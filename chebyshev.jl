@@ -27,9 +27,9 @@ function setup_chebyshev_pseudospectral(f, coord)
     fcheby = allocate_float(coord.ngrid, coord.nelement)
     dcheby = allocate_float(coord.ngrid)
     # setup the plans for the forward and backward Chebyshev transforms
-    forward_transform = plan_chebyshevtransform(f,kind=2)
-    #backward_transform = plan_ichebyshevtransform(fcheby[:,1],kind=2)
-    backward_transform = plan_ichebyshevtransform(dcheby,kind=2)
+    forward_transform = plan_chebyshevtransform(f,Val(2))
+    #backward_transform = plan_ichebyshevtransform(fcheby[:,1],Val(2))
+    backward_transform = plan_ichebyshevtransform(dcheby,Val(2))
     # return a structure containing the information needed to carry out
     # a 1D Chebyshev transform
     return chebyshev_info(fcheby, dcheby, forward_transform, backward_transform)
@@ -41,7 +41,7 @@ function scaled_chebyshev_grid(ngrid, nelement, n, box_length, imin, imax)
     # the fast Chebyshev transform (aka the discrete cosine transform)
     # needed to obtain Chebyshev spectral coefficients
     # this grid goes from ~ +1 to ~ -1
-    chebyshev_grid = chebyshevpoints(ngrid,kind=2)
+    chebyshev_grid = chebyshevpoints(ngrid,Val(2))
     # create array for the full grid and associated weights
     grid = allocate_float(n)
     # setup the scale factor by which the Chebyshev grid on [-1,1]
