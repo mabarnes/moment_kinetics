@@ -136,15 +136,16 @@ function time_advance!(ff, z, vpa, t, io)
                 advection_1d!(view(ff,:,ivpa,:), z_SL, z_source, z, use_semi_lagrange, dt)
             end
         end
-        if vpa.discretization == "chebyshev_pseudospectral"
-            for iz ∈ 1:z.n
-                advection_1d!(view(ff,iz,:,:), vpa_SL, vpa_source, vpa, use_semi_lagrange, dt, vpa_chebyshev)
-            end
-        elseif vpa.discretization == "finite_difference"
-            for iz ∈ 1:z.n
-                advection_1d!(view(ff,iz,:,:), vpa_SL, vpa_source, vpa, use_semi_lagrange, dt)
-            end
-        end
+        ##just advect in z-direction for now...
+        #if vpa.discretization == "chebyshev_pseudospectral"
+        #    for iz ∈ 1:z.n
+        #        advection_1d!(view(ff,iz,:,:), vpa_SL, vpa_source, vpa, use_semi_lagrange, dt, vpa_chebyshev)
+        #    end
+        #elseif vpa.discretization == "finite_difference"
+        #    for iz ∈ 1:z.n
+        #        advection_1d!(view(ff,iz,:,:), vpa_SL, vpa_source, vpa, use_semi_lagrange, dt)
+        #    end
+        #end
         # update the time
         t += dt
         # write ff to file every nwrite time steps
