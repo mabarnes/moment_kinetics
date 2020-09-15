@@ -39,7 +39,8 @@ function moment_kinetics()
     # write initial condition to file
     write_f(ff, z, vpa, code_time, io.ff)
     # solve the advection equation to advance u in time by nstep time steps
-    @timeit to "time_advance" time_advance!(ff, z, vpa, code_time, io)
+    z_chebyshev, vpa_chebyshev, z_source, vpa_source, z_SL, vpa_SL, moments = time_advance_setup!(ff, z, vpa)
+    @timeit to "time_advance" time_advance!(ff, z, vpa, code_time, io, z_chebyshev, vpa_chebyshev, z_source, vpa_source, z_SL, vpa_SL, moments)
     # finish i/o
     finish_file_io(io)
     return nothing
@@ -78,13 +79,9 @@ function init_f(z, vpa)
     end
     return f
 end
-# solve ∂f/∂t + v(z,t)⋅∂f/∂z = 0
-# define approximate characteristic velocity
-# v₀(z)=vⁿ(z) and take time derivative along this characteristic
-# df/dt + δv⋅∂f/∂z = 0, with δv(z,t)=v(z,t)-v₀(z)
-# for prudent choice of v₀, expect δv≪v so that explicit
-# time integrator can be used without severe CFL condition
-function time_advance!(ff, z, vpa, t, io)
+
+# do set-up for the time advance separately so we can time just the computation
+function time_advance_setup!(ff, z, vpa)
     # create arrays needed for explicit Chebyshev pseudospectral treatment
     # and create the plans for the forward and backward fast Chebyshev transforms
     if z.discretization == "chebyshev_pseudospectral"
@@ -124,6 +121,16 @@ function time_advance!(ff, z, vpa, t, io)
     # method if the user specifies this
     z_SL = setup_semi_lagrange(z.n)
     vpa_SL = setup_semi_lagrange(vpa.n)
+    return z_chebyshev, vpa_chebyshev, z_source, vpa_source, z_SL, vpa_SL, moments
+end
+
+# solve ∂f/∂t + v(z,t)⋅∂f/∂z = 0
+# define approximate characteristic velocity
+# v₀(z)=vⁿ(z) and take time derivative along this characteristic
+# df/dt + δv⋅∂f/∂z = 0, with δv(z,t)=v(z,t)-v₀(z)
+# for prudent choice of v₀, expect δv≪v so that explicit
+# time integrator can be used without severe CFL condition
+function time_advance!(ff, z, vpa, t, io, z_chebyshev, vpa_chebyshev, z_source, vpa_source, z_SL, vpa_SL, moments)
     # main time advance loop
     for i ∈ 1:nstep
         # advection_1d! advances the operator-split 1D advection equation
