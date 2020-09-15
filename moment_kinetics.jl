@@ -1,6 +1,7 @@
 push!(LOAD_PATH, ".")
 
 using TimerOutputs
+using Profile
 
 to = TimerOutput()
 
@@ -40,7 +41,9 @@ function moment_kinetics()
     write_f(ff, z, vpa, code_time, io.ff)
     # solve the advection equation to advance u in time by nstep time steps
     z_chebyshev, vpa_chebyshev, z_source, vpa_source, z_SL, vpa_SL, moments = time_advance_setup!(ff, z, vpa)
-    @timeit to "time_advance" time_advance!(ff, z, vpa, code_time, io, z_chebyshev, vpa_chebyshev, z_source, vpa_source, z_SL, vpa_SL, moments)
+    time_advance!(ff, z, vpa, code_time, io, z_chebyshev, vpa_chebyshev, z_source, vpa_source, z_SL, vpa_SL, moments)
+    @timeit to "time_advance" @profile time_advance!(ff, z, vpa, code_time, io, z_chebyshev, vpa_chebyshev, z_source, vpa_source, z_SL, vpa_SL, moments)
+    Profile.print()
     # finish i/o
     finish_file_io(io)
     return nothing
