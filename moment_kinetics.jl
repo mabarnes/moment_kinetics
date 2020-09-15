@@ -2,6 +2,7 @@
 push!(LOAD_PATH, ".")
 
 using TimerOutputs
+using Profile
 
 to = TimerOutput()
 
@@ -49,8 +50,8 @@ function moment_kinetics()
     ff = init_f(z, vpa)
 
     # do the actual run
-    @timeit to "time_advance" time_advance!(ff, z, vpa, code_time, io, z_chebyshev, vpa_chebyshev, z_source, vpa_source, z_SL, vpa_SL, moments, nstep)
-
+    @timeit to "time_advance" @profile time_advance!(ff, z, vpa, code_time, io, z_chebyshev, vpa_chebyshev, z_source, vpa_source, z_SL, vpa_SL, moments, nstep)
+    Profile.print()
     # finish i/o
     finish_file_io(io)
     return nothing
