@@ -1,9 +1,8 @@
 module chebyshev
 
-using FastTransforms: chebyshevpoints, clenshawcurtisweights
-using FastTransforms: ChebyshevTransformPlan, IChebyshevTransformPlan
-using FastTransforms: plan_chebyshevtransform, plan_ichebyshevtransform
-using array_allocation: allocate_float
+using FFTW
+using array_allocation: allocate_float, allocate_complex
+using clenshaw_curtis: clenshawcurtisweights
 
 export update_fcheby
 export setup_chebyshev_pseudospectral
@@ -11,28 +10,36 @@ export scaled_chebyshev_grid
 export chebyshev_spectral_derivative!
 
 struct chebyshev_info
+    # fext is an array for storing f(z) on the extended domain needed
+    # to perform complex-to-complex FFT using the fact that f(theta) is even in theta
+    fext::Array{Complex{Float64},1}
     # Chebyshev spectral coefficients of distribution function f
+    # first dimension contains location within element
+    # second dimension indicates the element
     f::Array{Float64,2}
     # Chebyshev spectral coefficients of derivative of f
     df::Array{Float64,1}
-    # plan for the forward Chebyshev transform on Chebyshev Gauss Lobatto grid
-    forward::ChebyshevTransformPlan
-    # plan for the backward Chebyshev transform on Chebyshev Gauss Lobatto grid
-    backward::IChebyshevTransformPlan
+    # plan for the complex-to-complex, in-place Fourier transform on Chebyshev-Gauss-Lobatto grid
+    transform::FFTW.cFFTWPlan
 end
 # create arrays needed for explicit Chebyshev pseudospectral treatment
-# and create the plans for the forward and backward fast Chebyshev transforms
-function setup_chebyshev_pseudospectral(f, coord)
+# and create the plans for the forward and backward fast Fourier transforms
+function setup_chebyshev_pseudospectral(coord)
+    # ngrid_fft is the number of grid points in the extended domain
+    # in z = cos(theta).  this is necessary to turn a cosine transform on [0,π]
+    # into a complex transform on [0,2π], which is more efficient in FFTW
+    ngrid_fft = 2*(coord.ngrid-1)
+    # create array for f on extended [0,2π] domain in theta = ArcCos[z]
+    fext = allocate_complex(ngrid_fft)
     # create arrays for storing Chebyshev spectral coefficients of f and f'
     fcheby = allocate_float(coord.ngrid, coord.nelement)
     dcheby = allocate_float(coord.ngrid)
-    # setup the plans for the forward and backward Chebyshev transforms
-    forward_transform = plan_chebyshevtransform(f,kind=2)
-    #backward_transform = plan_ichebyshevtransform(fcheby[:,1],kind=2)
-    backward_transform = plan_ichebyshevtransform(dcheby,kind=2)
+    # setup the plans for the forward and backward Fourier transforms
+    transform = plan_fft!(fext, flags=FFTW.MEASURE)
+    #backward_transform = plan_fft!(fext, flags=FFTW.MEASURE)
     # return a structure containing the information needed to carry out
     # a 1D Chebyshev transform
-    return chebyshev_info(fcheby, dcheby, forward_transform, backward_transform)
+    return chebyshev_info(fext, fcheby, dcheby, transform)
 end
 # initialize chebyshev grid scaled to interval [-box_length/2, box_length/2]
 function scaled_chebyshev_grid(ngrid, nelement, n, box_length, imin, imax)
@@ -41,7 +48,7 @@ function scaled_chebyshev_grid(ngrid, nelement, n, box_length, imin, imax)
     # the fast Chebyshev transform (aka the discrete cosine transform)
     # needed to obtain Chebyshev spectral coefficients
     # this grid goes from ~ +1 to ~ -1
-    chebyshev_grid = chebyshevpoints(ngrid,kind=2)
+    chebyshev_grid = chebyshevpoints(ngrid)
     # create array for the full grid and associated weights
     grid = allocate_float(n)
     # setup the scale factor by which the Chebyshev grid on [-1,1]
@@ -69,11 +76,20 @@ end
 # Chebyshev transform f to get Chebyshev spectral coefficients
 function update_fcheby!(cheby, ff, coord)
     k = 0
+    # loop over the different elements and perform a Chebyshev transform
+    # using the grid within each element
     @inbounds for j ∈ 1:coord.nelement
+        # imin is the minimum index on the full grid for this (jth) element
+        # the 'k' below accounts for the fact that the first element includes
+        # both boundary points, while each additional element shares a boundary
+        # point with neighboring elements.  the choice was made when defining
+        # coord.imin to exclude the lower boundary point in each element other
+        # than the first so that no point is double-counted
         imin = coord.imin[j]-k
+        # imax is the maximum index on the full grid for this (jth) element
         imax = coord.imax[j]
-        #cheby.f[:,j] .= cheby.forward*reverse(ff)[imin:imax]
-        cheby.f[:,j] .= cheby.forward*reverse(ff[imin:imax])
+        chebyshev_forward_transform!(view(cheby.f,:,j),
+            cheby.fext, view(ff,imin:imax), cheby.transform, coord.ngrid)
         k = 1
     end
     return nothing
@@ -87,54 +103,23 @@ function update_df_chebyshev!(df, chebyshev, coord)
     # obtain Chebyshev spectral coefficients of f'[z]
     # note that must multiply by 2/Lz to get derivative
     # in scaled coordinate
-    k = 1
+    k = 0
+    scale_factor = 2*nelement/L
     @inbounds for j ∈ 1:nelement
         chebyshev_spectral_derivative!(chebyshev.df,chebyshev.f[:,j])
         # inverse Chebyshev transform to get df/dz
         # and multiply by scaling factor needed to go
         # from Chebyshev z coordinate to actual z
-        imin = coord.imin[j]
+        imin = coord.imin[j] - k
         imax = coord.imax[j]
-        df[imin:imax] .= 2*nelement*reverse(chebyshev.backward*chebyshev.df)[k:ngrid]/L
-        #df[imin:imax] .= 2*nelement*(chebyshev.backward*chebyshev.df)[k:ngrid]/L
-        #df[imin:imax] .= reverse(chebyshev.backward*chebyshev.f[:,j])[k:ngrid]
-        #df[imin:imax] .= (chebyshev.backward*chebyshev.f[:,j])[k:ngrid]
-        k = 2
-    end
-    #df .= reverse(df)
-    return nothing
-end
-#=
-# compute the Chebyshev spectral coefficients of the spatial derivative of f
-function update_df_chebyshev!(df, fcheb, dfcheb, backward, ngrid, nelement, L, imin, imax, to)
-    @timeit to "@boundscheck" @boundscheck nelement == size(fcheb,2) || throw(BoundsError(fcheb))
-    # obtain Chebyshev spectral coefficients of f'[z]
-    # note that must multiply by 2/Lz to get derivative
-    # in scaled coordinate
-    k = 1
-    tmp = 2*nelement/L
-    dum = allocate_float(ngrid)
-    @inbounds for j ∈ 1:nelement
-        @timeit to "chebyshev_spectral_derivative!" chebyshev_spectral_derivative!(dfcheb,fcheb[:,j])
-        # inverse Chebyshev transform to get df/dz
-        # and multiply by scaling factor needed to go
-        # from Chebyshev z coordinate to actual z
-        #@timeit to "df" df[imin[j]:imax[j]] .= 2*nelement*reverse(backward*dfcheb)[k:ngrid]/L
-        #@timeit to "df" df[imin[j]:imax[j]] .= tmp*reverse(backward*dfcheb)[k:ngrid]
-        @timeit to "transform" dum = reverse(backward*dfcheb)
-        for i ∈ imin[j]:imax[j]
-            @timeit to "ii" ii = i-imin[j]+k
-            @timeit to "df" df[i] = 2*nelement*dum[ii]/L
+        chebyshev_backward_transform!(view(df,imin:imax), chebyshev.fext, chebyshev.df, chebyshev.transform, coord.ngrid)
+        for i ∈ imin:imax
+            df[i] *= scale_factor
         end
-        #df[imin:imax] .= 2*nelement*(chebyshev.backward*chebyshev.df)[k:ngrid]/L
-        #df[imin:imax] .= reverse(chebyshev.backward*chebyshev.f[:,j])[k:ngrid]
-        #df[imin:imax] .= (chebyshev.backward*chebyshev.f[:,j])[k:ngrid]
-        k = 2
+        k = 1
     end
-    #df .= reverse(df)
     return nothing
 end
-=#
 # use Chebyshev basis to compute the derivative of f
 function chebyshev_spectral_derivative!(df,f)
     m = length(f)
@@ -180,6 +165,98 @@ function chebyshevmoments(N)
         μ[i+1] = 2/(1-i^2)
     end
     return μ
+end
+# returns the Chebyshev-Gauss-Lobatto grid points on an n point grid
+function chebyshevpoints(n)
+    grid = allocate_float(n)
+    nfac = 1/(n-1)
+    @inbounds begin
+        # calculate z = cos(θ) ∈ [1,-1]
+        for j ∈ 1:n
+            grid[j] = cospi((j-1)*nfac)
+        end
+    end
+    return grid
+end
+# takes the real function ff on a Chebyshev grid in z (domain [-1, 1]),
+# which corresponds to the domain [π, 2π] in variable theta = ArcCos(z).
+# interested in functions of form f(z) = sum_n c_n T_n(z)
+# using T_n(cos(theta)) = cos(n*theta) and z = cos(theta) gives
+# f(z) = sum_n c_n cos(n*theta)
+# thus a Chebyshev transform is equivalent to a discrete cosine transform
+# doing this directly turns out to be slower than extending the domain
+# from [0, 2pi] and using the fact that f(z) must be even (as cosines are all even)
+# on this extended domain, can do a standard complex-to-complex fft
+# fext is an array used to store f(theta) on the extended grid theta ∈ [0,2π)
+# ff is f(theta) on the grid [π,2π]
+# the Chebyshev coefficients of ff are calculated and stored in chebyf
+# n is the number of grid points on the Chebyshev-Gauss-Lobatto grid
+# transform is the plan for the complex-to-complex, in-place fft
+function chebyshev_forward_transform!(chebyf, fext, ff, transform, n)
+    # ff as input is f(z) on the domain [-1,1]
+    # corresponding to f(theta) on the domain [π,2π]
+    # must extend f(theta) using even-ness about theta=π onto domain [0,2π]
+    @inbounds begin
+        # first, fill in values for f on domain θ ∈ [0,π]
+        # using even-ness of f about θ = π
+        for j ∈ 0:n-1
+            fext[n-j] = complex(ff[j+1],0)
+        end
+        # next, fill in values for f on domain θ ∈ (π,2π)
+        for j ∈ 1:n-2
+            fext[n+j] = fext[n-j]
+        end
+    end
+    # perform the forward, complex-to-complex FFT in-place (cheby.fext is overwritten)
+    transform*fext
+    # use reality + evenness of f to eliminate unncessary information
+    # and obtain Chebyshev spectral coefficients for this element
+    # also sort out normalisation
+    @inbounds begin
+        nm = n-1
+        nfac = 1/nm
+        for j ∈ 2:nm
+            chebyf[j] = real(fext[j])*nfac
+        end
+        nfac *= 0.5
+        chebyf[1] = real(fext[1])*nfac
+        chebyf[n] = real(fext[n])*nfac
+    end
+    return nothing
+end
+
+function chebyshev_backward_transform!(ff, fext, chebyf, transform, n)
+    # chebyf as input contains Chebyshev spectral coefficients
+    # need to use reality condition to extend onto negative frequency domain
+    @inbounds begin
+        # first, fill in values for fext corresponding to positive frequencies
+        for j ∈ 1:n
+            fext[j] = chebyf[j]
+        end
+        # next, fill in values for fext corresponding to negative frequencies
+        # using fext(-k) = conjg(fext(k)) = fext(k)
+        # usual FFT ordering with j=1 <-> k=0, followed by ascending k up to kmax
+        # and then descending from -kmax down to -dk
+        for j ∈ 1:n-2
+            fext[n+j] = fext[n-j]
+        end
+    end
+    # perform the backward, complex-to-complex FFT in-place (fext is overwritten)
+    transform*fext
+    # fext now contains a real function on θ [0,2π)
+    # all we need is the real(fext) on [π,2π]
+    # also sort out normalisation
+    @inbounds begin
+        nm = n-1
+        # fill in entries for ff on θ ∈ [π,2π)
+        # and account for normalisation
+        for j ∈ 1:nm
+            ff[j] = real(fext[j+nm])*0.5
+        end
+        # fill in ff[2π] and normalise
+        ff[n] = real(fext[1])*0.5
+    end
+    return nothing
 end
 
 end

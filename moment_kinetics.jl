@@ -1,8 +1,9 @@
+# add the current directory to the path where the code looks for external modules
 push!(LOAD_PATH, ".")
 
-using TimerOutputs
+#using TimerOutputs
 
-to = TimerOutput()
+#to = TimerOutput()
 
 using array_allocation: allocate_float
 using file_io: setup_file_io, finish_file_io
@@ -39,7 +40,7 @@ function moment_kinetics()
     # write initial condition to file
     write_f(ff, z, vpa, code_time, io.ff)
     # solve the advection equation to advance u in time by nstep time steps
-    @timeit to "time_advance" time_advance!(ff, z, vpa, code_time, io)
+    time_advance!(ff, z, vpa, code_time, io)
     # finish i/o
     finish_file_io(io)
     return nothing
@@ -90,10 +91,10 @@ function time_advance!(ff, z, vpa, t, io)
     if z.discretization == "chebyshev_pseudospectral"
         # will only chebyshev transform within a given element
         # so send in the correctly-sized array to setup the chebyshev plan
-        z_chebyshev = setup_chebyshev_pseudospectral(ff[1:z.ngrid,1,1], z)
+        z_chebyshev = setup_chebyshev_pseudospectral(z)
     end
     if vpa.discretization == "chebyshev_pseudospectral"
-        vpa_chebyshev = setup_chebyshev_pseudospectral(ff[1,1:vpa.ngrid,1], vpa)
+        vpa_chebyshev = setup_chebyshev_pseudospectral(vpa)
     end
     # pass a subarray of ff (its value at the previous time level)
     # and allocate/initialize the velocity space moments needed for advancing
@@ -158,5 +159,5 @@ end
 
 moment_kinetics()
 
-show(to)
+#show(to)
 println()

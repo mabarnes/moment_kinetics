@@ -30,7 +30,7 @@ function advection_1d!(ff, SL, source, coord, use_semi_lagrange, dt, chebyshev)
         update_advection_factor!(source, SL, coord.n, dt, j)
         # Chebyshev transform f to get Chebyshev spectral coefficients
         # and use them to calculate f'
-        update_fcheby!(chebyshev, ff[:,j], coord)
+        update_fcheby!(chebyshev, view(ff,:,j), coord)
         update_df_chebyshev!(source.df, chebyshev, coord)
         # calculate the explicit source terms on the rhs of the equation;
         # i.e., -Δt⋅δv⋅f'
