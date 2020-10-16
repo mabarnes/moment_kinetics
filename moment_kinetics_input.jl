@@ -38,7 +38,7 @@ const use_semi_lagrange = true
 
 # parameters related to the z grid
 # ngrid_z is number of grid points per element
-const ngrid_z = 41
+const ngrid_z = 33
 # nelement_z is the number of elements
 const nelement_z = 3
 # L_z is the box length
@@ -53,7 +53,7 @@ const discretization_option_z = "chebyshev_pseudospectral"
 
 # parameters related to the vpa grid
 # ngrid_vpa is the number of grid points per element
-const ngrid_vpa = 11
+const ngrid_vpa = 33
 # nelement_vpa is the number of elements
 const nelement_vpa = 3
 # L_vpa is the box length in units of vthermal_species

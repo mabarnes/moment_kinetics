@@ -19,8 +19,11 @@ struct chebyshev_info
     f::Array{Float64,2}
     # Chebyshev spectral coefficients of derivative of f
     df::Array{Float64,1}
-    # plan for the complex-to-complex, in-place Fourier transform on Chebyshev-Gauss-Lobatto grid
-    transform::FFTW.cFFTWPlan
+    # plan for the complex-to-complex, in-place, forward Fourier transform on Chebyshev-Gauss-Lobatto grid
+    forward::FFTW.cFFTWPlan
+    # plan for the complex-to-complex, in-place, backward Fourier transform on Chebyshev-Gauss-Lobatto grid
+    #backward_transform::FFTW.cFFTWPlan
+    backward::AbstractFFTs.ScaledPlan
 end
 # create arrays needed for explicit Chebyshev pseudospectral treatment
 # and create the plans for the forward and backward fast Fourier transforms
@@ -35,11 +38,11 @@ function setup_chebyshev_pseudospectral(coord)
     fcheby = allocate_float(coord.ngrid, coord.nelement)
     dcheby = allocate_float(coord.ngrid)
     # setup the plans for the forward and backward Fourier transforms
-    transform = plan_fft!(fext, flags=FFTW.MEASURE)
-    #backward_transform = plan_fft!(fext, flags=FFTW.MEASURE)
+    forward_transform = plan_fft!(fext, flags=FFTW.MEASURE)
+    backward_transform = plan_ifft!(fext, flags=FFTW.MEASURE)
     # return a structure containing the information needed to carry out
     # a 1D Chebyshev transform
-    return chebyshev_info(fext, fcheby, dcheby, transform)
+    return chebyshev_info(fext, fcheby, dcheby, forward_transform, backward_transform)
 end
 # initialize chebyshev grid scaled to interval [-box_length/2, box_length/2]
 function scaled_chebyshev_grid(ngrid, nelement, n, box_length, imin, imax)
@@ -89,7 +92,7 @@ function update_fcheby!(cheby, ff, coord)
         # imax is the maximum index on the full grid for this (jth) element
         imax = coord.imax[j]
         chebyshev_forward_transform!(view(cheby.f,:,j),
-            cheby.fext, view(ff,imin:imax), cheby.transform, coord.ngrid)
+            cheby.fext, view(ff,imin:imax), cheby.forward, coord.ngrid)
         k = 1
     end
     return nothing
@@ -104,6 +107,7 @@ function update_df_chebyshev!(df, chebyshev, coord)
     # note that must multiply by 2/Lz to get derivative
     # in scaled coordinate
     k = 0
+    df_boundary = 0
     scale_factor = 2*nelement/L
     @inbounds for j ∈ 1:nelement
         chebyshev_spectral_derivative!(chebyshev.df,chebyshev.f[:,j])
@@ -112,10 +116,18 @@ function update_df_chebyshev!(df, chebyshev, coord)
         # from Chebyshev z coordinate to actual z
         imin = coord.imin[j] - k
         imax = coord.imax[j]
-        chebyshev_backward_transform!(view(df,imin:imax), chebyshev.fext, chebyshev.df, chebyshev.transform, coord.ngrid)
+        chebyshev_backward_transform!(view(df,imin:imax), chebyshev.fext, chebyshev.df, chebyshev.forward, coord.ngrid)
         for i ∈ imin:imax
             df[i] *= scale_factor
         end
+        if j > 1
+            df[imin] = 0.5*(df[imin]+df_boundary)
+            #df[imin] = df_boundary
+        end
+        # store value for df at the boundary between elements
+        # and use it to average the df obtained by neighboring elements
+        # at this overlapping point
+        df_boundary = df[imax]
         k = 1
     end
     return nothing
@@ -230,8 +242,8 @@ function chebyshev_backward_transform!(ff, fext, chebyf, transform, n)
     # need to use reality condition to extend onto negative frequency domain
     @inbounds begin
         # first, fill in values for fext corresponding to positive frequencies
-        for j ∈ 1:n
-            fext[j] = chebyf[j]
+        for j ∈ 2:n-1
+            fext[j] = chebyf[j]*0.5
         end
         # next, fill in values for fext corresponding to negative frequencies
         # using fext(-k) = conjg(fext(k)) = fext(k)
@@ -240,6 +252,10 @@ function chebyshev_backward_transform!(ff, fext, chebyf, transform, n)
         for j ∈ 1:n-2
             fext[n+j] = fext[n-j]
         end
+        # fill in zero frequency mode, which is special in that it does not require
+        # the 1/2 scale factor
+        fext[1] = chebyf[1]
+        fext[n] = chebyf[n]
     end
     # perform the backward, complex-to-complex FFT in-place (fext is overwritten)
     transform*fext
@@ -249,12 +265,11 @@ function chebyshev_backward_transform!(ff, fext, chebyf, transform, n)
     @inbounds begin
         nm = n-1
         # fill in entries for ff on θ ∈ [π,2π)
-        # and account for normalisation
         for j ∈ 1:nm
-            ff[j] = real(fext[j+nm])*0.5
+            ff[j] = real(fext[j+nm])
         end
         # fill in ff[2π] and normalise
-        ff[n] = real(fext[1])*0.5
+        ff[n] = real(fext[1])
     end
     return nothing
 end
