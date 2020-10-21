@@ -29,7 +29,7 @@ end
 const run_name = "comparetoJohn"
 
 # parameters related to the time stepping
-const nstep = 10000
+const nstep = 1000000
 const dt = 0.001
 const nwrite = 100
 # use_semi_lagrange = true to use interpolation-free semi-Lagrange treatment
