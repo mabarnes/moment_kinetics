@@ -1,0 +1,11 @@
+#!/bin/bash
+
+#SBATCH -n1
+#SBATCH --time=2:00:00
+#SBATCH --account=FUA34_SOLBOUT4
+#SBATCH --partition=skl_fua_dbg
+#SBATCH --output output.log
+#SBATCH --error error.log
+
+cd $SLURM_SUBMIT_DIR
+./performance_scan.sh
