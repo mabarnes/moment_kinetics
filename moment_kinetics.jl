@@ -1,9 +1,9 @@
 # add the current directory to the path where the code looks for external modules
 push!(LOAD_PATH, ".")
 
-#using TimerOutputs
+using TimerOutputs
 
-#to = TimerOutput()
+to = TimerOutput()
 
 using array_allocation: allocate_float
 using file_io: setup_file_io, finish_file_io
@@ -39,8 +39,11 @@ function moment_kinetics()
     io = setup_file_io(run_name)
     # write initial condition to file
     write_f(ff, z, vpa, code_time, io.ff)
+
     # solve the advection equation to advance u in time by nstep time steps
-    time_advance!(ff, z, vpa, code_time, io)
+    @timeit to "time_advance" time_advance!(ff, z, vpa, code_time, io)
+    #time_advance!(ff, z, vpa, code_time, io)
+
     # finish i/o
     finish_file_io(io)
     return nothing
@@ -159,5 +162,5 @@ end
 
 moment_kinetics()
 
-#show(to)
+show(to)
 println()
