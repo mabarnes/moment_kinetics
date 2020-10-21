@@ -42,7 +42,15 @@ function moment_kinetics()
 
     # solve the advection equation to advance u in time by nstep time steps
     z_chebyshev, vpa_chebyshev, z_source, vpa_source, z_SL, vpa_SL, moments = time_advance_setup!(ff, z, vpa)
-    @timeit to "time_advance" time_advance!(ff, z, vpa, code_time, io, z_chebyshev, vpa_chebyshev, z_source, vpa_source, z_SL, vpa_SL, moments)
+
+    # run one step ahead of time to ensure everything is pre-compiled
+    time_advance!(ff, z, vpa, code_time, io, z_chebyshev, vpa_chebyshev, z_source, vpa_source, z_SL, vpa_SL, moments, 1)
+    # reset ff
+    ff = init_f(z, vpa)
+
+    # do the actual run
+    @timeit to "time_advance" time_advance!(ff, z, vpa, code_time, io, z_chebyshev, vpa_chebyshev, z_source, vpa_source, z_SL, vpa_SL, moments, nstep)
+
     # finish i/o
     finish_file_io(io)
     return nothing
@@ -132,7 +140,7 @@ end
 # df/dt + δv⋅∂f/∂z = 0, with δv(z,t)=v(z,t)-v₀(z)
 # for prudent choice of v₀, expect δv≪v so that explicit
 # time integrator can be used without severe CFL condition
-function time_advance!(ff, z, vpa, t, io, z_chebyshev, vpa_chebyshev, z_source, vpa_source, z_SL, vpa_SL, moments)
+function time_advance!(ff, z, vpa, t, io, z_chebyshev, vpa_chebyshev, z_source, vpa_source, z_SL, vpa_SL, moments, nstep)
     # main time advance loop
     for i ∈ 1:nstep
         # advection_1d! advances the operator-split 1D advection equation
