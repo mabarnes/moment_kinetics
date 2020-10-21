@@ -170,3 +170,4 @@ moment_kinetics()
 
 show(to)
 println()
+println(z_input.ngrid - 1, " ", TimerOutputs.time(to["time_advance"]) * 1.0e-9)
