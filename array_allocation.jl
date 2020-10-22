@@ -1,10 +1,15 @@
 module array_allocation
 
-export allocate_float, allocate_int
+export allocate_float, allocate_int, allocate_complex
 
 # allocate 1d array with n entries of type Int64
 function allocate_int(n)
     return array = Array{Int64,1}(undef, n)
+end
+
+# allocate 1d array with n entries of type Int64
+function allocate_int(n,m)
+    return array = Array{Int64,1}(undef, n, m)
 end
 
 # allocate 1d array with n entries of type Float64

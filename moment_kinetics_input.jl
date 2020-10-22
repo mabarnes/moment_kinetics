@@ -26,7 +26,7 @@ struct grid_input
 end
 
 # this is the prefix for all output files associated with this run
-const run_name = "example"
+const run_name = "test"
 
 # parameters related to the time stepping
 const nstep = 5

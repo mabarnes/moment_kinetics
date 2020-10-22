@@ -28,6 +28,21 @@ end
 # create and return a structure containing the arrays needed for the
 # semi-Lagrange time advance
 function setup_semi_lagrange(n)
+    return setup_semi_lagrange_local(n)
+end
+function setup_semi_lagrange(n, m)
+    # allocate an array containing structures with the info needed
+    # to do the semi-Lagrange time advance
+    SL = Array{semi_lagrange_info,1}(undef, m)
+    # store all of this information in a structure and return it
+    for i ∈ 1:m
+        SL[i] = setup_semi_lagrange_local(n)
+    end
+    return SL
+end
+# create and return a structure containing the arrays needed for the
+# semi-Lagrange time advance
+function setup_semi_lagrange_local(n)
     # create an array to hold crossing times for each cell
     crossing_time = allocate_float(n)
     # create an array to hold cumulative trajectory time for each characteristic
@@ -51,24 +66,19 @@ function setup_semi_lagrange(n)
     return semi_lagrange_info(crossing_time, trajectory_time, dep_pts, dep_idx,
         characteristic_speed)
 end
-function find_approximate_characteristic!(SL, source, coord, dt)
+function find_approximate_characteristic!(SL, speed, coord, dt)
     # calculate the time required to cross the cell associated with each
     # grid point based on the cell width and advection speed
-    update_crossing_times!(SL.crossing_time, source.speed, coord.cell_width)
+    update_crossing_times!(SL.crossing_time, speed, coord.cell_width)
     # integrate backward in time from time level m+1 to level m
     # along approximate characteristics determined by speed profile at level m
     # to obtain departure points.  these will not correspond
     # in general to grid points at time level m
-#    find_departure_points!(SL.dep_pts, SL.dep_idx,
-#        SL.trajectory_time, SL.crossing_time, source.speed, coord.grid,
-#        coord.bc, dt)
-    find_departure_points!(SL, coord, source.speed, dt)
+    find_departure_points!(SL, coord, speed, dt)
     # redefine v₀ slightly so
     # that departure point corresonds to nearest grid point
     # this avoids the need to do interpolation to obtain
     # function values off the fixed grid in z
-    #project_characteristics_onto_grid!(SL.dep_idx, SL.dep_pts,
-    #    SL.characteristic_speed, coord.grid, coord.cell_width, dt)
     project_characteristics_onto_grid!(SL, coord, dt)
 end
 # obtain the time needed to cross the cell

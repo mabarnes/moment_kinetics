@@ -34,7 +34,7 @@ struct coordinate
     discretization::String
     # bc is the boundary condition option for this coordinate
     bc::String
-    # wgts contains the integrate weights associated with each grid point
+    # wgts contains the integration weights associated with each grid point
     wgts::Array{Float64,1}
 end
 # create arrays associated with a given coordinate,

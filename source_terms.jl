@@ -4,11 +4,11 @@ import array_allocation: allocate_float
 import moment_kinetics_input: advection_speed, advection_speed_option
 
 export setup_source
-export update_speed!
+#export update_speed!
 export update_advection_factor!
 export calculate_explicit_source!
 export update_f!
-
+#=
 struct advection_speed_info_z
     # this is the peculiar velocity along z
     vpa::Array{Float64,1}
@@ -19,31 +19,29 @@ struct advection_speed_info_vpa
     # fcheby contains the Chebyshev spectral coefficients of ff
     fcheby::Array{Float64,2}
 end
-
 function setup_advection_speed_z(vpa)
     return advection_speed_info_z(vpa)
 end
 function setup_advection_speed_vpa(ff, fcheby)
     return advection_speed_info_vpa(ff, fcheby)
 end
+=#
 # structure containing the basic arrays associated with the
 # source terms appearing in the advection equation for each coordinate
-struct source
+struct source_info
     # rhs is the sum of the source terms appearing on the righthand side
     # of the equation
-    rhs::Array{Float64,1}
+    rhs::Array{Float64}
     # df is the derivative of the distribution function f with respect
     # to the coordinate associated with this set of source terms
-    df::Array{Float64,1}
+    df::Array{Float64}
     # speed is the component of the advection speed along this coordinate axis
-    speed::Array{Float64,1}
+    speed::Array{Float64}
     # adv_fac is the advection factor that multiplies df in the advective source
-    adv_fac::Array{Float64,1}
+    adv_fac::Array{Float64}
 end
 # create arrays needed to compute the source term(s)
-#function setup_source(coord, advection_info)
-function setup_source(coord)
-    n = coord.n
+function setup_source(n)
     # create array for storing the explicit source terms appearing
     # on the righthand side of the equation
     rhs = allocate_float(n)
@@ -53,11 +51,24 @@ function setup_source(coord)
     adv_fac = allocate_float(n)
     # create array for storing the speed along this coordinate
     speed = allocate_float(n)
-    # initialize the advection speed array
-    update_speed!(speed, coord)
-    #update_speed!(speed, advection_info, coord)
-    return source(rhs, df, speed, adv_fac)
+    # return source_info struct containing necessary 1D arrays
+    return source_info(rhs, df, speed, adv_fac)
 end
+# create arrays needed to compute the source term(s)
+function setup_source(n, m)
+    # create array for storing the explicit source terms appearing
+    # on the righthand side of the equation
+    rhs = allocate_float(n, m)
+    # create array for storing ∂f/∂(coordinate)
+    df = allocate_float(n, m)
+    # create array for storing the advection coefficient
+    adv_fac = allocate_float(n, m)
+    # create array for storing the speed along this coordinate
+    speed = allocate_float(n, m)
+    # return source_info struct containing necessary 1D arrays
+    return source_info(rhs, df, speed, adv_fac)
+end
+#=
 # calculate the advection speed at each grid point
 function update_speed!(speed, coord)
     n = coord.n
@@ -92,13 +103,13 @@ function update_speed!(speed, adv::advection_speed_info_vpa, coord)
 
     return nothing
 end
-
+=#
 # calculate the factor appearing in front of f' in the advection term
 # at time level n in the frame moving with the approximate characteristic
-function update_advection_factor!(source, SL, n, dt, j)
+function update_advection_factor!(adv_fac, speed, SL, n, dt, j)
     @boundscheck n == length(SL.dep_idx) || throw(BoundsError(SL.dep_idx))
-    @boundscheck n == length(source.adv_fac) || throw(BoundsError(source.adv_fac))
-    @boundscheck n == length(source.speed) || throw(BoundsError(source.speed))
+    @boundscheck n == length(adv_fac) || throw(BoundsError(adv_fac))
+    @boundscheck n == length(speed) || throw(BoundsError(speed))
     @boundscheck n == length(SL.characteristic_speed) ||
         throw(BoundsError(SL.characteristic_speed))
     @inbounds for i ∈ 2:n
@@ -112,9 +123,9 @@ function update_advection_factor!(source, SL, n, dt, j)
             # characteristic speed v_char
             # NB: need to change v[idx] to v[i] for second iteration of RK
             if j == 1
-                source.adv_fac[i] = -dt*(source.speed[idx]-SL.characteristic_speed[i])
+                adv_fac[i] = -dt*(speed[idx]-SL.characteristic_speed[i])
             elseif j == 2
-                source.adv_fac[i] = -dt*(source.speed[i]-SL.characteristic_speed[i])
+                adv_fac[i] = -dt*(speed[i]-SL.characteristic_speed[i])
             end
         end
     end
@@ -122,12 +133,12 @@ function update_advection_factor!(source, SL, n, dt, j)
 end
 # calculate the explicit source terms on the rhs of the equation;
 # i.e., -Δt⋅δv⋅f'
-function calculate_explicit_source!(source, dep_idx, n, j)
+function calculate_explicit_source!(rhs, df, adv_fac, dep_idx, n, j)
     # ensure that arrays needed for this function are inbounds
     # to avoid checking multiple times later
-    @boundscheck n == length(source.rhs) || throw(BoundsError(source.rhs))
-    @boundscheck n == length(source.df) || throw(BoundsError(source.df))
-    @boundscheck n == length(source.adv_fac) || throw(BoundsError(source.adv_fac))
+    @boundscheck n == length(rhs) || throw(BoundsError(rhs))
+    @boundscheck n == length(df) || throw(BoundsError(df))
+    @boundscheck n == length(adv_fac) || throw(BoundsError(adv_fac))
     @boundscheck n == length(dep_idx) || throw(BoundsError(dep_idx))
     # calculate the source evaluated at the departure point for the
     # ith characteristic.  note that adv_fac[i] has already
@@ -137,12 +148,12 @@ function calculate_explicit_source!(source, dep_idx, n, j)
         @inbounds for i ∈ 2:n
             idx = dep_idx[i]
             if idx > 0
-                source.rhs[i] = source.adv_fac[i]*source.df[idx]
+                rhs[i] = adv_fac[i]*df[idx]
             end
         end
     elseif j == 2
         @inbounds for i ∈ 2:n
-            source.rhs[i] = source.adv_fac[i]*source.df[i]
+            rhs[i] = adv_fac[i]*df[i]
         end
     end
     return nothing
@@ -155,6 +166,9 @@ function update_f!(ff, rhs, dep_idx, n, j)
     @boundscheck n == length(dep_idx) || throw(BoundsError(dep_idx))
 
     @inbounds for i ∈ 2:n
+        # dep_idx is the index of the departure point for the approximate
+        # characteristic passing through grid point i
+        # if semi-Lagrange is not used, then dep_idx = i
         idx = dep_idx[i]
         if idx > 0
             ff[i,j+1] = ff[idx,1] + rhs[i]
