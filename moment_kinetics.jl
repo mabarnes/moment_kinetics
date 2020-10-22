@@ -11,9 +11,10 @@ using file_io: write_f, write_moments
 using chebyshev: setup_chebyshev_pseudospectral
 using coordinates: define_coordinate, write_coordinate
 using source_terms: setup_source
-using source_terms: setup_advection_speed_z
+#using source_terms: setup_advection_speed_z
 using semi_lagrange: setup_semi_lagrange
-using advection: advection_1d!
+using vpa_advection: vpa_advection!, update_speed_vpa!
+using z_advection: z_advection!, update_speed_z!
 using velocity_moments: setup_moments
 
 using moment_kinetics_input: run_name
@@ -117,34 +118,34 @@ function time_advance!(ff, z, vpa, t, io)
     # with advection in z
     #z_source = setup_source(z, z_advection_info)
     #vpa_source = setup_source(vpa, vpa_advection_info)
-    z_source = setup_source(z)
-    vpa_source = setup_source(vpa)
-    # create a structure containing the arrays needed for the semi-Lagrange
+    z_source = setup_source(z.n, vpa.n)
+    # initialise the z advection speed
+    update_speed_z!(z_source.speed, vpa, z)
+    # create structure vpa_source whose members are the arrays needed to compute
+    # the source(s) appearing in the split part of the GK equation dealing
+    # with advection in vpa
+    vpa_source = setup_source(z.n, vpa.n)
+    # initialise the vpa advection speed
+    update_speed_vpa!(vpa_source.speed, vpa, z)
+    # create an array of structures containing the arrays needed for the semi-Lagrange
     # solve and initialize the characteristic speed and departure indices
     # so that the code can gracefully run without using the semi-Lagrange
     # method if the user specifies this
-    z_SL = setup_semi_lagrange(z.n)
-    vpa_SL = setup_semi_lagrange(vpa.n)
+    z_SL = setup_semi_lagrange(z.n, vpa.n)
+    vpa_SL = setup_semi_lagrange(vpa.n, z.n)
     # main time advance loop
     for i ∈ 1:nstep
-        # advection_1d! advances the operator-split 1D advection equation
+        # z_advection! advances the operator-split 1D advection equation in z
         if z.discretization == "chebyshev_pseudospectral"
-            for ivpa ∈ 1:vpa.n
-                advection_1d!(view(ff,:,ivpa,:), z_SL, z_source, z, use_semi_lagrange, dt, z_chebyshev)
-            end
+            z_advection!(ff, z_SL, z_source, z, vpa, use_semi_lagrange, dt, z_chebyshev)
         elseif z.discretization == "finite_difference"
-            for ivpa ∈ 1:vpa.n
-                advection_1d!(view(ff,:,ivpa,:), z_SL, z_source, z, use_semi_lagrange, dt)
-            end
+            z_advection!(ff, z_SL, z_source, z, vpa, use_semi_lagrange, dt)
         end
+        # vpa_advection! advances the operator-split 1D advection equation in vpa
         if vpa.discretization == "chebyshev_pseudospectral"
-            for iz ∈ 1:z.n
-                advection_1d!(view(ff,iz,:,:), vpa_SL, vpa_source, vpa, use_semi_lagrange, dt, vpa_chebyshev)
-            end
+            vpa_advection!(ff, vpa_SL, vpa_source, vpa, z, use_semi_lagrange, dt, vpa_chebyshev)
         elseif vpa.discretization == "finite_difference"
-            for iz ∈ 1:z.n
-                advection_1d!(view(ff,iz,:,:), vpa_SL, vpa_source, vpa, use_semi_lagrange, dt)
-            end
+            vpa_advection!(ff, vpa_SL, vpa_source, vpa, z, use_semi_lagrange, dt)
         end
         # update the time
         t += dt
