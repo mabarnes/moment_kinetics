@@ -63,7 +63,9 @@ function init_f(z, vpa)
             # initial condition is an unshifted Gaussian
             for j ∈ 1:vpa.n
                 for i ∈ 1:z.n
-                    f[i,j,:] .= (exp(-0.5*((z.grid[i]-3*zwidth)/zwidth)^2)
+                    #f[i,j,:] .= (exp(-0.5*((z.grid[i]-3*zwidth)/zwidth)^2)
+                    # * exp(-0.5*(vpa.grid[j]/vpawidth)^2))
+                    f[i,j,:] .= (exp(-0.5*((z.grid[i])/zwidth)^2)
                      * exp(-0.5*(vpa.grid[j]/vpawidth)^2))
                 end
             end
