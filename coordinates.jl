@@ -71,7 +71,7 @@ function init_grid(ngrid, nelement, n, L, imin, imax, igrid, discretization)
         # 'wgts' are the integration weights attached to each grid points
         # that are those associated with Clenshaw-Curtis quadrature
         grid, wgts = scaled_chebyshev_grid(ngrid, nelement, n, L, imin, imax)
-    println("sum(wgts): ", sum(wgts))
+#    println("sum(wgts): ", sum(wgts))
     elseif discretization == "finite_difference"
         # initialize equally spaced grid defined on [-L/2,L/2]
         grid = equally_spaced_grid(n, L)

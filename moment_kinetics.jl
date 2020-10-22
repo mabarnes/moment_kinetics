@@ -5,21 +5,19 @@ push!(LOAD_PATH, ".")
 
 #to = TimerOutput()
 
-using array_allocation: allocate_float
 using file_io: setup_file_io, finish_file_io
 using file_io: write_f, write_moments
 using chebyshev: setup_chebyshev_pseudospectral
 using coordinates: define_coordinate, write_coordinate
 using source_terms: setup_source
-#using source_terms: setup_advection_speed_z
 using semi_lagrange: setup_semi_lagrange
 using vpa_advection: vpa_advection!, update_speed_vpa!
 using z_advection: z_advection!, update_speed_z!
 using velocity_moments: setup_moments
+using initial_conditions: init_f
 
 using moment_kinetics_input: run_name
 using moment_kinetics_input: z_input, vpa_input
-using moment_kinetics_input: zwidth, initialization_option, monomial_degree, vpawidth
 using moment_kinetics_input: nstep, dt, nwrite, use_semi_lagrange
 using moment_kinetics_input: check_input
 
@@ -46,40 +44,6 @@ function moment_kinetics()
     finish_file_io(io)
     return nothing
 end
-# creates ff and specifies its initial condition
-function init_f(z, vpa)
-    f = allocate_float(z.n, vpa.n, 3)
-    @inbounds begin
-        if initialization_option == "gaussian"
-            # initial condition is an unshifted Gaussian
-            for j ∈ 1:vpa.n
-                for i ∈ 1:z.n
-                    f[i,j,:] .= (exp(-0.5*((z.grid[i]-3*zwidth)/zwidth)^2)
-                     * exp(-0.5*(vpa.grid[j]/vpawidth)^2))
-                end
-            end
-        elseif initialization_option == "monomial"
-            # linear variation in z, with offset so that
-            # function passes through zero at upwind boundary
-            for i ∈ 1:z.n
-                f[i,j,:] .= ((z.grid[i] + 0.5*z.L)^monomial_degree
-                    .* (vpa.grid[j] + 0.5*vpa.L)^monomial_degree)
-            end
-        end
-        if z.bc == "zero"
-            # impose zero incoming BC
-            f[1,:,:] .= 0
-            #f[nz,:] .= 0
-        elseif z.bc == "periodic"
-            # impose periodicity
-            f[1,:,:] .= f[z.n,:,:]
-        end
-        if vpa.bc == "zero"
-            f[:,1,:] .= 0
-        end
-    end
-    return f
-end
 # solve ∂f/∂t + v(z,t)⋅∂f/∂z = 0
 # define approximate characteristic velocity
 # v₀(z)=vⁿ(z) and take time derivative along this characteristic
@@ -102,22 +66,9 @@ function time_advance!(ff, z, vpa, t, io)
     # the kinetic equation coupled to fluid equations
     # the resulting moments are returned in the structure "moments"
     moments = setup_moments(view(ff,:,:,1), vpa, z.n)
-#=
-    # create structures z_advection and vpa_advection that contain all of the
-    # information necessary to update the advection speed in the z and vpa
-    # directions
-    z_advection_info = setup_advection_speed_z(vpa.grid)
-    if z.discretization == "chebyshev_pseudospectral"
-        vpa_advection_info = setup_advection_speed_vpa(ff, z_chebyshev.f)
-    else
-        vpa_advection_info = setup_advection_speed_vpa(ff)
-    end
-=#
     # create structure z_source whose members are the arrays needed to compute
     # the source(s) appearing in the split part of the GK equation dealing
     # with advection in z
-    #z_source = setup_source(z, z_advection_info)
-    #vpa_source = setup_source(vpa, vpa_advection_info)
     z_source = setup_source(z.n, vpa.n)
     # initialise the z advection speed
     update_speed_z!(z_source.speed, vpa, z)
@@ -161,4 +112,4 @@ end
 moment_kinetics()
 
 #show(to)
-println()
+#println()
