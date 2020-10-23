@@ -39,7 +39,7 @@ function advection_1d!(ff, SL, source, coord, use_semi_lagrange, dt, chebyshev)
         # along approximate characteristics
         update_f!(ff, source.rhs, SL.dep_idx, coord.n, j)
     end
-    ff[:,1] .= 0.5*(ff[:,2] .+ ff[:,3])
+    @views @. ff[:,1] = 0.5*(ff[:,2] + ff[:,3])
 end
 # missing argument chebyshev indicates that a finite difference method is being used
 function advection_1d!(ff, SL, source, coord, use_semi_lagrange, dt)
@@ -69,7 +69,7 @@ function advection_1d!(ff, SL, source, coord, use_semi_lagrange, dt)
         # along approximate characteristics
         update_f!(ff, source.rhs, SL.dep_idx, coord.n, j)
     end
-    ff[:,1] .= 0.5*(ff[:,2] .+ ff[:,3])
+    @views @. ff[:,1] = 0.5*(ff[:,2] + ff[:,3])
 end
 
 function update_df_finite_difference!(df, f, del, j, adv_fac, bc)

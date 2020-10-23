@@ -21,9 +21,9 @@ function setup_moments(ff, vpa, nz)
     tmp = allocate_float(vpa.n)
     # no need to check bounds, as array as declared above has correct size
     @inbounds for j ∈ 1:nz
-        @. tmp = ff[j,:]
+        @views @. tmp = ff[j,:]
         density[j] = integrate_over_vspace(tmp, vpa.wgts)
-        @. tmp = ff[j,:] * vpa.grid^2
+        @views @. tmp = ff[j,:] * vpa.grid^2
         parallel_pressure[j] = integrate_over_vspace(tmp, vpa.wgts)
     end
 
@@ -38,9 +38,9 @@ function update_moments!(moments, ff, vpa, nz)
     update_ppar!(moments.ppar, tmp, ff, vpa, nz)
 #=
     @inbounds for j ∈ 1:nz
-        @. tmp = ff[j,:]
+        @views @. tmp = ff[j,:]
         moments.dens[j] = integrate_over_vspace(tmp, vpa.wgts)
-        @. tmp = ff[j,:] * vpa.grid^2
+        @views @. tmp = ff[j,:] * vpa.grid^2
         moments.ppar[j] = integrate_over_vspace(tmp, vpa.wgts)
     end
 =#
@@ -49,7 +49,7 @@ end
 
 function update_dens(dens, tmp, ff, vpa, nz)
     @inbounds for j ∈ 1:nz
-        @. tmp = ff[j,:]
+        @views @. tmp = ff[j,:]
         dens[j] = integrate_over_vspace(tmp, vpa.wgts)
     end
     return nothing
@@ -57,7 +57,7 @@ end
 
 function update_ppar(ppar, tmp, ff, vpa, nz)
     @inbounds for j ∈ 1:nz
-        @. tmp = ff[j,:] * vpa.grid^2
+        @views @. tmp = ff[j,:] * vpa.grid^2
         ppar[j] = integrate_over_vspace(tmp, vpa.wgts)
     end
     return nothing
