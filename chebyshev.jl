@@ -9,7 +9,7 @@ export setup_chebyshev_pseudospectral
 export scaled_chebyshev_grid
 export chebyshev_spectral_derivative!
 
-struct chebyshev_info
+struct chebyshev_info{TForward <: FFTW.cFFTWPlan, TBackward <: AbstractFFTs.ScaledPlan}
     # fext is an array for storing f(z) on the extended domain needed
     # to perform complex-to-complex FFT using the fact that f(theta) is even in theta
     fext::Array{Complex{Float64},1}
@@ -20,10 +20,10 @@ struct chebyshev_info
     # Chebyshev spectral coefficients of derivative of f
     df::Array{Float64,1}
     # plan for the complex-to-complex, in-place, forward Fourier transform on Chebyshev-Gauss-Lobatto grid
-    forward::FFTW.cFFTWPlan
+    forward::TForward
     # plan for the complex-to-complex, in-place, backward Fourier transform on Chebyshev-Gauss-Lobatto grid
     #backward_transform::FFTW.cFFTWPlan
-    backward::AbstractFFTs.ScaledPlan
+    backward::TBackward
 end
 # create arrays needed for explicit Chebyshev pseudospectral treatment
 # and create the plans for the forward and backward fast Fourier transforms
