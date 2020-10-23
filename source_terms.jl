@@ -161,7 +161,7 @@ end
 # update ff at time level n+1 using an explicit Runge-Kutta method
 # along approximate characteristics
 function update_f!(ff, rhs, dep_idx, n, j)
-    @boundscheck n == length(ff[:,1]) || throw(BoundsError(ff))
+    @boundscheck n == size(ff,1) || throw(BoundsError(ff))
     @boundscheck n == length(rhs) || throw(BoundsError(rhs))
     @boundscheck n == length(dep_idx) || throw(BoundsError(dep_idx))
 
