@@ -107,7 +107,7 @@ function update_df_chebyshev!(df, chebyshev, coord)
     # note that must multiply by 2/Lz to get derivative
     # in scaled coordinate
     k = 0
-    df_boundary = 0
+    df_boundary = 0.0
     scale_factor = 2*nelement/L
     @inbounds for j ∈ 1:nelement
         chebyshev_spectral_derivative!(chebyshev.df,chebyshev.f[:,j])
