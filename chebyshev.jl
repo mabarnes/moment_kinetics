@@ -110,7 +110,7 @@ function update_df_chebyshev!(df, chebyshev, coord)
     df_boundary = 0.0
     scale_factor = 2*nelement/L
     @inbounds for j ∈ 1:nelement
-        chebyshev_spectral_derivative!(chebyshev.df,chebyshev.f[:,j])
+        chebyshev_spectral_derivative!(chebyshev.df,view(chebyshev.f,:,j))
         # inverse Chebyshev transform to get df/dz
         # and multiply by scaling factor needed to go
         # from Chebyshev z coordinate to actual z
