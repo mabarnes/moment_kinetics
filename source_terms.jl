@@ -101,23 +101,24 @@ function update_advection_factor!(source, SL, n, dt, j)
     @boundscheck n == length(source.speed) || throw(BoundsError(source.speed))
     @boundscheck n == length(SL.characteristic_speed) ||
         throw(BoundsError(SL.characteristic_speed))
-    @inbounds for i ∈ 2:n
-        idx = SL.dep_idx[i]
-        # only need to calculate advection factor for characteristics
-        # that originate within the domain, as zero incoming BC
-        # takes care of the rest.
-        if idx > 0
-            # the effective advection speed appearing in the source
-            # is the speed in the frame moving with the approximate
-            # characteristic speed v_char
-            # NB: need to change v[idx] to v[i] for second iteration of RK
-            if j == 1
-                source.adv_fac[i] = -dt*(source.speed[idx]-SL.characteristic_speed[i])
-            elseif j == 2
-                source.adv_fac[i] = -dt*(source.speed[i]-SL.characteristic_speed[i])
-            end
-        end
-    end
+    #@inbounds for i ∈ 2:n
+    #    idx = SL.dep_idx[i]
+    #    # only need to calculate advection factor for characteristics
+    #    # that originate within the domain, as zero incoming BC
+    #    # takes care of the rest.
+    #    if idx > 0
+    #        # the effective advection speed appearing in the source
+    #        # is the speed in the frame moving with the approximate
+    #        # characteristic speed v_char
+    #        # NB: need to change v[idx] to v[i] for second iteration of RK
+    #        if j == 1
+    #            source.adv_fac[i] = -dt*(source.speed[idx]-SL.characteristic_speed[i])
+    #        elseif j == 2
+    #            source.adv_fac[i] = -dt*(source.speed[i]-SL.characteristic_speed[i])
+    #        end
+    #    end
+    #end
+    source.adv_fac .= dt.*source.speed
     return nothing
 end
 # calculate the explicit source terms on the rhs of the equation;
@@ -133,18 +134,19 @@ function calculate_explicit_source!(source, dep_idx, n, j)
     # ith characteristic.  note that adv_fac[i] has already
     # been defined so that it corresponds to the advection factor
     # corresponding to the ith characteristic
-    if j == 1
-        @inbounds for i ∈ 2:n
-            idx = dep_idx[i]
-            if idx > 0
-                source.rhs[i] = source.adv_fac[i]*source.df[idx]
-            end
-        end
-    elseif j == 2
-        @inbounds for i ∈ 2:n
-            source.rhs[i] = source.adv_fac[i]*source.df[i]
-        end
-    end
+    #if j == 1
+    #    @inbounds for i ∈ 2:n
+    #        idx = dep_idx[i]
+    #        if idx > 0
+    #            source.rhs[i] = source.adv_fac[i]*source.df[idx]
+    #        end
+    #    end
+    #elseif j == 2
+    #    @inbounds for i ∈ 2:n
+    #        source.rhs[i] = source.adv_fac[i]*source.df[i]
+    #    end
+    #end
+    source.rhs .= source.adv_fac.*source.df
     return nothing
 end
 # update ff at time level n+1 using an explicit Runge-Kutta method
@@ -154,14 +156,17 @@ function update_f!(ff, rhs, dep_idx, n, j)
     @boundscheck n == length(rhs) || throw(BoundsError(rhs))
     @boundscheck n == length(dep_idx) || throw(BoundsError(dep_idx))
 
+    #@inbounds for i ∈ 2:n
+    #    idx = dep_idx[i]
+    #    if idx > 0
+    #        ff[i,j+1] = ff[idx,1] + rhs[i]
+    #    else
+    #        # NB: need to re-examine this for case with non-advective terms
+    #        ff[i,j+1] = 0.
+    #    end
+    #end
     @inbounds for i ∈ 2:n
-        idx = dep_idx[i]
-        if idx > 0
-            ff[i,j+1] = ff[idx,1] + rhs[i]
-        else
-            # NB: need to re-examine this for case with non-advective terms
-            ff[i,j+1] = 0.
-        end
+      ff[i, j+1] = ff[i, 1] + rhs[i]
     end
     return nothing
 end
