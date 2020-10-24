@@ -31,7 +31,7 @@ const run_name = "comparetoJohn"
 # parameters related to the time stepping
 const nstep = 1000000
 const dt = 0.001
-const nwrite = 100
+const nwrite = 10000
 # use_semi_lagrange = true to use interpolation-free semi-Lagrange treatment
 # otherwise, solve problem solely using the discretization_option above
 const use_semi_lagrange = false
