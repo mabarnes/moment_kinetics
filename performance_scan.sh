@@ -6,6 +6,7 @@ do
 
   for i in {1..5}
   do
-    julia moment_kinetics.jl | tail -n 1 | tee -a julia_times.txt
+    #julia moment_kinetics.jl | tail -n 1 | tee -a julia_times.txt
+    julia -O3 --check-bounds=no --math-mode=fast moment_kinetics.jl | tail -n 1 | tee -a julia_times.txt
   done
 done
