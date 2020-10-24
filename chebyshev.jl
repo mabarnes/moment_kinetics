@@ -38,8 +38,8 @@ function setup_chebyshev_pseudospectral(coord)
     fcheby = allocate_float(coord.ngrid, coord.nelement)
     dcheby = allocate_float(coord.ngrid)
     # setup the plans for the forward and backward Fourier transforms
-    forward_transform = plan_fft!(fext, flags=FFTW.MEASURE)
-    backward_transform = plan_ifft!(fext, flags=FFTW.MEASURE)
+    forward_transform = plan_fft!(fext, flags=FFTW.EXHAUSTIVE)
+    backward_transform = plan_ifft!(fext, flags=FFTW.EXHAUSTIVE)
     # return a structure containing the information needed to carry out
     # a 1D Chebyshev transform
     return chebyshev_info(fext, fcheby, dcheby, forward_transform, backward_transform)
