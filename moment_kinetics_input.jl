@@ -8,6 +8,7 @@ export vpa_input
 export nstep, dt, nwrite, use_semi_lagrange
 export advection_speed, advection_speed_option
 export initialization_option, zwidth, monomial_degree
+export boltzmann_electron_response
 export check_input
 
 struct grid_input
@@ -75,6 +76,10 @@ const initialization_option = "gaussian"
 const zwidth = 0.1
 const vpawidth = 0.5
 const monomial_degree = 2
+
+# if boltzmann_electron_response = true, then the electron
+# density is fixed to be n₀(eϕ/T)
+const boltzmann_electron_response = true
 
 z_input = grid_input("z", ngrid_z, nelement_z, L_z,
     discretization_option_z, boundary_option_z)
