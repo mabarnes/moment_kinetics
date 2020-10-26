@@ -28,17 +28,17 @@ end
 =#
 # structure containing the basic arrays associated with the
 # source terms appearing in the advection equation for each coordinate
-struct source_info
+struct source_info{ndim}
     # rhs is the sum of the source terms appearing on the righthand side
     # of the equation
-    rhs::Array{Float64}
+    rhs::Array{Float64, ndim}
     # df is the derivative of the distribution function f with respect
     # to the coordinate associated with this set of source terms
-    df::Array{Float64}
+    df::Array{Float64, ndim}
     # speed is the component of the advection speed along this coordinate axis
-    speed::Array{Float64}
+    speed::Array{Float64, ndim}
     # adv_fac is the advection factor that multiplies df in the advective source
-    adv_fac::Array{Float64}
+    adv_fac::Array{Float64, ndim}
 end
 # create arrays needed to compute the source term(s)
 function setup_source(n)
@@ -52,7 +52,7 @@ function setup_source(n)
     # create array for storing the speed along this coordinate
     speed = allocate_float(n)
     # return source_info struct containing necessary 1D arrays
-    return source_info(rhs, df, speed, adv_fac)
+    return source_info{1}(rhs, df, speed, adv_fac)
 end
 # create arrays needed to compute the source term(s)
 function setup_source(n, m)
@@ -66,7 +66,7 @@ function setup_source(n, m)
     # create array for storing the speed along this coordinate
     speed = allocate_float(n, m)
     # return source_info struct containing necessary 1D arrays
-    return source_info(rhs, df, speed, adv_fac)
+    return source_info{2}(rhs, df, speed, adv_fac)
 end
 #=
 # calculate the advection speed at each grid point
@@ -161,7 +161,7 @@ end
 # update ff at time level n+1 using an explicit Runge-Kutta method
 # along approximate characteristics
 function update_f!(ff, rhs, dep_idx, n, j)
-    @boundscheck n == length(ff[:,1]) || throw(BoundsError(ff))
+    @boundscheck n == size(ff,1) || throw(BoundsError(ff))
     @boundscheck n == length(rhs) || throw(BoundsError(rhs))
     @boundscheck n == length(dep_idx) || throw(BoundsError(dep_idx))
 

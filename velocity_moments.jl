@@ -29,9 +29,9 @@ function setup_moments(ff, vpa, nz)
     scratch = allocate_float(vpa.n)
     # no need to check bounds, as array as declared above has correct size
     @inbounds for iz ∈ 1:nz
-        @. scratch = ff[iz,:]
+        @views @. scratch = ff[iz,:]
         density[iz] = integrate_over_vspace(scratch, vpa.wgts)
-        @. scratch = ff[iz,:] * vpa.grid^2
+        @views @. scratch = ff[iz,:] * vpa.grid^2
         parallel_pressure[iz] = integrate_over_vspace(scratch, vpa.wgts)
     end
 
@@ -47,15 +47,16 @@ end
 
 function update_density!(dens, scratch, ff, vpa, nz)
     @inbounds for iz ∈ 1:nz
-        @. scratch = ff[iz,:]
+        @views @. scratch = ff[iz,:]
         dens[iz] = integrate_over_vspace(scratch, vpa.wgts)
     end
     return nothing
 end
 
+
 function update_ppar!(ppar, scratch, ff, vpa, nz)
     @inbounds for iz ∈ 1:nz
-        @. scratch = ff[iz,:] * vpa.grid^2
+        @views @. scratch = ff[iz,:] * vpa.grid^2
         ppar[iz] = integrate_over_vspace(scratch, vpa.wgts)
     end
     return nothing
