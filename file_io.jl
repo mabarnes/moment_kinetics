@@ -3,7 +3,7 @@ module file_io
 export input_option_error
 export open_output_file
 export setup_file_io, finish_file_io
-export write_f, write_moments
+export write_f, write_moments, write_fields
 
 # structure containing the various input/output streams
 struct ios
@@ -12,12 +12,16 @@ struct ios
     # corresponds to the ascii file to which velocity space moments of the
     # distribution function such as density and pressure are written
     moments::IOStream
+    # corresponds to the ascii file to which electromagnetic fields
+    # such as the electrostatic potential are written
+    fields::IOStream
 end
 # open the necessary output files
 function setup_file_io(run_name)
     ff_io = open_output_file(run_name, "f_vs_t")
     mom_io = open_output_file(run_name, "moments_vs_t")
-    return ios(ff_io, mom_io)
+    fields_io = open_output_file(run_name, "fields_vs_t")
+    return ios(ff_io, mom_io, fields_io)
 end
 # close all opened output files
 function finish_file_io(io)
@@ -48,6 +52,16 @@ function write_moments(mom, z, t, io)
         for i ∈ 1:z.n
             println(io,"t: ", t, ",   z: ", z.grid[i], "  dens: ", mom.dens[i],
                 ",   ppar: ", mom.ppar[i])
+        end
+    end
+    println(io,"")
+    return nothing
+end
+# write electrostatic potential at this time slice
+function write_fields(flds, z, t, io)
+    @inbounds begin
+        for i ∈ 1:z.n
+            println(io,"t: ", t, ",   z: ", z.grid[i], "  phi: ", flds.phi[i])
         end
     end
     println(io,"")

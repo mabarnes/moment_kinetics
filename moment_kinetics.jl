@@ -6,7 +6,7 @@ push!(LOAD_PATH, ".")
 #to = TimerOutput()
 
 using file_io: setup_file_io, finish_file_io
-using file_io: write_f, write_moments
+using file_io: write_f, write_moments, write_fields
 using chebyshev: setup_chebyshev_pseudospectral
 using coordinates: define_coordinate, write_coordinate
 using source_terms: setup_source
@@ -14,6 +14,7 @@ using semi_lagrange: setup_semi_lagrange
 using vpa_advection: vpa_advection!, update_speed_vpa!
 using z_advection: z_advection!, update_speed_z!
 using velocity_moments: setup_moments
+using em_fields: setup_em_fields, update_phi!
 using initial_conditions: init_f
 
 using moment_kinetics_input: run_name
@@ -66,6 +67,12 @@ function time_advance!(ff, z, vpa, t, io)
     # the kinetic equation coupled to fluid equations
     # the resulting moments are returned in the structure "moments"
     moments = setup_moments(view(ff,:,:,1), vpa, z.n)
+    # pass a subarray of ff (its value at the previous time level)
+    # and create the "fields" structure that contains arrays
+    # for the electrostatic potential phi and eventually the electromagnetic fields
+    fields = setup_em_fields(z.n)
+    # initialize the electrostatic potential
+    update_phi!(fields.phi, moments, view(ff,:,:,1), vpa, z.n)
     # create structure z_source whose members are the arrays needed to compute
     # the source(s) appearing in the split part of the GK equation dealing
     # with advection in z
@@ -77,7 +84,7 @@ function time_advance!(ff, z, vpa, t, io)
     # with advection in vpa
     vpa_source = setup_source(z.n, vpa.n)
     # initialise the vpa advection speed
-    update_speed_vpa!(vpa_source.speed, vpa, z)
+    update_speed_vpa!(vpa_source.speed, fields.phi, moments, view(ff,:,:,1), vpa, z)
     # create an array of structures containing the arrays needed for the semi-Lagrange
     # solve and initialize the characteristic speed and departure indices
     # so that the code can gracefully run without using the semi-Lagrange
@@ -94,9 +101,9 @@ function time_advance!(ff, z, vpa, t, io)
         end
         # vpa_advection! advances the operator-split 1D advection equation in vpa
         if vpa.discretization == "chebyshev_pseudospectral"
-            vpa_advection!(ff, vpa_SL, vpa_source, vpa, z, use_semi_lagrange, dt, vpa_chebyshev)
+            vpa_advection!(ff, fields.phi, moments, vpa_SL, vpa_source, vpa, z, use_semi_lagrange, dt, vpa_chebyshev)
         elseif vpa.discretization == "finite_difference"
-            vpa_advection!(ff, vpa_SL, vpa_source, vpa, z, use_semi_lagrange, dt)
+            vpa_advection!(ff, fields.phi, moments, vpa_SL, vpa_source, vpa, z, use_semi_lagrange, dt)
         end
         # update the time
         t += dt
@@ -104,6 +111,7 @@ function time_advance!(ff, z, vpa, t, io)
         if mod(i,nwrite) == 0
             write_f(ff, z, vpa, t, io.ff)
             write_moments(moments, z, t, io.moments)
+            write_fields(fields, z, t, io.fields)
         end
     end
     return nothing

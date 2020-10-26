@@ -10,16 +10,17 @@ import source_terms: calculate_explicit_source!
 import source_terms: update_f!
 import chebyshev: update_fcheby!
 import chebyshev: update_df_chebyshev!
+using em_fields: update_phi!
 
 # argument chebyshev indicates that a chebyshev pseudopectral method is being used
-function vpa_advection!(ff, SL, source, vpa, z, use_semi_lagrange, dt, chebyshev)
+function vpa_advection!(ff, phi, moments, SL, source, vpa, z, use_semi_lagrange, dt, chebyshev)
     # check to ensure that all array indices accessed in this function
     # are in-bounds
     @boundscheck size(ff,1) == z.n || throw(BoundsError(ff))
     @boundscheck size(ff,2) == vpa.n || throw(BoundsError(ff))
     @boundscheck size(ff,3) == 3 || throw(BoundsError(ff))
     # get the updated speed along the vpa direction
-    update_speed_vpa!(source.speed, vpa, z)
+    update_speed_vpa!(source.speed, phi, moments, view(ff,:,:,1), vpa, z)
     # if using interpolation-free Semi-Lagrange,
     # follow characteristics backwards in time from level m+1 to level m
     # to get departure points.  then find index of grid point nearest
@@ -51,9 +52,10 @@ function vpa_advection!(ff, SL, source, vpa, z, use_semi_lagrange, dt, chebyshev
             # along approximate characteristics
             update_f!(view(ff,iz,:,:), view(source.rhs,iz,:), SL[iz].dep_idx, vpa.n, j)
         end
+        #moments.dens_updated = false ; moments.ppar_updated = false
         # calculate the advection speed corresponding to current f
         if j != jend
-            update_speed_vpa!(source.speed, vpa, z)
+            update_speed_vpa!(source.speed, phi, moments, view(ff,:,:,j+1), vpa, z)
         end
     end
     @inbounds begin
@@ -66,14 +68,14 @@ function vpa_advection!(ff, SL, source, vpa, z, use_semi_lagrange, dt, chebyshev
 end
 # for use with finite difference scheme
 # argument chebyshev indicates that a chebyshev pseudopectral method is being used
-function vpa_advection!(ff, SL, source, vpa, z, use_semi_lagrange, dt)
+function vpa_advection!(ff, phi, moments, SL, source, vpa, z, use_semi_lagrange, dt)
     # check to ensure that all array indices accessed in this function
     # are in-bounds
     @boundscheck size(f,1) == z.n || throw(BoundsError(f))
     @boundscheck size(f,2) == vpa.n || throw(BoundsError(f))
     @boundscheck size(f,3) == 3 || throw(BoundsError(f))
     # get the updated speed along the vpa direction
-    update_speed_z!(source.speed, vpa, z)
+    update_speed_vpa!(source.speed, phi, moments, view(ff,:,:,1), vpa, z)
     # if using interpolation-free Semi-Lagrange,
     # follow characteristics backwards in time from level m+1 to level m
     # to get departure points.  then find index of grid point nearest
@@ -104,8 +106,11 @@ function vpa_advection!(ff, SL, source, vpa, z, use_semi_lagrange, dt)
             # along approximate characteristics
             update_f!(view(ff,iz,:,:), view(source.rhs,iz,:), SL[iz].dep_idx, vpa.n, j)
         end
+        #moments.dens_updated = false ; moments.ppar_updated = false
         # calculate the advection speed corresponding to current f
-        update_speed_vpa!(source.speed, vpa, z)
+	if j != jend
+	   update_speed_vpa!(source.speed, phi, moments, view(ff,:,:,j+1), vpa, z)
+	end
     end
     @inbounds begin
         for ivpa ∈ 1:vpa.n
@@ -116,11 +121,11 @@ function vpa_advection!(ff, SL, source, vpa, z, use_semi_lagrange, dt)
     end
 end
 # calculate the advection speed in the z-direction at each grid point
-function update_speed_vpa!(speed, vpa, z)
+function update_speed_vpa!(speed, phi, moments, ff, vpa, z)
     @boundscheck z.n == size(speed,1) || throw(BoundsError(speed))
     @boundscheck vpa.n == size(speed,2) || throw(BoundsError(speed))
     if advection_speed_option == "default"
-        #update_E_parallel!()
+        update_phi!(phi, moments, ff, vpa, z.n)
         @inbounds begin
             for j ∈ 1:vpa.n
                 for i ∈ 1:z.n

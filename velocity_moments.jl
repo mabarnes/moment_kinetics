@@ -4,12 +4,20 @@ using array_allocation: allocate_float
 
 export integrate_over_vspace!
 export update_moments!
+export update_density!
 
-struct moment
+struct moments
     # this is the particle density
     dens::Array{Float64,1}
+    # flag that keeps track of if the density needs updating before use
+    dens_updated::Bool
     # this is the parallel pressure
     ppar::Array{Float64,1}
+    # flag that keeps track of whether or not ppar needs updating before use
+    ppar_updated::Bool
+    # this is a scratch array that can be used for intermediate calculations
+    # involving the moments; useful to avoid unneccesary allocation/garbage collection
+    scratch::Array{Float64,1}
 end
 
 function setup_moments(ff, vpa, nz)
@@ -17,48 +25,38 @@ function setup_moments(ff, vpa, nz)
     density = allocate_float(nz)
     # allocate array used for the parallel pressure
     parallel_pressure = allocate_float(nz)
-    # NB: there will be a better way to do this to avoid memory usage
-    tmp = allocate_float(vpa.n)
+    # allocate arrary to be used for temporary storage
+    scratch = allocate_float(vpa.n)
     # no need to check bounds, as array as declared above has correct size
-    @inbounds for j ∈ 1:nz
-        @. tmp = ff[j,:]
-        density[j] = integrate_over_vspace(tmp, vpa.wgts)
-        @. tmp = ff[j,:] * vpa.grid^2
-        parallel_pressure[j] = integrate_over_vspace(tmp, vpa.wgts)
+    @inbounds for iz ∈ 1:nz
+        @. scratch = ff[iz,:]
+        density[iz] = integrate_over_vspace(scratch, vpa.wgts)
+        @. scratch = ff[iz,:] * vpa.grid^2
+        parallel_pressure[iz] = integrate_over_vspace(scratch, vpa.wgts)
     end
 
-    return moment(density, parallel_pressure)
+    return moments(density, true, parallel_pressure, true, scratch)
 end
 
 function update_moments!(moments, ff, vpa, nz)
-    # NB: there will be a better way to do this to avoid memory usage
-    tmp = allocate_float(vpa.n)
     @boundscheck nz == size(ff, 1) || throw(BoundsError(ff))
-    update_dens!(moments.dens, tmp, ff, vpa, nz)
-    update_ppar!(moments.ppar, tmp, ff, vpa, nz)
-#=
-    @inbounds for j ∈ 1:nz
-        @. tmp = ff[j,:]
-        moments.dens[j] = integrate_over_vspace(tmp, vpa.wgts)
-        @. tmp = ff[j,:] * vpa.grid^2
-        moments.ppar[j] = integrate_over_vspace(tmp, vpa.wgts)
-    end
-=#
+    update_density!(moments.dens, moments.scratch, ff, vpa, nz)
+    update_ppar!(moments.ppar, moments.scratch, ff, vpa, nz)
     return nothing
 end
 
-function update_dens(dens, tmp, ff, vpa, nz)
-    @inbounds for j ∈ 1:nz
-        @. tmp = ff[j,:]
-        dens[j] = integrate_over_vspace(tmp, vpa.wgts)
+function update_density!(dens, scratch, ff, vpa, nz)
+    @inbounds for iz ∈ 1:nz
+        @. scratch = ff[iz,:]
+        dens[iz] = integrate_over_vspace(scratch, vpa.wgts)
     end
     return nothing
 end
 
-function update_ppar(ppar, tmp, ff, vpa, nz)
-    @inbounds for j ∈ 1:nz
-        @. tmp = ff[j,:] * vpa.grid^2
-        ppar[j] = integrate_over_vspace(tmp, vpa.wgts)
+function update_ppar!(ppar, scratch, ff, vpa, nz)
+    @inbounds for iz ∈ 1:nz
+        @. scratch = ff[iz,:] * vpa.grid^2
+        ppar[iz] = integrate_over_vspace(scratch, vpa.wgts)
     end
     return nothing
 end
