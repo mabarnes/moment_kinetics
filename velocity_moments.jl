@@ -6,7 +6,7 @@ export integrate_over_vspace!
 export update_moments!
 export update_density!
 
-struct moments
+mutable struct moments
     # this is the particle density
     dens::Array{Float64,1}
     # flag that keeps track of if the density needs updating before use

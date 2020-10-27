@@ -4,28 +4,9 @@ import array_allocation: allocate_float
 import moment_kinetics_input: advection_speed, advection_speed_option
 
 export setup_source
-#export update_speed!
 export update_advection_factor!
 export calculate_explicit_source!
 export update_f!
-#=
-struct advection_speed_info_z
-    # this is the peculiar velocity along z
-    vpa::Array{Float64,1}
-end
-struct advection_speed_info_vpa
-    # this is the particle distribution function
-    ff::Array{Float64,3}
-    # fcheby contains the Chebyshev spectral coefficients of ff
-    fcheby::Array{Float64,2}
-end
-function setup_advection_speed_z(vpa)
-    return advection_speed_info_z(vpa)
-end
-function setup_advection_speed_vpa(ff, fcheby)
-    return advection_speed_info_vpa(ff, fcheby)
-end
-=#
 # structure containing the basic arrays associated with the
 # source terms appearing in the advection equation for each coordinate
 struct source_info{ndim}
@@ -68,42 +49,6 @@ function setup_source(n, m)
     # return source_info struct containing necessary 1D arrays
     return source_info{2}(rhs, df, speed, adv_fac)
 end
-#=
-# calculate the advection speed at each grid point
-function update_speed!(speed, coord)
-    n = coord.n
-    @boundscheck n == length(speed) || throw(BoundsError(speed))
-    if advection_speed_option == "constant"
-        @inbounds for i ∈ 1:n
-            speed[i] = advection_speed
-        end
-    elseif advection_speed_option == "linear"
-        @inbounds for i ∈ 1:n
-            speed[i] = advection_speed*(coord.grid[i]+0.5*coord.L)
-        end
-    end
-    return nothing
-end
-# calculate the advection speed in the z coordinate
-function update_speed!(speed, adv::advection_speed_info_z, coord)
-    n = coord.n
-    @boundscheck n == length(speed) || throw(BoundsError(speed))
-    @inbounds for i ∈ 1:n
-        speed[i] = adv.vpa[i]
-    end
-    return nothing
-end
-# calculate the advection speed in the vpa coordinate
-function update_speed!(speed, adv::advection_speed_info_vpa, coord)
-    n = coord.n
-    @boundscheck n == length(speed) || throw(BoundsError(speed))
-    # obtain the parallel pressure
-    update_ppar!(ppar, vpa_tmp, ff, vpa, nz)
-    # calculate the z derivative of the parallel pressure
-
-    return nothing
-end
-=#
 # calculate the factor appearing in front of f' in the advection term
 # at time level n in the frame moving with the approximate characteristic
 function update_advection_factor!(adv_fac, speed, SL, n, dt, j)

@@ -126,6 +126,9 @@ function time_advance!(ff, t, z, vpa, z_chebyshev, vpa_chebyshev, moments, field
         elseif z.discretization == "finite_difference"
             z_advection!(ff, z_SL, z_source, z, vpa, use_semi_lagrange, dt)
         end
+        # reset "xx.updated" flags to false since ff has been updated
+        # and the corresponding moments have not
+        moments.dens_updated = false ; moments.ppar_updated = false
         # vpa_advection! advances the operator-split 1D advection equation in vpa
         if vpa.discretization == "chebyshev_pseudospectral"
             vpa_advection!(ff, fields.phi, moments, vpa_SL, vpa_source, vpa, z, use_semi_lagrange, dt, vpa_chebyshev)
