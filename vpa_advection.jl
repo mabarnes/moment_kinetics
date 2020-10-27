@@ -3,17 +3,19 @@ module vpa_advection
 export vpa_advection!
 export update_speed_vpa!
 
-import moment_kinetics_input: advection_speed, advection_speed_option
-import semi_lagrange: find_approximate_characteristic!
-import source_terms: update_advection_factor!
-import source_terms: calculate_explicit_source!
-import source_terms: update_f!
-import chebyshev: update_fcheby!
-import chebyshev: update_df_chebyshev!
+using finite_differences: update_df_finite_difference!
+using moment_kinetics_input: advection_speed, advection_speed_option
+using semi_lagrange: find_approximate_characteristic!
+using source_terms: update_advection_factor!
+using source_terms: calculate_explicit_source!
+using source_terms: update_f!
+using chebyshev: update_fcheby!
+using chebyshev: update_df_chebyshev!
 using em_fields: update_phi!
 
 # argument chebyshev indicates that a chebyshev pseudopectral method is being used
-function vpa_advection!(ff, phi, moments, SL, source, vpa, z, use_semi_lagrange, dt, chebyshev)
+function vpa_advection!(ff, phi, moments, SL, source, vpa, z, use_semi_lagrange, dt,
+	vpa_spectral)
     # check to ensure that all array indices accessed in this function
     # are in-bounds
     @boundscheck size(ff,1) == z.n || throw(BoundsError(ff))
@@ -42,8 +44,8 @@ function vpa_advection!(ff, phi, moments, SL, source, vpa, z, use_semi_lagrange,
                 view(source.speed,iz,:), SL[iz], vpa.n, dt, j)
             # Chebyshev transform f to get Chebyshev spectral coefficients
             # and use them to calculate f'
-            update_fcheby!(chebyshev, view(ff,iz,:,j), vpa)
-            update_df_chebyshev!(view(source.df,iz,:), chebyshev, vpa)
+            update_fcheby!(vpa_spectral, view(ff,iz,:,j), vpa)
+            update_df_chebyshev!(view(source.df,iz,:), vpa_spectral, vpa)
             # calculate the explicit source terms on the rhs of the equation;
             # i.e., -Δt⋅δv⋅f'
             calculate_explicit_source!(view(source.rhs,iz,:), view(source.df,iz,:),
@@ -67,7 +69,6 @@ function vpa_advection!(ff, phi, moments, SL, source, vpa, z, use_semi_lagrange,
     end
 end
 # for use with finite difference scheme
-# argument chebyshev indicates that a chebyshev pseudopectral method is being used
 function vpa_advection!(ff, phi, moments, SL, source, vpa, z, use_semi_lagrange, dt)
     # check to ensure that all array indices accessed in this function
     # are in-bounds
@@ -151,46 +152,6 @@ function update_speed_vpa!(speed, phi, moments, ff, vpa, z)
         end
     end
     return nothing
-end
-
-function update_df_finite_difference!(df, f, del, adv_fac, bc)
-    n = length(del)
-    @boundscheck n == length(df) || throw(BoundsError(df))
-	@boundscheck n == length(f) || throw(BoundsError(f))
-    @boundscheck n == length(del) || throw(BoundsError(del))
-	@boundscheck n == length(adv_fac) || throw(BoundsError(adv_fac))
-    @inbounds @fastmath begin
-        if bc == "zero"
-            df[1] = 0.
-        elseif bc == "periodic"
-            df[1] = (f[1]-f[n-1])/del[1]
-        end
-        for i ∈ 3:n-2
-            if adv_fac[i] < 0
-                df[i] =  (3*f[i]-4*f[i-1]+f[i-2])/(2*del[i])
-            else
-                df[i] = (-f[i+2]+4*f[i+1]-3*f[i])/(2*del[i+1])
-            end
-        end
-        if adv_fac[1] > 0
-            df[1] = (-f[3]+4*f[2]-3*f[1])/(2*del[2])
-        end
-        if adv_fac[2] > 0
-            df[2] = (-f[4]+4*f[3]-3*f[2])/(2*del[3])
-        else
-            # have to modify for periodic
-            df[2] = (3*f[2]-4*f[1])/(2*del[2])
-        end
-        if adv_fac[n] < 0
-            df[n] = (3*f[n]-4*f[n-1]+f[n-2])/(2*del[n])
-        end
-        if adv_fac[n-1] < 0
-            df[n-1] = (3*f[n-1]-4*f[n-2]+f[n-3])/(2*del[n-1])
-        else
-            # have to modify for periodic
-            df[n-1] = (4*f[n]-3*f[n-1])/(2*del[n])
-        end
-    end
 end
 
 end

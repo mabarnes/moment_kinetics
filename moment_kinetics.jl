@@ -24,6 +24,7 @@ using moment_kinetics_input: performance_test
 to1 = TimerOutput()
 to2 = TimerOutput()
 
+# main function that contains all of the content of the program
 function moment_kinetics(to)
     # check input options to catch errors
     check_input()
@@ -43,14 +44,14 @@ function moment_kinetics(to)
     write_f(ff, z, vpa, code_time, io.ff)
     # create arrays and do other work needed to setup
     # the main time advance loop
-    z_chebyshev, vpa_chebyshev, moments, fields, z_source, vpa_source,
+    z_spectral, vpa_spectral, moments, fields, z_source, vpa_source,
         z_SL, vpa_SL = setup_time_advance(ff, z, vpa)
     # solve the 1+1D kinetic equation to advance f in time by nstep time steps
     if performance_test
-        @timeit to "time_advance" time_advance!(ff, code_time, z, vpa, z_chebyshev, vpa_chebyshev, moments,
+        @timeit to "time_advance" time_advance!(ff, code_time, z, vpa, z_spectral, vpa_spectral, moments,
             fields, z_source, vpa_source, z_SL, vpa_SL, io)
     else
-        time_advance!(ff, code_time, z, vpa, z_chebyshev, vpa_chebyshev, moments,
+        time_advance!(ff, code_time, z, vpa, z_spectral, vpa_spectral, moments,
             fields, z_source, vpa_source, z_SL, vpa_SL, io)
     end
     # finish i/o
@@ -66,18 +67,18 @@ function setup_time_advance(ff, z, vpa)
     if z.discretization == "chebyshev_pseudospectral"
         # create arrays needed for explicit Chebyshev pseudospectral treatment in vpa
         # and create the plans for the forward and backward fast Chebyshev transforms
-        z_chebyshev = setup_chebyshev_pseudospectral(z)
+        z_spectral = setup_chebyshev_pseudospectral(z)
     else
         # create dummy Bool variable to return in place of the above struct
-        z_chebyshev = false
+        z_spectral = false
     end
     if vpa.discretization == "chebyshev_pseudospectral"
         # create arrays needed for explicit Chebyshev pseudospectral treatment in vpa
         # and create the plans for the forward and backward fast Chebyshev transforms
-        vpa_chebyshev = setup_chebyshev_pseudospectral(vpa)
+        vpa_spectral = setup_chebyshev_pseudospectral(vpa)
     else
         # create dummy Bool variable to return in place of the above struct
-        vpa_chebyshev = false
+        vpa_spectral = false
     end
     # pass a subarray of ff (its value at the previous time level)
     # and allocate/initialize the velocity space moments needed for advancing
@@ -108,7 +109,7 @@ function setup_time_advance(ff, z, vpa)
     # method if the user specifies this
     z_SL = setup_semi_lagrange(z.n, vpa.n)
     vpa_SL = setup_semi_lagrange(vpa.n, z.n)
-    return z_chebyshev, vpa_chebyshev, moments, fields, z_source, vpa_source, z_SL, vpa_SL
+    return z_spectral, vpa_spectral, moments, fields, z_source, vpa_source, z_SL, vpa_SL
 end
 # solve ∂f/∂t + v(z,t)⋅∂f/∂z + dvpa/dt ⋅ ∂f/∂vpa= 0
 # define approximate characteristic velocity
@@ -116,13 +117,13 @@ end
 # df/dt + δv⋅∂f/∂z = 0, with δv(z,t)=v(z,t)-v₀(z)
 # for prudent choice of v₀, expect δv≪v so that explicit
 # time integrator can be used without severe CFL condition
-function time_advance!(ff, t, z, vpa, z_chebyshev, vpa_chebyshev, moments, fields,
+function time_advance!(ff, t, z, vpa, z_spectral, vpa_spectral, moments, fields,
     z_source, vpa_source, z_SL, vpa_SL, io)
     # main time advance loop
     for i ∈ 1:nstep
         # z_advection! advances the operator-split 1D advection equation in z
         if z.discretization == "chebyshev_pseudospectral"
-            z_advection!(ff, z_SL, z_source, z, vpa, use_semi_lagrange, dt, z_chebyshev)
+            z_advection!(ff, z_SL, z_source, z, vpa, use_semi_lagrange, dt, z_spectral)
         elseif z.discretization == "finite_difference"
             z_advection!(ff, z_SL, z_source, z, vpa, use_semi_lagrange, dt)
         end
@@ -131,7 +132,7 @@ function time_advance!(ff, t, z, vpa, z_chebyshev, vpa_chebyshev, moments, field
         moments.dens_updated = false ; moments.ppar_updated = false
         # vpa_advection! advances the operator-split 1D advection equation in vpa
         if vpa.discretization == "chebyshev_pseudospectral"
-            vpa_advection!(ff, fields.phi, moments, vpa_SL, vpa_source, vpa, z, use_semi_lagrange, dt, vpa_chebyshev)
+            vpa_advection!(ff, fields.phi, moments, vpa_SL, vpa_source, vpa, z, use_semi_lagrange, dt, vpa_spectral)
         elseif vpa.discretization == "finite_difference"
             vpa_advection!(ff, fields.phi, moments, vpa_SL, vpa_source, vpa, z, use_semi_lagrange, dt)
         end
