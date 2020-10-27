@@ -19,7 +19,9 @@ struct moments
     # involving the moments; useful to avoid unneccesary allocation/garbage collection
     scratch::Array{Float64,1}
 end
-
+# create and initialise arrays for the density and parallel pressure,
+# as well as a scratch array used for intermediate calculations needed
+# to later update these moments
 function setup_moments(ff, vpa, nz)
     # allocate array used for the particle density
     density = allocate_float(nz)
@@ -37,14 +39,14 @@ function setup_moments(ff, vpa, nz)
 
     return moments(density, true, parallel_pressure, true, scratch)
 end
-
+# calculate the updated density (dens) and parallel pressure (ppar)
 function update_moments!(moments, ff, vpa, nz)
     @boundscheck nz == size(ff, 1) || throw(BoundsError(ff))
     update_density!(moments.dens, moments.scratch, ff, vpa, nz)
     update_ppar!(moments.ppar, moments.scratch, ff, vpa, nz)
     return nothing
 end
-
+# calculate the updated density (dens)
 function update_density!(dens, scratch, ff, vpa, nz)
     @inbounds for iz ∈ 1:nz
         @views @. scratch = ff[iz,:]
@@ -52,8 +54,7 @@ function update_density!(dens, scratch, ff, vpa, nz)
     end
     return nothing
 end
-
-
+# calculate the updated parallel pressure (ppar)
 function update_ppar!(ppar, scratch, ff, vpa, nz)
     @inbounds for iz ∈ 1:nz
         @views @. scratch = ff[iz,:] * vpa.grid^2
@@ -61,12 +62,12 @@ function update_ppar!(ppar, scratch, ff, vpa, nz)
     end
     return nothing
 end
-
+# computes the integral over vpa of the integrand, using the input vpa_wgts
 function integrate_over_vspace(integrand, vpa_wgts)
     # nvpa is the number of v_parallel grid points
     nvpa = length(vpa_wgts)
     # initialize 'integral' to zero before sum
-    integral = 0
+    integral = 0.0
     @boundscheck nvpa == length(integrand) || throw(BoundsError(integrand))
     @inbounds for i ∈ 1:nvpa
         integral += integrand[i]*vpa_wgts[i]
