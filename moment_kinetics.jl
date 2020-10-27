@@ -1,9 +1,7 @@
 # add the current directory to the path where the code looks for external modules
 push!(LOAD_PATH, ".")
 
-#using TimerOutputs
-
-#to = TimerOutput()
+using TimerOutputs
 
 using file_io: setup_file_io, finish_file_io
 using file_io: write_f, write_moments, write_fields
@@ -21,8 +19,12 @@ using moment_kinetics_input: run_name
 using moment_kinetics_input: z_input, vpa_input
 using moment_kinetics_input: nstep, dt, nwrite, use_semi_lagrange
 using moment_kinetics_input: check_input
+using moment_kinetics_input: performance_test
 
-function moment_kinetics()
+to1 = TimerOutput()
+to2 = TimerOutput()
+
+function moment_kinetics(to)
     # check input options to catch errors
     check_input()
     # initialize z grid and write grid point locations to file
@@ -39,28 +41,43 @@ function moment_kinetics()
     io = setup_file_io(run_name)
     # write initial condition to file
     write_f(ff, z, vpa, code_time, io.ff)
-    # solve the advection equation to advance u in time by nstep time steps
-    time_advance!(ff, z, vpa, code_time, io)
+    # create arrays and do other work needed to setup
+    # the main time advance loop
+    z_chebyshev, vpa_chebyshev, moments, fields, z_source, vpa_source,
+        z_SL, vpa_SL = setup_time_advance(ff, z, vpa)
+    # solve the 1+1D kinetic equation to advance f in time by nstep time steps
+    if performance_test
+        @timeit to "time_advance" time_advance!(ff, code_time, z, vpa, z_chebyshev, vpa_chebyshev, moments,
+            fields, z_source, vpa_source, z_SL, vpa_SL, io)
+    else
+        time_advance!(ff, code_time, z, vpa, z_chebyshev, vpa_chebyshev, moments,
+            fields, z_source, vpa_source, z_SL, vpa_SL, io)
+    end
     # finish i/o
     finish_file_io(io)
     return nothing
 end
-# solve ∂f/∂t + v(z,t)⋅∂f/∂z = 0
-# define approximate characteristic velocity
-# v₀(z)=vⁿ(z) and take time derivative along this characteristic
-# df/dt + δv⋅∂f/∂z = 0, with δv(z,t)=v(z,t)-v₀(z)
-# for prudent choice of v₀, expect δv≪v so that explicit
-# time integrator can be used without severe CFL condition
-function time_advance!(ff, z, vpa, t, io)
-    # create arrays needed for explicit Chebyshev pseudospectral treatment
-    # and create the plans for the forward and backward fast Chebyshev transforms
+# create arrays and do other work needed to setup
+# the main time advance loop.
+# this includes creating and populating structs
+# for Chebyshev transforms, velocity space moments,
+# EM fields, semi-Lagrange treatment, and source terms
+function setup_time_advance(ff, z, vpa)
     if z.discretization == "chebyshev_pseudospectral"
-        # will only chebyshev transform within a given element
-        # so send in the correctly-sized array to setup the chebyshev plan
+        # create arrays needed for explicit Chebyshev pseudospectral treatment in vpa
+        # and create the plans for the forward and backward fast Chebyshev transforms
         z_chebyshev = setup_chebyshev_pseudospectral(z)
+    else
+        # create dummy Bool variable to return in place of the above struct
+        z_chebyshev = false
     end
     if vpa.discretization == "chebyshev_pseudospectral"
+        # create arrays needed for explicit Chebyshev pseudospectral treatment in vpa
+        # and create the plans for the forward and backward fast Chebyshev transforms
         vpa_chebyshev = setup_chebyshev_pseudospectral(vpa)
+    else
+        # create dummy Bool variable to return in place of the above struct
+        vpa_chebyshev = false
     end
     # pass a subarray of ff (its value at the previous time level)
     # and allocate/initialize the velocity space moments needed for advancing
@@ -91,6 +108,16 @@ function time_advance!(ff, z, vpa, t, io)
     # method if the user specifies this
     z_SL = setup_semi_lagrange(z.n, vpa.n)
     vpa_SL = setup_semi_lagrange(vpa.n, z.n)
+    return z_chebyshev, vpa_chebyshev, moments, fields, z_source, vpa_source, z_SL, vpa_SL
+end
+# solve ∂f/∂t + v(z,t)⋅∂f/∂z + dvpa/dt ⋅ ∂f/∂vpa= 0
+# define approximate characteristic velocity
+# v₀(z)=vⁿ(z) and take time derivative along this characteristic
+# df/dt + δv⋅∂f/∂z = 0, with δv(z,t)=v(z,t)-v₀(z)
+# for prudent choice of v₀, expect δv≪v so that explicit
+# time integrator can be used without severe CFL condition
+function time_advance!(ff, t, z, vpa, z_chebyshev, vpa_chebyshev, moments, fields,
+    z_source, vpa_source, z_SL, vpa_SL, io)
     # main time advance loop
     for i ∈ 1:nstep
         # z_advection! advances the operator-split 1D advection equation in z
@@ -117,7 +144,13 @@ function time_advance!(ff, z, vpa, t, io)
     return nothing
 end
 
-moment_kinetics()
-
-#show(to)
-#println()
+if performance_test
+    @timeit to1 "moment_kinetics 1" moment_kinetics(to1)
+    show(to1)
+    println()
+    @timeit to2 "moment_kinetics 1" moment_kinetics(to2)
+    show(to2)
+    println()
+else
+    moment_kinetics(to1)
+end

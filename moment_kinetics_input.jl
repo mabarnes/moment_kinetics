@@ -10,6 +10,7 @@ export advection_speed, advection_speed_option
 export initialization_option, zwidth, monomial_degree
 export boltzmann_electron_response
 export check_input
+export performance_test
 
 struct grid_input
     # name of the variable associated with this coordinate
@@ -27,12 +28,12 @@ struct grid_input
 end
 
 # this is the prefix for all output files associated with this run
-const run_name = "test"
+const run_name = "example"
 
 # parameters related to the time stepping
-const nstep = 5
-const dt = 0.1
-const nwrite = 5
+const nstep = 500
+const dt = 0.001
+const nwrite = 500
 # use_semi_lagrange = true to use interpolation-free semi-Lagrange treatment
 # otherwise, solve problem solely using the discretization_option above
 const use_semi_lagrange = true
@@ -50,7 +51,7 @@ const boundary_option_z = "zero"
 # determine the discretization option for the z grid
 # supported options are "chebyshev_pseudospectral" and "finite_difference"
 const discretization_option_z = "chebyshev_pseudospectral"
-#const discretization_option = "finite_difference"
+#const discretization_option_z= "finite_difference"
 
 # parameters related to the vpa grid
 # ngrid_vpa is the number of grid points per element
@@ -65,7 +66,7 @@ const boundary_option_vpa = "zero"
 # determine the discretization option for the vpa grid
 # supported options are "chebyshev_pseudospectral" and "finite_difference"
 const discretization_option_vpa = "chebyshev_pseudospectral"
-#const discretization_option = "finite_difference"
+#const discretization_option_vpa = "finite_difference"
 
 # advection speed
 const advection_speed = 1.0
@@ -80,6 +81,9 @@ const monomial_degree = 2
 # if boltzmann_electron_response = true, then the electron
 # density is fixed to be n₀(eϕ/T)
 const boltzmann_electron_response = true
+
+# performance_test = true returns timings and memory usage
+const performance_test = false
 
 z_input = grid_input("z", ngrid_z, nelement_z, L_z,
     discretization_option_z, boundary_option_z)

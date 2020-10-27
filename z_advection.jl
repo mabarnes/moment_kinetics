@@ -102,7 +102,7 @@ function z_advection!(ff, SL, source, z, vpa, use_semi_lagrange, dt)
                 view(source.adv_fac,:,ivpa), SL[ivpa].dep_idx, z.n, j)
             # update ff at time level n+1 using an explicit Runge-Kutta method
             # along approximate characteristics
-            update_f!(view(ff,:,ivpa,:), source[ivpa].rhs, SL[ivpa].dep_idx, z.n, j)
+            update_f!(view(ff,:,ivpa,:), view(source.rhs,:,ivpa), SL[ivpa].dep_idx, z.n, j)
         end
         # calculate the advection speed corresponding to current f
         if j != jend
