@@ -29,14 +29,10 @@ function setup_moments(ff, vpa, nz)
     parallel_pressure = allocate_float(nz)
     # allocate arrary to be used for temporary storage
     scratch = allocate_float(vpa.n)
-    # no need to check bounds, as array as declared above has correct size
-    @inbounds for iz ∈ 1:nz
-        @views @. scratch = ff[iz,:]
-        density[iz] = integrate_over_vspace(scratch, vpa.wgts)
-        @views @. scratch = ff[iz,:] * vpa.grid^2
-        parallel_pressure[iz] = integrate_over_vspace(scratch, vpa.wgts)
-    end
-
+    # initialise the density and parallel_pressure arrays
+    update_density!(density, scratch, ff, vpa, nz)
+    update_ppar!(parallel_pressure, scratch, ff, vpa, nz)
+    # return a struct containing arrays/Bools needed to update moments
     return moments(density, true, parallel_pressure, true, scratch)
 end
 # calculate the updated density (dens) and parallel pressure (ppar)
