@@ -102,7 +102,7 @@ function setup_time_advance(ff, z, vpa)
     # with advection in vpa
     vpa_source = setup_source(z.n, vpa.n)
     # initialise the vpa advection speed
-    update_speed_vpa!(vpa_source.speed, fields.phi, moments, view(ff,:,:,1), vpa, z)
+    update_speed_vpa!(vpa_source.speed, fields.phi, moments, view(ff,:,:,1), vpa, z.n)
     # create an array of structures containing the arrays needed for the semi-Lagrange
     # solve and initialize the characteristic speed and departure indices
     # so that the code can gracefully run without using the semi-Lagrange
@@ -132,9 +132,11 @@ function time_advance!(ff, t, z, vpa, z_spectral, vpa_spectral, moments, fields,
         moments.dens_updated = false ; moments.ppar_updated = false
         # vpa_advection! advances the operator-split 1D advection equation in vpa
         if vpa.discretization == "chebyshev_pseudospectral"
-            vpa_advection!(ff, fields.phi, moments, vpa_SL, vpa_source, vpa, z, use_semi_lagrange, dt, vpa_spectral)
+            vpa_advection!(ff, fields.phi, moments, vpa_SL, vpa_source, vpa, z.n,
+                use_semi_lagrange, dt, vpa_spectral, z_spectral)
         elseif vpa.discretization == "finite_difference"
-            vpa_advection!(ff, fields.phi, moments, vpa_SL, vpa_source, vpa, z, use_semi_lagrange, dt)
+            vpa_advection!(ff, fields.phi, moments, vpa_SL, vpa_source, vpa, z.n,
+                use_semi_lagrange, dt)
         end
         # update the time
         t += dt
