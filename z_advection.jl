@@ -20,7 +20,7 @@ function z_advection!(ff, SL, source, z, vpa, use_semi_lagrange, dt, spectral)
     @boundscheck size(ff,2) == vpa.n || throw(BoundsError(ff))
     @boundscheck size(ff,3) == 3 || throw(BoundsError(ff))
     # get the updated speed along the z direction
-    update_speed_z!(source.speed, vpa, z)
+    update_speed_z!(source, vpa, z)
     # if using interpolation-free Semi-Lagrange,
     # follow characteristics backwards in time from level m+1 to level m
     # to get departure points.  then find index of grid point nearest
@@ -28,7 +28,7 @@ function z_advection!(ff, SL, source, z, vpa, use_semi_lagrange, dt, spectral)
     # an approximate characteristic
     if use_semi_lagrange
         for ivpa ∈ 1:vpa.n
-            find_approximate_characteristic!(SL[ivpa], view(source.speed,:,ivpa), z, dt)
+            find_approximate_characteristic!(SL[ivpa], source[ivpa].speed, z, dt)
         end
     end
     # Heun's method (RK2) for explicit time advance
@@ -38,23 +38,23 @@ function z_advection!(ff, SL, source, z, vpa, use_semi_lagrange, dt, spectral)
             # calculate the factor appearing in front of df/dz in the advection
             # term at time level n in the frame moving with the approximate
             # characteristic
-            update_advection_factor!(view(source.adv_fac,:,ivpa),
-                view(source.speed,:,ivpa), SL[ivpa], z.n, dt, j)
+            update_advection_factor!(source[ivpa].adv_fac,
+                source[ivpa].speed, SL[ivpa], z.n, dt, j)
             # Chebyshev transform f to get Chebyshev spectral coefficients
             # and use them to calculate f'
             update_fcheby!(spectral, view(ff,:,ivpa,j), z)
-            update_df_chebyshev!(view(source.df,:,ivpa), spectral, z)
+            update_df_chebyshev!(source[ivpa].df, spectral, z)
             # calculate the explicit source terms on the rhs of the equation;
             # i.e., -Δt⋅δv⋅f'
-            calculate_explicit_source!(view(source.rhs,:,ivpa), view(source.df,:,ivpa),
-                view(source.adv_fac,:,ivpa), SL[ivpa].dep_idx, z.n, j)
+            calculate_explicit_source!(source[ivpa].rhs, source[ivpa].df,
+                source[ivpa].adv_fac, SL[ivpa].dep_idx, z.n, j)
             # update ff at time level n+1 using an explicit Runge-Kutta method
             # along approximate characteristics
-            update_f!(view(ff,:,ivpa,:), view(source.rhs,:,ivpa), SL[ivpa].dep_idx, z.n, j)
+            update_f!(view(ff,:,ivpa,:), source[ivpa].rhs, SL[ivpa].dep_idx, z.n, j)
         end
         # calculate the advection speed corresponding to current f
         if j != jend
-            update_speed_z!(source.speed, vpa, z)
+            update_speed_z!(source, vpa, z)
         end
     end
     @inbounds begin
@@ -73,7 +73,7 @@ function z_advection!(ff, SL, source, z, vpa, use_semi_lagrange, dt)
     @boundscheck size(f,2) == vpa.n || throw(BoundsError(f))
     @boundscheck size(f,3) == 3 || throw(BoundsError(f))
     # get the updated speed along the z direction
-    update_speed_z!(source.speed, vpa, z)
+    update_speed_z!(source, vpa, z)
     # if using interpolation-free Semi-Lagrange,
     # follow characteristics backwards in time from level m+1 to level m
     # to get departure points.  then find index of grid point nearest
@@ -81,7 +81,7 @@ function z_advection!(ff, SL, source, z, vpa, use_semi_lagrange, dt)
     # an approximate characteristic
     if use_semi_lagrange
         for ivpa ∈ 1:vpa.n
-            find_approximate_characteristic!(SL[ivpa], view(source.speed,:,ivpa), z, dt)
+            find_approximate_characteristic!(SL[ivpa], source[ivpa].speed, z, dt)
         end
     end
     # Heun's method (RK2) for explicit time advance
@@ -91,22 +91,22 @@ function z_advection!(ff, SL, source, z, vpa, use_semi_lagrange, dt)
             # calculate the factor appearing in front of df/dz in the advection
             # term at time level n in the frame moving with the approximate
             # characteristic
-            update_advection_factor!(view(source.adv_fac,:,ivpa),
-                view(source.speed,:,ivpa), SL[ivpa], z.n, dt, j)
+            update_advection_factor!(source[ivpa].adv_fac,
+                source[ivpa].speed, SL[ivpa], z.n, dt, j)
             # calculate the derivative of f
-            update_df_finite_difference!(view(source.df,:,ivpa), view(ff,:,ivpa,j),
-                z.cell_width, view(source.adv_fac,:,ivpa), z.bc)
+            update_df_finite_difference!(source[ivpa].df, view(ff,:,ivpa,j),
+                z.cell_width, source[ivpa].adv_fac, z.bc)
             # calculate the explicit source terms on the rhs of the equation;
             # i.e., -Δt⋅δv⋅f'
-            calculate_explicit_source!(view(source.rhs,:,ivpa), view(source.df,:,ivpa),
-                view(source.adv_fac,:,ivpa), SL[ivpa].dep_idx, z.n, j)
+            calculate_explicit_source!(source[ivpa].rhs, source[ivpa].df,
+                source[ivpa].adv_fac, SL[ivpa].dep_idx, z.n, j)
             # update ff at time level n+1 using an explicit Runge-Kutta method
             # along approximate characteristics
-            update_f!(view(ff,:,ivpa,:), view(source.rhs,:,ivpa), SL[ivpa].dep_idx, z.n, j)
+            update_f!(view(ff,:,ivpa,:), source[ivpa].rhs, SL[ivpa].dep_idx, z.n, j)
         end
         # calculate the advection speed corresponding to current f
         if j != jend
-            update_speed_z!(source.speed, vpa, z)
+            update_speed_z!(source, vpa, z)
         end
     end
     @inbounds begin
@@ -119,14 +119,14 @@ function z_advection!(ff, SL, source, z, vpa, use_semi_lagrange, dt)
 end
 
 # calculate the advection speed in the z-direction at each grid point
-function update_speed_z!(speed, vpa, z)
-    @boundscheck z.n == size(speed,1) || throw(BoundsError(speed))
-    @boundscheck vpa.n == size(speed,2) || throw(BoundsError(speed))
+function update_speed_z!(source, vpa, z)
+    @boundscheck vpa.n == size(source,1) || throw(BoundsError(source))
+    @boundscheck z.n == size(source[1].speed,1) || throw(BoundsError(speed))
     if advection_speed_option == "default"
         @inbounds begin
             for j ∈ 1:vpa.n
                 for i ∈ 1:z.n
-                    speed[i,j] = vpa[j]
+                    source[j].speed[i] = vpa[j]
                 end
             end
         end
@@ -134,7 +134,7 @@ function update_speed_z!(speed, vpa, z)
         @inbounds begin
             for j ∈ 1:vpa.n
                 for i ∈ 1:z.n
-                    speed[i,j] = advection_speed
+                    source[j].speed[i] = advection_speed
                 end
             end
         end
@@ -142,7 +142,7 @@ function update_speed_z!(speed, vpa, z)
         @inbounds begin
             for j ∈ 1:vpa.n
                 for i ∈ 1:z.n
-                    speed[i,j] = advection_speed*(z.grid[i]+0.5*z.L)
+                    source[j].speed[i] = advection_speed*(z.grid[i]+0.5*z.L)
                 end
             end
         end

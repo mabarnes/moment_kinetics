@@ -96,13 +96,13 @@ function setup_time_advance(ff, z, vpa)
     # with advection in z
     z_source = setup_source(z.n, vpa.n)
     # initialise the z advection speed
-    update_speed_z!(z_source.speed, vpa, z)
+    update_speed_z!(z_source, vpa, z)
     # create structure vpa_source whose members are the arrays needed to compute
     # the source(s) appearing in the split part of the GK equation dealing
     # with advection in vpa
-    vpa_source = setup_source(z.n, vpa.n)
+    vpa_source = setup_source(vpa.n, z.n)
     # initialise the vpa advection speed
-    update_speed_vpa!(vpa_source.speed, fields.phi, moments, view(ff,:,:,1), vpa, z.n)
+    update_speed_vpa!(vpa_source, fields.phi, moments, view(ff,:,:,1), vpa, z.n)
     # create an array of structures containing the arrays needed for the semi-Lagrange
     # solve and initialize the characteristic speed and departure indices
     # so that the code can gracefully run without using the semi-Lagrange
