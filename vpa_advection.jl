@@ -9,6 +9,7 @@ using semi_lagrange: find_approximate_characteristic!
 using source_terms: update_advection_factor!
 using source_terms: calculate_explicit_source!
 using source_terms: update_f!
+using source_terms: update_boundary_indices!
 using chebyshev: update_fcheby!
 using chebyshev: update_df_chebyshev!
 using em_fields: update_phi!
@@ -23,6 +24,8 @@ function vpa_advection!(ff, phi, moments, SL, source, vpa, nz, use_semi_lagrange
     @boundscheck size(ff,3) == 3 || throw(BoundsError(ff))
     # get the updated speed along the vpa direction
     update_speed_vpa!(source, phi, moments, view(ff,:,:,1), vpa, nz)
+	# update the upwind/downwind boundary indices and upwind_increment
+	update_boundary_indices!(source)
     # if using interpolation-free Semi-Lagrange,
     # follow characteristics backwards in time from level m+1 to level m
     # to get departure points.  then find index of grid point nearest
@@ -55,9 +58,11 @@ function vpa_advection!(ff, phi, moments, SL, source, vpa, nz, use_semi_lagrange
             update_f!(view(ff,iz,:,:), source[iz].rhs, SL[iz].dep_idx, vpa.n, j)
         end
         moments.dens_updated = false ; moments.ppar_updated = false
-        # calculate the advection speed corresponding to current f
         if j != jend
+			# calculate the advection speed corresponding to current f
 			update_speed_vpa!(source, phi, moments, view(ff,:,:,j+1), vpa, nz)
+			# update the upwind/downwind boundary indices and upwind_increment
+			update_boundary_indices!(source)
         end
     end
     @inbounds @fastmath begin

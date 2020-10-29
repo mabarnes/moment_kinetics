@@ -9,6 +9,7 @@ using semi_lagrange: find_approximate_characteristic!
 using source_terms: update_advection_factor!
 using source_terms: calculate_explicit_source!
 using source_terms: update_f!
+using source_terms: update_boundary_indices!
 using chebyshev: update_fcheby!
 using chebyshev: update_df_chebyshev!
 
@@ -21,6 +22,8 @@ function z_advection!(ff, SL, source, z, vpa, use_semi_lagrange, dt, spectral)
     @boundscheck size(ff,3) == 3 || throw(BoundsError(ff))
     # get the updated speed along the z direction
     update_speed_z!(source, vpa, z)
+    # update the upwind/downwind boundary indices and upwind_increment
+    update_boundary_indices!(source)
     # if using interpolation-free Semi-Lagrange,
     # follow characteristics backwards in time from level m+1 to level m
     # to get departure points.  then find index of grid point nearest
@@ -52,9 +55,11 @@ function z_advection!(ff, SL, source, z, vpa, use_semi_lagrange, dt, spectral)
             # along approximate characteristics
             update_f!(view(ff,:,ivpa,:), source[ivpa].rhs, SL[ivpa].dep_idx, z.n, j)
         end
-        # calculate the advection speed corresponding to current f
         if j != jend
+            # calculate the advection speed corresponding to current f
             update_speed_z!(source, vpa, z)
+            # update the upwind/downwind boundary indices and upwind_increment
+            update_boundary_indices!(source)
         end
     end
     @inbounds begin
