@@ -83,7 +83,7 @@ const monomial_degree = 2
 const boltzmann_electron_response = true
 
 # performance_test = true returns timings and memory usage
-const performance_test = false
+const performance_test = true
 
 z_input = grid_input("z", ngrid_z, nelement_z, L_z,
     discretization_option_z, boundary_option_z)

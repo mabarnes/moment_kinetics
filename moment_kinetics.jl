@@ -7,7 +7,7 @@ using file_io: setup_file_io, finish_file_io
 using file_io: write_f, write_moments, write_fields
 using chebyshev: setup_chebyshev_pseudospectral
 using coordinates: define_coordinate, write_coordinate
-using source_terms: setup_source
+using source_terms: setup_source, update_boundary_indices!
 using semi_lagrange: setup_semi_lagrange
 using vpa_advection: vpa_advection!, update_speed_vpa!
 using z_advection: z_advection!, update_speed_z!
@@ -97,12 +97,16 @@ function setup_time_advance(ff, z, vpa)
     z_source = setup_source(z.n, vpa.n)
     # initialise the z advection speed
     update_speed_z!(z_source, vpa, z)
+    # initialise the upwind/downwind boundary indices in z
+    update_boundary_indices!(z_source)
     # create structure vpa_source whose members are the arrays needed to compute
     # the source(s) appearing in the split part of the GK equation dealing
     # with advection in vpa
     vpa_source = setup_source(vpa.n, z.n)
     # initialise the vpa advection speed
     update_speed_vpa!(vpa_source, fields.phi, moments, view(ff,:,:,1), vpa, z.n)
+    # initialise the upwind/downwind boundary indices in vpa
+    update_boundary_indices!(vpa_source)
     # create an array of structures containing the arrays needed for the semi-Lagrange
     # solve and initialize the characteristic speed and departure indices
     # so that the code can gracefully run without using the semi-Lagrange

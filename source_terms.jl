@@ -1,13 +1,14 @@
 module source_terms
 
-import array_allocation: allocate_float
-import moment_kinetics_input: advection_speed, advection_speed_option
-
 export setup_source
 export update_advection_factor!
 export calculate_explicit_source!
 export update_f!
 export update_boundary_indices!
+
+using array_allocation: allocate_float
+using moment_kinetics_input: advection_speed, advection_speed_option
+
 # structure containing the basic arrays associated with the
 # source terms appearing in the advection equation for each coordinate
 mutable struct source_info
@@ -63,24 +64,26 @@ function setup_source_local(n)
     # return source_info struct containing necessary 1D/0D arrays
     return source_info(rhs, df, speed, adv_fac, upwind_idx, downwind_idx, upwind_increment)
 end
-#=
 # calculate the grid index correspond to the upwind and downwind boundaries,
 # as well as the index increment needed to sweep in the upwind direction
-function update_boundary_indices!(source, n, speed)
-    # for now, assume the speed has the same sign at all grid points
-    # so only need to check its value at one location to determine the upwind direction
-    if speed[1] > 0
-        SL.upwind_idx = 1
-        SL.upwind_increment = -1
-        SL.downwind_idx = n
-    else
-        SL.upwind_idx = n
-        SL.upwind_increment = 1
-        SL.downwind_idx = 1
+function update_boundary_indices!(source)
+    m = size(source,1)
+    n = size(source[1].speed,1)
+    for j ∈ 1:m
+        # for now, assume the speed has the same sign at all grid points
+        # so only need to check its value at one location to determine the upwind direction
+        if source[j].speed[1] > 0
+            source[j].upwind_idx = 1
+            source[j].upwind_increment = -1
+            source[j].downwind_idx = n
+        else
+            source[j].upwind_idx = n
+            source[j].upwind_increment = 1
+            source[j].downwind_idx = 1
+        end
     end
     return nothing
 end
-=#
 # calculate the factor appearing in front of f' in the advection term
 # at time level n in the frame moving with the approximate characteristic
 function update_advection_factor!(adv_fac, speed, SL, n, dt, j)
