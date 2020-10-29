@@ -31,8 +31,14 @@ function z_advection!(ff, SL, source, z, vpa, use_semi_lagrange, dt, spectral)
     # an approximate characteristic
     if use_semi_lagrange
         for ivpa ∈ 1:vpa.n
-            find_approximate_characteristic!(SL[ivpa], source[ivpa].speed, z, dt)
+            find_approximate_characteristic!(SL[ivpa], source[ivpa], z, dt)
         end
+#=        for iz ∈ 1:z.n
+            println("iz: ", iz, "  z: ", z.grid[iz], "  crossing_time: ", SL[2].crossing_time[iz],
+                "  dep_pts: ", SL[2].dep_pts[iz], "  dep_idx: ", SL[2].dep_idx[iz],
+                "  characteristic_speed: ", SL[2].characteristic_speed[iz])
+        end
+=#
     end
     # Heun's method (RK2) for explicit time advance
     jend = 2
@@ -42,7 +48,8 @@ function z_advection!(ff, SL, source, z, vpa, use_semi_lagrange, dt, spectral)
             # term at time level n in the frame moving with the approximate
             # characteristic
             update_advection_factor!(source[ivpa].adv_fac,
-                source[ivpa].speed, SL[ivpa], z.n, dt, j)
+                source[ivpa].speed, source[ivpa].upwind_idx, source[ivpa].downwind_idx,
+                source[ivpa].upwind_increment, SL[ivpa], z.n, dt, j)
             # Chebyshev transform f to get Chebyshev spectral coefficients
             # and use them to calculate f'
             update_fcheby!(spectral, view(ff,:,ivpa,j), z)
@@ -50,10 +57,13 @@ function z_advection!(ff, SL, source, z, vpa, use_semi_lagrange, dt, spectral)
             # calculate the explicit source terms on the rhs of the equation;
             # i.e., -Δt⋅δv⋅f'
             calculate_explicit_source!(source[ivpa].rhs, source[ivpa].df,
-                source[ivpa].adv_fac, SL[ivpa].dep_idx, z.n, j)
+                source[ivpa].adv_fac, source[ivpa].upwind_idx, source[ivpa].downwind_idx,
+                source[ivpa].upwind_increment, SL[ivpa].dep_idx, z.n, j)
             # update ff at time level n+1 using an explicit Runge-Kutta method
             # along approximate characteristics
-            update_f!(view(ff,:,ivpa,:), source[ivpa].rhs, SL[ivpa].dep_idx, z.n, j)
+            update_f!(view(ff,:,ivpa,:), source[ivpa].rhs, source[ivpa].upwind_idx,
+                source[ivpa].downwind_idx, source[ivpa].upwind_increment, SL[ivpa].dep_idx,
+                z.n, j)
         end
         if j != jend
             # calculate the advection speed corresponding to current f
@@ -86,7 +96,7 @@ function z_advection!(ff, SL, source, z, vpa, use_semi_lagrange, dt)
     # an approximate characteristic
     if use_semi_lagrange
         for ivpa ∈ 1:vpa.n
-            find_approximate_characteristic!(SL[ivpa], source[ivpa].speed, z, dt)
+            find_approximate_characteristic!(SL[ivpa], source[ivpa], z, dt)
         end
     end
     # Heun's method (RK2) for explicit time advance
@@ -97,17 +107,21 @@ function z_advection!(ff, SL, source, z, vpa, use_semi_lagrange, dt)
             # term at time level n in the frame moving with the approximate
             # characteristic
             update_advection_factor!(source[ivpa].adv_fac,
-                source[ivpa].speed, SL[ivpa], z.n, dt, j)
+                source[ivpa].speed, source[ivpa].upwind_idx, source[ivpa].downwind_idx,
+                source[ivpa].upwind_increment, SL[ivpa], z.n, dt, j)
             # calculate the derivative of f
             update_df_finite_difference!(source[ivpa].df, view(ff,:,ivpa,j),
                 z.cell_width, source[ivpa].adv_fac, z.bc)
             # calculate the explicit source terms on the rhs of the equation;
             # i.e., -Δt⋅δv⋅f'
             calculate_explicit_source!(source[ivpa].rhs, source[ivpa].df,
-                source[ivpa].adv_fac, SL[ivpa].dep_idx, z.n, j)
+                source[ivpa].adv_fac, source[ivpa].upwind_idx, source[ivpa].downwind_idx,
+                source[ivpa].upwind_increment, SL[ivpa].dep_idx, z.n, j)
             # update ff at time level n+1 using an explicit Runge-Kutta method
             # along approximate characteristics
-            update_f!(view(ff,:,ivpa,:), source[ivpa].rhs, SL[ivpa].dep_idx, z.n, j)
+            update_f!(view(ff,:,ivpa,:), source[ivpa].rhs, source[ivpa].upwind_idx,
+                source[ivpa].downwind_idx, source[ivpa].upwind_increment, SL[ivpa].dep_idx,
+                z.n, j)
         end
         # calculate the advection speed corresponding to current f
         if j != jend

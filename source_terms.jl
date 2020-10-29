@@ -86,20 +86,19 @@ function update_boundary_indices!(source)
 end
 # calculate the factor appearing in front of f' in the advection term
 # at time level n in the frame moving with the approximate characteristic
-function update_advection_factor!(adv_fac, speed, SL, n, dt, j)
+function update_advection_factor!(adv_fac, speed, upwind_idx, downwind_idx,
+    upwind_increment, SL, n, dt, j)
     @boundscheck n == length(SL.dep_idx) || throw(BoundsError(SL.dep_idx))
     @boundscheck n == length(adv_fac) || throw(BoundsError(adv_fac))
     @boundscheck n == length(speed) || throw(BoundsError(speed))
     @boundscheck n == length(SL.characteristic_speed) ||
         throw(BoundsError(SL.characteristic_speed))
-    #@inbounds for i ∈ SL.upwind_idx-SL.upwind_increment:-SL.upwind_increment:SL.downwind_idx
-    @inbounds for i ∈ 2:n
+    @inbounds for i ∈ upwind_idx-upwind_increment:-upwind_increment:downwind_idx
         idx = SL.dep_idx[i]
         # only need to calculate advection factor for characteristics
         # that originate within the domain, as zero incoming BC
         # takes care of the rest.
-        if idx > 0
-        #if idx != SL.upwind_idx + SL.upwind_increment
+        if idx != upwind_idx + upwind_increment
             # the effective advection speed appearing in the source
             # is the speed in the frame moving with the approximate
             # characteristic speed v_char
@@ -115,7 +114,8 @@ function update_advection_factor!(adv_fac, speed, SL, n, dt, j)
 end
 # calculate the explicit source terms on the rhs of the equation;
 # i.e., -Δt⋅δv⋅f'
-function calculate_explicit_source!(rhs, df, adv_fac, dep_idx, n, j)
+function calculate_explicit_source!(rhs, df, adv_fac, up_idx, down_idx, up_incr,
+    dep_idx, n, j)
     # ensure that arrays needed for this function are inbounds
     # to avoid checking multiple times later
     @boundscheck n == length(rhs) || throw(BoundsError(rhs))
@@ -127,14 +127,14 @@ function calculate_explicit_source!(rhs, df, adv_fac, dep_idx, n, j)
     # been defined so that it corresponds to the advection factor
     # corresponding to the ith characteristic
     if j == 1
-        @inbounds for i ∈ 2:n
+        @inbounds for i ∈ up_idx:-up_incr:down_idx
             idx = dep_idx[i]
-            if idx > 0
+            if idx != up_idx + up_incr
                 rhs[i] = adv_fac[i]*df[idx]
             end
         end
     elseif j == 2
-        @inbounds for i ∈ 2:n
+        @inbounds for i ∈ up_idx:-up_incr:down_idx
             rhs[i] = adv_fac[i]*df[i]
         end
     end
@@ -142,17 +142,17 @@ function calculate_explicit_source!(rhs, df, adv_fac, dep_idx, n, j)
 end
 # update ff at time level n+1 using an explicit Runge-Kutta method
 # along approximate characteristics
-function update_f!(ff, rhs, dep_idx, n, j)
+function update_f!(ff, rhs, up_idx, down_idx, up_incr, dep_idx, n, j)
     @boundscheck n == size(ff,1) || throw(BoundsError(ff))
     @boundscheck n == length(rhs) || throw(BoundsError(rhs))
     @boundscheck n == length(dep_idx) || throw(BoundsError(dep_idx))
 
-    @inbounds for i ∈ 2:n
+    @inbounds for i ∈ up_idx:-up_incr:down_idx
         # dep_idx is the index of the departure point for the approximate
         # characteristic passing through grid point i
         # if semi-Lagrange is not used, then dep_idx = i
         idx = dep_idx[i]
-        if idx > 0
+        if idx != up_idx + up_incr
             ff[i,j+1] = ff[idx,1] + rhs[i]
         else
             # NB: need to re-examine this for case with non-advective terms

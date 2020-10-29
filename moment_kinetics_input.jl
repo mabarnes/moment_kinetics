@@ -28,7 +28,7 @@ struct grid_input
 end
 
 # this is the prefix for all output files associated with this run
-const run_name = "example"
+const run_name = "speed_negative"
 
 # parameters related to the time stepping
 const nstep = 500
@@ -40,9 +40,9 @@ const use_semi_lagrange = true
 
 # parameters related to the z grid
 # ngrid_z is number of grid points per element
-const ngrid_z = 33
+const ngrid_z = 9
 # nelement_z is the number of elements
-const nelement_z = 3
+const nelement_z = 10
 # L_z is the box length
 const L_z = 2.
 # determine the boundary condition
@@ -55,9 +55,9 @@ const discretization_option_z = "chebyshev_pseudospectral"
 
 # parameters related to the vpa grid
 # ngrid_vpa is the number of grid points per element
-const ngrid_vpa = 33
+const ngrid_vpa = 9
 # nelement_vpa is the number of elements
-const nelement_vpa = 3
+const nelement_vpa = 10
 # L_vpa is the box length in units of vthermal_species
 const L_vpa = 6.
 # determine the boundary condition
@@ -69,7 +69,7 @@ const discretization_option_vpa = "chebyshev_pseudospectral"
 #const discretization_option_vpa = "finite_difference"
 
 # advection speed
-const advection_speed = 1.0
+const advection_speed = -1.0
 const advection_speed_option = "constant"
 
 # determines which function is being advected

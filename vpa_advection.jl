@@ -33,7 +33,7 @@ function vpa_advection!(ff, phi, moments, SL, source, vpa, nz, use_semi_lagrange
     # an approximate characteristic
     if use_semi_lagrange
         for iz ∈ 1:nz
-            find_approximate_characteristic!(SL[iz], source[iz].speed, vpa, dt)
+            find_approximate_characteristic!(SL[iz], source[iz], vpa, dt)
         end
     end
     # Heun's method (RK2) for explicit time advance
@@ -43,8 +43,9 @@ function vpa_advection!(ff, phi, moments, SL, source, vpa, nz, use_semi_lagrange
             # calculate the factor appearing in front of df/dvpa in the advection
             # term at time level n in the frame moving with the approximate
             # characteristic
-            update_advection_factor!(source[iz].adv_fac,
-                source[iz].speed, SL[iz], vpa.n, dt, j)
+			update_advection_factor!(source[iz].adv_fac,
+                source[iz].speed, source[iz].upwind_idx, source[iz].downwind_idx,
+				source[iz].upwind_increment, SL[iz], vpa.n, dt, j)
             # Chebyshev transform f to get Chebyshev spectral coefficients
             # and use them to calculate f'
             update_fcheby!(vpa_spectral, view(ff,iz,:,j), vpa)
@@ -52,10 +53,13 @@ function vpa_advection!(ff, phi, moments, SL, source, vpa, nz, use_semi_lagrange
             # calculate the explicit source terms on the rhs of the equation;
             # i.e., -Δt⋅δv⋅f'
             calculate_explicit_source!(source[iz].rhs, source[iz].df,
-                source[iz].adv_fac, SL[iz].dep_idx, vpa.n, j)
+                source[iz].adv_fac, source[iz].upwind_idx, source[iz].downwind_idx,
+				source[iz].upwind_increment, SL[iz].dep_idx, vpa.n, j)
             # update ff at time level n+1 using an explicit Runge-Kutta method
             # along approximate characteristics
-            update_f!(view(ff,iz,:,:), source[iz].rhs, SL[iz].dep_idx, vpa.n, j)
+			@views update_f!(ff[iz,:,:], source[iz].rhs, source[iz].upwind_idx,
+				source[iz].downwind_idx, source[iz].upwind_increment, SL[iz].dep_idx,
+				vpa.n, j)
         end
         moments.dens_updated = false ; moments.ppar_updated = false
         if j != jend
@@ -89,7 +93,7 @@ function vpa_advection!(ff, phi, moments, SL, source, vpa, nz, use_semi_lagrange
     # an approximate characteristic
     if use_semi_lagrange
         for iz ∈ 1:nz
-            find_approximate_characteristic!(SL[iz], source[iz].speed, vpa, dt)
+            find_approximate_characteristic!(SL[iz], source[iz], vpa, dt)
         end
     end
     # Heun's method (RK2) for explicit time advance
@@ -100,17 +104,21 @@ function vpa_advection!(ff, phi, moments, SL, source, vpa, nz, use_semi_lagrange
             # term at time level n in the frame moving with the approximate
             # characteristic
             update_advection_factor!(source[iz].adv_fac,
-                source[iz].speed, SL[iz], vpa.n, dt, j)
+                source[iz].speed, source[iz].upwind_idx, source[iz].downwind_idx,
+				source[iz].upwind_increment, SL[iz], vpa.n, dt, j)
             # calculate the derivative of f
             @views update_df_finite_difference!(source[iz].df, ff[iz,:,j],
                 vpa.cell_width, source[iz].adv_fac, vpa.bc)
             # calculate the explicit source terms on the rhs of the equation;
             # i.e., -Δt⋅δv⋅f'
-            calculate_explicit_source!(source[iz].rhs, source[iz].df,
-                source[iz].adv_fac, SL[iz].dep_idx, vpa.n, j)
+			calculate_explicit_source!(source[iz].rhs, source[iz].df,
+                source[iz].adv_fac, source[iz].upwind_idx, source[iz].downwind_idx,
+				source[iz].upwind_increment, SL[iz].dep_idx, vpa.n, j)
             # update ff at time level n+1 using an explicit Runge-Kutta method
             # along approximate characteristics
-            @views update_f!(ff[iz,:,:], source[iz].rhs, SL[iz].dep_idx, vpa.n, j)
+            @views update_f!(ff[iz,:,:], source[iz].rhs, source[iz].upwind_idx,
+				source[iz].downwind_idx, source[iz].upwind_increment, SL[iz].dep_idx,
+				vpa.n, j)
         end
         moments.dens_updated = false ; moments.ppar_updated = false
         # calculate the advection speed corresponding to current f

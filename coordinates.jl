@@ -103,11 +103,11 @@ function grid_spacing(grid, n)
     d = allocate_float(n)
     @inbounds begin
         for i ∈ 2:n
-            d[i] =  grid[i]-grid[i-1]
+            d[i-1] =  grid[i]-grid[i-1]
         end
-        # first entry corresponds to cell beyond the grid boundary
+        # final (nth) entry corresponds to cell beyond the grid boundary
         # only time this may be needed is if periodic BCs are used
-        d[1] = d[n]
+        d[n] = d[1]
     end
     return d
 end
