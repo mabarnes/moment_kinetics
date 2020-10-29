@@ -145,7 +145,7 @@ function update_speed_z!(source, vpa, z)
         @inbounds begin
             for j ∈ 1:vpa.n
                 for i ∈ 1:z.n
-                    source[j].speed[i] = vpa[j]
+                    source[j].speed[i] = vpa.grid[j]
                 end
             end
         end
