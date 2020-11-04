@@ -25,16 +25,16 @@ function setup_moments(ff, vpa, nz)
     # allocate array used for the parallel pressure
     parallel_pressure = allocate_float(nz)
     # initialise the density and parallel_pressure arrays
-    update_density!(density, vpa.scratch, ff, vpa, nz)
-    update_ppar!(parallel_pressure, vpa.scratch, ff, vpa, nz)
+    update_density!(density, view(vpa.scratch,:,1), ff, vpa, nz)
+    update_ppar!(parallel_pressure, view(vpa.scratch,:,1), ff, vpa, nz)
     # return a struct containing arrays/Bools needed to update moments
     return moments(density, true, parallel_pressure, true)
 end
 # calculate the updated density (dens) and parallel pressure (ppar)
 function update_moments!(moments, ff, vpa, nz)
     @boundscheck nz == size(ff, 1) || throw(BoundsError(ff))
-    update_density!(moments.dens, vpa.scratch, ff, vpa, nz)
-    update_ppar!(moments.ppar, vpa.scratch, ff, vpa, nz)
+    update_density!(moments.dens, view(vpa.scratch,:,1), ff, vpa, nz)
+    update_ppar!(moments.ppar, view(vpa.scratch,:,1), ff, vpa, nz)
     return nothing
 end
 # calculate the updated density (dens)
