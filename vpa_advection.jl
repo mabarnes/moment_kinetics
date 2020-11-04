@@ -10,15 +10,17 @@ using source_terms: update_boundary_indices!
 using em_fields: update_phi!
 
 # argument chebyshev indicates that a chebyshev pseudopectral method is being used
-function vpa_advection!(ff, phi, moments, SL, source, vpa, nz, use_semi_lagrange, dt,
-	vpa_spectral, z_spectral)
+function vpa_advection!(ff, ff_scratch, phi, moments, SL, source, vpa, nz,
+	use_semi_lagrange, dt, vpa_spectral, z_spectral)
     # check to ensure that all array indices accessed in this function
     # are in-bounds
     @boundscheck size(ff,1) == nz || throw(BoundsError(ff))
     @boundscheck size(ff,2) == vpa.n || throw(BoundsError(ff))
-    @boundscheck size(ff,3) == 3 || throw(BoundsError(ff))
+	@boundscheck size(ff_scratch,1) == nz || throw(BoundsError(ff_scratch))
+    @boundscheck size(ff_scratch,2) == vpa.n || throw(BoundsError(ff_scratch))
+	@boundscheck size(ff_scratch,3) == 3 || throw(BoundsError(ff_scratch))
     # get the updated speed along the vpa direction
-    update_speed_vpa!(source, phi, moments, view(ff,:,:,1), vpa, nz)
+    update_speed_vpa!(source, phi, moments, ff, vpa, nz)
 	# update the upwind/downwind boundary indices and upwind_increment
 	update_boundary_indices!(source)
     # if using interpolation-free Semi-Lagrange,
@@ -33,14 +35,16 @@ function vpa_advection!(ff, phi, moments, SL, source, vpa, nz, use_semi_lagrange
     end
     # Heun's method (RK2) for explicit time advance
     jend = 2
+	ff_scratch[:,:,1] .= ff
     for j ∈ 1:jend
         for iz ∈ 1:nz
-			advance_f_local!(view(ff,iz,:,:), SL[iz], source[iz], vpa, dt, vpa_spectral, j)
+			@views advance_f_local!(ff_scratch[iz,:,j+1], ff_scratch[iz,:,j],
+				ff[iz,:], SL[iz], source[iz], vpa, dt, vpa_spectral, j)
 		end
         moments.dens_updated = false ; moments.ppar_updated = false
         if j != jend
 			# calculate the advection speed corresponding to current f
-			update_speed_vpa!(source, phi, moments, view(ff,:,:,j+1), vpa, nz)
+			update_speed_vpa!(source, phi, moments, view(ff_scratch,:,:,j+1), vpa, nz)
 			# update the upwind/downwind boundary indices and upwind_increment
 			update_boundary_indices!(source)
         end
@@ -48,20 +52,23 @@ function vpa_advection!(ff, phi, moments, SL, source, vpa, nz, use_semi_lagrange
     @inbounds @fastmath begin
         for ivpa ∈ 1:vpa.n
             for iz ∈ 1:nz
-                ff[iz,ivpa,1] = 0.5*(ff[iz,ivpa,2] + ff[iz,ivpa,3])
+                ff[iz,ivpa] = 0.5*(ff_scratch[iz,ivpa,2] + ff_scratch[iz,ivpa,3])
             end
         end
     end
 end
 # for use with finite difference scheme
-function vpa_advection!(ff, phi, moments, SL, source, vpa, nz, use_semi_lagrange, dt)
+function vpa_advection!(ff, ff_scratch, phi, moments, SL, source, vpa, nz,
+	use_semi_lagrange, dt)
     # check to ensure that all array indices accessed in this function
     # are in-bounds
     @boundscheck size(f,1) == nz || throw(BoundsError(f))
     @boundscheck size(f,2) == vpa.n || throw(BoundsError(f))
-    @boundscheck size(f,3) == 3 || throw(BoundsError(f))
+	@boundscheck size(ff_scratch,1) == nz || throw(BoundsError(ff_scratch))
+    @boundscheck size(ff_scratch,2) == vpa.n || throw(BoundsError(ff_scratch))
+	@boundscheck size(ff_scratch,3) == 3 || throw(BoundsError(ff_scratch))
     # get the updated speed along the vpa direction
-	update_speed_vpa!(source, phi, moments, view(ff,:,:,1), vpa, nz)
+	update_speed_vpa!(source, phi, moments, ff, vpa, nz)
     # if using interpolation-free Semi-Lagrange,
     # follow characteristics backwards in time from level m+1 to level m
     # to get departure points.  then find index of grid point nearest
@@ -74,9 +81,11 @@ function vpa_advection!(ff, phi, moments, SL, source, vpa, nz, use_semi_lagrange
     end
     # Heun's method (RK2) for explicit time advance
     jend = 2
+	ff_scratch[:,:,1] .= ff
     for j ∈ 1:jend
         for iz ∈ 1:nz
-            advance_f_local!(view(ff,iz,:,:), SL[iz], source[iz], vpa, dt, j)
+			@views advance_f_local!(ff_scratch[iz,:,j+1], ff_scratch[iz,:,j],
+				ff[iz,:], SL[iz], source[iz], vpa, dt, j)
         end
         moments.dens_updated = false ; moments.ppar_updated = false
         # calculate the advection speed corresponding to current f
@@ -87,7 +96,7 @@ function vpa_advection!(ff, phi, moments, SL, source, vpa, nz, use_semi_lagrange
     @inbounds @fastmath begin
         for ivpa ∈ 1:vpa.n
             for iz ∈ 1:nz
-                ff[iz,ivpa,1] = 0.5*(ff[iz,ivpa,2] + ff[iz,ivpa,3])
+                ff[iz,ivpa] = 0.5*(ff_scratch[iz,ivpa,2] + ff_scratch[iz,ivpa,3])
             end
         end
     end

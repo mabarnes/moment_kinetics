@@ -22,7 +22,7 @@ function update_phi!(phi, moments, ff, vpa, nz)
     @boundscheck size(moments.dens,1) == nz || throw(BoundsError(moments.dens))
     if boltzmann_electron_response
         if moments.dens_updated == false
-            update_density!(moments.dens, view(vpa.scratch,:,1), ff, vpa, nz)
+            update_density!(moments.dens, vpa.scratch, ff, vpa, nz)
             moments.dens_updated = true
         end
         @inbounds begin

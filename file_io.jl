@@ -38,7 +38,7 @@ function write_f(f, z, vpa, t, io)
         for j ∈ 1:vpa.n
             for i ∈ 1:z.n
                 println(io,"t: ", t, ",   z: ", z.grid[i], ",  vpa: ", vpa.grid[j],
-                    ",   f: ", f[i,j,1])
+                    ",   f: ", f[i,j])
             end
             println(io)
         end

@@ -35,7 +35,7 @@ function moment_kinetics(to)
     vpa = define_coordinate(vpa_input)
     write_coordinate(vpa, run_name, "vpa")
     # initialize f(z)
-    ff = init_f(z, vpa)
+    ff, ff_scratch = init_f(z, vpa)
     # initialize time variable
     code_time = 0.
     # setup i/o
@@ -45,13 +45,15 @@ function moment_kinetics(to)
     # create arrays and do other work needed to setup
     # the main time advance loop
     z_spectral, vpa_spectral, moments, fields, z_source, vpa_source,
-        z_SL, vpa_SL = setup_time_advance(view(ff,:,:,1), z, vpa)
+        z_SL, vpa_SL = setup_time_advance(ff, z, vpa)
     # solve the 1+1D kinetic equation to advance f in time by nstep time steps
     if performance_test
-        @timeit to "time_advance" time_advance!(ff, code_time, z, vpa, z_spectral, vpa_spectral, moments,
+        @timeit to "time_advance" time_advance!(ff, ff_scratch, code_time, z, vpa,
+            z_spectral, vpa_spectral, moments,
             fields, z_source, vpa_source, z_SL, vpa_SL, io)
     else
-        time_advance!(ff, code_time, z, vpa, z_spectral, vpa_spectral, moments,
+        time_advance!(ff, ff_scratch, code_time, z, vpa,
+            z_spectral, vpa_spectral, moments,
             fields, z_source, vpa_source, z_SL, vpa_SL, io)
     end
     # finish i/o
@@ -121,26 +123,26 @@ end
 # df/dt + δv⋅∂f/∂z = 0, with δv(z,t)=v(z,t)-v₀(z)
 # for prudent choice of v₀, expect δv≪v so that explicit
 # time integrator can be used without severe CFL condition
-function time_advance!(ff, t, z, vpa, z_spectral, vpa_spectral, moments, fields,
-    z_source, vpa_source, z_SL, vpa_SL, io)
+function time_advance!(ff, ff_scratch, t, z, vpa, z_spectral, vpa_spectral,
+    moments, fields, z_source, vpa_source, z_SL, vpa_SL, io)
     # main time advance loop
     for i ∈ 1:nstep
         # z_advection! advances the operator-split 1D advection equation in z
         if z.discretization == "chebyshev_pseudospectral"
-            z_advection!(ff, z_SL, z_source, z, vpa, use_semi_lagrange, dt, z_spectral)
+            z_advection!(ff, ff_scratch, z_SL, z_source, z, vpa, use_semi_lagrange, dt, z_spectral)
         elseif z.discretization == "finite_difference"
-            z_advection!(ff, z_SL, z_source, z, vpa, use_semi_lagrange, dt)
+            z_advection!(ff, ff_scratch, z_SL, z_source, z, vpa, use_semi_lagrange, dt)
         end
         # reset "xx.updated" flags to false since ff has been updated
         # and the corresponding moments have not
         moments.dens_updated = false ; moments.ppar_updated = false
         # vpa_advection! advances the operator-split 1D advection equation in vpa
         if vpa.discretization == "chebyshev_pseudospectral"
-            vpa_advection!(ff, fields.phi, moments, vpa_SL, vpa_source, vpa, z.n,
-                use_semi_lagrange, dt, vpa_spectral, z_spectral)
+            vpa_advection!(ff, ff_scratch, fields.phi, moments, vpa_SL, vpa_source,
+                vpa, z.n, use_semi_lagrange, dt, vpa_spectral, z_spectral)
         elseif vpa.discretization == "finite_difference"
-            vpa_advection!(ff, fields.phi, moments, vpa_SL, vpa_source, vpa, z.n,
-                use_semi_lagrange, dt)
+            vpa_advection!(ff, ff_scratch, fields.phi, moments, vpa_SL, vpa_source,
+                vpa, z.n, use_semi_lagrange, dt)
         end
         # update the time
         t += dt
