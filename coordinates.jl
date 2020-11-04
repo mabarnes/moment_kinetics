@@ -36,6 +36,8 @@ struct coordinate
     bc::String
     # wgts contains the integration weights associated with each grid point
     wgts::Array{Float64,1}
+    # scratch is an array used for intermediate calculations requiring n entries
+    scratch::Array{Float64,1}
 end
 # create arrays associated with a given coordinate,
 # setup the coordinate grid, and populate the coordinate structure
@@ -57,9 +59,12 @@ function define_coordinate(input)
         igrid, input.discretization)
     # calculate the widths of the cells between neighboring grid points
     cell_width = grid_spacing(grid, n)
+    # scratch is an array used for intermediate calculations requiring n entries
+    scratch = allocate_float(n)
 
     return coordinate(input.name, n, input.ngrid, input.nelement, input.L, grid,
-        cell_width, igrid, ielement, imin, imax, input.discretization, input.bc, wgts)
+        cell_width, igrid, ielement, imin, imax, input.discretization, input.bc,
+        wgts, scratch)
 end
 # setup a grid with n grid points on the interval [-L/2,L/2]
 function init_grid(ngrid, nelement, n, L, imin, imax, igrid, discretization)

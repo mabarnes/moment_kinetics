@@ -15,9 +15,6 @@ mutable struct moments
     ppar::Array{Float64,1}
     # flag that keeps track of whether or not ppar needs updating before use
     ppar_updated::Bool
-    # this is a scratch array that can be used for intermediate calculations
-    # involving the moments; useful to avoid unneccesary allocation/garbage collection
-    scratch::Array{Float64,1}
 end
 # create and initialise arrays for the density and parallel pressure,
 # as well as a scratch array used for intermediate calculations needed
@@ -27,19 +24,17 @@ function setup_moments(ff, vpa, nz)
     density = allocate_float(nz)
     # allocate array used for the parallel pressure
     parallel_pressure = allocate_float(nz)
-    # allocate arrary to be used for temporary storage
-    scratch = allocate_float(vpa.n)
     # initialise the density and parallel_pressure arrays
-    update_density!(density, scratch, ff, vpa, nz)
-    update_ppar!(parallel_pressure, scratch, ff, vpa, nz)
+    update_density!(density, vpa.scratch, ff, vpa, nz)
+    update_ppar!(parallel_pressure, vpa.scratch, ff, vpa, nz)
     # return a struct containing arrays/Bools needed to update moments
-    return moments(density, true, parallel_pressure, true, scratch)
+    return moments(density, true, parallel_pressure, true)
 end
 # calculate the updated density (dens) and parallel pressure (ppar)
 function update_moments!(moments, ff, vpa, nz)
     @boundscheck nz == size(ff, 1) || throw(BoundsError(ff))
-    update_density!(moments.dens, moments.scratch, ff, vpa, nz)
-    update_ppar!(moments.ppar, moments.scratch, ff, vpa, nz)
+    update_density!(moments.dens, vpa.scratch, ff, vpa, nz)
+    update_ppar!(moments.ppar, vpa.scratch, ff, vpa, nz)
     return nothing
 end
 # calculate the updated density (dens)
