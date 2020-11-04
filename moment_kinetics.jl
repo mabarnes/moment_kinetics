@@ -45,7 +45,7 @@ function moment_kinetics(to)
     # create arrays and do other work needed to setup
     # the main time advance loop
     z_spectral, vpa_spectral, moments, fields, z_source, vpa_source,
-        z_SL, vpa_SL = setup_time_advance(ff, z, vpa)
+        z_SL, vpa_SL = setup_time_advance(view(ff,:,:,1), z, vpa)
     # solve the 1+1D kinetic equation to advance f in time by nstep time steps
     if performance_test
         @timeit to "time_advance" time_advance!(ff, code_time, z, vpa, z_spectral, vpa_spectral, moments,
@@ -84,13 +84,13 @@ function setup_time_advance(ff, z, vpa)
     # and allocate/initialize the velocity space moments needed for advancing
     # the kinetic equation coupled to fluid equations
     # the resulting moments are returned in the structure "moments"
-    moments = setup_moments(view(ff,:,:,1), vpa, z.n)
+    moments = setup_moments(ff, vpa, z.n)
     # pass a subarray of ff (its value at the previous time level)
     # and create the "fields" structure that contains arrays
     # for the electrostatic potential phi and eventually the electromagnetic fields
     fields = setup_em_fields(z.n)
     # initialize the electrostatic potential
-    update_phi!(fields.phi, moments, view(ff,:,:,1), vpa, z.n)
+    update_phi!(fields.phi, moments, ff, vpa, z.n)
     # create structure z_source whose members are the arrays needed to compute
     # the source(s) appearing in the split part of the GK equation dealing
     # with advection in z
@@ -104,7 +104,7 @@ function setup_time_advance(ff, z, vpa)
     # with advection in vpa
     vpa_source = setup_source(vpa.n, z.n)
     # initialise the vpa advection speed
-    update_speed_vpa!(vpa_source, fields.phi, moments, view(ff,:,:,1), vpa, z.n)
+    update_speed_vpa!(vpa_source, fields.phi, moments, ff, vpa, z.n)
     # initialise the upwind/downwind boundary indices in vpa
     update_boundary_indices!(vpa_source)
     # create an array of structures containing the arrays needed for the semi-Lagrange

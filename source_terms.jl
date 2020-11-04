@@ -140,26 +140,5 @@ function calculate_explicit_source!(rhs, df, adv_fac, up_idx, down_idx, up_incr,
     end
     return nothing
 end
-# update ff at time level n+1 using an explicit Runge-Kutta method
-# along approximate characteristics
-function update_f!(ff, rhs, up_idx, down_idx, up_incr, dep_idx, n, j)
-    @boundscheck n == size(ff,1) || throw(BoundsError(ff))
-    @boundscheck n == length(rhs) || throw(BoundsError(rhs))
-    @boundscheck n == length(dep_idx) || throw(BoundsError(dep_idx))
-
-    @inbounds for i ∈ up_idx:-up_incr:down_idx
-        # dep_idx is the index of the departure point for the approximate
-        # characteristic passing through grid point i
-        # if semi-Lagrange is not used, then dep_idx = i
-        idx = dep_idx[i]
-        if idx != up_idx + up_incr
-            ff[i,j+1] = ff[idx,1] + rhs[i]
-        else
-            # NB: need to re-examine this for case with non-advective terms
-            ff[i,j+1] = 0.
-        end
-    end
-    return nothing
-end
 
 end
