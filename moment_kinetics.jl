@@ -4,7 +4,7 @@ push!(LOAD_PATH, ".")
 using TimerOutputs
 
 using file_io: setup_file_io, finish_file_io
-using file_io: write_f, write_moments, write_fields
+using file_io: write_data_to_ascii, write_data_to_binary
 using chebyshev: setup_chebyshev_pseudospectral
 using coordinates: define_coordinate, write_coordinate
 using source_terms: setup_source, update_boundary_indices!
@@ -38,26 +38,28 @@ function moment_kinetics(to)
     ff, ff_scratch = init_f(z, vpa)
     # initialize time variable
     code_time = 0.
-    # setup i/o
-    io = setup_file_io(run_name)
-    # write initial condition to file
-    write_f(ff, z, vpa, code_time, io.ff)
     # create arrays and do other work needed to setup
     # the main time advance loop
     z_spectral, vpa_spectral, moments, fields, z_source, vpa_source,
         z_SL, vpa_SL = setup_time_advance(ff, z, vpa)
+    # setup i/o
+    io, cdf = setup_file_io(run_name, z, vpa)
+    # write initial data to ascii files
+    write_data_to_ascii(ff, moments, fields, z, vpa, code_time, io)
+    # write initial data to binary file (netcdf)
+    write_data_to_binary(ff, moments, fields, code_time, cdf, 1)
     # solve the 1+1D kinetic equation to advance f in time by nstep time steps
     if performance_test
         @timeit to "time_advance" time_advance!(ff, ff_scratch, code_time, z, vpa,
             z_spectral, vpa_spectral, moments,
-            fields, z_source, vpa_source, z_SL, vpa_SL, io)
+            fields, z_source, vpa_source, z_SL, vpa_SL, io, cdf)
     else
         time_advance!(ff, ff_scratch, code_time, z, vpa,
             z_spectral, vpa_spectral, moments,
-            fields, z_source, vpa_source, z_SL, vpa_SL, io)
+            fields, z_source, vpa_source, z_SL, vpa_SL, io, cdf)
     end
     # finish i/o
-    finish_file_io(io)
+    finish_file_io(io, cdf)
     return nothing
 end
 # create arrays and do other work needed to setup
@@ -124,8 +126,9 @@ end
 # for prudent choice of v₀, expect δv≪v so that explicit
 # time integrator can be used without severe CFL condition
 function time_advance!(ff, ff_scratch, t, z, vpa, z_spectral, vpa_spectral,
-    moments, fields, z_source, vpa_source, z_SL, vpa_SL, io)
+    moments, fields, z_source, vpa_source, z_SL, vpa_SL, io, cdf)
     # main time advance loop
+    iwrite = 2
     for i ∈ 1:nstep
         # z_advection! advances the operator-split 1D advection equation in z
         if z.discretization == "chebyshev_pseudospectral"
@@ -148,9 +151,9 @@ function time_advance!(ff, ff_scratch, t, z, vpa, z_spectral, vpa_spectral,
         t += dt
         # write ff to file every nwrite time steps
         if mod(i,nwrite) == 0
-            write_f(ff, z, vpa, t, io.ff)
-            write_moments(moments, z, t, io.moments)
-            write_fields(fields, z, t, io.fields)
+            write_data_to_ascii(ff, moments, fields, z, vpa, t, io)
+            write_data_to_binary(ff, moments, fields, t, cdf, iwrite)
+            iwrite += 1
         end
     end
     return nothing

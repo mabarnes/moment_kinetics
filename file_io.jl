@@ -3,7 +3,11 @@ module file_io
 export input_option_error
 export open_output_file
 export setup_file_io, finish_file_io
-export write_f, write_moments, write_fields
+export write_data_to_ascii
+export write_data_to_binary
+
+using NCDatasets
+using type_definitions: mk_float
 
 # structure containing the various input/output streams
 struct ios
@@ -16,24 +20,111 @@ struct ios
     # such as the electrostatic potential are written
     fields::IOStream
 end
+# structure containing the data/metadata needed for netcdf file i/o
+struct netcdf_info{t_type, zvpat_type, zt_type}
+    # file identifier for the netcdf file to which data is written
+    fid::NCDataset
+    # handle for the time variable
+    time::t_type
+    # handle for the distribution function variable
+    f::zvpat_type
+    # handle for the electrostatic potential variable
+    phi::zt_type
+    # handle for the ion density
+    density::zt_type
+end
 # open the necessary output files
-function setup_file_io(run_name)
+function setup_file_io(run_name, z, vpa)
     ff_io = open_output_file(run_name, "f_vs_t")
     mom_io = open_output_file(run_name, "moments_vs_t")
     fields_io = open_output_file(run_name, "fields_vs_t")
-    return ios(ff_io, mom_io, fields_io)
+    cdf = setup_netcdf_io(run_name, z, vpa)
+    return ios(ff_io, mom_io, fields_io), cdf
+end
+# setup file i/o for netcdf
+function setup_netcdf_io(run_name, z, vpa)
+    # the netcdf file will be given by the run_name with .cdf appended
+    filename = string(run_name,".cdf")
+    # if a netcdf file with the requested name already exists, remove it
+    isfile(filename) && rm(filename)
+    # create the new NetCDF file
+    fid = NCDataset(filename,"c")
+    # write a header to the NetCDF file
+    fid.attrib["file_info"] = "This is a NetCDF file containing output data from the moment_kinetics code"
+    ### define coordinate dimensions ###
+    # define the z dimension
+    defDim(fid, "nz", z.n)
+    # define the vpa dimension
+    defDim(fid, "nvpa", vpa.n)
+    # define the time dimension, with an expandable size (denoted by Inf)
+    defDim(fid, "ntime", Inf)
+    ### create and write static variables to file ###
+    # create and write the "z" variable to file
+    varname = "z"
+    attributes = Dict("description" => "parallel coordinate")
+    dims = ("nz",)
+    vartype = mk_float
+    var = defVar(fid, varname, vartype, dims, attrib=attributes)
+    var[:] = z.grid
+    # create and write the "vpa" variable to file
+    varname = "vpa"
+    attributes = Dict("description" => "parallel velocity")
+    dims = ("nvpa",)
+    vartype = mk_float
+    var = defVar(fid, varname, vartype, dims, attrib=attributes)
+    var[:] = vpa.grid
+    ### create variables for time-dependent quantities and store them ###
+    ### in a struct for later access ###
+    # create the "time" variable
+    varname = "time"
+    attributes = Dict("description" => "time")
+    dims = ("ntime",)
+    vartype = mk_float
+    cdf_time = defVar(fid, varname, vartype, dims, attrib=attributes)
+    # create the "f" variable
+    varname = "f"
+    attributes = Dict("description" => "distribution function")
+    vartype = mk_float
+    dims = ("nz","nvpa","ntime")
+    cdf_f = defVar(fid, varname, vartype, dims, attrib=attributes)
+    # create variables that are floats with data in the z and time dimensions
+    vartype = mk_float
+    dims = ("nz","ntime")
+    # create the "phi" variable, which will contain the electrostatic potential
+    varname = "phi"
+    attributes = Dict("description" => "electrostatic potential",
+                      "units" => "Tref/e")
+    cdf_phi = defVar(fid, varname, vartype, dims, attrib=attributes)
+    # create the "density" variable, which will contain the ion density
+    varname = "density"
+    attributes = Dict("description" => "ion density",
+                      "units" => "ne")
+    cdf_density = defVar(fid, varname, vartype, dims, attrib=attributes)
+    # create a struct that stores the variables and other info needed for
+    # writing to the netcdf file during run-time
+    t_type = typeof(cdf_time)
+    zvpat_type = typeof(cdf_f)
+    zt_type = typeof(cdf_phi)
+    return netcdf_info{t_type, zvpat_type, zt_type}(fid, cdf_time, cdf_f,
+        cdf_phi, cdf_density)
 end
 # close all opened output files
-function finish_file_io(io)
+function finish_file_io(io, cdf)
     # get the fields in the ios struct
     io_fields = fieldnames(typeof(io))
     for i ∈ 1:length(io_fields)
         close(getfield(io, io_fields[i]))
     end
+    close(cdf.fid)
     return nothing
 end
+function write_data_to_ascii(ff, moments, fields, z, vpa, t, io)
+    write_f_ascii(ff, z, vpa, t, io.ff)
+    write_moments_ascii(moments, z, t, io.moments)
+    write_fields_ascii(fields, z, t, io.fields)
+end
 # write the function f(z,vpa) at this time slice
-function write_f(f, z, vpa, t, io)
+function write_f_ascii(f, z, vpa, t, io)
     @inbounds begin
         for j ∈ 1:vpa.n
             for i ∈ 1:z.n
@@ -47,7 +138,7 @@ function write_f(f, z, vpa, t, io)
     return nothing
 end
 # write moments of the distribution function f(z,vpa) at this time slice
-function write_moments(mom, z, t, io)
+function write_moments_ascii(mom, z, t, io)
     @inbounds begin
         for i ∈ 1:z.n
             println(io,"t: ", t, ",   z: ", z.grid[i], "  dens: ", mom.dens[i],
@@ -58,7 +149,7 @@ function write_moments(mom, z, t, io)
     return nothing
 end
 # write electrostatic potential at this time slice
-function write_fields(flds, z, t, io)
+function write_fields_ascii(flds, z, t, io)
     @inbounds begin
         for i ∈ 1:z.n
             println(io,"t: ", t, ",   z: ", z.grid[i], "  phi: ", flds.phi[i])
@@ -66,6 +157,17 @@ function write_fields(flds, z, t, io)
     end
     println(io,"")
     return nothing
+end
+# write time-dependent data to the netcdf file
+function write_data_to_binary(ff, moments, fields, t, cdf, t_idx)
+    # add the time for this time slice to the netcdf file
+    cdf.time[t_idx] = t
+    # add the distribution function data at this time slice to the netcdf file
+    cdf.f[:,:,t_idx] = ff
+    # add the electrostatic potential data at this time slice to the netcdf file
+    cdf.phi[:,t_idx] = fields.phi
+    # add the density data at this time slice to the netcdf file
+    cdf.density[:,t_idx] = moments.dens
 end
 # accepts an option name which has been identified as problematic and returns
 # an appropriate error message

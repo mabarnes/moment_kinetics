@@ -28,12 +28,12 @@ struct grid_input
 end
 
 # this is the prefix for all output files associated with this run
-const run_name = "speed_negative"
+const run_name = "example"
 
 # parameters related to the time stepping
 const nstep = 500
 const dt = 0.001
-const nwrite = 500
+const nwrite = 100
 # use_semi_lagrange = true to use interpolation-free semi-Lagrange treatment
 # otherwise, solve problem solely using the discretization_option above
 const use_semi_lagrange = true
