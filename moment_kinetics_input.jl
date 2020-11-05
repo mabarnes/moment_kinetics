@@ -1,7 +1,5 @@
 module moment_kinetics_input
 
-import file_io: input_option_error, open_output_file
-
 export run_name
 export z_input
 export vpa_input
@@ -12,15 +10,18 @@ export boltzmann_electron_response
 export check_input
 export performance_test
 
+using type_definitions: mk_float, mk_int
+using file_io: input_option_error, open_output_file
+
 struct grid_input
     # name of the variable associated with this coordinate
     name::String
     # number of grid points per element
-    ngrid::Int64
+    ngrid::mk_int
     # number of elements
-    nelement::Int64
+    nelement::mk_int
     # box length
-    L::Float64
+    L::mk_float
     # discretization option
     discretization::String
     # boundary option

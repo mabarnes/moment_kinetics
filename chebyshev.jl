@@ -1,24 +1,25 @@
 module chebyshev
 
-using FFTW
-using array_allocation: allocate_float, allocate_complex
-using clenshaw_curtis: clenshawcurtisweights
-
 export update_fcheby
 export setup_chebyshev_pseudospectral
 export scaled_chebyshev_grid
 export chebyshev_spectral_derivative!
 
+using FFTW
+using type_definitions: mk_float
+using array_allocation: allocate_float, allocate_complex
+using clenshaw_curtis: clenshawcurtisweights
+
 struct chebyshev_info{TForward <: FFTW.cFFTWPlan, TBackward <: AbstractFFTs.ScaledPlan}
     # fext is an array for storing f(z) on the extended domain needed
     # to perform complex-to-complex FFT using the fact that f(theta) is even in theta
-    fext::Array{Complex{Float64},1}
+    fext::Array{Complex{mk_float},1}
     # Chebyshev spectral coefficients of distribution function f
     # first dimension contains location within element
     # second dimension indicates the element
-    f::Array{Float64,2}
+    f::Array{mk_float,2}
     # Chebyshev spectral coefficients of derivative of f
-    df::Array{Float64,1}
+    df::Array{mk_float,1}
     # plan for the complex-to-complex, in-place, forward Fourier transform on Chebyshev-Gauss-Lobatto grid
     forward::TForward
     # plan for the complex-to-complex, in-place, backward Fourier transform on Chebyshev-Gauss-Lobatto grid
@@ -212,7 +213,7 @@ function chebyshev_forward_transform!(chebyf, fext, ff, transform, n)
         # first, fill in values for f on domain θ ∈ [0,π]
         # using even-ness of f about θ = π
         for j ∈ 0:n-1
-            fext[n-j] = complex(ff[j+1],0)
+            fext[n-j] = complex(ff[j+1],0.0)
         end
         # next, fill in values for f on domain θ ∈ (π,2π)
         for j ∈ 1:n-2

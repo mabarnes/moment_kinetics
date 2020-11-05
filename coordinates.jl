@@ -1,43 +1,44 @@
 module coordinates
 
-import array_allocation: allocate_float, allocate_int
-import file_io: open_output_file
-import chebyshev: scaled_chebyshev_grid
-
 export define_coordinate, write_coordinate
+
+using type_definitions: mk_float, mk_int
+using array_allocation: allocate_float, allocate_int
+using file_io: open_output_file
+using chebyshev: scaled_chebyshev_grid
 
 # structure containing basic information related to coordinates
 struct coordinate
     # name is the name of the variable associated with this coordiante
     name::String
     # n is the total number of grid points associated with this coordinate
-    n::Int64
+    n::mk_int
     # ngrid is the number of grid points per element in this coordinate
-    ngrid::Int64
+    ngrid::mk_int
     # nelement is the number of elements associated with this coordinate
-    nelement::Int64
+    nelement::mk_int
     # L is the box length in this coordinate
-    L::Float64
+    L::mk_float
     # grid is the location of the grid points
-    grid::Array{Float64,1}
+    grid::Array{mk_float,1}
     # cell_width is the width associated with the cells between grid points
-    cell_width::Array{Float64,1}
+    cell_width::Array{mk_float,1}
     # igrid contains the grid point index within the element
-    igrid::Array{Int64,1}
+    igrid::Array{mk_int,1}
     # ielement contains the element index
-    ielement::Array{Int64,1}
+    ielement::Array{mk_int,1}
     # imin[j] contains the minimum index on the full grid for element j
-    imin::Array{Int64,1}
+    imin::Array{mk_int,1}
     # imax[j] contains the maximum index on the full grid for element j
-    imax::Array{Int64,1}
+    imax::Array{mk_int,1}
     # discretization option for the grid
     discretization::String
     # bc is the boundary condition option for this coordinate
     bc::String
     # wgts contains the integration weights associated with each grid point
-    wgts::Array{Float64,1}
+    wgts::Array{mk_float,1}
     # scratch is an array used for intermediate calculations requiring n entries
-    scratch::Array{Float64,1}
+    scratch::Array{mk_float,1}
 end
 # create arrays associated with a given coordinate,
 # setup the coordinate grid, and populate the coordinate structure

@@ -1,11 +1,12 @@
 module semi_lagrange
 
-import array_allocation: allocate_float, allocate_int
-
 export setup_semi_lagrange
 export update_crossing_times!
 export find_departure_points!
 export project_characteristics_onto_grid!
+
+using type_definitions: mk_float, mk_int
+using array_allocation: allocate_float, allocate_int
 
 # structure semi_lagrange_info contains the basic information needed
 # to project backwards along approximate characteristics, which
@@ -13,17 +14,17 @@ export project_characteristics_onto_grid!
 struct semi_lagrange_info
     # crossing_time is the time required to cross a given cell
     # moving at a specified advection speed
-    crossing_time::Array{Float64,1}
+    crossing_time::Array{mk_float,1}
     # trajectory_time is the cumulative trajectory time along a characteristic
-    trajectory_time::Array{Float64,1}
+    trajectory_time::Array{mk_float,1}
     # dep_pts are the departure points at time level m for characteristic
     # arriving at time level m+1
-    dep_pts::Array{Float64,1}
+    dep_pts::Array{mk_float,1}
     # dep_idx are the indices of the nearest downwind grid point to
     # the departure point (which is in general between grid points)
-    dep_idx::Array{Int64,1}
+    dep_idx::Array{mk_int,1}
     # characteristic_speed is the approximate characteristic speed
-    characteristic_speed::Array{Float64,1}
+    characteristic_speed::Array{mk_float,1}
 end
 # create and return a structure containing the arrays needed for the
 # semi-Lagrange time advance

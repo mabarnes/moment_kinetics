@@ -3,12 +3,13 @@ module em_fields
 export setup_em_fields
 export update_phi!
 
+using type_definitions: mk_float
 using array_allocation: allocate_float
 using moment_kinetics_input: boltzmann_electron_response
 using velocity_moments: update_density!
 
 struct fields
-    phi::Array{Float64}
+    phi::Array{mk_float}
 end
 
 function setup_em_fields(m)

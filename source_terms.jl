@@ -6,6 +6,7 @@ export calculate_explicit_source!
 export update_f!
 export update_boundary_indices!
 
+using type_definitions: mk_float, mk_int
 using array_allocation: allocate_float
 using moment_kinetics_input: advection_speed, advection_speed_option
 
@@ -14,20 +15,20 @@ using moment_kinetics_input: advection_speed, advection_speed_option
 mutable struct source_info
     # rhs is the sum of the source terms appearing on the righthand side
     # of the equation
-    rhs::Array{Float64, 1}
+    rhs::Array{mk_float, 1}
     # df is the derivative of the distribution function f with respect
     # to the coordinate associated with this set of source terms
-    df::Array{Float64, 1}
+    df::Array{mk_float, 1}
     # speed is the component of the advection speed along this coordinate axis
-    speed::Array{Float64, 1}
+    speed::Array{mk_float, 1}
     # adv_fac is the advection factor that multiplies df in the advective source
-    adv_fac::Array{Float64, 1}
+    adv_fac::Array{mk_float, 1}
     # upwind_idx is the boundary index for the upwind boundary
-    upwind_idx::Int64
+    upwind_idx::mk_int
     # downwind_idx is the boundary index for the downwind boundary
-    downwind_idx::Int64
+    downwind_idx::mk_int
     # upwind_increment is the index increment used when sweeping in the upwind direction
-    upwind_increment::Int64
+    upwind_increment::mk_int
 end
 # create arrays needed to compute the source term(s) for a 1D problem
 function setup_source(n)

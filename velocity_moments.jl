@@ -1,18 +1,19 @@
 module velocity_moments
 
-using array_allocation: allocate_float
-
 export integrate_over_vspace!
 export update_moments!
 export update_density!
 
+using type_definitions: mk_float
+using array_allocation: allocate_float
+
 mutable struct moments
     # this is the particle density
-    dens::Array{Float64,1}
+    dens::Array{mk_float,1}
     # flag that keeps track of if the density needs updating before use
     dens_updated::Bool
     # this is the parallel pressure
-    ppar::Array{Float64,1}
+    ppar::Array{mk_float,1}
     # flag that keeps track of whether or not ppar needs updating before use
     ppar_updated::Bool
 end
