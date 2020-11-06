@@ -29,7 +29,7 @@ struct grid_input
 end
 
 # this is the prefix for all output files associated with this run
-const run_name = "example"
+const run_name = "const"
 
 # parameters related to the time stepping
 const nstep = 500
@@ -43,12 +43,12 @@ const use_semi_lagrange = true
 # ngrid_z is number of grid points per element
 const ngrid_z = 9
 # nelement_z is the number of elements
-const nelement_z = 10
+const nelement_z = 11
 # L_z is the box length
 const L_z = 2.
 # determine the boundary condition
-# currently supported option is "zero"
-const boundary_option_z = "zero"
+# currently supported option is "constant"
+const boundary_option_z = "constant"
 # determine the discretization option for the z grid
 # supported options are "chebyshev_pseudospectral" and "finite_difference"
 const discretization_option_z = "chebyshev_pseudospectral"
@@ -78,6 +78,7 @@ const initialization_option = "gaussian"
 const zwidth = 0.1
 const vpawidth = 0.5
 const monomial_degree = 2
+const density_offset = 1.0
 
 # if boltzmann_electron_response = true, then the electron
 # density is fixed to be n₀(eϕ/T)
@@ -124,9 +125,9 @@ function check_input_z(io)
         input_option_error("discretization_option_z", discretization_option_z)
     end
     # boundary_option determines z boundary condition
-    # supported options are "zero" and "periodic"
-    if boundary_option_z == "zero"
-        println(io,">boundary_option_z = 'zero'.  enforcing zero incoming BC in z.")
+    # supported options are "constant" and "periodic"
+    if boundary_option_z == "constant"
+        println(io,">boundary_option_z = 'constant'.  enforcing constant incoming BC in z.")
     elseif boundary_option == "periodic"
         println(io,">boundary_option_z = 'periodic'.  enforcing periodicity in z.")
     else

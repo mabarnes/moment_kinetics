@@ -8,6 +8,7 @@ using array_allocation: allocate_float
 using moment_kinetics_input: initialization_option
 using moment_kinetics_input: monomial_degree
 using moment_kinetics_input: zwidth, vpawidth
+using moment_kinetics_input: density_offset
 
 # creates ff and specifies its initial condition
 function init_f(z, vpa)
@@ -18,8 +19,8 @@ function init_f(z, vpa)
             # initial condition is an unshifted Gaussian
             for j ∈ 1:vpa.n
                 for i ∈ 1:z.n
-                    f[i,j] = (exp(-0.5*((z.grid[i]-3*zwidth)/zwidth)^2)
-                     * exp(-0.5*(vpa.grid[j]/vpawidth)^2))
+                    f[i,j] = ((density_offset + exp(-(z.grid[i]/zwidth)^2))
+                     * exp(-(vpa.grid[j]/vpawidth)^2) / sqrt(pi))
                 end
             end
         elseif initialization_option == "monomial"
@@ -39,20 +40,19 @@ function init_f(z, vpa)
 end
 # impose the prescribed z boundary condition on f
 # at every vpa grid point
-function enforce_z_boundary_condition!(f::Array{mk_float,2}, bc::String, src::T) where T
+function enforce_z_boundary_condition!(f::Array{mk_float,2}, bc::String, vpa, src::T) where T
     for ivpa ∈ 1:size(src,1)
         enforce_z_boundary_condition!(view(f,:,ivpa), bc,
-            src[ivpa].upwind_idx, src[ivpa].downwind_idx)
+            src[ivpa].upwind_idx, src[ivpa].downwind_idx, vpa.grid[ivpa])
     end
 end
 # impose the prescribed z boundary conditin on f
 # at a single vpa grid point
-function enforce_z_boundary_condition!(f, bc, upwind_idx, downwind_idx)
-    if bc == "zero"
+function enforce_z_boundary_condition!(f, bc, upwind_idx, downwind_idx, v)
+    if bc == "constant"
         # BC is time-independent f at upwind boundary
         # and constant f beyond boundary
-        #f[upwind_idx] .= density_offset
-        f[upwind_idx] = 0.0
+        f[upwind_idx] = density_offset * exp(-(v/vpawidth)^2) / sqrt(pi)
     elseif bc == "periodic"
         # impose periodicity
         f[downwind_idx] = f[upwind_idx]

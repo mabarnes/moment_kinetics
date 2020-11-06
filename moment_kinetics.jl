@@ -78,7 +78,7 @@ function setup_time_advance!(ff, z, vpa)
     # initialise the upwind/downwind boundary indices in z
     update_boundary_indices!(z_source)
     # enforce prescribed boundary condition in z on the distribution function f
-    enforce_z_boundary_condition!(ff, z.bc, z_source)
+    enforce_z_boundary_condition!(ff, z.bc, vpa, z_source)
     if z.discretization == "chebyshev_pseudospectral"
         # create arrays needed for explicit Chebyshev pseudospectral treatment in vpa
         # and create the plans for the forward and backward fast Chebyshev transforms
