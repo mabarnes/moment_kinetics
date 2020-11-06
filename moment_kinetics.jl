@@ -14,6 +14,7 @@ using z_advection: z_advection!, update_speed_z!
 using velocity_moments: setup_moments
 using em_fields: setup_em_fields, update_phi!
 using initial_conditions: init_f
+using initial_conditions: enforce_z_boundary_condition!
 
 using moment_kinetics_input: run_name
 using moment_kinetics_input: z_input, vpa_input
@@ -41,7 +42,7 @@ function moment_kinetics(to)
     # create arrays and do other work needed to setup
     # the main time advance loop
     z_spectral, vpa_spectral, moments, fields, z_source, vpa_source,
-        z_SL, vpa_SL = setup_time_advance(ff, z, vpa)
+        z_SL, vpa_SL = setup_time_advance!(ff, z, vpa)
     # setup i/o
     io, cdf = setup_file_io(run_name, z, vpa)
     # write initial data to ascii files
@@ -67,7 +68,17 @@ end
 # this includes creating and populating structs
 # for Chebyshev transforms, velocity space moments,
 # EM fields, semi-Lagrange treatment, and source terms
-function setup_time_advance(ff, z, vpa)
+function setup_time_advance!(ff, z, vpa)
+    # create structure z_source whose members are the arrays needed to compute
+    # the source(s) appearing in the split part of the GK equation dealing
+    # with advection in z
+    z_source = setup_source(z.n, vpa.n)
+    # initialise the z advection speed
+    update_speed_z!(z_source, vpa, z)
+    # initialise the upwind/downwind boundary indices in z
+    update_boundary_indices!(z_source)
+    # enforce prescribed boundary condition in z on the distribution function f
+    enforce_z_boundary_condition!(ff, z.bc, z_source)
     if z.discretization == "chebyshev_pseudospectral"
         # create arrays needed for explicit Chebyshev pseudospectral treatment in vpa
         # and create the plans for the forward and backward fast Chebyshev transforms
@@ -95,14 +106,6 @@ function setup_time_advance(ff, z, vpa)
     fields = setup_em_fields(z.n)
     # initialize the electrostatic potential
     update_phi!(fields.phi, moments, ff, vpa, z.n)
-    # create structure z_source whose members are the arrays needed to compute
-    # the source(s) appearing in the split part of the GK equation dealing
-    # with advection in z
-    z_source = setup_source(z.n, vpa.n)
-    # initialise the z advection speed
-    update_speed_z!(z_source, vpa, z)
-    # initialise the upwind/downwind boundary indices in z
-    update_boundary_indices!(z_source)
     # create structure vpa_source whose members are the arrays needed to compute
     # the source(s) appearing in the split part of the GK equation dealing
     # with advection in vpa

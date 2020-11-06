@@ -1,7 +1,9 @@
 module initial_conditions
 
 export init_f
+export enforce_z_boundary_condition!
 
+using type_definitions: mk_float
 using array_allocation: allocate_float
 using moment_kinetics_input: initialization_option
 using moment_kinetics_input: monomial_degree
@@ -28,19 +30,32 @@ function init_f(z, vpa)
                     * (vpa.grid[j] + 0.5*vpa.L)^monomial_degree)
             end
         end
-        if z.bc == "zero"
-            # impose zero incoming BC
-            f[1,:] .= 0.0
-            #f[nz,:] .= 0
-        elseif z.bc == "periodic"
-            # impose periodicity
-            f[1,:] .= f[z.n,:]
-        end
         if vpa.bc == "zero"
             f[:,1] .= 0.0
         end
     end
     return f, f_scratch
+end
+# impose the prescribed z boundary condition on f
+# at every vpa grid point
+function enforce_z_boundary_condition!(f::Array{mk_float,2}, bc::String, src::T) where T
+    for ivpa ∈ 1:size(src,1)
+        enforce_z_boundary_condition!(view(f,:,ivpa), bc,
+            src[ivpa].upwind_idx, src[ivpa].downwind_idx)
+    end
+end
+# impose the prescribed z boundary conditin on f
+# at a single vpa grid point
+function enforce_z_boundary_condition!(f, bc, upwind_idx, downwind_idx)
+    if bc == "zero"
+        # BC is time-independent f at upwind boundary
+        # and constant f beyond boundary
+        #f[upwind_idx] .= density_offset
+        f[upwind_idx] = 0.0
+    elseif bc == "periodic"
+        # impose periodicity
+        f[downwind_idx] = f[upwind_idx]
+    end
 end
 
 end
