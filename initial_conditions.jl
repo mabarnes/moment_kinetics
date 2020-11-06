@@ -32,6 +32,7 @@ function init_f(z, vpa)
         end
         if vpa.bc == "zero"
             f[:,1] .= 0.0
+            f[:,end] .= 0.0
         end
     end
     return f, f_scratch

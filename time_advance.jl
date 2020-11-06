@@ -71,10 +71,11 @@ function update_f!(f_new, f_old, rhs, up_idx, down_idx, up_incr, dep_idx, n, j)
         if idx != up_idx + up_incr
             f_new[i] = f_old[idx] + rhs[i]
         else
-            # NB: I think the following two lines of code should give same result
-            # but they do not; should look into it
-            #f_new[i] = f_old[up_idx]
-            f_new[i] = 0.0
+            # if departure index is beyond upwind boundary, then
+            # set updated value along characteristic equal to the old
+            # value at the boundary; i.e., assume f is constant
+            # beyond the upwind boundary
+            f_new[i] = f_old[up_idx]
         end
     end
     return nothing
