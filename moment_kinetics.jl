@@ -6,7 +6,7 @@ using TimerOutputs
 using file_io: setup_file_io, finish_file_io
 using file_io: write_data_to_ascii, write_data_to_binary
 using chebyshev: setup_chebyshev_pseudospectral
-using coordinates: define_coordinate, write_coordinate
+using coordinates: define_coordinate
 using source_terms: setup_source, update_boundary_indices!
 using semi_lagrange: setup_semi_lagrange
 using vpa_advection: vpa_advection!, update_speed_vpa!
@@ -15,8 +15,9 @@ using velocity_moments: setup_moments
 using em_fields: setup_em_fields, update_phi!
 using initial_conditions: init_f
 using initial_conditions: enforce_z_boundary_condition!
+using initial_conditions: enforce_vpa_boundary_condition!
 
-using moment_kinetics_input: run_name
+using moment_kinetics_input: run_name, output_dir
 using moment_kinetics_input: z_input, vpa_input
 using moment_kinetics_input: nstep, dt, nwrite, use_semi_lagrange
 using moment_kinetics_input: check_input
@@ -31,10 +32,8 @@ function moment_kinetics(to)
     check_input()
     # initialize z grid and write grid point locations to file
     z = define_coordinate(z_input)
-    write_coordinate(z, run_name, "zgrid")
     # initialize vpa grid and write grid point locations to file
     vpa = define_coordinate(vpa_input)
-    write_coordinate(vpa, run_name, "vpa")
     # initialize f(z)
     ff, ff_scratch = init_f(z, vpa)
     # initialize time variable
@@ -44,7 +43,7 @@ function moment_kinetics(to)
     z_spectral, vpa_spectral, moments, fields, z_source, vpa_source,
         z_SL, vpa_SL = setup_time_advance!(ff, z, vpa)
     # setup i/o
-    io, cdf = setup_file_io(run_name, z, vpa)
+    io, cdf = setup_file_io(output_dir, run_name, z, vpa)
     # write initial data to ascii files
     write_data_to_ascii(ff, moments, fields, z, vpa, code_time, io)
     # write initial data to binary file (netcdf)
@@ -111,9 +110,11 @@ function setup_time_advance!(ff, z, vpa)
     # with advection in vpa
     vpa_source = setup_source(vpa.n, z.n)
     # initialise the vpa advection speed
-    update_speed_vpa!(vpa_source, fields.phi, moments, ff, vpa, z.n)
+    update_speed_vpa!(vpa_source, fields.phi, moments, ff, vpa, z, z_spectral)
     # initialise the upwind/downwind boundary indices in vpa
     update_boundary_indices!(vpa_source)
+    # enforce prescribed boundary condition in vpa on the distribution function f
+    enforce_vpa_boundary_condition!(ff, vpa.bc, vpa_source)
     # create an array of structures containing the arrays needed for the semi-Lagrange
     # solve and initialize the characteristic speed and departure indices
     # so that the code can gracefully run without using the semi-Lagrange
@@ -145,15 +146,16 @@ function time_advance!(ff, ff_scratch, t, z, vpa, z_spectral, vpa_spectral,
         # vpa_advection! advances the operator-split 1D advection equation in vpa
         if vpa.discretization == "chebyshev_pseudospectral"
             vpa_advection!(ff, ff_scratch, fields.phi, moments, vpa_SL, vpa_source,
-                vpa, z.n, use_semi_lagrange, dt, vpa_spectral, z_spectral)
+                vpa, z, use_semi_lagrange, dt, vpa_spectral, z_spectral)
         elseif vpa.discretization == "finite_difference"
             vpa_advection!(ff, ff_scratch, fields.phi, moments, vpa_SL, vpa_source,
-                vpa, z.n, use_semi_lagrange, dt)
+                vpa, z, use_semi_lagrange, dt)
         end
         # update the time
         t += dt
         # write ff to file every nwrite time steps
         if mod(i,nwrite) == 0
+            println("finished time step ", i)
             write_data_to_ascii(ff, moments, fields, z, vpa, t, io)
             write_data_to_binary(ff, moments, fields, t, cdf, iwrite)
             iwrite += 1
