@@ -1,6 +1,6 @@
 module moment_kinetics_input
 
-export run_name
+export run_name, output_dir
 export z_input
 export vpa_input
 export nstep, dt, nwrite, use_semi_lagrange
@@ -29,12 +29,14 @@ struct grid_input
 end
 
 # this is the prefix for all output files associated with this run
-const run_name = "const"
+const run_name = "example"
+# this is the directory where the simulation data will be stored
+const output_dir = run_name
 
 # parameters related to the time stepping
-const nstep = 500
-const dt = 0.001
-const nwrite = 100
+const nstep = 100
+const dt = 0.01
+const nwrite = 4
 # use_semi_lagrange = true to use interpolation-free semi-Lagrange treatment
 # otherwise, solve problem solely using the discretization_option above
 const use_semi_lagrange = true
@@ -43,7 +45,7 @@ const use_semi_lagrange = true
 # ngrid_z is number of grid points per element
 const ngrid_z = 9
 # nelement_z is the number of elements
-const nelement_z = 11
+const nelement_z = 12
 # L_z is the box length
 const L_z = 2.
 # determine the boundary condition
@@ -58,9 +60,9 @@ const discretization_option_z = "chebyshev_pseudospectral"
 # ngrid_vpa is the number of grid points per element
 const ngrid_vpa = 9
 # nelement_vpa is the number of elements
-const nelement_vpa = 10
+const nelement_vpa = 15
 # L_vpa is the box length in units of vthermal_species
-const L_vpa = 6.
+const L_vpa = 8.
 # determine the boundary condition
 # only supported option at present is "zero"
 const boundary_option_vpa = "zero"
@@ -75,8 +77,8 @@ const advection_speed_option = "constant"
 
 # determines which function is being advected
 const initialization_option = "gaussian"
-const zwidth = 0.1
-const vpawidth = 0.5
+const zwidth = 0.25
+const vpawidth = 1.0
 const monomial_degree = 2
 const density_offset = 1.0
 
@@ -94,7 +96,11 @@ vpa_input = grid_input("vpa", ngrid_vpa, nelement_vpa, L_vpa,
 
 # check various input options to ensure they are all valid/consistent
 function check_input()
-    io = open_output_file(run_name, "input")
+    # check to see if output_dir exists in the current directory
+    # if not, create it
+    isdir(output_dir) || mkdir(output_dir)
+    # open ascii file in which informtaion about input choices will be written
+    io = open_output_file(string(output_dir,"/",run_name), "input")
     check_input_time_advance(io)
     check_input_z(io)
     check_input_vpa(io)
