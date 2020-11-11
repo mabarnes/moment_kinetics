@@ -1,6 +1,7 @@
 module chebyshev
 
-export update_fcheby
+export update_fcheby!
+export update_df_chebyshev!
 export setup_chebyshev_pseudospectral
 export scaled_chebyshev_grid
 export chebyshev_spectral_derivative!
