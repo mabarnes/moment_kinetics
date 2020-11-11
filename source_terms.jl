@@ -71,7 +71,7 @@ function update_boundary_indices!(source)
     m = size(source,1)
     n = size(source[1].speed,1)
     for j ∈ 1:m
-        # for now, assume the speed has the same sign at all grid points
+        # NB: for now, assume the speed has the same sign at all grid points
         # so only need to check its value at one location to determine the upwind direction
         if source[j].speed[1] > 0
             source[j].upwind_idx = 1

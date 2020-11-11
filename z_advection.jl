@@ -60,8 +60,8 @@ end
 function z_advection!(ff, ff_scratch, SL, source, z, vpa, use_semi_lagrange, dt)
     # check to ensure that all array indices accessed in this function
     # are in-bounds
-    @boundscheck size(f,1) == z.n || throw(BoundsError(f))
-    @boundscheck size(f,2) == vpa.n || throw(BoundsError(f))
+    @boundscheck size(ff,1) == z.n || throw(BoundsError(ff))
+    @boundscheck size(ff,2) == vpa.n || throw(BoundsError(ff))
     @boundscheck size(ff_scratch,1) == z.n || throw(BoundsError(ff_scratch))
     @boundscheck size(ff_scratch,2) == vpa.n || throw(BoundsError(ff_scratch))
     @boundscheck size(ff_scratch,3) == 3 || throw(BoundsError(ff_scratch))

@@ -34,17 +34,21 @@ struct netcdf_info{t_type, zvpat_type, zt_type}
     density::zt_type
 end
 # open the necessary output files
-function setup_file_io(run_name, z, vpa)
-    ff_io = open_output_file(run_name, "f_vs_t")
-    mom_io = open_output_file(run_name, "moments_vs_t")
-    fields_io = open_output_file(run_name, "fields_vs_t")
-    cdf = setup_netcdf_io(run_name, z, vpa)
+function setup_file_io(output_dir, run_name, z, vpa)
+    # check to see if output_dir exists in the current directory
+    # if not, create it
+    isdir(output_dir) || mkdir(output_dir)
+    out_prefix = string(output_dir, "/", run_name)
+    ff_io = open_output_file(out_prefix, "f_vs_t")
+    mom_io = open_output_file(out_prefix, "moments_vs_t")
+    fields_io = open_output_file(out_prefix, "fields_vs_t")
+    cdf = setup_netcdf_io(out_prefix, z, vpa)
     return ios(ff_io, mom_io, fields_io), cdf
 end
 # setup file i/o for netcdf
-function setup_netcdf_io(run_name, z, vpa)
-    # the netcdf file will be given by the run_name with .cdf appended
-    filename = string(run_name,".cdf")
+function setup_netcdf_io(prefix, z, vpa)
+    # the netcdf file will be given by output_dir/run_name with .cdf appended
+    filename = string(prefix,".cdf")
     # if a netcdf file with the requested name already exists, remove it
     isfile(filename) && rm(filename)
     # create the new NetCDF file

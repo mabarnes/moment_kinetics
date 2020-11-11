@@ -63,7 +63,10 @@ function update_f!(f_new, f_old, rhs, up_idx, down_idx, up_incr, dep_idx, n, j)
     @boundscheck n == length(dep_idx) || throw(BoundsError(dep_idx))
     @boundscheck n == length(f_old) || throw(BoundsError(f_old))
 
-    @inbounds for i ∈ up_idx:-up_incr:down_idx
+    # do not update the upwind boundary, where the BC has been imposed
+    f_new[up_idx] = f_old[up_idx]
+    #@inbounds for i ∈ up_idx-up_incr:-up_incr:down_idx
+    for i ∈ up_idx-up_incr:-up_incr:down_idx
         # dep_idx is the index of the departure point for the approximate
         # characteristic passing through grid point i
         # if semi-Lagrange is not used, then dep_idx = i

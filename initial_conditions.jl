@@ -2,6 +2,7 @@ module initial_conditions
 
 export init_f
 export enforce_z_boundary_condition!
+export enforce_vpa_boundary_condition!
 
 using type_definitions: mk_float
 using array_allocation: allocate_float
@@ -31,10 +32,11 @@ function init_f(z, vpa)
                     * (vpa.grid[j] + 0.5*vpa.L)^monomial_degree)
             end
         end
-        if vpa.bc == "zero"
-            f[:,1] .= 0.0
-            f[:,end] .= 0.0
-        end
+        #enforce_vpa_boundary_condition!(f, vpa.bc)
+        #if vpa.bc == "zero"
+        #    #f[:,1] .= 0.0
+        #    f[:,end] .= 0.0
+        #end
     end
     return f, f_scratch
 end
@@ -56,6 +58,19 @@ function enforce_z_boundary_condition!(f, bc, upwind_idx, downwind_idx, v)
     elseif bc == "periodic"
         # impose periodicity
         f[downwind_idx] = f[upwind_idx]
+    end
+end
+# impose the prescribed vpa boundary condition on f
+# at every z grid point
+function enforce_vpa_boundary_condition!(f, bc, src::T) where T
+    nz = size(f,1)
+    for iz ∈ 1:nz
+        enforce_vpa_boundary_condition_local!(view(f,iz,:), bc, src[iz].upwind_idx)
+    end
+end
+function enforce_vpa_boundary_condition_local!(f::T, bc, upwind_idx) where T
+    if bc == "zero"
+        f[upwind_idx] = 0.0
     end
 end
 

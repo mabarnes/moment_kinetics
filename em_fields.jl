@@ -28,7 +28,7 @@ function update_phi!(phi, moments, ff, vpa, nz)
         end
         @inbounds begin
             for iz ∈ 1:nz
-                phi[iz] = moments.dens[iz]
+                phi[iz] = log(moments.dens[iz])
             end
         end
     end

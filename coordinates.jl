@@ -166,16 +166,5 @@ end
 function integration_weights(grid, discretization)
 
 end
-# write the grid point locations for this coordinate to file
-function write_coordinate(coord, run_name, extension)
-    # open a file with the desired extension
-    io = open_output_file(run_name, extension)
-    # write grid point locations to file
-    @inbounds for i ∈ 1:coord.n
-        println(io, "index: ", i, "  grid: ", coord.grid[i], "  weight: ", coord.wgts[i])
-    end
-    # close the file
-    close(io)
-end
 
 end
