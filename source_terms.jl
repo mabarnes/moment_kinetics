@@ -94,10 +94,12 @@ function update_advection_factor!(adv_fac, speed, upwind_idx, downwind_idx,
     @boundscheck n == length(speed) || throw(BoundsError(speed))
     @boundscheck n == length(SL.characteristic_speed) ||
         throw(BoundsError(SL.characteristic_speed))
-    @inbounds for i ∈ upwind_idx-upwind_increment:-upwind_increment:downwind_idx
+    #NB: commented out line below needed for bc != periodic?
+    #@inbounds for i ∈ upwind_idx-upwind_increment:-upwind_increment:downwind_idx
+    @inbounds for i ∈ upwind_idx:-upwind_increment:downwind_idx
         idx = SL.dep_idx[i]
         # only need to calculate advection factor for characteristics
-        # that originate within the domain, as zero incoming BC
+        # that originate within the domain, as zero/constant incoming BC
         # takes care of the rest.
         if idx != upwind_idx + upwind_increment
             # the effective advection speed appearing in the source

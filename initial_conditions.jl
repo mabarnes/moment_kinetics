@@ -65,12 +65,15 @@ end
 function enforce_vpa_boundary_condition!(f, bc, src::T) where T
     nz = size(f,1)
     for iz ∈ 1:nz
-        enforce_vpa_boundary_condition_local!(view(f,iz,:), bc, src[iz].upwind_idx)
+        enforce_vpa_boundary_condition_local!(view(f,iz,:), bc, src[iz].upwind_idx,
+            src[iz].downwind_idx)
     end
 end
-function enforce_vpa_boundary_condition_local!(f::T, bc, upwind_idx) where T
+function enforce_vpa_boundary_condition_local!(f::T, bc, upwind_idx, downwind_idx) where T
     if bc == "zero"
         f[upwind_idx] = 0.0
+    elseif bc == "periodic"
+        f[downwind_idx] = f[upwind_idx]
     end
 end
 

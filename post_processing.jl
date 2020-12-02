@@ -82,5 +82,12 @@ anim = @animate for i ∈ 1:ntime
 end
 outfile = string(run_name, "_f_vs_z_vpa.gif")
 gif(anim, outfile, fps=5)
+# make a gif animation of f(vpa0,z,t)
+ivpa=cld(nvpa,2)
+anim = @animate for i ∈ 1:ntime
+    plot(z, ff[:,ivpa,i], ylims = (fmin,fmax))
+end
+outfile = string(run_name, "_f_vs_z.gif")
+gif(anim, outfile, fps=5)
 
 close(fid)
