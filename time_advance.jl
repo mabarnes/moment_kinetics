@@ -16,22 +16,32 @@ function advance_f_local!(f_new, f_current, f_old, SL, source, coord, dt, spectr
     # calculate the factor appearing in front of df/dz in the advection
     # term at time level n in the frame moving with the approximate
     # characteristic
+    #println("j: ", j)
     update_advection_factor!(source.adv_fac,
         source.speed, source.upwind_idx, source.downwind_idx,
         source.upwind_increment, SL, coord.n, dt, j)
+    #println("adv_fac[1]: ", source.adv_fac[1], "  adv_fac[end]: ", source.adv_fac[end])
     # Chebyshev transform f to get Chebyshev spectral coefficients
     # and use them to calculate f'
     update_fcheby!(spectral, f_current, coord)
     update_df_chebyshev!(source.df, spectral, coord)
+    if coord.bc == "periodic"
+        #NB: should the following be modified to take upwind info instead of average?
+        source.df[1] = 0.5*(source.df[1]+source.df[end])
+        source.df[end] = source.df[1]
+    end
+    #println("df[1]: ", source.df[1], "  df[end]: ", source.df[end])
     # calculate the explicit source terms on the rhs of the equation;
     # i.e., -Δt⋅δv⋅f'
     calculate_explicit_source!(source.rhs, source.df,
         source.adv_fac, source.upwind_idx, source.downwind_idx,
         source.upwind_increment, SL.dep_idx, coord.n, j)
+    #println("rhs[1]: ", source.rhs[1], "  rhs[end]: ", source.rhs[end])
     # update ff at time level n+1 using an explicit Runge-Kutta method
     # along approximate characteristics
     update_f!(f_new, f_old, source.rhs, source.upwind_idx, source.downwind_idx,
-        source.upwind_increment, SL.dep_idx, coord.n, j)
+        source.upwind_increment, SL.dep_idx, coord.n, j, coord.bc)
+    #println("f_new[1]: ", f_new[1], "  f_new[end]: ", f_new[end])
 end
 # do all the work needed to update f(z) at a single vpa grid point
 # using finite difference method for derivatives
@@ -44,7 +54,12 @@ function advance_f_local!(f_new, f_current, f_old, SL, source, coord, dt, j)
         source.upwind_increment, SL, coord.n, dt, j)
     # calculate the derivative of f
     update_df_finite_difference!(source.df, f_current,
-        coord.cell_width, source.adv_fac, coord.bc)
+        coord.cell_width, source.adv_fac, coord.bc, coord.fd_option)
+    if coord.bc == "periodic"
+        #NB: should the following be modified to take upwind info instead of average?
+        source.df[1] = 0.5*(source.df[1]+source.df[end])
+        source.df[end] = source.df[1]
+    end
     # calculate the explicit source terms on the rhs of the equation;
     # i.e., -Δt⋅δv⋅f'
     calculate_explicit_source!(source.rhs, source.df,
@@ -53,20 +68,25 @@ function advance_f_local!(f_new, f_current, f_old, SL, source, coord, dt, j)
     # update ff at time level n+1 using an explicit Runge-Kutta method
     # along approximate characteristics
     update_f!(f_new, f_old, source.rhs, source.upwind_idx, source.downwind_idx,
-        source.upwind_increment, SL.dep_idx, coord.n, j)
+        source.upwind_increment, SL.dep_idx, coord.n, j, coord.bc)
 end
 # update ff at time level n+1 using an explicit Runge-Kutta method
 # along approximate characteristics
-function update_f!(f_new, f_old, rhs, up_idx, down_idx, up_incr, dep_idx, n, j)
+function update_f!(f_new, f_old, rhs, up_idx, down_idx, up_incr, dep_idx, n, j, bc)
     @boundscheck n == length(f_new) || throw(BoundsError(f_new))
     @boundscheck n == length(rhs) || throw(BoundsError(rhs))
     @boundscheck n == length(dep_idx) || throw(BoundsError(dep_idx))
     @boundscheck n == length(f_old) || throw(BoundsError(f_old))
 
-    # do not update the upwind boundary, where the BC has been imposed
-    f_new[up_idx] = f_old[up_idx]
+    # do not update the upwind boundary, where the constant incoming BC has been imposed
+    if bc != "periodic"
+        f_new[up_idx] = f_old[up_idx]
+        istart = up_idx-up_incr
+    else
+        istart = up_idx
+    end
     #@inbounds for i ∈ up_idx-up_incr:-up_incr:down_idx
-    for i ∈ up_idx-up_incr:-up_incr:down_idx
+    for i ∈ up_idx:-up_incr:down_idx
         # dep_idx is the index of the departure point for the approximate
         # characteristic passing through grid point i
         # if semi-Lagrange is not used, then dep_idx = i

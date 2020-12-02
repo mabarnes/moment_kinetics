@@ -123,6 +123,7 @@ function update_df_chebyshev!(df, chebyshev, coord)
             df[i] *= scale_factor
         end
         if j > 1
+            # NB: should this be changed to use value from upwind boundary?
             df[imin] = 0.5*(df[imin]+df_boundary)
             #df[imin] = df_boundary
         end

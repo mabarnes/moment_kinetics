@@ -133,24 +133,55 @@ function time_advance!(ff, ff_scratch, t, z, vpa, z_spectral, vpa_spectral,
     moments, fields, z_source, vpa_source, z_SL, vpa_SL, io, cdf)
     # main time advance loop
     iwrite = 2
+    flipflop = false
     for i ∈ 1:nstep
-        # z_advection! advances the operator-split 1D advection equation in z
-        if z.discretization == "chebyshev_pseudospectral"
-            z_advection!(ff, ff_scratch, z_SL, z_source, z, vpa, use_semi_lagrange, dt, z_spectral)
-        elseif z.discretization == "finite_difference"
-            z_advection!(ff, ff_scratch, z_SL, z_source, z, vpa, use_semi_lagrange, dt)
+        #flipflop = false
+        if flipflop
+            # vpa_advection! advances the operator-split 1D advection equation in vpa
+            if vpa.discretization == "chebyshev_pseudospectral"
+                vpa_advection!(ff, ff_scratch, fields.phi, moments, vpa_SL, vpa_source,
+                    vpa, z, use_semi_lagrange, dt, vpa_spectral, z_spectral)
+            elseif vpa.discretization == "finite_difference"
+                vpa_advection!(ff, ff_scratch, fields.phi, moments, vpa_SL, vpa_source,
+                    vpa, z, use_semi_lagrange, dt)
+            end
+            # reset "xx.updated" flags to false since ff has been updated
+            # and the corresponding moments have not
+            moments.dens_updated = false ; moments.ppar_updated = false
+            # z_advection! advances the operator-split 1D advection equation in z
+            if z.discretization == "chebyshev_pseudospectral"
+                z_advection!(ff, ff_scratch, z_SL, z_source, z, vpa, use_semi_lagrange, dt, z_spectral)
+            elseif z.discretization == "finite_difference"
+                z_advection!(ff, ff_scratch, z_SL, z_source, z, vpa, use_semi_lagrange, dt)
+            end
+            # reset "xx.updated" flags to false since ff has been updated
+            # and the corresponding moments have not
+            moments.dens_updated = false ; moments.ppar_updated = false
+            flipflop = false
+        else
+            # z_advection! advances the operator-split 1D advection equation in z
+            if z.discretization == "chebyshev_pseudospectral"
+                z_advection!(ff, ff_scratch, z_SL, z_source, z, vpa, use_semi_lagrange, dt, z_spectral)
+            elseif z.discretization == "finite_difference"
+                z_advection!(ff, ff_scratch, z_SL, z_source, z, vpa, use_semi_lagrange, dt)
+            end
+            # reset "xx.updated" flags to false since ff has been updated
+            # and the corresponding moments have not
+            moments.dens_updated = false ; moments.ppar_updated = false
+            # vpa_advection! advances the operator-split 1D advection equation in vpa
+            if vpa.discretization == "chebyshev_pseudospectral"
+                vpa_advection!(ff, ff_scratch, fields.phi, moments, vpa_SL, vpa_source,
+                    vpa, z, use_semi_lagrange, dt, vpa_spectral, z_spectral)
+            elseif vpa.discretization == "finite_difference"
+                vpa_advection!(ff, ff_scratch, fields.phi, moments, vpa_SL, vpa_source,
+                    vpa, z, use_semi_lagrange, dt)
+            end
+            # reset "xx.updated" flags to false since ff has been updated
+            # and the corresponding moments have not
+            moments.dens_updated = false ; moments.ppar_updated = false
+            flipflop = true
         end
-        # reset "xx.updated" flags to false since ff has been updated
-        # and the corresponding moments have not
-        moments.dens_updated = false ; moments.ppar_updated = false
-        # vpa_advection! advances the operator-split 1D advection equation in vpa
-        if vpa.discretization == "chebyshev_pseudospectral"
-            vpa_advection!(ff, ff_scratch, fields.phi, moments, vpa_SL, vpa_source,
-                vpa, z, use_semi_lagrange, dt, vpa_spectral, z_spectral)
-        elseif vpa.discretization == "finite_difference"
-            vpa_advection!(ff, ff_scratch, fields.phi, moments, vpa_SL, vpa_source,
-                vpa, z, use_semi_lagrange, dt)
-        end
+
         # update the time
         t += dt
         # write ff to file every nwrite time steps
