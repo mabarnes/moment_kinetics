@@ -6,6 +6,7 @@ using type_definitions: mk_float, mk_int
 using array_allocation: allocate_float, allocate_int
 using file_io: open_output_file
 using chebyshev: scaled_chebyshev_grid
+using quadrature: composite_simpson_weights
 
 # structure containing basic information related to coordinates
 struct coordinate
@@ -39,13 +40,18 @@ struct coordinate
     bc::String
     # wgts contains the integration weights associated with each grid point
     wgts::Array{mk_float,1}
+    # uniform_grid contains location of grid points mapped to a uniform grid
+    # if finite differences used for discretization, no mapping required, and uniform_grid = grid
+    uniform_grid::Array{mk_float,1}
+    # duniform_dgrid is the local derivative of the uniform grid with respect to
+    # the coordinate grid
+    duniform_dgrid::Array{mk_float,2}
     # scratch is an array used for intermediate calculations requiring n entries
     scratch::Array{mk_float,1}
 end
 # create arrays associated with a given coordinate,
 # setup the coordinate grid, and populate the coordinate structure
 # containing all of this information
-#function define_coordinate(ngrid, nelement, L, discretization, bc)
 function define_coordinate(input)
     # total number of grid points is ngrid for the first element
     # plus ngrid-1 unique points for each additional element due
@@ -58,19 +64,24 @@ function define_coordinate(input)
     # to the full grid
     imin, imax = elemental_to_full_grid_map(input.ngrid, input.nelement)
     # initialize the grid and the integration weights associated with the grid
-    grid, wgts = init_grid(input.ngrid, input.nelement, n, input.L, imin, imax,
-        igrid, input.discretization)
+    # also obtain the Chebyshev theta grid and spacing if chosen as discretization option
+    grid, wgts, uniform_grid = init_grid(input.ngrid, input.nelement, n, input.L,
+        imin, imax, igrid, input.discretization)
     # calculate the widths of the cells between neighboring grid points
     cell_width = grid_spacing(grid, n)
+    # duniform_dgrid is the local derivative of the uniform grid with respect to
+    # the coordinate grid
+    duniform_dgrid = allocate_float(input.ngrid, input.nelement)
     # scratch is an array used for intermediate calculations requiring n entries
     scratch = allocate_float(n)
 
     return coordinate(input.name, n, input.ngrid, input.nelement, input.L, grid,
         cell_width, igrid, ielement, imin, imax, input.discretization, input.fd_option,
-        input.bc, wgts, scratch)
+        input.bc, wgts, uniform_grid, duniform_dgrid, scratch)
 end
 # setup a grid with n grid points on the interval [-L/2,L/2]
 function init_grid(ngrid, nelement, n, L, imin, imax, igrid, discretization)
+    uniform_grid = equally_spaced_grid(n,L)
     if discretization == "chebyshev_pseudospectral"
         # initialize chebyshev grid defined on [-L/2,L/2]
         # with n grid points chosen to facilitate
@@ -79,19 +90,14 @@ function init_grid(ngrid, nelement, n, L, imin, imax, igrid, discretization)
         # 'wgts' are the integration weights attached to each grid points
         # that are those associated with Clenshaw-Curtis quadrature
         grid, wgts = scaled_chebyshev_grid(ngrid, nelement, n, L, imin, imax)
-#    println("sum(wgts): ", sum(wgts))
     elseif discretization == "finite_difference"
         # initialize equally spaced grid defined on [-L/2,L/2]
-        grid = equally_spaced_grid(n, L)
-        # allocate arrays for the integration weights
-        # NB: should be able to save memory as weights are repeated for each element
-        wgts = allocate_float(n)
-        # the integration weights are the (equal) grid spacings
-        tmp = 1/(n-1)
-        wgts .= tmp
+        grid = uniform_grid
+        # use composite Simpson's rule to obtain integration weights associated with this coordinate
+        wgts = composite_simpson_weights(grid)
     end
     # return the locations of the grid points
-    return grid, wgts
+    return grid, wgts, uniform_grid
 end
 # setup an equally spaced grid with n grid points
 # between [-L/2,L/2]
@@ -162,11 +168,6 @@ function elemental_to_full_grid_map(ngrid, nelement)
         end
     end
     return imin, imax
-end
-# integration_weights creates, computes, and returns an array for the
-# 1D integration weights associated with each grid point
-function integration_weights(grid, discretization)
-
 end
 
 end
