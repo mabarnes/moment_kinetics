@@ -99,7 +99,7 @@ function analyze_and_plot_data()
     println("done.")
 
     if pp.calculate_frequencies
-        print("Calculating the frequency and damping/growth rate...")
+        println("Calculating the frequency and damping/growth rate...")
         # shifted_time = t - t0
         shifted_time = allocate_float(ntime)
         @. shifted_time = time - time[itime_min]

@@ -2,6 +2,7 @@ module chebyshev
 
 export update_fcheby!
 export update_df_chebyshev!
+export chebyshev_derivative!
 export setup_chebyshev_pseudospectral
 export scaled_chebyshev_grid
 export chebyshev_spectral_derivative!
@@ -52,9 +53,9 @@ function scaled_chebyshev_grid(ngrid, nelement, n, box_length, imin, imax)
     # with n grid points chosen to facilitate
     # the fast Chebyshev transform (aka the discrete cosine transform)
     # needed to obtain Chebyshev spectral coefficients
-    # this grid goes from ~ +1 to ~ -1
+    # this grid goes from +1 to -1
     chebyshev_grid = chebyshevpoints(ngrid)
-    # create array for the full grid and associated weights
+    # create array for the full grid
     grid = allocate_float(n)
     # setup the scale factor by which the Chebyshev grid on [-1,1]
     # is to be multiplied to account for the full domain [-L/2,L/2]
@@ -78,6 +79,49 @@ function scaled_chebyshev_grid(ngrid, nelement, n, box_length, imin, imax)
     wgts = clenshaw_curtis_weights(ngrid, nelement, n, imin, imax, scale_factor)
     return grid, wgts
 end
+function chebyshev_derivative!(df, ff, chebyshev, coord)
+    # define local variable nelement for convenience
+    nelement = coord.nelement
+    # check array bounds
+    @boundscheck nelement == size(chebyshev.f,2) || throw(BoundsError(chebyshev.f))
+    @boundscheck nelement == size(df,2) && coord.ngrid == size(df,1) || throw(BoundsError(df))
+    # note that one must multiply by 2*nelement/L to get derivative
+    # in scaled coordinate
+    scale_factor = 2*nelement/coord.L
+    # variable k will be used to avoid double counting of overlapping point
+    # at element boundaries (see below for further explanation)
+    k = 0
+    # calculate the Chebyshev derivative on each element
+    @inbounds for j ∈ 1:nelement
+        # imin is the minimum index on the full grid for this (jth) element
+        # the 'k' below accounts for the fact that the first element includes
+        # both boundary points, while each additional element shares a boundary
+        # point with neighboring elements.  the choice was made when defining
+        # coord.imin to exclude the lower boundary point in each element other
+        # than the first so that no point is double-counted
+        imin = coord.imin[j]-k
+        # imax is the maximum index on the full grid for this (jth) element
+        imax = coord.imax[j]
+        @views chebyshev_derivative_single_element!(df[:,j], ff[imin:imax],
+            chebyshev.f[:,j], chebyshev.df, chebyshev.fext, chebyshev.forward, coord)
+        # and multiply by scaling factor needed to go
+        # from Chebyshev z coordinate to actual z
+        for i ∈ 1:coord.ngrid
+            df[i,j] *= scale_factor
+        end
+        k = 1
+    end
+    return nothing
+end
+function chebyshev_derivative_single_element!(df, ff, cheby_f, cheby_df, cheby_fext, forward, coord)
+    # calculate the Chebyshev coefficients of the real-space function ff and return
+    # as cheby_f
+    chebyshev_forward_transform!(cheby_f, cheby_fext, ff, forward, coord.ngrid)
+    # calculate the Chebyshev coefficients of the derivative of ff with respect to coord.grid
+    chebyshev_spectral_derivative!(cheby_df, cheby_f)
+    # inverse Chebyshev transform to get df/dcoord
+    chebyshev_backward_transform!(df, cheby_fext, cheby_df, forward, coord.ngrid)
+end
 # Chebyshev transform f to get Chebyshev spectral coefficients
 function update_fcheby!(cheby, ff, coord)
     k = 0
@@ -100,38 +144,26 @@ function update_fcheby!(cheby, ff, coord)
     return nothing
 end
 # compute the Chebyshev spectral coefficients of the spatial derivative of f
-function update_df_chebyshev!(df, chebyshev, coord)
+function update_df_chebyshev!(df, chebyshev, coord, upwind_increment)
     ngrid = coord.ngrid
     nelement = coord.nelement
     L = coord.L
     @boundscheck nelement == size(chebyshev.f,2) || throw(BoundsError(chebyshev.f))
+    @boundscheck nelement == size(df,2) && ngrid == size(df,1) || throw(BoundsError(df))
     # obtain Chebyshev spectral coefficients of f'[z]
     # note that must multiply by 2/Lz to get derivative
     # in scaled coordinate
-    k = 0
-    df_boundary = 0.0
     scale_factor = 2*nelement/L
+    # scan over elements
     @inbounds for j ∈ 1:nelement
         chebyshev_spectral_derivative!(chebyshev.df,view(chebyshev.f,:,j))
         # inverse Chebyshev transform to get df/dz
         # and multiply by scaling factor needed to go
         # from Chebyshev z coordinate to actual z
-        imin = coord.imin[j] - k
-        imax = coord.imax[j]
-        chebyshev_backward_transform!(view(df,imin:imax), chebyshev.fext, chebyshev.df, chebyshev.forward, coord.ngrid)
-        for i ∈ imin:imax
-            df[i] *= scale_factor
+        chebyshev_backward_transform!(view(df,:,j), chebyshev.fext, chebyshev.df, chebyshev.forward, coord.ngrid)
+        for i ∈ 1:ngrid
+            df[i,j] *= scale_factor
         end
-        if j > 1
-            # NB: should this be changed to use value from upwind boundary?
-            df[imin] = 0.5*(df[imin]+df_boundary)
-            #df[imin] = df_boundary
-        end
-        # store value for df at the boundary between elements
-        # and use it to average the df obtained by neighboring elements
-        # at this overlapping point
-        df_boundary = df[imax]
-        k = 1
     end
     return nothing
 end
