@@ -64,6 +64,7 @@ function integrate_over_vspace(integrand, vpa_wgts)
     @inbounds for i ∈ 1:nvpa
         integral += integrand[i]*vpa_wgts[i]
     end
+    integral /= sqrt(pi)
     return integral
 end
 

@@ -87,12 +87,14 @@ function find_approximate_characteristic!(SL, source, coord, dt)
     # that departure point corresonds to nearest grid point
     # this avoids the need to do interpolation to obtain
     # function values off the fixed grid in z
-    project_characteristics_onto_grid!(SL, coord, dt, source.upwind_idx,
-        source.upwind_increment)
+    project_characteristics_onto_grid!(SL, source.modified_speed, coord, dt,
+        source.upwind_idx, source.upwind_increment)
 end
 # obtain the time needed to cross the cell
 # assigned to each grid point, given the
 # advection speed within the cell
+# d is an array contain cell widths, with d[1]=d[n] the distance between the 1st and 2nd grid points
+# v is an array containing the speeds at grid points
 # NB: assuming constant advection speed within each cell, taken as speed
 # NB: at neighboring downwind grid point
 # NB: might be better and not much harder to analytically solve
@@ -115,7 +117,8 @@ function update_crossing_times!(crossing_time, v, d)
         # divided by a measure of the speed of particles within the cell;
         # note that crossing_time[1] = crossing_time[n] = crossing time for the right-most cell;
         @inbounds for i ∈ 2:n
-            crossing_time[i] = abs(d[i-1]/v[i])
+            crossing_time[i] = abs(2.0*d[i-1]/(v[i]+v[i-1]))
+            #crossing_time[i] = abs(d[i-1]/v[i])
         end
         # crossing_time[1] should not be needed unless periodic BCs are used (if then)
         crossing_time[1] = crossing_time[n]
@@ -124,7 +127,8 @@ function update_crossing_times!(crossing_time, v, d)
         # divided by a measure of the speed of particles within the cell;
         # note that crossing_time[n] = crossing_time[1] = crossing time for the left-most cell;
         @inbounds for i ∈ 1:n-1
-            crossing_time[i] = abs(d[i]/v[i])
+            #crossing_time[i] = abs(d[i]/v[i])
+            crossing_time[i] = abs(2.0*d[i]/(v[i]+v[i+1]))
         end
         # crossing_time[n] should not be needed unless periodic BCs are used (if then)
         crossing_time[n] = crossing_time[1]
@@ -209,13 +213,6 @@ function find_departure_points!(SL, coord, speed, upwind_idx, downwind_idx,
                     jstart = min(i+upwind_increment,iend)
                 end
             end
-#            if upwind_increment < 0
-#                #jstart = max(min(SL.dep_idx[i],i+upwind_increment),upwind_idx-upwind_increment)
-#                jstart = max(min(SL.dep_idx[i],i+upwind_increment),iend)
-#            else
-#                #jstart = min(max(SL.dep_idx[i],i+upwind_increment),upwind_idx-upwind_increment)
-#                jstart = min(max(SL.dep_idx[i],i+upwind_increment),iend)
-#            end
             # the cumulative time spent on the i-1 characteristic in integrating
             # backward from its arrival point to the grid point corresponding
             # to jstart
@@ -394,12 +391,13 @@ end
 =#
 # determine the nearest grid point to each departure point
 #function project_characteristics_onto_grid!(dep_idx, dep, vc, z, dz, dt)
-function project_characteristics_onto_grid!(SL, coord, dt, upwind_idx, upwind_increment)
+function project_characteristics_onto_grid!(SL, mod_speed, coord, dt, upwind_idx, upwind_increment)
     # n is the number of grid points along this coordinate axis
     n = coord.n
     # ensure arrays used in this function are inbounds
     @boundscheck n == length(SL.dep_idx) || throw(BoundsError(SL.dep_idx))
     @boundscheck n == length(SL.dep_pts) || throw(BoundsError(SL.dep_pts))
+    @boundscheck n == length(mod_speed) || throw(BoundsError(mod_speed))
     @boundscheck n == length(coord.cell_width) || throw(BoundsError(coord.cell_width))
     @boundscheck n == length(SL.characteristic_speed) ||
         throw(BoundsError(SL.characteristic_speed))
@@ -419,6 +417,7 @@ function project_characteristics_onto_grid!(SL, coord, dt, upwind_idx, upwind_in
             # NB: for the moment as a way of identifying characteristics
             # NB: originating beyond the grid boundary
             SL.characteristic_speed[i] = real(upwind_increment)
+            # NB: need to set mod_speed to something sensible here?
         else
             # account for fact that cell_width[1] is first cell, etc.
             # whereas idx is defined to be nearest downwind grid point from
@@ -441,19 +440,34 @@ function project_characteristics_onto_grid!(SL, coord, dt, upwind_idx, upwind_in
                 # of having dep_idx beyond the upwind boundary.
                 SL.dep_idx[i] = idx + upwind_increment
             end
+            # the factor wrapped_distance accounts for contribution to the
+            # distance travelled by characteristics in wrapping around the domain,
+            # possibly multiple times
+            wrapped_distance = -upwind_increment*SL.n_transits[i]*coord.L
+            # arrival_grid is the grid location at the future time level m+1
+            # from which we start following the characteristic backwards in time
+            arrival_grid = coord.grid[i]
+            # departure_grid is the nearest grid point to the departure point
+            # of the characteristic at time level m
+            departure_grid = coord.grid[SL.dep_idx[i]]
+            # departure_point is the location of the characteristic at time level m
+            # that passes through arrival_grid at time level m+1
+            departure_point = SL.dep_pts[i]
             # update the characteristic speed to account
             # for the trajectory slope change needed to make departure point
             # be the nearest grid point.
             # despite the fact that the spatially-dependent speed at time
             # level n was used to find the departure point, one can replace
             # this with the constant velocity along the ith characteristic
-            # that was needed to arrive at the departure point
+            # that was needed to arrive at the departure grid point
             #NB: need to worry about the sign of these differences for case
             #NB: with negative advection speed?
-            # NB: need to account for cases with periodic BC where characteristic
-            # NB: can wrap around the domain, possibly multiple times
-            SL.characteristic_speed[i] = (-upwind_increment*SL.n_transits[i]*coord.L
-                + (coord.grid[i]-coord.grid[SL.dep_idx[i]]))/dt
+            SL.characteristic_speed[i] = (wrapped_distance + (arrival_grid-departure_grid))/dt
+            # despite the fact that the spatially-dependent speed at time
+            # level n was used to find the departure point, one can replace
+            # this with the constant velocity along the ith characteristic
+            # that was needed to arrive at the departure point
+            mod_speed[i] = (wrapped_distance + (arrival_grid-departure_point))/dt
         end
     end
     return nothing

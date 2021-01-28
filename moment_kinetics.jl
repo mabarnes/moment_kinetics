@@ -6,6 +6,7 @@ using TimerOutputs
 using file_io: setup_file_io, finish_file_io
 using file_io: write_data_to_ascii, write_data_to_binary
 using chebyshev: setup_chebyshev_pseudospectral
+using chebyshev: chebyshev_derivative!
 using coordinates: define_coordinate
 using source_terms: setup_source, update_boundary_indices!
 using semi_lagrange: setup_semi_lagrange
@@ -71,9 +72,9 @@ function setup_time_advance!(ff, z, vpa)
     # create structure z_source whose members are the arrays needed to compute
     # the source(s) appearing in the split part of the GK equation dealing
     # with advection in z
-    z_source = setup_source(z.n, vpa.n)
+    z_source = setup_source(z, vpa)
     # initialise the z advection speed
-    update_speed_z!(z_source, vpa, z)
+    update_speed_z!(z_source, vpa, z, 0.0)
     # initialise the upwind/downwind boundary indices in z
     update_boundary_indices!(z_source)
     # enforce prescribed boundary condition in z on the distribution function f
@@ -82,17 +83,23 @@ function setup_time_advance!(ff, z, vpa)
         # create arrays needed for explicit Chebyshev pseudospectral treatment in vpa
         # and create the plans for the forward and backward fast Chebyshev transforms
         z_spectral = setup_chebyshev_pseudospectral(z)
+        # obtain the local derivatives of the uniform z-grid with respect to the used z-grid
+        chebyshev_derivative!(z.duniform_dgrid, z.uniform_grid, z_spectral, z)
     else
         # create dummy Bool variable to return in place of the above struct
         z_spectral = false
+        z.duniform_dgrid .= 1.0
     end
     if vpa.discretization == "chebyshev_pseudospectral"
         # create arrays needed for explicit Chebyshev pseudospectral treatment in vpa
         # and create the plans for the forward and backward fast Chebyshev transforms
         vpa_spectral = setup_chebyshev_pseudospectral(vpa)
+        # obtain the local derivatives of the uniform vpa-grid with respect to the used vpa-grid
+        chebyshev_derivative!(vpa.duniform_dgrid, vpa.uniform_grid, vpa_spectral, vpa)
     else
         # create dummy Bool variable to return in place of the above struct
         vpa_spectral = false
+        vpa.duniform_dgrid .= 1.0
     end
     # pass a subarray of ff (its value at the previous time level)
     # and allocate/initialize the velocity space moments needed for advancing
@@ -108,9 +115,13 @@ function setup_time_advance!(ff, z, vpa)
     # create structure vpa_source whose members are the arrays needed to compute
     # the source(s) appearing in the split part of the GK equation dealing
     # with advection in vpa
-    vpa_source = setup_source(vpa.n, z.n)
+    vpa_source = setup_source(vpa, z)
     # initialise the vpa advection speed
-    update_speed_vpa!(vpa_source, fields.phi, moments, ff, vpa, z, z_spectral)
+    if z.discretization == "chebyshev_pseudospectral"
+        update_speed_vpa!(vpa_source, fields.phi, moments, ff, vpa, z, z_spectral)
+    else
+        update_speed_vpa!(vpa_source, fields.phi, moments, ff, vpa, z)
+    end
     # initialise the upwind/downwind boundary indices in vpa
     update_boundary_indices!(vpa_source)
     # enforce prescribed boundary condition in vpa on the distribution function f
@@ -135,6 +146,7 @@ function time_advance!(ff, ff_scratch, t, z, vpa, z_spectral, vpa_spectral,
     iwrite = 2
     flipflop = false
     for i ∈ 1:nstep
+        #NB: following line only for testing
         #flipflop = false
         if flipflop
             # vpa_advection! advances the operator-split 1D advection equation in vpa
@@ -150,9 +162,11 @@ function time_advance!(ff, ff_scratch, t, z, vpa, z_spectral, vpa_spectral,
             moments.dens_updated = false ; moments.ppar_updated = false
             # z_advection! advances the operator-split 1D advection equation in z
             if z.discretization == "chebyshev_pseudospectral"
-                z_advection!(ff, ff_scratch, z_SL, z_source, z, vpa, use_semi_lagrange, dt, z_spectral)
+                z_advection!(ff, ff_scratch, z_SL, z_source, z, vpa, use_semi_lagrange,
+                             dt, z_spectral, t)
             elseif z.discretization == "finite_difference"
-                z_advection!(ff, ff_scratch, z_SL, z_source, z, vpa, use_semi_lagrange, dt)
+                z_advection!(ff, ff_scratch, z_SL, z_source, z, vpa, use_semi_lagrange,
+                             dt, t)
             end
             # reset "xx.updated" flags to false since ff has been updated
             # and the corresponding moments have not
@@ -161,11 +175,11 @@ function time_advance!(ff, ff_scratch, t, z, vpa, z_spectral, vpa_spectral,
         else
             # z_advection! advances the operator-split 1D advection equation in z
             if z.discretization == "chebyshev_pseudospectral"
-                z_advection!(ff, ff_scratch, z_SL, z_source, z, vpa, use_semi_lagrange, dt, z_spectral)
+                z_advection!(ff, ff_scratch, z_SL, z_source, z, vpa, use_semi_lagrange, dt, z_spectral, t)
             elseif z.discretization == "finite_difference"
-                z_advection!(ff, ff_scratch, z_SL, z_source, z, vpa, use_semi_lagrange, dt)
+                z_advection!(ff, ff_scratch, z_SL, z_source, z, vpa, use_semi_lagrange, dt, t)
             end
-            # reset "xx.updated" flags to false since ff has been updated
+            # reset "moments.xx_updated" flags to false since ff has been updated
             # and the corresponding moments have not
             moments.dens_updated = false ; moments.ppar_updated = false
             # vpa_advection! advances the operator-split 1D advection equation in vpa
@@ -196,10 +210,10 @@ function time_advance!(ff, ff_scratch, t, z, vpa, z_spectral, vpa_spectral,
 end
 
 if performance_test
-    @timeit to1 "moment_kinetics 1" moment_kinetics(to1)
+    @timeit to1 "first call to moment_kinetics" moment_kinetics(to1)
     show(to1)
     println()
-    @timeit to2 "moment_kinetics 1" moment_kinetics(to2)
+    @timeit to2 "second call to moment_kinetics" moment_kinetics(to2)
     show(to2)
     println()
 else
