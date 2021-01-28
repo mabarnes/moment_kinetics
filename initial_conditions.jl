@@ -27,25 +27,6 @@ function init_f(z, vpa)
             f[iz,ivpa] = z.scratch[iz]*vpa.scratch[ivpa]
         end
     end
-#=    @inbounds begin
-        if initialization_option == "gaussian"
-            # initial condition is an unshifted Gaussian
-            for j ∈ 1:vpa.n
-                for i ∈ 1:z.n
-                    f[i,j] = ((density_offset + exp(-(z.grid[i]/zwidth)^2))
-                     * exp(-(vpa.grid[j]/vpawidth)^2) / sqrt(pi))
-                end
-            end
-        elseif initialization_option == "monomial"
-            # linear variation in z, with offset so that
-            # function passes through zero at upwind boundary
-            for i ∈ 1:z.n
-                f[i,j] = ((z.grid[i] + 0.5*z.L)^monomial_degree
-                    * (vpa.grid[j] + 0.5*vpa.L)^monomial_degree)
-            end
-        end
-    end
-=#
     return f, f_scratch
 end
 # init_fz iniitializes F(z)
@@ -77,7 +58,7 @@ function init_fvpa(vpa, init_option)
         if init_option == "gaussian"
             # initial condition is an unshifted Gaussian
             for j ∈ 1:vpa.n
-                vpa.scratch[j] = exp(-(vpa.grid[j]/vpa_width)^2) / sqrt(pi)
+                vpa.scratch[j] = exp(-(vpa.grid[j]/vpa_width)^2)
             end
         elseif initialization_option == "sinusoid"
             # initial condition is sinusoid in vpa
