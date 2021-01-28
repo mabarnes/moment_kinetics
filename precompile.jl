@@ -11,8 +11,9 @@ Pkg.activate("tmpdir")
 # add the packages we wish to pre-compile
 Pkg.add("NCDatasets")
 Pkg.add("Plots")
-packages = [:NCDatasets, :Plots]
-# creat the sysimage 'moment_kinetics.so' in the base moment_kinetics source directory
+Pkg.add("LsqFit")
+packages = [:NCDatasets, :Plots, :LsqFit]
+# create the sysimage 'moment_kinetics.so' in the base moment_kinetics source directory
 # with the above pre-compiled packages
 create_sysimage(packages; sysimage_path="moment_kinetics.so")
 # remove the temporary directory
