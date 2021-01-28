@@ -37,6 +37,11 @@ const run_name = "example"
 # this is the directory where the simulation data will be stored
 const output_dir = run_name
 
+# if boltzmann_electron_response = true, then the electron
+# density is fixed to be N_e*(eϕ/T_e)
+# currently this is the only supported option
+const boltzmann_electron_response = true
+
 # parameters related to the time stepping
 const nstep = 3000
 const dt = 0.001
@@ -120,10 +125,6 @@ const vpa_amplitude = 1.0
 # inputs for "monomial" initial condition
 #const vpa_initialization_option = "monomial"
 const vpa_monomial_degree = 2
-
-# if boltzmann_electron_response = true, then the electron
-# density is fixed to be n₀(eϕ/T)
-const boltzmann_electron_response = true
 
 # performance_test = true returns timings and memory usage
 const performance_test = false

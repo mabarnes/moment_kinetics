@@ -15,6 +15,12 @@ struct pp_input
     plot_phi_vs_z_t::Bool
     # if animate_phi_vs_z = true, create animation of phi vs z at different time slices
     animate_phi_vs_z::Bool
+    # if plot_dens0_vs_t = true, create plot of ion_density(z0) vs time
+    plot_dens0_vs_t::Bool
+    # if plot_dens_vs_z_t = true, create plot of ion density vs z and time
+    plot_dens_vs_z_t::Bool
+    # if animate_dens_vs_z = true, create animation of ion density vs z at different time slices
+    animate_dens_vs_z::Bool
     # if animate_f_vs_z_vpa = true, create animation of f(z,vpa) at different time slices
     animate_f_vs_z_vpa::Bool
     # if animate_f_vs_z_vpa0 = true, create animation of f(z,vpa0) at different time slices
@@ -43,6 +49,12 @@ const plot_phi0_vs_t = true
 const plot_phi_vs_z_t = true
 # if animate_phi_vs_z = true, create animation of phi(z) at different time slices
 const animate_phi_vs_z = true
+# if plot_dens0_vs_t = true, create plot of ion_density(z0) vs time
+const plot_dens0_vs_t = true
+# if plot_dens_vs_z_t = true, create heatmap of ion density vs z and time
+const plot_dens_vs_z_t = true
+# if animate_dens_vs_z = true, create animation of ion_density(z) at different time slices
+const animate_dens_vs_z = true
 # if animate_f_vs_z_vpa = true, create animation of f(z,vpa) at different time slices
 const animate_f_vs_z_vpa = true
 # if animate_f_vs_z_vpa0 = true, create animation of f(z,vpa0) at different time slices
@@ -64,7 +76,8 @@ const iz0 = -1
 const ivpa0 = -1
 
 pp = pp_input(calculate_frequencies, plot_phi0_vs_t, plot_phi_vs_z_t,
-    animate_phi_vs_z, animate_f_vs_z_vpa, animate_f_vs_z_vpa0, animate_f_vs_z0_vpa,
+    animate_phi_vs_z, plot_dens0_vs_t, plot_dens_vs_z_t, animate_dens_vs_z,
+    animate_f_vs_z_vpa, animate_f_vs_z_vpa0, animate_f_vs_z0_vpa,
     nwrite_movie, itime_min, itime_max, iz0, ivpa0)
 
 end

@@ -121,7 +121,7 @@ function analyze_and_plot_data()
         outfile = string(run_name, "_phi0_vs_t.pdf")
         savefig(outfile)
         # plot the time trace of phi(z=z0)-phi_fldline_avg
-        @views plot(time, abs.(delta_phi[iz0,:]), yaxis=:log)
+        @views plot(time, abs.(delta_phi[iz0,:]), xlabel="t*Lz/vti", ylabel="δϕ", yaxis=:log)
         if pp.calculate_frequencies
             plot!(time, abs.(delta_phi[iz0,itime_min]/cos(phase) * exp.(growth_rate*shifted_time)
                 .* cos.(frequency*shifted_time .+ phase)))
@@ -141,6 +141,58 @@ function analyze_and_plot_data()
             @views plot(z, phi[:,i], xlabel="z", ylabel="ϕ", ylims = (phimin,phimax))
         end
         outfile = string(run_name, "_phi_vs_z.gif")
+        gif(anim, outfile, fps=5)
+    end
+    println("done.")
+
+    print("Loading velocity moments data...")
+    # define a handle for the ion density
+    cdfvar = fid["density"]
+    # load the ion density data
+    ion_density = cdfvar.var[:,:]
+    println("done.")
+
+    print("Analyzing velocity moments data...")
+    ion_density_fldline_avg = allocate_float(ntime)
+    for i ∈ 1:ntime
+        ion_density_fldline_avg[i] = field_line_average(view(ion_density,:,i), z_wgts, Lz)
+    end
+    # delta_ion_density = n_i - <n_i> is the fluctuating density
+    delta_ion_density = allocate_float(nz,ntime)
+    for iz ∈ 1:nz
+        delta_ion_density[iz,:] .= ion_density[iz,:] - ion_density_fldline_avg
+    end
+    println("done.")
+
+    println("Plotting velocity moments data...")
+    ion_dens_min = minimum(ion_density)
+    ion_dens_max = maximum(ion_density)
+    if pp.plot_dens0_vs_t
+        # plot the time trace of n_i(z=z0)
+        @views plot(time, ion_density[iz0,:])
+        outfile = string(run_name, "_dens0_vs_t.pdf")
+        savefig(outfile)
+        # plot the time trace of n_i(z=z0)-ion_density_fldline_avg
+        @views plot(time, abs.(delta_ion_density[iz0,:]), yaxis=:log)
+        outfile = string(run_name, "_delta_dens0_vs_t.pdf")
+        savefig(outfile)
+        # plot the time trace of ion_density_fldline_avg
+        @views plot(time, ion_density_fldline_avg, xlabel="time", ylabel="<nᵢ/Nₑ>", ylims=(ion_dens_min,ion_dens_max))
+        outfile = string(run_name, "_fldline_avg_dens_vs_t.pdf")
+        savefig(outfile)
+    end
+    if pp.plot_dens_vs_z_t
+        # make a heatmap plot of n_i(z,t)
+        heatmap(time, z, ion_density, xlabel="time", ylabel="z", title="nᵢ/Nₑ", c = :deep)
+        outfile = string(run_name, "_dens_vs_z_t.pdf")
+        savefig(outfile)
+    end
+    if pp.animate_dens_vs_z
+        # make a gif animation of ϕ(z) at different times
+        anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+            @views plot(z, ion_density[:,i], xlabel="z", ylabel="nᵢ/Nₑ", ylims = (ion_dens_min,ion_dens_max))
+        end
+        outfile = string(run_name, "_dens_vs_z.gif")
         gif(anim, outfile, fps=5)
     end
     println("done.")
