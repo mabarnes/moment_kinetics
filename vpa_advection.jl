@@ -23,48 +23,32 @@ function vpa_advection!(ff, ff_scratch, phi, moments, SL, source, vpa, z,
 	@boundscheck size(ff_scratch,1) == z.n || throw(BoundsError(ff_scratch))
     @boundscheck size(ff_scratch,2) == vpa.n || throw(BoundsError(ff_scratch))
 	@boundscheck size(ff_scratch,3) == 3 || throw(BoundsError(ff_scratch))
-    # get the updated speed along the vpa direction
-    update_speed_vpa!(source, phi, moments, ff, vpa, z, z_spectral)
-	# update the upwind/downwind boundary indices and upwind_increment
-	update_boundary_indices!(source)
-    # if using interpolation-free Semi-Lagrange,
-    # follow characteristics backwards in time from level m+1 to level m
-    # to get departure points.  then find index of grid point nearest
-    # the departure point at time level m and use this to define
-    # an approximate characteristic
-    if use_semi_lagrange
-        for iz ∈ 1:z.n
-            find_approximate_characteristic!(SL[iz], source[iz], vpa, dt)
-        end
-    end
     # Heun's method (RK2) for explicit time advance
     jend = 2
 	ff_scratch[:,:,1] .= ff
     for j ∈ 1:jend
+		# calculate the advection speed corresponding to current f
+	    update_speed_vpa!(source, phi, moments, view(ff_scratch,:,:,j), vpa, z, z_spectral)
+		# update the upwind/downwind boundary indices and upwind_increment
+		# NB: not sure if this will work properly with SL method at the moment
+		# NB: if the speed is actually time-dependent
+		update_boundary_indices!(source)
+	    # if using interpolation-free Semi-Lagrange,
+	    # follow characteristics backwards in time from level m+1 to level m
+	    # to get departure points.  then find index of grid point nearest
+	    # the departure point at time level m and use this to define
+	    # an approximate characteristic
+	    if use_semi_lagrange
+	        for iz ∈ 1:z.n
+	            find_approximate_characteristic!(SL[iz], source[iz], vpa, dt)
+	        end
+	    end
         for iz ∈ 1:z.n
 			@views advance_f_local!(ff_scratch[iz,:,j+1], ff_scratch[iz,:,j],
 				ff[iz,:], SL[iz], source[iz], vpa, dt, vpa_spectral, j)
 		end
 		enforce_vpa_boundary_condition!(view(ff_scratch,:,:,j+1), vpa.bc, source)
         moments.dens_updated = false ; moments.ppar_updated = false
-        if j != jend
-			# calculate the advection speed corresponding to current f
-			update_speed_vpa!(source, phi, moments, view(ff_scratch,:,:,j+1), vpa, z, z_spectral)
-			# update the upwind/downwind boundary indices and upwind_increment
-			# NB: not sure if this will work properly with SL method at the moment
-			# NB: if the speed is actually time-dependent
-			update_boundary_indices!(source)
-			# if using interpolation-free Semi-Lagrange,
-            # follow characteristics backwards in time from level m+1 to level m
-            # to get departure points.  then find index of grid point nearest
-            # the departure point at time level m and use this to define
-            # an approximate characteristic
-            if use_semi_lagrange
-                for iz ∈ 1:z.n
-                    find_approximate_characteristic!(SL[iz], source[iz], vpa, dt)
-                end
-            end
-        end
     end
     @inbounds @fastmath begin
         for ivpa ∈ 1:vpa.n
@@ -102,28 +86,28 @@ function vpa_advection!(ff, ff_scratch, phi, moments, SL, source, vpa, z,
     jend = 2
 	ff_scratch[:,:,1] .= ff
     for j ∈ 1:jend
+		# calculate the advection speed corresponding to current f
+	    update_speed_vpa!(source, phi, moments, view(ff_scratch,:,:,j), vpa, z)
+		# update the upwind/downwind boundary indices and upwind_increment
+		# NB: not sure if this will work properly with SL method at the moment
+		# NB: if the speed is actually time-dependent
+		update_boundary_indices!(source)
+	    # if using interpolation-free Semi-Lagrange,
+	    # follow characteristics backwards in time from level m+1 to level m
+	    # to get departure points.  then find index of grid point nearest
+	    # the departure point at time level m and use this to define
+	    # an approximate characteristic
+	    if use_semi_lagrange
+	        for iz ∈ 1:z.n
+	            find_approximate_characteristic!(SL[iz], source[iz], vpa, dt)
+	        end
+	    end
         for iz ∈ 1:z.n
 			@views advance_f_local!(ff_scratch[iz,:,j+1], ff_scratch[iz,:,j],
 				ff[iz,:], SL[iz], source[iz], vpa, dt, j)
         end
 		enforce_vpa_boundary_condition!(view(ff_scratch,:,:,j+1), vpa.bc, source)
         moments.dens_updated = false ; moments.ppar_updated = false
-        # calculate the advection speed corresponding to current f
-		if j != jend
-			update_speed_vpa!(source, phi, moments, view(ff_scratch,:,:,j+1), vpa, z)
-			# update the upwind/downwind boundary indices and upwind_increment
-			update_boundary_indices!(source)
-			# if using interpolation-free Semi-Lagrange,
-            # follow characteristics backwards in time from level m+1 to level m
-            # to get departure points.  then find index of grid point nearest
-            # the departure point at time level m and use this to define
-            # an approximate characteristic
-            if use_semi_lagrange
-                for iz ∈ 1:z.n
-                    find_approximate_characteristic!(SL[iz], source[iz], vpa, dt)
-                end
-            end
-		end
     end
     @inbounds @fastmath begin
         for ivpa ∈ 1:vpa.n
