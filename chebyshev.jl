@@ -6,6 +6,7 @@ export chebyshev_derivative!
 export setup_chebyshev_pseudospectral
 export scaled_chebyshev_grid
 export chebyshev_spectral_derivative!
+export chebyshev_info
 
 using FFTW
 using type_definitions: mk_float

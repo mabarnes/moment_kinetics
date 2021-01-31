@@ -1,12 +1,15 @@
 # add the current directory to the path where the code looks for external modules
 push!(LOAD_PATH, ".")
 
+# packages
 using NCDatasets
 using Plots
+using LsqFit
+# modules
 using post_processing_input: pp
 using quadrature: composite_simpson_weights
 using array_allocation: allocate_float
-using LsqFit
+using file_io: open_output_file
 
 function analyze_and_plot_data()
     # get the run_name from the command-line
@@ -107,7 +110,9 @@ function analyze_and_plot_data()
         # and fit phi(z0,t)/phi(z0,t0), which eliminates the constant A pre-factor
         @views growth_rate, frequency, phase =
             fit_phi0_vs_time(delta_phi[iz0,itime_min:itime_max], shifted_time[itime_min:itime_max])
-        println("growth_rate: ", growth_rate, "  frequency: ", frequency, "  phase: ", phase)
+        io = open_output_file(run_name, "frequency_fit.txt")
+        println(io, "growth_rate: ", growth_rate, "  frequency: ", frequency, "  phase: ", phase)
+        close(io)
         println("done.")
     end
 
