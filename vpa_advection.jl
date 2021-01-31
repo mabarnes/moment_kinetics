@@ -10,6 +10,7 @@ using source_terms: update_boundary_indices!
 using em_fields: update_phi!
 using chebyshev: update_fcheby!
 using chebyshev: update_df_chebyshev!
+using chebyshev: chebyshev_info
 using finite_differences: derivative_finite_difference!
 using initial_conditions: enforce_vpa_boundary_condition!
 
@@ -45,67 +46,8 @@ function vpa_advection!(ff, ff_scratch, phi, moments, SL, source, vpa, z,
 	    end
         for iz ∈ 1:z.n
 			@views advance_f_local!(ff_scratch[iz,:,j+1], ff_scratch[iz,:,j],
-				ff[iz,:], SL[iz], source[iz], vpa, dt, vpa_spectral, j)
+				ff[iz,:], SL[iz], source[iz], vpa, dt, j, vpa_spectral)
 		end
-		enforce_vpa_boundary_condition!(view(ff_scratch,:,:,j+1), vpa.bc, source)
-        moments.dens_updated = false ; moments.ppar_updated = false
-    end
-    @inbounds @fastmath begin
-        for ivpa ∈ 1:vpa.n
-            for iz ∈ 1:z.n
-                ff[iz,ivpa] = 0.5*(ff_scratch[iz,ivpa,2] + ff_scratch[iz,ivpa,3])
-            end
-        end
-    end
-end
-# for use with finite difference scheme
-function vpa_advection!(ff, ff_scratch, phi, moments, SL, source, vpa, z,
-	use_semi_lagrange, dt)
-    # check to ensure that all array indices accessed in this function
-    # are in-bounds
-    @boundscheck size(ff,1) == z.n || throw(BoundsError(f))
-    @boundscheck size(ff,2) == vpa.n || throw(BoundsError(f))
-	@boundscheck size(ff_scratch,1) == z.n || throw(BoundsError(ff_scratch))
-    @boundscheck size(ff_scratch,2) == vpa.n || throw(BoundsError(ff_scratch))
-	@boundscheck size(ff_scratch,3) == 3 || throw(BoundsError(ff_scratch))
-    # get the updated speed along the vpa direction
-	update_speed_vpa!(source, phi, moments, ff, vpa, z)
-	# update the upwind/downwind boundary indices and upwind_increment
-	update_boundary_indices!(source)
-    # if using interpolation-free Semi-Lagrange,
-    # follow characteristics backwards in time from level m+1 to level m
-    # to get departure points.  then find index of grid point nearest
-    # the departure point at time level m and use this to define
-    # an approximate characteristic
-    if use_semi_lagrange
-        for iz ∈ 1:z.n
-            find_approximate_characteristic!(SL[iz], source[iz], vpa, dt)
-        end
-    end
-    # Heun's method (RK2) for explicit time advance
-    jend = 2
-	ff_scratch[:,:,1] .= ff
-    for j ∈ 1:jend
-		# calculate the advection speed corresponding to current f
-	    update_speed_vpa!(source, phi, moments, view(ff_scratch,:,:,j), vpa, z)
-		# update the upwind/downwind boundary indices and upwind_increment
-		# NB: not sure if this will work properly with SL method at the moment
-		# NB: if the speed is actually time-dependent
-		update_boundary_indices!(source)
-	    # if using interpolation-free Semi-Lagrange,
-	    # follow characteristics backwards in time from level m+1 to level m
-	    # to get departure points.  then find index of grid point nearest
-	    # the departure point at time level m and use this to define
-	    # an approximate characteristic
-	    if use_semi_lagrange
-	        for iz ∈ 1:z.n
-	            find_approximate_characteristic!(SL[iz], source[iz], vpa, dt)
-	        end
-	    end
-        for iz ∈ 1:z.n
-			@views advance_f_local!(ff_scratch[iz,:,j+1], ff_scratch[iz,:,j],
-				ff[iz,:], SL[iz], source[iz], vpa, dt, j)
-        end
 		enforce_vpa_boundary_condition!(view(ff_scratch,:,:,j+1), vpa.bc, source)
         moments.dens_updated = false ; moments.ppar_updated = false
     end
@@ -132,32 +74,16 @@ function update_speed_vpa!(source, phi, moments, ff, vpa, z, z_spectral)
 		# dvpa/dt = constant ⋅ (vpa + L_vpa/2)
 		update_speed_linear!(source, vpa, z.n)
     end
-    return nothing
-end
-# calculate the advection speed in the z-direction at each grid point
-function update_speed_vpa!(source, phi, moments, ff, vpa, z)
-    @boundscheck z.n == size(source,1) || throw(BoundsError(source))
-    @boundscheck vpa.n == size(source[1].speed,1) || throw(BoundsError(speed))
-    if advection_speed_option_vpa == "default"
-		# dvpa/dt = Ze/m ⋅ E_parallel
-        update_speed_default!(source, phi, moments, ff, vpa, z)
-    elseif advection_speed_option_vpa == "constant"
-		# dvpa/dt = constant
-		update_speed_constant!(source, vpa.n, z.n)
-    elseif advection_speed_option_vpa == "linear"
-		# dvpa/dt = constant ⋅ (vpa + L_vpa/2)
-		update_speed_linear!(source, vpa, z.n)
-    end
 	@inbounds begin
 		for iz ∈ 1:z.n
 			@. source[iz].modified_speed = source[iz].speed
 		end
 	end
-	return nothing
+    return nothing
 end
 # update the advection speed dvpa/dt = Ze/m E_parallel
-# if optional z_spectral argument passed, then use Chebyshev spectral treatment
-function update_speed_default!(source, phi, moments, ff, vpa, z, z_spectral)
+# if z_spectral argument has type chebyshev_info, then use Chebyshev spectral treatment
+function update_speed_default!(source, phi, moments, ff, vpa, z, z_spectral::chebyshev_info)
 	update_phi!(phi, moments, ff, vpa, z.n)
 	# get the Chebyshev coefficients for phi and store in z_spectral.f
 	update_fcheby!(z_spectral, phi, z)
@@ -173,8 +99,9 @@ function update_speed_default!(source, phi, moments, ff, vpa, z, z_spectral)
 		end
 	end
 end
-# if z_spectral not passed, use finite differences to obtain phi derivative
-function update_speed_default!(source, phi, moments, ff, vpa, z)
+# 'z_not_spectral' is a dummy input whose type indicates whether a spectral
+# or finite diifference discretization is used for z
+function update_speed_default!(source, phi, moments, ff, vpa, z, z_not_spectral::Bool)
 	# update the electrostatic potential phi
 	update_phi!(phi, moments, ff, vpa, z.n)
 	# calculate the derivative of phi with respect to z
