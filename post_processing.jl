@@ -153,52 +153,61 @@ function analyze_and_plot_data()
     print("Loading velocity moments data...")
     # define a handle for the ion density
     cdfvar = fid["density"]
-    # load the ion density data
-    ion_density = cdfvar.var[:,:]
+    # load the species density data
+    density = cdfvar.var[:,:,:]
+    # define the number of species
+    n_species = size(cdfvar,2)
     println("done.")
 
     print("Analyzing velocity moments data...")
-    ion_density_fldline_avg = allocate_float(ntime)
-    for i ∈ 1:ntime
-        ion_density_fldline_avg[i] = field_line_average(view(ion_density,:,i), z_wgts, Lz)
+    density_fldline_avg = allocate_float(n_species, ntime)
+    for is ∈ 1:n_species
+        for i ∈ 1:ntime
+            density_fldline_avg[is,i] = field_line_average(view(density,:,is,i), z_wgts, Lz)
+        end
     end
-    # delta_ion_density = n_i - <n_i> is the fluctuating density
-    delta_ion_density = allocate_float(nz,ntime)
-    for iz ∈ 1:nz
-        delta_ion_density[iz,:] .= ion_density[iz,:] - ion_density_fldline_avg
+    # delta_density = n_s - <n_s> is the fluctuating density
+    delta_density = allocate_float(nz,n_species,ntime)
+    for is ∈ 1:n_species
+        for iz ∈ 1:nz
+            @. delta_density[iz,is,:] = density[iz,is,:] - density_fldline_avg[is,:]
+        end
     end
     println("done.")
 
     println("Plotting velocity moments data...")
-    ion_dens_min = minimum(ion_density)
-    ion_dens_max = maximum(ion_density)
-    if pp.plot_dens0_vs_t
-        # plot the time trace of n_i(z=z0)
-        @views plot(time, ion_density[iz0,:])
-        outfile = string(run_name, "_dens0_vs_t.pdf")
-        savefig(outfile)
-        # plot the time trace of n_i(z=z0)-ion_density_fldline_avg
-        @views plot(time, abs.(delta_ion_density[iz0,:]), yaxis=:log)
-        outfile = string(run_name, "_delta_dens0_vs_t.pdf")
-        savefig(outfile)
-        # plot the time trace of ion_density_fldline_avg
-        @views plot(time, ion_density_fldline_avg, xlabel="time", ylabel="<nᵢ/Nₑ>", ylims=(ion_dens_min,ion_dens_max))
-        outfile = string(run_name, "_fldline_avg_dens_vs_t.pdf")
-        savefig(outfile)
-    end
-    if pp.plot_dens_vs_z_t
-        # make a heatmap plot of n_i(z,t)
-        heatmap(time, z, ion_density, xlabel="time", ylabel="z", title="nᵢ/Nₑ", c = :deep)
-        outfile = string(run_name, "_dens_vs_z_t.pdf")
-        savefig(outfile)
-    end
-    if pp.animate_dens_vs_z
-        # make a gif animation of ϕ(z) at different times
-        anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-            @views plot(z, ion_density[:,i], xlabel="z", ylabel="nᵢ/Nₑ", ylims = (ion_dens_min,ion_dens_max))
+    for is ∈ 1:n_species
+        dens_min = minimum(density[:,is,:])
+        dens_max = maximum(density[:,is,:])
+        spec_string = string(is)
+        if pp.plot_dens0_vs_t
+            # plot the time trace of n_s(z=z0)
+            @views plot(time, density[iz0,is,:])
+            outfile = string(run_name, "_dens0_vs_t_spec", spec_string, ".pdf")
+            savefig(outfile)
+            # plot the time trace of n_s(z=z0)-density_fldline_avg
+            @views plot(time, abs.(delta_density[iz0,is,:]), yaxis=:log)
+            outfile = string(run_name, "_delta_dens0_vs_t_spec", spec_string, ".pdf")
+            savefig(outfile)
+            # plot the time trace of density_fldline_avg
+            @views plot(time, density_fldline_avg[is,:], xlabel="time", ylabel="<ns/Nₑ>", ylims=(dens_min,dens_max))
+            outfile = string(run_name, "_fldline_avg_dens_vs_t_spec", spec_string, ".pdf")
+            savefig(outfile)
         end
-        outfile = string(run_name, "_dens_vs_z.gif")
-        gif(anim, outfile, fps=5)
+        if pp.plot_dens_vs_z_t
+            # make a heatmap plot of n_i(z,t)
+            heatmap(time, z, density[:,is,:], xlabel="time", ylabel="z", title="ns/Nₑ", c = :deep)
+            outfile = string(run_name, "_dens_vs_z_t_spec", spec_string, ".pdf")
+            savefig(outfile)
+        end
+        if pp.animate_dens_vs_z
+            # make a gif animation of ϕ(z) at different times
+            anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+                @views plot(z, density[:,is,i], xlabel="z", ylabel="nᵢ/Nₑ", ylims = (dens_min,dens_max))
+            end
+            outfile = string(run_name, "_dens_vs_z_spec", spec_string, ".gif")
+            gif(anim, outfile, fps=5)
+        end
     end
     println("done.")
 
@@ -206,38 +215,45 @@ function analyze_and_plot_data()
     # define a handle for the distribution function
     cdfvar = fid["f"]
     # load the distribution function data
-    ff = cdfvar.var[:,:,:]
+    ff = cdfvar.var[:,:,:,:]
     println("done.")
 
     println("Plotting distribution function data...")
     cmlog(cmlin::ColorGradient) = RGB[cmlin[x] for x=LinRange(0,1,30)]
     logdeep = cgrad(:deep, scale=:log) |> cmlog
-    fmin = minimum(ff)
-    fmax = maximum(ff)
-    if pp.animate_f_vs_z_vpa
-        # make a gif animation of f(vpa,z,t)
-        anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-            #heatmap(vpa, z, log.(abs.(ff[:,:,i])), xlabel="vpa", ylabel="z", clims = (fmin,fmax), c = :deep)
-            @views heatmap(vpa, z, log.(abs.(ff[:,:,i])), xlabel="vpa", ylabel="z", fillcolor = logdeep)
+    for is ∈ 1:n_species
+        spec_string = string("_spec", string(is))
+        #fmin = minimum(ff[:,:,is,:])
+        #fmax = maximum(ff[:,:,is,:])
+        if pp.animate_f_vs_z_vpa
+            # make a gif animation of f(vpa,z,t)
+            anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+                #heatmap(vpa, z, log.(abs.(ff[:,:,i])), xlabel="vpa", ylabel="z", clims = (fmin,fmax), c = :deep)
+                @views heatmap(vpa, z, log.(abs.(ff[:,:,is,i])), xlabel="vpa", ylabel="z", fillcolor = logdeep)
+            end
+            outfile = string(run_name, "_f_vs_z_vpa", spec_string, ".gif")
+            gif(anim, outfile, fps=5)
         end
-        outfile = string(run_name, "_f_vs_z_vpa.gif")
-        gif(anim, outfile, fps=5)
-    end
-    if pp.animate_f_vs_z_vpa0
-        # make a gif animation of f(vpa0,z,t)
-        anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-            @views plot(z, ff[:,ivpa0,i], ylims = (fmin,fmax))
+        if pp.animate_f_vs_z_vpa0
+            fmin = minimum(ff[:,ivpa0,is,:])
+            fmax = maximum(ff[:,ivpa0,is,:])
+            # make a gif animation of f(vpa0,z,t)
+            anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+                @views plot(z, ff[:,ivpa0,is,i], ylims = (fmin,fmax))
+            end
+            outfile = string(run_name, "_f_vs_z", spec_string, ".gif")
+            gif(anim, outfile, fps=5)
         end
-        outfile = string(run_name, "_f_vs_z.gif")
-        gif(anim, outfile, fps=5)
-    end
-    if pp.animate_f_vs_z0_vpa
-        # make a gif animation of f(vpa,z0,t)
-        anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-            @views plot(vpa, ff[iz0,:,i], ylims = (fmin,fmax))
+        if pp.animate_f_vs_z0_vpa
+            fmin = minimum(ff[iz0,:,is,:])
+            fmax = maximum(ff[iz0,:,is,:])
+            # make a gif animation of f(vpa,z0,t)
+            anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+                @views plot(vpa, ff[iz0,:,is,i], ylims = (fmin,fmax))
+            end
+            outfile = string(run_name, "_f_vs_vpa", spec_string, ".gif")
+            gif(anim, outfile, fps=5)
         end
-        outfile = string(run_name, "_f_vs_vpa.gif")
-        gif(anim, outfile, fps=5)
     end
     println("done.")
 

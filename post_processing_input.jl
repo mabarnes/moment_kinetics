@@ -64,10 +64,10 @@ const animate_f_vs_z0_vpa = true
 # animations will use one in every nwrite_movie data slices
 const nwrite_movie = 5
 # itime_min is the minimum time index at which to start animations
-const itime_min = 50
+const itime_min = -1
 # itime_max is the final time index at which to end animations
 # if itime_max < 0, the value used will be the total number of time slices
-const itime_max = 200
+const itime_max = -1
 # iz0 is the iz index used when plotting data at a single z location
 # by default, it will be set to cld(nz,2) unless a non-negative value provided here
 const iz0 = -1

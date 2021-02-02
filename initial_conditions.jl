@@ -6,70 +6,69 @@ export enforce_vpa_boundary_condition!
 
 using type_definitions: mk_float
 using array_allocation: allocate_float
-using moment_kinetics_input: z_initialization_option, vpa_initialization_option
-using moment_kinetics_input: z_width, vpa_width
-using moment_kinetics_input: z_monomial_degree, vpa_monomial_degree
-using moment_kinetics_input: z_amplitude, z_wavenumber, vpa_amplitude, vpa_wavenumber
-using moment_kinetics_input: density_offset
 
 # creates f and specifies its initial condition
 # all initial conditions are of the form f = F(z)*G(vpa)
-function init_f(z, vpa)
-    f = allocate_float(z.n, vpa.n)
-    f_scratch = allocate_float(z.n, vpa.n, 3)
-    # initialize F(z) and return in z.scratch
-    init_fz(z, z_initialization_option)
-    # initialize G(vpa) and return in vpa.scratch
-    init_fvpa(vpa, vpa_initialization_option)
-    # calculate f = F(z)*G(vpa)
-    for ivpa ∈ 1:vpa.n
-        for iz ∈ 1:z.n
-            f[iz,ivpa] = z.scratch[iz]*vpa.scratch[ivpa]
+function init_f(z, vpa, composition, species)
+    n_species = composition.n_species
+    f = allocate_float(z.n, vpa.n, n_species)
+    f_scratch = allocate_float(z.n, vpa.n, n_species, 3)
+    for is ∈ 1:n_species
+        # initialize F(z) and return in z.scratch
+        init_fz(z, species[is])
+        # initialize G(vpa) and return in vpa.scratch
+        init_fvpa(vpa, species[is])
+        # calculate f = F(z)*G(vpa)
+        for ivpa ∈ 1:vpa.n
+            for iz ∈ 1:z.n
+                f[iz,ivpa,is] = z.scratch[iz]*vpa.scratch[ivpa]
+            end
         end
     end
     return f, f_scratch
 end
 # init_fz iniitializes F(z)
-function init_fz(z, init_option)
+function init_fz(z, spec)
     @inbounds begin
-        if init_option == "gaussian"
+        if spec.z_IC.initialization_option == "gaussian"
             # initial condition is an unshifted Gaussian
             for i ∈ 1:z.n
-                z.scratch[i] = density_offset + exp(-(z.grid[i]/z_width)^2)
+                z.scratch[i] = spec.initial_density + exp(-(z.grid[i]/spec.z_IC.width)^2)
             end
-        elseif init_option == "sinusoid"
+        elseif spec.z_IC.initialization_option == "sinusoid"
             # initial condition is sinusoid in z
             for i ∈ 1:z.n
-                z.scratch[i] = density_offset + z_amplitude*cospi(2.0*z_wavenumber*z.grid[i]/z.L)
+                z.scratch[i] = spec.initial_density*(1.0 + spec.z_IC.amplitude
+                    *cospi(2.0*spec.z_IC.wavenumber*z.grid[i]/z.L))
             end
-        elseif init_option == "monomial"
+        elseif spec.z_IC.inititalization_option == "monomial"
             # linear variation in z, with offset so that
             # function passes through zero at upwind boundary
             for i ∈ 1:z.n
-                z.scratch[i] = (z.grid[i] + 0.5*z.L)^z_monomial_degree
+                z.scratch[i] = (z.grid[i] + 0.5*z.L)^spec.z_IC.monomial_degree
             end
         end
     end
     return nothing
 end
 # init_fvpa initializes G(vpa)
-function init_fvpa(vpa, init_option)
+function init_fvpa(vpa, spec)
     @inbounds begin
-        if init_option == "gaussian"
+        if spec.vpa_IC.initialization_option == "gaussian"
             # initial condition is an unshifted Gaussian
             for j ∈ 1:vpa.n
-                vpa.scratch[j] = exp(-(vpa.grid[j]/vpa_width)^2)
+                vpa.scratch[j] = exp(-(vpa.grid[j]/spec.vpa_IC.width)^2/spec.initial_temperature)
             end
-        elseif initialization_option == "sinusoid"
+        elseif spec.vpa_IC.initialization_option == "sinusoid"
             # initial condition is sinusoid in vpa
             for j ∈ 1:vpa.n
-                vpa.scratch[j] = vpa_amplitude*cospi(2.0*vpa_wavenumber*vpa.grid[j]/vpa.L)
+                vpa.scratch[j] = spec.vpa_IC.amplitude*cospi(2.0*spec.vpa_IC.wavenumber*vpa.grid[j]/vpa.L)
             end
-        elseif initialization_option == "monomial"
+        elseif spec.vpa_IC.initialization_option == "monomial"
             # linear variation in vpa, with offset so that
             # function passes through zero at upwind boundary
             for j ∈ 1:z.n
-                vpa.scratch[j] = (vpa.grid[j] + 0.5*vpa.L)^vpa_monomial_degree
+                vpa.scratch[j] = (vpa.grid[j] + 0.5*vpa.L)^spec.vpa_IC.monomial_degree
             end
         end
     end
@@ -77,7 +76,7 @@ function init_fvpa(vpa, init_option)
 end
 # impose the prescribed z boundary condition on f
 # at every vpa grid point
-function enforce_z_boundary_condition!(f::Array{mk_float,2}, bc::String, vpa, src::T) where T
+function enforce_z_boundary_condition!(f, bc::String, vpa, src::T) where T
     for ivpa ∈ 1:size(src,1)
         enforce_z_boundary_condition!(view(f,:,ivpa), bc,
             src[ivpa].upwind_idx, src[ivpa].downwind_idx, vpa.grid[ivpa])
