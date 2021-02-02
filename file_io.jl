@@ -21,20 +21,20 @@ struct ios
     fields::IOStream
 end
 # structure containing the data/metadata needed for netcdf file i/o
-struct netcdf_info{t_type, zvpat_type, zt_type}
+struct netcdf_info{t_type, zvpast_type, zt_type, zst_type}
     # file identifier for the netcdf file to which data is written
     fid::NCDataset
     # handle for the time variable
     time::t_type
     # handle for the distribution function variable
-    f::zvpat_type
+    f::zvpast_type
     # handle for the electrostatic potential variable
     phi::zt_type
     # handle for the ion density
-    density::zt_type
+    density::zst_type
 end
 # open the necessary output files
-function setup_file_io(output_dir, run_name, z, vpa)
+function setup_file_io(output_dir, run_name, z, vpa, composition)
     # check to see if output_dir exists in the current directory
     # if not, create it
     isdir(output_dir) || mkdir(output_dir)
@@ -42,11 +42,11 @@ function setup_file_io(output_dir, run_name, z, vpa)
     ff_io = open_output_file(out_prefix, "f_vs_t")
     mom_io = open_output_file(out_prefix, "moments_vs_t")
     fields_io = open_output_file(out_prefix, "fields_vs_t")
-    cdf = setup_netcdf_io(out_prefix, z, vpa)
+    cdf = setup_netcdf_io(out_prefix, z, vpa, composition)
     return ios(ff_io, mom_io, fields_io), cdf
 end
 # setup file i/o for netcdf
-function setup_netcdf_io(prefix, z, vpa)
+function setup_netcdf_io(prefix, z, vpa, composition)
     # the netcdf file will be given by output_dir/run_name with .cdf appended
     filename = string(prefix,".cdf")
     # if a netcdf file with the requested name already exists, remove it
@@ -60,6 +60,12 @@ function setup_netcdf_io(prefix, z, vpa)
     defDim(fid, "nz", z.n)
     # define the vpa dimension
     defDim(fid, "nvpa", vpa.n)
+    # define the species dimension
+    defDim(fid, "n_species", composition.n_species)
+    # define the ion species dimension
+    defDim(fid, "n_ion_species", composition.n_ion_species)
+    # define the neutral species dimension
+    defDim(fid, "n_neutral_species", composition.n_neutral_species)
     # define the time dimension, with an expandable size (denoted by Inf)
     defDim(fid, "ntime", Inf)
     ### create and write static variables to file ###
@@ -89,7 +95,7 @@ function setup_netcdf_io(prefix, z, vpa)
     varname = "f"
     attributes = Dict("description" => "distribution function")
     vartype = mk_float
-    dims = ("nz","nvpa","ntime")
+    dims = ("nz","nvpa","n_species","ntime")
     cdf_f = defVar(fid, varname, vartype, dims, attrib=attributes)
     # create variables that are floats with data in the z and time dimensions
     vartype = mk_float
@@ -97,19 +103,23 @@ function setup_netcdf_io(prefix, z, vpa)
     # create the "phi" variable, which will contain the electrostatic potential
     varname = "phi"
     attributes = Dict("description" => "electrostatic potential",
-                      "units" => "Tref/e")
+                      "units" => "Te/e")
     cdf_phi = defVar(fid, varname, vartype, dims, attrib=attributes)
-    # create the "density" variable, which will contain the ion density
+    # create variables that are floats with data in the z, species and time dimensions
+    vartype = mk_float
+    dims = ("nz","n_species","ntime")
+    # create the "density" variable, which will contain the species densities
     varname = "density"
-    attributes = Dict("description" => "ion density",
-                      "units" => "ne")
+    attributes = Dict("description" => "species density",
+                      "units" => "Ne")
     cdf_density = defVar(fid, varname, vartype, dims, attrib=attributes)
     # create a struct that stores the variables and other info needed for
     # writing to the netcdf file during run-time
     t_type = typeof(cdf_time)
-    zvpat_type = typeof(cdf_f)
+    zvpast_type = typeof(cdf_f)
     zt_type = typeof(cdf_phi)
-    return netcdf_info{t_type, zvpat_type, zt_type}(fid, cdf_time, cdf_f,
+    zst_type = typeof(cdf_density)
+    return netcdf_info{t_type, zvpast_type, zt_type, zst_type}(fid, cdf_time, cdf_f,
         cdf_phi, cdf_density)
 end
 # close all opened output files
@@ -122,31 +132,37 @@ function finish_file_io(io, cdf)
     close(cdf.fid)
     return nothing
 end
-function write_data_to_ascii(ff, moments, fields, z, vpa, t, io)
+function write_data_to_ascii(ff, moments, fields, z, vpa, t, n_species, io)
     write_f_ascii(ff, z, vpa, t, io.ff)
-    write_moments_ascii(moments, z, t, io.moments)
+    write_moments_ascii(moments, z, t, n_species, io.moments)
     write_fields_ascii(fields, z, t, io.fields)
 end
 # write the function f(z,vpa) at this time slice
 function write_f_ascii(f, z, vpa, t, io)
     @inbounds begin
-        for j ∈ 1:vpa.n
-            for i ∈ 1:z.n
-                println(io,"t: ", t, ",   z: ", z.grid[i], ",  vpa: ", vpa.grid[j],
-                    ",   f: ", f[i,j])
+        n_species = size(f,3)
+        for is ∈ 1:n_species
+            for j ∈ 1:vpa.n
+                for i ∈ 1:z.n
+                    println(io,"t: ", t, "   spec: ", is, ",   z: ", z.grid[i],
+                        ",  vpa: ", vpa.grid[j], ",   f: ", f[i,j,is])
+                end
+                println(io)
             end
             println(io)
         end
+        println(io)
     end
-    println(io,"")
     return nothing
 end
 # write moments of the distribution function f(z,vpa) at this time slice
-function write_moments_ascii(mom, z, t, io)
+function write_moments_ascii(mom, z, t, n_species, io)
     @inbounds begin
-        for i ∈ 1:z.n
-            println(io,"t: ", t, ",   z: ", z.grid[i], "  dens: ", mom.dens[i],
-                ",   ppar: ", mom.ppar[i])
+        for is ∈ 1:n_species
+            for i ∈ 1:z.n
+                println(io,"t: ", t, "   species: ", is, ",   z: ", z.grid[i], "  dens: ", mom.dens[i,is],
+                    ",   ppar: ", mom.ppar[i,is])
+            end
         end
     end
     println(io,"")
@@ -163,15 +179,17 @@ function write_fields_ascii(flds, z, t, io)
     return nothing
 end
 # write time-dependent data to the netcdf file
-function write_data_to_binary(ff, moments, fields, t, cdf, t_idx)
+function write_data_to_binary(ff, moments, fields, t, n_species, cdf, t_idx)
     # add the time for this time slice to the netcdf file
     cdf.time[t_idx] = t
     # add the distribution function data at this time slice to the netcdf file
-    cdf.f[:,:,t_idx] = ff
+    cdf.f[:,:,:,t_idx] = ff
     # add the electrostatic potential data at this time slice to the netcdf file
     cdf.phi[:,t_idx] = fields.phi
     # add the density data at this time slice to the netcdf file
-    cdf.density[:,t_idx] = moments.dens
+    for is ∈ 1:n_species
+        cdf.density[:,:,t_idx] = moments.dens
+    end
 end
 # accepts an option name which has been identified as problematic and returns
 # an appropriate error message

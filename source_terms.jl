@@ -38,6 +38,34 @@ mutable struct source_info
     upwind_increment::mk_int
 end
 # create arrays needed to compute the source term(s) for a 1D problem
+function setup_source(coord, nspec)
+    # allocate an array containing structures with much of the info needed
+    # to do the 1D advection time advance
+    source = Array{source_info,1}(undef, nspec)
+    # store all of this information in a structure and return it
+    for is ∈ 1:nspec
+        source[is] = setup_source_local(coord.n, coord.ngrid, coord.nelement)
+    end
+    return source
+end
+# create arrays needed to compute the source term(s) for a 2D problem
+function setup_source(coord1, coord2, nspec)
+    # n and m are the number of unique grid points along coordinates coord1 and coord2
+    n = coord1.n
+    m = coord2.n
+    # allocate an array containing structures with much of the info needed
+    # to do the 1D advection time advance
+    source = Array{source_info,2}(undef, m, nspec)
+    # store all of this information in a structure and return it
+    for is ∈ 1:nspec
+        for i ∈ 1:m
+            source[i,is] = setup_source_local(coord1.n, coord1.ngrid, coord1.nelement)
+        end
+    end
+    return source
+end
+#=
+# create arrays needed to compute the source term(s) for a 1D problem
 function setup_source(coord)
     return setup_source_local(coord.n, coord.ngrid, coord.nelement)
 end
@@ -55,6 +83,7 @@ function setup_source(coord1, coord2)
     end
     return source
 end
+=#
 # create arrays needed to compute the source term(s)
 function setup_source_local(n, ngrid, nelement)
     # create array for storing the explicit source terms appearing
