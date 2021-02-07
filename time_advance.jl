@@ -2,6 +2,7 @@ module time_advance
 
 export update_f!
 export advance_f_local!
+export rk_update_f!
 
 using finite_differences: derivative_finite_difference!
 using chebyshev: chebyshev_derivative!
@@ -93,6 +94,26 @@ function update_f!(f_new, f_old, rhs, up_idx, down_idx, up_incr, dep_idx, n, j, 
         end
     end
     return nothing
+end
+
+function rk_update_f!(ff, ff_rk, nz, nvpa, n_rk_stages)
+    if n_rk_stages == 1
+        @inbounds begin
+            for ivpa ∈ 1:nvpa
+                for iz ∈ 1:nz
+                    ff[iz,ivpa] = ff_rk[iz,ivpa,2]
+                end
+            end
+        end
+    elseif n_rk_stages == 2
+        @inbounds begin
+            for ivpa ∈ 1:nvpa
+                for iz ∈ 1:nz
+                    ff[iz,ivpa] = 0.5*(ff_rk[iz,ivpa,2] + ff_rk[iz,ivpa,3])
+                end
+            end
+        end
+    end
 end
 
 end

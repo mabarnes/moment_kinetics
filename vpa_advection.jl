@@ -5,20 +5,18 @@ export update_speed_vpa!
 
 using moment_kinetics_input: advection_speed, advection_speed_option_vpa
 using semi_lagrange: find_approximate_characteristic!
-using time_advance: advance_f_local!
+using time_advance: advance_f_local!, rk_update_f!
 using source_terms: update_boundary_indices!
 using source_terms: set_igrid_ielem
 using em_fields: update_phi!
 using chebyshev: chebyshev_derivative!
-#using chebyshev: update_fcheby!
-#using chebyshev: update_df_chebyshev!
 using chebyshev: chebyshev_info
 using finite_differences: derivative_finite_difference!
 using initial_conditions: enforce_vpa_boundary_condition!
 
 # argument chebyshev indicates that a chebyshev pseudopectral method is being used
 function vpa_advection!(ff, ff_scratch, phi, moments, SL, source, vpa, z,
-	use_semi_lagrange, dt, vpa_spectral, z_spectral, composition)
+	n_rk_stages, use_semi_lagrange, dt, vpa_spectral, z_spectral, composition)
     # check to ensure that all array indices accessed in this function
     # are in-bounds
     @boundscheck size(ff,1) == z.n || throw(BoundsError(ff))
@@ -28,12 +26,11 @@ function vpa_advection!(ff, ff_scratch, phi, moments, SL, source, vpa, z,
     @boundscheck size(ff_scratch,2) == vpa.n || throw(BoundsError(ff_scratch))
 	@boundscheck size(ff_scratch,3) == composition.n_ion_species || throw(BoundsError(ff_scratch))
 	@boundscheck size(ff_scratch,4) == 3 || throw(BoundsError(ff_scratch))
-    # Heun's method (RK2) for explicit time advance
-    jend = 2
+    # SSP RK for explicit time advance
 	ff_scratch[:,:,:,1] .= ff
-    for j ∈ 1:jend
+    for istage ∈ 1:n_rk_stages
 		# calculate the advection speed corresponding to current f
-	    update_speed_vpa!(source, phi, moments, view(ff_scratch,:,:,:,j), vpa, z,
+	    update_speed_vpa!(source, phi, moments, view(ff_scratch,:,:,:,istage), vpa, z,
 			composition, z_spectral)
 		for is ∈ 1:composition.n_ion_species
 			# update the upwind/downwind boundary indices and upwind_increment
@@ -51,21 +48,15 @@ function vpa_advection!(ff, ff_scratch, phi, moments, SL, source, vpa, z,
 		        end
 		    end
 	        for iz ∈ 1:z.n
-				@views advance_f_local!(ff_scratch[iz,:,is,j+1], ff_scratch[iz,:,is,j],
-					ff[iz,:,is], SL[iz], source[iz,is], vpa, dt, j, vpa_spectral)
+				@views advance_f_local!(ff_scratch[iz,:,is,istage+1], ff_scratch[iz,:,is,istage],
+					ff[iz,:,is], SL[iz], source[iz,is], vpa, dt, istage, vpa_spectral)
 			end
-			enforce_vpa_boundary_condition!(view(ff_scratch,:,:,is,j+1), vpa.bc, source)
+			enforce_vpa_boundary_condition!(view(ff_scratch,:,:,is,istage+1), vpa.bc, source)
 			moments.dens_updated[is] = false ; moments.ppar_updated[is] = false
 		end
 	end
-    @inbounds @fastmath begin
-		for is ∈ 1:composition.n_ion_species
-			for ivpa ∈ 1:vpa.n
-	            for iz ∈ 1:z.n
-	                ff[iz,ivpa,is] = 0.5*(ff_scratch[iz,ivpa,is,2] + ff_scratch[iz,ivpa,is,3])
-	            end
-	        end
-		end
+	for is ∈ 1:composition.n_ion_species
+		@views rk_update_f!(ff[:,:,is], ff_scratch[:,:,is,:], z.n, vpa.n, n_rk_stages)
     end
 end
 # calculate the advection speed in the z-direction at each grid point

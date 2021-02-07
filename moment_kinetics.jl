@@ -153,6 +153,7 @@ function time_advance!(ff, ff_scratch, t, t_input, z, vpa, z_spectral, vpa_spect
     nstep = t_input.nstep
     nwrite = t_input.nwrite
     dt = t_input.dt
+    n_rk_stages = t_input.n_rk_stages
     use_semi_lagrange = t_input.use_semi_lagrange
     n_species = composition.n_species
     for i ∈ 1:nstep
@@ -163,13 +164,13 @@ function time_advance!(ff, ff_scratch, t, t_input, z, vpa, z_spectral, vpa_spect
             # vpa_advection! advances the operator-split 1D advection equation in vpa
             # vpa-advection only applies for charged species
             @views vpa_advection!(ff[:,:,1:n_ion_species], ff_scratch[:,:,1:n_ion_species,:],
-                fields.phi, moments, vpa_SL, vpa_source, vpa, z,
+                fields.phi, moments, vpa_SL, vpa_source, vpa, z, n_rk_stages,
                 use_semi_lagrange, dt, vpa_spectral, z_spectral, composition)
             # z_advection! advances the operator-split 1D advection equation in z
             # apply z-advection operation to all species (charged and neutral)
             for is ∈ 1:n_species
                 @views z_advection!(ff[:,:,is], ff_scratch[:,:,is,:], z_SL, z_source[:,is],
-                    z, vpa, use_semi_lagrange, dt, t, z_spectral)
+                    z, vpa, n_rk_stages, use_semi_lagrange, dt, t, z_spectral)
                 # reset "xx.updated" flags to false since ff has been updated
                 # and the corresponding moments have not
                 moments.dens_updated[is] = false ; moments.ppar_updated[is] = false
@@ -177,7 +178,7 @@ function time_advance!(ff, ff_scratch, t, t_input, z, vpa, z_spectral, vpa_spect
             if composition.n_neutral_species > 0
                 # account for charge exchange collisions between ions and neutrals
                 @views charge_exchange_collisions!(ff, ff_scratch, moments, composition,
-                    vpa, charge_exchange_frequency, z.n, dt)
+                    vpa, charge_exchange_frequency, z.n, dt, n_rk_stages)
             end
             # fliplop enables reversal of the order of operators, which
             # is necessary for achieving 2nd order accuracy in time
@@ -186,13 +187,13 @@ function time_advance!(ff, ff_scratch, t, t_input, z, vpa, z_spectral, vpa_spect
             if composition.n_neutral_species > 0
                 # account for charge exchange collisions between ions and neutrals
                 @views charge_exchange_collisions!(ff, ff_scratch, moments, composition,
-                    vpa, charge_exchange_frequency, z.n, dt)
+                    vpa, charge_exchange_frequency, z.n, dt, n_rk_stages)
             end
             # z_advection! advances the operator-split 1D advection equation in z
             # apply z-advection operation to all species (charged and neutral)
             for is ∈ 1:composition.n_species
                 @views z_advection!(ff[:,:,is], ff_scratch[:,:,is,:], z_SL, z_source[:,is],
-                    z, vpa, use_semi_lagrange, dt, t, z_spectral)
+                    z, vpa, n_rk_stages, use_semi_lagrange, dt, t, z_spectral)
                 # reset "moments.xx_updated" flags to false since ff has been updated
                 # and the corresponding moments have not
                 moments.dens_updated[is] = false ; moments.ppar_updated[is] = false
@@ -200,7 +201,7 @@ function time_advance!(ff, ff_scratch, t, t_input, z, vpa, z_spectral, vpa_spect
             # vpa_advection! advances the operator-split 1D advection equation in vpa
             # vpa-advection only applies for charged species
             @views vpa_advection!(ff[:,:,1:n_ion_species], ff_scratch[:,:,1:n_ion_species,:],
-                fields.phi, moments, vpa_SL, vpa_source, vpa, z,
+                fields.phi, moments, vpa_SL, vpa_source, vpa, z, n_rk_stages,
                 use_semi_lagrange, dt, vpa_spectral, z_spectral, composition)
             # fliplop enables reversal of the order of operators, which
             # is necessary for achieving 2nd order accuracy in time

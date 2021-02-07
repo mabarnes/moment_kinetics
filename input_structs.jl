@@ -13,6 +13,7 @@ struct time_input
     dt::mk_float
     nwrite::mk_int
     use_semi_lagrange::Bool
+    n_rk_stages::mk_int
 end
 mutable struct grid_input_mutable
     # name of the variable associated with this coordinate

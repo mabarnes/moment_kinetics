@@ -32,7 +32,7 @@ function mk_input()
     n_ion_species = 1
     # n_neutral_species is the number of evolved neutral species
     # currently only n_neutral_species = 0 is supported
-    n_neutral_species = 0
+    n_neutral_species = 1
     # if boltzmann_electron_response = true, then the electron
     # density is fixed to be N_e*(eϕ/T_e)
     # currently this is the only supported option
@@ -53,6 +53,8 @@ function mk_input()
     # use_semi_lagrange = true to use interpolation-free semi-Lagrange treatment
     # otherwise, solve problem solely using the discretization_option above
     use_semi_lagrange = false
+    # n_rk_stages = 1 or 2 are currently the only supported options
+    n_rk_stages = 2
 
     # overwrite some default parameters related to the z grid
     # ngrid is number of grid points per element
@@ -90,7 +92,7 @@ function mk_input()
     #species[2].initial_density = 0.5
     species[1].z_IC.amplitude = 0.1
     #species[2].z_IC.amplitude = 0.1
-    charge_exchange_frequency = 0.0
+    charge_exchange_frequency = 1.0
     #################### end specification of species inputs #####################
 #=
     const advection_speed_option_z = "default"
@@ -109,7 +111,7 @@ function mk_input()
     ########## end user inputs. do not modify following code! ###############
     #########################################################################
 
-    t = time_input(nstep, dt, nwrite, use_semi_lagrange)
+    t = time_input(nstep, dt, nwrite, use_semi_lagrange, n_rk_stages)
     # replace mutable structures with immutable ones to optimize performance
     # and avoid possible misunderstandings
     z_immutable = grid_input("z", z.ngrid, z.nelement, z.L,
@@ -146,7 +148,7 @@ function mk_input()
 end
 
 function load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_response)
-    # parameters related to the z grid
+    #################### parameters related to the z grid ######################
     # ngrid_z is number of grid points per element
     ngrid_z = 100
     # nelement_z is the number of elements
@@ -170,7 +172,8 @@ function load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_resp
     # create a mutable structure containing the input info related to the z grid
     z = grid_input_mutable("z", ngrid_z, nelement_z, L_z,
         discretization_option_z, finite_difference_option_z, boundary_option_z)
-    # parameters related to the vpa grid
+    ############################################################################
+    ################### parameters related to the vpa grid #####################
     # ngrid_vpa is the number of grid points per element
     ngrid_vpa = 300
     # nelement_vpa is the number of elements
@@ -193,6 +196,7 @@ function load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_resp
     # create a mutable structure containing the input info related to the vpa grid
     vpa = grid_input_mutable("vpa", ngrid_vpa, nelement_vpa, L_vpa,
         discretization_option_vpa, finite_difference_option_vpa, boundary_option_vpa)
+    #############################################################################
     # define default values and create corresponding mutable structs holding
     # information about the composition of the species and their initial conditions
     if boltzmann_electron_response
