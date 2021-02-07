@@ -145,7 +145,7 @@ function update_fcheby!(cheby, ff, coord)
     return nothing
 end
 # compute the Chebyshev spectral coefficients of the spatial derivative of f
-function update_df_chebyshev!(df, chebyshev, coord, upwind_increment)
+function update_df_chebyshev!(df, chebyshev, coord)
     ngrid = coord.ngrid
     nelement = coord.nelement
     L = coord.L

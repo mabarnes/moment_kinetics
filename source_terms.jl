@@ -5,6 +5,7 @@ export update_advection_factor!
 export calculate_explicit_source!
 export update_f!
 export update_boundary_indices!
+export set_igrid_ilem
 
 using type_definitions: mk_float, mk_int
 using array_allocation: allocate_float
@@ -182,6 +183,13 @@ function calculate_explicit_source!(rhs, df, adv_fac, up_idx, down_idx, up_incr,
                 # choose which value of df to use; this is because
                 # df is multi-valued at the overlapping point at the boundary
                 # between neighboring elements.
+                igrid, ielem = set_igrid_ielem(igrid_map[idx], ielement_map[idx],
+                    adv_fac[i], ngrid, nelement)
+#=
+                # if at the boundary point within the element, must carefully
+                # choose which value of df to use; this is because
+                # df is multi-valued at the overlapping point at the boundary
+                # between neighboring elements.
                 # here we choose to use the value of df from the upwind element.
 
                 # note that the first ngrid points are classified as belonging to the first element
@@ -203,12 +211,20 @@ function calculate_explicit_source!(rhs, df, adv_fac, up_idx, down_idx, up_incr,
                     igrid = igrid_map[idx]
                     ielem = ielement_map[idx]
                 end
+=#
                 rhs[i] = adv_fac[i]*df[igrid,ielem]
             end
         end
     elseif j == 2
         #@inbounds for i ∈ up_idx:-up_incr:down_idx
         @inbounds for i ∈ 1:n
+            # if at the boundary point within the element, must carefully
+            # choose which value of df to use; this is because
+            # df is multi-valued at the overlapping point at the boundary
+            # between neighboring elements.
+            igrid, ielem = set_igrid_ielem(igrid_map[i], ielement_map[i],
+                adv_fac[i], ngrid, nelement)
+#=
             # if at the boundary point within the element, must carefully
             # choose which value of df to use; this is because
             # df is multi-valued at the overlapping point at the boundary
@@ -234,10 +250,40 @@ function calculate_explicit_source!(rhs, df, adv_fac, up_idx, down_idx, up_incr,
                 igrid = igrid_map[i]
                 ielem = ielement_map[i]
             end
+=#
             rhs[i] = adv_fac[i]*df[igrid,ielem]
         end
     end
     return nothing
+end
+
+function set_igrid_ielem(igrid_map, ielem_map, adv_fac, ngrid, nelement)
+    # if at the boundary point within the element, must carefully
+    # choose which value of df to use; this is because
+    # df is multi-valued at the overlapping point at the boundary
+    # between neighboring elements.
+    # here we choose to use the value of df from the upwind element.
+
+    # note that the first ngrid points are classified as belonging to the first element
+    # and the next ngrid-1 points belonging to second element, etc.
+
+    # adv_fac > 0 corresponds to negative advection speed, so
+    # use derivative information from upwind element at larger coordinate value
+    if igrid_map == ngrid && adv_fac > 0.0
+        igrid = 1
+        ielem = mod(ielem_map, nelement) + 1
+    # adv_fac < 0 corresponds to positive advection speed, so
+    # use derivative information from upwind element at smaller coordinate value
+    elseif igrid_map == 1 && adv_fac < 0.0
+        igrid = ngrid
+        ielem = nelement - mod(nelement-ielem_map+1,nelement)
+    # aside from above cases, the pre-computed mappings from unpacked index i
+    # to element and grid within element indices are already correct
+    else
+        igrid = igrid_map
+        ielem = ielem_map
+    end
+    return igrid, ielem
 end
 
 end

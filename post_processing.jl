@@ -50,14 +50,14 @@ function analyze_and_plot_data()
     # nwrite_movie is the stride used when making animations
     nwrite_movie = pp.nwrite_movie
     # itime_min is the minimum time index at which to start animations
-    if pp.itime_min > 0
+    if pp.itime_min > 0 && pp.itime_min <= ntime
         itime_min = pp.itime_min
     else
         itime_min = 1
     end
     # itime_max is the final time index at which to end animations
     # if itime_max < 0, the value used will be the total number of time slices
-    if pp.itime_max > 0
+    if pp.itime_max > 0 && pp.itime_max <= ntime
         itime_max = pp.itime_max
     else
         itime_max = ntime
@@ -74,7 +74,7 @@ function analyze_and_plot_data()
     if pp.ivpa0 > 0
         ivpa0 = pp.ivpa0
     else
-        ivpa0 = cld(nvpa,2)
+        ivpa0 = cld(nvpa,3)
     end
     println("done.")
 
@@ -218,6 +218,22 @@ function analyze_and_plot_data()
     ff = cdfvar.var[:,:,:,:]
     println("done.")
 
+    print("Analyzing distributiion function data...")
+    f_fldline_avg = allocate_float(nvpa,n_species,ntime)
+    for i ∈ 1:ntime
+        for is ∈ 1:n_species
+            for ivpa ∈ 1:nvpa
+                f_fldline_avg[ivpa,is,i] = field_line_average(view(ff,:,ivpa,is,i), z_wgts, Lz)
+            end
+        end
+    end
+    # delta_f = f - <f> is the fluctuating distribution function
+    delta_f = allocate_float(nz,nvpa,n_species,ntime)
+    for iz ∈ 1:nz
+        @. delta_f[iz,:,:,:] = ff[iz,:,:,:] - f_fldline_avg
+    end
+    println("done.")
+
     println("Plotting distribution function data...")
     cmlog(cmlin::ColorGradient) = RGB[cmlin[x] for x=LinRange(0,1,30)]
     logdeep = cgrad(:deep, scale=:log) |> cmlog
@@ -234,6 +250,14 @@ function analyze_and_plot_data()
             outfile = string(run_name, "_f_vs_z_vpa", spec_string, ".gif")
             gif(anim, outfile, fps=5)
         end
+        if pp.animate_deltaf_vs_z_vpa
+            # make a gif animation of δf(vpa,z,t)
+            anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+                @views heatmap(vpa, z, delta_f[:,:,is,i], xlabel="vpa", ylabel="z", c = :deep, interpolation = :cubic)
+            end
+            outfile = string(run_name, "_deltaf_vs_z_vpa", spec_string, ".gif")
+            gif(anim, outfile, fps=5)
+        end
         if pp.animate_f_vs_z_vpa0
             fmin = minimum(ff[:,ivpa0,is,:])
             fmax = maximum(ff[:,ivpa0,is,:])
@@ -244,6 +268,16 @@ function analyze_and_plot_data()
             outfile = string(run_name, "_f_vs_z", spec_string, ".gif")
             gif(anim, outfile, fps=5)
         end
+        if pp.animate_deltaf_vs_z_vpa0
+            fmin = minimum(delta_f[:,ivpa0,is,:])
+            fmax = maximum(delta_f[:,ivpa0,is,:])
+            # make a gif animation of f(vpa0,z,t)
+            anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+                @views plot(z, delta_f[:,ivpa0,is,i], ylims = (fmin,fmax))
+            end
+            outfile = string(run_name, "_deltaf_vs_z", spec_string, ".gif")
+            gif(anim, outfile, fps=5)
+        end
         if pp.animate_f_vs_z0_vpa
             fmin = minimum(ff[iz0,:,is,:])
             fmax = maximum(ff[iz0,:,is,:])
@@ -252,6 +286,16 @@ function analyze_and_plot_data()
                 @views plot(vpa, ff[iz0,:,is,i], ylims = (fmin,fmax))
             end
             outfile = string(run_name, "_f_vs_vpa", spec_string, ".gif")
+            gif(anim, outfile, fps=5)
+        end
+        if pp.animate_deltaf_vs_z0_vpa
+            fmin = minimum(delta_f[iz0,:,is,:])
+            fmax = maximum(delta_f[iz0,:,is,:])
+            # make a gif animation of f(vpa,z0,t)
+            anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+                @views plot(vpa, delta_f[iz0,:,is,i], ylims = (fmin,fmax))
+            end
+            outfile = string(run_name, "_deltaf_vs_vpa", spec_string, ".gif")
             gif(anim, outfile, fps=5)
         end
     end

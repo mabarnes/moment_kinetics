@@ -19,6 +19,7 @@ using initial_conditions: enforce_z_boundary_condition!
 using initial_conditions: enforce_vpa_boundary_condition!
 using moment_kinetics_input: mk_input
 using moment_kinetics_input: performance_test
+using charge_exchange: charge_exchange_collisions!
 
 to1 = TimerOutput()
 to2 = TimerOutput()
@@ -27,7 +28,8 @@ to2 = TimerOutput()
 function moment_kinetics(to)
     # obtain input options from moment_kinetics_input.jl
     # and check input to catch errors
-    run_name, output_dir, t_input, z_input, vpa_input, composition, species = mk_input()
+    run_name, output_dir, t_input, z_input, vpa_input, composition, species,
+        charge_exchange_frequency = mk_input()
     # initialize z grid and write grid point locations to file
     z = define_coordinate(z_input)
     # initialize vpa grid and write grid point locations to file
@@ -51,11 +53,13 @@ function moment_kinetics(to)
     if performance_test
         @timeit to "time_advance" time_advance!(ff, ff_scratch, code_time, t_input,
             z, vpa, z_spectral, vpa_spectral, moments, fields,
-            z_source, vpa_source, z_SL, vpa_SL, composition, io, cdf)
+            z_source, vpa_source, z_SL, vpa_SL, composition, charge_exchange_frequency,
+            io, cdf)
     else
         time_advance!(ff, ff_scratch, code_time, t_input, z, vpa,
             z_spectral, vpa_spectral, moments, fields,
-            z_source, vpa_source, z_SL, vpa_SL, composition, io, cdf)
+            z_source, vpa_source, z_SL, vpa_SL, composition, charge_exchange_frequency,
+            io, cdf)
     end
     # finish i/o
     finish_file_io(io, cdf)
@@ -141,7 +145,8 @@ end
 # for prudent choice of v₀, expect δv≪v so that explicit
 # time integrator can be used without severe CFL condition
 function time_advance!(ff, ff_scratch, t, t_input, z, vpa, z_spectral, vpa_spectral,
-    moments, fields, z_source, vpa_source, z_SL, vpa_SL, composition, io, cdf)
+    moments, fields, z_source, vpa_source, z_SL, vpa_SL, composition,
+    charge_exchange_frequency, io, cdf)
     # main time advance loop
     iwrite = 2
     flipflop = false
@@ -149,6 +154,7 @@ function time_advance!(ff, ff_scratch, t, t_input, z, vpa, z_spectral, vpa_spect
     nwrite = t_input.nwrite
     dt = t_input.dt
     use_semi_lagrange = t_input.use_semi_lagrange
+    n_species = composition.n_species
     for i ∈ 1:nstep
         n_ion_species = composition.n_ion_species
         #NB: following line only for testing
@@ -161,15 +167,27 @@ function time_advance!(ff, ff_scratch, t, t_input, z, vpa, z_spectral, vpa_spect
                 use_semi_lagrange, dt, vpa_spectral, z_spectral, composition)
             # z_advection! advances the operator-split 1D advection equation in z
             # apply z-advection operation to all species (charged and neutral)
-            for is ∈ 1:composition.n_species
+            for is ∈ 1:n_species
                 @views z_advection!(ff[:,:,is], ff_scratch[:,:,is,:], z_SL, z_source[:,is],
                     z, vpa, use_semi_lagrange, dt, t, z_spectral)
                 # reset "xx.updated" flags to false since ff has been updated
                 # and the corresponding moments have not
                 moments.dens_updated[is] = false ; moments.ppar_updated[is] = false
             end
+            if composition.n_neutral_species > 0
+                # account for charge exchange collisions between ions and neutrals
+                @views charge_exchange_collisions!(ff, ff_scratch, moments, composition,
+                    vpa, charge_exchange_frequency, z.n, dt)
+            end
+            # fliplop enables reversal of the order of operators, which
+            # is necessary for achieving 2nd order accuracy in time
             flipflop = false
         else
+            if composition.n_neutral_species > 0
+                # account for charge exchange collisions between ions and neutrals
+                @views charge_exchange_collisions!(ff, ff_scratch, moments, composition,
+                    vpa, charge_exchange_frequency, z.n, dt)
+            end
             # z_advection! advances the operator-split 1D advection equation in z
             # apply z-advection operation to all species (charged and neutral)
             for is ∈ 1:composition.n_species
@@ -184,6 +202,8 @@ function time_advance!(ff, ff_scratch, t, t_input, z, vpa, z_spectral, vpa_spect
             @views vpa_advection!(ff[:,:,1:n_ion_species], ff_scratch[:,:,1:n_ion_species,:],
                 fields.phi, moments, vpa_SL, vpa_source, vpa, z,
                 use_semi_lagrange, dt, vpa_spectral, z_spectral, composition)
+            # fliplop enables reversal of the order of operators, which
+            # is necessary for achieving 2nd order accuracy in time
             flipflop = true
         end
         # update the time
