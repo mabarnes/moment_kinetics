@@ -7,9 +7,11 @@ using moment_kinetics_input: advection_speed, advection_speed_option_vpa
 using semi_lagrange: find_approximate_characteristic!
 using time_advance: advance_f_local!
 using source_terms: update_boundary_indices!
+using source_terms: set_igrid_ielem
 using em_fields: update_phi!
-using chebyshev: update_fcheby!
-using chebyshev: update_df_chebyshev!
+using chebyshev: chebyshev_derivative!
+#using chebyshev: update_fcheby!
+#using chebyshev: update_df_chebyshev!
 using chebyshev: chebyshev_info
 using finite_differences: derivative_finite_difference!
 using initial_conditions: enforce_vpa_boundary_condition!
@@ -99,16 +101,21 @@ end
 # if z_spectral argument has type chebyshev_info, then use Chebyshev spectral treatment
 function update_speed_default!(source, phi, moments, ff, vpa, z, composition, z_spectral::chebyshev_info)
 	update_phi!(phi, moments, ff, vpa, z.n, composition)
-	# get the Chebyshev coefficients for phi and store in z_spectral.f
-	update_fcheby!(z_spectral, phi, z)
 	# dphi/dz is calculated and stored in z.scratch
-	update_df_chebyshev!(z.scratch, z_spectral, z)
+	chebyshev_derivative!(z.scratch2d, phi, z_spectral, z)
+#	# get the Chebyshev coefficients for phi and store in z_spectral.f
+#	update_fcheby!(z_spectral, phi, z)
+#	# dphi/dz is calculated and stored in z.scratch
+#	update_df_chebyshev!(z.scratch2d, z_spectral, z)
 	@inbounds @fastmath begin
 		for is ∈ 1:composition.n_ion_species
 			for iz ∈ 1:z.n
-				z.scratch[iz] *= -0.5
+#				igrid = z.igrid[iz]
+#				ielem = z.ielement[iz]
 				for ivpa ∈ 1:vpa.n
-					source[iz,is].speed[ivpa] = z.scratch[iz]
+					igrid, ielem = set_igrid_ielem(z.igrid[iz], z.ielement[iz],
+						-vpa.grid[ivpa], z.ngrid, z.nelement)
+					source[iz,is].speed[ivpa] = -0.5*z.scratch2d[igrid,ielem]
 				end
 			end
 		end

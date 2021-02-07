@@ -61,6 +61,7 @@ function mk_input()
     z.nelement = 1
     # determine the discretization option for the z grid
     # supported options are "chebyshev_pseudospectral" and "finite_difference"
+    #z.discretization = "chebyshev_pseudospectral"
     z.discretization = "finite_difference"
 
     # overwrite some default parameters related to the vpa grid
@@ -75,16 +76,21 @@ function mk_input()
     vpa.bc = "periodic"
     # determine the discretization option for the vpa grid
     # supported options are "chebyshev_pseudospectral" and "finite_difference"
+    #vpa.discretization = "chebyshev_pseudospectral"
     vpa.discretization = "finite_difference"
 
     ####### specify any deviations from default inputs for evolved species #######
     # set initial Tᵢ/Tₑ = 1
     species[1].initial_temperature = 1.0
+    # set initial neutral temperature Tn/Tₑ = 1
     #species[2].initial_temperature = 1.0
     # set initial nᵢ/Nₑ = 1.0
-    species[1].initial_density = 1.0
+    #species[1].initial_density = 0.5
     # set initial neutral densiity = Nₑ
     #species[2].initial_density = 0.5
+    species[1].z_IC.amplitude = 0.1
+    #species[2].z_IC.amplitude = 0.1
+    charge_exchange_frequency = 0.0
     #################### end specification of species inputs #####################
 #=
     const advection_speed_option_z = "default"
@@ -135,7 +141,8 @@ function mk_input()
         z_immutable, vpa_immutable, composition, species_immutable)
 
     # return immutable structs for z, vpa, species and composition
-    return run_name, output_dir, t, z_immutable, vpa_immutable, composition, species_immutable
+    return run_name, output_dir, t, z_immutable, vpa_immutable, composition,
+        species_immutable, charge_exchange_frequency
 end
 
 function load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_response)
