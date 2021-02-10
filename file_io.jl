@@ -12,7 +12,7 @@ using type_definitions: mk_float
 # structure containing the various input/output streams
 struct ios
     # corresponds to the ascii file to which the distribution function is written
-    ff::IOStream
+    #ff::IOStream
     # corresponds to the ascii file to which velocity space moments of the
     # distribution function such as density and pressure are written
     moments::IOStream
@@ -39,11 +39,12 @@ function setup_file_io(output_dir, run_name, z, vpa, composition)
     # if not, create it
     isdir(output_dir) || mkdir(output_dir)
     out_prefix = string(output_dir, "/", run_name)
-    ff_io = open_output_file(out_prefix, "f_vs_t")
+    #ff_io = open_output_file(out_prefix, "f_vs_t")
     mom_io = open_output_file(out_prefix, "moments_vs_t")
     fields_io = open_output_file(out_prefix, "fields_vs_t")
     cdf = setup_netcdf_io(out_prefix, z, vpa, composition)
-    return ios(ff_io, mom_io, fields_io), cdf
+    #return ios(ff_io, mom_io, fields_io), cdf
+    return ios(mom_io, fields_io), cdf
 end
 # setup file i/o for netcdf
 function setup_netcdf_io(prefix, z, vpa, composition)
@@ -133,7 +134,7 @@ function finish_file_io(io, cdf)
     return nothing
 end
 function write_data_to_ascii(ff, moments, fields, z, vpa, t, n_species, io)
-    write_f_ascii(ff, z, vpa, t, io.ff)
+    #write_f_ascii(ff, z, vpa, t, io.ff)
     write_moments_ascii(moments, z, t, n_species, io.moments)
     write_fields_ascii(fields, z, t, io.fields)
 end
