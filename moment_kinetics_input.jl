@@ -1,32 +1,26 @@
 module moment_kinetics_input
 
 export mk_input
-export advection_speed, advection_speed_option_z, advection_speed_option_vpa
-export z_adv_oscillation_amplitude, z_adv_frequency
 export performance_test
 
 using type_definitions: mk_float, mk_int
 using array_allocation: allocate_float
 using file_io: input_option_error, open_output_file
 using input_structs: time_input
+using input_structs: advection_input, advection_input_mutable
 using input_structs: grid_input, grid_input_mutable
 using input_structs: initial_condition_input, initial_condition_input_mutable
 using input_structs: species_parameters, species_parameters_mutable
 using input_structs: species_composition
 
-const advection_speed_option_z = "default"
-const advection_speed_option_vpa = "default"
-# advection speed
-const advection_speed = -1.0
-# for advection_speed_option = "oscillating", advection speed is of form
-# speed = advection_speed*(1 + z_adv_oscillation_amplitude*sinpi(z_adv_frequency*t))
-const z_adv_frequency = 1.0
-const z_adv_oscillation_amplitude = 1.0
-
 const performance_test = false
 
 function mk_input()
 
+    # this is the prefix for all output files associated with this run
+    run_name = "CX_4p0_amp0p001_nz200_nvpa400_Lv10_dt0p0005"
+    # this is the directory where the simulation data will be stored
+    output_dir = string("runs/",run_name)
     # n_ion_species is the number of evolved ion species
     # currently only n_ion_species = 1 is supported
     n_ion_species = 1
@@ -41,24 +35,20 @@ function mk_input()
     z, vpa, species, composition =
         load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_response)
 
-    # this is the prefix for all output files associated with this run
-    run_name = "example"
-    # this is the directory where the simulation data will be stored
-    output_dir = run_name
-
     # parameters related to the time stepping
-    nstep = 3000
-    dt = 0.001
-    nwrite = 10
+    nstep = 12000
+    dt = 0.00025
+    nwrite = 40
     # use_semi_lagrange = true to use interpolation-free semi-Lagrange treatment
     # otherwise, solve problem solely using the discretization_option above
     use_semi_lagrange = false
-    # n_rk_stages = 1 or 2 are currently the only supported options
+    # options are n_rk_stages = 1, 2 or 3 (corresponding to forward Euler,
+    # Heun's method and SSP RK3)
     n_rk_stages = 2
 
     # overwrite some default parameters related to the z grid
     # ngrid is number of grid points per element
-    z.ngrid = 50
+    z.ngrid = 200
     # nelement is the number of elements
     z.nelement = 1
     # determine the discretization option for the z grid
@@ -68,11 +58,11 @@ function mk_input()
 
     # overwrite some default parameters related to the vpa grid
     # ngrid is the number of grid points per element
-    vpa.ngrid = 300
+    vpa.ngrid = 400
     # nelement is the number of elements
     vpa.nelement = 1
     # L is the box length in units of vthermal_species
-    vpa.L = 6.0
+    vpa.L = 10.0
     # determine the boundary condition
     # only supported option at present is "zero" and "periodic"
     vpa.bc = "periodic"
@@ -83,30 +73,18 @@ function mk_input()
 
     ####### specify any deviations from default inputs for evolved species #######
     # set initial Tᵢ/Tₑ = 1
-    species[1].initial_temperature = 1.0
+    #species[1].initial_temperature = 1.0
     # set initial neutral temperature Tn/Tₑ = 1
     #species[2].initial_temperature = 1.0
     # set initial nᵢ/Nₑ = 1.0
-    #species[1].initial_density = 0.5
+    species[1].initial_density = 0.5
     # set initial neutral densiity = Nₑ
-    #species[2].initial_density = 0.5
-    species[1].z_IC.amplitude = 0.1
-    #species[2].z_IC.amplitude = 0.1
-    charge_exchange_frequency = 1.0
+    species[2].initial_density = 0.5
+    species[1].z_IC.amplitude = 0.001
+    species[2].z_IC.amplitude = 0.001
+    charge_exchange_frequency = 4.0
     #################### end specification of species inputs #####################
-#=
-    const advection_speed_option_z = "default"
-    const advection_speed_option_vpa = "default"
-    # advection speed
-    const advection_speed = -1.0
-    # for advection_speed_option = "oscillating", advection speed is of form
-    # speed = advection_speed*(1 + z_adv_oscillation_amplitude*sinpi(z_adv_frequency*t))
-    const z_adv_frequency = 1.0
-    const z_adv_oscillation_amplitude = 1.0
 
-    # performance_test = true returns timings and memory usage
-    performance_test = false
-=#
     #########################################################################
     ########## end user inputs. do not modify following code! ###############
     #########################################################################
@@ -114,10 +92,14 @@ function mk_input()
     t = time_input(nstep, dt, nwrite, use_semi_lagrange, n_rk_stages)
     # replace mutable structures with immutable ones to optimize performance
     # and avoid possible misunderstandings
+    z_advection_immutable = advection_input(z.advection.option, z.advection.constant_speed,
+        z.advection.frequency, z.advection.oscillation_amplitude)
     z_immutable = grid_input("z", z.ngrid, z.nelement, z.L,
-        z.discretization, z.fd_option, z.bc)
+        z.discretization, z.fd_option, z.bc, z_advection_immutable)
+    vpa_advection_immutable = advection_input(vpa.advection.option, vpa.advection.constant_speed,
+        vpa.advection.frequency, vpa.advection.oscillation_amplitude)
     vpa_immutable = grid_input("vpa", vpa.ngrid, vpa.nelement, vpa.L,
-        vpa.discretization, vpa.fd_option, vpa.bc)
+        vpa.discretization, vpa.fd_option, vpa.bc, vpa_advection_immutable)
     n_species = composition.n_species
     species_immutable = Array{species_parameters,1}(undef,n_species)
     for is ∈ 1:n_species
@@ -169,9 +151,23 @@ function load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_resp
     #finite_difference_option_z = "first_order_upwind"
     #finite_difference_option_z = "second_order_upwind"
     finite_difference_option_z = "third_order_upwind"
+    # determine the option used for the advection speed in z
+    # supported options are "constant" and "oscillating",
+    # in addition to the "default" option which uses dz/dt = vpa as the advection speed
+    advection_option_z = "default"
+    # constant advection speed in z to use with advection_option_z = "constant"
+    advection_speed_z = 1.0
+    # for advection_option_z = "oscillating", advection speed is of form
+    # speed = advection_speed_z*(1 + oscillation_amplitude_z*sinpi(frequency_z*t))
+    frequency_z = 1.0
+    oscillation_amplitude_z = 1.0
+    # mutable struct containing advection speed options/inputs for z
+    advection_z = advection_input_mutable(advection_option_z, advection_speed_z,
+        frequency_z, oscillation_amplitude_z)
     # create a mutable structure containing the input info related to the z grid
     z = grid_input_mutable("z", ngrid_z, nelement_z, L_z,
-        discretization_option_z, finite_difference_option_z, boundary_option_z)
+        discretization_option_z, finite_difference_option_z, boundary_option_z,
+        advection_z)
     ############################################################################
     ################### parameters related to the vpa grid #####################
     # ngrid_vpa is the number of grid points per element
@@ -193,9 +189,23 @@ function load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_resp
     # supported options are "third_order_upwind", "second_order_upwind" and "first_order_upwind"
     #finite_difference_option_vpa = "second_order_upwind"
     finite_difference_option_vpa = "third_order_upwind"
+    # determine the option used for the advection speed in vpa
+    # supported options are "constant" and "oscillating",
+    # in addition to the "default" option which uses dvpa/dt = q*Ez/m as the advection speed
+    advection_option_vpa = "default"
+    # constant advection speed in vpa to use with advection_option_vpa = "constant"
+    advection_speed_vpa = 1.0
+    # for advection_option_vpa = "oscillating", advection speed is of form
+    # speed = advection_speed_vpa*(1 + oscillation_amplitude_vpa*sinpi(frequency_vpa*t))
+    frequency_vpa = 1.0
+    oscillation_amplitude_vpa = 1.0
+    # mutable struct containing advection speed options/inputs for z
+    advection_vpa = advection_input_mutable(advection_option_vpa, advection_speed_vpa,
+        frequency_vpa, oscillation_amplitude_vpa)
     # create a mutable structure containing the input info related to the vpa grid
     vpa = grid_input_mutable("vpa", ngrid_vpa, nelement_vpa, L_vpa,
-        discretization_option_vpa, finite_difference_option_vpa, boundary_option_vpa)
+        discretization_option_vpa, finite_difference_option_vpa, boundary_option_vpa,
+        advection_vpa)
     #############################################################################
     # define default values and create corresponding mutable structs holding
     # information about the composition of the species and their initial conditions

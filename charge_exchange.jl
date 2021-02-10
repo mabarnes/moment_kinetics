@@ -15,7 +15,7 @@ function charge_exchange_collisions!(ff, ff_scratch, moments, composition,
 	@boundscheck nz == size(ff_scratch,1) || throw(BoundsError(ff_scratch))
 	@boundscheck vpa.n == size(ff_scratch,2) || throw(BoundsError(ff_scratch))
 	@boundscheck n_species == size(ff_scratch,3) || throw(BoundsError(ff_scratch))
-	@boundscheck 3 == size(ff_scratch,4) || throw(BoundsError(ff_scratch))
+	@boundscheck n_rk_stages+1 == size(ff_scratch,4) || throw(BoundsError(ff_scratch))
 	@boundscheck nz == size(moments.dens,1) || throw(BoundsError(moments.dens))
 	@boundscheck n_species == size(moments.dens,2) || throw(BoundsError(moments.dens))
 	# SSP RK for explicit time advance
@@ -36,7 +36,7 @@ function charge_exchange_collisions!(ff, ff_scratch, moments, composition,
 			# with all of the neutral species
 			for isp ∈ 1:n_neutral_species
 				#cxfac = dt*charge_exchange_frequency[is,isp]
-				cxfac = dt*charge_exchange_frequency
+				#cxfac = dt*charge_exchange_frequency
 				for ivpa ∈ 1:vpa.n
 					for iz ∈ 1:nz
 						ff_scratch[iz,ivpa,is,istage+1] += dt*charge_exchange_frequency *(
@@ -53,7 +53,7 @@ function charge_exchange_collisions!(ff, ff_scratch, moments, composition,
 			# for each neutral species, obtain affect of charge exchange collisions
 			# with all of the ion species
 			for isp ∈ 1:n_ion_species
-				cxfac = dt*charge_exchange_frequency
+				#cxfac = dt*charge_exchange_frequency
 				for ivpa ∈ 1:vpa.n
 					for iz ∈ 1:nz
 						ff_scratch[iz,ivpa,is+n_ion_species,istage+1] += dt*charge_exchange_frequency*(

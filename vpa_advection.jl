@@ -3,7 +3,6 @@ module vpa_advection
 export vpa_advection!
 export update_speed_vpa!
 
-using moment_kinetics_input: advection_speed, advection_speed_option_vpa
 using semi_lagrange: find_approximate_characteristic!
 using time_advance: advance_f_local!, rk_update_f!
 using source_terms: update_boundary_indices!
@@ -25,10 +24,15 @@ function vpa_advection!(ff, ff_scratch, phi, moments, SL, source, vpa, z,
 	@boundscheck size(ff_scratch,1) == z.n || throw(BoundsError(ff_scratch))
     @boundscheck size(ff_scratch,2) == vpa.n || throw(BoundsError(ff_scratch))
 	@boundscheck size(ff_scratch,3) == composition.n_ion_species || throw(BoundsError(ff_scratch))
-	@boundscheck size(ff_scratch,4) == 3 || throw(BoundsError(ff_scratch))
+	@boundscheck size(ff_scratch,4) == n_rk_stages+1 || throw(BoundsError(ff_scratch))
     # SSP RK for explicit time advance
 	ff_scratch[:,:,:,1] .= ff
     for istage ∈ 1:n_rk_stages
+		# for SSP RK3, need to redefine ff_scratch[3]
+        if istage == 3
+            @. ff_scratch[:,:,:,istage] = 0.25*(ff_scratch[:,:,:,istage] +
+                ff_scratch[:,:,:,istage-1] + 2.0*ff)
+        end
 		# calculate the advection speed corresponding to current f
 	    update_speed_vpa!(source, phi, moments, view(ff_scratch,:,:,:,istage), vpa, z,
 			composition, z_spectral)
@@ -64,16 +68,16 @@ function update_speed_vpa!(source, phi, moments, ff, vpa, z, composition, z_spec
     @boundscheck z.n == size(source,1) || throw(BoundsError(source))
 	@boundscheck composition.n_ion_species == size(source,2) || throw(BoundsError(source))
 	@boundscheck vpa.n == size(source[1,1].speed,1) || throw(BoundsError(speed))
-    if advection_speed_option_vpa == "default"
+    if vpa.advection.option == "default"
 		# dvpa/dt = Ze/m ⋅ E_parallel
         update_speed_default!(source, phi, moments, ff, vpa, z, composition, z_spectral)
 		#update_speed_constant!(source, vpa.n, z.n)
-    elseif advection_speed_option_vpa == "constant"
+    elseif vpa.advection.option == "constant"
 		# dvpa/dt = constant
 		for is ∈ 1:composition.n_ion_species
-			update_speed_constant!(view(source,:,is), vpa.n, z.n)
+			update_speed_constant!(view(source,:,is), vpa, z.n)
 		end
-    elseif advection_speed_option_vpa == "linear"
+    elseif vpa.advection.option == "linear"
 		# dvpa/dt = constant ⋅ (vpa + L_vpa/2)
 		for is ∈ 1:composition.n_ion_species
 			update_speed_linear!(view(source,:,is), vpa, z.n)
@@ -133,11 +137,11 @@ function update_speed_default!(source, phi, moments, ff, vpa, z, composition, z_
 	end
 end
 # update the advection speed dvpa/dt = constant
-function update_speed_constant!(source, nvpa, nz)
+function update_speed_constant!(source, vpa, nz)
 	@inbounds @fastmath begin
 		for iz ∈ 1:nz
-			for ivpa ∈ 1:nvpa
-				source[iz].speed[ivpa] = advection_speed
+			for ivpa ∈ 1:vpa.n
+				source[iz].speed[ivpa] = vpa.advection.constant_speed
 			end
 		end
 	end
@@ -147,7 +151,7 @@ function update_speed_linear(source, vpa, nz)
 	@inbounds @fastmath begin
 		for iz ∈ 1:nz
 			for ivpa ∈ 1:vpa.n
-				source[iz].speed[ivpa] = advection_speed*(vpa.grid[ivpa]+0.5*vpa.L)
+				source[iz].speed[ivpa] = vpa.advection.constant_speed*(vpa.grid[ivpa]+0.5*vpa.L)
 			end
 		end
 	end

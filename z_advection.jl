@@ -3,8 +3,6 @@ module z_advection
 export z_advection!
 export update_speed_z!
 
-using moment_kinetics_input: advection_speed, advection_speed_option_z
-using moment_kinetics_input: z_adv_oscillation_amplitude, z_adv_frequency
 using semi_lagrange: find_approximate_characteristic!
 using time_advance: advance_f_local!, rk_update_f!
 using source_terms: update_boundary_indices!
@@ -19,12 +17,17 @@ function z_advection!(ff, ff_scratch, SL, source, z, vpa, n_rk_stages,
     @boundscheck size(ff,2) == vpa.n || throw(BoundsError(ff))
     @boundscheck size(ff_scratch,1) == z.n || throw(BoundsError(ff_scratch))
     @boundscheck size(ff_scratch,2) == vpa.n || throw(BoundsError(ff_scratch))
-    @boundscheck size(ff_scratch,3) == 3 || throw(BoundsError(ff_scratch))
+    @boundscheck size(ff_scratch,3) == n_rk_stages+1 || throw(BoundsError(ff_scratch))
     # SSP RK for explicit time advance
     ff_scratch[:,:,1] .= ff
     # NB: memory usage could be made more efficient here, as ff_scratch[:,:,1]
     # not really needed; just easier to read/write code with it available
     for istage ∈ 1:n_rk_stages
+        # for SSP RK3, need to redefine ff_scratch[3]
+        if istage == 3
+            @. ff_scratch[:,:,istage] = 0.25*(ff_scratch[:,:,istage] +
+                ff_scratch[:,:,istage-1] + 2.0*ff)
+        end
         # get the updated speed along the z direction using the current f
         update_speed_z!(source, vpa, z, t)
         # update the upwind/downwind boundary indices and upwind_increment
@@ -51,7 +54,7 @@ end
 function update_speed_z!(source, vpa, z, t)
     @boundscheck vpa.n == size(source,1) || throw(BoundsError(source))
     @boundscheck z.n == size(source[1].speed,1) || throw(BoundsError(speed))
-    if advection_speed_option_z == "default"
+    if z.advection.option == "default"
         @inbounds begin
             for j ∈ 1:vpa.n
                 for i ∈ 1:z.n
@@ -59,28 +62,28 @@ function update_speed_z!(source, vpa, z, t)
                 end
             end
         end
-    elseif advection_speed_option_z == "constant"
+    elseif z.advection.option == "constant"
         @inbounds begin
             for j ∈ 1:vpa.n
                 for i ∈ 1:z.n
-                    source[j].speed[i] = advection_speed
+                    source[j].speed[i] = z.advection.constant_speed
                 end
             end
         end
-    elseif advection_speed_option_z == "linear"
+    elseif z.advection.option == "linear"
         @inbounds begin
             for j ∈ 1:vpa.n
                 for i ∈ 1:z.n
-                    source[j].speed[i] = advection_speed*(z.grid[i]+0.5*z.L)
+                    source[j].speed[i] = z.advection.constant_speed*(z.grid[i]+0.5*z.L)
                 end
             end
         end
-    elseif advection_speed_option_z == "oscillating"
+    elseif z.advection.option == "oscillating"
         @inbounds begin
             for j ∈ 1:vpa.n
                 for i ∈ 1:z.n
-                    source[j].speed[i] = advection_speed*(1.0
-                        + z_adv_oscillation_amplitude*sinpi(t*z_adv_frequency))
+                    source[j].speed[i] = z.advection.constant_speed*(1.0
+                        + z.advection.oscillation_amplitude*sinpi(t*z.advection.frequency))
                 end
             end
         end

@@ -1,6 +1,7 @@
 module input_structs
 
 export time_input
+export advection_input, advection_input_mutable
 export grid_input, grid_input_mutable
 export initial_condition_input, initial_condition_input_mutable
 export species_parameters, species_parameters_mutable
@@ -14,6 +15,26 @@ struct time_input
     nwrite::mk_int
     use_semi_lagrange::Bool
     n_rk_stages::mk_int
+end
+mutable struct advection_input_mutable
+    # advection speed option
+    option::String
+    # constant advection speed to use with the "constant" advection option
+    constant_speed::mk_float
+    # for option = "oscillating", advection speed is of form
+    # speed = constant_speed*(1 + oscillation_amplitude*sinpi(frequency*t))
+    frequency::mk_float
+    oscillation_amplitude::mk_float
+end
+struct advection_input
+    # advection speed option
+    option::String
+    # constant advection speed to use with the "constant" advection option
+    constant_speed::mk_float
+    # for option = "oscillating", advection speed is of form
+    # speed = constant_speed*(1 + oscillation_amplitude*sinpi(frequency*t))
+    frequency::mk_float
+    oscillation_amplitude::mk_float
 end
 mutable struct grid_input_mutable
     # name of the variable associated with this coordinate
@@ -30,6 +51,8 @@ mutable struct grid_input_mutable
     fd_option::String
     # boundary option
     bc::String
+    # mutable struct containing advection speed options
+    advection::advection_input_mutable
 end
 struct grid_input
     # name of the variable associated with this coordinate
@@ -46,6 +69,8 @@ struct grid_input
     fd_option::String
     # boundary option
     bc::String
+    # struct containing advection speed options
+    advection::advection_input
 end
 mutable struct initial_condition_input_mutable
     # initialization inputs for one coordinate of a separable distribution function

@@ -35,7 +35,7 @@ function moment_kinetics(to)
     # initialize vpa grid and write grid point locations to file
     vpa = define_coordinate(vpa_input)
     # initialize f(z)
-    ff, ff_scratch = init_f(z, vpa, composition, species)
+    ff, ff_scratch = init_f(z, vpa, composition, species, t_input.n_rk_stages)
     # initialize time variable
     code_time = 0.
     # create arrays and do other work needed to setup
