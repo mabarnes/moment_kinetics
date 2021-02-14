@@ -71,7 +71,7 @@ function update_ppar!(ppar, scratch, ff, vpa, nz)
     @boundscheck nz == size(ff, 1) || throw(BoundsError(ff))
     @boundscheck nz == length(ppar) || throw(BoundsError(ppar))
     @inbounds for iz ∈ 1:nz
-        @views @. scratch = ff[iz,:] * vpa.grid^2
+        @views @. scratch = ff[iz,:] * 2.0*vpa.grid^2/3.0
         ppar[iz] = integrate_over_vspace(scratch, vpa.wgts)
     end
     return nothing

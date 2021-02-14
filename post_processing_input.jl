@@ -17,6 +17,8 @@ struct pp_input
     animate_phi_vs_z::Bool
     # if plot_dens0_vs_t = true, create plot of ion_density(z0) vs time
     plot_dens0_vs_t::Bool
+    # if plot_ppar0_vs_t = true, create plot of ion_ppar(z0) vs time
+    plot_ppar0_vs_t::Bool
     # if plot_dens_vs_z_t = true, create plot of ion density vs z and time
     plot_dens_vs_z_t::Bool
     # if animate_dens_vs_z = true, create animation of ion density vs z at different time slices
@@ -60,8 +62,10 @@ const plot_phi_vs_z_t = false
 #const animate_phi_vs_z = true
 const animate_phi_vs_z = false
 # if plot_dens0_vs_t = true, create plot of ion_density(z0) vs time
-#const plot_dens0_vs_t = true
-const plot_dens0_vs_t = false
+const plot_dens0_vs_t = true
+#const plot_dens0_vs_t = false
+# if plot_ppar0_vs_t = true, create plot of ion_ppar(z0) vs time
+const plot_ppar0_vs_t = true
 # if plot_dens_vs_z_t = true, create heatmap of ion density vs z and time
 #const plot_dens_vs_z_t = true
 const plot_dens_vs_z_t = false
@@ -69,29 +73,29 @@ const plot_dens_vs_z_t = false
 #const animate_dens_vs_z = true
 const animate_dens_vs_z = false
 # if animate_f_vs_z_vpa = true, create animation of f(z,vpa) at different time slices
-const animate_f_vs_z_vpa = true
+const animate_f_vs_z_vpa = false
 #const animate_f_vs_z_vpa = false
 # if animate_deltaf_vs_z_vpa = true, create animation of δf(z,vpa) at different time slices
-const animate_deltaf_vs_z_vpa = true
+const animate_deltaf_vs_z_vpa = false
 # if animate_f_vs_z_vpa0 = true, create animation of f(z,vpa0) at different time slices
 #const animate_f_vs_z_vpa0 = true
 const animate_f_vs_z_vpa0 = false
 # if animate_deltaf_vs_z_vpa0 = true, create animation of δf(z,vpa0) at different time slices
 #const animate_deltaf_vs_z_vpa0 = true
-const animate_deltaf_vs_z_vpa0 = true
+const animate_deltaf_vs_z_vpa0 = false
 # if animate_f_vs_z0_vpa = true, create animation of f(z0,vpa) at different time slices
 #const animate_f_vs_z0_vpa = true
 const animate_f_vs_z0_vpa = false
 # if animate_deltaf_vs_z0_vpa = true, create animation of δf(z0,vpa) at different time slices
-#const animate_deltaf_vs_z0_vpa = true
 const animate_deltaf_vs_z0_vpa = true
+#const animate_deltaf_vs_z0_vpa = false
 # animations will use one in every nwrite_movie data slices
 const nwrite_movie = 5
 # itime_min is the minimum time index at which to start animations
 const itime_min = 50
 # itime_max is the final time index at which to end animations
 # if itime_max < 0, the value used will be the total number of time slices
-const itime_max = 200
+const itime_max = -1
 # iz0 is the iz index used when plotting data at a single z location
 # by default, it will be set to cld(nz,2) unless a non-negative value provided here
 const iz0 = -1
@@ -100,7 +104,7 @@ const iz0 = -1
 const ivpa0 = -1
 
 pp = pp_input(calculate_frequencies, plot_phi0_vs_t, plot_phi_vs_z_t,
-    animate_phi_vs_z, plot_dens0_vs_t, plot_dens_vs_z_t, animate_dens_vs_z,
+    animate_phi_vs_z, plot_dens0_vs_t, plot_ppar0_vs_t, plot_dens_vs_z_t, animate_dens_vs_z,
     animate_f_vs_z_vpa, animate_f_vs_z_vpa0, animate_f_vs_z0_vpa,
     animate_deltaf_vs_z_vpa, animate_deltaf_vs_z_vpa0, animate_deltaf_vs_z0_vpa,
     nwrite_movie, itime_min, itime_max, iz0, ivpa0)

@@ -12,15 +12,12 @@ using input_structs: grid_input, grid_input_mutable
 using input_structs: initial_condition_input, initial_condition_input_mutable
 using input_structs: species_parameters, species_parameters_mutable
 using input_structs: species_composition
+using input_structs: drive_input, drive_input_mutable
 
 const performance_test = false
 
 function mk_input()
 
-    # this is the prefix for all output files associated with this run
-    run_name = "CX_4p0_amp0p001_nz200_nvpa400_Lv10_dt0p0005"
-    # this is the directory where the simulation data will be stored
-    output_dir = string("runs/",run_name)
     # n_ion_species is the number of evolved ion species
     # currently only n_ion_species = 1 is supported
     n_ion_species = 1
@@ -32,13 +29,18 @@ function mk_input()
     # currently this is the only supported option
     boltzmann_electron_response = true
 
-    z, vpa, species, composition =
+    z, vpa, species, composition, drive =
         load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_response)
 
+    # this is the prefix for all output files associated with this run
+    run_name = "CX_9p0_Ti0p5"
+    # this is the directory where the simulation data will be stored
+    output_dir = string("runs/",run_name)
+
     # parameters related to the time stepping
-    nstep = 12000
-    dt = 0.00025
-    nwrite = 40
+    nstep = 6000*4
+    dt = 0.0005/sqrt(0.5)/4
+    nwrite = 20*4
     # use_semi_lagrange = true to use interpolation-free semi-Lagrange treatment
     # otherwise, solve problem solely using the discretization_option above
     use_semi_lagrange = false
@@ -48,7 +50,7 @@ function mk_input()
 
     # overwrite some default parameters related to the z grid
     # ngrid is number of grid points per element
-    z.ngrid = 200
+    z.ngrid = 400
     # nelement is the number of elements
     z.nelement = 1
     # determine the discretization option for the z grid
@@ -62,7 +64,7 @@ function mk_input()
     # nelement is the number of elements
     vpa.nelement = 1
     # L is the box length in units of vthermal_species
-    vpa.L = 10.0
+    vpa.L = 10.0*sqrt(0.5)
     # determine the boundary condition
     # only supported option at present is "zero" and "periodic"
     vpa.bc = "periodic"
@@ -78,11 +80,13 @@ function mk_input()
     #species[2].initial_temperature = 1.0
     # set initial nᵢ/Nₑ = 1.0
     species[1].initial_density = 0.5
+    species[1].initial_temperature = 0.5
+    species[1].z_IC.amplitude = 0.0001
     # set initial neutral densiity = Nₑ
     species[2].initial_density = 0.5
-    species[1].z_IC.amplitude = 0.001
-    species[2].z_IC.amplitude = 0.001
-    charge_exchange_frequency = 4.0
+    species[2].initial_temperature = species[1].initial_temperature
+    species[2].z_IC.amplitude = species[1].z_IC.amplitude
+    charge_exchange_frequency = 9.0*sqrt(0.5)
     #################### end specification of species inputs #####################
 
     #########################################################################
@@ -119,6 +123,7 @@ function mk_input()
         species_immutable[is] = species_parameters(species_type, species[is].initial_temperature,
             species[is].initial_density, z_IC, vpa_IC)
     end
+    drive_immutable = drive_input(drive.force_phi, drive.amplitude, drive.frequency)
 
     # check input to catch errors/unsupported options
     check_input(run_name, output_dir, nstep, dt, use_semi_lagrange,
@@ -126,7 +131,7 @@ function mk_input()
 
     # return immutable structs for z, vpa, species and composition
     return run_name, output_dir, t, z_immutable, vpa_immutable, composition,
-        species_immutable, charge_exchange_frequency
+        species_immutable, charge_exchange_frequency, drive_immutable
 end
 
 function load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_response)
@@ -262,7 +267,13 @@ function load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_resp
                 initial_density, z_initial_conditions, vpa_initial_conditions)
         end
     end
-    return z, vpa, species, composition
+    # if drive_phi = true, include external electrostatic potential of form
+    # phi(z,t=0)*drive_amplitude*sinpi(time*drive_frequency)
+    drive_phi = false
+    drive_amplitude = 1.0
+    drive_frequency = 1.0
+    drive = drive_input_mutable(drive_phi, drive_amplitude, drive_frequency)
+    return z, vpa, species, composition, drive
 end
 
 # check various input options to ensure they are all valid/consistent
