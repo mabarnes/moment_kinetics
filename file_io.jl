@@ -30,8 +30,10 @@ struct netcdf_info{t_type, zvpast_type, zt_type, zst_type}
     f::zvpast_type
     # handle for the electrostatic potential variable
     phi::zt_type
-    # handle for the ion density
+    # handle for the species density
     density::zst_type
+    # handle for the species parallel pressure
+    parallel_pressure::zst_type
 end
 # open the necessary output files
 function setup_file_io(output_dir, run_name, z, vpa, composition)
@@ -114,6 +116,11 @@ function setup_netcdf_io(prefix, z, vpa, composition)
     attributes = Dict("description" => "species density",
                       "units" => "Ne")
     cdf_density = defVar(fid, varname, vartype, dims, attrib=attributes)
+    # create the "parallel_pressure" variable, which will contain the species parallel pressures
+    varname = "parallel_pressure"
+    attributes = Dict("description" => "species parallel pressure",
+                      "units" => "Ne*Te")
+    cdf_ppar = defVar(fid, varname, vartype, dims, attrib=attributes)
     # create a struct that stores the variables and other info needed for
     # writing to the netcdf file during run-time
     t_type = typeof(cdf_time)
@@ -121,7 +128,7 @@ function setup_netcdf_io(prefix, z, vpa, composition)
     zt_type = typeof(cdf_phi)
     zst_type = typeof(cdf_density)
     return netcdf_info{t_type, zvpast_type, zt_type, zst_type}(fid, cdf_time, cdf_f,
-        cdf_phi, cdf_density)
+        cdf_phi, cdf_density, cdf_ppar)
 end
 # close all opened output files
 function finish_file_io(io, cdf)
@@ -190,6 +197,7 @@ function write_data_to_binary(ff, moments, fields, t, n_species, cdf, t_idx)
     # add the density data at this time slice to the netcdf file
     for is ∈ 1:n_species
         cdf.density[:,:,t_idx] = moments.dens
+        cdf.parallel_pressure[:,:,t_idx] = moments.ppar
     end
 end
 # accepts an option name which has been identified as problematic and returns

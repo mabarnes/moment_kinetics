@@ -57,7 +57,8 @@ function init_fvpa(vpa, spec)
         if spec.vpa_IC.initialization_option == "gaussian"
             # initial condition is an unshifted Gaussian
             for j ∈ 1:vpa.n
-                vpa.scratch[j] = exp(-(vpa.grid[j]/spec.vpa_IC.width)^2/spec.initial_temperature)
+                vpa.scratch[j] = exp(-(vpa.grid[j]/spec.vpa_IC.width)^2/spec.initial_temperature) /
+                    sqrt(spec.initial_temperature)
             end
         elseif spec.vpa_IC.initialization_option == "sinusoid"
             # initial condition is sinusoid in vpa

@@ -29,7 +29,7 @@ function moment_kinetics(to)
     # obtain input options from moment_kinetics_input.jl
     # and check input to catch errors
     run_name, output_dir, t_input, z_input, vpa_input, composition, species,
-        charge_exchange_frequency = mk_input()
+        charge_exchange_frequency, drive_input = mk_input()
     # initialize z grid and write grid point locations to file
     z = define_coordinate(z_input)
     # initialize vpa grid and write grid point locations to file
@@ -41,7 +41,7 @@ function moment_kinetics(to)
     # create arrays and do other work needed to setup
     # the main time advance loop
     z_spectral, vpa_spectral, moments, fields, z_source, vpa_source,
-        z_SL, vpa_SL = setup_time_advance!(ff, z, vpa, composition)
+        z_SL, vpa_SL = setup_time_advance!(ff, z, vpa, composition, drive_input)
     # setup i/o
     io, cdf = setup_file_io(output_dir, run_name, z, vpa, composition)
     # write initial data to ascii files
@@ -70,7 +70,7 @@ end
 # this includes creating and populating structs
 # for Chebyshev transforms, velocity space moments,
 # EM fields, semi-Lagrange treatment, and source terms
-function setup_time_advance!(ff, z, vpa, composition)
+function setup_time_advance!(ff, z, vpa, composition, drive_input)
     n_species = composition.n_species
     n_ion_species = composition.n_ion_species
     # create structure z_source whose members are the arrays needed to compute
@@ -111,19 +111,20 @@ function setup_time_advance!(ff, z, vpa, composition)
     # the kinetic equation coupled to fluid equations
     # the resulting moments are returned in the structure "moments"
     moments = setup_moments(ff, vpa, z.n)
-
     # pass a subarray of ff (its value at the previous time level)
     # and create the "fields" structure that contains arrays
     # for the electrostatic potential phi and eventually the electromagnetic fields
-    fields = setup_em_fields(z.n)
+    fields = setup_em_fields(z.n, drive_input.force_phi, drive_input.amplitude, drive_input.frequency)
     # initialize the electrostatic potential
-    update_phi!(fields.phi, moments, ff, vpa, z.n, composition)
+    update_phi!(fields, moments, ff, vpa, z.n, composition, 0.0)
+    # save the initial phi(z) for possible use later (e.g., if forcing phi)
+    fields.phi0 .= fields.phi
     # create structure vpa_source whose members are the arrays needed to compute
     # the source(s) appearing in the split part of the GK equation dealing
     # with advection in vpa
     vpa_source = setup_source(vpa, z, n_ion_species)
     # initialise the vpa advection speed
-    update_speed_vpa!(vpa_source, fields.phi, moments, ff, vpa, z, composition, z_spectral)
+    update_speed_vpa!(vpa_source, fields, moments, ff, vpa, z, composition, 0.0, z_spectral)
     for is ∈ 1:n_ion_species
         # initialise the upwind/downwind boundary indices in vpa
         update_boundary_indices!(view(vpa_source,:,is))
@@ -164,8 +165,8 @@ function time_advance!(ff, ff_scratch, t, t_input, z, vpa, z_spectral, vpa_spect
             # vpa_advection! advances the operator-split 1D advection equation in vpa
             # vpa-advection only applies for charged species
             @views vpa_advection!(ff[:,:,1:n_ion_species], ff_scratch[:,:,1:n_ion_species,:],
-                fields.phi, moments, vpa_SL, vpa_source, vpa, z, n_rk_stages,
-                use_semi_lagrange, dt, vpa_spectral, z_spectral, composition)
+                fields, moments, vpa_SL, vpa_source, vpa, z, n_rk_stages,
+                use_semi_lagrange, dt, t, vpa_spectral, z_spectral, composition)
             # z_advection! advances the operator-split 1D advection equation in z
             # apply z-advection operation to all species (charged and neutral)
             for is ∈ 1:n_species
@@ -201,8 +202,8 @@ function time_advance!(ff, ff_scratch, t, t_input, z, vpa, z_spectral, vpa_spect
             # vpa_advection! advances the operator-split 1D advection equation in vpa
             # vpa-advection only applies for charged species
             @views vpa_advection!(ff[:,:,1:n_ion_species], ff_scratch[:,:,1:n_ion_species,:],
-                fields.phi, moments, vpa_SL, vpa_source, vpa, z, n_rk_stages,
-                use_semi_lagrange, dt, vpa_spectral, z_spectral, composition)
+                fields, moments, vpa_SL, vpa_source, vpa, z, n_rk_stages,
+                use_semi_lagrange, dt, t, vpa_spectral, z_spectral, composition)
             # fliplop enables reversal of the order of operators, which
             # is necessary for achieving 2nd order accuracy in time
             flipflop = true

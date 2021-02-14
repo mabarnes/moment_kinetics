@@ -109,9 +109,32 @@ function analyze_and_plot_data()
         # assume phi(z0,t) = A*exp(growth_rate*t)*cos(omega*t - φ)
         # and fit phi(z0,t)/phi(z0,t0), which eliminates the constant A pre-factor
         @views growth_rate, frequency, phase =
-            fit_phi0_vs_time(delta_phi[iz0,itime_min:itime_max], shifted_time[itime_min:itime_max])
+            compute_frequencies(shifted_time[itime_min:itime_max], delta_phi[iz0,itime_min:itime_max])
+        # estimate variation of frequency/growth rate over time_window by computing
+        # values for each half of the time window and taking max/min
+        i1 = itime_min ; i2 = itime_min + cld(itime_max-itime_min,2)
+        println("t1: ", time[i1], "  t2: ", time[i2])
+        @views growth_rate_1, frequency_1, phase_1 =
+            compute_frequencies(shifted_time[i1:i2], delta_phi[iz0,i1:i2])
+        i1 = i2+1 ; i2 = itime_max
+        println("t1: ", time[i1], "  t2: ", time[i2])
+        @views growth_rate_2, frequency_2, phase_2 =
+            compute_frequencies(shifted_time[i1:i2], delta_phi[iz0,i1:i2])
+        growth_rate_max = max(growth_rate_1, growth_rate_2, growth_rate)
+        growth_rate_min = min(growth_rate_1, growth_rate_2, growth_rate)
+        frequency_max = max(frequency_1, frequency_2, frequency)
+        frequency_min = min(frequency_1, frequency_2, frequency)
+        # write info related to fit to file
         io = open_output_file(run_name, "frequency_fit.txt")
-        println(io, "growth_rate: ", growth_rate, "  frequency: ", frequency, "  phase: ", phase)
+        println(io, "#growth_rate: ", growth_rate, "  min: ", growth_rate_min, "  max: ", growth_rate_max,
+            "  frequency: ", frequency, "  min: ", frequency_min, "  max: ", frequency_max,
+            "  phase: ", phase)
+        println(io)
+        for i ∈ 1:ntime
+            println(io, "time: ", time[i], "  delta_phi: ", delta_phi[iz0,i],
+                "  fit_phi: ", delta_phi[iz0,itime_min]/cos(phase) * exp(growth_rate*shifted_time[i])
+                    * cos(frequency*shifted_time[i] + phase))
+        end
         close(io)
         println("done.")
     end
@@ -151,10 +174,14 @@ function analyze_and_plot_data()
     println("done.")
 
     print("Loading velocity moments data...")
-    # define a handle for the ion density
+    # define a handle for the species density
     cdfvar = fid["density"]
     # load the species density data
     density = cdfvar.var[:,:,:]
+    # define a handle for the species parallel pressure
+    cdfvar = fid["parallel_pressure"]
+    # load the species density data
+    parallel_pressure = cdfvar.var[:,:,:]
     # define the number of species
     n_species = size(cdfvar,2)
     println("done.")
@@ -166,11 +193,24 @@ function analyze_and_plot_data()
             density_fldline_avg[is,i] = field_line_average(view(density,:,is,i), z_wgts, Lz)
         end
     end
+    ppar_fldline_avg = allocate_float(n_species, ntime)
+    for is ∈ 1:n_species
+        for i ∈ 1:ntime
+            ppar_fldline_avg[is,i] = field_line_average(view(parallel_pressure,:,is,i), z_wgts, Lz)
+        end
+    end
     # delta_density = n_s - <n_s> is the fluctuating density
     delta_density = allocate_float(nz,n_species,ntime)
     for is ∈ 1:n_species
         for iz ∈ 1:nz
             @. delta_density[iz,is,:] = density[iz,is,:] - density_fldline_avg[is,:]
+        end
+    end
+    # delta_ppar = ppar_s - <ppar_s> is the fluctuating parallel pressure
+    delta_ppar = allocate_float(nz,n_species,ntime)
+    for is ∈ 1:n_species
+        for iz ∈ 1:nz
+            @. delta_ppar[iz,is,:] = parallel_pressure[iz,is,:] - ppar_fldline_avg[is,:]
         end
     end
     println("done.")
@@ -179,6 +219,8 @@ function analyze_and_plot_data()
     for is ∈ 1:n_species
         dens_min = minimum(density[:,is,:])
         dens_max = maximum(density[:,is,:])
+        ppar_min = minimum(parallel_pressure[:,is,:])
+        ppar_max = maximum(parallel_pressure[:,is,:])
         spec_string = string(is)
         if pp.plot_dens0_vs_t
             # plot the time trace of n_s(z=z0)
@@ -192,6 +234,20 @@ function analyze_and_plot_data()
             # plot the time trace of density_fldline_avg
             @views plot(time, density_fldline_avg[is,:], xlabel="time", ylabel="<ns/Nₑ>", ylims=(dens_min,dens_max))
             outfile = string(run_name, "_fldline_avg_dens_vs_t_spec", spec_string, ".pdf")
+            savefig(outfile)
+        end
+        if pp.plot_ppar0_vs_t
+            # plot the time trace of n_s(z=z0)
+            @views plot(time, parallel_pressure[iz0,is,:])
+            outfile = string(run_name, "_ppar0_vs_t_spec", spec_string, ".pdf")
+            savefig(outfile)
+            # plot the time trace of n_s(z=z0)-density_fldline_avg
+            @views plot(time, abs.(delta_ppar[iz0,is,:]), yaxis=:log)
+            outfile = string(run_name, "_delta_ppar0_vs_t_spec", spec_string, ".pdf")
+            savefig(outfile)
+            # plot the time trace of ppar_fldline_avg
+            @views plot(time, ppar_fldline_avg[is,:], xlabel="time", ylabel="<ppars/NₑTₑ>", ylims=(ppar_min,ppar_max))
+            outfile = string(run_name, "_fldline_avg_ppar_vs_t_spec", spec_string, ".pdf")
             savefig(outfile)
         end
         if pp.plot_dens_vs_z_t
@@ -314,6 +370,20 @@ function field_line_average(fld, wgts, L)
     return total/L
 end
 
+function compute_frequencies(time_window, dphi)
+    growth_rate = 0.0 ; frequency = 0.0 ; phase = 0.0
+    for iter ∈ 1:10
+        @views growth_rate_change, frequency, phase =
+            fit_phi0_vs_time(exp.(-growth_rate*time_window) .* dphi, time_window)
+        growth_rate += growth_rate_change
+        println("growth_rate: ", growth_rate, "  growth_rate_change/growth_rate: ", growth_rate_change/growth_rate)
+        if abs(growth_rate_change/growth_rate) < 0.001
+            break
+        end
+    end
+    return growth_rate, frequency, phase
+end
+
 function fit_phi0_vs_time(phi0, tmod)
     # the model we are fitting to the data is given by the function 'model':
     # assume phi(z0,t) = exp(γt)cos(ωt-φ) so that
@@ -322,10 +392,14 @@ function fit_phi0_vs_time(phi0, tmod)
     @. model(t, p) = exp(p[1]*t) * cos(p[2]*t + p[3]) / cos(p[3])
     model_params = allocate_float(3)
     model_params[1] = -0.1
-    model_params[2] = 1.0
+    model_params[2] = 8.6
     model_params[3] = 0.0
     @views fit = curve_fit(model, tmod, phi0/phi0[1], model_params)
-    return fit.param[1], fit.param[2], fit.param[3]
+    # get the confidence interval at 10% level for each fit parameter
+    #se = standard_error(fit)
+    #standard_deviation = Array{Float64,1}
+    #@. standard_deviation = se * sqrt(size(tmod))
+    return fit.param[1], fit.param[2], fit.param[3]#, standard_deviation
 end
 
 analyze_and_plot_data()

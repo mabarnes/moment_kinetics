@@ -14,8 +14,8 @@ using finite_differences: derivative_finite_difference!
 using initial_conditions: enforce_vpa_boundary_condition!
 
 # argument chebyshev indicates that a chebyshev pseudopectral method is being used
-function vpa_advection!(ff, ff_scratch, phi, moments, SL, source, vpa, z,
-	n_rk_stages, use_semi_lagrange, dt, vpa_spectral, z_spectral, composition)
+function vpa_advection!(ff, ff_scratch, fields, moments, SL, source, vpa, z,
+	n_rk_stages, use_semi_lagrange, dt, t, vpa_spectral, z_spectral, composition)
     # check to ensure that all array indices accessed in this function
     # are in-bounds
     @boundscheck size(ff,1) == z.n || throw(BoundsError(ff))
@@ -34,8 +34,8 @@ function vpa_advection!(ff, ff_scratch, phi, moments, SL, source, vpa, z,
                 ff_scratch[:,:,:,istage-1] + 2.0*ff)
         end
 		# calculate the advection speed corresponding to current f
-	    update_speed_vpa!(source, phi, moments, view(ff_scratch,:,:,:,istage), vpa, z,
-			composition, z_spectral)
+	    update_speed_vpa!(source, fields, moments, view(ff_scratch,:,:,:,istage), vpa, z,
+			composition, t, z_spectral)
 		for is ∈ 1:composition.n_ion_species
 			# update the upwind/downwind boundary indices and upwind_increment
 			# NB: not sure if this will work properly with SL method at the moment
@@ -64,13 +64,13 @@ function vpa_advection!(ff, ff_scratch, phi, moments, SL, source, vpa, z,
     end
 end
 # calculate the advection speed in the z-direction at each grid point
-function update_speed_vpa!(source, phi, moments, ff, vpa, z, composition, z_spectral)
+function update_speed_vpa!(source, fields, moments, ff, vpa, z, composition, t, z_spectral)
     @boundscheck z.n == size(source,1) || throw(BoundsError(source))
 	@boundscheck composition.n_ion_species == size(source,2) || throw(BoundsError(source))
 	@boundscheck vpa.n == size(source[1,1].speed,1) || throw(BoundsError(speed))
     if vpa.advection.option == "default"
 		# dvpa/dt = Ze/m ⋅ E_parallel
-        update_speed_default!(source, phi, moments, ff, vpa, z, composition, z_spectral)
+        update_speed_default!(source, fields, moments, ff, vpa, z, composition, t, z_spectral)
 		#update_speed_constant!(source, vpa.n, z.n)
     elseif vpa.advection.option == "constant"
 		# dvpa/dt = constant
@@ -94,10 +94,12 @@ function update_speed_vpa!(source, phi, moments, ff, vpa, z, composition, z_spec
 end
 # update the advection speed dvpa/dt = Ze/m E_parallel
 # if z_spectral argument has type chebyshev_info, then use Chebyshev spectral treatment
-function update_speed_default!(source, phi, moments, ff, vpa, z, composition, z_spectral::chebyshev_info)
-	update_phi!(phi, moments, ff, vpa, z.n, composition)
+function update_speed_default!(source, fields, moments, ff, vpa, z, composition,
+	t, z_spectral::chebyshev_info)
+	# calculate the updated electrostatic potnetial phi
+	update_phi!(fields, moments, ff, vpa, z.n, composition, t)
 	# dphi/dz is calculated and stored in z.scratch
-	chebyshev_derivative!(z.scratch2d, phi, z_spectral, z)
+	chebyshev_derivative!(z.scratch2d, fields.phi, z_spectral, z)
 #	# get the Chebyshev coefficients for phi and store in z_spectral.f
 #	update_fcheby!(z_spectral, phi, z)
 #	# dphi/dz is calculated and stored in z.scratch
@@ -118,12 +120,13 @@ function update_speed_default!(source, phi, moments, ff, vpa, z, composition, z_
 end
 # 'z_not_spectral' is a dummy input whose type indicates whether a spectral
 # or finite diifference discretization is used for z
-function update_speed_default!(source, phi, moments, ff, vpa, z, composition, z_not_spectral::Bool)
+function update_speed_default!(source, fields, moments, ff, vpa, z, composition,
+	t, z_not_spectral::Bool)
 	# update the electrostatic potential phi
-	update_phi!(phi, moments, ff, vpa, z.n, composition)
+	update_phi!(fields, moments, ff, vpa, z.n, composition, t)
 	# calculate the derivative of phi with respect to z
 	# and store in z.scratch
-	derivative_finite_difference!(z.scratch, phi, z.cell_width, z.bc,
+	derivative_finite_difference!(z.scratch, fields.phi, z.cell_width, z.bc,
 		"second_order_centered", z.igrid, z.ielement)
 	# advection velocity in vpa is -dphi/dz = -z.scratch
 	@inbounds @fastmath begin
