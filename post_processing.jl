@@ -178,6 +178,10 @@ function analyze_and_plot_data()
     cdfvar = fid["density"]
     # load the species density data
     density = cdfvar.var[:,:,:]
+    # define a handle for the species parallel flow
+    cdfvar = fid["parallel_flow"]
+    # load the species density data
+    parallel_flow = cdfvar.var[:,:,:]
     # define a handle for the species parallel pressure
     cdfvar = fid["parallel_pressure"]
     # load the species density data
@@ -193,6 +197,12 @@ function analyze_and_plot_data()
             density_fldline_avg[is,i] = field_line_average(view(density,:,is,i), z_wgts, Lz)
         end
     end
+    upar_fldline_avg = allocate_float(n_species, ntime)
+    for is ∈ 1:n_species
+        for i ∈ 1:ntime
+            upar_fldline_avg[is,i] = field_line_average(view(parallel_flow,:,is,i), z_wgts, Lz)
+        end
+    end
     ppar_fldline_avg = allocate_float(n_species, ntime)
     for is ∈ 1:n_species
         for i ∈ 1:ntime
@@ -206,6 +216,13 @@ function analyze_and_plot_data()
             @. delta_density[iz,is,:] = density[iz,is,:] - density_fldline_avg[is,:]
         end
     end
+    # delta_upar = upar_s - <upar_s> is the fluctuating parallel flow
+    delta_upar = allocate_float(nz,n_species,ntime)
+    for is ∈ 1:n_species
+        for iz ∈ 1:nz
+            @. delta_upar[iz,is,:] = parallel_flow[iz,is,:] - upar_fldline_avg[is,:]
+        end
+    end
     # delta_ppar = ppar_s - <ppar_s> is the fluctuating parallel pressure
     delta_ppar = allocate_float(nz,n_species,ntime)
     for is ∈ 1:n_species
@@ -217,11 +234,9 @@ function analyze_and_plot_data()
 
     println("Plotting velocity moments data...")
     for is ∈ 1:n_species
+        spec_string = string(is)
         dens_min = minimum(density[:,is,:])
         dens_max = maximum(density[:,is,:])
-        ppar_min = minimum(parallel_pressure[:,is,:])
-        ppar_max = maximum(parallel_pressure[:,is,:])
-        spec_string = string(is)
         if pp.plot_dens0_vs_t
             # plot the time trace of n_s(z=z0)
             @views plot(time, density[iz0,is,:])
@@ -236,6 +251,24 @@ function analyze_and_plot_data()
             outfile = string(run_name, "_fldline_avg_dens_vs_t_spec", spec_string, ".pdf")
             savefig(outfile)
         end
+        upar_min = minimum(parallel_flow[:,is,:])
+        upar_max = maximum(parallel_flow[:,is,:])
+        if pp.plot_upar0_vs_t
+            # plot the time trace of n_s(z=z0)
+            @views plot(time, parallel_flow[iz0,is,:])
+            outfile = string(run_name, "_upar0_vs_t_spec", spec_string, ".pdf")
+            savefig(outfile)
+            # plot the time trace of n_s(z=z0)-density_fldline_avg
+            @views plot(time, abs.(delta_upar[iz0,is,:]), yaxis=:log)
+            outfile = string(run_name, "_delta_upar0_vs_t_spec", spec_string, ".pdf")
+            savefig(outfile)
+            # plot the time trace of ppar_fldline_avg
+            @views plot(time, upar_fldline_avg[is,:], xlabel="time", ylabel="<upars/sqrt(2Te/ms)>", ylims=(upar_min,upar_max))
+            outfile = string(run_name, "_fldline_avg_upar_vs_t_spec", spec_string, ".pdf")
+            savefig(outfile)
+        end
+        ppar_min = minimum(parallel_pressure[:,is,:])
+        ppar_max = maximum(parallel_pressure[:,is,:])
         if pp.plot_ppar0_vs_t
             # plot the time trace of n_s(z=z0)
             @views plot(time, parallel_pressure[iz0,is,:])
