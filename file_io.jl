@@ -32,6 +32,8 @@ struct netcdf_info{t_type, zvpast_type, zt_type, zst_type}
     phi::zt_type
     # handle for the species density
     density::zst_type
+    # handle for the species parallel flow
+    parallel_flow::zst_type
     # handle for the species parallel pressure
     parallel_pressure::zst_type
 end
@@ -116,6 +118,11 @@ function setup_netcdf_io(prefix, z, vpa, composition)
     attributes = Dict("description" => "species density",
                       "units" => "Ne")
     cdf_density = defVar(fid, varname, vartype, dims, attrib=attributes)
+    # create the "parallel_flow" variable, which will contain the species parallel flows
+    varname = "parallel_flow"
+    attributes = Dict("description" => "species parallel flow",
+                      "units" => "sqrt(2*Te/ms)")
+    cdf_upar = defVar(fid, varname, vartype, dims, attrib=attributes)
     # create the "parallel_pressure" variable, which will contain the species parallel pressures
     varname = "parallel_pressure"
     attributes = Dict("description" => "species parallel pressure",
@@ -128,7 +135,7 @@ function setup_netcdf_io(prefix, z, vpa, composition)
     zt_type = typeof(cdf_phi)
     zst_type = typeof(cdf_density)
     return netcdf_info{t_type, zvpast_type, zt_type, zst_type}(fid, cdf_time, cdf_f,
-        cdf_phi, cdf_density, cdf_ppar)
+        cdf_phi, cdf_density, cdf_upar, cdf_ppar)
 end
 # close all opened output files
 function finish_file_io(io, cdf)
@@ -168,8 +175,9 @@ function write_moments_ascii(mom, z, t, n_species, io)
     @inbounds begin
         for is ∈ 1:n_species
             for i ∈ 1:z.n
-                println(io,"t: ", t, "   species: ", is, ",   z: ", z.grid[i], "  dens: ", mom.dens[i,is],
-                    ",   ppar: ", mom.ppar[i,is])
+                println(io,"t: ", t, "   species: ", is, "   z: ", z.grid[i],
+                    "  dens: ", mom.dens[i,is], "   upar: ", mom.upar[i,is],
+                    "   ppar: ", mom.ppar[i,is])
             end
         end
     end
@@ -197,6 +205,7 @@ function write_data_to_binary(ff, moments, fields, t, n_species, cdf, t_idx)
     # add the density data at this time slice to the netcdf file
     for is ∈ 1:n_species
         cdf.density[:,:,t_idx] = moments.dens
+        cdf.parallel_flow[:,:,t_idx] = moments.upar
         cdf.parallel_pressure[:,:,t_idx] = moments.ppar
     end
 end

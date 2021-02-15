@@ -12,6 +12,10 @@ mutable struct moments
     dens::Array{mk_float,2}
     # flag that keeps track of if the density needs updating before use
     dens_updated::Array{Bool,1}
+    # this is the parallel flow
+    upar::Array{mk_float,2}
+    # flag that keeps track of whether or not upar needs updating before use
+    upar_updated::Array{Bool,1}
     # this is the parallel pressure
     ppar::Array{mk_float,2}
     # flag that keeps track of whether or not ppar needs updating before use
@@ -26,6 +30,10 @@ function setup_moments(ff, vpa, nz)
     density = allocate_float(nz, n_species)
     # allocate array of Bools that indicate if the density is updated for each species
     density_updated = allocate_bool(n_species)
+    # allocate array used for the parallel flow
+    parallel_flow = allocate_float(nz, n_species)
+    # allocate array of Bools that indicate if the parallel flow is updated for each species
+    parallel_flow_updated = allocate_bool(n_species)
     # allocate array used for the parallel pressure
     parallel_pressure = allocate_float(nz, n_species)
     # allocate array of Bools that indicate if the parallel pressure is updated for each species
@@ -34,11 +42,14 @@ function setup_moments(ff, vpa, nz)
     for is ∈ 1:n_species
         @views update_density!(density[:,is], vpa.scratch, ff[:,:,is], vpa, nz)
         density_updated[is] = true
+        @views update_upar!(parallel_flow[:,is], vpa.scratch, ff[:,:,is], vpa, nz)
+        parallel_flow_updated[is] = true
         @views update_ppar!(parallel_pressure[:,is], vpa.scratch, ff[:,:,is], vpa, nz)
         parallel_pressure_updated[is] = true
     end
     # return struct containing arrays needed to update moments
-    return moments(density, density_updated, parallel_pressure, parallel_pressure_updated)
+    return moments(density, density_updated, parallel_flow, parallel_flow_updated,
+        parallel_pressure, parallel_pressure_updated)
 end
 # calculate the updated density (dens) and parallel pressure (ppar) for all species
 function update_moments!(moments, ff, vpa, nz)
@@ -48,6 +59,10 @@ function update_moments!(moments, ff, vpa, nz)
         if moments.dens_updated[is] == false
             @views update_density!(moments.dens[:,is], vpa.scratch, ff[:,:,is], vpa, nz)
             moments.dens_updated[is] = true
+        end
+        if moments.upar_updated[is] == false
+            @views update_upar!(moments.upar[:,is], vpa.scratch, ff[:,:,is], vpa, nz)
+            moments.upar_updated[is] = true
         end
         if moments.ppar_updated[is] == false
             @views update_ppar!(moments.ppar[:,is], vpa.scratch, ff[:,:,is], vpa, nz)
@@ -63,6 +78,16 @@ function update_density!(dens, scratch, ff, vpa, nz)
     @inbounds for iz ∈ 1:nz
         @views @. scratch = ff[iz,:]
         dens[iz] = integrate_over_vspace(scratch, vpa.wgts)
+    end
+    return nothing
+end
+# calculate the updated parallel flow (upar)
+function update_upar!(upar, scratch, ff, vpa, nz)
+    @boundscheck nz == size(ff, 1) || throw(BoundsError(ff))
+    @boundscheck nz == length(upar) || throw(BoundsError(upar))
+    @inbounds for iz ∈ 1:nz
+        @views @. scratch = ff[iz,:] * vpa.grid
+        upar[iz] = integrate_over_vspace(scratch, vpa.wgts)
     end
     return nothing
 end

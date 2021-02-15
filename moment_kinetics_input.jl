@@ -33,14 +33,14 @@ function mk_input()
         load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_response)
 
     # this is the prefix for all output files associated with this run
-    run_name = "CX_9p0_Ti0p5"
+    run_name = "debug"
     # this is the directory where the simulation data will be stored
     output_dir = string("runs/",run_name)
 
     # parameters related to the time stepping
-    nstep = 6000*4
-    dt = 0.0005/sqrt(0.5)/4
-    nwrite = 20*4
+    nstep = 6000
+    dt = 0.0005/sqrt(0.5)
+    nwrite = 20
     # use_semi_lagrange = true to use interpolation-free semi-Lagrange treatment
     # otherwise, solve problem solely using the discretization_option above
     use_semi_lagrange = false
@@ -50,7 +50,7 @@ function mk_input()
 
     # overwrite some default parameters related to the z grid
     # ngrid is number of grid points per element
-    z.ngrid = 400
+    z.ngrid = 200
     # nelement is the number of elements
     z.nelement = 1
     # determine the discretization option for the z grid
@@ -60,7 +60,7 @@ function mk_input()
 
     # overwrite some default parameters related to the vpa grid
     # ngrid is the number of grid points per element
-    vpa.ngrid = 400
+    vpa.ngrid = 200
     # nelement is the number of elements
     vpa.nelement = 1
     # L is the box length in units of vthermal_species
@@ -81,7 +81,7 @@ function mk_input()
     # set initial nᵢ/Nₑ = 1.0
     species[1].initial_density = 0.5
     species[1].initial_temperature = 0.5
-    species[1].z_IC.amplitude = 0.0001
+    species[1].z_IC.amplitude = 0.001
     # set initial neutral densiity = Nₑ
     species[2].initial_density = 0.5
     species[2].initial_temperature = species[1].initial_temperature
