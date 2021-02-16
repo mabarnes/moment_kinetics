@@ -14,6 +14,18 @@ function derivative_finite_difference!(df, f, del, adv_fac, bc, fd_option, igrid
 	elseif fd_option == "first_order_upwind"
 		upwind_first_order!(df, f, del, adv_fac, bc, igrid, ielement)
 	end
+	# have not filled df array values for the first grid point in each element
+	# after the first, as these are repeated points that overlap with the neighbouring element
+	# fill them in now in case they are accessed elsewhere
+	nelement = size(df,2)
+	ngrid = size(df,1)
+	@inbounds begin
+		if nelement > 1
+			for ielem ∈ 2:nelement
+				df[1,ielem] = df[ngrid,ielem-1]
+			end
+		end
+	end
 	return nothing
 end
 function derivative_finite_difference!(df, f, del, bc, fd_option, igrid, ielement)
