@@ -26,11 +26,11 @@ to1 = TimerOutput()
 to2 = TimerOutput()
 
 # main function that contains all of the content of the program
-function moment_kinetics(to)
+function moment_kinetics(to, input)
     # obtain input options from moment_kinetics_input.jl
     # and check input to catch errors
     run_name, output_dir, t_input, z_input, vpa_input, composition, species,
-        charge_exchange_frequency, drive_input = mk_input()
+        charge_exchange_frequency, drive_input = input
     # initialize z grid and write grid point locations to file
     z = define_coordinate(z_input)
     # initialize vpa grid and write grid point locations to file
@@ -279,12 +279,14 @@ function time_advance_no_splitting!(ff, ff_scratch, t, t_input, z, vpa,
     end
 end
 if performance_test
-    @timeit to1 "first call to moment_kinetics" moment_kinetics(to1)
+    input = mk_input()
+    @timeit to1 "first call to moment_kinetics" moment_kinetics(to1, input)
     show(to1)
     println()
-    @timeit to2 "second call to moment_kinetics" moment_kinetics(to2)
+    @timeit to2 "second call to moment_kinetics" moment_kinetics(to2, input)
     show(to2)
     println()
 else
-    moment_kinetics(to1)
+    input = mk_input()
+    moment_kinetics(to1, input)
 end
