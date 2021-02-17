@@ -9,10 +9,13 @@ mkpath("tmpdir")
 # activate a new environment for the temporary project directory
 Pkg.activate("tmpdir")
 # add the packages we wish to pre-compile
+Pkg.add("PackageCompiler")
+Pkg.add("TimerOutputs")
 Pkg.add("NCDatasets")
+Pkg.add("FFTW")
 Pkg.add("Plots")
 Pkg.add("LsqFit")
-packages = [:NCDatasets, :Plots, :LsqFit]
+packages = [:PackageCompiler, :TimerOutputs, :NCDatasets, :FFTW, :Plots, :LsqFit]
 # create the sysimage 'moment_kinetics.so' in the base moment_kinetics source directory
 # with the above pre-compiled packages
 create_sysimage(packages; sysimage_path="moment_kinetics.so")
