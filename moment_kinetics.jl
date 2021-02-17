@@ -18,7 +18,9 @@ using initial_conditions: init_f
 using initial_conditions: enforce_z_boundary_condition!
 using initial_conditions: enforce_vpa_boundary_condition!
 using moment_kinetics_input: mk_input
-using moment_kinetics_input: performance_test
+using moment_kinetics_input: run_type
+using moment_kinetics_input: RunType, single, performance_test, scan
+using scan_input: mk_scan_inputs
 using charge_exchange: charge_exchange_collisions!, charge_exchange_single_stage!
 using time_advance: rk_update_f!
 
@@ -51,7 +53,7 @@ function moment_kinetics(to, input)
     update_moments!(moments, ff, vpa, z.n)
     write_data_to_binary(ff, moments, fields, code_time, composition.n_species, cdf, 1)
     # solve the 1+1D kinetic equation to advance f in time by nstep time steps
-    if performance_test
+    if run_type == performance_test
         @timeit to "time_advance" time_advance!(ff, ff_scratch, code_time, t_input,
             z, vpa, z_spectral, vpa_spectral, moments, fields,
             z_source, vpa_source, z_SL, vpa_SL, composition, charge_exchange_frequency,
@@ -278,7 +280,10 @@ function time_advance_no_splitting!(ff, ff_scratch, t, t_input, z, vpa,
 		@views rk_update_f!(ff[:,:,is], ff_scratch[:,:,is,:], z.n, vpa.n, n_rk_stages)
     end
 end
-if performance_test
+if run_type == single
+    input = mk_input()
+    moment_kinetics(to1, input)
+elseif run_type == performance_test
     input = mk_input()
     @timeit to1 "first call to moment_kinetics" moment_kinetics(to1, input)
     show(to1)
@@ -286,7 +291,14 @@ if performance_test
     @timeit to2 "second call to moment_kinetics" moment_kinetics(to2, input)
     show(to2)
     println()
+elseif run_type == scan
+    scan_inputs = mk_scan_inputs()
+
+    for s ∈ scan_inputs
+        println("running parameters: ", s)
+        this_input = mk_input(s)
+        moment_kinetics(to1, this_input)
+    end
 else
-    input = mk_input()
-    moment_kinetics(to1, input)
+    error(run_type, " is not a valid run_type option")
 end
