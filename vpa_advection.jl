@@ -34,7 +34,7 @@ function vpa_advection!(ff, ff_scratch, fields, moments, SL, source, vpa, z,
             @. ff_scratch[:,:,:,istage] = 0.25*(ff_scratch[:,:,:,istage] +
                 ff_scratch[:,:,:,istage-1] + 2.0*ff)
         end
-		@views vpa_advection_single_stage!(ff, ff_scratch[:,:,:,istage:istage+1], fields,
+		@views vpa_advection_single_stage!(ff_scratch[:,:,:,istage:istage+1], ff, fields,
 			moments, SL, source, vpa, z, use_semi_lagrange, dt, t, vpa_spectral,
 			z_spectral, composition, istage)
 		reset_moments_status!(moments)
@@ -43,7 +43,7 @@ function vpa_advection!(ff, ff_scratch, fields, moments, SL, source, vpa, z,
 		@views rk_update_f!(ff[:,:,is], ff_scratch[:,:,is,:], z.n, vpa.n, n_rk_stages)
     end
 end
-function vpa_advection_single_stage!(ff, ff_scratch, fields, moments, SL, source, vpa, z,
+function vpa_advection_single_stage!(ff_scratch, ff, fields, moments, SL, source, vpa, z,
 	use_semi_lagrange, dt, t, vpa_spectral, z_spectral, composition, istage)
 	# calculate the advection speed corresponding to current f
 	update_speed_vpa!(source, fields, moments, view(ff_scratch,:,:,:,1), vpa, z,

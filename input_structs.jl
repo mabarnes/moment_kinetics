@@ -16,6 +16,7 @@ struct time_input
     nwrite::mk_int
     use_semi_lagrange::Bool
     n_rk_stages::mk_int
+    split_operators::Bool
 end
 mutable struct advection_input_mutable
     # advection speed option

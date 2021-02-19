@@ -10,8 +10,8 @@ using chebyshev: chebyshev_derivative!
 using coordinates: define_coordinate
 using source_terms: setup_source, update_boundary_indices!
 using semi_lagrange: setup_semi_lagrange
-using vpa_advection: vpa_advection!, update_speed_vpa!
-using z_advection: z_advection!, update_speed_z!
+using vpa_advection: vpa_advection!, vpa_advection_single_stage!, update_speed_vpa!
+using z_advection: z_advection!, z_advection_single_stage!, update_speed_z!
 using velocity_moments: setup_moments, update_moments!, reset_moments_status!
 using em_fields: setup_em_fields, update_phi!
 using initial_conditions: init_f
@@ -19,7 +19,8 @@ using initial_conditions: enforce_z_boundary_condition!
 using initial_conditions: enforce_vpa_boundary_condition!
 using moment_kinetics_input: mk_input
 using moment_kinetics_input: performance_test
-using charge_exchange: charge_exchange_collisions!
+using charge_exchange: charge_exchange_collisions!, charge_exchange_single_stage!
+using time_advance: rk_update_f!
 
 to1 = TimerOutput()
 to2 = TimerOutput()
@@ -151,13 +152,15 @@ function time_advance!(ff, ff_scratch, t, t_input, z, vpa, z_spectral, vpa_spect
     # main time advance loop
     iwrite = 2
     for i ∈ 1:t_input.nstep
-        #if operator_splitting
+        if t_input.split_operators
             time_advance_split_operators!(ff, ff_scratch, t, t_input, z, vpa,
                 z_spectral, vpa_spectral, moments, fields, z_source, vpa_source,
                 z_SL, vpa_SL, composition, charge_exchange_frequency, i)
-        #else
-        #    time_advance_no_splitting!()
-        #end
+        else
+            time_advance_no_splitting!(ff, ff_scratch, t, t_input, z, vpa,
+                z_spectral, vpa_spectral, moments, fields, z_source, vpa_source,
+                z_SL, vpa_SL, composition, charge_exchange_frequency, i)
+        end
         # update the time
         t += t_input.dt
         # write data to file every nwrite time steps
@@ -229,8 +232,7 @@ function time_advance_split_operators!(ff, ff_scratch, t, t_input, z, vpa,
     end
     return nothing
 end
-#=
-function time_advance_no_splitting(ff, ff_scratch, t, t_input, z, vpa,
+function time_advance_no_splitting!(ff, ff_scratch, t, t_input, z, vpa,
     z_spectral, vpa_spectral, moments, fields, z_source, vpa_source,
     z_SL, vpa_SL, composition, charge_exchange_frequency, istep)
 
@@ -252,20 +254,20 @@ function time_advance_no_splitting(ff, ff_scratch, t, t_input, z, vpa,
         end
         # vpa_advection_single_stage! advances the 1D advection equation in vpa
         # only charged species have a force accelerating them in vpa
-        @views vpa_advection_single_stage!(ff[:,:,1:n_ion_species],
-            ff_scratch[:,:,1:n_ion_species,istage:istage+1], fields,
+        @views vpa_advection_single_stage!(ff_scratch[:,:,1:n_ion_species,istage:istage+1],
+            ff[:,:,1:n_ion_species], fields,
             moments, vpa_SL, vpa_source, vpa, z, use_semi_lagrange, dt, t,
             vpa_spectral, z_spectral, composition, istage)
         # z_advection_single_stage! advances 1D advection equation in z
         # apply z-advection operation to all species (charged and neutral)
         for is ∈ 1:composition.n_species
-            @views z_advection_single_stage!(ff[:,:,is], ff_scratch[:,:,is,:], z_SL,
+            @views z_advection_single_stage!(ff_scratch[:,:,is,:], ff[:,:,is], z_SL,
                 z_source[:,is], z, vpa, use_semi_lagrange, dt, t, z_spectral, istage)
         end
         if composition.n_neutral_species > 0
             # account for charge exchange collisions between ions and neutrals
-            charge_exchange_single_stage!(ff, ff_scratch, moments, n_ion_species,
-                composition.n_neutral_species, vpa, charge_exchange_frequency, nz,
+            charge_exchange_single_stage!(ff_scratch, ff, moments, n_ion_species,
+                composition.n_neutral_species, vpa, charge_exchange_frequency, z.n,
                 dt, istage)
         end
         # reset "xx.updated" flags to false since ff has been updated
@@ -276,7 +278,6 @@ function time_advance_no_splitting(ff, ff_scratch, t, t_input, z, vpa,
 		@views rk_update_f!(ff[:,:,is], ff_scratch[:,:,is,:], z.n, vpa.n, n_rk_stages)
     end
 end
-=#
 if performance_test
     @timeit to1 "first call to moment_kinetics" moment_kinetics(to1)
     show(to1)

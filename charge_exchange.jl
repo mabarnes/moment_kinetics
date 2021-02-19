@@ -23,7 +23,7 @@ function charge_exchange_collisions!(ff, ff_scratch, moments, composition,
 		ff_scratch[:,:,:,istage] .= ff
 	end
     for istage ∈ 1:n_rk_stages
-		charge_exchange_single_stage!(ff, ff_scratch, moments, n_ion_species,
+		charge_exchange_single_stage!(ff_scratch, ff, moments, n_ion_species,
 			n_neutral_species, vpa, charge_exchange_frequency, nz, dt, istage)
 		reset_moments_status!(moments)
 	end
@@ -31,7 +31,7 @@ function charge_exchange_collisions!(ff, ff_scratch, moments, composition,
 		@views rk_update_f!(ff[:,:,is], ff_scratch[:,:,is,:], nz, vpa.n, n_rk_stages)
 	end
 end
-function charge_exchange_single_stage!(ff, ff_scratch, moments, n_ion_species,
+function charge_exchange_single_stage!(ff_scratch, ff, moments, n_ion_species,
 	n_neutral_species, vpa, charge_exchange_frequency, nz, dt, istage)
 	# make sure all densities needed for the charge exchange collisions are up-to-date
 	for is ∈ 1:n_ion_species+n_neutral_species
@@ -55,7 +55,6 @@ function charge_exchange_single_stage!(ff, ff_scratch, moments, n_ion_species,
 				end
 			end
 		end
-#		moments.dens_updated[is] = false ; moments.ppar_updated[is] = false
 	end
 
 	# apply CX collisions to all neutral species
@@ -72,7 +71,6 @@ function charge_exchange_single_stage!(ff, ff_scratch, moments, n_ion_species,
 				end
 			end
 		end
-#		moments.dens_updated[is+n_ion_species] = false ; moments.ppar_updated[is+n_ion_species] = false
 	end
 end
 

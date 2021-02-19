@@ -65,6 +65,7 @@ function mk_input()
     # options are n_rk_stages = 1, 2 or 3 (corresponding to forward Euler,
     # Heun's method and SSP RK3)
     n_rk_stages = 2
+    split_operators = false
 
     # overwrite some default parameters related to the z grid
     # ngrid is number of grid points per element
@@ -97,7 +98,7 @@ function mk_input()
     ########## end user inputs. do not modify following code! ###############
     #########################################################################
 
-    t = time_input(nstep, dt, nwrite, use_semi_lagrange, n_rk_stages)
+    t = time_input(nstep, dt, nwrite, use_semi_lagrange, n_rk_stages, split_operators)
     # replace mutable structures with immutable ones to optimize performance
     # and avoid possible misunderstandings
     z_advection_immutable = advection_input(z.advection.option, z.advection.constant_speed,
