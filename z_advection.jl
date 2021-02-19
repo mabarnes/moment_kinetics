@@ -13,11 +13,11 @@ function z_advection!(ff, ff_scratch, SL, source, z, vpa, n_rk_stages,
                       use_semi_lagrange, dt, t, spectral)
     # check to ensure that all array indices accessed in this function
     # are in-bounds
-    @boundscheck size(ff,1) == z.n || throw(BoundsError(ff))
-    @boundscheck size(ff,2) == vpa.n || throw(BoundsError(ff))
-    @boundscheck size(ff_scratch,1) == z.n || throw(BoundsError(ff_scratch))
-    @boundscheck size(ff_scratch,2) == vpa.n || throw(BoundsError(ff_scratch))
-    @boundscheck size(ff_scratch,3) == n_rk_stages+1 || throw(BoundsError(ff_scratch))
+#    @boundscheck size(ff,1) == z.n || throw(BoundsError(ff))
+#    @boundscheck size(ff,2) == vpa.n || throw(BoundsError(ff))
+#    @boundscheck size(ff_scratch,1) == z.n || throw(BoundsError(ff_scratch))
+#    @boundscheck size(ff_scratch,2) == vpa.n || throw(BoundsError(ff_scratch))
+#    @boundscheck size(ff_scratch,3) == n_rk_stages+1 || throw(BoundsError(ff_scratch))
     # SSP RK for explicit time advance
     ff_scratch[:,:,1] .= ff
     # NB: memory usage could be made more efficient here, as ff_scratch[:,:,1]
@@ -28,27 +28,33 @@ function z_advection!(ff, ff_scratch, SL, source, z, vpa, n_rk_stages,
             @. ff_scratch[:,:,istage] = 0.25*(ff_scratch[:,:,istage] +
                 ff_scratch[:,:,istage-1] + 2.0*ff)
         end
-        # get the updated speed along the z direction using the current f
-        update_speed_z!(source, vpa, z, t)
-        # update the upwind/downwind boundary indices and upwind_increment
-        update_boundary_indices!(source)
-        # if using interpolation-free Semi-Lagrange,
-        # follow characteristics backwards in time from level m+1 to level m
-        # to get departure points.  then find index of grid point nearest
-        # the departure point at time level m and use this to define
-        # an approximate characteristic
-        if use_semi_lagrange
-            for ivpa ∈ 1:vpa.n
-                find_approximate_characteristic!(SL[ivpa], source[ivpa], z, dt)
-            end
-        end
-        # advance z-advection equation
-        for ivpa ∈ 1:vpa.n
-            @views advance_f_local!(ff_scratch[:,ivpa,istage+1], ff_scratch[:,ivpa,istage],
-                ff[:,ivpa], SL[ivpa], source[ivpa], z, dt, istage, spectral)
-        end
+        z_advection_single_stage!(ff, ff_scratch, SL, source, z, vpa,
+                              use_semi_lagrange, dt, t, spectral, istage)
     end
     rk_update_f!(ff, ff_scratch, z.n, vpa.n, n_rk_stages)
+end
+# do a single stage time advance (potentially as part of a multi-stage RK scheme)
+function z_advection_single_stage!(ff, ff_scratch, SL, source, z, vpa,
+                      use_semi_lagrange, dt, t, spectral, istage)
+    # get the updated speed along the z direction using the current f
+    update_speed_z!(source, vpa, z, t)
+    # update the upwind/downwind boundary indices and upwind_increment
+    update_boundary_indices!(source)
+    # if using interpolation-free Semi-Lagrange,
+    # follow characteristics backwards in time from level m+1 to level m
+    # to get departure points.  then find index of grid point nearest
+    # the departure point at time level m and use this to define
+    # an approximate characteristic
+    if use_semi_lagrange
+        for ivpa ∈ 1:vpa.n
+            find_approximate_characteristic!(SL[ivpa], source[ivpa], z, dt)
+        end
+    end
+    # advance z-advection equation
+    for ivpa ∈ 1:vpa.n
+        @views advance_f_local!(ff_scratch[:,ivpa,istage+1], ff_scratch[:,ivpa,istage],
+            ff[:,ivpa], SL[ivpa], source[ivpa], z, dt, istage, spectral, use_semi_lagrange)
+    end
 end
 # calculate the advection speed in the z-direction at each grid point
 function update_speed_z!(source, vpa, z, t)
