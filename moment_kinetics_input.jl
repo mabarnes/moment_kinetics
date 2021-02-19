@@ -33,13 +33,31 @@ function mk_input()
         load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_response)
 
     # this is the prefix for all output files associated with this run
-    run_name = "debug"
+    run_name = "CX5_TiTe4"
     # this is the directory where the simulation data will be stored
     output_dir = string("runs/",run_name)
 
+    ####### specify any deviations from default inputs for evolved species #######
+    # set initial Tᵢ/Tₑ = 1
+    #species[1].initial_temperature = 1.0
+    # set initial neutral temperature Tn/Tₑ = 1
+    #species[2].initial_temperature = 1.0
+    # set initial nᵢ/Nₑ = 1.0
+    species[1].initial_density = 0.5
+    species[1].initial_temperature = 4.0
+    species[1].z_IC.amplitude = 0.001
+    # set initial neutral densiity = Nₑ
+    if composition.n_species > 1
+        species[2].initial_density = 0.5
+        species[2].initial_temperature = species[1].initial_temperature
+        species[2].z_IC.amplitude = species[1].z_IC.amplitude
+    end
+
+    charge_exchange_frequency = 5.0*sqrt(species[1].initial_temperature)
+
     # parameters related to the time stepping
     nstep = 6000
-    dt = 0.0005/sqrt(0.5)
+    dt = 0.0005/sqrt(species[1].initial_temperature)
     nwrite = 20
     # use_semi_lagrange = true to use interpolation-free semi-Lagrange treatment
     # otherwise, solve problem solely using the discretization_option above
@@ -64,7 +82,7 @@ function mk_input()
     # nelement is the number of elements
     vpa.nelement = 1
     # L is the box length in units of vthermal_species
-    vpa.L = 10.0*sqrt(0.5)
+    vpa.L = 10.0*sqrt(species[1].initial_temperature)
     # determine the boundary condition
     # only supported option at present is "zero" and "periodic"
     vpa.bc = "periodic"
@@ -73,20 +91,6 @@ function mk_input()
     #vpa.discretization = "chebyshev_pseudospectral"
     vpa.discretization = "finite_difference"
 
-    ####### specify any deviations from default inputs for evolved species #######
-    # set initial Tᵢ/Tₑ = 1
-    #species[1].initial_temperature = 1.0
-    # set initial neutral temperature Tn/Tₑ = 1
-    #species[2].initial_temperature = 1.0
-    # set initial nᵢ/Nₑ = 1.0
-    species[1].initial_density = 0.5
-    species[1].initial_temperature = 0.5
-    species[1].z_IC.amplitude = 0.001
-    # set initial neutral densiity = Nₑ
-    species[2].initial_density = 0.5
-    species[2].initial_temperature = species[1].initial_temperature
-    species[2].z_IC.amplitude = species[1].z_IC.amplitude
-    charge_exchange_frequency = 9.0*sqrt(0.5)
     #################### end specification of species inputs #####################
 
     #########################################################################

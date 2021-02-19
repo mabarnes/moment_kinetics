@@ -3,6 +3,7 @@ module velocity_moments
 export integrate_over_vspace!
 export update_moments!
 export update_density!
+export reset_moments_status!
 
 using type_definitions: mk_float
 using array_allocation: allocate_float, allocate_bool
@@ -114,6 +115,11 @@ function integrate_over_vspace(integrand, vpa_wgts)
     end
     integral /= sqrt(pi)
     return integral
+end
+function reset_moments_status!(moments)
+    moments.dens_updated .= false
+    moments.upar_updated .= false
+    moments.ppar_updated .= false
 end
 
 end

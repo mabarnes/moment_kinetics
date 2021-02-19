@@ -215,7 +215,7 @@ function calculate_explicit_source!(rhs, df, adv_fac, up_idx, down_idx, up_incr,
                 rhs[i] = adv_fac[i]*df[igrid,ielem]
             end
         end
-    elseif j == 2
+    else
         #@inbounds for i ∈ up_idx:-up_incr:down_idx
         @inbounds for i ∈ 1:n
             # if at the boundary point within the element, must carefully

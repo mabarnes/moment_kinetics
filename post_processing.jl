@@ -106,7 +106,7 @@ function analyze_and_plot_data()
         # shifted_time = t - t0
         shifted_time = allocate_float(ntime)
         @. shifted_time = time - time[itime_min]
-        # assume phi(z0,t) = A*exp(growth_rate*t)*cos(omega*t - φ)
+        # assume phi(z0,t) = A*exp(growth_rate*t)*cos(ω*t - φ)
         # and fit phi(z0,t)/phi(z0,t0), which eliminates the constant A pre-factor
         @views growth_rate, frequency, phase =
             compute_frequencies(shifted_time[itime_min:itime_max], delta_phi[iz0,itime_min:itime_max])
