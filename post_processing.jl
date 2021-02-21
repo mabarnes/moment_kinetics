@@ -11,11 +11,13 @@ using quadrature: composite_simpson_weights
 using array_allocation: allocate_float
 using file_io: open_output_file
 
-function analyze_and_plot_data()
-    # get the run_name from the command-line
-    run_name = ARGS[1]
+function analyze_and_plot_data(path)
+    # Create run_name from the path to the run directory
+    path = realpath(path)
+    run_name = joinpath(path, basename(path))
 
     # create the netcdf filename from the given run_name
+    #filename = string(run_name, "/", run_name, ".cdf")
     filename = string(run_name, ".cdf")
 
     print("Opening ", filename, " to read NetCDF data...")
@@ -435,4 +437,13 @@ function fit_phi0_vs_time(phi0, tmod)
     return fit.param[1], fit.param[2], fit.param[3]#, standard_deviation
 end
 
-analyze_and_plot_data()
+# get the run_names from the command-line
+for path ∈ ARGS
+    println("post-processing ", path)
+    try
+        analyze_and_plot_data(path)
+    catch e
+        println("failed with ", e)
+    end
+    println()
+end
