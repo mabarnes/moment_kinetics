@@ -120,7 +120,7 @@ struct species_parameters
     # struct containing the initial condition info in vpa for this species
     vpa_IC::initial_condition_input
 end
-struct species_composition
+mutable struct species_composition
     # n_species = total number of evolved species (including ions, neutrals and electrons)
     n_species::mk_int
     # n_ion_species is the number of evolved ion species
@@ -129,6 +129,8 @@ struct species_composition
     n_neutral_species::mk_int
     # if boltzmann_electron_response = true, the electron density is fixed to be Nₑ*(eϕ/T_e)
     boltzmann_electron_response::Bool
+    # electron temperature used for Boltzmann response
+    T_e::Float64
 end
 mutable struct drive_input_mutable
     # if drive.phi = true, include external electrostatic potential

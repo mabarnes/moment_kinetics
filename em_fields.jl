@@ -44,7 +44,7 @@ function update_phi!(fields, moments, ff, vpa, nz, composition, t)
             for is ∈ 1:composition.n_ion_species
                 total_density += moments.dens[iz,is]
             end
-            fields.phi[iz] = log(total_density)
+            fields.phi[iz] = composition.T_e * log(total_density)
         end
         if fields.force_phi
             @inbounds for iz ∈ 1:nz

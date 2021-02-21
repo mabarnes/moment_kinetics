@@ -39,13 +39,14 @@ function mk_input(scan_input=Dict())
     output_dir = string("runs/",run_name)
 
     ####### specify any deviations from default inputs for evolved species #######
-    # set initial Tᵢ/Tₑ = 1
+    # set initial Tₑ = 1
+    composition.T_e = get(scan_input, :T_e, 1.0)
     #species[1].initial_temperature = 1.0
     # set initial neutral temperature Tn/Tₑ = 1
     #species[2].initial_temperature = 1.0
     # set initial nᵢ/Nₑ = 1.0
     species[1].initial_density = get(scan_input, (:initial_density, 1), 0.5)
-    species[1].initial_temperature = get(scan_input, (:initial_temperature, 1), 0.5)
+    species[1].initial_temperature = get(scan_input, (:initial_temperature, 1), 1.0)
     species[1].z_IC.amplitude = get(scan_input, (:z_IC_amplitude, 1), 0.001)
     # set initial neutral densiity = Nₑ
     if composition.n_species > 1
@@ -226,7 +227,7 @@ function load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_resp
         n_species = n_ion_speces + n_neutral_species + 1
     end
     composition = species_composition(n_species, n_ion_species, n_neutral_species,
-        boltzmann_electron_response)
+        boltzmann_electron_response, 1.0)
     species = Array{species_parameters_mutable,1}(undef,n_species)
     # initial temperature for each species defaults to Tₑ
     initial_temperature = 1.0
