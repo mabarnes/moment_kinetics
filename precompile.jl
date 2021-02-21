@@ -15,7 +15,10 @@ Pkg.add("NCDatasets")
 Pkg.add("FFTW")
 Pkg.add("Plots")
 Pkg.add("LsqFit")
-packages = [:PackageCompiler, :TimerOutputs, :NCDatasets, :FFTW, :Plots, :LsqFit]
+Pkg.add("OrderedCollections");
+Pkg.add("Glob");
+Pkg.add("NaturalSort")
+packages = [:PackageCompiler, :TimerOutputs, :NCDatasets, :FFTW, :Plots, :LsqFit, :OrderedCollections, :Glob, :NaturalSort]
 # create the sysimage 'moment_kinetics.so' in the base moment_kinetics source directory
 # with the above pre-compiled packages
 create_sysimage(packages; sysimage_path="moment_kinetics.so")
