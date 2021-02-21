@@ -26,6 +26,8 @@ function mk_scan_inputs()
     #scan_inputs[(:initial_temperature, 1)] = (0.25, 0.5, 0.75, 1.0)
     #scan_inputs[(:initial_temperature, 2)] = scan_inputs[(:initial_density, 1)]
 
+    #scan_inputs[:T_e] = (0.25, 0.5, 1.0, 2.0, 4.0)
+
     #scan_inputs[(:z_IC_amplitude, 1)] = (.001,)
     #scan_inputs[(:z_IC_amplitude, 2)] = (.001,)
 

@@ -8,12 +8,40 @@ using Plots
 ni_array = [0.0001, 0.25, 0.5, 0.75, 0.9999]
 nn_array = 1.0 .- ni_array
 
-scan_basename = "CXscan1"
+scan_basename_n = "CXscan1"
+
+T_array = [0.25, 0.5, 1.0, 2.0, 4.0]
+
+scan_basename_T = "CXscan2"
 
 # Read simulation results
 function get_sim_results(ni, nn)
     # Use 'natural' sort to get CX frequencies sorted numerically despite this being a list of strings
-    run_directories = sort(glob(string("runs/", scan_basename, "_initial_density1-", ni, "_initial_density2-", nn, "_charge_exchange_frequency-*")), lt=natural)
+    run_directories = sort(glob(string("runs/", scan_basename_n, "_initial_density1-", ni, "_initial_density2-", nn, "_charge_exchange_frequency-*")), lt=natural)
+    n = length(run_directories)
+    CX_freq = Vector{Float64}(undef, n)
+    real_frequency = Vector{Float64}(undef, n)
+    growth_rate = Vector{Float64}(undef, n)
+    for (i, run) ∈ enumerate(run_directories)
+        try
+            # Divide by 2π to get 'Hz' instead of 'radians/s'
+            CX_freq[i] = parse(Float64, split(split(run, "_")[8], "-")[2]) / 2 / π
+            info = split(readline(string(joinpath(run, basename(run)), ".frequency_fit.txt")))
+            growth_rate[i] = parse(Float64, info[2]) / 2 / π
+            real_frequency[i] = parse(Float64, info[8]) / 2 / π
+        catch LoadError
+            CX_freq[i] = NaN
+            growth_rate[i] = NaN
+            real_frequency[i] = NaN
+            println(string(joinpath(run, basename(run)), ".frequency_fit.txt"), " failed")
+        end
+    end
+    return CX_freq, real_frequency, growth_rate
+end
+
+function get_sim_results_T(T_e)
+    # Use 'natural' sort to get CX frequencies sorted numerically despite this being a list of strings
+    run_directories = sort(glob(string("runs/", scan_basename_T, "_T_e-", T_e, "_charge_exchange_frequency-*")), lt=natural)
     n = length(run_directories)
     CX_freq = Vector{Float64}(undef, n)
     real_frequency = Vector{Float64}(undef, n)
@@ -29,6 +57,7 @@ function get_sim_results(ni, nn)
             CX_freq[i] = NaN
             growth_rate[i] = NaN
             real_frequency[i] = NaN
+            println(string(joinpath(run, basename(run)), ".frequency_fit.txt"), " failed")
         end
     end
     return CX_freq, real_frequency, growth_rate
@@ -47,10 +76,11 @@ analytical_results_ni = OrderedDict(
      "ni100"=>readdlm("runs/analytic_results/ni100.txt", comments=true),
     )
 analytical_results_Te = OrderedDict(
-     "Te005"=>readdlm("runs/analytic_results/Te025.txt", comments=true),
-     "Te100"=>readdlm("runs/analytic_results/Te025.txt", comments=true),
-     "Te200"=>readdlm("runs/analytic_results/Te025.txt", comments=true),
-     "Te400"=>readdlm("runs/analytic_results/Te025.txt", comments=true),
+     "Te025"=>readdlm("runs/analytic_results/Te025.txt", comments=true),
+     "Te005"=>readdlm("runs/analytic_results/Te05.txt", comments=true),
+     "Te100"=>readdlm("runs/analytic_results/Te100.txt", comments=true),
+     "Te200"=>readdlm("runs/analytic_results/Te200.txt", comments=true),
+     "Te400"=>readdlm("runs/analytic_results/Te400.txt", comments=true),
     )
 
 # Plot analytical results
@@ -100,13 +130,78 @@ for (i, (ni, nn)) ∈ enumerate(zip(ni_array, nn_array))
              CX_freq, real_frequency,
              label=string("sim, ni=", ni, " nn=", nn),
              color=i,
+             markerstrokecolor=0,
             )
     scatter!(growth_rate_plot,
              CX_freq, growth_rate,
              label=string("sim, ni=", ni, " nn=", nn),
              color=i,
+             markerstrokecolor=0,
             )
 end
 
 savefig(real_frequency_plot, "runs/comparison_plots/real_frequency.pdf")
 savefig(growth_rate_plot, "runs/comparison_plots/growth_rate.pdf")
+
+
+# Plot T scan
+
+# Plot analytical results
+
+real_frequency_plot = plot(legend=:outertopright, size=(900,400))
+for (i, (k,v)) ∈ enumerate(analytical_results_Te)
+    plot!(real_frequency_plot,
+          v[:, 1], v[:, 2],
+          label=k,
+          xlabel="CX collision frequency",
+          ylabel="Mode frequency",
+          color=i,
+         )
+end
+
+growth_rate_plot = plot(legend=:outertopright, size=(900,400))
+for (i, (k,v)) ∈ enumerate(analytical_results_Te)
+    plot!(growth_rate_plot,
+          v[2:end, 1], v[2:end, 3],
+          label=k,
+          xlabel="CX collision frequency",
+          ylabel="Growth rate",
+          color=i,
+         )
+    plot!(growth_rate_plot,
+          v[2:end, 1], v[2:end, 4],
+          label="",
+          color=i,
+          linestyle=:dash,
+         )
+end
+
+# fix plot limits so funny simulation results don't mess them up
+plot!(real_frequency_plot,
+      xlims=xlims(real_frequency_plot),
+      ylims=ylims(real_frequency_plot),
+     )
+plot!(growth_rate_plot,
+      xlims=xlims(growth_rate_plot),
+      ylims=ylims(growth_rate_plot),
+     )
+
+# Plot simulation results
+for (i, (T_e)) ∈ enumerate(T_array)
+    CX_freq, real_frequency, growth_rate = get_sim_results_T(T_e)
+    scatter!(real_frequency_plot,
+             CX_freq, real_frequency,
+             label=string("sim, T_e=", T_e),
+             color=i,
+             markerstrokecolor=0,
+            )
+    scatter!(growth_rate_plot,
+             CX_freq, growth_rate,
+             label=string("sim, T_e=", T_e),
+             color=i,
+             markerstrokecolor=0,
+            )
+end
+
+savefig(real_frequency_plot, "runs/comparison_plots/real_frequency_T.pdf")
+savefig(growth_rate_plot, "runs/comparison_plots/growth_rate_T.pdf")
