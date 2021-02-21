@@ -1,5 +1,6 @@
-# add the current directory to the path where the code looks for external modules
-push!(LOAD_PATH, ".")
+module moment_kinetics
+
+export run_moment_kinetics
 
 using TimerOutputs
 
@@ -17,18 +18,13 @@ using em_fields: setup_em_fields, update_phi!
 using initial_conditions: init_f
 using initial_conditions: enforce_z_boundary_condition!
 using initial_conditions: enforce_vpa_boundary_condition!
-using moment_kinetics_input: mk_input
 using moment_kinetics_input: run_type
 using moment_kinetics_input: RunType, single, performance_test, scan
-using scan_input: mk_scan_inputs
 using charge_exchange: charge_exchange_collisions!, charge_exchange_single_stage!
 using time_advance: rk_update_f!
 
-to1 = TimerOutput()
-to2 = TimerOutput()
-
 # main function that contains all of the content of the program
-function moment_kinetics(to, input)
+function run_moment_kinetics(to, input)
     # obtain input options from moment_kinetics_input.jl
     # and check input to catch errors
     run_name, output_dir, t_input, z_input, vpa_input, composition, species,
@@ -280,25 +276,5 @@ function time_advance_no_splitting!(ff, ff_scratch, t, t_input, z, vpa,
 		@views rk_update_f!(ff[:,:,is], ff_scratch[:,:,is,:], z.n, vpa.n, n_rk_stages)
     end
 end
-if run_type == single
-    input = mk_input()
-    moment_kinetics(to1, input)
-elseif run_type == performance_test
-    input = mk_input()
-    @timeit to1 "first call to moment_kinetics" moment_kinetics(to1, input)
-    show(to1)
-    println()
-    @timeit to2 "second call to moment_kinetics" moment_kinetics(to2, input)
-    show(to2)
-    println()
-elseif run_type == scan
-    scan_inputs = mk_scan_inputs()
 
-    for s ∈ scan_inputs
-        println("running parameters: ", s)
-        this_input = mk_input(s)
-        moment_kinetics(to1, this_input)
-    end
-else
-    error(run_type, " is not a valid run_type option")
 end
