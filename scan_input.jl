@@ -2,13 +2,12 @@ module scan_input
 
 export mk_scan_inputs
 
-# How to combine input lists. E.g. if we have a,b,c then:
-#   - inner has runs with (a[1], b[1], c[1]), (a[2], b[2], c[2]), etc.
-#     [all lists must have the same length]
-#   - outer has runs with all permutations of elements from a, b and c
-#     [lists can be any length]
-@enum CombineMethod inner outer
-const combine_method = inner
+# By default, inputs are combined with an 'inner product', i.e. inputs a,b,c
+# are combined as (a[1],b[1],c[1]), (a[2],b[2],c[2]), etc.
+# Any inputs named in 'combine_outer' are instead combined with an 'outer
+# product', i.e. an entry is created for every value of those inputs combined
+# with every combination of the other inputs.
+const combine_outer = [:charge_exchange_frequency]
 
 const base_name = "scan"
 
@@ -30,56 +29,64 @@ function mk_scan_inputs()
 
     scan_inputs[:charge_exchange_frequency] = range(0.0, 2.0*π * 2.0, length=20)
 
-    if combine_method == inner
-        # check all inputs have same size
-        l = length(collect(values(scan_inputs))[1])
-        for (key, value) ∈ scan_inputs
-            if length(value) != l
-                error("Lengths of all input values should be the same. Expected ", l,
-                      "for ", key, " but got ", length(value))
+    # Combine inputs into single Vector
+    outer_inputs = Dict()
+    for x ∈ combine_outer
+        outer_inputs[x] = pop!(scan_inputs, x)
+    end
+
+    # First combine the 'inner product' inputs
+    ##########################################
+
+    # check all inputs have same size
+    l = length(collect(values(scan_inputs))[1])
+    for (key, value) ∈ scan_inputs
+        if length(value) != l
+            error("Lengths of all input values should be the same. Expected ", l,
+                  "for ", key, " but got ", length(value))
+        end
+    end
+
+    result = Vector{Dict}(undef, l)
+    for i ∈ 1:l
+        result[i] = Dict{Any,Any}(key=>value[i] for (key, value) in scan_inputs)
+    end
+
+    # Combine 'result' with 'combine_outer' fields
+    ##############################################
+
+    # Need to make arrays of keys and values in outer_inputs so that we can
+    # access them by index. Dicts don't add items from the beginning!
+    outer_keys = collect(keys(outer_inputs))
+    outer_values = collect(values(outer_inputs))
+    function create_level(i, scan_list)
+        # This function recursively builds an outer-product of all the
+        # option values in the scan
+        if i > length(outer_keys)
+            # Done building the scan_list, so just return it, ending the
+            # recursion
+            return scan_list
+        end
+
+        l = length(scan_list) * length(outer_values[i])
+        new_scan_inputs = Vector{Dict}(undef, l)
+        count = 0
+        for partial_dict ∈ scan_list
+            for j ∈ 1:length(outer_values[i])
+                count = count + 1
+                new_dict = copy(partial_dict)
+                new_dict[outer_keys[i]] = outer_values[i][j]
+                new_scan_inputs[count] = new_dict
             end
         end
 
-        result = Vector{Dict}(undef, l)
-        for i ∈ 1:l
-            result[i] = Dict{Any,Any}(key=>value[i] for (key, value) in scan_inputs)
-            result[i][:run_name] = mk_name(result[i])
-        end
-    elseif combine_method == outer
-        # Need to make arrays of keys and values in scan_inputs so that we can
-        # access them by index. Dicts don't add items from the beginning!
-        scan_keys = collect(keys(scan_inputs))
-        scan_values = collect(values(scan_inputs))
-        function create_level(i, scan_list)
-            # This function recursively builds an outer-product of all the
-            # option values in the scan
-            if i > length(scan_keys)
-                # Done building the scan_list, so just return it, ending the recursion
-                return scan_list
-            end
+        return create_level(i + 1, new_scan_inputs)
+    end
 
-            l = length(scan_list) * length(scan_values[i])
-            new_scan_inputs = Vector{Dict}(undef, l)
-            count = 0
-            for partial_dict ∈ scan_list
-                for j ∈ 1:length(scan_values[i])
-                    count = count + 1
-                    new_dict = copy(partial_dict)
-                    new_dict[scan_keys[i]] = scan_values[i][j]
-                    new_scan_inputs[count] = new_dict
-                end
-            end
+    result = create_level(1, result)
 
-            return create_level(i + 1, new_scan_inputs)
-        end
-
-        result = create_level(1, (Dict(),))
-        
-        for x in result
-            x[:run_name] = mk_name(x)
-        end
-    else
-        error("Unknown combine_method ", combine_method)
+    for x in result
+        x[:run_name] = mk_name(x)
     end
 
     println("Running scan:")
