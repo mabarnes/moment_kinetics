@@ -13,7 +13,7 @@ scan_basename = "CXscan1"
 # Read simulation results
 function get_sim_results(ni, nn)
     # Use 'natural' sort to get CX frequencies sorted numerically despite this being a list of strings
-    run_directories = sort(glob(string("runs/", scan_basename, "_initial_density2-", nn, "_charge_exchange_frequency-*_initial_density1-", ni)), lt=natural)
+    run_directories = sort(glob(string("runs/", scan_basename, "_initial_density1-", ni, "_initial_density2-", nn, "_charge_exchange_frequency-*")), lt=natural)
     n = length(run_directories)
     CX_freq = Vector{Float64}(undef, n)
     real_frequency = Vector{Float64}(undef, n)

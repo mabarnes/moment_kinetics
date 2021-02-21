@@ -1,5 +1,7 @@
 module scan_input
 
+using OrderedCollections: OrderedDict
+
 export mk_scan_inputs
 
 # By default, inputs are combined with an 'inner product', i.e. inputs a,b,c
@@ -12,7 +14,7 @@ const combine_outer = [:charge_exchange_frequency]
 const base_name = "scan"
 
 function mk_scan_inputs()
-    scan_inputs = Dict()
+    scan_inputs = OrderedDict()
 
     #scan_inputs[:nstep] = (6000,)
     #scan_inputs[:dt] = (0.0005/sqrt(0.5),)
@@ -30,7 +32,7 @@ function mk_scan_inputs()
     scan_inputs[:charge_exchange_frequency] = range(0.0, 2.0*π * 2.0, length=20)
 
     # Combine inputs into single Vector
-    outer_inputs = Dict()
+    outer_inputs = OrderedDict()
     for x ∈ combine_outer
         outer_inputs[x] = pop!(scan_inputs, x)
     end
@@ -47,35 +49,31 @@ function mk_scan_inputs()
         end
     end
 
-    result = Vector{Dict}(undef, l)
+    result = Vector{OrderedDict}(undef, l)
     for i ∈ 1:l
-        result[i] = Dict{Any,Any}(key=>value[i] for (key, value) in scan_inputs)
+        result[i] = OrderedDict{Any,Any}(key=>value[i] for (key, value) in scan_inputs)
     end
 
     # Combine 'result' with 'combine_outer' fields
     ##############################################
 
-    # Need to make arrays of keys and values in outer_inputs so that we can
-    # access them by index. Dicts don't add items from the beginning!
-    outer_keys = collect(keys(outer_inputs))
-    outer_values = collect(values(outer_inputs))
     function create_level(i, scan_list)
         # This function recursively builds an outer-product of all the
         # option values in the scan
-        if i > length(outer_keys)
+        if i > length(outer_inputs.keys)
             # Done building the scan_list, so just return it, ending the
             # recursion
             return scan_list
         end
 
-        l = length(scan_list) * length(outer_values[i])
-        new_scan_inputs = Vector{Dict}(undef, l)
+        l = length(scan_list) * length(outer_inputs.vals[i])
+        new_scan_inputs = Vector{OrderedDict}(undef, l)
         count = 0
         for partial_dict ∈ scan_list
-            for j ∈ 1:length(outer_values[i])
+            for j ∈ 1:length(outer_inputs.vals[i])
                 count = count + 1
                 new_dict = copy(partial_dict)
-                new_dict[outer_keys[i]] = outer_values[i][j]
+                new_dict[outer_inputs.keys[i]] = outer_inputs.vals[i][j]
                 new_scan_inputs[count] = new_dict
             end
         end
