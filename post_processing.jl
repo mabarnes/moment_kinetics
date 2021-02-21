@@ -1,5 +1,6 @@
-# add the current directory to the path where the code looks for external modules
-push!(LOAD_PATH, ".")
+module post_processing
+
+export analyze_and_plot
 
 # packages
 using NCDatasets
@@ -437,13 +438,4 @@ function fit_phi0_vs_time(phi0, tmod)
     return fit.param[1], fit.param[2], fit.param[3]#, standard_deviation
 end
 
-# get the run_names from the command-line
-for path ∈ ARGS
-    println("post-processing ", path)
-    try
-        analyze_and_plot_data(path)
-    catch e
-        println("failed with ", e)
-    end
-    println()
 end

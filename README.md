@@ -3,4 +3,4 @@
 2) To pre-compile a static image that includes a few of the external packages required for post-processing, run 'julia precompile.jl'.
 3) Create a subdirectory to store run output, 'mkdir runs'.
 4) To run julia with optimization, type 'julia -O3 -Jmoment_kinetics.so driver.jl'.  Input options can be specified in moment_kinetics_input.jl. If running a scan, it can be parallelised by passing the number of processors as an argument.
-5) To make plots and calculate frequencies/growth rates, type 'julia -Jmoment_kinetics.so post_processing.jl'.  Input options for post-processing can be specified in post_processing_input.jl.
+5) To make plots and calculate frequencies/growth rates, type 'julia -Jmoment_kinetics.so post_processing_driver.jl'. Pass the directories to process as command line arguments. Optionally pass a number as the first argument to parallelise post processing of different directories. Input options for post-processing can be specified in post_processing_input.jl.
