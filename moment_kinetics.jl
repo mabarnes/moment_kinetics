@@ -1,3 +1,6 @@
+# add the current directory to the path where the code looks for external modules
+push!(LOAD_PATH, ".")
+
 module moment_kinetics
 
 export run_moment_kinetics
@@ -278,3 +281,10 @@ function time_advance_no_splitting!(ff, ff_scratch, t, t_input, z, vpa,
 end
 
 end
+
+using TimerOutputs
+using moment_kinetics_input: mk_input
+
+to = TimerOutput
+input = mk_input()
+moment_kinetics.run_moment_kinetics(to, input)

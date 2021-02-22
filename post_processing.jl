@@ -1,3 +1,6 @@
+# add the current directory to the path where the code looks for external modules
+push!(LOAD_PATH, ".")
+
 module post_processing
 
 export analyze_and_plot
@@ -439,3 +442,5 @@ function fit_phi0_vs_time(phi0, tmod)
 end
 
 end
+
+post_processing.analyze_and_plot_data(ARGS[1])
