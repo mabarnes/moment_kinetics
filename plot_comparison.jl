@@ -179,7 +179,8 @@ end
 # fix plot limits so funny simulation results don't mess them up
 plot!(real_frequency_plot,
       xlims=xlims(real_frequency_plot),
-      ylims=ylims(real_frequency_plot),
+      #ylims=ylims(real_frequency_plot),
+      ylims=(0.0, ylims(real_frequency_plot)[2]),
      )
 plot!(growth_rate_plot,
       xlims=xlims(growth_rate_plot),
