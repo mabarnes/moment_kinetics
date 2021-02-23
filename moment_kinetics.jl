@@ -181,6 +181,7 @@ function time_advance_split_operators!(ff, ff_scratch, t, t_input, z, vpa,
 
     # define some abbreviated variables for tidiness
     n_ion_species = composition.n_ion_species
+    n_neutral_species = composition.n_neutral_species
     dt = t_input.dt
     n_rk_stages = t_input.n_rk_stages
     use_semi_lagrange = t_input.use_semi_lagrange
@@ -195,40 +196,54 @@ function time_advance_split_operators!(ff, ff_scratch, t, t_input, z, vpa,
         @views vpa_advection!(ff[:,:,1:n_ion_species], ff_scratch[:,:,1:n_ion_species,:],
             fields, moments, vpa_SL, vpa_source, vpa, z, n_rk_stages,
             use_semi_lagrange, dt, t, vpa_spectral, z_spectral, composition)
+        for is ∈ 1:composition.n_ion_species
+        	@views rk_update_f!(ff[:,:,is], ff_scratch[:,:,is,:], z.n, vpa.n, n_rk_stages)
+        end
         # z_advection! advances the operator-split 1D advection equation in z
         # apply z-advection operation to all species (charged and neutral)
         for is ∈ 1:composition.n_species
             @views z_advection!(ff[:,:,is], ff_scratch[:,:,is,:], z_SL, z_source[:,is],
                 z, vpa, n_rk_stages, use_semi_lagrange, dt, t, z_spectral)
-            # reset "xx.updated" flags to false since ff has been updated
-            # and the corresponding moments have not
-            reset_moments_status!(moments)
+            @views rk_update_f!(ff[:,:,is], ff_scratch[:,:,is,:], z.n, vpa.n, n_rk_stages)
         end
+        # reset "xx.updated" flags to false since ff has been updated
+        # and the corresponding moments have not
+        reset_moments_status!(moments)
         if composition.n_neutral_species > 0
             # account for charge exchange collisions between ions and neutrals
             @views charge_exchange_collisions!(ff, ff_scratch, moments, composition,
                 vpa, charge_exchange_frequency, z.n, dt, n_rk_stages)
+            for is ∈ 1:n_ion_species+n_neutral_species
+            	@views rk_update_f!(ff[:,:,is], ff_scratch[:,:,is,:], z.n, vpa.n, n_rk_stages)
+            end
         end
     else
         if composition.n_neutral_species > 0
             # account for charge exchange collisions between ions and neutrals
             @views charge_exchange_collisions!(ff, ff_scratch, moments, composition,
                 vpa, charge_exchange_frequency, z.n, dt, n_rk_stages)
+            for is ∈ 1:n_ion_species+n_neutral_species
+            	@views rk_update_f!(ff[:,:,is], ff_scratch[:,:,is,:], z.n, vpa.n, n_rk_stages)
+            end
         end
         # z_advection! advances the operator-split 1D advection equation in z
         # apply z-advection operation to all species (charged and neutral)
         for is ∈ 1:composition.n_species
             @views z_advection!(ff[:,:,is], ff_scratch[:,:,is,:], z_SL, z_source[:,is],
                 z, vpa, n_rk_stages, use_semi_lagrange, dt, t, z_spectral)
-            # reset "moments.xx_updated" flags to false since ff has been updated
-            # and the corresponding moments have not
-            reset_moments_status!(moments)
+            @views rk_update_f!(ff[:,:,is], ff_scratch[:,:,is,:], z.n, vpa.n, n_rk_stages)
         end
+        # reset "moments.xx_updated" flags to false since ff has been updated
+        # and the corresponding moments have not
+        reset_moments_status!(moments)
         # vpa_advection! advances the operator-split 1D advection equation in vpa
         # vpa-advection only applies for charged species
         @views vpa_advection!(ff[:,:,1:n_ion_species], ff_scratch[:,:,1:n_ion_species,:],
             fields, moments, vpa_SL, vpa_source, vpa, z, n_rk_stages,
             use_semi_lagrange, dt, t, vpa_spectral, z_spectral, composition)
+        for is ∈ 1:composition.n_ion_species
+        	@views rk_update_f!(ff[:,:,is], ff_scratch[:,:,is,:], z.n, vpa.n, n_rk_stages)
+        end
     end
     return nothing
 end

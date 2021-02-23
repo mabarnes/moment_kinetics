@@ -4,7 +4,7 @@ export z_advection!
 export update_speed_z!
 
 using semi_lagrange: find_approximate_characteristic!
-using time_advance: rk_update_f!
+#using time_advance: rk_update_f!
 using advection: advance_f_local!, update_boundary_indices!
 using chebyshev: chebyshev_info
 
@@ -31,7 +31,7 @@ function z_advection!(ff, ff_scratch, SL, source, z, vpa, n_rk_stages,
         z_advection_single_stage!(ff_scratch, ff, SL, source, z, vpa,
                               use_semi_lagrange, dt, t, spectral, istage)
     end
-    rk_update_f!(ff, ff_scratch, z.n, vpa.n, n_rk_stages)
+    #rk_update_f!(ff, ff_scratch, z.n, vpa.n, n_rk_stages)
 end
 # do a single stage time advance (potentially as part of a multi-stage RK scheme)
 function z_advection_single_stage!(ff_scratch, ff, SL, source, z, vpa,
