@@ -5,8 +5,8 @@ export update_speed_vpa!
 
 using semi_lagrange: find_approximate_characteristic!
 using time_advance: advance_f_local!, rk_update_f!
-using source_terms: update_boundary_indices!
-using source_terms: set_igrid_ielem
+using advection: update_boundary_indices!
+using advection: set_igrid_ielem
 using em_fields: update_phi!
 using chebyshev: chebyshev_derivative!
 using chebyshev: chebyshev_info

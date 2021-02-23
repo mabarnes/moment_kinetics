@@ -7,9 +7,9 @@ export rk_update_f!
 using finite_differences: derivative_finite_difference!
 using chebyshev: chebyshev_derivative!
 using chebyshev: chebyshev_info
-using source_terms: update_advection_factor!
-using source_terms: calculate_explicit_source!
-using source_terms: update_boundary_indices!
+using advection: update_advection_factor!
+using advection: calculate_explicit_source!
+using advection: update_boundary_indices!
 
 # update the righthand side of the equation to account for 1d advection in this coordinate
 function update_rhs!(source, f_current, SL, coord, dt, j, spectral)

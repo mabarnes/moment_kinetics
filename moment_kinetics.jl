@@ -8,7 +8,7 @@ using file_io: write_data_to_ascii, write_data_to_binary
 using chebyshev: setup_chebyshev_pseudospectral
 using chebyshev: chebyshev_derivative!
 using coordinates: define_coordinate
-using source_terms: setup_source, update_boundary_indices!
+using advection: setup_source, update_boundary_indices!
 using semi_lagrange: setup_semi_lagrange
 using vpa_advection: vpa_advection!, vpa_advection_single_stage!, update_speed_vpa!
 using z_advection: z_advection!, z_advection_single_stage!, update_speed_z!

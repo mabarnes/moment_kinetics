@@ -5,7 +5,7 @@ export update_speed_z!
 
 using semi_lagrange: find_approximate_characteristic!
 using time_advance: advance_f_local!, rk_update_f!
-using source_terms: update_boundary_indices!
+using advection: update_boundary_indices!
 using chebyshev: chebyshev_info
 
 # argument chebyshev indicates that a chebyshev pseudopectral method is being used

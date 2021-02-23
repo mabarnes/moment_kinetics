@@ -1,9 +1,8 @@
-module source_terms
+module advection
 
 export setup_source
 export update_advection_factor!
 export calculate_explicit_source!
-export update_f!
 export update_boundary_indices!
 export set_igrid_ilem
 
@@ -185,33 +184,6 @@ function calculate_explicit_source!(rhs, df, adv_fac, up_idx, down_idx, up_incr,
                 # between neighboring elements.
                 igrid, ielem = set_igrid_ielem(igrid_map[idx], ielement_map[idx],
                     adv_fac[i], ngrid, nelement)
-#=
-                # if at the boundary point within the element, must carefully
-                # choose which value of df to use; this is because
-                # df is multi-valued at the overlapping point at the boundary
-                # between neighboring elements.
-                # here we choose to use the value of df from the upwind element.
-
-                # note that the first ngrid points are classified as belonging to the first element
-                # and the next ngrid-1 points belonging to second element, etc.
-
-                # adv_fac > 0 corresponds to negative advection speed, so
-                # use derivative information from upwind element at larger coordinate value
-                if igrid_map[idx] == ngrid && adv_fac[i] > 0.0
-                    igrid = 1
-                    ielem = mod(ielement_map[idx], nelement) + 1
-                # adv_fac < 0 corresponds to positive advection speed, so
-                # use derivative information from upwind element at smaller coordinate value
-                elseif igrid_map[idx] == 1 && adv_fac[i] < 0.0
-                    igrid = ngrid
-                    ielem = nelement - mod(nelement-ielement_map[idx]+1,nelement)
-                # aside from above cases, the pre-computed mappings from unpacked index i
-                # to element and grid within element indices are already correct
-                else
-                    igrid = igrid_map[idx]
-                    ielem = ielement_map[idx]
-                end
-=#
                 rhs[i] = adv_fac[i]*df[igrid,ielem]
             end
         end
@@ -224,33 +196,6 @@ function calculate_explicit_source!(rhs, df, adv_fac, up_idx, down_idx, up_incr,
             # between neighboring elements.
             igrid, ielem = set_igrid_ielem(igrid_map[i], ielement_map[i],
                 adv_fac[i], ngrid, nelement)
-#=
-            # if at the boundary point within the element, must carefully
-            # choose which value of df to use; this is because
-            # df is multi-valued at the overlapping point at the boundary
-            # between neighboring elements.
-            # here we choose to use the value of df from the upwind element.
-
-            # note that the first ngrid points are classified as belonging to the first element
-            # and the next ngrid-1 points belonging to second element, etc.
-
-            # adv_fac > 0 corresponds to negative advection speed, so
-            # use derivative information from upwind element at larger coordinate value
-            if igrid_map[i] == ngrid && adv_fac[i] > 0
-                igrid = 1
-                ielem = mod(ielement_map[i], nelement) + 1
-                # adv_fac < 0 corresponds to positive advection speed, so
-                # use derivative information from upwind element at smaller coordinate value
-            elseif igrid_map[i] == 1 && adv_fac[i] < 0
-                igrid = ngrid
-                ielem = nelement - mod(nelement-ielement_map[i]+1,nelement)
-                # aside from above cases, the pre-computed mappings from unpacked index i
-                # to element and grid within element indices are already correct
-            else
-                igrid = igrid_map[i]
-                ielem = ielement_map[i]
-            end
-=#
             rhs[i] = adv_fac[i]*df[igrid,ielem]
         end
     end
