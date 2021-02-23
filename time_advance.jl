@@ -1,16 +1,19 @@
 module time_advance
 
-export update_f!
-export advance_f_local!
+#export update_f!
+#export advance_f_local!
 export rk_update_f!
 
+#=
 using finite_differences: derivative_finite_difference!
 using chebyshev: chebyshev_derivative!
 using chebyshev: chebyshev_info
 using advection: update_advection_factor!
 using advection: calculate_explicit_source!
 using advection: update_boundary_indices!
+=#
 
+#=
 # update the righthand side of the equation to account for 1d advection in this coordinate
 function update_rhs!(source, f_current, SL, coord, dt, j, spectral)
     # calculate the factor appearing in front of df/dcoord in the advection
@@ -138,7 +141,7 @@ function update_f!(f_new, f_old, rhs, up_idx, down_idx, up_incr, dep_idx, n, bc,
     end
     return nothing
 end
-
+=#
 function rk_update_f!(ff, ff_rk, nz, nvpa, n_rk_stages)
     @boundscheck nz == size(ff_rk,1) || throw(BoundsError(ff_rk))
     @boundscheck nvpa == size(ff_rk,2) || throw(BoundsError(ff_rk))
