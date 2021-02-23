@@ -3,7 +3,6 @@ module charge_exchange
 export charge_exchange_collisions!
 
 using velocity_moments: update_density!, reset_moments_status!
-#using time_advance: rk_update_f!
 
 function charge_exchange_collisions!(ff, ff_scratch, moments, composition,
 	vpa, charge_exchange_frequency, nz, dt, n_rk_stages)
@@ -27,9 +26,6 @@ function charge_exchange_collisions!(ff, ff_scratch, moments, composition,
 			n_neutral_species, vpa, charge_exchange_frequency, nz, dt, istage)
 		reset_moments_status!(moments)
 	end
-	#for is ∈ 1:n_ion_species+n_neutral_species
-	#	@views rk_update_f!(ff[:,:,is], ff_scratch[:,:,is,:], nz, vpa.n, n_rk_stages)
-	#end
 end
 function charge_exchange_single_stage!(ff_scratch, ff, moments, n_ion_species,
 	n_neutral_species, vpa, charge_exchange_frequency, nz, dt, istage)

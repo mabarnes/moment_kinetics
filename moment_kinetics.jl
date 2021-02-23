@@ -5,21 +5,22 @@ using TimerOutputs
 
 using file_io: setup_file_io, finish_file_io
 using file_io: write_data_to_ascii, write_data_to_binary
-using chebyshev: setup_chebyshev_pseudospectral
-using chebyshev: chebyshev_derivative!
+#using chebyshev: setup_chebyshev_pseudospectral
+#using chebyshev: chebyshev_derivative!
 using coordinates: define_coordinate
-using advection: setup_source, update_boundary_indices!
-using semi_lagrange: setup_semi_lagrange
-using vpa_advection: vpa_advection!, vpa_advection_single_stage!, update_speed_vpa!
-using z_advection: z_advection!, z_advection_single_stage!, update_speed_z!
+#using advection: setup_source, update_boundary_indices!
+#using semi_lagrange: setup_semi_lagrange
+using vpa_advection: vpa_advection!, vpa_advection_single_stage!#, update_speed_vpa!
+using z_advection: z_advection!, z_advection_single_stage!#, update_speed_z!
 using velocity_moments: setup_moments, update_moments!, reset_moments_status!
-using em_fields: setup_em_fields, update_phi!
+#using em_fields: setup_em_fields, update_phi!
 using initial_conditions: init_f
-using initial_conditions: enforce_z_boundary_condition!
-using initial_conditions: enforce_vpa_boundary_condition!
+#using initial_conditions: enforce_z_boundary_condition!
+#using initial_conditions: enforce_vpa_boundary_condition!
 using moment_kinetics_input: mk_input
 using moment_kinetics_input: performance_test
 using charge_exchange: charge_exchange_collisions!, charge_exchange_single_stage!
+using time_advance: setup_time_advance!
 using time_advance: rk_update_f!
 
 to1 = TimerOutput()
@@ -66,6 +67,7 @@ function moment_kinetics(to)
     finish_file_io(io, cdf)
     return nothing
 end
+#=
 # create arrays and do other work needed to setup
 # the main time advance loop.
 # this includes creating and populating structs
@@ -140,6 +142,7 @@ function setup_time_advance!(ff, z, vpa, composition, drive_input)
     vpa_SL = setup_semi_lagrange(vpa.n, z.n)
     return z_spectral, vpa_spectral, moments, fields, z_source, vpa_source, z_SL, vpa_SL
 end
+=#
 # solve ∂f/∂t + v(z,t)⋅∂f/∂z + dvpa/dt ⋅ ∂f/∂vpa= 0
 # define approximate characteristic velocity
 # v₀(z)=vⁿ(z) and take time derivative along this characteristic

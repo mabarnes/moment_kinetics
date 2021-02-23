@@ -4,7 +4,6 @@ export vpa_advection!
 export update_speed_vpa!
 
 using semi_lagrange: find_approximate_characteristic!
-#using time_advance: rk_update_f!
 using advection: update_boundary_indices!
 using advection: advance_f_local!, set_igrid_ielem
 using em_fields: update_phi!
@@ -39,9 +38,6 @@ function vpa_advection!(ff, ff_scratch, fields, moments, SL, source, vpa, z,
 			z_spectral, composition, istage)
 		reset_moments_status!(moments)
 	end
-	#for is ∈ 1:composition.n_ion_species
-	#	@views rk_update_f!(ff[:,:,is], ff_scratch[:,:,is,:], z.n, vpa.n, n_rk_stages)
-    #end
 end
 function vpa_advection_single_stage!(ff_scratch, ff, fields, moments, SL, source, vpa, z,
 	use_semi_lagrange, dt, t, vpa_spectral, z_spectral, composition, istage)
@@ -69,7 +65,6 @@ function vpa_advection_single_stage!(ff_scratch, ff, fields, moments, SL, source
 				use_semi_lagrange)
 		end
 		enforce_vpa_boundary_condition!(view(ff_scratch,:,:,is,2), vpa.bc, source)
-		#moments.dens_updated[is] = false ; moments.ppar_updated[is] = false
 	end
 end
 # calculate the advection speed in the z-direction at each grid point
