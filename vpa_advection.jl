@@ -33,17 +33,17 @@ function vpa_advection!(ff, ff_scratch, fields, moments, SL, source, vpa, z,
             @. ff_scratch[:,:,:,istage] = 0.25*(ff_scratch[:,:,:,istage] +
                 ff_scratch[:,:,:,istage-1] + 2.0*ff)
         end
-		@views vpa_advection_single_stage!(ff_scratch[:,:,:,istage:istage+1], ff, fields,
-			moments, SL, source, vpa, z, use_semi_lagrange, dt, t, vpa_spectral,
+		@views vpa_advection_single_stage!(ff_scratch[:,:,:,istage+1], ff_scratch[:,:,:,istage],
+			ff, fields, moments, SL, source, vpa, z, use_semi_lagrange, dt, t, vpa_spectral,
 			z_spectral, composition, istage)
 		reset_moments_status!(moments)
 	end
 end
-function vpa_advection_single_stage!(ff_scratch, ff, fields, moments, SL, source, vpa, z,
-	use_semi_lagrange, dt, t, vpa_spectral, z_spectral, composition, istage)
+function vpa_advection_single_stage!(f_out, f_in, ff, fields, moments, SL, source,
+	vpa, z, use_semi_lagrange, dt, t, vpa_spectral, z_spectral, composition, istage)
+
 	# calculate the advection speed corresponding to current f
-	update_speed_vpa!(source, fields, moments, view(ff_scratch,:,:,:,1), vpa, z,
-		composition, t, z_spectral)
+	update_speed_vpa!(source, fields, moments, f_in, vpa, z, composition, t, z_spectral)
 	for is ∈ 1:composition.n_ion_species
 		# update the upwind/downwind boundary indices and upwind_increment
 		# NB: not sure if this will work properly with SL method at the moment
@@ -60,11 +60,11 @@ function vpa_advection_single_stage!(ff_scratch, ff, fields, moments, SL, source
 			end
 		end
 		for iz ∈ 1:z.n
-			@views advance_f_local!(ff_scratch[iz,:,is,2], ff_scratch[iz,:,is,1],
+			@views advance_f_local!(f_out[iz,:,is], f_in[iz,:,is],
 				ff[iz,:,is], SL[iz], source[iz,is], vpa, dt, istage, vpa_spectral,
 				use_semi_lagrange)
 		end
-		enforce_vpa_boundary_condition!(view(ff_scratch,:,:,is,2), vpa.bc, source)
+		enforce_vpa_boundary_condition!(view(f_out,:,:,is), vpa.bc, source)
 	end
 end
 # calculate the advection speed in the z-direction at each grid point

@@ -27,12 +27,13 @@ function z_advection!(ff, ff_scratch, SL, source, z, vpa, n_rk_stages,
             @. ff_scratch[:,:,istage] = 0.25*(ff_scratch[:,:,istage] +
                 ff_scratch[:,:,istage-1] + 2.0*ff)
         end
-        z_advection_single_stage!(ff_scratch, ff, SL, source, z, vpa,
-                              use_semi_lagrange, dt, t, spectral, istage)
+        @views z_advection_single_stage!(ff_scratch[:,:,istage+1],
+            ff_scratch[:,:,istage], ff, SL, source, z, vpa, use_semi_lagrange,
+            dt, t, spectral, istage)
     end
 end
 # do a single stage time advance (potentially as part of a multi-stage RK scheme)
-function z_advection_single_stage!(ff_scratch, ff, SL, source, z, vpa,
+function z_advection_single_stage!(f_out, f_in, ff, SL, source, z, vpa,
                       use_semi_lagrange, dt, t, spectral, istage)
     # get the updated speed along the z direction using the current f
     update_speed_z!(source, vpa, z, t)
@@ -50,7 +51,7 @@ function z_advection_single_stage!(ff_scratch, ff, SL, source, z, vpa,
     end
     # advance z-advection equation
     for ivpa ∈ 1:vpa.n
-        @views advance_f_local!(ff_scratch[:,ivpa,istage+1], ff_scratch[:,ivpa,istage],
+        @views advance_f_local!(f_out[:,ivpa], f_in[:,ivpa],
             ff[:,ivpa], SL[ivpa], source[ivpa], z, dt, istage, spectral, use_semi_lagrange)
     end
 end

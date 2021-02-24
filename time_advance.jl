@@ -219,21 +219,23 @@ function time_advance_no_splitting!(ff, ff_scratch, t, t_input, z, vpa,
         end
         # vpa_advection_single_stage! advances the 1D advection equation in vpa
         # only charged species have a force accelerating them in vpa
-        @views vpa_advection_single_stage!(ff_scratch[:,:,1:n_ion_species,istage:istage+1],
+        @views vpa_advection_single_stage!(ff_scratch[:,:,1:n_ion_species,istage+1],
+            ff_scratch[:,:,1:n_ion_species,istage],
             ff[:,:,1:n_ion_species], fields,
             moments, vpa_SL, vpa_source, vpa, z, use_semi_lagrange, dt, t,
             vpa_spectral, z_spectral, composition, istage)
         # z_advection_single_stage! advances 1D advection equation in z
         # apply z-advection operation to all species (charged and neutral)
         for is ∈ 1:composition.n_species
-            @views z_advection_single_stage!(ff_scratch[:,:,is,:], ff[:,:,is], z_SL,
+            @views z_advection_single_stage!(ff_scratch[:,:,is,istage+1],
+                ff_scratch[:,:,is,istage], ff[:,:,is], z_SL,
                 z_source[:,is], z, vpa, use_semi_lagrange, dt, t, z_spectral, istage)
         end
         if composition.n_neutral_species > 0
             # account for charge exchange collisions between ions and neutrals
-            charge_exchange_single_stage!(ff_scratch, ff, moments, n_ion_species,
-                composition.n_neutral_species, vpa, charge_exchange_frequency, z.n,
-                dt, istage)
+            @views charge_exchange_single_stage!(ff_scratch[:,:,:,istage+1],
+                ff_scratch[:,:,:,istage], ff, moments, n_ion_species,
+                composition.n_neutral_species, vpa, charge_exchange_frequency, z.n, dt)
         end
         # reset "xx.updated" flags to false since ff has been updated
         # and the corresponding moments have not
@@ -243,6 +245,36 @@ function time_advance_no_splitting!(ff, ff_scratch, t, t_input, z, vpa,
 		@views rk_update_f!(ff[:,:,is], ff_scratch[:,:,is,:], z.n, vpa.n, n_rk_stages)
     end
 end
+#=
+# euler_time_advance! advances the equation df/dt = G[f]
+# using the forward Euler method: f2 = f1 + dt*f1,
+# with f1 an input and f2 the output
+function euler_time_advance!(f_out, f_in)
+    # vpa_advection_single_stage! advances the 1D advection equation in vpa
+    # only charged species have a force accelerating them in vpa
+    @views vpa_advection_single_stage!(ff_scratch[:,:,1:n_ion_species,istage:istage+1],
+        ff[:,:,1:n_ion_species], fields,
+        moments, vpa_SL, vpa_source, vpa, z, use_semi_lagrange, dt, t,
+        vpa_spectral, z_spectral, composition, istage)
+    # z_advection_single_stage! advances 1D advection equation in z
+    # apply z-advection operation to all species (charged and neutral)
+    for is ∈ 1:composition.n_species
+        @views z_advection_single_stage!(ff_scratch[:,:,is,:], ff[:,:,is], z_SL,
+            z_source[:,is], z, vpa, use_semi_lagrange, dt, t, z_spectral, istage)
+    end
+    if composition.n_neutral_species > 0
+        # account for charge exchange collisions between ions and neutrals
+        charge_exchange_single_stage!(ff_scratch, ff, moments, n_ion_species,
+            composition.n_neutral_species, vpa, charge_exchange_frequency, z.n,
+            dt, istage)
+    end
+    # reset "xx.updated" flags to false since ff has been updated
+    # and the corresponding moments have not
+    reset_moments_status!(moments)
+end
+=#
+# rk_update_f! combines the results of the various Runge Kutta stages
+# to obtain the updated distribution function
 function rk_update_f!(ff, ff_rk, nz, nvpa, n_rk_stages)
     @boundscheck nz == size(ff_rk,1) || throw(BoundsError(ff_rk))
     @boundscheck nvpa == size(ff_rk,2) || throw(BoundsError(ff_rk))
