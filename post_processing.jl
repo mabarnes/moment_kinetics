@@ -115,17 +115,17 @@ function analyze_and_plot_data(path)
         @. shifted_time = time - time[itime_min]
         # assume phi(z0,t) = A*exp(growth_rate*t)*cos(ω*t - φ)
         # and fit phi(z0,t)/phi(z0,t0), which eliminates the constant A pre-factor
-        @views growth_rate, frequency, phase =
+        @views growth_rate, frequency, phase, fit_error =
             compute_frequencies(shifted_time[itime_min:itime_max], delta_phi[iz0,itime_min:itime_max])
         # estimate variation of frequency/growth rate over time_window by computing
         # values for each half of the time window and taking max/min
         i1 = itime_min ; i2 = itime_min + cld(itime_max-itime_min,2)
         println("t1: ", time[i1], "  t2: ", time[i2])
-        @views growth_rate_1, frequency_1, phase_1 =
+        @views growth_rate_1, frequency_1, phase_1, _ =
             compute_frequencies(shifted_time[i1:i2], delta_phi[iz0,i1:i2])
         i1 = i2+1 ; i2 = itime_max
         println("t1: ", time[i1], "  t2: ", time[i2])
-        @views growth_rate_2, frequency_2, phase_2 =
+        @views growth_rate_2, frequency_2, phase_2, _ =
             compute_frequencies(shifted_time[i1:i2], delta_phi[iz0,i1:i2])
         growth_rate_max = max(growth_rate_1, growth_rate_2, growth_rate)
         growth_rate_min = min(growth_rate_1, growth_rate_2, growth_rate)
@@ -135,7 +135,7 @@ function analyze_and_plot_data(path)
         io = open_output_file(run_name, "frequency_fit.txt")
         println(io, "#growth_rate: ", growth_rate, "  min: ", growth_rate_min, "  max: ", growth_rate_max,
             "  frequency: ", frequency, "  min: ", frequency_min, "  max: ", frequency_max,
-            "  phase: ", phase)
+            "  phase: ", phase, " fit_error: ", fit_error)
         println(io)
         fit_phi = (delta_phi[iz0,itime_min]./cos(phase) .* exp.(growth_rate.*shifted_time)
                    .* cos.(frequency*shifted_time .+ phase))
@@ -172,6 +172,8 @@ function analyze_and_plot_data(path)
         var[:,:] = delta_phi
         var = get_or_create("fit_phi","fit to delta phi", ("ntime",))
         var[:] = fit_phi
+        var = get_or_create("fit_error","RMS error on the fit of phi")
+        var[:] = fit_error
         println("done.")
     end
 
@@ -440,9 +442,9 @@ function field_line_average(fld, wgts, L)
 end
 
 function compute_frequencies(time_window, dphi)
-    growth_rate = 0.0 ; frequency = 0.0 ; phase = 0.0
+    growth_rate = 0.0 ; frequency = 0.0 ; phase = 0.0 ; fit_error = 0.0
     for iter ∈ 1:10
-        @views growth_rate_change, frequency, phase =
+        @views growth_rate_change, frequency, phase, fit_error =
             fit_phi0_vs_time(exp.(-growth_rate*time_window) .* dphi, time_window)
         growth_rate += growth_rate_change
         println("growth_rate: ", growth_rate, "  growth_rate_change/growth_rate: ", growth_rate_change/growth_rate)
@@ -450,7 +452,7 @@ function compute_frequencies(time_window, dphi)
             break
         end
     end
-    return growth_rate, frequency, phase
+    return growth_rate, frequency, phase, fit_error
 end
 
 function fit_phi0_vs_time(phi0, tmod)
@@ -468,7 +470,12 @@ function fit_phi0_vs_time(phi0, tmod)
     #se = standard_error(fit)
     #standard_deviation = Array{Float64,1}
     #@. standard_deviation = se * sqrt(size(tmod))
-    return fit.param[1], fit.param[2], fit.param[3]#, standard_deviation
+
+    fitted_function = model(tmod, fit.param)
+    fit_error = sqrt(sum((phi0/phi0[1] - fitted_function).^2
+                         / max.(phi0/phi0[1], fitted_function).^2) / length(tmod))
+
+    return fit.param[1], fit.param[2], fit.param[3], fit_error
 end
 
 end
