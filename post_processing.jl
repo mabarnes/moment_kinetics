@@ -14,6 +14,7 @@ using post_processing_input: pp
 using quadrature: composite_simpson_weights
 using array_allocation: allocate_float
 using file_io: open_output_file
+using type_definitions: mk_float
 
 function analyze_and_plot_data(path)
     # Create run_name from the path to the run directory
@@ -26,7 +27,7 @@ function analyze_and_plot_data(path)
 
     print("Opening ", filename, " to read NetCDF data...")
     # open the netcdf file with given filename for reading
-    fid = NCDataset(filename,"r")
+    fid = NCDataset(filename,"a")
     println("done.")
 
     print("Loading coordinate data...")
@@ -136,12 +137,41 @@ function analyze_and_plot_data(path)
             "  frequency: ", frequency, "  min: ", frequency_min, "  max: ", frequency_max,
             "  phase: ", phase)
         println(io)
+        fit_phi = (delta_phi[iz0,itime_min]./cos(phase) .* exp.(growth_rate.*shifted_time)
+                   .* cos.(frequency*shifted_time .+ phase))
         for i ∈ 1:ntime
             println(io, "time: ", time[i], "  delta_phi: ", delta_phi[iz0,i],
-                "  fit_phi: ", delta_phi[iz0,itime_min]/cos(phase) * exp(growth_rate*shifted_time[i])
-                    * cos(frequency*shifted_time[i] + phase))
+                    "  fit_phi: ", fit_phi[i])
         end
         close(io)
+        # also save fit to NetCDF file
+
+        function get_or_create(name, description, dims=())
+            if name in fid
+                return fid[name]
+            else
+                return defVar(fid, name, mk_float, dims,
+                              attrib=Dict("description"=>description))
+            end
+        end
+        var = get_or_create("growth_rate", "mode growth rate from fit")
+        var[:] = growth_rate
+        var = get_or_create("growth_rate_min","min growth rate from different fits")
+        var[:] = growth_rate_min
+        var = get_or_create("growth_rate_max","max growth rate from different fits")
+        var[:] = growth_rate_max
+        var = get_or_create("frequency","mode frequency from fit")
+        var[:] = frequency
+        var = get_or_create("frequency_min","min frequency from different fits")
+        var[:] = frequency_min
+        var = get_or_create("frequency_max","max frequency from different fits")
+        var[:] = frequency_max
+        var = get_or_create("phase","mode phase from fit")
+        var[:] = phase
+        var = get_or_create("delta_phi", "delta phi from simulation", ("nz", "ntime"))
+        var[:,:] = delta_phi
+        var = get_or_create("fit_phi","fit to delta phi", ("ntime",))
+        var[:] = fit_phi
         println("done.")
     end
 
