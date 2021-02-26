@@ -6,7 +6,7 @@ try
     @everywhere path_start_ind = 2
 catch ArgumentError
     # Default to serial if a number was not given as the first argument
-    path_start_ind = 1
+    @everywhere path_start_ind = 1
 end
 
 # add the current directory to the path where the code looks for external modules

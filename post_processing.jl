@@ -443,4 +443,6 @@ end
 
 end
 
-post_processing.analyze_and_plot_data(ARGS[1])
+if abspath(PROGRAM_FILE) == @__FILE__
+    post_processing.analyze_and_plot_data(ARGS[1])
+end

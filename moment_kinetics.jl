@@ -282,9 +282,11 @@ end
 
 end
 
-using TimerOutputs
-using moment_kinetics_input: mk_input
+if abspath(PROGRAM_FILE) == @__FILE__
+    using TimerOutputs
+    using moment_kinetics_input: mk_input
 
-to = TimerOutput
-input = mk_input()
-moment_kinetics.run_moment_kinetics(to, input)
+    to = TimerOutput
+    input = mk_input()
+    moment_kinetics.run_moment_kinetics(to, input)
+end
