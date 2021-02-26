@@ -45,7 +45,7 @@ function run_moment_kinetics(to, input)
     z_spectral, vpa_spectral, moments, fields, z_source, vpa_source,
         z_SL, vpa_SL = setup_time_advance!(ff, z, vpa, composition, drive_input)
     # setup i/o
-    io, cdf = setup_file_io(output_dir, run_name, z, vpa, composition)
+    io, cdf = setup_file_io(output_dir, run_name, z, vpa, composition, charge_exchange_frequency)
     # write initial data to ascii files
     write_data_to_ascii(ff, moments, fields, z, vpa, code_time, composition.n_species, io)
     # write initial data to binary file (netcdf) -- after updating velocity-space moments

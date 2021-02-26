@@ -38,7 +38,7 @@ struct netcdf_info{t_type, zvpast_type, zt_type, zst_type}
     parallel_pressure::zst_type
 end
 # open the necessary output files
-function setup_file_io(output_dir, run_name, z, vpa, composition)
+function setup_file_io(output_dir, run_name, z, vpa, composition, charge_exchange_frequqency)
     # check to see if output_dir exists in the current directory
     # if not, create it
     isdir(output_dir) || mkdir(output_dir)
@@ -46,12 +46,12 @@ function setup_file_io(output_dir, run_name, z, vpa, composition)
     #ff_io = open_output_file(out_prefix, "f_vs_t")
     mom_io = open_output_file(out_prefix, "moments_vs_t")
     fields_io = open_output_file(out_prefix, "fields_vs_t")
-    cdf = setup_netcdf_io(out_prefix, z, vpa, composition)
+    cdf = setup_netcdf_io(out_prefix, z, vpa, composition, charge_exchange_frequqency)
     #return ios(ff_io, mom_io, fields_io), cdf
     return ios(mom_io, fields_io), cdf
 end
 # setup file i/o for netcdf
-function setup_netcdf_io(prefix, z, vpa, composition)
+function setup_netcdf_io(prefix, z, vpa, composition, charge_exchange_frequency)
     # the netcdf file will be given by output_dir/run_name with .cdf appended
     filename = string(prefix,".cdf")
     # if a netcdf file with the requested name already exists, remove it
@@ -88,6 +88,20 @@ function setup_netcdf_io(prefix, z, vpa, composition)
     vartype = mk_float
     var = defVar(fid, varname, vartype, dims, attrib=attributes)
     var[:] = vpa.grid
+    # create and write the "T_e" variable to file
+    varname = "T_e"
+    attributes = Dict("description" => "electron temperature")
+    dims = ()
+    vartype = mk_float
+    var = defVar(fid, varname, vartype, dims, attrib=attributes)
+    var[:] = composition.T_e
+    # create and write the "charge_exchange_frequency" variable to file
+    varname = "charge_exchange_frequency"
+    attributes = Dict("description" => "charge exchange collision frequency")
+    dims = ()
+    vartype = mk_float
+    var = defVar(fid, varname, vartype, dims, attrib=attributes)
+    var[:] = charge_exchange_frequency
     ### create variables for time-dependent quantities and store them ###
     ### in a struct for later access ###
     # create the "time" variable
