@@ -1,6 +1,7 @@
 using DelimitedFiles: readdlm
 using Glob
 using NaturalSort
+using NCDatasets: NCDataset
 using OrderedCollections: OrderedDict
 using Plots
 
@@ -23,17 +24,19 @@ function get_sim_results(ni, nn)
     real_frequency = Vector{Float64}(undef, n)
     growth_rate = Vector{Float64}(undef, n)
     for (i, run) ∈ enumerate(run_directories)
+        filename = string(joinpath(run, basename(run)), ".cdf")
         try
+            fid = NCDataset(filename)
             # Divide by 2π to get 'Hz' instead of 'radians/s'
-            CX_freq[i] = parse(Float64, split(split(run, "_")[8], "-")[2]) / 2 / π
-            info = split(readline(string(joinpath(run, basename(run)), ".frequency_fit.txt")))
-            growth_rate[i] = parse(Float64, info[2]) / 2 / π
-            real_frequency[i] = parse(Float64, info[8]) / 2 / π
+            CX_freq[i] = fid["charge_exchange_frequency"][:] / 2 / π
+            growth_rate[i] = fid["growth_rate"][:] / 2 / π
+            real_frequency[i] = fid["frequency"][:] / 2 / π
+            close(fid)
         catch LoadError
             CX_freq[i] = NaN
             growth_rate[i] = NaN
             real_frequency[i] = NaN
-            println(string(joinpath(run, basename(run)), ".frequency_fit.txt"), " failed")
+            println(filename, " failed")
         end
     end
     return CX_freq, real_frequency, growth_rate
@@ -47,17 +50,19 @@ function get_sim_results_T(T_e)
     real_frequency = Vector{Float64}(undef, n)
     growth_rate = Vector{Float64}(undef, n)
     for (i, run) ∈ enumerate(run_directories)
+        filename = string(joinpath(run, basename(run)), ".cdf")
         try
+            fid = NCDataset(filename)
             # Divide by 2π to get 'Hz' instead of 'radians/s'
-            CX_freq[i] = parse(Float64, split(split(run, "_")[6], "-")[2]) / 2 / π
-            info = split(readline(string(joinpath(run, basename(run)), ".frequency_fit.txt")))
-            growth_rate[i] = parse(Float64, info[2]) / 2 / π
-            real_frequency[i] = parse(Float64, info[8]) / 2 / π
+            CX_freq[i] = fid["charge_exchange_frequency"][:] / 2 / π
+            growth_rate[i] = fid["growth_rate"][:] / 2 / π
+            real_frequency[i] = fid["frequency"][:] / 2 / π
+            close(fid)
         catch LoadError
             CX_freq[i] = NaN
             growth_rate[i] = NaN
             real_frequency[i] = NaN
-            println(string(joinpath(run, basename(run)), ".frequency_fit.txt"), " failed")
+            println(filename, " failed")
         end
     end
     return CX_freq, real_frequency, growth_rate
