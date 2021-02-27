@@ -155,7 +155,7 @@ function update_advection_factor!(adv_fac, speed, upwind_idx, downwind_idx,
             # NB: need to change v[idx] to v[i] for second iteration of RK
             if j == 1
                 adv_fac[i] = -dt*(speed[idx]-SL.characteristic_speed[i])
-            elseif j == 2
+            else
                 adv_fac[i] = -dt*(speed[i]-SL.characteristic_speed[i])
             end
         end
