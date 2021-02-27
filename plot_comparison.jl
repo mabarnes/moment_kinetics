@@ -23,6 +23,7 @@ function get_sim_results(ni, nn)
     CX_freq = Vector{Float64}(undef, n)
     real_frequency = Vector{Float64}(undef, n)
     growth_rate = Vector{Float64}(undef, n)
+    fit_error = Vector{Float64}(undef, n)
     for (i, run) ∈ enumerate(run_directories)
         filename = string(joinpath(run, basename(run)), ".cdf")
         try
@@ -31,15 +32,17 @@ function get_sim_results(ni, nn)
             CX_freq[i] = fid["charge_exchange_frequency"][:] / 2 / π
             growth_rate[i] = fid["growth_rate"][:] / 2 / π
             real_frequency[i] = fid["frequency"][:] / 2 / π
+            fit_error[i] = fid["fit_error"][:]
             close(fid)
         catch LoadError
             CX_freq[i] = NaN
             growth_rate[i] = NaN
             real_frequency[i] = NaN
+            fit_error[i] = NaN
             println(filename, " failed")
         end
     end
-    return CX_freq, real_frequency, growth_rate
+    return CX_freq, real_frequency, growth_rate, fit_error
 end
 
 function get_sim_results_T(T_e)
@@ -49,6 +52,7 @@ function get_sim_results_T(T_e)
     CX_freq = Vector{Float64}(undef, n)
     real_frequency = Vector{Float64}(undef, n)
     growth_rate = Vector{Float64}(undef, n)
+    fit_error = Vector{Float64}(undef, n)
     for (i, run) ∈ enumerate(run_directories)
         filename = string(joinpath(run, basename(run)), ".cdf")
         try
@@ -57,15 +61,17 @@ function get_sim_results_T(T_e)
             CX_freq[i] = fid["charge_exchange_frequency"][:] / 2 / π
             growth_rate[i] = fid["growth_rate"][:] / 2 / π
             real_frequency[i] = fid["frequency"][:] / 2 / π
+            fit_error[i] = fid["fit_error"][:]
             close(fid)
         catch LoadError
             CX_freq[i] = NaN
             growth_rate[i] = NaN
             real_frequency[i] = NaN
+            fit_error[i] = NaN
             println(filename, " failed")
         end
     end
-    return CX_freq, real_frequency, growth_rate
+    return CX_freq, real_frequency, growth_rate, fit_error
 end
 
 # Read analytical results
@@ -128,19 +134,42 @@ plot!(growth_rate_plot,
       ylims=ylims(growth_rate_plot),
      )
 
+function  split_results(array, fit_error)
+    threshold = 0.07
+    return ([x for (i, x) in enumerate(array) if fit_error[i] < threshold],
+            [x for (i, x) in enumerate(array) if fit_error[i] >= threshold])
+end
+
 # Plot simulation results
 for (i, (ni, nn)) ∈ enumerate(zip(ni_array, nn_array))
-    CX_freq, real_frequency, growth_rate = get_sim_results(ni, nn)
+    CX_freq, real_frequency, growth_rate, fit_error = get_sim_results(ni, nn)
+    cx_good, cx_bad = split_results(CX_freq, fit_error)
+    rf_good, rf_bad = split_results(real_frequency, fit_error)
     scatter!(real_frequency_plot,
-             CX_freq, real_frequency,
+             cx_good, rf_good,
+             label=string("sim, ni=", ni, " nn=", nn),
+             color=i,
+             markerstrokecolor=0,
+            )
+    scatter!(real_frequency_plot,
+             cx_bad, rf_bad,
+             label="",
+             color=i,
+             markershape=:xcross,
+             markerstrokecolor=0,
+            )
+    gr_good, gr_bad = split_results(growth_rate, fit_error)
+    scatter!(growth_rate_plot,
+             cx_good, gr_good,
              label=string("sim, ni=", ni, " nn=", nn),
              color=i,
              markerstrokecolor=0,
             )
     scatter!(growth_rate_plot,
-             CX_freq, growth_rate,
-             label=string("sim, ni=", ni, " nn=", nn),
+             cx_bad, gr_bad,
+             label="",
              color=i,
+             markershape=:xcross,
              markerstrokecolor=0,
             )
 end
@@ -194,17 +223,34 @@ plot!(growth_rate_plot,
 
 # Plot simulation results
 for (i, (T_e)) ∈ enumerate(T_array)
-    CX_freq, real_frequency, growth_rate = get_sim_results_T(T_e)
+    CX_freq, real_frequency, growth_rate, fit_error = get_sim_results_T(T_e)
+    cx_good, cx_bad = split_results(CX_freq, fit_error)
+    rf_good, rf_bad = split_results(real_frequency, fit_error)
     scatter!(real_frequency_plot,
-             CX_freq, real_frequency,
+             cx_good, rf_good,
+             label=string("sim, T_e=", T_e),
+             color=i,
+             markerstrokecolor=0,
+            )
+    scatter!(real_frequency_plot,
+             cx_bad, rf_bad,
+             label="",
+             color=i,
+             markershape=:xcross,
+             markerstrokecolor=0,
+            )
+    gr_good, gr_bad = split_results(growth_rate, fit_error)
+    scatter!(growth_rate_plot,
+             cx_good, gr_good,
              label=string("sim, T_e=", T_e),
              color=i,
              markerstrokecolor=0,
             )
     scatter!(growth_rate_plot,
-             CX_freq, growth_rate,
-             label=string("sim, T_e=", T_e),
+             cx_bad, gr_bad,
+             label="",
              color=i,
+             markershape=:xcross,
              markerstrokecolor=0,
             )
 end
