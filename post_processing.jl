@@ -448,7 +448,7 @@ function compute_frequencies(time_window, dphi)
             fit_phi0_vs_time(exp.(-growth_rate*time_window) .* dphi, time_window)
         growth_rate += growth_rate_change
         println("growth_rate: ", growth_rate, "  growth_rate_change/growth_rate: ", growth_rate_change/growth_rate)
-        if abs(growth_rate_change/growth_rate) < 0.001
+        if abs(growth_rate_change/growth_rate) < 1.0e-8
             break
         end
     end

@@ -3,7 +3,6 @@ module charge_exchange
 export charge_exchange_collisions!
 
 using velocity_moments: update_density!, reset_moments_status!
-using time_advance: rk_update_f!
 
 function charge_exchange_collisions!(ff, ff_scratch, moments, composition,
 	vpa, charge_exchange_frequency, nz, dt, n_rk_stages)
@@ -24,19 +23,16 @@ function charge_exchange_collisions!(ff, ff_scratch, moments, composition,
 	end
     for istage ∈ 1:n_rk_stages
 		charge_exchange_single_stage!(ff_scratch, ff, moments, n_ion_species,
-			n_neutral_species, vpa, charge_exchange_frequency, nz, dt, istage)
+			n_neutral_species, vpa, charge_exchange_frequency, nz, dt)
 		reset_moments_status!(moments)
 	end
-	for is ∈ 1:n_ion_species+n_neutral_species
-		@views rk_update_f!(ff[:,:,is], ff_scratch[:,:,is,:], nz, vpa.n, n_rk_stages)
-	end
 end
-function charge_exchange_single_stage!(ff_scratch, ff, moments, n_ion_species,
-	n_neutral_species, vpa, charge_exchange_frequency, nz, dt, istage)
+function charge_exchange_single_stage!(f_out, f_in, ff, moments, n_ion_species,
+	n_neutral_species, vpa, charge_exchange_frequency, nz, dt)
 	# make sure all densities needed for the charge exchange collisions are up-to-date
 	for is ∈ 1:n_ion_species+n_neutral_species
 		if moments.dens_updated[is] == false
-			@views update_density!(moments.dens[:,is], vpa.scratch, ff_scratch[:,:,is,istage], vpa, nz)
+			@views update_density!(moments.dens[:,is], vpa.scratch, f_in[:,:,is], vpa, nz)
 			moments.dens_updated[is] = true
 		end
 	end
@@ -49,9 +45,9 @@ function charge_exchange_single_stage!(ff_scratch, ff, moments, n_ion_species,
 			#cxfac = dt*charge_exchange_frequency
 			for ivpa ∈ 1:vpa.n
 				for iz ∈ 1:nz
-					ff_scratch[iz,ivpa,is,istage+1] += dt*charge_exchange_frequency *(
-						ff_scratch[iz,ivpa,isp+n_ion_species,istage]*moments.dens[iz,is]
-						- ff_scratch[iz,ivpa,is,istage]*moments.dens[iz,isp+n_ion_species])
+					f_out[iz,ivpa,is] += dt*charge_exchange_frequency *(
+						f_in[iz,ivpa,isp+n_ion_species]*moments.dens[iz,is]
+						- f_in[iz,ivpa,is]*moments.dens[iz,isp+n_ion_species])
 				end
 			end
 		end
@@ -65,9 +61,9 @@ function charge_exchange_single_stage!(ff_scratch, ff, moments, n_ion_species,
 			#cxfac = dt*charge_exchange_frequency
 			for ivpa ∈ 1:vpa.n
 				for iz ∈ 1:nz
-					ff_scratch[iz,ivpa,is+n_ion_species,istage+1] += dt*charge_exchange_frequency*(
-						ff_scratch[iz,ivpa,isp,istage]*moments.dens[iz,is+n_ion_species]
-						- ff_scratch[iz,ivpa,is+n_ion_species,istage]*moments.dens[iz,isp])
+					f_out[iz,ivpa,is+n_ion_species] += dt*charge_exchange_frequency*(
+						f_in[iz,ivpa,isp]*moments.dens[iz,is+n_ion_species]
+						- f_in[iz,ivpa,is+n_ion_species]*moments.dens[iz,isp])
 				end
 			end
 		end
