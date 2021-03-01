@@ -204,6 +204,21 @@ function time_advance_no_splitting!(ff, ff_scratch, t, t_input, z, vpa,
     # define abbreviated variable for tidiness
     n_rk_stages = t_input.n_rk_stages
 
+    if n_rk_stages == 3
+        ssp_rk3!(ff, ff_scratch, t, t_input, z, vpa,
+            z_spectral, vpa_spectral, moments, fields, z_source, vpa_source,
+            z_SL, vpa_SL, composition, charge_exchange_frequency, istep)
+    elseif n_rk_stages == 2
+        ssp_rk2!(ff, ff_scratch, t, t_input, z, vpa,
+            z_spectral, vpa_spectral, moments, fields, z_source, vpa_source,
+            z_SL, vpa_SL, composition, charge_exchange_frequency, istep)
+    else
+        euler_time_advance!(ff, ff, ff, fields, moments, z_SL, vpa_SL,
+            z_source, vpa_source, z, vpa, t,
+            t_input, z_spectral, vpa_spectral, composition,
+            charge_exchange_frequency, 1)
+    end
+#=
     # initialize ff_scratch to the distribution function value at the current time level
     for istage ∈ 1:n_rk_stages + 1
         ff_scratch[:,:,:,istage] .= ff
@@ -220,35 +235,75 @@ function time_advance_no_splitting!(ff, ff_scratch, t, t_input, z, vpa,
             ff, fields, moments, z_SL, vpa_SL, z_source, vpa_source, z, vpa, t,
             t_input, z_spectral, vpa_spectral, composition,
             charge_exchange_frequency, istage)
-#=
-        # vpa_advection_single_stage! advances the 1D advection equation in vpa
-        # only charged species have a force accelerating them in vpa
-        @views vpa_advection_single_stage!(ff_scratch[:,:,1:n_ion_species,istage+1],
-            ff_scratch[:,:,1:n_ion_species,istage],
-            ff[:,:,1:n_ion_species], fields,
-            moments, vpa_SL, vpa_source, vpa, z, use_semi_lagrange, dt, t,
-            vpa_spectral, z_spectral, composition, istage)
-        # z_advection_single_stage! advances 1D advection equation in z
-        # apply z-advection operation to all species (charged and neutral)
-        for is ∈ 1:composition.n_species
-            @views z_advection_single_stage!(ff_scratch[:,:,is,istage+1],
-                ff_scratch[:,:,is,istage], ff[:,:,is], z_SL,
-                z_source[:,is], z, vpa, use_semi_lagrange, dt, t, z_spectral, istage)
-        end
-        if composition.n_neutral_species > 0
-            # account for charge exchange collisions between ions and neutrals
-            @views charge_exchange_single_stage!(ff_scratch[:,:,:,istage+1],
-                ff_scratch[:,:,:,istage], ff, moments, n_ion_species,
-                composition.n_neutral_species, vpa, charge_exchange_frequency, z.n, dt)
-        end
-        # reset "xx.updated" flags to false since ff has been updated
-        # and the corresponding moments have not
-        reset_moments_status!(moments)
-=#
     end
     for is ∈ 1:composition.n_species
 		@views rk_update_f!(ff[:,:,is], ff_scratch[:,:,is,:], z.n, vpa.n, n_rk_stages)
     end
+=#
+end
+function ssp_rk3!(ff, ff_scratch, t, t_input, z, vpa,
+    z_spectral, vpa_spectral, moments, fields, z_source, vpa_source,
+    z_SL, vpa_SL, composition, charge_exchange_frequency, istep)
+
+    ff_scratch[:,:,:,1] .= ff
+
+    istage = 1
+    # do an Euler time advance, with ff_scratch[2] the advanced function
+    # and ff_scratch[1] the function at time level n
+    ff_scratch[:,:,:,istage+1] .= ff_scratch[:,:,:,istage]
+    # calculate f^{(1)} = fⁿ + Δt*G[fⁿ] = ff_scratch[2]
+    @views euler_time_advance!(ff_scratch[:,:,:,istage+1], ff_scratch[:,:,:,istage],
+        ff, fields, moments, z_SL, vpa_SL, z_source, vpa_source, z, vpa, t,
+        t_input, z_spectral, vpa_spectral, composition,
+        charge_exchange_frequency, istage)
+
+    istage = 2
+    ff_scratch[:,:,:,istage+1] .= ff_scratch[:,:,:,istage]
+    # calculate f^{(2)} = f^{(1)} + Δt*G[f^{(1)}] = ff_scratch[3]
+    @views euler_time_advance!(ff_scratch[:,:,:,istage+1], ff_scratch[:,:,:,istage],
+        ff, fields, moments, z_SL, vpa_SL, z_source, vpa_source, z, vpa, t,
+        t_input, z_spectral, vpa_spectral, composition,
+        charge_exchange_frequency, istage)
+    # redefinte ff_scratch[3] = g^{(2)} = 3/4 fⁿ + 1/4 f^{(2)}
+    @. ff_scratch[:,:,:,istage+1] = 0.75*ff + 0.25*ff_scratch[:,:,:,istage+1]
+
+    istage = 3
+    ff_scratch[:,:,:,istage+1] .= ff_scratch[:,:,:,istage]
+    # calculate f^{(3)} = g^{(2)} + Δt*G[g^{(2)}] = ff_scratch[4]
+    @views euler_time_advance!(ff_scratch[:,:,:,istage+1], ff_scratch[:,:,:,istage],
+        ff, fields, moments, z_SL, vpa_SL, z_source, vpa_source, z, vpa, t,
+        t_input, z_spectral, vpa_spectral, composition,
+        charge_exchange_frequency, istage)
+
+    # obtain f^{n+1} = 1/3 fⁿ + 2/3 f^{(3)}
+    @. ff = (ff + 2.0*ff_scratch[:,:,:,istage+1])/3.0
+end
+function ssp_rk2!(ff, ff_scratch, t, t_input, z, vpa,
+    z_spectral, vpa_spectral, moments, fields, z_source, vpa_source,
+    z_SL, vpa_SL, composition, charge_exchange_frequency, istep)
+
+    # define abbreviated variable for tidiness
+    n_rk_stages = t_input.n_rk_stages
+
+    ff_scratch[:,:,:,1] .= ff
+
+    istage = 1
+    # do an Euler time advance, with ff_scratch[2] the advanced function
+    # and ff_scratch[1] the function at time level n
+    ff_scratch[:,:,:,istage+1] .= ff_scratch[:,:,:,istage]
+    @views euler_time_advance!(ff_scratch[:,:,:,istage+1], ff_scratch[:,:,:,istage],
+        ff, fields, moments, z_SL, vpa_SL, z_source, vpa_source, z, vpa, t,
+        t_input, z_spectral, vpa_spectral, composition,
+        charge_exchange_frequency, istage)
+
+    istage = 2
+    ff_scratch[:,:,:,istage+1] .= ff_scratch[:,:,:,istage]
+    @views euler_time_advance!(ff_scratch[:,:,:,istage+1], ff_scratch[:,:,:,istage],
+        ff, fields, moments, z_SL, vpa_SL, z_source, vpa_source, z, vpa, t,
+        t_input, z_spectral, vpa_spectral, composition,
+        charge_exchange_frequency, istage)
+
+    @. ff = 0.5*(ff + ff_scratch[:,:,:,istage+1])
 end
 # euler_time_advance! advances the equation df/dt = G[f]
 # using the forward Euler method: f_out = f_in + dt*f_in,
