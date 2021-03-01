@@ -22,7 +22,8 @@ function charge_exchange_collisions!(ff, ff_scratch, moments, composition,
 		ff_scratch[:,:,:,istage] .= ff
 	end
     for istage ∈ 1:n_rk_stages
-		charge_exchange_single_stage!(ff_scratch, ff, moments, n_ion_species,
+		@views charge_exchange_single_stage!(ff_scratch[:,:,:,istage+1],
+			ff_scratch[:,:,:,istage], ff, moments, n_ion_species,
 			n_neutral_species, vpa, charge_exchange_frequency, nz, dt)
 		reset_moments_status!(moments)
 	end
