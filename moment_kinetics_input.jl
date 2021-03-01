@@ -14,9 +14,10 @@ using input_structs: species_parameters, species_parameters_mutable
 using input_structs: species_composition
 using input_structs: drive_input, drive_input_mutable
 
-const performance_test = false
+@enum RunType single performance_test scan
+const run_type = scan
 
-function mk_input()
+function mk_input(scan_input=Dict())
 
     # n_ion_species is the number of evolved ion species
     # currently only n_ion_species = 1 is supported
@@ -33,32 +34,35 @@ function mk_input()
         load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_response)
 
     # this is the prefix for all output files associated with this run
-    run_name = "CX5_TiTe4"
+    run_name = get(scan_input, :run_name, "debug")
     # this is the directory where the simulation data will be stored
     output_dir = string("runs/",run_name)
 
     ####### specify any deviations from default inputs for evolved species #######
-    # set initial Tᵢ/Tₑ = 1
+    # set initial Tₑ = 1
+    composition.T_e = get(scan_input, :T_e, 1.0)
     #species[1].initial_temperature = 1.0
     # set initial neutral temperature Tn/Tₑ = 1
     #species[2].initial_temperature = 1.0
     # set initial nᵢ/Nₑ = 1.0
-    species[1].initial_density = 0.5
-    species[1].initial_temperature = 4.0
-    species[1].z_IC.amplitude = 0.001
+    species[1].initial_density = get(scan_input, (:initial_density, 1), 0.5)
+    species[1].initial_temperature = get(scan_input, (:initial_temperature, 1), 1.0)
+    species[1].z_IC.amplitude = get(scan_input, (:z_IC_amplitude, 1), 0.001)
     # set initial neutral densiity = Nₑ
     if composition.n_species > 1
-        species[2].initial_density = 0.5
-        species[2].initial_temperature = species[1].initial_temperature
-        species[2].z_IC.amplitude = species[1].z_IC.amplitude
+        species[2].initial_density = get(scan_input, (:initial_density, 2), 0.5)
+        species[2].initial_temperature = get(scan_input, (:initial_temperature, 2), species[1].initial_temperature)
+        species[2].z_IC.amplitude = get(scan_input, (:z_IC_amplitude, 2), species[1].z_IC.amplitude)
     end
+    #################### end specification of species inputs #####################
 
-    charge_exchange_frequency = 5.0*sqrt(species[1].initial_temperature)
+
+    charge_exchange_frequency = get(scan_input, :charge_exchange_frequency, 5.0*sqrt(species[1].initial_temperature))
 
     # parameters related to the time stepping
-    nstep = 6000
-    dt = 0.0005/sqrt(species[1].initial_temperature)
-    nwrite = 20
+    nstep = get(scan_input, :nstep, 6000)
+    dt = get(scan_input, :dt, 0.0005/sqrt(species[1].initial_temperature))
+    nwrite = get(scan_input, :nwrite, 20)
     # use_semi_lagrange = true to use interpolation-free semi-Lagrange treatment
     # otherwise, solve problem solely using the discretization_option above
     use_semi_lagrange = false
@@ -91,8 +95,6 @@ function mk_input()
     # supported options are "chebyshev_pseudospectral" and "finite_difference"
     #vpa.discretization = "chebyshev_pseudospectral"
     vpa.discretization = "finite_difference"
-
-    #################### end specification of species inputs #####################
 
     #########################################################################
     ########## end user inputs. do not modify following code! ###############
@@ -225,7 +227,7 @@ function load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_resp
         n_species = n_ion_speces + n_neutral_species + 1
     end
     composition = species_composition(n_species, n_ion_species, n_neutral_species,
-        boltzmann_electron_response)
+        boltzmann_electron_response, 1.0)
     species = Array{species_parameters_mutable,1}(undef,n_species)
     # initial temperature for each species defaults to Tₑ
     initial_temperature = 1.0
