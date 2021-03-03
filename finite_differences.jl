@@ -19,13 +19,13 @@ function derivative_finite_difference!(df, f, del, adv_fac, bc, fd_option, igrid
 	# fill them in now in case they are accessed elsewhere
 	nelement = size(df,2)
 	ngrid = size(df,1)
-	@inbounds begin
+	#@inbounds begin
 		if nelement > 1
 			for ielem ∈ 2:nelement
 				df[1,ielem] = df[ngrid,ielem-1]
 			end
 		end
-	end
+	#end
 	return nothing
 end
 function derivative_finite_difference!(df, f, del, bc, fd_option, igrid, ielement)
@@ -171,10 +171,10 @@ function upwind_second_order!(df, f, del, adv_fac, bc, igrid, ielement)
 end
 function upwind_third_order!(df, f, del, adv_fac, bc, igrid, ielement)
     n = length(del)
-	@boundscheck n == length(f) || throw(BoundsError(f))
+	@boundscheck n == length(f) && n > 3 || throw(BoundsError(f))
     @boundscheck n == length(del) || throw(BoundsError(del))
 	@boundscheck n == length(adv_fac) || throw(BoundsError(adv_fac))
-    @inbounds @fastmath begin
+    #@inbounds @fastmath begin
         for i ∈ 3:n-2
             if adv_fac[i] < 0
 				df[igrid[i],ielement[i]] =  (2*f[i+1]+3*f[i]-6*f[i-1]+f[i-2])/(6*del[i])
@@ -240,7 +240,7 @@ function upwind_third_order!(df, f, del, adv_fac, bc, igrid, ielement)
 		else
 			df[igrid[n],ielement[n]] =  (2*tmp1+3*f[n]-6*f[n-1]+f[n-2])/(6*del[n-1])
 		end
-	end
+	#end
 	return nothing
 end
 # take the derivative of input function f and return as df
