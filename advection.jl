@@ -143,23 +143,25 @@ function update_advection_factor!(adv_fac, speed, upwind_idx, downwind_idx,
         throw(BoundsError(SL.characteristic_speed))
     #NB: commented out line below needed for bc != periodic?
     #@inbounds for i ∈ upwind_idx-upwind_increment:-upwind_increment:downwind_idx
-    @inbounds for i ∈ upwind_idx:-upwind_increment:downwind_idx
-        idx = SL.dep_idx[i]
-        # only need to calculate advection factor for characteristics
-        # that originate within the domain, as zero/constant incoming BC
-        # takes care of the rest.
-        if idx != upwind_idx + upwind_increment
-            # the effective advection speed appearing in the source
-            # is the speed in the frame moving with the approximate
-            # characteristic speed v_char
-            # NB: need to change v[idx] to v[i] for second iteration of RK
-            if j == 1
-                adv_fac[i] = -dt*(speed[idx]-SL.characteristic_speed[i])
-            else
-                adv_fac[i] = -dt*(speed[i]-SL.characteristic_speed[i])
+    #@inbounds begin
+        for i ∈ upwind_idx:-upwind_increment:downwind_idx
+            idx = SL.dep_idx[i]
+            # only need to calculate advection factor for characteristics
+            # that originate within the domain, as zero/constant incoming BC
+            # takes care of the rest.
+            if idx != upwind_idx + upwind_increment
+                # the effective advection speed appearing in the source
+                # is the speed in the frame moving with the approximate
+                # characteristic speed v_char
+                # NB: need to change v[idx] to v[i] for second iteration of RK
+                if j == 1
+                    adv_fac[i] = -dt*(speed[idx]-SL.characteristic_speed[i])
+                else
+                    adv_fac[i] = -dt*(speed[i]-SL.characteristic_speed[i])
+                end
             end
         end
-    end
+    #end
     return nothing
 end
 # calculate the explicit source terms on the rhs of the equation;
@@ -178,30 +180,34 @@ function calculate_explicit_source!(rhs, df, adv_fac, up_idx, down_idx, up_incr,
     # corresponding to the ith characteristic
     if j == 1
         #@inbounds for i ∈ up_idx:-up_incr:down_idx
-        @inbounds for i ∈ 1:n
-            idx = dep_idx[i]
+        #@inbounds begin
+            for i ∈ 1:n
+                idx = dep_idx[i]
 
-            if idx != up_idx + up_incr
+                if idx != up_idx + up_incr
+                    # if at the boundary point within the element, must carefully
+                    # choose which value of df to use; this is because
+                    # df is multi-valued at the overlapping point at the boundary
+                    # between neighboring elements.
+                    igrid, ielem = set_igrid_ielem(igrid_map[idx], ielement_map[idx],
+                        adv_fac[i], ngrid, nelement)
+                    rhs[i] = adv_fac[i]*df[igrid,ielem]
+                end
+            end
+        #end
+    else
+        #@inbounds for i ∈ up_idx:-up_incr:down_idx
+        #@inbounds begin
+            for i ∈ 1:n
                 # if at the boundary point within the element, must carefully
                 # choose which value of df to use; this is because
                 # df is multi-valued at the overlapping point at the boundary
                 # between neighboring elements.
-                igrid, ielem = set_igrid_ielem(igrid_map[idx], ielement_map[idx],
+                igrid, ielem = set_igrid_ielem(igrid_map[i], ielement_map[i],
                     adv_fac[i], ngrid, nelement)
                 rhs[i] = adv_fac[i]*df[igrid,ielem]
             end
-        end
-    else
-        #@inbounds for i ∈ up_idx:-up_incr:down_idx
-        @inbounds for i ∈ 1:n
-            # if at the boundary point within the element, must carefully
-            # choose which value of df to use; this is because
-            # df is multi-valued at the overlapping point at the boundary
-            # between neighboring elements.
-            igrid, ielem = set_igrid_ielem(igrid_map[i], ielement_map[i],
-                adv_fac[i], ngrid, nelement)
-            rhs[i] = adv_fac[i]*df[igrid,ielem]
-        end
+        #end
     end
     return nothing
 end
@@ -303,7 +309,8 @@ function update_f!(f_new, f_old, rhs, up_idx, down_idx, up_incr, dep_idx, n, bc,
             end
         end
     else
-        @inbounds for i ∈ up_idx:-up_incr:down_idx
+        #@inbounds for i ∈ up_idx:-up_incr:down_idx
+        for i ∈ up_idx:-up_incr:down_idx
             f_new[i] += rhs[i]
         end
     end
