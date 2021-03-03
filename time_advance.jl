@@ -204,7 +204,11 @@ function time_advance_no_splitting!(ff, ff_scratch, t, t_input, z, vpa,
     # define abbreviated variable for tidiness
     n_rk_stages = t_input.n_rk_stages
 
-    if n_rk_stages == 3
+    if n_rk_stages == 4
+        ssp_rk3_4stage!(ff, ff_scratch, t, t_input, z, vpa,
+            z_spectral, vpa_spectral, moments, fields, z_source, vpa_source,
+            z_SL, vpa_SL, composition, charge_exchange_frequency, istep)
+    elseif n_rk_stages == 3
         ssp_rk3!(ff, ff_scratch, t, t_input, z, vpa,
             z_spectral, vpa_spectral, moments, fields, z_source, vpa_source,
             z_SL, vpa_SL, composition, charge_exchange_frequency, istep)
@@ -218,28 +222,54 @@ function time_advance_no_splitting!(ff, ff_scratch, t, t_input, z, vpa,
             t_input, z_spectral, vpa_spectral, composition,
             charge_exchange_frequency, 1)
     end
-#=
-    # initialize ff_scratch to the distribution function value at the current time level
-    for istage ∈ 1:n_rk_stages + 1
-        ff_scratch[:,:,:,istage] .= ff
-    end
-    for istage ∈ 1:n_rk_stages
-        # for SSP RK3, need to redefine ff_scratch[3]
-        if istage == 3
-            @. ff_scratch[:,:,:,istage] = 0.25*(ff_scratch[:,:,:,istage] +
-                ff_scratch[:,:,:,istage-1] + 2.0*ff)
-        end
-        # do an Euler time advance, with ff_scratch[istage+1] the advanced function
-        # and ff_scratch[istage] the function at level n
-        @views euler_time_advance!(ff_scratch[:,:,:,istage+1], ff_scratch[:,:,:,istage],
-            ff, fields, moments, z_SL, vpa_SL, z_source, vpa_source, z, vpa, t,
-            t_input, z_spectral, vpa_spectral, composition,
-            charge_exchange_frequency, istage)
-    end
-    for is ∈ 1:composition.n_species
-		@views rk_update_f!(ff[:,:,is], ff_scratch[:,:,is,:], z.n, vpa.n, n_rk_stages)
-    end
-=#
+end
+function ssp_rk3_4stage!(ff, ff_scratch, t, t_input, z, vpa,
+    z_spectral, vpa_spectral, moments, fields, z_source, vpa_source,
+    z_SL, vpa_SL, composition, charge_exchange_frequency, istep)
+
+    ff_scratch[:,:,:,1] .= ff
+
+    istage = 1
+    # do an Euler time advance, with ff_scratch[2] the advanced function
+    # and ff_scratch[1] the function at time level n
+    ff_scratch[:,:,:,istage+1] .= ff_scratch[:,:,:,istage]
+    # calculate f^{(1)} = fⁿ + Δt*G[fⁿ] = ff_scratch[2]
+    @views euler_time_advance!(ff_scratch[:,:,:,istage+1], ff_scratch[:,:,:,istage],
+        ff, fields, moments, z_SL, vpa_SL, z_source, vpa_source, z, vpa, t,
+        t_input, z_spectral, vpa_spectral, composition,
+        charge_exchange_frequency, istage)
+    @. ff_scratch[:,:,:,istage+1] = 0.5*(ff + ff_scratch[:,:,:,istage+1])
+
+    istage = 2
+    ff_scratch[:,:,:,istage+1] .= ff_scratch[:,:,:,istage]
+    # calculate f^{(2)} = f^{(1)} + Δt*G[f^{(1)}] = ff_scratch[3]
+    @views euler_time_advance!(ff_scratch[:,:,:,istage+1], ff_scratch[:,:,:,istage],
+        ff, fields, moments, z_SL, vpa_SL, z_source, vpa_source, z, vpa, t,
+        t_input, z_spectral, vpa_spectral, composition,
+        charge_exchange_frequency, istage)
+    # redefinte ff_scratch[3] = g^{(2)} = 1/2 f^{(1)} + 1/2 f^{(2)}
+    @. ff_scratch[:,:,:,istage+1] = 0.5*(ff_scratch[:,:,:,istage] + ff_scratch[:,:,:,istage+1])
+
+    istage = 3
+    ff_scratch[:,:,:,istage+1] .= ff_scratch[:,:,:,istage]
+    # calculate f^{(3)} = g^{(2)} + Δt*G[g^{(2)}] = ff_scratch[4]
+    @views euler_time_advance!(ff_scratch[:,:,:,istage+1], ff_scratch[:,:,:,istage],
+        ff, fields, moments, z_SL, vpa_SL, z_source, vpa_source, z, vpa, t,
+        t_input, z_spectral, vpa_spectral, composition,
+        charge_exchange_frequency, istage)
+    # redefine ff_scratch[4] = g^{(3)} = 2/3 fⁿ + 1/6 g^{(2)} + 1/6 f^{(3)}
+    @. ff_scratch[:,:,:,istage+1] = (4.0*ff + ff_scratch[:,:,:,istage] + ff_scratch[:,:,:,istage+1])/6.0
+
+    istage = 4
+    ff_scratch[:,:,:,istage+1] .= ff_scratch[:,:,:,istage]
+    # calculate f^{(4)} = g^{(3)} + Δt*G[g^{(3)}] = ff_scratch[5]
+    @views euler_time_advance!(ff_scratch[:,:,:,istage+1], ff_scratch[:,:,:,istage],
+        ff, fields, moments, z_SL, vpa_SL, z_source, vpa_source, z, vpa, t,
+        t_input, z_spectral, vpa_spectral, composition,
+        charge_exchange_frequency, istage)
+
+    # obtain f^{n+1} = 1/3 fⁿ + 2/3 f^{(4)}
+    @. ff = 0.5*(ff_scratch[:,:,:,istage] + ff_scratch[:,:,:,istage+1])
 end
 function ssp_rk3!(ff, ff_scratch, t, t_input, z, vpa,
     z_spectral, vpa_spectral, moments, fields, z_source, vpa_source,
