@@ -33,6 +33,7 @@ function vpa_advection!(ff, ff_scratch, fields, moments, SL, source, vpa, z,
             @. ff_scratch[:,:,:,istage] = 0.25*(ff_scratch[:,:,:,istage] +
                 ff_scratch[:,:,:,istage-1] + 2.0*ff)
         end
+		ff_scratch[:,:,:,istage+1] .= ff
 		@views vpa_advection_single_stage!(ff_scratch[:,:,:,istage+1], ff_scratch[:,:,:,istage],
 			ff, fields, moments, SL, source, vpa, z, use_semi_lagrange, dt, t, vpa_spectral,
 			z_spectral, composition, istage)
@@ -87,13 +88,13 @@ function update_speed_vpa!(source, fields, moments, ff, vpa, z, composition, t, 
 			update_speed_linear!(view(source,:,is), vpa, z.n)
 		end
 	end
-	@inbounds begin
+	#@inbounds begin
 		for is ∈ 1:composition.n_ion_species
 			for iz ∈ 1:z.n
 				@. source[iz,is].modified_speed = source[iz,is].speed
 			end
 		end
-	end
+	#end
     return nothing
 end
 # update the advection speed dvpa/dt = Ze/m E_parallel
@@ -145,13 +146,13 @@ function update_speed_default!(source, fields, moments, ff, vpa, z, composition,
 end
 # update the advection speed dvpa/dt = constant
 function update_speed_constant!(source, vpa, nz)
-	@inbounds @fastmath begin
+	#@inbounds @fastmath begin
 		for iz ∈ 1:nz
 			for ivpa ∈ 1:vpa.n
 				source[iz].speed[ivpa] = vpa.advection.constant_speed
 			end
 		end
-	end
+	#end
 end
 # update the advection speed dvpa/dt = const*(vpa + L/2)
 function update_speed_linear(source, vpa, nz)

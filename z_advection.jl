@@ -27,6 +27,7 @@ function z_advection!(ff, ff_scratch, SL, source, z, vpa, n_rk_stages,
             @. ff_scratch[:,:,istage] = 0.25*(ff_scratch[:,:,istage] +
                 ff_scratch[:,:,istage-1] + 2.0*ff)
         end
+        ff_scratch[:,:,istage+1] .= ff
         @views z_advection_single_stage!(ff_scratch[:,:,istage+1],
             ff_scratch[:,:,istage], ff, SL, source, z, vpa, use_semi_lagrange,
             dt, t, spectral, istage)
