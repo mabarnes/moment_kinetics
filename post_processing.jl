@@ -20,196 +20,27 @@ function analyze_and_plot_data(path)
     # Create run_name from the path to the run directory
     path = realpath(path)
     run_name = joinpath(path, basename(path))
-
-    # create the netcdf filename from the given run_name
-    #filename = string(run_name, "/", run_name, ".cdf")
-    filename = string(run_name, ".cdf")
-
-    print("Opening ", filename, " to read NetCDF data...")
-    # open the netcdf file with given filename for reading
-    fid = NCDataset(filename,"a")
-    println("done.")
-
-    print("Loading coordinate data...")
-    # define a handle for the z coordinate
-    cdfvar = fid["z"]
-    # get the number of z grid points
-    nz = length(cdfvar)
-    # load the data for z
-    z = cdfvar.var[:]
-
-    # define a handle for the vpa coordinate
-    cdfvar = fid["vpa"]
-    # get the number of vpa grid points
-    nvpa = length(cdfvar)
-    # load the data for vpa
-    vpa = cdfvar.var[:]
-
-    # define a handle for the time coordinate
-    cdfvar = fid["time"]
-    # get the number of time grid points
-    ntime = length(cdfvar)
-    # load the data for time
-    time = cdfvar.var[:]
-    println("done.")
-
-    print("Initializing the post-processing input options...")
-    # nwrite_movie is the stride used when making animations
-    nwrite_movie = pp.nwrite_movie
-    # itime_min is the minimum time index at which to start animations
-    if pp.itime_min > 0 && pp.itime_min <= ntime
-        itime_min = pp.itime_min
-    else
-        itime_min = 1
-    end
-    # itime_max is the final time index at which to end animations
-    # if itime_max < 0, the value used will be the total number of time slices
-    if pp.itime_max > 0 && pp.itime_max <= ntime
-        itime_max = pp.itime_max
-    else
-        itime_max = ntime
-    end
-    # iz0 is the iz index used when plotting data at a single z location
-    # by default, it will be set to cld(nz,2) unless a non-negative value provided
-    if pp.iz0 > 0
-        iz0 = pp.iz0
-    else
-        iz0 = cld(nz,2)
-    end
-    # ivpa0 is the iz index used when plotting data at a single vpa location
-    # by default, it will be set to cld(nvpa,2) unless a non-negative value provided
-    if pp.ivpa0 > 0
-        ivpa0 = pp.ivpa0
-    else
-        ivpa0 = cld(nvpa,3)
-    end
-    println("done.")
-
-    print("Loading fields data...")
-    # define a handle for the electrostatic potential
-    cdfvar = fid["phi"]
-    # load the electrostatic potential data
-    phi = cdfvar.var[:,:]
-    println("done.")
-
-    print("Analyzing fields data...")
-    # compute the z integration weights needed to do field line averages
-    z_wgts = composite_simpson_weights(z)
-    # Lz = z box length
-    Lz = z[end]-z[1]
-    phi_fldline_avg = allocate_float(ntime)
-    for i ∈ 1:ntime
-        phi_fldline_avg[i] = field_line_average(view(phi,:,i), z_wgts, Lz)
-    end
-    # delta_phi = phi - <phi> is the fluctuating phi
-    delta_phi = allocate_float(nz,ntime)
-    for iz ∈ 1:nz
-        delta_phi[iz,:] .= phi[iz,:] - phi_fldline_avg
-    end
-    println("done.")
-
+    # open the netcdf file and give it the handle 'fid'
+    fid = open_netcdf_file(run_name)
+    # load space-time coordinate data
+    nz, z, z_wgts, Lz, nvpa, vpa, vpa_wgts, ntime, time = load_coordinate_data(fid)
+    # initialise the post-processing input options
+    nwrite_movie, itime_min, itime_max, iz0, ivpa0 = init_postprocessing_options(pp, nz, nvpa, ntime)
+    # load fields data
+    phi = load_fields_data(fid)
+    # analyze the fields data
+    phi_fldline_avg, delta_phi = analyze_fields_data(phi, ntime, nz, z_wgts, Lz)
+    # use a fit to calculate and write to file the damping rate and growth rate of the
+    # perturbed electrostatic potential
     if pp.calculate_frequencies
-        println("Calculating the frequency and damping/growth rate...")
-        # shifted_time = t - t0
-        shifted_time = allocate_float(ntime)
-        @. shifted_time = time - time[itime_min]
-        # assume phi(z0,t) = A*exp(growth_rate*t)*cos(ω*t - φ)
-        # and fit phi(z0,t)/phi(z0,t0), which eliminates the constant A pre-factor
-        @views growth_rate, frequency, phase, fit_error =
-            compute_frequencies(shifted_time[itime_min:itime_max], delta_phi[iz0,itime_min:itime_max])
-        # estimate variation of frequency/growth rate over time_window by computing
-        # values for each half of the time window and taking max/min
-        i1 = itime_min ; i2 = itime_min + cld(itime_max-itime_min,2)
-        println("t1: ", time[i1], "  t2: ", time[i2])
-        @views growth_rate_1, frequency_1, phase_1, _ =
-            compute_frequencies(shifted_time[i1:i2], delta_phi[iz0,i1:i2])
-        i1 = i2+1 ; i2 = itime_max
-        println("t1: ", time[i1], "  t2: ", time[i2])
-        @views growth_rate_2, frequency_2, phase_2, _ =
-            compute_frequencies(shifted_time[i1:i2], delta_phi[iz0,i1:i2])
-        growth_rate_max = max(growth_rate_1, growth_rate_2, growth_rate)
-        growth_rate_min = min(growth_rate_1, growth_rate_2, growth_rate)
-        frequency_max = max(frequency_1, frequency_2, frequency)
-        frequency_min = min(frequency_1, frequency_2, frequency)
-        # write info related to fit to file
-        io = open_output_file(run_name, "frequency_fit.txt")
-        println(io, "#growth_rate: ", growth_rate, "  min: ", growth_rate_min, "  max: ", growth_rate_max,
-            "  frequency: ", frequency, "  min: ", frequency_min, "  max: ", frequency_max,
-            "  phase: ", phase, " fit_error: ", fit_error)
-        println(io)
-        fit_phi = (delta_phi[iz0,itime_min]./cos(phase) .* exp.(growth_rate.*shifted_time)
-                   .* cos.(frequency*shifted_time .+ phase))
-        for i ∈ 1:ntime
-            println(io, "time: ", time[i], "  delta_phi: ", delta_phi[iz0,i],
-                    "  fit_phi: ", fit_phi[i])
-        end
-        close(io)
-        # also save fit to NetCDF file
-
-        function get_or_create(name, description, dims=())
-            if name in fid
-                return fid[name]
-            else
-                return defVar(fid, name, mk_float, dims,
-                              attrib=Dict("description"=>description))
-            end
-        end
-        var = get_or_create("growth_rate", "mode growth rate from fit")
-        var[:] = growth_rate
-        var = get_or_create("growth_rate_min","min growth rate from different fits")
-        var[:] = growth_rate_min
-        var = get_or_create("growth_rate_max","max growth rate from different fits")
-        var[:] = growth_rate_max
-        var = get_or_create("frequency","mode frequency from fit")
-        var[:] = frequency
-        var = get_or_create("frequency_min","min frequency from different fits")
-        var[:] = frequency_min
-        var = get_or_create("frequency_max","max frequency from different fits")
-        var[:] = frequency_max
-        var = get_or_create("phase","mode phase from fit")
-        var[:] = phase
-        var = get_or_create("delta_phi", "delta phi from simulation", ("nz", "ntime"))
-        var[:,:] = delta_phi
-        var = get_or_create("fit_phi","fit to delta phi", ("ntime",))
-        var[:] = fit_phi
-        var = get_or_create("fit_error","RMS error on the fit of phi")
-        var[:] = fit_error
-        println("done.")
+        frequency, growth_rate, phase, shifted_time =
+            calculate_and_write_frequencies(fid, run_name, ntime, time, itime_min,
+                                            itime_max, iz0, delta_phi)
     end
-
-    println("Plotting fields data...")
-    phimin = minimum(phi)
-    phimax = maximum(phi)
-    if pp.plot_phi0_vs_t
-        # plot the time trace of phi(z=z0)
-        #plot(time, log.(phi[i,:]), yscale = :log10)
-        @views plot(time, phi[iz0,:])
-        outfile = string(run_name, "_phi0_vs_t.pdf")
-        savefig(outfile)
-        # plot the time trace of phi(z=z0)-phi_fldline_avg
-        @views plot(time, abs.(delta_phi[iz0,:]), xlabel="t*Lz/vti", ylabel="δϕ", yaxis=:log)
-        if pp.calculate_frequencies
-            plot!(time, abs.(delta_phi[iz0,itime_min]/cos(phase) * exp.(growth_rate*shifted_time)
-                .* cos.(frequency*shifted_time .+ phase)))
-        end
-        outfile = string(run_name, "_delta_phi0_vs_t.pdf")
-        savefig(outfile)
-    end
-    if pp.plot_phi_vs_z_t
-        # make a heatmap plot of ϕ(z,t)
-        heatmap(time, z, phi, xlabel="time", ylabel="z", title="ϕ", c = :deep)
-        outfile = string(run_name, "_phi_vs_z_t.pdf")
-        savefig(outfile)
-    end
-    if pp.animate_phi_vs_z
-        # make a gif animation of ϕ(z) at different times
-        anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-            @views plot(z, phi[:,i], xlabel="z", ylabel="ϕ", ylims = (phimin,phimax))
-        end
-        outfile = string(run_name, "_phi_vs_z.gif")
-        gif(anim, outfile, fps=5)
-    end
-    println("done.")
+    # create the requested plots of the fields
+    plot_fields(phi, delta_phi, time, itime_min, itime_max, nwrite_movie,
+                z, iz0, run_name, frequency, growth_rate, phase,
+                shifted_time, pp)
 
     print("Loading velocity moments data...")
     # define a handle for the species density
@@ -345,7 +176,7 @@ function analyze_and_plot_data(path)
     ff = cdfvar.var[:,:,:,:]
     println("done.")
 
-    print("Analyzing distributiion function data...")
+    print("Analyzing distribution function data...")
     f_fldline_avg = allocate_float(nvpa,n_species,ntime)
     for i ∈ 1:ntime
         for is ∈ 1:n_species
@@ -359,6 +190,7 @@ function analyze_and_plot_data(path)
     for iz ∈ 1:nz
         @. delta_f[iz,:,:,:] = ff[iz,:,:,:] - f_fldline_avg
     end
+    #@views advection_test_1d(ff[:,:,:,1], ff[:,:,:,end])
     println("done.")
 
     println("Plotting distribution function data...")
@@ -431,7 +263,217 @@ function analyze_and_plot_data(path)
     close(fid)
 
 end
+function open_netcdf_file(run_name)
+    # create the netcdf filename from the given run_name
+    filename = string(run_name, ".cdf")
 
+    print("Opening ", filename, " to read NetCDF data...")
+    # open the netcdf file with given filename for reading
+    fid = NCDataset(filename,"a")
+    println("done.")
+
+    return fid
+end
+function load_coordinate_data(fid)
+    print("Loading coordinate data...")
+    # define a handle for the z coordinate
+    cdfvar = fid["z"]
+    # get the number of z grid points
+    nz = length(cdfvar)
+    # load the data for z
+    z = cdfvar.var[:]
+    # get the weights associated with the z coordinate
+    cdfvar = fid["z_wgts"]
+    z_wgts = cdfvar.var[:]
+    # Lz = z box length
+    Lz = z[end]-z[1]
+
+    # define a handle for the vpa coordinate
+    cdfvar = fid["vpa"]
+    # get the number of vpa grid points
+    nvpa = length(cdfvar)
+    # load the data for vpa
+    vpa = cdfvar.var[:]
+    # get the weights associated with the vpa coordinate
+    cdfvar = fid["vpa_wgts"]
+    vpa_wgts = cdfvar.var[:]
+
+    # define a handle for the time coordinate
+    cdfvar = fid["time"]
+    # get the number of time grid points
+    ntime = length(cdfvar)
+    # load the data for time
+    time = cdfvar.var[:]
+    println("done.")
+
+    return nz, z, z_wgts, Lz, nvpa, vpa, vpa_wgts, ntime, time
+end
+function init_postprocessing_options(pp, nz, nvpa, ntime)
+    print("Initializing the post-processing input options...")
+    # nwrite_movie is the stride used when making animations
+    nwrite_movie = pp.nwrite_movie
+    # itime_min is the minimum time index at which to start animations
+    if pp.itime_min > 0 && pp.itime_min <= ntime
+        itime_min = pp.itime_min
+    else
+        itime_min = 1
+    end
+    # itime_max is the final time index at which to end animations
+    # if itime_max < 0, the value used will be the total number of time slices
+    if pp.itime_max > 0 && pp.itime_max <= ntime
+        itime_max = pp.itime_max
+    else
+        itime_max = ntime
+    end
+    # iz0 is the iz index used when plotting data at a single z location
+    # by default, it will be set to cld(nz,2) unless a non-negative value provided
+    if pp.iz0 > 0
+        iz0 = pp.iz0
+    else
+        iz0 = cld(nz,2)
+    end
+    # ivpa0 is the iz index used when plotting data at a single vpa location
+    # by default, it will be set to cld(nvpa,2) unless a non-negative value provided
+    if pp.ivpa0 > 0
+        ivpa0 = pp.ivpa0
+    else
+        ivpa0 = cld(nvpa,3)
+    end
+    println("done.")
+    return nwrite_movie, itime_min, itime_max, iz0, ivpa0
+end
+function load_fields_data(fid)
+    print("Loading fields data...")
+    # define a handle for the electrostatic potential
+    cdfvar = fid["phi"]
+    # load the electrostatic potential data
+    phi = cdfvar.var[:,:]
+    println("done.")
+    return phi
+end
+function analyze_fields_data(phi, ntime, nz, z_wgts, Lz)
+    print("Analyzing fields data...")
+    # compute the z integration weights needed to do field line averages
+    #z_wgts = composite_simpson_weights(z)
+    # Lz = z box length
+    #Lz = z[end]-z[1]
+    phi_fldline_avg = allocate_float(ntime)
+    for i ∈ 1:ntime
+        phi_fldline_avg[i] = field_line_average(view(phi,:,i), z_wgts, Lz)
+    end
+    # delta_phi = phi - <phi> is the fluctuating phi
+    delta_phi = allocate_float(nz,ntime)
+    for iz ∈ 1:nz
+        delta_phi[iz,:] .= phi[iz,:] - phi_fldline_avg
+    end
+    println("done.")
+    return phi_fldline_avg, delta_phi
+end
+function calculate_and_write_frequencies(fid, run_name, ntime, time, itime_min, itime_max, iz0, delta_phi)
+    println("Calculating the frequency and damping/growth rate...")
+    # shifted_time = t - t0
+    shifted_time = allocate_float(ntime)
+    @. shifted_time = time - time[itime_min]
+    # assume phi(z0,t) = A*exp(growth_rate*t)*cos(ω*t - φ)
+    # and fit phi(z0,t)/phi(z0,t0), which eliminates the constant A pre-factor
+    @views growth_rate, frequency, phase, fit_error =
+        compute_frequencies(shifted_time[itime_min:itime_max], delta_phi[iz0,itime_min:itime_max])
+    # estimate variation of frequency/growth rate over time_window by computing
+    # values for each half of the time window and taking max/min
+    i1 = itime_min ; i2 = itime_min + cld(itime_max-itime_min,2)
+    println("t1: ", time[i1], "  t2: ", time[i2])
+    @views growth_rate_1, frequency_1, phase_1, _ =
+        compute_frequencies(shifted_time[i1:i2], delta_phi[iz0,i1:i2])
+    i1 = i2+1 ; i2 = itime_max
+    println("t1: ", time[i1], "  t2: ", time[i2])
+    @views growth_rate_2, frequency_2, phase_2, _ =
+        compute_frequencies(shifted_time[i1:i2], delta_phi[iz0,i1:i2])
+    growth_rate_max = max(growth_rate_1, growth_rate_2, growth_rate)
+    growth_rate_min = min(growth_rate_1, growth_rate_2, growth_rate)
+    frequency_max = max(frequency_1, frequency_2, frequency)
+    frequency_min = min(frequency_1, frequency_2, frequency)
+    # write info related to fit to file
+    io = open_output_file(run_name, "frequency_fit.txt")
+    println(io, "#growth_rate: ", growth_rate, "  min: ", growth_rate_min, "  max: ", growth_rate_max,
+        "  frequency: ", frequency, "  min: ", frequency_min, "  max: ", frequency_max,
+        "  phase: ", phase, " fit_error: ", fit_error)
+    println(io)
+    fit_phi = (delta_phi[iz0,itime_min]./cos(phase) .* exp.(growth_rate.*shifted_time)
+               .* cos.(frequency*shifted_time .+ phase))
+    for i ∈ 1:ntime
+        println(io, "time: ", time[i], "  delta_phi: ", delta_phi[iz0,i],
+                "  fit_phi: ", fit_phi[i])
+    end
+    close(io)
+    # also save fit to NetCDF file
+    function get_or_create(name, description, dims=())
+        if name in fid
+            return fid[name]
+        else
+            return defVar(fid, name, mk_float, dims,
+                          attrib=Dict("description"=>description))
+        end
+    end
+    var = get_or_create("growth_rate", "mode growth rate from fit")
+    var[:] = growth_rate
+    var = get_or_create("growth_rate_min","min growth rate from different fits")
+    var[:] = growth_rate_min
+    var = get_or_create("growth_rate_max","max growth rate from different fits")
+    var[:] = growth_rate_max
+    var = get_or_create("frequency","mode frequency from fit")
+    var[:] = frequency
+    var = get_or_create("frequency_min","min frequency from different fits")
+    var[:] = frequency_min
+    var = get_or_create("frequency_max","max frequency from different fits")
+    var[:] = frequency_max
+    var = get_or_create("phase","mode phase from fit")
+    var[:] = phase
+    var = get_or_create("delta_phi", "delta phi from simulation", ("nz", "ntime"))
+    var[:,:] = delta_phi
+    var = get_or_create("fit_phi","fit to delta phi", ("ntime",))
+    var[:] = fit_phi
+    var = get_or_create("fit_error","RMS error on the fit of phi")
+    var[:] = fit_error
+    println("done.")
+    return frequency, growth_rate, phase, shifted_time
+end
+function plot_fields(phi, delta_phi, time, itime_min, itime_max, nwrite_movie,
+    z, iz0, run_name, frequency, growth_rate, phase, shifted_time, pp)
+
+    println("Plotting fields data...")
+    phimin = minimum(phi)
+    phimax = maximum(phi)
+    if pp.plot_phi0_vs_t
+        # plot the time trace of phi(z=z0)
+        #plot(time, log.(phi[i,:]), yscale = :log10)
+        @views plot(time, phi[iz0,:])
+        outfile = string(run_name, "_phi0_vs_t.pdf")
+        savefig(outfile)
+        # plot the time trace of phi(z=z0)-phi_fldline_avg
+        @views plot(time, abs.(delta_phi[iz0,:]), xlabel="t*Lz/vti", ylabel="δϕ", yaxis=:log)
+        if pp.calculate_frequencies
+            plot!(time, abs.(delta_phi[iz0,itime_min]/cos(phase) * exp.(growth_rate*shifted_time)
+                .* cos.(frequency*shifted_time .+ phase)))
+        end
+        outfile = string(run_name, "_delta_phi0_vs_t.pdf")
+        savefig(outfile)
+    end
+    if pp.plot_phi_vs_z_t
+        # make a heatmap plot of ϕ(z,t)
+        heatmap(time, z, phi, xlabel="time", ylabel="z", title="ϕ", c = :deep)
+        outfile = string(run_name, "_phi_vs_z_t.pdf")
+        savefig(outfile)
+    end
+    if pp.animate_phi_vs_z
+        # make a gif animation of ϕ(z) at different times
+        anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+            @views plot(z, phi[:,i], xlabel="z", ylabel="ϕ", ylims = (phimin,phimax))
+        end
+        outfile = string(run_name, "_phi_vs_z.gif")
+        gif(anim, outfile, fps=5)
+    end
+    println("done.")
+end
 function field_line_average(fld, wgts, L)
     n = length(fld)
     total = 0.0
@@ -477,6 +519,11 @@ function fit_phi0_vs_time(phi0, tmod)
 
     return fit.param[1], fit.param[2], fit.param[3], fit_error
 end
+
+#function advection_test_1d(fstart, fend)
+#    rmserr = sqrt(sum((fend .- fstart).^2))/(size(fend,1)*size(fend,2)*size(fend,3))
+#    println("advection_test_1d rms error: ", rmserr)
+#end
 
 end
 

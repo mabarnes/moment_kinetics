@@ -14,8 +14,8 @@ using input_structs: species_parameters, species_parameters_mutable
 using input_structs: species_composition
 using input_structs: drive_input, drive_input_mutable
 
-@enum RunType single performance_test scan
-const run_type = scan
+@enum single performance_test scan
+const run_type = single
 
 function mk_input(scan_input=Dict())
 
@@ -24,7 +24,7 @@ function mk_input(scan_input=Dict())
     n_ion_species = 1
     # n_neutral_species is the number of evolved neutral species
     # currently only n_neutral_species = 0 is supported
-    n_neutral_species = 1
+    n_neutral_species = 0
     # if boltzmann_electron_response = true, then the electron
     # density is fixed to be N_e*(eϕ/T_e)
     # currently this is the only supported option
@@ -34,9 +34,15 @@ function mk_input(scan_input=Dict())
         load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_response)
 
     # this is the prefix for all output files associated with this run
-    run_name = get(scan_input, :run_name, "debug")
+    run_name = get(scan_input, :run_name, "example")
     # this is the directory where the simulation data will be stored
     output_dir = string("runs/",run_name)
+
+    #z.advection.option = "constant"
+    #z.advection.constant_speed = 1.0
+
+    #vpa.advection.option = "constant"
+    #vpa.advection.constant_speed = 0.0
 
     ####### specify any deviations from default inputs for evolved species #######
     # set initial Tₑ = 1
@@ -45,7 +51,7 @@ function mk_input(scan_input=Dict())
     # set initial neutral temperature Tn/Tₑ = 1
     #species[2].initial_temperature = 1.0
     # set initial nᵢ/Nₑ = 1.0
-    species[1].initial_density = get(scan_input, (:initial_density, 1), 0.5)
+    species[1].initial_density = get(scan_input, (:initial_density, 1), 1.0)
     species[1].initial_temperature = get(scan_input, (:initial_temperature, 1), 1.0)
     species[1].z_IC.amplitude = get(scan_input, (:z_IC_amplitude, 1), 0.001)
     # set initial neutral densiity = Nₑ
@@ -56,36 +62,35 @@ function mk_input(scan_input=Dict())
     end
     #################### end specification of species inputs #####################
 
-
-    charge_exchange_frequency = get(scan_input, :charge_exchange_frequency, 5.0*sqrt(species[1].initial_temperature))
+    charge_exchange_frequency = get(scan_input, :charge_exchange_frequency, 0.0*sqrt(species[1].initial_temperature))
 
     # parameters related to the time stepping
-    nstep = get(scan_input, :nstep, 6000)
-    dt = get(scan_input, :dt, 0.0005/sqrt(species[1].initial_temperature))
-    nwrite = get(scan_input, :nwrite, 20)
+    nstep = get(scan_input, :nstep, 1500)
+    dt = get(scan_input, :dt, 0.002/sqrt(species[1].initial_temperature))
+    nwrite = get(scan_input, :nwrite, 5)
     # use_semi_lagrange = true to use interpolation-free semi-Lagrange treatment
     # otherwise, solve problem solely using the discretization_option above
     use_semi_lagrange = false
     # options are n_rk_stages = 1, 2 or 3 (corresponding to forward Euler,
     # Heun's method and SSP RK3)
-    n_rk_stages = 2
+    n_rk_stages = 4
     split_operators = false
 
     # overwrite some default parameters related to the z grid
     # ngrid is number of grid points per element
-    z.ngrid = 200
+    z.ngrid = 9
     # nelement is the number of elements
-    z.nelement = 1
+    z.nelement = 2
     # determine the discretization option for the z grid
     # supported options are "chebyshev_pseudospectral" and "finite_difference"
-    #z.discretization = "chebyshev_pseudospectral"
-    z.discretization = "finite_difference"
+    z.discretization = "chebyshev_pseudospectral"
+    #z.discretization = "finite_difference"
 
     # overwrite some default parameters related to the vpa grid
     # ngrid is the number of grid points per element
-    vpa.ngrid = 200
+    vpa.ngrid = 9
     # nelement is the number of elements
-    vpa.nelement = 1
+    vpa.nelement = 20
     # L is the box length in units of vthermal_species
     vpa.L = 10.0*sqrt(species[1].initial_temperature)
     # determine the boundary condition
@@ -93,8 +98,8 @@ function mk_input(scan_input=Dict())
     vpa.bc = "periodic"
     # determine the discretization option for the vpa grid
     # supported options are "chebyshev_pseudospectral" and "finite_difference"
-    #vpa.discretization = "chebyshev_pseudospectral"
-    vpa.discretization = "finite_difference"
+    vpa.discretization = "chebyshev_pseudospectral"
+    #vpa.discretization = "finite_difference"
 
     #########################################################################
     ########## end user inputs. do not modify following code! ###############
@@ -361,6 +366,12 @@ function check_input_vpa(vpa, io)
             "vpa.fd_option = ")
         if vpa.fd_option == "third_order_upwind"
             print(io,"'third_order_upwind'.")
+            if (vpa.ngrid < 4)
+                println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+                println("ERROR: vpa.ngrid < 4 incompatible with 3rd order upwind differences.  Aborting.")
+                println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+                exit(1)
+            end
         elseif vpa.fd_option == "second_order_upwind"
             print(io,"'second_order_upwind'.")
         elseif vpa.fd_option == "first_order_upwind"
