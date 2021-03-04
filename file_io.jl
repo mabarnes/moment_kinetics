@@ -81,6 +81,12 @@ function setup_netcdf_io(prefix, z, vpa, composition, charge_exchange_frequency)
     vartype = mk_float
     var = defVar(fid, varname, vartype, dims, attrib=attributes)
     var[:] = z.grid
+    # create and write the "z_wgts" variable to file
+    varname = "z_wgts"
+    attributes = Dict("description" => "integration weights for parallel coordinate")
+    vartype = mk_float
+    var = defVar(fid, varname, vartype, dims, attrib=attributes)
+    var[:] = z.wgts
     # create and write the "vpa" variable to file
     varname = "vpa"
     attributes = Dict("description" => "parallel velocity")
@@ -88,6 +94,12 @@ function setup_netcdf_io(prefix, z, vpa, composition, charge_exchange_frequency)
     vartype = mk_float
     var = defVar(fid, varname, vartype, dims, attrib=attributes)
     var[:] = vpa.grid
+    # create and write the "vpa_wgts" variable to file
+    varname = "vpa_wgts"
+    attributes = Dict("description" => "integration weights for parallel velocity coordinate")
+    vartype = mk_float
+    var = defVar(fid, varname, vartype, dims, attrib=attributes)
+    var[:] = vpa.wgts
     # create and write the "T_e" variable to file
     varname = "T_e"
     attributes = Dict("description" => "electron temperature")
