@@ -11,36 +11,8 @@ using chebyshev: chebyshev_derivative!
 using chebyshev: chebyshev_info
 using finite_differences: derivative_finite_difference!
 using initial_conditions: enforce_vpa_boundary_condition!
-using velocity_moments: reset_moments_status!
 
-# argument chebyshev indicates that a chebyshev pseudopectral method is being used
-function vpa_advection!(ff, ff_scratch, fields, moments, SL, source, vpa, z,
-	n_rk_stages, use_semi_lagrange, dt, t, vpa_spectral, z_spectral, composition)
-    # check to ensure that all array indices accessed in this function
-    # are in-bounds
-    @boundscheck size(ff,1) == z.n || throw(BoundsError(ff))
-    @boundscheck size(ff,2) == vpa.n || throw(BoundsError(ff))
-	@boundscheck size(ff,3) == composition.n_ion_species || throw(BoundsError(ff))
-	@boundscheck size(ff_scratch,1) == z.n || throw(BoundsError(ff_scratch))
-    @boundscheck size(ff_scratch,2) == vpa.n || throw(BoundsError(ff_scratch))
-	@boundscheck size(ff_scratch,3) == composition.n_ion_species || throw(BoundsError(ff_scratch))
-	@boundscheck size(ff_scratch,4) == n_rk_stages+1 || throw(BoundsError(ff_scratch))
-    # SSP RK for explicit time advance
-	ff_scratch[:,:,:,1] .= ff
-    for istage ∈ 1:n_rk_stages
-		# for SSP RK3, need to redefine ff_scratch[3]
-        if istage == 3
-            @. ff_scratch[:,:,:,istage] = 0.25*(ff_scratch[:,:,:,istage] +
-                ff_scratch[:,:,:,istage-1] + 2.0*ff)
-        end
-		ff_scratch[:,:,:,istage+1] .= ff
-		@views vpa_advection_single_stage!(ff_scratch[:,:,:,istage+1], ff_scratch[:,:,:,istage],
-			ff, fields, moments, SL, source, vpa, z, use_semi_lagrange, dt, t, vpa_spectral,
-			z_spectral, composition, istage)
-		reset_moments_status!(moments)
-	end
-end
-function vpa_advection_single_stage!(f_out, f_in, ff, fields, moments, SL, source,
+function vpa_advection!(f_out, f_in, ff, fields, moments, SL, source,
 	vpa, z, use_semi_lagrange, dt, t, vpa_spectral, z_spectral, composition, istage)
 
 	# calculate the advection speed corresponding to current f

@@ -6,6 +6,7 @@ export performance_test
 using type_definitions: mk_float, mk_int
 using array_allocation: allocate_float
 using file_io: input_option_error, open_output_file
+using input_structs: evolve_moments_options
 using input_structs: time_input
 using input_structs: advection_input, advection_input_mutable
 using input_structs: grid_input, grid_input_mutable
@@ -30,13 +31,16 @@ function mk_input(scan_input=Dict())
     # currently this is the only supported option
     boltzmann_electron_response = true
 
-    z, vpa, species, composition, drive =
+    z, vpa, species, composition, drive, evolve_moments =
         load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_response)
 
     # this is the prefix for all output files associated with this run
-    run_name = get(scan_input, :run_name, "example")
+    run_name = get(scan_input, :run_name, "example2")
     # this is the directory where the simulation data will be stored
     output_dir = string("runs/",run_name)
+    # if evolve_moments.density = true, evolve density via continuity eqn
+    # and g = f/n via modified drift kinetic equation
+    evolve_moments.density = false
 
     #z.advection.option = "constant"
     #z.advection.constant_speed = 1.0
@@ -142,11 +146,14 @@ function mk_input(scan_input=Dict())
         z_immutable, vpa_immutable, composition, species_immutable)
 
     # return immutable structs for z, vpa, species and composition
-    return run_name, output_dir, t, z_immutable, vpa_immutable, composition,
-        species_immutable, charge_exchange_frequency, drive_immutable
+    return run_name, output_dir, evolve_moments, t, z_immutable, vpa_immutable,
+        composition, species_immutable, charge_exchange_frequency, drive_immutable
 end
 
 function load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_response)
+    ############## options related to the equations being solved ###############
+    evolve_density = false
+    evolve_moments = evolve_moments_options(evolve_density)
     #################### parameters related to the z grid ######################
     # ngrid_z is number of grid points per element
     ngrid_z = 100
@@ -285,7 +292,7 @@ function load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_resp
     drive_amplitude = 1.0
     drive_frequency = 1.0
     drive = drive_input_mutable(drive_phi, drive_amplitude, drive_frequency)
-    return z, vpa, species, composition, drive
+    return z, vpa, species, composition, drive, evolve_moments
 end
 
 # check various input options to ensure they are all valid/consistent

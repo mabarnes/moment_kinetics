@@ -7,34 +7,8 @@ using semi_lagrange: find_approximate_characteristic!
 using advection: advance_f_local!, update_boundary_indices!
 using chebyshev: chebyshev_info
 
-# argument chebyshev indicates that a chebyshev pseudopectral method is being used
-function z_advection!(ff, ff_scratch, SL, source, z, vpa, n_rk_stages,
-                      use_semi_lagrange, dt, t, spectral)
-    # check to ensure that all array indices accessed in this function
-    # are in-bounds
-#    @boundscheck size(ff,1) == z.n || throw(BoundsError(ff))
-#    @boundscheck size(ff,2) == vpa.n || throw(BoundsError(ff))
-#    @boundscheck size(ff_scratch,1) == z.n || throw(BoundsError(ff_scratch))
-#    @boundscheck size(ff_scratch,2) == vpa.n || throw(BoundsError(ff_scratch))
-#    @boundscheck size(ff_scratch,3) == n_rk_stages+1 || throw(BoundsError(ff_scratch))
-    # SSP RK for explicit time advance
-    ff_scratch[:,:,1] .= ff
-    # NB: memory usage could be made more efficient here, as ff_scratch[:,:,1]
-    # not really needed; just easier to read/write code with it available
-    for istage ∈ 1:n_rk_stages
-        # for SSP RK3, need to redefine ff_scratch[3]
-        if istage == 3
-            @. ff_scratch[:,:,istage] = 0.25*(ff_scratch[:,:,istage] +
-                ff_scratch[:,:,istage-1] + 2.0*ff)
-        end
-        ff_scratch[:,:,istage+1] .= ff
-        @views z_advection_single_stage!(ff_scratch[:,:,istage+1],
-            ff_scratch[:,:,istage], ff, SL, source, z, vpa, use_semi_lagrange,
-            dt, t, spectral, istage)
-    end
-end
 # do a single stage time advance (potentially as part of a multi-stage RK scheme)
-function z_advection_single_stage!(f_out, f_in, ff, SL, source, z, vpa,
+function z_advection!(f_out, f_in, ff, SL, source, z, vpa,
                       use_semi_lagrange, dt, t, spectral, istage)
     # get the updated speed along the z direction using the current f
     update_speed_z!(source, vpa, z, t)

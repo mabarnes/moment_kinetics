@@ -9,10 +9,10 @@ using array_allocation: allocate_float
 
 # creates f and specifies its initial condition
 # all initial conditions are of the form f = F(z)*G(vpa)
+# NB: ∫dvpa f = F(z) ∫dvpa G = n(z)
 function init_f(z, vpa, composition, species, n_rk_stages)
     n_species = composition.n_species
     f = allocate_float(z.n, vpa.n, n_species)
-    f_scratch = allocate_float(z.n, vpa.n, n_species, n_rk_stages+1)
     for is ∈ 1:n_species
         # initialize F(z) and return in z.scratch
         init_fz(z, species[is])
@@ -25,7 +25,7 @@ function init_f(z, vpa, composition, species, n_rk_stages)
             end
         end
     end
-    return f, f_scratch
+    return f
 end
 # init_fz iniitializes F(z)
 function init_fz(z, spec)

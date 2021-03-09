@@ -13,6 +13,8 @@ mutable struct moments
     dens::Array{mk_float,2}
     # flag that keeps track of if the density needs updating before use
     dens_updated::Array{Bool,1}
+    # flag that indicates if the density should be evolved via continuity equation
+    evolve_density::Bool
     # this is the parallel flow
     upar::Array{mk_float,2}
     # flag that keeps track of whether or not upar needs updating before use
@@ -25,7 +27,7 @@ end
 # create and initialise arrays for the density and parallel pressure,
 # as well as a scratch array used for intermediate calculations needed
 # to later update these moments
-function setup_moments(ff, vpa, nz)
+function setup_moments(ff, vpa, nz, evolve_moments)
     n_species = size(ff,3)
     # allocate array used for the particle density
     density = allocate_float(nz, n_species)
@@ -49,8 +51,8 @@ function setup_moments(ff, vpa, nz)
         parallel_pressure_updated[is] = true
     end
     # return struct containing arrays needed to update moments
-    return moments(density, density_updated, parallel_flow, parallel_flow_updated,
-        parallel_pressure, parallel_pressure_updated)
+    return moments(density, density_updated, evolve_moments.density,
+        parallel_flow, parallel_flow_updated, parallel_pressure, parallel_pressure_updated)
 end
 # calculate the updated density (dens) and parallel pressure (ppar) for all species
 function update_moments!(moments, ff, vpa, nz)
@@ -117,7 +119,9 @@ function integrate_over_vspace(integrand, vpa_wgts)
     return integral
 end
 function reset_moments_status!(moments)
-    moments.dens_updated .= false
+    if moments.evolve_density == false
+        moments.dens_updated .= false
+    end
     moments.upar_updated .= false
     moments.ppar_updated .= false
 end
