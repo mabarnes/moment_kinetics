@@ -1,5 +1,6 @@
 module input_structs
 
+export evolve_moments_options
 export time_input
 export advection_input, advection_input_mutable
 export grid_input, grid_input_mutable
@@ -10,6 +11,9 @@ export drive_input, drive_input_mutable
 
 using type_definitions: mk_float, mk_int
 
+mutable struct evolve_moments_options
+    density::Bool
+end
 struct time_input
     nstep::mk_int
     dt::mk_float
