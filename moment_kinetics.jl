@@ -32,7 +32,7 @@ function run_moment_kinetics(to, input)
     code_time = 0.
     # create arrays and do other work needed to setup
     # the main time advance loop -- including normalisation of f by density if requested
-    z_spectral, vpa_spectral, moments, fields, z_source, vpa_source,
+    z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
         z_SL, vpa_SL, scratch, advance = setup_time_advance!(ff, z, vpa, composition,
         drive_input, evolve_moments, t_input)
     # setup i/o
@@ -45,12 +45,12 @@ function run_moment_kinetics(to, input)
     if run_type == performance_test
         @timeit to "time_advance" time_advance!(ff, scratch, code_time, t_input,
             z, vpa, z_spectral, vpa_spectral, moments, fields,
-            z_source, vpa_source, z_SL, vpa_SL, composition, charge_exchange_frequency,
+            z_advect, vpa_advect, z_SL, vpa_SL, composition, charge_exchange_frequency,
             advance, io, cdf)
     else
         time_advance!(ff, scratch, code_time, t_input, z, vpa,
             z_spectral, vpa_spectral, moments, fields,
-            z_source, vpa_source, z_SL, vpa_SL, composition, charge_exchange_frequency,
+            z_advect, vpa_advect, z_SL, vpa_SL, composition, charge_exchange_frequency,
             advance, io, cdf)
     end
     # finish i/o

@@ -1,8 +1,8 @@
 module advection
 
-export setup_source
+export setup_advection
 export update_advection_factor!
-export calculate_explicit_source!
+export calculate_explicit_advection!
 export update_boundary_indices!
 export set_igrid_ilem
 export advance_f_local!
@@ -14,13 +14,13 @@ using chebyshev: chebyshev_derivative!
 using chebyshev: chebyshev_info
 
 # structure containing the basic arrays associated with the
-# source terms appearing in the advection equation for each coordinate
-mutable struct source_info
-    # rhs is the sum of the source terms appearing on the righthand side
+# advection terms appearing in the advection equation for each coordinate
+mutable struct advection_info
+    # rhs is the sum of the advection terms appearing on the righthand side
     # of the equation
     rhs::Array{mk_float, 1}
     # df is the derivative of the distribution function f with respect
-    # to the coordinate associated with this set of source terms
+    # to the coordinate associated with this set of advection terms
     # it has dimensions of nelement x ngrid_per_element
     df::Array{mk_float, 2}
     # speed is the component of the advection speed along this coordinate axis
@@ -32,7 +32,7 @@ mutable struct source_info
     # the grid is equally spaced (a re-scaling of the Chebyshev theta coordinate);
     # otherwise, modified_speed = speed
     modified_speed::Array{mk_float,1}
-    # adv_fac is the advection factor that multiplies df in the advective source
+    # adv_fac is the advection factor that multiplies df in the advection term
     adv_fac::Array{mk_float, 1}
     # upwind_idx is the boundary index for the upwind boundary
     upwind_idx::mk_int
@@ -41,56 +41,36 @@ mutable struct source_info
     # upwind_increment is the index increment used when sweeping in the upwind direction
     upwind_increment::mk_int
 end
-# create arrays needed to compute the source term(s) for a 1D problem
-function setup_source(coord, nspec)
+# create arrays needed to compute the advection term(s) for a 1D problem
+function setup_advection(coord, nspec)
     # allocate an array containing structures with much of the info needed
     # to do the 1D advection time advance
-    source = Array{source_info,1}(undef, nspec)
+    advection = Array{advection_info,1}(undef, nspec)
     # store all of this information in a structure and return it
     for is ∈ 1:nspec
-        source[is] = setup_source_local(coord.n, coord.ngrid, coord.nelement)
+        advection[is] = setup_advection_local(coord.n, coord.ngrid, coord.nelement)
     end
-    return source
+    return advection
 end
-# create arrays needed to compute the source term(s) for a 2D problem
-function setup_source(coord1, coord2, nspec)
+# create arrays needed to compute the advection term(s) for a 2D problem
+function setup_advection(coord1, coord2, nspec)
     # n and m are the number of unique grid points along coordinates coord1 and coord2
     n = coord1.n
     m = coord2.n
     # allocate an array containing structures with much of the info needed
     # to do the 1D advection time advance
-    source = Array{source_info,2}(undef, m, nspec)
+    advection = Array{advection_info,2}(undef, m, nspec)
     # store all of this information in a structure and return it
     for is ∈ 1:nspec
         for i ∈ 1:m
-            source[i,is] = setup_source_local(coord1.n, coord1.ngrid, coord1.nelement)
+            advection[i,is] = setup_advection_local(coord1.n, coord1.ngrid, coord1.nelement)
         end
     end
-    return source
+    return advection
 end
-#=
-# create arrays needed to compute the source term(s) for a 1D problem
-function setup_source(coord)
-    return setup_source_local(coord.n, coord.ngrid, coord.nelement)
-end
-# create arrays needed to compute the source term(s) for a 2D problem
-function setup_source(coord1, coord2)
-    # n and m are the number of unique grid points along coordinates coord1 and coord2
-    n = coord1.n
-    m = coord2.n
-    # allocate an array containing structures with much of the info needed
-    # to do the 1D advection time advance
-    source = Array{source_info,1}(undef, m)
-    # store all of this information in a structure and return it
-    for i ∈ 1:m
-        source[i] = setup_source_local(coord1.n, coord1.ngrid, coord1.nelement)
-    end
-    return source
-end
-=#
-# create arrays needed to compute the source term(s)
-function setup_source_local(n, ngrid, nelement)
-    # create array for storing the explicit source terms appearing
+# create arrays needed to compute the advection term(s)
+function setup_advection_local(n, ngrid, nelement)
+    # create array for storing the explicit advection terms appearing
     # on the righthand side of the equation
     rhs = allocate_float(n)
     # create array for storing ∂f/∂(coordinate)
@@ -109,25 +89,25 @@ function setup_source_local(n, ngrid, nelement)
     downwind_idx = n
     # index increment used when sweeping in the upwind direction; will be updated before use
     upwind_increment = -1
-    # return source_info struct containing necessary 1D/0D arrays
-    return source_info(rhs, df, speed, modified_speed, adv_fac, upwind_idx, downwind_idx, upwind_increment)
+    # return advection_info struct containing necessary 1D/0D arrays
+    return advection_info(rhs, df, speed, modified_speed, adv_fac, upwind_idx, downwind_idx, upwind_increment)
 end
 # calculate the grid index correspond to the upwind and downwind boundaries,
 # as well as the index increment needed to sweep in the upwind direction
-function update_boundary_indices!(source)
-    m = size(source,1)
-    n = size(source[1].speed,1)
+function update_boundary_indices!(advection)
+    m = size(advection,1)
+    n = size(advection[1].speed,1)
     for j ∈ 1:m
         # NB: for now, assume the speed has the same sign at all grid points
         # so only need to check its value at one location to determine the upwind direction
-        if source[j].speed[1] > 0
-            source[j].upwind_idx = 1
-            source[j].upwind_increment = -1
-            source[j].downwind_idx = n
+        if advection[j].speed[1] > 0
+            advection[j].upwind_idx = 1
+            advection[j].upwind_increment = -1
+            advection[j].downwind_idx = n
         else
-            source[j].upwind_idx = n
-            source[j].upwind_increment = 1
-            source[j].downwind_idx = 1
+            advection[j].upwind_idx = n
+            advection[j].upwind_increment = 1
+            advection[j].downwind_idx = 1
         end
     end
     return nothing
@@ -150,7 +130,7 @@ function update_advection_factor!(adv_fac, speed, upwind_idx, downwind_idx,
             # that originate within the domain, as zero/constant incoming BC
             # takes care of the rest.
             if idx != upwind_idx + upwind_increment
-                # the effective advection speed appearing in the source
+                # the effective advection speed appearing in the advection term
                 # is the speed in the frame moving with the approximate
                 # characteristic speed v_char
                 # NB: need to change v[idx] to v[i] for second iteration of RK
@@ -164,9 +144,9 @@ function update_advection_factor!(adv_fac, speed, upwind_idx, downwind_idx,
     #end
     return nothing
 end
-# calculate the explicit source terms on the rhs of the equation;
+# calculate the explicit advection terms on the rhs of the equation;
 # i.e., -Δt⋅δv⋅f'
-function calculate_explicit_source!(rhs, df, adv_fac, up_idx, down_idx, up_incr,
+function calculate_explicit_advection!(rhs, df, adv_fac, up_idx, down_idx, up_incr,
     dep_idx, n, ngrid, nelement, igrid_map, ielement_map, j)
     # ensure that arrays needed for this function are inbounds
     # to avoid checking multiple times later
@@ -174,7 +154,7 @@ function calculate_explicit_source!(rhs, df, adv_fac, up_idx, down_idx, up_incr,
     @boundscheck ngrid == size(df,1) && nelement == size(df,2) || throw(BoundsError(df))
     @boundscheck n == length(adv_fac) || throw(BoundsError(adv_fac))
     @boundscheck n == length(dep_idx) || throw(BoundsError(dep_idx))
-    # calculate the source evaluated at the departure point for the
+    # calculate the advection terms evaluated at the departure point for the
     # ith characteristic.  note that adv_fac[i] has already
     # been defined so that it corresponds to the advection factor
     # corresponding to the ith characteristic
@@ -242,20 +222,20 @@ function set_igrid_ielem(igrid_map, ielem_map, adv_fac, ngrid, nelement)
 end
 
 # update the righthand side of the equation to account for 1d advection in this coordinate
-function update_rhs!(source, f_current, SL, coord, dt, j, spectral)
+function update_rhs!(advection, f_current, SL, coord, dt, j, spectral)
     # calculate the factor appearing in front of df/dcoord in the advection
     # term at time level n in the frame moving with the approximate
     # characteristic
-    update_advection_factor!(source.adv_fac,
-        source.modified_speed, source.upwind_idx, source.downwind_idx,
-        source.upwind_increment, SL, coord.n, dt, j, coord)
+    update_advection_factor!(advection.adv_fac,
+        advection.modified_speed, advection.upwind_idx, advection.downwind_idx,
+        advection.upwind_increment, SL, coord.n, dt, j, coord)
     # calculate df/dcoord
-    derivative!(source.df, f_current, coord, source.adv_fac, spectral)
-    # calculate the explicit source terms on the rhs of the equation;
+    derivative!(advection.df, f_current, coord, advection.adv_fac, spectral)
+    # calculate the explicit advection terms on the rhs of the equation;
     # i.e., -Δt⋅δv⋅f'
-    calculate_explicit_source!(source.rhs, source.df,
-        source.adv_fac, source.upwind_idx, source.downwind_idx,
-        source.upwind_increment, SL.dep_idx, coord.n, coord.ngrid, coord.nelement,
+    calculate_explicit_advection!(advection.rhs, advection.df,
+        advection.adv_fac, advection.upwind_idx, advection.downwind_idx,
+        advection.upwind_increment, SL.dep_idx, coord.n, coord.ngrid, coord.nelement,
         coord.igrid, coord.ielement, j)
 end
 # Chebyshev transform f to get Chebyshev spectral coefficients and use them to calculate f'
@@ -268,13 +248,13 @@ function derivative!(df, f, coord, adv_fac, not_spectral::Bool)
         coord.bc, coord.fd_option, coord.igrid, coord.ielement)
 end
 # do all the work needed to update f(coord) at a single value of other coords
-function advance_f_local!(f_new, f_current, f_old, SL, source, coord, dt, j, spectral, use_SL)
+function advance_f_local!(f_new, f_current, f_old, SL, advection, coord, dt, j, spectral, use_SL)
     # update the rhs of the equation accounting for 1d advection in coord
-    update_rhs!(source, f_current, SL, coord, dt, j, spectral)
+    update_rhs!(advection, f_current, SL, coord, dt, j, spectral)
     # update ff at time level n+1 using an explicit Runge-Kutta method
     # along approximate characteristics
-    update_f!(f_new, f_old, source.rhs, source.upwind_idx, source.downwind_idx,
-        source.upwind_increment, SL.dep_idx, coord.n, coord.bc, use_SL)
+    update_f!(f_new, f_old, advection.rhs, advection.upwind_idx, advection.downwind_idx,
+        advection.upwind_increment, SL.dep_idx, coord.n, coord.bc, use_SL)
 end
 # update ff at time level n+1 using an explicit Runge-Kutta method
 # along approximate characteristics

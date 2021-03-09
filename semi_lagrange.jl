@@ -73,22 +73,22 @@ function setup_semi_lagrange_local(n)
     return semi_lagrange_info(crossing_time, trajectory_time, dep_pts, dep_idx,
         characteristic_speed, n_transits)
 end
-function find_approximate_characteristic!(SL, source, coord, dt)
+function find_approximate_characteristic!(SL, advection, coord, dt)
     # calculate the time required to cross the cell associated with each
     # grid point based on the cell width and advection speed
-    update_crossing_times!(SL.crossing_time, source.speed, coord.cell_width)
+    update_crossing_times!(SL.crossing_time, advection.speed, coord.cell_width)
     # integrate backward in time from time level m+1 to level m
     # along approximate characteristics determined by speed profile at level m
     # to obtain departure points.  these will not correspond
     # in general to grid points at time level m
-    find_departure_points!(SL, coord, source.speed, source.upwind_idx,
-        source.downwind_idx, source.upwind_increment, dt)
+    find_departure_points!(SL, coord, advection.speed, advection.upwind_idx,
+        advection.downwind_idx, advection.upwind_increment, dt)
     # redefine v₀ slightly so
     # that departure point corresonds to nearest grid point
     # this avoids the need to do interpolation to obtain
     # function values off the fixed grid in z
-    project_characteristics_onto_grid!(SL, source.modified_speed, coord, dt,
-        source.upwind_idx, source.upwind_increment)
+    project_characteristics_onto_grid!(SL, advection.modified_speed, coord, dt,
+        advection.upwind_idx, advection.upwind_increment)
 end
 # obtain the time needed to cross the cell
 # assigned to each grid point, given the

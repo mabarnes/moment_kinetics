@@ -35,7 +35,7 @@ function mk_input(scan_input=Dict())
         load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_response)
 
     # this is the prefix for all output files associated with this run
-    run_name = get(scan_input, :run_name, "example2")
+    run_name = get(scan_input, :run_name, "example")
     # this is the directory where the simulation data will be stored
     output_dir = string("runs/",run_name)
     # if evolve_moments.density = true, evolve density via continuity eqn
