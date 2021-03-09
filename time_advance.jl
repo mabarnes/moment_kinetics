@@ -15,6 +15,7 @@ using advection: setup_advection, update_boundary_indices!
 using z_advection: update_speed_z!, z_advection!
 using vpa_advection: update_speed_vpa!, vpa_advection!
 using charge_exchange: charge_exchange_collisions!
+using source_terms: source_terms!
 using continuity: continuity_equation!
 using em_fields: setup_em_fields, update_phi!
 using semi_lagrange: setup_semi_lagrange
@@ -30,6 +31,7 @@ mutable struct advance_flags
     vpa_advection::Bool
     z_advection::Bool
     cx_collisions::Bool
+    source_terms::Bool
     continuity::Bool
 end
 
@@ -47,7 +49,7 @@ function setup_time_advance!(ff, z, vpa, composition, drive_input, evolve_moment
     # if no splitting of operators, all terms advanced concurrently;
     # else, will advance one term at a time.
     if t_input.split_operators
-        advance = advance_flags(false, false, false, false)
+        advance = advance_flags(false, false, false, false, false)
     else
         if composition.n_neutral_species > 0
             advance_cx = true
@@ -55,11 +57,13 @@ function setup_time_advance!(ff, z, vpa, composition, drive_input, evolve_moment
             advance_cx = false
         end
         if evolve_moments.density
+            advance_sources = true
             advance_continuity = true
         else
+            advance_sources = false
             advance_continuity = false
         end
-        advance = advance_flags(true, true, advance_cx, advance_continuity)
+        advance = advance_flags(true, true, advance_cx, advance_sources, advance_continuity)
     end
     # create structure z_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the split part of the GK equation dealing
@@ -243,7 +247,13 @@ function time_advance_split_operators!(ff, scratch, t, t_input, z, vpa,
             advance.cx_collisions = false
         end
         # use the continuity equation to update the density
+        # and add the source terms associated with redefining g = pdf/density to the kinetic equation
         if moments.evolve_density
+            advance.source_terms = true
+            time_advance_no_splitting!(ff, scratch, t, t_input, z, vpa,
+                z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
+                z_SL, vpa_SL, composition, charge_exchange_frequency, advance, istep)
+            advance.source_terms = false
             advance.continuity = true
             time_advance_no_splitting!(ff, scratch, t, t_input, z, vpa,
                 z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
@@ -252,12 +262,18 @@ function time_advance_split_operators!(ff, scratch, t, t_input, z, vpa,
         end
     else
         # use the continuity equation to update the density
+        # and add the source terms associated with redefining g = pdf/density to the kinetic equation
         if moments.evolve_density
             advance.continuity = true
             time_advance_no_splitting!(ff, scratch, t, t_input, z, vpa,
                 z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
                 z_SL, vpa_SL, composition, charge_exchange_frequency, advance, istep)
             advance.continuity = false
+            advance.source_terms = true
+            time_advance_no_splitting!(ff, scratch, t, t_input, z, vpa,
+                z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
+                z_SL, vpa_SL, composition, charge_exchange_frequency, advance, istep)
+            advance.source_terms = false
         end
         # account for charge exchange collisions between ions and neutrals
         if composition.n_neutral_species > 0
@@ -309,6 +325,7 @@ function time_advance_no_splitting!(ff, scratch, t, t_input, z, vpa,
             t_input, z_spectral, vpa_spectral, composition,
             charge_exchange_frequency, advance, 1)
     end
+    return nothing
 end
 function ssp_rk3_4stage!(ff, scratch, t, t_input, z, vpa,
     z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
@@ -324,17 +341,14 @@ function ssp_rk3_4stage!(ff, scratch, t, t_input, z, vpa,
     # and scratch[1] containing quantities at time level n
     update_solution_vector!(scratch, moments, istage)
     # calculate f^{(1)} = fⁿ + Δt*G[fⁿ] = scratch[2].pdf
-    #println("pre-euler1: ", sum(scratch[istage+1].pdf), " 2: ", sum(scratch[istage].pdf))
     @views euler_time_advance!(scratch[istage+1], scratch[istage],
         ff, fields, moments, z_SL, vpa_SL, z_advect, vpa_advect, z, vpa, t,
         t_input, z_spectral, vpa_spectral, composition,
         charge_exchange_frequency, advance, istage)
-    #println("post-euler1: ", sum(scratch[istage+1].pdf), " 2: ", sum(scratch[istage].pdf))
     @. scratch[istage+1].pdf = 0.5*(ff + scratch[istage+1].pdf)
     if moments.evolve_density
         @. scratch[istage+1].density = 0.5*(moments.dens + scratch[istage+1].density)
     end
-    #println("post-scratch1: ", sum(scratch[istage+1].pdf), " 2: ", sum(scratch[istage].pdf))
 
     istage = 2
     update_solution_vector!(scratch, moments, istage)
@@ -376,7 +390,7 @@ function ssp_rk3_4stage!(ff, scratch, t, t_input, z, vpa,
     if moments.evolve_density
         @. moments.dens = 0.5*(scratch[istage].density + scratch[istage+1].density)
     end
-    #println("ff: ", sum(ff), "  dens: ", sum(moments.dens), "  upar: ", sum(moments.upar), "  ppar: ", sum(moments.ppar))
+    return nothing
 end
 function ssp_rk3!(ff, scratch, t, t_input, z, vpa,
     z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
@@ -423,6 +437,7 @@ function ssp_rk3!(ff, scratch, t, t_input, z, vpa,
     if moments.evolve_density
         @. moments.dens = (moments.dens + 2.0*scratch[istage+1].density)/3.0
     end
+    return nothing
 end
 function ssp_rk2!(ff, scratch, t, t_input, z, vpa,
     z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
@@ -455,6 +470,7 @@ function ssp_rk2!(ff, scratch, t, t_input, z, vpa,
     if moments.evolve_density
         @. moments.dens = 0.5*(moments.dens + scratch[istage+1].density)
     end
+    return nothing
 end
 # euler_time_advance! advances the vector equation dfvec/dt = G[f]
 # that includes the kinetic equation + any evolved moment equations
@@ -489,12 +505,16 @@ function euler_time_advance!(fvec_out, fvec_in, ff, fields, moments, z_SL, vpa_S
         charge_exchange_collisions!(fvec_out.pdf, fvec_in.pdf, ff, moments, n_ion_species,
             composition.n_neutral_species, vpa, charge_exchange_frequency, z.n, dt)
     end
+    if advance.source_terms
+        source_terms!(fvec_out.pdf, fvec_in, moments, z, vpa, dt, z_advect, z_spectral)
+    end
     if advance.continuity
         continuity_equation!(fvec_out.density, fvec_in, moments, z, vpa, dt, z_spectral)
     end
     # reset "xx.updated" flags to false since ff has been updated
     # and the corresponding moments have not
     reset_moments_status!(moments)
+    return nothing
 end
 # update the vector containing the pdf and any evolved moments of the pdf
 # for use in the Runge-Kutta time advance
@@ -503,6 +523,7 @@ function update_solution_vector!(evolved, moments, istage)
     if moments.evolve_density
         evolved[istage+1].density .= evolved[istage].density
     end
+    return nothing
 end
 
 end
