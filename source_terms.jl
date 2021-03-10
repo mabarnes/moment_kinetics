@@ -29,8 +29,8 @@ function source_terms_single_species!(pdf_out, pdf_in, dens, upar, z, vpa, dt, a
         igrid, ielem = set_igrid_ielem(z.igrid[iz], z.ielement[iz], advection.adv_fac[iz], z.ngrid, z.nelement)
         pdf_out[iz] += dt*z.scratch2d[igrid,ielem]*pdf_in[iz]
     end
-    # calculate dn/dz
-    derivative!(z.scratch2d, dens, z, advection.adv_fac, spectral)
+    # calculate ∂ln(n)/∂z
+    derivative!(z.scratch2d, log.(dens), z, advection.adv_fac, spectral)
     for iz ∈ 1:z.n
         igrid, ielem = set_igrid_ielem(z.igrid[iz], z.ielement[iz], advection.adv_fac[iz], z.ngrid, z.nelement)
         pdf_out[iz] -= dt*z.scratch2d[igrid,ielem]*(vpa - upar[iz])*pdf_in[iz]
