@@ -4,14 +4,11 @@ export setup_advection
 export update_advection_factor!
 export calculate_explicit_advection!
 export update_boundary_indices!
-export set_igrid_ilem
 export advance_f_local!
 
 using type_definitions: mk_float, mk_int
 using array_allocation: allocate_float
-using finite_differences: derivative_finite_difference!
-using chebyshev: chebyshev_derivative!
-using chebyshev: chebyshev_info
+using derivatives: derivative!
 
 # structure containing the basic arrays associated with the
 # advection terms appearing in the advection equation for each coordinate
@@ -146,81 +143,25 @@ function update_advection_factor!(adv_fac, speed, upwind_idx, downwind_idx,
 end
 # calculate the explicit advection terms on the rhs of the equation;
 # i.e., -Δt⋅δv⋅f'
-function calculate_explicit_advection!(rhs, df, adv_fac, up_idx, down_idx, up_incr,
-    dep_idx, n, ngrid, nelement, igrid_map, ielement_map, j)
-    # ensure that arrays needed for this function are inbounds
-    # to avoid checking multiple times later
-    @boundscheck n == length(rhs) || throw(BoundsError(rhs))
-    @boundscheck ngrid == size(df,1) && nelement == size(df,2) || throw(BoundsError(df))
-    @boundscheck n == length(adv_fac) || throw(BoundsError(adv_fac))
-    @boundscheck n == length(dep_idx) || throw(BoundsError(dep_idx))
+function calculate_explicit_advection!(rhs, df, adv_fac, up_idx, up_incr, dep_idx, n, j)
     # calculate the advection terms evaluated at the departure point for the
     # ith characteristic.  note that adv_fac[i] has already
     # been defined so that it corresponds to the advection factor
     # corresponding to the ith characteristic
     if j == 1
-        #@inbounds for i ∈ up_idx:-up_incr:down_idx
-        #@inbounds begin
-            for i ∈ 1:n
-                idx = dep_idx[i]
-
-                if idx != up_idx + up_incr
-                    # if at the boundary point within the element, must carefully
-                    # choose which value of df to use; this is because
-                    # df is multi-valued at the overlapping point at the boundary
-                    # between neighboring elements.
-                    igrid, ielem = set_igrid_ielem(igrid_map[idx], ielement_map[idx],
-                        adv_fac[i], ngrid, nelement)
-                    rhs[i] = adv_fac[i]*df[igrid,ielem]
-                end
+        for i ∈ 1:n
+            idx = dep_idx[i]
+            if idx != up_idx + up_incr
+                rhs[i] = adv_fac[i]*df[idx]
             end
-        #end
+        end
     else
-        #@inbounds for i ∈ up_idx:-up_incr:down_idx
-        #@inbounds begin
-            for i ∈ 1:n
-                # if at the boundary point within the element, must carefully
-                # choose which value of df to use; this is because
-                # df is multi-valued at the overlapping point at the boundary
-                # between neighboring elements.
-                igrid, ielem = set_igrid_ielem(igrid_map[i], ielement_map[i],
-                    adv_fac[i], ngrid, nelement)
-                rhs[i] = adv_fac[i]*df[igrid,ielem]
-            end
-        #end
+        for i ∈ 1:n
+            rhs[i] = adv_fac[i]*df[i]
+        end
     end
     return nothing
 end
-
-function set_igrid_ielem(igrid_map, ielem_map, adv_fac, ngrid, nelement)
-    # if at the boundary point within the element, must carefully
-    # choose which value of df to use; this is because
-    # df is multi-valued at the overlapping point at the boundary
-    # between neighboring elements.
-    # here we choose to use the value of df from the upwind element.
-
-    # note that the first ngrid points are classified as belonging to the first element
-    # and the next ngrid-1 points belonging to second element, etc.
-
-    # adv_fac > 0 corresponds to negative advection speed, so
-    # use derivative information from upwind element at larger coordinate value
-    if igrid_map == ngrid && adv_fac > 0.0
-        igrid = 1
-        ielem = mod(ielem_map, nelement) + 1
-    # adv_fac < 0 corresponds to positive advection speed, so
-    # use derivative information from upwind element at smaller coordinate value
-    elseif igrid_map == 1 && adv_fac < 0.0
-        igrid = ngrid
-        ielem = nelement - mod(nelement-ielem_map+1,nelement)
-    # aside from above cases, the pre-computed mappings from unpacked index i
-    # to element and grid within element indices are already correct
-    else
-        igrid = igrid_map
-        ielem = ielem_map
-    end
-    return igrid, ielem
-end
-
 # update the righthand side of the equation to account for 1d advection in this coordinate
 function update_rhs!(advection, f_current, SL, coord, dt, j, spectral)
     # calculate the factor appearing in front of df/dcoord in the advection
@@ -230,22 +171,12 @@ function update_rhs!(advection, f_current, SL, coord, dt, j, spectral)
         advection.modified_speed, advection.upwind_idx, advection.downwind_idx,
         advection.upwind_increment, SL, coord.n, dt, j, coord)
     # calculate df/dcoord
-    derivative!(advection.df, f_current, coord, advection.adv_fac, spectral)
+    derivative!(coord.scratch, f_current, coord, advection.adv_fac, spectral)
     # calculate the explicit advection terms on the rhs of the equation;
     # i.e., -Δt⋅δv⋅f'
-    calculate_explicit_advection!(advection.rhs, advection.df,
-        advection.adv_fac, advection.upwind_idx, advection.downwind_idx,
-        advection.upwind_increment, SL.dep_idx, coord.n, coord.ngrid, coord.nelement,
-        coord.igrid, coord.ielement, j)
-end
-# Chebyshev transform f to get Chebyshev spectral coefficients and use them to calculate f'
-function derivative!(df, f, coord, adv_fac, spectral::chebyshev_info)
-    chebyshev_derivative!(df, f, spectral, coord)
-end
-# calculate the derivative of f using finite differences; stored in df
-function derivative!(df, f, coord, adv_fac, not_spectral::Bool)
-    derivative_finite_difference!(df, f, coord.cell_width, adv_fac,
-        coord.bc, coord.fd_option, coord.igrid, coord.ielement)
+    calculate_explicit_advection!(advection.rhs, coord.scratch,
+        advection.adv_fac, advection.upwind_idx, advection.upwind_increment,
+        SL.dep_idx, coord.n, j)
 end
 # do all the work needed to update f(coord) at a single value of other coords
 function advance_f_local!(f_new, f_current, f_old, SL, advection, coord, dt, j, spectral, use_SL)

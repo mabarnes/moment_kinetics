@@ -3,9 +3,7 @@ module source_terms
 export source_terms!
 
 using velocity_moments: update_moments!
-using advection: set_igrid_ielem
-using chebyshev: chebyshev_info, chebyshev_derivative!
-using finite_differences: derivative_finite_difference!
+using derivatives: derivative!
 
 function source_terms!(pdf_out, fvec_in, moments, z, vpa, dt, advection, spectral)
     # update the parallel flow velocity upar
@@ -23,28 +21,12 @@ function source_terms!(pdf_out, fvec_in, moments, z, vpa, dt, advection, spectra
     return nothing
 end
 function source_terms_single_species!(pdf_out, pdf_in, dens, upar, z, vpa, dt, advection, spectral)
-    # calculate dupar/dz
-    derivative!(z.scratch2d, upar, z, advection.adv_fac, spectral)
-    for iz ∈ 1:z.n
-        igrid, ielem = set_igrid_ielem(z.igrid[iz], z.ielement[iz], advection.adv_fac[iz], z.ngrid, z.nelement)
-        pdf_out[iz] += dt*z.scratch2d[igrid,ielem]*pdf_in[iz]
-    end
-    # calculate ∂ln(n)/∂z
-    derivative!(z.scratch2d, log.(dens), z, advection.adv_fac, spectral)
-    for iz ∈ 1:z.n
-        igrid, ielem = set_igrid_ielem(z.igrid[iz], z.ielement[iz], advection.adv_fac[iz], z.ngrid, z.nelement)
-        pdf_out[iz] -= dt*z.scratch2d[igrid,ielem]*(vpa - upar[iz])*pdf_in[iz]
-    end
+    # calculate d(n*upar)/dz
+    @. z.scratch = dens*upar
+    derivative!(z.scratch, z.scratch, z, spectral)
+    # update the density
+    @. pdf_out += dt*z.scratch*pdf_in/dens
     return nothing
-end
-# Chebyshev transform f to get Chebyshev spectral coefficients and use them to calculate f'
-function derivative!(df, f, coord, adv_fac, spectral::chebyshev_info)
-    chebyshev_derivative!(df, f, spectral, coord)
-end
-# calculate the derivative of f using finite differences; stored in df
-function derivative!(df, f, coord, adv_fac, not_spectral::Bool)
-    derivative_finite_difference!(df, f, coord.cell_width, adv_fac,
-        coord.bc, coord.fd_option, coord.igrid, coord.ielement)
 end
 
 end

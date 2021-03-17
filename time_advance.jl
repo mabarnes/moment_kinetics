@@ -494,15 +494,19 @@ function euler_time_advance!(fvec_out, fvec_in, ff, fields, moments, z_SL, vpa_S
     # z_advection! advances 1D advection equation in z
     # apply z-advection operation to all species (charged and neutral)
     if advance.z_advection
+#=
         for is ∈ 1:composition.n_species
             @views z_advection!(fvec_out.pdf[:,:,is], fvec_in.pdf[:,:,is],
-                ff[:,:,is], z_SL, z_advect[:,is], z, vpa, use_semi_lagrange, dt, t,
-                z_spectral, istage)
-        end
+                ff[:,:,is], z_SL, z_advect[:,is], z, vpa,
+                use_semi_lagrange, dt, t, z_spectral, istage)
+        #end
+=#
+        @views z_advection!(fvec_out.pdf, fvec_in, ff, moments, z_SL, z_advect, z, vpa,
+            use_semi_lagrange, dt, t, z_spectral, composition.n_species, istage)
     end
     # account for charge exchange collisions between ions and neutrals
     if advance.cx_collisions
-        charge_exchange_collisions!(fvec_out.pdf, fvec_in.pdf, ff, moments, n_ion_species,
+        charge_exchange_collisions!(fvec_out.pdf, fvec_in, moments, n_ion_species,
             composition.n_neutral_species, vpa, charge_exchange_frequency, z.n, dt)
     end
     if advance.source_terms

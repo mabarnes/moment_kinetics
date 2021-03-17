@@ -5,11 +5,9 @@ export update_speed_vpa!
 
 using semi_lagrange: find_approximate_characteristic!
 using advection: update_boundary_indices!
-using advection: advance_f_local!, set_igrid_ielem
+using advection: advance_f_local!
 using em_fields: update_phi!
-using chebyshev: chebyshev_derivative!
-using chebyshev: chebyshev_info
-using finite_differences: derivative_finite_difference!
+using derivatives: derivative!
 using initial_conditions: enforce_vpa_boundary_condition!
 
 function vpa_advection!(f_out, f_in, ff, fields, moments, SL, advect,
@@ -69,42 +67,13 @@ function update_speed_vpa!(advect, fields, moments, ff, vpa, z, composition, t, 
 	#end
     return nothing
 end
-# update the advection speed dvpa/dt = Ze/m E_parallel
-# if z_spectral argument has type chebyshev_info, then use Chebyshev spectral treatment
-function update_speed_default!(advect, fields, moments, ff, vpa, z, composition,
-	t, z_spectral::chebyshev_info)
-	# calculate the updated electrostatic potnetial phi
-	update_phi!(fields, moments, ff, vpa, z.n, composition, t)
-	# dphi/dz is calculated and stored in z.scratch
-	chebyshev_derivative!(z.scratch2d, fields.phi, z_spectral, z)
-#	# get the Chebyshev coefficients for phi and store in z_spectral.f
-#	update_fcheby!(z_spectral, phi, z)
-#	# dphi/dz is calculated and stored in z.scratch
-#	update_df_chebyshev!(z.scratch2d, z_spectral, z)
-	@inbounds @fastmath begin
-		for is ∈ 1:composition.n_ion_species
-			for iz ∈ 1:z.n
-#				igrid = z.igrid[iz]
-#				ielem = z.ielement[iz]
-				for ivpa ∈ 1:vpa.n
-					igrid, ielem = set_igrid_ielem(z.igrid[iz], z.ielement[iz],
-						-vpa.grid[ivpa], z.ngrid, z.nelement)
-					advect[iz,is].speed[ivpa] = -0.5*z.scratch2d[igrid,ielem]
-				end
-			end
-		end
-	end
-end
-# 'z_not_spectral' is a dummy input whose type indicates whether a spectral
-# or finite diifference discretization is used for z
-function update_speed_default!(advect, fields, moments, ff, vpa, z, composition,
-	t, z_not_spectral::Bool)
+function update_speed_default!(advect, fields, moments, ff, vpa, z, composition, t, z_spectral)
 	# update the electrostatic potential phi
 	update_phi!(fields, moments, ff, vpa, z.n, composition, t)
-	# calculate the derivative of phi with respect to z
-	# and store in z.scratch
-	derivative_finite_difference!(z.scratch, fields.phi, z.cell_width, z.bc,
-		"second_order_centered", z.igrid, z.ielement)
+	# calculate the derivative of phi with respect to z;
+	# the value at element boundaries is taken to be the average of the values
+	# at neighbouring elements
+	derivative!(z.scratch, fields.phi, z, z_spectral)
 	# advection velocity in vpa is -dphi/dz = -z.scratch
 	@inbounds @fastmath begin
 		for is ∈ 1:composition.n_ion_species
