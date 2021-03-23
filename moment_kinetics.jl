@@ -34,7 +34,7 @@ function run_moment_kinetics(to, input)
     # the main time advance loop -- including normalisation of f by density if requested
     z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
         z_SL, vpa_SL, scratch, advance = setup_time_advance!(ff, z, vpa, composition,
-        drive_input, evolve_moments, t_input)
+        drive_input, evolve_moments, t_input, charge_exchange_frequency)
     # setup i/o
     io, cdf = setup_file_io(output_dir, run_name, z, vpa, composition, charge_exchange_frequency)
     # write initial data to ascii files

@@ -9,7 +9,7 @@ using file_io: write_data_to_ascii, write_data_to_binary
 using chebyshev: setup_chebyshev_pseudospectral
 using chebyshev: chebyshev_derivative!
 using velocity_moments: setup_moments, update_moments!, reset_moments_status!
-using initial_conditions: enforce_z_boundary_condition!
+using initial_conditions: enforce_z_boundary_condition!, enforce_boundary_conditions!
 using initial_conditions: enforce_vpa_boundary_condition!
 using advection: setup_advection, update_boundary_indices!
 using z_advection: update_speed_z!, z_advection!
@@ -40,7 +40,7 @@ end
 # this includes creating and populating structs
 # for Chebyshev transforms, velocity space moments,
 # EM fields, semi-Lagrange treatment, and advection terms
-function setup_time_advance!(ff, z, vpa, composition, drive_input, evolve_moments, t_input)
+function setup_time_advance!(ff, z, vpa, composition, drive_input, evolve_moments, t_input, cx_frequency)
     # define some local variables for convenience/tidiness
     n_species = composition.n_species
     n_ion_species = composition.n_ion_species
@@ -51,7 +51,7 @@ function setup_time_advance!(ff, z, vpa, composition, drive_input, evolve_moment
     if t_input.split_operators
         advance = advance_flags(false, false, false, false, false)
     else
-        if composition.n_neutral_species > 0
+        if composition.n_neutral_species > 0 && cx_frequency > 0.0
             advance_cx = true
         else
             advance_cx = false
@@ -106,11 +106,14 @@ function setup_time_advance!(ff, z, vpa, composition, drive_input, evolve_moment
     moments = setup_moments(ff, vpa, z.n, evolve_moments)
     # redefine the distrubtion function ff = f(z,vpa)/n(z) if this option is chosen
     normalize_pdf!(ff, moments)
+    # create an array of structs containing scratch arrays for the pdf and any moments
+    # that are separately evolved via fluid equations
+    scratch = setup_scratch_arrays(moments, ff, z.n, vpa.n, n_species, t_input.n_rk_stages)
     # create the "fields" structure that contains arrays
     # for the electrostatic potential phi and eventually the electromagnetic fields
     fields = setup_em_fields(z.n, drive_input.force_phi, drive_input.amplitude, drive_input.frequency)
     # initialize the electrostatic potential
-    update_phi!(fields, moments, ff, vpa, z.n, composition, 0.0)
+    update_phi!(fields, moments, scratch[1], vpa, z.n, composition, 0.0)
     # save the initial phi(z) for possible use later (e.g., if forcing phi)
     fields.phi0 .= fields.phi
     # create structure vpa_advect whose members are the arrays needed to compute
@@ -118,7 +121,7 @@ function setup_time_advance!(ff, z, vpa, composition, drive_input, evolve_moment
     # with advection in vpa
     vpa_advect = setup_advection(vpa, z, n_ion_species)
     # initialise the vpa advection speed
-    update_speed_vpa!(vpa_advect, fields, moments, ff, vpa, z, composition, 0.0, z_spectral)
+    update_speed_vpa!(vpa_advect, fields, moments, scratch[1], vpa, z, composition, 0.0, z_spectral)
     for is ∈ 1:n_ion_species
         # initialise the upwind/downwind boundary indices in vpa
         update_boundary_indices!(view(vpa_advect,:,is))
@@ -131,9 +134,6 @@ function setup_time_advance!(ff, z, vpa, composition, drive_input, evolve_moment
     # method if the user specifies this
     z_SL = setup_semi_lagrange(z.n, vpa.n)
     vpa_SL = setup_semi_lagrange(vpa.n, z.n)
-    # create an array of structs containing scratch arrays for the pdf and any moments
-    # that are separately evolved via fluid equations
-    scratch = setup_scratch_arrays(moments, z.n, vpa.n, n_species, t_input.n_rk_stages)
     return z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect, z_SL,
         vpa_SL, scratch, advance
 end
@@ -149,7 +149,7 @@ function normalize_pdf!(pdf, moments)
 end
 # create an array of structs containing scratch arrays for the pdf and any moments
 # that are separately evolved via fluid equations
-function setup_scratch_arrays(moments, nz, nvpa, nspec, n_rk_stages)
+function setup_scratch_arrays(moments, pdf_in, nz, nvpa, nspec, n_rk_stages)
     # create n_rk_stages+1 pdf-sized scratch arrays
     pdf = allocate_float(nz, nvpa, nspec, n_rk_stages+1)
     if moments.evolve_density
@@ -162,6 +162,8 @@ function setup_scratch_arrays(moments, nz, nvpa, nspec, n_rk_stages)
         # the appropriate slice of the pdf and dens arrays created above
         for istage ∈ 1:n_rk_stages+1
             @views scratch[istage] = scratch_pdf_dens(pdf[:,:,:,istage], dens[:,:,istage])
+            scratch[istage].pdf .= pdf_in
+            scratch[istage].density .= moments.dens
         end
     else
         # create n_rk_stages+1 structs, each of which will contain one pdf array
@@ -171,6 +173,7 @@ function setup_scratch_arrays(moments, nz, nvpa, nspec, n_rk_stages)
         # the appropriate slice of the pdf array created above
         for istage ∈ 1:n_rk_stages+1
             @views scratch[istage] = scratch_pdf(pdf[:,:,:,istage])
+            scratch[istage].pdf .= pdf_in
         end
     end
     return scratch
@@ -487,30 +490,23 @@ function euler_time_advance!(fvec_out, fvec_in, ff, fields, moments, z_SL, vpa_S
     # only charged species have a force accelerating them in vpa
     if advance.vpa_advection
         @views vpa_advection!(fvec_out.pdf[:,:,1:n_ion_species],
-            fvec_in.pdf[:,:,1:n_ion_species], ff[:,:,1:n_ion_species], fields,
+            fvec_in, ff[:,:,1:n_ion_species], fields,
             moments, vpa_SL, vpa_advect, vpa, z, use_semi_lagrange, dt, t,
             vpa_spectral, z_spectral, composition, istage)
     end
     # z_advection! advances 1D advection equation in z
     # apply z-advection operation to all species (charged and neutral)
     if advance.z_advection
-#=
-        for is ∈ 1:composition.n_species
-            @views z_advection!(fvec_out.pdf[:,:,is], fvec_in.pdf[:,:,is],
-                ff[:,:,is], z_SL, z_advect[:,is], z, vpa,
-                use_semi_lagrange, dt, t, z_spectral, istage)
-        #end
-=#
         @views z_advection!(fvec_out.pdf, fvec_in, ff, moments, z_SL, z_advect, z, vpa,
             use_semi_lagrange, dt, t, z_spectral, composition.n_species, istage)
+    end
+    if advance.source_terms
+        source_terms!(fvec_out.pdf, fvec_in, moments, z, vpa, dt, z_spectral)
     end
     # account for charge exchange collisions between ions and neutrals
     if advance.cx_collisions
         charge_exchange_collisions!(fvec_out.pdf, fvec_in, moments, n_ion_species,
             composition.n_neutral_species, vpa, charge_exchange_frequency, z.n, dt)
-    end
-    if advance.source_terms
-        source_terms!(fvec_out.pdf, fvec_in, moments, z, vpa, dt, z_advect, z_spectral)
     end
     if advance.continuity
         continuity_equation!(fvec_out.density, fvec_in, moments, z, vpa, dt, z_spectral)
@@ -518,6 +514,9 @@ function euler_time_advance!(fvec_out, fvec_in, ff, fields, moments, z_SL, vpa_S
     # reset "xx.updated" flags to false since ff has been updated
     # and the corresponding moments have not
     reset_moments_status!(moments)
+    # enforce boundary conditions in z and vpa on the distribution function
+    # NB: probably need to do the same for the evolved moments
+    enforce_boundary_conditions!(fvec_out.pdf, z.bc, vpa.bc, vpa.grid, z_advect, vpa_advect)
     return nothing
 end
 # update the vector containing the pdf and any evolved moments of the pdf

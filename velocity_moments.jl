@@ -7,6 +7,7 @@ export reset_moments_status!
 
 using type_definitions: mk_float
 using array_allocation: allocate_float, allocate_bool
+using derivatives: integral
 
 mutable struct moments
     # this is the particle density
@@ -106,6 +107,8 @@ function update_ppar!(ppar, scratch, ff, vpa, nz)
 end
 # computes the integral over vpa of the integrand, using the input vpa_wgts
 function integrate_over_vspace(integrand, vpa_wgts)
+    return integral(integrand, vpa_wgts)/sqrt(pi)
+#=
     # nvpa is the number of v_parallel grid points
     nvpa = length(vpa_wgts)
     # initialize 'integral' to zero before sum
@@ -117,6 +120,7 @@ function integrate_over_vspace(integrand, vpa_wgts)
     end
     integral /= sqrt(pi)
     return integral
+=#
 end
 function reset_moments_status!(moments)
     if moments.evolve_density == false

@@ -9,6 +9,8 @@ function derivative_finite_difference!(df, f, del, adv_fac, bc, fd_option, igrid
 		upwind_second_order!(df, f, del, adv_fac, bc, igrid, ielement)
 	elseif fd_option == "third_order_upwind"
 		upwind_third_order!(df, f, del, adv_fac, bc, igrid, ielement)
+	elseif fd_option == "fourth_order_upwind"
+		upwind_fourth_order!(df, f, del, bc, igrid, ielement)
 	elseif fd_option == "second_order_centered"
 		centered_second_order!(df, f, del, bc, igrid, ielement)
 	elseif fd_option == "first_order_upwind"
@@ -29,7 +31,9 @@ function derivative_finite_difference!(df, f, del, adv_fac, bc, fd_option, igrid
 	return nothing
 end
 function derivative_finite_difference!(df, f, del, bc, fd_option, igrid, ielement)
-	if fd_option == "second_order_centered"
+	if fd_option == "fourth_order_centered"
+		centered_fourth_order!(df, f, del, bc, igrid, ielement)
+	elseif fd_option == "second_order_centered"
 		centered_second_order!(df, f, del, bc, igrid, ielement)
 	end
 	return nothing
@@ -303,6 +307,51 @@ function centered_second_order!(df::Array{mk_float,1}, f, del, bc, igrid, ieleme
 		df[i] = 0.5*f[i+1]/del[i]
 		i = n
 		df[i] = -0.5*f[i-1]/del[n-1]
+	end
+end
+# take the derivative of input function f and return as df
+# using fourth-order, centered differences.
+# input/output array df is 2D array of size ngrid x nelement
+function centered_fourth_order!(df::Array{mk_float,2}, f, del, bc, igrid, ielement)
+	n = length(f)
+	# get derivative at internal points
+	for i ∈ 3:n-2
+		df[igrid[i],ielement[i]] = (8.0*(f[i+1]-f[i-1])+f[i-2]-f[i+2])/(12.0*del[i])
+	end
+	# use BCs to treat boundary points
+	if bc == "periodic"
+		i = 1
+		ghost1 = f[n-1]
+		ghost2 = f[n-2]
+		df[igrid[i],ielement[i]] = (8.0*(f[i+1]-ghost1)+ghost2-f[i+2])/(12.0*del[i])
+		i = 2
+		df[igrid[i],ielement[i]] = (8.0*(f[i+1]-f[i-1])+ghost1-f[i+2])/(12.0*del[i])
+		i = n
+		ghost1 = f[2]
+		ghost2 = f[3]
+		df[igrid[i],ielement[i]] = (8.0*(ghost1-f[i-1])+f[i-2]-ghost2)/(12.0*del[i])
+		i = n-1
+		df[igrid[i],ielement[i]] = (8.0*(f[i+1]-f[i-1])+f[i-2]-ghost1)/(12.0*del[i])
+	elseif bc == "constant"
+		i = 1
+		ghost = f[1]
+		df[igrid[i],ielement[i]] = (8.0*(f[i+1]-ghost)+ghost-f[i+2])/(12.0*del[i])
+		i = 2
+		df[igrid[i],ielement[i]] = (8.0*(f[i+1]-f[i-1])+ghost-f[i+2])/(12.0*del[i])
+		i = n
+		ghost = f[n]
+		df[igrid[i],ielement[i]] = (8.0*(ghost-f[i-1])+f[i-2]-ghost)/(12.0*del[i])
+		i = n-1
+		df[igrid[i],ielement[i]] = (8.0*(f[i+1]-f[i-1])+f[i-2]-ghost)/(12.0*del[i])
+	elseif bc == "zero"
+		i = 1
+		df[igrid[i],ielement[i]] = (8.0*f[i+1]-f[i+2])/(12.0*del[i])
+		i = 2
+		df[igrid[i],ielement[i]] = (8.0*(f[i+1]-f[i-1])-f[i+2])/(12.0*del[i])
+		i = n
+		df[igrid[i],ielement[i]] = (-8.0*f[i-1]+f[i-2])/(12.0*del[i])
+		i = n-1
+		df[igrid[i],ielement[i]] = (8.0*(f[i+1]-f[i-1])+f[i-2])/(12.0*del[i])
 	end
 end
 

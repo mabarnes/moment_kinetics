@@ -1,6 +1,7 @@
 module derivatives
 
 export derivative!
+export integral
 
 using chebyshev: chebyshev_info, chebyshev_derivative!
 using finite_differences: derivative_finite_difference!
@@ -35,7 +36,7 @@ end
 function derivative!(df, f, coord, not_spectral::Bool)
     # get the derivative at each grid point within each element and store in df
     derivative_finite_difference!(coord.scratch2d, f, coord.cell_width,
-        coord.bc, "second_order_centered", coord.igrid, coord.ielement)
+        coord.bc, "fourth_order_centered", coord.igrid, coord.ielement)
     # map the derivative from the elemental grid to the full grid;
     # at element boundaries, use the average of the derivatives from neighboring elements.
     derivative_elements_to_full_grid!(df, coord.scratch2d, coord)
@@ -166,6 +167,20 @@ function reconcile_element_boundaries_centered!(df1d, df2d, coord)
         end
     end
     return nothing
+end
+
+# computes the integral of the integrand, using the input wgts
+function integral(integrand, wgts)
+    # n is the number of grid points
+    n = length(wgts)
+    # initialize 'integral' to zero before sum
+    integral = 0.0
+    @boundscheck n == length(integrand) || throw(BoundsError(integrand))
+    @boundscheck n == length(wgts) || throw(BoundsError(wgts))
+    @inbounds for i ∈ 1:n
+        integral += integrand[i]*wgts[i]
+    end
+    return integral
 end
 
 end

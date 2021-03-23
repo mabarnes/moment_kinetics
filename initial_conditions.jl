@@ -3,6 +3,7 @@ module initial_conditions
 export init_f
 export enforce_z_boundary_condition!
 export enforce_vpa_boundary_condition!
+export enforce_boundary_conditions!
 
 using type_definitions: mk_float
 using array_allocation: allocate_float
@@ -75,6 +76,20 @@ function init_fvpa(vpa, spec)
     end
     return nothing
 end
+function enforce_boundary_conditions!(f, z_bc, vpa_bc, vpa, z_adv::T1, vpa_adv::T2) where {T1, T2}
+    for is ∈ 1:size(f,3)
+        # enforce the z BC
+        for ivpa ∈ 1:size(f,2)
+            @views enforce_z_boundary_condition!(f[:,ivpa,is], z_bc, z_adv[ivpa,is].upwind_idx, z_adv[ivpa,is].downwind_idx, vpa[ivpa])
+        end
+    end
+    for is ∈ 1:size(vpa_adv,2)
+        # enforce the vpa BC
+        for iz ∈ 1:size(f,1)
+            @views enforce_vpa_boundary_condition_local!(f[iz,:,is], vpa_bc, vpa_adv[iz,is].upwind_idx, vpa_adv[iz,is].downwind_idx)
+        end
+    end
+end
 # impose the prescribed z boundary condition on f
 # at every vpa grid point
 function enforce_z_boundary_condition!(f, bc::String, vpa, src::T) where T
@@ -92,8 +107,9 @@ function enforce_z_boundary_condition!(f, bc, upwind_idx, downwind_idx, v)
         f[upwind_idx] = density_offset * exp(-(v/vpawidth)^2) / sqrt(pi)
     elseif bc == "periodic"
         # impose periodicity
-        f[downwind_idx] = f[upwind_idx]
         #f[upwind_idx] = f[downwind_idx]
+        f[upwind_idx] = 0.5*(f[upwind_idx]+f[downwind_idx])
+        f[downwind_idx] = f[downwind_idx]
     end
 end
 # impose the prescribed vpa boundary condition on f
@@ -108,9 +124,11 @@ end
 function enforce_vpa_boundary_condition_local!(f::T, bc, upwind_idx, downwind_idx) where T
     if bc == "zero"
         f[upwind_idx] = 0.0
+        f[downwind_idx] = 0.0
     elseif bc == "periodic"
-        #f[downwind_idx] = f[upwind_idx]
-        f[upwind_idx] = f[downwind_idx]
+        #f[upwind_idx] = f[downwind_idx]
+        f[upwind_idx] = 0.5*(f[upwind_idx]+f[downwind_idx])
+        f[downwind_idx] = f[upwind_idx]
     end
 end
 

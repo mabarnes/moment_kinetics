@@ -25,7 +25,7 @@ function mk_input(scan_input=Dict())
     n_ion_species = 1
     # n_neutral_species is the number of evolved neutral species
     # currently only n_neutral_species = 0 is supported
-    n_neutral_species = 0
+    n_neutral_species = 1
     # if boltzmann_electron_response = true, then the electron
     # density is fixed to be N_e*(eϕ/T_e)
     # currently this is the only supported option
@@ -40,7 +40,7 @@ function mk_input(scan_input=Dict())
     output_dir = string("runs/",run_name)
     # if evolve_moments.density = true, evolve density via continuity eqn
     # and g = f/n via modified drift kinetic equation
-    evolve_moments.density = false
+    evolve_moments.density = true
 
     #z.advection.option = "constant"
     #z.advection.constant_speed = 1.0
@@ -51,11 +51,9 @@ function mk_input(scan_input=Dict())
     ####### specify any deviations from default inputs for evolved species #######
     # set initial Tₑ = 1
     composition.T_e = get(scan_input, :T_e, 1.0)
-    #species[1].initial_temperature = 1.0
     # set initial neutral temperature Tn/Tₑ = 1
-    #species[2].initial_temperature = 1.0
     # set initial nᵢ/Nₑ = 1.0
-    species[1].initial_density = get(scan_input, (:initial_density, 1), 1.0)
+    species[1].initial_density = get(scan_input, (:initial_density, 1), 0.5)
     species[1].initial_temperature = get(scan_input, (:initial_temperature, 1), 1.0)
     species[1].z_IC.amplitude = get(scan_input, (:z_IC_amplitude, 1), 0.001)
     # set initial neutral densiity = Nₑ
@@ -66,17 +64,17 @@ function mk_input(scan_input=Dict())
     end
     #################### end specification of species inputs #####################
 
-    charge_exchange_frequency = get(scan_input, :charge_exchange_frequency, 0.0*sqrt(species[1].initial_temperature))
+    charge_exchange_frequency = get(scan_input, :charge_exchange_frequency, 2.0*sqrt(species[1].initial_temperature))
 
     # parameters related to the time stepping
-    nstep = get(scan_input, :nstep, 1500)
-    dt = get(scan_input, :dt, 0.002/sqrt(species[1].initial_temperature))
-    nwrite = get(scan_input, :nwrite, 5)
+    nstep = get(scan_input, :nstep, 5000)
+    dt = get(scan_input, :dt, 0.001/sqrt(species[1].initial_temperature))
+    nwrite = get(scan_input, :nwrite, 10)
     # use_semi_lagrange = true to use interpolation-free semi-Lagrange treatment
     # otherwise, solve problem solely using the discretization_option above
     use_semi_lagrange = false
-    # options are n_rk_stages = 1, 2 or 3 (corresponding to forward Euler,
-    # Heun's method and SSP RK3)
+    # options are n_rk_stages = 1, 2, 3 or 4 (corresponding to forward Euler,
+    # Heun's method, SSP RK3 and 4-stage SSP RK3)
     n_rk_stages = 4
     split_operators = false
 
@@ -88,13 +86,12 @@ function mk_input(scan_input=Dict())
     # determine the discretization option for the z grid
     # supported options are "chebyshev_pseudospectral" and "finite_difference"
     z.discretization = "chebyshev_pseudospectral"
-    #z.discretization = "finite_difference"
 
     # overwrite some default parameters related to the vpa grid
     # ngrid is the number of grid points per element
-    vpa.ngrid = 9
+    vpa.ngrid = 17
     # nelement is the number of elements
-    vpa.nelement = 20
+    vpa.nelement = 10
     # L is the box length in units of vthermal_species
     vpa.L = 10.0*sqrt(species[1].initial_temperature)
     # determine the boundary condition
@@ -103,7 +100,6 @@ function mk_input(scan_input=Dict())
     # determine the discretization option for the vpa grid
     # supported options are "chebyshev_pseudospectral" and "finite_difference"
     vpa.discretization = "chebyshev_pseudospectral"
-    #vpa.discretization = "finite_difference"
 
     #########################################################################
     ########## end user inputs. do not modify following code! ###############

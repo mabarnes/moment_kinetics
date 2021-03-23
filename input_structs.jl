@@ -8,6 +8,7 @@ export initial_condition_input, initial_condition_input_mutable
 export species_parameters, species_parameters_mutable
 export species_composition
 export drive_input, drive_input_mutable
+export pp_input
 
 using type_definitions: mk_float, mk_int
 
@@ -151,6 +152,54 @@ struct drive_input
     # phi(z,t=0)*amplitude*sinpi(t*frequency)
     amplitude::mk_float
     frequency::mk_float
+end
+struct pp_input
+    # if calculate_frequencies = true, calculate and print the frequency and growth/decay
+    # rate of phi, using values at iz = iz0
+    calculate_frequencies::Bool
+    # if plot_phi0_vs_t = true, create plot of phi(z0) vs time
+    plot_phi0_vs_t::Bool
+    # if plot_phi_vs_z_t = true, create plot of phi vs z and time
+    plot_phi_vs_z_t::Bool
+    # if animate_phi_vs_z = true, create animation of phi vs z at different time slices
+    animate_phi_vs_z::Bool
+    # if plot_dens0_vs_t = true, create plots of species density(z0) vs time
+    plot_dens0_vs_t::Bool
+    # if plot_upar0_vs_t = true, create plots of species upar(z0) vs time
+    plot_upar0_vs_t::Bool
+    # if plot_ppar0_vs_t = true, create plots of species ppar(z0) vs time
+    plot_ppar0_vs_t::Bool
+    # if plot_dens_vs_z_t = true, create plot of species density vs z and time
+    plot_dens_vs_z_t::Bool
+    # if plot_upar_vs_z_t = true, create plot of species parallel flow vs z and time
+    plot_upar_vs_z_t::Bool
+    # if animate_dens_vs_z = true, create animation of species density vs z at different time slices
+    animate_dens_vs_z::Bool
+    # if animate_upar_vs_z = true, create animation of species parallel flow vs z at different time slices
+    animate_upar_vs_z::Bool
+    # if animate_f_vs_z_vpa = true, create animation of f(z,vpa) at different time slices
+    animate_f_vs_z_vpa::Bool
+    # if animate_f_vs_z_vpa0 = true, create animation of f(z,vpa0) at different time slices
+    animate_f_vs_z_vpa0::Bool
+    # if animate_f_vs_z0_vpa = true, create animation of f(z0,vpa) at different time slices
+    animate_f_vs_z0_vpa::Bool
+    # if animate_deltaf_vs_z_vpa = true, create animation of δf(z,vpa) at different time slices
+    animate_deltaf_vs_z_vpa::Bool
+    # if animate_deltaf_vs_z_vpa0 = true, create animation of δf(z,vpa0) at different time slices
+    animate_deltaf_vs_z_vpa0::Bool
+    # if animate_deltaf_vs_z0_vpa = true, create animation of δf(z0,vpa) at different time slices
+    animate_deltaf_vs_z0_vpa::Bool
+    # animations will use one in every nwrite_movie data slices
+    nwrite_movie::mk_int
+    # itime_min is the minimum time index at which to start animations
+    itime_min::mk_int
+    # itime_max is the final time index at which to end animations
+    # if itime_max < 0, the value used will be the total number of time slices
+    itime_max::mk_int
+    # iz0 is the iz index used when plotting data at a single z location
+    iz0::mk_int
+    # ivpa0 is the ivpa index used when plotting data at a single vpa location
+    ivpa0::mk_int
 end
 
 end
