@@ -7,7 +7,7 @@ using semi_lagrange: find_approximate_characteristic!
 using advection: update_boundary_indices!
 using advection: advance_f_local!
 using em_fields: update_phi!
-using derivatives: derivative!
+using calculus: derivative!
 using initial_conditions: enforce_vpa_boundary_condition!
 
 function vpa_advection!(f_out, fvec_in, ff, fields, moments, SL, advect,

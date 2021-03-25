@@ -2,7 +2,7 @@ module continuity
 
 export continuity_equation!
 
-using derivatives: derivative!
+using calculus: derivative!
 using velocity_moments: update_moments!
 
 # use the continuity equation dn/dt + d(n*upar)/dz to update the density n for all species

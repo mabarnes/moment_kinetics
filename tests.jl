@@ -6,7 +6,7 @@ module tests
 using input_structs: grid_input, advection_input
 using coordinates: define_coordinate
 using chebyshev: setup_chebyshev_pseudospectral
-using derivatives: derivative!, integral
+using calculus: derivative!, integral
 
 function test_fundamental_theorem_calculus_chebyshev()
     print("performing test of fundamental theorem of calculus...")

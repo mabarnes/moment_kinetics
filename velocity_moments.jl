@@ -7,7 +7,7 @@ export reset_moments_status!
 
 using type_definitions: mk_float
 using array_allocation: allocate_float, allocate_bool
-using derivatives: integral
+using calculus: integral
 
 mutable struct moments
     # this is the particle density

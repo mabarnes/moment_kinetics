@@ -8,7 +8,7 @@ export advance_f_local!
 
 using type_definitions: mk_float, mk_int
 using array_allocation: allocate_float
-using derivatives: derivative!
+using calculus: derivative!
 
 # structure containing the basic arrays associated with the
 # advection terms appearing in the advection equation for each coordinate

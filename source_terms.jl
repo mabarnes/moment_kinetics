@@ -3,7 +3,7 @@ module source_terms
 export source_terms!
 
 using velocity_moments: update_moments!
-using derivatives: derivative!
+using calculus: derivative!
 
 function source_terms!(pdf_out, fvec_in, moments, z, vpa, dt, spectral)
     # update the parallel flow velocity upar
