@@ -18,6 +18,8 @@ Pkg.add("LsqFit")
 Pkg.add("OrderedCollections");
 Pkg.add("Glob");
 Pkg.add("NaturalSort")
+Pkg.add("SpecialFunctions")
+Pkg.add("Roots")
 packages = [:PackageCompiler, :TimerOutputs, :NCDatasets, :FFTW, :Plots, :LsqFit, :OrderedCollections, :Glob, :NaturalSort]
 # create the sysimage 'moment_kinetics.so' in the base moment_kinetics source directory
 # with the above pre-compiled packages

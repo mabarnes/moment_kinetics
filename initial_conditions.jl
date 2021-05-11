@@ -7,6 +7,7 @@ export enforce_boundary_conditions!
 
 using type_definitions: mk_float
 using array_allocation: allocate_float
+using bgk: init_bgk_pdf!
 
 # creates f and specifies its initial condition
 # all initial conditions are of the form f = F(z)*G(vpa)
@@ -15,14 +16,19 @@ function init_f(z, vpa, composition, species, n_rk_stages)
     n_species = composition.n_species
     f = allocate_float(z.n, vpa.n, n_species)
     for is ∈ 1:n_species
-        # initialize F(z) and return in z.scratch
-        init_fz(z, species[is])
-        # initialize G(vpa) and return in vpa.scratch
-        init_fvpa(vpa, species[is])
-        # calculate f = F(z)*G(vpa)
-        for ivpa ∈ 1:vpa.n
-            for iz ∈ 1:z.n
-                f[iz,ivpa,is] = z.scratch[iz]*vpa.scratch[ivpa]
+        if species[is].z_IC.initialization_option == "bgk" ||
+            species[is].vpa_IC.initialization_option == "bgk"
+            @views init_bgk_pdf!(f[:,:,is], 0.0, species[is].initial_temperature, z.grid, z.L, vpa.grid)
+        else
+            # initialize F(z) and return in z.scratch
+            init_fz(z, species[is])
+            # initialize G(vpa) and return in vpa.scratch
+            init_fvpa(vpa, species[is])
+            # calculate f = F(z)*G(vpa)
+            for ivpa ∈ 1:vpa.n
+                for iz ∈ 1:z.n
+                    f[iz,ivpa,is] = z.scratch[iz]*vpa.scratch[ivpa]
+                end
             end
         end
     end
@@ -107,9 +113,8 @@ function enforce_z_boundary_condition!(f, bc, upwind_idx, downwind_idx, v)
         f[upwind_idx] = density_offset * exp(-(v/vpawidth)^2) / sqrt(pi)
     elseif bc == "periodic"
         # impose periodicity
-        #f[upwind_idx] = f[downwind_idx]
-        f[upwind_idx] = 0.5*(f[upwind_idx]+f[downwind_idx])
-        f[downwind_idx] = f[downwind_idx]
+        f[downwind_idx] = 0.5*(f[upwind_idx]+f[downwind_idx])
+        f[upwind_idx] = f[downwind_idx]
     end
 end
 # impose the prescribed vpa boundary condition on f
@@ -124,11 +129,10 @@ end
 function enforce_vpa_boundary_condition_local!(f::T, bc, upwind_idx, downwind_idx) where T
     if bc == "zero"
         f[upwind_idx] = 0.0
-        f[downwind_idx] = 0.0
+        #f[downwind_idx] = 0.0
     elseif bc == "periodic"
-        #f[upwind_idx] = f[downwind_idx]
-        f[upwind_idx] = 0.5*(f[upwind_idx]+f[downwind_idx])
-        f[downwind_idx] = f[upwind_idx]
+        f[downwind_idx] = 0.5*(f[upwind_idx]+f[downwind_idx])
+        f[upwind_idx] = f[downwind_idx]
     end
 end
 
