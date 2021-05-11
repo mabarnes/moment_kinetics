@@ -1,6 +1,7 @@
 module coordinates
 
 export define_coordinate, write_coordinate
+export equally_spaced_grid
 
 using type_definitions: mk_float, mk_int
 using array_allocation: allocate_float, allocate_int
