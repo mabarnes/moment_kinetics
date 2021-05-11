@@ -9,6 +9,7 @@ using file_io: write_data_to_ascii, write_data_to_binary
 using chebyshev: setup_chebyshev_pseudospectral
 using chebyshev: chebyshev_derivative!
 using velocity_moments: setup_moments, update_moments!, reset_moments_status!
+using velocity_moments: enforce_particle_density_constraint!
 using initial_conditions: enforce_z_boundary_condition!, enforce_boundary_conditions!
 using initial_conditions: enforce_vpa_boundary_condition!
 using advection: setup_advection, update_boundary_indices!
@@ -517,6 +518,9 @@ function euler_time_advance!(fvec_out, fvec_in, ff, fields, moments, z_SL, vpa_S
     # enforce boundary conditions in z and vpa on the distribution function
     # NB: probably need to do the same for the evolved moments
     enforce_boundary_conditions!(fvec_out.pdf, z.bc, vpa.bc, vpa.grid, z_advect, vpa_advect)
+    if moments.evolve_density && moments.enforce_particle_conservation
+        enforce_particle_density_constraint!(fvec_out, fvec_in, z, vpa)
+    end
     return nothing
 end
 # update the vector containing the pdf and any evolved moments of the pdf

@@ -23,6 +23,7 @@ function continuity_equation_single_species!(dens_out, dens_in, upar, z, dt, spe
     @. z.scratch = dens_in*upar
     # calculate d(nu)/dz, averaging the derivative values at element boundaries
     derivative!(z.scratch, z.scratch, z, spectral)
+    #derivative!(z.scratch, z.scratch, z, -upar, spectral)
     # update the density
     @. dens_out -= dt*z.scratch
 end

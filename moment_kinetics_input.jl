@@ -35,12 +35,13 @@ function mk_input(scan_input=Dict())
         load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_response)
 
     # this is the prefix for all output files associated with this run
-    run_name = get(scan_input, :run_name, "example")
+    run_name = get(scan_input, :run_name, "TiTe1_CX2_dens_lres_noconserve")
     # this is the directory where the simulation data will be stored
     output_dir = string("runs/",run_name)
     # if evolve_moments.density = true, evolve density via continuity eqn
     # and g = f/n via modified drift kinetic equation
     evolve_moments.density = true
+    evolve_moments.particle_conservation = false
 
     #z.advection.option = "constant"
     #z.advection.constant_speed = 1.0
@@ -56,6 +57,7 @@ function mk_input(scan_input=Dict())
     species[1].initial_density = get(scan_input, (:initial_density, 1), 0.5)
     species[1].initial_temperature = get(scan_input, (:initial_temperature, 1), 1.0)
     species[1].z_IC.amplitude = get(scan_input, (:z_IC_amplitude, 1), 0.001)
+    #species[1].z_IC.initialization_option = "bgk"
     # set initial neutral densiity = Nₑ
     if composition.n_species > 1
         species[2].initial_density = get(scan_input, (:initial_density, 2), 0.5)
@@ -64,7 +66,7 @@ function mk_input(scan_input=Dict())
     end
     #################### end specification of species inputs #####################
 
-    charge_exchange_frequency = get(scan_input, :charge_exchange_frequency, 2.0*sqrt(species[1].initial_temperature))
+    charge_exchange_frequency = get(scan_input, :charge_exchange_frequency, 4.0*sqrt(species[1].initial_temperature))
 
     # parameters related to the time stepping
     nstep = get(scan_input, :nstep, 5000)
@@ -80,26 +82,33 @@ function mk_input(scan_input=Dict())
 
     # overwrite some default parameters related to the z grid
     # ngrid is number of grid points per element
-    z.ngrid = 9
+    z.ngrid = 5
     # nelement is the number of elements
-    z.nelement = 2
+    z.nelement = 1
+    #z.ngrid = 400
+    #z.nelement = 1
     # determine the discretization option for the z grid
     # supported options are "chebyshev_pseudospectral" and "finite_difference"
     z.discretization = "chebyshev_pseudospectral"
+    #z.discretization = "finite_difference"
 
     # overwrite some default parameters related to the vpa grid
     # ngrid is the number of grid points per element
-    vpa.ngrid = 17
+    vpa.ngrid = 9
     # nelement is the number of elements
-    vpa.nelement = 10
+    vpa.nelement = 2
+    #vpa.ngrid = 400
+    #vpa.nelement = 1
     # L is the box length in units of vthermal_species
-    vpa.L = 10.0*sqrt(species[1].initial_temperature)
+    vpa.L = 8.0*sqrt(species[1].initial_temperature)
     # determine the boundary condition
     # only supported option at present is "zero" and "periodic"
     vpa.bc = "periodic"
+    #vpa.bc = "zero"
     # determine the discretization option for the vpa grid
     # supported options are "chebyshev_pseudospectral" and "finite_difference"
     vpa.discretization = "chebyshev_pseudospectral"
+    #vpa.discretization = "finite_difference"
 
     #########################################################################
     ########## end user inputs. do not modify following code! ###############
@@ -149,7 +158,8 @@ end
 function load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_response)
     ############## options related to the equations being solved ###############
     evolve_density = false
-    evolve_moments = evolve_moments_options(evolve_density)
+    particle_conservation = true
+    evolve_moments = evolve_moments_options(evolve_density, particle_conservation)
     #################### parameters related to the z grid ######################
     # ngrid_z is number of grid points per element
     ngrid_z = 100
@@ -424,6 +434,9 @@ function check_input_initialization(composition, species, io)
         elseif species[is].z_IC.initialization_option == "sinusoid"
             print(io,">z_initialization_option = 'sinusoid'.")
             println(io,"  setting F(z) = initial_density + z_amplitude*sinpi(z_wavenumber*z/L_z).")
+        elseif species[is].z_IC.initialization_option == "bgk"
+            print(io,">z_initialization_option = 'bgk'.")
+            println(io,"  setting F(z,vpa) = F(vpa^2 + phi), with phi_max = 0.")
         else
             input_option_error("z_initialization_option", species[is].z_IC.initialization_option)
         end
@@ -436,6 +449,9 @@ function check_input_initialization(composition, species, io)
         elseif species[is].vpa_IC.initialization_option == "sinusoid"
             print(io,">vpa_initialization_option = 'sinusoid'.")
             println(io,"  setting G(vpa) = vpa_amplitude*sinpi(vpa_wavenumber*vpa/L_vpa).")
+        elseif species[is].vpa_IC.initialization_option == "bgk"
+            print(io,">vpa_initialization_option = 'bgk'.")
+            println(io,"  setting F(z,vpa) = F(vpa^2 + phi), with phi_max = 0.")
         else
             input_option_error("vpa_initialization_option", species[is].vpa_IC.initialization_option)
         end

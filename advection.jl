@@ -171,8 +171,8 @@ function update_rhs!(advection, f_current, SL, coord, dt, j, spectral)
         advection.modified_speed, advection.upwind_idx, advection.downwind_idx,
         advection.upwind_increment, SL, coord.n, dt, j, coord)
     # calculate df/dcoord
-    #derivative!(coord.scratch, f_current, coord, advection.adv_fac, spectral)
-    derivative!(coord.scratch, f_current, coord, spectral)
+    derivative!(coord.scratch, f_current, coord, advection.adv_fac, spectral)
+    #derivative!(coord.scratch, f_current, coord, spectral)
     # calculate the explicit advection terms on the rhs of the equation;
     # i.e., -Δt⋅δv⋅f'
     calculate_explicit_advection!(advection.rhs, coord.scratch,

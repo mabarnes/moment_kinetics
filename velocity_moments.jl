@@ -4,6 +4,7 @@ export integrate_over_vspace!
 export update_moments!
 export update_density!
 export reset_moments_status!
+export enforce_particle_density_constraint!
 
 using type_definitions: mk_float
 using array_allocation: allocate_float, allocate_bool
@@ -16,6 +17,8 @@ mutable struct moments
     dens_updated::Array{Bool,1}
     # flag that indicates if the density should be evolved via continuity equation
     evolve_density::Bool
+    # flag that indicates if exact particle conservation should be enforced
+    enforce_particle_conservation::Bool
     # this is the parallel flow
     upar::Array{mk_float,2}
     # flag that keeps track of whether or not upar needs updating before use
@@ -52,7 +55,7 @@ function setup_moments(ff, vpa, nz, evolve_moments)
         parallel_pressure_updated[is] = true
     end
     # return struct containing arrays needed to update moments
-    return moments(density, density_updated, evolve_moments.density,
+    return moments(density, density_updated, evolve_moments.density, evolve_moments.particle_conservation,
         parallel_flow, parallel_flow_updated, parallel_pressure, parallel_pressure_updated)
 end
 # calculate the updated density (dens) and parallel pressure (ppar) for all species
@@ -108,19 +111,20 @@ end
 # computes the integral over vpa of the integrand, using the input vpa_wgts
 function integrate_over_vspace(integrand, vpa_wgts)
     return integral(integrand, vpa_wgts)/sqrt(pi)
-#=
-    # nvpa is the number of v_parallel grid points
-    nvpa = length(vpa_wgts)
-    # initialize 'integral' to zero before sum
-    integral = 0.0
-    @boundscheck nvpa == length(integrand) || throw(BoundsError(integrand))
-    @boundscheck nvpa == length(vpa_wgts) || throw(BoundsError(vpa_wgts))
-    @inbounds for i ∈ 1:nvpa
-        integral += integrand[i]*vpa_wgts[i]
+end
+function enforce_particle_density_constraint!(fvec_new, fvec_old, z, vpa)
+    for is ∈ 1:size(fvec_new.density,2)
+        #tmp1 = integral(fvec_old.density[:,is], z.wgts)
+        #tmp2 = integral(fvec_new.density[:,is], z.wgts)
+        #@views avgdens_ratio = integral(fvec_new.density[:,is], z.wgts)/integral(fvec_old.density[:,is], z.wgts)
+        #println("tmp1: ", tmp1, "  tmp2: ", tmp2, "  ratio: ", avgdens_ratio)
+        for iz ∈ 1:size(fvec_new.density,1)
+            @. vpa.scratch = fvec_new.pdf[iz,:,is]
+            density_integral = integrate_over_vspace(vpa.scratch, vpa.wgts)
+            @. fvec_new.pdf[iz,:,is] += fvec_old.pdf[iz,:,is] * (1.0 - density_integral)
+            #fvec_new.density[iz,is] += fvec_old.density[iz,is] * (1.0 - avgdens_ratio)
+        end
     end
-    integral /= sqrt(pi)
-    return integral
-=#
 end
 function reset_moments_status!(moments)
     if moments.evolve_density == false

@@ -23,6 +23,7 @@ function source_terms_single_species!(pdf_out, pdf_in, dens, upar, z, dt, spectr
     # calculate d(n*upar)/dz
     @. z.scratch = dens*upar
     derivative!(z.scratch, z.scratch, z, spectral)
+    #derivative!(z.scratch, z.scratch, z, -upar, spectral)
     # update the density
     @. pdf_out += dt*z.scratch*pdf_in/dens
     return nothing
