@@ -6,7 +6,6 @@ module post_processing
 export analyze_and_plot
 
 # packages
-using NCDatasets
 using Plots
 using LsqFit
 # modules
@@ -15,6 +14,9 @@ using quadrature: composite_simpson_weights
 using array_allocation: allocate_float
 using file_io: open_output_file
 using type_definitions: mk_float
+using load_data: open_netcdf_file
+using load_data: load_coordinate_data, load_fields_data, load_moments_data, load_pdf_data
+using analysis: analyze_fields_data, analyze_moments_data, analyze_pdf_data
 
 function analyze_and_plot_data(path)
     # Create run_name from the path to the run directory
@@ -50,14 +52,17 @@ function analyze_and_plot_data(path)
         parallel_pressure, delta_ppar, ppar_fldline_avg,
         pp, run_name, time, itime_min, itime_max, nwrite_movie,
         z, iz0, n_species)
-
+    # load particle distribution function (pdf) data
+    ff = load_pdf_data(fid)
+    # analyze the pdf data
+    f_fldline_avg, delta_f, dens_moment = analyze_pdf_data(ff, nz, nvpa, n_species, ntime, z_wgts, Lz, vpa_wgts)
+#=
     print("Loading distribution function data...")
     # define a handle for the distribution function
     cdfvar = fid["f"]
     # load the distribution function data
     ff = cdfvar.var[:,:,:,:]
     println("done.")
-
     print("Analyzing distribution function data...")
     f_fldline_avg = allocate_float(nvpa,n_species,ntime)
     for i ∈ 1:ntime
@@ -82,12 +87,16 @@ function analyze_and_plot_data(path)
     end
     #@views advection_test_1d(ff[:,:,:,1], ff[:,:,:,end])
     println("done.")
-
+=#
     println("Plotting distribution function data...")
     cmlog(cmlin::ColorGradient) = RGB[cmlin[x] for x=LinRange(0,1,30)]
     logdeep = cgrad(:deep, scale=:log) |> cmlog
     for is ∈ 1:n_species
-        spec_string = string("_spec", string(is))
+        if n_species > 1
+            spec_string = string("_spec", string(is))
+        else
+            spec_string = ""
+        end
         # plot ∫dvpa f (= density unless density separately evolved, in which case, it should = 1)
         @views plot(time, 1.0 .- dens_moment[iz0,is,:])
         outfile = string(run_name, "_intf0_vs_t", spec_string, ".pdf")
@@ -95,10 +104,17 @@ function analyze_and_plot_data(path)
         #fmin = minimum(ff[:,:,is,:])
         #fmax = maximum(ff[:,:,is,:])
         if pp.animate_f_vs_z_vpa
-            # make a gif animation of f(vpa,z,t)
+            # make a gif animation of ln f(vpa,z,t)
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
                 #heatmap(vpa, z, log.(abs.(ff[:,:,i])), xlabel="vpa", ylabel="z", clims = (fmin,fmax), c = :deep)
                 @views heatmap(vpa, z, log.(abs.(ff[:,:,is,i])), xlabel="vpa", ylabel="z", fillcolor = logdeep)
+            end
+            outfile = string(run_name, "_logf_vs_z_vpa", spec_string, ".gif")
+            gif(anim, outfile, fps=5)
+            # make a gif animation of f(vpa,z,t)
+            anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+                #heatmap(vpa, z, log.(abs.(ff[:,:,i])), xlabel="vpa", ylabel="z", clims = (fmin,fmax), c = :deep)
+                @views heatmap(vpa, z, ff[:,:,is,i], xlabel="vpa", ylabel="z", c = :deep, interepolation = :cubic)
             end
             outfile = string(run_name, "_f_vs_z_vpa", spec_string, ".gif")
             gif(anim, outfile, fps=5)
@@ -157,6 +173,7 @@ function analyze_and_plot_data(path)
     close(fid)
 
 end
+#=
 function open_netcdf_file(run_name)
     # create the netcdf filename from the given run_name
     filename = string(run_name, ".cdf")
@@ -202,6 +219,7 @@ function load_coordinate_data(fid)
 
     return nz, z, z_wgts, Lz, nvpa, vpa, vpa_wgts, ntime, time
 end
+=#
 function init_postprocessing_options(pp, nz, nvpa, ntime)
     print("Initializing the post-processing input options...")
     # nwrite_movie is the stride used when making animations
@@ -236,6 +254,7 @@ function init_postprocessing_options(pp, nz, nvpa, ntime)
     println("done.")
     return nwrite_movie, itime_min, itime_max, iz0, ivpa0
 end
+#=
 function load_fields_data(fid)
     print("Loading fields data...")
     # define a handle for the electrostatic potential
@@ -263,6 +282,7 @@ function analyze_fields_data(phi, ntime, nz, z_wgts, Lz)
     println("done.")
     return phi_fldline_avg, delta_phi
 end
+=#
 function calculate_and_write_frequencies(fid, run_name, ntime, time, itime_min, itime_max, iz0, delta_phi, pp)
     if pp.calculate_frequencies
         println("Calculating the frequency and damping/growth rate...")
@@ -275,6 +295,7 @@ function calculate_and_write_frequencies(fid, run_name, ntime, time, itime_min, 
             compute_frequencies(shifted_time[itime_min:itime_max], delta_phi[iz0,itime_min:itime_max])
         # estimate variation of frequency/growth rate over time_window by computing
         # values for each half of the time window and taking max/min
+#=
         i1 = itime_min ; i2 = itime_min + cld(itime_max-itime_min,2)
         println("t1: ", time[i1], "  t2: ", time[i2])
         @views growth_rate_1, frequency_1, phase_1, _ =
@@ -283,6 +304,11 @@ function calculate_and_write_frequencies(fid, run_name, ntime, time, itime_min, 
         println("t1: ", time[i1], "  t2: ", time[i2])
         @views growth_rate_2, frequency_2, phase_2, _ =
             compute_frequencies(shifted_time[i1:i2], delta_phi[iz0,i1:i2])
+=#
+        # use dummy values for growth_rate_x and frequency_x, as original calculation seems broken
+        growth_rate_1 = growth_rate ; frequency_1 = frequency
+        growth_rate_2 = growth_rate ; frequency_2 = frequency
+        #
         growth_rate_max = max(growth_rate_1, growth_rate_2, growth_rate)
         growth_rate_min = min(growth_rate_1, growth_rate_2, growth_rate)
         frequency_max = max(frequency_1, frequency_2, frequency)
@@ -376,6 +402,7 @@ function plot_fields(phi, delta_phi, time, itime_min, itime_max, nwrite_movie,
     end
     println("done.")
 end
+#=
 function load_moments_data(fid)
     print("Loading velocity moments data...")
     # define a handle for the species density
@@ -395,6 +422,8 @@ function load_moments_data(fid)
     println("done.")
     return density, parallel_flow, parallel_pressure, n_species
 end
+=#
+#=
 function analyze_moments_data(density, parallel_flow, parallel_pressure, ntime, n_species, nz, z_wgts, Lz)
     print("Analyzing velocity moments data...")
     density_fldline_avg = allocate_float(n_species, ntime)
@@ -439,6 +468,7 @@ function analyze_moments_data(density, parallel_flow, parallel_pressure, ntime, 
     println("done.")
     return density_fldline_avg, upar_fldline_avg, ppar_fldline_avg, delta_density, delta_upar, delta_ppar
 end
+=#
 function plot_moments(density, delta_density, density_fldline_avg,
     parallel_flow, delta_upar, upar_fldline_avg,
     parallel_pressure, delta_ppar, ppar_fldline_avg,
@@ -529,6 +559,7 @@ function plot_moments(density, delta_density, density_fldline_avg,
     end
     println("done.")
 end
+#=
 function field_line_average(fld, wgts, L)
     n = length(fld)
     total = 0.0
@@ -551,6 +582,7 @@ function integrate_over_vspace(integrand, vpa_wgts)
     integral /= sqrt(pi)
     return integral
 end
+=#
 
 function compute_frequencies(time_window, dphi)
     growth_rate = 0.0 ; frequency = 0.0 ; phase = 0.0 ; fit_error = 0.0
