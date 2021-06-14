@@ -5,6 +5,7 @@ export analyze_moments_data
 export analyze_pdf_data
 
 using array_allocation: allocate_float
+using calculus: integral
 
 function analyze_fields_data(phi, ntime, nz, z_wgts, Lz)
     print("Analyzing fields data...")
@@ -99,27 +100,12 @@ function analyze_pdf_data(ff, nz, nvpa, n_species, ntime, z_wgts, Lz, vpa_wgts)
 end
 
 function field_line_average(fld, wgts, L)
-    n = length(fld)
-    total = 0.0
-    for i ∈ 1:n
-        total += wgts[i]*fld[i]
-    end
-    return total/L
+    return integral(fld, wgts)/L
 end
 
 # computes the integral over vpa of the integrand, using the input vpa_wgts
 function integrate_over_vspace(integrand, vpa_wgts)
-    # nvpa is the number of v_parallel grid points
-    nvpa = length(vpa_wgts)
-    # initialize 'integral' to zero before sum
-    integral = 0.0
-    @boundscheck nvpa == length(integrand) || throw(BoundsError(integrand))
-    @boundscheck nvpa == length(vpa_wgts) || throw(BoundsError(vpa_wgts))
-    @inbounds for i ∈ 1:nvpa
-        integral += integrand[i]*vpa_wgts[i]
-    end
-    integral /= sqrt(pi)
-    return integral
+    return integral(integrand, vpa_wgts)/sqrt(pi)
 end
 
 end
