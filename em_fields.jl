@@ -26,7 +26,8 @@ function setup_em_fields(m, force_phi, drive_amplitude, drive_frequency)
 end
 
 # update_phi updates the electrostatic potential, phi
-function update_phi!(fields, fvec, vpa, nz, composition, t)
+#function update_phi!(fields, fvec, vpa, nz, composition, t)
+function update_phi!(fields, fvec, vpa, nz, composition)
     n_ion_species = composition.n_ion_species
     @boundscheck size(fields.phi,1) == nz || throw(BoundsError(fields.phi))
     @boundscheck size(fields.phi0,1) == nz || throw(BoundsError(fields.phi0))
@@ -40,11 +41,11 @@ function update_phi!(fields, fvec, vpa, nz, composition, t)
             end
             fields.phi[iz] = composition.T_e * log(total_density)
         end
-        if fields.force_phi
-            @inbounds for iz ∈ 1:nz
-                fields.phi[iz] += fields.phi0[iz]*fields.drive_amplitude*sin(t*fields.drive_frequency)
-            end
-        end
+        # if fields.force_phi
+        #     @inbounds for iz ∈ 1:nz
+        #         fields.phi[iz] += fields.phi0[iz]*fields.drive_amplitude*sin(t*fields.drive_frequency)
+        #     end
+        # end
     end
 end
 

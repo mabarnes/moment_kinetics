@@ -180,7 +180,7 @@ function enforce_moment_constraints!(fvec_new, fvec_old, z, vpa, moments)
                 upar_integral = integrate_over_vspace(vpa.scratch, vpa.wgts)
                 @. vpa.scratch = fvec_old.pdf[iz,:,is] * vpa.grid^2
                 upar_integral /= integrate_over_vspace(vpa.scratch, vpa.wgts)
-                @. fvec_new.pdf[iz,:,is] -= vpa.grid*fvec_old.pdf[iz,:,is]
+                @. fvec_new.pdf[iz,:,is] -= vpa.grid*fvec_old.pdf[iz,:,is]*upar_integral
             end
             #fvec_new.density[iz,is] += fvec_old.density[iz,is] * (1.0 - avgdens_ratio)
             fvec_new.density[iz,is] += fvec_old.density[iz,is] * avgdens_ratio

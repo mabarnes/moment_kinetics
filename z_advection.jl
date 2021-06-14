@@ -12,7 +12,7 @@ function z_advection!(f_out, fvec_in, ff, moments, SL, advect, z, vpa,
                       use_semi_lagrange, dt, t, spectral, n_species, istage)
     for is ∈ 1:n_species
         # get the updated speed along the z direction using the current f
-        @views update_speed_z!(advect[:,is], vpa, z, t)
+        @views update_speed_z!(advect[:,is], fvec_in.upar[:,is], moments.evolve_upar, vpa, z, t)
         # update the upwind/downwind boundary indices and upwind_increment
         @views update_boundary_indices!(advect[:,is])
         # if using interpolation-free Semi-Lagrange,
@@ -42,7 +42,7 @@ function z_advection!(f_out, fvec_in, ff, moments, SL, advect, z, vpa,
     end
 end
 # calculate the advection speed in the z-direction at each grid point
-function update_speed_z!(advect, vpa, z, t)
+function update_speed_z!(advect, upar, evolve_upar, vpa, z, t)
     @boundscheck vpa.n == size(advect,1) || throw(BoundsError(advect))
     @boundscheck z.n == size(advect[1].speed,1) || throw(BoundsError(speed))
     if z.advection.option == "default"
@@ -50,6 +50,11 @@ function update_speed_z!(advect, vpa, z, t)
             for j ∈ 1:vpa.n
                 for i ∈ 1:z.n
                     advect[j].speed[i] = vpa.grid[j]
+                end
+            end
+            if evolve_upar
+                for j ∈ 1:vpa.n
+                    @. advect[j].speed += upar
                 end
             end
         end

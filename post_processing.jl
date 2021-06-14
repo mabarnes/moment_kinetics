@@ -56,7 +56,10 @@ function analyze_and_plot_data(path)
     # load particle distribution function (pdf) data
     ff = load_pdf_data(fid)
     # analyze the pdf data
-    f_fldline_avg, delta_f, dens_moment = analyze_pdf_data(ff, nz, nvpa, n_species, ntime, z_wgts, Lz, vpa_wgts)
+    f_fldline_avg, delta_f, dens_moment, upar_moment = analyze_pdf_data(ff, vpa, nz, nvpa, n_species, ntime, z_wgts, Lz, vpa_wgts)
+    for i ∈ 1:size(upar_moment,3)
+        println("time: ", time[i], "  upar_moment: ", upar_moment[iz0,1,i])
+    end
 
     println("Plotting distribution function data...")
     cmlog(cmlin::ColorGradient) = RGB[cmlin[x] for x=LinRange(0,1,30)]
@@ -67,9 +70,20 @@ function analyze_and_plot_data(path)
         else
             spec_string = ""
         end
-        # plot ∫dvpa f (= density unless density separately evolved, in which case, it should = 1)
+        # plot difference between evolved density and ∫dvpa f; only possibly different if density removed from
+        # normalised distribution function at run-time
         @views plot(time, density[iz0,is,:] .- dens_moment[iz0,is,:])
         outfile = string(run_name, "_intf0_vs_t", spec_string, ".pdf")
+        savefig(outfile)
+        # if evolve_upar = true, plot ∫dwpa wpa * f, which should equal zero
+        # otherwise, this plots ∫dvpa vpa * f, which is dens*upar
+        intwf0_max = maximum(abs.(upar_moment[iz0,is,:]))
+        if intwf0_max < 1.0e-15
+            @views plot(time, upar_moment[iz0,is,:], ylims = (-1.0e-15, 1.0e-15))
+        else
+            @views plot(time, upar_moment[iz0,is,:])
+        end
+        outfile = string(run_name, "_intwf0_vs_t", spec_string, ".pdf")
         savefig(outfile)
         #fmin = minimum(ff[:,:,is,:])
         #fmax = maximum(ff[:,:,is,:])

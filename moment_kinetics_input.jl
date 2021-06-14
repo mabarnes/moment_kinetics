@@ -43,8 +43,8 @@ function mk_input(scan_input=Dict())
     # if evolve_moments.density = true, evolve density via continuity eqn
     # and g = f/n via modified drift kinetic equation
     evolve_moments.density = true
-    evolve_moments.parallel_flow = false
-    evolve_moments.conservation = true
+    evolve_moments.parallel_flow = true
+    evolve_moments.conservation = false
 
     #z.advection.option = "constant"
     #z.advection.constant_speed = 1.0

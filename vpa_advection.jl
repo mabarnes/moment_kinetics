@@ -10,11 +10,11 @@ using em_fields: update_phi!
 using calculus: derivative!
 using initial_conditions: enforce_vpa_boundary_condition!
 
-function vpa_advection!(f_out, fvec_in, ff, fields, SL, advect,
+function vpa_advection!(f_out, fvec_in, ff, fields, evolve_upar, SL, advect,
 	vpa, z, use_semi_lagrange, dt, t, vpa_spectral, z_spectral, composition, CX_frequency, istage)
 
 	# calculate the advection speed corresponding to current f
-	update_speed_vpa!(advect, fields, fvec_in, vpa, z, composition, CX_frequency, t, z_spectral)
+	update_speed_vpa!(advect, fields, fvec_in, evolve_upar, vpa, z, composition, CX_frequency, t, z_spectral)
 	for is ∈ 1:composition.n_ion_species
 		# update the upwind/downwind boundary indices and upwind_increment
 		# NB: not sure if this will work properly with SL method at the moment
@@ -39,14 +39,13 @@ function vpa_advection!(f_out, fvec_in, ff, fields, SL, advect,
 	end
 end
 # calculate the advection speed in the z-direction at each grid point
-function update_speed_vpa!(advect, fields, fvec, vpa, z, composition, CX_frequency, t, z_spectral)
+function update_speed_vpa!(advect, fields, fvec, evolve_upar, vpa, z, composition, CX_frequency, t, z_spectral)
     @boundscheck z.n == size(advect,1) || throw(BoundsError(advect))
 	@boundscheck composition.n_ion_species == size(advect,2) || throw(BoundsError(advect))
 	@boundscheck vpa.n == size(advect[1,1].speed,1) || throw(BoundsError(speed))
     if vpa.advection.option == "default"
 		# dvpa/dt = Ze/m ⋅ E_parallel
-        update_speed_default!(advect, fields, fvec, vpa, z, composition, t, z_spectral)
-		#update_speed_constant!(advect, vpa.n, z.n)
+        update_speed_default!(advect, fields, fvec, evolve_upar, vpa, z, composition, t, z_spectral)
     elseif vpa.advection.option == "constant"
 		# dvpa/dt = constant
 		for is ∈ 1:composition.n_ion_species
@@ -67,19 +66,42 @@ function update_speed_vpa!(advect, fields, fvec, vpa, z, composition, CX_frequen
 	#end
     return nothing
 end
-function update_speed_default!(advect, fields, fvec, vpa, z, composition, t, z_spectral)
-	# update the electrostatic potential phi
-	update_phi!(fields, fvec, vpa, z.n, composition, t)
-	# calculate the derivative of phi with respect to z;
-	# the value at element boundaries is taken to be the average of the values
-	# at neighbouring elements
-	derivative!(z.scratch, fields.phi, z, z_spectral)
-	# advection velocity in vpa is -dphi/dz = -z.scratch
-	@inbounds @fastmath begin
+function update_speed_default!(advect, fields, fvec, evolve_upar, vpa, z, composition, t, z_spectral)
+	if evolve_upar
 		for is ∈ 1:composition.n_ion_species
+			# get d(ppar)/dz
+			derivative!(z.scratch, view(fvec.ppar,:,is), z, z_spectral)
+			# update parallel acceleration to account for parallel derivative of parallel pressure
+			# NB: no vpa-dependence so compute for first entry in vpa and copy into remaining entries
+			for iz ∈ 1:z.n
+				advect[iz,is].speed[1] = z.scratch[iz]/fvec.density[iz,is]
+				for ivpa ∈ 2:vpa.n
+					advect[iz,is].speed[ivpa] = advect[iz,is].speed[1]
+				end
+			end
+			# calculate d(upar)/dz
+			derivative!(z.scratch, view(fvec.upar,:,is), z, z_spectral)
+			# update parallel acceleration to account for -wpar*dupar/dz
 			for iz ∈ 1:z.n
 				for ivpa ∈ 1:vpa.n
-					advect[iz,is].speed[ivpa] = -0.5*z.scratch[iz]
+				advect[iz,is].speed[ivpa] -= vpa.grid[ivpa]*z.scratch[iz]
+				end
+			end
+		end
+	else
+		# update the electrostatic potential phi
+		update_phi!(fields, fvec, vpa, z.n, composition)
+		# calculate the derivative of phi with respect to z;
+		# the value at element boundaries is taken to be the average of the values
+		# at neighbouring elements
+		derivative!(z.scratch, fields.phi, z, z_spectral)
+		# advection velocity in vpa is -dphi/dz = -z.scratch
+		@inbounds @fastmath begin
+			for is ∈ 1:composition.n_ion_species
+				for iz ∈ 1:z.n
+					for ivpa ∈ 1:vpa.n
+						advect[iz,is].speed[ivpa] = -0.5*z.scratch[iz]
+					end
 				end
 			end
 		end

@@ -71,7 +71,7 @@ function analyze_moments_data(density, parallel_flow, parallel_pressure, ntime, 
     return density_fldline_avg, upar_fldline_avg, ppar_fldline_avg, delta_density, delta_upar, delta_ppar
 end
 
-function analyze_pdf_data(ff, nz, nvpa, n_species, ntime, z_wgts, Lz, vpa_wgts)
+function analyze_pdf_data(ff, vpa, nz, nvpa, n_species, ntime, z_wgts, Lz, vpa_wgts)
     print("Analyzing distribution function data...")
     f_fldline_avg = allocate_float(nvpa,n_species,ntime)
     for i ∈ 1:ntime
@@ -87,16 +87,18 @@ function analyze_pdf_data(ff, nz, nvpa, n_species, ntime, z_wgts, Lz, vpa_wgts)
         @. delta_f[iz,:,:,:] = ff[iz,:,:,:] - f_fldline_avg
     end
     dens_moment = allocate_float(nz,n_species,ntime)
+    upar_moment = allocate_float(nz,n_species,ntime)
     for i ∈ 1:ntime
         for is ∈ 1:n_species
             for iz ∈ 1:nz
                 @views dens_moment[iz,is,i] = integrate_over_vspace(ff[iz,:,is,i], vpa_wgts)
+                @views upar_moment[iz,is,i] = integrate_over_vspace(ff[iz,:,is,i] .* vpa, vpa_wgts)
             end
         end
     end
     #@views advection_test_1d(ff[:,:,:,1], ff[:,:,:,end])
     println("done.")
-    return f_fldline_avg, delta_f, dens_moment
+    return f_fldline_avg, delta_f, dens_moment, upar_moment
 end
 
 function field_line_average(fld, wgts, L)

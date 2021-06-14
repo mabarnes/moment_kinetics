@@ -100,8 +100,8 @@ function setup_time_advance!(pdf, z, vpa, composition, drive_input, evolve_momen
     z_advect = setup_advection(z, vpa, n_species)
     # initialise the z advection speed
     for is ∈ 1:n_species
-        #@views update_speed_z!(z_advect[:,is], moments.upar[:,is], moments.evolve_upar, vpa, z, 0.0)
-        @views update_speed_z!(z_advect[:,is], vpa, z, 0.0)
+        @views update_speed_z!(z_advect[:,is], moments.upar[:,is], moments.evolve_upar, vpa, z, 0.0)
+        #@views update_speed_z!(z_advect[:,is], vpa, z, 0.0)
         # initialise the upwind/downwind boundary indices in z
         update_boundary_indices!(view(z_advect,:,is))
         # enforce prescribed boundary condition in z on the distribution function f
@@ -139,7 +139,7 @@ function setup_time_advance!(pdf, z, vpa, composition, drive_input, evolve_momen
     fields = setup_em_fields(z.n, drive_input.force_phi, drive_input.amplitude, drive_input.frequency)
     # initialize the electrostatic potential
     #update_phi!(fields, moments, scratch[1], vpa, z.n, composition, 0.0)
-    update_phi!(fields, scratch[1], vpa, z.n, composition, 0.0)
+    update_phi!(fields, scratch[1], vpa, z.n, composition)
     # save the initial phi(z) for possible use later (e.g., if forcing phi)
     fields.phi0 .= fields.phi
     # create structure vpa_advect whose members are the arrays needed to compute
@@ -147,7 +147,7 @@ function setup_time_advance!(pdf, z, vpa, composition, drive_input, evolve_momen
     # with advection in vpa
     vpa_advect = setup_advection(vpa, z, n_ion_species)
     # initialise the vpa advection speed
-    update_speed_vpa!(vpa_advect, fields, scratch[1], vpa, z, composition, cx_frequency, 0.0, z_spectral)
+    update_speed_vpa!(vpa_advect, fields, scratch[1], moments.evolve_upar, vpa, z, composition, cx_frequency, 0.0, z_spectral)
     for is ∈ 1:n_ion_species
         # initialise the upwind/downwind boundary indices in vpa
         update_boundary_indices!(view(vpa_advect,:,is))
@@ -455,7 +455,7 @@ function time_advance_no_splitting!(pdf, scratch, t, t_input, z, vpa,
     # end
     return nothing
 end
-function rk_update!(scratch, pdf, moments, vpa, nz, rk_coefs, istage)
+function rk_update!(scratch, pdf, moments, fields, vpa, nz, rk_coefs, istage, composition)
     @. scratch[istage+1].pdf = rk_coefs[1]*pdf.norm + rk_coefs[2]*scratch[istage].pdf + rk_coefs[3]*scratch[istage+1].pdf
     if moments.evolve_density
         @. scratch[istage+1].density = rk_coefs[1]*moments.dens + rk_coefs[2]*scratch[istage].density + rk_coefs[3]*scratch[istage+1].density
@@ -477,6 +477,8 @@ function rk_update!(scratch, pdf, moments, vpa, nz, rk_coefs, istage)
         @. scratch[istage+1].upar /= scratch[istage+1].density
     end
     update_ppar!(scratch[istage+1].ppar, moments.ppar_updated, pdf.unnorm, vpa, nz)
+    # update the electrostatic potential phi
+    update_phi!(fields, scratch[istage+1], vpa, nz, composition)
 end
 function ssp_rk!(pdf, scratch, t, t_input, z, vpa,
     z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
@@ -505,7 +507,7 @@ function ssp_rk!(pdf, scratch, t, t_input, z, vpa,
             t_input, z_spectral, vpa_spectral, composition,
             charge_exchange_frequency, advance, istage)
         #println("ssp_rk3: ", sum(abs.(scratch[istage+1].pdf)))
-        @views rk_update!(scratch, pdf, moments, vpa, z.n, advance.rk_coefs[:,istage], istage)
+        @views rk_update!(scratch, pdf, moments, fields, vpa, z.n, advance.rk_coefs[:,istage], istage, composition)
         #println("ssp_rk4: ", sum(abs.(scratch[istage+1].pdf)))
     end
 
@@ -729,7 +731,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, z_SL, vpa_
     #println("euler: ", sum(abs.(fvec_out.pdf)))
     if advance.vpa_advection
         @views vpa_advection!(fvec_out.pdf[:,:,1:n_ion_species],
-            fvec_in, pdf.norm[:,:,1:n_ion_species], fields,
+            fvec_in, pdf.norm[:,:,1:n_ion_species], fields, moments.evolve_upar,
             vpa_SL, vpa_advect, vpa, z, use_semi_lagrange, dt, t,
             vpa_spectral, z_spectral, composition, charge_exchange_frequency, istage)
     end
@@ -760,7 +762,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, z_SL, vpa_
     #println("continuity_equation: ", sum(abs.(fvec_out.pdf)))
     if advance.force_balance
         # fvec_out.upar is over-written in force_balance! and contains the particle flux
-        force_balance!(fvec_out.upar, fvec_in, moments, fields, n_ion_species,
+        force_balance!(fvec_out.upar, fvec_in, fields, n_ion_species,
             composition.n_neutral_species, charge_exchange_frequency, z, vpa, dt, z_spectral)
         # convert from the particle flux to the parallel flow
         @. fvec_out.upar /= fvec_out.density
