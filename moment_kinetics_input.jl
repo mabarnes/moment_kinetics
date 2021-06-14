@@ -2,6 +2,7 @@ module moment_kinetics_input
 
 export mk_input
 export performance_test
+#export advective_form
 
 using type_definitions: mk_float, mk_int
 using array_allocation: allocate_float
@@ -17,6 +18,7 @@ using input_structs: drive_input, drive_input_mutable
 
 @enum single performance_test scan
 const run_type = single
+#const advective_form = false
 
 function mk_input(scan_input=Dict())
 
@@ -25,7 +27,7 @@ function mk_input(scan_input=Dict())
     n_ion_species = 1
     # n_neutral_species is the number of evolved neutral species
     # currently only n_neutral_species = 0 is supported
-    n_neutral_species = 1
+    n_neutral_species = 0
     # if boltzmann_electron_response = true, then the electron
     # density is fixed to be N_e*(eϕ/T_e)
     # currently this is the only supported option
@@ -35,13 +37,14 @@ function mk_input(scan_input=Dict())
         load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_response)
 
     # this is the prefix for all output files associated with this run
-    run_name = get(scan_input, :run_name, "TiTe1_CX2_dens_lres_noconserve")
+    run_name = get(scan_input, :run_name, "advective_test")
     # this is the directory where the simulation data will be stored
     output_dir = string("runs/",run_name)
     # if evolve_moments.density = true, evolve density via continuity eqn
     # and g = f/n via modified drift kinetic equation
     evolve_moments.density = true
-    evolve_moments.particle_conservation = false
+    evolve_moments.parallel_flow = false
+    evolve_moments.conservation = true
 
     #z.advection.option = "constant"
     #z.advection.constant_speed = 1.0
@@ -66,7 +69,7 @@ function mk_input(scan_input=Dict())
     end
     #################### end specification of species inputs #####################
 
-    charge_exchange_frequency = get(scan_input, :charge_exchange_frequency, 4.0*sqrt(species[1].initial_temperature))
+    charge_exchange_frequency = get(scan_input, :charge_exchange_frequency, 0.0*sqrt(species[1].initial_temperature))
 
     # parameters related to the time stepping
     nstep = get(scan_input, :nstep, 5000)
@@ -82,9 +85,9 @@ function mk_input(scan_input=Dict())
 
     # overwrite some default parameters related to the z grid
     # ngrid is number of grid points per element
-    z.ngrid = 5
+    z.ngrid = 9
     # nelement is the number of elements
-    z.nelement = 1
+    z.nelement = 2
     #z.ngrid = 400
     #z.nelement = 1
     # determine the discretization option for the z grid
@@ -94,9 +97,9 @@ function mk_input(scan_input=Dict())
 
     # overwrite some default parameters related to the vpa grid
     # ngrid is the number of grid points per element
-    vpa.ngrid = 9
+    vpa.ngrid = 17
     # nelement is the number of elements
-    vpa.nelement = 2
+    vpa.nelement = 10
     #vpa.ngrid = 400
     #vpa.nelement = 1
     # L is the box length in units of vthermal_species
@@ -148,7 +151,7 @@ function mk_input(scan_input=Dict())
 
     # check input to catch errors/unsupported options
     check_input(run_name, output_dir, nstep, dt, use_semi_lagrange,
-        z_immutable, vpa_immutable, composition, species_immutable)
+        z_immutable, vpa_immutable, composition, species_immutable, evolve_moments)
 
     # return immutable structs for z, vpa, species and composition
     return run_name, output_dir, evolve_moments, t, z_immutable, vpa_immutable,
@@ -158,8 +161,9 @@ end
 function load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_response)
     ############## options related to the equations being solved ###############
     evolve_density = false
-    particle_conservation = true
-    evolve_moments = evolve_moments_options(evolve_density, particle_conservation)
+    evolve_parallel_flow = false
+    conservation = true
+    evolve_moments = evolve_moments_options(evolve_density, evolve_parallel_flow, conservation)
     #################### parameters related to the z grid ######################
     # ngrid_z is number of grid points per element
     ngrid_z = 100
@@ -303,7 +307,7 @@ end
 
 # check various input options to ensure they are all valid/consistent
 function check_input(run_name, output_dir, nstep, dt, use_semi_lagrange, z, vpa,
-    composition, species)
+    composition, species, evolve_moments)
     # check to see if output_dir exists in the current directory
     # if not, create it
     isdir(output_dir) || mkdir(output_dir)
@@ -315,6 +319,12 @@ function check_input(run_name, output_dir, nstep, dt, use_semi_lagrange, z, vpa,
     check_input_z(z, io)
     check_input_vpa(vpa, io)
     check_input_initialization(composition, species, io)
+    # if the parallel flow is evolved separately, then the density must also be evolved separately
+    if evolve_moments.parallel_flow && !evolve_moments.density
+        print(io,">evolve_moments.parallel_flow = true, but evolve_moments.density = false.")
+        println(io, "this is not a supported option.  forcing evolve_moments.density = true.")
+        evolve_moments.density = true
+    end
     close(io)
 end
 function check_input_time_advance(nstep, dt, use_semi_lagrange, io)

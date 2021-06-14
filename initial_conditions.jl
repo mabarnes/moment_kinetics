@@ -9,12 +9,17 @@ using type_definitions: mk_float
 using array_allocation: allocate_float
 using bgk: init_bgk_pdf!
 
+struct pdf_struct
+    norm::Array{mk_float,3}
+    unnorm::Array{mk_float,3}
+end
+
 # creates f and specifies its initial condition
 # all initial conditions are of the form f = F(z)*G(vpa)
 # NB: ∫dvpa f = F(z) ∫dvpa G = n(z)
 function init_f(z, vpa, composition, species, n_rk_stages)
     n_species = composition.n_species
-    f = allocate_float(z.n, vpa.n, n_species)
+    pdf_unnorm = allocate_float(z.n, vpa.n, n_species)
     for is ∈ 1:n_species
         if species[is].z_IC.initialization_option == "bgk" ||
             species[is].vpa_IC.initialization_option == "bgk"
@@ -27,12 +32,13 @@ function init_f(z, vpa, composition, species, n_rk_stages)
             # calculate f = F(z)*G(vpa)
             for ivpa ∈ 1:vpa.n
                 for iz ∈ 1:z.n
-                    f[iz,ivpa,is] = z.scratch[iz]*vpa.scratch[ivpa]
+                    pdf_unnorm[iz,ivpa,is] = z.scratch[iz]*vpa.scratch[ivpa]
                 end
             end
         end
     end
-    return f
+    pdf_norm = copy(pdf_unnorm)
+    return pdf_struct(pdf_norm, pdf_unnorm)
 end
 # init_fz iniitializes F(z)
 function init_fz(z, spec)

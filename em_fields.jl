@@ -26,29 +26,17 @@ function setup_em_fields(m, force_phi, drive_amplitude, drive_frequency)
 end
 
 # update_phi updates the electrostatic potential, phi
-function update_phi!(fields, moments, fvec, vpa, nz, composition, t)
+function update_phi!(fields, fvec, vpa, nz, composition, t)
     n_ion_species = composition.n_ion_species
     @boundscheck size(fields.phi,1) == nz || throw(BoundsError(fields.phi))
     @boundscheck size(fields.phi0,1) == nz || throw(BoundsError(fields.phi0))
-    @boundscheck size(moments.dens,1) == nz || throw(BoundsError(moments.dens))
-    @boundscheck size(moments.dens,2) == composition.n_species || throw(BoundsError(moments.dens))
+    @boundscheck size(fvec.density,1) == nz || throw(BoundsError(fvec.density))
+    @boundscheck size(fvec.density,2) == composition.n_species || throw(BoundsError(fvec.density))
     if composition.boltzmann_electron_response
-        if moments.evolve_density
-            dens = fvec.density
-        else
-            for is ∈ 1:composition.n_ion_species
-                if moments.dens_updated[is] == false
-                    @views update_density!(moments.dens[:,is], vpa.scratch, fvec.pdf[:,:,is], vpa, nz)
-                    moments.dens_updated[is] = true
-                end
-            end
-            dens = moments.dens
-        end
         @inbounds for iz ∈ 1:nz
             total_density = 0.0
             for is ∈ 1:composition.n_ion_species
-                #total_density += moments.dens[iz,is]
-                total_density += dens[iz,is]
+                total_density += fvec.density[iz,is]
             end
             fields.phi[iz] = composition.T_e * log(total_density)
         end

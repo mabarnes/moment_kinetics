@@ -3,18 +3,15 @@ module continuity
 export continuity_equation!
 
 using calculus: derivative!
-using velocity_moments: update_moments!
 
 # use the continuity equation dn/dt + d(n*upar)/dz to update the density n for all species
 function continuity_equation!(dens_out, fvec_in, moments, z, vpa, dt, spectral)
-    # update the parallel flow velocity upar
-    update_moments!(moments, fvec_in.pdf, vpa, z.n)
     # use the continuity equation dn/dt + d(n*upar)/dz to update the density n
     # for each species
     n_species = size(dens_out,2)
     for is ∈ 1:n_species
         @views continuity_equation_single_species!(dens_out[:,is],
-            fvec_in.density[:,is], moments.upar[:,is], z, dt, spectral)
+            fvec_in.density[:,is], fvec_in.upar[:,is], z, dt, spectral)
     end
 end
 # use the continuity equation dn/dt + d(n*upar)/dz to update the density n

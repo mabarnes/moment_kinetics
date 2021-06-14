@@ -27,28 +27,28 @@ function run_moment_kinetics(to, input)
     vpa = define_coordinate(vpa_input)
     # initialize f(z).  note that ff initialised here satisfies ∫dvpa f(z,vpa) = n(z)
     # if evolve_moments.density = true, it will be normalsied by n(z) later
-    ff = init_f(z, vpa, composition, species, t_input.n_rk_stages)
+    pdf = init_f(z, vpa, composition, species, t_input.n_rk_stages)
     # initialize time variable
     code_time = 0.
     # create arrays and do other work needed to setup
     # the main time advance loop -- including normalisation of f by density if requested
     z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
-        z_SL, vpa_SL, scratch, advance = setup_time_advance!(ff, z, vpa, composition,
+        z_SL, vpa_SL, scratch, advance = setup_time_advance!(pdf, z, vpa, composition,
         drive_input, evolve_moments, t_input, charge_exchange_frequency)
     # setup i/o
     io, cdf = setup_file_io(output_dir, run_name, z, vpa, composition, charge_exchange_frequency)
     # write initial data to ascii files
-    write_data_to_ascii(ff, moments, fields, z, vpa, code_time, composition.n_species, io)
+    write_data_to_ascii(pdf.unnorm, moments, fields, z, vpa, code_time, composition.n_species, io)
     # write initial data to binary file (netcdf)
-    write_data_to_binary(ff, moments, fields, code_time, composition.n_species, cdf, 1)
+    write_data_to_binary(pdf.unnorm, moments, fields, code_time, composition.n_species, cdf, 1)
     # solve the 1+1D kinetic equation to advance f in time by nstep time steps
     if run_type == performance_test
-        @timeit to "time_advance" time_advance!(ff, scratch, code_time, t_input,
+        @timeit to "time_advance" time_advance!(pdf, scratch, code_time, t_input,
             z, vpa, z_spectral, vpa_spectral, moments, fields,
             z_advect, vpa_advect, z_SL, vpa_SL, composition, charge_exchange_frequency,
             advance, io, cdf)
     else
-        time_advance!(ff, scratch, code_time, t_input, z, vpa,
+        time_advance!(pdf, scratch, code_time, t_input, z, vpa,
             z_spectral, vpa_spectral, moments, fields,
             z_advect, vpa_advect, z_SL, vpa_SL, composition, charge_exchange_frequency,
             advance, io, cdf)
