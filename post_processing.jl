@@ -57,9 +57,6 @@ function analyze_and_plot_data(path)
     ff = load_pdf_data(fid)
     # analyze the pdf data
     f_fldline_avg, delta_f, dens_moment, upar_moment = analyze_pdf_data(ff, vpa, nz, nvpa, n_species, ntime, z_wgts, Lz, vpa_wgts)
-    for i ∈ 1:size(upar_moment,3)
-        println("time: ", time[i], "  upar_moment: ", upar_moment[iz0,1,i])
-    end
 
     println("Plotting distribution function data...")
     cmlog(cmlin::ColorGradient) = RGB[cmlin[x] for x=LinRange(0,1,30)]

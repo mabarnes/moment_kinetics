@@ -27,7 +27,7 @@ function mk_input(scan_input=Dict())
     n_ion_species = 1
     # n_neutral_species is the number of evolved neutral species
     # currently only n_neutral_species = 0 is supported
-    n_neutral_species = 0
+    n_neutral_species = 1
     # if boltzmann_electron_response = true, then the electron
     # density is fixed to be N_e*(eϕ/T_e)
     # currently this is the only supported option
@@ -37,14 +37,14 @@ function mk_input(scan_input=Dict())
         load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_response)
 
     # this is the prefix for all output files associated with this run
-    run_name = get(scan_input, :run_name, "advective_test")
+    run_name = get(scan_input, :run_name, "upar")
     # this is the directory where the simulation data will be stored
     output_dir = string("runs/",run_name)
     # if evolve_moments.density = true, evolve density via continuity eqn
     # and g = f/n via modified drift kinetic equation
     evolve_moments.density = true
     evolve_moments.parallel_flow = true
-    evolve_moments.conservation = false
+    evolve_moments.conservation = true
 
     #z.advection.option = "constant"
     #z.advection.constant_speed = 1.0
@@ -69,7 +69,7 @@ function mk_input(scan_input=Dict())
     end
     #################### end specification of species inputs #####################
 
-    charge_exchange_frequency = get(scan_input, :charge_exchange_frequency, 0.0*sqrt(species[1].initial_temperature))
+    charge_exchange_frequency = get(scan_input, :charge_exchange_frequency, 2.0*sqrt(species[1].initial_temperature))
 
     # parameters related to the time stepping
     nstep = get(scan_input, :nstep, 5000)

@@ -13,9 +13,17 @@ using initial_conditions: enforce_vpa_boundary_condition!
 function vpa_advection!(f_out, fvec_in, ff, fields, evolve_upar, SL, advect,
 	vpa, z, use_semi_lagrange, dt, t, vpa_spectral, z_spectral, composition, CX_frequency, istage)
 
+	# only have a parallel acceleration term for neutrals if using the peculiar velocity
+	# wpar = vpar - upar as a variable; i.e., d(wpar)/dt /=0 for neutrals even though d(vpar)/dt = 0.
+	# define the number of evolved species accordingly
+	if evolve_upar
+		nspecies_accelerated = composition.n_species
+	else
+		nspecies_accelerated = composition.n_ion_species
+	end
 	# calculate the advection speed corresponding to current f
 	update_speed_vpa!(advect, fields, fvec_in, evolve_upar, vpa, z, composition, CX_frequency, t, z_spectral)
-	for is ∈ 1:composition.n_ion_species
+	for is ∈ 1:nspecies_accelerated
 		# update the upwind/downwind boundary indices and upwind_increment
 		# NB: not sure if this will work properly with SL method at the moment
 		# NB: if the speed is actually time-dependent
@@ -41,11 +49,12 @@ end
 # calculate the advection speed in the z-direction at each grid point
 function update_speed_vpa!(advect, fields, fvec, evolve_upar, vpa, z, composition, CX_frequency, t, z_spectral)
     @boundscheck z.n == size(advect,1) || throw(BoundsError(advect))
-	@boundscheck composition.n_ion_species == size(advect,2) || throw(BoundsError(advect))
+	#@boundscheck composition.n_ion_species == size(advect,2) || throw(BoundsError(advect))
+	@boundscheck composition.n_species == size(advect,2) || throw(BoundsError(advect))
 	@boundscheck vpa.n == size(advect[1,1].speed,1) || throw(BoundsError(speed))
     if vpa.advection.option == "default"
 		# dvpa/dt = Ze/m ⋅ E_parallel
-        update_speed_default!(advect, fields, fvec, evolve_upar, vpa, z, composition, t, z_spectral)
+        update_speed_default!(advect, fields, fvec, evolve_upar, vpa, z, composition, CX_frequency, t, z_spectral)
     elseif vpa.advection.option == "constant"
 		# dvpa/dt = constant
 		for is ∈ 1:composition.n_ion_species
@@ -58,7 +67,8 @@ function update_speed_vpa!(advect, fields, fvec, evolve_upar, vpa, z, compositio
 		end
 	end
 	#@inbounds begin
-		for is ∈ 1:composition.n_ion_species
+		#for is ∈ 1:composition.n_ion_species
+		for is ∈ 1:composition.n_species
 			for iz ∈ 1:z.n
 				@. advect[iz,is].modified_speed = advect[iz,is].speed
 			end
@@ -66,9 +76,9 @@ function update_speed_vpa!(advect, fields, fvec, evolve_upar, vpa, z, compositio
 	#end
     return nothing
 end
-function update_speed_default!(advect, fields, fvec, evolve_upar, vpa, z, composition, t, z_spectral)
+function update_speed_default!(advect, fields, fvec, evolve_upar, vpa, z, composition, CX_frequency, t, z_spectral)
 	if evolve_upar
-		for is ∈ 1:composition.n_ion_species
+		for is ∈ 1:composition.n_species
 			# get d(ppar)/dz
 			derivative!(z.scratch, view(fvec.ppar,:,is), z, z_spectral)
 			# update parallel acceleration to account for parallel derivative of parallel pressure
@@ -84,7 +94,37 @@ function update_speed_default!(advect, fields, fvec, evolve_upar, vpa, z, compos
 			# update parallel acceleration to account for -wpar*dupar/dz
 			for iz ∈ 1:z.n
 				for ivpa ∈ 1:vpa.n
-				advect[iz,is].speed[ivpa] -= vpa.grid[ivpa]*z.scratch[iz]
+					advect[iz,is].speed[ivpa] -= vpa.grid[ivpa]*z.scratch[iz]
+				end
+			end
+		end
+		# if neutrals present and charge exchange frequency non-zero,
+		# account for collisional friction between ions and neutrals
+		if composition.n_neutral_species > 0 && abs(CX_frequency) > 0.0
+			# include contribution to ion acceleration due to collisional friction with neutrals
+			for is ∈ 1:composition.n_ion_species
+				for isp ∈ 1:composition.n_neutral_species
+					# get the absolute species index for the neutral species
+					isn = composition.n_ion_species + isp
+					for iz ∈ 1:z.n
+						tmp = -CX_frequency*fvec.density[iz,isn]*(fvec.upar[iz,isn]-fvec.upar[iz,is])
+						for ivpa ∈ 1:vpa.n
+							advect[iz,is].speed[ivpa] += tmp
+						end
+					end
+				end
+			end
+			# include contribution to neutral acceleration due to collisional friction with ions
+			for isp ∈ 1:composition.n_neutral_species
+				for isi ∈ 1:composition.n_ion_species
+					# get the absolute species index for the neutral species
+					is = composition.n_ion_species + isp
+					for iz ∈ 1:z.n
+						tmp = -CX_frequency*fvec.density[iz,isi]*(fvec.upar[iz,isi]-fvec.upar[iz,is])
+						for ivpa ∈ 1:vpa.n
+							advect[iz,is].speed[ivpa] += tmp
+						end
+					end
 				end
 			end
 		end

@@ -145,10 +145,15 @@ function setup_time_advance!(pdf, z, vpa, composition, drive_input, evolve_momen
     # create structure vpa_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the split part of the GK equation dealing
     # with advection in vpa
-    vpa_advect = setup_advection(vpa, z, n_ion_species)
+    vpa_advect = setup_advection(vpa, z, n_species)
     # initialise the vpa advection speed
     update_speed_vpa!(vpa_advect, fields, scratch[1], moments.evolve_upar, vpa, z, composition, cx_frequency, 0.0, z_spectral)
-    for is ∈ 1:n_ion_species
+    if moments.evolve_upar
+        nspec = n_species
+    else
+        nspec = n_ion_species
+    end
+    for is ∈ 1:nspec
         # initialise the upwind/downwind boundary indices in vpa
         update_boundary_indices!(view(vpa_advect,:,is))
         # enforce prescribed boundary condition in vpa on the distribution function f
@@ -727,11 +732,11 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, z_SL, vpa_
     dt = t_input.dt
     use_semi_lagrange = t_input.use_semi_lagrange
     # vpa_advection! advances the 1D advection equation in vpa.
-    # only charged species have a force accelerating them in vpa
-    #println("euler: ", sum(abs.(fvec_out.pdf)))
+    # only charged species have a force accelerating them in vpa;
+    # however, neutral species do have non-zero d(wpa)/dt, so there is advection in wpa
+    # if evolve_upar = true
     if advance.vpa_advection
-        @views vpa_advection!(fvec_out.pdf[:,:,1:n_ion_species],
-            fvec_in, pdf.norm[:,:,1:n_ion_species], fields, moments.evolve_upar,
+        @views vpa_advection!(fvec_out.pdf, fvec_in, pdf.norm, fields, moments.evolve_upar,
             vpa_SL, vpa_advect, vpa, z, use_semi_lagrange, dt, t,
             vpa_spectral, z_spectral, composition, charge_exchange_frequency, istage)
     end
@@ -762,8 +767,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, z_SL, vpa_
     #println("continuity_equation: ", sum(abs.(fvec_out.pdf)))
     if advance.force_balance
         # fvec_out.upar is over-written in force_balance! and contains the particle flux
-        force_balance!(fvec_out.upar, fvec_in, fields, n_ion_species,
-            composition.n_neutral_species, charge_exchange_frequency, z, vpa, dt, z_spectral)
+        force_balance!(fvec_out.upar, fvec_in, fields, charge_exchange_frequency, z, vpa, dt, z_spectral, composition)
         # convert from the particle flux to the parallel flow
         @. fvec_out.upar /= fvec_out.density
     end
