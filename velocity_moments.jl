@@ -36,6 +36,10 @@ mutable struct moments
     ppar::Array{mk_float,2}
     # flag that keeps track of whether or not ppar needs updating before use
     ppar_updated::Array{Bool,1}
+    # flag that indicates if the parallel pressure should be evolved via the energy equation
+    evolve_ppar::Bool
+    # flag that indicates if the drift kinetic equation should be formulated in advective form
+    #advective_form::Bool
 end
 # create and initialise arrays for the density and parallel pressure,
 # as well as a scratch array used for intermediate calculations needed
@@ -68,7 +72,7 @@ function setup_moments(ff, vpa, nz, evolve_moments)
     # return struct containing arrays needed to update moments
     return moments(density, density_updated, evolve_moments.density, evolve_moments.conservation,
         parallel_flow, parallel_flow_updated, evolve_moments.parallel_flow,
-        parallel_pressure, parallel_pressure_updated)
+        parallel_pressure, parallel_pressure_updated, evolve_moments.parallel_pressure)#evolve_moments.advective_form)
 end
 # calculate the updated density (dens) and parallel pressure (ppar) for all species
 function update_moments!(moments, ff, vpa, nz)
@@ -199,7 +203,9 @@ function reset_moments_status!(moments)
     if moments.evolve_upar == false
         moments.upar_updated .= false
     end
-    moments.ppar_updated .= false
+    if moments.evolve_ppar == false
+        moments.ppar_updated .= false
+    end
 end
 
 end

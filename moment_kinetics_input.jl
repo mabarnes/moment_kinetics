@@ -18,7 +18,6 @@ using input_structs: drive_input, drive_input_mutable
 
 @enum single performance_test scan
 const run_type = single
-#const advective_form = false
 
 function mk_input(scan_input=Dict())
 
@@ -44,7 +43,9 @@ function mk_input(scan_input=Dict())
     # and g = f/n via modified drift kinetic equation
     evolve_moments.density = true
     evolve_moments.parallel_flow = true
+    evolve_moments.parallel_pressure = false
     evolve_moments.conservation = true
+#    evolve_moments.advective_form = false
 
     #z.advection.option = "constant"
     #z.advection.constant_speed = 1.0
@@ -162,8 +163,10 @@ function load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_resp
     ############## options related to the equations being solved ###############
     evolve_density = false
     evolve_parallel_flow = false
+    evolve_parallel_pressure = false
     conservation = true
-    evolve_moments = evolve_moments_options(evolve_density, evolve_parallel_flow, conservation)
+    #advective_form = false
+    evolve_moments = evolve_moments_options(evolve_density, evolve_parallel_flow, evolve_parallel_pressure, conservation)#advective_form)
     #################### parameters related to the z grid ######################
     # ngrid_z is number of grid points per element
     ngrid_z = 100

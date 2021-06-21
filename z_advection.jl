@@ -25,20 +25,46 @@ function z_advection!(f_out, fvec_in, ff, moments, SL, advect, z, vpa,
                 find_approximate_characteristic!(SL[ivpa], advect[ivpa,is], z, dt)
             end
         end
+        # # advance z-advection equation
+        # if moments.evolve_density
+        #     for ivpa ∈ 1:vpa.n
+        #         @. advect[ivpa,is].speed /= fvec_in.density[:,is]
+        #         @. advect[ivpa,is].modified_speed /= fvec_in.density[:,is]
+        #         @views advance_f_local!(f_out[:,ivpa,is], fvec_in.density[:,is] .* fvec_in.pdf[:,ivpa,is],
+        #             ff[:,ivpa,is], SL[ivpa], advect[ivpa,is], z, dt, istage, spectral, use_semi_lagrange)
+        #     end
+        # else
+        #     for ivpa ∈ 1:vpa.n
+        #         @views advance_f_local!(f_out[:,ivpa,is], fvec_in.pdf[:,ivpa,is],
+        #             ff[:,ivpa,is], SL[ivpa], advect[ivpa,is], z, dt, istage, spectral, use_semi_lagrange)
+        #     end
+        # end
         # advance z-advection equation
-        if moments.evolve_density
-            for ivpa ∈ 1:vpa.n
-                @. advect[ivpa,is].speed /= fvec_in.density[:,is]
-                @. advect[ivpa,is].modified_speed /= fvec_in.density[:,is]
-                @views advance_f_local!(f_out[:,ivpa,is], fvec_in.density[:,is] .* fvec_in.pdf[:,ivpa,is],
-                    ff[:,ivpa,is], SL[ivpa], advect[ivpa,is], z, dt, istage, spectral, use_semi_lagrange)
-            end
-        else
-            for ivpa ∈ 1:vpa.n
-                @views advance_f_local!(f_out[:,ivpa,is], fvec_in.pdf[:,ivpa,is],
-                    ff[:,ivpa,is], SL[ivpa], advect[ivpa,is], z, dt, istage, spectral, use_semi_lagrange)
-            end
+        for ivpa ∈ 1:vpa.n
+            @views adjust_advection_speed!(advect[ivpa,is].speed, advect[ivpa,is].modified_speed,
+                                           fvec_in.density[:,is], fvec_in.ppar[:,is], moments.evolve_density)
+            # take the normalized pdf contained in fvec_in.pdf and remove the normalization,
+            # returning the true (un-normalized) particle distribution function in z.scratch
+            @views unnormalize_pdf!(z.scratch, fvec_in.pdf[:,ivpa,is], fvec_in.density[:,is], fvec_in.ppar[:,is],
+                             moments.evolve_density, moments.evolve_ppar)
+            @views advance_f_local!(f_out[:,ivpa,is], z.scratch,
+                ff[:,ivpa,is], SL[ivpa], advect[ivpa,is], z, dt, istage, spectral, use_semi_lagrange)
         end
+    end
+end
+function adjust_advection_speed!(speed, mod_speed, dens, ppar, evolve_density)
+    if evolve_density
+        @. speed /= dens
+        @. mod_speed /= dens
+    end
+end
+function unnormalize_pdf!(unnorm, norm, dens, ppar, evolve_density, evolve_ppar)
+    if evolve_ppar
+        @. unnorm = norm * sqrt(dens^3/ppar)
+    elseif evolve_density
+        @. unnorm = norm * dens
+    else
+        @. unnorm = norm
     end
 end
 # calculate the advection speed in the z-direction at each grid point

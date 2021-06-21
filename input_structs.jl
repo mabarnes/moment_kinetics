@@ -15,7 +15,9 @@ using type_definitions: mk_float, mk_int
 mutable struct evolve_moments_options
     density::Bool
     parallel_flow::Bool
+    parallel_pressure::Bool
     conservation::Bool
+    #advective_form::Bool
 end
 struct time_input
     nstep::mk_int
