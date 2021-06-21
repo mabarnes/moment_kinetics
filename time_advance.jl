@@ -101,7 +101,6 @@ function setup_time_advance!(pdf, z, vpa, composition, drive_input, evolve_momen
     # initialise the z advection speed
     for is ∈ 1:n_species
         @views update_speed_z!(z_advect[:,is], moments.upar[:,is], moments.evolve_upar, vpa, z, 0.0)
-        #@views update_speed_z!(z_advect[:,is], vpa, z, 0.0)
         # initialise the upwind/downwind boundary indices in z
         update_boundary_indices!(view(z_advect,:,is))
         # enforce prescribed boundary condition in z on the distribution function f
@@ -178,54 +177,6 @@ function normalize_pdf!(pdf, moments)
     end
     return nothing
 end
-# # create an array of structs containing scratch arrays for the normalised pdf and any moments
-# # that are separately evolved via fluid equations
-# function setup_scratch_arrays(moments, pdf_in, nz, nvpa, nspec, n_rk_stages)
-#     # create n_rk_stages+1 pdf-sized scratch arrays
-#     pdf = allocate_float(nz, nvpa, nspec, n_rk_stages+1)
-#     if moments.evolve_upar
-#         # create n_rk_stages+1 density-sized scratch arrays
-#         dens = allocate_float(nz, nspec, n_rk_stages+1)
-#         # create n_rk_stages+1 parallel-flow-sized scratch arrays
-#         upar = allocate_float(nz, nspec, n_rk_stages+1)
-#         # create n_rk_stages+1 structs, each of which will contain one pdf,
-#         # one density, and oen parallel flow array
-#         scratch = Vector{scratch_pdf_dens_upar}(undef, n_rk_stages+1)
-#         # populate each of the structs
-#         # NB: all of the array members of the scratch struct will point to
-#         # the appropriate slice of the pdf, dens and upar arrays created above
-#         for istage ∈ 1:n_rk_stages+1
-#             @views scratch[istage] = scratch_pdf_dens_upar(pdf[:,:,:,istage], dens[:,:,istage], upar[:,:,istage])
-#             scratch[istage].pdf .= pdf_in
-#             scratch[istage].density .= moments.dens
-#             scratch[istage].upar .= moments.upar
-#         end
-#     elseif moments.evolve_density
-#         # create n_rk_stages+1 density-sized scratch arrays
-#         dens = allocate_float(nz, nspec, n_rk_stages+1)
-#         # create n_rk_stages+1 structs, each of which will contain one pdf and one density array
-#         scratch = Vector{scratch_pdf_dens}(undef, n_rk_stages+1)
-#         # populate each of the structs
-#         # NB: all of the array members of the scratch struct will point to
-#         # the appropriate slice of the pdf and dens arrays created above
-#         for istage ∈ 1:n_rk_stages+1
-#             @views scratch[istage] = scratch_pdf_dens(pdf[:,:,:,istage], dens[:,:,istage])
-#             scratch[istage].pdf .= pdf_in
-#             scratch[istage].density .= moments.dens
-#         end
-#     else
-#         # create n_rk_stages+1 structs, each of which will contain one pdf array
-#         scratch = Vector{scratch_pdf}(undef, n_rk_stages+1)
-#         # populate each of the structs
-#         # NB: all of the array members of the scratch struct will point to
-#         # the appropriate slice of the pdf array created above
-#         for istage ∈ 1:n_rk_stages+1
-#             @views scratch[istage] = scratch_pdf(pdf[:,:,:,istage])
-#             scratch[istage].pdf .= pdf_in
-#         end
-#     end
-#     return scratch
-# end
 # create an array of structs containing scratch arrays for the normalised pdf and low-order moments
 # that may be evolved separately via fluid equations
 function setup_scratch_arrays(moments, pdf_in, nz, nvpa, nspec, n_rk_stages)
@@ -306,7 +257,6 @@ function time_advance!(pdf, scratch, t, t_input, z, vpa, z_spectral, vpa_spectra
                 z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
                 z_SL, vpa_SL, composition, charge_exchange_frequency, advance, i)
         end
-        #println("step: ", i, "  pdf.norm: ", sum(abs.(pdf.norm)), "  dens: ", sum(abs.(moments.dens)), "  upar: ", sum(abs.(moments.upar)))
         # update the time
         t += t_input.dt
         # write data to file every nwrite time steps
@@ -423,9 +373,6 @@ function time_advance_no_splitting!(pdf, scratch, t, t_input, z, vpa,
     z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
     z_SL, vpa_SL, composition, charge_exchange_frequency, advance, istep)
 
-    # define abbreviated variable for tidiness
-    #n_rk_stages = t_input.n_rk_stages
-
     if t_input.n_rk_stages > 1
         ssp_rk!(pdf, scratch, t, t_input, z, vpa,
             z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
@@ -438,26 +385,6 @@ function time_advance_no_splitting!(pdf, scratch, t, t_input, z, vpa,
         # NB: this must be broken -- scratch is updated in euler_time_advance!,
         # but not the pdf or moments.  need to add update to these quantities here
     end
-    # if n_rk_stages == 4
-    #     ssp_rk3_4stage!(pdf, scratch, t, t_input, z, vpa,
-    #         z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
-    #         z_SL, vpa_SL, composition, charge_exchange_frequency, advance, istep)
-    # elseif n_rk_stages == 3
-    #     ssp_rk3!(pdf, scratch, t, t_input, z, vpa,
-    #         z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
-    #         z_SL, vpa_SL, composition, charge_exchange_frequency, advance, istep)
-    # elseif n_rk_stages == 2
-    #     ssp_rk2!(pdf, scratch, t, t_input, z, vpa,
-    #         z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
-    #         z_SL, vpa_SL, composition, charge_exchange_frequency, advance, istep)
-    # else
-    #     euler_time_advance!(scratch, scratch, pdf, fields, moments, z_SL, vpa_SL,
-    #         z_advect, vpa_advect, z, vpa, t,
-    #         t_input, z_spectral, vpa_spectral, composition,
-    #         charge_exchange_frequency, advance, 1)
-    #     # NB: this must be broken -- scratch is updated in euler_time_advance!,
-    #     # but not the pdf or moments.  need to add update to these quantities here
-    # end
     return nothing
 end
 function rk_update!(scratch, pdf, moments, fields, vpa, nz, rk_coefs, istage, composition)
@@ -496,24 +423,16 @@ function ssp_rk!(pdf, scratch, t, t_input, z, vpa,
     scratch[1].upar .= moments.upar
     scratch[1].ppar .= moments.ppar
 
-    #println("pdf1: ", sum(abs.(scratch[1].pdf)))
-    #println("dens1: ", sum(abs.(scratch[1].density)))
-    #println("upar1: ", sum(abs.(scratch[1].upar)))
-    #println("ppar1: ", sum(abs.(scratch[1].ppar)))
-
     for istage ∈ 1:n_rk_stages
         # do an Euler time advance, with scratch[2] containing the advanced quantities
         # and scratch[1] containing quantities at time level n
         update_solution_vector!(scratch, moments, istage)
-        #println("ssp_rk2: ", sum(abs.(scratch[istage+1].pdf)))
         # calculate f^{(1)} = fⁿ + Δt*G[fⁿ] = scratch[2].pdf
         @views euler_time_advance!(scratch[istage+1], scratch[istage],
             pdf, fields, moments, z_SL, vpa_SL, z_advect, vpa_advect, z, vpa, t,
             t_input, z_spectral, vpa_spectral, composition,
             charge_exchange_frequency, advance, istage)
-        #println("ssp_rk3: ", sum(abs.(scratch[istage+1].pdf)))
         @views rk_update!(scratch, pdf, moments, fields, vpa, z.n, advance.rk_coefs[:,istage], istage, composition)
-        #println("ssp_rk4: ", sum(abs.(scratch[istage+1].pdf)))
     end
 
     istage = n_rk_stages+1
@@ -526,200 +445,9 @@ function ssp_rk!(pdf, scratch, t, t_input, z, vpa,
     moments.dens .= scratch[istage].density
     moments.upar .= scratch[istage].upar
     moments.ppar .= scratch[istage].ppar
-    #println("pdf.norm: ", sum(abs.(pdf.norm)))
     update_pdf_unnorm!(pdf, moments)
     return nothing
 end
-# function ssp_rk3_4stage!(pdf, scratch, t, t_input, z, vpa,
-#     z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
-#     z_SL, vpa_SL, composition, charge_exchange_frequency, advance, istep)
-#
-#     scratch[1].pdf .= pdf.norm
-#     # if moments.evolve_density
-#     #     scratch[1].density .= moments.dens
-#     #     if moments.evolve_upar
-#     #         scratch[1].upar .= moments.upar
-#     #     end
-#     # end
-#     scratch[1].density = moments.dens
-#     scratch[1].upar = moments.upar
-#     scratch[1].ppar = moments.ppar
-#
-#     istage = 1
-#     # do an Euler time advance, with scratch[2] containing the advanced quantities
-#     # and scratch[1] containing quantities at time level n
-#     update_solution_vector!(scratch, moments, istage)
-#     # calculate f^{(1)} = fⁿ + Δt*G[fⁿ] = scratch[2].pdf
-#     @views euler_time_advance!(scratch[istage+1], scratch[istage],
-#         pdf, fields, moments, z_SL, vpa_SL, z_advect, vpa_advect, z, vpa, t,
-#         t_input, z_spectral, vpa_spectral, composition,
-#         charge_exchange_frequency, advance, istage)
-#     @views rk_update!(scratch, pdf, moments, vpa, nz, advance.rk_coefs[:,istage], istage)
-#     #@. scratch[istage+1].pdf = 0.5*(pdf.norm + scratch[istage+1].pdf)
-#     # if moments.evolve_density
-#     #     @. scratch[istage+1].density = 0.5*(moments.dens + scratch[istage+1].density)
-#     #     if moments.evolve_upar
-#     #         @. scratch[istage+1].upar = 0.5*(moments.upar + scratch[istage+1].upar)
-#     #     end
-#     # end
-#
-#     istage = 2
-#     update_solution_vector!(scratch, moments, istage)
-#     # calculate f^{(2)} = f^{(1)} + Δt*G[f^{(1)}] = scratch[3].pdf
-#     @views euler_time_advance!(scratch[istage+1], scratch[istage],
-#         pdf, fields, moments, z_SL, vpa_SL, z_advect, vpa_advect, z, vpa, t,
-#         t_input, z_spectral, vpa_spectral, composition,
-#         charge_exchange_frequency, advance, istage)
-#     # redefinte scratch[3].pdf = g^{(2)} = 1/2 f^{(1)} + 1/2 f^{(2)}
-#     @views rk_update!(scratch, pdf, moments, vpa, nz, advance.rk_coefs[:,istage], istage)
-#     # @. scratch[istage+1].pdf = 0.5*(scratch[istage].pdf + scratch[istage+1].pdf)
-#     # if moments.evolve_density
-#     #     @. scratch[istage+1].density = 0.5*(scratch[istage].density + scratch[istage+1].density)
-#     #     if moments.evolve_upar
-#     #         @. scratch[istage+1].upar = 0.5*(scratch[istage].upar + scratch[istage+1].upar)
-#     #     end
-#     # end
-#
-#     istage = 3
-#     update_solution_vector!(scratch, moments, istage)
-#     # calculate f^{(3)} = g^{(2)} + Δt*G[g^{(2)}] = scratch[4].pdf
-#     @views euler_time_advance!(scratch[istage+1], scratch[istage],
-#         pdf, fields, moments, z_SL, vpa_SL, z_advect, vpa_advect, z, vpa, t,
-#         t_input, z_spectral, vpa_spectral, composition,
-#         charge_exchange_frequency, advance, istage)
-#     # redefine scratch[4].pdf = g^{(3)} = 2/3 fⁿ + 1/6 g^{(2)} + 1/6 f^{(3)}
-#     @views rk_update!(scratch, pdf, moments, vpa, nz, advance.rk_coefs[:,istage], istage)
-#     @. scratch[istage+1].pdf = (4.0*pdf.norm + scratch[istage].pdf + scratch[istage+1].pdf)/6.0
-#     # if moments.evolve_density
-#     #     @. scratch[istage+1].density = (4.0*moments.dens + scratch[istage].density
-#     #         + scratch[istage+1].density)/6.0
-#     #     if moments.evolve_upar
-#     #         @. scratch[istage+1].upar = (4.0*moments.upar + scratch[istage].upar
-#     #             + scratch[istage+1].upar)/6.0
-#     #     end
-#     # end
-#
-#     istage = 4
-#     update_solution_vector!(scratch, moments, istage)
-#     # calculate f^{(4)} = g^{(3)} + Δt*G[g^{(3)}] = scratch[5].pdf
-#     @views euler_time_advance!(scratch[istage+1], scratch[istage],
-#         pdf, fields, moments, z_SL, vpa_SL, z_advect, vpa_advect, z, vpa, t,
-#         t_input, z_spectral, vpa_spectral, composition,
-#         charge_exchange_frequency, advance, istage)
-#     # obtain f^{n+1} = 1/2 g^{(3)} + 1/2 f^{(4)}
-#     @views rk_update!(scratch, pdf, moments, vpa, nz, advance.rk_coefs[:,istage], istage)
-#     # update the pdf.norm and moments arrays as needed
-#     @. pdf.norm = scratch[istage+1].pdf
-#     @. moments.dens = scratch[istage+1].density
-#     @. moments.upar = scratch[istage+1].upar
-#     @. moments.ppar = scratch[istage+1].ppar
-#     # @. pdf.norm = 0.5*(scratch[istage].pdf + scratch[istage+1].pdf)
-#     # if moments.evolve_density
-#     #     @. moments.dens = 0.5*(scratch[istage].density + scratch[istage+1].density)
-#     #     if moments.evolve_upar
-#     #         @. moments.upar = 0.5*(scratch[istage].upar + scratch[istage+1].upar)
-#     #     end
-#     # end
-#     update_pdf_unnorm!(pdf, moments)
-#     return nothing
-# end
-# function ssp_rk3!(pdf, scratch, t, t_input, z, vpa,
-#     z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
-#     z_SL, vpa_SL, composition, charge_exchange_frequency, advance, istep)
-#
-#     scratch[1].pdf .= pdf.norm
-#     if moments.evolve_density
-#         scratch[1].density .= moments.dens
-#         if moments.evolve_upar
-#             scratch[1].upar .= moments.upar
-#         end
-#     end
-#
-#     istage = 1
-#     # do an Euler time advance, with scratch[2] containing the advanced quantities
-#     # and scratch[1] containing quantities at time level n
-#     update_solution_vector!(scratch, moments, istage)
-#     # calculate f^{(1)} = fⁿ + Δt*G[fⁿ] = scratch[2].pdf
-#     @views euler_time_advance!(scratch[istage+1], scratch[istage],
-#         pdf, fields, moments, z_SL, vpa_SL, z_advect, vpa_advect, z, vpa, t,
-#         t_input, z_spectral, vpa_spectral, composition,
-#         charge_exchange_frequency, advance, istage)
-#
-#     istage = 2
-#     update_solution_vector!(scratch, moments, istage)
-#     # calculate f^{(2)} = f^{(1)} + Δt*G[f^{(1)}] = scratch[3].pdf
-#     @views euler_time_advance!(scratch[istage+1], scratch[istage],
-#         pdf, fields, moments, z_SL, vpa_SL, z_advect, vpa_advect, z, vpa, t,
-#         t_input, z_spectral, vpa_spectral, composition,
-#         charge_exchange_frequency, advance, istage)
-#     # redefinte scratch[3].pdf = g^{(2)} = 3/4 fⁿ + 1/4 f^{(2)}
-#     @. scratch[istage+1].pdf = 0.75*pdf.norm + 0.25*scratch[istage+1].pdf
-#     if moments.evolve_density
-#         @. scratch[istage+1].density = 0.75*moments.dens + 0.25*scratch[istage+1].density
-#         if moments.evolve_upar
-#             @. scratch[istage+1].upar = 0.75*moments.upar + 0.25*scratch[istage+1].upar
-#         end
-#     end
-#
-#     istage = 3
-#     update_solution_vector!(scratch, moments, istage)
-#     # calculate f^{(3)} = g^{(2)} + Δt*G[g^{(2)}] = scratch[4].pdf
-#     @views euler_time_advance!(scratch[istage+1], scratch[istage],
-#         pdf, fields, moments, z_SL, vpa_SL, z_advect, vpa_advect, z, vpa, t,
-#         t_input, z_spectral, vpa_spectral, composition,
-#         charge_exchange_frequency, advance, istage)
-#
-#     # obtain f^{n+1} = 1/3 fⁿ + 2/3 f^{(3)}
-#     @. pdf.norm = (pdf.norm + 2.0*scratch[istage+1].pdf)/3.0
-#     if moments.evolve_density
-#         @. moments.dens = (moments.dens + 2.0*scratch[istage+1].density)/3.0
-#         if moments.evolve_upar
-#             @. moments.upar = (moments.upar + 2.0*scratch[istage+1].upar)/3.0
-#         end
-#     end
-#     update_pdf_unnorm!(pdf, moments)
-#     return nothing
-# end
-# function ssp_rk2!(pdf, scratch, t, t_input, z, vpa,
-#     z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
-#     z_SL, vpa_SL, composition, charge_exchange_frequency, advance, istep)
-#
-#     scratch[1].pdf .= pdf.norm
-#     if moments.evolve_density
-#         scratch[1].density .= moments.dens
-#         if moments.evolve_upar
-#             scratch[1].upar .= moments.upar
-#         end
-#     end
-#
-#     istage = 1
-#     # do an Euler time advance, with scratch[2] containing the advanced quantities
-#     # and scratch[1] containing quantities at time level n
-#     update_solution_vector!(scratch, moments, istage)
-#     # calculate f^{(1)} = fⁿ + Δt*G[fⁿ] = scratch[2].pdf
-#     @views euler_time_advance!(scratch[istage+1], scratch[istage],
-#         pdf, fields, moments, z_SL, vpa_SL, z_advect, vpa_advect, z, vpa, t,
-#         t_input, z_spectral, vpa_spectral, composition,
-#         charge_exchange_frequency, advance, istage)
-#
-#     istage = 2
-#     update_solution_vector!(scratch, moments, istage)
-#     # calculate f^{(2)} = f^{(1)} + Δt*G[f^{(1)}] = scratch[3].pdf
-#     @views euler_time_advance!(scratch[istage+1], scratch[istage],
-#         pdf, fields, moments, z_SL, vpa_SL, z_advect, vpa_advect, z, vpa, t,
-#         t_input, z_spectral, vpa_spectral, composition,
-#         charge_exchange_frequency, advance, istage)
-#
-#     @. pdf.norm = 0.5*(pdf.norm + scratch[istage+1].pdf)
-#     if moments.evolve_density
-#         @. moments.dens = 0.5*(moments.dens + scratch[istage+1].density)
-#         if moments.evolve_upar
-#             @. moments.upar = 0.5*(moments.upar + scratch[istage+1].upar)
-#         end
-#     end
-#     update_pdf_unnorm!(pdf, moments)
-#     return nothing
-# end
 # euler_time_advance! advances the vector equation dfvec/dt = G[f]
 # that includes the kinetic equation + any evolved moment equations
 # using the forward Euler method: fvec_out = fvec_in + dt*fvec_in,
@@ -734,65 +462,46 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, z_SL, vpa_
     # vpa_advection! advances the 1D advection equation in vpa.
     # only charged species have a force accelerating them in vpa;
     # however, neutral species do have non-zero d(wpa)/dt, so there is advection in wpa
-    # if evolve_upar = true
     if advance.vpa_advection
         @views vpa_advection!(fvec_out.pdf, fvec_in, pdf.norm, fields, moments.evolve_upar,
             vpa_SL, vpa_advect, vpa, z, use_semi_lagrange, dt, t,
             vpa_spectral, z_spectral, composition, charge_exchange_frequency, istage)
     end
-    #println("vpa_advection -- pdf: ", sum(abs.(fvec_out.pdf)), "  dens: ", sum(abs.(fvec_in.density)), "  upar: ", sum(abs.(fvec_in.upar)))
-    #println("vpa_advection: ", sum(abs.(fvec_out.pdf)))
     # z_advection! advances 1D advection equation in z
     # apply z-advection operation to all species (charged and neutral)
     if advance.z_advection
         @views z_advection!(fvec_out.pdf, fvec_in, pdf.norm, moments, z_SL, z_advect, z, vpa,
             use_semi_lagrange, dt, t, z_spectral, composition.n_species, istage)
     end
-    #println("z_advection -- pdf: ", sum(abs.(fvec_out.pdf)), "  dens: ", sum(abs.(fvec_in.density)), "  upar: ", sum(abs.(fvec_in.upar)))
-    #println("z_advection: ", sum(abs.(fvec_out.pdf)))
     if advance.source_terms
         source_terms!(fvec_out.pdf, fvec_in, moments, z, vpa, dt, z_spectral)
     end
-    #println("source_terms -- pdf: ", sum(abs.(fvec_out.pdf)), "  dens: ", sum(abs.(fvec_in.density)), "  upar: ", sum(abs.(fvec_in.upar)))
-    #println("source_terms: ", sum(abs.(fvec_out.pdf)))
     # account for charge exchange collisions between ions and neutrals
     if advance.cx_collisions
         charge_exchange_collisions!(fvec_out.pdf, fvec_in, moments, n_ion_species,
             composition.n_neutral_species, vpa, charge_exchange_frequency, z.n, dt)
     end
-    #println("cx_collisions: ", sum(abs.(fvec_out.pdf)))
     if advance.continuity
         continuity_equation!(fvec_out.density, fvec_in, moments, z, vpa, dt, z_spectral)
     end
-    #println("continuity_equation: ", sum(abs.(fvec_out.pdf)))
     if advance.force_balance
         # fvec_out.upar is over-written in force_balance! and contains the particle flux
         force_balance!(fvec_out.upar, fvec_in, fields, charge_exchange_frequency, z, vpa, dt, z_spectral, composition)
         # convert from the particle flux to the parallel flow
         @. fvec_out.upar /= fvec_out.density
     end
-    #println("force_balance: ", sum(abs.(fvec_out.pdf)))
     # reset "xx.updated" flags to false since ff has been updated
     # and the corresponding moments have not
     reset_moments_status!(moments)
     # enforce boundary conditions in z and vpa on the distribution function
     # NB: probably need to do the same for the evolved moments
     enforce_boundary_conditions!(fvec_out.pdf, z.bc, vpa.bc, vpa.grid, z_advect, vpa_advect)
-    # if moments.evolve_density && moments.enforce_conservation
-    #     enforce_moment_constraints!(fvec_out, fvec_in, z, vpa, moments)
-    # end
     return nothing
 end
 # update the vector containing the pdf and any evolved moments of the pdf
 # for use in the Runge-Kutta time advance
 function update_solution_vector!(evolved, moments, istage)
     evolved[istage+1].pdf .= evolved[istage].pdf
-    # if moments.evolve_density
-    #     evolved[istage+1].density .= evolved[istage].density
-    #     if moments.evolve_upar
-    #         evolved[istage+1].upar .= evolved[istage].upar
-    #     end
-    # end
     evolved[istage+1].density .= evolved[istage].density
     evolved[istage+1].upar .= evolved[istage].upar
     evolved[istage+1].ppar .= evolved[istage].ppar
