@@ -10,7 +10,7 @@ using chebyshev: setup_chebyshev_pseudospectral
 using chebyshev: chebyshev_derivative!
 using velocity_moments: setup_moments, update_moments!, reset_moments_status!
 using velocity_moments: enforce_moment_constraints!
-using velocity_moments: update_density!, update_upar!, update_ppar!
+using velocity_moments: update_density!, update_upar!, update_ppar!, update_qpar!
 using initial_conditions: enforce_z_boundary_condition!, enforce_boundary_conditions!
 using initial_conditions: enforce_vpa_boundary_condition!
 using advection: setup_advection, update_boundary_indices!
@@ -20,26 +20,15 @@ using charge_exchange: charge_exchange_collisions!
 using source_terms: source_terms!
 using continuity: continuity_equation!
 using force_balance: force_balance!
+using energy_equation: energy_equation!
 using em_fields: setup_em_fields, update_phi!
 using semi_lagrange: setup_semi_lagrange
 
-struct scratch_pdf{T}
-    pdf::T
-end
-struct scratch_pdf_dens{T1,T2}
+struct scratch_pdf{T1,T2}
     pdf::T1
     density::T2
-end
-struct scratch_pdf_dens_upar{T1,T2,T3}
-    pdf::T1
-    density::T2
-    upar::T3
-end
-struct scratch_pdf_dens_upar_ppar{T1,T2,T3,T4}
-    pdf::T1
-    density::T2
-    upar::T3
-    ppar::T4
+    upar::T2
+    ppar::T2
 end
 mutable struct advance_info
     vpa_advection::Bool
@@ -48,6 +37,7 @@ mutable struct advance_info
     source_terms::Bool
     continuity::Bool
     force_balance::Bool
+    energy::Bool
     rk_coefs::Array{mk_float,2}
 end
 
@@ -56,7 +46,8 @@ end
 # this includes creating and populating structs
 # for Chebyshev transforms, velocity space moments,
 # EM fields, semi-Lagrange treatment, and advection terms
-function setup_time_advance!(pdf, z, vpa, composition, drive_input, evolve_moments, t_input, cx_frequency)
+function setup_time_advance!(pdf, z, vpa, composition, drive_input, evolve_moments,
+                             t_input, cx_frequency, species)
     # define some local variables for convenience/tidiness
     n_species = composition.n_species
     n_ion_species = composition.n_ion_species
@@ -67,7 +58,7 @@ function setup_time_advance!(pdf, z, vpa, composition, drive_input, evolve_momen
     # if no splitting of operators, all terms advanced concurrently;
     # else, will advance one term at a time.
     if t_input.split_operators
-        advance = advance_info(false, false, false, false, false, false, rk_coefs)
+        advance = advance_info(false, false, false, false, false, false, false, rk_coefs)
     else
         if composition.n_neutral_species > 0 && cx_frequency > 0.0
             advance_cx = true
@@ -79,6 +70,11 @@ function setup_time_advance!(pdf, z, vpa, composition, drive_input, evolve_momen
             advance_continuity = true
             if evolve_moments.parallel_flow
                 advance_force_balance = true
+                if evolve_moments.parallel_pressure
+                    advance_energy = true
+                else
+                    advance_energy = false
+                end
             else
                 advance_force_balance = false
             end
@@ -86,21 +82,24 @@ function setup_time_advance!(pdf, z, vpa, composition, drive_input, evolve_momen
             advance_sources = false
             advance_continuity = false
             advance_force_balance = false
+            advance_energy = false
         end
-        advance = advance_info(true, true, advance_cx, advance_sources, advance_continuity, advance_force_balance, rk_coefs)
+        advance = advance_info(true, true, advance_cx, advance_sources, advance_continuity,
+                               advance_force_balance, advance_energy, rk_coefs)
     end
     # pass the distribution function pdf.unnorm (defined such that ∫dvpa pdf = density)
     # and allocate/initialize the velocity space moments needed for advancing
     # the kinetic equation coupled to fluid equations
     # the resulting moments are returned in the structure "moments"
-    moments = setup_moments(pdf.unnorm, vpa, z.n, evolve_moments)
+    moments = setup_moments(pdf.unnorm, vpa, z.n, evolve_moments, species)
     # create structure z_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the split part of the GK equation dealing
     # with advection in z
     z_advect = setup_advection(z, vpa, n_species)
     # initialise the z advection speed
     for is ∈ 1:n_species
-        @views update_speed_z!(z_advect[:,is], moments.upar[:,is], moments.evolve_upar, vpa, z, 0.0)
+        @views update_speed_z!(z_advect[:,is], moments.upar[:,is], moments.vth[:,is],
+                               moments.evolve_upar, moments.evolve_ppar, vpa, z, 0.0)
         # initialise the upwind/downwind boundary indices in z
         update_boundary_indices!(view(z_advect,:,is))
         # enforce prescribed boundary condition in z on the distribution function f
@@ -146,7 +145,7 @@ function setup_time_advance!(pdf, z, vpa, composition, drive_input, evolve_momen
     # with advection in vpa
     vpa_advect = setup_advection(vpa, z, n_species)
     # initialise the vpa advection speed
-    update_speed_vpa!(vpa_advect, fields, scratch[1], moments.evolve_upar, vpa, z, composition, cx_frequency, 0.0, z_spectral)
+    update_speed_vpa!(vpa_advect, fields, scratch[1], moments, vpa, z, composition, cx_frequency, 0.0, z_spectral)
     if moments.evolve_upar
         nspec = n_species
     else
@@ -168,9 +167,14 @@ function setup_time_advance!(pdf, z, vpa, composition, drive_input, evolve_momen
         vpa_SL, scratch, advance
 end
 # if evolving the density via continuity equation, redefine the normalised f → f/n
+# if evolving the parallel pressure via energy equation, redefine f -> f * vth / n
 function normalize_pdf!(pdf, moments)
     nvpa = size(pdf,2)
-    if moments.evolve_density
+    if moments.evolve_ppar
+        for ivpa ∈ 1:nvpa
+            @. pdf[:,ivpa,:] *= moments.vth/moments.dens
+        end
+    elseif moments.evolve_density
         for ivpa ∈ 1:nvpa
             @. pdf[:,ivpa,:] /= moments.dens
         end
@@ -190,12 +194,12 @@ function setup_scratch_arrays(moments, pdf_in, nz, nvpa, nspec, n_rk_stages)
     ppar = allocate_float(nz, nspec, n_rk_stages+1)
     # create n_rk_stages+1 structs, each of which will contain one pdf,
     # one density, and one parallel flow array
-    scratch = Vector{scratch_pdf_dens_upar_ppar}(undef, n_rk_stages+1)
+    scratch = Vector{scratch_pdf}(undef, n_rk_stages+1)
     # populate each of the structs
     # NB: all of the array members of the scratch struct will point to
     # the appropriate slice of the pdf, dens and upar arrays created above
     for istage ∈ 1:n_rk_stages+1
-        @views scratch[istage] = scratch_pdf_dens_upar_ppar(pdf[:,:,:,istage], dens[:,:,istage], upar[:,:,istage], ppar[:,:,istage])
+        @views scratch[istage] = scratch_pdf(pdf[:,:,:,istage], dens[:,:,istage], upar[:,:,istage], ppar[:,:,istage])
         scratch[istage].pdf .= pdf_in
         scratch[istage].density .= moments.dens
         scratch[istage].upar .= moments.upar
@@ -246,7 +250,6 @@ function time_advance!(pdf, scratch, t, t_input, z, vpa, z_spectral, vpa_spectra
     charge_exchange_frequency, advance, io, cdf)
     # main time advance loop
     iwrite = 2
-    #println("step: 0", "  pdf.norm: ", sum(abs.(pdf.norm)), "  dens: ", sum(abs.(moments.dens)), "  upar: ", sum(abs.(moments.upar)))
     for i ∈ 1:t_input.nstep
         if t_input.split_operators
             time_advance_split_operators!(pdf, scratch, t, t_input, z, vpa,
@@ -319,8 +322,36 @@ function time_advance_split_operators!(pdf, scratch, t, t_input, z, vpa,
                 z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
                 z_SL, vpa_SL, composition, charge_exchange_frequency, advance, istep)
             advance.continuity = false
+            if moments.evolve_upar
+                advance.force_balance = true
+                time_advance_no_splitting!(pdf, scratch, t, t_input, z, vpa,
+                    z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
+                    z_SL, vpa_SL, composition, charge_exchange_frequency, advance, istep)
+                advance.force_balance = false
+                if moments.evolve_ppar
+                    advance.energy = true
+                    time_advance_no_splitting!(pdf, scratch, t, t_input, z, vpa,
+                        z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
+                        z_SL, vpa_SL, composition, charge_exchange_frequency, advance, istep)
+                    advance.energy = false
+                end
+            end
         end
     else
+        if moments.evolve_upar
+            if moments.evolve_ppar
+                advance.energy = true
+                time_advance_no_splitting!(pdf, scratch, t, t_input, z, vpa,
+                    z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
+                    z_SL, vpa_SL, composition, charge_exchange_frequency, advance, istep)
+                advance.energy = false
+            end
+            advance.force_balance = true
+            time_advance_no_splitting!(pdf, scratch, t, t_input, z, vpa,
+                z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
+                z_SL, vpa_SL, composition, charge_exchange_frequency, advance, istep)
+            advance.force_balance = false
+        end
         # use the continuity equation to update the density
         # and add the source terms associated with redefining g = pdf/density to the kinetic equation
         if moments.evolve_density
@@ -408,7 +439,15 @@ function rk_update!(scratch, pdf, moments, fields, vpa, nz, rk_coefs, istage, co
         # convert from particle particle flux to parallel flow
         @. scratch[istage+1].upar /= scratch[istage+1].density
     end
-    update_ppar!(scratch[istage+1].ppar, moments.ppar_updated, pdf.unnorm, vpa, nz)
+    if moments.evolve_ppar
+        @. scratch[istage+1].ppar = rk_coefs[1]*moments.ppar + rk_coefs[2]*scratch[istage].ppar + rk_coefs[3]*scratch[istage+1].ppar
+    else
+        update_ppar!(scratch[istage+1].ppar, moments.ppar_updated, pdf.unnorm, vpa, nz)
+    end
+    # update the thermal speed
+    @. moments.vth = sqrt(2*moments.ppar/moments.dens)
+    # update the parallel heat flux
+    update_qpar!(moments.qpar, moments.qpar_updated, pdf.unnorm, vpa, nz, moments.vpa_norm_fac)
     # update the electrostatic potential phi
     update_phi!(fields, scratch[istage+1], vpa, nz, composition)
 end
@@ -463,7 +502,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, z_SL, vpa_
     # only charged species have a force accelerating them in vpa;
     # however, neutral species do have non-zero d(wpa)/dt, so there is advection in wpa
     if advance.vpa_advection
-        @views vpa_advection!(fvec_out.pdf, fvec_in, pdf.norm, fields, moments.evolve_upar,
+        @views vpa_advection!(fvec_out.pdf, fvec_in, pdf.norm, fields, moments,
             vpa_SL, vpa_advect, vpa, z, use_semi_lagrange, dt, t,
             vpa_spectral, z_spectral, composition, charge_exchange_frequency, istage)
     end
@@ -490,6 +529,9 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, z_SL, vpa_
         # convert from the particle flux to the parallel flow
         @. fvec_out.upar /= fvec_out.density
     end
+    if advance.energy
+        energy_equation!(fvec_out.ppar, fvec_in, moments, charge_exchange_frequency, z, dt, z_spectral, composition)
+    end
     # reset "xx.updated" flags to false since ff has been updated
     # and the corresponding moments have not
     reset_moments_status!(moments)
@@ -511,7 +553,11 @@ function update_pdf_unnorm!(pdf, moments)
     # if separately evolving the density via the continuity equation,
     # the evolved pdf has been normalised by the particle density
     # undo this normalisation to get the true particle distribution function
-    if moments.evolve_density
+    if moments.evolve_ppar
+        for ivpa ∈ 1:size(pdf.norm,2)
+            @. pdf.unnorm[:,ivpa,:] = pdf.norm[:,ivpa,:]*moments.dens/moments.vth
+        end
+    elseif moments.evolve_density
         for ivpa ∈ 1:size(pdf.norm,2)
             @. pdf.unnorm[:,ivpa,:] = pdf.norm[:,ivpa,:]*moments.dens
         end

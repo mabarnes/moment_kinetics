@@ -8,21 +8,47 @@ function source_terms!(pdf_out, fvec_in, moments, z, vpa, dt, spectral)
     # calculate the source terms due to redefinition of the pdf to split off density,
     # and use them to update the pdf
     n_species = size(pdf_out,3)
-    for is ∈ 1:n_species
-        for ivpa ∈ 1:vpa.n
-            @views source_terms_density!(pdf_out[:,ivpa,is], fvec_in.pdf[:,ivpa,is],
-                fvec_in.density[:,is], fvec_in.upar[:,is], z, dt, spectral)
+    if moments.evolve_ppar
+        for is ∈ 1:n_species
+            for ivpa ∈ 1:vpa.n
+                @views source_terms_evolve_ppar!(pdf_out[:,ivpa,is], fvec_in.pdf[:,ivpa,is],
+                    fvec_in.density[:,is], fvec_in.upar[:,is], fvec_in.ppar[:,is],
+                    moments.vth[:,is], moments.qpar[:,is], z, dt, spectral)
+            end
+        end
+    elseif moments.evolve_density
+        for is ∈ 1:n_species
+            for ivpa ∈ 1:vpa.n
+                @views source_terms_evolve_density!(pdf_out[:,ivpa,is], fvec_in.pdf[:,ivpa,is],
+                    fvec_in.density[:,is], fvec_in.upar[:,is], z, dt, spectral)
+            end
         end
     end
     return nothing
 end
-function source_terms_density!(pdf_out, pdf_in, dens, upar, z, dt, spectral)
+function source_terms_evolve_density!(pdf_out, pdf_in, dens, upar, z, dt, spectral)
     # calculate d(n*upar)/dz
     @. z.scratch = dens*upar
     derivative!(z.scratch, z.scratch, z, spectral)
     #derivative!(z.scratch, z.scratch, z, -upar, spectral)
     # update the density
     @. pdf_out += dt*z.scratch*pdf_in/dens
+    return nothing
+end
+function source_terms_evolve_ppar!(pdf_out, pdf_in, dens, upar, ppar, vth, qpar, z, dt, spectral)
+    # calculate dn/dz
+    derivative!(z.scratch, dens, z, spectral)
+    # update the pdf to account for the density gradient contribution to the source
+    @. pdf_out += dt*z.scratch*pdf_in*upar/dens
+    # calculate dvth/dz
+    derivative!(z.scratch, vth, z, spectral)
+    # update the pdf to account for the -g*upar/vth * dvth/dz contribution to the source
+    @. pdf_out -= dt*z.scratch*pdf_in*upar/vth
+    # calculate dqpar/dz
+    derivative!(z.scratch, qpar, z, spectral)
+    # update the pdf to account for the parallel heat flux contribution to the source
+    @. pdf_out -= 0.5*dt*z.scratch*pdf_in/ppar
+    #NB: need to add in the contribution from CX
     return nothing
 end
 

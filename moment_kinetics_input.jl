@@ -26,7 +26,7 @@ function mk_input(scan_input=Dict())
     n_ion_species = 1
     # n_neutral_species is the number of evolved neutral species
     # currently only n_neutral_species = 0 is supported
-    n_neutral_species = 1
+    n_neutral_species = 0
     # if boltzmann_electron_response = true, then the electron
     # density is fixed to be N_e*(eϕ/T_e)
     # currently this is the only supported option
@@ -36,14 +36,14 @@ function mk_input(scan_input=Dict())
         load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_response)
 
     # this is the prefix for all output files associated with this run
-    run_name = get(scan_input, :run_name, "upar")
+    run_name = get(scan_input, :run_name, "ppar")
     # this is the directory where the simulation data will be stored
     output_dir = string("runs/",run_name)
     # if evolve_moments.density = true, evolve density via continuity eqn
     # and g = f/n via modified drift kinetic equation
     evolve_moments.density = true
     evolve_moments.parallel_flow = true
-    evolve_moments.parallel_pressure = false
+    evolve_moments.parallel_pressure = true
     evolve_moments.conservation = true
 #    evolve_moments.advective_form = false
 

@@ -73,16 +73,20 @@ function load_moments_data(fid)
     density = cdfvar.var[:,:,:]
     # define a handle for the species parallel flow
     cdfvar = fid["parallel_flow"]
-    # load the species density data
+    # load the species parallel flow data
     parallel_flow = cdfvar.var[:,:,:]
     # define a handle for the species parallel pressure
     cdfvar = fid["parallel_pressure"]
-    # load the species density data
+    # load the species parallel pressure data
     parallel_pressure = cdfvar.var[:,:,:]
+    # define a handle for the species parallel heat flux
+    cdfvar = fid["parallel_heat_flux"]
+    # load the species parallel heat flux data
+    parallel_heat_flux = cdfvar.var[:,:,:]
     # define the number of species
     n_species = size(cdfvar,2)
     println("done.")
-    return density, parallel_flow, parallel_pressure, n_species
+    return density, parallel_flow, parallel_pressure, parallel_heat_flux, n_species
 end
 
 function load_pdf_data(fid)

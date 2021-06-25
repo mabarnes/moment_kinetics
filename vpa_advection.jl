@@ -10,19 +10,19 @@ using em_fields: update_phi!
 using calculus: derivative!
 using initial_conditions: enforce_vpa_boundary_condition!
 
-function vpa_advection!(f_out, fvec_in, ff, fields, evolve_upar, SL, advect,
+function vpa_advection!(f_out, fvec_in, ff, fields, moments, SL, advect,
 	vpa, z, use_semi_lagrange, dt, t, vpa_spectral, z_spectral, composition, CX_frequency, istage)
 
 	# only have a parallel acceleration term for neutrals if using the peculiar velocity
 	# wpar = vpar - upar as a variable; i.e., d(wpar)/dt /=0 for neutrals even though d(vpar)/dt = 0.
 	# define the number of evolved species accordingly
-	if evolve_upar
+	if moments.evolve_upar
 		nspecies_accelerated = composition.n_species
 	else
 		nspecies_accelerated = composition.n_ion_species
 	end
 	# calculate the advection speed corresponding to current f
-	update_speed_vpa!(advect, fields, fvec_in, evolve_upar, vpa, z, composition, CX_frequency, t, z_spectral)
+	update_speed_vpa!(advect, fields, fvec_in, moments, vpa, z, composition, CX_frequency, t, z_spectral)
 	for is ∈ 1:nspecies_accelerated
 		# update the upwind/downwind boundary indices and upwind_increment
 		# NB: not sure if this will work properly with SL method at the moment
@@ -47,14 +47,14 @@ function vpa_advection!(f_out, fvec_in, ff, fields, evolve_upar, SL, advect,
 	end
 end
 # calculate the advection speed in the z-direction at each grid point
-function update_speed_vpa!(advect, fields, fvec, evolve_upar, vpa, z, composition, CX_frequency, t, z_spectral)
+function update_speed_vpa!(advect, fields, fvec, moments, vpa, z, composition, CX_frequency, t, z_spectral)
     @boundscheck z.n == size(advect,1) || throw(BoundsError(advect))
 	#@boundscheck composition.n_ion_species == size(advect,2) || throw(BoundsError(advect))
 	@boundscheck composition.n_species == size(advect,2) || throw(BoundsError(advect))
 	@boundscheck vpa.n == size(advect[1,1].speed,1) || throw(BoundsError(speed))
     if vpa.advection.option == "default"
 		# dvpa/dt = Ze/m ⋅ E_parallel
-        update_speed_default!(advect, fields, fvec, evolve_upar, vpa, z, composition, CX_frequency, t, z_spectral)
+        update_speed_default!(advect, fields, fvec, moments, vpa, z, composition, CX_frequency, t, z_spectral)
     elseif vpa.advection.option == "constant"
 		# dvpa/dt = constant
 		for is ∈ 1:composition.n_ion_species
@@ -76,8 +76,40 @@ function update_speed_vpa!(advect, fields, fvec, evolve_upar, vpa, z, compositio
 	#end
     return nothing
 end
-function update_speed_default!(advect, fields, fvec, evolve_upar, vpa, z, composition, CX_frequency, t, z_spectral)
-	if evolve_upar
+function update_speed_default!(advect, fields, fvec, moments, vpa, z, composition, CX_frequency, t, z_spectral)
+	if moments.evolve_ppar
+		for is ∈ 1:composition.n_species
+			# get d(ppar)/dz
+			derivative!(z.scratch, view(fvec.ppar,:,is), z, z_spectral)
+			# update parallel acceleration to account for parallel derivative of parallel pressure
+			# NB: no vpa-dependence so compute for first entry in vpa and copy into remaining entries
+			for iz ∈ 1:z.n
+				advect[iz,is].speed[1] = z.scratch[iz]/(fvec.density[iz,is]*moments.vth[iz,is])
+				for ivpa ∈ 2:vpa.n
+					advect[iz,is].speed[ivpa] = advect[iz,is].speed[1]
+				end
+			end
+			# calculate d(qpar)/dz
+			derivative!(z.scratch, view(moments.qpar,:,is), z, z_spectral)
+			# update parallel acceleration to account for (wpar/2*ppar)*dqpar/dz
+			for iz ∈ 1:z.n
+				for ivpa ∈ 1:vpa.n
+					advect[iz,is].speed[ivpa] += 0.5*vpa.grid[ivpa]*z.scratch[iz]/fvec.ppar[iz,is]
+				end
+			end
+			# calculate d(vth)/dz
+			derivative!(z.scratch, view(moments.vth,:,is), z, z_spectral)
+			# update parallel acceleration to account for -wpar^2 * d(vth)/dz term
+			for iz ∈ 1:z.n
+				for ivpa ∈ 1:vpa.n
+					advect[iz,is].speed[ivpa] -= vpa.grid[ivpa]^2*z.scratch[iz]
+				end
+			end
+		end
+		#NB: need to add in contributions from charge exchange collisions
+		if composition.n_neutral_species > 0 && abs(CX_frequency) > 0.0
+		end
+	elseif moments.evolve_upar
 		for is ∈ 1:composition.n_species
 			# get d(ppar)/dz
 			derivative!(z.scratch, view(fvec.ppar,:,is), z, z_spectral)

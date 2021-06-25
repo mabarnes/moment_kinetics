@@ -36,6 +36,8 @@ struct netcdf_info{t_type, zvpast_type, zt_type, zst_type}
     parallel_flow::zst_type
     # handle for the species parallel pressure
     parallel_pressure::zst_type
+    # handle for the species parallel heat flux
+    parallel_heat_flux::zst_type
 end
 # open the necessary output files
 function setup_file_io(output_dir, run_name, z, vpa, composition, charge_exchange_frequqency)
@@ -154,6 +156,11 @@ function setup_netcdf_io(prefix, z, vpa, composition, charge_exchange_frequency)
     attributes = Dict("description" => "species parallel pressure",
                       "units" => "Ne*Te")
     cdf_ppar = defVar(fid, varname, vartype, dims, attrib=attributes)
+    # create the "parallel_heat_flux" variable, which will contain the species parallel heat fluxes
+    varname = "parallel_heat_flux"
+    attributes = Dict("description" => "species parallel heat flux",
+                      "units" => "Ne*Te*vth")
+    cdf_qpar = defVar(fid, varname, vartype, dims, attrib=attributes)
     # create a struct that stores the variables and other info needed for
     # writing to the netcdf file during run-time
     t_type = typeof(cdf_time)
@@ -161,7 +168,7 @@ function setup_netcdf_io(prefix, z, vpa, composition, charge_exchange_frequency)
     zt_type = typeof(cdf_phi)
     zst_type = typeof(cdf_density)
     return netcdf_info{t_type, zvpast_type, zt_type, zst_type}(fid, cdf_time, cdf_f,
-        cdf_phi, cdf_density, cdf_upar, cdf_ppar)
+        cdf_phi, cdf_density, cdf_upar, cdf_ppar, cdf_qpar)
 end
 # close all opened output files
 function finish_file_io(io, cdf)
@@ -203,7 +210,7 @@ function write_moments_ascii(mom, z, t, n_species, io)
             for i ∈ 1:z.n
                 println(io,"t: ", t, "   species: ", is, "   z: ", z.grid[i],
                     "  dens: ", mom.dens[i,is], "   upar: ", mom.upar[i,is],
-                    "   ppar: ", mom.ppar[i,is])
+                    "   ppar: ", mom.ppar[i,is], "   qpar: ", mom.qpar[i,is])
             end
         end
     end
@@ -233,6 +240,7 @@ function write_data_to_binary(ff, moments, fields, t, n_species, cdf, t_idx)
         cdf.density[:,:,t_idx] = moments.dens
         cdf.parallel_flow[:,:,t_idx] = moments.upar
         cdf.parallel_pressure[:,:,t_idx] = moments.ppar
+        cdf.parallel_heat_flux[:,:,t_idx] = moments.qpar
     end
 end
 # accepts an option name which has been identified as problematic and returns

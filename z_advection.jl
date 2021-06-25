@@ -12,7 +12,8 @@ function z_advection!(f_out, fvec_in, ff, moments, SL, advect, z, vpa,
                       use_semi_lagrange, dt, t, spectral, n_species, istage)
     for is ∈ 1:n_species
         # get the updated speed along the z direction using the current f
-        @views update_speed_z!(advect[:,is], fvec_in.upar[:,is], moments.evolve_upar, vpa, z, t)
+        @views update_speed_z!(advect[:,is], fvec_in.upar[:,is], moments.vth[:,is],
+                               moments.evolve_upar, moments.evolve_ppar, vpa, z, t)
         # update the upwind/downwind boundary indices and upwind_increment
         @views update_boundary_indices!(advect[:,is])
         # if using interpolation-free Semi-Lagrange,
@@ -42,25 +43,29 @@ function z_advection!(f_out, fvec_in, ff, moments, SL, advect, z, vpa,
         # advance z-advection equation
         for ivpa ∈ 1:vpa.n
             @views adjust_advection_speed!(advect[ivpa,is].speed, advect[ivpa,is].modified_speed,
-                                           fvec_in.density[:,is], fvec_in.ppar[:,is], moments.evolve_density)
+                                           fvec_in.density[:,is], moments.vth[:,is],
+                                           moments.evolve_density, moments.evolve_ppar)
             # take the normalized pdf contained in fvec_in.pdf and remove the normalization,
             # returning the true (un-normalized) particle distribution function in z.scratch
-            @views unnormalize_pdf!(z.scratch, fvec_in.pdf[:,ivpa,is], fvec_in.density[:,is], fvec_in.ppar[:,is],
-                             moments.evolve_density, moments.evolve_ppar)
-            @views advance_f_local!(f_out[:,ivpa,is], z.scratch,
-                ff[:,ivpa,is], SL[ivpa], advect[ivpa,is], z, dt, istage, spectral, use_semi_lagrange)
+            @views unnormalize_pdf!(z.scratch, fvec_in.pdf[:,ivpa,is], fvec_in.density[:,is], moments.vth[:,is],
+                                    moments.evolve_density, moments.evolve_ppar)
+            @views advance_f_local!(f_out[:,ivpa,is], z.scratch, ff[:,ivpa,is], SL[ivpa], advect[ivpa,is],
+                                    z, dt, istage, spectral, use_semi_lagrange)
         end
     end
 end
-function adjust_advection_speed!(speed, mod_speed, dens, ppar, evolve_density)
-    if evolve_density
+function adjust_advection_speed!(speed, mod_speed, dens, vth, evolve_density, evolve_ppar)
+    if evolve_ppar
+        @. speed *= vth/dens
+        @. mod_speed *= vth/dens
+    elseif evolve_density
         @. speed /= dens
         @. mod_speed /= dens
     end
 end
-function unnormalize_pdf!(unnorm, norm, dens, ppar, evolve_density, evolve_ppar)
+function unnormalize_pdf!(unnorm, norm, dens, vth, evolve_density, evolve_ppar)
     if evolve_ppar
-        @. unnorm = norm * sqrt(dens^3/ppar)
+        @. unnorm = norm * dens/vth
     elseif evolve_density
         @. unnorm = norm * dens
     else
@@ -68,7 +73,7 @@ function unnormalize_pdf!(unnorm, norm, dens, ppar, evolve_density, evolve_ppar)
     end
 end
 # calculate the advection speed in the z-direction at each grid point
-function update_speed_z!(advect, upar, evolve_upar, vpa, z, t)
+function update_speed_z!(advect, upar, vth, evolve_upar, evolve_ppar, vpa, z, t)
     @boundscheck vpa.n == size(advect,1) || throw(BoundsError(advect))
     @boundscheck z.n == size(advect[1].speed,1) || throw(BoundsError(speed))
     if z.advection.option == "default"
@@ -79,6 +84,11 @@ function update_speed_z!(advect, upar, evolve_upar, vpa, z, t)
                 end
             end
             if evolve_upar
+                if evolve_ppar
+                    for j ∈ 1:vpa.n
+                        @. advect[j].speed *= vth
+                    end
+                end
                 for j ∈ 1:vpa.n
                     @. advect[j].speed += upar
                 end

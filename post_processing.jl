@@ -43,14 +43,17 @@ function analyze_and_plot_data(path)
                 z, iz0, run_name, frequency, growth_rate, phase,
                 shifted_time, pp)
     # load velocity moments data
-    density, parallel_flow, parallel_pressure, n_species = load_moments_data(fid)
+    density, parallel_flow, parallel_pressure, parallel_heat_flux, n_species = load_moments_data(fid)
     # analyze the velocity moments data
-    density_fldline_avg, upar_fldline_avg, ppar_fldline_avg, delta_density, delta_upar, delta_ppar =
-        analyze_moments_data(density, parallel_flow, parallel_pressure, ntime, n_species, nz, z_wgts, Lz)
+    density_fldline_avg, upar_fldline_avg, ppar_fldline_avg, qpar_fldline_avg,
+        delta_density, delta_upar, delta_ppar, delta_qpar =
+        analyze_moments_data(density, parallel_flow, parallel_pressure, parallel_heat_flux,
+                             ntime, n_species, nz, z_wgts, Lz)
     # create the requested plots of the moments
     plot_moments(density, delta_density, density_fldline_avg,
         parallel_flow, delta_upar, upar_fldline_avg,
         parallel_pressure, delta_ppar, ppar_fldline_avg,
+        parallel_heat_flux, delta_qpar, qpar_fldline_avg,
         pp, run_name, time, itime_min, itime_max, nwrite_movie,
         z, iz0, n_species)
     # load particle distribution function (pdf) data
@@ -310,6 +313,7 @@ end
 function plot_moments(density, delta_density, density_fldline_avg,
     parallel_flow, delta_upar, upar_fldline_avg,
     parallel_pressure, delta_ppar, ppar_fldline_avg,
+    parallel_heat_flux, delta_qpar, qpar_fldline_avg,
     pp, run_name, time, itime_min, itime_max, nwrite_movie, z, iz0, n_species)
     println("Plotting velocity moments data...")
     for is ∈ 1:n_species
@@ -366,6 +370,22 @@ function plot_moments(density, delta_density, density_fldline_avg,
             outfile = string(run_name, "_fldline_avg_ppar_vs_t_spec", spec_string, ".pdf")
             savefig(outfile)
         end
+        qpar_min = minimum(parallel_heat_flux[:,is,:])
+        qpar_max = maximum(parallel_heat_flux[:,is,:])
+        if pp.plot_qpar0_vs_t
+            # plot the time trace of n_s(z=z0)
+            @views plot(time, parallel_heat_flux[iz0,is,:])
+            outfile = string(run_name, "_qpar0_vs_t_spec", spec_string, ".pdf")
+            savefig(outfile)
+            # plot the time trace of n_s(z=z0)-density_fldline_avg
+            @views plot(time, abs.(delta_qpar[iz0,is,:]), yaxis=:log)
+            outfile = string(run_name, "_delta_qpar0_vs_t_spec", spec_string, ".pdf")
+            savefig(outfile)
+            # plot the time trace of ppar_fldline_avg
+            @views plot(time, qpar_fldline_avg[is,:], xlabel="time", ylabel="<qpars/NₑTₑvth>", ylims=(qpar_min,qpar_max))
+            outfile = string(run_name, "_fldline_avg_qpar_vs_t_spec", spec_string, ".pdf")
+            savefig(outfile)
+        end
         if pp.plot_dens_vs_z_t
             # make a heatmap plot of n_s(z,t)
             heatmap(time, z, density[:,is,:], xlabel="time", ylabel="z", title="ns/Nₑ", c = :deep)
@@ -376,6 +396,18 @@ function plot_moments(density, delta_density, density_fldline_avg,
             # make a heatmap plot of upar_s(z,t)
             heatmap(time, z, parallel_flow[:,is,:], xlabel="time", ylabel="z", title="upars/vt", c = :deep)
             outfile = string(run_name, "_upar_vs_z_t_spec", spec_string, ".pdf")
+            savefig(outfile)
+        end
+        if pp.plot_ppar_vs_z_t
+            # make a heatmap plot of upar_s(z,t)
+            heatmap(time, z, parallel_pressure[:,is,:], xlabel="time", ylabel="z", title="ppars/NₑTₑ", c = :deep)
+            outfile = string(run_name, "_ppar_vs_z_t_spec", spec_string, ".pdf")
+            savefig(outfile)
+        end
+        if pp.plot_qpar_vs_z_t
+            # make a heatmap plot of upar_s(z,t)
+            heatmap(time, z, parallel_heat_flux[:,is,:], xlabel="time", ylabel="z", title="qpars/NₑTₑvt", c = :deep)
+            outfile = string(run_name, "_qpar_vs_z_t_spec", spec_string, ".pdf")
             savefig(outfile)
         end
         if pp.animate_dens_vs_z

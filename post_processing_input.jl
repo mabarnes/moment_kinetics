@@ -21,10 +21,16 @@ const plot_dens0_vs_t = true
 const plot_upar0_vs_t = true
 # if plot_ppar0_vs_t = true, create plots of species ppar(z0) vs time
 const plot_ppar0_vs_t = true
+# if plot_qpar0_vs_t = true, create plots of species qpar(z0) vs time
+const plot_qpar0_vs_t = true
 # if plot_dens_vs_z_t = true, create heatmap of species density vs z and time
 const plot_dens_vs_z_t = false
 # if plot_upar_vs_z_t = true, create heatmap of species parallel flow vs z and time
 const plot_upar_vs_z_t = false
+# if plot_ppar_vs_z_t = true, create heatmap of species parallel pressure vs z and time
+const plot_ppar_vs_z_t = false
+# if plot_qpar_vs_z_t = true, create heatmap of species parallel heat flux vs z and time
+const plot_qpar_vs_z_t = false
 # if animate_dens_vs_z = true, create animation of species density(z) at different time slices
 const animate_dens_vs_z = false
 # if animate_upar_vs_z = true, create animation of species parallel flow(z) at different time slices
@@ -56,8 +62,9 @@ const iz0 = -1
 const ivpa0 = -1
 
 pp = pp_input(calculate_frequencies, plot_phi0_vs_t, plot_phi_vs_z_t,
-    animate_phi_vs_z, plot_dens0_vs_t, plot_upar0_vs_t, plot_ppar0_vs_t,
-    plot_dens_vs_z_t, plot_upar_vs_z_t, animate_dens_vs_z, animate_upar_vs_z,
+    animate_phi_vs_z, plot_dens0_vs_t, plot_upar0_vs_t, plot_ppar0_vs_t, plot_qpar0_vs_t,
+    plot_dens_vs_z_t, plot_upar_vs_z_t, plot_ppar_vs_z_t, plot_qpar_vs_z_t,
+    animate_dens_vs_z, animate_upar_vs_z,
     animate_f_vs_z_vpa, animate_f_vs_z_vpa0, animate_f_vs_z0_vpa,
     animate_deltaf_vs_z_vpa, animate_deltaf_vs_z_vpa0, animate_deltaf_vs_z0_vpa,
     nwrite_movie, itime_min, itime_max, iz0, ivpa0)

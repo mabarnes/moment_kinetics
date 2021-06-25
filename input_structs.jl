@@ -173,10 +173,16 @@ struct pp_input
     plot_upar0_vs_t::Bool
     # if plot_ppar0_vs_t = true, create plots of species ppar(z0) vs time
     plot_ppar0_vs_t::Bool
+    # if plot_qpar0_vs_t = true, create plots of species qpar(z0) vs time
+    plot_qpar0_vs_t::Bool
     # if plot_dens_vs_z_t = true, create plot of species density vs z and time
     plot_dens_vs_z_t::Bool
     # if plot_upar_vs_z_t = true, create plot of species parallel flow vs z and time
     plot_upar_vs_z_t::Bool
+    # if plot_ppar_vs_z_t = true, create plot of species parallel pressure vs z and time
+    plot_ppar_vs_z_t::Bool
+    # if plot_qpar_vs_z_t = true, create plot of species parallel heat flux vs z and time
+    plot_qpar_vs_z_t::Bool
     # if animate_dens_vs_z = true, create animation of species density vs z at different time slices
     animate_dens_vs_z::Bool
     # if animate_upar_vs_z = true, create animation of species parallel flow vs z at different time slices

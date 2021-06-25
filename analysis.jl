@@ -9,10 +9,6 @@ using calculus: integral
 
 function analyze_fields_data(phi, ntime, nz, z_wgts, Lz)
     print("Analyzing fields data...")
-    # compute the z integration weights needed to do field line averages
-    #z_wgts = composite_simpson_weights(z)
-    # Lz = z box length
-    #Lz = z[end]-z[1]
     phi_fldline_avg = allocate_float(ntime)
     for i ∈ 1:ntime
         phi_fldline_avg[i] = field_line_average(view(phi,:,i), z_wgts, Lz)
@@ -26,7 +22,7 @@ function analyze_fields_data(phi, ntime, nz, z_wgts, Lz)
     return phi_fldline_avg, delta_phi
 end
 
-function analyze_moments_data(density, parallel_flow, parallel_pressure, ntime, n_species, nz, z_wgts, Lz)
+function analyze_moments_data(density, parallel_flow, parallel_pressure, parallel_heat_flux, ntime, n_species, nz, z_wgts, Lz)
     print("Analyzing velocity moments data...")
     density_fldline_avg = allocate_float(n_species, ntime)
     for is ∈ 1:n_species
@@ -44,6 +40,12 @@ function analyze_moments_data(density, parallel_flow, parallel_pressure, ntime, 
     for is ∈ 1:n_species
         for i ∈ 1:ntime
             ppar_fldline_avg[is,i] = field_line_average(view(parallel_pressure,:,is,i), z_wgts, Lz)
+        end
+    end
+    qpar_fldline_avg = allocate_float(n_species, ntime)
+    for is ∈ 1:n_species
+        for i ∈ 1:ntime
+            qpar_fldline_avg[is,i] = field_line_average(view(parallel_heat_flux,:,is,i), z_wgts, Lz)
         end
     end
     # delta_density = n_s - <n_s> is the fluctuating density
@@ -67,8 +69,16 @@ function analyze_moments_data(density, parallel_flow, parallel_pressure, ntime, 
             @. delta_ppar[iz,is,:] = parallel_pressure[iz,is,:] - ppar_fldline_avg[is,:]
         end
     end
+    # delta_qpar = qpar_s - <qpar_s> is the fluctuating parallel heat flux
+    delta_qpar = allocate_float(nz,n_species,ntime)
+    for is ∈ 1:n_species
+        for iz ∈ 1:nz
+            @. delta_qpar[iz,is,:] = parallel_heat_flux[iz,is,:] - qpar_fldline_avg[is,:]
+        end
+    end
     println("done.")
-    return density_fldline_avg, upar_fldline_avg, ppar_fldline_avg, delta_density, delta_upar, delta_ppar
+    return density_fldline_avg, upar_fldline_avg, ppar_fldline_avg, qpar_fldline_avg,
+           delta_density, delta_upar, delta_ppar, delta_qpar
 end
 
 function analyze_pdf_data(ff, vpa, nz, nvpa, n_species, ntime, z_wgts, Lz, vpa_wgts)
