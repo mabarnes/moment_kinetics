@@ -43,7 +43,8 @@ function analyze_and_plot_data(path)
                 z, iz0, run_name, frequency, growth_rate, phase,
                 shifted_time, pp)
     # load velocity moments data
-    density, parallel_flow, parallel_pressure, parallel_heat_flux, n_species = load_moments_data(fid)
+    density, parallel_flow, parallel_pressure, parallel_heat_flux,
+        thermal_speed, n_species, evolve_ppar = load_moments_data(fid)
     # analyze the velocity moments data
     density_fldline_avg, upar_fldline_avg, ppar_fldline_avg, qpar_fldline_avg,
         delta_density, delta_upar, delta_ppar, delta_qpar =
@@ -54,12 +55,14 @@ function analyze_and_plot_data(path)
         parallel_flow, delta_upar, upar_fldline_avg,
         parallel_pressure, delta_ppar, ppar_fldline_avg,
         parallel_heat_flux, delta_qpar, qpar_fldline_avg,
-        pp, run_name, time, itime_min, itime_max, nwrite_movie,
-        z, iz0, n_species)
+        pp, run_name, time, itime_min, itime_max,
+        nwrite_movie, z, iz0, n_species)
     # load particle distribution function (pdf) data
     ff = load_pdf_data(fid)
     # analyze the pdf data
-    f_fldline_avg, delta_f, dens_moment, upar_moment = analyze_pdf_data(ff, vpa, nz, nvpa, n_species, ntime, z_wgts, Lz, vpa_wgts)
+    f_fldline_avg, delta_f, dens_moment, upar_moment =
+        analyze_pdf_data(ff, vpa, nz, nvpa, n_species, ntime, z_wgts, Lz, vpa_wgts,
+                         thermal_speed, evolve_ppar)
 
     println("Plotting distribution function data...")
     cmlog(cmlin::ColorGradient) = RGB[cmlin[x] for x=LinRange(0,1,30)]
@@ -72,7 +75,7 @@ function analyze_and_plot_data(path)
         end
         # plot difference between evolved density and ∫dvpa f; only possibly different if density removed from
         # normalised distribution function at run-time
-        @views plot(time, density[iz0,is,:] .- dens_moment[iz0,is,:])
+        @views plot(time[2:end], density[iz0,is,2:end] .- dens_moment[iz0,is,2:end])
         outfile = string(run_name, "_intf0_vs_t", spec_string, ".pdf")
         savefig(outfile)
         # if evolve_upar = true, plot ∫dwpa wpa * f, which should equal zero
@@ -314,7 +317,8 @@ function plot_moments(density, delta_density, density_fldline_avg,
     parallel_flow, delta_upar, upar_fldline_avg,
     parallel_pressure, delta_ppar, ppar_fldline_avg,
     parallel_heat_flux, delta_qpar, qpar_fldline_avg,
-    pp, run_name, time, itime_min, itime_max, nwrite_movie, z, iz0, n_species)
+    pp, run_name, time, itime_min, itime_max, nwrite_movie,
+    z, iz0, n_species)
     println("Plotting velocity moments data...")
     for is ∈ 1:n_species
         spec_string = string(is)

@@ -83,10 +83,23 @@ function load_moments_data(fid)
     cdfvar = fid["parallel_heat_flux"]
     # load the species parallel heat flux data
     parallel_heat_flux = cdfvar.var[:,:,:]
+    # define a handle for the species thermal speed
+    cdfvar = fid["thermal_speed"]
+    # load the species thermal speed data
+    thermal_speed = cdfvar.var[:,:,:]
     # define the number of species
     n_species = size(cdfvar,2)
+    # define a handle for the flag indicating if the parallel pressure should be separately advanced
+    cdfvar = fid["evolve_ppar"]
+    # load the parallel pressure evolution flag
+    evolve_ppar_int = cdfvar.var[:]
+    if evolve_ppar_int[1] == 1
+        evolve_ppar = true
+    else
+        evolve_ppar = false
+    end
     println("done.")
-    return density, parallel_flow, parallel_pressure, parallel_heat_flux, n_species
+    return density, parallel_flow, parallel_pressure, parallel_heat_flux, thermal_speed, n_species, evolve_ppar
 end
 
 function load_pdf_data(fid)

@@ -7,7 +7,7 @@ export write_data_to_ascii
 export write_data_to_binary
 
 using NCDatasets
-using type_definitions: mk_float
+using type_definitions: mk_float, mk_int
 
 # structure containing the various input/output streams
 struct ios
@@ -38,9 +38,12 @@ struct netcdf_info{t_type, zvpast_type, zt_type, zst_type}
     parallel_pressure::zst_type
     # handle for the species parallel heat flux
     parallel_heat_flux::zst_type
+    # handle for the species thermal speed
+    thermal_speed::zst_type
 end
 # open the necessary output files
-function setup_file_io(output_dir, run_name, z, vpa, composition, charge_exchange_frequqency)
+function setup_file_io(output_dir, run_name, z, vpa, composition,
+                       charge_exchange_frequqency, evolve_ppar)
     # check to see if output_dir exists in the current directory
     # if not, create it
     isdir(output_dir) || mkdir(output_dir)
@@ -48,12 +51,13 @@ function setup_file_io(output_dir, run_name, z, vpa, composition, charge_exchang
     #ff_io = open_output_file(out_prefix, "f_vs_t")
     mom_io = open_output_file(out_prefix, "moments_vs_t")
     fields_io = open_output_file(out_prefix, "fields_vs_t")
-    cdf = setup_netcdf_io(out_prefix, z, vpa, composition, charge_exchange_frequqency)
+    cdf = setup_netcdf_io(out_prefix, z, vpa, composition, charge_exchange_frequqency,
+                          evolve_ppar)
     #return ios(ff_io, mom_io, fields_io), cdf
     return ios(mom_io, fields_io), cdf
 end
 # setup file i/o for netcdf
-function setup_netcdf_io(prefix, z, vpa, composition, charge_exchange_frequency)
+function setup_netcdf_io(prefix, z, vpa, composition, charge_exchange_frequency, evolve_ppar)
     # the netcdf file will be given by output_dir/run_name with .cdf appended
     filename = string(prefix,".cdf")
     # if a netcdf file with the requested name already exists, remove it
@@ -116,6 +120,13 @@ function setup_netcdf_io(prefix, z, vpa, composition, charge_exchange_frequency)
     vartype = mk_float
     var = defVar(fid, varname, vartype, dims, attrib=attributes)
     var[:] = charge_exchange_frequency
+    # create and write the "evolve_ppar" variable to file
+    varname = "evolve_ppar"
+    attributes = Dict("description" => "flag indicating if the parallel pressure is separately evolved")
+    vartype = mk_int
+    dims = ("n_species",)
+    var = defVar(fid, varname, vartype, dims, attrib=attributes)
+    var[:] = evolve_ppar
     ### create variables for time-dependent quantities and store them ###
     ### in a struct for later access ###
     # create the "time" variable
@@ -161,6 +172,12 @@ function setup_netcdf_io(prefix, z, vpa, composition, charge_exchange_frequency)
     attributes = Dict("description" => "species parallel heat flux",
                       "units" => "Ne*Te*vth")
     cdf_qpar = defVar(fid, varname, vartype, dims, attrib=attributes)
+    # create the "thermal_speed" variable, which will contain the species thermal speed
+    varname = "thermal_speed"
+    attributes = Dict("description" => "species thermal speed",
+                      "units" => "vth")
+    cdf_vth = defVar(fid, varname, vartype, dims, attrib=attributes)
+
     # create a struct that stores the variables and other info needed for
     # writing to the netcdf file during run-time
     t_type = typeof(cdf_time)
@@ -168,7 +185,7 @@ function setup_netcdf_io(prefix, z, vpa, composition, charge_exchange_frequency)
     zt_type = typeof(cdf_phi)
     zst_type = typeof(cdf_density)
     return netcdf_info{t_type, zvpast_type, zt_type, zst_type}(fid, cdf_time, cdf_f,
-        cdf_phi, cdf_density, cdf_upar, cdf_ppar, cdf_qpar)
+        cdf_phi, cdf_density, cdf_upar, cdf_ppar, cdf_qpar, cdf_vth)
 end
 # close all opened output files
 function finish_file_io(io, cdf)
@@ -241,6 +258,7 @@ function write_data_to_binary(ff, moments, fields, t, n_species, cdf, t_idx)
         cdf.parallel_flow[:,:,t_idx] = moments.upar
         cdf.parallel_pressure[:,:,t_idx] = moments.ppar
         cdf.parallel_heat_flux[:,:,t_idx] = moments.qpar
+        cdf.thermal_speed[:,:,t_idx] = moments.vth
     end
 end
 # accepts an option name which has been identified as problematic and returns

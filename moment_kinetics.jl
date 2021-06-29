@@ -36,7 +36,8 @@ function run_moment_kinetics(to, input)
         z_SL, vpa_SL, scratch, advance = setup_time_advance!(pdf, z, vpa, composition,
         drive_input, evolve_moments, t_input, charge_exchange_frequency, species)
     # setup i/o
-    io, cdf = setup_file_io(output_dir, run_name, z, vpa, composition, charge_exchange_frequency)
+    io, cdf = setup_file_io(output_dir, run_name, z, vpa, composition, charge_exchange_frequency,
+                            moments.evolve_ppar)
     # write initial data to ascii files
     write_data_to_ascii(pdf.unnorm, moments, fields, z, vpa, code_time, composition.n_species, io)
     # write initial data to binary file (netcdf)
