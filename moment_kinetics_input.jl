@@ -26,7 +26,7 @@ function mk_input(scan_input=Dict())
     n_ion_species = 1
     # n_neutral_species is the number of evolved neutral species
     # currently only n_neutral_species = 0 is supported
-    n_neutral_species = 0
+    n_neutral_species = 1
     # if boltzmann_electron_response = true, then the electron
     # density is fixed to be N_e*(eϕ/T_e)
     # currently this is the only supported option

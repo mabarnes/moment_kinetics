@@ -248,6 +248,7 @@ end
 function time_advance!(pdf, scratch, t, t_input, z, vpa, z_spectral, vpa_spectral,
     moments, fields, z_advect, vpa_advect, z_SL, vpa_SL, composition,
     charge_exchange_frequency, advance, io, cdf)
+
     # main time advance loop
     iwrite = 2
     for i ∈ 1:t_input.nstep
@@ -513,7 +514,8 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, z_SL, vpa_
             use_semi_lagrange, dt, t, z_spectral, composition.n_species, istage)
     end
     if advance.source_terms
-        source_terms!(fvec_out.pdf, fvec_in, moments, z, vpa, dt, z_spectral)
+        source_terms!(fvec_out.pdf, fvec_in, moments, z, vpa, dt, z_spectral,
+                      composition, charge_exchange_frequency)
     end
     # account for charge exchange collisions between ions and neutrals
     if advance.cx_collisions

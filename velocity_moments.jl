@@ -1,6 +1,6 @@
 module velocity_moments
 
-export integrate_over_vspace!
+export integrate_over_vspace
 export update_moments!
 export update_density!
 export update_upar!
@@ -101,10 +101,11 @@ function setup_moments(ff, vpa, nz, evolve_moments, species)
         @views update_ppar_species!(parallel_pressure[:,is], vpa.scratch, ff[:,:,is], vpa, nz)
         @. parallel_pressure[:,is] *= vpa_norm_fac[:,is]^3
         parallel_pressure_updated[is] = true
-        @. thermal_speed = sqrt(2*parallel_pressure/density)
+        @. thermal_speed[:,is] = sqrt(2*parallel_pressure[:,is]/density[:,is])
         @views update_qpar_species!(parallel_heat_flux[:,is], vpa.scratch, ff[:,:,is], vpa, nz, vpa_norm_fac[:,is])
         parallel_heat_flux_updated[is] = true
     end
+
     # return struct containing arrays needed to update moments
     return moments(density, density_updated, evolve_moments.density, evolve_moments.conservation,
         parallel_flow, parallel_flow_updated, evolve_moments.parallel_flow,

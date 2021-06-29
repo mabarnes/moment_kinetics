@@ -70,7 +70,7 @@ function init_fvpa(vpa, spec)
         if spec.vpa_IC.initialization_option == "gaussian"
             # initial condition is an unshifted Gaussian
             for j ∈ 1:vpa.n
-                # NB: note that the factor of spec.initial_temperature iin the Gaussian should be removed
+                # NB: note that the factor of spec.initial_temperature in the Gaussian should be removed
                 # if evolve_ppar = true
                 vpa.scratch[j] = exp(-(vpa.grid[j]/spec.vpa_IC.width)^2/spec.initial_temperature) /
                     sqrt(spec.initial_temperature)

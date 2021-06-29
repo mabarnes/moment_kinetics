@@ -106,8 +106,30 @@ function update_speed_default!(advect, fields, fvec, moments, vpa, z, compositio
 				end
 			end
 		end
-		#NB: need to add in contributions from charge exchange collisions
+		# add in contributions from charge exchange collisions
 		if composition.n_neutral_species > 0 && abs(CX_frequency) > 0.0
+			for is ∈ 1:composition.n_ion_species
+				for isn ∈ 1:composition.n_neutral_species
+					isp = composition.n_ion_species + isn
+					for iz ∈ 1:z.n
+						@. advect[iz,is].speed += CX_frequency *
+							(0.5*vpa.grid/fvec.ppar[iz,is] * (fvec.density[iz,isp]*fvec.ppar[iz,is]
+							- fvec.density[iz,is]*fvec.ppar[iz,isp])
+							- fvec.density[iz,isp] * (fvec.upar[iz,isp]-fvec.upar[iz,is])/moments.vth[iz,is])
+					end
+				end
+			end
+			for isn ∈ 1:composition.n_neutral_species
+				is = isn + composition.n_ion_species
+				for isp ∈ 1:composition.n_ion_species
+					for iz ∈ 1:z.n
+						@. advect[iz,is].speed += CX_frequency *
+							(0.5*vpa.grid/fvec.ppar[iz,is] * (fvec.density[iz,isp]*fvec.ppar[iz,is]
+							- fvec.density[iz,is]*fvec.ppar[iz,isp])
+							- fvec.density[iz,isp] * (fvec.upar[iz,isp]-fvec.upar[iz,is])/moments.vth[iz,is])
+					end
+				end
+			end
 		end
 	elseif moments.evolve_upar
 		for is ∈ 1:composition.n_species
