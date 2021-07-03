@@ -1,6 +1,3 @@
-# add the current directory to the path where the code looks for external modules
-push!(LOAD_PATH, ".")
-
 module post_processing
 
 export analyze_and_plot
@@ -10,14 +7,14 @@ using Plots
 using LsqFit
 using NCDatasets
 # modules
-using post_processing_input: pp
-using quadrature: composite_simpson_weights
-using array_allocation: allocate_float
-using file_io: open_output_file
-using type_definitions: mk_float
-using load_data: open_netcdf_file
-using load_data: load_coordinate_data, load_fields_data, load_moments_data, load_pdf_data
-using analysis: analyze_fields_data, analyze_moments_data, analyze_pdf_data
+using ..post_processing_input: pp
+using ..quadrature: composite_simpson_weights
+using ..array_allocation: allocate_float
+using ..file_io: open_output_file
+using ..type_definitions: mk_float
+using ..load_data: open_netcdf_file
+using ..load_data: load_coordinate_data, load_fields_data, load_moments_data, load_pdf_data
+using ..analysis: analyze_fields_data, analyze_moments_data, analyze_pdf_data
 
 function analyze_and_plot_data(path)
     # Create run_name from the path to the run directory
@@ -476,8 +473,4 @@ end
 #    println("advection_test_1d rms error: ", rmserr)
 #end
 
-end
-
-if abspath(PROGRAM_FILE) == @__FILE__
-    post_processing.analyze_and_plot_data(ARGS[1])
 end

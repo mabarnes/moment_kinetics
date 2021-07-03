@@ -2,7 +2,7 @@ module energy_equation
 
 export energy_equation!
 
-using calculus: derivative!
+using ..calculus: derivative!
 
 function energy_equation!(ppar, fvec, moments, CX_frequency, z, dt, spectral, composition)
     for is ∈ 1:composition.n_species

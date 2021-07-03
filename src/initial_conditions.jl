@@ -5,9 +5,9 @@ export enforce_z_boundary_condition!
 export enforce_vpa_boundary_condition!
 export enforce_boundary_conditions!
 
-using type_definitions: mk_float
-using array_allocation: allocate_float
-using bgk: init_bgk_pdf!
+using ..type_definitions: mk_float
+using ..array_allocation: allocate_float
+using ..bgk: init_bgk_pdf!
 
 struct pdf_struct
     norm::Array{mk_float,3}

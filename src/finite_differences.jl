@@ -2,7 +2,7 @@ module finite_differences
 
 export derivative_finite_difference!
 
-using type_definitions: mk_float
+using ..type_definitions: mk_float
 
 function derivative_finite_difference!(df, f, del, adv_fac, bc, fd_option, igrid, ielement)
 	if fd_option == "second_order_upwind"

@@ -4,8 +4,8 @@ export analyze_fields_data
 export analyze_moments_data
 export analyze_pdf_data
 
-using array_allocation: allocate_float
-using calculus: integral
+using ..array_allocation: allocate_float
+using ..calculus: integral
 
 function analyze_fields_data(phi, ntime, nz, z_wgts, Lz)
     print("Analyzing fields data...")

@@ -1,19 +1,51 @@
-# add the current directory to the path where the code looks for external modules
-push!(LOAD_PATH, ".")
-
 module moment_kinetics
 
 export run_moment_kinetics
 
+# Include submodules from other source files
+# Note that order of includes matters - things used in one module must already
+# be defined
+include("type_definitions.jl")
+include("array_allocation.jl")
+include("clenshaw_curtis.jl")
+include("chebyshev.jl")
+include("finite_differences.jl")
+include("quadrature.jl")
+include("calculus.jl")
+include("file_io.jl")
+include("input_structs.jl")
+include("coordinates.jl")
+include("velocity_moments.jl")
+include("em_fields.jl")
+include("bgk.jl")
+include("initial_conditions.jl")
+include("semi_lagrange.jl")
+include("advection.jl")
+include("vpa_advection.jl")
+include("z_advection.jl")
+
+include("charge_exchange.jl")
+include("continuity.jl")
+include("energy_equation.jl")
+include("force_balance.jl")
+include("moment_kinetics_input.jl")
+include("source_terms.jl")
+include("time_advance.jl")
+
+include("analysis.jl")
+include("load_data.jl")
+include("post_processing_input.jl")
+include("post_processing.jl")
+
 using TimerOutputs
 
-using file_io: setup_file_io, finish_file_io
-using file_io: write_data_to_ascii, write_data_to_binary
-using coordinates: define_coordinate
-using initial_conditions: init_f
-using moment_kinetics_input: run_type
-using moment_kinetics_input: performance_test
-using time_advance: setup_time_advance!, time_advance!
+using .file_io: setup_file_io, finish_file_io
+using .file_io: write_data_to_ascii, write_data_to_binary
+using .coordinates: define_coordinate
+using .initial_conditions: init_f
+using .moment_kinetics_input: run_type
+using .moment_kinetics_input: performance_test
+using .time_advance: setup_time_advance!, time_advance!
 
 # main function that contains all of the content of the program
 function run_moment_kinetics(to, input)
@@ -59,14 +91,4 @@ function run_moment_kinetics(to, input)
     return nothing
 end
 
-end
-
-# provide option of running from command line via 'julia moment_kinetics.jl'
-if abspath(PROGRAM_FILE) == @__FILE__
-    using TimerOutputs
-    using moment_kinetics_input: mk_input
-
-    to = TimerOutput
-    input = mk_input()
-    moment_kinetics.run_moment_kinetics(to, input)
 end

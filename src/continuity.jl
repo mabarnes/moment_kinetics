@@ -2,7 +2,7 @@ module continuity
 
 export continuity_equation!
 
-using calculus: derivative!
+using ..calculus: derivative!
 
 # use the continuity equation dn/dt + d(n*upar)/dz to update the density n for all species
 function continuity_equation!(dens_out, fvec_in, moments, z, vpa, dt, spectral)

@@ -1,0 +1,18 @@
+name = "moment_kinetics"
+uuid = "b5ff72cc-06fc-4161-ad14-dba1c22ed34e"
+authors = ["Michael Barnes <michael.barnes@physics.ox.ac.uk>"]
+version = "0.1.0"
+
+[deps]
+DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
+FFTW = "7a1cc6ca-52ef-59f5-83cd-3a7055c09341"
+Glob = "c27321d9-0574-5035-807b-f59d2c89b15c"
+LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
+LsqFit = "2fda8390-95c7-5789-9bda-21331edee243"
+NCDatasets = "85f8d34a-cbdd-5861-8df4-14fed0d494ab"
+NaturalSort = "c020b1a1-e9b0-503a-9c33-f039bfc54a85"
+OrderedCollections = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
+Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
+Roots = "f2b01f46-fcfa-551c-844a-d8ac1e96c665"
+SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
+TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"

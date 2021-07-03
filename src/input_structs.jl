@@ -10,7 +10,7 @@ export species_composition
 export drive_input, drive_input_mutable
 export pp_input
 
-using type_definitions: mk_float, mk_int
+using ..type_definitions: mk_float, mk_int
 
 mutable struct evolve_moments_options
     density::Bool

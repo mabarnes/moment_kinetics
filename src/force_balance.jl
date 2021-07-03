@@ -2,7 +2,7 @@ module force_balance
 
 export force_balance!
 
-using calculus: derivative!
+using ..calculus: derivative!
 
 # use the force balance equation d(nu)/dt + d(ppar + n*upar*upar)/dz =
 # -(dens/2)*dphi/dz + R*dens_i*dens_n*(upar_n-upar_i)

@@ -2,7 +2,7 @@ module quadrature
 
 export composite_simpson_weights
 
-using array_allocation: allocate_float
+using ..array_allocation: allocate_float
 
 # composite_simpson_weights creates, computes, and returns an array for the
 # 1D integration weights associated with each grid point using composite Simpson's rule

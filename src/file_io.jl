@@ -7,7 +7,7 @@ export write_data_to_ascii
 export write_data_to_binary
 
 using NCDatasets
-using type_definitions: mk_float, mk_int
+using ..type_definitions: mk_float, mk_int
 
 # structure containing the various input/output streams
 struct ios

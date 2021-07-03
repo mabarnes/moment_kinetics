@@ -5,8 +5,8 @@ export update_crossing_times!
 export find_departure_points!
 export project_characteristics_onto_grid!
 
-using type_definitions: mk_float, mk_int
-using array_allocation: allocate_float, allocate_int
+using ..type_definitions: mk_float, mk_int
+using ..array_allocation: allocate_float, allocate_int
 
 # structure semi_lagrange_info contains the basic information needed
 # to project backwards along approximate characteristics, which

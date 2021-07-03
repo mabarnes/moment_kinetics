@@ -9,9 +9,9 @@ export update_qpar!
 export reset_moments_status!
 export enforce_moment_constraints!
 
-using type_definitions: mk_float
-using array_allocation: allocate_float, allocate_bool
-using calculus: integral
+using ..type_definitions: mk_float
+using ..array_allocation: allocate_float, allocate_bool
+using ..calculus: integral
 
 #global tmpsum1 = 0.0
 #global tmpsum2 = 0.0

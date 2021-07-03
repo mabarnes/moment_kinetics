@@ -9,9 +9,9 @@ export chebyshev_spectral_derivative!
 export chebyshev_info
 
 using FFTW
-using type_definitions: mk_float
-using array_allocation: allocate_float, allocate_complex
-using clenshaw_curtis: clenshawcurtisweights
+using ..type_definitions: mk_float
+using ..array_allocation: allocate_float, allocate_complex
+using ..clenshaw_curtis: clenshawcurtisweights
 
 struct chebyshev_info{TForward <: FFTW.cFFTWPlan, TBackward <: AbstractFFTs.ScaledPlan}
     # fext is an array for storing f(z) on the extended domain needed

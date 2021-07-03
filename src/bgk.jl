@@ -4,10 +4,10 @@ export init_bgk_pdf!
 
 using SpecialFunctions: erfi
 using Roots: find_zero
-using array_allocation: allocate_float, allocate_int
-using quadrature: composite_simpson_weights
-using calculus: integral
-using coordinates: equally_spaced_grid
+using ..array_allocation: allocate_float, allocate_int
+using ..quadrature: composite_simpson_weights
+using ..calculus: integral
+using ..coordinates: equally_spaced_grid
 
 function init_bgk_pdf!(pdf, phi_max, tau, z, Lz, vpa)
     nz = length(z)

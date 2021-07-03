@@ -6,9 +6,9 @@ export calculate_explicit_advection!
 export update_boundary_indices!
 export advance_f_local!
 
-using type_definitions: mk_float, mk_int
-using array_allocation: allocate_float
-using calculus: derivative!
+using ..type_definitions: mk_float, mk_int
+using ..array_allocation: allocate_float
+using ..calculus: derivative!
 
 # structure containing the basic arrays associated with the
 # advection terms appearing in the advection equation for each coordinate

@@ -3,8 +3,8 @@ module calculus
 export derivative!
 export integral
 
-using chebyshev: chebyshev_info, chebyshev_derivative!
-using finite_differences: derivative_finite_difference!
+using ..chebyshev: chebyshev_info, chebyshev_derivative!
+using ..finite_differences: derivative_finite_difference!
 
 # Chebyshev transform f to get Chebyshev spectral coefficients and use them to calculate f'
 function derivative!(df, f, coord, adv_fac, spectral::chebyshev_info)

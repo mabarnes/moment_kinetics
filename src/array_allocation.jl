@@ -2,7 +2,7 @@ module array_allocation
 
 export allocate_float, allocate_int, allocate_complex, allocate_bool
 
-using type_definitions: mk_float, mk_int
+using ..type_definitions: mk_float, mk_int
 
 # allocate 1d array with n entries of type Bool
 function allocate_bool(n)

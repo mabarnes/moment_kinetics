@@ -2,7 +2,7 @@ module source_terms
 
 export source_terms!
 
-using calculus: derivative!
+using ..calculus: derivative!
 
 function source_terms!(pdf_out, fvec_in, moments, z, vpa, dt, spectral, composition, CX_frequency)
     # calculate the source terms due to redefinition of the pdf to split off density,

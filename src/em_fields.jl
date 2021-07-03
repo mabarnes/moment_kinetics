@@ -3,9 +3,9 @@ module em_fields
 export setup_em_fields
 export update_phi!
 
-using type_definitions: mk_float
-using array_allocation: allocate_float
-using velocity_moments: update_density!
+using ..type_definitions: mk_float
+using ..array_allocation: allocate_float
+using ..velocity_moments: update_density!
 
 struct fields
     # phi is the electrostatic potential

@@ -3,9 +3,9 @@ module z_advection
 export z_advection!
 export update_speed_z!
 
-using semi_lagrange: find_approximate_characteristic!
-using advection: advance_f_local!, update_boundary_indices!
-using chebyshev: chebyshev_info
+using ..semi_lagrange: find_approximate_characteristic!
+using ..advection: advance_f_local!, update_boundary_indices!
+using ..chebyshev: chebyshev_info
 
 # do a single stage time advance (potentially as part of a multi-stage RK scheme)
 function z_advection!(f_out, fvec_in, ff, moments, SL, advect, z, vpa,
