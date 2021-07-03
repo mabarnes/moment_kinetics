@@ -1,6 +1,6 @@
 # moment_kinetics
 0) Ensure that the Julia version is >= 1.6.1 by doing `julia --version` at command line. 
-1) To install dependencies, run 'julia -e "import Pkg; Pkg.add(\"PackageCompiler\"); Pkg.add(\"TimerOutputs\"); Pkg.add(\"NCDatasets\"); Pkg.add(\"FFTW\"); Pkg.add(\"Plots\"); Pkg.add(\"LsqFit\"); Pkg.add(\"OrderedCollections\"); Pkg.add(\"Glob\"); Pkg.add(\"NaturalSort\"); Pkg.add(\"SpecialFunctions\"); Pkg.add(\"Roots\")"'.
+1) Dependencies should be automatically installed when the `moment_kinetics` package is activated. If you run as noted below, this should happen automatically. If you run in the REPL, you can either start it using `julia --project` (which activates the 'project' in the current directory) or in the REPL type `]` to enter `pkg>` mode, enter `activate .` and then backspace to leave `pkg>` mode.
 2) To pre-compile a static image that includes a few of the external packages required for post-processing, run 'julia precompile.jl'.
 3) Create a subdirectory to store run output, 'mkdir runs'.
 4) To run julia with optimization, type 'julia -O3 --package -Jmoment_kinetics.so run_moment_kinetics.jl'.  Input options can be specified in moment_kinetics_input.jl.
@@ -26,3 +26,6 @@ Parameter scans can be run, and can (optionally) use multiple processors. Short 
     ```
     julia -O3 --package -Jmoment_kinetics.so plot_comparison.jl
     ```
+
+## Developing
+* If you need to add a dependency, start the REPL with the `moment_kinetics` package activated (see [above](#moment_kinetics)), enter `pkg>` mode  and then to add, for example, the `FFTW.jl` package enter `add FFTW`. This should take kare of adding the package (`FFTW`) to the `Project.toml` and `Manifest.toml` files.
