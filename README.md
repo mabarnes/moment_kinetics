@@ -13,16 +13,16 @@ Parameter scans can be run, and can (optionally) use multiple processors. Short 
 1) mk_input() now takes a Dict argument, which can modify values. So mk_input() sets the 'defaults' (for a scan), which are overridden by any key/value pairs in the Dict.
 2) mk_scan_inputs() (in scan_input.jl) creates an Array of Dicts that can be passed to mk_input(). It first creates a Dict of parameters to scan over (keys are the names of the variable, values are an Array to scan over), then assembles an Array of Dicts (where each entry in the Array is a Dict with a single value for each variable being scanned). Most variables are combined as an 'inner product', e.g. {:ni=>[0.5, 1.], :nn=>[0.5, 0.]} gives [{:ni=>0.5, :nn=>0.5}, {ni=>1., nn=>0.}]. Any special variables specified in the 'combine_outer' array are instead combined with the rest as an 'outer product', i.e. an entry is created for every value of those variables for each entry in the 'inner-producted' list. [This was just complicated enough to run the scans I've done so far without wasted simulations.]
 3) The code in 'driver.jl' picks between a single run (normal case), a performance_test, or creating a scan by calling mk_scan_input() and then looping over the returned array, calling mk_input() and running a simulation for each entry. This loop is parallelised (with the set of simulations dispatched over several processes - each simulation is still running serially). Running a scan (on 12 processes - actually 13 but the 'master' process doesn't run any of the loop bodies, so there are 12 'workers'):
-```
-julia -O3 --package -Jmoment_kinetics.so driver.jl 12
-```
-(runs in serial if no argument is given)
+    ```
+    julia -O3 --package -Jmoment_kinetics.so driver.jl 12
+    ```
+    (runs in serial if no argument is given)
 4) The scan puts each run in a separate directory, named with a prefix specified by 'base_name' in scan_input.jl and the rest the names and values of the scanned-over parameters (the names are created in mk_scan_input() too, and passed as the :run_name entry of the returned Dicts).
 5) To run post_processing.analyze_and_plot_data() over a bunch of directories (again parallelized trivially, and the number of processes to use is an optional argument, serial if omitted):
-```
-julia -O3 --package -Jmoment_kinetics.so post_processing_driver.jl 12 runs/scan_name_*
-```
+    ```
+    julia -O3 --package -Jmoment_kinetics.so post_processing_driver.jl 12 runs/scan_name_*
+    ```
 6) Plotting the scan is not so general, plot_comparison.jl does it, but is only set up for the particular scans I ran - everything except the charge exchange frequencies is hard-coded in.
-```
-julia -O3 --package -Jmoment_kinetics.so plot_comparison.jl
-```
+    ```
+    julia -O3 --package -Jmoment_kinetics.so plot_comparison.jl
+    ```
