@@ -9,10 +9,8 @@ catch ArgumentError
     @everywhere path_start_ind = 1
 end
 
-# add the current directory to the path where the code looks for external modules
-@everywhere push!(LOAD_PATH, ".")
-
-@everywhere using post_processing: analyze_and_plot_data
+@everywhere using moment_kinetics
+@everywhere using moment_kinetics.post_processing: analyze_and_plot_data
 
 # get the run_names from the command-line
 @sync @distributed for path ∈ ARGS[path_start_ind:end]

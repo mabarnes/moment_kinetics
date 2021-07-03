@@ -23,14 +23,15 @@ include("semi_lagrange.jl")
 include("advection.jl")
 include("vpa_advection.jl")
 include("z_advection.jl")
-
 include("charge_exchange.jl")
 include("continuity.jl")
 include("energy_equation.jl")
 include("force_balance.jl")
-include("moment_kinetics_input.jl")
 include("source_terms.jl")
 include("time_advance.jl")
+
+include("moment_kinetics_input.jl")
+include("scan_input.jl")
 
 include("analysis.jl")
 include("load_data.jl")

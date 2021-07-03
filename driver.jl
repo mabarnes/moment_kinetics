@@ -5,16 +5,13 @@ if length(ARGS) > 0
     addprocs(n_procs)
 end
 
-# add the current directory to the path where the code looks for external modules
-@everywhere push!(LOAD_PATH, ".")
-
 @everywhere using TimerOutputs
 
-@everywhere using moment_kinetics: run_moment_kinetics
-using moment_kinetics_input: run_type
-using moment_kinetics_input: RunType, single, performance_test, scan
-@everywhere using moment_kinetics_input: mk_input
-using scan_input: mk_scan_inputs
+@everywhere using moment_kinetics
+using moment_kinetics.moment_kinetics_input: run_type
+using moment_kinetics.moment_kinetics_input: RunType, single, performance_test, scan
+@everywhere using moment_kinetics.moment_kinetics_input: mk_input
+using moment_kinetics.scan_input: mk_scan_inputs
 
 if run_type == single
     to = TimerOutput()
