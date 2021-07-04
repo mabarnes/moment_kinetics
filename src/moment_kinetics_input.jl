@@ -59,15 +59,15 @@ function mk_input(scan_input=Dict())
     composition.T_e = get(scan_input, "T_e", 1.0)
     # set initial neutral temperature Tn/Tₑ = 1
     # set initial nᵢ/Nₑ = 1.0
-    species[1].initial_density = get(scan_input, ("initial_density", 1), 0.5)
-    species[1].initial_temperature = get(scan_input, ("initial_temperature", 1), 1.0)
-    species[1].z_IC.amplitude = get(scan_input, ("z_IC_amplitude", 1), 0.001)
+    species[1].initial_density = get(scan_input, "initial_density1", 0.5)
+    species[1].initial_temperature = get(scan_input, "initial_temperature1", 1.0)
+    species[1].z_IC.amplitude = get(scan_input, "z_IC_amplitude1", 0.001)
     #species[1].z_IC.initialization_option = "bgk"
     # set initial neutral densiity = Nₑ
     if composition.n_species > 1
-        species[2].initial_density = get(scan_input, ("initial_density", 2), 0.5)
-        species[2].initial_temperature = get(scan_input, ("initial_temperature", 2), species[1].initial_temperature)
-        species[2].z_IC.amplitude = get(scan_input, ("z_IC_amplitude", 2), species[1].z_IC.amplitude)
+        species[2].initial_density = get(scan_input, "initial_density2", 0.5)
+        species[2].initial_temperature = get(scan_input, "initial_temperature2", species[1].initial_temperature)
+        species[2].z_IC.amplitude = get(scan_input, "z_IC_amplitude2", species[1].z_IC.amplitude)
     end
     #################### end specification of species inputs #####################
 
