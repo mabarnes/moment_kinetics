@@ -2,6 +2,7 @@
 using Pkg
 Pkg.activate(".")
 
+using Revise
 using TimerOutputs
 using moment_kinetics
 
