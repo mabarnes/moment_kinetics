@@ -39,6 +39,7 @@ include("post_processing_input.jl")
 include("post_processing.jl")
 
 using TimerOutputs
+using TOML
 
 using .file_io: setup_file_io, finish_file_io
 using .file_io: write_data_to_ascii, write_data_to_binary
@@ -90,6 +91,11 @@ function run_moment_kinetics(to, input_dict=Dict())
     # finish i/o
     finish_file_io(io, cdf)
     return nothing
+end
+
+# overload which takes a filename and loads input
+function run_moment_kinetics(to, input_filename::String)
+    return run_moment_kinetics(to, TOML.parsefile(input_filename))
 end
 
 end
