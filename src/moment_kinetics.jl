@@ -39,17 +39,18 @@ include("post_processing_input.jl")
 include("post_processing.jl")
 
 using TimerOutputs
+using TOML
 
 using .file_io: setup_file_io, finish_file_io
 using .file_io: write_data_to_ascii, write_data_to_binary
 using .coordinates: define_coordinate
 using .initial_conditions: init_f
-using .moment_kinetics_input: run_type
-using .moment_kinetics_input: performance_test
+using .moment_kinetics_input: mk_input, run_type, performance_test
 using .time_advance: setup_time_advance!, time_advance!
 
 # main function that contains all of the content of the program
-function run_moment_kinetics(to, input)
+function run_moment_kinetics(to, input_dict=Dict())
+    input = mk_input(input_dict)
     # obtain input options from moment_kinetics_input.jl
     # and check input to catch errors
     run_name, output_dir, evolve_moments, t_input, z_input, vpa_input,
@@ -90,6 +91,11 @@ function run_moment_kinetics(to, input)
     # finish i/o
     finish_file_io(io, cdf)
     return nothing
+end
+
+# overload which takes a filename and loads input
+function run_moment_kinetics(to, input_filename::String)
+    return run_moment_kinetics(to, TOML.parsefile(input_filename))
 end
 
 end

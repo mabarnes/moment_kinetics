@@ -36,7 +36,7 @@ function mk_input(scan_input=Dict())
         load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_response)
 
     # this is the prefix for all output files associated with this run
-    run_name = get(scan_input, :run_name, "ppar")
+    run_name = get(scan_input, "run_name", "ppar")
     # this is the directory where the simulation data will be stored
     output_dir = string("runs/",run_name)
     # if evolve_moments.density = true, evolve density via continuity eqn
@@ -55,27 +55,27 @@ function mk_input(scan_input=Dict())
 
     ####### specify any deviations from default inputs for evolved species #######
     # set initial Tₑ = 1
-    composition.T_e = get(scan_input, :T_e, 1.0)
+    composition.T_e = get(scan_input, "T_e", 1.0)
     # set initial neutral temperature Tn/Tₑ = 1
     # set initial nᵢ/Nₑ = 1.0
-    species[1].initial_density = get(scan_input, (:initial_density, 1), 0.5)
-    species[1].initial_temperature = get(scan_input, (:initial_temperature, 1), 1.0)
-    species[1].z_IC.amplitude = get(scan_input, (:z_IC_amplitude, 1), 0.001)
+    species[1].initial_density = get(scan_input, ("initial_density", 1), 0.5)
+    species[1].initial_temperature = get(scan_input, ("initial_temperature", 1), 1.0)
+    species[1].z_IC.amplitude = get(scan_input, ("z_IC_amplitude", 1), 0.001)
     #species[1].z_IC.initialization_option = "bgk"
     # set initial neutral densiity = Nₑ
     if composition.n_species > 1
-        species[2].initial_density = get(scan_input, (:initial_density, 2), 0.5)
-        species[2].initial_temperature = get(scan_input, (:initial_temperature, 2), species[1].initial_temperature)
-        species[2].z_IC.amplitude = get(scan_input, (:z_IC_amplitude, 2), species[1].z_IC.amplitude)
+        species[2].initial_density = get(scan_input, ("initial_density", 2), 0.5)
+        species[2].initial_temperature = get(scan_input, ("initial_temperature", 2), species[1].initial_temperature)
+        species[2].z_IC.amplitude = get(scan_input, ("z_IC_amplitude", 2), species[1].z_IC.amplitude)
     end
     #################### end specification of species inputs #####################
 
-    charge_exchange_frequency = get(scan_input, :charge_exchange_frequency, 2.0*sqrt(species[1].initial_temperature))
+    charge_exchange_frequency = get(scan_input, "charge_exchange_frequency", 2.0*sqrt(species[1].initial_temperature))
 
     # parameters related to the time stepping
-    nstep = get(scan_input, :nstep, 5000)
-    dt = get(scan_input, :dt, 0.001/sqrt(species[1].initial_temperature))
-    nwrite = get(scan_input, :nwrite, 10)
+    nstep = get(scan_input, "nstep", 5000)
+    dt = get(scan_input, "dt", 0.001/sqrt(species[1].initial_temperature))
+    nwrite = get(scan_input, "nwrite", 10)
     # use_semi_lagrange = true to use interpolation-free semi-Lagrange treatment
     # otherwise, solve problem solely using the discretization_option above
     use_semi_lagrange = false

@@ -1,13 +1,14 @@
-# provide option of running from command line via 'julia moment_kinetics.jl'
-if abspath(PROGRAM_FILE) == @__FILE__
-    using Pkg
-    Pkg.activate(".")
+# provide option of running from command line via 'julia run_moment_kinetics.jl'
+using Pkg
+Pkg.activate(".")
 
-    using TimerOutputs
-    using moment_kinetics
-    using moment_kinetics.moment_kinetics_input: mk_input
+using TimerOutputs
+using moment_kinetics
 
-    to = TimerOutput
-    input = mk_input()
-    run_moment_kinetics(to, input)
+to = TimerOutput()
+
+if length(ARGS) > 0
+    run_moment_kinetics(to, ARGS[1])
+else
+    run_moment_kinetics(to)
 end

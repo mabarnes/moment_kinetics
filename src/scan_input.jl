@@ -9,29 +9,29 @@ export mk_scan_inputs
 # Any inputs named in 'combine_outer' are instead combined with an 'outer
 # product', i.e. an entry is created for every value of those inputs combined
 # with every combination of the other inputs.
-const combine_outer = [:charge_exchange_frequency]
+const combine_outer = ["charge_exchange_frequency"]
 
 const base_name = "scan"
 
 function mk_scan_inputs()
     scan_inputs = OrderedDict()
 
-    #scan_inputs[:nstep] = (6000,)
-    #scan_inputs[:dt] = (0.0005/sqrt(0.5),)
-    #scan_inputs[:nwrite] = (20,)
+    #scan_inputs["nstep"] = (6000,)
+    #scan_inputs["dt"] = (0.0005/sqrt(0.5),)
+    #scan_inputs["nwrite"] = (20,)
 
-    scan_inputs[(:initial_density, 1)] = Float64[0.0001, 0.25, 0.5, 0.75, 0.9999]
-    scan_inputs[(:initial_density, 2)] = 1.0 .- scan_inputs[(:initial_density, 1)]
+    scan_inputs[("initial_density", 1)] = Float64[0.0001, 0.25, 0.5, 0.75, 0.9999]
+    scan_inputs[("initial_density", 2)] = 1.0 .- scan_inputs[("initial_density", 1)]
 
-    #scan_inputs[(:initial_temperature, 1)] = (0.25, 0.5, 0.75, 1.0)
-    #scan_inputs[(:initial_temperature, 2)] = scan_inputs[(:initial_density, 1)]
+    #scan_inputs[("initial_temperature", 1)] = (0.25, 0.5, 0.75, 1.0)
+    #scan_inputs[("initial_temperature", 2)] = scan_inputs[("initial_density", 1)]
 
-    #scan_inputs[:T_e] = (0.25, 0.5, 1.0, 2.0, 4.0)
+    #scan_inputs["T_e"] = (0.25, 0.5, 1.0, 2.0, 4.0)
 
-    #scan_inputs[(:z_IC_amplitude, 1)] = (.001,)
-    #scan_inputs[(:z_IC_amplitude, 2)] = (.001,)
+    #scan_inputs[("z_IC_amplitude", 1)] = (.001,)
+    #scan_inputs[("z_IC_amplitude", 2)] = (.001,)
 
-    scan_inputs[:charge_exchange_frequency] = range(0.0, 2.0*π * 2.0, length=20)
+    scan_inputs["charge_exchange_frequency"] = range(0.0, 2.0*π * 2.0, length=20)
 
     # Combine inputs into single Vector
     outer_inputs = OrderedDict()
@@ -86,7 +86,7 @@ function mk_scan_inputs()
     result = create_level(1, result)
 
     for x in result
-        x[:run_name] = mk_name(x)
+        x["run_name"] = mk_name(x)
     end
 
     println("Running scan:")
