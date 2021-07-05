@@ -1,6 +1,4 @@
-using Test: @testset, @test
-
-using moment_kinetics
+include("setup.jl")
 
 using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.coordinates: define_coordinate

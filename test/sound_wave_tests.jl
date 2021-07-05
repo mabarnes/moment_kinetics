@@ -1,9 +1,8 @@
-using Test: @testset, @test
+include("setup.jl")
 
 using Base.Filesystem: tempname
 using TimerOutputs
 
-using moment_kinetics
 using moment_kinetics.array_allocation: allocate_float
 using moment_kinetics.load_data: open_netcdf_file
 using moment_kinetics.load_data: load_coordinate_data, load_fields_data
@@ -75,13 +74,10 @@ function run_test(analytic_frequency, analytic_growth_rate,
     input["run_name"] = name
 
     # Suppress console output while running
-    oldstd = stdout
     frequency = undef
     growth_rate = undef
     fit_error = undef
-    try
-        redirect_stdout(open("/dev/null", "w"))
-
+    quietoutput() do
         # run simulation
         run_moment_kinetics(to, input)
 
@@ -111,9 +107,6 @@ function run_test(analytic_frequency, analytic_growth_rate,
         @. shifted_time = time - time[itime_min]
         @views growth_rate, frequency, phase, fit_error =
             compute_frequencies(shifted_time[itime_min:itime_max], delta_phi[iz0,itime_min:itime_max])
-    finally
-        # Restore regular output
-        redirect_stdout(oldstd)
     end
 
     # Check the fit error is not too large, otherwise we are testing junk
