@@ -309,7 +309,7 @@ function check_input(run_name, output_dir, nstep, dt, use_semi_lagrange, z, vpa,
     # if not, create it
     isdir(output_dir) || mkdir(output_dir)
     # copy the input file to the output directory to be saved
-    cp("moment_kinetics_input.jl", string(output_dir,"/moment_kinetics_input.jl"), force=true)
+    cp(joinpath(@__DIR__, "moment_kinetics_input.jl"), joinpath(output_dir, "moment_kinetics_input.jl"), force=true)
     # open ascii file in which informtaion about input choices will be written
     io = open_output_file(string(output_dir,"/",run_name), "input")
     check_input_time_advance(nstep, dt, use_semi_lagrange, io)
