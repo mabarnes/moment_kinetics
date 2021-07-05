@@ -50,7 +50,7 @@ to = TimerOutput()
 
 # Note 'name' should not be shared by any two tests in this file
 function run_test(analytic_frequency, analytic_growth_rate,
-                  regression_frequency, regression_growth_rate;
+                  regression_frequency, regression_growth_rate, itime_min=50;
                   args...)
     # by passing keyword arguments to run_test, args becomes a Dict which can be used to
     # update the default inputs
@@ -59,7 +59,10 @@ function run_test(analytic_frequency, analytic_growth_rate,
     if length(args) == 0
         name = "default"
     else
-        name = string((string(k, v) for (k, v) in args)...)
+        name = string((string(k, "-", v, "_") for (k, v) in args)...)
+
+        # Remove trailing "_"
+        name = chop(name)
     end
 
     # Provide some progress info
@@ -100,7 +103,6 @@ function run_test(analytic_frequency, analytic_growth_rate,
 
         # use a fit to calculate the damping rate and growth rate of the perturbed
         # electrostatic potential
-        itime_min = 50
         itime_max = ntime
         iz0 = cld(nz, 3)
         shifted_time = allocate_float(ntime)
@@ -126,9 +128,37 @@ end
 @testset "sound wave" begin
     println("sound wave tests")
 
-    # finite difference, n_i=n_n, T_e=1
-    run_test(2*π*1.4467, -2*π*0.6020, 9.086418917943888, -3.7721955722319067)
-    run_test(2*π*1.4240, -2*π*0.6379, 8.952239959749647, -3.993274462332926, charge_exchange_frequency=2*π*0.1)
-    run_test(2*π*0.0, -2*π*0.3235, -1.3580709765355172e-8, -2.067405000497296, charge_exchange_frequency=2*π*1.8)
-    run_test(2*π*0.0, -2*π*0.2963, -2.5169990003686893e-8, -1.8859754487408424, charge_exchange_frequency=2*π*2.0)
+    # finite difference
+    ###################
+
+    #n_i=n_n, T_e=1
+    run_test(2*π*1.4467, -2*π*0.6020, 9.088165950344875, -3.782644195212332)
+    run_test(2*π*1.4240, -2*π*0.6379, 8.94471246539846, -4.007911334911641;
+             charge_exchange_frequency=2*π*0.1)
+    run_test(2*π*0.0, -2*π*0.3235, -2.4875812650256877e-8, -2.0674058532583377;
+             charge_exchange_frequency=2*π*1.8)
+    run_test(2*π*0.0, -2*π*0.2963, 2.537172960830937e-8, -1.8859761749410544;
+             charge_exchange_frequency=2*π*2.0)
+
+    # n_i>>n_n T_e=1
+    run_test(2*π*1.4467, -2*π*0.6020, 9.088140069079614, -3.7826857636062994;
+             initial_density1=0.9999, initial_density2=0.0001, charge_exchange_frequency=2*π*0.1)
+    run_test(2*π*1.4467, -2*π*0.6020, 9.095615164138666, -3.7823638206119243;
+             initial_density1=0.9999, initial_density2=0.0001, charge_exchange_frequency=2*π*2.0)
+
+    # n_i<<n_n T_e=1
+    run_test(2*π*1.3954, -2*π*0.6815, 8.763408530044039, -4.279469251105851;
+             initial_density1=0.0001, initial_density2=0.9999, charge_exchange_frequency=2*π*0.1)
+    run_test(2*π*0.0, -2*π*0.5112, 0.00010548629800712489, -3.1811557181853765;
+             initial_density1=0.0001, initial_density2=0.9999, charge_exchange_frequency=2*π*2.0)
+
+    # n_i=n_n T_e=0.5
+    # Fit is difficult for low CX frequency branch at this T_e, so skip testing it
+    run_test(2*π*0.0, -2*π*0.2727, 8.543432714270637e-9, -1.7140527313085931, 75;
+             T_e=0.5, nstep=2500, charge_exchange_frequency=2*π*2.0)
+
+    # n_i=n_n T_e=4
+    run_test(2*π*1.9919, -2*π*0.2491, 12.516410588614505, -1.5655471316186798;
+             T_e=4.0, charge_exchange_frequency=2*π*0.1)
+    # CX=2*π*2.0 case with T_e=4 is too hard to converge, so skip
 end
