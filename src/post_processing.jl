@@ -57,7 +57,7 @@ function analyze_and_plot_data(path)
     # load particle distribution function (pdf) data
     ff = load_pdf_data(fid)
     # analyze the pdf data
-    f_fldline_avg, delta_f, dens_moment, upar_moment =
+    f_fldline_avg, delta_f, dens_moment, upar_moment, ppar_moment =
         analyze_pdf_data(ff, vpa, nz, nvpa, n_species, ntime, z_wgts, Lz, vpa_wgts,
                          thermal_speed, evolve_ppar)
 
@@ -72,7 +72,7 @@ function analyze_and_plot_data(path)
         end
         # plot difference between evolved density and ∫dvpa f; only possibly different if density removed from
         # normalised distribution function at run-time
-        @views plot(time[2:end], density[iz0,is,2:end] .- dens_moment[iz0,is,2:end])
+        @views plot(time, density[iz0,is,:] .- dens_moment[iz0,is,:])
         outfile = string(run_name, "_intf0_vs_t", spec_string, ".pdf")
         savefig(outfile)
         # if evolve_upar = true, plot ∫dwpa wpa * f, which should equal zero
@@ -84,6 +84,12 @@ function analyze_and_plot_data(path)
             @views plot(time, upar_moment[iz0,is,:])
         end
         outfile = string(run_name, "_intwf0_vs_t", spec_string, ".pdf")
+        savefig(outfile)
+        # plot difference between evolved parallel pressure and ∫dvpa vpa^2 f;
+        # only possibly different if density and thermal speed removed from
+        # normalised distribution function at run-time
+        @views plot(time, parallel_pressure[iz0,is,:] .- ppar_moment[iz0,is,:])
+        outfile = string(run_name, "_intw2f0_vs_t", spec_string, ".pdf")
         savefig(outfile)
         #fmin = minimum(ff[:,:,is,:])
         #fmax = maximum(ff[:,:,is,:])
@@ -437,8 +443,8 @@ function compute_frequencies(time_window, dphi)
         @views growth_rate_change, frequency, phase, fit_error =
             fit_phi0_vs_time(exp.(-growth_rate*time_window) .* dphi, time_window)
         growth_rate += growth_rate_change
-        println("growth_rate: ", growth_rate, "  growth_rate_change/growth_rate: ", growth_rate_change/growth_rate)
-        if abs(growth_rate_change/growth_rate) < 1.0e-8
+        println("growth_rate: ", growth_rate, "  growth_rate_change/growth_rate: ", growth_rate_change/growth_rate, "  fit_error: ", fit_error)
+        if abs(growth_rate_change/growth_rate) < 1.0e-8 || fit_error < 1.0e-3
             break
         end
     end

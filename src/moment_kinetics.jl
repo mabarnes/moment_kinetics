@@ -44,7 +44,7 @@ using TOML
 using .file_io: setup_file_io, finish_file_io
 using .file_io: write_data_to_ascii, write_data_to_binary
 using .coordinates: define_coordinate
-using .initial_conditions: init_f
+using .initial_conditions: init_pdf_and_moments
 using .moment_kinetics_input: mk_input, run_type, performance_test
 using .time_advance: setup_time_advance!, time_advance!
 
@@ -59,16 +59,16 @@ function run_moment_kinetics(to, input_dict=Dict())
     z = define_coordinate(z_input)
     # initialize vpa grid and write grid point locations to file
     vpa = define_coordinate(vpa_input)
-    # initialize f(z).  note that ff initialised here satisfies ∫dvpa f(z,vpa) = n(z)
-    # if evolve_moments.density = true, it will be normalsied by n(z) later
-    pdf = init_f(z, vpa, composition, species, t_input.n_rk_stages)
+    # initialize f(z,vpa) and the lowest three v-space moments (density(z), upar(z) and ppar(z)),
+    # each of which may be evolved separately depending on input choices.
+    pdf, moments = init_pdf_and_moments(z, vpa, composition, species, t_input.n_rk_stages, evolve_moments)
     # initialize time variable
     code_time = 0.
     # create arrays and do other work needed to setup
     # the main time advance loop -- including normalisation of f by density if requested
     z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
         z_SL, vpa_SL, scratch, advance = setup_time_advance!(pdf, z, vpa, composition,
-        drive_input, evolve_moments, t_input, charge_exchange_frequency, species)
+        drive_input, moments, t_input, charge_exchange_frequency, species)
     # setup i/o
     io, cdf = setup_file_io(output_dir, run_name, z, vpa, composition, charge_exchange_frequency,
                             moments.evolve_ppar)

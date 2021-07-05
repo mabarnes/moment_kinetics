@@ -8,7 +8,7 @@ using ..array_allocation: allocate_float
 using ..file_io: write_data_to_ascii, write_data_to_binary
 using ..chebyshev: setup_chebyshev_pseudospectral
 using ..chebyshev: chebyshev_derivative!
-using ..velocity_moments: setup_moments, update_moments!, reset_moments_status!
+using ..velocity_moments: update_moments!, reset_moments_status!
 using ..velocity_moments: enforce_moment_constraints!
 using ..velocity_moments: update_density!, update_upar!, update_ppar!, update_qpar!
 using ..initial_conditions: enforce_z_boundary_condition!, enforce_boundary_conditions!
@@ -46,7 +46,7 @@ end
 # this includes creating and populating structs
 # for Chebyshev transforms, velocity space moments,
 # EM fields, semi-Lagrange treatment, and advection terms
-function setup_time_advance!(pdf, z, vpa, composition, drive_input, evolve_moments,
+function setup_time_advance!(pdf, z, vpa, composition, drive_input, moments,
                              t_input, cx_frequency, species)
     # define some local variables for convenience/tidiness
     n_species = composition.n_species
@@ -65,18 +65,19 @@ function setup_time_advance!(pdf, z, vpa, composition, drive_input, evolve_momen
         else
             advance_cx = false
         end
-        if evolve_moments.density
+        if moments.evolve_density
             advance_sources = true
             advance_continuity = true
-            if evolve_moments.parallel_flow
+            if moments.evolve_upar
                 advance_force_balance = true
-                if evolve_moments.parallel_pressure
+                if moments.evolve_ppar
                     advance_energy = true
                 else
                     advance_energy = false
                 end
             else
                 advance_force_balance = false
+                advance_energy = false
             end
         else
             advance_sources = false
@@ -87,11 +88,6 @@ function setup_time_advance!(pdf, z, vpa, composition, drive_input, evolve_momen
         advance = advance_info(true, true, advance_cx, advance_sources, advance_continuity,
                                advance_force_balance, advance_energy, rk_coefs)
     end
-    # pass the distribution function pdf.unnorm (defined such that ∫dvpa pdf = density)
-    # and allocate/initialize the velocity space moments needed for advancing
-    # the kinetic equation coupled to fluid equations
-    # the resulting moments are returned in the structure "moments"
-    moments = setup_moments(pdf.unnorm, vpa, z.n, evolve_moments, species)
     # create structure z_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the split part of the GK equation dealing
     # with advection in z
@@ -127,8 +123,6 @@ function setup_time_advance!(pdf, z, vpa, composition, drive_input, evolve_momen
         vpa_spectral = false
         vpa.duniform_dgrid .= 1.0
     end
-    # redefine the distrubtion function pdf.norm = pdf.unnorm(z,vpa)/n(z) if this option is chosen
-    normalize_pdf!(pdf.norm, moments)
     # create an array of structs containing scratch arrays for the pdf and low-order moments
     # that may be evolved separately via fluid equations
     scratch = setup_scratch_arrays(moments, pdf.norm, z.n, vpa.n, n_species, t_input.n_rk_stages)
@@ -136,7 +130,6 @@ function setup_time_advance!(pdf, z, vpa, composition, drive_input, evolve_momen
     # for the electrostatic potential phi and eventually the electromagnetic fields
     fields = setup_em_fields(z.n, drive_input.force_phi, drive_input.amplitude, drive_input.frequency)
     # initialize the electrostatic potential
-    #update_phi!(fields, moments, scratch[1], vpa, z.n, composition, 0.0)
     update_phi!(fields, scratch[1], vpa, z.n, composition)
     # save the initial phi(z) for possible use later (e.g., if forcing phi)
     fields.phi0 .= fields.phi
@@ -446,7 +439,12 @@ function rk_update!(scratch, pdf, moments, fields, vpa, nz, rk_coefs, istage, co
         update_ppar!(scratch[istage+1].ppar, moments.ppar_updated, pdf.unnorm, vpa, nz)
     end
     # update the thermal speed
-    @. moments.vth = sqrt(2*moments.ppar/moments.dens)
+    @. moments.vth = sqrt(2.0*scratch[istage+1].ppar/scratch[istage+1].density)
+    if moments.evolve_ppar
+        for ivpa ∈ 1:vpa.n
+            @. pdf.unnorm[:,ivpa,:] /= moments.vth
+        end
+    end
     # update the parallel heat flux
     update_qpar!(moments.qpar, moments.qpar_updated, pdf.unnorm, vpa, nz, moments.vpa_norm_fac)
     # update the electrostatic potential phi

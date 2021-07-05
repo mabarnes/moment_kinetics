@@ -99,21 +99,24 @@ function analyze_pdf_data(ff, vpa, nz, nvpa, n_species, ntime, z_wgts, Lz, vpa_w
     end
     dens_moment = allocate_float(nz,n_species,ntime)
     upar_moment = allocate_float(nz,n_species,ntime)
+    ppar_moment = allocate_float(nz,n_species,ntime)
     for i ∈ 1:ntime
         for is ∈ 1:n_species
             for iz ∈ 1:nz
                 @views dens_moment[iz,is,i] = integrate_over_vspace(ff[iz,:,is,i], vpa_wgts)
                 @views upar_moment[iz,is,i] = integrate_over_vspace(ff[iz,:,is,i] .* vpa, vpa_wgts)
+                @views ppar_moment[iz,is,i] = integrate_over_vspace(ff[iz,:,is,i] .* vpa.^2, vpa_wgts)
             end
         end
     end
     if evolve_ppar
         @. dens_moment *= vth
         @. upar_moment *= vth^2
+        @. ppar_moment *= vth^3
     end
     #@views advection_test_1d(ff[:,:,:,1], ff[:,:,:,end])
     println("done.")
-    return f_fldline_avg, delta_f, dens_moment, upar_moment
+    return f_fldline_avg, delta_f, dens_moment, upar_moment, ppar_moment
 end
 
 function field_line_average(fld, wgts, L)
