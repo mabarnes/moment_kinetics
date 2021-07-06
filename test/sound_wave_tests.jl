@@ -7,7 +7,7 @@ using moment_kinetics.array_allocation: allocate_float
 using moment_kinetics.load_data: open_netcdf_file
 using moment_kinetics.load_data: load_coordinate_data, load_fields_data
 using moment_kinetics.analysis: analyze_fields_data
-using moment_kinetics.post_processing: compute_frequencies
+using moment_kinetics.post_processing: fit_delta_phi_mode
 
 # Create a temporary directory for test output
 test_output_directory = tempname()
@@ -77,9 +77,7 @@ function run_test(analytic_frequency, analytic_growth_rate,
     input["run_name"] = name
 
     # Suppress console output while running
-    frequency = undef
-    growth_rate = undef
-    fit_error = undef
+    phi_fit = undef
     quietoutput() do
         # run simulation
         run_moment_kinetics(to, input)
@@ -107,22 +105,24 @@ function run_test(analytic_frequency, analytic_growth_rate,
         iz0 = cld(nz, 3)
         shifted_time = allocate_float(ntime)
         @. shifted_time = time - time[itime_min]
-        @views growth_rate, frequency, phase, fit_error =
-            compute_frequencies(shifted_time[itime_min:itime_max], delta_phi[iz0,itime_min:itime_max])
+        @views phi_fit = fit_delta_phi_mode(shifted_time[itime_min:itime_max], z,
+                                            delta_phi[:, itime_min:itime_max])
     end
 
-    # Check the fit error is not too large, otherwise we are testing junk
-    @test fit_error < 2.e-2
+    # Check the fit errors are not too large, otherwise we are testing junk
+    @test phi_fit.fit_error < 2.e-2
+    @test phi_fit.offset_fit_error < 1.e-6
+    @test phi_fit.cosine_fit_error < 5.e-8
 
     # analytic_frequency and analytic_growth rate are the analytically expected values
     # (from F. Parra's calculation).
-    @test isapprox(frequency, analytic_frequency, rtol=3.e-2, atol=4.e-3)
-    @test isapprox(growth_rate, analytic_growth_rate, rtol=3.e-2)
+    @test isapprox(phi_fit.frequency, analytic_frequency, rtol=3.e-2, atol=4.e-3)
+    @test isapprox(phi_fit.growth_rate, analytic_growth_rate, rtol=3.e-2)
 
     # regression_frequency and regression_growth_rate are saved numerical values, which
     # are tested with tighter tolerances than the analytic values.
-    @test isapprox(frequency, regression_frequency, rtol=2.e-8, atol=3.e-8)
-    @test isapprox(growth_rate, regression_growth_rate, rtol=2.e-8)
+    @test isapprox(phi_fit.frequency, regression_frequency, rtol=2.e-8, atol=3.e-8)
+    @test isapprox(phi_fit.growth_rate, regression_growth_rate, rtol=2.e-8)
 end
 
 @testset "sound wave" begin
