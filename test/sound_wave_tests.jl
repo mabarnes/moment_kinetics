@@ -10,6 +10,9 @@ using moment_kinetics.load_data: load_coordinate_data, load_fields_data
 using moment_kinetics.analysis: analyze_fields_data
 using moment_kinetics.post_processing: fit_delta_phi_mode
 
+const analytical_rtol = 3.e-2
+const regression_rtol = 1.e-9
+
 # Create a temporary directory for test output
 test_output_directory = tempname()
 mkpath(test_output_directory)
@@ -170,13 +173,13 @@ function run_test(test_input, analytic_frequency, analytic_growth_rate,
 
     # analytic_frequency and analytic_growth rate are the analytically expected values
     # (from F. Parra's calculation).
-    @test isapprox(phi_fit.frequency, analytic_frequency, rtol=3.e-2)
-    @test isapprox(phi_fit.growth_rate, analytic_growth_rate, rtol=3.e-2)
+    @test isapprox(phi_fit.frequency, analytic_frequency, rtol=analytical_rtol)
+    @test isapprox(phi_fit.growth_rate, analytic_growth_rate, rtol=analytical_rtol)
 
     # regression_frequency and regression_growth_rate are saved numerical values, which
     # are tested with tighter tolerances than the analytic values.
-    @test isapprox(phi_fit.frequency, regression_frequency, rtol=1.e-9)
-    @test isapprox(phi_fit.growth_rate, regression_growth_rate, rtol=1.e-9)
+    @test isapprox(phi_fit.frequency, regression_frequency, rtol=regression_rtol)
+    @test isapprox(phi_fit.growth_rate, regression_growth_rate, rtol=regression_rtol)
 end
 
 
