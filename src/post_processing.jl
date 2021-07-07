@@ -505,7 +505,7 @@ function fit_delta_phi_mode(t, z, delta_phi)
     doffsetdt = offset_fit.param[1]
     offset0 = offset_fit.param[2]
     offset_error = sqrt(mean(offset_fit.resid .^ 2))
-    offset_tol = 1.e-5
+    offset_tol = 2.e-5
     if abs(doffsetdt) > offset_tol
         error("d(offset)/dt=", doffsetdt, " is non-negligible (>", offset_tol,
               ") but fit_delta_phi_mode expected either a standing wave or a ",

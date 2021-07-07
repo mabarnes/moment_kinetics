@@ -46,6 +46,21 @@ test_input_finite_difference = Dict("n_ion_species" => 1,
                                     "vpa_bc" => "periodic",
                                     "vpa_discretization" => "finite_difference")
 
+test_input_finite_difference_split_1_moment =
+    merge(test_input_finite_difference,
+          Dict("run_name" => "finite_difference_split_1_moment",
+               "evolve_moments_density" => true))
+
+test_input_finite_difference_split_2_moments =
+    merge(test_input_finite_difference_split_1_moment,
+          Dict("run_name" => "finite_difference_split_2_moments",
+               "evolve_moments_parallel_flow" => true))
+
+test_input_finite_difference_split_3_moments =
+    merge(test_input_finite_difference_split_2_moments,
+          Dict("run_name" => "finite_difference_split_3_moments",
+               "evolve_moments_parallel_pressure" => true))
+
 test_input_chebyshev = merge(test_input_finite_difference,
                              Dict("run_name" => "chebyshev_pseudospectral",
                                   "z_discretization" => "chebyshev_pseudospectral",
@@ -54,6 +69,21 @@ test_input_chebyshev = merge(test_input_finite_difference,
                                   "vpa_discretization" => "chebyshev_pseudospectral",
                                   "vpa_ngrid" => 17,
                                   "vpa_nelement" => 8))
+
+test_input_chebyshev_split_1_moment =
+    merge(test_input_chebyshev,
+          Dict("run_name" => "chebyshev_pseudospectral_split_1_moment",
+               "evolve_moments_density" => true))
+
+test_input_chebyshev_split_2_moments =
+    merge(test_input_chebyshev_split_1_moment,
+          Dict("run_name" => "chebyshev_pseudospectral_split_2_moments",
+               "evolve_moments_parallel_flow" => true))
+
+test_input_chebyshev_split_3_moments =
+    merge(test_input_chebyshev_split_2_moments,
+          Dict("run_name" => "chebyshev_pseudospectral_split_3_moments",
+               "evolve_moments_parallel_pressure" => true))
 
 
 # Not actually used in the tests, but needed for first argument of run_moment_kinetics
@@ -135,7 +165,7 @@ function run_test(test_input, analytic_frequency, analytic_growth_rate,
 
     # Check the fit errors are not too large, otherwise we are testing junk
     @test phi_fit.fit_error < 2.e-2
-    @test phi_fit.offset_fit_error < 1.e-6
+    @test phi_fit.offset_fit_error < 5.e-6
     @test phi_fit.cosine_fit_error < 5.e-8
 
     # analytic_frequency and analytic_growth rate are the analytically expected values
@@ -145,9 +175,14 @@ function run_test(test_input, analytic_frequency, analytic_growth_rate,
 
     # regression_frequency and regression_growth_rate are saved numerical values, which
     # are tested with tighter tolerances than the analytic values.
-    @test isapprox(phi_fit.frequency, regression_frequency, rtol=5.e-10)
-    @test isapprox(phi_fit.growth_rate, regression_growth_rate, rtol=5.e-10)
+    @test isapprox(phi_fit.frequency, regression_frequency, rtol=1.e-9)
+    @test isapprox(phi_fit.growth_rate, regression_growth_rate, rtol=1.e-9)
 end
+
+
+# run_test_set_* functions call run_test for various parameters, and record the expected
+# values to be used for regression_frequency and regression_growth_rate for each
+# particular case
 
 function run_test_set_finite_difference()
     #n_i=n_n, T_e=1
@@ -186,6 +221,129 @@ function run_test_set_finite_difference()
     # n_i=n_n T_e=4
     run_test(test_input_finite_difference, 2*π*1.9919, -2*π*0.2491, 12.51565738918366,
              -1.5654422948824103; T_e=4.0, charge_exchange_frequency=2*π*0.1)
+    # CX=2*π*2.0 case with T_e=4 is too hard to converge, so skip
+end
+
+function run_test_set_finite_difference_split_1_moment()
+    #n_i=n_n, T_e=1
+    run_test(test_input_finite_difference_split_1_moment, 2*π*1.4467, -2*π*0.6020,
+             9.091493524327964, -3.777665867614049)
+    run_test(test_input_finite_difference_split_1_moment, 2*π*1.4240, -2*π*0.6379,
+             8.953508560280834, -4.001644687690077; charge_exchange_frequency=2*π*0.1)
+    run_test(test_input_finite_difference_split_1_moment, 2*π*0.0, -2*π*0.3235, 0.0,
+             -2.05926190520108; charge_exchange_frequency=2*π*1.8)
+    run_test(test_input_finite_difference_split_1_moment, 2*π*0.0, -2*π*0.2963, 0.0,
+             -1.8818262558642804; charge_exchange_frequency=2*π*2.0)
+
+    # n_i>>n_n T_e=1
+    run_test(test_input_finite_difference_split_1_moment, 2*π*1.4467, -2*π*0.6020,
+             9.09146802461751, -3.777706892295241; initial_density1=0.9999,
+             initial_density2=0.0001, charge_exchange_frequency=2*π*0.1)
+    run_test(test_input_finite_difference_split_1_moment, 2*π*1.4467, -2*π*0.6020,
+             9.088600096940231, -3.7870589478251206; initial_density1=0.9999,
+             initial_density2=0.0001, charge_exchange_frequency=2*π*2.0)
+
+    # n_i<<n_n T_e=1
+    run_test(test_input_finite_difference_split_1_moment, 2*π*1.3954, -2*π*0.6815,
+             8.785064220517988, -4.275580111640141; initial_density1=0.0001,
+             initial_density2=0.9999, charge_exchange_frequency=2*π*0.1)
+    run_test(test_input_finite_difference_split_1_moment, 2*π*0.0, -2*π*0.5112, 0.0,
+             -3.2119286548981716; initial_density1=0.0001, initial_density2=0.9999,
+             charge_exchange_frequency=2*π*2.0)
+
+    # n_i=n_n T_e=0.5
+    run_test(test_input_finite_difference_split_1_moment, 2*π*1.2671, -2*π*0.8033,
+             7.966196877373141, -5.02965525662319, 30; T_e=0.5, nstep=1300,
+             charge_exchange_frequency=2*π*0.0)
+    run_test(test_input_finite_difference_split_1_moment, 2*π*0.0, -2*π*0.2727, 0.0,
+             -1.7114385998755213; T_e=0.5, charge_exchange_frequency=2*π*2.0)
+
+    # n_i=n_n T_e=4
+    run_test(test_input_finite_difference_split_1_moment, 2*π*1.9919, -2*π*0.2491,
+             12.515654502100627, -1.5654340021890731; T_e=4.0,
+             charge_exchange_frequency=2*π*0.1)
+    # CX=2*π*2.0 case with T_e=4 is too hard to converge, so skip
+end
+
+function run_test_set_finite_difference_split_2_moments()
+    #n_i=n_n, T_e=1
+    run_test(test_input_finite_difference_split_2_moments, 2*π*1.4467, -2*π*0.6020,
+             9.097763659968544, -3.7580080201111734)
+    run_test(test_input_finite_difference_split_2_moments, 2*π*1.4240, -2*π*0.6379,
+             8.978198943638452, -3.975337092289034; charge_exchange_frequency=2*π*0.1)
+    run_test(test_input_finite_difference_split_2_moments, 2*π*0.0, -2*π*0.3235, 0.0,
+             -2.0539272618322517; charge_exchange_frequency=2*π*1.8)
+    run_test(test_input_finite_difference_split_2_moments, 2*π*0.0, -2*π*0.2963, 0.0,
+             -1.8772110217069822; charge_exchange_frequency=2*π*2.0)
+
+    # n_i>>n_n T_e=1
+    run_test(test_input_finite_difference_split_2_moments, 2*π*1.4467, -2*π*0.6020,
+             9.097740524923225, -3.7580476472383055; initial_density1=0.9999,
+             initial_density2=0.0001, charge_exchange_frequency=2*π*0.1)
+    run_test(test_input_finite_difference_split_2_moments, 2*π*1.4467, -2*π*0.6020,
+             9.094955859467234, -3.7672675386429764; initial_density1=0.9999,
+             initial_density2=0.0001, charge_exchange_frequency=2*π*2.0)
+
+    # n_i<<n_n T_e=1
+    run_test(test_input_finite_difference_split_2_moments, 2*π*1.3954, -2*π*0.6815,
+             8.853475538840721, -4.250291948484979; initial_density1=0.0001,
+             initial_density2=0.9999, charge_exchange_frequency=2*π*0.1)
+    run_test(test_input_finite_difference_split_2_moments, 2*π*0.0, -2*π*0.5112, 0.0,
+             -3.2023178398409193; initial_density1=0.0001, initial_density2=0.9999,
+             charge_exchange_frequency=2*π*2.0)
+
+    # n_i=n_n T_e=0.5
+    run_test(test_input_finite_difference_split_2_moments, 2*π*1.2671, -2*π*0.8033,
+             7.983874107794549, -4.970861124146282, 30; T_e=0.5, nstep=1300,
+             charge_exchange_frequency=2*π*0.0)
+    run_test(test_input_finite_difference_split_2_moments, 2*π*0.0, -2*π*0.2727, 0.0,
+             -1.7073623296055411; T_e=0.5, charge_exchange_frequency=2*π*2.0)
+
+    # n_i=n_n T_e=4
+    run_test(test_input_finite_difference_split_2_moments, 2*π*1.9919, -2*π*0.2491,
+             12.516541634192802, -1.5656433826739014; T_e=4.0,
+             charge_exchange_frequency=2*π*0.1)
+    # CX=2*π*2.0 case with T_e=4 is too hard to converge, so skip
+end
+
+function run_test_set_finite_difference_split_3_moments()
+    #n_i=n_n, T_e=1
+    run_test(test_input_finite_difference_split_3_moments, 2*π*1.4467, -2*π*0.6020,
+             9.093629275008885, -3.7729070085467162)
+    run_test(test_input_finite_difference_split_3_moments, 2*π*1.4240, -2*π*0.6379,
+             8.960453644497454, -3.9998305928623856; charge_exchange_frequency=2*π*0.1)
+    run_test(test_input_finite_difference_split_3_moments, 2*π*0.0, -2*π*0.3235, 0.0,
+             -2.0521682863990653; charge_exchange_frequency=2*π*1.8)
+    run_test(test_input_finite_difference_split_3_moments, 2*π*0.0, -2*π*0.2963, 0.0,
+             -1.8756529591893045; charge_exchange_frequency=2*π*2.0)
+
+    # n_i>>n_n T_e=1
+    run_test(test_input_finite_difference_split_3_moments, 2*π*1.4467, -2*π*0.6020,
+             9.0936044015915, -3.7729484978962944; initial_density1=0.9999,
+             initial_density2=0.0001, charge_exchange_frequency=2*π*0.1)
+    run_test(test_input_finite_difference_split_3_moments, 2*π*1.4467, -2*π*0.6020,
+             9.09073992320698, -3.7823446011594464; initial_density1=0.9999,
+             initial_density2=0.0001, charge_exchange_frequency=2*π*2.0)
+
+    # n_i<<n_n T_e=1
+    run_test(test_input_finite_difference_split_3_moments, 2*π*1.3954, -2*π*0.6815,
+             8.80311956904467, -4.28207267141589; initial_density1=0.0001,
+             initial_density2=0.9999, charge_exchange_frequency=2*π*0.1)
+    run_test(test_input_finite_difference_split_3_moments, 2*π*0.0, -2*π*0.5112, 0.0,
+             -3.198045285969458; initial_density1=0.0001, initial_density2=0.9999,
+             charge_exchange_frequency=2*π*2.0)
+
+    # n_i=n_n T_e=0.5
+    run_test(test_input_finite_difference_split_3_moments, 2*π*1.2671, -2*π*0.8033,
+             7.9709416406027405, -5.017098763695644, 30; T_e=0.5, nstep=1300,
+             charge_exchange_frequency=2*π*0.0)
+    run_test(test_input_finite_difference_split_3_moments, 2*π*0.0, -2*π*0.2727, 0.0,
+             -1.7058801097683656; T_e=0.5, charge_exchange_frequency=2*π*2.0)
+
+    # n_i=n_n T_e=4
+    run_test(test_input_finite_difference_split_3_moments, 2*π*1.9919, -2*π*0.2491,
+             12.517160609534336, -1.5665029660914167; T_e=4.0,
+             charge_exchange_frequency=2*π*0.1)
     # CX=2*π*2.0 case with T_e=4 is too hard to converge, so skip
 end
 
@@ -229,13 +387,142 @@ function run_test_set_chebyshev()
     # CX=2*π*2.0 case with T_e=4 is too hard to converge, so skip
 end
 
+function run_test_set_chebyshev_split_1_moment()
+    #n_i=n_n, T_e=1
+    run_test(test_input_chebyshev_split_1_moment, 2*π*1.4467, -2*π*0.6020,
+             9.085990812952684, -3.79588298709171)
+    run_test(test_input_chebyshev_split_1_moment, 2*π*1.4240, -2*π*0.6379,
+             8.934738270890447, -4.025718553464908; charge_exchange_frequency=2*π*0.1)
+    run_test(test_input_chebyshev_split_1_moment, 2*π*0.0, -2*π*0.3235, 0.0,
+             -2.0582986398310155; charge_exchange_frequency=2*π*1.8)
+    run_test(test_input_chebyshev_split_1_moment, 2*π*0.0, -2*π*0.2963, 0.0,
+             -1.8811803891784995; charge_exchange_frequency=2*π*2.0)
+
+    # n_i>>n_n T_e=1
+    run_test(test_input_chebyshev_split_1_moment, 2*π*1.4467, -2*π*0.6020,
+             9.085963694047994, -3.795925359965073; initial_density1=0.9999,
+             initial_density2=0.0001, charge_exchange_frequency=2*π*0.1)
+    run_test(test_input_chebyshev_split_1_moment, 2*π*1.4467, -2*π*0.6020,
+             9.08300151030528, -3.8054690741046944; initial_density1=0.9999,
+             initial_density2=0.0001, charge_exchange_frequency=2*π*2.0)
+
+    # n_i<<n_n T_e=1
+    run_test(test_input_chebyshev_split_1_moment, 2*π*1.3954, -2*π*0.6815,
+             8.737202843165628, -4.29936911741645; initial_density1=0.0001,
+             initial_density2=0.9999, charge_exchange_frequency=2*π*0.1)
+    run_test(test_input_chebyshev_split_1_moment, 2*π*0.0, -2*π*0.5112, 0.0,
+             -3.209889224717887; initial_density1=0.0001, initial_density2=0.9999,
+             charge_exchange_frequency=2*π*2.0)
+
+    # n_i=n_n T_e=0.5
+    run_test(test_input_chebyshev_split_1_moment, 2*π*1.2671, -2*π*0.8033,
+             7.959176531864484, -5.0468118597306315, 30; T_e=0.5, nstep=1300,
+             charge_exchange_frequency=2*π*0.0)
+    run_test(test_input_chebyshev_split_1_moment, 2*π*0.0, -2*π*0.2727, 0.0,
+             -1.7109497111415288; T_e=0.5, charge_exchange_frequency=2*π*2.0)
+
+    # n_i=n_n T_e=4
+    run_test(test_input_chebyshev_split_1_moment, 2*π*1.9919, -2*π*0.2491,
+             12.515693871624226, -1.5653870459310333; T_e=4.0,
+             charge_exchange_frequency=2*π*0.1)
+    # CX=2*π*2.0 case with T_e=4 is too hard to converge, so skip
+end
+
+function run_test_set_chebyshev_split_2_moments()
+    #n_i=n_n, T_e=1
+    run_test(test_input_chebyshev_split_2_moments, 2*π*1.4467, -2*π*0.6020,
+             9.085692213794985, -3.796847219028767)
+    run_test(test_input_chebyshev_split_2_moments, 2*π*1.4240, -2*π*0.6379,
+             8.93547132091605, -4.028739848302094; charge_exchange_frequency=2*π*0.1)
+    run_test(test_input_chebyshev_split_2_moments, 2*π*0.0, -2*π*0.3235, 0.0,
+             -2.052034499180987; charge_exchange_frequency=2*π*1.8)
+    run_test(test_input_chebyshev_split_2_moments, 2*π*0.0, -2*π*0.2963, 0.0,
+             -1.8759661453977758; charge_exchange_frequency=2*π*2.0)
+
+    # n_i>>n_n T_e=1
+    run_test(test_input_chebyshev_split_2_moments, 2*π*1.4467, -2*π*0.6020,
+             9.08566529769197, -3.7968898948273133; initial_density1=0.9999,
+             initial_density2=0.0001, charge_exchange_frequency=2*π*0.1)
+    run_test(test_input_chebyshev_split_2_moments, 2*π*1.4467, -2*π*0.6020,
+             9.08267018403319, -3.8065237687674482; initial_density1=0.9999,
+             initial_density2=0.0001, charge_exchange_frequency=2*π*2.0)
+
+    # n_i<<n_n T_e=1
+    run_test(test_input_chebyshev_split_2_moments, 2*π*1.3954, -2*π*0.6815,
+             8.737881434679556, -4.305186452089822; initial_density1=0.0001,
+             initial_density2=0.9999, charge_exchange_frequency=2*π*0.1)
+    run_test(test_input_chebyshev_split_2_moments, 2*π*0.0, -2*π*0.5112, 0.0,
+             -3.197485614384494; initial_density1=0.0001, initial_density2=0.9999,
+             charge_exchange_frequency=2*π*2.0)
+
+    # n_i=n_n T_e=0.5
+    run_test(test_input_chebyshev_split_2_moments, 2*π*1.2671, -2*π*0.8033,
+             7.957949041949206, -5.050516393765112, 30; T_e=0.5, nstep=1300,
+             charge_exchange_frequency=2*π*0.0)
+    run_test(test_input_chebyshev_split_2_moments, 2*π*0.0, -2*π*0.2727, 0.0,
+             -1.70626927062398; T_e=0.5, charge_exchange_frequency=2*π*2.0)
+
+    # n_i=n_n T_e=4
+    run_test(test_input_chebyshev_split_2_moments, 2*π*1.9919, -2*π*0.2491,
+             12.516557919918846, -1.565597154553777; T_e=4.0,
+             charge_exchange_frequency=2*π*0.1)
+    # CX=2*π*2.0 case with T_e=4 is too hard to converge, so skip
+end
+
+function run_test_set_chebyshev_split_3_moments()
+    #n_i=n_n, T_e=1
+    run_test(test_input_chebyshev_split_3_moments, 2*π*1.4467, -2*π*0.6020,
+             9.086786508104689, -3.7975280087731282)
+    run_test(test_input_chebyshev_split_3_moments, 2*π*1.4240, -2*π*0.6379,
+             8.934015460526556, -4.034338449186001; charge_exchange_frequency=2*π*0.1)
+    run_test(test_input_chebyshev_split_3_moments, 2*π*0.0, -2*π*0.3235, 0.0,
+             -2.0508568608063786; charge_exchange_frequency=2*π*1.8)
+    run_test(test_input_chebyshev_split_3_moments, 2*π*0.0, -2*π*0.2963, 0.0,
+             -1.874775713946675; charge_exchange_frequency=2*π*2.0)
+
+    # n_i>>n_n T_e=1
+    run_test(test_input_chebyshev_split_3_moments, 2*π*1.4467, -2*π*0.6020,
+             9.086759275944901, -3.7975714393101967; initial_density1=0.9999,
+             initial_density2=0.0001, charge_exchange_frequency=2*π*0.1)
+    run_test(test_input_chebyshev_split_3_moments, 2*π*1.4467, -2*π*0.6020,
+             9.083766358338591, -3.807232848653037; initial_density1=0.9999,
+             initial_density2=0.0001, charge_exchange_frequency=2*π*2.0)
+
+    # n_i<<n_n T_e=1
+    run_test(test_input_chebyshev_split_3_moments, 2*π*1.3954, -2*π*0.6815,
+             8.728901333140364, -4.317875620754033; initial_density1=0.0001,
+             initial_density2=0.9999, charge_exchange_frequency=2*π*0.1)
+    run_test(test_input_chebyshev_split_3_moments, 2*π*0.0, -2*π*0.5112, 0.0,
+             -3.19502939956025; initial_density1=0.0001, initial_density2=0.9999,
+             charge_exchange_frequency=2*π*2.0)
+
+    # n_i=n_n T_e=0.5
+    run_test(test_input_chebyshev_split_3_moments, 2*π*1.2671, -2*π*0.8033,
+             7.956374919280151, -5.062100731226223, 30; T_e=0.5, nstep=1300,
+             charge_exchange_frequency=2*π*0.0)
+    run_test(test_input_chebyshev_split_3_moments, 2*π*0.0, -2*π*0.2727, 0.0,
+             -1.7051785811012337; T_e=0.5, charge_exchange_frequency=2*π*2.0)
+
+    # n_i=n_n T_e=4
+    run_test(test_input_chebyshev_split_3_moments, 2*π*1.9919, -2*π*0.2491,
+             12.5171565748106, -1.5664675067239247; T_e=4.0,
+             charge_exchange_frequency=2*π*0.1)
+    # CX=2*π*2.0 case with T_e=4 is too hard to converge, so skip
+end
+
 
 @testset "sound wave" begin
     println("sound wave tests")
 
     # finite difference
     run_test_set_finite_difference()
+    run_test_set_finite_difference_split_1_moment()
+    run_test_set_finite_difference_split_2_moments()
+    run_test_set_finite_difference_split_3_moments()
 
     # Chebyshev pseudospectral
     run_test_set_chebyshev()
+    run_test_set_chebyshev_split_1_moment()
+    run_test_set_chebyshev_split_2_moments()
+    run_test_set_chebyshev_split_3_moments()
 end
