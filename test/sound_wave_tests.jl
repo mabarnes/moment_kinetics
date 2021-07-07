@@ -153,7 +153,8 @@ end
              initial_density1=0.0001, initial_density2=0.9999, charge_exchange_frequency=2*π*2.0)
 
     # n_i=n_n T_e=0.5
-    # Fit is difficult for low CX frequency branch at this T_e, so skip testing it
+    run_test(2*π*1.2671, -2*π*0.8033, 7.966986900120581, -5.027477871263039, 30;
+             T_e=0.5, nstep=1300, charge_exchange_frequency=2*π*0.0)
     run_test(2*π*0.0, -2*π*0.2727, 0.0, -1.711457812071076;
              T_e=0.5, charge_exchange_frequency=2*π*2.0)
 
