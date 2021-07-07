@@ -2,6 +2,7 @@ include("setup.jl")
 
 using Base.Filesystem: tempname
 using TimerOutputs
+#using Plots: plot, plot!, gui
 
 using moment_kinetics.array_allocation: allocate_float
 using moment_kinetics.load_data: open_netcdf_file
@@ -107,6 +108,17 @@ function run_test(analytic_frequency, analytic_growth_rate,
         @. shifted_time = time - time[itime_min]
         @views phi_fit = fit_delta_phi_mode(shifted_time[itime_min:itime_max], z,
                                             delta_phi[:, itime_min:itime_max])
+        ## The following plot code (copied from post_processing.jl) may be helpful for
+        ## debugging tests. Uncomment to use, and also uncomment
+        ## `using Plots: plot, plot!, gui at the top of the file.
+        #L = z[end] - z[begin]
+        #fitted_delta_phi =
+        #    @. (phi_fit.amplitude0 * cos(2.0 * π * (z[iz0] + phi_fit.offset0) / L)
+        #        * exp(phi_fit.growth_rate * shifted_time)
+        #        * cos(phi_fit.frequency * shifted_time + phi_fit.phase))
+        #@views plot(time, abs.(delta_phi[iz0,:]), xlabel="t*Lz/vti", ylabel="δϕ", yaxis=:log)
+        #plot!(time, abs.(fitted_delta_phi))
+        #gui()
     end
 
     # Check the fit errors are not too large, otherwise we are testing junk
