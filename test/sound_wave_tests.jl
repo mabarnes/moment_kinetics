@@ -18,7 +18,7 @@ mkpath(test_output_directory)
 test_input_finite_difference = Dict("n_ion_species" => 1,
                                     "n_neutral_species" => 1,
                                     "boltzmann_electron_response" => true,
-                                    "run_name" => nothing, # this needs to be set by the particular test
+                                    "run_name" => "finite_difference",
                                     "base_directory" => test_output_directory,
                                     "evolve_moments_density" => false,
                                     "evolve_moments_parallel_flow" => false,
@@ -46,21 +46,33 @@ test_input_finite_difference = Dict("n_ion_species" => 1,
                                     "vpa_bc" => "periodic",
                                     "vpa_discretization" => "finite_difference")
 
+test_input_chebyshev = merge(test_input_finite_difference,
+                             Dict("run_name" => "chebyshev_pseudospectral",
+                                  "z_discretization" => "chebyshev_pseudospectral",
+                                  "z_ngrid" => 9,
+                                  "z_nelement" => 2,
+                                  "vpa_discretization" => "chebyshev_pseudospectral",
+                                  "vpa_ngrid" => 17,
+                                  "vpa_nelement" => 8))
+
+
 # Not actually used in the tests, but needed for first argument of run_moment_kinetics
 to = TimerOutput()
 
+"""
+Run a sound-wave test for a single set of parameters
+"""
 # Note 'name' should not be shared by any two tests in this file
-function run_test(analytic_frequency, analytic_growth_rate,
+function run_test(test_input, analytic_frequency, analytic_growth_rate,
                   regression_frequency, regression_growth_rate, itime_min=50;
                   args...)
     # by passing keyword arguments to run_test, args becomes a Dict which can be used to
     # update the default inputs
 
     # Convert keyword arguments to a unique name
-    if length(args) == 0
-        name = "default"
-    else
-        name = string((string(k, "-", v, "_") for (k, v) in args)...)
+    name = test_input["run_name"]
+    if length(args) > 0
+        name = string(name, "_", (string(k, "-", v, "_") for (k, v) in args)...)
 
         # Remove trailing "_"
         name = chop(name)
@@ -70,10 +82,10 @@ function run_test(analytic_frequency, analytic_growth_rate,
     println("    - testing ", name)
 
     # Convert dict from symbol keys to String keys
-    test_inputs = Dict(String(k) => v for (k, v) in args)
+    modified_inputs = Dict(String(k) => v for (k, v) in args)
 
     # Update default inputs with values to be changed
-    input = merge(test_input_finite_difference, test_inputs)
+    input = merge(test_input, modified_inputs)
 
     input["run_name"] = name
 
@@ -137,41 +149,93 @@ function run_test(analytic_frequency, analytic_growth_rate,
     @test isapprox(phi_fit.growth_rate, regression_growth_rate, rtol=5.e-10)
 end
 
+function run_test_set_finite_difference()
+    #n_i=n_n, T_e=1
+    run_test(test_input_finite_difference, 2*π*1.4467, -2*π*0.6020, 9.091646784462293,
+             -3.7772056653373385)
+    run_test(test_input_finite_difference, 2*π*1.4240, -2*π*0.6379, 8.954132663749439,
+             -4.000929213530583; charge_exchange_frequency=2*π*0.1)
+    run_test(test_input_finite_difference, 2*π*0.0, -2*π*0.3235, 0.0,
+             -2.059288429238561; charge_exchange_frequency=2*π*1.8)
+    run_test(test_input_finite_difference, 2*π*0.0, -2*π*0.2963, 0.0,
+             -1.8818455584985407; charge_exchange_frequency=2*π*2.0)
+
+    # n_i>>n_n T_e=1
+    run_test(test_input_finite_difference, 2*π*1.4467, -2*π*0.6020, 9.091621526115807,
+             -3.777246851378533; initial_density1=0.9999, initial_density2=0.0001,
+             charge_exchange_frequency=2*π*0.1)
+    run_test(test_input_finite_difference, 2*π*1.4467, -2*π*0.6020, 9.088756546426614,
+             -3.786593990110537; initial_density1=0.9999, initial_density2=0.0001,
+             charge_exchange_frequency=2*π*2.0)
+
+    # n_i<<n_n T_e=1
+    run_test(test_input_finite_difference, 2*π*1.3954, -2*π*0.6815, 8.786954560354536,
+             -4.274831939571534; initial_density1=0.0001, initial_density2=0.9999,
+             charge_exchange_frequency=2*π*0.1)
+    run_test(test_input_finite_difference, 2*π*0.0, -2*π*0.5112, 0.0,
+             -3.211984675439382; initial_density1=0.0001, initial_density2=0.9999,
+             charge_exchange_frequency=2*π*2.0)
+
+    # n_i=n_n T_e=0.5
+    run_test(test_input_finite_difference, 2*π*1.2671, -2*π*0.8033, 7.966986900120581,
+             -5.027477871263039, 30; T_e=0.5, nstep=1300,
+             charge_exchange_frequency=2*π*0.0)
+    run_test(test_input_finite_difference, 2*π*0.0, -2*π*0.2727, 0.0,
+             -1.711457812071076; T_e=0.5, charge_exchange_frequency=2*π*2.0)
+
+    # n_i=n_n T_e=4
+    run_test(test_input_finite_difference, 2*π*1.9919, -2*π*0.2491, 12.51565738918366,
+             -1.5654422948824103; T_e=4.0, charge_exchange_frequency=2*π*0.1)
+    # CX=2*π*2.0 case with T_e=4 is too hard to converge, so skip
+end
+
+function run_test_set_chebyshev()
+    #n_i=n_n, T_e=1
+    run_test(test_input_chebyshev, 2*π*1.4467, -2*π*0.6020, 9.085815883255613,
+             -3.794758980708628)
+    run_test(test_input_chebyshev, 2*π*1.4240, -2*π*0.6379, 8.933662137891284,
+             -4.025210168129686; charge_exchange_frequency=2*π*0.1)
+    run_test(test_input_chebyshev, 2*π*0.0, -2*π*0.3235, 0.0, -2.058256214667329;
+             charge_exchange_frequency=2*π*1.8)
+    run_test(test_input_chebyshev, 2*π*0.0, -2*π*0.2963, 0.0, -1.8811503415036912;
+             charge_exchange_frequency=2*π*2.0)
+
+    # n_i>>n_n T_e=1
+    run_test(test_input_chebyshev, 2*π*1.4467, -2*π*0.6020, 9.085788801178547,
+             -3.7948015219732847; initial_density1=0.9999, initial_density2=0.0001,
+             charge_exchange_frequency=2*π*0.1)
+    run_test(test_input_chebyshev, 2*π*1.4467, -2*π*0.6020, 9.082828578103666,
+             -3.8043350154911963; initial_density1=0.9999, initial_density2=0.0001,
+             charge_exchange_frequency=2*π*2.0)
+
+    # n_i<<n_n T_e=1
+    run_test(test_input_chebyshev, 2*π*1.3954, -2*π*0.6815, 8.731402331355747,
+             -4.298957441316324; initial_density1=0.0001, initial_density2=0.9999,
+             charge_exchange_frequency=2*π*0.1)
+    run_test(test_input_chebyshev, 2*π*0.0, -2*π*0.5112, 0.0, -3.209548708667724;
+             initial_density1=0.0001, initial_density2=0.9999,
+             charge_exchange_frequency=2*π*2.0)
+
+    # n_i=n_n T_e=0.5
+    run_test(test_input_chebyshev, 2*π*1.2671, -2*π*0.8033, 7.961282395577671,
+             -5.0569493468462605, 30; T_e=0.5, nstep=1300,
+             charge_exchange_frequency=2*π*0.0)
+    run_test(test_input_chebyshev, 2*π*0.0, -2*π*0.2727, 0.0, -1.7108849176496357;
+             T_e=0.5, charge_exchange_frequency=2*π*2.0)
+
+    # n_i=n_n T_e=4
+    run_test(test_input_chebyshev, 2*π*1.9919, -2*π*0.2491, 12.515690550010879,
+             -1.5653809098333944; T_e=4.0, charge_exchange_frequency=2*π*0.1)
+    # CX=2*π*2.0 case with T_e=4 is too hard to converge, so skip
+end
+
+
 @testset "sound wave" begin
     println("sound wave tests")
 
     # finite difference
-    ###################
+    run_test_set_finite_difference()
 
-    #n_i=n_n, T_e=1
-    run_test(2*π*1.4467, -2*π*0.6020, 9.091646784462293, -3.7772056653373385)
-    run_test(2*π*1.4240, -2*π*0.6379, 8.954132663749439, -4.000929213530583;
-             charge_exchange_frequency=2*π*0.1)
-    run_test(2*π*0.0, -2*π*0.3235, 0.0, -2.059288429238561;
-             charge_exchange_frequency=2*π*1.8)
-    run_test(2*π*0.0, -2*π*0.2963, 0.0, -1.8818455584985407;
-             charge_exchange_frequency=2*π*2.0)
-
-    # n_i>>n_n T_e=1
-    run_test(2*π*1.4467, -2*π*0.6020, 9.091621526115807, -3.777246851378533;
-             initial_density1=0.9999, initial_density2=0.0001, charge_exchange_frequency=2*π*0.1)
-    run_test(2*π*1.4467, -2*π*0.6020, 9.088756546426614, -3.786593990110537;
-             initial_density1=0.9999, initial_density2=0.0001, charge_exchange_frequency=2*π*2.0)
-
-    # n_i<<n_n T_e=1
-    run_test(2*π*1.3954, -2*π*0.6815, 8.786954560354536, -4.274831939571534;
-             initial_density1=0.0001, initial_density2=0.9999, charge_exchange_frequency=2*π*0.1)
-    run_test(2*π*0.0, -2*π*0.5112, 0.0, -3.211984675439382;
-             initial_density1=0.0001, initial_density2=0.9999, charge_exchange_frequency=2*π*2.0)
-
-    # n_i=n_n T_e=0.5
-    run_test(2*π*1.2671, -2*π*0.8033, 7.966986900120581, -5.027477871263039, 30;
-             T_e=0.5, nstep=1300, charge_exchange_frequency=2*π*0.0)
-    run_test(2*π*0.0, -2*π*0.2727, 0.0, -1.711457812071076;
-             T_e=0.5, charge_exchange_frequency=2*π*2.0)
-
-    # n_i=n_n T_e=4
-    run_test(2*π*1.9919, -2*π*0.2491, 12.51565738918366, -1.5654422948824103;
-             T_e=4.0, charge_exchange_frequency=2*π*0.1)
-    # CX=2*π*2.0 case with T_e=4 is too hard to converge, so skip
+    # Chebyshev pseudospectral
+    run_test_set_chebyshev()
 end
