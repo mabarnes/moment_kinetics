@@ -11,7 +11,7 @@ using moment_kinetics.analysis: analyze_fields_data
 using moment_kinetics.post_processing: fit_delta_phi_mode
 
 const analytical_rtol = 3.e-2
-const regression_rtol = 1.e-9
+const regression_rtol = 2.e-8
 
 # Create a temporary directory for test output
 test_output_directory = tempname()
