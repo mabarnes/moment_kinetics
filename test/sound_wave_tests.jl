@@ -116,12 +116,12 @@ function run_test(analytic_frequency, analytic_growth_rate,
 
     # analytic_frequency and analytic_growth rate are the analytically expected values
     # (from F. Parra's calculation).
-    @test isapprox(phi_fit.frequency, analytic_frequency, rtol=3.e-2, atol=4.e-3)
+    @test isapprox(phi_fit.frequency, analytic_frequency, rtol=3.e-2)
     @test isapprox(phi_fit.growth_rate, analytic_growth_rate, rtol=3.e-2)
 
     # regression_frequency and regression_growth_rate are saved numerical values, which
     # are tested with tighter tolerances than the analytic values.
-    @test isapprox(phi_fit.frequency, regression_frequency, rtol=2.e-8, atol=3.e-8)
+    @test isapprox(phi_fit.frequency, regression_frequency, rtol=2.e-8)
     @test isapprox(phi_fit.growth_rate, regression_growth_rate, rtol=2.e-8)
 end
 
