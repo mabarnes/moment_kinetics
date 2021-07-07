@@ -133,8 +133,8 @@ function run_test(analytic_frequency, analytic_growth_rate,
 
     # regression_frequency and regression_growth_rate are saved numerical values, which
     # are tested with tighter tolerances than the analytic values.
-    @test isapprox(phi_fit.frequency, regression_frequency, rtol=2.e-8)
-    @test isapprox(phi_fit.growth_rate, regression_growth_rate, rtol=2.e-8)
+    @test isapprox(phi_fit.frequency, regression_frequency, rtol=5.e-10)
+    @test isapprox(phi_fit.growth_rate, regression_growth_rate, rtol=5.e-10)
 end
 
 @testset "sound wave" begin
