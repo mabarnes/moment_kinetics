@@ -536,7 +536,7 @@ function fit_delta_phi_mode(t, z, delta_phi)
                 fit_phi0_vs_time(exp.(-growth_rate*t) .* amplitude, t)
             growth_rate += growth_rate_change
             println("growth_rate: ", growth_rate, "  growth_rate_change/growth_rate: ", growth_rate_change/growth_rate, "  fit_error: ", fit_error)
-            if abs(growth_rate_change/growth_rate) < 1.0e-10 || fit_error < 1.0e-9
+            if abs(growth_rate_change/growth_rate) < 1.0e-12 || fit_error < 1.0e-11
                 converged = true
                 break
             end
