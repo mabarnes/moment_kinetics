@@ -460,7 +460,7 @@ function run_test_set_chebyshev_split_2_moments()
 
     # n_i=n_n T_e=0.5
     run_test(test_input_chebyshev_split_2_moments, 2*π*1.2671, -2*π*0.8033,
-             7.957949041949206, -5.050516393765112, 30; T_e=0.5, nstep=1300,
+             7.960270878102388, -5.0492363327785865, 40; T_e=0.5, nstep=1300, nwrite=10,
              charge_exchange_frequency=2*π*0.0)
     run_test(test_input_chebyshev_split_2_moments, 2*π*0.0, -2*π*0.2727, 0.0,
              -1.70626927062398; T_e=0.5, charge_exchange_frequency=2*π*2.0)
@@ -501,7 +501,7 @@ function run_test_set_chebyshev_split_3_moments()
 
     # n_i=n_n T_e=0.5
     run_test(test_input_chebyshev_split_3_moments, 2*π*1.2671, -2*π*0.8033,
-             7.956374919280151, -5.062100731226223, 30; T_e=0.5, nstep=1300,
+             7.959846943693199, -5.056059461788515, 80; T_e=0.5, nstep=1300, nwrite=5,
              charge_exchange_frequency=2*π*0.0)
     run_test(test_input_chebyshev_split_3_moments, 2*π*0.0, -2*π*0.2727, 0.0,
              -1.7051785811012337; T_e=0.5, charge_exchange_frequency=2*π*2.0)
