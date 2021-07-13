@@ -64,10 +64,11 @@ function mk_input(scan_input=Dict())
     species[1].z_IC.amplitude = get(scan_input, "z_IC_amplitude1", 0.001)
     #species[1].z_IC.initialization_option = "bgk"
     # set initial neutral densiity = Nₑ
-    if composition.n_species > 1
-        species[2].initial_density = get(scan_input, "initial_density2", 0.5)
-        species[2].initial_temperature = get(scan_input, "initial_temperature2", species[1].initial_temperature)
-        species[2].z_IC.amplitude = get(scan_input, "z_IC_amplitude2", species[1].z_IC.amplitude)
+    for (i, s) in enumerate(species[2:end])
+        i = i+1
+        s.initial_density = get(scan_input, "initial_density$i", 0.5)
+        s.initial_temperature = get(scan_input, "initial_temperature$i", species[1].initial_temperature)
+        s.z_IC.amplitude = get(scan_input, "z_IC_amplitude$i", species[1].z_IC.amplitude)
     end
     #################### end specification of species inputs #####################
 
