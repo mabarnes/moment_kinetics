@@ -78,7 +78,8 @@ function init_vth!(vth, z, spec, n_species)
             @. vth[:,is] =
                 sqrt(spec[is].initial_temperature
                      * (1.0 + spec[is].z_IC.temperature_amplitude
-                              * cospi(2.0*spec[is].z_IC.wavenumber*z.grid/z.L)))
+                              * cos(2.0*π*spec[is].z_IC.wavenumber*z.grid/z.L +
+                                    spec[is].z_IC.temperature_phase)))
         else
             @. vth[:,is] =  sqrt(spec[is].initial_temperature)
         end
@@ -92,8 +93,11 @@ function init_density!(dens, z, spec, n_species)
             @. dens[:,is] = spec[is].initial_density + exp(-(z.grid/spec[is].z_IC.width)^2)
         elseif spec[is].z_IC.initialization_option == "sinusoid"
             # initial condition is sinusoid in z
-            @. dens[:,is] = spec[is].initial_density*(1.0 + spec[is].z_IC.density_amplitude
-                *cospi(2.0*spec[is].z_IC.wavenumber*z.grid/z.L))
+            @. dens[:,is] =
+                (spec[is].initial_density
+                 * (1.0 + spec[is].z_IC.density_amplitude
+                          * cos(2.0*π*spec[is].z_IC.wavenumber*z.grid/z.L
+                                + spec[is].z_IC.density_phase)))
         elseif spec[is].z_IC.inititalization_option == "monomial"
             # linear variation in z, with offset so that
             # function passes through zero at upwind boundary
@@ -107,8 +111,10 @@ function init_upar!(upar, z, spec, n_species)
     for is ∈ 1:n_species
         if spec[is].z_IC.initialization_option == "sinusoid"
             # initial condition is sinusoid in z
-            @. upar[:,is] = (spec[is].z_IC.upar_amplitude
-                             * cospi(2.0*spec[is].z_IC.wavenumber*z.grid/z.L))
+            @. upar[:,is] =
+                (spec[is].z_IC.upar_amplitude
+                 * cos(2.0*π*spec[is].z_IC.wavenumber*z.grid/z.L
+                       + spec[is].z_IC.upar_phase))
         else
             @. upar[:,is] = 0.0
         end
@@ -126,7 +132,10 @@ function init_pdf_over_density!(pdf, spec, z, vpa, vth, vpa_norm_fac)
     elseif spec.vpa_IC.initialization_option == "sinusoid"
         # initial condition is sinusoid in vpa
         for iz ∈ 1:z.n
-            @. pdf[iz,:] = spec.vpa_IC.density_amplitude*cospi(2.0*spec.vpa_IC.wavenumber*vpa.grid/vpa.L)
+            @. pdf[iz,:] =
+                (spec.vpa_IC.density_amplitude
+                 * cos(2.0*π*spec.vpa_IC.wavenumber*vpa.grid/vpa.L
+                       + spec.vpa_IC.density_phase))
         end
     elseif spec.vpa_IC.initialization_option == "monomial"
         # linear variation in vpa, with offset so that

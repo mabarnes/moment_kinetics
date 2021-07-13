@@ -91,8 +91,11 @@ mutable struct initial_condition_input_mutable
     # inputs for "sinusoid" initial condition
     wavenumber::mk_int
     density_amplitude::mk_float
+    density_phase::mk_float
     upar_amplitude::mk_float
+    upar_phase::mk_float
     temperature_amplitude::mk_float
+    temperature_phase::mk_float
     # inputs for "monomial" initial condition
     monomial_degree::mk_int
 end
@@ -104,8 +107,11 @@ struct initial_condition_input
     # inputs for "sinusoid" initial condition
     wavenumber::mk_int
     density_amplitude::mk_float
+    density_phase::mk_float
     upar_amplitude::mk_float
+    upar_phase::mk_float
     temperature_amplitude::mk_float
+    temperature_phase::mk_float
     # inputs for "monomial" initial condition
     monomial_degree::mk_int
 end
