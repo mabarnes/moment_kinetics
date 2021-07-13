@@ -61,14 +61,18 @@ function mk_input(scan_input=Dict())
     # set initial nᵢ/Nₑ = 1.0
     species[1].initial_density = get(scan_input, "initial_density1", 0.5)
     species[1].initial_temperature = get(scan_input, "initial_temperature1", 1.0)
-    species[1].z_IC.amplitude = get(scan_input, "z_IC_amplitude1", 0.001)
+    species[1].z_IC.density_amplitude = get(scan_input, "z_IC_density_amplitude1", 0.001)
+    species[1].z_IC.upar_amplitude = get(scan_input, "z_IC_upar_amplitude1", 0.0)
+    species[1].z_IC.temperature_amplitude = get(scan_input, "z_IC_temperature_amplitude1", 0.0)
     #species[1].z_IC.initialization_option = "bgk"
     # set initial neutral densiity = Nₑ
     for (i, s) in enumerate(species[2:end])
         i = i+1
         s.initial_density = get(scan_input, "initial_density$i", 0.5)
         s.initial_temperature = get(scan_input, "initial_temperature$i", species[1].initial_temperature)
-        s.z_IC.amplitude = get(scan_input, "z_IC_amplitude$i", species[1].z_IC.amplitude)
+        s.z_IC.density_amplitude = get(scan_input, "z_IC_density_amplitude$i", species[1].z_IC.density_amplitude)
+        s.z_IC.upar_amplitude = get(scan_input, "z_IC_upar_amplitude$i", species[1].z_IC.upar_amplitude)
+        s.z_IC.temperature_amplitude = get(scan_input, "z_IC_temperature_amplitude$i", species[1].z_IC.temperature_amplitude)
     end
     #################### end specification of species inputs #####################
 
@@ -136,10 +140,12 @@ function mk_input(scan_input=Dict())
         end
         z_IC = initial_condition_input(species[is].z_IC.initialization_option,
             species[is].z_IC.width, species[is].z_IC.wavenumber,
-            species[is].z_IC.amplitude, species[is].z_IC.monomial_degree)
+            species[is].z_IC.density_amplitude, species[is].z_IC.upar_amplitude,
+            species[is].z_IC.temperature_amplitude, species[is].z_IC.monomial_degree)
         vpa_IC = initial_condition_input(species[is].vpa_IC.initialization_option,
             species[is].vpa_IC.width, species[is].vpa_IC.wavenumber,
-            species[is].vpa_IC.amplitude, species[is].vpa_IC.monomial_degree)
+            species[is].vpa_IC.density_amplitude, species[is].vpa_IC.upar_amplitude,
+            species[is].vpa_IC.temperature_amplitude, species[is].vpa_IC.monomial_degree)
         species_immutable[is] = species_parameters(species_type, species[is].initial_temperature,
             species[is].initial_density, z_IC, vpa_IC)
     end
@@ -262,11 +268,14 @@ function load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_resp
     # inputs for "sinusoid" initial condition
     # z_wavenumber should be an integer
     z_wavenumber = 1
-    z_amplitude = 0.1
+    z_density_amplitude = 0.1
+    z_upar_amplitude = 0.0
+    z_temperature_amplitude = 0.0
     # inputs for "monomial" initial condition
     z_monomial_degree = 2
     z_initial_conditions = initial_condition_input_mutable(z_initialization_option,
-        z_width, z_wavenumber, z_amplitude, z_monomial_degree)
+        z_width, z_wavenumber, z_density_amplitude, z_upar_amplitude,
+        z_temperature_amplitude, z_monomial_degree)
     # initialization inputs for vpa part of distribution function
     # supported options are "gaussian", "sinusoid" and "monomial"
     # inputs for 'gaussian' initial condition
@@ -276,11 +285,14 @@ function load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_resp
     vpa_width = 1.0
     # inputs for "sinusoid" initial condition
     vpa_wavenumber = 1
-    vpa_amplitude = 1.0
+    vpa_density_amplitude = 1.0
+    vpa_upar_amplitude = 0.0
+    vpa_temperature_amplitude = 0.0
     # inputs for "monomial" initial condition
     vpa_monomial_degree = 2
     vpa_initial_conditions = initial_condition_input_mutable(vpa_initialization_option,
-        vpa_width, vpa_wavenumber, vpa_amplitude, vpa_monomial_degree)
+        vpa_width, vpa_wavenumber, vpa_density_amplitude, vpa_upar_amplitude,
+        vpa_temperature_amplitude, vpa_monomial_degree)
 
     # fill in entries in species struct corresponding to ion species
     for is ∈ 1:n_ion_species
