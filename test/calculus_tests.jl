@@ -7,14 +7,18 @@ using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.chebyshev: setup_chebyshev_pseudospectral
 using moment_kinetics.calculus: derivative!, integral
 
+fd_fake_setup(x) = return false
+
 @testset "calculus" begin
-    @testset "fundamental theorem of calculus" begin
+    @testset "fundamental theorem of calculus" for (discretization, setup_func) ∈
+            (("finite_difference", fd_fake_setup),
+             ("chebyshev_pseudospectral", setup_chebyshev_pseudospectral))
+
         etol = 1.0e-15
         # define inputs needed for the test
         ngrid = 5
         nelement = 2
         L = 6.0
-        discretization = "chebyshev_pseudospectral"
         bc = "periodic"
         # fd_option and adv_input not actually used so given values unimportant
         fd_option = ""
@@ -26,7 +30,7 @@ using moment_kinetics.calculus: derivative!, integral
         x = define_coordinate(input)
         # create arrays needed for Chebyshev pseudospectral treatment in x
         # and create the plans for the forward and backward fast Chebyshev transforms
-        spectral = setup_chebyshev_pseudospectral(x)
+        spectral = setup_func(x)
         # create array for the function f(x) to be differentiated/integrated
         f = Array{Float64,1}(undef, x.n)
         # create array for the derivative df/dx
