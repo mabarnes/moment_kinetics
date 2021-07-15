@@ -12,6 +12,7 @@ using FFTW
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_float, allocate_complex
 using ..clenshaw_curtis: clenshawcurtisweights
+import ..interpolation: interpolate_to_grid_1d
 
 struct chebyshev_info{TForward <: FFTW.cFFTWPlan, TBackward <: AbstractFFTs.ScaledPlan}
     # fext is an array for storing f(z) on the extended domain needed
@@ -181,6 +182,112 @@ function chebyshev_spectral_derivative!(df,f)
         end
         df[1] = f[2] + 0.5*df[3]
     end
+end
+
+"""
+Interpolation from a regular grid to a 1d grid with arbitrary spacing
+
+Arguments
+---------
+new_grid : Array{mk_float, 1}
+    Grid of points to interpolate `coord` to
+f : Array{mk_float}
+    Field to be interpolated
+coord : coordinate
+    `coordinate` struct giving the coordinate along which f varies
+chebyshev : chebyshev_info
+    struct containing information for Chebyshev transforms
+
+Returns
+-------
+result : Array
+    Array with the values of `f` interpolated to the points in `new_grid`.
+"""
+function interpolate_to_grid_1d(newgrid, f, coord, chebyshev::chebyshev_info)
+    # define local variable nelement for convenience
+    nelement = coord.nelement
+    # check array bounds
+    @boundscheck nelement == size(chebyshev.f,2) || throw(BoundsError(chebyshev.f))
+
+    # Array for output
+    result = similar(newgrid)
+
+    n_new = size(newgrid)[1]
+    # Find which points belong to which element.
+    # kstart[j] contains the index of the first point in newgrid that is within element
+    # j, and kstart[nelement+1]=n_new.
+    # Assumes points in newgrid are sorted.
+    # May not be the moste efficient algorithm.
+    kstart = [1]
+    k = 1
+    @inbounds for j ∈ 1:nelement
+        while true
+            if k == n_new+1 || newgrid[k] > coord.grid[coord.imax[j]]
+                push!(kstart, k)
+                break
+            end
+
+            k += 1
+
+            if k == n_new+1 || newgrid[k] > coord.grid[coord.imax[j]]
+                push!(kstart, k)
+                break
+            end
+        end
+    end
+
+    # First element includes both boundary points, while all others have only one (to
+    # avoid duplication), so calculate the first element outside the loop.
+    if kstart[1] < kstart[2]
+        result[kstart[1]:kstart[2]-1] =
+            chebyshev_interpolate_single_element(newgrid[kstart[1]:kstart[2]-1],
+                                                 f[coord.imin[1]:coord.imax[1]],
+                                                 1, coord, chebyshev)
+    end
+    @inbounds for j ∈ 2:nelement
+        if kstart[j] < kstart[j+1]
+            result[kstart[j]:kstart[j+1]-1] =
+                chebyshev_interpolate_single_element(newgrid[kstart[j]:kstart[j+1]-1],
+                                                     f[coord.imin[j]-1:coord.imax[j]],
+                                                     j, coord, chebyshev)
+        end
+    end
+
+    return result
+end
+function chebyshev_interpolate_single_element(newgrid, f, j, coord, chebyshev)
+    # Temporary buffer to store Chebyshev coefficients
+    cheby_f = Array{mk_float, 1}(undef, coord.ngrid)
+
+    # Array for the result
+    result = similar(newgrid, mk_float)
+
+    # Need to transform newgrid values to a scaled z-coordinate associated with the
+    # Chebyshev coefficients to get the interpolated function values. Transform is a
+    # shift and scale so that the element coordinate goes from -1 to 1
+    imin = j == 1 ? coord.imin[1] : coord.imin[j] - 1
+    imax = coord.imax[j]
+    shift = 0.5 * (coord.grid[imin] + coord.grid[imax])
+    scale = 2.0 / (coord.grid[imax] - coord.grid[imin])
+
+    # Get Chebyshev coefficients
+    chebyshev_forward_transform!(cheby_f, chebyshev.fext, f, chebyshev.forward, coord.ngrid)
+
+    for (i, x) ∈ enumerate(newgrid)
+        z = scale * (x - shift)
+        # Evaluate sum of Chebyshev polynomials at z using recurrence relation
+        cheb1 = 1.0
+        cheb2 = z
+        result[i] = cheby_f[1] * cheb1 + cheby_f[2] * cheb2
+        for coef in cheby_f[3:end]
+            temp = cheb2
+            cheb2 = 2.0 * z * cheb2 - cheb1
+            cheb1 = temp
+            result[i] += coef * cheb2
+        end
+    end
+
+    return result
 end
 # returns wgts array containing the integration weights associated
 # with all grid points for Clenshaw-Curtis quadrature
