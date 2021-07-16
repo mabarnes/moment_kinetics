@@ -4,4 +4,5 @@ using Test: @testset
     include("calculus_tests.jl")
     include("interpolation_tests.jl")
     include("sound_wave_tests.jl")
+    include("nonlinear_sound_wave_tests.jl")
 end
