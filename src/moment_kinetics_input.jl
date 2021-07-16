@@ -314,13 +314,13 @@ function load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_resp
     # fill in entries in species struct corresponding to ion species
     for is ∈ 1:n_ion_species
         species[is] = species_parameters_mutable("ion", initial_temperature, initial_density,
-            z_initial_conditions, vpa_initial_conditions)
+            deepcopy(z_initial_conditions), deepcopy(vpa_initial_conditions))
     end
     # if there are neutrals, fill in corresponding entries in species struct
     if n_neutral_species > 0
         for is ∈ 1:n_neutral_species
             species[n_ion_species + is] = species_parameters_mutable("neutral", initial_temperature,
-                initial_density, z_initial_conditions, vpa_initial_conditions)
+                initial_density, deepcopy(z_initial_conditions), deepcopy(vpa_initial_conditions))
         end
     end
     # if drive_phi = true, include external electrostatic potential of form
