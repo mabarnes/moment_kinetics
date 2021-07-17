@@ -59,6 +59,6 @@ fd_fake_setup(x) = return false
         #end
 
         # Test that error intdf is less than the specified error tolerance etol
-        @test intdf < etol
+        @test abs(intdf) < etol
     end
 end
