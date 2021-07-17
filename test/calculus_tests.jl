@@ -9,15 +9,23 @@ using moment_kinetics.calculus: derivative!, integral
 
 fd_fake_setup(x) = return false
 
-@testset "calculus" begin
-    @testset "fundamental theorem of calculus" for (discretization, setup_func) ∈
+@testset "fundamental theorem of calculus" begin
+    @testset "$discretization $ngrid $nelement" for (discretization, setup_func) ∈
             (("finite_difference", fd_fake_setup),
-             ("chebyshev_pseudospectral", setup_chebyshev_pseudospectral))
+             ("chebyshev_pseudospectral", setup_chebyshev_pseudospectral)),
+            ngrid ∈ (5,6,7,8,9,10), nelement ∈ (1, 2, 3, 4, 5)
+
+        if discretization == "finite_difference" && (ngrid - 1) * nelement % 2 == 1
+            # When the total number of points (counting the periodically identified end
+            # points a a single point) is odd, we have to use Simpson's 3/8 rule for
+            # integration for one set of points at the beginning of the array, which
+            # breaks the symmetry that makes integration of the derivative exact, so
+            # this test would fail
+            continue
+        end
 
         etol = 1.0e-15
         # define inputs needed for the test
-        ngrid = 5
-        nelement = 2
         L = 6.0
         bc = "periodic"
         # fd_option and adv_input not actually used so given values unimportant
