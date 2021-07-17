@@ -516,15 +516,17 @@ end
 @testset "sound wave" begin
     println("sound wave tests")
 
-    # finite difference
-    run_test_set_finite_difference()
-    @long run_test_set_finite_difference_split_1_moment()
-    @long run_test_set_finite_difference_split_2_moments()
-    run_test_set_finite_difference_split_3_moments()
+    @testset "finite difference" begin
+        run_test_set_finite_difference()
+        @long run_test_set_finite_difference_split_1_moment()
+        @long run_test_set_finite_difference_split_2_moments()
+        run_test_set_finite_difference_split_3_moments()
+    end
 
-    # Chebyshev pseudospectral
-    run_test_set_chebyshev()
-    run_test_set_chebyshev_split_1_moment()
-    run_test_set_chebyshev_split_2_moments()
-    run_test_set_chebyshev_split_3_moments()
+    @testset "Chebyshev" begin
+        run_test_set_chebyshev()
+        run_test_set_chebyshev_split_1_moment()
+        run_test_set_chebyshev_split_2_moments()
+        run_test_set_chebyshev_split_3_moments()
+    end
 end
