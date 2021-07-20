@@ -1,6 +1,4 @@
-using Test: @testset, @test
-
-using moment_kinetics
+include("setup.jl")
 
 using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.coordinates: define_coordinate
@@ -8,6 +6,7 @@ using moment_kinetics.chebyshev: setup_chebyshev_pseudospectral
 using moment_kinetics.calculus: derivative!, integral
 
 @testset "calculus" begin
+    println("calculus tests")
     @testset "fundamental theorem of calculus" begin
         etol = 1.0e-15
         # define inputs needed for the test

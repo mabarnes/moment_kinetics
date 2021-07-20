@@ -1,0 +1,47 @@
+# Run all tests, which can take a long time
+name: Long tests
+
+# Only run when commits are added to master branch
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macOS-latest]
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v2
+      - uses: julia-actions/setup-julia@v1
+        with:
+          version: '1'
+          arch: x64
+      - uses: julia-actions/julia-buildpkg@v1
+        # The following is copied and simplified from
+        # https://github.com/julia-actions/julia-runtest/blob/master/action.yml
+        # in order to pass customised arguments to `Pkg.test()`
+        #
+        # Occasionally, there are rather large delays (> a few hours)
+        # between the time a package is registered in General and
+        # propagated to pkg.julialang.org.  We can avoid this by manually
+        # cloning ~/.julia/registries/General/ in Julia 1.5 and later.
+        # See:
+        # * https://github.com/JuliaLang/Pkg.jl/issues/2011
+        # * https://github.com/JuliaRegistries/General/issues/16777
+        # * https://github.com/JuliaPackaging/PkgServer.jl/issues/60
+      - run: julia --color=yes "$GITHUB_ACTION_PATH"/add_general_registry.jl
+        shell: bash
+        env:
+          # We set `JULIA_PKG_SERVER` only for this step to enforce
+          # `Pkg.Registry.add` to use Git.  This way, Pkg.jl can send
+          # the request metadata to pkg.julialang.org when installing
+          # packages via `Pkg.test`.
+          JULIA_PKG_SERVER: ""
+      - run: |
+          julia --check-bounds=yes --color=yes --depwarn=yes --inline=yes --project=@. -e 'import Pkg; Pkg.test(; coverage = :true, force_latest_compatible_version = :auto, test_args=["--long"])'
+        shell: bash

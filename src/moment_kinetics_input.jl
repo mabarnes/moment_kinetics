@@ -38,13 +38,14 @@ function mk_input(scan_input=Dict())
     # this is the prefix for all output files associated with this run
     run_name = get(scan_input, "run_name", "ppar")
     # this is the directory where the simulation data will be stored
-    output_dir = string("runs/",run_name)
+    base_directory = get(scan_input, "base_directory", "runs")
+    output_dir = string(base_directory, "/", run_name)
     # if evolve_moments.density = true, evolve density via continuity eqn
     # and g = f/n via modified drift kinetic equation
-    evolve_moments.density = true
-    evolve_moments.parallel_flow = true
-    evolve_moments.parallel_pressure = true
-    evolve_moments.conservation = true
+    evolve_moments.density = get(scan_input, "evolve_moments_density", true)
+    evolve_moments.parallel_flow = get(scan_input, "evolve_moments_parallel_flow", true)
+    evolve_moments.parallel_pressure = get(scan_input, "evolve_moments_parallel_pressure", true)
+    evolve_moments.conservation = get(scan_input, "evolve_moments_conservation", true)
 #    evolve_moments.advective_form = false
 
     #z.advection.option = "constant"
@@ -58,15 +59,15 @@ function mk_input(scan_input=Dict())
     composition.T_e = get(scan_input, "T_e", 1.0)
     # set initial neutral temperature Tn/Tₑ = 1
     # set initial nᵢ/Nₑ = 1.0
-    species[1].initial_density = get(scan_input, ("initial_density", 1), 0.5)
-    species[1].initial_temperature = get(scan_input, ("initial_temperature", 1), 1.0)
-    species[1].z_IC.amplitude = get(scan_input, ("z_IC_amplitude", 1), 0.001)
+    species[1].initial_density = get(scan_input, "initial_density1", 0.5)
+    species[1].initial_temperature = get(scan_input, "initial_temperature1", 1.0)
+    species[1].z_IC.amplitude = get(scan_input, "z_IC_amplitude1", 0.001)
     #species[1].z_IC.initialization_option = "bgk"
     # set initial neutral densiity = Nₑ
     if composition.n_species > 1
-        species[2].initial_density = get(scan_input, ("initial_density", 2), 0.5)
-        species[2].initial_temperature = get(scan_input, ("initial_temperature", 2), species[1].initial_temperature)
-        species[2].z_IC.amplitude = get(scan_input, ("z_IC_amplitude", 2), species[1].z_IC.amplitude)
+        species[2].initial_density = get(scan_input, "initial_density2", 0.5)
+        species[2].initial_temperature = get(scan_input, "initial_temperature2", species[1].initial_temperature)
+        species[2].z_IC.amplitude = get(scan_input, "z_IC_amplitude2", species[1].z_IC.amplitude)
     end
     #################### end specification of species inputs #####################
 
@@ -75,44 +76,37 @@ function mk_input(scan_input=Dict())
     # parameters related to the time stepping
     nstep = get(scan_input, "nstep", 5000)
     dt = get(scan_input, "dt", 0.001/sqrt(species[1].initial_temperature))
-    nwrite = get(scan_input, "nwrite", 10)
+    nwrite = get(scan_input, "nwrite", 20)
     # use_semi_lagrange = true to use interpolation-free semi-Lagrange treatment
     # otherwise, solve problem solely using the discretization_option above
-    use_semi_lagrange = false
+    use_semi_lagrange = get(scan_input, "use_semi_lagrange", false)
     # options are n_rk_stages = 1, 2, 3 or 4 (corresponding to forward Euler,
     # Heun's method, SSP RK3 and 4-stage SSP RK3)
-    n_rk_stages = 4
-    split_operators = false
+    n_rk_stages = get(scan_input, "n_rk_stages", 4)
+    split_operators = get(scan_input, "split_operators", false)
 
     # overwrite some default parameters related to the z grid
     # ngrid is number of grid points per element
-    z.ngrid = 9
+    z.ngrid = get(scan_input, "z_ngrid", 9)
     # nelement is the number of elements
-    z.nelement = 2
-    #z.ngrid = 400
-    #z.nelement = 1
+    z.nelement = get(scan_input, "z_nelement", 2)
     # determine the discretization option for the z grid
     # supported options are "chebyshev_pseudospectral" and "finite_difference"
-    z.discretization = "chebyshev_pseudospectral"
-    #z.discretization = "finite_difference"
+    z.discretization = get(scan_input, "z_discretization", "chebyshev_pseudospectral")
 
     # overwrite some default parameters related to the vpa grid
     # ngrid is the number of grid points per element
-    vpa.ngrid = 17
+    vpa.ngrid = get(scan_input, "vpa_ngrid", 17)
     # nelement is the number of elements
-    vpa.nelement = 10
-    #vpa.ngrid = 400
-    #vpa.nelement = 1
+    vpa.nelement = get(scan_input, "vpa_nelement", 10)
     # L is the box length in units of vthermal_species
-    vpa.L = 8.0*sqrt(species[1].initial_temperature)
+    vpa.L = get(scan_input, "vpa_L", 8.0*sqrt(species[1].initial_temperature))
     # determine the boundary condition
     # only supported option at present is "zero" and "periodic"
-    vpa.bc = "periodic"
-    #vpa.bc = "zero"
+    vpa.bc = get(scan_input, "vpa_bc", "periodic")
     # determine the discretization option for the vpa grid
     # supported options are "chebyshev_pseudospectral" and "finite_difference"
-    vpa.discretization = "chebyshev_pseudospectral"
-    #vpa.discretization = "finite_difference"
+    vpa.discretization = get(scan_input, "vpa_discretization", "chebyshev_pseudospectral")
 
     #########################################################################
     ########## end user inputs. do not modify following code! ###############
@@ -315,7 +309,7 @@ function check_input(run_name, output_dir, nstep, dt, use_semi_lagrange, z, vpa,
     # if not, create it
     isdir(output_dir) || mkdir(output_dir)
     # copy the input file to the output directory to be saved
-    cp("moment_kinetics_input.jl", string(output_dir,"/moment_kinetics_input.jl"), force=true)
+    cp(joinpath(@__DIR__, "moment_kinetics_input.jl"), joinpath(output_dir, "moment_kinetics_input.jl"), force=true)
     # open ascii file in which informtaion about input choices will be written
     io = open_output_file(string(output_dir,"/",run_name), "input")
     check_input_time_advance(nstep, dt, use_semi_lagrange, io)

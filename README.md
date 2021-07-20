@@ -27,6 +27,16 @@ Parameter scans can be run, and can (optionally) use multiple processors. Short 
     julia -O3 --project -Jdependencies.so plot_comparison.jl
     ```
 
+## Tests
+There is a test suite in the `test/` subdirectory. It can be run in a few ways:
+* Run using `Pkg`. Either start the julia REPL, enter `]` to enter `pkg>` mode and type test; execute `import Pkg; Pkg.test()` in the REPL; or run on the command line `julia -e "import Pkg; Pkg.test()`.
+* Execute some or all of the tests as a script. For example in the terminal run `julia -O3 --project test/runtests.jl` or in the REPL run `include("test/runtests.jl")`. Individual test files can also be run instead of `runtests.jl` which runs all the tests.
+
+By default the test suite should run fairly quickly (in a few minutes). To do so, it skips many cases. To run more comprehensive tests, you can activate the `--long` option:
+* `Pkg.test(; test_args=["--long"])`. Note the semicolon is necessary.
+* In the REPL, run `push!(ARGS, "--long")` before running the tests.
+* Running from the terminal, pass as a command line argument, e.g. `julia -O3 --project --long test/runtests.jl`
+
 ## Developing
 * If you need to add a dependency, start the REPL with the `moment_kinetics` package activated (see [above](#moment_kinetics)), enter `pkg>` mode  and then to add, for example, the `FFTW.jl` package enter `add FFTW`. This should take kare of adding the package (`FFTW`) to the `Project.toml` and `Manifest.toml` files.
 * When working on the code, one way to avoid waiting for everything to recompile frequently is to load the Revise.jl package `using Revise`, which will recompile each edited function/method as needed, so it is possible to keep a REPL session open and avoid long recompilation. `moment_kinetics` can be run fairly conveniently from the REPL as `using TimerOutputs; using moment_kinetics; run_moment_kinetics(TimerOutput(), input)` where `input` is a `Dict()` containing any non-default options desired. Input can also be loaded from a TOML file passing the filaname as a String to the second argument, e.g. `run_moment_kinetics(TimerOutput(), "input.toml")`. It might be convenient to add `using Revise` to your `startup.jl` file so it's always loaded.
