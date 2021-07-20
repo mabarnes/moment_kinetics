@@ -75,3 +75,9 @@ function quietoutput(body)
         redirect_stdout(oldstd)
     end
 end
+
+"""
+Pass this function to the `norm` argument of `isapprox()` to test the maximum error
+between two arrays.
+"""
+maxabs_norm(x) = maximum(abs.(x))
