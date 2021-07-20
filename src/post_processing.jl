@@ -6,6 +6,7 @@ export analyze_and_plot
 using Plots
 using LsqFit
 using NCDatasets
+using Statistics: mean
 # modules
 using ..post_processing_input: pp
 using ..quadrature: composite_simpson_weights
@@ -32,13 +33,12 @@ function analyze_and_plot_data(path)
     phi_fldline_avg, delta_phi = analyze_fields_data(phi, ntime, nz, z_wgts, Lz)
     # use a fit to calculate and write to file the damping rate and growth rate of the
     # perturbed electrostatic potential
-    frequency, growth_rate, phase, shifted_time =
-        calculate_and_write_frequencies(fid, run_name, ntime, time, itime_min,
+    frequency, growth_rate, shifted_time, fitted_delta_phi =
+        calculate_and_write_frequencies(fid, run_name, ntime, time, z, itime_min,
                                         itime_max, iz0, delta_phi, pp)
     # create the requested plots of the fields
     plot_fields(phi, delta_phi, time, itime_min, itime_max, nwrite_movie,
-                z, iz0, run_name, frequency, growth_rate, phase,
-                shifted_time, pp)
+                z, iz0, run_name, fitted_delta_phi, pp)
     # load velocity moments data
     density, parallel_flow, parallel_pressure, parallel_heat_flux,
         thermal_speed, n_species, evolve_ppar = load_moments_data(fid)
@@ -197,47 +197,35 @@ function init_postprocessing_options(pp, nz, nvpa, ntime)
     println("done.")
     return nwrite_movie, itime_min, itime_max, iz0, ivpa0
 end
-function calculate_and_write_frequencies(fid, run_name, ntime, time, itime_min, itime_max, iz0, delta_phi, pp)
+function calculate_and_write_frequencies(fid, run_name, ntime, time, z, itime_min,
+                                         itime_max, iz0, delta_phi, pp)
     if pp.calculate_frequencies
         println("Calculating the frequency and damping/growth rate...")
         # shifted_time = t - t0
         shifted_time = allocate_float(ntime)
         @. shifted_time = time - time[itime_min]
-        # assume phi(z0,t) = A*exp(growth_rate*t)*cos(ω*t - φ)
+        # assume phi(z0,t) = A*exp(growth_rate*t)*cos(ω*t + φ)
         # and fit phi(z0,t)/phi(z0,t0), which eliminates the constant A pre-factor
-        @views growth_rate, frequency, phase, fit_error =
-            compute_frequencies(shifted_time[itime_min:itime_max], delta_phi[iz0,itime_min:itime_max])
-        # estimate variation of frequency/growth rate over time_window by computing
-        # values for each half of the time window and taking max/min
-#=
-        i1 = itime_min ; i2 = itime_min + cld(itime_max-itime_min,2)
-        println("t1: ", time[i1], "  t2: ", time[i2])
-        @views growth_rate_1, frequency_1, phase_1, _ =
-            compute_frequencies(shifted_time[i1:i2], delta_phi[iz0,i1:i2])
-        i1 = i2+1 ; i2 = itime_max
-        println("t1: ", time[i1], "  t2: ", time[i2])
-        @views growth_rate_2, frequency_2, phase_2, _ =
-            compute_frequencies(shifted_time[i1:i2], delta_phi[iz0,i1:i2])
-=#
-        # use dummy values for growth_rate_x and frequency_x, as original calculation seems broken
-        growth_rate_1 = growth_rate ; frequency_1 = frequency
-        growth_rate_2 = growth_rate ; frequency_2 = frequency
-        #
-        growth_rate_max = max(growth_rate_1, growth_rate_2, growth_rate)
-        growth_rate_min = min(growth_rate_1, growth_rate_2, growth_rate)
-        frequency_max = max(frequency_1, frequency_2, frequency)
-        frequency_min = min(frequency_1, frequency_2, frequency)
+        @views phi_fit = fit_delta_phi_mode(shifted_time[itime_min:itime_max], z,
+                                            delta_phi[:, itime_min:itime_max])
+
         # write info related to fit to file
         io = open_output_file(run_name, "frequency_fit.txt")
-        println(io, "#growth_rate: ", growth_rate, "  min: ", growth_rate_min, "  max: ", growth_rate_max,
-            "  frequency: ", frequency, "  min: ", frequency_min, "  max: ", frequency_max,
-            "  phase: ", phase, " fit_error: ", fit_error)
+        println(io, "#growth_rate: ", phi_fit.growth_rate,
+                "  frequency: ", phi_fit.frequency,
+                " fit_errors: ", phi_fit.amplitude_fit_error, " ",
+                phi_fit.offset_fit_error, " ", phi_fit.cosine_fit_error)
         println(io)
-        fit_phi = (delta_phi[iz0,itime_min]./cos(phase) .* exp.(growth_rate.*shifted_time)
-                   .* cos.(frequency*shifted_time .+ phase))
+
+        # Calculate the fitted phi as a function of time at index iz0
+        L = z[end] - z[begin]
+        fitted_delta_phi =
+            @. (phi_fit.amplitude0 * cos(2.0 * π * (z[iz0] + phi_fit.offset0) / L)
+                * exp(phi_fit.growth_rate * shifted_time)
+                * cos(phi_fit.frequency * shifted_time + phi_fit.phase))
         for i ∈ 1:ntime
             println(io, "time: ", time[i], "  delta_phi: ", delta_phi[iz0,i],
-                    "  fit_phi: ", fit_phi[i])
+                    "  fitted_delta_phi: ", fitted_delta_phi[i])
         end
         close(io)
         # also save fit to NetCDF file
@@ -250,25 +238,29 @@ function calculate_and_write_frequencies(fid, run_name, ntime, time, itime_min, 
             end
         end
         var = get_or_create("growth_rate", "mode growth rate from fit")
-        var[:] = growth_rate
-        var = get_or_create("growth_rate_min","min growth rate from different fits")
-        var[:] = growth_rate_min
-        var = get_or_create("growth_rate_max","max growth rate from different fits")
-        var[:] = growth_rate_max
+        var[:] = phi_fit.growth_rate
         var = get_or_create("frequency","mode frequency from fit")
-        var[:] = frequency
-        var = get_or_create("frequency_min","min frequency from different fits")
-        var[:] = frequency_min
-        var = get_or_create("frequency_max","max frequency from different fits")
-        var[:] = frequency_max
-        var = get_or_create("phase","mode phase from fit")
-        var[:] = phase
+        var[:] = phi_fit.frequency
         var = get_or_create("delta_phi", "delta phi from simulation", ("nz", "ntime"))
         var[:,:] = delta_phi
-        var = get_or_create("fit_phi","fit to delta phi", ("ntime",))
-        var[:] = fit_phi
-        var = get_or_create("fit_error","RMS error on the fit of phi")
-        var[:] = fit_error
+        var = get_or_create("phi_amplitude", "amplitude of delta phi from fit over z",
+                            ("ntime",))
+        var[:,:] = phi_fit.amplitude
+        var = get_or_create("phi_offset", "offset of delta phi from fit over z",
+                            ("ntime",))
+        var[:,:] = phi_fit.offset
+        var = get_or_create("fitted_delta_phi","fit to delta phi", ("ntime",))
+        var[:] = fitted_delta_phi
+        var = get_or_create("amplitude_fit_error",
+                            "RMS error on the fit of the ln(amplitude) of phi")
+        var[:] = phi_fit.amplitude_fit_error
+        var = get_or_create("offset_fit_error",
+                            "RMS error on the fit of the offset of phi")
+        var[:] = phi_fit.offset_fit_error
+        var = get_or_create("cosine_fit_error",
+                            "Maximum over time of the RMS error on the fit of a cosine "
+                            * "to phi.")
+        var[:] = phi_fit.cosine_fit_error
         println("done.")
     else
         frequency = 0.0
@@ -277,10 +269,10 @@ function calculate_and_write_frequencies(fid, run_name, ntime, time, itime_min, 
         shifted_time = allocate_float(ntime)
         @. shifted_time = time - time[itime_min]
     end
-    return frequency, growth_rate, phase, shifted_time
+    return phi_fit.frequency, phi_fit.growth_rate, shifted_time, fitted_delta_phi
 end
 function plot_fields(phi, delta_phi, time, itime_min, itime_max, nwrite_movie,
-    z, iz0, run_name, frequency, growth_rate, phase, shifted_time, pp)
+    z, iz0, run_name, fitted_delta_phi, pp)
 
     println("Plotting fields data...")
     phimin = minimum(phi)
@@ -294,8 +286,7 @@ function plot_fields(phi, delta_phi, time, itime_min, itime_max, nwrite_movie,
         # plot the time trace of phi(z=z0)-phi_fldline_avg
         @views plot(time, abs.(delta_phi[iz0,:]), xlabel="t*Lz/vti", ylabel="δϕ", yaxis=:log)
         if pp.calculate_frequencies
-            plot!(time, abs.(delta_phi[iz0,itime_min]/cos(phase) * exp.(growth_rate*shifted_time)
-                .* cos.(frequency*shifted_time .+ phase)))
+            plot!(time, abs.(fitted_delta_phi))
         end
         outfile = string(run_name, "_delta_phi0_vs_t.pdf")
         savefig(outfile)
@@ -437,23 +428,145 @@ function plot_moments(density, delta_density, density_fldline_avg,
     println("done.")
 end
 
-function compute_frequencies(time_window, dphi)
-    growth_rate = 0.0 ; frequency = 0.0 ; phase = 0.0 ; fit_error = 0.0
-    for iter ∈ 1:10
-        @views growth_rate_change, frequency, phase, fit_error =
-            fit_phi0_vs_time(exp.(-growth_rate*time_window) .* dphi, time_window)
-        growth_rate += growth_rate_change
-        println("growth_rate: ", growth_rate, "  growth_rate_change/growth_rate: ", growth_rate_change/growth_rate, "  fit_error: ", fit_error)
-        if abs(growth_rate_change/growth_rate) < 1.0e-8 || fit_error < 1.0e-3
-            break
-        end
+"""
+Fit delta_phi to get the frequency and growth rate.
+
+Note, expect the input to be a standing wave (as simulations are initialised with just a
+density perturbation), so need to extract both frequency and growth rate from the
+time-variation of the amplitude.
+
+The function assumes that if the amplitude does not cross zero, then the mode is
+non-oscillatory and so fits just an exponential, not exp*cos. The simulation used as
+input should be long enough to contain at least ~1 period of oscillation if the mode is
+oscillatory or the fit will not work.
+
+Arguments
+---------
+z : Array{mk_float, 1}
+    1d array of the grid point positions
+t : Array{mk_float, 1}
+    1d array of the time points
+delta_phi : Array{mk_float, 2}
+    2d array of the values of delta_phi(z, t)
+
+Returns
+-------
+phi_fit_result struct whose fields are:
+    growth_rate : mk_flaot
+        Fitted growth rate of the mode
+    amplitude0 : mk_float
+        Fitted amplitude at t=0
+    frequency : mk_float
+        Fitted frequency of the mode
+    offset0 : mk_float
+        Fitted offset at t=0
+    amplitude_fit_error : mk_float
+        RMS error in fit to ln(amplitude) - i.e. ln(A)
+    offset_fit_error : mk_float
+        RMS error in fit to offset - i.e. δ
+    cosine_fit_error : mk_float
+        Maximum of the RMS errors of the cosine fits at each time point
+    amplitude : Array{mk_float, 1}
+        Values of amplitude from which growth_rate fit was calculated
+    offset : Array{mk_float, 1}
+        Values of offset from which frequency fit was calculated
+"""
+function fit_delta_phi_mode(t, z, delta_phi)
+    # First fit a cosine to each time slice
+    results = Array{mk_float, 2}(undef, 3, size(delta_phi)[2])
+    amplitude_guess = 1.0
+    offset_guess = 0.0
+    for (i, phi_z) in enumerate(eachcol(delta_phi))
+        results[:, i] .= fit_cosine(z, phi_z, amplitude_guess, offset_guess)
+        (amplitude_guess, offset_guess) = results[1:2, i]
     end
-    return growth_rate, frequency, phase, fit_error
+
+    amplitude = results[1, :]
+    offset = results[2, :]
+    cosine_fit_error = results[3, :]
+
+    L = z[end] - z[begin]
+
+    # Choose initial amplitude to be positive, for convenience.
+    if amplitude[1] < 0
+        # 'Wrong sign' of amplitude is equivalent to a phase shift by π
+        amplitude .*= -1.0
+        offset .+= L / 2.0
+    end
+
+    # model for linear fits
+    @. model(t, p) = p[1] * t + p[2]
+
+    # Fit offset vs. time
+    # Would give phase velocity for a travelling wave, but we expect either a standing
+    # wave or a zero-frequency decaying mode, so expect the time variation of the offset
+    # to be ≈0
+    offset_fit = curve_fit(model, t, offset, [1.0, 0.0])
+    doffsetdt = offset_fit.param[1]
+    offset0 = offset_fit.param[2]
+    offset_error = sqrt(mean(offset_fit.resid .^ 2))
+    offset_tol = 2.e-5
+    if abs(doffsetdt) > offset_tol
+        error("d(offset)/dt=", doffsetdt, " is non-negligible (>", offset_tol,
+              ") but fit_delta_phi_mode expected either a standing wave or a ",
+              "zero-frequency decaying mode.")
+    end
+
+    growth_rate = 0.0
+    amplitude0 = 0.0
+    frequency = 0.0
+    phase = 0.0
+    fit_error = 0.0
+    if all(amplitude .> 0.0)
+        # No zero crossing, so assume the mode is non-oscillatory (i.e. purely
+        # growing/decaying).
+
+        # Fit ln(amplitude) vs. time so we don't give extra weight to early time points
+        amplitude_fit = curve_fit(model, t, log.(amplitude), [-1.0, 1.0])
+        growth_rate = amplitude_fit.param[1]
+        amplitude0 = exp(amplitude_fit.param[2])
+        fit_error = sqrt(mean(amplitude_fit.resid .^ 2))
+        frequency = 0.0
+        phase = 0.0
+    else
+        converged = false
+        maxiter = 100
+        for iter ∈ 1:maxiter
+            @views growth_rate_change, frequency, phase, fit_error =
+                fit_phi0_vs_time(exp.(-growth_rate*t) .* amplitude, t)
+            growth_rate += growth_rate_change
+            println("growth_rate: ", growth_rate, "  growth_rate_change/growth_rate: ", growth_rate_change/growth_rate, "  fit_error: ", fit_error)
+            if abs(growth_rate_change/growth_rate) < 1.0e-12 || fit_error < 1.0e-11
+                converged = true
+                break
+            end
+        end
+        if !converged
+            error("Iteration to find growth rate failed to converge in ", maxiter,
+                  "iterations")
+        end
+        amplitude0 = amplitude[1] / cos(phase)
+    end
+
+    return phi_fit_result(growth_rate, frequency, phase, amplitude0, offset0, fit_error,
+                          offset_error, maximum(cosine_fit_error), amplitude, offset)
+end
+struct phi_fit_result
+    growth_rate::mk_float
+    frequency::mk_float
+    phase::mk_float
+    amplitude0::mk_float
+    offset0::mk_float
+    fit_error::mk_float
+    offset_fit_error::mk_float
+    cosine_fit_error::mk_float
+    amplitude::Array{mk_float, 1}
+    offset::Array{mk_float, 1}
 end
 
 function fit_phi0_vs_time(phi0, tmod)
     # the model we are fitting to the data is given by the function 'model':
-    # assume phi(z0,t) = exp(γt)cos(ωt-φ) so that
+    # assume phi(z0,t) = exp(γt)cos(ωt+φ) so that
     # phi(z0,t)/phi(z0,t0) = exp((t-t₀)γ)*cos((t-t₀)*ω + phase)/cos(phase),
     # where tmod = t-t0 and phase = ωt₀-φ
     @. model(t, p) = exp(p[1]*t) * cos(p[2]*t + p[3]) / cos(p[3])
@@ -468,10 +581,56 @@ function fit_phi0_vs_time(phi0, tmod)
     #@. standard_deviation = se * sqrt(size(tmod))
 
     fitted_function = model(tmod, fit.param)
-    fit_error = sqrt(sum((phi0/phi0[1] - fitted_function).^2
-                         / max.(phi0/phi0[1], fitted_function).^2) / length(tmod))
+    fit_error = sqrt(mean((phi0/phi0[1] - fitted_function).^2
+                          / max.(phi0/phi0[1], fitted_function).^2))
 
     return fit.param[1], fit.param[2], fit.param[3], fit_error
+end
+
+"""
+Fit a cosine to a 1d array
+
+Fit function is A*cos(2*π*n*(z + δ)/L)
+
+The domain z is taken to be periodic, with the first and last points identified, so
+L=z[end]-z[begin]
+
+Arguments
+---------
+z : Array
+    1d array with positions of the grid points - should have the same length as data
+data : Array
+    1d array of the data to be fit
+amplitude_guess : Float
+    Initial guess for the amplitude (the value from the previous time point might be a
+    good choice)
+offset_guess : Float
+    Initial guess for the offset (the value from the previous time point might be a good
+    choice)
+n : Int, default 1
+    The periodicity used for the fit
+
+Returns
+-------
+amplitude : Float
+    The amplitude A of the cosine fit
+offset : Float
+    The offset δ of the cosine fit
+error : Float
+    The RMS of the difference between data and the fit
+"""
+function fit_cosine(z, data, amplitude_guess, offset_guess, n=1)
+    # Length of domain
+    L = z[end] - z[begin]
+
+    @. model(z, p) = p[1] * cos(2*π*n*(z + p[2])/L)
+    fit = curve_fit(model, z, data, [amplitude_guess, offset_guess])
+
+    # calculate error
+    error = sqrt(mean(fit.resid .^ 2))
+    println("")
+
+    return fit.param[1], fit.param[2], error
 end
 
 #function advection_test_1d(fstart, fend)

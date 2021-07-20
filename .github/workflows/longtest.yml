@@ -1,0 +1,31 @@
+# Run all tests, which can take a long time
+name: Long tests
+
+# Only run when commits are added to master branch
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macOS-latest]
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v2
+      - uses: julia-actions/setup-julia@v1
+        with:
+          version: '1'
+          arch: x64
+      - uses: julia-actions/julia-buildpkg@v1
+        # The following is copied and simplified from
+        # https://github.com/julia-actions/julia-runtest/blob/master/action.yml
+        # in order to pass customised arguments to `Pkg.test()`
+        #
+      - run: |
+          julia --check-bounds=yes --color=yes --depwarn=yes --inline=yes --project=@. -e 'import Pkg; Pkg.test(; coverage = :true, test_args=["--long"])'
+        shell: bash
