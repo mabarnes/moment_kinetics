@@ -4,6 +4,24 @@ export derivative_finite_difference!
 
 using ..type_definitions: mk_float
 
+function fd_check_option(option, ngrid)
+    if option == "second_order_upwind"
+        if ngrid < 3
+            error("ngrid < 3 incompatible with 2rd order upwind differences.")
+        end
+    elseif option == "third_order_upwind"
+        if ngrid < 4
+            error("ngrid < 4 incompatible with 3rd order upwind differences.")
+        end
+    elseif option == "fourth_order_centered"
+        if ngrid < 3
+            error("ngrid < 3 incompatible with 4th order centered differences.")
+        end
+    elseif ! option in ("first_order_upwind", "second_order_centered")
+        error("finite difference option '$option' is not recognised")
+    end
+end
+
 function derivative_finite_difference!(df, f, del, adv_fac, bc, fd_option, igrid, ielement)
 	if fd_option == "second_order_upwind"
 		upwind_second_order!(df, f, del, adv_fac, bc, igrid, ielement)
