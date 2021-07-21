@@ -7,13 +7,18 @@ Included in test files as `include("setup.jl")`
 
 # Commonly needed packages
 ##########################
-using ArgParse
 using Test: @testset, @test
 using moment_kinetics
 
+module MKTestUtilities
+
+export use_verbose, @long, quietoutput, maxabs_norm, @testset_skip
 
 # Parse command line arguments to allow settings to be used for tests
 #####################################################################
+
+using ArgParse
+
 s = ArgParseSettings()
 @add_arg_table! s begin
     "--long"
@@ -48,7 +53,7 @@ Tests marked with `@long` can be enabled by:
 """
 macro long(code)
     if options["long"]
-        :( $code )
+        :( $(esc(code)) )
     end
 end
 
@@ -87,13 +92,8 @@ between two arrays.
 maxabs_norm(x) = maximum(abs.(x))
 
 
-# Provide custom macro to skip a testset
-#################################################
-
-# Wrap in a module so we don't need to import extra stuff into the global namespace
-module SkipTestSets
-
-export @testset_skip
+# Custom macro to skip a testset
+################################
 
 import Test: Test, finish
 using Test: DefaultTestSet, Broken
@@ -131,6 +131,6 @@ macro testset_skip(args...)
     return ex
 end
 
-end # SkipTestSets
+end
 
-using .SkipTestSets
+using .MKTestUtilities

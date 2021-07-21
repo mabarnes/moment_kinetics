@@ -1,3 +1,5 @@
+module SoundWaveTests
+
 include("setup.jl")
 
 using Base.Filesystem: tempname
@@ -523,21 +525,29 @@ function run_test_set_chebyshev_split_3_moments()
     # CX=2*π*2.0 case with T_e=4 is too hard to converge, so skip
 end
 
+function runtests()
+    @testset "sound wave" verbose=use_verbose begin
+        println("sound wave tests")
 
-@testset "sound wave" verbose=use_verbose begin
-    println("sound wave tests")
+        @testset "finite difference" begin
+            run_test_set_finite_difference()
+            @long run_test_set_finite_difference_split_1_moment()
+            @long run_test_set_finite_difference_split_2_moments()
+            run_test_set_finite_difference_split_3_moments()
+        end
 
-    @testset "finite difference" begin
-        run_test_set_finite_difference()
-        @long run_test_set_finite_difference_split_1_moment()
-        @long run_test_set_finite_difference_split_2_moments()
-        run_test_set_finite_difference_split_3_moments()
-    end
-
-    @testset "Chebyshev" begin
-        run_test_set_chebyshev()
-        run_test_set_chebyshev_split_1_moment()
-        run_test_set_chebyshev_split_2_moments()
-        run_test_set_chebyshev_split_3_moments()
+        @testset "Chebyshev" begin
+            run_test_set_chebyshev()
+            run_test_set_chebyshev_split_1_moment()
+            run_test_set_chebyshev_split_2_moments()
+            run_test_set_chebyshev_split_3_moments()
+        end
     end
 end
+
+end # SoundWaveTests
+
+
+using .SoundWaveTests
+
+SoundWaveTests.runtests()
