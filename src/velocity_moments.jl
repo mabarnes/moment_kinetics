@@ -1,6 +1,7 @@
 module velocity_moments
 
 export integrate_over_vspace
+export integrate_over_positive_vpa, integrate_over_negative_vpa
 export create_moments
 export update_moments!
 export update_density!
@@ -205,6 +206,88 @@ end
 # computes the integral over vpa of the integrand, using the input vpa_wgts
 function integrate_over_vspace(integrand, vpa_wgts)
     return integral(integrand, vpa_wgts)/sqrt(pi)
+end
+# computes the integral over vpa >= 0 of the integrand, using the input vpa_wgts
+# this could be made more efficient for the case that dz/dt = vpa is time-independent,
+# but it has been left general for the cases where, e.g., dz/dt = wpa*vth + upar
+# varies in time
+function integrate_over_positive_vpa(integrand, dzdt, vpa_wgts, wgts_mod)
+    # define the nvpa variable for convenience
+    nvpa = length(integrand)
+    # define an approximation to zero that allows for finite-precision arithmetic
+    zero = -1.0e-8
+    # if dzdt at the maximum vpa index is negative, then dzdt < 0 everywhere
+    # the integral over positive dzdt is thus zero, as we assume the distribution
+    # function is zero beyond the simulated vpa domain
+    if dzdt[nvpa] < zero
+        vpa_integral = 0.0
+    else
+        # do bounds checks on arrays that will be used in the below loop
+        @boundscheck nvpa == length(integrand) || throw(BoundsError(integrand))
+        @boundscheck nvpa == length(dzdt) || throw(BoundsError(dzdt))
+        @boundscheck nvpa == length(vpa_wgts) || throw(BoundsError(vpa_wgts))
+        @boundscheck nvpa == length(wgts_mod) || throw(BoundsError(wgts_mod))
+        # initialise the integration weights, wgts_mod, to be the input vpa_wgts
+        # this will only change at the dzdt = 0 point, if it exists on the grid
+        @. wgts_mod = vpa_wgts
+        # ivpa_zero will be the minimum index for which dzdt[ivpa_zero] >= 0
+        ivpa_zero = 0
+        @inbounds for ivpa ∈ 1:nvpa
+            if dzdt[ivpa] >= zero
+                ivpa_zero = ivpa
+                # if dzdt = 0, need to divide its associated integration
+                # weight by a factor of 2 to avoid double-counting
+                if abs(dzdt[ivpa]) < abs(zero)
+                    wgts_mod[ivpa] /= 2.0
+                end
+                break
+            end
+        end
+        println("ivpa_zero: ", ivpa_zero, "  nvpa: ", nvpa)
+        @views vpa_integral = integral(integrand[ivpa_zero:end], wgts_mod[ivpa_zero:end])/sqrt(pi)
+    end
+    return vpa_integral
+end
+# computes the integral over vpa <= 0 of the integrand, using the input vpa_wgts
+# this could be made more efficient for the case that dz/dt = vpa is time-independent,
+# but it has been left general for the cases where, e.g., dz/dt = wpa*vth + upar
+# varies in time
+function integrate_over_negative_vpa(integrand, dzdt, vpa_wgts, wgts_mod)
+    # define the nvpa variable for convenience
+    nvpa = length(integrand)
+    # define an approximation to zero that allows for finite-precision arithmetic
+    zero = 1.0e-8
+    # if dzdt at the mimimum vpa index is positive, then dzdt > 0 everywhere
+    # the integral over negative dzdt is thus zero, as we assume the distribution
+    # function is zero beyond the simulated vpa domain
+    if dzdt[1] > zero
+        vpa_integral = 0.0
+    else
+        # do bounds checks on arrays that will be used in the below loop
+        @boundscheck nvpa == length(integrand) || throw(BoundsError(integrand))
+        @boundscheck nvpa == length(dzdt) || throw(BoundsError(dzdt))
+        @boundscheck nvpa == length(vpa_wgts) || throw(BoundsError(vpa_wgts))
+        @boundscheck nvpa == length(wgts_mod) || throw(BoundsError(wgts_mod))
+        # initialise the integration weights, wgts_mod, to be the input vpa_wgts
+        # this will only change at the dzdt = 0 point, if it exists on the grid
+        @. wgts_mod = vpa_wgts
+        # ivpa_zero will be the maximum index for which dzdt[ivpa_zero] <= 0
+        ivpa_zero = 0
+        @inbounds for ivpa ∈ nvpa:-1:1
+            if dzdt[ivpa] <= zero
+                ivpa_zero = ivpa
+                # if dzdt = 0, need to divide its associated integration
+                # weight by a factor of 2 to avoid double-counting
+                if abs(dzdt[ivpa]) < zero
+                    wgts_mod[ivpa] /= 2.0
+                end
+                break
+            end
+        end
+        println("ivpa_zero: ", ivpa_zero, "  nvpa: ", nvpa)
+        @views vpa_integral = integral(integrand[1:ivpa_zero], wgts_mod[1:ivpa_zero])/sqrt(pi)
+    end
+    return vpa_integral
 end
 function enforce_moment_constraints!(fvec_new, fvec_old, z, vpa, moments)
     #global @. dens_hist += fvec_old.density
