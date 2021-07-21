@@ -379,12 +379,12 @@ end
     @testset "FD split 1" begin
         run_test(test_input_finite_difference_split_1_moment, 1.e-3)
     end
-    #@testset "FD split 2" begin
-    #    run_test(test_input_finite_difference_split_2_moments, 1.e-3)
-    #end
-    #@testset "FD split 3" begin
-    #    run_test(test_input_finite_difference_split_3_moments, 1.e-3)
-    #end
+    @testset_skip "grids need shift/scale for collisions" "FD split 2" begin
+        run_test(test_input_finite_difference_split_2_moments, 1.e-3)
+    end
+    @testset_skip "grids need shift/scale for collisions" "FD split 3" begin
+        run_test(test_input_finite_difference_split_3_moments, 1.e-3)
+    end
 
     # Chebyshev pseudospectral
     # Benchmark data is taken from this run (Chebyshev with no splitting)
@@ -394,10 +394,10 @@ end
     @testset "Chebyshev split 1" begin
         run_test(test_input_chebyshev_split_1_moment, 1.e-3)
     end
-    #@testset "Chebyshev split 2" begin
-    #    run_test(test_input_chebyshev_split_2_moments, 1.e-3)
-    #end
-    #@testset "Chebyshev split 3" begin
-    #    run_test(test_input_chebyshev_split_3_moments, 1.e-3)
-    #end
+    @testset_skip "grids need shift/scale for collisions" "Chebyshev split 2" begin
+        run_test(test_input_chebyshev_split_2_moments, 1.e-3)
+    end
+    @testset_skip "grids need shift/scale for collisions" "Chebyshev split 3" begin
+        run_test(test_input_chebyshev_split_3_moments, 1.e-3)
+    end
 end
