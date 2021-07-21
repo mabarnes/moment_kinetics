@@ -524,7 +524,7 @@ function run_test_set_chebyshev_split_3_moments()
 end
 
 
-@testset "sound wave" begin
+@testset "sound wave" verbose=use_verbose begin
     println("sound wave tests")
 
     @testset "finite difference" begin

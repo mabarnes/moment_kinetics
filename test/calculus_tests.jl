@@ -9,7 +9,7 @@ using Random
 
 fd_fake_setup(x) = return false
 
-@testset "calculus" begin
+@testset "calculus" verbose=use_verbose begin
     println("calculus tests")
     @testset "fundamental theorem of calculus" begin
         @testset "$discretization $ngrid $nelement" for (discretization, setup_func) ∈
@@ -70,7 +70,7 @@ fd_fake_setup(x) = return false
 
     rng = MersenneTwister(42)
 
-    @testset "finite_difference derivatives (4 argument), periodic" begin
+    @testset "finite_difference derivatives (4 argument), periodic" verbose=false begin
         @testset "$nelement $ngrid" for nelement ∈ (1:5), ngrid ∈ (9:33)
 
             # define inputs needed for the test
@@ -103,7 +103,7 @@ fd_fake_setup(x) = return false
         end
     end
 
-    @testset "finite_difference derivatives upwinding (5 argument), periodic" begin
+    @testset "finite_difference derivatives upwinding (5 argument), periodic" verbose=false begin
         @testset "$nelement $ngrid" for
                 (fd_option, order) ∈ (
                                       ("fourth_order_centered", 4),
@@ -150,7 +150,7 @@ fd_fake_setup(x) = return false
         end
     end
 
-    @testset "finite_difference derivatives (4 argument), Neumann" begin
+    @testset "finite_difference derivatives (4 argument), Neumann" verbose=false begin
         @testset "$nelement $ngrid" for bc ∈ ("constant", "zero"),
                 nelement ∈ (1:5), ngrid ∈ (9:33)
 
@@ -190,7 +190,7 @@ fd_fake_setup(x) = return false
         end
     end
 
-    @testset "finite_difference derivatives upwinding (5 argument), Neumann" begin
+    @testset "finite_difference derivatives upwinding (5 argument), Neumann" verbose=false begin
         @testset "$nelement $ngrid" for bc ∈ ("constant", "zero"),
                 (fd_option, rtol_prefactor) ∈ (("fourth_order_centered", 3.0),
                                                ("second_order_centered", 3.0),
@@ -241,7 +241,7 @@ fd_fake_setup(x) = return false
         end
     end
 
-    @testset "Chebyshev pseudospectral derivatives (4 argument), periodic" begin
+    @testset "Chebyshev pseudospectral derivatives (4 argument), periodic" verbose=false begin
         @testset "$nelement $ngrid" for (nelement, ngrid, rtol) ∈
                 (
                  (1, 5, 8.e-1),
@@ -434,7 +434,7 @@ fd_fake_setup(x) = return false
         end
     end
 
-    @testset "Chebyshev pseudospectral derivatives upwinding (5 argument), periodic" begin
+    @testset "Chebyshev pseudospectral derivatives upwinding (5 argument), periodic" verbose=false begin
         @testset "$nelement $ngrid" for (nelement, ngrid, rtol) ∈
                 (
                  (1, 5, 8.e-1),
@@ -632,7 +632,7 @@ fd_fake_setup(x) = return false
         end
     end
 
-    @testset "Chebyshev pseudospectral derivatives (4 argument), Neumann" begin
+    @testset "Chebyshev pseudospectral derivatives (4 argument), Neumann" verbose=false begin
         @testset "$nelement $ngrid" for bc ∈ ("constant", "zero"),
                 nelement ∈ (1:5), ngrid ∈ (3:33)
 
@@ -681,7 +681,7 @@ fd_fake_setup(x) = return false
         end
     end
 
-    @testset "Chebyshev pseudospectral derivatives upwinding (5 argument), Neumann" begin
+    @testset "Chebyshev pseudospectral derivatives upwinding (5 argument), Neumann" verbose=false begin
         @testset "$nelement $ngrid" for bc ∈ ("constant", "zero"),
                 nelement ∈ (1:5), ngrid ∈ (3:33)
 

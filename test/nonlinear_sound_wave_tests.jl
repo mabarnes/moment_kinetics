@@ -369,7 +369,7 @@ function run_test(test_input, rtol; args...)
 end
 
 
-@testset "nonlinear sound wave" begin
+@testset "nonlinear sound wave" verbose=use_verbose begin
     println("nonlinear sound wave tests")
 
     # finite difference

@@ -19,8 +19,12 @@ s = ArgParseSettings()
     "--long"
         help = "Include more tests, increasing test run time."
         action = :store_true
+    "--verbose", "-v"
+        help = "Print verbose output from tests."
+        action = :store_true
 end
 options = parse_args(s)
+use_verbose = options["verbose"]
 
 
 # Convenience modifiers for test calls

@@ -23,7 +23,7 @@ bc = "periodic"
 fd_option = ""
 adv_input = advection_input("default", 1.0, 0.0, 0.0)
 
-@testset "interpolation" begin
+@testset "interpolation" verbose=use_verbose begin
     @testset "$discretization, $ntest, $nelement, $zlim" for
             (discretization, setup_func, rtol) ∈
                 (("finite_difference", fd_fake_setup, 1.e-5),
