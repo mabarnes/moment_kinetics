@@ -7,6 +7,24 @@ using Interpolations
 using ..type_definitions: mk_float
 import ..interpolation: interpolate_to_grid_1d
 
+function fd_check_option(option, ngrid)
+    if option == "second_order_upwind"
+        if ngrid < 3
+            error("ngrid < 3 incompatible with 2rd order upwind differences.")
+        end
+    elseif option == "third_order_upwind"
+        if ngrid < 4
+            error("ngrid < 4 incompatible with 3rd order upwind differences.")
+        end
+    elseif option == "fourth_order_centered"
+        if ngrid < 3
+            error("ngrid < 3 incompatible with 4th order centered differences.")
+        end
+    elseif ! option in ("first_order_upwind", "second_order_centered")
+        error("finite difference option '$option' is not recognised")
+    end
+end
+
 function derivative_finite_difference!(df, f, del, adv_fac, bc, fd_option, igrid, ielement)
 	if fd_option == "second_order_upwind"
 		upwind_second_order!(df, f, del, adv_fac, bc, igrid, ielement)
@@ -16,6 +34,8 @@ function derivative_finite_difference!(df, f, del, adv_fac, bc, fd_option, igrid
 		upwind_fourth_order!(df, f, del, bc, igrid, ielement)
 	elseif fd_option == "second_order_centered"
 		centered_second_order!(df, f, del, bc, igrid, ielement)
+	elseif fd_option == "fourth_order_centered"
+		centered_fourth_order!(df, f, del, bc, igrid, ielement)
 	elseif fd_option == "first_order_upwind"
 		upwind_first_order!(df, f, del, adv_fac, bc, igrid, ielement)
 	end
@@ -56,6 +76,10 @@ function upwind_first_order!(df, f, del, adv_fac, bc, igrid, ielement)
                 #df[i] = (f[i+1]-f[i])/del[i+1]
 				df[igrid[i],ielement[i]] = (f[i+1]-f[i])/del[i+1]
             end
+        end
+        # fill in points at start of elements, in case we are using more than one
+        for j ∈ 2:ielement[end]
+            df[1, j] = df[end, j-1]
         end
 		i = 1
 		if adv_fac[i] < 0
@@ -174,6 +198,10 @@ function upwind_second_order!(df, f, del, adv_fac, bc, igrid, ielement)
 			df[igrid[n],ielement[n]] =  (3*f[n]-4*f[n-1]+f[n-2])/(2*del[n-1])
 		end
 	end
+        # fill in points at start of elements, in case we are using more than one
+        for j ∈ 2:ielement[end]
+            df[1, j] = df[end, j-1]
+        end
 	return nothing
 end
 function upwind_third_order!(df, f, del, adv_fac, bc, igrid, ielement)
@@ -248,6 +276,10 @@ function upwind_third_order!(df, f, del, adv_fac, bc, igrid, ielement)
 			df[igrid[n],ielement[n]] =  (2*tmp1+3*f[n]-6*f[n-1]+f[n-2])/(6*del[n-1])
 		end
 	#end
+        # fill in points at start of elements, in case we are using more than one
+        for j ∈ 2:ielement[end]
+            df[1, j] = df[end, j-1]
+        end
 	return nothing
 end
 # take the derivative of input function f and return as df
@@ -259,6 +291,10 @@ function centered_second_order!(df::Array{mk_float,2}, f, del, bc, igrid, ieleme
 	for i ∈ 2:n-1
 		df[igrid[i],ielement[i]] = 0.5*(f[i+1]-f[i-1])/del[i]
 	end
+        # fill in points at start of elements, in case we are using more than one
+        for j ∈ 2:ielement[end]
+            df[1, j] = df[end, j-1]
+        end
 	# use BCs to treat boundary points
 	if bc == "periodic"
 		i = 1
@@ -290,6 +326,10 @@ function centered_second_order!(df::Array{mk_float,1}, f, del, bc, igrid, ieleme
 	for i ∈ 2:n-1
 		df[i] = 0.5*(f[i+1]-f[i-1])/del[i]
 	end
+        # fill in points at start of elements, in case we are using more than one
+        for j ∈ 2:ielement[end]
+            df[1, j] = df[end, j-1]
+        end
 	# use BCs to treat boundary points
 	if bc == "periodic"
 		i = 1
@@ -356,6 +396,10 @@ function centered_fourth_order!(df::Array{mk_float,2}, f, del, bc, igrid, ieleme
 		i = n-1
 		df[igrid[i],ielement[i]] = (8.0*(f[i+1]-f[i-1])+f[i-2])/(12.0*del[i])
 	end
+        # fill in points at start of elements, in case we are using more than one
+        for j ∈ 2:ielement[end]
+            df[1, j] = df[end, j-1]
+        end
 end
 
 """

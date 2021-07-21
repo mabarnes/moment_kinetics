@@ -43,13 +43,11 @@ function composite_simpson_weights(grid)
     if n > 5
         if mod(n,2) == 0
             wgts[4] += c1
-        end
-        for i ∈ 5:n-1
-            if mod(i,2) == 0
-                wgts[i] = c3
-            else
-                wgts[i] = c2
-            end
+            wgts[5:2:n-1] .= c2
+            wgts[6:2:n-1] .= c3
+        else
+            wgts[5:2:n-1] .= c3
+            wgts[6:2:n-1] .= c2
         end
     end
     return wgts

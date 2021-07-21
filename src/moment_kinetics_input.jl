@@ -7,6 +7,7 @@ export performance_test
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float
 using ..file_io: input_option_error, open_output_file
+using ..finite_differences: fd_check_option
 using ..input_structs: evolve_moments_options
 using ..input_structs: time_input
 using ..input_structs: advection_input, advection_input_mutable
@@ -375,18 +376,10 @@ function check_input_z(z, io)
         print(io,">z.discretization = 'chebyshev_pseudospectral'.  ")
         println(io,"using a Chebyshev pseudospectral method in z.")
     elseif z.discretization == "finite_difference"
-        print(io,">z.discretization = 'finite_difference', ",
-            "and z.fd_option = ")
-        if z.fd_option == "third_order_upwind"
-            print(io,"'third_order_upwind'.")
-        elseif z.fd_option == "second_order_upwind"
-            print(io,"'second_order_upwind'.")
-        elseif z.fd_option == "first_order_upwind"
-            print(io,"'first_order_upwind'.")
-        else
-            input_option_error("z.fd_option", z.fd_option)
-        end
-        println(io,"  using finite differences on an equally spaced grid in z.")
+        println(io,">z.discretization = 'finite_difference', ",
+            "and z.fd_option = ", z.fd_option,
+            "  using finite differences on an equally spaced grid in z.")
+        fd_check_option(z.fd_option, z.ngrid)
     else
         input_option_error("z.discretization", z.discretization)
     end
@@ -412,24 +405,10 @@ function check_input_vpa(vpa, io)
         print(io,">vpa.discretization = 'chebyshev_pseudospectral'.  ")
         println(io,"using a Chebyshev pseudospectral method in vpa.")
     elseif vpa.discretization == "finite_difference"
-        print(io,">vpa.discretization = 'finite_difference', and ",
-            "vpa.fd_option = ")
-        if vpa.fd_option == "third_order_upwind"
-            print(io,"'third_order_upwind'.")
-            if (vpa.ngrid < 4)
-                println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-                println("ERROR: vpa.ngrid < 4 incompatible with 3rd order upwind differences.  Aborting.")
-                println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
-                exit(1)
-            end
-        elseif vpa.fd_option == "second_order_upwind"
-            print(io,"'second_order_upwind'.")
-        elseif vpa.fd_option == "first_order_upwind"
-            print(io,"'first_order_upwind'.")
-        else
-            input_option_error("vpa.fd_option", vpa.fd_option)
-        end
-        println(io,"  using finite differences on an equally spaced grid in vpa.")
+        println(io,">vpa.discretization = 'finite_difference', and ",
+            "vpa.fd_option = ", vpa.fd_option,
+            "  using finite differences on an equally spaced grid in vpa.")
+        fd_check_option(vpa.fd_option, vpa.ngrid)
     else
         input_option_error("vpa.discretization", vpa.discretization)
     end
