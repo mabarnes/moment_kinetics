@@ -54,6 +54,10 @@ function upwind_first_order!(df, f, del, adv_fac, bc, igrid, ielement)
 				df[igrid[i],ielement[i]] = (f[i+1]-f[i])/del[i+1]
             end
         end
+        # fill in points at start of elements, in case we are using more than one
+        for j ∈ 2:ielement[end]
+            df[1, j] = df[end, j-1]
+        end
 		i = 1
 		if adv_fac[i] < 0
 			if bc == "periodic"
@@ -171,6 +175,10 @@ function upwind_second_order!(df, f, del, adv_fac, bc, igrid, ielement)
 			df[igrid[n],ielement[n]] =  (3*f[n]-4*f[n-1]+f[n-2])/(2*del[n-1])
 		end
 	end
+        # fill in points at start of elements, in case we are using more than one
+        for j ∈ 2:ielement[end]
+            df[1, j] = df[end, j-1]
+        end
 	return nothing
 end
 function upwind_third_order!(df, f, del, adv_fac, bc, igrid, ielement)
@@ -245,6 +253,10 @@ function upwind_third_order!(df, f, del, adv_fac, bc, igrid, ielement)
 			df[igrid[n],ielement[n]] =  (2*tmp1+3*f[n]-6*f[n-1]+f[n-2])/(6*del[n-1])
 		end
 	#end
+        # fill in points at start of elements, in case we are using more than one
+        for j ∈ 2:ielement[end]
+            df[1, j] = df[end, j-1]
+        end
 	return nothing
 end
 # take the derivative of input function f and return as df
@@ -256,6 +268,10 @@ function centered_second_order!(df::Array{mk_float,2}, f, del, bc, igrid, ieleme
 	for i ∈ 2:n-1
 		df[igrid[i],ielement[i]] = 0.5*(f[i+1]-f[i-1])/del[i]
 	end
+        # fill in points at start of elements, in case we are using more than one
+        for j ∈ 2:ielement[end]
+            df[1, j] = df[end, j-1]
+        end
 	# use BCs to treat boundary points
 	if bc == "periodic"
 		i = 1
@@ -287,6 +303,10 @@ function centered_second_order!(df::Array{mk_float,1}, f, del, bc, igrid, ieleme
 	for i ∈ 2:n-1
 		df[i] = 0.5*(f[i+1]-f[i-1])/del[i]
 	end
+        # fill in points at start of elements, in case we are using more than one
+        for j ∈ 2:ielement[end]
+            df[1, j] = df[end, j-1]
+        end
 	# use BCs to treat boundary points
 	if bc == "periodic"
 		i = 1
@@ -353,6 +373,10 @@ function centered_fourth_order!(df::Array{mk_float,2}, f, del, bc, igrid, ieleme
 		i = n-1
 		df[igrid[i],ielement[i]] = (8.0*(f[i+1]-f[i-1])+f[i-2])/(12.0*del[i])
 	end
+        # fill in points at start of elements, in case we are using more than one
+        for j ∈ 2:ielement[end]
+            df[1, j] = df[end, j-1]
+        end
 end
 
 
