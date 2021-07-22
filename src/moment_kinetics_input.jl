@@ -36,7 +36,7 @@ function mk_input(scan_input=Dict())
         load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_response)
 
     # this is the prefix for all output files associated with this run
-    run_name = get(scan_input, "run_name", "ppar")
+    run_name = get(scan_input, "run_name", "periodicBC")
     # this is the directory where the simulation data will be stored
     base_directory = get(scan_input, "base_directory", "runs")
     output_dir = string(base_directory, "/", run_name)
@@ -46,17 +46,14 @@ function mk_input(scan_input=Dict())
     evolve_moments.parallel_flow = get(scan_input, "evolve_moments_parallel_flow", true)
     evolve_moments.parallel_pressure = get(scan_input, "evolve_moments_parallel_pressure", true)
     evolve_moments.conservation = get(scan_input, "evolve_moments_conservation", true)
-#    evolve_moments.advective_form = false
-
-    #z.advection.option = "constant"
-    #z.advection.constant_speed = 1.0
-
-    #vpa.advection.option = "constant"
-    #vpa.advection.constant_speed = 0.0
 
     ####### specify any deviations from default inputs for evolved species #######
     # set initial Tₑ = 1
     composition.T_e = get(scan_input, "T_e", 1.0)
+    # set wall temperature T_wall = Tw/Te
+    composition.T_wall = 1.0
+    # set the ratio of the neutral to ion mass
+    composition.mn_over_mi = 6.0
     # set initial neutral temperature Tn/Tₑ = 1
     # set initial nᵢ/Nₑ = 1.0
     species[1].initial_density = get(scan_input, "initial_density1", 0.5)
@@ -93,6 +90,9 @@ function mk_input(scan_input=Dict())
     # determine the discretization option for the z grid
     # supported options are "chebyshev_pseudospectral" and "finite_difference"
     z.discretization = get(scan_input, "z_discretization", "chebyshev_pseudospectral")
+    # determine the boundary condition to impose in z
+    # supported options are "constant", "periodic" and "wall"
+    z.bc = get(scan_input, "z_bc", "periodic")
 
     # overwrite some default parameters related to the vpa grid
     # ngrid is the number of grid points per element
@@ -245,8 +245,14 @@ function load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_resp
     else
         n_species = n_ion_speces + n_neutral_species + 1
     end
+    # electron temperature over reference temperature
+    T_e = 1.0
+    # temperature at the entrance to the wall in terms of the electron temperature
+    T_wall = 1.0
+    # ratio of the neutral particle mass to the ion particle mass
+    mn_over_mi = 6.0
     composition = species_composition(n_species, n_ion_species, n_neutral_species,
-        boltzmann_electron_response, 1.0)
+        boltzmann_electron_response, T_e, T_wall, mn_over_mi)
     species = Array{species_parameters_mutable,1}(undef,n_species)
     # initial temperature for each species defaults to Tₑ
     initial_temperature = 1.0
@@ -366,6 +372,8 @@ function check_input_z(z, io)
         println(io,">z.bc = 'constant'.  enforcing constant incoming BC in z.")
     elseif z.bc == "periodic"
         println(io,">z.bc = 'periodic'.  enforcing periodicity in z.")
+    elseif z.bc == "wall"
+        println(io,">z.bc = 'wall'.  enforcing wall BC in z.")
     else
         input_option_error("z.bc", z.bc)
     end
