@@ -542,8 +542,9 @@ function fit_delta_phi_mode(t, z, delta_phi)
             end
         end
         if !converged
-            error("Iteration to find growth rate failed to converge in ", maxiter,
-                  "iterations")
+            println("WARNING: Iteration to find growth rate failed to converge in ", maxiter, " iterations")
+            #error("Iteration to find growth rate failed to converge in ", maxiter,
+            #      "iterations")
         end
         amplitude0 = amplitude[1] / cos(phase)
     end
@@ -557,7 +558,7 @@ struct phi_fit_result
     phase::mk_float
     amplitude0::mk_float
     offset0::mk_float
-    fit_error::mk_float
+    amplitude_fit_error::mk_float
     offset_fit_error::mk_float
     cosine_fit_error::mk_float
     amplitude::Array{mk_float, 1}
