@@ -1,6 +1,6 @@
 module PerformanceTestUtils
 
-export upload_result, extract_summary, check_config
+export upload_result, extract_summary, check_config, get_config
 
 using Dates
 using DelimitedFiles
