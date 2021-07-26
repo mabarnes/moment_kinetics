@@ -1,4 +1,5 @@
 using Profile
+using StatProfilerHTML
 using TimerOutputs
 using TOML
 
@@ -20,7 +21,7 @@ function main(input_file)
     run_moment_kinetics(to, short_input)
 
     Profile.clear()
-    @profile run_moment_kinetics(to, input)
+    @profilehtml run_moment_kinetics(to, input)
     Profile.print()
 
     return nothing

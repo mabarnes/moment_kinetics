@@ -52,12 +52,13 @@ less memory_profile.txt
 
 Sampling profiler
 -----------------
-Julia has a built in sampling profiler in the Profile package.
+Julia has a built in sampling profiler in the `Profile` package.
 
 `sampling_profile.jl` is a script that profiles `run_moment_kinetics()` It uses a short
 initial run to get compilation out of the way, after which the profile is reset and
-`run_moment_kinetics()` is called using the `@profile` macro from `Profile`. The profile
-is printed to stdout.
+`run_moment_kinetics()` is called using the `@profilehtml` macro from `StatProfileHTML`.
+The profile is printed to stdout, and an html report is saved in the `statprof/`
+subdirectory - to view it open `statprof/index.html` with a web browser.
 
 For convenience `run_sampling_profile.sh` calls `sampling_profile.jl` with the necessary
 flags passed to `julia`. The first argument to the script gives the input file to use.
