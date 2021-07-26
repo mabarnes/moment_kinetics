@@ -1,5 +1,4 @@
-This subdirectory contains some scripts for profiling `moment_kinetics`. At the moment,
-only memory profiling is considered.
+This subdirectory contains some scripts for profiling `moment_kinetics`.
 
 Memory profiling
 ----------------
@@ -50,3 +49,16 @@ less memory_profile.txt
 # clean up .mem files again
 ./cleanup_mem_files.sh
 ```
+
+Sampling profiler
+-----------------
+Julia has a built in sampling profiler in the Profile package.
+
+`sampling_profile.jl` is a script that profiles `run_moment_kinetics()` It uses a short
+initial run to get compilation out of the way, after which the profile is reset and
+`run_moment_kinetics()` is called using the `@profile` macro from `Profile`. The profile
+is printed to stdout.
+
+For convenience `run_sampling_profile.sh` calls `sampling_profile.jl` with the necessary
+flags passed to `julia`. The first argument to the script gives the input file to use.
+Various `*.toml` input files are included for different types of run.
