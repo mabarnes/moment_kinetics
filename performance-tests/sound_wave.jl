@@ -116,7 +116,7 @@ Returns
 function run_test(input)
     # Run once to check everything is compiled
     initial_input = deepcopy(input)
-    initial_input["nsteps"] = 2
+    initial_input["nstep"] = 2
     run_moment_kinetics(to, input)
 
     result = @benchmark run_moment_kinetics($to, $input) seconds=benchmark_seconds samples=benchmark_samples evals=benchmark_evals
