@@ -22,7 +22,10 @@ function main(input_file)
 
     Profile.clear()
     @profilehtml run_moment_kinetics(to, input)
-    Profile.print()
+
+    # Print to stdout
+    # Use IOContext to increase width so that lines don't get trucated
+    Profile.print(IOContext(stdout, :displaysize => (24, 500)))
 
     return nothing
 end
