@@ -24,11 +24,11 @@ using ..energy_equation: energy_equation!
 using ..em_fields: setup_em_fields, update_phi!
 using ..semi_lagrange: setup_semi_lagrange
 
-struct scratch_pdf{T1,T2}
-    pdf::T1
-    density::T2
-    upar::T2
-    ppar::T2
+struct scratch_pdf{n_distribution, n_moment}
+    pdf::Array{mk_float, n_distribution}
+    density::Array{mk_float, n_moment}
+    upar::Array{mk_float, n_moment}
+    ppar::Array{mk_float, n_moment}
 end
 mutable struct advance_info
     vpa_advection::Bool
@@ -177,26 +177,13 @@ end
 # create an array of structs containing scratch arrays for the normalised pdf and low-order moments
 # that may be evolved separately via fluid equations
 function setup_scratch_arrays(moments, pdf_in, nz, nvpa, nspec, n_rk_stages)
-    # create n_rk_stages+1 pdf-sized scratch arrays
-    pdf = allocate_float(nz, nvpa, nspec, n_rk_stages+1)
-    # create n_rk_stages+1 density-sized scratch arrays
-    dens = allocate_float(nz, nspec, n_rk_stages+1)
-    # create n_rk_stages+1 parallel-flow-sized scratch arrays
-    upar = allocate_float(nz, nspec, n_rk_stages+1)
-    # create n_rk_stages+1 parallel-pressure-sized scratch arrays
-    ppar = allocate_float(nz, nspec, n_rk_stages+1)
     # create n_rk_stages+1 structs, each of which will contain one pdf,
     # one density, and one parallel flow array
-    scratch = Vector{scratch_pdf}(undef, n_rk_stages+1)
+    scratch = Vector{scratch_pdf{3,2}}(undef, n_rk_stages+1)
     # populate each of the structs
-    # NB: all of the array members of the scratch struct will point to
-    # the appropriate slice of the pdf, dens and upar arrays created above
     for istage ∈ 1:n_rk_stages+1
-        @views scratch[istage] = scratch_pdf(pdf[:,:,:,istage], dens[:,:,istage], upar[:,:,istage], ppar[:,:,istage])
-        scratch[istage].pdf .= pdf_in
-        scratch[istage].density .= moments.dens
-        scratch[istage].upar .= moments.upar
-        scratch[istage].ppar .= moments.ppar
+        scratch[istage] = scratch_pdf(deepcopy(pdf_in), deepcopy(moments.dens),
+                                      deepcopy(moments.upar), deepcopy(moments.ppar))
     end
     return scratch
 end
