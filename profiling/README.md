@@ -1,5 +1,22 @@
 This subdirectory contains some scripts for profiling `moment_kinetics`.
 
+One thing that can give a performance hit in julia is lots of allocation during a run.
+Using memory profiling (see below) can indicate where this is happening. Sometimes the
+cause is in our code directly, in which case the profile output will indicate the file
+and line where the allocations are occuring. However, the allocations can also turn up
+in the Julia standard library, or in other packages. For example, a common cause of
+extra allocations is that array slices are returned as copies rather than `View`s. This
+seems to show up as allocations in `multidimensional.jl` (in the `_unsafe_get_index`
+function). To track down where these are coming from, first find the function (using the
+source file where the allocations are recorded by the memory profiling script), then run
+the sampling profiler script (see below), and (it's helpful to pipe the output to a file
+to make it searchable here) look for calls to that function, then follow back up the
+call tree to see which lines in `moment_kinetics` triggered them. If they came frome
+somewhere in initialisation, then the allocations are probably not important, so keep
+searching, but if they come from inside the time-stepping loop, then look for the
+lowest-level function in the `moment_kinetics` package, and debug from there (for the
+example mentioned, try adding `@views` or `@view` to avoid the subarray copies).
+
 Memory profiling
 ----------------
 Julia has a `--track-allocation=all` option that saves information on the memory
