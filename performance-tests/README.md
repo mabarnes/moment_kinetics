@@ -36,7 +36,7 @@ julia> plot_performance_history("results/sound_wave.txt"; show=true, save=false)
 ```
 or the file can be called as a script
 ```
-julia -O3 --check-bounds=no plot_performance.jl
+julia -O3 --project --check-bounds=no plot_performance.jl
 ```
 some default values are taken from `config.toml` where necessary. When running as a
 script, the file-name to read from (default is `results/sound_wave.txt`) and machine
