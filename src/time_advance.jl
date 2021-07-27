@@ -420,9 +420,7 @@ function rk_update!(scratch, pdf, moments, fields, vpa, nz, rk_coefs, istage, co
             @. pdf.unnorm[:,ivpa,:] = scratch[istage+1].pdf[:,ivpa,:]*scratch[istage+1].density
         end
     else
-        for ivpa ∈ 1:vpa.n
-            @. pdf.unnorm[:,ivpa,:] = scratch[istage+1].pdf[:,ivpa,:]
-        end
+        pdf.unnorm .= scratch[istage+1].pdf
         update_density!(scratch[istage+1].density, moments.dens_updated, pdf.unnorm, vpa, nz)
     end
     # NB: if moments.evolve_upar = true, then moments.evolve_density = true
