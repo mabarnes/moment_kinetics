@@ -8,16 +8,10 @@ end
 const context = 2
 
 # Get the path to a module, as suggested here:
-# https://stackoverflow.com/a/63883681/13577592
-module_file(modu) = String(first(methods(getfield(modu, :eval))).file)
+# https://discourse.julialang.org/t/get-path-to-julia-install/65315
+julia_dir = normpath(joinpath(Sys.BINDIR, "..", "share", "julia"))
 
-# import REPL just so we can use it to get a path to the Julia install location
-using REPL
-repl_file = module_file(REPL)
-# extract the install directory by stripping of the last few components of the path
-julia_dir = joinpath(splitpath(repl_file)[begin:end-5]...)
-
-results = analyze_malloc([joinpath("..", "src"), joinpath(homedir(), ".julia"), julia_dir])
+results = analyze_malloc([joinpath("..", "src"); [x for x in DEPOT_PATH if isdir(x)]])
 n_results = length(results)
 
 """
