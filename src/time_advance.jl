@@ -404,7 +404,7 @@ function rk_update!(scratch, pdf, moments, fields, vpa, nz, rk_coefs, istage, co
     if moments.evolve_density
         @. scratch[istage+1].density = rk_coefs[1]*moments.dens + rk_coefs[2]*scratch[istage].density + rk_coefs[3]*scratch[istage+1].density
         for ivpa ∈ 1:vpa.n
-            @. pdf.unnorm[:,ivpa,:] = scratch[istage+1].pdf[:,ivpa,:]*scratch[istage+1].density
+            @. pdf.unnorm[:,ivpa,:] = @view(scratch[istage+1].pdf[:,ivpa,:]) * scratch[istage+1].density
         end
     else
         pdf.unnorm .= scratch[istage+1].pdf
@@ -544,7 +544,7 @@ function update_pdf_unnorm!(pdf, moments)
         end
     elseif moments.evolve_density
         for ivpa ∈ 1:size(pdf.norm,2)
-            @. pdf.unnorm[:,ivpa,:] = pdf.norm[:,ivpa,:]*moments.dens
+            @. pdf.unnorm[:,ivpa,:] = @view(pdf.norm[:,ivpa,:]) * moments.dens
         end
     else
         @. pdf.unnorm = pdf.norm
