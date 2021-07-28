@@ -4,21 +4,21 @@ export source_terms!
 
 using ..calculus: derivative!
 
-function source_terms!(pdf_out, fvec_in, moments, z, vpa, dt, spectral, composition, CX_frequency)
+function source_terms!(pdf_out, fvec_in, moments, vpa, z, dt, spectral, composition, CX_frequency)
     # calculate the source terms due to redefinition of the pdf to split off density,
     # and use them to update the pdf
     #n_species = size(pdf_out,3)
     if moments.evolve_ppar
         for is ∈ 1:composition.n_species
             for ivpa ∈ 1:vpa.n
-                @views source_terms_evolve_ppar!(pdf_out[:,ivpa,is], fvec_in.pdf[:,ivpa,is],
+                @views source_terms_evolve_ppar!(pdf_out[ivpa,:,is], fvec_in.pdf[ivpa,:,is],
                                                  fvec_in.density[:,is], fvec_in.upar[:,is], fvec_in.ppar[:,is],
                                                  moments.vth[:,is], moments.qpar[:,is], z, dt, spectral)
             end
         end
         if composition.n_neutral_species > 0 && abs(CX_frequency) > 0.0
             for ivpa ∈ 1:vpa.n
-                @views source_terms_evolve_ppar_CX!(pdf_out[:,ivpa,:], fvec_in.pdf[:,ivpa,:],
+                @views source_terms_evolve_ppar_CX!(pdf_out[ivpa,:,:], fvec_in.pdf[ivpa,:,:],
                                                     fvec_in.density, fvec_in.ppar, composition,
                                                     CX_frequency, dt)
             end
@@ -26,7 +26,7 @@ function source_terms!(pdf_out, fvec_in, moments, z, vpa, dt, spectral, composit
     elseif moments.evolve_density
         for is ∈ 1:composition.n_species
             for ivpa ∈ 1:vpa.n
-                @views source_terms_evolve_density!(pdf_out[:,ivpa,is], fvec_in.pdf[:,ivpa,is],
+                @views source_terms_evolve_density!(pdf_out[ivpa,:,is], fvec_in.pdf[ivpa,:,is],
                                                     fvec_in.density[:,is], fvec_in.upar[:,is], z, dt, spectral)
             end
         end

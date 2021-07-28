@@ -7,7 +7,7 @@ using ..calculus: derivative!
 # use the force balance equation d(nu)/dt + d(ppar + n*upar*upar)/dz =
 # -(dens/2)*dphi/dz + R*dens_i*dens_n*(upar_n-upar_i)
 # to update the parallel particle flux dens*upar for each species
-function force_balance!(pflx, fvec, fields, CX_frequency, z, vpa, dt, spectral, composition)
+function force_balance!(pflx, fvec, fields, CX_frequency, vpa, z, dt, spectral, composition)
     # account for momentum flux contribution to force balance
     for is ∈ 1:composition.n_species
         @views force_balance_flux_species!(pflx[:,is], fvec.density[:,is], fvec.upar[:,is], fvec.ppar[:,is], z, dt, spectral)

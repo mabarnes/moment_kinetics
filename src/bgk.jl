@@ -60,21 +60,21 @@ end
 # pdf = particle distribution function;
 # this function fills in the part of phase space where x > e*phi_max/T
 function passing_pdf!(pdf, phi_max, tau, x, ivpa_min)
-    nvpa = size(x,2)
-    for iz ∈ 1:size(x,1)
+    nvpa = size(x,1)
+    for iz ∈ 1:size(x,2)
         if ivpa_min[iz] > 1
             for ivpa ∈ 1:ivpa_min[iz]-1
-                pdf[iz,ivpa] = exp(((1.0+tau)*phi_max - x[iz,ivpa])/tau)/sqrt(pi*tau)
-                if pdf[iz,ivpa] < 0.0
+                pdf[ivpa,iz] = exp(((1.0+tau)*phi_max - x[ivpa,iz])/tau)/sqrt(pi*tau)
+                if pdf[ivpa,iz] < 0.0
                     println("warning: pdf obtained in bgk init is negative: pdf[", iz, ",", ivpa, "] = ", pdf[iz,ivpa], " is negative. setting pdf there to zero.")
-                    pdf[iz,ivpa] = 0.0
+                    pdf[ivpa,iz] = 0.0
                 end
             end
             for ivpa ∈ nvpa:-1:nvpa-ivpa_min[iz]+2
-                pdf[iz,ivpa] = exp(((1.0+tau)*phi_max - x[iz,ivpa])/tau)/sqrt(pi*tau)
+                pdf[iz,ivpa] = exp(((1.0+tau)*phi_max - x[ivpa,iz])/tau)/sqrt(pi*tau)
                 if pdf[iz,ivpa] < 0.0
-                    println("warning: pdf obtained in bgk init is negative: pdf[", iz, ",", ivpa, "] = ", pdf[iz,ivpa], " is negative. setting pdf there to zero.")
-                    pdf[iz,ivpa] = 0.0
+                    println("warning: pdf obtained in bgk init is negative: pdf[", ivpa, ",", iz, "] = ", pdf[ivpa,iz], " is negative. setting pdf there to zero.")
+                    pdf[ivpa,iz] = 0.0
                 end
             end
         end
@@ -109,7 +109,7 @@ end
 # pdf is the particle distribution function for all of phase space,
 # with this function filling in only the part with x < e*phi_max/T
 function trapped_pdf!(pdf, phi_max, tau, x, y, wgts, integrand, ivpa_min)
-    nvpa = size(x,2)
+    nvpa = size(x,1)
     # trapped_pdf_single evaluates the trapped pdf at the given total parallel energy value, x0
     function trapped_pdf_single(x0)
         # construct the integrand
@@ -134,14 +134,14 @@ function trapped_pdf!(pdf, phi_max, tau, x, y, wgts, integrand, ivpa_min)
         # calculate the trapped pdf
         return exp(phi_max)/(2.0*sqrt(pi*tau)) - total/(pi*tau)^1.5 - exp(x0)*erfi(sqrt(phi_max-x0))/sqrt(pi)
     end
-    for iz ∈ 1:size(x,1)
+    for iz ∈ 1:size(x,2)
         if ivpa_min[iz] <= nvpa
             ivpa_max = nvpa-ivpa_min[iz]+1
             for ivpa ∈ ivpa_min[iz]:ivpa_max
-                pdf[iz,ivpa] = trapped_pdf_single(x[iz,ivpa])
-                if pdf[iz,ivpa] < 0.0
+                pdf[ivpa,iz] = trapped_pdf_single(x[ivpa,iz])
+                if pdf[ivpa,iz] < 0.0
                     println("warning: pdf obtained in bgk init is negative: pdf[", iz, ",", ivpa, "] = ", pdf[iz,ivpa], " is negative. setting pdf there to zero.")
-                    pdf[iz,ivpa] = 0.0
+                    pdf[ivpa,iz] = 0.0
                 end
             end
         end
@@ -154,23 +154,23 @@ end
 function total_energy_grid(vpa, phi)
     nvpa = length(vpa)
     nz = length(phi)
-    x = allocate_float(nz, nvpa)
-    for ivpa ∈ 1:nvpa
-        for iz ∈ 1:nz
-            x[iz,ivpa] = vpa[ivpa]^2 + phi[iz]
+    x = allocate_float(nvpa, nz)
+    for iz ∈ 1:nz
+        for ivpa ∈ 1:nvpa
+            x[ivpa,iz] = vpa[ivpa]^2 + phi[iz]
         end
     end
     return x
 end
 function trapped_passing_boundary(x, phi_max)
-    nvpa = size(x,2)
+    nvpa = size(x,1)
     # initialize the lower boundary for the trapped domain to be beyond the boundary of vpa
     ivpa_min = allocate_int(nvpa)
     @. ivpa_min = nvpa+1
-    for iz ∈ 1:size(x,1)
+    for iz ∈ 1:size(x,2)
         # start from most negative vpa and look for first vpa value where x < phi_max
-        for ivpa ∈ 1:size(x,2)
-            if x[iz,ivpa] <= phi_max
+        for ivpa ∈ 1:nvpa
+            if x[ivpa,iz] <= phi_max
                 ivpa_min[iz] = ivpa
                 break
             end

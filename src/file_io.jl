@@ -42,7 +42,7 @@ struct netcdf_info{t_type, zvpast_type, zt_type, zst_type}
     thermal_speed::zst_type
 end
 # open the necessary output files
-function setup_file_io(output_dir, run_name, z, vpa, composition,
+function setup_file_io(output_dir, run_name, vpa, z, composition,
                        charge_exchange_frequqency, evolve_ppar)
     # check to see if output_dir exists in the current directory
     # if not, create it
@@ -67,10 +67,10 @@ function setup_netcdf_io(prefix, z, vpa, composition, charge_exchange_frequency,
     # write a header to the NetCDF file
     fid.attrib["file_info"] = "This is a NetCDF file containing output data from the moment_kinetics code"
     ### define coordinate dimensions ###
-    # define the z dimension
-    defDim(fid, "nz", z.n)
     # define the vpa dimension
     defDim(fid, "nvpa", vpa.n)
+    # define the z dimension
+    defDim(fid, "nz", z.n)
     # define the species dimension
     defDim(fid, "n_species", composition.n_species)
     # define the ion species dimension
@@ -139,7 +139,7 @@ function setup_netcdf_io(prefix, z, vpa, composition, charge_exchange_frequency,
     varname = "f"
     attributes = Dict("description" => "distribution function")
     vartype = mk_float
-    dims = ("nz","nvpa","n_species","ntime")
+    dims = ("nvpa","nz","n_species","ntime")
     cdf_f = defVar(fid, varname, vartype, dims, attrib=attributes)
     # create variables that are floats with data in the z and time dimensions
     vartype = mk_float
@@ -197,7 +197,7 @@ function finish_file_io(io, cdf)
     close(cdf.fid)
     return nothing
 end
-function write_data_to_ascii(ff, moments, fields, z, vpa, t, n_species, io)
+function write_data_to_ascii(ff, moments, fields, vpa, z, t, n_species, io)
     #write_f_ascii(ff, z, vpa, t, io.ff)
     write_moments_ascii(moments, z, t, n_species, io.moments)
     write_fields_ascii(fields, z, t, io.fields)

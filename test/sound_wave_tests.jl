@@ -150,7 +150,7 @@ function run_test(test_input, analytic_frequency, analytic_growth_rate,
         fid = open_netcdf_file(path)
 
         # load space-time coordinate data
-        nz, z, z_wgts, Lz, nvpa, vpa, vpa_wgts, ntime, time = load_coordinate_data(fid)
+        nvpa, vpa, vpa_wgts, nz, z, z_wgts, Lz, ntime, time = load_coordinate_data(fid)
 
         # load fields data
         phi = load_fields_data(fid)

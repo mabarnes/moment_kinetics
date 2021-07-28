@@ -39,8 +39,8 @@ function vpa_advection!(f_out, fvec_in, ff, fields, moments, SL, advect,
 			end
 		end
 		for iz ∈ 1:z.n
-			@views advance_f_local!(f_out[iz,:,is], fvec_in.pdf[iz,:,is],
-				ff[iz,:,is], SL[iz], advect[iz,is], vpa, dt, istage, vpa_spectral,
+			@views advance_f_local!(f_out[:,iz,is], fvec_in.pdf[:,iz,is],
+				ff[:,iz,is], SL[iz], advect[iz,is], vpa, dt, istage, vpa_spectral,
 				use_semi_lagrange)
 		end
 		#@views enforce_vpa_boundary_condition!(f_out[:,:,is], vpa.bc, advect[:,is])

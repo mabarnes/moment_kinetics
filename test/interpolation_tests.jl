@@ -72,10 +72,10 @@ function runtests()
             x = [x for x in range(11.0, 13.0, length=4)]
             @testset "3d z" begin
                 # create array for the function f(z) to be interpolated
-                f = test_function(z.L, z.grid, y, x)
+                f = test_function(z.L, y, z.grid, x)
 
                 # create expected output
-                expected = test_function(z.L, test_grid, y, x)
+                expected = test_function(z.L, y, test_grid, x)
 
                 @test isapprox(interpolate_to_grid_z(test_grid, f, z, spectral),
                                expected, rtol=rtol, atol=1.e-14)
@@ -84,10 +84,10 @@ function runtests()
             vpa = z
             @testset "3d vpa" begin
                 # create array for the function f(z) to be interpolated
-                f = test_function(vpa.L, y, vpa.grid, x)
+                f = test_function(vpa.L, vpa.grid, y, x)
 
                 # create expected output
-                expected = test_function(vpa.L, y, test_grid, x)
+                expected = test_function(vpa.L, test_grid, y, x)
 
                 @test isapprox(interpolate_to_grid_vpa(test_grid, f, vpa, spectral),
                                expected, rtol=rtol, atol=1.e-14)

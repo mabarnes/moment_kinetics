@@ -13,11 +13,11 @@ function charge_exchange_collisions!(f_out, fvec_in, moments, n_ion_species,
             for isp ∈ 1:n_neutral_species
                 #cxfac = dt*charge_exchange_frequency[is,isp]
                 #cxfac = dt*charge_exchange_frequency
-                for ivpa ∈ 1:vpa.n
-                    for iz ∈ 1:nz
-                        f_out[iz,ivpa,is] +=
+                for iz ∈ 1:nz
+                    for ivpa ∈ 1:vpa.n
+                        f_out[ivpa,iz,is] +=
                            dt*charge_exchange_frequency*fvec_in.density[iz,isp+n_ion_species]*(
-                               fvec_in.pdf[iz,ivpa,isp+n_ion_species] - fvec_in.pdf[iz,ivpa,is])
+                               fvec_in.pdf[ivpa,iz,isp+n_ion_species] - fvec_in.pdf[ivpa,iz,is])
                     end
                 end
             end
@@ -28,11 +28,11 @@ function charge_exchange_collisions!(f_out, fvec_in, moments, n_ion_species,
             # with all of the ion species
             for isp ∈ 1:n_ion_species
                 #cxfac = dt*charge_exchange_frequency
-                for ivpa ∈ 1:vpa.n
-                    for iz ∈ 1:nz
-                        f_out[iz,ivpa,is+n_ion_species] +=
+                for iz ∈ 1:nz
+                    for ivpa ∈ 1:vpa.n
+                        f_out[ivpa,iz,is+n_ion_species] +=
                             dt*charge_exchange_frequency*fvec_in.density[iz,isp]*(
-                                fvec_in.pdf[iz,ivpa,isp] - fvec_in.pdf[iz,ivpa,is+n_ion_species])
+                                fvec_in.pdf[ivpa,iz,isp] - fvec_in.pdf[ivpa,iz,is+n_ion_species])
                     end
                 end
             end
@@ -45,12 +45,12 @@ function charge_exchange_collisions!(f_out, fvec_in, moments, n_ion_species,
             for isp ∈ 1:n_neutral_species
                 #cxfac = dt*charge_exchange_frequency[is,isp]
                 #cxfac = dt*charge_exchange_frequency
-                for ivpa ∈ 1:vpa.n
-                    for iz ∈ 1:nz
-                        f_out[iz,ivpa,is] +=
+                for iz ∈ 1:nz
+                    for ivpa ∈ 1:vpa.n
+                        f_out[ivpa,iz,is] +=
                             dt*charge_exchange_frequency*(
-                                fvec_in.pdf[iz,ivpa,isp+n_ion_species]*fvec_in.density[iz,is]
-                                - fvec_in.pdf[iz,ivpa,is]*fvec_in.density[iz,isp+n_ion_species])
+                                fvec_in.pdf[ivpa,iz,isp+n_ion_species]*fvec_in.density[iz,is]
+                                - fvec_in.pdf[ivpa,iz,is]*fvec_in.density[iz,isp+n_ion_species])
                     end
                 end
             end
@@ -61,12 +61,12 @@ function charge_exchange_collisions!(f_out, fvec_in, moments, n_ion_species,
             # with all of the ion species
             for isp ∈ 1:n_ion_species
                 #cxfac = dt*charge_exchange_frequency
-                for ivpa ∈ 1:vpa.n
-                    for iz ∈ 1:nz
-                        f_out[iz,ivpa,is+n_ion_species] +=
+                for iz ∈ 1:nz
+                    for ivpa ∈ 1:vpa.n
+                        f_out[ivpa,iz,is+n_ion_species] +=
                             dt*charge_exchange_frequency*(
-                                fvec_in.pdf[iz,ivpa,isp]*fvec_in.density[iz,is+n_ion_species]
-                                - fvec_in.pdf[iz,ivpa,is+n_ion_species]*fvec_in.density[iz,isp])
+                                fvec_in.pdf[ivpa,iz,isp]*fvec_in.density[iz,is+n_ion_species]
+                                - fvec_in.pdf[ivpa,iz,is+n_ion_species]*fvec_in.density[iz,isp])
                     end
                 end
             end
