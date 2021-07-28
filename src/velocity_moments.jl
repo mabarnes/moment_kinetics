@@ -219,7 +219,7 @@ function enforce_moment_constraints!(fvec_new, fvec_old, z, vpa, moments)
             @. vpa.scratch = @view fvec_new.pdf[iz,:,is]
             density_integral = integrate_over_vspace(vpa.scratch, vpa.wgts)
             if moments.evolve_upar
-                @. vpa.scratch = fvec_new.pdf[iz,:,is] * vpa.grid
+                @. vpa.scratch = @view(fvec_new.pdf[iz,:,is]) * vpa.grid
                 upar_integral = integrate_over_vspace(vpa.scratch, vpa.wgts)
             end
             if moments.evolve_ppar
@@ -227,22 +227,22 @@ function enforce_moment_constraints!(fvec_new, fvec_old, z, vpa, moments)
                 ppar_integral = integrate_over_vspace(vpa.scratch, vpa.wgts) - 0.5*density_integral
             end
             # update the pdf to account for the density-conserving correction
-            @. fvec_new.pdf[iz,:,is] += @view(fvec_old.pdf[iz,:,is]) * (1.0 - density_integral)
+            @views @. fvec_new.pdf[iz,:,is] += fvec_old.pdf[iz,:,is] * (1.0 - density_integral)
             if moments.evolve_upar
                 # next form the even part of the old distribution function that is needed
                 # to ensure momentum and energy conservation
-                @. vpa.scratch = fvec_old.pdf[iz,:,is]
+                @. vpa.scratch = @view(fvec_old.pdf[iz,:,is])
                 reverse!(vpa.scratch)
-                @. vpa.scratch = 0.5*(vpa.scratch + fvec_old.pdf[iz,:,is])
+                @. vpa.scratch = 0.5*(vpa.scratch + @view(fvec_old.pdf[iz,:,is]))
                 # calculate the integrals involving this even pdf
                 upar_integral /= integrate_over_vspace(vpa.scratch .* vpa.grid.^2, vpa.wgts)
                 # update the pdf to account for the momentum-conserving correction
-                @. fvec_new.pdf[iz,:,is] -= vpa.scratch * vpa.grid * upar_integral
+                @. @view(fvec_new.pdf[iz,:,is]) -= vpa.scratch * vpa.grid * upar_integral
                 if moments.evolve_ppar
                     pptmp = ppar_integral
                     ppar_integral /= integrate_over_vspace(vpa.grid.^2 .* vpa.scratch .* (vpa.grid.^2 .- 0.5), vpa.wgts)
                     # update the pdf to account for the energy-conserving correction
-                    @. fvec_new.pdf[iz,:,is] -= vpa.scratch * (vpa.grid^2 - 0.5) * ppar_integral
+                    @. @view(fvec_new.pdf[iz,:,is]) -= vpa.scratch * (vpa.grid^2 - 0.5) * ppar_integral
                 end
             end
             fvec_new.density[iz,is] += fvec_old.density[iz,is] * avgdens_ratio
@@ -259,7 +259,7 @@ function enforce_moment_constraints!(fvec_new, fvec_old, z, vpa, moments)
     # NB: no longer need fvec_old.pdf so can use for temporary storage of un-normalised pdf
     if moments.evolve_ppar
         for ivpa ∈ 1:vpa.n
-            @. fvec_old.pdf[:,ivpa,:] = fvec_new.pdf[:,ivpa,:] * fvec_new.density / moments.vth
+            @. fvec_old.pdf[:,ivpa,:] = @view(fvec_new.pdf[:,ivpa,:]) * fvec_new.density / moments.vth
         end
     elseif moments.evolve_density
         for ivpa ∈ 1:vpa.n
