@@ -169,7 +169,9 @@ function reconcile_element_boundaries_centered!(df1d, df2d, coord)
     return nothing
 end
 
-# computes the integral of the integrand, using the input wgts
+"""
+Computes the integral of the integrand, using the input wgts
+"""
 function integral(integrand, wgts)
     # n is the number of grid points
     n = length(wgts)
@@ -179,6 +181,40 @@ function integral(integrand, wgts)
     @boundscheck n == length(wgts) || throw(BoundsError(wgts))
     @inbounds for i ∈ 1:n
         integral += integrand[i]*wgts[i]
+    end
+    return integral
+end
+
+"""
+Computes the integral of the integrand multiplied by v, using the input wgts
+"""
+function integral(integrand, v, wgts)
+    # n is the number of grid points
+    n = length(wgts)
+    # initialize 'integral' to zero before sum
+    integral = 0.0
+    @boundscheck n == length(integrand) || throw(BoundsError(integrand))
+    @boundscheck n == length(v) || throw(BoundsError(v))
+    @boundscheck n == length(wgts) || throw(BoundsError(wgts))
+    @inbounds for i ∈ 1:n
+        integral += integrand[i] * v[i] * wgts[i]
+    end
+    return integral
+end
+
+"""
+Computes the integral of the integrand multiplied by v^n, using the input wgts
+"""
+function integral(integrand, v, n, wgts)
+    # n is the number of grid points
+    n_v = length(wgts)
+    # initialize 'integral' to zero before sum
+    integral = 0.0
+    @boundscheck n_v == length(integrand) || throw(BoundsError(integrand))
+    @boundscheck n_v == length(v) || throw(BoundsError(v))
+    @boundscheck n_v == length(wgts) || throw(BoundsError(wgts))
+    @inbounds for i ∈ 1:n_v
+        integral += integrand[i] * v[i] ^ n * wgts[i]
     end
     return integral
 end
