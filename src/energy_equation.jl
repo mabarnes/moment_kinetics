@@ -33,13 +33,13 @@ function energy_equation_CX!(ppar_out, dens, ppar, composition, CX_frequency, dt
     for is ∈ 1:composition.n_ion_species
         for isn ∈ 1:composition.n_neutral_species
             isp = composition.n_ion_species + isn
-            @. ppar_out[:,is] -= dt*CX_frequency*(dens[:,isp]*ppar[:,is]-dens[:,is]*ppar[:,isp])
+            @views @. ppar_out[:,is] -= dt*CX_frequency*(dens[:,isp]*ppar[:,is]-dens[:,is]*ppar[:,isp])
         end
     end
     for isn ∈ 1:composition.n_neutral_species
         is = isn + composition.n_ion_species
         for isp ∈ 1:composition.n_ion_species
-            @. ppar_out[:,is] -= dt*CX_frequency*(dens[:,isp]*ppar[:,is]-dens[:,is]*ppar[:,isp])
+            @views @. ppar_out[:,is] -= dt*CX_frequency*(dens[:,isp]*ppar[:,is]-dens[:,is]*ppar[:,isp])
         end
     end
 end

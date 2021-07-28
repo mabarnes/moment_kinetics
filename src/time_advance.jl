@@ -427,7 +427,7 @@ function rk_update!(scratch, pdf, moments, fields, vpa, nz, rk_coefs, istage, co
     @. moments.vth = sqrt(2.0*scratch[istage+1].ppar/scratch[istage+1].density)
     if moments.evolve_ppar
         for ivpa ∈ 1:vpa.n
-            @. pdf.unnorm[:,ivpa,:] /= moments.vth
+            @. @view(pdf.unnorm[:,ivpa,:]) /= moments.vth
         end
     end
     # update the parallel heat flux
@@ -540,7 +540,7 @@ function update_pdf_unnorm!(pdf, moments)
     # undo this normalisation to get the true particle distribution function
     if moments.evolve_ppar
         for ivpa ∈ 1:size(pdf.norm,2)
-            @. pdf.unnorm[:,ivpa,:] = pdf.norm[:,ivpa,:]*moments.dens/moments.vth
+            @. pdf.unnorm[:,ivpa,:] = @view(pdf.norm[:,ivpa,:])*moments.dens/moments.vth
         end
     elseif moments.evolve_density
         for ivpa ∈ 1:size(pdf.norm,2)

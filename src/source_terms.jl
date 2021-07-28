@@ -61,14 +61,14 @@ function source_terms_evolve_ppar_CX!(pdf_out, pdf_in, dens, ppar, composition, 
     for is ∈ 1:composition.n_ion_species
         for isn ∈ 1:composition.n_neutral_species
             isp = composition.n_ion_species + isn
-            @. pdf_out[:,is] -= 0.5*dt*pdf_in[:,is]*CX_frequency *
+            @views @. pdf_out[:,is] -= 0.5*dt*pdf_in[:,is]*CX_frequency *
                 (dens[:,isp]*ppar[:,is]-dens[:,is]*ppar[:,isp])/ppar[:,is]
         end
     end
     for isn ∈ 1:composition.n_neutral_species
         is = composition.n_ion_species + isn
         for isp ∈ 1:composition.n_ion_species
-            @. pdf_out[:,is] -= 0.5*dt*pdf_in[:,is]*CX_frequency *
+            @views @. pdf_out[:,is] -= 0.5*dt*pdf_in[:,is]*CX_frequency *
                 (dens[:,isp]*ppar[:,is]-dens[:,is]*ppar[:,isp])/ppar[:,is]
         end
     end
