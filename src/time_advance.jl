@@ -125,7 +125,7 @@ function setup_time_advance!(pdf, z, vpa, composition, drive_input, moments,
     end
     # create an array of structs containing scratch arrays for the pdf and low-order moments
     # that may be evolved separately via fluid equations
-    scratch = setup_scratch_arrays(moments, pdf.norm, z.n, vpa.n, n_species, t_input.n_rk_stages)
+    scratch = setup_scratch_arrays(moments, pdf.norm, t_input.n_rk_stages)
     # create the "fields" structure that contains arrays
     # for the electrostatic potential phi and eventually the electromagnetic fields
     fields = setup_em_fields(z.n, drive_input.force_phi, drive_input.amplitude, drive_input.frequency)
@@ -165,18 +165,18 @@ function normalize_pdf!(pdf, moments)
     nvpa = size(pdf,2)
     if moments.evolve_ppar
         for ivpa ∈ 1:nvpa
-            @. pdf[:,ivpa,:] *= moments.vth/moments.dens
+            @. pdf[ivpa,:,:] *= moments.vth/moments.dens
         end
     elseif moments.evolve_density
         for ivpa ∈ 1:nvpa
-            @. pdf[:,ivpa,:] /= moments.dens
+            @. pdf[ivpa,:,:] /= moments.dens
         end
     end
     return nothing
 end
 # create an array of structs containing scratch arrays for the normalised pdf and low-order moments
 # that may be evolved separately via fluid equations
-function setup_scratch_arrays(moments, pdf_in, nz, nvpa, nspec, n_rk_stages)
+function setup_scratch_arrays(moments, pdf_in, n_rk_stages)
     # create n_rk_stages+1 structs, each of which will contain one pdf,
     # one density, and one parallel flow array
     scratch = Vector{scratch_pdf{3,2}}(undef, n_rk_stages+1)
