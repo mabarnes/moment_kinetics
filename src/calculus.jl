@@ -5,6 +5,7 @@ export integral
 
 using ..chebyshev: chebyshev_info, chebyshev_derivative!
 using ..finite_differences: derivative_finite_difference!
+using ..type_definitions: mk_float
 
 # Chebyshev transform f to get Chebyshev spectral coefficients and use them to calculate f'
 function derivative!(df, f, coord, adv_fac, spectral::chebyshev_info)
@@ -41,7 +42,7 @@ function derivative!(df, f, coord, not_spectral::Bool)
     # at element boundaries, use the average of the derivatives from neighboring elements.
     derivative_elements_to_full_grid!(df, coord.scratch2d, coord)
 end
-function derivative_elements_to_full_grid!(df1d, df2d, coord, adv_fac::Array{Float64,1})
+function derivative_elements_to_full_grid!(df1d, df2d, coord, adv_fac::Array{mk_float,1})
     # no changes need to be made for the derivative at points away from element boundaries
     elements_to_full_grid_interior_pts!(df1d, df2d, coord)
     # resolve the multi-valued nature of the derivative at element boundaries
@@ -77,7 +78,7 @@ end
 # df is multi-valued at the overlapping point at the boundary
 # between neighboring elements.
 # here we choose to use the value of df from the upwind element.
-function reconcile_element_boundaries_upwind!(df1d, df2d, coord, adv_fac::Array{Float64,1})
+function reconcile_element_boundaries_upwind!(df1d, df2d, coord, adv_fac::Array{mk_float,1})
     # note that the first ngrid points are classified as belonging to the first element
     # and the next ngrid-1 points belonging to second element, etc.
 
