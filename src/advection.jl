@@ -121,6 +121,7 @@ function update_advection_factor!(adv_fac, speed, upwind_idx, downwind_idx,
     #NB: commented out line below needed for bc != periodic?
     #@inbounds for i ∈ upwind_idx-upwind_increment:-upwind_increment:downwind_idx
     #@inbounds begin
+    if j == 1
         for i ∈ upwind_idx:-upwind_increment:downwind_idx
             idx = SL.dep_idx[i]
             # only need to calculate advection factor for characteristics
@@ -130,14 +131,19 @@ function update_advection_factor!(adv_fac, speed, upwind_idx, downwind_idx,
                 # the effective advection speed appearing in the advection term
                 # is the speed in the frame moving with the approximate
                 # characteristic speed v_char
-                # NB: need to change v[idx] to v[i] for second iteration of RK
-                if j == 1
-                    adv_fac[i] = -dt*(speed[idx]-SL.characteristic_speed[i])
-                else
-                    adv_fac[i] = -dt*(speed[i]-SL.characteristic_speed[i])
-                end
+                adv_fac[i] = -dt*(speed[idx]-SL.characteristic_speed[i])
             end
         end
+    else
+        # NB: need to change v[idx] to v[i] for second iteration of RK -
+        # otherwise identical to loop in first branch
+        for i ∈ upwind_idx:-upwind_increment:downwind_idx
+            idx = SL.dep_idx[i]
+            if idx != upwind_idx + upwind_increment
+                adv_fac[i] = -dt*(speed[i]-SL.characteristic_speed[i])
+            end
+        end
+    end
     #end
     return nothing
 end

@@ -46,21 +46,19 @@ end
 function force_balance_CX!(pflx, dens, upar, CX_frequency, composition, nz, dt)
     # include contribution to ion acceleration due to collisional friction with neutrals
     for is ∈ 1:composition.n_ion_species
-        for isp ∈ 1:composition.n_neutral_species
+        for isp ∈ composition.n_ion_species+1:composition.n_species
             # get the absolute species index for the neutral species
-            isn = composition.n_ion_species + isp
             for iz ∈ 1:nz
-                pflx[iz,is] += dt*CX_frequency*dens[iz,is]*dens[iz,isn]*(upar[iz,isn]-upar[iz,is])
+                pflx[iz,is] += dt*CX_frequency*dens[iz,is]*dens[iz,isp]*(upar[iz,isp]-upar[iz,is])
             end
         end
     end
     # include contribution to neutral acceleration due to collisional friction with ions
-    for isp ∈ 1:composition.n_neutral_species
-        for isi ∈ 1:composition.n_ion_species
+    for isp ∈ composition.n_ion_species+1:composition.n_species
+        for is ∈ 1:composition.n_ion_species
             # get the absolute species index for the neutral species
-            is = composition.n_ion_species + isp
             for iz ∈ 1:nz
-                pflx[iz,is] += dt*CX_frequency*dens[iz,is]*dens[iz,isi]*(upar[iz,isi]-upar[iz,is])
+                pflx[iz,isp] += dt*CX_frequency*dens[iz,isp]*dens[iz,is]*(upar[iz,is]-upar[iz,isp])
             end
         end
     end

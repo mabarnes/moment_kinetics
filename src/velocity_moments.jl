@@ -183,18 +183,17 @@ function update_qpar!(qpar, qpar_updated, pdf, vpa, nz, vpanorm)
     @boundscheck n_species == size(qpar,2) || throw(BoundsError(qpar))
     for is ∈ 1:n_species
         if qpar_updated[is] == false
-            @views update_qpar_species!(qpar[:,is], vpa.scratch, pdf[:,:,is], vpa, nz, vpanorm[:,is])
+            @views update_qpar_species!(qpar[:,is], pdf[:,:,is], vpa, nz, vpanorm[:,is])
             qpar_updated[is] = true
         end
     end
 end
 # calculate the updated parallel heat flux (qpar) for a given species
-function update_qpar_species!(qpar, scratch, ff, vpa, nz, vpanorm)
+function update_qpar_species!(qpar, ff, vpa, nz, vpanorm)
     @boundscheck nz == size(ff, 2) || throw(BoundsError(ff))
     @boundscheck nz == length(qpar) || throw(BoundsError(qpar))
     @inbounds for iz ∈ 1:nz
-        @views @. scratch = ff[:,iz] * vpa.grid^3 * vpanorm[iz]^4
-        qpar[iz] = integrate_over_vspace(scratch, vpa.wgts)
+        qpar[iz] = integrate_over_vspace(@view(ff[:,iz]), vpa.grid, 3, vpa.wgts) * vpanorm[iz]^4
     end
     return nothing
 end

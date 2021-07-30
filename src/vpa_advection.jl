@@ -109,8 +109,7 @@ function update_speed_default!(advect, fields, fvec, moments, vpa, z, compositio
 		# add in contributions from charge exchange collisions
 		if composition.n_neutral_species > 0 && abs(CX_frequency) > 0.0
 			for is ∈ 1:composition.n_ion_species
-				for isn ∈ 1:composition.n_neutral_species
-					isp = composition.n_ion_species + isn
+				for isp ∈ composition.n_ion_species+1:composition.n_species
 					for iz ∈ 1:z.n
 						@. advect[iz,is].speed += CX_frequency *
 							(0.5*vpa.grid/fvec.ppar[iz,is] * (fvec.density[iz,isp]*fvec.ppar[iz,is]
@@ -119,8 +118,7 @@ function update_speed_default!(advect, fields, fvec, moments, vpa, z, compositio
 					end
 				end
 			end
-			for isn ∈ 1:composition.n_neutral_species
-				is = isn + composition.n_ion_species
+			for is ∈ composition.n_ion_species+1:composition.n_species
 				for isp ∈ 1:composition.n_ion_species
 					for iz ∈ 1:z.n
 						@. advect[iz,is].speed += CX_frequency *
@@ -157,11 +155,9 @@ function update_speed_default!(advect, fields, fvec, moments, vpa, z, compositio
 		if composition.n_neutral_species > 0 && abs(CX_frequency) > 0.0
 			# include contribution to ion acceleration due to collisional friction with neutrals
 			for is ∈ 1:composition.n_ion_species
-				for isp ∈ 1:composition.n_neutral_species
-					# get the absolute species index for the neutral species
-					isn = composition.n_ion_species + isp
+				for isp ∈ composition.n_ion_species+1:composition.n_species
 					for iz ∈ 1:z.n
-						tmp = -CX_frequency*fvec.density[iz,isn]*(fvec.upar[iz,isn]-fvec.upar[iz,is])
+						tmp = -CX_frequency*fvec.density[iz,isp]*(fvec.upar[iz,isp]-fvec.upar[iz,is])
 						for ivpa ∈ 1:vpa.n
 							advect[iz,is].speed[ivpa] += tmp
 						end
@@ -169,14 +165,13 @@ function update_speed_default!(advect, fields, fvec, moments, vpa, z, compositio
 				end
 			end
 			# include contribution to neutral acceleration due to collisional friction with ions
-			for isp ∈ 1:composition.n_neutral_species
-				for isi ∈ 1:composition.n_ion_species
+			for isp ∈ composition.n_ion_species+1:composition.n_species
+				for is ∈ 1:composition.n_ion_species
 					# get the absolute species index for the neutral species
-					is = composition.n_ion_species + isp
 					for iz ∈ 1:z.n
-						tmp = -CX_frequency*fvec.density[iz,isi]*(fvec.upar[iz,isi]-fvec.upar[iz,is])
+						tmp = -CX_frequency*fvec.density[iz,is]*(fvec.upar[iz,is]-fvec.upar[iz,isp])
 						for ivpa ∈ 1:vpa.n
-							advect[iz,is].speed[ivpa] += tmp
+							advect[iz,isp].speed[ivpa] += tmp
 						end
 					end
 				end

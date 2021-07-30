@@ -280,9 +280,7 @@ function chebyshev_interpolate_single_element(newgrid, f, j, coord, chebyshev)
         cheb2 = z
         result[i] = cheby_f[1] * cheb1 + cheby_f[2] * cheb2
         for coef in cheby_f[3:end]
-            temp = cheb2
-            cheb2 = 2.0 * z * cheb2 - cheb1
-            cheb1 = temp
+            cheb1, cheb2 = cheb2, 2.0 * z * cheb2 - cheb1
             result[i] += coef * cheb2
         end
     end
