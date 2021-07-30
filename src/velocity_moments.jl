@@ -180,7 +180,7 @@ end
 # the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
 function update_qpar!(qpar, qpar_updated, pdf, vpa, nz, vpanorm)
     n_species = size(pdf,3)
-    @boundscheck n_species == size(qpar,2) || throw(BoundsError(ppar))
+    @boundscheck n_species == size(qpar,2) || throw(BoundsError(qpar))
     for is ∈ 1:n_species
         if qpar_updated[is] == false
             @views update_qpar_species!(qpar[:,is], vpa.scratch, pdf[:,:,is], vpa, nz, vpanorm[:,is])
