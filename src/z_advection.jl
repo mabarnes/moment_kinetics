@@ -78,53 +78,45 @@ function update_speed_z!(advect, upar, vth, evolve_upar, evolve_ppar, vpa, z, t)
     @boundscheck z.n == size(advect[1].speed,1) || throw(BoundsError(speed))
     if z.advection.option == "default"
         @inbounds begin
-            for j ∈ 1:vpa.n
-                for i ∈ 1:z.n
-                    advect[j].speed[i] = vpa.grid[j]
-                end
+            for ivpa ∈ 1:vpa.n
+                advect[ivpa].speed .= vpa.grid[ivpa]
             end
             if evolve_upar
                 if evolve_ppar
-                    for j ∈ 1:vpa.n
-                        @. advect[j].speed *= vth
+                    for ivpa ∈ 1:vpa.n
+                        advect[ivpa].speed .*= vth
                     end
                 end
-                for j ∈ 1:vpa.n
-                    @. advect[j].speed += upar
+                for ivpa ∈ 1:vpa.n
+                    advect[ivpa].speed .+= upar
                 end
             end
         end
     elseif z.advection.option == "constant"
         @inbounds begin
-            for j ∈ 1:vpa.n
-                for i ∈ 1:z.n
-                    advect[j].speed[i] = z.advection.constant_speed
-                end
+            for ivpa ∈ 1:vpa.n
+                advect[ivpa].speed .= z.advection.constant_speed
             end
         end
     elseif z.advection.option == "linear"
         @inbounds begin
-            for j ∈ 1:vpa.n
-                for i ∈ 1:z.n
-                    advect[j].speed[i] = z.advection.constant_speed*(z.grid[i]+0.5*z.L)
-                end
+            for ivpa ∈ 1:vpa.n
+                advect[ivpa].speed .= z.advection.constant_speed*(z.grid[i]+0.5*z.L)
             end
         end
     elseif z.advection.option == "oscillating"
         @inbounds begin
-            for j ∈ 1:vpa.n
-                for i ∈ 1:z.n
-                    advect[j].speed[i] = z.advection.constant_speed*(1.0
+            for ivpa ∈ 1:vpa.n
+                advect[ivpa].speed .= z.advection.constant_speed*(1.0
                         + z.advection.oscillation_amplitude*sinpi(t*z.advection.frequency))
-                end
             end
         end
     end
     # the default for modified_speed is simply speed.
     # will be modified later if semi-Lagrange scheme used
     @inbounds begin
-        for j ∈ 1:vpa.n
-            @. advect[j].modified_speed = advect[j].speed
+        for ivpa ∈ 1:vpa.n
+            advect[ivpa].modified_speed .= advect[ivpa].speed
         end
     end
     return nothing
