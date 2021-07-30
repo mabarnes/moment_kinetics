@@ -165,7 +165,7 @@ function update_speed_default!(advect, fields, fvec, moments, vpa, z, compositio
 		end
 	else
 		# update the electrostatic potential phi
-		update_phi!(fields, fvec, vpa, z.n, composition)
+		update_phi!(fields, fvec, z, composition)
 		# calculate the derivative of phi with respect to z;
 		# the value at element boundaries is taken to be the average of the values
 		# at neighbouring elements

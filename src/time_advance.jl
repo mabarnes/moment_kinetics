@@ -29,6 +29,7 @@ struct scratch_pdf{n_distribution, n_moment}
     density::Array{mk_float, n_moment}
     upar::Array{mk_float, n_moment}
     ppar::Array{mk_float, n_moment}
+    temp_z_s::Array{mk_float, n_moment}
 end
 mutable struct advance_info
     vpa_advection::Bool
@@ -130,7 +131,7 @@ function setup_time_advance!(pdf, vpa, z, composition, drive_input, moments,
     # for the electrostatic potential phi and eventually the electromagnetic fields
     fields = setup_em_fields(z.n, drive_input.force_phi, drive_input.amplitude, drive_input.frequency)
     # initialize the electrostatic potential
-    update_phi!(fields, scratch[1], vpa, z.n, composition)
+    update_phi!(fields, scratch[1], z, composition)
     # save the initial phi(z) for possible use later (e.g., if forcing phi)
     fields.phi0 .= fields.phi
     # create structure vpa_advect whose members are the arrays needed to compute
@@ -161,15 +162,17 @@ function setup_time_advance!(pdf, vpa, z, composition, drive_input, moments,
 end
 # if evolving the density via continuity equation, redefine the normalised f → f/n
 # if evolving the parallel pressure via energy equation, redefine f -> f * vth / n
-function normalize_pdf!(pdf, moments)
-    nvpa = size(pdf,2)
+# 'scratch' should be a (nz,nspecies) array
+function normalize_pdf!(pdf, moments, scratch)
     if moments.evolve_ppar
-        for ivpa ∈ 1:nvpa
-            @. pdf[ivpa,:,:] *= moments.vth/moments.dens
+        @. scratch = moments.vth/moments.dens
+        for i ∈ CartesianIndices(pdf)
+            pdf[i] *= scratch[i[2], i[3]]
         end
     elseif moments.evolve_density
-        for ivpa ∈ 1:nvpa
-            @. pdf[ivpa,:,:] /= moments.dens
+        @. scatch = 1.0 / moments.dens
+        for i ∈ CartesianIndices(pdf)
+            pdf[i] *= scratch[i[2], i[3]]
         end
     end
     return nothing
@@ -183,7 +186,8 @@ function setup_scratch_arrays(moments, pdf_in, n_rk_stages)
     # populate each of the structs
     for istage ∈ 1:n_rk_stages+1
         scratch[istage] = scratch_pdf(deepcopy(pdf_in), deepcopy(moments.dens),
-                                      deepcopy(moments.upar), deepcopy(moments.ppar))
+                                      deepcopy(moments.upar), deepcopy(moments.ppar),
+                                      similar(moments.dens))
     end
     return scratch
 end
@@ -399,41 +403,42 @@ function time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
     end
     return nothing
 end
-function rk_update!(scratch, pdf, moments, fields, vpa, nz, rk_coefs, istage, composition)
+function rk_update!(scratch, pdf, moments, fields, vpa, z, rk_coefs, istage, composition)
     @. scratch[istage+1].pdf = rk_coefs[1]*pdf.norm + rk_coefs[2]*scratch[istage].pdf + rk_coefs[3]*scratch[istage+1].pdf
     if moments.evolve_density
         @. scratch[istage+1].density = rk_coefs[1]*moments.dens + rk_coefs[2]*scratch[istage].density + rk_coefs[3]*scratch[istage+1].density
-        for ivpa ∈ 1:vpa.n
-            @. pdf.unnorm[ivpa,:,:] = @view(scratch[istage+1].pdf[ivpa,:,:]) * scratch[istage+1].density
+        for i ∈ CartesianIndices(pdf.unnorm)
+            pdf.unnorm[i] = scratch[istage+1].pdf[i] * scratch[istage+1].density[i[2], i[3]]
         end
     else
         pdf.unnorm .= scratch[istage+1].pdf
-        update_density!(scratch[istage+1].density, moments.dens_updated, pdf.unnorm, vpa, nz)
+        update_density!(scratch[istage+1].density, moments.dens_updated, pdf.unnorm, vpa, z.n)
     end
     # NB: if moments.evolve_upar = true, then moments.evolve_density = true
     if moments.evolve_upar
         @. scratch[istage+1].upar = rk_coefs[1]*moments.upar + rk_coefs[2]*scratch[istage].upar + rk_coefs[3]*scratch[istage+1].upar
     else
-        update_upar!(scratch[istage+1].upar, moments.upar_updated, pdf.unnorm, vpa, nz)
+        update_upar!(scratch[istage+1].upar, moments.upar_updated, pdf.unnorm, vpa, z.n)
         # convert from particle particle flux to parallel flow
         @. scratch[istage+1].upar /= scratch[istage+1].density
     end
     if moments.evolve_ppar
         @. scratch[istage+1].ppar = rk_coefs[1]*moments.ppar + rk_coefs[2]*scratch[istage].ppar + rk_coefs[3]*scratch[istage+1].ppar
     else
-        update_ppar!(scratch[istage+1].ppar, moments.ppar_updated, pdf.unnorm, vpa, nz)
+        update_ppar!(scratch[istage+1].ppar, moments.ppar_updated, pdf.unnorm, vpa, z.n)
     end
     # update the thermal speed
     @. moments.vth = sqrt(2.0*scratch[istage+1].ppar/scratch[istage+1].density)
     if moments.evolve_ppar
-        for ivpa ∈ 1:vpa.n
-            @. @view(pdf.unnorm[ivpa,:,:]) /= moments.vth
+        @. scratch[istage].temp_z_s = 1.0 / moments.vth
+        for i ∈ CartesianIndices(pdf.unnorm)
+            pdf.unnorm[i] *= scratch[istage].temp_z_s[i[2], i[3]]
         end
     end
     # update the parallel heat flux
-    update_qpar!(moments.qpar, moments.qpar_updated, pdf.unnorm, vpa, nz, moments.vpa_norm_fac)
+    update_qpar!(moments.qpar, moments.qpar_updated, pdf.unnorm, vpa, z.n, moments.vpa_norm_fac)
     # update the electrostatic potential phi
-    update_phi!(fields, scratch[istage+1], vpa, nz, composition)
+    update_phi!(fields, scratch[istage+1], z, composition)
 end
 function ssp_rk!(pdf, scratch, t, t_input, vpa, z,
     vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
@@ -455,7 +460,7 @@ function ssp_rk!(pdf, scratch, t, t_input, vpa, z,
             pdf, fields, moments, vpa_SL, z_SL, vpa_advect, z_advect, vpa, z, t,
             t_input, vpa_spectral, z_spectral, composition,
             charge_exchange_frequency, advance, istage)
-        @views rk_update!(scratch, pdf, moments, fields, vpa, z.n, advance.rk_coefs[:,istage], istage, composition)
+        @views rk_update!(scratch, pdf, moments, fields, vpa, z, advance.rk_coefs[:,istage], istage, composition)
     end
 
     istage = n_rk_stages+1
@@ -468,7 +473,7 @@ function ssp_rk!(pdf, scratch, t, t_input, vpa, z,
     moments.dens .= scratch[istage].density
     moments.upar .= scratch[istage].upar
     moments.ppar .= scratch[istage].ppar
-    update_pdf_unnorm!(pdf, moments)
+    update_pdf_unnorm!(pdf, moments, scratch[istage].temp_z_s)
     return nothing
 end
 # euler_time_advance! advances the vector equation dfvec/dt = G[f]
@@ -534,17 +539,20 @@ function update_solution_vector!(evolved, moments, istage)
     evolved[istage+1].ppar .= evolved[istage].ppar
     return nothing
 end
-function update_pdf_unnorm!(pdf, moments)
+
+# scratch should be a (nz,nspecies) array
+function update_pdf_unnorm!(pdf, moments, scratch)
     # if separately evolving the density via the continuity equation,
     # the evolved pdf has been normalised by the particle density
     # undo this normalisation to get the true particle distribution function
     if moments.evolve_ppar
-        for ivpa ∈ 1:size(pdf.norm,1)
-            @. pdf.unnorm[ivpa,:,:] = @view(pdf.norm[ivpa,:,:])*moments.dens/moments.vth
+        @. scratch = moments.dens/moments.vth
+        for i in CartesianIndices(pdf.unnorm)
+            pdf.unnorm[i] = pdf.norm[i]*scratch[i[2],i[3]]
         end
     elseif moments.evolve_density
-        for ivpa ∈ 1:size(pdf.norm,1)
-            @. pdf.unnorm[ivpa,:,:] = @view(pdf.norm[ivpa,:,:]) * moments.dens
+        for i in CartesianIndices(pdf.unnorm)
+            pdf.unnorm[i] = pdf.norm[i] * moments.dens[i[2],i[3]]
         end
     else
         @. pdf.unnorm = pdf.norm

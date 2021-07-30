@@ -250,17 +250,18 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, moments)
     # update the parallel heat flux
     # NB: no longer need fvec_old.pdf so can use for temporary storage of un-normalised pdf
     if moments.evolve_ppar
-        for ivpa ∈ 1:vpa.n
-            @. fvec_old.pdf[ivpa,:,:] = @view(fvec_new.pdf[ivpa,:,:]) * fvec_new.density / moments.vth
+        @. fvec_old.temp_z_s = fvec_new.density / moments.vth
+        for i ∈ CartesianIndices(fvec_old.pdf)
+            fvec_old.pdf[i] = fvec_new.pdf[i] * fvec_old.temp_z_s[i[2],i[3]]
         end
     elseif moments.evolve_density
-        for ivpa ∈ 1:vpa.n
-            @. fvec_old.pdf[ivpa,:,:] = @view(fvec_new.pdf[ivpa,:,:]) * fvec_new.density
+        for i ∈ CartesianIndices(fvec_old.pdf)
+            fvec_old.pdf[i] = fvec_new.pdf[i] * fvec_new.density[i[2],i[3]]
         end
     else
         @. fvec_old.pdf = fvec_new.pdf
     end
-    @views update_qpar!(moments.qpar, moments.qpar_updated, fvec_old.pdf, vpa, z.n, moments.vpa_norm_fac)
+    update_qpar!(moments.qpar, moments.qpar_updated, fvec_old.pdf, vpa, z.n, moments.vpa_norm_fac)
 end
 function reset_moments_status!(moments)
     if moments.evolve_density == false
