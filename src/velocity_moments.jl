@@ -210,31 +210,35 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, moments)
         #@views avgdens_ratio = integral(fvec_new.density[:,is], z.wgts)/integral(fvec_old.density[:,is], z.wgts)
         @views avgdens_ratio = integral(fvec_old.density[:,is] .- fvec_new.density[:,is], z.wgts)/integral(fvec_old.density[:,is], z.wgts)
         for iz ∈ 1:size(fvec_new.density,1)
+            # Create views once to save overhead
+            fnew_view = @view(fvec_new.pdf[:,iz,is])
+            fold_view = @view(fvec_old.pdf[:,iz,is])
+
             # first calculate all of the integrals involving the updated pdf fvec_new.pdf
-            density_integral = integrate_over_vspace(@view(fvec_new.pdf[:,iz,is]), vpa.wgts)
+            density_integral = integrate_over_vspace(fnew_view, vpa.wgts)
             if moments.evolve_upar
-                upar_integral = integrate_over_vspace(@view(fvec_new.pdf[:,iz,is]), vpa.grid, vpa.wgts)
+                upar_integral = integrate_over_vspace(fnew_view, vpa.grid, vpa.wgts)
             end
             if moments.evolve_ppar
-                ppar_integral = integrate_over_vspace(@view(fvec_new.pdf[:,iz,is]), vpa.grid, 2, vpa.wgts) - 0.5*density_integral
+                ppar_integral = integrate_over_vspace(fnew_view, vpa.grid, 2, vpa.wgts) - 0.5*density_integral
             end
             # update the pdf to account for the density-conserving correction
-            @views @. fvec_new.pdf[:,iz,is] += fvec_old.pdf[:,iz,is] * (1.0 - density_integral)
+            @. fnew_view += fold_view * (1.0 - density_integral)
             if moments.evolve_upar
                 # next form the even part of the old distribution function that is needed
                 # to ensure momentum and energy conservation
-                @. vpa.scratch = @view(fvec_old.pdf[:,iz,is])
+                @. vpa.scratch = fold_view
                 reverse!(vpa.scratch)
-                @. vpa.scratch = 0.5*(vpa.scratch + @view(fvec_old.pdf[:,iz,is]))
+                @. vpa.scratch = 0.5*(vpa.scratch + fold_view)
                 # calculate the integrals involving this even pdf
                 vpa2_moment = integrate_over_vspace(vpa.scratch, vpa.grid, 2, vpa.wgts)
                 upar_integral /= vpa2_moment
                 # update the pdf to account for the momentum-conserving correction
-                @. @view(fvec_new.pdf[:,iz,is]) -= vpa.scratch * vpa.grid * upar_integral
+                @. fnew_view -= vpa.scratch * vpa.grid * upar_integral
                 if moments.evolve_ppar
                     ppar_integral /= integrate_over_vspace(vpa.scratch, vpa.grid, 4, vpa.wgts) - 0.5 * vpa2_moment
                     # update the pdf to account for the energy-conserving correction
-                    @. @view(fvec_new.pdf[:,iz,is]) -= vpa.scratch * (vpa.grid^2 - 0.5) * ppar_integral
+                    @. fnew_view -= vpa.scratch * (vpa.grid^2 - 0.5) * ppar_integral
                 end
             end
             fvec_new.density[iz,is] += fvec_old.density[iz,is] * avgdens_ratio
