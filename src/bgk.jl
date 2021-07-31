@@ -8,6 +8,7 @@ using ..array_allocation: allocate_float, allocate_int
 using ..quadrature: composite_simpson_weights
 using ..calculus: integral
 using ..coordinates: equally_spaced_grid
+using ..optimization
 
 function init_bgk_pdf!(pdf, phi_max, tau, z, Lz, vpa)
     nz = length(z)
@@ -61,7 +62,7 @@ end
 # this function fills in the part of phase space where x > e*phi_max/T
 function passing_pdf!(pdf, phi_max, tau, x, ivpa_min)
     nvpa = size(x,1)
-    for iz ∈ 1:size(x,2)
+    @outerloop for iz ∈ 1:size(x,2)
         if ivpa_min[iz] > 1
             for ivpa ∈ 1:ivpa_min[iz]-1
                 pdf[ivpa,iz] = exp(((1.0+tau)*phi_max - x[ivpa,iz])/tau)/sqrt(pi*tau)
@@ -86,7 +87,7 @@ function allowed_wave_amplitude!(phi_max, tau, y, wgts, integrand)
     # trapped_pdf_single evaluates the trapped pdf at the given total parallel energy value, x0
     function trapped_pdf_single(x0)
         # construct the integrand
-        for i ∈ 1:n
+        @outerloop for i ∈ 1:n
             integrand[i] = asin((phi_max-x0-y[i])/(phi_max+y[i]-x0))*exp((tau*phi_max-y[i])/tau)
         end
         # carry out the semi-infinite integral in y
@@ -134,7 +135,7 @@ function trapped_pdf!(pdf, phi_max, tau, x, y, wgts, integrand, ivpa_min)
         # calculate the trapped pdf
         return exp(phi_max)/(2.0*sqrt(pi*tau)) - total/(pi*tau)^1.5 - exp(x0)*erfi(sqrt(phi_max-x0))/sqrt(pi)
     end
-    for iz ∈ 1:size(x,2)
+    @outerloop for iz ∈ 1:size(x,2)
         if ivpa_min[iz] <= nvpa
             ivpa_max = nvpa-ivpa_min[iz]+1
             for ivpa ∈ ivpa_min[iz]:ivpa_max
@@ -155,7 +156,7 @@ function total_energy_grid(vpa, phi)
     nvpa = length(vpa)
     nz = length(phi)
     x = allocate_float(nvpa, nz)
-    for iz ∈ 1:nz
+    @outerloop for iz ∈ 1:nz
         for ivpa ∈ 1:nvpa
             x[ivpa,iz] = vpa[ivpa]^2 + phi[iz]
         end
@@ -167,7 +168,7 @@ function trapped_passing_boundary(x, phi_max)
     # initialize the lower boundary for the trapped domain to be beyond the boundary of vpa
     ivpa_min = allocate_int(nvpa)
     @. ivpa_min = nvpa+1
-    for iz ∈ 1:size(x,2)
+    @outerloop for iz ∈ 1:size(x,2)
         # start from most negative vpa and look for first vpa value where x < phi_max
         for ivpa ∈ 1:nvpa
             if x[ivpa,iz] <= phi_max

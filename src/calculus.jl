@@ -10,38 +10,46 @@ using ..optimization
 
 # Chebyshev transform f to get Chebyshev spectral coefficients and use them to calculate f'
 function derivative!(df, f, coord, adv_fac, spectral::chebyshev_info)
+    ithread = Base.Threads.threadid()
+    scratch = @view(coord.scratch_2d[:,:,ithread])
     # get the derivative at each grid point within each element and store in df
-    chebyshev_derivative!(coord.scratch_2d, f, spectral, coord)
+    chebyshev_derivative!(scratch, f, spectral, coord)
     # map the derivative from the elemental grid to the full grid;
     # at element boundaries, use the derivative from the upwind element.
-    derivative_elements_to_full_grid!(df, coord.scratch_2d, coord, adv_fac)
+    derivative_elements_to_full_grid!(df, scratch, coord, adv_fac)
 end
 # Chebyshev transform f to get Chebyshev spectral coefficients and use them to calculate f'
 function derivative!(df, f, coord, spectral::chebyshev_info)
+    ithread = Base.Threads.threadid()
+    scratch = @view(coord.scratch_2d[:,:,ithread])
     # get the derivative at each grid point within each element and store in df
-    chebyshev_derivative!(coord.scratch_2d, f, spectral, coord)
+    chebyshev_derivative!(scratch, f, spectral, coord)
     # map the derivative from the elemental grid to the full grid;
     # at element boundaries, use the average of the derivatives from neighboring elements.
-    derivative_elements_to_full_grid!(df, coord.scratch_2d, coord)
+    derivative_elements_to_full_grid!(df, scratch, coord)
 end
 # calculate the derivative of f using finite differences, with particular scheme
 # specifiied by coord.fd_option; stored in df
 function derivative!(df, f, coord, adv_fac, not_spectral::Bool)
+    ithread = Base.Threads.threadid()
+    scratch = @view(coord.scratch_2d[:,:,ithread])
     # get the derivative at each grid point within each element and store in df
-    derivative_finite_difference!(coord.scratch_2d, f, coord.cell_width, adv_fac,
+    derivative_finite_difference!(scratch, f, coord.cell_width, adv_fac,
         coord.bc, coord.fd_option, coord.igrid, coord.ielement)
     # map the derivative from the elemental grid to the full grid;
     # at element boundaries, use the derivative from the upwind element.
-    derivative_elements_to_full_grid!(df, coord.scratch_2d, coord, adv_fac)
+    derivative_elements_to_full_grid!(df, scratch, coord, adv_fac)
 end
 # calculate the derivative of f using centered differences; stored in df
 function derivative!(df, f, coord, not_spectral::Bool)
+    ithread = Base.Threads.threadid()
+    scratch = @view(coord.scratch_2d[:,:,ithread])
     # get the derivative at each grid point within each element and store in df
-    derivative_finite_difference!(coord.scratch_2d, f, coord.cell_width,
+    derivative_finite_difference!(scratch, f, coord.cell_width,
         coord.bc, "fourth_order_centered", coord.igrid, coord.ielement)
     # map the derivative from the elemental grid to the full grid;
     # at element boundaries, use the average of the derivatives from neighboring elements.
-    derivative_elements_to_full_grid!(df, coord.scratch_2d, coord)
+    derivative_elements_to_full_grid!(df, scratch, coord)
 end
 function derivative_elements_to_full_grid!(df1d, df2d, coord, adv_fac::Array{mk_float,1})
     # no changes need to be made for the derivative at points away from element boundaries
@@ -68,7 +76,7 @@ function elements_to_full_grid_interior_pts!(df1d, df2d, coord)
     df1d[2:ngm1] .= @view df2d[2:ngm1,1]
     # deal with any additional elements
     if coord.nelement > 1
-        for ielem ∈ 2:coord.nelement
+        @outerloop for ielem ∈ 2:coord.nelement
             @. df1d[coord.imin[ielem]:coord.imax[ielem]-1] = @view df2d[2:ngm1,ielem]
         end
     end

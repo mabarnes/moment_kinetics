@@ -286,7 +286,7 @@ end
 # take the derivative of input function f and return as df
 # using second-order, centered differences.
 # input/output array df is 2D array of size ngrid x nelement
-function centered_second_order!(df::Array{mk_float,2}, f, del, bc, igrid, ielement)
+function centered_second_order!(df::AbstractArray{T,2}, f, del, bc, igrid, ielement) where {T}
 	n = length(f)
 	# get derivative at internal points
 	@innerloop for i ∈ 2:n-1
@@ -321,7 +321,7 @@ end
 # take the derivative of input function f and return as df
 # using second-order, centered differences.
 # input/output df is 1D array of size n (full grid)
-function centered_second_order!(df::Array{mk_float,1}, f, del, bc, igrid, ielement)
+function centered_second_order!(df::AbstractArray{T,1}, f, del, bc, igrid, ielement) where {T}
 	n = length(f)
 	# get derivative at internal points
 	@innerloop for i ∈ 2:n-1
@@ -356,7 +356,7 @@ end
 # take the derivative of input function f and return as df
 # using fourth-order, centered differences.
 # input/output array df is 2D array of size ngrid x nelement
-function centered_fourth_order!(df::Array{mk_float,2}, f, del, bc, igrid, ielement)
+function centered_fourth_order!(df, f, del, bc, igrid, ielement)
 	n = length(f)
 	# get derivative at internal points
 	@innerloop for i ∈ 3:n-2

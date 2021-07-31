@@ -45,7 +45,7 @@ function setup_advection(coord, nspec)
     # to do the 1D advection time advance
     advection = Array{advection_info,1}(undef, nspec)
     # store all of this information in a structure and return it
-    for is ∈ 1:nspec
+    @outerloop for is ∈ 1:nspec
         advection[is] = setup_advection_local(coord.n, coord.ngrid, coord.nelement)
     end
     return advection
@@ -59,8 +59,8 @@ function setup_advection(coord1, coord2, nspec)
     # to do the 1D advection time advance
     advection = Array{advection_info,2}(undef, m, nspec)
     # store all of this information in a structure and return it
-    for is ∈ 1:nspec
-        for i ∈ 1:m
+    @outerloop for is ∈ 1:nspec
+        @outerloop for i ∈ 1:m
             advection[i,is] = setup_advection_local(coord1.n, coord1.ngrid, coord1.nelement)
         end
     end
@@ -171,6 +171,8 @@ function calculate_explicit_advection!(rhs, df, adv_fac, up_idx, up_incr, dep_id
 end
 # update the righthand side of the equation to account for 1d advection in this coordinate
 function update_rhs!(advection, f_current, SL, coord, dt, j, spectral)
+    ithread = Base.Threads.threadid()
+    scratch = @view(coord.scratch[:,ithread])
     # calculate the factor appearing in front of df/dcoord in the advection
     # term at time level n in the frame moving with the approximate
     # characteristic
@@ -178,11 +180,11 @@ function update_rhs!(advection, f_current, SL, coord, dt, j, spectral)
         advection.modified_speed, advection.upwind_idx, advection.downwind_idx,
         advection.upwind_increment, SL, coord.n, dt, j, coord)
     # calculate df/dcoord
-    derivative!(coord.scratch, f_current, coord, advection.adv_fac, spectral)
-    #derivative!(coord.scratch, f_current, coord, spectral)
+    derivative!(scratch, f_current, coord, advection.adv_fac, spectral)
+    #derivative!(scratch, f_current, coord, spectral)
     # calculate the explicit advection terms on the rhs of the equation;
     # i.e., -Δt⋅δv⋅f'
-    calculate_explicit_advection!(advection.rhs, coord.scratch,
+    calculate_explicit_advection!(advection.rhs, scratch,
         advection.adv_fac, advection.upwind_idx, advection.upwind_increment,
         SL.dep_idx, coord.n, j)
 end

@@ -9,6 +9,7 @@ using ..file_io: open_output_file
 using ..chebyshev: scaled_chebyshev_grid
 using ..quadrature: composite_simpson_weights
 using ..input_structs: advection_input
+using ..optimization
 
 # structure containing basic information related to coordinates
 struct coordinate
@@ -48,13 +49,13 @@ struct coordinate
     # duniform_dgrid is the local derivative of the uniform grid with respect to
     # the coordinate grid
     duniform_dgrid::Array{mk_float,2}
-    # scratch is an array used for intermediate calculations requiring n entries
-    scratch::Array{mk_float,1}
-    # scratch2d is an array used for intermediate calculations requiring ngrid x nelement entries
-    scratch2::Array{mk_float,1}
+    # scratch is an array used for intermediate calculations requiring n entries. Need
+    # one per thread to avoid race conditions
+    scratch::Array{mk_float,2}
+    scratch2::Array{mk_float,2}
     # scratch_2d is an array used for intermediate calculations requiring ngrid x
-    # nelement entries
-    scratch_2d::Array{mk_float,2}
+    # nelement entries. Need one per thread to avoid race conditions
+    scratch_2d::Array{mk_float,3}
     # struct containing advection speed options/inputs
     advection::advection_input
 end
@@ -82,9 +83,9 @@ function define_coordinate(input)
     # the coordinate grid
     duniform_dgrid = allocate_float(input.ngrid, input.nelement)
     # scratch is an array used for intermediate calculations requiring n entries
-    scratch = allocate_float(n)
+    scratch = allocate_float(n, Base.Threads.nthreads())
     # scratch_2d is an array used for intermediate calculations requiring ngrid x nelement entries
-    scratch_2d = allocate_float(input.ngrid, input.nelement)
+    scratch_2d = allocate_float(input.ngrid, input.nelement, Base.Threads.nthreads())
     # struct containing the advection speed options/inputs for this coordinate
     advection = input.advection
 
@@ -118,7 +119,7 @@ end
 function equally_spaced_grid(n, L)
     # create array for the equally spaced grid with n grid points
     grid = allocate_float(n)
-    @inbounds for i ∈ 1:n
+    @inbounds @outerloop for i ∈ 1:n
         grid[i] = -0.5*L + (i-1)*L/(n-1)
     end
     return grid
@@ -130,7 +131,7 @@ function grid_spacing(grid, n)
     # array to contain the cell widths
     d = allocate_float(n)
     @inbounds begin
-        for i ∈ 2:n
+        @outerloop for i ∈ 2:n
             d[i-1] =  grid[i]-grid[i-1]
         end
         # final (nth) entry corresponds to cell beyond the grid boundary
@@ -145,13 +146,13 @@ function full_to_elemental_grid_map(ngrid, nelement, n)
     igrid = allocate_int(n)
     ielement = allocate_int(n)
     k = 1
-    for i ∈ 1:ngrid
+    @outerloop for i ∈ 1:ngrid
         ielement[k] = 1
         igrid[k] = i
         k += 1
     end
     if nelement > 1
-        for j ∈ 2:nelement
+        @outerloop for j ∈ 2:nelement
             # avoid double-counting overlapping point
             # at boundary between elements
             for i ∈ 2:ngrid
@@ -175,7 +176,7 @@ function elemental_to_full_grid_map(ngrid, nelement)
         # each additional element contributes ngrid-1 unique entries
         # due to repetition of one grid point at the boundary
         if nelement > 1
-            for i ∈ 2:nelement
+            @outerloop for i ∈ 2:nelement
                 imin[i] = imax[i-1] + 1
                 imax[i] = imin[i] + ngrid - 2
             end

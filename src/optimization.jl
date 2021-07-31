@@ -1,6 +1,6 @@
 module optimization
 
-export @innerloop
+export @innerloop, @outerloop
 
 """
 Macro to use for optimizing inner loops
@@ -25,6 +25,11 @@ macro innerloop(ex)
     #return esc( :( @fastmath @simd ivdep $ex ) )
     #
     return esc( :( $ex ) )
+end
+
+macro outerloop(ex)
+    return esc( :( Base.Threads.@threads $ex ) )
+    #return esc( :( $ex ) )
 end
 
 end # optimization

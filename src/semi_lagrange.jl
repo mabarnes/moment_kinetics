@@ -161,6 +161,8 @@ function find_departure_points!(SL, coord, speed, upwind_idx, downwind_idx,
     @boundscheck n == length(speed) || throw(BoundsError(speed))
 
     @inbounds begin
+        ithread = Base.Threads.threadid()
+        scratch = @view(coord.scratch[:,ithread])
         SL.n_transits .= 0.0
         if coord.bc != "periodic"
             # if the BC is not periodic, then the departure point for the
@@ -180,7 +182,7 @@ function find_departure_points!(SL, coord, speed, upwind_idx, downwind_idx,
             # this is needed by the point at the upwind/downwind
             # boundary and some of this information may also be needed by points downwind
             # of the boundary whose characteristics originate upwind of the upwind boundary.
-            calculate_time_from_boundary!(coord.scratch, SL.crossing_time, upwind_idx,
+            calculate_time_from_boundary!(scratch, SL.crossing_time, upwind_idx,
                 upwind_increment, downwind_idx, dt)
             iend = upwind_idx
         end
@@ -196,7 +198,7 @@ function find_departure_points!(SL, coord, speed, upwind_idx, downwind_idx,
             # updates SL.dep_pts, SL.dep_idx, and ttotal_out
             ttotal_out = departure_point!(SL, ttotal_in, i, jstart,
                 coord.grid, speed, dt, upwind_idx, upwind_increment, downwind_idx,
-                coord.bc, coord.scratch)
+                coord.bc, scratch)
             # jstart will be the grid point to start the time integration
             # for the characteristic immediately upwind of the ith one.
             # generic case is to start sweeping upwind starting at the

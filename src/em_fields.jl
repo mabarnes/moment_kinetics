@@ -34,14 +34,16 @@ function update_phi!(fields, fvec, z, composition)
     @boundscheck size(fvec.density,1) == z.n || throw(BoundsError(fvec.density))
     @boundscheck size(fvec.density,2) == composition.n_species || throw(BoundsError(fvec.density))
     if composition.boltzmann_electron_response
-        z.scratch .= @view(fvec.density[:,1])
-        @inbounds for is ∈ 2:composition.n_ion_species
-            @innerloop for iz ∈ 1:z.n
-                z.scratch[iz] += fvec.density[iz,is]
+        ithread = Base.Threads.threadid()
+        scratch = @view(z.scratch[:,ithread])
+        scratch .= @view(fvec.density[:,1])
+        @inbounds @outerloop for is ∈ 2:composition.n_ion_species
+            @outerloop for iz ∈ 1:z.n
+                scratch[iz] += fvec.density[iz,is]
             end
         end
-        @inbounds @innerloop for iz ∈ 1:z.n
-            fields.phi[iz] = composition.T_e * log(z.scratch[iz])
+        @inbounds @outerloop for iz ∈ 1:z.n
+            fields.phi[iz] = composition.T_e * log(scratch[iz])
         end
         # if fields.force_phi
         #     @inbounds for iz ∈ 1:z.n
