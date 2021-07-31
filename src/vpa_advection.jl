@@ -88,17 +88,13 @@ function update_speed_default!(advect, fields, fvec, moments, vpa, z, compositio
 			derivative!(z.scratch, view(moments.qpar,:,is), z, z_spectral)
 			# update parallel acceleration to account for (wpar/2*ppar)*dqpar/dz
 			for iz ∈ 1:z.n
-				for ivpa ∈ 1:vpa.n
-					advect[iz,is].speed[ivpa] += 0.5*vpa.grid[ivpa]*z.scratch[iz]/fvec.ppar[iz,is]
-				end
+				@. advect[iz,is].speed += 0.5*vpa.grid*z.scratch[iz]/fvec.ppar[iz,is]
 			end
 			# calculate d(vth)/dz
 			derivative!(z.scratch, view(moments.vth,:,is), z, z_spectral)
 			# update parallel acceleration to account for -wpar^2 * d(vth)/dz term
 			for iz ∈ 1:z.n
-				for ivpa ∈ 1:vpa.n
-					advect[iz,is].speed[ivpa] -= vpa.grid[ivpa]^2*z.scratch[iz]
-				end
+				@. advect[iz,is].speed -= vpa.grid^2*z.scratch[iz]
 			end
 		end
 		# add in contributions from charge exchange collisions
@@ -137,9 +133,7 @@ function update_speed_default!(advect, fields, fvec, moments, vpa, z, compositio
 			derivative!(z.scratch, view(fvec.upar,:,is), z, z_spectral)
 			# update parallel acceleration to account for -wpar*dupar/dz
 			for iz ∈ 1:z.n
-				for ivpa ∈ 1:vpa.n
-					advect[iz,is].speed[ivpa] -= vpa.grid[ivpa]*z.scratch[iz]
-				end
+				@. advect[iz,is].speed -= vpa.grid*z.scratch[iz]
 			end
 		end
 		# if neutrals present and charge exchange frequency non-zero,
