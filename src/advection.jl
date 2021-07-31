@@ -9,6 +9,7 @@ export advance_f_local!
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float
 using ..calculus: derivative!
+using ..optimization
 
 # structure containing the basic arrays associated with the
 # advection terms appearing in the advection equation for each coordinate
@@ -94,7 +95,7 @@ end
 function update_boundary_indices!(advection)
     m = size(advection,1)
     n = size(advection[1].speed,1)
-    for j ∈ 1:m
+    @innerloop for j ∈ 1:m
         # NB: for now, assume the speed has the same sign at all grid points
         # so only need to check its value at one location to determine the upwind direction
         if advection[j].speed[1] > 0
@@ -122,7 +123,7 @@ function update_advection_factor!(adv_fac, speed, upwind_idx, downwind_idx,
     #@inbounds for i ∈ upwind_idx-upwind_increment:-upwind_increment:downwind_idx
     #@inbounds begin
     if j == 1
-        for i ∈ upwind_idx:-upwind_increment:downwind_idx
+        @innerloop for i ∈ upwind_idx:-upwind_increment:downwind_idx
             idx = SL.dep_idx[i]
             # only need to calculate advection factor for characteristics
             # that originate within the domain, as zero/constant incoming BC
@@ -137,7 +138,7 @@ function update_advection_factor!(adv_fac, speed, upwind_idx, downwind_idx,
     else
         # NB: need to change v[idx] to v[i] for second iteration of RK -
         # otherwise identical to loop in first branch
-        for i ∈ upwind_idx:-upwind_increment:downwind_idx
+        @innerloop for i ∈ upwind_idx:-upwind_increment:downwind_idx
             idx = SL.dep_idx[i]
             if idx != upwind_idx + upwind_increment
                 adv_fac[i] = -dt*(speed[i]-SL.characteristic_speed[i])
@@ -155,14 +156,14 @@ function calculate_explicit_advection!(rhs, df, adv_fac, up_idx, up_incr, dep_id
     # been defined so that it corresponds to the advection factor
     # corresponding to the ith characteristic
     if j == 1
-        for i ∈ 1:n
+        @innerloop for i ∈ 1:n
             idx = dep_idx[i]
             if idx != up_idx + up_incr
                 rhs[i] = adv_fac[i]*df[idx]
             end
         end
     else
-        for i ∈ 1:n
+        @innerloop for i ∈ 1:n
             rhs[i] = adv_fac[i]*df[i]
         end
     end
@@ -211,7 +212,7 @@ function update_f!(f_new, f_old, rhs, up_idx, down_idx, up_incr, dep_idx, n, bc,
             istart = up_idx
         end
         #@inbounds for i ∈ up_idx-up_incr:-up_incr:down_idx
-        @inbounds for i ∈ up_idx:-up_incr:down_idx
+        @inbounds @innerloop for i ∈ up_idx:-up_incr:down_idx
             # dep_idx is the index of the departure point for the approximate
             # characteristic passing through grid point i
             # if semi-Lagrange is not used, then dep_idx = i
@@ -228,7 +229,7 @@ function update_f!(f_new, f_old, rhs, up_idx, down_idx, up_incr, dep_idx, n, bc,
         end
     else
         #@inbounds for i ∈ up_idx:-up_incr:down_idx
-        for i ∈ up_idx:-up_incr:down_idx
+        @innerloop for i ∈ up_idx:-up_incr:down_idx
             f_new[i] += rhs[i]
         end
     end

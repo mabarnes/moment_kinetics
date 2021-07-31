@@ -6,6 +6,7 @@ export integral
 using ..chebyshev: chebyshev_info, chebyshev_derivative!
 using ..finite_differences: derivative_finite_difference!
 using ..type_definitions: mk_float
+using ..optimization
 
 # Chebyshev transform f to get Chebyshev spectral coefficients and use them to calculate f'
 function derivative!(df, f, coord, adv_fac, spectral::chebyshev_info)
@@ -180,7 +181,7 @@ function integral(integrand, wgts)
     integral = 0.0
     @boundscheck n == length(integrand) || throw(BoundsError(integrand))
     @boundscheck n == length(wgts) || throw(BoundsError(wgts))
-    @inbounds for i ∈ 1:n
+    @inbounds @innerloop for i ∈ 1:n
         integral += integrand[i]*wgts[i]
     end
     return integral
@@ -197,7 +198,7 @@ function integral(integrand, v, wgts)
     @boundscheck n == length(integrand) || throw(BoundsError(integrand))
     @boundscheck n == length(v) || throw(BoundsError(v))
     @boundscheck n == length(wgts) || throw(BoundsError(wgts))
-    @inbounds for i ∈ 1:n
+    @inbounds @innerloop for i ∈ 1:n
         integral += integrand[i] * v[i] * wgts[i]
     end
     return integral
@@ -214,7 +215,7 @@ function integral(integrand, v, n, wgts)
     @boundscheck n_v == length(integrand) || throw(BoundsError(integrand))
     @boundscheck n_v == length(v) || throw(BoundsError(v))
     @boundscheck n_v == length(wgts) || throw(BoundsError(wgts))
-    @inbounds for i ∈ 1:n_v
+    @inbounds @innerloop for i ∈ 1:n_v
         integral += integrand[i] * v[i] ^ n * wgts[i]
     end
     return integral

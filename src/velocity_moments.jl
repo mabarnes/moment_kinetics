@@ -13,6 +13,7 @@ export enforce_moment_constraints!
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_float, allocate_bool
 using ..calculus: integral
+using ..optimization
 
 #global tmpsum1 = 0.0
 #global tmpsum2 = 0.0
@@ -255,11 +256,11 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, moments)
     # NB: no longer need fvec_old.pdf so can use for temporary storage of un-normalised pdf
     if moments.evolve_ppar
         @. fvec_old.temp_z_s = fvec_new.density / moments.vth
-        for i ∈ CartesianIndices(fvec_old.pdf)
+        @innerloop for i ∈ CartesianIndices(fvec_old.pdf)
             fvec_old.pdf[i] = fvec_new.pdf[i] * fvec_old.temp_z_s[i[2],i[3]]
         end
     elseif moments.evolve_density
-        for i ∈ CartesianIndices(fvec_old.pdf)
+        @innerloop for i ∈ CartesianIndices(fvec_old.pdf)
             fvec_old.pdf[i] = fvec_new.pdf[i] * fvec_new.density[i[2],i[3]]
         end
     else

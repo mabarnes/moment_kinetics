@@ -2,6 +2,7 @@ module clenshaw_curtis
 
 using FFTW
 using LinearAlgebra
+using ..optimization
 
 export clenshawcurtisweights
 
@@ -26,7 +27,7 @@ function chebyshevpoints(n)
     nfac = 1/(n-1)
     @inbounds begin
         # calculate z = cos(θ) ∈ [1,-1]
-        for j ∈ 1:n
+        @innerloop for j ∈ 1:n
             grid[j] = cospi((j-1)*nfac)
         end
     end

@@ -4,6 +4,7 @@ export derivative_finite_difference!
 
 using Interpolations
 
+using ..optimization
 using ..type_definitions: mk_float
 import ..interpolation: interpolate_to_grid_1d
 
@@ -68,7 +69,7 @@ function upwind_first_order!(df, f, del, adv_fac, bc, igrid, ielement)
     @boundscheck n == length(del) || throw(BoundsError(del))
 	@boundscheck n == length(adv_fac) || throw(BoundsError(adv_fac))
     @inbounds @fastmath begin
-        for i ∈ 2:n-1
+        @innerloop for i ∈ 2:n-1
             if adv_fac[i] < 0
                 #df[i] =  (f[i]-f[i-1])/del[i]
 				df[igrid[i],ielement[i]] =  (f[i]-f[i-1])/del[i]
@@ -121,7 +122,7 @@ function upwind_second_order!(df, f, del, adv_fac, bc, igrid, ielement)
     @boundscheck n == length(del) || throw(BoundsError(del))
 	@boundscheck n == length(adv_fac) || throw(BoundsError(adv_fac))
     @inbounds @fastmath begin
-        for i ∈ 3:n-2
+        @innerloop for i ∈ 3:n-2
             if adv_fac[i] < 0
                 #df[i] =  (3*f[i]-4*f[i-1]+f[i-2])/(2*del[i])
 				df[igrid[i],ielement[i]] =  (3*f[i]-4*f[i-1]+f[i-2])/(2*del[i])
@@ -210,7 +211,7 @@ function upwind_third_order!(df, f, del, adv_fac, bc, igrid, ielement)
     @boundscheck n == length(del) || throw(BoundsError(del))
 	@boundscheck n == length(adv_fac) || throw(BoundsError(adv_fac))
     #@inbounds @fastmath begin
-        for i ∈ 3:n-2
+        @innerloop for i ∈ 3:n-2
             if adv_fac[i] < 0
 				df[igrid[i],ielement[i]] =  (2*f[i+1]+3*f[i]-6*f[i-1]+f[i-2])/(6*del[i])
             else
@@ -288,7 +289,7 @@ end
 function centered_second_order!(df::Array{mk_float,2}, f, del, bc, igrid, ielement)
 	n = length(f)
 	# get derivative at internal points
-	for i ∈ 2:n-1
+	@innerloop for i ∈ 2:n-1
 		df[igrid[i],ielement[i]] = 0.5*(f[i+1]-f[i-1])/del[i]
 	end
         # fill in points at start of elements, in case we are using more than one
@@ -323,7 +324,7 @@ end
 function centered_second_order!(df::Array{mk_float,1}, f, del, bc, igrid, ielement)
 	n = length(f)
 	# get derivative at internal points
-	for i ∈ 2:n-1
+	@innerloop for i ∈ 2:n-1
 		df[i] = 0.5*(f[i+1]-f[i-1])/del[i]
 	end
         # fill in points at start of elements, in case we are using more than one
@@ -358,7 +359,7 @@ end
 function centered_fourth_order!(df::Array{mk_float,2}, f, del, bc, igrid, ielement)
 	n = length(f)
 	# get derivative at internal points
-	for i ∈ 3:n-2
+	@innerloop for i ∈ 3:n-2
 		df[igrid[i],ielement[i]] = (8.0*(f[i+1]-f[i-1])+f[i-2]-f[i+2])/(12.0*del[i])
 	end
 	# use BCs to treat boundary points

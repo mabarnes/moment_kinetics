@@ -2,6 +2,8 @@ module charge_exchange
 
 export charge_exchange_collisions!
 
+using ..optimization
+
 function charge_exchange_collisions!(f_out, fvec_in, moments, n_ion_species,
         n_species, vpa, charge_exchange_frequency, nz, dt)
 
@@ -14,7 +16,7 @@ function charge_exchange_collisions!(f_out, fvec_in, moments, n_ion_species,
                 #cxfac = dt*charge_exchange_frequency[is,isp]
                 #cxfac = dt*charge_exchange_frequency
                 for iz ∈ 1:nz
-                    for ivpa ∈ 1:vpa.n
+                    @innerloop for ivpa ∈ 1:vpa.n
                         f_out[ivpa,iz,is] +=
                            dt*charge_exchange_frequency*fvec_in.density[iz,isp]*(
                                fvec_in.pdf[ivpa,iz,isp] - fvec_in.pdf[ivpa,iz,is])
@@ -29,7 +31,7 @@ function charge_exchange_collisions!(f_out, fvec_in, moments, n_ion_species,
             for isp ∈ 1:n_ion_species
                 #cxfac = dt*charge_exchange_frequency
                 for iz ∈ 1:nz
-                    for ivpa ∈ 1:vpa.n
+                    @innerloop for ivpa ∈ 1:vpa.n
                         f_out[ivpa,iz,is] +=
                             dt*charge_exchange_frequency*fvec_in.density[iz,isp]*(
                                 fvec_in.pdf[ivpa,iz,isp] - fvec_in.pdf[ivpa,iz,is])
@@ -46,7 +48,7 @@ function charge_exchange_collisions!(f_out, fvec_in, moments, n_ion_species,
                 #cxfac = dt*charge_exchange_frequency[is,isp]
                 #cxfac = dt*charge_exchange_frequency
                 for iz ∈ 1:nz
-                    for ivpa ∈ 1:vpa.n
+                    @innerloop for ivpa ∈ 1:vpa.n
                         f_out[ivpa,iz,is] +=
                             dt*charge_exchange_frequency*(
                                 fvec_in.pdf[ivpa,iz,isp]*fvec_in.density[iz,is]
@@ -62,7 +64,7 @@ function charge_exchange_collisions!(f_out, fvec_in, moments, n_ion_species,
             for isp ∈ 1:n_ion_species
                 #cxfac = dt*charge_exchange_frequency
                 for iz ∈ 1:nz
-                    for ivpa ∈ 1:vpa.n
+                    @innerloop for ivpa ∈ 1:vpa.n
                         f_out[ivpa,iz,is] +=
                             dt*charge_exchange_frequency*(
                                 fvec_in.pdf[ivpa,iz,isp]*fvec_in.density[iz,is]

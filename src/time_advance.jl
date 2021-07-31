@@ -23,6 +23,7 @@ using ..force_balance: force_balance!
 using ..energy_equation: energy_equation!
 using ..em_fields: setup_em_fields, update_phi!
 using ..semi_lagrange: setup_semi_lagrange
+using ..optimization
 
 struct scratch_pdf{n_distribution, n_moment}
     pdf::Array{mk_float, n_distribution}
@@ -407,7 +408,7 @@ function rk_update!(scratch, pdf, moments, fields, vpa, z, rk_coefs, istage, com
     @. scratch[istage+1].pdf = rk_coefs[1]*pdf.norm + rk_coefs[2]*scratch[istage].pdf + rk_coefs[3]*scratch[istage+1].pdf
     if moments.evolve_density
         @. scratch[istage+1].density = rk_coefs[1]*moments.dens + rk_coefs[2]*scratch[istage].density + rk_coefs[3]*scratch[istage+1].density
-        for i ∈ CartesianIndices(pdf.unnorm)
+        @innerloop for i ∈ CartesianIndices(pdf.unnorm)
             pdf.unnorm[i] = scratch[istage+1].pdf[i] * scratch[istage+1].density[i[2], i[3]]
         end
     else
@@ -431,7 +432,7 @@ function rk_update!(scratch, pdf, moments, fields, vpa, z, rk_coefs, istage, com
     @. moments.vth = sqrt(2.0*scratch[istage+1].ppar/scratch[istage+1].density)
     if moments.evolve_ppar
         @. scratch[istage].temp_z_s = 1.0 / moments.vth
-        for i ∈ CartesianIndices(pdf.unnorm)
+        @innerloop for i ∈ CartesianIndices(pdf.unnorm)
             pdf.unnorm[i] *= scratch[istage].temp_z_s[i[2], i[3]]
         end
     end
@@ -547,11 +548,11 @@ function update_pdf_unnorm!(pdf, moments, scratch)
     # undo this normalisation to get the true particle distribution function
     if moments.evolve_ppar
         @. scratch = moments.dens/moments.vth
-        for i in CartesianIndices(pdf.unnorm)
+        @innerloop for i in CartesianIndices(pdf.unnorm)
             pdf.unnorm[i] = pdf.norm[i]*scratch[i[2],i[3]]
         end
     elseif moments.evolve_density
-        for i in CartesianIndices(pdf.unnorm)
+        @innerloop for i in CartesianIndices(pdf.unnorm)
             pdf.unnorm[i] = pdf.norm[i] * moments.dens[i[2],i[3]]
         end
     else

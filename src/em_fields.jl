@@ -5,6 +5,7 @@ export update_phi!
 
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_float
+using ..optimization
 using ..velocity_moments: update_density!
 
 struct fields
@@ -35,11 +36,11 @@ function update_phi!(fields, fvec, z, composition)
     if composition.boltzmann_electron_response
         z.scratch .= @view(fvec.density[:,1])
         @inbounds for is ∈ 2:composition.n_ion_species
-            for iz ∈ 1:z.n
+            @innerloop for iz ∈ 1:z.n
                 z.scratch[iz] += fvec.density[iz,is]
             end
         end
-        @inbounds for iz ∈ 1:z.n
+        @inbounds @innerloop for iz ∈ 1:z.n
             fields.phi[iz] = composition.T_e * log(z.scratch[iz])
         end
         # if fields.force_phi

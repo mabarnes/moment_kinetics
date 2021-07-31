@@ -3,6 +3,7 @@ module force_balance
 export force_balance!
 
 using ..calculus: derivative!
+using ..optimization
 
 # use the force balance equation d(nu)/dt + d(ppar + n*upar*upar)/dz =
 # -(dens/2)*dphi/dz + R*dens_i*dens_n*(upar_n-upar_i)
@@ -48,7 +49,7 @@ function force_balance_CX!(pflx, dens, upar, CX_frequency, composition, nz, dt)
     for is ∈ 1:composition.n_ion_species
         for isp ∈ composition.n_ion_species+1:composition.n_species
             # get the absolute species index for the neutral species
-            for iz ∈ 1:nz
+            @innerloop for iz ∈ 1:nz
                 pflx[iz,is] += dt*CX_frequency*dens[iz,is]*dens[iz,isp]*(upar[iz,isp]-upar[iz,is])
             end
         end
@@ -57,7 +58,7 @@ function force_balance_CX!(pflx, dens, upar, CX_frequency, composition, nz, dt)
     for isp ∈ composition.n_ion_species+1:composition.n_species
         for is ∈ 1:composition.n_ion_species
             # get the absolute species index for the neutral species
-            for iz ∈ 1:nz
+            @innerloop for iz ∈ 1:nz
                 pflx[iz,isp] += dt*CX_frequency*dens[iz,isp]*dens[iz,is]*(upar[iz,is]-upar[iz,isp])
             end
         end

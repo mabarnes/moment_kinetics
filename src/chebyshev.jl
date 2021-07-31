@@ -13,6 +13,7 @@ using ..type_definitions: mk_float
 using ..array_allocation: allocate_float, allocate_complex
 using ..clenshaw_curtis: clenshawcurtisweights
 import ..interpolation: interpolate_to_grid_1d
+using ..optimization
 
 struct chebyshev_info{TForward <: FFTW.cFFTWPlan, TBackward <: AbstractFFTs.ScaledPlan}
     # fext is an array for storing f(z) on the extended domain needed
@@ -163,7 +164,7 @@ function update_df_chebyshev!(df, chebyshev, coord)
         # and multiply by scaling factor needed to go
         # from Chebyshev z coordinate to actual z
         chebyshev_backward_transform!(view(df,:,j), chebyshev.fext, chebyshev.df, chebyshev.forward, coord.ngrid)
-        for i ∈ 1:ngrid
+        @innerloop for i ∈ 1:ngrid
             df[i,j] *= scale_factor
         end
     end
@@ -314,7 +315,7 @@ end
 # ∫dx Tᵢ(x) over range [-1,1]
 function chebyshevmoments(N)
     μ = zeros(N)
-    @inbounds for i = 0:2:N-1
+    @inbounds @innerloop for i = 0:2:N-1
         μ[i+1] = 2/(1-i^2)
     end
     return μ
@@ -325,7 +326,7 @@ function chebyshevpoints(n)
     nfac = 1/(n-1)
     @inbounds begin
         # calculate z = cos(θ) ∈ [1,-1]
-        for j ∈ 1:n
+        @innerloop for j ∈ 1:n
             grid[j] = cospi((j-1)*nfac)
         end
     end
@@ -352,11 +353,11 @@ function chebyshev_forward_transform!(chebyf, fext, ff, transform, n)
     @inbounds begin
         # first, fill in values for f on domain θ ∈ [0,π]
         # using even-ness of f about θ = π
-        for j ∈ 0:n-1
+        @innerloop for j ∈ 0:n-1
             fext[n-j] = complex(ff[j+1],0.0)
         end
         # next, fill in values for f on domain θ ∈ (π,2π)
-        for j ∈ 1:n-2
+        @innerloop for j ∈ 1:n-2
             fext[n+j] = fext[n-j]
         end
     end
@@ -368,7 +369,7 @@ function chebyshev_forward_transform!(chebyf, fext, ff, transform, n)
     @inbounds begin
         nm = n-1
         nfac = 1/nm
-        for j ∈ 2:nm
+        @innerloop for j ∈ 2:nm
             chebyf[j] = real(fext[j])*nfac
         end
         nfac *= 0.5
@@ -383,14 +384,14 @@ function chebyshev_backward_transform!(ff, fext, chebyf, transform, n)
     # need to use reality condition to extend onto negative frequency domain
     @inbounds begin
         # first, fill in values for fext corresponding to positive frequencies
-        for j ∈ 2:n-1
+        @innerloop for j ∈ 2:n-1
             fext[j] = chebyf[j]*0.5
         end
         # next, fill in values for fext corresponding to negative frequencies
         # using fext(-k) = conjg(fext(k)) = fext(k)
         # usual FFT ordering with j=1 <-> k=0, followed by ascending k up to kmax
         # and then descending from -kmax down to -dk
-        for j ∈ 1:n-2
+        @innerloop for j ∈ 1:n-2
             fext[n+j] = fext[n-j]
         end
         # fill in zero frequency mode, which is special in that it does not require
@@ -406,7 +407,7 @@ function chebyshev_backward_transform!(ff, fext, chebyf, transform, n)
     @inbounds begin
         nm = n-1
         # fill in entries for ff on θ ∈ [π,2π)
-        for j ∈ 1:nm
+        @innerloop for j ∈ 1:nm
             ff[j] = real(fext[j+nm])
         end
         # fill in ff[2π] and normalise
