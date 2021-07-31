@@ -51,6 +51,7 @@ struct coordinate
     # scratch is an array used for intermediate calculations requiring n entries
     scratch::Array{mk_float,1}
     # scratch2d is an array used for intermediate calculations requiring ngrid x nelement entries
+    scratch2::Array{mk_float,1}
     # scratch_2d is an array used for intermediate calculations requiring ngrid x
     # nelement entries
     scratch_2d::Array{mk_float,2}
@@ -89,7 +90,8 @@ function define_coordinate(input)
 
     return coordinate(input.name, n, input.ngrid, input.nelement, input.L, grid,
         cell_width, igrid, ielement, imin, imax, input.discretization, input.fd_option,
-        input.bc, wgts, uniform_grid, duniform_dgrid, scratch, scratch_2d, advection)
+        input.bc, wgts, uniform_grid, duniform_dgrid, scratch, copy(scratch),
+        scratch_2d, advection)
 end
 # setup a grid with n grid points on the interval [-L/2,L/2]
 function init_grid(ngrid, nelement, n, L, imin, imax, igrid, discretization)
