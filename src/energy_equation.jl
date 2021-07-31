@@ -6,7 +6,7 @@ using ..calculus: derivative!
 using ..optimization
 
 function energy_equation!(ppar, fvec, moments, CX_frequency, z, dt, spectral, composition)
-    @outerloop for is ∈ 1:composition.n_species
+    for is ∈ 1:composition.n_species
         @views energy_equation_noCX!(ppar[:,is], fvec.upar[:,is], fvec.ppar[:,is],
                                      moments.qpar[:,is], dt, z, spectral)
     end
@@ -33,13 +33,13 @@ function energy_equation_noCX!(ppar_out, upar, ppar, qpar, dt, z, spectral)
     @. ppar_out -= 3.0*dt*ppar*scratch
 end
 function energy_equation_CX!(ppar_out, dens, ppar, composition, CX_frequency, dt)
-    @outerloop for is ∈ 1:composition.n_ion_species
-        @outerloop for isp ∈ composition.n_ion_species+1:composition.n_species
+    for is ∈ 1:composition.n_ion_species
+        for isp ∈ composition.n_ion_species+1:composition.n_species
             @views @. ppar_out[:,is] -= dt*CX_frequency*(dens[:,isp]*ppar[:,is]-dens[:,is]*ppar[:,isp])
         end
     end
-    @outerloop for is ∈ composition.n_ion_species+1:composition.n_species
-        @outerloop for isp ∈ 1:composition.n_ion_species
+    for is ∈ composition.n_ion_species+1:composition.n_species
+        for isp ∈ 1:composition.n_ion_species
             @views @. ppar_out[:,is] -= dt*CX_frequency*(dens[:,isp]*ppar[:,is]-dens[:,is]*ppar[:,isp])
         end
     end

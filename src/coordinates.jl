@@ -119,7 +119,7 @@ end
 function equally_spaced_grid(n, L)
     # create array for the equally spaced grid with n grid points
     grid = allocate_float(n)
-    @inbounds @outerloop for i ∈ 1:n
+    @inbounds for i ∈ 1:n
         grid[i] = -0.5*L + (i-1)*L/(n-1)
     end
     return grid
@@ -131,7 +131,7 @@ function grid_spacing(grid, n)
     # array to contain the cell widths
     d = allocate_float(n)
     @inbounds begin
-        @outerloop for i ∈ 2:n
+        for i ∈ 2:n
             d[i-1] =  grid[i]-grid[i-1]
         end
         # final (nth) entry corresponds to cell beyond the grid boundary
@@ -146,13 +146,13 @@ function full_to_elemental_grid_map(ngrid, nelement, n)
     igrid = allocate_int(n)
     ielement = allocate_int(n)
     k = 1
-    @outerloop for i ∈ 1:ngrid
+    for i ∈ 1:ngrid
         ielement[k] = 1
         igrid[k] = i
         k += 1
     end
     if nelement > 1
-        @outerloop for j ∈ 2:nelement
+        for j ∈ 2:nelement
             # avoid double-counting overlapping point
             # at boundary between elements
             for i ∈ 2:ngrid
@@ -176,7 +176,7 @@ function elemental_to_full_grid_map(ngrid, nelement)
         # each additional element contributes ngrid-1 unique entries
         # due to repetition of one grid point at the boundary
         if nelement > 1
-            @outerloop for i ∈ 2:nelement
+            for i ∈ 2:nelement
                 imin[i] = imax[i-1] + 1
                 imax[i] = imin[i] + ngrid - 2
             end

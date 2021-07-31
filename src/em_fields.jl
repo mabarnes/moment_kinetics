@@ -37,12 +37,12 @@ function update_phi!(fields, fvec, z, composition)
         ithread = Base.Threads.threadid()
         scratch = @view(z.scratch[:,ithread])
         scratch .= @view(fvec.density[:,1])
-        @inbounds @outerloop for is ∈ 2:composition.n_ion_species
-            @outerloop for iz ∈ 1:z.n
+        @inbounds for is ∈ 2:composition.n_ion_species
+            for iz ∈ 1:z.n
                 scratch[iz] += fvec.density[iz,is]
             end
         end
-        @inbounds @outerloop for iz ∈ 1:z.n
+        @inbounds for iz ∈ 1:z.n
             fields.phi[iz] = composition.T_e * log(scratch[iz])
         end
         # if fields.force_phi

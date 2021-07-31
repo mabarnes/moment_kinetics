@@ -93,7 +93,7 @@ end
 function update_moments!(moments, ff, vpa, nz)
     n_species = size(ff,3)
     @boundscheck n_species == size(moments.dens,2) || throw(BoundsError(moments))
-    @outerloop for is ∈ 1:n_species
+    for is ∈ 1:n_species
         if moments.dens_updated[is] == false
             @views update_density_species!(moments.dens[:,is], ff[:,:,is], vpa, nz)
             moments.dens_updated[is] = true
@@ -119,7 +119,7 @@ end
 function update_density!(dens, dens_updated, pdf, vpa, nz)
     n_species = size(pdf,3)
     @boundscheck n_species == size(dens,2) || throw(BoundsError(dens))
-    @outerloop for is ∈ 1:n_species
+    for is ∈ 1:n_species
         if dens_updated[is] == false
             @views update_density_species!(dens[:,is], pdf[:,:,is], vpa, nz)
             dens_updated[is] = true
@@ -130,7 +130,7 @@ end
 function update_density_species!(dens, ff, vpa, nz)
     @boundscheck nz == size(ff, 2) || throw(BoundsError(ff))
     @boundscheck nz == length(dens) || throw(BoundsError(dens))
-    @inbounds @outerloop for iz ∈ 1:nz
+    @inbounds for iz ∈ 1:nz
         dens[iz] = integrate_over_vspace(@view(ff[:,iz]), vpa.wgts)
     end
     return nothing
@@ -140,7 +140,7 @@ end
 function update_upar!(upar, upar_updated, pdf, vpa, nz)
     n_species = size(pdf,3)
     @boundscheck n_species == size(upar,2) || throw(BoundsError(upar))
-    @outerloop for is ∈ 1:n_species
+    for is ∈ 1:n_species
         if upar_updated[is] == false
             @views update_upar_species!(upar[:,is], pdf[:,:,is], vpa, nz)
             upar_updated[is] = true
@@ -151,7 +151,7 @@ end
 function update_upar_species!(upar, ff, vpa, nz)
     @boundscheck nz == size(ff, 2) || throw(BoundsError(ff))
     @boundscheck nz == length(upar) || throw(BoundsError(upar))
-    @inbounds @outerloop for iz ∈ 1:nz
+    @inbounds for iz ∈ 1:nz
         upar[iz] = integrate_over_vspace(@view(ff[:,iz]), vpa.grid, vpa.wgts)
     end
     return nothing
@@ -161,7 +161,7 @@ end
 function update_ppar!(ppar, ppar_updated, pdf, vpa, nz)
     n_species = size(pdf,3)
     @boundscheck n_species == size(ppar,2) || throw(BoundsError(ppar))
-    @outerloop for is ∈ 1:n_species
+    for is ∈ 1:n_species
         if ppar_updated[is] == false
             @views update_ppar_species!(ppar[:,is], pdf[:,:,is], vpa, nz)
             ppar_updated[is] = true
@@ -172,7 +172,7 @@ end
 function update_ppar_species!(ppar, ff, vpa, nz)
     @boundscheck nz == size(ff, 2) || throw(BoundsError(ff))
     @boundscheck nz == length(ppar) || throw(BoundsError(ppar))
-    @inbounds @outerloop for iz ∈ 1:nz
+    @inbounds for iz ∈ 1:nz
         ppar[iz] = integrate_over_vspace(@view(ff[:,iz]), vpa.grid, 2, vpa.wgts)
     end
     return nothing
@@ -182,7 +182,7 @@ end
 function update_qpar!(qpar, qpar_updated, pdf, vpa, nz, vpanorm)
     n_species = size(pdf,3)
     @boundscheck n_species == size(qpar,2) || throw(BoundsError(qpar))
-    @outerloop for is ∈ 1:n_species
+    for is ∈ 1:n_species
         if qpar_updated[is] == false
             @views update_qpar_species!(qpar[:,is], pdf[:,:,is], vpa, nz, vpanorm[:,is])
             qpar_updated[is] = true
@@ -193,7 +193,7 @@ end
 function update_qpar_species!(qpar, ff, vpa, nz, vpanorm)
     @boundscheck nz == size(ff, 2) || throw(BoundsError(ff))
     @boundscheck nz == length(qpar) || throw(BoundsError(qpar))
-    @inbounds @outerloop for iz ∈ 1:nz
+    @inbounds for iz ∈ 1:nz
         qpar[iz] = integrate_over_vspace(@view(ff[:,iz]), vpa.grid, 3, vpa.wgts) * vpanorm[iz]^4
     end
     return nothing
@@ -205,12 +205,12 @@ end
 function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, moments)
     #global @. dens_hist += fvec_old.density
     #global n_hist += 1
-    @outerloop for is ∈ 1:size(fvec_new.density,2)
+    for is ∈ 1:size(fvec_new.density,2)
         #tmp1 = integral(fvec_old.density[:,is], z.wgts)
         #tmp2 = integral(fvec_new.density[:,is], z.wgts)
         #@views avgdens_ratio = integral(fvec_new.density[:,is], z.wgts)/integral(fvec_old.density[:,is], z.wgts)
         @views avgdens_ratio = integral(fvec_old.density[:,is] .- fvec_new.density[:,is], z.wgts)/integral(fvec_old.density[:,is], z.wgts)
-        @outerloop for iz ∈ 1:size(fvec_new.density,1)
+        for iz ∈ 1:size(fvec_new.density,1)
             # Create views once to save overhead
             fnew_view = @view(fvec_new.pdf[:,iz,is])
             fold_view = @view(fvec_old.pdf[:,iz,is])
@@ -258,11 +258,11 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, moments)
     # NB: no longer need fvec_old.pdf so can use for temporary storage of un-normalised pdf
     if moments.evolve_ppar
         @. fvec_old.temp_z_s = fvec_new.density / moments.vth
-        @outerloop for i ∈ CartesianIndices(fvec_old.pdf)
+        for i ∈ CartesianIndices(fvec_old.pdf)
             fvec_old.pdf[i] = fvec_new.pdf[i] * fvec_old.temp_z_s[i[2],i[3]]
         end
     elseif moments.evolve_density
-        @outerloop for i ∈ CartesianIndices(fvec_old.pdf)
+        for i ∈ CartesianIndices(fvec_old.pdf)
             fvec_old.pdf[i] = fvec_new.pdf[i] * fvec_new.density[i[2],i[3]]
         end
     else

@@ -10,7 +10,7 @@ function continuity_equation!(dens_out, fvec_in, moments, vpa, z, dt, spectral)
     # use the continuity equation dn/dt + d(n*upar)/dz to update the density n
     # for each species
     n_species = size(dens_out,2)
-    @outerloop for is ∈ 1:n_species
+    for is ∈ 1:n_species
         @views continuity_equation_single_species!(dens_out[:,is],
             fvec_in.density[:,is], fvec_in.upar[:,is], z, dt, spectral)
     end

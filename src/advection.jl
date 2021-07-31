@@ -45,7 +45,7 @@ function setup_advection(coord, nspec)
     # to do the 1D advection time advance
     advection = Array{advection_info,1}(undef, nspec)
     # store all of this information in a structure and return it
-    @outerloop for is ∈ 1:nspec
+    for is ∈ 1:nspec
         advection[is] = setup_advection_local(coord.n, coord.ngrid, coord.nelement)
     end
     return advection
@@ -59,8 +59,8 @@ function setup_advection(coord1, coord2, nspec)
     # to do the 1D advection time advance
     advection = Array{advection_info,2}(undef, m, nspec)
     # store all of this information in a structure and return it
-    @outerloop for is ∈ 1:nspec
-        @outerloop for i ∈ 1:m
+    for is ∈ 1:nspec
+        for i ∈ 1:m
             advection[i,is] = setup_advection_local(coord1.n, coord1.ngrid, coord1.nelement)
         end
     end

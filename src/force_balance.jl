@@ -10,11 +10,11 @@ using ..optimization
 # to update the parallel particle flux dens*upar for each species
 function force_balance!(pflx, fvec, fields, CX_frequency, vpa, z, dt, spectral, composition)
     # account for momentum flux contribution to force balance
-    @outerloop for is ∈ 1:composition.n_species
+    for is ∈ 1:composition.n_species
         @views force_balance_flux_species!(pflx[:,is], fvec.density[:,is], fvec.upar[:,is], fvec.ppar[:,is], z, dt, spectral)
     end
     # account for parallel electric field contribution to force balance
-    @outerloop for is ∈ 1:composition.n_ion_species
+    for is ∈ 1:composition.n_ion_species
         @views force_balance_Epar_species!(pflx[:,is], fields.phi, fvec.density[:,is], z, dt, spectral)
     end
     # if neutrals present and charge exchange frequency non-zero,
@@ -50,19 +50,19 @@ end
 
 function force_balance_CX!(pflx, dens, upar, CX_frequency, composition, nz, dt)
     # include contribution to ion acceleration due to collisional friction with neutrals
-    @outerloop for is ∈ 1:composition.n_ion_species
-        @outerloop for isp ∈ composition.n_ion_species+1:composition.n_species
+    for is ∈ 1:composition.n_ion_species
+        for isp ∈ composition.n_ion_species+1:composition.n_species
             # get the absolute species index for the neutral species
-            @outerloop for iz ∈ 1:nz
+            for iz ∈ 1:nz
                 pflx[iz,is] += dt*CX_frequency*dens[iz,is]*dens[iz,isp]*(upar[iz,isp]-upar[iz,is])
             end
         end
     end
     # include contribution to neutral acceleration due to collisional friction with ions
-    @outerloop for isp ∈ composition.n_ion_species+1:composition.n_species
-        @outerloop for is ∈ 1:composition.n_ion_species
+    for isp ∈ composition.n_ion_species+1:composition.n_species
+        for is ∈ 1:composition.n_ion_species
             # get the absolute species index for the neutral species
-            @outerloop for iz ∈ 1:nz
+            for iz ∈ 1:nz
                 pflx[iz,isp] += dt*CX_frequency*dens[iz,isp]*dens[iz,is]*(upar[iz,is]-upar[iz,isp])
             end
         end

@@ -48,7 +48,7 @@ function init_pdf_and_moments(vpa, z, composition, species, n_rk_stages, evolve_
 end
 function create_and_init_pdf(moments, vpa, z, n_species, species)
     pdf_norm = allocate_float(vpa.n, z.n, n_species)
-    @outerloop for is ∈ 1:n_species
+    for is ∈ 1:n_species
         if species[is].z_IC.initialization_option == "bgk" || species[is].vpa_IC.initialization_option == "bgk"
             @views init_bgk_pdf!(f[:,:,is], 0.0, species[is].initial_temperature, z.grid, z.L, vpa.grid)
         else
@@ -60,7 +60,7 @@ function create_and_init_pdf(moments, vpa, z, n_species, species)
         end
     end
     pdf_unnorm = copy(pdf_norm)
-    @outerloop for ivpa ∈ 1:vpa.n
+    for ivpa ∈ 1:vpa.n
         @. pdf_unnorm[ivpa,:,:] *= moments.dens
         if moments.evolve_ppar
             @. pdf_norm[ivpa,:,:] *= moments.vth
@@ -73,7 +73,7 @@ end
 # for now the only initialisation option for the temperature is constant in z
 # returns vth0 = sqrt(2Ts/ms) / sqrt(2Te/ms) = sqrt(Ts/Te)
 function init_vth!(vth, z, spec, n_species)
-    @outerloop for is ∈ 1:n_species
+    for is ∈ 1:n_species
         if spec[is].z_IC.initialization_option == "sinusoid"
             # initial condition is sinusoid in z
             @. vth[:,is] =
@@ -88,7 +88,7 @@ function init_vth!(vth, z, spec, n_species)
     return nothing
 end
 function init_density!(dens, z, spec, n_species)
-    @outerloop for is ∈ 1:n_species
+    for is ∈ 1:n_species
         if spec[is].z_IC.initialization_option == "gaussian"
             # initial condition is an unshifted Gaussian
             @. dens[:,is] = spec[is].initial_density + exp(-(z.grid/spec[is].z_IC.width)^2)
@@ -109,7 +109,7 @@ function init_density!(dens, z, spec, n_species)
 end
 # for now the only initialisation option is zero parallel flow
 function init_upar!(upar, z, spec, n_species)
-    @outerloop for is ∈ 1:n_species
+    for is ∈ 1:n_species
         if spec[is].z_IC.initialization_option == "sinusoid"
             # initial condition is sinusoid in z
             @. upar[:,is] =
@@ -127,12 +127,12 @@ function init_pdf_over_density!(pdf, spec, vpa, z, vth, vpa_norm_fac)
         # initial condition is an unshifted Gaussian
         # if evolve_ppar = true, then vpa coordinate is (vpa - upar)/vth;
         # otherwise it is either (vpa-upar) or simply vpa
-        @outerloop for iz ∈ 1:z.n
+        for iz ∈ 1:z.n
             @. pdf[:,iz] = exp(-(vpa.grid*(vpa_norm_fac[iz]/vth[iz]))^2) / vth[iz]
         end
     elseif spec.vpa_IC.initialization_option == "sinusoid"
         # initial condition is sinusoid in vpa
-        @outerloop for iz ∈ 1:z.n
+        for iz ∈ 1:z.n
             @. pdf[:,iz] =
                 (spec.vpa_IC.density_amplitude
                  * cos(2.0*π*spec.vpa_IC.wavenumber*vpa.grid/vpa.L
@@ -141,11 +141,11 @@ function init_pdf_over_density!(pdf, spec, vpa, z, vth, vpa_norm_fac)
     elseif spec.vpa_IC.initialization_option == "monomial"
         # linear variation in vpa, with offset so that
         # function passes through zero at upwind boundary
-        @outerloop for iz ∈ 1:z.n
+        for iz ∈ 1:z.n
             @. pdf[:,iz] = (vpa.grid + 0.5*vpa.L)^spec.vpa_IC.monomial_degree
         end
     end
-    @outerloop for iz ∈ 1:z.n
+    for iz ∈ 1:z.n
         ithread = Base.Threads.threadid()
         scratch = @view(vpa.scratch[:,ithread])
         # densfac = the integral of the pdf over v-space, which should be unity,
@@ -167,15 +167,15 @@ function init_pdf_over_density!(pdf, spec, vpa, z, vth, vpa_norm_fac)
     return nothing
 end
 function enforce_boundary_conditions!(f, vpa_bc, z_bc, vpa, vpa_adv::T1, z_adv::T2) where {T1, T2}
-    @outerloop for is ∈ 1:size(f,3)
+    for is ∈ 1:size(f,3)
         # enforce the z BC
-        @outerloop for ivpa ∈ 1:size(f,1)
+        for ivpa ∈ 1:size(f,1)
             @views enforce_z_boundary_condition!(f[ivpa,:,is], z_bc, z_adv[ivpa,is].upwind_idx, z_adv[ivpa,is].downwind_idx, vpa[ivpa])
         end
     end
-    @outerloop for is ∈ 1:size(vpa_adv,2)
+    for is ∈ 1:size(vpa_adv,2)
         # enforce the vpa BC
-        @outerloop for iz ∈ 1:size(f,2)
+        for iz ∈ 1:size(f,2)
             @views enforce_vpa_boundary_condition_local!(f[:,iz,is], vpa_bc, vpa_adv[iz,is].upwind_idx, vpa_adv[iz,is].downwind_idx)
         end
     end
