@@ -175,7 +175,7 @@ function update_speed_default!(advect, fields, fvec, moments, vpa, z, compositio
 		@inbounds @fastmath begin
 			for is ∈ 1:composition.n_ion_species
 				for iz ∈ 1:z.n
-					advect[iz,is].speed .= -0.5*scratch
+                                    advect[iz,is].speed .= -0.5*scratch[iz]
 				end
 			end
 		end
