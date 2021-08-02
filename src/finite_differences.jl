@@ -2,7 +2,10 @@ module finite_differences
 
 export derivative_finite_difference!
 
+using Interpolations
+
 using ..type_definitions: mk_float
+import ..interpolation: interpolate_to_grid_1d
 
 function fd_check_option(option, ngrid)
     if option == "second_order_upwind"
@@ -399,5 +402,33 @@ function centered_fourth_order!(df::Array{mk_float,2}, f, del, bc, igrid, ieleme
         end
 end
 
+"""
+Interpolation from a regular grid to a 1d grid with arbitrary spacing
+
+Arguments
+---------
+new_grid : Array{mk_float, 1}
+    Grid of points to interpolate `coord` to
+f : Array{mk_float}
+    Field to be interpolated
+coord : coordinate
+    `coordinate` struct giving the coordinate along which f varies
+not_spectral : Bool
+    A Bool argument here indicates that the coordinate is not spectral-element
+    discretized, i.e. it is on a uniform ('finite difference') grid.
+
+Returns
+-------
+result : Array
+    Array with the values of `f` interpolated to the points in `new_grid`.
+"""
+function interpolate_to_grid_1d(new_grid, f, coord, not_spectral::Bool)
+    # Convert coord to a range, assuming it is uniformly spaced
+    x = coord.grid
+    x_range = range(x[begin], x[end], length=size(x)[1])
+    unscaled = interpolate(f, BSpline(Cubic(Periodic(OnCell()))))
+    interpolation_function = scale(unscaled, x_range)
+    return interpolation_function(new_grid)
+end
 
 end

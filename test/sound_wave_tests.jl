@@ -1,3 +1,5 @@
+module SoundWaveTests
+
 include("setup.jl")
 
 using Base.Filesystem: tempname
@@ -32,7 +34,18 @@ test_input_finite_difference = Dict("n_ion_species" => 1,
                                     "initial_temperature1" => 1.0,
                                     "initial_density2" => 0.5,
                                     "initial_temperature2" => 1.0,
-                                    "z_IC_amplitude1" => 0.001,
+                                    "z_IC_density_amplitude1" => 0.001,
+                                    "z_IC_density_phase1" => 0.0,
+                                    "z_IC_upar_amplitude1" => 0.0,
+                                    "z_IC_upar_phase1" => 0.0,
+                                    "z_IC_temperature_amplitude1" => 0.0,
+                                    "z_IC_temperature_phase1" => 0.0,
+                                    "z_IC_density_amplitude2" => 0.001,
+                                    "z_IC_density_phase2" => 0.0,
+                                    "z_IC_upar_amplitude2" => 0.0,
+                                    "z_IC_upar_phase2" => 0.0,
+                                    "z_IC_temperature_amplitude2" => 0.0,
+                                    "z_IC_temperature_phase2" => 0.0,
                                     "charge_exchange_frequency" => 2*π*0.1,
                                     "nstep" => 1500,
                                     "dt" => 0.002,
@@ -512,21 +525,29 @@ function run_test_set_chebyshev_split_3_moments()
     # CX=2*π*2.0 case with T_e=4 is too hard to converge, so skip
 end
 
+function runtests()
+    @testset "sound wave" verbose=use_verbose begin
+        println("sound wave tests")
 
-@testset "sound wave" begin
-    println("sound wave tests")
+        @testset "finite difference" begin
+            run_test_set_finite_difference()
+            @long run_test_set_finite_difference_split_1_moment()
+            @long run_test_set_finite_difference_split_2_moments()
+            run_test_set_finite_difference_split_3_moments()
+        end
 
-    @testset "finite difference" begin
-        run_test_set_finite_difference()
-        @long run_test_set_finite_difference_split_1_moment()
-        @long run_test_set_finite_difference_split_2_moments()
-        run_test_set_finite_difference_split_3_moments()
-    end
-
-    @testset "Chebyshev" begin
-        run_test_set_chebyshev()
-        run_test_set_chebyshev_split_1_moment()
-        run_test_set_chebyshev_split_2_moments()
-        run_test_set_chebyshev_split_3_moments()
+        @testset "Chebyshev" begin
+            run_test_set_chebyshev()
+            run_test_set_chebyshev_split_1_moment()
+            run_test_set_chebyshev_split_2_moments()
+            run_test_set_chebyshev_split_3_moments()
+        end
     end
 end
+
+end # SoundWaveTests
+
+
+using .SoundWaveTests
+
+SoundWaveTests.runtests()

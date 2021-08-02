@@ -7,6 +7,7 @@ export run_moment_kinetics
 # be defined
 include("type_definitions.jl")
 include("array_allocation.jl")
+include("interpolation.jl")
 include("clenshaw_curtis.jl")
 include("chebyshev.jl")
 include("finite_differences.jl")

@@ -37,6 +37,8 @@ By default the test suite should run fairly quickly (in a few minutes). To do so
 * In the REPL, run `push!(ARGS, "--long")` before running the tests.
 * Running from the terminal, pass as a command line argument, e.g. `julia -O3 --project --long test/runtests.jl`
 
+To get more output on what tests were successful, an option `--verbose` (or `-v`) can be passed in a similar way to `--long` (if any tests fail, the output is printed by default).
+
 ## Developing
 * If you need to add a dependency, start the REPL with the `moment_kinetics` package activated (see [above](#moment_kinetics)), enter `pkg>` mode  and then to add, for example, the `FFTW.jl` package enter `add FFTW`. This should take kare of adding the package (`FFTW`) to the `Project.toml` and `Manifest.toml` files.
 * When working on the code, one way to avoid waiting for everything to recompile frequently is to load the Revise.jl package `using Revise`, which will recompile each edited function/method as needed, so it is possible to keep a REPL session open and avoid long recompilation. `moment_kinetics` can be run fairly conveniently from the REPL as `using TimerOutputs; using moment_kinetics; run_moment_kinetics(TimerOutput(), input)` where `input` is a `Dict()` containing any non-default options desired. Input can also be loaded from a TOML file passing the filaname as a String to the second argument, e.g. `run_moment_kinetics(TimerOutput(), "input.toml")`. It might be convenient to add `using Revise` to your `startup.jl` file so it's always loaded.
