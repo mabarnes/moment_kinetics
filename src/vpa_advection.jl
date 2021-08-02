@@ -163,17 +163,19 @@ function update_speed_default!(advect, fields, fvec, moments, vpa, z, compositio
 			end
 		end
 	else
+                ithread = Base.Threads.threadid()
+                scratch = @view(z.scratch[:,ithread])
 		# update the electrostatic potential phi
 		update_phi!(fields, fvec, z, composition)
 		# calculate the derivative of phi with respect to z;
 		# the value at element boundaries is taken to be the average of the values
 		# at neighbouring elements
-                derivative!(z.scratch[:,1], fields.phi, z, z_spectral)
+                derivative!(scratch, fields.phi, z, z_spectral)
 		# advection velocity in vpa is -dphi/dz = -z.scratch
 		@inbounds @fastmath begin
 			for is ∈ 1:composition.n_ion_species
 				for iz ∈ 1:z.n
-					advect[iz,is].speed .= -0.5*z.scratch[iz,1]
+					advect[iz,is].speed .= -0.5*scratch
 				end
 			end
 		end
