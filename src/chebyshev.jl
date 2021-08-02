@@ -24,7 +24,7 @@ struct chebyshev_info{TForward <: FFTW.cFFTWPlan, TBackward <: AbstractFFTs.Scal
     # second dimension indicates the element
     f::Vector{Array{mk_float,2}}
     # Chebyshev spectral coefficients of derivative of f
-    df::Array{mk_float,1}
+    df::Vector{Array{mk_float,1}}
     # plan for the complex-to-complex, in-place, forward Fourier transform on Chebyshev-Gauss-Lobatto grid
     forward::Vector{TForward}
     # plan for the complex-to-complex, in-place, backward Fourier transform on Chebyshev-Gauss-Lobatto grid
@@ -43,7 +43,7 @@ function setup_chebyshev_pseudospectral(coord)
     fext = [allocate_complex(ngrid_fft) for _ ∈ 1:nthreads]
     # create arrays for storing Chebyshev spectral coefficients of f and f'
     fcheby = [allocate_float(coord.ngrid, coord.nelement) for i ∈ 1:nthreads]
-    dcheby = allocate_float(coord.ngrid)
+    dcheby = [allocate_float(coord.ngrid) for i ∈ 1:nthreads]
     # setup the plans for the forward and backward Fourier transforms
     forward_transform = [plan_fft!(fext[i], flags=FFTW.MEASURE) for i ∈ 1:nthreads]
     backward_transform = [plan_ifft!(fext[i], flags=FFTW.MEASURE) for i ∈ 1:nthreads]
@@ -88,6 +88,7 @@ function chebyshev_derivative!(df, ff, chebyshev, coord)
     fext = chebyshev.fext[ithread]
     forward = chebyshev.forward[ithread]
     cheby_f = chebyshev.f[ithread]
+    cheby_df = chebyshev.df[ithread]
 
     # define local variable nelement for convenience
     nelement = coord.nelement
@@ -112,7 +113,7 @@ function chebyshev_derivative!(df, ff, chebyshev, coord)
         # imax is the maximum index on the full grid for this (jth) element
         imax = coord.imax[j]
         @views chebyshev_derivative_single_element!(df[:,j], ff[imin:imax],
-            cheby_f[:,j], chebyshev.df, fext, forward, coord)
+            cheby_f[:,j], cheby_df, fext, forward, coord)
         # and multiply by scaling factor needed to go
         # from Chebyshev z coordinate to actual z
         for i ∈ 1:coord.ngrid
@@ -163,6 +164,7 @@ function update_df_chebyshev!(df, chebyshev, coord)
     fext = chebyshev.fext[ithread]
     forward = chebyshev.forward[ithread]
     cheby_f = chebyshev.f[ithread]
+    cheby_df = chebyshev.df[ithread]
 
     ngrid = coord.ngrid
     nelement = coord.nelement
@@ -175,11 +177,11 @@ function update_df_chebyshev!(df, chebyshev, coord)
     scale_factor = 2*nelement/L
     # scan over elements
     @inbounds for j ∈ 1:nelement
-        chebyshev_spectral_derivative!(chebyshev.df,view(cheby_f,:,j))
+        chebyshev_spectral_derivative!(cheby_df,view(cheby_f,:,j))
         # inverse Chebyshev transform to get df/dz
         # and multiply by scaling factor needed to go
         # from Chebyshev z coordinate to actual z
-        chebyshev_backward_transform!(view(df,:,j), fext, chebyshev.df, forward, coord.ngrid)
+        chebyshev_backward_transform!(view(df,:,j), fext, cheby_df, forward, coord.ngrid)
         @innerloop for i ∈ 1:ngrid
             df[i,j] *= scale_factor
         end
