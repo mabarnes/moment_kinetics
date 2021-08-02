@@ -22,7 +22,7 @@ struct chebyshev_info{TForward <: FFTW.cFFTWPlan, TBackward <: AbstractFFTs.Scal
     # Chebyshev spectral coefficients of distribution function f
     # first dimension contains location within element
     # second dimension indicates the element
-    f::Array{mk_float,2}
+    f::Vector{Array{mk_float,2}}
     # Chebyshev spectral coefficients of derivative of f
     df::Array{mk_float,1}
     # plan for the complex-to-complex, in-place, forward Fourier transform on Chebyshev-Gauss-Lobatto grid
@@ -42,7 +42,7 @@ function setup_chebyshev_pseudospectral(coord)
     # create array for f on extended [0,2π] domain in theta = ArcCos[z]
     fext = [allocate_complex(ngrid_fft) for _ ∈ 1:nthreads]
     # create arrays for storing Chebyshev spectral coefficients of f and f'
-    fcheby = allocate_float(coord.ngrid, coord.nelement)
+    fcheby = [allocate_float(coord.ngrid, coord.nelement) for i ∈ 1:nthreads]
     dcheby = allocate_float(coord.ngrid)
     # setup the plans for the forward and backward Fourier transforms
     forward_transform = [plan_fft!(fext[i], flags=FFTW.MEASURE) for i ∈ 1:nthreads]
@@ -87,11 +87,12 @@ function chebyshev_derivative!(df, ff, chebyshev, coord)
     ithread = Base.Threads.threadid()
     fext = chebyshev.fext[ithread]
     forward = chebyshev.forward[ithread]
+    cheby_f = chebyshev.f[ithread]
 
     # define local variable nelement for convenience
     nelement = coord.nelement
     # check array bounds
-    @boundscheck nelement == size(chebyshev.f,2) || throw(BoundsError(chebyshev.f))
+    @boundscheck nelement == size(cheby_f,2) || throw(BoundsError(cheby_f))
     @boundscheck nelement == size(df,2) && coord.ngrid == size(df,1) || throw(BoundsError(df))
     # note that one must multiply by 2*nelement/L to get derivative
     # in scaled coordinate
@@ -111,7 +112,7 @@ function chebyshev_derivative!(df, ff, chebyshev, coord)
         # imax is the maximum index on the full grid for this (jth) element
         imax = coord.imax[j]
         @views chebyshev_derivative_single_element!(df[:,j], ff[imin:imax],
-            chebyshev.f[:,j], chebyshev.df, fext, forward, coord)
+            cheby_f[:,j], chebyshev.df, fext, forward, coord)
         # and multiply by scaling factor needed to go
         # from Chebyshev z coordinate to actual z
         for i ∈ 1:coord.ngrid
@@ -135,6 +136,7 @@ function update_fcheby!(cheby, ff, coord)
     ithread = Base.Threads.threadid()
     fext = chebyshev.fext[ithread]
     forward = cheby.forward[ithread]
+    cheby_f = chebyshev.f[ithread]
 
     k = 0
     # loop over the different elements and perform a Chebyshev transform
@@ -149,7 +151,7 @@ function update_fcheby!(cheby, ff, coord)
         imin = coord.imin[j]-k
         # imax is the maximum index on the full grid for this (jth) element
         imax = coord.imax[j]
-        chebyshev_forward_transform!(view(cheby.f,:,j),
+        chebyshev_forward_transform!(view(cheby_f,:,j),
             fext, view(ff,imin:imax), forward, coord.ngrid)
         k = 1
     end
@@ -160,11 +162,12 @@ function update_df_chebyshev!(df, chebyshev, coord)
     ithread = Base.Threads.threadid()
     fext = chebyshev.fext[ithread]
     forward = chebyshev.forward[ithread]
+    cheby_f = chebyshev.f[ithread]
 
     ngrid = coord.ngrid
     nelement = coord.nelement
     L = coord.L
-    @boundscheck nelement == size(chebyshev.f,2) || throw(BoundsError(chebyshev.f))
+    @boundscheck nelement == size(cheby_f,2) || throw(BoundsError(cheby_f))
     @boundscheck nelement == size(df,2) && ngrid == size(df,1) || throw(BoundsError(df))
     # obtain Chebyshev spectral coefficients of f'[z]
     # note that must multiply by 2/Lz to get derivative
@@ -172,7 +175,7 @@ function update_df_chebyshev!(df, chebyshev, coord)
     scale_factor = 2*nelement/L
     # scan over elements
     @inbounds for j ∈ 1:nelement
-        chebyshev_spectral_derivative!(chebyshev.df,view(chebyshev.f,:,j))
+        chebyshev_spectral_derivative!(chebyshev.df,view(cheby_f,:,j))
         # inverse Chebyshev transform to get df/dz
         # and multiply by scaling factor needed to go
         # from Chebyshev z coordinate to actual z
@@ -221,7 +224,7 @@ function interpolate_to_grid_1d(newgrid, f, coord, chebyshev::chebyshev_info)
     # define local variable nelement for convenience
     nelement = coord.nelement
     # check array bounds
-    @boundscheck nelement == size(chebyshev.f,2) || throw(BoundsError(chebyshev.f))
+    @boundscheck nelement == size(chebyshev.f[1],2) || throw(BoundsError(chebyshev.f[1]))
 
     # Array for output
     result = similar(newgrid)
