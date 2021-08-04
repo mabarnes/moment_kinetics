@@ -7,53 +7,57 @@ using ..semi_lagrange: find_approximate_characteristic!
 using ..advection: advance_f_local!, update_boundary_indices!
 using ..chebyshev: chebyshev_info
 using ..optimization
+using TimerOutputs
 
 # do a single stage time advance (potentially as part of a multi-stage RK scheme)
 function z_advection!(f_out, fvec_in, ff, moments, SL, advect, z, vpa,
-                      use_semi_lagrange, dt, t, spectral, n_species, istage)
-    for is ∈ 1:n_species
-        # get the updated speed along the z direction using the current f
-        @views update_speed_z!(advect[:,is], fvec_in.upar[:,is], moments.vth[:,is],
-                               moments.evolve_upar, moments.evolve_ppar, vpa, z, t)
-        # update the upwind/downwind boundary indices and upwind_increment
-        @views update_boundary_indices!(advect[:,is])
-        # if using interpolation-free Semi-Lagrange,
-        # follow characteristics backwards in time from level m+1 to level m
-        # to get departure points.  then find index of grid point nearest
-        # the departure point at time level m and use this to define
-        # an approximate characteristic
-        if use_semi_lagrange
-            for ivpa ∈ 1:vpa.n
-                find_approximate_characteristic!(SL[ivpa], advect[ivpa,is], z, dt)
+                      use_semi_lagrange, dt, t, spectral, n_species, istage, to)
+    @timeit to "z_advection loop" begin
+        Base.Threads.@threads for is ∈ 1:n_species
+            # get the updated speed along the z direction using the current f
+            @views update_speed_z!(advect[:,is], fvec_in.upar[:,is], moments.vth[:,is],
+                                   moments.evolve_upar, moments.evolve_ppar, vpa, z, t)
+            # update the upwind/downwind boundary indices and upwind_increment
+            @views update_boundary_indices!(advect[:,is])
+            # if using interpolation-free Semi-Lagrange,
+            # follow characteristics backwards in time from level m+1 to level m
+            # to get departure points.  then find index of grid point nearest
+            # the departure point at time level m and use this to define
+            # an approximate characteristic
+            if use_semi_lagrange
+                for ivpa ∈ 1:vpa.n
+                    find_approximate_characteristic!(SL[ivpa], advect[ivpa,is], z, dt)
+                end
             end
-        end
-        # # advance z-advection equation
-        # if moments.evolve_density
-        #     for ivpa ∈ 1:vpa.n
-        #         @. advect[ivpa,is].speed /= fvec_in.density[:,is]
-        #         @. advect[ivpa,is].modified_speed /= fvec_in.density[:,is]
-        #         @views advance_f_local!(f_out[:,ivpa,is], fvec_in.density[:,is] .* fvec_in.pdf[:,ivpa,is],
-        #             ff[:,ivpa,is], SL[ivpa], advect[ivpa,is], z, dt, istage, spectral, use_semi_lagrange)
-        #     end
-        # else
-        #     for ivpa ∈ 1:vpa.n
-        #         @views advance_f_local!(f_out[:,ivpa,is], fvec_in.pdf[:,ivpa,is],
-        #             ff[:,ivpa,is], SL[ivpa], advect[ivpa,is], z, dt, istage, spectral, use_semi_lagrange)
-        #     end
-        # end
-        # advance z-advection equation
-        for ivpa ∈ 1:vpa.n
-            ithread = Base.Threads.threadid()
-            scratch = @view(z.scratch[:,ithread])
-            @views adjust_advection_speed!(advect[ivpa,is].speed, advect[ivpa,is].modified_speed,
-                                           fvec_in.density[:,is], moments.vth[:,is],
-                                           moments.evolve_density, moments.evolve_ppar)
-            # take the normalized pdf contained in fvec_in.pdf and remove the normalization,
-            # returning the true (un-normalized) particle distribution function in scratch
-            @views unnormalize_pdf!(scratch, fvec_in.pdf[ivpa,:,is], fvec_in.density[:,is], moments.vth[:,is],
-                                    moments.evolve_density, moments.evolve_ppar)
-            @views advance_f_local!(f_out[ivpa,:,is], scratch, ff[ivpa,:,is], SL[ivpa], advect[ivpa,is],
-                                    z, dt, istage, spectral, use_semi_lagrange)
+            # # advance z-advection equation
+            # if moments.evolve_density
+            #     for ivpa ∈ 1:vpa.n
+            #         @. advect[ivpa,is].speed /= fvec_in.density[:,is]
+            #         @. advect[ivpa,is].modified_speed /= fvec_in.density[:,is]
+            #         @views advance_f_local!(f_out[:,ivpa,is], fvec_in.density[:,is] .* fvec_in.pdf[:,ivpa,is],
+            #             ff[:,ivpa,is], SL[ivpa], advect[ivpa,is], z, dt, istage, spectral, use_semi_lagrange)
+            #     end
+            # else
+            #     for ivpa ∈ 1:vpa.n
+            #         @views advance_f_local!(f_out[:,ivpa,is], fvec_in.pdf[:,ivpa,is],
+            #             ff[:,ivpa,is], SL[ivpa], advect[ivpa,is], z, dt, istage, spectral, use_semi_lagrange)
+            #     end
+            # end
+            # advance z-advection equation
+            for ivpa ∈ 1:vpa.n
+                #ithread = Base.Threads.threadid()
+                #scratch = @view(z.scratch[:,ithread])
+                #@views adjust_advection_speed!(advect[ivpa,is].speed, advect[ivpa,is].modified_speed,
+                #                               fvec_in.density[:,is], moments.vth[:,is],
+                #                               moments.evolve_density, moments.evolve_ppar)
+                ## take the normalized pdf contained in fvec_in.pdf and remove the normalization,
+                ## returning the true (un-normalized) particle distribution function in scratch
+                #@views unnormalize_pdf!(scratch, fvec_in.pdf[ivpa,:,is], fvec_in.density[:,is], moments.vth[:,is],
+                #                        moments.evolve_density, moments.evolve_ppar)
+                #@views advance_f_local!(f_out[ivpa,:,is], scratch, ff[ivpa,:,is], SL[ivpa], advect[ivpa,is],
+                #                        z, dt, istage, spectral, use_semi_lagrange)
+                @views @. f_out[ivpa,:,is] -= dt*f_out[ivpa,:,is]
+            end
         end
     end
 end

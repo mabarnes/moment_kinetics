@@ -83,7 +83,9 @@ function run_moment_kinetics(to, input_dict=Dict())
         @timeit to "time_advance" time_advance!(pdf, scratch, code_time, t_input,
             vpa, z, vpa_spectral, z_spectral, moments, fields,
             vpa_advect, z_advect, vpa_SL, z_SL, composition, charge_exchange_frequency,
-            advance, io, cdf)
+            advance, io, cdf, to)
+        display(to)
+        println()
     else
         time_advance!(pdf, scratch, code_time, t_input, vpa, z,
             vpa_spectral, z_spectral, moments, fields,
