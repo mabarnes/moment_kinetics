@@ -8,6 +8,7 @@ export initial_condition_input, initial_condition_input_mutable
 export species_parameters, species_parameters_mutable
 export species_composition
 export drive_input, drive_input_mutable
+export collisions_input
 export pp_input
 
 using ..type_definitions: mk_float, mk_int
@@ -160,6 +161,12 @@ struct drive_input
     # phi(z,t=0)*amplitude*sinpi(t*frequency)
     amplitude::mk_float
     frequency::mk_float
+end
+mutable struct collisions_input
+    # charge exchange collision frequency
+    charge_exchange::mk_float
+    # ionization collision frequency
+    ionization::mk_float
 end
 struct pp_input
     # if calculate_frequencies = true, calculate and print the frequency and growth/decay

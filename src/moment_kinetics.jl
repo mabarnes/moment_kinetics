@@ -24,6 +24,7 @@ include("advection.jl")
 include("vpa_advection.jl")
 include("z_advection.jl")
 include("charge_exchange.jl")
+include("ionization.jl")
 include("continuity.jl")
 include("energy_equation.jl")
 include("force_balance.jl")
@@ -54,7 +55,7 @@ function run_moment_kinetics(to, input_dict=Dict())
     # obtain input options from moment_kinetics_input.jl
     # and check input to catch errors
     run_name, output_dir, evolve_moments, t_input, z_input, vpa_input,
-        composition, species, charge_exchange_frequency, drive_input = input
+        composition, species, collisions, drive_input = input
     # initialize z grid and write grid point locations to file
     z = define_coordinate(z_input)
     # initialize vpa grid and write grid point locations to file
@@ -68,9 +69,9 @@ function run_moment_kinetics(to, input_dict=Dict())
     # the main time advance loop -- including normalisation of f by density if requested
     z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
         z_SL, vpa_SL, scratch, advance = setup_time_advance!(pdf, z, vpa, composition,
-        drive_input, moments, t_input, charge_exchange_frequency, species)
+        drive_input, moments, t_input, collisions, species)
     # setup i/o
-    io, cdf = setup_file_io(output_dir, run_name, z, vpa, composition, charge_exchange_frequency,
+    io, cdf = setup_file_io(output_dir, run_name, z, vpa, composition, collisions.charge_exchange,
                             moments.evolve_ppar)
     # write initial data to ascii files
     write_data_to_ascii(pdf.unnorm, moments, fields, z, vpa, code_time, composition.n_species, io)
@@ -80,12 +81,12 @@ function run_moment_kinetics(to, input_dict=Dict())
     if run_type == performance_test
         @timeit to "time_advance" time_advance!(pdf, scratch, code_time, t_input,
             z, vpa, z_spectral, vpa_spectral, moments, fields,
-            z_advect, vpa_advect, z_SL, vpa_SL, composition, charge_exchange_frequency,
+            z_advect, vpa_advect, z_SL, vpa_SL, composition, collisions,
             advance, io, cdf)
     else
         time_advance!(pdf, scratch, code_time, t_input, z, vpa,
             z_spectral, vpa_spectral, moments, fields,
-            z_advect, vpa_advect, z_SL, vpa_SL, composition, charge_exchange_frequency,
+            z_advect, vpa_advect, z_SL, vpa_SL, composition, collisions,
             advance, io, cdf)
     end
     # finish i/o

@@ -214,8 +214,9 @@ function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, composition) 
             end
             # NB: need to generalise to more than one ion species
             # get the Knudsen cosine distribution
-            # NB: as vtfac is time-independent, can be made more efficient by doing this once
-            # during initialisation and saving the result
+            # NB: as vtfac is time-independent, can be made more efficient by creating
+            # array for Knudsen cosine distribution and carrying out following four liness
+            # of calculation at initialization
             @. vpa.scratch = (3*pi/vtfac^3)*abs(vpa.grid)*erfc(abs(vpa.grid)/vtfac)
             tmparr = copy(vpa.scratch)
             tmp = integrate_over_positive_vpa(vpa.grid .* vpa.scratch, vpa.grid, vpa.wgts, tmparr)

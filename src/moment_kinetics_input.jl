@@ -15,6 +15,7 @@ using ..input_structs: initial_condition_input, initial_condition_input_mutable
 using ..input_structs: species_parameters, species_parameters_mutable
 using ..input_structs: species_composition
 using ..input_structs: drive_input, drive_input_mutable
+using ..input_structs: collisions_input
 
 @enum RunType single performance_test scan
 const run_type = single
@@ -32,11 +33,11 @@ function mk_input(scan_input=Dict())
     # currently this is the only supported option
     boltzmann_electron_response = true
 
-    z, vpa, species, composition, drive, evolve_moments =
+    z, vpa, species, composition, drive, evolve_moments, collisions =
         load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_response)
 
     # this is the prefix for all output files associated with this run
-    run_name = get(scan_input, "run_name", "wallBC_gaussian")
+    run_name = get(scan_input, "run_name", "wallBC_ionization")
     # this is the directory where the simulation data will be stored
     base_directory = get(scan_input, "base_directory", "runs")
     output_dir = string(base_directory, "/", run_name)
@@ -68,12 +69,13 @@ function mk_input(scan_input=Dict())
     end
     #################### end specification of species inputs #####################
 
-    charge_exchange_frequency = get(scan_input, "charge_exchange_frequency", 2.0*sqrt(species[1].initial_temperature))
+    collisions.charge_exchange = get(scan_input, "charge_exchange_frequency", 2.0*sqrt(species[1].initial_temperature))
+    collisions.ionization = collisions.charge_exchange
 
     # parameters related to the time stepping
-    nstep = get(scan_input, "nstep", 5000)
-    dt = get(scan_input, "dt", 0.001/sqrt(species[1].initial_temperature))
-    nwrite = get(scan_input, "nwrite", 20)
+    nstep = get(scan_input, "nstep", 10000)
+    dt = get(scan_input, "dt", 0.0005/sqrt(species[1].initial_temperature))
+    nwrite = get(scan_input, "nwrite", 40)
     # use_semi_lagrange = true to use interpolation-free semi-Lagrange treatment
     # otherwise, solve problem solely using the discretization_option above
     use_semi_lagrange = get(scan_input, "use_semi_lagrange", false)
@@ -86,7 +88,7 @@ function mk_input(scan_input=Dict())
     # ngrid is number of grid points per element
     z.ngrid = get(scan_input, "z_ngrid", 9)
     # nelement is the number of elements
-    z.nelement = get(scan_input, "z_nelement", 2)
+    z.nelement = get(scan_input, "z_nelement", 4)
     # determine the discretization option for the z grid
     # supported options are "chebyshev_pseudospectral" and "finite_difference"
     z.discretization = get(scan_input, "z_discretization", "chebyshev_pseudospectral")
@@ -150,7 +152,7 @@ function mk_input(scan_input=Dict())
 
     # return immutable structs for z, vpa, species and composition
     return run_name, output_dir, evolve_moments, t, z_immutable, vpa_immutable,
-        composition, species_immutable, charge_exchange_frequency, drive_immutable
+        composition, species_immutable, collisions, drive_immutable
 end
 
 function load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_response)
@@ -305,7 +307,13 @@ function load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_resp
     drive_amplitude = 1.0
     drive_frequency = 1.0
     drive = drive_input_mutable(drive_phi, drive_amplitude, drive_frequency)
-    return z, vpa, species, composition, drive, evolve_moments
+    # charge exchange collision frequency
+    charge_exchange = 0.0
+    # ionization collision frequency
+    ionization = 0.0
+    collisions = collisions_input(charge_exchange, ionization)
+
+    return z, vpa, species, composition, drive, evolve_moments, collisions
 end
 
 # check various input options to ensure they are all valid/consistent
