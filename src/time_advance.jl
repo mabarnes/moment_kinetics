@@ -98,9 +98,9 @@ function setup_time_advance!(pdf, z, vpa, composition, drive_input, moments,
                                moments.evolve_upar, moments.evolve_ppar, vpa, z, 0.0)
         # initialise the upwind/downwind boundary indices in z
         update_boundary_indices!(view(z_advect,:,is))
-        # enforce prescribed boundary condition in z on the distribution function f
-        @views enforce_z_boundary_condition!(pdf.unnorm[:,:,is], z.bc, vpa, z_advect[:,is])
     end
+    # enforce prescribed boundary condition in z on the distribution function f
+    @views enforce_z_boundary_condition!(pdf.unnorm, z.bc, z_advect, vpa, composition)
     if z.discretization == "chebyshev_pseudospectral"
         # create arrays needed for explicit Chebyshev pseudospectral treatment in vpa
         # and create the plans for the forward and backward fast Chebyshev transforms
@@ -537,7 +537,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, z_SL, vpa_
     reset_moments_status!(moments)
     # enforce boundary conditions in z and vpa on the distribution function
     # NB: probably need to do the same for the evolved moments
-    enforce_boundary_conditions!(fvec_out.pdf, z.bc, vpa.bc, vpa.grid, z_advect, vpa_advect)
+    enforce_boundary_conditions!(fvec_out.pdf, z.bc, vpa.bc, vpa, z_advect, vpa_advect, composition)
     return nothing
 end
 # update the vector containing the pdf and any evolved moments of the pdf

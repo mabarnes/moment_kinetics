@@ -36,32 +36,32 @@ function mk_input(scan_input=Dict())
         load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_response)
 
     # this is the prefix for all output files associated with this run
-    run_name = get(scan_input, "run_name", "periodicBC")
+    run_name = get(scan_input, "run_name", "wallBC_gaussian")
     # this is the directory where the simulation data will be stored
     base_directory = get(scan_input, "base_directory", "runs")
     output_dir = string(base_directory, "/", run_name)
     # if evolve_moments.density = true, evolve density via continuity eqn
     # and g = f/n via modified drift kinetic equation
-    evolve_moments.density = get(scan_input, "evolve_moments_density", true)
-    evolve_moments.parallel_flow = get(scan_input, "evolve_moments_parallel_flow", true)
-    evolve_moments.parallel_pressure = get(scan_input, "evolve_moments_parallel_pressure", true)
-    evolve_moments.conservation = get(scan_input, "evolve_moments_conservation", true)
+    evolve_moments.density = get(scan_input, "evolve_moments_density", false)
+    evolve_moments.parallel_flow = get(scan_input, "evolve_moments_parallel_flow", false)
+    evolve_moments.parallel_pressure = get(scan_input, "evolve_moments_parallel_pressure", false)
+    evolve_moments.conservation = get(scan_input, "evolve_moments_conservation", false)
 
     ####### specify any deviations from default inputs for evolved species #######
     # set initial Tₑ = 1
     composition.T_e = get(scan_input, "T_e", 1.0)
     # set wall temperature T_wall = Tw/Te
     composition.T_wall = 1.0
-    # set the ratio of the neutral to ion mass
-    composition.mn_over_mi = 6.0
     # set initial neutral temperature Tn/Tₑ = 1
     # set initial nᵢ/Nₑ = 1.0
+    species[1].z_IC.initialization_option = get(scan_input, "z_IC_option1", "gaussian")
     species[1].initial_density = get(scan_input, "initial_density1", 0.5)
     species[1].initial_temperature = get(scan_input, "initial_temperature1", 1.0)
     species[1].z_IC.amplitude = get(scan_input, "z_IC_amplitude1", 0.001)
     #species[1].z_IC.initialization_option = "bgk"
     # set initial neutral densiity = Nₑ
     if composition.n_species > 1
+        species[2].z_IC.initialization_option = get(scan_input, "z_IC_option1", species[1].z_IC.initialization_option)
         species[2].initial_density = get(scan_input, "initial_density2", 0.5)
         species[2].initial_temperature = get(scan_input, "initial_temperature2", species[1].initial_temperature)
         species[2].z_IC.amplitude = get(scan_input, "z_IC_amplitude2", species[1].z_IC.amplitude)
@@ -92,7 +92,7 @@ function mk_input(scan_input=Dict())
     z.discretization = get(scan_input, "z_discretization", "chebyshev_pseudospectral")
     # determine the boundary condition to impose in z
     # supported options are "constant", "periodic" and "wall"
-    z.bc = get(scan_input, "z_bc", "periodic")
+    z.bc = get(scan_input, "z_bc", "wall")
 
     # overwrite some default parameters related to the vpa grid
     # ngrid is the number of grid points per element
@@ -250,7 +250,7 @@ function load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_resp
     # temperature at the entrance to the wall in terms of the electron temperature
     T_wall = 1.0
     # ratio of the neutral particle mass to the ion particle mass
-    mn_over_mi = 6.0
+    mn_over_mi = 1.0
     composition = species_composition(n_species, n_ion_species, n_neutral_species,
         boltzmann_electron_response, T_e, T_wall, mn_over_mi)
     species = Array{species_parameters_mutable,1}(undef,n_species)
