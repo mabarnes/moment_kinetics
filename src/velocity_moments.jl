@@ -213,7 +213,7 @@ end
 # varies in time
 function integrate_over_positive_vpa(integrand, dzdt, vpa_wgts, wgts_mod)
     # define the nvpa variable for convenience
-    nvpa = length(integrand)
+    nvpa = length(dzdt)
     # define an approximation to zero that allows for finite-precision arithmetic
     zero = -1.0e-8
     # if dzdt at the maximum vpa index is negative, then dzdt < 0 everywhere
@@ -243,7 +243,6 @@ function integrate_over_positive_vpa(integrand, dzdt, vpa_wgts, wgts_mod)
                 break
             end
         end
-        println("ivpa_zero: ", ivpa_zero, "  nvpa: ", nvpa)
         @views vpa_integral = integral(integrand[ivpa_zero:end], wgts_mod[ivpa_zero:end])/sqrt(pi)
     end
     return vpa_integral
@@ -284,7 +283,6 @@ function integrate_over_negative_vpa(integrand, dzdt, vpa_wgts, wgts_mod)
                 break
             end
         end
-        println("ivpa_zero: ", ivpa_zero, "  nvpa: ", nvpa)
         @views vpa_integral = integral(integrand[1:ivpa_zero], wgts_mod[1:ivpa_zero])/sqrt(pi)
     end
     return vpa_integral

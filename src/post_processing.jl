@@ -208,6 +208,8 @@ function calculate_and_write_frequencies(fid, run_name, ntime, time, z, itime_mi
         # and fit phi(z0,t)/phi(z0,t0), which eliminates the constant A pre-factor
         @views phi_fit = fit_delta_phi_mode(shifted_time[itime_min:itime_max], z,
                                             delta_phi[:, itime_min:itime_max])
+        frequency = phi_fit.frequency
+        growth_rate = phi_fit.growth_rate
 
         # write info related to fit to file
         io = open_output_file(run_name, "frequency_fit.txt")
@@ -268,8 +270,10 @@ function calculate_and_write_frequencies(fid, run_name, ntime, time, z, itime_mi
         phase = 0.0
         shifted_time = allocate_float(ntime)
         @. shifted_time = time - time[itime_min]
+        fitted_delta_phi = zeros(ntime)
+
     end
-    return phi_fit.frequency, phi_fit.growth_rate, shifted_time, fitted_delta_phi
+    return frequency, growth_rate, shifted_time, fitted_delta_phi
 end
 function plot_fields(phi, delta_phi, time, itime_min, itime_max, nwrite_movie,
     z, iz0, run_name, fitted_delta_phi, pp)
@@ -507,7 +511,7 @@ function fit_delta_phi_mode(t, z, delta_phi)
     offset_error = sqrt(mean(offset_fit.resid .^ 2))
     offset_tol = 2.e-5
     if abs(doffsetdt) > offset_tol
-        error("d(offset)/dt=", doffsetdt, " is non-negligible (>", offset_tol,
+        println("WARNING: d(offset)/dt=", doffsetdt, " is non-negligible (>", offset_tol,
               ") but fit_delta_phi_mode expected either a standing wave or a ",
               "zero-frequency decaying mode.")
     end
@@ -543,8 +547,6 @@ function fit_delta_phi_mode(t, z, delta_phi)
         end
         if !converged
             println("WARNING: Iteration to find growth rate failed to converge in ", maxiter, " iterations")
-            #error("Iteration to find growth rate failed to converge in ", maxiter,
-            #      "iterations")
         end
         amplitude0 = amplitude[1] / cos(phase)
     end
@@ -629,7 +631,6 @@ function fit_cosine(z, data, amplitude_guess, offset_guess, n=1)
 
     # calculate error
     error = sqrt(mean(fit.resid .^ 2))
-    println("")
 
     return fit.param[1], fit.param[2], error
 end
