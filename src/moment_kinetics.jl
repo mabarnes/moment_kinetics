@@ -6,6 +6,7 @@ export run_moment_kinetics
 # Note that order of includes matters - things used in one module must already
 # be defined
 include("type_definitions.jl")
+include("optimization.jl")
 include("array_allocation.jl")
 include("interpolation.jl")
 include("clenshaw_curtis.jl")
