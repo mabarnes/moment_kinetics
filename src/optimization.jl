@@ -1,6 +1,22 @@
 module optimization
 
+# 'Macro hygiene' in Julia means expressions are evaluated by default with variables,
+# etc.  local to the macro or defined in the module where the macro is defined. The
+# `esc()` function can be used to 'escape' an expression so variables in the expression
+# are taken from the calling context of the macro.  Approach here is to wrap everything
+# in `esc()` (i.e. disable all 'macro hygiene') because we define macros that wrap other
+# macros (see comments below). This works OK for us because there is not much code in
+# the @innerloop and @outerloop macros - the lack of 'hygiene' means we need to export
+# things that are used in the loops (e.g. `Polyester`) so that they are available when
+# `using optimization` is used.
+
 export @innerloop, @outerloop
+
+using Base.Threads: threadid
+export threadid
+
+using Polyester
+export Polyester
 
 """
 Macro to use for optimizing inner loops
@@ -28,7 +44,8 @@ macro innerloop(ex)
 end
 
 macro outerloop(ex)
-    return esc( :( Base.Threads.@threads $ex ) )
+    #return esc( :( Base.Threads.@threads $ex ) )
+    return esc( :( Polyester.@batch $ex ) )
     #return esc( :( $ex ) )
 end
 
