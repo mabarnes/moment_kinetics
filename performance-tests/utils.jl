@@ -138,8 +138,14 @@ function upload_result(testtype::AbstractString, results::Vector{Float64})
 
         repo = get_updated_results_repo()
 
+        nthreads = Base.Threads.nthreads()
+
         # append results to file
-        results_file = string(testtype, ".txt")
+        results_name = testtype
+        if nthreads > 1
+            results_name = @sprintf "%s_%ithreads" testtype nthreads
+        end
+        results_file = string(results_name, ".txt")
         results_path = joinpath(results_directory, results_file)
         open(results_path, "a") do io
             write(io, results_string)
