@@ -9,9 +9,10 @@ using ..chebyshev: chebyshev_info
 using ..optimization
 
 # do a single stage time advance (potentially as part of a multi-stage RK scheme)
-function z_advection!(f_out, fvec_in, ff, moments, SL, advect, z, vpa,
+function z_advection!(f_out, fvec_in, ff, moments, SL_vec, advect, z, vpa,
                       use_semi_lagrange, dt, t, spectral, n_species, istage)
     for is ∈ 1:n_species
+            SL = SL_vec[is]
         # get the updated speed along the z direction using the current f
         @views update_speed_z!(advect[:,is], fvec_in.upar[:,is], moments.vth[:,is],
                                moments.evolve_upar, moments.evolve_ppar, vpa, z, t)

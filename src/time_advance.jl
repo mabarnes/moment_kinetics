@@ -155,9 +155,11 @@ function setup_time_advance!(pdf, vpa, z, composition, drive_input, moments,
     # create an array of structures containing the arrays needed for the semi-Lagrange
     # solve and initialize the characteristic speed and departure indices
     # so that the code can gracefully run without using the semi-Lagrange
-    # method if the user specifies this
-    z_SL = setup_semi_lagrange(z.n, vpa.n)
-    vpa_SL = setup_semi_lagrange(vpa.n, z.n)
+    # method if the user specifies this.
+    # Separate copy for each species to avoid conflicts when running with
+    # multiple threads.
+    z_SL = [setup_semi_lagrange(z.n, vpa.n) for _ ∈ 1:n_species]
+    vpa_SL = [setup_semi_lagrange(vpa.n, z.n) for _ ∈ 1:n_species]
     return vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
         vpa_SL, z_SL, scratch, advance
 end

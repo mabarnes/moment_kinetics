@@ -11,7 +11,7 @@ using ..calculus: derivative!
 using ..initial_conditions: enforce_vpa_boundary_condition!
 using ..optimization
 
-function vpa_advection!(f_out, fvec_in, ff, fields, moments, SL, advect,
+function vpa_advection!(f_out, fvec_in, ff, fields, moments, SL_vec, advect,
 	vpa, z, use_semi_lagrange, dt, t, vpa_spectral, z_spectral, composition, CX_frequency, istage)
 
 	# only have a parallel acceleration term for neutrals if using the peculiar velocity
@@ -25,6 +25,7 @@ function vpa_advection!(f_out, fvec_in, ff, fields, moments, SL, advect,
 	# calculate the advection speed corresponding to current f
 	update_speed_vpa!(advect, fields, fvec_in, moments, vpa, z, composition, CX_frequency, t, z_spectral)
 	for is ∈ 1:nspecies_accelerated
+                SL = SL_vec[is]
 		# update the upwind/downwind boundary indices and upwind_increment
 		# NB: not sure if this will work properly with SL method at the moment
 		# NB: if the speed is actually time-dependent
