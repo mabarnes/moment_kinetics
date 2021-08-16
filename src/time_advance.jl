@@ -234,7 +234,7 @@ end
 # time integrator can be used without severe CFL condition
 function time_advance!(pdf, scratch, t, t_input, vpa, z, vpa_spectral, z_spectral,
     moments, fields, vpa_advect, z_advect, vpa_SL, z_SL, composition,
-    charge_exchange_frequency, advance, io, cdf)
+    charge_exchange_frequency, advance, io, cdf, to=nothing)
 
     # main time advance loop
     iwrite = 2
@@ -246,7 +246,7 @@ function time_advance!(pdf, scratch, t, t_input, vpa, z, vpa_spectral, z_spectra
         else
             time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
                 vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
-                vpa_SL, z_SL, composition, charge_exchange_frequency, advance, i)
+                vpa_SL, z_SL, composition, charge_exchange_frequency, advance, i, to)
         end
         # update the time
         t += t_input.dt
@@ -390,17 +390,17 @@ function time_advance_split_operators!(pdf, scratch, t, t_input, vpa, z,
 end
 function time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
     vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
-    vpa_SL, z_SL, composition, charge_exchange_frequency, advance, istep)
+    vpa_SL, z_SL, composition, charge_exchange_frequency, advance, istep, to=nothing)
 
     if t_input.n_rk_stages > 1
         ssp_rk!(pdf, scratch, t, t_input, vpa, z,
             vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
-            vpa_SL, z_SL, composition, charge_exchange_frequency, advance, istep)
+            vpa_SL, z_SL, composition, charge_exchange_frequency, advance, istep, to)
     else
         euler_time_advance!(scratch, scratch, pdf, fields, moments, vpa_SL, z_SL,
             vpa_advect, z_advect, vpa, z, t,
             t_input, vpa_spectral, z_spectral, composition,
-            charge_exchange_frequency, advance, 1)
+            charge_exchange_frequency, advance, 1, to)
         # NB: this must be broken -- scratch is updated in euler_time_advance!,
         # but not the pdf or moments.  need to add update to these quantities here
     end
@@ -445,7 +445,7 @@ function rk_update!(scratch, pdf, moments, fields, vpa, z, rk_coefs, istage, com
 end
 function ssp_rk!(pdf, scratch, t, t_input, vpa, z,
     vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
-    vpa_SL, z_SL, composition, charge_exchange_frequency, advance, istep)
+    vpa_SL, z_SL, composition, charge_exchange_frequency, advance, istep, to)
 
     n_rk_stages = t_input.n_rk_stages
 
@@ -462,7 +462,7 @@ function ssp_rk!(pdf, scratch, t, t_input, vpa, z,
         @views euler_time_advance!(scratch[istage+1], scratch[istage],
             pdf, fields, moments, vpa_SL, z_SL, vpa_advect, z_advect, vpa, z, t,
             t_input, vpa_spectral, z_spectral, composition,
-            charge_exchange_frequency, advance, istage)
+            charge_exchange_frequency, advance, istage, to)
         @views rk_update!(scratch, pdf, moments, fields, vpa, z, advance.rk_coefs[:,istage], istage, composition)
     end
 
@@ -485,7 +485,7 @@ end
 # with fvec_in an input and fvec_out the output
 function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, z_SL,
     vpa_advect, z_advect, vpa, z, t, t_input, vpa_spectral, z_spectral,
-    composition, charge_exchange_frequency, advance, istage)
+    composition, charge_exchange_frequency, advance, istage, to)
     # define some abbreviated variables for tidiness
     n_ion_species = composition.n_ion_species
     dt = t_input.dt
@@ -496,13 +496,13 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, z_
     if advance.vpa_advection
         @views vpa_advection!(fvec_out.pdf, fvec_in, pdf.norm, fields, moments,
             vpa_SL, vpa_advect, vpa, z, use_semi_lagrange, dt, t,
-            vpa_spectral, z_spectral, composition, charge_exchange_frequency, istage)
+            vpa_spectral, z_spectral, composition, charge_exchange_frequency, istage, to)
     end
     # z_advection! advances 1D advection equation in z
     # apply z-advection operation to all species (charged and neutral)
     if advance.z_advection
         @views z_advection!(fvec_out.pdf, fvec_in, pdf.norm, moments, z_SL, z_advect, z, vpa,
-            use_semi_lagrange, dt, t, z_spectral, composition.n_species, istage)
+            use_semi_lagrange, dt, t, z_spectral, composition.n_species, istage, to)
     end
     if advance.source_terms
         source_terms!(fvec_out.pdf, fvec_in, moments, vpa, z, dt, z_spectral,

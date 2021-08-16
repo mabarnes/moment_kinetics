@@ -7,10 +7,12 @@ using ..semi_lagrange: find_approximate_characteristic!
 using ..advection: advance_f_local!, update_boundary_indices!
 using ..chebyshev: chebyshev_info
 using ..optimization
+using TimerOutputs
 
 # do a single stage time advance (potentially as part of a multi-stage RK scheme)
 function z_advection!(f_out, fvec_in, ff, moments, SL_vec, advect, z, vpa,
-                      use_semi_lagrange, dt, t, spectral, n_species, istage)
+                      use_semi_lagrange, dt, t, spectral, n_species, istage, to)
+    @timeit to "z_advection loop" begin
     for is ∈ 1:n_species
             SL = SL_vec[is]
         # get the updated speed along the z direction using the current f
@@ -56,6 +58,7 @@ function z_advection!(f_out, fvec_in, ff, moments, SL_vec, advect, z, vpa,
             @views advance_f_local!(f_out[ivpa,:,is], scratch, ff[ivpa,:,is], SL[ivpa], advect[ivpa,is],
                                     z, dt, istage, spectral, use_semi_lagrange)
         end
+    end
     end
 end
 function adjust_advection_speed!(speed, mod_speed, dens, vth, evolve_density, evolve_ppar)

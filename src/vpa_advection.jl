@@ -10,9 +10,10 @@ using ..em_fields: update_phi!
 using ..calculus: derivative!
 using ..initial_conditions: enforce_vpa_boundary_condition!
 using ..optimization
+using TimerOutputs
 
 function vpa_advection!(f_out, fvec_in, ff, fields, moments, SL_vec, advect,
-	vpa, z, use_semi_lagrange, dt, t, vpa_spectral, z_spectral, composition, CX_frequency, istage)
+	vpa, z, use_semi_lagrange, dt, t, vpa_spectral, z_spectral, composition, CX_frequency, istage, to)
 
 	# only have a parallel acceleration term for neutrals if using the peculiar velocity
 	# wpar = vpar - upar as a variable; i.e., d(wpar)/dt /=0 for neutrals even though d(vpar)/dt = 0.
@@ -24,6 +25,7 @@ function vpa_advection!(f_out, fvec_in, ff, fields, moments, SL_vec, advect,
 	end
 	# calculate the advection speed corresponding to current f
 	update_speed_vpa!(advect, fields, fvec_in, moments, vpa, z, composition, CX_frequency, t, z_spectral)
+        @timeit to "vpa_advection loop" begin
 	for is ∈ 1:nspecies_accelerated
                 SL = SL_vec[is]
 		# update the upwind/downwind boundary indices and upwind_increment
@@ -47,6 +49,7 @@ function vpa_advection!(f_out, fvec_in, ff, fields, moments, SL_vec, advect,
 		end
 		#@views enforce_vpa_boundary_condition!(f_out[:,:,is], vpa.bc, advect[:,is])
 	end
+        end
 end
 # calculate the advection speed in the z-direction at each grid point
 function update_speed_vpa!(advect, fields, fvec, moments, vpa, z, composition, CX_frequency, t, z_spectral)
