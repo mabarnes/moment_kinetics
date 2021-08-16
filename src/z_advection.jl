@@ -6,11 +6,17 @@ export update_speed_z!
 using ..semi_lagrange: find_approximate_characteristic!
 using ..advection: advance_f_local!, update_boundary_indices!
 using ..chebyshev: chebyshev_info
+using ..optimization
 
 # do a single stage time advance (potentially as part of a multi-stage RK scheme)
-function z_advection!(f_out, fvec_in, ff, moments, SL, advect, z, vpa,
-                      use_semi_lagrange, dt, t, spectral, n_species, istage)
+function z_advection!(f_out, fvec_in, ff, moments, SL_vec, advect, z_vec, vpa_vec,
+                      use_semi_lagrange, dt, t, spectral_vec, n_species, istage)
     for is ∈ 1:n_species
+        ithread = threadid()
+        SL = SL_vec[ithread]
+        z = z_vec[ithread]
+        vpa = vpa_vec[ithread]
+        spectral = spectral_vec[ithread]
         # get the updated speed along the z direction using the current f
         @views update_speed_z!(advect[:,is], fvec_in.upar[:,is], moments.vth[:,is],
                                moments.evolve_upar, moments.evolve_ppar, vpa, z, t)

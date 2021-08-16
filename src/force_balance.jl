@@ -3,22 +3,30 @@ module force_balance
 export force_balance!
 
 using ..calculus: derivative!
+using ..optimization
 
 # use the force balance equation d(nu)/dt + d(ppar + n*upar*upar)/dz =
 # -(dens/2)*dphi/dz + R*dens_i*dens_n*(upar_n-upar_i)
 # to update the parallel particle flux dens*upar for each species
-function force_balance!(pflx, fvec, fields, CX_frequency, vpa, z, dt, spectral, composition)
+function force_balance!(pflx, fvec, fields, CX_frequency, vpa_vec, z_vec, dt, spectral_vec, composition)
     # account for momentum flux contribution to force balance
     for is ∈ 1:composition.n_species
+        ithread = threadid()
+        z = z_vec[ithread]
+        spectral = spectral_vec[ithread]
         @views force_balance_flux_species!(pflx[:,is], fvec.density[:,is], fvec.upar[:,is], fvec.ppar[:,is], z, dt, spectral)
     end
     # account for parallel electric field contribution to force balance
     for is ∈ 1:composition.n_ion_species
+        ithread = threadid()
+        z = z_vec[ithread]
+        spectral = spectral_vec[ithread]
         @views force_balance_Epar_species!(pflx[:,is], fields.phi, fvec.density[:,is], z, dt, spectral)
     end
     # if neutrals present and charge exchange frequency non-zero,
     # account for collisional friction between ions and neutrals
     if composition.n_neutral_species > 0 && abs(CX_frequency) > 0.0
+        z = z_vec[threadid()]
         force_balance_CX!(pflx, fvec.density, fvec.upar, CX_frequency, composition, z.n, dt)
     end
 end

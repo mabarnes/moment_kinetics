@@ -18,7 +18,9 @@ end
 
 # creates the normalised pdf and the velocity-space moments and populates them
 # with a self-consistent initial condition
-function init_pdf_and_moments(vpa, z, composition, species, n_rk_stages, evolve_moments)
+function init_pdf_and_moments(vpa_vec, z_vec, composition, species, n_rk_stages, evolve_moments)
+    vpa = vpa_vec[1]
+    z = z_vec[1]
     # define the n_species variable for convenience
     n_species = composition.n_species
     # create the 'moments' struct that contains various v-space moments and other
@@ -42,7 +44,7 @@ function init_pdf_and_moments(vpa, z, composition, species, n_rk_stages, evolve_
     # when evolve_ppar = true.
     pdf = create_and_init_pdf(moments, vpa, z, n_species, species)
     # calculae the initial parallel heat flux from the initial un-normalised pdf
-    update_qpar!(moments.qpar, moments.qpar_updated, pdf.unnorm, vpa, z.n, moments.vpa_norm_fac)
+    update_qpar!(moments.qpar, moments.qpar_updated, pdf.unnorm, vpa_vec, z.n, moments.vpa_norm_fac)
     return pdf, moments
 end
 function create_and_init_pdf(moments, vpa, z, n_species, species)
@@ -163,11 +165,11 @@ function init_pdf_over_density!(pdf, spec, vpa, z, vth, vpa_norm_fac)
     end
     return nothing
 end
-function enforce_boundary_conditions!(f, vpa_bc, z_bc, vpa, vpa_adv::T1, z_adv::T2) where {T1, T2}
+function enforce_boundary_conditions!(f, vpa_bc, z_bc, vpa_grid, vpa_adv::T1, z_adv::T2) where {T1, T2}
     for is ∈ 1:size(f,3)
         # enforce the z BC
         for ivpa ∈ 1:size(f,1)
-            @views enforce_z_boundary_condition!(f[ivpa,:,is], z_bc, z_adv[ivpa,is].upwind_idx, z_adv[ivpa,is].downwind_idx, vpa[ivpa])
+            @views enforce_z_boundary_condition!(f[ivpa,:,is], z_bc, z_adv[ivpa,is].upwind_idx, z_adv[ivpa,is].downwind_idx, vpa_grid[ivpa])
         end
     end
     for is ∈ 1:size(vpa_adv,2)

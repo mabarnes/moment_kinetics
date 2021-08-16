@@ -3,13 +3,19 @@ module source_terms
 export source_terms!
 
 using ..calculus: derivative!
+using ..optimization
 
-function source_terms!(pdf_out, fvec_in, moments, vpa, z, dt, spectral, composition, CX_frequency)
+function source_terms!(pdf_out, fvec_in, moments, vpa_vec, z_vec, dt, spectral_vec,
+                       composition, CX_frequency)
     # calculate the source terms due to redefinition of the pdf to split off density,
     # and use them to update the pdf
     #n_species = size(pdf_out,3)
     if moments.evolve_ppar
         for is ∈ 1:composition.n_species
+            ithread = threadid()
+            vpa = vpa_vec[ithread]
+            z = z_vec[ithread]
+            spectral = spectral_vec[ithread]
             @views source_terms_evolve_ppar!(pdf_out[:,:,is], fvec_in.pdf[:,:,is],
                                              fvec_in.density[:,is], fvec_in.upar[:,is], fvec_in.ppar[:,is],
                                              moments.vth[:,is], moments.qpar[:,is], z, dt, spectral)
@@ -21,6 +27,10 @@ function source_terms!(pdf_out, fvec_in, moments, vpa, z, dt, spectral, composit
         end
     elseif moments.evolve_density
         for is ∈ 1:composition.n_species
+            ithread = threadid()
+            vpa = vpa_vec[ithread]
+            z = z_vec[ithread]
+            spectral = spectral_vec[ithread]
             @views source_terms_evolve_density!(pdf_out[:,:,is], fvec_in.pdf[:,:,is],
                                                 fvec_in.density[:,is], fvec_in.upar[:,is], z, dt, spectral)
         end

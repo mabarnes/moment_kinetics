@@ -9,9 +9,11 @@ using ..advection: advance_f_local!
 using ..em_fields: update_phi!
 using ..calculus: derivative!
 using ..initial_conditions: enforce_vpa_boundary_condition!
+using ..optimization
 
-function vpa_advection!(f_out, fvec_in, ff, fields, moments, SL, advect,
-	vpa, z, use_semi_lagrange, dt, t, vpa_spectral, z_spectral, composition, CX_frequency, istage)
+function vpa_advection!(f_out, fvec_in, ff, fields, moments, SL_vec, advect,
+                        vpa_vec, z_vec, use_semi_lagrange, dt, t, vpa_spectral_vec,
+                        z_spectral_vec, composition, CX_frequency, istage)
 
 	# only have a parallel acceleration term for neutrals if using the peculiar velocity
 	# wpar = vpar - upar as a variable; i.e., d(wpar)/dt /=0 for neutrals even though d(vpar)/dt = 0.
@@ -22,8 +24,15 @@ function vpa_advection!(f_out, fvec_in, ff, fields, moments, SL, advect,
 		nspecies_accelerated = composition.n_ion_species
 	end
 	# calculate the advection speed corresponding to current f
-	update_speed_vpa!(advect, fields, fvec_in, moments, vpa, z, composition, CX_frequency, t, z_spectral)
+	update_speed_vpa!(advect, fields, fvec_in, moments, vpa_vec[1], z_vec[1],
+ 	                  composition, CX_frequency, t, z_spectral_vec[1])
 	for is ∈ 1:nspecies_accelerated
+                ithread = threadid()
+                SL = SL_vec[ithread]
+                vpa = vpa_vec[ithread]
+                z = z_vec[ithread]
+                vpa_spectral = vpa_spectral_vec[ithread]
+                z_spectral = z_spectral_vec[ithread]
 		# update the upwind/downwind boundary indices and upwind_increment
 		# NB: not sure if this will work properly with SL method at the moment
 		# NB: if the speed is actually time-dependent

@@ -3,9 +3,13 @@ module energy_equation
 export energy_equation!
 
 using ..calculus: derivative!
+using ..optimization
 
-function energy_equation!(ppar, fvec, moments, CX_frequency, z, dt, spectral, composition)
+function energy_equation!(ppar, fvec, moments, CX_frequency, z_vec, dt, spectral_vec, composition)
     for is ∈ 1:composition.n_species
+        ithread = threadid()
+        z = z_vec[ithread]
+        spectral = spectral_vec[ithread]
         @views energy_equation_noCX!(ppar[:,is], fvec.upar[:,is], fvec.ppar[:,is],
                                      moments.qpar[:,is], dt, z, spectral)
     end

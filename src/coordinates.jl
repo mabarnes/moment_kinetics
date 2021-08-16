@@ -88,10 +88,11 @@ function define_coordinate(input)
     # struct containing the advection speed options/inputs for this coordinate
     advection = input.advection
 
-    return coordinate(input.name, n, input.ngrid, input.nelement, input.L, grid,
+    return [coordinate(input.name, n, input.ngrid, input.nelement, input.L, grid,
         cell_width, igrid, ielement, imin, imax, input.discretization, input.fd_option,
-        input.bc, wgts, uniform_grid, duniform_dgrid, scratch, copy(scratch),
-        scratch_2d, advection)
+        input.bc, wgts, uniform_grid, duniform_dgrid, deepcopy(scratch),
+        deepcopy(scratch), deepcopy(scratch_2d), advection)
+        for _ ∈ 1:Base.Threads.nthreads()]
 end
 # setup a grid with n grid points on the interval [-L/2,L/2]
 function init_grid(ngrid, nelement, n, L, imin, imax, igrid, discretization)

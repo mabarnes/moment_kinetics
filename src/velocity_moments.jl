@@ -13,6 +13,7 @@ export enforce_moment_constraints!
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_float, allocate_bool
 using ..calculus: integral
+using ..optimization
 
 #global tmpsum1 = 0.0
 #global tmpsum2 = 0.0
@@ -115,11 +116,12 @@ function update_moments!(moments, ff, vpa, nz)
 end
 # NB: if this function is called and if dens_updated is false, then
 # the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
-function update_density!(dens, dens_updated, pdf, vpa, nz)
+function update_density!(dens, dens_updated, pdf, vpa_vec, nz)
     n_species = size(pdf,3)
     @boundscheck n_species == size(dens,2) || throw(BoundsError(dens))
     for is ∈ 1:n_species
         if dens_updated[is] == false
+            vpa = vpa_vec[threadid()]
             @views update_density_species!(dens[:,is], pdf[:,:,is], vpa, nz)
             dens_updated[is] = true
         end
@@ -136,11 +138,12 @@ function update_density_species!(dens, ff, vpa, nz)
 end
 # NB: if this function is called and if upar_updated is false, then
 # the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
-function update_upar!(upar, upar_updated, pdf, vpa, nz)
+function update_upar!(upar, upar_updated, pdf, vpa_vec, nz)
     n_species = size(pdf,3)
     @boundscheck n_species == size(upar,2) || throw(BoundsError(upar))
     for is ∈ 1:n_species
         if upar_updated[is] == false
+            vpa = vpa_vec[threadid()]
             @views update_upar_species!(upar[:,is], pdf[:,:,is], vpa, nz)
             upar_updated[is] = true
         end
@@ -157,11 +160,12 @@ function update_upar_species!(upar, ff, vpa, nz)
 end
 # NB: if this function is called and if ppar_updated is false, then
 # the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
-function update_ppar!(ppar, ppar_updated, pdf, vpa, nz)
+function update_ppar!(ppar, ppar_updated, pdf, vpa_vec, nz)
     n_species = size(pdf,3)
     @boundscheck n_species == size(ppar,2) || throw(BoundsError(ppar))
     for is ∈ 1:n_species
         if ppar_updated[is] == false
+            vpa = vpa_vec[threadid()]
             @views update_ppar_species!(ppar[:,is], pdf[:,:,is], vpa, nz)
             ppar_updated[is] = true
         end
@@ -178,11 +182,12 @@ function update_ppar_species!(ppar, ff, vpa, nz)
 end
 # NB: if this function is called and if ppar_updated is false, then
 # the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
-function update_qpar!(qpar, qpar_updated, pdf, vpa, nz, vpanorm)
+function update_qpar!(qpar, qpar_updated, pdf, vpa_vec, nz, vpanorm)
     n_species = size(pdf,3)
     @boundscheck n_species == size(qpar,2) || throw(BoundsError(qpar))
     for is ∈ 1:n_species
         if qpar_updated[is] == false
+            vpa = vpa_vec[threadid()]
             @views update_qpar_species!(qpar[:,is], pdf[:,:,is], vpa, nz, vpanorm[:,is])
             qpar_updated[is] = true
         end
@@ -201,10 +206,13 @@ end
 function integrate_over_vspace(args...)
     return integral(args...)/sqrt(pi)
 end
-function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, moments)
+function enforce_moment_constraints!(fvec_new, fvec_old, vpa_vec, z_vec, moments)
     #global @. dens_hist += fvec_old.density
     #global n_hist += 1
     for is ∈ 1:size(fvec_new.density,2)
+        ithread = threadid()
+        vpa = vpa_vec[ithread]
+        z = z_vec[ithread]
         #tmp1 = integral(fvec_old.density[:,is], z.wgts)
         #tmp2 = integral(fvec_new.density[:,is], z.wgts)
         #@views avgdens_ratio = integral(fvec_new.density[:,is], z.wgts)/integral(fvec_old.density[:,is], z.wgts)
@@ -265,7 +273,7 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, moments)
     else
         @. fvec_old.pdf = fvec_new.pdf
     end
-    update_qpar!(moments.qpar, moments.qpar_updated, fvec_old.pdf, vpa, z.n, moments.vpa_norm_fac)
+    update_qpar!(moments.qpar, moments.qpar_updated, fvec_old.pdf, vpa_vec, z_vec[1].n, moments.vpa_norm_fac)
 end
 function reset_moments_status!(moments)
     if moments.evolve_density == false

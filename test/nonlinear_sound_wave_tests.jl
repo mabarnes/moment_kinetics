@@ -11,6 +11,7 @@ using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.load_data: open_netcdf_file, load_coordinate_data,
                                  load_fields_data, load_moments_data, load_pdf_data
 using moment_kinetics.interpolation: interpolate_to_grid_z, interpolate_to_grid_vpa
+using moment_kinetics.optimization
 using moment_kinetics.type_definitions: mk_float
 
 const analytical_rtol = 3.e-2
@@ -265,18 +266,18 @@ function run_test(test_input, rtol; args...)
                        adv_input)
     z = define_coordinate(input)
     if test_input["z_discretization"] == "chebyshev_pseudospectral"
-        z_spectral = setup_chebyshev_pseudospectral(z)
+        z_spectral = setup_chebyshev_pseudospectral(z[1])
     else
-        z_spectral = false
+        z_spectral = [false for _ ∈ 1:Base.Threads.nthreads()]
     end
     input = grid_input("coord", test_input["vpa_ngrid"], test_input["vpa_nelement"],
                        vpa_L, test_input["vpa_discretization"], "",
                        test_input["vpa_bc"], adv_input)
     vpa = define_coordinate(input)
     if test_input["vpa_discretization"] == "chebyshev_pseudospectral"
-        vpa_spectral = setup_chebyshev_pseudospectral(vpa)
+        vpa_spectral = setup_chebyshev_pseudospectral(vpa[1])
     else
-        vpa_spectral = false
+        vpa_spectral = [false for _ ∈ 1:Base.Threads.nthreads()]
     end
 
     # Test against values interpolated onto 'expected' grid which is fairly coarse no we
@@ -315,20 +316,20 @@ function run_test(test_input, rtol; args...)
     #println()
     function test_values(tind)
         @testset "tind=$tind" begin
-            newgrid_phi = interpolate_to_grid_z(expected.z, phi[:, tind], z, z_spectral)
+            newgrid_phi = interpolate_to_grid_z(expected.z, phi[:, tind], z[1], z_spectral[1])
             @test isapprox(expected.phi[:, tind], newgrid_phi, rtol=rtol)
 
-            newgrid_n = interpolate_to_grid_z(expected.z, n[:, :, tind], z, z_spectral)
+            newgrid_n = interpolate_to_grid_z(expected.z, n[:, :, tind], z[1], z_spectral[1])
             @test isapprox(expected.n[:, :, tind], newgrid_n, rtol=rtol)
 
-            newgrid_upar = interpolate_to_grid_z(expected.z, upar[:, :, tind], z, z_spectral)
+            newgrid_upar = interpolate_to_grid_z(expected.z, upar[:, :, tind], z[1], z_spectral[1])
             @test isapprox(expected.upar[:, :, tind], newgrid_upar, rtol=rtol)
 
-            newgrid_ppar = interpolate_to_grid_z(expected.z, ppar[:, :, tind], z, z_spectral)
+            newgrid_ppar = interpolate_to_grid_z(expected.z, ppar[:, :, tind], z[1], z_spectral[1])
             @test isapprox(expected.ppar[:, :, tind], newgrid_ppar, rtol=rtol)
 
-            newgrid_f = interpolate_to_grid_z(expected.z, f[:, :, :, tind], z, z_spectral)
-            newgrid_f = interpolate_to_grid_vpa(expected.vpa, newgrid_f, vpa, vpa_spectral)
+            newgrid_f = interpolate_to_grid_z(expected.z, f[:, :, :, tind], z[1], z_spectral[1])
+            newgrid_f = interpolate_to_grid_vpa(expected.vpa, newgrid_f, vpa[1], vpa_spectral[1])
             @test isapprox(expected.f[:, :, :, tind], newgrid_f, rtol=rtol)
         end
     end

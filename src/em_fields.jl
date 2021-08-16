@@ -26,6 +26,9 @@ function setup_em_fields(m, force_phi, drive_amplitude, drive_frequency)
 end
 
 # update_phi updates the electrostatic potential, phi
+function update_phi!(fields, fvec, z::Vector, composition)
+    update_phi!(fields, fvec, z[1], composition)
+end
 function update_phi!(fields, fvec, z, composition)
     n_ion_species = composition.n_ion_species
     @boundscheck size(fields.phi,1) == z.n || throw(BoundsError(fields.phi))

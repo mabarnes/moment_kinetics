@@ -33,6 +33,11 @@ end
 # create arrays needed for explicit Chebyshev pseudospectral treatment
 # and create the plans for the forward and backward fast Fourier transforms
 function setup_chebyshev_pseudospectral(coord)
+    # Create a separete chebyshev_info for each thread
+    return [setup_chebyshev_pseudospectral_single(coord)
+            for _ ∈ 1:Base.Threads.nthreads()]
+end
+function setup_chebyshev_pseudospectral_single(coord)
     # ngrid_fft is the number of grid points in the extended domain
     # in z = cos(theta).  this is necessary to turn a cosine transform on [0,π]
     # into a complex transform on [0,2π], which is more efficient in FFTW

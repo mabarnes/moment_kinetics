@@ -32,7 +32,7 @@ end
 # create and return a structure containing the arrays needed for the
 # semi-Lagrange time advance
 function setup_semi_lagrange(n)
-    return setup_semi_lagrange_local(n)
+    return [setup_semi_lagrange_local(n) for _ ∈ 1:Base.Threads.nthreads()]
 end
 function setup_semi_lagrange(n, m)
     # allocate an array containing structures with the info needed
@@ -42,7 +42,7 @@ function setup_semi_lagrange(n, m)
     for i ∈ 1:m
         SL[i] = setup_semi_lagrange_local(n)
     end
-    return SL
+    return [deepcopy(SL) for _ ∈ 1:Base.Threads.nthreads()]
 end
 # create and return a structure containing the arrays needed for the
 # semi-Lagrange time advance

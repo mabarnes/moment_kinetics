@@ -72,10 +72,10 @@ function run_moment_kinetics(to, input_dict=Dict())
         vpa_SL, z_SL, scratch, advance = setup_time_advance!(pdf, vpa, z, composition,
         drive_input, moments, t_input, charge_exchange_frequency, species)
     # setup i/o
-    io, cdf = setup_file_io(output_dir, run_name, vpa, z, composition, charge_exchange_frequency,
+    io, cdf = setup_file_io(output_dir, run_name, vpa[1], z[1], composition, charge_exchange_frequency,
                             moments.evolve_ppar)
     # write initial data to ascii files
-    write_data_to_ascii(pdf.unnorm, moments, fields, vpa, z, code_time, composition.n_species, io)
+    write_data_to_ascii(pdf.unnorm, moments, fields, vpa[1], z[1], code_time, composition.n_species, io)
     # write initial data to binary file (netcdf)
     write_data_to_binary(pdf.unnorm, moments, fields, code_time, composition.n_species, cdf, 1)
     # solve the 1+1D kinetic equation to advance f in time by nstep time steps

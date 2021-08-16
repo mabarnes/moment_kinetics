@@ -7,8 +7,9 @@ using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.chebyshev: setup_chebyshev_pseudospectral
 using moment_kinetics.interpolation:
     interpolate_to_grid_1d, interpolate_to_grid_z, interpolate_to_grid_vpa
+using moment_kinetics.optimization
 
-fd_fake_setup(z) = return false
+fd_fake_setup(z) = return [false for _ ∈ Base.Threads.nthreads()]
 
 # periodic test function
 # returns an array whose shape is the outer product of the 2nd, 3rd, ... arguments
@@ -37,11 +38,11 @@ function runtests()
             input = grid_input("coord", ngrid, nelement, L,
                 discretization, fd_option, bc, adv_input)
             # create the coordinate struct 'z'
-            z = define_coordinate(input)
+            z = define_coordinate(input)[threadid()]
             # For Chebyshev method, create arrays needed for Chebyshev pseudospectral
             # treatment in z and create the plans for the forward and backward fast
             # Chebyshev transforms. Just get `false` for finite difference.
-            spectral = setup_func(z)
+            spectral = setup_func(z)[threadid()]
 
             test_grid = [z for z in range(-zlim, zlim, length=ntest)]
 

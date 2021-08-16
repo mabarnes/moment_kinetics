@@ -6,10 +6,11 @@ using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.chebyshev: setup_chebyshev_pseudospectral
 using moment_kinetics.calculus: derivative!, integral
+using moment_kinetics.optimization
 
 using Random
 
-fd_fake_setup(x) = return false
+fd_fake_setup(x) = return [false for _ ∈ Base.Threads.nthreads()]
 
 function runtests()
     @testset "calculus" verbose=use_verbose begin
@@ -41,11 +42,11 @@ function runtests()
                 input = grid_input("coord", ngrid, nelement, L,
                     discretization, fd_option, bc, adv_input)
                 # create the coordinate struct 'x'
-                x = define_coordinate(input)
+                x = define_coordinate(input)[threadid()]
                 # create arrays needed for Chebyshev pseudospectral treatment in x
                 # and create the plans for the forward and backward fast Chebyshev
                 # transforms
-                spectral = setup_func(x)
+                spectral = setup_func(x)[threadid()]
                 # create array for the function f(x) to be differentiated/integrated
                 f = Array{Float64,1}(undef, x.n)
                 # create array for the derivative df/dx
@@ -87,7 +88,7 @@ function runtests()
                 input = grid_input("coord", ngrid, nelement, L,
                     "finite_difference", fd_option, bc, adv_input)
                 # create the coordinate struct 'x'
-                x = define_coordinate(input)
+                x = define_coordinate(input)[threadid()]
 
                 # create array for the derivative df/dx and the expected result
                 df = Array{Float64,1}(undef, x.n)
@@ -129,7 +130,7 @@ function runtests()
                 input = grid_input("coord", ngrid, nelement, L,
                     "finite_difference", fd_option, bc, adv_input)
                 # create the coordinate struct 'x'
-                x = define_coordinate(input)
+                x = define_coordinate(input)[threadid()]
 
                 # create array for the derivative df/dx and the expected result
                 df = Array{Float64,1}(undef, x.n)
@@ -167,7 +168,7 @@ function runtests()
                 input = grid_input("coord", ngrid, nelement, L,
                     "finite_difference", fd_option, bc, adv_input)
                 # create the coordinate struct 'x'
-                x = define_coordinate(input)
+                x = define_coordinate(input)[threadid()]
 
                 # create array for the derivative df/dx and the expected result
                 df = Array{Float64,1}(undef, x.n)
@@ -213,7 +214,7 @@ function runtests()
                 input = grid_input("coord", ngrid, nelement, L,
                     "finite_difference", fd_option, bc, adv_input)
                 # create the coordinate struct 'x'
-                x = define_coordinate(input)
+                x = define_coordinate(input)[threadid()]
 
                 # create array for the derivative df/dx and the expected result
                 df = Array{Float64,1}(undef, x.n)
@@ -416,11 +417,11 @@ function runtests()
                 input = grid_input("coord", ngrid, nelement, L,
                     "chebyshev_pseudospectral", fd_option, bc, adv_input)
                 # create the coordinate struct 'x'
-                x = define_coordinate(input)
+                x = define_coordinate(input)[threadid()]
                 # create arrays needed for Chebyshev pseudospectral treatment in x
                 # and create the plans for the forward and backward fast Chebyshev
                 # transforms
-                spectral = setup_chebyshev_pseudospectral(x)
+                spectral = setup_chebyshev_pseudospectral(x)[threadid()]
 
                 offset = randn(rng)
                 f = @. sinpi(2.0 * x.grid / L) + offset
@@ -609,11 +610,11 @@ function runtests()
                 input = grid_input("coord", ngrid, nelement, L,
                     "chebyshev_pseudospectral", fd_option, bc, adv_input)
                 # create the coordinate struct 'x'
-                x = define_coordinate(input)
+                x = define_coordinate(input)[threadid()]
                 # create arrays needed for Chebyshev pseudospectral treatment in x
                 # and create the plans for the forward and backward fast Chebyshev
                 # transforms
-                spectral = setup_chebyshev_pseudospectral(x)
+                spectral = setup_chebyshev_pseudospectral(x)[threadid()]
 
                 offset = randn(rng)
                 f = @. sinpi(2.0 * x.grid / L) + offset
@@ -650,11 +651,11 @@ function runtests()
                 input = grid_input("coord", ngrid, nelement, L,
                     "chebyshev_pseudospectral", fd_option, bc, adv_input)
                 # create the coordinate struct 'x'
-                x = define_coordinate(input)
+                x = define_coordinate(input)[threadid()]
                 # create arrays needed for Chebyshev pseudospectral treatment in x
                 # and create the plans for the forward and backward fast Chebyshev
                 # transforms
-                spectral = setup_chebyshev_pseudospectral(x)
+                spectral = setup_chebyshev_pseudospectral(x)[threadid()]
 
                 # test polynomials up to order ngrid-1
                 for n ∈ 0:ngrid-1
@@ -699,11 +700,11 @@ function runtests()
                 input = grid_input("coord", ngrid, nelement, L,
                     "chebyshev_pseudospectral", fd_option, bc, adv_input)
                 # create the coordinate struct 'x'
-                x = define_coordinate(input)
+                x = define_coordinate(input)[threadid()]
                 # create arrays needed for Chebyshev pseudospectral treatment in x
                 # and create the plans for the forward and backward fast Chebyshev
                 # transforms
-                spectral = setup_chebyshev_pseudospectral(x)
+                spectral = setup_chebyshev_pseudospectral(x)[threadid()]
 
                 # test polynomials up to order ngrid-1
                 for n ∈ 0:ngrid-1
