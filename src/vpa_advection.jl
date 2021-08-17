@@ -26,7 +26,7 @@ function vpa_advection!(f_out, fvec_in, ff, fields, moments, SL_vec, advect,
 	# calculate the advection speed corresponding to current f
 	update_speed_vpa!(advect, fields, fvec_in, moments, vpa_vec[1], z_vec[1],
  	                  composition, CX_frequency, t, z_spectral_vec[1])
-	for is ∈ 1:nspecies_accelerated
+	@outerloop for is ∈ 1:nspecies_accelerated
                 ithread = threadid()
                 SL = SL_vec[ithread]
                 vpa = vpa_vec[ithread]

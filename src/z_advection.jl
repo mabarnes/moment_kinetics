@@ -11,7 +11,7 @@ using ..optimization
 # do a single stage time advance (potentially as part of a multi-stage RK scheme)
 function z_advection!(f_out, fvec_in, ff, moments, SL_vec, advect, z_vec, vpa_vec,
                       use_semi_lagrange, dt, t, spectral_vec, n_species, istage)
-    for is ∈ 1:n_species
+    @outerloop for is ∈ 1:n_species
         ithread = threadid()
         SL = SL_vec[ithread]
         z = z_vec[ithread]
