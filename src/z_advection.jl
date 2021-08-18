@@ -7,10 +7,13 @@ using ..semi_lagrange: find_approximate_characteristic!
 using ..advection: advance_f_local!, update_boundary_indices!
 using ..chebyshev: chebyshev_info
 using ..optimization
+using TimerOutputs
+using ..moment_kinetics: global_timer
 
 # do a single stage time advance (potentially as part of a multi-stage RK scheme)
 function z_advection!(f_out, fvec_in, ff, moments, SL_vec, advect, z_vec, vpa_vec,
                       use_semi_lagrange, dt, t, spectral_vec, n_species, istage)
+    @timeit global_timer "z_advection" begin
     @outerloop for is ∈ 1:n_species
         ithread = threadid()
         SL = SL_vec[ithread]
@@ -58,6 +61,7 @@ function z_advection!(f_out, fvec_in, ff, moments, SL_vec, advect, z_vec, vpa_ve
             @views advance_f_local!(f_out[ivpa,:,is], z.scratch, ff[ivpa,:,is], SL[ivpa], advect[ivpa,is],
                                     z, dt, istage, spectral, use_semi_lagrange)
         end
+    end
     end
 end
 function adjust_advection_speed!(speed, mod_speed, dens, vth, evolve_density, evolve_ppar)

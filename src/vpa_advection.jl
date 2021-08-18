@@ -10,6 +10,8 @@ using ..em_fields: update_phi!
 using ..calculus: derivative!
 using ..initial_conditions: enforce_vpa_boundary_condition!
 using ..optimization
+using TimerOutputs
+using ..moment_kinetics: global_timer
 
 function vpa_advection!(f_out, fvec_in, ff, fields, moments, SL_vec, advect,
                         vpa_vec, z_vec, use_semi_lagrange, dt, t, vpa_spectral_vec,
@@ -26,6 +28,7 @@ function vpa_advection!(f_out, fvec_in, ff, fields, moments, SL_vec, advect,
 	# calculate the advection speed corresponding to current f
 	update_speed_vpa!(advect, fields, fvec_in, moments, vpa_vec[1], z_vec[1],
  	                  composition, CX_frequency, t, z_spectral_vec[1])
+        @timeit global_timer "vpa_advection" begin
 	@outerloop for is ∈ 1:nspecies_accelerated
                 ithread = threadid()
                 SL = SL_vec[ithread]
@@ -54,6 +57,7 @@ function vpa_advection!(f_out, fvec_in, ff, fields, moments, SL_vec, advect,
 		end
 		#@views enforce_vpa_boundary_condition!(f_out[:,:,is], vpa.bc, advect[:,is])
 	end
+        end
 end
 # calculate the advection speed in the z-direction at each grid point
 function update_speed_vpa!(advect, fields, fvec, moments, vpa, z, composition, CX_frequency, t, z_spectral)
