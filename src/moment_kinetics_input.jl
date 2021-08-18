@@ -18,7 +18,7 @@ using ..input_structs: species_composition
 using ..input_structs: drive_input, drive_input_mutable
 
 @enum RunType single performance_test scan
-const run_type = single
+const run_type = performance_test
 
 function mk_input(scan_input=Dict())
 
