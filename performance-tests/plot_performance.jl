@@ -8,7 +8,6 @@ export compare_nthreads_performance_history
 
 using Dates
 using CSV
-using ElasticArrays
 using Glob
 using Plots
 
@@ -26,14 +25,28 @@ function load_run(filename)
     return data
 end
 
+mutable struct RunData
+    memory::Float64
+    min::Float64
+    median::Float64
+    max::Float64
+end
+struct MachineDataRow
+    commit::String
+    date::DateTime
+    data::Vector{RunData}
+end
 struct MachineData
     ntests::Int
-    commits::ElasticArray{String}
-    dates::ElasticArray{DateTime}
-    data::Vector{ElasticArray{Float64}}
-    MachineData(ntests) = new(ntests, ElasticArray{String}(undef, 0),
-                              ElasticArray{DateTime}(undef, 0),
-                              [ElasticArray{Float64}(undef, 4, 0) for _ in 1:ntests])
+    list::Vector{MachineDataRow}
+    MachineData(ntests) = new(ntests, Vector{MachineDataRow}(undef, 0))
+end
+import Base: push!
+function push!(data::MachineData, commit::String, date::DateTime, run_data)
+    rd = [RunData(x...) for x ∈ run_data]
+    @assert length(rd) == data.ntests
+    row = MachineDataRow(commit, date, rd)
+    push!(data.list, row)
 end
 """
 Parse the data returned by load_run and extract data for each machine into a separate struct
@@ -55,11 +68,8 @@ function split_machines(data)
         end
 
         machine_data = split_data[machine]
-        push!(machine_data.commits, commit)
-        push!(machine_data.dates, date)
-        for i ∈ 1:ntests
-            append!(machine_data.data[i], [row[j] for j in 4 + 4*(i-1):4 + 4*i - 1])
-        end
+        push!(machine_data, commit, date,
+              [[row[j] for j ∈ 4 + 4*(i-1):4 + 4*i - 1] for i ∈ 1:ntests])
     end
     return split_data
 end
@@ -84,7 +94,7 @@ blankticks : Tuple(UnitRange{Int64, Vector{String})
 function get_x_ticks(commits, dates)
     # truncate commit hashes to first 6 characters and trim the time from dates
     xticks = (1:length(commits), ["$(a[1:6]) $(Dates.format(b, "Y-m-d"))"
-                                  for (a, b) in zip(commits, dates)])
+                                  for (a, b) ∈ zip(commits, dates)])
     blankticks = (1:length(commits), ["" for _ ∈ 1:length(commits)])
 end
 
@@ -153,16 +163,17 @@ function plot_performance_history(filename, machine=nothing; show=false, save=tr
         machine = config["machine"]
     end
 
-    data = load_run(filename)
-    split_data = split_machines(data)
+    all_data = load_run(filename)
+    split_data = split_machines(all_data)
     machine_data = split_data[machine]
 
-    start_index = (start_from <= 0 ? max(length(machine_data.commits) + start_from, 1)
-                                   : min(start_from, length(machine_data.commits)))
+    l = length(machine_data.list)
+    start_index = (start_from <= 0 ? max(l + start_from, 1) : min(start_from, l))
+    data = @view machine_data.list[start_index:end]
 
-    commits = [x[1:6] for x in machine_data.commits[start_index:end]]
+    commits = [r.commit[1:6] for r ∈ data]
 
-    dates = machine_data.dates[start_index:end]
+    dates = [r.date for r ∈ data]
 
     ntests = machine_data.ntests
 
@@ -175,13 +186,14 @@ function plot_performance_history(filename, machine=nothing; show=false, save=tr
 
     xticks, blankticks = get_x_ticks(commits, dates)
     for i ∈ 1:ntests
-        perf_data = machine_data.data[i]
-        plot!(memplot, perf_data[1, start_index:end];
+        perf_data = [r.data[i] for r ∈ data]
+        plot!(memplot, [x.memory for x ∈ perf_data];
               marker=:x, xticks=blankticks, label="test $i")
-        plot!(timeplot, perf_data[2, start_index:end];
+        mintime = [x.min for x ∈ perf_data]
+        mediantime = [x.median for x ∈ perf_data]
+        plot!(timeplot, mintime;
               marker=:x, xticks=xticks, xrotation=45,
-              yerror=(0.0, perf_data[3, start_index:end]
-                           - perf_data[2, start_index:end]),
+              yerror=(0.0, mediantime - mintime),
               label="test $i")
     end
 
