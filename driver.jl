@@ -25,10 +25,10 @@ elseif run_type == performance_test
     to2 = TimerOutput()
 
     input = mk_input()
-    @timeit to1 "first call to run_moment_kinetics" run_moment_kinetics(to1, input)
+    @timeit to1 "first call to run_moment_kinetics" run_moment_kinetics(input, to1)
     show(to1)
     println()
-    @timeit to2 "second call to run_moment_kinetics" run_moment_kinetics(to2, input)
+    @timeit to2 "second call to run_moment_kinetics" run_moment_kinetics(input, to2)
     show(to2)
     println()
 elseif run_type == scan
@@ -37,8 +37,7 @@ elseif run_type == scan
     @sync @distributed for s ∈ scan_inputs
         println("running parameters: ", s)
         this_input = mk_input(s)
-        to = TimerOutput()
-        run_moment_kinetics(to, this_input)
+        run_moment_kinetics(this_input)
     end
 else
     error(run_type, " is not a valid run_type option")

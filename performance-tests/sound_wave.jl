@@ -5,7 +5,6 @@ using .PerformanceTestUtils
 
 using BenchmarkTools
 using moment_kinetics
-using TimerOutputs
 
 const test_name = "sound_wave"
 const benchmark_seconds = 60
@@ -103,9 +102,6 @@ test_input_chebyshev_split_3_moments =
           Dict("run_name" => "chebyshev_pseudospectral_split_3_moments",
                "evolve_moments_parallel_pressure" => true))
 
-# Not actually used in the tests, but needed for first argument of run_moment_kinetics
-to = TimerOutput()
-
 """
 Benchmark for one set of parameters
 
@@ -119,7 +115,7 @@ function run_test(input)
     initial_input["nstep"] = 2
     run_moment_kinetics(to, input)
 
-    result = @benchmark run_moment_kinetics($to, $input) seconds=benchmark_seconds samples=benchmark_samples evals=benchmark_evals
+    result = @benchmark run_moment_kinetics($input) seconds=benchmark_seconds samples=benchmark_samples evals=benchmark_evals
     println(input["run_name"])
     display(result)
     println()

@@ -1,6 +1,5 @@
 using Profile
 using StatProfilerHTML
-using TimerOutputs
 using TOML
 
 using moment_kinetics
@@ -15,13 +14,11 @@ function main(input_file)
     short_input = deepcopy(input)
     short_input["nstep"] = 2
 
-    to = TimerOutput()
-
     # Short run to make sure everything is compiled
-    run_moment_kinetics(to, short_input)
+    run_moment_kinetics(short_input)
 
     Profile.clear()
-    @profilehtml run_moment_kinetics(to, input)
+    @profilehtml run_moment_kinetics(input)
 
     # Print to stdout
     # Use IOContext to increase width so that lines don't get trucated
