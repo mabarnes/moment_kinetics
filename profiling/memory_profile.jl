@@ -1,5 +1,4 @@
 using Profile
-using TimerOutputs
 using TOML
 
 using moment_kinetics
@@ -14,15 +13,13 @@ function main(input_file)
     short_input = deepcopy(input)
     short_input["nstep"] = 2
 
-    to = TimerOutput()
-
     # Short run to make sure everything is compiled
-    run_moment_kinetics(to, short_input)
+    run_moment_kinetics(short_input)
 
     # Reset memory allocation counters, so we only count the main run
     Profile.clear_malloc_data()
 
-    run_moment_kinetics(to, input)
+    run_moment_kinetics(input)
 
     return nothing
 end

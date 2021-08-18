@@ -2,6 +2,9 @@ module moment_kinetics
 
 export run_moment_kinetics
 
+using TimerOutputs
+global_timer = TimerOutput()
+
 # Include submodules from other source files
 # Note that order of includes matters - things used in one module must already
 # be defined
@@ -39,7 +42,6 @@ include("load_data.jl")
 include("post_processing_input.jl")
 include("post_processing.jl")
 
-using TimerOutputs
 using TOML
 
 using .file_io: setup_file_io, finish_file_io
@@ -50,7 +52,7 @@ using .moment_kinetics_input: mk_input, run_type, performance_test
 using .time_advance: setup_time_advance!, time_advance!
 
 # main function that contains all of the content of the program
-function run_moment_kinetics(to, input_dict=Dict())
+function run_moment_kinetics(input_dict=Dict())
     input = mk_input(input_dict)
     # obtain input options from moment_kinetics_input.jl
     # and check input to catch errors
@@ -79,10 +81,12 @@ function run_moment_kinetics(to, input_dict=Dict())
     write_data_to_binary(pdf.unnorm, moments, fields, code_time, composition.n_species, cdf, 1)
     # solve the 1+1D kinetic equation to advance f in time by nstep time steps
     if run_type == performance_test
-        @timeit to "time_advance" time_advance!(pdf, scratch, code_time, t_input,
+        @timeit global_timer "time_advance" time_advance!(pdf, scratch, code_time, t_input,
             vpa, z, vpa_spectral, z_spectral, moments, fields,
             vpa_advect, z_advect, vpa_SL, z_SL, composition, charge_exchange_frequency,
             advance, io, cdf)
+        print_timer(global_timer, sortby=:name)
+        println()
     else
         time_advance!(pdf, scratch, code_time, t_input, vpa, z,
             vpa_spectral, z_spectral, moments, fields,
@@ -95,8 +99,14 @@ function run_moment_kinetics(to, input_dict=Dict())
 end
 
 # overload which takes a filename and loads input
-function run_moment_kinetics(to, input_filename::String)
-    return run_moment_kinetics(to, TOML.parsefile(input_filename))
+function run_moment_kinetics(input_filename::String)
+    return run_moment_kinetics(TOML.parsefile(input_filename))
+end
+
+# overload to pass a TimerOutput
+function run_moment_kinetics(input, timer::TimerOutput)
+    global global_timer = timer
+    run_moment_kinetics(input)
 end
 
 end

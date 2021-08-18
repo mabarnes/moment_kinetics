@@ -7,7 +7,6 @@ using moment_kinetics
 
 input_dict = Dict("nstep"=>1, "run_name"=>"precompilation")
 
-to = TimerOutput()
-run_moment_kinetics(to, input_dict)
+run_moment_kinetics(input_dict)
 
 rm("runs/precompilation/", recursive=true)

@@ -3,7 +3,6 @@ module NonlinearSoundWaveTests
 include("setup.jl")
 
 using Base.Filesystem: tempname
-using TimerOutputs
 
 using moment_kinetics.chebyshev: setup_chebyshev_pseudospectral
 using moment_kinetics.coordinates: define_coordinate
@@ -192,9 +191,6 @@ test_input_chebyshev_split_3_moments =
                "evolve_moments_parallel_pressure" => true))
 
 
-# Not actually used in the tests, but needed for first argument of run_moment_kinetics
-to = TimerOutput()
-
 """
 Run a sound-wave test for a single set of parameters
 """
@@ -231,7 +227,7 @@ function run_test(test_input, rtol; args...)
     f = undef
     quietoutput() do
         # run simulation
-        run_moment_kinetics(to, input)
+        run_moment_kinetics(input)
 
         # Load and analyse output
         #########################

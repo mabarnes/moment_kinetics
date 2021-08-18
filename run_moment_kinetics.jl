@@ -2,13 +2,10 @@
 using Pkg
 Pkg.activate(".")
 
-using TimerOutputs
 using moment_kinetics
 
-to = TimerOutput()
-
 if length(ARGS) > 0
-    run_moment_kinetics(to, ARGS[1])
+    run_moment_kinetics(ARGS[1])
 else
-    run_moment_kinetics(to)
+    run_moment_kinetics()
 end
