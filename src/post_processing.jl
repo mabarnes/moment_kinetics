@@ -4,9 +4,12 @@ export analyze_and_plot
 
 # packages
 using Plots
+using IJulia
 using LsqFit
 using NCDatasets
 using Statistics: mean
+using SpecialFunctions: erfi
+#using LaTeXStrings
 # modules
 using ..post_processing_input: pp
 using ..quadrature: composite_simpson_weights
@@ -16,6 +19,7 @@ using ..type_definitions: mk_float
 using ..load_data: open_netcdf_file
 using ..load_data: load_coordinate_data, load_fields_data, load_moments_data, load_pdf_data
 using ..analysis: analyze_fields_data, analyze_moments_data, analyze_pdf_data
+using ..velocity_moments: integrate_over_vspace
 
 function analyze_and_plot_data(path)
     # Create run_name from the path to the run directory
@@ -108,6 +112,11 @@ function analyze_and_plot_data(path)
             end
             outfile = string(run_name, "_f_vs_z_vpa", spec_string, ".gif")
             gif(anim, outfile, fps=5)
+            # make pdf of f(vpa,z,t_final) for each species
+            str = string("spec ", string(is), " pdf")
+            @views heatmap(vpa, z, ff[:,:,is,end], xlabel="vpa", ylabel="z", c = :deep, interpolation = :cubic, title=str)
+            outfile = string(run_name, "_f_vs_z_vpa_final", spec_string, ".pdf")
+            savefig(outfile)
         end
         if pp.animate_deltaf_vs_z_vpa
             # make a gif animation of δf(vpa,z,t)
@@ -140,9 +149,33 @@ function analyze_and_plot_data(path)
         if pp.animate_f_vs_z0_vpa
             fmin = minimum(ff[iz0,:,is,:])
             fmax = maximum(ff[iz0,:,is,:])
+
+            # if is == 1
+            #     tmp = copy(ff)
+            #     @. tmp[1,:,1,:] /= vpa^2
+            #     bohm_integral = copy(time)
+            #     for i ∈ 1:ntime
+            #         @views bohm_integral[i] = integrate_over_vspace(tmp[1,1:cld(nvpa,2)-1,1,i],vpa_wgts[1:cld(nvpa,2)-1])/2.0
+            #     end
+            #     plot(time, bohm_integral, xlabel="time", label="Bohm integral")
+            #     plot!(time, density[1,1,:], label="nᵢ(zmin)")
+            #     outfile = string(run_name, "_Bohm_criterion.pdf")
+            #     savefig(outfile)
+            #     println()
+            #     if bohm_integral[end] <= density[1,1,end]
+            #         println("Bohm criterion: ", bohm_integral[end], " <= ", density[1,1,end], " is satisfied!")
+            #     else
+            #         println("Bohm criterion: ", bohm_integral[end], " <= ", density[1,1,end], " is not satisfied!")
+            #     end
+            #     println()
+            #     for j ∈ 0:10
+            #         println("j: ", j, "  Bohm integral: ", integrate_over_vspace(tmp[1,1:cld(nvpa,2)-j,1,end],vpa_wgts[1:cld(nvpa,2)-j,end])/2.0)
+            #     end
+            # end
             # make a gif animation of f(vpa,z0,t)
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-                @views plot(vpa, ff[iz0,:,is,i], ylims = (fmin,fmax))
+                #@views plot(vpa, ff[iz0,:,is,i], ylims = (fmin,fmax))
+                @views plot(vpa, ff[iz0,:,is,i])
             end
             outfile = string(run_name, "_f_vs_vpa", spec_string, ".gif")
             gif(anim, outfile, fps=5)
@@ -309,6 +342,16 @@ function plot_fields(phi, delta_phi, time, itime_min, itime_max, nwrite_movie,
         outfile = string(run_name, "_phi_vs_z.gif")
         gif(anim, outfile, fps=5)
     end
+    # nz = length(z)
+    # izmid = cld(nz,2)
+    # plot(z[izmid:end], phi[izmid:end,end] .- phi[izmid,end], xlabel="z/Lz - 1/2", ylabel="eϕ/Te", label = "data", linewidth=2)
+    # plot!(exp.(-(phi[cld(nz,2),end] .- phi[izmid:end,end])) .* erfi.(sqrt.(abs.(phi[cld(nz,2),end] .- phi[izmid:end,end])))/sqrt(pi)/0.688, phi[izmid:end,end] .- phi[izmid,end], label = "analytical", linewidth=2)
+    # outfile = string(run_name, "_harrison_comparison.pdf")
+    # savefig(outfile)
+    plot(z, phi[:,end], xlabel="z/Lz", ylabel="eϕ/Te", label="", linewidth=2)
+    outfile = string(run_name, "_phi_final.pdf")
+    savefig(outfile)
+
     println("done.")
 end
 function plot_moments(density, delta_density, density_fldline_avg,
@@ -318,6 +361,15 @@ function plot_moments(density, delta_density, density_fldline_avg,
     pp, run_name, time, itime_min, itime_max, nwrite_movie,
     z, iz0, n_species)
     println("Plotting velocity moments data...")
+    # plot the species-summed, field-line averaged vs time
+    denstot = copy(density_fldline_avg)
+    denstot .= sum(density_fldline_avg,dims=1)
+    @. denstot /= denstot[1,1]
+    denstot_min = minimum(denstot[1,:]) - 0.1
+    denstot_max = maximum(denstot[1,:]) + 0.1
+    @views plot(time, denstot[1,:], ylims=(denstot_min,denstot_max), xlabel="time", ylabel="∑ⱼn̅ⱼ(t)/∑ⱼn̅ⱼ(0)", label="", linewidth=2)
+    outfile = string(run_name, "_denstot_vs_t.pdf")
+    savefig(outfile)
     for is ∈ 1:n_species
         spec_string = string(is)
         dens_min = minimum(density[:,is,:])

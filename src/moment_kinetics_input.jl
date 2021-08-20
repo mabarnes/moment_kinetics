@@ -37,7 +37,7 @@ function mk_input(scan_input=Dict())
         load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_response)
 
     # this is the prefix for all output files associated with this run
-    run_name = get(scan_input, "run_name", "wallBC_ionization")
+    run_name = get(scan_input, "run_name", "wallBC")
     # this is the directory where the simulation data will be stored
     base_directory = get(scan_input, "base_directory", "runs")
     output_dir = string(base_directory, "/", run_name)
@@ -56,14 +56,14 @@ function mk_input(scan_input=Dict())
     # set initial neutral temperature Tn/Tₑ = 1
     # set initial nᵢ/Nₑ = 1.0
     species[1].z_IC.initialization_option = get(scan_input, "z_IC_option1", "gaussian")
-    species[1].initial_density = get(scan_input, "initial_density1", 0.5)
+    species[1].initial_density = get(scan_input, "initial_density1", 1.0)
     species[1].initial_temperature = get(scan_input, "initial_temperature1", 1.0)
     species[1].z_IC.amplitude = get(scan_input, "z_IC_amplitude1", 0.001)
     #species[1].z_IC.initialization_option = "bgk"
     # set initial neutral densiity = Nₑ
     if composition.n_species > 1
         species[2].z_IC.initialization_option = get(scan_input, "z_IC_option1", species[1].z_IC.initialization_option)
-        species[2].initial_density = get(scan_input, "initial_density2", 0.5)
+        species[2].initial_density = get(scan_input, "initial_density2", species[1].initial_density)
         species[2].initial_temperature = get(scan_input, "initial_temperature2", species[1].initial_temperature)
         species[2].z_IC.amplitude = get(scan_input, "z_IC_amplitude2", species[1].z_IC.amplitude)
     end
@@ -73,9 +73,9 @@ function mk_input(scan_input=Dict())
     collisions.ionization = collisions.charge_exchange
 
     # parameters related to the time stepping
-    nstep = get(scan_input, "nstep", 10000)
-    dt = get(scan_input, "dt", 0.0005/sqrt(species[1].initial_temperature))
-    nwrite = get(scan_input, "nwrite", 40)
+    nstep = get(scan_input, "nstep", 40000)
+    dt = get(scan_input, "dt", 0.00025/sqrt(species[1].initial_temperature))
+    nwrite = get(scan_input, "nwrite", 80)
     # use_semi_lagrange = true to use interpolation-free semi-Lagrange treatment
     # otherwise, solve problem solely using the discretization_option above
     use_semi_lagrange = get(scan_input, "use_semi_lagrange", false)
@@ -88,7 +88,7 @@ function mk_input(scan_input=Dict())
     # ngrid is number of grid points per element
     z.ngrid = get(scan_input, "z_ngrid", 9)
     # nelement is the number of elements
-    z.nelement = get(scan_input, "z_nelement", 4)
+    z.nelement = get(scan_input, "z_nelement", 8)
     # determine the discretization option for the z grid
     # supported options are "chebyshev_pseudospectral" and "finite_difference"
     z.discretization = get(scan_input, "z_discretization", "chebyshev_pseudospectral")
@@ -311,7 +311,8 @@ function load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_resp
     charge_exchange = 0.0
     # ionization collision frequency
     ionization = 0.0
-    collisions = collisions_input(charge_exchange, ionization)
+    constant_ionization_rate = false
+    collisions = collisions_input(charge_exchange, ionization, constant_ionization_rate)
 
     return z, vpa, species, composition, drive, evolve_moments, collisions
 end
@@ -475,6 +476,9 @@ function check_input_initialization(composition, species, io)
         elseif species[is].vpa_IC.initialization_option == "bgk"
             print(io,">vpa_initialization_option = 'bgk'.")
             println(io,"  setting F(z,vpa) = F(vpa^2 + phi), with phi_max = 0.")
+        elseif species[is].vpa_IC.initialization_option == "vpagaussian"
+            print(io,">vpa_initialization_option = 'vpagaussian'.")
+            println(io,"  setting G(vpa) = vpa^2*exp(-(vpa/vpa_width)^2).")
         else
             input_option_error("vpa_initialization_option", species[is].vpa_IC.initialization_option)
         end

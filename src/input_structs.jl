@@ -167,6 +167,8 @@ mutable struct collisions_input
     charge_exchange::mk_float
     # ionization collision frequency
     ionization::mk_float
+    # if constant_ionization_rate = true, use an ionization term that is constant in z
+    constant_ionization_rate::Bool
 end
 struct pp_input
     # if calculate_frequencies = true, calculate and print the frequency and growth/decay

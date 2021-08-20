@@ -113,6 +113,27 @@ function init_pdf_over_density!(pdf, spec, z, vpa, vth, vpa_norm_fac)
         for iz ∈ 1:z.n
             @. pdf[iz,:] = exp(-(vpa.grid*(vpa_norm_fac[iz]/vth[iz]))^2) / vth[iz]
         end
+        for iz ∈ 1:z.n
+            # densfac = the integral of the pdf over v-space, which should be unity,
+            # but may not be exactly unity due to quadrature errors
+            densfac = integrate_over_vspace(view(pdf,iz,:), vpa.wgts)
+            # pparfac = the integral of the pdf over v-space, weighted by m_s w_s^2 / vths^2,
+            # where w_s = vpa - upar_s;
+            # should be equal to 1/2, but may not be exactly 1/2 due to quadrature errors
+            @. vpa.scratch = vpa.grid^2 * pdf[iz,:] * (vpa_norm_fac[iz]/vth[iz])^2
+            pparfac = integrate_over_vspace(vpa.scratch, vpa.wgts)
+            # pparfac2 = the integral of the pdf over v-space, weighted by m_s w_s^2 (w_s^2 - vths^2 / 2) / vth^4
+            #@. vpa.scratch = vpa.grid^2 *(vpa.grid^2/pparfac - vth[iz]^2/densfac) * pdf[iz,:] * (vpa_norm_fac[iz]/vth[iz])^4
+            @. vpa.scratch = vpa.grid^2 *(vpa.grid^2/pparfac - 1.0/densfac) * pdf[iz,:] * (vpa_norm_fac[iz]/vth[iz])^4
+            pparfac2 = integrate_over_vspace(vpa.scratch, vpa.wgts)
+
+            #@. pdf[iz,:] = pdf[iz,:]/densfac + (0.5 - pparfac/densfac)/pparfac2*(vpa.grid^2/pparfac - vth[iz]^2/densfac)*pdf[iz,:]*(vpa_norm_fac[iz]/vth[iz])^2
+            @. pdf[iz,:] = pdf[iz,:]/densfac + (0.5 - pparfac/densfac)/pparfac2*(vpa.grid^2/pparfac - 1.0/densfac)*pdf[iz,:]*(vpa_norm_fac[iz]/vth[iz])^2
+        end
+    elseif spec.vpa_IC.initialization_option == "vpagaussian"
+        for iz ∈ 1:z.n
+            @. pdf[iz,:] = vpa.grid^2*exp(-(vpa.grid*(vpa_norm_fac[iz]/vth[iz]))^2) / vth[iz]
+        end
     elseif spec.vpa_IC.initialization_option == "sinusoid"
         # initial condition is sinusoid in vpa
         for iz ∈ 1:z.n
@@ -125,23 +146,23 @@ function init_pdf_over_density!(pdf, spec, z, vpa, vth, vpa_norm_fac)
             @. pdf[iz,:] = (vpa.grid + 0.5*vpa.L)^spec.vpa_IC.monomial_degree
         end
     end
-    for iz ∈ 1:z.n
-        # densfac = the integral of the pdf over v-space, which should be unity,
-        # but may not be exactly unity due to quadrature errors
-        densfac = integrate_over_vspace(view(pdf,iz,:), vpa.wgts)
-        # pparfac = the integral of the pdf over v-space, weighted by m_s w_s^2 / vths^2,
-        # where w_s = vpa - upar_s;
-        # should be equal to 1/2, but may not be exactly 1/2 due to quadrature errors
-        @. vpa.scratch = vpa.grid^2 * pdf[iz,:] * (vpa_norm_fac[iz]/vth[iz])^2
-        pparfac = integrate_over_vspace(vpa.scratch, vpa.wgts)
-        # pparfac2 = the integral of the pdf over v-space, weighted by m_s w_s^2 (w_s^2 - vths^2 / 2) / vth^4
-        #@. vpa.scratch = vpa.grid^2 *(vpa.grid^2/pparfac - vth[iz]^2/densfac) * pdf[iz,:] * (vpa_norm_fac[iz]/vth[iz])^4
-        @. vpa.scratch = vpa.grid^2 *(vpa.grid^2/pparfac - 1.0/densfac) * pdf[iz,:] * (vpa_norm_fac[iz]/vth[iz])^4
-        pparfac2 = integrate_over_vspace(vpa.scratch, vpa.wgts)
-
-        #@. pdf[iz,:] = pdf[iz,:]/densfac + (0.5 - pparfac/densfac)/pparfac2*(vpa.grid^2/pparfac - vth[iz]^2/densfac)*pdf[iz,:]*(vpa_norm_fac[iz]/vth[iz])^2
-        @. pdf[iz,:] = pdf[iz,:]/densfac + (0.5 - pparfac/densfac)/pparfac2*(vpa.grid^2/pparfac - 1.0/densfac)*pdf[iz,:]*(vpa_norm_fac[iz]/vth[iz])^2
-    end
+    # for iz ∈ 1:z.n
+    #     # densfac = the integral of the pdf over v-space, which should be unity,
+    #     # but may not be exactly unity due to quadrature errors
+    #     densfac = integrate_over_vspace(view(pdf,iz,:), vpa.wgts)
+    #     # pparfac = the integral of the pdf over v-space, weighted by m_s w_s^2 / vths^2,
+    #     # where w_s = vpa - upar_s;
+    #     # should be equal to 1/2, but may not be exactly 1/2 due to quadrature errors
+    #     @. vpa.scratch = vpa.grid^2 * pdf[iz,:] * (vpa_norm_fac[iz]/vth[iz])^2
+    #     pparfac = integrate_over_vspace(vpa.scratch, vpa.wgts)
+    #     # pparfac2 = the integral of the pdf over v-space, weighted by m_s w_s^2 (w_s^2 - vths^2 / 2) / vth^4
+    #     #@. vpa.scratch = vpa.grid^2 *(vpa.grid^2/pparfac - vth[iz]^2/densfac) * pdf[iz,:] * (vpa_norm_fac[iz]/vth[iz])^4
+    #     @. vpa.scratch = vpa.grid^2 *(vpa.grid^2/pparfac - 1.0/densfac) * pdf[iz,:] * (vpa_norm_fac[iz]/vth[iz])^4
+    #     pparfac2 = integrate_over_vspace(vpa.scratch, vpa.wgts)
+    #
+    #     #@. pdf[iz,:] = pdf[iz,:]/densfac + (0.5 - pparfac/densfac)/pparfac2*(vpa.grid^2/pparfac - vth[iz]^2/densfac)*pdf[iz,:]*(vpa_norm_fac[iz]/vth[iz])^2
+    #     @. pdf[iz,:] = pdf[iz,:]/densfac + (0.5 - pparfac/densfac)/pparfac2*(vpa.grid^2/pparfac - 1.0/densfac)*pdf[iz,:]*(vpa_norm_fac[iz]/vth[iz])^2
+    # end
     return nothing
 end
 function enforce_boundary_conditions!(f, z_bc, vpa_bc, vpa, z_adv::T1, vpa_adv::T2, composition) where {T1, T2}

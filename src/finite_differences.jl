@@ -64,7 +64,7 @@ function upwind_first_order!(df, f, del, adv_fac, bc, igrid, ielement)
 				tmp = f[n-1]
 			elseif bc == "constant"
 				tmp = f[1]
-			elseif bc == "zero"
+			elseif bc == "zero" || bc == "wall"
 				tmp = 0.0
 			end
 			#df[i] = (f[i]-tmp)/del[i]
@@ -79,7 +79,7 @@ function upwind_first_order!(df, f, del, adv_fac, bc, igrid, ielement)
 				tmp = f[2]
 			elseif bc == "constant"
 				tmp = f[n]
-			elseif bc == "zero"
+			elseif bc == "zero" || bc == "wall"
 				tmp = 0.0
 			end
 			#df[i] = (tmp-f[i])/del[1]
@@ -113,7 +113,7 @@ function upwind_second_order!(df, f, del, adv_fac, bc, igrid, ielement)
 				tmp1 = f[n-1]
 			elseif bc == "constant"
 				tmp1 = f[1]
-			elseif bc == "zero"
+			elseif bc == "zero" || bc == "wall"
 				tmp1 = 0.0
 			end
 			#df[i] = (3.0*f[i]-4.0*f[i-1]+tmp1)/(2.0*del[i])
@@ -130,7 +130,7 @@ function upwind_second_order!(df, f, del, adv_fac, bc, igrid, ielement)
 			elseif bc == "constant"
 				tmp2 = f[1]
 				tmp1 = tmp2
-			elseif bc == "zero"
+			elseif bc == "zero" || bc == "wall"
 				tmp2 = 0.0
 				tmp1 = tmp2
 			end
@@ -145,7 +145,7 @@ function upwind_second_order!(df, f, del, adv_fac, bc, igrid, ielement)
 				tmp1 = f[2]
 			elseif bc == "constant"
 				tmp1 = f[n]
-			elseif bc == "zero"
+			elseif bc == "zero" || bc == "wall"
 				tmp1 = 0.0
 			end
 			i = n-1
@@ -164,7 +164,7 @@ function upwind_second_order!(df, f, del, adv_fac, bc, igrid, ielement)
 			elseif bc == "constant"
 				tmp2 = f[n]
 				tmp1 = tmp2
-			elseif bc == "zero"
+			elseif bc == "zero" || bc == "wall"
 				tmp2 = 0.0
 				tmp1 = tmp2
 			end
@@ -188,10 +188,10 @@ function upwind_third_order!(df, f, del, adv_fac, bc, igrid, ielement)
 	@boundscheck n == length(adv_fac) || throw(BoundsError(adv_fac))
     #@inbounds @fastmath begin
         for i ∈ 3:n-2
-            if adv_fac[i] < 0
-				df[igrid[i],ielement[i]] =  (2*f[i+1]+3*f[i]-6*f[i-1]+f[i-2])/(6*del[i])
+			if adv_fac[i] < 0.0
+				df[igrid[i],ielement[i]] =  (2.0*f[i+1]+3.0*f[i]-6.0*f[i-1]+f[i-2])/(6.0*del[i])
             else
-				df[igrid[i],ielement[i]] = (-f[i+2]+6*f[i+1]-3*f[i]-2*f[i-1])/(6*del[i+1])
+				df[igrid[i],ielement[i]] = (-f[i+2]+6.0*f[i+1]-3.0*f[i]-2.0*f[i-1])/(6.0*del[i+1])
             end
         end
 		i = 2
@@ -200,12 +200,12 @@ function upwind_third_order!(df, f, del, adv_fac, bc, igrid, ielement)
 				tmp1 = f[n-1]
 			elseif bc == "constant"
 				tmp1 = f[1]
-			elseif bc == "zero"
+			elseif bc == "zero" || bc == "wall"
 				tmp1 = 0.0
 			end
 			df[igrid[i],ielement[i]] = (2.0*f[i+1]+3.0*f[i]-6.0*f[i-1]+tmp1)/(6.0*del[i])
 		else
-			df[igrid[i],ielement[i]] = (-f[i+2]+6*f[i+1]-3*f[i]-2*f[i-1])/(6*del[i+1])
+			df[igrid[i],ielement[i]] = (-f[i+2]+6.0*f[i+1]-3.0*f[i]-2.0*f[i-1])/(6.0*del[i+1])
 		end
 		i = 1
 		if bc == "periodic"
@@ -214,28 +214,28 @@ function upwind_third_order!(df, f, del, adv_fac, bc, igrid, ielement)
 		elseif bc == "constant"
 			tmp2 = f[1]
 			tmp1 = tmp2
-		elseif bc == "zero"
+		elseif bc == "zero" || bc == "wall"
 			tmp2 = 0.0
 			tmp1 = tmp2
 		end
 		if adv_fac[i] < 0
 			df[igrid[i],ielement[i]] = (2.0*f[i+1]+3.0*f[i]-6.0*tmp1+tmp2)/(6.0*del[i])
 		else
-			df[igrid[i],ielement[i]] = (-f[i+2]+6*f[i+1]-3*f[i]-2*tmp1)/(6*del[i+1])
+			df[igrid[i],ielement[i]] = (-f[i+2]+4.0*f[i+1]-3.0*f[i])/(2.0*del[i+1])
 		end
 		if adv_fac[n-1] > 0
 			if bc == "periodic"
 				tmp1 = f[2]
 			elseif bc == "constant"
 				tmp1 = f[n]
-			elseif bc == "zero"
+			elseif bc == "zero" || bc == "wall"
 				tmp1 = 0.0
 			end
 			i = n-1
-			df[igrid[i],ielement[i]] = (-tmp1+6*f[i+1]-3*f[i]-2*f[i-1])/(6*del[1])
+			df[igrid[i],ielement[i]] = (-tmp1+6.0*f[i+1]-3.0*f[i]-2.0*f[i-1])/(6.0*del[1])
 		else
 			i = n-1
-			df[igrid[i],ielement[i]] =  (2*f[i+1]+3*f[i]-6*f[i-1]+f[i-2])/(6*del[i])
+			df[igrid[i],ielement[i]] =  (2.0*f[i+1]+3.0*f[i]-6.0*f[i-1]+f[i-2])/(6.0*del[i])
 		end
 		if bc == "periodic"
 			tmp2 = f[3]
@@ -243,14 +243,14 @@ function upwind_third_order!(df, f, del, adv_fac, bc, igrid, ielement)
 		elseif bc == "constant"
 			tmp2 = f[n]
 			tmp1 = tmp2
-		elseif bc == "zero"
+		elseif bc == "zero" || bc == "wall"
 			tmp2 = 0.0
 			tmp1 = tmp2
 		end
 		if adv_fac[n] > 0
-			df[igrid[n],ielement[n]] = (-tmp2+6*tmp1-3*f[n]-2*f[n-1])/(6*del[1])
+			df[igrid[n],ielement[n]] = (-tmp2+6.0*tmp1-3.0*f[n]-2.0*f[n-1])/(6.0*del[1])
 		else
-			df[igrid[n],ielement[n]] =  (2*tmp1+3*f[n]-6*f[n-1]+f[n-2])/(6*del[n-1])
+			df[igrid[n],ielement[n]] =  (3.0*f[n]-4.0*f[n-1]+f[n-2])/(2.0*del[n-1])
 		end
 	#end
         # fill in points at start of elements, in case we are using more than one
@@ -287,7 +287,7 @@ function centered_second_order!(df::Array{mk_float,2}, f, del, bc, igrid, ieleme
 		i = n
 		ghost = f[n]
 		df[igrid[i],ielement[i]] = 0.5*(ghost-f[i-1])/del[n-1]
-	elseif bc == "zero"
+	elseif bc == "zero" || bc == "wall"
 		i = 1
 		df[igrid[i],ielement[i]] = 0.5*f[i+1]/del[i]
 		i = n
@@ -322,7 +322,7 @@ function centered_second_order!(df::Array{mk_float,1}, f, del, bc, igrid, ieleme
 		i = n
 		ghost = f[n]
 		df[i] = 0.5*(ghost-f[i-1])/del[n-1]
-	elseif bc == "zero"
+	elseif bc == "zero" || bc == "wall"
 		i = 1
 		df[i] = 0.5*f[i+1]/del[i]
 		i = n
@@ -363,7 +363,7 @@ function centered_fourth_order!(df::Array{mk_float,2}, f, del, bc, igrid, ieleme
 		df[igrid[i],ielement[i]] = (8.0*(ghost-f[i-1])+f[i-2]-ghost)/(12.0*del[i])
 		i = n-1
 		df[igrid[i],ielement[i]] = (8.0*(f[i+1]-f[i-1])+f[i-2]-ghost)/(12.0*del[i])
-	elseif bc == "zero"
+	elseif bc == "zero" || bc == "wall"
 		i = 1
 		df[igrid[i],ielement[i]] = (8.0*f[i+1]-f[i+2])/(12.0*del[i])
 		i = 2

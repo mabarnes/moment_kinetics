@@ -73,6 +73,9 @@ function setup_time_advance!(pdf, z, vpa, composition, drive_input, moments,
             else
                 advance_ionization = false
             end
+        else
+            advance_cx = false
+            advance_ionization = false
         end
         if moments.evolve_density
             advance_sources = true
@@ -551,7 +554,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, z_SL, vpa_
     # account for ionization collisions between ions and neutrals
     if advance.ionization_collisions
         ionization_collisions!(fvec_out.pdf, fvec_in, moments.evolve_density, n_ion_species,
-            composition.n_neutral_species, vpa.n, collisions.ionization, z.n, dt)
+            composition.n_neutral_species, vpa, collisions, z.n, dt)
     end
     if advance.continuity
         continuity_equation!(fvec_out.density, fvec_in, moments, z, vpa, dt, z_spectral)
