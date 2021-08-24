@@ -17,47 +17,52 @@ function vpa_advection!(f_out, fvec_in, ff, fields, moments, SL_vec, advect,
                         vpa_vec, z_vec, use_semi_lagrange, dt, t, vpa_spectral_vec,
                         z_spectral_vec, composition, CX_frequency, istage)
 
-	# only have a parallel acceleration term for neutrals if using the peculiar velocity
-	# wpar = vpar - upar as a variable; i.e., d(wpar)/dt /=0 for neutrals even though d(vpar)/dt = 0.
-	# define the number of evolved species accordingly
-	if moments.evolve_upar
-		nspecies_accelerated = composition.n_species
-	else
-		nspecies_accelerated = composition.n_ion_species
-	end
-	# calculate the advection speed corresponding to current f
-	update_speed_vpa!(advect, fields, fvec_in, moments, vpa_vec[1], z_vec[1],
- 	                  composition, CX_frequency, t, z_spectral_vec[1])
-        @timeit global_timer "vpa_advection" begin
-	@outerloop for is ∈ 1:nspecies_accelerated
-                ithread = threadid()
-                SL = SL_vec[ithread]
-                vpa = vpa_vec[ithread]
-                z = z_vec[ithread]
-                vpa_spectral = vpa_spectral_vec[ithread]
-                z_spectral = z_spectral_vec[ithread]
-		# update the upwind/downwind boundary indices and upwind_increment
-		# NB: not sure if this will work properly with SL method at the moment
-		# NB: if the speed is actually time-dependent
-		update_boundary_indices!(view(advect,:,is))
-		# if using interpolation-free Semi-Lagrange,
-		# follow characteristics backwards in time from level m+1 to level m
-		# to get departure points.  then find index of grid point nearest
-		# the departure point at time level m and use this to define
-		# an approximate characteristic
-		if use_semi_lagrange
-			for iz ∈ 1:z.n
-				find_approximate_characteristic!(SL[iz], advect[iz,is], vpa, dt)
-			end
-		end
-		for iz ∈ 1:z.n
-			@views advance_f_local!(f_out[:,iz,is], fvec_in.pdf[:,iz,is],
-				ff[:,iz,is], SL[iz], advect[iz,is], vpa, dt, istage, vpa_spectral,
-				use_semi_lagrange)
-		end
-		#@views enforce_vpa_boundary_condition!(f_out[:,:,is], vpa.bc, advect[:,is])
-	end
+    nz = z_vec[1].n
+    # only have a parallel acceleration term for neutrals if using the peculiar velocity
+    # wpar = vpar - upar as a variable; i.e., d(wpar)/dt /=0 for neutrals even though d(vpar)/dt = 0.
+    # define the number of evolved species accordingly
+    if moments.evolve_upar
+        nspecies_accelerated = composition.n_species
+    else
+        nspecies_accelerated = composition.n_ion_species
+    end
+    # calculate the advection speed corresponding to current f
+    update_speed_vpa!(advect, fields, fvec_in, moments, vpa_vec[1], z_vec[1],
+        composition, CX_frequency, t, z_spectral_vec[1])
+    for is ∈ 1:nspecies_accelerated
+        # update the upwind/downwind boundary indices and upwind_increment
+        # NB: not sure if this will work properly with SL method at the moment
+        # NB: if the speed is actually time-dependent
+        update_boundary_indices!(view(advect,:,is))
+    end
+    # if using interpolation-free Semi-Lagrange,
+    # follow characteristics backwards in time from level m+1 to level m
+    # to get departure points.  then find index of grid point nearest
+    # the departure point at time level m and use this to define
+    # an approximate characteristic
+    if use_semi_lagrange
+        for is ∈ 1:nspecies_accelerated
+            for iz ∈ 1:nz
+                find_approximate_characteristic!(SL[iz], advect[iz,is], vpa, dt)
+            end
         end
+    end
+    @timeit global_timer "vpa_advection" begin
+        @outerloop for is ∈ 1:nspecies_accelerated, iz ∈ 1:nz
+            ithread = threadid()
+            SL = SL_vec[ithread]
+            vpa = vpa_vec[ithread]
+            z = z_vec[ithread]
+            vpa_spectral = vpa_spectral_vec[ithread]
+            z_spectral = z_spectral_vec[ithread]
+            @views advance_f_local!(f_out[:,iz,is], fvec_in.pdf[:,iz,is],
+                                    ff[:,iz,is], SL[iz], advect[iz,is], vpa, dt,
+                                    istage, vpa_spectral, use_semi_lagrange)
+        end
+    end
+    #for is ∈ 1:nspecies_accelerated, iz ∈ 1:nz
+    #@views enforce_vpa_boundary_condition!(f_out[:,:,is], vpa.bc, advect[:,is])
+    #end
 end
 # calculate the advection speed in the z-direction at each grid point
 function update_speed_vpa!(advect, fields, fvec, moments, vpa, z, composition, CX_frequency, t, z_spectral)

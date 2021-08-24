@@ -13,54 +13,45 @@ using ..moment_kinetics: global_timer
 # do a single stage time advance (potentially as part of a multi-stage RK scheme)
 function z_advection!(f_out, fvec_in, ff, moments, SL_vec, advect, z_vec, vpa_vec,
                       use_semi_lagrange, dt, t, spectral_vec, n_species, istage)
-    @timeit global_timer "z_advection" begin
+    nvpa = vpa_vec[1].n
+    @timeit global_timer "z_advection pre-loop" begin
     @outerloop for is ∈ 1:n_species
         ithread = threadid()
-        SL = SL_vec[ithread]
         z = z_vec[ithread]
         vpa = vpa_vec[ithread]
-        spectral = spectral_vec[ithread]
         # get the updated speed along the z direction using the current f
         @views update_speed_z!(advect[:,is], fvec_in.upar[:,is], moments.vth[:,is],
                                moments.evolve_upar, moments.evolve_ppar, vpa, z, t)
         # update the upwind/downwind boundary indices and upwind_increment
         @views update_boundary_indices!(advect[:,is])
+    end
+    end
+    if use_semi_lagrange
         # if using interpolation-free Semi-Lagrange,
         # follow characteristics backwards in time from level m+1 to level m
         # to get departure points.  then find index of grid point nearest
         # the departure point at time level m and use this to define
         # an approximate characteristic
-        if use_semi_lagrange
-            for ivpa ∈ 1:vpa.n
-                find_approximate_characteristic!(SL[ivpa], advect[ivpa,is], z, dt)
-            end
+        @outerloop for is ∈ 1:n_species, ivpa ∈ 1:nvpa
+            find_approximate_characteristic!(SL[ivpa], advect[ivpa,is], z, dt)
         end
-        # # advance z-advection equation
-        # if moments.evolve_density
-        #     for ivpa ∈ 1:vpa.n
-        #         @. advect[ivpa,is].speed /= fvec_in.density[:,is]
-        #         @. advect[ivpa,is].modified_speed /= fvec_in.density[:,is]
-        #         @views advance_f_local!(f_out[:,ivpa,is], fvec_in.density[:,is] .* fvec_in.pdf[:,ivpa,is],
-        #             ff[:,ivpa,is], SL[ivpa], advect[ivpa,is], z, dt, istage, spectral, use_semi_lagrange)
-        #     end
-        # else
-        #     for ivpa ∈ 1:vpa.n
-        #         @views advance_f_local!(f_out[:,ivpa,is], fvec_in.pdf[:,ivpa,is],
-        #             ff[:,ivpa,is], SL[ivpa], advect[ivpa,is], z, dt, istage, spectral, use_semi_lagrange)
-        #     end
-        # end
-        # advance z-advection equation
-        for ivpa ∈ 1:vpa.n
-            @views adjust_advection_speed!(advect[ivpa,is].speed, advect[ivpa,is].modified_speed,
-                                           fvec_in.density[:,is], moments.vth[:,is],
-                                           moments.evolve_density, moments.evolve_ppar)
-            # take the normalized pdf contained in fvec_in.pdf and remove the normalization,
-            # returning the true (un-normalized) particle distribution function in z.scratch
-            @views unnormalize_pdf!(z.scratch, fvec_in.pdf[ivpa,:,is], fvec_in.density[:,is], moments.vth[:,is],
-                                    moments.evolve_density, moments.evolve_ppar)
-            @views advance_f_local!(f_out[ivpa,:,is], z.scratch, ff[ivpa,:,is], SL[ivpa], advect[ivpa,is],
-                                    z, dt, istage, spectral, use_semi_lagrange)
-        end
+    end
+    @timeit global_timer "z_advection" begin
+    @outerloop for is ∈ 1:n_species, ivpa ∈ 1:nvpa
+        ithread = threadid()
+        SL = SL_vec[ithread]
+        z = z_vec[ithread]
+        vpa = vpa_vec[ithread]
+        spectral = spectral_vec[ithread]
+        @views adjust_advection_speed!(advect[ivpa,is].speed, advect[ivpa,is].modified_speed,
+                                       fvec_in.density[:,is], moments.vth[:,is],
+                                       moments.evolve_density, moments.evolve_ppar)
+        # take the normalized pdf contained in fvec_in.pdf and remove the normalization,
+        # returning the true (un-normalized) particle distribution function in z.scratch
+        @views unnormalize_pdf!(z.scratch, fvec_in.pdf[ivpa,:,is], fvec_in.density[:,is], moments.vth[:,is],
+                                moments.evolve_density, moments.evolve_ppar)
+        @views advance_f_local!(f_out[ivpa,:,is], z.scratch, ff[ivpa,:,is], SL[ivpa], advect[ivpa,is],
+                                z, dt, istage, spectral, use_semi_lagrange)
     end
     end
 end
