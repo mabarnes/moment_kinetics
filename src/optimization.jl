@@ -18,6 +18,9 @@ export threadid
 using Polyester
 export Polyester
 
+using FLoops
+export FLoops
+
 """
 Macro to use for optimizing inner loops
 
@@ -44,9 +47,20 @@ macro innerloop(ex)
 end
 
 macro outerloop(ex)
-    #return esc( :( Base.Threads.@threads $ex ) )
-    return esc( :( Polyester.@batch $ex ) )
+    # Do-nothing
     #return esc( :( $ex ) )
+
+    # Threading from Julia Base
+    #return esc( :( Base.Threads.@threads $ex ) )
+
+    # Lightweight threads using Polyester.jl
+    #return esc( :( Polyester.@batch $ex ) )
+
+    # Parallelise nested loops using FLoops.jl
+    block = quote
+        FLoops.@floop FLoops.ThreadedEx() $ex
+    end
+    return esc(block)
 end
 
 end # optimization
