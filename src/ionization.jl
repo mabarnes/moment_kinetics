@@ -20,10 +20,10 @@ function ionization_collisions!(f_out, fvec_in, evolve_density, n_ion_species,
 			# with all of the neutral species
 			for isn ∈ 1:n_neutral_species
 				isp = isn + n_ion_species
-				for ivpa ∈ 1:vpa.n
-					for iz ∈ 1:nz
+				for iz ∈ 1:nz
+					for ivpa ∈ 1:vpa.n
 						#NB: used quasineutrality to replace electron density with ion density
-						f_out[iz,ivpa,is] += dt*collisions.ionization*fvec_in.pdf[iz,ivpa,isp]*fvec_in.density[iz,is]
+						f_out[ivpa,iz,is] += dt*collisions.ionization*fvec_in.pdf[ivpa,iz,isp]*fvec_in.density[iz,is]
 					end
 				end
 			end
@@ -34,9 +34,9 @@ function ionization_collisions!(f_out, fvec_in, evolve_density, n_ion_species,
 			# for each neutral species, obtain affect of ionization collisions
 			# with all of the ion species
 			for isp ∈ 1:n_ion_species
-				for ivpa ∈ 1:vpa.n
-					for iz ∈ 1:nz
-						f_out[iz,ivpa,is] -= dt*collisions.ionization*fvec_in.pdf[iz,ivpa,is]*fvec_in.density[iz,isp]
+				for iz ∈ 1:nz
+					for ivpa ∈ 1:vpa.n
+						f_out[ivpa,iz,is] -= dt*collisions.ionization*fvec_in.pdf[ivpa,iz,is]*fvec_in.density[iz,isp]
 					end
 				end
 			end
