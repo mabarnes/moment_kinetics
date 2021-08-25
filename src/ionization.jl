@@ -6,8 +6,7 @@ function ionization_collisions!(f_out, fvec_in, evolve_density, n_ion_species,
 	n_neutral_species, vpa, collisions, nz, dt)
 
     if evolve_density
-        println("Ionization collisions not currently supported for anything other than the standard drift kinetic equation: Aborting.")
-        exit()
+        error("Ionization collisions not currently supported for anything other than the standard drift kinetic equation: Aborting.")
 	elseif collisions.constant_ionization_rate
 		width = 0.5
 		for ivpa ∈ 1:vpa.n
