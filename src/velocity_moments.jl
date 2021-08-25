@@ -196,8 +196,9 @@ end
 function update_qpar_species!(qpar, scratch, ff, vpa, nz, vpanorm)
     @boundscheck nz == size(ff, 1) || throw(BoundsError(ff))
     @boundscheck nz == length(qpar) || throw(BoundsError(qpar))
+    scratch = similar(vpa.grid)
     @inbounds for iz ∈ 1:nz
-        @. scratch = ff[iz,:] * vpa.grid^3 * vpanorm[iz]^4
+        @views @. scratch = ff[iz,:] * vpa.grid^3 * vpanorm[iz]^4
         qpar[iz] = integrate_over_vspace(scratch, vpa.wgts)
     end
     return nothing

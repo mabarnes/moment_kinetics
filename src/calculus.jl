@@ -63,11 +63,11 @@ function elements_to_full_grid_interior_pts!(df1d, df2d, coord)
     # for efficiency, define ngm1 to be ngrid-1, as it will be used repeatedly
     ngm1 = coord.ngrid-1
     # treat the first element
-    @. df1d[2:ngm1] = df2d[2:ngm1,1]
+    df1d[2:ngm1] .= @view df2d[2:ngm1,1]
     # deal with any additional elements
     if coord.nelement > 1
         for ielem ∈ 2:coord.nelement
-            @. df1d[coord.imin[ielem]:coord.imax[ielem]-1] = df2d[2:ngm1,ielem]
+            @. df1d[coord.imin[ielem]:coord.imax[ielem]-1] = @view df2d[2:ngm1,ielem]
         end
     end
     return nothing
