@@ -4,14 +4,14 @@ export energy_equation!
 
 using ..calculus: derivative!
 
-function energy_equation!(ppar, fvec, moments, CX_frequency, z, dt, spectral, composition)
+function energy_equation!(ppar, fvec, moments, collisions, z, dt, spectral, composition)
     for is ∈ 1:composition.n_species
         @views energy_equation_noCX!(ppar[:,is], fvec.upar[:,is], fvec.ppar[:,is],
                                      moments.qpar[:,is], dt, z, spectral)
     end
     # add in contribution due to charge exchange
-    if composition.n_neutral_species > 0 && abs(CX_frequency) > 0.0
-        @views energy_equation_CX!(ppar, fvec.density, fvec.ppar, composition, CX_frequency, dt)
+    if composition.n_neutral_species > 0 && abs(collisions.charge_exchange) > 0.0
+        @views energy_equation_CX!(ppar, fvec.density, fvec.ppar, composition, collisions.charge_exchange, dt)
     end
 
 end
