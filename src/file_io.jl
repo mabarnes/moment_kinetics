@@ -42,8 +42,8 @@ struct netcdf_info{t_type, zvpast_type, zt_type, zst_type}
     thermal_speed::zst_type
 end
 # open the necessary output files
-function setup_file_io(output_dir, run_name, z, vpa, composition,
-                       charge_exchange_frequqency, evolve_ppar)
+function setup_file_io(output_dir, run_name, vpa, z, composition,
+                       collisions, evolve_ppar)
     # check to see if output_dir exists in the current directory
     # if not, create it
     isdir(output_dir) || mkdir(output_dir)
@@ -51,13 +51,13 @@ function setup_file_io(output_dir, run_name, z, vpa, composition,
     #ff_io = open_output_file(out_prefix, "f_vs_t")
     mom_io = open_output_file(out_prefix, "moments_vs_t")
     fields_io = open_output_file(out_prefix, "fields_vs_t")
-    cdf = setup_netcdf_io(out_prefix, z, vpa, composition, charge_exchange_frequqency,
+    cdf = setup_netcdf_io(out_prefix, z, vpa, composition, collisions,
                           evolve_ppar)
     #return ios(ff_io, mom_io, fields_io), cdf
     return ios(mom_io, fields_io), cdf
 end
 # setup file i/o for netcdf
-function setup_netcdf_io(prefix, z, vpa, composition, charge_exchange_frequency, evolve_ppar)
+function setup_netcdf_io(prefix, z, vpa, composition, collisions, evolve_ppar)
     # the netcdf file will be given by output_dir/run_name with .cdf appended
     filename = string(prefix,".cdf")
     # if a netcdf file with the requested name already exists, remove it
@@ -67,10 +67,10 @@ function setup_netcdf_io(prefix, z, vpa, composition, charge_exchange_frequency,
     # write a header to the NetCDF file
     fid.attrib["file_info"] = "This is a NetCDF file containing output data from the moment_kinetics code"
     ### define coordinate dimensions ###
-    # define the z dimension
-    defDim(fid, "nz", z.n)
     # define the vpa dimension
     defDim(fid, "nvpa", vpa.n)
+    # define the z dimension
+    defDim(fid, "nz", z.n)
     # define the species dimension
     defDim(fid, "n_species", composition.n_species)
     # define the ion species dimension
@@ -119,7 +119,7 @@ function setup_netcdf_io(prefix, z, vpa, composition, charge_exchange_frequency,
     dims = ()
     vartype = mk_float
     var = defVar(fid, varname, vartype, dims, attrib=attributes)
-    var[:] = charge_exchange_frequency
+    var[:] = collisions.charge_exchange
     # create and write the "evolve_ppar" variable to file
     varname = "evolve_ppar"
     attributes = Dict("description" => "flag indicating if the parallel pressure is separately evolved")
@@ -139,7 +139,7 @@ function setup_netcdf_io(prefix, z, vpa, composition, charge_exchange_frequency,
     varname = "f"
     attributes = Dict("description" => "distribution function")
     vartype = mk_float
-    dims = ("nz","nvpa","n_species","ntime")
+    dims = ("nvpa","nz","n_species","ntime")
     cdf_f = defVar(fid, varname, vartype, dims, attrib=attributes)
     # create variables that are floats with data in the z and time dimensions
     vartype = mk_float
@@ -197,7 +197,7 @@ function finish_file_io(io, cdf)
     close(cdf.fid)
     return nothing
 end
-function write_data_to_ascii(ff, moments, fields, z, vpa, t, n_species, io)
+function write_data_to_ascii(ff, moments, fields, vpa, z, t, n_species, io)
     #write_f_ascii(ff, z, vpa, t, io.ff)
     write_moments_ascii(moments, z, t, n_species, io.moments)
     write_fields_ascii(fields, z, t, io.fields)

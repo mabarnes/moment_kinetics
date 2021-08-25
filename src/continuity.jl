@@ -5,7 +5,7 @@ export continuity_equation!
 using ..calculus: derivative!
 
 # use the continuity equation dn/dt + d(n*upar)/dz to update the density n for all species
-function continuity_equation!(dens_out, fvec_in, moments, z, vpa, dt, spectral)
+function continuity_equation!(dens_out, fvec_in, moments, vpa, z, dt, spectral)
     # use the continuity equation dn/dt + d(n*upar)/dz to update the density n
     # for each species
     n_species = size(dens_out,2)

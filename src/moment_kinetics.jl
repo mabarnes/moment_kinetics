@@ -7,6 +7,7 @@ export run_moment_kinetics
 # be defined
 include("type_definitions.jl")
 include("array_allocation.jl")
+include("interpolation.jl")
 include("clenshaw_curtis.jl")
 include("chebyshev.jl")
 include("finite_differences.jl")
@@ -62,31 +63,31 @@ function run_moment_kinetics(to, input_dict=Dict())
     vpa = define_coordinate(vpa_input)
     # initialize f(z,vpa) and the lowest three v-space moments (density(z), upar(z) and ppar(z)),
     # each of which may be evolved separately depending on input choices.
-    pdf, moments = init_pdf_and_moments(z, vpa, composition, species, t_input.n_rk_stages, evolve_moments)
+    pdf, moments = init_pdf_and_moments(vpa, z, composition, species, t_input.n_rk_stages, evolve_moments)
     # initialize time variable
     code_time = 0.
     # create arrays and do other work needed to setup
     # the main time advance loop -- including normalisation of f by density if requested
-    z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
-        z_SL, vpa_SL, scratch, advance = setup_time_advance!(pdf, z, vpa, composition,
+    vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
+        vpa_SL, z_SL, scratch, advance = setup_time_advance!(pdf, vpa, z, composition,
         drive_input, moments, t_input, collisions, species)
     # setup i/o
-    io, cdf = setup_file_io(output_dir, run_name, z, vpa, composition, collisions.charge_exchange,
+    io, cdf = setup_file_io(output_dir, run_name, vpa, z, composition, collisions,
                             moments.evolve_ppar)
     # write initial data to ascii files
-    write_data_to_ascii(pdf.unnorm, moments, fields, z, vpa, code_time, composition.n_species, io)
+    write_data_to_ascii(pdf.unnorm, moments, fields, vpa, z, code_time, composition.n_species, io)
     # write initial data to binary file (netcdf)
     write_data_to_binary(pdf.unnorm, moments, fields, code_time, composition.n_species, cdf, 1)
     # solve the 1+1D kinetic equation to advance f in time by nstep time steps
     if run_type == performance_test
         @timeit to "time_advance" time_advance!(pdf, scratch, code_time, t_input,
-            z, vpa, z_spectral, vpa_spectral, moments, fields,
-            z_advect, vpa_advect, z_SL, vpa_SL, composition, collisions,
+            vpa, z, vpa_spectral, z_spectral, moments, fields,
+            vpa_advect, z_advect, vpa_SL, z_SL, composition, collisions,
             advance, io, cdf)
     else
-        time_advance!(pdf, scratch, code_time, t_input, z, vpa,
-            z_spectral, vpa_spectral, moments, fields,
-            z_advect, vpa_advect, z_SL, vpa_SL, composition, collisions,
+        time_advance!(pdf, scratch, code_time, t_input, vpa, z,
+            vpa_spectral, z_spectral, moments, fields,
+            vpa_advect, z_advect, vpa_SL, z_SL, composition, collisions,
             advance, io, cdf)
     end
     # finish i/o

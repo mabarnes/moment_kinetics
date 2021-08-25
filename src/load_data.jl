@@ -52,7 +52,7 @@ function load_coordinate_data(fid)
     time = cdfvar.var[:]
     println("done.")
 
-    return nz, z, z_wgts, Lz, nvpa, vpa, vpa_wgts, ntime, time
+    return nvpa, vpa, vpa_wgts, nz, z, z_wgts, Lz, ntime, time
 end
 
 function load_fields_data(fid)

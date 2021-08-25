@@ -95,20 +95,20 @@ function update_moments!(moments, ff, vpa, nz)
     @boundscheck n_species == size(moments.dens,2) || throw(BoundsError(moments))
     for is ∈ 1:n_species
         if moments.dens_updated[is] == false
-            @views update_density_species!(moments.dens[:,is], vpa.scratch, ff[:,:,is], vpa, nz)
+            @views update_density_species!(moments.dens[:,is], ff[:,:,is], vpa, nz)
             moments.dens_updated[is] = true
         end
         if moments.upar_updated[is] == false
-            @views update_upar_species!(moments.upar[:,is], vpa.scratch, ff[:,:,is], vpa, nz)
+            @views update_upar_species!(moments.upar[:,is], ff[:,:,is], vpa, nz)
             moments.upar_updated[is] = true
         end
         if moments.ppar_updated[is] == false
-            @views update_ppar_species!(moments.ppar[:,is], vpa.scratch, ff[:,:,is], vpa, nz)
+            @views update_ppar_species!(moments.ppar[:,is], ff[:,:,is], vpa, nz)
             moments.ppar_updated[is] = true
         end
         @. moments.vth = sqrt(2*moments.ppar/moments.dens)
         if moments.qpar_updated[is] == false
-            @views update_qpar_species!(moments.qpar[:,is], vpa.scratch, ff[:,:,is], vpa, nz, moments.vpa_norm_fac[:,is])
+            @views update_qpar_species!(moments.qpar[:,is], ff[:,:,is], vpa, nz, moments.vpa_norm_fac[:,is])
             moments.qpar_updated[is] = true
         end
     end
@@ -121,18 +121,17 @@ function update_density!(dens, dens_updated, pdf, vpa, nz)
     @boundscheck n_species == size(dens,2) || throw(BoundsError(dens))
     for is ∈ 1:n_species
         if dens_updated[is] == false
-            @views update_density_species!(dens[:,is], vpa.scratch, pdf[:,:,is], vpa, nz)
+            @views update_density_species!(dens[:,is], pdf[:,:,is], vpa, nz)
             dens_updated[is] = true
         end
     end
 end
 # calculate the updated density (dens) for a given species
-function update_density_species!(dens, scratch, ff, vpa, nz)
-    @boundscheck nz == size(ff, 1) || throw(BoundsError(ff))
+function update_density_species!(dens, ff, vpa, nz)
+    @boundscheck nz == size(ff, 2) || throw(BoundsError(ff))
     @boundscheck nz == length(dens) || throw(BoundsError(dens))
     @inbounds for iz ∈ 1:nz
-        @views @. scratch = ff[iz,:]
-        dens[iz] = integrate_over_vspace(scratch, vpa.wgts)
+        dens[iz] = integrate_over_vspace(@view(ff[:,iz]), vpa.wgts)
     end
     return nothing
 end
@@ -143,18 +142,17 @@ function update_upar!(upar, upar_updated, pdf, vpa, nz)
     @boundscheck n_species == size(upar,2) || throw(BoundsError(upar))
     for is ∈ 1:n_species
         if upar_updated[is] == false
-            @views update_upar_species!(upar[:,is], vpa.scratch, pdf[:,:,is], vpa, nz)
+            @views update_upar_species!(upar[:,is], pdf[:,:,is], vpa, nz)
             upar_updated[is] = true
         end
     end
 end
 # calculate the updated parallel flow (upar) for a given species
-function update_upar_species!(upar, scratch, ff, vpa, nz)
-    @boundscheck nz == size(ff, 1) || throw(BoundsError(ff))
+function update_upar_species!(upar, ff, vpa, nz)
+    @boundscheck nz == size(ff, 2) || throw(BoundsError(ff))
     @boundscheck nz == length(upar) || throw(BoundsError(upar))
     @inbounds for iz ∈ 1:nz
-        @views @. scratch = ff[iz,:] * vpa.grid
-        upar[iz] = integrate_over_vspace(scratch, vpa.wgts)
+        upar[iz] = integrate_over_vspace(@view(ff[:,iz]), vpa.grid, vpa.wgts)
     end
     return nothing
 end
@@ -165,19 +163,17 @@ function update_ppar!(ppar, ppar_updated, pdf, vpa, nz)
     @boundscheck n_species == size(ppar,2) || throw(BoundsError(ppar))
     for is ∈ 1:n_species
         if ppar_updated[is] == false
-            @views update_ppar_species!(ppar[:,is], vpa.scratch, pdf[:,:,is], vpa, nz)
+            @views update_ppar_species!(ppar[:,is], pdf[:,:,is], vpa, nz)
             ppar_updated[is] = true
         end
     end
 end
 # calculate the updated parallel pressure (ppar) for a given species
-function update_ppar_species!(ppar, scratch, ff, vpa, nz)
-    @boundscheck nz == size(ff, 1) || throw(BoundsError(ff))
+function update_ppar_species!(ppar, ff, vpa, nz)
+    @boundscheck nz == size(ff, 2) || throw(BoundsError(ff))
     @boundscheck nz == length(ppar) || throw(BoundsError(ppar))
     @inbounds for iz ∈ 1:nz
-        #@views @. scratch = ff[iz,:] * 2.0*vpa.grid^2/3.0
-        @views @. scratch = ff[iz,:] * vpa.grid^2
-        ppar[iz] = integrate_over_vspace(scratch, vpa.wgts)
+        ppar[iz] = integrate_over_vspace(@view(ff[:,iz]), vpa.grid, 2, vpa.wgts)
     end
     return nothing
 end
@@ -185,27 +181,26 @@ end
 # the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
 function update_qpar!(qpar, qpar_updated, pdf, vpa, nz, vpanorm)
     n_species = size(pdf,3)
-    @boundscheck n_species == size(qpar,2) || throw(BoundsError(ppar))
+    @boundscheck n_species == size(qpar,2) || throw(BoundsError(qpar))
     for is ∈ 1:n_species
         if qpar_updated[is] == false
-            @views update_qpar_species!(qpar[:,is], vpa.scratch, pdf[:,:,is], vpa, nz, vpanorm[:,is])
+            @views update_qpar_species!(qpar[:,is], pdf[:,:,is], vpa, nz, vpanorm[:,is])
             qpar_updated[is] = true
         end
     end
 end
 # calculate the updated parallel heat flux (qpar) for a given species
-function update_qpar_species!(qpar, scratch, ff, vpa, nz, vpanorm)
-    @boundscheck nz == size(ff, 1) || throw(BoundsError(ff))
+function update_qpar_species!(qpar, ff, vpa, nz, vpanorm)
+    @boundscheck nz == size(ff, 2) || throw(BoundsError(ff))
     @boundscheck nz == length(qpar) || throw(BoundsError(qpar))
     @inbounds for iz ∈ 1:nz
-        @. scratch = ff[iz,:] * vpa.grid^3 * vpanorm[iz]^4
-        qpar[iz] = integrate_over_vspace(scratch, vpa.wgts)
+        qpar[iz] = integrate_over_vspace(@view(ff[:,iz]), vpa.grid, 3, vpa.wgts) * vpanorm[iz]^4
     end
     return nothing
 end
 # computes the integral over vpa of the integrand, using the input vpa_wgts
-function integrate_over_vspace(integrand, vpa_wgts)
-    return integral(integrand, vpa_wgts)/sqrt(pi)
+function integrate_over_vspace(args...)
+    return integral(args...)/sqrt(pi)
 end
 # computes the integral over vpa >= 0 of the integrand, using the input vpa_wgts
 # this could be made more efficient for the case that dz/dt = vpa is time-independent,
@@ -287,7 +282,7 @@ function integrate_over_negative_vpa(integrand, dzdt, vpa_wgts, wgts_mod)
     end
     return vpa_integral
 end
-function enforce_moment_constraints!(fvec_new, fvec_old, z, vpa, moments)
+function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, moments)
     #global @. dens_hist += fvec_old.density
     #global n_hist += 1
     for is ∈ 1:size(fvec_new.density,2)
@@ -296,34 +291,35 @@ function enforce_moment_constraints!(fvec_new, fvec_old, z, vpa, moments)
         #@views avgdens_ratio = integral(fvec_new.density[:,is], z.wgts)/integral(fvec_old.density[:,is], z.wgts)
         @views avgdens_ratio = integral(fvec_old.density[:,is] .- fvec_new.density[:,is], z.wgts)/integral(fvec_old.density[:,is], z.wgts)
         for iz ∈ 1:size(fvec_new.density,1)
+            # Create views once to save overhead
+            fnew_view = @view(fvec_new.pdf[:,iz,is])
+            fold_view = @view(fvec_old.pdf[:,iz,is])
+
             # first calculate all of the integrals involving the updated pdf fvec_new.pdf
-            @. vpa.scratch = fvec_new.pdf[iz,:,is]
-            density_integral = integrate_over_vspace(vpa.scratch, vpa.wgts)
+            density_integral = integrate_over_vspace(fnew_view, vpa.wgts)
             if moments.evolve_upar
-                @. vpa.scratch = fvec_new.pdf[iz,:,is] * vpa.grid
-                upar_integral = integrate_over_vspace(vpa.scratch, vpa.wgts)
+                upar_integral = integrate_over_vspace(fnew_view, vpa.grid, vpa.wgts)
             end
             if moments.evolve_ppar
-                @. vpa.scratch = fvec_new.pdf[iz,:,is] * vpa.grid^2
-                ppar_integral = integrate_over_vspace(vpa.scratch, vpa.wgts) - 0.5*density_integral
+                ppar_integral = integrate_over_vspace(fnew_view, vpa.grid, 2, vpa.wgts) - 0.5*density_integral
             end
             # update the pdf to account for the density-conserving correction
-            @. fvec_new.pdf[iz,:,is] += fvec_old.pdf[iz,:,is] * (1.0 - density_integral)
+            @. fnew_view += fold_view * (1.0 - density_integral)
             if moments.evolve_upar
                 # next form the even part of the old distribution function that is needed
                 # to ensure momentum and energy conservation
-                @. vpa.scratch = fvec_old.pdf[iz,:,is]
+                @. vpa.scratch = fold_view
                 reverse!(vpa.scratch)
-                @. vpa.scratch = 0.5*(vpa.scratch + fvec_old.pdf[iz,:,is])
+                @. vpa.scratch = 0.5*(vpa.scratch + fold_view)
                 # calculate the integrals involving this even pdf
-                upar_integral /= integrate_over_vspace(vpa.scratch .* vpa.grid.^2, vpa.wgts)
+                vpa2_moment = integrate_over_vspace(vpa.scratch, vpa.grid, 2, vpa.wgts)
+                upar_integral /= vpa2_moment
                 # update the pdf to account for the momentum-conserving correction
-                @. fvec_new.pdf[iz,:,is] -= vpa.scratch * vpa.grid * upar_integral
+                @. fnew_view -= vpa.scratch * vpa.grid * upar_integral
                 if moments.evolve_ppar
-                    pptmp = ppar_integral
-                    ppar_integral /= integrate_over_vspace(vpa.grid.^2 .* vpa.scratch .* (vpa.grid.^2 .- 0.5), vpa.wgts)
+                    ppar_integral /= integrate_over_vspace(vpa.scratch, vpa.grid, 4, vpa.wgts) - 0.5 * vpa2_moment
                     # update the pdf to account for the energy-conserving correction
-                    @. fvec_new.pdf[iz,:,is] -= vpa.scratch * (vpa.grid^2 - 0.5) * ppar_integral
+                    @. fnew_view -= vpa.scratch * (vpa.grid^2 - 0.5) * ppar_integral
                 end
             end
             fvec_new.density[iz,is] += fvec_old.density[iz,is] * avgdens_ratio
@@ -339,17 +335,18 @@ function enforce_moment_constraints!(fvec_new, fvec_old, z, vpa, moments)
     # update the parallel heat flux
     # NB: no longer need fvec_old.pdf so can use for temporary storage of un-normalised pdf
     if moments.evolve_ppar
-        for ivpa ∈ 1:vpa.n
-            @. fvec_old.pdf[:,ivpa,:] = fvec_new.pdf[:,ivpa,:] * fvec_new.density / moments.vth
+        @. fvec_old.temp_z_s = fvec_new.density / moments.vth
+        for i ∈ CartesianIndices(fvec_old.pdf)
+            fvec_old.pdf[i] = fvec_new.pdf[i] * fvec_old.temp_z_s[i[2],i[3]]
         end
     elseif moments.evolve_density
-        for ivpa ∈ 1:vpa.n
-            @. fvec_old.pdf[:,ivpa,:] = fvec_new.pdf[:,ivpa,:] * fvec_new.density
+        for i ∈ CartesianIndices(fvec_old.pdf)
+            fvec_old.pdf[i] = fvec_new.pdf[i] * fvec_new.density[i[2],i[3]]
         end
     else
         @. fvec_old.pdf = fvec_new.pdf
     end
-    @views update_qpar!(moments.qpar, moments.qpar_updated, fvec_old.pdf, vpa, z.n, moments.vpa_norm_fac)
+    update_qpar!(moments.qpar, moments.qpar_updated, fvec_old.pdf, vpa, z.n, moments.vpa_norm_fac)
 end
 function reset_moments_status!(moments)
     if moments.evolve_density == false

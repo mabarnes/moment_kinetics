@@ -91,7 +91,12 @@ mutable struct initial_condition_input_mutable
     width::mk_float
     # inputs for "sinusoid" initial condition
     wavenumber::mk_int
-    amplitude::mk_float
+    density_amplitude::mk_float
+    density_phase::mk_float
+    upar_amplitude::mk_float
+    upar_phase::mk_float
+    temperature_amplitude::mk_float
+    temperature_phase::mk_float
     # inputs for "monomial" initial condition
     monomial_degree::mk_int
 end
@@ -102,7 +107,12 @@ struct initial_condition_input
     width::mk_float
     # inputs for "sinusoid" initial condition
     wavenumber::mk_int
-    amplitude::mk_float
+    density_amplitude::mk_float
+    density_phase::mk_float
+    upar_amplitude::mk_float
+    upar_phase::mk_float
+    temperature_amplitude::mk_float
+    temperature_phase::mk_float
     # inputs for "monomial" initial condition
     monomial_degree::mk_int
 end
@@ -219,10 +229,10 @@ struct pp_input
     # itime_max is the final time index at which to end animations
     # if itime_max < 0, the value used will be the total number of time slices
     itime_max::mk_int
-    # iz0 is the iz index used when plotting data at a single z location
-    iz0::mk_int
     # ivpa0 is the ivpa index used when plotting data at a single vpa location
     ivpa0::mk_int
+    # iz0 is the iz index used when plotting data at a single z location
+    iz0::mk_int
 end
 
 end

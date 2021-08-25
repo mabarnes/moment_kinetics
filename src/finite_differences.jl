@@ -2,7 +2,28 @@ module finite_differences
 
 export derivative_finite_difference!
 
+using Interpolations
+
 using ..type_definitions: mk_float
+import ..interpolation: interpolate_to_grid_1d
+
+function fd_check_option(option, ngrid)
+    if option == "second_order_upwind"
+        if ngrid < 3
+            error("ngrid < 3 incompatible with 2rd order upwind differences.")
+        end
+    elseif option == "third_order_upwind"
+        if ngrid < 4
+            error("ngrid < 4 incompatible with 3rd order upwind differences.")
+        end
+    elseif option == "fourth_order_centered"
+        if ngrid < 3
+            error("ngrid < 3 incompatible with 4th order centered differences.")
+        end
+    elseif ! option in ("first_order_upwind", "second_order_centered")
+        error("finite difference option '$option' is not recognised")
+    end
+end
 
 function derivative_finite_difference!(df, f, del, adv_fac, bc, fd_option, igrid, ielement)
 	if fd_option == "second_order_upwind"
@@ -13,6 +34,8 @@ function derivative_finite_difference!(df, f, del, adv_fac, bc, fd_option, igrid
 		upwind_fourth_order!(df, f, del, bc, igrid, ielement)
 	elseif fd_option == "second_order_centered"
 		centered_second_order!(df, f, del, bc, igrid, ielement)
+	elseif fd_option == "fourth_order_centered"
+		centered_fourth_order!(df, f, del, bc, igrid, ielement)
 	elseif fd_option == "first_order_upwind"
 		upwind_first_order!(df, f, del, adv_fac, bc, igrid, ielement)
 	end
@@ -379,5 +402,33 @@ function centered_fourth_order!(df::Array{mk_float,2}, f, del, bc, igrid, ieleme
         end
 end
 
+"""
+Interpolation from a regular grid to a 1d grid with arbitrary spacing
+
+Arguments
+---------
+new_grid : Array{mk_float, 1}
+    Grid of points to interpolate `coord` to
+f : Array{mk_float}
+    Field to be interpolated
+coord : coordinate
+    `coordinate` struct giving the coordinate along which f varies
+not_spectral : Bool
+    A Bool argument here indicates that the coordinate is not spectral-element
+    discretized, i.e. it is on a uniform ('finite difference') grid.
+
+Returns
+-------
+result : Array
+    Array with the values of `f` interpolated to the points in `new_grid`.
+"""
+function interpolate_to_grid_1d(new_grid, f, coord, not_spectral::Bool)
+    # Convert coord to a range, assuming it is uniformly spaced
+    x = coord.grid
+    x_range = range(x[begin], x[end], length=size(x)[1])
+    unscaled = interpolate(f, BSpline(Cubic(Periodic(OnCell()))))
+    interpolation_function = scale(unscaled, x_range)
+    return interpolation_function(new_grid)
+end
 
 end

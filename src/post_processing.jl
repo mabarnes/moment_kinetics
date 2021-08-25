@@ -28,9 +28,9 @@ function analyze_and_plot_data(path)
     # open the netcdf file and give it the handle 'fid'
     fid = open_netcdf_file(run_name)
     # load space-time coordinate data
-    nz, z, z_wgts, Lz, nvpa, vpa, vpa_wgts, ntime, time = load_coordinate_data(fid)
+    nvpa, vpa, vpa_wgts, nz, z, z_wgts, Lz, ntime, time = load_coordinate_data(fid)
     # initialise the post-processing input options
-    nwrite_movie, itime_min, itime_max, iz0, ivpa0 = init_postprocessing_options(pp, nz, nvpa, ntime)
+    nwrite_movie, itime_min, itime_max, ivpa0, iz0 = init_postprocessing_options(pp, nvpa, nz, ntime)
     # load fields data
     phi = load_fields_data(fid)
     # analyze the fields data
@@ -62,8 +62,8 @@ function analyze_and_plot_data(path)
     ff = load_pdf_data(fid)
     # analyze the pdf data
     f_fldline_avg, delta_f, dens_moment, upar_moment, ppar_moment =
-        analyze_pdf_data(ff, vpa, nz, nvpa, n_species, ntime, z_wgts, Lz, vpa_wgts,
-                         thermal_speed, evolve_ppar)
+        analyze_pdf_data(ff, vpa, nvpa, nz, n_species, ntime, vpa_wgts, z_wgts,
+                         Lz, thermal_speed, evolve_ppar)
 
     println("Plotting distribution function data...")
     cmlog(cmlin::ColorGradient) = RGB[cmlin[x] for x=LinRange(0,1,30)]
@@ -97,20 +97,20 @@ function analyze_and_plot_data(path)
         savefig(outfile)
         #fmin = minimum(ff[:,:,is,:])
         #fmax = maximum(ff[:,:,is,:])
-        if pp.animate_f_vs_z_vpa
+        if pp.animate_f_vs_vpa_z
             # make a gif animation of ln f(vpa,z,t)
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
                 #heatmap(vpa, z, log.(abs.(ff[:,:,i])), xlabel="vpa", ylabel="z", clims = (fmin,fmax), c = :deep)
-                @views heatmap(vpa, z, log.(abs.(ff[:,:,is,i])), xlabel="vpa", ylabel="z", fillcolor = logdeep)
+                @views heatmap(vpa, z, log.(abs.(ff[:,:,is,i])), xlabel="z", ylabel="vpa", fillcolor = logdeep)
             end
-            outfile = string(run_name, "_logf_vs_z_vpa", spec_string, ".gif")
+            outfile = string(run_name, "_logf_vs_vpa_z", spec_string, ".gif")
             gif(anim, outfile, fps=5)
             # make a gif animation of f(vpa,z,t)
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
                 #heatmap(vpa, z, log.(abs.(ff[:,:,i])), xlabel="vpa", ylabel="z", clims = (fmin,fmax), c = :deep)
-                @views heatmap(vpa, z, ff[:,:,is,i], xlabel="vpa", ylabel="z", c = :deep, interepolation = :cubic)
+                @views heatmap(vpa, z, ff[:,:,is,i], xlabel="z", ylabel="vpa", c = :deep, interpolation = :cubic)
             end
-            outfile = string(run_name, "_f_vs_z_vpa", spec_string, ".gif")
+            outfile = string(run_name, "_f_vs_vpa_z", spec_string, ".gif")
             gif(anim, outfile, fps=5)
             # make pdf of f(vpa,z,t_final) for each species
             str = string("spec ", string(is), " pdf")
@@ -118,37 +118,37 @@ function analyze_and_plot_data(path)
             outfile = string(run_name, "_f_vs_z_vpa_final", spec_string, ".pdf")
             savefig(outfile)
         end
-        if pp.animate_deltaf_vs_z_vpa
+        if pp.animate_deltaf_vs_vpa_z
             # make a gif animation of δf(vpa,z,t)
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
                 @views heatmap(vpa, z, delta_f[:,:,is,i], xlabel="vpa", ylabel="z", c = :deep, interpolation = :cubic)
             end
-            outfile = string(run_name, "_deltaf_vs_z_vpa", spec_string, ".gif")
+            outfile = string(run_name, "_deltaf_vs_vpa_z", spec_string, ".gif")
             gif(anim, outfile, fps=5)
         end
-        if pp.animate_f_vs_z_vpa0
+        if pp.animate_f_vs_vpa_z0
             fmin = minimum(ff[:,ivpa0,is,:])
             fmax = maximum(ff[:,ivpa0,is,:])
             # make a gif animation of f(vpa0,z,t)
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-                @views plot(z, ff[:,ivpa0,is,i], ylims = (fmin,fmax))
+                @views plot(z, ff[ivpa0,:,is,i], ylims = (fmin,fmax))
             end
             outfile = string(run_name, "_f_vs_z", spec_string, ".gif")
             gif(anim, outfile, fps=5)
         end
-        if pp.animate_deltaf_vs_z_vpa0
-            fmin = minimum(delta_f[:,ivpa0,is,:])
-            fmax = maximum(delta_f[:,ivpa0,is,:])
+        if pp.animate_deltaf_vs_vpa_z0
+            fmin = minimum(delta_f[ivpa0,:,is,:])
+            fmax = maximum(delta_f[ivpa0,:,is,:])
             # make a gif animation of f(vpa0,z,t)
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-                @views plot(z, delta_f[:,ivpa0,is,i], ylims = (fmin,fmax))
+                @views plot(z, delta_f[ivpa0,:,is,i], ylims = (fmin,fmax))
             end
             outfile = string(run_name, "_deltaf_vs_z", spec_string, ".gif")
             gif(anim, outfile, fps=5)
         end
         if pp.animate_f_vs_z0_vpa
-            fmin = minimum(ff[iz0,:,is,:])
-            fmax = maximum(ff[iz0,:,is,:])
+            fmin = minimum(ff[:,iz0,is,:])
+            fmax = maximum(ff[:,iz0,is,:])
 
             # if is == 1
             #     tmp = copy(ff)
@@ -175,17 +175,17 @@ function analyze_and_plot_data(path)
             # make a gif animation of f(vpa,z0,t)
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
                 #@views plot(vpa, ff[iz0,:,is,i], ylims = (fmin,fmax))
-                @views plot(vpa, ff[iz0,:,is,i])
+                @views plot(vpa, ff[:,iz0,is,i])
             end
             outfile = string(run_name, "_f_vs_vpa", spec_string, ".gif")
             gif(anim, outfile, fps=5)
         end
         if pp.animate_deltaf_vs_z0_vpa
-            fmin = minimum(delta_f[iz0,:,is,:])
-            fmax = maximum(delta_f[iz0,:,is,:])
+            fmin = minimum(delta_f[:,iz0,is,:])
+            fmax = maximum(delta_f[:,iz0,is,:])
             # make a gif animation of f(vpa,z0,t)
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-                @views plot(vpa, delta_f[iz0,:,is,i], ylims = (fmin,fmax))
+                @views plot(vpa, delta_f[:,iz0,is,i], ylims = (fmin,fmax))
             end
             outfile = string(run_name, "_deltaf_vs_vpa", spec_string, ".gif")
             gif(anim, outfile, fps=5)
@@ -196,7 +196,7 @@ function analyze_and_plot_data(path)
     close(fid)
 
 end
-function init_postprocessing_options(pp, nz, nvpa, ntime)
+function init_postprocessing_options(pp, nvpa, nz, ntime)
     print("Initializing the post-processing input options...")
     # nwrite_movie is the stride used when making animations
     nwrite_movie = pp.nwrite_movie
@@ -228,7 +228,7 @@ function init_postprocessing_options(pp, nz, nvpa, ntime)
         ivpa0 = cld(nvpa,3)
     end
     println("done.")
-    return nwrite_movie, itime_min, itime_max, iz0, ivpa0
+    return nwrite_movie, itime_min, itime_max, ivpa0, iz0
 end
 function calculate_and_write_frequencies(fid, run_name, ntime, time, z, itime_min,
                                          itime_max, iz0, delta_phi, pp)
