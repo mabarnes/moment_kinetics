@@ -244,7 +244,7 @@ function upwind_third_order!(df, f, del, adv_fac, bc, igrid, ielement)
 		if adv_fac[i] < 0
 			df[igrid[i],ielement[i]] = (2.0*f[i+1]+3.0*f[i]-6.0*tmp1+tmp2)/(6.0*del[i])
 		else
-			df[igrid[i],ielement[i]] = (-f[i+2]+4.0*f[i+1]-3.0*f[i])/(2.0*del[i+1])
+			df[igrid[i],ielement[i]] = (-f[i+2]+6.0*f[i+1]-3.0*f[i]-2.0*tmp1)/(6.0*del[i+1])
 		end
 		if adv_fac[n-1] > 0
 			if bc == "periodic"
@@ -273,7 +273,7 @@ function upwind_third_order!(df, f, del, adv_fac, bc, igrid, ielement)
 		if adv_fac[n] > 0
 			df[igrid[n],ielement[n]] = (-tmp2+6.0*tmp1-3.0*f[n]-2.0*f[n-1])/(6.0*del[1])
 		else
-			df[igrid[n],ielement[n]] =  (3.0*f[n]-4.0*f[n-1]+f[n-2])/(2.0*del[n-1])
+			df[igrid[n],ielement[n]] =  (2.0*tmp1+3.0*f[n]-6.0*f[n-1]+f[n-2])/(6.0*del[n-1])
 		end
 	#end
         # fill in points at start of elements, in case we are using more than one
