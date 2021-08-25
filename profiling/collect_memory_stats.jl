@@ -7,10 +7,9 @@ end
 
 const context = 2
 
-# Get the path to a module, as suggested here:
+# Use DEPOT path to get the path julia base/stdlib and to installed packages,
+# as suggested here:
 # https://discourse.julialang.org/t/get-path-to-julia-install/65315
-julia_dir = normpath(joinpath(Sys.BINDIR, "..", "share", "julia"))
-
 results = analyze_malloc([joinpath("..", "src"); [x for x in DEPOT_PATH if isdir(x)]])
 n_results = length(results)
 

@@ -7,7 +7,7 @@ using ..calculus: derivative!
 # use the force balance equation d(nu)/dt + d(ppar + n*upar*upar)/dz =
 # -(dens/2)*dphi/dz + R*dens_i*dens_n*(upar_n-upar_i)
 # to update the parallel particle flux dens*upar for each species
-function force_balance!(pflx, fvec, fields, CX_frequency, z, vpa, dt, spectral, composition)
+function force_balance!(pflx, fvec, fields, CX_frequency, vpa, z, dt, spectral, composition)
     # account for momentum flux contribution to force balance
     for is ∈ 1:composition.n_species
         @views force_balance_flux_species!(pflx[:,is], fvec.density[:,is], fvec.upar[:,is], fvec.ppar[:,is], z, dt, spectral)
@@ -46,21 +46,19 @@ end
 function force_balance_CX!(pflx, dens, upar, CX_frequency, composition, nz, dt)
     # include contribution to ion acceleration due to collisional friction with neutrals
     for is ∈ 1:composition.n_ion_species
-        for isp ∈ 1:composition.n_neutral_species
+        for isp ∈ composition.n_ion_species+1:composition.n_species
             # get the absolute species index for the neutral species
-            isn = composition.n_ion_species + isp
             for iz ∈ 1:nz
-                pflx[iz,is] += dt*CX_frequency*dens[iz,is]*dens[iz,isn]*(upar[iz,isn]-upar[iz,is])
+                pflx[iz,is] += dt*CX_frequency*dens[iz,is]*dens[iz,isp]*(upar[iz,isp]-upar[iz,is])
             end
         end
     end
     # include contribution to neutral acceleration due to collisional friction with ions
-    for isp ∈ 1:composition.n_neutral_species
-        for isi ∈ 1:composition.n_ion_species
+    for isp ∈ composition.n_ion_species+1:composition.n_species
+        for is ∈ 1:composition.n_ion_species
             # get the absolute species index for the neutral species
-            is = composition.n_ion_species + isp
             for iz ∈ 1:nz
-                pflx[iz,is] += dt*CX_frequency*dens[iz,is]*dens[iz,isi]*(upar[iz,isi]-upar[iz,is])
+                pflx[iz,isp] += dt*CX_frequency*dens[iz,isp]*dens[iz,is]*(upar[iz,is]-upar[iz,isp])
             end
         end
     end

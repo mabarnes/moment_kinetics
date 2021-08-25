@@ -88,14 +88,14 @@ function analyze_pdf_data(ff, vpa, nz, nvpa, n_species, ntime, z_wgts, Lz, vpa_w
     for i ∈ 1:ntime
         for is ∈ 1:n_species
             for ivpa ∈ 1:nvpa
-                f_fldline_avg[ivpa,is,i] = field_line_average(view(ff,:,ivpa,is,i), z_wgts, Lz)
+                f_fldline_avg[ivpa,is,i] = field_line_average(view(ff,ivpa,:,is,i), z_wgts, Lz)
             end
         end
     end
     # delta_f = f - <f> is the fluctuating distribution function
     delta_f = allocate_float(nz,nvpa,n_species,ntime)
     for iz ∈ 1:nz
-        @. delta_f[iz,:,:,:] = ff[iz,:,:,:] - f_fldline_avg
+        @. delta_f[:,iz,:,:] = ff[:,iz,:,:] - f_fldline_avg
     end
     dens_moment = allocate_float(nz,n_species,ntime)
     upar_moment = allocate_float(nz,n_species,ntime)
@@ -103,9 +103,9 @@ function analyze_pdf_data(ff, vpa, nz, nvpa, n_species, ntime, z_wgts, Lz, vpa_w
     for i ∈ 1:ntime
         for is ∈ 1:n_species
             for iz ∈ 1:nz
-                @views dens_moment[iz,is,i] = integrate_over_vspace(ff[iz,:,is,i], vpa_wgts)
-                @views upar_moment[iz,is,i] = integrate_over_vspace(ff[iz,:,is,i] .* vpa, vpa_wgts)
-                @views ppar_moment[iz,is,i] = integrate_over_vspace(ff[iz,:,is,i] .* vpa.^2, vpa_wgts)
+                @views dens_moment[iz,is,i] = integrate_over_vspace(ff[:,iz,is,i], vpa_wgts)
+                @views upar_moment[iz,is,i] = integrate_over_vspace(ff[:,iz,is,i], vpa, vpa_wgts)
+                @views ppar_moment[iz,is,i] = integrate_over_vspace(ff[:,iz,is,i], vpa, 2, vpa_wgts)
             end
         end
     end

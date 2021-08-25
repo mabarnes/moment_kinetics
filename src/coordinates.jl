@@ -51,7 +51,10 @@ struct coordinate
     # scratch is an array used for intermediate calculations requiring n entries
     scratch::Array{mk_float,1}
     # scratch2d is an array used for intermediate calculations requiring ngrid x nelement entries
-    scratch2d::Array{mk_float,2}
+    scratch2::Array{mk_float,1}
+    # scratch_2d is an array used for intermediate calculations requiring ngrid x
+    # nelement entries
+    scratch_2d::Array{mk_float,2}
     # struct containing advection speed options/inputs
     advection::advection_input
 end
@@ -80,14 +83,15 @@ function define_coordinate(input)
     duniform_dgrid = allocate_float(input.ngrid, input.nelement)
     # scratch is an array used for intermediate calculations requiring n entries
     scratch = allocate_float(n)
-    # scratch2d is an array used for intermediate calculations requiring ngrid x nelement entries
-    scratch2d = allocate_float(input.ngrid, input.nelement)
+    # scratch_2d is an array used for intermediate calculations requiring ngrid x nelement entries
+    scratch_2d = allocate_float(input.ngrid, input.nelement)
     # struct containing the advection speed options/inputs for this coordinate
     advection = input.advection
 
     return coordinate(input.name, n, input.ngrid, input.nelement, input.L, grid,
         cell_width, igrid, ielement, imin, imax, input.discretization, input.fd_option,
-        input.bc, wgts, uniform_grid, duniform_dgrid, scratch, scratch2d, advection)
+        input.bc, wgts, uniform_grid, duniform_dgrid, scratch, copy(scratch),
+        scratch_2d, advection)
 end
 # setup a grid with n grid points on the interval [-L/2,L/2]
 function init_grid(ngrid, nelement, n, L, imin, imax, igrid, discretization)

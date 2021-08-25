@@ -24,11 +24,12 @@ using ..energy_equation: energy_equation!
 using ..em_fields: setup_em_fields, update_phi!
 using ..semi_lagrange: setup_semi_lagrange
 
-struct scratch_pdf{T1,T2}
-    pdf::T1
-    density::T2
-    upar::T2
-    ppar::T2
+struct scratch_pdf{n_distribution, n_moment}
+    pdf::Array{mk_float, n_distribution}
+    density::Array{mk_float, n_moment}
+    upar::Array{mk_float, n_moment}
+    ppar::Array{mk_float, n_moment}
+    temp_z_s::Array{mk_float, n_moment}
 end
 mutable struct advance_info
     vpa_advection::Bool
@@ -46,7 +47,7 @@ end
 # this includes creating and populating structs
 # for Chebyshev transforms, velocity space moments,
 # EM fields, semi-Lagrange treatment, and advection terms
-function setup_time_advance!(pdf, z, vpa, composition, drive_input, moments,
+function setup_time_advance!(pdf, vpa, z, composition, drive_input, moments,
                              t_input, cx_frequency, species)
     # define some local variables for convenience/tidiness
     n_species = composition.n_species
@@ -125,12 +126,12 @@ function setup_time_advance!(pdf, z, vpa, composition, drive_input, moments,
     end
     # create an array of structs containing scratch arrays for the pdf and low-order moments
     # that may be evolved separately via fluid equations
-    scratch = setup_scratch_arrays(moments, pdf.norm, z.n, vpa.n, n_species, t_input.n_rk_stages)
+    scratch = setup_scratch_arrays(moments, pdf.norm, t_input.n_rk_stages)
     # create the "fields" structure that contains arrays
     # for the electrostatic potential phi and eventually the electromagnetic fields
     fields = setup_em_fields(z.n, drive_input.force_phi, drive_input.amplitude, drive_input.frequency)
     # initialize the electrostatic potential
-    update_phi!(fields, scratch[1], vpa, z.n, composition)
+    update_phi!(fields, scratch[1], z, composition)
     # save the initial phi(z) for possible use later (e.g., if forcing phi)
     fields.phi0 .= fields.phi
     # create structure vpa_advect whose members are the arrays needed to compute
@@ -156,47 +157,37 @@ function setup_time_advance!(pdf, z, vpa, composition, drive_input, moments,
     # method if the user specifies this
     z_SL = setup_semi_lagrange(z.n, vpa.n)
     vpa_SL = setup_semi_lagrange(vpa.n, z.n)
-    return z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect, z_SL,
-        vpa_SL, scratch, advance
+    return vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
+        vpa_SL, z_SL, scratch, advance
 end
 # if evolving the density via continuity equation, redefine the normalised f → f/n
 # if evolving the parallel pressure via energy equation, redefine f -> f * vth / n
-function normalize_pdf!(pdf, moments)
-    nvpa = size(pdf,2)
+# 'scratch' should be a (nz,nspecies) array
+function normalize_pdf!(pdf, moments, scratch)
     if moments.evolve_ppar
-        for ivpa ∈ 1:nvpa
-            @. pdf[:,ivpa,:] *= moments.vth/moments.dens
+        @. scratch = moments.vth/moments.dens
+        for i ∈ CartesianIndices(pdf)
+            pdf[i] *= scratch[i[2], i[3]]
         end
     elseif moments.evolve_density
-        for ivpa ∈ 1:nvpa
-            @. pdf[:,ivpa,:] /= moments.dens
+        @. scatch = 1.0 / moments.dens
+        for i ∈ CartesianIndices(pdf)
+            pdf[i] *= scratch[i[2], i[3]]
         end
     end
     return nothing
 end
 # create an array of structs containing scratch arrays for the normalised pdf and low-order moments
 # that may be evolved separately via fluid equations
-function setup_scratch_arrays(moments, pdf_in, nz, nvpa, nspec, n_rk_stages)
-    # create n_rk_stages+1 pdf-sized scratch arrays
-    pdf = allocate_float(nz, nvpa, nspec, n_rk_stages+1)
-    # create n_rk_stages+1 density-sized scratch arrays
-    dens = allocate_float(nz, nspec, n_rk_stages+1)
-    # create n_rk_stages+1 parallel-flow-sized scratch arrays
-    upar = allocate_float(nz, nspec, n_rk_stages+1)
-    # create n_rk_stages+1 parallel-pressure-sized scratch arrays
-    ppar = allocate_float(nz, nspec, n_rk_stages+1)
+function setup_scratch_arrays(moments, pdf_in, n_rk_stages)
     # create n_rk_stages+1 structs, each of which will contain one pdf,
     # one density, and one parallel flow array
-    scratch = Vector{scratch_pdf}(undef, n_rk_stages+1)
+    scratch = Vector{scratch_pdf{3,2}}(undef, n_rk_stages+1)
     # populate each of the structs
-    # NB: all of the array members of the scratch struct will point to
-    # the appropriate slice of the pdf, dens and upar arrays created above
     for istage ∈ 1:n_rk_stages+1
-        @views scratch[istage] = scratch_pdf(pdf[:,:,:,istage], dens[:,:,istage], upar[:,:,istage], ppar[:,:,istage])
-        scratch[istage].pdf .= pdf_in
-        scratch[istage].density .= moments.dens
-        scratch[istage].upar .= moments.upar
-        scratch[istage].ppar .= moments.ppar
+        scratch[istage] = scratch_pdf(deepcopy(pdf_in), deepcopy(moments.dens),
+                                      deepcopy(moments.upar), deepcopy(moments.ppar),
+                                      similar(moments.dens))
     end
     return scratch
 end
@@ -238,28 +229,28 @@ end
 # df/dt + δv⋅∂f/∂z = 0, with δv(z,t)=v(z,t)-v₀(z)
 # for prudent choice of v₀, expect δv≪v so that explicit
 # time integrator can be used without severe CFL condition
-function time_advance!(pdf, scratch, t, t_input, z, vpa, z_spectral, vpa_spectral,
-    moments, fields, z_advect, vpa_advect, z_SL, vpa_SL, composition,
+function time_advance!(pdf, scratch, t, t_input, vpa, z, vpa_spectral, z_spectral,
+    moments, fields, vpa_advect, z_advect, vpa_SL, z_SL, composition,
     charge_exchange_frequency, advance, io, cdf)
 
     # main time advance loop
     iwrite = 2
     for i ∈ 1:t_input.nstep
         if t_input.split_operators
-            time_advance_split_operators!(pdf, scratch, t, t_input, z, vpa,
-                z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
-                z_SL, vpa_SL, composition, charge_exchange_frequency, advance, i)
+            time_advance_split_operators!(pdf, scratch, t, t_input, vpa, z,
+                vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
+                vpa_SL, z_SL, composition, charge_exchange_frequency, advance, i)
         else
-            time_advance_no_splitting!(pdf, scratch, t, t_input, z, vpa,
-                z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
-                z_SL, vpa_SL, composition, charge_exchange_frequency, advance, i)
+            time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
+                vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
+                vpa_SL, z_SL, composition, charge_exchange_frequency, advance, i)
         end
         # update the time
         t += t_input.dt
         # write data to file every nwrite time steps
         if mod(i,t_input.nwrite) == 0
             println("finished time step ", i)
-            write_data_to_ascii(pdf.unnorm, moments, fields, z, vpa, t, composition.n_species, io)
+            write_data_to_ascii(pdf.unnorm, moments, fields, vpa, z, t, composition.n_species, io)
             # write initial data to binary file (netcdf)
             write_data_to_binary(pdf.unnorm, moments, fields, t, composition.n_species, cdf, iwrite)
             iwrite += 1
@@ -267,9 +258,9 @@ function time_advance!(pdf, scratch, t, t_input, z, vpa, z_spectral, vpa_spectra
     end
     return nothing
 end
-function time_advance_split_operators!(pdf, scratch, t, t_input, z, vpa,
-    z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
-    z_SL, vpa_SL, composition, charge_exchange_frequency, advance, istep)
+function time_advance_split_operators!(pdf, scratch, t, t_input, vpa, z,
+    vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
+    vpa_SL, z_SL, composition, charge_exchange_frequency, advance, istep)
 
     # define some abbreviated variables for tidiness
     n_ion_species = composition.n_ion_species
@@ -284,49 +275,49 @@ function time_advance_split_operators!(pdf, scratch, t, t_input, z, vpa,
         # advance the operator-split 1D advection equation in vpa
         # vpa-advection only applies for charged species
         advance.vpa_advection = true
-        time_advance_no_splitting!(pdf, scratch, t, t_input, z, vpa,
-            z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
-            z_SL, vpa_SL, composition, charge_exchange_frequency, advance, istep)
+        time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
+            vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
+            vpa_SL, z_SL, composition, charge_exchange_frequency, advance, istep)
         advance.vpa_advection = false
         # z_advection! advances the operator-split 1D advection equation in z
         # apply z-advection operation to all species (charged and neutral)
         advance.z_advection = true
-        time_advance_no_splitting!(pdf, scratch, t, t_input, z, vpa,
-            z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
-            z_SL, vpa_SL, composition, charge_exchange_frequency, advance, istep)
+        time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
+            vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
+            vpa_SL, z_SL, composition, charge_exchange_frequency, advance, istep)
         advance.z_advection = false
         # account for charge exchange collisions between ions and neutrals
         if composition.n_neutral_species > 0
             advance.cx_collisions = true
-            time_advance_no_splitting!(pdf, scratch, t, t_input, z, vpa,
-                z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
-                z_SL, vpa_SL, composition, charge_exchange_frequency, advance, istep)
+            time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
+                vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
+                vpa_SL, z_SL, composition, charge_exchange_frequency, advance, istep)
             advance.cx_collisions = false
         end
         # use the continuity equation to update the density
         # and add the source terms associated with redefining g = pdf/density to the kinetic equation
         if moments.evolve_density
             advance.source_terms = true
-            time_advance_no_splitting!(pdf, scratch, t, t_input, z, vpa,
-                z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
-                z_SL, vpa_SL, composition, charge_exchange_frequency, advance, istep)
+            time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
+                vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
+                vpa_SL, z_SL, composition, charge_exchange_frequency, advance, istep)
             advance.source_terms = false
             advance.continuity = true
-            time_advance_no_splitting!(pdf, scratch, t, t_input, z, vpa,
-                z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
-                z_SL, vpa_SL, composition, charge_exchange_frequency, advance, istep)
+            time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
+                vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
+                vpa_SL, z_SL, composition, charge_exchange_frequency, advance, istep)
             advance.continuity = false
             if moments.evolve_upar
                 advance.force_balance = true
-                time_advance_no_splitting!(pdf, scratch, t, t_input, z, vpa,
-                    z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
-                    z_SL, vpa_SL, composition, charge_exchange_frequency, advance, istep)
+                time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
+                    vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
+                    vpa_SL, z_SL, composition, charge_exchange_frequency, advance, istep)
                 advance.force_balance = false
                 if moments.evolve_ppar
                     advance.energy = true
-                    time_advance_no_splitting!(pdf, scratch, t, t_input, z, vpa,
-                        z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
-                        z_SL, vpa_SL, composition, charge_exchange_frequency, advance, istep)
+                    time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
+                        vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
+                        vpa_SL, z_SL, composition, charge_exchange_frequency, advance, istep)
                     advance.energy = false
                 end
             end
@@ -335,122 +326,123 @@ function time_advance_split_operators!(pdf, scratch, t, t_input, z, vpa,
         if moments.evolve_upar
             if moments.evolve_ppar
                 advance.energy = true
-                time_advance_no_splitting!(pdf, scratch, t, t_input, z, vpa,
-                    z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
-                    z_SL, vpa_SL, composition, charge_exchange_frequency, advance, istep)
+                time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
+                    vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
+                    vpa_SL, z_SL, composition, charge_exchange_frequency, advance, istep)
                 advance.energy = false
             end
             advance.force_balance = true
-            time_advance_no_splitting!(pdf, scratch, t, t_input, z, vpa,
-                z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
-                z_SL, vpa_SL, composition, charge_exchange_frequency, advance, istep)
+            time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
+                vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
+                vpa_SL, z_SL, composition, charge_exchange_frequency, advance, istep)
             advance.force_balance = false
         end
         # use the continuity equation to update the density
         # and add the source terms associated with redefining g = pdf/density to the kinetic equation
         if moments.evolve_density
             advance.continuity = true
-            time_advance_no_splitting!(pdf, scratch, t, t_input, z, vpa,
-                z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
-                z_SL, vpa_SL, composition, charge_exchange_frequency, advance, istep)
+            time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
+                vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
+                vpa_SL, z_SL, composition, charge_exchange_frequency, advance, istep)
             advance.continuity = false
             # use force balance to update the parallel flow
             # and subsequently add the source terms associated with using the peculiar velocity as a variable
             if moments.evolve_parallel_flow
                 advance.force_balance = true
-                time_advance_no_splitting!(pdf, scratch, t, t_input, z, vpa,
-                    z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
-                    z_SL, vpa_SL, composition, charge_exchange_frequency, advance, istep)
+                time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
+                    vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
+                    vpa_SL, z_SL, composition, charge_exchange_frequency, advance, istep)
                 advance.force_balance = false
             end
             advance.source_terms = true
-            time_advance_no_splitting!(pdf, scratch, t, t_input, z, vpa,
-                z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
-                z_SL, vpa_SL, composition, charge_exchange_frequency, advance, istep)
+            time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
+                vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
+                vpa_SL, z_SL, composition, charge_exchange_frequency, advance, istep)
             advance.source_terms = false
         end
         # account for charge exchange collisions between ions and neutrals
         if composition.n_neutral_species > 0
             advance.cx_collisions = true
-            time_advance_no_splitting!(pdf, scratch, t, t_input, z, vpa,
-                z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
-                z_SL, vpa_SL, composition, charge_exchange_frequency, advance, istep)
+            time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
+                vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
+                vpa_SL, z_SL, composition, charge_exchange_frequency, advance, istep)
             advance.cx_collisions = false
         end
         # z_advection! advances the operator-split 1D advection equation in z
         # apply z-advection operation to all species (charged and neutral)
         advance.z_advection = true
-        time_advance_no_splitting!(pdf, scratch, t, t_input, z, vpa,
-            z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
-            z_SL, vpa_SL, composition, charge_exchange_frequency, advance, istep)
+        time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
+            vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
+            vpa_SL, z_SL, composition, charge_exchange_frequency, advance, istep)
         advance.z_advection = false
         # advance the operator-split 1D advection equation in vpa
         # vpa-advection only applies for charged species
         advance.vpa_advection = true
-        time_advance_no_splitting!(pdf, scratch, t, t_input, z, vpa,
-            z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
-            z_SL, vpa_SL, composition, charge_exchange_frequency, advance, istep)
+        time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
+            vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
+            vpa_SL, z_SL, composition, charge_exchange_frequency, advance, istep)
         advance.vpa_advection = false
     end
     return nothing
 end
-function time_advance_no_splitting!(pdf, scratch, t, t_input, z, vpa,
-    z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
-    z_SL, vpa_SL, composition, charge_exchange_frequency, advance, istep)
+function time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
+    vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
+    vpa_SL, z_SL, composition, charge_exchange_frequency, advance, istep)
 
     if t_input.n_rk_stages > 1
-        ssp_rk!(pdf, scratch, t, t_input, z, vpa,
-            z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
-            z_SL, vpa_SL, composition, charge_exchange_frequency, advance, istep)
+        ssp_rk!(pdf, scratch, t, t_input, vpa, z,
+            vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
+            vpa_SL, z_SL, composition, charge_exchange_frequency, advance, istep)
     else
-        euler_time_advance!(scratch, scratch, pdf, fields, moments, z_SL, vpa_SL,
-            z_advect, vpa_advect, z, vpa, t,
-            t_input, z_spectral, vpa_spectral, composition,
+        euler_time_advance!(scratch, scratch, pdf, fields, moments, vpa_SL, z_SL,
+            vpa_advect, z_advect, vpa, z, t,
+            t_input, vpa_spectral, z_spectral, composition,
             charge_exchange_frequency, advance, 1)
         # NB: this must be broken -- scratch is updated in euler_time_advance!,
         # but not the pdf or moments.  need to add update to these quantities here
     end
     return nothing
 end
-function rk_update!(scratch, pdf, moments, fields, vpa, nz, rk_coefs, istage, composition)
+function rk_update!(scratch, pdf, moments, fields, vpa, z, rk_coefs, istage, composition)
     @. scratch[istage+1].pdf = rk_coefs[1]*pdf.norm + rk_coefs[2]*scratch[istage].pdf + rk_coefs[3]*scratch[istage+1].pdf
     if moments.evolve_density
         @. scratch[istage+1].density = rk_coefs[1]*moments.dens + rk_coefs[2]*scratch[istage].density + rk_coefs[3]*scratch[istage+1].density
-        for ivpa ∈ 1:vpa.n
-            @. pdf.unnorm[:,ivpa,:] = scratch[istage+1].pdf[:,ivpa,:]*scratch[istage+1].density
+        for i ∈ CartesianIndices(pdf.unnorm)
+            pdf.unnorm[i] = scratch[istage+1].pdf[i] * scratch[istage+1].density[i[2], i[3]]
         end
     else
         pdf.unnorm .= scratch[istage+1].pdf
-        update_density!(scratch[istage+1].density, moments.dens_updated, pdf.unnorm, vpa, nz)
+        update_density!(scratch[istage+1].density, moments.dens_updated, pdf.unnorm, vpa, z.n)
     end
     # NB: if moments.evolve_upar = true, then moments.evolve_density = true
     if moments.evolve_upar
         @. scratch[istage+1].upar = rk_coefs[1]*moments.upar + rk_coefs[2]*scratch[istage].upar + rk_coefs[3]*scratch[istage+1].upar
     else
-        update_upar!(scratch[istage+1].upar, moments.upar_updated, pdf.unnorm, vpa, nz)
+        update_upar!(scratch[istage+1].upar, moments.upar_updated, pdf.unnorm, vpa, z.n)
         # convert from particle particle flux to parallel flow
         @. scratch[istage+1].upar /= scratch[istage+1].density
     end
     if moments.evolve_ppar
         @. scratch[istage+1].ppar = rk_coefs[1]*moments.ppar + rk_coefs[2]*scratch[istage].ppar + rk_coefs[3]*scratch[istage+1].ppar
     else
-        update_ppar!(scratch[istage+1].ppar, moments.ppar_updated, pdf.unnorm, vpa, nz)
+        update_ppar!(scratch[istage+1].ppar, moments.ppar_updated, pdf.unnorm, vpa, z.n)
     end
     # update the thermal speed
     @. moments.vth = sqrt(2.0*scratch[istage+1].ppar/scratch[istage+1].density)
     if moments.evolve_ppar
-        for ivpa ∈ 1:vpa.n
-            @. pdf.unnorm[:,ivpa,:] /= moments.vth
+        @. scratch[istage].temp_z_s = 1.0 / moments.vth
+        for i ∈ CartesianIndices(pdf.unnorm)
+            pdf.unnorm[i] *= scratch[istage].temp_z_s[i[2], i[3]]
         end
     end
     # update the parallel heat flux
-    update_qpar!(moments.qpar, moments.qpar_updated, pdf.unnorm, vpa, nz, moments.vpa_norm_fac)
+    update_qpar!(moments.qpar, moments.qpar_updated, pdf.unnorm, vpa, z.n, moments.vpa_norm_fac)
     # update the electrostatic potential phi
-    update_phi!(fields, scratch[istage+1], vpa, nz, composition)
+    update_phi!(fields, scratch[istage+1], z, composition)
 end
-function ssp_rk!(pdf, scratch, t, t_input, z, vpa,
-    z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
-    z_SL, vpa_SL, composition, charge_exchange_frequency, advance, istep)
+function ssp_rk!(pdf, scratch, t, t_input, vpa, z,
+    vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
+    vpa_SL, z_SL, composition, charge_exchange_frequency, advance, istep)
 
     n_rk_stages = t_input.n_rk_stages
 
@@ -465,15 +457,15 @@ function ssp_rk!(pdf, scratch, t, t_input, z, vpa,
         update_solution_vector!(scratch, moments, istage)
         # calculate f^{(1)} = fⁿ + Δt*G[fⁿ] = scratch[2].pdf
         @views euler_time_advance!(scratch[istage+1], scratch[istage],
-            pdf, fields, moments, z_SL, vpa_SL, z_advect, vpa_advect, z, vpa, t,
-            t_input, z_spectral, vpa_spectral, composition,
+            pdf, fields, moments, vpa_SL, z_SL, vpa_advect, z_advect, vpa, z, t,
+            t_input, vpa_spectral, z_spectral, composition,
             charge_exchange_frequency, advance, istage)
-        @views rk_update!(scratch, pdf, moments, fields, vpa, z.n, advance.rk_coefs[:,istage], istage, composition)
+        @views rk_update!(scratch, pdf, moments, fields, vpa, z, advance.rk_coefs[:,istage], istage, composition)
     end
 
     istage = n_rk_stages+1
     if moments.evolve_density && moments.enforce_conservation
-        enforce_moment_constraints!(scratch[istage], scratch[1], z, vpa, moments)
+        enforce_moment_constraints!(scratch[istage], scratch[1], vpa, z, moments)
     end
 
     # update the pdf.norm and moments arrays as needed
@@ -481,15 +473,15 @@ function ssp_rk!(pdf, scratch, t, t_input, z, vpa,
     moments.dens .= scratch[istage].density
     moments.upar .= scratch[istage].upar
     moments.ppar .= scratch[istage].ppar
-    update_pdf_unnorm!(pdf, moments)
+    update_pdf_unnorm!(pdf, moments, scratch[istage].temp_z_s)
     return nothing
 end
 # euler_time_advance! advances the vector equation dfvec/dt = G[f]
 # that includes the kinetic equation + any evolved moment equations
 # using the forward Euler method: fvec_out = fvec_in + dt*fvec_in,
 # with fvec_in an input and fvec_out the output
-function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, z_SL, vpa_SL,
-    z_advect, vpa_advect, z, vpa, t, t_input, z_spectral, vpa_spectral,
+function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, z_SL,
+    vpa_advect, z_advect, vpa, z, t, t_input, vpa_spectral, z_spectral,
     composition, charge_exchange_frequency, advance, istage)
     # define some abbreviated variables for tidiness
     n_ion_species = composition.n_ion_species
@@ -510,20 +502,20 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, z_SL, vpa_
             use_semi_lagrange, dt, t, z_spectral, composition.n_species, istage)
     end
     if advance.source_terms
-        source_terms!(fvec_out.pdf, fvec_in, moments, z, vpa, dt, z_spectral,
+        source_terms!(fvec_out.pdf, fvec_in, moments, vpa, z, dt, z_spectral,
                       composition, charge_exchange_frequency)
     end
     # account for charge exchange collisions between ions and neutrals
     if advance.cx_collisions
         charge_exchange_collisions!(fvec_out.pdf, fvec_in, moments, n_ion_species,
-            composition.n_neutral_species, vpa, charge_exchange_frequency, z.n, dt)
+            composition.n_species, vpa, charge_exchange_frequency, z.n, dt)
     end
     if advance.continuity
-        continuity_equation!(fvec_out.density, fvec_in, moments, z, vpa, dt, z_spectral)
+        continuity_equation!(fvec_out.density, fvec_in, moments, vpa, z, dt, z_spectral)
     end
     if advance.force_balance
         # fvec_out.upar is over-written in force_balance! and contains the particle flux
-        force_balance!(fvec_out.upar, fvec_in, fields, charge_exchange_frequency, z, vpa, dt, z_spectral, composition)
+        force_balance!(fvec_out.upar, fvec_in, fields, charge_exchange_frequency, vpa, z, dt, z_spectral, composition)
         # convert from the particle flux to the parallel flow
         @. fvec_out.upar /= fvec_out.density
     end
@@ -535,7 +527,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, z_SL, vpa_
     reset_moments_status!(moments)
     # enforce boundary conditions in z and vpa on the distribution function
     # NB: probably need to do the same for the evolved moments
-    enforce_boundary_conditions!(fvec_out.pdf, z.bc, vpa.bc, vpa.grid, z_advect, vpa_advect)
+    enforce_boundary_conditions!(fvec_out.pdf, vpa.bc, z.bc, vpa.grid, vpa_advect, z_advect)
     return nothing
 end
 # update the vector containing the pdf and any evolved moments of the pdf
@@ -547,17 +539,20 @@ function update_solution_vector!(evolved, moments, istage)
     evolved[istage+1].ppar .= evolved[istage].ppar
     return nothing
 end
-function update_pdf_unnorm!(pdf, moments)
+
+# scratch should be a (nz,nspecies) array
+function update_pdf_unnorm!(pdf, moments, scratch)
     # if separately evolving the density via the continuity equation,
     # the evolved pdf has been normalised by the particle density
     # undo this normalisation to get the true particle distribution function
     if moments.evolve_ppar
-        for ivpa ∈ 1:size(pdf.norm,2)
-            @. pdf.unnorm[:,ivpa,:] = pdf.norm[:,ivpa,:]*moments.dens/moments.vth
+        @. scratch = moments.dens/moments.vth
+        for i in CartesianIndices(pdf.unnorm)
+            pdf.unnorm[i] = pdf.norm[i]*scratch[i[2],i[3]]
         end
     elseif moments.evolve_density
-        for ivpa ∈ 1:size(pdf.norm,2)
-            @. pdf.unnorm[:,ivpa,:] = pdf.norm[:,ivpa,:]*moments.dens
+        for i in CartesianIndices(pdf.unnorm)
+            pdf.unnorm[i] = pdf.norm[i] * moments.dens[i[2],i[3]]
         end
     else
         @. pdf.unnorm = pdf.norm

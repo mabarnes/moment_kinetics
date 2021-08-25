@@ -80,3 +80,16 @@ subdirectory - to view it open `statprof/index.html` with a web browser.
 For convenience `run_sampling_profile.sh` calls `sampling_profile.jl` with the necessary
 flags passed to `julia`. The first argument to the script gives the input file to use.
 Various `*.toml` input files are included for different types of run.
+
+Type instability
+----------------
+If you see allocations on a line of our own code which don't have an obvious cause, it
+may be a sign of 'type instability' (where the type cannot be determined at compile
+time). One way to diagnose this is to mark the call to the function that the line occurs
+in with the `@code_warntype` macro - to do this in a script (rather than from the REPL)
+you need to include `using InteractiveUtils: @code_warntype`. From a script, it may be
+useful to add a call to `error()` just below the function call to stop execution after
+the output from `@code_warntype` is printed. The output should highlight in red any
+variables that do not have a concrete type at compile time. To fix the type instability,
+track back to where those variables were created. For example, it may help to give
+explicit types (or parameterized types) to a `struct`.

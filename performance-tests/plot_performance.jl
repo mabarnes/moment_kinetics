@@ -110,7 +110,7 @@ function plot_performance_history(filename, machine=nothing; show=false, save=tr
 
     ntests = machine_data.ntests
 
-    plots = plot(;layout=(2, 1), link=:x, ylims=(0.0, :auto), legend=:outertopright)
+    plots = plot(;layout=(2, 1), link=:x, yaxis=:log, grid=true, minorgrid=true, legend=:outertopright)
     memplot = plots[1]
     timeplot = plots[2]
     ylabel!(memplot, "Memory usage (B)")

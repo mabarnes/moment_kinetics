@@ -15,11 +15,11 @@ interpolate_to_grid_1d() = nothing
 
 function interpolate_to_grid_z(newgrid, f::Array{mk_float, 3}, z, spectral)
     size_f = size(f)
-    result = Array{mk_float}(undef, (size(newgrid)[1], size_f[2:end]...))
+    result = Array{mk_float}(undef, (size_f[1], size(newgrid)[1], size_f[3]))
 
     for is ∈ 1:size_f[3]
-        for ivpa ∈ 1:size_f[2]
-            result[:, ivpa, is] = interpolate_to_grid_1d(newgrid, f[:, ivpa, is], z, spectral)
+        for ivpa ∈ 1:size_f[1]
+            result[ivpa, :, is] = interpolate_to_grid_1d(newgrid, f[ivpa, :, is], z, spectral)
         end
     end
 
@@ -43,11 +43,11 @@ end
 
 function interpolate_to_grid_vpa(newgrid, f::Array{mk_float, 3}, vpa, spectral)
     size_f = size(f)
-    result = Array{mk_float}(undef, (size_f[1], size(newgrid)[1], size_f[3]))
+    result = Array{mk_float}(undef, (size(newgrid)[1], size_f[2:3]...))
 
     for is ∈ 1:size_f[3]
-        for iz ∈ 1:size_f[1]
-            result[iz, :, is] = interpolate_to_grid_1d(newgrid, f[iz, :, is], vpa, spectral)
+        for iz ∈ 1:size_f[2]
+            result[:, iz, is] = interpolate_to_grid_1d(newgrid, f[:, iz, is], vpa, spectral)
         end
     end
 

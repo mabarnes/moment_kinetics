@@ -216,10 +216,10 @@ struct pp_input
     # itime_max is the final time index at which to end animations
     # if itime_max < 0, the value used will be the total number of time slices
     itime_max::mk_int
-    # iz0 is the iz index used when plotting data at a single z location
-    iz0::mk_int
     # ivpa0 is the ivpa index used when plotting data at a single vpa location
     ivpa0::mk_int
+    # iz0 is the iz index used when plotting data at a single z location
+    iz0::mk_int
 end
 
 end
