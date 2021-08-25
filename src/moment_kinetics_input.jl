@@ -69,7 +69,7 @@ function mk_input(scan_input=Dict())
     # set initial neutral densiity = Nₑ
     for (i, s) in enumerate(species[2:end])
         i = i+1
-        s.z_IC.initialization_option = get(scan_input, "z_IC_option1", species[1].z_IC.initialization_option)
+        s.z_IC.initialization_option = get(scan_input, "z_IC_option$i", species[1].z_IC.initialization_option)
         s.initial_density = get(scan_input, "initial_density$i", 0.5)
         s.initial_temperature = get(scan_input, "initial_temperature$i", species[1].initial_temperature)
         s.z_IC.density_amplitude = get(scan_input, "z_IC_density_amplitude$i", species[1].z_IC.density_amplitude)
