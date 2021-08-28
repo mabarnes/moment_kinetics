@@ -179,13 +179,15 @@ end
 function normalize_pdf!(pdf, moments, scratch)
     if moments.evolve_ppar
         @. scratch = moments.vth/moments.dens
-        for i ∈ CartesianIndices(pdf)
-            pdf[i] *= scratch[i[2], i[3]]
+        nvpa, nz, nspecies = size(pdf)
+        for is ∈ 1:nspecies, iz ∈ 1:nz, ivpa ∈ 1:nvpa
+            pdf[ivpa,iz,is] *= scratch[iz, is]
         end
     elseif moments.evolve_density
         @. scatch = 1.0 / moments.dens
-        for i ∈ CartesianIndices(pdf)
-            pdf[i] *= scratch[i[2], i[3]]
+        nvpa, nz, nspecies = size(pdf)
+        for is ∈ 1:nspecies, iz ∈ 1:nz, ivpa ∈ 1:nvpa
+            pdf[ivpa,iz,is] *= scratch[iz, is]
         end
     end
     return nothing
@@ -438,8 +440,9 @@ function rk_update!(scratch, pdf, moments, fields, vpa, z, rk_coefs, istage, com
     @. scratch[istage+1].pdf = rk_coefs[1]*pdf.norm + rk_coefs[2]*scratch[istage].pdf + rk_coefs[3]*scratch[istage+1].pdf
     if moments.evolve_density
         @. scratch[istage+1].density = rk_coefs[1]*moments.dens + rk_coefs[2]*scratch[istage].density + rk_coefs[3]*scratch[istage+1].density
-        for i ∈ CartesianIndices(pdf.unnorm)
-            pdf.unnorm[i] = scratch[istage+1].pdf[i] * scratch[istage+1].density[i[2], i[3]]
+        nvpa, nz, nspecies = size(pdf.unnorm)
+        for is ∈ 1:nspecies, iz ∈ 1:nz, ivpa ∈ 1:nvpa
+            pdf.unnorm[ivpa,iz,is] = scratch[istage+1].pdf[ivpa,iz,is] * scratch[istage+1].density[iz,is]
         end
     else
         pdf.unnorm .= scratch[istage+1].pdf
@@ -462,8 +465,9 @@ function rk_update!(scratch, pdf, moments, fields, vpa, z, rk_coefs, istage, com
     @. moments.vth = sqrt(2.0*scratch[istage+1].ppar/scratch[istage+1].density)
     if moments.evolve_ppar
         @. scratch[istage].temp_z_s = 1.0 / moments.vth
-        for i ∈ CartesianIndices(pdf.unnorm)
-            pdf.unnorm[i] *= scratch[istage].temp_z_s[i[2], i[3]]
+        nvpa, nz, nspecies = size(pdf.unnorm)
+        for is ∈ 1:nspecies, iz ∈ 1:nz, ivpa ∈ 1:nvpa
+            pdf.unnorm[ivpa,iz,is] *= scratch[istage].temp_z_s[iz,is]
         end
     end
     # update the parallel heat flux
@@ -583,12 +587,14 @@ function update_pdf_unnorm!(pdf, moments, scratch)
     # undo this normalisation to get the true particle distribution function
     if moments.evolve_ppar
         @. scratch = moments.dens/moments.vth
-        for i in CartesianIndices(pdf.unnorm)
-            pdf.unnorm[i] = pdf.norm[i]*scratch[i[2],i[3]]
+        nvpa, nz, nspecies = size(pdf.unnorm)
+        for is ∈ 1:nspecies, iz ∈ 1:nz, ivpa ∈ 1:nvpa
+            pdf.unnorm[ivpa,iz,is] = pdf.norm[ivpa,iz,is]*scratch[iz,is]
         end
     elseif moments.evolve_density
-        for i in CartesianIndices(pdf.unnorm)
-            pdf.unnorm[i] = pdf.norm[i] * moments.dens[i[2],i[3]]
+        nvpa, nz, nspecies = size(pdf.unnorm)
+        for is ∈ 1:nspecies, iz ∈ 1:nz, ivpa ∈ 1:nvpa
+            pdf.unnorm[ivpa,iz,is] = pdf.norm[ivpa,iz,is] * moments.dens[iz,is]
         end
     else
         @. pdf.unnorm = pdf.norm

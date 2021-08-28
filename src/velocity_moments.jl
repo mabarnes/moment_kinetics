@@ -336,12 +336,14 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, moments)
     # NB: no longer need fvec_old.pdf so can use for temporary storage of un-normalised pdf
     if moments.evolve_ppar
         @. fvec_old.temp_z_s = fvec_new.density / moments.vth
-        for i ∈ CartesianIndices(fvec_old.pdf)
-            fvec_old.pdf[i] = fvec_new.pdf[i] * fvec_old.temp_z_s[i[2],i[3]]
+        nvpa, nz, nspecies = size(fvec_old.pdf)
+        for is ∈ 1:nspecies, iz ∈ 1:nz, ivpa ∈ 1:nvpa
+            fvec_old.pdf[ivpa,iz,is] = fvec_new.pdf[ivpa,iz,is] * fvec_old.temp_z_s[iz,is]
         end
     elseif moments.evolve_density
-        for i ∈ CartesianIndices(fvec_old.pdf)
-            fvec_old.pdf[i] = fvec_new.pdf[i] * fvec_new.density[i[2],i[3]]
+        nvpa, nz, nspecies = size(fvec_old.pdf)
+        for is ∈ 1:nspecies, iz ∈ 1:nz, ivpa ∈ 1:nvpa
+            fvec_old.pdf[ivpa,iz,is] = fvec_new.pdf[ivpa,iz,is] * fvec_new.density[iz,is]
         end
     else
         @. fvec_old.pdf = fvec_new.pdf
