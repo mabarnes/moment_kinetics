@@ -83,6 +83,7 @@ function mk_input(scan_input=Dict())
 
     collisions.charge_exchange = get(scan_input, "charge_exchange_frequency", 2.0*sqrt(species[1].initial_temperature))
     collisions.ionization = get(scan_input, "ionization_frequency", collisions.charge_exchange)
+    collisions.constant_ionization_rate = get(scan_input, "constant_ionization_rate", false)
 
     # parameters related to the time stepping
     nstep = get(scan_input, "nstep", 40000)
