@@ -6,6 +6,7 @@ export analyze_pdf_data
 
 using ..array_allocation: allocate_float
 using ..calculus: integral
+using ..velocity_moments: integrate_over_vspace
 
 function analyze_fields_data(phi, ntime, nz, z_wgts, Lz)
     print("Analyzing fields data...")
@@ -121,11 +122,6 @@ end
 
 function field_line_average(fld, wgts, L)
     return integral(fld, wgts)/L
-end
-
-# computes the integral over vpa of the integrand, using the input vpa_wgts
-function integrate_over_vspace(integrand, vpa_wgts)
-    return integral(integrand, vpa_wgts)/sqrt(pi)
 end
 
 end
