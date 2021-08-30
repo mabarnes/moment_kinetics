@@ -9,6 +9,7 @@ function runtests()
         include("sound_wave_tests.jl")
         include("nonlinear_sound_wave_tests.jl")
         include("harrisonthompson.jl")
+        include("wall_bc_tests.jl")
     end
 end
 
