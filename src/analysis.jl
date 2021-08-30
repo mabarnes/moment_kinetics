@@ -81,7 +81,7 @@ function analyze_moments_data(density, parallel_flow, parallel_pressure, paralle
            delta_density, delta_upar, delta_ppar, delta_qpar
 end
 
-function analyze_pdf_data(ff, vpa, nz, nvpa, n_species, ntime, z_wgts, Lz, vpa_wgts,
+function analyze_pdf_data(ff, vpa, nvpa, nz, n_species, ntime, vpa_wgts, z_wgts, Lz,
                           vth, evolve_ppar)
     print("Analyzing distribution function data...")
     f_fldline_avg = allocate_float(nvpa,n_species,ntime)
@@ -93,7 +93,7 @@ function analyze_pdf_data(ff, vpa, nz, nvpa, n_species, ntime, z_wgts, Lz, vpa_w
         end
     end
     # delta_f = f - <f> is the fluctuating distribution function
-    delta_f = allocate_float(nz,nvpa,n_species,ntime)
+    delta_f = allocate_float(nvpa,nz,n_species,ntime)
     for iz ∈ 1:nz
         @. delta_f[:,iz,:,:] = ff[:,iz,:,:] - f_fldline_avg
     end

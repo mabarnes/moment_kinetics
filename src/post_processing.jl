@@ -100,35 +100,35 @@ function analyze_and_plot_data(path)
         if pp.animate_f_vs_vpa_z
             # make a gif animation of ln f(vpa,z,t)
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-                #heatmap(vpa, z, log.(abs.(ff[:,:,i])), xlabel="vpa", ylabel="z", clims = (fmin,fmax), c = :deep)
-                @views heatmap(vpa, z, log.(abs.(ff[:,:,is,i])), xlabel="z", ylabel="vpa", fillcolor = logdeep)
+                #heatmap(z, vpa, log.(abs.(ff[:,:,i])), xlabel="z", ylabel="vpa", clims = (fmin,fmax), c = :deep)
+                @views heatmap(z, vpa, log.(abs.(ff[:,:,is,i])), xlabel="z", ylabel="vpa", fillcolor = logdeep)
             end
             outfile = string(run_name, "_logf_vs_vpa_z", spec_string, ".gif")
             gif(anim, outfile, fps=5)
             # make a gif animation of f(vpa,z,t)
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-                #heatmap(vpa, z, log.(abs.(ff[:,:,i])), xlabel="vpa", ylabel="z", clims = (fmin,fmax), c = :deep)
-                @views heatmap(vpa, z, ff[:,:,is,i], xlabel="z", ylabel="vpa", c = :deep, interpolation = :cubic)
+                #heatmap(z, vpa, log.(abs.(ff[:,:,i])), xlabel="z", ylabel="vpa", clims = (fmin,fmax), c = :deep)
+                @views heatmap(z, vpa, ff[:,:,is,i], xlabel="z", ylabel="vpa", c = :deep, interpolation = :cubic)
             end
             outfile = string(run_name, "_f_vs_vpa_z", spec_string, ".gif")
             gif(anim, outfile, fps=5)
             # make pdf of f(vpa,z,t_final) for each species
             str = string("spec ", string(is), " pdf")
-            @views heatmap(vpa, z, ff[:,:,is,end], xlabel="vpa", ylabel="z", c = :deep, interpolation = :cubic, title=str)
+            @views heatmap(z, vpa, ff[:,:,is,end], xlabel="vpa", ylabel="z", c = :deep, interpolation = :cubic, title=str)
             outfile = string(run_name, "_f_vs_z_vpa_final", spec_string, ".pdf")
             savefig(outfile)
         end
         if pp.animate_deltaf_vs_vpa_z
             # make a gif animation of δf(vpa,z,t)
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-                @views heatmap(vpa, z, delta_f[:,:,is,i], xlabel="vpa", ylabel="z", c = :deep, interpolation = :cubic)
+                @views heatmap(z, vpa, delta_f[:,:,is,i], xlabel="z", ylabel="vpa", c = :deep, interpolation = :cubic)
             end
             outfile = string(run_name, "_deltaf_vs_vpa_z", spec_string, ".gif")
             gif(anim, outfile, fps=5)
         end
         if pp.animate_f_vs_vpa_z0
-            fmin = minimum(ff[:,ivpa0,is,:])
-            fmax = maximum(ff[:,ivpa0,is,:])
+            fmin = minimum(ff[ivpa0,:,is,:])
+            fmax = maximum(ff[ivpa0,:,is,:])
             # make a gif animation of f(vpa0,z,t)
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
                 @views plot(z, ff[ivpa0,:,is,i], ylims = (fmin,fmax))
@@ -146,16 +146,16 @@ function analyze_and_plot_data(path)
             outfile = string(run_name, "_deltaf_vs_z", spec_string, ".gif")
             gif(anim, outfile, fps=5)
         end
-        if pp.animate_f_vs_z0_vpa
+        if pp.animate_f_vs_vpa_z0
             fmin = minimum(ff[:,iz0,is,:])
             fmax = maximum(ff[:,iz0,is,:])
 
             # if is == 1
             #     tmp = copy(ff)
-            #     @. tmp[1,:,1,:] /= vpa^2
+            #     @. tmp[:,1,1,:] /= vpa^2
             #     bohm_integral = copy(time)
             #     for i ∈ 1:ntime
-            #         @views bohm_integral[i] = integrate_over_vspace(tmp[1,1:cld(nvpa,2)-1,1,i],vpa_wgts[1:cld(nvpa,2)-1])/2.0
+            #         @views bohm_integral[i] = integrate_over_vspace(tmp[1:cld(nvpa,2)-1,1,1,i],vpa_wgts[1:cld(nvpa,2)-1])/2.0
             #     end
             #     plot(time, bohm_integral, xlabel="time", label="Bohm integral")
             #     plot!(time, density[1,1,:], label="nᵢ(zmin)")
@@ -169,7 +169,7 @@ function analyze_and_plot_data(path)
             #     end
             #     println()
             #     for j ∈ 0:10
-            #         println("j: ", j, "  Bohm integral: ", integrate_over_vspace(tmp[1,1:cld(nvpa,2)-j,1,end],vpa_wgts[1:cld(nvpa,2)-j,end])/2.0)
+            #         println("j: ", j, "  Bohm integral: ", integrate_over_vspace(tmp[1:cld(nvpa,2)-j,1,1,end],vpa_wgts[1:cld(nvpa,2)-j,end])/2.0)
             #     end
             # end
             # make a gif animation of f(vpa,z0,t)
@@ -180,7 +180,7 @@ function analyze_and_plot_data(path)
             outfile = string(run_name, "_f_vs_vpa", spec_string, ".gif")
             gif(anim, outfile, fps=5)
         end
-        if pp.animate_deltaf_vs_z0_vpa
+        if pp.animate_deltaf_vs_vpa_z0
             fmin = minimum(delta_f[:,iz0,is,:])
             fmax = maximum(delta_f[:,iz0,is,:])
             # make a gif animation of f(vpa,z0,t)

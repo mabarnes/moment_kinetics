@@ -10,7 +10,7 @@ function ionization_collisions!(f_out, fvec_in, evolve_density, n_ion_species,
 	elseif collisions.constant_ionization_rate
 		width = 0.5
 		for ivpa ∈ 1:vpa.n
-			@. f_out[:,ivpa,1] += dt*collisions.ionization/width*exp(-(vpa.grid[ivpa]/width)^2)
+			@. f_out[ivpa,:,1] += dt*collisions.ionization/width*exp(-(vpa.grid[ivpa]/width)^2)
 		end
 	else
         # apply ionization collisions to all ion species

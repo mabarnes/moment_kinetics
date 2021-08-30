@@ -211,17 +211,17 @@ struct pp_input
     # if animate_upar_vs_z = true, create animation of species parallel flow vs z at different time slices
     animate_upar_vs_z::Bool
     # if animate_f_vs_z_vpa = true, create animation of f(z,vpa) at different time slices
-    animate_f_vs_z_vpa::Bool
+    animate_f_vs_vpa_z::Bool
     # if animate_f_vs_z_vpa0 = true, create animation of f(z,vpa0) at different time slices
-    animate_f_vs_z_vpa0::Bool
+    animate_f_vs_vpa0_z::Bool
     # if animate_f_vs_z0_vpa = true, create animation of f(z0,vpa) at different time slices
-    animate_f_vs_z0_vpa::Bool
+    animate_f_vs_vpa_z0::Bool
     # if animate_deltaf_vs_z_vpa = true, create animation of δf(z,vpa) at different time slices
-    animate_deltaf_vs_z_vpa::Bool
+    animate_deltaf_vs_vpa_z::Bool
     # if animate_deltaf_vs_z_vpa0 = true, create animation of δf(z,vpa0) at different time slices
-    animate_deltaf_vs_z_vpa0::Bool
+    animate_deltaf_vs_vpa0_z::Bool
     # if animate_deltaf_vs_z0_vpa = true, create animation of δf(z0,vpa) at different time slices
-    animate_deltaf_vs_z0_vpa::Bool
+    animate_deltaf_vs_vpa_z0::Bool
     # animations will use one in every nwrite_movie data slices
     nwrite_movie::mk_int
     # itime_min is the minimum time index at which to start animations
