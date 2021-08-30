@@ -160,6 +160,8 @@ function run_test(test_input, analytic_frequency, analytic_growth_rate,
         # load fields data
         phi = load_fields_data(fid)
 
+        close(fid)
+
         # analyze the fields data
         phi_fldline_avg, delta_phi = analyze_fields_data(phi, ntime, nz, z_wgts, Lz)
 

@@ -255,6 +255,8 @@ function run_test(test_input, rtol; args...)
 
         # load particle distribution function (pdf) data
         f = load_pdf_data(fid)
+
+        close(fid)
     end
 
     # Create coordinates
