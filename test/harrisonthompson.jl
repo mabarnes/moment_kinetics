@@ -126,7 +126,8 @@ to = TimerOutput()
 Run a test for a single set of parameters
 """
 # Note 'name' should not be shared by any two tests in this file
-function run_test(test_input, rtol, atol; args...)
+function run_test(test_input, analytic_rtol, analytic_atol, expected_phi,
+                  regression_rtol, regression_atol; args...)
     # by passing keyword arguments to run_test, args becomes a Dict which can be used to
     # update the default inputs
 
@@ -181,8 +182,13 @@ function run_test(test_input, rtol, atol; args...)
     # Analytic solution defines phi=0 at mid-point, so need to offset the code solution
     offset = phi[(nz+1)÷2, end]
     # Error is large on the boundary points, so test those separately
-    @test isapprox(phi[2:end-1, end] .- offset, analytic_phi[2:end-1], rtol=rtol, atol=atol)
-    @test isapprox(phi[[1, end], end] .- offset, analytic_phi[[1, end]], rtol=10.0*rtol, atol=atol)
+    @test isapprox(phi[2:end-1, end] .- offset, analytic_phi[2:end-1],
+                   rtol=analytic_rtol, atol=analytic_atol)
+    @test isapprox(phi[[1, end], end] .- offset, analytic_phi[[1, end]],
+                   rtol=10.0*analytic_rtol, atol=analytic_atol)
+
+    # Regression test
+    @test isapprox(phi[:, end], expected_phi, rtol=regression_rtol, atol=regression_atol)
 end
 
 function runtests()
@@ -190,11 +196,17 @@ function runtests()
         println("Harrison-Thompson wall boundary condition tests")
 
         @testset_skip "FD version forms discontinuity in vpa at z=±L/2" "finite difference" begin
-            run_test(test_input_finite_difference, 1e-3, 1e-4)
+            run_test(test_input_finite_difference, 1.e-3, 1.e-4, zeros(100), 1.e-14, 1.e-15)
         end
 
         @testset "Chebyshev" begin
-            run_test(test_input_chebyshev, 3.e-2, 3.e-3)
+            run_test(test_input_chebyshev, 3.e-2, 3.e-3,
+                     [-0.8100630096349565, -0.6518856160147646, -0.4205717722276304,
+                      -0.2829742494858749, -0.1833320256571621, -0.1359546420028737,
+                      -0.10968680094355439, -0.10655932911687617, -0.10320743994056783,
+                      -0.1065593291168768, -0.10968680094355476, -0.13595464200287433,
+                      -0.18333202565716236, -0.28297424948587463, -0.42057177222762804,
+                      -0.6518856160147616, -0.8100630096349531], 1.e-14, 1.e-15)
         end
     end
 end
