@@ -67,6 +67,13 @@ function mk_input(scan_input=Dict())
     species[1].z_IC.temperature_phase = get(scan_input, "z_IC_temperature_phase1", 0.0)
     #species[1].z_IC.initialization_option = "bgk"
     # set initial neutral densiity = Nₑ
+    species[1].vpa_IC.initialization_option = get(scan_input, "vpa_IC_option1", "gaussian")
+    species[1].vpa_IC.density_amplitude = get(scan_input, "vpa_IC_density_amplitude1", 0.000)
+    species[1].vpa_IC.density_phase = get(scan_input, "vpa_IC_density_phase1", 0.0)
+    species[1].vpa_IC.upar_amplitude = get(scan_input, "vpa_IC_upar_amplitude1", 0.0)
+    species[1].vpa_IC.upar_phase = get(scan_input, "vpa_IC_upar_phase1", 0.0)
+    species[1].vpa_IC.temperature_amplitude = get(scan_input, "vpa_IC_temperature_amplitude1", 0.0)
+    species[1].vpa_IC.temperature_phase = get(scan_input, "vpa_IC_temperature_phase1", 0.0)
     for (i, s) in enumerate(species[2:end])
         i = i+1
         s.z_IC.initialization_option = get(scan_input, "z_IC_option$i", species[1].z_IC.initialization_option)
@@ -78,6 +85,13 @@ function mk_input(scan_input=Dict())
         s.z_IC.upar_phase = get(scan_input, "z_IC_upar_phase$i", species[1].z_IC.upar_phase)
         s.z_IC.temperature_amplitude = get(scan_input, "z_IC_temperature_amplitude$i", species[1].z_IC.temperature_amplitude)
         s.z_IC.temperature_phase = get(scan_input, "z_IC_temperature_phase$i", species[1].z_IC.temperature_phase)
+        s.vpa_IC.initialization_option = get(scan_input, "vpa_IC_option$i", species[1].vpa_IC.initialization_option)
+        s.vpa_IC.density_amplitude = get(scan_input, "vpa_IC_density_amplitude$i", species[1].vpa_IC.density_amplitude)
+        s.vpa_IC.density_phase = get(scan_input, "vpa_IC_density_phase$i", species[1].vpa_IC.density_phase)
+        s.vpa_IC.upar_amplitude = get(scan_input, "vpa_IC_upar_amplitude$i", species[1].vpa_IC.upar_amplitude)
+        s.vpa_IC.upar_phase = get(scan_input, "vpa_IC_upar_phase$i", species[1].vpa_IC.upar_phase)
+        s.vpa_IC.temperature_amplitude = get(scan_input, "vpa_IC_temperature_amplitude$i", species[1].vpa_IC.temperature_amplitude)
+        s.vpa_IC.temperature_phase = get(scan_input, "vpa_IC_temperature_phase$i", species[1].vpa_IC.temperature_phase)
     end
     #################### end specification of species inputs #####################
 
