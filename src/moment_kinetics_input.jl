@@ -179,13 +179,24 @@ function mk_input(scan_input=Dict())
     end
     drive_immutable = drive_input(drive.force_phi, drive.amplitude, drive.frequency)
 
+    # Make file to log some information about inputs into.
+    # check to see if output_dir exists in the current directory
+    # if not, create it
+    isdir(output_dir) || mkdir(output_dir)
+    io = open_output_file(string(output_dir,"/",run_name), "input")
+
     # check input to catch errors/unsupported options
-    check_input(run_name, output_dir, nstep, dt, use_semi_lagrange,
+    check_input(io, output_dir, nstep, dt, use_semi_lagrange,
         z_immutable, vpa_immutable, composition, species_immutable, evolve_moments)
 
     # return immutable structs for z, vpa, species and composition
-    return run_name, output_dir, evolve_moments, t, z_immutable, vpa_immutable,
-        composition, species_immutable, collisions, drive_immutable
+    all_inputs = (run_name, output_dir, evolve_moments, t, z_immutable, vpa_immutable,
+                  composition, species_immutable, collisions, drive_immutable)
+    println(io, "\nAll inputs returned from mk_input():")
+    println(io, all_inputs)
+    close(io)
+
+    return all_inputs
 end
 
 function load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_response)
@@ -364,15 +375,11 @@ function load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_resp
 end
 
 # check various input options to ensure they are all valid/consistent
-function check_input(run_name, output_dir, nstep, dt, use_semi_lagrange, z, vpa,
+function check_input(io, output_dir, nstep, dt, use_semi_lagrange, z, vpa,
     composition, species, evolve_moments)
-    # check to see if output_dir exists in the current directory
-    # if not, create it
-    isdir(output_dir) || mkdir(output_dir)
     # copy the input file to the output directory to be saved
     cp(joinpath(@__DIR__, "moment_kinetics_input.jl"), joinpath(output_dir, "moment_kinetics_input.jl"), force=true)
     # open ascii file in which informtaion about input choices will be written
-    io = open_output_file(string(output_dir,"/",run_name), "input")
     check_input_time_advance(nstep, dt, use_semi_lagrange, io)
     check_input_z(z, io)
     check_input_vpa(vpa, io)
@@ -383,7 +390,6 @@ function check_input(run_name, output_dir, nstep, dt, use_semi_lagrange, z, vpa,
         println(io, "this is not a supported option.  forcing evolve_moments.density = true.")
         evolve_moments.density = true
     end
-    close(io)
 end
 function check_input_time_advance(nstep, dt, use_semi_lagrange, io)
     println(io,"##### time advance #####")
