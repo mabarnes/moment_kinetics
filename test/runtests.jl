@@ -8,6 +8,7 @@ function runtests()
         include("interpolation_tests.jl")
         include("sound_wave_tests.jl")
         include("nonlinear_sound_wave_tests.jl")
+        include("harrisonthompson.jl")
     end
 end
 

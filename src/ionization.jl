@@ -8,6 +8,11 @@ function ionization_collisions!(f_out, fvec_in, evolve_density, n_ion_species,
     if evolve_density
         error("Ionization collisions not currently supported for anything other than the standard drift kinetic equation: Aborting.")
 	elseif collisions.constant_ionization_rate
+                # Oddly the test in test/harrisonthompson.jl matches the analitical
+                # solution (which assumes width=0.0) better with width=0.5 than with,
+                # e.g., width=0.15. Possibly narrower widths would require more vpa
+                # resolution, which then causes crashes due to overshoots giving
+                # negative f??
 		width = 0.5
 		for ivpa ∈ 1:vpa.n
 			@. f_out[ivpa,:,1] += dt*collisions.ionization/width*exp(-(vpa.grid[ivpa]/width)^2)
