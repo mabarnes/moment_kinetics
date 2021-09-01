@@ -35,12 +35,14 @@ test_input_finite_difference = Dict("n_ion_species" => 1,
                                     "initial_temperature1" => 1.0,
                                     "initial_density2" => 0.5,
                                     "initial_temperature2" => 1.0,
+                                    "z_IC_option1" => "sinusoid",
                                     "z_IC_density_amplitude1" => 0.001,
                                     "z_IC_density_phase1" => 0.0,
                                     "z_IC_upar_amplitude1" => 0.0,
                                     "z_IC_upar_phase1" => 0.0,
                                     "z_IC_temperature_amplitude1" => 0.0,
                                     "z_IC_temperature_phase1" => 0.0,
+                                    "z_IC_option2" => "sinusoid",
                                     "z_IC_density_amplitude2" => 0.001,
                                     "z_IC_density_phase2" => 0.0,
                                     "z_IC_upar_amplitude2" => 0.0,
@@ -48,6 +50,7 @@ test_input_finite_difference = Dict("n_ion_species" => 1,
                                     "z_IC_temperature_amplitude2" => 0.0,
                                     "z_IC_temperature_phase2" => 0.0,
                                     "charge_exchange_frequency" => 2*π*0.1,
+                                    "ionization_frequency" => 0.0,
                                     "nstep" => 1500,
                                     "dt" => 0.002,
                                     "nwrite" => 20,
@@ -56,6 +59,7 @@ test_input_finite_difference = Dict("n_ion_species" => 1,
                                     "split_operators" => false,
                                     "z_ngrid" => 100,
                                     "z_nelement" => 1,
+                                    "z_bc" => "periodic",
                                     "z_discretization" => "finite_difference",
                                     "vpa_ngrid" => 180,
                                     "vpa_nelement" => 1,
@@ -156,6 +160,8 @@ function run_test(test_input, analytic_frequency, analytic_growth_rate,
         # load fields data
         phi = load_fields_data(fid)
 
+        close(fid)
+
         # analyze the fields data
         phi_fldline_avg, delta_phi = analyze_fields_data(phi, ntime, nz, z_wgts, Lz)
 
@@ -181,7 +187,7 @@ function run_test(test_input, analytic_frequency, analytic_growth_rate,
     end
 
     # Check the fit errors are not too large, otherwise we are testing junk
-    @test phi_fit.fit_error < 2.e-2
+    @test phi_fit.amplitude_fit_error < 2.e-2
     @test phi_fit.offset_fit_error < 5.e-6
     @test phi_fit.cosine_fit_error < 5.e-8
 

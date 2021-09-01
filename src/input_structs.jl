@@ -8,6 +8,7 @@ export initial_condition_input, initial_condition_input_mutable
 export species_parameters, species_parameters_mutable
 export species_composition
 export drive_input, drive_input_mutable
+export collisions_input
 export pp_input
 
 using ..type_definitions: mk_float, mk_int
@@ -149,7 +150,11 @@ mutable struct species_composition
     # if boltzmann_electron_response = true, the electron density is fixed to be Nₑ*(eϕ/T_e)
     boltzmann_electron_response::Bool
     # electron temperature used for Boltzmann response
-    T_e::Float64
+    T_e::mk_float
+    # wall temperature used if 'wall' BC selected for z coordinate; normalised by electron temperature
+    T_wall::mk_float
+    # ratio of the neutral particle mass to the ion mass
+    mn_over_mi::mk_float
 end
 mutable struct drive_input_mutable
     # if drive.phi = true, include external electrostatic potential
@@ -166,6 +171,14 @@ struct drive_input
     # phi(z,t=0)*amplitude*sinpi(t*frequency)
     amplitude::mk_float
     frequency::mk_float
+end
+mutable struct collisions_input
+    # charge exchange collision frequency
+    charge_exchange::mk_float
+    # ionization collision frequency
+    ionization::mk_float
+    # if constant_ionization_rate = true, use an ionization term that is constant in z
+    constant_ionization_rate::Bool
 end
 struct pp_input
     # if calculate_frequencies = true, calculate and print the frequency and growth/decay
@@ -198,17 +211,17 @@ struct pp_input
     # if animate_upar_vs_z = true, create animation of species parallel flow vs z at different time slices
     animate_upar_vs_z::Bool
     # if animate_f_vs_z_vpa = true, create animation of f(z,vpa) at different time slices
-    animate_f_vs_z_vpa::Bool
+    animate_f_vs_vpa_z::Bool
     # if animate_f_vs_z_vpa0 = true, create animation of f(z,vpa0) at different time slices
-    animate_f_vs_z_vpa0::Bool
+    animate_f_vs_vpa0_z::Bool
     # if animate_f_vs_z0_vpa = true, create animation of f(z0,vpa) at different time slices
-    animate_f_vs_z0_vpa::Bool
+    animate_f_vs_vpa_z0::Bool
     # if animate_deltaf_vs_z_vpa = true, create animation of δf(z,vpa) at different time slices
-    animate_deltaf_vs_z_vpa::Bool
+    animate_deltaf_vs_vpa_z::Bool
     # if animate_deltaf_vs_z_vpa0 = true, create animation of δf(z,vpa0) at different time slices
-    animate_deltaf_vs_z_vpa0::Bool
+    animate_deltaf_vs_vpa0_z::Bool
     # if animate_deltaf_vs_z0_vpa = true, create animation of δf(z0,vpa) at different time slices
-    animate_deltaf_vs_z0_vpa::Bool
+    animate_deltaf_vs_vpa_z0::Bool
     # animations will use one in every nwrite_movie data slices
     nwrite_movie::mk_int
     # itime_min is the minimum time index at which to start animations

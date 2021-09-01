@@ -7,7 +7,7 @@ using ..calculus: derivative!
 # use the force balance equation d(nu)/dt + d(ppar + n*upar*upar)/dz =
 # -(dens/2)*dphi/dz + R*dens_i*dens_n*(upar_n-upar_i)
 # to update the parallel particle flux dens*upar for each species
-function force_balance!(pflx, fvec, fields, CX_frequency, vpa, z, dt, spectral, composition)
+function force_balance!(pflx, fvec, fields, collisions, vpa, z, dt, spectral, composition)
     # account for momentum flux contribution to force balance
     for is ∈ 1:composition.n_species
         @views force_balance_flux_species!(pflx[:,is], fvec.density[:,is], fvec.upar[:,is], fvec.ppar[:,is], z, dt, spectral)
@@ -18,8 +18,8 @@ function force_balance!(pflx, fvec, fields, CX_frequency, vpa, z, dt, spectral, 
     end
     # if neutrals present and charge exchange frequency non-zero,
     # account for collisional friction between ions and neutrals
-    if composition.n_neutral_species > 0 && abs(CX_frequency) > 0.0
-        force_balance_CX!(pflx, fvec.density, fvec.upar, CX_frequency, composition, z.n, dt)
+    if composition.n_neutral_species > 0 && abs(collisions.charge_exchange) > 0.0
+        force_balance_CX!(pflx, fvec.density, fvec.upar, collisions.charge_exchange, composition, z.n, dt)
     end
 end
 

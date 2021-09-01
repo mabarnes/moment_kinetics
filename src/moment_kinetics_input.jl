@@ -16,6 +16,7 @@ using ..input_structs: initial_condition_input, initial_condition_input_mutable
 using ..input_structs: species_parameters, species_parameters_mutable
 using ..input_structs: species_composition
 using ..input_structs: drive_input, drive_input_mutable
+using ..input_structs: collisions_input
 
 @enum RunType single performance_test scan
 const run_type = single
@@ -33,34 +34,30 @@ function mk_input(scan_input=Dict())
     # currently this is the only supported option
     boltzmann_electron_response = true
 
-    z, vpa, species, composition, drive, evolve_moments =
+    z, vpa, species, composition, drive, evolve_moments, collisions =
         load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_response)
 
     # this is the prefix for all output files associated with this run
-    run_name = get(scan_input, "run_name", "ppar")
+    run_name = get(scan_input, "run_name", "wallBC")
     # this is the directory where the simulation data will be stored
     base_directory = get(scan_input, "base_directory", "runs")
     output_dir = string(base_directory, "/", run_name)
     # if evolve_moments.density = true, evolve density via continuity eqn
     # and g = f/n via modified drift kinetic equation
-    evolve_moments.density = get(scan_input, "evolve_moments_density", true)
-    evolve_moments.parallel_flow = get(scan_input, "evolve_moments_parallel_flow", true)
-    evolve_moments.parallel_pressure = get(scan_input, "evolve_moments_parallel_pressure", true)
-    evolve_moments.conservation = get(scan_input, "evolve_moments_conservation", true)
-#    evolve_moments.advective_form = false
-
-    #z.advection.option = "constant"
-    #z.advection.constant_speed = 1.0
-
-    #vpa.advection.option = "constant"
-    #vpa.advection.constant_speed = 0.0
+    evolve_moments.density = get(scan_input, "evolve_moments_density", false)
+    evolve_moments.parallel_flow = get(scan_input, "evolve_moments_parallel_flow", false)
+    evolve_moments.parallel_pressure = get(scan_input, "evolve_moments_parallel_pressure", false)
+    evolve_moments.conservation = get(scan_input, "evolve_moments_conservation", false)
 
     ####### specify any deviations from default inputs for evolved species #######
     # set initial Tₑ = 1
     composition.T_e = get(scan_input, "T_e", 1.0)
+    # set wall temperature T_wall = Tw/Te
+    composition.T_wall = 1.0
     # set initial neutral temperature Tn/Tₑ = 1
     # set initial nᵢ/Nₑ = 1.0
-    species[1].initial_density = get(scan_input, "initial_density1", 0.5)
+    species[1].z_IC.initialization_option = get(scan_input, "z_IC_option1", "gaussian")
+    species[1].initial_density = get(scan_input, "initial_density1", 1.0)
     species[1].initial_temperature = get(scan_input, "initial_temperature1", 1.0)
     species[1].z_IC.density_amplitude = get(scan_input, "z_IC_density_amplitude1", 0.001)
     species[1].z_IC.density_phase = get(scan_input, "z_IC_density_phase1", 0.0)
@@ -72,6 +69,7 @@ function mk_input(scan_input=Dict())
     # set initial neutral densiity = Nₑ
     for (i, s) in enumerate(species[2:end])
         i = i+1
+        s.z_IC.initialization_option = get(scan_input, "z_IC_option$i", species[1].z_IC.initialization_option)
         s.initial_density = get(scan_input, "initial_density$i", 0.5)
         s.initial_temperature = get(scan_input, "initial_temperature$i", species[1].initial_temperature)
         s.z_IC.density_amplitude = get(scan_input, "z_IC_density_amplitude$i", species[1].z_IC.density_amplitude)
@@ -83,12 +81,14 @@ function mk_input(scan_input=Dict())
     end
     #################### end specification of species inputs #####################
 
-    charge_exchange_frequency = get(scan_input, "charge_exchange_frequency", 2.0*sqrt(species[1].initial_temperature))
+    collisions.charge_exchange = get(scan_input, "charge_exchange_frequency", 2.0*sqrt(species[1].initial_temperature))
+    collisions.ionization = get(scan_input, "ionization_frequency", collisions.charge_exchange)
+    collisions.constant_ionization_rate = get(scan_input, "constant_ionization_rate", false)
 
     # parameters related to the time stepping
-    nstep = get(scan_input, "nstep", 5000)
-    dt = get(scan_input, "dt", 0.001/sqrt(species[1].initial_temperature))
-    nwrite = get(scan_input, "nwrite", 20)
+    nstep = get(scan_input, "nstep", 40000)
+    dt = get(scan_input, "dt", 0.00025/sqrt(species[1].initial_temperature))
+    nwrite = get(scan_input, "nwrite", 80)
     # use_semi_lagrange = true to use interpolation-free semi-Lagrange treatment
     # otherwise, solve problem solely using the discretization_option above
     use_semi_lagrange = get(scan_input, "use_semi_lagrange", false)
@@ -101,10 +101,13 @@ function mk_input(scan_input=Dict())
     # ngrid is number of grid points per element
     z.ngrid = get(scan_input, "z_ngrid", 9)
     # nelement is the number of elements
-    z.nelement = get(scan_input, "z_nelement", 2)
+    z.nelement = get(scan_input, "z_nelement", 8)
     # determine the discretization option for the z grid
     # supported options are "chebyshev_pseudospectral" and "finite_difference"
     z.discretization = get(scan_input, "z_discretization", "chebyshev_pseudospectral")
+    # determine the boundary condition to impose in z
+    # supported options are "constant", "periodic" and "wall"
+    z.bc = get(scan_input, "z_bc", "wall")
 
     # overwrite some default parameters related to the vpa grid
     # ngrid is the number of grid points per element
@@ -168,7 +171,7 @@ function mk_input(scan_input=Dict())
 
     # return immutable structs for z, vpa, species and composition
     return run_name, output_dir, evolve_moments, t, z_immutable, vpa_immutable,
-        composition, species_immutable, charge_exchange_frequency, drive_immutable
+        composition, species_immutable, collisions, drive_immutable
 end
 
 function load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_response)
@@ -263,8 +266,14 @@ function load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_resp
     else
         n_species = n_ion_speces + n_neutral_species + 1
     end
+    # electron temperature over reference temperature
+    T_e = 1.0
+    # temperature at the entrance to the wall in terms of the electron temperature
+    T_wall = 1.0
+    # ratio of the neutral particle mass to the ion particle mass
+    mn_over_mi = 1.0
     composition = species_composition(n_species, n_ion_species, n_neutral_species,
-        boltzmann_electron_response, 1.0)
+        boltzmann_electron_response, T_e, T_wall, mn_over_mi)
     species = Array{species_parameters_mutable,1}(undef,n_species)
     # initial temperature for each species defaults to Tₑ
     initial_temperature = 1.0
@@ -330,7 +339,14 @@ function load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_resp
     drive_amplitude = 1.0
     drive_frequency = 1.0
     drive = drive_input_mutable(drive_phi, drive_amplitude, drive_frequency)
-    return z, vpa, species, composition, drive, evolve_moments
+    # charge exchange collision frequency
+    charge_exchange = 0.0
+    # ionization collision frequency
+    ionization = 0.0
+    constant_ionization_rate = false
+    collisions = collisions_input(charge_exchange, ionization, constant_ionization_rate)
+
+    return z, vpa, species, composition, drive, evolve_moments, collisions
 end
 
 # check various input options to ensure they are all valid/consistent
@@ -389,6 +405,8 @@ function check_input_z(z, io)
         println(io,">z.bc = 'constant'.  enforcing constant incoming BC in z.")
     elseif z.bc == "periodic"
         println(io,">z.bc = 'periodic'.  enforcing periodicity in z.")
+    elseif z.bc == "wall"
+        println(io,">z.bc = 'wall'.  enforcing wall BC in z.")
     else
         input_option_error("z.bc", z.bc)
     end
@@ -468,6 +486,9 @@ function check_input_initialization(composition, species, io)
         elseif species[is].vpa_IC.initialization_option == "bgk"
             print(io,">vpa_initialization_option = 'bgk'.")
             println(io,"  setting F(z,vpa) = F(vpa^2 + phi), with phi_max = 0.")
+        elseif species[is].vpa_IC.initialization_option == "vpagaussian"
+            print(io,">vpa_initialization_option = 'vpagaussian'.")
+            println(io,"  setting G(vpa) = vpa^2*exp(-(vpa/vpa_width)^2).")
         else
             input_option_error("vpa_initialization_option", species[is].vpa_IC.initialization_option)
         end

@@ -5,10 +5,14 @@ export enforce_z_boundary_condition!
 export enforce_vpa_boundary_condition!
 export enforce_boundary_conditions!
 
+# package
+using SpecialFunctions: erfc
+# modules
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_float
 using ..bgk: init_bgk_pdf!
 using ..velocity_moments: integrate_over_vspace
+using ..velocity_moments: integrate_over_positive_vpa, integrate_over_negative_vpa
 using ..velocity_moments: create_moments, update_qpar!
 
 struct pdf_struct
@@ -129,13 +133,31 @@ function init_pdf_over_density!(pdf, spec, vpa, z, vth, vpa_norm_fac)
         for iz ∈ 1:z.n
             @. pdf[:,iz] = exp(-(vpa.grid*(vpa_norm_fac[iz]/vth[iz]))^2) / vth[iz]
         end
+        for iz ∈ 1:z.n
+            # densfac = the integral of the pdf over v-space, which should be unity,
+            # but may not be exactly unity due to quadrature errors
+            densfac = integrate_over_vspace(view(pdf,:,iz), vpa.wgts)
+            # pparfac = the integral of the pdf over v-space, weighted by m_s w_s^2 / vths^2,
+            # where w_s = vpa - upar_s;
+            # should be equal to 1/2, but may not be exactly 1/2 due to quadrature errors
+            @. vpa.scratch = vpa.grid^2 * pdf[:,iz] * (vpa_norm_fac[iz]/vth[iz])^2
+            pparfac = integrate_over_vspace(vpa.scratch, vpa.wgts)
+            # pparfac2 = the integral of the pdf over v-space, weighted by m_s w_s^2 (w_s^2 - vths^2 / 2) / vth^4
+            #@. vpa.scratch = vpa.grid^2 *(vpa.grid^2/pparfac - vth[iz]^2/densfac) * pdf[:,iz] * (vpa_norm_fac[iz]/vth[iz])^4
+            @. vpa.scratch = vpa.grid^2 *(vpa.grid^2/pparfac - 1.0/densfac) * pdf[:,iz] * (vpa_norm_fac[iz]/vth[iz])^4
+            pparfac2 = integrate_over_vspace(vpa.scratch, vpa.wgts)
+
+            #@. pdf[:,iz] = pdf[:,iz]/densfac + (0.5 - pparfac/densfac)/pparfac2*(vpa.grid^2/pparfac - vth[iz]^2/densfac)*pdf[:,iz]*(vpa_norm_fac[iz]/vth[iz])^2
+            @. pdf[:,iz] = pdf[:,iz]/densfac + (0.5 - pparfac/densfac)/pparfac2*(vpa.grid^2/pparfac - 1.0/densfac)*pdf[:,iz]*(vpa_norm_fac[iz]/vth[iz])^2
+        end
+    elseif spec.vpa_IC.initialization_option == "vpagaussian"
+        for iz ∈ 1:z.n
+            @. pdf[:,iz] = vpa.grid^2*exp(-(vpa.grid*(vpa_norm_fac[iz]/vth[iz]))^2) / vth[iz]
+        end
     elseif spec.vpa_IC.initialization_option == "sinusoid"
         # initial condition is sinusoid in vpa
         for iz ∈ 1:z.n
-            @. pdf[:,iz] =
-                (spec.vpa_IC.density_amplitude
-                 * cos(2.0*π*spec.vpa_IC.wavenumber*vpa.grid/vpa.L
-                       + spec.vpa_IC.density_phase))
+            @. pdf[:,iz] = spec.vpa_IC.amplitude*cospi(2.0*spec.vpa_IC.wavenumber*vpa.grid/vpa.L)
         end
     elseif spec.vpa_IC.initialization_option == "monomial"
         # linear variation in vpa, with offset so that
@@ -144,58 +166,116 @@ function init_pdf_over_density!(pdf, spec, vpa, z, vth, vpa_norm_fac)
             @. pdf[:,iz] = (vpa.grid + 0.5*vpa.L)^spec.vpa_IC.monomial_degree
         end
     end
-    for iz ∈ 1:z.n
-        # densfac = the integral of the pdf over v-space, which should be unity,
-        # but may not be exactly unity due to quadrature errors
-        densfac = integrate_over_vspace(view(pdf,:,iz), vpa.wgts)
-        # pparfac = the integral of the pdf over v-space, weighted by m_s w_s^2 / vths^2,
-        # where w_s = vpa - upar_s;
-        # should be equal to 1/2, but may not be exactly 1/2 due to quadrature errors
-        @. vpa.scratch = vpa.grid^2 * pdf[:,iz] * (vpa_norm_fac[iz]/vth[iz])^2
-        pparfac = integrate_over_vspace(vpa.scratch, vpa.wgts)
-        # pparfac2 = the integral of the pdf over v-space, weighted by m_s w_s^2 (w_s^2 - vths^2 / 2) / vth^4
-        #@. vpa.scratch = vpa.grid^2 *(vpa.grid^2/pparfac - vth[iz]^2/densfac) * pdf[iz,:] * (vpa_norm_fac[iz]/vth[iz])^4
-        @. vpa.scratch = vpa.grid^2 *(vpa.grid^2/pparfac - 1.0/densfac) * pdf[:,iz] * (vpa_norm_fac[iz]/vth[iz])^4
-        pparfac2 = integrate_over_vspace(vpa.scratch, vpa.wgts)
-
-        #@. pdf[iz,:] = pdf[iz,:]/densfac + (0.5 - pparfac/densfac)/pparfac2*(vpa.grid^2/pparfac - vth[iz]^2/densfac)*pdf[iz,:]*(vpa_norm_fac[iz]/vth[iz])^2
-        @. pdf[:,iz] = pdf[:,iz]/densfac + (0.5 - pparfac/densfac)/pparfac2*(vpa.grid^2/pparfac - 1.0/densfac)*pdf[:,iz]*(vpa_norm_fac[iz]/vth[iz])^2
-    end
+    # for iz ∈ 1:z.n
+    #     # densfac = the integral of the pdf over v-space, which should be unity,
+    #     # but may not be exactly unity due to quadrature errors
+    #     densfac = integrate_over_vspace(view(pdf,:,iz), vpa.wgts)
+    #     # pparfac = the integral of the pdf over v-space, weighted by m_s w_s^2 / vths^2,
+    #     # where w_s = vpa - upar_s;
+    #     # should be equal to 1/2, but may not be exactly 1/2 due to quadrature errors
+    #     @. vpa.scratch = vpa.grid^2 * pdf[:,iz] * (vpa_norm_fac[iz]/vth[iz])^2
+    #     pparfac = integrate_over_vspace(vpa.scratch, vpa.wgts)
+    #     # pparfac2 = the integral of the pdf over v-space, weighted by m_s w_s^2 (w_s^2 - vths^2 / 2) / vth^4
+    #     #@. vpa.scratch = vpa.grid^2 *(vpa.grid^2/pparfac - vth[iz]^2/densfac) * pdf[iz,:] * (vpa_norm_fac[iz]/vth[iz])^4
+    #     @. vpa.scratch = vpa.grid^2 *(vpa.grid^2/pparfac - 1.0/densfac) * pdf[:,iz] * (vpa_norm_fac[iz]/vth[iz])^4
+    #     pparfac2 = integrate_over_vspace(vpa.scratch, vpa.wgts)
+    #
+    #     #@. pdf[:,iz] = pdf[:,iz]/densfac + (0.5 - pparfac/densfac)/pparfac2*(vpa.grid^2/pparfac - vth[iz]^2/densfac)*pdf[:,iz]*(vpa_norm_fac[iz]/vth[iz])^2
+    #     @. pdf[:,iz] = pdf[:,iz]/densfac + (0.5 - pparfac/densfac)/pparfac2*(vpa.grid^2/pparfac - 1.0/densfac)*pdf[:,iz]*(vpa_norm_fac[iz]/vth[iz])^2
+    # end
     return nothing
 end
-function enforce_boundary_conditions!(f, vpa_bc, z_bc, vpa, vpa_adv::T1, z_adv::T2) where {T1, T2}
-    for is ∈ 1:size(f,3)
-        # enforce the z BC
-        for ivpa ∈ 1:size(f,1)
-            @views enforce_z_boundary_condition!(f[ivpa,:,is], z_bc, z_adv[ivpa,is].upwind_idx, z_adv[ivpa,is].downwind_idx, vpa[ivpa])
-        end
-    end
+function enforce_boundary_conditions!(f, vpa_bc, z_bc, vpa, vpa_adv::T1, z_adv::T2, composition) where {T1, T2}
+    @views enforce_z_boundary_condition!(f, z_bc, z_adv, vpa, composition)
     for is ∈ 1:size(vpa_adv,2)
         # enforce the vpa BC
         for iz ∈ 1:size(f,2)
-            @views enforce_vpa_boundary_condition_local!(f[:,iz,is], vpa_bc, vpa_adv[iz,is].upwind_idx, vpa_adv[iz,is].downwind_idx)
+            @views enforce_vpa_boundary_condition_local!(f[:,iz,is], vpa_bc, vpa_adv[iz,is].upwind_idx,
+                                                         vpa_adv[iz,is].downwind_idx)
         end
     end
 end
-# impose the prescribed z boundary condition on f
-# at every vpa grid point
-function enforce_z_boundary_condition!(f, bc::String, vpa, src::T) where T
-    for ivpa ∈ 1:size(src,1)
-        enforce_z_boundary_condition!(view(f,ivpa,:), bc,
-            src[ivpa].upwind_idx, src[ivpa].downwind_idx, vpa.grid[ivpa])
-    end
-end
-# impose the prescribed z boundary conditin on f
-# at a single vpa grid point
-function enforce_z_boundary_condition!(f, bc, upwind_idx, downwind_idx, v)
+# enforce boundary conditions on f in z
+function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, composition) where T
+    # define n_species variable for convenience
+    n_species = composition.n_species
+    # define nvpa variable for convenience
+    nvpa = vpa.n
+    # define a zero that accounts for finite precision
+    zero = 1.0e-10
+    # 'constant' BC is time-independent f at upwind boundary
+    # and constant f beyond boundary
     if bc == "constant"
-        # BC is time-independent f at upwind boundary
-        # and constant f beyond boundary
-        f[upwind_idx] = density_offset * exp(-(v/vpawidth)^2) / sqrt(pi)
+        for is ∈ 1:n_species
+            for ivpa ∈ 1:nvpa
+                upwind_idx = adv[ivpa,is].upwind_idx
+                f[ivpa,upwind_idx,is] = density_offset * exp(-(vpa.grid[ivpa]/vpawidth)^2) / sqrt(pi)
+            end
+        end
+    # 'periodic' BC enforces periodicity by taking the average of the boundary points
     elseif bc == "periodic"
-        # impose periodicity
-        f[downwind_idx] = 0.5*(f[upwind_idx]+f[downwind_idx])
-        f[upwind_idx] = f[downwind_idx]
+        for is ∈ 1:n_species
+            for ivpa ∈ 1:nvpa
+                downwind_idx = adv[ivpa,is].downwind_idx
+                upwind_idx = adv[ivpa,is].upwind_idx
+                f[ivpa,downwind_idx,is] = 0.5*(f[ivpa,upwind_idx,is]+f[ivpa,downwind_idx,is])
+                f[ivpa,upwind_idx,is] = f[ivpa,downwind_idx,is]
+            end
+        end
+    # 'wall' BC enforces wall boundary conditions
+    elseif bc == "wall"
+        # zero incoming BC for ions, as they recombine at the wall
+        for is ∈ 1:composition.n_ion_species
+            for ivpa ∈ 1:nvpa
+                # no parallel BC should be enforced for vpa = 0
+                if abs(vpa.grid[ivpa]) > zero
+                    upwind_idx = adv[ivpa,is].upwind_idx
+                    f[ivpa,upwind_idx,is] = 0.0
+                end
+            end
+        end
+        # BC for neutrals
+        if composition.n_neutral_species > 0
+            # define vtfac to avoid repeated computation below
+            vtfac = sqrt(composition.T_wall * composition.mn_over_mi)
+            # initialise the combined ion/neutral fluxes into the walls to be zero
+            wall_flux_0 = 0.0
+            wall_flux_L = 0.0
+            # include the contribution to the wall fluxes due to species with index 'is'
+            for is ∈ 1:composition.n_ion_species
+                @views wall_flux_0 += (sqrt(composition.mn_over_mi) *
+                                       integrate_over_negative_vpa(abs.(vpa.grid) .* f[:,1,is], vpa.grid, vpa.wgts, vpa.scratch))
+                @views wall_flux_L += (sqrt(composition.mn_over_mi) *
+                                       integrate_over_positive_vpa(abs.(vpa.grid) .* f[:,end,is], vpa.grid, vpa.wgts, vpa.scratch))
+            end
+            for isn ∈ 1:composition.n_neutral_species
+                is = isn + composition.n_ion_species
+                @views wall_flux_0 += integrate_over_negative_vpa(abs.(vpa.grid) .* f[:,1,is], vpa.grid, vpa.wgts, vpa.scratch)
+                @views wall_flux_L += integrate_over_positive_vpa(abs.(vpa.grid) .* f[:,end,is], vpa.grid, vpa.wgts, vpa.scratch)
+            end
+            # NB: need to generalise to more than one ion species
+            # get the Knudsen cosine distribution
+            # NB: as vtfac is time-independent, can be made more efficient by creating
+            # array for Knudsen cosine distribution and carrying out following four lines
+            # of calculation at initialization
+            @. vpa.scratch = (3*pi/vtfac^3)*abs(vpa.grid)*erfc(abs(vpa.grid)/vtfac)
+            tmparr = copy(vpa.scratch)
+            tmp = integrate_over_positive_vpa(vpa.grid .* vpa.scratch, vpa.grid, vpa.wgts, tmparr)
+            @. vpa.scratch /= tmp
+            for isn ∈ 1:composition.n_neutral_species
+                is = isn + composition.n_ion_species
+                for ivpa ∈ 1:nvpa
+                    # no parallel BC should be enforced for vpa = 0
+                    if abs(vpa.grid[ivpa]) > zero
+                        if adv[ivpa,is].upwind_idx == 1
+                            f[ivpa,1,is] = wall_flux_0 * vpa.scratch[ivpa]
+                        else
+                            f[ivpa,end,is] = wall_flux_L * vpa.scratch[ivpa]
+                        end
+                    end
+                end
+            end
+        end
     end
 end
 # impose the prescribed vpa boundary condition on f

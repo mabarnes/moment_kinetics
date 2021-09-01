@@ -106,8 +106,8 @@ Use `@testset_skip` to replace `@testset` for some tests which should be skipped
 
 Usage
 -----
-Replace `@testset` with `@testset "reason"` where `"reason"` is a string saying why the
-test should be skipped (which should come before the description string, if that is
+Replace `@testset` with `@testset_skip "reason"` where `"reason"` is a string saying why
+the test should be skipped (which should come before the description string, if that is
 present).
 """
 macro testset_skip(args...)

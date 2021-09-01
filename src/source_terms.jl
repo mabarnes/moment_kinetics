@@ -34,8 +34,9 @@ function source_terms_evolve_density!(pdf_out, pdf_in, dens, upar, z, dt, spectr
     @. z.scratch *= dt/dens
     #derivative!(z.scratch, z.scratch, z, -upar, spectral)
     # update the density
-    for i in CartesianIndices(pdf_out)
-        pdf_out[i] += pdf_in[i]*z.scratch[i[2]]
+    nvpa, nz = size(pdf_out)
+    for iz ∈ 1:nz, ivpa ∈ 1:nvpa
+        pdf_out[ivpa,iz] += pdf_in[ivpa,iz]*z.scratch[iz]
     end
     return nothing
 end
@@ -53,8 +54,9 @@ function source_terms_evolve_ppar!(pdf_out, pdf_in, dens, upar, ppar, vth, qpar,
     # update the pdf to account for the parallel heat flux contribution to the source
     @. z.scratch -= 0.5*dt*z.scratch2/ppar
 
-    for i ∈ CartesianIndices(pdf_out)
-        pdf_out[i] += pdf_in[i] * z.scratch[i[2]]
+    nvpa, nz = size(pdf_out)
+    for iz ∈ 1:nz, ivpa ∈ 1:nvpa
+        pdf_out[ivpa,iz] += pdf_in[ivpa,iz]*z.scratch[iz]
     end
     return nothing
 end

@@ -4,9 +4,12 @@ export analyze_and_plot
 
 # packages
 using Plots
+using IJulia
 using LsqFit
 using NCDatasets
 using Statistics: mean
+using SpecialFunctions: erfi
+#using LaTeXStrings
 # modules
 using ..post_processing_input: pp
 using ..quadrature: composite_simpson_weights
@@ -16,6 +19,7 @@ using ..type_definitions: mk_float
 using ..load_data: open_netcdf_file
 using ..load_data: load_coordinate_data, load_fields_data, load_moments_data, load_pdf_data
 using ..analysis: analyze_fields_data, analyze_moments_data, analyze_pdf_data
+using ..velocity_moments: integrate_over_vspace
 
 function analyze_and_plot_data(path)
     # Create run_name from the path to the run directory
@@ -96,30 +100,35 @@ function analyze_and_plot_data(path)
         if pp.animate_f_vs_vpa_z
             # make a gif animation of ln f(vpa,z,t)
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-                #heatmap(vpa, z, log.(abs.(ff[:,:,i])), xlabel="vpa", ylabel="z", clims = (fmin,fmax), c = :deep)
-                @views heatmap(vpa, z, log.(abs.(ff[:,:,is,i])), xlabel="z", ylabel="vpa", fillcolor = logdeep)
+                #heatmap(z, vpa, log.(abs.(ff[:,:,i])), xlabel="z", ylabel="vpa", clims = (fmin,fmax), c = :deep)
+                @views heatmap(z, vpa, log.(abs.(ff[:,:,is,i])), xlabel="z", ylabel="vpa", fillcolor = logdeep)
             end
             outfile = string(run_name, "_logf_vs_vpa_z", spec_string, ".gif")
             gif(anim, outfile, fps=5)
             # make a gif animation of f(vpa,z,t)
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-                #heatmap(vpa, z, log.(abs.(ff[:,:,i])), xlabel="vpa", ylabel="z", clims = (fmin,fmax), c = :deep)
-                @views heatmap(vpa, z, ff[:,:,is,i], xlabel="z", ylabel="vpa", c = :deep, interpolation = :cubic)
+                #heatmap(z, vpa, log.(abs.(ff[:,:,i])), xlabel="z", ylabel="vpa", clims = (fmin,fmax), c = :deep)
+                @views heatmap(z, vpa, ff[:,:,is,i], xlabel="z", ylabel="vpa", c = :deep, interpolation = :cubic)
             end
             outfile = string(run_name, "_f_vs_vpa_z", spec_string, ".gif")
             gif(anim, outfile, fps=5)
+            # make pdf of f(vpa,z,t_final) for each species
+            str = string("spec ", string(is), " pdf")
+            @views heatmap(z, vpa, ff[:,:,is,end], xlabel="vpa", ylabel="z", c = :deep, interpolation = :cubic, title=str)
+            outfile = string(run_name, "_f_vs_z_vpa_final", spec_string, ".pdf")
+            savefig(outfile)
         end
         if pp.animate_deltaf_vs_vpa_z
             # make a gif animation of δf(vpa,z,t)
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-                @views heatmap(vpa, z, delta_f[:,:,is,i], xlabel="vpa", ylabel="z", c = :deep, interpolation = :cubic)
+                @views heatmap(z, vpa, delta_f[:,:,is,i], xlabel="z", ylabel="vpa", c = :deep, interpolation = :cubic)
             end
             outfile = string(run_name, "_deltaf_vs_vpa_z", spec_string, ".gif")
             gif(anim, outfile, fps=5)
         end
         if pp.animate_f_vs_vpa_z0
-            fmin = minimum(ff[:,ivpa0,is,:])
-            fmax = maximum(ff[:,ivpa0,is,:])
+            fmin = minimum(ff[ivpa0,:,is,:])
+            fmax = maximum(ff[ivpa0,:,is,:])
             # make a gif animation of f(vpa0,z,t)
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
                 @views plot(z, ff[ivpa0,:,is,i], ylims = (fmin,fmax))
@@ -137,17 +146,41 @@ function analyze_and_plot_data(path)
             outfile = string(run_name, "_deltaf_vs_z", spec_string, ".gif")
             gif(anim, outfile, fps=5)
         end
-        if pp.animate_f_vs_z0_vpa
+        if pp.animate_f_vs_vpa_z0
             fmin = minimum(ff[:,iz0,is,:])
             fmax = maximum(ff[:,iz0,is,:])
+
+            # if is == 1
+            #     tmp = copy(ff)
+            #     @. tmp[:,1,1,:] /= vpa^2
+            #     bohm_integral = copy(time)
+            #     for i ∈ 1:ntime
+            #         @views bohm_integral[i] = integrate_over_vspace(tmp[1:cld(nvpa,2)-1,1,1,i],vpa_wgts[1:cld(nvpa,2)-1])/2.0
+            #     end
+            #     plot(time, bohm_integral, xlabel="time", label="Bohm integral")
+            #     plot!(time, density[1,1,:], label="nᵢ(zmin)")
+            #     outfile = string(run_name, "_Bohm_criterion.pdf")
+            #     savefig(outfile)
+            #     println()
+            #     if bohm_integral[end] <= density[1,1,end]
+            #         println("Bohm criterion: ", bohm_integral[end], " <= ", density[1,1,end], " is satisfied!")
+            #     else
+            #         println("Bohm criterion: ", bohm_integral[end], " <= ", density[1,1,end], " is not satisfied!")
+            #     end
+            #     println()
+            #     for j ∈ 0:10
+            #         println("j: ", j, "  Bohm integral: ", integrate_over_vspace(tmp[1:cld(nvpa,2)-j,1,1,end],vpa_wgts[1:cld(nvpa,2)-j,end])/2.0)
+            #     end
+            # end
             # make a gif animation of f(vpa,z0,t)
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-                @views plot(vpa, ff[:,iz0,is,i], ylims = (fmin,fmax))
+                #@views plot(vpa, ff[iz0,:,is,i], ylims = (fmin,fmax))
+                @views plot(vpa, ff[:,iz0,is,i])
             end
             outfile = string(run_name, "_f_vs_vpa", spec_string, ".gif")
             gif(anim, outfile, fps=5)
         end
-        if pp.animate_deltaf_vs_z0_vpa
+        if pp.animate_deltaf_vs_vpa_z0
             fmin = minimum(delta_f[:,iz0,is,:])
             fmax = maximum(delta_f[:,iz0,is,:])
             # make a gif animation of f(vpa,z0,t)
@@ -208,6 +241,8 @@ function calculate_and_write_frequencies(fid, run_name, ntime, time, z, itime_mi
         # and fit phi(z0,t)/phi(z0,t0), which eliminates the constant A pre-factor
         @views phi_fit = fit_delta_phi_mode(shifted_time[itime_min:itime_max], z,
                                             delta_phi[:, itime_min:itime_max])
+        frequency = phi_fit.frequency
+        growth_rate = phi_fit.growth_rate
 
         # write info related to fit to file
         io = open_output_file(run_name, "frequency_fit.txt")
@@ -268,8 +303,10 @@ function calculate_and_write_frequencies(fid, run_name, ntime, time, z, itime_mi
         phase = 0.0
         shifted_time = allocate_float(ntime)
         @. shifted_time = time - time[itime_min]
+        fitted_delta_phi = zeros(ntime)
+
     end
-    return phi_fit.frequency, phi_fit.growth_rate, shifted_time, fitted_delta_phi
+    return frequency, growth_rate, shifted_time, fitted_delta_phi
 end
 function plot_fields(phi, delta_phi, time, itime_min, itime_max, nwrite_movie,
     z, iz0, run_name, fitted_delta_phi, pp)
@@ -305,6 +342,16 @@ function plot_fields(phi, delta_phi, time, itime_min, itime_max, nwrite_movie,
         outfile = string(run_name, "_phi_vs_z.gif")
         gif(anim, outfile, fps=5)
     end
+    # nz = length(z)
+    # izmid = cld(nz,2)
+    # plot(z[izmid:end], phi[izmid:end,end] .- phi[izmid,end], xlabel="z/Lz - 1/2", ylabel="eϕ/Te", label = "data", linewidth=2)
+    # plot!(exp.(-(phi[cld(nz,2),end] .- phi[izmid:end,end])) .* erfi.(sqrt.(abs.(phi[cld(nz,2),end] .- phi[izmid:end,end])))/sqrt(pi)/0.688, phi[izmid:end,end] .- phi[izmid,end], label = "analytical", linewidth=2)
+    # outfile = string(run_name, "_harrison_comparison.pdf")
+    # savefig(outfile)
+    plot(z, phi[:,end], xlabel="z/Lz", ylabel="eϕ/Te", label="", linewidth=2)
+    outfile = string(run_name, "_phi_final.pdf")
+    savefig(outfile)
+
     println("done.")
 end
 function plot_moments(density, delta_density, density_fldline_avg,
@@ -314,6 +361,15 @@ function plot_moments(density, delta_density, density_fldline_avg,
     pp, run_name, time, itime_min, itime_max, nwrite_movie,
     z, iz0, n_species)
     println("Plotting velocity moments data...")
+    # plot the species-summed, field-line averaged vs time
+    denstot = copy(density_fldline_avg)
+    denstot .= sum(density_fldline_avg,dims=1)
+    @. denstot /= denstot[1,1]
+    denstot_min = minimum(denstot[1,:]) - 0.1
+    denstot_max = maximum(denstot[1,:]) + 0.1
+    @views plot(time, denstot[1,:], ylims=(denstot_min,denstot_max), xlabel="time", ylabel="∑ⱼn̅ⱼ(t)/∑ⱼn̅ⱼ(0)", label="", linewidth=2)
+    outfile = string(run_name, "_denstot_vs_t.pdf")
+    savefig(outfile)
     for is ∈ 1:n_species
         spec_string = string(is)
         dens_min = minimum(density[:,is,:])
@@ -507,7 +563,7 @@ function fit_delta_phi_mode(t, z, delta_phi)
     offset_error = sqrt(mean(offset_fit.resid .^ 2))
     offset_tol = 2.e-5
     if abs(doffsetdt) > offset_tol
-        error("d(offset)/dt=", doffsetdt, " is non-negligible (>", offset_tol,
+        println("WARNING: d(offset)/dt=", doffsetdt, " is non-negligible (>", offset_tol,
               ") but fit_delta_phi_mode expected either a standing wave or a ",
               "zero-frequency decaying mode.")
     end
@@ -542,8 +598,7 @@ function fit_delta_phi_mode(t, z, delta_phi)
             end
         end
         if !converged
-            error("Iteration to find growth rate failed to converge in ", maxiter,
-                  "iterations")
+            println("WARNING: Iteration to find growth rate failed to converge in ", maxiter, " iterations")
         end
         amplitude0 = amplitude[1] / cos(phase)
     end
@@ -557,7 +612,7 @@ struct phi_fit_result
     phase::mk_float
     amplitude0::mk_float
     offset0::mk_float
-    fit_error::mk_float
+    amplitude_fit_error::mk_float
     offset_fit_error::mk_float
     cosine_fit_error::mk_float
     amplitude::Array{mk_float, 1}
@@ -628,7 +683,6 @@ function fit_cosine(z, data, amplitude_guess, offset_guess, n=1)
 
     # calculate error
     error = sqrt(mean(fit.resid .^ 2))
-    println("")
 
     return fit.param[1], fit.param[2], error
 end
