@@ -162,7 +162,7 @@ function run_test(test_input, expected_phi, tolerance; args...)
         println("data tested would be: ", actual_phi)
         @test false
     else
-        @test isapprox(actual_phi, expected_phi, rtol=1.e-14, atol=1.e-15)
+        @test isapprox(actual_phi, expected_phi, rtol=3.e-10, atol=1.e-15)
     end
 
     # Create coordinates
