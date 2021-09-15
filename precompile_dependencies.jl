@@ -3,6 +3,7 @@ using Pkg
 # Activate the moment_kinetics package
 Pkg.activate(".")
 
+Pkg.instantiate()
 using PackageCompiler
 
 packages = [:PackageCompiler, :TimerOutputs, :NCDatasets, :FFTW, :Plots, :IJulia, :LsqFit, :OrderedCollections, :Glob, :NaturalSort, :SpecialFunctions, :Roots, :TOML]
