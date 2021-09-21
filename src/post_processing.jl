@@ -529,7 +529,7 @@ phi_fit_result struct whose fields are:
 """
 function fit_delta_phi_mode(t, z, delta_phi)
     # First fit a cosine to each time slice
-    results = Array{mk_float, 2}(undef, 3, size(delta_phi)[2])
+    results = allocate_float(3, size(delta_phi)[2])
     amplitude_guess = 1.0
     offset_guess = 0.0
     for (i, phi_z) in enumerate(eachcol(delta_phi))

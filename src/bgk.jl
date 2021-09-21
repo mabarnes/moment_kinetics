@@ -5,11 +5,17 @@ export init_bgk_pdf!
 using SpecialFunctions: erfi
 using Roots: find_zero
 using ..array_allocation: allocate_float, allocate_int
+using ..communication: block_rank
 using ..quadrature: composite_simpson_weights
 using ..calculus: integral
 using ..coordinates: equally_spaced_grid
 
 function init_bgk_pdf!(pdf, phi_max, tau, z, Lz, vpa)
+    # For simplicity, just run in serial for now
+    if block_rank[] != 0
+        return
+    end
+
     nz = length(z)
     dum, wgts, integrand = setup_dummy_integrals()
     # find the allowed wave amplitude (phi_max - phi_min),

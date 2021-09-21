@@ -2,10 +2,13 @@ module moment_kinetics
 
 export run_moment_kinetics
 
+using MPI
+
 # Include submodules from other source files
 # Note that order of includes matters - things used in one module must already
 # be defined
 include("type_definitions.jl")
+include("communication.jl")
 include("array_allocation.jl")
 include("interpolation.jl")
 include("clenshaw_curtis.jl")
@@ -45,6 +48,7 @@ using TOML
 
 using .file_io: setup_file_io, finish_file_io
 using .file_io: write_data_to_ascii, write_data_to_binary
+using .communication: block_rank, block_synchronize, finalize_comms!, initialize_comms!
 using .coordinates: define_coordinate
 using .initial_conditions: init_pdf_and_moments
 using .moment_kinetics_input: mk_input, run_type, performance_test
@@ -66,7 +70,7 @@ function run_moment_kinetics(to::TimerOutput, input_dict=Dict())
     # last 2 elements of mk_state are `io` and `cdf`
     cleanup_moment_kinetics!(mk_state[end-1:end]...)
 
-    if run_type == performance_test
+    if block_rank[] == 0 && run_type == performance_test
         # Print the timing information if this is a performance test
         display(to)
         println()
@@ -86,15 +90,18 @@ end
 
 # Perform all the initialization steps for a run.
 function setup_moment_kinetics(input_dict::Dict)
+    # Set up MPI
+    initialize_comms!()
+
     input = mk_input(input_dict)
     # obtain input options from moment_kinetics_input.jl
     # and check input to catch errors
     run_name, output_dir, evolve_moments, t_input, z_input, vpa_input,
         composition, species, collisions, drive_input = input
     # initialize z grid and write grid point locations to file
-    z = define_coordinate(z_input)
+    z = define_coordinate(z_input, composition)
     # initialize vpa grid and write grid point locations to file
-    vpa = define_coordinate(vpa_input)
+    vpa = define_coordinate(vpa_input, composition)
     # initialize f(z,vpa) and the lowest three v-space moments (density(z), upar(z) and ppar(z)),
     # each of which may be evolved separately depending on input choices.
     pdf, moments = init_pdf_and_moments(vpa, z, composition, species, t_input.n_rk_stages, evolve_moments)
@@ -113,6 +120,8 @@ function setup_moment_kinetics(input_dict::Dict)
     # write initial data to binary file (netcdf)
     write_data_to_binary(pdf.unnorm, moments, fields, code_time, composition.n_species, cdf, 1)
 
+    block_synchronize()
+
     return pdf, scratch, code_time, t_input, vpa, z, vpa_spectral, z_spectral, moments,
            fields, vpa_advect, z_advect, vpa_SL, z_SL, composition, collisions, advance,
            io, cdf
@@ -123,6 +132,9 @@ function cleanup_moment_kinetics!(io::Union{file_io.ios,Nothing},
                                   cdf::Union{file_io.netcdf_info,Nothing})
     # finish i/o
     finish_file_io(io, cdf)
+
+    # clean up MPI objects
+    finalize_comms!()
 
     return nothing
 end

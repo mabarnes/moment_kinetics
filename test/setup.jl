@@ -12,7 +12,9 @@ using moment_kinetics
 
 module MKTestUtilities
 
-export use_verbose, @long, quietoutput, maxabs_norm, @testset_skip
+export use_verbose, @long, quietoutput, global_rank, maxabs_norm, @testset_skip
+
+using moment_kinetics.communication: global_rank
 
 # Parse command line arguments to allow settings to be used for tests
 #####################################################################

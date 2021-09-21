@@ -147,6 +147,23 @@ mutable struct species_composition
     n_ion_species::mk_int
     # n_neutral_species is the number of evolved neutral species
     n_neutral_species::mk_int
+    # Local range of indices for this processor to use at species level of parallel
+    # loops over shared arrays
+    species_local_range::UnitRange{mk_int}
+    # Is this processor the first in the group iterating over a given species?
+    first_proc_in_group::Bool
+    # Local range of indices for this processor to use at species level of parallel
+    # loops over shared arrays, when only looping over ion species
+    ion_species_local_range::UnitRange{mk_int}
+    # Is this processor the first in the group iterating over a given species, when
+    # looping just over ion species?
+    first_proc_in_ion_group::Bool
+    # Local range of indices for this processor to use at species level of parallel
+    # loops over shared arrays, when only looping over neutral species
+    neutral_species_local_range::UnitRange{mk_int}
+    # Is this processor the first in the group iterating over a given species, when
+    # looping just over neutral species?
+    first_proc_in_neutral_group::Bool
     # if boltzmann_electron_response = true, the electron density is fixed to be Nₑ*(eϕ/T_e)
     boltzmann_electron_response::Bool
     # electron temperature used for Boltzmann response
@@ -155,6 +172,8 @@ mutable struct species_composition
     T_wall::mk_float
     # ratio of the neutral particle mass to the ion mass
     mn_over_mi::mk_float
+    # scratch buffer whose size is n_species
+    scratch::Vector{mk_float}
 end
 mutable struct drive_input_mutable
     # if drive.phi = true, include external electrostatic potential

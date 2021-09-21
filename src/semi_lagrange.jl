@@ -6,7 +6,8 @@ export find_departure_points!
 export project_characteristics_onto_grid!
 
 using ..type_definitions: mk_float, mk_int
-using ..array_allocation: allocate_float, allocate_int
+using ..array_allocation: allocate_shared_float, allocate_shared_int
+using ..communication: block_rank, MPISharedArray
 
 # structure semi_lagrange_info contains the basic information needed
 # to project backwards along approximate characteristics, which
@@ -14,20 +15,20 @@ using ..array_allocation: allocate_float, allocate_int
 struct semi_lagrange_info
     # crossing_time is the time required to cross a given cell
     # moving at a specified advection speed
-    crossing_time::Array{mk_float,1}
+    crossing_time::MPISharedArray{mk_float,1}
     # trajectory_time is the cumulative trajectory time along a characteristic
-    trajectory_time::Array{mk_float,1}
+    trajectory_time::MPISharedArray{mk_float,1}
     # dep_pts are the departure points at time level m for characteristic
     # arriving at time level m+1
-    dep_pts::Array{mk_float,1}
+    dep_pts::MPISharedArray{mk_float,1}
     # dep_idx are the indices of the nearest downwind grid point to
     # the departure point (which is in general between grid points)
-    dep_idx::Array{mk_int,1}
+    dep_idx::MPISharedArray{mk_int,1}
     # characteristic_speed is the approximate characteristic speed
-    characteristic_speed::Array{mk_float,1}
+    characteristic_speed::MPISharedArray{mk_float,1}
     # n_transits is the number of times that the characteristic
     # crosses the upwind bounary; only needed if BC = "periodic"
-    n_transits::Array{mk_int,1}
+    n_transits::MPISharedArray{mk_int,1}
 end
 # create and return a structure containing the arrays needed for the
 # semi-Lagrange time advance
@@ -48,27 +49,35 @@ end
 # semi-Lagrange time advance
 function setup_semi_lagrange_local(n)
     # create an array to hold crossing times for each cell
-    crossing_time = allocate_float(n)
+    crossing_time = allocate_shared_float(n)
     # create an array to hold cumulative trajectory time for each characteristic
-    trajectory_time = allocate_float(n)
+    trajectory_time = allocate_shared_float(n)
     # create array for the departure points at time level m
-    dep_pts = allocate_float(n)
+    dep_pts = allocate_shared_float(n)
     # create array for the indices of the nearest downwind grid point to
     # the departure point (which is in general between grid points)
-    dep_idx = allocate_int(n)
+    dep_idx = allocate_shared_int(n)
     # initialize the departure indices to be the save as the arrival indices
     # this allows for a clean algorithm that can use semi-Lagrange or not
     # without a lot of conditional statements within inner loops
-    for i ∈ 1:n
-        dep_idx[i] = i
+    if block_rank[] == 0
+        for i ∈ 1:n
+            dep_idx[i] = i
+        end
     end
     # create array containing approximate characteristic speed
     # initialize characteristic speed to zero, in case one wants to
     # do a time advance without use of semi-Lagrange treatment
-    characteristic_speed = zeros(n)
+    characteristic_speed = allocate_shared_float(n)
+    if block_rank[] == 0
+        characteristic_speed .= 0.0
+    end
     # create array to contain the number of times the characteristics cross
     # the upwind boundary
-    n_transits = zeros(n)
+    n_transits = allocate_shared_int(n)
+    if block_rank[] == 0
+        n_transits .= 0
+    end
     # store all of this information in a structure and return it
     return semi_lagrange_info(crossing_time, trajectory_time, dep_pts, dep_idx,
         characteristic_speed, n_transits)

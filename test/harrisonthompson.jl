@@ -157,37 +157,42 @@ function run_test(test_input, analytic_rtol, analytic_atol, expected_phi,
     quietoutput() do
         # run simulation
         run_moment_kinetics(to, input)
-
-        # Load and analyse output
-        #########################
-
-        path = joinpath(realpath(input["base_directory"]), name, name)
-
-        # open the netcdf file and give it the handle 'fid'
-        fid = open_netcdf_file(path)
-
-        # load space-time coordinate data
-        nvpa, vpa, vpa_wgts, nz, z, z_wgts, Lz, ntime, time = load_coordinate_data(fid)
-
-        # load fields data
-        phi = load_fields_data(fid)
-
-        close(fid)
-
-        analytic_phi = [findphi(zval, input["ionization_frequency"]) for zval ∈ z]
     end
 
-    nz = length(z)
-    # Analytic solution defines phi=0 at mid-point, so need to offset the code solution
-    offset = phi[(nz+1)÷2, end]
-    # Error is large on the boundary points, so test those separately
-    @test isapprox(phi[2:end-1, end] .- offset, analytic_phi[2:end-1],
-                   rtol=analytic_rtol, atol=analytic_atol)
-    @test isapprox(phi[[1, end], end] .- offset, analytic_phi[[1, end]],
-                   rtol=10.0*analytic_rtol, atol=analytic_atol)
+    if global_rank == 0
+        quietoutput() do
 
-    # Regression test
-    @test isapprox(phi[:, end], expected_phi, rtol=regression_rtol, atol=regression_atol)
+            # Load and analyse output
+            #########################
+
+            path = joinpath(realpath(input["base_directory"]), name, name)
+
+            # open the netcdf file and give it the handle 'fid'
+            fid = open_netcdf_file(path)
+
+            # load space-time coordinate data
+            nvpa, vpa, vpa_wgts, nz, z, z_wgts, Lz, ntime, time = load_coordinate_data(fid)
+
+            # load fields data
+            phi = load_fields_data(fid)
+
+            close(fid)
+
+            analytic_phi = [findphi(zval, input["ionization_frequency"]) for zval ∈ z]
+        end
+
+        nz = length(z)
+        # Analytic solution defines phi=0 at mid-point, so need to offset the code solution
+        offset = phi[(nz+1)÷2, end]
+        # Error is large on the boundary points, so test those separately
+        @test isapprox(phi[2:end-1, end] .- offset, analytic_phi[2:end-1],
+                       rtol=analytic_rtol, atol=analytic_atol)
+        @test isapprox(phi[[1, end], end] .- offset, analytic_phi[[1, end]],
+                       rtol=10.0*analytic_rtol, atol=analytic_atol)
+
+        # Regression test
+        @test isapprox(phi[:, end], expected_phi, rtol=regression_rtol, atol=regression_atol)
+    end
 end
 
 function runtests()

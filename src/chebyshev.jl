@@ -257,7 +257,7 @@ function interpolate_to_grid_1d(newgrid, f, coord, chebyshev::chebyshev_info)
 end
 function chebyshev_interpolate_single_element(newgrid, f, j, coord, chebyshev)
     # Temporary buffer to store Chebyshev coefficients
-    cheby_f = Array{mk_float, 1}(undef, coord.ngrid)
+    cheby_f = allocate_float(coord.ngrid)
 
     # Array for the result
     result = similar(newgrid, mk_float)

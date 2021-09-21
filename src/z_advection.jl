@@ -9,20 +9,20 @@ using ..chebyshev: chebyshev_info
 
 # do a single stage time advance (potentially as part of a multi-stage RK scheme)
 function z_advection!(f_out, fvec_in, ff, moments, SL, advect, z, vpa,
-                      use_semi_lagrange, dt, t, spectral, n_species, istage)
-    for is ∈ 1:n_species
+                      use_semi_lagrange, dt, t, spectral, composition, istage)
+    for is ∈ composition.species_local_range
         # get the updated speed along the z direction using the current f
         @views update_speed_z!(advect[:,is], fvec_in.upar[:,is], moments.vth[:,is],
                                moments.evolve_upar, moments.evolve_ppar, vpa, z, t)
         # update the upwind/downwind boundary indices and upwind_increment
-        @views update_boundary_indices!(advect[:,is])
+        @views update_boundary_indices!(advect[:,is], vpa.outer_loop_range)
         # if using interpolation-free Semi-Lagrange,
         # follow characteristics backwards in time from level m+1 to level m
         # to get departure points.  then find index of grid point nearest
         # the departure point at time level m and use this to define
         # an approximate characteristic
         if use_semi_lagrange
-            for ivpa ∈ 1:vpa.n
+            for ivpa ∈ vpa.outer_loop_range
                 find_approximate_characteristic!(SL[ivpa], advect[ivpa,is], z, dt)
             end
         end
@@ -41,7 +41,7 @@ function z_advection!(f_out, fvec_in, ff, moments, SL, advect, z, vpa,
         #     end
         # end
         # advance z-advection equation
-        for ivpa ∈ 1:vpa.n
+        for ivpa ∈ vpa.outer_loop_range
             @views adjust_advection_speed!(advect[ivpa,is].speed, advect[ivpa,is].modified_speed,
                                            fvec_in.density[:,is], moments.vth[:,is],
                                            moments.evolve_density, moments.evolve_ppar)
@@ -80,35 +80,35 @@ function update_speed_z!(advect, upar, vth, evolve_upar, evolve_ppar, vpa, z, t)
     @boundscheck z.n == size(advect[1].speed,1) || throw(BoundsError(speed))
     if z.advection.option == "default"
         @inbounds begin
-            for ivpa ∈ 1:vpa.n
+            for ivpa ∈ vpa.outer_loop_range
                 advect[ivpa].speed .= vpa.grid[ivpa]
             end
             if evolve_upar
                 if evolve_ppar
-                    for ivpa ∈ 1:vpa.n
+                    for ivpa ∈ vpa.outer_loop_range
                         advect[ivpa].speed .*= vth
                     end
                 end
-                for ivpa ∈ 1:vpa.n
+                for ivpa ∈ vpa.outer_loop_range
                     advect[ivpa].speed .+= upar
                 end
             end
         end
     elseif z.advection.option == "constant"
         @inbounds begin
-            for ivpa ∈ 1:vpa.n
+            for ivpa ∈ vpa.outer_loop_range
                 advect[ivpa].speed .= z.advection.constant_speed
             end
         end
     elseif z.advection.option == "linear"
         @inbounds begin
-            for ivpa ∈ 1:vpa.n
+            for ivpa ∈ vpa.outer_loop_range
                 advect[ivpa].speed .= z.advection.constant_speed*(z.grid[i]+0.5*z.L)
             end
         end
     elseif z.advection.option == "oscillating"
         @inbounds begin
-            for ivpa ∈ 1:vpa.n
+            for ivpa ∈ vpa.outer_loop_range
                 advect[ivpa].speed .= z.advection.constant_speed*(1.0
                         + z.advection.oscillation_amplitude*sinpi(t*z.advection.frequency))
             end
@@ -117,7 +117,7 @@ function update_speed_z!(advect, upar, vth, evolve_upar, evolve_ppar, vpa, z, t)
     # the default for modified_speed is simply speed.
     # will be modified later if semi-Lagrange scheme used
     @inbounds begin
-        for ivpa ∈ 1:vpa.n
+        for ivpa ∈ vpa.outer_loop_range
             advect[ivpa].modified_speed .= advect[ivpa].speed
         end
     end

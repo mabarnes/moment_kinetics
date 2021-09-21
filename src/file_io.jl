@@ -7,6 +7,7 @@ export write_data_to_ascii
 export write_data_to_binary
 
 using NCDatasets
+using ..communication: block_rank
 using ..type_definitions: mk_float, mk_int
 
 # structure containing the various input/output streams
@@ -44,6 +45,11 @@ end
 # open the necessary output files
 function setup_file_io(output_dir, run_name, vpa, z, composition,
                        collisions, evolve_ppar)
+    if block_rank[] != 0
+        # Only read/write from first process in each 'block'
+        return nothing, nothing
+    end
+
     # check to see if output_dir exists in the current directory
     # if not, create it
     isdir(output_dir) || mkdir(output_dir)
@@ -189,6 +195,11 @@ function setup_netcdf_io(prefix, z, vpa, composition, collisions, evolve_ppar)
 end
 # close all opened output files
 function finish_file_io(io, cdf)
+    if block_rank[] != 0
+        # Only read/write from first process in each 'block'
+        return nothing
+    end
+
     # get the fields in the ios struct
     io_fields = fieldnames(typeof(io))
     for i ∈ 1:length(io_fields)
@@ -198,12 +209,22 @@ function finish_file_io(io, cdf)
     return nothing
 end
 function write_data_to_ascii(ff, moments, fields, vpa, z, t, n_species, io)
+    if block_rank[] != 0
+        # Only read/write from first process in each 'block'
+        return
+    end
+
     #write_f_ascii(ff, z, vpa, t, io.ff)
     write_moments_ascii(moments, z, t, n_species, io.moments)
     write_fields_ascii(fields, z, t, io.fields)
 end
 # write the function f(z,vpa) at this time slice
 function write_f_ascii(f, z, vpa, t, io)
+    if block_rank[] != 0
+        # Only read/write from first process in each 'block'
+        return nothing
+    end
+
     @inbounds begin
         n_species = size(f,3)
         for is ∈ 1:n_species
@@ -222,6 +243,11 @@ function write_f_ascii(f, z, vpa, t, io)
 end
 # write moments of the distribution function f(z,vpa) at this time slice
 function write_moments_ascii(mom, z, t, n_species, io)
+    if block_rank[] != 0
+        # Only read/write from first process in each 'block'
+        return nothing
+    end
+
     @inbounds begin
         for is ∈ 1:n_species
             for i ∈ 1:z.n
@@ -236,6 +262,11 @@ function write_moments_ascii(mom, z, t, n_species, io)
 end
 # write electrostatic potential at this time slice
 function write_fields_ascii(flds, z, t, io)
+    if block_rank[] != 0
+        # Only read/write from first process in each 'block'
+        return nothing
+    end
+
     @inbounds begin
         for i ∈ 1:z.n
             println(io,"t: ", t, ",   z: ", z.grid[i], "  phi: ", flds.phi[i])
@@ -246,6 +277,11 @@ function write_fields_ascii(flds, z, t, io)
 end
 # write time-dependent data to the netcdf file
 function write_data_to_binary(ff, moments, fields, t, n_species, cdf, t_idx)
+    if block_rank[] != 0
+        # Only read/write from first process in each 'block'
+        return
+    end
+
     # add the time for this time slice to the netcdf file
     cdf.time[t_idx] = t
     # add the distribution function data at this time slice to the netcdf file

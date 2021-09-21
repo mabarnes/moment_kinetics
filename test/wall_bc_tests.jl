@@ -137,52 +137,56 @@ function run_test(test_input, expected_phi, tolerance; args...)
     quietoutput() do
         # run simulation
         run_moment_kinetics(to, input)
-
-        # Load and analyse output
-        #########################
-
-        path = joinpath(realpath(input["base_directory"]), name, name)
-
-        # open the netcdf file and give it the handle 'fid'
-        fid = open_netcdf_file(path)
-
-        # load space-time coordinate data
-        nvpa, vpa, vpa_wgts, nz, z, z_wgts, Lz, ntime, time = load_coordinate_data(fid)
-
-        # load fields data
-        phi = load_fields_data(fid)
-
-        close(fid)
     end
 
-    # Regression test
-    actual_phi = phi[begin:3:end, end]
-    if expected_phi == nothing
-        # Error: no expected input provided
-        println("data tested would be: ", actual_phi)
-        @test false
-    else
-        @test isapprox(actual_phi, expected_phi, rtol=3.e-10, atol=1.e-15)
-    end
+    if global_rank[] == 0
+        quietoutput() do
+            # Load and analyse output
+            #########################
 
-    # Create coordinates
-    #
-    # create the 'input' struct containing input info needed to create a coordinate
-    # adv_input not actually used in this test so given values unimportant
-    adv_input = advection_input("default", 1.0, 0.0, 0.0)
-    input = grid_input("coord", test_input["z_ngrid"], test_input["z_nelement"], 1.0,
-                       test_input["z_discretization"], "", test_input["z_bc"],
-                       adv_input)
-    z = define_coordinate(input)
-    if test_input["z_discretization"] == "chebyshev_pseudospectral"
-        z_spectral = setup_chebyshev_pseudospectral(z)
-    else
-        z_spectral = false
-    end
+            path = joinpath(realpath(input["base_directory"]), name, name)
 
-    # Cross comparison of all discretizations to same benchmark
-    phi_interp = interpolate_to_grid_z(cross_compare_points, phi[:, end], z, z_spectral)
-    @test isapprox(phi_interp, cross_compare_phi, rtol=tolerance, atol=1.e-15)
+            # open the netcdf file and give it the handle 'fid'
+            fid = open_netcdf_file(path)
+
+            # load space-time coordinate data
+            nvpa, vpa, vpa_wgts, nz, z, z_wgts, Lz, ntime, time = load_coordinate_data(fid)
+
+            # load fields data
+            phi = load_fields_data(fid)
+
+            close(fid)
+        end
+
+        # Regression test
+        actual_phi = phi[begin:3:end, end]
+        if expected_phi == nothing
+            # Error: no expected input provided
+            println("data tested would be: ", actual_phi)
+            @test false
+        else
+            @test isapprox(actual_phi, expected_phi, rtol=3.e-10, atol=1.e-15)
+        end
+
+        # Create coordinates
+        #
+        # create the 'input' struct containing input info needed to create a coordinate
+        # adv_input not actually used in this test so given values unimportant
+        adv_input = advection_input("default", 1.0, 0.0, 0.0)
+        input = grid_input("coord", test_input["z_ngrid"], test_input["z_nelement"], 1.0,
+                           test_input["z_discretization"], "", test_input["z_bc"],
+                           adv_input)
+        z = define_coordinate(input)
+        if test_input["z_discretization"] == "chebyshev_pseudospectral"
+            z_spectral = setup_chebyshev_pseudospectral(z)
+        else
+            z_spectral = false
+        end
+
+        # Cross comparison of all discretizations to same benchmark
+        phi_interp = interpolate_to_grid_z(cross_compare_points, phi[:, end], z, z_spectral)
+        @test isapprox(phi_interp, cross_compare_phi, rtol=tolerance, atol=1.e-15)
+    end
 end
 
 function runtests()

@@ -4,7 +4,8 @@ export setup_em_fields
 export update_phi!
 
 using ..type_definitions: mk_float
-using ..array_allocation: allocate_float
+using ..array_allocation: allocate_shared_float
+using ..communication: block_rank
 using ..velocity_moments: update_density!
 
 struct fields
@@ -20,8 +21,8 @@ struct fields
 end
 
 function setup_em_fields(m, force_phi, drive_amplitude, drive_frequency)
-    phi = allocate_float(m)
-    phi0 = allocate_float(m)
+    phi = allocate_shared_float(m)
+    phi0 = allocate_shared_float(m)
     return fields(phi, phi0, force_phi, drive_amplitude, drive_frequency)
 end
 
@@ -33,20 +34,22 @@ function update_phi!(fields, fvec, z, composition)
     @boundscheck size(fvec.density,1) == z.n || throw(BoundsError(fvec.density))
     @boundscheck size(fvec.density,2) == composition.n_species || throw(BoundsError(fvec.density))
     if composition.boltzmann_electron_response
-        z.scratch .= @view(fvec.density[:,1])
-        @inbounds for is ∈ 2:composition.n_ion_species
-            for iz ∈ 1:z.n
-                z.scratch[iz] += fvec.density[iz,is]
+        if block_rank[] == 0
+            z.scratch .= @view(fvec.density[:,1])
+            @inbounds for is ∈ 2:composition.n_ion_species
+                for iz ∈ 1:z.n
+                    z.scratch[iz] += fvec.density[iz,is]
+                end
             end
+            @inbounds for iz ∈ 1:z.n
+                fields.phi[iz] = composition.T_e * log(z.scratch[iz])
+            end
+            # if fields.force_phi
+            #     @inbounds for iz ∈ 1:z.n
+            #         fields.phi[iz] += fields.phi0[iz]*fields.drive_amplitude*sin(t*fields.drive_frequency)
+            #     end
+            # end
         end
-        @inbounds for iz ∈ 1:z.n
-            fields.phi[iz] = composition.T_e * log(z.scratch[iz])
-        end
-        # if fields.force_phi
-        #     @inbounds for iz ∈ 1:z.n
-        #         fields.phi[iz] += fields.phi0[iz]*fields.drive_amplitude*sin(t*fields.drive_frequency)
-        #     end
-        # end
     end
 end
 
