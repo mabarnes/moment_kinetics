@@ -491,7 +491,7 @@ function ssp_rk!(pdf, scratch, t, t_input, vpa, z,
         # and scratch[1] containing quantities at time level n
         update_solution_vector!(scratch, moments, istage)
         # calculate f^{(1)} = fⁿ + Δt*G[fⁿ] = scratch[2].pdf
-        @views euler_time_advance!(scratch[istage+1], scratch[istage],
+        euler_time_advance!(scratch[istage+1], scratch[istage],
             pdf, fields, moments, vpa_SL, z_SL, vpa_advect, z_advect, vpa, z, t,
             t_input, vpa_spectral, z_spectral, composition,
             collisions, advance, istage)
@@ -526,14 +526,14 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, z_
     # only charged species have a force accelerating them in vpa;
     # however, neutral species do have non-zero d(wpa)/dt, so there is advection in wpa
     if advance.vpa_advection
-        @views vpa_advection!(fvec_out.pdf, fvec_in, pdf.norm, fields, moments,
+        vpa_advection!(fvec_out.pdf, fvec_in, pdf.norm, fields, moments,
             vpa_SL, vpa_advect, vpa, z, use_semi_lagrange, dt, t,
             vpa_spectral, z_spectral, composition, collisions.charge_exchange, istage)
     end
     # z_advection! advances 1D advection equation in z
     # apply z-advection operation to all species (charged and neutral)
     if advance.z_advection
-        @views z_advection!(fvec_out.pdf, fvec_in, pdf.norm, moments, z_SL, z_advect, z, vpa,
+        z_advection!(fvec_out.pdf, fvec_in, pdf.norm, moments, z_SL, z_advect, z, vpa,
             use_semi_lagrange, dt, t, z_spectral, composition.n_species, istage)
     end
     if advance.source_terms
