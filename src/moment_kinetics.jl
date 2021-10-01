@@ -7,6 +7,7 @@ using MPI
 # Include submodules from other source files
 # Note that order of includes matters - things used in one module must already
 # be defined
+include("debugging.jl")
 include("type_definitions.jl")
 include("communication.jl")
 include("array_allocation.jl")

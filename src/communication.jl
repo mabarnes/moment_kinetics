@@ -18,6 +18,7 @@ export allocate_shared_float, block_synchronize, block_rank, block_size, comm_bl
 
 using MPI
 
+using ..debugging
 using ..type_definitions: mk_float, mk_int
 
 const comm_world = MPI.Comm()
@@ -57,6 +58,9 @@ Barrier because it only requires communication within a single node.
 """
 function block_synchronize()
     MPI.Barrier(comm_block)
+    @debug_block_synchronize begin
+        println("debugging block_synchronize")
+    end
 end
 
 """
