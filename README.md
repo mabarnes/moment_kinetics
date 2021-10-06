@@ -41,12 +41,14 @@
     $ julia --project run_post_processing.jl runs/<directory to process>
     ```
     passing the directory to process as a command line argument. Input options for post-processing can be specified in post_processing_input.jl.
-4b) Parameter scans or performance tests can be performed by running
+
+6) Parameter scans (see [Running parameter scans](#running-parameter-scans)) or performance tests can be performed by running
     ```
     $ julia -O3 --project driver.jl
     ```
     If running a scan, it can be parallelised by passing the number of processors as an argument. Scan options are set in `scan_inputs.jl`.
-5b) Post processing can be done for several directories at once using
+
+7) Post processing can be done for several directories at once using
     ```
     $ julia --project post_processing_driver.jl runs/<directory1> runs/<directory2> ...
     ```
