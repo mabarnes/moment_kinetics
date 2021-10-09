@@ -5,14 +5,14 @@ export update_phi!
 
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_shared_float
-using ..communication: block_rank
+using ..communication: block_rank, MPISharedArray
 using ..velocity_moments: update_density!
 
 struct fields
     # phi is the electrostatic potential
-    phi::Array{mk_float}
+    phi::MPISharedArray{mk_float}
     # phi0 is the initial electrostatic potential
-    phi0::Array{mk_float}
+    phi0::MPISharedArray{mk_float}
     # if including an external forcing for phi, it is of the form
     # phi_external = phi0*drive_amplitude*sinpi(t*drive_frequency)
     force_phi::Bool

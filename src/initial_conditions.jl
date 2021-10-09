@@ -11,14 +11,14 @@ using SpecialFunctions: erfc
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_shared_float
 using ..bgk: init_bgk_pdf!
-using ..communication: block_rank, block_synchronize
+using ..communication: block_rank, block_synchronize, MPISharedArray
 using ..velocity_moments: integrate_over_vspace
 using ..velocity_moments: integrate_over_positive_vpa, integrate_over_negative_vpa
 using ..velocity_moments: create_moments, update_qpar!
 
 struct pdf_struct
-    norm::Array{mk_float,3}
-    unnorm::Array{mk_float,3}
+    norm::MPISharedArray{mk_float,3}
+    unnorm::MPISharedArray{mk_float,3}
 end
 
 # creates the normalised pdf and the velocity-space moments and populates them

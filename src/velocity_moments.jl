@@ -14,7 +14,7 @@ export enforce_moment_constraints!
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_shared_float, allocate_bool
 using ..calculus: integral
-using ..communication: block_rank, block_synchronize
+using ..communication: block_rank, block_synchronize, MPISharedArray
 
 #global tmpsum1 = 0.0
 #global tmpsum2 = 0.0
@@ -23,7 +23,7 @@ using ..communication: block_rank, block_synchronize
 
 mutable struct moments
     # this is the particle density
-    dens::Array{mk_float,2}
+    dens::MPISharedArray{mk_float,2}
     # flag that keeps track of if the density needs updating before use
     # Note: may not be set for all species on this process, but this process only ever
     # sets/uses the value for the same subset of species. This means dens_update does
@@ -34,7 +34,7 @@ mutable struct moments
     # flag that indicates if exact particle conservation should be enforced
     enforce_conservation::Bool
     # this is the parallel flow
-    upar::Array{mk_float,2}
+    upar::MPISharedArray{mk_float,2}
     # flag that keeps track of whether or not upar needs updating before use
     # Note: may not be set for all species on this process, but this process only ever
     # sets/uses the value for the same subset of species. This means upar_update does
@@ -43,7 +43,7 @@ mutable struct moments
     # flag that indicates if the parallel flow should be evolved via force balance
     evolve_upar::Bool
     # this is the parallel pressure
-    ppar::Array{mk_float,2}
+    ppar::MPISharedArray{mk_float,2}
     # flag that keeps track of whether or not ppar needs updating before use
     # Note: may not be set for all species on this process, but this process only ever
     # sets/uses the value for the same subset of species. This means ppar_update does
@@ -52,19 +52,19 @@ mutable struct moments
     # flag that indicates if the parallel pressure should be evolved via the energy equation
     evolve_ppar::Bool
     # this is the parallel heat flux
-    qpar::Array{mk_float,2}
+    qpar::MPISharedArray{mk_float,2}
     # flag that keeps track of whether or not qpar needs updating before use
     # Note: may not be set for all species on this process, but this process only ever
     # sets/uses the value for the same subset of species. This means qpar_update does
     # not need to be a shared memory array.
     qpar_updated::Vector{Bool}
     # this is the thermal speed based on the parallel temperature Tpar = ppar/dens: vth = sqrt(2*Tpar/m)
-    vth::Array{mk_float,2}
+    vth::MPISharedArray{mk_float,2}
     # if evolve_ppar = true, then the velocity variable is (vpa - upa)/vth, which introduces
     # a factor of vth for each power of wpa in velocity space integrals.
     # vpa_norm_fac accounts for this: it is vth if using the above definition for the parallel velocity,
     # and it is one otherwise
-    vpa_norm_fac::Array{mk_float,2}
+    vpa_norm_fac::MPISharedArray{mk_float,2}
     # flag that indicates if the drift kinetic equation should be formulated in advective form
     #advective_form::Bool
 end

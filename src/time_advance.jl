@@ -5,7 +5,8 @@ export time_advance!
 
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_float, allocate_shared_float
-using ..communication: block_rank, block_synchronize
+using ..communication: block_rank, block_synchronize, MPISharedArray
+using ..debugging
 using ..file_io: write_data_to_ascii, write_data_to_binary
 using ..chebyshev: setup_chebyshev_pseudospectral
 using ..chebyshev: chebyshev_derivative!
@@ -27,11 +28,11 @@ using ..em_fields: setup_em_fields, update_phi!
 using ..semi_lagrange: setup_semi_lagrange
 
 struct scratch_pdf{n_distribution, n_moment}
-    pdf::Array{mk_float, n_distribution}
-    density::Array{mk_float, n_moment}
-    upar::Array{mk_float, n_moment}
-    ppar::Array{mk_float, n_moment}
-    temp_z_s::Array{mk_float, n_moment}
+    pdf::MPISharedArray{mk_float, n_distribution}
+    density::MPISharedArray{mk_float, n_moment}
+    upar::MPISharedArray{mk_float, n_moment}
+    ppar::MPISharedArray{mk_float, n_moment}
+    temp_z_s::MPISharedArray{mk_float, n_moment}
 end
 mutable struct advance_info
     vpa_advection::Bool

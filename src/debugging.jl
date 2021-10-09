@@ -20,6 +20,7 @@ using ArgParse
 macronames = [
               ("debug_block_synchronize", 1),
               ("debug_shared_array", 1),
+              ("debug_shared_array_allocate", 2),
              ]
 
 #s = ArgParseSettings()

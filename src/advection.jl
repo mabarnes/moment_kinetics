@@ -9,29 +9,29 @@ export advance_f_local!
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_shared_float, allocate_shared_int
 using ..calculus: derivative!
-using ..communication: block_rank, block_synchronize
+using ..communication: block_rank, block_synchronize, MPISharedArray
 
 # structure containing the basic arrays associated with the
 # advection terms appearing in the advection equation for each coordinate
 mutable struct advection_info
     # rhs is the sum of the advection terms appearing on the righthand side
     # of the equation
-    rhs::Array{mk_float, 1}
+    rhs::MPISharedArray{mk_float, 1}
     # df is the derivative of the distribution function f with respect
     # to the coordinate associated with this set of advection terms
     # it has dimensions of nelement x ngrid_per_element
-    df::Array{mk_float, 2}
+    df::MPISharedArray{mk_float, 2}
     # speed is the component of the advection speed along this coordinate axis
-    speed::Array{mk_float, 1}
+    speed::MPISharedArray{mk_float, 1}
     # if using semi-Lagrange approach,
     # modified_speed is delta / dt, where delta for a given characteristic
     # is the displacement from the arrival point to the
     # (generally off-grid) departure point using the coordinate in which
     # the grid is equally spaced (a re-scaling of the Chebyshev theta coordinate);
     # otherwise, modified_speed = speed
-    modified_speed::Array{mk_float,1}
+    modified_speed::MPISharedArray{mk_float,1}
     # adv_fac is the advection factor that multiplies df in the advection term
-    adv_fac::Array{mk_float, 1}
+    adv_fac::MPISharedArray{mk_float, 1}
     # upwind_idx is the boundary index for the upwind boundary
     upwind_idx::MPISharedArray{mk_int, 1}
     # downwind_idx is the boundary index for the downwind boundary
