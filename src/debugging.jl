@@ -4,6 +4,14 @@ Define debugging levels that can be used to include extra debugging steps
 Provides a bunch of macros (see the `macronames` Vector) that can be used to surround code in
 other modules so that it only runs if the 'debug level' passed to the `--debug` or `-d`
 command line argument is high enough.
+
+Also provides macro `*_ifelse` whose names are taken from `macronames`, which can be
+used to switch definitions, etc. For example, if `debug_shared_array` is in
+`macronames`, then
+```
+const MPISharedArray = @debug_shared_array_ifelse(DebugMPISharedArray, Array)
+```
+can be used to make the type represented by `MPISharedArray` depend on the debug level.
 """
 module debugging
 
@@ -31,17 +39,34 @@ _debug_level = 0
 for (macroname, minlevel) ∈ macronames
     m = Symbol(macroname)
     export_string = Symbol(string("@", macroname))
+    ifelse_string = macroname * "_ifelse"
+    ifelse_symbol = Symbol(ifelse_string)
+    export_ifelse_string = Symbol(string("@", ifelse_string))
 
-    macro_block = quote
-        macro $m(blk)
-            if _debug_level >= $minlevel
+    if _debug_level >= minlevel
+        macro_block = quote
+            macro $m(blk)
                 return :( $(esc(blk)) )
-            else
+            end
+
+            macro $ifelse_symbol(debug, standard)
+                return :( $(esc(debug)) )
+            end
+
+            export $export_string, $export_ifelse_string
+        end
+    else
+        macro_block = quote
+            macro $m(blk)
                 return :()
             end
-        end
 
-        export $export_string
+            macro $ifelse_symbol(debug, standard)
+                return :( $(esc(standard)) )
+            end
+
+            export $export_string, $export_ifelse_string
+        end
     end
 
     eval(macro_block)
