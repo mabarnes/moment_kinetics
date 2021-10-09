@@ -115,6 +115,29 @@ function allocate_shared(T, dims)
         n_local = 0
     end
 
+    @debug_shared_array begin
+        # Check that allocate_shared was called from the same place on all ranks
+        st = stacktrace()
+        stackstring = string([string(s, "\n") for s ∈ st]...)
+
+        # Only include file and line number in the string that we hash so that
+        # function calls with different signatures are not seen as different
+        # (e.g. time_advance!() with I/O arguments on rank-0 but not on other
+        # ranks).
+        signaturestring = string([string(s.file, s.line) for s ∈ st]...)
+
+        hash = sha256(signaturestring)
+        all_hashes = MPI.Allgather(hash, comm_block)
+        l = length(hash)
+        for i ∈ 1:length(all_hashes)÷l
+            if all_hashes[(i - 1) * l + 1: i * l] != hash
+                error("allocate_shared() called inconsistently\n",
+                      "rank $(block_rank[]) called from:\n",
+                      stackstring)
+            end
+        end
+    end
+
     win, ptr = MPI.Win_allocate_shared(T, n_local, comm_block)
 
     # Array is allocated contiguously, but `ptr` points to the 'locally owned' part.
