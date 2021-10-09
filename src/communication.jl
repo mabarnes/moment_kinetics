@@ -17,6 +17,7 @@ export allocate_shared_float, block_synchronize, block_rank, block_size, comm_bl
        get_species_local_range, global_rank
 
 using MPI
+using SHA
 
 using ..debugging
 using ..type_definitions: mk_float, mk_int
@@ -59,7 +60,25 @@ Barrier because it only requires communication within a single node.
 function block_synchronize()
     MPI.Barrier(comm_block)
     @debug_block_synchronize begin
-        println("debugging block_synchronize")
+        st = stacktrace()
+        stackstring = string([string(s, "\n") for s ∈ st]...)
+
+        # Only include file and line number in the string that we hash so that
+        # function calls with different signatures are not seen as different
+        # (e.g. time_advance!() with I/O arguments on rank-0 but not on other
+        # ranks).
+        signaturestring = string([string(s.file, s.line) for s ∈ st]...)
+
+        hash = sha256(signaturestring)
+        all_hashes = MPI.Allgather(hash, comm_block)
+        l = length(hash)
+        for i ∈ 1:length(all_hashes)÷l
+            if all_hashes[(i - 1) * l + 1: i * l] != hash
+                error("block_synchronize() called inconsistently\n",
+                      "rank $(block_rank[]) called from:\n",
+                      stackstring)
+            end
+        end
     end
 end
 
