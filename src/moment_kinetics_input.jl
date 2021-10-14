@@ -67,6 +67,13 @@ function mk_input(scan_input=Dict())
     species[1].z_IC.temperature_phase = get(scan_input, "z_IC_temperature_phase1", 0.0)
     #species[1].z_IC.initialization_option = "bgk"
     # set initial neutral densiity = Nₑ
+    species[1].vpa_IC.initialization_option = get(scan_input, "vpa_IC_option1", "gaussian")
+    species[1].vpa_IC.density_amplitude = get(scan_input, "vpa_IC_density_amplitude1", 1.000)
+    species[1].vpa_IC.density_phase = get(scan_input, "vpa_IC_density_phase1", 0.0)
+    species[1].vpa_IC.upar_amplitude = get(scan_input, "vpa_IC_upar_amplitude1", 0.0)
+    species[1].vpa_IC.upar_phase = get(scan_input, "vpa_IC_upar_phase1", 0.0)
+    species[1].vpa_IC.temperature_amplitude = get(scan_input, "vpa_IC_temperature_amplitude1", 0.0)
+    species[1].vpa_IC.temperature_phase = get(scan_input, "vpa_IC_temperature_phase1", 0.0)
     for (i, s) in enumerate(species[2:end])
         i = i+1
         s.z_IC.initialization_option = get(scan_input, "z_IC_option$i", species[1].z_IC.initialization_option)
@@ -78,6 +85,13 @@ function mk_input(scan_input=Dict())
         s.z_IC.upar_phase = get(scan_input, "z_IC_upar_phase$i", species[1].z_IC.upar_phase)
         s.z_IC.temperature_amplitude = get(scan_input, "z_IC_temperature_amplitude$i", species[1].z_IC.temperature_amplitude)
         s.z_IC.temperature_phase = get(scan_input, "z_IC_temperature_phase$i", species[1].z_IC.temperature_phase)
+        s.vpa_IC.initialization_option = get(scan_input, "vpa_IC_option$i", species[1].vpa_IC.initialization_option)
+        s.vpa_IC.density_amplitude = get(scan_input, "vpa_IC_density_amplitude$i", species[1].vpa_IC.density_amplitude)
+        s.vpa_IC.density_phase = get(scan_input, "vpa_IC_density_phase$i", species[1].vpa_IC.density_phase)
+        s.vpa_IC.upar_amplitude = get(scan_input, "vpa_IC_upar_amplitude$i", species[1].vpa_IC.upar_amplitude)
+        s.vpa_IC.upar_phase = get(scan_input, "vpa_IC_upar_phase$i", species[1].vpa_IC.upar_phase)
+        s.vpa_IC.temperature_amplitude = get(scan_input, "vpa_IC_temperature_amplitude$i", species[1].vpa_IC.temperature_amplitude)
+        s.vpa_IC.temperature_phase = get(scan_input, "vpa_IC_temperature_phase$i", species[1].vpa_IC.temperature_phase)
     end
     #################### end specification of species inputs #####################
 
@@ -165,13 +179,24 @@ function mk_input(scan_input=Dict())
     end
     drive_immutable = drive_input(drive.force_phi, drive.amplitude, drive.frequency)
 
+    # Make file to log some information about inputs into.
+    # check to see if output_dir exists in the current directory
+    # if not, create it
+    isdir(output_dir) || mkdir(output_dir)
+    io = open_output_file(string(output_dir,"/",run_name), "input")
+
     # check input to catch errors/unsupported options
-    check_input(run_name, output_dir, nstep, dt, use_semi_lagrange,
+    check_input(io, output_dir, nstep, dt, use_semi_lagrange,
         z_immutable, vpa_immutable, composition, species_immutable, evolve_moments)
 
     # return immutable structs for z, vpa, species and composition
-    return run_name, output_dir, evolve_moments, t, z_immutable, vpa_immutable,
-        composition, species_immutable, collisions, drive_immutable
+    all_inputs = (run_name, output_dir, evolve_moments, t, z_immutable, vpa_immutable,
+                  composition, species_immutable, collisions, drive_immutable)
+    println(io, "\nAll inputs returned from mk_input():")
+    println(io, all_inputs)
+    close(io)
+
+    return all_inputs
 end
 
 function load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_response)
@@ -350,15 +375,11 @@ function load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_resp
 end
 
 # check various input options to ensure they are all valid/consistent
-function check_input(run_name, output_dir, nstep, dt, use_semi_lagrange, z, vpa,
+function check_input(io, output_dir, nstep, dt, use_semi_lagrange, z, vpa,
     composition, species, evolve_moments)
-    # check to see if output_dir exists in the current directory
-    # if not, create it
-    isdir(output_dir) || mkdir(output_dir)
     # copy the input file to the output directory to be saved
     cp(joinpath(@__DIR__, "moment_kinetics_input.jl"), joinpath(output_dir, "moment_kinetics_input.jl"), force=true)
     # open ascii file in which informtaion about input choices will be written
-    io = open_output_file(string(output_dir,"/",run_name), "input")
     check_input_time_advance(nstep, dt, use_semi_lagrange, io)
     check_input_z(z, io)
     check_input_vpa(vpa, io)
@@ -369,7 +390,6 @@ function check_input(run_name, output_dir, nstep, dt, use_semi_lagrange, z, vpa,
         println(io, "this is not a supported option.  forcing evolve_moments.density = true.")
         evolve_moments.density = true
     end
-    close(io)
 end
 function check_input_time_advance(nstep, dt, use_semi_lagrange, io)
     println(io,"##### time advance #####")
