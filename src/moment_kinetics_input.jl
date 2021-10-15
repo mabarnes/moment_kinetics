@@ -38,16 +38,16 @@ function mk_input(scan_input=Dict())
         load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_response)
 
     # this is the prefix for all output files associated with this run
-    run_name = get(scan_input, "run_name", "wallBC")
+    run_name = get(scan_input, "run_name", "mk_Rion")
     # this is the directory where the simulation data will be stored
     base_directory = get(scan_input, "base_directory", "runs")
     output_dir = string(base_directory, "/", run_name)
     # if evolve_moments.density = true, evolve density via continuity eqn
     # and g = f/n via modified drift kinetic equation
-    evolve_moments.density = get(scan_input, "evolve_moments_density", false)
-    evolve_moments.parallel_flow = get(scan_input, "evolve_moments_parallel_flow", false)
-    evolve_moments.parallel_pressure = get(scan_input, "evolve_moments_parallel_pressure", false)
-    evolve_moments.conservation = get(scan_input, "evolve_moments_conservation", false)
+    evolve_moments.density = get(scan_input, "evolve_moments_density", true)
+    evolve_moments.parallel_flow = get(scan_input, "evolve_moments_parallel_flow", true)
+    evolve_moments.parallel_pressure = get(scan_input, "evolve_moments_parallel_pressure", true)
+    evolve_moments.conservation = get(scan_input, "evolve_moments_conservation", true)
 
     ####### specify any deviations from default inputs for evolved species #######
     # set initial Tₑ = 1
@@ -56,7 +56,7 @@ function mk_input(scan_input=Dict())
     composition.T_wall = 1.0
     # set initial neutral temperature Tn/Tₑ = 1
     # set initial nᵢ/Nₑ = 1.0
-    species[1].z_IC.initialization_option = get(scan_input, "z_IC_option1", "gaussian")
+    species[1].z_IC.initialization_option = get(scan_input, "z_IC_option1", "sinusoid")
     species[1].initial_density = get(scan_input, "initial_density1", 1.0)
     species[1].initial_temperature = get(scan_input, "initial_temperature1", 1.0)
     species[1].z_IC.density_amplitude = get(scan_input, "z_IC_density_amplitude1", 0.001)
@@ -97,6 +97,7 @@ function mk_input(scan_input=Dict())
 
     collisions.charge_exchange = get(scan_input, "charge_exchange_frequency", 2.0*sqrt(species[1].initial_temperature))
     collisions.ionization = get(scan_input, "ionization_frequency", collisions.charge_exchange)
+    #collisions.ionization = get(scan_input, "ionization_frequency", 0.0)
     collisions.constant_ionization_rate = get(scan_input, "constant_ionization_rate", false)
 
     # parameters related to the time stepping
@@ -121,7 +122,7 @@ function mk_input(scan_input=Dict())
     z.discretization = get(scan_input, "z_discretization", "chebyshev_pseudospectral")
     # determine the boundary condition to impose in z
     # supported options are "constant", "periodic" and "wall"
-    z.bc = get(scan_input, "z_bc", "wall")
+    z.bc = get(scan_input, "z_bc", "periodic")
 
     # overwrite some default parameters related to the vpa grid
     # ngrid is the number of grid points per element

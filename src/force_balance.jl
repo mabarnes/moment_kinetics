@@ -5,7 +5,7 @@ export force_balance!
 using ..calculus: derivative!
 
 # use the force balance equation d(nu)/dt + d(ppar + n*upar*upar)/dz =
-# -(dens/2)*dphi/dz + R*dens_i*dens_n*(upar_n-upar_i)
+# -(dens/2)*dphi/dz + R*dens_i*dens_n*(upar_n-upar_i) + Rion*dens_i*dens_n*upar_n
 # to update the parallel particle flux dens*upar for each species
 function force_balance!(pflx, fvec, fields, collisions, vpa, z, dt, spectral, composition)
     # account for momentum flux contribution to force balance
@@ -16,10 +16,17 @@ function force_balance!(pflx, fvec, fields, collisions, vpa, z, dt, spectral, co
     for is ∈ 1:composition.n_ion_species
         @views force_balance_Epar_species!(pflx[:,is], fields.phi, fvec.density[:,is], z, dt, spectral)
     end
-    # if neutrals present and charge exchange frequency non-zero,
-    # account for collisional friction between ions and neutrals
-    if composition.n_neutral_species > 0 && abs(collisions.charge_exchange) > 0.0
-        force_balance_CX!(pflx, fvec.density, fvec.upar, collisions.charge_exchange, composition, z.n, dt)
+    # if neutrals present account for charge exchange and/or ionizatiion collisions
+    if composition.n_neutral_species > 0
+        # account for collisional friction between ions and neutrals
+        if abs(collisions.charge_exchange) > 0.0
+            force_balance_CX!(pflx, fvec.density, fvec.upar, collisions.charge_exchange, composition, z.n, dt)
+        end
+        # account for ionization collisions
+        if abs(collisions.ionization) > 0.0
+            force_balance_ionization!(pflx, fvec.density, fvec.upar, collisions.ionization,
+                                      composition, z.n, dt)
+        end
     end
 end
 
@@ -59,6 +66,27 @@ function force_balance_CX!(pflx, dens, upar, CX_frequency, composition, nz, dt)
             # get the absolute species index for the neutral species
             for iz ∈ 1:nz
                 pflx[iz,isp] += dt*CX_frequency*dens[iz,isp]*dens[iz,is]*(upar[iz,is]-upar[iz,isp])
+            end
+        end
+    end
+end
+
+function force_balance_ionization!(pflx, dens, upar, ionization_frequency, composition, nz, dt)
+    # include contribution to ion acceleration due to ionization of neutrals
+    for is ∈ 1:composition.n_ion_species
+        for isp ∈ composition.n_ion_species+1:composition.n_species
+            # get the absolute species index for the neutral species
+            for iz ∈ 1:nz
+                pflx[iz,is] += dt*ionization_frequency*dens[iz,is]*dens[iz,isp]*upar[iz,isp]
+            end
+        end
+    end
+    # include contribution to neutral acceleration due to ionizaton
+    for isp ∈ composition.n_ion_species+1:composition.n_species
+        for is ∈ 1:composition.n_ion_species
+            # get the absolute species index for the neutral species
+            for iz ∈ 1:nz
+                pflx[iz,isp] -= dt*ionization_frequency*dens[iz,isp]*dens[iz,is]*upar[iz,isp]
             end
         end
     end

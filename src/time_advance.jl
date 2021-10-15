@@ -152,7 +152,7 @@ function setup_time_advance!(pdf, vpa, z, composition, drive_input, moments,
     vpa_advect = setup_advection(vpa, z, n_species)
     # initialise the vpa advection speed
     update_speed_vpa!(vpa_advect, fields, scratch[1], moments, vpa, z, composition,
-                      collisions.charge_exchange, 0.0, z_spectral)
+                      collisions.charge_exchange, collisions.ionization, 0.0, z_spectral)
     if moments.evolve_upar
         nspec = n_species
     else
@@ -528,7 +528,8 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, z_
     if advance.vpa_advection
         @views vpa_advection!(fvec_out.pdf, fvec_in, pdf.norm, fields, moments,
             vpa_SL, vpa_advect, vpa, z, use_semi_lagrange, dt, t,
-            vpa_spectral, z_spectral, composition, collisions.charge_exchange, istage)
+            vpa_spectral, z_spectral, composition, collisions.charge_exchange,
+            collisions.ionization, istage)
     end
     # z_advection! advances 1D advection equation in z
     # apply z-advection operation to all species (charged and neutral)
@@ -538,7 +539,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, z_
     end
     if advance.source_terms
         source_terms!(fvec_out.pdf, fvec_in, moments, vpa, z, dt, z_spectral,
-                      composition, collisions.charge_exchange)
+                      composition, collisions.charge_exchange, collisions.ionization)
     end
     # account for charge exchange collisions between ions and neutrals
     if advance.cx_collisions
@@ -551,7 +552,8 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, z_
             composition.n_neutral_species, vpa, collisions, z.n, dt)
     end
     if advance.continuity
-        continuity_equation!(fvec_out.density, fvec_in, moments, vpa, z, dt, z_spectral)
+        continuity_equation!(fvec_out.density, fvec_in, moments, vpa, z, dt,
+                             composition, collisions.ionization, z_spectral)
     end
     if advance.force_balance
         # fvec_out.upar is over-written in force_balance! and contains the particle flux

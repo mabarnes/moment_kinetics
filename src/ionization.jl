@@ -6,7 +6,28 @@ function ionization_collisions!(f_out, fvec_in, evolve_density, n_ion_species,
 	n_neutral_species, vpa, collisions, nz, dt)
 
     if evolve_density
-        error("Ionization collisions not currently supported for anything other than the standard drift kinetic equation: Aborting.")
+		# apply ionization collisions to all ion species
+		for isi ∈ 1:n_ion_species
+			# for each ion species, obtain effect of ionization collisions
+			# with all of the neutral species
+			for is ∈ 1:n_neutral_species
+				isn = is + n_ion_species
+				for iz ∈ 1:nz
+					@. f_out[:,iz,isi] += dt*collisions.ionization*fvec_in.density[iz,isn]*fvec_in.pdf[:,iz,isn]
+				end
+			end
+		end
+		# apply ionization collisions to all neutral species
+		for is ∈ 1:n_neutral_species
+			isn = is + n_ion_species
+			# for each neutral species, obtain effect of ionization collisions
+			# with all of the ion species
+			for isi ∈ 1:n_ion_species
+				for iz ∈ 1:nz
+					@. f_out[:,iz,isn] -= dt*collisions.ionization*fvec_in.density[iz,isi]*fvec_in.pdf[:,iz,isn]
+				end
+			end
+		end
 	elseif collisions.constant_ionization_rate
                 # Oddly the test in test/harrisonthompson.jl matches the analitical
                 # solution (which assumes width=0.0) better with width=0.5 than with,
