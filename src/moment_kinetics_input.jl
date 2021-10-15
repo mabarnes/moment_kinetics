@@ -31,11 +31,15 @@ function mk_input(scan_input=Dict())
     n_neutral_species = 1
     # if boltzmann_electron_response = true, then the electron
     # density is fixed to be N_e*(eϕ/T_e)
-    # currently this is the only supported option
-    boltzmann_electron_response = true
-
+    boltzmann_electron_response = false
+    boltzmann_electron_response_with_simple_sheath = true
+    # if boltzmann_electron_response_with_simple_sheath = true,
+    # and boltzmann_electron_response = false, then the electron
+    # density is fixed to be N_e*(eϕ/T_e) and N_e is calculated 
+    # w.r.t a reference value using J_||e + J_||i = 0 at z = 0 
+    
     z, vpa, species, composition, drive, evolve_moments, collisions =
-        load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_response)
+        load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath)
 
     # this is the prefix for all output files associated with this run
     run_name = get(scan_input, "run_name", "wallBC")
@@ -56,6 +60,10 @@ function mk_input(scan_input=Dict())
     composition.T_wall = 1.0
     # set initial neutral temperature Tn/Tₑ = 1
     # set initial nᵢ/Nₑ = 1.0
+    # set phi_wall at z = 0
+    composition.phi_wall = 0.0
+    
+    
     species[1].z_IC.initialization_option = get(scan_input, "z_IC_option1", "gaussian")
     species[1].initial_density = get(scan_input, "initial_density1", 1.0)
     species[1].initial_temperature = get(scan_input, "initial_temperature1", 1.0)
@@ -100,7 +108,7 @@ function mk_input(scan_input=Dict())
     collisions.constant_ionization_rate = get(scan_input, "constant_ionization_rate", false)
 
     # parameters related to the time stepping
-    nstep = get(scan_input, "nstep", 40000)
+    nstep = get(scan_input, "nstep", 1000)
     dt = get(scan_input, "dt", 0.00025/sqrt(species[1].initial_temperature))
     nwrite = get(scan_input, "nwrite", 80)
     # use_semi_lagrange = true to use interpolation-free semi-Lagrange treatment
@@ -199,7 +207,7 @@ function mk_input(scan_input=Dict())
     return all_inputs
 end
 
-function load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_response)
+function load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath)
     ############## options related to the equations being solved ###############
     evolve_density = false
     evolve_parallel_flow = false
@@ -286,7 +294,7 @@ function load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_resp
     #############################################################################
     # define default values and create corresponding mutable structs holding
     # information about the composition of the species and their initial conditions
-    if boltzmann_electron_response
+    if boltzmann_electron_response | boltzmann_electron_response_with_simple_sheath
         n_species = n_ion_species + n_neutral_species
     else
         n_species = n_ion_speces + n_neutral_species + 1
@@ -295,10 +303,14 @@ function load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_resp
     T_e = 1.0
     # temperature at the entrance to the wall in terms of the electron temperature
     T_wall = 1.0
+    # wall potential at z = 0
+    phi_wall = 0.0
     # ratio of the neutral particle mass to the ion particle mass
     mn_over_mi = 1.0
+    # ratio of the electron particle mass to the ion particle mass
+    me_over_mi = 1.0/1836.0
     composition = species_composition(n_species, n_ion_species, n_neutral_species,
-        boltzmann_electron_response, T_e, T_wall, mn_over_mi)
+        boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath, T_e, T_wall, phi_wall, mn_over_mi, me_over_mi)
     species = Array{species_parameters_mutable,1}(undef,n_species)
     # initial temperature for each species defaults to Tₑ
     initial_temperature = 1.0

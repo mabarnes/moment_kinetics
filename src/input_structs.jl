@@ -149,12 +149,18 @@ mutable struct species_composition
     n_neutral_species::mk_int
     # if boltzmann_electron_response = true, the electron density is fixed to be Nₑ*(eϕ/T_e)
     boltzmann_electron_response::Bool
+    # if boltzmann_electron_response_with_simple_sheath = true, the electron density is fixed to be Nₑ*(eϕ/T_e) and N_e is calculated using a current condition at the wall
+    boltzmann_electron_response_with_simple_sheath::Bool
     # electron temperature used for Boltzmann response
     T_e::mk_float
     # wall temperature used if 'wall' BC selected for z coordinate; normalised by electron temperature
     T_wall::mk_float
+    # wall potential used if 'boltzmann_electron_response_with_simple_sheath' selected 
+    phi_wall::mk_float
     # ratio of the neutral particle mass to the ion mass
     mn_over_mi::mk_float
+    # ratio of the electron particle mass to the ion mass
+    me_over_mi::mk_float
 end
 mutable struct drive_input_mutable
     # if drive.phi = true, include external electrostatic potential

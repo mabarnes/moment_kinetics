@@ -32,15 +32,37 @@ function update_phi!(fields, fvec, z, composition)
     @boundscheck size(fields.phi0,1) == z.n || throw(BoundsError(fields.phi0))
     @boundscheck size(fvec.density,1) == z.n || throw(BoundsError(fvec.density))
     @boundscheck size(fvec.density,2) == composition.n_species || throw(BoundsError(fvec.density))
-    if composition.boltzmann_electron_response
-        z.scratch .= @view(fvec.density[:,1])
-        @inbounds for is ∈ 2:composition.n_ion_species
-            for iz ∈ 1:z.n
-                z.scratch[iz] += fvec.density[iz,is]
-            end
+    
+    # first, calculate Sum_{i} Z_i n_i 
+    z.scratch .= 0.0
+    @inbounds for is ∈ 1:composition.n_ion_species
+        for iz ∈ 1:z.n
+            z.scratch[iz] += fvec.density[iz,is]
         end
+    end
+    
+    if composition.boltzmann_electron_response
+        N_e = 1.0
+    elseif composition.boltzmann_electron_response_with_simple_sheath
+        #  calculate Sum_{i} Z_i n_i u_i = J_||i at z = 0 
+        jpar_i = 0.0
+        @inbounds for is ∈ 1:composition.n_ion_species
+            jpar_i += fvec.density[1,is]*fvec.upar[1,is]
+        end
+        
+        N_e = sqrt(2.0 * pi * composition.me_over_mi / composition.T_e) * jpar_i * exp( - composition.phi_wall)    
+    end
+    
+    
+    if composition.boltzmann_electron_response | composition.boltzmann_electron_response_with_simple_sheath  
+        #z.scratch .= @view(fvec.density[:,1])
+        #@inbounds for is ∈ 2:composition.n_ion_species
+        #    for iz ∈ 1:z.n
+        #        z.scratch[iz] += fvec.density[iz,is]
+        #    end
+        #end
         @inbounds for iz ∈ 1:z.n
-            fields.phi[iz] = composition.T_e * log(z.scratch[iz])
+            fields.phi[iz] = N_e * composition.T_e * log(z.scratch[iz])
         end
         # if fields.force_phi
         #     @inbounds for iz ∈ 1:z.n
@@ -48,6 +70,9 @@ function update_phi!(fields, fvec, z, composition)
         #     end
         # end
     end
+    
+    ## can calculate phi at z = L and hence phi_wall(z=L) using jpar_i at z =L if needed
+    
 end
 
 end
