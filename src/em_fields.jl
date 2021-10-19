@@ -50,7 +50,7 @@ function update_phi!(fields, fvec, z, composition)
             jpar_i += fvec.density[1,is]*fvec.upar[1,is]
         end
         
-        N_e = sqrt(2.0 * pi * composition.me_over_mi / composition.T_e) * jpar_i * exp( - composition.phi_wall)    
+        N_e = 2.0 * sqrt( pi * composition.me_over_mi) * jpar_i * exp( - composition.phi_wall)    
     end
     
     
