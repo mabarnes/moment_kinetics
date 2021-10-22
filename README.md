@@ -131,11 +131,11 @@ To get more output on what tests were successful, an option `--verbose` (or `-v`
     ```
     `Revise.jl` will recompile each edited function/method as needed, so it is possible to keep a REPL session open and avoid long recompilation. `moment_kinetics` can be run fairly conveniently from the REPL
     ```
-    julia> using TimerOutputs, moment_kinetics
-    julia> run_moment_kinetics(TimerOutput(), input)
+    julia> using moment_kinetics
+    julia> run_moment_kinetics(input)
     ```
     where `input` is a `Dict()` containing any non-default options desired. Input can also be loaded from a TOML file passing the filaname as a String to the second argument, e.g.
     ```
-    julia> run_moment_kinetics(TimerOutput(), "input.toml")
+    julia> run_moment_kinetics("input.toml")
     ```
     It might be convenient to add `using Revise` to your `startup.jl` file (`~/julia/config/startup.jl`) so it's always loaded.
