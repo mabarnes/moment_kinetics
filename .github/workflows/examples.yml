@@ -1,0 +1,24 @@
+# Based on example from https://github.com/julia-actions/julia-runtest
+name: Check examples
+
+on: [push, pull_request]
+
+jobs:
+  examples:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macOS-latest]
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v2
+      - uses: julia-actions/setup-julia@v1
+        with:
+          version: '1'
+          arch: x64
+      - uses: julia-actions/julia-buildpkg@v1
+      - name: Test examples
+        run: |
+          mkdir runs
+          julia --project -O3 -e 'using moment_kinetics; for (root, dirs, files) in walkdir("examples") for file in files if endswith(file, ".toml") println(joinpath(root, file)); run_moment_kinetics(joinpath(root, file)) end end end'
