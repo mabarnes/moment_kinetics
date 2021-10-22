@@ -21,6 +21,22 @@ using ..input_structs: collisions_input
 @enum RunType single performance_test scan
 const run_type = single
 
+# Utility function for converting a string to an Enum when getting from a Dict, based on
+# the type of the default value
+function get(d::Dict, key, default::Enum)
+    valstring = get(d, key, nothing)
+    if valstring == nothing
+        return default
+    # instances(typeof(default)) gets the possible values of the Enum. Then convert to
+    # Symbol, then to String.
+    elseif valstring ∈ String.(Symbol.(instances(typeof(default))))
+        return eval(Symbol(valstring))
+    else
+        error("Expected a $(typeof(default)), but '$valstring' is not in "
+              * "$(instances(typeof(default)))")
+    end
+end
+
 function mk_input(scan_input=Dict())
 
     # n_ion_species is the number of evolved ion species
