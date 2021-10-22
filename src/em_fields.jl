@@ -5,6 +5,7 @@ export update_phi!
 
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_float
+using ..input_structs
 using ..velocity_moments: update_density!
 
 struct fields
@@ -41,9 +42,9 @@ function update_phi!(fields, fvec, z, composition)
         end
     end
     
-    if composition.boltzmann_electron_response
+    if composition.electron_physics == boltzmann_electron_response
         N_e = 1.0
-    elseif composition.boltzmann_electron_response_with_simple_sheath
+    elseif composition.electron_physics == boltzmann_electron_response_with_simple_sheath
         #  calculate Sum_{i} Z_i n_i u_i = J_||i at z = 0 
         jpar_i = 0.0
         @inbounds for is ∈ 1:composition.n_ion_species
@@ -54,7 +55,7 @@ function update_phi!(fields, fvec, z, composition)
     end
     
     
-    if composition.boltzmann_electron_response | composition.boltzmann_electron_response_with_simple_sheath  
+    if composition.electron_physics ∈ (boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath)
         #z.scratch .= @view(fvec.density[:,1])
         #@inbounds for is ∈ 2:composition.n_ion_species
         #    for iz ∈ 1:z.n
