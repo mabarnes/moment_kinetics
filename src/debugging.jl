@@ -47,7 +47,14 @@ for (macroname, minlevel) ∈ macronames
     if _debug_level >= minlevel
         macro_block = quote
             macro $m(blk)
-                return :( $(esc(blk)) )
+                return quote
+                    # Uncomment the following line to print the macro name each time
+                    # the debug block is called. Can be useful to see progress, since
+                    # debugging blocks can make the code run very slowly.
+                    #println($$macroname)
+
+                    $(esc(blk))
+                end
             end
 
             macro $ifelse_symbol(debug, standard)
