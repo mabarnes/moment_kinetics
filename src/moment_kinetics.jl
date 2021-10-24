@@ -92,6 +92,13 @@ function run_moment_kinetics(to::TimerOutput, input_dict=Dict())
     end
     # finish i/o
     finish_file_io(io, cdf)
+
+    if block_rank[] == 0 && run_type == performance_test
+        # Print the timing information if this is a performance test
+        display(to)
+        println()
+    end
+
     return nothing
 end
 
