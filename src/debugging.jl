@@ -18,9 +18,10 @@ module debugging
 using ArgParse
 
 macronames = [
-              ("debug_block_synchronize", 1),
-              ("debug_shared_array", 1),
-              ("debug_shared_array_allocate", 2),
+              ("debug_initialize_NaN", 1),
+              ("debug_block_synchronize", 2),
+              ("debug_shared_array", 2),
+              ("debug_shared_array_allocate", 3),
              ]
 
 #s = ArgParseSettings()
