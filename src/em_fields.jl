@@ -44,29 +44,25 @@ function update_phi!(fields, fvec, z, composition)
     
     if composition.electron_physics == boltzmann_electron_response
         N_e = 1.0
-        #println("using boltzmann_electron_response")
-        println(" N_e ", N_e)
     elseif composition.electron_physics == boltzmann_electron_response_with_simple_sheath
         #  calculate Sum_{i} Z_i n_i u_i = J_||i at z = 0 
         jpar_i = 0.0
         @inbounds for is ∈ 1:composition.n_ion_species
-            jpar_i += fvec.density[1,is]*fvec.upar[1,is]
+            jpar_i +=  fvec.density[1,is]*fvec.upar[1,is]
         end
-        println("jpar_i", jpar_i)
-        N_e = 2.0 * sqrt( pi * composition.me_over_mi) * jpar_i * exp( - composition.phi_wall)   
-        #println("using boltzmann_electron_response_with_simple_sheath")
-        println("N_e ", N_e)
+        # Calculate N_e using J_||e at sheath entrance at z = 0 (lower boundary).
+        # Assuming pdf is a half maxwellian with boltzmann factor at wall, we have 
+        # J_||e = e N_e v_{th,e} exp[ e phi_wall / T_e ] / 2 sqrt{pi},
+        # where positive sign above (and negative sign below)
+        # is due to the fact that electrons reaching the wall flow towards more negative z.
+        # Using J_||e + J_||i = 0, and rearranging for N_e, we have 
+        N_e = - 2.0 * sqrt( pi * composition.me_over_mi) * jpar_i * exp( - composition.phi_wall / composition.T_e) 
+        # See P.C. Stangeby, The Plasma Boundary of Magnetic Fusion Devices, IOP Publishing, Chpt 2, p75
     end
     
     
     if composition.electron_physics ∈ (boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath)
-        #z.scratch .= @view(fvec.density[:,1])
-        #@inbounds for is ∈ 2:composition.n_ion_species
-        #    for iz ∈ 1:z.n
-        #        z.scratch[iz] += fvec.density[iz,is]
-        #    end
-        #end
-        # calculate phi from 
+        # finally, calculate phi from 
         # Sum_{i} Z_i n_i = N_e exp[ e phi / T_e]
         @inbounds for iz ∈ 1:z.n
             fields.phi[iz] =  composition.T_e * log(z.scratch[iz]/ N_e )
