@@ -44,14 +44,18 @@ function update_phi!(fields, fvec, z, composition)
     
     if composition.electron_physics == boltzmann_electron_response
         N_e = 1.0
+        #println("using boltzmann_electron_response")
+        println(" N_e ", N_e)
     elseif composition.electron_physics == boltzmann_electron_response_with_simple_sheath
         #  calculate Sum_{i} Z_i n_i u_i = J_||i at z = 0 
         jpar_i = 0.0
         @inbounds for is ∈ 1:composition.n_ion_species
             jpar_i += fvec.density[1,is]*fvec.upar[1,is]
         end
-        
-        N_e = 2.0 * sqrt( pi * composition.me_over_mi) * jpar_i * exp( - composition.phi_wall)    
+        println("jpar_i", jpar_i)
+        N_e = 2.0 * sqrt( pi * composition.me_over_mi) * jpar_i * exp( - composition.phi_wall)   
+        #println("using boltzmann_electron_response_with_simple_sheath")
+        println("N_e ", N_e)
     end
     
     
@@ -62,8 +66,10 @@ function update_phi!(fields, fvec, z, composition)
         #        z.scratch[iz] += fvec.density[iz,is]
         #    end
         #end
+        # calculate phi from 
+        # Sum_{i} Z_i n_i = N_e exp[ e phi / T_e]
         @inbounds for iz ∈ 1:z.n
-            fields.phi[iz] = N_e * composition.T_e * log(z.scratch[iz])
+            fields.phi[iz] =  composition.T_e * log(z.scratch[iz]/ N_e )
         end
         # if fields.force_phi
         #     @inbounds for iz ∈ 1:z.n
