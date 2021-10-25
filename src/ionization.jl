@@ -2,10 +2,12 @@ module ionization
 
 export ionization_collisions!
 
-function ionization_collisions!(f_out, fvec_in, evolve_density, n_ion_species,
-	n_neutral_species, vpa, collisions, nz, dt)
+using ..interpolation: interpolate_to_grid_vpa
 
-    if evolve_density
+function ionization_collisions!(f_out, fvec_in, moments, n_ion_species,
+								n_neutral_species, vpa, spectral, collisions, nz, dt)
+
+    if moments.evolve_density
 		# apply ionization collisions to all ion species
 		for isi ∈ 1:n_ion_species
 			# for each ion species, obtain effect of ionization collisions
@@ -13,7 +15,25 @@ function ionization_collisions!(f_out, fvec_in, evolve_density, n_ion_species,
 			for is ∈ 1:n_neutral_species
 				isn = is + n_ion_species
 				for iz ∈ 1:nz
-					@. f_out[:,iz,isi] += dt*collisions.ionization*fvec_in.density[iz,isn]*fvec_in.pdf[:,iz,isn]
+					if moments.evolve_upar
+						# wpa = vpa - upa_s if upar evolved but no ppar
+	                    # if ppar also evolved, wpa = (vpa - upa_s)/vths
+						if moments.evolve_ppar
+							wpa_shift_norm = moments.vth[iz,isn]
+						else
+							wpa_shift_norm = 1.0
+						end
+						# calculate the shift in the wpa grid to the desired (ion) wpa locations
+						wpa_shift = (fvec_in.upar[iz,isi] - fvec_in.upar[iz,isn])/wpa_shift_norm
+						# construct the wpa grid on which to interpolate the neutral pdf
+                        @. vpa.scratch = vpa.grid + wpa_shift
+						# interpolate to the new grid (passed in as vpa.scratch)
+                        # and return interpolated values in vpa.scratch
+                        vpa.scratch .= interpolate_to_grid_vpa(vpa.scratch, view(fvec_in.pdf,:,iz,isn), vpa, spectral)
+					else
+						@. vpa.scratch = fvec_in.pdf[:,iz,isn]
+					end
+					@. f_out[:,iz,isi] += dt*collisions.ionization*fvec_in.density[iz,isn]*vpa.scratch
 				end
 			end
 		end

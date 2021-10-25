@@ -60,47 +60,7 @@ function setup_time_advance!(pdf, vpa, z, composition, drive_input, moments,
     # indicate which parts of the equations are to be advanced concurrently.
     # if no splitting of operators, all terms advanced concurrently;
     # else, will advance one term at a time.
-    if t_input.split_operators
-        advance = advance_info(false, false, false, false, false, false, false, false, rk_coefs)
-    else
-        if composition.n_neutral_species > 0
-            if collisions.charge_exchange > 0.0
-                advance_cx = true
-            else
-                advance_cx = false
-            end
-            if collisions.ionization > 0.0
-                advance_ionization = true
-            else
-                advance_ionization = false
-            end
-        else
-            advance_cx = false
-            advance_ionization = false
-        end
-        if moments.evolve_density
-            advance_sources = true
-            advance_continuity = true
-            if moments.evolve_upar
-                advance_force_balance = true
-                if moments.evolve_ppar
-                    advance_energy = true
-                else
-                    advance_energy = false
-                end
-            else
-                advance_force_balance = false
-                advance_energy = false
-            end
-        else
-            advance_sources = false
-            advance_continuity = false
-            advance_force_balance = false
-            advance_energy = false
-        end
-        advance = advance_info(true, true, advance_cx, advance_ionization, advance_sources,
-                               advance_continuity, advance_force_balance, advance_energy, rk_coefs)
-    end
+    advance = setup_advance_flags(moments, composition, t_input.split_operators, collisions, rk_coefs)
     # create structure z_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the split part of the GK equation dealing
     # with advection in z
@@ -172,6 +132,60 @@ function setup_time_advance!(pdf, vpa, z, composition, drive_input, moments,
     vpa_SL = setup_semi_lagrange(vpa.n, z.n)
     return vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
         vpa_SL, z_SL, scratch, advance
+end
+# create the 'advance_info' struct to be used in later Euler advance to
+# indicate which parts of the equations are to be advanced concurrently.
+# if no splitting of operators, all terms advanced concurrently;
+# else, will advance one term at a time.
+function setup_advance_flags(moments, composition, split_operators, collisions, rk_coefs)
+    # default is not to concurrently advance different operators
+    advance_vpa_advection = false
+    advance_z_advection = false
+    advance_cx = false
+    advance_ionization = false
+    advance_sources = false
+    advance_continuity = false
+    advance_force_balance = false
+    advance_energy = false
+    # all advance flags remain false if using operator-splitting
+    # otherwise, check to see if the flags need to be set to true
+    if !split_operators
+        # default for non-split operators is to include both vpa and z advection together
+        advance_vpa_advection = true
+        advance_z_advection = true
+        # if neutrals present, check to see if different ion-neutral
+        # collisions are enabled
+        if composition.n_neutral_species > 0
+            # if charge exchange collision frequency non-zero,
+            # account for charge exchange collisions
+            if abs(collisions.charge_exchange) > 0.0
+                advance_cx = true
+            end
+            # if ionization collision frequency non-zero,
+            # account for charge exchange collisions
+            if abs(collisions.ionization) > 0.0
+                advance_ionization = true
+            end
+        end
+        # if evolving the density (and possibly flow/pressure) via fluid equations
+        # need to include associated sources in the modified kinetic equation
+        # must also advance the continuity equation itself
+        if moments.evolve_density
+            advance_sources = true
+            advance_continuity = true
+            # if also evolving the parallel flow, must advance the force balance equation
+            if moments.evolve_upar
+                advance_force_balance = true
+                # if also evolving parallel pressure, must advance the energy equation
+                if moments.evolve_ppar
+                    advance_energy = true
+                end
+            end
+        end
+    end
+    return advance_info(advance_vpa_advection, advance_z_advection, advance_cx,
+                        advance_ionization, advance_sources, advance_continuity,
+                        advance_force_balance, advance_energy, rk_coefs)
 end
 # if evolving the density via continuity equation, redefine the normalised f → f/n
 # if evolving the parallel pressure via energy equation, redefine f -> f * vth / n
@@ -544,12 +558,12 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, z_
     # account for charge exchange collisions between ions and neutrals
     if advance.cx_collisions
         charge_exchange_collisions!(fvec_out.pdf, fvec_in, moments, n_ion_species,
-            composition.n_species, vpa, collisions.charge_exchange, z.n, dt)
+            composition.n_neutral_species, vpa, vpa_spectral, collisions.charge_exchange, z.n, dt)
     end
     # account for ionization collisions between ions and neutrals
     if advance.ionization_collisions
-        ionization_collisions!(fvec_out.pdf, fvec_in, moments.evolve_density, n_ion_species,
-            composition.n_neutral_species, vpa, collisions, z.n, dt)
+        ionization_collisions!(fvec_out.pdf, fvec_in, moments, n_ion_species,
+            composition.n_neutral_species, vpa, vpa_spectral, collisions, z.n, dt)
     end
     if advance.continuity
         continuity_equation!(fvec_out.density, fvec_in, moments, vpa, z, dt,
