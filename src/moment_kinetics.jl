@@ -51,7 +51,7 @@ using .moment_kinetics_input: mk_input, run_type, performance_test
 using .time_advance: setup_time_advance!, time_advance!
 
 # main function that contains all of the content of the program
-function run_moment_kinetics(to, input_dict=Dict())
+function run_moment_kinetics(to::TimerOutput, input_dict=Dict())
     input = mk_input(input_dict)
     # obtain input options from moment_kinetics_input.jl
     # and check input to catch errors
@@ -96,8 +96,12 @@ function run_moment_kinetics(to, input_dict=Dict())
 end
 
 # overload which takes a filename and loads input
-function run_moment_kinetics(to, input_filename::String)
+function run_moment_kinetics(to::TimerOutput, input_filename::String)
     return run_moment_kinetics(to, TOML.parsefile(input_filename))
+end
+# overloads with no TimerOutput arguments
+function run_moment_kinetics(input=Dict())
+    return run_moment_kinetics(TimerOutput(), input)
 end
 
 end
