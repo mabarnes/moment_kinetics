@@ -38,16 +38,17 @@ function mk_input(scan_input=Dict())
         load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_response)
 
     # this is the prefix for all output files associated with this run
-    run_name = get(scan_input, "run_name", "mk_Rion")
+    run_name = get(scan_input, "run_name", "mk_cxion_periodic_upar")
     # this is the directory where the simulation data will be stored
     base_directory = get(scan_input, "base_directory", "runs")
     output_dir = string(base_directory, "/", run_name)
     # if evolve_moments.density = true, evolve density via continuity eqn
     # and g = f/n via modified drift kinetic equation
-    evolve_moments.density = get(scan_input, "evolve_moments_density", true)
-    evolve_moments.parallel_flow = get(scan_input, "evolve_moments_parallel_flow", true)
-    evolve_moments.parallel_pressure = get(scan_input, "evolve_moments_parallel_pressure", true)
-    evolve_moments.conservation = get(scan_input, "evolve_moments_conservation", true)
+    moment_kinetic = true
+    evolve_moments.density = get(scan_input, "evolve_moments_density", moment_kinetic)
+    evolve_moments.parallel_flow = get(scan_input, "evolve_moments_parallel_flow", moment_kinetic)
+    evolve_moments.parallel_pressure = get(scan_input, "evolve_moments_parallel_pressure", moment_kinetic)
+    evolve_moments.conservation = get(scan_input, "evolve_moments_conservation", moment_kinetic)
 
     ####### specify any deviations from default inputs for evolved species #######
     # set initial Tₑ = 1
@@ -59,9 +60,9 @@ function mk_input(scan_input=Dict())
     species[1].z_IC.initialization_option = get(scan_input, "z_IC_option1", "sinusoid")
     species[1].initial_density = get(scan_input, "initial_density1", 1.0)
     species[1].initial_temperature = get(scan_input, "initial_temperature1", 1.0)
-    species[1].z_IC.density_amplitude = get(scan_input, "z_IC_density_amplitude1", 0.001)
+    species[1].z_IC.density_amplitude = get(scan_input, "z_IC_density_amplitude1", 0.2)
     species[1].z_IC.density_phase = get(scan_input, "z_IC_density_phase1", 0.0)
-    species[1].z_IC.upar_amplitude = get(scan_input, "z_IC_upar_amplitude1", 0.0)
+    species[1].z_IC.upar_amplitude = get(scan_input, "z_IC_upar_amplitude1", 0.5)
     species[1].z_IC.upar_phase = get(scan_input, "z_IC_upar_phase1", 0.0)
     species[1].z_IC.temperature_amplitude = get(scan_input, "z_IC_temperature_amplitude1", 0.0)
     species[1].z_IC.temperature_phase = get(scan_input, "z_IC_temperature_phase1", 0.0)
@@ -77,11 +78,12 @@ function mk_input(scan_input=Dict())
     for (i, s) in enumerate(species[2:end])
         i = i+1
         s.z_IC.initialization_option = get(scan_input, "z_IC_option$i", species[1].z_IC.initialization_option)
-        s.initial_density = get(scan_input, "initial_density$i", 0.5)
+        s.initial_density = get(scan_input, "initial_density$i", species[1].initial_density)
         s.initial_temperature = get(scan_input, "initial_temperature$i", species[1].initial_temperature)
         s.z_IC.density_amplitude = get(scan_input, "z_IC_density_amplitude$i", species[1].z_IC.density_amplitude)
         s.z_IC.density_phase = get(scan_input, "z_IC_density_phase$i", species[1].z_IC.density_phase)
         s.z_IC.upar_amplitude = get(scan_input, "z_IC_upar_amplitude$i", species[1].z_IC.upar_amplitude)
+        #s.z_IC.upar_amplitude = get(scan_input, "z_IC_upar_amplitude$i", -0.5)
         s.z_IC.upar_phase = get(scan_input, "z_IC_upar_phase$i", species[1].z_IC.upar_phase)
         s.z_IC.temperature_amplitude = get(scan_input, "z_IC_temperature_amplitude$i", species[1].z_IC.temperature_amplitude)
         s.z_IC.temperature_phase = get(scan_input, "z_IC_temperature_phase$i", species[1].z_IC.temperature_phase)
@@ -101,9 +103,9 @@ function mk_input(scan_input=Dict())
     collisions.constant_ionization_rate = get(scan_input, "constant_ionization_rate", false)
 
     # parameters related to the time stepping
-    nstep = get(scan_input, "nstep", 40000)
-    dt = get(scan_input, "dt", 0.00025/sqrt(species[1].initial_temperature))
-    nwrite = get(scan_input, "nwrite", 80)
+    nstep = get(scan_input, "nstep", 10000)
+    dt = get(scan_input, "dt", 0.0002/sqrt(species[1].initial_temperature))
+    nwrite = get(scan_input, "nwrite", 20)
     # use_semi_lagrange = true to use interpolation-free semi-Lagrange treatment
     # otherwise, solve problem solely using the discretization_option above
     use_semi_lagrange = get(scan_input, "use_semi_lagrange", false)
