@@ -6,6 +6,7 @@ Note these are not guaranteed to be highly optimized!
 module interpolation
 
 export interpolate_to_grid_z
+export interpolate_to_grid_vpa
 
 using ..type_definitions: mk_float
 
@@ -41,17 +42,21 @@ function interpolate_to_grid_z(newgrid, f::Array{mk_float, 1}, z, spectral)
     return interpolate_to_grid_1d(newgrid, f, z, spectral)
 end
 
-function interpolate_to_grid_vpa(newgrid, f::Array{mk_float, 3}, vpa, spectral)
-    size_f = size(f)
-    result = Array{mk_float}(undef, (size(newgrid)[1], size_f[2:3]...))
+# function interpolate_to_grid_vpa(newgrid, f::Array{mk_float, 3}, vpa, spectral)
+#     size_f = size(f)
+#     result = Array{mk_float}(undef, (size(newgrid)[1], size_f[2:3]...))
+#
+#     for is ∈ 1:size_f[3]
+#         for iz ∈ 1:size_f[2]
+#             result[:, iz, is] = interpolate_to_grid_1d(newgrid, f[:, iz, is], vpa, spectral)
+#         end
+#     end
+#
+#     return result
+# end
 
-    for is ∈ 1:size_f[3]
-        for iz ∈ 1:size_f[2]
-            result[:, iz, is] = interpolate_to_grid_1d(newgrid, f[:, iz, is], vpa, spectral)
-        end
-    end
-
-    return result
+function interpolate_to_grid_vpa(newgrid, f, vpa, spectral)
+    return interpolate_to_grid_1d(newgrid, f, vpa, spectral)
 end
 
 end
