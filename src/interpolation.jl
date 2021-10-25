@@ -8,7 +8,7 @@ module interpolation
 export interpolate_to_grid_z
 export interpolate_to_grid_vpa
 
-using ..type_definitions: mk_float
+using ..type_definitions: mk_float, mk_int
 
 # Define dummy function so both chebyshev.jl and finite_differences.jl can merge new
 # implementations to it.
@@ -42,20 +42,22 @@ function interpolate_to_grid_z(newgrid, f::Array{mk_float, 1}, z, spectral)
     return interpolate_to_grid_1d(newgrid, f, z, spectral)
 end
 
-# function interpolate_to_grid_vpa(newgrid, f::Array{mk_float, 3}, vpa, spectral)
-#     size_f = size(f)
-#     result = Array{mk_float}(undef, (size(newgrid)[1], size_f[2:3]...))
-#
-#     for is ∈ 1:size_f[3]
-#         for iz ∈ 1:size_f[2]
-#             result[:, iz, is] = interpolate_to_grid_1d(newgrid, f[:, iz, is], vpa, spectral)
-#         end
-#     end
-#
-#     return result
-# end
+function interpolate_to_grid_vpa(newgrid, f::Array{mk_float, 3}, vpa, spectral)
+    size_f = size(f)
+    result = Array{mk_float}(undef, (size(newgrid)[1], size_f[2:3]...))
 
-function interpolate_to_grid_vpa(newgrid, f, vpa, spectral)
+    for is ∈ 1:size_f[3]
+        for iz ∈ 1:size_f[2]
+            result[:, iz, is] = interpolate_to_grid_1d(newgrid, f[:, iz, is], vpa, spectral)
+        end
+    end
+
+    return result
+end
+
+function interpolate_to_grid_vpa(newgrid, f::SubArray{mk_float, 1, Array{mk_float, 3},
+                                 Tuple{Base.Slice{Base.OneTo{mk_int}}, mk_int, mk_int}, true},
+                                 vpa, spectral)
     return interpolate_to_grid_1d(newgrid, f, vpa, spectral)
 end
 
