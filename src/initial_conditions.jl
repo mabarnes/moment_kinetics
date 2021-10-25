@@ -22,13 +22,13 @@ end
 
 # creates the normalised pdf and the velocity-space moments and populates them
 # with a self-consistent initial condition
-function init_pdf_and_moments(vpa, z, composition, species, n_rk_stages, evolve_moments)
+function init_pdf_and_moments(vpa, z, composition, species, n_rk_stages, evolve_moments, ionization)
     # define the n_species variable for convenience
     n_species = composition.n_species
     # create the 'moments' struct that contains various v-space moments and other
     # information related to these moments.
     # the time-dependent entries are not initialised.
-    moments = create_moments(z.n, n_species, evolve_moments)
+    moments = create_moments(z.n, n_species, evolve_moments, ionization, z.bc)
     # initialise the density profile
     init_density!(moments.dens, z, species, n_species)
     moments.dens_updated .= true
@@ -58,8 +58,8 @@ function create_and_init_pdf(moments, vpa, z, n_species, species)
             # updates pdf_norm to contain pdf / density, so that ∫dvpa pdf.norm = 1,
             # ∫dwpa wpa * pdf.norm = 0, and ∫dwpa m_s (wpa/vths)^2 pdf.norm = 1/2
             # to machine precision
-            @views init_pdf_over_density!(pdf_norm[:,:,is], species[is], vpa, z,
-                                          moments.vth[:,is], moments.vpa_norm_fac[:,is])
+            @views init_pdf_over_density!(pdf_norm[:,:,is], species[is], vpa, z, moments.vth[:,is], moments.upar[:,is],
+                                          moments.vpa_norm_fac[:,is], moments.evolve_upar, moments.evolve_ppar)
         end
     end
     pdf_unnorm = copy(pdf_norm)
@@ -125,13 +125,22 @@ function init_upar!(upar, z, spec, n_species)
     end
     return nothing
 end
-function init_pdf_over_density!(pdf, spec, vpa, z, vth, vpa_norm_fac)
+function init_pdf_over_density!(pdf, spec, vpa, z, vth, upar, vpa_norm_fac, evolve_upar, evolve_ppar)
     if spec.vpa_IC.initialization_option == "gaussian"
-        # initial condition is an unshifted Gaussian
+        # initial condition is a Gaussian in the peculiar velocity
         # if evolve_ppar = true, then vpa coordinate is (vpa - upar)/vth;
         # otherwise it is either (vpa-upar) or simply vpa
         for iz ∈ 1:z.n
-            @. pdf[:,iz] = exp(-(vpa.grid*(vpa_norm_fac[iz]/vth[iz]))^2) / vth[iz]
+            # obtain (vpa - upar)/vth
+            if evolve_ppar
+                @. vpa.scratch = vpa.grid
+            elseif evolve_upar
+                @. vpa.scratch = vpa.grid/vth[iz]
+            else
+                @. vpa.scratch = (vpa.grid - upar[iz])/vth[iz]
+            end
+            #@. pdf[:,iz] = exp(-(vpa.grid*(vpa_norm_fac[iz]/vth[iz]))^2) / vth[iz]
+            @. pdf[:,iz] = exp(-vpa.scratch^2) / vth[iz]
         end
         for iz ∈ 1:z.n
             # densfac = the integral of the pdf over v-space, which should be unity,
