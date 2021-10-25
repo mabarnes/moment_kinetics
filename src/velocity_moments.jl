@@ -301,6 +301,8 @@ end
 function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, moments)
     # n_species is the number of evolved species
     n_species = size(fvec_new.density,2)
+    # nz is the number of z grid points
+    nz = size(fvec_new.density,1)
     # add a small correction to the density for each species to ensure that
     # that particle number is conserved if it should be;
     # ionisation collisions and net particle flux out of the domain due to, e.g.,
@@ -309,10 +311,12 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, moments)
         if moments.particle_number_conserved[is]
             # obtain the factor by which the density much change in order to ensure exact particle conservation
             @views avgdens_ratio = integral(fvec_old.density[:,is] .- fvec_new.density[:,is], z.wgts)/integral(fvec_old.density[:,is], z.wgts)
-            # update the density with the above factor to ensure particle conservation
-            fvec_new.density[iz,is] += fvec_old.density[iz,is] * avgdens_ratio
-            # update the thermal speed, as the density has changed
-            moments.vth[iz,is] = sqrt(2.0*fvec_new.ppar[iz,is]/fvec_new.density[iz,is])
+            for iz ∈ 1:nz
+                # update the density with the above factor to ensure particle conservation
+                fvec_new.density[iz,is] += fvec_old.density[iz,is] * avgdens_ratio
+                # update the thermal speed, as the density has changed
+                moments.vth[iz,is] = sqrt(2.0*fvec_new.ppar[iz,is]/fvec_new.density[iz,is])
+            end
         end
     end
     for is ∈ 1:n_species
