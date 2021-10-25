@@ -112,13 +112,21 @@ function init_density!(dens, z, spec, n_species)
 end
 # for now the only initialisation option is zero parallel flow
 function init_upar!(upar, z, spec, n_species)
-    for is ∈ 1:n_species
+    for is ∈ 1:n_species 
         if spec[is].z_IC.initialization_option == "sinusoid"
             # initial condition is sinusoid in z
             @. upar[:,is] =
                 (spec[is].z_IC.upar_amplitude
                  * cos(2.0*π*spec[is].z_IC.wavenumber*z.grid/z.L
                        + spec[is].z_IC.upar_phase))
+        elseif spec[is].z_IC.initialization_option == "gaussian" # "linear"
+            # initial condition is linear in z
+            # this is designed to give a nonzero J_{||i} at endpoints in z
+            # necessary for an electron sheath condition involving J_{||i}
+            # option "gaussian" to be consistent with usual init option for now
+            @. upar[:,is] =
+                (spec[is].z_IC.upar_amplitude * 2.0 *       
+                       (z.grid[:] - z.grid[floor(Int,z.n/2)])/z.L)
         else
             @. upar[:,is] = 0.0
         end
