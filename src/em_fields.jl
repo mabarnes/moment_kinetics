@@ -42,6 +42,7 @@ function update_phi!(fields, fvec, z, composition)
         end
     end
     
+    
     if composition.electron_physics == boltzmann_electron_response
         N_e = 1.0
     elseif composition.electron_physics == boltzmann_electron_response_with_simple_sheath
@@ -58,6 +59,10 @@ function update_phi!(fields, fvec, z, composition)
         # Using J_||e + J_||i = 0, and rearranging for N_e, we have 
         N_e = - 2.0 * sqrt( pi * composition.me_over_mi) * jpar_i * exp( - composition.phi_wall / composition.T_e) 
         # See P.C. Stangeby, The Plasma Boundary of Magnetic Fusion Devices, IOP Publishing, Chpt 2, p75
+        
+        #io = open("phi_debug.txt","a")
+        #println(io,"phi_wall required", log(-2.0 * sqrt( pi * composition.me_over_mi) * jpar_i ) * composition.T_e)
+        #close(io)
     end
     
     
