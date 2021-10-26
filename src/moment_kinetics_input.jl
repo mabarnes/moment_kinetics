@@ -64,11 +64,11 @@ function mk_input(scan_input=Dict())
     # set initial Tₑ = 1
     composition.T_e = get(scan_input, "T_e", 1.0)
     # set wall temperature T_wall = Tw/Te
-    composition.T_wall = 1.0
+    composition.T_wall = get(scan_input, "T_wall", 1.0)
     # set initial neutral temperature Tn/Tₑ = 1
     # set initial nᵢ/Nₑ = 1.0
     # set phi_wall at z = 0
-    composition.phi_wall = 0.0
+    composition.phi_wall = get(scan_input, "phi_wall", 0.0)
     
     
     species[1].z_IC.initialization_option = get(scan_input, "z_IC_option1", "gaussian")
