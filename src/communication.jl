@@ -313,14 +313,84 @@ function get_coordinate_local_range(n, n_species)
     return first:last
 end
 
+# Need to put this before block_synchronize() so that original_error() is defined.
+@debug_error_stop_all begin
+    # Redefine Base.error(::String) so that it communicates the error to other
+    # processes, which can pick it up in block_synchronize() so that all processes are
+    # stopped. This should make interactive debugging easier, since all processes will
+    # stop if there is an error, instead of hanging.  Using ^C to stop hanging processes
+    # seems to mess up the MPI state so it's not possible to call, e.g.,
+    # `run_moment_kinetics()` again without restarting Julia.
+    #
+    # Also calls finalize_comms!() on all processes when erroring, so that a later run
+    # starts from a clean state. Note: if you catch the `ErrorException` raised by
+    # `error()` and try to continue, most likely you will get a segfault (when
+    # @debug_error_stop_all is active) because all the shared-memory arrays are deleted.
+    #
+    # Only want this active for debug runs, because for production runs we don't want
+    # extra MPI.Allgather() calls.
+    #
+    # The following implementation feels like a horrible hack, so I (JTO) am worried it
+    # might be fragile in the long run, but it only affects the code when debugging is
+    # enabled, and only really exists for convenience - if it breaks we can just delete
+    # it.
+    #
+    # Using 'world age' allows us to call the original Base.error(::String) from inside
+    # this redefined Base.error(::String). Implementation copied from here:
+    # https://discourse.julialang.org/t/how-to-call-the-original-function-when-overriding-it/56865/6
+    const world_age_before_definition = Base.get_world_counter()
+    original_error(message) = Base.invoke_in_world(world_age_before_definition,
+                                                   Base.error, message)
+    function Base.error(message::String)
+        # Communicate to all processes (which pick up the messages in
+        # block_synchronize()) that there was an error
+        _ = MPI.Allgather(true, comm_world)
+
+        # Clean up MPI-allocated memory before raising error
+        finalize_comms!()
+
+        original_error(message)
+    end
+
+    # This needs to be called before each blocking collective operation (e.g.
+    # MPI.Barrier()), to make sure any errors that have occured on other processes are
+    # communicated.
+    function _gather_errors()
+        # Gather a flag from all processes saying if there has been an error. If there
+        # was, error here too so that all processes stop.
+        all_errors = MPI.Allgather(false, comm_world)
+        if any(all_errors)
+            error_procs = Vector{mk_int}(undef, 0)
+            for (i, flag) ∈ enumerate(all_errors)
+                if flag
+                    # (i-1) because MPI ranks are 0-based indices
+                    push!(error_procs, i-1)
+                end
+            end
+
+            # Clean up MPI-allocated memory before raising error
+            finalize_comms!()
+
+            original_error("Stop due to errors on other processes. Processes with "
+                           * "errors were: $error_procs.")
+        end
+    end
+end
+
 """
 Call an MPI Barrier for all processors in a block.
 
 Used to synchronise processors that are working on the same shared-memory array(s)
 between operations, to avoid race conditions. Should be (much) cheaper than a global MPI
 Barrier because it only requires communication within a single node.
+
+Note: some debugging code currently assumes that if block_synchronize() is called on one
+block, it is called simultaneously on all blocks. It seems likely that this will always
+be true, but if it ever changes (i.e. different blocks doing totally different work),
+the debugging routines need to be updated.
 """
 function block_synchronize()
+    @debug_error_stop_all _gather_errors()
     MPI.Barrier(comm_block)
 
     @debug_block_synchronize begin
@@ -355,6 +425,7 @@ function block_synchronize()
         for (arraynum, array) ∈ enumerate(global_debugmpisharedarray_store)
             dims = size(array)
             global_dims = (dims..., block_size[])
+            @debug_error_stop_all _gather_errors()
             global_is_read = reshape(MPI.Allgather(array.is_read, comm_block),
                                      global_dims...)
             global_is_written = reshape(MPI.Allgather(array.is_written, comm_block),
@@ -393,6 +464,7 @@ function block_synchronize()
             array.is_written .= false
         end
 
+        @debug_error_stop_all _gather_errors()
         MPI.Barrier(comm_block)
     end
 end
