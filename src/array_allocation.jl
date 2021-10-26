@@ -3,8 +3,9 @@ module array_allocation
 export allocate_float, allocate_int, allocate_complex, allocate_bool, allocate_shared
 
 using ..type_definitions: mk_float, mk_int
-using ..communication: allocate_shared, block_rank, block_synchronize
+using ..communication: allocate_shared, block_rank
 using ..debugging
+@debug_initialize_NaN using ..communication: block_synchronize
 
 # allocate array with dimensions given by dims and entries of type Bool
 function allocate_bool(dims...)

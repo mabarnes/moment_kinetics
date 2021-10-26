@@ -23,6 +23,7 @@ macronames = [
               ("debug_block_synchronize", 2),
               ("debug_shared_array", 2),
               ("debug_shared_array_allocate", 3),
+              ("debug_detect_redundant_block_synchronize", 4)
              ]
 
 #s = ArgParseSettings()
@@ -68,7 +69,7 @@ for (macroname, minlevel) ∈ macronames
     else
         macro_block = quote
             macro $m(blk)
-                return :()
+                return
             end
 
             macro $ifelse_symbol(debug, standard)

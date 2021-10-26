@@ -27,6 +27,8 @@ using ..energy_equation: energy_equation!
 using ..em_fields: setup_em_fields, update_phi!
 using ..semi_lagrange: setup_semi_lagrange
 
+@debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
+
 struct scratch_pdf{n_distribution, n_moment}
     pdf::MPISharedArray{mk_float, n_distribution}
     density::MPISharedArray{mk_float, n_moment}
@@ -273,6 +275,12 @@ end
 function time_advance!(pdf, scratch, t, t_input, vpa, z, vpa_spectral, z_spectral,
     moments, fields, vpa_advect, z_advect, vpa_SL, z_SL, composition,
     collisions, advance, io, cdf)
+
+    @debug_detect_redundant_block_synchronize begin
+        # Only want to check for redundant block_synchronize() calls during the
+        # time advance loop, so activate these checks here
+        debug_detect_redundant_is_active[] = true
+    end
 
     # main time advance loop
     iwrite = 2

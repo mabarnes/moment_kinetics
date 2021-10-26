@@ -12,7 +12,7 @@ loop ranges), as at the moment we only run with 1 ion species and 1 neutral spec
 """
 module communication
 
-export allocate_shared_float, block_synchronize, block_rank, block_size, comm_block,
+export allocate_shared, block_synchronize, block_rank, block_size, comm_block,
        comm_world, finalize_comms!, initialize_comms!, get_coordinate_local_range,
        get_species_local_range, global_rank, MPISharedArray
 
@@ -63,6 +63,10 @@ end
         is_read::Array{Bool,N}
         is_written::Array{Bool, N}
         creation_stack_trace::String
+        @debug_detect_redundant_block_synchronize begin
+            previous_is_read::Array{Bool,N}
+            previous_is_written::Array{Bool, N}
+        end
     end
 
     # Constructors
@@ -73,6 +77,17 @@ end
         is_written = Array{Bool}(undef, dims)
         is_written .= false
         creation_stack_trace = string([string(s, "\n") for s in stacktrace()]...)
+        @debug_detect_redundant_block_synchronize begin
+            # Initialize as `true` so that the first call to block_synchronize() with
+            # @debug_detect_redundant_block_synchronize activated does not register the
+            # previous call as unnecessary
+            previous_is_read = Array{Bool}(undef, dims)
+            previous_is_read .= true
+            previous_is_written = Array{Bool}(undef, dims)
+            previous_is_written .= true
+            return DebugMPISharedArray(array, is_read, is_written, creation_stack_trace,
+                                       previous_is_read, previous_is_written)
+        end
         return DebugMPISharedArray(array, is_read, is_written, creation_stack_trace)
     end
 
@@ -377,6 +392,10 @@ end
     end
 end
 
+@debug_detect_redundant_block_synchronize begin
+    const previous_block_synchronize_stackstring = Ref{String}("")
+    const debug_detect_redundant_is_active = Ref{Bool}(false)
+end
 """
 Call an MPI Barrier for all processors in a block.
 
@@ -422,25 +441,38 @@ function block_synchronize()
         #   at most one rank.
         # * If an element is not written to, any rank can read it.
         # * If an element is written to, only the rank that writes to it should read it.
-        for (arraynum, array) ∈ enumerate(global_debugmpisharedarray_store)
+        #
+        # This function is used in two ways:
+        # 1. To throw an error when @debug_shared_array is activated.
+        # 2. To show when an error would be raised at one block_synchronize() call if
+        #    the previous block_synchronize() call were removed.
+        function check_array(array, array_is_read, array_is_written; check_redundant=false)
             dims = size(array)
             global_dims = (dims..., block_size[])
             @debug_error_stop_all _gather_errors()
-            global_is_read = reshape(MPI.Allgather(array.is_read, comm_block),
+            global_is_read = reshape(MPI.Allgather(array_is_read, comm_block),
                                      global_dims...)
-            global_is_written = reshape(MPI.Allgather(array.is_written, comm_block),
+            global_is_written = reshape(MPI.Allgather(array_is_written, comm_block),
                                         global_dims...)
             for i ∈ CartesianIndices(array)
                 n_reads = sum(global_is_read[i, :])
                 n_writes = sum(global_is_written[i, :])
                 if n_writes > 1
-                    error("Shared memory array written at $i from multiple ranks "
-                          * "between calls to block_synchronize(). Array was created "
-                          * "at:\n"
-                          * array.creation_stack_trace)
+                    if check_redundant
+                        # In the @debug_detect_redundant_block_synchronize case, cannot
+                        # use Base.error() (as redefined by @debug_error_stop_all),
+                        # because the redefined function cleans up (deletes) the
+                        # shared-memory arrays, so would cause segfaults.
+                        return false
+                    else
+                        error("Shared memory array written at $i from multiple ranks "
+                              * "between calls to block_synchronize(). Array was "
+                              * "created at:\n"
+                              * array.creation_stack_trace)
+                    end
                 elseif n_writes == 1 && n_reads > 0
                     if global_is_written[i, block_rank[] + 1]
-                        read_procs = Vector{Int}(undef, 0)
+                        read_procs = Vector{mk_int}(undef, 0)
                         for (r, is_read) ∈ enumerate(global_is_read[i, :])
                             if r == block_rank[] + 1
                                 continue
@@ -449,19 +481,102 @@ function block_synchronize()
                             end
                         end
                         if length(read_procs) > 0
-                            # 'rank' is 0-based, but read_procs was 1-based, so correct
-                            read_procs .-= 1
-                            error("Shared memory array was written at $i on rank "
-                                  * "$(block_rank[]) but read from ranks $read_procs "
-                                  * "Array was created at:\n"
-                                  * array.creation_stack_trace)
+                            if check_redundant
+                                # In the @debug_detect_redundant_block_synchronize case,
+                                # cannot use Base.error() (as redefined by
+                                # @debug_error_stop_all), because the redefined function
+                                # cleans up (deletes) the shared-memory arrays, so would
+                                # cause segfaults.
+                                return false
+                            else
+                                # 'rank' is 0-based, but read_procs was 1-based, so
+                                # correct
+                                read_procs .-= 1
+                                error("Shared memory array was written at $i on rank "
+                                      * "$(block_rank[]) but read from ranks "
+                                      * "$read_procs Array was created at:\n"
+                                      * array.creation_stack_trace)
+                            end
                         end
                     end
+                end
+            end
+            return true
+        end
+
+        @debug_detect_redundant_block_synchronize previous_was_unnecessary = true
+        for (arraynum, array) ∈ enumerate(global_debugmpisharedarray_store)
+
+            check_array(array, array.is_read, array.is_written)
+
+            @debug_detect_redundant_block_synchronize begin
+                # debug_detect_redundant_is_active[] is set to true at the beginning of
+                # time_advance!() so that we do not do these checks during
+                # initialization: they cause problems with @debug_initialize_NaN during
+                # array allocation; generally it does not matter if there are a few
+                # extra block_synchronize() calls during initialization, so it is not
+                # worth the effort to trim them down to the absolute minimum.
+                if debug_detect_redundant_is_active[]
+                    # Note `||` cannot broadcast because it 'short-circuits', so only
+                    # accepts scalar Bool arguments. Therefore we need to use `.|`
+                    # (broadcasted, bit-wise or) to combine arrays of Bool.  Need to
+                    # explicitly convert the result to a Vector{Bool}, because by
+                    # default the result is a BitVector, and passing BitVector to
+                    # MPI.Allgather() causes an error
+                    combined_is_read = Array{Bool}(array.previous_is_read .|
+                                                   array.is_read)
+                    combined_is_written = Array{Bool}(array.previous_is_written .|
+                                                      array.is_written)
+
+                    if !check_array(array, combined_is_read, combined_is_written,
+                                    check_redundant=true)
+                        # If there was a failure for at least one array, the previous
+                        # block_synchronize was necessary - if the previous call was not
+                        # there, for this array array.is_read and array.is_written would
+                        # have the values of combined_is_read and combined_is_written,
+                        # and would fail the check_array() above this
+                        # @debug_detect_redundant_block_synchronize block.
+                        previous_was_unnecessary = false
+                    end
+
+                    array.previous_is_read .= array.is_read
+                    array.previous_is_written .= array.is_written
                 end
             end
 
             array.is_read .= false
             array.is_written .= false
+        end
+        @debug_detect_redundant_block_synchronize begin
+            if debug_detect_redundant_is_active[]
+                # Check the previous call was unnecessary on all processes, not just
+                # this one
+                previous_was_unnecessary = MPI.Allreduce(previous_was_unnecessary,
+                                                         MPI.Op(&, Bool), comm_world)
+
+                if (previous_was_unnecessary && global_size[] > 1)
+                    # The intention of this debug block is to detect when calls to
+                    # block_synchronize() are not necessary and can be removed. It's not
+                    # obvious that this will always work - it might be that a call to
+                    # block_synchronize() is necessary with some options, but not
+                    # necessary with others. Hopefully it will be possible to handle
+                    # this by moving the block_synchronize() call inside appropriate
+                    # if-clauses. If not, it might be necessary to define something like
+                    # block_synchronize_ignore_redundant() to skip this check because
+                    # the check is ambiguous.
+                    #
+                    # If we are running in serial (global_size[] == 1), then none of the
+                    # block_synchronize() calls are 'necessary', so this check is not
+                    # useful.
+                    error("Previous call to block_synchronize() was not necessary. "
+                          * "Call was from:\n"
+                          * "$(previous_block_synchronize_stackstring[])")
+                end
+
+                st = stacktrace()
+                stackstring = string([string(s, "\n") for s ∈ st]...)
+                previous_block_synchronize_stackstring[] = stackstring
+            end
         end
 
         @debug_error_stop_all _gather_errors()
@@ -480,6 +595,10 @@ Also does some set up for debugging routines, if they are active.
 function initialize_comms!()
     if length(global_Win_store) > 0
         free_shared_arrays()
+    end
+
+    @debug_detect_redundant_block_synchronize begin
+        debug_detect_redundant_is_active[] = false
     end
 
     return nothing
