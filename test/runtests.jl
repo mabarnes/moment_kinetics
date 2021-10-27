@@ -4,12 +4,12 @@ include("setup.jl")
 
 function runtests()
     @testset "moment_kinetics tests" verbose=use_verbose begin
-        include("calculus_tests.jl")
-        include("interpolation_tests.jl")
-        include("sound_wave_tests.jl")
-        include("nonlinear_sound_wave_tests.jl")
-        include("harrisonthompson.jl")
-        include("wall_bc_tests.jl")
+        include(joinpath(@__DIR__, "calculus_tests.jl"))
+        include(joinpath(@__DIR__, "interpolation_tests.jl"))
+        include(joinpath(@__DIR__, "sound_wave_tests.jl"))
+        include(joinpath(@__DIR__, "nonlinear_sound_wave_tests.jl"))
+        include(joinpath(@__DIR__, "harrisonthompson.jl"))
+        include(joinpath(@__DIR__, "wall_bc_tests.jl"))
     end
 end
 
