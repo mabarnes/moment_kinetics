@@ -112,7 +112,7 @@ function init_density!(dens, z, spec, n_species)
 end
 # for now the only initialisation option is zero parallel flow
 function init_upar!(upar, z, spec, n_species)
-    for is ∈ 1:n_species 
+    for is ∈ 1:n_species
         if spec[is].z_IC.initialization_option == "sinusoid"
             # initial condition is sinusoid in z
             @. upar[:,is] =

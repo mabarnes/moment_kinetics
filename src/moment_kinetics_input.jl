@@ -115,7 +115,7 @@ function mk_input(scan_input=Dict())
     collisions.constant_ionization_rate = get(scan_input, "constant_ionization_rate", false)
 
     # parameters related to the time stepping
-    nstep = get(scan_input, "nstep", 1000)
+    nstep = get(scan_input, "nstep", 40000)
     dt = get(scan_input, "dt", 0.00025/sqrt(species[1].initial_temperature))
     nwrite = get(scan_input, "nwrite", 80)
     # use_semi_lagrange = true to use interpolation-free semi-Lagrange treatment

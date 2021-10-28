@@ -34,7 +34,7 @@ function update_phi!(fields, fvec, z, composition)
     @boundscheck size(fvec.density,1) == z.n || throw(BoundsError(fvec.density))
     @boundscheck size(fvec.density,2) == composition.n_species || throw(BoundsError(fvec.density))
     
-    # first, calculate Sum_{i} Z_i n_i 
+    # first, calculate Sum_{i} Z_i n_i
     z.scratch .= 0.0
     @inbounds for is ∈ 1:composition.n_ion_species
         for iz ∈ 1:z.n
