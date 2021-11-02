@@ -46,13 +46,15 @@ Returns
 -------
 LibGit2.GitRepo
 """
-function get_updated_results_repo()
+function get_updated_results_repo(upload::Bool)
     if isdir(results_directory)
         repo = GitRepo(results_directory)
-        LibGit2.fetch(repo)
-        success = LibGit2.merge!(repo)
-        if !success
-            error("Merging results repo failed")
+        if upload
+            LibGit2.fetch(repo)
+            success = LibGit2.merge!(repo)
+            if !success
+                error("Merging results repo failed")
+            end
         end
         return repo
     else
@@ -85,9 +87,9 @@ Run checks on the configuration in `config.toml`
 """
 function check_config()
     config = get_config()
-    if config["upload"]
-        # If the data is not going to be uploaded, doesn't matter if the machine name is
-        # in the known list
+    if config["commit"]
+        # If the data is not going to be committed, doesn't matter if the machine name
+        # is in the known list
         check_machine(config)
     end
 end
@@ -131,7 +133,7 @@ function upload_result(testtype::AbstractString,
                        initialization_results::Vector{Float64},
                        results::Vector{Float64})
     config = get_config()
-    if config["upload"]
+    if config["commit"]
         date = Dates.format(now(), date_format)
         mk_commit = get_mk_commit()
 
@@ -146,7 +148,7 @@ function upload_result(testtype::AbstractString,
         initialization_results_string = make_result_string(initialization_results)
         results_string = make_result_string(results)
 
-        repo = get_updated_results_repo()
+        repo = get_updated_results_repo(config["upload"])
 
         # append results to file
         function append_to_file(filename, line, nresults)
@@ -179,9 +181,12 @@ function upload_result(testtype::AbstractString,
         LibGit2.add!(repo, initialization_results_file)
         LibGit2.add!(repo, results_file)
         LibGit2.commit(repo, "Update $results_file")
-        # refspecs argument seems to be needed, even though apparently it shouldn't be
-        # according to https://github.com/JuliaLang/julia/issues/20741
-        LibGit2.push(repo, refspecs=["refs/heads/master"])
+        if config["upload"]
+            # refspecs argument seems to be needed, even though apparently it
+            # shouldn't be according to
+            # https://github.com/JuliaLang/julia/issues/20741
+            LibGit2.push(repo, refspecs=["refs/heads/master"])
+        end
     end
 end
 
