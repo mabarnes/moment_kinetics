@@ -99,20 +99,22 @@ test_input_chebyshev_split_3_moments =
           Dict("run_name" => "chebyshev_pseudospectral_split_3_moments",
                "evolve_moments_parallel_pressure" => true))
 
+inputs_list = (test_input_finite_difference,
+               test_input_finite_difference_split_1_moment,
+               test_input_finite_difference_split_2_moments,
+               test_input_finite_difference_split_3_moments,
+               test_input_chebyshev,
+               test_input_chebyshev_split_1_moment,
+               test_input_chebyshev_split_2_moments,
+               test_input_chebyshev_split_3_moments)
+
 function run_tests()
     check_config()
 
     collected_initialization_results = Vector{Float64}(undef, 0)
     collected_results = Vector{Float64}(undef, 0)
 
-    for input ∈ (test_input_finite_difference,
-                 test_input_finite_difference_split_1_moment,
-                 test_input_finite_difference_split_2_moments,
-                 test_input_finite_difference_split_3_moments,
-                 test_input_chebyshev,
-                 test_input_chebyshev_split_1_moment,
-                 test_input_chebyshev_split_2_moments,
-                 test_input_chebyshev_split_3_moments)
+    for input ∈ inputs_list
 
         (initialization_results, results) = run_test(input)
         collected_initialization_results  = vcat(collected_initialization_results,
@@ -127,4 +129,6 @@ end # SoundWavePerformance
 
 using .SoundWavePerformance
 
-SoundWavePerformance.run_tests()
+if abspath(PROGRAM_FILE) == @__FILE__
+    SoundWavePerformance.run_tests()
+end
