@@ -52,6 +52,40 @@ using .time_advance: setup_time_advance!, time_advance!
 
 # main function that contains all of the content of the program
 function run_moment_kinetics(to::TimerOutput, input_dict=Dict())
+    # set up all the structs, etc. needed for a run
+    mk_state = setup_moment_kinetics(input_dict)
+
+    # solve the 1+1D kinetic equation to advance f in time by nstep time steps
+    if run_type == performance_test
+        @timeit to "time_advance" time_advance!(mk_state...)
+    else
+        time_advance!(mk_state...)
+    end
+
+    # clean up i/o and communications
+    # last 2 elements of mk_state are `io` and `cdf`
+    cleanup_moment_kinetics!(mk_state[end-1:end]...)
+
+    if run_type == performance_test
+        # Print the timing information if this is a performance test
+        display(to)
+        println()
+    end
+
+    return nothing
+end
+
+# overload which takes a filename and loads input
+function run_moment_kinetics(to::TimerOutput, input_filename::String)
+    return run_moment_kinetics(to, TOML.parsefile(input_filename))
+end
+# overloads with no TimerOutput arguments
+function run_moment_kinetics(input=Dict())
+    return run_moment_kinetics(TimerOutput(), input)
+end
+
+# Perform all the initialization steps for a run.
+function setup_moment_kinetics(input_dict::Dict)
     input = mk_input(input_dict)
     # obtain input options from moment_kinetics_input.jl
     # and check input to catch errors
@@ -78,37 +112,19 @@ function run_moment_kinetics(to::TimerOutput, input_dict=Dict())
     write_data_to_ascii(pdf.unnorm, moments, fields, vpa, z, code_time, composition.n_species, io)
     # write initial data to binary file (netcdf)
     write_data_to_binary(pdf.unnorm, moments, fields, code_time, composition.n_species, cdf, 1)
-    # solve the 1+1D kinetic equation to advance f in time by nstep time steps
-    if run_type == performance_test
-        @timeit to "time_advance" time_advance!(pdf, scratch, code_time, t_input,
-            vpa, z, vpa_spectral, z_spectral, moments, fields,
-            vpa_advect, z_advect, vpa_SL, z_SL, composition, collisions,
-            advance, io, cdf)
-    else
-        time_advance!(pdf, scratch, code_time, t_input, vpa, z,
-            vpa_spectral, z_spectral, moments, fields,
-            vpa_advect, z_advect, vpa_SL, z_SL, composition, collisions,
-            advance, io, cdf)
-    end
+
+    return pdf, scratch, code_time, t_input, vpa, z, vpa_spectral, z_spectral, moments,
+           fields, vpa_advect, z_advect, vpa_SL, z_SL, composition, collisions, advance,
+           io, cdf
+end
+
+# Clean up after a run
+function cleanup_moment_kinetics!(io::Union{file_io.ios,Nothing},
+                                  cdf::Union{file_io.netcdf_info,Nothing})
     # finish i/o
     finish_file_io(io, cdf)
 
-    if block_rank[] == 0 && run_type == performance_test
-        # Print the timing information if this is a performance test
-        display(to)
-        println()
-    end
-
     return nothing
-end
-
-# overload which takes a filename and loads input
-function run_moment_kinetics(to::TimerOutput, input_filename::String)
-    return run_moment_kinetics(to, TOML.parsefile(input_filename))
-end
-# overloads with no TimerOutput arguments
-function run_moment_kinetics(input=Dict())
-    return run_moment_kinetics(TimerOutput(), input)
 end
 
 end
