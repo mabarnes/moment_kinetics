@@ -48,6 +48,7 @@ for (macroname, minlevel) ∈ macronames
     export_ifelse_string = Symbol(string("@", ifelse_string))
 
     if _debug_level >= minlevel
+        println("$export_string activated")
         macro_block = quote
             macro $m(blk)
                 return quote
