@@ -1,13 +1,16 @@
 module PerformanceTestUtils
 
-export upload_result, extract_summary, check_config, get_config
+export upload_result, extract_summary, check_config, get_config, run_test
 
+using BenchmarkTools
 using Dates
 using DelimitedFiles
 using LibGit2
 using Printf
 using Statistics
 using TOML
+
+using moment_kinetics: setup_moment_kinetics, cleanup_moment_kinetics!, time_advance!
 
 const date_format = "Y-m-d_HH:MM:SS"
 
@@ -124,26 +127,41 @@ results : Vector{Float64}
     Results of the test, a vector with concatenated results of several test cases.
     Results from each test case should be formatted by extract_summary()
 """
-function upload_result(testtype::AbstractString, results::Vector{Float64})
+function upload_result(testtype::AbstractString,
+                       initialization_results::Vector{Float64},
+                       results::Vector{Float64})
     config = get_config()
     if config["upload"]
         date = Dates.format(now(), date_format)
         mk_commit = get_mk_commit()
 
-        results_string = @sprintf "%40s %32s %18s" mk_commit config["machine"] date
-        for r ∈ results
-            results_string *= @sprintf " %22.17g" r
+        function make_result_string(r)
+            return_string = @sprintf "%40s %32s %18s" mk_commit config["machine"] date
+            for x ∈ r
+                return_string *= @sprintf " %22.17g" x
+            end
+            return_string *= "\n"
+            return return_string
         end
-        results_string *= "\n"
+        initialization_results_string = make_result_string(initialization_results)
+        results_string = make_result_string(results)
 
         repo = get_updated_results_repo()
 
         # append results to file
-        results_file = string(testtype, ".txt")
+        results_file = string(testtype, "_1procs.txt")
+        initialization_results_file = string(testtype,
+                                             "_1procs_initialization.txt")
+        initialization_results_path = joinpath(results_directory,
+                                               initialization_results_file)
         results_path = joinpath(results_directory, results_file)
+        open(initialization_results_path, "a") do io
+            write(io, initialization_results_string)
+        end
         open(results_path, "a") do io
             write(io, results_string)
         end
+        LibGit2.add!(repo, initialization_results_file)
         LibGit2.add!(repo, results_file)
         LibGit2.commit(repo, "Update $results_file")
         # refspecs argument seems to be needed, even though apparently it shouldn't be
@@ -171,5 +189,57 @@ function extract_summary(result)
     return [result.memory, minimum(times) * 1.e-9, median(times) * 1.e-9,
             maximum(times) * 1.e-9]
 end
+
+const initialization_seconds = 20
+const initialization_samples = 100
+const initialization_evals = 1
+const benchmark_seconds = 60
+const benchmark_samples = 100
+const benchmark_evals = 1
+"""
+Benchmark for one set of parameters
+
+Returns
+-------
+[minimum time, median time, maximum time]
+"""
+function run_test(input)
+    println(input["run_name"])
+    println("=" ^ length(input["run_name"]))
+    println()
+    flush(stdout)
+
+    result = @benchmark(time_advance!(mk_state...),
+                        setup=(mk_state = setup_moment_kinetics($input)),
+                        teardown=cleanup_moment_kinetics!(mk_state[end-1:end]...),
+                        seconds=benchmark_seconds,
+                        samples=benchmark_samples,
+                        evals=benchmark_evals)
+
+    println("Time advance")
+    println("------------")
+    display(result)
+    println()
+    flush(stdout)
+
+    # This does not clean up the open files or MPI allocated memory, but hopefully it
+    # should not matter too much - this 'benchmark' is just a sanity check that nothing
+    # is horribly inefficient in initialization. Just in case, run after the main
+    # benchmark (which does clean up after itself).
+    initialization_result = @benchmark(setup_moment_kinetics($input),
+                                       seconds=initialization_seconds,
+                                       samples=initialization_samples,
+                                       evals=initialization_evals)
+    println("Initialization")
+    println("--------------")
+    display(initialization_result)
+    println()
+    println()
+    println()
+    flush(stdout)
+
+    return extract_summary(initialization_result), extract_summary(result)
+end
+
 
 end # PerformanceTestUtils

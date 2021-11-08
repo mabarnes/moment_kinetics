@@ -150,15 +150,18 @@ using .MKPlotPerformance
 
 if abspath(PROGRAM_FILE) == @__FILE__
     filename = undef
-    if length(ARGS) > 1
-        filename = ARGS[1]
+    if length(ARGS) > 0
+        prefix = ARGS[1]
     else
-        filename = "results/sound_wave.txt"
+        prefix = "results/sound_wave"
     end
-    machine = undef
+    filename = string(prefix, "_1procs.txt")
     if length(ARGS) > 1
+        machine = ARGS[2]
         plot_performance_history(filename, machine)
+        plot_performance_history(string(prefix, "_1procs_initialization.txt"), machine)
     else
         plot_performance_history(filename)
+        plot_performance_history(string(prefix, "_1procs_initialization.txt"))
     end
 end
