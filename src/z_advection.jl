@@ -12,10 +12,10 @@ function z_advection!(f_out, fvec_in, ff, moments, SL, advect, z, vpa,
                       use_semi_lagrange, dt, t, spectral, composition, istage)
     for is ∈ composition.species_local_range
         # get the updated speed along the z direction using the current f
-        @views update_speed_z!(advect[:,is], fvec_in.upar[:,is], moments.vth[:,is],
+        @views update_speed_z!(advect[is], fvec_in.upar[:,is], moments.vth[:,is],
                                moments.evolve_upar, moments.evolve_ppar, vpa, z, t)
         # update the upwind/downwind boundary indices and upwind_increment
-        @views update_boundary_indices!(advect[:,is], vpa.outer_loop_range)
+        @views update_boundary_indices!(advect[is], vpa.outer_loop_range)
         # if using interpolation-free Semi-Lagrange,
         # follow characteristics backwards in time from level m+1 to level m
         # to get departure points.  then find index of grid point nearest
@@ -23,33 +23,33 @@ function z_advection!(f_out, fvec_in, ff, moments, SL, advect, z, vpa,
         # an approximate characteristic
         if use_semi_lagrange
             for ivpa ∈ vpa.outer_loop_range
-                find_approximate_characteristic!(SL[ivpa], advect[ivpa,is], z, dt)
+                find_approximate_characteristic!(SL[ivpa], advect[is], ivpa, z, dt)
             end
         end
         # # advance z-advection equation
         # if moments.evolve_density
         #     for ivpa ∈ 1:vpa.n
-        #         @. advect[ivpa,is].speed /= fvec_in.density[:,is]
-        #         @. advect[ivpa,is].modified_speed /= fvec_in.density[:,is]
+        #         @views @. advect[is].speed[:,ivpa] /= fvec_in.density[:,is]
+        #         @views @. advect[is].modified_speed[:,ivpa] /= fvec_in.density[:,is]
         #         @views advance_f_local!(f_out[:,ivpa,is], fvec_in.density[:,is] .* fvec_in.pdf[:,ivpa,is],
-        #             ff[:,ivpa,is], SL[ivpa], advect[ivpa,is], z, dt, istage, spectral, use_semi_lagrange)
+        #             ff[:,ivpa,is], SL[ivpa], advect[is], ivpa, z, dt, istage, spectral, use_semi_lagrange)
         #     end
         # else
         #     for ivpa ∈ 1:vpa.n
         #         @views advance_f_local!(f_out[:,ivpa,is], fvec_in.pdf[:,ivpa,is],
-        #             ff[:,ivpa,is], SL[ivpa], advect[ivpa,is], z, dt, istage, spectral, use_semi_lagrange)
+        #             ff[:,ivpa,is], SL[ivpa], advect[is], ivpa, z, dt, istage, spectral, use_semi_lagrange)
         #     end
         # end
         # advance z-advection equation
         for ivpa ∈ vpa.outer_loop_range
-            @views adjust_advection_speed!(advect[ivpa,is].speed, advect[ivpa,is].modified_speed,
+            @views adjust_advection_speed!(advect[is].speed[:,ivpa], advect[is].modified_speed[:,ivpa],
                                            fvec_in.density[:,is], moments.vth[:,is],
                                            moments.evolve_density, moments.evolve_ppar)
             # take the normalized pdf contained in fvec_in.pdf and remove the normalization,
             # returning the true (un-normalized) particle distribution function in z.scratch
             @views unnormalize_pdf!(z.scratch, fvec_in.pdf[ivpa,:,is], fvec_in.density[:,is], moments.vth[:,is],
                                     moments.evolve_density, moments.evolve_ppar)
-            @views advance_f_local!(f_out[ivpa,:,is], z.scratch, ff[ivpa,:,is], SL[ivpa], advect[ivpa,is],
+            @views advance_f_local!(f_out[ivpa,:,is], z.scratch, ff[ivpa,:,is], SL[ivpa], advect[is], ivpa,
                                     z, dt, istage, spectral, use_semi_lagrange)
         end
     end
@@ -76,40 +76,40 @@ function unnormalize_pdf!(unnorm, norm, dens, vth, evolve_density, evolve_ppar)
 end
 # calculate the advection speed in the z-direction at each grid point
 function update_speed_z!(advect, upar, vth, evolve_upar, evolve_ppar, vpa, z, t)
-    @boundscheck vpa.n == size(advect,1) || throw(BoundsError(advect))
-    @boundscheck z.n == size(advect[1].speed,1) || throw(BoundsError(speed))
+    @boundscheck vpa.n == size(advect.speed,2) || throw(BoundsError(advect))
+    @boundscheck z.n == size(advect.speed,1) || throw(BoundsError(speed))
     if z.advection.option == "default"
         @inbounds begin
             for ivpa ∈ vpa.outer_loop_range
-                advect[ivpa].speed .= vpa.grid[ivpa]
+                @views advect.speed[:,ivpa] .= vpa.grid[ivpa]
             end
             if evolve_upar
                 if evolve_ppar
                     for ivpa ∈ vpa.outer_loop_range
-                        advect[ivpa].speed .*= vth
+                        @views advect.speed[:,ivpa] .*= vth
                     end
                 end
                 for ivpa ∈ vpa.outer_loop_range
-                    advect[ivpa].speed .+= upar
+                    @views advect.speed[:,ivpa] .+= upar
                 end
             end
         end
     elseif z.advection.option == "constant"
         @inbounds begin
             for ivpa ∈ vpa.outer_loop_range
-                advect[ivpa].speed .= z.advection.constant_speed
+                @views advect.speed[:,ivpa] .= z.advection.constant_speed
             end
         end
     elseif z.advection.option == "linear"
         @inbounds begin
             for ivpa ∈ vpa.outer_loop_range
-                advect[ivpa].speed .= z.advection.constant_speed*(z.grid[i]+0.5*z.L)
+                @views advect.speed[:,ivpa] .= z.advection.constant_speed*(z.grid[i]+0.5*z.L)
             end
         end
     elseif z.advection.option == "oscillating"
         @inbounds begin
             for ivpa ∈ vpa.outer_loop_range
-                advect[ivpa].speed .= z.advection.constant_speed*(1.0
+                @views advect.speed[:,ivpa] .= z.advection.constant_speed*(1.0
                         + z.advection.oscillation_amplitude*sinpi(t*z.advection.frequency))
             end
         end
@@ -118,7 +118,7 @@ function update_speed_z!(advect, upar, vth, evolve_upar, evolve_ppar, vpa, z, t)
     # will be modified later if semi-Lagrange scheme used
     @inbounds begin
         for ivpa ∈ vpa.outer_loop_range
-            advect[ivpa].modified_speed .= advect[ivpa].speed
+            @views advect.modified_speed[:,ivpa] .= advect.speed[:,ivpa]
         end
     end
     return nothing

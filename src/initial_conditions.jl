@@ -199,8 +199,8 @@ function enforce_boundary_conditions!(f, vpa_bc, z_bc, vpa, z, vpa_adv::T1, z_ad
     for is ∈ composition.species_local_range
         # enforce the vpa BC
         for iz ∈ z.outer_loop_range
-            @views enforce_vpa_boundary_condition_local!(f[:,iz,is], vpa_bc, vpa_adv[iz,is].upwind_idx[],
-                                                         vpa_adv[iz,is].downwind_idx[])
+            @views enforce_vpa_boundary_condition_local!(f[:,iz,is], vpa_bc, vpa_adv[is].upwind_idx[iz],
+                                                         vpa_adv[is].downwind_idx[iz])
         end
     end
 end
@@ -225,8 +225,8 @@ function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, composition) 
     elseif bc == "periodic"
         for is ∈ composition.species_local_range
             for ivpa ∈ vpa.outer_loop_range
-                downwind_idx = adv[ivpa,is].downwind_idx[]
-                upwind_idx = adv[ivpa,is].upwind_idx[]
+                downwind_idx = adv[is].downwind_idx[ivpa]
+                upwind_idx = adv[is].upwind_idx[ivpa]
                 f[ivpa,downwind_idx,is] = 0.5*(f[ivpa,upwind_idx,is]+f[ivpa,downwind_idx,is])
                 f[ivpa,upwind_idx,is] = f[ivpa,downwind_idx,is]
             end
@@ -238,7 +238,7 @@ function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, composition) 
             for ivpa ∈ vpa.outer_loop_range_ions
                 # no parallel BC should be enforced for vpa = 0
                 if abs(vpa.grid[ivpa]) > zero
-                    upwind_idx = adv[ivpa,is].upwind_idx[]
+                    upwind_idx = adv[is].upwind_idx[ivpa]
                     f[ivpa,upwind_idx,is] = 0.0
                 end
             end
@@ -279,7 +279,7 @@ function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, composition) 
                     for ivpa ∈ 1:nvpa
                         # no parallel BC should be enforced for vpa = 0
                         if abs(vpa.grid[ivpa]) > zero
-                            if adv[ivpa,is].upwind_idx[] == 1
+                            if adv[is].upwind_idx[ivpa] == 1
                                 f[ivpa,1,is] = wall_flux_0 * vpa.scratch[ivpa]
                             else
                                 f[ivpa,end,is] = wall_flux_L * vpa.scratch[ivpa]
@@ -296,8 +296,8 @@ end
 function enforce_vpa_boundary_condition!(f, bc, src::T) where T
     nz = size(f,2)
     for iz ∈ 1:nz
-        enforce_vpa_boundary_condition_local!(view(f,:,iz), bc, src[iz].upwind_idx[],
-            src[iz].downwind_idx[])
+        enforce_vpa_boundary_condition_local!(view(f,:,iz), bc, src.upwind_idx[iz],
+            src.downwind_idx[iz])
     end
 end
 function enforce_vpa_boundary_condition_local!(f::T, bc, upwind_idx, downwind_idx) where T

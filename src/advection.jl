@@ -13,87 +13,73 @@ using ..communication: block_rank, block_synchronize, MPISharedArray
 
 # structure containing the basic arrays associated with the
 # advection terms appearing in the advection equation for each coordinate
-mutable struct advection_info
+mutable struct advection_info{L,M,N}
     # rhs is the sum of the advection terms appearing on the righthand side
     # of the equation
-    rhs::MPISharedArray{mk_float, 1}
+    rhs::MPISharedArray{mk_float, L}
     # df is the derivative of the distribution function f with respect
     # to the coordinate associated with this set of advection terms
     # it has dimensions of nelement x ngrid_per_element
-    df::MPISharedArray{mk_float, 2}
+    df::MPISharedArray{mk_float, M}
     # speed is the component of the advection speed along this coordinate axis
-    speed::MPISharedArray{mk_float, 1}
+    speed::MPISharedArray{mk_float, L}
     # if using semi-Lagrange approach,
     # modified_speed is delta / dt, where delta for a given characteristic
     # is the displacement from the arrival point to the
     # (generally off-grid) departure point using the coordinate in which
     # the grid is equally spaced (a re-scaling of the Chebyshev theta coordinate);
     # otherwise, modified_speed = speed
-    modified_speed::MPISharedArray{mk_float,1}
+    modified_speed::MPISharedArray{mk_float, L}
     # adv_fac is the advection factor that multiplies df in the advection term
-    adv_fac::MPISharedArray{mk_float, 1}
+    adv_fac::MPISharedArray{mk_float, L}
     # upwind_idx is the boundary index for the upwind boundary
-    upwind_idx::MPISharedArray{mk_int, 1}
+    upwind_idx::MPISharedArray{mk_int, N}
     # downwind_idx is the boundary index for the downwind boundary
-    downwind_idx::MPISharedArray{mk_int, 1}
+    downwind_idx::MPISharedArray{mk_int, N}
     # upwind_increment is the index increment used when sweeping in the upwind direction
-    upwind_increment::MPISharedArray{mk_int, 1}
+    upwind_increment::MPISharedArray{mk_int, N}
 end
 # create arrays needed to compute the advection term(s) for a 1D problem
-function setup_advection(coord, nspec)
+function setup_advection(nspec, coords...)
     # allocate an array containing structures with much of the info needed
     # to do the 1D advection time advance
-    advection = Array{advection_info,1}(undef, nspec)
+    ncoord = length(coords)
+    advection = Array{advection_info{ncoord,ncoord+1,ncoord-1},1}(undef, nspec)
     # store all of this information in a structure and return it
     for is ∈ 1:nspec
-        advection[is] = setup_advection_local(coord.n, coord.ngrid, coord.nelement)
-    end
-    return advection
-end
-# create arrays needed to compute the advection term(s) for a 2D problem
-function setup_advection(coord1, coord2, nspec)
-    # n and m are the number of unique grid points along coordinates coord1 and coord2
-    n = coord1.n
-    m = coord2.n
-    # allocate an array containing structures with much of the info needed
-    # to do the 1D advection time advance
-    advection = Array{advection_info,2}(undef, m, nspec)
-    # store all of this information in a structure and return it
-    for is ∈ 1:nspec
-        for i ∈ 1:m
-            advection[i,is] = setup_advection_local(coord1.n, coord1.ngrid, coord1.nelement)
-        end
+        advection[is] = setup_advection_per_species(coords...)
     end
     return advection
 end
 # create arrays needed to compute the advection term(s)
-function setup_advection_local(n, ngrid, nelement)
+function setup_advection_per_species(coords...)
     # create array for storing the explicit advection terms appearing
     # on the righthand side of the equation
-    rhs = allocate_shared_float(n)
+    rhs = allocate_shared_float([coord.n for coord in coords]...)
     # create array for storing ∂f/∂(coordinate)
     # NB: need to store on nelement x ngrid_per_element array, as must keep info
     # about multi-valued derivative at overlapping point at element boundaries
-    df = allocate_shared_float(ngrid, nelement)
+    df = allocate_shared_float(coords[1].ngrid, coords[1].nelement,
+                               [coord.n for coord in coords[2:end]]...)
     # create array for storing the advection coefficient
-    adv_fac = allocate_shared_float(n)
+    adv_fac = allocate_shared_float([coord.n for coord in coords]...)
     # create array for storing the speed along this coordinate
-    speed = allocate_shared_float(n)
+    speed = allocate_shared_float([coord.n for coord in coords]...)
     # create array for storing the modified speed along this coordinate
-    modified_speed = allocate_shared_float(n)
+    modified_speed = allocate_shared_float([coord.n for coord in coords]...)
     # index for the upwind boundary; will be updated before use so value irrelevant
-    upwind_idx = allocate_shared_int(1)
+    upwind_idx = allocate_shared_int([coord.n for coord in coords[2:end]]...)
     # index for the downwind boundary; will be updated before use so value irrelevant
-    downwind_idx = allocate_shared_int(1)
+    downwind_idx = allocate_shared_int([coord.n for coord in coords[2:end]]...)
     # index increment used when sweeping in the upwind direction; will be updated before use
-    upwind_increment = allocate_shared_int(1)
+    upwind_increment = allocate_shared_int([coord.n for coord in coords[2:end]]...)
     if block_rank[] == 0
-        upwind_idx[] = 1
-        downwind_idx[] = n
-        upwind_increment[] = -1
+        upwind_idx[:] .= 1
+        downwind_idx[:] .= coords[1].n
+        upwind_increment[:] .= -1
     end
     block_synchronize()
-    # return advection_info struct containing necessary 1D/0D arrays
+    # return advection_info struct containing necessary arrays
     return advection_info(rhs, df, speed, modified_speed, adv_fac, upwind_idx, downwind_idx, upwind_increment)
 end
 
@@ -111,18 +97,18 @@ orthogonal_coordinate : coordinate
     information needed to iterate over the orthogonal coordinate.
 """
 function update_boundary_indices!(advection, orthogonal_coordinate_range)
-    n = size(advection[1].speed,1)
+    n = size(advection.speed,1)
     for j ∈ orthogonal_coordinate_range
         # NB: for now, assume the speed has the same sign at all grid points
         # so only need to check its value at one location to determine the upwind direction
-        if advection[j].speed[1] > 0
-            advection[j].upwind_idx[] = 1
-            advection[j].upwind_increment[] = -1
-            advection[j].downwind_idx[] = n
+        if advection.speed[1,j] > 0
+            advection.upwind_idx[j] = 1
+            advection.upwind_increment[j] = -1
+            advection.downwind_idx[j] = n
         else
-            advection[j].upwind_idx[] = n
-            advection[j].upwind_increment[] = 1
-            advection[j].downwind_idx[] = 1
+            advection.upwind_idx[j] = n
+            advection.upwind_increment[j] = 1
+            advection.downwind_idx[j] = 1
         end
     end
     return nothing
@@ -187,30 +173,34 @@ function calculate_explicit_advection!(rhs, df, adv_fac, up_idx, up_incr, dep_id
     return nothing
 end
 # update the righthand side of the equation to account for 1d advection in this coordinate
-function update_rhs!(advection, f_current, SL, coord, dt, j, spectral)
+function update_rhs!(advection, i_outer, f_current, SL, coord, dt, j, spectral)
     # calculate the factor appearing in front of df/dcoord in the advection
     # term at time level n in the frame moving with the approximate
     # characteristic
-    update_advection_factor!(advection.adv_fac,
-        advection.modified_speed, advection.upwind_idx[], advection.downwind_idx[],
-        advection.upwind_increment[], SL, coord.n, dt, j, coord)
+    @views update_advection_factor!(advection.adv_fac[:,i_outer],
+        advection.modified_speed[:,i_outer], advection.upwind_idx[i_outer],
+        advection.downwind_idx[i_outer], advection.upwind_increment[i_outer],
+        SL, coord.n, dt, j, coord)
     # calculate df/dcoord
-    derivative!(coord.scratch, f_current, coord, advection.adv_fac, spectral)
+    @views derivative!(coord.scratch, f_current, coord, advection.adv_fac[:,i_outer], spectral)
     #derivative!(coord.scratch, f_current, coord, spectral)
     # calculate the explicit advection terms on the rhs of the equation;
     # i.e., -Δt⋅δv⋅f'
-    calculate_explicit_advection!(advection.rhs, coord.scratch,
-        advection.adv_fac, advection.upwind_idx[], advection.upwind_increment[],
-        SL.dep_idx, coord.n, j)
+    @views calculate_explicit_advection!(advection.rhs[:,i_outer], coord.scratch,
+        advection.adv_fac[:,i_outer], advection.upwind_idx[i_outer],
+        advection.upwind_increment[i_outer], SL.dep_idx, coord.n, j)
 end
 # do all the work needed to update f(coord) at a single value of other coords
-function advance_f_local!(f_new, f_current, f_old, SL, advection, coord, dt, j, spectral, use_SL)
+function advance_f_local!(f_new, f_current, f_old, SL, advection, i_outer, coord, dt, j, spectral, use_SL)
     # update the rhs of the equation accounting for 1d advection in coord
-    update_rhs!(advection, f_current, SL, coord, dt, j, spectral)
+    update_rhs!(advection, i_outer, f_current, SL, coord, dt, j, spectral)
     # update ff at time level n+1 using an explicit Runge-Kutta method
     # along approximate characteristics
-    update_f!(f_new, f_old, advection.rhs, advection.upwind_idx[], advection.downwind_idx[],
-        advection.upwind_increment[], SL.dep_idx, coord.n, coord.bc, use_SL)
+    @views update_f!(f_new, f_old, advection.rhs[:,i_outer],
+                     advection.upwind_idx[i_outer],
+                     advection.downwind_idx[i_outer],
+                     advection.upwind_increment[i_outer], SL.dep_idx, coord.n,
+                     coord.bc, use_SL)
 end
 # update ff at time level n+1 using an explicit Runge-Kutta method
 # along approximate characteristics

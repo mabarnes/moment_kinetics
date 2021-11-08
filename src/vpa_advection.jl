@@ -31,7 +31,7 @@ function vpa_advection!(f_out, fvec_in, ff, fields, moments, SL, advect,
         # update the upwind/downwind boundary indices and upwind_increment
         # NB: not sure if this will work properly with SL method at the moment
         # NB: if the speed is actually time-dependent
-        update_boundary_indices!(view(advect,:,is), z_range)
+        update_boundary_indices!(advect[is], z_range)
         # if using interpolation-free Semi-Lagrange,
         # follow characteristics backwards in time from level m+1 to level m
         # to get departure points.  then find index of grid point nearest
@@ -39,23 +39,23 @@ function vpa_advection!(f_out, fvec_in, ff, fields, moments, SL, advect,
         # an approximate characteristic
         if use_semi_lagrange
             for iz ∈ z_range
-                find_approximate_characteristic!(SL[iz], advect[iz,is], vpa, dt)
+                find_approximate_characteristic!(SL[iz], advect[is], iz, vpa, dt)
             end
         end
         for iz ∈ z_range
-            @views advance_f_local!(f_out[:,iz,is], fvec_in.pdf[:,iz,is],
-                                    ff[:,iz,is], SL[iz], advect[iz,is], vpa, dt, istage, vpa_spectral,
-                                    use_semi_lagrange)
+            @views advance_f_local!(f_out[:,iz,is], fvec_in.pdf[:,iz,is], ff[:,iz,is],
+                                    SL[iz], advect[is], iz, vpa, dt, istage,
+                                    vpa_spectral, use_semi_lagrange)
         end
-        #@views enforce_vpa_boundary_condition!(f_out[:,:,is], vpa.bc, advect[:,is])
+        #@views enforce_vpa_boundary_condition!(f_out[:,:,is], vpa.bc, advect[is])
     end
 end
 # calculate the advection speed in the z-direction at each grid point
 function update_speed_vpa!(advect, fields, fvec, moments, vpa, z, composition, CX_frequency, t, z_spectral)
-    @boundscheck z.n == size(advect,1) || throw(BoundsError(advect))
+    @boundscheck z.n == size(advect[1].speed,2) || throw(BoundsError(advect))
     #@boundscheck composition.n_ion_species == size(advect,2) || throw(BoundsError(advect))
-    @boundscheck composition.n_species == size(advect,2) || throw(BoundsError(advect))
-    @boundscheck vpa.n == size(advect[1,1].speed,1) || throw(BoundsError(speed))
+    @boundscheck composition.n_species == size(advect,1) || throw(BoundsError(advect))
+    @boundscheck vpa.n == size(advect[1].speed,1) || throw(BoundsError(speed))
     if vpa.advection.option == "default"
         # dvpa/dt = Ze/m ⋅ E_parallel
         update_speed_default!(advect, fields, fvec, moments, vpa, z, composition, CX_frequency, t, z_spectral)
@@ -65,7 +65,7 @@ function update_speed_vpa!(advect, fields, fvec, moments, vpa, z, composition, C
             #
             # dvpa/dt = constant
             for is ∈ 1:composition.n_ion_species
-                update_speed_constant!(view(advect,:,is), vpa, z.n)
+                update_speed_constant!(advect[is], vpa, z.n)
             end
         end
     elseif vpa.advection.option == "linear"
@@ -74,7 +74,7 @@ function update_speed_vpa!(advect, fields, fvec, moments, vpa, z, composition, C
             #
             # dvpa/dt = constant ⋅ (vpa + L_vpa/2)
             for is ∈ 1:composition.n_ion_species
-                update_speed_linear!(view(advect,:,is), vpa, z.n)
+                update_speed_linear!(advect[is], vpa, z.n)
             end
         end
     end
@@ -83,7 +83,7 @@ function update_speed_vpa!(advect, fields, fvec, moments, vpa, z, composition, C
     #for is ∈ 1:composition.n_ion_species
     for is ∈ composition.species_local_range
         for iz ∈ z.outer_loop_range
-            @. advect[iz,is].modified_speed = advect[iz,is].speed
+            @views @. advect[is].modified_speed[:,iz] = advect[is].speed[:,iz]
         end
     end
     #end
@@ -97,19 +97,19 @@ function update_speed_default!(advect, fields, fvec, moments, vpa, z, compositio
             # update parallel acceleration to account for parallel derivative of parallel pressure
             # NB: no vpa-dependence so compute as a scalar and broadcast to all entries
             for iz ∈ z.outer_loop_range
-                advect[iz,is].speed .= z.scratch[iz]/(fvec.density[iz,is]*moments.vth[iz,is])
+                @views advect[is].speed[:,iz] .= z.scratch[iz]/(fvec.density[iz,is]*moments.vth[iz,is])
             end
             # calculate d(qpar)/dz
             derivative!(z.scratch, view(moments.qpar,:,is), z, z_spectral)
             # update parallel acceleration to account for (wpar/2*ppar)*dqpar/dz
             for iz ∈ z.outer_loop_range
-                @. advect[iz,is].speed += 0.5*vpa.grid*z.scratch[iz]/fvec.ppar[iz,is]
+                @views @. advect[is].speed[:,iz] += 0.5*vpa.grid*z.scratch[iz]/fvec.ppar[iz,is]
             end
             # calculate d(vth)/dz
             derivative!(z.scratch, view(moments.vth,:,is), z, z_spectral)
             # update parallel acceleration to account for -wpar^2 * d(vth)/dz term
             for iz ∈ z.outer_loop_range
-                @. advect[iz,is].speed -= vpa.grid^2*z.scratch[iz]
+                @views @. advect[is].speed[:,iz] -= vpa.grid^2*z.scratch[iz]
             end
         end
         block_synchronize()
@@ -118,7 +118,7 @@ function update_speed_default!(advect, fields, fvec, moments, vpa, z, compositio
             for is ∈ composition.ion_species_local_range
                 for isp ∈ composition.n_ion_species+1:composition.n_species
                     for iz ∈ z.outer_loop_range_ions
-                        @. advect[iz,is].speed += CX_frequency *
+                        @views @. advect[is].speed[:,iz] += CX_frequency *
                         (0.5*vpa.grid/fvec.ppar[iz,is] * (fvec.density[iz,isp]*fvec.ppar[iz,is]
                                                           - fvec.density[iz,is]*fvec.ppar[iz,isp])
                          - fvec.density[iz,isp] * (fvec.upar[iz,isp]-fvec.upar[iz,is])/moments.vth[iz,is])
@@ -128,7 +128,7 @@ function update_speed_default!(advect, fields, fvec, moments, vpa, z, compositio
             for is ∈ composition.neutral_species_local_range
                 for isp ∈ 1:composition.n_ion_species
                     for iz ∈ z.outer_loop_range_neutrals
-                        @. advect[iz,is].speed += CX_frequency *
+                        @views @. advect[is].speed[:,iz] += CX_frequency *
                         (0.5*vpa.grid/fvec.ppar[iz,is] * (fvec.density[iz,isp]*fvec.ppar[iz,is]
                                                           - fvec.density[iz,is]*fvec.ppar[iz,isp])
                          - fvec.density[iz,isp] * (fvec.upar[iz,isp]-fvec.upar[iz,is])/moments.vth[iz,is])
@@ -143,13 +143,13 @@ function update_speed_default!(advect, fields, fvec, moments, vpa, z, compositio
             # update parallel acceleration to account for parallel derivative of parallel pressure
             # NB: no vpa-dependence so compute as a scalar and broadcast to all entries
             for iz ∈ z.outer_loop_range
-                advect[iz,is].speed .= z.scratch[iz]/fvec.density[iz,is]
+                @views advect[is].speed[:,iz] .= z.scratch[iz]/fvec.density[iz,is]
             end
             # calculate d(upar)/dz
             derivative!(z.scratch, view(fvec.upar,:,is), z, z_spectral)
             # update parallel acceleration to account for -wpar*dupar/dz
             for iz ∈ z.outer_loop_range
-                @. advect[iz,is].speed -= vpa.grid*z.scratch[iz]
+                @views @. advect[is].speed[:,iz] -= vpa.grid*z.scratch[iz]
             end
         end
         block_synchronize()
@@ -160,7 +160,7 @@ function update_speed_default!(advect, fields, fvec, moments, vpa, z, compositio
             for is ∈ composition.ion_species_local_range
                 for isp ∈ composition.n_ion_species+1:composition.n_species
                     for iz ∈ z.outer_loop_range_ions
-                        advect[iz,is].speed .+= -CX_frequency*fvec.density[iz,isp]*(fvec.upar[iz,isp]-fvec.upar[iz,is])
+                        @views advect[is].speed[:,iz] .+= -CX_frequency*fvec.density[iz,isp]*(fvec.upar[iz,isp]-fvec.upar[iz,is])
                     end
                 end
             end
@@ -169,7 +169,7 @@ function update_speed_default!(advect, fields, fvec, moments, vpa, z, compositio
                 for is ∈ 1:composition.n_ion_species
                     # get the absolute species index for the neutral species
                     for iz ∈ z.outer_loop_range_neutrals
-                        advect[iz,isp].speed .+= -CX_frequency*fvec.density[iz,is]*(fvec.upar[iz,is]-fvec.upar[iz,isp])
+                        @views advect[isp].speed[:,iz] .+= -CX_frequency*fvec.density[iz,is]*(fvec.upar[iz,is]-fvec.upar[iz,isp])
                     end
                 end
             end
@@ -186,7 +186,7 @@ function update_speed_default!(advect, fields, fvec, moments, vpa, z, compositio
         @inbounds @fastmath begin
             for is ∈ composition.ion_species_local_range
                 for iz ∈ z.outer_loop_range_ions
-                    advect[iz,is].speed .= -0.5*z.scratch[iz]
+                    @views advect[is].speed[:,iz] .= -0.5*z.scratch[iz]
                 end
             end
         end
@@ -196,7 +196,7 @@ end
 function update_speed_constant!(advect, vpa, nz)
     #@inbounds @fastmath begin
     for iz ∈ 1:nz
-        advect[iz].speed .= vpa.advection.constant_speed
+        @views advect.speed[:,iz] .= vpa.advection.constant_speed
     end
     #end
 end
@@ -204,7 +204,7 @@ end
 function update_speed_linear(advect, vpa, nz)
     @inbounds @fastmath begin
         for iz ∈ 1:nz
-            @. advect[iz].speed = vpa.advection.constant_speed*(vpa.grid+0.5*vpa.L)
+            @views @. advect.speed[:,iz] = vpa.advection.constant_speed*(vpa.grid+0.5*vpa.L)
         end
     end
 end

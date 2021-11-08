@@ -108,13 +108,13 @@ function setup_time_advance!(pdf, vpa, z, composition, drive_input, moments,
     # create structure z_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the split part of the GK equation dealing
     # with advection in z
-    z_advect = setup_advection(z, vpa, n_species)
+    z_advect = setup_advection(n_species, z, vpa)
     # initialise the z advection speed
     for is ∈ composition.species_local_range
-        @views update_speed_z!(z_advect[:,is], moments.upar[:,is], moments.vth[:,is],
+        @views update_speed_z!(z_advect[is], moments.upar[:,is], moments.vth[:,is],
                                moments.evolve_upar, moments.evolve_ppar, vpa, z, 0.0)
         # initialise the upwind/downwind boundary indices in z
-        update_boundary_indices!(view(z_advect,:,is), vpa.outer_loop_range)
+        update_boundary_indices!(z_advect[is], vpa.outer_loop_range)
     end
     block_synchronize()
     # enforce prescribed boundary condition in z on the distribution function f
@@ -157,7 +157,7 @@ function setup_time_advance!(pdf, vpa, z, composition, drive_input, moments,
     # create structure vpa_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the split part of the GK equation dealing
     # with advection in vpa
-    vpa_advect = setup_advection(vpa, z, n_species)
+    vpa_advect = setup_advection(n_species, vpa, z)
     # initialise the vpa advection speed
     update_speed_vpa!(vpa_advect, fields, scratch[1], moments, vpa, z, composition,
                       collisions.charge_exchange, 0.0, z_spectral)
@@ -169,9 +169,9 @@ function setup_time_advance!(pdf, vpa, z, composition, drive_input, moments,
     if block_rank[] == 0
         for is ∈ 1:nspec
             # initialise the upwind/downwind boundary indices in vpa
-            update_boundary_indices!(view(vpa_advect,:,is), 1:z.n)
+            update_boundary_indices!(vpa_advect[is], 1:z.n)
             # enforce prescribed boundary condition in vpa on the distribution function f
-            @views enforce_vpa_boundary_condition!(pdf.norm[:,:,is], vpa.bc, vpa_advect[:,is])
+            @views enforce_vpa_boundary_condition!(pdf.norm[:,:,is], vpa.bc, vpa_advect[is])
         end
     end
     # create an array of structures containing the arrays needed for the semi-Lagrange
