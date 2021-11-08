@@ -10,6 +10,7 @@ using Printf
 using Statistics
 using TOML
 
+using moment_kinetics.communication: block_rank, block_size
 using moment_kinetics: setup_moment_kinetics, cleanup_moment_kinetics!, time_advance!
 
 const date_format = "Y-m-d_HH:MM:SS"
@@ -132,60 +133,62 @@ results : Vector{Float64}
 function upload_result(testtype::AbstractString,
                        initialization_results::Vector{Float64},
                        results::Vector{Float64})
-    config = get_config()
-    if config["commit"]
-        date = Dates.format(now(), date_format)
-        mk_commit = get_mk_commit()
+    if block_rank[] == 0
+        config = get_config()
+        if config["commit"]
+            date = Dates.format(now(), date_format)
+            mk_commit = get_mk_commit()
 
-        function make_result_string(r)
-            return_string = @sprintf "%40s %32s %18s" mk_commit config["machine"] date
-            for x ∈ r
-                return_string *= @sprintf " %22.17g" x
-            end
-            return_string *= "\n"
-            return return_string
-        end
-        initialization_results_string = make_result_string(initialization_results)
-        results_string = make_result_string(results)
-
-        repo = get_updated_results_repo(config["upload"])
-
-        # append results to file
-        function append_to_file(filename, line, nresults)
-            header_string = "Commit                                  | Machine                        | Date             "
-            for i ∈ 1:(nresults÷4)
-                header_string *= "| Memory usage $i (B)   | Minimum runtime $i (s)| Median runtime $i (s) | Maximum runtime $i (s)"
-            end
-            header_string *= "\n"
-            if !isfile(filename)
-                open(filename, "w") do io
-                    write(io, header_string)
-                    write(io, line)
+            function make_result_string(r)
+                return_string = @sprintf "%40s %32s %18s" mk_commit config["machine"] date
+                for x ∈ r
+                    return_string *= @sprintf " %22.17g" x
                 end
-            else
-                open(filename, "a") do io
-                    write(io, line)
+                return_string *= "\n"
+                return return_string
+            end
+            initialization_results_string = make_result_string(initialization_results)
+            results_string = make_result_string(results)
+
+            repo = get_updated_results_repo(config["upload"])
+
+            # append results to file
+            function append_to_file(filename, line, nresults)
+                header_string = "Commit                                  | Machine                        | Date             "
+                for i ∈ 1:(nresults÷4)
+                    header_string *= "| Memory usage $i (B)   | Minimum runtime $i (s)| Median runtime $i (s) | Maximum runtime $i (s)"
+                end
+                header_string *= "\n"
+                if !isfile(filename)
+                    open(filename, "w") do io
+                        write(io, header_string)
+                        write(io, line)
+                    end
+                else
+                    open(filename, "a") do io
+                        write(io, line)
+                    end
                 end
             end
-        end
-        results_file = string(testtype, "_1procs.txt")
-        initialization_results_file = string(testtype,
-                                             "_1procs_initialization.txt")
-        initialization_results_path = joinpath(results_directory,
-                                               initialization_results_file)
-        results_path = joinpath(results_directory, results_file)
-        append_to_file(results_path, results_string, length(results))
-        append_to_file(initialization_results_path, initialization_results_string, length(results))
+            results_file = string(testtype, "_", block_size[], "procs.txt")
+            initialization_results_file = string(testtype, "_", block_size[],
+                                                 "procs_initialization.txt")
+            initialization_results_path = joinpath(results_directory,
+                                                   initialization_results_file)
+            results_path = joinpath(results_directory, results_file)
+            append_to_file(results_path, results_string, length(results))
+            append_to_file(initialization_results_path, initialization_results_string, length(results))
 
-        # Commit results
-        LibGit2.add!(repo, initialization_results_file)
-        LibGit2.add!(repo, results_file)
-        LibGit2.commit(repo, "Update $results_file")
-        if config["upload"]
-            # refspecs argument seems to be needed, even though apparently it
-            # shouldn't be according to
-            # https://github.com/JuliaLang/julia/issues/20741
-            LibGit2.push(repo, refspecs=["refs/heads/master"])
+            # Commit results
+            LibGit2.add!(repo, initialization_results_file)
+            LibGit2.add!(repo, results_file)
+            LibGit2.commit(repo, "Update $results_file")
+            if config["upload"]
+                # refspecs argument seems to be needed, even though apparently it
+                # shouldn't be according to
+                # https://github.com/JuliaLang/julia/issues/20741
+                LibGit2.push(repo, refspecs=["refs/heads/master"])
+            end
         end
     end
 end
@@ -210,6 +213,8 @@ function extract_summary(result)
             maximum(times) * 1.e-9]
 end
 
+_println0(s="") = block_rank[] == 0 && println(s)
+_display0(s="") = block_rank[] == 0 && display(s)
 const initialization_seconds = 20
 const initialization_samples = 100
 const initialization_evals = 1
@@ -224,9 +229,10 @@ Returns
 [minimum time, median time, maximum time]
 """
 function run_test(input)
-    println(input["run_name"])
-    println("=" ^ length(input["run_name"]))
-    println()
+    message = input["run_name"] * " ($(block_size[]) procs)"
+    _println0(message)
+    _println0("=" ^ length(message))
+    _println0()
     flush(stdout)
 
     result = @benchmark(time_advance!(mk_state...),
@@ -236,10 +242,12 @@ function run_test(input)
                         samples=benchmark_samples,
                         evals=benchmark_evals)
 
-    println("Time advance")
-    println("------------")
-    display(result)
-    println()
+    message = "Time advance ($(block_size[]) procs)"
+    _println0(message)
+    _println0("-" ^ length(message))
+    _display0(result)
+    _println0()
+    _println0()
     flush(stdout)
 
     # This does not clean up the open files or MPI allocated memory, but hopefully it
@@ -250,12 +258,13 @@ function run_test(input)
                                        seconds=initialization_seconds,
                                        samples=initialization_samples,
                                        evals=initialization_evals)
-    println("Initialization")
-    println("--------------")
-    display(initialization_result)
-    println()
-    println()
-    println()
+    message = "Initialization ($(block_size[]) procs)"
+    _println0(message)
+    _println0("-" ^ length(message))
+    _display0(initialization_result)
+    _println0()
+    _println0()
+    _println0()
     flush(stdout)
 
     return extract_summary(initialization_result), extract_summary(result)
