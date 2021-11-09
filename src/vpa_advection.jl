@@ -39,12 +39,12 @@ function vpa_advection!(f_out, fvec_in, ff, fields, moments, SL, advect,
         # an approximate characteristic
         if use_semi_lagrange
             for iz ∈ z_range
-                find_approximate_characteristic!(SL[iz], advect[is], iz, vpa, dt)
+                find_approximate_characteristic!(SL, advect[is], iz, vpa, dt)
             end
         end
         for iz ∈ z_range
             @views advance_f_local!(f_out[:,iz,is], fvec_in.pdf[:,iz,is], ff[:,iz,is],
-                                    SL[iz], advect[is], iz, vpa, dt, istage,
+                                    SL, advect[is], iz, vpa, dt, istage,
                                     vpa_spectral, use_semi_lagrange)
         end
         #@views enforce_vpa_boundary_condition!(f_out[:,:,is], vpa.bc, advect[is])

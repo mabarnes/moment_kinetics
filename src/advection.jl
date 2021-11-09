@@ -116,18 +116,18 @@ end
 # calculate the factor appearing in front of f' in the advection term
 # at time level n in the frame moving with the approximate characteristic
 function update_advection_factor!(adv_fac, speed, upwind_idx, downwind_idx,
-    upwind_increment, SL, n, dt, j, coord)
-    @boundscheck n == length(SL.dep_idx) || throw(BoundsError(SL.dep_idx))
+    upwind_increment, SL, i_outer, n, dt, j, coord)
+    @boundscheck n == size(SL.dep_idx, 1) || throw(BoundsError(SL.dep_idx))
     @boundscheck n == length(adv_fac) || throw(BoundsError(adv_fac))
     @boundscheck n == length(speed) || throw(BoundsError(speed))
-    @boundscheck n == length(SL.characteristic_speed) ||
+    @boundscheck n == size(SL.characteristic_speed, 1) ||
         throw(BoundsError(SL.characteristic_speed))
     #NB: commented out line below needed for bc != periodic?
     #@inbounds for i ∈ upwind_idx-upwind_increment:-upwind_increment:downwind_idx
     #@inbounds begin
     if j == 1
         for i ∈ upwind_idx:-upwind_increment:downwind_idx
-            idx = SL.dep_idx[i]
+            idx = SL.dep_idx[i,i_outer]
             # only need to calculate advection factor for characteristics
             # that originate within the domain, as zero/constant incoming BC
             # takes care of the rest.
@@ -135,16 +135,16 @@ function update_advection_factor!(adv_fac, speed, upwind_idx, downwind_idx,
                 # the effective advection speed appearing in the advection term
                 # is the speed in the frame moving with the approximate
                 # characteristic speed v_char
-                adv_fac[i] = -dt*(speed[idx]-SL.characteristic_speed[i])
+                adv_fac[i] = -dt*(speed[idx]-SL.characteristic_speed[i,i_outer])
             end
         end
     else
         # NB: need to change v[idx] to v[i] for second iteration of RK -
         # otherwise identical to loop in first branch
         for i ∈ upwind_idx:-upwind_increment:downwind_idx
-            idx = SL.dep_idx[i]
+            idx = SL.dep_idx[i,i_outer]
             if idx != upwind_idx + upwind_increment
-                adv_fac[i] = -dt*(speed[i]-SL.characteristic_speed[i])
+                adv_fac[i] = -dt*(speed[i]-SL.characteristic_speed[i,i_outer])
             end
         end
     end
@@ -180,7 +180,7 @@ function update_rhs!(advection, i_outer, f_current, SL, coord, dt, j, spectral)
     @views update_advection_factor!(advection.adv_fac[:,i_outer],
         advection.modified_speed[:,i_outer], advection.upwind_idx[i_outer],
         advection.downwind_idx[i_outer], advection.upwind_increment[i_outer],
-        SL, coord.n, dt, j, coord)
+        SL, i_outer, coord.n, dt, j, coord)
     # calculate df/dcoord
     @views derivative!(coord.scratch, f_current, coord, advection.adv_fac[:,i_outer], spectral)
     #derivative!(coord.scratch, f_current, coord, spectral)
@@ -188,7 +188,7 @@ function update_rhs!(advection, i_outer, f_current, SL, coord, dt, j, spectral)
     # i.e., -Δt⋅δv⋅f'
     @views calculate_explicit_advection!(advection.rhs[:,i_outer], coord.scratch,
         advection.adv_fac[:,i_outer], advection.upwind_idx[i_outer],
-        advection.upwind_increment[i_outer], SL.dep_idx, coord.n, j)
+        advection.upwind_increment[i_outer], SL.dep_idx[:,i_outer], coord.n, j)
 end
 # do all the work needed to update f(coord) at a single value of other coords
 function advance_f_local!(f_new, f_current, f_old, SL, advection, i_outer, coord, dt, j, spectral, use_SL)
@@ -199,7 +199,7 @@ function advance_f_local!(f_new, f_current, f_old, SL, advection, i_outer, coord
     @views update_f!(f_new, f_old, advection.rhs[:,i_outer],
                      advection.upwind_idx[i_outer],
                      advection.downwind_idx[i_outer],
-                     advection.upwind_increment[i_outer], SL.dep_idx, coord.n,
+                     advection.upwind_increment[i_outer], SL.dep_idx[:,i_outer], coord.n,
                      coord.bc, use_SL)
 end
 # update ff at time level n+1 using an explicit Runge-Kutta method

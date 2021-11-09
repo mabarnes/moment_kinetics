@@ -12,69 +12,54 @@ using ..communication: block_rank, MPISharedArray
 # structure semi_lagrange_info contains the basic information needed
 # to project backwards along approximate characteristics, which
 # underpins the semi-Lagrange approach to time advancement
-struct semi_lagrange_info
+struct semi_lagrange_info{N}
     # crossing_time is the time required to cross a given cell
     # moving at a specified advection speed
-    crossing_time::MPISharedArray{mk_float,1}
+    crossing_time::MPISharedArray{mk_float,N}
     # trajectory_time is the cumulative trajectory time along a characteristic
-    trajectory_time::MPISharedArray{mk_float,1}
+    trajectory_time::MPISharedArray{mk_float,N}
     # dep_pts are the departure points at time level m for characteristic
     # arriving at time level m+1
-    dep_pts::MPISharedArray{mk_float,1}
+    dep_pts::MPISharedArray{mk_float,N}
     # dep_idx are the indices of the nearest downwind grid point to
     # the departure point (which is in general between grid points)
-    dep_idx::MPISharedArray{mk_int,1}
+    dep_idx::MPISharedArray{mk_int,N}
     # characteristic_speed is the approximate characteristic speed
-    characteristic_speed::MPISharedArray{mk_float,1}
+    characteristic_speed::MPISharedArray{mk_float,N}
     # n_transits is the number of times that the characteristic
     # crosses the upwind bounary; only needed if BC = "periodic"
-    n_transits::MPISharedArray{mk_int,1}
+    n_transits::MPISharedArray{mk_int,N}
 end
 # create and return a structure containing the arrays needed for the
 # semi-Lagrange time advance
-function setup_semi_lagrange(n)
-    return setup_semi_lagrange_local(n)
-end
-function setup_semi_lagrange(n, m)
-    # allocate an array containing structures with the info needed
-    # to do the semi-Lagrange time advance
-    SL = Array{semi_lagrange_info,1}(undef, m)
-    # store all of this information in a structure and return it
-    for i ∈ 1:m
-        SL[i] = setup_semi_lagrange_local(n)
-    end
-    return SL
-end
-# create and return a structure containing the arrays needed for the
-# semi-Lagrange time advance
-function setup_semi_lagrange_local(n)
+function setup_semi_lagrange(dims...)
     # create an array to hold crossing times for each cell
-    crossing_time = allocate_shared_float(n)
+    crossing_time = allocate_shared_float(dims...)
     # create an array to hold cumulative trajectory time for each characteristic
-    trajectory_time = allocate_shared_float(n)
+    trajectory_time = allocate_shared_float(dims...)
     # create array for the departure points at time level m
-    dep_pts = allocate_shared_float(n)
+    dep_pts = allocate_shared_float(dims...)
     # create array for the indices of the nearest downwind grid point to
     # the departure point (which is in general between grid points)
-    dep_idx = allocate_shared_int(n)
+    dep_idx = allocate_shared_int(dims...)
     # initialize the departure indices to be the save as the arrival indices
     # this allows for a clean algorithm that can use semi-Lagrange or not
     # without a lot of conditional statements within inner loops
     if block_rank[] == 0
-        for i ∈ 1:n
-            dep_idx[i] = i
+        for i ∈ CartesianIndices(dep_idx)
+            dep_idx[i] = i[1]
         end
     end
     # create array containing approximate characteristic speed
     # initialize characteristic speed to zero, in case one wants to
     # do a time advance without use of semi-Lagrange treatment
-    characteristic_speed = allocate_shared_float(n)
+    characteristic_speed = allocate_shared_float(dims...)
     if block_rank[] == 0
         characteristic_speed .= 0.0
     end
     # create array to contain the number of times the characteristics cross
     # the upwind boundary
-    n_transits = allocate_shared_int(n)
+    n_transits = allocate_shared_int(dims...)
     if block_rank[] == 0
         n_transits .= 0
     end
@@ -91,7 +76,7 @@ function find_approximate_characteristic!(SL, advection, i_outer, coord, dt)
     # along approximate characteristics determined by speed profile at level m
     # to obtain departure points.  these will not correspond
     # in general to grid points at time level m
-    @views find_departure_points!(SL, coord, advection.speed[:,i_outer],
+    @views find_departure_points!(SL, i_outer, coord, advection.speed[:,i_outer],
                                   advection.upwind_idx[i_outer],
                                   advection.downwind_idx[i_outer],
                                   advection.upwind_increment[i_outer], dt)
@@ -168,10 +153,10 @@ function find_departure_points!(SL, coord, speed, upwind_idx, downwind_idx,
     # n is the number of grid points along this coordinate axis
     n = coord.n
     # ensure that all of the arrays used in this function are inbounds
-    @boundscheck n == length(SL.crossing_time) || throw(BoundsError(SL.crossing_time))
-    @boundscheck n == length(SL.dep_idx) || throw(BoundsError(SL.dep_idx))
-    @boundscheck n == length(SL.dep_pts) || throw(BoundsError(SL.dep_pts))
-    @boundscheck n == length(speed) || throw(BoundsError(speed))
+    @boundscheck n == size(SL.crossing_time, 1) || throw(BoundsError(SL.crossing_time))
+    @boundscheck n == size(SL.dep_idx, 1) || throw(BoundsError(SL.dep_idx))
+    @boundscheck n == size(SL.dep_pts, 1) || throw(BoundsError(SL.dep_pts))
+    @boundscheck n == size(speed, 1) || throw(BoundsError(speed))
 
     @inbounds begin
         SL.n_transits .= 0.0
@@ -181,10 +166,10 @@ function find_departure_points!(SL, coord, speed, upwind_idx, downwind_idx,
             # beyond the upwind boundary (and thus off the grid).
             # constant or zero BC will be used to fix the boundary value.
             # set departure point to be at upwind boundary
-            SL.dep_pts[upwind_idx] = coord.grid[upwind_idx]
+            SL.dep_pts[upwind_idx,i_outer] = coord.grid[upwind_idx]
             # set the departure index to be just upwind of the upwind boundary;
             # will be used during update of f to impose zero/constant incoming BC
-            SL.dep_idx[upwind_idx] = upwind_idx + upwind_increment
+            SL.dep_idx[upwind_idx,i_outer] = upwind_idx + upwind_increment
             iend = upwind_idx-upwind_increment
         else
             # if periodic boundary condition, will be most efficient to store
@@ -193,8 +178,9 @@ function find_departure_points!(SL, coord, speed, upwind_idx, downwind_idx,
             # this is needed by the point at the upwind/downwind
             # boundary and some of this information may also be needed by points downwind
             # of the boundary whose characteristics originate upwind of the upwind boundary.
-            calculate_time_from_boundary!(coord.scratch, SL.crossing_time, upwind_idx,
-                upwind_increment, downwind_idx, dt)
+            @views calculate_time_from_boundary!(coord.scratch,
+                SL.crossing_time[:,i_outer], upwind_idx, upwind_increment, downwind_idx,
+                dt)
             iend = upwind_idx
         end
         # start with the characteristic at the furthest point downwind
@@ -207,17 +193,17 @@ function find_departure_points!(SL, coord, speed, upwind_idx, downwind_idx,
         for i ∈ downwind_idx:upwind_increment:iend
             # calculate the departure point for the ith characteristic;
             # updates SL.dep_pts, SL.dep_idx, and ttotal_out
-            ttotal_out = departure_point!(SL, ttotal_in, i, jstart,
+            ttotal_out = departure_point!(SL, i_outer, ttotal_in, i, jstart,
                 coord.grid, speed, dt, upwind_idx, upwind_increment, downwind_idx,
                 coord.bc, coord.scratch)
             # jstart will be the grid point to start the time integration
             # for the characteristic immediately upwind of the ith one.
             # generic case is to start sweeping upwind starting at the
             # departure point for the ith characteristic.
-            jstart = SL.dep_idx[i]
+            jstart = SL.dep_idx[i,i_outer]
             # account for cases where departure point is less than one grid
             # spacing away from arrival point
-            if ttotal_out < SL.crossing_time[SL.dep_idx[i]]
+            if ttotal_out < SL.crossing_time[SL.dep_idx[i,i_outer],i_outer]
                 # in this case, jstart should be the neighboring upwind point
                 # from the departure=arrival point of the ith characteristic
                 if upwind_increment < 0
@@ -229,7 +215,7 @@ function find_departure_points!(SL, coord, speed, upwind_idx, downwind_idx,
             # the cumulative time spent on the i-1 characteristic in integrating
             # backward from its arrival point to the grid point corresponding
             # to jstart
-            ttotal_in = max(0.,ttotal_out - SL.crossing_time[i])
+            ttotal_in = max(0.,ttotal_out - SL.crossing_time[i,i_outer])
         end
     end
     return nothing
@@ -238,7 +224,7 @@ end
 # overwrites SL.dep_pts[i], SL.dep_idx[i], and returns ...
 # note that the dep_idx calculated here is the index of the nearest
 # downwind gridpoint to the departure point (which is in general off-grid)
-function departure_point!(SL, t_in, i, jstart, grid, v, dt, upwind_idx,
+function departure_point!(SL, i_outer, t_in, i, jstart, grid, v, dt, upwind_idx,
     upwind_increment, downwind_idx, bc, tbound)
     # t_in is the time spent by a particle following this ith characteristic
     # in going from the arrival point (grid point i at future time level) to the
@@ -246,7 +232,7 @@ function departure_point!(SL, t_in, i, jstart, grid, v, dt, upwind_idx,
     # note that the jstart grid point is the grid point immediately
     # downwind of the departure point for the characteristic
     # immediately downwind of this (ith) one.
-    t_out, dep_pt_found = departure_point_single_transit!(SL, t_in, i, jstart,
+    t_out, dep_pt_found = departure_point_single_transit!(SL, i_outer, t_in, i, jstart,
         grid, v, dt, upwind_idx, upwind_increment)
     # if dep_pt_found = false, then the departure point for this characteristic
     # was not encountered during a single transit of the domain
@@ -255,20 +241,20 @@ function departure_point!(SL, t_in, i, jstart, grid, v, dt, upwind_idx,
             if bc != "periodic"
                 # set departure point to be the upwind boundary, which is given
                 # by incoming boundary condition
-                SL.dep_pts[i] = grid[upwind_idx]
+                SL.dep_pts[i,i_outer] = grid[upwind_idx]
                 # similarly, dep_idx must be set to the upwind boundary index
-                SL.dep_idx[i] = upwind_idx + upwind_increment
+                SL.dep_idx[i,i_outer] = upwind_idx + upwind_increment
             else
                 # if the time taken to cross all grid points is less than dt-t_out,
                 # calculate the number of times the domain must be crossed before
                 # this is no longer true
                 if tbound[upwind_idx] <= (dt - t_out)
                     tmp = 1 + convert(mk_int,fld(dt-t_out, tbound[upwind_idx]))
-                    @. SL.n_transits[i:upwind_increment:upwind_idx] += tmp
+                    @. SL.n_transits[i:upwind_increment:upwind_idx,i_outer] += tmp
                     # update trajectory time to account for additional transits of domain
                     t_out += (tmp-1)*tbound[upwind_idx]
                 else
-                    @. SL.n_transits[i:upwind_increment:upwind_idx] += 1
+                    @. SL.n_transits[i:upwind_increment:upwind_idx,i_outer] += 1
                 end
                 # remainder is the difference between dt and the time taken
                 # to go from the arrival point to the downwind boundary
@@ -279,9 +265,9 @@ function departure_point!(SL, t_in, i, jstart, grid, v, dt, upwind_idx,
                 for j ∈ downwind_idx+upwind_increment:upwind_increment:upwind_idx
                     if remainder < tbound[j]
                         jmod = j-upwind_increment
-                        SL.dep_idx[i] = jmod
-                        SL.dep_pts[i] = grid[jmod] - v[jmod]*(remainder-tbound[SL.dep_idx[i]])
-                        t_out += tbound[SL.dep_idx[i]]
+                        SL.dep_idx[i,i_outer] = jmod
+                        SL.dep_pts[i,i_outer] = grid[jmod] - v[jmod]*(remainder-tbound[SL.dep_idx[i,i_outer]])
+                        t_out += tbound[SL.dep_idx[i,i_outer]]
                         break
                     end
                 end
@@ -290,7 +276,7 @@ function departure_point!(SL, t_in, i, jstart, grid, v, dt, upwind_idx,
     end
     return t_out
 end
-function departure_point_single_transit!(SL, t_in, i, jstart, grid, v, dt, upwind_idx,
+function departure_point_single_transit!(SL, i_outer, t_in, i, jstart, grid, v, dt, upwind_idx,
     upwind_increment)
     # t_in is the time spent by a particle following this ith characteristic
     # in going from the arrival point (grid point i at future time level) to the
@@ -301,10 +287,10 @@ function departure_point_single_transit!(SL, t_in, i, jstart, grid, v, dt, upwin
     t_out = t_in
     @inbounds begin
         for j ∈ jstart:upwind_increment:upwind_idx-upwind_increment
-            tmp = t_out + SL.crossing_time[j]
+            tmp = t_out + SL.crossing_time[j,i_outer]
             if tmp >= dt
-                SL.dep_pts[i] = grid[j] - v[j]*(dt-t_out)
-                SL.dep_idx[i] = j
+                SL.dep_pts[i,i_outer] = grid[j] - v[j]*(dt-t_out)
+                SL.dep_idx[i,i_outer] = j
                 dep_pt_found = true
                 return t_out, dep_pt_found
             else
@@ -404,19 +390,19 @@ end
 =#
 # determine the nearest grid point to each departure point
 #function project_characteristics_onto_grid!(dep_idx, dep, vc, z, dz, dt)
-function project_characteristics_onto_grid!(SL, mod_speed, coord, dt, upwind_idx, upwind_increment)
+function project_characteristics_onto_grid!(SL, i_outer, mod_speed, coord, dt, upwind_idx, upwind_increment)
     # n is the number of grid points along this coordinate axis
     n = coord.n
     # ensure arrays used in this function are inbounds
-    @boundscheck n == length(SL.dep_idx) || throw(BoundsError(SL.dep_idx))
-    @boundscheck n == length(SL.dep_pts) || throw(BoundsError(SL.dep_pts))
-    @boundscheck n == length(mod_speed) || throw(BoundsError(mod_speed))
-    @boundscheck n == length(coord.cell_width) || throw(BoundsError(coord.cell_width))
-    @boundscheck n == length(SL.characteristic_speed) ||
+    @boundscheck n == size(SL.dep_idx, 1) || throw(BoundsError(SL.dep_idx))
+    @boundscheck n == size(SL.dep_pts, 1) || throw(BoundsError(SL.dep_pts))
+    @boundscheck n == size(mod_speed, 1) || throw(BoundsError(mod_speed))
+    @boundscheck n == size(coord.cell_width, 1) || throw(BoundsError(coord.cell_width))
+    @boundscheck n == size(SL.characteristic_speed, 1) ||
         throw(BoundsError(SL.characteristic_speed))
 
     @inbounds for i ∈ 1:n
-        idx = SL.dep_idx[i]
+        idx = SL.dep_idx[i,i_outer]
         if idx == upwind_idx + upwind_increment
             # departure point/index already found to be upwind of upwind boundary;
             # only possible for non-periodic boundary condition, so okay to use
@@ -429,7 +415,7 @@ function project_characteristics_onto_grid!(SL, mod_speed, coord, dt, upwind_idx
             # NB: the opposite sign to the advection speed
             # NB: for the moment as a way of identifying characteristics
             # NB: originating beyond the grid boundary
-            SL.characteristic_speed[i] = real(upwind_increment)
+            SL.characteristic_speed[i,i_outer] = real(upwind_increment)
             # NB: need to set mod_speed to something sensible here?
         else
             # account for fact that cell_width[1] is first cell, etc.
@@ -441,7 +427,7 @@ function project_characteristics_onto_grid!(SL, mod_speed, coord, dt, upwind_idx
             else
                 idxmod = idx - 1
             end
-            if abs(coord.grid[idx]-SL.dep_pts[i]) < 0.5*coord.cell_width[idxmod]
+            if abs(coord.grid[idx]-SL.dep_pts[i,i_outer]) < 0.5*coord.cell_width[idxmod]
                 # no need to do anything with dep_idx, as this is actually
                 # the closest grid point to the departure point
             else
@@ -451,21 +437,21 @@ function project_characteristics_onto_grid!(SL, mod_speed, coord, dt, upwind_idx
                 # upwind boundary, as it is always the nearest downwind point
                 # that is used.  thus, there should be no possibility
                 # of having dep_idx beyond the upwind boundary.
-                SL.dep_idx[i] = idx + upwind_increment
+                SL.dep_idx[i,i_outer] = idx + upwind_increment
             end
             # the factor wrapped_distance accounts for contribution to the
             # distance travelled by characteristics in wrapping around the domain,
             # possibly multiple times
-            wrapped_distance = -upwind_increment*SL.n_transits[i]*coord.L
+            wrapped_distance = -upwind_increment*SL.n_transits[i,i_outer]*coord.L
             # arrival_grid is the grid location at the future time level m+1
             # from which we start following the characteristic backwards in time
             arrival_grid = coord.grid[i]
             # departure_grid is the nearest grid point to the departure point
             # of the characteristic at time level m
-            departure_grid = coord.grid[SL.dep_idx[i]]
+            departure_grid = coord.grid[SL.dep_idx[i,i_outer]]
             # departure_point is the location of the characteristic at time level m
             # that passes through arrival_grid at time level m+1
-            departure_point = SL.dep_pts[i]
+            departure_point = SL.dep_pts[i,i_outer]
             # update the characteristic speed to account
             # for the trajectory slope change needed to make departure point
             # be the nearest grid point.
@@ -475,7 +461,7 @@ function project_characteristics_onto_grid!(SL, mod_speed, coord, dt, upwind_idx
             # that was needed to arrive at the departure grid point
             #NB: need to worry about the sign of these differences for case
             #NB: with negative advection speed?
-            SL.characteristic_speed[i] = (wrapped_distance + (arrival_grid-departure_grid))/dt
+            SL.characteristic_speed[i,i_outer] = (wrapped_distance + (arrival_grid-departure_grid))/dt
             # despite the fact that the spatially-dependent speed at time
             # level n was used to find the departure point, one can replace
             # this with the constant velocity along the ith characteristic

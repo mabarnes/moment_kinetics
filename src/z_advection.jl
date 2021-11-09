@@ -49,7 +49,7 @@ function z_advection!(f_out, fvec_in, ff, moments, SL, advect, z, vpa,
             # returning the true (un-normalized) particle distribution function in z.scratch
             @views unnormalize_pdf!(z.scratch, fvec_in.pdf[ivpa,:,is], fvec_in.density[:,is], moments.vth[:,is],
                                     moments.evolve_density, moments.evolve_ppar)
-            @views advance_f_local!(f_out[ivpa,:,is], z.scratch, ff[ivpa,:,is], SL[ivpa], advect[is], ivpa,
+            @views advance_f_local!(f_out[ivpa,:,is], z.scratch, ff[ivpa,:,is], SL, advect[is], ivpa,
                                     z, dt, istage, spectral, use_semi_lagrange)
         end
     end
