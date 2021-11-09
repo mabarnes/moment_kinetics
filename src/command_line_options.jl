@@ -15,6 +15,11 @@ s = ArgParseSettings()
         help = "Name of TOML input file."
         arg_type = String
         default = nothing
+    "--debug", "-d"
+        help = "Set debugging level, default is 0 (no extra debugging). Higher " *
+               "integer values activate more checks (and increase run time)"
+        arg_type = Int
+        default = 0
     # Options for tests
     "--long"
         help = "Include more tests, increasing test run time."

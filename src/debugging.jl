@@ -15,8 +15,6 @@ can be used to make the type represented by `MPISharedArray` depend on the debug
 """
 module debugging
 
-using ArgParse
-
 macronames = [
               ("debug_initialize_NaN", 1),
               ("debug_error_stop_all", 1),
@@ -26,19 +24,8 @@ macronames = [
               ("debug_detect_redundant_block_synchronize", 4)
              ]
 
-#s = ArgParseSettings()
-#@add_arg_table! s begin
-#    "--debug", "-d"
-#        help = "Set debugging level, default is 0 (no extra debugging). Higher " *
-#               "integer values activate more checks (and increase run time)"
-#        arg_type = Int
-#        default = 0
-#end
-#options = parse_args(s)
-#_debug_level = options["debug"]
-## Problems with trying to call ArgParse with a partial options list - for now just
-## hard-code _debug_level
-_debug_level = 0
+using ..command_line_options: options
+_debug_level = options["debug"]
 
 for (macroname, minlevel) ∈ macronames
     m = Symbol(macroname)
