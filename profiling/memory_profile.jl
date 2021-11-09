@@ -2,7 +2,7 @@ using Profile
 using TimerOutputs
 using TOML
 
-using moment_kinetics
+using moment_kinetics: run_moment_kinetics, options
 
 function main(input_file)
     input = TOML.parsefile(input_file)
@@ -29,8 +29,8 @@ end
 
 # Call main() using first argument as input_file name if running as a script
 if abspath(PROGRAM_FILE) == @__FILE__
-    if length(ARGS) < 1
-        error("Must provide input file as first command line argument")
+    if options["inputfile"] == nothing
+        error("Must provide input file as positional command line argument")
     end
-    main(ARGS[1])
+    main(options["inputfile"])
 end

@@ -476,14 +476,9 @@ if abspath(PROGRAM_FILE) == @__FILE__
         prefix = mk_options["inputfile"]
     end
     filename = string(prefix, "_1procs.txt")
-    if length(ARGS) > 1
-        machine = ARGS[2]
-        plot_performance_history(filename, machine)
-        plot_performance_history(string(prefix, "_1procs_initialization.txt"), machine)
-        plot_strong_scaling_history(prefix, machine)
-    else
-        plot_performance_history(filename)
-        plot_performance_history(string(prefix, "_1procs_initialization.txt"))
-        plot_strong_scaling_history(prefix)
-    end
+
+    machine = mk_options["machine-name"]
+    plot_performance_history(filename, machine)
+    plot_performance_history(string(prefix, "_1procs_initialization.txt"), machine)
+    plot_strong_scaling_history(prefix, machine)
 end

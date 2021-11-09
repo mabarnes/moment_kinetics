@@ -15,23 +15,9 @@ module MKTestUtilities
 export use_verbose, @long, quietoutput, global_rank, maxabs_norm, @testset_skip
 
 using moment_kinetics.communication: global_rank
+using moment_kinetics.command_line_options: options
 
-# Parse command line arguments to allow settings to be used for tests
-#####################################################################
-
-using ArgParse
-
-s = ArgParseSettings()
-@add_arg_table! s begin
-    "--long"
-        help = "Include more tests, increasing test run time."
-        action = :store_true
-    "--verbose", "-v"
-        help = "Print verbose output from tests."
-        action = :store_true
-end
-options = parse_args(s)
-use_verbose = options["verbose"]
+const use_verbose = options["verbose"]
 
 
 # Convenience modifiers for test calls
@@ -119,7 +105,7 @@ macro testset_skip(args...)
 
     skip_reason = args[1]
 
-    desc, testsettype, options = parse_testset_args(args[2:end-1])
+    desc, _, _ = parse_testset_args(args[2:end-1])
 
     ex = quote
         # record the reason for the skip in the description, and mark the tests as

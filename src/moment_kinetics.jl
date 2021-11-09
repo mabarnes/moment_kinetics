@@ -7,6 +7,7 @@ using MPI
 # Include submodules from other source files
 # Note that order of includes matters - things used in one module must already
 # be defined
+include("command_line_options.jl")
 include("debugging.jl")
 include("type_definitions.jl")
 include("communication.jl")
@@ -49,6 +50,7 @@ using TOML
 
 using .file_io: setup_file_io, finish_file_io
 using .file_io: write_data_to_ascii, write_data_to_binary
+using .command_line_options: options
 using .communication: block_rank, block_synchronize, finalize_comms!, initialize_comms!
 using .coordinates: define_coordinate
 using .initial_conditions: init_pdf_and_moments
@@ -85,8 +87,15 @@ function run_moment_kinetics(to::TimerOutput, input_filename::String)
     return run_moment_kinetics(to, TOML.parsefile(input_filename))
 end
 # overloads with no TimerOutput arguments
-function run_moment_kinetics(input=Dict())
+function run_moment_kinetics(input)
     return run_moment_kinetics(TimerOutput(), input)
+end
+function run_moment_kinetics()
+    if options["inputfile"] == nothing
+        run_moment_kinetics(Dict())
+    else
+        run_moment_kinetics(options["inputfile"])
+    end
 end
 
 # Perform all the initialization steps for a run.
