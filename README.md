@@ -139,3 +139,31 @@ To get more output on what tests were successful, an option `--verbose` (or `-v`
     julia> run_moment_kinetics("input.toml")
     ```
     It might be convenient to add `using Revise` to your `startup.jl` file (`~/julia/config/startup.jl`) so it's always loaded.
+* Parallelization: the code is parallelized at the moment using MPI and shared-memory arrays. Arrays representing the pdf, moments, etc. are shared between all processes. Using shared memory means, for example, we can take derivatives along one dimension while parallelising the other for any dimension without having to communicate to re-distribute the arrays.
+    * To run in parallel, just put `mpirun -np <n>` in front of the call you would normally use, with `<n>` the number of processes to use.
+    * It is possible to use a REPL workflow with parallel code:
+        * Recommended option is to use [tmpi](https://github.com/Azrael3000/tmpi). This utility (it's a bash script that uses `tmux`) starts an mpi program with each process in a separate pane in a single terminal, and mirrors input to all processes simultaneously (which is normally what you want, there are also commands to 'zoom in' on a single process).
+        * Another 'low-tech' possibilty is to use something like `mpirun -np 4 xterm -e julia --project`, but that will start each process in a separate xterm and you would have to enter commands separately in each one. Occasionally useful for debugging when nothing else is available.
+    * As currently implemented, the number of processes must either be less than or equal to the number of species, or be divisible by the number of species.
+    * There is no restriction on the number of spatial/velocity-space grid points, although load-balancing may be affected - if there are only very few points per process, and a small fraction of processes have an extra grid point (e.g. splitting 5 points over 4 processes, so 3 process have 1 point but 1 process has 2 points), many processes will spend time waiting for the few with an extra point.
+    * Parallelism is implemented by defining ranges in `species_composition` and `coordinate` structs which depend on the process rank - they define the set of points that each process should handle. So for example, if the inner loop (which is not parallelized) is over `vpa`, then the loop would look something like
+        ```
+        for is in composition.species_local_range
+            for iz in z.outer_loop_range
+                for ivpa in 1:vpa.n
+                    f[ivpa,iz,is] = ...
+                end
+            end
+        end
+        ```
+        and the sets formed by composition.species_local_range and z.outer_loop_range have no overlap between different processes. Similarly if the inner loop is over `z`, then the loop would look something like
+        ```
+        for is in composition.species_local_range
+            for ivpa in vpa.outer_loop_range
+                for iz in 1:z.n
+                    f[ivpa,iz,is] = ...
+                end
+            end
+        end
+        ```
+    * For information on race conditions and debugging, see `debug_test/README.md`.
