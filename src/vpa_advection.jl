@@ -7,7 +7,6 @@ using ..semi_lagrange: find_approximate_characteristic!
 using ..advection: update_boundary_indices!
 using ..advection: advance_f_local!
 using ..communication: block_rank, block_synchronize
-using ..em_fields: update_phi!
 using ..calculus: derivative!
 using ..initial_conditions: enforce_vpa_boundary_condition!
 
@@ -175,8 +174,6 @@ function update_speed_default!(advect, fields, fvec, moments, vpa, z, compositio
         end
     else
         # update the electrostatic potential phi
-        update_phi!(fields, fvec, z, composition, z.outer_loop_range)
-        block_synchronize()
         # calculate the derivative of phi with respect to z;
         # the value at element boundaries is taken to be the average of the values
         # at neighbouring elements
