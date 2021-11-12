@@ -1,0 +1,27 @@
+# Run tests in parallel to check for bugs that only show up on multiple processes
+name: Run tests in parallel
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        # This job currently fails on macOS - don't know why, try re-activating later
+        #os: [ubuntu-latest, macOS-latest]
+        os: [ubuntu-latest]
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v2
+      - uses: julia-actions/setup-julia@v1
+        with:
+          version: '1'
+          arch: x64
+      - uses: julia-actions/julia-buildpkg@v1
+      - run: |
+          julia --project -e 'using MPI; MPI.install_mpiexecjl()'
+          ~/.julia/bin/mpiexecjl -np 2 julia --project=@. --check-bounds=yes test/runtests.jl
+          ~/.julia/bin/mpiexecjl -np 4 julia --project=@. --check-bounds=yes test/runtests.jl
+        shell: bash
