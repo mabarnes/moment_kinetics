@@ -147,10 +147,10 @@ function setup_time_advance!(pdf, vpa, z, composition, drive_input, moments,
     # create the "fields" structure that contains arrays
     # for the electrostatic potential phi and eventually the electromagnetic fields
     fields = setup_em_fields(z.n, drive_input.force_phi, drive_input.amplitude, drive_input.frequency)
-    # initialize the electrostatic potential
-    update_phi!(fields, scratch[1], z, composition)
-    # save the initial phi(z) for possible use later (e.g., if forcing phi)
     if block_rank[] == 0
+        # initialize the electrostatic potential
+        update_phi!(fields, scratch[1], z, composition, 1:z.n)
+        # save the initial phi(z) for possible use later (e.g., if forcing phi)
         fields.phi0 .= fields.phi
     end
     block_synchronize()
@@ -159,8 +159,11 @@ function setup_time_advance!(pdf, vpa, z, composition, drive_input, moments,
     # with advection in vpa
     vpa_advect = setup_advection(n_species, vpa, z)
     # initialise the vpa advection speed
-    update_speed_vpa!(vpa_advect, fields, scratch[1], moments, vpa, z, composition,
-                      collisions.charge_exchange, 0.0, z_spectral)
+    if block_rank[] == 0
+        update_speed_vpa!(vpa_advect, fields, scratch[1], moments, vpa, z, composition,
+                          collisions.charge_exchange, 0.0, z_spectral,
+                          1:composition.n_species, 1:z.n)
+    end
     if moments.evolve_upar
         nspec = n_species
     else
@@ -478,7 +481,6 @@ function rk_update!(scratch, pdf, moments, fields, vpa, z, rk_coefs, istage, com
     for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range, ivpa ∈ 1:nvpa
         new_scratch.pdf[ivpa,iz,is] = rk_coefs[1]*pdf.norm[ivpa,iz,is] + rk_coefs[2]*old_scratch.pdf[ivpa,iz,is] + rk_coefs[3]*new_scratch.pdf[ivpa,iz,is]
     end
-    #block_synchronize()
     if moments.evolve_density
         for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range
             new_scratch.density[iz,is] = rk_coefs[1]*moments.dens[iz,is] + rk_coefs[2]*old_scratch.density[iz,is] + rk_coefs[3]*new_scratch.density[iz,is]
@@ -492,7 +494,6 @@ function rk_update!(scratch, pdf, moments, fields, vpa, z, rk_coefs, istage, com
         end
         update_density!(new_scratch.density, moments.dens_updated, pdf.unnorm, vpa, z, composition)
     end
-    block_synchronize()
     # NB: if moments.evolve_upar = true, then moments.evolve_density = true
     if moments.evolve_upar
         for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range
@@ -505,7 +506,6 @@ function rk_update!(scratch, pdf, moments, fields, vpa, z, rk_coefs, istage, com
             new_scratch.upar[iz,is] /= new_scratch.density[iz,is]
         end
     end
-    #block_synchronize()
     if moments.evolve_ppar
         for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range
             new_scratch.ppar[iz,is] = rk_coefs[1]*moments.ppar[iz,is] + rk_coefs[2]*old_scratch.ppar[iz,is] + rk_coefs[3]*new_scratch.ppar[iz,is]
@@ -513,7 +513,6 @@ function rk_update!(scratch, pdf, moments, fields, vpa, z, rk_coefs, istage, com
     else
         update_ppar!(new_scratch.ppar, moments.ppar_updated, pdf.unnorm, vpa, z, composition)
     end
-    #block_synchronize()
     # update the thermal speed
     for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range
         moments.vth[iz,is] = sqrt(2.0*new_scratch.ppar[iz,is]/new_scratch.density[iz,is])
@@ -526,12 +525,10 @@ function rk_update!(scratch, pdf, moments, fields, vpa, z, rk_coefs, istage, com
             pdf.unnorm[ivpa,iz,is] *= old_scratch.temp_z_s[iz,is]
         end
     end
-    #block_synchronize()
     # update the parallel heat flux
     update_qpar!(moments.qpar, moments.qpar_updated, pdf.unnorm, vpa, z, composition, moments.vpa_norm_fac)
-    #block_synchronize()
     # update the electrostatic potential phi
-    update_phi!(fields, new_scratch, z, composition)
+    update_phi!(fields, scratch[istage+1], z, composition, z.outer_loop_range)
 end
 function ssp_rk!(pdf, scratch, t, t_input, vpa, z,
     vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
@@ -548,7 +545,6 @@ function ssp_rk!(pdf, scratch, t, t_input, vpa, z,
         first_scratch.upar[iz,is] = moments.upar[iz,is]
         first_scratch.ppar[iz,is] = moments.ppar[iz,is]
     end
-    block_synchronize()
 
     for istage ∈ 1:n_rk_stages
         # do an Euler time advance, with scratch[2] containing the advanced quantities
@@ -560,11 +556,11 @@ function ssp_rk!(pdf, scratch, t, t_input, vpa, z,
             t_input, vpa_spectral, z_spectral, composition,
             collisions, advance, istage)
         @views rk_update!(scratch, pdf, moments, fields, vpa, z, advance.rk_coefs[:,istage], istage, composition)
-        moments.evolve_upar && istage < n_rk_stages && block_synchronize()
     end
 
     istage = n_rk_stages+1
     if moments.evolve_density && moments.enforce_conservation
+        block_synchronize()
         enforce_moment_constraints!(scratch[istage], scratch[1], vpa, z, composition, moments)
     end
 
@@ -578,9 +574,7 @@ function ssp_rk!(pdf, scratch, t, t_input, vpa, z,
         moments.upar[iz,is] = final_scratch.upar[iz,is]
         moments.ppar[iz,is] = final_scratch.ppar[iz,is]
     end
-    #block_synchronize()
     update_pdf_unnorm!(pdf, moments, scratch[istage].temp_z_s, composition, z)
-    #block_synchronize()
     return nothing
 end
 # euler_time_advance! advances the vector equation dfvec/dt = G[f]
@@ -618,7 +612,6 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, z_
     if advance.cx_collisions
         charge_exchange_collisions!(fvec_out.pdf, fvec_in, moments, composition, vpa, z,
                                     collisions.charge_exchange, dt)
-        !moments.evolve_upar && !advance.ionization_collisions && block_synchronize()
     end
     # account for ionization collisions between ions and neutrals
     if advance.ionization_collisions
@@ -632,10 +625,11 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, z_
     if advance.force_balance
         # fvec_out.upar is over-written in force_balance! and contains the particle flux
         force_balance!(fvec_out.upar, fvec_in, fields, collisions, vpa, z, dt, z_spectral, composition)
-        block_synchronize()
         # convert from the particle flux to the parallel flow
-        for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range
-            fvec_out.upar[iz,is] /= fvec_out.density[iz,is]
+        for is ∈ composition.species_local_range
+            if composition.first_proc_in_group
+                @views @. fvec_out.upar[:,is] /= fvec_out.density[:,is]
+            end
         end
     end
     if advance.energy
@@ -647,6 +641,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, z_
     # enforce boundary conditions in z and vpa on the distribution function
     # NB: probably need to do the same for the evolved moments
     enforce_boundary_conditions!(fvec_out.pdf, vpa.bc, z.bc, vpa, z, vpa_advect, z_advect, composition)
+    block_synchronize()
     return nothing
 end
 # update the vector containing the pdf and any evolved moments of the pdf

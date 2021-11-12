@@ -147,6 +147,10 @@ mutable struct species_composition
     n_ion_species::mk_int
     # n_neutral_species is the number of evolved neutral species
     n_neutral_species::mk_int
+    # Species indices that represent ions
+    ion_species_range::UnitRange{mk_int}
+    # Species indices that represent neutrals
+    neutral_species_range::UnitRange{mk_int}
     # Local range of indices for this processor to use at species level of parallel
     # loops over shared arrays
     species_local_range::UnitRange{mk_int}

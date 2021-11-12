@@ -194,8 +194,6 @@ function init_pdf_over_density!(pdf, spec, vpa, z, vth, vpa_norm_fac)
     return nothing
 end
 function enforce_boundary_conditions!(f, vpa_bc, z_bc, vpa, z, vpa_adv::T1, z_adv::T2, composition) where {T1, T2}
-    @views enforce_z_boundary_condition!(f, z_bc, z_adv, vpa, composition)
-    block_synchronize()
     for is ∈ composition.species_local_range
         # enforce the vpa BC
         for iz ∈ z.outer_loop_range
@@ -203,6 +201,8 @@ function enforce_boundary_conditions!(f, vpa_bc, z_bc, vpa, z, vpa_adv::T1, z_ad
                                                          vpa_adv[is].downwind_idx[iz])
         end
     end
+    block_synchronize()
+    @views enforce_z_boundary_condition!(f, z_bc, z_adv, vpa, composition)
 end
 # enforce boundary conditions on f in z
 function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, composition) where T
@@ -233,13 +233,15 @@ function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, composition) 
         end
     # 'wall' BC enforces wall boundary conditions
     elseif bc == "wall"
-        # zero incoming BC for ions, as they recombine at the wall
-        for is ∈ composition.ion_species_local_range
-            for ivpa ∈ vpa.outer_loop_range_ions
-                # no parallel BC should be enforced for vpa = 0
-                if abs(vpa.grid[ivpa]) > zero
-                    upwind_idx = adv[is].upwind_idx[ivpa]
-                    f[ivpa,upwind_idx,is] = 0.0
+        for is ∈ composition.species_local_range
+            # zero incoming BC for ions, as they recombine at the wall
+            if is ∈ composition.ion_species_range
+                for ivpa ∈ vpa.outer_loop_range
+                    # no parallel BC should be enforced for vpa = 0
+                    if abs(vpa.grid[ivpa]) > zero
+                        upwind_idx = adv[is].upwind_idx[ivpa]
+                        f[ivpa,upwind_idx,is] = 0.0
+                    end
                 end
             end
         end

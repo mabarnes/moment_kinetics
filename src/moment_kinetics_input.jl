@@ -309,8 +309,9 @@ function load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_resp
     # ratio of the neutral particle mass to the ion particle mass
     mn_over_mi = 1.0
     composition = species_composition(n_species, n_ion_species, n_neutral_species,
-        1:n_species, true, 1:n_species, true, 1:0, false, boltzmann_electron_response,
-        T_e, T_wall, mn_over_mi, allocate_float(n_species))
+        1:n_ion_species, n_ion_species+1:n_species, 1:n_species, true, 1:n_species,
+        true, 1:0, false, boltzmann_electron_response, T_e, T_wall, mn_over_mi,
+        allocate_float(n_species))
     species = Array{species_parameters_mutable,1}(undef,n_species)
     # initial temperature for each species defaults to Tₑ
     initial_temperature = 1.0

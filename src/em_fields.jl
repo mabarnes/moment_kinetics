@@ -5,7 +5,7 @@ export update_phi!
 
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_shared_float
-using ..communication: block_rank, MPISharedArray
+using ..communication: block_rank, block_synchronize, MPISharedArray
 using ..velocity_moments: update_density!
 
 struct fields
@@ -27,21 +27,30 @@ function setup_em_fields(m, force_phi, drive_amplitude, drive_frequency)
 end
 
 # update_phi updates the electrostatic potential, phi
-function update_phi!(fields, fvec, z, composition)
+function update_phi!(fields, fvec, z, composition, z_range)
     n_ion_species = composition.n_ion_species
     @boundscheck size(fields.phi,1) == z.n || throw(BoundsError(fields.phi))
     @boundscheck size(fields.phi0,1) == z.n || throw(BoundsError(fields.phi0))
     @boundscheck size(fvec.density,1) == z.n || throw(BoundsError(fvec.density))
     @boundscheck size(fvec.density,2) == composition.n_species || throw(BoundsError(fvec.density))
     if composition.boltzmann_electron_response
-        if block_rank[] == 0
-            z.scratch .= @view(fvec.density[:,1])
+        # Update phi using the set of processes that handles the first ion species
+        # Means we get at least some parallelism, even though we have to sum
+        # over species, and reduces number of block_synchronize() calls needed
+        # when there is only one species.
+        if 1 ∈ composition.species_local_range
+            for iz ∈ z_range
+                z.scratch[iz] = fvec.density[iz,1]
+            end
+        end
+        composition.n_ion_species > 1 && block_synchronize()
+        if 1 ∈ composition.species_local_range
             @inbounds for is ∈ 2:composition.n_ion_species
-                for iz ∈ 1:z.n
+                for iz ∈ z_range
                     z.scratch[iz] += fvec.density[iz,is]
                 end
             end
-            @inbounds for iz ∈ 1:z.n
+            @inbounds for iz ∈ z_range
                 fields.phi[iz] = composition.T_e * log(z.scratch[iz])
             end
             # if fields.force_phi
