@@ -62,6 +62,7 @@ function adjust_advection_speed!(speed, mod_speed, dens, vth, evolve_density, ev
         @. speed /= dens
         @. mod_speed /= dens
     end
+    return nothing
 end
 function unnormalize_pdf!(unnorm, norm, dens, vth, evolve_density, evolve_ppar)
     if evolve_ppar
@@ -71,6 +72,7 @@ function unnormalize_pdf!(unnorm, norm, dens, vth, evolve_density, evolve_ppar)
     else
         @. unnorm = norm
     end
+    return nothing
 end
 # calculate the advection speed in the z-direction at each grid point
 function update_speed_z!(advect, upar, vth, evolve_upar, evolve_ppar, vpa, z, t)
