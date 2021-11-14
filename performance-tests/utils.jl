@@ -149,18 +149,33 @@ function upload_result(testtype::AbstractString,
         repo = get_updated_results_repo()
 
         # append results to file
+        function append_to_file(filename, line, nresults)
+            header_string = "Commit                                  | Machine                        | Date             "
+            for i ∈ 1:(nresults÷4)
+                header_string *= "| Memory usage $i (B)   | Minimum runtime $i (s)| Median runtime $i (s) | Maximum runtime $i (s)"
+            end
+            header_string *= "\n"
+            if !isfile(filename)
+                open(filename, "w") do io
+                    write(io, header_string)
+                    write(io, line)
+                end
+            else
+                open(filename, "a") do io
+                    write(io, line)
+                end
+            end
+        end
         results_file = string(testtype, "_1procs.txt")
         initialization_results_file = string(testtype,
                                              "_1procs_initialization.txt")
         initialization_results_path = joinpath(results_directory,
                                                initialization_results_file)
         results_path = joinpath(results_directory, results_file)
-        open(initialization_results_path, "a") do io
-            write(io, initialization_results_string)
-        end
-        open(results_path, "a") do io
-            write(io, results_string)
-        end
+        append_to_file(results_path, results_string, length(results))
+        append_to_file(initialization_results_path, initialization_results_string, length(results))
+
+        # Commit results
         LibGit2.add!(repo, initialization_results_file)
         LibGit2.add!(repo, results_file)
         LibGit2.commit(repo, "Update $results_file")
