@@ -473,55 +473,57 @@ function time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
 end
 function rk_update!(scratch, pdf, moments, fields, vpa, z, rk_coefs, istage, composition)
     nvpa = size(pdf.unnorm, 1)
+    new_scratch = scratch[istage+1]
+    old_scratch = scratch[istage]
     for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range, ivpa ∈ 1:nvpa
-        scratch[istage+1].pdf[ivpa,iz,is] = rk_coefs[1]*pdf.norm[ivpa,iz,is] + rk_coefs[2]*scratch[istage].pdf[ivpa,iz,is] + rk_coefs[3]*scratch[istage+1].pdf[ivpa,iz,is]
+        new_scratch.pdf[ivpa,iz,is] = rk_coefs[1]*pdf.norm[ivpa,iz,is] + rk_coefs[2]*old_scratch.pdf[ivpa,iz,is] + rk_coefs[3]*new_scratch.pdf[ivpa,iz,is]
     end
     #block_synchronize()
     if moments.evolve_density
         for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range
-            scratch[istage+1].density[iz,is] = rk_coefs[1]*moments.dens[iz,is] + rk_coefs[2]*scratch[istage].density[iz,is] + rk_coefs[3]*scratch[istage+1].density[iz,is]
+            new_scratch.density[iz,is] = rk_coefs[1]*moments.dens[iz,is] + rk_coefs[2]*old_scratch.density[iz,is] + rk_coefs[3]*new_scratch.density[iz,is]
         end
         for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range, ivpa ∈ 1:nvpa
-            pdf.unnorm[ivpa,iz,is] = scratch[istage+1].pdf[ivpa,iz,is] * scratch[istage+1].density[iz,is]
+            pdf.unnorm[ivpa,iz,is] = new_scratch.pdf[ivpa,iz,is] * new_scratch.density[iz,is]
         end
     else
         for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range, ivpa ∈ 1:nvpa
-            pdf.unnorm[ivpa,iz,is] = scratch[istage+1].pdf[ivpa,iz,is]
+            pdf.unnorm[ivpa,iz,is] = new_scratch.pdf[ivpa,iz,is]
         end
-        update_density!(scratch[istage+1].density, moments.dens_updated, pdf.unnorm, vpa, z, composition)
+        update_density!(new_scratch.density, moments.dens_updated, pdf.unnorm, vpa, z, composition)
     end
     block_synchronize()
     # NB: if moments.evolve_upar = true, then moments.evolve_density = true
     if moments.evolve_upar
         for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range
-            scratch[istage+1].upar[iz,is] = rk_coefs[1]*moments.upar[iz,is] + rk_coefs[2]*scratch[istage].upar[iz,is] + rk_coefs[3]*scratch[istage+1].upar[iz,is]
+            new_scratch.upar[iz,is] = rk_coefs[1]*moments.upar[iz,is] + rk_coefs[2]*old_scratch.upar[iz,is] + rk_coefs[3]*new_scratch.upar[iz,is]
         end
     else
-        update_upar!(scratch[istage+1].upar, moments.upar_updated, pdf.unnorm, vpa, z, composition)
+        update_upar!(new_scratch.upar, moments.upar_updated, pdf.unnorm, vpa, z, composition)
         # convert from particle particle flux to parallel flow
         for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range
-            scratch[istage+1].upar[iz,is] /= scratch[istage+1].density[iz,is]
+            new_scratch.upar[iz,is] /= new_scratch.density[iz,is]
         end
     end
     #block_synchronize()
     if moments.evolve_ppar
         for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range
-            scratch[istage+1].ppar[iz,is] = rk_coefs[1]*moments.ppar[iz,is] + rk_coefs[2]*scratch[istage].ppar[iz,is] + rk_coefs[3]*scratch[istage+1].ppar[iz,is]
+            new_scratch.ppar[iz,is] = rk_coefs[1]*moments.ppar[iz,is] + rk_coefs[2]*old_scratch.ppar[iz,is] + rk_coefs[3]*new_scratch.ppar[iz,is]
         end
     else
-        update_ppar!(scratch[istage+1].ppar, moments.ppar_updated, pdf.unnorm, vpa, z, composition)
+        update_ppar!(new_scratch.ppar, moments.ppar_updated, pdf.unnorm, vpa, z, composition)
     end
     #block_synchronize()
     # update the thermal speed
     for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range
-        moments.vth[iz,is] = sqrt(2.0*scratch[istage+1].ppar[iz,is]/scratch[istage+1].density[iz,is])
+        moments.vth[iz,is] = sqrt(2.0*new_scratch.ppar[iz,is]/new_scratch.density[iz,is])
     end
     if moments.evolve_ppar
         for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range
-            scratch[istage].temp_z_s[iz,is] = 1.0 / moments.vth[iz,is]
+            old_scratch.temp_z_s[iz,is] = 1.0 / moments.vth[iz,is]
         end
         for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range, ivpa ∈ 1:vpa.n
-            pdf.unnorm[ivpa,iz,is] *= scratch[istage].temp_z_s[iz,is]
+            pdf.unnorm[ivpa,iz,is] *= old_scratch.temp_z_s[iz,is]
         end
     end
     #block_synchronize()
@@ -529,7 +531,7 @@ function rk_update!(scratch, pdf, moments, fields, vpa, z, rk_coefs, istage, com
     update_qpar!(moments.qpar, moments.qpar_updated, pdf.unnorm, vpa, z, composition, moments.vpa_norm_fac)
     #block_synchronize()
     # update the electrostatic potential phi
-    update_phi!(fields, scratch[istage+1], z, composition)
+    update_phi!(fields, new_scratch, z, composition)
 end
 function ssp_rk!(pdf, scratch, t, t_input, vpa, z,
     vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
@@ -537,13 +539,14 @@ function ssp_rk!(pdf, scratch, t, t_input, vpa, z,
 
     n_rk_stages = t_input.n_rk_stages
 
+    first_scratch = scratch[1]
     for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range, ivpa ∈ 1:vpa.n
-        scratch[1].pdf[ivpa,iz,is] = pdf.norm[ivpa,iz,is]
+        first_scratch.pdf[ivpa,iz,is] = pdf.norm[ivpa,iz,is]
     end
     for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range
-        scratch[1].density[iz,is] = moments.dens[iz,is]
-        scratch[1].upar[iz,is] = moments.upar[iz,is]
-        scratch[1].ppar[iz,is] = moments.ppar[iz,is]
+        first_scratch.density[iz,is] = moments.dens[iz,is]
+        first_scratch.upar[iz,is] = moments.upar[iz,is]
+        first_scratch.ppar[iz,is] = moments.ppar[iz,is]
     end
     block_synchronize()
 
@@ -566,13 +569,14 @@ function ssp_rk!(pdf, scratch, t, t_input, vpa, z,
     end
 
     # update the pdf.norm and moments arrays as needed
+    final_scratch = scratch[istage]
     for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range, ivpa ∈ 1:vpa.n
-        pdf.norm[ivpa,iz,is] = scratch[istage].pdf[ivpa,iz,is]
+        pdf.norm[ivpa,iz,is] = final_scratch.pdf[ivpa,iz,is]
     end
     for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range
-        moments.dens[iz,is] = scratch[istage].density[iz,is]
-        moments.upar[iz,is] = scratch[istage].upar[iz,is]
-        moments.ppar[iz,is] = scratch[istage].ppar[iz,is]
+        moments.dens[iz,is] = final_scratch.density[iz,is]
+        moments.upar[iz,is] = final_scratch.upar[iz,is]
+        moments.ppar[iz,is] = final_scratch.ppar[iz,is]
     end
     #block_synchronize()
     update_pdf_unnorm!(pdf, moments, scratch[istage].temp_z_s, composition, z)
@@ -648,13 +652,15 @@ end
 # update the vector containing the pdf and any evolved moments of the pdf
 # for use in the Runge-Kutta time advance
 function update_solution_vector!(evolved, moments, istage, composition, vpa, z)
+    new_evolved = evolved[istage+1]
+    old_evolved = evolved[istage]
     for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range, ivpa ∈ 1:vpa.n
-        evolved[istage+1].pdf[ivpa,iz,is] = evolved[istage].pdf[ivpa,iz,is]
+        new_evolved.pdf[ivpa,iz,is] = old_evolved.pdf[ivpa,iz,is]
     end
     for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range
-        evolved[istage+1].density[iz,is] = evolved[istage].density[iz,is]
-        evolved[istage+1].upar[iz,is] = evolved[istage].upar[iz,is]
-        evolved[istage+1].ppar[iz,is] = evolved[istage].ppar[iz,is]
+        new_evolved.density[iz,is] = old_evolved.density[iz,is]
+        new_evolved.upar[iz,is] = old_evolved.upar[iz,is]
+        new_evolved.ppar[iz,is] = old_evolved.ppar[iz,is]
     end
     return nothing
 end
