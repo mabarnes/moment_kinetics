@@ -13,6 +13,7 @@ using Plots
 
 # include the test cases so that we can get inputs from them
 include("sound_wave.jl")
+include("sound_wave-2xres.jl")
 
 """
 Loads performance data from a file formatted by PerformanceTestUtils.upload_result()
@@ -284,6 +285,12 @@ function get_grid_sizes(prefix)
     prefix = splitpath(prefix)[end]
     if prefix == "sound_wave"
         inputs_list = SoundWavePerformance.inputs_list
+        # Use nz as the 'grid size' because that is the outer-loop in most of the 1D1V
+        # code (basically everything apart from z_advection!()).
+        grid_sizes = [input["z_nelement"] * (input["z_ngrid"] - 1) + 1
+                      for input in inputs_list]
+    elseif prefix == "sound_wave-2xres"
+        inputs_list = SoundWave2xResPerformance.inputs_list
         # Use nz as the 'grid size' because that is the outer-loop in most of the 1D1V
         # code (basically everything apart from z_advection!()).
         grid_sizes = [input["z_nelement"] * (input["z_ngrid"] - 1) + 1
