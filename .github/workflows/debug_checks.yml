@@ -12,6 +12,7 @@ jobs:
         #os: [ubuntu-latest, macOS-latest]
         os: [ubuntu-latest]
       fail-fast: false
+    timeout-minutes: 40
 
     steps:
       - uses: actions/checkout@v2
@@ -23,4 +24,4 @@ jobs:
       - name: Test examples
         run: |
           julia --project -e 'using MPI; MPI.install_mpiexecjl()'
-          ~/.julia/bin/mpiexecjl -np 4 julia --project --check-bounds=yes --compiled-modules=no debug_test/runtests.jl --debug 99
+          ~/.julia/bin/mpiexecjl -np 4 julia -Jmoment_kinetics.so --project --check-bounds=yes --compiled-modules=no debug_test/runtests.jl --debug 99
