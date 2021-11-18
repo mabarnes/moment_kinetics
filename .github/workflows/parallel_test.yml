@@ -32,9 +32,6 @@ jobs:
           #   terrible performance when oversubscribing.
           mpiexec -np 2 --mca rmaps_base_oversubscribe 1 julia --project=@. -Jmoment_kinetics.so -O3 --check-bounds=no test/runtests.jl --debug 1
           mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project=@. -Jmoment_kinetics.so -O3 --check-bounds=no test/runtests.jl --debug 1
-          ## Try the following if using MPI.jl's default mpich implementation
-          ## - was failing to recognise the --with-device argument though (which is
-          ##   needed to allow oversubscription without making the performance terrible)
-          #~/.julia/bin/mpiexecjl -np 2 --with-device=ch3:sock julia --project=@. -Jmoment_kinetics.so -O3 --check-bounds=no test/runtests.jl --debug 1
-          #~/.julia/bin/mpiexecjl -np 4 --with-device=ch3:sock julia --project=@. -Jmoment_kinetics.so -O3 --check-bounds=no test/runtests.jl --debug 1
+          # Note: MPI.jl's default implementation is mpich, which has a similar option
+          # `--with-device=ch3:sock`, but that needs to be set when compiling mpich.
         shell: bash
