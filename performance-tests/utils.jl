@@ -213,6 +213,18 @@ function extract_summary(result)
             maximum(times) * 1.e-9]
 end
 
+# Wrap the setup and cleanup functions so we can keep the state in an external
+# variable when benchmarking initialization with setup_moment_kinetics(). Necessary
+# because it doesn't seem to be possible to assign the output of the function being
+# benchmarked to a variable that can be passed to the teardown function.
+const mk_state_ref = Ref{Any}()
+function setup_wrapper!(input)
+    mk_state_ref[] = setup_moment_kinetics(input)
+end
+function cleanup_wrapper!()
+    cleanup_moment_kinetics!(mk_state_ref[][end-1:end]...)
+end
+
 _println0(s="") = block_rank[] == 0 && println(s)
 _display0(s="") = block_rank[] == 0 && display(s)
 const initialization_seconds = 20
@@ -250,11 +262,8 @@ function run_test(input)
     _println0()
     flush(stdout)
 
-    # This does not clean up the open files or MPI allocated memory, but hopefully it
-    # should not matter too much - this 'benchmark' is just a sanity check that nothing
-    # is horribly inefficient in initialization. Just in case, run after the main
-    # benchmark (which does clean up after itself).
-    initialization_result = @benchmark(setup_moment_kinetics($input),
+    initialization_result = @benchmark(setup_wrapper!($input),
+                                       teardown=cleanup_wrapper!(),
                                        seconds=initialization_seconds,
                                        samples=initialization_samples,
                                        evals=initialization_evals)
