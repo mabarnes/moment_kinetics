@@ -227,10 +227,10 @@ end
 
 _println0(s="") = block_rank[] == 0 && println(s)
 _display0(s="") = block_rank[] == 0 && display(s)
-const initialization_seconds = 20
-const initialization_samples = 100
+const initialization_seconds = Inf
+const initialization_samples = 40
 const initialization_evals = 1
-const benchmark_seconds = 60
+const benchmark_seconds = Inf
 const benchmark_samples = 100
 const benchmark_evals = 1
 """
