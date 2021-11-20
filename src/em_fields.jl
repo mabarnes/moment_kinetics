@@ -53,25 +53,21 @@ function update_phi!(fields, fvec, z, composition, z_range)
         if composition.electron_physics == boltzmann_electron_response
             N_e = 1.0
         elseif composition.electron_physics == boltzmann_electron_response_with_simple_sheath
-            #  calculate Sum_{i} Z_i n_i u_i = J_||i at z = 0 
+            #  calculate Sum_{i} Z_i n_i u_i = J_||i at z = 0
             jpar_i = 0.0
             @inbounds for is ∈ 1:composition.n_ion_species
                 jpar_i +=  fvec.density[1,is]*fvec.upar[1,is]
             end
             # Calculate N_e using J_||e at sheath entrance at z = 0 (lower boundary).
-            # Assuming pdf is a half maxwellian with boltzmann factor at wall, we have 
+            # Assuming pdf is a half maxwellian with boltzmann factor at wall, we have
             # J_||e = e N_e v_{th,e} exp[ e phi_wall / T_e ] / 2 sqrt{pi},
             # where positive sign above (and negative sign below)
             # is due to the fact that electrons reaching the wall flow towards more negative z.
-            # Using J_||e + J_||i = 0, and rearranging for N_e, we have 
-            N_e = - 2.0 * sqrt( pi * composition.me_over_mi) * jpar_i * exp( - composition.phi_wall / composition.T_e) 
+            # Using J_||e + J_||i = 0, and rearranging for N_e, we have
+            N_e = - 2.0 * sqrt( pi * composition.me_over_mi) * jpar_i * exp( - composition.phi_wall / composition.T_e)
             # See P.C. Stangeby, The Plasma Boundary of Magnetic Fusion Devices, IOP Publishing, Chpt 2, p75
-            
-            #io = open("phi_debug.txt","a")
-            #println(io,"phi_wall required", log(-2.0 * sqrt( pi * composition.me_over_mi) * jpar_i ) * composition.T_e)
-            #close(io)
         end
-        
+
         if composition.electron_physics ∈ (boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath)
             @inbounds for iz ∈ z_range
                 fields.phi[iz] = composition.T_e * log(z.scratch[iz])
@@ -83,9 +79,9 @@ function update_phi!(fields, fvec, z, composition, z_range)
             # end
         end
     end
-    
+
     ## can calculate phi at z = L and hence phi_wall(z=L) using jpar_i at z =L if needed
-    
+
 end
 
 end
