@@ -48,6 +48,8 @@ struct advection_input
     frequency::mk_float
     oscillation_amplitude::mk_float
 end
+@enum electron_physics_type boltzmann_electron_response boltzmann_electron_response_with_simple_sheath
+export electron_physics_type, boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath
 mutable struct grid_input_mutable
     # name of the variable associated with this coordinate
     name::String
@@ -147,6 +149,12 @@ mutable struct species_composition
     n_ion_species::mk_int
     # n_neutral_species is the number of evolved neutral species
     n_neutral_species::mk_int
+    # * if electron_physics=boltzmann_electron_response, the electron density is fixed
+    #   to be Nₑ*(eϕ/T_e)
+    # * if electron_physics=boltzmann_electron_response_with_simple_sheath, the electron
+    #   density is fixed to be Nₑ*(eϕ/T_e) and N_e is calculated using a current
+    #   condition at the wall
+    electron_physics::electron_physics_type
     # Species indices that represent ions
     ion_species_range::UnitRange{mk_int}
     # Species indices that represent neutrals
@@ -168,14 +176,16 @@ mutable struct species_composition
     # Is this processor the first in the group iterating over a given species, when
     # looping just over neutral species?
     first_proc_in_neutral_group::Bool
-    # if boltzmann_electron_response = true, the electron density is fixed to be Nₑ*(eϕ/T_e)
-    boltzmann_electron_response::Bool
     # electron temperature used for Boltzmann response
     T_e::mk_float
     # wall temperature used if 'wall' BC selected for z coordinate; normalised by electron temperature
     T_wall::mk_float
+    # wall potential used if electron_physics=boltzmann_electron_response_with_simple_sheath 
+    phi_wall::mk_float
     # ratio of the neutral particle mass to the ion mass
     mn_over_mi::mk_float
+    # ratio of the electron particle mass to the ion mass
+    me_over_mi::mk_float
     # scratch buffer whose size is n_species
     scratch::Vector{mk_float}
 end
