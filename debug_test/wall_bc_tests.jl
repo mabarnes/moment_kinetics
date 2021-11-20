@@ -19,6 +19,7 @@ test_input_finite_difference = Dict("n_ion_species" => 1,
                                     "evolve_moments_parallel_flow" => false,
                                     "evolve_moments_parallel_pressure" => false,
                                     "evolve_moments_conservation" => false,
+                                    "electron_physics" => "boltzmann_electron_response",
                                     "T_e" => 1.0,
                                     "T_wall" => 1.0,
                                     "initial_density1" => 1.0,
@@ -72,6 +73,11 @@ test_input_finite_difference = Dict("n_ion_species" => 1,
                                     "vpa_bc" => "periodic",
                                     "vpa_discretization" => "finite_difference")
 
+test_input_finite_difference_simple_sheath = merge(
+    test_input_finite_difference,
+    Dict("run_name" => "finite_difference_simple_sheath",
+         "electron_physics" => "boltzmann_electron_response_with_simple_sheath"))
+
 test_input_chebyshev = merge(test_input_finite_difference,
                              Dict("run_name" => "chebyshev_pseudospectral",
                                   "z_discretization" => "chebyshev_pseudospectral",
@@ -80,6 +86,11 @@ test_input_chebyshev = merge(test_input_finite_difference,
                                   "vpa_discretization" => "chebyshev_pseudospectral",
                                   "vpa_ngrid" => 3,
                                   "vpa_nelement" => 2))
+
+test_input_chebyshev_simple_sheath = merge(
+    test_input_finite_difference,
+    Dict("run_name" => "chebyshev_pseudospectral_simple_sheath",
+         "electron_physics" => "boltzmann_electron_response_with_simple_sheath"))
 
 """
 Run a test for a single set of parameters
@@ -110,7 +121,9 @@ function run_test(test_input; args...)
     input["run_name"] = name
 
     # run simulation
-    run_moment_kinetics(input)
+    @testset "$name" begin
+      run_moment_kinetics(input)
+    end
 end
 
 function runtests()
@@ -120,10 +133,12 @@ function runtests()
 
         #@testset "finite difference" begin
         #    run_test(test_input_finite_difference)
+        #    run_test(test_input_finite_difference_simple_sheath)
         #end
 
         @testset "Chebyshev" begin
             run_test(test_input_chebyshev)
+            run_test(test_input_chebyshev_simple_sheath)
         end
     end
 end
