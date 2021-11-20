@@ -58,8 +58,8 @@ function create_and_init_pdf(moments, vpa, z, n_species, species)
             # updates pdf_norm to contain pdf / density, so that ∫dvpa pdf.norm = 1,
             # ∫dwpa wpa * pdf.norm = 0, and ∫dwpa m_s (wpa/vths)^2 pdf.norm = 1/2
             # to machine precision
-            @views init_pdf_over_density!(pdf_norm[:,:,is], species[is], vpa, z,
-                                          moments.vth[:,is], moments.vpa_norm_fac[:,is])
+            @views init_pdf_over_density!(pdf_norm[:,:,is], species[is], vpa, z, moments.vth[:,is], moments.upar[:,is],
+                                          moments.vpa_norm_fac[:,is], moments.evolve_upar, moments.evolve_ppar)
         end
     end
     pdf_unnorm = copy(pdf_norm)
@@ -119,19 +119,36 @@ function init_upar!(upar, z, spec, n_species)
                 (spec[is].z_IC.upar_amplitude
                  * cos(2.0*π*spec[is].z_IC.wavenumber*z.grid/z.L
                        + spec[is].z_IC.upar_phase))
+        elseif spec[is].z_IC.initialization_option == "gaussian" # "linear"
+            # initial condition is linear in z
+            # this is designed to give a nonzero J_{||i} at endpoints in z
+            # necessary for an electron sheath condition involving J_{||i}
+            # option "gaussian" to be consistent with usual init option for now
+            @. upar[:,is] =
+                (spec[is].z_IC.upar_amplitude * 2.0 *       
+                       (z.grid[:] - z.grid[floor(Int,z.n/2)])/z.L)
         else
             @. upar[:,is] = 0.0
         end
     end
     return nothing
 end
-function init_pdf_over_density!(pdf, spec, vpa, z, vth, vpa_norm_fac)
+function init_pdf_over_density!(pdf, spec, vpa, z, vth, upar, vpa_norm_fac, evolve_upar, evolve_ppar)
     if spec.vpa_IC.initialization_option == "gaussian"
-        # initial condition is an unshifted Gaussian
+        # initial condition is a Gaussian in the peculiar velocity
         # if evolve_ppar = true, then vpa coordinate is (vpa - upar)/vth;
         # otherwise it is either (vpa-upar) or simply vpa
         for iz ∈ 1:z.n
-            @. pdf[:,iz] = exp(-(vpa.grid*(vpa_norm_fac[iz]/vth[iz]))^2) / vth[iz]
+            # obtain (vpa - upar)/vth
+            if evolve_ppar
+                @. vpa.scratch = vpa.grid
+            elseif evolve_upar
+                @. vpa.scratch = vpa.grid/vth[iz]
+            else
+                @. vpa.scratch = (vpa.grid - upar[iz])/vth[iz]
+            end
+            #@. pdf[:,iz] = exp(-(vpa.grid*(vpa_norm_fac[iz]/vth[iz]))^2) / vth[iz]
+            @. pdf[:,iz] = exp(-vpa.scratch^2) / vth[iz]
         end
         for iz ∈ 1:z.n
             # densfac = the integral of the pdf over v-space, which should be unity,

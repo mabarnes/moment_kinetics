@@ -8,18 +8,27 @@ using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float
 using ..file_io: input_option_error, open_output_file
 using ..finite_differences: fd_check_option
-using ..input_structs: evolve_moments_options
-using ..input_structs: time_input
-using ..input_structs: advection_input, advection_input_mutable
-using ..input_structs: grid_input, grid_input_mutable
-using ..input_structs: initial_condition_input, initial_condition_input_mutable
-using ..input_structs: species_parameters, species_parameters_mutable
-using ..input_structs: species_composition
-using ..input_structs: drive_input, drive_input_mutable
-using ..input_structs: collisions_input
+using ..input_structs
 
 @enum RunType single performance_test scan
 const run_type = single
+
+# Utility function for converting a string to an Enum when getting from a Dict, based on
+# the type of the default value
+import Base: get
+function get(d::Dict, key, default::Enum)
+    valstring = get(d, key, nothing)
+    if valstring == nothing
+        return default
+    # instances(typeof(default)) gets the possible values of the Enum. Then convert to
+    # Symbol, then to String.
+    elseif valstring ∈ String.(Symbol.(instances(typeof(default))))
+        return eval(Symbol(valstring))
+    else
+        error("Expected a $(typeof(default)), but '$valstring' is not in "
+              * "$(instances(typeof(default)))")
+    end
+end
 
 function mk_input(scan_input=Dict())
 
@@ -29,13 +38,15 @@ function mk_input(scan_input=Dict())
     # n_neutral_species is the number of evolved neutral species
     # currently only n_neutral_species = 0 is supported
     n_neutral_species = 1
-    # if boltzmann_electron_response = true, then the electron
-    # density is fixed to be N_e*(eϕ/T_e)
-    # currently this is the only supported option
-    boltzmann_electron_response = true
-
+    # * if electron_physics=boltzmann_electron_response, then the electron density is
+    #   fixed to be N_e*(eϕ/T_e)
+    # * if electron_physics=boltzmann_electron_response_with_simple_sheath, then the
+    #   electron density is fixed to be N_e*(eϕ/T_e) and N_e is calculated w.r.t a
+    #   reference value using J_||e + J_||i = 0 at z = 0
+    electron_physics = get(scan_input, "electron_physics", boltzmann_electron_response)
+    
     z, vpa, species, composition, drive, evolve_moments, collisions =
-        load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_response)
+        load_defaults(n_ion_species, n_neutral_species, electron_physics)
 
     # this is the prefix for all output files associated with this run
     run_name = get(scan_input, "run_name", "wallBC")
@@ -53,9 +64,13 @@ function mk_input(scan_input=Dict())
     # set initial Tₑ = 1
     composition.T_e = get(scan_input, "T_e", 1.0)
     # set wall temperature T_wall = Tw/Te
-    composition.T_wall = 1.0
+    composition.T_wall = get(scan_input, "T_wall", 1.0)
     # set initial neutral temperature Tn/Tₑ = 1
     # set initial nᵢ/Nₑ = 1.0
+    # set phi_wall at z = 0
+    composition.phi_wall = get(scan_input, "phi_wall", 0.0)
+    
+    
     species[1].z_IC.initialization_option = get(scan_input, "z_IC_option1", "gaussian")
     species[1].initial_density = get(scan_input, "initial_density1", 1.0)
     species[1].initial_temperature = get(scan_input, "initial_temperature1", 1.0)
@@ -199,7 +214,7 @@ function mk_input(scan_input=Dict())
     return all_inputs
 end
 
-function load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_response)
+function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     ############## options related to the equations being solved ###############
     evolve_density = false
     evolve_parallel_flow = false
@@ -286,7 +301,7 @@ function load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_resp
     #############################################################################
     # define default values and create corresponding mutable structs holding
     # information about the composition of the species and their initial conditions
-    if boltzmann_electron_response
+    if electron_physics ∈ (boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath)
         n_species = n_ion_species + n_neutral_species
     else
         n_species = n_ion_speces + n_neutral_species + 1
@@ -295,10 +310,14 @@ function load_defaults(n_ion_species, n_neutral_species, boltzmann_electron_resp
     T_e = 1.0
     # temperature at the entrance to the wall in terms of the electron temperature
     T_wall = 1.0
+    # wall potential at z = 0
+    phi_wall = 0.0
     # ratio of the neutral particle mass to the ion particle mass
     mn_over_mi = 1.0
+    # ratio of the electron particle mass to the ion particle mass
+    me_over_mi = 1.0/1836.0
     composition = species_composition(n_species, n_ion_species, n_neutral_species,
-        boltzmann_electron_response, T_e, T_wall, mn_over_mi)
+        electron_physics, T_e, T_wall, phi_wall, mn_over_mi, me_over_mi)
     species = Array{species_parameters_mutable,1}(undef,n_species)
     # initial temperature for each species defaults to Tₑ
     initial_temperature = 1.0

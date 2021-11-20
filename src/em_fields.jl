@@ -5,6 +5,7 @@ export update_phi!
 
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_float
+using ..input_structs
 using ..velocity_moments: update_density!
 
 struct fields
@@ -32,15 +33,44 @@ function update_phi!(fields, fvec, z, composition)
     @boundscheck size(fields.phi0,1) == z.n || throw(BoundsError(fields.phi0))
     @boundscheck size(fvec.density,1) == z.n || throw(BoundsError(fvec.density))
     @boundscheck size(fvec.density,2) == composition.n_species || throw(BoundsError(fvec.density))
-    if composition.boltzmann_electron_response
-        z.scratch .= @view(fvec.density[:,1])
-        @inbounds for is ∈ 2:composition.n_ion_species
-            for iz ∈ 1:z.n
-                z.scratch[iz] += fvec.density[iz,is]
-            end
+    
+    # first, calculate Sum_{i} Z_i n_i
+    z.scratch .= 0.0
+    @inbounds for is ∈ 1:composition.n_ion_species
+        for iz ∈ 1:z.n
+            z.scratch[iz] += fvec.density[iz,is]
         end
+    end
+    
+    
+    if composition.electron_physics == boltzmann_electron_response
+        N_e = 1.0
+    elseif composition.electron_physics == boltzmann_electron_response_with_simple_sheath
+        #  calculate Sum_{i} Z_i n_i u_i = J_||i at z = 0 
+        jpar_i = 0.0
+        @inbounds for is ∈ 1:composition.n_ion_species
+            jpar_i +=  fvec.density[1,is]*fvec.upar[1,is]
+        end
+        # Calculate N_e using J_||e at sheath entrance at z = 0 (lower boundary).
+        # Assuming pdf is a half maxwellian with boltzmann factor at wall, we have 
+        # J_||e = e N_e v_{th,e} exp[ e phi_wall / T_e ] / 2 sqrt{pi},
+        # where positive sign above (and negative sign below)
+        # is due to the fact that electrons reaching the wall flow towards more negative z.
+        # Using J_||e + J_||i = 0, and rearranging for N_e, we have 
+        N_e = - 2.0 * sqrt( pi * composition.me_over_mi) * jpar_i * exp( - composition.phi_wall / composition.T_e) 
+        # See P.C. Stangeby, The Plasma Boundary of Magnetic Fusion Devices, IOP Publishing, Chpt 2, p75
+        
+        #io = open("phi_debug.txt","a")
+        #println(io,"phi_wall required", log(-2.0 * sqrt( pi * composition.me_over_mi) * jpar_i ) * composition.T_e)
+        #close(io)
+    end
+    
+    
+    if composition.electron_physics ∈ (boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath)
+        # finally, calculate phi from 
+        # Sum_{i} Z_i n_i = N_e exp[ e phi / T_e]
         @inbounds for iz ∈ 1:z.n
-            fields.phi[iz] = composition.T_e * log(z.scratch[iz])
+            fields.phi[iz] =  composition.T_e * log(z.scratch[iz]/ N_e )
         end
         # if fields.force_phi
         #     @inbounds for iz ∈ 1:z.n
@@ -48,6 +78,9 @@ function update_phi!(fields, fvec, z, composition)
         #     end
         # end
     end
+    
+    ## can calculate phi at z = L and hence phi_wall(z=L) using jpar_i at z =L if needed
+    
 end
 
 end
