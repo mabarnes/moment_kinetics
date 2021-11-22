@@ -6,7 +6,7 @@ export find_departure_points!
 export project_characteristics_onto_grid!
 
 using ..type_definitions: mk_float, mk_int
-using ..array_allocation: allocate_shared_float, allocate_shared_int
+using ..array_allocation: allocate_shared_float, allocate_shared_int, sort_dimensions
 using ..communication: block_rank, MPISharedArray
 
 # structure semi_lagrange_info contains the basic information needed
@@ -30,18 +30,38 @@ struct semi_lagrange_info{N}
     # crosses the upwind bounary; only needed if BC = "periodic"
     n_transits::MPISharedArray{mk_int,N}
 end
-# create and return a structure containing the arrays needed for the
-# semi-Lagrange time advance
-function setup_semi_lagrange(dims...)
+"""
+create and return a structure containing the arrays needed for the semi-Lagrange time
+advance
+
+Arguments
+---------
+dims : name=n::mk_int
+    Keyword arguments give the name (key) and size (value) of the dimensions. The first
+    keyword argument is the dimension in which advection is calculated with the structs
+    created here. The remaining keyword arguments are the other dimensions - the order
+    that the other dimensions/coordinates are given in does not matter.
+
+Returns
+-------
+semi_lagrange_info
+    Struct containing the information and temporary arrays needed for the semi-Lagrange
+    scheme.
+"""
+function setup_semi_lagrange(; dims...)
+    advection_dim = NamedTuple{keys(dims)[1]}((values(dims)[1],))
+    sorted_other_names = sort_dimensions(keys(dims)[2:end])
+    other_dims = NamedTuple{(name for name in sorted_other_names)}(
+        (dims[name] for name in sorted_other_names))
     # create an array to hold crossing times for each cell
-    crossing_time = allocate_shared_float(dims...)
+    crossing_time = allocate_shared_float_keep_order(advection_dim..., other_dims...)
     # create an array to hold cumulative trajectory time for each characteristic
-    trajectory_time = allocate_shared_float(dims...)
+    trajectory_time = allocate_shared_float_keep_order(advection_dim..., other_dims...)
     # create array for the departure points at time level m
-    dep_pts = allocate_shared_float(dims...)
+    dep_pts = allocate_shared_float_keep_order(advection_dim..., other_dims...)
     # create array for the indices of the nearest downwind grid point to
     # the departure point (which is in general between grid points)
-    dep_idx = allocate_shared_int(dims...)
+    dep_idx = allocate_shared_int_keep_order(advection_dim..., other_dims...)
     # initialize the departure indices to be the save as the arrival indices
     # this allows for a clean algorithm that can use semi-Lagrange or not
     # without a lot of conditional statements within inner loops
@@ -53,7 +73,7 @@ function setup_semi_lagrange(dims...)
     # create array containing approximate characteristic speed
     # initialize characteristic speed to zero, in case one wants to
     # do a time advance without use of semi-Lagrange treatment
-    characteristic_speed = allocate_shared_float(dims...)
+    characteristic_speed = allocate_shared_float(advection_dim..., other_dims...)
     if block_rank[] == 0
         characteristic_speed .= 0.0
     end

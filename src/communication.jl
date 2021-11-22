@@ -12,11 +12,13 @@ loop ranges), as at the moment we only run with 1 ion species and 1 neutral spec
 """
 module communication
 
-export allocate_shared, block_synchronize, block_rank, block_size, comm_block,
-       comm_world, finalize_comms!, initialize_comms!, get_coordinate_local_range,
-       get_species_local_range, global_rank, MPISharedArray
+export allocate_shared, allocate_shared_keep_order, block_synchronize,
+       block_rank, block_size, comm_block, comm_world, finalize_comms!,
+       initialize_comms!, get_coordinate_local_range, get_species_local_range,
+       global_rank, MPISharedArray
 
 using MPI
+using NamedDims
 using SHA
 
 using ..debugging
@@ -58,8 +60,8 @@ end
 
     export DebugMPISharedArray
 
-    struct DebugMPISharedArray{T, N} <: AbstractArray{T, N}
-        data::Array{T,N}
+    struct DebugMPISharedArray{L, T, N} <: AbstractArray{T, N}
+        data::NamedDimsArray{L,T,N}
         is_read::Array{Bool,N}
         is_written::Array{Bool, N}
         creation_stack_trace::String
@@ -93,12 +95,12 @@ end
 
     # Define functions needed for AbstractArray interface
     # (https://docs.julialang.org/en/v1/manual/interfaces/#man-interface-array)
-    Base.size(A::DebugMPISharedArray{T, N}) where {T, N} = size(A.data)
-    function Base.getindex(A::DebugMPISharedArray{T, N}, I::Vararg{mk_int,N}) where {T, N}
+    Base.size(A::DebugMPISharedArray{L, T, N}) where {L, T, N} = size(A.data)
+    function Base.getindex(A::DebugMPISharedArray{L, T, N}, I::Vararg{mk_int,N}) where {L, T, N}
         A.is_read[I...] = true
         return getindex(A.data, I...)
     end
-    function Base.setindex!(A::DebugMPISharedArray{T, N}, v::T, I::Vararg{mk_int,N}) where {T, N}
+    function Base.setindex!(A::DebugMPISharedArray{L, T, N}, v::T, I::Vararg{mk_int,N}) where {L, T, N}
         A.is_written[I...] = true
         return setindex!(A.data, v, I...)
     end
@@ -108,6 +110,10 @@ end
     # Define 3 versions here because Julia dispatches to the most specific applicable
     # method, so need to make sure these are the most specific versions, regardless of
     # how the type passed to the first argument was defined.
+    function Base.convert(::Type{NamedDimsArray{L,T,N}} where {L,T,N}, a::DebugMPISharedArray)
+        error("Forbidden to convert DebugMPISharedArray to Array - this would "
+              * "silently disable the debug checks")
+    end
     function Base.convert(::Type{Array{T,N}} where {T,N}, a::DebugMPISharedArray)
         error("Forbidden to convert DebugMPISharedArray to Array - this would "
               * "silently disable the debug checks")
@@ -127,7 +133,7 @@ end
     const global_debugmpisharedarray_store = Vector{DebugMPISharedArray}(undef, 0)
 end
 
-const MPISharedArray = @debug_shared_array_ifelse(DebugMPISharedArray, Array)
+const MPISharedArray = @debug_shared_array_ifelse(DebugMPISharedArray, NamedDimsArray)
 
 """
 Get a shared-memory array of `mk_float` (shared by all processes in a 'block')
@@ -150,10 +156,14 @@ Returns
 -------
 Array{mk_float}
 """
-function allocate_shared(T, dims)
+function allocate_shared(T; dims...)
+    return allocate_shared_keep_order(T; dims...)
+end
+# variant where dimensions of returned array are not sorted
+function allocate_shared_keep_order(T; dims...)
     br = block_rank[]
     bs = block_size[]
-    n = prod(dims)
+    n = prod(values(dims))
 
     if br == 0
         # Allocate points on rank-0 for simplicity
@@ -203,7 +213,11 @@ function allocate_shared(T, dims)
     # put them all in the same global_Win_store - this won't introduce type instability
     push!(global_Win_store, win)
 
-    array = unsafe_wrap(Array, base_ptr, dims)
+    # values(dims) returns a NamedTuple, so need to call values() on the result
+    # to get a Tuple of the actual values - see
+    # https://discourse.julialang.org/t/unexpected-behaviour-of-values-for-generic-kwargs/71938
+    bare_array = unsafe_wrap(Array, base_ptr, values(values(dims)))
+    array = NamedDimsArray{keys(dims)}(bare_array)
 
     @debug_shared_array begin
         # If @debug_shared_array is active, create DebugMPISharedArray instead of Array

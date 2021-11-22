@@ -9,7 +9,7 @@ using ..communication: get_coordinate_local_range
 using ..file_io: open_output_file
 using ..chebyshev: scaled_chebyshev_grid
 using ..quadrature: composite_simpson_weights
-using ..input_structs: advection_input
+using ..input_structs: advection_input, species_composition
 
 # structure containing basic information related to coordinates
 struct coordinate
@@ -70,7 +70,9 @@ end
 # create arrays associated with a given coordinate,
 # setup the coordinate grid, and populate the coordinate structure
 # containing all of this information
-function define_coordinate(input, composition=nothing)
+function define_coordinate(input,
+                           name::Symbol,
+                           composition::Union{species_composition,Nothing}=nothing)
     # total number of grid points is ngrid for the first element
     # plus ngrid-1 unique points for each additional element due
     # to the repetition of a point at the element boundary
@@ -82,23 +84,23 @@ function define_coordinate(input, composition=nothing)
     end
     # obtain index mapping from full grid to the
     # grid within each element (igrid, ielement)
-    igrid, ielement = full_to_elemental_grid_map(input.ngrid, input.nelement, n)
+    igrid, ielement = full_to_elemental_grid_map(name, input.ngrid, input.nelement, n)
     # obtain index mapping from the grid within each element
     # to the full grid
     imin, imax = elemental_to_full_grid_map(input.ngrid, input.nelement)
     # initialize the grid and the integration weights associated with the grid
     # also obtain the Chebyshev theta grid and spacing if chosen as discretization option
-    grid, wgts, uniform_grid = init_grid(input.ngrid, input.nelement, n, input.L,
-        imin, imax, igrid, input.discretization)
+    grid, wgts, uniform_grid = init_grid(name, input.ngrid, input.nelement, n, input.L,
+                                         imin, imax, igrid, input.discretization)
     # calculate the widths of the cells between neighboring grid points
-    cell_width = grid_spacing(grid, n)
+    cell_width = grid_spacing(name, grid, n)
     # duniform_dgrid is the local derivative of the uniform grid with respect to
     # the coordinate grid
-    duniform_dgrid = allocate_float(input.ngrid, input.nelement)
+    duniform_dgrid = allocate_float(grid=input.ngrid, element=input.nelement)
     # scratch is an array used for intermediate calculations requiring n entries
-    scratch = allocate_float(n)
+    scratch = allocate_float(; name => n)
     # scratch_2d is an array used for intermediate calculations requiring ngrid x nelement entries
-    scratch_2d = allocate_float(input.ngrid, input.nelement)
+    scratch_2d = allocate_float(grid=input.ngrid, element=input.nelement)
     # struct containing the advection speed options/inputs for this coordinate
     advection = input.advection
 
@@ -116,8 +118,8 @@ function get_local_loop_ranges(n, composition)
            get_coordinate_local_range(n, composition.n_neutral_species)
 end
 # setup a grid with n grid points on the interval [-L/2,L/2]
-function init_grid(ngrid, nelement, n, L, imin, imax, igrid, discretization)
-    uniform_grid = equally_spaced_grid(n,L)
+function init_grid(name::Symbol, ngrid, nelement, n, L, imin, imax, igrid, discretization)
+    uniform_grid = equally_spaced_grid(name,n,L)
     if discretization == "chebyshev_pseudospectral"
         # initialize chebyshev grid defined on [-L/2,L/2]
         # with n grid points chosen to facilitate
@@ -125,21 +127,21 @@ function init_grid(ngrid, nelement, n, L, imin, imax, igrid, discretization)
         # needed to obtain Chebyshev spectral coefficients
         # 'wgts' are the integration weights attached to each grid points
         # that are those associated with Clenshaw-Curtis quadrature
-        grid, wgts = scaled_chebyshev_grid(ngrid, nelement, n, L, imin, imax)
+        grid, wgts = scaled_chebyshev_grid(name, ngrid, nelement, n, L, imin, imax)
     elseif discretization == "finite_difference"
         # initialize equally spaced grid defined on [-L/2,L/2]
         grid = uniform_grid
         # use composite Simpson's rule to obtain integration weights associated with this coordinate
-        wgts = composite_simpson_weights(grid)
+        wgts = composite_simpson_weights(name, grid)
     end
     # return the locations of the grid points
     return grid, wgts, uniform_grid
 end
 # setup an equally spaced grid with n grid points
 # between [-L/2,L/2]
-function equally_spaced_grid(n, L)
+function equally_spaced_grid(name::Symbol, n, L)
     # create array for the equally spaced grid with n grid points
-    grid = allocate_float(n)
+    grid = allocate_float(; name => n)
     @inbounds for i ∈ 1:n
         grid[i] = -0.5*L + (i-1)*L/(n-1)
     end
@@ -148,9 +150,9 @@ end
 # given a set of grid point locations
 # calculate and return the length
 # associated with the cell between adjacent grid points
-function grid_spacing(grid, n)
+function grid_spacing(name::Symbol, grid, n)
     # array to contain the cell widths
-    d = allocate_float(n)
+    d = allocate_float(; name => n)
     @inbounds begin
         for i ∈ 2:n
             d[i-1] =  grid[i]-grid[i-1]
@@ -163,9 +165,9 @@ function grid_spacing(grid, n)
 end
 # setup arrays containing a map from the unpacked grid point indices
 # to the element index and the grid point index within each element
-function full_to_elemental_grid_map(ngrid, nelement, n)
-    igrid = allocate_int(n)
-    ielement = allocate_int(n)
+function full_to_elemental_grid_map(name::Symbol, ngrid, nelement, n)
+    igrid = allocate_int(; name => n)
+    ielement = allocate_int(; name => n)
     k = 1
     for i ∈ 1:ngrid
         ielement[k] = 1
@@ -188,8 +190,8 @@ end
 # returns imin and imax, which contain the minimum and maximum
 # indices on the full grid for each element
 function elemental_to_full_grid_map(ngrid, nelement)
-    imin = allocate_int(nelement)
-    imax = allocate_int(nelement)
+    imin = allocate_int(element=nelement)
+    imax = allocate_int(element=nelement)
     @inbounds begin
         # the first element contains ngrid entries
         imin[1] = 1

@@ -17,13 +17,13 @@ import ..interpolation: interpolate_to_grid_1d
 struct chebyshev_info{TForward <: FFTW.cFFTWPlan, TBackward <: AbstractFFTs.ScaledPlan}
     # fext is an array for storing f(z) on the extended domain needed
     # to perform complex-to-complex FFT using the fact that f(theta) is even in theta
-    fext::Array{Complex{mk_float},1}
+    fext::AbstractArray{Complex{mk_float},1}
     # Chebyshev spectral coefficients of distribution function f
     # first dimension contains location within element
     # second dimension indicates the element
-    f::Array{mk_float,2}
+    f::AbstractArray{mk_float,2}
     # Chebyshev spectral coefficients of derivative of f
-    df::Array{mk_float,1}
+    df::AbstractArray{mk_float,1}
     # plan for the complex-to-complex, in-place, forward Fourier transform on Chebyshev-Gauss-Lobatto grid
     forward::TForward
     # plan for the complex-to-complex, in-place, backward Fourier transform on Chebyshev-Gauss-Lobatto grid
@@ -38,19 +38,19 @@ function setup_chebyshev_pseudospectral(coord)
     # into a complex transform on [0,2π], which is more efficient in FFTW
     ngrid_fft = 2*(coord.ngrid-1)
     # create array for f on extended [0,2π] domain in theta = ArcCos[z]
-    fext = allocate_complex(ngrid_fft)
+    fext = allocate_complex(k=ngrid_fft)
     # create arrays for storing Chebyshev spectral coefficients of f and f'
-    fcheby = allocate_float(coord.ngrid, coord.nelement)
-    dcheby = allocate_float(coord.ngrid)
+    fcheby = allocate_float(grid=coord.ngrid, element=coord.nelement)
+    dcheby = allocate_float(grid=coord.ngrid)
     # setup the plans for the forward and backward Fourier transforms
-    forward_transform = plan_fft!(fext, flags=FFTW.MEASURE)
-    backward_transform = plan_ifft!(fext, flags=FFTW.MEASURE)
+    forward_transform = plan_fft!(parent(fext), flags=FFTW.MEASURE)
+        backward_transform = plan_ifft!(parent(fext), flags=FFTW.MEASURE)
     # return a structure containing the information needed to carry out
     # a 1D Chebyshev transform
     return chebyshev_info(fext, fcheby, dcheby, forward_transform, backward_transform)
 end
 # initialize chebyshev grid scaled to interval [-box_length/2, box_length/2]
-function scaled_chebyshev_grid(ngrid, nelement, n, box_length, imin, imax)
+function scaled_chebyshev_grid(name::Symbol, ngrid, nelement, n, box_length, imin, imax)
     # initialize chebyshev grid defined on [1,-1]
     # with n grid points chosen to facilitate
     # the fast Chebyshev transform (aka the discrete cosine transform)
@@ -58,7 +58,7 @@ function scaled_chebyshev_grid(ngrid, nelement, n, box_length, imin, imax)
     # this grid goes from +1 to -1
     chebyshev_grid = chebyshevpoints(ngrid)
     # create array for the full grid
-    grid = allocate_float(n)
+    grid = allocate_float(; name => n)
     # setup the scale factor by which the Chebyshev grid on [-1,1]
     # is to be multiplied to account for the full domain [-L/2,L/2]
     # and the splitting into nelement elements with ngrid grid points
@@ -257,7 +257,7 @@ function interpolate_to_grid_1d(newgrid, f, coord, chebyshev::chebyshev_info)
 end
 function chebyshev_interpolate_single_element(newgrid, f, j, coord, chebyshev)
     # Temporary buffer to store Chebyshev coefficients
-    cheby_f = allocate_float(coord.ngrid)
+    cheby_f = allocate_float(grid=coord.ngrid)
 
     # Array for the result
     result = similar(newgrid, mk_float)
@@ -321,7 +321,7 @@ function chebyshevmoments(N)
 end
 # returns the Chebyshev-Gauss-Lobatto grid points on an n point grid
 function chebyshevpoints(n)
-    grid = allocate_float(n)
+    grid = Vector{mk_float}(undef, n)
     nfac = 1/(n-1)
     @inbounds begin
         # calculate z = cos(θ) ∈ [1,-1]

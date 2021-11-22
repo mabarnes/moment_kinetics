@@ -6,73 +6,101 @@ export calculate_explicit_advection!
 export update_boundary_indices!
 export advance_f_local!
 
+using Base.Iterators: take, rest
+
 using ..type_definitions: mk_float, mk_int
-using ..array_allocation: allocate_shared_float, allocate_shared_int
+using ..array_allocation: allocate_shared_float_keep_order,
+                          allocate_shared_int_keep_order, sort_dimensions
 using ..calculus: derivative!
 using ..communication: block_rank, block_synchronize, MPISharedArray
 
 # structure containing the basic arrays associated with the
 # advection terms appearing in the advection equation for each coordinate
-mutable struct advection_info{L,M,N}
+mutable struct advection_info{D1,D2,D3,N1,N2,N3}
     # rhs is the sum of the advection terms appearing on the righthand side
     # of the equation
-    rhs::MPISharedArray{mk_float, L}
+    rhs::MPISharedArray{D1, mk_float, N1}
     # df is the derivative of the distribution function f with respect
     # to the coordinate associated with this set of advection terms
     # it has dimensions of nelement x ngrid_per_element
-    df::MPISharedArray{mk_float, M}
+    df::MPISharedArray{D2, mk_float, N2}
     # speed is the component of the advection speed along this coordinate axis
-    speed::MPISharedArray{mk_float, L}
+    speed::MPISharedArray{D1, mk_float, N1}
     # if using semi-Lagrange approach,
     # modified_speed is delta / dt, where delta for a given characteristic
     # is the displacement from the arrival point to the
     # (generally off-grid) departure point using the coordinate in which
     # the grid is equally spaced (a re-scaling of the Chebyshev theta coordinate);
     # otherwise, modified_speed = speed
-    modified_speed::MPISharedArray{mk_float, L}
+    modified_speed::MPISharedArray{D1, mk_float, N1}
     # adv_fac is the advection factor that multiplies df in the advection term
-    adv_fac::MPISharedArray{mk_float, L}
+    adv_fac::MPISharedArray{D1, mk_float, N1}
     # upwind_idx is the boundary index for the upwind boundary
-    upwind_idx::MPISharedArray{mk_int, N}
+    upwind_idx::MPISharedArray{D3, mk_int, N3}
     # downwind_idx is the boundary index for the downwind boundary
-    downwind_idx::MPISharedArray{mk_int, N}
+    downwind_idx::MPISharedArray{D3, mk_int, N3}
     # upwind_increment is the index increment used when sweeping in the upwind direction
-    upwind_increment::MPISharedArray{mk_int, N}
+    upwind_increment::MPISharedArray{D3, mk_int, N3}
 end
-# create arrays needed to compute the advection term(s) for a 1D problem
-function setup_advection(nspec, coords...)
+"""
+Create arrays needed to compute the advection term(s) for a 1D problem
+
+Arguments
+---------
+nspec : mk_int
+    Number of species
+coords : name=coord::coordinate
+    Keyword arguments give the name (key) and coordinate (value) for the phase space
+    dimensions. The first keyword argument is the dimension in which advection is
+    calculated with the structs created here. The remaining keyword arguments are the
+    other dimensions - the order that the other dimensions/coordinates are given in does
+    not matter.
+
+Returns
+-------
+Vector{advection_info}
+    Vector of structs containing, for each species, the information and temporary arrays
+    needed to calculate advection in the dimension corresponding to the first of the
+    coords keyword arguments.
+"""
+function setup_advection(nspec; coords...)
     # allocate an array containing structures with much of the info needed
     # to do the 1D advection time advance
     ncoord = length(coords)
-    advection = Array{advection_info{ncoord,ncoord+1,ncoord-1},1}(undef, nspec)
-    # store all of this information in a structure and return it
-    for is ∈ 1:nspec
-        advection[is] = setup_advection_per_species(coords...)
-    end
-    return advection
+    return [setup_advection_per_species(; coords...) for _ ∈ 1:nspec]
 end
-# create arrays needed to compute the advection term(s)
-function setup_advection_per_species(coords...)
+# Create arrays needed to compute the advection term(s).
+# The first coordinate argument is the dimension in which advection is calculated with
+# the struct created here. The following arguments are the remaining phase space
+# dimensions, and their order does not matter.
+function setup_advection_per_species(; coords...)
+    # values(coords) returns a NamedTuple, so need to call values() on the result
+    # to get a Tuple of the actual values - see
+    # https://discourse.julialang.org/t/unexpected-behaviour-of-values-for-generic-kwargs/71938
+    advection_dim = NamedTuple{(keys(coords)[1],)}((values(values(coords))[1].n,))
+    sorted_other_names = sort_dimensions(keys(coords)[2:end])
+    other_dims = NamedTuple{sorted_other_names}(
+        Tuple(coords[name].n for name in sorted_other_names))
     # create array for storing the explicit advection terms appearing
     # on the righthand side of the equation
-    rhs = allocate_shared_float([coord.n for coord in coords]...)
+    rhs = allocate_shared_float_keep_order(; advection_dim..., other_dims...)
     # create array for storing ∂f/∂(coordinate)
     # NB: need to store on nelement x ngrid_per_element array, as must keep info
     # about multi-valued derivative at overlapping point at element boundaries
-    df = allocate_shared_float(coords[1].ngrid, coords[1].nelement,
-                               [coord.n for coord in coords[2:end]]...)
+    df = allocate_shared_float_keep_order(;
+        grid=coords[1].ngrid, element=coords[1].nelement, other_dims...)
     # create array for storing the advection coefficient
-    adv_fac = allocate_shared_float([coord.n for coord in coords]...)
+    adv_fac = allocate_shared_float_keep_order(; advection_dim..., other_dims...)
     # create array for storing the speed along this coordinate
-    speed = allocate_shared_float([coord.n for coord in coords]...)
+    speed = allocate_shared_float_keep_order(; advection_dim..., other_dims...)
     # create array for storing the modified speed along this coordinate
-    modified_speed = allocate_shared_float([coord.n for coord in coords]...)
+    modified_speed = allocate_shared_float_keep_order(; advection_dim..., other_dims...)
     # index for the upwind boundary; will be updated before use so value irrelevant
-    upwind_idx = allocate_shared_int([coord.n for coord in coords[2:end]]...)
+    upwind_idx = allocate_shared_int_keep_order(; other_dims...)
     # index for the downwind boundary; will be updated before use so value irrelevant
-    downwind_idx = allocate_shared_int([coord.n for coord in coords[2:end]]...)
+    downwind_idx = allocate_shared_int_keep_order(; other_dims...)
     # index increment used when sweeping in the upwind direction; will be updated before use
-    upwind_increment = allocate_shared_int([coord.n for coord in coords[2:end]]...)
+    upwind_increment = allocate_shared_int_keep_order(; other_dims...)
     if block_rank[] == 0
         upwind_idx[:] .= 1
         downwind_idx[:] .= coords[1].n

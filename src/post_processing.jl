@@ -235,7 +235,7 @@ function calculate_and_write_frequencies(fid, run_name, ntime, time, z, itime_mi
     if pp.calculate_frequencies
         println("Calculating the frequency and damping/growth rate...")
         # shifted_time = t - t0
-        shifted_time = allocate_float(ntime)
+        shifted_time = allocate_float(t=ntime)
         @. shifted_time = time - time[itime_min]
         # assume phi(z0,t) = A*exp(growth_rate*t)*cos(ω*t + φ)
         # and fit phi(z0,t)/phi(z0,t0), which eliminates the constant A pre-factor
@@ -301,7 +301,7 @@ function calculate_and_write_frequencies(fid, run_name, ntime, time, z, itime_mi
         frequency = 0.0
         growth_rate = 0.0
         phase = 0.0
-        shifted_time = allocate_float(ntime)
+        shifted_time = allocate_float(t=ntime)
         @. shifted_time = time - time[itime_min]
         fitted_delta_phi = zeros(ntime)
 
@@ -529,7 +529,7 @@ phi_fit_result struct whose fields are:
 """
 function fit_delta_phi_mode(t, z, delta_phi)
     # First fit a cosine to each time slice
-    results = allocate_float(3, size(delta_phi)[2])
+    results = allocate_float(fit_param=3, t=size(delta_phi)[2])
     amplitude_guess = 1.0
     offset_guess = 0.0
     for (i, phi_z) in enumerate(eachcol(delta_phi))
@@ -625,7 +625,7 @@ function fit_phi0_vs_time(phi0, tmod)
     # phi(z0,t)/phi(z0,t0) = exp((t-t₀)γ)*cos((t-t₀)*ω + phase)/cos(phase),
     # where tmod = t-t0 and phase = ωt₀-φ
     @. model(t, p) = exp(p[1]*t) * cos(p[2]*t + p[3]) / cos(p[3])
-    model_params = allocate_float(3)
+    model_params = allocate_float(param=3)
     model_params[1] = -0.1
     model_params[2] = 8.6
     model_params[3] = 0.0

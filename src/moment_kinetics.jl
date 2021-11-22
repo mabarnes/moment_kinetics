@@ -109,9 +109,9 @@ function setup_moment_kinetics(input_dict::Dict)
     run_name, output_dir, evolve_moments, t_input, z_input, vpa_input,
         composition, species, collisions, drive_input = input
     # initialize z grid and write grid point locations to file
-    z = define_coordinate(z_input, composition)
+    z = define_coordinate(z_input, :z, composition)
     # initialize vpa grid and write grid point locations to file
-    vpa = define_coordinate(vpa_input, composition)
+    vpa = define_coordinate(vpa_input, :vpa, composition)
     # initialize f(z,vpa) and the lowest three v-space moments (density(z), upar(z) and ppar(z)),
     # each of which may be evolved separately depending on input choices.
     pdf, moments = init_pdf_and_moments(vpa, z, composition, species, t_input.n_rk_stages, evolve_moments)

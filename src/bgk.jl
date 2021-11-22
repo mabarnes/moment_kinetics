@@ -26,7 +26,7 @@ function init_bgk_pdf!(pdf, phi_max, tau, z, Lz, vpa)
     # add a buffer in to dphi to avoid problems with slightly negative numbers
     dphi *= 0.9
     # define phi(z) to have max value phi_max and min value phi_max - dphi
-    phi = allocate_float(nz)
+    phi = allocate_float(z=nz)
 #    @. phi = dphi*exp(-200.0*(2.0*z/Lz)^2) + (phi_max-dphi)
 #    @. phi = -dphi*exp(-200.0*(2.0*z/Lz)^2) + phi_max
 #    @. phi = -(1.0+sinpi(2.0*z/Lz))*0.5*dphi + phi_max
@@ -160,7 +160,7 @@ end
 function total_energy_grid(vpa, phi)
     nvpa = length(vpa)
     nz = length(phi)
-    x = allocate_float(nvpa, nz)
+    x = allocate_float(vpa=nvpa, z=nz)
     for iz ∈ 1:nz
         for ivpa ∈ 1:nvpa
             x[ivpa,iz] = vpa[ivpa]^2 + phi[iz]
@@ -171,7 +171,7 @@ end
 function trapped_passing_boundary(x, phi_max)
     nvpa = size(x,1)
     # initialize the lower boundary for the trapped domain to be beyond the boundary of vpa
-    ivpa_min = allocate_int(nvpa)
+    ivpa_min = allocate_int(vpa=nvpa)
     @. ivpa_min = nvpa+1
     for iz ∈ 1:size(x,2)
         # start from most negative vpa and look for first vpa value where x < phi_max
@@ -194,7 +194,7 @@ function setup_dummy_integrals()
     @. y += 0.5*ymax
     # assign integration weights to the y grid points using composite Simpson's rule
     wgts = composite_simpson_weights(y)
-    integrand = allocate_float(n)
+    integrand = allocate_float(dummy=n)
     return y, wgts, integrand
 end
 

@@ -22,7 +22,7 @@ function clenshawcurtisweights!(μ, plan)
 end
 
 function chebyshevpoints(n)
-    grid = allocate_float(n)
+    grid = Vector{mk_float}(undef,n)
     nfac = 1/(n-1)
     @inbounds begin
         # calculate z = cos(θ) ∈ [1,-1]

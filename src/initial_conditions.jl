@@ -16,9 +16,9 @@ using ..velocity_moments: integrate_over_vspace
 using ..velocity_moments: integrate_over_positive_vpa, integrate_over_negative_vpa
 using ..velocity_moments: create_moments, update_qpar!
 
-struct pdf_struct
-    norm::MPISharedArray{mk_float,3}
-    unnorm::MPISharedArray{mk_float,3}
+struct pdf_struct{D}
+    norm::MPISharedArray{D,mk_float,3}
+    unnorm::MPISharedArray{D,mk_float,3}
 end
 
 # creates the normalised pdf and the velocity-space moments and populates them
@@ -55,8 +55,8 @@ function init_pdf_and_moments(vpa, z, composition, species, n_rk_stages, evolve_
     return pdf, moments
 end
 function create_and_init_pdf(moments, vpa, z, n_species, species)
-    pdf_norm = allocate_shared_float(vpa.n, z.n, n_species)
-    pdf_unnorm = allocate_shared_float(vpa.n, z.n, n_species)
+    pdf_norm = allocate_shared_float(vpa=vpa.n, z=z.n, s=n_species)
+    pdf_unnorm = allocate_shared_float(vpa=vpa.n, z=z.n, s=n_species)
     if block_rank[] == 0
         for is ∈ 1:n_species
             if species[is].z_IC.initialization_option == "bgk" || species[is].vpa_IC.initialization_option == "bgk"

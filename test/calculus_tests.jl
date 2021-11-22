@@ -41,7 +41,7 @@ function runtests()
                 input = grid_input("coord", ngrid, nelement, L,
                     discretization, fd_option, bc, adv_input)
                 # create the coordinate struct 'x'
-                x = define_coordinate(input)
+                x = define_coordinate(input, :x)
                 # create arrays needed for Chebyshev pseudospectral treatment in x
                 # and create the plans for the forward and backward fast Chebyshev
                 # transforms
@@ -87,7 +87,7 @@ function runtests()
                 input = grid_input("coord", ngrid, nelement, L,
                     "finite_difference", fd_option, bc, adv_input)
                 # create the coordinate struct 'x'
-                x = define_coordinate(input)
+                x = define_coordinate(input, :x)
 
                 # create array for the derivative df/dx and the expected result
                 df = Array{Float64,1}(undef, x.n)
@@ -129,7 +129,7 @@ function runtests()
                 input = grid_input("coord", ngrid, nelement, L,
                     "finite_difference", fd_option, bc, adv_input)
                 # create the coordinate struct 'x'
-                x = define_coordinate(input)
+                x = define_coordinate(input, :x)
 
                 # create array for the derivative df/dx and the expected result
                 df = Array{Float64,1}(undef, x.n)
@@ -167,7 +167,7 @@ function runtests()
                 input = grid_input("coord", ngrid, nelement, L,
                     "finite_difference", fd_option, bc, adv_input)
                 # create the coordinate struct 'x'
-                x = define_coordinate(input)
+                x = define_coordinate(input, :x)
 
                 # create array for the derivative df/dx and the expected result
                 df = Array{Float64,1}(undef, x.n)
@@ -213,7 +213,7 @@ function runtests()
                 input = grid_input("coord", ngrid, nelement, L,
                     "finite_difference", fd_option, bc, adv_input)
                 # create the coordinate struct 'x'
-                x = define_coordinate(input)
+                x = define_coordinate(input, :x)
 
                 # create array for the derivative df/dx and the expected result
                 df = Array{Float64,1}(undef, x.n)
@@ -416,7 +416,7 @@ function runtests()
                 input = grid_input("coord", ngrid, nelement, L,
                     "chebyshev_pseudospectral", fd_option, bc, adv_input)
                 # create the coordinate struct 'x'
-                x = define_coordinate(input)
+                x = define_coordinate(input, :x)
                 # create arrays needed for Chebyshev pseudospectral treatment in x
                 # and create the plans for the forward and backward fast Chebyshev
                 # transforms
@@ -609,7 +609,7 @@ function runtests()
                 input = grid_input("coord", ngrid, nelement, L,
                     "chebyshev_pseudospectral", fd_option, bc, adv_input)
                 # create the coordinate struct 'x'
-                x = define_coordinate(input)
+                x = define_coordinate(input, :x)
                 # create arrays needed for Chebyshev pseudospectral treatment in x
                 # and create the plans for the forward and backward fast Chebyshev
                 # transforms
@@ -650,7 +650,7 @@ function runtests()
                 input = grid_input("coord", ngrid, nelement, L,
                     "chebyshev_pseudospectral", fd_option, bc, adv_input)
                 # create the coordinate struct 'x'
-                x = define_coordinate(input)
+                x = define_coordinate(input, :x)
                 # create arrays needed for Chebyshev pseudospectral treatment in x
                 # and create the plans for the forward and backward fast Chebyshev
                 # transforms
@@ -699,7 +699,7 @@ function runtests()
                 input = grid_input("coord", ngrid, nelement, L,
                     "chebyshev_pseudospectral", fd_option, bc, adv_input)
                 # create the coordinate struct 'x'
-                x = define_coordinate(input)
+                x = define_coordinate(input, :x)
                 # create arrays needed for Chebyshev pseudospectral treatment in x
                 # and create the plans for the forward and backward fast Chebyshev
                 # transforms
