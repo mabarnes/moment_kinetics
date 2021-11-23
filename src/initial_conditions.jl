@@ -80,7 +80,7 @@ function create_and_init_pdf(moments, vpa, z, n_species, species)
             end
         end
     end
-    return pdf_struct(pdf_norm, pdf_unnorm)
+    return pdf_struct{(:vpa,:z,:s)}(pdf_norm, pdf_unnorm)
 end
 # for now the only initialisation option for the temperature is constant in z
 # returns vth0 = sqrt(2Ts/ms) / sqrt(2Te/ms) = sqrt(Ts/Te)
