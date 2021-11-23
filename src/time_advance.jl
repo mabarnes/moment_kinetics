@@ -216,10 +216,10 @@ end
 function setup_scratch_arrays(moments, pdf_in, n_rk_stages)
     # create n_rk_stages+1 structs, each of which will contain one pdf,
     # one density, and one parallel flow array
-    scratch = Vector{scratch_pdf{dimnames(pdf_in),dimnames(moments.dens),3,2}}(
+    scratch = Vector{scratch_pdf{(:vpa,:z,:s),(:z,:s),3,2}}(
         undef, n_rk_stages+1)
-    pdf_dims = NamedTuple(k => size(pdf_in, k) for k in dimnames(pdf_in))
-    moment_dims = NamedTuple(k => size(moments.dens, k) for k in dimnames(moments.dens))
+    pdf_dims = NamedTuple{(:vpa,:z,:s)}(size(pdf_in))
+    moment_dims = NamedTuple{(:z,:s)}(size(moments.dens))
     # populate each of the structs
     for istage ∈ 1:n_rk_stages+1
         # Allocate arrays in temporary variables so that we can identify them

@@ -61,7 +61,7 @@ end
     export DebugMPISharedArray
 
     struct DebugMPISharedArray{L, T, N} <: AbstractArray{T, N}
-        data::NamedDimsArray{L,T,N}
+        data::NamedDimsArray{L,T,N,Array{T,N}}
         is_read::Array{Bool,N}
         is_written::Array{Bool, N}
         creation_stack_trace::String
@@ -133,7 +133,8 @@ end
     const global_debugmpisharedarray_store = Vector{DebugMPISharedArray}(undef, 0)
 end
 
-const MPISharedArray = @debug_shared_array_ifelse(DebugMPISharedArray, NamedDimsArray)
+const MPISharedArray{L,T,N} = @debug_shared_array_ifelse(DebugMPISharedArray{L,T,N},
+                                                         NamedDimsArray{L,T,N,Array{T,N}})
 
 """
 Get a shared-memory array of `mk_float` (shared by all processes in a 'block')
@@ -201,8 +202,8 @@ function allocate_shared_keep_order(T; dims...)
     # We want to use as a shared array, so want to wrap the entire shared array.
     # Get start pointer of array from rank-0 process. Cannot use ptr, as this
     # is null when n_local=0.
-    _, _, base_ptr = MPI.Win_shared_query(win, 0)
-    base_ptr = Ptr{T}(base_ptr)
+    _, _, bare_ptr = MPI.Win_shared_query(win, 0)
+    base_ptr = Ptr{T}(bare_ptr)
 
     if base_ptr == Ptr{Nothing}(0)
         error("Got null pointer when trying to allocate shared array")
@@ -216,8 +217,8 @@ function allocate_shared_keep_order(T; dims...)
     # values(dims) returns a NamedTuple, so need to call values() on the result
     # to get a Tuple of the actual values - see
     # https://discourse.julialang.org/t/unexpected-behaviour-of-values-for-generic-kwargs/71938
-    bare_array = unsafe_wrap(Array, base_ptr, values(values(dims)))
-    array = NamedDimsArray{keys(dims)}(bare_array)
+    bare_array = unsafe_wrap(Array, base_ptr, Tuple(dims.data))
+    array = NamedDimsArray{keys(dims.data)}(bare_array)
 
     @debug_shared_array begin
         # If @debug_shared_array is active, create DebugMPISharedArray instead of Array
