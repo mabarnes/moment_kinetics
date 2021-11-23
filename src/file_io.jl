@@ -26,13 +26,20 @@ end
 # returned from `NCDatasets.defVar()`) because compiler does not seem to be
 # able to pick up the return types of `defVar()` at compile time, so without
 # using it the result returned from `setup_file_io()` is not a concrete type.
-nc_var_type{N} = NCDatasets.CFVariable{mk_float, N,
-                                       NCDatasets.Variable{mk_float, N,
-                                                           NCDatasets.NCDataset},
-                                       NCDatasets.Attributes{NCDatasets.NCDataset{Nothing}},
-                                       NamedTuple{(:fillvalue, :scale_factor,
-                                                   :add_offset, :calendar, :time_origin,
-                                                   :time_factor), NTuple{6, Nothing}}}
+nc_var_type{N} = Union{
+   NCDatasets.CFVariable{mk_float, N,
+                         NCDatasets.Variable{mk_float, N, NCDatasets.NCDataset},
+                         NCDatasets.Attributes{NCDatasets.NCDataset{Nothing}},
+                         NamedTuple{(:fillvalue, :scale_factor, :add_offset,
+                                     :calendar, :time_origin, :time_factor),
+                                    NTuple{6, Nothing}}},
+   NCDatasets.CFVariable{mk_float, N,
+                         NCDatasets.Variable{mk_float, N,
+                                             NCDatasets.NCDataset{Nothing}},
+                         NCDatasets.Attributes{NCDatasets.NCDataset{Nothing}},
+                         NamedTuple{(:fillvalue, :scale_factor, :add_offset,
+                                     :calendar, :time_origin, :time_factor),
+                                    NTuple{6, Nothing}}}}
 # structure containing the data/metadata needed for netcdf file i/o
 struct netcdf_info{distribution_N,moment_N,phi_N}
     # file identifier for the netcdf file to which data is written
