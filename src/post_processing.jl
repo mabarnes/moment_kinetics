@@ -22,13 +22,12 @@ using ..load_data: load_coordinate_data, load_fields_data, load_moments_data, lo
 using ..analysis: analyze_fields_data, analyze_moments_data, analyze_pdf_data
 using ..velocity_moments: integrate_over_vspace
 
-# NamedDimsArray compatibility for curve_fit
-curve_fit(m, c, d::NamedDimsArray, g) =
-    curve_fit(m, c, parent(d), g)
-curve_fit(m, c::NamedDimsArray, d::NamedDimsArray, g) =
-    curve_fit(m, parent(c), parent(d), g)
-curve_fit(m, c::NamedDimsArray, d::NamedDimsArray, g::NamedDimsArray) =
-    curve_fit(m, parent(c), parent(d), parent(g))
+# NamedDimsArray compatibility for curve_fit - unname converts to parent type
+# if the argument is a NamedDimsArray and does nothing otherwise, so any
+# argument can be NamedDimsArray as long as the third argument is.
+import LsqFit: curve_fit
+curve_fit(m, c::AbstractArray, d::NamedDimsArray, g::AbstractArray) =
+    curve_fit(unname(m), unname(c), unname(d), unname(g))
 
 function analyze_and_plot_data(path)
     # Create run_name from the path to the run directory
