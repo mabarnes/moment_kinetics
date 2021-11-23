@@ -6,6 +6,7 @@ export analyze_and_plot
 using Plots
 using IJulia
 using LsqFit
+using NamedDims
 using NCDatasets
 using Statistics: mean
 using SpecialFunctions: erfi
@@ -20,6 +21,14 @@ using ..load_data: open_netcdf_file
 using ..load_data: load_coordinate_data, load_fields_data, load_moments_data, load_pdf_data
 using ..analysis: analyze_fields_data, analyze_moments_data, analyze_pdf_data
 using ..velocity_moments: integrate_over_vspace
+
+# NamedDimsArray compatibility for curve_fit
+curve_fit(m, c, d::NamedDimsArray, g) =
+    curve_fit(m, c, parent(d), g)
+curve_fit(m, c::NamedDimsArray, d::NamedDimsArray, g) =
+    curve_fit(m, parent(c), parent(d), g)
+curve_fit(m, c::NamedDimsArray, d::NamedDimsArray, g::NamedDimsArray) =
+    curve_fit(m, parent(c), parent(d), parent(g))
 
 function analyze_and_plot_data(path)
     # Create run_name from the path to the run directory

@@ -9,11 +9,11 @@ using ..communication: allocate_shared, allocate_shared_keep_order, block_rank
 using ..debugging
 @debug_initialize_NaN using ..communication: block_synchronize
 
-# Sort dimensions so that all arrays have dimensions in the same order, unless
-# they are explicitly allocated with a different order.
-function sort_dimensions(dims::Tuple{Symbol})
+# Check dimension order so that all arrays have dimensions in the same order,
+# unless they are explicitly allocated with a different order.
+function check_dim_order(dims::Tuple{Symbol})
     # Dummy implementation as a placeholder - implement this later
-    return dims
+    return nothing
 end
 
 # allocate array with dimensions given by dims and entries of type Bool

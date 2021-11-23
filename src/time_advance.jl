@@ -110,7 +110,7 @@ function setup_time_advance!(pdf, vpa, z, composition, drive_input, moments,
     # create structure z_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the split part of the GK equation dealing
     # with advection in z
-    z_advect = setup_advection(n_species, z=z, vpa=vpa)
+    z_advect = setup_advection(n_species, Val(:z), z, vpa=vpa.n)
     # initialise the z advection speed
     for is ∈ composition.species_local_range
         @views update_speed_z!(z_advect[is], moments.upar[:,is], moments.vth[:,is],
@@ -159,7 +159,7 @@ function setup_time_advance!(pdf, vpa, z, composition, drive_input, moments,
     # create structure vpa_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the split part of the GK equation dealing
     # with advection in vpa
-    vpa_advect = setup_advection(n_species, vpa=vpa, z=z)
+    vpa_advect = setup_advection(n_species, Val(:vpa), vpa, z=z.n)
     # initialise the vpa advection speed
     if block_rank[] == 0
         update_speed_vpa!(vpa_advect, fields, scratch[1], moments, vpa, z, composition,
@@ -183,8 +183,8 @@ function setup_time_advance!(pdf, vpa, z, composition, drive_input, moments,
     # solve and initialize the characteristic speed and departure indices
     # so that the code can gracefully run without using the semi-Lagrange
     # method if the user specifies this
-    z_SL = setup_semi_lagrange(z=z.n, vpa=vpa.n)
-    vpa_SL = setup_semi_lagrange(vpa=vpa.n, z=z.n)
+    z_SL = setup_semi_lagrange(Val(:z), z.n; vpa=vpa.n)
+    vpa_SL = setup_semi_lagrange(Val(:vpa), vpa.n; z=z.n)
 
     block_synchronize()
     return vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
