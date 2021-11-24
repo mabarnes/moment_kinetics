@@ -100,11 +100,11 @@ function setup_advection_per_species(
     modified_speed = allocate_shared_float(advection_dims;
         advection_dim => advection_coord.n, other_dim_sizes...)
     # index for the upwind boundary; will be updated before use so value irrelevant
-    upwind_idx = allocate_shared_int(Val(other_dims); other_dim_sizes...)
+    upwind_idx = allocate_shared_int(other_dims; other_dim_sizes...)
     # index for the downwind boundary; will be updated before use so value irrelevant
-    downwind_idx = allocate_shared_int(Val(other_dims); other_dim_sizes...)
+    downwind_idx = allocate_shared_int(other_dims; other_dim_sizes...)
     # index increment used when sweeping in the upwind direction; will be updated before use
-    upwind_increment = allocate_shared_int(Val(other_dims); other_dim_sizes...)
+    upwind_increment = allocate_shared_int(other_dims; other_dim_sizes...)
     if block_rank[] == 0
         upwind_idx[:] .= 1
         downwind_idx[:] .= advection_coord.n

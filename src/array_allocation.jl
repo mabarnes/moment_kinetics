@@ -14,7 +14,7 @@ using ..debugging
 # entry dropped. Val{} arguments used so that the whole thing should be
 # evaluated at compile time.
 function drop_dim(::Val{to_drop}, ::Val{dims}) where {to_drop,dims}
-    return filter(d->d!=to_drop, dims)
+    return Val(filter(d->d!=to_drop, dims))
 end
 
 # allocate array with dimensions given by dims and entries of type Bool
