@@ -272,7 +272,7 @@ function run_test(test_input, rtol; args...)
                            z_L, test_input["z_discretization"], "",
                            "periodic", #test_input["z_bc"],
                            adv_input)
-        z = define_coordinate(input)
+        z = define_coordinate(input, Val(:z))
         if test_input["z_discretization"] == "chebyshev_pseudospectral"
             z_spectral = setup_chebyshev_pseudospectral(z)
         else
@@ -281,7 +281,7 @@ function run_test(test_input, rtol; args...)
         input = grid_input("coord", test_input["vpa_ngrid"], test_input["vpa_nelement"],
                            vpa_L, test_input["vpa_discretization"], "",
                            test_input["vpa_bc"], adv_input)
-        vpa = define_coordinate(input)
+        vpa = define_coordinate(input, Val(:vpa))
         if test_input["vpa_discretization"] == "chebyshev_pseudospectral"
             vpa_spectral = setup_chebyshev_pseudospectral(vpa)
         else
