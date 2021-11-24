@@ -17,13 +17,13 @@ import ..interpolation: interpolate_to_grid_1d
 struct chebyshev_info{TForward <: FFTW.cFFTWPlan, TBackward <: AbstractFFTs.ScaledPlan}
     # fext is an array for storing f(z) on the extended domain needed
     # to perform complex-to-complex FFT using the fact that f(theta) is even in theta
-    fext::AbstractArray{Complex{mk_float},1}
+    fext::Array{Complex{mk_float},1}
     # Chebyshev spectral coefficients of distribution function f
     # first dimension contains location within element
     # second dimension indicates the element
-    f::AbstractArray{mk_float,2}
+    f::Array{mk_float,2}
     # Chebyshev spectral coefficients of derivative of f
-    df::AbstractArray{mk_float,1}
+    df::Array{mk_float,1}
     # plan for the complex-to-complex, in-place, forward Fourier transform on Chebyshev-Gauss-Lobatto grid
     forward::TForward
     # plan for the complex-to-complex, in-place, backward Fourier transform on Chebyshev-Gauss-Lobatto grid
@@ -38,13 +38,14 @@ function setup_chebyshev_pseudospectral(coord)
     # into a complex transform on [0,2π], which is more efficient in FFTW
     ngrid_fft = 2*(coord.ngrid-1)
     # create array for f on extended [0,2π] domain in theta = ArcCos[z]
-    fext = allocate_complex(Val((:k,)); k=ngrid_fft)
+    fext = parent(allocate_complex(Val((:k,)); k=ngrid_fft))
     # create arrays for storing Chebyshev spectral coefficients of f and f'
-    fcheby = allocate_float(Val((:grid, :element)); grid=coord.ngrid, element=coord.nelement)
-    dcheby = allocate_float(Val((:grid,)); grid=coord.ngrid)
+    fcheby = parent(allocate_float(Val((:grid, :element)); grid=coord.ngrid,
+                                   element=coord.nelement))
+    dcheby = parent(allocate_float(Val((:grid,)); grid=coord.ngrid))
     # setup the plans for the forward and backward Fourier transforms
-    forward_transform = plan_fft!(parent(fext), flags=FFTW.MEASURE)
-        backward_transform = plan_ifft!(parent(fext), flags=FFTW.MEASURE)
+    forward_transform = plan_fft!(fext, flags=FFTW.MEASURE)
+    backward_transform = plan_ifft!(fext, flags=FFTW.MEASURE)
     # return a structure containing the information needed to carry out
     # a 1D Chebyshev transform
     return chebyshev_info(fext, fcheby, dcheby, forward_transform, backward_transform)
