@@ -191,7 +191,7 @@ function run_test(test_input, analytic_frequency, analytic_growth_rate,
         end
 
         # Check the fit errors are not too large, otherwise we are testing junk
-        @test phi_fit.amplitude_fit_error < 2.e-2
+        @test phi_fit.amplitude_fit_error < 1.e-1
         @test phi_fit.offset_fit_error < 5.e-6
         @test phi_fit.cosine_fit_error < 5.e-8
 
