@@ -7,10 +7,10 @@ export update_boundary_indices!
 export advance_f_local!
 
 using Base.Iterators: take, rest
+using NamedDims
 
 using ..type_definitions: mk_float, mk_int
-using ..array_allocation: allocate_shared_float_keep_order,
-                          allocate_shared_int_keep_order, check_dim_order
+using ..array_allocation: allocate_shared_float, allocate_shared_int, drop_dim
 using ..calculus: derivative!
 using ..communication: block_rank, block_synchronize, MPISharedArray
 using ..coordinates: coordinate
@@ -64,55 +64,47 @@ Vector{advection_info}
     needed to calculate advection in the dimension corresponding to the first of the
     coords keyword arguments.
 """
-function setup_advection(nspec, ::Val{advection_dim}, advection_coord::coordinate;
-                         other_dims...) where advection_dim
+function setup_advection(nspec, ::Val{advection_dim}, advection_coord::coordinate,
+                         ::Val{dims}; other_dim_sizes...) where {advection_dim,dims}
     # allocate an array containing structures with much of the info needed
     # to do the 1D advection time advance
-    return [setup_advection_per_species(Val(advection_dim), advection_coord; other_dims...)
-            for _ ∈ 1:nspec]
-    #ncoord = length(coords)
-    #other_dimnames = keys(other_dims)
-    #dimnames = (advection_dim, other_dimnames...)
-    #gridelement_dimnames = (:grid, :element, dimnames[2:end]...)
-    #advection = Vector{advection_info{dimnames,gridelement_dimnames,dimnames[2:end],
-    #                                  ncoord,ncoord+1,ncoord-1}}(undef, nspec)
-    ## store all of this information in a structure and return it
-    #for is ∈ 1:nspec
-    #    advection[is] = setup_advection_per_species(Val(advection_dim), advection_coord;
-    #                                                other_dims...)
-    #end
-    #return advection
+    return [setup_advection_per_species(Val(advection_dim), advection_coord, Val(dims);
+                                        other_dim_sizes...) for _ ∈ 1:nspec]
 end
 # Create arrays needed to compute the advection term(s).
 # The first coordinate argument is the dimension in which advection is calculated with
 # the struct created here. The following arguments are the remaining phase space
 # dimensions, and their order does not matter.
-function setup_advection_per_species(::Val{advection_dim}, advection_coord::coordinate;
-                                     other_dims...) where advection_dim
+function setup_advection_per_species(
+        ::Val{advection_dim}, advection_coord::coordinate, ::Val{dims};
+        other_dim_sizes...) where {advection_dim,dims}
+    advection_dims = Val(NamedDims.expand_dimnames((advection_dim,), dims))
+    other_dims = drop_dim(Val(advection_dim), Val(dims))
+    advection_gridelement_dims = Val(NamedDims.expand_dimnames((:grid,:element), other_dims))
     # create array for storing the explicit advection terms appearing
     # on the righthand side of the equation
-    rhs = allocate_shared_float_keep_order(; advection_dim => advection_coord.n,
-                                             other_dims...)
+    rhs = allocate_shared_float(advection_dims;
+        advection_dim => advection_coord.n, other_dim_sizes...)
     # create array for storing ∂f/∂(coordinate)
     # NB: need to store on nelement x ngrid_per_element array, as must keep info
     # about multi-valued derivative at overlapping point at element boundaries
-    df = allocate_shared_float_keep_order(;
-        grid=advection_coord.ngrid, element=advection_coord.nelement, other_dims...)
+    df = allocate_shared_float(advection_gridelement_dims;
+        grid=advection_coord.ngrid, element=advection_coord.nelement, other_dim_sizes...)
     # create array for storing the advection coefficient
-    adv_fac = allocate_shared_float_keep_order(; advection_dim => advection_coord.n,
-                                                 other_dims...)
+    adv_fac = allocate_shared_float(advection_dims;
+        advection_dim => advection_coord.n, other_dim_sizes...)
     # create array for storing the speed along this coordinate
-    speed = allocate_shared_float_keep_order(; advection_dim => advection_coord.n,
-                                               other_dims...)
+    speed = allocate_shared_float(advection_dims;
+        advection_dim => advection_coord.n, other_dim_sizes...)
     # create array for storing the modified speed along this coordinate
-    modified_speed = allocate_shared_float_keep_order(; advection_dim => advection_coord.n,
-                                                        other_dims...)
+    modified_speed = allocate_shared_float(advection_dims;
+        advection_dim => advection_coord.n, other_dim_sizes...)
     # index for the upwind boundary; will be updated before use so value irrelevant
-    upwind_idx = allocate_shared_int_keep_order(; other_dims...)
+    upwind_idx = allocate_shared_int(Val(other_dims); other_dim_sizes...)
     # index for the downwind boundary; will be updated before use so value irrelevant
-    downwind_idx = allocate_shared_int_keep_order(; other_dims...)
+    downwind_idx = allocate_shared_int(Val(other_dims); other_dim_sizes...)
     # index increment used when sweeping in the upwind direction; will be updated before use
-    upwind_increment = allocate_shared_int_keep_order(; other_dims...)
+    upwind_increment = allocate_shared_int(Val(other_dims); other_dim_sizes...)
     if block_rank[] == 0
         upwind_idx[:] .= 1
         downwind_idx[:] .= advection_coord.n

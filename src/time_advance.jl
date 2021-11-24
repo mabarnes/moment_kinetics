@@ -5,7 +5,8 @@ export time_advance!
 
 using NamedDims
 
-using ..type_definitions: mk_float
+using ..type_definitions: mk_float, phase_space_dims, pdf_dims_tuple, pdf_dims,
+                          moment_dims_tuple, moment_dims, pdf_ndims, moment_ndims
 using ..array_allocation: allocate_float, allocate_shared_float
 using ..communication: block_rank, block_synchronize, MPISharedArray
 using ..debugging
@@ -31,12 +32,12 @@ using ..semi_lagrange: setup_semi_lagrange
 
 @debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
 
-struct scratch_pdf{dims_distribution, dims_moment, n_distribution, n_moment}
-    pdf::MPISharedArray{dims_distribution, mk_float, n_distribution}
-    density::MPISharedArray{dims_moment, mk_float, n_moment}
-    upar::MPISharedArray{dims_moment, mk_float, n_moment}
-    ppar::MPISharedArray{dims_moment, mk_float, n_moment}
-    temp_z_s::MPISharedArray{dims_moment, mk_float, n_moment}
+struct scratch_pdf
+    pdf::MPISharedArray{pdf_dims_tuple, mk_float, pdf_ndims}
+    density::MPISharedArray{moment_dims_tuple, mk_float, moment_ndims}
+    upar::MPISharedArray{moment_dims_tuple, mk_float, moment_ndims}
+    ppar::MPISharedArray{moment_dims_tuple, mk_float, moment_ndims}
+    temp_z_s::MPISharedArray{moment_dims_tuple, mk_float, moment_ndims}
 end
 mutable struct advance_info
     vpa_advection::Bool
@@ -110,7 +111,7 @@ function setup_time_advance!(pdf, vpa, z, composition, drive_input, moments,
     # create structure z_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the split part of the GK equation dealing
     # with advection in z
-    z_advect = setup_advection(n_species, Val(:z), z, vpa=vpa.n)
+    z_advect = setup_advection(n_species, Val(:z), z, phase_space_dims; vpa=vpa.n)
     # initialise the z advection speed
     for is ∈ composition.species_local_range
         @views update_speed_z!(z_advect[is], moments.upar[:,is], moments.vth[:,is],
@@ -159,7 +160,7 @@ function setup_time_advance!(pdf, vpa, z, composition, drive_input, moments,
     # create structure vpa_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the split part of the GK equation dealing
     # with advection in vpa
-    vpa_advect = setup_advection(n_species, Val(:vpa), vpa, z=z.n)
+    vpa_advect = setup_advection(n_species, Val(:vpa), vpa, phase_space_dims; z=z.n)
     # initialise the vpa advection speed
     if block_rank[] == 0
         update_speed_vpa!(vpa_advect, fields, scratch[1], moments, vpa, z, composition,
@@ -183,8 +184,8 @@ function setup_time_advance!(pdf, vpa, z, composition, drive_input, moments,
     # solve and initialize the characteristic speed and departure indices
     # so that the code can gracefully run without using the semi-Lagrange
     # method if the user specifies this
-    z_SL = setup_semi_lagrange(Val(:z), z.n; vpa=vpa.n)
-    vpa_SL = setup_semi_lagrange(Val(:vpa), vpa.n; z=z.n)
+    z_SL = setup_semi_lagrange(Val(:z), z.n, phase_space_dims; vpa=vpa.n)
+    vpa_SL = setup_semi_lagrange(Val(:vpa), vpa.n, phase_space_dims; z=z.n)
 
     block_synchronize()
     return vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
@@ -216,19 +217,18 @@ end
 function setup_scratch_arrays(moments, pdf_in, n_rk_stages)
     # create n_rk_stages+1 structs, each of which will contain one pdf,
     # one density, and one parallel flow array
-    scratch = Vector{scratch_pdf{(:vpa,:z,:s),(:z,:s),3,2}}(
-        undef, n_rk_stages+1)
-    pdf_dims = NamedTuple{(:vpa,:z,:s)}(size(pdf_in))
-    moment_dims = NamedTuple{(:z,:s)}(size(moments.dens))
+    scratch = Vector{scratch_pdf}(undef, n_rk_stages+1)
+    pdf_dim_sizes = NamedTuple{pdf_dims_tuple}(size(pdf_in))
+    moment_dim_sizes = NamedTuple{moment_dims_tuple}(size(moments.dens))
     # populate each of the structs
     for istage ∈ 1:n_rk_stages+1
         # Allocate arrays in temporary variables so that we can identify them
         # by source line when using @debug_shared_array
-        pdf_array = allocate_shared_float(; pdf_dims...)
-        density_array = allocate_shared_float(; moment_dims...)
-        upar_array = allocate_shared_float(; moment_dims...)
-        ppar_array = allocate_shared_float(; moment_dims...)
-        temp_z_s_array = allocate_shared_float(; moment_dims...)
+        pdf_array = allocate_shared_float(pdf_dims; pdf_dim_sizes...)
+        density_array = allocate_shared_float(moment_dims; moment_dim_sizes...)
+        upar_array = allocate_shared_float(moment_dims; moment_dim_sizes...)
+        ppar_array = allocate_shared_float(moment_dims; moment_dim_sizes...)
+        temp_z_s_array = allocate_shared_float(moment_dims; moment_dim_sizes...)
         scratch[istage] = scratch_pdf(pdf_array, density_array, upar_array,
                                       ppar_array, temp_z_s_array)
         if block_rank[] == 0
@@ -245,7 +245,7 @@ end
 # e.g., if f is the function to be updated, then
 # f^{n+1}[stage+1] = rk_coef[1,stage]*f^{n} + rk_coef[2,stage]*f^{n+1}[stage] + rk_coef[3,stage]*(f^{n}+dt*G[f^{n+1}[stage]]
 function setup_runge_kutta_coefficients(n_rk_stages)
-    rk_coefs = allocate_float(term=3, rk_stage=n_rk_stages)
+    rk_coefs = allocate_float(Val((:term,:rk_stage)); term=3, rk_stage=n_rk_stages)
     rk_coefs .= 0.0
     if n_rk_stages == 4
         rk_coefs[1,1] = 0.5

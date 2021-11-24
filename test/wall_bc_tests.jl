@@ -176,7 +176,7 @@ function run_test(test_input, expected_phi, tolerance; args...)
         input = grid_input("coord", test_input["z_ngrid"], test_input["z_nelement"], 1.0,
                            test_input["z_discretization"], "", test_input["z_bc"],
                            adv_input)
-        z = define_coordinate(input)
+        z = define_coordinate(input, Val(:z))
         if test_input["z_discretization"] == "chebyshev_pseudospectral"
             z_spectral = setup_chebyshev_pseudospectral(z)
         else

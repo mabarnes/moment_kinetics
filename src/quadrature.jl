@@ -6,9 +6,9 @@ using ..array_allocation: allocate_float
 
 # composite_simpson_weights creates, computes, and returns an array for the
 # 1D integration weights associated with each grid point using composite Simpson's rule
-function composite_simpson_weights(dimname::Symbol, grid)
+function composite_simpson_weights(::Val{dimname}, grid) where dimname
     n = length(grid)
-    wgts = allocate_float(; dimname => n)
+    wgts = allocate_float(Val((dimname,)); dimname => n)
     # assume equal grid spacing
     h = grid[2]-grid[1]
     # constant coefficients needed for composite Simpson's rule

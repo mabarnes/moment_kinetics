@@ -38,10 +38,10 @@ function setup_chebyshev_pseudospectral(coord)
     # into a complex transform on [0,2π], which is more efficient in FFTW
     ngrid_fft = 2*(coord.ngrid-1)
     # create array for f on extended [0,2π] domain in theta = ArcCos[z]
-    fext = allocate_complex(k=ngrid_fft)
+    fext = allocate_complex(Val((:k,)); k=ngrid_fft)
     # create arrays for storing Chebyshev spectral coefficients of f and f'
-    fcheby = allocate_float(grid=coord.ngrid, element=coord.nelement)
-    dcheby = allocate_float(grid=coord.ngrid)
+    fcheby = allocate_float(Val((:grid, :element)); grid=coord.ngrid, element=coord.nelement)
+    dcheby = allocate_float(Val((:grid,)); grid=coord.ngrid)
     # setup the plans for the forward and backward Fourier transforms
     forward_transform = plan_fft!(parent(fext), flags=FFTW.MEASURE)
         backward_transform = plan_ifft!(parent(fext), flags=FFTW.MEASURE)
@@ -50,7 +50,7 @@ function setup_chebyshev_pseudospectral(coord)
     return chebyshev_info(fext, fcheby, dcheby, forward_transform, backward_transform)
 end
 # initialize chebyshev grid scaled to interval [-box_length/2, box_length/2]
-function scaled_chebyshev_grid(name::Symbol, ngrid, nelement, n, box_length, imin, imax)
+function scaled_chebyshev_grid(::Val{name}, ngrid, nelement, n, box_length, imin, imax) where name
     # initialize chebyshev grid defined on [1,-1]
     # with n grid points chosen to facilitate
     # the fast Chebyshev transform (aka the discrete cosine transform)
@@ -58,7 +58,7 @@ function scaled_chebyshev_grid(name::Symbol, ngrid, nelement, n, box_length, imi
     # this grid goes from +1 to -1
     chebyshev_grid = chebyshevpoints(ngrid)
     # create array for the full grid
-    grid = allocate_float(; name => n)
+    grid = allocate_float(Val((name,)); name => n)
     # setup the scale factor by which the Chebyshev grid on [-1,1]
     # is to be multiplied to account for the full domain [-L/2,L/2]
     # and the splitting into nelement elements with ngrid grid points
@@ -257,7 +257,7 @@ function interpolate_to_grid_1d(newgrid, f, coord, chebyshev::chebyshev_info)
 end
 function chebyshev_interpolate_single_element(newgrid, f, j, coord, chebyshev)
     # Temporary buffer to store Chebyshev coefficients
-    cheby_f = allocate_float(grid=coord.ngrid)
+    cheby_f = allocate_float(Val((:grid,)); grid=coord.ngrid)
 
     # Array for the result
     result = similar(newgrid, mk_float)

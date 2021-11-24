@@ -13,7 +13,7 @@ export enforce_moment_constraints!
 
 using NamedDims
 
-using ..type_definitions: mk_float
+using ..type_definitions: mk_float, moment_dims_tuple, moment_dims, moment_ndims
 using ..array_allocation: allocate_shared_float, allocate_bool
 using ..calculus: integral
 using ..communication: block_rank, block_synchronize, MPISharedArray
@@ -23,81 +23,82 @@ using ..communication: block_rank, block_synchronize, MPISharedArray
 #global dens_hist = zeros(17,1)
 #global n_hist = 0
 
-mutable struct moments{D1,D2}
+mutable struct moments
     # this is the particle density
-    dens::MPISharedArray{D1,mk_float,2}
+    dens::MPISharedArray{moment_dims_tuple,mk_float,moment_ndims}
     # flag that keeps track of if the density needs updating before use
     # Note: may not be set for all species on this process, but this process only ever
     # sets/uses the value for the same subset of species. This means dens_update does
     # not need to be a shared memory array.
-    dens_updated::NamedDimsArray{D2,Bool,1}
+    dens_updated::NamedDimsArray{(:s,),Bool,1}
     # flag that indicates if the density should be evolved via continuity equation
     evolve_density::Bool
     # flag that indicates if exact particle conservation should be enforced
     enforce_conservation::Bool
     # this is the parallel flow
-    upar::MPISharedArray{D1,mk_float,2}
+    upar::MPISharedArray{moment_dims_tuple,mk_float,moment_ndims}
     # flag that keeps track of whether or not upar needs updating before use
     # Note: may not be set for all species on this process, but this process only ever
     # sets/uses the value for the same subset of species. This means upar_update does
     # not need to be a shared memory array.
-    upar_updated::NamedDimsArray{D2,Bool,1}
+    upar_updated::NamedDimsArray{(:s,),Bool,1}
     # flag that indicates if the parallel flow should be evolved via force balance
     evolve_upar::Bool
     # this is the parallel pressure
-    ppar::MPISharedArray{D1,mk_float,2}
+    ppar::MPISharedArray{moment_dims_tuple,mk_float,moment_ndims}
     # flag that keeps track of whether or not ppar needs updating before use
     # Note: may not be set for all species on this process, but this process only ever
     # sets/uses the value for the same subset of species. This means ppar_update does
     # not need to be a shared memory array.
-    ppar_updated::NamedDimsArray{D2,Bool,1}
+    ppar_updated::NamedDimsArray{(:s,),Bool,1}
     # flag that indicates if the parallel pressure should be evolved via the energy equation
     evolve_ppar::Bool
     # this is the parallel heat flux
-    qpar::MPISharedArray{D1,mk_float,2}
+    qpar::MPISharedArray{moment_dims_tuple,mk_float,moment_ndims}
     # flag that keeps track of whether or not qpar needs updating before use
     # Note: may not be set for all species on this process, but this process only ever
     # sets/uses the value for the same subset of species. This means qpar_update does
     # not need to be a shared memory array.
-    qpar_updated::NamedDimsArray{D2,Bool,1}
+    qpar_updated::NamedDimsArray{(:s,),Bool,1}
     # this is the thermal speed based on the parallel temperature Tpar = ppar/dens: vth = sqrt(2*Tpar/m)
-    vth::MPISharedArray{D1,mk_float,2}
+    vth::MPISharedArray{moment_dims_tuple,mk_float,moment_ndims}
     # if evolve_ppar = true, then the velocity variable is (vpa - upa)/vth, which introduces
     # a factor of vth for each power of wpa in velocity space integrals.
     # vpa_norm_fac accounts for this: it is vth if using the above definition for the parallel velocity,
     # and it is one otherwise
-    vpa_norm_fac::MPISharedArray{D1,mk_float,2}
+    vpa_norm_fac::MPISharedArray{moment_dims_tuple,mk_float,moment_ndims}
     # flag that indicates if the drift kinetic equation should be formulated in advective form
     #advective_form::Bool
 end
-function create_moments(nz, n_species, evolve_moments)
+function create_moments(evolve_moments; moment_dim_sizes...)
+    n_species = moment_dim_sizes[:s]
     # allocate array used for the particle density
-    density = allocate_shared_float(z=nz, s=n_species)
+    density = allocate_shared_float(moment_dims; moment_dim_sizes...)
     # allocate array of Bools that indicate if the density is updated for each species
-    density_updated = allocate_bool(s=n_species)
+    density_updated = allocate_bool(Val((:s,)); s=n_species)
     density_updated .= false
     # allocate array used for the parallel flow
-    parallel_flow = allocate_shared_float(z=nz, s=n_species)
+    parallel_flow = allocate_shared_float(moment_dims; moment_dim_sizes...)
     # allocate array of Bools that indicate if the parallel flow is updated for each species
-    parallel_flow_updated = allocate_bool(s=n_species)
+    parallel_flow_updated = allocate_bool(Val((:s,)); s=n_species)
     parallel_flow_updated .= false
     # allocate array used for the parallel pressure
-    parallel_pressure = allocate_shared_float(z=nz, s=n_species)
+    parallel_pressure = allocate_shared_float(moment_dims; moment_dim_sizes...)
     # allocate array of Bools that indicate if the parallel pressure is updated for each species
-    parallel_pressure_updated = allocate_bool(s=n_species)
+    parallel_pressure_updated = allocate_bool(Val((:s,)); s=n_species)
     parallel_pressure_updated .= false
     # allocate array used for the parallel flow
-    parallel_heat_flux = allocate_shared_float(z=nz, s=n_species)
+    parallel_heat_flux = allocate_shared_float(moment_dims; moment_dim_sizes...)
     # allocate array of Bools that indicate if the parallel flow is updated for each species
-    parallel_heat_flux_updated = allocate_bool(s=n_species)
+    parallel_heat_flux_updated = allocate_bool(Val((:s,)); s=n_species)
     parallel_heat_flux_updated .= false
     block_synchronize()
     # allocate array used for the thermal speed
-    thermal_speed = allocate_shared_float(z=nz, s=n_species)
+    thermal_speed = allocate_shared_float(moment_dims; moment_dim_sizes...)
     if evolve_moments.parallel_pressure
         vpa_norm_fac = thermal_speed
     else
-        vpa_norm_fac = allocate_shared_float(z=nz, s=n_species)
+        vpa_norm_fac = allocate_shared_float(moment_dims; moment_dim_sizes...)
         if block_rank[] == 0
             vpa_norm_fac .= 1.0
         end

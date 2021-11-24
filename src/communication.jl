@@ -157,14 +157,11 @@ Returns
 -------
 Array{mk_float}
 """
-function allocate_shared(T; dims...)
-    return allocate_shared_keep_order(T; dims...)
-end
-# variant where dimensions of returned array are not sorted
-function allocate_shared_keep_order(T; dims...)
+function allocate_shared(T, ::Val{dims}; dim_sizes...) where dims
     br = block_rank[]
     bs = block_size[]
-    n = prod(values(dims))
+    sizes = Tuple(dim_sizes[d] for d in dims)
+    n = prod(values(dim_sizes))
 
     if br == 0
         # Allocate points on rank-0 for simplicity
@@ -214,11 +211,8 @@ function allocate_shared_keep_order(T; dims...)
     # put them all in the same global_Win_store - this won't introduce type instability
     push!(global_Win_store, win)
 
-    # values(dims) returns a NamedTuple, so need to call values() on the result
-    # to get a Tuple of the actual values - see
-    # https://discourse.julialang.org/t/unexpected-behaviour-of-values-for-generic-kwargs/71938
-    bare_array = unsafe_wrap(Array, base_ptr, Tuple(dims.data))
-    array = NamedDimsArray{keys(dims.data)}(bare_array)
+    bare_array = unsafe_wrap(Array, base_ptr, sizes)
+    array = NamedDimsArray{dims}(bare_array)
 
     @debug_shared_array begin
         # If @debug_shared_array is active, create DebugMPISharedArray instead of Array

@@ -3,17 +3,18 @@ module em_fields
 export setup_em_fields
 export update_phi!
 
-using ..type_definitions: mk_float
+using ..type_definitions: mk_float, spatial_dims_tuple, spatial_dims,
+                          spatial_ndims
 using ..array_allocation: allocate_shared_float
 using ..communication: block_rank, block_synchronize, MPISharedArray
 using ..input_structs
 using ..velocity_moments: update_density!
 
-struct fields{dims,N}
+struct fields
     # phi is the electrostatic potential
-    phi::MPISharedArray{dims,mk_float,N}
+    phi::MPISharedArray{spatial_dims_tuple,mk_float,spatial_ndims}
     # phi0 is the initial electrostatic potential
-    phi0::MPISharedArray{dims,mk_float,N}
+    phi0::MPISharedArray{spatial_dims_tuple,mk_float,spatial_ndims}
     # if including an external forcing for phi, it is of the form
     # phi_external = phi0*drive_amplitude*sinpi(t*drive_frequency)
     force_phi::Bool
@@ -22,8 +23,8 @@ struct fields{dims,N}
 end
 
 function setup_em_fields(m, force_phi, drive_amplitude, drive_frequency)
-    phi = allocate_shared_float(z=m)
-    phi0 = allocate_shared_float(z=m)
+    phi = allocate_shared_float(spatial_dims; z=m)
+    phi0 = allocate_shared_float(spatial_dims; z=m)
     return fields(phi, phi0, force_phi, drive_amplitude, drive_frequency)
 end
 

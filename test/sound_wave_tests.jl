@@ -173,7 +173,7 @@ function run_test(test_input, analytic_frequency, analytic_growth_rate,
             # electrostatic potential
             itime_max = ntime
             iz0 = cld(nz, 3)
-            shifted_time = allocate_float(t=ntime)
+            shifted_time = allocate_float(Val((:t,)); t=ntime)
             @. shifted_time = time - time[itime_min]
             @views phi_fit = fit_delta_phi_mode(shifted_time[itime_min:itime_max], z,
                                                 delta_phi[:, itime_min:itime_max])

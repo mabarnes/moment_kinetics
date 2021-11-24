@@ -37,7 +37,7 @@ function runtests()
             input = grid_input("coord", ngrid, nelement, L,
                 discretization, fd_option, bc, adv_input)
             # create the coordinate struct 'z'
-            z = define_coordinate(input, :z)
+            z = define_coordinate(input, Val(:z))
             # For Chebyshev method, create arrays needed for Chebyshev pseudospectral
             # treatment in z and create the plans for the forward and backward fast
             # Chebyshev transforms. Just get `false` for finite difference.

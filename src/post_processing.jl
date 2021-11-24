@@ -16,10 +16,10 @@ using ..post_processing_input: pp
 using ..quadrature: composite_simpson_weights
 using ..array_allocation: allocate_float
 using ..file_io: open_output_file
-using ..type_definitions: mk_float
+using ..type_definitions: mk_float, pdf_dims, moment_dims
 using ..load_data: open_netcdf_file
 using ..load_data: load_coordinate_data, load_fields_data, load_moments_data, load_pdf_data
-using ..analysis: analyze_fields_data, analyze_moments_data, analyze_pdf_data
+using ..analysis: analyze_fields_data, analyze_moments_data, analyze_pdf_data, pdf_dims_t, moment_dims_t
 using ..velocity_moments: integrate_over_vspace
 
 # NamedDimsArray compatibility for curve_fit - unname converts to parent type
@@ -243,7 +243,7 @@ function calculate_and_write_frequencies(fid, run_name, ntime, time, z, itime_mi
     if pp.calculate_frequencies
         println("Calculating the frequency and damping/growth rate...")
         # shifted_time = t - t0
-        shifted_time = allocate_float(t=ntime)
+        shifted_time = allocate_float(Val((:t,)); t=ntime)
         @. shifted_time = time - time[itime_min]
         # assume phi(z0,t) = A*exp(growth_rate*t)*cos(ω*t + φ)
         # and fit phi(z0,t)/phi(z0,t0), which eliminates the constant A pre-factor
@@ -309,7 +309,7 @@ function calculate_and_write_frequencies(fid, run_name, ntime, time, z, itime_mi
         frequency = 0.0
         growth_rate = 0.0
         phase = 0.0
-        shifted_time = allocate_float(t=ntime)
+        shifted_time = allocate_float(Val((:t,)); t=ntime)
         @. shifted_time = time - time[itime_min]
         fitted_delta_phi = zeros(ntime)
 
@@ -537,7 +537,7 @@ phi_fit_result struct whose fields are:
 """
 function fit_delta_phi_mode(t, z, delta_phi)
     # First fit a cosine to each time slice
-    results = allocate_float(fit_param=3, t=size(delta_phi)[2])
+    results = allocate_float(Val((:fit_param, :t)); fit_param=3, t=size(delta_phi)[2])
     amplitude_guess = 1.0
     offset_guess = 0.0
     for (i, phi_z) in enumerate(eachcol(delta_phi))
@@ -623,8 +623,8 @@ struct phi_fit_result
     amplitude_fit_error::mk_float
     offset_fit_error::mk_float
     cosine_fit_error::mk_float
-    amplitude::Array{mk_float, 1}
-    offset::Array{mk_float, 1}
+    amplitude::NamedDimsArray{(:t,), mk_float, 1}
+    offset::NamedDimsArray{(:t,), mk_float, 1}
 end
 
 function fit_phi0_vs_time(phi0, tmod)
@@ -633,7 +633,7 @@ function fit_phi0_vs_time(phi0, tmod)
     # phi(z0,t)/phi(z0,t0) = exp((t-t₀)γ)*cos((t-t₀)*ω + phase)/cos(phase),
     # where tmod = t-t0 and phase = ωt₀-φ
     @. model(t, p) = exp(p[1]*t) * cos(p[2]*t + p[3]) / cos(p[3])
-    model_params = allocate_float(param=3)
+    model_params = allocate_float(Val((:param,)); param=3)
     model_params[1] = -0.1
     model_params[2] = 8.6
     model_params[3] = 0.0

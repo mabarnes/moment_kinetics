@@ -8,7 +8,7 @@ export enforce_boundary_conditions!
 # package
 using SpecialFunctions: erfc
 # modules
-using ..type_definitions: mk_float
+using ..type_definitions: mk_float, pdf_dims_tuple, pdf_dims, pdf_ndims
 using ..array_allocation: allocate_shared_float
 using ..bgk: init_bgk_pdf!
 using ..communication: block_rank, block_synchronize, MPISharedArray
@@ -16,9 +16,9 @@ using ..velocity_moments: integrate_over_vspace
 using ..velocity_moments: integrate_over_positive_vpa, integrate_over_negative_vpa
 using ..velocity_moments: create_moments, update_qpar!
 
-struct pdf_struct{D}
-    norm::MPISharedArray{D,mk_float,3}
-    unnorm::MPISharedArray{D,mk_float,3}
+struct pdf_struct
+    norm::MPISharedArray{pdf_dims_tuple,mk_float,pdf_ndims}
+    unnorm::MPISharedArray{pdf_dims_tuple,mk_float,pdf_ndims}
 end
 
 # creates the normalised pdf and the velocity-space moments and populates them
@@ -29,7 +29,7 @@ function init_pdf_and_moments(vpa, z, composition, species, n_rk_stages, evolve_
     # create the 'moments' struct that contains various v-space moments and other
     # information related to these moments.
     # the time-dependent entries are not initialised.
-    moments = create_moments(z.n, n_species, evolve_moments)
+    moments = create_moments(evolve_moments; z=z.n, s=n_species)
     if block_rank[] == 0
         # initialise the density profile
         init_density!(moments.dens, z, species, n_species)
@@ -55,8 +55,8 @@ function init_pdf_and_moments(vpa, z, composition, species, n_rk_stages, evolve_
     return pdf, moments
 end
 function create_and_init_pdf(moments, vpa, z, n_species, species)
-    pdf_norm = allocate_shared_float(vpa=vpa.n, z=z.n, s=n_species)
-    pdf_unnorm = allocate_shared_float(vpa=vpa.n, z=z.n, s=n_species)
+    pdf_norm = allocate_shared_float(pdf_dims; vpa=vpa.n, z=z.n, s=n_species)
+    pdf_unnorm = allocate_shared_float(pdf_dims; vpa=vpa.n, z=z.n, s=n_species)
     if block_rank[] == 0
         for is ∈ 1:n_species
             if species[is].z_IC.initialization_option == "bgk" || species[is].vpa_IC.initialization_option == "bgk"
@@ -80,7 +80,7 @@ function create_and_init_pdf(moments, vpa, z, n_species, species)
             end
         end
     end
-    return pdf_struct{(:vpa,:z,:s)}(pdf_norm, pdf_unnorm)
+    return pdf_struct(pdf_norm, pdf_unnorm)
 end
 # for now the only initialisation option for the temperature is constant in z
 # returns vth0 = sqrt(2Ts/ms) / sqrt(2Te/ms) = sqrt(Ts/Te)
