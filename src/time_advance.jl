@@ -6,7 +6,8 @@ export time_advance!
 using NamedDims
 
 using ..type_definitions: mk_float, phase_space_dims, pdf_dims_tuple, pdf_dims,
-                          moment_dims_tuple, moment_dims, pdf_ndims, moment_ndims
+                          moment_dims_tuple, moment_dims, phase_space_ndims, pdf_ndims,
+                          moment_ndims
 using ..array_allocation: allocate_float, allocate_shared_float
 using ..communication: block_rank, block_synchronize, MPISharedArray
 using ..debugging
@@ -111,7 +112,8 @@ function setup_time_advance!(pdf, vpa, z, composition, drive_input, moments,
     # create structure z_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the split part of the GK equation dealing
     # with advection in z
-    z_advect = setup_advection(n_species, Val(:z), z, phase_space_dims; vpa=vpa.n)
+    z_advect = setup_advection(n_species, Val(:z), z, phase_space_dims,
+                               Val(phase_space_ndims); vpa=vpa.n)
     # initialise the z advection speed
     for is ∈ composition.species_local_range
         @views update_speed_z!(z_advect[is], moments.upar[:,is], moments.vth[:,is],
@@ -160,7 +162,8 @@ function setup_time_advance!(pdf, vpa, z, composition, drive_input, moments,
     # create structure vpa_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the split part of the GK equation dealing
     # with advection in vpa
-    vpa_advect = setup_advection(n_species, Val(:vpa), vpa, phase_space_dims; z=z.n)
+    vpa_advect = setup_advection(n_species, Val(:vpa), vpa, phase_space_dims,
+                                 Val(phase_space_ndims); z=z.n)
     # initialise the vpa advection speed
     if block_rank[] == 0
         update_speed_vpa!(vpa_advect, fields, scratch[1], moments, vpa, z, composition,

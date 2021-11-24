@@ -9,7 +9,7 @@ export advance_f_local!
 using Base.Iterators: take, rest
 using NamedDims
 
-using ..type_definitions: mk_float, mk_int
+using ..type_definitions: mk_float, mk_int, Val_to_tuple
 using ..array_allocation: allocate_shared_float, allocate_shared_int, drop_dim
 using ..calculus: derivative!
 using ..communication: block_rank, block_synchronize, MPISharedArray
@@ -65,19 +65,19 @@ Vector{advection_info}
     coords keyword arguments.
 """
 function setup_advection(nspec, ::Val{advection_dim}, advection_coord::coordinate,
-                         ::Val{dims}; other_dim_sizes...) where {advection_dim,dims}
+        ::Val{dims}, ::Val{ndims}; other_dim_sizes...) where {advection_dim,dims,ndims}
     # allocate an array containing structures with much of the info needed
     # to do the 1D advection time advance
-    return [setup_advection_per_species(Val(advection_dim), advection_coord, Val(dims);
-                                        other_dim_sizes...) for _ ∈ 1:nspec]
+    return [setup_advection_per_species(Val(advection_dim), advection_coord, Val(dims),
+                                        Val(ndims); other_dim_sizes...) for _ ∈ 1:nspec]
 end
 # Create arrays needed to compute the advection term(s).
 # The first coordinate argument is the dimension in which advection is calculated with
 # the struct created here. The following arguments are the remaining phase space
 # dimensions, and their order does not matter.
 function setup_advection_per_species(
-        ::Val{advection_dim}, advection_coord::coordinate, ::Val{dims};
-        other_dim_sizes...) where {advection_dim,dims}
+        ::Val{advection_dim}, advection_coord::coordinate, ::Val{dims}, ::Val{ndims};
+        other_dim_sizes...) where {advection_dim,dims,ndims}
     advection_dims = Val(NamedDims.expand_dimnames((advection_dim,), dims))
     other_dims = drop_dim(Val(advection_dim), Val(dims))
     advection_gridelement_dims = Val(NamedDims.expand_dimnames((:grid,:element), other_dims))
@@ -112,7 +112,12 @@ function setup_advection_per_species(
     end
     block_synchronize()
     # return advection_info struct containing necessary arrays
-    return advection_info(rhs, df, speed, modified_speed, adv_fac, upwind_idx, downwind_idx, upwind_increment)
+    return advection_info{Val_to_tuple(advection_dims),
+                          Val_to_tuple(advection_gridelement_dims),
+                          Val_to_tuple(other_dims),
+                          ndims,ndims+1,ndims-1}(
+        rhs, df, speed, modified_speed, adv_fac, upwind_idx, downwind_idx,
+        upwind_increment)
 end
 
 """

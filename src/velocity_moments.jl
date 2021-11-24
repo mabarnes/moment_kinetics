@@ -30,7 +30,7 @@ mutable struct moments
     # Note: may not be set for all species on this process, but this process only ever
     # sets/uses the value for the same subset of species. This means dens_update does
     # not need to be a shared memory array.
-    dens_updated::NamedDimsArray{(:s,),Bool,1}
+    dens_updated::NamedDimsArray{(:s,),Bool,1,Array{Bool,1}}
     # flag that indicates if the density should be evolved via continuity equation
     evolve_density::Bool
     # flag that indicates if exact particle conservation should be enforced
@@ -41,7 +41,7 @@ mutable struct moments
     # Note: may not be set for all species on this process, but this process only ever
     # sets/uses the value for the same subset of species. This means upar_update does
     # not need to be a shared memory array.
-    upar_updated::NamedDimsArray{(:s,),Bool,1}
+    upar_updated::NamedDimsArray{(:s,),Bool,1,Array{Bool,1}}
     # flag that indicates if the parallel flow should be evolved via force balance
     evolve_upar::Bool
     # this is the parallel pressure
@@ -50,7 +50,7 @@ mutable struct moments
     # Note: may not be set for all species on this process, but this process only ever
     # sets/uses the value for the same subset of species. This means ppar_update does
     # not need to be a shared memory array.
-    ppar_updated::NamedDimsArray{(:s,),Bool,1}
+    ppar_updated::NamedDimsArray{(:s,),Bool,1,Array{Bool,1}}
     # flag that indicates if the parallel pressure should be evolved via the energy equation
     evolve_ppar::Bool
     # this is the parallel heat flux
@@ -59,7 +59,7 @@ mutable struct moments
     # Note: may not be set for all species on this process, but this process only ever
     # sets/uses the value for the same subset of species. This means qpar_update does
     # not need to be a shared memory array.
-    qpar_updated::NamedDimsArray{(:s,),Bool,1}
+    qpar_updated::NamedDimsArray{(:s,),Bool,1,Array{Bool,1}}
     # this is the thermal speed based on the parallel temperature Tpar = ppar/dens: vth = sqrt(2*Tpar/m)
     vth::MPISharedArray{moment_dims_tuple,mk_float,moment_ndims}
     # if evolve_ppar = true, then the velocity variable is (vpa - upa)/vth, which introduces

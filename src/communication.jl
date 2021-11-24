@@ -160,7 +160,9 @@ Array{mk_float}
 function allocate_shared(T, ::Val{dims}; dim_sizes...) where dims
     br = block_rank[]
     bs = block_size[]
-    sizes = Tuple(dim_sizes[d] for d in dims)
+    # Broadcasting `getindex()` makes `sizes` type-stable, as suggested here
+    # https://discourse.julialang.org/t/unexpected-behaviour-of-values-for-generic-kwargs/71938/5
+    sizes = getindex.((dim_sizes,), dims)
     n = prod(values(dim_sizes))
 
     if br == 0

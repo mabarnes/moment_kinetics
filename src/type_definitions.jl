@@ -11,6 +11,9 @@ const mk_int = Int64
 function expand_Val_dimnames(::Val{dimnames}, ::Val{dim}) where {dimnames, dim}
     return Val(NamedDims.expand_dimnames(dimnames, dim))
 end
+function Val_to_tuple(::Val{dimnames}) where dimnames
+    return dimnames
+end
 
 const phase_space_dims_tuple = (:vpa, :z)
 const phase_space_ndims = 2
