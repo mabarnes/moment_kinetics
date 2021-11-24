@@ -15,9 +15,8 @@ function source_terms!(pdf_out, fvec_in, moments, vpa, z, dt, spectral, composit
                                              moments.vth[:,is], moments.qpar[:,is], z, dt, spectral)
         end
         if composition.n_neutral_species > 0 && abs(CX_frequency) > 0.0
-            @views source_terms_evolve_ppar_CX!(pdf_out[:,:,:], fvec_in.pdf[:,:,:],
-                                                fvec_in.density, fvec_in.ppar, composition,
-                                                CX_frequency, dt, z)
+            source_terms_evolve_ppar_CX!(pdf_out, fvec_in.pdf, fvec_in.density,
+                                         fvec_in.ppar, composition, CX_frequency, dt, z)
         end
     elseif moments.evolve_density
         for is ∈ composition.species_local_range
