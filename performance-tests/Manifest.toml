@@ -132,6 +132,12 @@ git-tree-sha1 = "9f02045d934dc030edad45944ea80dbd1f0ebea7"
 uuid = "d38c429a-6771-53c6-b99e-75d170b6e991"
 version = "0.5.7"
 
+[[CovarianceEstimation]]
+deps = ["LinearAlgebra", "Statistics", "StatsBase"]
+git-tree-sha1 = "bc3930158d2be029e90b7c40d1371c4f54fa04db"
+uuid = "587fd27a-f159-11e8-2dae-1979310e6154"
+version = "0.2.6"
+
 [[DataAPI]]
 git-tree-sha1 = "ee400abb2298bd13bfc3df1c412ed228061a2385"
 uuid = "9a962f9c-6df0-11e9-0e5d-c546b8b5ee8a"
@@ -469,9 +475,9 @@ uuid = "8f399da3-3557-5675-b5ff-fb832c97cbdb"
 
 [[Libffi_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
-git-tree-sha1 = "761a393aeccd6aa92ec3515e428c26bf99575b3b"
+git-tree-sha1 = "0b4a5d71f3e5200a7dff793393e09dfc2d874290"
 uuid = "e9f186c6-92d2-5b65-8a66-fee21dc1b490"
-version = "3.2.2+0"
+version = "3.2.2+1"
 
 [[Libgcrypt_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Libgpg_error_jll", "Pkg"]
@@ -617,6 +623,12 @@ version = "7.8.0"
 git-tree-sha1 = "bfe47e760d60b82b66b61d2d44128b62e3a369fb"
 uuid = "77ba4419-2d1f-58cd-9bb1-8ffee604a2e3"
 version = "0.3.5"
+
+[[NamedDims]]
+deps = ["AbstractFFTs", "CovarianceEstimation", "LinearAlgebra", "Pkg", "Requires", "Statistics"]
+git-tree-sha1 = "69d23c528c5f298c80ac2e8bfab244822bdd0578"
+uuid = "356022a1-0364-5f58-8944-0da4b18d706f"
+version = "0.2.37"
 
 [[NaturalSort]]
 git-tree-sha1 = "eda490d06b9f7c00752ee81cfa451efe55521e21"
@@ -1175,7 +1187,7 @@ uuid = "f27f6e37-5d2b-51aa-960f-b287f2bc3b7a"
 version = "1.3.7+0"
 
 [[moment_kinetics]]
-deps = ["ArgParse", "DelimitedFiles", "FFTW", "Glob", "IJulia", "Interpolations", "LinearAlgebra", "LsqFit", "MPI", "NCDatasets", "NaturalSort", "OrderedCollections", "PackageCompiler", "Plots", "Revise", "Roots", "SHA", "SpecialFunctions", "Statistics", "TOML", "TimerOutputs"]
+deps = ["ArgParse", "DelimitedFiles", "FFTW", "Glob", "IJulia", "Interpolations", "LinearAlgebra", "LsqFit", "MPI", "NCDatasets", "NamedDims", "NaturalSort", "OrderedCollections", "PackageCompiler", "Plots", "Revise", "Roots", "SHA", "SpecialFunctions", "Statistics", "TOML", "TimerOutputs"]
 path = ".."
 uuid = "b5ff72cc-06fc-4161-ad14-dba1c22ed34e"
 version = "0.1.0"
