@@ -305,7 +305,8 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, composition, mo
     # process in the next loop - that would be an error because different processes
     # write to fvec_new.density[:,is]
     for is ∈ composition.species_local_range
-        @views composition.scratch[is] = integral(fvec_old.density[:,is] .- fvec_new.density[:,is], z.wgts)/integral(fvec_old.density[:,is], z.wgts)
+        @views @. z.scratch = fvec_old.density[:,is] - fvec_new.density[:,is]
+        @views composition.scratch[is] = integral(z.scratch, z.wgts)/integral(fvec_old.density[:,is], z.wgts)
     end
     block_synchronize()
 
