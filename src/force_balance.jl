@@ -30,7 +30,9 @@ end
 # flux term above
 function force_balance_flux_species!(pflx, dens, upar, ppar, z, dt, spectral)
     # calculate the parallel flux of parallel momentum densitg at the previous time level/RK stage
-    @. z.scratch = ppar + dens*upar^2
+    #@. z.scratch = ppar + dens*upar^2
+    # Until julia-1.8 is released, prefer x*x to x^2 to avoid extra allocations when broadcasting.
+    @. z.scratch = ppar + dens*upar*upar
     # calculate d(nu)/dz, averaging the derivative values at element boundaries
     derivative!(z.scratch, z.scratch, z, spectral)
     # update the parallel momentum density to account for the parallel flux of parallel momentum
@@ -39,10 +41,14 @@ end
 # use the force balance equation d(mnu)/dt + ... = -n*Epar + ...
 # to update mnu; this function accounts for the contribution from the Epar term
 function force_balance_Epar_species!(pflx, phi, dens, z, dt, spectral)
-    # calculate the parallel electric field
-    derivative!(z.scratch, -phi, z, spectral)
+    # calculate the (negative of the) parallel electric field.
+    # Done like this because passing in -phi would require a temporary buffer to be allocated.
+    # So z.scratch = -Epar
+    derivative!(z.scratch, phi, z, spectral)
     # update the parallel momentum density to account for the force from the parallel electric field
-    @. pflx += 0.5*dt*z.scratch*dens
+    #  pflx += 0.5*dt*Epar*dens
+    #  => pflx -= 0.5*dt*(-Epar)*dens
+    @. pflx -= 0.5*dt*z.scratch*dens
 end
 
 function force_balance_CX!(pflx, dens, upar, CX_frequency, composition, z, dt)

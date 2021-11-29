@@ -305,7 +305,8 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, composition, mo
     # process in the next loop - that would be an error because different processes
     # write to fvec_new.density[:,is]
     for is ∈ composition.species_local_range
-        @views composition.scratch[is] = integral(fvec_old.density[:,is] .- fvec_new.density[:,is], z.wgts)/integral(fvec_old.density[:,is], z.wgts)
+        @views @. z.scratch = fvec_old.density[:,is] - fvec_new.density[:,is]
+        @views composition.scratch[is] = integral(z.scratch, z.wgts)/integral(fvec_old.density[:,is], z.wgts)
     end
     block_synchronize()
 
@@ -343,7 +344,10 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, composition, mo
                 if moments.evolve_ppar
                     ppar_integral /= integrate_over_vspace(vpa.scratch, vpa.grid, 4, vpa.wgts) - 0.5 * vpa2_moment
                     # update the pdf to account for the energy-conserving correction
-                    @. fnew_view -= vpa.scratch * (vpa.grid^2 - 0.5) * ppar_integral
+                    #@. fnew_view -= vpa.scratch * (vpa.grid^2 - 0.5) * ppar_integral
+                    # Until julia-1.8 is released, prefer x*x to x^2 to avoid
+                    # extra allocations when broadcasting.
+                    @. fnew_view -= vpa.scratch * (vpa.grid * vpa.grid - 0.5) * ppar_integral
                 end
             end
             fvec_new.density[iz,is] += fvec_old.density[iz,is] * avgdens_ratio

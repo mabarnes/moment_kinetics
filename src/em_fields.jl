@@ -9,11 +9,11 @@ using ..communication: block_rank, block_synchronize, MPISharedArray
 using ..input_structs
 using ..velocity_moments: update_density!
 
-struct fields
+struct fields{N}
     # phi is the electrostatic potential
-    phi::MPISharedArray{mk_float}
+    phi::MPISharedArray{mk_float,N}
     # phi0 is the initial electrostatic potential
-    phi0::MPISharedArray{mk_float}
+    phi0::MPISharedArray{mk_float,N}
     # if including an external forcing for phi, it is of the form
     # phi_external = phi0*drive_amplitude*sinpi(t*drive_frequency)
     force_phi::Bool
