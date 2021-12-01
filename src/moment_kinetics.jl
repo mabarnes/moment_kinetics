@@ -10,6 +10,7 @@ using MPI
 include("command_line_options.jl")
 include("debugging.jl")
 include("type_definitions.jl")
+include("looping.jl")
 include("communication.jl")
 include("array_allocation.jl")
 include("interpolation.jl")
@@ -51,7 +52,8 @@ using TOML
 using .file_io: setup_file_io, finish_file_io
 using .file_io: write_data_to_ascii, write_data_to_binary
 using .command_line_options: options
-using .communication: block_rank, block_synchronize, finalize_comms!, initialize_comms!
+using .communication: block_rank, block_size, block_synchronize,
+                      finalize_comms!, initialize_comms!
 using .coordinates: define_coordinate
 using .initial_conditions: init_pdf_and_moments
 using .moment_kinetics_input: mk_input, run_type, performance_test
@@ -112,6 +114,9 @@ function setup_moment_kinetics(input_dict::Dict)
     z = define_coordinate(z_input, composition)
     # initialize vpa grid and write grid point locations to file
     vpa = define_coordinate(vpa_input, composition)
+    # Create loop range variables for shared-memory-parallel loops
+    looping.setup_loop_ranges!(block_rank[], block_size[]; s=composition.n_species,
+                               z=z.n, vpa=vpa.n)
     # initialize f(z,vpa) and the lowest three v-space moments (density(z), upar(z) and ppar(z)),
     # each of which may be evolved separately depending on input choices.
     pdf, moments = init_pdf_and_moments(vpa, z, composition, species, t_input.n_rk_stages, evolve_moments)
