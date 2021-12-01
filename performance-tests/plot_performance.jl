@@ -23,9 +23,10 @@ Returns
 CSV.File
 """
 function load_run(filename)
-    data = CSV.File(filename; header=false, datarow=2, delim=" ", ignorerepeated=true,
-                    dateformat=PerformanceTestUtils.date_format, type=Float64,
-                    types=Dict(1=>String, 2=>String, 3=>DateTime))
+    data = CSV.File(filename; header=false, skipto=2, delim=" ", ignorerepeated=true,
+                    dateformat=PerformanceTestUtils.date_format,
+                    types=(i,name)->ifelse(i ∈ (1,2), String,
+                                           ifelse(i == 3, DateTime, Float64)))
     return data
 end
 
