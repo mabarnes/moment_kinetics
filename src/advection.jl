@@ -89,12 +89,11 @@ the index increment needed to sweep in the upwind direction
 
 Arguments
 ---------
-advection : Vector{advection_info}(n_orthogonal)
-    structs containing information on how to advect in a direction. Has as many entries
-    as there are grid points in the dimension orthogonal to the advection direction.
-orthogonal_coordinate : coordinate
-    coordinate struct for the dimension orthogonal to the advection direction, used for
-    information needed to iterate over the orthogonal coordinate.
+advection : advection_info
+    struct containing information on how to advect in a direction.
+orthogonal_coordinate_range : UnitRange{mk_int}
+    Range of indices for the dimension orthogonal to the advection direction, used to
+    iterate over the orthogonal coordinate.
 """
 function update_boundary_indices!(advection, orthogonal_coordinate_range)
     n = size(advection.speed,1)
