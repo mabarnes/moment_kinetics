@@ -145,60 +145,65 @@ function run_test(test_input, analytic_frequency, analytic_growth_rate,
     quietoutput() do
         # run simulation
         run_moment_kinetics(to, input)
-
-        # Load and analyse output
-        #########################
-
-        path = joinpath(realpath(input["base_directory"]), name, name)
-
-        # open the netcdf file and give it the handle 'fid'
-        fid = open_netcdf_file(path)
-
-        # load space-time coordinate data
-        nvpa, vpa, vpa_wgts, nz, z, z_wgts, Lz, ntime, time = load_coordinate_data(fid)
-
-        # load fields data
-        phi = load_fields_data(fid)
-
-        close(fid)
-
-        # analyze the fields data
-        phi_fldline_avg, delta_phi = analyze_fields_data(phi, ntime, nz, z_wgts, Lz)
-
-        # use a fit to calculate the damping rate and growth rate of the perturbed
-        # electrostatic potential
-        itime_max = ntime
-        iz0 = cld(nz, 3)
-        shifted_time = allocate_float(ntime)
-        @. shifted_time = time - time[itime_min]
-        @views phi_fit = fit_delta_phi_mode(shifted_time[itime_min:itime_max], z,
-                                            delta_phi[:, itime_min:itime_max])
-        ## The following plot code (copied from post_processing.jl) may be helpful for
-        ## debugging tests. Uncomment to use, and also uncomment
-        ## `using Plots: plot, plot!, gui at the top of the file.
-        #L = z[end] - z[begin]
-        #fitted_delta_phi =
-        #    @. (phi_fit.amplitude0 * cos(2.0 * π * (z[iz0] + phi_fit.offset0) / L)
-        #        * exp(phi_fit.growth_rate * shifted_time)
-        #        * cos(phi_fit.frequency * shifted_time + phi_fit.phase))
-        #@views plot(time, abs.(delta_phi[iz0,:]), xlabel="t*Lz/vti", ylabel="δϕ", yaxis=:log)
-        #plot!(time, abs.(fitted_delta_phi))
-        #gui()
     end
 
-    # Check the fit errors are not too large, otherwise we are testing junk
-    @test phi_fit.amplitude_fit_error < 2.e-2
-    @test phi_fit.offset_fit_error < 5.e-6
-    @test phi_fit.cosine_fit_error < 5.e-8
+    if global_rank[] == 0
+        quietoutput() do
 
-    # analytic_frequency and analytic_growth rate are the analytically expected values
-    # (from F. Parra's calculation).
-    @test isapprox(phi_fit.frequency, analytic_frequency, rtol=analytical_rtol)
-    @test isapprox(phi_fit.growth_rate, analytic_growth_rate, rtol=analytical_rtol)
+            # Load and analyse output
+            #########################
 
-    # Test some values of phi for a regression test, which can use with tighter
-    # tolerances than the analytic test.
-    @test isapprox(phi[regression_range], regression_phi, rtol=regression_rtol)
+            path = joinpath(realpath(input["base_directory"]), name, name)
+
+            # open the netcdf file and give it the handle 'fid'
+            fid = open_netcdf_file(path)
+
+            # load space-time coordinate data
+            nvpa, vpa, vpa_wgts, nz, z, z_wgts, Lz, ntime, time = load_coordinate_data(fid)
+
+            # load fields data
+            phi = load_fields_data(fid)
+
+            close(fid)
+
+            # analyze the fields data
+            phi_fldline_avg, delta_phi = analyze_fields_data(phi, ntime, nz, z_wgts, Lz)
+
+            # use a fit to calculate the damping rate and growth rate of the perturbed
+            # electrostatic potential
+            itime_max = ntime
+            iz0 = cld(nz, 3)
+            shifted_time = allocate_float(ntime)
+            @. shifted_time = time - time[itime_min]
+            @views phi_fit = fit_delta_phi_mode(shifted_time[itime_min:itime_max], z,
+                                                delta_phi[:, itime_min:itime_max])
+            ## The following plot code (copied from post_processing.jl) may be helpful for
+            ## debugging tests. Uncomment to use, and also uncomment
+            ## `using Plots: plot, plot!, gui at the top of the file.
+            #L = z[end] - z[begin]
+            #fitted_delta_phi =
+            #    @. (phi_fit.amplitude0 * cos(2.0 * π * (z[iz0] + phi_fit.offset0) / L)
+            #        * exp(phi_fit.growth_rate * shifted_time)
+            #        * cos(phi_fit.frequency * shifted_time + phi_fit.phase))
+            #@views plot(time, abs.(delta_phi[iz0,:]), xlabel="t*Lz/vti", ylabel="δϕ", yaxis=:log)
+            #plot!(time, abs.(fitted_delta_phi))
+            #gui()
+        end
+
+        # Check the fit errors are not too large, otherwise we are testing junk
+        @test phi_fit.amplitude_fit_error < 1.e-1
+        @test phi_fit.offset_fit_error < 5.e-6
+        @test phi_fit.cosine_fit_error < 5.e-8
+
+        # analytic_frequency and analytic_growth rate are the analytically expected values
+        # (from F. Parra's calculation).
+        @test isapprox(phi_fit.frequency, analytic_frequency, rtol=analytical_rtol)
+        @test isapprox(phi_fit.growth_rate, analytic_growth_rate, rtol=analytical_rtol)
+
+        # Test some values of phi for a regression test, which can use with tighter
+        # tolerances than the analytic test.
+        @test isapprox(phi[regression_range], regression_phi, rtol=regression_rtol)
+    end
 end
 
 

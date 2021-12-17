@@ -33,6 +33,7 @@ n_rk_stages = 4
 split_operators = false
 z_ngrid = 81
 z_nelement = 1
+z_bc = "periodic"
 z_discretization = "finite_difference"
 vpa_ngrid = 241
 vpa_nelement = 1

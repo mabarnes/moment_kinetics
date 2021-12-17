@@ -1,17 +1,10 @@
-module SoundWavePerformance
+module SoundWaveDebug
 
-include("utils.jl")
-using .PerformanceTestUtils
-
-const test_name = "sound_wave"
+include("setup.jl")
 
 # Create a temporary directory for test output
 test_output_directory = tempname()
 mkpath(test_output_directory)
-
-# Useful parameters
-const z_L = 1.0 # always 1 in normalized units?
-const vpa_L = 8.0
 
 # default inputs for tests
 test_input_finite_difference = Dict("n_ion_species" => 1,
@@ -29,34 +22,34 @@ test_input_finite_difference = Dict("n_ion_species" => 1,
                                     "initial_density2" => 0.5,
                                     "initial_temperature2" => 1.0,
                                     "z_IC_option1" => "sinusoid",
-                                    "z_IC_density_amplitude1" => 0.5,
+                                    "z_IC_density_amplitude1" => 0.001,
                                     "z_IC_density_phase1" => 0.0,
                                     "z_IC_upar_amplitude1" => 0.0,
                                     "z_IC_upar_phase1" => 0.0,
-                                    "z_IC_temperature_amplitude1" => 0.5,
-                                    "z_IC_temperature_phase1" => π,
+                                    "z_IC_temperature_amplitude1" => 0.0,
+                                    "z_IC_temperature_phase1" => 0.0,
                                     "z_IC_option2" => "sinusoid",
-                                    "z_IC_density_amplitude2" => 0.5,
-                                    "z_IC_density_phase2" => π,
+                                    "z_IC_density_amplitude2" => 0.001,
+                                    "z_IC_density_phase2" => 0.0,
                                     "z_IC_upar_amplitude2" => 0.0,
                                     "z_IC_upar_phase2" => 0.0,
-                                    "z_IC_temperature_amplitude2" => 0.5,
+                                    "z_IC_temperature_amplitude2" => 0.0,
                                     "z_IC_temperature_phase2" => 0.0,
                                     "charge_exchange_frequency" => 2*π*0.1,
                                     "ionization_frequency" => 0.0,
-                                    "nstep" => 100,
-                                    "dt" => 0.0005,
-                                    "nwrite" => 200,
+                                    "nstep" => 3,
+                                    "dt" => 0.002,
+                                    "nwrite" => 2,
                                     "use_semi_lagrange" => false,
                                     "n_rk_stages" => 4,
                                     "split_operators" => false,
-                                    "z_ngrid" => 81,
+                                    "z_ngrid" => 8,
                                     "z_nelement" => 1,
                                     "z_bc" => "periodic",
                                     "z_discretization" => "finite_difference",
-                                    "vpa_ngrid" => 241,
+                                    "vpa_ngrid" => 8,
                                     "vpa_nelement" => 1,
-                                    "vpa_L" => vpa_L,
+                                    "vpa_L" => 8.0,
                                     "vpa_bc" => "periodic",
                                     "vpa_discretization" => "finite_difference")
 
@@ -78,11 +71,11 @@ test_input_finite_difference_split_3_moments =
 test_input_chebyshev = merge(test_input_finite_difference,
                              Dict("run_name" => "chebyshev_pseudospectral",
                                   "z_discretization" => "chebyshev_pseudospectral",
-                                  "z_ngrid" => 9,
-                                  "z_nelement" => 10,
+                                  "z_ngrid" => 3,
+                                  "z_nelement" => 2,
                                   "vpa_discretization" => "chebyshev_pseudospectral",
-                                  "vpa_ngrid" => 17,
-                                  "vpa_nelement" => 15))
+                                  "vpa_ngrid" => 3,
+                                  "vpa_nelement" => 2))
 
 test_input_chebyshev_split_1_moment =
     merge(test_input_chebyshev,
@@ -99,36 +92,64 @@ test_input_chebyshev_split_3_moments =
           Dict("run_name" => "chebyshev_pseudospectral_split_3_moments",
                "evolve_moments_parallel_pressure" => true))
 
-inputs_list = (test_input_finite_difference,
-               test_input_finite_difference_split_1_moment,
-               test_input_finite_difference_split_2_moments,
-               test_input_finite_difference_split_3_moments,
-               test_input_chebyshev,
-               test_input_chebyshev_split_1_moment,
-               test_input_chebyshev_split_2_moments,
-               test_input_chebyshev_split_3_moments)
 
-function run_tests()
-    check_config()
+"""
+Run a sound-wave test for a single set of parameters
+"""
+# Note 'name' should not be shared by any two tests in this file
+function run_test(test_input; args...)
+    # by passing keyword arguments to run_test, args becomes a Dict which can be used to
+    # update the default inputs
 
-    collected_initialization_results = Vector{Float64}(undef, 0)
-    collected_results = Vector{Float64}(undef, 0)
+    # Convert keyword arguments to a unique name
+    name = test_input["run_name"]
+    if length(args) > 0
+        name = string(name, "_", (string(k, "-", v, "_") for (k, v) in args)...)
 
-    for input ∈ inputs_list
-
-        (initialization_results, results) = run_test(input)
-        collected_initialization_results  = vcat(collected_initialization_results,
-                                                 initialization_results)
-        collected_results = vcat(collected_results, results)
+        # Remove trailing "_"
+        name = chop(name)
     end
 
-    upload_result(test_name, collected_initialization_results, collected_results)
+    @testset "$name" begin
+        # Provide some progress info
+        println("    - bug-checking ", name)
+
+        # Convert dict from symbol keys to String keys
+        modified_inputs = Dict(String(k) => v for (k, v) in args)
+
+        # Update default inputs with values to be changed
+        input = merge(test_input, modified_inputs)
+
+        input["run_name"] = name
+
+        # run simulation
+        run_moment_kinetics(input)
+    end
 end
 
-end # SoundWavePerformance
+function runtests()
+    @testset "sound wave" begin
+        println("sound wave tests")
 
-using .SoundWavePerformance
+        @testset "finite difference" begin
+            run_test(test_input_finite_difference)
+            run_test(test_input_finite_difference_split_1_moment)
+            run_test(test_input_finite_difference_split_2_moments)
+            run_test(test_input_finite_difference_split_3_moments)
+        end
 
-if abspath(PROGRAM_FILE) == @__FILE__
-    SoundWavePerformance.run_tests()
+        @testset "Chebyshev" begin
+            run_test(test_input_chebyshev)
+            run_test(test_input_chebyshev_split_1_moment)
+            run_test(test_input_chebyshev_split_2_moments)
+            run_test(test_input_chebyshev_split_3_moments)
+        end
+    end
 end
+
+end # SoundWaveDebug
+
+
+using .SoundWaveDebug
+
+SoundWaveDebug.runtests()

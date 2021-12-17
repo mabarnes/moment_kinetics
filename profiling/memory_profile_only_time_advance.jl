@@ -1,8 +1,8 @@
 using Profile
-using TimerOutputs
 using TOML
 
-using moment_kinetics: run_moment_kinetics, options
+using moment_kinetics: run_moment_kinetics, setup_moment_kinetics, time_advance!,
+                       options
 
 function main(input_file)
     input = TOML.parsefile(input_file)
@@ -14,15 +14,16 @@ function main(input_file)
     short_input = deepcopy(input)
     short_input["nstep"] = 2
 
-    to = TimerOutput()
-
     # Short run to make sure everything is compiled
-    run_moment_kinetics(to, short_input)
+    run_moment_kinetics(short_input)
 
-    # Reset memory allocation counters, so we only count the main run
+    # Do setup
+    mk_state = setup_moment_kinetics(input)
+
+    # Reset memory allocation counters, so we only count the main time-advance loop
     Profile.clear_malloc_data()
 
-    run_moment_kinetics(to, input)
+    time_advance!(mk_state...)
 
     return nothing
 end

@@ -1,47 +1,70 @@
 module array_allocation
 
-export allocate_float, allocate_int, allocate_complex, allocate_bool
+export allocate_float, allocate_int, allocate_complex, allocate_bool, allocate_shared
 
 using ..type_definitions: mk_float, mk_int
+using ..communication: allocate_shared, block_rank
+using ..debugging
+@debug_initialize_NaN using ..communication: block_synchronize
 
-# allocate 1d array with n entries of type Bool
-function allocate_bool(n)
-    return array = Array{Bool,1}(undef, n)
+# allocate array with dimensions given by dims and entries of type Bool
+function allocate_bool(dims...)
+    return array = Array{Bool}(undef, dims...)
 end
-
-# allocate 1d array with n entries of type mk_int
-function allocate_int(n)
-    return array = Array{mk_int,1}(undef, n)
-end
-# allocate 1d array with n entries of type mk_int
-function allocate_int(n,m)
-    return array = Array{mk_int,1}(undef, n, m)
+# variant where array is in shared memory for all processors in the 'block'
+function allocate_shared_bool(dims...)
+    return array = allocate_shared(Bool, dims)
 end
 
-# allocate 1d array with n entries of type mk_float
-function allocate_float(n)
-    return array = Array{mk_float,1}(undef, n)
+# allocate 1d array with dimensions given by dims and entries of type mk_int
+function allocate_int(dims...)
+    return array = Array{mk_int}(undef, dims...)
 end
-# allocate a 2d array of size n×m with entries of type mk_float
-function allocate_float(n,m)
-    return array = Array{mk_float,2}(undef, n, m)
-end
-# allocate a 3d array of size n×m with entries of type mk_float
-function allocate_float(n,m,p)
-    return array = Array{mk_float,3}(undef, n, m, p)
-end
-# allocate a 4d array of size n×mxpxq with entries of type mk_float
-function allocate_float(n,m,p,q)
-    return array = Array{mk_float,4}(undef, n, m, p, q)
-end
-# allocate 1d array with n entries of type Complex{mk_float}
-function allocate_complex(n)
-    return array = Array{Complex{mk_float},1}(undef, n)
+# variant where array is in shared memory for all processors in the 'block'
+function allocate_shared_int(dims...)
+    return array = allocate_shared(mk_int, dims)
 end
 
-# allocate a 2d array of size n×m with entries of type Complex{mk_float}
-function allocate_complex(n,m)
-    return array = Array{Complex{mk_float},2}(undef, n, m)
+# allocate array with dimensions given by dims and entries of type mk_float
+function allocate_float(dims...)
+    array = Array{mk_float}(undef, dims...)
+    @debug_initialize_NaN begin
+        array .= NaN
+    end
+    return array
+end
+# variant where array is in shared memory for all processors in the 'block'
+function allocate_shared_float(dims...)
+    array = allocate_shared(mk_float, dims)
+    @debug_initialize_NaN begin
+        # Initialize as NaN to try and catch use of uninitialized values
+        if block_rank[] == 0
+            array .= NaN
+        end
+        block_synchronize()
+    end
+    return array
+end
+
+# allocate 1d array with dimensions given by dims and entries of type Complex{mk_float}
+function allocate_complex(dims...)
+    array = Array{Complex{mk_float}}(undef, dims...)
+    @debug_initialize_NaN begin
+        array .= NaN
+    end
+    return array
+end
+# variant where array is in shared memory for all processors in the 'block'
+function allocate_shared_complex(dims...)
+    array = allocate_shared(Complex{mk_float}, dims)
+    @debug_initialize_NaN begin
+        # Initialize as NaN to try and catch use of uninitialized values
+        if block_rank[] == 0
+            array .= NaN
+        end
+        block_synchronize()
+    end
+    return array
 end
 
 end

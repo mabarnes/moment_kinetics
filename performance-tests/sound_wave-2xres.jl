@@ -1,9 +1,9 @@
-module SoundWavePerformance
+module SoundWave2xResPerformance
 
 include("utils.jl")
 using .PerformanceTestUtils
 
-const test_name = "sound_wave"
+const test_name = "sound_wave-2xres"
 
 # Create a temporary directory for test output
 test_output_directory = tempname()
@@ -45,16 +45,16 @@ test_input_finite_difference = Dict("n_ion_species" => 1,
                                     "charge_exchange_frequency" => 2*π*0.1,
                                     "ionization_frequency" => 0.0,
                                     "nstep" => 100,
-                                    "dt" => 0.0005,
+                                    "dt" => 0.0002,
                                     "nwrite" => 200,
                                     "use_semi_lagrange" => false,
                                     "n_rk_stages" => 4,
                                     "split_operators" => false,
-                                    "z_ngrid" => 81,
+                                    "z_ngrid" => 161,
                                     "z_nelement" => 1,
                                     "z_bc" => "periodic",
                                     "z_discretization" => "finite_difference",
-                                    "vpa_ngrid" => 241,
+                                    "vpa_ngrid" => 481,
                                     "vpa_nelement" => 1,
                                     "vpa_L" => vpa_L,
                                     "vpa_bc" => "periodic",
@@ -79,9 +79,9 @@ test_input_chebyshev = merge(test_input_finite_difference,
                              Dict("run_name" => "chebyshev_pseudospectral",
                                   "z_discretization" => "chebyshev_pseudospectral",
                                   "z_ngrid" => 9,
-                                  "z_nelement" => 10,
+                                  "z_nelement" => 20,
                                   "vpa_discretization" => "chebyshev_pseudospectral",
-                                  "vpa_ngrid" => 17,
+                                  "vpa_ngrid" => 34,
                                   "vpa_nelement" => 15))
 
 test_input_chebyshev_split_1_moment =
@@ -125,10 +125,10 @@ function run_tests()
     upload_result(test_name, collected_initialization_results, collected_results)
 end
 
-end # SoundWavePerformance
+end # SoundWave2xResPerformance
 
-using .SoundWavePerformance
+using .SoundWave2xResPerformance
 
 if abspath(PROGRAM_FILE) == @__FILE__
-    SoundWavePerformance.run_tests()
+    SoundWave2xResPerformance.run_tests()
 end

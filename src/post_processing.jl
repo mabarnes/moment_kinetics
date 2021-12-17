@@ -529,7 +529,7 @@ phi_fit_result struct whose fields are:
 """
 function fit_delta_phi_mode(t, z, delta_phi)
     # First fit a cosine to each time slice
-    results = Array{mk_float, 2}(undef, 3, size(delta_phi)[2])
+    results = allocate_float(3, size(delta_phi)[2])
     amplitude_guess = 1.0
     offset_guess = 0.0
     for (i, phi_z) in enumerate(eachcol(delta_phi))
@@ -636,8 +636,8 @@ function fit_phi0_vs_time(phi0, tmod)
     #@. standard_deviation = se * sqrt(size(tmod))
 
     fitted_function = model(tmod, fit.param)
-    fit_error = sqrt(mean((phi0/phi0[1] - fitted_function).^2
-                          / max.(phi0/phi0[1], fitted_function).^2))
+    fit_error = sqrt(mean(@.((phi0/phi0[1] - fitted_function)^2
+                             / max(phi0/phi0[1], fitted_function)^2)))
 
     return fit.param[1], fit.param[2], fit.param[3], fit_error
 end

@@ -1,2 +1,3 @@
+commit = true
 upload = true
 machine = "my-machine"

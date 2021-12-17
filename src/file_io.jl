@@ -7,6 +7,7 @@ export write_data_to_ascii
 export write_data_to_binary
 
 using NCDatasets
+using ..communication: block_rank
 using ..type_definitions: mk_float, mk_int
 
 # structure containing the various input/output streams
@@ -20,30 +21,54 @@ struct ios
     # such as the electrostatic potential are written
     fields::IOStream
 end
+
+# Use this long-winded type (found by using `typeof(v)` where `v` is a variable
+# returned from `NCDatasets.defVar()`) because compiler does not seem to be
+# able to pick up the return types of `defVar()` at compile time, so without
+# using it the result returned from `setup_file_io()` is not a concrete type.
+nc_var_type{N} = Union{
+   NCDatasets.CFVariable{mk_float, N,
+                         NCDatasets.Variable{mk_float, N, NCDatasets.NCDataset},
+                         NCDatasets.Attributes{NCDatasets.NCDataset{Nothing}},
+                         NamedTuple{(:fillvalue, :scale_factor, :add_offset,
+                                     :calendar, :time_origin, :time_factor),
+                                    NTuple{6, Nothing}}},
+   NCDatasets.CFVariable{mk_float, N,
+                         NCDatasets.Variable{mk_float, N,
+                                             NCDatasets.NCDataset{Nothing}},
+                         NCDatasets.Attributes{NCDatasets.NCDataset{Nothing}},
+                         NamedTuple{(:fillvalue, :scale_factor, :add_offset,
+                                     :calendar, :time_origin, :time_factor),
+                                    NTuple{6, Nothing}}}}
 # structure containing the data/metadata needed for netcdf file i/o
-struct netcdf_info{t_type, zvpast_type, zt_type, zst_type}
+struct netcdf_info
     # file identifier for the netcdf file to which data is written
     fid::NCDataset
     # handle for the time variable
-    time::t_type
+    time::nc_var_type{1}
     # handle for the distribution function variable
-    f::zvpast_type
+    f::nc_var_type{4}
     # handle for the electrostatic potential variable
-    phi::zt_type
+    phi::nc_var_type{2}
     # handle for the species density
-    density::zst_type
+    density::nc_var_type{3}
     # handle for the species parallel flow
-    parallel_flow::zst_type
+    parallel_flow::nc_var_type{3}
     # handle for the species parallel pressure
-    parallel_pressure::zst_type
+    parallel_pressure::nc_var_type{3}
     # handle for the species parallel heat flux
-    parallel_heat_flux::zst_type
+    parallel_heat_flux::nc_var_type{3}
     # handle for the species thermal speed
-    thermal_speed::zst_type
+    thermal_speed::nc_var_type{3}
 end
 # open the necessary output files
 function setup_file_io(output_dir, run_name, vpa, z, composition,
                        collisions, evolve_ppar)
+    if block_rank[] != 0
+        # Only read/write from first process in each 'block'
+        return nothing, nothing
+    end
+
     # check to see if output_dir exists in the current directory
     # if not, create it
     isdir(output_dir) || mkdir(output_dir)
@@ -180,15 +205,16 @@ function setup_netcdf_io(prefix, z, vpa, composition, collisions, evolve_ppar)
 
     # create a struct that stores the variables and other info needed for
     # writing to the netcdf file during run-time
-    t_type = typeof(cdf_time)
-    zvpast_type = typeof(cdf_f)
-    zt_type = typeof(cdf_phi)
-    zst_type = typeof(cdf_density)
-    return netcdf_info{t_type, zvpast_type, zt_type, zst_type}(fid, cdf_time, cdf_f,
-        cdf_phi, cdf_density, cdf_upar, cdf_ppar, cdf_qpar, cdf_vth)
+    return netcdf_info(fid, cdf_time, cdf_f, cdf_phi, cdf_density, cdf_upar,
+                       cdf_ppar, cdf_qpar, cdf_vth)
 end
 # close all opened output files
 function finish_file_io(io, cdf)
+    if block_rank[] != 0
+        # Only read/write from first process in each 'block'
+        return nothing
+    end
+
     # get the fields in the ios struct
     io_fields = fieldnames(typeof(io))
     for i ∈ 1:length(io_fields)
@@ -198,12 +224,22 @@ function finish_file_io(io, cdf)
     return nothing
 end
 function write_data_to_ascii(ff, moments, fields, vpa, z, t, n_species, io)
+    if block_rank[] != 0
+        # Only read/write from first process in each 'block'
+        return
+    end
+
     #write_f_ascii(ff, z, vpa, t, io.ff)
     write_moments_ascii(moments, z, t, n_species, io.moments)
     write_fields_ascii(fields, z, t, io.fields)
 end
 # write the function f(z,vpa) at this time slice
 function write_f_ascii(f, z, vpa, t, io)
+    if block_rank[] != 0
+        # Only read/write from first process in each 'block'
+        return nothing
+    end
+
     @inbounds begin
         n_species = size(f,3)
         for is ∈ 1:n_species
@@ -222,6 +258,11 @@ function write_f_ascii(f, z, vpa, t, io)
 end
 # write moments of the distribution function f(z,vpa) at this time slice
 function write_moments_ascii(mom, z, t, n_species, io)
+    if block_rank[] != 0
+        # Only read/write from first process in each 'block'
+        return nothing
+    end
+
     @inbounds begin
         for is ∈ 1:n_species
             for i ∈ 1:z.n
@@ -236,6 +277,11 @@ function write_moments_ascii(mom, z, t, n_species, io)
 end
 # write electrostatic potential at this time slice
 function write_fields_ascii(flds, z, t, io)
+    if block_rank[] != 0
+        # Only read/write from first process in each 'block'
+        return nothing
+    end
+
     @inbounds begin
         for i ∈ 1:z.n
             println(io,"t: ", t, ",   z: ", z.grid[i], "  phi: ", flds.phi[i])
@@ -246,6 +292,11 @@ function write_fields_ascii(flds, z, t, io)
 end
 # write time-dependent data to the netcdf file
 function write_data_to_binary(ff, moments, fields, t, n_species, cdf, t_idx)
+    if block_rank[] != 0
+        # Only read/write from first process in each 'block'
+        return
+    end
+
     # add the time for this time slice to the netcdf file
     cdf.time[t_idx] = t
     # add the distribution function data at this time slice to the netcdf file

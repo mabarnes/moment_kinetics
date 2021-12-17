@@ -9,15 +9,16 @@ export enforce_boundary_conditions!
 using SpecialFunctions: erfc
 # modules
 using ..type_definitions: mk_float
-using ..array_allocation: allocate_float
+using ..array_allocation: allocate_shared_float
 using ..bgk: init_bgk_pdf!
+using ..communication: block_rank, block_synchronize, MPISharedArray
 using ..velocity_moments: integrate_over_vspace
 using ..velocity_moments: integrate_over_positive_vpa, integrate_over_negative_vpa
 using ..velocity_moments: create_moments, update_qpar!
 
 struct pdf_struct
-    norm::Array{mk_float,3}
-    unnorm::Array{mk_float,3}
+    norm::MPISharedArray{mk_float,3}
+    unnorm::MPISharedArray{mk_float,3}
 end
 
 # creates the normalised pdf and the velocity-space moments and populates them
@@ -29,46 +30,54 @@ function init_pdf_and_moments(vpa, z, composition, species, n_rk_stages, evolve_
     # information related to these moments.
     # the time-dependent entries are not initialised.
     moments = create_moments(z.n, n_species, evolve_moments)
-    # initialise the density profile
-    init_density!(moments.dens, z, species, n_species)
-    moments.dens_updated .= true
-    # initialise the parallel flow profile
-    init_upar!(moments.upar, z, species, n_species)
-    moments.upar_updated .= true
-    # initialise the parallel thermal speed profile
-    init_vth!(moments.vth, z, species, n_species)
-    @. moments.ppar = 0.5 * moments.dens * moments.vth^2
-    moments.ppar_updated .= true
+    if block_rank[] == 0
+        # initialise the density profile
+        init_density!(moments.dens, z, species, n_species)
+        moments.dens_updated .= true
+        # initialise the parallel flow profile
+        init_upar!(moments.upar, z, species, n_species)
+        moments.upar_updated .= true
+        # initialise the parallel thermal speed profile
+        init_vth!(moments.vth, z, species, n_species)
+        @. moments.ppar = 0.5 * moments.dens * moments.vth^2
+        moments.ppar_updated .= true
+    end
+    block_synchronize()
     # create and initialise the normalised particle distribution function (pdf)
     # such that ∫dwpa pdf.norm = 1, ∫dwpa wpa * pdf.norm = 0, and ∫dwpa wpa^2 * pdf.norm = 1/2
     # note that wpa = vpa - upar, unless moments.evolve_ppar = true, in which case wpa = (vpa - upar)/vth
     # the definition of pdf.norm changes accordingly from pdf.unnorm / density to pdf.unnorm * vth / density
     # when evolve_ppar = true.
     pdf = create_and_init_pdf(moments, vpa, z, n_species, species)
-    # calculae the initial parallel heat flux from the initial un-normalised pdf
-    update_qpar!(moments.qpar, moments.qpar_updated, pdf.unnorm, vpa, z.n, moments.vpa_norm_fac)
+    block_synchronize()
+    # calculate the initial parallel heat flux from the initial un-normalised pdf
+    update_qpar!(moments.qpar, moments.qpar_updated, pdf.unnorm, vpa, z, composition, moments.vpa_norm_fac)
     return pdf, moments
 end
 function create_and_init_pdf(moments, vpa, z, n_species, species)
-    pdf_norm = allocate_float(vpa.n, z.n, n_species)
-    for is ∈ 1:n_species
-        if species[is].z_IC.initialization_option == "bgk" || species[is].vpa_IC.initialization_option == "bgk"
-            @views init_bgk_pdf!(f[:,:,is], 0.0, species[is].initial_temperature, z.grid, z.L, vpa.grid)
-        else
-            # updates pdf_norm to contain pdf / density, so that ∫dvpa pdf.norm = 1,
-            # ∫dwpa wpa * pdf.norm = 0, and ∫dwpa m_s (wpa/vths)^2 pdf.norm = 1/2
-            # to machine precision
-            @views init_pdf_over_density!(pdf_norm[:,:,is], species[is], vpa, z, moments.vth[:,is], moments.upar[:,is],
-                                          moments.vpa_norm_fac[:,is], moments.evolve_upar, moments.evolve_ppar)
+    pdf_norm = allocate_shared_float(vpa.n, z.n, n_species)
+    pdf_unnorm = allocate_shared_float(vpa.n, z.n, n_species)
+    if block_rank[] == 0
+        for is ∈ 1:n_species
+            if species[is].z_IC.initialization_option == "bgk" || species[is].vpa_IC.initialization_option == "bgk"
+                @views init_bgk_pdf!(f[:,:,is], 0.0, species[is].initial_temperature, z.grid, z.L, vpa.grid)
+            else
+                # updates pdf_norm to contain pdf / density, so that ∫dvpa pdf.norm = 1,
+                # ∫dwpa wpa * pdf.norm = 0, and ∫dwpa m_s (wpa/vths)^2 pdf.norm = 1/2
+                # to machine precision
+                @views init_pdf_over_density!(pdf_norm[:,:,is], species[is], vpa, z, moments.vth[:,is],
+                                              moments.upar[:,is], moments.vpa_norm_fac[:,is],
+                                              moments.evolve_upar, moments.evolve_ppar)
+            end
         end
-    end
-    pdf_unnorm = copy(pdf_norm)
-    for ivpa ∈ 1:vpa.n
-        @. pdf_unnorm[ivpa,:,:] *= moments.dens
-        if moments.evolve_ppar
-            @. pdf_norm[ivpa,:,:] *= moments.vth
-        elseif moments.evolve_density == false
-            @. pdf_norm[ivpa,:,:] = pdf_unnorm[ivpa,:,:]
+        pdf_unnorm .= pdf_norm
+        for ivpa ∈ 1:vpa.n
+            @. pdf_unnorm[ivpa,:,:] *= moments.dens
+            if moments.evolve_ppar
+                @. pdf_norm[ivpa,:,:] *= moments.vth
+            elseif moments.evolve_density == false
+                @. pdf_norm[ivpa,:,:] = pdf_unnorm[ivpa,:,:]
+            end
         end
     end
     return pdf_struct(pdf_norm, pdf_unnorm)
@@ -202,15 +211,16 @@ function init_pdf_over_density!(pdf, spec, vpa, z, vth, upar, vpa_norm_fac, evol
     # end
     return nothing
 end
-function enforce_boundary_conditions!(f, vpa_bc, z_bc, vpa, vpa_adv::T1, z_adv::T2, composition) where {T1, T2}
-    @views enforce_z_boundary_condition!(f, z_bc, z_adv, vpa, composition)
-    for is ∈ 1:size(vpa_adv,2)
+function enforce_boundary_conditions!(f, vpa_bc, z_bc, vpa, z, vpa_adv::T1, z_adv::T2, composition) where {T1, T2}
+    for is ∈ composition.species_local_range
         # enforce the vpa BC
-        for iz ∈ 1:size(f,2)
-            @views enforce_vpa_boundary_condition_local!(f[:,iz,is], vpa_bc, vpa_adv[iz,is].upwind_idx,
-                                                         vpa_adv[iz,is].downwind_idx)
+        for iz ∈ z.outer_loop_range
+            @views enforce_vpa_boundary_condition_local!(f[:,iz,is], vpa_bc, vpa_adv[is].upwind_idx[iz],
+                                                         vpa_adv[is].downwind_idx[iz])
         end
     end
+    block_synchronize()
+    @views enforce_z_boundary_condition!(f, z_bc, z_adv, vpa, composition)
 end
 # enforce boundary conditions on f in z
 function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, composition) where T
@@ -223,71 +233,77 @@ function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, composition) 
     # 'constant' BC is time-independent f at upwind boundary
     # and constant f beyond boundary
     if bc == "constant"
-        for is ∈ 1:n_species
-            for ivpa ∈ 1:nvpa
-                upwind_idx = adv[ivpa,is].upwind_idx
+        for is ∈ composition.species_local_range
+            for ivpa ∈ vpa.outer_loop_range
+                upwind_idx = adv[ivpa,is].upwind_idx[]
                 f[ivpa,upwind_idx,is] = density_offset * exp(-(vpa.grid[ivpa]/vpawidth)^2) / sqrt(pi)
             end
         end
     # 'periodic' BC enforces periodicity by taking the average of the boundary points
     elseif bc == "periodic"
-        for is ∈ 1:n_species
-            for ivpa ∈ 1:nvpa
-                downwind_idx = adv[ivpa,is].downwind_idx
-                upwind_idx = adv[ivpa,is].upwind_idx
+        for is ∈ composition.species_local_range
+            for ivpa ∈ vpa.outer_loop_range
+                downwind_idx = adv[is].downwind_idx[ivpa]
+                upwind_idx = adv[is].upwind_idx[ivpa]
                 f[ivpa,downwind_idx,is] = 0.5*(f[ivpa,upwind_idx,is]+f[ivpa,downwind_idx,is])
                 f[ivpa,upwind_idx,is] = f[ivpa,downwind_idx,is]
             end
         end
     # 'wall' BC enforces wall boundary conditions
     elseif bc == "wall"
-        # zero incoming BC for ions, as they recombine at the wall
-        for is ∈ 1:composition.n_ion_species
-            for ivpa ∈ 1:nvpa
-                # no parallel BC should be enforced for vpa = 0
-                if abs(vpa.grid[ivpa]) > zero
-                    upwind_idx = adv[ivpa,is].upwind_idx
-                    f[ivpa,upwind_idx,is] = 0.0
+        for is ∈ composition.species_local_range
+            # zero incoming BC for ions, as they recombine at the wall
+            if is ∈ composition.ion_species_range
+                for ivpa ∈ vpa.outer_loop_range
+                    # no parallel BC should be enforced for vpa = 0
+                    if abs(vpa.grid[ivpa]) > zero
+                        upwind_idx = adv[is].upwind_idx[ivpa]
+                        f[ivpa,upwind_idx,is] = 0.0
+                    end
                 end
             end
         end
+        block_synchronize()
         # BC for neutrals
         if composition.n_neutral_species > 0
-            # define vtfac to avoid repeated computation below
-            vtfac = sqrt(composition.T_wall * composition.mn_over_mi)
-            # initialise the combined ion/neutral fluxes into the walls to be zero
-            wall_flux_0 = 0.0
-            wall_flux_L = 0.0
-            # include the contribution to the wall fluxes due to species with index 'is'
-            for is ∈ 1:composition.n_ion_species
-                @views wall_flux_0 += (sqrt(composition.mn_over_mi) *
-                                       integrate_over_negative_vpa(abs.(vpa.grid) .* f[:,1,is], vpa.grid, vpa.wgts, vpa.scratch))
-                @views wall_flux_L += (sqrt(composition.mn_over_mi) *
-                                       integrate_over_positive_vpa(abs.(vpa.grid) .* f[:,end,is], vpa.grid, vpa.wgts, vpa.scratch))
-            end
-            for isn ∈ 1:composition.n_neutral_species
-                is = isn + composition.n_ion_species
-                @views wall_flux_0 += integrate_over_negative_vpa(abs.(vpa.grid) .* f[:,1,is], vpa.grid, vpa.wgts, vpa.scratch)
-                @views wall_flux_L += integrate_over_positive_vpa(abs.(vpa.grid) .* f[:,end,is], vpa.grid, vpa.wgts, vpa.scratch)
-            end
-            # NB: need to generalise to more than one ion species
-            # get the Knudsen cosine distribution
-            # NB: as vtfac is time-independent, can be made more efficient by creating
-            # array for Knudsen cosine distribution and carrying out following four lines
-            # of calculation at initialization
-            @. vpa.scratch = (3*pi/vtfac^3)*abs(vpa.grid)*erfc(abs(vpa.grid)/vtfac)
-            tmparr = copy(vpa.scratch)
-            tmp = integrate_over_positive_vpa(vpa.grid .* vpa.scratch, vpa.grid, vpa.wgts, tmparr)
-            @. vpa.scratch /= tmp
-            for isn ∈ 1:composition.n_neutral_species
-                is = isn + composition.n_ion_species
-                for ivpa ∈ 1:nvpa
-                    # no parallel BC should be enforced for vpa = 0
-                    if abs(vpa.grid[ivpa]) > zero
-                        if adv[ivpa,is].upwind_idx == 1
-                            f[ivpa,1,is] = wall_flux_0 * vpa.scratch[ivpa]
-                        else
-                            f[ivpa,end,is] = wall_flux_L * vpa.scratch[ivpa]
+            # TODO: parallelise this...
+            if block_rank[] == 0
+                # define vtfac to avoid repeated computation below
+                vtfac = sqrt(composition.T_wall * composition.mn_over_mi)
+                # initialise the combined ion/neutral fluxes into the walls to be zero
+                wall_flux_0 = 0.0
+                wall_flux_L = 0.0
+                # include the contribution to the wall fluxes due to species with index 'is'
+                for is ∈ 1:composition.n_ion_species
+                    @views wall_flux_0 += (sqrt(composition.mn_over_mi) *
+                                           integrate_over_negative_vpa(abs.(vpa.grid) .* f[:,1,is], vpa.grid, vpa.wgts, vpa.scratch))
+                    @views wall_flux_L += (sqrt(composition.mn_over_mi) *
+                                           integrate_over_positive_vpa(abs.(vpa.grid) .* f[:,end,is], vpa.grid, vpa.wgts, vpa.scratch))
+                end
+                for isn ∈ 1:composition.n_neutral_species
+                    is = isn + composition.n_ion_species
+                    @views wall_flux_0 += integrate_over_negative_vpa(abs.(vpa.grid) .* f[:,1,is], vpa.grid, vpa.wgts, vpa.scratch)
+                    @views wall_flux_L += integrate_over_positive_vpa(abs.(vpa.grid) .* f[:,end,is], vpa.grid, vpa.wgts, vpa.scratch)
+                end
+                # NB: need to generalise to more than one ion species
+                # get the Knudsen cosine distribution
+                # NB: as vtfac is time-independent, can be made more efficient by creating
+                # array for Knudsen cosine distribution and carrying out following four lines
+                # of calculation at initialization
+                @. vpa.scratch = (3*pi/vtfac^3)*abs(vpa.grid)*erfc(abs(vpa.grid)/vtfac)
+                tmparr = copy(vpa.scratch)
+                tmp = integrate_over_positive_vpa(vpa.grid .* vpa.scratch, vpa.grid, vpa.wgts, tmparr)
+                @. vpa.scratch /= tmp
+                for isn ∈ 1:composition.n_neutral_species
+                    is = isn + composition.n_ion_species
+                    for ivpa ∈ 1:nvpa
+                        # no parallel BC should be enforced for vpa = 0
+                        if abs(vpa.grid[ivpa]) > zero
+                            if adv[is].upwind_idx[ivpa] == 1
+                                f[ivpa,1,is] = wall_flux_0 * vpa.scratch[ivpa]
+                            else
+                                f[ivpa,end,is] = wall_flux_L * vpa.scratch[ivpa]
+                            end
                         end
                     end
                 end
@@ -300,8 +316,8 @@ end
 function enforce_vpa_boundary_condition!(f, bc, src::T) where T
     nz = size(f,2)
     for iz ∈ 1:nz
-        enforce_vpa_boundary_condition_local!(view(f,:,iz), bc, src[iz].upwind_idx,
-            src[iz].downwind_idx)
+        enforce_vpa_boundary_condition_local!(view(f,:,iz), bc, src.upwind_idx[iz],
+            src.downwind_idx[iz])
     end
 end
 function enforce_vpa_boundary_condition_local!(f::T, bc, upwind_idx, downwind_idx) where T

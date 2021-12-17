@@ -1,0 +1,33 @@
+# Based on example from https://github.com/julia-actions/julia-runtest
+name: Debug checks for correctness
+
+on: [push, pull_request]
+
+jobs:
+  debug-checks:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macOS-latest]
+      fail-fast: false
+    timeout-minutes: 40
+
+    steps:
+      - uses: actions/checkout@v2
+      - uses: mpi4py/setup-mpi@v1
+        with:
+          mpi: 'openmpi'
+      - uses: julia-actions/setup-julia@v1
+        with:
+          version: '1'
+          arch: x64
+      - uses: julia-actions/julia-buildpkg@v1
+      - name: Test examples
+        run: |
+          julia --project -e 'ENV["JULIA_MPI_BINARY"]="system"; using Pkg; Pkg.build("MPI"; verbose=true)'
+          # Need to use openmpi so that the following arguments work:
+          # * `--mca rmaps_base_oversubscribe 1` allows oversubscription (more processes
+          #   than physical cores).
+          # * `--mca mpi_yield_when_idle 1` changes a setting to prevent excessively
+          #   terrible performance when oversubscribing.
+          mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes --compiled-modules=no debug_test/runtests.jl --debug 99

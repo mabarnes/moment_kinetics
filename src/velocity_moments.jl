@@ -12,8 +12,9 @@ export reset_moments_status!
 export enforce_moment_constraints!
 
 using ..type_definitions: mk_float
-using ..array_allocation: allocate_float, allocate_bool
+using ..array_allocation: allocate_shared_float, allocate_bool
 using ..calculus: integral
+using ..communication: block_rank, block_synchronize, MPISharedArray
 
 #global tmpsum1 = 0.0
 #global tmpsum2 = 0.0
@@ -22,66 +23,82 @@ using ..calculus: integral
 
 mutable struct moments
     # this is the particle density
-    dens::Array{mk_float,2}
+    dens::MPISharedArray{mk_float,2}
     # flag that keeps track of if the density needs updating before use
-    dens_updated::Array{Bool,1}
+    # Note: may not be set for all species on this process, but this process only ever
+    # sets/uses the value for the same subset of species. This means dens_update does
+    # not need to be a shared memory array.
+    dens_updated::Vector{Bool}
     # flag that indicates if the density should be evolved via continuity equation
     evolve_density::Bool
     # flag that indicates if exact particle conservation should be enforced
     enforce_conservation::Bool
     # this is the parallel flow
-    upar::Array{mk_float,2}
+    upar::MPISharedArray{mk_float,2}
     # flag that keeps track of whether or not upar needs updating before use
-    upar_updated::Array{Bool,1}
+    # Note: may not be set for all species on this process, but this process only ever
+    # sets/uses the value for the same subset of species. This means upar_update does
+    # not need to be a shared memory array.
+    upar_updated::Vector{Bool}
     # flag that indicates if the parallel flow should be evolved via force balance
     evolve_upar::Bool
     # this is the parallel pressure
-    ppar::Array{mk_float,2}
+    ppar::MPISharedArray{mk_float,2}
     # flag that keeps track of whether or not ppar needs updating before use
-    ppar_updated::Array{Bool,1}
+    # Note: may not be set for all species on this process, but this process only ever
+    # sets/uses the value for the same subset of species. This means ppar_update does
+    # not need to be a shared memory array.
+    ppar_updated::Vector{Bool}
     # flag that indicates if the parallel pressure should be evolved via the energy equation
     evolve_ppar::Bool
     # this is the parallel heat flux
-    qpar::Array{mk_float,2}
+    qpar::MPISharedArray{mk_float,2}
     # flag that keeps track of whether or not qpar needs updating before use
-    qpar_updated::Array{Bool,1}
+    # Note: may not be set for all species on this process, but this process only ever
+    # sets/uses the value for the same subset of species. This means qpar_update does
+    # not need to be a shared memory array.
+    qpar_updated::Vector{Bool}
     # this is the thermal speed based on the parallel temperature Tpar = ppar/dens: vth = sqrt(2*Tpar/m)
-    vth::Array{mk_float,2}
+    vth::MPISharedArray{mk_float,2}
     # if evolve_ppar = true, then the velocity variable is (vpa - upa)/vth, which introduces
     # a factor of vth for each power of wpa in velocity space integrals.
     # vpa_norm_fac accounts for this: it is vth if using the above definition for the parallel velocity,
     # and it is one otherwise
-    vpa_norm_fac::Array{mk_float,2}
+    vpa_norm_fac::MPISharedArray{mk_float,2}
     # flag that indicates if the drift kinetic equation should be formulated in advective form
     #advective_form::Bool
 end
 function create_moments(nz, n_species, evolve_moments)
     # allocate array used for the particle density
-    density = allocate_float(nz, n_species)
+    density = allocate_shared_float(nz, n_species)
     # allocate array of Bools that indicate if the density is updated for each species
     density_updated = allocate_bool(n_species)
     density_updated .= false
     # allocate array used for the parallel flow
-    parallel_flow = allocate_float(nz, n_species)
+    parallel_flow = allocate_shared_float(nz, n_species)
     # allocate array of Bools that indicate if the parallel flow is updated for each species
     parallel_flow_updated = allocate_bool(n_species)
     parallel_flow_updated .= false
     # allocate array used for the parallel pressure
-    parallel_pressure = allocate_float(nz, n_species)
+    parallel_pressure = allocate_shared_float(nz, n_species)
     # allocate array of Bools that indicate if the parallel pressure is updated for each species
     parallel_pressure_updated = allocate_bool(n_species)
     parallel_pressure_updated .= false
     # allocate array used for the parallel flow
-    parallel_heat_flux = allocate_float(nz, n_species)
+    parallel_heat_flux = allocate_shared_float(nz, n_species)
     # allocate array of Bools that indicate if the parallel flow is updated for each species
     parallel_heat_flux_updated = allocate_bool(n_species)
     parallel_heat_flux_updated .= false
+    block_synchronize()
     # allocate array used for the thermal speed
-    thermal_speed = allocate_float(nz, n_species)
+    thermal_speed = allocate_shared_float(nz, n_species)
     if evolve_moments.parallel_pressure
         vpa_norm_fac = thermal_speed
     else
-        vpa_norm_fac = ones(mk_float, nz, n_species)
+        vpa_norm_fac = allocate_shared_float(nz, n_species)
+        if block_rank[] == 0
+            vpa_norm_fac .= 1.0
+        end
     end
     # return struct containing arrays needed to update moments
     return moments(density, density_updated, evolve_moments.density, evolve_moments.conservation,
@@ -90,25 +107,25 @@ function create_moments(nz, n_species, evolve_moments)
         parallel_heat_flux, parallel_heat_flux_updated, thermal_speed, vpa_norm_fac)
 end
 # calculate the updated density (dens) and parallel pressure (ppar) for all species
-function update_moments!(moments, ff, vpa, nz)
+function update_moments!(moments, ff, vpa, nz, composition)
     n_species = size(ff,3)
     @boundscheck n_species == size(moments.dens,2) || throw(BoundsError(moments))
-    for is ∈ 1:n_species
+    for is ∈ composition.species_local_range
         if moments.dens_updated[is] == false
-            @views update_density_species!(moments.dens[:,is], ff[:,:,is], vpa, nz)
+            @views update_density_species!(moments.dens[:,is], ff[:,:,is], vpa, z)
             moments.dens_updated[is] = true
         end
         if moments.upar_updated[is] == false
-            @views update_upar_species!(moments.upar[:,is], ff[:,:,is], vpa, nz)
+            @views update_upar_species!(moments.upar[:,is], ff[:,:,is], vpa, z)
             moments.upar_updated[is] = true
         end
         if moments.ppar_updated[is] == false
-            @views update_ppar_species!(moments.ppar[:,is], ff[:,:,is], vpa, nz)
+            @views update_ppar_species!(moments.ppar[:,is], ff[:,:,is], vpa, z)
             moments.ppar_updated[is] = true
         end
         @. moments.vth = sqrt(2*moments.ppar/moments.dens)
         if moments.qpar_updated[is] == false
-            @views update_qpar_species!(moments.qpar[:,is], ff[:,:,is], vpa, nz, moments.vpa_norm_fac[:,is])
+            @views update_qpar_species!(moments.qpar[:,is], ff[:,:,is], vpa, z, moments.vpa_norm_fac[:,is])
             moments.qpar_updated[is] = true
         end
     end
@@ -116,84 +133,82 @@ function update_moments!(moments, ff, vpa, nz)
 end
 # NB: if this function is called and if dens_updated is false, then
 # the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
-function update_density!(dens, dens_updated, pdf, vpa, nz)
+function update_density!(dens, dens_updated, pdf, vpa, z, composition)
     n_species = size(pdf,3)
     @boundscheck n_species == size(dens,2) || throw(BoundsError(dens))
-    for is ∈ 1:n_species
+    for is ∈ composition.species_local_range
         if dens_updated[is] == false
-            @views update_density_species!(dens[:,is], pdf[:,:,is], vpa, nz)
+            @views update_density_species!(dens[:,is], pdf[:,:,is], vpa, z)
             dens_updated[is] = true
         end
     end
 end
 # calculate the updated density (dens) for a given species
-function update_density_species!(dens, ff, vpa, nz)
-    @boundscheck nz == size(ff, 2) || throw(BoundsError(ff))
-    @boundscheck nz == length(dens) || throw(BoundsError(dens))
-    @inbounds for iz ∈ 1:nz
+function update_density_species!(dens, ff, vpa, z)
+    @boundscheck z.n == size(ff, 2) || throw(BoundsError(ff))
+    @boundscheck z.n == length(dens) || throw(BoundsError(dens))
+    @inbounds for iz ∈ z.outer_loop_range
         dens[iz] = integrate_over_vspace(@view(ff[:,iz]), vpa.wgts)
     end
     return nothing
 end
 # NB: if this function is called and if upar_updated is false, then
 # the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
-function update_upar!(upar, upar_updated, pdf, vpa, nz)
+function update_upar!(upar, upar_updated, pdf, vpa, z, composition)
     n_species = size(pdf,3)
     @boundscheck n_species == size(upar,2) || throw(BoundsError(upar))
-    for is ∈ 1:n_species
+    for is ∈ composition.species_local_range
         if upar_updated[is] == false
-            @views update_upar_species!(upar[:,is], pdf[:,:,is], vpa, nz)
+            @views update_upar_species!(upar[:,is], pdf[:,:,is], vpa, z)
             upar_updated[is] = true
         end
     end
 end
 # calculate the updated parallel flow (upar) for a given species
-function update_upar_species!(upar, ff, vpa, nz)
-    @boundscheck nz == size(ff, 2) || throw(BoundsError(ff))
-    @boundscheck nz == length(upar) || throw(BoundsError(upar))
-    @inbounds for iz ∈ 1:nz
+function update_upar_species!(upar, ff, vpa, z)
+    @boundscheck z.n == size(ff, 2) || throw(BoundsError(ff))
+    @boundscheck z.n == length(upar) || throw(BoundsError(upar))
+    @inbounds for iz ∈ z.outer_loop_range
         upar[iz] = integrate_over_vspace(@view(ff[:,iz]), vpa.grid, vpa.wgts)
     end
     return nothing
 end
 # NB: if this function is called and if ppar_updated is false, then
 # the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
-function update_ppar!(ppar, ppar_updated, pdf, vpa, nz)
-    n_species = size(pdf,3)
-    @boundscheck n_species == size(ppar,2) || throw(BoundsError(ppar))
-    for is ∈ 1:n_species
+function update_ppar!(ppar, ppar_updated, pdf, vpa, z, composition)
+    @boundscheck composition.n_species == size(ppar,2) || throw(BoundsError(ppar))
+    for is ∈ composition.species_local_range
         if ppar_updated[is] == false
-            @views update_ppar_species!(ppar[:,is], pdf[:,:,is], vpa, nz)
+            @views update_ppar_species!(ppar[:,is], pdf[:,:,is], vpa, z)
             ppar_updated[is] = true
         end
     end
 end
 # calculate the updated parallel pressure (ppar) for a given species
-function update_ppar_species!(ppar, ff, vpa, nz)
-    @boundscheck nz == size(ff, 2) || throw(BoundsError(ff))
-    @boundscheck nz == length(ppar) || throw(BoundsError(ppar))
-    @inbounds for iz ∈ 1:nz
+function update_ppar_species!(ppar, ff, vpa, z)
+    @boundscheck z.n == size(ff, 2) || throw(BoundsError(ff))
+    @boundscheck z.n == length(ppar) || throw(BoundsError(ppar))
+    @inbounds for iz ∈ z.outer_loop_range
         ppar[iz] = integrate_over_vspace(@view(ff[:,iz]), vpa.grid, 2, vpa.wgts)
     end
     return nothing
 end
 # NB: if this function is called and if ppar_updated is false, then
 # the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
-function update_qpar!(qpar, qpar_updated, pdf, vpa, nz, vpanorm)
-    n_species = size(pdf,3)
-    @boundscheck n_species == size(qpar,2) || throw(BoundsError(qpar))
-    for is ∈ 1:n_species
+function update_qpar!(qpar, qpar_updated, pdf, vpa, z, composition, vpanorm)
+    @boundscheck composition.n_species == size(qpar,2) || throw(BoundsError(qpar))
+    for is ∈ composition.species_local_range
         if qpar_updated[is] == false
-            @views update_qpar_species!(qpar[:,is], pdf[:,:,is], vpa, nz, vpanorm[:,is])
+            @views update_qpar_species!(qpar[:,is], pdf[:,:,is], vpa, z, vpanorm[:,is])
             qpar_updated[is] = true
         end
     end
 end
 # calculate the updated parallel heat flux (qpar) for a given species
-function update_qpar_species!(qpar, ff, vpa, nz, vpanorm)
-    @boundscheck nz == size(ff, 2) || throw(BoundsError(ff))
-    @boundscheck nz == length(qpar) || throw(BoundsError(qpar))
-    @inbounds for iz ∈ 1:nz
+function update_qpar_species!(qpar, ff, vpa, z, vpanorm)
+    @boundscheck z.n == size(ff, 2) || throw(BoundsError(ff))
+    @boundscheck z.n == length(qpar) || throw(BoundsError(qpar))
+    @inbounds for iz ∈ z.outer_loop_range
         qpar[iz] = integrate_over_vspace(@view(ff[:,iz]), vpa.grid, 3, vpa.wgts) * vpanorm[iz]^4
     end
     return nothing
@@ -282,15 +297,25 @@ function integrate_over_negative_vpa(integrand, dzdt, vpa_wgts, wgts_mod)
     end
     return vpa_integral
 end
-function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, moments)
+function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, composition, moments)
     #global @. dens_hist += fvec_old.density
     #global n_hist += 1
-    for is ∈ 1:size(fvec_new.density,2)
+
+    # pre-calculate avgdens_ratio so that we don't read fvec_new.density[:,is] on every
+    # process in the next loop - that would be an error because different processes
+    # write to fvec_new.density[:,is]
+    for is ∈ composition.species_local_range
+        @views @. z.scratch = fvec_old.density[:,is] - fvec_new.density[:,is]
+        @views composition.scratch[is] = integral(z.scratch, z.wgts)/integral(fvec_old.density[:,is], z.wgts)
+    end
+    block_synchronize()
+
+    for is ∈ composition.species_local_range
         #tmp1 = integral(fvec_old.density[:,is], z.wgts)
         #tmp2 = integral(fvec_new.density[:,is], z.wgts)
         #@views avgdens_ratio = integral(fvec_new.density[:,is], z.wgts)/integral(fvec_old.density[:,is], z.wgts)
-        @views avgdens_ratio = integral(fvec_old.density[:,is] .- fvec_new.density[:,is], z.wgts)/integral(fvec_old.density[:,is], z.wgts)
-        for iz ∈ 1:size(fvec_new.density,1)
+        avgdens_ratio = composition.scratch[is]
+        for iz ∈ z.outer_loop_range
             # Create views once to save overhead
             fnew_view = @view(fvec_new.pdf[:,iz,is])
             fold_view = @view(fvec_old.pdf[:,iz,is])
@@ -319,7 +344,10 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, moments)
                 if moments.evolve_ppar
                     ppar_integral /= integrate_over_vspace(vpa.scratch, vpa.grid, 4, vpa.wgts) - 0.5 * vpa2_moment
                     # update the pdf to account for the energy-conserving correction
-                    @. fnew_view -= vpa.scratch * (vpa.grid^2 - 0.5) * ppar_integral
+                    #@. fnew_view -= vpa.scratch * (vpa.grid^2 - 0.5) * ppar_integral
+                    # Until julia-1.8 is released, prefer x*x to x^2 to avoid
+                    # extra allocations when broadcasting.
+                    @. fnew_view -= vpa.scratch * (vpa.grid * vpa.grid - 0.5) * ppar_integral
                 end
             end
             fvec_new.density[iz,is] += fvec_old.density[iz,is] * avgdens_ratio
@@ -335,22 +363,26 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, moments)
     # update the parallel heat flux
     # NB: no longer need fvec_old.pdf so can use for temporary storage of un-normalised pdf
     if moments.evolve_ppar
-        @. fvec_old.temp_z_s = fvec_new.density / moments.vth
-        nvpa, nz, nspecies = size(fvec_old.pdf)
-        for is ∈ 1:nspecies, iz ∈ 1:nz, ivpa ∈ 1:nvpa
-            fvec_old.pdf[ivpa,iz,is] = fvec_new.pdf[ivpa,iz,is] * fvec_old.temp_z_s[iz,is]
+        for is ∈ composition.species_local_range
+            for iz ∈ z.outer_loop_range
+                fvec_old.temp_z_s[iz,is] = fvec_new.density[iz,is] / moments.vth[iz,is]
+            end
+            for iz ∈ z.outer_loop_range, ivpa ∈ 1:vpa.n
+                fvec_old.pdf[ivpa,iz,is] = fvec_new.pdf[ivpa,iz,is] * fvec_old.temp_z_s[iz,is]
+            end
         end
     elseif moments.evolve_density
-        nvpa, nz, nspecies = size(fvec_old.pdf)
-        for is ∈ 1:nspecies, iz ∈ 1:nz, ivpa ∈ 1:nvpa
+        for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range, ivpa ∈ 1:vpa.n
             fvec_old.pdf[ivpa,iz,is] = fvec_new.pdf[ivpa,iz,is] * fvec_new.density[iz,is]
         end
     else
-        @. fvec_old.pdf = fvec_new.pdf
+        for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range, ivpa ∈ 1:vpa.n
+            fvec_old.pdf[ivpa,iz,is] = fvec_new.pdf[ivpa,iz,is]
+        end
     end
-    update_qpar!(moments.qpar, moments.qpar_updated, fvec_old.pdf, vpa, z.n, moments.vpa_norm_fac)
+    update_qpar!(moments.qpar, moments.qpar_updated, fvec_old.pdf, vpa, z, composition, moments.vpa_norm_fac)
 end
-function reset_moments_status!(moments)
+function reset_moments_status!(moments, composition, z)
     if moments.evolve_density == false
         moments.dens_updated .= false
     end

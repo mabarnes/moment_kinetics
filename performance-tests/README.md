@@ -39,5 +39,13 @@ or the file can be called as a script
 julia -O3 --project --check-bounds=no plot_performance.jl
 ```
 some default values are taken from `config.toml` where necessary. When running as a
-script, the file-name to read from (default is `results/sound_wave.txt`) and machine
-name can be passed as the first and second arguments.
+script, the file-name to read from (default is `results/sound_wave.txt`) can be passed
+as a positional argument and the machine name can be passed to the `--machine-name`
+flag.
+
+Warning: when looking at memory allocation plots, bear in mind that the value does not
+include memory allocated by the MPI library (i.e. shared-memory arrays). This should not
+affect the time-advance profiling (since no new shared-memory arrays are allocated), but
+will affect the allocations reported during initialization (in particular there is a
+big, 'fictitious' drop between the commits before and after introducing
+shared-memory arrays).

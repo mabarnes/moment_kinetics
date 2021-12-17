@@ -235,114 +235,119 @@ function run_test(test_input, rtol; args...)
     quietoutput() do
         # run simulation
         run_moment_kinetics(to, input)
-
-        # Load and analyse output
-        #########################
-
-        path = joinpath(realpath(input["base_directory"]), name, name)
-
-        # open the netcdf file and give it the handle 'fid'
-        fid = open_netcdf_file(path)
-
-        # load space-time coordinate data
-        nz, _, z_wgts, Lz, nvpa, _, vpa_wgts, ntime, time = load_coordinate_data(fid)
-
-        # load fields data
-        phi = load_fields_data(fid)
-
-        # load velocity moments data
-        n, upar, ppar, qpar, v_t, n_species, evolve_ppar = load_moments_data(fid)
-
-        # load particle distribution function (pdf) data
-        f = load_pdf_data(fid)
-
-        close(fid)
     end
 
-    # Create coordinates
-    #
-    # create the 'input' struct containing input info needed to create a coordinate
-    # adv_input not actually used in this test so given values unimportant
-    adv_input = advection_input("default", 1.0, 0.0, 0.0)
-    input = grid_input("coord", test_input["z_ngrid"], test_input["z_nelement"],
-                       z_L, test_input["z_discretization"], "",
-                       "periodic", #test_input["z_bc"],
-                       adv_input)
-    z = define_coordinate(input)
-    if test_input["z_discretization"] == "chebyshev_pseudospectral"
-        z_spectral = setup_chebyshev_pseudospectral(z)
-    else
-        z_spectral = false
-    end
-    input = grid_input("coord", test_input["vpa_ngrid"], test_input["vpa_nelement"],
-                       vpa_L, test_input["vpa_discretization"], "",
-                       test_input["vpa_bc"], adv_input)
-    vpa = define_coordinate(input)
-    if test_input["vpa_discretization"] == "chebyshev_pseudospectral"
-        vpa_spectral = setup_chebyshev_pseudospectral(vpa)
-    else
-        vpa_spectral = false
-    end
+    if global_rank[] == 0
+        quietoutput() do
 
-    # Test against values interpolated onto 'expected' grid which is fairly coarse no we
-    # do not have to save too much data in this file
+            # Load and analyse output
+            #########################
 
-    # Use commented-out lines to get the test data to put in `expected`
-    #newgrid_phi = cat(interpolate_to_grid_z(expected.z, phi[:, 1], z, z_spectral),
-    #                   interpolate_to_grid_z(expected.z, phi[:, 2], z, z_spectral);
-    #                   dims=2)
-    #println("phi ", size(newgrid_phi))
-    #println(newgrid_phi)
-    #println()
-    #newgrid_n = cat(interpolate_to_grid_z(expected.z, n[:, :, 1], z, z_spectral),
-    #                   interpolate_to_grid_z(expected.z, n[:, :, 2], z, z_spectral);
-    #                   dims=3)
-    #println("n ", size(newgrid_n))
-    #println(newgrid_n)
-    #println()
-    #newgrid_upar = cat(interpolate_to_grid_z(expected.z, upar[:, :, 1], z, z_spectral),
-    #                   interpolate_to_grid_z(expected.z, upar[:, :, 2], z, z_spectral);
-    #                   dims=3)
-    #println("upar ", size(newgrid_upar))
-    #println(newgrid_upar)
-    #println()
-    #newgrid_ppar = cat(interpolate_to_grid_z(expected.z, ppar[:, :, 1], z, z_spectral),
-    #                   interpolate_to_grid_z(expected.z, ppar[:, :, 2], z, z_spectral);
-    #                   dims=3)
-    #println("ppar ", size(newgrid_ppar))
-    #println(newgrid_ppar)
-    #println()
-    #newgrid_f = cat(interpolate_to_grid_vpa(expected.vpa, interpolate_to_grid_z(expected.z, f[:, :, :, 1], z, z_spectral), vpa, vpa_spectral),
-    #                interpolate_to_grid_vpa(expected.vpa, interpolate_to_grid_z(expected.z, f[:, :, :, 2], z, z_spectral), vpa, vpa_spectral);
-    #                dims=4)
-    #println("f ", size(newgrid_f))
-    #println(newgrid_f)
-    #println()
-    function test_values(tind)
-        @testset "tind=$tind" begin
-            newgrid_phi = interpolate_to_grid_z(expected.z, phi[:, tind], z, z_spectral)
-            @test isapprox(expected.phi[:, tind], newgrid_phi, rtol=rtol)
+            path = joinpath(realpath(input["base_directory"]), name, name)
 
-            newgrid_n = interpolate_to_grid_z(expected.z, n[:, :, tind], z, z_spectral)
-            @test isapprox(expected.n[:, :, tind], newgrid_n, rtol=rtol)
+            # open the netcdf file and give it the handle 'fid'
+            fid = open_netcdf_file(path)
 
-            newgrid_upar = interpolate_to_grid_z(expected.z, upar[:, :, tind], z, z_spectral)
-            @test isapprox(expected.upar[:, :, tind], newgrid_upar, rtol=rtol)
+            # load space-time coordinate data
+            nz, _, z_wgts, Lz, nvpa, _, vpa_wgts, ntime, time = load_coordinate_data(fid)
 
-            newgrid_ppar = interpolate_to_grid_z(expected.z, ppar[:, :, tind], z, z_spectral)
-            @test isapprox(expected.ppar[:, :, tind], newgrid_ppar, rtol=rtol)
+            # load fields data
+            phi = load_fields_data(fid)
 
-            newgrid_f = interpolate_to_grid_z(expected.z, f[:, :, :, tind], z, z_spectral)
-            newgrid_f = interpolate_to_grid_vpa(expected.vpa, newgrid_f, vpa, vpa_spectral)
-            @test isapprox(expected.f[:, :, :, tind], newgrid_f, rtol=rtol)
+            # load velocity moments data
+            n, upar, ppar, qpar, v_t, n_species, evolve_ppar = load_moments_data(fid)
+
+            # load particle distribution function (pdf) data
+            f = load_pdf_data(fid)
+
+            close(fid)
         end
+
+        # Create coordinates
+        #
+        # create the 'input' struct containing input info needed to create a coordinate
+        # adv_input not actually used in this test so given values unimportant
+        adv_input = advection_input("default", 1.0, 0.0, 0.0)
+        input = grid_input("coord", test_input["z_ngrid"], test_input["z_nelement"],
+                           z_L, test_input["z_discretization"], "",
+                           "periodic", #test_input["z_bc"],
+                           adv_input)
+        z = define_coordinate(input)
+        if test_input["z_discretization"] == "chebyshev_pseudospectral"
+            z_spectral = setup_chebyshev_pseudospectral(z)
+        else
+            z_spectral = false
+        end
+        input = grid_input("coord", test_input["vpa_ngrid"], test_input["vpa_nelement"],
+                           vpa_L, test_input["vpa_discretization"], "",
+                           test_input["vpa_bc"], adv_input)
+        vpa = define_coordinate(input)
+        if test_input["vpa_discretization"] == "chebyshev_pseudospectral"
+            vpa_spectral = setup_chebyshev_pseudospectral(vpa)
+        else
+            vpa_spectral = false
+        end
+
+        # Test against values interpolated onto 'expected' grid which is fairly coarse no we
+        # do not have to save too much data in this file
+
+        # Use commented-out lines to get the test data to put in `expected`
+        #newgrid_phi = cat(interpolate_to_grid_z(expected.z, phi[:, 1], z, z_spectral),
+        #                   interpolate_to_grid_z(expected.z, phi[:, 2], z, z_spectral);
+        #                   dims=2)
+        #println("phi ", size(newgrid_phi))
+        #println(newgrid_phi)
+        #println()
+        #newgrid_n = cat(interpolate_to_grid_z(expected.z, n[:, :, 1], z, z_spectral),
+        #                   interpolate_to_grid_z(expected.z, n[:, :, 2], z, z_spectral);
+        #                   dims=3)
+        #println("n ", size(newgrid_n))
+        #println(newgrid_n)
+        #println()
+        #newgrid_upar = cat(interpolate_to_grid_z(expected.z, upar[:, :, 1], z, z_spectral),
+        #                   interpolate_to_grid_z(expected.z, upar[:, :, 2], z, z_spectral);
+        #                   dims=3)
+        #println("upar ", size(newgrid_upar))
+        #println(newgrid_upar)
+        #println()
+        #newgrid_ppar = cat(interpolate_to_grid_z(expected.z, ppar[:, :, 1], z, z_spectral),
+        #                   interpolate_to_grid_z(expected.z, ppar[:, :, 2], z, z_spectral);
+        #                   dims=3)
+        #println("ppar ", size(newgrid_ppar))
+        #println(newgrid_ppar)
+        #println()
+        #newgrid_f = cat(interpolate_to_grid_vpa(expected.vpa, interpolate_to_grid_z(expected.z, f[:, :, :, 1], z, z_spectral), vpa, vpa_spectral),
+        #                interpolate_to_grid_vpa(expected.vpa, interpolate_to_grid_z(expected.z, f[:, :, :, 2], z, z_spectral), vpa, vpa_spectral);
+        #                dims=4)
+        #println("f ", size(newgrid_f))
+        #println(newgrid_f)
+        #println()
+        function test_values(tind)
+            @testset "tind=$tind" begin
+                newgrid_phi = interpolate_to_grid_z(expected.z, phi[:, tind], z, z_spectral)
+                @test isapprox(expected.phi[:, tind], newgrid_phi, rtol=rtol)
+
+                newgrid_n = interpolate_to_grid_z(expected.z, n[:, :, tind], z, z_spectral)
+                @test isapprox(expected.n[:, :, tind], newgrid_n, rtol=rtol)
+
+                newgrid_upar = interpolate_to_grid_z(expected.z, upar[:, :, tind], z, z_spectral)
+                @test isapprox(expected.upar[:, :, tind], newgrid_upar, rtol=rtol)
+
+                newgrid_ppar = interpolate_to_grid_z(expected.z, ppar[:, :, tind], z, z_spectral)
+                @test isapprox(expected.ppar[:, :, tind], newgrid_ppar, rtol=rtol)
+
+                newgrid_f = interpolate_to_grid_z(expected.z, f[:, :, :, tind], z, z_spectral)
+                newgrid_f = interpolate_to_grid_vpa(expected.vpa, newgrid_f, vpa, vpa_spectral)
+                @test isapprox(expected.f[:, :, :, tind], newgrid_f, rtol=rtol)
+            end
+        end
+
+        # Test initial values
+        test_values(1)
+
+        # Test final values
+        test_values(2)
     end
-
-    # Test initial values
-    test_values(1)
-
-    # Test final values
-    test_values(2)
 end
 
 

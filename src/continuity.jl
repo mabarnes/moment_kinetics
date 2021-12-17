@@ -5,13 +5,14 @@ export continuity_equation!
 using ..calculus: derivative!
 
 # use the continuity equation dn/dt + d(n*upar)/dz to update the density n for all species
-function continuity_equation!(dens_out, fvec_in, moments, vpa, z, dt, spectral)
+function continuity_equation!(dens_out, fvec_in, moments, composition, vpa, z, dt, spectral)
     # use the continuity equation dn/dt + d(n*upar)/dz to update the density n
     # for each species
-    n_species = size(dens_out,2)
-    for is ∈ 1:n_species
-        @views continuity_equation_single_species!(dens_out[:,is],
-            fvec_in.density[:,is], fvec_in.upar[:,is], z, dt, spectral)
+    for is ∈ composition.species_local_range
+        if composition.first_proc_in_group
+            @views continuity_equation_single_species!(dens_out[:,is],
+                fvec_in.density[:,is], fvec_in.upar[:,is], z, dt, spectral)
+        end
     end
 end
 # use the continuity equation dn/dt + d(n*upar)/dz to update the density n
