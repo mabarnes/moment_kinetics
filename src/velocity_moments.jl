@@ -97,7 +97,7 @@ function create_moments(nz, n_species, evolve_moments)
     else
         vpa_norm_fac = allocate_shared_float(nz, n_species)
         if block_rank[] == 0
-            vpa_norm_fac .= ones(mk_float, nz, n_species)
+            vpa_norm_fac .= 1.0
         end
     end
     # return struct containing arrays needed to update moments
