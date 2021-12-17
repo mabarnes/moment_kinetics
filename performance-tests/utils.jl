@@ -154,12 +154,12 @@ function upload_result(testtype::AbstractString,
 
             # append results to file
             function append_to_file(filename, line, nresults)
-                header_string = "Commit                                  | Machine                        | Date             "
-                for i ∈ 1:(nresults÷4)
-                    header_string *= "| Memory usage $i (B)   | Minimum runtime $i (s)| Median runtime $i (s) | Maximum runtime $i (s)"
-                end
-                header_string *= "\n"
                 if !isfile(filename)
+                    header_string = "Commit                                  | Machine                        | Date             "
+                    for i ∈ 1:(nresults÷4)
+                        header_string *= "| Memory usage $i (B)   | Minimum runtime $i (s)| Median runtime $i (s) | Maximum runtime $i (s)"
+                    end
+                    header_string *= "\n"
                     open(filename, "w") do io
                         write(io, header_string)
                         write(io, line)
