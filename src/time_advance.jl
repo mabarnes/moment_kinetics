@@ -147,9 +147,10 @@ function setup_time_advance!(pdf, vpa, z, composition, drive_input, moments,
     # create the "fields" structure that contains arrays
     # for the electrostatic potential phi and eventually the electromagnetic fields
     fields = setup_em_fields(z.n, drive_input.force_phi, drive_input.amplitude, drive_input.frequency)
+    # initialize the electrostatic potential
+    update_phi!(fields, scratch[1], z, composition)
+    block_synchronize()
     if block_rank[] == 0
-        # initialize the electrostatic potential
-        update_phi!(fields, scratch[1], z, composition, 1:z.n)
         # save the initial phi(z) for possible use later (e.g., if forcing phi)
         fields.phi0 .= fields.phi
     end
@@ -528,7 +529,7 @@ function rk_update!(scratch, pdf, moments, fields, vpa, z, rk_coefs, istage, com
     # update the parallel heat flux
     update_qpar!(moments.qpar, moments.qpar_updated, pdf.unnorm, vpa, z, composition, moments.vpa_norm_fac)
     # update the electrostatic potential phi
-    update_phi!(fields, scratch[istage+1], z, composition, z.outer_loop_range)
+    update_phi!(fields, scratch[istage+1], z, composition)
 end
 function ssp_rk!(pdf, scratch, t, t_input, vpa, z,
     vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
