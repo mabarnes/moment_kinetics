@@ -17,7 +17,7 @@ function allocate_shared_bool(dims...)
 end
 
 # allocate 1d array with dimensions given by dims and entries of type mk_int
-function allocate_int(dims)
+function allocate_int(dims...)
     return array = Array{mk_int}(undef, dims...)
 end
 # variant where array is in shared memory for all processors in the 'block'
