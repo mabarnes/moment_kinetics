@@ -227,6 +227,11 @@ end
 
 _println0(s="") = block_rank[] == 0 && println(s)
 _display0(s="") = block_rank[] == 0 && display(s)
+
+# `initialization_seconds` and `benchmark_seconds` are set to Inf so that parallel
+# benchmarks run correctly. If they were finite, slightly different timings on different
+# processes could lead to different numbers of benchmark evaluations on different
+# processes, causing execution to hang.
 const initialization_seconds = Inf
 const initialization_samples = 40
 const initialization_evals = 1
