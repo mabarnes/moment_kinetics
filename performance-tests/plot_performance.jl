@@ -190,9 +190,8 @@ Find all files corresponding to 'prefix'
 Arguments
 ---------
 prefix : String
-    Prefix of files in the format "\$(prefix).txt" (for serial runs) or
-    "\$(prefix)_\$(n)procs.txt" (for parallel runs), filled with data for a certain set of
-    tests by PerformanceTestUtils.upload_result().
+    Prefix of files in the format "\$(prefix)_\$(n)procs.txt", filled with data for a
+    certain set of tests by PerformanceTestUtils.upload_result().
 
 Returns
 -------
@@ -317,9 +316,8 @@ Plot strong scaling performance data
 Arguments
 ---------
 prefix : String
-    Prefix of files in the format "\$(prefix).txt" (for serial runs) or
-    "\$(prefix)_\$(n)procs.txt" (for parallel runs), filled with data for a certain set of
-    tests by PerformanceTestUtils.upload_result().
+    Prefix of files in the format "\$(prefix)_\$(n)procs.txt", filled with data for a
+    certain set of tests by PerformanceTestUtils.upload_result().
 machine : String, optional
     Name of the machine to plot performace data from. If not given, the name is read
     from `config.toml`.
