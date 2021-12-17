@@ -156,7 +156,7 @@ To get more output on what tests were successful, an option `--verbose` (or `-v`
             end
         end
         ```
-        and the sets formed by composition.species_local_range and z.outer_loop_range have no overlap between different processes. Similarly if the inner loop is over `z`, then the loop would look something like
+        and the sets of points formed by composition.species_local_range and z.outer_loop_range have no overlap between different processes. Similarly if the inner loop is over `z`, then the loop would look something like
         ```
         for is in composition.species_local_range
             for ivpa in vpa.outer_loop_range

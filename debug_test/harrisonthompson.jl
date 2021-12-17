@@ -1,7 +1,7 @@
 module HarrisonThompsonDebug
 # Test case with constant-in-space, delta-function-in-vpa source against
 # analytic solution from [E. R. Harrison and W. B. Thompson. The low pressure
-# plane symmetric discharge. Proc. Phys.  Soc., 74:145, 1959]
+# plane symmetric discharge. Proc. Phys. Soc., 74:145, 1959]
 
 include("setup.jl")
 

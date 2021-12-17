@@ -47,4 +47,5 @@ Warning: when looking at memory allocation plots, bear in mind that the value do
 include memory allocated by the MPI library (i.e. shared-memory arrays). This should not
 affect the time-advance profiling (since no new shared-memory arrays are allocated), but
 will affect the allocations reported during initialization (in particular there is a
-big, 'fictitious' drop when shared-memory arrays are introduced).
+big, 'fictitious' drop between the commits before and after introducing
+shared-memory arrays).
