@@ -8,21 +8,21 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        # This job currently fails on macOS - don't know why, try re-activating later
-        #os: [ubuntu-latest, macOS-latest]
-        os: [ubuntu-latest]
+        os: [ubuntu-latest, macOS-latest]
       fail-fast: false
     timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v2
+      - uses: mpi4py/setup-mpi@v1
+        with:
+          mpi: 'openmpi'
       - uses: julia-actions/setup-julia@v1
         with:
           version: '1'
           arch: x64
       - uses: julia-actions/julia-buildpkg@v1
       - run: |
-          sudo apt-get install openmpi-bin
           julia --project -e 'ENV["JULIA_MPI_BINARY"]="system"; using Pkg; Pkg.build("MPI"; verbose=true)'
           julia -O3 --check-bounds=no precompile.jl --debug 1
           # Need to use openmpi so that the following arguments work:
