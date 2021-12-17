@@ -70,7 +70,7 @@ function update_phi!(fields, fvec, z, composition, z_range)
 
         if composition.electron_physics ∈ (boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath)
             @inbounds for iz ∈ z_range
-                fields.phi[iz] = composition.T_e * log(z.scratch[iz])
+                fields.phi[iz] = composition.T_e * log(z.scratch[iz] / N_e)
             end
             # if fields.force_phi
             #     @inbounds for iz ∈ 1:z.n
