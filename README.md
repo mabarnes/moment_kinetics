@@ -13,11 +13,7 @@
     (moment_kinetics) pkg> instantiate
     ```
     this should download and install all the dependencies.
-2) Create a subdirectory to store run output.
-    ```
-    $ mkdir runs
-    ```
-3) For julia>=1.6, pre-compiling dependencies manually is not necessary any more due to improvements to the native pre-compilation, so this step can be skipped (although precompiling the whole `moment_kinetics` code may still be useful sometimes). To pre-compile a static image (`dependencies.so`) that includes most of the external packages required for running and post-processing, run
+2) For julia>=1.6, pre-compiling dependencies manually is not necessary any more due to improvements to the native pre-compilation, so this step can be skipped (although precompiling the whole `moment_kinetics` code may still be useful sometimes). To pre-compile a static image (`dependencies.so`) that includes most of the external packages required for running and post-processing, run
     ```
     $ julia -O3 precompile_dependencies.jl
     ```
@@ -26,8 +22,8 @@
     ```
     $ julia -O3 precompile.jl
     ```
-   this significantly decreases the load time but prevents code changes from taking effect when `moment_kinetics.so` is used without repeating the precompilation (to use this option, replace `dependencies.so` below with `moment_kinetics.so`). Note that these commands will fail if the `runs` subdirectory does not exist.
-4) To run julia with optimization, type
+   this significantly decreases the load time but prevents code changes from taking effect when `moment_kinetics.so` is used without repeating the precompilation (to use this option, replace `dependencies.so` below with `moment_kinetics.so`).
+3) To run julia with optimization, type
     ```
     $julia -O3 --project run_moment_kinetics.jl
     ```
@@ -36,19 +32,19 @@
     $ julia -O3 --project run_moment_kinetics.jl input.toml
     ```
     * It may be more convenient when running `moment_kinetics` more than once to work from the Julia REPL - see [Developing](#developing).
-5) To make plots and calculate frequencies/growth rates, run
+4) To make plots and calculate frequencies/growth rates, run
     ```
     $ julia --project run_post_processing.jl runs/<directory to process>
     ```
     passing the directory to process as a command line argument. Input options for post-processing can be specified in post_processing_input.jl.
 
-6) Parameter scans (see [Running parameter scans](#running-parameter-scans)) or performance tests can be performed by running
+5) Parameter scans (see [Running parameter scans](#running-parameter-scans)) or performance tests can be performed by running
     ```
     $ julia -O3 --project driver.jl
     ```
     If running a scan, it can be parallelised by passing the number of processors as an argument. Scan options are set in `scan_inputs.jl`.
 
-7) Post processing can be done for several directories at once using
+6) Post processing can be done for several directories at once using
     ```
     $ julia --project post_processing_driver.jl runs/<directory1> runs/<directory2> ...
     ```
