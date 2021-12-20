@@ -15,11 +15,36 @@ using ..post_processing_input: pp
 using ..quadrature: composite_simpson_weights
 using ..array_allocation: allocate_float
 using ..file_io: open_output_file
-using ..type_definitions: mk_float
+using ..type_definitions: mk_float, mk_int
 using ..load_data: open_netcdf_file
 using ..load_data: load_coordinate_data, load_fields_data, load_moments_data, load_pdf_data
 using ..analysis: analyze_fields_data, analyze_moments_data, analyze_pdf_data
 using ..velocity_moments: integrate_over_vspace
+
+"""
+Calculate a moving average
+
+```
+result[i] = mean(v[i-n:i+n])
+```
+Except near the ends of the array where indices outside the range of v are skipped.
+"""
+function moving_average(v::AbstractVector, n::mk_int)
+    if length(v) < 2*n+1
+        error("Cannot take moving average with n=$n on vector of length=$(length(v))")
+    end
+    result = similar(v)
+    for i ∈ 1:n
+        result[i] = mean(v[begin:i+n])
+    end
+    for i ∈ n+1:length(v)-n-1
+        result[i] = mean(v[i-n:i+n])
+    end
+    for i ∈ length(v)-n:length(v)
+        result[i] = mean(v[i-n:end])
+    end
+    return result
+end
 
 function analyze_and_plot_data(path)
     # Create run_name from the path to the run directory
@@ -636,8 +661,8 @@ function fit_phi0_vs_time(phi0, tmod)
     #@. standard_deviation = se * sqrt(size(tmod))
 
     fitted_function = model(tmod, fit.param)
-    fit_error = sqrt(mean(@.((phi0/phi0[1] - fitted_function)^2
-                             / max(phi0/phi0[1], fitted_function)^2)))
+    norm = moving_average(@.((abs(phi0/phi0[1]) + abs(fitted_function))^2), 1)
+    fit_error = sqrt(mean(@.((phi0/phi0[1] - fitted_function)^2 / norm)))
 
     return fit.param[1], fit.param[2], fit.param[3], fit_error
 end
