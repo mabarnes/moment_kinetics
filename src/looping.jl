@@ -3,10 +3,17 @@ module looping
 Provides convenience macros for shared-memory-parallel loops
 """
 
+using ..debugging
+using ..communication: _block_synchronize
 using ..type_definitions: mk_int
 
 using Combinatorics
 using Primes
+
+@debug_loop_type_region using ..debugging: current_loop_region_type
+
+# Export this to make sure it is available in every scope that imports looping
+export @debug_loop_type_region
 
 const all_dimensions = (:s, :z, :vpa)
 const dimension_combinations = Tuple(Tuple(c) for c in combinations(all_dimensions))
@@ -45,8 +52,10 @@ function loop_range_names(dims::Tuple)
 end
 
 # Create struct to store ranges for loops over all combinations of dimensions
-LoopRanges_body = quote end
-setup_loop_ranges_arguments = []
+LoopRanges_body = quote
+    rank0::Bool
+end
+setup_loop_ranges_arguments = [:( rank0=(block_rank==0) )]
 for dims ∈ dimension_combinations
     global LoopRanges_body, setup_loop_ranges_arguments
     range_names = loop_range_names(dims)
@@ -205,7 +214,7 @@ function get_best_ranges_from_sizes(block_rank, block_size, dim_sizes_list)
         sb_ranks[i] = sub_rank ÷ remaining_block_size
         sub_rank = sub_rank % remaining_block_size
     end
-    
+
     return [get_local_range(sb_rank, sb_size, dim_size)
             for (sb_rank, sb_size, dim_size) in zip(sb_ranks, best_split,
                                                     dim_sizes_list)]
@@ -224,6 +233,7 @@ export loop_ranges
 #`n` is an integer giving the size of the dimension.
 eval(quote
          function setup_loop_ranges!(block_rank, block_size; dim_sizes...)
+             @debug_loop_type_region current_loop_region_type[] = "serial"
              best_ranges = Dict()
              for dims ∈ dimension_combinations
                  best_ranges[dims] = get_best_ranges(block_rank, block_size,
@@ -242,6 +252,7 @@ for dims ∈ dimension_combinations
     # Create an expression-function/macro combination for each level of the
     # loop
     dims_symb = Symbol(dims_string(dims))
+    dims_symb_string = string(dims_symb)
     range_names = loop_range_names(dims)
     range_exprs =
         Tuple(:( loop_ranges[].$(range_names[dim]) )
@@ -254,6 +265,12 @@ for dims ∈ dimension_combinations
             macro $macro_name(iteration_var, expr)
                 this_range = $range_expr
                 return quote
+                    @debug_loop_type_region begin
+                        if current_loop_region_type[] != $$dims_symb_string
+                            error("Called loop of type $($$dims_symb_string) in region of "
+                                  * "type $(current_loop_region_type[])")
+                        end
+                    end
                     for $(esc(iteration_var)) = $this_range
                         $(esc(expr))
                     end
@@ -282,7 +299,15 @@ for dims ∈ dimension_combinations
                     end
                 end
             end
-            return ex
+            return quote
+                @debug_loop_type_region begin
+                    if current_loop_region_type[] != $$dims_symb_string
+                        error("Called loop of type $($$dims_symb_string) in region of type "
+                              * "$(current_loop_region_type[])")
+                    end
+                end
+                $ex
+            end
         end
     end
     eval(macro_body_expr)
@@ -296,6 +321,55 @@ for dims ∈ dimension_combinations
         export $nested_macro_at_name
     end
     eval(macro_expr)
+
+    # Create a function for beginning loops of type 'dims'
+    sync_name = Symbol(:begin_, dims_symb, :_region)
+    eval(quote
+             function $sync_name(; no_synchronize::Bool=false)
+                 @debug_loop_type_region begin
+                     if current_loop_region_type[] == $dims_symb_string
+                         error("Called $($sync_name)(), but already in region of type "
+                               * "$(current_loop_region_type[]).")
+                     end
+                     current_loop_region_type[] = $dims_symb_string
+                 end
+                 if !no_synchronize
+                     _block_synchronize()
+                 end
+             end
+             export $sync_name
+         end)
 end
+
+"""
+Run a block of code on only rank-0 of each block
+"""
+macro serial_region(blk)
+    return quote
+        @debug_loop_type_region begin
+            if current_loop_region_type[] != "serial"
+                error("Called loop of type serial in region of type "
+                      * "$(current_loop_region_type[])")
+            end
+            current_loop_region_type[] = "serial"
+        end
+        if loop_ranges[].rank0
+            $(esc(blk))
+        end
+    end
+end
+export @serial_region
+function begin_serial_region(; no_synchronize::Bool=false)
+    @debug_loop_type_region begin
+        if current_loop_region_type[] == "serial"
+            error("Called begin_serial_region(), but already in region of type serial.")
+        end
+        current_loop_region_type[] = "serial"
+    end
+    if !no_synchronize
+        _block_synchronize()
+    end
+end
+export begin_serial_region
 
 end # looping
