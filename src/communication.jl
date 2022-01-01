@@ -584,6 +584,11 @@ function _block_synchronize()
     end
 end
 
+# Temporary export for backward compatibility - remove once all files are updated to use
+# the new macros/functions
+const block_synchronize = _block_synchronize
+export block_synchronize
+
 """
 Set up communications
 
