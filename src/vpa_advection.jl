@@ -19,12 +19,11 @@ function vpa_advection!(f_out, fvec_in, ff, fields, moments, SL, advect,
     if moments.evolve_upar
         species_range = composition.species_local_range
         z_range = z.outer_loop_range
-        composition.n_neutral_species > 0 && abs(CX_frequency) > 0.0 && block_synchronize()
     else
         species_range = composition.ion_species_local_range
         z_range = z.outer_loop_range_ions
-        block_synchronize()
     end
+    block_synchronize()
     # calculate the advection speed corresponding to current f
     update_speed_vpa!(advect, fields, fvec_in, moments, vpa, z, composition, CX_frequency, t, z_spectral, species_range, z_range)
     for is ∈ species_range
