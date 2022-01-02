@@ -7,7 +7,7 @@ export write_data_to_ascii
 export write_data_to_binary
 
 using NCDatasets
-using ..communication: block_rank
+using ..looping
 using ..type_definitions: mk_float, mk_int
 
 # structure containing the various input/output streams
@@ -64,22 +64,24 @@ end
 # open the necessary output files
 function setup_file_io(output_dir, run_name, vpa, z, composition,
                        collisions, evolve_ppar)
-    if block_rank[] != 0
+    begin_serial_region()
+    @serial_region begin
         # Only read/write from first process in each 'block'
-        return nothing, nothing
-    end
 
-    # check to see if output_dir exists in the current directory
-    # if not, create it
-    isdir(output_dir) || mkdir(output_dir)
-    out_prefix = string(output_dir, "/", run_name)
-    #ff_io = open_output_file(out_prefix, "f_vs_t")
-    mom_io = open_output_file(out_prefix, "moments_vs_t")
-    fields_io = open_output_file(out_prefix, "fields_vs_t")
-    cdf = setup_netcdf_io(out_prefix, z, vpa, composition, collisions,
-                          evolve_ppar)
-    #return ios(ff_io, mom_io, fields_io), cdf
-    return ios(mom_io, fields_io), cdf
+        # check to see if output_dir exists in the current directory
+        # if not, create it
+        isdir(output_dir) || mkdir(output_dir)
+        out_prefix = string(output_dir, "/", run_name)
+        #ff_io = open_output_file(out_prefix, "f_vs_t")
+        mom_io = open_output_file(out_prefix, "moments_vs_t")
+        fields_io = open_output_file(out_prefix, "fields_vs_t")
+        cdf = setup_netcdf_io(out_prefix, z, vpa, composition, collisions,
+                              evolve_ppar)
+        #return ios(ff_io, mom_io, fields_io), cdf
+        return ios(mom_io, fields_io), cdf
+    end
+    # For other processes in the block, return (nothing, nothing)
+    return nothing, nothing
 end
 # setup file i/o for netcdf
 function setup_netcdf_io(prefix, z, vpa, composition, collisions, evolve_ppar)
@@ -210,107 +212,103 @@ function setup_netcdf_io(prefix, z, vpa, composition, collisions, evolve_ppar)
 end
 # close all opened output files
 function finish_file_io(io, cdf)
-    if block_rank[] != 0
+    @serial_region begin
         # Only read/write from first process in each 'block'
-        return nothing
-    end
 
-    # get the fields in the ios struct
-    io_fields = fieldnames(typeof(io))
-    for i ∈ 1:length(io_fields)
-        close(getfield(io, io_fields[i]))
+        # get the fields in the ios struct
+        io_fields = fieldnames(typeof(io))
+        for i ∈ 1:length(io_fields)
+            close(getfield(io, io_fields[i]))
+        end
+        close(cdf.fid)
     end
-    close(cdf.fid)
     return nothing
 end
 function write_data_to_ascii(ff, moments, fields, vpa, z, t, n_species, io)
-    if block_rank[] != 0
+    @serial_region begin
         # Only read/write from first process in each 'block'
-        return
-    end
 
-    #write_f_ascii(ff, z, vpa, t, io.ff)
-    write_moments_ascii(moments, z, t, n_species, io.moments)
-    write_fields_ascii(fields, z, t, io.fields)
+        #write_f_ascii(ff, z, vpa, t, io.ff)
+        write_moments_ascii(moments, z, t, n_species, io.moments)
+        write_fields_ascii(fields, z, t, io.fields)
+    end
+    return nothing
 end
 # write the function f(z,vpa) at this time slice
 function write_f_ascii(f, z, vpa, t, io)
-    if block_rank[] != 0
+    @serial_region begin
         # Only read/write from first process in each 'block'
-        return nothing
-    end
 
-    @inbounds begin
-        n_species = size(f,3)
-        for is ∈ 1:n_species
-            for j ∈ 1:vpa.n
-                for i ∈ 1:z.n
-                    println(io,"t: ", t, "   spec: ", is, ",   z: ", z.grid[i],
-                        ",  vpa: ", vpa.grid[j], ",   f: ", f[i,j,is])
+        @inbounds begin
+            n_species = size(f,3)
+            for is ∈ 1:n_species
+                for j ∈ 1:vpa.n
+                    for i ∈ 1:z.n
+                        println(io,"t: ", t, "   spec: ", is, ",   z: ", z.grid[i],
+                            ",  vpa: ", vpa.grid[j], ",   f: ", f[i,j,is])
+                    end
+                    println(io)
                 end
                 println(io)
             end
             println(io)
         end
-        println(io)
     end
     return nothing
 end
 # write moments of the distribution function f(z,vpa) at this time slice
 function write_moments_ascii(mom, z, t, n_species, io)
-    if block_rank[] != 0
+    @serial_region begin
         # Only read/write from first process in each 'block'
-        return nothing
-    end
 
-    @inbounds begin
-        for is ∈ 1:n_species
-            for i ∈ 1:z.n
-                println(io,"t: ", t, "   species: ", is, "   z: ", z.grid[i],
-                    "  dens: ", mom.dens[i,is], "   upar: ", mom.upar[i,is],
-                    "   ppar: ", mom.ppar[i,is], "   qpar: ", mom.qpar[i,is])
+        @inbounds begin
+            for is ∈ 1:n_species
+                for i ∈ 1:z.n
+                    println(io,"t: ", t, "   species: ", is, "   z: ", z.grid[i],
+                        "  dens: ", mom.dens[i,is], "   upar: ", mom.upar[i,is],
+                        "   ppar: ", mom.ppar[i,is], "   qpar: ", mom.qpar[i,is])
+                end
             end
         end
+        println(io,"")
     end
-    println(io,"")
     return nothing
 end
 # write electrostatic potential at this time slice
 function write_fields_ascii(flds, z, t, io)
-    if block_rank[] != 0
+    @serial_region begin
         # Only read/write from first process in each 'block'
-        return nothing
-    end
 
-    @inbounds begin
-        for i ∈ 1:z.n
-            println(io,"t: ", t, ",   z: ", z.grid[i], "  phi: ", flds.phi[i])
+        @inbounds begin
+            for i ∈ 1:z.n
+                println(io,"t: ", t, ",   z: ", z.grid[i], "  phi: ", flds.phi[i])
+            end
         end
+        println(io,"")
     end
-    println(io,"")
     return nothing
 end
 # write time-dependent data to the netcdf file
 function write_data_to_binary(ff, moments, fields, t, n_species, cdf, t_idx)
-    if block_rank[] != 0
+    @serial_region begin
         # Only read/write from first process in each 'block'
-        return
-    end
 
-    # add the time for this time slice to the netcdf file
-    cdf.time[t_idx] = t
-    # add the distribution function data at this time slice to the netcdf file
-    cdf.f[:,:,:,t_idx] = ff
-    # add the electrostatic potential data at this time slice to the netcdf file
-    cdf.phi[:,t_idx] = fields.phi
-    # add the density data at this time slice to the netcdf file
-    for is ∈ 1:n_species
-        cdf.density[:,:,t_idx] = moments.dens
-        cdf.parallel_flow[:,:,t_idx] = moments.upar
-        cdf.parallel_pressure[:,:,t_idx] = moments.ppar
-        cdf.parallel_heat_flux[:,:,t_idx] = moments.qpar
-        cdf.thermal_speed[:,:,t_idx] = moments.vth
+        # add the time for this time slice to the netcdf file
+        cdf.time[t_idx] = t
+        # add the distribution function data at this time slice to the netcdf file
+        cdf.f[:,:,:,t_idx] = ff
+        # add the electrostatic potential data at this time slice to the netcdf file
+        cdf.phi[:,t_idx] = fields.phi
+        # add the density data at this time slice to the netcdf file
+        for is ∈ 1:n_species
+            cdf.density[:,:,t_idx] = moments.dens
+            cdf.parallel_flow[:,:,t_idx] = moments.upar
+            cdf.parallel_pressure[:,:,t_idx] = moments.ppar
+            cdf.parallel_heat_flux[:,:,t_idx] = moments.qpar
+            cdf.thermal_speed[:,:,t_idx] = moments.vth
+        end
     end
+    return nothing
 end
 # accepts an option name which has been identified as problematic and returns
 # an appropriate error message
