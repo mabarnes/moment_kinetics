@@ -6,7 +6,7 @@ export performance_test
 
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float
-using ..communication: block_rank, get_species_local_range
+using ..communication
 using ..file_io: input_option_error, open_output_file
 using ..finite_differences: fd_check_option
 using ..input_structs
