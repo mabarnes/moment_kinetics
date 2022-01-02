@@ -3,14 +3,15 @@ module force_balance
 export force_balance!
 
 using ..calculus: derivative!
+using ..looping
 
 # use the force balance equation d(nu)/dt + d(ppar + n*upar*upar)/dz =
 # -(dens/2)*dphi/dz + R*dens_i*dens_n*(upar_n-upar_i)
 # to update the parallel particle flux dens*upar for each species
 function force_balance!(pflx, fvec, fields, collisions, vpa, z, dt, spectral, composition)
     # account for momentum flux contribution to force balance
-    for is ∈ composition.species_local_range
-        if composition.first_proc_in_group
+    @s_z_loop_s is begin
+        if 1 ∈ loop_ranges[].s_z_range_z
             @views force_balance_flux_species!(pflx[:,is], fvec.density[:,is], fvec.upar[:,is], fvec.ppar[:,is], z, dt, spectral)
             if is ∈ composition.ion_species_range
                 # account for parallel electric field contribution to force balance
@@ -52,8 +53,8 @@ function force_balance_Epar_species!(pflx, phi, dens, z, dt, spectral)
 end
 
 function force_balance_CX!(pflx, dens, upar, CX_frequency, composition, z, dt)
-    for is ∈ composition.species_local_range
-        if composition.first_proc_in_group
+    @s_z_loop_s is begin
+        if 1 ∈ loop_ranges[].s_z_range_z
             # include contribution to ion acceleration due to collisional friction with neutrals
             if is ∈ composition.ion_species_range
                 for isp ∈ composition.neutral_species_range
