@@ -13,8 +13,7 @@ loop ranges), as at the moment we only run with 1 ion species and 1 neutral spec
 module communication
 
 export allocate_shared, block_rank, block_size, comm_block,
-       comm_world, finalize_comms!, initialize_comms!, get_coordinate_local_range,
-       get_species_local_range, global_rank, MPISharedArray
+       comm_world, finalize_comms!, initialize_comms!, global_rank, MPISharedArray
 
 using MPI
 using SHA
@@ -213,119 +212,6 @@ function allocate_shared(T, dims)
     end
 
     return array
-end
-
-"""
-Get local range of species indices when splitting a loop over processes in a block
-
-Arguments
----------
-n_species : mk_int
-    Number of species.
-offset : mk_int, default 0
-    Start the species index range at offset+1, instead of 1. Used to create ranges over
-    neutral species.
-
-Returns
--------
-UnitRange{mk_int}
-    Range of species indices to iterate over on this process
-Bool
-    Is this process the first in the group iterating over a species?
-"""
-function get_species_local_range(n_species, offset=0)
-    bs = block_size[]
-    br = block_rank[]
-
-    if n_species >= bs
-        # More species than processes (or same number) so split up species amoung
-        # processes
-        if n_species % bs != 0
-            error("Number of species ($n_species) bigger than block size ($bs) "
-                  * "but block size does not divide n_species.")
-        end
-
-        n_local = n_species ÷ bs
-        return mk_int(br * n_local + 1 + offset):mk_int((br + 1) * n_local + offset), true
-    else
-        # More processes than species, so assign group of processes to each species
-        if bs % n_species != 0
-            error("Block size ($bs) is bigger than number of species "
-                  * "($n_species) but n_species does not divide block size")
-        end
-        group_size = bs ÷ n_species
-        group_rank = br % group_size
-        species_ind = br ÷ group_size + 1
-        return mk_int(species_ind + offset):mk_int(species_ind + offset), group_rank == 0
-    end
-end
-
-"""
-Get local range of (outer-loop) coordinate indices when splitting a loop over processes
-in a block
-"""
-function get_coordinate_local_range(n, n_species)
-    n_procs = block_size[]
-    if n_species >= n_procs
-        # No need to split loop over coordinate - will only run on a single processor
-        # anyway
-        return 1:n
-    elseif n_procs % n_species != 0
-        error("Number of species must divide n_procs when n_procs>n_species")
-    end
-
-    # Split processors into sub-blocks, where each sub-block gets one species.
-    n_sub_block_procs = n_procs ÷ n_species
-    sub_block_rank = block_rank[] % n_sub_block_procs
-
-    # Assign either (n÷n_sub_block_procs) or (n÷n_sub_block_procs+1) points to each
-    # processor, with the lower number (n÷n_sub_block_procs) on lower-number processors,
-    # because the root process might have slightly more work to do in general.
-    # This calculation is not at all optimized, but is not going to take long, and is
-    # only done in initialization, so it is more important to be simple and robust.
-    remaining = n
-    done = false
-    n_points_for_proc = zeros(mk_int, n_sub_block_procs)
-    while !done
-        for i ∈ n_sub_block_procs:-1:1
-            n_points_for_proc[i] += 1
-            remaining -= 1
-            if remaining == 0
-                done = true
-                break
-            end
-        end
-    end
-
-    ## An alternative way of dividing points between processes might be to minimise the
-    #number of points on proc 0.
-    #points_per_proc = div(n, n_sub_block_procs, RoundUp)
-    #remaining = n
-    #n_points_for_proc = zeros(mk_int, n_sub_block_procs)
-    #for i ∈ n_procs:-1:1
-    #    if remaining >= points_per_proc
-    #        n_points_for_proc[i] = points_per_proc
-    #        remaining -= points_per_proc
-    #    else
-    #        n_points_for_proc[i] = remaining
-    #        remaining = 0
-    #        break
-    #    end
-    #end
-    #if remaining > 0
-    #    error("not all grid points have been assigned to processes, but should have "
-    #          * "been")
-    #end
-
-    # remember sub_block_rank is a 0-based index, so need to add one to get an index for
-    # the n_points_for_proc Vector.
-    first = 1
-    for i ∈ 1:sub_block_rank
-        first += n_points_for_proc[i]
-    end
-    last = first + n_points_for_proc[sub_block_rank + 1] - 1
-
-    return first:last
 end
 
 # Need to put this before _block_synchronize() so that original_error() is defined.
@@ -583,11 +469,6 @@ function _block_synchronize()
         MPI.Barrier(comm_block)
     end
 end
-
-# Temporary export for backward compatibility - remove once all files are updated to use
-# the new macros/functions
-const block_synchronize = _block_synchronize
-export block_synchronize
 
 """
 Set up communications

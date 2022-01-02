@@ -5,7 +5,6 @@ export equally_spaced_grid
 
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_int
-using ..communication: get_coordinate_local_range
 using ..file_io: open_output_file
 using ..chebyshev: scaled_chebyshev_grid
 using ..quadrature: composite_simpson_weights
@@ -21,14 +20,6 @@ struct coordinate
     ngrid::mk_int
     # nelement is the number of elements associated with this coordinate
     nelement::mk_int
-    # Range to use for outer coordinate level of shared-memory parallel for-loops
-    outer_loop_range::UnitRange{mk_int}
-    # Range to use for outer coordinate level of shared-memory parallel for-loops when
-    # species loop is only over ions
-    outer_loop_range_ions::UnitRange{mk_int}
-    # Range to use for outer coordinate level of shared-memory parallel for-loops when
-    # species loop is only over neutrals
-    outer_loop_range_neutrals::UnitRange{mk_int}
     # L is the box length in this coordinate
     L::mk_float
     # grid is the location of the grid points
@@ -75,11 +66,6 @@ function define_coordinate(input, composition=nothing)
     # plus ngrid-1 unique points for each additional element due
     # to the repetition of a point at the element boundary
     n = (input.ngrid-1)*input.nelement + 1
-    if composition === nothing
-        outer_loop_range, outer_loop_range_ions, outer_loop_range_neutrals = 1:n, 1:n, 1:0
-    else
-        outer_loop_range, outer_loop_range_ions, outer_loop_range_neutrals = get_local_loop_ranges(n, composition)
-    end
     # obtain index mapping from full grid to the
     # grid within each element (igrid, ielement)
     igrid, ielement = full_to_elemental_grid_map(input.ngrid, input.nelement, n)
@@ -102,18 +88,10 @@ function define_coordinate(input, composition=nothing)
     # struct containing the advection speed options/inputs for this coordinate
     advection = input.advection
 
-    return coordinate(input.name, n, input.ngrid, input.nelement, outer_loop_range,
-        outer_loop_range_ions, outer_loop_range_neutrals, input.L, grid, cell_width,
-        igrid, ielement, imin, imax, input.discretization, input.fd_option, input.bc,
-        wgts, uniform_grid, duniform_dgrid, scratch, copy(scratch), scratch_2d,
-        advection)
-end
-# get the local range for a loop that is run in parallel by a 'block' over a
-# shared-memory array
-function get_local_loop_ranges(n, composition)
-    return get_coordinate_local_range(n, composition.n_species),
-           get_coordinate_local_range(n, composition.n_ion_species),
-           get_coordinate_local_range(n, composition.n_neutral_species)
+    return coordinate(input.name, n, input.ngrid, input.nelement, input.L, grid,
+        cell_width, igrid, ielement, imin, imax, input.discretization, input.fd_option,
+        input.bc, wgts, uniform_grid, duniform_dgrid, scratch, copy(scratch),
+        scratch_2d, advection)
 end
 # setup a grid with n grid points on the interval [-L/2,L/2]
 function init_grid(ngrid, nelement, n, L, imin, imax, igrid, discretization)

@@ -159,23 +159,6 @@ mutable struct species_composition
     ion_species_range::UnitRange{mk_int}
     # Species indices that represent neutrals
     neutral_species_range::UnitRange{mk_int}
-    # Local range of indices for this processor to use at species level of parallel
-    # loops over shared arrays
-    species_local_range::UnitRange{mk_int}
-    # Is this processor the first in the group iterating over a given species?
-    first_proc_in_group::Bool
-    # Local range of indices for this processor to use at species level of parallel
-    # loops over shared arrays, when only looping over ion species
-    ion_species_local_range::UnitRange{mk_int}
-    # Is this processor the first in the group iterating over a given species, when
-    # looping just over ion species?
-    first_proc_in_ion_group::Bool
-    # Local range of indices for this processor to use at species level of parallel
-    # loops over shared arrays, when only looping over neutral species
-    neutral_species_local_range::UnitRange{mk_int}
-    # Is this processor the first in the group iterating over a given species, when
-    # looping just over neutral species?
-    first_proc_in_neutral_group::Bool
     # electron temperature used for Boltzmann response
     T_e::mk_float
     # wall temperature used if 'wall' BC selected for z coordinate; normalised by electron temperature
