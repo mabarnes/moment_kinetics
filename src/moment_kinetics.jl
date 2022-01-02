@@ -52,12 +52,15 @@ using TOML
 using .file_io: setup_file_io, finish_file_io
 using .file_io: write_data_to_ascii, write_data_to_binary
 using .command_line_options: options
-using .communication: block_rank, block_size, block_synchronize,
-                      finalize_comms!, initialize_comms!
+using .communication
 using .coordinates: define_coordinate
+using .debugging
 using .initial_conditions: init_pdf_and_moments
+using .looping
 using .moment_kinetics_input: mk_input, run_type, performance_test
 using .time_advance: setup_time_advance!, time_advance!
+
+@debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
 
 # main function that contains all of the content of the program
 function run_moment_kinetics(to::TimerOutput, input_dict=Dict())
@@ -135,7 +138,7 @@ function setup_moment_kinetics(input_dict::Dict)
     # write initial data to binary file (netcdf)
     write_data_to_binary(pdf.unnorm, moments, fields, code_time, composition.n_species, cdf, 1)
 
-    block_synchronize()
+    begin_s_z_region()
 
     return pdf, scratch, code_time, t_input, vpa, z, vpa_spectral, z_spectral, moments,
            fields, vpa_advect, z_advect, vpa_SL, z_SL, composition, collisions, advance,
@@ -145,6 +148,14 @@ end
 # Clean up after a run
 function cleanup_moment_kinetics!(io::Union{file_io.ios,Nothing},
                                   cdf::Union{file_io.netcdf_info,Nothing})
+    @debug_detect_redundant_block_synchronize begin
+        # Disable check for redundant _block_synchronize() during finalization, as this
+        # only runs once so any failure is not important.
+        debug_detect_redundant_is_active[] = false
+    end
+
+    begin_serial_region()
+
     # finish i/o
     finish_file_io(io, cdf)
 
