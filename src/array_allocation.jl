@@ -3,9 +3,9 @@ module array_allocation
 export allocate_float, allocate_int, allocate_complex, allocate_bool, allocate_shared
 
 using ..type_definitions: mk_float, mk_int
-using ..communication: allocate_shared, block_rank
+using ..communication
 using ..debugging
-@debug_initialize_NaN using ..communication: block_synchronize
+@debug_initialize_NaN using ..communication: block_rank, _block_synchronize
 
 # allocate array with dimensions given by dims and entries of type Bool
 function allocate_bool(dims...)
@@ -41,7 +41,7 @@ function allocate_shared_float(dims...)
         if block_rank[] == 0
             array .= NaN
         end
-        block_synchronize()
+        _block_synchronize()
     end
     return array
 end
@@ -62,7 +62,7 @@ function allocate_shared_complex(dims...)
         if block_rank[] == 0
             array .= NaN
         end
-        block_synchronize()
+        _block_synchronize()
     end
     return array
 end
