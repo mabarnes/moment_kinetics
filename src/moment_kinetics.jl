@@ -51,7 +51,7 @@ using TOML
 
 using .file_io: setup_file_io, finish_file_io
 using .file_io: write_data_to_ascii, write_data_to_binary
-using .command_line_options: options
+using .command_line_options: get_options
 using .communication
 using .coordinates: define_coordinate
 using .debugging
@@ -96,10 +96,11 @@ function run_moment_kinetics(input)
     return run_moment_kinetics(TimerOutput(), input)
 end
 function run_moment_kinetics()
-    if options["inputfile"] == nothing
+    inputfile = get_options()["inputfile"]
+    if inputfile == nothing
         run_moment_kinetics(Dict())
     else
-        run_moment_kinetics(options["inputfile"])
+        run_moment_kinetics(inputfile)
     end
 end
 

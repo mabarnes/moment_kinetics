@@ -33,12 +33,12 @@ s = ArgParseSettings()
         arg_type = String
         default = nothing
 end
-# parsing here means options are available at (pre)compile-time
-const options = parse_args(s)
 
-function __init__()
-    # merging here means options are updated at run-time
-    merge!(options, parse_args(s))
+function get_options()
+    # Use getter function instead of calling parse_args(s) in __init__() and storing the
+    # result in a variable because the __init__() version ignores command line arguments
+    # when moment_kinetics is compiled into a static system image using `precompile.jl`.
+    return parse_args(s)
 end
 
 end

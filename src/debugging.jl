@@ -25,8 +25,8 @@ macronames = [
               ("debug_detect_redundant_block_synchronize", 4)
              ]
 
-using ..command_line_options: options
-_debug_level = options["debug"]
+using ..command_line_options: get_options
+_debug_level = get_options()["debug"]
 
 for (macroname, minlevel) ∈ macronames
     m = Symbol(macroname)
