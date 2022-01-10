@@ -134,8 +134,10 @@ function setup_moment_kinetics(input_dict::Dict)
     
     print("got to here 3 \n")
     
-    pdf, moments = init_pdf_and_moments(vpa, z, composition, species, t_input.n_rk_stages, evolve_moments)
-    
+    pdf, moments = init_pdf_and_moments(vpa, z, r, composition, species, t_input.n_rk_stages, evolve_moments)
+   
+    print("got to here 4 \n")
+   
     # initialize time variable
     code_time = 0.
     # create arrays and do other work needed to setup
