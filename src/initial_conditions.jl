@@ -17,28 +17,30 @@ using ..velocity_moments: integrate_over_positive_vpa, integrate_over_negative_v
 using ..velocity_moments: create_moments, update_qpar!
 
 struct pdf_struct
-    norm::MPISharedArray{mk_float,3}
-    unnorm::MPISharedArray{mk_float,3}
+    # MRH norm::MPISharedArray{mk_float,3}
+    # MRH unnorm::MPISharedArray{mk_float,3}
+    norm::MPISharedArray{mk_float,4}
+    unnorm::MPISharedArray{mk_float,4}
 end
 
 # creates the normalised pdf and the velocity-space moments and populates them
 # with a self-consistent initial condition
-function init_pdf_and_moments(vpa, z, composition, species, n_rk_stages, evolve_moments)
+function init_pdf_and_moments(vpa, z, r, composition, species, n_rk_stages, evolve_moments)
     # define the n_species variable for convenience
     n_species = composition.n_species
     # create the 'moments' struct that contains various v-space moments and other
     # information related to these moments.
     # the time-dependent entries are not initialised.
-    moments = create_moments(z.n, n_species, evolve_moments)
+    moments = create_moments(z.n, r.n, n_species, evolve_moments)
     if block_rank[] == 0
         # initialise the density profile
-        init_density!(moments.dens, z, species, n_species)
+        init_density!(moments.dens, z, r, species, n_species)
         moments.dens_updated .= true
         # initialise the parallel flow profile
-        init_upar!(moments.upar, z, species, n_species)
+        init_upar!(moments.upar, z, r, species, n_species)
         moments.upar_updated .= true
         # initialise the parallel thermal speed profile
-        init_vth!(moments.vth, z, species, n_species)
+        init_vth!(moments.vth, z, r, species, n_species)
         @. moments.ppar = 0.5 * moments.dens * moments.vth^2
         moments.ppar_updated .= true
     end
@@ -48,35 +50,37 @@ function init_pdf_and_moments(vpa, z, composition, species, n_rk_stages, evolve_
     # note that wpa = vpa - upar, unless moments.evolve_ppar = true, in which case wpa = (vpa - upar)/vth
     # the definition of pdf.norm changes accordingly from pdf.unnorm / density to pdf.unnorm * vth / density
     # when evolve_ppar = true.
-    pdf = create_and_init_pdf(moments, vpa, z, n_species, species)
+    pdf = create_and_init_pdf(moments, vpa, z, r, n_species, species)
     block_synchronize()
     # calculate the initial parallel heat flux from the initial un-normalised pdf
-    update_qpar!(moments.qpar, moments.qpar_updated, pdf.unnorm, vpa, z, composition, moments.vpa_norm_fac)
+    update_qpar!(moments.qpar, moments.qpar_updated, pdf.unnorm, vpa, z, r, composition, moments.vpa_norm_fac)
     return pdf, moments
 end
-function create_and_init_pdf(moments, vpa, z, n_species, species)
-    pdf_norm = allocate_shared_float(vpa.n, z.n, n_species)
-    pdf_unnorm = allocate_shared_float(vpa.n, z.n, n_species)
+function create_and_init_pdf(moments, vpa, z, r, n_species, species)
+    pdf_norm = allocate_shared_float(vpa.n, z.n, r.n, n_species)
+    pdf_unnorm = allocate_shared_float(vpa.n, z.n, r.n, n_species)
     if block_rank[] == 0
         for is ∈ 1:n_species
-            if species[is].z_IC.initialization_option == "bgk" || species[is].vpa_IC.initialization_option == "bgk"
-                @views init_bgk_pdf!(f[:,:,is], 0.0, species[is].initial_temperature, z.grid, z.L, vpa.grid)
-            else
-                # updates pdf_norm to contain pdf / density, so that ∫dvpa pdf.norm = 1,
-                # ∫dwpa wpa * pdf.norm = 0, and ∫dwpa m_s (wpa/vths)^2 pdf.norm = 1/2
-                # to machine precision
-                @views init_pdf_over_density!(pdf_norm[:,:,is], species[is], vpa, z, moments.vth[:,is],
-                                              moments.upar[:,is], moments.vpa_norm_fac[:,is],
-                                              moments.evolve_upar, moments.evolve_ppar)
+            for ir ∈ 1:r.n
+                if species[is].z_IC.initialization_option == "bgk" || species[is].vpa_IC.initialization_option == "bgk"
+                    @views init_bgk_pdf!(f[:,:,ir,is], 0.0, species[is].initial_temperature, z.grid, z.L, vpa.grid)
+                else
+                    # updates pdf_norm to contain pdf / density, so that ∫dvpa pdf.norm = 1,
+                    # ∫dwpa wpa * pdf.norm = 0, and ∫dwpa m_s (wpa/vths)^2 pdf.norm = 1/2
+                    # to machine precision
+                    @views init_pdf_over_density!(pdf_norm[:,:,ir,is], species[is], vpa, z, moments.vth[:,ir,is],
+                                                  moments.upar[:,ir,is], moments.vpa_norm_fac[:,ir,is],
+                                                  moments.evolve_upar, moments.evolve_ppar)
+                end
             end
         end
         pdf_unnorm .= pdf_norm
         for ivpa ∈ 1:vpa.n
-            @. pdf_unnorm[ivpa,:,:] *= moments.dens
+            @. pdf_unnorm[ivpa,:,:,:] *= moments.dens
             if moments.evolve_ppar
-                @. pdf_norm[ivpa,:,:] *= moments.vth
+                @. pdf_norm[ivpa,:,:,:] *= moments.vth
             elseif moments.evolve_density == false
-                @. pdf_norm[ivpa,:,:] = pdf_unnorm[ivpa,:,:]
+                @. pdf_norm[ivpa,:,:,:] = pdf_unnorm[ivpa,:,:,:]
             end
         end
     end
@@ -84,60 +88,66 @@ function create_and_init_pdf(moments, vpa, z, n_species, species)
 end
 # for now the only initialisation option for the temperature is constant in z
 # returns vth0 = sqrt(2Ts/ms) / sqrt(2Te/ms) = sqrt(Ts/Te)
-function init_vth!(vth, z, spec, n_species)
+function init_vth!(vth, z, r, spec, n_species)
     for is ∈ 1:n_species
-        if spec[is].z_IC.initialization_option == "sinusoid"
-            # initial condition is sinusoid in z
-            @. vth[:,is] =
-                sqrt(spec[is].initial_temperature
-                     * (1.0 + spec[is].z_IC.temperature_amplitude
-                              * cos(2.0*π*spec[is].z_IC.wavenumber*z.grid/z.L +
-                                    spec[is].z_IC.temperature_phase)))
-        else
-            @. vth[:,is] =  sqrt(spec[is].initial_temperature)
+        for ir ∈ 1:r.n
+            if spec[is].z_IC.initialization_option == "sinusoid"
+                # initial condition is sinusoid in z
+                @. vth[:,ir,is] =
+                    sqrt(spec[is].initial_temperature
+                         * (1.0 + spec[is].z_IC.temperature_amplitude
+                                  * cos(2.0*π*spec[is].z_IC.wavenumber*z.grid/z.L +
+                                        spec[is].z_IC.temperature_phase)))
+            else
+                @. vth[:,ir,is] =  sqrt(spec[is].initial_temperature)
+            end
         end
     end
     return nothing
 end
-function init_density!(dens, z, spec, n_species)
+function init_density!(dens, z, r, spec, n_species)
     for is ∈ 1:n_species
-        if spec[is].z_IC.initialization_option == "gaussian"
-            # initial condition is an unshifted Gaussian
-            @. dens[:,is] = spec[is].initial_density + exp(-(z.grid/spec[is].z_IC.width)^2)
-        elseif spec[is].z_IC.initialization_option == "sinusoid"
-            # initial condition is sinusoid in z
-            @. dens[:,is] =
-                (spec[is].initial_density
-                 * (1.0 + spec[is].z_IC.density_amplitude
-                          * cos(2.0*π*spec[is].z_IC.wavenumber*z.grid/z.L
-                                + spec[is].z_IC.density_phase)))
-        elseif spec[is].z_IC.inititalization_option == "monomial"
-            # linear variation in z, with offset so that
-            # function passes through zero at upwind boundary
-            @. dens[:,is] = (z.grid + 0.5*z.L)^spec[is].z_IC.monomial_degree
+        for ir ∈ 1:r.n
+            if spec[is].z_IC.initialization_option == "gaussian"
+                # initial condition is an unshifted Gaussian
+                @. dens[:,ir,is] = spec[is].initial_density + exp(-(z.grid/spec[is].z_IC.width)^2)
+            elseif spec[is].z_IC.initialization_option == "sinusoid"
+                # initial condition is sinusoid in z
+                @. dens[:,ir,is] =
+                    (spec[is].initial_density
+                     * (1.0 + spec[is].z_IC.density_amplitude
+                              * cos(2.0*π*spec[is].z_IC.wavenumber*z.grid/z.L
+                                    + spec[is].z_IC.density_phase)))
+            elseif spec[is].z_IC.inititalization_option == "monomial"
+                # linear variation in z, with offset so that
+                # function passes through zero at upwind boundary
+                @. dens[:,ir,is] = (z.grid + 0.5*z.L)^spec[is].z_IC.monomial_degree
+            end
         end
     end
     return nothing
 end
 # for now the only initialisation option is zero parallel flow
-function init_upar!(upar, z, spec, n_species)
+function init_upar!(upar, z, r, spec, n_species)
     for is ∈ 1:n_species
-        if spec[is].z_IC.initialization_option == "sinusoid"
-            # initial condition is sinusoid in z
-            @. upar[:,is] =
-                (spec[is].z_IC.upar_amplitude
-                 * cos(2.0*π*spec[is].z_IC.wavenumber*z.grid/z.L
-                       + spec[is].z_IC.upar_phase))
-        elseif spec[is].z_IC.initialization_option == "gaussian" # "linear"
-            # initial condition is linear in z
-            # this is designed to give a nonzero J_{||i} at endpoints in z
-            # necessary for an electron sheath condition involving J_{||i}
-            # option "gaussian" to be consistent with usual init option for now
-            @. upar[:,is] =
-                (spec[is].z_IC.upar_amplitude * 2.0 *       
-                       (z.grid[:] - z.grid[floor(Int,z.n/2)])/z.L)
-        else
-            @. upar[:,is] = 0.0
+        for ir ∈ 1:r.n
+            if spec[is].z_IC.initialization_option == "sinusoid"
+                # initial condition is sinusoid in z
+                @. upar[:,ir,is] =
+                    (spec[is].z_IC.upar_amplitude
+                     * cos(2.0*π*spec[is].z_IC.wavenumber*z.grid/z.L
+                           + spec[is].z_IC.upar_phase))
+            elseif spec[is].z_IC.initialization_option == "gaussian" # "linear"
+                # initial condition is linear in z
+                # this is designed to give a nonzero J_{||i} at endpoints in z
+                # necessary for an electron sheath condition involving J_{||i}
+                # option "gaussian" to be consistent with usual init option for now
+                @. upar[:,ir,is] =
+                    (spec[is].z_IC.upar_amplitude * 2.0 *       
+                           (z.grid[:] - z.grid[floor(Int,z.n/2)])/z.L)
+            else
+                @. upar[:,ir,is] = 0.0
+            end
         end
     end
     return nothing
