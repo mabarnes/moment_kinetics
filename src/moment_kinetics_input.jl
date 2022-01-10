@@ -46,7 +46,7 @@ function mk_input(scan_input=Dict())
     #   reference value using J_||e + J_||i = 0 at z = 0
     electron_physics = get(scan_input, "electron_physics", boltzmann_electron_response)
     
-    z, vpa, species, composition, drive, evolve_moments, collisions =
+    z, r, vpa, species, composition, drive, evolve_moments, collisions =
         load_defaults(n_ion_species, n_neutral_species, electron_physics)
 
     # this is the prefix for all output files associated with this run
@@ -170,6 +170,10 @@ function mk_input(scan_input=Dict())
         z.advection.frequency, z.advection.oscillation_amplitude)
     z_immutable = grid_input("z", z.ngrid, z.nelement, z.L,
         z.discretization, z.fd_option, z.bc, z_advection_immutable)
+    r_advection_immutable = advection_input(r.advection.option, r.advection.constant_speed,
+        r.advection.frequency, r.advection.oscillation_amplitude)
+    r_immutable = grid_input("r", r.ngrid, r.nelement, r.L,
+        r.discretization, r.fd_option, r.bc, r_advection_immutable)
     vpa_advection_immutable = advection_input(vpa.advection.option, vpa.advection.constant_speed,
         vpa.advection.frequency, vpa.advection.oscillation_amplitude)
     vpa_immutable = grid_input("vpa", vpa.ngrid, vpa.nelement, vpa.L,
@@ -216,7 +220,7 @@ function mk_input(scan_input=Dict())
         z_immutable, vpa_immutable, composition, species_immutable, evolve_moments)
 
     # return immutable structs for z, vpa, species and composition
-    all_inputs = (run_name, output_dir, evolve_moments, t, z_immutable, vpa_immutable,
+    all_inputs = (run_name, output_dir, evolve_moments, t, z_immutable, r_immutable, vpa_immutable,
                   composition, species_immutable, collisions, drive_immutable)
     println(io, "\nAll inputs returned from mk_input():")
     println(io, all_inputs)
@@ -271,6 +275,44 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     z = grid_input_mutable("z", ngrid_z, nelement_z, L_z,
         discretization_option_z, finite_difference_option_z, boundary_option_z,
         advection_z)
+    #################### parameters related to the r grid ######################
+    # ngrid_r is number of grid points per element
+    ngrid_r = 100
+    # nelement_r is the number of elements
+    nelement_r = 1
+    # L_r is the box length
+    L_r = 1.0
+    # determine the boundary condition in r
+    # currently supported options are "constant" and "periodic"
+    boundary_option_r = "periodic"
+    #boundary_option_r = "constant"
+    # determine the discretization option for the r grid
+    # supported options are "chebyshev_pseudospectral" and "finite_difference"
+    #discretization_option_r = "chebyshev_pseudospectral"
+    discretization_option_r = "finite_difference"
+    # if discretization_option_r = "finite_difference", then
+    # finite_difference_option_r determines the finite difference scheme to be used
+    # supported options are "third_order_upwind", "second_order_upwind" and "first_order_upwind"
+    #finite_difference_option_r = "first_order_upwind"
+    #finite_difference_option_r = "second_order_upwind"
+    finite_difference_option_r = "third_order_upwind"
+    # determine the option used for the advection speed in r
+    # supported options are "constant" and "oscillating",
+    # in addition to the "default" option which uses dr/dt = vpa as the advection speed
+    advection_option_r = "default" # MRH -- NEED TO CHANGE THIS ASAP!
+    # constant advection speed in r to use with advection_option_r = "constant"
+    advection_speed_r = 1.0
+    # for advection_option_r = "oscillating", advection speed is of form
+    # speed = advection_speed_r*(1 + oscillation_amplitude_r*sinpi(frequency_r*t))
+    frequency_r = 1.0
+    oscillation_amplitude_r = 1.0
+    # mutable struct containing advection speed options/inputs for r
+    advection_r = advection_input_mutable(advection_option_r, advection_speed_r,
+        frequency_r, oscillation_amplitude_r)
+    # create a mutable structure containing the input info related to the r grid
+    r = grid_input_mutable("r", ngrid_r, nelement_r, L_r,
+        discretization_option_r, finite_difference_option_r, boundary_option_r,
+        advection_r)
     ############################################################################
     ################### parameters related to the vpa grid #####################
     # ngrid_vpa is the number of grid points per element
@@ -403,7 +445,7 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     constant_ionization_rate = false
     collisions = collisions_input(charge_exchange, ionization, constant_ionization_rate)
 
-    return z, vpa, species, composition, drive, evolve_moments, collisions
+    return z, r, vpa, species, composition, drive, evolve_moments, collisions
 end
 
 # check various input options to ensure they are all valid/consistent

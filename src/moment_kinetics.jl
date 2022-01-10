@@ -100,21 +100,33 @@ end
 
 # Perform all the initialization steps for a run.
 function setup_moment_kinetics(input_dict::Dict)
+    
+    print("got to here 1 \n")
+
+    
     # Set up MPI
     initialize_comms!()
 
+    print("got to here 2 \n")
+    
     input = mk_input(input_dict)
     # obtain input options from moment_kinetics_input.jl
     # and check input to catch errors
-    run_name, output_dir, evolve_moments, t_input, z_input, vpa_input,
+    run_name, output_dir, evolve_moments, t_input, z_input, r_input, vpa_input,
         composition, species, collisions, drive_input = input
     # initialize z grid and write grid point locations to file
     z = define_coordinate(z_input, composition)
+    # initialize r grid and write grid point locations to file
+    r = define_coordinate(r_input, composition)
     # initialize vpa grid and write grid point locations to file
     vpa = define_coordinate(vpa_input, composition)
     # initialize f(z,vpa) and the lowest three v-space moments (density(z), upar(z) and ppar(z)),
     # each of which may be evolved separately depending on input choices.
+    
+    print("got to here 3 \n")
+    
     pdf, moments = init_pdf_and_moments(vpa, z, composition, species, t_input.n_rk_stages, evolve_moments)
+    
     # initialize time variable
     code_time = 0.
     # create arrays and do other work needed to setup
