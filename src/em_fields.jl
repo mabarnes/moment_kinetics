@@ -40,9 +40,11 @@ function update_phi!(fields, fvec, z, composition)
     # Means we get at least some parallelism, even though we have to sum
     # over species, and reduces number of _block_synchronize() calls needed
     # when there is only one species.
+    # first initialize z.scratch to zero;
+    # it will be updated with the species-summed density below
     if 1 ∈ loop_ranges[].s_z_range_s
         @s_z_loop_z iz begin
-            z.scratch[iz] = fvec.density[iz,1]
+            z.scratch[iz] = 0.0
         end
     end
     if (composition.n_ion_species > 1 ||
@@ -57,7 +59,9 @@ function update_phi!(fields, fvec, z, composition)
        _block_synchronize()
     end
     if 1 ∈ loop_ranges[].s_z_range_s
-        @inbounds for is ∈ 2:composition.n_ion_species
+        # compute the species-summed ion density;
+        # NB: assumes all ions have proton charge
+        @inbounds for is ∈ 1:composition.n_ion_species
             @s_z_loop_z iz begin
                 z.scratch[iz] += fvec.density[iz,is]
             end
