@@ -9,7 +9,8 @@ export advance_f_local!
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_shared_float, allocate_shared_int
 using ..calculus: derivative!
-using ..communication: block_rank, block_synchronize, MPISharedArray
+using ..communication
+using ..looping
 
 # structure containing the basic arrays associated with the
 # advection terms appearing in the advection equation for each coordinate
@@ -73,12 +74,11 @@ function setup_advection_per_species(coords...)
     downwind_idx = allocate_shared_int([coord.n for coord in coords[2:end]]...)
     # index increment used when sweeping in the upwind direction; will be updated before use
     upwind_increment = allocate_shared_int([coord.n for coord in coords[2:end]]...)
-    if block_rank[] == 0
+    @serial_region begin
         upwind_idx[:] .= 1
         downwind_idx[:] .= coords[1].n
         upwind_increment[:] .= -1
     end
-    block_synchronize()
     # return advection_info struct containing necessary arrays
     return advection_info(rhs, df, speed, modified_speed, adv_fac, upwind_idx, downwind_idx, upwind_increment)
 end

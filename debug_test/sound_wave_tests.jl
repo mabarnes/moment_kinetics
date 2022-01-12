@@ -138,11 +138,25 @@ function runtests()
             run_test(test_input_finite_difference_split_3_moments)
         end
 
+        @testset "finite difference, CX=0" begin
+            run_test(test_input_finite_difference; charge_exchange_frequency=0.0)
+            run_test(test_input_finite_difference_split_1_moment; charge_exchange_frequency=0.0)
+            run_test(test_input_finite_difference_split_2_moments; charge_exchange_frequency=0.0)
+            run_test(test_input_finite_difference_split_3_moments; charge_exchange_frequency=0.0)
+        end
+
         @testset "Chebyshev" begin
             run_test(test_input_chebyshev)
             run_test(test_input_chebyshev_split_1_moment)
             run_test(test_input_chebyshev_split_2_moments)
             run_test(test_input_chebyshev_split_3_moments)
+        end
+
+        @testset "Chebyshev, CX=0" begin
+            run_test(test_input_chebyshev; charge_exchange_frequency=0.0)
+            run_test(test_input_chebyshev_split_1_moment; charge_exchange_frequency=0.0)
+            run_test(test_input_chebyshev_split_2_moments; charge_exchange_frequency=0.0)
+            run_test(test_input_chebyshev_split_3_moments; charge_exchange_frequency=0.0)
         end
     end
 end

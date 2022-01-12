@@ -23,9 +23,10 @@ Returns
 CSV.File
 """
 function load_run(filename)
-    data = CSV.File(filename; header=false, datarow=2, delim=" ", ignorerepeated=true,
-                    dateformat=PerformanceTestUtils.date_format, type=Float64,
-                    types=Dict(1=>String, 2=>String, 3=>DateTime))
+    data = CSV.File(filename; header=false, skipto=2, delim=" ", ignorerepeated=true,
+                    dateformat=PerformanceTestUtils.date_format,
+                    types=(i,name)->ifelse(i ∈ (1,2), String,
+                                           ifelse(i == 3, DateTime, Float64)))
     return data
 end
 
@@ -464,18 +465,18 @@ end
 end # MKPlotPerformance
 
 using .MKPlotPerformance
-using moment_kinetics: options as mk_options
+using moment_kinetics: get_options
 
 if abspath(PROGRAM_FILE) == @__FILE__
     filename = undef
-    if mk_options["inputfile"] == nothing
+    if get_options()["inputfile"] == nothing
         prefix = "results/sound_wave"
     else
-        prefix = mk_options["inputfile"]
+        prefix = get_options()["inputfile"]
     end
     filename = string(prefix, "_1procs.txt")
 
-    machine = mk_options["machine-name"]
+    machine = get_options()["machine-name"]
     plot_performance_history(filename, machine)
     plot_performance_history(string(prefix, "_1procs_initialization.txt"), machine)
     plot_strong_scaling_history(prefix, machine)

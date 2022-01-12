@@ -5,8 +5,10 @@ export update_phi!
 
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_shared_float
-using ..communication: block_rank, block_synchronize, MPISharedArray
+using ..communication
+using ..communication: _block_synchronize
 using ..input_structs
+using ..looping
 using ..velocity_moments: update_density!
 
 struct fields{N}
@@ -36,10 +38,10 @@ function update_phi!(fields, fvec, z, composition)
     @boundscheck size(fvec.density,2) == composition.n_species || throw(BoundsError(fvec.density))
     # Update phi using the set of processes that handles the first ion species
     # Means we get at least some parallelism, even though we have to sum
-    # over species, and reduces number of block_synchronize() calls needed
+    # over species, and reduces number of _block_synchronize() calls needed
     # when there is only one species.
-    if 1 ∈ composition.species_local_range
-        for iz ∈ z.outer_loop_range
+    if 1 ∈ loop_ranges[].s_z_range_s
+        @s_z_loop_z iz begin
             z.scratch[iz] = fvec.density[iz,1]
         end
     end
@@ -50,11 +52,13 @@ function update_phi!(fields, fvec, z, composition)
        # If composition.electron_physics ==
        # boltzmann_electron_response_with_simple_sheath, all ranks need to read
        # fvec.density at iz=1, so need to synchronize here.
-       block_synchronize()
+       # Use _block_synchronize() directly because we stay in a z_s type region, even
+       # though synchronization is needed here.
+       _block_synchronize()
     end
-    if 1 ∈ composition.species_local_range
+    if 1 ∈ loop_ranges[].s_z_range_s
         @inbounds for is ∈ 2:composition.n_ion_species
-            for iz ∈ z.outer_loop_range
+            @s_z_loop_z iz begin
                 z.scratch[iz] += fvec.density[iz,is]
             end
         end
@@ -80,7 +84,7 @@ function update_phi!(fields, fvec, z, composition)
         end
 
         if composition.electron_physics ∈ (boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath)
-            @inbounds for iz ∈ z.outer_loop_range
+            @s_z_loop_z iz begin
                 fields.phi[iz] = composition.T_e * log(z.scratch[iz] / N_e)
             end
             # if fields.force_phi

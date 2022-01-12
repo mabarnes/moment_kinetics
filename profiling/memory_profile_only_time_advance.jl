@@ -2,7 +2,7 @@ using Profile
 using TOML
 
 using moment_kinetics: run_moment_kinetics, setup_moment_kinetics, time_advance!,
-                       options
+                       get_options
 
 function main(input_file)
     input = TOML.parsefile(input_file)
@@ -30,8 +30,8 @@ end
 
 # Call main() using first argument as input_file name if running as a script
 if abspath(PROGRAM_FILE) == @__FILE__
-    if options["inputfile"] == nothing
+    if get_options()["inputfile"] == nothing
         error("Must provide input file as positional command line argument")
     end
-    main(options["inputfile"])
+    main(get_options()["inputfile"])
 end

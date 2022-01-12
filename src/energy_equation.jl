@@ -3,10 +3,11 @@ module energy_equation
 export energy_equation!
 
 using ..calculus: derivative!
+using ..looping
 
 function energy_equation!(ppar, fvec, moments, collisions, z, dt, spectral, composition)
-    for is ∈ composition.species_local_range
-        if composition.first_proc_in_group
+    @s_z_loop_s is begin
+        if 1 ∈ loop_ranges[].s_z_range_z
             @views energy_equation_noCX!(ppar[:,is], fvec.upar[:,is], fvec.ppar[:,is],
                                          moments.qpar[:,is], dt, z, spectral)
         end
@@ -32,8 +33,8 @@ function energy_equation_noCX!(ppar_out, upar, ppar, qpar, dt, z, spectral)
     @. ppar_out -= 3.0*dt*ppar*z.scratch
 end
 function energy_equation_CX!(ppar_out, dens, ppar, composition, CX_frequency, dt)
-    for is ∈ composition.species_local_range
-        if composition.first_proc_in_group
+    @s_z_loop_s is begin
+        if 1 ∈ loop_ranges[].s_z_range_z
             if is ∈ composition.ion_species_range
                 for isp ∈ composition.neutral_species_range
                     @views @. ppar_out[:,is] -= dt*CX_frequency*(dens[:,isp]*ppar[:,is]-dens[:,is]*ppar[:,isp])

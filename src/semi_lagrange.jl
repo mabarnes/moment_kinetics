@@ -7,7 +7,8 @@ export project_characteristics_onto_grid!
 
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_shared_float, allocate_shared_int
-using ..communication: block_rank, MPISharedArray
+using ..communication
+using ..looping
 
 # structure semi_lagrange_info contains the basic information needed
 # to project backwards along approximate characteristics, which
@@ -45,7 +46,7 @@ function setup_semi_lagrange(dims...)
     # initialize the departure indices to be the save as the arrival indices
     # this allows for a clean algorithm that can use semi-Lagrange or not
     # without a lot of conditional statements within inner loops
-    if block_rank[] == 0
+    @serial_region begin
         for i ∈ CartesianIndices(dep_idx)
             dep_idx[i] = i[1]
         end
@@ -54,13 +55,13 @@ function setup_semi_lagrange(dims...)
     # initialize characteristic speed to zero, in case one wants to
     # do a time advance without use of semi-Lagrange treatment
     characteristic_speed = allocate_shared_float(dims...)
-    if block_rank[] == 0
+    @serial_region begin
         characteristic_speed .= 0.0
     end
     # create array to contain the number of times the characteristics cross
     # the upwind boundary
     n_transits = allocate_shared_int(dims...)
-    if block_rank[] == 0
+    @serial_region begin
         n_transits .= 0
     end
     # store all of this information in a structure and return it

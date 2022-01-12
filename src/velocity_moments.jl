@@ -14,7 +14,9 @@ export enforce_moment_constraints!
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_shared_float, allocate_bool
 using ..calculus: integral
-using ..communication: block_rank, block_synchronize, MPISharedArray
+using ..communication
+using ..communication: _block_synchronize
+using ..looping
 
 #global tmpsum1 = 0.0
 #global tmpsum2 = 0.0
@@ -89,14 +91,13 @@ function create_moments(nz, n_species, evolve_moments)
     # allocate array of Bools that indicate if the parallel flow is updated for each species
     parallel_heat_flux_updated = allocate_bool(n_species)
     parallel_heat_flux_updated .= false
-    block_synchronize()
     # allocate array used for the thermal speed
     thermal_speed = allocate_shared_float(nz, n_species)
     if evolve_moments.parallel_pressure
         vpa_norm_fac = thermal_speed
     else
         vpa_norm_fac = allocate_shared_float(nz, n_species)
-        if block_rank[] == 0
+        @serial_region begin
             vpa_norm_fac .= 1.0
         end
     end
@@ -110,7 +111,7 @@ end
 function update_moments!(moments, ff, vpa, nz, composition)
     n_species = size(ff,3)
     @boundscheck n_species == size(moments.dens,2) || throw(BoundsError(moments))
-    for is ∈ composition.species_local_range
+    @s_z_loop_s is begin
         if moments.dens_updated[is] == false
             @views update_density_species!(moments.dens[:,is], ff[:,:,is], vpa, z)
             moments.dens_updated[is] = true
@@ -136,7 +137,7 @@ end
 function update_density!(dens, dens_updated, pdf, vpa, z, composition)
     n_species = size(pdf,3)
     @boundscheck n_species == size(dens,2) || throw(BoundsError(dens))
-    for is ∈ composition.species_local_range
+    @s_z_loop_s is begin
         if dens_updated[is] == false
             @views update_density_species!(dens[:,is], pdf[:,:,is], vpa, z)
             dens_updated[is] = true
@@ -147,7 +148,7 @@ end
 function update_density_species!(dens, ff, vpa, z)
     @boundscheck z.n == size(ff, 2) || throw(BoundsError(ff))
     @boundscheck z.n == length(dens) || throw(BoundsError(dens))
-    @inbounds for iz ∈ z.outer_loop_range
+    @s_z_loop_z iz begin
         dens[iz] = integrate_over_vspace(@view(ff[:,iz]), vpa.wgts)
     end
     return nothing
@@ -157,7 +158,7 @@ end
 function update_upar!(upar, upar_updated, pdf, vpa, z, composition)
     n_species = size(pdf,3)
     @boundscheck n_species == size(upar,2) || throw(BoundsError(upar))
-    for is ∈ composition.species_local_range
+    @s_z_loop_s is begin
         if upar_updated[is] == false
             @views update_upar_species!(upar[:,is], pdf[:,:,is], vpa, z)
             upar_updated[is] = true
@@ -168,7 +169,7 @@ end
 function update_upar_species!(upar, ff, vpa, z)
     @boundscheck z.n == size(ff, 2) || throw(BoundsError(ff))
     @boundscheck z.n == length(upar) || throw(BoundsError(upar))
-    @inbounds for iz ∈ z.outer_loop_range
+    @s_z_loop_z iz begin
         upar[iz] = integrate_over_vspace(@view(ff[:,iz]), vpa.grid, vpa.wgts)
     end
     return nothing
@@ -177,7 +178,7 @@ end
 # the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
 function update_ppar!(ppar, ppar_updated, pdf, vpa, z, composition)
     @boundscheck composition.n_species == size(ppar,2) || throw(BoundsError(ppar))
-    for is ∈ composition.species_local_range
+    @s_z_loop_s is begin
         if ppar_updated[is] == false
             @views update_ppar_species!(ppar[:,is], pdf[:,:,is], vpa, z)
             ppar_updated[is] = true
@@ -188,7 +189,7 @@ end
 function update_ppar_species!(ppar, ff, vpa, z)
     @boundscheck z.n == size(ff, 2) || throw(BoundsError(ff))
     @boundscheck z.n == length(ppar) || throw(BoundsError(ppar))
-    @inbounds for iz ∈ z.outer_loop_range
+    @s_z_loop_z iz begin
         ppar[iz] = integrate_over_vspace(@view(ff[:,iz]), vpa.grid, 2, vpa.wgts)
     end
     return nothing
@@ -197,7 +198,7 @@ end
 # the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
 function update_qpar!(qpar, qpar_updated, pdf, vpa, z, composition, vpanorm)
     @boundscheck composition.n_species == size(qpar,2) || throw(BoundsError(qpar))
-    for is ∈ composition.species_local_range
+    @s_z_loop_s is begin
         if qpar_updated[is] == false
             @views update_qpar_species!(qpar[:,is], pdf[:,:,is], vpa, z, vpanorm[:,is])
             qpar_updated[is] = true
@@ -208,7 +209,7 @@ end
 function update_qpar_species!(qpar, ff, vpa, z, vpanorm)
     @boundscheck z.n == size(ff, 2) || throw(BoundsError(ff))
     @boundscheck z.n == length(qpar) || throw(BoundsError(qpar))
-    @inbounds for iz ∈ z.outer_loop_range
+    @s_z_loop_z iz begin
         qpar[iz] = integrate_over_vspace(@view(ff[:,iz]), vpa.grid, 3, vpa.wgts) * vpanorm[iz]^4
     end
     return nothing
@@ -304,18 +305,23 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, composition, mo
     # pre-calculate avgdens_ratio so that we don't read fvec_new.density[:,is] on every
     # process in the next loop - that would be an error because different processes
     # write to fvec_new.density[:,is]
-    for is ∈ composition.species_local_range
+    # This loop needs to be @s_z_loop_s because it fills the (not-shared)
+    # composition.scratch buffer to be used within the @s_z_loop_s below, so the values
+    # of is looped over by this process need to be the same.
+    @s_z_loop_s is begin
         @views @. z.scratch = fvec_old.density[:,is] - fvec_new.density[:,is]
         @views composition.scratch[is] = integral(z.scratch, z.wgts)/integral(fvec_old.density[:,is], z.wgts)
     end
-    block_synchronize()
+    # Need to call _block_synchronize() even though loop type does not change because
+    # all spatial ranks read fvec_new.density, but it will be written below.
+    _block_synchronize()
 
-    for is ∈ composition.species_local_range
+    @s_z_loop_s is begin
         #tmp1 = integral(fvec_old.density[:,is], z.wgts)
         #tmp2 = integral(fvec_new.density[:,is], z.wgts)
         #@views avgdens_ratio = integral(fvec_new.density[:,is], z.wgts)/integral(fvec_old.density[:,is], z.wgts)
         avgdens_ratio = composition.scratch[is]
-        for iz ∈ z.outer_loop_range
+        @s_z_loop_z iz begin
             # Create views once to save overhead
             fnew_view = @view(fvec_new.pdf[:,iz,is])
             fold_view = @view(fvec_old.pdf[:,iz,is])
@@ -363,21 +369,27 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, composition, mo
     # update the parallel heat flux
     # NB: no longer need fvec_old.pdf so can use for temporary storage of un-normalised pdf
     if moments.evolve_ppar
-        for is ∈ composition.species_local_range
-            for iz ∈ z.outer_loop_range
+        @s_z_loop_s is begin
+            @s_z_loop_z iz begin
                 fvec_old.temp_z_s[iz,is] = fvec_new.density[iz,is] / moments.vth[iz,is]
             end
-            for iz ∈ z.outer_loop_range, ivpa ∈ 1:vpa.n
-                fvec_old.pdf[ivpa,iz,is] = fvec_new.pdf[ivpa,iz,is] * fvec_old.temp_z_s[iz,is]
+            @s_z_loop_z iz begin
+                for ivpa ∈ 1:vpa.n
+                    fvec_old.pdf[ivpa,iz,is] = fvec_new.pdf[ivpa,iz,is] * fvec_old.temp_z_s[iz,is]
+                end
             end
         end
     elseif moments.evolve_density
-        for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range, ivpa ∈ 1:vpa.n
-            fvec_old.pdf[ivpa,iz,is] = fvec_new.pdf[ivpa,iz,is] * fvec_new.density[iz,is]
+        @s_z_loop is iz begin
+            for ivpa ∈ 1:vpa.n
+                fvec_old.pdf[ivpa,iz,is] = fvec_new.pdf[ivpa,iz,is] * fvec_new.density[iz,is]
+            end
         end
     else
-        for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range, ivpa ∈ 1:vpa.n
-            fvec_old.pdf[ivpa,iz,is] = fvec_new.pdf[ivpa,iz,is]
+        @s_z_loop is iz begin
+            for ivpa ∈ 1:vpa.n
+                fvec_old.pdf[ivpa,iz,is] = fvec_new.pdf[ivpa,iz,is]
+            end
         end
     end
     update_qpar!(moments.qpar, moments.qpar_updated, fvec_old.pdf, vpa, z, composition, moments.vpa_norm_fac)

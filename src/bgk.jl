@@ -5,57 +5,55 @@ export init_bgk_pdf!
 using SpecialFunctions: erfi
 using Roots: find_zero
 using ..array_allocation: allocate_float, allocate_int
-using ..communication: block_rank
+using ..looping
 using ..quadrature: composite_simpson_weights
 using ..calculus: integral
 using ..coordinates: equally_spaced_grid
 
 function init_bgk_pdf!(pdf, phi_max, tau, z, Lz, vpa)
     # For simplicity, just run in serial for now
-    if block_rank[] != 0
-        return
-    end
-
-    nz = length(z)
-    dum, wgts, integrand = setup_dummy_integrals()
-    # find the allowed wave amplitude (phi_max - phi_min),
-    # determined by considering the limiting case where vpa=0 so x = e*phi/T.
-    # the location where ftrap(x=e*phi/T) = 0 corresponds to the minimum
-    # value of phi (and thus x) before which f goes negative.
-    dphi = allowed_wave_amplitude!(phi_max, tau, dum, wgts, integrand)
-    # add a buffer in to dphi to avoid problems with slightly negative numbers
-    dphi *= 0.9
-    # define phi(z) to have max value phi_max and min value phi_max - dphi
-    phi = allocate_float(nz)
-#    @. phi = dphi*exp(-200.0*(2.0*z/Lz)^2) + (phi_max-dphi)
-#    @. phi = -dphi*exp(-200.0*(2.0*z/Lz)^2) + phi_max
-#    @. phi = -(1.0+sinpi(2.0*z/Lz))*0.5*dphi + phi_max
-    @. phi = -(1.0+cospi(2.0*z/Lz))*0.5*dphi + phi_max
-#    phi[1] = phi_max
-#    phi[end] = phi_max
+    @serial_region begin
+        nz = length(z)
+        dum, wgts, integrand = setup_dummy_integrals()
+        # find the allowed wave amplitude (phi_max - phi_min),
+        # determined by considering the limiting case where vpa=0 so x = e*phi/T.
+        # the location where ftrap(x=e*phi/T) = 0 corresponds to the minimum
+        # value of phi (and thus x) before which f goes negative.
+        dphi = allowed_wave_amplitude!(phi_max, tau, dum, wgts, integrand)
+        # add a buffer in to dphi to avoid problems with slightly negative numbers
+        dphi *= 0.9
+        # define phi(z) to have max value phi_max and min value phi_max - dphi
+        phi = allocate_float(nz)
+    #    @. phi = dphi*exp(-200.0*(2.0*z/Lz)^2) + (phi_max-dphi)
+    #    @. phi = -dphi*exp(-200.0*(2.0*z/Lz)^2) + phi_max
+    #    @. phi = -(1.0+sinpi(2.0*z/Lz))*0.5*dphi + phi_max
+        @. phi = -(1.0+cospi(2.0*z/Lz))*0.5*dphi + phi_max
+    #    phi[1] = phi_max
+    #    phi[end] = phi_max
 #=
-    for iz ∈ 1:nz
-        println("z: ", z[iz], "  phi: ", phi[iz])
-    end
-=#
-    # construct a grid in total parallel energy that contains all
-    # (z,vpa) points from the code grid
-    x = total_energy_grid(vpa, phi)
-    # get the max vpa index still in the trapped region for each z grid location
-    ivpa_min = trapped_passing_boundary(x, phi_max)
-    # fill in the pdf for the trapped part of phase space
-    trapped_pdf!(pdf, phi_max, tau, x, dum, wgts, integrand, ivpa_min)
-    # fill in the pdf for the passing part of phase space
-    passing_pdf!(pdf, phi_max, tau, x, ivpa_min)
-    # account for nomalization used in code
-    @. pdf *= sqrt(pi)
-#=
-    for ivpa ∈ 1:length(vpa)
         for iz ∈ 1:nz
-            println("x: ", x[iz,ivpa], "  z: ", z[iz], "  vpa: ", vpa[ivpa], "  f: ", pdf[iz,ivpa], " ivpa_min: ", ivpa_min[iz])
+            println("z: ", z[iz], "  phi: ", phi[iz])
         end
-    end
 =#
+        # construct a grid in total parallel energy that contains all
+        # (z,vpa) points from the code grid
+        x = total_energy_grid(vpa, phi)
+        # get the max vpa index still in the trapped region for each z grid location
+        ivpa_min = trapped_passing_boundary(x, phi_max)
+        # fill in the pdf for the trapped part of phase space
+        trapped_pdf!(pdf, phi_max, tau, x, dum, wgts, integrand, ivpa_min)
+        # fill in the pdf for the passing part of phase space
+        passing_pdf!(pdf, phi_max, tau, x, ivpa_min)
+        # account for nomalization used in code
+        @. pdf *= sqrt(pi)
+#=
+        for ivpa ∈ 1:length(vpa)
+            for iz ∈ 1:nz
+                println("x: ", x[iz,ivpa], "  z: ", z[iz], "  vpa: ", vpa[ivpa], "  f: ", pdf[iz,ivpa], " ivpa_min: ", ivpa_min[iz])
+            end
+        end
+=#
+    end
 end
 ### inputs ###
 # pdf is the particle distribution function, with the passing part of phase space not filled in

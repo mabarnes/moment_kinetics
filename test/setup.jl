@@ -15,9 +15,9 @@ module MKTestUtilities
 export use_verbose, @long, quietoutput, global_rank, maxabs_norm, @testset_skip
 
 using moment_kinetics.communication: global_rank
-using moment_kinetics.command_line_options: options
+using moment_kinetics.command_line_options: get_options
 
-const use_verbose = options["verbose"]
+const use_verbose = get_options()["verbose"]
 
 
 # Convenience modifiers for test calls
@@ -40,7 +40,7 @@ Tests marked with `@long` can be enabled by:
     Note that the semicolon is necessary (not sure why).
 """
 macro long(code)
-    if options["long"]
+    if get_options()["long"]
         :( $(esc(code)) )
     end
 end

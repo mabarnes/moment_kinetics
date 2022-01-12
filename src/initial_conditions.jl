@@ -11,7 +11,8 @@ using SpecialFunctions: erfc
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_shared_float
 using ..bgk: init_bgk_pdf!
-using ..communication: block_rank, block_synchronize, MPISharedArray
+using ..communication
+using ..looping
 using ..velocity_moments: integrate_over_vspace
 using ..velocity_moments: integrate_over_positive_vpa, integrate_over_negative_vpa
 using ..velocity_moments: create_moments, update_qpar!
@@ -30,7 +31,7 @@ function init_pdf_and_moments(vpa, z, composition, species, n_rk_stages, evolve_
     # information related to these moments.
     # the time-dependent entries are not initialised.
     moments = create_moments(z.n, n_species, evolve_moments)
-    if block_rank[] == 0
+    @serial_region begin
         # initialise the density profile
         init_density!(moments.dens, z, species, n_species)
         moments.dens_updated .= true
@@ -42,22 +43,21 @@ function init_pdf_and_moments(vpa, z, composition, species, n_rk_stages, evolve_
         @. moments.ppar = 0.5 * moments.dens * moments.vth^2
         moments.ppar_updated .= true
     end
-    block_synchronize()
     # create and initialise the normalised particle distribution function (pdf)
     # such that ∫dwpa pdf.norm = 1, ∫dwpa wpa * pdf.norm = 0, and ∫dwpa wpa^2 * pdf.norm = 1/2
     # note that wpa = vpa - upar, unless moments.evolve_ppar = true, in which case wpa = (vpa - upar)/vth
     # the definition of pdf.norm changes accordingly from pdf.unnorm / density to pdf.unnorm * vth / density
     # when evolve_ppar = true.
     pdf = create_and_init_pdf(moments, vpa, z, n_species, species)
-    block_synchronize()
     # calculate the initial parallel heat flux from the initial un-normalised pdf
+    begin_s_z_region()
     update_qpar!(moments.qpar, moments.qpar_updated, pdf.unnorm, vpa, z, composition, moments.vpa_norm_fac)
     return pdf, moments
 end
 function create_and_init_pdf(moments, vpa, z, n_species, species)
     pdf_norm = allocate_shared_float(vpa.n, z.n, n_species)
     pdf_unnorm = allocate_shared_float(vpa.n, z.n, n_species)
-    if block_rank[] == 0
+    @serial_region begin
         for is ∈ 1:n_species
             if species[is].z_IC.initialization_option == "bgk" || species[is].vpa_IC.initialization_option == "bgk"
                 @views init_bgk_pdf!(f[:,:,is], 0.0, species[is].initial_temperature, z.grid, z.L, vpa.grid)
@@ -212,14 +212,12 @@ function init_pdf_over_density!(pdf, spec, vpa, z, vth, upar, vpa_norm_fac, evol
     return nothing
 end
 function enforce_boundary_conditions!(f, vpa_bc, z_bc, vpa, z, vpa_adv::T1, z_adv::T2, composition) where {T1, T2}
-    for is ∈ composition.species_local_range
+    @s_z_loop is iz begin
         # enforce the vpa BC
-        for iz ∈ z.outer_loop_range
-            @views enforce_vpa_boundary_condition_local!(f[:,iz,is], vpa_bc, vpa_adv[is].upwind_idx[iz],
-                                                         vpa_adv[is].downwind_idx[iz])
-        end
+        @views enforce_vpa_boundary_condition_local!(f[:,iz,is], vpa_bc, vpa_adv[is].upwind_idx[iz],
+                                                     vpa_adv[is].downwind_idx[iz])
     end
-    block_synchronize()
+    begin_s_vpa_region()
     @views enforce_z_boundary_condition!(f, z_bc, z_adv, vpa, composition)
 end
 # enforce boundary conditions on f in z
@@ -233,28 +231,24 @@ function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, composition) 
     # 'constant' BC is time-independent f at upwind boundary
     # and constant f beyond boundary
     if bc == "constant"
-        for is ∈ composition.species_local_range
-            for ivpa ∈ vpa.outer_loop_range
-                upwind_idx = adv[ivpa,is].upwind_idx[]
-                f[ivpa,upwind_idx,is] = density_offset * exp(-(vpa.grid[ivpa]/vpawidth)^2) / sqrt(pi)
-            end
+        @s_vpa_loop is ivpa begin
+            upwind_idx = adv[ivpa,is].upwind_idx[]
+            f[ivpa,upwind_idx,is] = density_offset * exp(-(vpa.grid[ivpa]/vpawidth)^2) / sqrt(pi)
         end
     # 'periodic' BC enforces periodicity by taking the average of the boundary points
     elseif bc == "periodic"
-        for is ∈ composition.species_local_range
-            for ivpa ∈ vpa.outer_loop_range
-                downwind_idx = adv[is].downwind_idx[ivpa]
-                upwind_idx = adv[is].upwind_idx[ivpa]
-                f[ivpa,downwind_idx,is] = 0.5*(f[ivpa,upwind_idx,is]+f[ivpa,downwind_idx,is])
-                f[ivpa,upwind_idx,is] = f[ivpa,downwind_idx,is]
-            end
+        @s_vpa_loop is ivpa begin
+            downwind_idx = adv[is].downwind_idx[ivpa]
+            upwind_idx = adv[is].upwind_idx[ivpa]
+            f[ivpa,downwind_idx,is] = 0.5*(f[ivpa,upwind_idx,is]+f[ivpa,downwind_idx,is])
+            f[ivpa,upwind_idx,is] = f[ivpa,downwind_idx,is]
         end
     # 'wall' BC enforces wall boundary conditions
     elseif bc == "wall"
-        for is ∈ composition.species_local_range
+        @s_vpa_loop_s is begin
             # zero incoming BC for ions, as they recombine at the wall
             if is ∈ composition.ion_species_range
-                for ivpa ∈ vpa.outer_loop_range
+                @s_vpa_loop_vpa ivpa begin
                     # no parallel BC should be enforced for vpa = 0
                     if abs(vpa.grid[ivpa]) > zero
                         upwind_idx = adv[is].upwind_idx[ivpa]
@@ -263,11 +257,11 @@ function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, composition) 
                 end
             end
         end
-        block_synchronize()
         # BC for neutrals
         if composition.n_neutral_species > 0
+            begin_serial_region()
             # TODO: parallelise this...
-            if block_rank[] == 0
+            @serial_region begin
                 # define vtfac to avoid repeated computation below
                 vtfac = sqrt(composition.T_wall * composition.mn_over_mi)
                 # initialise the combined ion/neutral fluxes into the walls to be zero

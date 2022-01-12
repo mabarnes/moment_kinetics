@@ -12,9 +12,8 @@ loop ranges), as at the moment we only run with 1 ion species and 1 neutral spec
 """
 module communication
 
-export allocate_shared, block_synchronize, block_rank, block_size, comm_block,
-       comm_world, finalize_comms!, initialize_comms!, get_coordinate_local_range,
-       get_species_local_range, global_rank, MPISharedArray
+export allocate_shared, block_rank, block_size, comm_block,
+       comm_world, finalize_comms!, initialize_comms!, global_rank, MPISharedArray
 
 using MPI
 using SHA
@@ -78,7 +77,7 @@ end
         is_written .= false
         creation_stack_trace = string([string(s, "\n") for s in stacktrace()]...)
         @debug_detect_redundant_block_synchronize begin
-            # Initialize as `true` so that the first call to block_synchronize() with
+            # Initialize as `true` so that the first call to _block_synchronize() with
             # @debug_detect_redundant_block_synchronize activated does not register the
             # previous call as unnecessary
             previous_is_read = Array{Bool}(undef, dims)
@@ -123,7 +122,7 @@ end
 
     # Keep a global Vector of references to all created DebugMPISharedArray
     # instances, so their is_read and is_written members can be checked and
-    # reset by block_synchronize()
+    # reset by _block_synchronize()
     const global_debugmpisharedarray_store = Vector{DebugMPISharedArray}(undef, 0)
 end
 
@@ -215,123 +214,10 @@ function allocate_shared(T, dims)
     return array
 end
 
-"""
-Get local range of species indices when splitting a loop over processes in a block
-
-Arguments
----------
-n_species : mk_int
-    Number of species.
-offset : mk_int, default 0
-    Start the species index range at offset+1, instead of 1. Used to create ranges over
-    neutral species.
-
-Returns
--------
-UnitRange{mk_int}
-    Range of species indices to iterate over on this process
-Bool
-    Is this process the first in the group iterating over a species?
-"""
-function get_species_local_range(n_species, offset=0)
-    bs = block_size[]
-    br = block_rank[]
-
-    if n_species >= bs
-        # More species than processes (or same number) so split up species amoung
-        # processes
-        if n_species % bs != 0
-            error("Number of species ($n_species) bigger than block size ($bs) "
-                  * "but block size does not divide n_species.")
-        end
-
-        n_local = n_species ÷ bs
-        return mk_int(br * n_local + 1 + offset):mk_int((br + 1) * n_local + offset), true
-    else
-        # More processes than species, so assign group of processes to each species
-        if bs % n_species != 0
-            error("Block size ($bs) is bigger than number of species "
-                  * "($n_species) but n_species does not divide block size")
-        end
-        group_size = bs ÷ n_species
-        group_rank = br % group_size
-        species_ind = br ÷ group_size + 1
-        return mk_int(species_ind + offset):mk_int(species_ind + offset), group_rank == 0
-    end
-end
-
-"""
-Get local range of (outer-loop) coordinate indices when splitting a loop over processes
-in a block
-"""
-function get_coordinate_local_range(n, n_species)
-    n_procs = block_size[]
-    if n_species >= n_procs
-        # No need to split loop over coordinate - will only run on a single processor
-        # anyway
-        return 1:n
-    elseif n_procs % n_species != 0
-        error("Number of species must divide n_procs when n_procs>n_species")
-    end
-
-    # Split processors into sub-blocks, where each sub-block gets one species.
-    n_sub_block_procs = n_procs ÷ n_species
-    sub_block_rank = block_rank[] % n_sub_block_procs
-
-    # Assign either (n÷n_sub_block_procs) or (n÷n_sub_block_procs+1) points to each
-    # processor, with the lower number (n÷n_sub_block_procs) on lower-number processors,
-    # because the root process might have slightly more work to do in general.
-    # This calculation is not at all optimized, but is not going to take long, and is
-    # only done in initialization, so it is more important to be simple and robust.
-    remaining = n
-    done = false
-    n_points_for_proc = zeros(mk_int, n_sub_block_procs)
-    while !done
-        for i ∈ n_sub_block_procs:-1:1
-            n_points_for_proc[i] += 1
-            remaining -= 1
-            if remaining == 0
-                done = true
-                break
-            end
-        end
-    end
-
-    ## An alternative way of dividing points between processes might be to minimise the
-    #number of points on proc 0.
-    #points_per_proc = div(n, n_sub_block_procs, RoundUp)
-    #remaining = n
-    #n_points_for_proc = zeros(mk_int, n_sub_block_procs)
-    #for i ∈ n_procs:-1:1
-    #    if remaining >= points_per_proc
-    #        n_points_for_proc[i] = points_per_proc
-    #        remaining -= points_per_proc
-    #    else
-    #        n_points_for_proc[i] = remaining
-    #        remaining = 0
-    #        break
-    #    end
-    #end
-    #if remaining > 0
-    #    error("not all grid points have been assigned to processes, but should have "
-    #          * "been")
-    #end
-
-    # remember sub_block_rank is a 0-based index, so need to add one to get an index for
-    # the n_points_for_proc Vector.
-    first = 1
-    for i ∈ 1:sub_block_rank
-        first += n_points_for_proc[i]
-    end
-    last = first + n_points_for_proc[sub_block_rank + 1] - 1
-
-    return first:last
-end
-
-# Need to put this before block_synchronize() so that original_error() is defined.
+# Need to put this before _block_synchronize() so that original_error() is defined.
 @debug_error_stop_all begin
     # Redefine Base.error(::String) so that it communicates the error to other
-    # processes, which can pick it up in block_synchronize() so that all processes are
+    # processes, which can pick it up in _block_synchronize() so that all processes are
     # stopped. This should make interactive debugging easier, since all processes will
     # stop if there is an error, instead of hanging.  Using ^C to stop hanging processes
     # seems to mess up the MPI state so it's not possible to call, e.g.,
@@ -358,7 +244,7 @@ end
                                                    Base.error, message)
     function Base.error(message::String)
         # Communicate to all processes (which pick up the messages in
-        # block_synchronize()) that there was an error
+        # _block_synchronize()) that there was an error
         _ = MPI.Allgather(true, comm_world)
 
         # Clean up MPI-allocated memory before raising error
@@ -403,12 +289,12 @@ Used to synchronise processors that are working on the same shared-memory array(
 between operations, to avoid race conditions. Should be (much) cheaper than a global MPI
 Barrier because it only requires communication within a single node.
 
-Note: some debugging code currently assumes that if block_synchronize() is called on one
+Note: some debugging code currently assumes that if _block_synchronize() is called on one
 block, it is called simultaneously on all blocks. It seems likely that this will always
 be true, but if it ever changes (i.e. different blocks doing totally different work),
 the debugging routines need to be updated.
 """
-function block_synchronize()
+function _block_synchronize()
     @debug_error_stop_all _gather_errors()
     MPI.Barrier(comm_block)
 
@@ -428,7 +314,7 @@ function block_synchronize()
         for i ∈ 1:block_size[]
             h = all_hashes[:, i]
             if h != hash
-                error("block_synchronize() called inconsistently\n",
+                error("_block_synchronize() called inconsistently\n",
                       "rank $(block_rank[]) called from:\n",
                       stackstring)
             end
@@ -437,15 +323,15 @@ function block_synchronize()
 
     @debug_shared_array begin
         # Check for potential race conditions:
-        # * Between block_synchronize() any element of an array should be written to by
+        # * Between _block_synchronize() any element of an array should be written to by
         #   at most one rank.
         # * If an element is not written to, any rank can read it.
         # * If an element is written to, only the rank that writes to it should read it.
         #
         # This function is used in two ways:
         # 1. To throw an error when @debug_shared_array is activated.
-        # 2. To show when an error would be raised at one block_synchronize() call if
-        #    the previous block_synchronize() call were removed.
+        # 2. To show when an error would be raised at one _block_synchronize() call if
+        #    the previous _block_synchronize() call were removed.
         function check_array(array, array_is_read, array_is_written; check_redundant=false)
             dims = size(array)
             global_dims = (dims..., block_size[])
@@ -459,14 +345,14 @@ function block_synchronize()
                 n_writes = sum(global_is_written[i, :])
                 if n_writes > 1
                     if check_redundant
-                        # In the @debug_detect_redundant_block_synchronize case, cannot
+                        # In the @debug_detect_redundant__block_synchronize case, cannot
                         # use Base.error() (as redefined by @debug_error_stop_all),
                         # because the redefined function cleans up (deletes) the
                         # shared-memory arrays, so would cause segfaults.
                         return false
                     else
                         error("Shared memory array written at $i from multiple ranks "
-                              * "between calls to block_synchronize(). Array was "
+                              * "between calls to _block_synchronize(). Array was "
                               * "created at:\n"
                               * array.creation_stack_trace)
                     end
@@ -514,7 +400,7 @@ function block_synchronize()
                 # time_advance!() so that we do not do these checks during
                 # initialization: they cause problems with @debug_initialize_NaN during
                 # array allocation; generally it does not matter if there are a few
-                # extra block_synchronize() calls during initialization, so it is not
+                # extra _block_synchronize() calls during initialization, so it is not
                 # worth the effort to trim them down to the absolute minimum.
                 if debug_detect_redundant_is_active[]
                     # Note `||` cannot broadcast because it 'short-circuits', so only
@@ -531,7 +417,7 @@ function block_synchronize()
                     if !check_array(array, combined_is_read, combined_is_written,
                                     check_redundant=true)
                         # If there was a failure for at least one array, the previous
-                        # block_synchronize was necessary - if the previous call was not
+                        # _block_synchronize was necessary - if the previous call was not
                         # there, for this array array.is_read and array.is_written would
                         # have the values of combined_is_read and combined_is_written,
                         # and would fail the check_array() above this
@@ -556,19 +442,19 @@ function block_synchronize()
 
                 if (previous_was_unnecessary && global_size[] > 1)
                     # The intention of this debug block is to detect when calls to
-                    # block_synchronize() are not necessary and can be removed. It's not
+                    # _block_synchronize() are not necessary and can be removed. It's not
                     # obvious that this will always work - it might be that a call to
-                    # block_synchronize() is necessary with some options, but not
+                    # _block_synchronize() is necessary with some options, but not
                     # necessary with others. Hopefully it will be possible to handle
-                    # this by moving the block_synchronize() call inside appropriate
+                    # this by moving the _block_synchronize() call inside appropriate
                     # if-clauses. If not, it might be necessary to define something like
-                    # block_synchronize_ignore_redundant() to skip this check because
+                    # _block_synchronize_ignore_redundant() to skip this check because
                     # the check is ambiguous.
                     #
                     # If we are running in serial (global_size[] == 1), then none of the
-                    # block_synchronize() calls are 'necessary', so this check is not
+                    # _block_synchronize() calls are 'necessary', so this check is not
                     # useful.
-                    error("Previous call to block_synchronize() was not necessary. "
+                    error("Previous call to _block_synchronize() was not necessary. "
                           * "Call was from:\n"
                           * "$(previous_block_synchronize_stackstring[])")
                 end
