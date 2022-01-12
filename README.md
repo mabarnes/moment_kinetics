@@ -1,5 +1,5 @@
 # moment_kinetics
-0) Ensure that the Julia version is >= 1.6.1 by doing
+0) Ensure that the Julia version is >= 1.7.0 by doing
     ```
     $ julia --version
     ```
@@ -164,6 +164,24 @@ To get more output on what tests were successful, an option `--verbose` (or `-v`
             end
             ```
             The dimensions in the prefix before `_loop_` again give the dimensions that are looped over in the nested loop. The dimension in the suffix after `_loop_` indicates which particular dimension the macro loops over. The argument before `begin` is the name of the loop variables.
+        * To help show how these macros work, a script is provided that print a set of examples where the loop macros are expanded. It can be run from the Julia REPL
+            ```
+            $ julia --project
+                           _
+               _       _ _(_)_     |  Documentation: https://docs.julialang.org
+              (_)     | (_) (_)    |
+               _ _   _| |_  __ _   |  Type "?" for help, "]?" for Pkg help.
+              | | | | | | |/ _` |  |
+              | | |_| | | | (_| |  |  Version 1.7.0 (2021-11-30)
+             _/ |\__'_|_|_|\__'_|  |  Official https://julialang.org/ release
+            |__/                   |
+
+            julia> include("util/print-macros.jl")
+            ```
+            or on the command line
+            ```
+            $ julia --project util/print-macros.jl
+            ```
     * The ranges used are stored in a `LoopRanges` struct in the `Ref` variable `loop_ranges` (which is exported by the `looping` module). Occasionally it is useful to access the range directly. For example the range looped over by the macro `@s_z_loop_s` is `loop_ranges[].s_z_range_s` (same prefix/suffix meanings as the macro).
             * The square brackets `[]` are needed because `loop_ranges` is a reference to a `LoopRanges` object `Ref{LoopRanges}` (a bit like a pointer) - it allows `loop_ranges` to be a `const` variable, so its type is always known at compile time, but the actual `LoopRanges` can be set/modified at run-time.
     * It is also possible to run a block of code in serial (on just the rank-0 member of each block of processes) by wrapping it in a `@serial_region` macro. This is mostly useful for initialization or file I/O where performance is not critical. For example
