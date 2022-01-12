@@ -217,9 +217,22 @@ function interpolate_to_grid_1d(newgrid, f, coord, chebyshev::chebyshev_info)
     # kstart[j] contains the index of the first point in newgrid that is within element
     # j, and kstart[nelement+1]=n_new.
     # Assumes points in newgrid are sorted.
-    # May not be the moste efficient algorithm.
-    kstart = [1]
-    k = 1
+    # May not be the most efficient algorithm.
+    # check to see if any of the newgrid points are to the left of the first grid point
+    startidx = 1
+    for j ∈ 1:n_new
+        # if the new grid location is outside the bounds of the original grid,
+        # extrapolate f assuming f is constant beyond the domain
+        if newgrid[j] < coord.grid[1]
+            startidx += 1
+            result[j] = f[1]
+        else
+            break
+        end
+    end
+    # set the starting index to be startidx, found above
+    k = startidx
+    kstart = [k]
     @inbounds for j ∈ 1:nelement
         while true
             if k == n_new+1 || newgrid[k] > coord.grid[coord.imax[j]]
@@ -251,6 +264,10 @@ function interpolate_to_grid_1d(newgrid, f, coord, chebyshev::chebyshev_info)
                                                      f[coord.imin[j]-1:coord.imax[j]],
                                                      j, coord, chebyshev)
         end
+    end
+
+    if kstart[nelement+1] < n_new + 1
+        results[kstart[nelement+1]:end] .= f[end]
     end
 
     return result
