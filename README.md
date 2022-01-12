@@ -1,5 +1,5 @@
 # moment_kinetics
-0) Ensure that the Julia version is >= 1.6.1 by doing
+0) Ensure that the Julia version is >= 1.7.0 by doing
     ```
     $ julia --version
     ```
