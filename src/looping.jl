@@ -15,7 +15,7 @@ using Primes
 # Export this to make sure it is available in every scope that imports looping
 export @debug_loop_type_region
 
-const all_dimensions = (:s, :z, :vpa)
+const all_dimensions = (:s, :r, :z, :vpa)
 const dimension_combinations = Tuple(Tuple(c) for c in combinations(all_dimensions))
 
 """

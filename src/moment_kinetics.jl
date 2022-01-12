@@ -127,7 +127,7 @@ function setup_moment_kinetics(input_dict::Dict)
     # initialize vpa grid and write grid point locations to file
     vpa = define_coordinate(vpa_input, composition)
     # Create loop range variables for shared-memory-parallel loops
-    looping.setup_loop_ranges!(block_rank[], block_size[]; s=composition.n_species,
+    looping.setup_loop_ranges!(block_rank[], block_size[]; s=composition.n_species, r=r.n,
                                z=z.n, vpa=vpa.n)
     # initialize f(z,vpa) and the lowest three v-space moments (density(z), upar(z) and ppar(z)),
     # each of which may be evolved separately depending on input choices.
