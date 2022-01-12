@@ -3,13 +3,14 @@ module source_terms
 export source_terms!
 
 using ..calculus: derivative!
+using ..looping
 
 function source_terms!(pdf_out, fvec_in, moments, vpa, z, dt, spectral, composition, CX_frequency)
     # calculate the source terms due to redefinition of the pdf to split off density,
     # and use them to update the pdf
     #n_species = size(pdf_out,3)
     if moments.evolve_ppar
-        for is ∈ composition.species_local_range
+        @s_z_loop_s is begin
             @views source_terms_evolve_ppar!(pdf_out[:,:,is], fvec_in.pdf[:,:,is],
                                              fvec_in.density[:,is], fvec_in.upar[:,is], fvec_in.ppar[:,is],
                                              moments.vth[:,is], moments.qpar[:,is], z, dt, spectral)
@@ -20,7 +21,7 @@ function source_terms!(pdf_out, fvec_in, moments, vpa, z, dt, spectral, composit
                                                 CX_frequency, dt, z)
         end
     elseif moments.evolve_density
-        for is ∈ composition.species_local_range
+        @s_z_loop_s is begin
             @views source_terms_evolve_density!(pdf_out[:,:,is], fvec_in.pdf[:,:,is],
                                                 fvec_in.density[:,is], fvec_in.upar[:,is], z, dt, spectral)
         end
@@ -35,8 +36,10 @@ function source_terms_evolve_density!(pdf_out, pdf_in, dens, upar, z, dt, spectr
     #derivative!(z.scratch, z.scratch, z, -upar, spectral)
     # update the density
     nvpa = size(pdf_out, 1)
-    for iz ∈ z.outer_loop_range, ivpa ∈ 1:nvpa
-        pdf_out[ivpa,iz] += pdf_in[ivpa,iz]*z.scratch[iz]
+    @s_z_loop_z iz begin
+        for ivpa ∈ 1:nvpa
+            pdf_out[ivpa,iz] += pdf_in[ivpa,iz]*z.scratch[iz]
+        end
     end
     return nothing
 end
@@ -55,16 +58,18 @@ function source_terms_evolve_ppar!(pdf_out, pdf_in, dens, upar, ppar, vth, qpar,
     @. z.scratch -= 0.5*dt*z.scratch2/ppar
 
     nvpa = size(pdf_out, 1)
-    for iz ∈ z.outer_loop_range, ivpa ∈ 1:nvpa
-        pdf_out[ivpa,iz] += pdf_in[ivpa,iz]*z.scratch[iz]
+    @s_z_loop_z iz begin
+        for ivpa ∈ 1:nvpa
+            pdf_out[ivpa,iz] += pdf_in[ivpa,iz]*z.scratch[iz]
+        end
     end
     return nothing
 end
 function source_terms_evolve_ppar_CX!(pdf_out, pdf_in, dens, ppar, composition, CX_frequency, dt, z)
-    for is ∈ composition.species_local_range
+    @s_z_loop_s is begin
         if is ∈ composition.ion_species_range
             for isp ∈ composition.neutral_species_range
-                for iz in z.outer_loop_range
+                @s_z_loop_z iz begin
                     @views @. pdf_out[:,iz,is] -= 0.5*dt*pdf_in[:,iz,is]*CX_frequency *
                     (dens[iz,isp]*ppar[iz,is]-dens[iz,is]*ppar[iz,isp])/ppar[iz,is]
                 end
@@ -72,7 +77,7 @@ function source_terms_evolve_ppar_CX!(pdf_out, pdf_in, dens, ppar, composition, 
         end
         if is ∈ composition.neutral_species_range
             for isp ∈ composition.ion_species_range
-                for iz in z.outer_loop_range
+                @s_z_loop_z iz begin
                     @views @. pdf_out[:,iz,is] -= 0.5*dt*pdf_in[:,iz,is]*CX_frequency *
                     (dens[iz,isp]*ppar[iz,is]-dens[iz,is]*ppar[iz,isp])/ppar[iz,is]
                 end

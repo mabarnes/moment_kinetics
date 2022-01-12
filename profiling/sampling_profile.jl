@@ -2,7 +2,7 @@ using Profile
 using StatProfilerHTML
 using TOML
 
-using moment_kinetics: run_moment_kinetics, setup_moment_kinetics, time_advance!, cleanup_moment_kinetics!, options
+using moment_kinetics: run_moment_kinetics, setup_moment_kinetics, time_advance!, cleanup_moment_kinetics!, get_options
 using moment_kinetics.communication: block_rank
 
 function main(input_file)
@@ -43,8 +43,8 @@ end
 
 # Call main() using first argument as input_file name if running as a script
 if abspath(PROGRAM_FILE) == @__FILE__
-    if options["inputfile"] == nothing
+    if get_options()["inputfile"] == nothing
         error("Must provide input file as positional command line argument")
     end
-    main(options["inputfile"])
+    main(get_options()["inputfile"])
 end

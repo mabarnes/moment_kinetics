@@ -140,26 +140,39 @@ To get more output on what tests were successful, an option `--verbose` (or `-v`
     * It is possible to use a REPL workflow with parallel code:
         * Recommended option is to use [tmpi](https://github.com/Azrael3000/tmpi). This utility (it's a bash script that uses `tmux`) starts an mpi program with each process in a separate pane in a single terminal, and mirrors input to all processes simultaneously (which is normally what you want, there are also commands to 'zoom in' on a single process).
         * Another 'low-tech' possibilty is to use something like `mpirun -np 4 xterm -e julia --project`, but that will start each process in a separate xterm and you would have to enter commands separately in each one. Occasionally useful for debugging when nothing else is available.
-    * As currently implemented, the number of processes must either be less than or equal to the number of species, or be divisible by the number of species.
-    * There is no restriction on the number of spatial/velocity-space grid points, although load-balancing may be affected - if there are only very few points per process, and a small fraction of processes have an extra grid point (e.g. splitting 5 points over 4 processes, so 3 process have 1 point but 1 process has 2 points), many processes will spend time waiting for the few with an extra point.
-    * Parallelism is implemented by defining ranges in `species_composition` and `coordinate` structs which depend on the process rank - they define the set of points that each process should handle. So for example, if the inner loop (which is not parallelized) is over `vpa`, then the loop would look something like
-        ```
-        for is in composition.species_local_range
-            for iz in z.outer_loop_range
-                for ivpa in 1:vpa.n
+    * There is no restriction on the number of processes or number of grid points, although load-balancing may be affected - if there are only very few points per process, and a small fraction of processes have an extra grid point (e.g. splitting 5 points over 4 processes, so 3 process have 1 point but 1 process has 2 points), many processes will spend time waiting for the few with an extra point.
+    * Parallelism is implemented through macros that get the local ranges of points that each process should handle. The inner-most level of nested loops is typically not parallelized, to allow efficient FFTs for derivatives, etc. There are two types of loop macros:
+        * 1\. If there is just a single nested loop, then for example
+            ```
+            @s_z_loop is iz begin
+                for izpa in 1:vpa.n
                     f[ivpa,iz,is] = ...
                 end
             end
-        end
-        ```
-        and the sets of points formed by composition.species_local_range and z.outer_loop_range have no overlap between different processes. Similarly if the inner loop is over `z`, then the loop would look something like
-        ```
-        for is in composition.species_local_range
-            for ivpa in vpa.outer_loop_range
-                for iz in 1:z.n
-                    f[ivpa,iz,is] = ...
+            ```
+            The dimensions in the prefix before `_loop` give the dimensions that are looped over by the macro, the arguments before `begin` are the names of the loop variables, in the same order as the dimensions in the prefix; the first dimension/loop-variable corresponds to the outermost nested loop, etc.
+        * 2\. For more complex loops, a separate macro can be used for each level, for example
+            ```
+            @s_z_loop_s is begin
+                some_setup(is)
+                @s_z_loop_z iz begin
+                    @views do_something(f[:,iz,is])
+                end
+                @s_z_loop_z iz begin
+                    @views do_something_else(f[:,iz,is])
                 end
             end
+            ```
+            The dimensions in the prefix before `_loop_` again give the dimensions that are looped over in the nested loop. The dimension in the suffix after `_loop_` indicates which particular dimension the macro loops over. The argument before `begin` is the name of the loop variables.
+    * The ranges used are stored in a `LoopRanges` struct in the `Ref` variable `loop_ranges` (which is exported by the `looping` module). Occasionally it is useful to access the range directly. For example the range looped over by the macro `@s_z_loop_s` is `loop_ranges[].s_z_range_s` (same prefix/suffix meanings as the macro).
+            * The square brackets `[]` are needed because `loop_ranges` is a reference to a `LoopRanges` object `Ref{LoopRanges}` (a bit like a pointer) - it allows `loop_ranges` to be a `const` variable, so its type is always known at compile time, but the actual `LoopRanges` can be set/modified at run-time.
+    * It is also possible to run a block of code in serial (on just the rank-0 member of each block of processes) by wrapping it in a `@serial_region` macro. This is mostly useful for initialization or file I/O where performance is not critical. For example
+        ```
+        @serial_region begin
+            # Do some initialization
+            f .= 0.0
         end
         ```
+    * In any loops with the same prefix (whether type 1 or type 2) the same points belong to each process, so several loops can be executed without synchronizing the different processes. It is (mostly) only when changing the 'type' of loop (i.e. which dimensions it loops over) that synchronization is necessary, or when changing from 'serial region(s)' to parallel loops. To aid clarity and to allow some debugging routines to be added, the synchronization is done with functions labelled with the loop type. For example `begin_s_z_region()` should be called before `@s_z_loop` or `@s_z_loop_*` is called, and after any `@serial_region` or other type of `@*_loop*` macro. `begin_serial_region()` should be called before `@serial_region`.
+        * Internally, the `begin_*_region()` functions call `_block_synchronize()`, which calls `MPI.Barrier()`. When all debugging is disabled they are equivalent to `MPI.Barrier()`. Having different functions allow extra consistency checks to be done when debugging is enabled, see `debug_test/README.md`.
     * For information on race conditions and debugging, see `debug_test/README.md`.

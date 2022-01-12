@@ -5,9 +5,11 @@ export time_advance!
 
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_float, allocate_shared_float
-using ..communication: block_rank, block_synchronize, MPISharedArray
+using ..communication
+using ..communication: _block_synchronize
 using ..debugging
 using ..file_io: write_data_to_ascii, write_data_to_binary
+using ..looping
 using ..chebyshev: setup_chebyshev_pseudospectral
 using ..chebyshev: chebyshev_derivative!
 using ..velocity_moments: update_moments!, reset_moments_status!
@@ -108,17 +110,21 @@ function setup_time_advance!(pdf, vpa, z, composition, drive_input, moments,
     # create structure z_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the split part of the GK equation dealing
     # with advection in z
+    begin_serial_region()
     z_advect = setup_advection(n_species, z, vpa)
     # initialise the z advection speed
-    for is ∈ composition.species_local_range
+    begin_s_vpa_region()
+    @s_vpa_loop_s is begin
         @views update_speed_z!(z_advect[is], moments.upar[:,is], moments.vth[:,is],
                                moments.evolve_upar, moments.evolve_ppar, vpa, z, 0.0)
         # initialise the upwind/downwind boundary indices in z
-        update_boundary_indices!(z_advect[is], vpa.outer_loop_range)
+        update_boundary_indices!(z_advect[is], loop_ranges[].s_vpa_range_vpa)
     end
-    block_synchronize()
     # enforce prescribed boundary condition in z on the distribution function f
     @views enforce_z_boundary_condition!(pdf.unnorm, z.bc, z_advect, vpa, composition)
+    if z.bc != "wall" || composition.n_neutral_species == 0
+        begin_serial_region()
+    end
     if z.discretization == "chebyshev_pseudospectral"
         # create arrays needed for explicit Chebyshev pseudospectral treatment in vpa
         # and create the plans for the forward and backward fast Chebyshev transforms
@@ -148,29 +154,28 @@ function setup_time_advance!(pdf, vpa, z, composition, drive_input, moments,
     # for the electrostatic potential phi and eventually the electromagnetic fields
     fields = setup_em_fields(z.n, drive_input.force_phi, drive_input.amplitude, drive_input.frequency)
     # initialize the electrostatic potential
+    begin_s_z_region()
     update_phi!(fields, scratch[1], z, composition)
-    block_synchronize()
-    if block_rank[] == 0
+    begin_serial_region()
+    @serial_region begin
         # save the initial phi(z) for possible use later (e.g., if forcing phi)
         fields.phi0 .= fields.phi
     end
-    block_synchronize()
     # create structure vpa_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the split part of the GK equation dealing
     # with advection in vpa
     vpa_advect = setup_advection(n_species, vpa, z)
     # initialise the vpa advection speed
-    if block_rank[] == 0
-        update_speed_vpa!(vpa_advect, fields, scratch[1], moments, vpa, z, composition,
-                          collisions.charge_exchange, 0.0, z_spectral,
-                          1:composition.n_species, 1:z.n)
-    end
+    begin_s_z_region()
+    update_speed_vpa!(vpa_advect, fields, scratch[1], moments, vpa, z, composition,
+                      collisions.charge_exchange, 0.0, z_spectral)
     if moments.evolve_upar
         nspec = n_species
     else
         nspec = n_ion_species
     end
-    if block_rank[] == 0
+    begin_serial_region()
+    @serial_region begin
         for is ∈ 1:nspec
             # initialise the upwind/downwind boundary indices in vpa
             update_boundary_indices!(vpa_advect[is], 1:z.n)
@@ -185,7 +190,7 @@ function setup_time_advance!(pdf, vpa, z, composition, drive_input, moments,
     z_SL = setup_semi_lagrange(z.n, vpa.n)
     vpa_SL = setup_semi_lagrange(vpa.n, z.n)
 
-    block_synchronize()
+    begin_s_z_region()
     return vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
         vpa_SL, z_SL, scratch, advance
 end
@@ -229,7 +234,7 @@ function setup_scratch_arrays(moments, pdf_in, n_rk_stages)
         temp_z_s_array = allocate_shared_float(moment_dims...)
         scratch[istage] = scratch_pdf(pdf_array, density_array, upar_array,
                                       ppar_array, temp_z_s_array)
-        if block_rank[] == 0
+        @serial_region begin
             scratch[istage].pdf .= pdf_in
             scratch[istage].density .= moments.dens
             scratch[istage].upar .= moments.upar
@@ -281,7 +286,7 @@ function time_advance!(pdf, scratch, t, t_input, vpa, z, vpa_spectral, z_spectra
     collisions, advance, io, cdf)
 
     @debug_detect_redundant_block_synchronize begin
-        # Only want to check for redundant block_synchronize() calls during the
+        # Only want to check for redundant _block_synchronize() calls during the
         # time advance loop, so activate these checks here
         debug_detect_redundant_is_active[] = true
     end
@@ -302,12 +307,22 @@ function time_advance!(pdf, scratch, t, t_input, vpa, z, vpa_spectral, z_spectra
         t += t_input.dt
         # write data to file every nwrite time steps
         if mod(i,t_input.nwrite) == 0
-            block_synchronize()
-            block_rank[] == 0 && println("finished time step ", i)
+            @debug_detect_redundant_block_synchronize begin
+                # Skip check for redundant _block_synchronize() during file I/O because
+                # it only runs infrequently
+                debug_detect_redundant_is_active[] = false
+            end
+            begin_serial_region()
+            @serial_region println("finished time step ", i)
             write_data_to_ascii(pdf.unnorm, moments, fields, vpa, z, t, composition.n_species, io)
             # write initial data to binary file (netcdf)
             write_data_to_binary(pdf.unnorm, moments, fields, t, composition.n_species, cdf, iwrite)
             iwrite += 1
+            begin_s_z_region()
+            @debug_detect_redundant_block_synchronize begin
+                # Reactivate check for redundant _block_synchronize()
+                debug_detect_redundant_is_active[] = true
+            end
         end
     end
     return nothing
@@ -476,60 +491,72 @@ function time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
     return nothing
 end
 function rk_update!(scratch, pdf, moments, fields, vpa, z, rk_coefs, istage, composition)
+    begin_s_z_region()
     nvpa = size(pdf.unnorm, 1)
     new_scratch = scratch[istage+1]
     old_scratch = scratch[istage]
-    for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range, ivpa ∈ 1:nvpa
-        new_scratch.pdf[ivpa,iz,is] = rk_coefs[1]*pdf.norm[ivpa,iz,is] + rk_coefs[2]*old_scratch.pdf[ivpa,iz,is] + rk_coefs[3]*new_scratch.pdf[ivpa,iz,is]
+    @s_z_loop is iz begin
+        for ivpa ∈ 1:nvpa
+            new_scratch.pdf[ivpa,iz,is] = rk_coefs[1]*pdf.norm[ivpa,iz,is] + rk_coefs[2]*old_scratch.pdf[ivpa,iz,is] + rk_coefs[3]*new_scratch.pdf[ivpa,iz,is]
+        end
     end
     if moments.evolve_density
-        for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range
+        @s_z_loop is iz begin
             new_scratch.density[iz,is] = rk_coefs[1]*moments.dens[iz,is] + rk_coefs[2]*old_scratch.density[iz,is] + rk_coefs[3]*new_scratch.density[iz,is]
         end
-        for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range, ivpa ∈ 1:nvpa
-            pdf.unnorm[ivpa,iz,is] = new_scratch.pdf[ivpa,iz,is] * new_scratch.density[iz,is]
+        @s_z_loop is iz begin
+            for ivpa ∈ 1:nvpa
+                pdf.unnorm[ivpa,iz,is] = new_scratch.pdf[ivpa,iz,is] * new_scratch.density[iz,is]
+            end
         end
     else
-        for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range, ivpa ∈ 1:nvpa
-            pdf.unnorm[ivpa,iz,is] = new_scratch.pdf[ivpa,iz,is]
+        @s_z_loop is iz begin
+            for ivpa ∈ 1:nvpa
+                pdf.unnorm[ivpa,iz,is] = new_scratch.pdf[ivpa,iz,is]
+            end
         end
         update_density!(new_scratch.density, moments.dens_updated, pdf.unnorm, vpa, z, composition)
     end
     # NB: if moments.evolve_upar = true, then moments.evolve_density = true
     if moments.evolve_upar
-        for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range
+        @s_z_loop is iz begin
             new_scratch.upar[iz,is] = rk_coefs[1]*moments.upar[iz,is] + rk_coefs[2]*old_scratch.upar[iz,is] + rk_coefs[3]*new_scratch.upar[iz,is]
         end
     else
         update_upar!(new_scratch.upar, moments.upar_updated, pdf.unnorm, vpa, z, composition)
         # convert from particle particle flux to parallel flow
-        for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range
+        @s_z_loop is iz begin
             new_scratch.upar[iz,is] /= new_scratch.density[iz,is]
         end
     end
     if moments.evolve_ppar
-        for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range
+        @s_z_loop is iz begin
             new_scratch.ppar[iz,is] = rk_coefs[1]*moments.ppar[iz,is] + rk_coefs[2]*old_scratch.ppar[iz,is] + rk_coefs[3]*new_scratch.ppar[iz,is]
         end
     else
         update_ppar!(new_scratch.ppar, moments.ppar_updated, pdf.unnorm, vpa, z, composition)
     end
     # update the thermal speed
-    for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range
+    @s_z_loop is iz begin
         moments.vth[iz,is] = sqrt(2.0*new_scratch.ppar[iz,is]/new_scratch.density[iz,is])
     end
     if moments.evolve_ppar
-        for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range
+        @s_z_loop is iz begin
             old_scratch.temp_z_s[iz,is] = 1.0 / moments.vth[iz,is]
         end
-        for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range, ivpa ∈ 1:vpa.n
-            pdf.unnorm[ivpa,iz,is] *= old_scratch.temp_z_s[iz,is]
+        @s_z_loop is iz begin
+            for ivpa ∈ 1:vpa.n
+                pdf.unnorm[ivpa,iz,is] *= old_scratch.temp_z_s[iz,is]
+            end
         end
     end
     # update the parallel heat flux
     update_qpar!(moments.qpar, moments.qpar_updated, pdf.unnorm, vpa, z, composition, moments.vpa_norm_fac)
     # update the electrostatic potential phi
     update_phi!(fields, scratch[istage+1], z, composition)
+    # _block_synchronize() here because phi needs to be read on different ranks than it
+    # was written on, even though the loop-type does not change here
+    _block_synchronize()
 end
 function ssp_rk!(pdf, scratch, t, t_input, vpa, z,
     vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
@@ -538,13 +565,20 @@ function ssp_rk!(pdf, scratch, t, t_input, vpa, z,
     n_rk_stages = t_input.n_rk_stages
 
     first_scratch = scratch[1]
-    for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range, ivpa ∈ 1:vpa.n
-        first_scratch.pdf[ivpa,iz,is] = pdf.norm[ivpa,iz,is]
+    @s_z_loop is iz begin
+        for ivpa ∈ 1:vpa.n
+            first_scratch.pdf[ivpa,iz,is] = pdf.norm[ivpa,iz,is]
+        end
     end
-    for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range
+    @s_z_loop is iz begin
         first_scratch.density[iz,is] = moments.dens[iz,is]
         first_scratch.upar[iz,is] = moments.upar[iz,is]
         first_scratch.ppar[iz,is] = moments.ppar[iz,is]
+    end
+    if moments.evolve_upar
+        # moments may be read on all ranks, even though loop type is z_s, so need to
+        # synchronize here
+        _block_synchronize()
     end
 
     for istage ∈ 1:n_rk_stages
@@ -561,21 +595,22 @@ function ssp_rk!(pdf, scratch, t, t_input, vpa, z,
 
     istage = n_rk_stages+1
     if moments.evolve_density && moments.enforce_conservation
-        block_synchronize()
         enforce_moment_constraints!(scratch[istage], scratch[1], vpa, z, composition, moments)
     end
 
     # update the pdf.norm and moments arrays as needed
     final_scratch = scratch[istage]
-    for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range, ivpa ∈ 1:vpa.n
-        pdf.norm[ivpa,iz,is] = final_scratch.pdf[ivpa,iz,is]
+    @s_z_loop is iz begin
+        for ivpa ∈ 1:vpa.n
+            pdf.norm[ivpa,iz,is] = final_scratch.pdf[ivpa,iz,is]
+        end
     end
-    for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range
+    @s_z_loop is iz begin
         moments.dens[iz,is] = final_scratch.density[iz,is]
         moments.upar[iz,is] = final_scratch.upar[iz,is]
         moments.ppar[iz,is] = final_scratch.ppar[iz,is]
     end
-    update_pdf_unnorm!(pdf, moments, scratch[istage].temp_z_s, composition, z)
+    update_pdf_unnorm!(pdf, moments, scratch[istage].temp_z_s, composition, vpa)
     return nothing
 end
 # euler_time_advance! advances the vector equation dfvec/dt = G[f]
@@ -596,14 +631,14 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, z_
         vpa_advection!(fvec_out.pdf, fvec_in, pdf.norm, fields, moments,
             vpa_SL, vpa_advect, vpa, z, use_semi_lagrange, dt, t,
             vpa_spectral, z_spectral, composition, collisions.charge_exchange, istage)
-        block_synchronize()
     end
     # z_advection! advances 1D advection equation in z
     # apply z-advection operation to all species (charged and neutral)
     if advance.z_advection
+        begin_s_vpa_region()
         z_advection!(fvec_out.pdf, fvec_in, pdf.norm, moments, z_SL, z_advect, z, vpa,
             use_semi_lagrange, dt, t, z_spectral, composition, istage)
-        block_synchronize()
+        begin_s_z_region()
     end
     if advance.source_terms
         source_terms!(fvec_out.pdf, fvec_in, moments, vpa, z, dt, z_spectral,
@@ -627,8 +662,8 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, z_
         # fvec_out.upar is over-written in force_balance! and contains the particle flux
         force_balance!(fvec_out.upar, fvec_in, fields, collisions, vpa, z, dt, z_spectral, composition)
         # convert from the particle flux to the parallel flow
-        for is ∈ composition.species_local_range
-            if composition.first_proc_in_group
+        @s_z_loop_s is begin
+            if 1 ∈ loop_ranges[].s_z_range_z
                 @views @. fvec_out.upar[:,is] /= fvec_out.density[:,is]
             end
         end
@@ -642,7 +677,6 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, z_
     # enforce boundary conditions in z and vpa on the distribution function
     # NB: probably need to do the same for the evolved moments
     enforce_boundary_conditions!(fvec_out.pdf, vpa.bc, z.bc, vpa, z, vpa_advect, z_advect, composition)
-    block_synchronize()
     return nothing
 end
 # update the vector containing the pdf and any evolved moments of the pdf
@@ -650,10 +684,12 @@ end
 function update_solution_vector!(evolved, moments, istage, composition, vpa, z)
     new_evolved = evolved[istage+1]
     old_evolved = evolved[istage]
-    for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range, ivpa ∈ 1:vpa.n
-        new_evolved.pdf[ivpa,iz,is] = old_evolved.pdf[ivpa,iz,is]
+    @s_z_loop is iz begin
+        for ivpa ∈ 1:vpa.n
+            new_evolved.pdf[ivpa,iz,is] = old_evolved.pdf[ivpa,iz,is]
+        end
     end
-    for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range
+    @s_z_loop is iz begin
         new_evolved.density[iz,is] = old_evolved.density[iz,is]
         new_evolved.upar[iz,is] = old_evolved.upar[iz,is]
         new_evolved.ppar[iz,is] = old_evolved.ppar[iz,is]
@@ -662,25 +698,31 @@ function update_solution_vector!(evolved, moments, istage, composition, vpa, z)
 end
 
 # scratch should be a (nz,nspecies) array
-function update_pdf_unnorm!(pdf, moments, scratch, composition, z)
+function update_pdf_unnorm!(pdf, moments, scratch, composition, vpa)
     # if separately evolving the density via the continuity equation,
     # the evolved pdf has been normalised by the particle density
     # undo this normalisation to get the true particle distribution function
     nvpa = size(pdf.unnorm, 1)
     if moments.evolve_ppar
-        for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range
+        @s_z_loop is iz begin
             scratch[iz,is] = moments.dens[iz,is]/moments.vth[iz,is]
         end
-        for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range, ivpa ∈ 1:nvpa
-            pdf.unnorm[ivpa,iz,is] = pdf.norm[ivpa,iz,is]*scratch[iz,is]
+        @s_z_loop is iz begin
+            for ivpa ∈ 1:vpa.n
+                pdf.unnorm[ivpa,iz,is] = pdf.norm[ivpa,iz,is]*scratch[iz,is]
+            end
         end
     elseif moments.evolve_density
-        for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range, ivpa ∈ 1:nvpa
-            pdf.unnorm[ivpa,iz,is] = pdf.norm[ivpa,iz,is] * moments.dens[iz,is]
+        @s_z_loop is iz begin
+            for ivpa ∈ 1:vpa.n
+                pdf.unnorm[ivpa,iz,is] = pdf.norm[ivpa,iz,is] * moments.dens[iz,is]
+            end
         end
     else
-        for is ∈ composition.species_local_range, iz ∈ z.outer_loop_range, ivpa ∈ 1:nvpa
-            pdf.unnorm[ivpa,iz,is] = pdf.norm[ivpa,iz,is]
+        @s_z_loop is iz begin
+            for ivpa ∈ 1:vpa.n
+                pdf.unnorm[ivpa,iz,is] = pdf.norm[ivpa,iz,is]
+            end
         end
     end
 end

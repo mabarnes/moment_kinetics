@@ -11,6 +11,7 @@ include("command_line_options.jl")
 include("debugging.jl")
 include("type_definitions.jl")
 include("communication.jl")
+include("looping.jl")
 include("array_allocation.jl")
 include("interpolation.jl")
 include("clenshaw_curtis.jl")
@@ -50,12 +51,16 @@ using TOML
 
 using .file_io: setup_file_io, finish_file_io
 using .file_io: write_data_to_ascii, write_data_to_binary
-using .command_line_options: options
-using .communication: block_rank, block_synchronize, finalize_comms!, initialize_comms!
+using .command_line_options: get_options
+using .communication
 using .coordinates: define_coordinate
+using .debugging
 using .initial_conditions: init_pdf_and_moments
+using .looping
 using .moment_kinetics_input: mk_input, run_type, performance_test
 using .time_advance: setup_time_advance!, time_advance!
+
+@debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
 
 # main function that contains all of the content of the program
 function run_moment_kinetics(to::TimerOutput, input_dict=Dict())
@@ -91,10 +96,11 @@ function run_moment_kinetics(input)
     return run_moment_kinetics(TimerOutput(), input)
 end
 function run_moment_kinetics()
-    if options["inputfile"] == nothing
+    inputfile = get_options()["inputfile"]
+    if inputfile == nothing
         run_moment_kinetics(Dict())
     else
-        run_moment_kinetics(options["inputfile"])
+        run_moment_kinetics(inputfile)
     end
 end
 
@@ -112,6 +118,9 @@ function setup_moment_kinetics(input_dict::Dict)
     z = define_coordinate(z_input, composition)
     # initialize vpa grid and write grid point locations to file
     vpa = define_coordinate(vpa_input, composition)
+    # Create loop range variables for shared-memory-parallel loops
+    looping.setup_loop_ranges!(block_rank[], block_size[]; s=composition.n_species,
+                               z=z.n, vpa=vpa.n)
     # initialize f(z,vpa) and the lowest three v-space moments (density(z), upar(z) and ppar(z)),
     # each of which may be evolved separately depending on input choices.
     pdf, moments = init_pdf_and_moments(vpa, z, composition, species, t_input.n_rk_stages, evolve_moments)
@@ -130,7 +139,7 @@ function setup_moment_kinetics(input_dict::Dict)
     # write initial data to binary file (netcdf)
     write_data_to_binary(pdf.unnorm, moments, fields, code_time, composition.n_species, cdf, 1)
 
-    block_synchronize()
+    begin_s_z_region()
 
     return pdf, scratch, code_time, t_input, vpa, z, vpa_spectral, z_spectral, moments,
            fields, vpa_advect, z_advect, vpa_SL, z_SL, composition, collisions, advance,
@@ -140,6 +149,14 @@ end
 # Clean up after a run
 function cleanup_moment_kinetics!(io::Union{file_io.ios,Nothing},
                                   cdf::Union{file_io.netcdf_info,Nothing})
+    @debug_detect_redundant_block_synchronize begin
+        # Disable check for redundant _block_synchronize() during finalization, as this
+        # only runs once so any failure is not important.
+        debug_detect_redundant_is_active[] = false
+    end
+
+    begin_serial_region()
+
     # finish i/o
     finish_file_io(io, cdf)
 

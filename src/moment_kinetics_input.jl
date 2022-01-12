@@ -6,7 +6,7 @@ export performance_test
 
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float
-using ..communication: block_rank, get_species_local_range
+using ..communication
 using ..file_io: input_option_error, open_output_file
 using ..finite_differences: fd_check_option
 using ..input_structs
@@ -66,12 +66,6 @@ function mk_input(scan_input=Dict())
     composition.T_e = get(scan_input, "T_e", 1.0)
     # set wall temperature T_wall = Tw/Te
     composition.T_wall = get(scan_input, "T_wall", 1.0)
-    composition.species_local_range, composition.first_proc_in_group =
-        get_species_local_range(composition.n_species)
-    composition.ion_species_local_range, composition.first_proc_in_ion_group =
-        get_species_local_range(composition.n_ion_species)
-    composition.neutral_species_local_range, composition.first_proc_in_neutral_group =
-        get_species_local_range(composition.n_neutral_species, composition.n_ion_species)
     # set initial neutral temperature Tn/Tₑ = 1
     # set initial nᵢ/Nₑ = 1.0
     # set phi_wall at z = 0
@@ -328,9 +322,8 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     # ratio of the electron particle mass to the ion particle mass
     me_over_mi = 1.0/1836.0
     composition = species_composition(n_species, n_ion_species, n_neutral_species,
-        electron_physics, 1:n_ion_species, n_ion_species+1:n_species,
-        1:n_species, true, 1:n_species, true, 1:0, false, T_e, T_wall, phi_wall,
-        mn_over_mi, me_over_mi, allocate_float(n_species))
+        electron_physics, 1:n_ion_species, n_ion_species+1:n_species, T_e, T_wall,
+        phi_wall, mn_over_mi, me_over_mi, allocate_float(n_species))
     species = Array{species_parameters_mutable,1}(undef,n_species)
     # initial temperature for each species defaults to Tₑ
     initial_temperature = 1.0
