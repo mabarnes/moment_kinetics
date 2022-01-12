@@ -24,13 +24,13 @@ end
 
 # creates the normalised pdf and the velocity-space moments and populates them
 # with a self-consistent initial condition
-function init_pdf_and_moments(vpa, z, composition, species, n_rk_stages, evolve_moments)
+function init_pdf_and_moments(vpa, z, composition, species, n_rk_stages, evolve_moments, ionization)
     # define the n_species variable for convenience
     n_species = composition.n_species
     # create the 'moments' struct that contains various v-space moments and other
     # information related to these moments.
     # the time-dependent entries are not initialised.
-    moments = create_moments(z.n, n_species, evolve_moments)
+    moments = create_moments(z.n, n_species, evolve_moments, ionization, z.bc)
     @serial_region begin
         # initialise the density profile
         init_density!(moments.dens, z, species, n_species)
@@ -134,7 +134,7 @@ function init_upar!(upar, z, spec, n_species)
             # necessary for an electron sheath condition involving J_{||i}
             # option "gaussian" to be consistent with usual init option for now
             @. upar[:,is] =
-                (spec[is].z_IC.upar_amplitude * 2.0 *       
+                (spec[is].z_IC.upar_amplitude * 2.0 *
                        (z.grid[:] - z.grid[floor(Int,z.n/2)])/z.L)
         else
             @. upar[:,is] = 0.0
@@ -156,7 +156,6 @@ function init_pdf_over_density!(pdf, spec, vpa, z, vth, upar, vpa_norm_fac, evol
             else
                 @. vpa.scratch = (vpa.grid - upar[iz])/vth[iz]
             end
-            #@. pdf[:,iz] = exp(-(vpa.grid*(vpa_norm_fac[iz]/vth[iz]))^2) / vth[iz]
             @. pdf[:,iz] = exp(-vpa.scratch^2) / vth[iz]
         end
         for iz ∈ 1:z.n
