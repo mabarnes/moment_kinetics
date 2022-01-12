@@ -8,7 +8,7 @@ function ionization_collisions!(f_out, fvec_in, moments, n_ion_species,
         n_neutral_species, vpa, z, spectral, composition, collisions, nz, dt)
 
     if moments.evolve_density
-		for is ∈ composition.species_local_range
+		@s_z_loop_s is begin
 			# apply ionization collisions to all ion species
 			if is ∈ composition.ion_species_range
 				# identify index 'is' as an ion species index
@@ -16,7 +16,7 @@ function ionization_collisions!(f_out, fvec_in, moments, n_ion_species,
 				# for each ion species, obtain the effect of ionization collisions
 				# with all of the neutral species
 				for isn ∈ composition.neutral_species_range
-					for iz ∈ z.outer_loop_range
+					@s_z_loop_z iz begin
 						if moments.evolve_upar
 							# wpa = vpa - upa_s if upar evolved but no ppar
 		                    # if ppar also evolved, wpa = (vpa - upa_s)/vths
@@ -46,7 +46,7 @@ function ionization_collisions!(f_out, fvec_in, moments, n_ion_species,
 				# for each neutral species, obtain effect of ionization collisions
 				# with all of the ion species
 				for isi ∈ composition.ion_species_range
-					for iz ∈ z.outer_loop_range
+					@s_z_loop_z iz begin
 						for ivpa ∈ 1:vpa.n
 							f_out[ivpa,iz,isn] -= dt*collisions.ionization*fvec_in.density[iz,isi]*fvec_in.pdf[ivpa,iz,isn]
 						end
