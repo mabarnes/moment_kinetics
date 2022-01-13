@@ -10,7 +10,7 @@ using ..looping
 # to update the parallel particle flux dens*upar for each species
 function force_balance!(pflx, fvec, fields, collisions, vpa, z, dt, spectral, composition)
     # account for momentum flux contribution to force balance
-    @s_loop is begin
+    @loop_s is begin
         @views force_balance_flux_species!(pflx[:,is], fvec.density[:,is], fvec.upar[:,is], fvec.ppar[:,is], z, dt, spectral)
         if is ∈ composition.ion_species_range
             # account for parallel electric field contribution to force balance
@@ -51,7 +51,7 @@ function force_balance_Epar_species!(pflx, phi, dens, z, dt, spectral)
 end
 
 function force_balance_CX!(pflx, dens, upar, CX_frequency, composition, z, dt)
-    @s_loop is begin
+    @loop_s is begin
         # include contribution to ion acceleration due to collisional friction with neutrals
         if is ∈ composition.ion_species_range
             for isp ∈ composition.neutral_species_range

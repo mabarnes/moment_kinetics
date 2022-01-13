@@ -19,7 +19,7 @@ function vpa_advection!(f_out, fvec_in, ff, fields, moments, SL, advect,
 
     # calculate the advection speed corresponding to current f
     update_speed_vpa!(advect, fields, fvec_in, moments, vpa, z, composition, CX_frequency, t, z_spectral)
-    @s_z_loop_s is begin
+    @loop_s is begin
         if !moments.evolve_upar && is in composition.neutral_species_range
             # No acceleration for neutrals when not evolving upar
             continue
@@ -27,18 +27,18 @@ function vpa_advection!(f_out, fvec_in, ff, fields, moments, SL, advect,
         # update the upwind/downwind boundary indices and upwind_increment
         # NB: not sure if this will work properly with SL method at the moment
         # NB: if the speed is actually time-dependent
-        update_boundary_indices!(advect[is], loop_ranges[].s_z_range_z)
+        update_boundary_indices!(advect[is], loop_ranges[].z)
         # if using interpolation-free Semi-Lagrange,
         # follow characteristics backwards in time from level m+1 to level m
         # to get departure points.  then find index of grid point nearest
         # the departure point at time level m and use this to define
         # an approximate characteristic
         if use_semi_lagrange
-            @s_z_loop_z iz begin
+            @loop_z iz begin
                 find_approximate_characteristic!(SL, advect[is], iz, vpa, dt)
             end
         end
-        @s_z_loop_z iz begin
+        @loop_z iz begin
             @views advance_f_local!(f_out[:,iz,is], fvec_in.pdf[:,iz,is], ff[:,iz,is],
                                     SL, advect[is], iz, vpa, dt, istage,
                                     vpa_spectral, use_semi_lagrange)
@@ -80,12 +80,12 @@ function update_speed_vpa!(advect, fields, fvec, moments, vpa, z, composition, C
         end
         block_sychronize()
     end
-    @s_z_loop_s is begin
+    @loop_s is begin
         if !moments.evolve_upar && is in composition.neutral_species_range
             # No acceleration for neutrals when not evolving upar
             continue
         end
-        @s_z_loop_z iz begin
+        @loop_z iz begin
             @views @. advect[is].modified_speed[:,iz] = advect[is].speed[:,iz]
         end
     end
@@ -93,33 +93,33 @@ function update_speed_vpa!(advect, fields, fvec, moments, vpa, z, composition, C
 end
 function update_speed_default!(advect, fields, fvec, moments, vpa, z, composition, CX_frequency, t, z_spectral)
     if moments.evolve_ppar
-        @s_z_loop_s is begin
+        @loop_s is begin
             # get d(ppar)/dz
             derivative!(z.scratch, view(fvec.ppar,:,is), z, z_spectral)
             # update parallel acceleration to account for parallel derivative of parallel pressure
             # NB: no vpa-dependence so compute as a scalar and broadcast to all entries
-            @s_z_loop_z iz begin
+            @loop_z iz begin
                 @views advect[is].speed[:,iz] .= z.scratch[iz]/(fvec.density[iz,is]*moments.vth[iz,is])
             end
             # calculate d(qpar)/dz
             derivative!(z.scratch, view(moments.qpar,:,is), z, z_spectral)
             # update parallel acceleration to account for (wpar/2*ppar)*dqpar/dz
-            @s_z_loop_z iz begin
+            @loop_z iz begin
                 @views @. advect[is].speed[:,iz] += 0.5*vpa.grid*z.scratch[iz]/fvec.ppar[iz,is]
             end
             # calculate d(vth)/dz
             derivative!(z.scratch, view(moments.vth,:,is), z, z_spectral)
             # update parallel acceleration to account for -wpar^2 * d(vth)/dz term
-            @s_z_loop_z iz begin
+            @loop_z iz begin
                 @views @. advect[is].speed[:,iz] -= vpa.grid^2*z.scratch[iz]
             end
         end
         # add in contributions from charge exchange collisions
         if composition.n_neutral_species > 0 && abs(CX_frequency) > 0.0
-            @s_z_loop_s is begin
+            @loop_s is begin
                 if is ∈ composition.ion_species_range
                     for isp ∈ composition.neutral_species_range
-                        @s_z_loop_z iz begin
+                        @loop_z iz begin
                             @views @. advect[is].speed[:,iz] += CX_frequency *
                             (0.5*vpa.grid/fvec.ppar[iz,is] * (fvec.density[iz,isp]*fvec.ppar[iz,is]
                                                               - fvec.density[iz,is]*fvec.ppar[iz,isp])
@@ -129,7 +129,7 @@ function update_speed_default!(advect, fields, fvec, moments, vpa, z, compositio
                 end
                 if is ∈ composition.neutral_species_range
                     for isp ∈ composition.ion_species_range
-                        @s_z_loop_z iz begin
+                        @loop_z iz begin
                             @views @. advect[is].speed[:,iz] += CX_frequency *
                             (0.5*vpa.grid/fvec.ppar[iz,is] * (fvec.density[iz,isp]*fvec.ppar[iz,is]
                                                               - fvec.density[iz,is]*fvec.ppar[iz,isp])
@@ -140,18 +140,18 @@ function update_speed_default!(advect, fields, fvec, moments, vpa, z, compositio
             end
         end
     elseif moments.evolve_upar
-        @s_z_loop_s is begin
+        @loop_s is begin
             # get d(ppar)/dz
             derivative!(z.scratch, view(fvec.ppar,:,is), z, z_spectral)
             # update parallel acceleration to account for parallel derivative of parallel pressure
             # NB: no vpa-dependence so compute as a scalar and broadcast to all entries
-            @s_z_loop_z iz begin
+            @loop_z iz begin
                 @views advect[is].speed[:,iz] .= z.scratch[iz]/fvec.density[iz,is]
             end
             # calculate d(upar)/dz
             derivative!(z.scratch, view(fvec.upar,:,is), z, z_spectral)
             # update parallel acceleration to account for -wpar*dupar/dz
-            @s_z_loop_z iz begin
+            @loop_z iz begin
                 @views @. advect[is].speed[:,iz] -= vpa.grid*z.scratch[iz]
             end
         end
@@ -159,10 +159,10 @@ function update_speed_default!(advect, fields, fvec, moments, vpa, z, compositio
         # account for collisional friction between ions and neutrals
         if composition.n_neutral_species > 0 && abs(CX_frequency) > 0.0
             # include contribution to ion acceleration due to collisional friction with neutrals
-            @s_z_loop_s is begin
+            @loop_s is begin
                 if is ∈ composition.ion_species_range
                     for isp ∈ composition.neutral_species_range
-                        @s_z_loop_z iz begin
+                        @loop_z iz begin
                             @views advect[is].speed[:,iz] .+= -CX_frequency*fvec.density[iz,isp]*(fvec.upar[iz,isp]-fvec.upar[iz,is])
                         end
                     end
@@ -171,7 +171,7 @@ function update_speed_default!(advect, fields, fvec, moments, vpa, z, compositio
                 if is ∈ composition.neutral_species_range
                     for isp ∈ composition.ion_species_range
                         # get the absolute species index for the neutral species
-                        @s_z_loop_z iz begin
+                        @loop_z iz begin
                             @views advect[is].speed[:,iz] .+= -CX_frequency*fvec.density[iz,isp]*(fvec.upar[iz,isp]-fvec.upar[iz,is])
                         end
                     end
@@ -186,12 +186,12 @@ function update_speed_default!(advect, fields, fvec, moments, vpa, z, compositio
         derivative!(z.scratch, fields.phi, z, z_spectral)
         # advection velocity in vpa is -dphi/dz = -z.scratch
         @inbounds @fastmath begin
-            @s_z_loop_s is begin
+            @loop_s is begin
                 if !moments.evolve_upar && is in composition.neutral_species_range
                     # No acceleration for neutrals when not evolving upar
                     continue
                 end
-                @s_z_loop_z iz begin
+                @loop_z iz begin
                     @views advect[is].speed[:,iz] .= -0.5*z.scratch[iz]
                 end
             end
