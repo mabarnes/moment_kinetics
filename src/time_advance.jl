@@ -651,8 +651,8 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, z_
     end
     # account for ionization collisions between ions and neutrals
     if advance.ionization_collisions
-        ionization_collisions!(fvec_out.pdf, fvec_in, moments, n_ion_species,
-            composition.n_neutral_species, vpa, z, vpa_spectral, composition, collisions, z.n, dt)
+        ionization_collisions!(fvec_out.pdf, fvec_in, moments, vpa, z,
+                               vpa_spectral, composition, collisions, z.n, dt)
     end
     if advance.continuity
         continuity_equation!(fvec_out.density, fvec_in, moments, composition, vpa, z,
