@@ -62,27 +62,29 @@ function charge_exchange_collisions!(f_out, fvec_in, moments, composition, vpa, 
                 elseif is ∈ composition.ion_species_range
                     # identify the 'is' index as corresponding to an ion species
                     isi = is
-                    # wpa = vpa - upa_s if upar evolved but no ppar
-                    # if ppar also evolved, wpa = (vpa - upa_s)/vths
-                    if moments.evolve_ppar
-                        wpa_shift_norm = moments.vth[iz,isi]
-                    else
-                        wpa_shift_norm = 1.0
-                    end
-                    for isn ∈ composition.neutral_species_range
-                        # calculate the shift in the wpa grid to the desired (neutral) wpa locations
-                        wpa_shift = (fvec_in.upar[iz,isn] - fvec_in.upar[iz,isi])/wpa_shift_norm
-                        # construct the wpa grid on which to interpolate
-                        for ivpa ∈ 1:vpa.n
-                            vpa.scratch[ivpa] = vpa.grid[ivpa] + wpa_shift
+                    @loop_z iz begin
+                        # wpa = vpa - upa_s if upar evolved but no ppar
+                        # if ppar also evolved, wpa = (vpa - upa_s)/vths
+                        if moments.evolve_ppar
+                            wpa_shift_norm = moments.vth[iz,isi]
+                        else
+                            wpa_shift_norm = 1.0
                         end
-                        # interpolate to the new grid (passed in as vpa.scratch)
-                        # and return interpolated values in vpa.scratch
-                        vpa.scratch .= interpolate_to_grid_vpa(vpa.scratch, view(fvec_in.pdf,:,iz,isi), vpa, spectral)
-                        # add the charge exchange contribution to df/dt
-                        for ivpa ∈ 1:vpa.n
-                            f_out[ivpa,iz,isn] += dt*charge_exchange_frequency*fvec_in.density[iz,isi] *
-                                (vpa.scratch[ivpa]- fvec_in.pdf[ivpa,iz,isn])
+                        for isn ∈ composition.neutral_species_range
+                            # calculate the shift in the wpa grid to the desired (neutral) wpa locations
+                            wpa_shift = (fvec_in.upar[iz,isn] - fvec_in.upar[iz,isi])/wpa_shift_norm
+                            # construct the wpa grid on which to interpolate
+                            for ivpa ∈ 1:vpa.n
+                                vpa.scratch[ivpa] = vpa.grid[ivpa] + wpa_shift
+                            end
+                            # interpolate to the new grid (passed in as vpa.scratch)
+                            # and return interpolated values in vpa.scratch
+                            vpa.scratch .= interpolate_to_grid_vpa(vpa.scratch, view(fvec_in.pdf,:,iz,isi), vpa, spectral)
+                            # add the charge exchange contribution to df/dt
+                            for ivpa ∈ 1:vpa.n
+                                f_out[ivpa,iz,isn] += dt*charge_exchange_frequency*fvec_in.density[iz,isi] *
+                                    (vpa.scratch[ivpa]- fvec_in.pdf[ivpa,iz,isn])
+                            end
                         end
                     end
                 end

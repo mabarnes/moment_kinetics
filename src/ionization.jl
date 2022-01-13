@@ -3,9 +3,10 @@ module ionization
 export ionization_collisions!
 
 using ..looping
+using ..interpolation: interpolate_to_grid_vpa
 
-function ionization_collisions!(f_out, fvec_in, moments, n_ion_species,
-        n_neutral_species, vpa, z, spectral, composition, collisions, nz, dt)
+function ionization_collisions!(f_out, fvec_in, moments, vpa, z, spectral,
+								composition, collisions, nz, dt)
 
     if moments.evolve_density
 		@loop_s is begin
