@@ -6,9 +6,10 @@ Note these are not guaranteed to be highly optimized!
 module interpolation
 
 export interpolate_to_grid_z
+export interpolate_to_grid_vpa
 
 using ..array_allocation: allocate_float
-using ..type_definitions: mk_float
+using ..type_definitions: mk_float, mk_int
 
 # Define dummy function so both chebyshev.jl and finite_differences.jl can merge new
 # implementations to it.
@@ -53,6 +54,12 @@ function interpolate_to_grid_vpa(newgrid, f::Array{mk_float, 3}, vpa, spectral)
     end
 
     return result
+end
+
+function interpolate_to_grid_vpa(newgrid, f::SubArray{mk_float, 1, Array{mk_float, 3},
+                                 Tuple{Base.Slice{Base.OneTo{mk_int}}, mk_int, mk_int}, true},
+                                 vpa, spectral)
+    return interpolate_to_grid_1d(newgrid, f, vpa, spectral)
 end
 
 end
