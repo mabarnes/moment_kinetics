@@ -216,7 +216,7 @@ end
 function update_qpar_species!(qpar, ff, vpa, z, r, vpanorm)
     @boundscheck z.n == size(ff, 2) || throw(BoundsError(ff))
     @boundscheck z.n == size(qpar, 1) || throw(BoundsError(qpar))
-    @s_z_loop_z iz begin
+    @r_z_loop_r_z ir iz begin
         qpar[iz, ir] = integrate_over_vspace(@view(ff[:,iz, ir]), vpa.grid, 3, vpa.wgts) * vpanorm[iz, ir]^4
     end
     return nothing
