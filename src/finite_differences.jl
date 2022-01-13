@@ -486,7 +486,37 @@ function interpolate_to_grid_1d(new_grid, f, coord, not_spectral::Bool)
     x_range = range(x[begin], x[end], length=size(x)[1])
     unscaled = interpolate(f, BSpline(Cubic(Periodic(OnCell()))))
     interpolation_function = scale(unscaled, x_range)
-    return interpolation_function(new_grid)
+	# check to see if any of the new_grid points are to the left of the first grid point
+	n_new = size(new_grid)[1]
+	start_idx = 1
+	# array for output
+	result = similar(new_grid)
+	for j ∈ 1:n_new
+		# if the new grid location is outside the bounds of the original grid,
+        # extrapolate f assuming f is constant beyond the domain
+        if new_grid[j] < coord.grid[1]
+            start_idx += 1
+            result[j] = f[1]
+        else
+            break
+        end
+    end
+	# check for new_grid points beyond the final grid location
+	end_idx = n_new
+	for j ∈ n_new:-1:1
+		# if the new grid location is outside the bounds of the original grid,
+        # extrapolate f assuming f is constant beyond the domain
+        if new_grid[j] > coord.grid[end]
+            end_idx -= 1
+            result[j] = f[end]
+        else
+            break
+        end
+	end
+	interp_f = interpolation_function(view(new_grid,start_idx:end_idx))
+	result[start_idx:end_idx] .= interp_f
+	return result
+	#return interpolation_function(new_grid)
 end
 
 end
