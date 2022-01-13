@@ -65,4 +65,10 @@ function interpolate_to_grid_vpa(newgrid, f::Array{mk_float, 3}, vpa, spectral)
     return result
 end
 
+function interpolate_to_grid_vpa(newgrid, f::SubArray{mk_float, 1, T1,
+                                 Tuple{Base.Slice{Base.OneTo{mk_int}}, mk_int, mk_int}, T2},
+                                 vpa, spectral) where {T1, T2}
+    return interpolate_to_grid_1d(newgrid, f, vpa, spectral)
+end
+
 end
