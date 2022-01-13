@@ -145,7 +145,7 @@ To get more output on what tests were successful, an option `--verbose` (or `-v`
         * 1\. If there is just a single nested loop, then for example
             ```
             @s_z_loop is iz begin
-                for izpa in 1:vpa.n
+                for ivpa in 1:vpa.n
                     f[ivpa,iz,is] = ...
                 end
             end

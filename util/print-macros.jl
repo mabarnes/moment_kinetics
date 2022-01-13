@@ -21,7 +21,7 @@ function print_macros()
         macro_name = string("@", dims_string(dims), "_loop")
         macro_example = """
             $macro_name $(join(iteration_vars, " ")) begin
-                foo[$(join(iteration_vars, ","))] = something
+                foo[$(join(reverse(iteration_vars), ","))] = something
             end
         """
         println("```")
