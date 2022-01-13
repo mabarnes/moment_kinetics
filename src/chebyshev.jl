@@ -267,7 +267,7 @@ function interpolate_to_grid_1d(newgrid, f, coord, chebyshev::chebyshev_info)
     end
 
     if kstart[nelement+1] < n_new + 1
-        results[kstart[nelement+1]:end] .= f[end]
+        result[kstart[nelement+1]:end] .= f[end]
     end
 
     return result
