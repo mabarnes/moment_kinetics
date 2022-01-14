@@ -114,25 +114,25 @@ function create_moments(nz, nr, n_species, evolve_moments)
         parallel_heat_flux, parallel_heat_flux_updated, thermal_speed, vpa_norm_fac)
 end
 # calculate the updated density (dens) and parallel pressure (ppar) for all species
-function update_moments!(moments, ff, vpa, nz, composition)
-    n_species = size(ff,3)
-    @boundscheck n_species == size(moments.dens,2) || throw(BoundsError(moments))
-    @s_z_loop_s is begin
+function update_moments!(moments, ff, vpa, nz, nr, composition)
+    n_species = size(ff,4)
+    @boundscheck n_species == size(moments.dens,3) || throw(BoundsError(moments))
+    @s_r_z_loop_s is begin
         if moments.dens_updated[is] == false
-            @views update_density_species!(moments.dens[:,is], ff[:,:,is], vpa, z)
+            @views update_density_species!(moments.dens[:,:,is], ff[:,:,:,is], vpa, z, r)
             moments.dens_updated[is] = true
         end
         if moments.upar_updated[is] == false
-            @views update_upar_species!(moments.upar[:,is], ff[:,:,is], vpa, z)
+            @views update_upar_species!(moments.upar[:,:,is], ff[:,:,:,is], vpa, z, r)
             moments.upar_updated[is] = true
         end
         if moments.ppar_updated[is] == false
-            @views update_ppar_species!(moments.ppar[:,is], ff[:,:,is], vpa, z)
+            @views update_ppar_species!(moments.ppar[:,:,is], ff[:,:,:,is], vpa, z, r)
             moments.ppar_updated[is] = true
         end
         @. moments.vth = sqrt(2*moments.ppar/moments.dens)
         if moments.qpar_updated[is] == false
-            @views update_qpar_species!(moments.qpar[:,is], ff[:,:,is], vpa, z, moments.vpa_norm_fac[:,is])
+            @views update_qpar_species!(moments.qpar[:,is], ff[:,:,is], vpa, z, r, moments.vpa_norm_fac[:,:,is])
             moments.qpar_updated[is] = true
         end
     end
@@ -140,63 +140,69 @@ function update_moments!(moments, ff, vpa, nz, composition)
 end
 # NB: if this function is called and if dens_updated is false, then
 # the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
-function update_density!(dens, dens_updated, pdf, vpa, z, composition)
-    n_species = size(pdf,3)
-    @boundscheck n_species == size(dens,2) || throw(BoundsError(dens))
-    @s_z_loop_s is begin
+function update_density!(dens, dens_updated, pdf, vpa, z, r, composition)
+    n_species = size(pdf,4)
+    @boundscheck n_species == size(dens,3) || throw(BoundsError(dens))
+    @s_r_z_loop_s is begin
         if dens_updated[is] == false
-            @views update_density_species!(dens[:,is], pdf[:,:,is], vpa, z)
+            @views update_density_species!(dens[:,:,is], pdf[:,:,:,is], vpa, z, r)
             dens_updated[is] = true
         end
     end
 end
 # calculate the updated density (dens) for a given species
-function update_density_species!(dens, ff, vpa, z)
+function update_density_species!(dens, ff, vpa, z, r)
     @boundscheck z.n == size(ff, 2) || throw(BoundsError(ff))
-    @boundscheck z.n == length(dens) || throw(BoundsError(dens))
-    @s_z_loop_z iz begin
-        dens[iz] = integrate_over_vspace(@view(ff[:,iz]), vpa.wgts)
+    @boundscheck z.n == size(dens, 1) || throw(BoundsError(dens))
+    @s_r_z_loop_r ir begin
+        @s_r_z_loop_z iz begin
+            dens[iz,ir] = integrate_over_vspace(@view(ff[:,iz,ir]), vpa.wgts)
+        end
     end
     return nothing
 end
 # NB: if this function is called and if upar_updated is false, then
 # the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
-function update_upar!(upar, upar_updated, pdf, vpa, z, composition)
-    n_species = size(pdf,3)
-    @boundscheck n_species == size(upar,2) || throw(BoundsError(upar))
-    @s_z_loop_s is begin
+function update_upar!(upar, upar_updated, pdf, vpa, z, r, composition)
+    n_species = size(pdf,4)
+    @boundscheck n_species == size(upar,3) || throw(BoundsError(upar))
+    @s_r_z_loop_s is begin
         if upar_updated[is] == false
-            @views update_upar_species!(upar[:,is], pdf[:,:,is], vpa, z)
+            @views update_upar_species!(upar[:,:,is], pdf[:,:,:,is], vpa, z, r)
             upar_updated[is] = true
         end
     end
 end
 # calculate the updated parallel flow (upar) for a given species
-function update_upar_species!(upar, ff, vpa, z)
+function update_upar_species!(upar, ff, vpa, z, r)
     @boundscheck z.n == size(ff, 2) || throw(BoundsError(ff))
-    @boundscheck z.n == length(upar) || throw(BoundsError(upar))
-    @s_z_loop_z iz begin
-        upar[iz] = integrate_over_vspace(@view(ff[:,iz]), vpa.grid, vpa.wgts)
+    @boundscheck z.n == size(upar, 1) || throw(BoundsError(upar))
+    @s_r_z_loop_r ir begin
+        @s_r_z_loop_z iz begin
+            upar[iz,ir] = integrate_over_vspace(@view(ff[:,iz,ir]), vpa.grid, vpa.wgts)
+        end
     end
     return nothing
 end
 # NB: if this function is called and if ppar_updated is false, then
 # the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
-function update_ppar!(ppar, ppar_updated, pdf, vpa, z, composition)
+function update_ppar!(ppar, ppar_updated, pdf, vpa, z, r, composition)
     @boundscheck composition.n_species == size(ppar,2) || throw(BoundsError(ppar))
-    @s_z_loop_s is begin
+    @s_r_z_loop_s is begin
         if ppar_updated[is] == false
-            @views update_ppar_species!(ppar[:,is], pdf[:,:,is], vpa, z)
+            @views update_ppar_species!(ppar[:,:,is], pdf[:,:,:,is], vpa, z, r)
             ppar_updated[is] = true
         end
     end
 end
 # calculate the updated parallel pressure (ppar) for a given species
-function update_ppar_species!(ppar, ff, vpa, z)
+function update_ppar_species!(ppar, ff, vpa, z, r)
     @boundscheck z.n == size(ff, 2) || throw(BoundsError(ff))
-    @boundscheck z.n == length(ppar) || throw(BoundsError(ppar))
-    @s_z_loop_z iz begin
-        ppar[iz] = integrate_over_vspace(@view(ff[:,iz]), vpa.grid, 2, vpa.wgts)
+    @boundscheck z.n == size(ppar, 1) || throw(BoundsError(ppar))
+    @s_r_z_loop_r ir begin
+        @s_r_z_loop_z iz begin
+            ppar[iz,ir] = integrate_over_vspace(@view(ff[:,iz,ir]), vpa.grid, 2, vpa.wgts)
+        end
     end
     return nothing
 end
@@ -205,7 +211,7 @@ end
 
 function update_qpar!(qpar, qpar_updated, pdf, vpa, z, r, composition, vpanorm)
     @boundscheck composition.n_species == size(qpar,3) || throw(BoundsError(qpar))
-    @s_z_loop_s is begin
+    @s_r_z_loop_s is begin
         if qpar_updated[is] == false
             @views update_qpar_species!(qpar[:,:,is], pdf[:,:,:,is], vpa, z, r, vpanorm[:,:,is])
             qpar_updated[is] = true
@@ -216,8 +222,10 @@ end
 function update_qpar_species!(qpar, ff, vpa, z, r, vpanorm)
     @boundscheck z.n == size(ff, 2) || throw(BoundsError(ff))
     @boundscheck z.n == size(qpar, 1) || throw(BoundsError(qpar))
-    @r_z_loop_r_z ir iz begin
-        qpar[iz, ir] = integrate_over_vspace(@view(ff[:,iz, ir]), vpa.grid, 3, vpa.wgts) * vpanorm[iz, ir]^4
+    @s_r_z_loop_r ir begin
+        @s_r_z_loop_z iz begin
+            qpar[iz,ir] = integrate_over_vspace(@view(ff[:,iz,ir]), vpa.grid, 3, vpa.wgts) * vpanorm[iz,ir]^4
+        end
     end
     return nothing
 end
