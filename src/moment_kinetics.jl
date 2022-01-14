@@ -142,18 +142,18 @@ function setup_moment_kinetics(input_dict::Dict)
     code_time = 0.
     # create arrays and do other work needed to setup
     # the main time advance loop -- including normalisation of f by density if requested
-    vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
-        vpa_SL, z_SL, scratch, advance = setup_time_advance!(pdf, vpa, z, composition,
+    vpa_spectral, z_spectral, r_spectral, moments, fields, vpa_advect, z_advect, r_advect
+        vpa_SL, z_SL, r_SL, scratch, advance = setup_time_advance!(pdf, vpa, z, r, composition,
         drive_input, moments, t_input, collisions, species)
     # setup i/o
-    io, cdf = setup_file_io(output_dir, run_name, vpa, z, composition, collisions,
+    io, cdf = setup_file_io(output_dir, run_name, vpa, z, r, composition, collisions,
                             moments.evolve_ppar)
     # write initial data to ascii files
-    write_data_to_ascii(pdf.unnorm, moments, fields, vpa, z, code_time, composition.n_species, io)
+    write_data_to_ascii(pdf.unnorm, moments, fields, vpa, z, r, code_time, composition.n_species, io)
     # write initial data to binary file (netcdf)
     write_data_to_binary(pdf.unnorm, moments, fields, code_time, composition.n_species, cdf, 1)
 
-    begin_s_z_region()
+    begin_s_r_z_region()
 
     return pdf, scratch, code_time, t_input, vpa, z, vpa_spectral, z_spectral, moments,
            fields, vpa_advect, z_advect, vpa_SL, z_SL, composition, collisions, advance,

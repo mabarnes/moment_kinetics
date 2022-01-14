@@ -234,7 +234,7 @@ function enforce_boundary_conditions!(f, vpa_bc, z_bc, vpa, z, vpa_adv::T1, z_ad
     @views enforce_z_boundary_condition!(f, z_bc, z_adv, vpa, composition)
 end
 # enforce boundary conditions on f in z
-function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, composition) where T
+function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, r, composition) where T
     # define n_species variable for convenience
     n_species = composition.n_species
     # define nvpa variable for convenience
@@ -244,28 +244,30 @@ function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, composition) 
     # 'constant' BC is time-independent f at upwind boundary
     # and constant f beyond boundary
     if bc == "constant"
-        @s_vpa_loop is ivpa begin
-            upwind_idx = adv[ivpa,is].upwind_idx[]
-            f[ivpa,upwind_idx,is] = density_offset * exp(-(vpa.grid[ivpa]/vpawidth)^2) / sqrt(pi)
+        @s_r_vpa_loop is ir ivpa begin
+            upwind_idx = adv[is].upwind_idx[ivpa,ir]
+            f[ivpa,upwind_idx,ir,is] = density_offset * exp(-(vpa.grid[ivpa]/vpawidth)^2) / sqrt(pi)
         end
     # 'periodic' BC enforces periodicity by taking the average of the boundary points
     elseif bc == "periodic"
-        @s_vpa_loop is ivpa begin
-            downwind_idx = adv[is].downwind_idx[ivpa]
-            upwind_idx = adv[is].upwind_idx[ivpa]
-            f[ivpa,downwind_idx,is] = 0.5*(f[ivpa,upwind_idx,is]+f[ivpa,downwind_idx,is])
-            f[ivpa,upwind_idx,is] = f[ivpa,downwind_idx,is]
+        @s_r_vpa_loop is ir ivpa begin
+            downwind_idx = adv[is].downwind_idx[ivpa,ir]
+            upwind_idx = adv[is].upwind_idx[ivpa,ir]
+            f[ivpa,downwind_idx,ir,is] = 0.5*(f[ivpa,upwind_idx,ir,is]+f[ivpa,downwind_idx,ir,is])
+            f[ivpa,upwind_idx,ir,is] = f[ivpa,downwind_idx,ir,is]
         end
     # 'wall' BC enforces wall boundary conditions
     elseif bc == "wall"
-        @s_vpa_loop_s is begin
+        @s_r_vpa_loop_s is begin
             # zero incoming BC for ions, as they recombine at the wall
             if is ∈ composition.ion_species_range
-                @s_vpa_loop_vpa ivpa begin
+                @s_r_vpa_loop_vpa ivpa begin
                     # no parallel BC should be enforced for vpa = 0
                     if abs(vpa.grid[ivpa]) > zero
-                        upwind_idx = adv[is].upwind_idx[ivpa]
-                        f[ivpa,upwind_idx,is] = 0.0
+                        @s_r_vpa_loop_r ir begin
+                            upwind_idx = adv[is].upwind_idx[ivpa,ir]
+                            f[ivpa,upwind_idx,ir,is] = 0.0
+                        end
                     end
                 end
             end
@@ -282,15 +284,19 @@ function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, composition) 
                 wall_flux_L = 0.0
                 # include the contribution to the wall fluxes due to species with index 'is'
                 for is ∈ 1:composition.n_ion_species
-                    @views wall_flux_0 += (sqrt(composition.mn_over_mi) *
-                                           integrate_over_negative_vpa(abs.(vpa.grid) .* f[:,1,is], vpa.grid, vpa.wgts, vpa.scratch))
-                    @views wall_flux_L += (sqrt(composition.mn_over_mi) *
-                                           integrate_over_positive_vpa(abs.(vpa.grid) .* f[:,end,is], vpa.grid, vpa.wgts, vpa.scratch))
+                    for ir ∈ 1:r.n
+                        @views wall_flux_0 += (sqrt(composition.mn_over_mi) *
+                                               integrate_over_negative_vpa(abs.(vpa.grid) .* f[:,1,ir,is], vpa.grid, vpa.wgts, vpa.scratch))
+                        @views wall_flux_L += (sqrt(composition.mn_over_mi) *
+                                               integrate_over_positive_vpa(abs.(vpa.grid) .* f[:,end,ir,is], vpa.grid, vpa.wgts, vpa.scratch))
+                    end
                 end
                 for isn ∈ 1:composition.n_neutral_species
-                    is = isn + composition.n_ion_species
-                    @views wall_flux_0 += integrate_over_negative_vpa(abs.(vpa.grid) .* f[:,1,is], vpa.grid, vpa.wgts, vpa.scratch)
-                    @views wall_flux_L += integrate_over_positive_vpa(abs.(vpa.grid) .* f[:,end,is], vpa.grid, vpa.wgts, vpa.scratch)
+                    for ir ∈ 1:r.n
+                        is = isn + composition.n_ion_species
+                        @views wall_flux_0 += integrate_over_negative_vpa(abs.(vpa.grid) .* f[:,1,ir,is], vpa.grid, vpa.wgts, vpa.scratch)
+                        @views wall_flux_L += integrate_over_positive_vpa(abs.(vpa.grid) .* f[:,end,ir,is], vpa.grid, vpa.wgts, vpa.scratch)
+                    end
                 end
                 # NB: need to generalise to more than one ion species
                 # get the Knudsen cosine distribution
@@ -303,13 +309,15 @@ function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, composition) 
                 @. vpa.scratch /= tmp
                 for isn ∈ 1:composition.n_neutral_species
                     is = isn + composition.n_ion_species
-                    for ivpa ∈ 1:nvpa
-                        # no parallel BC should be enforced for vpa = 0
-                        if abs(vpa.grid[ivpa]) > zero
-                            if adv[is].upwind_idx[ivpa] == 1
-                                f[ivpa,1,is] = wall_flux_0 * vpa.scratch[ivpa]
-                            else
-                                f[ivpa,end,is] = wall_flux_L * vpa.scratch[ivpa]
+                    for ir ∈ 1:r.n
+                        for ivpa ∈ 1:nvpa
+                            # no parallel BC should be enforced for vpa = 0
+                            if abs(vpa.grid[ivpa]) > zero
+                                if adv[is].upwind_idx[ivpa,ir] == 1
+                                    f[ivpa,1,ir,is] = wall_flux_0 * vpa.scratch[ivpa]
+                                else
+                                    f[ivpa,end,ir,is] = wall_flux_L * vpa.scratch[ivpa]
+                                end
                             end
                         end
                     end
