@@ -33,17 +33,21 @@ function charge_exchange_collisions!(f_out, fvec_in, moments, composition, vpa, 
                 if is ∈ composition.neutral_species_range
                     # identify the 'is' index as a neutral species index
                     isn = is
-                    @s_z_loop_z iz begin
-                        # wpa = vpa - upa_s if upar evolved but no ppar
-                        # if ppar also evolved, wpa = (vpa - upa_s)/vths
-                        if moments.evolve_ppar
-                            wpa_shift_norm = moments.vth[iz,isn]
-                        else
-                            wpa_shift_norm = 1.0
+                    # set up point wpa_shift_norm, pointing to z.scratch
+                    wpa_shift_norm = z.scratch
+                    # wpa = vpa - upa_s if upar evolved but no ppar
+                    # if ppar also evolved, wpa = (vpa - upa_s)/vths
+                    if moments.evolve_ppar
+                        @s_z_loop_z iz begin
+                            wpa_shift_norm[iz] = moments.vth[iz,isn]
                         end
-                        for isi ∈ composition.ion_species_range
+                    else
+                        wpa_shift_norm .= 1.0
+                    end
+                    for isi ∈ composition.ion_species_range
+                        @s_z_loop_z iz begin
                             # calculate the shift in the wpa grid to the desired (ion) wpa locations
-                            wpa_shift = (fvec_in.upar[iz,isi] - fvec_in.upar[iz,isn])/wpa_shift_norm
+                            wpa_shift = (fvec_in.upar[iz,isi] - fvec_in.upar[iz,isn])/wpa_shift_norm[iz]
                             # construct the wpa grid on which to interpolate
                             # for ivpa ∈ 1:vpa.n
                             #     vpa.scratch[ivpa] = vpa.grid[ivpa] + wpa_shift
@@ -60,39 +64,66 @@ function charge_exchange_collisions!(f_out, fvec_in, moments, composition, vpa, 
                             end
                         end
                     end
+                    # @s_z_loop_z iz begin
+                    #     # wpa = vpa - upa_s if upar evolved but no ppar
+                    #     # if ppar also evolved, wpa = (vpa - upa_s)/vths
+                    #     if moments.evolve_ppar
+                    #         wpa_shift_norm = moments.vth[iz,isn]
+                    #     else
+                    #         wpa_shift_norm = 1.0
+                    #     end
+                    #     for isi ∈ composition.ion_species_range
+                    #         # calculate the shift in the wpa grid to the desired (ion) wpa locations
+                    #         wpa_shift = (fvec_in.upar[iz,isi] - fvec_in.upar[iz,isn])/wpa_shift_norm
+                    #         # construct the wpa grid on which to interpolate
+                    #         # for ivpa ∈ 1:vpa.n
+                    #         #     vpa.scratch[ivpa] = vpa.grid[ivpa] + wpa_shift
+                    #         # end
+                    #         # interpolate to the new grid (passed in as vpa.scratch)
+                    #         # and return interpolated values in vpa.scratch
+                    #         println("!!TEMPORARY COMMENTING OF VPA.SCRATCH IN CHARGE_EXCHANGE FOR TESTING!!")
+                    #         #vpa.scratch .= interpolate_to_grid_vpa(vpa.scratch, view(fvec_in.pdf,:,iz,isn), vpa, spectral)
+                    #         # add the charge exchange contribution to df/dt
+                    #         for ivpa ∈ 1:vpa.n
+                    #             f_out[ivpa,iz,isi] += dt*charge_exchange_frequency*fvec_in.density[iz,isn] *
+                    #                 (fvec_in.pdf[ivpa,iz,isn] - fvec_in.pdf[ivpa,iz,isi])
+                    #                 #(vpa.scratch[ivpa] - fvec_in.pdf[ivpa,iz,isi])
+                    #         end
+                    #     end
+                    # end
                 end
-                # repeat the above interpolation process to get the ion pdf on the neutral vpa grid
-                if is ∈ composition.ion_species_range
-                    # identify the 'is' index as corresponding to an ion species
-                    isi = is
-                    @s_z_loop_z iz begin
-                        # wpa = vpa - upa_s if upar evolved but no ppar
-                        # if ppar also evolved, wpa = (vpa - upa_s)/vths
-                        if moments.evolve_ppar
-                            wpa_shift_norm = moments.vth[iz,isi]
-                        else
-                            wpa_shift_norm = 1.0
-                        end
-                        for isn ∈ composition.neutral_species_range
-                            # calculate the shift in the wpa grid to the desired (neutral) wpa locations
-                            wpa_shift = (fvec_in.upar[iz,isn] - fvec_in.upar[iz,isi])/wpa_shift_norm
-                            # construct the wpa grid on which to interpolate
-                            # for ivpa ∈ 1:vpa.n
-                            #     vpa.scratch[ivpa] = vpa.grid[ivpa] + wpa_shift
-                            # end
-                            # interpolate to the new grid (passed in as vpa.scratch)
-                            # and return interpolated values in vpa.scratch
-                            println("!!TEMPORARY COMMENTING OF VPA.SCRATCH IN CHARGE_EXCHANGE FOR TESTING!!")
-                            #vpa.scratch .= interpolate_to_grid_vpa(vpa.scratch, view(fvec_in.pdf,:,iz,isi), vpa, spectral)
-                            # add the charge exchange contribution to df/dt
-                            for ivpa ∈ 1:vpa.n
-                                f_out[ivpa,iz,isn] += dt*charge_exchange_frequency*fvec_in.density[iz,isi] *
-                                    (fvec_in.pdf[ivpa,iz,isi] - fvec_in.pdf[ivpa,iz,isn])
-                                    #(vpa.scratch[ivpa]- fvec_in.pdf[ivpa,iz,isn])
-                            end
-                        end
-                    end
-                end
+                # # repeat the above interpolation process to get the ion pdf on the neutral vpa grid
+                # if is ∈ composition.ion_species_range
+                #     # identify the 'is' index as corresponding to an ion species
+                #     isi = is
+                #     @s_z_loop_z iz begin
+                #         # wpa = vpa - upa_s if upar evolved but no ppar
+                #         # if ppar also evolved, wpa = (vpa - upa_s)/vths
+                #         if moments.evolve_ppar
+                #             wpa_shift_norm = moments.vth[iz,isi]
+                #         else
+                #             wpa_shift_norm = 1.0
+                #         end
+                #         for isn ∈ composition.neutral_species_range
+                #             # calculate the shift in the wpa grid to the desired (neutral) wpa locations
+                #             wpa_shift = (fvec_in.upar[iz,isn] - fvec_in.upar[iz,isi])/wpa_shift_norm
+                #             # construct the wpa grid on which to interpolate
+                #             # for ivpa ∈ 1:vpa.n
+                #             #     vpa.scratch[ivpa] = vpa.grid[ivpa] + wpa_shift
+                #             # end
+                #             # interpolate to the new grid (passed in as vpa.scratch)
+                #             # and return interpolated values in vpa.scratch
+                #             println("!!TEMPORARY COMMENTING OF VPA.SCRATCH IN CHARGE_EXCHANGE FOR TESTING!!")
+                #             #vpa.scratch .= interpolate_to_grid_vpa(vpa.scratch, view(fvec_in.pdf,:,iz,isi), vpa, spectral)
+                #             # add the charge exchange contribution to df/dt
+                #             for ivpa ∈ 1:vpa.n
+                #                 f_out[ivpa,iz,isn] += dt*charge_exchange_frequency*fvec_in.density[iz,isi] *
+                #                     (fvec_in.pdf[ivpa,iz,isi] - fvec_in.pdf[ivpa,iz,isn])
+                #                     #(vpa.scratch[ivpa]- fvec_in.pdf[ivpa,iz,isn])
+                #             end
+                #         end
+                #     end
+                # end
             end
         else
             # apply CX collisions to all species
