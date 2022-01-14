@@ -40,11 +40,6 @@ function update_phi!(fields, fvec, z, composition)
     # Means we get at least some parallelism, even though we have to sum
     # over species, and reduces number of _block_synchronize() calls needed
     # when there is only one species.
-    if 1 ∈ loop_ranges[].s_z_range_s
-        @s_z_loop_z iz begin
-            z.scratch[iz] = fvec.density[iz,1]
-        end
-    end
     if (composition.n_ion_species > 1 ||
         composition.electron_physics == boltzmann_electron_response_with_simple_sheath)
        # If there is more than 1 ion species, the ranks that handle species 1 have to
@@ -57,6 +52,9 @@ function update_phi!(fields, fvec, z, composition)
        _block_synchronize()
     end
     if 1 ∈ loop_ranges[].s_z_range_s
+        @s_z_loop_z iz begin
+            z.scratch[iz] = fvec.density[iz,1]
+        end
         @inbounds for is ∈ 2:composition.n_ion_species
             @s_z_loop_z iz begin
                 z.scratch[iz] += fvec.density[iz,is]
