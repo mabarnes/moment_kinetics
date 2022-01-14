@@ -33,21 +33,21 @@ function charge_exchange_collisions!(f_out, fvec_in, moments, composition, vpa, 
                 if is ∈ composition.neutral_species_range
                     # identify the 'is' index as a neutral species index
                     isn = is
-                    # set up point wpa_shift_norm, pointing to z.scratch
-                    wpa_shift_norm = z.scratch
-                    # wpa = vpa - upa_s if upar evolved but no ppar
-                    # if ppar also evolved, wpa = (vpa - upa_s)/vths
-                    if moments.evolve_ppar
-                        @s_z_loop_z iz begin
-                            wpa_shift_norm[iz] = moments.vth[iz,isn]
-                        end
-                    else
-                        wpa_shift_norm .= 1.0
-                    end
+                    # # set up point wpa_shift_norm, pointing to z.scratch
+                    # wpa_shift_norm = z.scratch
+                    # # wpa = vpa - upa_s if upar evolved but no ppar
+                    # # if ppar also evolved, wpa = (vpa - upa_s)/vths
+                    # if moments.evolve_ppar
+                    #     @s_z_loop_z iz begin
+                    #         wpa_shift_norm[iz] = moments.vth[iz,isn]
+                    #     end
+                    # else
+                    #     wpa_shift_norm .= 1.0
+                    # end
                     for isi ∈ composition.ion_species_range
                         @s_z_loop_z iz begin
                             # calculate the shift in the wpa grid to the desired (ion) wpa locations
-                            wpa_shift = (fvec_in.upar[iz,isi] - fvec_in.upar[iz,isn])/wpa_shift_norm[iz]
+                            # wpa_shift = (fvec_in.upar[iz,isi] - fvec_in.upar[iz,isn])/wpa_shift_norm[iz]
                             # construct the wpa grid on which to interpolate
                             # for ivpa ∈ 1:vpa.n
                             #     vpa.scratch[ivpa] = vpa.grid[ivpa] + wpa_shift
