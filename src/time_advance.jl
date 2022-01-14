@@ -654,6 +654,16 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, z_
         ionization_collisions!(fvec_out.pdf, fvec_in, moments, n_ion_species,
             composition.n_neutral_species, vpa, z, composition, collisions, z.n, dt)
     end
+    # enforce boundary conditions in z and vpa on the distribution function
+    # NB: probably need to do the same for the evolved moments
+    enforce_boundary_conditions!(fvec_out.pdf, vpa.bc, z.bc, vpa, z, vpa_advect, z_advect, composition)
+    # End of advance fo distribution function
+
+    # Start advancing moments
+    # Do not actually need to synchronize here because above we only modify the
+    # distribution functio and below we only modify the moments, so there is no
+    # possibility of race conditions.
+    begin_s_region(no_synchronize=true)
     if advance.continuity
         continuity_equation!(fvec_out.density, fvec_in, moments, composition, vpa, z,
                              dt, z_spectral)
@@ -662,10 +672,8 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, z_
         # fvec_out.upar is over-written in force_balance! and contains the particle flux
         force_balance!(fvec_out.upar, fvec_in, fields, collisions, vpa, z, dt, z_spectral, composition)
         # convert from the particle flux to the parallel flow
-        @s_z_loop_s is begin
-            if 1 ∈ loop_ranges[].s_z_range_z
-                @views @. fvec_out.upar[:,is] /= fvec_out.density[:,is]
-            end
+        @s_loop is begin
+            @views @. fvec_out.upar[:,is] /= fvec_out.density[:,is]
         end
     end
     if advance.energy
@@ -674,9 +682,6 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, z_
     # reset "xx.updated" flags to false since ff has been updated
     # and the corresponding moments have not
     reset_moments_status!(moments, composition, z)
-    # enforce boundary conditions in z and vpa on the distribution function
-    # NB: probably need to do the same for the evolved moments
-    enforce_boundary_conditions!(fvec_out.pdf, vpa.bc, z.bc, vpa, z, vpa_advect, z_advect, composition)
     return nothing
 end
 # update the vector containing the pdf and any evolved moments of the pdf
