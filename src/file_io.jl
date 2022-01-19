@@ -47,19 +47,19 @@ struct netcdf_info
     # handle for the time variable
     time::nc_var_type{1}
     # handle for the distribution function variable
-    f::nc_var_type{4}
+    f::nc_var_type{5}
     # handle for the electrostatic potential variable
-    phi::nc_var_type{2}
+    phi::nc_var_type{3}
     # handle for the species density
-    density::nc_var_type{3}
+    density::nc_var_type{4}
     # handle for the species parallel flow
-    parallel_flow::nc_var_type{3}
+    parallel_flow::nc_var_type{4}
     # handle for the species parallel pressure
-    parallel_pressure::nc_var_type{3}
+    parallel_pressure::nc_var_type{4}
     # handle for the species parallel heat flux
-    parallel_heat_flux::nc_var_type{3}
+    parallel_heat_flux::nc_var_type{4}
     # handle for the species thermal speed
-    thermal_speed::nc_var_type{3}
+    thermal_speed::nc_var_type{4}
 end
 # open the necessary output files
 function setup_file_io(output_dir, run_name, vpa, z, r, composition,
@@ -185,7 +185,7 @@ function setup_netcdf_io(prefix, r, z, vpa, composition, collisions, evolve_ppar
     cdf_f = defVar(fid, varname, vartype, dims, attrib=attributes)
     # create variables that are floats with data in the z and time dimensions
     vartype = mk_float
-    dims = ("nz","ntime")
+    dims = ("nz","nr","ntime")
     # create the "phi" variable, which will contain the electrostatic potential
     varname = "phi"
     attributes = Dict("description" => "electrostatic potential",

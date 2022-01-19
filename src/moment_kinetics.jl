@@ -30,6 +30,7 @@ include("semi_lagrange.jl")
 include("advection.jl")
 include("vpa_advection.jl")
 include("z_advection.jl")
+include("r_advection.jl")
 include("charge_exchange.jl")
 include("ionization.jl")
 include("continuity.jl")
@@ -107,13 +108,13 @@ end
 # Perform all the initialization steps for a run.
 function setup_moment_kinetics(input_dict::Dict)
     
-    print("got to here 1 \n")
+    #print("got to here 1 \n")
 
     
     # Set up MPI
     initialize_comms!()
 
-    print("got to here 2 \n")
+    #print("got to here 2 \n")
     
     input = mk_input(input_dict)
     # obtain input options from moment_kinetics_input.jl
@@ -132,7 +133,7 @@ function setup_moment_kinetics(input_dict::Dict)
     # initialize f(z,vpa) and the lowest three v-space moments (density(z), upar(z) and ppar(z)),
     # each of which may be evolved separately depending on input choices.
     
-    print("got to here 3 \n")
+    #print("got to here 3 \n")
     
     pdf, moments = init_pdf_and_moments(vpa, z, r, composition, species, t_input.n_rk_stages, evolve_moments)
    
@@ -142,9 +143,12 @@ function setup_moment_kinetics(input_dict::Dict)
     code_time = 0.
     # create arrays and do other work needed to setup
     # the main time advance loop -- including normalisation of f by density if requested
-    vpa_spectral, z_spectral, r_spectral, moments, fields, vpa_advect, z_advect, r_advect
+    vpa_spectral, z_spectral, r_spectral, moments, fields, vpa_advect, z_advect, r_advect,
         vpa_SL, z_SL, r_SL, scratch, advance = setup_time_advance!(pdf, vpa, z, r, composition,
         drive_input, moments, t_input, collisions, species)
+    
+    
+    print("got to here 5 \n")
     # setup i/o
     io, cdf = setup_file_io(output_dir, run_name, vpa, z, r, composition, collisions,
                             moments.evolve_ppar)
@@ -154,6 +158,9 @@ function setup_moment_kinetics(input_dict::Dict)
     write_data_to_binary(pdf.unnorm, moments, fields, code_time, composition.n_species, cdf, 1)
 
     begin_s_r_z_region()
+
+
+    print("got to here 6 \n")
 
     return pdf, scratch, code_time, t_input, vpa, z, vpa_spectral, z_spectral, moments,
            fields, vpa_advect, z_advect, vpa_SL, z_SL, composition, collisions, advance,

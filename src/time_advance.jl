@@ -19,6 +19,7 @@ using ..initial_conditions: enforce_z_boundary_condition!, enforce_boundary_cond
 using ..initial_conditions: enforce_vpa_boundary_condition!
 using ..advection: setup_advection, update_boundary_indices!
 using ..z_advection: update_speed_z!, z_advection!
+using ..r_advection: update_speed_r!, r_advection!
 using ..vpa_advection: update_speed_vpa!, vpa_advection!
 using ..charge_exchange: charge_exchange_collisions!
 using ..ionization: ionization_collisions!
@@ -66,6 +67,7 @@ function setup_time_advance!(pdf, vpa, z, r, composition, drive_input, moments,
     # indicate which parts of the equations are to be advanced concurrently.
     # if no splitting of operators, all terms advanced concurrently;
     # else, will advance one term at a time.
+    
     if t_input.split_operators
         advance = advance_info(false, false, false, false, false, false, false, false, rk_coefs)
     else
@@ -147,9 +149,6 @@ function setup_time_advance!(pdf, vpa, z, r, composition, drive_input, moments,
         begin_serial_region()
     end
     
-    
-    
-    
     if z.discretization == "chebyshev_pseudospectral"
         # create arrays needed for explicit Chebyshev pseudospectral treatment in vpa
         # and create the plans for the forward and backward fast Chebyshev transforms
@@ -217,7 +216,7 @@ function setup_time_advance!(pdf, vpa, z, r, composition, drive_input, moments,
     @serial_region begin
         for is ∈ 1:nspec
             # initialise the upwind/downwind boundary indices in vpa
-            update_boundary_indices!(vpa_advect[is], 1:z.n)
+            update_boundary_indices!(vpa_advect[is], 1:z.n, 1:r.n)
             # enforce prescribed boundary condition in vpa on the distribution function f
             @views enforce_vpa_boundary_condition!(pdf.norm[:,:,:,is], vpa.bc, vpa_advect[is])
         end
@@ -234,6 +233,8 @@ function setup_time_advance!(pdf, vpa, z, r, composition, drive_input, moments,
     return vpa_spectral, z_spectral, r_spectral, moments, fields, vpa_advect, z_advect, r_advect,
         vpa_SL, z_SL, r_SL, scratch, advance
 end
+
+   
 # if evolving the density via continuity equation, redefine the normalised f → f/n
 # if evolving the parallel pressure via energy equation, redefine f -> f * vth / n
 # 'scratch' should be a (nz,nspecies) array
@@ -260,7 +261,7 @@ end
 function setup_scratch_arrays(moments, pdf_in, n_rk_stages)
     # create n_rk_stages+1 structs, each of which will contain one pdf,
     # one density, and one parallel flow array
-    scratch = Vector{scratch_pdf{3,2}}(undef, n_rk_stages+1)
+    scratch = Vector{scratch_pdf{4,3}}(undef, n_rk_stages+1)
     pdf_dims = size(pdf_in)
     moment_dims = size(moments.dens)
     # populate each of the structs

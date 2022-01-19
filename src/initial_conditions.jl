@@ -330,9 +330,12 @@ end
 # at every z grid point
 function enforce_vpa_boundary_condition!(f, bc, src::T) where T
     nz = size(f,2)
-    for iz ∈ 1:nz
-        enforce_vpa_boundary_condition_local!(view(f,:,iz), bc, src.upwind_idx[iz],
-            src.downwind_idx[iz])
+    nr = size(f,3)
+    for ir ∈ 1:nr
+        for iz ∈ 1:nz
+            enforce_vpa_boundary_condition_local!(view(f,:,iz,ir), bc, src.upwind_idx[iz],
+                src.downwind_idx[iz])
+        end
     end
 end
 function enforce_vpa_boundary_condition_local!(f::T, bc, upwind_idx, downwind_idx) where T
