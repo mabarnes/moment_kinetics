@@ -107,6 +107,26 @@ function setup_time_advance!(pdf, vpa, z, r, composition, drive_input, moments,
         advance = advance_info(true, true, advance_cx, advance_ionization, advance_sources,
                                advance_continuity, advance_force_balance, advance_energy, rk_coefs)
     end
+    
+    # create structure r_advect whose members are the arrays needed to compute
+    # the advection term(s) appearing in the split part of the GK equation dealing
+    # with advection in r
+    begin_serial_region()
+    r_advect = setup_advection(n_species, r, vpa, z)
+    # initialise the r advection speed
+    begin_s_z_vpa_region()
+    @s_z_vpa_loop_s is begin
+        @views update_speed_r!(r_advect[is], moments.upar[:,:,is], moments.vth[:,:,is],
+                               moments.evolve_upar, moments.evolve_ppar, vpa, z, r, 0.0)
+        # initialise the upwind/downwind boundary indices in z
+        update_boundary_indices!(r_advect[is], loop_ranges[].s_z_vpa_range_vpa,
+         loop_ranges[].s_z_vpa_range_z)
+    end
+    # enforce prescribed boundary condition in r on the distribution function f
+    # PLACEHOLDER
+    #@views enforce_r_boundary_condition!(pdf.unnorm, r.bc, r_advect, vpa, z, composition)
+    
+    
     # create structure z_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the split part of the GK equation dealing
     # with advection in z
@@ -126,6 +146,9 @@ function setup_time_advance!(pdf, vpa, z, r, composition, drive_input, moments,
     if z.bc != "wall" || composition.n_neutral_species == 0
         begin_serial_region()
     end
+    
+    
+    
     
     if z.discretization == "chebyshev_pseudospectral"
         # create arrays needed for explicit Chebyshev pseudospectral treatment in vpa
@@ -203,8 +226,9 @@ function setup_time_advance!(pdf, vpa, z, r, composition, drive_input, moments,
     # solve and initialize the characteristic speed and departure indices
     # so that the code can gracefully run without using the semi-Lagrange
     # method if the user specifies this
-    z_SL = setup_semi_lagrange(z.n, vpa.n)
-    vpa_SL = setup_semi_lagrange(vpa.n, z.n)
+    z_SL = setup_semi_lagrange(z.n, vpa.n, r.n)
+    vpa_SL = setup_semi_lagrange(vpa.n, z.n, r.n)
+    r_SL = setup_semi_lagrange(r.n, vpa.n, z.n)
 
     begin_s_z_region()
     return vpa_spectral, z_spectral, r_spectral, moments, fields, vpa_advect, z_advect, r_advect,
