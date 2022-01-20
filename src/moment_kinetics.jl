@@ -137,7 +137,7 @@ function setup_moment_kinetics(input_dict::Dict)
     
     pdf, moments = init_pdf_and_moments(vpa, z, r, composition, species, t_input.n_rk_stages, evolve_moments)
    
-    print("got to here 4 \n")
+    #print("got to here 4 \n")
    
     # initialize time variable
     code_time = 0.
@@ -148,7 +148,7 @@ function setup_moment_kinetics(input_dict::Dict)
         drive_input, moments, t_input, collisions, species)
     
     
-    print("got to here 5 \n")
+    #print("got to here 5 \n")
     # setup i/o
     io, cdf = setup_file_io(output_dir, run_name, vpa, z, r, composition, collisions,
                             moments.evolve_ppar)
@@ -160,10 +160,10 @@ function setup_moment_kinetics(input_dict::Dict)
     begin_s_r_z_region()
 
 
-    print("got to here 6 \n")
+    #print("got to here 6 \n")
 
-    return pdf, scratch, code_time, t_input, vpa, z, vpa_spectral, z_spectral, moments,
-           fields, vpa_advect, z_advect, vpa_SL, z_SL, composition, collisions, advance,
+    return pdf, scratch, code_time, t_input, vpa, z, r, vpa_spectral, z_spectral, r_spectral, moments,
+           fields, vpa_advect, z_advect, r_advect, vpa_SL, z_SL, r_SL, composition, collisions, advance,
            io, cdf
 end
 

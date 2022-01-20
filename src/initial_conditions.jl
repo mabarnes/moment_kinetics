@@ -224,14 +224,14 @@ function init_pdf_over_density!(pdf, spec, vpa, z, vth, upar, vpa_norm_fac, evol
     # end
     return nothing
 end
-function enforce_boundary_conditions!(f, vpa_bc, z_bc, vpa, z, vpa_adv::T1, z_adv::T2, composition) where {T1, T2}
-    @s_z_loop is iz begin
+function enforce_boundary_conditions!(f, vpa_bc, z_bc, vpa, z, r, vpa_adv::T1, z_adv::T2, composition) where {T1, T2}
+    @s_r_z_loop is ir iz begin
         # enforce the vpa BC
-        @views enforce_vpa_boundary_condition_local!(f[:,iz,is], vpa_bc, vpa_adv[is].upwind_idx[iz],
-                                                     vpa_adv[is].downwind_idx[iz])
+        @views enforce_vpa_boundary_condition_local!(f[:,iz,ir,is], vpa_bc, vpa_adv[is].upwind_idx[iz,ir],
+                                                     vpa_adv[is].downwind_idx[iz,ir])
     end
-    begin_s_vpa_region()
-    @views enforce_z_boundary_condition!(f, z_bc, z_adv, vpa, composition)
+    begin_s_r_vpa_region()
+    @views enforce_z_boundary_condition!(f, z_bc, z_adv, vpa, r, composition)
 end
 # enforce boundary conditions on f in z
 function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, r, composition) where T

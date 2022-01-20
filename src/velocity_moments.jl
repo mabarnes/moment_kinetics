@@ -187,7 +187,9 @@ end
 # NB: if this function is called and if ppar_updated is false, then
 # the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
 function update_ppar!(ppar, ppar_updated, pdf, vpa, z, r, composition)
-    @boundscheck composition.n_species == size(ppar,2) || throw(BoundsError(ppar))
+    @boundscheck composition.n_species == size(ppar,3) || throw(BoundsError(ppar))
+    @boundscheck r.n == size(ppar,2) || throw(BoundsError(ppar))
+    @boundscheck z.n == size(ppar,1) || throw(BoundsError(ppar))
     @s_r_z_loop_s is begin
         if ppar_updated[is] == false
             @views update_ppar_species!(ppar[:,:,is], pdf[:,:,:,is], vpa, z, r)
