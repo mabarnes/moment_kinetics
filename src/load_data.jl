@@ -22,6 +22,18 @@ end
 
 function load_coordinate_data(fid)
     print("Loading coordinate data...")
+    # define a handle for the r coordinate
+    cdfvar = fid["r"]
+    # get the number of r grid points
+    nr = length(cdfvar)
+    # load the data for r
+    r = cdfvar.var[:]
+    # get the weights associated with the r coordinate
+    cdfvar = fid["r_wgts"]
+    r_wgts = cdfvar.var[:]
+    # Lr = r box length
+    Lr = r[end]-r[1]
+    
     # define a handle for the z coordinate
     cdfvar = fid["z"]
     # get the number of z grid points
@@ -52,7 +64,7 @@ function load_coordinate_data(fid)
     time = cdfvar.var[:]
     println("done.")
 
-    return nvpa, vpa, vpa_wgts, nz, z, z_wgts, Lz, ntime, time
+    return nvpa, vpa, vpa_wgts, nz, z, z_wgts, Lz, nr, r, r_wgts, Lr, ntime, time
 end
 
 function load_fields_data(fid)
@@ -60,7 +72,7 @@ function load_fields_data(fid)
     # define a handle for the electrostatic potential
     cdfvar = fid["phi"]
     # load the electrostatic potential data
-    phi = cdfvar.var[:,:]
+    phi = cdfvar.var[:,:,:]
     println("done.")
     return phi
 end
@@ -70,25 +82,25 @@ function load_moments_data(fid)
     # define a handle for the species density
     cdfvar = fid["density"]
     # load the species density data
-    density = cdfvar.var[:,:,:]
+    density = cdfvar.var[:,:,:,:]
     # define a handle for the species parallel flow
     cdfvar = fid["parallel_flow"]
     # load the species parallel flow data
-    parallel_flow = cdfvar.var[:,:,:]
+    parallel_flow = cdfvar.var[:,:,:,:]
     # define a handle for the species parallel pressure
     cdfvar = fid["parallel_pressure"]
     # load the species parallel pressure data
-    parallel_pressure = cdfvar.var[:,:,:]
+    parallel_pressure = cdfvar.var[:,:,:,:]
     # define a handle for the species parallel heat flux
     cdfvar = fid["parallel_heat_flux"]
     # load the species parallel heat flux data
-    parallel_heat_flux = cdfvar.var[:,:,:]
+    parallel_heat_flux = cdfvar.var[:,:,:,:]
     # define a handle for the species thermal speed
     cdfvar = fid["thermal_speed"]
     # load the species thermal speed data
-    thermal_speed = cdfvar.var[:,:,:]
+    thermal_speed = cdfvar.var[:,:,:,:]
     # define the number of species
-    n_species = size(cdfvar,2)
+    n_species = size(cdfvar,3)
     # define a handle for the flag indicating if the parallel pressure should be separately advanced
     cdfvar = fid["evolve_ppar"]
     # load the parallel pressure evolution flag
