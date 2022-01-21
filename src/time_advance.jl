@@ -670,19 +670,23 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, z_
     # vpa_advection! advances the 1D advection equation in vpa.
     # only charged species have a force accelerating them in vpa;
     # however, neutral species do have non-zero d(wpa)/dt, so there is advection in wpa
+    
     if advance.vpa_advection
         vpa_advection!(fvec_out.pdf, fvec_in, pdf.norm, fields, moments,
             vpa_SL, vpa_advect, vpa, z, r, use_semi_lagrange, dt, t,
             vpa_spectral, z_spectral, composition, collisions.charge_exchange, istage)
     end
+    
     # z_advection! advances 1D advection equation in z
     # apply z-advection operation to all species (charged and neutral)
+    
     if advance.z_advection
         begin_s_r_vpa_region()
         z_advection!(fvec_out.pdf, fvec_in, pdf.norm, moments, z_SL, z_advect, z, vpa, r,
             use_semi_lagrange, dt, t, z_spectral, composition, istage)
         begin_s_r_z_region()
     end
+    
     if advance.source_terms
         source_terms!(fvec_out.pdf, fvec_in, moments, vpa, z, r, dt, z_spectral,
                       composition, collisions.charge_exchange)

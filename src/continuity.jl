@@ -6,13 +6,15 @@ using ..calculus: derivative!
 using ..looping
 
 # use the continuity equation dn/dt + d(n*upar)/dz to update the density n for all species
-function continuity_equation!(dens_out, fvec_in, moments, composition, vpa, z, dt, spectral)
+function continuity_equation!(dens_out, fvec_in, moments, composition, vpa, z, r, dt, spectral)
     # use the continuity equation dn/dt + d(n*upar)/dz to update the density n
     # for each species
-    @s_z_loop_s is begin
-        if 1 ∈ loop_ranges[].s_z_range_z
-            @views continuity_equation_single_species!(dens_out[:,is],
-                fvec_in.density[:,is], fvec_in.upar[:,is], z, dt, spectral)
+    @s_r_z_loop_s is begin
+        @s_r_z_loop_r ir begin #MRH NOT SURE ABOUT THIS!
+            if 1 ∈ loop_ranges[].s_r_z_range_z
+                @views continuity_equation_single_species!(dens_out[:,ir,is],
+                    fvec_in.density[:,ir,is], fvec_in.upar[:,ir,is], z, dt, spectral)
+            end
         end
     end
 end

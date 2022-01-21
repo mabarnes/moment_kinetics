@@ -277,39 +277,35 @@ function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, r, compositio
             begin_serial_region()
             # TODO: parallelise this...
             @serial_region begin
-                # define vtfac to avoid repeated computation below
-                vtfac = sqrt(composition.T_wall * composition.mn_over_mi)
-                # initialise the combined ion/neutral fluxes into the walls to be zero
-                wall_flux_0 = 0.0
-                wall_flux_L = 0.0
-                # include the contribution to the wall fluxes due to species with index 'is'
-                for is ∈ 1:composition.n_ion_species
-                    for ir ∈ 1:r.n
-                        @views wall_flux_0 += (sqrt(composition.mn_over_mi) *
-                                               integrate_over_negative_vpa(abs.(vpa.grid) .* f[:,1,ir,is], vpa.grid, vpa.wgts, vpa.scratch))
-                        @views wall_flux_L += (sqrt(composition.mn_over_mi) *
-                                               integrate_over_positive_vpa(abs.(vpa.grid) .* f[:,end,ir,is], vpa.grid, vpa.wgts, vpa.scratch))
+                for ir ∈ 1:r.n
+                    # define vtfac to avoid repeated computation below
+                    vtfac = sqrt(composition.T_wall * composition.mn_over_mi)
+                    # initialise the combined ion/neutral fluxes into the walls to be zero
+                    wall_flux_0 = 0.0
+                    wall_flux_L = 0.0
+                    # include the contribution to the wall fluxes due to species with index 'is'
+                    for is ∈ 1:composition.n_ion_species
+                            @views wall_flux_0 += (sqrt(composition.mn_over_mi) *
+                                                   integrate_over_negative_vpa(abs.(vpa.grid) .* f[:,1,ir,is], vpa.grid, vpa.wgts, vpa.scratch))
+                            @views wall_flux_L += (sqrt(composition.mn_over_mi) *
+                                                   integrate_over_positive_vpa(abs.(vpa.grid) .* f[:,end,ir,is], vpa.grid, vpa.wgts, vpa.scratch))
                     end
-                end
-                for isn ∈ 1:composition.n_neutral_species
-                    for ir ∈ 1:r.n
+                    for isn ∈ 1:composition.n_neutral_species
+                            is = isn + composition.n_ion_species
+                            @views wall_flux_0 += integrate_over_negative_vpa(abs.(vpa.grid) .* f[:,1,ir,is], vpa.grid, vpa.wgts, vpa.scratch)
+                            @views wall_flux_L += integrate_over_positive_vpa(abs.(vpa.grid) .* f[:,end,ir,is], vpa.grid, vpa.wgts, vpa.scratch)
+                    end
+                    # NB: need to generalise to more than one ion species
+                    # get the Knudsen cosine distribution
+                    # NB: as vtfac is time-independent, can be made more efficient by creating
+                    # array for Knudsen cosine distribution and carrying out following four lines
+                    # of calculation at initialization
+                    @. vpa.scratch = (3*pi/vtfac^3)*abs(vpa.grid)*erfc(abs(vpa.grid)/vtfac)
+                    tmparr = copy(vpa.scratch)
+                    tmp = integrate_over_positive_vpa(vpa.grid .* vpa.scratch, vpa.grid, vpa.wgts, tmparr)
+                    @. vpa.scratch /= tmp
+                    for isn ∈ 1:composition.n_neutral_species
                         is = isn + composition.n_ion_species
-                        @views wall_flux_0 += integrate_over_negative_vpa(abs.(vpa.grid) .* f[:,1,ir,is], vpa.grid, vpa.wgts, vpa.scratch)
-                        @views wall_flux_L += integrate_over_positive_vpa(abs.(vpa.grid) .* f[:,end,ir,is], vpa.grid, vpa.wgts, vpa.scratch)
-                    end
-                end
-                # NB: need to generalise to more than one ion species
-                # get the Knudsen cosine distribution
-                # NB: as vtfac is time-independent, can be made more efficient by creating
-                # array for Knudsen cosine distribution and carrying out following four lines
-                # of calculation at initialization
-                @. vpa.scratch = (3*pi/vtfac^3)*abs(vpa.grid)*erfc(abs(vpa.grid)/vtfac)
-                tmparr = copy(vpa.scratch)
-                tmp = integrate_over_positive_vpa(vpa.grid .* vpa.scratch, vpa.grid, vpa.wgts, tmparr)
-                @. vpa.scratch /= tmp
-                for isn ∈ 1:composition.n_neutral_species
-                    is = isn + composition.n_ion_species
-                    for ir ∈ 1:r.n
                         for ivpa ∈ 1:nvpa
                             # no parallel BC should be enforced for vpa = 0
                             if abs(vpa.grid[ivpa]) > zero
