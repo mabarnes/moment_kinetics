@@ -111,14 +111,14 @@ function setup_netcdf_io(prefix, r, z, vpa, composition, collisions, evolve_ppar
     ### create and write static variables to file ###
     # create and write the "r" variable to file
     varname = "r"
-    attributes = Dict("description" => "parallel coordinate")
+    attributes = Dict("description" => "radial coordinate")
     dims = ("nr",)
     vartype = mk_float
     var = defVar(fid, varname, vartype, dims, attrib=attributes)
     var[:] = r.grid
     # create and write the "r_wgts" variable to file
     varname = "r_wgts"
-    attributes = Dict("description" => "integration weights for parallel coordinate")
+    attributes = Dict("description" => "integration weights for radial coordinate")
     vartype = mk_float
     var = defVar(fid, varname, vartype, dims, attrib=attributes)
     var[:] = r.wgts
