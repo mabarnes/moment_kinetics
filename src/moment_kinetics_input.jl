@@ -271,7 +271,7 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
         advection_z)
     #################### parameters related to the r grid ######################
     # ngrid_r is number of grid points per element
-    ngrid_r = 100
+    ngrid_r = 1
     # nelement_r is the number of elements
     nelement_r = 1
     # L_r is the box length
