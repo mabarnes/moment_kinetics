@@ -96,7 +96,7 @@ end
 # setup a grid with n grid points on the interval [-L/2,L/2]
 function init_grid(ngrid, nelement, n, L, imin, imax, igrid, discretization)
     uniform_grid = equally_spaced_grid(n,L)
-    if discretization == "chebyshev_pseudospectral"
+    if discretization == "chebyshev_pseudospectral" && n > 1
         # initialize chebyshev grid defined on [-L/2,L/2]
         # with n grid points chosen to facilitate
         # the fast Chebyshev transform (aka the discrete cosine transform)
@@ -104,11 +104,16 @@ function init_grid(ngrid, nelement, n, L, imin, imax, igrid, discretization)
         # 'wgts' are the integration weights attached to each grid points
         # that are those associated with Clenshaw-Curtis quadrature
         grid, wgts = scaled_chebyshev_grid(ngrid, nelement, n, L, imin, imax)
-    elseif discretization == "finite_difference"
+    elseif discretization == "finite_difference" && n > 1
         # initialize equally spaced grid defined on [-L/2,L/2]
         grid = uniform_grid
         # use composite Simpson's rule to obtain integration weights associated with this coordinate
         wgts = composite_simpson_weights(grid)
+    elseif n == 1
+        grid = allocate_float(n)
+        grid[1] = 0
+        wgts = allocate_float(n)
+        wgts[1] = 1.0
     end
     # return the locations of the grid points
     return grid, wgts, uniform_grid
