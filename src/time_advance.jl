@@ -561,7 +561,7 @@ function rk_update!(scratch, pdf, moments, fields, vpa, z, r, rk_coefs, istage, 
     end
     # NB: if moments.evolve_upar = true, then moments.evolve_density = true
     if moments.evolve_upar
-        @s_z_loop is iz begin
+        @s_r_z_loop is ir iz begin
             new_scratch.upar[iz,ir,is] = rk_coefs[1]*moments.upar[iz,ir,is] + rk_coefs[2]*old_scratch.upar[iz,ir,is] + rk_coefs[3]*new_scratch.upar[iz,ir,is]
         end
     else
@@ -707,7 +707,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, z_
     end
     if advance.force_balance
         # fvec_out.upar is over-written in force_balance! and contains the particle flux
-        force_balance!(fvec_out.upar, fvec_in, fields, collisions, vpa, z, dt, z_spectral, composition)
+        force_balance!(fvec_out.upar, fvec_in, fields, collisions, vpa, z, r, dt, z_spectral, composition)
         # convert from the particle flux to the parallel flow
         @s_r_z_loop_s is begin
             @s_r_z_loop_r ir begin #MRH NOT SURE ABOUT THIS!

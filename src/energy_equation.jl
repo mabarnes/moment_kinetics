@@ -5,7 +5,7 @@ export energy_equation!
 using ..calculus: derivative!
 using ..looping
 
-function energy_equation!(ppar, fvec, moments, collisions, z, dt, spectral, composition)
+function energy_equation!(ppar, fvec, moments, collisions, z, r, dt, spectral, composition)
     @s_r_z_loop_s is begin
         @s_r_z_loop_r ir begin
             if 1 ∈ loop_ranges[].s_z_range_z

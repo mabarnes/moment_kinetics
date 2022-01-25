@@ -8,21 +8,23 @@ using ..looping
 # use the force balance equation d(nu)/dt + d(ppar + n*upar*upar)/dz =
 # -(dens/2)*dphi/dz + R*dens_i*dens_n*(upar_n-upar_i)
 # to update the parallel particle flux dens*upar for each species
-function force_balance!(pflx, fvec, fields, collisions, vpa, z, dt, spectral, composition)
+function force_balance!(pflx, fvec, fields, collisions, vpa, z, r, dt, spectral, composition)
     # account for momentum flux contribution to force balance
-    @s_z_loop_s is begin
-        if 1 ∈ loop_ranges[].s_z_range_z
-            @views force_balance_flux_species!(pflx[:,is], fvec.density[:,is], fvec.upar[:,is], fvec.ppar[:,is], z, dt, spectral)
-            if is ∈ composition.ion_species_range
-                # account for parallel electric field contribution to force balance
-                @views force_balance_Epar_species!(pflx[:,is], fields.phi, fvec.density[:,is], z, dt, spectral)
+    @s_r_z_loop_s is begin
+        @s_r_z_loop_r ir begin
+            if 1 ∈ loop_ranges[].s_r_z_range_z
+                @views force_balance_flux_species!(pflx[:,ir,is], fvec.density[:,ir,is], fvec.upar[:,ir,is], fvec.ppar[:,ir,is], z, dt, spectral)
+                if is ∈ composition.ion_species_range
+                    # account for parallel electric field contribution to force balance
+                    @views force_balance_Epar_species!(pflx[:,ir,is], fields.phi[:,ir], fvec.density[:,ir,is], z, dt, spectral)
+                end
             end
         end
     end
     # if neutrals present and charge exchange frequency non-zero,
     # account for collisional friction between ions and neutrals
     if composition.n_neutral_species > 0 && abs(collisions.charge_exchange) > 0.0
-        force_balance_CX!(pflx, fvec.density, fvec.upar, collisions.charge_exchange, composition, z, dt)
+        force_balance_CX!(pflx, fvec.density, fvec.upar, collisions.charge_exchange, composition, z, r, dt)
     end
 end
 
@@ -52,19 +54,21 @@ function force_balance_Epar_species!(pflx, phi, dens, z, dt, spectral)
     @. pflx -= 0.5*dt*z.scratch*dens
 end
 
-function force_balance_CX!(pflx, dens, upar, CX_frequency, composition, z, dt)
-    @s_z_loop_s is begin
-        if 1 ∈ loop_ranges[].s_z_range_z
-            # include contribution to ion acceleration due to collisional friction with neutrals
-            if is ∈ composition.ion_species_range
-                for isp ∈ composition.neutral_species_range
-                    @views @. pflx[:,is] += dt*CX_frequency*dens[:,is]*dens[:,isp]*(upar[:,isp]-upar[:,is])
+function force_balance_CX!(pflx, dens, upar, CX_frequency, composition, z, r, dt)
+    @s_r_z_loop_s is begin
+        @s_r_z_loop_r ir begin
+            if 1 ∈ loop_ranges[].s_r_z_range_z
+                # include contribution to ion acceleration due to collisional friction with neutrals
+                if is ∈ composition.ion_species_range
+                    for isp ∈ composition.neutral_species_range
+                        @views @. pflx[:,ir,is] += dt*CX_frequency*dens[:,ir,is]*dens[:,ir,isp]*(upar[:,ir,isp]-upar[:,ir,is])
+                    end
                 end
-            end
-            # include contribution to neutral acceleration due to collisional friction with ions
-            if is ∈ composition.neutral_species_range
-                for isp ∈ composition.ion_species_range
-                    @views @. pflx[:,is] += dt*CX_frequency*dens[:,is]*dens[:,isp]*(upar[:,isp]-upar[:,is])
+                # include contribution to neutral acceleration due to collisional friction with ions
+                if is ∈ composition.neutral_species_range
+                    for isp ∈ composition.ion_species_range
+                        @views @. pflx[:,ir,is] += dt*CX_frequency*dens[:,ir,is]*dens[:,ir,isp]*(upar[:,ir,isp]-upar[:,ir,is])
+                    end
                 end
             end
         end

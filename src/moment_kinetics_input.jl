@@ -127,6 +127,18 @@ function mk_input(scan_input=Dict())
     n_rk_stages = get(scan_input, "n_rk_stages", 4)
     split_operators = get(scan_input, "split_operators", false)
 
+    # overwrite some default parameters related to the r grid
+    # ngrid is number of grid points per element
+    r.ngrid = get(scan_input, "r_ngrid", 1)
+    # nelement is the number of elements
+    r.nelement = get(scan_input, "r_nelement", 1)
+    # determine the discretization option for the r grid
+    # supported options are "chebyshev_pseudospectral" and "finite_difference"
+    r.discretization = get(scan_input, "r_discretization", "finite_difference")
+    # determine the boundary condition to impose in r
+    # supported options are "constant", "periodic" and "wall"
+    r.bc = get(scan_input, "r_bc", "periodic")
+
     # overwrite some default parameters related to the z grid
     # ngrid is number of grid points per element
     z.ngrid = get(scan_input, "z_ngrid", 9)
