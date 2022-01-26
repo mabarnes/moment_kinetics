@@ -68,6 +68,13 @@ Suggested debugging strategy for race conditions is:
   does not change (for example when `phi` is calculated contributions from all
   charged species need to be summed, resulting in an unusual pattern of array
   accesses); in this case `_block_synchronize()` can be called directly.
+    * The function `debug_check_shared_memory()` can be inserted between
+      `begin_*_region()` calls when debugging to narrow down the location where
+      the incorrect array access occured. It is defined when
+      `@debug_shared_array` is active, and can be imported with `using
+      ..communication: debug_check_shared_memory()`. The function runs the same
+      error checks as are added by `@debug_shared_array` in
+      `_block_synchronize()`.
 * Run `debug_test/runtests.jl` with `@debug_detect_redundant_block_synchronize`
   activated. This should show if any call to `_block_synchronize()` (including
   the ones inside `begin_*_region()` calls) was 'unnecessary' - i.e. there
