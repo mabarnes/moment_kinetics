@@ -6,7 +6,7 @@ using ..calculus: derivative!
 using ..looping
 
 function energy_equation!(ppar, fvec, moments, collisions, z, dt, spectral, composition)
-    @s_loop is begin
+    @loop_s is begin
         @views energy_equation_noCX!(ppar[:,is], fvec.upar[:,is], fvec.ppar[:,is],
                                      moments.qpar[:,is], dt, z, spectral)
     end
@@ -31,7 +31,7 @@ function energy_equation_noCX!(ppar_out, upar, ppar, qpar, dt, z, spectral)
     @. ppar_out -= 3.0*dt*ppar*z.scratch
 end
 function energy_equation_CX!(ppar_out, dens, ppar, composition, CX_frequency, dt)
-    @s_loop is begin
+    @loop_s is begin
         if is ∈ composition.ion_species_range
             for isp ∈ composition.neutral_species_range
                 @views @. ppar_out[:,is] -= dt*CX_frequency*(dens[:,isp]*ppar[:,is]-dens[:,is]*ppar[:,isp])

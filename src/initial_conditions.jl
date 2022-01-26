@@ -212,7 +212,7 @@ function init_pdf_over_density!(pdf, spec, vpa, z, vth, upar, vpa_norm_fac, evol
     return nothing
 end
 function enforce_boundary_conditions!(f, vpa_bc, z_bc, vpa, z, vpa_adv::T1, z_adv::T2, composition) where {T1, T2}
-    @s_z_loop is iz begin
+    @loop_s_z is iz begin
         # enforce the vpa BC
         @views enforce_vpa_boundary_condition_local!(f[:,iz,is], vpa_bc, vpa_adv[is].upwind_idx[iz],
                                                      vpa_adv[is].downwind_idx[iz])
@@ -231,13 +231,13 @@ function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, composition) 
     # 'constant' BC is time-independent f at upwind boundary
     # and constant f beyond boundary
     if bc == "constant"
-        @s_vpa_loop is ivpa begin
+        @loop_s_vpa is ivpa begin
             upwind_idx = adv[ivpa,is].upwind_idx[]
             f[ivpa,upwind_idx,is] = density_offset * exp(-(vpa.grid[ivpa]/vpawidth)^2) / sqrt(pi)
         end
     # 'periodic' BC enforces periodicity by taking the average of the boundary points
     elseif bc == "periodic"
-        @s_vpa_loop is ivpa begin
+        @loop_s_vpa is ivpa begin
             downwind_idx = adv[is].downwind_idx[ivpa]
             upwind_idx = adv[is].upwind_idx[ivpa]
             f[ivpa,downwind_idx,is] = 0.5*(f[ivpa,upwind_idx,is]+f[ivpa,downwind_idx,is])
@@ -245,10 +245,10 @@ function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, composition) 
         end
     # 'wall' BC enforces wall boundary conditions
     elseif bc == "wall"
-        @s_vpa_loop_s is begin
+        @loop_s is begin
             # zero incoming BC for ions, as they recombine at the wall
             if is ∈ composition.ion_species_range
-                @s_vpa_loop_vpa ivpa begin
+                @loop_vpa ivpa begin
                     # no parallel BC should be enforced for vpa = 0
                     if abs(vpa.grid[ivpa]) > zero
                         upwind_idx = adv[is].upwind_idx[ivpa]

@@ -51,12 +51,12 @@ function update_phi!(fields, fvec, z, composition)
        # though synchronization is needed here.
        _block_synchronize()
     end
-    if 1 ∈ loop_ranges[].s_z_range_s
-        @s_z_loop_z iz begin
+    if 1 ∈ loop_ranges[].s
+        @loop_z iz begin
             z.scratch[iz] = fvec.density[iz,1]
         end
         @inbounds for is ∈ 2:composition.n_ion_species
-            @s_z_loop_z iz begin
+            @loop_z iz begin
                 z.scratch[iz] += fvec.density[iz,is]
             end
         end
@@ -82,7 +82,7 @@ function update_phi!(fields, fvec, z, composition)
         end
 
         if composition.electron_physics ∈ (boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath)
-            @s_z_loop_z iz begin
+            @loop_z iz begin
                 fields.phi[iz] = composition.T_e * log(z.scratch[iz] / N_e)
             end
             # if fields.force_phi
