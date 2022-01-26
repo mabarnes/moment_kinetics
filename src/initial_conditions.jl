@@ -54,7 +54,7 @@ function init_pdf_and_moments(vpa, z, r, composition, species, n_rk_stages, evol
 
     
     pdf = create_and_init_pdf(moments, vpa, z, r, n_species, species)
-    begin_s_z_region()
+    begin_s_r_z_region()
     # calculate the initial parallel heat flux from the initial un-normalised pdf
     update_qpar!(moments.qpar, moments.qpar_updated, pdf.unnorm, vpa, z, r, composition, moments.vpa_norm_fac)
     return pdf, moments

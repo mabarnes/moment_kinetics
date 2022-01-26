@@ -232,7 +232,7 @@ function setup_time_advance!(pdf, vpa, z, r, composition, drive_input, moments,
     vpa_SL = setup_semi_lagrange(vpa.n, z.n, r.n)
     r_SL = setup_semi_lagrange(r.n, vpa.n, z.n)
 
-    begin_s_z_region()
+    begin_s_r_z_region()
     return vpa_spectral, z_spectral, r_spectral, moments, fields, vpa_advect, z_advect, r_advect,
         vpa_SL, z_SL, r_SL, scratch, advance, scratch_dummy_sr
 end
@@ -364,7 +364,7 @@ function time_advance!(pdf, scratch, t, t_input, vpa, z, r, vpa_spectral, z_spec
             # write initial data to binary file (netcdf)
             write_data_to_binary(pdf.unnorm, moments, fields, t, composition.n_species, cdf, iwrite)
             iwrite += 1
-            begin_s_z_region()
+            begin_s_r_z_region()
             @debug_detect_redundant_block_synchronize begin
                 # Reactivate check for redundant _block_synchronize()
                 debug_detect_redundant_is_active[] = true
@@ -537,7 +537,7 @@ function time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z, r,
     return nothing
 end
 function rk_update!(scratch, pdf, moments, fields, vpa, z, r, rk_coefs, istage, composition)
-    begin_s_z_region()
+    begin_s_r_z_region()
     nvpa = size(pdf.unnorm, 1)
     new_scratch = scratch[istage+1]
     old_scratch = scratch[istage]

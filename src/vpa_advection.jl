@@ -151,7 +151,7 @@ function update_speed_default!(advect, fields, fvec, moments, vpa, z, r, composi
             end    
         end
     elseif moments.evolve_upar
-        @s_z_loop_s is begin
+        @s_r_z_loop_s is begin
             @s_r_z_loop_r ir begin
                 # get d(ppar)/dz
                 derivative!(z.scratch, view(fvec.ppar,:,ir,is), z, z_spectral)

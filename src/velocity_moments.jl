@@ -396,7 +396,7 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, r, composition,
                 @s_r_z_loop_z iz begin
                     fvec_old.temp_z_s[iz,ir,is] = fvec_new.density[iz,ir,is] / moments.vth[iz,ir,is]
                 end
-                @s_z_loop_z iz begin
+                @s_r_z_loop_z iz begin
                     for ivpa ∈ 1:vpa.n
                         fvec_old.pdf[ivpa,iz,ir,is] = fvec_new.pdf[ivpa,iz,ir,is] * fvec_old.temp_z_s[iz,ir,is]
                     end
