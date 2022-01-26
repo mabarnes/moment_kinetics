@@ -39,6 +39,7 @@ struct scratch_pdf{n_distribution, n_moment}
     ppar::MPISharedArray{mk_float, n_moment}
     temp_z_s::MPISharedArray{mk_float, n_moment}
 end
+
 mutable struct advance_info
     vpa_advection::Bool
     z_advection::Bool
@@ -188,6 +189,8 @@ function setup_time_advance!(pdf, vpa, z, r, composition, drive_input, moments,
     # create an array of structs containing scratch arrays for the pdf and low-order moments
     # that may be evolved separately via fluid equations
     scratch = setup_scratch_arrays(moments, pdf.norm, t_input.n_rk_stages)
+    # setup dummy arrays
+    scratch_dummy_sr = allocate_float(r.n, composition.n_species)
     # create the "fields" structure that contains arrays
     # for the electrostatic potential phi and eventually the electromagnetic fields
     fields = setup_em_fields(z.n, r.n, drive_input.force_phi, drive_input.amplitude, drive_input.frequency)
@@ -231,7 +234,7 @@ function setup_time_advance!(pdf, vpa, z, r, composition, drive_input, moments,
 
     begin_s_z_region()
     return vpa_spectral, z_spectral, r_spectral, moments, fields, vpa_advect, z_advect, r_advect,
-        vpa_SL, z_SL, r_SL, scratch, advance
+        vpa_SL, z_SL, r_SL, scratch, advance, scratch_dummy_sr
 end
 
    
@@ -284,6 +287,7 @@ function setup_scratch_arrays(moments, pdf_in, n_rk_stages)
     end
     return scratch
 end
+
 # given the number of Runge Kutta stages that are requested,
 # returns the needed Runge Kutta coefficients;
 # e.g., if f is the function to be updated, then
@@ -324,7 +328,7 @@ end
 # time integrator can be used without severe CFL condition
 function time_advance!(pdf, scratch, t, t_input, vpa, z, r, vpa_spectral, z_spectral, r_spectral,
     moments, fields, vpa_advect, z_advect, r_advect, vpa_SL, z_SL, r_SL, composition,
-    collisions, advance, io, cdf)
+    collisions, advance, scratch_dummy_sr, io, cdf)
 
     @debug_detect_redundant_block_synchronize begin
         # Only want to check for redundant _block_synchronize() calls during the
@@ -343,7 +347,7 @@ function time_advance!(pdf, scratch, t, t_input, vpa, z, r, vpa_spectral, z_spec
         else
             time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z, r,
                 vpa_spectral, z_spectral, r_spectral, moments, fields, vpa_advect, z_advect, r_advect,
-                vpa_SL, z_SL, r_SL, composition, collisions, advance, i)
+                vpa_SL, z_SL, r_SL, composition, collisions, advance,  scratch_dummy_sr, i)
         end
         # update the time
         t += t_input.dt
@@ -516,12 +520,12 @@ function time_advance_split_operators!(pdf, scratch, t, t_input, vpa, z,
 end
 function time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z, r, 
     vpa_spectral, z_spectral, r_spectral, moments, fields, vpa_advect, z_advect, r_advect,
-    vpa_SL, z_SL, r_SL, composition, collisions, advance, istep)
+    vpa_SL, z_SL, r_SL, composition, collisions, advance, scratch_dummy_sr, istep)
 
     if t_input.n_rk_stages > 1
         ssp_rk!(pdf, scratch, t, t_input, vpa, z, r, 
             vpa_spectral, z_spectral, r_spectral, moments, fields, vpa_advect, z_advect, r_advect,
-            vpa_SL, z_SL, r_SL, composition, collisions, advance, istep)
+            vpa_SL, z_SL, r_SL, composition, collisions, advance,  scratch_dummy_sr, istep)
     else
         euler_time_advance!(scratch, scratch, pdf, fields, moments, vpa_SL, z_SL, r_SL,
             vpa_advect, z_advect, r_advect, vpa, z, r, t,
@@ -602,7 +606,7 @@ function rk_update!(scratch, pdf, moments, fields, vpa, z, r, rk_coefs, istage, 
 end
 function ssp_rk!(pdf, scratch, t, t_input, vpa, z, r, 
     vpa_spectral, z_spectral, r_spectral, moments, fields, vpa_advect, z_advect, r_advect,
-    vpa_SL, z_SL, r_SL, composition, collisions, advance, istep)
+    vpa_SL, z_SL, r_SL, composition, collisions, advance,  scratch_dummy_sr, istep)
 
     n_rk_stages = t_input.n_rk_stages
 
@@ -637,7 +641,7 @@ function ssp_rk!(pdf, scratch, t, t_input, vpa, z, r,
 
     istage = n_rk_stages+1
     if moments.evolve_density && moments.enforce_conservation
-        enforce_moment_constraints!(scratch[istage], scratch[1], vpa, z, r, composition, moments)
+        enforce_moment_constraints!(scratch[istage], scratch[1], vpa, z, r, composition, moments, scratch_dummy_sr)
     end
 
     # update the pdf.norm and moments arrays as needed
