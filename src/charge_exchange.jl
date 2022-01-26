@@ -30,18 +30,18 @@ function charge_exchange_collisions!(f_out, fvec_in, moments, composition, vpa, 
                 # wpamod_j = (vpai_j - upar_n)/vthn = (vpan_j - upar_n)/vthn + (upar_i - upar_n)/vthn
                 # = wpa_j + (upar_i - upar_n)/vthn
                 # obtain the ion wpa values corresponding to the neutral wpa grid points
-                if is ∈ composition.neutral_species_range
-                    # identify the 'is' index as a neutral species index
-                    isn = is
+                if is ∈ composition.ion_species_range
+                    # identify the 'is' index as an ion species index
+                    isi = is
                     @loop_z iz begin
-                        # wpa = vpa - upa_s if upar evolved but no ppar
-                        # if ppar also evolved, wpa = (vpa - upa_s)/vths
-                        if moments.evolve_ppar
-                            wpa_shift_norm = moments.vth[iz,isn]
-                        else
-                            wpa_shift_norm = 1.0
-                        end
-                        for isi ∈ composition.ion_species_range
+                        for isn ∈ composition.neutral_species_range
+                            # wpa = vpa - upa_s if upar evolved but no ppar
+                            # if ppar also evolved, wpa = (vpa - upa_s)/vths
+                            if moments.evolve_ppar
+                                wpa_shift_norm = moments.vth[iz,isn]
+                            else
+                                wpa_shift_norm = 1.0
+                            end
                             # calculate the shift in the wpa grid to the desired (ion) wpa locations
                             wpa_shift = (fvec_in.upar[iz,isi] - fvec_in.upar[iz,isn])/wpa_shift_norm
                             # construct the wpa grid on which to interpolate
@@ -59,18 +59,18 @@ function charge_exchange_collisions!(f_out, fvec_in, moments, composition, vpa, 
                         end
                     end
                 # repeat the above interpolation process to get the ion pdf on the neutral vpa grid
-                elseif is ∈ composition.ion_species_range
-                    # identify the 'is' index as corresponding to an ion species
-                    isi = is
+                elseif is ∈ composition.neutral_species_range
+                    # identify the 'is' index as corresponding to a neutral species
+                    isn = is
                     @loop_z iz begin
-                        # wpa = vpa - upa_s if upar evolved but no ppar
-                        # if ppar also evolved, wpa = (vpa - upa_s)/vths
-                        if moments.evolve_ppar
-                            wpa_shift_norm = moments.vth[iz,isi]
-                        else
-                            wpa_shift_norm = 1.0
-                        end
-                        for isn ∈ composition.neutral_species_range
+                        for isi ∈ composition.ion_species_range
+                            # wpa = vpa - upa_s if upar evolved but no ppar
+                            # if ppar also evolved, wpa = (vpa - upa_s)/vths
+                            if moments.evolve_ppar
+                                wpa_shift_norm = moments.vth[iz,isi]
+                            else
+                                wpa_shift_norm = 1.0
+                            end
                             # calculate the shift in the wpa grid to the desired (neutral) wpa locations
                             wpa_shift = (fvec_in.upar[iz,isn] - fvec_in.upar[iz,isi])/wpa_shift_norm
                             # construct the wpa grid on which to interpolate
