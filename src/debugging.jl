@@ -18,7 +18,6 @@ module debugging
 macronames = [
               ("debug_initialize_NaN", 1),
               ("debug_error_stop_all", 1),
-              ("debug_loop_type_region", 1),
               ("debug_block_synchronize", 2),
               ("debug_shared_array", 2),
               ("debug_shared_array_allocate", 3),
@@ -70,16 +69,6 @@ for (macroname, minlevel) ∈ macronames
     end
 
     eval(macro_block)
-end
-
-@debug_loop_type_region begin
-    # Add checks that loop macros are used within the correct 'parallel region'. Helps
-    # ensure the `begin_*_region()` functions were called in the right places.
-    #
-    # Define this variable in `debugging` so that it can be imported in both
-    # communication.jl and looping.jl
-    const current_loop_region_type = Ref("serial")
-    export current_loop_region_type
 end
 
 end # debugging

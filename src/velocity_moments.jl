@@ -117,7 +117,7 @@ end
 function update_moments!(moments, ff, vpa, nz, nr, composition)
     n_species = size(ff,4)
     @boundscheck n_species == size(moments.dens,3) || throw(BoundsError(moments))
-    @s_r_z_loop_s is begin
+    @loop_s is begin
         if moments.dens_updated[is] == false
             @views update_density_species!(moments.dens[:,:,is], ff[:,:,:,is], vpa, z, r)
             moments.dens_updated[is] = true
@@ -143,7 +143,7 @@ end
 function update_density!(dens, dens_updated, pdf, vpa, z, r, composition)
     n_species = size(pdf,4)
     @boundscheck n_species == size(dens,3) || throw(BoundsError(dens))
-    @s_r_z_loop_s is begin
+    @loop_s is begin
         if dens_updated[is] == false
             @views update_density_species!(dens[:,:,is], pdf[:,:,:,is], vpa, z, r)
             dens_updated[is] = true
@@ -154,10 +154,8 @@ end
 function update_density_species!(dens, ff, vpa, z, r)
     @boundscheck z.n == size(ff, 2) || throw(BoundsError(ff))
     @boundscheck z.n == size(dens, 1) || throw(BoundsError(dens))
-    @s_r_z_loop_r ir begin
-        @s_r_z_loop_z iz begin
-            dens[iz,ir] = integrate_over_vspace(@view(ff[:,iz,ir]), vpa.wgts)
-        end
+    @loop_r_z ir iz begin
+        dens[iz,ir] = integrate_over_vspace(@view(ff[:,iz,ir]), vpa.wgts)
     end
     return nothing
 end
@@ -166,7 +164,7 @@ end
 function update_upar!(upar, upar_updated, pdf, vpa, z, r, composition)
     n_species = size(pdf,4)
     @boundscheck n_species == size(upar,3) || throw(BoundsError(upar))
-    @s_r_z_loop_s is begin
+    @loop_s is begin
         if upar_updated[is] == false
             @views update_upar_species!(upar[:,:,is], pdf[:,:,:,is], vpa, z, r)
             upar_updated[is] = true
@@ -177,10 +175,8 @@ end
 function update_upar_species!(upar, ff, vpa, z, r)
     @boundscheck z.n == size(ff, 2) || throw(BoundsError(ff))
     @boundscheck z.n == size(upar, 1) || throw(BoundsError(upar))
-    @s_r_z_loop_r ir begin
-        @s_r_z_loop_z iz begin
-            upar[iz,ir] = integrate_over_vspace(@view(ff[:,iz,ir]), vpa.grid, vpa.wgts)
-        end
+    @loop_r_z ir iz begin
+        upar[iz,ir] = integrate_over_vspace(@view(ff[:,iz,ir]), vpa.grid, vpa.wgts)
     end
     return nothing
 end
@@ -190,7 +186,7 @@ function update_ppar!(ppar, ppar_updated, pdf, vpa, z, r, composition)
     @boundscheck composition.n_species == size(ppar,3) || throw(BoundsError(ppar))
     @boundscheck r.n == size(ppar,2) || throw(BoundsError(ppar))
     @boundscheck z.n == size(ppar,1) || throw(BoundsError(ppar))
-    @s_r_z_loop_s is begin
+    @loop_s is begin
         if ppar_updated[is] == false
             @views update_ppar_species!(ppar[:,:,is], pdf[:,:,:,is], vpa, z, r)
             ppar_updated[is] = true
@@ -201,10 +197,8 @@ end
 function update_ppar_species!(ppar, ff, vpa, z, r)
     @boundscheck z.n == size(ff, 2) || throw(BoundsError(ff))
     @boundscheck z.n == size(ppar, 1) || throw(BoundsError(ppar))
-    @s_r_z_loop_r ir begin
-        @s_r_z_loop_z iz begin
-            ppar[iz,ir] = integrate_over_vspace(@view(ff[:,iz,ir]), vpa.grid, 2, vpa.wgts)
-        end
+    @loop_r_z ir iz begin
+        ppar[iz,ir] = integrate_over_vspace(@view(ff[:,iz,ir]), vpa.grid, 2, vpa.wgts)
     end
     return nothing
 end
@@ -213,7 +207,7 @@ end
 
 function update_qpar!(qpar, qpar_updated, pdf, vpa, z, r, composition, vpanorm)
     @boundscheck composition.n_species == size(qpar,3) || throw(BoundsError(qpar))
-    @s_r_z_loop_s is begin
+    @loop_s is begin
         if qpar_updated[is] == false
             @views update_qpar_species!(qpar[:,:,is], pdf[:,:,:,is], vpa, z, r, vpanorm[:,:,is])
             qpar_updated[is] = true
@@ -224,10 +218,8 @@ end
 function update_qpar_species!(qpar, ff, vpa, z, r, vpanorm)
     @boundscheck z.n == size(ff, 2) || throw(BoundsError(ff))
     @boundscheck z.n == size(qpar, 1) || throw(BoundsError(qpar))
-    @s_r_z_loop_r ir begin
-        @s_r_z_loop_z iz begin
-            qpar[iz,ir] = integrate_over_vspace(@view(ff[:,iz,ir]), vpa.grid, 3, vpa.wgts) * vpanorm[iz,ir]^4
-        end
+    @loop_r_z ir iz begin
+        qpar[iz,ir] = integrate_over_vspace(@view(ff[:,iz,ir]), vpa.grid, 3, vpa.wgts) * vpanorm[iz,ir]^4
     end
     return nothing
 end
@@ -325,8 +317,8 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, r, composition,
     # This loop needs to be @s_r_z_loop_s because it fills the (not-shared)
     # dummy_sr buffer to be used within the @s_z_loop_s below, so the values
     # of is looped over by this process need to be the same.
-    @s_r_z_loop_s is begin
-        @s_r_z_loop_r ir begin
+    @loop_s is begin
+        @loop_r ir begin
             @views @. z.scratch = fvec_old.density[:,ir,is] - fvec_new.density[:,ir,is]
             #@views composition.scratch[is] = integral(z.scratch, z.wgts)/integral(fvec_old.density[:,is], z.wgts)
             @views dummy_sr[ir,is] = integral(z.scratch, z.wgts)/integral(fvec_old.density[:,ir,is], z.wgts)
@@ -335,14 +327,14 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, r, composition,
     # Need to call _block_synchronize() even though loop type does not change because
     # all spatial ranks read fvec_new.density, but it will be written below.
     _block_synchronize()
-    
-    @s_r_z_loop_s is begin
+
+    @loop_s is begin
         #tmp1 = integral(fvec_old.density[:,is], z.wgts)
         #tmp2 = integral(fvec_new.density[:,is], z.wgts)
         #@views avgdens_ratio = integral(fvec_new.density[:,is], z.wgts)/integral(fvec_old.density[:,is], z.wgts)
-        @s_r_z_loop_r ir begin
+        @loop_r ir begin
             avgdens_ratio = dummy_sr[ir,is]
-            @s_r_z_loop_z iz begin
+            @loop_z iz begin
                 # Create views once to save overhead
                 fnew_view = @view(fvec_new.pdf[:,iz,ir,is])
                 fold_view = @view(fvec_old.pdf[:,iz,ir,is])
@@ -391,29 +383,23 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, r, composition,
     # update the parallel heat flux
     # NB: no longer need fvec_old.pdf so can use for temporary storage of un-normalised pdf
     if moments.evolve_ppar
-        @s_r_z_loop_s is begin
-            @s_r_z_loop_r ir begin
-                @s_r_z_loop_z iz begin
+        @loop_s is begin
+            @loop_r ir begin
+                @loop_z iz begin
                     fvec_old.temp_z_s[iz,ir,is] = fvec_new.density[iz,ir,is] / moments.vth[iz,ir,is]
                 end
-                @s_r_z_loop_z iz begin
-                    for ivpa ∈ 1:vpa.n
-                        fvec_old.pdf[ivpa,iz,ir,is] = fvec_new.pdf[ivpa,iz,ir,is] * fvec_old.temp_z_s[iz,ir,is]
-                    end
+                @loop_z_vpa iz ivpa begin
+                    fvec_old.pdf[ivpa,iz,ir,is] = fvec_new.pdf[ivpa,iz,ir,is] * fvec_old.temp_z_s[iz,ir,is]
                 end
             end
         end
     elseif moments.evolve_density
-        @s_r_z_loop is ir iz begin
-            for ivpa ∈ 1:vpa.n
-                fvec_old.pdf[ivpa,iz,ir,is] = fvec_new.pdf[ivpa,iz,ir,is] * fvec_new.density[iz,ir,is]
-            end
+        @loop_s_r_z_vpa is ir iz ivpa begin
+            fvec_old.pdf[ivpa,iz,ir,is] = fvec_new.pdf[ivpa,iz,ir,is] * fvec_new.density[iz,ir,is]
         end
     else
-        @s_r_z_loop is ir iz begin
-            for ivpa ∈ 1:vpa.n
-                fvec_old.pdf[ivpa,iz,ir,is] = fvec_new.pdf[ivpa,iz,ir,is]
-            end
+        @loop_s_r_z_vpa is ir iz ivpa begin
+            fvec_old.pdf[ivpa,iz,ir,is] = fvec_new.pdf[ivpa,iz,ir,is]
         end
     end
     update_qpar!(moments.qpar, moments.qpar_updated, fvec_old.pdf, vpa, z, r, composition, moments.vpa_norm_fac)

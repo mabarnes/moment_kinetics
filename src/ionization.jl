@@ -16,31 +16,23 @@ function ionization_collisions!(f_out, fvec_in, moments, n_ion_species,
         # resolution, which then causes crashes due to overshoots giving
         # negative f??
         width = 0.5
-        @s_r_z_loop_s is begin
+        @loop_s is begin
             if is ∈ composition.ion_species_range
-                @s_r_z_loop_r ir begin
-                    @s_r_z_loop_z iz begin
-                        for ivpa ∈ 1:vpa.n
-                            f_out[ivpa,iz,ir,is] += dt*collisions.ionization/width*exp(-(vpa.grid[ivpa]/width)^2)
-                        end
-                    end
+                @loop_r_z_vpa ir iz ivpa begin
+                    f_out[ivpa,iz,ir,is] += dt*collisions.ionization/width*exp(-(vpa.grid[ivpa]/width)^2)
                 end
             end
         end
     else
-        @s_r_z_loop_s is begin
+        @loop_s is begin
             # apply ionization collisions to all ion species
             if is ∈ composition.ion_species_range
                 # for each ion species, obtain affect of charge exchange collisions
                 # with all of the neutral species
                 for isp ∈ composition.neutral_species_range
-                    @s_r_z_loop_r ir begin
-                        @s_r_z_loop_z iz begin
-                            for ivpa ∈ 1:vpa.n
-                                #NB: used quasineutrality to replace electron density with ion density
-                                f_out[ivpa,iz,ir,is] += dt*collisions.ionization*fvec_in.pdf[ivpa,iz,ir,isp]*fvec_in.density[iz,ir,is]
-                            end
-                        end
+                    @loop_r_z_vpa ir iz ivpa begin
+                        #NB: used quasineutrality to replace electron density with ion density
+                        f_out[ivpa,iz,ir,is] += dt*collisions.ionization*fvec_in.pdf[ivpa,iz,ir,isp]*fvec_in.density[iz,ir,is]
                     end
                 end
             end
@@ -49,12 +41,8 @@ function ionization_collisions!(f_out, fvec_in, moments, n_ion_species,
                 # for each neutral species, obtain affect of ionization collisions
                 # with all of the ion species
                 for isp ∈ composition.ion_species_range
-                    @s_r_z_loop_r ir begin
-                        @s_r_z_loop_z iz begin
-                            for ivpa ∈ 1:vpa.n
-                                f_out[ivpa,iz,ir,is] -= dt*collisions.ionization*fvec_in.pdf[ivpa,iz,ir,is]*fvec_in.density[iz,ir,isp]
-                            end
-                        end
+                    @loop_r_z_vpa ir iz ivpa begin
+                        f_out[ivpa,iz,ir,is] -= dt*collisions.ionization*fvec_in.pdf[ivpa,iz,ir,is]*fvec_in.density[iz,ir,isp]
                     end
                 end
             end

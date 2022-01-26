@@ -9,9 +9,9 @@ using ..looping
 function continuity_equation!(dens_out, fvec_in, moments, composition, vpa, z, r, dt, spectral)
     # use the continuity equation dn/dt + d(n*upar)/dz to update the density n
     # for each species
-    @s_r_z_loop_s is begin
-        @s_r_z_loop_r ir begin #MRH NOT SURE ABOUT THIS!
-            if 1 ∈ loop_ranges[].s_r_z_range_z
+    @loop_s is begin
+        @loop_r ir begin #MRH NOT SURE ABOUT THIS!
+            if 1 ∈ loop_ranges[].z
                 @views continuity_equation_single_species!(dens_out[:,ir,is],
                     fvec_in.density[:,ir,is], fvec_in.upar[:,ir,is], z, dt, spectral)
             end

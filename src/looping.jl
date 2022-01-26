@@ -10,11 +10,6 @@ using ..type_definitions: mk_int
 using Combinatorics
 using Primes
 
-@debug_loop_type_region using ..debugging: current_loop_region_type
-
-# Export this to make sure it is available in every scope that imports looping
-export @debug_loop_type_region
-
 const all_dimensions = (:s, :r, :z, :vpa)
 const dimension_combinations = Tuple(Tuple(c) for c in combinations(all_dimensions))
 
@@ -28,48 +23,37 @@ function dims_string(dims::Tuple)
     return result
 end
 
-"""
-Construct names for the loop range variables
-
-Arguments
----------
-dims : Tuple
-    Tuple of dimension names (all given as `Symbol`s)
-
-Returns
--------
-Dict{Symbol,Symbol}
-    Dict whose keys are the dimension names, and values are the loop range
-    names
-"""
-function loop_range_names(dims::Tuple)
-    result = Dict{Symbol,Symbol}()
-    loop_prefix = "$(dims_string(dims))_range_"
-    for d ∈ dims
-        result[d] = Symbol(string(loop_prefix, d))
-    end
-    return result
-end
-
 # Create struct to store ranges for loops over all combinations of dimensions
 LoopRanges_body = quote
+    parallel_dims::Tuple{Vararg{Symbol}}
     rank0::Bool
 end
-setup_loop_ranges_arguments = [:( rank0=(block_rank==0) )]
-for dims ∈ dimension_combinations
-    global LoopRanges_body, setup_loop_ranges_arguments
-    range_names = loop_range_names(dims)
-    for dim ∈ dims
-        LoopRanges_body = quote
-            $LoopRanges_body;
-            $(range_names[dim])::UnitRange{mk_int}
-        end
-        # best_ranges is a local variable created in setup_loop_ranges()
-        push!(setup_loop_ranges_arguments,
-              :( $(range_names[dim])=best_ranges[$dims][$(QuoteNode(dim))] ))
+for dim ∈ all_dimensions
+    global LoopRanges_body
+    LoopRanges_body = quote
+        $LoopRanges_body;
+        $dim::UnitRange{mk_int}
     end
 end
 eval(quote
+         """
+         LoopRanges structs contain information on which points should be included on
+         this process in loops over shared-memory arrays.
+
+         Members
+         -------
+         parallel_dims::Tuple{Vararg{Symbol}}
+                Indicates which dimensions are (or might be) parallelized when using
+                this LoopRanges. Provided for information for developers, to make it
+                easier to tell (when using a Debugger, or printing debug informatino)
+                which LoopRanges instance is active in looping.loop_ranges at any point
+                in the code.
+         rank0::Bool
+                Is this process the one with rank 0 in the 'block' which work in
+                parallel on shared memory arrays.
+         <d>::UnitRange{mk_int}
+                Loop ranges for each dimension <d> in looping.all_dimensions.
+         """
          Base.@kwdef struct LoopRanges
              $LoopRanges_body
          end
@@ -185,9 +169,19 @@ end
 Find the ranges for loop variables that optimize load balance for a certain block_size
 """
 function get_best_ranges(block_rank, block_size, dims, dim_sizes)
+    # Find ranges for 'dims', which should be parallelized
     ranges = get_best_ranges_from_sizes(block_rank, block_size,
                                         (dim_sizes[d] for d ∈ dims))
-    return Dict(d=>r for (d,r) ∈ zip(dims, ranges))
+    result = Dict(d=>r for (d,r) ∈ zip(dims, ranges))
+
+    # Iterate over all points in ranges not being parallelized
+    for d in all_dimensions
+        if !(d in dims)
+            result[d] = 1:dim_sizes[d]
+        end
+    end
+
+    return result
 end
 function get_best_ranges_from_sizes(block_rank, block_size, dim_sizes_list)
     splits = get_splits(block_size, length(dim_sizes_list))
@@ -225,6 +219,10 @@ end
 const loop_ranges = Ref{LoopRanges}()
 export loop_ranges
 
+# module variable used to store LoopRanges that are swapped into the loop_ranges
+# variable in begin_*_region() functions
+const loop_ranges_store = Dict{Tuple{Vararg{Symbol}}, LoopRanges}()
+
 #Create ranges for loops with different combinations of variables
 #
 #Arguments
@@ -233,14 +231,27 @@ export loop_ranges
 #`n` is an integer giving the size of the dimension.
 eval(quote
          function setup_loop_ranges!(block_rank, block_size; dim_sizes...)
-             @debug_loop_type_region current_loop_region_type[] = "serial"
-             best_ranges = Dict()
-             for dims ∈ dimension_combinations
-                 best_ranges[dims] = get_best_ranges(block_rank, block_size,
-                                                     dims, dim_sizes)
+             rank0 = (block_rank == 0)
+
+             # Use empty tuple for serial region
+             if rank0
+                 loop_ranges_store[()] = LoopRanges(;
+                     parallel_dims=(), rank0=rank0,
+                     Dict(d=>1:n for (d,n) in dim_sizes)...)
+             else
+                 loop_ranges_store[()] = LoopRanges(;
+                     parallel_dims=(), rank0=rank0,
+                     Dict(d=>1:0 for (d,_) in dim_sizes)...)
              end
 
-             loop_ranges[] = LoopRanges($(setup_loop_ranges_arguments...))
+             for dims ∈ dimension_combinations
+                 loop_ranges_store[dims] = LoopRanges(;
+                     parallel_dims=dims, rank0 = rank0,
+                     get_best_ranges(block_rank, block_size, dims, dim_sizes)...)
+             end
+
+             loop_ranges[] = loop_ranges_store[()]
+
              return nothing
          end
      end)
@@ -252,39 +263,15 @@ for dims ∈ dimension_combinations
     # Create an expression-function/macro combination for each level of the
     # loop
     dims_symb = Symbol(dims_string(dims))
-    dims_symb_string = string(dims_symb)
-    range_names = loop_range_names(dims)
     range_exprs =
-        Tuple(:( loop_ranges[].$(range_names[dim]) )
+        Tuple(:( loop_ranges[].$dim )
               for dim in dims)
     range_exprs = Tuple(Expr(:quote, r) for r in range_exprs)
-    for (dim, range_expr) ∈ zip(dims, range_exprs)
-        macro_name = Symbol(dims_symb, :_loop_, dim)
-        macro_at_name = Symbol("@", macro_name)
-        one_level_expr = quote
-            macro $macro_name(iteration_var, expr)
-                this_range = $range_expr
-                return quote
-                    @debug_loop_type_region begin
-                        if current_loop_region_type[] != $$dims_symb_string
-                            error("Called loop of type $($$dims_symb_string) in region of "
-                                  * "type $(current_loop_region_type[])")
-                        end
-                    end
-                    for $(esc(iteration_var)) = $this_range
-                        $(esc(expr))
-                    end
-                end
-            end
-            export $macro_at_name
-        end
-        eval(one_level_expr)
-    end
 
     # Create a macro for the nested loop
     # Copy style from Base.Cartesian.@nloops code
-    nested_macro_name =  Symbol(dims_symb, :_loop)
-    nested_macro_body_name =  Symbol(dims_symb, :_loop_body)
+    nested_macro_name = Symbol(:loop_, dims_symb)
+    nested_macro_body_name = Symbol(:loop_body_, dims_symb)
     iteration_vars = Tuple(Symbol(:i, x) for x ∈ 1:length(dims))
 
     macro_body_expr = quote
@@ -299,15 +286,7 @@ for dims ∈ dimension_combinations
                     end
                 end
             end
-            return quote
-                @debug_loop_type_region begin
-                    if current_loop_region_type[] != $$dims_symb_string
-                        error("Called loop of type $($$dims_symb_string) in region of type "
-                              * "$(current_loop_region_type[])")
-                    end
-                end
-                $ex
-            end
+            return ex
         end
     end
     eval(macro_body_expr)
@@ -322,20 +301,14 @@ for dims ∈ dimension_combinations
     end
     eval(macro_expr)
 
-    # Create a function for beginning loops of type 'dims'
+    # Create a function for beginning regions where 'dims' are parallelized
     sync_name = Symbol(:begin_, dims_symb, :_region)
     eval(quote
              function $sync_name(; no_synchronize::Bool=false)
-                 @debug_loop_type_region begin
-                     if current_loop_region_type[] == $dims_symb_string
-                         error("Called $($sync_name)(), but already in region of type "
-                               * "$(current_loop_region_type[]).")
-                     end
-                     current_loop_region_type[] = $dims_symb_string
-                 end
                  if !no_synchronize
                      _block_synchronize()
                  end
+                 loop_ranges[] = loop_ranges_store[$dims]
              end
              export $sync_name
          end)
@@ -346,13 +319,6 @@ Run a block of code on only rank-0 of each block
 """
 macro serial_region(blk)
     return quote
-        @debug_loop_type_region begin
-            if current_loop_region_type[] != "serial"
-                error("Called loop of type serial in region of type "
-                      * "$(current_loop_region_type[])")
-            end
-            current_loop_region_type[] = "serial"
-        end
         if loop_ranges[].rank0
             $(esc(blk))
         end
@@ -360,15 +326,10 @@ macro serial_region(blk)
 end
 export @serial_region
 function begin_serial_region(; no_synchronize::Bool=false)
-    @debug_loop_type_region begin
-        if current_loop_region_type[] == "serial"
-            error("Called begin_serial_region(), but already in region of type serial.")
-        end
-        current_loop_region_type[] = "serial"
-    end
     if !no_synchronize
         _block_synchronize()
     end
+    loop_ranges[] = loop_ranges_store[()]
 end
 export begin_serial_region
 

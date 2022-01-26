@@ -44,10 +44,10 @@ function update_phi!(fields, fvec, z, r, composition)
     # over species, and reduces number of _block_synchronize() calls needed
     # when there is only one species.
     
-    @s_r_z_loop_r ir begin # radial locations uncoupled so perform boltzmann solve 
+    @loop_r ir begin # radial locations uncoupled so perform boltzmann solve 
                            # for each radial position in parallel if possible 
-        if 1 ∈ loop_ranges[].s_r_z_range_s
-            @s_r_z_loop_z iz begin
+        if 1 ∈ loop_ranges[].s
+            @loop_z iz begin
                 z.scratch[iz] = fvec.density[iz,ir,1]
             end
         end
@@ -62,9 +62,9 @@ function update_phi!(fields, fvec, z, r, composition)
            # though synchronization is needed here.
            _block_synchronize()
         end
-        if 1 ∈ loop_ranges[].s_r_z_range_s
+        if 1 ∈ loop_ranges[].s
             @inbounds for is ∈ 2:composition.n_ion_species
-                @s_r_z_loop_z iz begin
+                @loop_z iz begin
                     z.scratch[iz] += fvec.density[iz,ir,is]
                 end
             end
@@ -90,7 +90,7 @@ function update_phi!(fields, fvec, z, r, composition)
             end
 
             if composition.electron_physics ∈ (boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath)
-                @s_r_z_loop_z iz begin
+                @loop_z iz begin
                     fields.phi[iz,ir] = composition.T_e * log(z.scratch[iz] / N_e)
                 end
                 # if fields.force_phi

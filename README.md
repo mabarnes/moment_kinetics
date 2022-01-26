@@ -141,29 +141,33 @@ To get more output on what tests were successful, an option `--verbose` (or `-v`
         * Recommended option is to use [tmpi](https://github.com/Azrael3000/tmpi). This utility (it's a bash script that uses `tmux`) starts an mpi program with each process in a separate pane in a single terminal, and mirrors input to all processes simultaneously (which is normally what you want, there are also commands to 'zoom in' on a single process).
         * Another 'low-tech' possibilty is to use something like `mpirun -np 4 xterm -e julia --project`, but that will start each process in a separate xterm and you would have to enter commands separately in each one. Occasionally useful for debugging when nothing else is available.
     * There is no restriction on the number of processes or number of grid points, although load-balancing may be affected - if there are only very few points per process, and a small fraction of processes have an extra grid point (e.g. splitting 5 points over 4 processes, so 3 process have 1 point but 1 process has 2 points), many processes will spend time waiting for the few with an extra point.
-    * Parallelism is implemented through macros that get the local ranges of points that each process should handle. The inner-most level of nested loops is typically not parallelized, to allow efficient FFTs for derivatives, etc. There are two types of loop macros:
-        * 1\. If there is just a single nested loop, then for example
-            ```
-            @s_z_loop is iz begin
-                for izpa in 1:vpa.n
-                    f[ivpa,iz,is] = ...
-                end
+    * Parallelism is implemented through macros that get the local ranges of points that each process should handle. The inner-most level of nested loops is typically not parallelized, to allow efficient FFTs for derivatives, etc. A loop over one (possibly parallelized) dimension can be written as, for example,
+        ```
+        @loop_s is begin
+            f[is] = ...
+        end
+        ```
+        These macros can be nested as needed for relatively complex loops
+        ```
+        @loop_s is begin
+            some_setup(is)
+            @loop_z iz begin
+                @views do_something(f[:,iz,is])
             end
-            ```
-            The dimensions in the prefix before `_loop` give the dimensions that are looped over by the macro, the arguments before `begin` are the names of the loop variables, in the same order as the dimensions in the prefix; the first dimension/loop-variable corresponds to the outermost nested loop, etc.
-        * 2\. For more complex loops, a separate macro can be used for each level, for example
-            ```
-            @s_z_loop_s is begin
-                some_setup(is)
-                @s_z_loop_z iz begin
-                    @views do_something(f[:,iz,is])
-                end
-                @s_z_loop_z iz begin
-                    @views do_something_else(f[:,iz,is])
-                end
+            @loop_z iz begin
+                @views do_something_else(f[:,iz,is])
             end
-            ```
-            The dimensions in the prefix before `_loop_` again give the dimensions that are looped over in the nested loop. The dimension in the suffix after `_loop_` indicates which particular dimension the macro loops over. The argument before `begin` is the name of the loop variables.
+        end
+        ```
+        Simpler nested loops can (optionally) be written more compactly
+        ```
+        @loop_s_z_vpa is iz ivpa begin
+            f[ivpa,iz,is] = ...
+        end
+        ```
+        Which dimensions are actually parallelized by these macros is controlled by the 'region' that the code is currently in, as set by the `begin_<dims>_region()` functions, which <dims> are the dimensions that will be parallelized in the following region. For example, after calling `begin_s_z_region()` loop over species and z will be divided up over the processes in a 'block' (currently there is only one block, which contains the whole grid and all the processes being used, as we have not yet implemented distributed-memory parallelism). Every process will loop over all points in the remaining dimensions.
+        * In a region after `begin_serial_region()`, the rank 0 process in each block will loop over all points in every dimension, and all other ranks will not loop over any.
+        * Inside serial regions, the macro `@serial_region` can also be used to wrap blocks of code so that they only run on rank 0 of the block. This is useful for example to allow the use of array-broadcast expressions during initialization where performance is not critical.
         * To help show how these macros work, a script is provided that print a set of examples where the loop macros are expanded. It can be run from the Julia REPL
             ```
             $ julia --project

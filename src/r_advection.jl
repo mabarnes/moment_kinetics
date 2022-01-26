@@ -11,7 +11,7 @@ using ..looping
 # do a single stage time advance (potentially as part of a multi-stage RK scheme)
 function r_advection!(f_out, fvec_in, ff, moments, SL, advect, r, z, vpa,
                       use_semi_lagrange, dt, t, spectral, composition, istage)
-    @s_z_vpa_loop_s is begin
+    @loop_s is begin
         # get the updated speed along the r direction using the current f
         @views update_speed_r!(advect[is], fvec_in.upar[:,:,is], moments.vth[:,:,is],
                                moments.evolve_upar, moments.evolve_ppar, vpa, z, r, t)
@@ -40,18 +40,16 @@ function r_advection!(f_out, fvec_in, ff, moments, SL, advect, r, z, vpa,
         #     end
         # end
         # advance r-advection equation
-        @s_z_vpa_loop_z iz begin
-            @s_z_vpa_loop_vpa ivpa begin
-                @views adjust_advection_speed!(advect[is].speed[:,ivpa,iz], advect[is].modified_speed[:,ivpa,iz],
-                                               fvec_in.density[iz,:,is], moments.vth[iz,:,is],
-                                               moments.evolve_density, moments.evolve_ppar)
-                # take the normalized pdf contained in fvec_in.pdf and remove the normalization,
-                # returning the true (un-normalized) particle distribution function in z.scratch
-                @views unnormalize_pdf!(r.scratch, fvec_in.pdf[ivpa,iz,:,is], fvec_in.density[iz,:,is], moments.vth[iz,:,is],
-                                        moments.evolve_density, moments.evolve_ppar)
-                @views advance_f_local!(f_out[ivpa,iz,:,is], r.scratch, ff[ivpa,iz,:,is], SL, advect[is], ivpa,
-                                        r, dt, istage, spectral, use_semi_lagrange)
-            end
+        @loop_z_vpa iz ivpa begin
+            @views adjust_advection_speed!(advect[is].speed[:,ivpa,iz], advect[is].modified_speed[:,ivpa,iz],
+                                           fvec_in.density[iz,:,is], moments.vth[iz,:,is],
+                                           moments.evolve_density, moments.evolve_ppar)
+            # take the normalized pdf contained in fvec_in.pdf and remove the normalization,
+            # returning the true (un-normalized) particle distribution function in z.scratch
+            @views unnormalize_pdf!(r.scratch, fvec_in.pdf[ivpa,iz,:,is], fvec_in.density[iz,:,is], moments.vth[iz,:,is],
+                                    moments.evolve_density, moments.evolve_ppar)
+            @views advance_f_local!(f_out[ivpa,iz,:,is], r.scratch, ff[ivpa,iz,:,is], SL, advect[is], ivpa,
+                                    r, dt, istage, spectral, use_semi_lagrange)
         end
     end
 end
@@ -82,20 +80,16 @@ function update_speed_r!(advect, upar, vth, evolve_upar, evolve_ppar, vpa, z, r,
     @boundscheck r.n == size(advect.speed,1) || throw(BoundsError(speed))
     if r.advection.option == "default" || r.advection.option == "constant"
         @inbounds begin
-            @s_z_vpa_loop_z iz begin
-                @s_z_vpa_loop_vpa ivpa begin
-                    @views advect.speed[:,ivpa,iz] .= r.advection.constant_speed
-                end
+            @loop_z_vpa iz ivpa begin
+                @views advect.speed[:,ivpa,iz] .= r.advection.constant_speed
             end
         end
     end
     # the default for modified_speed is simply speed.
     # will be modified later if semi-Lagrange scheme used
     @inbounds begin
-        @s_z_vpa_loop_z iz begin
-            @s_z_vpa_loop_vpa ivpa begin
-                @views advect.modified_speed[:,ivpa,iz] .= advect.speed[:,ivpa,iz]
-            end
+        @loop_z_vpa iz ivpa begin
+            @views advect.modified_speed[:,ivpa,iz] .= advect.speed[:,ivpa,iz]
         end
     end
     return nothing
