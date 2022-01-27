@@ -140,7 +140,7 @@ function update_speed_default!(advect, fields, fvec, moments, vpa, z, r, composi
                         end
                     end
                 end
-            end    
+            end
         end
     elseif moments.evolve_upar
         @loop_s is begin

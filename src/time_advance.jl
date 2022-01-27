@@ -68,7 +68,6 @@ function setup_time_advance!(pdf, vpa, z, r, composition, drive_input, moments,
     # indicate which parts of the equations are to be advanced concurrently.
     # if no splitting of operators, all terms advanced concurrently;
     # else, will advance one term at a time.
-    
     if t_input.split_operators
         advance = advance_info(false, false, false, false, false, false, false, false, rk_coefs)
     else
@@ -596,7 +595,7 @@ function rk_update!(scratch, pdf, moments, fields, vpa, z, r, rk_coefs, istage, 
 end
 function ssp_rk!(pdf, scratch, t, t_input, vpa, z, r, 
     vpa_spectral, z_spectral, r_spectral, moments, fields, vpa_advect, z_advect, r_advect,
-    vpa_SL, z_SL, r_SL, composition, collisions, advance,  scratch_dummy_sr, istep)
+    vpa_SL, z_SL, r_SL, composition, collisions, advance, scratch_dummy_sr, istep)
 
     n_rk_stages = t_input.n_rk_stages
 
@@ -708,12 +707,8 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, z_
         # fvec_out.upar is over-written in force_balance! and contains the particle flux
         force_balance!(fvec_out.upar, fvec_in, fields, collisions, vpa, z, r, dt, z_spectral, composition)
         # convert from the particle flux to the parallel flow
-        @loop_s is begin
-            @loop_r ir begin #MRH NOT SURE ABOUT THIS!
-                if 1 ∈ loop_ranges[].z
-                    @views @. fvec_out.upar[:,ir,is] /= fvec_out.density[:,ir,is]
-                end
-            end
+        @loop_s_r_z is ir iz begin
+            @views @. fvec_out.upar[:,ir,is] /= fvec_out.density[:,ir,is]
         end
     end
     if advance.energy

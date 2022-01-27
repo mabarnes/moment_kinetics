@@ -16,7 +16,8 @@ function r_advection!(f_out, fvec_in, ff, moments, SL, advect, r, z, vpa,
         @views update_speed_r!(advect[is], fvec_in.upar[:,:,is], moments.vth[:,:,is],
                                moments.evolve_upar, moments.evolve_ppar, vpa, z, r, t)
         # update the upwind/downwind boundary indices and upwind_increment
-        @views update_boundary_indices!(advect[is], loop_ranges[].s_z_vpa_range_vpa, loop_ranges[].s_z_vpa_range_z)
+        @views update_boundary_indices!(advect[is], loop_ranges[].vpa, loop_ranges[].z)
+
         # if using interpolation-free Semi-Lagrange,
         # follow characteristics backwards in time from level m+1 to level m
         # to get departure points.  then find index of grid point nearest
@@ -45,7 +46,8 @@ function r_advection!(f_out, fvec_in, ff, moments, SL, advect, r, z, vpa,
                                            fvec_in.density[iz,:,is], moments.vth[iz,:,is],
                                            moments.evolve_density, moments.evolve_ppar)
             # take the normalized pdf contained in fvec_in.pdf and remove the normalization,
-            # returning the true (un-normalized) particle distribution function in z.scratch
+            # returning the true (un-normalized) particle distribution function in r.scratch
+
             @views unnormalize_pdf!(r.scratch, fvec_in.pdf[ivpa,iz,:,is], fvec_in.density[iz,:,is], moments.vth[iz,:,is],
                                     moments.evolve_density, moments.evolve_ppar)
             @views advance_f_local!(f_out[ivpa,iz,:,is], r.scratch, ff[ivpa,iz,:,is], SL, advect[is], ivpa,

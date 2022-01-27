@@ -8,10 +8,8 @@ using ..looping
 function energy_equation!(ppar, fvec, moments, collisions, z, r, dt, spectral, composition)
     @loop_s is begin
         @loop_r ir begin
-            if 1 ∈ loop_ranges[].z
-                @views energy_equation_noCX!(ppar[:,ir,is], fvec.upar[:,ir,is], fvec.ppar[:,ir,is],
-                                             moments.qpar[:,ir,is], dt, z, spectral)
-            end
+            @views energy_equation_noCX!(ppar[:,ir,is], fvec.upar[:,ir,is], fvec.ppar[:,ir,is],
+                                         moments.qpar[:,ir,is], dt, z, spectral)
         end
     end
     # add in contribution due to charge exchange
@@ -37,16 +35,14 @@ end
 function energy_equation_CX!(ppar_out, dens, ppar, composition, CX_frequency, dt)
     @loop_s is begin
         @loop_r ir begin
-            if 1 ∈ loop_ranges[].z
-                if is ∈ composition.ion_species_range
-                    for isp ∈ composition.neutral_species_range
-                        @views @. ppar_out[:,ir,is] -= dt*CX_frequency*(dens[:,ir,isp]*ppar[:,ir,is]-dens[:,ir,is]*ppar[:,ir,isp])
-                    end
+            if is ∈ composition.ion_species_range
+                for isp ∈ composition.neutral_species_range
+                    @views @. ppar_out[:,ir,is] -= dt*CX_frequency*(dens[:,ir,isp]*ppar[:,ir,is]-dens[:,ir,is]*ppar[:,ir,isp])
                 end
-                if is ∈ composition.neutral_species_range
-                    for isp ∈ composition.ion_species_range
-                        @views @. ppar_out[:,ir,is] -= dt*CX_frequency*(dens[:,ir,isp]*ppar[:,ir,is]-dens[:,ir,is]*ppar[:,ir,isp])
-                    end
+            end
+            if is ∈ composition.neutral_species_range
+                for isp ∈ composition.ion_species_range
+                    @views @. ppar_out[:,ir,is] -= dt*CX_frequency*(dens[:,ir,isp]*ppar[:,ir,is]-dens[:,ir,is]*ppar[:,ir,isp])
                 end
             end
         end

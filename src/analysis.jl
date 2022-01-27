@@ -24,7 +24,7 @@ function analyze_fields_data(phi, ntime, nz, z_wgts, Lz)
 end
 
 function analyze_moments_data(density, parallel_flow, parallel_pressure, parallel_heat_flux, ntime, n_species, nz, z_wgts, Lz)
-    print("Analyzing velocity moments data...",n_species)
+    print("Analyzing velocity moments data...")
     density_fldline_avg = allocate_float(n_species, ntime)
     for is ∈ 1:n_species
         for i ∈ 1:ntime

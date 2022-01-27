@@ -26,7 +26,6 @@ using ..looping
 mutable struct moments
     # this is the particle density
     dens::MPISharedArray{mk_float,3}
-    # MRH dens::MPISharedArray{mk_float,2}
     # flag that keeps track of if the density needs updating before use
     # Note: may not be set for all species on this process, but this process only ever
     # sets/uses the value for the same subset of species. This means dens_update does
@@ -38,7 +37,6 @@ mutable struct moments
     enforce_conservation::Bool
     # this is the parallel flow
     upar::MPISharedArray{mk_float,3}
-    # MRH upar::MPISharedArray{mk_float,2}
     # flag that keeps track of whether or not upar needs updating before use
     # Note: may not be set for all species on this process, but this process only ever
     # sets/uses the value for the same subset of species. This means upar_update does
@@ -48,7 +46,6 @@ mutable struct moments
     evolve_upar::Bool
     # this is the parallel pressure
     ppar::MPISharedArray{mk_float,3}
-    # MRH ppar::MPISharedArray{mk_float,2}
     # flag that keeps track of whether or not ppar needs updating before use
     # Note: may not be set for all species on this process, but this process only ever
     # sets/uses the value for the same subset of species. This means ppar_update does
@@ -58,7 +55,6 @@ mutable struct moments
     evolve_ppar::Bool
     # this is the parallel heat flux
     qpar::MPISharedArray{mk_float,3}
-    # MRH qpar::MPISharedArray{mk_float,2}
     # flag that keeps track of whether or not qpar needs updating before use
     # Note: may not be set for all species on this process, but this process only ever
     # sets/uses the value for the same subset of species. This means qpar_update does
@@ -66,12 +62,10 @@ mutable struct moments
     qpar_updated::Vector{Bool}
     # this is the thermal speed based on the parallel temperature Tpar = ppar/dens: vth = sqrt(2*Tpar/m)
     vth::MPISharedArray{mk_float,3}
-    # MRH vth::MPISharedArray{mk_float,2}
     # if evolve_ppar = true, then the velocity variable is (vpa - upa)/vth, which introduces
     # a factor of vth for each power of wpa in velocity space integrals.
     # vpa_norm_fac accounts for this: it is vth if using the above definition for the parallel velocity,
     # and it is one otherwise
-    # MRH vpa_norm_fac::MPISharedArray{mk_float,2}
     vpa_norm_fac::MPISharedArray{mk_float,3}
     # flag that indicates if the drift kinetic equation should be formulated in advective form
     #advective_form::Bool
@@ -314,24 +308,18 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, r, composition,
     # pre-calculate avgdens_ratio so that we don't read fvec_new.density[:,is] on every
     # process in the next loop - that would be an error because different processes
     # write to fvec_new.density[:,is]
-    # This loop needs to be @s_r_z_loop_s because it fills the (not-shared)
-    # dummy_sr buffer to be used within the @s_z_loop_s below, so the values
+    # This loop needs to be @loop_s_r because it fills the (not-shared)
+    # dummy_sr buffer to be used within the @loop_s_r below, so the values
     # of is looped over by this process need to be the same.
-    @loop_s is begin
-        @loop_r ir begin
-            @views @. z.scratch = fvec_old.density[:,ir,is] - fvec_new.density[:,ir,is]
-            #@views composition.scratch[is] = integral(z.scratch, z.wgts)/integral(fvec_old.density[:,is], z.wgts)
-            @views dummy_sr[ir,is] = integral(z.scratch, z.wgts)/integral(fvec_old.density[:,ir,is], z.wgts)
-        end
+    @loop_s_r is ir begin
+        @views @. z.scratch = fvec_old.density[:,ir,is] - fvec_new.density[:,ir,is]
+        @views dummy_sr[ir,is] = integral(z.scratch, z.wgts)/integral(fvec_old.density[:,ir,is], z.wgts)
     end
     # Need to call _block_synchronize() even though loop type does not change because
     # all spatial ranks read fvec_new.density, but it will be written below.
     _block_synchronize()
 
     @loop_s is begin
-        #tmp1 = integral(fvec_old.density[:,is], z.wgts)
-        #tmp2 = integral(fvec_new.density[:,is], z.wgts)
-        #@views avgdens_ratio = integral(fvec_new.density[:,is], z.wgts)/integral(fvec_old.density[:,is], z.wgts)
         @loop_r ir begin
             avgdens_ratio = dummy_sr[ir,is]
             @loop_z iz begin

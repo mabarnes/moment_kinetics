@@ -137,9 +137,7 @@ function plot_1D_1V_diagnostics(run_name, fid, nwrite_movie, itime_min, itime_ma
     plot_fields(phi, delta_phi, time, itime_min, itime_max, nwrite_movie,
                 z, iz0, run_name, fitted_delta_phi, pp)
     # load velocity moments data
-    #density, parallel_flow, parallel_pressure, parallel_heat_flux,
-    #    thermal_speed, n_species, evolve_ppar = load_moments_data(fid)
-    # analyze the velocity moments datas
+    # analyze the velocity moments data
     density_fldline_avg, upar_fldline_avg, ppar_fldline_avg, qpar_fldline_avg,
         delta_density, delta_upar, delta_ppar, delta_qpar =
         analyze_moments_data(density, parallel_flow, parallel_pressure, parallel_heat_flux,
@@ -152,7 +150,6 @@ function plot_1D_1V_diagnostics(run_name, fid, nwrite_movie, itime_min, itime_ma
         pp, run_name, time, itime_min, itime_max,
         nwrite_movie, z, iz0, n_species)
     # load particle distribution function (pdf) data
-    #ff = load_pdf_data(fid)
     # analyze the pdf data
     f_fldline_avg, delta_f, dens_moment, upar_moment, ppar_moment =
         analyze_pdf_data(ff, vpa, nvpa, nz, n_species, ntime, vpa_wgts, z_wgts,

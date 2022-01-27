@@ -18,8 +18,6 @@ using ..velocity_moments: integrate_over_positive_vpa, integrate_over_negative_v
 using ..velocity_moments: create_moments, update_qpar!
 
 struct pdf_struct
-    # MRH norm::MPISharedArray{mk_float,3}
-    # MRH unnorm::MPISharedArray{mk_float,3}
     norm::MPISharedArray{mk_float,4}
     unnorm::MPISharedArray{mk_float,4}
 end
@@ -51,8 +49,6 @@ function init_pdf_and_moments(vpa, z, r, composition, species, n_rk_stages, evol
     # note that wpa = vpa - upar, unless moments.evolve_ppar = true, in which case wpa = (vpa - upar)/vth
     # the definition of pdf.norm changes accordingly from pdf.unnorm / density to pdf.unnorm * vth / density
     # when evolve_ppar = true.
-
-    
     pdf = create_and_init_pdf(moments, vpa, z, r, n_species, species)
     begin_s_r_z_region()
     # calculate the initial parallel heat flux from the initial un-normalised pdf
