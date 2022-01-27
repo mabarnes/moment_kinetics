@@ -10,7 +10,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macOS-latest]
       fail-fast: false
-    timeout-minutes: 40
+    timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v2
