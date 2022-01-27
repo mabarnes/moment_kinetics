@@ -44,25 +44,23 @@ function update_phi!(fields, fvec, z, r, composition)
     # over species, and reduces number of _block_synchronize() calls needed
     # when there is only one species.
     
+    if (composition.n_ion_species > 1 ||
+        composition.electron_physics == boltzmann_electron_response_with_simple_sheath)
+        # If there is more than 1 ion species, the ranks that handle species 1 have to
+        # read density for all the other species, so need to synchronize here.
+        # If composition.electron_physics ==
+        # boltzmann_electron_response_with_simple_sheath, all ranks need to read
+        # fvec.density at iz=1, so need to synchronize here.
+        # Use _block_synchronize() directly because we stay in a z_s type region, even
+        # though synchronization is needed here.
+        _block_synchronize()
+    end
     @loop_r ir begin # radial locations uncoupled so perform boltzmann solve 
                            # for each radial position in parallel if possible 
         if 1 ∈ loop_ranges[].s
             @loop_z iz begin
                 z.scratch[iz] = fvec.density[iz,ir,1]
             end
-        end
-        if (composition.n_ion_species > 1 ||
-            composition.electron_physics == boltzmann_electron_response_with_simple_sheath)
-           # If there is more than 1 ion species, the ranks that handle species 1 have to
-           # read density for all the other species, so need to synchronize here.
-           # If composition.electron_physics ==
-           # boltzmann_electron_response_with_simple_sheath, all ranks need to read
-           # fvec.density at iz=1, so need to synchronize here.
-           # Use _block_synchronize() directly because we stay in a z_s type region, even
-           # though synchronization is needed here.
-           _block_synchronize()
-        end
-        if 1 ∈ loop_ranges[].s
             @inbounds for is ∈ 2:composition.n_ion_species
                 @loop_z iz begin
                     z.scratch[iz] += fvec.density[iz,ir,is]
