@@ -708,7 +708,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, z_
         force_balance!(fvec_out.upar, fvec_in, fields, collisions, vpa, z, r, dt, z_spectral, composition)
         # convert from the particle flux to the parallel flow
         @loop_s_r_z is ir iz begin
-            @views @. fvec_out.upar[:,ir,is] /= fvec_out.density[:,ir,is]
+            fvec_out.upar[iz,ir,is] /= fvec_out.density[iz,ir,is]
         end
     end
     if advance.energy
