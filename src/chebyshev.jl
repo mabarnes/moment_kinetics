@@ -14,7 +14,7 @@ using ..type_definitions: mk_float
 using ..array_allocation: allocate_float, allocate_complex
 using ..clenshaw_curtis: clenshawcurtisweights
 import ..calculus: elementwise_derivative!
-import ..interpolation: interpolate_to_grid_1d
+import ..interpolation: interpolate_to_grid_1d!
 
 """
 """
@@ -228,6 +228,8 @@ Interpolation from a regular grid to a 1d grid with arbitrary spacing
 
 Arguments
 ---------
+result : Array{mk_float, 1}
+    Array to be overwritten with the result of the interpolation
 new_grid : Array{mk_float, 1}
     Grid of points to interpolate `coord` to
 f : Array{mk_float}
@@ -236,20 +238,12 @@ coord : coordinate
     `coordinate` struct giving the coordinate along which f varies
 chebyshev : chebyshev_info
     struct containing information for Chebyshev transforms
-
-Returns
--------
-result : Array
-    Array with the values of `f` interpolated to the points in `new_grid`.
 """
-function interpolate_to_grid_1d(newgrid, f, coord, chebyshev::chebyshev_info)
+function interpolate_to_grid_1d!(result, newgrid, f, coord, chebyshev::chebyshev_info)
     # define local variable nelement for convenience
     nelement = coord.nelement
     # check array bounds
     @boundscheck nelement == size(chebyshev.f,2) || throw(BoundsError(chebyshev.f))
-
-    # Array for output
-    result = similar(newgrid)
 
     n_new = size(newgrid)[1]
     # Find which points belong to which element.
@@ -309,7 +303,7 @@ function interpolate_to_grid_1d(newgrid, f, coord, chebyshev::chebyshev_info)
         results[kstart[nelement+1]:end] .= f[end]
     end
 
-    return result
+    return nothing
 end
 
 """
