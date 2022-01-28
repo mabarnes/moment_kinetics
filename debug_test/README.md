@@ -36,11 +36,6 @@ are undefined behaviour though, and so can also cause anything up to segfaults.
 The provided debugging routines can help to pin down where either of these
 errors happen.
 
-The cheapest test is `@debug_loop_type_region` (activated at `--debug 1` or
-higher). This checks that all loop macros used follow the correct
-`begin_*_region()` function, which should ensure that the array accesses are
-correct most of the time.
-
 The `@debug_shared_array` macro (activated at `--debug 2` or
 higher) counts all reads and writes to shared arrays by each process, and
 checks at each `_block_synchronize()` call whether either pattern has occurred
@@ -91,3 +86,7 @@ Suggested debugging strategy for race conditions is:
   ```
   moments.evolve_upar && _block_synchronize()
   ```
+
+You can find out what loop type is currently active by looking at
+`loop_ranges[].parallel_dims`. This variable is a Tuple containing Symbols for
+each dimension currently being parallelized.
