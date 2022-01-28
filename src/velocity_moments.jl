@@ -25,7 +25,7 @@ using ..looping
 
 mutable struct moments
     # this is the particle density
-    dens::MPISharedArray{mk_float,2}
+    dens::MPISharedArray{mk_float,3}
     # flag that keeps track of if the density needs updating before use
     # Note: may not be set for all species on this process, but this process only ever
     # sets/uses the value for the same subset of species. This means dens_update does
@@ -36,7 +36,7 @@ mutable struct moments
     # flag that indicates if exact particle conservation should be enforced
     enforce_conservation::Bool
     # this is the parallel flow
-    upar::MPISharedArray{mk_float,2}
+    upar::MPISharedArray{mk_float,3}
     # flag that keeps track of whether or not upar needs updating before use
     # Note: may not be set for all species on this process, but this process only ever
     # sets/uses the value for the same subset of species. This means upar_update does
@@ -45,7 +45,7 @@ mutable struct moments
     # flag that indicates if the parallel flow should be evolved via force balance
     evolve_upar::Bool
     # this is the parallel pressure
-    ppar::MPISharedArray{mk_float,2}
+    ppar::MPISharedArray{mk_float,3}
     # flag that keeps track of whether or not ppar needs updating before use
     # Note: may not be set for all species on this process, but this process only ever
     # sets/uses the value for the same subset of species. This means ppar_update does
@@ -54,49 +54,49 @@ mutable struct moments
     # flag that indicates if the parallel pressure should be evolved via the energy equation
     evolve_ppar::Bool
     # this is the parallel heat flux
-    qpar::MPISharedArray{mk_float,2}
+    qpar::MPISharedArray{mk_float,3}
     # flag that keeps track of whether or not qpar needs updating before use
     # Note: may not be set for all species on this process, but this process only ever
     # sets/uses the value for the same subset of species. This means qpar_update does
     # not need to be a shared memory array.
     qpar_updated::Vector{Bool}
     # this is the thermal speed based on the parallel temperature Tpar = ppar/dens: vth = sqrt(2*Tpar/m)
-    vth::MPISharedArray{mk_float,2}
+    vth::MPISharedArray{mk_float,3}
     # if evolve_ppar = true, then the velocity variable is (vpa - upa)/vth, which introduces
     # a factor of vth for each power of wpa in velocity space integrals.
     # vpa_norm_fac accounts for this: it is vth if using the above definition for the parallel velocity,
     # and it is one otherwise
-    vpa_norm_fac::MPISharedArray{mk_float,2}
+    vpa_norm_fac::MPISharedArray{mk_float,3}
     # flag that indicates if the drift kinetic equation should be formulated in advective form
     #advective_form::Bool
 end
-function create_moments(nz, n_species, evolve_moments)
+function create_moments(nz, nr, n_species, evolve_moments)
     # allocate array used for the particle density
-    density = allocate_shared_float(nz, n_species)
+    density = allocate_shared_float(nz, nr, n_species)
     # allocate array of Bools that indicate if the density is updated for each species
     density_updated = allocate_bool(n_species)
     density_updated .= false
     # allocate array used for the parallel flow
-    parallel_flow = allocate_shared_float(nz, n_species)
+    parallel_flow = allocate_shared_float(nz, nr, n_species)
     # allocate array of Bools that indicate if the parallel flow is updated for each species
     parallel_flow_updated = allocate_bool(n_species)
     parallel_flow_updated .= false
     # allocate array used for the parallel pressure
-    parallel_pressure = allocate_shared_float(nz, n_species)
+    parallel_pressure = allocate_shared_float(nz, nr, n_species)
     # allocate array of Bools that indicate if the parallel pressure is updated for each species
     parallel_pressure_updated = allocate_bool(n_species)
     parallel_pressure_updated .= false
     # allocate array used for the parallel flow
-    parallel_heat_flux = allocate_shared_float(nz, n_species)
+    parallel_heat_flux = allocate_shared_float(nz, nr, n_species)
     # allocate array of Bools that indicate if the parallel flow is updated for each species
     parallel_heat_flux_updated = allocate_bool(n_species)
     parallel_heat_flux_updated .= false
     # allocate array used for the thermal speed
-    thermal_speed = allocate_shared_float(nz, n_species)
+    thermal_speed = allocate_shared_float(nz, nr, n_species)
     if evolve_moments.parallel_pressure
         vpa_norm_fac = thermal_speed
     else
-        vpa_norm_fac = allocate_shared_float(nz, n_species)
+        vpa_norm_fac = allocate_shared_float(nz, nr, n_species)
         @serial_region begin
             vpa_norm_fac .= 1.0
         end
@@ -108,25 +108,25 @@ function create_moments(nz, n_species, evolve_moments)
         parallel_heat_flux, parallel_heat_flux_updated, thermal_speed, vpa_norm_fac)
 end
 # calculate the updated density (dens) and parallel pressure (ppar) for all species
-function update_moments!(moments, ff, vpa, nz, composition)
-    n_species = size(ff,3)
-    @boundscheck n_species == size(moments.dens,2) || throw(BoundsError(moments))
+function update_moments!(moments, ff, vpa, nz, nr, composition)
+    n_species = size(ff,4)
+    @boundscheck n_species == size(moments.dens,3) || throw(BoundsError(moments))
     @loop_s is begin
         if moments.dens_updated[is] == false
-            @views update_density_species!(moments.dens[:,is], ff[:,:,is], vpa, z)
+            @views update_density_species!(moments.dens[:,:,is], ff[:,:,:,is], vpa, z, r)
             moments.dens_updated[is] = true
         end
         if moments.upar_updated[is] == false
-            @views update_upar_species!(moments.upar[:,is], ff[:,:,is], vpa, z)
+            @views update_upar_species!(moments.upar[:,:,is], ff[:,:,:,is], vpa, z, r)
             moments.upar_updated[is] = true
         end
         if moments.ppar_updated[is] == false
-            @views update_ppar_species!(moments.ppar[:,is], ff[:,:,is], vpa, z)
+            @views update_ppar_species!(moments.ppar[:,:,is], ff[:,:,:,is], vpa, z, r)
             moments.ppar_updated[is] = true
         end
         @. moments.vth = sqrt(2*moments.ppar/moments.dens)
         if moments.qpar_updated[is] == false
-            @views update_qpar_species!(moments.qpar[:,is], ff[:,:,is], vpa, z, moments.vpa_norm_fac[:,is])
+            @views update_qpar_species!(moments.qpar[:,is], ff[:,:,is], vpa, z, r, moments.vpa_norm_fac[:,:,is])
             moments.qpar_updated[is] = true
         end
     end
@@ -134,83 +134,86 @@ function update_moments!(moments, ff, vpa, nz, composition)
 end
 # NB: if this function is called and if dens_updated is false, then
 # the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
-function update_density!(dens, dens_updated, pdf, vpa, z, composition)
-    n_species = size(pdf,3)
-    @boundscheck n_species == size(dens,2) || throw(BoundsError(dens))
+function update_density!(dens, dens_updated, pdf, vpa, z, r, composition)
+    n_species = size(pdf,4)
+    @boundscheck n_species == size(dens,3) || throw(BoundsError(dens))
     @loop_s is begin
         if dens_updated[is] == false
-            @views update_density_species!(dens[:,is], pdf[:,:,is], vpa, z)
+            @views update_density_species!(dens[:,:,is], pdf[:,:,:,is], vpa, z, r)
             dens_updated[is] = true
         end
     end
 end
 # calculate the updated density (dens) for a given species
-function update_density_species!(dens, ff, vpa, z)
+function update_density_species!(dens, ff, vpa, z, r)
     @boundscheck z.n == size(ff, 2) || throw(BoundsError(ff))
-    @boundscheck z.n == length(dens) || throw(BoundsError(dens))
-    @loop_z iz begin
-        dens[iz] = integrate_over_vspace(@view(ff[:,iz]), vpa.wgts)
+    @boundscheck z.n == size(dens, 1) || throw(BoundsError(dens))
+    @loop_r_z ir iz begin
+        dens[iz,ir] = integrate_over_vspace(@view(ff[:,iz,ir]), vpa.wgts)
     end
     return nothing
 end
 # NB: if this function is called and if upar_updated is false, then
 # the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
-function update_upar!(upar, upar_updated, pdf, vpa, z, composition)
-    n_species = size(pdf,3)
-    @boundscheck n_species == size(upar,2) || throw(BoundsError(upar))
+function update_upar!(upar, upar_updated, pdf, vpa, z, r, composition)
+    n_species = size(pdf,4)
+    @boundscheck n_species == size(upar,3) || throw(BoundsError(upar))
     @loop_s is begin
         if upar_updated[is] == false
-            @views update_upar_species!(upar[:,is], pdf[:,:,is], vpa, z)
+            @views update_upar_species!(upar[:,:,is], pdf[:,:,:,is], vpa, z, r)
             upar_updated[is] = true
         end
     end
 end
 # calculate the updated parallel flow (upar) for a given species
-function update_upar_species!(upar, ff, vpa, z)
+function update_upar_species!(upar, ff, vpa, z, r)
     @boundscheck z.n == size(ff, 2) || throw(BoundsError(ff))
-    @boundscheck z.n == length(upar) || throw(BoundsError(upar))
-    @loop_z iz begin
-        upar[iz] = integrate_over_vspace(@view(ff[:,iz]), vpa.grid, vpa.wgts)
+    @boundscheck z.n == size(upar, 1) || throw(BoundsError(upar))
+    @loop_r_z ir iz begin
+        upar[iz,ir] = integrate_over_vspace(@view(ff[:,iz,ir]), vpa.grid, vpa.wgts)
     end
     return nothing
 end
 # NB: if this function is called and if ppar_updated is false, then
 # the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
-function update_ppar!(ppar, ppar_updated, pdf, vpa, z, composition)
-    @boundscheck composition.n_species == size(ppar,2) || throw(BoundsError(ppar))
+function update_ppar!(ppar, ppar_updated, pdf, vpa, z, r, composition)
+    @boundscheck composition.n_species == size(ppar,3) || throw(BoundsError(ppar))
+    @boundscheck r.n == size(ppar,2) || throw(BoundsError(ppar))
+    @boundscheck z.n == size(ppar,1) || throw(BoundsError(ppar))
     @loop_s is begin
         if ppar_updated[is] == false
-            @views update_ppar_species!(ppar[:,is], pdf[:,:,is], vpa, z)
+            @views update_ppar_species!(ppar[:,:,is], pdf[:,:,:,is], vpa, z, r)
             ppar_updated[is] = true
         end
     end
 end
 # calculate the updated parallel pressure (ppar) for a given species
-function update_ppar_species!(ppar, ff, vpa, z)
+function update_ppar_species!(ppar, ff, vpa, z, r)
     @boundscheck z.n == size(ff, 2) || throw(BoundsError(ff))
-    @boundscheck z.n == length(ppar) || throw(BoundsError(ppar))
-    @loop_z iz begin
-        ppar[iz] = integrate_over_vspace(@view(ff[:,iz]), vpa.grid, 2, vpa.wgts)
+    @boundscheck z.n == size(ppar, 1) || throw(BoundsError(ppar))
+    @loop_r_z ir iz begin
+        ppar[iz,ir] = integrate_over_vspace(@view(ff[:,iz,ir]), vpa.grid, 2, vpa.wgts)
     end
     return nothing
 end
 # NB: if this function is called and if ppar_updated is false, then
 # the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
-function update_qpar!(qpar, qpar_updated, pdf, vpa, z, composition, vpanorm)
-    @boundscheck composition.n_species == size(qpar,2) || throw(BoundsError(qpar))
+
+function update_qpar!(qpar, qpar_updated, pdf, vpa, z, r, composition, vpanorm)
+    @boundscheck composition.n_species == size(qpar,3) || throw(BoundsError(qpar))
     @loop_s is begin
         if qpar_updated[is] == false
-            @views update_qpar_species!(qpar[:,is], pdf[:,:,is], vpa, z, vpanorm[:,is])
+            @views update_qpar_species!(qpar[:,:,is], pdf[:,:,:,is], vpa, z, r, vpanorm[:,:,is])
             qpar_updated[is] = true
         end
     end
 end
 # calculate the updated parallel heat flux (qpar) for a given species
-function update_qpar_species!(qpar, ff, vpa, z, vpanorm)
+function update_qpar_species!(qpar, ff, vpa, z, r, vpanorm)
     @boundscheck z.n == size(ff, 2) || throw(BoundsError(ff))
-    @boundscheck z.n == length(qpar) || throw(BoundsError(qpar))
-    @loop_z iz begin
-        qpar[iz] = integrate_over_vspace(@view(ff[:,iz]), vpa.grid, 3, vpa.wgts) * vpanorm[iz]^4
+    @boundscheck z.n == size(qpar, 1) || throw(BoundsError(qpar))
+    @loop_r_z ir iz begin
+        qpar[iz,ir] = integrate_over_vspace(@view(ff[:,iz,ir]), vpa.grid, 3, vpa.wgts) * vpanorm[iz,ir]^4
     end
     return nothing
 end
@@ -298,67 +301,66 @@ function integrate_over_negative_vpa(integrand, dzdt, vpa_wgts, wgts_mod)
     end
     return vpa_integral
 end
-function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, composition, moments)
+function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, r, composition, moments, dummy_sr)
     #global @. dens_hist += fvec_old.density
     #global n_hist += 1
 
     # pre-calculate avgdens_ratio so that we don't read fvec_new.density[:,is] on every
     # process in the next loop - that would be an error because different processes
     # write to fvec_new.density[:,is]
-    # This loop needs to be @s_z_loop_s because it fills the (not-shared)
-    # composition.scratch buffer to be used within the @s_z_loop_s below, so the values
+    # This loop needs to be @loop_s_r because it fills the (not-shared)
+    # dummy_sr buffer to be used within the @loop_s_r below, so the values
     # of is looped over by this process need to be the same.
-    @loop_s is begin
-        @views @. z.scratch = fvec_old.density[:,is] - fvec_new.density[:,is]
-        @views composition.scratch[is] = integral(z.scratch, z.wgts)/integral(fvec_old.density[:,is], z.wgts)
+    @loop_s_r is ir begin
+        @views @. z.scratch = fvec_old.density[:,ir,is] - fvec_new.density[:,ir,is]
+        @views dummy_sr[ir,is] = integral(z.scratch, z.wgts)/integral(fvec_old.density[:,ir,is], z.wgts)
     end
     # Need to call _block_synchronize() even though loop type does not change because
     # all spatial ranks read fvec_new.density, but it will be written below.
     _block_synchronize()
 
     @loop_s is begin
-        #tmp1 = integral(fvec_old.density[:,is], z.wgts)
-        #tmp2 = integral(fvec_new.density[:,is], z.wgts)
-        #@views avgdens_ratio = integral(fvec_new.density[:,is], z.wgts)/integral(fvec_old.density[:,is], z.wgts)
-        avgdens_ratio = composition.scratch[is]
-        @loop_z iz begin
-            # Create views once to save overhead
-            fnew_view = @view(fvec_new.pdf[:,iz,is])
-            fold_view = @view(fvec_old.pdf[:,iz,is])
+        @loop_r ir begin
+            avgdens_ratio = dummy_sr[ir,is]
+            @loop_z iz begin
+                # Create views once to save overhead
+                fnew_view = @view(fvec_new.pdf[:,iz,ir,is])
+                fold_view = @view(fvec_old.pdf[:,iz,ir,is])
 
-            # first calculate all of the integrals involving the updated pdf fvec_new.pdf
-            density_integral = integrate_over_vspace(fnew_view, vpa.wgts)
-            if moments.evolve_upar
-                upar_integral = integrate_over_vspace(fnew_view, vpa.grid, vpa.wgts)
-            end
-            if moments.evolve_ppar
-                ppar_integral = integrate_over_vspace(fnew_view, vpa.grid, 2, vpa.wgts) - 0.5*density_integral
-            end
-            # update the pdf to account for the density-conserving correction
-            @. fnew_view += fold_view * (1.0 - density_integral)
-            if moments.evolve_upar
-                # next form the even part of the old distribution function that is needed
-                # to ensure momentum and energy conservation
-                @. vpa.scratch = fold_view
-                reverse!(vpa.scratch)
-                @. vpa.scratch = 0.5*(vpa.scratch + fold_view)
-                # calculate the integrals involving this even pdf
-                vpa2_moment = integrate_over_vspace(vpa.scratch, vpa.grid, 2, vpa.wgts)
-                upar_integral /= vpa2_moment
-                # update the pdf to account for the momentum-conserving correction
-                @. fnew_view -= vpa.scratch * vpa.grid * upar_integral
-                if moments.evolve_ppar
-                    ppar_integral /= integrate_over_vspace(vpa.scratch, vpa.grid, 4, vpa.wgts) - 0.5 * vpa2_moment
-                    # update the pdf to account for the energy-conserving correction
-                    #@. fnew_view -= vpa.scratch * (vpa.grid^2 - 0.5) * ppar_integral
-                    # Until julia-1.8 is released, prefer x*x to x^2 to avoid
-                    # extra allocations when broadcasting.
-                    @. fnew_view -= vpa.scratch * (vpa.grid * vpa.grid - 0.5) * ppar_integral
+                # first calculate all of the integrals involving the updated pdf fvec_new.pdf
+                density_integral = integrate_over_vspace(fnew_view, vpa.wgts)
+                if moments.evolve_upar
+                    upar_integral = integrate_over_vspace(fnew_view, vpa.grid, vpa.wgts)
                 end
+                if moments.evolve_ppar
+                    ppar_integral = integrate_over_vspace(fnew_view, vpa.grid, 2, vpa.wgts) - 0.5*density_integral
+                end
+                # update the pdf to account for the density-conserving correction
+                @. fnew_view += fold_view * (1.0 - density_integral)
+                if moments.evolve_upar
+                    # next form the even part of the old distribution function that is needed
+                    # to ensure momentum and energy conservation
+                    @. vpa.scratch = fold_view
+                    reverse!(vpa.scratch)
+                    @. vpa.scratch = 0.5*(vpa.scratch + fold_view)
+                    # calculate the integrals involving this even pdf
+                    vpa2_moment = integrate_over_vspace(vpa.scratch, vpa.grid, 2, vpa.wgts)
+                    upar_integral /= vpa2_moment
+                    # update the pdf to account for the momentum-conserving correction
+                    @. fnew_view -= vpa.scratch * vpa.grid * upar_integral
+                    if moments.evolve_ppar
+                        ppar_integral /= integrate_over_vspace(vpa.scratch, vpa.grid, 4, vpa.wgts) - 0.5 * vpa2_moment
+                        # update the pdf to account for the energy-conserving correction
+                        #@. fnew_view -= vpa.scratch * (vpa.grid^2 - 0.5) * ppar_integral
+                        # Until julia-1.8 is released, prefer x*x to x^2 to avoid
+                        # extra allocations when broadcasting.
+                        @. fnew_view -= vpa.scratch * (vpa.grid * vpa.grid - 0.5) * ppar_integral
+                    end
+                end
+                fvec_new.density[iz,ir,is] += fvec_old.density[iz,ir,is] * avgdens_ratio
+                # update the thermal speed, as the density has changed
+                moments.vth[iz,ir,is] = sqrt(2.0*fvec_new.ppar[iz,ir,is]/fvec_new.density[iz,ir,is])
             end
-            fvec_new.density[iz,is] += fvec_old.density[iz,is] * avgdens_ratio
-            # update the thermal speed, as the density has changed
-            moments.vth[iz,is] = sqrt(2.0*fvec_new.ppar[iz,is]/fvec_new.density[iz,is])
         end
         #global tmpsum1 += avgdens_ratio
         #@views avgdens_ratio2 = integral(fvec_old.density[:,is] .- fvec_new.density[:,is], z.wgts)#/integral(fvec_old.density[:,is], z.wgts)
@@ -370,29 +372,25 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, composition, mo
     # NB: no longer need fvec_old.pdf so can use for temporary storage of un-normalised pdf
     if moments.evolve_ppar
         @loop_s is begin
-            @loop_z iz begin
-                fvec_old.temp_z_s[iz,is] = fvec_new.density[iz,is] / moments.vth[iz,is]
-            end
-            @loop_z iz begin
-                for ivpa ∈ 1:vpa.n
-                    fvec_old.pdf[ivpa,iz,is] = fvec_new.pdf[ivpa,iz,is] * fvec_old.temp_z_s[iz,is]
+            @loop_r ir begin
+                @loop_z iz begin
+                    fvec_old.temp_z_s[iz,ir,is] = fvec_new.density[iz,ir,is] / moments.vth[iz,ir,is]
+                end
+                @loop_z_vpa iz ivpa begin
+                    fvec_old.pdf[ivpa,iz,ir,is] = fvec_new.pdf[ivpa,iz,ir,is] * fvec_old.temp_z_s[iz,ir,is]
                 end
             end
         end
     elseif moments.evolve_density
-        @loop_s_z is iz begin
-            for ivpa ∈ 1:vpa.n
-                fvec_old.pdf[ivpa,iz,is] = fvec_new.pdf[ivpa,iz,is] * fvec_new.density[iz,is]
-            end
+        @loop_s_r_z_vpa is ir iz ivpa begin
+            fvec_old.pdf[ivpa,iz,ir,is] = fvec_new.pdf[ivpa,iz,ir,is] * fvec_new.density[iz,ir,is]
         end
     else
-        @loop_s_z is iz begin
-            for ivpa ∈ 1:vpa.n
-                fvec_old.pdf[ivpa,iz,is] = fvec_new.pdf[ivpa,iz,is]
-            end
+        @loop_s_r_z_vpa is ir iz ivpa begin
+            fvec_old.pdf[ivpa,iz,ir,is] = fvec_new.pdf[ivpa,iz,ir,is]
         end
     end
-    update_qpar!(moments.qpar, moments.qpar_updated, fvec_old.pdf, vpa, z, composition, moments.vpa_norm_fac)
+    update_qpar!(moments.qpar, moments.qpar_updated, fvec_old.pdf, vpa, z, r, composition, moments.vpa_norm_fac)
 end
 function reset_moments_status!(moments, composition, z)
     if moments.evolve_density == false

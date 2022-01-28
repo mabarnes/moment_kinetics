@@ -18,28 +18,29 @@ using ..velocity_moments: integrate_over_positive_vpa, integrate_over_negative_v
 using ..velocity_moments: create_moments, update_qpar!
 
 struct pdf_struct
-    norm::MPISharedArray{mk_float,3}
-    unnorm::MPISharedArray{mk_float,3}
+    norm::MPISharedArray{mk_float,4}
+    unnorm::MPISharedArray{mk_float,4}
 end
 
 # creates the normalised pdf and the velocity-space moments and populates them
 # with a self-consistent initial condition
-function init_pdf_and_moments(vpa, z, composition, species, n_rk_stages, evolve_moments)
+function init_pdf_and_moments(vpa, z, r, composition, species, n_rk_stages, evolve_moments)
     # define the n_species variable for convenience
     n_species = composition.n_species
     # create the 'moments' struct that contains various v-space moments and other
     # information related to these moments.
     # the time-dependent entries are not initialised.
-    moments = create_moments(z.n, n_species, evolve_moments)
+    
+    moments = create_moments(z.n, r.n, n_species, evolve_moments)
     @serial_region begin
         # initialise the density profile
-        init_density!(moments.dens, z, species, n_species)
+        init_density!(moments.dens, z, r, species, n_species)
         moments.dens_updated .= true
         # initialise the parallel flow profile
-        init_upar!(moments.upar, z, species, n_species)
+        init_upar!(moments.upar, z, r, species, n_species)
         moments.upar_updated .= true
         # initialise the parallel thermal speed profile
-        init_vth!(moments.vth, z, species, n_species)
+        init_vth!(moments.vth, z, r, species, n_species)
         @. moments.ppar = 0.5 * moments.dens * moments.vth^2
         moments.ppar_updated .= true
     end
@@ -48,35 +49,37 @@ function init_pdf_and_moments(vpa, z, composition, species, n_rk_stages, evolve_
     # note that wpa = vpa - upar, unless moments.evolve_ppar = true, in which case wpa = (vpa - upar)/vth
     # the definition of pdf.norm changes accordingly from pdf.unnorm / density to pdf.unnorm * vth / density
     # when evolve_ppar = true.
-    pdf = create_and_init_pdf(moments, vpa, z, n_species, species)
+    pdf = create_and_init_pdf(moments, vpa, z, r, n_species, species)
+    begin_s_r_z_region()
     # calculate the initial parallel heat flux from the initial un-normalised pdf
-    begin_s_z_region()
-    update_qpar!(moments.qpar, moments.qpar_updated, pdf.unnorm, vpa, z, composition, moments.vpa_norm_fac)
+    update_qpar!(moments.qpar, moments.qpar_updated, pdf.unnorm, vpa, z, r, composition, moments.vpa_norm_fac)
     return pdf, moments
 end
-function create_and_init_pdf(moments, vpa, z, n_species, species)
-    pdf_norm = allocate_shared_float(vpa.n, z.n, n_species)
-    pdf_unnorm = allocate_shared_float(vpa.n, z.n, n_species)
+function create_and_init_pdf(moments, vpa, z, r, n_species, species)
+    pdf_norm = allocate_shared_float(vpa.n, z.n, r.n, n_species)
+    pdf_unnorm = allocate_shared_float(vpa.n, z.n, r.n, n_species)
     @serial_region begin
         for is ∈ 1:n_species
-            if species[is].z_IC.initialization_option == "bgk" || species[is].vpa_IC.initialization_option == "bgk"
-                @views init_bgk_pdf!(f[:,:,is], 0.0, species[is].initial_temperature, z.grid, z.L, vpa.grid)
-            else
-                # updates pdf_norm to contain pdf / density, so that ∫dvpa pdf.norm = 1,
-                # ∫dwpa wpa * pdf.norm = 0, and ∫dwpa m_s (wpa/vths)^2 pdf.norm = 1/2
-                # to machine precision
-                @views init_pdf_over_density!(pdf_norm[:,:,is], species[is], vpa, z, moments.vth[:,is],
-                                              moments.upar[:,is], moments.vpa_norm_fac[:,is],
-                                              moments.evolve_upar, moments.evolve_ppar)
+            for ir ∈ 1:r.n
+                if species[is].z_IC.initialization_option == "bgk" || species[is].vpa_IC.initialization_option == "bgk"
+                    @views init_bgk_pdf!(f[:,:,ir,is], 0.0, species[is].initial_temperature, z.grid, z.L, vpa.grid)
+                else
+                    # updates pdf_norm to contain pdf / density, so that ∫dvpa pdf.norm = 1,
+                    # ∫dwpa wpa * pdf.norm = 0, and ∫dwpa m_s (wpa/vths)^2 pdf.norm = 1/2
+                    # to machine precision
+                    @views init_pdf_over_density!(pdf_norm[:,:,ir,is], species[is], vpa, z, moments.vth[:,ir,is],
+                                                  moments.upar[:,ir,is], moments.vpa_norm_fac[:,ir,is],
+                                                  moments.evolve_upar, moments.evolve_ppar)
+                end
             end
         end
         pdf_unnorm .= pdf_norm
         for ivpa ∈ 1:vpa.n
-            @. pdf_unnorm[ivpa,:,:] *= moments.dens
+            @. pdf_unnorm[ivpa,:,:,:] *= moments.dens
             if moments.evolve_ppar
-                @. pdf_norm[ivpa,:,:] *= moments.vth
+                @. pdf_norm[ivpa,:,:,:] *= moments.vth
             elseif moments.evolve_density == false
-                @. pdf_norm[ivpa,:,:] = pdf_unnorm[ivpa,:,:]
+                @. pdf_norm[ivpa,:,:,:] = pdf_unnorm[ivpa,:,:,:]
             end
         end
     end
@@ -84,60 +87,66 @@ function create_and_init_pdf(moments, vpa, z, n_species, species)
 end
 # for now the only initialisation option for the temperature is constant in z
 # returns vth0 = sqrt(2Ts/ms) / sqrt(2Te/ms) = sqrt(Ts/Te)
-function init_vth!(vth, z, spec, n_species)
+function init_vth!(vth, z, r, spec, n_species)
     for is ∈ 1:n_species
-        if spec[is].z_IC.initialization_option == "sinusoid"
-            # initial condition is sinusoid in z
-            @. vth[:,is] =
-                sqrt(spec[is].initial_temperature
-                     * (1.0 + spec[is].z_IC.temperature_amplitude
-                              * cos(2.0*π*spec[is].z_IC.wavenumber*z.grid/z.L +
-                                    spec[is].z_IC.temperature_phase)))
-        else
-            @. vth[:,is] =  sqrt(spec[is].initial_temperature)
+        for ir ∈ 1:r.n
+            if spec[is].z_IC.initialization_option == "sinusoid"
+                # initial condition is sinusoid in z
+                @. vth[:,ir,is] =
+                    sqrt(spec[is].initial_temperature
+                         * (1.0 + spec[is].z_IC.temperature_amplitude
+                                  * cos(2.0*π*spec[is].z_IC.wavenumber*z.grid/z.L +
+                                        spec[is].z_IC.temperature_phase)))
+            else
+                @. vth[:,ir,is] =  sqrt(spec[is].initial_temperature)
+            end
         end
     end
     return nothing
 end
-function init_density!(dens, z, spec, n_species)
+function init_density!(dens, z, r, spec, n_species)
     for is ∈ 1:n_species
-        if spec[is].z_IC.initialization_option == "gaussian"
-            # initial condition is an unshifted Gaussian
-            @. dens[:,is] = spec[is].initial_density + exp(-(z.grid/spec[is].z_IC.width)^2)
-        elseif spec[is].z_IC.initialization_option == "sinusoid"
-            # initial condition is sinusoid in z
-            @. dens[:,is] =
-                (spec[is].initial_density
-                 * (1.0 + spec[is].z_IC.density_amplitude
-                          * cos(2.0*π*spec[is].z_IC.wavenumber*z.grid/z.L
-                                + spec[is].z_IC.density_phase)))
-        elseif spec[is].z_IC.inititalization_option == "monomial"
-            # linear variation in z, with offset so that
-            # function passes through zero at upwind boundary
-            @. dens[:,is] = (z.grid + 0.5*z.L)^spec[is].z_IC.monomial_degree
+        for ir ∈ 1:r.n
+            if spec[is].z_IC.initialization_option == "gaussian"
+                # initial condition is an unshifted Gaussian
+                @. dens[:,ir,is] = spec[is].initial_density + exp(-(z.grid/spec[is].z_IC.width)^2)
+            elseif spec[is].z_IC.initialization_option == "sinusoid"
+                # initial condition is sinusoid in z
+                @. dens[:,ir,is] =
+                    (spec[is].initial_density
+                     * (1.0 + spec[is].z_IC.density_amplitude
+                              * cos(2.0*π*spec[is].z_IC.wavenumber*z.grid/z.L
+                                    + spec[is].z_IC.density_phase)))
+            elseif spec[is].z_IC.inititalization_option == "monomial"
+                # linear variation in z, with offset so that
+                # function passes through zero at upwind boundary
+                @. dens[:,ir,is] = (z.grid + 0.5*z.L)^spec[is].z_IC.monomial_degree
+            end
         end
     end
     return nothing
 end
 # for now the only initialisation option is zero parallel flow
-function init_upar!(upar, z, spec, n_species)
+function init_upar!(upar, z, r, spec, n_species)
     for is ∈ 1:n_species
-        if spec[is].z_IC.initialization_option == "sinusoid"
-            # initial condition is sinusoid in z
-            @. upar[:,is] =
-                (spec[is].z_IC.upar_amplitude
-                 * cos(2.0*π*spec[is].z_IC.wavenumber*z.grid/z.L
-                       + spec[is].z_IC.upar_phase))
-        elseif spec[is].z_IC.initialization_option == "gaussian" # "linear"
-            # initial condition is linear in z
-            # this is designed to give a nonzero J_{||i} at endpoints in z
-            # necessary for an electron sheath condition involving J_{||i}
-            # option "gaussian" to be consistent with usual init option for now
-            @. upar[:,is] =
-                (spec[is].z_IC.upar_amplitude * 2.0 *       
-                       (z.grid[:] - z.grid[floor(Int,z.n/2)])/z.L)
-        else
-            @. upar[:,is] = 0.0
+        for ir ∈ 1:r.n
+            if spec[is].z_IC.initialization_option == "sinusoid"
+                # initial condition is sinusoid in z
+                @. upar[:,ir,is] =
+                    (spec[is].z_IC.upar_amplitude
+                     * cos(2.0*π*spec[is].z_IC.wavenumber*z.grid/z.L
+                           + spec[is].z_IC.upar_phase))
+            elseif spec[is].z_IC.initialization_option == "gaussian" # "linear"
+                # initial condition is linear in z
+                # this is designed to give a nonzero J_{||i} at endpoints in z
+                # necessary for an electron sheath condition involving J_{||i}
+                # option "gaussian" to be consistent with usual init option for now
+                @. upar[:,ir,is] =
+                    (spec[is].z_IC.upar_amplitude * 2.0 *       
+                           (z.grid[:] - z.grid[floor(Int,z.n/2)])/z.L)
+            else
+                @. upar[:,ir,is] = 0.0
+            end
         end
     end
     return nothing
@@ -211,17 +220,17 @@ function init_pdf_over_density!(pdf, spec, vpa, z, vth, upar, vpa_norm_fac, evol
     # end
     return nothing
 end
-function enforce_boundary_conditions!(f, vpa_bc, z_bc, vpa, z, vpa_adv::T1, z_adv::T2, composition) where {T1, T2}
-    @loop_s_z is iz begin
+function enforce_boundary_conditions!(f, vpa_bc, z_bc, vpa, z, r, vpa_adv::T1, z_adv::T2, composition) where {T1, T2}
+    @loop_s_r_z is ir iz begin
         # enforce the vpa BC
-        @views enforce_vpa_boundary_condition_local!(f[:,iz,is], vpa_bc, vpa_adv[is].upwind_idx[iz],
-                                                     vpa_adv[is].downwind_idx[iz])
+        @views enforce_vpa_boundary_condition_local!(f[:,iz,ir,is], vpa_bc, vpa_adv[is].upwind_idx[iz,ir],
+                                                     vpa_adv[is].downwind_idx[iz,ir])
     end
-    begin_s_vpa_region()
-    @views enforce_z_boundary_condition!(f, z_bc, z_adv, vpa, composition)
+    begin_s_r_vpa_region()
+    @views enforce_z_boundary_condition!(f, z_bc, z_adv, vpa, r, composition)
 end
 # enforce boundary conditions on f in z
-function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, composition) where T
+function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, r, composition) where T
     # define n_species variable for convenience
     n_species = composition.n_species
     # define nvpa variable for convenience
@@ -231,17 +240,17 @@ function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, composition) 
     # 'constant' BC is time-independent f at upwind boundary
     # and constant f beyond boundary
     if bc == "constant"
-        @loop_s_vpa is ivpa begin
-            upwind_idx = adv[ivpa,is].upwind_idx[]
-            f[ivpa,upwind_idx,is] = density_offset * exp(-(vpa.grid[ivpa]/vpawidth)^2) / sqrt(pi)
+        @loop_s_r_vpa is ir ivpa begin
+            upwind_idx = adv[is].upwind_idx[ivpa,ir]
+            f[ivpa,upwind_idx,ir,is] = density_offset * exp(-(vpa.grid[ivpa]/vpawidth)^2) / sqrt(pi)
         end
     # 'periodic' BC enforces periodicity by taking the average of the boundary points
     elseif bc == "periodic"
-        @loop_s_vpa is ivpa begin
-            downwind_idx = adv[is].downwind_idx[ivpa]
-            upwind_idx = adv[is].upwind_idx[ivpa]
-            f[ivpa,downwind_idx,is] = 0.5*(f[ivpa,upwind_idx,is]+f[ivpa,downwind_idx,is])
-            f[ivpa,upwind_idx,is] = f[ivpa,downwind_idx,is]
+        @loop_s_r_vpa is ir ivpa begin
+            downwind_idx = adv[is].downwind_idx[ivpa,ir]
+            upwind_idx = adv[is].upwind_idx[ivpa,ir]
+            f[ivpa,downwind_idx,ir,is] = 0.5*(f[ivpa,upwind_idx,ir,is]+f[ivpa,downwind_idx,ir,is])
+            f[ivpa,upwind_idx,ir,is] = f[ivpa,downwind_idx,ir,is]
         end
     # 'wall' BC enforces wall boundary conditions
     elseif bc == "wall"
@@ -251,8 +260,10 @@ function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, composition) 
                 @loop_vpa ivpa begin
                     # no parallel BC should be enforced for vpa = 0
                     if abs(vpa.grid[ivpa]) > zero
-                        upwind_idx = adv[is].upwind_idx[ivpa]
-                        f[ivpa,upwind_idx,is] = 0.0
+                        @loop_r ir begin
+                            upwind_idx = adv[is].upwind_idx[ivpa,ir]
+                            f[ivpa,upwind_idx,ir,is] = 0.0
+                        end
                     end
                 end
             end
@@ -262,41 +273,43 @@ function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, composition) 
             begin_serial_region()
             # TODO: parallelise this...
             @serial_region begin
-                # define vtfac to avoid repeated computation below
-                vtfac = sqrt(composition.T_wall * composition.mn_over_mi)
-                # initialise the combined ion/neutral fluxes into the walls to be zero
-                wall_flux_0 = 0.0
-                wall_flux_L = 0.0
-                # include the contribution to the wall fluxes due to species with index 'is'
-                for is ∈ 1:composition.n_ion_species
-                    @views wall_flux_0 += (sqrt(composition.mn_over_mi) *
-                                           integrate_over_negative_vpa(abs.(vpa.grid) .* f[:,1,is], vpa.grid, vpa.wgts, vpa.scratch))
-                    @views wall_flux_L += (sqrt(composition.mn_over_mi) *
-                                           integrate_over_positive_vpa(abs.(vpa.grid) .* f[:,end,is], vpa.grid, vpa.wgts, vpa.scratch))
-                end
-                for isn ∈ 1:composition.n_neutral_species
-                    is = isn + composition.n_ion_species
-                    @views wall_flux_0 += integrate_over_negative_vpa(abs.(vpa.grid) .* f[:,1,is], vpa.grid, vpa.wgts, vpa.scratch)
-                    @views wall_flux_L += integrate_over_positive_vpa(abs.(vpa.grid) .* f[:,end,is], vpa.grid, vpa.wgts, vpa.scratch)
-                end
-                # NB: need to generalise to more than one ion species
-                # get the Knudsen cosine distribution
-                # NB: as vtfac is time-independent, can be made more efficient by creating
-                # array for Knudsen cosine distribution and carrying out following four lines
-                # of calculation at initialization
-                @. vpa.scratch = (3*pi/vtfac^3)*abs(vpa.grid)*erfc(abs(vpa.grid)/vtfac)
-                tmparr = copy(vpa.scratch)
-                tmp = integrate_over_positive_vpa(vpa.grid .* vpa.scratch, vpa.grid, vpa.wgts, tmparr)
-                @. vpa.scratch /= tmp
-                for isn ∈ 1:composition.n_neutral_species
-                    is = isn + composition.n_ion_species
-                    for ivpa ∈ 1:nvpa
-                        # no parallel BC should be enforced for vpa = 0
-                        if abs(vpa.grid[ivpa]) > zero
-                            if adv[is].upwind_idx[ivpa] == 1
-                                f[ivpa,1,is] = wall_flux_0 * vpa.scratch[ivpa]
-                            else
-                                f[ivpa,end,is] = wall_flux_L * vpa.scratch[ivpa]
+                for ir ∈ 1:r.n
+                    # define vtfac to avoid repeated computation below
+                    vtfac = sqrt(composition.T_wall * composition.mn_over_mi)
+                    # initialise the combined ion/neutral fluxes into the walls to be zero
+                    wall_flux_0 = 0.0
+                    wall_flux_L = 0.0
+                    # include the contribution to the wall fluxes due to species with index 'is'
+                    for is ∈ 1:composition.n_ion_species
+                            @views wall_flux_0 += (sqrt(composition.mn_over_mi) *
+                                                   integrate_over_negative_vpa(abs.(vpa.grid) .* f[:,1,ir,is], vpa.grid, vpa.wgts, vpa.scratch))
+                            @views wall_flux_L += (sqrt(composition.mn_over_mi) *
+                                                   integrate_over_positive_vpa(abs.(vpa.grid) .* f[:,end,ir,is], vpa.grid, vpa.wgts, vpa.scratch))
+                    end
+                    for isn ∈ 1:composition.n_neutral_species
+                            is = isn + composition.n_ion_species
+                            @views wall_flux_0 += integrate_over_negative_vpa(abs.(vpa.grid) .* f[:,1,ir,is], vpa.grid, vpa.wgts, vpa.scratch)
+                            @views wall_flux_L += integrate_over_positive_vpa(abs.(vpa.grid) .* f[:,end,ir,is], vpa.grid, vpa.wgts, vpa.scratch)
+                    end
+                    # NB: need to generalise to more than one ion species
+                    # get the Knudsen cosine distribution
+                    # NB: as vtfac is time-independent, can be made more efficient by creating
+                    # array for Knudsen cosine distribution and carrying out following four lines
+                    # of calculation at initialization
+                    @. vpa.scratch = (3*pi/vtfac^3)*abs(vpa.grid)*erfc(abs(vpa.grid)/vtfac)
+                    tmparr = copy(vpa.scratch)
+                    tmp = integrate_over_positive_vpa(vpa.grid .* vpa.scratch, vpa.grid, vpa.wgts, tmparr)
+                    @. vpa.scratch /= tmp
+                    for isn ∈ 1:composition.n_neutral_species
+                        is = isn + composition.n_ion_species
+                        for ivpa ∈ 1:nvpa
+                            # no parallel BC should be enforced for vpa = 0
+                            if abs(vpa.grid[ivpa]) > zero
+                                if adv[is].upwind_idx[ivpa,ir] == 1
+                                    f[ivpa,1,ir,is] = wall_flux_0 * vpa.scratch[ivpa]
+                                else
+                                    f[ivpa,end,ir,is] = wall_flux_L * vpa.scratch[ivpa]
+                                end
                             end
                         end
                     end
@@ -309,9 +322,12 @@ end
 # at every z grid point
 function enforce_vpa_boundary_condition!(f, bc, src::T) where T
     nz = size(f,2)
-    for iz ∈ 1:nz
-        enforce_vpa_boundary_condition_local!(view(f,:,iz), bc, src.upwind_idx[iz],
-            src.downwind_idx[iz])
+    nr = size(f,3)
+    for ir ∈ 1:nr
+        for iz ∈ 1:nz
+            enforce_vpa_boundary_condition_local!(view(f,:,iz,ir), bc, src.upwind_idx[iz],
+                src.downwind_idx[iz])
+        end
     end
 end
 function enforce_vpa_boundary_condition_local!(f::T, bc, upwind_idx, downwind_idx) where T

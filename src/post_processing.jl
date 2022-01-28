@@ -53,11 +53,79 @@ function analyze_and_plot_data(path)
     # open the netcdf file and give it the handle 'fid'
     fid = open_netcdf_file(run_name)
     # load space-time coordinate data
-    nvpa, vpa, vpa_wgts, nz, z, z_wgts, Lz, ntime, time = load_coordinate_data(fid)
+    nvpa, vpa, vpa_wgts, nz, z, z_wgts, Lz, 
+     nr, r, r_wgts, Lr, ntime, time = load_coordinate_data(fid)
     # initialise the post-processing input options
-    nwrite_movie, itime_min, itime_max, ivpa0, iz0 = init_postprocessing_options(pp, nvpa, nz, ntime)
-    # load fields data
+    nwrite_movie, itime_min, itime_max, ivpa0, iz0, ir0 = init_postprocessing_options(pp, nvpa, nz, nr, ntime)
+    # load full (z,r,t) fields data
     phi = load_fields_data(fid)
+    # load full (z,r,species,t) velocity moments data
+    density, parallel_flow, parallel_pressure, parallel_heat_flux,
+        thermal_speed, n_species, evolve_ppar = load_moments_data(fid)
+    # load full (vpa,z,r,species,t) particle distribution function (pdf) data
+    ff = load_pdf_data(fid)
+    
+    #evaluate 1D-1V diagnostics at fixed ir0
+    plot_1D_1V_diagnostics(run_name, fid, nwrite_movie, itime_min, itime_max, ivpa0, iz0, ir0, r,
+        phi[:,ir0,:], 
+        density[:,ir0,:,:],
+        parallel_flow[:,ir0,:,:],
+        parallel_pressure[:,ir0,:,:],
+        parallel_heat_flux[:,ir0,:,:],
+        thermal_speed[:,ir0,:,:],
+        ff[:,:,ir0,:,:],
+        n_species, evolve_ppar, nvpa, vpa, vpa_wgts,
+        nz, z, z_wgts, Lz, ntime, time)
+     
+    close(fid)
+
+end
+function init_postprocessing_options(pp, nvpa, nz, nr, ntime)
+    print("Initializing the post-processing input options...")
+    # nwrite_movie is the stride used when making animations
+    nwrite_movie = pp.nwrite_movie
+    # itime_min is the minimum time index at which to start animations
+    if pp.itime_min > 0 && pp.itime_min <= ntime
+        itime_min = pp.itime_min
+    else
+        itime_min = 1
+    end
+    # itime_max is the final time index at which to end animations
+    # if itime_max < 0, the value used will be the total number of time slices
+    if pp.itime_max > 0 && pp.itime_max <= ntime
+        itime_max = pp.itime_max
+    else
+        itime_max = ntime
+    end
+    # ir0 is the ir index used when plotting data at a single r location
+    # by default, it will be set to cld(nr,3) unless a non-negative value provided
+    if pp.ir0 > 0
+        ir0 = pp.ir0
+    else
+        ir0 = cld(nr,3)
+    end
+    # iz0 is the iz index used when plotting data at a single z location
+    # by default, it will be set to cld(nz,3) unless a non-negative value provided
+    if pp.iz0 > 0
+        iz0 = pp.iz0
+    else
+        iz0 = cld(nz,3)
+    end
+    # ivpa0 is the iz index used when plotting data at a single vpa location
+    # by default, it will be set to cld(nvpa,3) unless a non-negative value provided
+    if pp.ivpa0 > 0
+        ivpa0 = pp.ivpa0
+    else
+        ivpa0 = cld(nvpa,3)
+    end
+    println("done.")
+    return nwrite_movie, itime_min, itime_max, ivpa0, iz0, ir0
+end
+
+function plot_1D_1V_diagnostics(run_name, fid, nwrite_movie, itime_min, itime_max, ivpa0, iz0, ir0, r,
+ phi, density, parallel_flow, parallel_pressure, parallel_heat_flux,
+     thermal_speed, ff, n_species, evolve_ppar, nvpa, vpa, vpa_wgts,
+                                nz, z, z_wgts, Lz, ntime, time)
     # analyze the fields data
     phi_fldline_avg, delta_phi = analyze_fields_data(phi, ntime, nz, z_wgts, Lz)
     # use a fit to calculate and write to file the damping rate and growth rate of the
@@ -69,8 +137,6 @@ function analyze_and_plot_data(path)
     plot_fields(phi, delta_phi, time, itime_min, itime_max, nwrite_movie,
                 z, iz0, run_name, fitted_delta_phi, pp)
     # load velocity moments data
-    density, parallel_flow, parallel_pressure, parallel_heat_flux,
-        thermal_speed, n_species, evolve_ppar = load_moments_data(fid)
     # analyze the velocity moments data
     density_fldline_avg, upar_fldline_avg, ppar_fldline_avg, qpar_fldline_avg,
         delta_density, delta_upar, delta_ppar, delta_qpar =
@@ -84,7 +150,6 @@ function analyze_and_plot_data(path)
         pp, run_name, time, itime_min, itime_max,
         nwrite_movie, z, iz0, n_species)
     # load particle distribution function (pdf) data
-    ff = load_pdf_data(fid)
     # analyze the pdf data
     f_fldline_avg, delta_f, dens_moment, upar_moment, ppar_moment =
         analyze_pdf_data(ff, vpa, nvpa, nz, n_species, ntime, vpa_wgts, z_wgts,
@@ -218,43 +283,8 @@ function analyze_and_plot_data(path)
     end
     println("done.")
 
-    close(fid)
+end 
 
-end
-function init_postprocessing_options(pp, nvpa, nz, ntime)
-    print("Initializing the post-processing input options...")
-    # nwrite_movie is the stride used when making animations
-    nwrite_movie = pp.nwrite_movie
-    # itime_min is the minimum time index at which to start animations
-    if pp.itime_min > 0 && pp.itime_min <= ntime
-        itime_min = pp.itime_min
-    else
-        itime_min = 1
-    end
-    # itime_max is the final time index at which to end animations
-    # if itime_max < 0, the value used will be the total number of time slices
-    if pp.itime_max > 0 && pp.itime_max <= ntime
-        itime_max = pp.itime_max
-    else
-        itime_max = ntime
-    end
-    # iz0 is the iz index used when plotting data at a single z location
-    # by default, it will be set to cld(nz,3) unless a non-negative value provided
-    if pp.iz0 > 0
-        iz0 = pp.iz0
-    else
-        iz0 = cld(nz,3)
-    end
-    # ivpa0 is the iz index used when plotting data at a single vpa location
-    # by default, it will be set to cld(nvpa,2) unless a non-negative value provided
-    if pp.ivpa0 > 0
-        ivpa0 = pp.ivpa0
-    else
-        ivpa0 = cld(nvpa,3)
-    end
-    println("done.")
-    return nwrite_movie, itime_min, itime_max, ivpa0, iz0
-end
 function calculate_and_write_frequencies(fid, run_name, ntime, time, z, itime_min,
                                          itime_max, iz0, delta_phi, pp)
     if pp.calculate_frequencies
@@ -379,6 +409,7 @@ function plot_fields(phi, delta_phi, time, itime_min, itime_max, nwrite_movie,
 
     println("done.")
 end
+
 function plot_moments(density, delta_density, density_fldline_avg,
     parallel_flow, delta_upar, upar_fldline_avg,
     parallel_pressure, delta_ppar, ppar_fldline_avg,

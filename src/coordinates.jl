@@ -96,7 +96,12 @@ end
 # setup a grid with n grid points on the interval [-L/2,L/2]
 function init_grid(ngrid, nelement, n, L, imin, imax, igrid, discretization)
     uniform_grid = equally_spaced_grid(n,L)
-    if discretization == "chebyshev_pseudospectral"
+    if n == 1
+        grid = allocate_float(n)
+        grid[1] = 0
+        wgts = allocate_float(n)
+        wgts[1] = 1.0
+    elseif discretization == "chebyshev_pseudospectral"
         # initialize chebyshev grid defined on [-L/2,L/2]
         # with n grid points chosen to facilitate
         # the fast Chebyshev transform (aka the discrete cosine transform)
@@ -109,6 +114,8 @@ function init_grid(ngrid, nelement, n, L, imin, imax, igrid, discretization)
         grid = uniform_grid
         # use composite Simpson's rule to obtain integration weights associated with this coordinate
         wgts = composite_simpson_weights(grid)
+    else
+        error("discretization option '$discretization' unrecognized")
     end
     # return the locations of the grid points
     return grid, wgts, uniform_grid

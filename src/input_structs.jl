@@ -249,6 +249,8 @@ struct pp_input
     ivpa0::mk_int
     # iz0 is the iz index used when plotting data at a single z location
     iz0::mk_int
+    # ir0 is the ir index used when plotting data at a single r location
+    ir0::mk_int
 end
 
 end

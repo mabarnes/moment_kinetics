@@ -47,22 +47,22 @@ struct netcdf_info
     # handle for the time variable
     time::nc_var_type{1}
     # handle for the distribution function variable
-    f::nc_var_type{4}
+    f::nc_var_type{5}
     # handle for the electrostatic potential variable
-    phi::nc_var_type{2}
+    phi::nc_var_type{3}
     # handle for the species density
-    density::nc_var_type{3}
+    density::nc_var_type{4}
     # handle for the species parallel flow
-    parallel_flow::nc_var_type{3}
+    parallel_flow::nc_var_type{4}
     # handle for the species parallel pressure
-    parallel_pressure::nc_var_type{3}
+    parallel_pressure::nc_var_type{4}
     # handle for the species parallel heat flux
-    parallel_heat_flux::nc_var_type{3}
+    parallel_heat_flux::nc_var_type{4}
     # handle for the species thermal speed
-    thermal_speed::nc_var_type{3}
+    thermal_speed::nc_var_type{4}
 end
 # open the necessary output files
-function setup_file_io(output_dir, run_name, vpa, z, composition,
+function setup_file_io(output_dir, run_name, vpa, z, r, composition,
                        collisions, evolve_ppar)
     begin_serial_region()
     @serial_region begin
@@ -75,7 +75,7 @@ function setup_file_io(output_dir, run_name, vpa, z, composition,
         #ff_io = open_output_file(out_prefix, "f_vs_t")
         mom_io = open_output_file(out_prefix, "moments_vs_t")
         fields_io = open_output_file(out_prefix, "fields_vs_t")
-        cdf = setup_netcdf_io(out_prefix, z, vpa, composition, collisions,
+        cdf = setup_netcdf_io(out_prefix, r, z, vpa, composition, collisions,
                               evolve_ppar)
         #return ios(ff_io, mom_io, fields_io), cdf
         return ios(mom_io, fields_io), cdf
@@ -84,7 +84,7 @@ function setup_file_io(output_dir, run_name, vpa, z, composition,
     return nothing, nothing
 end
 # setup file i/o for netcdf
-function setup_netcdf_io(prefix, z, vpa, composition, collisions, evolve_ppar)
+function setup_netcdf_io(prefix, r, z, vpa, composition, collisions, evolve_ppar)
     # the netcdf file will be given by output_dir/run_name with .cdf appended
     filename = string(prefix,".cdf")
     # if a netcdf file with the requested name already exists, remove it
@@ -98,6 +98,8 @@ function setup_netcdf_io(prefix, z, vpa, composition, collisions, evolve_ppar)
     defDim(fid, "nvpa", vpa.n)
     # define the z dimension
     defDim(fid, "nz", z.n)
+    # define the r dimension
+    defDim(fid, "nr", r.n)
     # define the species dimension
     defDim(fid, "n_species", composition.n_species)
     # define the ion species dimension
@@ -107,6 +109,19 @@ function setup_netcdf_io(prefix, z, vpa, composition, collisions, evolve_ppar)
     # define the time dimension, with an expandable size (denoted by Inf)
     defDim(fid, "ntime", Inf)
     ### create and write static variables to file ###
+    # create and write the "r" variable to file
+    varname = "r"
+    attributes = Dict("description" => "radial coordinate")
+    dims = ("nr",)
+    vartype = mk_float
+    var = defVar(fid, varname, vartype, dims, attrib=attributes)
+    var[:] = r.grid
+    # create and write the "r_wgts" variable to file
+    varname = "r_wgts"
+    attributes = Dict("description" => "integration weights for radial coordinate")
+    vartype = mk_float
+    var = defVar(fid, varname, vartype, dims, attrib=attributes)
+    var[:] = r.wgts
     # create and write the "z" variable to file
     varname = "z"
     attributes = Dict("description" => "parallel coordinate")
@@ -166,11 +181,11 @@ function setup_netcdf_io(prefix, z, vpa, composition, collisions, evolve_ppar)
     varname = "f"
     attributes = Dict("description" => "distribution function")
     vartype = mk_float
-    dims = ("nvpa","nz","n_species","ntime")
+    dims = ("nvpa","nz","nr","n_species","ntime")
     cdf_f = defVar(fid, varname, vartype, dims, attrib=attributes)
     # create variables that are floats with data in the z and time dimensions
     vartype = mk_float
-    dims = ("nz","ntime")
+    dims = ("nz","nr","ntime")
     # create the "phi" variable, which will contain the electrostatic potential
     varname = "phi"
     attributes = Dict("description" => "electrostatic potential",
@@ -178,7 +193,7 @@ function setup_netcdf_io(prefix, z, vpa, composition, collisions, evolve_ppar)
     cdf_phi = defVar(fid, varname, vartype, dims, attrib=attributes)
     # create variables that are floats with data in the z, species and time dimensions
     vartype = mk_float
-    dims = ("nz","n_species","ntime")
+    dims = ("nz","nr","n_species","ntime")
     # create the "density" variable, which will contain the species densities
     varname = "density"
     attributes = Dict("description" => "species density",
@@ -224,13 +239,13 @@ function finish_file_io(io, cdf)
     end
     return nothing
 end
-function write_data_to_ascii(ff, moments, fields, vpa, z, t, n_species, io)
+function write_data_to_ascii(ff, moments, fields, vpa, z, r, t, n_species, io)
     @serial_region begin
         # Only read/write from first process in each 'block'
 
         #write_f_ascii(ff, z, vpa, t, io.ff)
-        write_moments_ascii(moments, z, t, n_species, io.moments)
-        write_fields_ascii(fields, z, t, io.fields)
+        write_moments_ascii(moments, z, r, t, n_species, io.moments)
+        write_fields_ascii(fields, z, r, t, io.fields)
     end
     return nothing
 end
@@ -257,16 +272,18 @@ function write_f_ascii(f, z, vpa, t, io)
     return nothing
 end
 # write moments of the distribution function f(z,vpa) at this time slice
-function write_moments_ascii(mom, z, t, n_species, io)
+function write_moments_ascii(mom, z, r, t, n_species, io)
     @serial_region begin
         # Only read/write from first process in each 'block'
 
         @inbounds begin
             for is ∈ 1:n_species
-                for i ∈ 1:z.n
-                    println(io,"t: ", t, "   species: ", is, "   z: ", z.grid[i],
-                        "  dens: ", mom.dens[i,is], "   upar: ", mom.upar[i,is],
-                        "   ppar: ", mom.ppar[i,is], "   qpar: ", mom.qpar[i,is])
+                for ir ∈ 1:r.n
+                    for iz ∈ 1:z.n
+                        println(io,"t: ", t, "   species: ", is, "   r: ", r.grid[ir], "   z: ", z.grid[iz],
+                            "  dens: ", mom.dens[iz,ir,is], "   upar: ", mom.upar[iz,ir,is],
+                            "   ppar: ", mom.ppar[iz,ir,is], "   qpar: ", mom.qpar[iz,ir,is])
+                    end
                 end
             end
         end
@@ -275,13 +292,15 @@ function write_moments_ascii(mom, z, t, n_species, io)
     return nothing
 end
 # write electrostatic potential at this time slice
-function write_fields_ascii(flds, z, t, io)
+function write_fields_ascii(flds, z, r, t, io)
     @serial_region begin
         # Only read/write from first process in each 'block'
 
         @inbounds begin
-            for i ∈ 1:z.n
-                println(io,"t: ", t, ",   z: ", z.grid[i], "  phi: ", flds.phi[i])
+            for ir ∈ 1:r.n
+                for iz ∈ 1:z.n
+                    println(io,"t: ", t, "   r: ", r.grid[ir],"   z: ", z.grid[iz], "  phi: ", flds.phi[iz,ir])
+                end
             end
         end
         println(io,"")
@@ -296,16 +315,16 @@ function write_data_to_binary(ff, moments, fields, t, n_species, cdf, t_idx)
         # add the time for this time slice to the netcdf file
         cdf.time[t_idx] = t
         # add the distribution function data at this time slice to the netcdf file
-        cdf.f[:,:,:,t_idx] = ff
+        cdf.f[:,:,:,:,t_idx] = ff
         # add the electrostatic potential data at this time slice to the netcdf file
-        cdf.phi[:,t_idx] = fields.phi
+        cdf.phi[:,:,t_idx] = fields.phi
         # add the density data at this time slice to the netcdf file
         for is ∈ 1:n_species
-            cdf.density[:,:,t_idx] = moments.dens
-            cdf.parallel_flow[:,:,t_idx] = moments.upar
-            cdf.parallel_pressure[:,:,t_idx] = moments.ppar
-            cdf.parallel_heat_flux[:,:,t_idx] = moments.qpar
-            cdf.thermal_speed[:,:,t_idx] = moments.vth
+            cdf.density[:,:,:,t_idx] = moments.dens
+            cdf.parallel_flow[:,:,:,t_idx] = moments.upar
+            cdf.parallel_pressure[:,:,:,t_idx] = moments.ppar
+            cdf.parallel_heat_flux[:,:,:,t_idx] = moments.qpar
+            cdf.thermal_speed[:,:,:,t_idx] = moments.vth
         end
     end
     return nothing

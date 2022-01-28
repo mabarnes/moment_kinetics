@@ -145,6 +145,10 @@ test_input_finite_difference = Dict("n_ion_species" => 1,
                                     "use_semi_lagrange" => false,
                                     "n_rk_stages" => 4,
                                     "split_operators" => false,
+                                    "r_ngrid" => 1,
+                                    "r_nelement" => 1,
+                                    "r_bc" => "periodic",
+                                    "r_discretization" => "finite_difference",
                                     "z_ngrid" => 100,
                                     "z_nelement" => 1,
                                     "z_bc" => "periodic",
@@ -249,18 +253,22 @@ function run_test(test_input, rtol; args...)
             fid = open_netcdf_file(path)
 
             # load space-time coordinate data
-            nz, _, z_wgts, Lz, nvpa, _, vpa_wgts, ntime, time = load_coordinate_data(fid)
+            nvpa, vpa, vpa_wgts, nz, z, z_wgts, Lz, nr, r, r_wgts, Lr, ntime, time = load_coordinate_data(fid)
 
             # load fields data
-            phi = load_fields_data(fid)
+            phi_zrt = load_fields_data(fid)
 
             # load velocity moments data
-            n, upar, ppar, qpar, v_t, n_species, evolve_ppar = load_moments_data(fid)
+            n_zrst, upar_zrst, ppar_zrst, qpar_zrst, v_t_zrst, n_species, evolve_ppar = load_moments_data(fid)
 
             # load particle distribution function (pdf) data
-            f = load_pdf_data(fid)
+            f_vpazrst = load_pdf_data(fid)
 
             close(fid)
+            
+            phi = phi_zrt[:,1,:]
+            n, upar, ppar, qpar, v_t = n_zrst[:,1,:,:], upar_zrst[:,1,:,:], ppar_zrst[:,1,:,:], qpar_zrst[:,1,:,:], v_t_zrst[:,1,:,:]
+            f = f_vpazrst[:,:,1,:,:]
         end
 
         # Create coordinates
