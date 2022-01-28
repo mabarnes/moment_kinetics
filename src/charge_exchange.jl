@@ -3,7 +3,7 @@ module charge_exchange
 export charge_exchange_collisions!
 
 using ..looping
-using ..interpolation: interpolate_to_grid_vpa
+using ..interpolation: interpolate_to_grid_vpa!
 
 function charge_exchange_collisions!(f_out, fvec_in, moments, composition, vpa, z,
                                      spectral, charge_exchange_frequency, dt)
@@ -49,12 +49,12 @@ function charge_exchange_collisions!(f_out, fvec_in, moments, composition, vpa, 
                                 vpa.scratch[ivpa] = vpa.grid[ivpa] + wpa_shift
                             end
                             # interpolate to the new grid (passed in as vpa.scratch)
-                            # and return interpolated values in vpa.scratch
-                            vpa.scratch .= interpolate_to_grid_vpa(vpa.scratch, view(fvec_in.pdf,:,iz,isn), vpa, spectral)
+                            # and return interpolated values in vpa.scratch2
+                            interpolate_to_grid_vpa!(vpa.scratch2, vpa.scratch, view(fvec_in.pdf,:,iz,isn), vpa, spectral)
                             # add the charge exchange contribution to df/dt
                             for ivpa ∈ 1:vpa.n
                                 f_out[ivpa,iz,isi] += dt*charge_exchange_frequency*fvec_in.density[iz,isn] *
-                                    (vpa.scratch[ivpa] - fvec_in.pdf[ivpa,iz,isi])
+                                    (vpa.scratch2[ivpa] - fvec_in.pdf[ivpa,iz,isi])
                             end
                         end
                     end
@@ -79,11 +79,11 @@ function charge_exchange_collisions!(f_out, fvec_in, moments, composition, vpa, 
                             end
                             # interpolate to the new grid (passed in as vpa.scratch)
                             # and return interpolated values in vpa.scratch
-                            vpa.scratch .= interpolate_to_grid_vpa(vpa.scratch, view(fvec_in.pdf,:,iz,isi), vpa, spectral)
+                            interpolate_to_grid_vpa!(vpa.scratch2, vpa.scratch, view(fvec_in.pdf,:,iz,isi), vpa, spectral)
                             # add the charge exchange contribution to df/dt
                             for ivpa ∈ 1:vpa.n
                                 f_out[ivpa,iz,isn] += dt*charge_exchange_frequency*fvec_in.density[iz,isi] *
-                                    (vpa.scratch[ivpa]- fvec_in.pdf[ivpa,iz,isn])
+                                    (vpa.scratch2[ivpa]- fvec_in.pdf[ivpa,iz,isn])
                             end
                         end
                     end
