@@ -346,6 +346,11 @@ function plot_strong_scaling_history(prefix, machine=nothing; show=false, save=t
     for (filename, nproc) ∈ zip(filenames, nprocs)
         data = load_run(filename)
         split_data = split_machines(data, remove_duplicates=true)
+
+        if !(machine ∈ keys(split_data))
+            # `machine` has no dat for this nproc, so skip
+            continue
+        end
         machine_data = split_data[machine]
 
         if ntests < 0
@@ -374,7 +379,7 @@ function plot_strong_scaling_history(prefix, machine=nothing; show=false, save=t
                            legend=false, size=(2400, 400))
     function add_plot(commit; linewidth=1, show_ideal=false)
         to_plot = Array{Union{Float64,Missing},3}(undef, 4, ntests, length(nprocs))
-        for (i, nproc) in enumerate(nprocs)
+        for (i, nproc) in enumerate(keys(data_for_nproc))
             data = data_for_nproc[nproc]
             if commit ∈ keys(data)
                 to_plot[:,:,i] .= data[commit]
