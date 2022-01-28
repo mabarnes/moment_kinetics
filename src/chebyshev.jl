@@ -9,7 +9,7 @@ export chebyshev_spectral_derivative!
 export chebyshev_info
 
 using FFTW
-using ..type_definitions: mk_float
+using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_complex
 using ..clenshaw_curtis: clenshawcurtisweights
 import ..interpolation: interpolate_to_grid_1d!
@@ -209,94 +209,84 @@ function interpolate_to_grid_1d!(result, newgrid, f, coord, chebyshev::chebyshev
     n_new = size(newgrid)[1]
     # Find which points belong to which element.
     # kstart[j] contains the index of the first point in newgrid that is within element
-    # j, and kstart[nelement+1]=n_new.
+    # j, and kstart[nelement+1] is n_new if the last point is within coord.grid, or the
+    # index of the first element outside coord.grid otherwise.
     # Assumes points in newgrid are sorted.
     # May not be the most efficient algorithm.
+    # Find start/end points for each element, storing their indices in kstart
+    kstart = Vector{mk_int}(undef, nelement+1)
+    # set the starting index by finding the start of coord.grid
+    kstart[1] = searchsortedfirst(newgrid, coord.grid[1])
     # check to see if any of the newgrid points are to the left of the first grid point
-    startidx = 1
-    for j ∈ 1:n_new
+    for j ∈ 1:kstart[1]-1
         # if the new grid location is outside the bounds of the original grid,
         # extrapolate f assuming f is constant beyond the domain
-        if newgrid[j] < coord.grid[1]
-            startidx += 1
-            result[j] = f[1]
-        else
-            break
-        end
+        result[j] = f[1]
     end
-    # set the starting index to be startidx, found above
-    k = startidx
-    kstart = [k]
     @inbounds for j ∈ 1:nelement
-        while true
-            if k == n_new+1 || newgrid[k] > coord.grid[coord.imax[j]]
-                push!(kstart, k)
-                break
-            end
-
-            k += 1
-
-            if k == n_new+1 || newgrid[k] > coord.grid[coord.imax[j]]
-                push!(kstart, k)
-                break
-            end
-        end
+        # Search from kstart[j] to try to speed up the sort, but means result of
+        # searchsortedfirst() is offset by kstart[j]-1 from the beginning of newgrid.
+        kstart[j+1] = kstart[j] - 1 + @views searchsortedfirst(newgrid[kstart[j]:end], coord.grid[coord.imax[j]])
     end
 
     # First element includes both boundary points, while all others have only one (to
     # avoid duplication), so calculate the first element outside the loop.
     if kstart[1] < kstart[2]
-        result[kstart[1]:kstart[2]-1] =
-            chebyshev_interpolate_single_element(newgrid[kstart[1]:kstart[2]-1],
-                                                 f[coord.imin[1]:coord.imax[1]],
-                                                 1, coord, chebyshev)
+        imin = coord.imin[1]
+        imax = coord.imax[1]
+        kmin = kstart[1]
+        kmax = kstart[2] - 1
+        @views chebyshev_interpolate_single_element!(result[kmin:kmax],
+                                                     newgrid[kmin:kmax],
+                                                     f[imin:imax],
+                                                     imin, imax, coord, chebyshev)
     end
     @inbounds for j ∈ 2:nelement
-        if kstart[j] < kstart[j+1]
-            result[kstart[j]:kstart[j+1]-1] =
-                chebyshev_interpolate_single_element(newgrid[kstart[j]:kstart[j+1]-1],
-                                                     f[coord.imin[j]-1:coord.imax[j]],
-                                                     j, coord, chebyshev)
+        kmin = kstart[j]
+        kmax = kstart[j+1] - 1
+        if kmin <= kmax
+            imin = coord.imin[j] - 1
+            imax = coord.imax[j]
+            @views chebyshev_interpolate_single_element!(result[kmin:kmax],
+                                                         newgrid[kmin:kmax],
+                                                         f[imin:imax],
+                                                         imin, imax, coord, chebyshev)
         end
     end
 
-    if kstart[nelement+1] < n_new + 1
-        result[kstart[nelement+1]:end] .= f[end]
+    for k ∈ kstart[nelement+1]:n_new
+        result[k] = f[end]
     end
 
     return nothing
 end
-function chebyshev_interpolate_single_element(newgrid, f, j, coord, chebyshev)
+function chebyshev_interpolate_single_element!(result, newgrid, f, imin, imax, coord, chebyshev)
     # Temporary buffer to store Chebyshev coefficients
-    cheby_f = allocate_float(coord.ngrid)
-
-    # Array for the result
-    result = similar(newgrid, mk_float)
+    cheby_f = chebyshev.df
 
     # Need to transform newgrid values to a scaled z-coordinate associated with the
     # Chebyshev coefficients to get the interpolated function values. Transform is a
     # shift and scale so that the element coordinate goes from -1 to 1
-    imin = j == 1 ? coord.imin[1] : coord.imin[j] - 1
-    imax = coord.imax[j]
     shift = 0.5 * (coord.grid[imin] + coord.grid[imax])
     scale = 2.0 / (coord.grid[imax] - coord.grid[imin])
 
     # Get Chebyshev coefficients
     chebyshev_forward_transform!(cheby_f, chebyshev.fext, f, chebyshev.forward, coord.ngrid)
 
-    for (i, x) ∈ enumerate(newgrid)
+    for i ∈ 1:length(newgrid)
+        x = newgrid[i]
         z = scale * (x - shift)
         # Evaluate sum of Chebyshev polynomials at z using recurrence relation
         cheb1 = 1.0
         cheb2 = z
         result[i] = cheby_f[1] * cheb1 + cheby_f[2] * cheb2
-        for coef in cheby_f[3:end]
+        for coef ∈ @view(cheby_f[3:end])
             cheb1, cheb2 = cheb2, 2.0 * z * cheb2 - cheb1
             result[i] += coef * cheb2
         end
     end
 
-    return result
+    return nothing
 end
 
 # returns wgts array containing the integration weights associated
