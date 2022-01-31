@@ -58,11 +58,17 @@ function z_advection!(f_out, fvec_in, ff, moments, SL, advect, z, vpa, r,
 end
 function adjust_advection_speed!(speed, mod_speed, dens, vth, evolve_density, evolve_ppar)
     if evolve_ppar
-        @. speed *= vth/dens
-        @. mod_speed *= vth/dens
+        for i in eachindex(speed)
+            factor = vth[i]/dens[i]
+            speed[i] *= factor
+            mod_speed[i] *= factor
+        end
     elseif evolve_density
-        @. speed /= dens
-        @. mod_speed /= dens
+        for i in eachindex(speed)
+            factor = 1.0 / dens[i]
+            speed[i] *= factor
+            mod_speed[i] *= factor
+        end
     end
     return nothing
 end
@@ -86,12 +92,11 @@ function update_speed_z!(advect, upar, vth, evolve_upar, evolve_ppar, vpa, z, r,
             @loop_r_vpa ir ivpa begin
                 @views advect.speed[:,ivpa,ir] .= vpa.grid[ivpa]
             end
-            if evolve_upar
-                if evolve_ppar
-                    @loop_r_vpa ir ivpa begin
-                        @views advect.speed[:,ivpa,ir] .*= vth
-                    end
+            if evolve_ppar
+                @loop_r_vpa ir ivpa begin
+                    @. @views advect.speed[:,ivpa,ir] = advect.speed[:,ivpa,ir] * vth + upar
                 end
+            elseif evolve_upar
                 @loop_r_vpa ir ivpa begin
                     @views advect.speed[:,ivpa,ir] .+= upar
                 end
