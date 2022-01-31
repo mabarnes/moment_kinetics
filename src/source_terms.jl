@@ -33,9 +33,9 @@ function source_terms_evolve_density!(pdf_out, pdf_in, dens, upar, z, r, dt, spe
     nvpa = size(pdf_out, 1)
     @loop_r ir begin
         # calculate d(n*upar)/dz
-        @. z.scratch = dens[:,ir]*upar[:,ir]
+        @views @. z.scratch = dens[:,ir]*upar[:,ir]
         derivative!(z.scratch, z.scratch, z, spectral)
-        @. z.scratch *= dt/dens[:,ir]
+        @views @. z.scratch *= dt/dens[:,ir]
         #derivative!(z.scratch, z.scratch, z, -upar, spectral)
         @loop_z_vpa iz ivpa begin
             pdf_out[ivpa,iz,ir] += pdf_in[ivpa,iz,ir]*z.scratch[iz]
@@ -49,15 +49,15 @@ function source_terms_evolve_ppar!(pdf_out, pdf_in, dens, upar, ppar, vth, qpar,
         # calculate dn/dz
         derivative!(z.scratch, view(dens,:,ir), z, spectral)
         # update the pdf to account for the density gradient contribution to the source
-        @. z.scratch *= dt*upar[:,ir]/dens[:,ir]
+        @views @. z.scratch *= dt*upar[:,ir]/dens[:,ir]
         # calculate dvth/dz
         derivative!(z.scratch2, view(vth,:,ir), z, spectral)
         # update the pdf to account for the -g*upar/vth * dvth/dz contribution to the source
-        @. z.scratch -= dt*z.scratch2*upar[:,ir]/vth[:,ir]
+        @views @. z.scratch -= dt*z.scratch2*upar[:,ir]/vth[:,ir]
         # calculate dqpar/dz
         derivative!(z.scratch2, view(qpar,:,ir), z, spectral)
         # update the pdf to account for the parallel heat flux contribution to the source
-        @. z.scratch -= 0.5*dt*z.scratch2/ppar[:,ir]
+        @views @. z.scratch -= 0.5*dt*z.scratch2/ppar[:,ir]
 
         @loop_z_vpa iz ivpa begin
             pdf_out[ivpa,iz,ir] += pdf_in[ivpa,iz,ir]*z.scratch[iz]
