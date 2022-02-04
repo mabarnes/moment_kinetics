@@ -21,18 +21,38 @@ using SHA
 using ..debugging
 using ..type_definitions: mk_float, mk_int
 
+"""
+"""
 const comm_world = MPI.Comm()
+
+"""
+"""
 const comm_block = MPI.Comm()
 
 # Use Ref for these variables so that they can be made `const` (so have a definite
 # type), but contain a value assigned at run-time.
+"""
+"""
 const global_rank = Ref{mk_int}()
+
+"""
+"""
 const global_size = Ref{mk_int}()
+
+"""
+"""
 const block_rank = Ref{mk_int}()
+
+"""
+"""
 const block_size = Ref{mk_int}()
 
+"""
+"""
 const global_Win_store = Vector{MPI.Win}(undef, 0)
 
+"""
+"""
 function __init__()
     MPI.Init()
 
@@ -54,9 +74,6 @@ end
     Special type for debugging race conditions in accesses to shared-memory arrays.
     Only used if debugging._debug_level is high enough.
     """
-
-    export DebugMPISharedArray
-
     struct DebugMPISharedArray{T, N} <: AbstractArray{T, N}
         data::Array{T,N}
         is_read::Array{Bool,N}
@@ -67,6 +84,8 @@ end
             previous_is_written::Array{Bool, N}
         end
     end
+
+    export DebugMPISharedArray
 
     # Constructors
     function DebugMPISharedArray(array::Array)
@@ -126,6 +145,8 @@ end
     const global_debugmpisharedarray_store = Vector{DebugMPISharedArray}(undef, 0)
 end
 
+"""
+"""
 const MPISharedArray = @debug_shared_array_ifelse(DebugMPISharedArray, Array)
 
 """
@@ -279,7 +300,12 @@ end
 end
 
 @debug_detect_redundant_block_synchronize begin
+    """
+    """
     const previous_block_synchronize_stackstring = Ref{String}("")
+
+    """
+    """
     const debug_detect_redundant_is_active = Ref{Bool}(false)
 end
 @debug_shared_array begin
@@ -539,6 +565,8 @@ function finalize_comms!()
     return nothing
 end
 
+"""
+"""
 function free_shared_arrays()
     @debug_shared_array resize!(global_debugmpisharedarray_store, 0)
 

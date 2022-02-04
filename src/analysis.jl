@@ -1,3 +1,5 @@
+"""
+"""
 module analysis
 
 export analyze_fields_data
@@ -8,6 +10,8 @@ using ..array_allocation: allocate_float
 using ..calculus: integral
 using ..velocity_moments: integrate_over_vspace
 
+"""
+"""
 function analyze_fields_data(phi, ntime, nz, z_wgts, Lz)
     print("Analyzing fields data...")
     phi_fldline_avg = allocate_float(ntime)
@@ -23,6 +27,8 @@ function analyze_fields_data(phi, ntime, nz, z_wgts, Lz)
     return phi_fldline_avg, delta_phi
 end
 
+"""
+"""
 function analyze_moments_data(density, parallel_flow, parallel_pressure, parallel_heat_flux, ntime, n_species, nz, z_wgts, Lz)
     print("Analyzing velocity moments data...")
     density_fldline_avg = allocate_float(n_species, ntime)
@@ -82,6 +88,8 @@ function analyze_moments_data(density, parallel_flow, parallel_pressure, paralle
            delta_density, delta_upar, delta_ppar, delta_qpar
 end
 
+"""
+"""
 function analyze_pdf_data(ff, vpa, nvpa, nz, n_species, ntime, vpa_wgts, z_wgts, Lz,
                           vth, evolve_ppar)
     print("Analyzing distribution function data...")
@@ -120,6 +128,8 @@ function analyze_pdf_data(ff, vpa, nvpa, nz, n_species, ntime, vpa_wgts, z_wgts,
     return f_fldline_avg, delta_f, dens_moment, upar_moment, ppar_moment
 end
 
+"""
+"""
 function field_line_average(fld, wgts, L)
     return integral(fld, wgts)/L
 end

@@ -1,3 +1,5 @@
+"""
+"""
 module load_data
 
 export open_netcdf_file
@@ -8,6 +10,8 @@ export load_pdf_data
 
 using NCDatasets
 
+"""
+"""
 function open_netcdf_file(run_name)
     # create the netcdf filename from the given run_name
     filename = string(run_name, ".cdf")
@@ -20,6 +24,8 @@ function open_netcdf_file(run_name)
     return fid
 end
 
+"""
+"""
 function load_coordinate_data(fid)
     print("Loading coordinate data...")
     # define a handle for the r coordinate
@@ -67,6 +73,8 @@ function load_coordinate_data(fid)
     return nvpa, vpa, vpa_wgts, nz, z, z_wgts, Lz, nr, r, r_wgts, Lr, ntime, time
 end
 
+"""
+"""
 function load_fields_data(fid)
     print("Loading fields data...")
     # define a handle for the electrostatic potential
@@ -77,6 +85,8 @@ function load_fields_data(fid)
     return phi
 end
 
+"""
+"""
 function load_moments_data(fid)
     print("Loading velocity moments data...")
     # define a handle for the species density
@@ -114,6 +124,8 @@ function load_moments_data(fid)
     return density, parallel_flow, parallel_pressure, parallel_heat_flux, thermal_speed, n_species, evolve_ppar
 end
 
+"""
+"""
 function load_pdf_data(fid)
     print("Loading distribution function data...")
     # define a handle for the distribution function
