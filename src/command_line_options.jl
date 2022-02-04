@@ -9,7 +9,7 @@ export options
 
 using ArgParse
 
-s = ArgParseSettings()
+const s = ArgParseSettings()
 @add_arg_table! s begin
     "inputfile"
         help = "Name of TOML input file."
