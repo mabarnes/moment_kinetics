@@ -659,20 +659,10 @@ function fit_delta_phi_mode(t, z, delta_phi)
         amplitude0 = amplitude[1] / cos(phase)
     end
 
-    return phi_fit_result(growth_rate, frequency, phase, amplitude0, offset0, fit_error,
-                          offset_error, maximum(cosine_fit_error), amplitude, offset)
-end
-struct phi_fit_result
-    growth_rate::mk_float
-    frequency::mk_float
-    phase::mk_float
-    amplitude0::mk_float
-    offset0::mk_float
-    amplitude_fit_error::mk_float
-    offset_fit_error::mk_float
-    cosine_fit_error::mk_float
-    amplitude::Array{mk_float, 1}
-    offset::Array{mk_float, 1}
+    return (growth_rate=growth_rate, frequency=frequency, phase=phase,
+            amplitude0=amplitude0, offset0=offset0, amplitude_fit_error=fit_error,
+            offset_fit_error=offset_error, cosine_fit_error=maximum(cosine_fit_error),
+            amplitude=amplitude, offset=offset)
 end
 
 function fit_phi0_vs_time(phi0, tmod)
