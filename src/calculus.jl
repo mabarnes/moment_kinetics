@@ -220,4 +220,34 @@ function integral(integrand, v, n, wgts)
     return integral
 end
 
+
+"""
+2D velocity integration routines
+"""
+
+"""
+Computes the integral of the 2D integrand, using the input wgts
+"""
+function integral(integrand, vx, px, wgtsx, vy, py, wgtsy)
+    # nx is the number of grid points
+    nx = length(wgtsx)
+    ny = length(wgtsy)
+    # initialize 'integral' to zero before sum
+    integral = 0.0
+    @boundscheck nx == size(integrand,1) || throw(BoundsError(integrand))
+    @boundscheck ny == size(integrand,2) || throw(BoundsError(integrand))
+    @boundscheck nx == length(vx) || throw(BoundsError(vx))
+    @boundscheck ny == length(vy) || throw(BoundsError(vy))
+#    @boundscheck ny == length(wgtsy) || throw(BoundsError(wtgsy))
+#    @boundscheck nx == length(wgtsx) || throw(BoundsError(wtgsx))
+   
+    @inbounds for i ∈ 1:ny
+        @inbounds for j ∈ 1:nx
+            integral += integrand[j,i]* (vy[i] ^ py) *  (vx[i] ^ px)* wgtsy[i] * wgtsx[j]
+        end
+    end
+    return integral
+end
+
+
 end
