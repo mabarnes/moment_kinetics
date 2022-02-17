@@ -96,9 +96,10 @@ end
 # setup a grid with n grid points on the interval [-L/2,L/2]
 function init_grid(ngrid, nelement, n, L, imin, imax, igrid, discretization)
     uniform_grid = equally_spaced_grid(n,L)
+    uniform_grid_shifted = equally_spaced_grid_shifted(n,L)
     if n == 1
         grid = allocate_float(n)
-        grid[1] = 0
+        grid[1] = 1.0
         wgts = allocate_float(n)
         wgts[1] = 1.0
     elseif discretization == "chebyshev_pseudospectral"
@@ -114,6 +115,11 @@ function init_grid(ngrid, nelement, n, L, imin, imax, igrid, discretization)
         grid = uniform_grid
         # use composite Simpson's rule to obtain integration weights associated with this coordinate
         wgts = composite_simpson_weights(grid)
+    elseif discretization == "finite_difference_vperp"
+        # initialize equally spaced grid defined on [0,L]
+        grid = uniform_grid_shifted
+        # use composite Simpson's rule to obtain integration weights associated with this coordinate
+        wgts = composite_simpson_weights(grid)
     else
         error("discretization option '$discretization' unrecognized")
     end
@@ -127,6 +133,16 @@ function equally_spaced_grid(n, L)
     grid = allocate_float(n)
     @inbounds for i ∈ 1:n
         grid[i] = -0.5*L + (i-1)*L/(n-1)
+    end
+    return grid
+end
+# setup an equally spaced grid with n grid points
+# between [0,L]
+function equally_spaced_grid_shifted(n, L)
+    # create array for the equally spaced grid with n grid points
+    grid = allocate_float(n)
+    @inbounds for i ∈ 1:n
+        grid[i] =  (i-1)*L/(n-1)
     end
     return grid
 end
