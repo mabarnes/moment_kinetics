@@ -380,7 +380,7 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     ############################################################################
     ################### parameters related to the vperp grid #####################
     # ngrid_vperp is the number of grid points per element
-    ngrid_vperp = 1
+    ngrid_vperp = 10
     # nelement_vperp is the number of elements
     nelement_vperp = 1
     # L_vperp is the box length in units of vthermal_species
@@ -391,10 +391,9 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     #boundary_option_vperp = "zero"
     boundary_option_vperp = "periodic"
     # determine the discretization option for the vperp grid
-    # supported options are "chebyshev_pseudospectral" and "finite_difference"
-    #discretization_option_vperp = "chebyshev_pseudospectral"
-    discretization_option_vperp = "finite_difference"
-    # if discretization_option_vperp = "finite_difference", then
+    # supported options are "finite_difference_vperp"
+    discretization_option_vperp = "finite_difference_vperp"
+    # if discretization_option_vperp = "finite_difference_vperp", then
     # finite_difference_option_vperp determines the finite difference scheme to be used
     # supported options are "third_order_upwind", "second_order_upwind" and "first_order_upwind"
     #finite_difference_option_vperp = "second_order_upwind"
