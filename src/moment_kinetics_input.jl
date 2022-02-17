@@ -46,7 +46,7 @@ function mk_input(scan_input=Dict())
     #   reference value using J_||e + J_||i = 0 at z = 0
     electron_physics = get(scan_input, "electron_physics", boltzmann_electron_response)
     
-    z, r, vpa, species, composition, drive, evolve_moments, collisions =
+    z, r, vpa, vperp, species, composition, drive, evolve_moments, collisions =
         load_defaults(n_ion_species, n_neutral_species, electron_physics)
 
     # this is the prefix for all output files associated with this run
@@ -165,6 +165,21 @@ function mk_input(scan_input=Dict())
     # supported options are "chebyshev_pseudospectral" and "finite_difference"
     vpa.discretization = get(scan_input, "vpa_discretization", "chebyshev_pseudospectral")
 
+    # overwrite some default parameters related to the vperp grid
+    # ngrid is the number of grid points per element
+    vperp.ngrid = get(scan_input, "vperp_ngrid", 1)
+    # nelement is the number of elements
+    vperp.nelement = get(scan_input, "vperp_nelement", 1)
+    # L is the box length in units of vthermal_species
+    vperp.L = get(scan_input, "vperp_L", 8.0*sqrt(species[1].initial_temperature))
+    # determine the boundary condition
+    # only supported option at present is "zero" and "periodic"
+    # MRH probably need to add new bc option here
+    vperp.bc = get(scan_input, "vperp_bc", "periodic")
+    # determine the discretization option for the vperp grid
+    # supported options are "chebyshev_pseudospectral" and "finite_difference"
+    vperp.discretization = get(scan_input, "vperp_discretization", "chebyshev_pseudospectral")
+
     #########################################################################
     ########## end user inputs. do not modify following code! ###############
     #########################################################################
@@ -184,6 +199,10 @@ function mk_input(scan_input=Dict())
         vpa.advection.frequency, vpa.advection.oscillation_amplitude)
     vpa_immutable = grid_input("vpa", vpa.ngrid, vpa.nelement, vpa.L,
         vpa.discretization, vpa.fd_option, vpa.bc, vpa_advection_immutable)
+    vperp_advection_immutable = advection_input(vperp.advection.option, vperp.advection.constant_speed,
+        vperp.advection.frequency, vperp.advection.oscillation_amplitude)
+    vperp_immutable = grid_input("vperp", vperp.ngrid, vperp.nelement, vperp.L,
+        vperp.discretization, vperp.fd_option, vperp.bc, vperp_advection_immutable)
     n_species = composition.n_species
     species_immutable = Array{species_parameters,1}(undef,n_species)
     for is ∈ 1:n_species
@@ -226,7 +245,8 @@ function mk_input(scan_input=Dict())
         z_immutable, vpa_immutable, composition, species_immutable, evolve_moments)
 
     # return immutable structs for z, vpa, species and composition
-    all_inputs = (run_name, output_dir, evolve_moments, t, z_immutable, r_immutable, vpa_immutable,
+    all_inputs = (run_name, output_dir, evolve_moments, t, 
+                  z_immutable, r_immutable, vpa_immutable, vperp_immutable,
                   composition, species_immutable, collisions, drive_immutable)
     println(io, "\nAll inputs returned from mk_input():")
     println(io, all_inputs)
@@ -357,6 +377,44 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     vpa = grid_input_mutable("vpa", ngrid_vpa, nelement_vpa, L_vpa,
         discretization_option_vpa, finite_difference_option_vpa, boundary_option_vpa,
         advection_vpa)
+    ############################################################################
+    ################### parameters related to the vperp grid #####################
+    # ngrid_vperp is the number of grid points per element
+    ngrid_vperp = 1
+    # nelement_vperp is the number of elements
+    nelement_vperp = 1
+    # L_vperp is the box length in units of vthermal_species
+    L_vperp = 6.0
+    # determine the boundary condition
+    # currently supported options are "zero" and "periodic"
+    # MRH probably need new bc option here 
+    #boundary_option_vperp = "zero"
+    boundary_option_vperp = "periodic"
+    # determine the discretization option for the vperp grid
+    # supported options are "chebyshev_pseudospectral" and "finite_difference"
+    #discretization_option_vperp = "chebyshev_pseudospectral"
+    discretization_option_vperp = "finite_difference"
+    # if discretization_option_vperp = "finite_difference", then
+    # finite_difference_option_vperp determines the finite difference scheme to be used
+    # supported options are "third_order_upwind", "second_order_upwind" and "first_order_upwind"
+    #finite_difference_option_vperp = "second_order_upwind"
+    finite_difference_option_vperp = "third_order_upwind"
+    # determine the option used for the advection speed in vperp
+    # supported options are "constant" and "oscillating",
+    advection_option_vperp = "default"
+    # constant advection speed in vperp to use with advection_option_vperp = "constant"
+    advection_speed_vperp = 0.0
+    # for advection_option_vperp = "oscillating", advection speed is of form
+    # speed = advection_speed_vperp*(1 + oscillation_amplitude_vperp*sinpi(frequency_vperp*t))
+    frequency_vperp = 1.0
+    oscillation_amplitude_vperp = 1.0
+    # mutable struct containing advection speed options/inputs for z
+    advection_vperp = advection_input_mutable(advection_option_vperp, advection_speed_vperp,
+        frequency_vperp, oscillation_amplitude_vperp)
+    # create a mutable structure containing the input info related to the vperp grid
+    vperp = grid_input_mutable("vperp", ngrid_vperp, nelement_vperp, L_vperp,
+        discretization_option_vperp, finite_difference_option_vperp, boundary_option_vperp,
+        advection_vperp)
     #############################################################################
     # define default values and create corresponding mutable structs holding
     # information about the composition of the species and their initial conditions
@@ -450,7 +508,7 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     constant_ionization_rate = false
     collisions = collisions_input(charge_exchange, ionization, constant_ionization_rate)
 
-    return z, r, vpa, species, composition, drive, evolve_moments, collisions
+    return z, r, vpa, vperp, species, composition, drive, evolve_moments, collisions
 end
 
 # check various input options to ensure they are all valid/consistent
