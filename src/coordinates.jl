@@ -99,7 +99,7 @@ function init_grid(ngrid, nelement, n, L, imin, imax, igrid, discretization)
     uniform_grid_shifted = equally_spaced_grid_shifted(n,L)
     if n == 1
         grid = allocate_float(n)
-        grid[1] = 1.0
+        grid[1] = 0.0
         wgts = allocate_float(n)
         wgts[1] = 1.0
     elseif discretization == "chebyshev_pseudospectral"
@@ -120,6 +120,7 @@ function init_grid(ngrid, nelement, n, L, imin, imax, igrid, discretization)
         grid = uniform_grid_shifted
         # use composite Simpson's rule to obtain integration weights associated with this coordinate
         wgts = composite_simpson_weights(grid)
+        wgts = wgts * grid # to include vperp in jacobian of integral
     else
         error("discretization option '$discretization' unrecognized")
     end
