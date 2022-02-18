@@ -48,8 +48,10 @@ function vpa_advection!(f_out, fvec_in, ff, fields, moments, SL, advect,
     end
 end
 # calculate the advection speed in the z-direction at each grid point
-function update_speed_vpa!(advect, fields, fvec, moments, vpa, z, r, composition, CX_frequency, t, z_spectral)
-    @boundscheck z.n == size(advect[1].speed,2) || throw(BoundsError(advect))
+function update_speed_vpa!(advect, fields, fvec, moments, vpa, vperp, z, r, composition, CX_frequency, t, z_spectral)
+    @boundscheck r.n == size(advect[1].speed,4) || throw(BoundsError(advect))
+    @boundscheck z.n == size(advect[1].speed,3) || throw(BoundsError(advect))
+    @boundscheck vperp.n == size(advect[1].speed,2) || throw(BoundsError(advect))
     #@boundscheck composition.n_ion_species == size(advect,2) || throw(BoundsError(advect))
     @boundscheck composition.n_species == size(advect,1) || throw(BoundsError(advect))
     @boundscheck vpa.n == size(advect[1].speed,1) || throw(BoundsError(speed))

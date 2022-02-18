@@ -250,7 +250,7 @@ function enforce_boundary_conditions!(f, vpa_bc, z_bc, vpa, z, r, vpa_adv::T1, z
     @views enforce_z_boundary_condition!(f, z_bc, z_adv, vpa, r, composition)
 end
 # enforce boundary conditions on f in z
-function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, r, composition) where T
+function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, vperp, r, composition) where T
     # define n_species variable for convenience
     n_species = composition.n_species
     # define nvpa variable for convenience
@@ -260,17 +260,17 @@ function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, r, compositio
     # 'constant' BC is time-independent f at upwind boundary
     # and constant f beyond boundary
     if bc == "constant"
-        @loop_s_r_vpa is ir ivpa begin
-            upwind_idx = adv[is].upwind_idx[ivpa,ir]
-            f[ivpa,upwind_idx,ir,is] = density_offset * exp(-(vpa.grid[ivpa]/vpawidth)^2) / sqrt(pi)
+        @loop_s_r_vperp_vpa is ir ivperp ivpa begin
+            upwind_idx = adv[is].upwind_idx[ivpa,ivperp,ir]
+            f[ivpa,ivperp,upwind_idx,ir,is] = density_offset * exp(-(vpa.grid[ivpa]/vpawidth)^2) / sqrt(pi)
         end
     # 'periodic' BC enforces periodicity by taking the average of the boundary points
     elseif bc == "periodic"
         @loop_s_r_vpa is ir ivpa begin
-            downwind_idx = adv[is].downwind_idx[ivpa,ir]
-            upwind_idx = adv[is].upwind_idx[ivpa,ir]
-            f[ivpa,downwind_idx,ir,is] = 0.5*(f[ivpa,upwind_idx,ir,is]+f[ivpa,downwind_idx,ir,is])
-            f[ivpa,upwind_idx,ir,is] = f[ivpa,downwind_idx,ir,is]
+            downwind_idx = adv[is].downwind_idx[ivpa,ivperp,ir]
+            upwind_idx = adv[is].upwind_idx[ivpa,ivperp,ir]
+            f[ivpa,ivperp,downwind_idx,ir,is] = 0.5*(f[ivpa,ivperp,upwind_idx,ir,is]+f[ivpa,ivperp,downwind_idx,ir,is])
+            f[ivpa,ivperp,upwind_idx,ir,is] = f[ivpa,ivperp,downwind_idx,ir,is]
         end
     # 'wall' BC enforces wall boundary conditions
     elseif bc == "wall"
@@ -280,9 +280,9 @@ function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, r, compositio
                 @loop_vpa ivpa begin
                     # no parallel BC should be enforced for vpa = 0
                     if abs(vpa.grid[ivpa]) > zero
-                        @loop_r ir begin
-                            upwind_idx = adv[is].upwind_idx[ivpa,ir]
-                            f[ivpa,upwind_idx,ir,is] = 0.0
+                        @loop_r_vperp ir ivperp begin
+                            upwind_idx = adv[is].upwind_idx[ivpa,ivperp,ir]
+                            f[ivpa,ivperp,upwind_idx,ir,is] = 0.0
                         end
                     end
                 end
@@ -294,41 +294,43 @@ function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, r, compositio
             # TODO: parallelise this...
             @serial_region begin
                 for ir ∈ 1:r.n
-                    # define vtfac to avoid repeated computation below
-                    vtfac = sqrt(composition.T_wall * composition.mn_over_mi)
-                    # initialise the combined ion/neutral fluxes into the walls to be zero
-                    wall_flux_0 = 0.0
-                    wall_flux_L = 0.0
-                    # include the contribution to the wall fluxes due to species with index 'is'
-                    for is ∈ 1:composition.n_ion_species
-                            @views wall_flux_0 += (sqrt(composition.mn_over_mi) *
-                                                   integrate_over_negative_vpa(abs.(vpa.grid) .* f[:,1,ir,is], vpa.grid, vpa.wgts, vpa.scratch))
-                            @views wall_flux_L += (sqrt(composition.mn_over_mi) *
-                                                   integrate_over_positive_vpa(abs.(vpa.grid) .* f[:,end,ir,is], vpa.grid, vpa.wgts, vpa.scratch))
-                    end
-                    for isn ∈ 1:composition.n_neutral_species
+                    for ivperp ∈ 1:vperp.n
+                        # define vtfac to avoid repeated computation below
+                        vtfac = sqrt(composition.T_wall * composition.mn_over_mi)
+                        # initialise the combined ion/neutral fluxes into the walls to be zero
+                        wall_flux_0 = 0.0
+                        wall_flux_L = 0.0
+                        # include the contribution to the wall fluxes due to species with index 'is'
+                        for is ∈ 1:composition.n_ion_species
+                                @views wall_flux_0 += (sqrt(composition.mn_over_mi) *
+                                                       integrate_over_negative_vpa(abs.(vpa.grid) .* f[:,ivperp,1,ir,is], vpa.grid, vpa.wgts, vpa.scratch))
+                                @views wall_flux_L += (sqrt(composition.mn_over_mi) *
+                                                       integrate_over_positive_vpa(abs.(vpa.grid) .* f[:,ivperp,end,ir,is], vpa.grid, vpa.wgts, vpa.scratch))
+                        end
+                        for isn ∈ 1:composition.n_neutral_species
+                                is = isn + composition.n_ion_species
+                                @views wall_flux_0 += integrate_over_negative_vpa(abs.(vpa.grid) .* f[:,ivperp,1,ir,is], vpa.grid, vpa.wgts, vpa.scratch)
+                                @views wall_flux_L += integrate_over_positive_vpa(abs.(vpa.grid) .* f[:,ivperp,end,ir,is], vpa.grid, vpa.wgts, vpa.scratch)
+                        end
+                        # NB: need to generalise to more than one ion species
+                        # get the Knudsen cosine distribution
+                        # NB: as vtfac is time-independent, can be made more efficient by creating
+                        # array for Knudsen cosine distribution and carrying out following four lines
+                        # of calculation at initialization
+                        @. vpa.scratch = (3*pi/vtfac^3)*abs(vpa.grid)*erfc(abs(vpa.grid)/vtfac)
+                        tmparr = copy(vpa.scratch)
+                        tmp = integrate_over_positive_vpa(vpa.grid .* vpa.scratch, vpa.grid, vpa.wgts, tmparr)
+                        @. vpa.scratch /= tmp
+                        for isn ∈ 1:composition.n_neutral_species
                             is = isn + composition.n_ion_species
-                            @views wall_flux_0 += integrate_over_negative_vpa(abs.(vpa.grid) .* f[:,1,ir,is], vpa.grid, vpa.wgts, vpa.scratch)
-                            @views wall_flux_L += integrate_over_positive_vpa(abs.(vpa.grid) .* f[:,end,ir,is], vpa.grid, vpa.wgts, vpa.scratch)
-                    end
-                    # NB: need to generalise to more than one ion species
-                    # get the Knudsen cosine distribution
-                    # NB: as vtfac is time-independent, can be made more efficient by creating
-                    # array for Knudsen cosine distribution and carrying out following four lines
-                    # of calculation at initialization
-                    @. vpa.scratch = (3*pi/vtfac^3)*abs(vpa.grid)*erfc(abs(vpa.grid)/vtfac)
-                    tmparr = copy(vpa.scratch)
-                    tmp = integrate_over_positive_vpa(vpa.grid .* vpa.scratch, vpa.grid, vpa.wgts, tmparr)
-                    @. vpa.scratch /= tmp
-                    for isn ∈ 1:composition.n_neutral_species
-                        is = isn + composition.n_ion_species
-                        for ivpa ∈ 1:nvpa
-                            # no parallel BC should be enforced for vpa = 0
-                            if abs(vpa.grid[ivpa]) > zero
-                                if adv[is].upwind_idx[ivpa,ir] == 1
-                                    f[ivpa,1,ir,is] = wall_flux_0 * vpa.scratch[ivpa]
-                                else
-                                    f[ivpa,end,ir,is] = wall_flux_L * vpa.scratch[ivpa]
+                            for ivpa ∈ 1:nvpa
+                                # no parallel BC should be enforced for vpa = 0
+                                if abs(vpa.grid[ivpa]) > zero
+                                    if adv[is].upwind_idx[ivpa,ir] == 1
+                                        f[ivpa,ivperp,1,ir,is] = wall_flux_0 * vpa.scratch[ivpa]
+                                    else
+                                        f[ivpa,ivperp,end,ir,is] = wall_flux_L * vpa.scratch[ivpa]
+                                    end
                                 end
                             end
                         end

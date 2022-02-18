@@ -57,7 +57,7 @@ end
 # this includes creating and populating structs
 # for Chebyshev transforms, velocity space moments,
 # EM fields, semi-Lagrange treatment, and advection terms
-function setup_time_advance!(pdf, vpa, z, r, composition, drive_input, moments,
+function setup_time_advance!(pdf, vpa, vperp, z, r, composition, drive_input, moments,
                              t_input, collisions, species)
     # define some local variables for convenience/tidiness
     n_species = composition.n_species
@@ -114,14 +114,14 @@ function setup_time_advance!(pdf, vpa, z, r, composition, drive_input, moments,
     # the advection term(s) appearing in the split part of the GK equation dealing
     # with advection in r
     begin_serial_region()
-    r_advect = setup_advection(n_species, r, vpa, z)
+    r_advect = setup_advection(n_species, r, vpa, vperp, z)
     # initialise the r advection speed
-    begin_s_z_vpa_region()
+    begin_s_z_vperp_vpa_region()
     @loop_s is begin
         @views update_speed_r!(r_advect[is], moments.upar[:,:,is], moments.vth[:,:,is],
-                               moments.evolve_upar, moments.evolve_ppar, vpa, z, r, 0.0)
+                               moments.evolve_upar, moments.evolve_ppar, vpa, vperp, z, r, 0.0)
         # initialise the upwind/downwind boundary indices in z
-        update_boundary_indices!(r_advect[is], loop_ranges[].vpa, loop_ranges[].z)
+        update_boundary_indices!(r_advect[is], loop_ranges[].vpa, loop_ranges[].vperp, loop_ranges[].z)
     end
     # enforce prescribed boundary condition in r on the distribution function f
     # PLACEHOLDER
@@ -132,17 +132,17 @@ function setup_time_advance!(pdf, vpa, z, r, composition, drive_input, moments,
     # the advection term(s) appearing in the split part of the GK equation dealing
     # with advection in z
     begin_serial_region()
-    z_advect = setup_advection(n_species, z, vpa, r)
+    z_advect = setup_advection(n_species, z, vpa, vperp, r)
     # initialise the z advection speed
-    begin_s_r_vpa_region()
+    begin_s_r_vperp_vpa_region()
     @loop_s is begin
         @views update_speed_z!(z_advect[is], moments.upar[:,:,is], moments.vth[:,:,is],
-                               moments.evolve_upar, moments.evolve_ppar, vpa, z, r, 0.0)
+                               moments.evolve_upar, moments.evolve_ppar, vpa, vperp, z, r, 0.0)
         # initialise the upwind/downwind boundary indices in z
-        update_boundary_indices!(z_advect[is], loop_ranges[].vpa, loop_ranges[].r)
+        update_boundary_indices!(z_advect[is], loop_ranges[].vpa, loop_ranges[].vperp, loop_ranges[].r)
     end
     # enforce prescribed boundary condition in z on the distribution function f
-    @views enforce_z_boundary_condition!(pdf.unnorm, z.bc, z_advect, vpa, r, composition)
+    @views enforce_z_boundary_condition!(pdf.unnorm, z.bc, z_advect, vpa, vperp, r, composition)
     if z.bc != "wall" || composition.n_neutral_species == 0
         begin_serial_region()
     end
@@ -183,6 +183,18 @@ function setup_time_advance!(pdf, vpa, z, r, composition, drive_input, moments,
         vpa.duniform_dgrid .= 1.0
     end
     
+    if vperp.discretization == "chebyshev_pseudospectral"
+        # create arrays needed for explicit Chebyshev pseudospectral treatment in vperp
+        # and create the plans for the forward and backward fast Chebyshev transforms
+        vperp_spectral = setup_chebyshev_pseudospectral(vperp)
+        # obtain the local derivatives of the uniform vperp-grid with respect to the used vperp-grid
+        chebyshev_derivative!(vperp.duniform_dgrid, vperp.uniform_grid, vperp_spectral, vperp)
+    else
+        # create dummy Bool variable to return in place of the above struct
+        vperp_spectral = false
+        vperp.duniform_dgrid .= 1.0
+    end
+    
     # create an array of structs containing scratch arrays for the pdf and low-order moments
     # that may be evolved separately via fluid equations
     scratch = setup_scratch_arrays(moments, pdf.norm, t_input.n_rk_stages)
@@ -192,7 +204,7 @@ function setup_time_advance!(pdf, vpa, z, r, composition, drive_input, moments,
     # for the electrostatic potential phi and eventually the electromagnetic fields
     fields = setup_em_fields(z.n, r.n, drive_input.force_phi, drive_input.amplitude, drive_input.frequency)
     # initialize the electrostatic potential
-    begin_s_r_z_region()
+    begin_s_r_z_vperp_region()
     update_phi!(fields, scratch[1], z, r, composition)
     begin_serial_region()
     @serial_region begin
@@ -202,10 +214,10 @@ function setup_time_advance!(pdf, vpa, z, r, composition, drive_input, moments,
     # create structure vpa_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the split part of the GK equation dealing
     # with advection in vpa
-    vpa_advect = setup_advection(n_species, vpa, z, r)
+    vpa_advect = setup_advection(n_species, vpa, vperp, z, r)
     # initialise the vpa advection speed
-    begin_s_r_z_region()
-    update_speed_vpa!(vpa_advect, fields, scratch[1], moments, vpa, z, r, composition,
+    begin_s_r_z_vperp_region()
+    update_speed_vpa!(vpa_advect, fields, scratch[1], moments, vpa, vperp, z, r, composition,
                       collisions.charge_exchange, 0.0, z_spectral)
     if moments.evolve_upar
         nspec = n_species
@@ -216,22 +228,24 @@ function setup_time_advance!(pdf, vpa, z, r, composition, drive_input, moments,
     @serial_region begin
         for is ∈ 1:nspec
             # initialise the upwind/downwind boundary indices in vpa
-            update_boundary_indices!(vpa_advect[is], 1:z.n, 1:r.n)
+            update_boundary_indices!(vpa_advect[is], 1:vperp.n, 1:z.n, 1:r.n)
             # enforce prescribed boundary condition in vpa on the distribution function f
-            @views enforce_vpa_boundary_condition!(pdf.norm[:,:,:,is], vpa.bc, vpa_advect[is])
+            @views enforce_vpa_boundary_condition!(pdf.norm[:,:,:,:,is], vpa.bc, vpa_advect[is])
         end
     end
     # create an array of structures containing the arrays needed for the semi-Lagrange
     # solve and initialize the characteristic speed and departure indices
     # so that the code can gracefully run without using the semi-Lagrange
     # method if the user specifies this
-    z_SL = setup_semi_lagrange(z.n, vpa.n, r.n)
-    vpa_SL = setup_semi_lagrange(vpa.n, z.n, r.n)
-    r_SL = setup_semi_lagrange(r.n, vpa.n, z.n)
+    z_SL = setup_semi_lagrange(z.n, vpa.n, vperp.n, r.n)
+    vpa_SL = setup_semi_lagrange(vpa.n, vperp.n, z.n, r.n)
+    vperp_SL = setup_semi_lagrange(vperp.n, vpa.n, z.n, r.n)
+    r_SL = setup_semi_lagrange(r.n, vpa.n, vperp.n, z.n)
 
-    begin_s_r_z_region()
-    return vpa_spectral, z_spectral, r_spectral, moments, fields, vpa_advect, z_advect, r_advect,
-        vpa_SL, z_SL, r_SL, scratch, advance, scratch_dummy_sr
+    begin_s_r_z_vperp_region()
+    return vpa_spectral, vperp_spectral, z_spectral, r_spectral, moments, fields, 
+    vpa_advect, vperp_advect, z_advect, r_advect,vpa_SL, vperp_SL, z_SL, r_SL,
+    scratch, advance, scratch_dummy_sr
 end
 
    

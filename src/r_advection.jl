@@ -76,22 +76,23 @@ function unnormalize_pdf!(unnorm, norm, dens, vth, evolve_density, evolve_ppar)
     return nothing
 end
 # calculate the advection speed in the z-direction at each grid point
-function update_speed_r!(advect, upar, vth, evolve_upar, evolve_ppar, vpa, z, r, t)
-    @boundscheck z.n == size(advect.speed,3) || throw(BoundsError(advect))
+function update_speed_r!(advect, upar, vth, evolve_upar, evolve_ppar, vpa, vperp, z, r, t)
+    @boundscheck z.n == size(advect.speed,4) || throw(BoundsError(advect))
+    @boundscheck vperp.n == size(advect.speed,3) || throw(BoundsError(advect))
     @boundscheck vpa.n == size(advect.speed,2) || throw(BoundsError(advect))
     @boundscheck r.n == size(advect.speed,1) || throw(BoundsError(speed))
     if r.advection.option == "default" || r.advection.option == "constant"
         @inbounds begin
-            @loop_z_vpa iz ivpa begin
-                @views advect.speed[:,ivpa,iz] .= r.advection.constant_speed
+            @loop_z_vperp_vpa iz ivperp ivpa begin
+                @views advect.speed[:,ivpa,ivperp,iz] .= r.advection.constant_speed
             end
         end
     end
     # the default for modified_speed is simply speed.
     # will be modified later if semi-Lagrange scheme used
     @inbounds begin
-        @loop_z_vpa iz ivpa begin
-            @views advect.modified_speed[:,ivpa,iz] .= advect.speed[:,ivpa,iz]
+        @loop_z_vperp_vpa iz ivperp ivpa begin
+            @views advect.modified_speed[:,ivpa,ivperp,iz] .= advect.speed[:,ivpa,ivperp,iz]
         end
     end
     return nothing

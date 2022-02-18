@@ -83,41 +83,42 @@ function unnormalize_pdf!(unnorm, norm, dens, vth, evolve_density, evolve_ppar)
     return nothing
 end
 # calculate the advection speed in the z-direction at each grid point
-function update_speed_z!(advect, upar, vth, evolve_upar, evolve_ppar, vpa, z, r, t)
-    @boundscheck r.n == size(advect.speed,3) || throw(BoundsError(advect))
+function update_speed_z!(advect, upar, vth, evolve_upar, evolve_ppar, vpa, vperp, z, r, t)
+    @boundscheck r.n == size(advect.speed,4) || throw(BoundsError(advect))
+    @boundscheck vperp.n == size(advect.speed,3) || throw(BoundsError(advect))
     @boundscheck vpa.n == size(advect.speed,2) || throw(BoundsError(advect))
     @boundscheck z.n == size(advect.speed,1) || throw(BoundsError(speed))
     if z.advection.option == "default"
         @inbounds begin
-            @loop_r_vpa ir ivpa begin
-                @views advect.speed[:,ivpa,ir] .= vpa.grid[ivpa]
+            @loop_r_vperp_vpa ir ivperp ivpa begin
+                @views advect.speed[:,ivpa,ivperp,ir] .= vpa.grid[ivpa]
             end
             if evolve_ppar
-                @loop_r_vpa ir ivpa begin
-                    @. @views advect.speed[:,ivpa,ir] = advect.speed[:,ivpa,ir] * vth + upar
+                @loop_r_vperp_vpa ir ivperp ivpa begin
+                    @. @views advect.speed[:,ivpa,ivperp,ir] = advect.speed[:,ivpa,ivperp,ir] * vth + upar
                 end
             elseif evolve_upar
-                @loop_r_vpa ir ivpa begin
-                    @views advect.speed[:,ivpa,ir] .+= upar
+                @loop_r_vperp_vpa ir ivperp ivpa begin
+                    @views advect.speed[:,ivpa,ivperp,ir] .+= upar
                 end
             end
         end
     elseif z.advection.option == "constant"
         @inbounds begin
-            @loop_r_vpa ir ivpa begin
-                @views advect.speed[:,ivpa,ir] .= z.advection.constant_speed
+            @loop_r_vperp_vpa ir ivperp ivpa begin
+                @views advect.speed[:,ivpa,ivperp,ir] .= z.advection.constant_speed
             end
         end
     elseif z.advection.option == "linear"
         @inbounds begin
-            @loop_r_vpa ir ivpa begin
-                @views advect.speed[:,ivpa,ir] .= z.advection.constant_speed*(z.grid[i]+0.5*z.L)
+            @loop_r_vperp_vpa ir ivperp ivpa begin
+                @views advect.speed[:,ivpa,ivperp,ir] .= z.advection.constant_speed*(z.grid[i]+0.5*z.L)
             end
         end
     elseif z.advection.option == "oscillating"
         @inbounds begin
-            @loop_r_vpa ir ivpa begin
-                @views advect.speed[:,ivpa,ir] .= z.advection.constant_speed*(1.0
+            @loop_r_vperp_vpa ir ivperp ivpa begin
+                @views advect.speed[:,ivpa,ivperp,ir] .= z.advection.constant_speed*(1.0
                         + z.advection.oscillation_amplitude*sinpi(t*z.advection.frequency))
             end
         end
@@ -125,8 +126,8 @@ function update_speed_z!(advect, upar, vth, evolve_upar, evolve_ppar, vpa, z, r,
     # the default for modified_speed is simply speed.
     # will be modified later if semi-Lagrange scheme used
     @inbounds begin
-        @loop_r_vpa ir ivpa begin
-            @views advect.modified_speed[:,ivpa,ir] .= advect.speed[:,ivpa,ir]
+        @@loop_r_vperp_vpa ir ivperp ivpa begin
+            @views advect.modified_speed[:,ivpa,ivperp,ir] .= advect.speed[:,ivpa,ivperp,ir]
         end
     end
     return nothing
