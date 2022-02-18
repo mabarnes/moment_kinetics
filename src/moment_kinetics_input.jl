@@ -177,8 +177,8 @@ function mk_input(scan_input=Dict())
     # MRH probably need to add new bc option here
     vperp.bc = get(scan_input, "vperp_bc", "periodic")
     # determine the discretization option for the vperp grid
-    # supported options are "chebyshev_pseudospectral" and "finite_difference"
-    vperp.discretization = get(scan_input, "vperp_discretization", "chebyshev_pseudospectral")
+    # supported options are "finite_difference_vperp"
+    vperp.discretization = get(scan_input, "vperp_discretization", "finite_difference_vperp")
 
     #########################################################################
     ########## end user inputs. do not modify following code! ###############

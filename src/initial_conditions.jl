@@ -50,9 +50,9 @@ function init_pdf_and_moments(vpa, vperp, z, r, composition, species, n_rk_stage
     # the definition of pdf.norm changes accordingly from pdf.unnorm / density to pdf.unnorm * vth / density
     # when evolve_ppar = true.
     pdf = create_and_init_pdf(moments, vpa, vperp, z, r, n_species, species)
-    begin_s_r_z_region()
+    begin_s_r_z_vperp_region()
     # calculate the initial parallel heat flux from the initial un-normalised pdf
-    update_qpar!(moments.qpar, moments.qpar_updated, pdf.unnorm, vpa, z, r, composition, moments.vpa_norm_fac)
+    update_qpar!(moments.qpar, moments.qpar_updated, pdf.unnorm, vpa, vperp, z, r, composition, moments.vpa_norm_fac)
     return pdf, moments
 end
 function create_and_init_pdf(moments, vpa, vperp, z, r, n_species, species)
@@ -62,12 +62,13 @@ function create_and_init_pdf(moments, vpa, vperp, z, r, n_species, species)
         for is ∈ 1:n_species
             for ir ∈ 1:r.n
                 if species[is].z_IC.initialization_option == "bgk" || species[is].vpa_IC.initialization_option == "bgk"
+                    # MRH not supported yet
                     @views init_bgk_pdf!(f[:,:,ir,is], 0.0, species[is].initial_temperature, z.grid, z.L, vpa.grid)
                 else
                     # updates pdf_norm to contain pdf / density, so that ∫dvpa pdf.norm = 1,
                     # ∫dwpa wpa * pdf.norm = 0, and ∫dwpa m_s (wpa/vths)^2 pdf.norm = 1/2
                     # to machine precision
-                    @views init_pdf_over_density!(pdf_norm[:,:,ir,is], species[is], vpa, vperp, z, moments.vth[:,ir,is],
+                    @views init_pdf_over_density!(pdf_norm[:,:,:,ir,is], species[is], vpa, vperp, z, moments.vth[:,ir,is],
                                                   moments.upar[:,ir,is], moments.vpa_norm_fac[:,ir,is],
                                                   moments.evolve_upar, moments.evolve_ppar)
                 end
@@ -195,7 +196,7 @@ function init_pdf_over_density!(pdf, spec, vpa, vperp, z, vth, upar, vpa_norm_fa
             #@. pdf[:,iz] = pdf[:,iz]/densfac + (0.5 - pparfac/densfac)/pparfac2*(vpa.grid^2/pparfac - vth[iz]^2/densfac)*pdf[:,iz]*(vpa_norm_fac[iz]/vth[iz])^2
             for ivperp ∈ 1:vperp.n
                 for ivpa ∈ 1:vpa.n
-                    pdf[ivpa,ivperp,iz] = pdf[ivpa,ivperp,iz]/densfac + (0.5 - pparfac/densfac)/pparfac2*(vpa.grid^2/pparfac - 1.0/densfac)*pdf[ivpa,ivperp,iz]*(vpa_norm_fac[iz]/vth[iz])^2
+                    pdf[ivpa,ivperp,iz] = pdf[ivpa,ivperp,iz]/densfac + (0.5 - pparfac/densfac)/pparfac2*(vpa.grid[ivpa]^2/pparfac - 1.0/densfac)*pdf[ivpa,ivperp,iz]*(vpa_norm_fac[iz]/vth[iz])^2
                 end
             end
         end
@@ -266,7 +267,7 @@ function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, vperp, r, com
         end
     # 'periodic' BC enforces periodicity by taking the average of the boundary points
     elseif bc == "periodic"
-        @loop_s_r_vpa is ir ivpa begin
+        @loop_s_r_vperp_vpa is ir ivperp ivpa begin
             downwind_idx = adv[is].downwind_idx[ivpa,ivperp,ir]
             upwind_idx = adv[is].upwind_idx[ivpa,ivperp,ir]
             f[ivpa,ivperp,downwind_idx,ir,is] = 0.5*(f[ivpa,ivperp,upwind_idx,ir,is]+f[ivpa,ivperp,downwind_idx,ir,is])

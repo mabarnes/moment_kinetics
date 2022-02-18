@@ -199,21 +199,26 @@ end
 # NB: if this function is called and if ppar_updated is false, then
 # the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
 
-function update_qpar!(qpar, qpar_updated, pdf, vpa, z, r, composition, vpanorm)
+function update_qpar!(qpar, qpar_updated, pdf, vpa, vperp, z, r, composition, vpanorm)
     @boundscheck composition.n_species == size(qpar,3) || throw(BoundsError(qpar))
     @loop_s is begin
         if qpar_updated[is] == false
-            @views update_qpar_species!(qpar[:,:,is], pdf[:,:,:,is], vpa, z, r, vpanorm[:,:,is])
+            @views update_qpar_species!(qpar[:,:,is], pdf[:,:,:,:,is], vpa, vperp, z, r, vpanorm[:,:,is])
             qpar_updated[is] = true
         end
     end
 end
 # calculate the updated parallel heat flux (qpar) for a given species
-function update_qpar_species!(qpar, ff, vpa, z, r, vpanorm)
-    @boundscheck z.n == size(ff, 2) || throw(BoundsError(ff))
+function update_qpar_species!(qpar, ff, vpa, vperp, z, r, vpanorm)
+    @boundscheck r.n == size(ff, 4) || throw(BoundsError(ff))
+    @boundscheck z.n == size(ff, 3) || throw(BoundsError(ff))
+    @boundscheck vperp.n == size(ff, 2) || throw(BoundsError(ff))
+    @boundscheck vpa.n == size(ff, 1) || throw(BoundsError(ff))
+    @boundscheck r.n == size(qpar, 2) || throw(BoundsError(qpar))
     @boundscheck z.n == size(qpar, 1) || throw(BoundsError(qpar))
     @loop_r_z ir iz begin
-        qpar[iz,ir] = integrate_over_vspace(@view(ff[:,iz,ir]), vpa.grid, 3, vpa.wgts) * vpanorm[iz,ir]^4
+        # old ! qpar[iz,ir] = integrate_over_vspace(@view(ff[:,iz,ir]), vpa.grid, 3, vpa.wgts) * vpanorm[iz,ir]^4
+        qpar[iz,ir] = integrate_over_vspace(@view(ff[:,:,iz,ir]), vpa.grid, 3, vpa.wgts, vperp.grid, 0, vperp.wgts) * vpanorm[iz,ir]^4
     end
     return nothing
 end

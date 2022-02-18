@@ -275,7 +275,7 @@ end
 function setup_scratch_arrays(moments, pdf_in, n_rk_stages)
     # create n_rk_stages+1 structs, each of which will contain one pdf,
     # one density, and one parallel flow array
-    scratch = Vector{scratch_pdf{4,3}}(undef, n_rk_stages+1)
+    scratch = Vector{scratch_pdf{5,3}}(undef, n_rk_stages+1)
     pdf_dims = size(pdf_in)
     moment_dims = size(moments.dens)
     # populate each of the structs

@@ -126,7 +126,7 @@ function update_speed_z!(advect, upar, vth, evolve_upar, evolve_ppar, vpa, vperp
     # the default for modified_speed is simply speed.
     # will be modified later if semi-Lagrange scheme used
     @inbounds begin
-        @@loop_r_vperp_vpa ir ivperp ivpa begin
+        @loop_r_vperp_vpa ir ivperp ivpa begin
             @views advect.modified_speed[:,ivpa,ivperp,ir] .= advect.speed[:,ivpa,ivperp,ir]
         end
     end
