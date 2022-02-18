@@ -20,6 +20,7 @@ using ..initial_conditions: enforce_vpa_boundary_condition!
 using ..advection: setup_advection, update_boundary_indices!
 using ..z_advection: update_speed_z!, z_advection!
 using ..r_advection: update_speed_r!, r_advection!
+using ..vperp_advection: update_speed_vperp!, vperp_advection!
 using ..vpa_advection: update_speed_vpa!, vpa_advection!
 using ..charge_exchange: charge_exchange_collisions!
 using ..ionization: ionization_collisions!
@@ -231,6 +232,28 @@ function setup_time_advance!(pdf, vpa, vperp, z, r, composition, drive_input, mo
             update_boundary_indices!(vpa_advect[is], 1:vperp.n, 1:z.n, 1:r.n)
             # enforce prescribed boundary condition in vpa on the distribution function f
             @views enforce_vpa_boundary_condition!(pdf.norm[:,:,:,:,is], vpa.bc, vpa_advect[is])
+        end
+    end
+    # create structure vperp_advect whose members are the arrays needed to compute
+    # the advection term(s) appearing in the split part of the GK equation dealing
+    # with advection in vperp
+    begin_serial_region()
+    vperp_advect = setup_advection(n_species, vperp, vpa, z, r)
+    # initialise the vperp advection speed
+    if moments.evolve_upar
+        nspec = n_species
+    else
+        nspec = n_ion_species
+    end
+    begin_serial_region()
+    @serial_region begin
+        for is ∈ 1:nspec
+            @views update_speed_vperp!(vperp_advect[is], vpa, vperp, z, r, 0.0)
+            # initialise the upwind/downwind boundary indices in vpa
+            update_boundary_indices!(vperp_advect[is], 1:vpa.n, 1:z.n, 1:r.n)
+            # enforce prescribed boundary condition in vpa on the distribution function f
+            #PLACEHOLDER
+            #@views enforce_vperp_boundary_condition!(pdf.norm[:,:,:,:,is], vpa.bc, vpa_advect[is])
         end
     end
     # create an array of structures containing the arrays needed for the semi-Lagrange
