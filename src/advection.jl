@@ -95,20 +95,23 @@ orthogonal_coordinate_range : UnitRange{mk_int}
     Range of indices for the dimension orthogonal to the advection direction, used to
     iterate over the orthogonal coordinate.
 """
-function update_boundary_indices!(advection, orthogonal_coordinate_range1, orthogonal_coordinate_range2)
+function update_boundary_indices!(advection, orthogonal_coordinate_range1, 
+orthogonal_coordinate_range2, orthogonal_coordinate_range3)
     n = size(advection.speed,1)
-    for k ∈ orthogonal_coordinate_range2
-        for j ∈ orthogonal_coordinate_range1
-            # NB: for now, assume the speed has the same sign at all grid points
-            # so only need to check its value at one location to determine the upwind direction
-            if advection.speed[1,j,k] > 0
-                advection.upwind_idx[j,k] = 1
-                advection.upwind_increment[j,k] = -1
-                advection.downwind_idx[j,k] = n
-            else
-                advection.upwind_idx[j,k] = n
-                advection.upwind_increment[j,k] = 1
-                advection.downwind_idx[j,k] = 1
+    for l ∈ orthogonal_coordinate_range3
+        for k ∈ orthogonal_coordinate_range2
+            for j ∈ orthogonal_coordinate_range1
+                # NB: for now, assume the speed has the same sign at all grid points
+                # so only need to check its value at one location to determine the upwind direction
+                if advection.speed[1,j,k,l] > 0
+                    advection.upwind_idx[j,k,l] = 1
+                    advection.upwind_increment[j,k,l] = -1
+                    advection.downwind_idx[j,k,l] = n
+                else
+                    advection.upwind_idx[j,k,l] = n
+                    advection.upwind_increment[j,k,l] = 1
+                    advection.downwind_idx[j,k,l] = 1
+                end
             end
         end
     end
