@@ -113,7 +113,7 @@ function setup_moment_kinetics(input_dict::Dict)
     input = mk_input(input_dict)
     # obtain input options from moment_kinetics_input.jl
     # and check input to catch errors
-    run_name, output_dir, evolve_moments, t_input, z_input, r_input, vpa_input,
+    run_name, output_dir, evolve_moments, t_input, z_input, r_input, vpa_input, vperp_input,
         composition, species, collisions, drive_input = input
     # initialize z grid and write grid point locations to file
     z = define_coordinate(z_input, composition)
@@ -121,18 +121,21 @@ function setup_moment_kinetics(input_dict::Dict)
     r = define_coordinate(r_input, composition)
     # initialize vpa grid and write grid point locations to file
     vpa = define_coordinate(vpa_input, composition)
+    # initialize vperp grid and write grid point locations to file
+    vperp = define_coordinate(vperp_input, composition)
     # Create loop range variables for shared-memory-parallel loops
     looping.setup_loop_ranges!(block_rank[], block_size[]; s=composition.n_species, r=r.n,
-                               z=z.n, vpa=vpa.n)
+                               z=z.n, vperp=vperp.n, vpa=vpa.n)
     # initialize f(z,vpa) and the lowest three v-space moments (density(z), upar(z) and ppar(z)),
     # each of which may be evolved separately depending on input choices.
-    pdf, moments = init_pdf_and_moments(vpa, z, r, composition, species, t_input.n_rk_stages, evolve_moments)
+    pdf, moments = init_pdf_and_moments(vpa, vperp, z, r, composition, species, t_input.n_rk_stages, evolve_moments)
     # initialize time variable
     code_time = 0.
     # create arrays and do other work needed to setup
     # the main time advance loop -- including normalisation of f by density if requested
-    vpa_spectral, z_spectral, r_spectral, moments, fields, vpa_advect, z_advect, r_advect,
-        vpa_SL, z_SL, r_SL, scratch, advance, scratch_dummy_sr = setup_time_advance!(pdf, vpa, z, r, composition,
+    vpa_spectral, vperp_spectral, z_spectral, r_spectral, moments, fields, 
+    vpa_advect, vperp_advect, z_advect, r_advect,
+    vpa_SL, vperp_SL, z_SL, r_SL, scratch, advance, scratch_dummy_sr = setup_time_advance!(pdf, vpa, vperp, z, r, composition,
         drive_input, moments, t_input, collisions, species)
     # setup i/o
     io, cdf = setup_file_io(output_dir, run_name, vpa, z, r, composition, collisions,
