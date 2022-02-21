@@ -47,7 +47,7 @@ struct netcdf_info
     # handle for the time variable
     time::nc_var_type{1}
     # handle for the distribution function variable
-    f::nc_var_type{5}
+    f::nc_var_type{6}
     # handle for the electrostatic potential variable
     phi::nc_var_type{3}
     # handle for the species density
@@ -62,7 +62,7 @@ struct netcdf_info
     thermal_speed::nc_var_type{4}
 end
 # open the necessary output files
-function setup_file_io(output_dir, run_name, vpa, z, r, composition,
+function setup_file_io(output_dir, run_name, vpa, vperp, z, r, composition,
                        collisions, evolve_ppar)
     begin_serial_region()
     @serial_region begin
@@ -75,7 +75,7 @@ function setup_file_io(output_dir, run_name, vpa, z, r, composition,
         #ff_io = open_output_file(out_prefix, "f_vs_t")
         mom_io = open_output_file(out_prefix, "moments_vs_t")
         fields_io = open_output_file(out_prefix, "fields_vs_t")
-        cdf = setup_netcdf_io(out_prefix, r, z, vpa, composition, collisions,
+        cdf = setup_netcdf_io(out_prefix, r, z, vperp, vpa, composition, collisions,
                               evolve_ppar)
         #return ios(ff_io, mom_io, fields_io), cdf
         return ios(mom_io, fields_io), cdf
@@ -84,7 +84,7 @@ function setup_file_io(output_dir, run_name, vpa, z, r, composition,
     return nothing, nothing
 end
 # setup file i/o for netcdf
-function setup_netcdf_io(prefix, r, z, vpa, composition, collisions, evolve_ppar)
+function setup_netcdf_io(prefix, r, z, vperp, vpa, composition, collisions, evolve_ppar)
     # the netcdf file will be given by output_dir/run_name with .cdf appended
     filename = string(prefix,".cdf")
     # if a netcdf file with the requested name already exists, remove it
@@ -96,6 +96,8 @@ function setup_netcdf_io(prefix, r, z, vpa, composition, collisions, evolve_ppar
     ### define coordinate dimensions ###
     # define the vpa dimension
     defDim(fid, "nvpa", vpa.n)
+    # define the vperp dimension
+    defDim(fid, "nvperp", vperp.n)
     # define the z dimension
     defDim(fid, "nz", z.n)
     # define the r dimension
@@ -135,6 +137,19 @@ function setup_netcdf_io(prefix, r, z, vpa, composition, collisions, evolve_ppar
     vartype = mk_float
     var = defVar(fid, varname, vartype, dims, attrib=attributes)
     var[:] = z.wgts
+    # create and write the "vperp" variable to file
+    varname = "vperp"
+    attributes = Dict("description" => "parallel velocity")
+    dims = ("nvperp",)
+    vartype = mk_float
+    var = defVar(fid, varname, vartype, dims, attrib=attributes)
+    var[:] = vperp.grid
+    # create and write the "vperp_wgts" variable to file
+    varname = "vperp_wgts"
+    attributes = Dict("description" => "integration weights for parallel velocity coordinate")
+    vartype = mk_float
+    var = defVar(fid, varname, vartype, dims, attrib=attributes)
+    var[:] = vperp.wgts
     # create and write the "vpa" variable to file
     varname = "vpa"
     attributes = Dict("description" => "parallel velocity")
@@ -181,7 +196,7 @@ function setup_netcdf_io(prefix, r, z, vpa, composition, collisions, evolve_ppar
     varname = "f"
     attributes = Dict("description" => "distribution function")
     vartype = mk_float
-    dims = ("nvpa","nz","nr","n_species","ntime")
+    dims = ("nvpa","nvperp","nz","nr","n_species","ntime")
     cdf_f = defVar(fid, varname, vartype, dims, attrib=attributes)
     # create variables that are floats with data in the z and time dimensions
     vartype = mk_float
@@ -239,7 +254,7 @@ function finish_file_io(io, cdf)
     end
     return nothing
 end
-function write_data_to_ascii(ff, moments, fields, vpa, z, r, t, n_species, io)
+function write_data_to_ascii(ff, moments, fields, vpa, vperp, z, r, t, n_species, io)
     @serial_region begin
         # Only read/write from first process in each 'block'
 
@@ -315,7 +330,7 @@ function write_data_to_binary(ff, moments, fields, t, n_species, cdf, t_idx)
         # add the time for this time slice to the netcdf file
         cdf.time[t_idx] = t
         # add the distribution function data at this time slice to the netcdf file
-        cdf.f[:,:,:,:,t_idx] = ff
+        cdf.f[:,:,:,:,:,t_idx] = ff
         # add the electrostatic potential data at this time slice to the netcdf file
         cdf.phi[:,:,t_idx] = fields.phi
         # add the density data at this time slice to the netcdf file

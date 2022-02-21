@@ -9,14 +9,14 @@ using ..chebyshev: chebyshev_info
 using ..looping
 
 # do a single stage time advance (potentially as part of a multi-stage RK scheme)
-function z_advection!(f_out, fvec_in, ff, moments, SL, advect, z, vpa, r,
+function z_advection!(f_out, fvec_in, ff, moments, SL, advect, z, vpa, vperp, r,
                       use_semi_lagrange, dt, t, spectral, composition, istage)
     @loop_s is begin
         # get the updated speed along the z direction using the current f
         @views update_speed_z!(advect[is], fvec_in.upar[:,:,is], moments.vth[:,:,is],
-                               moments.evolve_upar, moments.evolve_ppar, vpa, z, r, t)
+                               moments.evolve_upar, moments.evolve_ppar, vpa, vperp, z, r, t)
         # update the upwind/downwind boundary indices and upwind_increment
-        @views update_boundary_indices!(advect[is], loop_ranges[].vpa, loop_ranges[].r)
+        @views update_boundary_indices!(advect[is], loop_ranges[].vpa, loop_ranges[].vperp, loop_ranges[].r)
         # if using interpolation-free Semi-Lagrange,
         # follow characteristics backwards in time from level m+1 to level m
         # to get departure points.  then find index of grid point nearest
@@ -24,8 +24,8 @@ function z_advection!(f_out, fvec_in, ff, moments, SL, advect, z, vpa, r,
         # an approximate characteristic
         if use_semi_lagrange
             # MRH NOT SUPPORTED
-            @loop_r_vpa ir ivpa begin
-                find_approximate_characteristic!(SL[ivpa], advect[is], ivpa, ir, z, dt)
+            @loop_r_vperp_vpa ir ivperp ivpa begin
+                find_approximate_characteristic!(SL[ivpa], advect[is], ivpa, ivperp, ir, z, dt)
             end
         end
         # # advance z-advection equation
@@ -43,15 +43,15 @@ function z_advection!(f_out, fvec_in, ff, moments, SL, advect, z, vpa, r,
         #     end
         # end
         # advance z-advection equation
-        @loop_r_vpa ir ivpa begin
-            @views adjust_advection_speed!(advect[is].speed[:,ivpa,ir], advect[is].modified_speed[:,ivpa,ir],
+        @loop_r_vperp_vpa ir ivperp ivpa begin
+            @views adjust_advection_speed!(advect[is].speed[:,ivpa,ivperp,ir], advect[is].modified_speed[:,ivpa,ivperp,ir],
                                            fvec_in.density[:,ir,is], moments.vth[:,ir,is],
                                            moments.evolve_density, moments.evolve_ppar)
             # take the normalized pdf contained in fvec_in.pdf and remove the normalization,
             # returning the true (un-normalized) particle distribution function in z.scratch
-            @views unnormalize_pdf!(z.scratch, fvec_in.pdf[ivpa,:,ir,is], fvec_in.density[:,ir,is], moments.vth[:,ir,is],
+            @views unnormalize_pdf!(z.scratch, fvec_in.pdf[ivpa,ivperp,:,ir,is], fvec_in.density[:,ir,is], moments.vth[:,ir,is],
                                     moments.evolve_density, moments.evolve_ppar)
-            @views advance_f_local!(f_out[ivpa,:,ir,is], z.scratch, ff[ivpa,:,ir,is], SL, advect[is], ivpa, ir,
+            @views advance_f_local!(f_out[ivpa,ivperp,:,ir,is], z.scratch, ff[ivpa,ivperp,:,ir,is], SL, advect[is], ivpa, ivperp, ir,
                                     z, dt, istage, spectral, use_semi_lagrange)
         end
     end

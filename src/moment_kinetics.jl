@@ -136,21 +136,24 @@ function setup_moment_kinetics(input_dict::Dict)
     # the main time advance loop -- including normalisation of f by density if requested
     vpa_spectral, vperp_spectral, z_spectral, r_spectral, moments, fields, 
     vpa_advect, vperp_advect, z_advect, r_advect,
-    vpa_SL, vperp_SL, z_SL, r_SL, scratch, advance, scratch_dummy_sr = setup_time_advance!(pdf, vpa, vperp, z, r, composition,
+    vpa_SL, vperp_SL, z_SL, r_SL, scratch, advance, scratch_dummy = setup_time_advance!(pdf, vpa, vperp, z, r, composition,
         drive_input, moments, t_input, collisions, species)
     # setup i/o
-    io, cdf = setup_file_io(output_dir, run_name, vpa, z, r, composition, collisions,
+    io, cdf = setup_file_io(output_dir, run_name, vpa, vperp, z, r, composition, collisions,
                             moments.evolve_ppar)
     # write initial data to ascii files
-    write_data_to_ascii(pdf.unnorm, moments, fields, vpa, z, r, code_time, composition.n_species, io)
+    write_data_to_ascii(pdf.unnorm, moments, fields, vpa, vperp, z, r, code_time, composition.n_species, io)
     # write initial data to binary file (netcdf)
     write_data_to_binary(pdf.unnorm, moments, fields, code_time, composition.n_species, cdf, 1)
 
-    begin_s_r_z_region()
+    begin_s_r_z_vperp_region()
 
-    return pdf, scratch, code_time, t_input, vpa, z, r, vpa_spectral, z_spectral, r_spectral, moments,
-           fields, vpa_advect, z_advect, r_advect, vpa_SL, z_SL, r_SL, composition, collisions, advance,
-           scratch_dummy_sr, io, cdf
+    return pdf, scratch, code_time, t_input, vpa, vperp, z, r,
+           vpa_spectral, vperp_spectral, z_spectral, r_spectral, 
+           moments, fields, 
+           vpa_advect, vperp_advect, z_advect, r_advect, 
+           vpa_SL, vperp_SL, z_SL, r_SL,
+           composition, collisions, advance, scratch_dummy, io, cdf
 end
 
 # Clean up after a run

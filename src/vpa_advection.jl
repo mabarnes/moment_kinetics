@@ -12,13 +12,15 @@ using ..initial_conditions: enforce_vpa_boundary_condition!
 using ..looping
 
 function vpa_advection!(f_out, fvec_in, ff, fields, moments, SL, advect,
-        vpa, z, r, use_semi_lagrange, dt, t, vpa_spectral, z_spectral, composition, CX_frequency, istage)
+        vpa, vperp, z, r, use_semi_lagrange, dt, t,
+        vpa_spectral, z_spectral, composition, CX_frequency, istage)
 
     # only have a parallel acceleration term for neutrals if using the peculiar velocity
     # wpar = vpar - upar as a variable; i.e., d(wpar)/dt /=0 for neutrals even though d(vpar)/dt = 0.
 
     # calculate the advection speed corresponding to current f
-    update_speed_vpa!(advect, fields, fvec_in, moments, vpa, z, r, composition, CX_frequency, t, z_spectral)
+    update_speed_vpa!(advect, fields, fvec_in, moments, vpa, vperp,
+    z, r, composition, CX_frequency, t, z_spectral)
     @loop_s is begin
         if !moments.evolve_upar && is in composition.neutral_species_range
             # No acceleration for neutrals when not evolving upar
@@ -27,7 +29,7 @@ function vpa_advection!(f_out, fvec_in, ff, fields, moments, SL, advect,
         # update the upwind/downwind boundary indices and upwind_increment
         # NB: not sure if this will work properly with SL method at the moment
         # NB: if the speed is actually time-dependent
-        update_boundary_indices!(advect[is], loop_ranges[].z, loop_ranges[].r)
+        update_boundary_indices!(advect[is], loop_ranges[].vperp, loop_ranges[].z, loop_ranges[].r)
         # if using interpolation-free Semi-Lagrange,
         # follow characteristics backwards in time from level m+1 to level m
         # to get departure points.  then find index of grid point nearest
@@ -35,13 +37,14 @@ function vpa_advection!(f_out, fvec_in, ff, fields, moments, SL, advect,
         # an approximate characteristic
         if use_semi_lagrange
             # NOT SUPPORTED in semi_lagrange module
-            @loop_z iz begin
-                find_approximate_characteristic!(SL, advect[is], iz, ir, vpa, dt)
+            @loop_r_z_vperp ir iz ivperp begin
+                find_approximate_characteristic!(SL, advect[is], ivperp, iz, ir, vpa, dt)
             end
         end
-        @loop_r_z ir iz begin
-            @views advance_f_local!(f_out[:,iz,ir,is], fvec_in.pdf[:,iz,ir,is], ff[:,iz,ir,is],
-                                    SL, advect[is], iz, ir, vpa, dt, istage,
+        @loop_r_z_vperp ir iz ivperp begin
+            @views advance_f_local!(f_out[:,ivperp,iz,ir,is], fvec_in.pdf[:,ivperp,iz,ir,is],
+                                    ff[:,ivperp,iz,ir,is],
+                                    SL, advect[is], ivperp, iz, ir, vpa, dt, istage,
                                     vpa_spectral, use_semi_lagrange)
         end
         #@views enforce_vpa_boundary_condition!(f_out[:,:,is], vpa.bc, advect[is])
