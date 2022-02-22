@@ -65,6 +65,11 @@ test_input_finite_difference = Dict("n_ion_species" => 1,
                                     "z_nelement" => 1,
                                     "z_bc" => "periodic",
                                     "z_discretization" => "finite_difference",
+                                    "vperp_ngrid" => 1,
+                                    "vperp_nelement" => 1,
+                                    "vperp_L" => 1.0,
+                                    "vperp_bc" => "periodic",
+                                    "vperp_discretization" => "finite_difference_vperp",
                                     "vpa_ngrid" => 180,
                                     "vpa_nelement" => 1,
                                     "vpa_L" => 8.0,
@@ -163,14 +168,17 @@ function run_test(test_input, analytic_frequency, analytic_growth_rate,
             fid = open_netcdf_file(path)
 
             # load space-time coordinate data
-            nvpa, vpa, vpa_wgts, nz, z, z_wgts, Lz, nr, r, r_wgts, Lr, ntime, time = load_coordinate_data(fid)
+            nvpa, vpa, vpa_wgts, nvperp, vperp, vperp_wgts,
+            nz, z, z_wgts, Lz, nr, r, r_wgts, Lr, ntime, time = load_coordinate_data(fid)
 
             # load fields data
             phi_zrt = load_fields_data(fid)
 
             close(fid)
-
-            phi = phi_zrt[:,1,:]
+            
+            ir0 = 1 
+            
+            phi = phi_zrt[:,ir0,:]
 
             # analyze the fields data
             phi_fldline_avg, delta_phi = analyze_fields_data(phi, ntime, nz, z_wgts, Lz)
