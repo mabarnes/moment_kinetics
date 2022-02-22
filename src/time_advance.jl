@@ -53,7 +53,7 @@ mutable struct advance_info
     rk_coefs::Array{mk_float,2}
 end
 
-mutable struct scatch_dummy_arrays
+mutable struct scratch_dummy_arrays
     dummy_sr::Array{mk_float,2}
     dummy_vpavperp::Array{mk_float,2}
 end 
@@ -207,7 +207,7 @@ function setup_time_advance!(pdf, vpa, vperp, z, r, composition, drive_input, mo
     # setup dummy arrays
     dummy_sr = allocate_float(r.n, composition.n_species)
     dummy_vpavperp = allocate_float(vpa.n, vperp.n)
-    scatch_dummy = scratch_dummy_arrays(dummy_sr,dummy_vpavperp)
+    scratch_dummy = scratch_dummy_arrays(dummy_sr,dummy_vpavperp)
     # create the "fields" structure that contains arrays
     # for the electrostatic potential phi and eventually the electromagnetic fields
     fields = setup_em_fields(z.n, r.n, drive_input.force_phi, drive_input.amplitude, drive_input.frequency)
@@ -624,7 +624,7 @@ function rk_update!(scratch, pdf, moments, fields, vpa, vperp, z, r, rk_coefs, i
             new_scratch.ppar[iz,ir,is] = rk_coefs[1]*moments.ppar[iz,ir,is] + rk_coefs[2]*old_scratch.ppar[iz,ir,is] + rk_coefs[3]*new_scratch.ppar[iz,ir,is]
         end
     else
-        update_ppar!(new_scratch.ppar, moments.ppar_updated, pdf.unnorm, vpa, z, r, composition)
+        update_ppar!(new_scratch.ppar, moments.ppar_updated, pdf.unnorm, vpa, vperp, z, r, composition)
     end
     # update the thermal speed
     @loop_s_r_z is ir iz begin
@@ -754,7 +754,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, vp
     end
     # enforce boundary conditions in z and vpa on the distribution function
     # NB: probably need to do the same for the evolved moments
-    enforce_boundary_conditions!(fvec_out.pdf, vpa.bc, z.bc, vpa, z, r, vpa_advect, z_advect, composition)
+    enforce_boundary_conditions!(fvec_out.pdf, vpa.bc, z.bc, vpa, vperp, z, r, vpa_advect, z_advect, composition)
     # End of advance fo distribution function
 
     # Start advancing moments

@@ -198,7 +198,7 @@ function update_ppar!(ppar, ppar_updated, pdf, vpa, vperp, z, r, composition)
     end
 end
 # calculate the updated parallel pressure (ppar) for a given species
-function update_ppar_species!(ppar, ff, vpa, z, r)
+function update_ppar_species!(ppar, ff, vpa, vperp, z, r)
     @boundscheck vpa.n == size(ff, 1) || throw(BoundsError(ff))
     @boundscheck vperp.n == size(ff, 2) || throw(BoundsError(ff))
     @boundscheck z.n == size(ff, 3) || throw(BoundsError(ff))

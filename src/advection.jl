@@ -120,7 +120,7 @@ end
 # calculate the factor appearing in front of f' in the advection term
 # at time level n in the frame moving with the approximate characteristic
 function update_advection_factor!(adv_fac, speed, upwind_idx, downwind_idx,
-    upwind_increment, SL, i_outer, j_outer, n, dt, j, coord)
+    upwind_increment, SL, i_outer, j_outer, k_outer, n, dt, j, coord)
     @boundscheck n == size(SL.dep_idx, 1) || throw(BoundsError(SL.dep_idx))
     @boundscheck n == length(adv_fac) || throw(BoundsError(adv_fac))
     @boundscheck n == length(speed) || throw(BoundsError(speed))
@@ -131,7 +131,7 @@ function update_advection_factor!(adv_fac, speed, upwind_idx, downwind_idx,
     #@inbounds begin
     if j == 1
         for i ∈ upwind_idx:-upwind_increment:downwind_idx
-            idx = SL.dep_idx[i,i_outer,j_outer]
+            idx = SL.dep_idx[i,i_outer,j_outer,k_outer]
             # only need to calculate advection factor for characteristics
             # that originate within the domain, as zero/constant incoming BC
             # takes care of the rest.
@@ -139,16 +139,16 @@ function update_advection_factor!(adv_fac, speed, upwind_idx, downwind_idx,
                 # the effective advection speed appearing in the advection term
                 # is the speed in the frame moving with the approximate
                 # characteristic speed v_char
-                adv_fac[i] = -dt*(speed[idx]-SL.characteristic_speed[i,i_outer,j_outer])
+                adv_fac[i] = -dt*(speed[idx]-SL.characteristic_speed[i,i_outer,j_outer,k_outer])
             end
         end
     else
         # NB: need to change v[idx] to v[i] for second iteration of RK -
         # otherwise identical to loop in first branch
         for i ∈ upwind_idx:-upwind_increment:downwind_idx
-            idx = SL.dep_idx[i,i_outer,j_outer]
+            idx = SL.dep_idx[i,i_outer,j_outer,k_outer]
             if idx != upwind_idx + upwind_increment
-                adv_fac[i] = -dt*(speed[i]-SL.characteristic_speed[i,i_outer,j_outer])
+                adv_fac[i] = -dt*(speed[i]-SL.characteristic_speed[i,i_outer,j_outer,k_outer])
             end
         end
     end

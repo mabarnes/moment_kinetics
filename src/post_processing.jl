@@ -53,16 +53,16 @@ function analyze_and_plot_data(path)
     # open the netcdf file and give it the handle 'fid'
     fid = open_netcdf_file(run_name)
     # load space-time coordinate data
-    nvpa, vpa, vpa_wgts, nz, z, z_wgts, Lz, 
+    nvpa, vpa, vpa_wgts, nvperp, vperp, vperp_wgts, nz, z, z_wgts, Lz, 
      nr, r, r_wgts, Lr, ntime, time = load_coordinate_data(fid)
     # initialise the post-processing input options
-    nwrite_movie, itime_min, itime_max, ivpa0, iz0, ir0 = init_postprocessing_options(pp, nvpa, nz, nr, ntime)
+    nwrite_movie, itime_min, itime_max, ivpa0, ivperp0, iz0, ir0 = init_postprocessing_options(pp, nvpa, nvperp, nz, nr, ntime)
     # load full (z,r,t) fields data
     phi = load_fields_data(fid)
     # load full (z,r,species,t) velocity moments data
     density, parallel_flow, parallel_pressure, parallel_heat_flux,
         thermal_speed, n_species, evolve_ppar = load_moments_data(fid)
-    # load full (vpa,z,r,species,t) particle distribution function (pdf) data
+    # load full (vpa,vperp,z,r,species,t) particle distribution function (pdf) data
     ff = load_pdf_data(fid)
     
     #evaluate 1D-1V diagnostics at fixed ir0
@@ -73,14 +73,14 @@ function analyze_and_plot_data(path)
         parallel_pressure[:,ir0,:,:],
         parallel_heat_flux[:,ir0,:,:],
         thermal_speed[:,ir0,:,:],
-        ff[:,:,ir0,:,:],
+        ff[:,ivperp0,:,ir0,:,:],
         n_species, evolve_ppar, nvpa, vpa, vpa_wgts,
         nz, z, z_wgts, Lz, ntime, time)
      
     close(fid)
 
 end
-function init_postprocessing_options(pp, nvpa, nz, nr, ntime)
+function init_postprocessing_options(pp, nvpa, nvperp, nz, nr, ntime)
     print("Initializing the post-processing input options...")
     # nwrite_movie is the stride used when making animations
     nwrite_movie = pp.nwrite_movie
@@ -111,6 +111,13 @@ function init_postprocessing_options(pp, nvpa, nz, nr, ntime)
     else
         iz0 = cld(nz,3)
     end
+    # ivperp0 is the iz index used when plotting data at a single vperp location
+    # by default, it will be set to cld(nvperp,3) unless a non-negative value provided
+    if pp.ivperp0 > 0
+        ivperp0 = pp.ivperp0
+    else
+        ivperp0 = cld(nvperp,3)
+    end
     # ivpa0 is the iz index used when plotting data at a single vpa location
     # by default, it will be set to cld(nvpa,3) unless a non-negative value provided
     if pp.ivpa0 > 0
@@ -119,7 +126,7 @@ function init_postprocessing_options(pp, nvpa, nz, nr, ntime)
         ivpa0 = cld(nvpa,3)
     end
     println("done.")
-    return nwrite_movie, itime_min, itime_max, ivpa0, iz0, ir0
+    return nwrite_movie, itime_min, itime_max, ivpa0, ivperp0, iz0, ir0
 end
 
 function plot_1D_1V_diagnostics(run_name, fid, nwrite_movie, itime_min, itime_max, ivpa0, iz0, ir0, r,

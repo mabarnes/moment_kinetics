@@ -46,6 +46,16 @@ function load_coordinate_data(fid)
     # Lz = z box length
     Lz = z[end]-z[1]
 
+    # define a handle for the vperp coordinate
+    cdfvar = fid["vperp"]
+    # get the number of vperp grid points
+    nvperp = length(cdfvar)
+    # load the data for vperp
+    vperp = cdfvar.var[:]
+    # get the weights associated with the vperp coordinate
+    cdfvar = fid["vperp_wgts"]
+    vperp_wgts = cdfvar.var[:]
+
     # define a handle for the vpa coordinate
     cdfvar = fid["vpa"]
     # get the number of vpa grid points
@@ -64,7 +74,7 @@ function load_coordinate_data(fid)
     time = cdfvar.var[:]
     println("done.")
 
-    return nvpa, vpa, vpa_wgts, nz, z, z_wgts, Lz, nr, r, r_wgts, Lr, ntime, time
+    return nvpa, vpa, vpa_wgts, nvperp, vperp, vperp_wgts, nz, z, z_wgts, Lz, nr, r, r_wgts, Lr, ntime, time
 end
 
 function load_fields_data(fid)
@@ -119,7 +129,7 @@ function load_pdf_data(fid)
     # define a handle for the distribution function
     cdfvar = fid["f"]
     # load the distribution function data
-    pdf = cdfvar.var[:,:,:,:]
+    pdf = cdfvar.var[:,:,:,:,:,:]
     println("done.")
     return pdf
 end

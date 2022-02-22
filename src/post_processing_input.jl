@@ -57,6 +57,9 @@ const itime_max = -1
 # ivpa0 is the ivpa index used when plotting data at a single vpa location
 # by default, it will be set to cld(nvpa,3) unless a non-negative value provided here
 const ivpa0 = -1
+# ivperp0 is the ivperp index used when plotting data at a single vperp location
+# by default, it will be set to cld(nvperp,3) unless a non-negative value provided here
+const ivperp0 = -1
 # iz0 is the iz index used when plotting data at a single z location
 # by default, it will be set to cld(nz,3) unless a non-negative value provided here
 const iz0 = -1
@@ -70,6 +73,6 @@ pp = pp_input(calculate_frequencies, plot_phi0_vs_t, plot_phi_vs_z_t,
     animate_dens_vs_z, animate_upar_vs_z,
     animate_f_vs_vpa_z, animate_f_vs_vpa_z0, animate_f_vs_z0_vpa,
     animate_deltaf_vs_vpa_z, animate_deltaf_vs_vpa_z0, animate_deltaf_vs_vpa_z0,
-    nwrite_movie, itime_min, itime_max, ivpa0, iz0, ir0)
+    nwrite_movie, itime_min, itime_max, ivpa0, ivperp0, iz0, ir0)
 
 end

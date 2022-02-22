@@ -247,6 +247,8 @@ struct pp_input
     itime_max::mk_int
     # ivpa0 is the ivpa index used when plotting data at a single vpa location
     ivpa0::mk_int
+    # ivperp0 is the ivperp index used when plotting data at a single vperp location
+    ivperp0::mk_int
     # iz0 is the iz index used when plotting data at a single z location
     iz0::mk_int
     # ir0 is the ir index used when plotting data at a single r location
