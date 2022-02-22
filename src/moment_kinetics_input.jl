@@ -380,7 +380,7 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     ############################################################################
     ################### parameters related to the vperp grid #####################
     # ngrid_vperp is the number of grid points per element
-    ngrid_vperp = 10
+    ngrid_vperp = 1
     # nelement_vperp is the number of elements
     nelement_vperp = 1
     # L_vperp is the box length in units of vthermal_species
