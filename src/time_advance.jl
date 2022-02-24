@@ -599,7 +599,7 @@ function rk_update!(scratch, pdf, moments, fields, vpa, vperp, z, r, rk_coefs, i
             new_scratch.density[iz,ir,is] = rk_coefs[1]*moments.dens[iz,ir,is] + rk_coefs[2]*old_scratch.density[iz,ir,is] + rk_coefs[3]*new_scratch.density[iz,ir,is]
         end
         @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
-            pdf.unnorm[ivpa,ivperp,iz,ir,is] = new_scratch.pdf[ivpa,ivperp,iz,ir,is] * new_scratch.density[iz,ivperp,ir,is]
+            pdf.unnorm[ivpa,ivperp,iz,ir,is] = new_scratch.pdf[ivpa,ivperp,iz,ir,is] * new_scratch.density[iz,ir,is]
         end
     else
         @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
