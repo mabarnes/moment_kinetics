@@ -241,9 +241,9 @@ function integral(integrand, vx, px, wgtsx, vy, py, wgtsy)
 #    @boundscheck ny == length(wgtsy) || throw(BoundsError(wtgsy))
 #    @boundscheck nx == length(wgtsx) || throw(BoundsError(wtgsx))
    
-    @inbounds for i ∈ 1:ny
-        @inbounds for j ∈ 1:nx
-            integral += integrand[j,i]* (vy[i] ^ py) *  (vx[i] ^ px)* wgtsy[i] * wgtsx[j]
+    @inbounds for j ∈ 1:ny
+        @inbounds for i ∈ 1:nx
+            integral += integrand[i,j] * (vx[i] ^ px) * (vy[j] ^ py) * wgtsx[i] * wgtsy[j]
         end
     end
     return integral
