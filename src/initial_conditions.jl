@@ -191,7 +191,7 @@ function init_pdf_over_density!(pdf, spec, vpa, vperp, z, vth, upar, vpa_norm_fa
             #@. vpa.scratch = vpa.grid^2 *(vpa.grid^2/pparfac - vth[iz]^2/densfac) * pdf[:,iz] * (vpa_norm_fac[iz]/vth[iz])^4
             # old! @views @. vpa.scratch = vpa.grid^2 *(vpa.grid^2/pparfac - 1.0/densfac) * pdf[:,iz] * (vpa_norm_fac[iz]/vth[iz])^4
             # old! pparfac2 = integrate_over_vspace(vpa.scratch, vpa.wgts)
-            pparfac2 = integrate_over_vspace(pdf[:,:,iz] * (vpa_norm_fac[iz]/vth[iz])^4, vpa.grid, 4, vpa.wgts, vperp.grid, 0, vperp.wgts)/pparfac - integrate_over_vspace(pdf[:,:,iz] * (vpa_norm_fac[iz]/vth[iz])^4, vpa.grid, 2, vpa.wgts, vperp.grid, 0, vperp.wgts)/densfac
+            pparfac2 = integrate_over_vspace(pdf[:,:,iz] * (vpa_norm_fac[iz]/vth[iz])^4, vpa.grid, 4, vpa.wgts, vperp.grid, 0, vperp.wgts)/pparfac - integrate_over_vspace(pdf[:,:,iz] * vth[iz]^2 * (vpa_norm_fac[iz]/vth[iz])^4, vpa.grid, 2, vpa.wgts, vperp.grid, 0, vperp.wgts)/densfac
 
             #@. pdf[:,iz] = pdf[:,iz]/densfac + (0.5 - pparfac/densfac)/pparfac2*(vpa.grid^2/pparfac - vth[iz]^2/densfac)*pdf[:,iz]*(vpa_norm_fac[iz]/vth[iz])^2
             for ivperp ∈ 1:vperp.n
