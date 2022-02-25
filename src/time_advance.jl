@@ -755,7 +755,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, vp
     # enforce boundary conditions in z and vpa on the distribution function
     # NB: probably need to do the same for the evolved moments
     enforce_boundary_conditions!(fvec_out.pdf, vpa.bc, z.bc, vpa, vperp, z, r, vpa_advect, z_advect, composition)
-    # End of advance fo distribution function
+    # End of advance for distribution function
 
     # Start advancing moments
     # Do not actually need to synchronize here because above we only modify the
