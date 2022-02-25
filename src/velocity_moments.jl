@@ -334,7 +334,7 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, vperp, z, r, compo
     # of is looped over by this process need to be the same.
     @loop_s_r is ir begin
         @views @. z.scratch = fvec_old.density[:,ir,is] - fvec_new.density[:,ir,is]
-        @views scratch_dummy.dummy_sr[ir,is] = integral(z.scratch, z.wgts)/integral(fvec_old.density[:,ir,is], z.wgts)
+        @views dummy.dummy_sr[ir,is] = integral(z.scratch, z.wgts)/integral(fvec_old.density[:,ir,is], z.wgts)
     end
     # Need to call _block_synchronize() even though loop type does not change because
     # all spatial ranks read fvec_new.density, but it will be written below.
@@ -342,7 +342,7 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, vperp, z, r, compo
 
     @loop_s is begin
         @loop_r ir begin
-            avgdens_ratio = scratch_dummy.dummy_sr[ir,is]
+            avgdens_ratio = dummy.dummy_sr[ir,is]
             @loop_z iz begin
                 # Create views once to save overhead
                 fnew_view = @view(fvec_new.pdf[:,:,iz,ir,is])
@@ -364,23 +364,23 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, vperp, z, r, compo
                 if moments.evolve_upar
                     # next form the even part of the old distribution function that is needed
                     # to ensure momentum and energy conservation
-                    @. scratch_dummy.dummy_vpavperp = fold_view
+                    @. dummy.dummy_vpavperp = fold_view
                     @loop_vperp ivperp begin
-                        reverse!(scratch_dummy.dummy_vpavperp[:,ivperp])
-                        @. scratch_dummy.dummy_vpavperp[:,ivperp] = 
-                         0.5*(scratch_dummy.dummy_vpavperp[:,ivperp] + fold_view[:,ivperp])
+                        reverse!(dummy.dummy_vpavperp[:,ivperp])
+                        @. dummy.dummy_vpavperp[:,ivperp] = 
+                         0.5*(dummy.dummy_vpavperp[:,ivperp] + fold_view[:,ivperp])
                     end
                     # calculate the integrals involving this even pdf
-                    vpa2_moment = integrate_over_vspace(scratch_dummy.dummy_vpavperp,
+                    vpa2_moment = integrate_over_vspace(dummy.dummy_vpavperp,
                      vpa.grid, 2, vpa.wgts, vperp.grid, 0, vperp.wgts)
                     upar_integral /= vpa2_moment
                     if moments.evolve_ppar
-                        vpa4_moment = integrate_over_vspace(scratch_dummy.dummy_vpavperp, vpa.grid, 4, vpa.wgts) - 0.5 * vpa2_moment
+                        vpa4_moment = integrate_over_vspace(dummy.dummy_vpavperp, vpa.grid, 4, vpa.wgts) - 0.5 * vpa2_moment
                         ppar_integral /= vpa4_moment
                     end
                     # update the pdf to account for the momentum-conserving correction
                     @loop_vperp ivperp begin
-                        @. fnew_view[:,ivperp] -= scratch_dummy.dummy_vpavperp[:,ivperp] * vpa.grid * upar_integral
+                        @. fnew_view[:,ivperp] -= dummy.dummy_vpavperp[:,ivperp] * vpa.grid * upar_integral
                     end
                     if moments.evolve_ppar
                         @loop_vperp ivperp begin
@@ -411,21 +411,21 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, vperp, z, r, compo
                 @loop_z iz begin
                     fvec_old.temp_z_s[iz,ir,is] = fvec_new.density[iz,ir,is] / moments.vth[iz,ir,is]
                 end
-                @loop_z_vpa iz ivpa begin
-                    fvec_old.pdf[ivpa,iz,ir,is] = fvec_new.pdf[ivpa,iz,ir,is] * fvec_old.temp_z_s[iz,ir,is]
+                @loop_z_vperp_vpa iz ivperp ivpa begin
+                    fvec_old.pdf[ivpa,ivperp,iz,ir,is] = fvec_new.pdf[ivpa,ivperp,iz,ir,is] * fvec_old.temp_z_s[iz,ir,is]
                 end
             end
         end
     elseif moments.evolve_density
-        @loop_s_r_z_vpa is ir iz ivpa begin
-            fvec_old.pdf[ivpa,iz,ir,is] = fvec_new.pdf[ivpa,iz,ir,is] * fvec_new.density[iz,ir,is]
+        @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+            fvec_old.pdf[ivpa,ivperp,iz,ir,is] = fvec_new.pdf[ivpa,ivperp,iz,ir,is] * fvec_new.density[iz,ir,is]
         end
     else
-        @loop_s_r_z_vpa is ir iz ivpa begin
-            fvec_old.pdf[ivpa,iz,ir,is] = fvec_new.pdf[ivpa,iz,ir,is]
+        @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+            fvec_old.pdf[ivpa,ivperp,iz,ir,is] = fvec_new.pdf[ivpa,ivperp,iz,ir,is]
         end
     end
-    update_qpar!(moments.qpar, moments.qpar_updated, fvec_old.pdf, vpa, z, r, composition, moments.vpa_norm_fac)
+    update_qpar!(moments.qpar, moments.qpar_updated, fvec_old.pdf, vpa, vperp, z, r, composition, moments.vpa_norm_fac)
 end
 function reset_moments_status!(moments, composition, z)
     if moments.evolve_density == false
