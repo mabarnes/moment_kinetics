@@ -1,3 +1,5 @@
+"""
+"""
 module bgk
 
 export init_bgk_pdf!
@@ -10,6 +12,8 @@ using ..quadrature: composite_simpson_weights
 using ..calculus: integral
 using ..coordinates: equally_spaced_grid
 
+"""
+"""
 function init_bgk_pdf!(pdf, phi_max, tau, z, Lz, vpa)
     # For simplicity, just run in serial for now
     @serial_region begin
@@ -55,14 +59,18 @@ function init_bgk_pdf!(pdf, phi_max, tau, z, Lz, vpa)
 =#
     end
 end
-### inputs ###
-# pdf is the particle distribution function, with the passing part of phase space not filled in
-# phi_max is the maximum value that e * phi / Te takes
-# tau = Ti/Te is the ion-electron temperature ratio
-# x = m*vpa^2/2Te + e*phi/Te is 1D array containing the total parallel energy (conserved)
-### ouptut ###
-# pdf = particle distribution function;
-# this function fills in the part of phase space where x > e*phi_max/T
+
+"""
+# inputs
+- pdf is the particle distribution function, with the passing part of phase space not filled in
+- phi_max is the maximum value that e * phi / Te takes
+- tau = Ti/Te is the ion-electron temperature ratio
+- x = m*vpa^2/2Te + e*phi/Te is 1D array containing the total parallel energy (conserved)
+
+# output
+- pdf = particle distribution function; this function fills in the part of phase space
+  where x > e*phi_max/T
+"""
 function passing_pdf!(pdf, phi_max, tau, x, ivpa_min)
     nvpa = size(x,1)
     for iz ∈ 1:size(x,2)
@@ -85,6 +93,9 @@ function passing_pdf!(pdf, phi_max, tau, x, ivpa_min)
     end
     return nothing
 end
+
+"""
+"""
 function allowed_wave_amplitude!(phi_max, tau, y, wgts, integrand)
     n = length(y)
     # trapped_pdf_single evaluates the trapped pdf at the given total parallel energy value, x0
@@ -102,16 +113,20 @@ function allowed_wave_amplitude!(phi_max, tau, y, wgts, integrand)
     phi_min = find_zero(trapped_pdf_single, -0.1)
     return phi_max - phi_min
 end
-### inputs ###
-# phi_max is the maximum value that e * phi / Te takes
-# tau = Ti/Te is the ion-electron temperature ratio
-# x = vpa^2 + e*phi is a 2D array containing the total parallel energy on the (z,vpa) grid
-# y = dummy coordinate for the necessary integrals in the function
-# integrand = dummy array used to hold integrands defined and integrated in this function
-# wgts = integration weights associated with y integrals
-### output ###
-# pdf is the particle distribution function for all of phase space,
-# with this function filling in only the part with x < e*phi_max/T
+
+"""
+# inputs
+- phi_max is the maximum value that e * phi / Te takes
+- tau = Ti/Te is the ion-electron temperature ratio
+- x = vpa^2 + e*phi is a 2D array containing the total parallel energy on the (z,vpa) grid
+- y = dummy coordinate for the necessary integrals in the function
+- integrand = dummy array used to hold integrands defined and integrated in this function
+- wgts = integration weights associated with y integrals
+
+# output
+- pdf is the particle distribution function for all of phase space, with this function
+  filling in only the part with x < e*phi_max/T
+"""
 function trapped_pdf!(pdf, phi_max, tau, x, y, wgts, integrand, ivpa_min)
     nvpa = size(x,1)
     # trapped_pdf_single evaluates the trapped pdf at the given total parallel energy value, x0
@@ -151,10 +166,13 @@ function trapped_pdf!(pdf, phi_max, tau, x, y, wgts, integrand, ivpa_min)
         end
     end
 end
+
+"""
 # inputs:
-# vpa = parallel velocity normalized by vts = sqrt(2*Te/ms)
-# phi = electrostatic potential normalized by Te/e
+- vpa = parallel velocity normalized by vts = sqrt(2*Te/ms)
+- phi = electrostatic potential normalized by Te/e
 # output: x = vpa^2 + phi is the total parallel energy
+"""
 function total_energy_grid(vpa, phi)
     nvpa = length(vpa)
     nz = length(phi)
@@ -166,6 +184,9 @@ function total_energy_grid(vpa, phi)
     end
     return x
 end
+
+"""
+"""
 function trapped_passing_boundary(x, phi_max)
     nvpa = size(x,1)
     # initialize the lower boundary for the trapped domain to be beyond the boundary of vpa
@@ -182,6 +203,9 @@ function trapped_passing_boundary(x, phi_max)
     end
     return ivpa_min
 end
+
+"""
+"""
 function setup_dummy_integrals()
     # construct a simple, equally-spaced grid of n points for the integration
     # on a semi-infinity domain (0,∞) over the dummy variable y

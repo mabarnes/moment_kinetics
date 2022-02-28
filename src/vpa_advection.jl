@@ -1,3 +1,5 @@
+"""
+"""
 module vpa_advection
 
 export vpa_advection!
@@ -11,6 +13,8 @@ using ..calculus: derivative!
 using ..initial_conditions: enforce_vpa_boundary_condition!
 using ..looping
 
+"""
+"""
 function vpa_advection!(f_out, fvec_in, ff, fields, moments, SL, advect,
         vpa, vperp, z, r, use_semi_lagrange, dt, t,
         vpa_spectral, z_spectral, composition, CX_frequency, istage)
@@ -50,7 +54,10 @@ function vpa_advection!(f_out, fvec_in, ff, fields, moments, SL, advect,
         #@views enforce_vpa_boundary_condition!(f_out[:,:,is], vpa.bc, advect[is])
     end
 end
-# calculate the advection speed in the z-direction at each grid point
+
+"""
+calculate the advection speed in the vpa-direction at each grid point
+"""
 function update_speed_vpa!(advect, fields, fvec, moments, vpa, vperp, z, r, composition, CX_frequency, t, z_spectral)
     @boundscheck r.n == size(advect[1].speed,4) || throw(BoundsError(advect))
     @boundscheck z.n == size(advect[1].speed,3) || throw(BoundsError(advect))
@@ -97,6 +104,9 @@ function update_speed_vpa!(advect, fields, fvec, moments, vpa, vperp, z, r, comp
     end
     return nothing
 end
+
+"""
+"""
 function update_speed_default!(advect, fields, fvec, moments, vpa, vperp, z, r, composition, CX_frequency, t, z_spectral)
     if moments.evolve_ppar
         @loop_s is begin
@@ -210,7 +220,10 @@ function update_speed_default!(advect, fields, fvec, moments, vpa, vperp, z, r, 
         end
     end
 end
-# update the advection speed dvpa/dt = constant
+
+"""
+update the advection speed dvpa/dt = constant
+"""
 function update_speed_constant!(advect, vpa, vperp_range, z_range, r_range)
     #@inbounds @fastmath begin
     for ir ∈ r_range
@@ -222,7 +235,10 @@ function update_speed_constant!(advect, vpa, vperp_range, z_range, r_range)
     end
     #end
 end
-# update the advection speed dvpa/dt = const*(vpa + L/2)
+
+"""
+update the advection speed dvpa/dt = const*(vpa + L/2)
+"""
 function update_speed_linear(advect, vpa, z_range, r_range)
     @inbounds @fastmath begin
         for ir ∈ r_range

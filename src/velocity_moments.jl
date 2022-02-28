@@ -1,3 +1,5 @@
+"""
+"""
 module velocity_moments
 
 export integrate_over_vspace
@@ -23,6 +25,8 @@ using ..looping
 #global dens_hist = zeros(17,1)
 #global n_hist = 0
 
+"""
+"""
 mutable struct moments
     # this is the particle density
     dens::MPISharedArray{mk_float,3}
@@ -70,6 +74,9 @@ mutable struct moments
     # flag that indicates if the drift kinetic equation should be formulated in advective form
     #advective_form::Bool
 end
+
+"""
+"""
 function create_moments(nz, nr, n_species, evolve_moments)
     # allocate array used for the particle density
     density = allocate_shared_float(nz, nr, n_species)
@@ -107,7 +114,10 @@ function create_moments(nz, nr, n_species, evolve_moments)
         parallel_pressure, parallel_pressure_updated, evolve_moments.parallel_pressure,
         parallel_heat_flux, parallel_heat_flux_updated, thermal_speed, vpa_norm_fac)
 end
-# calculate the updated density (dens) and parallel pressure (ppar) for all species
+
+"""
+calculate the updated density (dens) and parallel pressure (ppar) for all species
+"""
 function update_moments!(moments, ff, vpa, nz, nr, composition)
     n_species = size(ff,4)
     @boundscheck n_species == size(moments.dens,3) || throw(BoundsError(moments))
@@ -132,8 +142,11 @@ function update_moments!(moments, ff, vpa, nz, nr, composition)
     end
     return nothing
 end
-# NB: if this function is called and if dens_updated is false, then
-# the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
+
+"""
+NB: if this function is called and if dens_updated is false, then
+the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
+"""
 function update_density!(dens, dens_updated, pdf, vpa, vperp, z, r, composition)
     n_species = size(pdf,5)
     @boundscheck n_species == size(dens,3) || throw(BoundsError(dens))
@@ -144,7 +157,10 @@ function update_density!(dens, dens_updated, pdf, vpa, vperp, z, r, composition)
         end
     end
 end
-# calculate the updated density (dens) for a given species
+
+"""
+calculate the updated density (dens) for a given species
+"""
 function update_density_species!(dens, ff, vpa, vperp, z, r)
     @boundscheck vpa.n == size(ff, 1) || throw(BoundsError(ff))
     @boundscheck vperp.n == size(ff, 2) || throw(BoundsError(ff))
@@ -158,8 +174,11 @@ function update_density_species!(dens, ff, vpa, vperp, z, r)
     end
     return nothing
 end
-# NB: if this function is called and if upar_updated is false, then
-# the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
+
+"""
+NB: if this function is called and if upar_updated is false, then
+the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
+"""
 function update_upar!(upar, upar_updated, pdf, vpa, vperp, z, r, composition)
     n_species = size(pdf,5)
     @boundscheck n_species == size(upar,3) || throw(BoundsError(upar))
@@ -170,7 +189,10 @@ function update_upar!(upar, upar_updated, pdf, vpa, vperp, z, r, composition)
         end
     end
 end
-# calculate the updated parallel flow (upar) for a given species
+
+"""
+calculate the updated parallel flow (upar) for a given species
+"""
 function update_upar_species!(upar, ff, vpa, vperp, z, r)
     @boundscheck vpa.n == size(ff, 1) || throw(BoundsError(ff))
     @boundscheck vperp.n == size(ff, 2) || throw(BoundsError(ff))
@@ -184,8 +206,11 @@ function update_upar_species!(upar, ff, vpa, vperp, z, r)
     end
     return nothing
 end
-# NB: if this function is called and if ppar_updated is false, then
-# the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
+
+"""
+NB: if this function is called and if ppar_updated is false, then
+the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
+"""
 function update_ppar!(ppar, ppar_updated, pdf, vpa, vperp, z, r, composition)
     @boundscheck composition.n_species == size(ppar,3) || throw(BoundsError(ppar))
     @boundscheck r.n == size(ppar,2) || throw(BoundsError(ppar))
@@ -197,7 +222,10 @@ function update_ppar!(ppar, ppar_updated, pdf, vpa, vperp, z, r, composition)
         end
     end
 end
-# calculate the updated parallel pressure (ppar) for a given species
+
+"""
+calculate the updated parallel pressure (ppar) for a given species
+"""
 function update_ppar_species!(ppar, ff, vpa, vperp, z, r)
     @boundscheck vpa.n == size(ff, 1) || throw(BoundsError(ff))
     @boundscheck vperp.n == size(ff, 2) || throw(BoundsError(ff))
@@ -211,9 +239,11 @@ function update_ppar_species!(ppar, ff, vpa, vperp, z, r)
     end
     return nothing
 end
-# NB: if this function is called and if ppar_updated is false, then
-# the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
 
+"""
+NB: if this function is called and if ppar_updated is false, then
+the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
+"""
 function update_qpar!(qpar, qpar_updated, pdf, vpa, vperp, z, r, composition, vpanorm)
     @boundscheck composition.n_species == size(qpar,3) || throw(BoundsError(qpar))
     @loop_s is begin
@@ -223,7 +253,10 @@ function update_qpar!(qpar, qpar_updated, pdf, vpa, vperp, z, r, composition, vp
         end
     end
 end
-# calculate the updated parallel heat flux (qpar) for a given species
+
+"""
+calculate the updated parallel heat flux (qpar) for a given species
+"""
 function update_qpar_species!(qpar, ff, vpa, vperp, z, r, vpanorm)
     @boundscheck r.n == size(ff, 4) || throw(BoundsError(ff))
     @boundscheck z.n == size(ff, 3) || throw(BoundsError(ff))
@@ -238,14 +271,20 @@ function update_qpar_species!(qpar, ff, vpa, vperp, z, r, vpanorm)
     end
     return nothing
 end
-# computes the integral over vpa of the integrand, using the input vpa_wgts
+
+"""
+computes the integral over vpa of the integrand, using the input vpa_wgts
+"""
 function integrate_over_vspace(args...)
     return integral(args...)/sqrt(pi)
 end
-# computes the integral over vpa >= 0 of the integrand, using the input vpa_wgts
-# this could be made more efficient for the case that dz/dt = vpa is time-independent,
-# but it has been left general for the cases where, e.g., dz/dt = wpa*vth + upar
-# varies in time
+
+"""
+computes the integral over vpa >= 0 of the integrand, using the input vpa_wgts
+this could be made more efficient for the case that dz/dt = vpa is time-independent,
+but it has been left general for the cases where, e.g., dz/dt = wpa*vth + upar
+varies in time
+"""
 function integrate_over_positive_vpa(integrand, dzdt, vpa_wgts, wgts_mod)
     # define the nvpa variable for convenience
     nvpa = length(dzdt)
@@ -282,10 +321,13 @@ function integrate_over_positive_vpa(integrand, dzdt, vpa_wgts, wgts_mod)
     end
     return vpa_integral
 end
-# computes the integral over vpa <= 0 of the integrand, using the input vpa_wgts
-# this could be made more efficient for the case that dz/dt = vpa is time-independent,
-# but it has been left general for the cases where, e.g., dz/dt = wpa*vth + upar
-# varies in time
+
+"""
+computes the integral over vpa <= 0 of the integrand, using the input vpa_wgts
+this could be made more efficient for the case that dz/dt = vpa is time-independent,
+but it has been left general for the cases where, e.g., dz/dt = wpa*vth + upar
+varies in time
+"""
 function integrate_over_negative_vpa(integrand, dzdt, vpa_wgts, wgts_mod)
     # define the nvpa variable for convenience
     nvpa = length(integrand)
@@ -322,6 +364,9 @@ function integrate_over_negative_vpa(integrand, dzdt, vpa_wgts, wgts_mod)
     end
     return vpa_integral
 end
+
+"""
+"""
 function enforce_moment_constraints!(fvec_new, fvec_old, vpa, vperp, z, r, composition, moments, dummy)
     #global @. dens_hist += fvec_old.density
     #global n_hist += 1
@@ -427,6 +472,9 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, vperp, z, r, compo
     end
     update_qpar!(moments.qpar, moments.qpar_updated, fvec_old.pdf, vpa, vperp, z, r, composition, moments.vpa_norm_fac)
 end
+
+"""
+"""
 function reset_moments_status!(moments, composition, z)
     if moments.evolve_density == false
         moments.dens_updated .= false

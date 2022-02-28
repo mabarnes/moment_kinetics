@@ -379,7 +379,11 @@ function plot_strong_scaling_history(prefix, machine=nothing; show=false, save=t
                            legend=false, size=(2400, 400))
     function add_plot(commit; linewidth=1, show_ideal=false)
         to_plot = Array{Union{Float64,Missing},3}(undef, 4, ntests, length(nprocs))
-        for (i, nproc) in enumerate(keys(data_for_nproc))
+        for (i, nproc) in enumerate(nprocs)
+            if !(nproc ∈ keys(data_for_nproc))
+                to_plot[:,:,i] .= missing
+                continue
+            end
             data = data_for_nproc[nproc]
             if commit ∈ keys(data)
                 to_plot[:,:,i] .= data[commit]

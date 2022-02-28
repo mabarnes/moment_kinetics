@@ -1,3 +1,5 @@
+"""
+"""
 module z_advection
 
 export z_advection!
@@ -8,7 +10,9 @@ using ..advection: advance_f_local!, update_boundary_indices!
 using ..chebyshev: chebyshev_info
 using ..looping
 
-# do a single stage time advance (potentially as part of a multi-stage RK scheme)
+"""
+do a single stage time advance (potentially as part of a multi-stage RK scheme)
+"""
 function z_advection!(f_out, fvec_in, ff, moments, SL, advect, z, vpa, vperp, r,
                       use_semi_lagrange, dt, t, spectral, composition, istage)
     @loop_s is begin
@@ -56,6 +60,9 @@ function z_advection!(f_out, fvec_in, ff, moments, SL, advect, z, vpa, vperp, r,
         end
     end
 end
+
+"""
+"""
 function adjust_advection_speed!(speed, mod_speed, dens, vth, evolve_density, evolve_ppar)
     if evolve_ppar
         for i in eachindex(speed)
@@ -72,6 +79,9 @@ function adjust_advection_speed!(speed, mod_speed, dens, vth, evolve_density, ev
     end
     return nothing
 end
+
+"""
+"""
 function unnormalize_pdf!(unnorm, norm, dens, vth, evolve_density, evolve_ppar)
     if evolve_ppar
         @. unnorm = norm * dens/vth
@@ -82,7 +92,10 @@ function unnormalize_pdf!(unnorm, norm, dens, vth, evolve_density, evolve_ppar)
     end
     return nothing
 end
-# calculate the advection speed in the z-direction at each grid point
+
+"""
+calculate the advection speed in the z-direction at each grid point
+"""
 function update_speed_z!(advect, upar, vth, evolve_upar, evolve_ppar, vpa, vperp, z, r, t)
     @boundscheck r.n == size(advect.speed,4) || throw(BoundsError(advect))
     @boundscheck vperp.n == size(advect.speed,3) || throw(BoundsError(advect))

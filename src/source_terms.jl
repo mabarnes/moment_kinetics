@@ -1,3 +1,5 @@
+"""
+"""
 module source_terms
 
 export source_terms!
@@ -5,9 +7,11 @@ export source_terms!
 using ..calculus: derivative!
 using ..looping
 
+"""
+calculate the source terms due to redefinition of the pdf to split off density,
+and use them to update the pdf
+"""
 function source_terms!(pdf_out, fvec_in, moments, vpa, vperp, z, r, dt, spectral, composition, CX_frequency)
-    # calculate the source terms due to redefinition of the pdf to split off density,
-    # and use them to update the pdf
     #n_species = size(pdf_out,3)
     if moments.evolve_ppar
         @loop_s is begin
@@ -28,6 +32,9 @@ function source_terms!(pdf_out, fvec_in, moments, vpa, vperp, z, r, dt, spectral
     end
     return nothing
 end
+
+"""
+"""
 function source_terms_evolve_density!(pdf_out, pdf_in, dens, upar, z, r, dt, spectral)
     # update the density
     nvpa = size(pdf_out, 1)
@@ -43,6 +50,9 @@ function source_terms_evolve_density!(pdf_out, pdf_in, dens, upar, z, r, dt, spe
     end
     return nothing
 end
+
+"""
+"""
 function source_terms_evolve_ppar!(pdf_out, pdf_in, dens, upar, ppar, vth, qpar, z, r, dt, spectral)
     nvpa = size(pdf_out, 1)
     @loop_r ir begin
@@ -65,6 +75,9 @@ function source_terms_evolve_ppar!(pdf_out, pdf_in, dens, upar, ppar, vth, qpar,
     end
     return nothing
 end
+
+"""
+"""
 function source_terms_evolve_ppar_CX!(pdf_out, pdf_in, dens, ppar, composition, CX_frequency, dt, z, r)
     @loop_s is begin
         if is ∈ composition.ion_species_range

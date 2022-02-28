@@ -1,3 +1,5 @@
+"""
+"""
 module energy_equation
 
 export energy_equation!
@@ -5,6 +7,8 @@ export energy_equation!
 using ..calculus: derivative!
 using ..looping
 
+"""
+"""
 function energy_equation!(ppar, fvec, moments, collisions, z, r, dt, spectral, composition)
     @loop_s_r is ir begin
         @views energy_equation_noCX!(ppar[:,ir,is], fvec.upar[:,ir,is], fvec.ppar[:,ir,is],
@@ -16,6 +20,9 @@ function energy_equation!(ppar, fvec, moments, collisions, z, r, dt, spectral, c
     end
 
 end
+
+"""
+"""
 function energy_equation_noCX!(ppar_out, upar, ppar, qpar, dt, z, spectral)
     # calculate dppar/dz and store in z.scratch
     derivative!(z.scratch, ppar, z, spectral)
@@ -30,6 +37,9 @@ function energy_equation_noCX!(ppar_out, upar, ppar, qpar, dt, z, spectral)
     # update ppar to account for contribution from parallel flow gradient
     @. ppar_out -= 3.0*dt*ppar*z.scratch
 end
+
+"""
+"""
 function energy_equation_CX!(ppar_out, dens, ppar, composition, CX_frequency, dt)
     @loop_s_r is ir begin
         if is ∈ composition.ion_species_range

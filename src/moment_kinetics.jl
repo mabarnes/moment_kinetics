@@ -1,3 +1,5 @@
+"""
+"""
 module moment_kinetics
 
 export run_moment_kinetics
@@ -64,7 +66,9 @@ using .time_advance: setup_time_advance!, time_advance!
 
 @debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
 
-# main function that contains all of the content of the program
+"""
+main function that contains all of the content of the program
+"""
 function run_moment_kinetics(to::TimerOutput, input_dict=Dict())
     # set up all the structs, etc. needed for a run
     mk_state = setup_moment_kinetics(input_dict)
@@ -89,14 +93,23 @@ function run_moment_kinetics(to::TimerOutput, input_dict=Dict())
     return nothing
 end
 
-# overload which takes a filename and loads input
+"""
+overload which takes a filename and loads input
+"""
 function run_moment_kinetics(to::TimerOutput, input_filename::String)
     return run_moment_kinetics(to, TOML.parsefile(input_filename))
 end
-# overloads with no TimerOutput arguments
+
+"""
+overload with no TimerOutput arguments
+"""
 function run_moment_kinetics(input)
     return run_moment_kinetics(TimerOutput(), input)
 end
+
+"""
+overload which gets the input file name from command line arguments
+"""
 function run_moment_kinetics()
     inputfile = get_options()["inputfile"]
     if inputfile == nothing
@@ -106,7 +119,9 @@ function run_moment_kinetics()
     end
 end
 
-# Perform all the initialization steps for a run.
+"""
+Perform all the initialization steps for a run.
+"""
 function setup_moment_kinetics(input_dict::Dict)
     # Set up MPI
     initialize_comms!()
@@ -156,7 +171,9 @@ function setup_moment_kinetics(input_dict::Dict)
            composition, collisions, advance, scratch_dummy, io, cdf
 end
 
-# Clean up after a run
+"""
+Clean up after a run
+"""
 function cleanup_moment_kinetics!(io::Union{file_io.ios,Nothing},
                                   cdf::Union{file_io.netcdf_info,Nothing})
     @debug_detect_redundant_block_synchronize begin

@@ -1,7 +1,7 @@
-module looping
 """
 Provides convenience macros for shared-memory-parallel loops
 """
+module looping
 
 using ..debugging
 using ..communication: _block_synchronize
@@ -183,6 +183,9 @@ function get_best_ranges(block_rank, block_size, dims, dim_sizes)
 
     return result
 end
+
+"""
+"""
 function get_best_ranges_from_sizes(block_rank, block_size, dim_sizes_list)
     splits = get_splits(block_size, length(dim_sizes_list))
     load_balance = Inf
@@ -214,22 +217,28 @@ function get_best_ranges_from_sizes(block_rank, block_size, dim_sizes_list)
                                                     dim_sizes_list)]
 end
 
-# module variable that we can access by giving fully-qualified name in loop
-# macros
+"""
+module variable that we can access by giving fully-qualified name in loop
+macros
+"""
 const loop_ranges = Ref{LoopRanges}()
 export loop_ranges
 
-# module variable used to store LoopRanges that are swapped into the loop_ranges
-# variable in begin_*_region() functions
+"""
+module variable used to store LoopRanges that are swapped into the loop_ranges
+variable in begin_*_region() functions
+"""
 const loop_ranges_store = Dict{Tuple{Vararg{Symbol}}, LoopRanges}()
 
-#Create ranges for loops with different combinations of variables
-#
-#Arguments
-#---------
-#Keyword arguments `dim=n` are required for each dim in $all_dimensions where
-#`n` is an integer giving the size of the dimension.
 eval(quote
+         """
+         Create ranges for loops with different combinations of variables
+
+         Arguments
+         ---------
+         Keyword arguments `dim=n` are required for each dim in $($all_dimensions) where
+         `n` is an integer giving the size of the dimension.
+         """
          function setup_loop_ranges!(block_rank, block_size; dim_sizes...)
              rank0 = (block_rank == 0)
 
@@ -293,6 +302,9 @@ for dims ∈ dimension_combinations
 
     nested_macro_at_name = Symbol("@", nested_macro_name)
     macro_expr = quote
+        """
+        Loop over $($dims) dimensions
+        """
         macro $nested_macro_name($(iteration_vars...), body)
             return $nested_macro_body_name(body, $(iteration_vars...))
         end
@@ -304,6 +316,13 @@ for dims ∈ dimension_combinations
     # Create a function for beginning regions where 'dims' are parallelized
     sync_name = Symbol(:begin_, dims_symb, :_region)
     eval(quote
+             """
+             Begin region in which $($dims) dimensions are parallelized by being split
+             between processes.
+
+             Calls `_block_synchronize()` to synchronize the processes operating on a
+             shared-memory block, unless `no_synchronize=true` is passed as an argument.
+             """
              function $sync_name(; no_synchronize::Bool=false)
                  if !no_synchronize
                      _block_synchronize()
@@ -315,7 +334,8 @@ for dims ∈ dimension_combinations
 end
 
 """
-Run a block of code on only rank-0 of each block
+Run a block of code on only rank-0 of each group of processes operating on a
+shared-memory block
 """
 macro serial_region(blk)
     return quote
@@ -325,6 +345,14 @@ macro serial_region(blk)
     end
 end
 export @serial_region
+
+"""
+Begin region in which only rank-0 in each group of processes operating on a
+shared-memory block operates on shared-memory arrays.
+
+Calls `_block_synchronize()` to synchronize the processes operating on a shared-memory
+block, unless `no_synchronize=true` is passed as an argument.
+"""
 function begin_serial_region(; no_synchronize::Bool=false)
     if !no_synchronize
         _block_synchronize()

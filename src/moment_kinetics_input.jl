@@ -1,3 +1,5 @@
+"""
+"""
 module moment_kinetics_input
 
 export mk_input
@@ -14,9 +16,11 @@ using ..input_structs
 @enum RunType single performance_test scan
 const run_type = single
 
-# Utility function for converting a string to an Enum when getting from a Dict, based on
-# the type of the default value
 import Base: get
+"""
+Utility mothod for converting a string to an Enum when getting from a Dict, based on the
+type of the default value
+"""
 function get(d::Dict, key, default::Enum)
     valstring = get(d, key, nothing)
     if valstring == nothing
@@ -31,6 +35,8 @@ function get(d::Dict, key, default::Enum)
     end
 end
 
+"""
+"""
 function mk_input(scan_input=Dict())
 
     # n_ion_species is the number of evolved ion species
@@ -255,6 +261,8 @@ function mk_input(scan_input=Dict())
     return all_inputs
 end
 
+"""
+"""
 function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     ############## options related to the equations being solved ###############
     evolve_density = false
@@ -510,7 +518,9 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     return z, r, vpa, vperp, species, composition, drive, evolve_moments, collisions
 end
 
-# check various input options to ensure they are all valid/consistent
+"""
+check various input options to ensure they are all valid/consistent
+"""
 function check_input(io, output_dir, nstep, dt, use_semi_lagrange, z, vpa,
     composition, species, evolve_moments)
     # copy the input file to the output directory to be saved
@@ -529,6 +539,9 @@ function check_input(io, output_dir, nstep, dt, use_semi_lagrange, z, vpa,
         evolve_moments.density = true
     end
 end
+
+"""
+"""
 function check_input_time_advance(nstep, dt, use_semi_lagrange, io)
     println(io,"##### time advance #####")
     println(io)
@@ -540,6 +553,9 @@ function check_input_time_advance(nstep, dt, use_semi_lagrange, io)
     end
     println(io,">running for ", nstep, " time steps, with step size ", dt, ".")
 end
+
+"""
+"""
 function check_input_z(z, io)
     println(io)
     println(io,"######## z-grid ########")
@@ -571,6 +587,9 @@ function check_input_z(z, io)
     println(io,">using ", z.ngrid, " grid points per z element on ", z.nelement,
         " elements across the z domain [", -0.5*z.L, ",", 0.5*z.L, "].")
 end
+
+"""
+"""
 function check_input_vpa(vpa, io)
     println(io)
     println(io,"######## vpa-grid ########")
@@ -600,6 +619,9 @@ function check_input_vpa(vpa, io)
     println(io,">using ", vpa.ngrid, " grid points per vpa element on ", vpa.nelement,
         " elements across the vpa domain [", -0.5*vpa.L, ",", 0.5*vpa.L, "].")
 end
+
+"""
+"""
 function check_input_initialization(composition, species, io)
     println(io)
     println(io,"####### initialization #######")

@@ -1,3 +1,5 @@
+"""
+"""
 module calculus
 
 export derivative!
@@ -7,7 +9,9 @@ using ..chebyshev: chebyshev_info, chebyshev_derivative!
 using ..finite_differences: derivative_finite_difference!
 using ..type_definitions: mk_float
 
-# Chebyshev transform f to get Chebyshev spectral coefficients and use them to calculate f'
+"""
+Chebyshev transform f to get Chebyshev spectral coefficients and use them to calculate f'
+"""
 function derivative!(df, f, coord, adv_fac, spectral::chebyshev_info)
     # get the derivative at each grid point within each element and store in df
     chebyshev_derivative!(coord.scratch_2d, f, spectral, coord)
@@ -15,7 +19,10 @@ function derivative!(df, f, coord, adv_fac, spectral::chebyshev_info)
     # at element boundaries, use the derivative from the upwind element.
     derivative_elements_to_full_grid!(df, coord.scratch_2d, coord, adv_fac)
 end
-# Chebyshev transform f to get Chebyshev spectral coefficients and use them to calculate f'
+
+"""
+Chebyshev transform f to get Chebyshev spectral coefficients and use them to calculate f'
+"""
 function derivative!(df, f, coord, spectral::chebyshev_info)
     # get the derivative at each grid point within each element and store in df
     chebyshev_derivative!(coord.scratch_2d, f, spectral, coord)
@@ -23,8 +30,11 @@ function derivative!(df, f, coord, spectral::chebyshev_info)
     # at element boundaries, use the average of the derivatives from neighboring elements.
     derivative_elements_to_full_grid!(df, coord.scratch_2d, coord)
 end
-# calculate the derivative of f using finite differences, with particular scheme
-# specifiied by coord.fd_option; stored in df
+
+"""
+calculate the derivative of f using finite differences, with particular scheme
+specifiied by coord.fd_option; stored in df
+"""
 function derivative!(df, f, coord, adv_fac, not_spectral::Bool)
     # get the derivative at each grid point within each element and store in df
     derivative_finite_difference!(coord.scratch_2d, f, coord.cell_width, adv_fac,
@@ -33,7 +43,10 @@ function derivative!(df, f, coord, adv_fac, not_spectral::Bool)
     # at element boundaries, use the derivative from the upwind element.
     derivative_elements_to_full_grid!(df, coord.scratch_2d, coord, adv_fac)
 end
-# calculate the derivative of f using centered differences; stored in df
+
+"""
+calculate the derivative of f using centered differences; stored in df
+"""
 function derivative!(df, f, coord, not_spectral::Bool)
     # get the derivative at each grid point within each element and store in df
     derivative_finite_difference!(coord.scratch_2d, f, coord.cell_width,
@@ -42,6 +55,9 @@ function derivative!(df, f, coord, not_spectral::Bool)
     # at element boundaries, use the average of the derivatives from neighboring elements.
     derivative_elements_to_full_grid!(df, coord.scratch_2d, coord)
 end
+
+"""
+"""
 function derivative_elements_to_full_grid!(df1d, df2d, coord, adv_fac::AbstractArray{mk_float,1})
     # no changes need to be made for the derivative at points away from element boundaries
     elements_to_full_grid_interior_pts!(df1d, df2d, coord)
@@ -50,6 +66,9 @@ function derivative_elements_to_full_grid!(df1d, df2d, coord, adv_fac::AbstractA
     reconcile_element_boundaries_upwind!(df1d, df2d, coord, adv_fac)
     return nothing
 end
+
+"""
+"""
 function derivative_elements_to_full_grid!(df1d, df2d, coord)
     # no changes need to be made for the derivative at points away from element boundaries
     elements_to_full_grid_interior_pts!(df1d, df2d, coord)
@@ -58,8 +77,11 @@ function derivative_elements_to_full_grid!(df1d, df2d, coord)
     reconcile_element_boundaries_centered!(df1d, df2d, coord)
     return nothing
 end
-# maps the derivative at points away from element boundaries
-# from the grid/element representation to the full grid representation
+
+"""
+maps the derivative at points away from element boundaries
+from the grid/element representation to the full grid representation
+"""
 function elements_to_full_grid_interior_pts!(df1d, df2d, coord)
     # for efficiency, define ngm1 to be ngrid-1, as it will be used repeatedly
     ngm1 = coord.ngrid-1
@@ -73,11 +95,14 @@ function elements_to_full_grid_interior_pts!(df1d, df2d, coord)
     end
     return nothing
 end
-# if at the boundary point within the element, must carefully
-# choose which value of df to use; this is because
-# df is multi-valued at the overlapping point at the boundary
-# between neighboring elements.
-# here we choose to use the value of df from the upwind element.
+
+"""
+if at the boundary point within the element, must carefully
+choose which value of df to use; this is because
+df is multi-valued at the overlapping point at the boundary
+between neighboring elements.
+here we choose to use the value of df from the upwind element.
+"""
 function reconcile_element_boundaries_upwind!(df1d, df2d, coord, adv_fac::AbstractArray{mk_float,1})
     # note that the first ngrid points are classified as belonging to the first element
     # and the next ngrid-1 points belonging to second element, etc.
@@ -139,11 +164,14 @@ function reconcile_element_boundaries_upwind!(df1d, df2d, coord, adv_fac::Abstra
     end
     return nothing
 end
-# if at the boundary point within the element, must carefully
-# choose which value of df to use; this is because
-# df is multi-valued at the overlapping point at the boundary
-# between neighboring elements.
-# here we choose to use the value of df from the upwind element.
+
+"""
+if at the boundary point within the element, must carefully
+choose which value of df to use; this is because
+df is multi-valued at the overlapping point at the boundary
+between neighboring elements.
+here we choose to use the value of df from the upwind element.
+"""
 function reconcile_element_boundaries_centered!(df1d, df2d, coord)
     # note that the first ngrid points are classified as belonging to the first element
     # and the next ngrid-1 points belonging to second element, etc.

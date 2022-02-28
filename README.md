@@ -1,4 +1,6 @@
-# moment_kinetics
+# Getting started
+
+## Basics
 0) Ensure that the Julia version is >= 1.7.0 by doing
     ```
     $ julia --version

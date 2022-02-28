@@ -1,3 +1,5 @@
+"""
+"""
 module input_structs
 
 export evolve_moments_options
@@ -13,6 +15,8 @@ export pp_input
 
 using ..type_definitions: mk_float, mk_int
 
+"""
+"""
 mutable struct evolve_moments_options
     density::Bool
     parallel_flow::Bool
@@ -20,6 +24,9 @@ mutable struct evolve_moments_options
     conservation::Bool
     #advective_form::Bool
 end
+
+"""
+"""
 struct time_input
     nstep::mk_int
     dt::mk_float
@@ -28,6 +35,9 @@ struct time_input
     n_rk_stages::mk_int
     split_operators::Bool
 end
+
+"""
+"""
 mutable struct advection_input_mutable
     # advection speed option
     option::String
@@ -38,6 +48,9 @@ mutable struct advection_input_mutable
     frequency::mk_float
     oscillation_amplitude::mk_float
 end
+
+"""
+"""
 struct advection_input
     # advection speed option
     option::String
@@ -48,8 +61,14 @@ struct advection_input
     frequency::mk_float
     oscillation_amplitude::mk_float
 end
+
+"""
+"""
 @enum electron_physics_type boltzmann_electron_response boltzmann_electron_response_with_simple_sheath
 export electron_physics_type, boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath
+
+"""
+"""
 mutable struct grid_input_mutable
     # name of the variable associated with this coordinate
     name::String
@@ -68,6 +87,9 @@ mutable struct grid_input_mutable
     # mutable struct containing advection speed options
     advection::advection_input_mutable
 end
+
+"""
+"""
 struct grid_input
     # name of the variable associated with this coordinate
     name::String
@@ -86,6 +108,9 @@ struct grid_input
     # struct containing advection speed options
     advection::advection_input
 end
+
+"""
+"""
 mutable struct initial_condition_input_mutable
     # initialization inputs for one coordinate of a separable distribution function
     initialization_option::String
@@ -102,6 +127,9 @@ mutable struct initial_condition_input_mutable
     # inputs for "monomial" initial condition
     monomial_degree::mk_int
 end
+
+"""
+"""
 struct initial_condition_input
     # initialization inputs for one coordinate of a separable distribution function
     initialization_option::String
@@ -118,6 +146,9 @@ struct initial_condition_input
     # inputs for "monomial" initial condition
     monomial_degree::mk_int
 end
+
+"""
+"""
 mutable struct species_parameters_mutable
     # type is the type of species; options are 'ion' or 'neutral'
     type::String
@@ -130,6 +161,9 @@ mutable struct species_parameters_mutable
     # struct containing the initial condition info in vpa for this species
     vpa_IC::initial_condition_input_mutable
 end
+
+"""
+"""
 struct species_parameters
     # type is the type of species; options are 'ion' or 'neutral'
     type::String
@@ -142,6 +176,9 @@ struct species_parameters
     # struct containing the initial condition info in vpa for this species
     vpa_IC::initial_condition_input
 end
+
+"""
+"""
 mutable struct species_composition
     # n_species = total number of evolved species (including ions, neutrals and electrons)
     n_species::mk_int
@@ -172,6 +209,9 @@ mutable struct species_composition
     # scratch buffer whose size is n_species
     scratch::Vector{mk_float}
 end
+
+"""
+"""
 mutable struct drive_input_mutable
     # if drive.phi = true, include external electrostatic potential
     force_phi::Bool
@@ -180,6 +220,9 @@ mutable struct drive_input_mutable
     amplitude::mk_float
     frequency::mk_float
 end
+
+"""
+"""
 struct drive_input
     # if drive.phi = true, include external electrostatic potential
     force_phi::Bool
@@ -188,6 +231,9 @@ struct drive_input
     amplitude::mk_float
     frequency::mk_float
 end
+
+"""
+"""
 mutable struct collisions_input
     # charge exchange collision frequency
     charge_exchange::mk_float
@@ -196,6 +242,9 @@ mutable struct collisions_input
     # if constant_ionization_rate = true, use an ionization term that is constant in z
     constant_ionization_rate::Bool
 end
+
+"""
+"""
 struct pp_input
     # if calculate_frequencies = true, calculate and print the frequency and growth/decay
     # rate of phi, using values at iz = iz0

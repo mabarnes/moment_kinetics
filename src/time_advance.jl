@@ -1,3 +1,5 @@
+"""
+"""
 module time_advance
 
 export setup_time_advance!
@@ -33,6 +35,8 @@ using ..semi_lagrange: setup_semi_lagrange
 
 @debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
 
+"""
+"""
 struct scratch_pdf{n_distribution, n_moment}
     pdf::MPISharedArray{mk_float, n_distribution}
     density::MPISharedArray{mk_float, n_moment}
@@ -41,6 +45,8 @@ struct scratch_pdf{n_distribution, n_moment}
     temp_z_s::MPISharedArray{mk_float, n_moment}
 end
 
+"""
+"""
 mutable struct advance_info
     vpa_advection::Bool
     z_advection::Bool
@@ -58,11 +64,13 @@ mutable struct scratch_dummy_arrays
     dummy_vpavperp::Array{mk_float,2}
 end 
 
-# create arrays and do other work needed to setup
-# the main time advance loop.
-# this includes creating and populating structs
-# for Chebyshev transforms, velocity space moments,
-# EM fields, semi-Lagrange treatment, and advection terms
+"""
+create arrays and do other work needed to setup
+the main time advance loop.
+this includes creating and populating structs
+for Chebyshev transforms, velocity space moments,
+EM fields, semi-Lagrange treatment, and advection terms
+"""
 function setup_time_advance!(pdf, vpa, vperp, z, r, composition, drive_input, moments,
                              t_input, collisions, species)
     # define some local variables for convenience/tidiness
@@ -278,10 +286,11 @@ function setup_time_advance!(pdf, vpa, vperp, z, r, composition, drive_input, mo
     scratch, advance, scratch_dummy
 end
 
-   
-# if evolving the density via continuity equation, redefine the normalised f → f/n
-# if evolving the parallel pressure via energy equation, redefine f -> f * vth / n
-# 'scratch' should be a (nz,nspecies) array
+"""
+if evolving the density via continuity equation, redefine the normalised f → f/n
+if evolving the parallel pressure via energy equation, redefine f -> f * vth / n
+'scratch' should be a (nz,nspecies) array
+"""
 function normalize_pdf!(pdf, moments, scratch)
     error("Function normalise_pdf() has not been updated to be parallelized. Does not "
           * "seem to be used at the moment.")
@@ -300,8 +309,11 @@ function normalize_pdf!(pdf, moments, scratch)
     end
     return nothing
 end
-# create an array of structs containing scratch arrays for the normalised pdf and low-order moments
-# that may be evolved separately via fluid equations
+
+"""
+create an array of structs containing scratch arrays for the normalised pdf and low-order moments
+that may be evolved separately via fluid equations
+"""
 function setup_scratch_arrays(moments, pdf_in, n_rk_stages)
     # create n_rk_stages+1 structs, each of which will contain one pdf,
     # one density, and one parallel flow array
@@ -329,10 +341,12 @@ function setup_scratch_arrays(moments, pdf_in, n_rk_stages)
     return scratch
 end
 
-# given the number of Runge Kutta stages that are requested,
-# returns the needed Runge Kutta coefficients;
-# e.g., if f is the function to be updated, then
-# f^{n+1}[stage+1] = rk_coef[1,stage]*f^{n} + rk_coef[2,stage]*f^{n+1}[stage] + rk_coef[3,stage]*(f^{n}+dt*G[f^{n+1}[stage]]
+"""
+given the number of Runge Kutta stages that are requested,
+returns the needed Runge Kutta coefficients;
+e.g., if f is the function to be updated, then
+f^{n+1}[stage+1] = rk_coef[1,stage]*f^{n} + rk_coef[2,stage]*f^{n+1}[stage] + rk_coef[3,stage]*(f^{n}+dt*G[f^{n+1}[stage]]
+"""
 function setup_runge_kutta_coefficients(n_rk_stages)
     rk_coefs = allocate_float(3,n_rk_stages)
     rk_coefs .= 0.0
@@ -361,12 +375,15 @@ function setup_runge_kutta_coefficients(n_rk_stages)
     end
     return rk_coefs
 end
-# solve ∂f/∂t + v(z,t)⋅∂f/∂z + dvpa/dt ⋅ ∂f/∂vpa= 0
-# define approximate characteristic velocity
-# v₀(z)=vⁿ(z) and take time derivative along this characteristic
-# df/dt + δv⋅∂f/∂z = 0, with δv(z,t)=v(z,t)-v₀(z)
-# for prudent choice of v₀, expect δv≪v so that explicit
-# time integrator can be used without severe CFL condition
+
+"""
+solve ∂f/∂t + v(z,t)⋅∂f/∂z + dvpa/dt ⋅ ∂f/∂vpa= 0
+define approximate characteristic velocity
+v₀(z)=vⁿ(z) and take time derivative along this characteristic
+df/dt + δv⋅∂f/∂z = 0, with δv(z,t)=v(z,t)-v₀(z)
+for prudent choice of v₀, expect δv≪v so that explicit
+time integrator can be used without severe CFL condition
+"""
 function time_advance!(pdf, scratch, t, t_input, vpa, vperp, z, r,
     vpa_spectral, vperp_spectral, z_spectral, r_spectral,
     moments, fields, vpa_advect, vperp_advect, z_advect, r_advect,
@@ -419,6 +436,9 @@ function time_advance!(pdf, scratch, t, t_input, vpa, vperp, z, r,
     end
     return nothing
 end
+
+"""
+"""
 function time_advance_split_operators!(pdf, scratch, t, t_input, vpa, z,
     vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
     vpa_SL, z_SL, composition, collisions, advance, istep)
@@ -564,6 +584,9 @@ function time_advance_split_operators!(pdf, scratch, t, t_input, vpa, z,
     end
     return nothing
 end
+
+"""
+"""
 function time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, vperp, z, r, 
     vpa_spectral, vperp_spectral, z_spectral, r_spectral,
     moments, fields, vpa_advect, vperp_advect, z_advect, r_advect,
@@ -586,6 +609,9 @@ function time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, vperp, z, r,
     end
     return nothing
 end
+
+"""
+"""
 function rk_update!(scratch, pdf, moments, fields, vpa, vperp, z, r, rk_coefs, istage, composition)
     begin_s_r_z_vperp_region()
     nvpa = size(pdf.unnorm, 1)
@@ -646,6 +672,9 @@ function rk_update!(scratch, pdf, moments, fields, vpa, vperp, z, r, rk_coefs, i
     # was written on, even though the loop-type does not change here
     _block_synchronize()
 end
+
+"""
+"""
 function ssp_rk!(pdf, scratch, t, t_input, vpa, vperp, z, r, 
     vpa_spectral, vperp_spectral, z_spectral, r_spectral,
     moments, fields, vpa_advect, vperp_advect, z_advect, r_advect,
@@ -699,10 +728,13 @@ function ssp_rk!(pdf, scratch, t, t_input, vpa, vperp, z, r,
     update_pdf_unnorm!(pdf, moments, scratch[istage].temp_z_s, composition, vpa, vperp)
     return nothing
 end
-# euler_time_advance! advances the vector equation dfvec/dt = G[f]
-# that includes the kinetic equation + any evolved moment equations
-# using the forward Euler method: fvec_out = fvec_in + dt*fvec_in,
-# with fvec_in an input and fvec_out the output
+
+"""
+euler_time_advance! advances the vector equation dfvec/dt = G[f]
+that includes the kinetic equation + any evolved moment equations
+using the forward Euler method: fvec_out = fvec_in + dt*fvec_in,
+with fvec_in an input and fvec_out the output
+"""
 function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, vperp_SL, z_SL, r_SL,
     vpa_advect, vperp_advect, z_advect, r_advect, vpa, vperp, z, r, t, t_input,
     vpa_spectral, vperp_spectral, z_spectral, r_spectral, composition, collisions, advance, istage)
@@ -782,8 +814,11 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, vp
     reset_moments_status!(moments, composition, z)
     return nothing
 end
-# update the vector containing the pdf and any evolved moments of the pdf
-# for use in the Runge-Kutta time advance
+
+"""
+update the vector containing the pdf and any evolved moments of the pdf
+for use in the Runge-Kutta time advance
+"""
 function update_solution_vector!(evolved, moments, istage, composition, vpa, vperp, z, r)
     new_evolved = evolved[istage+1]
     old_evolved = evolved[istage]
@@ -798,11 +833,14 @@ function update_solution_vector!(evolved, moments, istage, composition, vpa, vpe
     return nothing
 end
 
-# scratch should be a (nz,nspecies) array
+"""
+if separately evolving the density via the continuity equation,
+the evolved pdf has been normalised by the particle density
+undo this normalisation to get the true particle distribution function
+
+scratch should be a (nz,nspecies) array
+"""
 function update_pdf_unnorm!(pdf, moments, scratch, composition, vpa, vperp)
-    # if separately evolving the density via the continuity equation,
-    # the evolved pdf has been normalised by the particle density
-    # undo this normalisation to get the true particle distribution function
     nvpa = size(pdf.unnorm, 1)
     if moments.evolve_ppar
         @loop_s_r_z is ir iz begin
