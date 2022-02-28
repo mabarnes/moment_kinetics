@@ -1,3 +1,5 @@
+"""
+"""
 module semi_lagrange
 
 export setup_semi_lagrange
@@ -10,9 +12,11 @@ using ..array_allocation: allocate_shared_float, allocate_shared_int
 using ..communication
 using ..looping
 
-# structure semi_lagrange_info contains the basic information needed
-# to project backwards along approximate characteristics, which
-# underpins the semi-Lagrange approach to time advancement
+"""
+structure semi_lagrange_info contains the basic information needed
+to project backwards along approximate characteristics, which
+underpins the semi-Lagrange approach to time advancement
+"""
 struct semi_lagrange_info{N}
     # crossing_time is the time required to cross a given cell
     # moving at a specified advection speed
@@ -31,8 +35,11 @@ struct semi_lagrange_info{N}
     # crosses the upwind bounary; only needed if BC = "periodic"
     n_transits::MPISharedArray{mk_int,N}
 end
-# create and return a structure containing the arrays needed for the
-# semi-Lagrange time advance
+
+"""
+create and return a structure containing the arrays needed for the
+semi-Lagrange time advance
+"""
 function setup_semi_lagrange(dims...)
     # create an array to hold crossing times for each cell
     crossing_time = allocate_shared_float(dims...)
@@ -68,6 +75,9 @@ function setup_semi_lagrange(dims...)
     return semi_lagrange_info(crossing_time, trajectory_time, dep_pts, dep_idx,
         characteristic_speed, n_transits)
 end
+
+"""
+"""
 function find_approximate_characteristic!(SL, advection, i_outer, j_outer, coord, dt)
     # calculate the time required to cross the cell associated with each
     # grid point based on the cell width and advection speed
@@ -89,15 +99,18 @@ function find_approximate_characteristic!(SL, advection, i_outer, j_outer, coord
                                               coord, dt, advection.upwind_idx[i_outer,j_outer],
                                               advection.upwind_increment[i_outer,j_outer])
 end
-# obtain the time needed to cross the cell
-# assigned to each grid point, given the
-# advection speed within the cell
-# d is an array contain cell widths, with d[1]=d[n] the distance between the 1st and 2nd grid points
-# v is an array containing the speeds at grid points
-# NB: assuming constant advection speed within each cell, taken as speed
-# NB: at neighboring downwind grid point
-# NB: might be better and not much harder to analytically solve
-# NB: for crossing time assuming, e.g., linear variation of advection speed
+
+"""
+obtain the time needed to cross the cell
+assigned to each grid point, given the
+advection speed within the cell
+d is an array contain cell widths, with d[1]=d[n] the distance between the 1st and 2nd grid points
+v is an array containing the speeds at grid points
+NB: assuming constant advection speed within each cell, taken as speed
+NB: at neighboring downwind grid point
+NB: might be better and not much harder to analytically solve
+NB: for crossing time assuming, e.g., linear variation of advection speed
+"""
 function update_crossing_times!(crossing_time, v, d)
     # d contains the cell width associated with
     # each of the m grid points
@@ -135,22 +148,26 @@ function update_crossing_times!(crossing_time, v, d)
 
     return nothing
 end
-# follow trajectory from each grid point at time level n+1
-# backwards in time until Δt has elapsed to find
-# the departure points and the indices of the nearest downwind grid points
-# to the departure points
-# SL.dep_pts: array containing the locations of the departure points
-# SL.dep_idx: array containing the indices of the nearest downwind
-# grid point to the departure point
-# tbound: array used to store the cumulative time spent by a particle moving along its
-# characteristic backwards from the downwind boundary.  only needed if BC is periodic
-# SL.crossing_time: array containing the amount of time required to cross each cell
-# speed: the advection speed at the grid point locations given by coord.grid
-# coord.grid: grid point locations
-# dt: time step size
-#function find_departure_points!(dep, dep_idx, tbound, tcell, v, coord, bc, dt)
+
+"""
+follow trajectory from each grid point at time level n+1
+backwards in time until Δt has elapsed to find
+the departure points and the indices of the nearest downwind grid points
+to the departure points
+SL.dep_pts: array containing the locations of the departure points
+SL.dep_idx: array containing the indices of the nearest downwind
+grid point to the departure point
+tbound: array used to store the cumulative time spent by a particle moving along its
+characteristic backwards from the downwind boundary.  only needed if BC is periodic
+SL.crossing_time: array containing the amount of time required to cross each cell
+speed: the advection speed at the grid point locations given by coord.grid
+coord.grid: grid point locations
+dt: time step size
+"""
 function find_departure_points!(SL, coord, speed, upwind_idx, downwind_idx,
     upwind_increment, dt)
+#function find_departure_points!(dep, dep_idx, tbound, tcell, v, coord, bc, dt)
+
     # n is the number of grid points along this coordinate axis
     n = coord.n
     # ensure that all of the arrays used in this function are inbounds
@@ -221,10 +238,13 @@ function find_departure_points!(SL, coord, speed, upwind_idx, downwind_idx,
     end
     return nothing
 end
-# calculate the departure point for the ith characteristic;
-# overwrites SL.dep_pts[i], SL.dep_idx[i], and returns ...
-# note that the dep_idx calculated here is the index of the nearest
-# downwind gridpoint to the departure point (which is in general off-grid)
+
+"""
+calculate the departure point for the ith characteristic;
+overwrites SL.dep_pts[i], SL.dep_idx[i], and returns ...
+note that the dep_idx calculated here is the index of the nearest
+downwind gridpoint to the departure point (which is in general off-grid)
+"""
 function departure_point!(SL, i_outer, t_in, i, jstart, grid, v, dt, upwind_idx,
     upwind_increment, downwind_idx, bc, tbound)
     # t_in is the time spent by a particle following this ith characteristic
@@ -277,14 +297,17 @@ function departure_point!(SL, i_outer, t_in, i, jstart, grid, v, dt, upwind_idx,
     end
     return t_out
 end
+
+"""
+t_in is the time spent by a particle following this ith characteristic
+in going from the arrival point (grid point i at future time level) to the
+grid point jstart;
+note that the jstart grid point is the grid point immediately
+downwind of the departure point for the characteristic
+immediately downwind of this (ith) one.
+"""
 function departure_point_single_transit!(SL, i_outer, t_in, i, jstart, grid, v, dt, upwind_idx,
     upwind_increment)
-    # t_in is the time spent by a particle following this ith characteristic
-    # in going from the arrival point (grid point i at future time level) to the
-    # grid point jstart;
-    # note that the jstart grid point is the grid point immediately
-    # downwind of the departure point for the characteristic
-    # immediately downwind of this (ith) one.
     t_out = t_in
     @inbounds begin
         for j ∈ jstart:upwind_increment:upwind_idx-upwind_increment
@@ -305,13 +328,17 @@ function departure_point_single_transit!(SL, i_outer, t_in, i, jstart, grid, v, 
     # upwind boundary (including time from any previous transits of the domain)
     return t_out, dep_pt_found
 end
-# if periodic boundary condition, will be most efficient to store
-# the time taken by a characteristic to pass from the downwind boundary
-# to each point on the grid, as this will be used for all characteristics
-# that wrap around from -L/2 to L/2
+
+"""
+if periodic boundary condition, will be most efficient to store
+the time taken by a characteristic to pass from the downwind boundary
+to each point on the grid, as this will be used for all characteristics
+that wrap around from -L/2 to L/2
+
+tbound is the time spent on a characteristic in getting from
+the downdiwnd boundary to the ith grid point
+"""
 function calculate_time_from_boundary!(tbound, tcell, upwind_idx, upwind_incr, downwind_idx, dt)
-    # tbound is the time spent on a characteristic in getting from
-    # the downdiwnd boundary to the ith grid point
     @boundscheck abs(upwind_idx+upwind_incr-downwind_idx) == length(tbound) || throw(BoundsError(tbound))
     @inbounds begin
         # starting at downwind boundary, so no time needed to get there
@@ -389,9 +416,12 @@ function departure_point_periodic!(dep, dep_idx, total, i, jstart, tcell, z, v, 
     return nothing
 end
 =#
-# determine the nearest grid point to each departure point
-#function project_characteristics_onto_grid!(dep_idx, dep, vc, z, dz, dt)
+
+"""
+determine the nearest grid point to each departure point
+"""
 function project_characteristics_onto_grid!(SL, i_outer, mod_speed, coord, dt, upwind_idx, upwind_increment)
+#function project_characteristics_onto_grid!(dep_idx, dep, vc, z, dz, dt)
     # n is the number of grid points along this coordinate axis
     n = coord.n
     # ensure arrays used in this function are inbounds

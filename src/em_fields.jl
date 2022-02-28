@@ -1,3 +1,5 @@
+"""
+"""
 module em_fields
 
 export setup_em_fields
@@ -11,6 +13,8 @@ using ..input_structs
 using ..looping
 using ..velocity_moments: update_density!
 
+"""
+"""
 struct fields
     # phi is the electrostatic potential
     phi::MPISharedArray{mk_float,2}
@@ -23,13 +27,17 @@ struct fields
     drive_frequency::mk_float
 end
 
+"""
+"""
 function setup_em_fields(nz, nr, force_phi, drive_amplitude, drive_frequency)
     phi = allocate_shared_float(nz,nr)
     phi0 = allocate_shared_float(nz,nr)
     return fields(phi, phi0, force_phi, drive_amplitude, drive_frequency)
 end
 
-# update_phi updates the electrostatic potential, phi
+"""
+update_phi updates the electrostatic potential, phi
+"""
 function update_phi!(fields, fvec, z, r, composition)
     n_ion_species = composition.n_ion_species
     @boundscheck size(fields.phi,1) == z.n || throw(BoundsError(fields.phi))

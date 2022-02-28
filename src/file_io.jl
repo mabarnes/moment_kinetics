@@ -1,3 +1,5 @@
+"""
+"""
 module file_io
 
 export input_option_error
@@ -10,7 +12,9 @@ using NCDatasets
 using ..looping
 using ..type_definitions: mk_float, mk_int
 
-# structure containing the various input/output streams
+"""
+structure containing the various input/output streams
+"""
 struct ios
     # corresponds to the ascii file to which the distribution function is written
     #ff::IOStream
@@ -40,7 +44,10 @@ nc_var_type{N} = Union{
                          NamedTuple{(:fillvalue, :scale_factor, :add_offset,
                                      :calendar, :time_origin, :time_factor),
                                     NTuple{6, Nothing}}}}
-# structure containing the data/metadata needed for netcdf file i/o
+
+"""
+structure containing the data/metadata needed for netcdf file i/o
+"""
 struct netcdf_info
     # file identifier for the netcdf file to which data is written
     fid::NCDataset
@@ -61,7 +68,10 @@ struct netcdf_info
     # handle for the species thermal speed
     thermal_speed::nc_var_type{4}
 end
-# open the necessary output files
+
+"""
+open the necessary output files
+"""
 function setup_file_io(output_dir, run_name, vpa, z, r, composition,
                        collisions, evolve_ppar)
     begin_serial_region()
@@ -83,7 +93,10 @@ function setup_file_io(output_dir, run_name, vpa, z, r, composition,
     # For other processes in the block, return (nothing, nothing)
     return nothing, nothing
 end
-# setup file i/o for netcdf
+
+"""
+setup file i/o for netcdf
+"""
 function setup_netcdf_io(prefix, r, z, vpa, composition, collisions, evolve_ppar)
     # the netcdf file will be given by output_dir/run_name with .cdf appended
     filename = string(prefix,".cdf")
@@ -225,7 +238,10 @@ function setup_netcdf_io(prefix, r, z, vpa, composition, collisions, evolve_ppar
     return netcdf_info(fid, cdf_time, cdf_f, cdf_phi, cdf_density, cdf_upar,
                        cdf_ppar, cdf_qpar, cdf_vth)
 end
-# close all opened output files
+
+"""
+close all opened output files
+"""
 function finish_file_io(io, cdf)
     @serial_region begin
         # Only read/write from first process in each 'block'
@@ -239,6 +255,9 @@ function finish_file_io(io, cdf)
     end
     return nothing
 end
+
+"""
+"""
 function write_data_to_ascii(ff, moments, fields, vpa, z, r, t, n_species, io)
     @serial_region begin
         # Only read/write from first process in each 'block'
@@ -249,7 +268,10 @@ function write_data_to_ascii(ff, moments, fields, vpa, z, r, t, n_species, io)
     end
     return nothing
 end
-# write the function f(z,vpa) at this time slice
+
+"""
+write the function f(z,vpa) at this time slice
+"""
 function write_f_ascii(f, z, vpa, t, io)
     @serial_region begin
         # Only read/write from first process in each 'block'
@@ -271,7 +293,10 @@ function write_f_ascii(f, z, vpa, t, io)
     end
     return nothing
 end
-# write moments of the distribution function f(z,vpa) at this time slice
+
+"""
+write moments of the distribution function f(z,vpa) at this time slice
+"""
 function write_moments_ascii(mom, z, r, t, n_species, io)
     @serial_region begin
         # Only read/write from first process in each 'block'
@@ -291,7 +316,10 @@ function write_moments_ascii(mom, z, r, t, n_species, io)
     end
     return nothing
 end
-# write electrostatic potential at this time slice
+
+"""
+write electrostatic potential at this time slice
+"""
 function write_fields_ascii(flds, z, r, t, io)
     @serial_region begin
         # Only read/write from first process in each 'block'
@@ -307,7 +335,10 @@ function write_fields_ascii(flds, z, r, t, io)
     end
     return nothing
 end
-# write time-dependent data to the netcdf file
+
+"""
+write time-dependent data to the netcdf file
+"""
 function write_data_to_binary(ff, moments, fields, t, n_species, cdf, t_idx)
     @serial_region begin
         # Only read/write from first process in each 'block'
@@ -329,16 +360,22 @@ function write_data_to_binary(ff, moments, fields, t, n_species, cdf, t_idx)
     end
     return nothing
 end
-# accepts an option name which has been identified as problematic and returns
-# an appropriate error message
+
+"""
+accepts an option name which has been identified as problematic and returns
+an appropriate error message
+"""
 function input_option_error(option_name, input)
     msg = string("'",input,"'")
     msg = string(msg, " is not a valid ", option_name)
     error(msg)
     return nothing
 end
-# opens an output file with the requested prefix and extension
-# and returns the corresponding io stream (identifier)
+
+"""
+opens an output file with the requested prefix and extension
+and returns the corresponding io stream (identifier)
+"""
 function open_output_file(prefix, ext)
     str = string(prefix,".",ext)
     return io = open(str,"w")

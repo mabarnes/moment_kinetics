@@ -1,3 +1,5 @@
+"""
+"""
 module continuity
 
 export continuity_equation!
@@ -5,7 +7,9 @@ export continuity_equation!
 using ..calculus: derivative!
 using ..looping
 
-# use the continuity equation dn/dt + d(n*upar)/dz to update the density n for all species
+"""
+use the continuity equation dn/dt + d(n*upar)/dz to update the density n for all species
+"""
 function continuity_equation!(dens_out, fvec_in, moments, composition, vpa, z, r, dt, spectral)
     # use the continuity equation dn/dt + d(n*upar)/dz to update the density n
     # for each species
@@ -16,7 +20,10 @@ function continuity_equation!(dens_out, fvec_in, moments, composition, vpa, z, r
         end
     end
 end
-# use the continuity equation dn/dt + d(n*upar)/dz to update the density n
+
+"""
+use the continuity equation dn/dt + d(n*upar)/dz to update the density n
+"""
 function continuity_equation_single_species!(dens_out, dens_in, upar, z, dt, spectral)
     # calculate the particle flux nu
     @. z.scratch = dens_in*upar

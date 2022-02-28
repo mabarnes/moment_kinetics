@@ -1,3 +1,5 @@
+"""
+"""
 module advection
 
 export setup_advection
@@ -12,8 +14,10 @@ using ..calculus: derivative!
 using ..communication
 using ..looping
 
-# structure containing the basic arrays associated with the
-# advection terms appearing in the advection equation for each coordinate
+"""
+structure containing the basic arrays associated with the
+advection terms appearing in the advection equation for each coordinate
+"""
 mutable struct advection_info{L,M,N}
     # rhs is the sum of the advection terms appearing on the righthand side
     # of the equation
@@ -40,7 +44,10 @@ mutable struct advection_info{L,M,N}
     # upwind_increment is the index increment used when sweeping in the upwind direction
     upwind_increment::MPISharedArray{mk_int, N}
 end
-# create arrays needed to compute the advection term(s) for a 1D problem
+
+"""
+create arrays needed to compute the advection term(s) for a 1D problem
+"""
 function setup_advection(nspec, coords...)
     # allocate an array containing structures with much of the info needed
     # to do the 1D advection time advance
@@ -52,7 +59,10 @@ function setup_advection(nspec, coords...)
     end
     return advection
 end
-# create arrays needed to compute the advection term(s)
+
+"""
+create arrays needed to compute the advection term(s)
+"""
 function setup_advection_per_species(coords...)
     # create array for storing the explicit advection terms appearing
     # on the righthand side of the equation
@@ -114,8 +124,11 @@ function update_boundary_indices!(advection, orthogonal_coordinate_range1, ortho
     end
     return nothing
 end
-# calculate the factor appearing in front of f' in the advection term
-# at time level n in the frame moving with the approximate characteristic
+
+"""
+calculate the factor appearing in front of f' in the advection term
+at time level n in the frame moving with the approximate characteristic
+"""
 function update_advection_factor!(adv_fac, speed, upwind_idx, downwind_idx,
     upwind_increment, SL, i_outer, j_outer, n, dt, j, coord)
     @boundscheck n == size(SL.dep_idx, 1) || throw(BoundsError(SL.dep_idx))
@@ -152,8 +165,11 @@ function update_advection_factor!(adv_fac, speed, upwind_idx, downwind_idx,
     #end
     return nothing
 end
-# calculate the explicit advection terms on the rhs of the equation;
-# i.e., -Δt⋅δv⋅f'
+
+"""
+calculate the explicit advection terms on the rhs of the equation;
+i.e., -Δt⋅δv⋅f'
+"""
 function calculate_explicit_advection!(rhs, df, adv_fac, up_idx, up_incr, dep_idx, n, j)
     # calculate the advection terms evaluated at the departure point for the
     # ith characteristic.  note that adv_fac[i] has already
@@ -173,7 +189,10 @@ function calculate_explicit_advection!(rhs, df, adv_fac, up_idx, up_incr, dep_id
     end
     return nothing
 end
-# update the righthand side of the equation to account for 1d advection in this coordinate
+
+"""
+update the righthand side of the equation to account for 1d advection in this coordinate
+"""
 function update_rhs!(advection, i_outer, j_outer, f_current, SL, coord, dt, j, spectral)
     # calculate the factor appearing in front of df/dcoord in the advection
     # term at time level n in the frame moving with the approximate
@@ -191,7 +210,10 @@ function update_rhs!(advection, i_outer, j_outer, f_current, SL, coord, dt, j, s
         advection.adv_fac[:,i_outer,j_outer], advection.upwind_idx[i_outer,j_outer],
         advection.upwind_increment[i_outer,j_outer], SL.dep_idx[:,i_outer,j_outer], coord.n, j)
 end
-# do all the work needed to update f(coord) at a single value of other coords
+
+"""
+do all the work needed to update f(coord) at a single value of other coords
+"""
 function advance_f_local!(f_new, f_current, f_old, SL, advection, i_outer, j_outer, coord, dt, j, spectral, use_SL)
     # update the rhs of the equation accounting for 1d advection in coord
     update_rhs!(advection, i_outer, j_outer, f_current, SL, coord, dt, j, spectral)
@@ -203,8 +225,11 @@ function advance_f_local!(f_new, f_current, f_old, SL, advection, i_outer, j_out
                      advection.upwind_increment[i_outer,j_outer], SL.dep_idx[:,i_outer,j_outer], coord.n,
                      coord.bc, use_SL)
 end
-# update ff at time level n+1 using an explicit Runge-Kutta method
-# along approximate characteristics
+
+"""
+update ff at time level n+1 using an explicit Runge-Kutta method
+along approximate characteristics
+"""
 function update_f!(f_new, f_old, rhs, up_idx, down_idx, up_incr, dep_idx, n, bc, use_SL)
     @boundscheck n == length(f_new) || throw(BoundsError(f_new))
     @boundscheck n == length(rhs) || throw(BoundsError(rhs))

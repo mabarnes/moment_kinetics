@@ -4,15 +4,21 @@ using OrderedCollections: OrderedDict
 
 export mk_scan_inputs
 
-# By default, inputs are combined with an 'inner product', i.e. inputs a,b,c
-# are combined as (a[1],b[1],c[1]), (a[2],b[2],c[2]), etc.
-# Any inputs named in 'combine_outer' are instead combined with an 'outer
-# product', i.e. an entry is created for every value of those inputs combined
-# with every combination of the other inputs.
+"""
+By default, inputs are combined with an 'inner product', i.e. inputs a,b,c
+are combined as (a[1],b[1],c[1]), (a[2],b[2],c[2]), etc.
+Any inputs named in 'combine_outer' are instead combined with an 'outer
+product', i.e. an entry is created for every value of those inputs combined
+with every combination of the other inputs.
+"""
 const combine_outer = ["charge_exchange_frequency"]
 
+"""
+"""
 const base_name = "scan"
 
+"""
+"""
 function mk_scan_inputs()
     scan_inputs = OrderedDict()
 
@@ -97,6 +103,8 @@ function mk_scan_inputs()
     return result
 end
 
+"""
+"""
 function mk_name(input)
     name = base_name
 

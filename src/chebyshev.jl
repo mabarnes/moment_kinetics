@@ -1,3 +1,5 @@
+"""
+"""
 module chebyshev
 
 export update_fcheby!
@@ -14,6 +16,8 @@ using ..array_allocation: allocate_float, allocate_complex
 using ..clenshaw_curtis: clenshawcurtisweights
 import ..interpolation: interpolate_to_grid_1d
 
+"""
+"""
 struct chebyshev_info{TForward <: FFTW.cFFTWPlan, TBackward <: AbstractFFTs.ScaledPlan}
     # fext is an array for storing f(z) on the extended domain needed
     # to perform complex-to-complex FFT using the fact that f(theta) is even in theta
@@ -30,8 +34,11 @@ struct chebyshev_info{TForward <: FFTW.cFFTWPlan, TBackward <: AbstractFFTs.Scal
     #backward_transform::FFTW.cFFTWPlan
     backward::TBackward
 end
-# create arrays needed for explicit Chebyshev pseudospectral treatment
-# and create the plans for the forward and backward fast Fourier transforms
+
+"""
+create arrays needed for explicit Chebyshev pseudospectral treatment
+and create the plans for the forward and backward fast Fourier transforms
+"""
 function setup_chebyshev_pseudospectral(coord)
     # ngrid_fft is the number of grid points in the extended domain
     # in z = cos(theta).  this is necessary to turn a cosine transform on [0,π]
@@ -49,7 +56,10 @@ function setup_chebyshev_pseudospectral(coord)
     # a 1D Chebyshev transform
     return chebyshev_info(fext, fcheby, dcheby, forward_transform, backward_transform)
 end
-# initialize chebyshev grid scaled to interval [-box_length/2, box_length/2]
+
+"""
+initialize chebyshev grid scaled to interval [-box_length/2, box_length/2]
+"""
 function scaled_chebyshev_grid(ngrid, nelement, n, box_length, imin, imax)
     # initialize chebyshev grid defined on [1,-1]
     # with n grid points chosen to facilitate
@@ -81,6 +91,9 @@ function scaled_chebyshev_grid(ngrid, nelement, n, box_length, imin, imax)
     wgts = clenshaw_curtis_weights(ngrid, nelement, n, imin, imax, scale_factor)
     return grid, wgts
 end
+
+"""
+"""
 function chebyshev_derivative!(df, ff, chebyshev, coord)
     # define local variable nelement for convenience
     nelement = coord.nelement
@@ -115,6 +128,9 @@ function chebyshev_derivative!(df, ff, chebyshev, coord)
     end
     return nothing
 end
+
+"""
+"""
 function chebyshev_derivative_single_element!(df, ff, cheby_f, cheby_df, cheby_fext, forward, coord)
     # calculate the Chebyshev coefficients of the real-space function ff and return
     # as cheby_f
@@ -124,7 +140,10 @@ function chebyshev_derivative_single_element!(df, ff, cheby_f, cheby_df, cheby_f
     # inverse Chebyshev transform to get df/dcoord
     chebyshev_backward_transform!(df, cheby_fext, cheby_df, forward, coord.ngrid)
 end
-# Chebyshev transform f to get Chebyshev spectral coefficients
+
+"""
+Chebyshev transform f to get Chebyshev spectral coefficients
+"""
 function update_fcheby!(cheby, ff, coord)
     k = 0
     # loop over the different elements and perform a Chebyshev transform
@@ -145,7 +164,10 @@ function update_fcheby!(cheby, ff, coord)
     end
     return nothing
 end
-# compute the Chebyshev spectral coefficients of the spatial derivative of f
+
+"""
+compute the Chebyshev spectral coefficients of the spatial derivative of f
+"""
 function update_df_chebyshev!(df, chebyshev, coord)
     ngrid = coord.ngrid
     nelement = coord.nelement
@@ -169,7 +191,10 @@ function update_df_chebyshev!(df, chebyshev, coord)
     end
     return nothing
 end
-# use Chebyshev basis to compute the derivative of f
+
+"""
+use Chebyshev basis to compute the derivative of f
+"""
 function chebyshev_spectral_derivative!(df,f)
     m = length(f)
     @boundscheck m == length(df) || throw(BoundsError(df))
@@ -255,6 +280,9 @@ function interpolate_to_grid_1d(newgrid, f, coord, chebyshev::chebyshev_info)
 
     return result
 end
+
+"""
+"""
 function chebyshev_interpolate_single_element(newgrid, f, j, coord, chebyshev)
     # Temporary buffer to store Chebyshev coefficients
     cheby_f = allocate_float(coord.ngrid)
@@ -287,8 +315,11 @@ function chebyshev_interpolate_single_element(newgrid, f, j, coord, chebyshev)
 
     return result
 end
-# returns wgts array containing the integration weights associated
-# with all grid points for Clenshaw-Curtis quadrature
+
+"""
+returns wgts array containing the integration weights associated
+with all grid points for Clenshaw-Curtis quadrature
+"""
 function clenshaw_curtis_weights(ngrid, nelement, n, imin, imax, scale_factor)
     # create array containing the integration weights
     wgts = zeros(n)
@@ -310,8 +341,11 @@ function clenshaw_curtis_weights(ngrid, nelement, n, imin, imax, scale_factor)
     end
     return wgts
 end
-# compute and return modified Chebyshev moments of the first kind:
-# ∫dx Tᵢ(x) over range [-1,1]
+
+"""
+compute and return modified Chebyshev moments of the first kind:
+∫dx Tᵢ(x) over range [-1,1]
+"""
 function chebyshevmoments(N)
     μ = zeros(N)
     @inbounds for i = 0:2:N-1
@@ -319,7 +353,10 @@ function chebyshevmoments(N)
     end
     return μ
 end
-# returns the Chebyshev-Gauss-Lobatto grid points on an n point grid
+
+"""
+returns the Chebyshev-Gauss-Lobatto grid points on an n point grid
+"""
 function chebyshevpoints(n)
     grid = allocate_float(n)
     nfac = 1/(n-1)
@@ -331,20 +368,23 @@ function chebyshevpoints(n)
     end
     return grid
 end
-# takes the real function ff on a Chebyshev grid in z (domain [-1, 1]),
-# which corresponds to the domain [π, 2π] in variable theta = ArcCos(z).
-# interested in functions of form f(z) = sum_n c_n T_n(z)
-# using T_n(cos(theta)) = cos(n*theta) and z = cos(theta) gives
-# f(z) = sum_n c_n cos(n*theta)
-# thus a Chebyshev transform is equivalent to a discrete cosine transform
-# doing this directly turns out to be slower than extending the domain
-# from [0, 2pi] and using the fact that f(z) must be even (as cosines are all even)
-# on this extended domain, can do a standard complex-to-complex fft
-# fext is an array used to store f(theta) on the extended grid theta ∈ [0,2π)
-# ff is f(theta) on the grid [π,2π]
-# the Chebyshev coefficients of ff are calculated and stored in chebyf
-# n is the number of grid points on the Chebyshev-Gauss-Lobatto grid
-# transform is the plan for the complex-to-complex, in-place fft
+
+"""
+takes the real function ff on a Chebyshev grid in z (domain [-1, 1]),
+which corresponds to the domain [π, 2π] in variable theta = ArcCos(z).
+interested in functions of form f(z) = sum_n c_n T_n(z)
+using T_n(cos(theta)) = cos(n*theta) and z = cos(theta) gives
+f(z) = sum_n c_n cos(n*theta)
+thus a Chebyshev transform is equivalent to a discrete cosine transform
+doing this directly turns out to be slower than extending the domain
+from [0, 2pi] and using the fact that f(z) must be even (as cosines are all even)
+on this extended domain, can do a standard complex-to-complex fft
+fext is an array used to store f(theta) on the extended grid theta ∈ [0,2π)
+ff is f(theta) on the grid [π,2π]
+the Chebyshev coefficients of ff are calculated and stored in chebyf
+n is the number of grid points on the Chebyshev-Gauss-Lobatto grid
+transform is the plan for the complex-to-complex, in-place fft
+"""
 function chebyshev_forward_transform!(chebyf, fext, ff, transform, n)
     # ff as input is f(z) on the domain [-1,1]
     # corresponding to f(theta) on the domain [π,2π]
@@ -378,6 +418,8 @@ function chebyshev_forward_transform!(chebyf, fext, ff, transform, n)
     return nothing
 end
 
+"""
+"""
 function chebyshev_backward_transform!(ff, fext, chebyf, transform, n)
     # chebyf as input contains Chebyshev spectral coefficients
     # need to use reality condition to extend onto negative frequency domain

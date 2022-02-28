@@ -1,3 +1,5 @@
+"""
+"""
 module finite_differences
 
 export derivative_finite_difference!
@@ -7,6 +9,8 @@ using Interpolations
 using ..type_definitions: mk_float
 import ..interpolation: interpolate_to_grid_1d
 
+"""
+"""
 function fd_check_option(option, ngrid)
     if option == "second_order_upwind"
         if ngrid < 3
@@ -25,6 +29,8 @@ function fd_check_option(option, ngrid)
     end
 end
 
+"""
+"""
 function derivative_finite_difference!(df, f, del, adv_fac, bc, fd_option, igrid, ielement)
 	if fd_option == "second_order_upwind"
 		upwind_second_order!(df, f, del, adv_fac, bc, igrid, ielement)
@@ -53,6 +59,9 @@ function derivative_finite_difference!(df, f, del, adv_fac, bc, fd_option, igrid
 	#end
 	return nothing
 end
+
+"""
+"""
 function derivative_finite_difference!(df, f, del, bc, fd_option, igrid, ielement)
 	if fd_option == "fourth_order_centered"
 		centered_fourth_order!(df, f, del, bc, igrid, ielement)
@@ -62,6 +71,8 @@ function derivative_finite_difference!(df, f, del, bc, fd_option, igrid, ielemen
 	return nothing
 end
 
+"""
+"""
 function upwind_first_order!(df, f, del, adv_fac, bc, igrid, ielement)
     n = length(del)
 	@boundscheck n == length(f) || throw(BoundsError(f))
@@ -115,6 +126,8 @@ function upwind_first_order!(df, f, del, adv_fac, bc, igrid, ielement)
 	return nothing
 end
 
+"""
+"""
 function upwind_second_order!(df, f, del, adv_fac, bc, igrid, ielement)
     n = length(del)
 	@boundscheck n == length(f) || throw(BoundsError(f))
@@ -204,6 +217,9 @@ function upwind_second_order!(df, f, del, adv_fac, bc, igrid, ielement)
         end
 	return nothing
 end
+
+"""
+"""
 function upwind_third_order!(df, f, del, adv_fac, bc, igrid, ielement)
     n = length(del)
 	@boundscheck n == length(f) && n > 3 || throw(BoundsError(f))
@@ -294,9 +310,12 @@ function upwind_third_order!(df, f, del, adv_fac, bc, igrid, ielement)
         end
 	return nothing
 end
-# take the derivative of input function f and return as df
-# using second-order, centered differences.
-# input/output array df is 2D array of size ngrid x nelement
+
+"""
+take the derivative of input function f and return as df
+using second-order, centered differences.
+input/output array df is 2D array of size ngrid x nelement
+"""
 function centered_second_order!(df::Array{mk_float,2}, f, del, bc, igrid, ielement)
 	n = length(f)
 	# get derivative at internal points
@@ -329,9 +348,12 @@ function centered_second_order!(df::Array{mk_float,2}, f, del, bc, igrid, ieleme
 		df[igrid[i],ielement[i]] = -0.5*f[i-1]/del[n-1]
 	end
 end
-# take the derivative of input function f and return as df
-# using second-order, centered differences.
-# input/output df is 1D array of size n (full grid)
+
+"""
+take the derivative of input function f and return as df
+using second-order, centered differences.
+input/output df is 1D array of size n (full grid)
+"""
 function centered_second_order!(df::Array{mk_float,1}, f, del, bc, igrid, ielement)
 	n = length(f)
 	# get derivative at internal points
@@ -364,9 +386,12 @@ function centered_second_order!(df::Array{mk_float,1}, f, del, bc, igrid, ieleme
 		df[i] = -0.5*f[i-1]/del[n-1]
 	end
 end
-# take the derivative of input function f and return as df
-# using fourth-order, centered differences.
-# input/output array df is 2D array of size ngrid x nelement
+
+"""
+take the derivative of input function f and return as df
+using fourth-order, centered differences.
+input/output array df is 2D array of size ngrid x nelement
+"""
 function centered_fourth_order!(df::Array{mk_float,2}, f, del, bc, igrid, ielement)
 	n = length(f)
 	# get derivative at internal points

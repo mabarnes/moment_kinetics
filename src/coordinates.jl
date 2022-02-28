@@ -1,3 +1,5 @@
+"""
+"""
 module coordinates
 
 export define_coordinate, write_coordinate
@@ -10,7 +12,9 @@ using ..chebyshev: scaled_chebyshev_grid
 using ..quadrature: composite_simpson_weights
 using ..input_structs: advection_input
 
-# structure containing basic information related to coordinates
+"""
+structure containing basic information related to coordinates
+"""
 struct coordinate
     # name is the name of the variable associated with this coordiante
     name::String
@@ -58,9 +62,12 @@ struct coordinate
     # struct containing advection speed options/inputs
     advection::advection_input
 end
-# create arrays associated with a given coordinate,
-# setup the coordinate grid, and populate the coordinate structure
-# containing all of this information
+
+"""
+create arrays associated with a given coordinate,
+setup the coordinate grid, and populate the coordinate structure
+containing all of this information
+"""
 function define_coordinate(input, composition=nothing)
     # total number of grid points is ngrid for the first element
     # plus ngrid-1 unique points for each additional element due
@@ -93,7 +100,10 @@ function define_coordinate(input, composition=nothing)
         input.bc, wgts, uniform_grid, duniform_dgrid, scratch, copy(scratch),
         scratch_2d, advection)
 end
-# setup a grid with n grid points on the interval [-L/2,L/2]
+
+"""
+setup a grid with n grid points on the interval [-L/2,L/2]
+"""
 function init_grid(ngrid, nelement, n, L, imin, imax, igrid, discretization)
     uniform_grid = equally_spaced_grid(n,L)
     if n == 1
@@ -120,8 +130,11 @@ function init_grid(ngrid, nelement, n, L, imin, imax, igrid, discretization)
     # return the locations of the grid points
     return grid, wgts, uniform_grid
 end
-# setup an equally spaced grid with n grid points
-# between [-L/2,L/2]
+
+"""
+setup an equally spaced grid with n grid points
+between [-L/2,L/2]
+"""
 function equally_spaced_grid(n, L)
     # create array for the equally spaced grid with n grid points
     grid = allocate_float(n)
@@ -130,9 +143,12 @@ function equally_spaced_grid(n, L)
     end
     return grid
 end
-# given a set of grid point locations
-# calculate and return the length
-# associated with the cell between adjacent grid points
+
+"""
+given a set of grid point locations
+calculate and return the length
+associated with the cell between adjacent grid points
+"""
 function grid_spacing(grid, n)
     # array to contain the cell widths
     d = allocate_float(n)
@@ -146,8 +162,11 @@ function grid_spacing(grid, n)
     end
     return d
 end
-# setup arrays containing a map from the unpacked grid point indices
-# to the element index and the grid point index within each element
+
+"""
+setup arrays containing a map from the unpacked grid point indices
+to the element index and the grid point index within each element
+"""
 function full_to_elemental_grid_map(ngrid, nelement, n)
     igrid = allocate_int(n)
     ielement = allocate_int(n)
@@ -170,8 +189,11 @@ function full_to_elemental_grid_map(ngrid, nelement, n)
     end
     return igrid, ielement
 end
-# returns imin and imax, which contain the minimum and maximum
-# indices on the full grid for each element
+
+"""
+returns imin and imax, which contain the minimum and maximum
+indices on the full grid for each element
+"""
 function elemental_to_full_grid_map(ngrid, nelement)
     imin = allocate_int(nelement)
     imax = allocate_int(nelement)

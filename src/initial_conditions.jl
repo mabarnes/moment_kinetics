@@ -1,3 +1,5 @@
+"""
+"""
 module initial_conditions
 
 export init_pdf_and_moments
@@ -17,13 +19,17 @@ using ..velocity_moments: integrate_over_vspace
 using ..velocity_moments: integrate_over_positive_vpa, integrate_over_negative_vpa
 using ..velocity_moments: create_moments, update_qpar!
 
+"""
+"""
 struct pdf_struct
     norm::MPISharedArray{mk_float,4}
     unnorm::MPISharedArray{mk_float,4}
 end
 
-# creates the normalised pdf and the velocity-space moments and populates them
-# with a self-consistent initial condition
+"""
+creates the normalised pdf and the velocity-space moments and populates them
+with a self-consistent initial condition
+"""
 function init_pdf_and_moments(vpa, z, r, composition, species, n_rk_stages, evolve_moments)
     # define the n_species variable for convenience
     n_species = composition.n_species
@@ -55,6 +61,9 @@ function init_pdf_and_moments(vpa, z, r, composition, species, n_rk_stages, evol
     update_qpar!(moments.qpar, moments.qpar_updated, pdf.unnorm, vpa, z, r, composition, moments.vpa_norm_fac)
     return pdf, moments
 end
+
+"""
+"""
 function create_and_init_pdf(moments, vpa, z, r, n_species, species)
     pdf_norm = allocate_shared_float(vpa.n, z.n, r.n, n_species)
     pdf_unnorm = allocate_shared_float(vpa.n, z.n, r.n, n_species)
@@ -85,8 +94,11 @@ function create_and_init_pdf(moments, vpa, z, r, n_species, species)
     end
     return pdf_struct(pdf_norm, pdf_unnorm)
 end
-# for now the only initialisation option for the temperature is constant in z
-# returns vth0 = sqrt(2Ts/ms) / sqrt(2Te/ms) = sqrt(Ts/Te)
+
+"""
+for now the only initialisation option for the temperature is constant in z
+returns vth0 = sqrt(2Ts/ms) / sqrt(2Te/ms) = sqrt(Ts/Te)
+"""
 function init_vth!(vth, z, r, spec, n_species)
     for is ∈ 1:n_species
         for ir ∈ 1:r.n
@@ -104,6 +116,9 @@ function init_vth!(vth, z, r, spec, n_species)
     end
     return nothing
 end
+
+"""
+"""
 function init_density!(dens, z, r, spec, n_species)
     for is ∈ 1:n_species
         for ir ∈ 1:r.n
@@ -126,7 +141,10 @@ function init_density!(dens, z, r, spec, n_species)
     end
     return nothing
 end
-# for now the only initialisation option is zero parallel flow
+
+"""
+for now the only initialisation option is zero parallel flow
+"""
 function init_upar!(upar, z, r, spec, n_species)
     for is ∈ 1:n_species
         for ir ∈ 1:r.n
@@ -151,6 +169,9 @@ function init_upar!(upar, z, r, spec, n_species)
     end
     return nothing
 end
+
+"""
+"""
 function init_pdf_over_density!(pdf, spec, vpa, z, vth, upar, vpa_norm_fac, evolve_upar, evolve_ppar)
     if spec.vpa_IC.initialization_option == "gaussian"
         # initial condition is a Gaussian in the peculiar velocity
@@ -220,6 +241,9 @@ function init_pdf_over_density!(pdf, spec, vpa, z, vth, upar, vpa_norm_fac, evol
     # end
     return nothing
 end
+
+"""
+"""
 function enforce_boundary_conditions!(f, vpa_bc, z_bc, vpa, z, r, vpa_adv::T1, z_adv::T2, composition) where {T1, T2}
     @loop_s_r_z is ir iz begin
         # enforce the vpa BC
@@ -229,7 +253,10 @@ function enforce_boundary_conditions!(f, vpa_bc, z_bc, vpa, z, r, vpa_adv::T1, z
     begin_s_r_vpa_region()
     @views enforce_z_boundary_condition!(f, z_bc, z_adv, vpa, r, composition)
 end
-# enforce boundary conditions on f in z
+
+"""
+enforce boundary conditions on f in z
+"""
 function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, r, composition) where T
     # define n_species variable for convenience
     n_species = composition.n_species
@@ -318,8 +345,11 @@ function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, r, compositio
         end
     end
 end
-# impose the prescribed vpa boundary condition on f
-# at every z grid point
+
+"""
+impose the prescribed vpa boundary condition on f
+at every z grid point
+"""
 function enforce_vpa_boundary_condition!(f, bc, src::T) where T
     nz = size(f,2)
     nr = size(f,3)
@@ -330,6 +360,9 @@ function enforce_vpa_boundary_condition!(f, bc, src::T) where T
         end
     end
 end
+
+"""
+"""
 function enforce_vpa_boundary_condition_local!(f::T, bc, upwind_idx, downwind_idx) where T
     if bc == "zero"
         f[upwind_idx] = 0.0

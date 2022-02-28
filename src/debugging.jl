@@ -15,28 +15,53 @@ can be used to make the type represented by `MPISharedArray` depend on the debug
 """
 module debugging
 
+"""
+"""
 macronames = [
-              ("debug_initialize_NaN", 1),
-              ("debug_error_stop_all", 1),
-              ("debug_block_synchronize", 2),
-              ("debug_shared_array", 2),
-              ("debug_shared_array_allocate", 3),
-              ("debug_detect_redundant_block_synchronize", 4)
-             ]
+    ("debug_initialize_NaN", 1, "Initialize arrays with NaN."),
+
+    ("debug_error_stop_all", 1,
+    "Use MPI.Allgather to stop all processes following an error on any process."),
+
+    ("debug_block_synchronize", 2,
+     "Check _block_synchronize() was called from the same place on every process."),
+
+    ("debug_shared_array", 2,
+     "Check for incorrect reads/writes to shared-memory arrays"),
+
+    ("debug_shared_array_allocate", 3,
+     "Check that allocate_shared() was called from the same place on every process."),
+
+    ("debug_detect_redundant_block_synchronize", 4,
+     "Check if any _block_synchronize() call could have been skipped without resulting "
+     * "in an error.")
+]
 
 using ..command_line_options: get_options
+
+"""
+"""
 _debug_level = get_options()["debug"]
 
-for (macroname, minlevel) ∈ macronames
+for (macroname, minlevel, macro_docstring) ∈ macronames
     m = Symbol(macroname)
     export_string = Symbol(string("@", macroname))
     ifelse_string = macroname * "_ifelse"
     ifelse_symbol = Symbol(ifelse_string)
     export_ifelse_string = Symbol(string("@", ifelse_string))
+    ifelse_docstring = "Evaluate first expression if $macroname is active, second " *
+                       "expression if not"
+    macro_docstring *= "\n Activated at `_debug_level >= $minlevel`"
 
     if _debug_level >= minlevel
         println("$export_string activated")
+        macro_docstring *= "\n Currently active (`_debug_level = $_debug_level`)."
+        ifelse_docstring *= "\n $macroname is active (`_debug_level = $_debug_level " *
+                            ">= $minlevel`)."
         macro_block = quote
+            """
+            $($macro_docstring)
+            """
             macro $m(blk)
                 return quote
                     # Uncomment the following line to print the macro name each time
@@ -48,6 +73,9 @@ for (macroname, minlevel) ∈ macronames
                 end
             end
 
+            """
+            $($ifelse_docstring)
+            """
             macro $ifelse_symbol(debug, standard)
                 return :( $(esc(debug)) )
             end
@@ -55,11 +83,20 @@ for (macroname, minlevel) ∈ macronames
             export $export_string, $export_ifelse_string
         end
     else
+        macro_docstring *= "\n Currently inactive (`_debug_level = $_debug_level`)."
+        ifelse_docstring *= "\n $macroname is inactive (`_debug_level = $_debug_level " *
+                            "< $minlevel`)."
         macro_block = quote
+            """
+            $($macro_docstring)
+            """
             macro $m(blk)
                 return
             end
 
+            """
+            $($ifelse_docstring)
+            """
             macro $ifelse_symbol(debug, standard)
                 return :( $(esc(standard)) )
             end

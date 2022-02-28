@@ -1,3 +1,5 @@
+"""
+"""
 module array_allocation
 
 export allocate_float, allocate_int, allocate_complex, allocate_bool, allocate_shared
@@ -7,25 +9,37 @@ using ..communication
 using ..debugging
 @debug_initialize_NaN using ..communication: block_rank, _block_synchronize
 
-# allocate array with dimensions given by dims and entries of type Bool
+"""
+allocate array with dimensions given by dims and entries of type Bool
+"""
 function allocate_bool(dims...)
     return array = Array{Bool}(undef, dims...)
 end
-# variant where array is in shared memory for all processors in the 'block'
+ 
+"""
+variant where array is in shared memory for all processors in the 'block'
+"""
 function allocate_shared_bool(dims...)
     return array = allocate_shared(Bool, dims)
 end
 
-# allocate 1d array with dimensions given by dims and entries of type mk_int
+"""
+allocate 1d array with dimensions given by dims and entries of type mk_int
+"""
 function allocate_int(dims...)
     return array = Array{mk_int}(undef, dims...)
 end
-# variant where array is in shared memory for all processors in the 'block'
+
+"""
+variant where array is in shared memory for all processors in the 'block'
+"""
 function allocate_shared_int(dims...)
     return array = allocate_shared(mk_int, dims)
 end
 
-# allocate array with dimensions given by dims and entries of type mk_float
+"""
+allocate array with dimensions given by dims and entries of type mk_float
+"""
 function allocate_float(dims...)
     array = Array{mk_float}(undef, dims...)
     @debug_initialize_NaN begin
@@ -33,7 +47,10 @@ function allocate_float(dims...)
     end
     return array
 end
-# variant where array is in shared memory for all processors in the 'block'
+
+"""
+variant where array is in shared memory for all processors in the 'block'
+"""
 function allocate_shared_float(dims...)
     array = allocate_shared(mk_float, dims)
     @debug_initialize_NaN begin
@@ -46,7 +63,9 @@ function allocate_shared_float(dims...)
     return array
 end
 
-# allocate 1d array with dimensions given by dims and entries of type Complex{mk_float}
+"""
+allocate 1d array with dimensions given by dims and entries of type Complex{mk_float}
+"""
 function allocate_complex(dims...)
     array = Array{Complex{mk_float}}(undef, dims...)
     @debug_initialize_NaN begin
@@ -54,7 +73,10 @@ function allocate_complex(dims...)
     end
     return array
 end
-# variant where array is in shared memory for all processors in the 'block'
+
+"""
+variant where array is in shared memory for all processors in the 'block'
+"""
 function allocate_shared_complex(dims...)
     array = allocate_shared(Complex{mk_float}, dims)
     @debug_initialize_NaN begin

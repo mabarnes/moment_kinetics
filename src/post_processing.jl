@@ -1,3 +1,5 @@
+"""
+"""
 module post_processing
 
 export analyze_and_plot
@@ -46,6 +48,8 @@ function moving_average(v::AbstractVector, n::mk_int)
     return result
 end
 
+"""
+"""
 function analyze_and_plot_data(path)
     # Create run_name from the path to the run directory
     path = realpath(path)
@@ -80,6 +84,9 @@ function analyze_and_plot_data(path)
     close(fid)
 
 end
+
+"""
+"""
 function init_postprocessing_options(pp, nvpa, nz, nr, ntime)
     print("Initializing the post-processing input options...")
     # nwrite_movie is the stride used when making animations
@@ -122,6 +129,8 @@ function init_postprocessing_options(pp, nvpa, nz, nr, ntime)
     return nwrite_movie, itime_min, itime_max, ivpa0, iz0, ir0
 end
 
+"""
+"""
 function plot_1D_1V_diagnostics(run_name, fid, nwrite_movie, itime_min, itime_max, ivpa0, iz0, ir0, r,
  phi, density, parallel_flow, parallel_pressure, parallel_heat_flux,
      thermal_speed, ff, n_species, evolve_ppar, nvpa, vpa, vpa_wgts,
@@ -285,6 +294,8 @@ function plot_1D_1V_diagnostics(run_name, fid, nwrite_movie, itime_min, itime_ma
 
 end 
 
+"""
+"""
 function calculate_and_write_frequencies(fid, run_name, ntime, time, z, itime_min,
                                          itime_max, iz0, delta_phi, pp)
     if pp.calculate_frequencies
@@ -363,6 +374,9 @@ function calculate_and_write_frequencies(fid, run_name, ntime, time, z, itime_mi
     end
     return frequency, growth_rate, shifted_time, fitted_delta_phi
 end
+
+"""
+"""
 function plot_fields(phi, delta_phi, time, itime_min, itime_max, nwrite_movie,
     z, iz0, run_name, fitted_delta_phi, pp)
 
@@ -410,6 +424,8 @@ function plot_fields(phi, delta_phi, time, itime_min, itime_max, nwrite_movie,
     println("done.")
 end
 
+"""
+"""
 function plot_moments(density, delta_density, density_fldline_avg,
     parallel_flow, delta_upar, upar_fldline_avg,
     parallel_pressure, delta_ppar, ppar_fldline_avg,
@@ -659,20 +675,10 @@ function fit_delta_phi_mode(t, z, delta_phi)
         amplitude0 = amplitude[1] / cos(phase)
     end
 
-    return phi_fit_result(growth_rate, frequency, phase, amplitude0, offset0, fit_error,
-                          offset_error, maximum(cosine_fit_error), amplitude, offset)
-end
-struct phi_fit_result
-    growth_rate::mk_float
-    frequency::mk_float
-    phase::mk_float
-    amplitude0::mk_float
-    offset0::mk_float
-    amplitude_fit_error::mk_float
-    offset_fit_error::mk_float
-    cosine_fit_error::mk_float
-    amplitude::Array{mk_float, 1}
-    offset::Array{mk_float, 1}
+    return (growth_rate=growth_rate, frequency=frequency, phase=phase,
+            amplitude0=amplitude0, offset0=offset0, amplitude_fit_error=fit_error,
+            offset_fit_error=offset_error, cosine_fit_error=maximum(cosine_fit_error),
+            amplitude=amplitude, offset=offset)
 end
 
 function fit_phi0_vs_time(phi0, tmod)
