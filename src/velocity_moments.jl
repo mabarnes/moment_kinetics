@@ -375,7 +375,7 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, vperp, z, r, compo
                      vpa.grid, 2, vpa.wgts, vperp.grid, 0, vperp.wgts)
                     upar_integral /= vpa2_moment
                     if moments.evolve_ppar
-                        vpa4_moment = integrate_over_vspace(dummy.dummy_vpavperp, vpa.grid, 4, vpa.wgts) - 0.5 * vpa2_moment
+                        vpa4_moment = integrate_over_vspace(dummy.dummy_vpavperp, vpa.grid, 4, vpa.wgts, vperp.grid, 0, vperp.wgts) - 0.5 * vpa2_moment
                         ppar_integral /= vpa4_moment
                     end
                     # update the pdf to account for the momentum-conserving correction
