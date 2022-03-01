@@ -262,13 +262,13 @@ function run_test(test_input, rtol; args...)
             n_zrst, upar_zrst, ppar_zrst, qpar_zrst, v_t_zrst, n_species, evolve_ppar = load_moments_data(fid)
 
             # load particle distribution function (pdf) data
-            f_vpazrst = load_pdf_data(fid)
+            f_vpavperpzrst = load_pdf_data(fid)
 
             close(fid)
             
             phi = phi_zrt[:,1,:]
             n, upar, ppar, qpar, v_t = n_zrst[:,1,:,:], upar_zrst[:,1,:,:], ppar_zrst[:,1,:,:], qpar_zrst[:,1,:,:], v_t_zrst[:,1,:,:]
-            f = f_vpazrst[:,:,1,:,:]
+            f = f_vpavperpzrst[:,1,:,1,:,:]
         end
 
         # Create coordinates
