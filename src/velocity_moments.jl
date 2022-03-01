@@ -433,7 +433,7 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, vperp, z, r, compo
                             #@. fnew_view -= vpa.scratch * (vpa.grid^2 - 0.5) * ppar_integral
                             # Until julia-1.8 is released, prefer x*x to x^2 to avoid
                             # extra allocations when broadcasting.
-                            @. fnew_view[:,ivperp] -= vpa.scratch * (vpa.grid * vpa.grid - 0.5) * ppar_integral
+                            @. fnew_view[:,ivperp] -= dummy.dummy_vpavperp[:,ivperp] * (vpa.grid * vpa.grid - 0.5) * ppar_integral
                         end
                     end
                 end
