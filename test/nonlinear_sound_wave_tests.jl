@@ -197,6 +197,30 @@ test_input_chebyshev_split_3_moments =
           Dict("run_name" => "chebyshev_pseudospectral_split_3_moments",
                "evolve_moments_parallel_pressure" => true))
 
+test_input_chebyshev_matrix_multiply = merge(
+    test_input_chebyshev,
+    Dict("run_name" => "chebyshev_pseudospectral_matrix_multiply",
+         "z_discretization" => "chebyshev_pseudospectral_matrix_multiply",
+         "vpa_discretization" => "chebyshev_pseudospectral_matrix_multiply"))
+
+test_input_chebyshev_matrix_multiply_split_1_moment = merge(
+    test_input_chebyshev_split_1_moment,
+    Dict("run_name" => "chebyshev_pseudospectral_matrix_multiply_split_1_moment",
+         "z_discretization" => "chebyshev_pseudospectral_matrix_multiply",
+         "vpa_discretization" => "chebyshev_pseudospectral_matrix_multiply"))
+
+test_input_chebyshev_matrix_multiply_split_2_moments = merge(
+    test_input_chebyshev_split_2_moments,
+    Dict("run_name" => "chebyshev_pseudospectral_matrix_multiply_split_2_moments",
+         "z_discretization" => "chebyshev_pseudospectral_matrix_multiply",
+         "vpa_discretization" => "chebyshev_pseudospectral_matrix_multiply"))
+
+test_input_chebyshev_matrix_multiply_split_3_moments = merge(
+    test_input_chebyshev_split_3_moments,
+    Dict("run_name" => "chebyshev_pseudospectral_matrix_multiply_split_3_moments",
+         "z_discretization" => "chebyshev_pseudospectral_matrix_multiply",
+         "vpa_discretization" => "chebyshev_pseudospectral_matrix_multiply"))
+
 
 # Not actually used in the tests, but needed for first argument of run_moment_kinetics
 to = TimerOutput()
@@ -368,17 +392,24 @@ function runtests()
 
         # Chebyshev pseudospectral
         # Benchmark data is taken from this run (Chebyshev with no splitting)
-        @testset "Chebyshev base" begin
-            run_test(test_input_chebyshev, 1.e-10)
+        @testset "Chebyshev base" for input ∈
+                (test_input_chebyshev, test_input_chebyshev_matrix_multiply)
+            run_test(input, 1.e-10)
         end
-        @testset "Chebyshev split 1" begin
-            run_test(test_input_chebyshev_split_1_moment, 1.e-3)
+        @testset "Chebyshev split 1" for input ∈
+                (test_input_chebyshev_split_1_moment,
+                 test_input_chebyshev_matrix_multiply_split_1_moment)
+            run_test(input, 1.e-3)
         end
-        @testset_skip "grids need shift/scale for collisions" "Chebyshev split 2" begin
-            run_test(test_input_chebyshev_split_2_moments, 1.e-3)
+        @testset_skip "grids need shift/scale for collisions" "Chebyshev split 2" for
+                input ∈ (test_input_chebyshev_split_2_moments,
+                         test_input_chebyshev_matrix_multiply_split_2_moments)
+            run_test(input, 1.e-3)
         end
-        @testset_skip "grids need shift/scale for collisions" "Chebyshev split 3" begin
-            run_test(test_input_chebyshev_split_3_moments, 1.e-3)
+        @testset_skip "grids need shift/scale for collisions" "Chebyshev split 3" for
+                input ∈ (test_input_chebyshev_split_3_moments,
+                         test_input_chebyshev_matrix_multiply_split_3_moments)
+            run_test(input, 1.e-3)
         end
     end
 end

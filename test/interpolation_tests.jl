@@ -26,7 +26,8 @@ function runtests()
     @testset "interpolation" verbose=use_verbose begin
         @testset "$discretization, $ntest, $nelement, $zlim" for
                 (discretization, rtol) ∈
-                    (("finite_difference", 1.e-5), ("chebyshev_pseudospectral", 1.e-8)),
+                    (("finite_difference", 1.e-5), ("chebyshev_pseudospectral", 1.e-8),
+                     ("chebyshev_pseudospectral_matrix_multiply", 1.e-8)),
                     ntest ∈ (3, 14), nelement ∈ (2, 8), zlim ∈ (L/2.0, L/5.0)
 
             # create the 'input' struct containing input info needed to create a coordinate
