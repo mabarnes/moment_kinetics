@@ -10,6 +10,7 @@ using ..array_allocation: allocate_float, allocate_int
 using ..calculus: derivative!
 using ..file_io: open_output_file
 using ..chebyshev: scaled_chebyshev_grid, setup_chebyshev_pseudospectral
+using ..lagrange: setup_lagrange_pseudospectral
 using ..quadrature: composite_simpson_weights
 using ..input_structs: advection_input
 
@@ -108,6 +109,13 @@ function define_coordinate(input, composition=nothing)
         spectral = setup_chebyshev_pseudospectral(coord)
         # obtain the local derivatives of the uniform grid with respect to the used grid
         derivative!(coord.duniform_dgrid, coord.uniform_grid, coord, spectral)
+    elseif input.discretization == "chebyshev_pseudospectral_matrix_multiply"
+        # create arrays needed for matrix-multiply pseudospectral treatment
+        scale_factor = 2.0 * coord.nelement / coord.L
+        #spectral = setup_lagrange_pseudospectral(coord.grid; scale_factor=scale_factor)
+        spectral = setup_lagrange_pseudospectral(coord.grid ./ scale_factor)
+        # obtain the local derivatives of the uniform grid with respect to the used grid
+        derivative!(coord.duniform_dgrid, coord.uniform_grid, coord, spectral)
     else
         # create dummy Bool variable to return in place of the above struct
         spectral = false
@@ -127,7 +135,8 @@ function init_grid(ngrid, nelement, n, L, imin, imax, igrid, discretization)
         grid[1] = 0
         wgts = allocate_float(n)
         wgts[1] = 1.0
-    elseif discretization == "chebyshev_pseudospectral"
+    elseif discretization ∈ ("chebyshev_pseudospectral",
+                             "chebyshev_pseudospectral_matrix_multiply")
         # initialize chebyshev grid defined on [-L/2,L/2]
         # with n grid points chosen to facilitate
         # the fast Chebyshev transform (aka the discrete cosine transform)

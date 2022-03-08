@@ -43,7 +43,7 @@ end
 """
 Create arrays for Lagrange polynomial operations
 """
-function setup_lagrange(collocation_points::Vector{mk_float}; scale_factor=nothing)
+function setup_lagrange_pseudospectral(collocation_points::Vector{mk_float}; scale_factor=nothing)
     if scale_factor === nothing
         return lagrange_info(collocation_points,
                              construct_derivative_matrix(collocation_points))
