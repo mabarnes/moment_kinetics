@@ -7,8 +7,9 @@ export equally_spaced_grid
 
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_int
+using ..calculus: derivative!
 using ..file_io: open_output_file
-using ..chebyshev: scaled_chebyshev_grid
+using ..chebyshev: scaled_chebyshev_grid, setup_chebyshev_pseudospectral
 using ..quadrature: composite_simpson_weights
 using ..input_structs: advection_input
 
@@ -95,10 +96,25 @@ function define_coordinate(input, composition=nothing)
     # struct containing the advection speed options/inputs for this coordinate
     advection = input.advection
 
-    return coordinate(input.name, n, input.ngrid, input.nelement, input.L, grid,
+    coord = coordinate(input.name, n, input.ngrid, input.nelement, input.L, grid,
         cell_width, igrid, ielement, imin, imax, input.discretization, input.fd_option,
         input.bc, wgts, uniform_grid, duniform_dgrid, scratch, copy(scratch),
         scratch_2d, advection)
+
+    if input.discretization == "chebyshev_pseudospectral"
+        # create arrays needed for explicit Chebyshev pseudospectral treatment in this
+        # coordinate and create the plans for the forward and backward fast Chebyshev
+        # transforms
+        spectral = setup_chebyshev_pseudospectral(coord)
+        # obtain the local derivatives of the uniform grid with respect to the used grid
+        derivative!(coord.duniform_dgrid, coord.uniform_grid, coord, spectral)
+    else
+        # create dummy Bool variable to return in place of the above struct
+        spectral = false
+        coord.duniform_dgrid .= 1.0
+    end
+
+    return coord, spectral
 end
 
 """
