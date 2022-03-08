@@ -95,6 +95,12 @@ test_input_chebyshev = merge(test_input_finite_difference,
                                   "vpa_ngrid" => 17,
                                   "vpa_nelement" => 10))
 
+test_input_chebyshev_matrix_multiply = merge(
+    test_input_chebyshev,
+    Dict("run_name" => "chebyshev_pseudospectral_matrix_multiply",
+         "z_discretization" => "chebyshev_pseudospectral_matrix_multiply",
+         "vpa_discretization" => "chebyshev_pseudospectral_matrix_multiply"))
+
 # Reference output interpolated onto a common set of points for comparing
 # different discretizations, taken from a Chebyshev run with z_grid=9,
 # z_nelement=8, nstep=40000, dt=0.00025
@@ -198,8 +204,10 @@ function runtests()
             run_test(test_input_finite_difference, nothing, 2.e-3)
         end
 
-        @testset "Chebyshev" begin
-            run_test(test_input_chebyshev,
+        @testset "Chebyshev$suffix" for (input, suffix) ∈
+                ((test_input_chebyshev, ""),
+                 (test_input_chebyshev_matrix_multiply, " matrix multiply"))
+            run_test(input,
                      [-0.423480349166609, 0.6167484253316418,
                       0.8149907943014488, 0.8228082604999473,
                       0.7425908033615429, -0.09876067560860455], 2.e-3)

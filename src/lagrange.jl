@@ -43,7 +43,7 @@ end
 """
 Create arrays for Lagrange polynomial operations
 """
-function setup_lagrange(collocation_points::Vector{mk_float}; scale_factor=nothing)
+function setup_lagrange_pseudospectral(collocation_points::Vector{mk_float}; scale_factor=nothing)
     if scale_factor === nothing
         return lagrange_info(collocation_points,
                              construct_derivative_matrix(collocation_points))
@@ -115,9 +115,24 @@ Calculate f' using a spectral polynomial method, implemented as a matrix multipl
 function elementwise_derivative!(coord, ff, lagrange::lagrange_info)
     df = coord.scratch_2d
 
-    # Calculate matrix-mulitply using LinearAlgebra (which should ultimately call
-    # LAPACK/BLAS)
-    mul!(df, lagrange.derivative, ff)
+    k = 0
+    # calculate the pseudospectral derivative on each element
+    @inbounds for j ∈ 1:coord.nelement
+        # imin is the minimum index on the full grid for this (jth) element
+        # the 'k' below accounts for the fact that the first element includes
+        # both boundary points, while each additional element shares a boundary
+        # point with neighboring elements.  the choice was made when defining
+        # coord.imin to exclude the lower boundary point in each element other
+        # than the first so that no point is double-counted
+        imin = coord.imin[j]-k
+        # imax is the maximum index on the full grid for this (jth) element
+        imax = coord.imax[j]
+        # Calculate matrix-mulitply using LinearAlgebra (which should ultimately call
+        # LAPACK/BLAS)
+        @views mul!(df[:,j], lagrange.derivative, ff[imin:imax])
+
+        k = 1
+    end
 
     return nothing
 end
@@ -132,11 +147,27 @@ physical coordinate.
 function elementwise_derivative!(coord, ff, lagrange::lagrange_info_scaled)
     df = coord.scratch_2d
 
-    # Calculate matrix-mulitply using LinearAlgebra (which should ultimately call
-    # LAPACK/BLAS)
-    mul!(df, lagrange.derivative, ff)
+    k = 0
+    # calculate the pseudospectral derivative on each element
+    @inbounds for j ∈ 1:coord.nelement
+        # imin is the minimum index on the full grid for this (jth) element
+        # the 'k' below accounts for the fact that the first element includes
+        # both boundary points, while each additional element shares a boundary
+        # point with neighboring elements.  the choice was made when defining
+        # coord.imin to exclude the lower boundary point in each element other
+        # than the first so that no point is double-counted
+        imin = coord.imin[j]-k
+        # imax is the maximum index on the full grid for this (jth) element
+        imax = coord.imax[j]
+        # Calculate matrix-mulitply using LinearAlgebra (which should ultimately call
+        # LAPACK/BLAS)
+        @views mul!(df[:,j], lagrange.derivative, ff[imin:imax])
+        # and multiply by scaling factor needed to go from scaled coordinate on [-1,1]
+        # to actual coordinate
+        @views df[:,j] .= lagrange.scale_factor
 
-    df .*= lagrange.scale_factor
+        k = 1
+    end
 
     return nothing
 end
@@ -150,7 +181,7 @@ Note: Lagrange derivative does not make use of upwinding information within each
 """
 function elementwise_derivative!(coord, ff, adv_fac,
                                  lagrange::Union{lagrange_info,lagrange_info_scaled})
-    return elementwise_derivative!(coord, ff, spectral)
+    return elementwise_derivative!(coord, ff, lagrange)
 end
 
 end # lagrange

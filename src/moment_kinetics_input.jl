@@ -515,6 +515,10 @@ function check_coordinate_input(coord, coord_name, io)
     if coord.discretization == "chebyshev_pseudospectral"
         print(io,">$coord_name.discretization = 'chebyshev_pseudospectral'.  ")
         println(io,"using a Chebyshev pseudospectral method in $coord_name.")
+    elseif coord.discretization == "chebyshev_pseudospectral_matrix_multiply"
+        print(io,">$coord_name.discretization = 'chebyshev_pseudospectral_matrix_multiply'.  ")
+        println(io,"using a Chebyshev pseudospectral method with matrix-multiply "
+                   * "implementation in $coord_name.")
     elseif coord.discretization == "finite_difference"
         println(io,">$coord_name.discretization = 'finite_difference', ",
             "and $coord_name.fd_option = ", coord.fd_option,
