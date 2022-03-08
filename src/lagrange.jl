@@ -77,7 +77,7 @@ function construct_derivative_matrix(collocation_points_in)::Matrix{mk_float}
 
     # Use high-precision arithmetic so rounding errors don't mess up our calculation of
     # matrix elements
-    collocation_points = lagrange_float.(collocation_points)
+    collocation_points = lagrange_float.(collocation_points_in)
 
     n = length(collocation_points)
 
