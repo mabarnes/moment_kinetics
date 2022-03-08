@@ -18,6 +18,10 @@ const lagrange_float = Float128
 
 """
 Information for operations with Lagrange polynomials
+
+This version is for the case when the collocation points are separated by 'physical'
+(possibly normalised) distances, so that no scale factor is required for the result of
+the derivative operation.
 """
 struct lagrange_info
     collocation_points::Vector{mk_float}
@@ -25,11 +29,29 @@ struct lagrange_info
 end
 
 """
+Information for operations with Lagrange polynomials
+
+This version is for the case when the collocation points are given on the interval
+[-1,1], so that a scale factor is required for the result of the derivative operation.
+"""
+struct lagrange_info_scaled
+    collocation_points::Vector{mk_float}
+    derivative::Matrix{mk_float}
+    scale_factor::mk_float
+end
+
+"""
 Create arrays for Lagrange polynomial operations
 """
-function setup_lagrange(collocation_points::Vector{mk_float})
-    return lagrange_info(collocation_points,
-                         construct_derivative_matrix(collocation_points))
+function setup_lagrange(collocation_points::Vector{mk_float}; scale_factor=nothing)
+    if scale_factor === nothing
+        return lagrange_info(collocation_points,
+                             construct_derivative_matrix(collocation_points))
+    else
+        return lagrange_info_scaled(collocation_points,
+                                    construct_derivative_matrix(collocation_points),
+                                    scale_factor)
+    end
 end
 
 """
@@ -96,6 +118,25 @@ function elementwise_derivative!(coord, ff, lagrange::lagrange_info)
     # Calculate matrix-mulitply using LinearAlgebra (which should ultimately call
     # LAPACK/BLAS)
     mul!(df, lagrange::derivative, ff)
+
+    return nothing
+end
+
+"""
+    elementwise_derivative!(coord, ff, lagrange::lagrange_info_scaled)
+
+Calculate f' using a spectral polynomial method, implemented as a matrix multiplication
+and including a scale factor to convert from a coordinate on the interval [-1,1] to the
+physical coordinate.
+"""
+function elementwise_derivative!(coord, ff, lagrange::lagrange_info_scaled)
+    df = coord.scratch_2d
+
+    # Calculate matrix-mulitply using LinearAlgebra (which should ultimately call
+    # LAPACK/BLAS)
+    mul!(df, lagrange::derivative, ff)
+
+    df .*= lagrange.scale_factor
 
     return nothing
 end
