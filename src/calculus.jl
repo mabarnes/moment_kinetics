@@ -5,53 +5,45 @@ module calculus
 export derivative!
 export integral
 
-using ..chebyshev: chebyshev_info, chebyshev_derivative!
-using ..finite_differences: derivative_finite_difference!
 using ..type_definitions: mk_float
 
 """
-Chebyshev transform f to get Chebyshev spectral coefficients and use them to calculate f'
+    elementwise_derivative!(coord, f, adv_fac, spectral)
+    elementwise_derivative!(coord, f, spectral)
+
+Generic function for element-by-element derivatives
+
+First signature, with `adv_fac`, calculates an upwind derivative, the second signature
+calculates a derivative without upwinding information.
+
+Result is stored in coord.scratch_2d.
 """
-function derivative!(df, f, coord, adv_fac, spectral::chebyshev_info)
-    # get the derivative at each grid point within each element and store in df
-    chebyshev_derivative!(coord.scratch_2d, f, spectral, coord)
+function elementwise_derivative! end
+
+"""
+    derivative!(df, f, coord, adv_fac, spectral)
+
+Upwinding derivative.
+"""
+function derivative!(df, f, coord, adv_fac, spectral)
+    # get the derivative at each grid point within each element and store in
+    # coord.scratch_2d
+    elementwise_derivative!(coord, f, adv_fac, spectral)
     # map the derivative from the elemental grid to the full grid;
     # at element boundaries, use the derivative from the upwind element.
     derivative_elements_to_full_grid!(df, coord.scratch_2d, coord, adv_fac)
 end
 
 """
-Chebyshev transform f to get Chebyshev spectral coefficients and use them to calculate f'
-"""
-function derivative!(df, f, coord, spectral::chebyshev_info)
-    # get the derivative at each grid point within each element and store in df
-    chebyshev_derivative!(coord.scratch_2d, f, spectral, coord)
-    # map the derivative from the elemental grid to the full grid;
-    # at element boundaries, use the average of the derivatives from neighboring elements.
-    derivative_elements_to_full_grid!(df, coord.scratch_2d, coord)
-end
+    derivative!(df, f, coord, spectral)
 
+Non-upwinding derivative.
 """
-calculate the derivative of f using finite differences, with particular scheme
-specifiied by coord.fd_option; stored in df
-"""
-function derivative!(df, f, coord, adv_fac, not_spectral::Bool)
-    # get the derivative at each grid point within each element and store in df
-    derivative_finite_difference!(coord.scratch_2d, f, coord.cell_width, adv_fac,
-        coord.bc, coord.fd_option, coord.igrid, coord.ielement)
-    # map the derivative from the elemental grid to the full grid;
-    # at element boundaries, use the derivative from the upwind element.
-    derivative_elements_to_full_grid!(df, coord.scratch_2d, coord, adv_fac)
-end
-
-"""
-calculate the derivative of f using centered differences; stored in df
-"""
-function derivative!(df, f, coord, not_spectral::Bool)
-    # get the derivative at each grid point within each element and store in df
-    derivative_finite_difference!(coord.scratch_2d, f, coord.cell_width,
-        coord.bc, "fourth_order_centered", coord.igrid, coord.ielement)
-    # map the derivative from the elemental grid to the full grid;
+function derivative!(df, f, coord, spectral)
+    # get the derivative at each grid point within each element and store in
+    # coord.scratch_2d
+    elementwise_derivative!(coord, f, spectral)
+    # map the derivative from the elem;ntal grid to the full grid;
     # at element boundaries, use the average of the derivatives from neighboring elements.
     derivative_elements_to_full_grid!(df, coord.scratch_2d, coord)
 end

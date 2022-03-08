@@ -4,7 +4,6 @@ module chebyshev
 
 export update_fcheby!
 export update_df_chebyshev!
-export chebyshev_derivative!
 export setup_chebyshev_pseudospectral
 export scaled_chebyshev_grid
 export chebyshev_spectral_derivative!
@@ -14,6 +13,7 @@ using FFTW
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_float, allocate_complex
 using ..clenshaw_curtis: clenshawcurtisweights
+import ..calculus: elementwise_derivative!
 import ..interpolation: interpolate_to_grid_1d
 
 """
@@ -93,8 +93,12 @@ function scaled_chebyshev_grid(ngrid, nelement, n, box_length, imin, imax)
 end
 
 """
+    elementwise_derivative!(coord, ff, chebyshev::chebyshev_info)
+
+Chebyshev transform f to get Chebyshev spectral coefficients and use them to calculate f'.
 """
-function chebyshev_derivative!(df, ff, chebyshev, coord)
+function elementwise_derivative!(coord, ff, chebyshev::chebyshev_info)
+    df = coord.scratch_2d
     # define local variable nelement for convenience
     nelement = coord.nelement
     # check array bounds
@@ -127,6 +131,16 @@ function chebyshev_derivative!(df, ff, chebyshev, coord)
         k = 1
     end
     return nothing
+end
+"""
+    elementwise_derivative!(coord, ff, adv_fac, spectral::chebyshev_info)
+
+Chebyshev transform f to get Chebyshev spectral coefficients and use them to calculate f'.
+
+Note: Chebyshev derivative does not make use of upwinding information within each element.
+"""
+function elementwise_derivative!(coord, ff, adv_fac, spectral::chebyshev_info)
+    return elementwise_derivative!(coord, ff, spectral)
 end
 
 """

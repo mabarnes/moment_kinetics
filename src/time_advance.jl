@@ -7,13 +7,13 @@ export time_advance!
 
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_float, allocate_shared_float
+using ..calculus: derivative!
 using ..communication: _block_synchronize
 using ..debugging
 using ..file_io: write_data_to_ascii, write_data_to_binary, debug_dump
 using ..looping
 using ..moment_kinetics_structs: scratch_pdf
 using ..chebyshev: setup_chebyshev_pseudospectral
-using ..chebyshev: chebyshev_derivative!
 using ..velocity_moments: update_moments!, reset_moments_status!
 using ..velocity_moments: enforce_moment_constraints!
 using ..velocity_moments: update_density!, update_upar!, update_ppar!, update_qpar!
@@ -150,7 +150,7 @@ function setup_time_advance!(pdf, vpa, z, r, composition, drive_input, moments,
         # and create the plans for the forward and backward fast Chebyshev transforms
         z_spectral = setup_chebyshev_pseudospectral(z)
         # obtain the local derivatives of the uniform z-grid with respect to the used z-grid
-        chebyshev_derivative!(z.duniform_dgrid, z.uniform_grid, z_spectral, z)
+        derivative!(z.duniform_dgrid, z.uniform_grid, z, z_spectral)
     else
         # create dummy Bool variable to return in place of the above struct
         z_spectral = false
@@ -162,7 +162,7 @@ function setup_time_advance!(pdf, vpa, z, r, composition, drive_input, moments,
         # and create the plans for the forward and backward fast Chebyshev transforms
         r_spectral = setup_chebyshev_pseudospectral(r)
         # obtain the local derivatives of the uniform r-grid with respect to the used r-grid
-        chebyshev_derivative!(r.duniform_dgrid, r.uniform_grid, r_spectral, r)
+        derivative!(r.duniform_dgrid, r.uniform_grid, r, r_spectral)
     else
         # create dummy Bool variable to return in place of the above struct
         r_spectral = false
@@ -174,7 +174,7 @@ function setup_time_advance!(pdf, vpa, z, r, composition, drive_input, moments,
         # and create the plans for the forward and backward fast Chebyshev transforms
         vpa_spectral = setup_chebyshev_pseudospectral(vpa)
         # obtain the local derivatives of the uniform vpa-grid with respect to the used vpa-grid
-        chebyshev_derivative!(vpa.duniform_dgrid, vpa.uniform_grid, vpa_spectral, vpa)
+        derivative!(vpa.duniform_dgrid, vpa.uniform_grid, vpa, vpa_spectral)
     else
         # create dummy Bool variable to return in place of the above struct
         vpa_spectral = false
