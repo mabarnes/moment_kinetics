@@ -5,7 +5,11 @@ Calculations done by matrix multiplication
 """
 module lagrange
 
+using LinearAlgebra
+
 using ..type_definitions: mk_float
+import ..calculus: elementwise_derivative!
+import ..interpolation: interpolate_to_grid_1d
 
 # Quadmath provides the Float128 type, which we use for increased precision when
 # pre-calculating matrix elements.
@@ -79,6 +83,33 @@ function construct_derivative_matrix(collocation_points_in)::Matrix{mk_float}
     end
 
     return derivative_matrix
+end
+
+"""
+    elementwise_derivative!(coord, ff, lagrange::lagrange_info)
+
+Calculate f' using a spectral polynomial method, implemented as a matrix multiplication.
+"""
+function elementwise_derivative!(coord, ff, lagrange::lagrange_info)
+    df = coord.scratch_2d
+
+    # Calculate matrix-mulitply using LinearAlgebra (which should ultimately call
+    # LAPACK/BLAS)
+    mul!(df, lagrange::derivative, ff)
+
+    return nothing
+end
+
+"""
+    elementwise_derivative!(coord, ff, adv_fac, lagrange::lagrange_info)
+
+Calculate f' using a spectral polynomial method, implemented as a matrix multiplication.
+
+Note: Lagrange derivative does not make use of upwinding information within each element.
+"""
+function elementwise_derivative!(coord, ff, adv_fac,
+                                 lagrange::Union{lagrange_info,lagrange_info_scaled})
+    return elementwise_derivative!(coord, ff, spectral)
 end
 
 end # lagrange
