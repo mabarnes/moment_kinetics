@@ -13,6 +13,7 @@ using FFTW
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_float, allocate_complex
 using ..clenshaw_curtis: clenshawcurtisweights
+using ..lagrange: setup_lagrange_pseudospectral
 import ..calculus: elementwise_derivative!
 import ..interpolation: interpolate_to_grid_1d
 
@@ -55,6 +56,24 @@ function setup_chebyshev_pseudospectral(coord)
     # return a structure containing the information needed to carry out
     # a 1D Chebyshev transform
     return chebyshev_info(fext, fcheby, dcheby, forward_transform, backward_transform)
+end
+
+"""
+create arrays needed for Chebyshev pseudospectral treatment using matrix-multiply methods
+"""
+function setup_chebyshev_pseudospectral_matrix_multiply(coord)
+    # Collocation points within an element on a grid scaled to a range of [-1,1].
+    # Need to reverse because the result of `chebyshevpoints()` is on [1,-1].
+    scaled_collocation_points = reverse(chebyshevpoints(coord.ngrid))
+
+    # Factor to scale between [-1,1] grid and physically-spaced (but possibly
+    # normalized) points
+    scale_factor = 2.0 * coord.nelement / coord.L
+
+    collocation_points = scaled_collocation_points ./ scale_factor
+
+    return setup_lagrange_pseudospectral(collocation_points)
+    #return setup_lagrange_pseudospectral(scaled_collocation_points; scale_factor=scale_factor)
 end
 
 """
