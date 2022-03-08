@@ -7,6 +7,11 @@ module lagrange
 
 using ..type_definitions: mk_float
 
+# Quadmath provides the Float128 type, which we use for increased precision when
+# pre-calculating matrix elements.
+using Quadmath
+const lagrange_float = Float128
+
 """
 Information for operations with Lagrange polynomials
 """
@@ -26,7 +31,7 @@ end
 """
 Construct matrix for a Lagrange polynomial derivative from collocation points.
 """
-function construct_derivative_matrix(collocation_points)
+function construct_derivative_matrix(collocation_points_in)::Matrix{mk_float}
     # The Lagrange interpolating polynomial through N points is
     #   ∑_i=1^N f_i l_i(x)
     # where
@@ -43,15 +48,19 @@ function construct_derivative_matrix(collocation_points)
     #   f'_i = ∑_j D_ij f_j
     # with
     #   D_ij = l'j(x_i)
+
+    # Use high-precision arithmetic so rounding errors don't mess up our calculation of
+    # matrix elements
+    collocation_points = lagrange_float.(collocation_points)
+
     n = length(collocation_points)
-    derivative_matrix = Matrix{mk_float}(undef, n, n)
 
     function l_prime(i, x)
-        result = 0.0
+        result = lagrange_float(0.0)
         for j ∈ 1:n
             j == i && continue
 
-            product = 1.0
+            product = lagrange_float(1.0)
             for k ∈ 1:n
                 (k == i || k == j) && continue
 
@@ -64,6 +73,7 @@ function construct_derivative_matrix(collocation_points)
         return result
     end
 
+    derivative_matrix = Matrix{mk_float}(undef, n, n)
     for i ∈ 1:n, j ∈ 1:n
         derivative_matrix[i,j] = l_prime(i, collocation_points[j])
     end
