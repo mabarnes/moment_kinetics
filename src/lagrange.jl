@@ -117,7 +117,7 @@ function elementwise_derivative!(coord, ff, lagrange::lagrange_info)
 
     # Calculate matrix-mulitply using LinearAlgebra (which should ultimately call
     # LAPACK/BLAS)
-    mul!(df, lagrange::derivative, ff)
+    mul!(df, lagrange.derivative, ff)
 
     return nothing
 end
@@ -134,7 +134,7 @@ function elementwise_derivative!(coord, ff, lagrange::lagrange_info_scaled)
 
     # Calculate matrix-mulitply using LinearAlgebra (which should ultimately call
     # LAPACK/BLAS)
-    mul!(df, lagrange::derivative, ff)
+    mul!(df, lagrange.derivative, ff)
 
     df .*= lagrange.scale_factor
 
