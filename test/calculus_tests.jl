@@ -14,7 +14,8 @@ function runtests()
         @testset "fundamental theorem of calculus" begin
             @testset "$discretization $ngrid $nelement" for
                     discretization ∈ ("finite_difference", "chebyshev_pseudospectral",
-                                      "chebyshev_pseudospectral_matrix_multiply"),
+                                      "chebyshev_pseudospectral_matrix_multiply",
+                                      "lagrange_uniform"),
                     ngrid ∈ (5,6,7,8,9,10), nelement ∈ (1, 2, 3, 4, 5)
 
                 if discretization == "finite_difference" && (ngrid - 1) * nelement % 2 == 1
