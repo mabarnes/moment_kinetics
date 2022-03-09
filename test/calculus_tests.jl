@@ -13,7 +13,8 @@ function runtests()
         println("calculus tests")
         @testset "fundamental theorem of calculus" begin
             @testset "$discretization $ngrid $nelement" for
-                    discretization ∈ ("finite_difference", "chebyshev_pseudospectral"),
+                    discretization ∈ ("finite_difference", "chebyshev_pseudospectral",
+                                      "chebyshev_pseudospectral_matrix_multiply"),
                     ngrid ∈ (5,6,7,8,9,10), nelement ∈ (1, 2, 3, 4, 5)
 
                 if discretization == "finite_difference" && (ngrid - 1) * nelement % 2 == 1
@@ -236,7 +237,9 @@ function runtests()
             end
         end
 
-        @testset "Chebyshev pseudospectral derivatives (4 argument), periodic" verbose=false begin
+        @testset "$cheb_implementation derivatives (4 argument), periodic" verbose=false for
+                cheb_implementation ∈ ("chebyshev_pseudospectral",
+                                       "chebyshev_pseudospectral_matrix_multiply")
             @testset "$nelement $ngrid" for (nelement, ngrid, rtol) ∈
                     (
                      (1, 5, 8.e-1),
@@ -406,7 +409,7 @@ function runtests()
                 # create the 'input' struct containing input info needed to create a
                 # coordinate
                 input = grid_input("coord", ngrid, nelement, L,
-                    "chebyshev_pseudospectral", fd_option, bc, adv_input)
+                    cheb_implementation, fd_option, bc, adv_input)
                 # create the coordinate struct 'x'
                 x, spectral = define_coordinate(input)
 
@@ -425,7 +428,9 @@ function runtests()
             end
         end
 
-        @testset "Chebyshev pseudospectral derivatives upwinding (5 argument), periodic" verbose=false begin
+        @testset "$cheb_implementation derivatives upwinding (5 argument), periodic" verbose=false for
+                cheb_implementation ∈ ("chebyshev_pseudospectral",
+                                       "chebyshev_pseudospectral_matrix_multiply")
             @testset "$nelement $ngrid" for (nelement, ngrid, rtol) ∈
                     (
                      (1, 5, 8.e-1),
@@ -547,7 +552,7 @@ function runtests()
                      (4, 26, 4.e-13),
                      (4, 27, 4.e-13),
                      (4, 28, 4.e-13),
-                     (4, 29, 4.e-13),
+                     (4, 29, 8.e-13),
                      (4, 30, 8.e-13),
                      (4, 31, 8.e-13),
                      (4, 32, 8.e-13),
@@ -595,7 +600,7 @@ function runtests()
                 # create the 'input' struct containing input info needed to create a
                 # coordinate
                 input = grid_input("coord", ngrid, nelement, L,
-                    "chebyshev_pseudospectral", fd_option, bc, adv_input)
+                    cheb_implementation, fd_option, bc, adv_input)
                 # create the coordinate struct 'x'
                 x, spectral = define_coordinate(input)
 
@@ -619,7 +624,9 @@ function runtests()
             end
         end
 
-        @testset "Chebyshev pseudospectral derivatives (4 argument), Neumann" verbose=false begin
+        @testset "$cheb_implementation derivatives (4 argument), Neumann" verbose=false for
+                cheb_implementation ∈ ("chebyshev_pseudospectral",
+                                       "chebyshev_pseudospectral_matrix_multiply")
             @testset "$nelement $ngrid" for bc ∈ ("constant", "zero"),
                     nelement ∈ (1:5), ngrid ∈ (3:33)
 
@@ -632,7 +639,7 @@ function runtests()
                 # create the 'input' struct containing input info needed to create a
                 # coordinate
                 input = grid_input("coord", ngrid, nelement, L,
-                    "chebyshev_pseudospectral", fd_option, bc, adv_input)
+                    cheb_implementation, fd_option, bc, adv_input)
                 # create the coordinate struct 'x'
                 x, spectral = define_coordinate(input)
 
@@ -657,14 +664,16 @@ function runtests()
                     # Note the error we might expect for a p=32 polynomial is probably
                     # something like p*(round-off) for x^p (?) so error on expected_df would
                     # be p*p*(round-off), or plausibly 1024*(round-off), so tolerance of
-                    # 2e-11 isn't unreasonable.
-                    @test isapprox(df, expected_df, rtol=2.0e-11, atol=2.0e-12,
+                    # 3e-11 isn't unreasonable.
+                    @test isapprox(df, expected_df, rtol=3.0e-11, atol=2.0e-12,
                                    norm=maxabs_norm)
                 end
             end
         end
 
-        @testset "Chebyshev pseudospectral derivatives upwinding (5 argument), Neumann" verbose=false begin
+        @testset "$cheb_implementation derivatives upwinding (5 argument), Neumann" verbose=false for
+                cheb_implementation ∈ ("chebyshev_pseudospectral",
+                                       "chebyshev_pseudospectral_matrix_multiply")
             @testset "$nelement $ngrid" for bc ∈ ("constant", "zero"),
                     nelement ∈ (1:5), ngrid ∈ (3:33)
 
@@ -677,7 +686,7 @@ function runtests()
                 # create the 'input' struct containing input info needed to create a
                 # coordinate
                 input = grid_input("coord", ngrid, nelement, L,
-                    "chebyshev_pseudospectral", fd_option, bc, adv_input)
+                    cheb_implementation, fd_option, bc, adv_input)
                 # create the coordinate struct 'x'
                 x, spectral = define_coordinate(input)
 
