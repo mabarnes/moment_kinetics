@@ -284,6 +284,36 @@ Note: implemented as a single generic function with a couple of conditional stat
 depending on the type of `lagrange`. These conditionals only depend on 'static' (i.e.
 compile-time) information, so should be resolved by the compiler with no run-time cost.
 Implementing like this avoids duplicated code.
+
+Algorithm note
+--------------
+
+The interpolation is currently implemented by directly evaluating the Lagrange
+polynomials. This will be O(n_new*n^2) where n_new=length(newgrid),
+n=length(lagrange.collocation_points). If performance profiling shows that this function
+is a significant run-time cost, it would be worth evaluating the performance/robustness
+trade-off offered by the alternatives discussed below.
+
+It might be quicker to evaluate by first doing a matrix multiplication to turn the
+function values into coefficients of either monomials (x^i) or Chebyshev polynomials
+(the matrix could be pre-calculated during setup), and then using those coefficients to
+evaluate the interpolated values. Using coefficients should be O(n^2) (for the matrix
+multiplication) plus O(n_new*n) (i.e. a vector operation for each point of newgrid),
+because the monomials can be evaluated simply (like z_pow_i *= z at each step of the
+loop) and the Chebyshev polynomials have a recursion relation that can be used (like in
+[chebyshev.chebyshev_interpolate_single_element](@ref)).
+
+However, the present version might be more robust - if the `newgrid` points are exactly
+on the original grid points, this implementation should have minimal rounding errors,
+because the contributions from all components f[j] at newgrid[i] that have j≠i will be
+multiplied by exactly 0.0.
+
+Note that there are cheaper methods for evaluating the Lagrange interpolation function
+(as described on the Wikipedia page), known as the 'barycentric form' and the 'second
+form or true form of the barycentric interpolation formula'. These should be O(n_new*n),
+skipping the matrix-multiplication O(n^2) cost of the monomial or Chebyshev methods
+suggested above. However, these formulas are bad numerically, because they involve
+dividing by (x - x_i), so produce `Inf` values when x==x_i.
 """
 function lagrange_interpolate_single_element(newgrid, f, j, coord, lagrange::T) where
         T <: Union{lagrange_info,scaled_lagrange_info}
@@ -326,67 +356,5 @@ function lagrange_interpolate_single_element(newgrid, f, j, coord, lagrange::T) 
 
     return result
 end
-
-### The following should 'work' but blows up if you try to evaluate at x=x_i
-#"""
-#"""
-#function lagrange_interpolate_single_element(newgrid, f, j, coord, lagrange::lagrange_info)
-#    # Array for the result
-#    result = similar(newgrid, mk_float)
-#
-#    # Need to transform newgrid values to a shifted z-coordinate associated with the
-#    # collocation points. Transform is a shift so that the element coordinate is
-#    # centered on 0.
-#    imin = j == 1 ? coord.imin[1] : coord.imin[j] - 1
-#    imax = coord.imax[j]
-#    shift = 0.5 * (coord.grid[imin] + coord.grid[imax])
-#
-#    for (i, x) ∈ enumerate(newgrid)
-#        z = x - shift
-#
-#        numerator = 0.0
-#        denominator = 0.0
-#        for k ∈ 1:length(f)
-#            factor = lagrange.barycentric_weights[k] / (z - lagrange.collocation_points[k])
-#            numerator += factor * f[k]
-#            denominator += factor
-#        end
-#
-#        result[i] = numerator / denominator
-#    end
-#
-#    return result
-#end
-#
-#"""
-#"""
-#function lagrange_interpolate_single_element(newgrid, f, j, coord, lagrange::scaled_lagrange_info)
-#    # Array for the result
-#    result = similar(newgrid, mk_float)
-#
-#    # Need to transform newgrid values to a scaled z-coordinate associated with the
-#    # collocation points. Transform is a shift and scale so that the element coordinate
-#    # goes from -1 to 1
-#    imin = j == 1 ? coord.imin[1] : coord.imin[j] - 1
-#    imax = coord.imax[j]
-#    shift = 0.5 * (coord.grid[imin] + coord.grid[imax])
-#    scale = 2.0 / (coord.grid[imax] - coord.grid[imin])
-#
-#    for (i, x) ∈ enumerate(newgrid)
-#        z = scale * (x - shift)
-#
-#        numerator = 0.0
-#        denominator = 0.0
-#        for k ∈ 1:length(f)
-#            factor = lagrange.barycentric_weights[k] / (z - lagrange.collocation_points[k])
-#            numerator += factor * f[k]
-#            denominator += factor
-#        end
-#
-#        result[i] = numerator / denominator
-#    end
-#
-#    return result
-#end
 
 end # lagrange
