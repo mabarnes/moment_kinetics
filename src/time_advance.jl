@@ -7,11 +7,11 @@ export time_advance!
 
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_float, allocate_shared_float
-using ..communication
 using ..communication: _block_synchronize
 using ..debugging
-using ..file_io: write_data_to_ascii, write_data_to_binary
+using ..file_io: write_data_to_ascii, write_data_to_binary, debug_dump
 using ..looping
+using ..moment_kinetics_structs: scratch_pdf
 using ..chebyshev: setup_chebyshev_pseudospectral
 using ..chebyshev: chebyshev_derivative!
 using ..velocity_moments: update_moments!, reset_moments_status!
@@ -33,16 +33,6 @@ using ..em_fields: setup_em_fields, update_phi!
 using ..semi_lagrange: setup_semi_lagrange
 
 @debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
-
-"""
-"""
-struct scratch_pdf{n_distribution, n_moment}
-    pdf::MPISharedArray{mk_float, n_distribution}
-    density::MPISharedArray{mk_float, n_moment}
-    upar::MPISharedArray{mk_float, n_moment}
-    ppar::MPISharedArray{mk_float, n_moment}
-    temp_z_s::MPISharedArray{mk_float, n_moment}
-end
 
 """
 """

@@ -163,7 +163,7 @@ function run_test(test_input, analytic_rtol, analytic_atol, expected_phi,
         run_moment_kinetics(to, input)
     end
 
-    if global_rank == 0
+    if global_rank[] == 0
         quietoutput() do
 
             # Load and analyse output
@@ -216,7 +216,7 @@ function runtests()
                       -0.10968680094355439, -0.10655932911687617, -0.10320743994056783,
                       -0.1065593291168768, -0.10968680094355476, -0.13595464200287433,
                       -0.18333202565716236, -0.28297424948587463, -0.42057177222762804,
-                      -0.6518856160147616, -0.8100630096349531], 1.e-14, 1.e-15)
+                      -0.6518856160147616, -0.8100630096349531], 5.e-9, 1.e-15)
         end
     end
 end

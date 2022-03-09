@@ -7,32 +7,18 @@ export update_phi!
 
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_shared_float
-using ..communication
 using ..communication: _block_synchronize
 using ..input_structs
 using ..looping
+using ..moment_kinetics_structs: em_fields_struct
 using ..velocity_moments: update_density!
-
-"""
-"""
-struct fields
-    # phi is the electrostatic potential
-    phi::MPISharedArray{mk_float,2}
-    # phi0 is the initial electrostatic potential
-    phi0::MPISharedArray{mk_float,2}
-    # if including an external forcing for phi, it is of the form
-    # phi_external = phi0*drive_amplitude*sinpi(t*drive_frequency)
-    force_phi::Bool
-    drive_amplitude::mk_float
-    drive_frequency::mk_float
-end
 
 """
 """
 function setup_em_fields(nz, nr, force_phi, drive_amplitude, drive_frequency)
     phi = allocate_shared_float(nz,nr)
     phi0 = allocate_shared_float(nz,nr)
-    return fields(phi, phi0, force_phi, drive_amplitude, drive_frequency)
+    return em_fields_struct(phi, phi0, force_phi, drive_amplitude, drive_frequency)
 end
 
 """
