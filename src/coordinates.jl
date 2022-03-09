@@ -11,7 +11,7 @@ using ..calculus: derivative!
 using ..file_io: open_output_file
 using ..chebyshev: scaled_chebyshev_grid, setup_chebyshev_pseudospectral,
                    setup_chebyshev_pseudospectral_matrix_multiply
-using ..lagrange: setup_lagrange_pseudospectral
+using ..lagrange: setup_lagrange_pseudospectral, lagrange_weights
 using ..quadrature: composite_simpson_weights
 using ..input_structs: advection_input
 
@@ -118,6 +118,10 @@ function define_coordinate(input, composition=nothing)
         #spectral = setup_lagrange_pseudospectral(coord.grid ./ scale_factor)
         # obtain the local derivatives of the uniform grid with respect to the used grid
         derivative!(coord.duniform_dgrid, coord.uniform_grid, coord, spectral)
+    elseif input.discretization == "lagrange_uniform"
+        # create arrays needed for Lagrange pseudospectral treatment on a uniform grid
+        spectral = setup_lagrange_pseudospectral(coord.grid[1:coord.ngrid])
+        coord.duniform_dgrid .= 1.0
     else
         # create dummy Bool variable to return in place of the above struct
         spectral = false
@@ -146,6 +150,9 @@ function init_grid(ngrid, nelement, n, L, imin, imax, igrid, discretization)
         # 'wgts' are the integration weights attached to each grid points
         # that are those associated with Clenshaw-Curtis quadrature
         grid, wgts = scaled_chebyshev_grid(ngrid, nelement, n, L, imin, imax)
+    elseif discretization == "lagrange_uniform"
+        grid = uniform_grid
+        wgts = lagrange_weights(uniform_grid, ngrid, nelement, n, L, imin, imax)
     elseif discretization == "finite_difference"
         # initialize equally spaced grid defined on [-L/2,L/2]
         grid = uniform_grid
