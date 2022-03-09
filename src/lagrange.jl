@@ -298,7 +298,11 @@ function lagrange_interpolate_single_element(newgrid, f, j, coord, lagrange::lag
         # Lagrange polynomials
         @. scratch = f * lagrange.barycentric_weights
         for k ∈ 1:length(f)
-            scratch[k] *= (z - lagrange.collocation_points[k])
+            factor = (z - lagrange.collocation_points[k])
+            for l ∈ 1:length(f)
+                l == k && continue
+                scratch[l] *= factor
+            end
         end
 
         result[i] = sum(scratch)
@@ -330,7 +334,11 @@ function lagrange_interpolate_single_element(newgrid, f, j, coord, lagrange::sca
         # Lagrange polynomials
         @. scratch = f * lagrange.barycentric_weights
         for k ∈ 1:length(f)
-            scratch[k] *= (z - lagrange.collocation_points[k])
+            factor = (z - lagrange.collocation_points[k])
+            for l ∈ 1:length(f)
+                l == k && continue
+                scratch[l] *= factor
+            end
         end
 
         result[i] = sum(scratch)
