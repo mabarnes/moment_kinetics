@@ -152,16 +152,30 @@ function upload_result(testtype::AbstractString,
 
             repo = get_updated_results_repo(config["upload"])
 
+            function header_string(nresults)
+                result = "Commit                                  | Machine                        | Date             "
+                for i ∈ 1:(nresults÷4)
+                    result *= "| Memory usage $i (B)   | Minimum runtime $i (s)| Median runtime $i (s) | Maximum runtime $i (s)"
+                end
+                result *= "\n"
+                return result
+            end
+
             # append results to file
             function append_to_file(filename, line, nresults)
                 if !isfile(filename)
-                    header_string = "Commit                                  | Machine                        | Date             "
-                    for i ∈ 1:(nresults÷4)
-                        header_string *= "| Memory usage $i (B)   | Minimum runtime $i (s)| Median runtime $i (s) | Maximum runtime $i (s)"
-                    end
-                    header_string *= "\n"
                     open(filename, "w") do io
-                        write(io, header_string)
+                        write(io, header_string(nresults))
+                        write(io, line)
+                    end
+                elseif length(split(readline(filename), "|")) < nresults
+                    # Need to re-write entire file in order to edit header line
+                    existing = readlines(filename, keep=true)
+                    open(filename, "w") do io
+                        write(io, header_string(nresults))
+                        for old_line in existing[2:end]
+                            write(io, old_line)
+                        end
                         write(io, line)
                     end
                 else

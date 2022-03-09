@@ -66,12 +66,21 @@ function split_machines(data; remove_duplicates::Bool=false)
             split_data[machine] = MachineData(ntests)
         end
 
+        function missing_to_nan(x)
+            if x === missing
+                return NaN
+            else
+                return x
+            end
+        end
+
         machine_data = split_data[machine]
         if !remove_duplicates || !(commit in machine_data.commits)
             push!(machine_data.commits, commit)
             push!(machine_data.dates, date)
             for i ∈ 1:ntests
-                append!(machine_data.data[i], [row[j] for j in 4 + 4*(i-1):4 + 4*i - 1])
+                append!(machine_data.data[i],
+                        [missing_to_nan(row[j]) for j in 4 + 4*(i-1):4 + 4*i - 1])
             end
         end
     end
@@ -372,11 +381,11 @@ function plot_strong_scaling_history(prefix, machine=nothing; show=false, save=t
 
     strong_scaling_plots = plot(;layout=(1, ntests), xaxis=:log, yaxis=:log,
                                  grid=true, minorgrid=true, legend=false,
-                                 size=(2400, 400))
+                                 size=(3600, 400))
     efficiency_plots = plot(;layout=(1, ntests), grid=true, minorgrid=true,
-                             legend=false, size=(2400, 400))
+                             legend=false, size=(3600, 400))
     actual_LB_plots = plot(;layout=(1, ntests), grid=true, minorgrid=true,
-                           legend=false, size=(2400, 400))
+                           legend=false, size=(3600, 400))
     function add_plot(commit; linewidth=1, show_ideal=false)
         to_plot = Array{Union{Float64,Missing},3}(undef, 4, ntests, length(nprocs))
         for (i, nproc) in enumerate(nprocs)
