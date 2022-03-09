@@ -7,6 +7,8 @@ See https://en.wikipedia.org/wiki/Lagrange_polynomial
 """
 module lagrange
 
+export setup_lagrange_pseudospectral, lagrange_weights
+
 using LinearAlgebra
 
 using ..array_allocation: allocate_float
@@ -127,6 +129,46 @@ function construct_derivative_matrix(collocation_points_in)::Matrix{mk_float}
     end
 
     return derivative_matrix
+end
+
+"""
+Construct integration weights using Lagrange polynomials
+"""
+function lagrange_weights(grid, ngrid, nelement, n, L, imin, imax)
+    weights = zeros(lagrange_float, n)
+
+    # Create weights for the first element
+    collocation_points = lagrange_float.(grid[1:ngrid])
+    for i ∈ 1:ngrid
+        # Need to integrate the i'th Lagrange polynomial
+        #   l_i(x) = Π_j=1,j≠i^N (x - x_j) / (x_i - x_j)
+        # Let the denominator be denoted by
+        #   d_i = Π_j=1,j≠i^N (x_i - x_j)
+        # The coefficient of x^(N - 1 - k) in d_i*l_i(x) is
+        #   {1, -∑_j=1,j≠i^N x_j, ..., (-1)^k*k!*∑_l1=1,l1≠i^N x_l1 ∑_l2=l1+1,l2≠i^N x_l2 ...∑_lk=l(k-1),lk≠i^N x_lk
+        # and the integral of x^(N-1-k) is
+        #   ∫_x0^xN x^k dx = [x^(N-k)/(N-k)]_x0^xN = (xN^(N-k) - x0^(N-k))/(N-k)
+        function sumfunc(level, k, lstart)
+            if level == k
+                return 1
+            end
+            result = lagrange_float(0.0)
+            for l ∈ lstart:ngrid
+                result += collocation_points[l] * sumfunc(level + 1, k, l + 1)
+            end
+            return result
+        end
+        for k ∈ 0:(ngrid - 1)
+            weights[i] += (
+                sumfunc(0, 0, 0) *
+                (collocation_points[ngrid]^(ngrid - k) -
+                 collocation_points[1]^(ngrid - k)) /
+                (ngrid - k)
+            )
+        end
+    end
+
+    return mk_float.(weights)
 end
 
 """
