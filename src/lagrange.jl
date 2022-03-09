@@ -277,43 +277,17 @@ function interpolate_to_grid_1d(newgrid, f, coord, lagrange::Union{lagrange_info
 end
 
 """
+    lagrange_interpolate_single_element(newgrid, f, j, coord, lagrange::lagrange_info)
+    lagrange_interpolate_single_element(newgrid, f, j, coord, lagrange::scaled_lagrange_info)
+
+Note: implemented as a single generic function with a couple of conditional statements
+depending on the type of `lagrange`. These conditionals only depend on 'static' (i.e.
+compile-time) information, so should be resolved by the compiler with no run-time cost.
+Implementing like this avoids duplicated code.
 """
-function lagrange_interpolate_single_element(newgrid, f, j, coord, lagrange::lagrange_info)
-    # Array for the result
-    result = similar(newgrid, mk_float)
+function lagrange_interpolate_single_element(newgrid, f, j, coord, lagrange::T) where
+        T <: Union{lagrange_info,scaled_lagrange_info}
 
-    scratch = lagrange.element_scratch
-
-    # Need to transform newgrid values to a shifted z-coordinate associated with the
-    # collocation points. Transform is a shift so that the element coordinate is
-    # centered on 0.
-    imin = j == 1 ? coord.imin[1] : coord.imin[j] - 1
-    imax = coord.imax[j]
-    shift = 0.5 * (coord.grid[imin] + coord.grid[imax])
-
-    for (i, x) ∈ enumerate(newgrid)
-        z = x - shift
-
-        # Note 'barycentric weights' are also give the x-independent denominators of the
-        # Lagrange polynomials
-        @. scratch = f * lagrange.barycentric_weights
-        for k ∈ 1:length(f)
-            factor = (z - lagrange.collocation_points[k])
-            for l ∈ 1:length(f)
-                l == k && continue
-                scratch[l] *= factor
-            end
-        end
-
-        result[i] = sum(scratch)
-    end
-
-    return result
-end
-
-"""
-"""
-function lagrange_interpolate_single_element(newgrid, f, j, coord, lagrange::scaled_lagrange_info)
     # Array for the result
     result = similar(newgrid, mk_float)
 
@@ -325,10 +299,16 @@ function lagrange_interpolate_single_element(newgrid, f, j, coord, lagrange::sca
     imin = j == 1 ? coord.imin[1] : coord.imin[j] - 1
     imax = coord.imax[j]
     shift = 0.5 * (coord.grid[imin] + coord.grid[imax])
-    scale = 2.0 / (coord.grid[imax] - coord.grid[imin])
+    if T === scaled_lagrange_info
+        scale = 2.0 / (coord.grid[imax] - coord.grid[imin])
+    end
 
     for (i, x) ∈ enumerate(newgrid)
-        z = scale * (x - shift)
+        if T === scaled_lagrange_info
+            z = scale * (x - shift)
+        else
+            z = x - shift
+        end
 
         # Note 'barycentric weights' are also give the x-independent denominators of the
         # Lagrange polynomials
