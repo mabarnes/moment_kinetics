@@ -159,15 +159,20 @@ function lagrange_weights(grid, ngrid, nelement, n, L, imin, imax)
             d_i *= (collocation_points[i] - collocation_points[j])
         end
 
+        cache = Dict{Tuple{Int64,Int64,Int64}, lagrange_float}()
         function sumfunc(k, level=0, lstart=1)
             if level == k
                 return 1
+            end
+            if (k, level, lstart) ∈ keys(cache)
+                return cache[(k, level, lstart)]
             end
             result = lagrange_float(0.0)
             for l ∈ lstart:ngrid
                 l == i && continue
                 result += collocation_points[l] * sumfunc(k, level + 1, l + 1)
             end
+            cache[(k, level, lstart)] = result
             return result
         end
         for k ∈ 0:(ngrid - 1)
