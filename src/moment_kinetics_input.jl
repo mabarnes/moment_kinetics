@@ -519,6 +519,9 @@ function check_coordinate_input(coord, coord_name, io)
         print(io,">$coord_name.discretization = 'chebyshev_pseudospectral_matrix_multiply'.  ")
         println(io,"using a Chebyshev pseudospectral method with matrix-multiply "
                    * "implementation in $coord_name.")
+    elseif coord.discretization == "lagrange_uniform"
+        print(io,">$coord_name.discretization = 'lagrange_uniform'.  ")
+        println(io,"using a Lagrange pseudospectral method with a uniform grid in $coord_name.")
     elseif coord.discretization == "finite_difference"
         println(io,">$coord_name.discretization = 'finite_difference', ",
             "and $coord_name.fd_option = ", coord.fd_option,
