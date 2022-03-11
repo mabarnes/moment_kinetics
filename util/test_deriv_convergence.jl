@@ -24,7 +24,7 @@ end
 discretization_list = ["finite_difference", "chebyshev_pseudospectral",
                        "chebyshev_pseudospectral_matrix_multiply", "lagrange_uniform"]
 
-p = plot(axis=:log)
+p = plot(yaxis=:log)
 ngrids = [n for n ∈ 8:40]
 
 for discretization ∈ discretization_list
