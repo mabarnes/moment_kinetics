@@ -5,7 +5,6 @@ include("setup.jl")
 using Base.Filesystem: tempname
 using TimerOutputs
 
-using moment_kinetics.chebyshev: setup_chebyshev_pseudospectral
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.load_data: open_netcdf_file, load_coordinate_data,
@@ -280,21 +279,11 @@ function run_test(test_input, rtol; args...)
                            z_L, test_input["z_discretization"], "",
                            "periodic", #test_input["z_bc"],
                            adv_input)
-        z = define_coordinate(input)
-        if test_input["z_discretization"] == "chebyshev_pseudospectral"
-            z_spectral = setup_chebyshev_pseudospectral(z)
-        else
-            z_spectral = false
-        end
+        z, z_spectral = define_coordinate(input)
         input = grid_input("coord", test_input["vpa_ngrid"], test_input["vpa_nelement"],
                            vpa_L, test_input["vpa_discretization"], "",
                            test_input["vpa_bc"], adv_input)
-        vpa = define_coordinate(input)
-        if test_input["vpa_discretization"] == "chebyshev_pseudospectral"
-            vpa_spectral = setup_chebyshev_pseudospectral(vpa)
-        else
-            vpa_spectral = false
-        end
+        vpa, vpa_spectral = define_coordinate(input)
 
         # Test against values interpolated onto 'expected' grid which is fairly coarse no we
         # do not have to save too much data in this file

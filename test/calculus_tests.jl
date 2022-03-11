@@ -4,20 +4,16 @@ include("setup.jl")
 
 using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.coordinates: define_coordinate
-using moment_kinetics.chebyshev: setup_chebyshev_pseudospectral
 using moment_kinetics.calculus: derivative!, integral
 
 using Random
-
-fd_fake_setup(x) = return false
 
 function runtests()
     @testset "calculus" verbose=use_verbose begin
         println("calculus tests")
         @testset "fundamental theorem of calculus" begin
-            @testset "$discretization $ngrid $nelement" for (discretization, setup_func) ∈
-                    (("finite_difference", fd_fake_setup),
-                     ("chebyshev_pseudospectral", setup_chebyshev_pseudospectral)),
+            @testset "$discretization $ngrid $nelement" for
+                    discretization ∈ ("finite_difference", "chebyshev_pseudospectral"),
                     ngrid ∈ (5,6,7,8,9,10), nelement ∈ (1, 2, 3, 4, 5)
 
                 if discretization == "finite_difference" && (ngrid - 1) * nelement % 2 == 1
@@ -41,11 +37,7 @@ function runtests()
                 input = grid_input("coord", ngrid, nelement, L,
                     discretization, fd_option, bc, adv_input)
                 # create the coordinate struct 'x'
-                x = define_coordinate(input)
-                # create arrays needed for Chebyshev pseudospectral treatment in x
-                # and create the plans for the forward and backward fast Chebyshev
-                # transforms
-                spectral = setup_func(x)
+                x, spectral = define_coordinate(input)
                 # create array for the function f(x) to be differentiated/integrated
                 f = Array{Float64,1}(undef, x.n)
                 # create array for the derivative df/dx
@@ -87,7 +79,7 @@ function runtests()
                 input = grid_input("coord", ngrid, nelement, L,
                     "finite_difference", fd_option, bc, adv_input)
                 # create the coordinate struct 'x'
-                x = define_coordinate(input)
+                x, spectral = define_coordinate(input)
 
                 # create array for the derivative df/dx and the expected result
                 df = Array{Float64,1}(undef, x.n)
@@ -129,7 +121,7 @@ function runtests()
                 input = grid_input("coord", ngrid, nelement, L,
                     "finite_difference", fd_option, bc, adv_input)
                 # create the coordinate struct 'x'
-                x = define_coordinate(input)
+                x, spectral = define_coordinate(input)
 
                 # create array for the derivative df/dx and the expected result
                 df = Array{Float64,1}(undef, x.n)
@@ -167,7 +159,7 @@ function runtests()
                 input = grid_input("coord", ngrid, nelement, L,
                     "finite_difference", fd_option, bc, adv_input)
                 # create the coordinate struct 'x'
-                x = define_coordinate(input)
+                x, spectral = define_coordinate(input)
 
                 # create array for the derivative df/dx and the expected result
                 df = Array{Float64,1}(undef, x.n)
@@ -213,7 +205,7 @@ function runtests()
                 input = grid_input("coord", ngrid, nelement, L,
                     "finite_difference", fd_option, bc, adv_input)
                 # create the coordinate struct 'x'
-                x = define_coordinate(input)
+                x, spectral = define_coordinate(input)
 
                 # create array for the derivative df/dx and the expected result
                 df = Array{Float64,1}(undef, x.n)
@@ -416,11 +408,7 @@ function runtests()
                 input = grid_input("coord", ngrid, nelement, L,
                     "chebyshev_pseudospectral", fd_option, bc, adv_input)
                 # create the coordinate struct 'x'
-                x = define_coordinate(input)
-                # create arrays needed for Chebyshev pseudospectral treatment in x
-                # and create the plans for the forward and backward fast Chebyshev
-                # transforms
-                spectral = setup_chebyshev_pseudospectral(x)
+                x, spectral = define_coordinate(input)
 
                 offset = randn(rng)
                 f = @. sinpi(2.0 * x.grid / L) + offset
@@ -609,11 +597,7 @@ function runtests()
                 input = grid_input("coord", ngrid, nelement, L,
                     "chebyshev_pseudospectral", fd_option, bc, adv_input)
                 # create the coordinate struct 'x'
-                x = define_coordinate(input)
-                # create arrays needed for Chebyshev pseudospectral treatment in x
-                # and create the plans for the forward and backward fast Chebyshev
-                # transforms
-                spectral = setup_chebyshev_pseudospectral(x)
+                x, spectral = define_coordinate(input)
 
                 offset = randn(rng)
                 f = @. sinpi(2.0 * x.grid / L) + offset
@@ -650,11 +634,7 @@ function runtests()
                 input = grid_input("coord", ngrid, nelement, L,
                     "chebyshev_pseudospectral", fd_option, bc, adv_input)
                 # create the coordinate struct 'x'
-                x = define_coordinate(input)
-                # create arrays needed for Chebyshev pseudospectral treatment in x
-                # and create the plans for the forward and backward fast Chebyshev
-                # transforms
-                spectral = setup_chebyshev_pseudospectral(x)
+                x, spectral = define_coordinate(input)
 
                 # test polynomials up to order ngrid-1
                 for n ∈ 0:ngrid-1
@@ -699,11 +679,7 @@ function runtests()
                 input = grid_input("coord", ngrid, nelement, L,
                     "chebyshev_pseudospectral", fd_option, bc, adv_input)
                 # create the coordinate struct 'x'
-                x = define_coordinate(input)
-                # create arrays needed for Chebyshev pseudospectral treatment in x
-                # and create the plans for the forward and backward fast Chebyshev
-                # transforms
-                spectral = setup_chebyshev_pseudospectral(x)
+                x, spectral = define_coordinate(input)
 
                 # test polynomials up to order ngrid-1
                 for n ∈ 0:ngrid-1

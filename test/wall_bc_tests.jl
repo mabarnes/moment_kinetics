@@ -8,7 +8,6 @@ include("setup.jl")
 using Base.Filesystem: tempname
 using TimerOutputs
 
-using moment_kinetics.chebyshev: setup_chebyshev_pseudospectral
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.interpolation: interpolate_to_grid_z
@@ -182,12 +181,7 @@ function run_test(test_input, expected_phi, tolerance; args...)
         input = grid_input("coord", test_input["z_ngrid"], test_input["z_nelement"], 1.0,
                            test_input["z_discretization"], "", test_input["z_bc"],
                            adv_input)
-        z = define_coordinate(input)
-        if test_input["z_discretization"] == "chebyshev_pseudospectral"
-            z_spectral = setup_chebyshev_pseudospectral(z)
-        else
-            z_spectral = false
-        end
+        z, z_spectral = define_coordinate(input)
 
         # Cross comparison of all discretizations to same benchmark
         phi_interp = interpolate_to_grid_z(cross_compare_points, phi[:, end], z, z_spectral)
