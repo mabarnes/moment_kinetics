@@ -130,6 +130,29 @@ test_input_chebyshev_matrix_multiply_split_3_moments = merge(
     Dict("z_discretization" => "chebyshev_pseudospectral_matrix_multiply",
          "vpa_discretization" => "chebyshev_pseudospectral_matrix_multiply"))
 
+test_input_lagrange_uniform = merge(test_input_finite_difference,
+                                    Dict("run_name" => "lagrange_uniform",
+                                         "z_discretization" => "lagrange_uniform",
+                                         "z_ngrid" => 9, "z_nelement" => 2,
+                                         "vpa_discretization" => "lagrange_uniform",
+                                         "vpa_ngrid" => 17,
+                                         "vpa_nelement" => 8))
+
+test_input_lagrange_uniform_split_1_moment =
+    merge(test_input_lagrange_uniform,
+          Dict("run_name" => "lagrange_uniform_split_1_moment",
+               "evolve_moments_density" => true))
+
+test_input_lagrange_uniform_split_2_moments =
+    merge(test_input_lagrange_uniform_split_1_moment,
+          Dict("run_name" => "lagrange_uniform_split_2_moments",
+               "evolve_moments_parallel_flow" => true))
+
+test_input_lagrange_uniform_split_3_moments =
+    merge(test_input_lagrange_uniform_split_2_moments,
+          Dict("run_name" => "lagrange_uniform_split_3_moments",
+               "evolve_moments_parallel_pressure" => true))
+
 
 # Not actually used in the tests, but needed for first argument of run_moment_kinetics
 to = TimerOutput()
@@ -718,6 +741,242 @@ function run_test_set_chebyshev_split_3_moments()
     end
 end
 
+function run_test_set_lagrange_uniform()
+    #n_i=n_n, T_e=1
+    @long run_test(test_input_lagrange_uniform, 2*π*1.4467, -2*π*0.6020,
+                   [-0.6941155980262039, -0.6940977032813103, -0.6940759796933667,
+                    -0.6940505149819431, -0.6940214119659553, -0.6939887881451088];
+                   charge_exchange_frequency=2*π*0.0)
+    run_test(test_input_lagrange_uniform, 2*π*1.4240, -2*π*0.6379,
+             [-0.6941155980262039, -0.6940977032813103, -0.6940759796933667,
+              -0.6940505149819431, -0.6940214119659553, -0.6939887881451088])
+    @long run_test(test_input_lagrange_uniform, 2*π*0.0, -2*π*0.3235,
+                   [-0.6941155980262039, -0.6940977032813103, -0.6940759796933667,
+                    -0.6940505149819431, -0.6940214119659553, -0.6939887881451088];
+                   charge_exchange_frequency=2*π*1.8)
+    @long run_test(test_input_lagrange_uniform, 2*π*0.0, -2*π*0.2963,
+                   [-0.6941155980262039, -0.6940977032813103, -0.6940759796933667,
+                    -0.6940505149819431, -0.6940214119659553, -0.6939887881451088];
+                   charge_exchange_frequency=2*π*2.0)
+
+    # n_i>>n_n T_e=1
+    @long run_test(test_input_lagrange_uniform, 2*π*1.4467, -2*π*0.6020,
+                   [-0.0010684224665919893, -0.0010505277216983934,
+                    -0.0010288041337547594, -0.0010033394223312585,
+                    -0.0009742364063434105, -0.0009416125854969064];
+                   initial_density1=0.9999, initial_density2=0.0001)
+    @long run_test(test_input_lagrange_uniform, 2*π*1.4467, -2*π*0.6020,
+                   [-0.0010684224665919893, -0.0010505277216983934, -0.0010288041337547594, -0.0010033394223312585, -0.0009742364063434105, -0.0009416125854969064]; initial_density1=0.9999, initial_density2=0.0001,
+                   charge_exchange_frequency=2*π*2.0)
+
+    # n_i<<n_n T_e=1
+    @long run_test(test_input_lagrange_uniform, 2*π*1.3954, -2*π*0.6815,
+                   [-9.211308789442441, -9.211290894697548, -9.211269171109604,
+                    -9.21124370639818, -9.211214603382192, -9.211181979561346];
+                   initial_density1=0.0001, initial_density2=0.9999)
+    @long run_test(test_input_lagrange_uniform, 2*π*0.0, -2*π*0.5112,
+                   [-9.211308789442441, -9.211290894697548, -9.211269171109604,
+                    -9.21124370639818, -9.211214603382192, -9.211181979561346];
+                   initial_density1=0.0001, initial_density2=0.9999,
+                   charge_exchange_frequency=2*π*2.0)
+
+    # n_i=n_n T_e=0.5
+    @long run_test(test_input_lagrange_uniform, 2*π*1.2671, -2*π*0.8033,
+                   [-0.34705779901310196, -0.34704885164065513, -0.3470379898466833,
+                    -0.3470252574909716, -0.3470107059829777, -0.3469943940725544], 30;
+                   T_e=0.5, nstep=1300, charge_exchange_frequency=2*π*0.0)
+    @long run_test(test_input_lagrange_uniform, 2*π*0.0, -2*π*0.2727,
+                   [-0.34705779901310196, -0.34704885164065513, -0.3470379898466833,
+                    -0.3470252574909716, -0.3470107059829777, -0.3469943940725544];
+                   T_e=0.5, charge_exchange_frequency=2*π*2.0)
+
+    # n_i=n_n T_e=4
+    @long run_test(test_input_lagrange_uniform, 2*π*1.9919, -2*π*0.2491,
+                   [-2.7764623921048157, -2.776390813125241, -2.7763039187734666,
+                    -2.7762020599277726, -2.7760856478638214, -2.775955152580435];
+                   T_e=4.0)
+    # CX=2*π*2.0 case with T_e=4 is too hard to converge, so skip
+end
+
+function run_test_set_lagrange_uniform_split_1_moment()
+    #n_i=n_n, T_e=1
+    run_test(test_input_lagrange_uniform_split_1_moment, 2*π*1.4467, -2*π*0.6020,
+             [-0.6941155980262039, -0.6940977032813103, -0.6940759796933667,
+              -0.6940505149819431, -0.6940214119659553, -0.6939887881451088];
+             charge_exchange_frequency=2*π*0.0)
+    run_test(test_input_lagrange_uniform_split_1_moment, 2*π*1.4240, -2*π*0.6379,
+             [-0.6941155980262039, -0.6940977032813103, -0.6940759796933667,
+              -0.6940505149819431, -0.6940214119659553, -0.6939887881451088])
+    run_test(test_input_lagrange_uniform_split_1_moment, 2*π*0.0, -2*π*0.3235,
+             [-0.6941155980262039, -0.6940977032813103, -0.6940759796933667,
+              -0.6940505149819431, -0.6940214119659553, -0.6939887881451088];
+             charge_exchange_frequency=2*π*1.8)
+    run_test(test_input_lagrange_uniform_split_1_moment, 2*π*0.0, -2*π*0.2963,
+             [-0.6941155980262039, -0.6940977032813103, -0.6940759796933667,
+              -0.6940505149819431, -0.6940214119659553, -0.6939887881451088];
+             charge_exchange_frequency=2*π*2.0)
+
+    # n_i>>n_n T_e=1
+    run_test(test_input_lagrange_uniform_split_1_moment, 2*π*1.4467, -2*π*0.6020,
+             [-0.0010684224665919893, -0.0010505277216983934, -0.0010288041337547594,
+              -0.0010033394223312585, -0.0009742364063434105, -0.0009416125854969064];
+             initial_density1=0.9999, initial_density2=0.0001)
+    run_test(test_input_lagrange_uniform_split_1_moment, 2*π*1.4467, -2*π*0.6020,
+             [-0.0010684224665919893, -0.0010505277216983934, -0.0010288041337547594,
+              -0.0010033394223312585, -0.0009742364063434105, -0.0009416125854969064];
+             initial_density1=0.9999, initial_density2=0.0001,
+             charge_exchange_frequency=2*π*2.0)
+
+    # n_i<<n_n T_e=1
+    run_test(test_input_lagrange_uniform_split_1_moment, 2*π*1.3954, -2*π*0.6815,
+             [-9.211308789442441, -9.211290894697548, -9.211269171109604,
+              -9.21124370639818, -9.211214603382192, -9.211181979561346];
+             initial_density1=0.0001, initial_density2=0.9999)
+    run_test(test_input_lagrange_uniform_split_1_moment, 2*π*0.0, -2*π*0.5112,
+             [-9.211308789442441, -9.211290894697548, -9.211269171109604,
+              -9.21124370639818, -9.211214603382192, -9.211181979561346];
+             initial_density1=0.0001, initial_density2=0.9999,
+             charge_exchange_frequency=2*π*2.0)
+
+    # n_i=n_n T_e=0.5
+    run_test(test_input_lagrange_uniform_split_1_moment, 2*π*1.2671, -2*π*0.8033,
+             [-0.34705779901310196, -0.34704885164065513, -0.3470379898466833,
+              -0.3470252574909716, -0.3470107059829777, -0.3469943940725544], 30;
+             T_e=0.5, nstep=1300, charge_exchange_frequency=2*π*0.0)
+    run_test(test_input_lagrange_uniform_split_1_moment, 2*π*0.0, -2*π*0.2727,
+             [-0.34705779901310196, -0.34704885164065513, -0.3470379898466833,
+              -0.3470252574909716, -0.3470107059829777, -0.3469943940725544]; T_e=0.5,
+             charge_exchange_frequency=2*π*2.0)
+
+    # n_i=n_n T_e=4
+    run_test(test_input_lagrange_uniform_split_1_moment, 2*π*1.9919, -2*π*0.2491,
+             [-2.7764623921048157, -2.776390813125241, -2.7763039187734666,
+              -2.7762020599277726, -2.7760856478638214, -2.775955152580435]; T_e=4.0)
+    # CX=2*π*2.0 case with T_e=4 is too hard to converge, so skip
+end
+
+function run_test_set_lagrange_uniform_split_2_moments()
+    #n_i=n_n, T_e=1
+    run_test(test_input_lagrange_uniform_split_2_moments, 2*π*1.4467, -2*π*0.6020,
+             [-0.6941155980262039, -0.6940977032813103, -0.6940759796933667,
+              -0.6940505149819431, -0.6940214119659553, -0.6939887881451088];
+             charge_exchange_frequency=2*π*0.0)
+    run_test(test_input_lagrange_uniform_split_2_moments, 2*π*1.4240, -2*π*0.6379,
+             [-0.6941155980262039, -0.6940977032813103, -0.6940759796933667,
+              -0.6940505149819431, -0.6940214119659553, -0.6939887881451088])
+    run_test(test_input_lagrange_uniform_split_2_moments, 2*π*0.0, -2*π*0.3235,
+             [-0.6941155980262039, -0.6940977032813103, -0.6940759796933667,
+              -0.6940505149819431, -0.6940214119659553, -0.6939887881451088];
+             charge_exchange_frequency=2*π*1.8)
+    run_test(test_input_lagrange_uniform_split_2_moments, 2*π*0.0, -2*π*0.2963,
+             [-0.6941155980262039, -0.6940977032813103, -0.6940759796933667,
+              -0.6940505149819431, -0.6940214119659553, -0.6939887881451088];
+             charge_exchange_frequency=2*π*2.0)
+
+    # n_i>>n_n T_e=1
+    run_test(test_input_lagrange_uniform_split_2_moments, 2*π*1.4467, -2*π*0.6020,
+             [-0.0010684224665919893, -0.0010505277216983934, -0.0010288041337547594,
+              -0.0010033394223312585, -0.0009742364063434105, -0.0009416125854969064];
+             initial_density1=0.9999, initial_density2=0.0001)
+    run_test(test_input_lagrange_uniform_split_2_moments, 2*π*1.4467, -2*π*0.6020,
+             [-0.0010684224665919893, -0.0010505277216983934, -0.0010288041337547594,
+              -0.0010033394223312585, -0.0009742364063434105, -0.0009416125854969064];
+             initial_density1=0.9999, initial_density2=0.0001,
+             charge_exchange_frequency=2*π*2.0)
+
+    # n_i<<n_n T_e=1
+    run_test(test_input_lagrange_uniform_split_2_moments, 2*π*1.3954, -2*π*0.6815,
+             [-9.211308789442441, -9.211290894697548, -9.211269171109604,
+              -9.21124370639818, -9.211214603382192, -9.211181979561346];
+             initial_density1=0.0001, initial_density2=0.9999)
+    run_test(test_input_lagrange_uniform_split_2_moments, 2*π*0.0, -2*π*0.5112,
+             [-9.211308789442441, -9.211290894697548, -9.211269171109604,
+              -9.21124370639818, -9.211214603382192, -9.211181979561346];
+             initial_density1=0.0001, initial_density2=0.9999,
+             charge_exchange_frequency=2*π*2.0)
+
+    # n_i=n_n T_e=0.5
+    run_test(test_input_lagrange_uniform_split_2_moments, 2*π*1.2671, -2*π*0.8033,
+             [-0.34706673733456106, -0.3470627566790802, -0.3470579059173919,
+              -0.347052193699157, -0.34704563020982493, -0.3470382271523149], 30;
+             T_e=0.5, nstep=1300, z_ngrid=150, vpa_ngrid=200,
+             charge_exchange_frequency=2*π*0.0)
+    run_test(test_input_lagrange_uniform_split_2_moments, 2*π*0.0, -2*π*0.2727,
+             [-0.34705779901310196, -0.34704885164065513, -0.3470379898466833,
+              -0.3470252574909716, -0.3470107059829777, -0.3469943940725544]; T_e=0.5,
+             charge_exchange_frequency=2*π*2.0)
+
+    # n_i=n_n T_e=4
+    run_test(test_input_lagrange_uniform_split_2_moments, 2*π*1.9919, -2*π*0.2491,
+             [-2.7764623921048157, -2.776390813125241, -2.7763039187734666,
+              -2.7762020599277726, -2.7760856478638214, -2.775955152580435]; T_e=4.0)
+    # CX=2*π*2.0 case with T_e=4 is too hard to converge, so skip
+end
+
+function run_test_set_lagrange_uniform_split_3_moments()
+    #n_i=n_n, T_e=1
+    @long run_test(test_input_lagrange_uniform_split_3_moments, 2*π*1.4467,
+                   -2*π*0.6020, [-0.6941155980262039, -0.6940977032813103,
+                                 -0.6940759796933667, -0.6940505149819431,
+                                 -0.6940214119659553, -0.6939887881451088];
+                   charge_exchange_frequency=2*π*0.0)
+    run_test(test_input_lagrange_uniform_split_3_moments, 2*π*1.4240, -2*π*0.6379,
+             [-0.6941155980262039, -0.6940977032813103, -0.6940759796933667,
+              -0.6940505149819431, -0.6940214119659553, -0.6939887881451088])
+    @long run_test(test_input_lagrange_uniform_split_3_moments, 2*π*0.0, -2*π*0.3235,
+                   [-0.6941155980262039, -0.6940977032813103, -0.6940759796933667,
+                    -0.6940505149819431, -0.6940214119659553, -0.6939887881451088];
+                   charge_exchange_frequency=2*π*1.8)
+    @long run_test(test_input_lagrange_uniform_split_3_moments, 2*π*0.0, -2*π*0.2963,
+                   [-0.6941155980262039, -0.6940977032813103, -0.6940759796933667,
+                    -0.6940505149819431, -0.6940214119659553, -0.6939887881451088];
+                   charge_exchange_frequency=2*π*2.0)
+
+    # n_i>>n_n T_e=1
+    @long run_test(test_input_lagrange_uniform_split_3_moments, 2*π*1.4467,
+                   -2*π*0.6020, [-0.0010684224665919893, -0.0010505277216983934,
+                                 -0.0010288041337547594, -0.0010033394223312585,
+                                 -0.0009742364063434105, -0.0009416125854969064];
+                   initial_density1=0.9999, initial_density2=0.0001)
+    @long run_test(test_input_lagrange_uniform_split_3_moments, 2*π*1.4467,
+                   -2*π*0.6020, [-0.0010684224665919893, -0.0010505277216983934,
+                                 -0.0010288041337547594, -0.0010033394223312585,
+                                 -0.0009742364063434105, -0.0009416125854969064];
+                   initial_density1=0.9999, initial_density2=0.0001,
+                   charge_exchange_frequency=2*π*2.0)
+
+    # n_i<<n_n T_e=1
+    @long run_test(test_input_lagrange_uniform_split_3_moments, 2*π*1.3954,
+                   -2*π*0.6815, [-9.211308789442441, -9.211290894697548,
+                                 -9.211269171109604, -9.21124370639818,
+                                 -9.211214603382192, -9.211181979561346];
+                   initial_density1=0.0001, initial_density2=0.9999)
+    @long run_test(test_input_lagrange_uniform_split_3_moments, 2*π*0.0, -2*π*0.5112,
+                   [-9.211308789442441, -9.211290894697548, -9.211269171109604,
+                    -9.21124370639818, -9.211214603382192, -9.211181979561346];
+                   initial_density1=0.0001, initial_density2=0.9999,
+                   charge_exchange_frequency=2*π*2.0)
+
+    # n_i=n_n T_e=0.5
+    @long run_test(test_input_lagrange_uniform_split_3_moments, 2*π*1.2671,
+                   -2*π*0.8033, [-0.34705779901310196, -0.34704885164065513,
+                                 -0.3470379898466833, -0.3470252574909716,
+                                 -0.3470107059829777, -0.3469943940725544], 30;
+                   T_e=0.5, nstep=1300, charge_exchange_frequency=2*π*0.0)
+    @long run_test(test_input_lagrange_uniform_split_3_moments, 2*π*0.0, -2*π*0.2727,
+                   [-0.34705779901310196, -0.34704885164065513, -0.3470379898466833,
+                    -0.3470252574909716, -0.3470107059829777, -0.3469943940725544];
+                   T_e=0.5, charge_exchange_frequency=2*π*2.0)
+
+    # n_i=n_n T_e=4
+    @long run_test(test_input_lagrange_uniform_split_3_moments, 2*π*1.9919,
+                   -2*π*0.2491, [-2.7764623921048157, -2.776390813125241,
+                                 -2.7763039187734666, -2.7762020599277726,
+                                 -2.7760856478638214, -2.775955152580435]; T_e=4.0)
+    # CX=2*π*2.0 case with T_e=4 is too hard to converge, so skip
+end
+
+
 function runtests()
     @testset "sound wave" verbose=use_verbose begin
         println("sound wave tests")
@@ -734,6 +993,13 @@ function runtests()
             run_test_set_chebyshev_split_1_moment()
             run_test_set_chebyshev_split_2_moments()
             run_test_set_chebyshev_split_3_moments()
+        end
+
+        @testset "Lagrange pseudospectral, uniform grid" begin
+            run_test_set_lagrange_uniform()
+            @long run_test_set_lagrange_uniform_split_1_moment()
+            @long run_test_set_lagrange_uniform_split_2_moments()
+            run_test_set_lagrange_uniform_split_3_moments()
         end
     end
 end
