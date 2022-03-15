@@ -12,9 +12,24 @@ function ionization_collisions!(f_out, fvec_in, moments, n_ion_species,
         n_neutral_species, vpa, z, r, composition, collisions, nz, dt)
 
     if moments.evolve_density
-        error("Ionization collisions not currently supported for anything other than the standard drift kinetic equation: Aborting.")
+		@loop_s is begin
+            # apply ionization collisions to all ion species
+            if is ∈ composition.ion_species_range
+                # for each ion species, obtain affect of charge exchange collisions
+                # with all of the neutral species
+                for isp ∈ composition.neutral_species_range
+                    @loop_r_z_vpa ir iz ivpa begin
+                        f_out[ivpa,iz,ir,is] +=
+                        dt*collisions.ionization*fvec_in.density[iz,ir,isp]*
+                        (fvec_in.pdf[ivpa,iz,ir,isp] - fvec_in.pdf[ivpa,iz,ir,is])
+                    end
+                end
+            end
+            # when working with the normalised distribution (pdf_unnorm / density),
+			# the ionisation collisions drop out of the neutral kinetic equation
+        end
     elseif collisions.constant_ionization_rate
-        # Oddly the test in test/harrisonthompson.jl matches the analitical
+        # Oddly the test in test/harrisonthompson.jl matches the analytical
         # solution (which assumes width=0.0) better with width=0.5 than with,
         # e.g., width=0.15. Possibly narrower widths would require more vpa
         # resolution, which then causes crashes due to overshoots giving
