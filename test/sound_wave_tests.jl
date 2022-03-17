@@ -79,12 +79,14 @@ test_input_finite_difference_split_1_moment =
 test_input_finite_difference_split_2_moments =
     merge(test_input_finite_difference_split_1_moment,
           Dict("run_name" => "finite_difference_split_2_moments",
-               "evolve_moments_parallel_flow" => true))
+               "evolve_moments_parallel_flow" => true, "vpa_ngrid" => 270,
+               "vpa_L" => 12.0))
 
 test_input_finite_difference_split_3_moments =
     merge(test_input_finite_difference_split_2_moments,
           Dict("run_name" => "finite_difference_split_3_moments",
-               "evolve_moments_parallel_pressure" => true))
+               "evolve_moments_parallel_pressure" => true, "vpa_ngrid" => 270,
+               "vpa_L" => 12.0))
 
 test_input_chebyshev = merge(test_input_finite_difference,
                              Dict("run_name" => "chebyshev_pseudospectral",
@@ -375,8 +377,7 @@ function run_test_set_finite_difference_split_2_moments()
     run_test(test_input_finite_difference_split_2_moments, 2*π*1.2671, -2*π*0.8033,
              [-0.34706673733456106, -0.3470627566790802, -0.3470579059173919,
               -0.347052193699157, -0.34704563020982493, -0.3470382271523149], 30;
-             T_e=0.5, nstep=1300, z_ngrid=150, vpa_ngrid=200,
-             charge_exchange_frequency=2*π*0.0)
+             T_e=0.5, nstep=1300, z_ngrid=150, charge_exchange_frequency=2*π*0.0)
     run_test(test_input_finite_difference_split_2_moments, 2*π*0.0, -2*π*0.2727,
              [-0.34705779901310196, -0.34704885164065513, -0.3470379898466833,
               -0.3470252574909716, -0.3470107059829777, -0.3469943940725544]; T_e=0.5,

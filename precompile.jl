@@ -5,7 +5,7 @@ Pkg.activate(".")
 
 using PackageCompiler
 
-packages = [:moment_kinetics, :PackageCompiler, :ArgParse, :Combinatorics, :DelimitedFiles, :FFTW, :Glob, :IJulia, :Interpolations, :LinearAlgebra, :LsqFit, :MPI, :NaturalSort, :NCDatasets, :OrderedCollections, :Plots, :Primes, :Roots, :SHA, :SpecialFunctions, :Statistics, :TOML, :TimerOutputs]
+packages = [:moment_kinetics, :PackageCompiler, :ArgParse, :Combinatorics, :DelimitedFiles, :FFTW, :Glob, :IJulia, :LinearAlgebra, :LsqFit, :MPI, :NaturalSort, :NCDatasets, :OrderedCollections, :Plots, :Primes, :Roots, :SHA, :SpecialFunctions, :Statistics, :TOML, :TimerOutputs]
 
 # Create the sysimage 'moment_kinetics.so' in the base moment_kinetics source directory
 # with both moment_kinetics and the dependencies listed above precompiled.
