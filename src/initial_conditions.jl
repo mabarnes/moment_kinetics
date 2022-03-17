@@ -30,14 +30,14 @@ end
 creates the normalised pdf and the velocity-space moments and populates them
 with a self-consistent initial condition
 """
-function init_pdf_and_moments(vpa, z, r, composition, species, n_rk_stages, evolve_moments)
+function init_pdf_and_moments(vpa, z, r, composition, species, n_rk_stages, evolve_moments, ionization)
     # define the n_species variable for convenience
     n_species = composition.n_species
     # create the 'moments' struct that contains various v-space moments and other
     # information related to these moments.
     # the time-dependent entries are not initialised.
     
-    moments = create_moments(z.n, r.n, n_species, evolve_moments)
+    moments = create_moments(z.n, r.n, n_species, evolve_moments, ionization, z.bc)
     @serial_region begin
         # initialise the density profile
         init_density!(moments.dens, z, r, species, n_species)

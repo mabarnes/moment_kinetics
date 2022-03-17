@@ -37,6 +37,10 @@ mutable struct moments
     dens_updated::Vector{Bool}
     # flag that indicates if the density should be evolved via continuity equation
     evolve_density::Bool
+    # flag that indicates if particle number should be conserved for each species
+    # effects like ionisation or net particle flux from the domain would lead to
+    # non-conservation
+    particle_number_conserved::Array{Bool,1}
     # flag that indicates if exact particle conservation should be enforced
     enforce_conservation::Bool
     # this is the parallel flow
@@ -77,7 +81,7 @@ end
 
 """
 """
-function create_moments(nz, nr, n_species, evolve_moments)
+function create_moments(nz, nr, n_species, evolve_moments, ionization, z_bc)
     # allocate array used for the particle density
     density = allocate_shared_float(nz, nr, n_species)
     # allocate array of Bools that indicate if the density is updated for each species
@@ -108,8 +112,19 @@ function create_moments(nz, nr, n_species, evolve_moments)
             vpa_norm_fac .= 1.0
         end
     end
+    # allocate array of Bools that indicate if particle number for each species should be conserved
+    particle_number_conserved = allocate_bool(n_species)
+    # by default, assumption is that particle number should be conserved for each species
+    particle_number_conserved .= true
+    # if ionization collisions are included or wall BCs are enforced,
+    # then particle number is not conserved within each species
+    if abs(ionization) > 0.0 || z_bc == "wall"
+        particle_number_conserved .= false
+    end
+
     # return struct containing arrays needed to update moments
-    return moments(density, density_updated, evolve_moments.density, evolve_moments.conservation,
+    return moments(density, density_updated, evolve_moments.density, particle_number_conserved,
+        evolve_moments.conservation,
         parallel_flow, parallel_flow_updated, evolve_moments.parallel_flow,
         parallel_pressure, parallel_pressure_updated, evolve_moments.parallel_pressure,
         parallel_heat_flux, parallel_heat_flux_updated, thermal_speed, vpa_norm_fac)
