@@ -246,20 +246,20 @@ end
 enforce boundary conditions in vpa and z on the evolved pdf;
 also enforce boundary conditions in z on all separately evolved velocity space moments of the pdf
 """
-function enforce_boundary_conditions!(fvec_out, vpa_bc, z_bc, vpa, z, r, vpa_adv::T1, z_adv::T2, composition) where {T1, T2}
+function enforce_boundary_conditions!(fvec_out, fvec_in, moments, vpa_bc, z_bc, vpa, z, r, vpa_adv::T1, z_adv::T2, composition) where {T1, T2}
     @loop_s_r_z is ir iz begin
         # enforce the vpa BC
         @views enforce_vpa_boundary_condition_local!(fvec_out.pdf[:,iz,ir,is], vpa_bc, vpa_adv[is].upwind_idx[iz,ir],
                                                      vpa_adv[is].downwind_idx[iz,ir])
     end
     begin_s_r_vpa_region()
-    @views enforce_z_boundary_condition!(fvec_out.pdf, z_bc, z_adv, vpa, r, composition)
+    @views enforce_z_boundary_condition!(fvec_out.pdf, fvec_in.density, moments, z_bc, z_adv, vpa, r, composition)
 end
 
 """
 enforce boundary conditions on f in z
 """
-function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, r, composition) where T
+function enforce_z_boundary_condition!(f, density, moments, bc::String, adv::T, vpa, r, composition) where T
     # define n_species variable for convenience
     n_species = composition.n_species
     # define nvpa variable for convenience
@@ -310,15 +310,31 @@ function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, r, compositio
                     wall_flux_L = 0.0
                     # include the contribution to the wall fluxes due to species with index 'is'
                     for is ∈ 1:composition.n_ion_species
-                            @views wall_flux_0 += (sqrt(composition.mn_over_mi) *
-                                                   integrate_over_negative_vpa(abs.(vpa.grid) .* f[:,1,ir,is], vpa.grid, vpa.wgts, vpa.scratch))
-                            @views wall_flux_L += (sqrt(composition.mn_over_mi) *
-                                                   integrate_over_positive_vpa(abs.(vpa.grid) .* f[:,end,ir,is], vpa.grid, vpa.wgts, vpa.scratch))
+		        normfac_0 = sqrt(composition.mn_over_mi)
+                        normfac_L = normfac_0
+                        # account for extra normalisation factors if evolving density separately from pdf
+                        if moments.evolve_density
+                            normfac_0 = normfac_0*density[1,ir,is]
+                            normfac_L = normfac_L*density[end,ir,is]
+                        end
+                        @views wall_flux_0 += (normfac_0 *
+                                               integrate_over_negative_vpa(abs.(vpa.grid) .* f[:,1,ir,is], vpa.grid, vpa.wgts, vpa.scratch))
+                        @views wall_flux_L += (normfac_L *
+                                               integrate_over_positive_vpa(abs.(vpa.grid) .* f[:,end,ir,is], vpa.grid, vpa.wgts, vpa.scratch))
                     end
                     for isn ∈ 1:composition.n_neutral_species
-                            is = isn + composition.n_ion_species
-                            @views wall_flux_0 += integrate_over_negative_vpa(abs.(vpa.grid) .* f[:,1,ir,is], vpa.grid, vpa.wgts, vpa.scratch)
-                            @views wall_flux_L += integrate_over_positive_vpa(abs.(vpa.grid) .* f[:,end,ir,is], vpa.grid, vpa.wgts, vpa.scratch)
+                        is = isn + composition.n_ion_species
+                        normfac_0 = 1.0
+                        normfac_L = 1.0
+                        # account for extra normalisation factors if evolving density separately from pdf
+                        if moments.evolve_density
+                            normfac_0 = normfac_0*density[1,ir,is]
+                            normfac_L = normfac_L*density[end,ir,is]
+                        end
+                        @views wall_flux_0 += (normfac_0 *
+                                               integrate_over_negative_vpa(abs.(vpa.grid) .* f[:,1,ir,is], vpa.grid, vpa.wgts, vpa.scratch))
+                        @views wall_flux_L += (normfac_L *
+                                               integrate_over_positive_vpa(abs.(vpa.grid) .* f[:,end,ir,is], vpa.grid, vpa.wgts, vpa.scratch))
                     end
                     # NB: need to generalise to more than one ion species
                     # get the Knudsen cosine distribution
@@ -331,13 +347,19 @@ function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, r, compositio
                     @. vpa.scratch /= tmp
                     for isn ∈ 1:composition.n_neutral_species
                         is = isn + composition.n_ion_species
+                        normfac_0 = 1.0
+                        normfac_L = 1.0
+                        if moments.evolve_density
+                            normfac_0 = 1.0 / density[1,ir,is]
+                            normfac_L = 1.0 / density[end,ir,is]
+                        end
                         for ivpa ∈ 1:nvpa
                             # no parallel BC should be enforced for vpa = 0
                             if abs(vpa.grid[ivpa]) > zero
                                 if adv[is].upwind_idx[ivpa,ir] == 1
-                                    f[ivpa,1,ir,is] = wall_flux_0 * vpa.scratch[ivpa]
+                                    f[ivpa,1,ir,is] = wall_flux_0 * vpa.scratch[ivpa] * normfac_0
                                 else
-                                    f[ivpa,end,ir,is] = wall_flux_L * vpa.scratch[ivpa]
+                                    f[ivpa,end,ir,is] = wall_flux_L * vpa.scratch[ivpa] * normfac_L
                                 end
                             end
                         end
