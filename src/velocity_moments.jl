@@ -362,26 +362,40 @@ end
 """
 """
 function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, r, composition, moments, dummy_sr)
-    #global @. dens_hist += fvec_old.density
-    #global n_hist += 1
-
     # pre-calculate avgdens_ratio so that we don't read fvec_new.density[:,is] on every
     # process in the next loop - that would be an error because different processes
     # write to fvec_new.density[:,is]
     # This loop needs to be @loop_s_r because it fills the (not-shared)
     # dummy_sr buffer to be used within the @loop_s_r below, so the values
     # of is looped over by this process need to be the same.
-    @loop_s_r is ir begin
-        @views @. z.scratch = fvec_old.density[:,ir,is] - fvec_new.density[:,ir,is]
-        @views dummy_sr[ir,is] = integral(z.scratch, z.wgts)/integral(fvec_old.density[:,ir,is], z.wgts)
+    if moments.particle_number_conserved
+    	@loop_s_r is ir begin
+            @views @. z.scratch = fvec_old.density[:,ir,is] - fvec_new.density[:,ir,is]
+            @views dummy_sr[ir,is] = integral(z.scratch, z.wgts)/integral(fvec_old.density[:,ir,is], z.wgts)
+	end
     end
     # Need to call _block_synchronize() even though loop type does not change because
     # all spatial ranks read fvec_new.density, but it will be written below.
     _block_synchronize()
 
     @loop_s is begin
+        # add a small correction to the density for each species to ensure that
+        # that particle number is conserved if it should be;
+        # ionisation collisions and net particle flux out of the domain due to, e.g.,
+        # a wall BC break particle conservation, in which cases it should not be enforced.
+        if moments.particle_number_conserved[is]
+            @loop_r ir begin
+                avgdens_ratio = dummy_sr[ir,is]
+                @loop_z iz begin
+                    # update the density with the above factor to ensure particle conservation
+                    fvec_new.density[iz,is] += fvec_old.density[iz,is] * avgdens_ratio
+                    # update the thermal speed, as the density has changed
+                    moments.vth[iz,is] = sqrt(2.0*fvec_new.ppar[iz,is]/fvec_new.density[iz,is])
+                end
+            end
+        end
         @loop_r ir begin
-            avgdens_ratio = dummy_sr[ir,is]
+#            avgdens_ratio = dummy_sr[ir,is]
             @loop_z iz begin
                 # Create views once to save overhead
                 fnew_view = @view(fvec_new.pdf[:,iz,ir,is])
@@ -417,14 +431,11 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, r, composition,
                         @. fnew_view -= vpa.scratch * (vpa.grid * vpa.grid - 0.5) * ppar_integral
                     end
                 end
-                fvec_new.density[iz,ir,is] += fvec_old.density[iz,ir,is] * avgdens_ratio
-                # update the thermal speed, as the density has changed
-                moments.vth[iz,ir,is] = sqrt(2.0*fvec_new.ppar[iz,ir,is]/fvec_new.density[iz,ir,is])
+ #               fvec_new.density[iz,ir,is] += fvec_old.density[iz,ir,is] * avgdens_ratio
+ #               # update the thermal speed, as the density has changed
+ #               moments.vth[iz,ir,is] = sqrt(2.0*fvec_new.ppar[iz,ir,is]/fvec_new.density[iz,ir,is])
             end
         end
-        #global tmpsum1 += avgdens_ratio
-        #@views avgdens_ratio2 = integral(fvec_old.density[:,is] .- fvec_new.density[:,is], z.wgts)#/integral(fvec_old.density[:,is], z.wgts)
-        #global tmpsum2 += avgdens_ratio2
     end
     # the pdf, density and thermal speed have been changed so the corresponding parallel heat flux must be updated
     moments.qpar_updated .= false
