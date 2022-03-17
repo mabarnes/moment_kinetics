@@ -1,5 +1,7 @@
 # Getting started
 
+The full documentation is online at [https://mabarnes.github.io/moment_kinetics](https://mabarnes.github.io/moment_kinetics).
+
 ## Basics
 0) Ensure that the Julia version is >= 1.7.0 by doing
     ```
