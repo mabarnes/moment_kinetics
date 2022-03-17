@@ -16,6 +16,7 @@ using ..velocity_moments: update_moments!, reset_moments_status!
 using ..velocity_moments: enforce_moment_constraints!
 using ..velocity_moments: update_density!, update_upar!, update_ppar!, update_qpar!
 using ..initial_conditions: enforce_z_boundary_condition!, enforce_boundary_conditions!
+using ..initial_conditions: enforce_z_boundary_condition_moments!
 using ..initial_conditions: enforce_vpa_boundary_condition!
 using ..advection: setup_advection, update_boundary_indices!
 using ..z_advection: update_speed_z!, z_advection!
@@ -139,6 +140,9 @@ function setup_time_advance!(pdf, vpa, z, r, z_spectral, composition, drive_inpu
     end
     # enforce prescribed boundary condition in z on the distribution function f
     @views enforce_z_boundary_condition!(pdf.unnorm, moments.dens, moments, z.bc, z_advect, vpa, r, composition)
+    # enforce prescribed boundary condition in z on the velocity space moments of f
+    @views enforce_z_boundary_condition_moments!(moments.dens, moments, z.bc)
+    
     if z.bc != "wall" || composition.n_neutral_species == 0
         begin_serial_region()
     end

@@ -254,6 +254,9 @@ function enforce_boundary_conditions!(fvec_out, fvec_in, moments, vpa_bc, z_bc, 
     end
     begin_s_r_vpa_region()
     @views enforce_z_boundary_condition!(fvec_out.pdf, fvec_in.density, moments, z_bc, z_adv, vpa, r, composition)
+    # enforce the z BC on the evolved velocity space moments of the pdf
+    @views enforce_z_boundary_condition_moments!(fvec_out.density, moments, z_bc)
+
 end
 
 """
@@ -370,6 +373,25 @@ function enforce_z_boundary_condition!(f, density, moments, bc::String, adv::T, 
     end
 end
 
+"""
+enforce the z boundary condition on the evolved velocity space moments of f
+"""
+function enforce_z_boundary_condition_moments!(density, moments, bc::String)
+    # TODO: parallelise
+    @serial_region begin
+        # enforce z boundary condition on density if it is evolved separately from f
+    	if moments.evolve_density
+            # TODO: extend to 'periodic' BC case, as this requires further code modifications to be consistent
+            # with finite difference derivatives (should be fine for Chebyshev)
+            if bc == "wall"
+                @loop_s_r is ir begin
+                    density[1,ir,is] = 0.5*(density[1,ir,is] + density[end,ir,is])
+                    density[end,ir,is] = density[1,ir,is]
+            	end
+            end
+        end
+    end
+end
 """
 impose the prescribed vpa boundary condition on f
 at every z grid point
