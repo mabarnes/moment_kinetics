@@ -388,9 +388,9 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, r, composition,
                 avgdens_ratio = dummy_sr[ir,is]
                 @loop_z iz begin
                     # update the density with the above factor to ensure particle conservation
-                    fvec_new.density[iz,is] += fvec_old.density[iz,is] * avgdens_ratio
+                    fvec_new.density[iz,ir,is] += fvec_old.density[iz,ir,is] * avgdens_ratio
                     # update the thermal speed, as the density has changed
-                    moments.vth[iz,is] = sqrt(2.0*fvec_new.ppar[iz,is]/fvec_new.density[iz,is])
+                    moments.vth[iz,ir,is] = sqrt(2.0*fvec_new.ppar[iz,ir,is]/fvec_new.density[iz,ir,is])
                 end
             end
         end
