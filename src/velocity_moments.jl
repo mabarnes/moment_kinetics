@@ -368,9 +368,9 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, r, composition,
     # This loop needs to be @loop_s_r because it fills the (not-shared)
     # dummy_sr buffer to be used within the @loop_s_r below, so the values
     # of is looped over by this process need to be the same.
-    if moments.particle_number_conserved
-    	@loop_s_r is ir begin
-            @views @. z.scratch = fvec_old.density[:,ir,is] - fvec_new.density[:,ir,is]
+    @loop_s_r is ir begin
+        if moments.particle_number_conserved[is]
+	    @views @. z.scratch = fvec_old.density[:,ir,is] - fvec_new.density[:,ir,is]
             @views dummy_sr[ir,is] = integral(z.scratch, z.wgts)/integral(fvec_old.density[:,ir,is], z.wgts)
 	end
     end
