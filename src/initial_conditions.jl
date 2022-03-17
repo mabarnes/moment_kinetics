@@ -243,15 +243,17 @@ function init_pdf_over_density!(pdf, spec, vpa, z, vth, upar, vpa_norm_fac, evol
 end
 
 """
+enforce boundary conditions in vpa and z on the evolved pdf;
+also enforce boundary conditions in z on all separately evolved velocity space moments of the pdf
 """
-function enforce_boundary_conditions!(f, vpa_bc, z_bc, vpa, z, r, vpa_adv::T1, z_adv::T2, composition) where {T1, T2}
+function enforce_boundary_conditions!(fvec_out, vpa_bc, z_bc, vpa, z, r, vpa_adv::T1, z_adv::T2, composition) where {T1, T2}
     @loop_s_r_z is ir iz begin
         # enforce the vpa BC
-        @views enforce_vpa_boundary_condition_local!(f[:,iz,ir,is], vpa_bc, vpa_adv[is].upwind_idx[iz,ir],
+        @views enforce_vpa_boundary_condition_local!(fvec_out.pdf[:,iz,ir,is], vpa_bc, vpa_adv[is].upwind_idx[iz,ir],
                                                      vpa_adv[is].downwind_idx[iz,ir])
     end
     begin_s_r_vpa_region()
-    @views enforce_z_boundary_condition!(f, z_bc, z_adv, vpa, r, composition)
+    @views enforce_z_boundary_condition!(fvec_out.pdf, z_bc, z_adv, vpa, r, composition)
 end
 
 """
