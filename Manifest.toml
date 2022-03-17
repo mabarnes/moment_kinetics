@@ -33,12 +33,6 @@ version = "3.2.1"
 [[deps.Artifacts]]
 uuid = "56f22d72-fd6d-98f1-02f0-08ddc0907c33"
 
-[[deps.AxisAlgorithms]]
-deps = ["LinearAlgebra", "Random", "SparseArrays", "WoodburyMatrices"]
-git-tree-sha1 = "66771c8d21c8ff5e3a93379480a2307ac36863f7"
-uuid = "13072b0f-2c55-5437-9ae7-d433b7a33950"
-version = "1.0.1"
-
 [[deps.Base64]]
 uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 
@@ -395,12 +389,6 @@ version = "2018.0.3+2"
 deps = ["Markdown"]
 uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
 
-[[deps.Interpolations]]
-deps = ["AxisAlgorithms", "ChainRulesCore", "LinearAlgebra", "OffsetArrays", "Random", "Ratios", "Requires", "SharedArrays", "SparseArrays", "StaticArrays", "WoodburyMatrices"]
-git-tree-sha1 = "61aa005707ea2cebf47c8d780da8dc9bc4e0c512"
-uuid = "a98d9a8b-a2ab-59e6-89dd-64a1c18fca59"
-version = "0.13.4"
-
 [[deps.InverseFunctions]]
 deps = ["Test"]
 git-tree-sha1 = "a7254c0acd8e62f1ac75ad24d5db43f5f19f3c65"
@@ -657,12 +645,6 @@ version = "400.702.400+0"
 [[deps.NetworkOptions]]
 uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
 
-[[deps.OffsetArrays]]
-deps = ["Adapt"]
-git-tree-sha1 = "043017e0bdeff61cfbb7afeb558ab29536bbb5ed"
-uuid = "6fe1bfb0-de20-5000-8ca7-80f57d26f881"
-version = "1.10.8"
-
 [[deps.Ogg_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "7937eda4681660b4d6aeeecc2f7e1c81c8ee4e2f"
@@ -798,12 +780,6 @@ uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 [[deps.Random]]
 deps = ["SHA", "Serialization"]
 uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
-
-[[deps.Ratios]]
-deps = ["Requires"]
-git-tree-sha1 = "01d341f502250e81f6fec0afe662aa861392a3aa"
-uuid = "c84ed2f1-dad5-54f0-aa8e-dbefe2724439"
-version = "0.4.2"
 
 [[deps.RecipesBase]]
 git-tree-sha1 = "6bf3f380ff52ce0832ddd3a2a7b9538ed1bcca7d"
@@ -1022,12 +998,6 @@ deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
 git-tree-sha1 = "66d72dc6fcc86352f01676e8f0f698562e60510f"
 uuid = "2381bf8a-dfd0-557d-9999-79630e7b1b91"
 version = "1.23.0+0"
-
-[[deps.WoodburyMatrices]]
-deps = ["LinearAlgebra", "SparseArrays"]
-git-tree-sha1 = "de67fa59e33ad156a590055375a30b23c40299d3"
-uuid = "efce3f68-66dc-5838-9240-27a6d6f5f9b6"
-version = "0.5.5"
 
 [[deps.XML2_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Libiconv_jll", "Pkg", "Zlib_jll"]

@@ -2,8 +2,6 @@
 """
 module finite_differences
 
-using Interpolations
-
 using ..type_definitions: mk_float
 import ..calculus: elementwise_derivative!
 
