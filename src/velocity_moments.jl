@@ -395,7 +395,6 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, r, composition,
             end
         end
         @loop_r ir begin
-#            avgdens_ratio = dummy_sr[ir,is]
             @loop_z iz begin
                 # Create views once to save overhead
                 fnew_view = @view(fvec_new.pdf[:,iz,ir,is])
