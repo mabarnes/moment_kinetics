@@ -26,7 +26,7 @@ function ionization_collisions!(f_out, fvec_in, moments, n_ion_species,
                 end
             end
             # when working with the normalised distribution (pdf_unnorm / density),
-			# the ionisation collisions drop out of the neutral kinetic equation
+            # the ionisation collisions drop out of the neutral kinetic equation
         end
     elseif collisions.constant_ionization_rate
         # Oddly the test in test/harrisonthompson.jl matches the analytical
