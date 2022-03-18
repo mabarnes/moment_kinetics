@@ -16,6 +16,7 @@ using ..velocity_moments: update_moments!, reset_moments_status!
 using ..velocity_moments: enforce_moment_constraints!
 using ..velocity_moments: update_density!, update_upar!, update_ppar!, update_qpar!
 using ..initial_conditions: enforce_z_boundary_condition!, enforce_boundary_conditions!
+using ..initial_conditions: enforce_z_boundary_condition_moments!
 using ..initial_conditions: enforce_vpa_boundary_condition!
 using ..advection: setup_advection, update_boundary_indices!
 using ..z_advection: update_speed_z!, z_advection!
@@ -105,7 +106,7 @@ function setup_time_advance!(pdf, vpa, z, r, z_spectral, composition, drive_inpu
         advance = advance_info(true, true, advance_cx, advance_ionization, advance_sources,
                                advance_continuity, advance_force_balance, advance_energy, rk_coefs)
     end
-    
+
     # create structure r_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the split part of the GK equation dealing
     # with advection in r
@@ -122,8 +123,8 @@ function setup_time_advance!(pdf, vpa, z, r, z_spectral, composition, drive_inpu
     # enforce prescribed boundary condition in r on the distribution function f
     # PLACEHOLDER
     #@views enforce_r_boundary_condition!(pdf.unnorm, r.bc, r_advect, vpa, z, composition)
-    
-    
+
+
     # create structure z_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the split part of the GK equation dealing
     # with advection in z
@@ -138,11 +139,14 @@ function setup_time_advance!(pdf, vpa, z, r, z_spectral, composition, drive_inpu
         update_boundary_indices!(z_advect[is], loop_ranges[].vpa, loop_ranges[].r)
     end
     # enforce prescribed boundary condition in z on the distribution function f
-    @views enforce_z_boundary_condition!(pdf.unnorm, z.bc, z_advect, vpa, r, composition)
+    @views enforce_z_boundary_condition!(pdf.unnorm, moments.dens, moments, z.bc, z_advect, vpa, r, composition)
+    # enforce prescribed boundary condition in z on the velocity space moments of f
+    @views enforce_z_boundary_condition_moments!(moments.dens, moments, z.bc)
+    
     if z.bc != "wall" || composition.n_neutral_species == 0
         begin_serial_region()
     end
-    
+
     # create an array of structs containing scratch arrays for the pdf and low-order moments
     # that may be evolved separately via fluid equations
     scratch = setup_scratch_arrays(moments, pdf.norm, t_input.n_rk_stages)
@@ -490,12 +494,12 @@ end
 
 """
 """
-function time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z, r, 
+function time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z, r,
     vpa_spectral, z_spectral, r_spectral, moments, fields, vpa_advect, z_advect, r_advect,
     vpa_SL, z_SL, r_SL, composition, collisions, advance, scratch_dummy_sr, istep)
 
     if t_input.n_rk_stages > 1
-        ssp_rk!(pdf, scratch, t, t_input, vpa, z, r, 
+        ssp_rk!(pdf, scratch, t, t_input, vpa, z, r,
             vpa_spectral, z_spectral, r_spectral, moments, fields, vpa_advect, z_advect, r_advect,
             vpa_SL, z_SL, r_SL, composition, collisions, advance,  scratch_dummy_sr, istep)
     else
@@ -574,7 +578,7 @@ end
 
 """
 """
-function ssp_rk!(pdf, scratch, t, t_input, vpa, z, r, 
+function ssp_rk!(pdf, scratch, t, t_input, vpa, z, r,
     vpa_spectral, z_spectral, r_spectral, moments, fields, vpa_advect, z_advect, r_advect,
     vpa_SL, z_SL, r_SL, composition, collisions, advance, scratch_dummy_sr, istep)
 
@@ -642,23 +646,23 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, z_
     # vpa_advection! advances the 1D advection equation in vpa.
     # only charged species have a force accelerating them in vpa;
     # however, neutral species do have non-zero d(wpa)/dt, so there is advection in wpa
-    
+
     if advance.vpa_advection
         vpa_advection!(fvec_out.pdf, fvec_in, pdf.norm, fields, moments,
             vpa_SL, vpa_advect, vpa, z, r, use_semi_lagrange, dt, t,
             vpa_spectral, z_spectral, composition, collisions.charge_exchange, istage)
     end
-    
+
     # z_advection! advances 1D advection equation in z
     # apply z-advection operation to all species (charged and neutral)
-    
+
     if advance.z_advection
         begin_s_r_vpa_region()
         z_advection!(fvec_out.pdf, fvec_in, pdf.norm, moments, z_SL, z_advect, z, vpa, r,
             use_semi_lagrange, dt, t, z_spectral, composition, istage)
         begin_s_r_z_region()
     end
-    
+
     if advance.source_terms
         source_terms!(fvec_out.pdf, fvec_in, moments, vpa, z, r, dt, z_spectral,
                       composition, collisions.charge_exchange)
@@ -675,7 +679,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, z_
     end
     # enforce boundary conditions in z and vpa on the distribution function
     # NB: probably need to do the same for the evolved moments
-    enforce_boundary_conditions!(fvec_out.pdf, vpa.bc, z.bc, vpa, z, r, vpa_advect, z_advect, composition)
+    enforce_boundary_conditions!(fvec_out, fvec_in, moments, vpa.bc, z.bc, vpa, z, r, vpa_advect, z_advect, composition)
     # End of advance fo distribution function
 
     # Start advancing moments
@@ -685,7 +689,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, z_
     begin_s_r_region(no_synchronize=true)
     if advance.continuity
         continuity_equation!(fvec_out.density, fvec_in, moments, composition, vpa, z, r,
-                             dt, z_spectral)
+                             dt, z_spectral, collisions.ionization)
     end
     if advance.force_balance
         # fvec_out.upar is over-written in force_balance! and contains the particle flux
