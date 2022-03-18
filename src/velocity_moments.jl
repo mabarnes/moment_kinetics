@@ -430,9 +430,6 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, r, composition,
                         @. fnew_view -= vpa.scratch * (vpa.grid * vpa.grid - 0.5) * ppar_integral
                     end
                 end
- #               fvec_new.density[iz,ir,is] += fvec_old.density[iz,ir,is] * avgdens_ratio
- #               # update the thermal speed, as the density has changed
- #               moments.vth[iz,ir,is] = sqrt(2.0*fvec_new.ppar[iz,ir,is]/fvec_new.density[iz,ir,is])
             end
         end
     end
