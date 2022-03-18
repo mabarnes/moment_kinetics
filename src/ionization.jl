@@ -15,7 +15,7 @@ function ionization_collisions!(f_out, fvec_in, moments, n_ion_species,
         @loop_s is begin
             # apply ionization collisions to all ion species
             if is ∈ composition.ion_species_range
-                # for each ion species, obtain affect of charge exchange collisions
+                # for each ion species, obtain effect of charge exchange collisions
                 # with all of the neutral species
                 for isp ∈ composition.neutral_species_range
                     @loop_r_z_vpa ir iz ivpa begin
