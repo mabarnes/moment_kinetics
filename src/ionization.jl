@@ -12,7 +12,7 @@ function ionization_collisions!(f_out, fvec_in, moments, n_ion_species,
         n_neutral_species, vpa, z, r, composition, collisions, nz, dt)
 
     if moments.evolve_density
-		@loop_s is begin
+        @loop_s is begin
             # apply ionization collisions to all ion species
             if is ∈ composition.ion_species_range
                 # for each ion species, obtain affect of charge exchange collisions
