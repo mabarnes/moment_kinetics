@@ -142,7 +142,7 @@ function setup_time_advance!(pdf, vpa, z, r, z_spectral, composition, drive_inpu
     @views enforce_z_boundary_condition!(pdf.unnorm, moments.dens, moments, z.bc, z_advect, vpa, r, composition)
     # enforce prescribed boundary condition in z on the velocity space moments of f
     @views enforce_z_boundary_condition_moments!(moments.dens, moments, z.bc)
-    
+
     if z.bc != "wall" || composition.n_neutral_species == 0
         begin_serial_region()
     end
@@ -170,7 +170,7 @@ function setup_time_advance!(pdf, vpa, z, r, z_spectral, composition, drive_inpu
     # initialise the vpa advection speed
     begin_s_r_z_region()
     update_speed_vpa!(vpa_advect, fields, scratch[1], moments, vpa, z, r, composition,
-                      collisions.charge_exchange, 0.0, z_spectral)
+                      collisions, 0.0, z_spectral)
     if moments.evolve_upar
         nspec = n_species
     else
@@ -650,7 +650,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, z_
     if advance.vpa_advection
         vpa_advection!(fvec_out.pdf, fvec_in, pdf.norm, fields, moments,
             vpa_SL, vpa_advect, vpa, z, r, use_semi_lagrange, dt, t,
-            vpa_spectral, z_spectral, composition, collisions.charge_exchange, istage)
+            vpa_spectral, z_spectral, composition, collisions, istage)
     end
 
     # z_advection! advances 1D advection equation in z

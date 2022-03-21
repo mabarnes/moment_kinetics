@@ -16,13 +16,14 @@ using ..looping
 """
 """
 function vpa_advection!(f_out, fvec_in, ff, fields, moments, SL, advect,
-        vpa, z, r, use_semi_lagrange, dt, t, vpa_spectral, z_spectral, composition, CX_frequency, istage)
+        vpa, z, r, use_semi_lagrange, dt, t, vpa_spectral, z_spectral, composition,
+        collisions, istage)
 
     # only have a parallel acceleration term for neutrals if using the peculiar velocity
     # wpar = vpar - upar as a variable; i.e., d(wpar)/dt /=0 for neutrals even though d(vpar)/dt = 0.
 
     # calculate the advection speed corresponding to current f
-    update_speed_vpa!(advect, fields, fvec_in, moments, vpa, z, r, composition, CX_frequency, t, z_spectral)
+    update_speed_vpa!(advect, fields, fvec_in, moments, vpa, z, r, composition, collisions, t, z_spectral)
     @loop_s is begin
         if !moments.evolve_upar && is in composition.neutral_species_range
             # No acceleration for neutrals when not evolving upar
@@ -55,14 +56,14 @@ end
 """
 calculate the advection speed in the vpa-direction at each grid point
 """
-function update_speed_vpa!(advect, fields, fvec, moments, vpa, z, r, composition, CX_frequency, t, z_spectral)
+function update_speed_vpa!(advect, fields, fvec, moments, vpa, z, r, composition, collisions, t, z_spectral)
     @boundscheck z.n == size(advect[1].speed,2) || throw(BoundsError(advect))
     #@boundscheck composition.n_ion_species == size(advect,2) || throw(BoundsError(advect))
     @boundscheck composition.n_species == size(advect,1) || throw(BoundsError(advect))
     @boundscheck vpa.n == size(advect[1].speed,1) || throw(BoundsError(speed))
     if vpa.advection.option == "default"
         # dvpa/dt = Ze/m ⋅ E_parallel
-        update_speed_default!(advect, fields, fvec, moments, vpa, z, r, composition, CX_frequency, t, z_spectral)
+        update_speed_default!(advect, fields, fvec, moments, vpa, z, r, composition, collisions, t, z_spectral)
     elseif vpa.advection.option == "constant"
         @serial_region begin
             # Not usually used - just run in serial
@@ -102,7 +103,7 @@ end
 
 """
 """
-function update_speed_default!(advect, fields, fvec, moments, vpa, z, r, composition, CX_frequency, t, z_spectral)
+function update_speed_default!(advect, fields, fvec, moments, vpa, z, r, composition, collisions, t, z_spectral)
     if moments.evolve_ppar
         @loop_s is begin
             @loop_r ir begin
@@ -128,12 +129,12 @@ function update_speed_default!(advect, fields, fvec, moments, vpa, z, r, composi
             end
         end
         # add in contributions from charge exchange collisions
-        if composition.n_neutral_species > 0 && abs(CX_frequency) > 0.0
+        if composition.n_neutral_species > 0 && abs(collisions.charge_exchange) > 0.0
             @loop_s is begin
                 if is ∈ composition.ion_species_range
                     for isp ∈ composition.neutral_species_range
                         @loop_r_z ir iz begin
-                            @views @. advect[is].speed[:,iz,ir] += CX_frequency *
+                            @views @. advect[is].speed[:,iz,ir] += collisions.charge_exchange *
                             (0.5*vpa.grid/fvec.ppar[iz,ir,is] * (fvec.density[iz,ir,isp]*fvec.ppar[iz,ir,is]
                                                               - fvec.density[iz,ir,is]*fvec.ppar[iz,ir,isp])
                              - fvec.density[iz,ir,isp] * (fvec.upar[iz,ir,isp]-fvec.upar[iz,ir,is])/moments.vth[iz,ir,is])
@@ -143,7 +144,7 @@ function update_speed_default!(advect, fields, fvec, moments, vpa, z, r, composi
                 if is ∈ composition.neutral_species_range
                     for isp ∈ composition.ion_species_range
                         @loop_r_z ir iz begin
-                            @views @. advect[is].speed[:,iz,ir] += CX_frequency *
+                            @views @. advect[is].speed[:,iz,ir] += collisions.charge_exchange *
                             (0.5*vpa.grid/fvec.ppar[iz,ir,is] * (fvec.density[iz,ir,isp]*fvec.ppar[iz,ir,is]
                                                               - fvec.density[iz,ir,is]*fvec.ppar[iz,ir,isp])
                              - fvec.density[iz,ir,isp] * (fvec.upar[iz,ir,isp]-fvec.upar[iz,ir,is])/moments.vth[iz,ir,is])
@@ -170,24 +171,37 @@ function update_speed_default!(advect, fields, fvec, moments, vpa, z, r, composi
                 end
             end
         end
-        # if neutrals present and charge exchange frequency non-zero,
-        # account for collisional friction between ions and neutrals
-        if composition.n_neutral_species > 0 && abs(CX_frequency) > 0.0
-            # include contribution to ion acceleration due to collisional friction with neutrals
-            @loop_s is begin
-                if is ∈ composition.ion_species_range
-                    for isp ∈ composition.neutral_species_range
-                        @loop_r_z ir iz begin
-                            @views advect[is].speed[:,iz,ir] .+= -CX_frequency*fvec.density[iz,ir,isp]*(fvec.upar[iz,ir,isp]-fvec.upar[iz,ir,is])
+        # if neutrals present compute contribution to parallel acceleration due to charge exchange
+        # and/or ionization collisions betweens ions and neutrals
+        if composition.n_neutral_species > 0
+            # account for collisional charge exchange friction between ions and neutrals
+            if abs(collisions.charge_exchange) > 0.0
+                @loop_s is begin
+                    if is ∈ composition.ion_species_range
+                        for isp ∈ composition.neutral_species_range
+                            @loop_r_z ir iz begin
+                                @views @. advect[is].speed[:,iz,ir] -= collisions.charge_exchange*fvec.density[iz,ir,isp]*(fvec.upar[iz,ir,isp]-fvec.upar[iz,ir,is])
+                            end
+                        end
+                    end
+                    # include contribution to neutral acceleration due to collisional friction with ions
+                    if is ∈ composition.neutral_species_range
+                        for isp ∈ composition.ion_species_range
+                            # get the absolute species index for the neutral species
+                            @loop_r_z ir iz begin
+                                @views @. advect[is].speed[:,iz,ir] -= collisions.charge_exchange*fvec.density[iz,ir,isp]*(fvec.upar[iz,ir,isp]-fvec.upar[iz,ir,is])
+                            end
                         end
                     end
                 end
-                # include contribution to neutral acceleration due to collisional friction with ions
-                if is ∈ composition.neutral_species_range
-                    for isp ∈ composition.ion_species_range
-                        # get the absolute species index for the neutral species
-                        @loop_r_z ir iz begin
-                            @views advect[is].speed[:,iz,ir] .+= -CX_frequency*fvec.density[iz,ir,isp]*(fvec.upar[iz,ir,isp]-fvec.upar[iz,ir,is])
+            end
+            if abs(collisions.ionization) > 0.0
+                @loop_s is begin
+                    if is ∈ composition.ion_species_range
+                        for isp ∈ composition.neutral_species_range
+                            @loop_r_z ir iz begin
+                                @views @. advect[is].speed[:,iz,ir] -= collisions.ionization*fvec.density[iz,ir,isp]*(fvec.upar[iz,ir,isp]-fvec.upar[iz,ir,is])
+                            end
                         end
                     end
                 end
