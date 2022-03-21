@@ -36,7 +36,6 @@ function init_pdf_and_moments(vpa, z, r, composition, species, n_rk_stages, evol
     # create the 'moments' struct that contains various v-space moments and other
     # information related to these moments.
     # the time-dependent entries are not initialised.
-    
     moments = create_moments(z.n, r.n, n_species, evolve_moments, ionization, z.bc)
     @serial_region begin
         # initialise the density profile
@@ -160,7 +159,7 @@ function init_upar!(upar, z, r, spec, n_species)
                 # necessary for an electron sheath condition involving J_{||i}
                 # option "gaussian" to be consistent with usual init option for now
                 @. upar[:,ir,is] =
-                    (spec[is].z_IC.upar_amplitude * 2.0 *       
+                    (spec[is].z_IC.upar_amplitude * 2.0 *
                            (z.grid[:] - z.grid[floor(Int,z.n/2)])/z.L)
             else
                 @. upar[:,ir,is] = 0.0
@@ -186,7 +185,6 @@ function init_pdf_over_density!(pdf, spec, vpa, z, vth, upar, vpa_norm_fac, evol
             else
                 @. vpa.scratch = (vpa.grid - upar[iz])/vth[iz]
             end
-            #@. pdf[:,iz] = exp(-(vpa.grid*(vpa_norm_fac[iz]/vth[iz]))^2) / vth[iz]
             @. pdf[:,iz] = exp(-vpa.scratch^2) / vth[iz]
         end
         for iz ∈ 1:z.n
@@ -199,11 +197,9 @@ function init_pdf_over_density!(pdf, spec, vpa, z, vth, upar, vpa_norm_fac, evol
             @views @. vpa.scratch = vpa.grid^2 * pdf[:,iz] * (vpa_norm_fac[iz]/vth[iz])^2
             pparfac = integrate_over_vspace(vpa.scratch, vpa.wgts)
             # pparfac2 = the integral of the pdf over v-space, weighted by m_s w_s^2 (w_s^2 - vths^2 / 2) / vth^4
-            #@. vpa.scratch = vpa.grid^2 *(vpa.grid^2/pparfac - vth[iz]^2/densfac) * pdf[:,iz] * (vpa_norm_fac[iz]/vth[iz])^4
             @views @. vpa.scratch = vpa.grid^2 *(vpa.grid^2/pparfac - 1.0/densfac) * pdf[:,iz] * (vpa_norm_fac[iz]/vth[iz])^4
             pparfac2 = integrate_over_vspace(vpa.scratch, vpa.wgts)
 
-            #@. pdf[:,iz] = pdf[:,iz]/densfac + (0.5 - pparfac/densfac)/pparfac2*(vpa.grid^2/pparfac - vth[iz]^2/densfac)*pdf[:,iz]*(vpa_norm_fac[iz]/vth[iz])^2
             @views @. pdf[:,iz] = pdf[:,iz]/densfac + (0.5 - pparfac/densfac)/pparfac2*(vpa.grid^2/pparfac - 1.0/densfac)*pdf[:,iz]*(vpa_norm_fac[iz]/vth[iz])^2
         end
     elseif spec.vpa_IC.initialization_option == "vpagaussian"
@@ -289,14 +285,8 @@ function enforce_z_boundary_condition!(f, density, moments, bc::String, adv::T, 
         @loop_s is begin
             # zero incoming BC for ions, as they recombine at the wall
             if is ∈ composition.ion_species_range
-                @loop_vpa ivpa begin
-                    # no parallel BC should be enforced for vpa = 0
-                    if abs(vpa.grid[ivpa]) > zero
-                        @loop_r ir begin
-                            upwind_idx = adv[is].upwind_idx[ivpa,ir]
-                            f[ivpa,upwind_idx,ir,is] = 0.0
-                        end
-                    end
+                @loop_r ir begin
+                    @views enforce_zero_incoming_bc!(f[:,:,ir,is], adv[is].speed[:,:,ir], zero)
                 end
             end
         end
@@ -313,7 +303,7 @@ function enforce_z_boundary_condition!(f, density, moments, bc::String, adv::T, 
                     wall_flux_L = 0.0
                     # include the contribution to the wall fluxes due to species with index 'is'
                     for is ∈ 1:composition.n_ion_species
-		        normfac_0 = sqrt(composition.mn_over_mi)
+		                normfac_0 = sqrt(composition.mn_over_mi)
                         normfac_L = normfac_0
                         # account for extra normalisation factors if evolving density separately from pdf
                         if moments.evolve_density
@@ -369,6 +359,30 @@ function enforce_z_boundary_condition!(f, density, moments, bc::String, adv::T, 
                     end
                 end
             end
+        end
+    end
+end
+
+"""
+enforce a zero incoming BC in z for given species pdf at each radial location
+"""
+function enforce_zero_incoming_bc!(pdf, advection_speed, zero)
+    nvpa = size(pdf,1)
+    # no parallel BC should be enforced for dz/dt = 0
+    # note that the parallel velocity coordinate vpa may be dz/dt or
+    # some version of the peculiar velocity (dz/dt - upar),
+    # so use advection speed below instead of vpa
+    @loop_vpa ivpa begin
+        # for left boundary in zed (z = -Lz/2), want
+        # f(z=-Lz/2, v_parallel > 0) = 0
+        #println("ivpa: ", ivpa, " speedl: ", adv[ivpa].speed[1], " speedr: ", adv[ivpa].speed[end])
+        if advection_speed[1,ivpa] > zero
+            pdf[ivpa,1] = 0.0
+        end
+        # for right boundary in zed (z = Lz/2), want
+        # f(z=Lz/2, v_parallel < 0) = 0
+        if advection_speed[end,ivpa] < -zero
+            pdf[ivpa,end] = 0.0
         end
     end
 end
