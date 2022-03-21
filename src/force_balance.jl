@@ -23,10 +23,17 @@ function force_balance!(pflx, fvec, fields, collisions, vpa, z, r, dt, spectral,
             end
         end
     end
-    # if neutrals present and charge exchange frequency non-zero,
-    # account for collisional friction between ions and neutrals
-    if composition.n_neutral_species > 0 && abs(collisions.charge_exchange) > 0.0
-        force_balance_CX!(pflx, fvec.density, fvec.upar, collisions.charge_exchange, composition, z, r, dt)
+    # if neutrals present account for charge exchange and/or ionization collisions
+    if composition.n_neutral_species > 0
+        # account for collisional friction between ions and neutrals
+        if abs(collisions.charge_exchange) > 0.0
+            force_balance_CX!(pflx, fvec.density, fvec.upar, collisions.charge_exchange, composition, z, r, dt)
+        end
+        # account for ionization collisions
+        if abs(collisions.ionization) > 0.0
+            force_balance_ionization!(pflx, fvec.density, fvec.upar, collisions.ionization,
+                                      composition, z.n, dt)
+        end
     end
 end
 
@@ -62,6 +69,7 @@ function force_balance_Epar_species!(pflx, phi, dens, z, dt, spectral)
 end
 
 """
+add the contribution to the evolution of the particle flux arising from charge exchange collisions
 """
 function force_balance_CX!(pflx, dens, upar, CX_frequency, composition, z, r, dt)
     @loop_s is begin
@@ -76,6 +84,28 @@ function force_balance_CX!(pflx, dens, upar, CX_frequency, composition, z, r, dt
             if is ∈ composition.neutral_species_range
                 for isp ∈ composition.ion_species_range
                     @views @. pflx[:,ir,is] += dt*CX_frequency*dens[:,ir,is]*dens[:,ir,isp]*(upar[:,ir,isp]-upar[:,ir,is])
+                end
+            end
+        end
+    end
+end
+
+"""
+add the contribution to the evolution of the particle flux arising from ionization collisions
+"""
+function force_balance_ionization!(pflx, dens, upar, ionization_frequency, composition, nz, dt)
+    @loop_s is begin
+        @loop_r ir begin
+            # include contribution to ion acceleration due to ionization of neutrals
+            if is ∈ composition.ion_species_range
+                for isp ∈ composition.neutral_species_range
+                    @views @. pflx[:,ir,is] += dt*ionization_frequency*dens[:,ir,is]*dens[:,ir,isp]*upar[:,ir,isp]
+                end
+            end
+            # include contribution to neutral acceleration due to ionizaton
+            if is ∈ composition.neutral_species_range
+                for isp ∈ composition.ion_species_range
+                    @views @. pflx[:,ir,is] -= dt*ionization_frequency*dens[:,ir,isp]*dens[:,ir,is]*upar[:,ir,is]
                 end
             end
         end
