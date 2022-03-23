@@ -139,7 +139,8 @@ function setup_time_advance!(pdf, vpa, z, r, z_spectral, composition, drive_inpu
         update_boundary_indices!(z_advect[is], loop_ranges[].vpa, loop_ranges[].r)
     end
     # enforce prescribed boundary condition in z on the distribution function f
-    @views enforce_z_boundary_condition!(pdf.unnorm, moments.dens, moments, z.bc, z_advect, vpa, r, composition)
+    @views enforce_z_boundary_condition!(pdf.unnorm, moments.dens, moments.upar, moments,
+                                         z.bc, z_advect, vpa, r, composition)
     # enforce prescribed boundary condition in z on the velocity space moments of f
     @views enforce_z_boundary_condition_moments!(moments.dens, moments, z.bc)
 
@@ -680,7 +681,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, z_
     # enforce boundary conditions in z and vpa on the distribution function
     # NB: probably need to do the same for the evolved moments
     enforce_boundary_conditions!(fvec_out, fvec_in, moments, vpa.bc, z.bc, vpa, z, r, vpa_advect, z_advect, composition)
-    # End of advance fo distribution function
+    # End of advance of distribution function
 
     # Start advancing moments
     # Do not actually need to synchronize here because above we only modify the
