@@ -18,12 +18,15 @@ function charge_exchange_collisions!(f_out, fvec_in, moments, composition, vpa, 
                 # for each ion species, obtain affect of charge exchange collisions
                 # with all of the neutral species
                 for isp ∈ composition.neutral_species_range
-                    #cxfac = dt*charge_exchange_frequency[is,isp]
-                    #cxfac = dt*charge_exchange_frequency
                     @loop_r_z_vpa ir iz ivpa begin
+                        if moments.evolve_ppar
+                            vth_ratio = moments.vth[iz,ir,is]/moments.vth[iz,ir,isp]
+                        else
+                            vth_ratio = 1.0
+                        end
                         f_out[ivpa,iz,ir,is] +=
                         dt*charge_exchange_frequency*fvec_in.density[iz,ir,isp]*
-                        (fvec_in.pdf[ivpa,iz,ir,isp] - fvec_in.pdf[ivpa,iz,ir,is])
+                        (fvec_in.pdf[ivpa,iz,ir,isp]*vth_ratio - fvec_in.pdf[ivpa,iz,ir,is])
                     end
                 end
             end
@@ -34,9 +37,14 @@ function charge_exchange_collisions!(f_out, fvec_in, moments, composition, vpa, 
                 for isp ∈ composition.ion_species_range
                     #cxfac = dt*charge_exchange_frequency
                     @loop_r_z_vpa ir iz ivpa begin
+                        if moments.evolve_ppar
+                            vth_ratio = moments.vth[iz,ir,is]/moments.vth[iz,ir,isp]
+                        else
+                            vth_ratio = 1.0
+                        end
                         f_out[ivpa,iz,ir,is] +=
                         dt*charge_exchange_frequency*fvec_in.density[iz,ir,isp]*
-                        (fvec_in.pdf[ivpa,iz,ir,isp] - fvec_in.pdf[ivpa,iz,ir,is])
+                        (fvec_in.pdf[ivpa,iz,ir,isp]*vth_ratio - fvec_in.pdf[ivpa,iz,ir,is])
                     end
                 end
             end

@@ -698,7 +698,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, z_
 
     if advance.source_terms
         source_terms!(fvec_out.pdf, fvec_in, moments, vpa, z, r, dt, z_spectral,
-                      composition, collisions.charge_exchange)
+                      composition, collisions)
     end
     # account for charge exchange collisions between ions and neutrals
     if advance.cx_collisions

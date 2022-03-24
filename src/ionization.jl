@@ -19,9 +19,14 @@ function ionization_collisions!(f_out, fvec_in, moments, n_ion_species,
                 # with all of the neutral species
                 for isp ∈ composition.neutral_species_range
                     @loop_r_z_vpa ir iz ivpa begin
+                        if moments.evolve_ppar
+                            vth_ratio = moments.vth[iz,ir,is]/moments.vth[iz,ir,isp]
+                        else
+                            vth_ratio = 1.0
+                        end
                         f_out[ivpa,iz,ir,is] +=
                         dt*collisions.ionization*fvec_in.density[iz,ir,isp]*
-                        (fvec_in.pdf[ivpa,iz,ir,isp] - fvec_in.pdf[ivpa,iz,ir,is])
+                        (fvec_in.pdf[ivpa,iz,ir,isp]*vth_ratio - fvec_in.pdf[ivpa,iz,ir,is])
                     end
                 end
             end
