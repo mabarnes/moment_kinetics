@@ -65,48 +65,7 @@ function setup_time_advance!(pdf, vpa, z, r, z_spectral, composition, drive_inpu
     # indicate which parts of the equations are to be advanced concurrently.
     # if no splitting of operators, all terms advanced concurrently;
     # else, will advance one term at a time.
-    if t_input.split_operators
-        advance = advance_info(false, false, false, false, false, false, false, false, rk_coefs)
-    else
-        if composition.n_neutral_species > 0
-            if collisions.charge_exchange > 0.0
-                advance_cx = true
-            else
-                advance_cx = false
-            end
-            if collisions.ionization > 0.0
-                advance_ionization = true
-            else
-                advance_ionization = false
-            end
-        else
-            advance_cx = false
-            advance_ionization = false
-        end
-        if moments.evolve_density
-            advance_sources = true
-            advance_continuity = true
-            if moments.evolve_upar
-                advance_force_balance = true
-                if moments.evolve_ppar
-                    advance_energy = true
-                else
-                    advance_energy = false
-                end
-            else
-                advance_force_balance = false
-                advance_energy = false
-            end
-        else
-            advance_sources = false
-            advance_continuity = false
-            advance_force_balance = false
-            advance_energy = false
-        end
-        advance = advance_info(true, true, advance_cx, advance_ionization, advance_sources,
-                               advance_continuity, advance_force_balance, advance_energy, rk_coefs)
-    end
-
+    advance = setup_advance_flags(moments, composition, t_input.split_operators, collisions, rk_coefs)
     # create structure r_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the split part of the GK equation dealing
     # with advection in r
@@ -197,6 +156,69 @@ function setup_time_advance!(pdf, vpa, z, r, z_spectral, composition, drive_inpu
     begin_s_r_z_region()
     return moments, fields, vpa_advect, z_advect, r_advect, vpa_SL, z_SL, r_SL, scratch,
            advance, scratch_dummy_sr
+end
+
+"""
+create the 'advance_info' struct to be used in later Euler advance to
+indicate which parts of the equations are to be advanced concurrently.
+if no splitting of operators, all terms advanced concurrently;
+else, will advance one term at a time.
+"""
+function setup_advance_flags(moments, composition, split_operators, collisions, rk_coefs)
+    # default is not to concurrently advance different operators
+    advance_vpa_advection = false
+    advance_z_advection = false
+    advance_cx = false
+    advance_ionization = false
+    advance_sources = false
+    advance_continuity = false
+    advance_force_balance = false
+    advance_energy = false
+    # all advance flags remain false if using operator-splitting
+    # otherwise, check to see if the flags need to be set to true
+    if !split_operators
+        # default for non-split operators is to include both vpa and z advection together
+        advance_vpa_advection = true
+        advance_z_advection = true
+        # if neutrals present, check to see if different ion-neutral
+        # collisions are enabled
+        if composition.n_neutral_species > 0
+            # if charge exchange collision frequency non-zero,
+            # account for charge exchange collisions
+            if abs(collisions.charge_exchange) > 0.0
+                advance_cx = true
+            end
+            # if ionization collision frequency non-zero,
+            # account for charge exchange collisions
+            if abs(collisions.ionization) > 0.0
+                advance_ionization = true
+            end
+        end
+        # if evolving the density, must advance the continuity equation,
+        # in addition to including sources arising from the use of a modified distribution
+        # function in the kinetic equation
+        if moments.evolve_density
+            advance_sources = true
+            advance_continuity = true
+        end
+        # if evolving the parallel flow, must advance the force balance equation,
+        # in addition to including sources arising from the use of a modified distribution
+        # function in the kinetic equation
+        if moments.evolve_upar
+            advance_sources = true
+            advance_force_balance = true
+        end
+        # if evolving the parallel pressure, must advance the energy equation,
+        # in addition to including sources arising from the use of a modified distribution
+        # function in the kinetic equation
+        if moments.evolve_ppar
+            advance_sources = true
+            advance_energy = true
+        end
+    end
+    return advance_info(advance_vpa_advection, advance_z_advection, advance_cx,
+                        advance_ionization, advance_sources, advance_continuity,
+                        advance_force_balance, advance_energy, rk_coefs)
 end
 
 """
@@ -392,43 +414,50 @@ function time_advance_split_operators!(pdf, scratch, t, t_input, vpa, z,
                 advance.ionization_collisions = false
             end
         end
-        # use the continuity equation to update the density
-        # and add the source terms associated with redefining g = pdf/density to the kinetic equation
-        if moments.evolve_density
+        # and add the source terms associated with redefining g = pdf/density or pdf*vth/density
+        # to the kinetic equation
+        if moments.evolve_density || moments.evolve_upar || moments.evolve_ppar
             advance.source_terms = true
             time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
                 vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
                 vpa_SL, z_SL, composition, collisions, advance, istep)
             advance.source_terms = false
+        end
+        # use the continuity equation to update the density
+        if moments.evolve_density
             advance.continuity = true
             time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
                 vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
                 vpa_SL, z_SL, composition, collisions, advance, istep)
             advance.continuity = false
-            if moments.evolve_upar
-                advance.force_balance = true
-                time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
-                    vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
-                    vpa_SL, z_SL, composition, collisions, advance, istep)
-                advance.force_balance = false
-                if moments.evolve_ppar
-                    advance.energy = true
-                    time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
-                        vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
-                        vpa_SL, z_SL, composition, collisions, advance, istep)
-                    advance.energy = false
-                end
-            end
+        end
+        # use force balance to update the parallel flow
+        if moments.evolve_upar
+            advance.force_balance = true
+            time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
+                vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
+                vpa_SL, z_SL, composition, collisions, advance, istep)
+            advance.force_balance = false
+        end
+        # use the energy equation to update the parallel pressure
+        if moments.evolve_ppar
+            advance.energy = true
+            time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
+                vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
+                vpa_SL, z_SL, composition, collisions, advance, istep)
+            advance.energy = false
         end
     else
+        # use the energy equation to update the parallel pressure
+        if moments.evolve_ppar
+            advance.energy = true
+            time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
+                vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
+                vpa_SL, z_SL, composition, collisions, advance, istep)
+            advance.energy = false
+        end
+        # use force balance to update the parallel flow
         if moments.evolve_upar
-            if moments.evolve_ppar
-                advance.energy = true
-                time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
-                    vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
-                    vpa_SL, z_SL, composition, collisions, advance, istep)
-                advance.energy = false
-            end
             advance.force_balance = true
             time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
                 vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
@@ -436,22 +465,16 @@ function time_advance_split_operators!(pdf, scratch, t, t_input, vpa, z,
             advance.force_balance = false
         end
         # use the continuity equation to update the density
-        # and add the source terms associated with redefining g = pdf/density to the kinetic equation
         if moments.evolve_density
             advance.continuity = true
             time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
                 vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
                 vpa_SL, z_SL, composition, collisions, advance, istep)
             advance.continuity = false
-            # use force balance to update the parallel flow
-            # and subsequently add the source terms associated with using the peculiar velocity as a variable
-            if moments.evolve_parallel_flow
-                advance.force_balance = true
-                time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
-                    vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
-                    vpa_SL, z_SL, composition, collisions, advance, istep)
-                advance.force_balance = false
-            end
+        end
+        # and add the source terms associated with redefining g = pdf/density or pdf*vth/density
+        # to the kinetic equation
+        if moments.evolve_density || moments.evolve_upar || moments.evolve_ppar
             advance.source_terms = true
             time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
                 vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
@@ -460,19 +483,19 @@ function time_advance_split_operators!(pdf, scratch, t, t_input, vpa, z,
         end
         # account for charge exchange collisions between ions and neutrals
         if composition.n_neutral_species > 0
-            if collisions.charge_exchange > 0.0
-                advance.cx_collisions = true
-                time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
-                    vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
-                    vpa_SL, z_SL, composition, collisions, advance, istep)
-                advance.cx_collisions = false
-            end
             if collisions.ionization > 0.0
                 advance.ionization = true
                 time_advance_no_splitting!(pdf, scratch, t, t_input, z, vpa,
                     z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
                     z_SL, vpa_SL, composition, collisions, advance, istep)
                 advance.ionization = false
+            end
+            if collisions.charge_exchange > 0.0
+                advance.cx_collisions = true
+                time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
+                    vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
+                    vpa_SL, z_SL, composition, collisions, advance, istep)
+                advance.cx_collisions = false
             end
         end
         # z_advection! advances the operator-split 1D advection equation in z
@@ -521,9 +544,12 @@ function rk_update!(scratch, pdf, moments, fields, vpa, z, r, rk_coefs, istage, 
     nvpa = size(pdf.unnorm, 1)
     new_scratch = scratch[istage+1]
     old_scratch = scratch[istage]
+    # use Runge Kutta to update the evolved pdf
     @loop_s_r_z_vpa is ir iz ivpa begin
         new_scratch.pdf[ivpa,iz,ir,is] = rk_coefs[1]*pdf.norm[ivpa,iz,ir,is] + rk_coefs[2]*old_scratch.pdf[ivpa,iz,ir,is] + rk_coefs[3]*new_scratch.pdf[ivpa,iz,ir,is]
     end
+    # if separately evolving the particle density, update using RK
+    # also update the true (un-normalized) pdf
     if moments.evolve_density
         @loop_s_r_z is ir iz begin
             new_scratch.density[iz,ir,is] = rk_coefs[1]*moments.dens[iz,ir,is] + rk_coefs[2]*old_scratch.density[iz,ir,is] + rk_coefs[3]*new_scratch.density[iz,ir,is]
@@ -531,13 +557,15 @@ function rk_update!(scratch, pdf, moments, fields, vpa, z, r, rk_coefs, istage, 
         @loop_s_r_z_vpa is ir iz ivpa begin
             pdf.unnorm[ivpa,iz,ir,is] = new_scratch.pdf[ivpa,iz,ir,is] * new_scratch.density[iz,ir,is]
         end
+    # if not separately evolving the particle density, calculate the density from the pdf
+    # and set the un-normalized pdf to the evolved pdf
     else
         @loop_s_r_z_vpa is ir iz ivpa begin
             pdf.unnorm[ivpa,iz,ir,is] = new_scratch.pdf[ivpa,iz,ir,is]
         end
         update_density!(new_scratch.density, moments.dens_updated, pdf.unnorm, vpa, z, r, composition)
     end
-    # NB: if moments.evolve_upar = true, then moments.evolve_density = true
+    # NB: below code assumes that if moments.evolve_upar = true, then moments.evolve_density = true
     if moments.evolve_upar
         @loop_s_r_z is ir iz begin
             new_scratch.upar[iz,ir,is] = rk_coefs[1]*moments.upar[iz,ir,is] + rk_coefs[2]*old_scratch.upar[iz,ir,is] + rk_coefs[3]*new_scratch.upar[iz,ir,is]
@@ -549,10 +577,12 @@ function rk_update!(scratch, pdf, moments, fields, vpa, z, r, rk_coefs, istage, 
             new_scratch.upar[iz,ir,is] /= new_scratch.density[iz,ir,is]
         end
     end
+    # if separately evolving the parallel pressure, update using RK;
     if moments.evolve_ppar
         @loop_s_r_z is ir iz begin
             new_scratch.ppar[iz,ir,is] = rk_coefs[1]*moments.ppar[iz,ir,is] + rk_coefs[2]*old_scratch.ppar[iz,ir,is] + rk_coefs[3]*new_scratch.ppar[iz,ir,is]
         end
+    # if not separately evolving the parallel pressure, calculate the pressure from the pdf
     else
         update_ppar!(new_scratch.ppar, moments.ppar_updated, pdf.unnorm, vpa, z, r, composition)
     end
@@ -560,6 +590,8 @@ function rk_update!(scratch, pdf, moments, fields, vpa, z, r, rk_coefs, istage, 
     @loop_s_r_z is ir iz begin
         moments.vth[iz,ir,is] = sqrt(2.0*new_scratch.ppar[iz,ir,is]/new_scratch.density[iz,ir,is])
     end
+    # if separately evolving the parallel pressure, update the true (un-normalized pdf) to reflect
+    # the fact that the evolved pdf has an extra factor of vth inside it
     if moments.evolve_ppar
         @loop_s_r_z is ir iz begin
             old_scratch.temp_z_s[iz,ir,is] = 1.0 / moments.vth[iz,ir,is]
