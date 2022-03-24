@@ -57,7 +57,7 @@ function analyze_and_plot_data(path)
     # open the netcdf file and give it the handle 'fid'
     fid = open_netcdf_file(run_name)
     # load space-time coordinate data
-    nvpa, vpa, vpa_wgts, nz, z, z_wgts, Lz, 
+    nvpa, vpa, vpa_wgts, nz, z, z_wgts, Lz,
      nr, r, r_wgts, Lr, ntime, time = load_coordinate_data(fid)
     # initialise the post-processing input options
     nwrite_movie, itime_min, itime_max, ivpa0, iz0, ir0 = init_postprocessing_options(pp, nvpa, nz, nr, ntime)
@@ -68,10 +68,10 @@ function analyze_and_plot_data(path)
         thermal_speed, n_species, evolve_ppar = load_moments_data(fid)
     # load full (vpa,z,r,species,t) particle distribution function (pdf) data
     ff = load_pdf_data(fid)
-    
+
     #evaluate 1D-1V diagnostics at fixed ir0
     plot_1D_1V_diagnostics(run_name, fid, nwrite_movie, itime_min, itime_max, ivpa0, iz0, ir0, r,
-        phi[:,ir0,:], 
+        phi[:,ir0,:],
         density[:,ir0,:,:],
         parallel_flow[:,ir0,:,:],
         parallel_pressure[:,ir0,:,:],
@@ -80,7 +80,7 @@ function analyze_and_plot_data(path)
         ff[:,:,ir0,:,:],
         n_species, evolve_ppar, nvpa, vpa, vpa_wgts,
         nz, z, z_wgts, Lz, ntime, time)
-     
+
     close(fid)
 
 end
@@ -132,9 +132,9 @@ end
 """
 """
 function plot_1D_1V_diagnostics(run_name, fid, nwrite_movie, itime_min, itime_max, ivpa0, iz0, ir0, r,
- phi, density, parallel_flow, parallel_pressure, parallel_heat_flux,
-     thermal_speed, ff, n_species, evolve_ppar, nvpa, vpa, vpa_wgts,
-                                nz, z, z_wgts, Lz, ntime, time)
+    phi, density, parallel_flow, parallel_pressure, parallel_heat_flux,
+    thermal_speed, ff, n_species, evolve_ppar, nvpa, vpa, vpa_wgts,
+    nz, z, z_wgts, Lz, ntime, time)
     # analyze the fields data
     phi_fldline_avg, delta_phi = analyze_fields_data(phi, ntime, nz, z_wgts, Lz)
     # use a fit to calculate and write to file the damping rate and growth rate of the
@@ -292,7 +292,7 @@ function plot_1D_1V_diagnostics(run_name, fid, nwrite_movie, itime_min, itime_ma
     end
     println("done.")
 
-end 
+end
 
 """
 """
