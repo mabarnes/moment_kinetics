@@ -174,7 +174,9 @@ function update_density!(dens, dens_updated, pdf, vpa, z, r, composition)
 end
 
 """
-calculate the updated density (dens) for a given species
+calculate the updated density (dens) for a given species;
+should only be called when evolve_density = false,
+in which case the vpa coordinate is vpa/c_s
 """
 function update_density_species!(dens, ff, vpa, z, r)
     @boundscheck z.n == size(ff, 2) || throw(BoundsError(ff))
@@ -229,7 +231,8 @@ function update_ppar!(ppar, ppar_updated, pdf, vpa, z, r, composition)
 end
 
 """
-calculate the updated parallel pressure (ppar) for a given species
+calculate the updated energy density (or parallel pressure, ppar) for a given species;
+which of these is calculated depends on the definition of the vpa coordinate
 """
 function update_ppar_species!(ppar, ff, vpa, z, r)
     @boundscheck z.n == size(ff, 2) || throw(BoundsError(ff))
@@ -370,9 +373,9 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, r, composition,
     # of is looped over by this process need to be the same.
     @loop_s_r is ir begin
         if moments.particle_number_conserved[is]
-	    @views @. z.scratch = fvec_old.density[:,ir,is] - fvec_new.density[:,ir,is]
+            @views @. z.scratch = fvec_old.density[:,ir,is] - fvec_new.density[:,ir,is]
             @views dummy_sr[ir,is] = integral(z.scratch, z.wgts)/integral(fvec_old.density[:,ir,is], z.wgts)
-	end
+        end
     end
     # Need to call _block_synchronize() even though loop type does not change because
     # all spatial ranks read fvec_new.density, but it will be written below.
