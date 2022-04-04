@@ -610,50 +610,24 @@ function rk_update!(scratch, pdf, moments, fields, vpa, vperp, z, r, rk_coefs, i
     @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
         new_scratch.pdf[ivpa,ivperp,iz,ir,is] = rk_coefs[1]*pdf.norm[ivpa,ivperp,iz,ir,is] + rk_coefs[2]*old_scratch.pdf[ivpa,ivperp,iz,ir,is] + rk_coefs[3]*new_scratch.pdf[ivpa,ivperp,iz,ir,is]
     end
-    if moments.evolve_density
-        @loop_s_r_z is ir iz begin
-            new_scratch.density[iz,ir,is] = rk_coefs[1]*moments.dens[iz,ir,is] + rk_coefs[2]*old_scratch.density[iz,ir,is] + rk_coefs[3]*new_scratch.density[iz,ir,is]
-        end
-        @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
-            pdf.unnorm[ivpa,ivperp,iz,ir,is] = new_scratch.pdf[ivpa,ivperp,iz,ir,is] * new_scratch.density[iz,ir,is]
-        end
-    else
-        @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
-            pdf.unnorm[ivpa,ivperp,iz,ir,is] = new_scratch.pdf[ivpa,ivperp,iz,ir,is]
-        end
-        update_density!(new_scratch.density, moments.dens_updated, pdf.unnorm, vpa, vperp, z, r, composition)
+    
+    @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+        pdf.unnorm[ivpa,ivperp,iz,ir,is] = new_scratch.pdf[ivpa,ivperp,iz,ir,is]
     end
-    # NB: if moments.evolve_upar = true, then moments.evolve_density = true
-    if moments.evolve_upar
-        @loop_s_r_z is ir iz begin
-            new_scratch.upar[iz,ir,is] = rk_coefs[1]*moments.upar[iz,ir,is] + rk_coefs[2]*old_scratch.upar[iz,ir,is] + rk_coefs[3]*new_scratch.upar[iz,ir,is]
-        end
-    else
-        update_upar!(new_scratch.upar, moments.upar_updated, pdf.unnorm, vpa, vperp, z, r, composition)
-        # convert from particle particle flux to parallel flow
-        @loop_s_r_z is ir iz begin
-            new_scratch.upar[iz,ir,is] /= new_scratch.density[iz,ir,is]
-        end
+    update_density!(new_scratch.density, moments.dens_updated, pdf.unnorm, vpa, vperp, z, r, composition)
+    
+    update_upar!(new_scratch.upar, moments.upar_updated, pdf.unnorm, vpa, vperp, z, r, composition)
+    # convert from particle particle flux to parallel flow
+    @loop_s_r_z is ir iz begin
+        new_scratch.upar[iz,ir,is] /= new_scratch.density[iz,ir,is]
     end
-    if moments.evolve_ppar
-        @loop_s_r_z is ir iz begin
-            new_scratch.ppar[iz,ir,is] = rk_coefs[1]*moments.ppar[iz,ir,is] + rk_coefs[2]*old_scratch.ppar[iz,ir,is] + rk_coefs[3]*new_scratch.ppar[iz,ir,is]
-        end
-    else
-        update_ppar!(new_scratch.ppar, moments.ppar_updated, pdf.unnorm, vpa, vperp, z, r, composition)
-    end
+    
+    update_ppar!(new_scratch.ppar, moments.ppar_updated, pdf.unnorm, vpa, vperp, z, r, composition)
     # update the thermal speed
     @loop_s_r_z is ir iz begin
         moments.vth[iz,ir,is] = sqrt(2.0*new_scratch.ppar[iz,ir,is]/new_scratch.density[iz,ir,is])
     end
-    if moments.evolve_ppar
-        @loop_s_r_z is ir iz begin
-            old_scratch.temp_z_s[iz,ir,is] = 1.0 / moments.vth[iz,ir,is]
-        end
-        @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
-            pdf.unnorm[ivpa,ivperp,iz,ir,is] *= old_scratch.temp_z_s[iz,ir,is]
-        end
-    end
+    
     # update the parallel heat flux
     update_qpar!(moments.qpar, moments.qpar_updated, pdf.unnorm, vpa, vperp, z, r, composition, moments.vpa_norm_fac)
     # update the electrostatic potential phi
