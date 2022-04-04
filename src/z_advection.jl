@@ -5,7 +5,6 @@ module z_advection
 export z_advection!
 export update_speed_z!
 
-using ..semi_lagrange: find_approximate_characteristic!
 using ..advection: advance_f_local!, update_boundary_indices!
 using ..chebyshev: chebyshev_info
 using ..looping
