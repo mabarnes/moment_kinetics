@@ -24,9 +24,6 @@ function z_advection!(f_out, fvec_in, ff, moments, SL, advect, z, vpa, vperp, r,
 
         # advance z-advection equation
         @loop_r_vperp_vpa ir ivperp ivpa begin
-            @views adjust_advection_speed!(advect[is].speed[:,ivpa,ivperp,ir], advect[is].modified_speed[:,ivpa,ivperp,ir],
-                                           fvec_in.density[:,ir,is], moments.vth[:,ir,is],
-                                           moments.evolve_density, moments.evolve_ppar)
             # take the normalized pdf contained in fvec_in.pdf and remove the normalization,
             # returning the true (un-normalized) particle distribution function in z.scratch
             @views unnormalize_pdf!(z.scratch, fvec_in.pdf[ivpa,ivperp,:,ir,is], fvec_in.density[:,ir,is], moments.vth[:,ir,is],
@@ -37,35 +34,11 @@ function z_advection!(f_out, fvec_in, ff, moments, SL, advect, z, vpa, vperp, r,
     end
 end
 
-"""
-"""
-function adjust_advection_speed!(speed, mod_speed, dens, vth, evolve_density, evolve_ppar)
-    if evolve_ppar
-        for i in eachindex(speed)
-            factor = vth[i]/dens[i]
-            speed[i] *= factor
-            mod_speed[i] *= factor
-        end
-    elseif evolve_density
-        for i in eachindex(speed)
-            factor = 1.0 / dens[i]
-            speed[i] *= factor
-            mod_speed[i] *= factor
-        end
-    end
-    return nothing
-end
 
 """
 """
 function unnormalize_pdf!(unnorm, norm, dens, vth, evolve_density, evolve_ppar)
-    if evolve_ppar
-        @. unnorm = norm * dens/vth
-    elseif evolve_density
-        @. unnorm = norm * dens
-    else
-        @. unnorm = norm
-    end
+    @. unnorm = norm
     return nothing
 end
 
@@ -82,16 +55,7 @@ function update_speed_z!(advect, upar, vth, evolve_upar, evolve_ppar, vpa, vperp
             @loop_r_vperp_vpa ir ivperp ivpa begin
                 @views advect.speed[:,ivpa,ivperp,ir] .= vpa.grid[ivpa]
             end
-            if evolve_ppar
-                @loop_r_vperp_vpa ir ivperp ivpa begin
-                    @. @views advect.speed[:,ivpa,ivperp,ir] = advect.speed[:,ivpa,ivperp,ir] * vth + upar
-                end
-            elseif evolve_upar
-                @loop_r_vperp_vpa ir ivperp ivpa begin
-                    @views advect.speed[:,ivpa,ivperp,ir] .+= upar
-                end
-            end
-        end
+    end
     elseif z.advection.option == "constant"
         @inbounds begin
             @loop_r_vperp_vpa ir ivperp ivpa begin
