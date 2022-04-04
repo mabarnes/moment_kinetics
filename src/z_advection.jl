@@ -32,20 +32,6 @@ function z_advection!(f_out, fvec_in, ff, moments, SL, advect, z, vpa, vperp, r,
                 find_approximate_characteristic!(SL[ivpa], advect[is], ivpa, ivperp, ir, z, dt)
             end
         end
-        # # advance z-advection equation
-        # if moments.evolve_density
-        #     for ivpa ∈ 1:vpa.n
-        #         @views @. advect[is].speed[:,ivpa] /= fvec_in.density[:,is]
-        #         @views @. advect[is].modified_speed[:,ivpa] /= fvec_in.density[:,is]
-        #         @views advance_f_local!(f_out[:,ivpa,is], fvec_in.density[:,is] .* fvec_in.pdf[:,ivpa,is],
-        #             ff[:,ivpa,is], SL[ivpa], advect[is], ivpa, z, dt, istage, spectral, use_semi_lagrange)
-        #     end
-        # else
-        #     for ivpa ∈ 1:vpa.n
-        #         @views advance_f_local!(f_out[:,ivpa,is], fvec_in.pdf[:,ivpa,is],
-        #             ff[:,ivpa,is], SL[ivpa], advect[is], ivpa, z, dt, istage, spectral, use_semi_lagrange)
-        #     end
-        # end
         # advance z-advection equation
         @loop_r_vperp_vpa ir ivperp ivpa begin
             @views adjust_advection_speed!(advect[is].speed[:,ivpa,ivperp,ir], advect[is].modified_speed[:,ivpa,ivperp,ir],
