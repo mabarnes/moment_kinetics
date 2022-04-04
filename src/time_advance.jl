@@ -655,12 +655,7 @@ function ssp_rk!(pdf, scratch, t, t_input, vpa, vperp, z, r,
         first_scratch.upar[iz,ir,is] = moments.upar[iz,ir,is]
         first_scratch.ppar[iz,ir,is] = moments.ppar[iz,ir,is]
     end
-    if moments.evolve_upar
-        # moments may be read on all ranks, even though loop type is z_s, so need to
-        # synchronize here
-        _block_synchronize()
-    end
-
+    
     for istage ∈ 1:n_rk_stages
         # do an Euler time advance, with scratch[2] containing the advanced quantities
         # and scratch[1] containing quantities at time level n
@@ -675,10 +670,7 @@ function ssp_rk!(pdf, scratch, t, t_input, vpa, vperp, z, r,
     end
 
     istage = n_rk_stages+1
-    if moments.evolve_density && moments.enforce_conservation
-        enforce_moment_constraints!(scratch[istage], scratch[1], vpa, vperp, z, r, composition, moments, scratch_dummy)
-    end
-
+    
     # update the pdf.norm and moments arrays as needed
     final_scratch = scratch[istage]
     @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
