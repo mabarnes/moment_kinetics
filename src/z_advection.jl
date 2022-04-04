@@ -21,17 +21,7 @@ function z_advection!(f_out, fvec_in, ff, moments, SL, advect, z, vpa, vperp, r,
                                moments.evolve_upar, moments.evolve_ppar, vpa, vperp, z, r, t)
         # update the upwind/downwind boundary indices and upwind_increment
         @views update_boundary_indices!(advect[is], loop_ranges[].vpa, loop_ranges[].vperp, loop_ranges[].r)
-        # if using interpolation-free Semi-Lagrange,
-        # follow characteristics backwards in time from level m+1 to level m
-        # to get departure points.  then find index of grid point nearest
-        # the departure point at time level m and use this to define
-        # an approximate characteristic
-        if use_semi_lagrange
-            # MRH NOT SUPPORTED
-            @loop_r_vperp_vpa ir ivperp ivpa begin
-                find_approximate_characteristic!(SL[ivpa], advect[is], ivpa, ivperp, ir, z, dt)
-            end
-        end
+
         # advance z-advection equation
         @loop_r_vperp_vpa ir ivperp ivpa begin
             @views adjust_advection_speed!(advect[is].speed[:,ivpa,ivperp,ir], advect[is].modified_speed[:,ivpa,ivperp,ir],
