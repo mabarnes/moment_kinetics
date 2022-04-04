@@ -745,26 +745,6 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, vp
     enforce_boundary_conditions!(fvec_out.pdf, vpa.bc, z.bc, vpa, vperp, z, r, vpa_advect, z_advect, composition)
     # End of advance for distribution function
 
-    # Start advancing moments
-    # Do not actually need to synchronize here because above we only modify the
-    # distribution function and below we only modify the moments, so there is no
-    # possibility of race conditions.
-    begin_s_r_region(no_synchronize=true)
-    if advance.continuity
-        continuity_equation!(fvec_out.density, fvec_in, moments, composition, z, r,
-                             dt, z_spectral)
-    end
-    if advance.force_balance
-        # fvec_out.upar is over-written in force_balance! and contains the particle flux
-        force_balance!(fvec_out.upar, fvec_in, fields, collisions, z, r, dt, z_spectral, composition)
-        # convert from the particle flux to the parallel flow
-        @loop_s_r_z is ir iz begin
-            fvec_out.upar[iz,ir,is] /= fvec_out.density[iz,ir,is]
-        end
-    end
-    if advance.energy
-        energy_equation!(fvec_out.ppar, fvec_in, moments, collisions, z, r, dt, z_spectral, composition)
-    end
     # reset "xx.updated" flags to false since ff has been updated
     # and the corresponding moments have not
     reset_moments_status!(moments, composition, z)
