@@ -389,18 +389,12 @@ function time_advance!(pdf, scratch, t, t_input, vpa, vperp, z, r,
     # main time advance loop
     iwrite = 2
     for i ∈ 1:t_input.nstep
-        if t_input.split_operators
-            # MRH NOT SUPPORTED
-            time_advance_split_operators!(pdf, scratch, t, t_input, vpa, z,
-                vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
-                vpa_SL, z_SL, composition, collisions, advance, i)
-        else
-            time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, vperp, z, r,
+       
+        time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, vperp, z, r,
                 vpa_spectral, vperp_spectral, z_spectral, r_spectral,
                 moments, fields, vpa_advect, vperp_advect, z_advect, r_advect,
                 vpa_SL, vperp_SL, z_SL, r_SL,
                 composition, collisions, advance,  scratch_dummy, i)
-        end
         # update the time
         t += t_input.dt
         # write data to file every nwrite time steps
