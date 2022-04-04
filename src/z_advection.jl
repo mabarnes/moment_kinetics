@@ -23,23 +23,13 @@ function z_advection!(f_out, fvec_in, ff, moments, SL, advect, z, vpa, vperp, r,
 
         # advance z-advection equation
         @loop_r_vperp_vpa ir ivperp ivpa begin
-            # take the normalized pdf contained in fvec_in.pdf and remove the normalization,
-            # returning the true (un-normalized) particle distribution function in z.scratch
-            @views unnormalize_pdf!(z.scratch, fvec_in.pdf[ivpa,ivperp,:,ir,is], fvec_in.density[:,ir,is], moments.vth[:,ir,is],
-                                    moments.evolve_density, moments.evolve_ppar)
+            z.scratch =  fvec_in.pdf[ivpa,ivperp,:,ir,is]
             @views advance_f_local!(f_out[ivpa,ivperp,:,ir,is], z.scratch, ff[ivpa,ivperp,:,ir,is], SL, advect[is], ivpa, ivperp, ir,
                                     z, dt, istage, spectral, use_semi_lagrange)
         end
     end
 end
 
-
-"""
-"""
-function unnormalize_pdf!(unnorm, norm, dens, vth, evolve_density, evolve_ppar)
-    @. unnorm = norm
-    return nothing
-end
 
 """
 calculate the advection speed in the z-direction at each grid point
