@@ -31,20 +31,8 @@ function vpa_advection!(f_out, fvec_in, ff, fields, moments, SL, advect,
             continue
         end
         # update the upwind/downwind boundary indices and upwind_increment
-        # NB: not sure if this will work properly with SL method at the moment
-        # NB: if the speed is actually time-dependent
         update_boundary_indices!(advect[is], loop_ranges[].vperp, loop_ranges[].z, loop_ranges[].r)
-        # if using interpolation-free Semi-Lagrange,
-        # follow characteristics backwards in time from level m+1 to level m
-        # to get departure points.  then find index of grid point nearest
-        # the departure point at time level m and use this to define
-        # an approximate characteristic
-        if use_semi_lagrange
-            # NOT SUPPORTED in semi_lagrange module
-            @loop_r_z_vperp ir iz ivperp begin
-                find_approximate_characteristic!(SL, advect[is], ivperp, iz, ir, vpa, dt)
-            end
-        end
+
         @loop_r_z_vperp ir iz ivperp begin
             @views advance_f_local!(f_out[:,ivperp,iz,ir,is], fvec_in.pdf[:,ivperp,iz,ir,is],
                                     ff[:,ivperp,iz,ir,is],
