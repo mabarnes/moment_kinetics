@@ -96,117 +96,27 @@ end
 """
 """
 function update_speed_default!(advect, fields, fvec, moments, vpa, vperp, z, r, composition, CX_frequency, t, z_spectral)
-    if moments.evolve_ppar
+
+    @inbounds @fastmath begin
         @loop_s is begin
+            if !moments.evolve_upar && is in composition.neutral_species_range
+                # No acceleration for neutrals when not evolving upar
+                continue
+            end
             @loop_r ir begin
-                # get d(ppar)/dz
-                derivative!(z.scratch, view(fvec.ppar,:,ir,is), z, z_spectral)
-                # update parallel acceleration to account for parallel derivative of parallel pressure
-                # NB: no vpa-dependence so compute as a scalar and broadcast to all entries
+                # update the electrostatic potential phi
+                # calculate the derivative of phi with respect to z;
+                # the value at element boundaries is taken to be the average of the values
+                # at neighbouring elements
+                derivative!(z.scratch, view(fields.phi,:,ir), z, z_spectral)
+                # advection velocity in vpa is -dphi/dz = -z.scratch
                 @loop_z_vperp iz ivperp begin
-                    @views advect[is].speed[:,ivperp,iz,ir] .= z.scratch[iz]/(fvec.density[iz,ir,is]*moments.vth[iz,ir,is])
-                end
-                # calculate d(qpar)/dz
-                derivative!(z.scratch, view(moments.qpar,:,ir,is), z, z_spectral)
-                # update parallel acceleration to account for (wpar/2*ppar)*dqpar/dz
-                @loop_z_vperp iz ivperp begin
-                    @views @. advect[is].speed[:,ivperp,iz,ir] += 0.5*vpa.grid*z.scratch[iz]/fvec.ppar[iz,ir,is]
-                end
-                # calculate d(vth)/dz
-                derivative!(z.scratch, view(moments.vth,:,ir,is), z, z_spectral)
-                # update parallel acceleration to account for -wpar^2 * d(vth)/dz term
-                @loop_z_vperp iz ivperp begin
-                    @views @. advect[is].speed[:,ivperp,iz,ir] -= vpa.grid^2*z.scratch[iz]
-                end
-            end
-        end
-        # add in contributions from charge exchange collisions
-        if composition.n_neutral_species > 0 && abs(CX_frequency) > 0.0
-            @loop_s is begin
-                if is ∈ composition.ion_species_range
-                    for isp ∈ composition.neutral_species_range
-                        @loop_r_z_vperp ir iz ivperp begin
-                            @views @. advect[is].speed[:,ivperp,iz,ir] += CX_frequency *
-                            (0.5*vpa.grid/fvec.ppar[iz,ir,is] * (fvec.density[iz,ir,isp]*fvec.ppar[iz,ir,is]
-                                                              - fvec.density[iz,ir,is]*fvec.ppar[iz,ir,isp])
-                             - fvec.density[iz,ir,isp] * (fvec.upar[iz,ir,isp]-fvec.upar[iz,ir,is])/moments.vth[iz,ir,is])
-                        end
-                    end
-                end
-                if is ∈ composition.neutral_species_range
-                    for isp ∈ composition.ion_species_range
-                        @loop_r_z_vperp ir iz ivperp begin
-                            @views @. advect[is].speed[:,ivperp,iz,ir] += CX_frequency *
-                            (0.5*vpa.grid/fvec.ppar[iz,ir,is] * (fvec.density[iz,ir,isp]*fvec.ppar[iz,ir,is]
-                                                              - fvec.density[iz,ir,is]*fvec.ppar[iz,ir,isp])
-                             - fvec.density[iz,ir,isp] * (fvec.upar[iz,ir,isp]-fvec.upar[iz,ir,is])/moments.vth[iz,ir,is])
-                        end
-                    end
-                end
-            end
-        end
-    elseif moments.evolve_upar
-        @loop_s is begin
-            @loop_r ir begin
-                # get d(ppar)/dz
-                derivative!(z.scratch, view(fvec.ppar,:,ir,is), z, z_spectral)
-                # update parallel acceleration to account for parallel derivative of parallel pressure
-                # NB: no vpa-dependence so compute as a scalar and broadcast to all entries
-                @loop_z_vperp iz ivperp begin
-                    @views advect[is].speed[:,ivperp,iz,ir] .= z.scratch[iz]/fvec.density[iz,ir,is]
-                end
-                # calculate d(upar)/dz
-                derivative!(z.scratch, view(fvec.upar,:,ir,is), z, z_spectral)
-                # update parallel acceleration to account for -wpar*dupar/dz
-                @loop_z_vperp iz ivperp begin
-                    @views @. advect[is].speed[:,ivperp,iz,ir] -= vpa.grid*z.scratch[iz]
-                end
-            end
-        end
-        # if neutrals present and charge exchange frequency non-zero,
-        # account for collisional friction between ions and neutrals
-        if composition.n_neutral_species > 0 && abs(CX_frequency) > 0.0
-            # include contribution to ion acceleration due to collisional friction with neutrals
-            @loop_s is begin
-                if is ∈ composition.ion_species_range
-                    for isp ∈ composition.neutral_species_range
-                        @loop_r_z_vperp ir iz ivperp begin
-                            @views advect[is].speed[:,ivperp,iz,ir] .+= -CX_frequency*fvec.density[iz,ir,isp]*(fvec.upar[iz,ir,isp]-fvec.upar[iz,ir,is])
-                        end
-                    end
-                end
-                # include contribution to neutral acceleration due to collisional friction with ions
-                if is ∈ composition.neutral_species_range
-                    for isp ∈ composition.ion_species_range
-                        # get the absolute species index for the neutral species
-                        @loop_r_z_vperp ir iz ivperp begin
-                            @views advect[is].speed[:,ivperp,iz,ir] .+= -CX_frequency*fvec.density[iz,ir,isp]*(fvec.upar[iz,ir,isp]-fvec.upar[iz,ir,is])
-                        end
-                    end
-                end
-            end
-        end
-    else
-        @inbounds @fastmath begin
-            @loop_s is begin
-                if !moments.evolve_upar && is in composition.neutral_species_range
-                    # No acceleration for neutrals when not evolving upar
-                    continue
-                end
-                @loop_r ir begin
-                    # update the electrostatic potential phi
-                    # calculate the derivative of phi with respect to z;
-                    # the value at element boundaries is taken to be the average of the values
-                    # at neighbouring elements
-                    derivative!(z.scratch, view(fields.phi,:,ir), z, z_spectral)
-                    # advection velocity in vpa is -dphi/dz = -z.scratch
-                    @loop_z_vperp iz ivperp begin
-                        @views advect[is].speed[:,ivperp,iz,ir] .= -0.5*z.scratch[iz]
-                    end
+                    @views advect[is].speed[:,ivperp,iz,ir] .= -0.5*z.scratch[iz]
                 end
             end
         end
     end
+
 end
 
 """
