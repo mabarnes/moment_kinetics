@@ -62,7 +62,7 @@ for Chebyshev transforms, velocity space moments,
 EM fields, semi-Lagrange treatment, and advection terms
 """
 function setup_time_advance!(pdf, vpa, vperp, z, r, composition, drive_input, moments,
-                             t_input, collisions, species)
+                             t_input, collisions, species, geometry)
     # define some local variables for convenience/tidiness
     n_species = composition.n_species
     n_ion_species = composition.n_ion_species
@@ -141,7 +141,7 @@ function setup_time_advance!(pdf, vpa, vperp, z, r, composition, drive_input, mo
     begin_s_r_vperp_vpa_region()
     @loop_s is begin
         @views update_speed_z!(z_advect[is], moments.upar[:,:,is], moments.vth[:,:,is],
-                               moments.evolve_upar, moments.evolve_ppar, vpa, vperp, z, r, 0.0)
+                               moments.evolve_upar, moments.evolve_ppar, vpa, vperp, z, r, 0.0, geometry)
         # initialise the upwind/downwind boundary indices in z
         update_boundary_indices!(z_advect[is], loop_ranges[].vpa, loop_ranges[].vperp, loop_ranges[].r)
     end

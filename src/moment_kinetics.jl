@@ -153,7 +153,7 @@ function setup_moment_kinetics(input_dict::Dict)
     vpa_spectral, vperp_spectral, z_spectral, r_spectral, moments, fields, 
     vpa_advect, vperp_advect, z_advect, r_advect,
     vpa_SL, vperp_SL, z_SL, r_SL, scratch, advance, scratch_dummy = setup_time_advance!(pdf, vpa, vperp, z, r, composition,
-        drive_input, moments, t_input, collisions, species)
+        drive_input, moments, t_input, collisions, species, geometry)
     # setup i/o
     io, cdf = setup_file_io(output_dir, run_name, vpa, vperp, z, r, composition, collisions,
                             moments.evolve_ppar)
