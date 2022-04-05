@@ -23,7 +23,7 @@ function z_advection!(f_out, fvec_in, ff, moments, SL, advect, z, vpa, vperp, r,
 
         # advance z-advection equation
         @loop_r_vperp_vpa ir ivperp ivpa begin
-            z.scratch =  fvec_in.pdf[ivpa,ivperp,:,ir,is]
+            @. z.scratch = fvec_in.pdf[ivpa,ivperp,:,ir,is]
             @views advance_f_local!(f_out[ivpa,ivperp,:,ir,is], z.scratch, ff[ivpa,ivperp,:,ir,is], SL, advect[is], ivpa, ivperp, ir,
                                     z, dt, istage, spectral, use_semi_lagrange)
         end
