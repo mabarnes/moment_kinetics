@@ -24,7 +24,7 @@ function vpa_advection!(f_out, fvec_in, ff, fields, moments, SL, advect,
 
     # calculate the advection speed corresponding to current f
     update_speed_vpa!(advect, fields, fvec_in, moments, vpa, vperp,
-    z, r, composition, CX_frequency, t, z_spectral)
+    z, r, composition, CX_frequency, t, z_spectral, geometry)
     @loop_s is begin
         if is in composition.neutral_species_range
             # No acceleration for neutrals
@@ -46,7 +46,7 @@ end
 """
 calculate the advection speed in the vpa-direction at each grid point
 """
-function update_speed_vpa!(advect, fields, fvec, moments, vpa, vperp, z, r, composition, CX_frequency, t, z_spectral)
+function update_speed_vpa!(advect, fields, fvec, moments, vpa, vperp, z, r, composition, CX_frequency, t, z_spectral, geometry)
     @boundscheck r.n == size(advect[1].speed,4) || throw(BoundsError(advect))
     @boundscheck z.n == size(advect[1].speed,3) || throw(BoundsError(advect))
     @boundscheck vperp.n == size(advect[1].speed,2) || throw(BoundsError(advect))
@@ -55,7 +55,7 @@ function update_speed_vpa!(advect, fields, fvec, moments, vpa, vperp, z, r, comp
     @boundscheck vpa.n == size(advect[1].speed,1) || throw(BoundsError(speed))
     if vpa.advection.option == "default"
         # dvpa/dt = Ze/m ⋅ E_parallel
-        update_speed_default!(advect, fields, fvec, moments, vpa, vperp, z, r, composition, CX_frequency, t, z_spectral)
+        update_speed_default!(advect, fields, fvec, moments, vpa, vperp, z, r, composition, CX_frequency, t, z_spectral, geometry)
     elseif vpa.advection.option == "constant"
         @serial_region begin
             # Not usually used - just run in serial
@@ -93,8 +93,8 @@ end
 
 """
 """
-function update_speed_default!(advect, fields, fvec, moments, vpa, vperp, z, r, composition, CX_frequency, t, z_spectral)
-
+function update_speed_default!(advect, fields, fvec, moments, vpa, vperp, z, r, composition, CX_frequency, t, z_spectral, geometry)
+    kpar = geometry.Bzed/geometry.Bmag
     @inbounds @fastmath begin
         @loop_s is begin
             if is in composition.neutral_species_range
@@ -108,8 +108,9 @@ function update_speed_default!(advect, fields, fvec, moments, vpa, vperp, z, r, 
                 # at neighbouring elements
                 derivative!(z.scratch, view(fields.phi,:,ir), z, z_spectral)
                 # advection velocity in vpa is -dphi/dz = -z.scratch
+                # kpar = Bzed/Bmag
                 @loop_z_vperp iz ivperp begin
-                    @views advect[is].speed[:,ivperp,iz,ir] .= -0.5*z.scratch[iz]
+                    @views advect[is].speed[:,ivperp,iz,ir] .= -0.5*kpar*z.scratch[iz]
                 end
             end
         end

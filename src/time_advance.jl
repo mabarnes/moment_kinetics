@@ -224,7 +224,7 @@ function setup_time_advance!(pdf, vpa, vperp, z, r, composition, drive_input, mo
     # initialise the vpa advection speed
     begin_s_r_z_vperp_region()
     update_speed_vpa!(vpa_advect, fields, scratch[1], moments, vpa, vperp, z, r, composition,
-                      collisions.charge_exchange, 0.0, z_spectral)
+                      collisions.charge_exchange, 0.0, z_spectral, geometry)
     if moments.evolve_upar
         nspec = n_species
     else
