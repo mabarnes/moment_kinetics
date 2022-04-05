@@ -13,7 +13,7 @@ using ..looping
 do a single stage time advance (potentially as part of a multi-stage RK scheme)
 """
 function z_advection!(f_out, fvec_in, ff, moments, SL, advect, z, vpa, vperp, r,
-                      use_semi_lagrange, dt, t, spectral, composition, istage)
+                      use_semi_lagrange, dt, t, spectral, composition, geometry, istage)
     @loop_s is begin
         # get the updated speed along the z direction using the current f
         @views update_speed_z!(advect[is], fvec_in.upar[:,:,is], moments.vth[:,:,is],

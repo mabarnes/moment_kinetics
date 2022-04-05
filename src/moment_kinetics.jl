@@ -131,7 +131,7 @@ function setup_moment_kinetics(input_dict::Dict)
     # obtain input options from moment_kinetics_input.jl
     # and check input to catch errors
     run_name, output_dir, evolve_moments, t_input, z_input, r_input, vpa_input, vperp_input,
-        composition, species, collisions, drive_input = input
+        composition, species, collisions, geometry, drive_input = input
     # initialize z grid and write grid point locations to file
     z = define_coordinate(z_input, composition)
     # initialize r grid and write grid point locations to file
@@ -169,7 +169,7 @@ function setup_moment_kinetics(input_dict::Dict)
            moments, fields, 
            vpa_advect, vperp_advect, z_advect, r_advect, 
            vpa_SL, vperp_SL, z_SL, r_SL,
-           composition, collisions, advance, scratch_dummy, io, cdf
+           composition, collisions, geometry, advance, scratch_dummy, io, cdf
 end
 
 """

@@ -12,6 +12,7 @@ export species_composition
 export drive_input, drive_input_mutable
 export collisions_input
 export pp_input
+export geometry_input
 
 using ..type_definitions: mk_float, mk_int
 
@@ -241,6 +242,15 @@ mutable struct collisions_input
     ionization::mk_float
     # if constant_ionization_rate = true, use an ionization term that is constant in z
     constant_ionization_rate::Bool
+end
+
+"""
+"""
+mutable struct geometry_input
+    # Bz/Bref
+    Bzed::mk_float
+    # Btot/Bref
+    Bmag::mk_float
 end
 
 """

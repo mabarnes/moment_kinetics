@@ -52,7 +52,7 @@ function mk_input(scan_input=Dict())
     #   reference value using J_||e + J_||i = 0 at z = 0
     electron_physics = get(scan_input, "electron_physics", boltzmann_electron_response)
     
-    z, r, vpa, vperp, species, composition, drive, evolve_moments, collisions =
+    z, r, vpa, vperp, species, composition, drive, evolve_moments, collisions, geometry =
         load_defaults(n_ion_species, n_neutral_species, electron_physics)
 
     # this is the prefix for all output files associated with this run
@@ -253,7 +253,7 @@ function mk_input(scan_input=Dict())
     # return immutable structs for z, vpa, species and composition
     all_inputs = (run_name, output_dir, evolve_moments, t, 
                   z_immutable, r_immutable, vpa_immutable, vperp_immutable,
-                  composition, species_immutable, collisions, drive_immutable)
+                  composition, species_immutable, collisions, geometry, drive_immutable)
     println(io, "\nAll inputs returned from mk_input():")
     println(io, all_inputs)
     close(io)
@@ -515,7 +515,11 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     constant_ionization_rate = false
     collisions = collisions_input(charge_exchange, ionization, constant_ionization_rate)
 
-    return z, r, vpa, vperp, species, composition, drive, evolve_moments, collisions
+    Bzed = 1.0
+    Bmag = 1.0
+    geometry = geometry_input(Bzed,Bmag)
+
+    return z, r, vpa, vperp, species, composition, drive, evolve_moments, collisions, geometry
 end
 
 """
