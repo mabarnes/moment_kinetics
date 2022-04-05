@@ -703,16 +703,16 @@ function runtests()
 
         @testset "finite difference" begin
             run_test_set_finite_difference()
-            @long run_test_set_finite_difference_split_1_moment()
-            @long run_test_set_finite_difference_split_2_moments()
-            run_test_set_finite_difference_split_3_moments()
+            #@long run_test_set_finite_difference_split_1_moment()
+            #@long run_test_set_finite_difference_split_2_moments()
+            #run_test_set_finite_difference_split_3_moments()
         end
 
         @testset "Chebyshev" begin
             run_test_set_chebyshev()
-            run_test_set_chebyshev_split_1_moment()
-            run_test_set_chebyshev_split_2_moments()
-            run_test_set_chebyshev_split_3_moments()
+            #run_test_set_chebyshev_split_1_moment()
+            #run_test_set_chebyshev_split_2_moments()
+            #run_test_set_chebyshev_split_3_moments()
         end
     end
 end
