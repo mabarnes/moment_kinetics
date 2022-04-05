@@ -515,9 +515,10 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     constant_ionization_rate = false
     collisions = collisions_input(charge_exchange, ionization, constant_ionization_rate)
 
-    Bzed = 1.0
-    Bmag = 1.0
-    geometry = geometry_input(Bzed,Bmag)
+    Bzed = 1.0 # magnetic field component along z
+    Bmag = 1.0 # magnetic field strength
+    rstar = 0.0 #rhostar of ions for ExB drift
+    geometry = geometry_input(Bzed,Bmag,rstar)
 
     return z, r, vpa, vperp, species, composition, drive, evolve_moments, collisions, geometry
 end

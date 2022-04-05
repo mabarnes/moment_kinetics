@@ -52,6 +52,7 @@ end
 mutable struct scratch_dummy_arrays
     dummy_sr::Array{mk_float,2}
     dummy_vpavperp::Array{mk_float,2}
+    dummy_zr::Array{mk_float,2}
 end 
 
 """
@@ -114,42 +115,6 @@ function setup_time_advance!(pdf, vpa, vperp, z, r, composition, drive_input, mo
                                advance_continuity, advance_force_balance, advance_energy, rk_coefs)
     end
     
-    # create structure r_advect whose members are the arrays needed to compute
-    # the advection term(s) appearing in the split part of the GK equation dealing
-    # with advection in r
-    begin_serial_region()
-    r_advect = setup_advection(n_species, r, vpa, vperp, z)
-    # initialise the r advection speed
-    begin_s_z_vperp_vpa_region()
-    @loop_s is begin
-        @views update_speed_r!(r_advect[is], moments.upar[:,:,is], moments.vth[:,:,is],
-                               moments.evolve_upar, moments.evolve_ppar, vpa, vperp, z, r, 0.0)
-        # initialise the upwind/downwind boundary indices in z
-        update_boundary_indices!(r_advect[is], loop_ranges[].vpa, loop_ranges[].vperp, loop_ranges[].z)
-    end
-    # enforce prescribed boundary condition in r on the distribution function f
-    # PLACEHOLDER
-    #@views enforce_r_boundary_condition!(pdf.unnorm, r.bc, r_advect, vpa, z, composition)
-    
-    
-    # create structure z_advect whose members are the arrays needed to compute
-    # the advection term(s) appearing in the split part of the GK equation dealing
-    # with advection in z
-    begin_serial_region()
-    z_advect = setup_advection(n_species, z, vpa, vperp, r)
-    # initialise the z advection speed
-    begin_s_r_vperp_vpa_region()
-    @loop_s is begin
-        @views update_speed_z!(z_advect[is], moments.upar[:,:,is], moments.vth[:,:,is],
-                               moments.evolve_upar, moments.evolve_ppar, vpa, vperp, z, r, 0.0, geometry)
-        # initialise the upwind/downwind boundary indices in z
-        update_boundary_indices!(z_advect[is], loop_ranges[].vpa, loop_ranges[].vperp, loop_ranges[].r)
-    end
-    # enforce prescribed boundary condition in z on the distribution function f
-    @views enforce_z_boundary_condition!(pdf.unnorm, z.bc, z_advect, vpa, vperp, r, composition)
-    if z.bc != "wall" || composition.n_neutral_species == 0
-        begin_serial_region()
-    end
     
     if z.discretization == "chebyshev_pseudospectral"
         # create arrays needed for explicit Chebyshev pseudospectral treatment in vpa
@@ -204,8 +169,9 @@ function setup_time_advance!(pdf, vpa, vperp, z, r, composition, drive_input, mo
     scratch = setup_scratch_arrays(moments, pdf.norm, t_input.n_rk_stages)
     # setup dummy arrays
     dummy_sr = allocate_float(r.n, composition.n_species)
+    dummy_zr = allocate_float(z.n, r.n)
     dummy_vpavperp = allocate_float(vpa.n, vperp.n)
-    scratch_dummy = scratch_dummy_arrays(dummy_sr,dummy_vpavperp)
+    scratch_dummy = scratch_dummy_arrays(dummy_sr,dummy_vpavperp,dummy_zr)
     # create the "fields" structure that contains arrays
     # for the electrostatic potential phi and eventually the electromagnetic fields
     fields = setup_em_fields(z.n, r.n, drive_input.force_phi, drive_input.amplitude, drive_input.frequency)
@@ -217,6 +183,45 @@ function setup_time_advance!(pdf, vpa, vperp, z, r, composition, drive_input, mo
         # save the initial phi(z) for possible use later (e.g., if forcing phi)
         fields.phi0 .= fields.phi
     end
+    
+    # create structure r_advect whose members are the arrays needed to compute
+    # the advection term(s) appearing in the split part of the GK equation dealing
+    # with advection in r
+    begin_serial_region()
+    r_advect = setup_advection(n_species, r, vpa, vperp, z)
+    # initialise the r advection speed
+    begin_s_z_vperp_vpa_region()
+    @loop_s is begin
+        @views update_speed_r!(r_advect[is], moments.upar[:,:,is], moments.vth[:,:,is],
+                               moments.evolve_upar, moments.evolve_ppar, vpa, vperp, z, r, 0.0)
+        # initialise the upwind/downwind boundary indices in z
+        update_boundary_indices!(r_advect[is], loop_ranges[].vpa, loop_ranges[].vperp, loop_ranges[].z)
+    end
+    # enforce prescribed boundary condition in r on the distribution function f
+    # PLACEHOLDER
+    #@views enforce_r_boundary_condition!(pdf.unnorm, r.bc, r_advect, vpa, z, composition)
+    
+    
+    # create structure z_advect whose members are the arrays needed to compute
+    # the advection term(s) appearing in the split part of the GK equation dealing
+    # with advection in z
+    begin_serial_region()
+    z_advect = setup_advection(n_species, z, vpa, vperp, r)
+    # initialise the z advection speed
+    begin_s_r_vperp_vpa_region()
+    @loop_s is begin
+        @views update_speed_z!(z_advect[is], fields, moments.upar[:,:,is], moments.vth[:,:,is],
+                               moments.evolve_upar, moments.evolve_ppar, vpa, vperp, z, r,
+                               0.0, geometry, scratch_dummy, r_spectral)
+        # initialise the upwind/downwind boundary indices in z
+        update_boundary_indices!(z_advect[is], loop_ranges[].vpa, loop_ranges[].vperp, loop_ranges[].r)
+    end
+    # enforce prescribed boundary condition in z on the distribution function f
+    @views enforce_z_boundary_condition!(pdf.unnorm, z.bc, z_advect, vpa, vperp, r, composition)
+    if z.bc != "wall" || composition.n_neutral_species == 0
+        begin_serial_region()
+    end
+    
     # create structure vpa_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the split part of the GK equation dealing
     # with advection in vpa
@@ -439,7 +444,7 @@ function time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, vperp, z, r,
             vpa_SL, vperp_SL, z_SL, r_SL,
             vpa_advect, vperp_advect, z_advect, r_advect, vpa, vperp, z, r, t,
             t_input, vpa_spectral, vperp_spectral, z_spectral, r_spectral, composition,
-            collisions, geometry, advance, 1)
+            collisions, geometry, scratch_dummy, advance, 1)
         # NB: this must be broken -- scratch is updated in euler_time_advance!,
         # but not the pdf or moments.  need to add update to these quantities here
     end
@@ -511,7 +516,7 @@ function ssp_rk!(pdf, scratch, t, t_input, vpa, vperp, z, r,
             pdf, fields, moments, vpa_SL, vperp_SL, z_SL, r_SL,
             vpa_advect, vperp_advect, z_advect, r_advect, vpa, vperp, z, r, t,
             t_input, vpa_spectral, vperp_spectral, z_spectral, r_spectral, composition,
-            collisions, geometry, advance, istage)
+            collisions, geometry, scratch_dummy, advance, istage)
         @views rk_update!(scratch, pdf, moments, fields, vpa, vperp, z, r, advance.rk_coefs[:,istage], istage, composition)
     end
 
@@ -539,7 +544,8 @@ with fvec_in an input and fvec_out the output
 """
 function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, vperp_SL, z_SL, r_SL,
     vpa_advect, vperp_advect, z_advect, r_advect, vpa, vperp, z, r, t, t_input,
-    vpa_spectral, vperp_spectral, z_spectral, r_spectral, composition, collisions, geometry, advance, istage)
+    vpa_spectral, vperp_spectral, z_spectral, r_spectral, composition, collisions, geometry,
+    scratch_dummy, advance, istage)
     # define some abbreviated variables for tidiness
     n_ion_species = composition.n_ion_species
     dt = t_input.dt
@@ -560,8 +566,8 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, vp
     
     if advance.z_advection
         begin_s_r_vperp_vpa_region()
-        z_advection!(fvec_out.pdf, fvec_in, pdf.norm, moments, z_SL, z_advect, z, vpa, vperp, r,
-            use_semi_lagrange, dt, t, z_spectral, composition, geometry, istage)
+        z_advection!(fvec_out.pdf, fvec_in, pdf.norm, fields, moments, z_SL, z_advect, z, vpa, vperp, r, r_spectral,
+            use_semi_lagrange, dt, t, z_spectral, composition, geometry, scratch_dummy, istage)
         begin_s_r_z_vperp_region()
     end
     

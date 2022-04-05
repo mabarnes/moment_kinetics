@@ -251,6 +251,8 @@ mutable struct geometry_input
     Bzed::mk_float
     # Btot/Bref
     Bmag::mk_float
+    # rhostar ion (ref)
+    rstar::mk_float #used to premultiply ExB drift terms 
 end
 
 """
