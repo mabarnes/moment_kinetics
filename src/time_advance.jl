@@ -572,10 +572,6 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, vp
     # PLACEHOLDER 
     #end 
     
-    if advance.source_terms
-        source_terms!(fvec_out.pdf, fvec_in, moments, vpa, vperp, z, r, dt, z_spectral,
-                      composition, collisions.charge_exchange)
-    end
     # account for charge exchange collisions between ions and neutrals
     if advance.cx_collisions
         charge_exchange_collisions!(fvec_out.pdf, fvec_in, moments, composition, vpa, vperp, z, r,
@@ -586,8 +582,8 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, vp
         ionization_collisions!(fvec_out.pdf, fvec_in, moments, n_ion_species,
             composition.n_neutral_species, vpa, vperp, z, r, composition, collisions, z.n, dt)
     end
+    
     # enforce boundary conditions in z and vpa on the distribution function
-    # NB: probably need to do the same for the evolved moments
     enforce_boundary_conditions!(fvec_out.pdf, vpa.bc, z.bc, vpa, vperp, z, r, vpa_advect, z_advect, composition)
     # End of advance for distribution function
 
