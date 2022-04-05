@@ -26,8 +26,8 @@ function vpa_advection!(f_out, fvec_in, ff, fields, moments, SL, advect,
     update_speed_vpa!(advect, fields, fvec_in, moments, vpa, vperp,
     z, r, composition, CX_frequency, t, z_spectral)
     @loop_s is begin
-        if !moments.evolve_upar && is in composition.neutral_species_range
-            # No acceleration for neutrals when not evolving upar
+        if is in composition.neutral_species_range
+            # No acceleration for neutrals
             continue
         end
         # update the upwind/downwind boundary indices and upwind_increment
@@ -61,8 +61,7 @@ function update_speed_vpa!(advect, fields, fvec, moments, vpa, vperp, z, r, comp
             # Not usually used - just run in serial
             #
             # dvpa/dt = constant
-            s_range = ifelse(moments.evolve_upar, 1:composition.n_species,
-                             composition.ion_species_range)
+            s_range = composition.ion_species_range
             for is ∈ s_range
                 update_speed_constant!(advect[is], vpa, 1:vperp.n, 1:z.n, 1:r.n)
             end
@@ -73,8 +72,7 @@ function update_speed_vpa!(advect, fields, fvec, moments, vpa, vperp, z, r, comp
             # Not usually used - just run in serial
             #
             # dvpa/dt = constant ⋅ (vpa + L_vpa/2)
-            s_range = ifelse(moments.evolve_upar, 1:composition.n_species,
-                             composition.ion_species_range)
+            s_range = composition.ion_species_range
             for is ∈ s_range
                 update_speed_linear!(advect[is], vpa, 1:vperp.n, 1:z.n, 1:r.n)
             end
@@ -82,8 +80,8 @@ function update_speed_vpa!(advect, fields, fvec, moments, vpa, vperp, z, r, comp
         block_sychronize()
     end
     @loop_s is begin
-        if !moments.evolve_upar && is in composition.neutral_species_range
-            # No acceleration for neutrals when not evolving upar
+        if is in composition.neutral_species_range
+            # No acceleration for neutrals
             continue
         end
         @loop_r_z_vperp ir iz ivperp begin
@@ -99,8 +97,8 @@ function update_speed_default!(advect, fields, fvec, moments, vpa, vperp, z, r, 
 
     @inbounds @fastmath begin
         @loop_s is begin
-            if !moments.evolve_upar && is in composition.neutral_species_range
-                # No acceleration for neutrals when not evolving upar
+            if is in composition.neutral_species_range
+                # No acceleration for neutrals
                 continue
             end
             @loop_r ir begin
