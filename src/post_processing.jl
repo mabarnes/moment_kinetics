@@ -80,7 +80,11 @@ function analyze_and_plot_data(path)
         ff[:,ivperp0,:,ir0,:,:],
         n_species, evolve_ppar, nvpa, vpa, vpa_wgts,
         nz, z, z_wgts, Lz, ntime, time)
-     
+    
+    # analyze the fields data
+    phi_fldline_avg, delta_phi = analyze_fields_data(phi[iz0,:,:], ntime, nr, r_wgts, Lr)    
+    plot_fields_rt(phi[iz0,:,:], delta_phi, time, itime_min, itime_max, nwrite_movie,
+    r, ir0, run_name, delta_phi, pp)
     close(fid)
 
 end
@@ -760,5 +764,52 @@ end
 #    rmserr = sqrt(sum((fend .- fstart).^2))/(size(fend,1)*size(fend,2)*size(fend,3))
 #    println("advection_test_1d rms error: ", rmserr)
 #end
+
+function plot_fields_rt(phi, delta_phi, time, itime_min, itime_max, nwrite_movie,
+    r, ir0, run_name, fitted_delta_phi, pp)
+
+    println("Plotting fields data...")
+    phimin = minimum(phi)
+    phimax = maximum(phi)
+    if pp.plot_phi0_vs_t
+        # plot the time trace of phi(r=r0)
+        #plot(time, log.(phi[i,:]), yscale = :log10)
+        @views plot(time, phi[ir0,:])
+        outfile = string(run_name, "_phi(r0,z0)_vs_t.pdf")
+        savefig(outfile)
+        # plot the time trace of phi(r=r0)-phi_fldline_avg
+        @views plot(time, abs.(delta_phi[ir0,:]), xlabel="t*Lz/vti", ylabel="δϕ", yaxis=:log)
+        if pp.calculate_frequencies
+            plot!(time, abs.(fitted_delta_phi))
+        end
+        outfile = string(run_name, "_delta_phi(r0,z0)_vs_t.pdf")
+        savefig(outfile)
+    end
+    if pp.plot_phi_vs_z_t
+        # make a heatmap plot of ϕ(r,t)
+        heatmap(time, r, phi, xlabel="time", ylabel="r", title="ϕ", c = :deep)
+        outfile = string(run_name, "_phi_vs_r_t.pdf")
+        savefig(outfile)
+    end
+    if pp.animate_phi_vs_z
+        # make a gif animation of ϕ(r) at different times
+        anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+            @views plot(r, phi[:,i], xlabel="r", ylabel="ϕ", ylims = (phimin,phimax))
+        end
+        outfile = string(run_name, "_phi_vs_r.gif")
+        gif(anim, outfile, fps=5)
+    end
+    # nz = length(z)
+    # izmid = cld(nz,2)
+    # plot(z[izmid:end], phi[izmid:end,end] .- phi[izmid,end], xlabel="z/Lz - 1/2", ylabel="eϕ/Te", label = "data", linewidth=2)
+    # plot!(exp.(-(phi[cld(nz,2),end] .- phi[izmid:end,end])) .* erfi.(sqrt.(abs.(phi[cld(nz,2),end] .- phi[izmid:end,end])))/sqrt(pi)/0.688, phi[izmid:end,end] .- phi[izmid,end], label = "analytical", linewidth=2)
+    # outfile = string(run_name, "_harrison_comparison.pdf")
+    # savefig(outfile)
+    plot(r, phi[:,end], xlabel="r/Lr", ylabel="eϕ/Te", label="", linewidth=2)
+    outfile = string(run_name, "_phi(r)_final.pdf")
+    savefig(outfile)
+
+    println("done.")
+end
 
 end
