@@ -21,7 +21,7 @@ function setup(discretization, ngrid)
     return x, spectral
 end
 
-discretization_list = ["finite_difference", "chebyshev_pseudospectral",
+discretization_list = ["finite_difference", #"chebyshev_pseudospectral",
                        "chebyshev_pseudospectral_matrix_multiply", "lagrange_uniform"]
 
 p = plot(yaxis=:log)
@@ -49,5 +49,7 @@ for discretization ∈ discretization_list
     println()
     plot!(p, ngrids, errors, label=discretization)
 end
+
+ylims!(p, (1.0e-35,1.0))
 
 savefig(p, "derivative_convergence.pdf")

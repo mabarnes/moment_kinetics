@@ -133,10 +133,10 @@ test_input_chebyshev_matrix_multiply_split_3_moments = merge(
 test_input_lagrange_uniform = merge(test_input_finite_difference,
                                     Dict("run_name" => "lagrange_uniform",
                                          "z_discretization" => "lagrange_uniform",
-                                         "z_ngrid" => 9, "z_nelement" => 2,
+                                         "z_ngrid" => 9, "z_nelement" => 4,
                                          "vpa_discretization" => "lagrange_uniform",
-                                         "vpa_ngrid" => 17,
-                                         "vpa_nelement" => 8))
+                                         "vpa_ngrid" => 8,
+                                         "vpa_nelement" => 64))
 
 test_input_lagrange_uniform_split_1_moment =
     merge(test_input_lagrange_uniform,
@@ -981,19 +981,19 @@ function runtests()
     @testset "sound wave" verbose=use_verbose begin
         println("sound wave tests")
 
-        @testset "finite difference" begin
-            run_test_set_finite_difference()
-            @long run_test_set_finite_difference_split_1_moment()
-            @long run_test_set_finite_difference_split_2_moments()
-            run_test_set_finite_difference_split_3_moments()
-        end
+        #@testset "finite difference" begin
+        #    run_test_set_finite_difference()
+        #    @long run_test_set_finite_difference_split_1_moment()
+        #    @long run_test_set_finite_difference_split_2_moments()
+        #    run_test_set_finite_difference_split_3_moments()
+        #end
 
-        @testset "Chebyshev" begin
-            run_test_set_chebyshev()
-            run_test_set_chebyshev_split_1_moment()
-            run_test_set_chebyshev_split_2_moments()
-            run_test_set_chebyshev_split_3_moments()
-        end
+        #@testset "Chebyshev" begin
+        #    run_test_set_chebyshev()
+        #    run_test_set_chebyshev_split_1_moment()
+        #    run_test_set_chebyshev_split_2_moments()
+        #    run_test_set_chebyshev_split_3_moments()
+        #end
 
         @testset "Lagrange pseudospectral, uniform grid" begin
             run_test_set_lagrange_uniform()
