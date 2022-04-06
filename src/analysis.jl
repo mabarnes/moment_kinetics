@@ -102,13 +102,13 @@ function analyze_pdf_data(ff, vpa, nvpa, nz, n_species, ntime, vpa_wgts, z_wgts,
         end
     end
     # delta_f = f - <f> is the fluctuating distribution function
-    delta_f = allocate_float(nvpa,nz,n_species,ntime)
+    delta_f = Float64.(allocate_float(nvpa,nz,n_species,ntime))
     for iz ∈ 1:nz
         @. delta_f[:,iz,:,:] = ff[:,iz,:,:] - f_fldline_avg
     end
-    dens_moment = allocate_float(nz,n_species,ntime)
-    upar_moment = allocate_float(nz,n_species,ntime)
-    ppar_moment = allocate_float(nz,n_species,ntime)
+    dens_moment = Float64.(allocate_float(nz,n_species,ntime))
+    upar_moment = Float64.(allocate_float(nz,n_species,ntime))
+    ppar_moment = Float64.(allocate_float(nz,n_species,ntime))
     for i ∈ 1:ntime
         for is ∈ 1:n_species
             for iz ∈ 1:nz

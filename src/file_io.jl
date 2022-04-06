@@ -14,6 +14,8 @@ using ..looping
 using ..moment_kinetics_structs: scratch_pdf, em_fields_struct
 using ..type_definitions: mk_float, mk_int
 
+const io_float = Float64
+
 """
 structure containing the various input/output streams
 """
@@ -33,14 +35,14 @@ end
 # able to pick up the return types of `defVar()` at compile time, so without
 # using it the result returned from `setup_file_io()` is not a concrete type.
 nc_var_type{N} = Union{
-   NCDatasets.CFVariable{mk_float, N,
-                         NCDatasets.Variable{mk_float, N, NCDatasets.NCDataset},
+   NCDatasets.CFVariable{io_float, N,
+                         NCDatasets.Variable{io_float, N, NCDatasets.NCDataset},
                          NCDatasets.Attributes{NCDatasets.NCDataset{Nothing}},
                          NamedTuple{(:fillvalue, :scale_factor, :add_offset,
                                      :calendar, :time_origin, :time_factor),
                                     NTuple{6, Nothing}}},
-   NCDatasets.CFVariable{mk_float, N,
-                         NCDatasets.Variable{mk_float, N,
+   NCDatasets.CFVariable{io_float, N,
+                         NCDatasets.Variable{io_float, N,
                                              NCDatasets.NCDataset{Nothing}},
                          NCDatasets.Attributes{NCDatasets.NCDataset{Nothing}},
                          NamedTuple{(:fillvalue, :scale_factor, :add_offset,
@@ -138,53 +140,53 @@ function define_static_variables!(fid,vpa,z,r,composition,collisions,evolve_ppar
     varname = "r"
     attributes = Dict("description" => "radial coordinate")
     dims = ("nr",)
-    vartype = mk_float
+    vartype = io_float
     var = defVar(fid, varname, vartype, dims, attrib=attributes)
     var[:] = r.grid
     # create and write the "r_wgts" variable to file
     varname = "r_wgts"
     attributes = Dict("description" => "integration weights for radial coordinate")
-    vartype = mk_float
+    vartype = io_float
     var = defVar(fid, varname, vartype, dims, attrib=attributes)
     var[:] = r.wgts
     # create and write the "z" variable to file
     varname = "z"
     attributes = Dict("description" => "parallel coordinate")
     dims = ("nz",)
-    vartype = mk_float
+    vartype = io_float
     var = defVar(fid, varname, vartype, dims, attrib=attributes)
     var[:] = z.grid
     # create and write the "z_wgts" variable to file
     varname = "z_wgts"
     attributes = Dict("description" => "integration weights for parallel coordinate")
-    vartype = mk_float
+    vartype = io_float
     var = defVar(fid, varname, vartype, dims, attrib=attributes)
     var[:] = z.wgts
     # create and write the "vpa" variable to file
     varname = "vpa"
     attributes = Dict("description" => "parallel velocity")
     dims = ("nvpa",)
-    vartype = mk_float
+    vartype = io_float
     var = defVar(fid, varname, vartype, dims, attrib=attributes)
     var[:] = vpa.grid
     # create and write the "vpa_wgts" variable to file
     varname = "vpa_wgts"
     attributes = Dict("description" => "integration weights for parallel velocity coordinate")
-    vartype = mk_float
+    vartype = io_float
     var = defVar(fid, varname, vartype, dims, attrib=attributes)
     var[:] = vpa.wgts
     # create and write the "T_e" variable to file
     varname = "T_e"
     attributes = Dict("description" => "electron temperature")
     dims = ()
-    vartype = mk_float
+    vartype = io_float
     var = defVar(fid, varname, vartype, dims, attrib=attributes)
     var[:] = composition.T_e
     # create and write the "charge_exchange_frequency" variable to file
     varname = "charge_exchange_frequency"
     attributes = Dict("description" => "charge exchange collision frequency")
     dims = ()
-    vartype = mk_float
+    vartype = io_float
     var = defVar(fid, varname, vartype, dims, attrib=attributes)
     var[:] = collisions.charge_exchange
     # create and write the "evolve_ppar" variable to file
@@ -208,16 +210,16 @@ function define_dynamic_variables!(fid)
     varname = "time"
     attributes = Dict("description" => "time")
     dims = ("ntime",)
-    vartype = mk_float
+    vartype = io_float
     cdf_time = defVar(fid, varname, vartype, dims, attrib=attributes)
     # create the "f" variable
     varname = "f"
     attributes = Dict("description" => "distribution function")
-    vartype = mk_float
+    vartype = io_float
     dims = ("nvpa","nz","nr","n_species","ntime")
     cdf_f = defVar(fid, varname, vartype, dims, attrib=attributes)
     # create variables that are floats with data in the z and time dimensions
-    vartype = mk_float
+    vartype = io_float
     dims = ("nz","nr","ntime")
     # create the "phi" variable, which will contain the electrostatic potential
     varname = "phi"
@@ -225,7 +227,7 @@ function define_dynamic_variables!(fid)
                       "units" => "Te/e")
     cdf_phi = defVar(fid, varname, vartype, dims, attrib=attributes)
     # create variables that are floats with data in the z, species and time dimensions
-    vartype = mk_float
+    vartype = io_float
     dims = ("nz","nr","n_species","ntime")
     # create the "density" variable, which will contain the species densities
     varname = "density"
@@ -389,18 +391,18 @@ function write_data_to_binary(ff, moments, fields, t, n_species, cdf, t_idx)
         # Only read/write from first process in each 'block'
 
         # add the time for this time slice to the netcdf file
-        cdf.time[t_idx] = t
+        cdf.time[t_idx] = io_float(t)
         # add the distribution function data at this time slice to the netcdf file
-        cdf.f[:,:,:,:,t_idx] = ff
+        cdf.f[:,:,:,:,t_idx] = io_float.(ff)
         # add the electrostatic potential data at this time slice to the netcdf file
-        cdf.phi[:,:,t_idx] = fields.phi
+        cdf.phi[:,:,t_idx] = io_float.(fields.phi)
         # add the density data at this time slice to the netcdf file
         for is ∈ 1:n_species
-            cdf.density[:,:,:,t_idx] = moments.dens
-            cdf.parallel_flow[:,:,:,t_idx] = moments.upar
-            cdf.parallel_pressure[:,:,:,t_idx] = moments.ppar
-            cdf.parallel_heat_flux[:,:,:,t_idx] = moments.qpar
-            cdf.thermal_speed[:,:,:,t_idx] = moments.vth
+            cdf.density[:,:,:,t_idx] = io_float.(moments.dens)
+            cdf.parallel_flow[:,:,:,t_idx] = io_float.(moments.upar)
+            cdf.parallel_pressure[:,:,:,t_idx] = io_float.(moments.ppar)
+            cdf.parallel_heat_flux[:,:,:,t_idx] = io_float.(moments.qpar)
+            cdf.thermal_speed[:,:,:,t_idx] = io_float.(moments.vth)
         end
     end
     return nothing

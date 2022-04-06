@@ -17,7 +17,8 @@ using ..post_processing_input: pp
 using ..quadrature: composite_simpson_weights
 using ..array_allocation: allocate_float
 using ..file_io: open_output_file
-using ..type_definitions: mk_float, mk_int
+using ..type_definitions: mk_int
+using ..file_io: io_float
 using ..load_data: open_netcdf_file
 using ..load_data: load_coordinate_data, load_fields_data, load_moments_data, load_pdf_data
 using ..analysis: analyze_fields_data, analyze_moments_data, analyze_pdf_data
@@ -334,7 +335,7 @@ function calculate_and_write_frequencies(fid, run_name, ntime, time, z, itime_mi
             if name in fid
                 return fid[name]
             else
-                return defVar(fid, name, mk_float, dims,
+                return defVar(fid, name, io_float, dims,
                               attrib=Dict("description"=>description))
             end
         end
@@ -570,11 +571,11 @@ oscillatory or the fit will not work.
 
 Arguments
 ---------
-z : Array{mk_float, 1}
+z : Array{io_float, 1}
     1d array of the grid point positions
-t : Array{mk_float, 1}
+t : Array{io_float, 1}
     1d array of the time points
-delta_phi : Array{mk_float, 2}
+delta_phi : Array{io_float, 2}
     2d array of the values of delta_phi(z, t)
 
 Returns
@@ -582,21 +583,21 @@ Returns
 phi_fit_result struct whose fields are:
     growth_rate : mk_flaot
         Fitted growth rate of the mode
-    amplitude0 : mk_float
+    amplitude0 : io_float
         Fitted amplitude at t=0
-    frequency : mk_float
+    frequency : io_float
         Fitted frequency of the mode
-    offset0 : mk_float
+    offset0 : io_float
         Fitted offset at t=0
-    amplitude_fit_error : mk_float
+    amplitude_fit_error : io_float
         RMS error in fit to ln(amplitude) - i.e. ln(A)
-    offset_fit_error : mk_float
+    offset_fit_error : io_float
         RMS error in fit to offset - i.e. δ
-    cosine_fit_error : mk_float
+    cosine_fit_error : io_float
         Maximum of the RMS errors of the cosine fits at each time point
-    amplitude : Array{mk_float, 1}
+    amplitude : Array{io_float, 1}
         Values of amplitude from which growth_rate fit was calculated
-    offset : Array{mk_float, 1}
+    offset : Array{io_float, 1}
         Values of offset from which frequency fit was calculated
 """
 function fit_delta_phi_mode(t, z, delta_phi)
