@@ -5,9 +5,10 @@ module type_definitions
 export mk_float
 export mk_int
 
+using Quadmath
 """
 """
-const mk_float = Float64
+const mk_float = Float128
 
 """
 """
