@@ -601,7 +601,8 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, vp
     end
     
     # enforce boundary conditions in z and vpa on the distribution function
-    enforce_boundary_conditions!(fvec_out.pdf, vpa.bc, z.bc, vpa, vperp, z, r, vpa_advect, z_advect, composition)
+    enforce_boundary_conditions!(fvec_out.pdf, vpa.bc, z.bc, r.bc, vpa, vperp, z, r,
+     vpa_advect, z_advect, r_advect, composition)
     # End of advance for distribution function
 
     # reset "xx.updated" flags to false since ff has been updated
