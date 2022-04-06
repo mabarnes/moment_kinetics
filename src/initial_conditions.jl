@@ -396,12 +396,15 @@ impose the prescribed vpa boundary condition on f
 at every z grid point
 """
 function enforce_vpa_boundary_condition!(f, bc, src::T) where T
-    nz = size(f,2)
-    nr = size(f,3)
+    nvperp = size(f,2)
+    nz = size(f,3)
+    nr = size(f,4)
     for ir ∈ 1:nr
         for iz ∈ 1:nz
-            enforce_vpa_boundary_condition_local!(view(f,:,iz,ir), bc, src.upwind_idx[iz],
-                src.downwind_idx[iz])
+            for ivperp ∈ 1:nvperp
+                enforce_vpa_boundary_condition_local!(view(f,:,ivperp,iz,ir), bc, src.upwind_idx[ivperp,iz,iz],
+                src.downwind_idx[ivperp,iz,ir])
+            end
         end
     end
 end

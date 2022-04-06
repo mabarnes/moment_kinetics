@@ -193,7 +193,7 @@ function setup_time_advance!(pdf, vpa, vperp, z, r, composition, drive_input, mo
     # initialise the r advection speed
     begin_s_z_vperp_vpa_region()
     @loop_s is begin
-        @views update_speed_r!(r_advect[is], moments.upar[:,:,is], moments.vth[:,:,is],
+        @views update_speed_r!(r_advect[is], fields, moments.upar[:,:,is], moments.vth[:,:,is],
             vpa, vperp, z, r, 0.0, geometry, scratch_dummy, z_spectral)
         # initialise the upwind/downwind boundary indices in z
         update_boundary_indices!(r_advect[is], loop_ranges[].vpa, loop_ranges[].vperp, loop_ranges[].z)
