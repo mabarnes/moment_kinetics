@@ -77,6 +77,10 @@ function mk_input(scan_input=Dict())
     # set phi_wall at z = 0
     composition.phi_wall = get(scan_input, "phi_wall", 0.0)
     
+    ## set geometry_input
+    geometry.Bzed = get(scan_input, "Bzed", 1.0)
+    geometry.Bmag = get(scan_input, "Bmag", 1.0)
+    geometry.rstar = get(scan_input, "rhostar", 0.0)
     
     species[1].z_IC.initialization_option = get(scan_input, "z_IC_option1", "gaussian")
     species[1].initial_density = get(scan_input, "initial_density1", 1.0)
