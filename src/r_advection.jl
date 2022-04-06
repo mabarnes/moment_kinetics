@@ -5,7 +5,6 @@ module r_advection
 export r_advection!
 export update_speed_r!
 
-using ..semi_lagrange: find_approximate_characteristic!
 using ..advection: advance_f_local!, update_boundary_indices!
 using ..chebyshev: chebyshev_info
 using ..looping
@@ -22,28 +21,6 @@ function r_advection!(f_out, fvec_in, ff, moments, SL, advect, r, z, vpa,
         # update the upwind/downwind boundary indices and upwind_increment
         @views update_boundary_indices!(advect[is], loop_ranges[].vpa, loop_ranges[].z)
 
-        # if using interpolation-free Semi-Lagrange,
-        # follow characteristics backwards in time from level m+1 to level m
-        # to get departure points.  then find index of grid point nearest
-        # the departure point at time level m and use this to define
-        # an approximate characteristic
-        if use_semi_lagrange
-            print("SL NOT SUPPORTED in: function r_advection!")
-        end
-        # # advance z-advection equation
-        # if moments.evolve_density
-        #     for ivpa ∈ 1:vpa.n
-        #         @views @. advect[is].speed[:,ivpa] /= fvec_in.density[:,is]
-        #         @views @. advect[is].modified_speed[:,ivpa] /= fvec_in.density[:,is]
-        #         @views advance_f_local!(f_out[:,ivpa,is], fvec_in.density[:,is] .* fvec_in.pdf[:,ivpa,is],
-        #             ff[:,ivpa,is], SL[ivpa], advect[is], ivpa, z, dt, istage, spectral, use_semi_lagrange)
-        #     end
-        # else
-        #     for ivpa ∈ 1:vpa.n
-        #         @views advance_f_local!(f_out[:,ivpa,is], fvec_in.pdf[:,ivpa,is],
-        #             ff[:,ivpa,is], SL[ivpa], advect[is], ivpa, z, dt, istage, spectral, use_semi_lagrange)
-        #     end
-        # end
         # advance r-advection equation
         @loop_z_vpa iz ivpa begin
             @views adjust_advection_speed!(advect[is].speed[:,ivpa,iz], advect[is].modified_speed[:,ivpa,iz],
