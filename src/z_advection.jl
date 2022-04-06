@@ -13,8 +13,8 @@ using ..looping
 """
 do a single stage time advance (potentially as part of a multi-stage RK scheme)
 """
-function z_advection!(f_out, fvec_in, ff, fields, moments, SL, advect, z, vpa, vperp, r, r_spectral,
-                      use_semi_lagrange, dt, t, spectral, composition, geometry, scratch_dummy, istage)
+function z_advection!(f_out, fvec_in, ff, fields, moments, SL, advect, z, vpa, vperp, r, 
+                      use_semi_lagrange, dt, t, z_spectral, r_spectral, composition, geometry, scratch_dummy, istage)
     
     
     @loop_s is begin
@@ -28,7 +28,7 @@ function z_advection!(f_out, fvec_in, ff, fields, moments, SL, advect, z, vpa, v
         @loop_r_vperp_vpa ir ivperp ivpa begin
             @. z.scratch = fvec_in.pdf[ivpa,ivperp,:,ir,is]
             @views advance_f_local!(f_out[ivpa,ivperp,:,ir,is], z.scratch, ff[ivpa,ivperp,:,ir,is], SL, advect[is], ivpa, ivperp, ir,
-                                    z, dt, istage, spectral, use_semi_lagrange)
+                                    z, dt, istage, z_spectral, use_semi_lagrange)
         end
     end
 end

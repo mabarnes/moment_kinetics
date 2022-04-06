@@ -40,6 +40,7 @@ using ..semi_lagrange: setup_semi_lagrange
 mutable struct advance_info
     vpa_advection::Bool
     z_advection::Bool
+    r_advection::Bool
     cx_collisions::Bool
     ionization_collisions::Bool
     source_terms::Bool
@@ -74,7 +75,7 @@ function setup_time_advance!(pdf, vpa, vperp, z, r, composition, drive_input, mo
     # if no splitting of operators, all terms advanced concurrently;
     # else, will advance one term at a time.
     if t_input.split_operators
-        advance = advance_info(false, false, false, false, false, false, false, false, rk_coefs)
+        advance = advance_info(false, false, false, false, false, false, false, false, false, rk_coefs)
     else
         if composition.n_neutral_species > 0
             if collisions.charge_exchange > 0.0
@@ -111,7 +112,7 @@ function setup_time_advance!(pdf, vpa, vperp, z, r, composition, drive_input, mo
             advance_force_balance = false
             advance_energy = false
         end
-        advance = advance_info(true, true, advance_cx, advance_ionization, advance_sources,
+        advance = advance_info(true, true, true, advance_cx, advance_ionization, advance_sources,
                                advance_continuity, advance_force_balance, advance_energy, rk_coefs)
     end
     
@@ -193,7 +194,7 @@ function setup_time_advance!(pdf, vpa, vperp, z, r, composition, drive_input, mo
     begin_s_z_vperp_vpa_region()
     @loop_s is begin
         @views update_speed_r!(r_advect[is], moments.upar[:,:,is], moments.vth[:,:,is],
-                               moments.evolve_upar, moments.evolve_ppar, vpa, vperp, z, r, 0.0)
+            vpa, vperp, z, r, 0.0, geometry, scratch_dummy, z_spectral)
         # initialise the upwind/downwind boundary indices in z
         update_boundary_indices!(r_advect[is], loop_ranges[].vpa, loop_ranges[].vperp, loop_ranges[].z)
     end
@@ -564,16 +565,25 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, vp
     # z_advection! advances 1D advection equation in z
     # apply z-advection operation to all species (charged and neutral)
     
+    
+    # MRH UNSURE ABOUT PARALLELISATION HERE
+    # z advection relies on derivatives in r to get ExB
     if advance.z_advection
         begin_s_r_vperp_vpa_region()
-        z_advection!(fvec_out.pdf, fvec_in, pdf.norm, fields, moments, z_SL, z_advect, z, vpa, vperp, r, r_spectral,
-            use_semi_lagrange, dt, t, z_spectral, composition, geometry, scratch_dummy, istage)
+        z_advection!(fvec_out.pdf, fvec_in, pdf.norm, fields, moments, z_SL, z_advect, z, vpa, vperp, r, 
+            use_semi_lagrange, dt, t, z_spectral, r_spectral, composition, geometry, scratch_dummy, istage)
         begin_s_r_z_vperp_region()
+        #  SHOULD NOT CHANGE TO VPA STRUCTURE YET
     end
+    # MRH UNSURE ABOUT PARALLELISATION HERE
     
-    #if advance.r_advection
-    # PLACEHOLDER 
-    #end 
+    # MRH UNSURE ABOUT PARALLELISATION HERE  
+    # r advection relies on derivatives in z to get ExB
+    if advance.r_advection && r.n > 1
+        r_advection!(fvec_out.pdf, fvec_in, pdf.norm, fields, moments, r_SL, r_advect, r, z, vperp, vpa, 
+            use_semi_lagrange, dt, t, r_spectral, z_spectral, composition, geometry, scratch_dummy, istage)
+    end 
+    # MRH UNSURE ABOUT PARALLELISATION HERE
     
     #if advance.vperp_advection
     # PLACEHOLDER 
