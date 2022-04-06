@@ -402,7 +402,7 @@ function enforce_vpa_boundary_condition!(f, bc, src::T) where T
     for ir ∈ 1:nr
         for iz ∈ 1:nz
             for ivperp ∈ 1:nvperp
-                enforce_vpa_boundary_condition_local!(view(f,:,ivperp,iz,ir), bc, src.upwind_idx[ivperp,iz,iz],
+                enforce_vpa_boundary_condition_local!(view(f,:,ivperp,iz,ir), bc, src.upwind_idx[ivperp,iz,ir],
                 src.downwind_idx[ivperp,iz,ir])
             end
         end
