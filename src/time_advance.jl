@@ -194,7 +194,7 @@ function setup_time_advance!(pdf, vpa, vperp, z, r, composition, drive_input, mo
     begin_s_z_vperp_vpa_region()
     @loop_s is begin
         @views update_speed_r!(r_advect[is], fields, moments.upar[:,:,is], moments.vth[:,:,is],
-            vpa, vperp, z, r, 0.0, geometry, scratch_dummy, z_spectral)
+            vpa, vperp, z, r, 0.0, geometry)
         # initialise the upwind/downwind boundary indices in z
         update_boundary_indices!(r_advect[is], loop_ranges[].vpa, loop_ranges[].vperp, loop_ranges[].z)
     end
@@ -213,7 +213,7 @@ function setup_time_advance!(pdf, vpa, vperp, z, r, composition, drive_input, mo
     @loop_s is begin
         @views update_speed_z!(z_advect[is], fields, moments.upar[:,:,is], moments.vth[:,:,is],
                                moments.evolve_upar, moments.evolve_ppar, vpa, vperp, z, r,
-                               0.0, geometry, scratch_dummy, r_spectral)
+                               0.0, geometry)
         # initialise the upwind/downwind boundary indices in z
         update_boundary_indices!(z_advect[is], loop_ranges[].vpa, loop_ranges[].vperp, loop_ranges[].r)
     end
@@ -571,7 +571,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, vp
     if advance.z_advection
         begin_s_r_vperp_vpa_region()
         z_advection!(fvec_out.pdf, fvec_in, pdf.norm, fields, moments, z_SL, z_advect, z, vpa, vperp, r, 
-            use_semi_lagrange, dt, t, z_spectral, r_spectral, composition, geometry, scratch_dummy, istage)
+            use_semi_lagrange, dt, t, z_spectral, composition, geometry, istage)
         begin_s_r_z_vperp_region()
         #  SHOULD NOT CHANGE TO VPA STRUCTURE YET
     end
@@ -581,7 +581,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, vp
     # r advection relies on derivatives in z to get ExB
     if advance.r_advection && r.n > 1
         r_advection!(fvec_out.pdf, fvec_in, pdf.norm, fields, moments, r_SL, r_advect, r, z, vperp, vpa, 
-            use_semi_lagrange, dt, t, r_spectral, z_spectral, composition, geometry, scratch_dummy, istage)
+            use_semi_lagrange, dt, t, r_spectral, composition, geometry, istage)
     end 
     # MRH UNSURE ABOUT PARALLELISATION HERE
     

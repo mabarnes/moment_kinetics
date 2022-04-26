@@ -7,18 +7,17 @@ export update_speed_r!
 
 using ..advection: advance_f_local!, update_boundary_indices!
 using ..chebyshev: chebyshev_info
-using ..calculus: derivative!
 using ..looping
 
 """
 do a single stage time advance (potentially as part of a multi-stage RK scheme)
 """
 function r_advection!(f_out, fvec_in, ff, fields, moments, SL, advect, r, z, vperp, vpa, 
-                      use_semi_lagrange, dt, t, r_spectral, z_spectral, composition, geometry, scratch_dummy, istage)
+                      use_semi_lagrange, dt, t, r_spectral, composition, geometry, istage)
     @loop_s is begin
         # get the updated speed along the r direction using the current f
         @views update_speed_r!(advect[is], fields, fvec_in.upar[:,:,is], moments.vth[:,:,is],
-                                vpa, vperp, z, r, t, geometry, scratch_dummy, z_spectral)
+                                vpa, vperp, z, r, t, geometry)
         # update the upwind/downwind boundary indices and upwind_increment
         @views update_boundary_indices!(advect[is], loop_ranges[].vpa, loop_ranges[].vperp, loop_ranges[].z)
         
@@ -39,19 +38,13 @@ end
 """
 calculate the advection speed in the r-direction at each grid point
 """
-function update_speed_r!(advect, fields, upar, vth, vpa, vperp, z, r, t, geometry, scratch_dummy, z_spectral)
+function update_speed_r!(advect, fields, upar, vth, vpa, vperp, z, r, t, geometry)
     @boundscheck z.n == size(advect.speed,4) || throw(BoundsError(advect))
     @boundscheck vperp.n == size(advect.speed,3) || throw(BoundsError(advect))
     @boundscheck vpa.n == size(advect.speed,2) || throw(BoundsError(advect))
     @boundscheck r.n == size(advect.speed,1) || throw(BoundsError(speed))
     if r.advection.option == "default" && r.n > 1
-         @loop_r ir begin
-            derivative!(z.scratch, view(fields.phi,:,ir), z, z_spectral)
-            @loop_z iz begin
-                scratch_dummy.dummy_zr[iz,ir] = z.scratch[iz]
-            end
-        end
-        ExBfac = -0.5*geometry.rstar
+        ExBfac = 0.5*geometry.rstar
         @inbounds begin
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 @views advect.speed[:,ivpa,ivperp,iz] .= ExBfac*fields.Ez[iz,:]
