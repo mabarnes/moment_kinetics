@@ -20,6 +20,10 @@ end
 """
 """
 struct em_fields_struct
+    # Er is the radial electric field
+    Er::MPISharedArray{mk_float,2}
+    # Ez is the parallel electric field
+    Ez::MPISharedArray{mk_float,2}
     # phi is the electrostatic potential
     phi::MPISharedArray{mk_float,2}
     # phi0 is the initial electrostatic potential
