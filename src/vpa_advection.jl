@@ -9,7 +9,6 @@ using ..semi_lagrange: find_approximate_characteristic!
 using ..advection: update_boundary_indices!
 using ..advection: advance_f_local!
 using ..communication
-using ..calculus: derivative!
 using ..initial_conditions: enforce_vpa_boundary_condition!
 using ..looping
 
