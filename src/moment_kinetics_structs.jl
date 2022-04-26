@@ -20,14 +20,14 @@ end
 """
 """
 struct em_fields_struct
-    # Er is the radial electric field
-    Er::MPISharedArray{mk_float,2}
-    # Ez is the parallel electric field
-    Ez::MPISharedArray{mk_float,2}
     # phi is the electrostatic potential
     phi::MPISharedArray{mk_float,2}
     # phi0 is the initial electrostatic potential
     phi0::MPISharedArray{mk_float,2}
+    # Er is the radial electric field
+    Er::MPISharedArray{mk_float,2}
+    # Ez is the parallel electric field
+    Ez::MPISharedArray{mk_float,2}
     # if including an external forcing for phi, it is of the form
     # phi_external = phi0*drive_amplitude*sinpi(t*drive_frequency)
     force_phi::Bool
