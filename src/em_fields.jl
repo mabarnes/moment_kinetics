@@ -18,18 +18,24 @@ using ..velocity_moments: update_density!
 function setup_em_fields(nz, nr, force_phi, drive_amplitude, drive_frequency)
     phi = allocate_shared_float(nz,nr)
     phi0 = allocate_shared_float(nz,nr)
-    return em_fields_struct(phi, phi0, force_phi, drive_amplitude, drive_frequency)
+    Er = allocate_shared_float(nz,nr)
+    Ez = allocate_shared_float(nz,nr)
+    return em_fields_struct(phi, phi0, Er, Ez, force_phi, drive_amplitude, drive_frequency)
 end
 
 """
 update_phi updates the electrostatic potential, phi
 """
-function update_phi!(fields, fvec, z, r, composition)
+function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral)
     n_ion_species = composition.n_ion_species
     @boundscheck size(fields.phi,1) == z.n || throw(BoundsError(fields.phi))
     @boundscheck size(fields.phi,2) == r.n || throw(BoundsError(fields.phi))
     @boundscheck size(fields.phi0,1) == z.n || throw(BoundsError(fields.phi0))
     @boundscheck size(fields.phi0,2) == r.n || throw(BoundsError(fields.phi0))
+    @boundscheck size(fields.Er,1) == z.n || throw(BoundsError(fields.Er))
+    @boundscheck size(fields.Er,2) == r.n || throw(BoundsError(fields.Er))
+    @boundscheck size(fields.Ez,1) == z.n || throw(BoundsError(fields.Ez))
+    @boundscheck size(fields.Ez,2) == r.n || throw(BoundsError(fields.Ez))
     @boundscheck size(fvec.density,1) == z.n || throw(BoundsError(fvec.density))
     @boundscheck size(fvec.density,2) == r.n || throw(BoundsError(fvec.density))
     @boundscheck size(fvec.density,3) == composition.n_species || throw(BoundsError(fvec.density))
@@ -96,6 +102,22 @@ function update_phi!(fields, fvec, z, r, composition)
    
     ## can calculate phi at z = L and hence phi_wall(z=L) using jpar_i at z =L if needed
     end # end of r loop
+    
+    ## calculate the electric fields after obtaining phi
+    #Er = - d phi / dr 
+    @loop_z iz begin
+        derivative!(r.scratch, view(fields.phi,iz,:), r, r_spectral)
+        @loop_r ir begin 
+            fields.Er[iz,ir] = -r.scratch[ir]
+        end
+    end
+    #Ez = - d phi / dz 
+    @loop_r ir begin
+        derivative!(z.scratch, view(fields.phi,:,ir), z, z_spectral)
+        @loop_z iz begin 
+            fields.Ez[iz,ir] = -z.scratch[iz]
+        end
+    end
 end
 
 end
