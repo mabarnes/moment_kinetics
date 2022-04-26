@@ -61,7 +61,7 @@ function update_speed_z!(advect, fields, upar, vth, evolve_upar, evolve_ppar, vp
             end
 
             @loop_r_vperp_vpa ir ivperp ivpa begin
-                    @views advect.speed[:,ivpa,ivperp,ir] .= vpa.grid[ivpa]*kpar .+ ExBfac*scratch_dummy.dummy_zr[:,ir]
+                    @views advect.speed[:,ivpa,ivperp,ir] .= vpa.grid[ivpa]*kpar .+ ExBfac*fields.Er[:,ir]
             end
         
         end

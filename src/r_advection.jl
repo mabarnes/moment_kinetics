@@ -54,7 +54,7 @@ function update_speed_r!(advect, fields, upar, vth, vpa, vperp, z, r, t, geometr
         ExBfac = -0.5*geometry.rstar
         @inbounds begin
             @loop_z_vperp_vpa iz ivperp ivpa begin
-                @views advect.speed[:,ivpa,ivperp,iz] .= ExBfac*scratch_dummy.dummy_zr[iz,:]
+                @views advect.speed[:,ivpa,ivperp,iz] .= ExBfac*fields.Ez[iz,:]
             end
         end
     elseif r.advection.option == "default" && r.n == 1 

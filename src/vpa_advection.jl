@@ -110,7 +110,8 @@ function update_speed_default!(advect, fields, fvec, moments, vpa, vperp, z, r, 
                 # advection velocity in vpa is -dphi/dz = -z.scratch
                 # kpar = Bzed/Bmag
                 @loop_z_vperp iz ivperp begin
-                    @views advect[is].speed[:,ivperp,iz,ir] .= -0.5*kpar*z.scratch[iz]
+                    #@views advect[is].speed[:,ivperp,iz,ir] .= -0.5*kpar*z.scratch[iz]
+                    @views advect[is].speed[:,ivperp,iz,ir] .= 0.5*kpar*fields.Ez[iz,ir]
                 end
             end
         end

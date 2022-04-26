@@ -12,6 +12,7 @@ using ..input_structs
 using ..looping
 using ..moment_kinetics_structs: em_fields_struct
 using ..velocity_moments: update_density!
+using ..calculus: derivative!
 
 """
 """
@@ -105,11 +106,15 @@ function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral)
     
     ## calculate the electric fields after obtaining phi
     #Er = - d phi / dr 
-    @loop_z iz begin
-        derivative!(r.scratch, view(fields.phi,iz,:), r, r_spectral)
-        @loop_r ir begin 
-            fields.Er[iz,ir] = -r.scratch[ir]
+    if r.n > 1
+        @loop_z iz begin
+            derivative!(r.scratch, view(fields.phi,iz,:), r, r_spectral)
+            @loop_r ir begin 
+                fields.Er[iz,ir] = -r.scratch[ir]
+            end
         end
+    else
+        fields.Er[:,:] .= 0.0
     end
     #Ez = - d phi / dz 
     @loop_r ir begin

@@ -454,7 +454,7 @@ end
 
 """
 """
-function rk_update!(scratch, pdf, moments, fields, vpa, vperp, z, r, rk_coefs, istage, composition)
+function rk_update!(scratch, pdf, moments, fields, vpa, vperp, z, r, rk_coefs, istage, composition, z_spectral, r_spectral)
     begin_s_r_z_vperp_region()
     nvpa = size(pdf.unnorm, 1)
     new_scratch = scratch[istage+1]
@@ -518,7 +518,7 @@ function ssp_rk!(pdf, scratch, t, t_input, vpa, vperp, z, r,
             vpa_advect, vperp_advect, z_advect, r_advect, vpa, vperp, z, r, t,
             t_input, vpa_spectral, vperp_spectral, z_spectral, r_spectral, composition,
             collisions, geometry, scratch_dummy, advance, istage)
-        @views rk_update!(scratch, pdf, moments, fields, vpa, vperp, z, r, advance.rk_coefs[:,istage], istage, composition)
+        @views rk_update!(scratch, pdf, moments, fields, vpa, vperp, z, r, advance.rk_coefs[:,istage], istage, composition, z_spectral, r_spectral)
     end
 
     istage = n_rk_stages+1
