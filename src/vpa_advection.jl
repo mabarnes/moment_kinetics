@@ -17,14 +17,14 @@ using ..looping
 """
 function vpa_advection!(f_out, fvec_in, ff, fields, moments, SL, advect,
         vpa, vperp, z, r, use_semi_lagrange, dt, t,
-        vpa_spectral, z_spectral, composition, CX_frequency, geometry, istage)
+        vpa_spectral, composition, CX_frequency, geometry, istage)
 
     # only have a parallel acceleration term for neutrals if using the peculiar velocity
     # wpar = vpar - upar as a variable; i.e., d(wpar)/dt /=0 for neutrals even though d(vpar)/dt = 0.
 
     # calculate the advection speed corresponding to current f
     update_speed_vpa!(advect, fields, fvec_in, moments, vpa, vperp,
-    z, r, composition, CX_frequency, t, z_spectral, geometry)
+    z, r, composition, CX_frequency, t, geometry)
     @loop_s is begin
         if is in composition.neutral_species_range
             # No acceleration for neutrals
@@ -46,7 +46,7 @@ end
 """
 calculate the advection speed in the vpa-direction at each grid point
 """
-function update_speed_vpa!(advect, fields, fvec, moments, vpa, vperp, z, r, composition, CX_frequency, t, z_spectral, geometry)
+function update_speed_vpa!(advect, fields, fvec, moments, vpa, vperp, z, r, composition, CX_frequency, t, geometry)
     @boundscheck r.n == size(advect[1].speed,4) || throw(BoundsError(advect))
     @boundscheck z.n == size(advect[1].speed,3) || throw(BoundsError(advect))
     @boundscheck vperp.n == size(advect[1].speed,2) || throw(BoundsError(advect))
@@ -55,7 +55,7 @@ function update_speed_vpa!(advect, fields, fvec, moments, vpa, vperp, z, r, comp
     @boundscheck vpa.n == size(advect[1].speed,1) || throw(BoundsError(speed))
     if vpa.advection.option == "default"
         # dvpa/dt = Ze/m ⋅ E_parallel
-        update_speed_default!(advect, fields, fvec, moments, vpa, vperp, z, r, composition, CX_frequency, t, z_spectral, geometry)
+        update_speed_default!(advect, fields, fvec, moments, vpa, vperp, z, r, composition, CX_frequency, t, geometry)
     elseif vpa.advection.option == "constant"
         @serial_region begin
             # Not usually used - just run in serial
@@ -93,7 +93,7 @@ end
 
 """
 """
-function update_speed_default!(advect, fields, fvec, moments, vpa, vperp, z, r, composition, CX_frequency, t, z_spectral, geometry)
+function update_speed_default!(advect, fields, fvec, moments, vpa, vperp, z, r, composition, CX_frequency, t, geometry)
     kpar = geometry.Bzed/geometry.Bmag
     @inbounds @fastmath begin
         @loop_s is begin
@@ -102,15 +102,8 @@ function update_speed_default!(advect, fields, fvec, moments, vpa, vperp, z, r, 
                 continue
             end
             @loop_r ir begin
-                # update the electrostatic potential phi
-                # calculate the derivative of phi with respect to z;
-                # the value at element boundaries is taken to be the average of the values
-                # at neighbouring elements
-                derivative!(z.scratch, view(fields.phi,:,ir), z, z_spectral)
-                # advection velocity in vpa is -dphi/dz = -z.scratch
                 # kpar = Bzed/Bmag
                 @loop_z_vperp iz ivperp begin
-                    #@views advect[is].speed[:,ivperp,iz,ir] .= -0.5*kpar*z.scratch[iz]
                     @views advect[is].speed[:,ivperp,iz,ir] .= 0.5*kpar*fields.Ez[iz,ir]
                 end
             end
