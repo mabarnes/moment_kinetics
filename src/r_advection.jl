@@ -52,7 +52,9 @@ function update_speed_r!(advect, fields, upar, vth, vpa, vperp, z, r, t, geometr
         end
     elseif r.advection.option == "default" && r.n == 1 
         # no advection if no length in r 
-        @views advect.speed[:,:,:,:] .= 0.
+        @loop_z_vperp_vpa iz ivperp ivpa begin
+            advect.speed[:,ivpa,ivperp,iz] .= 0.
+        end
     elseif r.advection.option == "constant"
         @inbounds begin
             @loop_z_vperp_vpa iz ivperp ivpa begin

@@ -27,7 +27,7 @@ end
 """
 update_phi updates the electrostatic potential, phi
 """
-function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral)
+function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral, evolve_density)
     n_ion_species = composition.n_ion_species
     @boundscheck size(fields.phi,1) == z.n || throw(BoundsError(fields.phi))
     @boundscheck size(fields.phi,2) == r.n || throw(BoundsError(fields.phi))
@@ -45,7 +45,7 @@ function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral)
     # over species, and reduces number of _block_synchronize() calls needed
     # when there is only one species.
     
-    if (composition.n_ion_species > 1 ||
+    if (composition.n_ion_species > 1 || !evolve_density ||
         composition.electron_physics == boltzmann_electron_response_with_simple_sheath)
         # If there is more than 1 ion species, the ranks that handle species 1 have to
         # read density for all the other species, so need to synchronize here.
@@ -106,21 +106,23 @@ function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral)
     
     ## calculate the electric fields after obtaining phi
     #Er = - d phi / dr 
-    if r.n > 1
-        @loop_z iz begin
-            derivative!(r.scratch, view(fields.phi,iz,:), r, r_spectral)
-            @loop_r ir begin 
-                fields.Er[iz,ir] = -r.scratch[ir]
+    if 1 ∈ loop_ranges[].s
+        if r.n > 1
+            @loop_z iz begin
+                derivative!(r.scratch, view(fields.phi,iz,:), r, r_spectral)
+                @loop_r ir begin
+                    fields.Er[iz,ir] = -r.scratch[ir]
+                end
             end
+        else
+            fields.Er[:,:] .= 0.0
         end
-    else
-        fields.Er[:,:] .= 0.0
-    end
-    #Ez = - d phi / dz 
-    @loop_r ir begin
-        derivative!(z.scratch, view(fields.phi,:,ir), z, z_spectral)
-        @loop_z iz begin 
-            fields.Ez[iz,ir] = -z.scratch[iz]
+        #Ez = - d phi / dz
+        @loop_r ir begin
+            derivative!(z.scratch, view(fields.phi,:,ir), z, z_spectral)
+            @loop_z iz begin
+                fields.Ez[iz,ir] = -z.scratch[iz]
+            end
         end
     end
 end

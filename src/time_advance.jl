@@ -177,9 +177,8 @@ function setup_time_advance!(pdf, vpa, vperp, z, r, composition, drive_input, mo
     # for the electrostatic potential phi and eventually the electromagnetic fields
     fields = setup_em_fields(z.n, r.n, drive_input.force_phi, drive_input.amplitude, drive_input.frequency)
     # initialize the electrostatic potential
-    begin_s_r_z_vperp_region()
-    update_phi!(fields, scratch[1], z, r, composition, z_spectral, r_spectral)
     begin_serial_region()
+    update_phi!(fields, scratch[1], z, r, composition, z_spectral, r_spectral, moments.evolve_density)
     @serial_region begin
         # save the initial phi(z) for possible use later (e.g., if forcing phi)
         fields.phi0 .= fields.phi
@@ -483,10 +482,9 @@ function rk_update!(scratch, pdf, moments, fields, vpa, vperp, z, r, rk_coefs, i
     # update the parallel heat flux
     update_qpar!(moments.qpar, moments.qpar_updated, pdf.unnorm, vpa, vperp, z, r, composition, moments.vpa_norm_fac)
     # update the electrostatic potential phi
-    update_phi!(fields, scratch[istage+1], z, r, composition, z_spectral, r_spectral)
-    # _block_synchronize() here because phi needs to be read on different ranks than it
-    # was written on, even though the loop-type does not change here
-    _block_synchronize()
+    begin_serial_region(no_synchronize=true)
+    update_phi!(fields, scratch[istage+1], z, r, composition, z_spectral, r_spectral, moments.evolve_density)
+    begin_s_r_z_vperp_region()
 end
 
 """
