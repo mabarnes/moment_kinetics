@@ -80,19 +80,25 @@ end
 function create_moments(nz, nr, n_species, evolve_moments)
     # allocate array used for the particle density
     density = allocate_shared_float(nz, nr, n_species)
-    # allocate array of Bools that indicate if the density is updated for each species
+    # Allocate array of Bools that indicate if the density is updated for each species.
+    # If density is evolved, set density_updated.=true because density should not be
+    # updated by taking a moment of f.
     density_updated = allocate_bool(n_species)
-    density_updated .= false
+    density_updated .= evolve_moments.density
     # allocate array used for the parallel flow
     parallel_flow = allocate_shared_float(nz, nr, n_species)
-    # allocate array of Bools that indicate if the parallel flow is updated for each species
+    # Allocate array of Bools that indicate if the parallel flow is updated for each species.
+    # If upar is evolved, set parallel_flow_updated.=true because upar should not be
+    # updated by taking a moment of f.
     parallel_flow_updated = allocate_bool(n_species)
-    parallel_flow_updated .= false
+    parallel_flow_updated .= evolve_moments.parallel_flow
     # allocate array used for the parallel pressure
     parallel_pressure = allocate_shared_float(nz, nr, n_species)
-    # allocate array of Bools that indicate if the parallel pressure is updated for each species
+    # Allocate array of Bools that indicate if the parallel pressure is updated for each species.
+    # If ppar is evolved, set parallel_pressure_updated.=true because ppar should not be
+    # updated by taking a moment of f.
     parallel_pressure_updated = allocate_bool(n_species)
-    parallel_pressure_updated .= false
+    parallel_pressure_updated .= evolve_moments.parallel_pressure
     # allocate array used for the parallel flow
     parallel_heat_flux = allocate_shared_float(nz, nr, n_species)
     # allocate array of Bools that indicate if the parallel flow is updated for each species
