@@ -88,7 +88,7 @@ test_input_chebyshev = merge(test_input_finite_difference,
                                   "vpa_nelement" => 2))
 
 test_input_chebyshev_simple_sheath = merge(
-    test_input_finite_difference,
+    test_input_chebyshev,
     Dict("run_name" => "chebyshev_pseudospectral_simple_sheath",
          "electron_physics" => "boltzmann_electron_response_with_simple_sheath"))
 
