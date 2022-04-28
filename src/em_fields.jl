@@ -37,6 +37,10 @@ function update_phi!(fields, fvec, z, r, composition)
     # Means we get at least some parallelism, even though we have to sum
     # over species, and reduces number of _block_synchronize() calls needed
     # when there is only one species.
+
+    # Use s_r_z region here, even though we only loop over r and z, to avoid changing
+    # the region type (which would cause extra synchronization calls).
+    begin_s_r_z_region()
     
     if (composition.n_ion_species > 1 ||
         composition.electron_physics == boltzmann_electron_response_with_simple_sheath)
