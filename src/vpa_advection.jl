@@ -19,6 +19,8 @@ function vpa_advection!(f_out, fvec_in, ff, fields, moments, SL, advect,
         vpa, z, r, use_semi_lagrange, dt, t, vpa_spectral, z_spectral, composition,
         collisions, istage)
 
+    begin_s_r_z_region()
+
     # only have a parallel acceleration term for neutrals if using the peculiar velocity
     # wpar = vpar - upar as a variable; i.e., d(wpar)/dt /=0 for neutrals even though d(vpar)/dt = 0.
 
