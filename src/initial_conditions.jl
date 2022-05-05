@@ -19,6 +19,8 @@ using ..velocity_moments: integrate_over_vspace
 using ..velocity_moments: integrate_over_positive_vpa, integrate_over_negative_vpa
 using ..velocity_moments: create_moments, update_qpar!
 
+using ..manufactured_solns: manufactured_solutions
+
 """
 """
 struct pdf_struct
@@ -36,7 +38,6 @@ function init_pdf_and_moments(vpa, vperp, z, r, composition, species, n_rk_stage
     # create the 'moments' struct that contains various v-space moments and other
     # information related to these moments.
     # the time-dependent entries are not initialised.
-    
     moments = create_moments(z.n, r.n, n_species, evolve_moments)
     @serial_region begin
         # initialise the density profile
@@ -56,6 +57,24 @@ function init_pdf_and_moments(vpa, vperp, z, r, composition, species, n_rk_stage
     # the definition of pdf.norm changes accordingly from pdf.unnorm / density to pdf.unnorm * vth / density
     # when evolve_ppar = true.
     pdf = create_and_init_pdf(moments, vpa, vperp, z, r, n_species, species)
+    
+    if(true)
+#        densi_func!,
+        dfni_func! = manufactured_solutions 
+        #nb fns not fns of species yet
+        for is in 1:n_species
+            for ir in 1:r.n
+                for iz in 1:z.n
+                    #densi_func!(moments.dens[iz,ir,is],[z.grid[iz],r.grid[ir],0.0])
+                    for ivperp in 1:vperp.n
+                        for ivpa in 1:vpa.n
+                            dfni_func!(pdf.unnorm[ivpa,ivperp,iz,ir,is],[vpa.grid[ivpa],vperp.grid[ivperp],z.grid[iz],r.grid[ir],0.0])
+                        end
+                    end
+                end
+            end
+        end
+    end 
     begin_s_r_z_vperp_region()
     # calculate the initial parallel heat flux from the initial un-normalised pdf
     update_qpar!(moments.qpar, moments.qpar_updated, pdf.unnorm, vpa, vperp, z, r, composition, moments.vpa_norm_fac)

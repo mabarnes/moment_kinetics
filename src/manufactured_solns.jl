@@ -2,20 +2,45 @@
 """
 module manufactured_solns
 
+export manufactured_solutions
+export manufactured_sources
+
 using Symbolics
 
     @variables r z vpa vperp t
 
+    function densi_sym()
+        densi = 1.0 + sin(t) + sin(r) + sin(z) 
+        return densi
+    end
+
+    function dfni_sym()
+        densi = densi_sym()
+        dfni = densi * exp( - vpa^2 - vperp^2) / sqrt(pi^3)
+        return dfni
+    end
+
     function manufactured_solutions()
 
-        densi = 1.0 + sin(t) + sin(r) + sin(z) 
-        dfni = densi * exp( - vpa^2 - vperp^2) / sqrt(pi^3)
-
-        return densi, dfni
+        densi = densi_sym()
+        dfni = dfni_sym()
+        
+        #build julia functions from these symbolic expressions
+        # cf. https://docs.juliahub.com/Symbolics/eABRO/3.4.0/tutorials/symbolic_functions/
+        densi_func = build_function(densi, [z, r, t])
+        dfni_func = build_function(dfni, [vpa, vperp, z, r, t])
+        # return non-allocating function
+        # call like: 
+        # densi_func[2]!(densi_preallocatedarray, [zval, rval, tval]) 
+        return eval(dfni_func[2])
+        #eval(densi_func[2]), 
     end 
 
     #function manufactured_sources(dfni,densi,geometry)
-    function manufactured_sources(dfni,densi)
+    function manufactured_sources(geometry)
+        
+        densi = densi_sym()
+        dfni = dfni_sym()
         
         Dr = Differential(r) 
         Dz = Differential(z) 
@@ -23,23 +48,22 @@ using Symbolics
         Dvperp = Differential(vperp) 
         Dt = Differential(t) 
     
-        #Bzed = geometry.Bzed
-        #Bmag = geometry.Bmag
-        #rhostar = geometry.rstar
-        Bzed = 1.0 #geometry.Bzed
-        Bmag = 1.0 #geometry.Bmag
-        rhostar = 1.0 #geometry.rstar
+        Bzed = geometry.Bzed
+        Bmag = geometry.Bmag
+        rhostar = geometry.rstar
+        #Bzed = 1.0 #geometry.Bzed
+        #Bmag = 1.0 #geometry.Bmag
+        #rhostar = 1.0 #geometry.rstar
         
         phi = log(densi)
         Er = -Dr(phi)
         Ez = -Dz(phi)
     
-        Source_i = Dt(dfni) + ( vpa * (Bzed/Bmag) - 0.5*rhostar*Er ) * Dz(dfni) + ( 0.5*rhostar*Ez ) * Dr(dfni) + ( 0.5*Ez*Bzed/Bmag ) * Dvpa(dfni)
-        return expand_derivatives(Source_i)
+        S = Dt(dfni) + ( vpa * (Bzed/Bmag) - 0.5*rhostar*Er ) * Dz(dfni) + ( 0.5*rhostar*Ez ) * Dr(dfni) + ( 0.5*Ez*Bzed/Bmag ) * Dvpa(dfni)
+        Source_i = expand_derivatives(S)
+        
+        Source_i_func = build_function(Source_i, [vpa, vperp, z, r, t])
+        return eval(Source_i_func[2])
     end 
     
-    densi, dfni = manufactured_solutions
-    
-    Source_i = manufactured_sources(dfni,densi)
-    write(Source_i)
 end
