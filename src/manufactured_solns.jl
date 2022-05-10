@@ -10,7 +10,7 @@ using Symbolics
     @variables r z vpa vperp t
 
     function densi_sym()
-        densi = 1.0 + sin(t) + sin(r) + sin(z) 
+        densi = 1.0 +  0.5*(sin(r) + sin(z))*sin(t)  
         return densi
     end
 
@@ -27,13 +27,12 @@ using Symbolics
         
         #build julia functions from these symbolic expressions
         # cf. https://docs.juliahub.com/Symbolics/eABRO/3.4.0/tutorials/symbolic_functions/
-        densi_func = build_function(densi, [z, r, t])
-        dfni_func = build_function(dfni, [vpa, vperp, z, r, t])
-        # return non-allocating function
+        densi_func = build_function(densi, z, r, t, expression=Val{false})
+        dfni_func = build_function(dfni, vpa, vperp, z, r, t, expression=Val{false})
+        # return function
         # call like: 
-        # densi_func[2]!(densi_preallocatedarray, [zval, rval, tval]) 
-        return eval(dfni_func[2])
-        #eval(densi_func[2]), 
+        # densi_func(zval, rval, tval) 
+        return dfni_func, densi_func
     end 
 
     #function manufactured_sources(dfni,densi,geometry)

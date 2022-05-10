@@ -59,16 +59,16 @@ function init_pdf_and_moments(vpa, vperp, z, r, composition, species, n_rk_stage
     pdf = create_and_init_pdf(moments, vpa, vperp, z, r, n_species, species)
     
     if(true)
-#        densi_func!,
-        dfni_func! = manufactured_solutions 
+        dfni_func, densi_func = manufactured_solutions() 
         #nb fns not fns of species yet
         for is in 1:n_species
             for ir in 1:r.n
                 for iz in 1:z.n
-                    #densi_func!(moments.dens[iz,ir,is],[z.grid[iz],r.grid[ir],0.0])
+                    moments.dens[iz,ir,is] = densi_func(z.grid[iz],r.grid[ir],0.0)
+                    # other moments here 
                     for ivperp in 1:vperp.n
                         for ivpa in 1:vpa.n
-                            dfni_func!(pdf.unnorm[ivpa,ivperp,iz,ir,is],[vpa.grid[ivpa],vperp.grid[ivperp],z.grid[iz],r.grid[ir],0.0])
+                            pdf.unnorm[ivpa,ivperp,iz,ir,is] = dfni_func(vpa.grid[ivpa],vperp.grid[ivperp],z.grid[iz],r.grid[ir],0.0)
                         end
                     end
                 end
