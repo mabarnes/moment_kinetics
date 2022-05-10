@@ -32,7 +32,7 @@ end
 creates the normalised pdf and the velocity-space moments and populates them
 with a self-consistent initial condition
 """
-function init_pdf_and_moments(vpa, vperp, z, r, composition, species, n_rk_stages, evolve_moments)
+function init_pdf_and_moments(vpa, vperp, z, r, composition, species, n_rk_stages, evolve_moments, use_manufactured_solns)
     # define the n_species variable for convenience
     n_species = composition.n_species
     # create the 'moments' struct that contains various v-space moments and other
@@ -58,7 +58,7 @@ function init_pdf_and_moments(vpa, vperp, z, r, composition, species, n_rk_stage
     # when evolve_ppar = true.
     pdf = create_and_init_pdf(moments, vpa, vperp, z, r, n_species, species)
     
-    if(true)
+    if(use_manufactured_solns)
         dfni_func, densi_func = manufactured_solutions() 
         #nb fns not fns of species yet
         for is in 1:n_species

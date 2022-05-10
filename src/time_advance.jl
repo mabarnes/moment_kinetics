@@ -48,6 +48,7 @@ mutable struct advance_info
     force_balance::Bool
     energy::Bool
     rk_coefs::Array{mk_float,2}
+    manufactured_solns_test::Bool
 end
 
 mutable struct scratch_dummy_arrays
@@ -74,8 +75,9 @@ function setup_time_advance!(pdf, vpa, vperp, z, r, composition, drive_input, mo
     # indicate which parts of the equations are to be advanced concurrently.
     # if no splitting of operators, all terms advanced concurrently;
     # else, will advance one term at a time.
+    manufactured_solns_test = t_input.use_manufactured_solns
     if t_input.split_operators
-        advance = advance_info(false, false, false, false, false, false, false, false, false, rk_coefs)
+        advance = advance_info(false, false, false, false, false, false, false, false, false, rk_coefs, manufactured_solns_test)
     else
         if composition.n_neutral_species > 0
             if collisions.charge_exchange > 0.0
@@ -113,7 +115,8 @@ function setup_time_advance!(pdf, vpa, vperp, z, r, composition, drive_input, mo
             advance_energy = false
         end
         advance = advance_info(true, true, true, advance_cx, advance_ionization, advance_sources,
-                               advance_continuity, advance_force_balance, advance_energy, rk_coefs)
+                               advance_continuity, advance_force_balance, advance_energy, rk_coefs,
+                               manufactured_solns_test)
     end
     
     
