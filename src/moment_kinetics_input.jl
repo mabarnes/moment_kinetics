@@ -137,7 +137,7 @@ function mk_input(scan_input=Dict())
     n_rk_stages = get(scan_input, "n_rk_stages", 4)
     split_operators = get(scan_input, "split_operators", false)
     use_manufactured_solns = get(scan_input, "use_manufactured_solns", false)
-    println("Info: The flag use_manufactured_solns is",use_manufactured_solns)
+    println("Info: The flag use_manufactured_solns is ",use_manufactured_solns)
     
     # overwrite some default parameters related to the r grid
     # ngrid is number of grid points per element

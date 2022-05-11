@@ -26,12 +26,15 @@ using ..vperp_advection: update_speed_vperp!, vperp_advection!
 using ..vpa_advection: update_speed_vpa!, vpa_advection!
 using ..charge_exchange: charge_exchange_collisions!
 using ..ionization: ionization_collisions!
-using ..source_terms: source_terms!
+using ..source_terms: source_terms!, source_terms_manufactured!
 using ..continuity: continuity_equation!
 using ..force_balance: force_balance!
 using ..energy_equation: energy_equation!
 using ..em_fields: setup_em_fields, update_phi!
 using ..semi_lagrange: setup_semi_lagrange
+
+using ..manufactured_solns: manufactured_sources
+
 
 @debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
 
@@ -278,10 +281,17 @@ function setup_time_advance!(pdf, vpa, vperp, z, r, composition, drive_input, mo
     vperp_SL = setup_semi_lagrange(vperp.n, vpa.n, z.n, r.n)
     r_SL = setup_semi_lagrange(r.n, vpa.n, vperp.n, z.n)
 
+    if(t_input.use_manufactured_solns)
+        manufactured_source_list = (Source_i_func = manufactured_sources(geometry), Source_n_func = "placeholder")
+        # possibly need to include neutral source or multiple sources for different ion/neutral species
+    else
+        manufactured_source_list = false # dummy Bool to be passed as argument instead of list
+    end
+
     begin_s_r_z_vperp_region()
     return vpa_spectral, vperp_spectral, z_spectral, r_spectral, moments, fields, 
     vpa_advect, vperp_advect, z_advect, r_advect,vpa_SL, vperp_SL, z_SL, r_SL,
-    scratch, advance, scratch_dummy
+    scratch, advance, scratch_dummy, manufactured_source_list
 end
 
 """
@@ -386,7 +396,7 @@ function time_advance!(pdf, scratch, t, t_input, vpa, vperp, z, r,
     vpa_spectral, vperp_spectral, z_spectral, r_spectral,
     moments, fields, vpa_advect, vperp_advect, z_advect, r_advect,
     vpa_SL, vperp_SL, z_SL, r_SL, composition,
-    collisions, geometry, advance, scratch_dummy, io, cdf)
+    collisions, geometry, advance, scratch_dummy, manufactured_source_list, io, cdf)
 
     @debug_detect_redundant_block_synchronize begin
         # Only want to check for redundant _block_synchronize() calls during the
@@ -402,7 +412,7 @@ function time_advance!(pdf, scratch, t, t_input, vpa, vperp, z, r,
                 vpa_spectral, vperp_spectral, z_spectral, r_spectral,
                 moments, fields, vpa_advect, vperp_advect, z_advect, r_advect,
                 vpa_SL, vperp_SL, z_SL, r_SL,
-                composition, collisions, geometry, advance,  scratch_dummy, i)
+                composition, collisions, geometry, advance,  scratch_dummy, manufactured_source_list, i)
         # update the time
         t += t_input.dt
         # write data to file every nwrite time steps
@@ -435,19 +445,19 @@ function time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, vperp, z, r,
     vpa_spectral, vperp_spectral, z_spectral, r_spectral,
     moments, fields, vpa_advect, vperp_advect, z_advect, r_advect,
     vpa_SL, vperp_SL, z_SL, r_SL, 
-    composition, collisions, geometry, advance, scratch_dummy, istep)
+    composition, collisions, geometry, advance, scratch_dummy, manufactured_source_list, istep)
 
     if t_input.n_rk_stages > 1
         ssp_rk!(pdf, scratch, t, t_input, vpa, vperp, z, r, 
             vpa_spectral, vperp_spectral, z_spectral, r_spectral,
             moments, fields, vpa_advect, vperp_advect, z_advect, r_advect,
-            vpa_SL, vperp_SL, z_SL, r_SL, composition, collisions, geometry, advance,  scratch_dummy, istep)
+            vpa_SL, vperp_SL, z_SL, r_SL, composition, collisions, geometry, advance,  scratch_dummy, manufactured_source_list, istep)
     else
         euler_time_advance!(scratch, scratch, pdf, fields, moments,
             vpa_SL, vperp_SL, z_SL, r_SL,
             vpa_advect, vperp_advect, z_advect, r_advect, vpa, vperp, z, r, t,
             t_input, vpa_spectral, vperp_spectral, z_spectral, r_spectral, composition,
-            collisions, geometry, scratch_dummy, advance, 1)
+            collisions, geometry, scratch_dummy, manufactured_source_list,  advance, 1)
         # NB: this must be broken -- scratch is updated in euler_time_advance!,
         # but not the pdf or moments.  need to add update to these quantities here
     end
@@ -495,7 +505,7 @@ end
 function ssp_rk!(pdf, scratch, t, t_input, vpa, vperp, z, r, 
     vpa_spectral, vperp_spectral, z_spectral, r_spectral,
     moments, fields, vpa_advect, vperp_advect, z_advect, r_advect,
-    vpa_SL, vperp_SL, z_SL, r_SL, composition, collisions, geometry, advance, scratch_dummy, istep)
+    vpa_SL, vperp_SL, z_SL, r_SL, composition, collisions, geometry, advance, scratch_dummy, manufactured_source_list, istep)
 
     n_rk_stages = t_input.n_rk_stages
 
@@ -518,7 +528,7 @@ function ssp_rk!(pdf, scratch, t, t_input, vpa, vperp, z, r,
             pdf, fields, moments, vpa_SL, vperp_SL, z_SL, r_SL,
             vpa_advect, vperp_advect, z_advect, r_advect, vpa, vperp, z, r, t,
             t_input, vpa_spectral, vperp_spectral, z_spectral, r_spectral, composition,
-            collisions, geometry, scratch_dummy, advance, istage)
+            collisions, geometry, scratch_dummy, manufactured_source_list, advance, istage)
         @views rk_update!(scratch, pdf, moments, fields, vpa, vperp, z, r, advance.rk_coefs[:,istage], istage, composition, z_spectral, r_spectral)
     end
 
@@ -547,7 +557,7 @@ with fvec_in an input and fvec_out the output
 function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, vperp_SL, z_SL, r_SL,
     vpa_advect, vperp_advect, z_advect, r_advect, vpa, vperp, z, r, t, t_input,
     vpa_spectral, vperp_spectral, z_spectral, r_spectral, composition, collisions, geometry,
-    scratch_dummy, advance, istage)
+    scratch_dummy, manufactured_source_list, advance, istage)
     # define some abbreviated variables for tidiness
     n_ion_species = composition.n_ion_species
     dt = t_input.dt
@@ -589,6 +599,10 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, vp
     #if advance.vperp_advection
     # PLACEHOLDER 
     #end 
+    
+    if advance.manufactured_solns_test
+        source_terms_manufactured!(fvec_out.pdf, fvec_in, moments, vpa, vperp, z, r, t, dt, composition, manufactured_source_list)
+    end
     
     # account for charge exchange collisions between ions and neutrals
     if advance.cx_collisions

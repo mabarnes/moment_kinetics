@@ -3,6 +3,7 @@
 module source_terms
 
 export source_terms!
+export source_terms_manufactured!
 
 using ..calculus: derivative!
 using ..looping
@@ -99,5 +100,27 @@ function source_terms_evolve_ppar_CX!(pdf_out, pdf_in, dens, ppar, composition, 
     end
     return nothing
 end
+
+"""
+advance the dfn with an arbitrary source function 
+"""
+
+function source_terms_manufactured!(pdf_out, fvec_in, moments, vpa, vperp, z, r, t, dt, composition, manufactured_source_list)
+    Source_i_func = manufactured_source_list.Source_i_func
+    @loop_s is begin
+        if is ∈ composition.ion_species_range
+            @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
+                pdf_out[ivpa,ivperp,iz,ir,is] += dt*Source_i_func(vpa.grid[ivpa],vperp.grid[ivperp],z.grid[iz],r.grid[ir],t)
+                # correct O(1) here?
+            end
+        end
+        #if is ∈ composition.neutral_species_range
+        #PLACEHOLDER for neutral source
+        #end
+    end
+    
+    return nothing
+end
+
 
 end

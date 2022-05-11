@@ -32,6 +32,7 @@ using Symbolics
         # return function
         # call like: 
         # densi_func(zval, rval, tval) 
+        # dfni_func(vpaval, vperpval, zval, rval, tval) 
         return dfni_func, densi_func
     end 
 
@@ -61,8 +62,8 @@ using Symbolics
         S = Dt(dfni) + ( vpa * (Bzed/Bmag) - 0.5*rhostar*Er ) * Dz(dfni) + ( 0.5*rhostar*Ez ) * Dr(dfni) + ( 0.5*Ez*Bzed/Bmag ) * Dvpa(dfni)
         Source_i = expand_derivatives(S)
         
-        Source_i_func = build_function(Source_i, [vpa, vperp, z, r, t])
-        return eval(Source_i_func[2])
+        Source_i_func = build_function(Source_i, vpa, vperp, z, r, t, expression=Val{false})
+        return Source_i_func
     end 
     
 end
