@@ -211,12 +211,18 @@ function init_pdf_over_density!(pdf, spec, vpa, vperp, z, vth, upar, vpa_norm_fa
             
             @. vperp.scratch = vperp.grid/vth[iz] # MRH correct thermal speed?
             #@. pdf[:,iz] = exp(-(vpa.grid*(vpa_norm_fac[iz]/vth[iz]))^2) / vth[iz]
-            for ivperp ∈ 1:vperp.n
+            if vperp.n == 1 # 1D case 
+                ivperp = 1 
                 for ivpa ∈ 1:vpa.n
-                    #pdf[ivpa,ivperp,iz] = exp(-vpa.scratch[ivpa]^2 - vperp.scratch[ivperp]^2  ) / vth[iz]^3 #MRH normalisation ?
-                    pdf[ivpa,ivperp,iz] = exp(-vpa.scratch[ivpa]^2 - vperp.scratch[ivperp]^2  ) / vth[iz] #MRH normalisation ?
+                    pdf[ivpa,ivperp,iz] = exp(-vpa.scratch[ivpa]^2 - vperp.scratch[ivperp]^2  ) / vth[iz]
                 end
-            end
+            else # 2D case with vperp
+                for ivperp ∈ 1:vperp.n
+                    for ivpa ∈ 1:vpa.n
+                        pdf[ivpa,ivperp,iz] = exp(-vpa.scratch[ivpa]^2 - vperp.scratch[ivperp]^2  ) / vth[iz]^3
+                    end
+                end
+            end 
         end
         for iz ∈ 1:z.n
             # densfac = the integral of the pdf over v-space, which should be unity,

@@ -130,7 +130,9 @@ function init_grid(ngrid, nelement, n, L, imin, imax, igrid, discretization)
         grid = uniform_grid_shifted
         # use composite Simpson's rule to obtain integration weights associated with this coordinate
         wgts = composite_simpson_weights(grid)
-        wgts = wgts * grid # to include vperp in jacobian of integral
+        wgts = 2.0 .* wgts .* grid # to include 2 vperp in jacobian of integral
+                                 # assumes pdf normalised like 
+                                 # f^N = Pi^{3/2} c_s^3 f / n_ref 
     else
         error("discretization option '$discretization' unrecognized")
     end

@@ -16,7 +16,7 @@ using Symbolics
 
     function dfni_sym()
         densi = densi_sym()
-        dfni = densi * exp( - vpa^2 - vperp^2) / sqrt(pi^3)
+        dfni = densi * exp( - vpa^2 - vperp^2) #/ sqrt(pi^3)
         return dfni
     end
 
