@@ -10,7 +10,7 @@ using Symbolics
     @variables r z vpa vperp t
 
     function densi_sym()
-        densi = 1.0 +  0.5*(sin(r) + sin(z))*sin(t)  
+        densi = 1.0 +  0.1*(sin(r) + sin(z))*sin(t)  
         return densi
     end
 

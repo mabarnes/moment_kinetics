@@ -22,6 +22,7 @@ using ..load_data: open_netcdf_file
 using ..load_data: load_coordinate_data, load_fields_data, load_moments_data, load_pdf_data
 using ..analysis: analyze_fields_data, analyze_moments_data, analyze_pdf_data
 using ..velocity_moments: integrate_over_vspace
+using ..manufactured_solns: manufactured_solutions
 
 """
 Calculate a moving average
@@ -80,13 +81,38 @@ function analyze_and_plot_data(path)
         ff[:,ivperp0,:,ir0,:,:],
         n_species, evolve_ppar, nvpa, vpa, vpa_wgts,
         nz, z, z_wgts, Lz, ntime, time)
+    close(fid)
     
     # analyze the fields data
     phi_fldline_avg, delta_phi = analyze_fields_data(phi[iz0,:,:], ntime, nr, r_wgts, Lr)    
     plot_fields_rt(phi[iz0,:,:], delta_phi, time, itime_min, itime_max, nwrite_movie,
     r, ir0, run_name, delta_phi, pp)
-    close(fid)
-
+    
+    manufactured_solns_test = true
+    # MRH hack condition on these plots for now
+    # Plots compare density and density_symbolic at last timestep 
+    if(manufactured_solns_test && nr > 1)
+        dfni_func, densi_func = manufactured_solutions()
+        
+        is = 1
+        spec_string = ""
+        it = ntime
+        heatmap(z, r, density[:,:,is,it], xlabel="z", ylabel="r", title="n_i/Nₑ", c = :deep)
+        outfile = string(run_name, "_dens_vs_r_z", spec_string, ".pdf")
+        savefig(outfile)
+        
+        density_sym = copy(density[:,:,:,:])
+        for ir in 1:nr
+            for iz in 1:nz
+                density_sym[iz,ir,is,it] = densi_func(z[iz],r[ir],time[it])
+            end
+        end
+        heatmap(z, r, density_sym[:,:,is,it], xlabel="z", ylabel="r", title="n_i/Nₑ", c = :deep)
+        outfile = string(run_name, "_dens_sym_vs_r_z", spec_string, ".pdf")
+        savefig(outfile)
+    end 
+    
+    
 end
 
 """
