@@ -43,8 +43,8 @@ function mk_input(scan_input=Dict())
     # currently only n_ion_species = 1 is supported
     n_ion_species = 1
     # n_neutral_species is the number of evolved neutral species
-    # currently only n_neutral_species = 0 is supported
-    n_neutral_species = 1
+    # currently only n_neutral_species = 0,1 is supported
+    n_neutral_species = get(scan_input, "n_neutral_species", 1)
     # * if electron_physics=boltzmann_electron_response, then the electron density is
     #   fixed to be N_e*(eϕ/T_e)
     # * if electron_physics=boltzmann_electron_response_with_simple_sheath, then the
@@ -187,6 +187,7 @@ function mk_input(scan_input=Dict())
     # determine the boundary condition
     # only supported option at present is "zero" and "periodic"
     # MRH probably need to add new bc option here
+    # MRH no vperp bc currently imposed so option below not used
     vperp.bc = get(scan_input, "vperp_bc", "periodic")
     # determine the discretization option for the vperp grid
     # supported options are "finite_difference_vperp"
@@ -220,7 +221,7 @@ function mk_input(scan_input=Dict())
     for is ∈ 1:n_species
         if is <= n_ion_species
             species_type = "ion"
-        elseif is <= n_ion_species + n_neutral_species
+        elseif is <= n_ion_species + n_neutral_species && n_neutral_species > 0
             species_type = "neutral"
         else
             species_type = "electron"
