@@ -151,7 +151,7 @@ function mk_input(scan_input=Dict())
     # supported options are "chebyshev_pseudospectral" and "finite_difference"
     r.discretization = get(scan_input, "r_discretization", "finite_difference")
     # determine the boundary condition to impose in r
-    # supported options are "constant", "periodic" and "wall"
+    # supported options are "constant", "periodic" and "Dirichlet"
     r.bc = get(scan_input, "r_bc", "periodic")
 
     # overwrite some default parameters related to the z grid

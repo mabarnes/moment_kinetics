@@ -18,7 +18,7 @@ using ..velocity_moments: update_moments!, reset_moments_status!
 using ..velocity_moments: enforce_moment_constraints!
 using ..velocity_moments: update_density!, update_upar!, update_ppar!, update_qpar!
 using ..initial_conditions: enforce_z_boundary_condition!, enforce_boundary_conditions!
-using ..initial_conditions: enforce_vpa_boundary_condition!
+using ..initial_conditions: enforce_vpa_boundary_condition!, enforce_r_boundary_condition!
 using ..advection: setup_advection, update_boundary_indices!
 using ..z_advection: update_speed_z!, z_advection!
 using ..r_advection: update_speed_r!, r_advection!
@@ -204,9 +204,8 @@ function setup_time_advance!(pdf, vpa, vperp, z, r, composition, drive_input, mo
         update_boundary_indices!(r_advect[is], loop_ranges[].vpa, loop_ranges[].vperp, loop_ranges[].z)
     end
     # enforce prescribed boundary condition in r on the distribution function f
-    # PLACEHOLDER
-    #@views enforce_r_boundary_condition!(pdf.unnorm, r.bc, r_advect, vpa, z, composition)
-    
+    # use present distribution as f_old in case of Dirichlet bc
+    @views enforce_r_boundary_condition!(pdf.unnorm, pdf.unnorm, r.bc, r_advect, vpa, vperp, z, composition)
     
     # create structure z_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the split part of the GK equation dealing
@@ -616,7 +615,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, vp
     end
     
     # enforce boundary conditions in z and vpa on the distribution function
-    enforce_boundary_conditions!(fvec_out.pdf, vpa.bc, z.bc, r.bc, vpa, vperp, z, r,
+    enforce_boundary_conditions!(fvec_out.pdf, pdf.unnorm, vpa.bc, z.bc, r.bc, vpa, vperp, z, r,
      vpa_advect, z_advect, r_advect, composition)
     # End of advance for distribution function
 

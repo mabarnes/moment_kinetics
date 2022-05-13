@@ -296,7 +296,7 @@ end
 # Can we have an explicit loop or explain what it does?
 # Seems to make the fn a operator elementwise in the vector f
 # but loop is over a part of mysterious x_adv objects...
-function enforce_boundary_conditions!(f, vpa_bc, z_bc, r_bc, vpa, vperp, z, r, vpa_adv::T1, z_adv::T2, r_adv::T3, composition) where {T1, T2, T3}
+function enforce_boundary_conditions!(f, f_old, vpa_bc, z_bc, r_bc, vpa, vperp, z, r, vpa_adv::T1, z_adv::T2, r_adv::T3, composition) where {T1, T2, T3}
     @loop_s_r_z_vperp is ir iz ivperp begin
         # enforce the vpa BC
         @views enforce_vpa_boundary_condition_local!(f[:,ivperp,iz,ir,is], vpa_bc, vpa_adv[is].upwind_idx[ivperp,iz,ir],
@@ -305,14 +305,14 @@ function enforce_boundary_conditions!(f, vpa_bc, z_bc, r_bc, vpa, vperp, z, r, v
     begin_s_r_vperp_vpa_region()
     @views enforce_z_boundary_condition!(f, z_bc, z_adv, vpa, vperp, r, composition)
     #MRH UNSURE ABOUT PARALLELISATION HERE
-    @views enforce_r_boundary_condition!(f, r_bc, r_adv, vpa, vperp, z, composition)
+    @views enforce_r_boundary_condition!(f, f_old, r_bc, r_adv, vpa, vperp, z, composition)
 end
 
 
 """
 enforce boundary conditions on f in r
 """
-function enforce_r_boundary_condition!(f, bc::String, adv::T, vpa, vperp, z, composition) where T
+function enforce_r_boundary_condition!(f, f_old, bc::String, adv::T, vpa, vperp, z, composition) where T
     # 'periodic' BC enforces periodicity by taking the average of the boundary points
     if bc == "periodic"
         @loop_s_z_vperp_vpa is iz ivperp ivpa begin
@@ -320,6 +320,15 @@ function enforce_r_boundary_condition!(f, bc::String, adv::T, vpa, vperp, z, com
             upwind_idx = adv[is].upwind_idx[ivpa,ivperp,iz]
             f[ivpa,ivperp,iz,downwind_idx,is] = 0.5*(f[ivpa,ivperp,iz,upwind_idx,is]+f[ivpa,ivperp,iz,downwind_idx,is])
             f[ivpa,ivperp,iz,upwind_idx,is] = f[ivpa,ivperp,iz,downwind_idx,is]
+        end
+    elseif bc == "Dirichlet"
+        # use the old distribution to force the new distribution to have 
+        # consistant-in-time values at the boundary
+        @loop_s_z_vperp_vpa is iz ivperp ivpa begin
+            downwind_idx = adv[is].downwind_idx[ivpa,ivperp,iz]
+            upwind_idx = adv[is].upwind_idx[ivpa,ivperp,iz]
+            f[ivpa,ivperp,iz,downwind_idx,is] = f_old[ivpa,ivperp,iz,downwind_idx,is]
+            f[ivpa,ivperp,iz,upwind_idx,is] = f_old[ivpa,ivperp,iz,upwind_idx,is]
         end
     end
 end
