@@ -110,7 +110,7 @@ function analyze_and_plot_data(path)
                 density_sym[iz,ir,is,it] = densi_func(z[iz],r[ir],time[it])
             end
         end
-        heatmap(z, r, density_sym[:,:,is,it], xlabel=L"z", ylabel=L"r", title=L"n_i/n_{ref}", c = :deep)
+        heatmap(z, r, density_sym[:,:,is,it], xlabel=L"z", ylabel=L"r", title=L"n_i^{sym}/n_{ref}", c = :deep)
         outfile = string(run_name, "_dens_sym_vs_r_z", spec_string, ".pdf")
         savefig(outfile)
         
