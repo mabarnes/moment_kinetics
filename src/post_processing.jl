@@ -11,7 +11,7 @@ using LsqFit
 using NCDatasets
 using Statistics: mean
 using SpecialFunctions: erfi
-#using LaTeXStrings
+using LaTeXStrings
 # modules
 using ..post_processing_input: pp
 using ..quadrature: composite_simpson_weights
@@ -100,7 +100,7 @@ function analyze_and_plot_data(path)
         is = 1
         spec_string = ""
         it = ntime
-        heatmap(z, r, density[:,:,is,it], xlabel="z", ylabel="r", title="n_i/Nₑ", c = :deep)
+        heatmap(z, r, density[:,:,is,it], xlabel=L"z", ylabel=L"r", title=L"n_i/n_{ref}", c = :deep)
         outfile = string(run_name, "_dens_vs_r_z", spec_string, ".pdf")
         savefig(outfile)
         
@@ -110,7 +110,7 @@ function analyze_and_plot_data(path)
                 density_sym[iz,ir,is,it] = densi_func(z[iz],r[ir],time[it])
             end
         end
-        heatmap(z, r, density_sym[:,:,is,it], xlabel="z", ylabel="r", title="n_i/Nₑ", c = :deep)
+        heatmap(z, r, density_sym[:,:,is,it], xlabel=L"z", ylabel=L"r", title=L"n_i/n_{ref}", c = :deep)
         outfile = string(run_name, "_dens_sym_vs_r_z", spec_string, ".pdf")
         savefig(outfile)
         
@@ -125,7 +125,7 @@ function analyze_and_plot_data(path)
             density_norm[it] = dummy
         end
         println(density_norm)
-        @views plot(time, density_norm[:], xlabel="t*Lz/vti", ylabel="Sum || n_i - n_i^{sym} ||^2") #, yaxis=:log)
+        @views plot(time, density_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=L" \sum || n_i - n_i^{sym} ||^2") #, yaxis=:log)
         outfile = string(run_name, "_dens_norm_vs_t", spec_string, ".pdf")
         savefig(outfile)
     end 
