@@ -59,7 +59,7 @@ function init_pdf_and_moments(vpa, vperp, z, r, composition, species, n_rk_stage
     pdf = create_and_init_pdf(moments, vpa, vperp, z, r, n_species, species)
     
     if(use_manufactured_solns)
-        dfni_func, densi_func = manufactured_solutions(r.L,z.L) 
+        dfni_func, densi_func = manufactured_solutions(r.L,z.L,r.bc,z.bc) 
         #nb fns not fns of species yet
         for is in 1:n_species
             for ir in 1:r.n
@@ -305,19 +305,19 @@ function enforce_boundary_conditions!(f, f_old, vpa_bc, z_bc, r_bc, vpa, vperp, 
     begin_s_r_vperp_vpa_region()
     @views enforce_z_boundary_condition!(f, z_bc, z_adv, vpa, vperp, r, composition)
     #MRH UNSURE ABOUT PARALLELISATION HERE
-    @views enforce_r_boundary_condition!(f, f_old, r_bc, r_adv, vpa, vperp, z, composition)
+    @views enforce_r_boundary_condition!(f, f_old, r_bc, r_adv, vpa, vperp, z, r, composition)
 end
 
 
 """
 enforce boundary conditions on f in r
 """
-function enforce_r_boundary_condition!(f, f_old, bc::String, adv::T, vpa, vperp, z, composition) where T
+function enforce_r_boundary_condition!(f, f_old, bc::String, adv::T, vpa, vperp, z, r, composition) where T
     # 'periodic' BC enforces periodicity by taking the average of the boundary points
     if bc == "periodic"
         @loop_s_z_vperp_vpa is iz ivperp ivpa begin
-            downwind_idx = adv[is].downwind_idx[ivpa,ivperp,iz]
-            upwind_idx = adv[is].upwind_idx[ivpa,ivperp,iz]
+            downwind_idx = 1 #adv[is].downwind_idx[ivpa,ivperp,iz]
+            upwind_idx = r.n #adv[is].upwind_idx[ivpa,ivperp,iz]
             f[ivpa,ivperp,iz,downwind_idx,is] = 0.5*(f[ivpa,ivperp,iz,upwind_idx,is]+f[ivpa,ivperp,iz,downwind_idx,is])
             f[ivpa,ivperp,iz,upwind_idx,is] = f[ivpa,ivperp,iz,downwind_idx,is]
         end
@@ -325,8 +325,8 @@ function enforce_r_boundary_condition!(f, f_old, bc::String, adv::T, vpa, vperp,
         # use the old distribution to force the new distribution to have 
         # consistant-in-time values at the boundary
         @loop_s_z_vperp_vpa is iz ivperp ivpa begin
-            downwind_idx = adv[is].downwind_idx[ivpa,ivperp,iz]
-            upwind_idx = adv[is].upwind_idx[ivpa,ivperp,iz]
+            downwind_idx = 1 #adv[is].downwind_idx[ivpa,ivperp,iz]
+            upwind_idx = r.n #adv[is].upwind_idx[ivpa,ivperp,iz]
             f[ivpa,ivperp,iz,downwind_idx,is] = f_old[ivpa,ivperp,iz,downwind_idx,is]
             f[ivpa,ivperp,iz,upwind_idx,is] = f_old[ivpa,ivperp,iz,upwind_idx,is]
         end

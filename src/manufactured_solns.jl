@@ -9,21 +9,25 @@ using Symbolics
 
     @variables r z vpa vperp t
 
-    function densi_sym(Lr,Lz)
-        densi = 1.0 +  0.1*(sin(2.0*pi*r/Lr) + sin(2.0*pi*z/Lz))*sin(2.0*pi*t)  
+    function densi_sym(Lr,Lz,r_bc,z_bc)
+        if r_bc == "periodic" && z_bc == "periodic"
+            densi = 1.0 +  0.1*(sin(2.0*pi*r/Lr) + sin(2.0*pi*z/Lz))*sin(2.0*pi*t)  
+        elseif r_bc == "Dirichlet" && z_bc == "periodic"
+            densi = 1.0 +  0.1*sin(2.0*pi*z/Lz)*sin(2.0*pi*t)*(r/Lr + 0.5)
+        end
         return densi
     end
 
-    function dfni_sym(Lr,Lz)
-        densi = densi_sym(Lr,Lz)
+    function dfni_sym(Lr,Lz,r_bc,z_bc)
+        densi = densi_sym(Lr,Lz,r_bc,z_bc)
         dfni = densi * exp( - vpa^2 - vperp^2) #/ sqrt(pi^3)
         return dfni
     end
 
-    function manufactured_solutions(Lr,Lz)
+    function manufactured_solutions(Lr,Lz,r_bc,z_bc)
 
-        densi = densi_sym(Lr,Lz)
-        dfni = dfni_sym(Lr,Lz)
+        densi = densi_sym(Lr,Lz,r_bc,z_bc)
+        dfni = dfni_sym(Lr,Lz,r_bc,z_bc)
         
         #build julia functions from these symbolic expressions
         # cf. https://docs.juliahub.com/Symbolics/eABRO/3.4.0/tutorials/symbolic_functions/
@@ -37,10 +41,10 @@ using Symbolics
     end 
 
     #function manufactured_sources(dfni,densi,geometry)
-    function manufactured_sources(Lr,Lz,geometry)
+    function manufactured_sources(Lr,Lz,r_bc,z_bc,geometry)
         
-        densi = densi_sym(Lr,Lz)
-        dfni = dfni_sym(Lr,Lz)
+        densi = densi_sym(Lr,Lz,r_bc,z_bc)
+        dfni = dfni_sym(Lr,Lz,r_bc,z_bc)
         
         Dr = Differential(r) 
         Dz = Differential(z) 

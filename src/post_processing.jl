@@ -24,6 +24,9 @@ using ..analysis: analyze_fields_data, analyze_moments_data, analyze_pdf_data
 using ..velocity_moments: integrate_over_vspace
 using ..manufactured_solns: manufactured_solutions
 
+using TOML
+import Base: get
+
 """
 Calculate a moving average
 
@@ -55,6 +58,9 @@ function analyze_and_plot_data(path)
     # Create run_name from the path to the run directory
     path = realpath(path)
     run_name = joinpath(path, basename(path))
+    input_filename = path * ".toml"
+    scan_input = TOML.parsefile(input_filename)
+        
     # open the netcdf file and give it the handle 'fid'
     fid = open_netcdf_file(run_name)
     # load space-time coordinate data
@@ -95,12 +101,14 @@ function analyze_and_plot_data(path)
     # MRH hack condition on these plots for now
     # Plots compare density and density_symbolic at last timestep 
     if(manufactured_solns_test && nr > 1)
-        dfni_func, densi_func = manufactured_solutions(Lr,Lz)
+        r_bc = get(scan_input, "r_bc", "periodic")
+        z_bc = get(scan_input, "z_bc", "periodic")
+        dfni_func, densi_func = manufactured_solutions(Lr,Lz,r_bc,z_bc)
         
         is = 1
         spec_string = ""
         it = ntime
-        heatmap(z, r, density[:,:,is,it], xlabel=L"z", ylabel=L"r", title=L"n_i/n_{ref}", c = :deep)
+        heatmap(r, z, density[:,:,is,it], xlabel=L"r", ylabel=L"z", title=L"n_i/n_{ref}", c = :deep)
         outfile = string(run_name, "_dens_vs_r_z", spec_string, ".pdf")
         savefig(outfile)
         
@@ -110,7 +118,7 @@ function analyze_and_plot_data(path)
                 density_sym[iz,ir,is,it] = densi_func(z[iz],r[ir],time[it])
             end
         end
-        heatmap(z, r, density_sym[:,:,is,it], xlabel=L"z", ylabel=L"r", title=L"n_i^{sym}/n_{ref}", c = :deep)
+        heatmap(r, z, density_sym[:,:,is,it], xlabel=L"r", ylabel=L"z", title=L"n_i^{sym}/n_{ref}", c = :deep)
         outfile = string(run_name, "_dens_sym_vs_r_z", spec_string, ".pdf")
         savefig(outfile)
         
@@ -268,7 +276,7 @@ function plot_1D_1V_diagnostics(run_name, fid, nwrite_movie, itime_min, itime_ma
             gif(anim, outfile, fps=5)
             # make pdf of f(vpa,z,t_final) for each species
             str = string("spec ", string(is), " pdf")
-            @views heatmap(z, vpa, ff[:,:,is,end], xlabel="vpa", ylabel="z", c = :deep, interpolation = :cubic, title=str)
+            @views heatmap(z, vpa, ff[:,:,is,end], xlabel="z", ylabel="vpa", c = :deep, interpolation = :cubic, title=str)
             outfile = string(run_name, "_f_vs_z_vpa_final", spec_string, ".pdf")
             savefig(outfile)
         end

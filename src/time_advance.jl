@@ -205,7 +205,7 @@ function setup_time_advance!(pdf, vpa, vperp, z, r, composition, drive_input, mo
     end
     # enforce prescribed boundary condition in r on the distribution function f
     # use present distribution as f_old in case of Dirichlet bc
-    @views enforce_r_boundary_condition!(pdf.unnorm, pdf.unnorm, r.bc, r_advect, vpa, vperp, z, composition)
+    @views enforce_r_boundary_condition!(pdf.unnorm, pdf.unnorm, r.bc, r_advect, vpa, vperp, z, r, composition)
     
     # create structure z_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the split part of the GK equation dealing
@@ -281,7 +281,7 @@ function setup_time_advance!(pdf, vpa, vperp, z, r, composition, drive_input, mo
     r_SL = setup_semi_lagrange(r.n, vpa.n, vperp.n, z.n)
 
     if(t_input.use_manufactured_solns)
-        manufactured_source_list = (Source_i_func = manufactured_sources(r.L,z.L,geometry), Source_n_func = "placeholder")
+        manufactured_source_list = (Source_i_func = manufactured_sources(r.L,z.L,r.bc,z.bc,geometry), Source_n_func = "placeholder")
         # possibly need to include neutral source or multiple sources for different ion/neutral species
     else
         manufactured_source_list = false # dummy Bool to be passed as argument instead of list
