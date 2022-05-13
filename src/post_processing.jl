@@ -71,16 +71,19 @@ function analyze_and_plot_data(path)
     ff = load_pdf_data(fid)
     
     #evaluate 1D-1V diagnostics at fixed ir0
-    plot_1D_1V_diagnostics(run_name, fid, nwrite_movie, itime_min, itime_max, ivpa0, iz0, ir0, r,
-        phi[:,ir0,:], 
-        density[:,ir0,:,:],
-        parallel_flow[:,ir0,:,:],
-        parallel_pressure[:,ir0,:,:],
-        parallel_heat_flux[:,ir0,:,:],
-        thermal_speed[:,ir0,:,:],
-        ff[:,ivperp0,:,ir0,:,:],
-        n_species, evolve_ppar, nvpa, vpa, vpa_wgts,
-        nz, z, z_wgts, Lz, ntime, time)
+    diagnostics_1d = false
+    if diagnostics_1d
+        plot_1D_1V_diagnostics(run_name, fid, nwrite_movie, itime_min, itime_max, ivpa0, iz0, ir0, r,
+            phi[:,ir0,:], 
+            density[:,ir0,:,:],
+            parallel_flow[:,ir0,:,:],
+            parallel_pressure[:,ir0,:,:],
+            parallel_heat_flux[:,ir0,:,:],
+            thermal_speed[:,ir0,:,:],
+            ff[:,ivperp0,:,ir0,:,:],
+            n_species, evolve_ppar, nvpa, vpa, vpa_wgts,
+            nz, z, z_wgts, Lz, ntime, time)
+    end 
     close(fid)
     
     # analyze the fields data
@@ -92,7 +95,7 @@ function analyze_and_plot_data(path)
     # MRH hack condition on these plots for now
     # Plots compare density and density_symbolic at last timestep 
     if(manufactured_solns_test && nr > 1)
-        dfni_func, densi_func = manufactured_solutions()
+        dfni_func, densi_func = manufactured_solutions(Lr,Lz)
         
         is = 1
         spec_string = ""
@@ -109,6 +112,21 @@ function analyze_and_plot_data(path)
         end
         heatmap(z, r, density_sym[:,:,is,it], xlabel="z", ylabel="r", title="n_i/Nₑ", c = :deep)
         outfile = string(run_name, "_dens_sym_vs_r_z", spec_string, ".pdf")
+        savefig(outfile)
+        
+        density_norm = copy(density[1,1,1,:])
+        for it in 1:ntime
+            dummy = 0.0
+            for ir in 1:nr
+                for iz in 1:nz
+                    dummy += (density[iz,ir,is,it] - densi_func(z[iz],r[ir],time[it]))^2
+                end
+            end
+            density_norm[it] = dummy
+        end
+        println(density_norm)
+        @views plot(time, density_norm[:], xlabel="t*Lz/vti", ylabel="Sum || n_i - n_i^{sym} ||^2") #, yaxis=:log)
+        outfile = string(run_name, "_dens_norm_vs_t", spec_string, ".pdf")
         savefig(outfile)
     end 
     

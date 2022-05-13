@@ -282,7 +282,7 @@ function setup_time_advance!(pdf, vpa, vperp, z, r, composition, drive_input, mo
     r_SL = setup_semi_lagrange(r.n, vpa.n, vperp.n, z.n)
 
     if(t_input.use_manufactured_solns)
-        manufactured_source_list = (Source_i_func = manufactured_sources(geometry), Source_n_func = "placeholder")
+        manufactured_source_list = (Source_i_func = manufactured_sources(r.L,z.L,geometry), Source_n_func = "placeholder")
         # possibly need to include neutral source or multiple sources for different ion/neutral species
     else
         manufactured_source_list = false # dummy Bool to be passed as argument instead of list

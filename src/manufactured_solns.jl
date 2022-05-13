@@ -9,21 +9,21 @@ using Symbolics
 
     @variables r z vpa vperp t
 
-    function densi_sym()
-        densi = 1.0 +  0.1*(sin(r) + sin(z))*sin(t)  
+    function densi_sym(Lr,Lz)
+        densi = 1.0 +  0.1*(sin(2.0*pi*r/Lr) + sin(2.0*pi*z/Lz))*sin(2.0*pi*t)  
         return densi
     end
 
-    function dfni_sym()
-        densi = densi_sym()
+    function dfni_sym(Lr,Lz)
+        densi = densi_sym(Lr,Lz)
         dfni = densi * exp( - vpa^2 - vperp^2) #/ sqrt(pi^3)
         return dfni
     end
 
-    function manufactured_solutions()
+    function manufactured_solutions(Lr,Lz)
 
-        densi = densi_sym()
-        dfni = dfni_sym()
+        densi = densi_sym(Lr,Lz)
+        dfni = dfni_sym(Lr,Lz)
         
         #build julia functions from these symbolic expressions
         # cf. https://docs.juliahub.com/Symbolics/eABRO/3.4.0/tutorials/symbolic_functions/
@@ -37,10 +37,10 @@ using Symbolics
     end 
 
     #function manufactured_sources(dfni,densi,geometry)
-    function manufactured_sources(geometry)
+    function manufactured_sources(Lr,Lz,geometry)
         
-        densi = densi_sym()
-        dfni = dfni_sym()
+        densi = densi_sym(Lr,Lz)
+        dfni = dfni_sym(Lr,Lz)
         
         Dr = Differential(r) 
         Dz = Differential(z) 
