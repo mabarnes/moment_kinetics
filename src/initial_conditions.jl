@@ -316,8 +316,8 @@ function enforce_r_boundary_condition!(f, f_old, bc::String, adv::T, vpa, vperp,
     # 'periodic' BC enforces periodicity by taking the average of the boundary points
     if bc == "periodic"
         @loop_s_z_vperp_vpa is iz ivperp ivpa begin
-            downwind_idx = 1 #adv[is].downwind_idx[ivpa,ivperp,iz]
-            upwind_idx = r.n #adv[is].upwind_idx[ivpa,ivperp,iz]
+            downwind_idx = adv[is].downwind_idx[ivpa,ivperp,iz] # 1 #
+            upwind_idx = adv[is].upwind_idx[ivpa,ivperp,iz] # r.n #
             f[ivpa,ivperp,iz,downwind_idx,is] = 0.5*(f[ivpa,ivperp,iz,upwind_idx,is]+f[ivpa,ivperp,iz,downwind_idx,is])
             f[ivpa,ivperp,iz,upwind_idx,is] = f[ivpa,ivperp,iz,downwind_idx,is]
         end
@@ -325,8 +325,8 @@ function enforce_r_boundary_condition!(f, f_old, bc::String, adv::T, vpa, vperp,
         # use the old distribution to force the new distribution to have 
         # consistant-in-time values at the boundary
         @loop_s_z_vperp_vpa is iz ivperp ivpa begin
-            downwind_idx = 1 #adv[is].downwind_idx[ivpa,ivperp,iz]
-            upwind_idx = r.n #adv[is].upwind_idx[ivpa,ivperp,iz]
+            downwind_idx = adv[is].downwind_idx[ivpa,ivperp,iz] # 1 #
+            upwind_idx = adv[is].upwind_idx[ivpa,ivperp,iz] # r.n #
             f[ivpa,ivperp,iz,downwind_idx,is] = f_old[ivpa,ivperp,iz,downwind_idx,is]
             f[ivpa,ivperp,iz,upwind_idx,is] = f_old[ivpa,ivperp,iz,upwind_idx,is]
         end
