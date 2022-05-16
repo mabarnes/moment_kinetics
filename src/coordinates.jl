@@ -133,6 +133,12 @@ function init_grid(ngrid, nelement, n, L, imin, imax, igrid, discretization)
         wgts = 2.0 .* wgts .* grid # to include 2 vperp in jacobian of integral
                                  # assumes pdf normalised like 
                                  # f^N = Pi^{3/2} c_s^3 f / n_ref 
+    elseif discretization == "chebyshev_pseudospectral_vperp"
+        # initialize chebyshev grid defined on [-L/2,L/2]
+        grid, wgts = scaled_chebyshev_grid(ngrid, nelement, n, L, imin, imax)
+        grid .= grid .+ L/2.0 # shift to [0,L] appropriate to vperp variable
+        wgts = 2.0 .* wgts .* grid # to include 2 vperp in jacobian of integral
+                                    # see note above on normalisation
     else
         error("discretization option '$discretization' unrecognized")
     end
