@@ -261,6 +261,9 @@ the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
 """
 function update_qpar!(qpar, qpar_updated, pdf, vpa, vperp, z, r, composition, vpanorm)
     @boundscheck composition.n_species == size(qpar,3) || throw(BoundsError(qpar))
+    
+    begin_s_r_z_region()
+
     @loop_s is begin
         if qpar_updated[is] == false
             @views update_qpar_species!(qpar[:,:,is], pdf[:,:,:,:,is], vpa, vperp, z, r, vpanorm[:,:,is])
@@ -279,8 +282,6 @@ function update_qpar_species!(qpar, ff, vpa, vperp, z, r, vpanorm)
     @boundscheck vpa.n == size(ff, 1) || throw(BoundsError(ff))
     @boundscheck r.n == size(qpar, 2) || throw(BoundsError(qpar))
     @boundscheck z.n == size(qpar, 1) || throw(BoundsError(qpar))
-    
-    begin_s_r_z_region()
     
     @loop_r_z ir iz begin
         # old ! qpar[iz,ir] = integrate_over_vspace(@view(ff[:,iz,ir]), vpa.grid, 3, vpa.wgts) * vpanorm[iz,ir]^4
