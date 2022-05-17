@@ -81,9 +81,9 @@ function mk_input(scan_input=Dict())
     geometry.Bzed = get(scan_input, "Bzed", 1.0)
     geometry.Bmag = get(scan_input, "Bmag", 1.0)
     geometry.rstar = get(scan_input, "rhostar", 0.0)
-    println("Info: Bzed is ",geometry.Bzed)
-    println("Info: Bmag is ",geometry.Bmag)
-    println("Info: rhostar is ",geometry.rstar)
+    #println("Info: Bzed is ",geometry.Bzed)
+    #println("Info: Bmag is ",geometry.Bmag)
+    #println("Info: rhostar is ",geometry.rstar)
     
     species[1].z_IC.initialization_option = get(scan_input, "z_IC_option1", "gaussian")
     species[1].initial_density = get(scan_input, "initial_density1", 1.0)
@@ -140,7 +140,7 @@ function mk_input(scan_input=Dict())
     n_rk_stages = get(scan_input, "n_rk_stages", 4)
     split_operators = get(scan_input, "split_operators", false)
     use_manufactured_solns = get(scan_input, "use_manufactured_solns", false)
-    println("Info: The flag use_manufactured_solns is ",use_manufactured_solns)
+    #println("Info: The flag use_manufactured_solns is ",use_manufactured_solns)
     
     # overwrite some default parameters related to the r grid
     # ngrid is number of grid points per element
