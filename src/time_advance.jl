@@ -223,9 +223,9 @@ function setup_time_advance!(pdf, vpa, vperp, z, r, composition, drive_input, mo
     end
     # enforce prescribed boundary condition in z on the distribution function f
     @views enforce_z_boundary_condition!(pdf.unnorm, z.bc, z_advect, vpa, vperp, r, composition)
-    if z.bc != "wall" || composition.n_neutral_species == 0
-        begin_serial_region()
-    end
+    
+    begin_serial_region()
+    
     
     # create structure vpa_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the split part of the GK equation dealing
@@ -287,7 +287,9 @@ function setup_time_advance!(pdf, vpa, vperp, z, r, composition, drive_input, mo
         manufactured_source_list = false # dummy Bool to be passed as argument instead of list
     end
 
-    begin_s_r_z_vperp_region()
+    # Ensure all processes are synchronized at the end of the setup
+    _block_synchronize()
+
     return vpa_spectral, vperp_spectral, z_spectral, r_spectral, moments, fields, 
     vpa_advect, vperp_advect, z_advect, r_advect,vpa_SL, vperp_SL, z_SL, r_SL,
     scratch, advance, scratch_dummy, manufactured_source_list
@@ -497,9 +499,8 @@ function rk_update!(scratch, pdf, moments, fields, vpa, vperp, z, r, rk_coefs, i
     # update the parallel heat flux
     update_qpar!(moments.qpar, moments.qpar_updated, pdf.unnorm, vpa, vperp, z, r, composition, moments.vpa_norm_fac)
     # update the electrostatic potential phi
-    begin_serial_region(no_synchronize=true)
     update_phi!(fields, scratch[istage+1], z, r, composition, z_spectral, r_spectral, moments.evolve_density)
-    begin_s_r_z_vperp_region()
+    #begin_s_r_z_vperp_region()
 end
 
 """
@@ -508,7 +509,9 @@ function ssp_rk!(pdf, scratch, t, t_input, vpa, vperp, z, r,
     vpa_spectral, vperp_spectral, z_spectral, r_spectral,
     moments, fields, vpa_advect, vperp_advect, z_advect, r_advect,
     vpa_SL, vperp_SL, z_SL, r_SL, composition, collisions, geometry, advance, scratch_dummy, manufactured_source_list,  istep)#pdf_in,
-
+    
+    begin_s_r_z_vperp_region()
+    
     n_rk_stages = t_input.n_rk_stages
 
     first_scratch = scratch[1]
@@ -576,27 +579,18 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, vp
     end
     
     # z_advection! advances 1D advection equation in z
-    # apply z-advection operation to all species (charged and neutral)
+    # apply z-advection operation to charged species
     
-    
-    # MRH UNSURE ABOUT PARALLELISATION HERE
-    # z advection relies on derivatives in r to get ExB
     if advance.z_advection
-        begin_s_r_vperp_vpa_region()
         z_advection!(fvec_out.pdf, fvec_in, pdf.norm, fields, moments, z_SL, z_advect, z, vpa, vperp, r, 
             use_semi_lagrange, dt, t, z_spectral, composition, geometry, istage)
-        begin_s_r_z_vperp_region()
-        #  SHOULD NOT CHANGE TO VPA STRUCTURE YET
     end
-    # MRH UNSURE ABOUT PARALLELISATION HERE
     
-    # MRH UNSURE ABOUT PARALLELISATION HERE  
     # r advection relies on derivatives in z to get ExB
     if advance.r_advection && r.n > 1
         r_advection!(fvec_out.pdf, fvec_in, pdf.norm, fields, moments, r_SL, r_advect, r, z, vperp, vpa, 
             use_semi_lagrange, dt, t, r_spectral, composition, geometry, istage)
     end 
-    # MRH UNSURE ABOUT PARALLELISATION HERE
     
     #if advance.vperp_advection
     # PLACEHOLDER 

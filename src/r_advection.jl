@@ -14,6 +14,9 @@ do a single stage time advance (potentially as part of a multi-stage RK scheme)
 """
 function r_advection!(f_out, fvec_in, ff, fields, moments, SL, advect, r, z, vperp, vpa, 
                       use_semi_lagrange, dt, t, r_spectral, composition, geometry, istage)
+    
+    begin_s_z_vperp_vpa_region()
+    
     @loop_s is begin
         # get the updated speed along the r direction using the current f
         @views update_speed_r!(advect[is], fields, fvec_in.upar[:,:,is], moments.vth[:,:,is],

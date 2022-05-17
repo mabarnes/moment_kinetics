@@ -154,6 +154,9 @@ NB: if this function is called and if dens_updated is false, then
 the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
 """
 function update_density!(dens, dens_updated, pdf, vpa, vperp, z, r, composition)
+    
+    begin_s_r_z_region()
+    
     n_species = size(pdf,5)
     @boundscheck n_species == size(dens,3) || throw(BoundsError(dens))
     @loop_s is begin
@@ -186,6 +189,9 @@ NB: if this function is called and if upar_updated is false, then
 the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
 """
 function update_upar!(upar, upar_updated, pdf, vpa, vperp, z, r, composition)
+    
+    begin_s_r_z_region()
+    
     n_species = size(pdf,5)
     @boundscheck n_species == size(upar,3) || throw(BoundsError(upar))
     @loop_s is begin
@@ -221,6 +227,9 @@ function update_ppar!(ppar, ppar_updated, pdf, vpa, vperp, z, r, composition)
     @boundscheck composition.n_species == size(ppar,3) || throw(BoundsError(ppar))
     @boundscheck r.n == size(ppar,2) || throw(BoundsError(ppar))
     @boundscheck z.n == size(ppar,1) || throw(BoundsError(ppar))
+    
+    begin_s_r_z_region()
+    
     @loop_s is begin
         if ppar_updated[is] == false
             @views update_ppar_species!(ppar[:,:,is], pdf[:,:,:,:,is], vpa, vperp, z, r)
@@ -270,6 +279,9 @@ function update_qpar_species!(qpar, ff, vpa, vperp, z, r, vpanorm)
     @boundscheck vpa.n == size(ff, 1) || throw(BoundsError(ff))
     @boundscheck r.n == size(qpar, 2) || throw(BoundsError(qpar))
     @boundscheck z.n == size(qpar, 1) || throw(BoundsError(qpar))
+    
+    begin_s_r_z_region()
+    
     @loop_r_z ir iz begin
         # old ! qpar[iz,ir] = integrate_over_vspace(@view(ff[:,iz,ir]), vpa.grid, 3, vpa.wgts) * vpanorm[iz,ir]^4
         qpar[iz,ir] = integrate_over_vspace(@view(ff[:,:,iz,ir]),
@@ -376,7 +388,9 @@ end
 function enforce_moment_constraints!(fvec_new, fvec_old, vpa, vperp, z, r, composition, moments, dummy)
     #global @. dens_hist += fvec_old.density
     #global n_hist += 1
-
+    
+    begin_s_r_z_region()
+    
     # pre-calculate avgdens_ratio so that we don't read fvec_new.density[:,is] on every
     # process in the next loop - that would be an error because different processes
     # write to fvec_new.density[:,is]

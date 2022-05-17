@@ -320,10 +320,18 @@ for dims ∈ dimension_combinations
              Begin region in which $($dims) dimensions are parallelized by being split
              between processes.
 
+             Returns immediately if loop_ranges[] is already set to the parallel
+             dimensions being requested. This allows the begin_*_region() calls to be
+             placed where they make logical sense, with no cost if a call happens to be
+             repeated (e.g. in different functions).
+             
              Calls `_block_synchronize()` to synchronize the processes operating on a
              shared-memory block, unless `no_synchronize=true` is passed as an argument.
              """
              function $sync_name(; no_synchronize::Bool=false)
+                 if loop_ranges[].parallel_dims == $dims
+                    return
+                 end
                  if !no_synchronize
                      _block_synchronize()
                  end
@@ -350,10 +358,17 @@ export @serial_region
 Begin region in which only rank-0 in each group of processes operating on a
 shared-memory block operates on shared-memory arrays.
 
+Returns immediately if loop_ranges[] is already set for a serial region. This allows the
+begin_*_region() calls to be placed where they make logical sense, with no cost if a
+call happens to be repeated (e.g. in different functions).
+
 Calls `_block_synchronize()` to synchronize the processes operating on a shared-memory
 block, unless `no_synchronize=true` is passed as an argument.
 """
 function begin_serial_region(; no_synchronize::Bool=false)
+    if loop_ranges[].parallel_dims == ()
+       return
+    end
     if !no_synchronize
         _block_synchronize()
     end

@@ -33,6 +33,9 @@ creates the normalised pdf and the velocity-space moments and populates them
 with a self-consistent initial condition
 """
 function init_pdf_and_moments(vpa, vperp, z, r, composition, species, n_rk_stages, evolve_moments, use_manufactured_solns)
+    
+    begin_serial_region()
+    
     # define the n_species variable for convenience
     n_species = composition.n_species
     # create the 'moments' struct that contains various v-space moments and other
@@ -76,7 +79,7 @@ function init_pdf_and_moments(vpa, vperp, z, r, composition, species, n_rk_stage
             end
         end
     end 
-    begin_s_r_z_vperp_region()
+    #begin_s_r_z_vperp_region()
     # calculate the initial parallel heat flux from the initial un-normalised pdf
     update_qpar!(moments.qpar, moments.qpar_updated, pdf.unnorm, vpa, vperp, z, r, composition, moments.vpa_norm_fac)
     return pdf, moments
@@ -297,6 +300,8 @@ end
 # Seems to make the fn a operator elementwise in the vector f
 # but loop is over a part of mysterious x_adv objects...
 function enforce_boundary_conditions!(f, f_old, vpa_bc, z_bc, r_bc, vpa, vperp, z, r, vpa_adv::T1, z_adv::T2, r_adv::T3, composition) where {T1, T2, T3}
+    
+    begin_s_r_z_vperp_region()
     @loop_s_r_z_vperp is ir iz ivperp begin
         # enforce the vpa BC
         @views enforce_vpa_boundary_condition_local!(f[:,ivperp,iz,ir,is], vpa_bc, vpa_adv[is].upwind_idx[ivperp,iz,ir],
@@ -304,7 +309,7 @@ function enforce_boundary_conditions!(f, f_old, vpa_bc, z_bc, r_bc, vpa, vperp, 
     end
     begin_s_r_vperp_vpa_region()
     @views enforce_z_boundary_condition!(f, z_bc, z_adv, vpa, vperp, r, composition)
-    #MRH UNSURE ABOUT PARALLELISATION HERE
+    begin_s_z_vperp_vpa_region()
     @views enforce_r_boundary_condition!(f, f_old, r_bc, r_adv, vpa, vperp, z, r, composition)
 end
 

@@ -45,6 +45,9 @@ function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral, ev
     # over species, and reduces number of _block_synchronize() calls needed
     # when there is only one species.
     
+    begin_serial_region(no_synchronize=true)
+    # in serial as both s, r and z required locally
+    
     if (composition.n_ion_species > 1 || !evolve_density ||
         composition.electron_physics == boltzmann_electron_response_with_simple_sheath)
         # If there is more than 1 ion species, the ranks that handle species 1 have to

@@ -10,6 +10,9 @@ using ..looping
 """
 """
 function energy_equation!(ppar, fvec, moments, collisions, z, r, dt, spectral, composition)
+    
+    begin_s_r_region()
+    
     @loop_s_r is ir begin
         @views energy_equation_noCX!(ppar[:,ir,is], fvec.upar[:,ir,is], fvec.ppar[:,ir,is],
                                      moments.qpar[:,ir,is], dt, z, spectral)

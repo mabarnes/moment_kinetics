@@ -11,6 +11,8 @@ using ..looping
 function charge_exchange_collisions!(f_out, fvec_in, moments, composition, vpa, vperp, z, r,
                                      charge_exchange_frequency, dt)
 
+    begin_s_r_z_region()
+    
     @loop_s is begin
         # apply CX collisions to all ion species
         if is ∈ composition.ion_species_range

@@ -13,6 +13,9 @@ use the continuity equation dn/dt + d(n*upar)/dz to update the density n for all
 function continuity_equation!(dens_out, fvec_in, moments, composition, z, r, dt, spectral)
     # use the continuity equation dn/dt + d(n*upar)/dz to update the density n
     # for each species
+    
+    begin_s_r_region()
+    
     @loop_s_r is ir begin
             @views continuity_equation_single_species!(dens_out[:,ir,is],
                 fvec_in.density[:,ir,is], fvec_in.upar[:,ir,is], z, dt, spectral)
