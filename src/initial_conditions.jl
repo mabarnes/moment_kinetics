@@ -329,10 +329,9 @@ function enforce_r_boundary_condition!(f, f_old, bc::String, adv::T, vpa, vperp,
     elseif bc == "Dirichlet"
         # use the old distribution to force the new distribution to have 
         # consistant-in-time values at the boundary
+        # impose bc on upwind boundary only (Hyperbolic PDE)
         @loop_s_z_vperp_vpa is iz ivperp ivpa begin
-            downwind_idx = adv[is].downwind_idx[ivpa,ivperp,iz] # 1 #
             upwind_idx = adv[is].upwind_idx[ivpa,ivperp,iz] # r.n #
-            f[ivpa,ivperp,iz,downwind_idx,is] = f_old[ivpa,ivperp,iz,downwind_idx,is]
             f[ivpa,ivperp,iz,upwind_idx,is] = f_old[ivpa,ivperp,iz,upwind_idx,is]
         end
     end
