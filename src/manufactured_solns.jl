@@ -16,13 +16,22 @@ using Symbolics
             #densi = 1.0 +  0.5*sin(2.0*pi*z/Lz)*(r/Lr + 0.5) + 0.2*sin(2.0*pi*r/Lr)*sin(2.0*pi*t)
             #densi = 1.0 +  0.5*sin(2.0*pi*z/Lz)*(r/Lr + 0.5) + sin(2.0*pi*r/Lr)*sin(2.0*pi*t)
             densi = 1.0 +  0.5*(r/Lr + 0.5) 
+        elseif r_bc == "periodic" && z_bc == "wall"
+            densi = 0.25*(0.5 - z/Lz) + 0.25*(z/Lz + 0.5)+ 0.2*(z/Lz + 0.5)*(0.5 - z/Lz)  #+  0.5*(r/Lr + 0.5) + 0.5*(z/Lz + 0.5)
         end
         return densi
     end
 
     function dfni_sym(Lr,Lz,r_bc,z_bc)
         densi = densi_sym(Lr,Lz,r_bc,z_bc)
-        dfni = densi * exp( - vpa^2 - vperp^2) #/ sqrt(pi^3)
+        if (r_bc == "periodic" && z_bc == "periodic") || (r_bc == "Dirichlet" && z_bc == "periodic")
+            dfni = densi * exp( - vpa^2 - vperp^2) #/ sqrt(pi^3)
+        elseif r_bc == "periodic" && z_bc == "wall"
+            Hplus = 0.5*(sign(vpa) + 1.0)
+            Hminus = 0.5*(sign(-vpa) + 1.0)
+            ffa =  exp(- vperp^2)
+            dfni = ffa * ( (0.5 - z/Lz) * Hminus * vpa^2 + (z/Lz + 0.5) * Hplus * vpa^2 + 0.2*(z/Lz + 0.5)*(0.5 - z/Lz) ) * exp( - vpa^2 )
+        end
         return dfni
     end
 
