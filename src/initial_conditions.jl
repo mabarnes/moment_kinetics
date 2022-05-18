@@ -344,6 +344,8 @@ function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, vperp, r, com
     n_species = composition.n_species
     # define nvpa variable for convenience
     nvpa = vpa.n
+    # define nz variable for convenience
+    nz = size(f, 3)
     # define a zero that accounts for finite precision
     zero = 1.0e-10
     # 'constant' BC is time-independent f at upwind boundary
@@ -366,14 +368,20 @@ function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, vperp, r, com
         @loop_s is begin
             # zero incoming BC for ions, as they recombine at the wall
             if is ∈ composition.ion_species_range
-                @loop_vpa ivpa begin
+                @loop_r_vperp_vpa ir ivperp ivpa begin
                     # no parallel BC should be enforced for vpa = 0
-                    if abs(vpa.grid[ivpa]) > zero
-                        @loop_r_vperp ir ivperp begin
-                            upwind_idx = adv[is].upwind_idx[ivpa,ivperp,ir]
-                            f[ivpa,ivperp,upwind_idx,ir,is] = 0.0
-                        end
+                    # adv.speed is signed 
+                    # adv.speed =  vpa*kpar - 0.5 *rhostar*Er
+                    
+                    iz = 1 # z = -L/2
+                    if adv[is].speed[iz,ivpa,ivperp,ir] > zero
+                        f[ivpa,ivperp,iz,ir,is] = 0.0
                     end
+                    iz = nz # z = L/2
+                    if adv[is].speed[iz,ivpa,ivperp,ir] < -zero
+                        f[ivpa,ivperp,iz,ir,is] = 0.0
+                    end
+                    
                 end
             end
         end
