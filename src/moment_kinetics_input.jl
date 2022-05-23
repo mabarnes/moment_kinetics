@@ -52,7 +52,7 @@ function mk_input(scan_input=Dict())
     #   reference value using J_||e + J_||i = 0 at z = 0
     electron_physics = get(scan_input, "electron_physics", boltzmann_electron_response)
     
-    z, r, vpa, vperp, species, composition, drive, evolve_moments, collisions, geometry =
+    z, r, vpa, vperp, vz, vr, species, composition, drive, evolve_moments, collisions, geometry =
         load_defaults(n_ion_species, n_neutral_species, electron_physics)
 
     # this is the prefix for all output files associated with this run
@@ -195,6 +195,34 @@ function mk_input(scan_input=Dict())
     # determine the discretization option for the vperp grid
     # supported options are "finite_difference_vperp" "chebyshev_pseudospectral_vperp"
     vperp.discretization = get(scan_input, "vperp_discretization", "chebyshev_pseudospectral_vperp")
+    
+    # overwrite some default parameters related to the vz grid
+    # ngrid is the number of grid points per element
+    vz.ngrid = get(scan_input, "vz_ngrid", 17)
+    # nelement is the number of elements
+    vz.nelement = get(scan_input, "vz_nelement", 10)
+    # L is the box length in units of vthermal_species
+    vz.L = get(scan_input, "vz_L", 8.0*sqrt(species[1].initial_temperature))
+    # determine the boundary condition
+    # only supported option at present is "zero" and "periodic"
+    vz.bc = get(scan_input, "vz_bc", "periodic")
+    # determine the discretization option for the vz grid
+    # supported options are "chebyshev_pseudospectral" and "finite_difference"
+    vz.discretization = get(scan_input, "vz_discretization", "chebyshev_pseudospectral")
+    
+    # overwrite some default parameters related to the vr grid
+    # ngrid is the number of grid points per element
+    vr.ngrid = get(scan_input, "vr_ngrid", 17)
+    # nelement is the number of elements
+    vr.nelement = get(scan_input, "vr_nelement", 10)
+    # L is the box length in units of vthermal_species
+    vr.L = get(scan_input, "vr_L", 8.0*sqrt(species[1].initial_temperature))
+    # determine the boundary condition
+    # only supported option at present is "zero" and "periodic"
+    vr.bc = get(scan_input, "vr_bc", "periodic")
+    # determine the discretization option for the vr grid
+    # supported options are "chebyshev_pseudospectral" and "finite_difference"
+    vr.discretization = get(scan_input, "vr_discretization", "chebyshev_pseudospectral")
 
     #########################################################################
     ########## end user inputs. do not modify following code! ###############
@@ -219,6 +247,15 @@ function mk_input(scan_input=Dict())
         vperp.advection.frequency, vperp.advection.oscillation_amplitude)
     vperp_immutable = grid_input("vperp", vperp.ngrid, vperp.nelement, vperp.L,
         vperp.discretization, vperp.fd_option, vperp.bc, vperp_advection_immutable)
+    vz_advection_immutable = advection_input(vz.advection.option, vz.advection.constant_speed,
+        vz.advection.frequency, vz.advection.oscillation_amplitude)
+    vz_immutable = grid_input("vz", vz.ngrid, vz.nelement, vz.L,
+        vz.discretization, vz.fd_option, vz.bc, vz_advection_immutable)
+    vr_advection_immutable = advection_input(vr.advection.option, vr.advection.constant_speed,
+        vr.advection.frequency, vr.advection.oscillation_amplitude)
+    vr_immutable = grid_input("vr", vr.ngrid, vr.nelement, vr.L,
+        vr.discretization, vr.fd_option, vr.bc, vr_advection_immutable)
+    
     n_species = composition.n_species
     species_immutable = Array{species_parameters,1}(undef,n_species)
     for is ∈ 1:n_species
@@ -262,7 +299,7 @@ function mk_input(scan_input=Dict())
 
     # return immutable structs for z, vpa, species and composition
     all_inputs = (run_name, output_dir, evolve_moments, t, 
-                  z_immutable, r_immutable, vpa_immutable, vperp_immutable,
+                  z_immutable, r_immutable, vpa_immutable, vperp_immutable, vz_immutable, vr_immutable,
                   composition, species_immutable, collisions, geometry, drive_immutable)
     println(io, "\nAll inputs returned from mk_input():")
     println(io, all_inputs)
@@ -432,6 +469,76 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     vperp = grid_input_mutable("vperp", ngrid_vperp, nelement_vperp, L_vperp,
         discretization_option_vperp, finite_difference_option_vperp, boundary_option_vperp,
         advection_vperp)
+    ############################################################################
+    ################### parameters related to the vr grid #####################
+    # ngrid_vr is the number of grid points per element
+    ngrid_vr = 1
+    # nelement_vr is the number of elements
+    nelement_vr = 1
+    # L_vr is the box length in units of vthermal_species
+    L_vr = 1.0
+    # determine the boundary condition
+    # currently supported options are "zero" and "periodic"
+    boundary_option_vr = "periodic"
+    # determine the discretization option for the vr grid
+    # supported options are "finite_difference" "chebyshev_pseudospectral"
+    discretization_option_vr = "chebyshev_pseudospectral"
+    # if discretization_option_vr = "finite_difference", then
+    # finite_difference_option_vr determines the finite difference scheme to be used
+    # supported options are "third_order_upwind", "second_order_upwind" and "first_order_upwind"
+    #finite_difference_option_vr = "second_order_upwind"
+    finite_difference_option_vr = "third_order_upwind"
+    # determine the option used for the advection speed in vr
+    # supported options are "constant" and "oscillating",
+    advection_option_vr = "default"
+    # constant advection speed in vr to use with advection_option_vr = "constant"
+    advection_speed_vr = 0.0
+    # for advection_option_vr = "oscillating", advection speed is of form
+    # speed = advection_speed_vr*(1 + oscillation_amplitude_vr*sinpi(frequency_vr*t))
+    frequency_vr = 1.0
+    oscillation_amplitude_vr = 1.0
+    # mutable struct containing advection speed options/inputs for z
+    advection_vr = advection_input_mutable(advection_option_vr, advection_speed_vr,
+        frequency_vr, oscillation_amplitude_vr)
+    # create a mutable structure containing the input info related to the vr grid
+    vr = grid_input_mutable("vr", ngrid_vr, nelement_vr, L_vr,
+        discretization_option_vr, finite_difference_option_vr, boundary_option_vr,
+        advection_vr)
+    ############################################################################
+    ################### parameters related to the vz grid #####################
+    # ngrid_vz is the number of grid points per element
+    ngrid_vz = 1
+    # nelement_vz is the number of elements
+    nelement_vz = 1
+    # L_vz is the box length in units of vthermal_species
+    L_vz = 1.0
+    # determine the boundary condition
+    # currently supported options are "zero" and "periodic"
+    boundary_option_vz = "periodic"
+    # determine the discretization option for the vz grid
+    # supported options are "finite_difference" "chebyshev_pseudospectral"
+    discretization_option_vz = "chebyshev_pseudospectral"
+    # if discretization_option_vz = "finite_difference", then
+    # finite_difference_option_vz determines the finite difference scheme to be used
+    # supported options are "third_order_upwind", "second_order_upwind" and "first_order_upwind"
+    #finite_difference_option_vz = "second_order_upwind"
+    finite_difference_option_vz = "third_order_upwind"
+    # determine the option used for the advection speed in vz
+    # supported options are "constant" and "oscillating",
+    advection_option_vz = "default"
+    # constant advection speed in vz to use with advection_option_vz = "constant"
+    advection_speed_vz = 0.0
+    # for advection_option_vz = "oscillating", advection speed is of form
+    # speed = advection_speed_vz*(1 + oscillation_amplitude_vz*sinpi(frequency_vz*t))
+    frequency_vz = 1.0
+    oscillation_amplitude_vz = 1.0
+    # mutable struct containing advection speed options/inputs for z
+    advection_vz = advection_input_mutable(advection_option_vz, advection_speed_vz,
+        frequency_vz, oscillation_amplitude_vz)
+    # create a mutable structure containing the input info related to the vz grid
+    vz = grid_input_mutable("vz", ngrid_vz, nelement_vz, L_vz,
+        discretization_option_vz, finite_difference_option_vz, boundary_option_vz,
+        advection_vz)
     #############################################################################
     # define default values and create corresponding mutable structs holding
     # information about the composition of the species and their initial conditions
@@ -530,7 +637,7 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     rstar = 0.0 #rhostar of ions for ExB drift
     geometry = geometry_input(Bzed,Bmag,rstar)
 
-    return z, r, vpa, vperp, species, composition, drive, evolve_moments, collisions, geometry
+    return z, r, vpa, vperp, vz, vr, species, composition, drive, evolve_moments, collisions, geometry
 end
 
 """
