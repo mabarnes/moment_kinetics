@@ -151,7 +151,7 @@ function setup_moment_kinetics(input_dict::Dict)
     vzeta = define_coordinate(vzeta_input, composition)
     # Create loop range variables for shared-memory-parallel loops
     looping.setup_loop_ranges!(block_rank[], block_size[]; s=composition.n_species, r=r.n,
-                               z=z.n, vperp=vperp.n, vpa=vpa.n) #, vr=vr.n, vz=vz.n
+                               z=z.n, vperp=vperp.n, vpa=vpa.n, vzeta=vzeta.n, vr=vr.n, vz=vz.n)
     # initialize f and the lowest three v-space moments (density, upar and ppar),
     # each of which may be evolved separately depending on input choices.
     pdf, moments = init_pdf_and_moments(vpa, vperp, z, r, composition, species, t_input.n_rk_stages, evolve_moments, t_input.use_manufactured_solns) #vz, vr, 
