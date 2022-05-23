@@ -52,7 +52,7 @@ function mk_input(scan_input=Dict())
     #   reference value using J_||e + J_||i = 0 at z = 0
     electron_physics = get(scan_input, "electron_physics", boltzmann_electron_response)
     
-    z, r, vpa, vperp, vz, vr, species, composition, drive, evolve_moments, collisions, geometry =
+    z, r, vpa, vperp, vz, vr, vzeta, species, composition, drive, evolve_moments, collisions, geometry =
         load_defaults(n_ion_species, n_neutral_species, electron_physics)
 
     # this is the prefix for all output files associated with this run
@@ -224,6 +224,20 @@ function mk_input(scan_input=Dict())
     # supported options are "chebyshev_pseudospectral" and "finite_difference"
     vr.discretization = get(scan_input, "vr_discretization", "chebyshev_pseudospectral")
 
+    # overwrite some default parameters related to the vzeta grid
+    # ngrid is the number of grid points per element
+    vzeta.ngrid = get(scan_input, "vzeta_ngrid", 17)
+    # nelement is the number of elements
+    vzeta.nelement = get(scan_input, "vzeta_nelement", 10)
+    # L is the box length in units of vthermal_species
+    vzeta.L = get(scan_input, "vzeta_L", 8.0*sqrt(species[1].initial_temperature))
+    # determine the boundary condition
+    # only supported option at present is "zero" and "periodic"
+    vzeta.bc = get(scan_input, "vzeta_bc", "periodic")
+    # determine the discretization option for the vzeta grid
+    # supported options are "chebyshev_pseudospectral" and "finite_difference"
+    vzeta.discretization = get(scan_input, "vzeta_discretization", "chebyshev_pseudospectral")
+
     #########################################################################
     ########## end user inputs. do not modify following code! ###############
     #########################################################################
@@ -255,6 +269,10 @@ function mk_input(scan_input=Dict())
         vr.advection.frequency, vr.advection.oscillation_amplitude)
     vr_immutable = grid_input("vr", vr.ngrid, vr.nelement, vr.L,
         vr.discretization, vr.fd_option, vr.bc, vr_advection_immutable)
+    vzeta_advection_immutable = advection_input(vzeta.advection.option, vzeta.advection.constant_speed,
+        vzeta.advection.frequency, vzeta.advection.oscillation_amplitude)
+    vzeta_immutable = grid_input("vzeta", vzeta.ngrid, vzeta.nelement, vzeta.L,
+        vzeta.discretization, vzeta.fd_option, vzeta.bc, vzeta_advection_immutable)
     
     n_species = composition.n_species
     species_immutable = Array{species_parameters,1}(undef,n_species)
@@ -299,7 +317,7 @@ function mk_input(scan_input=Dict())
 
     # return immutable structs for z, vpa, species and composition
     all_inputs = (run_name, output_dir, evolve_moments, t, 
-                  z_immutable, r_immutable, vpa_immutable, vperp_immutable, vz_immutable, vr_immutable,
+                  z_immutable, r_immutable, vpa_immutable, vperp_immutable, vz_immutable, vr_immutable, vzeta_immutable,
                   composition, species_immutable, collisions, geometry, drive_immutable)
     println(io, "\nAll inputs returned from mk_input():")
     println(io, all_inputs)
@@ -539,6 +557,41 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     vz = grid_input_mutable("vz", ngrid_vz, nelement_vz, L_vz,
         discretization_option_vz, finite_difference_option_vz, boundary_option_vz,
         advection_vz)
+    ############################################################################
+    ################### parameters related to the vzeta grid #####################
+    # ngrid_vzeta is the number of grid points per element
+    ngrid_vzeta = 1
+    # nelement_vzeta is the number of elements
+    nelement_vzeta = 1
+    # L_vzeta is the box length in units of vthermal_species
+    L_vzeta =1.0
+    # determine the boundary condition
+    # currently supported options are "zero" and "periodic"
+    boundary_option_vzeta = "periodic"
+    # determine the discretization option for the vzeta grid
+    # supported options are "finite_difference" "chebyshev_pseudospectral"
+    discretization_option_vzeta = "chebyshev_pseudospectral"
+    # if discretization_option_vzeta = "finite_difference", then
+    # finite_difference_option_vzeta determines the finite difference scheme to be used
+    # supported options are "third_order_upwind", "second_order_upwind" and "first_order_upwind"
+    #finite_difference_option_vzeta = "second_order_upwind"
+    finite_difference_option_vzeta = "third_order_upwind"
+    # determine the option used for the advection speed in vzeta
+    # supported options are "constant" and "oscillating",
+    advection_option_vzeta = "default"
+    # constant advection speed in vzeta to use with advection_option_vzeta = "constant"
+    advection_speed_vzeta = 0.0
+    # for advection_option_vzeta = "oscillating", advection speed is of form
+    # speed = advection_speed_vzeta*(1 + oscillation_amplitude_vzeta*sinpi(frequency_vzeta*t))
+    frequency_vzeta = 1.0
+    oscillation_amplitude_vzeta = 1.0
+    # mutable struct containing advection speed options/inputs for z
+    advection_vzeta = advection_input_mutable(advection_option_vzeta, advection_speed_vzeta,
+        frequency_vzeta, oscillation_amplitude_vzeta)
+    # create a mutable structure containing the input info related to the vzeta grid
+    vzeta = grid_input_mutable("vzeta", ngrid_vzeta, nelement_vzeta, L_vzeta,
+        discretization_option_vzeta, finite_difference_option_vzeta, boundary_option_vzeta,
+        advection_vzeta)
     #############################################################################
     # define default values and create corresponding mutable structs holding
     # information about the composition of the species and their initial conditions
@@ -637,7 +690,7 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     rstar = 0.0 #rhostar of ions for ExB drift
     geometry = geometry_input(Bzed,Bmag,rstar)
 
-    return z, r, vpa, vperp, vz, vr, species, composition, drive, evolve_moments, collisions, geometry
+    return z, r, vpa, vperp, vz, vr, vzeta, species, composition, drive, evolve_moments, collisions, geometry
 end
 
 """

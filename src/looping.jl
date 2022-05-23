@@ -10,7 +10,7 @@ using ..type_definitions: mk_int
 using Combinatorics
 using Primes
 
-const all_dimensions = (:s, :r, :z, :vperp, :vpa)
+const all_dimensions = (:s, :r, :z, :vperp, :vpa, :vr, :vz)
 const dimension_combinations = Tuple(Tuple(c) for c in combinations(all_dimensions))
 
 """
