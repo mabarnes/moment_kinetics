@@ -119,6 +119,35 @@ macro testset_skip(args...)
     return ex
 end
 
+"""
+    load_test_output(input::Dict, to_load::Tuple{Symbol})
+
+Load the output of a test that was run with settings in `input`. `to_load` specifies
+which variables to load - it can include potential `:phi`, density `:n`, distribution
+function `:f`. Coordinate data is always loaded.
+
+Returns a `Dict` whose keys are `String` containing all loaded data.
+"""
+function load_test_output(input::Dict, to_load::Tuple{Symbol})
+    output = Dict{String, Any}
+
+    path = joinpath(realpath(input["base_directory"]), input["run_name"], input["run_name"])
+
+    # open the netcdf file and give it the handle 'fid'
+    fid = open_netcdf_file(path)
+
+    # load space-time coordinate data
+    output["nvpa"], output["vpa"], output["vpa_wgts"],
+    output["nvperp"], output["vperp"], output["vperp_wgts"],
+    output["nz"], output["z"], output["z_wgts"], output["Lz"],
+    output["nr"], output["r"], output["r_wgts"], output["Lr"],
+    output["ntime"], output["time"]                            = load_coordinate_data(fid)
+
+    close(fid)
+
+    return output
+end
+
 end
 
 using .MKTestUtilities

@@ -7,6 +7,10 @@ export manufactured_sources
 
 using Symbolics
 
+using ..array_allocation: allocate_float
+using ..coordinates: coordinate
+using ..type_definitions
+
     @variables r z vpa vperp t
 
     function densi_sym(Lr,Lz,r_bc,z_bc)
@@ -80,5 +84,38 @@ using Symbolics
         Source_i_func = build_function(Source_i, vpa, vperp, z, r, t, expression=Val{false})
         return Source_i_func
     end 
-    
+
+    """
+        manufactured_solutions_as_arrays(
+            t::mk_float, r::AbstractVector, z::AbstractVector, vperp::AbstractVector,
+            vpa::AbstractVector)
+
+    Create array filled with manufactured solutions.
+
+    Returns
+    -------
+    (densi, phi, dfni)
+    """
+    function manufactured_solutions_as_arrays(
+        t::mk_float, r::coordinate, z::coordinate, vperp::coordinate,
+        vpa::coordinate)
+
+        dfni_func, densi_func = manufactured_solutions(r.L, z.L, r.bc, z.bc)
+
+        densi = allocate_float(z.n, r.n)
+        dfni = allocate_float(vpa.n, vperp.n, z.n, r.n)
+
+        for ir ∈ 1:r.n, iz ∈ 1:z.n
+            densi[iz,ir] = densi_func(z.grid[iz], r.grid[ir], t)
+            for ivperp ∈ 1:vperp.n, ivpa ∈ 1:vpa.n
+                dfni[iz,ir] = dfni_func(vpa.grid[ivpa], vperp.grid[ivperp], z.grid[iz],
+                                        r.grid[ir], t)
+            end
+        end
+
+        phi = log(densi)
+
+        return densi, phi, dfni
+    end
+
 end
