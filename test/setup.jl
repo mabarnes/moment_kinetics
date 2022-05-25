@@ -12,10 +12,14 @@ using moment_kinetics
 
 module MKTestUtilities
 
-export use_verbose, @long, quietoutput, global_rank, maxabs_norm, @testset_skip
+export use_verbose, @long, quietoutput, global_rank, load_test_output, maxabs_norm,
+       @testset_skip
 
 using moment_kinetics.communication: global_rank
 using moment_kinetics.command_line_options: get_options
+using moment_kinetics.load_data: open_netcdf_file
+using moment_kinetics.load_data: load_coordinate_data, load_fields_data,
+                                 load_charged_particle_moments_data, load_pdf_data
 
 const use_verbose = get_options()["verbose"]
 
@@ -117,6 +121,49 @@ macro testset_skip(args...)
     end
 
     return ex
+end
+
+"""
+    load_test_output(input::Dict, to_load::Tuple{Symbol})
+
+Load the output of a test that was run with settings in `input`. `to_load` specifies
+which variables to load - it can include potential `:phi`, moments `:moments`,
+distribution function `:f`. Coordinate data is always loaded.
+
+Returns a `Dict` whose keys are `String` containing all loaded data.
+"""
+function load_test_output(input::Dict, to_load::Tuple{Vararg{Symbol}})
+    output = Dict{String, Any}()
+
+    path = joinpath(realpath(input["base_directory"]), input["run_name"], input["run_name"])
+
+    # open the netcdf file and give it the handle 'fid'
+    fid = open_netcdf_file(path)
+
+    # load space-time coordinate data
+    output["vpa"], output["vperp"], output["z"], output["r"], output["ntime"],
+    output["time"] = load_coordinate_data(fid)
+
+    if :fields ∈ to_load
+        # Load EM fields
+        output["phi"], output["Er"], output["Ez"] = load_fields_data(fid)
+    end
+
+    if :moments ∈ to_load
+        # Load moments
+        output["density"], output["parallel_flow"], output["parallel_pressure"],
+        output["parallel_heat_flux"], output["thermal_speed"], output["n_species"],
+        output["evolve_ppar"] = load_charged_particle_moments_data(fid)
+    end
+
+    if :f ∈ to_load
+        # load full (vpa,vperp,z,r,species,t) particle distribution function (pdf) data
+        output["f"] = load_pdf_data(fid)
+    end
+
+    close(fid)
+
+    return output
 end
 
 end
