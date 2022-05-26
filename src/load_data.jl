@@ -11,6 +11,9 @@ export load_pdf_data
 export load_neutral_pdf_data
 export load_neutral_coordinate_data
 
+using ..coordinates: define_coordinate
+using ..input_structs: grid_input
+
 using NCDatasets
 
 """
@@ -35,49 +38,50 @@ end
 """
 function load_coordinate_data(fid)
     print("Loading coordinate data...")
-    # define a handle for the r coordinate
-    cdfvar = fid["r"]
-    # get the number of r grid points
-    nr = length(cdfvar)
-    # load the data for r
-    r = cdfvar.var[:]
-    # get the weights associated with the r coordinate
-    cdfvar = fid["r_wgts"]
-    r_wgts = cdfvar.var[:]
-    # Lr = r box length
-    Lr = r[end]-r[1]
-    
-    # define a handle for the z coordinate
-    cdfvar = fid["z"]
-    # get the number of z grid points
-    nz = length(cdfvar)
-    # load the data for z
-    z = cdfvar.var[:]
-    # get the weights associated with the z coordinate
-    cdfvar = fid["z_wgts"]
-    z_wgts = cdfvar.var[:]
-    # Lz = z box length
-    Lz = z[end]-z[1]
 
-    # define a handle for the vperp coordinate
-    cdfvar = fid["vperp"]
-    # get the number of vperp grid points
-    nvperp = length(cdfvar)
-    # load the data for vperp
-    vperp = cdfvar.var[:]
-    # get the weights associated with the vperp coordinate
-    cdfvar = fid["vperp_wgts"]
-    vperp_wgts = cdfvar.var[:]
+    function load_coordinate(name::String)
+        # define a handle for the coordinate
+        cdfvar = fid[name]
+        # get the number of grid points
+        n = length(cdfvar)
+        # load the data for grid point positions
+        grid = cdfvar.var[:]
+        # get the weights associated with the coordinate
+        cdfvar = fid["$(name)_wgts"]
+        wgts = cdfvar.var[:]
+        # Lr = box length for coordinate
+        L = grid[end]-grid[1]
 
-    # define a handle for the vpa coordinate
-    cdfvar = fid["vpa"]
-    # get the number of vpa grid points
-    nvpa = length(cdfvar)
-    # load the data for vpa
-    vpa = cdfvar.var[:]
-    # get the weights associated with the vpa coordinate
-    cdfvar = fid["vpa_wgts"]
-    vpa_wgts = cdfvar.var[:]
+        cdfvar = fid["$(name)_ngrid"]
+        ngrid = cdfvar.var[:]
+
+        cdfvar = fid["$(name)_nelement"]
+        nelement = cdfvar.var[:]
+
+        cdfvar = fid["$(name)_discretization"]
+        discretization = cdfvar.var[1]
+
+        cdfvar = fid["$(name)_fd_option"]
+        fd_option = cdfvar.var[1]
+
+        cdfvar = fid["$(name)_bc"]
+        bc = cdfvar.var[1]
+
+        input = grid_input(name, ngrid, nelement, L, discretization, fd_option, bc, nothing)
+
+        coord, spectral = define_coordinate(input)
+
+        # grid is recreated in define_coordinate, so check it is consistent with the
+        # saved grid positions
+        @assert isapprox(grid, coord.grid, rtol=1.e-14)
+
+        return coord
+    end
+
+    r = load_coordinate("r")
+    z = load_coordinate("z")
+    vperp = load_coordinate("vperp")
+    vpa = load_coordinate("vpa")
 
     # define a handle for the time coordinate
     cdfvar = fid["time"]
@@ -92,7 +96,7 @@ function load_coordinate_data(fid)
     n_neutral_species = fid.dim["n_neutral_species"]
     println("done.")
 
-    return nvpa, vpa, vpa_wgts, nvperp, vperp, vperp_wgts, nz, z, z_wgts, Lz, nr, r, r_wgts, Lr, ntime, time, n_ion_species, n_neutral_species
+    return vpa, vperp, z, r, ntime, time
 end
 
 function load_neutral_coordinate_data(fid)

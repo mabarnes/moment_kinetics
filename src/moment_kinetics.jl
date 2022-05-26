@@ -22,9 +22,9 @@ include("chebyshev.jl")
 include("finite_differences.jl")
 include("quadrature.jl")
 include("calculus.jl")
-include("file_io.jl")
 include("input_structs.jl")
 include("coordinates.jl")
+include("file_io.jl")
 include("velocity_moments.jl")
 include("velocity_grid_transforms.jl")
 include("em_fields.jl")
@@ -156,7 +156,7 @@ function setup_moment_kinetics(input_dict::Dict;
 
     # Set up MPI
     initialize_comms!()
-    
+
     input = mk_input(input_dict)
     # obtain input options from moment_kinetics_input.jl
     # and check input to catch errors
@@ -166,21 +166,29 @@ function setup_moment_kinetics(input_dict::Dict;
         vz_input, vr_input, vzeta_input, 
         composition, species, collisions, geometry, drive_input = input
     # initialize z grid and write grid point locations to file
-    z = define_coordinate(z_input, composition)
+    z, z_spectral = define_coordinate(z_input, composition)
     # initialize r grid and write grid point locations to file
-    r = define_coordinate(r_input, composition)
+    r, r_spectral = define_coordinate(r_input, composition)
     # initialize vpa grid and write grid point locations to file
-    vpa = define_coordinate(vpa_input, composition)
+    vpa, vpa_spectral = define_coordinate(vpa_input, composition)
     # initialize vperp grid and write grid point locations to file
-    vperp = define_coordinate(vperp_input, composition)
+    vperp, vperp_spectral = define_coordinate(vperp_input, composition)
     # initialize gyrophase grid and write grid point locations to file
-    gyrophase = define_coordinate(gyrophase_input, composition)
+    gyrophase, gyrophase_spectral = define_coordinate(gyrophase_input, composition)
     # initialize vz grid and write grid point locations to file
-    vz = define_coordinate(vz_input, composition)
+    vz, vz_spectral = define_coordinate(vz_input, composition)
     # initialize vr grid and write grid point locations to file
-    vr = define_coordinate(vr_input, composition)
+    vr, vr_spectral = define_coordinate(vr_input, composition)
     # initialize vr grid and write grid point locations to file
-    vzeta = define_coordinate(vzeta_input, composition)
+    vzeta, vzeta_spectral = define_coordinate(vzeta_input, composition)
+
+    ##
+    # construct named list of spectral objects to compactify arguments
+    ##
+    spectral_objects = (vz_spectral = vz_spectral, vr_spectral = vr_spectral,
+                        vzeta_spectral = vzeta_spectral, vpa_spectral = vpa_spectral,
+                        vperp_spectral = vperp_spectral, z_spectral = z_spectral,
+                        r_spectral = r_spectral)
     # Create loop range variables for shared-memory-parallel loops
     if composition.n_neutral_species == 0
         n_neutral_loop_size = 1 # Need this to have looping setup. Avoid neutral loops with if statements.
@@ -211,9 +219,10 @@ function setup_moment_kinetics(input_dict::Dict;
     code_time = 0.
     # create arrays and do other work needed to setup
     # the main time advance loop -- including normalisation of f by density if requested
-    moments, fields, spectral_objects, advect_objects, 
-    scratch, advance, scratch_dummy, manufactured_source_list = setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition,
-        drive_input, moments, t_input, collisions, species, geometry, boundary_distributions)
+    moments, fields, advect_objects, scratch,
+        advance, scratch_dummy, manufactured_source_list = setup_time_advance!(pdf, vz,
+            vr, vzeta, vpa, vperp, z, r, spectral_objects, composition, drive_input,
+            moments, t_input, collisions, species, geometry, boundary_distributions)
     # setup i/o
     io, cdf = setup_file_io(output_dir, run_name, vz, vr, vzeta, vpa, vperp, z, r, composition, collisions)
     # write initial data to ascii files
