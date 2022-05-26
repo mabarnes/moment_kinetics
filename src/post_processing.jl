@@ -53,6 +53,28 @@ function moving_average(v::AbstractVector, n::mk_int)
 end
 
 """
+    L2_error_norm(a, b)
+
+Calculate the L2 norm of the error between a and b: sqrt(mean((a-b)^2))
+"""
+function L2_error_norm(a, b)
+    @assert size(a) == size(b)
+    error = @. (a-b) / abs(a)
+    return sqrt(mean(error.^2))
+end
+
+"""
+    L_infinity_error_norm(a, b)
+
+Calculate the L_infinity norm of the error between a and b: maximum(|a-b|)
+"""
+function L_infinity_error_norm(a, b)
+    @assert size(a) == size(b)
+    error = @. (a-b) / abs(a)
+    return maximum(abs.(error))
+end
+
+"""
 """
 function analyze_and_plot_data(path)
     # Create run_name from the path to the run directory

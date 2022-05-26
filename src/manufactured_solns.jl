@@ -4,6 +4,7 @@ module manufactured_solns
 
 export manufactured_solutions
 export manufactured_sources
+export manufactured_solutions_as_arrays
 
 using Symbolics
 

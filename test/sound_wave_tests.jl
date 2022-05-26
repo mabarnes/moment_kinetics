@@ -7,8 +7,6 @@ using TimerOutputs
 #using Plots: plot, plot!, gui
 
 using moment_kinetics.array_allocation: allocate_float
-using moment_kinetics.load_data: open_netcdf_file
-using moment_kinetics.load_data: load_coordinate_data, load_fields_data
 using moment_kinetics.analysis: analyze_fields_data
 using moment_kinetics.post_processing: fit_delta_phi_mode
 
@@ -162,20 +160,17 @@ function run_test(test_input, analytic_frequency, analytic_growth_rate,
             # Load and analyse output
             #########################
 
-            path = joinpath(realpath(input["base_directory"]), name, name)
+            output = load_test_output(input, (:phi,))
 
-            # open the netcdf file and give it the handle 'fid'
-            fid = open_netcdf_file(path)
+            nz = output["nz"]
+            z = output["z"]
+            z_wgts = output["z_wgts"]
+            Lz = output["Lz"]
+            ntime = output["ntime"]
+            time = output["time"]
 
-            # load space-time coordinate data
-            nvpa, vpa, vpa_wgts, nvperp, vperp, vperp_wgts,
-            nz, z, z_wgts, Lz, nr, r, r_wgts, Lr, ntime, time = load_coordinate_data(fid)
+            phi_zrt = output["phi"]
 
-            # load fields data
-            phi_zrt = load_fields_data(fid)
-
-            close(fid)
-            
             ir0 = 1 
             
             phi = phi_zrt[:,ir0,:]
