@@ -12,7 +12,6 @@ using ..debugging
 using ..file_io: write_data_to_ascii, write_data_to_binary, debug_dump
 using ..looping
 using ..moment_kinetics_structs: scratch_pdf
-using ..chebyshev: setup_chebyshev_pseudospectral
 using ..chebyshev: chebyshev_derivative!
 using ..velocity_moments: update_moments!, reset_moments_status!
 using ..velocity_moments: enforce_moment_constraints!
@@ -99,8 +98,9 @@ this includes creating and populating structs
 for Chebyshev transforms, velocity space moments,
 EM fields, semi-Lagrange treatment, and advection terms
 """
-function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, drive_input, moments,
-                             t_input, collisions, species, geometry, boundary_distributions)
+function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, spectral_objects,
+                             composition, drive_input, moments, t_input, collisions,
+                             species, geometry, boundary_distributions)
     # define some local variables for convenience/tidiness
     n_species = composition.n_species
     n_ion_species = composition.n_ion_species
@@ -158,91 +158,6 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
                            manufactured_solns_test)
 
     
-    if z.discretization == "chebyshev_pseudospectral"
-        # create arrays needed for explicit Chebyshev pseudospectral treatment in vpa
-        # and create the plans for the forward and backward fast Chebyshev transforms
-        z_spectral = setup_chebyshev_pseudospectral(z)
-        # obtain the local derivatives of the uniform z-grid with respect to the used z-grid
-        chebyshev_derivative!(z.duniform_dgrid, z.uniform_grid, z_spectral, z)
-    else
-        # create dummy Bool variable to return in place of the above struct
-        z_spectral = false
-        z.duniform_dgrid .= 1.0
-    end
-    
-    if r.discretization == "chebyshev_pseudospectral"
-        # create arrays needed for explicit Chebyshev pseudospectral treatment in vpa
-        # and create the plans for the forward and backward fast Chebyshev transforms
-        r_spectral = setup_chebyshev_pseudospectral(r)
-        # obtain the local derivatives of the uniform r-grid with respect to the used r-grid
-        chebyshev_derivative!(r.duniform_dgrid, r.uniform_grid, r_spectral, r)
-    else
-        # create dummy Bool variable to return in place of the above struct
-        r_spectral = false
-        r.duniform_dgrid .= 1.0
-    end
-    
-    if vpa.discretization == "chebyshev_pseudospectral"
-        # create arrays needed for explicit Chebyshev pseudospectral treatment in vpa
-        # and create the plans for the forward and backward fast Chebyshev transforms
-        vpa_spectral = setup_chebyshev_pseudospectral(vpa)
-        # obtain the local derivatives of the uniform vpa-grid with respect to the used vpa-grid
-        chebyshev_derivative!(vpa.duniform_dgrid, vpa.uniform_grid, vpa_spectral, vpa)
-    else
-        # create dummy Bool variable to return in place of the above struct
-        vpa_spectral = false
-        vpa.duniform_dgrid .= 1.0
-    end
-    
-    # MRH CONSIDER REMOVING -> vperp_spectral never used
-    if vperp.discretization == "chebyshev_pseudospectral" && vperp.n > 1
-        # create arrays needed for explicit Chebyshev pseudospectral treatment in vperp
-        # and create the plans for the forward and backward fast Chebyshev transforms
-        vperp_spectral = setup_chebyshev_pseudospectral(vperp)
-        # obtain the local derivatives of the uniform vperp-grid with respect to the used vperp-grid
-        chebyshev_derivative!(vperp.duniform_dgrid, vperp.uniform_grid, vperp_spectral, vperp)
-    else
-        # create dummy Bool variable to return in place of the above struct
-        vperp_spectral = false
-        vperp.duniform_dgrid .= 1.0
-    end
-    
-    if vz.discretization == "chebyshev_pseudospectral" 
-        # create arrays needed for explicit Chebyshev pseudospectral treatment in vz
-        # and create the plans for the forward and backward fast Chebyshev transforms
-        vz_spectral = setup_chebyshev_pseudospectral(vz)
-        # obtain the local derivatives of the uniform vz-grid with respect to the used vz-grid
-        chebyshev_derivative!(vz.duniform_dgrid, vz.uniform_grid, vz_spectral, vz)
-    else
-        # create dummy Bool variable to return in place of the above struct
-        vz_spectral = false
-        vz.duniform_dgrid .= 1.0
-    end
-    
-    if vr.discretization == "chebyshev_pseudospectral" && vr.n > 1
-        # create arrays needed for explicit Chebyshev pseudospectral treatment in vr
-        # and create the plans for the forward and backward fast Chebyshev transforms
-        vr_spectral = setup_chebyshev_pseudospectral(vr)
-        # obtain the local derivatives of the uniform vr-grid with respect to the used vr-grid
-        chebyshev_derivative!(vr.duniform_dgrid, vr.uniform_grid, vr_spectral, vr)
-    else
-        # create dummy Bool variable to return in place of the above struct
-        vr_spectral = false
-        vr.duniform_dgrid .= 1.0
-    end
-    
-    if vzeta.discretization == "chebyshev_pseudospectral" && vzeta.n > 1
-        # create arrays needed for explicit Chebyshev pseudospectral treatment in vzeta
-        # and create the plans for the forward and backward fast Chebyshev transforms
-        vzeta_spectral = setup_chebyshev_pseudospectral(vzeta)
-        # obtain the local derivatives of the uniform vzeta-grid with respect to the used vzeta-grid
-        chebyshev_derivative!(vzeta.duniform_dgrid, vzeta.uniform_grid, vzeta_spectral, vzeta)
-    else
-        # create dummy Bool variable to return in place of the above struct
-        vzeta_spectral = false
-        vzeta.duniform_dgrid .= 1.0
-    end
-    
     # create an array of structs containing scratch arrays for the pdf and low-order moments
     # that may be evolved separately via fluid equations
     scratch = setup_scratch_arrays(moments, pdf.charged.norm, pdf.neutral.norm, t_input.n_rk_stages)
@@ -256,7 +171,8 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     fields = setup_em_fields(z.n, r.n, drive_input.force_phi, drive_input.amplitude, drive_input.frequency)
     # initialize the electrostatic potential
     begin_serial_region()
-    update_phi!(fields, scratch[1], z, r, composition, z_spectral, r_spectral)
+    update_phi!(fields, scratch[1], z, r, composition, spectral_objects.z_spectral,
+                spectral_objects.r_spectral)
     @serial_region begin
         # save the initial phi(z) for possible use later (e.g., if forcing phi)
         fields.phi0 .= fields.phi
@@ -371,17 +287,14 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     end
     
     ##
-    # construct named list of advect & spectral objects to compactify arguments
+    # construct named list of advect objects to compactify arguments
     ##
     
     #advect_objects = (vpa_advect = vpa_advect, vperp_advect = vperp_advect, z_advect = z_advect, 
     # r_advect = r_advect, neutral_z_advect = neutral_z_advect, neutral_r_advect = neutral_r_advect)
     advect_objects = advect_object_struct(vpa_advect, vperp_advect, z_advect, r_advect, neutral_z_advect, neutral_r_advect)
-    #spectral_objects = (vz_spectral = vz_spectral, vr_spectral = vr_spectral, vzeta_spectral = vzeta_spectral,
-    # vpa_spectral = vpa_spectral, vperp_spectral = vperp_spectral, z_spectral = z_spectral, r_spectral = r_spectral)
-    spectral_objects = spectral_object_struct(vz_spectral, vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral, z_spectral, r_spectral)
     if(t_input.use_manufactured_solns)
-        manufactured_source_list = manufactured_sources(r.L,z.L,r.bc,z.bc,composition,geometry,collisions,r.n)
+        manufactured_source_list = manufactured_sources(r.L,z.L,vpa.L,vperp.L,r.bc,z.bc,composition,geometry,collisions,r.n)
     else
         manufactured_source_list = false # dummy Bool to be passed as argument instead of list
     end
@@ -389,8 +302,8 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     # Ensure all processes are synchronized at the end of the setup
     _block_synchronize()
 
-    return moments, fields, spectral_objects, advect_objects, 
-    scratch, advance, scratch_dummy, manufactured_source_list
+    return moments, fields, advect_objects, scratch, advance, scratch_dummy,
+           manufactured_source_list
 end
 
 """
