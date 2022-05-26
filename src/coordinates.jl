@@ -15,7 +15,7 @@ using ..input_structs: advection_input
 """
 structure containing basic information related to coordinates
 """
-struct coordinate
+struct coordinate{Tadvection} where Tadvection<:Union{advection_input,Nothing}
     # name is the name of the variable associated with this coordiante
     name::String
     # n is the total number of grid points associated with this coordinate
@@ -60,7 +60,7 @@ struct coordinate
     # nelement entries
     scratch_2d::Array{mk_float,2}
     # struct containing advection speed options/inputs
-    advection::advection_input
+    advection::Tadvection
 end
 
 """

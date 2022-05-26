@@ -10,6 +10,7 @@ export write_data_to_binary
 
 using NCDatasets
 using ..communication: _block_synchronize
+using ..coordinates: coordinate
 using ..looping
 using ..moment_kinetics_structs: scratch_pdf, em_fields_struct
 using ..type_definitions: mk_float, mk_int
@@ -136,58 +137,68 @@ end
 Define static (i.e. time-independent) variables for an output file.
 """
 function define_static_variables!(fid,vpa,vperp,z,r,composition,collisions,evolve_ppar)
-    # create and write the "r" variable to file
-    varname = "r"
-    attributes = Dict("description" => "radial coordinate")
-    dims = ("nr",)
-    vartype = mk_float
-    var = defVar(fid, varname, vartype, dims, attrib=attributes)
-    var[:] = r.grid
-    # create and write the "r_wgts" variable to file
-    varname = "r_wgts"
-    attributes = Dict("description" => "integration weights for radial coordinate")
-    vartype = mk_float
-    var = defVar(fid, varname, vartype, dims, attrib=attributes)
-    var[:] = r.wgts
-    # create and write the "z" variable to file
-    varname = "z"
-    attributes = Dict("description" => "parallel coordinate")
-    dims = ("nz",)
-    vartype = mk_float
-    var = defVar(fid, varname, vartype, dims, attrib=attributes)
-    var[:] = z.grid
-    # create and write the "z_wgts" variable to file
-    varname = "z_wgts"
-    attributes = Dict("description" => "integration weights for parallel coordinate")
-    vartype = mk_float
-    var = defVar(fid, varname, vartype, dims, attrib=attributes)
-    var[:] = z.wgts
-    # create and write the "vperp" variable to file
-    varname = "vperp"
-    attributes = Dict("description" => "parallel velocity")
-    dims = ("nvperp",)
-    vartype = mk_float
-    var = defVar(fid, varname, vartype, dims, attrib=attributes)
-    var[:] = vperp.grid
-    # create and write the "vperp_wgts" variable to file
-    varname = "vperp_wgts"
-    attributes = Dict("description" => "integration weights for parallel velocity coordinate")
-    vartype = mk_float
-    var = defVar(fid, varname, vartype, dims, attrib=attributes)
-    var[:] = vperp.wgts
-    # create and write the "vpa" variable to file
-    varname = "vpa"
-    attributes = Dict("description" => "parallel velocity")
-    dims = ("nvpa",)
-    vartype = mk_float
-    var = defVar(fid, varname, vartype, dims, attrib=attributes)
-    var[:] = vpa.grid
-    # create and write the "vpa_wgts" variable to file
-    varname = "vpa_wgts"
-    attributes = Dict("description" => "integration weights for parallel velocity coordinate")
-    vartype = mk_float
-    var = defVar(fid, varname, vartype, dims, attrib=attributes)
-    var[:] = vpa.wgts
+    function save_coordinate(coord::coordinate, description::String)
+        # Create and write the grid for coord
+        varname = coord.name
+        attributes = Dict("description" => description)
+        dims = ("n$(coord.name)",)
+        vartype = mk_float
+        var = defVar(fid, varname, vartype, dims, attrib=attributes)
+        var[:] = coord.grid
+
+        # create and write the weights for coord
+        varname = "$(coord.name)_wgts"
+        attributes = Dict("description" => "integration weights for $(coord.name) coordinate")
+        vartype = mk_float
+        var = defVar(fid, varname, vartype, dims, attrib=attributes)
+        var[:] = coord.wgts
+
+        # create and write ngrid for coord
+        varname = "$(coord.name)_ngrid"
+        attributes = Dict("description" => "ngrid for $(coord.name) coordinate")
+        dims = ()
+        vartype = mk_int
+        var = defVar(fid, varname, vartype, dims, attrib=attributes)
+        var[:] = coord.ngrid
+
+        # create and write nelement for coord
+        varname = "$(coord.name)_nelement"
+        attributes = Dict("description" => "nelement for $(coord.name) coordinate")
+        dims = ()
+        vartype = mk_int
+        var = defVar(fid, varname, vartype, dims, attrib=attributes)
+        var[:] = coord.nelement
+
+        # create and write discretization for coord
+        varname = "$(coord.name)_discretization"
+        attributes = Dict("description" => "discretization for $(coord.name) coordinate")
+        dims = ()
+        vartype = String
+        var = defVar(fid, varname, vartype, dims, attrib=attributes)
+        var[:] = coord.discretization
+
+        # create and write fd_option for coord
+        varname = "$(coord.name)_fd_option"
+        attributes = Dict("description" => "fd_option for $(coord.name) coordinate")
+        dims = ()
+        vartype = String
+        var = defVar(fid, varname, vartype, dims, attrib=attributes)
+        var[:] = coord.fd_option
+
+        # create and write bc for coord
+        varname = "$(coord.name)_bc"
+        attributes = Dict("description" => "bc for $(coord.name) coordinate")
+        dims = ()
+        vartype = String
+        var = defVar(fid, varname, vartype, dims, attrib=attributes)
+        var[:] = coord.bc
+    end
+
+    # create and write the coordinate variables
+    save_coordinate(r)
+    save_coordinate(z)
+    save_coordinate(vperp)
+    save_coordinate(vpa)
     # create and write the "T_e" variable to file
     varname = "T_e"
     attributes = Dict("description" => "electron temperature")
