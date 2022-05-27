@@ -228,9 +228,9 @@ function mk_input(scan_input=Dict())
     
     # overwrite some default parameters related to the vr grid
     # ngrid is the number of grid points per element
-    vr.ngrid = get(scan_input, "vr_ngrid", 17)
+    vr.ngrid = get(scan_input, "vr_ngrid", 1)
     # nelement is the number of elements
-    vr.nelement = get(scan_input, "vr_nelement", 10)
+    vr.nelement = get(scan_input, "vr_nelement", 1)
     # L is the box length in units of vthermal_species
     vr.L = get(scan_input, "vr_L", 8.0*sqrt(species.charged[1].initial_temperature))
     # determine the boundary condition
@@ -242,9 +242,9 @@ function mk_input(scan_input=Dict())
 
     # overwrite some default parameters related to the vzeta grid
     # ngrid is the number of grid points per element
-    vzeta.ngrid = get(scan_input, "vzeta_ngrid", 17)
+    vzeta.ngrid = get(scan_input, "vzeta_ngrid", 1)
     # nelement is the number of elements
-    vzeta.nelement = get(scan_input, "vzeta_nelement", 10)
+    vzeta.nelement = get(scan_input, "vzeta_nelement", 1)
     # L is the box length in units of vthermal_species
     vzeta.L = get(scan_input, "vzeta_L", 8.0*sqrt(species.charged[1].initial_temperature))
     # determine the boundary condition
