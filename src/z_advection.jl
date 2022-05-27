@@ -20,7 +20,7 @@ function z_advection!(f_out, fvec_in, ff, fields, moments, SL, advect, z, vpa, v
     @loop_s is begin
         # get the updated speed along the z direction using the current f
         @views update_speed_z!(advect[is], fields, fvec_in.upar[:,:,is], moments.vth[:,:,is],
-                               moments.evolve_upar, moments.evolve_ppar, vpa, vperp, z, r, t, geometry)
+                               vpa, vperp, z, r, t, geometry)
         # update the upwind/downwind boundary indices and upwind_increment
         @views update_boundary_indices!(advect[is], loop_ranges[].vpa, loop_ranges[].vperp, loop_ranges[].r)
 
@@ -37,7 +37,7 @@ end
 """
 calculate the advection speed in the z-direction at each grid point
 """
-function update_speed_z!(advect, fields, upar, vth, evolve_upar, evolve_ppar, vpa, vperp, z, r, t, geometry)
+function update_speed_z!(advect, fields, upar, vth, vpa, vperp, z, r, t, geometry)
     @boundscheck r.n == size(advect.speed,4) || throw(BoundsError(advect))
     @boundscheck vperp.n == size(advect.speed,3) || throw(BoundsError(advect))
     @boundscheck vpa.n == size(advect.speed,2) || throw(BoundsError(advect))
