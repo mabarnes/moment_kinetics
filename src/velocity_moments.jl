@@ -4,7 +4,7 @@ module velocity_moments
 
 export integrate_over_vspace
 export integrate_over_positive_vpa, integrate_over_negative_vpa
-export create_moments
+export create_moments_chrg, create_moments_ntrl
 export update_moments!
 export update_density!
 export update_upar!
@@ -12,6 +12,7 @@ export update_ppar!
 export update_qpar!
 export reset_moments_status!
 export enforce_moment_constraints!
+export moments_chrg_substruct, moments_ntrl_substruct
 
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_shared_float, allocate_bool
@@ -27,98 +28,70 @@ using ..looping
 
 """
 """
-mutable struct moments
+mutable struct moments_charged_substruct
     # this is the particle density
     dens::MPISharedArray{mk_float,3}
-    # flag that keeps track of if the density needs updating before use
-    # Note: may not be set for all species on this process, but this process only ever
-    # sets/uses the value for the same subset of species. This means dens_update does
-    # not need to be a shared memory array.
-    dens_updated::Vector{Bool}
-    # flag that indicates if the density should be evolved via continuity equation
-    evolve_density::Bool
-    # flag that indicates if exact particle conservation should be enforced
-    enforce_conservation::Bool
     # this is the parallel flow
     upar::MPISharedArray{mk_float,3}
-    # flag that keeps track of whether or not upar needs updating before use
-    # Note: may not be set for all species on this process, but this process only ever
-    # sets/uses the value for the same subset of species. This means upar_update does
-    # not need to be a shared memory array.
-    upar_updated::Vector{Bool}
-    # flag that indicates if the parallel flow should be evolved via force balance
-    evolve_upar::Bool
     # this is the parallel pressure
     ppar::MPISharedArray{mk_float,3}
-    # flag that keeps track of whether or not ppar needs updating before use
-    # Note: may not be set for all species on this process, but this process only ever
-    # sets/uses the value for the same subset of species. This means ppar_update does
-    # not need to be a shared memory array.
-    ppar_updated::Vector{Bool}
-    # flag that indicates if the parallel pressure should be evolved via the energy equation
-    evolve_ppar::Bool
     # this is the parallel heat flux
     qpar::MPISharedArray{mk_float,3}
-    # flag that keeps track of whether or not qpar needs updating before use
-    # Note: may not be set for all species on this process, but this process only ever
-    # sets/uses the value for the same subset of species. This means qpar_update does
-    # not need to be a shared memory array.
-    qpar_updated::Vector{Bool}
     # this is the thermal speed based on the parallel temperature Tpar = ppar/dens: vth = sqrt(2*Tpar/m)
     vth::MPISharedArray{mk_float,3}
-    # if evolve_ppar = true, then the velocity variable is (vpa - upa)/vth, which introduces
-    # a factor of vth for each power of wpa in velocity space integrals.
-    # vpa_norm_fac accounts for this: it is vth if using the above definition for the parallel velocity,
-    # and it is one otherwise
-    vpa_norm_fac::MPISharedArray{mk_float,3}
-    # flag that indicates if the drift kinetic equation should be formulated in advective form
-    #advective_form::Bool
 end
 
 """
 """
-function create_moments(nz, nr, n_species, evolve_moments)
+mutable struct moments_neutral_substruct
+    # this is the particle density
+    dens::MPISharedArray{mk_float,3}
+    # this is the particle mean velocity in z 
+    uz::MPISharedArray{mk_float,3}
+    # this is the particle mean velocity in r 
+    ur::MPISharedArray{mk_float,3}
+    # this is the particle mean velocity in zeta 
+    uzeta::MPISharedArray{mk_float,3}
+    # this is the total particle pressure 
+    ptot::MPISharedArray{mk_float,3}
+    # this is the thermal speed based on the temperature T = ptot/dens: vth = sqrt(2*T/m)
+    vth::MPISharedArray{mk_float,3}
+end
+
+"""
+"""
+function create_moments_charged(nz, nr, n_species)
     # allocate array used for the particle density
     density = allocate_shared_float(nz, nr, n_species)
-    # Allocate array of Bools that indicate if the density is updated for each species.
-    # If density is evolved, set density_updated.=true because density should not be
-    # updated by taking a moment of f.
-    density_updated = allocate_bool(n_species)
-    density_updated .= evolve_moments.density
     # allocate array used for the parallel flow
     parallel_flow = allocate_shared_float(nz, nr, n_species)
-    # Allocate array of Bools that indicate if the parallel flow is updated for each species.
-    # If upar is evolved, set parallel_flow_updated.=true because upar should not be
-    # updated by taking a moment of f.
-    parallel_flow_updated = allocate_bool(n_species)
-    parallel_flow_updated .= evolve_moments.parallel_flow
     # allocate array used for the parallel pressure
     parallel_pressure = allocate_shared_float(nz, nr, n_species)
-    # Allocate array of Bools that indicate if the parallel pressure is updated for each species.
-    # If ppar is evolved, set parallel_pressure_updated.=true because ppar should not be
-    # updated by taking a moment of f.
-    parallel_pressure_updated = allocate_bool(n_species)
-    parallel_pressure_updated .= evolve_moments.parallel_pressure
     # allocate array used for the parallel flow
     parallel_heat_flux = allocate_shared_float(nz, nr, n_species)
     # allocate array of Bools that indicate if the parallel flow is updated for each species
-    parallel_heat_flux_updated = allocate_bool(n_species)
-    parallel_heat_flux_updated .= false
     # allocate array used for the thermal speed
     thermal_speed = allocate_shared_float(nz, nr, n_species)
-    if evolve_moments.parallel_pressure
-        vpa_norm_fac = thermal_speed
-    else
-        vpa_norm_fac = allocate_shared_float(nz, nr, n_species)
-        @serial_region begin
-            vpa_norm_fac .= 1.0
-        end
-    end
+    
     # return struct containing arrays needed to update moments
-    return moments(density, density_updated, evolve_moments.density, evolve_moments.conservation,
-        parallel_flow, parallel_flow_updated, evolve_moments.parallel_flow,
-        parallel_pressure, parallel_pressure_updated, evolve_moments.parallel_pressure,
-        parallel_heat_flux, parallel_heat_flux_updated, thermal_speed, vpa_norm_fac)
+    return moments_charged_substruct(density, parallel_flow, parallel_pressure, parallel_heat_flux, thermal_speed)
+end
+
+# neutral particles have natural mean velocities 
+# uz, ur, uzeta =/= upar 
+# and similarly for heat fluxes
+# therefore separate moments object for neutrals 
+    
+function create_moments_neutral(nz, nr, n_species)
+    # allocate array used for the particle density
+    density = allocate_shared_float(nz, nr, n_species)
+    uz = allocate_shared_float(nz, nr, n_species)
+    ur = allocate_shared_float(nz, nr, n_species)
+    uzeta = allocate_shared_float(nz, nr, n_species)
+    ptot = allocate_shared_float(nz, nr, n_species)
+    vth = allocate_shared_float(nz, nr, n_species)
+    # return struct containing arrays needed to update moments
+    return moments_neutral_substruct(density,uz,ur,uzeta,ptot,vth)
 end
 
 """
@@ -259,23 +232,20 @@ end
 NB: if this function is called and if ppar_updated is false, then
 the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
 """
-function update_qpar!(qpar, qpar_updated, pdf, vpa, vperp, z, r, composition, vpanorm)
-    @boundscheck composition.n_species == size(qpar,3) || throw(BoundsError(qpar))
+function update_qpar!(qpar, pdf, vpa, vperp, z, r, composition)
+    @boundscheck composition.n_ion_species == size(qpar,3) || throw(BoundsError(qpar))
     
     begin_s_r_z_region()
 
     @loop_s is begin
-        if qpar_updated[is] == false
-            @views update_qpar_species!(qpar[:,:,is], pdf[:,:,:,:,is], vpa, vperp, z, r, vpanorm[:,:,is])
-            qpar_updated[is] = true
-        end
+        @views update_qpar_species!(qpar[:,:,is], pdf[:,:,:,:,is], vpa, vperp, z, r)
     end
 end
 
 """
 calculate the updated parallel heat flux (qpar) for a given species
 """
-function update_qpar_species!(qpar, ff, vpa, vperp, z, r, vpanorm)
+function update_qpar_species!(qpar, ff, vpa, vperp, z, r)
     @boundscheck r.n == size(ff, 4) || throw(BoundsError(ff))
     @boundscheck z.n == size(ff, 3) || throw(BoundsError(ff))
     @boundscheck vperp.n == size(ff, 2) || throw(BoundsError(ff))
@@ -286,7 +256,7 @@ function update_qpar_species!(qpar, ff, vpa, vperp, z, r, vpanorm)
     @loop_r_z ir iz begin
         # old ! qpar[iz,ir] = integrate_over_vspace(@view(ff[:,iz,ir]), vpa.grid, 3, vpa.wgts) * vpanorm[iz,ir]^4
         qpar[iz,ir] = integrate_over_vspace(@view(ff[:,:,iz,ir]),
-         vpa.grid, 3, vpa.wgts, vperp.grid, 0, vperp.wgts) * vpanorm[iz,ir]^4
+         vpa.grid, 3, vpa.wgts, vperp.grid, 0, vperp.wgts)
     end
     return nothing
 end

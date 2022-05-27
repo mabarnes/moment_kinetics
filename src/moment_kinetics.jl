@@ -150,11 +150,16 @@ function setup_moment_kinetics(input_dict::Dict)
     # initialize vr grid and write grid point locations to file
     vzeta = define_coordinate(vzeta_input, composition)
     # Create loop range variables for shared-memory-parallel loops
-    looping.setup_loop_ranges!(block_rank[], block_size[]; s=composition.n_species, r=r.n,
-                               z=z.n, vperp=vperp.n, vpa=vpa.n, vzeta=vzeta.n, vr=vr.n, vz=vz.n)
+    if composition.n_neutral_species == 0
+        n_neutral_loop_size = 1 # Need this to have looping setup. Avoid neutral loops with if statements.
+    else
+        n_neutral_loop_size = composition.n_neutral_species
+    end
+    looping.setup_loop_ranges!(block_rank[], block_size[]; s=composition.n_ion_species, sn=n_neutral_loop_size, 
+                               r=r.n, z=z.n, vperp=vperp.n, vpa=vpa.n, vzeta=vzeta.n, vr=vr.n, vz=vz.n)
     # initialize f and the lowest three v-space moments (density, upar and ppar),
     # each of which may be evolved separately depending on input choices.
-    pdf, moments = init_pdf_and_moments(vpa, vperp, z, r, composition, species, t_input.n_rk_stages, evolve_moments, t_input.use_manufactured_solns) #vz, vr, 
+    pdf, moments = init_pdf_and_moments(vz, vr, vzeta, vpa, vperp, z, r, composition, species, t_input.n_rk_stages, evolve_moments, t_input.use_manufactured_solns) 
     # initialize time variable
     code_time = 0.
     # create arrays and do other work needed to setup

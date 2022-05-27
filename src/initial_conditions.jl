@@ -17,62 +17,88 @@ using ..communication
 using ..looping
 using ..velocity_moments: integrate_over_vspace
 using ..velocity_moments: integrate_over_positive_vpa, integrate_over_negative_vpa
-using ..velocity_moments: create_moments, update_qpar!
+using ..velocity_moments: create_moments_charged, create_moments_neutral, update_qpar!
+using ..velocity_moments: moments_charged_substruct, moments_neutral_substruct
 
 using ..manufactured_solns: manufactured_solutions
 
 """
 """
-struct pdf_struct
-    norm::MPISharedArray{mk_float,5}
-    unnorm::MPISharedArray{mk_float,5}
+struct pdf_substruct{n_distribution}
+    norm::MPISharedArray{mk_float,n_distribution}
+    unnorm::MPISharedArray{mk_float,n_distribution}
 end
 
+# struct of structs neatly contains i+n info?
+struct pdf_struct
+    #charged particles: s + r + z + vperp + vpa
+    charged::pdf_substruct{5}
+    #neutral particles: s + r + z + vzeta + vr + vz
+    neutral::pdf_substruct{6}
+end
+
+# need similar struct for moments? 
+struct moments_struct
+    charged::moments_charged_substruct
+    neutral::moments_neutral_substruct
+end
 """
 creates the normalised pdf and the velocity-space moments and populates them
 with a self-consistent initial condition
 """
-function init_pdf_and_moments(vpa, vperp, z, r, composition, species, n_rk_stages, evolve_moments, use_manufactured_solns)
+function init_pdf_and_moments(vz, vr, vzeta, vpa, vperp, z, r, composition, species, n_rk_stages, evolve_moments, use_manufactured_solns)
     
     begin_serial_region()
     
     # define the n_species variable for convenience
     n_species = composition.n_species
+    n_ion_species = composition.n_ion_species
+    n_neutral_species = composition.n_neutral_species
     # create the 'moments' struct that contains various v-space moments and other
     # information related to these moments.
     # the time-dependent entries are not initialised.
-    moments = create_moments(z.n, r.n, n_species, evolve_moments)
+    # moments arrays have same r and z grids for both ion and neutral species 
+    # and so are included in the same struct
+    charged = create_moments_charged(z.n, r.n, n_ion_species)
+    neutral = create_moments_neutral(z.n, r.n, n_neutral_species)
+    moments = moments_struct(charged,neutral)
+    
     @serial_region begin
+        #charged particles
         # initialise the density profile
-        init_density!(moments.dens, z, r, species, n_species)
-        moments.dens_updated .= true
+        init_density!(moments.charged.dens, z, r, species.charged, n_ion_species)
         # initialise the parallel flow profile
-        init_upar!(moments.upar, z, r, species, n_species)
-        moments.upar_updated .= true
+        init_upar!(moments.charged.upar, z, r, species.charged, n_ion_species)
         # initialise the parallel thermal speed profile
-        init_vth!(moments.vth, z, r, species, n_species)
-        @. moments.ppar = 0.5 * moments.dens * moments.vth^2
-        moments.ppar_updated .= true
+        init_vth!(moments.charged.vth, z, r, species.charged, n_ion_species)
+        @. moments.charged.ppar = 0.5 * moments.charged.dens * moments.charged.vth^2
+        if(n_neutral_species > 0)
+            #neutral particles
+            # initialise the density profile
+            init_density!(moments.neutral.dens, z, r, species.neutral, n_neutral_species)
+            init_uz!(moments.neutral.uz, z, r, species.neutral, n_neutral_species)
+            init_ur!(moments.neutral.ur, z, r, species.neutral, n_neutral_species)
+            init_uzeta!(moments.neutral.uzeta, z, r, species.neutral, n_neutral_species)
+            init_vth!(moments.neutral.vth, z, r, species.neutral, n_neutral_species)
+        end
     end
     # create and initialise the normalised particle distribution function (pdf)
-    # such that ∫dwpa pdf.norm = 1, ∫dwpa wpa * pdf.norm = 0, and ∫dwpa wpa^2 * pdf.norm = 1/2
-    # note that wpa = vpa - upar, unless moments.evolve_ppar = true, in which case wpa = (vpa - upar)/vth
-    # the definition of pdf.norm changes accordingly from pdf.unnorm / density to pdf.unnorm * vth / density
-    # when evolve_ppar = true.
-    pdf = create_and_init_pdf(moments, vpa, vperp, z, r, n_species, species)
+    pdf = create_and_init_pdf(moments, vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_species, species)
     
     if(use_manufactured_solns)
         dfni_func, densi_func = manufactured_solutions(r.L,z.L,r.bc,z.bc) 
+        #same for neutrals here
         #nb fns not fns of species yet
-        for is in 1:n_species
+        for is in 1:n_ion_species
             for ir in 1:r.n
                 for iz in 1:z.n
-                    moments.dens[iz,ir,is] = densi_func(z.grid[iz],r.grid[ir],0.0)
+                    moments.charged.dens[iz,ir,is] = densi_func(z.grid[iz],r.grid[ir],0.0)
                     # other moments here 
                     for ivperp in 1:vperp.n
                         for ivpa in 1:vpa.n
-                            pdf.unnorm[ivpa,ivperp,iz,ir,is] = dfni_func(vpa.grid[ivpa],vperp.grid[ivperp],z.grid[iz],r.grid[ir],0.0)
-                            pdf.norm[ivpa,ivperp,iz,ir,is] = pdf.unnorm[ivpa,ivperp,iz,ir,is]
+                            pdf.charged.unnorm[ivpa,ivperp,iz,ir,is] = dfni_func(vpa.grid[ivpa],vperp.grid[ivperp],z.grid[iz],r.grid[ir],0.0)
+                            pdf.charged.norm[ivpa,ivperp,iz,ir,is] = pdf.charged.unnorm[ivpa,ivperp,iz,ir,is]
+                            #same for neutrals here
                         end
                     end
                 end
@@ -81,44 +107,56 @@ function init_pdf_and_moments(vpa, vperp, z, r, composition, species, n_rk_stage
     end 
     #begin_s_r_z_vperp_region()
     # calculate the initial parallel heat flux from the initial un-normalised pdf
-    update_qpar!(moments.qpar, moments.qpar_updated, pdf.unnorm, vpa, vperp, z, r, composition, moments.vpa_norm_fac)
+    update_qpar!(moments.charged.qpar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
+    # need neutral version!!! update_qpar!(moments.charged.qpar, moments.charged.qpar_updated, pdf.charged.unnorm, vpa, vperp, z, r, composition, moments.charged.vpa_norm_fac)
     return pdf, moments
 end
 
 """
 """
-function create_and_init_pdf(moments, vpa, vperp, z, r, n_species, species)
-    pdf_norm = allocate_shared_float(vpa.n, vperp.n, z.n, r.n, n_species)
-    pdf_unnorm = allocate_shared_float(vpa.n, vperp.n, z.n, r.n, n_species)
+function create_and_init_pdf(moments, vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_species, species)
+    # allocate pdf arrays
+    pdf_charged_norm = allocate_shared_float(vpa.n, vperp.n, z.n, r.n, n_ion_species)
+    pdf_charged_unnorm = allocate_shared_float(vpa.n, vperp.n, z.n, r.n, n_ion_species)
+    #if n_neutral_species > 0
+        pdf_neutral_norm = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, r.n, n_neutral_species)
+        pdf_neutral_unnorm = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, r.n, n_neutral_species)
+    #end
     @serial_region begin
-        for is ∈ 1:n_species
+        for is ∈ 1:n_ion_species
             for ir ∈ 1:r.n
-                if species[is].z_IC.initialization_option == "bgk" || species[is].vpa_IC.initialization_option == "bgk"
-                    # MRH not supported yet
-                    @views init_bgk_pdf!(f[:,:,ir,is], 0.0, species[is].initial_temperature, z.grid, z.L, vpa.grid)
-                else
-                    # updates pdf_norm to contain pdf / density, so that ∫dvpa pdf.norm = 1,
-                    # ∫dwpa wpa * pdf.norm = 0, and ∫dwpa m_s (wpa/vths)^2 pdf.norm = 1/2
-                    # to machine precision
-                    @views init_pdf_over_density!(pdf_norm[:,:,:,ir,is], species[is], vpa, vperp, z, moments.vth[:,ir,is],
-                                                  moments.upar[:,ir,is], moments.vpa_norm_fac[:,ir,is],
-                                                  moments.evolve_upar, moments.evolve_ppar)
+                # updates pdf_norm to contain pdf / density, so that ∫dvpa pdf.norm = 1,
+                # ∫dwpa wpa * pdf.norm = 0, and ∫dwpa m_s (wpa/vths)^2 pdf.norm = 1/2
+                # to machine precision
+                @views init_pdf_charged_over_density!(pdf_charged_norm[:,:,:,ir,is], species.charged[is], vpa, vperp, z, moments.charged.vth[:,ir,is],
+                                              moments.charged.upar[:,ir,is])
+            end
+        end
+        if n_neutral_species > 0
+            for is ∈ 1:n_neutral_species
+                for ir ∈ 1:r.n
+                    @views init_pdf_neutral_over_density!(pdf_neutral_norm[:,:,:,:,ir,is], species.neutral[is], vz, vr, vzeta, z, moments.neutral.uz, moments.neutral.ur, moments.neutral.uzeta, moments.neutral.vth)
                 end
             end
         end
-        pdf_unnorm .= pdf_norm
+        #set unnorm pdf = norm pdf * dens
+        
         for ivperp ∈ 1:vperp.n
             for ivpa ∈ 1:vpa.n
-                @. pdf_unnorm[ivpa,ivperp,:,:,:] *= moments.dens
-                if moments.evolve_ppar
-                    @. pdf_norm[ivpa,ivperp,:,:,:] *= moments.vth
-                elseif moments.evolve_density == false
-                    @. pdf_norm[ivpa,ivperp,:,:,:] = pdf_unnorm[ivpa,ivperp,:,:,:]
+                @. pdf_charged_unnorm[ivpa,ivperp,:,:,:] = pdf_charged_norm[ivpa,ivperp,:,:,:] .* moments.charged.dens[:,:,:]
+            end
+        end
+        if n_neutral_species > 0 
+            for ivzeta in 1:vzeta.n
+                for ivr in 1:vr.n
+                    for ivz in 1:vz.n
+                        @. pdf_neutral_unnorm[ivz,ivr,ivzeta,:,:,:] = pdf_neutral_norm[ivz,ivr,ivzeta,:,:,:] .* moments.neutral.dens[:,:,:]
+                    end
                 end
             end
         end
     end
-    return pdf_struct(pdf_norm, pdf_unnorm)
+    return pdf_struct(pdf_substruct(pdf_charged_norm, pdf_charged_unnorm),pdf_substruct(pdf_neutral_norm, pdf_neutral_unnorm))
 end
 
 """
@@ -195,26 +233,42 @@ function init_upar!(upar, z, r, spec, n_species)
     end
     return nothing
 end
+function init_uz!(uz, z, r, spec, n_species)
+    for is ∈ 1:n_species
+        for ir ∈ 1:r.n
+            @. uz[:,ir,is] = 0.0
+        end
+    end
+    return nothing
+end
+function init_ur!(ur, z, r, spec, n_species)
+    for is ∈ 1:n_species
+        for ir ∈ 1:r.n
+            @. ur[:,ir,is] = 0.0
+        end
+    end
+    return nothing
+end
+function init_uzeta!(uzeta, z, r, spec, n_species)
+    for is ∈ 1:n_species
+        for ir ∈ 1:r.n
+            @. uzeta[:,ir,is] = 0.0
+        end
+    end
+    return nothing
+end
 
 """
 """
-function init_pdf_over_density!(pdf, spec, vpa, vperp, z, vth, upar, vpa_norm_fac, evolve_upar, evolve_ppar)
+function init_pdf_charged_over_density!(pdf, spec, vpa, vperp, z, vth, upar)
     if spec.vpa_IC.initialization_option == "gaussian"
         # initial condition is a Gaussian in the peculiar velocity
-        # if evolve_ppar = true, then vpa coordinate is (vpa - upar)/vth;
-        # otherwise it is either (vpa-upar) or simply vpa
         for iz ∈ 1:z.n
             # obtain (vpa - upar)/vth
-            if evolve_ppar
-                @. vpa.scratch = vpa.grid
-            elseif evolve_upar
-                @. vpa.scratch = vpa.grid/vth[iz]
-            else
-                @. vpa.scratch = (vpa.grid - upar[iz])/vth[iz]
-            end
+            @. vpa.scratch = (vpa.grid - upar[iz])/vth[iz]
             
-            @. vperp.scratch = vperp.grid/vth[iz] # MRH correct thermal speed?
-            #@. pdf[:,iz] = exp(-(vpa.grid*(vpa_norm_fac[iz]/vth[iz]))^2) / vth[iz]
+            @. vperp.scratch = vperp.grid/vth[iz]
+            
             if vperp.n == 1 # 1D case 
                 ivperp = 1 
                 for ivpa ∈ 1:vpa.n
@@ -228,35 +282,7 @@ function init_pdf_over_density!(pdf, spec, vpa, vperp, z, vth, upar, vpa_norm_fa
                 end
             end 
         end
-        for iz ∈ 1:z.n
-            # densfac = the integral of the pdf over v-space, which should be unity,
-            # but may not be exactly unity due to quadrature errors
-            densfac = integrate_over_vspace(view(pdf,:,:,iz), vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
-            # pparfac = the integral of the pdf over v-space, weighted by m_s w_s^2 / vths^2,
-            # where w_s = vpa - upar_s;
-            # should be equal to 1/2, but may not be exactly 1/2 due to quadrature errors
-            #old ! @views @. vpa.scratch = vpa.grid^2 * pdf[:,iz] * (vpa_norm_fac[iz]/vth[iz])^2
-            #old ! pparfac = integrate_over_vspace(vpa.scratch, vpa.wgts)
-            pparfac = integrate_over_vspace(pdf[:,:,iz] * (vpa_norm_fac[iz]/vth[iz])^2, vpa.grid, 2, vpa.wgts, vperp.grid, 0, vperp.wgts)
-            # pparfac2 = the integral of the pdf over v-space, weighted by m_s w_s^2 (w_s^2 - vths^2 / 2) / vth^4
-            #@. vpa.scratch = vpa.grid^2 *(vpa.grid^2/pparfac - vth[iz]^2/densfac) * pdf[:,iz] * (vpa_norm_fac[iz]/vth[iz])^4
-            # old! @views @. vpa.scratch = vpa.grid^2 *(vpa.grid^2/pparfac - 1.0/densfac) * pdf[:,iz] * (vpa_norm_fac[iz]/vth[iz])^4
-            # old! pparfac2 = integrate_over_vspace(vpa.scratch, vpa.wgts)
-            pparfac2 = integrate_over_vspace(pdf[:,:,iz] * (vpa_norm_fac[iz]/vth[iz])^4, vpa.grid, 4, vpa.wgts, vperp.grid, 0, vperp.wgts)/pparfac - integrate_over_vspace(pdf[:,:,iz] * (vpa_norm_fac[iz]/vth[iz])^4, vpa.grid, 2, vpa.wgts, vperp.grid, 0, vperp.wgts)/densfac
-
-            #@. pdf[:,iz] = pdf[:,iz]/densfac + (0.5 - pparfac/densfac)/pparfac2*(vpa.grid^2/pparfac - vth[iz]^2/densfac)*pdf[:,iz]*(vpa_norm_fac[iz]/vth[iz])^2
-            for ivperp ∈ 1:vperp.n
-                for ivpa ∈ 1:vpa.n
-                    pdf[ivpa,ivperp,iz] = pdf[ivpa,ivperp,iz]/densfac + (0.5 - pparfac/densfac)/pparfac2*(vpa.grid[ivpa]^2/pparfac - 1.0/densfac)*pdf[ivpa,ivperp,iz]*(vpa_norm_fac[iz]/vth[iz])^2
-                end
-            end
-        end
-    elseif spec.vpa_IC.initialization_option == "vpagaussian"
-        for iz ∈ 1:z.n
-            for ivperp ∈ 1:vperp.n
-                @. pdf[:,ivperp,iz] = vpa.grid^2*exp(-(vpa.grid*(vpa_norm_fac[iz]/vth[iz]))^2) / vth[iz]
-            end
-        end
+        
     elseif spec.vpa_IC.initialization_option == "sinusoid"
         # initial condition is sinusoid in vpa
         for iz ∈ 1:z.n
@@ -273,28 +299,42 @@ function init_pdf_over_density!(pdf, spec, vpa, vperp, z, vth, upar, vpa_norm_fa
             end
         end
     end
-    # for iz ∈ 1:z.n
-    #     # densfac = the integral of the pdf over v-space, which should be unity,
-    #     # but may not be exactly unity due to quadrature errors
-    #     densfac = integrate_over_vspace(view(pdf,:,iz), vpa.wgts)
-    #     # pparfac = the integral of the pdf over v-space, weighted by m_s w_s^2 / vths^2,
-    #     # where w_s = vpa - upar_s;
-    #     # should be equal to 1/2, but may not be exactly 1/2 due to quadrature errors
-    #     @. vpa.scratch = vpa.grid^2 * pdf[:,iz] * (vpa_norm_fac[iz]/vth[iz])^2
-    #     pparfac = integrate_over_vspace(vpa.scratch, vpa.wgts)
-    #     # pparfac2 = the integral of the pdf over v-space, weighted by m_s w_s^2 (w_s^2 - vths^2 / 2) / vth^4
-    #     #@. vpa.scratch = vpa.grid^2 *(vpa.grid^2/pparfac - vth[iz]^2/densfac) * pdf[iz,:] * (vpa_norm_fac[iz]/vth[iz])^4
-    #     @. vpa.scratch = vpa.grid^2 *(vpa.grid^2/pparfac - 1.0/densfac) * pdf[:,iz] * (vpa_norm_fac[iz]/vth[iz])^4
-    #     pparfac2 = integrate_over_vspace(vpa.scratch, vpa.wgts)
-    #
-    #     #@. pdf[:,iz] = pdf[:,iz]/densfac + (0.5 - pparfac/densfac)/pparfac2*(vpa.grid^2/pparfac - vth[iz]^2/densfac)*pdf[:,iz]*(vpa_norm_fac[iz]/vth[iz])^2
-    #     @. pdf[:,iz] = pdf[:,iz]/densfac + (0.5 - pparfac/densfac)/pparfac2*(vpa.grid^2/pparfac - 1.0/densfac)*pdf[:,iz]*(vpa_norm_fac[iz]/vth[iz])^2
-    # end
     return nothing
 end
 
 """
 """
+
+function init_pdf_neutral_over_density!(pdf, spec, vz, vr, vzeta, z, uz, ur, uzeta, vth)
+
+    # initial condition is a Gaussian in the peculiar velocity
+    for iz ∈ 1:z.n
+        # obtain (vpa - upar)/vth
+        @. vz.scratch = (vz.grid - uz[iz])/vth[iz]
+        @. vr.scratch = (vr.grid - ur[iz])/vth[iz]
+        @. vzeta.scratch = (vzeta.grid - uzeta[iz])/vth[iz]
+        
+        if vr.n == 1 && vzeta.n == 1 # 1D case 
+            ivr = 1
+            ivzeta = 1 
+            for ivz ∈ 1:vz.n
+                pdf[ivz,ivr,ivzeta,iz] = exp(-vz.scratch[ivz]^2 - vr.scratch[ivr]^2 - vzeta.scratch[ivr]^2  ) / vth[iz]
+            end
+        else # 3D case with vr & vzeta
+            for ivzeta ∈ 1:vzeta.n
+                for ivr ∈ 1:vr.n
+                    for ivz ∈ 1:vz.n
+                        pdf[ivz,ivr,ivzeta,iz] = exp(-vz.scratch[ivz]^2 - vr.scratch[ivr]^2 - vzeta.scratch[ivr]^2  ) / vth[iz]^3
+                    end
+                end
+            end
+        end 
+    end
+    
+    return nothing
+end
+
+
 # The "where" syntax here is confusing...
 # Can we have an explicit loop or explain what it does?
 # Seems to make the fn a operator elementwise in the vector f

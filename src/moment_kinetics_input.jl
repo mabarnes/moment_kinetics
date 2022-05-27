@@ -85,52 +85,68 @@ function mk_input(scan_input=Dict())
     #println("Info: Bmag is ",geometry.Bmag)
     #println("Info: rhostar is ",geometry.rstar)
     
-    species[1].z_IC.initialization_option = get(scan_input, "z_IC_option1", "gaussian")
-    species[1].initial_density = get(scan_input, "initial_density1", 1.0)
-    species[1].initial_temperature = get(scan_input, "initial_temperature1", 1.0)
-    species[1].z_IC.density_amplitude = get(scan_input, "z_IC_density_amplitude1", 0.001)
-    species[1].z_IC.density_phase = get(scan_input, "z_IC_density_phase1", 0.0)
-    species[1].z_IC.upar_amplitude = get(scan_input, "z_IC_upar_amplitude1", 0.0)
-    species[1].z_IC.upar_phase = get(scan_input, "z_IC_upar_phase1", 0.0)
-    species[1].z_IC.temperature_amplitude = get(scan_input, "z_IC_temperature_amplitude1", 0.0)
-    species[1].z_IC.temperature_phase = get(scan_input, "z_IC_temperature_phase1", 0.0)
-    #species[1].z_IC.initialization_option = "bgk"
-    # set initial neutral densiity = Nₑ
-    species[1].vpa_IC.initialization_option = get(scan_input, "vpa_IC_option1", "gaussian")
-    species[1].vpa_IC.density_amplitude = get(scan_input, "vpa_IC_density_amplitude1", 1.000)
-    species[1].vpa_IC.density_phase = get(scan_input, "vpa_IC_density_phase1", 0.0)
-    species[1].vpa_IC.upar_amplitude = get(scan_input, "vpa_IC_upar_amplitude1", 0.0)
-    species[1].vpa_IC.upar_phase = get(scan_input, "vpa_IC_upar_phase1", 0.0)
-    species[1].vpa_IC.temperature_amplitude = get(scan_input, "vpa_IC_temperature_amplitude1", 0.0)
-    species[1].vpa_IC.temperature_phase = get(scan_input, "vpa_IC_temperature_phase1", 0.0)
-    for (i, s) in enumerate(species[2:end])
-        i = i+1
-        s.z_IC.initialization_option = get(scan_input, "z_IC_option$i", species[1].z_IC.initialization_option)
-        s.initial_density = get(scan_input, "initial_density$i", 0.5)
-        s.initial_temperature = get(scan_input, "initial_temperature$i", species[1].initial_temperature)
-        s.z_IC.density_amplitude = get(scan_input, "z_IC_density_amplitude$i", species[1].z_IC.density_amplitude)
-        s.z_IC.density_phase = get(scan_input, "z_IC_density_phase$i", species[1].z_IC.density_phase)
-        s.z_IC.upar_amplitude = get(scan_input, "z_IC_upar_amplitude$i", species[1].z_IC.upar_amplitude)
-        s.z_IC.upar_phase = get(scan_input, "z_IC_upar_phase$i", species[1].z_IC.upar_phase)
-        s.z_IC.temperature_amplitude = get(scan_input, "z_IC_temperature_amplitude$i", species[1].z_IC.temperature_amplitude)
-        s.z_IC.temperature_phase = get(scan_input, "z_IC_temperature_phase$i", species[1].z_IC.temperature_phase)
-        s.vpa_IC.initialization_option = get(scan_input, "vpa_IC_option$i", species[1].vpa_IC.initialization_option)
-        s.vpa_IC.density_amplitude = get(scan_input, "vpa_IC_density_amplitude$i", species[1].vpa_IC.density_amplitude)
-        s.vpa_IC.density_phase = get(scan_input, "vpa_IC_density_phase$i", species[1].vpa_IC.density_phase)
-        s.vpa_IC.upar_amplitude = get(scan_input, "vpa_IC_upar_amplitude$i", species[1].vpa_IC.upar_amplitude)
-        s.vpa_IC.upar_phase = get(scan_input, "vpa_IC_upar_phase$i", species[1].vpa_IC.upar_phase)
-        s.vpa_IC.temperature_amplitude = get(scan_input, "vpa_IC_temperature_amplitude$i", species[1].vpa_IC.temperature_amplitude)
-        s.vpa_IC.temperature_phase = get(scan_input, "vpa_IC_temperature_phase$i", species[1].vpa_IC.temperature_phase)
+    species.charged[1].z_IC.initialization_option = get(scan_input, "z_IC_option1", "gaussian")
+    species.charged[1].initial_density = get(scan_input, "initial_density1", 1.0)
+    species.charged[1].initial_temperature = get(scan_input, "initial_temperature1", 1.0)
+    species.charged[1].z_IC.density_amplitude = get(scan_input, "z_IC_density_amplitude1", 0.001)
+    species.charged[1].z_IC.density_phase = get(scan_input, "z_IC_density_phase1", 0.0)
+    species.charged[1].z_IC.upar_amplitude = get(scan_input, "z_IC_upar_amplitude1", 0.0)
+    species.charged[1].z_IC.upar_phase = get(scan_input, "z_IC_upar_phase1", 0.0)
+    species.charged[1].z_IC.temperature_amplitude = get(scan_input, "z_IC_temperature_amplitude1", 0.0)
+    species.charged[1].z_IC.temperature_phase = get(scan_input, "z_IC_temperature_phase1", 0.0)
+    species.charged[1].vpa_IC.initialization_option = get(scan_input, "vpa_IC_option1", "gaussian")
+    species.charged[1].vpa_IC.density_amplitude = get(scan_input, "vpa_IC_density_amplitude1", 1.000)
+    species.charged[1].vpa_IC.density_phase = get(scan_input, "vpa_IC_density_phase1", 0.0)
+    species.charged[1].vpa_IC.upar_amplitude = get(scan_input, "vpa_IC_upar_amplitude1", 0.0)
+    species.charged[1].vpa_IC.upar_phase = get(scan_input, "vpa_IC_upar_phase1", 0.0)
+    species.charged[1].vpa_IC.temperature_amplitude = get(scan_input, "vpa_IC_temperature_amplitude1", 0.0)
+    species.charged[1].vpa_IC.temperature_phase = get(scan_input, "vpa_IC_temperature_phase1", 0.0)
+    if n_neutral_species > 0
+        species.neutral[1].z_IC.initialization_option = get(scan_input, "z_IC_option1", "gaussian")
+        species.neutral[1].initial_density = get(scan_input, "initial_density1", 1.0)
+        species.neutral[1].initial_temperature = get(scan_input, "initial_temperature1", 1.0)
+        species.neutral[1].z_IC.density_amplitude = get(scan_input, "z_IC_density_amplitude1", 0.001)
+        species.neutral[1].z_IC.density_phase = get(scan_input, "z_IC_density_phase1", 0.0)
+        species.neutral[1].z_IC.upar_amplitude = get(scan_input, "z_IC_upar_amplitude1", 0.0)
+        species.neutral[1].z_IC.upar_phase = get(scan_input, "z_IC_upar_phase1", 0.0)
+        species.neutral[1].z_IC.temperature_amplitude = get(scan_input, "z_IC_temperature_amplitude1", 0.0)
+        species.neutral[1].z_IC.temperature_phase = get(scan_input, "z_IC_temperature_phase1", 0.0)
+        species.neutral[1].vpa_IC.initialization_option = get(scan_input, "vpa_IC_option1", "gaussian")
+        species.neutral[1].vpa_IC.density_amplitude = get(scan_input, "vpa_IC_density_amplitude1", 1.000)
+        species.neutral[1].vpa_IC.density_phase = get(scan_input, "vpa_IC_density_phase1", 0.0)
+        species.neutral[1].vpa_IC.upar_amplitude = get(scan_input, "vpa_IC_upar_amplitude1", 0.0)
+        species.neutral[1].vpa_IC.upar_phase = get(scan_input, "vpa_IC_upar_phase1", 0.0)
+        species.neutral[1].vpa_IC.temperature_amplitude = get(scan_input, "vpa_IC_temperature_amplitude1", 0.0)
+        species.neutral[1].vpa_IC.temperature_phase = get(scan_input, "vpa_IC_temperature_phase1", 0.0)
     end
+        #for (i, s) in enumerate(species[2:end])
+        #    i = i+1
+        #    s.z_IC.initialization_option = get(scan_input, "z_IC_option$i", species[1].z_IC.initialization_option)
+        #    s.initial_density = get(scan_input, "initial_density$i", 0.5)
+        #    s.initial_temperature = get(scan_input, "initial_temperature$i", species[1].initial_temperature)
+        #    s.z_IC.density_amplitude = get(scan_input, "z_IC_density_amplitude$i", species[1].z_IC.density_amplitude)
+        #    s.z_IC.density_phase = get(scan_input, "z_IC_density_phase$i", species[1].z_IC.density_phase)
+        #    s.z_IC.upar_amplitude = get(scan_input, "z_IC_upar_amplitude$i", species[1].z_IC.upar_amplitude)
+        #    s.z_IC.upar_phase = get(scan_input, "z_IC_upar_phase$i", species[1].z_IC.upar_phase)
+        #    s.z_IC.temperature_amplitude = get(scan_input, "z_IC_temperature_amplitude$i", species[1].z_IC.temperature_amplitude)
+        #    s.z_IC.temperature_phase = get(scan_input, "z_IC_temperature_phase$i", species[1].z_IC.temperature_phase)
+        #    s.vpa_IC.initialization_option = get(scan_input, "vpa_IC_option$i", species[1].vpa_IC.initialization_option)
+        #    s.vpa_IC.density_amplitude = get(scan_input, "vpa_IC_density_amplitude$i", species[1].vpa_IC.density_amplitude)
+        #    s.vpa_IC.density_phase = get(scan_input, "vpa_IC_density_phase$i", species[1].vpa_IC.density_phase)
+        #    s.vpa_IC.upar_amplitude = get(scan_input, "vpa_IC_upar_amplitude$i", species[1].vpa_IC.upar_amplitude)
+        #    s.vpa_IC.upar_phase = get(scan_input, "vpa_IC_upar_phase$i", species[1].vpa_IC.upar_phase)
+        #    s.vpa_IC.temperature_amplitude = get(scan_input, "vpa_IC_temperature_amplitude$i", species[1].vpa_IC.temperature_amplitude)
+        #    s.vpa_IC.temperature_phase = get(scan_input, "vpa_IC_temperature_phase$i", species[1].vpa_IC.temperature_phase)
+        #end
     #################### end specification of species inputs #####################
 
-    collisions.charge_exchange = get(scan_input, "charge_exchange_frequency", 2.0*sqrt(species[1].initial_temperature))
+    collisions.charge_exchange = get(scan_input, "charge_exchange_frequency", 2.0*sqrt(species.charged[1].initial_temperature))
     collisions.ionization = get(scan_input, "ionization_frequency", collisions.charge_exchange)
     collisions.constant_ionization_rate = get(scan_input, "constant_ionization_rate", false)
 
     # parameters related to the time stepping
     nstep = get(scan_input, "nstep", 40000)
-    dt = get(scan_input, "dt", 0.00025/sqrt(species[1].initial_temperature))
+    dt = get(scan_input, "dt", 0.00025/sqrt(species.charged[1].initial_temperature))
     nwrite = get(scan_input, "nwrite", 80)
     # use_semi_lagrange = true to use interpolation-free semi-Lagrange treatment
     # otherwise, solve problem solely using the discretization_option above
@@ -172,7 +188,7 @@ function mk_input(scan_input=Dict())
     # nelement is the number of elements
     vpa.nelement = get(scan_input, "vpa_nelement", 10)
     # L is the box length in units of vthermal_species
-    vpa.L = get(scan_input, "vpa_L", 8.0*sqrt(species[1].initial_temperature))
+    vpa.L = get(scan_input, "vpa_L", 8.0*sqrt(species.charged[1].initial_temperature))
     # determine the boundary condition
     # only supported option at present is "zero" and "periodic"
     vpa.bc = get(scan_input, "vpa_bc", "periodic")
@@ -186,7 +202,7 @@ function mk_input(scan_input=Dict())
     # nelement is the number of elements
     vperp.nelement = get(scan_input, "vperp_nelement", 1)
     # L is the box length in units of vthermal_species
-    vperp.L = get(scan_input, "vperp_L", 8.0*sqrt(species[1].initial_temperature))
+    vperp.L = get(scan_input, "vperp_L", 8.0*sqrt(species.charged[1].initial_temperature))
     # determine the boundary condition
     # only supported option at present is "zero" and "periodic"
     # MRH probably need to add new bc option here
@@ -202,7 +218,7 @@ function mk_input(scan_input=Dict())
     # nelement is the number of elements
     vz.nelement = get(scan_input, "vz_nelement", 10)
     # L is the box length in units of vthermal_species
-    vz.L = get(scan_input, "vz_L", 8.0*sqrt(species[1].initial_temperature))
+    vz.L = get(scan_input, "vz_L", 8.0*sqrt(species.charged[1].initial_temperature))
     # determine the boundary condition
     # only supported option at present is "zero" and "periodic"
     vz.bc = get(scan_input, "vz_bc", "periodic")
@@ -216,7 +232,7 @@ function mk_input(scan_input=Dict())
     # nelement is the number of elements
     vr.nelement = get(scan_input, "vr_nelement", 10)
     # L is the box length in units of vthermal_species
-    vr.L = get(scan_input, "vr_L", 8.0*sqrt(species[1].initial_temperature))
+    vr.L = get(scan_input, "vr_L", 8.0*sqrt(species.charged[1].initial_temperature))
     # determine the boundary condition
     # only supported option at present is "zero" and "periodic"
     vr.bc = get(scan_input, "vr_bc", "periodic")
@@ -230,7 +246,7 @@ function mk_input(scan_input=Dict())
     # nelement is the number of elements
     vzeta.nelement = get(scan_input, "vzeta_nelement", 10)
     # L is the box length in units of vthermal_species
-    vzeta.L = get(scan_input, "vzeta_L", 8.0*sqrt(species[1].initial_temperature))
+    vzeta.L = get(scan_input, "vzeta_L", 8.0*sqrt(species.charged[1].initial_temperature))
     # determine the boundary condition
     # only supported option at present is "zero" and "periodic"
     vzeta.bc = get(scan_input, "vzeta_bc", "periodic")
@@ -274,31 +290,48 @@ function mk_input(scan_input=Dict())
     vzeta_immutable = grid_input("vzeta", vzeta.ngrid, vzeta.nelement, vzeta.L,
         vzeta.discretization, vzeta.fd_option, vzeta.bc, vzeta_advection_immutable)
     
-    n_species = composition.n_species
-    species_immutable = Array{species_parameters,1}(undef,n_species)
-    for is ∈ 1:n_species
-        if is <= n_ion_species
-            species_type = "ion"
-        elseif is <= n_ion_species + n_neutral_species && n_neutral_species > 0
-            species_type = "neutral"
-        else
-            species_type = "electron"
-        end
-        z_IC = initial_condition_input(species[is].z_IC.initialization_option,
-            species[is].z_IC.width, species[is].z_IC.wavenumber,
-            species[is].z_IC.density_amplitude, species[is].z_IC.density_phase,
-            species[is].z_IC.upar_amplitude, species[is].z_IC.upar_phase,
-            species[is].z_IC.temperature_amplitude, species[is].z_IC.temperature_phase,
-            species[is].z_IC.monomial_degree)
-        vpa_IC = initial_condition_input(species[is].vpa_IC.initialization_option,
-            species[is].vpa_IC.width, species[is].vpa_IC.wavenumber,
-            species[is].vpa_IC.density_amplitude, species[is].vpa_IC.density_phase,
-            species[is].vpa_IC.upar_amplitude, species[is].vpa_IC.upar_phase,
-            species[is].vpa_IC.temperature_amplitude,
-            species[is].vpa_IC.temperature_phase, species[is].vpa_IC.monomial_degree)
-        species_immutable[is] = species_parameters(species_type, species[is].initial_temperature,
-            species[is].initial_density, z_IC, vpa_IC)
+    species_charged_immutable = Array{species_parameters,1}(undef,n_ion_species)
+    species_neutral_immutable = Array{species_parameters,1}(undef,n_neutral_species)
+    
+    for is ∈ 1:n_ion_species
+        species_type = "ion"
+        #    species_type = "electron"
+        z_IC = initial_condition_input(species.charged[is].z_IC.initialization_option,
+            species.charged[is].z_IC.width, species.charged[is].z_IC.wavenumber,
+            species.charged[is].z_IC.density_amplitude, species.charged[is].z_IC.density_phase,
+            species.charged[is].z_IC.upar_amplitude, species.charged[is].z_IC.upar_phase,
+            species.charged[is].z_IC.temperature_amplitude, species.charged[is].z_IC.temperature_phase,
+            species.charged[is].z_IC.monomial_degree)
+        vpa_IC = initial_condition_input(species.charged[is].vpa_IC.initialization_option,
+            species.charged[is].vpa_IC.width, species.charged[is].vpa_IC.wavenumber,
+            species.charged[is].vpa_IC.density_amplitude, species.charged[is].vpa_IC.density_phase,
+            species.charged[is].vpa_IC.upar_amplitude, species.charged[is].vpa_IC.upar_phase,
+            species.charged[is].vpa_IC.temperature_amplitude,
+            species.charged[is].vpa_IC.temperature_phase, species.charged[is].vpa_IC.monomial_degree)
+        species_charged_immutable[is] = species_parameters(species_type, species.charged[is].initial_temperature,
+            species.charged[is].initial_density, z_IC, vpa_IC)
     end
+    if n_neutral_species > 0
+        for is ∈ 1:n_neutral_species
+            species_type = "neutral"
+            z_IC = initial_condition_input(species.neutral[is].z_IC.initialization_option,
+                species.neutral[is].z_IC.width, species.neutral[is].z_IC.wavenumber,
+                species.neutral[is].z_IC.density_amplitude, species.neutral[is].z_IC.density_phase,
+                species.neutral[is].z_IC.upar_amplitude, species.neutral[is].z_IC.upar_phase,
+                species.neutral[is].z_IC.temperature_amplitude, species.neutral[is].z_IC.temperature_phase,
+                species.neutral[is].z_IC.monomial_degree)
+            vpa_IC = initial_condition_input(species.neutral[is].vpa_IC.initialization_option,
+                species.neutral[is].vpa_IC.width, species.neutral[is].vpa_IC.wavenumber,
+                species.neutral[is].vpa_IC.density_amplitude, species.neutral[is].vpa_IC.density_phase,
+                species.neutral[is].vpa_IC.upar_amplitude, species.neutral[is].vpa_IC.upar_phase,
+                species.neutral[is].vpa_IC.temperature_amplitude,
+                species.neutral[is].vpa_IC.temperature_phase, species.neutral[is].vpa_IC.monomial_degree)
+            species_neutral_immutable[is] = species_parameters(species_type, species.neutral[is].initial_temperature,
+                species.neutral[is].initial_density, z_IC, vpa_IC)
+        end
+    end 
+    species_immutable = (charged = species_charged_immutable, neutral = species_neutral_immutable)
+    
     drive_immutable = drive_input(drive.force_phi, drive.amplitude, drive.frequency)
 
     # Make file to log some information about inputs into.
@@ -613,7 +646,10 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     composition = species_composition(n_species, n_ion_species, n_neutral_species,
         electron_physics, 1:n_ion_species, n_ion_species+1:n_species, T_e, T_wall,
         phi_wall, mn_over_mi, me_over_mi, allocate_float(n_species))
-    species = Array{species_parameters_mutable,1}(undef,n_species)
+    
+    species_charged = Array{species_parameters_mutable,1}(undef,n_ion_species)
+    species_neutral = Array{species_parameters_mutable,1}(undef,n_neutral_species)
+    
     # initial temperature for each species defaults to Tₑ
     initial_temperature = 1.0
     # initial density for each species defaults to Nₑ
@@ -662,16 +698,18 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
 
     # fill in entries in species struct corresponding to ion species
     for is ∈ 1:n_ion_species
-        species[is] = species_parameters_mutable("ion", initial_temperature, initial_density,
+        species_charged[is] = species_parameters_mutable("ion", initial_temperature, initial_density,
             deepcopy(z_initial_conditions), deepcopy(vpa_initial_conditions))
     end
     # if there are neutrals, fill in corresponding entries in species struct
     if n_neutral_species > 0
         for is ∈ 1:n_neutral_species
-            species[n_ion_species + is] = species_parameters_mutable("neutral", initial_temperature,
+            species_neutral[is] = species_parameters_mutable("neutral", initial_temperature,
                 initial_density, deepcopy(z_initial_conditions), deepcopy(vpa_initial_conditions))
         end
     end
+    species = (charged = species_charged, neutral = species_neutral)
+    
     # if drive_phi = true, include external electrostatic potential of form
     # phi(z,t=0)*drive_amplitude*sinpi(time*drive_frequency)
     drive_phi = false
@@ -706,7 +744,7 @@ function check_input(io, output_dir, nstep, dt, use_semi_lagrange, z, vpa,
     check_input_time_advance(nstep, dt, use_semi_lagrange, io)
     check_input_z(z, io)
     check_input_vpa(vpa, io)
-    check_input_initialization(composition, species, io)
+    #check_input_initialization(composition, species, io) MRH Need to update
     # if the parallel flow is evolved separately, then the density must also be evolved separately
     if evolve_moments.parallel_flow && !evolve_moments.density
         print(io,">evolve_moments.parallel_flow = true, but evolve_moments.density = false.")
