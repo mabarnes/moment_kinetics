@@ -79,49 +79,30 @@ function setup_time_advance!(pdf, vpa, vperp, z, r, composition, drive_input, mo
     # if no splitting of operators, all terms advanced concurrently;
     # else, will advance one term at a time.
     manufactured_solns_test = t_input.use_manufactured_solns
-    if t_input.split_operators
-        advance = advance_info(false, false, false, false, false, false, false, false, false, rk_coefs, manufactured_solns_test)
-    else
-        if composition.n_neutral_species > 0
-            if collisions.charge_exchange > 0.0
-                advance_cx = true
-            else
-                advance_cx = false
-            end
-            if collisions.ionization > 0.0
-                advance_ionization = true
-            else
-                advance_ionization = false
-            end
+    
+    if composition.n_neutral_species > 0
+        if collisions.charge_exchange > 0.0
+            advance_cx = true
         else
             advance_cx = false
+        end
+        if collisions.ionization > 0.0
+            advance_ionization = true
+        else
             advance_ionization = false
         end
-        if moments.evolve_density
-            advance_sources = true
-            advance_continuity = true
-            if moments.evolve_upar
-                advance_force_balance = true
-                if moments.evolve_ppar
-                    advance_energy = true
-                else
-                    advance_energy = false
-                end
-            else
-                advance_force_balance = false
-                advance_energy = false
-            end
-        else
-            advance_sources = false
-            advance_continuity = false
-            advance_force_balance = false
-            advance_energy = false
-        end
-        advance = advance_info(true, true, true, advance_cx, advance_ionization, advance_sources,
-                               advance_continuity, advance_force_balance, advance_energy, rk_coefs,
-                               manufactured_solns_test)
+    else
+        advance_cx = false
+        advance_ionization = false
     end
-    
+    advance_sources = false
+    advance_continuity = false
+    advance_force_balance = false
+    advance_energy = false
+    advance = advance_info(true, true, true, advance_cx, advance_ionization, advance_sources,
+                           advance_continuity, advance_force_balance, advance_energy, rk_coefs,
+                           manufactured_solns_test)
+
     
     if z.discretization == "chebyshev_pseudospectral"
         # create arrays needed for explicit Chebyshev pseudospectral treatment in vpa
