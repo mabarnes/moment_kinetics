@@ -169,8 +169,7 @@ function setup_moment_kinetics(input_dict::Dict)
     vpa_SL, vperp_SL, z_SL, r_SL, scratch, advance, scratch_dummy, manufactured_source_list = setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition,
         drive_input, moments, t_input, collisions, species, geometry)
     # setup i/o
-    io, cdf = setup_file_io(output_dir, run_name, vpa, vperp, z, r, composition, collisions,
-                            moments.evolve_ppar)
+    io, cdf = setup_file_io(output_dir, run_name, vpa, vperp, z, r, composition, collisions)
     # write initial data to ascii files
     write_data_to_ascii(pdf.unnorm, moments, fields, vpa, vperp, z, r, code_time, composition.n_species, io)
     # write initial data to binary file (netcdf)

@@ -74,8 +74,7 @@ end
 """
 open the necessary output files
 """
-function setup_file_io(output_dir, run_name, vpa, vperp, z, r, composition,
-                       collisions, evolve_ppar)
+function setup_file_io(output_dir, run_name, vpa, vperp, z, r, composition, collisions)
     begin_serial_region()
     @serial_region begin
         # Only read/write from first process in each 'block'
@@ -87,8 +86,7 @@ function setup_file_io(output_dir, run_name, vpa, vperp, z, r, composition,
         #ff_io = open_output_file(out_prefix, "f_vs_t")
         mom_io = open_output_file(out_prefix, "moments_vs_t")
         fields_io = open_output_file(out_prefix, "fields_vs_t")
-        cdf = setup_netcdf_io(out_prefix, r, z, vperp, vpa, composition, collisions,
-                              evolve_ppar)
+        cdf = setup_netcdf_io(out_prefix, r, z, vperp, vpa, composition, collisions)
         #return ios(ff_io, mom_io, fields_io), cdf
         return ios(mom_io, fields_io), cdf
     end
@@ -135,7 +133,7 @@ end
 
 Define static (i.e. time-independent) variables for an output file.
 """
-function define_static_variables!(fid,vpa,vperp,z,r,composition,collisions,evolve_ppar)
+function define_static_variables!(fid,vpa,vperp,z,r,composition,collisions)
     # create and write the "r" variable to file
     varname = "r"
     attributes = Dict("description" => "radial coordinate")
@@ -202,14 +200,7 @@ function define_static_variables!(fid,vpa,vperp,z,r,composition,collisions,evolv
     vartype = mk_float
     var = defVar(fid, varname, vartype, dims, attrib=attributes)
     var[:] = collisions.charge_exchange
-    # create and write the "evolve_ppar" variable to file
-    varname = "evolve_ppar"
-    attributes = Dict("description" => "flag indicating if the parallel pressure is separately evolved")
-    vartype = mk_int
-    dims = ("n_species",)
-    var = defVar(fid, varname, vartype, dims, attrib=attributes)
-    var[:] = evolve_ppar
-
+    
     return nothing
 end
 
@@ -274,7 +265,7 @@ end
 """
 setup file i/o for netcdf
 """
-function setup_netcdf_io(prefix, r, z, vperp, vpa, composition, collisions, evolve_ppar)
+function setup_netcdf_io(prefix, r, z, vperp, vpa, composition, collisions)
     # the netcdf file will be given by output_dir/run_name with .cdf appended
     filename = string(prefix,".cdf")
     # if a netcdf file with the requested name already exists, remove it
@@ -287,7 +278,7 @@ function setup_netcdf_io(prefix, r, z, vperp, vpa, composition, collisions, evol
     define_dimensions!(fid, vpa.n, vperp.n, z.n, r.n, composition.n_species,
                        composition.n_ion_species, composition.n_neutral_species)
     ### create and write static variables to file ###
-    define_static_variables!(fid,vpa,vperp,z,r,composition,collisions,evolve_ppar)
+    define_static_variables!(fid,vpa,vperp,z,r,composition,collisions)
     ### create variables for time-dependent quantities and store them ###
     ### in a struct for later access ###
     cdf_time, cdf_f, cdf_phi, cdf_density, cdf_upar, cdf_ppar, cdf_qpar, cdf_vth =
