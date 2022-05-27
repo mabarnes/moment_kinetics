@@ -340,12 +340,14 @@ end
 create an array of structs containing scratch arrays for the normalised pdf and low-order moments
 that may be evolved separately via fluid equations
 """
-function setup_scratch_arrays(moments, pdf_in, n_rk_stages)
+function setup_scratch_arrays(moments, pdf_charged_in, pdf_neutral_in, n_rk_stages)
     # create n_rk_stages+1 structs, each of which will contain one pdf,
     # one density, and one parallel flow array
-    scratch = Vector{scratch_pdf{5,3}}(undef, n_rk_stages+1)
-    pdf_dims = size(pdf_in)
-    moment_dims = size(moments.dens)
+    scratch = Vector{scratch_pdf{5,3,6,3}}(undef, n_rk_stages+1)
+    pdf_dims = size(pdf_charged_in)
+    moment_dims = size(moments.charged.dens)
+    pdf_neutral_dims = size(pdf_neutral_in)
+    moment_neutral_dims = size(moments.neutral.dens)
     # populate each of the structs
     for istage ∈ 1:n_rk_stages+1
         # Allocate arrays in temporary variables so that we can identify them
@@ -355,13 +357,21 @@ function setup_scratch_arrays(moments, pdf_in, n_rk_stages)
         upar_array = allocate_shared_float(moment_dims...)
         ppar_array = allocate_shared_float(moment_dims...)
         temp_z_s_array = allocate_shared_float(moment_dims...)
+        
+        pdf_neutral_array = allocate_shared_float(pdf_neutral_dims...)
+        density_neutral_array = allocate_shared_float(moment_neutral_dims...)
+        
+        
         scratch[istage] = scratch_pdf(pdf_array, density_array, upar_array,
-                                      ppar_array, temp_z_s_array)
+                                      ppar_array, temp_z_s_array, pdf_neutral_array, density_neutral_array)
         @serial_region begin
-            scratch[istage].pdf .= pdf_in
-            scratch[istage].density .= moments.dens
-            scratch[istage].upar .= moments.upar
-            scratch[istage].ppar .= moments.ppar
+            scratch[istage].pdf .= pdf_charged_in
+            scratch[istage].density .= moments.charged.dens
+            scratch[istage].upar .= moments.charged.upar
+            scratch[istage].ppar .= moments.charged.ppar
+            
+            scatch[istage].pdf_neutral = pdf_neutral_in
+            scratch[istage].density_neutral .= moments.neutral.dens
         end
     end
     return scratch
