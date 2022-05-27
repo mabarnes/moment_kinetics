@@ -140,7 +140,8 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
         vpa.duniform_dgrid .= 1.0
     end
     
-    if vperp.discretization == "chebyshev_pseudospectral_vperp"
+    # MRH CONSIDER REMOVING -> vperp_spectral never used
+    if vperp.discretization == "chebyshev_pseudospectral" && vperp.n > 1
         # create arrays needed for explicit Chebyshev pseudospectral treatment in vperp
         # and create the plans for the forward and backward fast Chebyshev transforms
         vperp_spectral = setup_chebyshev_pseudospectral(vperp)
@@ -152,7 +153,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
         vperp.duniform_dgrid .= 1.0
     end
     
-    if vz.discretization == "chebyshev_pseudospectral"
+    if vz.discretization == "chebyshev_pseudospectral" 
         # create arrays needed for explicit Chebyshev pseudospectral treatment in vz
         # and create the plans for the forward and backward fast Chebyshev transforms
         vz_spectral = setup_chebyshev_pseudospectral(vz)
@@ -164,7 +165,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
         vz.duniform_dgrid .= 1.0
     end
     
-    if vr.discretization == "chebyshev_pseudospectral"
+    if vr.discretization == "chebyshev_pseudospectral" && vr.n > 1
         # create arrays needed for explicit Chebyshev pseudospectral treatment in vr
         # and create the plans for the forward and backward fast Chebyshev transforms
         vr_spectral = setup_chebyshev_pseudospectral(vr)
@@ -176,7 +177,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
         vr.duniform_dgrid .= 1.0
     end
     
-    if vzeta.discretization == "chebyshev_pseudospectral"
+    if vzeta.discretization == "chebyshev_pseudospectral" && vzeta.n > 1
         # create arrays needed for explicit Chebyshev pseudospectral treatment in vzeta
         # and create the plans for the forward and backward fast Chebyshev transforms
         vzeta_spectral = setup_chebyshev_pseudospectral(vzeta)
@@ -190,7 +191,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     
     # create an array of structs containing scratch arrays for the pdf and low-order moments
     # that may be evolved separately via fluid equations
-    scratch = setup_scratch_arrays(moments, pdf.norm, t_input.n_rk_stages)
+    scratch = setup_scratch_arrays(moments, pdf.charged.norm, pdf.neutral.norm, t_input.n_rk_stages)
     # setup dummy arrays
     dummy_sr = allocate_float(r.n, composition.n_species)
     dummy_zr = allocate_float(z.n, r.n)
@@ -201,7 +202,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     fields = setup_em_fields(z.n, r.n, drive_input.force_phi, drive_input.amplitude, drive_input.frequency)
     # initialize the electrostatic potential
     begin_serial_region()
-    update_phi!(fields, scratch[1], z, r, composition, z_spectral, r_spectral, moments.evolve_density)
+    update_phi!(fields, scratch[1], z, r, composition, z_spectral, r_spectral)
     @serial_region begin
         # save the initial phi(z) for possible use later (e.g., if forcing phi)
         fields.phi0 .= fields.phi
@@ -363,14 +364,15 @@ function setup_scratch_arrays(moments, pdf_charged_in, pdf_neutral_in, n_rk_stag
         
         
         scratch[istage] = scratch_pdf(pdf_array, density_array, upar_array,
-                                      ppar_array, temp_z_s_array, pdf_neutral_array, density_neutral_array)
+                                      ppar_array, temp_z_s_array,
+                                      pdf_neutral_array, density_neutral_array)
         @serial_region begin
             scratch[istage].pdf .= pdf_charged_in
             scratch[istage].density .= moments.charged.dens
             scratch[istage].upar .= moments.charged.upar
             scratch[istage].ppar .= moments.charged.ppar
             
-            scatch[istage].pdf_neutral = pdf_neutral_in
+            scratch[istage].pdf_neutral .= pdf_neutral_in
             scratch[istage].density_neutral .= moments.neutral.dens
         end
     end
@@ -526,7 +528,7 @@ function rk_update!(scratch, pdf, moments, fields, vpa, vperp, z, r, rk_coefs, i
     # update the parallel heat flux
     update_qpar!(moments.qpar, moments.qpar_updated, pdf.unnorm, vpa, vperp, z, r, composition, moments.vpa_norm_fac)
     # update the electrostatic potential phi
-    update_phi!(fields, scratch[istage+1], z, r, composition, z_spectral, r_spectral, moments.evolve_density)
+    update_phi!(fields, scratch[istage+1], z, r, composition, z_spectral, r_spectral)
     #begin_s_r_z_vperp_region()
 end
 

@@ -27,7 +27,7 @@ end
 """
 update_phi updates the electrostatic potential, phi
 """
-function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral, evolve_density)
+function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral)
     n_ion_species = composition.n_ion_species
     @boundscheck size(fields.phi,1) == z.n || throw(BoundsError(fields.phi))
     @boundscheck size(fields.phi,2) == r.n || throw(BoundsError(fields.phi))
@@ -39,7 +39,7 @@ function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral, ev
     @boundscheck size(fields.Ez,2) == r.n || throw(BoundsError(fields.Ez))
     @boundscheck size(fvec.density,1) == z.n || throw(BoundsError(fvec.density))
     @boundscheck size(fvec.density,2) == r.n || throw(BoundsError(fvec.density))
-    @boundscheck size(fvec.density,3) == composition.n_species || throw(BoundsError(fvec.density))
+    @boundscheck size(fvec.density,3) == composition.n_ion_species || throw(BoundsError(fvec.density))
     # Update phi using the set of processes that handles the first ion species
     # Means we get at least some parallelism, even though we have to sum
     # over species, and reduces number of _block_synchronize() calls needed
@@ -48,7 +48,7 @@ function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral, ev
     begin_serial_region(no_synchronize=true)
     # in serial as both s, r and z required locally
     
-    if (composition.n_ion_species > 1 || !evolve_density ||
+    if (composition.n_ion_species > 1 || true ||
         composition.electron_physics == boltzmann_electron_response_with_simple_sheath)
         # If there is more than 1 ion species, the ranks that handle species 1 have to
         # read density for all the other species, so need to synchronize here.
