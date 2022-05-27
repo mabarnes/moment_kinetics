@@ -164,9 +164,9 @@ function setup_moment_kinetics(input_dict::Dict)
     code_time = 0.
     # create arrays and do other work needed to setup
     # the main time advance loop -- including normalisation of f by density if requested
-    vpa_spectral, vperp_spectral, z_spectral, r_spectral, moments, fields, 
+    vz_spectral, vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral, z_spectral, r_spectral, moments, fields, 
     vpa_advect, vperp_advect, z_advect, r_advect,
-    vpa_SL, vperp_SL, z_SL, r_SL, scratch, advance, scratch_dummy, manufactured_source_list = setup_time_advance!(pdf, vpa, vperp, z, r, composition,
+    vpa_SL, vperp_SL, z_SL, r_SL, scratch, advance, scratch_dummy, manufactured_source_list = setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition,
         drive_input, moments, t_input, collisions, species, geometry)
     # setup i/o
     io, cdf = setup_file_io(output_dir, run_name, vpa, vperp, z, r, composition, collisions,
