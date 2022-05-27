@@ -208,39 +208,42 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
         fields.phi0 .= fields.phi
     end
     
+    ##
+    # Charged particle advection only
+    ##
+    
     # create structure r_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the split part of the GK equation dealing
     # with advection in r
     begin_serial_region()
-    r_advect = setup_advection(n_species, r, vpa, vperp, z)
+    r_advect = setup_advection(n_ion_species, r, vpa, vperp, z)
     # initialise the r advection speed
     begin_s_z_vperp_vpa_region()
     @loop_s is begin
-        @views update_speed_r!(r_advect[is], fields, moments.upar[:,:,is], moments.vth[:,:,is],
+        @views update_speed_r!(r_advect[is], fields, moments.charged.upar[:,:,is], moments.charged.vth[:,:,is],
             vpa, vperp, z, r, 0.0, geometry)
         # initialise the upwind/downwind boundary indices in z
         update_boundary_indices!(r_advect[is], loop_ranges[].vpa, loop_ranges[].vperp, loop_ranges[].z)
     end
     # enforce prescribed boundary condition in r on the distribution function f
     # use present distribution as f_old in case of Dirichlet bc
-    @views enforce_r_boundary_condition!(pdf.unnorm, pdf.unnorm, r.bc, r_advect, vpa, vperp, z, r, composition)
+    @views enforce_r_boundary_condition!(pdf.charged.unnorm, pdf.charged.unnorm, r.bc, r_advect, vpa, vperp, z, r, composition)
     
     # create structure z_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the split part of the GK equation dealing
     # with advection in z
     begin_serial_region()
-    z_advect = setup_advection(n_species, z, vpa, vperp, r)
+    z_advect = setup_advection(n_ion_species, z, vpa, vperp, r)
     # initialise the z advection speed
     begin_s_r_vperp_vpa_region()
     @loop_s is begin
-        @views update_speed_z!(z_advect[is], fields, moments.upar[:,:,is], moments.vth[:,:,is],
-                               moments.evolve_upar, moments.evolve_ppar, vpa, vperp, z, r,
-                               0.0, geometry)
+        @views update_speed_z!(z_advect[is], fields, moments.charged.upar[:,:,is], moments.charged.vth[:,:,is],
+                               vpa, vperp, z, r, 0.0, geometry)
         # initialise the upwind/downwind boundary indices in z
         update_boundary_indices!(z_advect[is], loop_ranges[].vpa, loop_ranges[].vperp, loop_ranges[].r)
     end
     # enforce prescribed boundary condition in z on the distribution function f
-    @views enforce_z_boundary_condition!(pdf.unnorm, z.bc, z_advect, vpa, vperp, r, composition)
+    @views enforce_z_boundary_condition!(pdf.charged.unnorm, z.bc, z_advect, vpa, vperp, r, composition)
     
     begin_serial_region()
     
@@ -248,39 +251,30 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     # create structure vpa_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the split part of the GK equation dealing
     # with advection in vpa
-    vpa_advect = setup_advection(n_species, vpa, vperp, z, r)
+    vpa_advect = setup_advection(n_ion_species, vpa, vperp, z, r)
     # initialise the vpa advection speed
     begin_s_r_z_vperp_region()
-    update_speed_vpa!(vpa_advect, fields, scratch[1], moments, vpa, vperp, z, r, composition,
+    update_speed_vpa!(vpa_advect, fields, scratch[1], moments.charged, vpa, vperp, z, r, composition,
                       collisions.charge_exchange, 0.0, geometry)
-    if moments.evolve_upar
-        nspec = n_species
-    else
-        nspec = n_ion_species
-    end
+    
     begin_serial_region()
     @serial_region begin
-        for is ∈ 1:nspec
+        for is ∈ 1:n_ion_species
             # initialise the upwind/downwind boundary indices in vpa
             update_boundary_indices!(vpa_advect[is], 1:vperp.n, 1:z.n, 1:r.n)
             # enforce prescribed boundary condition in vpa on the distribution function f
-            @views enforce_vpa_boundary_condition!(pdf.norm[:,:,:,:,is], vpa.bc, vpa_advect[is])
+            @views enforce_vpa_boundary_condition!(pdf.charged.norm[:,:,:,:,is], vpa.bc, vpa_advect[is])
         end
     end
     # create structure vperp_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the split part of the GK equation dealing
     # with advection in vperp
     begin_serial_region()
-    vperp_advect = setup_advection(n_species, vperp, vpa, z, r)
+    vperp_advect = setup_advection(n_ion_species, vperp, vpa, z, r)
     # initialise the vperp advection speed
-    if moments.evolve_upar
-        nspec = n_species
-    else
-        nspec = n_ion_species
-    end
     begin_serial_region()
     @serial_region begin
-        for is ∈ 1:nspec
+        for is ∈ 1:n_ion_species
             @views update_speed_vperp!(vperp_advect[is], vpa, vperp, z, r, 0.0)
             # initialise the upwind/downwind boundary indices in vpa
             update_boundary_indices!(vperp_advect[is], 1:vpa.n, 1:z.n, 1:r.n)
@@ -289,6 +283,11 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
             #@views enforce_vperp_boundary_condition!(pdf.norm[:,:,:,:,is], vpa.bc, vpa_advect[is])
         end
     end
+    
+    ##
+    # Neutral particle advection
+    ##
+    
     # create an array of structures containing the arrays needed for the semi-Lagrange
     # solve and initialize the characteristic speed and departure indices
     # so that the code can gracefully run without using the semi-Lagrange
