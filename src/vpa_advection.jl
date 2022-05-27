@@ -24,7 +24,7 @@ function vpa_advection!(f_out, fvec_in, ff, fields, moments, SL, advect,
     # wpar = vpar - upar as a variable; i.e., d(wpar)/dt /=0 for neutrals even though d(vpar)/dt = 0.
 
     # calculate the advection speed corresponding to current f
-    update_speed_vpa!(advect, fields, fvec_in, moments, vpa, vperp,
+    update_speed_vpa!(advect, fields, vpa, vperp,
     z, r, composition, CX_frequency, t, geometry)
     @loop_s is begin
         if is in composition.neutral_species_range
@@ -47,7 +47,7 @@ end
 """
 calculate the advection speed in the vpa-direction at each grid point
 """
-function update_speed_vpa!(advect, fields, fvec, moments, vpa, vperp, z, r, composition, CX_frequency, t, geometry)
+function update_speed_vpa!(advect, fields, vpa, vperp, z, r, composition, CX_frequency, t, geometry)
     @boundscheck r.n == size(advect[1].speed,4) || throw(BoundsError(advect))
     @boundscheck z.n == size(advect[1].speed,3) || throw(BoundsError(advect))
     @boundscheck vperp.n == size(advect[1].speed,2) || throw(BoundsError(advect))
@@ -56,7 +56,7 @@ function update_speed_vpa!(advect, fields, fvec, moments, vpa, vperp, z, r, comp
     @boundscheck vpa.n == size(advect[1].speed,1) || throw(BoundsError(speed))
     if vpa.advection.option == "default"
         # dvpa/dt = Ze/m ⋅ E_parallel
-        update_speed_default!(advect, fields, fvec, moments, vpa, vperp, z, r, composition, CX_frequency, t, geometry)
+        update_speed_default!(advect, fields, vpa, vperp, z, r, composition, CX_frequency, t, geometry)
     elseif vpa.advection.option == "constant"
         @serial_region begin
             # Not usually used - just run in serial
@@ -94,7 +94,7 @@ end
 
 """
 """
-function update_speed_default!(advect, fields, fvec, moments, vpa, vperp, z, r, composition, CX_frequency, t, geometry)
+function update_speed_default!(advect, fields, vpa, vperp, z, r, composition, CX_frequency, t, geometry)
     kpar = geometry.Bzed/geometry.Bmag
     @inbounds @fastmath begin
         @loop_s is begin

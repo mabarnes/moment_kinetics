@@ -220,8 +220,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     # initialise the r advection speed
     begin_s_z_vperp_vpa_region()
     @loop_s is begin
-        @views update_speed_r!(r_advect[is], fields, moments.charged.upar[:,:,is], moments.charged.vth[:,:,is],
-            vpa, vperp, z, r, 0.0, geometry)
+        @views update_speed_r!(r_advect[is], fields, vpa, vperp, z, r, 0.0, geometry)
         # initialise the upwind/downwind boundary indices in z
         update_boundary_indices!(r_advect[is], loop_ranges[].vpa, loop_ranges[].vperp, loop_ranges[].z)
     end
@@ -237,8 +236,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     # initialise the z advection speed
     begin_s_r_vperp_vpa_region()
     @loop_s is begin
-        @views update_speed_z!(z_advect[is], fields, moments.charged.upar[:,:,is], moments.charged.vth[:,:,is],
-                               vpa, vperp, z, r, 0.0, geometry)
+        @views update_speed_z!(z_advect[is], fields, vpa, vperp, z, r, 0.0, geometry)
         # initialise the upwind/downwind boundary indices in z
         update_boundary_indices!(z_advect[is], loop_ranges[].vpa, loop_ranges[].vperp, loop_ranges[].r)
     end
@@ -254,7 +252,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     vpa_advect = setup_advection(n_ion_species, vpa, vperp, z, r)
     # initialise the vpa advection speed
     begin_s_r_z_vperp_region()
-    update_speed_vpa!(vpa_advect, fields, scratch[1], moments.charged, vpa, vperp, z, r, composition,
+    update_speed_vpa!(vpa_advect, fields, vpa, vperp, z, r, composition,
                       collisions.charge_exchange, 0.0, geometry)
     
     begin_serial_region()

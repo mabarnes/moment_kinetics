@@ -19,8 +19,7 @@ function r_advection!(f_out, fvec_in, ff, fields, moments, SL, advect, r, z, vpe
     
     @loop_s is begin
         # get the updated speed along the r direction using the current f
-        @views update_speed_r!(advect[is], fields, fvec_in.upar[:,:,is], moments.vth[:,:,is],
-                                vpa, vperp, z, r, t, geometry)
+        @views update_speed_r!(advect[is], fields, vpa, vperp, z, r, t, geometry)
         # update the upwind/downwind boundary indices and upwind_increment
         @views update_boundary_indices!(advect[is], loop_ranges[].vpa, loop_ranges[].vperp, loop_ranges[].z)
         
@@ -41,7 +40,7 @@ end
 """
 calculate the advection speed in the r-direction at each grid point
 """
-function update_speed_r!(advect, fields, upar, vth, vpa, vperp, z, r, t, geometry)
+function update_speed_r!(advect, fields, vpa, vperp, z, r, t, geometry)
     @boundscheck z.n == size(advect.speed,4) || throw(BoundsError(advect))
     @boundscheck vperp.n == size(advect.speed,3) || throw(BoundsError(advect))
     @boundscheck vpa.n == size(advect.speed,2) || throw(BoundsError(advect))
