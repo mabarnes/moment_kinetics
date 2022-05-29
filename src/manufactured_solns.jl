@@ -109,12 +109,12 @@ using ..type_definitions
         for ir ∈ 1:r.n, iz ∈ 1:z.n
             densi[iz,ir] = densi_func(z.grid[iz], r.grid[ir], t)
             for ivperp ∈ 1:vperp.n, ivpa ∈ 1:vpa.n
-                dfni[iz,ir] = dfni_func(vpa.grid[ivpa], vperp.grid[ivperp], z.grid[iz],
+                dfni[ivpa,ivperp,iz,ir] = dfni_func(vpa.grid[ivpa], vperp.grid[ivperp], z.grid[iz],
                                         r.grid[ir], t)
             end
         end
 
-        phi = log(densi)
+        phi = log.(densi)
 
         return densi, phi, dfni
     end
