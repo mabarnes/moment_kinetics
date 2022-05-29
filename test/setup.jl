@@ -141,10 +141,8 @@ function load_test_output(input::Dict, to_load::Tuple{Vararg{Symbol}})
     fid = open_netcdf_file(path)
 
     # load space-time coordinate data
-    output["nvpa"], output["vpa"], output["vpa_wgts"], output["nvperp"],
-    output["vperp"], output["vperp_wgts"], output["nz"], output["z"], output["z_wgts"],
-    output["Lz"], output["nr"], output["r"], output["r_wgts"], output["Lr"],
-    output["ntime"], output["time"] = load_coordinate_data(fid)
+    output["vpa"], output["vperp"], output["z"], output["r"], output["ntime"],
+    output["time"] = load_coordinate_data(fid)
 
     if :phi ∈ to_load
         # Load EM fields

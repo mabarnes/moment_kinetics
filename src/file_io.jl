@@ -199,10 +199,10 @@ function define_static_variables!(fid,vpa,vperp,z,r,composition,collisions,evolv
     end
 
     # create and write the coordinate variables
-    save_coordinate(r)
-    save_coordinate(z)
-    save_coordinate(vperp)
-    save_coordinate(vpa)
+    save_coordinate(r, "radial coordinate")
+    save_coordinate(z, "parallel coordinate")
+    save_coordinate(vperp, "perpendicular velocity")
+    save_coordinate(vpa, "parallel velocity")
     # create and write the "T_e" variable to file
     varname = "T_e"
     attributes = Dict("description" => "electron temperature")

@@ -162,10 +162,7 @@ function run_test(test_input, analytic_frequency, analytic_growth_rate,
 
             output = load_test_output(input, (:phi,))
 
-            nz = output["nz"]
             z = output["z"]
-            z_wgts = output["z_wgts"]
-            Lz = output["Lz"]
             ntime = output["ntime"]
             time = output["time"]
 
@@ -176,25 +173,25 @@ function run_test(test_input, analytic_frequency, analytic_growth_rate,
             phi = phi_zrt[:,ir0,:]
 
             # analyze the fields data
-            phi_fldline_avg, delta_phi = analyze_fields_data(phi, ntime, nz, z_wgts, Lz)
+            phi_fldline_avg, delta_phi = analyze_fields_data(phi, ntime, z.n, z.wgts, z.L)
 
             # use a fit to calculate the damping rate and growth rate of the perturbed
             # electrostatic potential
             itime_max = ntime
-            iz0 = cld(nz, 3)
+            iz0 = cld(z.n, 3)
             shifted_time = allocate_float(ntime)
             @. shifted_time = time - time[itime_min]
-            @views phi_fit = fit_delta_phi_mode(shifted_time[itime_min:itime_max], z,
+            @views phi_fit = fit_delta_phi_mode(shifted_time[itime_min:itime_max], z.grid,
                                                 delta_phi[:, itime_min:itime_max])
             ## The following plot code (copied from post_processing.jl) may be helpful for
             ## debugging tests. Uncomment to use, and also uncomment
             ## `using Plots: plot, plot!, gui at the top of the file.
-            #L = z[end] - z[begin]
+            #L = z.grid[end] - z.grid[begin]
             #fitted_delta_phi =
-            #    @. (phi_fit.amplitude0 * cos(2.0 * π * (z[iz0] + phi_fit.offset0) / L)
+            #    @. (phi_fit.amplitude0 * cos(2.0 * π * (z.grid[iz0] + phi_fit.offset0) / L)
             #        * exp(phi_fit.growth_rate * shifted_time)
             #        * cos(phi_fit.frequency * shifted_time + phi_fit.phase))
-            #@views plot(time, abs.(delta_phi[iz0,:]), xlabel="t*Lz/vti", ylabel="δϕ", yaxis=:log)
+            #@views plot(time, abs.(delta_phi[iz0,:]), xlabel="t*z.L/vti", ylabel="δϕ", yaxis=:log)
             #plot!(time, abs.(fitted_delta_phi))
             #gui()
         end
