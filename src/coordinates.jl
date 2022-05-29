@@ -7,7 +7,6 @@ export equally_spaced_grid
 
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_int
-using ..file_io: open_output_file
 using ..chebyshev: scaled_chebyshev_grid
 using ..quadrature: composite_simpson_weights
 using ..input_structs: advection_input
@@ -15,7 +14,7 @@ using ..input_structs: advection_input
 """
 structure containing basic information related to coordinates
 """
-struct coordinate{Tadvection} where Tadvection<:Union{advection_input,Nothing}
+struct coordinate{Tadvection<:Union{advection_input,Nothing}}
     # name is the name of the variable associated with this coordiante
     name::String
     # n is the total number of grid points associated with this coordinate

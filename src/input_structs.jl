@@ -92,7 +92,7 @@ end
 
 """
 """
-struct grid_input{Tadvection} where Tadvection<:Union{advection_input,Nothing}
+struct grid_input{Tadvection<:Union{advection_input,Nothing}}
     # name of the variable associated with this coordinate
     name::String
     # number of grid points per element
