@@ -127,6 +127,10 @@ function define_dimensions!(fid, nvpa, nvperp, nz, nr, n_species, n_ion_species=
     end
     # define the time dimension, with an expandable size (denoted by Inf)
     defDim(fid, "ntime", Inf)
+    # define a length-1 dimension for storing strings. Don't know why they cannot be
+    # stored as scalars, maybe did not find the right function/method, maybe a missing
+    # feature or bug in NCDatasets.jl?
+    defDim(fid, "str_dim", 1)
 
     return nothing
 end
@@ -172,7 +176,7 @@ function define_static_variables!(fid,vpa,vperp,z,r,composition,collisions,evolv
         # create and write discretization for coord
         varname = "$(coord.name)_discretization"
         attributes = Dict("description" => "discretization for $(coord.name) coordinate")
-        dims = ()
+        dims = ("str_dim",)
         vartype = String
         var = defVar(fid, varname, vartype, dims, attrib=attributes)
         var[:] = coord.discretization
@@ -180,7 +184,7 @@ function define_static_variables!(fid,vpa,vperp,z,r,composition,collisions,evolv
         # create and write fd_option for coord
         varname = "$(coord.name)_fd_option"
         attributes = Dict("description" => "fd_option for $(coord.name) coordinate")
-        dims = ()
+        dims = ("str_dim",)
         vartype = String
         var = defVar(fid, varname, vartype, dims, attrib=attributes)
         var[:] = coord.fd_option
@@ -188,7 +192,7 @@ function define_static_variables!(fid,vpa,vperp,z,r,composition,collisions,evolv
         # create and write bc for coord
         varname = "$(coord.name)_bc"
         attributes = Dict("description" => "bc for $(coord.name) coordinate")
-        dims = ()
+        dims = ("str_dim",)
         vartype = String
         var = defVar(fid, varname, vartype, dims, attrib=attributes)
         var[:] = coord.bc

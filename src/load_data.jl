@@ -52,13 +52,13 @@ function load_coordinate_data(fid)
         nelement = cdfvar.var[:]
 
         cdfvar = fid["$(name)_discretization"]
-        discretization = cdfvar.var[:]
+        discretization = cdfvar.var[1]
 
         cdfvar = fid["$(name)_fd_option"]
-        fd_option = cdfvar.var[:]
+        fd_option = cdfvar.var[1]
 
         cdfvar = fid["$(name)_bc"]
-        bc = cdfvar.var[:]
+        bc = cdfvar.var[1]
 
         input = grid_input(name, ngrid, nelement, L, discretization, fd_option, bc, nothing)
 
