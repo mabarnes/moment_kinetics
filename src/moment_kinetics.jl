@@ -178,7 +178,7 @@ function setup_moment_kinetics(input_dict::Dict)
 
     begin_s_r_z_vperp_region()
 
-    return pdf, scratch, code_time, t_input, vpa, vperp, z, r,
+    return pdf, scratch, code_time, t_input, vz, vr, vzeta, vpa, vperp, z, r,
            vpa_spectral, vperp_spectral, z_spectral, r_spectral, 
            moments, fields, 
            vpa_advect, vperp_advect, z_advect, r_advect, 

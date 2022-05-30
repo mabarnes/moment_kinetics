@@ -126,17 +126,14 @@ end
 NB: if this function is called and if dens_updated is false, then
 the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
 """
-function update_density!(dens, dens_updated, pdf, vpa, vperp, z, r, composition)
+function update_density!(dens, pdf, vpa, vperp, z, r, composition)
     
     begin_s_r_z_region()
     
     n_species = size(pdf,5)
     @boundscheck n_species == size(dens,3) || throw(BoundsError(dens))
     @loop_s is begin
-        if dens_updated[is] == false
-            @views update_density_species!(dens[:,:,is], pdf[:,:,:,:,is], vpa, vperp, z, r)
-            dens_updated[is] = true
-        end
+        @views update_density_species!(dens[:,:,is], pdf[:,:,:,:,is], vpa, vperp, z, r)
     end
 end
 
@@ -161,17 +158,14 @@ end
 NB: if this function is called and if upar_updated is false, then
 the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
 """
-function update_upar!(upar, upar_updated, pdf, vpa, vperp, z, r, composition)
+function update_upar!(upar, pdf, vpa, vperp, z, r, composition)
     
     begin_s_r_z_region()
     
     n_species = size(pdf,5)
     @boundscheck n_species == size(upar,3) || throw(BoundsError(upar))
     @loop_s is begin
-        if upar_updated[is] == false
-            @views update_upar_species!(upar[:,:,is], pdf[:,:,:,:,is], vpa, vperp, z, r)
-            upar_updated[is] = true
-        end
+        @views update_upar_species!(upar[:,:,is], pdf[:,:,:,:,is], vpa, vperp, z, r)
     end
 end
 
@@ -196,7 +190,7 @@ end
 NB: if this function is called and if ppar_updated is false, then
 the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
 """
-function update_ppar!(ppar, ppar_updated, pdf, vpa, vperp, z, r, composition)
+function update_ppar!(ppar, pdf, vpa, vperp, z, r, composition)
     @boundscheck composition.n_species == size(ppar,3) || throw(BoundsError(ppar))
     @boundscheck r.n == size(ppar,2) || throw(BoundsError(ppar))
     @boundscheck z.n == size(ppar,1) || throw(BoundsError(ppar))
@@ -204,10 +198,7 @@ function update_ppar!(ppar, ppar_updated, pdf, vpa, vperp, z, r, composition)
     begin_s_r_z_region()
     
     @loop_s is begin
-        if ppar_updated[is] == false
-            @views update_ppar_species!(ppar[:,:,is], pdf[:,:,:,:,is], vpa, vperp, z, r)
-            ppar_updated[is] = true
-        end
+        @views update_ppar_species!(ppar[:,:,is], pdf[:,:,:,:,is], vpa, vperp, z, r)
     end
 end
 
