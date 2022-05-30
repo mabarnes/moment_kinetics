@@ -133,16 +133,42 @@ end
 Increase resolution of simulation by multiplying the numbers of elements `*_nelement` in
 the `input` settings by `factor`.
 """
-function increase_resolution(input::Dict, factor)
+function increase_resolution(input::Dict, nelement)
     result = copy(input)
-    result["run_name"] = input["run_name"] * "_$factor"
+    result["run_name"] = input["run_name"] * "_$nelement"
     for key ∈ keys(result)
         if occursin("_nelement", key)
-            result[key] *= factor
+            result[key] = nelement
         end
     end
 
     return result
+end
+
+"""
+    get_and_check_ngrid(input::Dict)
+
+Get value of `ngrid` and check that it is the same for all dimensions. `ngrid` needs to
+be the same as it sets the convergence order, and we want this to be the same for all
+operators.
+"""
+function get_and_check_ngrid(input::Dict)::mk_int
+    ngrid = nothing
+
+    for key ∈ keys(input)
+        if occursin("_ngrid", key)
+            if ngrid === nothing
+                ngrid = input[key]
+            else
+                if ngrid != input[key]
+                    error("*_ngrid should all be the same, but $key=$(input[key]) when "
+                          * "we already found ngrid=$ngrid")
+                end
+            end
+        end
+    end
+
+    return ngrid
 end
 
 """
@@ -178,6 +204,8 @@ function testconvergence(input::Dict)
     f_errors_2 = Vector{mk_float}(undef, 0)
     f_errors_inf = Vector{mk_float}(undef, 0)
 
+    ngrid = get_and_check_ngrid(input)
+
     nelement_values = [2, 3, 4]
     for nelement ∈ nelement_values
         global_rank[] == 0 && println("testing nelement=$nelement")
@@ -203,6 +231,7 @@ function testconvergence(input::Dict)
         phi_convergence_inf = phi_errors_inf[1] ./ phi_errors_inf[2:end]
         f_convergence_2 = f_errors_2[1] ./ f_errors_2[2:end]
         f_convergence_inf = f_errors_inf[1] ./ f_errors_inf[2:end]
+        expected_convergence = @. (nelement_values[2:end] / nelement_values[1])^(ngrid - 1)
         println("n convergence")
         println(n_convergence_2)
         println(n_convergence_inf)
@@ -212,6 +241,8 @@ function testconvergence(input::Dict)
         println("f convergence")
         println(f_convergence_2)
         println(f_convergence_inf)
+        println("expected convergence")
+        println(expected_convergence)
     end
 end
 
