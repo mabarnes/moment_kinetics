@@ -22,7 +22,8 @@ struct ios
     #ff::IOStream
     # corresponds to the ascii file to which velocity space moments of the
     # distribution function such as density and pressure are written
-    moments::IOStream
+    moments_charged::IOStream
+    moments_neutral::IOStream
     # corresponds to the ascii file to which electromagnetic fields
     # such as the electrostatic potential are written
     fields::IOStream
@@ -55,26 +56,32 @@ struct netcdf_info
     fid::NCDataset
     # handle for the time variable
     time::nc_var_type{1}
-    # handle for the distribution function variable
+    # handle for the charged species distribution function variable
     f::nc_var_type{6}
     # handle for the electrostatic potential variable
     phi::nc_var_type{3}
-    # handle for the species density
+    # handle for the charged species density
     density::nc_var_type{4}
-    # handle for the species parallel flow
+    # handle for the charged species parallel flow
     parallel_flow::nc_var_type{4}
-    # handle for the species parallel pressure
+    # handle for the charged species parallel pressure
     parallel_pressure::nc_var_type{4}
-    # handle for the species parallel heat flux
+    # handle for the charged species parallel heat flux
     parallel_heat_flux::nc_var_type{4}
-    # handle for the species thermal speed
+    # handle for the charged species thermal speed
     thermal_speed::nc_var_type{4}
+    
+    # handle for the neutral species distribution function variable
+    f_neutral::nc_var_type{7}
+    # handle for the neutral species density
+    density_neutral::nc_var_type{4}
+
 end
 
 """
 open the necessary output files
 """
-function setup_file_io(output_dir, run_name, vpa, vperp, z, r, composition, collisions)
+function setup_file_io(output_dir, run_name, vz, vr, vzeta, vpa, vperp, z, r, composition, collisions)
     begin_serial_region()
     @serial_region begin
         # Only read/write from first process in each 'block'
@@ -84,11 +91,12 @@ function setup_file_io(output_dir, run_name, vpa, vperp, z, r, composition, coll
         isdir(output_dir) || mkdir(output_dir)
         out_prefix = string(output_dir, "/", run_name)
         #ff_io = open_output_file(out_prefix, "f_vs_t")
-        mom_io = open_output_file(out_prefix, "moments_vs_t")
+        mom_chrg_io = open_output_file(out_prefix, "moments_charged_vs_t")
+        mom_ntrl_io = open_output_file(out_prefix, "moments_neutral_vs_t")
         fields_io = open_output_file(out_prefix, "fields_vs_t")
-        cdf = setup_netcdf_io(out_prefix, r, z, vperp, vpa, composition, collisions)
+        cdf = setup_netcdf_io(out_prefix, r, z, vperp, vpa, vzeta, vr, vz, composition, collisions)
         #return ios(ff_io, mom_io, fields_io), cdf
-        return ios(mom_io, fields_io), cdf
+        return ios(mom_chrg_io, mom_ntrl_io, fields_io), cdf
     end
     # For other processes in the block, return (nothing, nothing)
     return nothing, nothing
@@ -97,13 +105,19 @@ end
 # Define the steps for creating a NetCDF file in utility functions so that they can be
 # shared between `setup_netcdf_io()` and `debug_dump()`
 """
-    define_dimensions!(fid, nvpa, nvperp, nz, nr, n_species, n_ion_species=nothing,
+    define_dimensions!(fid, nvz, nvr, nvzeta, nvpa, nvperp, nz, nr, n_species, n_ion_species=nothing,
                        n_neutral_species=nothing)
 
 Define dimensions for an output file.
 """
-function define_dimensions!(fid, nvpa, nvperp, nz, nr, n_species, n_ion_species=nothing,
-                            n_neutral_species=nothing)
+function define_dimensions!(fid, nvz, nvr, nvzeta, nvpa, nvperp, nz, nr, n_species,
+            n_ion_species=nothing, n_neutral_species=nothing)
+    # define the vz dimension
+    defDim(fid, "nvz", nvz)
+    # define the vr dimension
+    defDim(fid, "nvr", nvr)
+    # define the vzeta dimension
+    defDim(fid, "nvzeta", nvzeta)
     # define the vpa dimension
     defDim(fid, "nvpa", nvpa)
     # define the vperp dimension
@@ -129,11 +143,11 @@ function define_dimensions!(fid, nvpa, nvperp, nz, nr, n_species, n_ion_species=
 end
 
 """
-    define_static_variables!(vpa,vperp,z,r,composition,collisions,evolve_ppar)
+    define_static_variables!(vz,vr,vzeta,vpa,vperp,z,r,composition,collisions,evolve_ppar)
 
 Define static (i.e. time-independent) variables for an output file.
 """
-function define_static_variables!(fid,vpa,vperp,z,r,composition,collisions)
+function define_static_variables!(fid,vz,vr,vzeta,vpa,vperp,z,r,composition,collisions)
     # create and write the "r" variable to file
     varname = "r"
     attributes = Dict("description" => "radial coordinate")
@@ -186,6 +200,45 @@ function define_static_variables!(fid,vpa,vperp,z,r,composition,collisions)
     vartype = mk_float
     var = defVar(fid, varname, vartype, dims, attrib=attributes)
     var[:] = vpa.wgts
+    # create and write the "vzeta" variable to file
+    varname = "vzeta"
+    attributes = Dict("description" => "parallel velocity")
+    dims = ("nvzeta",)
+    vartype = mk_float
+    var = defVar(fid, varname, vartype, dims, attrib=attributes)
+    var[:] = vzeta.grid
+    # create and write the "vzeta_wgts" variable to file
+    varname = "vzeta_wgts"
+    attributes = Dict("description" => "integration weights for parallel velocity coordinate")
+    vartype = mk_float
+    var = defVar(fid, varname, vartype, dims, attrib=attributes)
+    var[:] = vzeta.wgts
+    # create and write the "vr" variable to file
+    varname = "vr"
+    attributes = Dict("description" => "parallel velocity")
+    dims = ("nvr",)
+    vartype = mk_float
+    var = defVar(fid, varname, vartype, dims, attrib=attributes)
+    var[:] = vr.grid
+    # create and write the "vr_wgts" variable to file
+    varname = "vr_wgts"
+    attributes = Dict("description" => "integration weights for parallel velocity coordinate")
+    vartype = mk_float
+    var = defVar(fid, varname, vartype, dims, attrib=attributes)
+    var[:] = vr.wgts
+    # create and write the "vz" variable to file
+    varname = "vz"
+    attributes = Dict("description" => "parallel velocity")
+    dims = ("nvz",)
+    vartype = mk_float
+    var = defVar(fid, varname, vartype, dims, attrib=attributes)
+    var[:] = vz.grid
+    # create and write the "vz_wgts" variable to file
+    varname = "vz_wgts"
+    attributes = Dict("description" => "integration weights for parallel velocity coordinate")
+    vartype = mk_float
+    var = defVar(fid, varname, vartype, dims, attrib=attributes)
+    var[:] = vz.wgts
     # create and write the "T_e" variable to file
     varname = "T_e"
     attributes = Dict("description" => "electron temperature")
@@ -218,9 +271,9 @@ function define_dynamic_variables!(fid)
     cdf_time = defVar(fid, varname, vartype, dims, attrib=attributes)
     # create the "f" variable
     varname = "f"
-    attributes = Dict("description" => "distribution function")
+    attributes = Dict("description" => "charged species distribution function")
     vartype = mk_float
-    dims = ("nvpa","nvperp","nz","nr","n_species","ntime")
+    dims = ("nvpa","nvperp","nz","nr","n_ion_species","ntime")
     cdf_f = defVar(fid, varname, vartype, dims, attrib=attributes)
     # create variables that are floats with data in the z and time dimensions
     vartype = mk_float
@@ -230,42 +283,57 @@ function define_dynamic_variables!(fid)
     attributes = Dict("description" => "electrostatic potential",
                       "units" => "Te/e")
     cdf_phi = defVar(fid, varname, vartype, dims, attrib=attributes)
-    # create variables that are floats with data in the z, species and time dimensions
+    # create variables that are floats with data in the z, ion species and time dimensions
     vartype = mk_float
-    dims = ("nz","nr","n_species","ntime")
-    # create the "density" variable, which will contain the species densities
+    dims = ("nz","nr","n_ion_species","ntime")
+    # create the "density" variable, which will contain the charged species densities
     varname = "density"
-    attributes = Dict("description" => "species density",
+    attributes = Dict("description" => "charged species density",
                       "units" => "Ne")
     cdf_density = defVar(fid, varname, vartype, dims, attrib=attributes)
-    # create the "parallel_flow" variable, which will contain the species parallel flows
+    # create the "parallel_flow" variable, which will contain the charged species parallel flows
     varname = "parallel_flow"
-    attributes = Dict("description" => "species parallel flow",
+    attributes = Dict("description" => "charged species parallel flow",
                       "units" => "sqrt(2*Te/ms)")
     cdf_upar = defVar(fid, varname, vartype, dims, attrib=attributes)
-    # create the "parallel_pressure" variable, which will contain the species parallel pressures
+    # create the "parallel_pressure" variable, which will contain the charged species parallel pressures
     varname = "parallel_pressure"
-    attributes = Dict("description" => "species parallel pressure",
+    attributes = Dict("description" => "charged species parallel pressure",
                       "units" => "Ne*Te")
     cdf_ppar = defVar(fid, varname, vartype, dims, attrib=attributes)
-    # create the "parallel_heat_flux" variable, which will contain the species parallel heat fluxes
+    # create the "parallel_heat_flux" variable, which will contain the charged species parallel heat fluxes
     varname = "parallel_heat_flux"
-    attributes = Dict("description" => "species parallel heat flux",
+    attributes = Dict("description" => "charged species parallel heat flux",
                       "units" => "Ne*Te*vth")
     cdf_qpar = defVar(fid, varname, vartype, dims, attrib=attributes)
-    # create the "thermal_speed" variable, which will contain the species thermal speed
+    # create the "thermal_speed" variable, which will contain the charged  species thermal speed
     varname = "thermal_speed"
-    attributes = Dict("description" => "species thermal speed",
+    attributes = Dict("description" => "charged species thermal speed",
                       "units" => "vth")
     cdf_vth = defVar(fid, varname, vartype, dims, attrib=attributes)
-
-    return cdf_time, cdf_f, cdf_phi, cdf_density, cdf_upar, cdf_ppar, cdf_qpar, cdf_vth
+    
+    # create variables that are floats with data in the z, neutral species and time dimensions
+    # create the "f_neutral" variable
+    varname = "f_neutral"
+    attributes = Dict("description" => "neutral species distribution function")
+    vartype = mk_float
+    dims = ("nvz","nvr","nvzeta","nz","nr","n_neutral_species","ntime")
+    cdf_f_neutral = defVar(fid, varname, vartype, dims, attrib=attributes)
+    # create the "density_neutral" variable, which will contain the neutral species densities
+    varname = "density_neutral"
+    dims = ("nz","nr","n_neutral_species","ntime")
+    attributes = Dict("description" => "neutral species density",
+                      "units" => "Ne")
+    cdf_density_neutral = defVar(fid, varname, vartype, dims, attrib=attributes)
+    
+    
+    return cdf_time, cdf_f, cdf_phi, cdf_density, cdf_upar, cdf_ppar, cdf_qpar, cdf_vth, cdf_f_neutral, cdf_density_neutral
 end
 
 """
 setup file i/o for netcdf
 """
-function setup_netcdf_io(prefix, r, z, vperp, vpa, composition, collisions)
+function setup_netcdf_io(prefix, r, z, vperp, vpa, vzeta, vr, vz, composition, collisions)
     # the netcdf file will be given by output_dir/run_name with .cdf appended
     filename = string(prefix,".cdf")
     # if a netcdf file with the requested name already exists, remove it
@@ -275,19 +343,19 @@ function setup_netcdf_io(prefix, r, z, vperp, vpa, composition, collisions)
     # write a header to the NetCDF file
     fid.attrib["file_info"] = "This is a NetCDF file containing output data from the moment_kinetics code"
     ### define coordinate dimensions ###
-    define_dimensions!(fid, vpa.n, vperp.n, z.n, r.n, composition.n_species,
+    define_dimensions!(fid, vz.n, vr.n, vzeta.n, vpa.n, vperp.n, z.n, r.n, composition.n_species,
                        composition.n_ion_species, composition.n_neutral_species)
     ### create and write static variables to file ###
-    define_static_variables!(fid,vpa,vperp,z,r,composition,collisions)
+    define_static_variables!(fid,vz,vr,vzeta,vpa,vperp,z,r,composition,collisions)
     ### create variables for time-dependent quantities and store them ###
     ### in a struct for later access ###
-    cdf_time, cdf_f, cdf_phi, cdf_density, cdf_upar, cdf_ppar, cdf_qpar, cdf_vth =
+    cdf_time, cdf_f, cdf_phi, cdf_density, cdf_upar, cdf_ppar, cdf_qpar, cdf_vth, cdf_f_neutral, cdf_density_neutral =
         define_dynamic_variables!(fid)
 
     # create a struct that stores the variables and other info needed for
     # writing to the netcdf file during run-time
     return netcdf_info(fid, cdf_time, cdf_f, cdf_phi, cdf_density, cdf_upar,
-                       cdf_ppar, cdf_qpar, cdf_vth)
+                       cdf_ppar, cdf_qpar, cdf_vth, cdf_f_neutral, cdf_density_neutral)
 end
 
 """
@@ -309,12 +377,15 @@ end
 
 """
 """
-function write_data_to_ascii(ff, moments, fields, vpa, vperp, z, r, t, n_species, io)
+function write_data_to_ascii(moments, fields, vpa, vperp, z, r, t, n_ion_species, n_neutral_species, io)
     @serial_region begin
         # Only read/write from first process in each 'block'
 
         #write_f_ascii(ff, z, vpa, t, io.ff)
-        write_moments_ascii(moments, z, r, t, n_species, io.moments)
+        write_moments_charged_ascii(moments.charged, z, r, t, n_ion_species, io.moments_charged)
+        if n_neutral_species > 0
+            write_moments_neutral_ascii(moments.neutral, z, r, t, n_neutral_species, io.moments_neutral)
+        end
         write_fields_ascii(fields, z, r, t, io.fields)
     end
     return nothing
@@ -346,9 +417,9 @@ function write_f_ascii(f, z, vpa, t, io)
 end
 
 """
-write moments of the distribution function f(z,vpa) at this time slice
+write moments of the charged species distribution function f at this time slice
 """
-function write_moments_ascii(mom, z, r, t, n_species, io)
+function write_moments_charged_ascii(mom, z, r, t, n_species, io)
     @serial_region begin
         # Only read/write from first process in each 'block'
 
@@ -359,6 +430,29 @@ function write_moments_ascii(mom, z, r, t, n_species, io)
                         println(io,"t: ", t, "   species: ", is, "   r: ", r.grid[ir], "   z: ", z.grid[iz],
                             "  dens: ", mom.dens[iz,ir,is], "   upar: ", mom.upar[iz,ir,is],
                             "   ppar: ", mom.ppar[iz,ir,is], "   qpar: ", mom.qpar[iz,ir,is])
+                    end
+                end
+            end
+        end
+        println(io,"")
+    end
+    return nothing
+end
+
+"""
+write moments of the neutral species distribution function f_neutral at this time slice
+"""
+function write_moments_neutral_ascii(mom, z, r, t, n_species, io)
+    @serial_region begin
+        # Only read/write from first process in each 'block'
+
+        @inbounds begin
+            for is ∈ 1:n_species
+                for ir ∈ 1:r.n
+                    for iz ∈ 1:z.n
+                        println(io,"t: ", t, "   species: ", is, "   r: ", r.grid[ir], "   z: ", z.grid[iz],
+                            "  dens: ", mom.dens[iz,ir,is], "   uz: ", mom.uz[iz,ir,is],
+                            "   ur: ", mom.ur[iz,ir,is], "   uzeta: ", mom.uzeta[iz,ir,is])
                     end
                 end
             end
@@ -390,7 +484,7 @@ end
 """
 write time-dependent data to the netcdf file
 """
-function write_data_to_binary(ff, moments, fields, t, n_species, cdf, t_idx)
+function write_data_to_binary(ff, ff_neutral, moments, fields, t, n_ion_species, n_neutral_species, cdf, t_idx)
     @serial_region begin
         # Only read/write from first process in each 'block'
 
@@ -401,12 +495,18 @@ function write_data_to_binary(ff, moments, fields, t, n_species, cdf, t_idx)
         # add the electrostatic potential data at this time slice to the netcdf file
         cdf.phi[:,:,t_idx] = fields.phi
         # add the density data at this time slice to the netcdf file
-        for is ∈ 1:n_species
-            cdf.density[:,:,:,t_idx] = moments.dens
-            cdf.parallel_flow[:,:,:,t_idx] = moments.upar
-            cdf.parallel_pressure[:,:,:,t_idx] = moments.ppar
-            cdf.parallel_heat_flux[:,:,:,t_idx] = moments.qpar
-            cdf.thermal_speed[:,:,:,t_idx] = moments.vth
+        for is ∈ 1:n_ion_species
+            cdf.density[:,:,:,t_idx] = moments.charged.dens
+            cdf.parallel_flow[:,:,:,t_idx] = moments.charged.upar
+            cdf.parallel_pressure[:,:,:,t_idx] = moments.charged.ppar
+            cdf.parallel_heat_flux[:,:,:,t_idx] = moments.charged.qpar
+            cdf.thermal_speed[:,:,:,t_idx] = moments.charged.vth
+        end
+        if n_neutral_species > 0
+            cdf.f_neutral[:,:,:,:,:,:,t_idx] = ff_neutral
+            for is ∈ 1:n_neutral_species
+                cdf.density_neutral[:,:,:,t_idx] = moments.neutral.dens
+            end
         end
     end
     return nothing
