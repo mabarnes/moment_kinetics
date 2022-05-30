@@ -178,9 +178,10 @@ function testconvergence(input::Dict)
     f_errors_2 = Vector{mk_float}(undef, 0)
     f_errors_inf = Vector{mk_float}(undef, 0)
 
-    for resolution_factor ∈ [1, 2, 3]
-        global_rank[] == 0 && println("testing $(resolution_factor)x")
-        case_input = increase_resolution(input, resolution_factor)
+    nelement_values = [2, 3, 4]
+    for nelement ∈ nelement_values
+        global_rank[] == 0 && println("testing nelement=$nelement")
+        case_input = increase_resolution(input, nelement)
 
         n_error_2, n_error_inf, phi_error_2, phi_error_inf, f_error_2,
         f_error_inf = runcase(case_input)
