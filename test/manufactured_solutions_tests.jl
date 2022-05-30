@@ -132,6 +132,7 @@ the `input` settings by `factor`.
 """
 function increase_resolution(input::Dict, factor)
     result = copy(input)
+    result["run_name"] = input["run_name"] * "_$factor"
     for key ∈ keys(result)
         if occursin("_nelement", key)
             result[key] *= factor
