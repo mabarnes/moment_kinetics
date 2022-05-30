@@ -62,7 +62,7 @@ Calculate the L2 norm of the error between a and b: sqrt(mean((a-b)^2))
 """
 function L2_error_norm(a, b)
     @assert size(a) == size(b)
-    error = @. (a-b) / abs(a)
+    error = @. (a-b)
     return sqrt(mean(error.^2))
 end
 
@@ -73,7 +73,7 @@ Calculate the L_infinity norm of the error between a and b: maximum(|a-b|)
 """
 function L_infinity_error_norm(a, b)
     @assert size(a) == size(b)
-    error = @. (a-b) / abs(a)
+    error = @. (a-b)
     return maximum(abs.(error))
 end
 
