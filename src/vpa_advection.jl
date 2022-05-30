@@ -52,7 +52,7 @@ function update_speed_vpa!(advect, fields, vpa, vperp, z, r, composition, CX_fre
     @boundscheck z.n == size(advect[1].speed,3) || throw(BoundsError(advect))
     @boundscheck vperp.n == size(advect[1].speed,2) || throw(BoundsError(advect))
     #@boundscheck composition.n_ion_species == size(advect,2) || throw(BoundsError(advect))
-    @boundscheck composition.n_species == size(advect,1) || throw(BoundsError(advect))
+    @boundscheck composition.n_ion_species == size(advect,1) || throw(BoundsError(advect))
     @boundscheck vpa.n == size(advect[1].speed,1) || throw(BoundsError(speed))
     if vpa.advection.option == "default"
         # dvpa/dt = Ze/m ⋅ E_parallel
@@ -81,10 +81,6 @@ function update_speed_vpa!(advect, fields, vpa, vperp, z, r, composition, CX_fre
         block_sychronize()
     end
     @loop_s is begin
-        if is in composition.neutral_species_range
-            # No acceleration for neutrals
-            continue
-        end
         @loop_r_z_vperp ir iz ivperp begin
             @views @. advect[is].modified_speed[:,ivperp,iz,ir] = advect[is].speed[:,ivperp,iz,ir]
         end
@@ -98,10 +94,11 @@ function update_speed_default!(advect, fields, vpa, vperp, z, r, composition, CX
     kpar = geometry.Bzed/geometry.Bmag
     @inbounds @fastmath begin
         @loop_s is begin
-            if is in composition.neutral_species_range
+            #if is in composition.neutral_species_range
                 # No acceleration for neutrals
-                continue
-            end
+            #    continue
+            #end
+            # Neutrals hardcoded to have no vpa_advection as vpa not a neutral coordinate
             @loop_r ir begin
                 # kpar = Bzed/Bmag
                 @loop_z_vperp iz ivperp begin
