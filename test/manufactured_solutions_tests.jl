@@ -84,28 +84,42 @@ function runcase(input::Dict)
         run_moment_kinetics(input)
     end
 
-    output = load_test_output(input, (:phi, :moments, :f))
+    n_error_2 = nothing
+    n_error_inf = nothing
+    phi_error_2 = nothing
+    phi_error_inf = nothing
+    f_error_2 = nothing
+    f_error_inf = nothing
+    if global_rank[] == 0
+        output = load_test_output(input, (:phi, :moments, :f))
 
-    t = output["time"][end]
-    n = output["density"][:,:,1,end]
-    phi = output["phi"][:,:,1,end]
-    f = output["f"][:,:,:,:,1,end]
+        t = output["time"][end]
+        n = output["density"][:,:,1,end]
+        phi = output["phi"][:,:,end]
+        f = output["f"][:,:,:,:,1,end]
+        f0 = f[size(f,1)÷2, 1, :, :]
 
-    n_manf, phi_manf, f_manf = manufactured_solutions_as_arrays(t, output["r"],
-                                   output["z"], output["vperp"], output["vpa"])
+        n_manf, phi_manf, f_manf = manufactured_solutions_as_arrays(t, output["r"],
+                                       output["z"], output["vperp"], output["vpa"])
+        f0_manf = f_manf[size(f,1)÷2, 1, :, :]
 
-    n_error_2 = L2_error_norm(n, n_manf)
-    n_error_inf = L_infinity_error_norm(n, n_manf)
+        n_error_2 = L2_error_norm(n, n_manf)
+        n_error_inf = L_infinity_error_norm(n, n_manf)
 
-    phi_error_2 = L2_error_norm(phi, phi_manf)
-    phi_error_inf = L_infinity_error_norm(phi, phi_manf)
+        phi_error_2 = L2_error_norm(phi, phi_manf)
+        phi_error_inf = L_infinity_error_norm(phi, phi_manf)
 
-    f_error_2 = L2_error_norm(f, f_manf)
-    f_error_inf = L_infinity_error_norm(f, f_manf)
+        f_error_2 = L2_error_norm(f, f_manf)
+        f_error_inf = L_infinity_error_norm(f, f_manf)
 
-    println("n ", n_error_2, " ", n_error_inf)
-    println("phi ", phi_error_2, " ", phi_error_inf)
-    println("f ", f_error_2, " ", f_error_inf)
+        f0_error_2 = L2_error_norm(f0, f0_manf)
+        f0_error_inf = L_infinity_error_norm(f0, f0_manf)
+
+        println("n ", n_error_2, " ", n_error_inf)
+        println("phi ", phi_error_2, " ", phi_error_inf)
+        println("f ", f_error_2, " ", f_error_inf)
+        println("f0 ", f0_error_2, " ", f0_error_inf)
+    end
 
     return n_error_2, n_error_inf, phi_error_2, phi_error_inf, f_error_2, f_error_inf
 end
@@ -160,25 +174,45 @@ function testconvergence(input::Dict)
     f_errors_2 = Vector{mk_float}(undef, 0)
     f_errors_inf = Vector{mk_float}(undef, 0)
 
-    for resolution_factor ∈ [1, 2, 4]
-        println("testing $(resolution_factor)x")
+    for resolution_factor ∈ [1, 2, 3]
+        global_rank[] == 0 && println("testing $(resolution_factor)x")
         case_input = increase_resolution(input, resolution_factor)
 
         n_error_2, n_error_inf, phi_error_2, phi_error_inf, f_error_2,
         f_error_inf = runcase(case_input)
 
-        push!(n_errors_2, n_error_2)
-        push!(n_errors_inf, n_error_inf)
-        push!(phi_errors_2, phi_error_2)
-        push!(phi_errors_inf, phi_error_inf)
-        push!(f_errors_2, f_error_2)
-        push!(f_errors_inf, f_error_inf)
+        if global_rank[] == 0
+            push!(n_errors_2, n_error_2)
+            push!(n_errors_inf, n_error_inf)
+            push!(phi_errors_2, phi_error_2)
+            push!(phi_errors_inf, phi_error_inf)
+            push!(f_errors_2, f_error_2)
+            push!(f_errors_inf, f_error_inf)
+        end
+    end
+
+    if global_rank[] == 0
+        n_convergence_2 = n_errors_2[1] ./ n_errors_2[2:end]
+        n_convergence_inf = n_errors_inf[1] ./ n_errors_inf[2:end]
+        phi_convergence_2 = phi_errors_2[1] ./ phi_errors_2[2:end]
+        phi_convergence_inf = phi_errors_inf[1] ./ phi_errors_inf[2:end]
+        f_convergence_2 = f_errors_2[1] ./ f_errors_2[2:end]
+        f_convergence_inf = f_errors_inf[1] ./ f_errors_inf[2:end]
+        println("n convergence")
+        println(n_convergence_2)
+        println(n_convergence_inf)
+        println("phi convergence")
+        println(phi_convergence_2)
+        println(phi_convergence_inf)
+        println("f convergence")
+        println(f_convergence_2)
+        println(f_convergence_inf)
     end
 end
 
 function runtests()
     @testset "MMS" verbose=use_verbose begin
-        println("MMS tests")
+        global_rank[] == 0 && println("MMS tests")
 
         @testset "r-periodic, z-periodic" begin
             testconvergence(input_sound_wave_periodic)
