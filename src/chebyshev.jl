@@ -322,7 +322,7 @@ with all grid points for Clenshaw-Curtis quadrature
 """
 function clenshaw_curtis_weights(ngrid, nelement, n, imin, imax, scale_factor)
     # create array containing the integration weights
-    wgts = zeros(n)
+    wgts = zeros(mk_float, n)
     # calculate the modified Chebshev moments of the first kind
     μ = chebyshevmoments(ngrid)
     @inbounds begin
