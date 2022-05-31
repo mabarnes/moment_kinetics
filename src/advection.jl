@@ -180,24 +180,17 @@ do all the work needed to update f(coord) at a single value of other coords
 function advance_f_local!(f_new, f_current, advection, i_outer, j_outer, k_outer, coord, dt, spectral)
     # update the rhs of the equation accounting for 1d advection in coord
     update_rhs!(advection, i_outer, j_outer, k_outer, f_current, coord, dt, spectral)
-    # update ff at time level n+1 using an explicit Runge-Kutta method
-    # along approximate characteristics
-    @views update_f!(f_new, advection.rhs[:,i_outer,j_outer,k_outer],
-                     advection.upwind_idx[i_outer,j_outer,k_outer],
-                     advection.downwind_idx[i_outer,j_outer,k_outer],
-                     advection.upwind_increment[i_outer,j_outer,k_outer], coord.n)
+    # update f to take into account the explicit advection
+    @views update_f!(f_new, advection.rhs[:,i_outer,j_outer,k_outer], coord.n)
 end
 
 """
-update ff at time level n+1 using an explicit Runge-Kutta method
-along approximate characteristics
 """
-function update_f!(f_new, rhs, up_idx, down_idx, up_incr, n)
+function update_f!(f_new, rhs, n)
     @boundscheck n == length(f_new) || throw(BoundsError(f_new))
     @boundscheck n == length(rhs) || throw(BoundsError(rhs))
     
-    #@inbounds for i ∈ up_idx:-up_incr:down_idx
-    for i ∈ up_idx:-up_incr:down_idx
+    for i ∈ 1:n
         f_new[i] += rhs[i]
     end
     return nothing
