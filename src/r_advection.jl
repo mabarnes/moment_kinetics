@@ -12,14 +12,14 @@ using ..looping
 """
 do a single stage time advance (potentially as part of a multi-stage RK scheme)
 """
-function r_advection!(f_out, fvec_in, ff, fields, moments, SL, advect, r, z, vperp, vpa, 
-                      use_semi_lagrange, dt, t, r_spectral, composition, geometry, istage)
+function r_advection!(f_out, fvec_in, fields, advect, r, z, vperp, vpa, 
+                      dt, r_spectral, composition, geometry)
     
     begin_s_z_vperp_vpa_region()
     
     @loop_s is begin
         # get the updated speed along the r direction using the current f
-        @views update_speed_r!(advect[is], fields, vpa, vperp, z, r, t, geometry)
+        @views update_speed_r!(advect[is], fields, vpa, vperp, z, r, geometry)
         # update the upwind/downwind boundary indices and upwind_increment
         @views update_boundary_indices!(advect[is], loop_ranges[].vpa, loop_ranges[].vperp, loop_ranges[].z)
         
@@ -40,7 +40,7 @@ end
 """
 calculate the advection speed in the r-direction at each grid point
 """
-function update_speed_r!(advect, fields, vpa, vperp, z, r, t, geometry)
+function update_speed_r!(advect, fields, vpa, vperp, z, r, geometry)
     @boundscheck z.n == size(advect.speed,4) || throw(BoundsError(advect))
     @boundscheck vperp.n == size(advect.speed,3) || throw(BoundsError(advect))
     @boundscheck vpa.n == size(advect.speed,2) || throw(BoundsError(advect))
