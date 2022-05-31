@@ -22,6 +22,7 @@ using ..initial_conditions: enforce_vpa_boundary_condition!, enforce_r_boundary_
 using ..advection: setup_advection, update_boundary_indices!
 using ..z_advection: update_speed_z!, z_advection!
 using ..r_advection: update_speed_r!, r_advection!
+using ..neutral_advection: update_speed_neutral_r!, neutral_r_advection!, update_speed_neutral_z!, neutral_z_advection!
 using ..vperp_advection: update_speed_vperp!, vperp_advection!
 using ..vpa_advection: update_speed_vpa!, vpa_advection!
 using ..charge_exchange: charge_exchange_collisions!
@@ -284,6 +285,33 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     ##
     # Neutral particle advection
     ##
+    
+    # create structure neutral_r_advect for neutral particle advection
+    begin_serial_region()
+    neutral_r_advect = setup_advection(n_neutral_species, r, vz, vr, vzeta, z)
+    # initialise the r advection speed
+    begin_sn_vzeta_vr_vz_region()
+    @loop_sn isn begin
+        @views update_speed_neutral_r!(neutral_r_advect[is], r, z, vzeta, vr, vz)
+        # initialise the upwind/downwind boundary indices in z
+        update_boundary_indices!(neutral_r_advect[is], loop_ranges[].vz, loop_ranges[].vr, loop_ranges[].vzeta, loop_ranges[].z)
+    end
+    # enforce prescribed boundary condition in r on the neutral distribution function f
+    # PLACEHOLDER!! @views enforce_r_boundary_condition!(pdf.neutral.unnorm, pdf.charged.unnorm, r.bc, r_advect, r, z, vzeta, vr, vz, composition)
+    
+    # create structure neutral_z_advect for neutral particle advection
+    begin_serial_region()
+    neutral_z_advect = setup_advection(n_neutral_species, z, vz, vr, vzeta, r)
+    # initialise the z advection speed
+    begin_sn_vzeta_vr_vz_region()
+    @loop_sn isn begin
+        @views update_speed_neutral_z!(neutral_z_advect[is], r, z, vzeta, vr, vz)
+        # initialise the upwind/downwind boundary indices in z
+        update_boundary_indices!(neutral_r_advect[is], loop_ranges[].vz, loop_ranges[].vr, loop_ranges[].vzeta, loop_ranges[].r)
+    end
+    # enforce prescribed boundary condition in r on the neutral distribution function f
+    # PLACEHOLDER!! @views enforce_z_boundary_condition!(pdf.neutral.unnorm, z.bc, z_advect, r, z, vzeta, vr, vz, composition)
+    
     
     if(t_input.use_manufactured_solns)
         manufactured_source_list = (Source_i_func = manufactured_sources(r.L,z.L,r.bc,z.bc,geometry), Source_n_func = "placeholder")
