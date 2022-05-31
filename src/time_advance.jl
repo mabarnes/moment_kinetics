@@ -31,7 +31,7 @@ using ..continuity: continuity_equation!
 using ..force_balance: force_balance!
 using ..energy_equation: energy_equation!
 using ..em_fields: setup_em_fields, update_phi!
-using ..semi_lagrange: setup_semi_lagrange
+#using ..semi_lagrange: setup_semi_lagrange
 
 using ..manufactured_solns: manufactured_sources
 
@@ -259,7 +259,7 @@ function setup_time_advance!(pdf, vpa, vperp, z, r, composition, drive_input, mo
     begin_serial_region()
     @serial_region begin
         for is ∈ 1:nspec
-            @views update_speed_vperp!(vperp_advect[is], vpa, vperp, z, r, 0.0)
+            @views update_speed_vperp!(vperp_advect[is], vpa, vperp, z, r)
             # initialise the upwind/downwind boundary indices in vpa
             update_boundary_indices!(vperp_advect[is], 1:vpa.n, 1:z.n, 1:r.n)
             # enforce prescribed boundary condition in vpa on the distribution function f
@@ -267,15 +267,7 @@ function setup_time_advance!(pdf, vpa, vperp, z, r, composition, drive_input, mo
             #@views enforce_vperp_boundary_condition!(pdf.norm[:,:,:,:,is], vpa.bc, vpa_advect[is])
         end
     end
-    # create an array of structures containing the arrays needed for the semi-Lagrange
-    # solve and initialize the characteristic speed and departure indices
-    # so that the code can gracefully run without using the semi-Lagrange
-    # method if the user specifies this
-    z_SL = setup_semi_lagrange(z.n, vpa.n, vperp.n, r.n)
-    vpa_SL = setup_semi_lagrange(vpa.n, vperp.n, z.n, r.n)
-    vperp_SL = setup_semi_lagrange(vperp.n, vpa.n, z.n, r.n)
-    r_SL = setup_semi_lagrange(r.n, vpa.n, vperp.n, z.n)
-
+ 
     if(t_input.use_manufactured_solns)
         manufactured_source_list = (Source_i_func = manufactured_sources(r.L,z.L,r.bc,z.bc,geometry), Source_n_func = "placeholder")
         # possibly need to include neutral source or multiple sources for different ion/neutral species
@@ -287,7 +279,7 @@ function setup_time_advance!(pdf, vpa, vperp, z, r, composition, drive_input, mo
     _block_synchronize()
 
     return vpa_spectral, vperp_spectral, z_spectral, r_spectral, moments, fields, 
-    vpa_advect, vperp_advect, z_advect, r_advect,vpa_SL, vperp_SL, z_SL, r_SL,
+    vpa_advect, vperp_advect, z_advect, r_advect,
     scratch, advance, scratch_dummy, manufactured_source_list
 end
 
@@ -392,8 +384,7 @@ time integrator can be used without severe CFL condition
 function time_advance!(pdf, scratch, t, t_input, vpa, vperp, z, r,
     vpa_spectral, vperp_spectral, z_spectral, r_spectral,
     moments, fields, vpa_advect, vperp_advect, z_advect, r_advect,
-    vpa_SL, vperp_SL, z_SL, r_SL, composition,
-    collisions, geometry, advance, scratch_dummy, manufactured_source_list, io, cdf)
+    composition, collisions, geometry, advance, scratch_dummy, manufactured_source_list, io, cdf)
 
     @debug_detect_redundant_block_synchronize begin
         # Only want to check for redundant _block_synchronize() calls during the
@@ -408,7 +399,6 @@ function time_advance!(pdf, scratch, t, t_input, vpa, vperp, z, r,
         time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, vperp, z, r,
                 vpa_spectral, vperp_spectral, z_spectral, r_spectral,
                 moments, fields, vpa_advect, vperp_advect, z_advect, r_advect,
-                vpa_SL, vperp_SL, z_SL, r_SL,
                 composition, collisions, geometry, advance,  scratch_dummy, manufactured_source_list, i)
         # update the time
         t += t_input.dt
@@ -441,7 +431,6 @@ end
 function time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, vperp, z, r, 
     vpa_spectral, vperp_spectral, z_spectral, r_spectral,
     moments, fields, vpa_advect, vperp_advect, z_advect, r_advect,
-    vpa_SL, vperp_SL, z_SL, r_SL, 
     composition, collisions, geometry, advance, scratch_dummy, manufactured_source_list, istep)
     
     #pdf_in = pdf.unnorm #get input pdf values in case we wish to impose a constant-in-time boundary condition in r
@@ -451,10 +440,9 @@ function time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, vperp, z, r,
         ssp_rk!(pdf, scratch, t, t_input, vpa, vperp, z, r, 
             vpa_spectral, vperp_spectral, z_spectral, r_spectral,
             moments, fields, vpa_advect, vperp_advect, z_advect, r_advect,
-            vpa_SL, vperp_SL, z_SL, r_SL, composition, collisions, geometry, advance,  scratch_dummy, manufactured_source_list, istep)#pdf_in, 
+            composition, collisions, geometry, advance,  scratch_dummy, manufactured_source_list, istep)#pdf_in, 
     else
         euler_time_advance!(scratch, scratch, pdf, fields, moments,
-            vpa_SL, vperp_SL, z_SL, r_SL,
             vpa_advect, vperp_advect, z_advect, r_advect, vpa, vperp, z, r, t,
             t_input, vpa_spectral, vperp_spectral, z_spectral, r_spectral, composition,
             collisions, geometry, scratch_dummy, manufactured_source_list, advance, 1)#pdf_in, 
@@ -504,7 +492,7 @@ end
 function ssp_rk!(pdf, scratch, t, t_input, vpa, vperp, z, r, 
     vpa_spectral, vperp_spectral, z_spectral, r_spectral,
     moments, fields, vpa_advect, vperp_advect, z_advect, r_advect,
-    vpa_SL, vperp_SL, z_SL, r_SL, composition, collisions, geometry, advance, scratch_dummy, manufactured_source_list,  istep)#pdf_in,
+    composition, collisions, geometry, advance, scratch_dummy, manufactured_source_list,  istep)#pdf_in,
     
     begin_s_r_z_vperp_region()
     
@@ -525,8 +513,7 @@ function ssp_rk!(pdf, scratch, t, t_input, vpa, vperp, z, r,
         # and scratch[1] containing quantities at time level n
         update_solution_vector!(scratch, moments, istage, composition, vpa, vperp, z, r)
         # calculate f^{(1)} = fⁿ + Δt*G[fⁿ] = scratch[2].pdf
-        euler_time_advance!(scratch[istage+1], scratch[istage],
-            pdf, fields, moments, vpa_SL, vperp_SL, z_SL, r_SL,
+        euler_time_advance!(scratch[istage+1], scratch[istage], pdf, fields, moments, 
             vpa_advect, vperp_advect, z_advect, r_advect, vpa, vperp, z, r, t,
             t_input, vpa_spectral, vperp_spectral, z_spectral, r_spectral, composition,
             collisions, geometry, scratch_dummy, manufactured_source_list, advance, istage) #pdf_in,
@@ -555,7 +542,7 @@ that includes the kinetic equation + any evolved moment equations
 using the forward Euler method: fvec_out = fvec_in + dt*fvec_in,
 with fvec_in an input and fvec_out the output
 """
-function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, vperp_SL, z_SL, r_SL,
+function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, 
     vpa_advect, vperp_advect, z_advect, r_advect, vpa, vperp, z, r, t, t_input,
     vpa_spectral, vperp_spectral, z_spectral, r_spectral, composition, collisions, geometry,
     scratch_dummy, manufactured_source_list, advance, istage) #pdf_in, 
