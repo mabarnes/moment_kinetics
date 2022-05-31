@@ -5,7 +5,6 @@ module vpa_advection
 export vpa_advection!
 export update_speed_vpa!
 
-using ..semi_lagrange: find_approximate_characteristic!
 using ..advection: update_boundary_indices!
 using ..advection: advance_f_local!
 using ..communication
@@ -23,8 +22,7 @@ function vpa_advection!(f_out, fvec_in, fields, advect,
     # wpar = vpar - upar as a variable; i.e., d(wpar)/dt /=0 for neutrals even though d(vpar)/dt = 0.
 
     # calculate the advection speed corresponding to current f
-    update_speed_vpa!(advect, fields, vpa, vperp,
-    z, r, composition, geometry)
+    update_speed_vpa!(advect, fields, vpa, vperp, z, r, composition, geometry)
     @loop_s is begin
         if is in composition.neutral_species_range
             # No acceleration for neutrals
@@ -87,7 +85,7 @@ end
 
 """
 """
-function update_speed_default!(advect, fields, vpa, vperp, z, r, composition geometry)
+function update_speed_default!(advect, fields, vpa, vperp, z, r, composition, geometry)
     kpar = geometry.Bzed/geometry.Bmag
     @inbounds @fastmath begin
         @loop_s is begin

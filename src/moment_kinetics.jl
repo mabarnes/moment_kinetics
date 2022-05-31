@@ -30,7 +30,7 @@ include("em_fields.jl")
 include("bgk.jl")
 include("manufactured_solns.jl") # MRH Here?
 include("initial_conditions.jl")
-include("semi_lagrange.jl")
+#include("semi_lagrange.jl")
 include("advection.jl")
 include("vpa_advection.jl")
 include("z_advection.jl")
@@ -166,7 +166,7 @@ function setup_moment_kinetics(input_dict::Dict)
     # the main time advance loop -- including normalisation of f by density if requested
     vz_spectral, vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral, z_spectral, r_spectral, moments, fields, 
     vpa_advect, vperp_advect, z_advect, r_advect,
-    vpa_SL, vperp_SL, z_SL, r_SL, scratch, advance, scratch_dummy, manufactured_source_list = setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition,
+    scratch, advance, scratch_dummy, manufactured_source_list = setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition,
         drive_input, moments, t_input, collisions, species, geometry)
     # setup i/o
     io, cdf = setup_file_io(output_dir, run_name, vz, vr, vzeta, vpa, vperp, z, r, composition, collisions)
@@ -182,7 +182,6 @@ function setup_moment_kinetics(input_dict::Dict)
            vpa_spectral, vperp_spectral, z_spectral, r_spectral, 
            moments, fields, 
            vpa_advect, vperp_advect, z_advect, r_advect, 
-           vpa_SL, vperp_SL, z_SL, r_SL,
            composition, collisions, geometry, advance, scratch_dummy, manufactured_source_list, io, cdf
 end
 
