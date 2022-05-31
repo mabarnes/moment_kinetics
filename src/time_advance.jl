@@ -233,8 +233,7 @@ function setup_time_advance!(pdf, vpa, vperp, z, r, composition, drive_input, mo
     vpa_advect = setup_advection(n_species, vpa, vperp, z, r)
     # initialise the vpa advection speed
     begin_s_r_z_vperp_region()
-    update_speed_vpa!(vpa_advect, fields, scratch[1], moments, vpa, vperp, z, r, composition,
-                      collisions.charge_exchange, 0.0, geometry)
+    update_speed_vpa!(vpa_advect, fields, vpa, vperp, z, r, composition, geometry)
     if moments.evolve_upar
         nspec = n_species
     else
@@ -572,10 +571,8 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, vp
     # however, neutral species do have non-zero d(wpa)/dt, so there is advection in wpa
     
     if advance.vpa_advection
-        vpa_advection!(fvec_out.pdf, fvec_in, pdf.norm, fields, moments,
-            vpa_SL, vpa_advect, vpa, vperp, z, r, use_semi_lagrange, dt, t,
-            vpa_spectral, composition, collisions.charge_exchange,
-            geometry, istage)
+        vpa_advection!(fvec_out.pdf, fvec_in, fields,
+         vpa_advect, vpa, vperp, z, r, dt, vpa_spectral, composition, geometry)
     end
     
     # z_advection! advances 1D advection equation in z
