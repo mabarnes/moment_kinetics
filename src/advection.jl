@@ -177,7 +177,7 @@ end
 """
 do all the work needed to update f(coord) at a single value of other coords
 """
-function advance_f_local!(f_new, f_current, f_old, SL, advection, i_outer, j_outer, k_outer, coord, dt, j, spectral, use_SL)
+function advance_f_local!(f_new, f_current, advection, i_outer, j_outer, k_outer, coord, dt, spectral)
     # update the rhs of the equation accounting for 1d advection in coord
     update_rhs!(advection, i_outer, j_outer, k_outer, f_current, coord, dt, spectral)
     # update ff at time level n+1 using an explicit Runge-Kutta method
