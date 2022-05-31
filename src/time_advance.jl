@@ -215,9 +215,7 @@ function setup_time_advance!(pdf, vpa, vperp, z, r, composition, drive_input, mo
     # initialise the z advection speed
     begin_s_r_vperp_vpa_region()
     @loop_s is begin
-        @views update_speed_z!(z_advect[is], fields, moments.upar[:,:,is], moments.vth[:,:,is],
-                               moments.evolve_upar, moments.evolve_ppar, vpa, vperp, z, r,
-                               0.0, geometry)
+        @views update_speed_z!(z_advect[is], fields, vpa, vperp, z, r, 0.0, geometry)
         # initialise the upwind/downwind boundary indices in z
         update_boundary_indices!(z_advect[is], loop_ranges[].vpa, loop_ranges[].vperp, loop_ranges[].r)
     end
@@ -579,8 +577,8 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, vp
     # apply z-advection operation to charged species
     
     if advance.z_advection
-        z_advection!(fvec_out.pdf, fvec_in, pdf.norm, fields, moments, z_SL, z_advect, z, vpa, vperp, r, 
-            use_semi_lagrange, dt, t, z_spectral, composition, geometry, istage)
+        z_advection!(fvec_out.pdf, fvec_in, fields,
+         z_advect, z, vpa, vperp, r, dt, t, z_spectral, composition, geometry)
     end
     
     # r advection relies on derivatives in z to get ExB

@@ -12,15 +12,13 @@ using ..looping
 """
 do a single stage time advance (potentially as part of a multi-stage RK scheme)
 """
-function z_advection!(f_out, fvec_in, ff, fields, moments, SL, advect, z, vpa, vperp, r, 
-                      use_semi_lagrange, dt, t, z_spectral, composition, geometry, istage)
+function z_advection!(f_out, fvec_in, fields, advect, z, vpa, vperp, r, dt, t, z_spectral, composition, geometry)
     
     begin_s_r_vperp_vpa_region()
     
     @loop_s is begin
         # get the updated speed along the z direction using the current f
-        @views update_speed_z!(advect[is], fields, fvec_in.upar[:,:,is], moments.vth[:,:,is],
-                               moments.evolve_upar, moments.evolve_ppar, vpa, vperp, z, r, t, geometry)
+        @views update_speed_z!(advect[is], fields, vpa, vperp, z, r, t, geometry)
         # update the upwind/downwind boundary indices and upwind_increment
         @views update_boundary_indices!(advect[is], loop_ranges[].vpa, loop_ranges[].vperp, loop_ranges[].r)
 
@@ -37,7 +35,7 @@ end
 """
 calculate the advection speed in the z-direction at each grid point
 """
-function update_speed_z!(advect, fields, upar, vth, evolve_upar, evolve_ppar, vpa, vperp, z, r, t, geometry)
+function update_speed_z!(advect, fields, vpa, vperp, z, r, t, geometry)
     @boundscheck r.n == size(advect.speed,4) || throw(BoundsError(advect))
     @boundscheck vperp.n == size(advect.speed,3) || throw(BoundsError(advect))
     @boundscheck vpa.n == size(advect.speed,2) || throw(BoundsError(advect))
