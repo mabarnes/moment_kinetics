@@ -290,29 +290,41 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     # create structure neutral_r_advect for neutral particle advection
     begin_serial_region()
     neutral_r_advect = setup_advection(n_neutral_species, r, vz, vr, vzeta, z)
-    # initialise the r advection speed
-    begin_sn_vzeta_vr_vz_region()
-    @loop_sn isn begin
-        @views update_speed_neutral_r!(neutral_r_advect[isn], r, z, vzeta, vr, vz)
-        # initialise the upwind/downwind boundary indices in z
-        update_boundary_indices!(neutral_r_advect[isn], loop_ranges[].vz, loop_ranges[].vr, loop_ranges[].vzeta, loop_ranges[].z)
-    end
-    # enforce prescribed boundary condition in r on the neutral distribution function f
-    # PLACEHOLDER!! @views enforce_r_boundary_condition!(pdf.neutral.unnorm, pdf.charged.unnorm, r.bc, r_advect, r, z, vzeta, vr, vz, composition)
+    if n_neutral_species > 0
+        # initialise the r advection speed
+        begin_sn_vzeta_vr_vz_region()
+        @loop_sn isn begin
+            @views update_speed_neutral_r!(neutral_r_advect[isn], r, z, vzeta, vr, vz)
+            # initialise the upwind/downwind boundary indices in z
+            update_boundary_indices!(neutral_r_advect[isn], loop_ranges[].vz, loop_ranges[].vr, loop_ranges[].vzeta, loop_ranges[].z)
+        end
+        # enforce prescribed boundary condition in r on the neutral distribution function f
+        # PLACEHOLDER!! @views enforce_r_boundary_condition!(pdf.neutral.unnorm, pdf.charged.unnorm, r.bc, r_advect, r, z, vzeta, vr, vz, composition)
+    end 
     
     # create structure neutral_z_advect for neutral particle advection
     begin_serial_region()
     neutral_z_advect = setup_advection(n_neutral_species, z, vz, vr, vzeta, r)
-    # initialise the z advection speed
-    begin_sn_vzeta_vr_vz_region()
-    @loop_sn isn begin
-        @views update_speed_neutral_z!(neutral_z_advect[isn], r, z, vzeta, vr, vz)
-        # initialise the upwind/downwind boundary indices in z
-        update_boundary_indices!(neutral_r_advect[isn], loop_ranges[].vz, loop_ranges[].vr, loop_ranges[].vzeta, loop_ranges[].r)
+    if n_neutral_species > 0
+        # initialise the z advection speed
+        begin_sn_vzeta_vr_vz_region()
+        @loop_sn isn begin
+            @views update_speed_neutral_z!(neutral_z_advect[isn], r, z, vzeta, vr, vz)
+            # initialise the upwind/downwind boundary indices in z
+            update_boundary_indices!(neutral_r_advect[isn], loop_ranges[].vz, loop_ranges[].vr, loop_ranges[].vzeta, loop_ranges[].r)
+        end
+        # enforce prescribed boundary condition in r on the neutral distribution function f
+        # PLACEHOLDER!! @views enforce_z_boundary_condition!(pdf.neutral.unnorm, z.bc, z_advect, r, z, vzeta, vr, vz, composition)
     end
-    # enforce prescribed boundary condition in r on the neutral distribution function f
-    # PLACEHOLDER!! @views enforce_z_boundary_condition!(pdf.neutral.unnorm, z.bc, z_advect, r, z, vzeta, vr, vz, composition)
     
+    ##
+    # construct named list of advect & spectral objects to compactify arguments
+    ##
+    
+    advect_objects = (vpa_advect = vpa_advect, vperp_advect = vperp_advect, z_advect = z_advect, 
+     r_advect = r_advect, neutral_z_advect = neutral_z_advect, neutral_r_advect = neutral_r_advect)
+    spectral_objects = (vz_spectral = vz_spectral, vr_spectral = vr_spectral, vzeta_spectral = vzeta_spectral,
+     vpa_spectral = vpa_spectral, vperp_spectral = vperp_spectral, z_spectral = z_spectral, r_spectral = r_spectral)
     
     if(t_input.use_manufactured_solns)
         manufactured_source_list = (Source_i_func = manufactured_sources(r.L,z.L,r.bc,z.bc,geometry), Source_n_func = "placeholder")
@@ -324,8 +336,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     # Ensure all processes are synchronized at the end of the setup
     _block_synchronize()
 
-    return vz_spectral, vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral, z_spectral, r_spectral, moments, fields, 
-    vpa_advect, vperp_advect, z_advect, r_advect, 
+    return moments, fields, spectral_objects, advect_objects, 
     scratch, advance, scratch_dummy, manufactured_source_list
 end
 
@@ -344,7 +355,7 @@ function normalize_pdf!(pdf, moments, scratch)
             pdf[ivpa,iz,is] *= scratch[iz, is]
         end
     elseif moments.evolve_density
-        @. scatch = 1.0 / moments.dens
+        @. scratch = 1.0 / moments.dens
         nvpa, nz, nspecies = size(pdf)
         for is ∈ 1:nspecies, iz ∈ 1:nz, ivpa ∈ 1:nvpa
             pdf[ivpa,iz,is] *= scratch[iz, is]
@@ -439,9 +450,8 @@ for prudent choice of v₀, expect δv≪v so that explicit
 time integrator can be used without severe CFL condition
 """
 function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, z, r,
-    vpa_spectral, vperp_spectral, z_spectral, r_spectral,
-    moments, fields, vpa_advect, vperp_advect, z_advect, r_advect,
-    composition, collisions, geometry, advance, scratch_dummy, manufactured_source_list, io, cdf)
+           moments, fields, spectral_objects, advect_objects,
+           composition, collisions, geometry, advance, scratch_dummy, manufactured_source_list, io, cdf)
 
     @debug_detect_redundant_block_synchronize begin
         # Only want to check for redundant _block_synchronize() calls during the
@@ -454,8 +464,7 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, z, r
     for i ∈ 1:t_input.nstep
        
         time_advance_no_splitting!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, z, r,
-                vpa_spectral, vperp_spectral, z_spectral, r_spectral,
-                moments, fields, vpa_advect, vperp_advect, z_advect, r_advect,
+                moments, fields, spectral_objects, advect_objects,
                 composition, collisions, geometry, advance,  scratch_dummy, manufactured_source_list, i)
         # update the time
         t += t_input.dt
@@ -487,22 +496,20 @@ end
 """
 """
 function time_advance_no_splitting!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, z, r, 
-    vpa_spectral, vperp_spectral, z_spectral, r_spectral,
-    moments, fields, vpa_advect, vperp_advect, z_advect, r_advect,
-    composition, collisions, geometry, advance, scratch_dummy, manufactured_source_list, istep)
+           moments, fields, spectral_objects, advect_objects,
+           composition, collisions, geometry, advance, scratch_dummy, manufactured_source_list, istep)
     
     #pdf_in = pdf.unnorm #get input pdf values in case we wish to impose a constant-in-time boundary condition in r
     #use pdf.norm for this fn for now.
     
     if t_input.n_rk_stages > 1
         ssp_rk!(pdf, scratch, t, t_input, vpa, vperp, z, r, 
-            vpa_spectral, vperp_spectral, z_spectral, r_spectral,
-            moments, fields, vpa_advect, vperp_advect, z_advect, r_advect,
+            moments, fields, spectral_objects, advect_objects,
             composition, collisions, geometry, advance,  scratch_dummy, manufactured_source_list, istep)#pdf_in, 
     else
         euler_time_advance!(scratch, scratch, pdf, fields, moments,
-            vpa_advect, vperp_advect, z_advect, r_advect, vpa, vperp, z, r, t,
-            t_input, vpa_spectral, vperp_spectral, z_spectral, r_spectral, composition,
+            advect_objects, vpa, vperp, z, r, t,
+            t_input, spectral_objects, composition,
             collisions, geometry, scratch_dummy, manufactured_source_list, advance, 1)#pdf_in, 
         # NB: this must be broken -- scratch is updated in euler_time_advance!,
         # but not the pdf or moments.  need to add update to these quantities here
@@ -548,9 +555,8 @@ end
 """
 """
 function ssp_rk!(pdf, scratch, t, t_input, vpa, vperp, z, r, 
-    vpa_spectral, vperp_spectral, z_spectral, r_spectral,
-    moments, fields, vpa_advect, vperp_advect, z_advect, r_advect,
-    composition, collisions, geometry, advance, scratch_dummy, manufactured_source_list,  istep)#pdf_in,
+           moments, fields, spectral_objects, advect_objects,
+           composition, collisions, geometry, advance, scratch_dummy, manufactured_source_list,  istep)#pdf_in,
     
     begin_s_r_z_vperp_region()
     
@@ -573,10 +579,11 @@ function ssp_rk!(pdf, scratch, t, t_input, vpa, vperp, z, r,
         # calculate f^{(1)} = fⁿ + Δt*G[fⁿ] = scratch[2].pdf
         euler_time_advance!(scratch[istage+1], scratch[istage],
             pdf, fields, moments, 
-            vpa_advect, vperp_advect, z_advect, r_advect, vpa, vperp, z, r, t,
-            t_input, vpa_spectral, vperp_spectral, z_spectral, r_spectral, composition,
+            advect_objects, vpa, vperp, z, r, t,
+            t_input, spectral_objects, composition,
             collisions, geometry, scratch_dummy, manufactured_source_list, advance, istage) #pdf_in,
-        @views rk_update!(scratch, pdf, moments, fields, vpa, vperp, z, r, advance.rk_coefs[:,istage], istage, composition, z_spectral, r_spectral)
+        @views rk_update!(scratch, pdf, moments, fields, vpa, vperp, z, r, advance.rk_coefs[:,istage], 
+         istage, composition, spectral_objects.z_spectral, spectral_objects.r_spectral)
     end
 
     istage = n_rk_stages+1
@@ -602,8 +609,8 @@ using the forward Euler method: fvec_out = fvec_in + dt*fvec_in,
 with fvec_in an input and fvec_out the output
 """
 function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, 
-    vpa_advect, vperp_advect, z_advect, r_advect, vpa, vperp, z, r, t, t_input,
-    vpa_spectral, vperp_spectral, z_spectral, r_spectral, composition, collisions, geometry,
+    advect_objects, vpa, vperp, z, r, t, t_input,
+    spectral_objects, composition, collisions, geometry,
     scratch_dummy, manufactured_source_list, advance, istage) #pdf_in, 
     # define some abbreviated variables for tidiness
     n_ion_species = composition.n_ion_species
@@ -612,6 +619,9 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     # vpa_advection! advances the 1D advection equation in vpa.
     # only charged species have a force accelerating them in vpa;
     # however, neutral species do have non-zero d(wpa)/dt, so there is advection in wpa
+    
+    vpa_spectral, r_spectral, z_spectral = spectral_objects.vpa_spectral, spectral_objects.r_spectral, spectral_objects.z_spectral
+    vpa_advect, r_advect, z_advect = advect_objects.vpa_advect, advect_objects.r_advect, advect_objects.z_advect
     
     if advance.vpa_advection
         vpa_advection!(fvec_out.pdf, fvec_in, fields, vpa_advect, vpa, vperp, z, r, dt, 
