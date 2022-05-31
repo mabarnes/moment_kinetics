@@ -29,9 +29,9 @@ function r_advection!(f_out, fvec_in, ff, fields, moments, SL, advect, r, z, vpe
             # returning the true (un-normalized) particle distribution function in r.scratch
             @. r.scratch = fvec_in.pdf[ivpa,ivperp,iz,:,is]
 
-            @views advance_f_local!(f_out[ivpa,ivperp,iz,:,is], r.scratch, ff[ivpa,ivperp,iz,:,is],
-                                    SL, advect[is], ivpa, ivperp, iz,
-                                    r, dt, istage, r_spectral, use_semi_lagrange)
+            @views advance_f_local!(f_out[ivpa,ivperp,iz,:,is], r.scratch,
+                                    advect[is], ivpa, ivperp, iz,
+                                    r, dt, r_spectral)
         end
     end
 end
