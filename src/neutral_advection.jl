@@ -20,7 +20,7 @@ function neutral_advection_r!(f_out, fvec_in, advect, r, z, vzeta, vr, vz, dt, r
     
     @loop_sn isn begin
         # get the updated speed along the r direction using the current f
-        @views update_speed_r!(advect[isn], r, z, vzeta, vr, vz)
+        @views update_speed_neutral_r!(advect[isn], r, z, vzeta, vr, vz)
         # update the upwind/downwind boundary indices and upwind_increment
         @views update_boundary_indices!(advect[isn], loop_ranges[].vz, loop_ranges[].vr, loop_ranges[].vzeta, loop_ranges[].z)
         
@@ -99,7 +99,7 @@ end
 """
 calculate the advection speed in the z-direction at each grid point
 """
-function update_speed_z!(advect, r, z, vzeta, vr, vz)
+function update_speed_neutral_z!(advect, r, z, vzeta, vr, vz)
     @boundscheck r.n == size(advect.speed,5) || throw(BoundsError(advect))
     @boundscheck vzeta.n == size(advect.speed,4) || throw(BoundsError(advect))
     @boundscheck vr.n == size(advect.speed,3) || throw(BoundsError(advect))

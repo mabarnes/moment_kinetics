@@ -128,6 +128,31 @@ orthogonal_coordinate_range2, orthogonal_coordinate_range3)
     return nothing
 end
 
+function update_boundary_indices!(advection, orthogonal_coordinate_range1, 
+orthogonal_coordinate_range2, orthogonal_coordinate_range3, orthogonal_coordinate_range4)
+    n = size(advection.speed,1)
+    for l ∈ orthogonal_coordinate_range4
+        for k ∈ orthogonal_coordinate_range3
+            for j ∈ orthogonal_coordinate_range2
+                for i ∈ orthogonal_coordinate_range1
+                    # NB: for now, assume the speed has the same sign at all grid points
+                    # so only need to check its value at one location to determine the upwind direction
+                    if advection.speed[1,i,j,k,l] > 0
+                        advection.upwind_idx[i,j,k,l] = 1
+                        advection.upwind_increment[i,j,k,l] = -1
+                        advection.downwind_idx[i,j,k,l] = n
+                    else
+                        advection.upwind_idx[i,j,k,l] = n
+                        advection.upwind_increment[i,j,k,l] = 1
+                        advection.downwind_idx[i,j,k,l] = 1
+                    end
+                end
+            end
+        end
+    end
+    return nothing
+end
+
 """
 calculate the factor appearing in front of f' in the advection term
 at time level n in the frame moving with the approximate characteristic
@@ -174,6 +199,24 @@ function update_rhs!(advection, i_outer, j_outer, k_outer, f_current, coord, dt,
     
 end
 
+function update_rhs!(advection, i_outer, j_outer, k_outer, l_outer, f_current, coord, dt, spectral)
+    # calculate the factor appearing in front of df/dcoord in the advection
+    # term at time level n in the frame moving with the approximate
+    # characteristic
+    
+    @views update_advection_factor!(advection.adv_fac[:,i_outer,j_outer,k_outer,l_outer],
+        advection.speed[:,i_outer,j_outer,k_outer,l_outer], coord.n, dt)
+    
+    # calculate df/dcoord
+    @views derivative!(coord.scratch, f_current, coord, advection.adv_fac[:,i_outer,j_outer,k_outer,l_outer], spectral)
+    
+    #derivative!(coord.scratch, f_current, coord, spectral)
+    # calculate the explicit advection terms on the rhs of the equation;
+    # i.e., -Δt⋅δv⋅f'
+    @views calculate_explicit_advection!(advection.rhs[:,i_outer,j_outer,k_outer,l_outer], coord.scratch, advection.adv_fac[:,i_outer,j_outer,k_outer,l_outer], coord.n)
+    
+end
+
 """
 do all the work needed to update f(coord) at a single value of other coords
 """
@@ -182,6 +225,13 @@ function advance_f_local!(f_new, f_current, advection, i_outer, j_outer, k_outer
     update_rhs!(advection, i_outer, j_outer, k_outer, f_current, coord, dt, spectral)
     # update f to take into account the explicit advection
     @views update_f!(f_new, advection.rhs[:,i_outer,j_outer,k_outer], coord.n)
+end
+
+function advance_f_local!(f_new, f_current, advection, i_outer, j_outer, k_outer, l_outer, coord, dt, spectral)
+    # update the rhs of the equation accounting for 1d advection in coord
+    update_rhs!(advection, i_outer, j_outer, k_outer, l_outer, f_current, coord, dt, spectral)
+    # update f to take into account the explicit advection
+    @views update_f!(f_new, advection.rhs[:,i_outer,j_outer,k_outer,l_outer], coord.n)
 end
 
 """

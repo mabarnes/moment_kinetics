@@ -22,7 +22,7 @@ using ..initial_conditions: enforce_vpa_boundary_condition!, enforce_r_boundary_
 using ..advection: setup_advection, update_boundary_indices!
 using ..z_advection: update_speed_z!, z_advection!
 using ..r_advection: update_speed_r!, r_advection!
-using ..neutral_advection: update_speed_neutral_r!, neutral_r_advection!, update_speed_neutral_z!, neutral_z_advection!
+using ..neutral_advection: update_speed_neutral_r!, neutral_advection_r!, update_speed_neutral_z!, neutral_advection_z!
 using ..vperp_advection: update_speed_vperp!, vperp_advection!
 using ..vpa_advection: update_speed_vpa!, vpa_advection!
 using ..charge_exchange: charge_exchange_collisions!
@@ -73,6 +73,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     # define some local variables for convenience/tidiness
     n_species = composition.n_species
     n_ion_species = composition.n_ion_species
+    n_neutral_species = composition.n_neutral_species
     # create array containing coefficients needed for the Runge Kutta time advance
     rk_coefs = setup_runge_kutta_coefficients(t_input.n_rk_stages)
     # create the 'advance' struct to be used in later Euler advance to
@@ -292,9 +293,9 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     # initialise the r advection speed
     begin_sn_vzeta_vr_vz_region()
     @loop_sn isn begin
-        @views update_speed_neutral_r!(neutral_r_advect[is], r, z, vzeta, vr, vz)
+        @views update_speed_neutral_r!(neutral_r_advect[isn], r, z, vzeta, vr, vz)
         # initialise the upwind/downwind boundary indices in z
-        update_boundary_indices!(neutral_r_advect[is], loop_ranges[].vz, loop_ranges[].vr, loop_ranges[].vzeta, loop_ranges[].z)
+        update_boundary_indices!(neutral_r_advect[isn], loop_ranges[].vz, loop_ranges[].vr, loop_ranges[].vzeta, loop_ranges[].z)
     end
     # enforce prescribed boundary condition in r on the neutral distribution function f
     # PLACEHOLDER!! @views enforce_r_boundary_condition!(pdf.neutral.unnorm, pdf.charged.unnorm, r.bc, r_advect, r, z, vzeta, vr, vz, composition)
@@ -305,9 +306,9 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     # initialise the z advection speed
     begin_sn_vzeta_vr_vz_region()
     @loop_sn isn begin
-        @views update_speed_neutral_z!(neutral_z_advect[is], r, z, vzeta, vr, vz)
+        @views update_speed_neutral_z!(neutral_z_advect[isn], r, z, vzeta, vr, vz)
         # initialise the upwind/downwind boundary indices in z
-        update_boundary_indices!(neutral_r_advect[is], loop_ranges[].vz, loop_ranges[].vr, loop_ranges[].vzeta, loop_ranges[].r)
+        update_boundary_indices!(neutral_r_advect[isn], loop_ranges[].vz, loop_ranges[].vr, loop_ranges[].vzeta, loop_ranges[].r)
     end
     # enforce prescribed boundary condition in r on the neutral distribution function f
     # PLACEHOLDER!! @views enforce_z_boundary_condition!(pdf.neutral.unnorm, z.bc, z_advect, r, z, vzeta, vr, vz, composition)
