@@ -222,52 +222,23 @@ function advance_f_local!(f_new, f_current, f_old, SL, advection, i_outer, j_out
     update_rhs!(advection, i_outer, j_outer, k_outer, f_current, SL, coord, dt, j, spectral)
     # update ff at time level n+1 using an explicit Runge-Kutta method
     # along approximate characteristics
-    @views update_f!(f_new, f_old, advection.rhs[:,i_outer,j_outer,k_outer],
+    @views update_f!(f_new, advection.rhs[:,i_outer,j_outer,k_outer],
                      advection.upwind_idx[i_outer,j_outer,k_outer],
                      advection.downwind_idx[i_outer,j_outer,k_outer],
-                     advection.upwind_increment[i_outer,j_outer,k_outer], SL.dep_idx[:,i_outer,j_outer,k_outer], coord.n,
-                     coord.bc, use_SL)
+                     advection.upwind_increment[i_outer,j_outer,k_outer], coord.n)
 end
 
 """
 update ff at time level n+1 using an explicit Runge-Kutta method
 along approximate characteristics
 """
-function update_f!(f_new, f_old, rhs, up_idx, down_idx, up_incr, dep_idx, n, bc, use_SL)
+function update_f!(f_new, rhs, up_idx, down_idx, up_incr, n)
     @boundscheck n == length(f_new) || throw(BoundsError(f_new))
     @boundscheck n == length(rhs) || throw(BoundsError(rhs))
-    @boundscheck n == length(dep_idx) || throw(BoundsError(dep_idx))
-    @boundscheck n == length(f_old) || throw(BoundsError(f_old))
-
-    if use_SL
-        # do not update the upwind boundary, where the constant incoming BC has been imposed
-        if bc != "periodic"
-            f_new[up_idx] = f_old[up_idx]
-            istart = up_idx-up_incr
-        else
-            istart = up_idx
-        end
-        #@inbounds for i ∈ up_idx-up_incr:-up_incr:down_idx
-        @inbounds for i ∈ up_idx:-up_incr:down_idx
-            # dep_idx is the index of the departure point for the approximate
-            # characteristic passing through grid point i
-            # if semi-Lagrange is not used, then dep_idx = i
-            idx = dep_idx[i]
-            if idx != up_idx + up_incr
-                f_new[i] = f_old[idx] + rhs[i]
-            else
-                # if departure index is beyond upwind boundary, then
-                # set updated value along characteristic equal to the old
-                # value at the boundary; i.e., assume f is constant
-                # beyond the upwind boundary
-                f_new[i] = f_old[up_idx]
-            end
-        end
-    else
-        #@inbounds for i ∈ up_idx:-up_incr:down_idx
-        for i ∈ up_idx:-up_incr:down_idx
-            f_new[i] += rhs[i]
-        end
+    
+    #@inbounds for i ∈ up_idx:-up_incr:down_idx
+    for i ∈ up_idx:-up_incr:down_idx
+        f_new[i] += rhs[i]
     end
     return nothing
 end
