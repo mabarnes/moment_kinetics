@@ -2,11 +2,10 @@
 """
 module finite_differences
 
-export derivative_finite_difference!
-
 using Interpolations
 
 using ..type_definitions: mk_float
+import ..calculus: elementwise_derivative!
 import ..interpolation: interpolate_to_grid_1d
 
 """
@@ -27,6 +26,28 @@ function fd_check_option(option, ngrid)
     elseif ! option in ("first_order_upwind", "second_order_centered")
         error("finite difference option '$option' is not recognised")
     end
+end
+
+"""
+    elementwise_derivative!(coord, f, adv_fac, not_spectral::Bool)
+
+Calculate the derivative of f using finite differences, with particular scheme
+specified by coord.fd_option; result stored in coord.scratch_2d.
+"""
+function elementwise_derivative!(coord, f, adv_fac, not_spectral::Bool)
+    return derivative_finite_difference!(coord.scratch_2d, f, coord.cell_width, adv_fac,
+        coord.bc, coord.fd_option, coord.igrid, coord.ielement)
+end
+
+"""
+    elementwise_derivative!(coord, f, not_spectral::Bool)
+
+Calculate the derivative of f using 4th order centered finite differences; result stored
+in coord.scratch_2d.
+"""
+function elementwise_derivative!(coord, f, not_spectral::Bool)
+    return derivative_finite_difference!(coord.scratch_2d, f, coord.cell_width,
+        coord.bc, "fourth_order_centered", coord.igrid, coord.ielement)
 end
 
 """

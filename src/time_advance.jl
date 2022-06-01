@@ -12,8 +12,6 @@ using ..debugging
 using ..file_io: write_data_to_ascii, write_data_to_binary, debug_dump
 using ..looping
 using ..moment_kinetics_structs: scratch_pdf
-using ..chebyshev: setup_chebyshev_pseudospectral
-using ..chebyshev: chebyshev_derivative!
 using ..velocity_moments: update_moments!, reset_moments_status!
 using ..velocity_moments: enforce_moment_constraints!
 using ..velocity_moments: update_density!, update_upar!, update_ppar!, update_qpar!
@@ -38,9 +36,6 @@ using ..manufactured_solns: manufactured_sources
 
 
 @debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
-
-"""
-"""
 mutable struct advance_info
     vpa_advection::Bool
     z_advection::Bool
@@ -68,8 +63,9 @@ this includes creating and populating structs
 for Chebyshev transforms, velocity space moments,
 EM fields, semi-Lagrange treatment, and advection terms
 """
-function setup_time_advance!(pdf, vpa, vperp, z, r, composition, drive_input, moments,
-                             t_input, collisions, species, geometry)
+function setup_time_advance!(pdf, vpa, vperp, z, r, z_spectral, r_spectral, composition,
+                             drive_input, moments, t_input, collisions, species,
+                             geometry)
     # define some local variables for convenience/tidiness
     n_species = composition.n_species
     n_ion_species = composition.n_ion_species
@@ -123,42 +119,6 @@ function setup_time_advance!(pdf, vpa, vperp, z, r, composition, drive_input, mo
                                manufactured_solns_test)
     end
     
-    
-    if z.discretization == "chebyshev_pseudospectral"
-        # create arrays needed for explicit Chebyshev pseudospectral treatment in vpa
-        # and create the plans for the forward and backward fast Chebyshev transforms
-        z_spectral = setup_chebyshev_pseudospectral(z)
-        # obtain the local derivatives of the uniform z-grid with respect to the used z-grid
-        chebyshev_derivative!(z.duniform_dgrid, z.uniform_grid, z_spectral, z)
-    else
-        # create dummy Bool variable to return in place of the above struct
-        z_spectral = false
-        z.duniform_dgrid .= 1.0
-    end
-    
-    if r.discretization == "chebyshev_pseudospectral"
-        # create arrays needed for explicit Chebyshev pseudospectral treatment in vpa
-        # and create the plans for the forward and backward fast Chebyshev transforms
-        r_spectral = setup_chebyshev_pseudospectral(r)
-        # obtain the local derivatives of the uniform r-grid with respect to the used r-grid
-        chebyshev_derivative!(r.duniform_dgrid, r.uniform_grid, r_spectral, r)
-    else
-        # create dummy Bool variable to return in place of the above struct
-        r_spectral = false
-        r.duniform_dgrid .= 1.0
-    end
-    
-    if vpa.discretization == "chebyshev_pseudospectral"
-        # create arrays needed for explicit Chebyshev pseudospectral treatment in vpa
-        # and create the plans for the forward and backward fast Chebyshev transforms
-        vpa_spectral = setup_chebyshev_pseudospectral(vpa)
-        # obtain the local derivatives of the uniform vpa-grid with respect to the used vpa-grid
-        chebyshev_derivative!(vpa.duniform_dgrid, vpa.uniform_grid, vpa_spectral, vpa)
-    else
-        # create dummy Bool variable to return in place of the above struct
-        vpa_spectral = false
-        vpa.duniform_dgrid .= 1.0
-    end
     
     if vperp.discretization == "chebyshev_pseudospectral"
         # create arrays needed for explicit Chebyshev pseudospectral treatment in vperp
@@ -291,9 +251,9 @@ function setup_time_advance!(pdf, vpa, vperp, z, r, composition, drive_input, mo
     # Ensure all processes are synchronized at the end of the setup
     _block_synchronize()
 
-    return vpa_spectral, vperp_spectral, z_spectral, r_spectral, moments, fields, 
-    vpa_advect, vperp_advect, z_advect, r_advect,vpa_SL, vperp_SL, z_SL, r_SL,
-    scratch, advance, scratch_dummy, manufactured_source_list
+    return moments, fields, vpa_advect, vperp_advect, z_advect, r_advect,vpa_SL,
+           vperp_SL, z_SL, r_SL, scratch, advance, scratch_dummy,
+           manufactured_source_list
 end
 
 """

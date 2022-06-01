@@ -4,7 +4,6 @@ module chebyshev
 
 export update_fcheby!
 export update_df_chebyshev!
-export chebyshev_derivative!
 export setup_chebyshev_pseudospectral
 export scaled_chebyshev_grid
 export chebyshev_spectral_derivative!
@@ -14,6 +13,8 @@ using FFTW
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_float, allocate_complex
 using ..clenshaw_curtis: clenshawcurtisweights
+using ..lagrange: setup_lagrange_pseudospectral
+import ..calculus: elementwise_derivative!
 import ..interpolation: interpolate_to_grid_1d
 
 """
@@ -58,6 +59,24 @@ function setup_chebyshev_pseudospectral(coord)
 end
 
 """
+create arrays needed for Chebyshev pseudospectral treatment using matrix-multiply methods
+"""
+function setup_chebyshev_pseudospectral_matrix_multiply(coord)
+    # Collocation points within an element on a grid scaled to a range of [-1,1].
+    # Need to reverse because the result of `chebyshevpoints()` is on [1,-1].
+    scaled_collocation_points = reverse(chebyshevpoints(coord.ngrid))
+
+    # Factor to scale between [-1,1] grid and physically-spaced (but possibly
+    # normalized) points
+    scale_factor = 2.0 * coord.nelement / coord.L
+
+    collocation_points = scaled_collocation_points ./ scale_factor
+
+    return setup_lagrange_pseudospectral(collocation_points)
+    #return setup_lagrange_pseudospectral(scaled_collocation_points; scale_factor=scale_factor)
+end
+
+"""
 initialize chebyshev grid scaled to interval [-box_length/2, box_length/2]
 """
 function scaled_chebyshev_grid(ngrid, nelement, n, box_length, imin, imax)
@@ -93,8 +112,12 @@ function scaled_chebyshev_grid(ngrid, nelement, n, box_length, imin, imax)
 end
 
 """
+    elementwise_derivative!(coord, ff, chebyshev::chebyshev_info)
+
+Chebyshev transform f to get Chebyshev spectral coefficients and use them to calculate f'.
 """
-function chebyshev_derivative!(df, ff, chebyshev, coord)
+function elementwise_derivative!(coord, ff, chebyshev::chebyshev_info)
+    df = coord.scratch_2d
     # define local variable nelement for convenience
     nelement = coord.nelement
     # check array bounds
@@ -127,6 +150,16 @@ function chebyshev_derivative!(df, ff, chebyshev, coord)
         k = 1
     end
     return nothing
+end
+"""
+    elementwise_derivative!(coord, ff, adv_fac, spectral::chebyshev_info)
+
+Chebyshev transform f to get Chebyshev spectral coefficients and use them to calculate f'.
+
+Note: Chebyshev derivative does not make use of upwinding information within each element.
+"""
+function elementwise_derivative!(coord, ff, adv_fac, spectral::chebyshev_info)
+    return elementwise_derivative!(coord, ff, spectral)
 end
 
 """

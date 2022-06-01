@@ -4,11 +4,8 @@ include("setup.jl")
 
 using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.coordinates: define_coordinate
-using moment_kinetics.chebyshev: setup_chebyshev_pseudospectral
 using moment_kinetics.interpolation:
     interpolate_to_grid_1d, interpolate_to_grid_z, interpolate_to_grid_vpa
-
-fd_fake_setup(z) = return false
 
 # periodic test function
 # returns an array whose shape is the outer product of the 2nd, 3rd, ... arguments
@@ -28,20 +25,16 @@ adv_input = advection_input("default", 1.0, 0.0, 0.0)
 function runtests()
     @testset "interpolation" verbose=use_verbose begin
         @testset "$discretization, $ntest, $nelement, $zlim" for
-                (discretization, setup_func, rtol) ∈
-                    (("finite_difference", fd_fake_setup, 1.e-5),
-                     ("chebyshev_pseudospectral", setup_chebyshev_pseudospectral, 1.e-8)),
+                (discretization, rtol) ∈
+                    (("finite_difference", 1.e-5), ("chebyshev_pseudospectral", 1.e-8),
+                     ("chebyshev_pseudospectral_matrix_multiply", 1.e-8)),
                     ntest ∈ (3, 14), nelement ∈ (2, 8), zlim ∈ (L/2.0, L/5.0)
 
             # create the 'input' struct containing input info needed to create a coordinate
             input = grid_input("coord", ngrid, nelement, L,
                 discretization, fd_option, bc, adv_input)
             # create the coordinate struct 'z'
-            z = define_coordinate(input)
-            # For Chebyshev method, create arrays needed for Chebyshev pseudospectral
-            # treatment in z and create the plans for the forward and backward fast
-            # Chebyshev transforms. Just get `false` for finite difference.
-            spectral = setup_func(z)
+            z, spectral = define_coordinate(input)
 
             test_grid = [z for z in range(-zlim, zlim, length=ntest)]
 

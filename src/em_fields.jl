@@ -13,9 +13,6 @@ using ..looping
 using ..moment_kinetics_structs: em_fields_struct
 using ..velocity_moments: update_density!
 using ..calculus: derivative!
-
-"""
-"""
 function setup_em_fields(nz, nr, force_phi, drive_amplitude, drive_frequency)
     phi = allocate_shared_float(nz,nr)
     phi0 = allocate_shared_float(nz,nr)

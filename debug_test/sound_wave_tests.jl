@@ -79,17 +79,21 @@ test_input_chebyshev = merge(test_input_finite_difference,
 
 test_input_chebyshev_split_1_moment =
     merge(test_input_chebyshev,
-          Dict("run_name" => "chebyshev_pseudospectral_split_1_moment",
+          Dict("run_name" => "chebyshev_pseudospectral_matrix_multiply_split_1_moment",
+               "z_discretization" => "chebyshev_pseudospectral_matrix_multiply",
+               "vpa_discretization" => "chebyshev_pseudospectral_matrix_multiply",
                "evolve_moments_density" => true))
 
 test_input_chebyshev_split_2_moments =
     merge(test_input_chebyshev_split_1_moment,
-          Dict("run_name" => "chebyshev_pseudospectral_split_2_moments",
+          Dict("run_name" => "chebyshev_pseudospectral_matrix_multiply_split_2_moments",
                "evolve_moments_parallel_flow" => true))
 
 test_input_chebyshev_split_3_moments =
     merge(test_input_chebyshev_split_2_moments,
           Dict("run_name" => "chebyshev_pseudospectral_split_3_moments",
+               "z_discretization" => "chebyshev_pseudospectral",
+               "vpa_discretization" => "chebyshev_pseudospectral",
                "evolve_moments_parallel_pressure" => true))
 
 

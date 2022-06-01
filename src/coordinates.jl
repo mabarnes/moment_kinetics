@@ -7,7 +7,10 @@ export equally_spaced_grid
 
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_int
-using ..chebyshev: scaled_chebyshev_grid
+using ..calculus: derivative!
+using ..chebyshev: scaled_chebyshev_grid, setup_chebyshev_pseudospectral,
+                   setup_chebyshev_pseudospectral_matrix_multiply
+using ..lagrange: setup_lagrange_pseudospectral, lagrange_weights
 using ..quadrature: composite_simpson_weights
 using ..input_structs: advection_input
 
@@ -94,10 +97,37 @@ function define_coordinate(input, composition=nothing)
     # struct containing the advection speed options/inputs for this coordinate
     advection = input.advection
 
-    return coordinate(input.name, n, input.ngrid, input.nelement, input.L, grid,
+    coord = coordinate(input.name, n, input.ngrid, input.nelement, input.L, grid,
         cell_width, igrid, ielement, imin, imax, input.discretization, input.fd_option,
         input.bc, wgts, uniform_grid, duniform_dgrid, scratch, copy(scratch),
         scratch_2d, advection)
+
+    if input.discretization ∈ ("chebyshev_pseudospectral",
+                               "chebyshev_pseudospectral_vperp")
+        # create arrays needed for explicit Chebyshev pseudospectral treatment in this
+        # coordinate and create the plans for the forward and backward fast Chebyshev
+        # transforms
+        spectral = setup_chebyshev_pseudospectral(coord)
+        # obtain the local derivatives of the uniform grid with respect to the used grid
+        derivative!(coord.duniform_dgrid, coord.uniform_grid, coord, spectral)
+    elseif input.discretization ∈ ("chebyshev_pseudospectral_matrix_multiply",
+                                   "chebyshev_pseudospectral_matrix_multiply_vperp")
+        # create arrays needed for matrix-multiply pseudospectral treatment
+        spectral = setup_chebyshev_pseudospectral_matrix_multiply(coord)
+        #spectral = setup_lagrange_pseudospectral(coord.grid ./ scale_factor)
+        # obtain the local derivatives of the uniform grid with respect to the used grid
+        derivative!(coord.duniform_dgrid, coord.uniform_grid, coord, spectral)
+    elseif input.discretization == "lagrange_uniform"
+        # create arrays needed for Lagrange pseudospectral treatment on a uniform grid
+        spectral = setup_lagrange_pseudospectral(coord.grid[1:coord.ngrid])
+        coord.duniform_dgrid .= 1.0
+    else
+        # create dummy Bool variable to return in place of the above struct
+        spectral = false
+        coord.duniform_dgrid .= 1.0
+    end
+
+    return coord, spectral
 end
 
 """
@@ -111,7 +141,8 @@ function init_grid(ngrid, nelement, n, L, imin, imax, igrid, discretization)
         grid[1] = 0.0
         wgts = allocate_float(n)
         wgts[1] = 1.0
-    elseif discretization == "chebyshev_pseudospectral"
+    elseif discretization ∈ ("chebyshev_pseudospectral",
+                             "chebyshev_pseudospectral_matrix_multiply")
         # initialize chebyshev grid defined on [-L/2,L/2]
         # with n grid points chosen to facilitate
         # the fast Chebyshev transform (aka the discrete cosine transform)
@@ -119,6 +150,9 @@ function init_grid(ngrid, nelement, n, L, imin, imax, igrid, discretization)
         # 'wgts' are the integration weights attached to each grid points
         # that are those associated with Clenshaw-Curtis quadrature
         grid, wgts = scaled_chebyshev_grid(ngrid, nelement, n, L, imin, imax)
+    elseif discretization == "lagrange_uniform"
+        grid = uniform_grid
+        wgts = lagrange_weights(uniform_grid, ngrid, nelement, n, L, imin, imax)
     elseif discretization == "finite_difference"
         # initialize equally spaced grid defined on [-L/2,L/2]
         grid = uniform_grid
@@ -132,7 +166,8 @@ function init_grid(ngrid, nelement, n, L, imin, imax, igrid, discretization)
         wgts = 2.0 .* wgts .* grid # to include 2 vperp in jacobian of integral
                                  # assumes pdf normalised like 
                                  # f^N = Pi^{3/2} c_s^3 f / n_ref 
-    elseif discretization == "chebyshev_pseudospectral_vperp"
+    elseif discretization ∈ ("chebyshev_pseudospectral_vperp",
+                             "chebyshev_pseudospectral_matrix_multiply_vperp")
         # initialize chebyshev grid defined on [-L/2,L/2]
         grid, wgts = scaled_chebyshev_grid(ngrid, nelement, n, L, imin, imax)
         grid .= grid .+ L/2.0 # shift to [0,L] appropriate to vperp variable

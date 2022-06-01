@@ -5,7 +5,6 @@ include("setup.jl")
 using Base.Filesystem: tempname
 using TimerOutputs
 
-using moment_kinetics.chebyshev: setup_chebyshev_pseudospectral
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.load_data: open_netcdf_file, load_coordinate_data,
@@ -198,6 +197,26 @@ test_input_chebyshev_split_3_moments =
           Dict("run_name" => "chebyshev_pseudospectral_split_3_moments",
                "evolve_moments_parallel_pressure" => true))
 
+test_input_chebyshev_matrix_multiply = merge(
+    test_input_chebyshev,
+    Dict("z_discretization" => "chebyshev_pseudospectral_matrix_multiply",
+         "vpa_discretization" => "chebyshev_pseudospectral_matrix_multiply"))
+
+test_input_chebyshev_matrix_multiply_split_1_moment = merge(
+    test_input_chebyshev_split_1_moment,
+    Dict("z_discretization" => "chebyshev_pseudospectral_matrix_multiply",
+         "vpa_discretization" => "chebyshev_pseudospectral_matrix_multiply"))
+
+test_input_chebyshev_matrix_multiply_split_2_moments = merge(
+    test_input_chebyshev_split_2_moments,
+    Dict("z_discretization" => "chebyshev_pseudospectral_matrix_multiply",
+         "vpa_discretization" => "chebyshev_pseudospectral_matrix_multiply"))
+
+test_input_chebyshev_matrix_multiply_split_3_moments = merge(
+    test_input_chebyshev_split_3_moments,
+    Dict("z_discretization" => "chebyshev_pseudospectral_matrix_multiply",
+         "vpa_discretization" => "chebyshev_pseudospectral_matrix_multiply"))
+
 
 # Not actually used in the tests, but needed for first argument of run_moment_kinetics
 to = TimerOutput()
@@ -277,21 +296,11 @@ function run_test(test_input, rtol; args...)
                            z_L, test_input["z_discretization"], "",
                            "periodic", #test_input["z_bc"],
                            adv_input)
-        z = define_coordinate(input)
-        if test_input["z_discretization"] == "chebyshev_pseudospectral"
-            z_spectral = setup_chebyshev_pseudospectral(z)
-        else
-            z_spectral = false
-        end
+        z, z_spectral = define_coordinate(input)
         input = grid_input("coord", test_input["vpa_ngrid"], test_input["vpa_nelement"],
                            vpa_L, test_input["vpa_discretization"], "",
                            test_input["vpa_bc"], adv_input)
-        vpa = define_coordinate(input)
-        if test_input["vpa_discretization"] == "chebyshev_pseudospectral"
-            vpa_spectral = setup_chebyshev_pseudospectral(vpa)
-        else
-            vpa_spectral = false
-        end
+        vpa, vpa_spectral = define_coordinate(input)
 
         # Test against values interpolated onto 'expected' grid which is fairly coarse no we
         # do not have to save too much data in this file
@@ -376,8 +385,9 @@ function runtests()
 
         # Chebyshev pseudospectral
         # Benchmark data is taken from this run (Chebyshev with no splitting)
-        @testset "Chebyshev base" begin
-            run_test(test_input_chebyshev, 1.e-10)
+        @testset "Chebyshev base" for input ∈
+                (test_input_chebyshev, test_input_chebyshev_matrix_multiply)
+            run_test(input, 1.e-10)
         end
         #@testset "Chebyshev split 1" begin
         #    run_test(test_input_chebyshev_split_1_moment, 1.e-3)

@@ -8,7 +8,6 @@ include("setup.jl")
 using Base.Filesystem: tempname
 using TimerOutputs
 
-using moment_kinetics.chebyshev: setup_chebyshev_pseudospectral
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.interpolation: interpolate_to_grid_z
@@ -96,6 +95,11 @@ test_input_chebyshev = merge(test_input_finite_difference,
                                   "vpa_ngrid" => 17,
                                   "vpa_nelement" => 10))
 
+test_input_chebyshev_matrix_multiply = merge(
+    test_input_chebyshev,
+    Dict("z_discretization" => "chebyshev_pseudospectral_matrix_multiply",
+         "vpa_discretization" => "chebyshev_pseudospectral_matrix_multiply"))
+
 # Reference output interpolated onto a common set of points for comparing
 # different discretizations, taken from a Chebyshev run with z_grid=9,
 # z_nelement=8, nstep=40000, dt=0.00025
@@ -179,12 +183,7 @@ function run_test(test_input, expected_phi, tolerance; args...)
         input = grid_input("coord", test_input["z_ngrid"], test_input["z_nelement"], 1.0,
                            test_input["z_discretization"], "", test_input["z_bc"],
                            adv_input)
-        z = define_coordinate(input)
-        if test_input["z_discretization"] == "chebyshev_pseudospectral"
-            z_spectral = setup_chebyshev_pseudospectral(z)
-        else
-            z_spectral = false
-        end
+        z, z_spectral = define_coordinate(input)
 
         # Cross comparison of all discretizations to same benchmark
         phi_interp = interpolate_to_grid_z(cross_compare_points, phi[:, end], z, z_spectral)
@@ -201,8 +200,10 @@ function runtests()
             run_test(test_input_finite_difference, nothing, 2.e-3)
         end
 
-        @testset "Chebyshev" begin
-            run_test(test_input_chebyshev,
+        @testset "Chebyshev$suffix" for (input, suffix) ∈
+                ((test_input_chebyshev, ""),
+                 (test_input_chebyshev_matrix_multiply, " matrix multiply"))
+            run_test(input,
                      [-0.423480349166609, 0.6167484253316418,
                       0.8149907943014488, 0.8228082604999473,
                       0.7425908033615429, -0.09876067560860455], 2.e-3)

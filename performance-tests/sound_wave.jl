@@ -99,6 +99,30 @@ test_input_chebyshev_split_3_moments =
           Dict("run_name" => "chebyshev_pseudospectral_split_3_moments",
                "evolve_moments_parallel_pressure" => true))
 
+test_input_chebyshev_matrix_multiply = merge(
+        test_input_chebyshev,
+        Dict("run_name" => "chebyshev_pseudospectral_matrix_multiply",
+             "z_discretization" => "chebyshev_pseudospectral_matrix_multiply",
+             "vpa_discretization" => "chebyshev_pseudospectral_matrix_multiply"))
+
+test_input_chebyshev_matrix_multiply_split_1_moment = merge(
+        test_input_chebyshev_split_1_moment,
+        Dict("run_name" => "chebyshev_pseudospectral_matrix_multiply_split_1_moment",
+             "z_discretization" => "chebyshev_pseudospectral_matrix_multiply",
+             "vpa_discretization" => "chebyshev_pseudospectral_matrix_multiply"))
+
+test_input_chebyshev_matrix_multiply_split_2_moments = merge(
+        test_input_chebyshev_split_2_moments,
+        Dict("run_name" => "chebyshev_pseudospectral_matrix_multiply_split_2_moments",
+             "z_discretization" => "chebyshev_pseudospectral_matrix_multiply",
+             "vpa_discretization" => "chebyshev_pseudospectral_matrix_multiply"))
+
+test_input_chebyshev_matrix_multiply_split_3_moments = merge(
+        test_input_chebyshev_split_3_moments,
+        Dict("run_name" => "chebyshev_pseudospectral_matrix_multiply_split_3_moments",
+             "z_discretization" => "chebyshev_pseudospectral_matrix_multiply",
+             "vpa_discretization" => "chebyshev_pseudospectral_matrix_multiply"))
+
 inputs_list = (test_input_finite_difference,
                test_input_finite_difference_split_1_moment,
                test_input_finite_difference_split_2_moments,
@@ -106,7 +130,11 @@ inputs_list = (test_input_finite_difference,
                test_input_chebyshev,
                test_input_chebyshev_split_1_moment,
                test_input_chebyshev_split_2_moments,
-               test_input_chebyshev_split_3_moments)
+               test_input_chebyshev_split_3_moments,
+               test_input_chebyshev_matrix_multiply,
+               test_input_chebyshev_matrix_multiply_split_1_moment,
+               test_input_chebyshev_matrix_multiply_split_2_moments,
+               test_input_chebyshev_matrix_multiply_split_3_moments)
 
 function run_tests()
     check_config()

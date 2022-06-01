@@ -257,8 +257,8 @@ function mk_input(scan_input=Dict())
     end
 
     # check input to catch errors/unsupported options
-    check_input(io, output_dir, nstep, dt, use_semi_lagrange,
-        z_immutable, vpa_immutable, composition, species_immutable, evolve_moments)
+    check_input(io, output_dir, nstep, dt, use_semi_lagrange, r_immutable, z_immutable,
+        vpa_immutable, composition, species_immutable, evolve_moments)
 
     # return immutable structs for z, vpa, species and composition
     all_inputs = (run_name, output_dir, evolve_moments, t, 
@@ -536,7 +536,7 @@ end
 """
 check various input options to ensure they are all valid/consistent
 """
-function check_input(io, output_dir, nstep, dt, use_semi_lagrange, z, vpa,
+function check_input(io, output_dir, nstep, dt, use_semi_lagrange, r, z, vpa,
     composition, species, evolve_moments)
     # copy the input file to the output directory to be saved
     if block_rank[] == 0
@@ -544,8 +544,9 @@ function check_input(io, output_dir, nstep, dt, use_semi_lagrange, z, vpa,
     end
     # open ascii file in which informtaion about input choices will be written
     check_input_time_advance(nstep, dt, use_semi_lagrange, io)
-    check_input_z(z, io)
-    check_input_vpa(vpa, io)
+    check_coordinate_input(r, "r", io)
+    check_coordinate_input(z, "z", io)
+    check_coordinate_input(vpa, "vpa", io)
     check_input_initialization(composition, species, io)
     # if the parallel flow is evolved separately, then the density must also be evolved separately
     if evolve_moments.parallel_flow && !evolve_moments.density
@@ -570,69 +571,50 @@ function check_input_time_advance(nstep, dt, use_semi_lagrange, io)
 end
 
 """
+Check input for a coordinate
 """
-function check_input_z(z, io)
-    println(io)
-    println(io,"######## z-grid ########")
-    println(io)
-    # discretization_option determines discretization in z
-    # supported options are chebyshev_pseudospectral and finite_difference
-    if z.discretization == "chebyshev_pseudospectral"
-        print(io,">z.discretization = 'chebyshev_pseudospectral'.  ")
-        println(io,"using a Chebyshev pseudospectral method in z.")
-    elseif z.discretization == "finite_difference"
-        println(io,">z.discretization = 'finite_difference', ",
-            "and z.fd_option = ", z.fd_option,
-            "  using finite differences on an equally spaced grid in z.")
-        fd_check_option(z.fd_option, z.ngrid)
-    else
-        input_option_error("z.discretization", z.discretization)
+function check_coordinate_input(coord, coord_name, io)
+    if coord.ngrid * coord.nelement == 1
+        # Coordinate is not being used for this run
+        return
     end
-    # boundary_option determines z boundary condition
-    # supported options are "constant" and "periodic"
-    if z.bc == "constant"
-        println(io,">z.bc = 'constant'.  enforcing constant incoming BC in z.")
-    elseif z.bc == "periodic"
-        println(io,">z.bc = 'periodic'.  enforcing periodicity in z.")
-    elseif z.bc == "wall"
-        println(io,">z.bc = 'wall'.  enforcing wall BC in z.")
-    else
-        input_option_error("z.bc", z.bc)
-    end
-    println(io,">using ", z.ngrid, " grid points per z element on ", z.nelement,
-        " elements across the z domain [", -0.5*z.L, ",", 0.5*z.L, "].")
-end
 
-"""
-"""
-function check_input_vpa(vpa, io)
     println(io)
-    println(io,"######## vpa-grid ########")
+    println(io,"######## $coord_name-grid ########")
     println(io)
-    # discretization_option determines discretization in vpa
+    # discretization_option determines discretization in coord
     # supported options are chebyshev_pseudospectral and finite_difference
-    if vpa.discretization == "chebyshev_pseudospectral"
-        print(io,">vpa.discretization = 'chebyshev_pseudospectral'.  ")
-        println(io,"using a Chebyshev pseudospectral method in vpa.")
-    elseif vpa.discretization == "finite_difference"
-        println(io,">vpa.discretization = 'finite_difference', and ",
-            "vpa.fd_option = ", vpa.fd_option,
-            "  using finite differences on an equally spaced grid in vpa.")
-        fd_check_option(vpa.fd_option, vpa.ngrid)
+    if coord.discretization == "chebyshev_pseudospectral"
+        print(io,">$coord_name.discretization = 'chebyshev_pseudospectral'.  ")
+        println(io,"using a Chebyshev pseudospectral method in $coord_name.")
+    elseif coord.discretization == "chebyshev_pseudospectral_matrix_multiply"
+        print(io,">$coord_name.discretization = 'chebyshev_pseudospectral_matrix_multiply'.  ")
+        println(io,"using a Chebyshev pseudospectral method with matrix-multiply "
+                   * "implementation in $coord_name.")
+    elseif coord.discretization == "lagrange_uniform"
+        print(io,">$coord_name.discretization = 'lagrange_uniform'.  ")
+        println(io,"using a Lagrange pseudospectral method with a uniform grid in $coord_name.")
+    elseif coord.discretization == "finite_difference"
+        println(io,">$coord_name.discretization = 'finite_difference', ",
+            "and $coord_name.fd_option = ", coord.fd_option,
+            "  using finite differences on an equally spaced grid in $coord_name.")
+        fd_check_option(coord.fd_option, coord.ngrid)
     else
-        input_option_error("vpa.discretization", vpa.discretization)
+        input_option_error("$coord_name.discretization", coord.discretization)
     end
-    # boundary_option determines vpa boundary condition
-    # supported options are "zero" and "periodic"
-    if vpa.bc == "zero"
-        println(io,">vpa.bc = 'zero'.  enforcing zero incoming BC in vpa.")
-    elseif vpa.bc == "periodic"
-        println(io,">vpa.bc = 'periodic'.  enforcing periodicity in vpa.")
+    # boundary_option determines coord boundary condition
+    # supported options are "constant" and "periodic"
+    if coord.bc == "constant"
+        println(io,">$coord_name.bc = 'constant'.  enforcing constant incoming BC in $coord_name.")
+    elseif coord.bc == "periodic"
+        println(io,">$coord_name.bc = 'periodic'.  enforcing periodicity in $coord_name.")
+    elseif coord_name == "z" && coord.bc == "wall"
+        println(io,">$coord_name.bc = 'wall'.  enforcing wall BC in $coord_name.")
     else
-        input_option_error("vpa.bc", vpa.bc)
+        input_option_error("$coord_name.bc", coord.bc)
     end
-    println(io,">using ", vpa.ngrid, " grid points per vpa element on ", vpa.nelement,
-        " elements across the vpa domain [", -0.5*vpa.L, ",", 0.5*vpa.L, "].")
+    println(io,">using ", coord.ngrid, " grid points per $coord_name element on ", coord.nelement,
+        " elements across the $coord_name domain [", -0.5*coord.L, ",", 0.5*coord.L, "].")
 end
 
 """

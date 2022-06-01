@@ -17,11 +17,12 @@ include("moment_kinetics_structs.jl")
 include("looping.jl")
 include("array_allocation.jl")
 include("interpolation.jl")
+include("calculus.jl")
 include("clenshaw_curtis.jl")
+include("lagrange.jl")
 include("chebyshev.jl")
 include("finite_differences.jl")
 include("quadrature.jl")
-include("calculus.jl")
 include("input_structs.jl")
 include("coordinates.jl")
 include("file_io.jl")
@@ -134,13 +135,13 @@ function setup_moment_kinetics(input_dict::Dict)
     run_name, output_dir, evolve_moments, t_input, z_input, r_input, vpa_input, vperp_input,
         composition, species, collisions, geometry, drive_input = input
     # initialize z grid and write grid point locations to file
-    z = define_coordinate(z_input, composition)
+    z, z_spectral = define_coordinate(z_input, composition)
     # initialize r grid and write grid point locations to file
-    r = define_coordinate(r_input, composition)
+    r, r_spectral = define_coordinate(r_input, composition)
     # initialize vpa grid and write grid point locations to file
-    vpa = define_coordinate(vpa_input, composition)
+    vpa, vpa_spectral = define_coordinate(vpa_input, composition)
     # initialize vperp grid and write grid point locations to file
-    vperp = define_coordinate(vperp_input, composition)
+    vperp, vperp_spectral = define_coordinate(vperp_input, composition)
     # Create loop range variables for shared-memory-parallel loops
     looping.setup_loop_ranges!(block_rank[], block_size[]; s=composition.n_species, r=r.n,
                                z=z.n, vperp=vperp.n, vpa=vpa.n)
@@ -151,10 +152,10 @@ function setup_moment_kinetics(input_dict::Dict)
     code_time = 0.
     # create arrays and do other work needed to setup
     # the main time advance loop -- including normalisation of f by density if requested
-    vpa_spectral, vperp_spectral, z_spectral, r_spectral, moments, fields, 
-    vpa_advect, vperp_advect, z_advect, r_advect,
-    vpa_SL, vperp_SL, z_SL, r_SL, scratch, advance, scratch_dummy, manufactured_source_list = setup_time_advance!(pdf, vpa, vperp, z, r, composition,
-        drive_input, moments, t_input, collisions, species, geometry)
+    moments, fields, vpa_advect, vperp_advect, z_advect, r_advect, vpa_SL, vperp_SL,
+    z_SL, r_SL, scratch, advance, scratch_dummy, manufactured_source_list =
+    setup_time_advance!(pdf, vpa, vperp, z, r, z_spectral, r_spectral, composition,
+                        drive_input, moments, t_input, collisions, species, geometry)
     # setup i/o
     io, cdf = setup_file_io(output_dir, run_name, vpa, vperp, z, r, composition, collisions,
                             moments.evolve_ppar)

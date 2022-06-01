@@ -122,6 +122,11 @@ test_input_chebyshev = merge(test_input_finite_difference,
                                   "vpa_ngrid" => 17,
                                   "vpa_nelement" => 10))
 
+test_input_chebyshev_matrix_multiply = merge(
+    test_input_chebyshev,
+    Dict("z_discretization" => "chebyshev_pseudospectral_matrix_multiply",
+         "vpa_discretization" => "chebyshev_pseudospectral_matrix_multiply"))
+
 # Not actually used in the tests, but needed for first argument of run_moment_kinetics
 to = TimerOutput()
 
@@ -163,7 +168,7 @@ function run_test(test_input, analytic_rtol, analytic_atol, expected_phi,
         run_moment_kinetics(to, input)
     end
 
-    if global_rank == 0
+    if global_rank[] == 0
         quietoutput() do
 
             # Load and analyse output
@@ -209,14 +214,16 @@ function runtests()
             run_test(test_input_finite_difference, 1.e-3, 1.e-4, zeros(100), 1.e-14, 1.e-15)
         end
 
-        @testset "Chebyshev" begin
-            run_test(test_input_chebyshev, 3.e-2, 3.e-3,
+        @testset "Chebyshev$suffix" for (input, suffix) ∈
+                ((test_input_chebyshev, ""),
+                 (test_input_chebyshev_matrix_multiply, " matrix multiply"))
+            run_test(input, 3.e-2, 3.e-3,
                      [-0.8100630096349565, -0.6518856160147646, -0.4205717722276304,
                       -0.2829742494858749, -0.1833320256571621, -0.1359546420028737,
                       -0.10968680094355439, -0.10655932911687617, -0.10320743994056783,
                       -0.1065593291168768, -0.10968680094355476, -0.13595464200287433,
                       -0.18333202565716236, -0.28297424948587463, -0.42057177222762804,
-                      -0.6518856160147616, -0.8100630096349531], 1.e-14, 1.e-15)
+                      -0.6518856160147616, -0.8100630096349531], 5.e-9, 1.e-15)
         end
     end
 end
