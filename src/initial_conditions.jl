@@ -115,7 +115,7 @@ function init_pdf_and_moments(vz, vr, vzeta, vpa, vperp, z, r, composition, spec
             for isn in 1:n_neutral_species
                 for ir in 1:r.n
                     for iz in 1:z.n
-                        moments.neutral.dens[iz,ir,is] = densn_func(z.grid[iz],r.grid[ir],0.0)
+                        moments.neutral.dens[iz,ir,isn] = densn_func(z.grid[iz],r.grid[ir],0.0)
                         for ivzeta in 1:vzeta.n
                             for ivr in 1:vr.n
                                 for ivz in 1:vz.n
