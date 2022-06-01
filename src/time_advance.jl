@@ -45,6 +45,8 @@ mutable struct advance_info
     vpa_advection::Bool
     z_advection::Bool
     r_advection::Bool
+    neutral_z_advection::Bool
+    neutral_r_advection::Bool
     cx_collisions::Bool
     ionization_collisions::Bool
     source_terms::Bool
@@ -83,6 +85,8 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     manufactured_solns_test = t_input.use_manufactured_solns
     
     if composition.n_neutral_species > 0
+        advance_neutral_z_advection = true
+        advance_neutral_r_advection = true
         if collisions.charge_exchange > 0.0
             advance_cx = true
         else
@@ -94,6 +98,8 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
             advance_ionization = false
         end
     else
+        advance_neutral_z_advection = false
+        advance_neutral_r_advection = false
         advance_cx = false
         advance_ionization = false
     end
@@ -101,7 +107,8 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     advance_continuity = false
     advance_force_balance = false
     advance_energy = false
-    advance = advance_info(true, true, true, advance_cx, advance_ionization, advance_sources,
+    advance = advance_info(true, true, true, advance_neutral_z_advection, advance_neutral_r_advection,
+                           advance_cx, advance_ionization, advance_sources,
                            advance_continuity, advance_force_balance, advance_energy, rk_coefs,
                            manufactured_solns_test)
 
