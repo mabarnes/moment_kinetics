@@ -19,7 +19,8 @@ using ..array_allocation: allocate_float
 using ..file_io: open_output_file
 using ..type_definitions: mk_float, mk_int
 using ..load_data: open_netcdf_file
-using ..load_data: load_coordinate_data, load_fields_data, load_moments_data, load_pdf_data
+using ..load_data: load_coordinate_data, load_fields_data, load_pdf_data
+using ..load_data: load_charged_particle_moments_data, load_neutral_particle_moments_data
 using ..analysis: analyze_fields_data, analyze_moments_data, analyze_pdf_data
 using ..velocity_moments: integrate_over_vspace
 using ..manufactured_solns: manufactured_solutions
@@ -65,14 +66,18 @@ function analyze_and_plot_data(path)
     fid = open_netcdf_file(run_name)
     # load space-time coordinate data
     nvpa, vpa, vpa_wgts, nvperp, vperp, vperp_wgts, nz, z, z_wgts, Lz, 
-     nr, r, r_wgts, Lr, ntime, time = load_coordinate_data(fid)
+     nr, r, r_wgts, Lr, ntime, time, n_ion_species, n_neutral_species = load_coordinate_data(fid)
+    println("\n Info: n_neutral_species = ",n_neutral_species,", n_ion_species = ",n_ion_species,"\n")
     # initialise the post-processing input options
     nwrite_movie, itime_min, itime_max, ivpa0, ivperp0, iz0, ir0 = init_postprocessing_options(pp, nvpa, nvperp, nz, nr, ntime)
     # load full (z,r,t) fields data
     phi = load_fields_data(fid)
     # load full (z,r,species,t) velocity moments data
     density, parallel_flow, parallel_pressure, parallel_heat_flux,
-        thermal_speed, n_species, evolve_ppar = load_moments_data(fid)
+        thermal_speed, evolve_ppar = load_charged_particle_moments_data(fid)
+    if n_neutral_species > 0
+        neutral_density = load_neutral_particle_moments_data(fid)
+    end
     # load full (vpa,vperp,z,r,species,t) particle distribution function (pdf) data
     ff = load_pdf_data(fid)
     
@@ -87,15 +92,18 @@ function analyze_and_plot_data(path)
             parallel_heat_flux[:,ir0,:,:],
             thermal_speed[:,ir0,:,:],
             ff[:,ivperp0,:,ir0,:,:],
-            n_species, evolve_ppar, nvpa, vpa, vpa_wgts,
+            n_ion_species, evolve_ppar, nvpa, vpa, vpa_wgts,
             nz, z, z_wgts, Lz, ntime, time)
     end 
     close(fid)
     
-    # analyze the fields data
-    phi_fldline_avg, delta_phi = analyze_fields_data(phi[iz0,:,:], ntime, nr, r_wgts, Lr)    
-    plot_fields_rt(phi[iz0,:,:], delta_phi, time, itime_min, itime_max, nwrite_movie,
-    r, ir0, run_name, delta_phi, pp)
+    diagnostics_2d = false
+    if diagnostics_2d
+        # analyze the fields data
+        phi_fldline_avg, delta_phi = analyze_fields_data(phi[iz0,:,:], ntime, nr, r_wgts, Lr)    
+        plot_fields_rt(phi[iz0,:,:], delta_phi, time, itime_min, itime_max, nwrite_movie,
+        r, ir0, run_name, delta_phi, pp)
+    end 
     
     manufactured_solns_test = true
     # MRH hack condition on these plots for now
@@ -103,13 +111,19 @@ function analyze_and_plot_data(path)
     if(manufactured_solns_test && nr > 1)
         r_bc = get(scan_input, "r_bc", "periodic")
         z_bc = get(scan_input, "z_bc", "periodic")
-        dfni_func, densi_func = manufactured_solutions(Lr,Lz,r_bc,z_bc)
+        manufactured_solns_list = manufactured_solutions(Lr,Lz,r_bc,z_bc) 
+        dfni_func = manufactured_solns_list.dfni_func
+        densi_func = manufactured_solns_list.densi_func
+        dfnn_func = manufactured_solns_list.dfnn_func
+        densn_func = manufactured_solns_list.densn_func
         
+        # ion test
+        #compare_densities_symbolic_test(run_name,density,densi_func,"ion",z,r,nz,nr,ntime)
         is = 1
-        spec_string = ""
+        spec_string = "ion"
         it = ntime
         heatmap(r, z, density[:,:,is,it], xlabel=L"r", ylabel=L"z", title=L"n_i/n_{ref}", c = :deep)
-        outfile = string(run_name, "_dens_vs_r_z", spec_string, ".pdf")
+        outfile = string(run_name, "_dens_vs_r_z_", spec_string, ".pdf")
         savefig(outfile)
         
         density_sym = copy(density[:,:,:,:])
@@ -119,10 +133,10 @@ function analyze_and_plot_data(path)
             end
         end
         heatmap(r, z, density_sym[:,:,is,it], xlabel=L"r", ylabel=L"z", title=L"n_i^{sym}/n_{ref}", c = :deep)
-        outfile = string(run_name, "_dens_sym_vs_r_z", spec_string, ".pdf")
+        outfile = string(run_name, "_dens_sym_vs_r_z_", spec_string, ".pdf")
         savefig(outfile)
         
-        density_norm = copy(density[1,1,1,:])
+        density_norm = zeros(mk_float,ntime)
         for it in 1:ntime
             dummy = 0.0
             for ir in 1:nr
@@ -134,8 +148,48 @@ function analyze_and_plot_data(path)
         end
         println(density_norm)
         @views plot(time, density_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=L" \sum || n_i - n_i^{sym} ||^2") #, yaxis=:log)
-        outfile = string(run_name, "_dens_norm_vs_t", spec_string, ".pdf")
+        outfile = string(run_name, "_dens_norm_vs_t_", spec_string, ".pdf")
         savefig(outfile)
+        
+        if n_neutral_species > 0
+            # neutral test
+            #compare_densities_symbolic_test(run_name,neutral_density,densn_func,"neutral",z,r,nz,nr,ntime)
+            # would rather use function above but getting errors 
+            #  LoadError: MethodError: no method matching getindex(::typeof(time), ::Int64)
+            # copy and paste body of function twice instead...
+            is = 1
+            spec_string = "neutral"
+            it = ntime
+            heatmap(r, z, neutral_density[:,:,is,it], xlabel=L"r", ylabel=L"z", title=L"n_i/n_{ref}", c = :deep)
+            outfile = string(run_name, "_dens_vs_r_z_", spec_string, ".pdf")
+            savefig(outfile)
+            
+            density_sym = copy(density[:,:,:,:])
+            for ir in 1:nr
+                for iz in 1:nz
+                    density_sym[iz,ir,is,it] = densn_func(z[iz],r[ir],time[it])
+                end
+            end
+            heatmap(r, z, density_sym[:,:,is,it], xlabel=L"r", ylabel=L"z", title=L"n_i^{sym}/n_{ref}", c = :deep)
+            outfile = string(run_name, "_dens_sym_vs_r_z_", spec_string, ".pdf")
+            savefig(outfile)
+            
+            density_norm = zeros(mk_float,ntime)
+            for it in 1:ntime
+                dummy = 0.0
+                for ir in 1:nr
+                    for iz in 1:nz
+                        dummy += (neutral_density[iz,ir,is,it] - densn_func(z[iz],r[ir],time[it]))^2
+                    end
+                end
+                density_norm[it] = dummy
+            end
+            println("test: ",spec_string," ",density_norm)
+            @views plot(time, density_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=L" \sum || n_i - n_i^{sym} ||^2") #, yaxis=:log)
+            outfile = string(run_name, "_dens_norm_vs_t_", spec_string, ".pdf")
+            savefig(outfile)
+            
+        end
     end 
     
     
@@ -143,6 +197,42 @@ end
 
 """
 """
+
+function compare_densities_symbolic_test(run_name,density,density_function,spec_string,z,r,nz,nr,ntime)
+    #density_function = function_list.density_function
+    is = 1
+    #spec_string = ""
+    it = ntime
+    heatmap(r, z, density[:,:,is,it], xlabel=L"r", ylabel=L"z", title=L"n_i/n_{ref}", c = :deep)
+    outfile = string(run_name, "_dens_vs_r_z_", spec_string, ".pdf")
+    savefig(outfile)
+    
+    density_sym = copy(density[:,:,:,:])
+    for ir in 1:nr
+        for iz in 1:nz
+            density_sym[iz,ir,is,it] = density_function(z[iz],r[ir],time[it])
+        end
+    end
+    heatmap(r, z, density_sym[:,:,is,it], xlabel=L"r", ylabel=L"z", title=L"n_i^{sym}/n_{ref}", c = :deep)
+    outfile = string(run_name, "_dens_sym_vs_r_z_", spec_string, ".pdf")
+    savefig(outfile)
+    
+    density_norm = zeros(mk_float,ntime)
+    for it in 1:ntime
+        dummy = 0.0
+        for ir in 1:nr
+            for iz in 1:nz
+                dummy += (density[iz,ir,is,it] - density_function(z[iz],r[ir],time[it]))^2
+            end
+        end
+        density_norm[it] = dummy
+    end
+    println("test: ",spec_string," ",density_norm)
+    @views plot(time, density_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=L" \sum || n_i - n_i^{sym} ||^2") #, yaxis=:log)
+    outfile = string(run_name, "_dens_norm_vs_t_", spec_string, ".pdf")
+    savefig(outfile)
+end
+
 function init_postprocessing_options(pp, nvpa, nvperp, nz, nr, ntime)
     print("Initializing the post-processing input options...")
     # nwrite_movie is the stride used when making animations

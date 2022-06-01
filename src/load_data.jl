@@ -5,7 +5,8 @@ module load_data
 export open_netcdf_file
 export load_coordinate_data
 export load_fields_data
-export load_moments_data
+export load_charged_particle_moments_data
+export load_neutral_particle_moments_data
 export load_pdf_data
 
 using NCDatasets
@@ -20,6 +21,10 @@ function open_netcdf_file(run_name)
     # open the netcdf file with given filename for reading
     fid = NCDataset(filename,"a")
     println("done.")
+
+    #dimnames = keys(fid.dim)
+    #println(dimnames)
+    #println(fid.dim["n_neutral_species"])
 
     return fid
 end
@@ -78,9 +83,14 @@ function load_coordinate_data(fid)
     ntime = length(cdfvar)
     # load the data for time
     time = cdfvar.var[:]
+    
+    # get the lengths of the ion species dimension
+    n_ion_species = fid.dim["n_ion_species"]
+    # get the lengths of the neutral species dimension
+    n_neutral_species = fid.dim["n_neutral_species"]
     println("done.")
 
-    return nvpa, vpa, vpa_wgts, nvperp, vperp, vperp_wgts, nz, z, z_wgts, Lz, nr, r, r_wgts, Lr, ntime, time
+    return nvpa, vpa, vpa_wgts, nvperp, vperp, vperp_wgts, nz, z, z_wgts, Lz, nr, r, r_wgts, Lr, ntime, time, n_ion_species, n_neutral_species
 end
 
 """
@@ -97,33 +107,41 @@ end
 
 """
 """
-function load_moments_data(fid)
-    print("Loading velocity moments data...")
-    # define a handle for the species density
+function load_charged_particle_moments_data(fid)
+    print("Loading charged particle velocity moments data...")
+    # define a handle for the charged species density
     cdfvar = fid["density"]
-    # load the species density data
+    # load the charged species density data
     density = cdfvar.var[:,:,:,:]
-    # define a handle for the species parallel flow
+    # define a handle for the charged species parallel flow
     cdfvar = fid["parallel_flow"]
-    # load the species parallel flow data
+    # load the charged species parallel flow data
     parallel_flow = cdfvar.var[:,:,:,:]
-    # define a handle for the species parallel pressure
+    # define a handle for the charged species parallel pressure
     cdfvar = fid["parallel_pressure"]
-    # load the species parallel pressure data
+    # load the charged species parallel pressure data
     parallel_pressure = cdfvar.var[:,:,:,:]
-    # define a handle for the species parallel heat flux
+    # define a handle for the charged species parallel heat flux
     cdfvar = fid["parallel_heat_flux"]
-    # load the species parallel heat flux data
+    # load the charged species parallel heat flux data
     parallel_heat_flux = cdfvar.var[:,:,:,:]
-    # define a handle for the species thermal speed
+    # define a handle for the charged species thermal speed
     cdfvar = fid["thermal_speed"]
-    # load the species thermal speed data
+    # load the charged species thermal speed data
     thermal_speed = cdfvar.var[:,:,:,:]
-    # define the number of species
-    n_species = size(cdfvar,3)
+    
     evolve_ppar = false
     println("done.")
-    return density, parallel_flow, parallel_pressure, parallel_heat_flux, thermal_speed, n_species, evolve_ppar
+    return density, parallel_flow, parallel_pressure, parallel_heat_flux, thermal_speed, evolve_ppar
+end
+
+function load_neutral_particle_moments_data(fid)
+    print("Loading neutral particle velocity moments data...")
+    cdfvar = fid["density_neutral"]
+    # load the neutral species density data
+    neutral_density = cdfvar.var[:,:,:,:]
+    println("done.")
+    return neutral_density
 end
 
 """
