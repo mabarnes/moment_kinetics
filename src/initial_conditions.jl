@@ -3,9 +3,13 @@
 module initial_conditions
 
 export init_pdf_and_moments
+export enforce_r_boundary_condition!
 export enforce_z_boundary_condition!
 export enforce_vpa_boundary_condition!
 export enforce_boundary_conditions!
+export enforce_neutral_boundary_conditions!
+export enforce_neutral_r_boundary_condition!
+export enforce_neutral_z_boundary_condition!
 
 # package
 using SpecialFunctions: erfc
@@ -505,6 +509,54 @@ function enforce_vpa_boundary_condition_local!(f::T, bc, upwind_idx, downwind_id
     elseif bc == "periodic"
         f[downwind_idx] = 0.5*(f[upwind_idx]+f[downwind_idx])
         f[upwind_idx] = f[downwind_idx]
+    end
+end
+
+function enforce_neutral_boundary_conditions!(f, r_adv::T, vz, vr, vzeta, z, r, composition) where T #f_initial,
+    
+    # f_initial contains the initial condition for enforcing a fixed-boundary-value condition 
+    # no bc on vz vr vzeta required as no advection in these coordinates
+    begin_sn_r_vzeta_vr_vz_region()
+    @views enforce_neutral_z_boundary_condition!(f, vz, vr, vzeta, z, r, composition)
+    begin_sn_z_vzeta_vr_vz_region()
+    @views enforce_neutral_r_boundary_condition!(f, r_adv, vz, vr, vzeta, z, r, composition) #f_initial, 
+end
+
+function enforce_neutral_z_boundary_condition!(f, vz, vr, vzeta, z, r, composition)
+    bc = z.bc
+    nz = z.n
+    # 'periodic' BC enforces periodicity by taking the average of the boundary points
+    if bc == "periodic"
+        @loop_sn_r_vzeta_vr_vz isn ir ivzeta ivr ivz begin
+            f[ivz,ivr,ivzeta,1,ir,isn] = 0.5*(f[ivz,ivr,ivzeta,1,ir,isn]+f[ivz,ivr,ivzeta,nz,ir,isn])
+            f[ivz,ivr,ivzeta,nz,ir,isn] = f[ivz,ivr,ivzeta,1,ir,isn]
+        end
+    end
+end
+
+function enforce_neutral_r_boundary_condition!(f, adv::T, vz, vr, vzeta, z, r, composition) where T #f_initial, 
+    bc = r.bc
+    nr = r.n
+    # 'periodic' BC enforces periodicity by taking the average of the boundary points
+    if bc == "periodic"
+        @loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
+            f[ivz,ivr,ivzeta,iz,1,isn] = 0.5*(f[ivz,ivr,ivzeta,iz,1,isn]+f[ivz,ivr,ivzeta,iz,nr,isn])
+            f[ivz,ivr,ivzeta,iz,nr,isn] = f[ivz,ivr,ivzeta,iz,1,isn]
+        end
+    #elseif bc == "Dirichlet"
+    #    # use the old distribution to force the new distribution to have 
+    #    # consistant-in-time values at the boundary
+    #    # impose bc on upwind boundary only (Hyperbolic PDE)
+    #    @loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
+    #    #ir = 1 # r = -L/2
+    #    #if adv[isn].speed[ir,ivz,ivr,ivzeta,ir] > zero
+    #    #    f[ivz,ivr,ivzeta,iz,ir,isn] = f_initial[ivz,ivr,ivzeta,iz,ir,isn]
+    #    #end
+    #    #ir = nr # r = L/2
+    #    #if adv[isn].speed[ir,ivz,ivr,ivzeta,ir] < -zero
+    #    #    f[ivz,ivr,ivzeta,iz,ir,isn] = f_initial[ivz,ivr,ivzeta,iz,ir,isn]
+    #    #end
+    #    end
     end
 end
 

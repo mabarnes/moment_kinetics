@@ -20,6 +20,8 @@ using ..velocity_moments: update_density!, update_upar!, update_ppar!, update_qp
 using ..velocity_moments: update_neutral_density!
 using ..initial_conditions: enforce_z_boundary_condition!, enforce_boundary_conditions!
 using ..initial_conditions: enforce_vpa_boundary_condition!, enforce_r_boundary_condition!
+using ..initial_conditions: enforce_neutral_boundary_conditions!
+using ..initial_conditions: enforce_neutral_z_boundary_condition!, enforce_neutral_r_boundary_condition!
 using ..advection: setup_advection, update_boundary_indices!
 using ..z_advection: update_speed_z!, z_advection!
 using ..r_advection: update_speed_r!, r_advection!
@@ -307,7 +309,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
             update_boundary_indices!(neutral_r_advect[isn], loop_ranges[].vz, loop_ranges[].vr, loop_ranges[].vzeta, loop_ranges[].z)
         end
         # enforce prescribed boundary condition in r on the neutral distribution function f
-        # PLACEHOLDER!! @views enforce_r_boundary_condition!(pdf.neutral.unnorm, pdf.charged.unnorm, r.bc, r_advect, r, z, vzeta, vr, vz, composition)
+        @views enforce_neutral_r_boundary_condition!(pdf.neutral.unnorm, r_advect, vz, vr, vzeta, z, r, composition)
     end 
     
     # create structure neutral_z_advect for neutral particle advection
@@ -322,7 +324,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
             update_boundary_indices!(neutral_r_advect[isn], loop_ranges[].vz, loop_ranges[].vr, loop_ranges[].vzeta, loop_ranges[].r)
         end
         # enforce prescribed boundary condition in r on the neutral distribution function f
-        # PLACEHOLDER!! @views enforce_z_boundary_condition!(pdf.neutral.unnorm, z.bc, z_advect, r, z, vzeta, vr, vz, composition)
+        @views enforce_neutral_z_boundary_condition!(pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
     end
     
     ##
@@ -726,9 +728,11 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
             composition.n_neutral_species, vpa, vperp, z, r, composition, collisions, z.n, dt)
     end
     
-    # enforce boundary conditions in z and vpa on the distribution function
+    # enforce boundary conditions in r, z and vpa on the charged particle distribution function
     enforce_boundary_conditions!(fvec_out.pdf, pdf.charged.norm, vpa.bc, z.bc, r.bc, vpa, vperp, z, r,
      vpa_advect, z_advect, r_advect, composition)
+    # enforce boundary conditions in r and z on the neutral particle distribution function
+    enforce_neutral_boundary_conditions!(fvec_out.pdf_neutral, r_advect, vz, vr, vzeta, z, r, composition)
     # End of advance for distribution function
 
     # reset "xx.updated" flags to false since ff has been updated
