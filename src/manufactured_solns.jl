@@ -25,7 +25,7 @@ using Symbolics
     function dfni_sym(Lr,Lz,r_bc,z_bc)
         densi = densi_sym(Lr,Lz,r_bc,z_bc)
         if (r_bc == "periodic" && z_bc == "periodic") || (r_bc == "Dirichlet" && z_bc == "periodic")
-            dfni = densi * exp( - vpa^2 - vperp^2) #/ sqrt(pi^3)
+            dfni = densi * exp( - vpa^2 - vperp^2) 
         elseif r_bc == "periodic" && z_bc == "wall"
             Hplus = 0.5*(sign(vpa) + 1.0)
             Hminus = 0.5*(sign(-vpa) + 1.0)
@@ -51,7 +51,6 @@ using Symbolics
         return dfni_func, densi_func
     end 
 
-    #function manufactured_sources(dfni,densi,geometry)
     function manufactured_sources(Lr,Lz,r_bc,z_bc,geometry)
         
         densi = densi_sym(Lr,Lz,r_bc,z_bc)
@@ -66,9 +65,6 @@ using Symbolics
         Bzed = geometry.Bzed
         Bmag = geometry.Bmag
         rhostar = geometry.rstar
-        #Bzed = 1.0 #geometry.Bzed
-        #Bmag = 1.0 #geometry.Bmag
-        #rhostar = 1.0 #geometry.rstar
         
         phi = log(densi)
         Er = -Dr(phi)
