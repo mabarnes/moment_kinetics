@@ -6,6 +6,7 @@ export manufactured_solutions
 export manufactured_sources
 export manufactured_electric_fields
 export manufactured_solutions_as_arrays
+export manufactured_rhs_as_array
 
 using Symbolics
 using IfElse
@@ -13,6 +14,7 @@ using ..input_structs
 
 using ..array_allocation: allocate_float
 using ..coordinates: coordinate
+using ..input_structs: geometry_input
 using ..type_definitions
 
     @variables r z vpa vperp t vz vr vzeta
@@ -255,8 +257,8 @@ using ..type_definitions
         return manufactured_E_fields
     end 
 
-    function manufactured_sources(Lr,Lz,r_bc,z_bc,composition,geometry,collisions,nr)
-        
+    function manufactured_solutions(Lr,Lz,r_bc,z_bc,geometry,composition,nr)
+
         # ion manufactured solutions
         densi = densi_sym(Lr,Lz,r_bc,z_bc)
         dfni = dfni_sym(Lr,Lz,r_bc,z_bc,composition,geometry,nr)
@@ -274,7 +276,6 @@ using ..type_definitions
         Dz = Differential(z) 
         Dvpa = Differential(vpa) 
         Dvperp = Differential(vperp) 
-        Dt = Differential(t) 
     
         # get geometric/composition data
         Bzed = geometry.Bzed
@@ -297,13 +298,28 @@ using ..type_definitions
         # calculate the electric fields and the potential
         Er, Ez, phi = electric_fields(Lr,Lz,r_bc,z_bc,composition,nr)
         
-        # the ion source to maintain the manufactured solution
-        Si = ( Dt(dfni) + ( vpa * (Bzed/Bmag) - 0.5*rhostar*Er ) * Dz(dfni) + ( 0.5*rhostar*Ez*rfac ) * Dr(dfni) + ( 0.5*Ez*Bzed/Bmag ) * Dvpa(dfni)
-               + cx_frequency*( densn*dfni - densi*gav_dfnn ) ) - ionization_frequency*dense*gav_dfnn 
+        rhs_ion = -( vpa * (Bzed/Bmag) - 0.5*rhostar*Er ) * Dz(dfni) - ( 0.5*rhostar*Ez ) * Dr(dfni) - ( 0.5*Ez*Bzed/Bmag ) * Dvpa(dfni)
+        rhs_neutral = -vz * Dz(dfnn) - rfac*vr * Dr(dfnn) - cx_frequency* (densi*dfnn - densn*vrvzvzeta_dfni) - ionization_frequency*dense*dfnn
+
+        return expand_derivatives(rhs_ion), expand_derivatives(rhs_neutral)
+    end
+
+    function manufactured_rhs(Lr,Lz,r_bc,z_bc,geometry)
+        rhs_sym = manufactured_rhs_sym(Lr,Lz,r_bc,z_bc,geometry)
+        return build_function(rhs_sym, vpa, vperp, z, r, t, expression=Val{false})
+    end
+
+    function manufactured_sources(Lr,Lz,r_bc,z_bc,composition,geometry,collisions,nr)
+
+        dfni = dfni_sym(Lr,Lz,r_bc,z_bc)
+        dfnn = dfnn_sym(Lr,Lz,r_bc,z_bc)
+        rhs_ion, rhs_neutral = manufactured_rhs_sym(Lr,Lz,r_bc,z_bc,composition,geometry,collisions,nr)
+
+        Dt = Differential(t)
+
+        Si = Dt(dfni) - rhs_ion
         Source_i = expand_derivatives(Si)
-        
-        # the neutral source to maintain the manufactured solution
-        Sn = Dt(dfnn) + vz * Dz(dfnn) + rfac*vr * Dr(dfnn) + cx_frequency* (densi*dfnn - densn*vrvzvzeta_dfni) + ionization_frequency*dense*dfnn
+        Sn = Dt(dfnn) - rhs_neutral
         Source_n = expand_derivatives(Sn)
         
         Source_i_func = build_function(Source_i, vpa, vperp, z, r, t, expression=Val{false})
@@ -345,6 +361,35 @@ using ..type_definitions
         phi = log.(densi)
 
         return densi, phi, dfni
+    end
+
+    """
+        manufactured_rhs_as_array(
+            t::mk_float, r::AbstractVector, z::AbstractVector, vperp::AbstractVector,
+            vpa::AbstractVector, geometry::geometry_input)
+
+    Create array filled with manufactured rhs.
+
+    Returns
+    -------
+    rhs
+    """
+    function manufactured_rhs_as_array(
+        t::mk_float, r::coordinate, z::coordinate, vperp::coordinate,
+        vpa::coordinate, geometry::geometry_input)
+
+        rhs_func = manufactured_rhs(r.L, z.L, r.bc, z.bc, geometry)
+
+        rhs = allocate_float(vpa.n, vperp.n, z.n, r.n)
+
+        for ir ∈ 1:r.n, iz ∈ 1:z.n
+            for ivperp ∈ 1:vperp.n, ivpa ∈ 1:vpa.n
+                rhs[ivpa,ivperp,iz,ir] = rhs_func(vpa.grid[ivpa], vperp.grid[ivperp],
+                                                  z.grid[iz], r.grid[ir], t)
+            end
+        end
+
+        return rhs
     end
 
 end
