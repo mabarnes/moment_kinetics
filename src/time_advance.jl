@@ -812,4 +812,35 @@ function update_pdf_unnorm!(pdf, moments, scratch, composition, vpa, vperp)
     end
 end
 
+"""
+Hacky way of extracting df/dt (and dn/dt, etc. if calculated) by wrapping
+euler_time_advance!()
+"""
+function evaluate_ddt!(fvec_out, fvec_in, pdf, fields, moments, advect_objects, vz, vr,
+        vzeta, vpa, vperp, gyrophase, z, r, t, t_input, spectral_objects, composition,
+        collisions, geometry, boundary_distributions, scratch_dummy,
+        manufactured_source_list, advance)
+
+    # Set initial state of fvec_out.pdf and fvec_out.pdf_neutral to 0.0, so that they
+    # will only contain the change in f
+    begin_s_r_z_vperp_vpa_region()
+    @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+        fvec_out.pdf[ivpa,ivperp,iz,ir,is] = 0.0
+    end
+    begin_sn_r_z_vzeta_vr_vz_region()
+    @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
+        fvec_out.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] = 0.0
+    end
+
+    # modify t_input to set dt=1
+    modified_t_input = time_input(t_input.nstep, 1.0, t_input.nwrite,
+        t_input.use_semi_lagrange, t_input.n_rk_stages, t_input.split_operators,
+        t_input.use_manufactured_solns)
+
+    euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, advect_objects, vz, vr,
+        vzeta, vpa, vperp, gyrophase, z, r, t, modified_t_input, spectral_objects,
+        composition, collisions, geometry, boundary_distributions, scratch_dummy,
+        manufactured_source_list, advance, 1)
+end
+
 end
