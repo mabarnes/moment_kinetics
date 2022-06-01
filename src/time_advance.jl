@@ -19,6 +19,7 @@ using ..velocity_moments: enforce_moment_constraints!
 using ..velocity_moments: update_density!, update_upar!, update_ppar!, update_qpar!
 using ..initial_conditions: enforce_z_boundary_condition!, enforce_boundary_conditions!
 using ..initial_conditions: enforce_vpa_boundary_condition!, enforce_r_boundary_condition!
+using ..input_structs: time_input
 using ..advection: setup_advection, update_boundary_indices!
 using ..z_advection: update_speed_z!, z_advection!
 using ..r_advection: update_speed_r!, r_advection!
@@ -665,6 +666,34 @@ function update_pdf_unnorm!(pdf, moments, scratch, composition, vpa, vperp)
             pdf.unnorm[ivpa,ivperp,iz,ir,is] = pdf.norm[ivpa,ivperp,iz,ir,is]
         end
     end
+end
+
+"""
+Hacky way of extracting df/dt (and dn/dt, etc. if calculated) by wrapping
+euler_time_advance!()
+"""
+function evaluate_ddt!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, vperp_SL, z_SL,
+        r_SL, vpa_advect, vperp_advect, z_advect, r_advect, vpa, vperp, z, r, t,
+        t_input, vpa_spectral, vperp_spectral, z_spectral, r_spectral, composition,
+        collisions, geometry, scratch_dummy, manufactured_source_list, advance)
+
+    # Set initial state of fvec_out.pdf to 0.0, so that it will only contain the change
+    # in f
+    begin_serial_region()
+    @serial_region begin
+        fvec_out.pdf .= 0.0
+    end
+
+    # modify t_input to set dt=1
+    modified_t_input = time_input(t_input.nstep, 1.0, t_input.nwrite,
+        t_input.use_semi_lagrange, t_input.n_rk_stages, t_input.split_operators,
+        t_input.use_manufactured_solns)
+
+    euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, vperp_SL, z_SL,
+        r_SL, vpa_advect, vperp_advect, z_advect, r_advect, vpa, vperp, z, r, t,
+        modified_t_input, vpa_spectral, vperp_spectral, z_spectral, r_spectral,
+        composition, collisions, geometry, scratch_dummy, manufactured_source_list,
+        advance, 1)
 end
 
 end
