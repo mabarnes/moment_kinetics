@@ -59,7 +59,7 @@ using Symbolics
         dfni = dfni_sym(Lr,Lz,r_bc,z_bc)
         
         densn = densn_sym(Lr,Lz,r_bc,z_bc)
-        dfnn_sym = dfnn_sym(Lr,Lz,r_bc,z_bc)
+        dfnn = dfnn_sym(Lr,Lz,r_bc,z_bc)
         
         #build julia functions from these symbolic expressions
         # cf. https://docs.juliahub.com/Symbolics/eABRO/3.4.0/tutorials/symbolic_functions/
@@ -86,7 +86,7 @@ using Symbolics
         dfni = dfni_sym(Lr,Lz,r_bc,z_bc)
         # neutral manufactured solutions
         densn = densn_sym(Lr,Lz,r_bc,z_bc)
-        dfnn_sym = dfnn_sym(Lr,Lz,r_bc,z_bc)
+        dfnn = dfnn_sym(Lr,Lz,r_bc,z_bc)
         
         # define derivative operators
         Dr = Differential(r) 
@@ -118,7 +118,7 @@ using Symbolics
         
         manufactured_sources_list = (Source_i_func = Source_i_func, Source_n_func = Source_n_func)
         
-        return manufactured_solns_list
+        return manufactured_sources_list
     end 
     
 end
