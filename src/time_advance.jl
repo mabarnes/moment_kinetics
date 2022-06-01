@@ -713,7 +713,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     end
     
     if advance.manufactured_solns_test
-        source_terms_manufactured!(fvec_out.pdf, fvec_in, moments, vpa, vperp, z, r, t, dt, composition, manufactured_source_list)
+        source_terms_manufactured!(fvec_out.pdf, fvec_out.pdf_neutral, vz, vr, vzeta, vpa, vperp, z, r, t, dt, composition, manufactured_source_list)
     end
     
     # account for charge exchange collisions between ions and neutrals
