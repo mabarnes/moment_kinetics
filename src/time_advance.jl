@@ -17,6 +17,7 @@ using ..chebyshev: chebyshev_derivative!
 using ..velocity_moments: update_moments!, reset_moments_status!
 using ..velocity_moments: enforce_moment_constraints!
 using ..velocity_moments: update_density!, update_upar!, update_ppar!, update_qpar!
+using ..velocity_moments: update_neutral_density!
 using ..initial_conditions: enforce_z_boundary_condition!, enforce_boundary_conditions!
 using ..initial_conditions: enforce_vpa_boundary_condition!, enforce_r_boundary_condition!
 using ..advection: setup_advection, update_boundary_indices!
@@ -510,12 +511,12 @@ function time_advance_no_splitting!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa
     #use pdf.norm for this fn for now.
     
     if t_input.n_rk_stages > 1
-        ssp_rk!(pdf, scratch, t, t_input, vpa, vperp, z, r, 
+        ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, z, r, 
             moments, fields, spectral_objects, advect_objects,
             composition, collisions, geometry, advance,  scratch_dummy, manufactured_source_list, istep)#pdf_in, 
     else
         euler_time_advance!(scratch, scratch, pdf, fields, moments,
-            advect_objects, vpa, vperp, z, r, t,
+            advect_objects, vz, vr, vzeta, vpa, vperp, z, r, t,
             t_input, spectral_objects, composition,
             collisions, geometry, scratch_dummy, manufactured_source_list, advance, 1)#pdf_in, 
         # NB: this must be broken -- scratch is updated in euler_time_advance!,
@@ -526,11 +527,16 @@ end
 
 """
 """
-function rk_update!(scratch, pdf, moments, fields, vpa, vperp, z, r, rk_coefs, istage, composition, z_spectral, r_spectral)
+function rk_update!(scratch, pdf, moments, fields, vz, vr, vzeta, vpa, vperp, z, r, rk_coefs, istage, composition, z_spectral, r_spectral)
     begin_s_r_z_vperp_region()
     nvpa = vpa.n
     new_scratch = scratch[istage+1]
     old_scratch = scratch[istage]
+    
+    ##
+    # update the charged particle distribution and moments 
+    ##
+    
     @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
         new_scratch.pdf[ivpa,ivperp,iz,ir,is] = rk_coefs[1]*pdf.charged.norm[ivpa,ivperp,iz,ir,is] + rk_coefs[2]*old_scratch.pdf[ivpa,ivperp,iz,ir,is] + rk_coefs[3]*new_scratch.pdf[ivpa,ivperp,iz,ir,is]
     end
@@ -554,6 +560,23 @@ function rk_update!(scratch, pdf, moments, fields, vpa, vperp, z, r, rk_coefs, i
     
     # update the parallel heat flux
     update_qpar!(moments.charged.qpar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
+    
+    ##
+    # update the neutral particle distribution and moments 
+    ##
+    
+    if composition.n_neutral_species > 0
+        @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
+            new_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] = ( rk_coefs[1]*pdf.neutral.norm[ivz,ivr,ivzeta,iz,ir,isn] 
+             + rk_coefs[2]*old_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] + rk_coefs[3]*new_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn])
+        end
+        @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
+            pdf.neutral.unnorm[ivz,ivr,ivzeta,iz,ir,isn] = new_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn]
+        end
+        update_neutral_density!(new_scratch.density_neutral, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
+        # other neutral moments here if needed
+    end 
+    
     # update the electrostatic potential phi
     update_phi!(fields, scratch[istage+1], z, r, composition, z_spectral, r_spectral)
     #begin_s_r_z_vperp_region()
@@ -561,7 +584,7 @@ end
 
 """
 """
-function ssp_rk!(pdf, scratch, t, t_input, vpa, vperp, z, r, 
+function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, z, r, 
            moments, fields, spectral_objects, advect_objects,
            composition, collisions, geometry, advance, scratch_dummy, manufactured_source_list,  istep)#pdf_in,
     
@@ -572,11 +595,23 @@ function ssp_rk!(pdf, scratch, t, t_input, vpa, vperp, z, r,
     first_scratch = scratch[1]
     @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
         first_scratch.pdf[ivpa,ivperp,iz,ir,is] = pdf.charged.norm[ivpa,ivperp,iz,ir,is]
+        # change norm -> unnorm if remove moment-based evolution?
     end
     @loop_s_r_z is ir iz begin
         first_scratch.density[iz,ir,is] = moments.charged.dens[iz,ir,is]
         first_scratch.upar[iz,ir,is] = moments.charged.upar[iz,ir,is]
         first_scratch.ppar[iz,ir,is] = moments.charged.ppar[iz,ir,is]
+    end
+    
+    if composition.n_neutral_species > 0
+        @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
+            first_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] = pdf.neutral.norm[ivz,ivr,ivzeta,iz,ir,isn]
+            # change norm -> unnorm if remove moment-based evolution?
+        end
+        @loop_sn_r_z isn ir iz begin
+            first_scratch.density_neutral[iz,ir,isn] = moments.neutral.dens[iz,ir,isn]
+            # other neutral moments here if required
+        end
     end
     
     for istage ∈ 1:n_rk_stages
@@ -586,10 +621,10 @@ function ssp_rk!(pdf, scratch, t, t_input, vpa, vperp, z, r,
         # calculate f^{(1)} = fⁿ + Δt*G[fⁿ] = scratch[2].pdf
         euler_time_advance!(scratch[istage+1], scratch[istage],
             pdf, fields, moments, 
-            advect_objects, vpa, vperp, z, r, t,
+            advect_objects, vz, vr, vzeta, vpa, vperp, z, r, t,
             t_input, spectral_objects, composition,
             collisions, geometry, scratch_dummy, manufactured_source_list, advance, istage) #pdf_in,
-        @views rk_update!(scratch, pdf, moments, fields, vpa, vperp, z, r, advance.rk_coefs[:,istage], 
+        @views rk_update!(scratch, pdf, moments, fields, vz, vr, vzeta, vpa, vperp, z, r, advance.rk_coefs[:,istage], 
          istage, composition, spectral_objects.z_spectral, spectral_objects.r_spectral)
     end
 
@@ -599,12 +634,24 @@ function ssp_rk!(pdf, scratch, t, t_input, vpa, vperp, z, r,
     final_scratch = scratch[istage]
     @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
         pdf.charged.norm[ivpa,ivperp,iz,ir,is] = final_scratch.pdf[ivpa,ivperp,iz,ir,is]
+        # change norm -> unnorm if remove moment-based evolution?
     end
     @loop_s_r_z is ir iz begin
         moments.charged.dens[iz,ir,is] = final_scratch.density[iz,ir,is]
         moments.charged.upar[iz,ir,is] = final_scratch.upar[iz,ir,is]
         moments.charged.ppar[iz,ir,is] = final_scratch.ppar[iz,ir,is]
     end
+    if composition.n_neutral_species > 0
+        @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
+            pdf.neutral.norm[ivz,ivr,ivzeta,iz,ir,isn] = final_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] 
+            # change norm -> unnorm if remove moment-based evolution?
+        end
+        @loop_sn_r_z isn ir iz begin
+            moments.neutral.dens[iz,ir,isn] = final_scratch.density_neutral[iz,ir,isn] 
+            # other neutral moments here if required
+        end
+    end
+    
     update_pdf_unnorm!(pdf, moments, scratch[istage].temp_z_s, composition, vpa, vperp)
     return nothing
 end
@@ -616,7 +663,7 @@ using the forward Euler method: fvec_out = fvec_in + dt*fvec_in,
 with fvec_in an input and fvec_out the output
 """
 function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, 
-    advect_objects, vpa, vperp, z, r, t, t_input,
+    advect_objects, vz, vr, vzeta, vpa, vperp, z, r, t, t_input,
     spectral_objects, composition, collisions, geometry,
     scratch_dummy, manufactured_source_list, advance, istage) #pdf_in, 
     # define some abbreviated variables for tidiness
@@ -705,6 +752,15 @@ function update_solution_vector!(evolved, moments, istage, composition, vpa, vpe
         new_evolved.upar[iz,ir,is] = old_evolved.upar[iz,ir,is]
         new_evolved.ppar[iz,ir,is] = old_evolved.ppar[iz,ir,is]
     end
+    if composition.n_neutral_species > 0 
+        @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
+            new_evolved.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] - old_evolved.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn]
+        end
+        @loop_sn_r_z isn ir iz begin
+            new_evolved.density_neutral[iz,ir,isn] = old_evolved.density_neutral[iz,ir,isn]
+            # other neutral moments here if needed
+        end
+    end
     return nothing
 end
 
@@ -712,13 +768,15 @@ end
 if separately evolving the density via the continuity equation,
 the evolved pdf has been normalised by the particle density
 undo this normalisation to get the true particle distribution function
-
-scratch should be a (nz,nspecies) array
 """
 function update_pdf_unnorm!(pdf, moments, scratch, composition, vpa, vperp)
-    nvpa = size(pdf.charged.unnorm, 1)
     @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
         pdf.charged.unnorm[ivpa,ivperp,iz,ir,is] = pdf.charged.norm[ivpa,ivperp,iz,ir,is]
+    end
+    if composition.n_neutral_species > 0
+        @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
+            pdf.neutral.unnorm[ivz,ivr,ivzeta,iz,ir,isn] = pdf.neutral.norm[ivz,ivr,ivzeta,iz,ir,isn]
+        end
     end
 end
 
