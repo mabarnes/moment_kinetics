@@ -90,9 +90,12 @@ function init_pdf_and_moments(vz, vr, vzeta, vpa, vperp, z, r, composition, spec
     pdf = create_and_init_pdf(moments, vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_species, species)
     
     if(use_manufactured_solns)
-        dfni_func, densi_func = manufactured_solutions(r.L,z.L,r.bc,z.bc) 
-        #same for neutrals here
-        #nb fns not fns of species yet
+        manufactured_solns_list = manufactured_solutions(r.L,z.L,r.bc,z.bc) 
+        dfni_func = manufactured_solns_list.dfni_func
+        densi_func = manufactured_solns_list.densi_func
+        dfnn_func = manufactured_solns_list.dfnn_func
+        densn_func = manufactured_solns_list.densn_func
+        #nb manufactured functions not functions of species
         for is in 1:n_ion_species
             for ir in 1:r.n
                 for iz in 1:z.n

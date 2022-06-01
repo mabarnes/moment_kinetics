@@ -337,8 +337,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
      vpa_spectral = vpa_spectral, vperp_spectral = vperp_spectral, z_spectral = z_spectral, r_spectral = r_spectral)
     
     if(t_input.use_manufactured_solns)
-        manufactured_source_list = (Source_i_func = manufactured_sources(r.L,z.L,r.bc,z.bc,geometry), Source_n_func = "placeholder")
-        # possibly need to include neutral source or multiple sources for different ion/neutral species
+        manufactured_source_list = manufactured_sources(r.L,z.L,r.bc,z.bc,geometry)
     else
         manufactured_source_list = false # dummy Bool to be passed as argument instead of list
     end
