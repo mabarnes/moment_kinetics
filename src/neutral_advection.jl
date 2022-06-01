@@ -80,16 +80,16 @@ function neutral_advection_z!(f_out, fvec_in, advect, r, z, vzeta, vr, vz, dt, z
         # get the updated speed along the r direction using the current f
         @views update_speed_neutral_z!(advect[isn], r, z, vzeta, vr, vz)
         # update the upwind/downwind boundary indices and upwind_increment
-        @views update_boundary_indices!(advect[isn], loop_ranges[].vz, loop_ranges[].vr, loop_ranges[].vzeta, loop_ranges[].z)
+        @views update_boundary_indices!(advect[isn], loop_ranges[].vz, loop_ranges[].vr, loop_ranges[].vzeta, loop_ranges[].r)
         
-        # advance r-advection equation
-        @loop_z_vzeta_vr_vz iz ivzeta ivr ivz begin
+        # advance z-advection equation
+        @loop_r_vzeta_vr_vz ir ivzeta ivr ivz begin
             # take the normalized pdf contained in fvec_in.pdf and remove the normalization,
             # returning the true (un-normalized) particle distribution function in r.scratch
-            @. z.scratch = fvec_in.pdf_neutral[ivz,ivr,ivzeta,iz,:,is]
+            @. z.scratch = fvec_in.pdf_neutral[ivz,ivr,ivzeta,:,ir,isn]
 
-            @views advance_f_local!(f_out[ivz,ivr,ivzeta,iz,:,is], z.scratch,
-                                    advect[isn], ivz, ivr, ivzeta, iz,
+            @views advance_f_local!(f_out[ivz,ivr,ivzeta,:,ir,isn], z.scratch,
+                                    advect[isn], ivz, ivr, ivzeta, ir,
                                     z, dt, z_spectral)
         end
     end
