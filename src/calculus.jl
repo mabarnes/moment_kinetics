@@ -278,4 +278,36 @@ function integral(integrand, vx, px, wgtsx, vy, py, wgtsy)
 end
 
 
+"""
+3D velocity integration routines
+"""
+
+"""
+Computes the integral of the 3D integrand, using the input wgts
+"""
+function integral(integrand, vx, px, wgtsx, vy, py, wgtsy, vz, pz, wgtsz)
+    # nx is the number of grid points
+    nx = length(wgtsx)
+    ny = length(wgtsy)
+    nz = length(wgtsz)
+    # initialize 'integral' to zero before sum
+    integral = 0.0
+    @boundscheck nx == size(integrand,1) || throw(BoundsError(integrand))
+    @boundscheck ny == size(integrand,2) || throw(BoundsError(integrand))
+    @boundscheck nz == size(integrand,3) || throw(BoundsError(integrand))
+    @boundscheck nx == length(vx) || throw(BoundsError(vx))
+    @boundscheck ny == length(vy) || throw(BoundsError(vy))
+    @boundscheck nz == length(vz) || throw(BoundsError(vz))
+   
+    @inbounds for k ∈ 1:nz
+        @inbounds for j ∈ 1:ny
+            @inbounds for i ∈ 1:nx
+                integral += integrand[i,j,k] * (vx[i] ^ px) * (vy[j] ^ py) * (vz[k] ^ pz) * wgtsx[i] * wgtsy[j] * wgtsz[k]
+            end
+        end
+    end
+    return integral
+end
+
+
 end
