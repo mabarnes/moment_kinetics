@@ -5,11 +5,13 @@ module manufactured_solns
 export manufactured_solutions
 export manufactured_sources
 export manufactured_solutions_as_arrays
+export manufactured_rhs_as_array
 
 using Symbolics
 
 using ..array_allocation: allocate_float
 using ..coordinates: coordinate
+using ..input_structs: geometry_input
 using ..type_definitions
 
     @variables r z vpa vperp t
@@ -56,9 +58,8 @@ using ..type_definitions
         return dfni_func, densi_func
     end 
 
-    #function manufactured_sources(dfni,densi,geometry)
-    function manufactured_sources(Lr,Lz,r_bc,z_bc,geometry)
-        
+    function manufactured_rhs_sym(Lr,Lz,r_bc,z_bc,geometry)
+
         densi = densi_sym(Lr,Lz,r_bc,z_bc)
         dfni = dfni_sym(Lr,Lz,r_bc,z_bc)
         
@@ -66,7 +67,6 @@ using ..type_definitions
         Dz = Differential(z) 
         Dvpa = Differential(vpa) 
         Dvperp = Differential(vperp) 
-        Dt = Differential(t) 
     
         Bzed = geometry.Bzed
         Bmag = geometry.Bmag
@@ -79,7 +79,24 @@ using ..type_definitions
         Er = -Dr(phi)
         Ez = -Dz(phi)
     
-        S = Dt(dfni) + ( vpa * (Bzed/Bmag) - 0.5*rhostar*Er ) * Dz(dfni) + ( 0.5*rhostar*Ez ) * Dr(dfni) + ( 0.5*Ez*Bzed/Bmag ) * Dvpa(dfni)
+        rhs = -( vpa * (Bzed/Bmag) - 0.5*rhostar*Er ) * Dz(dfni) - ( 0.5*rhostar*Ez ) * Dr(dfni) - ( 0.5*Ez*Bzed/Bmag ) * Dvpa(dfni)
+
+        return expand_derivatives(rhs)
+    end
+
+    function manufactured_rhs(Lr,Lz,r_bc,z_bc,geometry)
+        rhs_sym = manufactured_rhs_sym(Lr,Lz,r_bc,z_bc,geometry)
+        return build_function(rhs_sym, vpa, vperp, z, r, t, expression=Val{false})
+    end
+
+    #function manufactured_sources(dfni,densi,geometry)
+    function manufactured_sources(Lr,Lz,r_bc,z_bc,geometry)
+
+        dfni = dfni_sym(Lr,Lz,r_bc,z_bc)
+
+        Dt = Differential(t)
+
+        S = Dt(dfni) - manufactured_rhs_sym(Lr,Lz,r_bc,z_bc,geometry)
         Source_i = expand_derivatives(S)
         
         Source_i_func = build_function(Source_i, vpa, vperp, z, r, t, expression=Val{false})
@@ -117,6 +134,35 @@ using ..type_definitions
         phi = log.(densi)
 
         return densi, phi, dfni
+    end
+
+    """
+        manufactured_rhs_as_array(
+            t::mk_float, r::AbstractVector, z::AbstractVector, vperp::AbstractVector,
+            vpa::AbstractVector, geometry::geometry_input)
+
+    Create array filled with manufactured rhs.
+
+    Returns
+    -------
+    rhs
+    """
+    function manufactured_rhs_as_array(
+        t::mk_float, r::coordinate, z::coordinate, vperp::coordinate,
+        vpa::coordinate, geometry::geometry_input)
+
+        rhs_func = manufactured_rhs(r.L, z.L, r.bc, z.bc, geometry)
+
+        rhs = allocate_float(vpa.n, vperp.n, z.n, r.n)
+
+        for ir ∈ 1:r.n, iz ∈ 1:z.n
+            for ivperp ∈ 1:vperp.n, ivpa ∈ 1:vpa.n
+                rhs[ivpa,ivperp,iz,ir] = rhs_func(vpa.grid[ivpa], vperp.grid[ivperp],
+                                                  z.grid[iz], r.grid[ir], t)
+            end
+        end
+
+        return rhs
     end
 
 end
