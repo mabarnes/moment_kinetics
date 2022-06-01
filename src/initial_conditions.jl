@@ -100,17 +100,35 @@ function init_pdf_and_moments(vz, vr, vzeta, vpa, vperp, z, r, composition, spec
             for ir in 1:r.n
                 for iz in 1:z.n
                     moments.charged.dens[iz,ir,is] = densi_func(z.grid[iz],r.grid[ir],0.0)
-                    # other moments here 
                     for ivperp in 1:vperp.n
                         for ivpa in 1:vpa.n
                             pdf.charged.unnorm[ivpa,ivperp,iz,ir,is] = dfni_func(vpa.grid[ivpa],vperp.grid[ivperp],z.grid[iz],r.grid[ir],0.0)
                             pdf.charged.norm[ivpa,ivperp,iz,ir,is] = pdf.charged.unnorm[ivpa,ivperp,iz,ir,is]
-                            #same for neutrals here
+                            
                         end
                     end
                 end
             end
         end
+        
+        if n_neutral_species > 0
+            for isn in 1:n_neutral_species
+                for ir in 1:r.n
+                    for iz in 1:z.n
+                        moments.neutral.dens[iz,ir,is] = densn_func(z.grid[iz],r.grid[ir],0.0)
+                        for ivzeta in 1:vzeta.n
+                            for ivr in 1:vr.n
+                                for ivz in 1:vz.n
+                                    pdf.neutral.unnorm[ivz,ivr,ivzeta,iz,ir,isn] = dfnn_func(vz.grid[ivz],vr.grid[ivr],vzeta.grid[ivzeta],z.grid[iz],r.grid[ir],0.0)
+                                    pdf.neutral.norm[ivz,ivr,ivzeta,iz,ir,isn] = pdf.neutral.unnorm[ivz,ivr,ivzeta,iz,ir,isn]
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        
     end 
     #begin_s_r_z_vperp_region()
     # calculate the initial parallel heat flux from the initial un-normalised pdf
