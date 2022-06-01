@@ -72,13 +72,13 @@ end
 """
 do a single stage time advance in z (potentially as part of a multi-stage RK scheme)
 """
-function neutral_advection_z!(f_out, fvec_in, advect, r, z, vzeta, vr, vz, dt, r_spectral, composition, geometry)
+function neutral_advection_z!(f_out, fvec_in, advect, r, z, vzeta, vr, vz, dt, z_spectral, composition, geometry)
     
     begin_sn_z_vzeta_vr_vz_region()
     
     @loop_sn isn begin
         # get the updated speed along the r direction using the current f
-        @views update_speed_r!(advect[isn], r, z, vzeta, vr, vz)
+        @views update_speed_neutral_z!(advect[isn], r, z, vzeta, vr, vz)
         # update the upwind/downwind boundary indices and upwind_increment
         @views update_boundary_indices!(advect[isn], loop_ranges[].vz, loop_ranges[].vr, loop_ranges[].vzeta, loop_ranges[].z)
         
@@ -86,11 +86,11 @@ function neutral_advection_z!(f_out, fvec_in, advect, r, z, vzeta, vr, vz, dt, r
         @loop_z_vzeta_vr_vz iz ivzeta ivr ivz begin
             # take the normalized pdf contained in fvec_in.pdf and remove the normalization,
             # returning the true (un-normalized) particle distribution function in r.scratch
-            @. r.scratch = fvec_in.pdf_neutral[ivz,ivr,ivzeta,iz,:,is]
+            @. z.scratch = fvec_in.pdf_neutral[ivz,ivr,ivzeta,iz,:,is]
 
-            @views advance_f_local!(f_out[ivz,ivr,ivzeta,iz,:,is], r.scratch,
+            @views advance_f_local!(f_out[ivz,ivr,ivzeta,iz,:,is], z.scratch,
                                     advect[isn], ivz, ivr, ivzeta, iz,
-                                    r, dt, r_spectral)
+                                    z, dt, z_spectral)
         end
     end
 end
