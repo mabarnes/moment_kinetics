@@ -636,7 +636,7 @@ function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase,
            composition, collisions, geometry, boundary_distributions, 
            advance, scratch_dummy, manufactured_source_list,  istep)#pdf_in,
     
-    begin_s_r_z_vperp_region()
+    begin_s_r_z_region()
     
     n_rk_stages = t_input.n_rk_stages
 
