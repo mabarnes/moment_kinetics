@@ -92,7 +92,7 @@ using ..type_definitions
     # ion density symbolic function
     function densi_sym(Lr,Lz,r_bc,z_bc)
         if r_bc == "periodic" && z_bc == "periodic"
-            densi = 1.5 +  0.1*(sin(2.0*pi*r/Lr) + sin(2.0*pi*z/Lz))*sin(2.0*pi*t)  
+            densi = 1.5 +  0.1*(sin(2.0*pi*r/Lr) + sin(2.0*pi*z/Lz))*cos(2.0*pi*t)  
         elseif r_bc == "Dirichlet" && z_bc == "periodic"
             #densi = 1.0 +  0.5*sin(2.0*pi*z/Lz)*(r/Lr + 0.5) + 0.2*sin(2.0*pi*r/Lr)*sin(2.0*pi*t)
             #densi = 1.0 +  0.5*sin(2.0*pi*z/Lz)*(r/Lr + 0.5) + sin(2.0*pi*r/Lr)*sin(2.0*pi*t)
