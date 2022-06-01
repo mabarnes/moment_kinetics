@@ -13,6 +13,7 @@ export update_qpar!
 export reset_moments_status!
 export enforce_moment_constraints!
 export moments_chrg_substruct, moments_ntrl_substruct
+export update_neutral_density!
 
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_shared_float, allocate_bool
@@ -191,7 +192,7 @@ NB: if this function is called and if ppar_updated is false, then
 the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
 """
 function update_ppar!(ppar, pdf, vpa, vperp, z, r, composition)
-    @boundscheck composition.n_species == size(ppar,3) || throw(BoundsError(ppar))
+    @boundscheck composition.n_ion_species == size(ppar,3) || throw(BoundsError(ppar))
     @boundscheck r.n == size(ppar,2) || throw(BoundsError(ppar))
     @boundscheck z.n == size(ppar,1) || throw(BoundsError(ppar))
     
@@ -248,6 +249,37 @@ function update_qpar_species!(qpar, ff, vpa, vperp, z, r)
         # old ! qpar[iz,ir] = integrate_over_vspace(@view(ff[:,iz,ir]), vpa.grid, 3, vpa.wgts) * vpanorm[iz,ir]^4
         qpar[iz,ir] = integrate_over_vspace(@view(ff[:,:,iz,ir]),
          vpa.grid, 3, vpa.wgts, vperp.grid, 0, vperp.wgts)
+    end
+    return nothing
+end
+
+"""
+calculate the neutral density from the neutral pdf
+"""
+function update_neutral_density!(dens, pdf, vz, vr, vzeta, z, r, composition)
+    
+    begin_sn_r_z_region()
+    @boundscheck composition.n_neutral_species == size(pdf, 6) || throw(BoundsError(pdf))
+    @boundscheck composition.n_neutral_species == size(dens, 3) || throw(BoundsError(dens))
+    @loop_sn isn begin
+        @views update_neutral_density_species!(dens[:,:,isn], pdf[:,:,:,:,:,isn], vz, vr, vzeta, z, r)
+    end
+end
+
+"""
+calculate the updated density (dens) for a given species
+"""
+function update_neutral_density_species!(dens, ff, vz, vr, vzeta, z, r)
+    @boundscheck vz.n == size(ff, 1) || throw(BoundsError(ff))
+    @boundscheck vr.n == size(ff, 2) || throw(BoundsError(ff))
+    @boundscheck vzeta.n == size(ff, 3) || throw(BoundsError(ff))
+    @boundscheck z.n == size(ff, 4) || throw(BoundsError(ff))
+    @boundscheck r.n == size(ff, 5) || throw(BoundsError(ff))
+    @boundscheck z.n == size(dens, 1) || throw(BoundsError(dens))
+    @boundscheck r.n == size(dens, 2) || throw(BoundsError(dens))
+    @loop_r_z ir iz begin
+        dens[iz,ir] = integrate_over_vspace(@view(ff[:,:,:,iz,ir]), 
+         vz.grid, 0, vz.wgts, vr.grid, 0, vr.wgts, vzeta.grid, 0, vzeta.wgts)
     end
     return nothing
 end
