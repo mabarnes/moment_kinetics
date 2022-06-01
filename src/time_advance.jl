@@ -629,6 +629,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     
     vpa_spectral, r_spectral, z_spectral = spectral_objects.vpa_spectral, spectral_objects.r_spectral, spectral_objects.z_spectral
     vpa_advect, r_advect, z_advect = advect_objects.vpa_advect, advect_objects.r_advect, advect_objects.z_advect
+    neutral_z_advect, neutral_r_advect = advect_objects.neutral_z_advect, advect_objects.neutral_r_advect
     
     if advance.vpa_advection
         vpa_advection!(fvec_out.pdf, fvec_in, fields, vpa_advect, vpa, vperp, z, r, dt, 
@@ -652,6 +653,16 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     #if advance.vperp_advection
     # PLACEHOLDER 
     #end 
+    
+    if advance.neutral_z_advection
+        neutral_advection_z!(fvec_out.pdf_neutral, fvec_in, neutral_z_advect,
+            r, z, vzeta, vr, vz, dt, z_spectral, composition, geometry)
+    end
+    
+    if advance.neutral_r_advection && r.n > 1
+        neutral_advection_r!(fvec_out.pdf_neutral, fvec_in, neutral_r_advect,
+            r, z, vzeta, vr, vz, dt, r_spectral, composition, geometry)
+    end
     
     if advance.manufactured_solns_test
         source_terms_manufactured!(fvec_out.pdf, fvec_in, moments, vpa, vperp, z, r, t, dt, composition, manufactured_source_list)
