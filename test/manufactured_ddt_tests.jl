@@ -1,0 +1,238 @@
+"""
+Test cases using the method of manufactured solutions (MMS)
+"""
+module ManufacturedDDTTests
+
+include("setup.jl")
+include("mms_utils.jl")
+
+using moment_kinetics: setup_moment_kinetics, cleanup_moment_kinetics!
+using moment_kinetics.looping
+using moment_kinetics.manufactured_solns
+using moment_kinetics.post_processing: L2_error_norm, L_infinity_error_norm
+using moment_kinetics.time_advance: evaluate_ddt!, advance_info
+using moment_kinetics.type_definitions
+
+# Create a temporary directory for test output
+test_output_directory = tempname()
+mkpath(test_output_directory)
+
+ngrid = 7
+const input_sound_wave_periodic = Dict(
+    "use_manufactured_solns" => true,
+    "n_ion_species" => 1,
+    "n_neutral_species" => 0,
+    "boltzmann_electron_response" => true,
+    "run_name" => "MMS-rperiodic",
+    "base_directory" => test_output_directory,
+    "evolve_moments_density" => false,
+    "evolve_moments_parallel_flow" => false,
+    "evolve_moments_parallel_pressure" => false,
+    "evolve_moments_conservation" => false,
+    "T_e" => 1.0,
+    "rhostar" => 1.0,
+    "initial_density1" => 0.5,
+    "initial_temperature1" => 1.0,
+    "initial_density2" => 0.5,
+    "initial_temperature2" => 1.0,
+    "z_IC_option1" => "sinusoid",
+    "z_IC_density_amplitude1" => 0.001,
+    "z_IC_density_phase1" => 0.0,
+    "z_IC_upar_amplitude1" => 0.0,
+    "z_IC_upar_phase1" => 0.0,
+    "z_IC_temperature_amplitude1" => 0.0,
+    "z_IC_temperature_phase1" => 0.0,
+    "z_IC_option2" => "sinusoid",
+    "z_IC_density_amplitude2" => 0.001,
+    "z_IC_density_phase2" => 0.0,
+    "z_IC_upar_amplitude2" => 0.0,
+    "z_IC_upar_phase2" => 0.0,
+    "z_IC_temperature_amplitude2" => 0.0,
+    "z_IC_temperature_phase2" => 0.0,
+    "charge_exchange_frequency" => 0.62831853071,
+    "ionization_frequency" => 0.0,
+    #"nstep" => 10, #1700,
+    #"dt" => 0.002,
+    #"nwrite" => 10, #1700,
+    "nstep" => 1700, #1700,
+    "dt" => 0.0002, #0.002,
+    "nwrite" => 1700, #1700,
+    "use_semi_lagrange" => false,
+    "n_rk_stages" => 1,
+    "split_operators" => false,
+    "z_ngrid" => ngrid,
+    "z_nelement" => 2,
+    "z_bc" => "periodic",
+    "z_discretization" => "chebyshev_pseudospectral_matrix_multiply",
+    "r_ngrid" => ngrid,
+    "r_nelement" => 2,
+    "r_bc" => "periodic",
+    "r_discretization" => "chebyshev_pseudospectral_matrix_multiply",
+    "vpa_ngrid" => ngrid,
+    "vpa_nelement" => 4,
+    "vpa_L" => 8.0,
+    "vpa_bc" => "periodic",
+    "vpa_discretization" => "chebyshev_pseudospectral_matrix_multiply",
+    "vperp_ngrid" => ngrid,
+    "vperp_nelement" => 4,
+    "vperp_L" => 8.0,
+    "vperp_bc" => "periodic",
+    "vperp_discretization" => "chebyshev_pseudospectral_matrix_multiply_vperp",
+)
+
+"""
+    evaluate_initial_ddt(input_dict::Dict)
+
+Evaluate df/dt for the initial state of f.
+
+Very similar to combination of run_moment_kinetics function and various parts of
+time_advance module.
+"""
+function evaluate_initial_ddt(input_dict::Dict)
+    # set up all the structs, etc. needed for a run
+    mk_state = setup_moment_kinetics(input_dict)
+
+    # Split mk_state tuple into separate variables
+    pdf, scratch, t, t_input, vpa, vperp, z, r, vpa_spectral, vperp_spectral,
+    z_spectral, r_spectral, moments, fields, vpa_advect, vperp_advect, z_advect,
+    r_advect, vpa_SL, vperp_SL, z_SL, r_SL, composition, collisions, geometry, advance,
+    scratch_dummy, manufactured_source_list, io, cdf = mk_state
+
+    # Put initial state into scratch[1]
+    begin_s_r_z_region()
+    first_scratch = scratch[1]
+    output = scratch[2]
+    @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+        first_scratch.pdf[ivpa,ivperp,iz,ir,is] = pdf.norm[ivpa,ivperp,iz,ir,is]
+        output.pdf[ivpa,ivperp,iz,ir,is] = 0.0
+    end
+    @loop_s_r_z is ir iz begin
+        first_scratch.density[iz,ir,is] = moments.dens[iz,ir,is]
+        first_scratch.upar[iz,ir,is] = moments.upar[iz,ir,is]
+        first_scratch.ppar[iz,ir,is] = moments.ppar[iz,ir,is]
+        output.density[iz,ir,is] = 0.0
+        output.upar[iz,ir,is] = 0.0
+        output.ppar[iz,ir,is] = 0.0
+    end
+
+    # modify advance_info argument so that no manufactured sources are added when
+    # evaluating the time advance, as in this test we only want manufactured initial
+    # conditions
+    modified_advance = advance_info(advance.vpa_advection, advance.z_advection,
+        advance.r_advection, advance.cx_collisions, advance.ionization_collisions,
+        advance.source_terms, advance.continuity, advance.force_balance, advance.energy,
+        advance.rk_coefs, false)
+
+    evaluate_ddt!(output, first_scratch, pdf, fields, moments, vpa_SL, vperp_SL, z_SL,
+        r_SL, vpa_advect, vperp_advect, z_advect, r_advect, vpa, vperp, z, r, t,
+        t_input, vpa_spectral, vperp_spectral, z_spectral, r_spectral, composition,
+        collisions, geometry, scratch_dummy, manufactured_source_list, modified_advance)
+
+    # Make a copy of the array with df/dt so it doesn't get messed up by MPI cleanup in
+    # cleanup_moment_kinetics!()
+    dfdt = nothing
+    if global_rank[] == 0
+        dfdt = copy(output.pdf)
+    end
+
+    # clean up i/o and communications
+    # last 2 elements of mk_state are `io` and `cdf`
+    cleanup_moment_kinetics!(mk_state[end-1:end]...)
+
+    return dfdt, r, z, vperp, vpa, geometry
+end
+
+"""
+    runcase(input::Dict)
+
+Run a simulation with parameters set by `input` using manufactured sources and return
+the errors in each variable compared to the manufactured solution.
+"""
+function runcase(input::Dict)
+    dfdt = nothing
+    r = nothing
+    z = nothing
+    vperp = nothing
+    vpa = nothing
+    geometry = nothing
+    quietoutput() do
+        dfdt, r, z, vperp, vpa, geometry = evaluate_initial_ddt(input)
+    end
+
+    error_2 = nothing
+    error_inf = nothing
+    if global_rank[] == 0
+        rhs_manf = manufactured_rhs_as_array(mk_float(0.0), r, z, vperp, vpa, geometry)
+
+        # Only one species, so get rid of species index
+        dfdt = dfdt[:,:,:,:,1]
+
+        error_2 = L2_error_norm(dfdt, rhs_manf)
+        error_inf = L_infinity_error_norm(dfdt, rhs_manf)
+
+        println("error ", error_2, " ", error_inf)
+    end
+
+    return error_2, error_inf
+end
+
+"""
+    testconvergence(input::Dict)
+
+Test convergence with spatial resolution
+
+The parameters for the run are given in `input::Dict`.
+"""
+function testconvergence(input::Dict)
+    errors_2 = Vector{mk_float}(undef, 0)
+    errors_inf = Vector{mk_float}(undef, 0)
+
+    ngrid = get_and_check_ngrid(input)
+
+    #nelement_values = [2, 4, 6, 8, 10, 12, 14, 16]
+    nelement_values = [2, 4, 6, 8]
+    for nelement ∈ nelement_values
+        global_rank[] == 0 && println("testing nelement=$nelement")
+        case_input = increase_resolution(input, nelement)
+
+        error_2, error_inf = runcase(case_input)
+
+        if global_rank[] == 0
+            push!(errors_2, error_2)
+            push!(errors_inf, error_inf)
+        end
+    end
+
+    if global_rank[] == 0
+        convergence_2 = errors_2[1:end] ./ errors_2[end]
+        convergence_inf = errors_inf[1:end] ./ errors_inf[end]
+        expected_convergence = @. (nelement_values[end] / nelement_values[1:end])^(ngrid - 1)
+        println("errors")
+        println(errors_2)
+        println(errors_inf)
+        println("convergence")
+        println(convergence_2)
+        println(convergence_inf)
+        println("expected convergence")
+        println(expected_convergence)
+    end
+end
+
+function runtests()
+    @testset "MMS" verbose=use_verbose begin
+        global_rank[] == 0 && println("MMS tests")
+
+        @testset "r-periodic, z-periodic" begin
+            testconvergence(input_sound_wave_periodic)
+        end
+    end
+
+    return nothing
+end
+
+end # ManufacturedSolutionsTests
+
+
+using .ManufacturedDDTTests
+
+ManufacturedDDTTests.runtests()
