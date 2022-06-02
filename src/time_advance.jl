@@ -321,7 +321,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
         @loop_sn isn begin
             @views update_speed_neutral_z!(neutral_z_advect[isn], r, z, vzeta, vr, vz)
             # initialise the upwind/downwind boundary indices in z
-            update_boundary_indices!(neutral_r_advect[isn], loop_ranges[].vz, loop_ranges[].vr, loop_ranges[].vzeta, loop_ranges[].r)
+            update_boundary_indices!(neutral_z_advect[isn], loop_ranges[].vz, loop_ranges[].vr, loop_ranges[].vzeta, loop_ranges[].r)
         end
         # enforce prescribed boundary condition in r on the neutral distribution function f
         @views enforce_neutral_z_boundary_condition!(pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
