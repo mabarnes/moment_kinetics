@@ -8,6 +8,8 @@ export load_fields_data
 export load_charged_particle_moments_data
 export load_neutral_particle_moments_data
 export load_pdf_data
+export load_neutral_pdf_data
+export load_neutral_coordinate_data
 
 using NCDatasets
 
@@ -93,6 +95,40 @@ function load_coordinate_data(fid)
     return nvpa, vpa, vpa_wgts, nvperp, vperp, vperp_wgts, nz, z, z_wgts, Lz, nr, r, r_wgts, Lr, ntime, time, n_ion_species, n_neutral_species
 end
 
+function load_neutral_coordinate_data(fid)
+    print("Loading coordinate data...")
+    # define a handle for the vz coordinate
+    cdfvar = fid["vz"]
+    # get the number of vz grid points
+    nvz = length(cdfvar)
+    # load the data for vz
+    vz = cdfvar.var[:]
+    # get the weights associated with the vz coordinate
+    cdfvar = fid["vz_wgts"]
+    vz_wgts = cdfvar.var[:]
+    
+    # define a handle for the vr coordinate
+    cdfvar = fid["vr"]
+    # get the number of vr grid points
+    nvr = length(cdfvar)
+    # load the data for vr
+    vr = cdfvar.var[:]
+    # get the weights associated with the vr coordinate
+    cdfvar = fid["vr_wgts"]
+    vr_wgts = cdfvar.var[:]
+
+    # define a handle for the vzeta coordinate
+    cdfvar = fid["vzeta"]
+    # get the number of vzeta grid points
+    nvzeta = length(cdfvar)
+    # load the data for vzeta
+    vzeta = cdfvar.var[:]
+    # get the weights associated with the vzeta coordinate
+    cdfvar = fid["vzeta_wgts"]
+    vzeta_wgts = cdfvar.var[:]
+
+    return nvz, vz, vz_wgts, nvr, vr, vr_wgts, nvzeta, vzeta, vzeta_wgts
+end
 """
 """
 function load_fields_data(fid)
@@ -147,13 +183,24 @@ end
 """
 """
 function load_pdf_data(fid)
-    print("Loading distribution function data...")
+    print("Loading charged particle distribution function data...")
     # define a handle for the distribution function
     cdfvar = fid["f"]
     # load the distribution function data
     pdf = cdfvar.var[:,:,:,:,:,:]
     println("done.")
     return pdf
+end
+"""
+"""
+function load_neutral_pdf_data(fid)
+    print("Loading neutral particle distribution function data...")
+    # define a handle for the distribution function
+    cdfvar = fid["f_neutral"]
+    # load the distribution function data
+    neutral_pdf = cdfvar.var[:,:,:,:,:,:]
+    println("done.")
+    return neutral_pdf
 end
 
 end

@@ -21,6 +21,7 @@ using ..type_definitions: mk_float, mk_int
 using ..load_data: open_netcdf_file
 using ..load_data: load_coordinate_data, load_fields_data, load_pdf_data
 using ..load_data: load_charged_particle_moments_data, load_neutral_particle_moments_data
+using ..load_data: load_neutral_pdf_data, load_neutral_coordinate_data
 using ..analysis: analyze_fields_data, analyze_moments_data, analyze_pdf_data
 using ..velocity_moments: integrate_over_vspace
 using ..manufactured_solns: manufactured_solutions
@@ -68,18 +69,23 @@ function analyze_and_plot_data(path)
     nvpa, vpa, vpa_wgts, nvperp, vperp, vperp_wgts, nz, z, z_wgts, Lz, 
      nr, r, r_wgts, Lr, ntime, time, n_ion_species, n_neutral_species = load_coordinate_data(fid)
     println("\n Info: n_neutral_species = ",n_neutral_species,", n_ion_species = ",n_ion_species,"\n")
+    if n_neutral_species > 0
+        nvz, vz, vz_wgts, nvr, vr, vr_wgts, nvzeta, vzeta, vzeta_wgts = load_neutral_coordinate_data(fid)
+    end
     # initialise the post-processing input options
     nwrite_movie, itime_min, itime_max, ivpa0, ivperp0, iz0, ir0 = init_postprocessing_options(pp, nvpa, nvperp, nz, nr, ntime)
     # load full (z,r,t) fields data
     phi = load_fields_data(fid)
-    # load full (z,r,species,t) velocity moments data
+    # load full (z,r,species,t) charged particle velocity moments data
     density, parallel_flow, parallel_pressure, parallel_heat_flux,
         thermal_speed, evolve_ppar = load_charged_particle_moments_data(fid)
+    # load full (vpa,vperp,z,r,species,t) charged particle distribution function (pdf) data
+    ff = load_pdf_data(fid)
+    # load neutral particle data
     if n_neutral_species > 0
         neutral_density = load_neutral_particle_moments_data(fid)
+        neutral_ff = load_neutral_pdf_data(fid)
     end
-    # load full (vpa,vperp,z,r,species,t) particle distribution function (pdf) data
-    ff = load_pdf_data(fid)
     
     #evaluate 1D-1V diagnostics at fixed ir0
     diagnostics_1d = false
@@ -146,8 +152,27 @@ function analyze_and_plot_data(path)
             end
             density_norm[it] = dummy
         end
-        println(density_norm)
+        println("test density || n - n^{sym} ||^2: ",spec_string," ",density_norm)
         @views plot(time, density_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=L" \sum || n_i - n_i^{sym} ||^2") #, yaxis=:log)
+        outfile = string(run_name, "_dens_norm_vs_t_", spec_string, ".pdf")
+        savefig(outfile)
+        
+        pdf_norm = zeros(mk_float,ntime)
+        for it in 1:ntime
+            dummy = 0.0
+            for ir in 1:nr
+                for iz in 1:nz
+                    for ivperp in 1:nvperp
+                        for ivpa in 1:nvpa
+                            dummy += (ff[ivpa,ivperp,iz,ir,is,it] - dfni_func(vpa[ivpa],vperp[ivperp],z[iz],r[ir],time[it]))^2
+                        end
+                    end
+                end
+            end
+            pdf_norm[it] = dummy
+        end
+        println("test pdf || f - f^{sym} ||^2: ",spec_string," ",pdf_norm)
+        @views plot(time, pdf_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=L" \sum || f_i - f_i^{sym} ||^2") #, yaxis=:log)
         outfile = string(run_name, "_dens_norm_vs_t_", spec_string, ".pdf")
         savefig(outfile)
         
@@ -160,17 +185,17 @@ function analyze_and_plot_data(path)
             is = 1
             spec_string = "neutral"
             it = ntime
-            heatmap(r, z, neutral_density[:,:,is,it], xlabel=L"r", ylabel=L"z", title=L"n_i/n_{ref}", c = :deep)
+            heatmap(r, z, neutral_density[:,:,is,it], xlabel=L"r", ylabel=L"z", title=L"n_n/n_{ref}", c = :deep)
             outfile = string(run_name, "_dens_vs_r_z_", spec_string, ".pdf")
             savefig(outfile)
             
-            density_sym = copy(density[:,:,:,:])
+            density_sym = copy(neutral_density[:,:,:,:])
             for ir in 1:nr
                 for iz in 1:nz
                     density_sym[iz,ir,is,it] = densn_func(z[iz],r[ir],time[it])
                 end
             end
-            heatmap(r, z, density_sym[:,:,is,it], xlabel=L"r", ylabel=L"z", title=L"n_i^{sym}/n_{ref}", c = :deep)
+            heatmap(r, z, density_sym[:,:,is,it], xlabel=L"r", ylabel=L"z", title=L"n_n^{sym}/n_{ref}", c = :deep)
             outfile = string(run_name, "_dens_sym_vs_r_z_", spec_string, ".pdf")
             savefig(outfile)
             
@@ -184,8 +209,29 @@ function analyze_and_plot_data(path)
                 end
                 density_norm[it] = dummy
             end
-            println("test: ",spec_string," ",density_norm)
-            @views plot(time, density_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=L" \sum || n_i - n_i^{sym} ||^2") #, yaxis=:log)
+            println("test density || n - n^{sym} ||^2: ",spec_string," ",density_norm)
+            @views plot(time, density_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=L" \sum || n_n - n_n^{sym} ||^2") #, yaxis=:log)
+            outfile = string(run_name, "_dens_norm_vs_t_", spec_string, ".pdf")
+            savefig(outfile)
+            
+            pdf_norm = zeros(mk_float,ntime)
+            for it in 1:ntime
+                dummy = 0.0
+                for ir in 1:nr
+                    for iz in 1:nz
+                        for ivzeta in 1:nvzeta
+                            for ivr in 1:nvr
+                                for ivz in 1:nvz
+                                    dummy += (neutral_ff[ivz,ivr,ivzeta,iz,ir,is,it] - dfnn_func(vz[ivz],vr[ivr],vzeta[ivzeta],z[iz],r[ir],time[it]))^2
+                                end
+                            end
+                        end
+                    end
+                end
+                pdf_norm[it] = dummy
+            end
+            println("test pdf || f - f^{sym} ||^2: ",spec_string," ",pdf_norm)
+            @views plot(time, pdf_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=L" \sum || f_n - f_n^{sym} ||^2") #, yaxis=:log)
             outfile = string(run_name, "_dens_norm_vs_t_", spec_string, ".pdf")
             savefig(outfile)
             
