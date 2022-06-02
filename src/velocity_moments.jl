@@ -278,7 +278,7 @@ function update_neutral_density_species!(dens, ff, vz, vr, vzeta, z, r)
     @boundscheck z.n == size(dens, 1) || throw(BoundsError(dens))
     @boundscheck r.n == size(dens, 2) || throw(BoundsError(dens))
     @loop_r_z ir iz begin
-        dens[iz,ir] = integrate_over_vspace(@view(ff[:,:,:,iz,ir]), 
+        dens[iz,ir] = integrate_over_neutral_vspace(@view(ff[:,:,:,iz,ir]), 
          vz.grid, 0, vz.wgts, vr.grid, 0, vr.wgts, vzeta.grid, 0, vzeta.wgts)
     end
     return nothing
@@ -289,6 +289,11 @@ computes the integral over vpa of the integrand, using the input vpa_wgts
 """
 function integrate_over_vspace(args...)
     return integral(args...)/sqrt(pi)
+end
+# factor of Pi^3/2 assumes normalisation f^N_neutral = Pi^3/2 c_neutral^3 f_neutral / n_ref 
+# works for 3D but what about 1D?
+function integrate_over_neutral_vspace(args...)
+    return integral(args...)/(sqrt(pi)^3)
 end
 
 """
