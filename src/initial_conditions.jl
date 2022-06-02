@@ -23,6 +23,7 @@ using ..velocity_moments: integrate_over_vspace
 using ..velocity_moments: integrate_over_positive_vpa, integrate_over_negative_vpa
 using ..velocity_moments: create_moments_charged, create_moments_neutral, update_qpar!
 using ..velocity_moments: moments_charged_substruct, moments_neutral_substruct
+using ..velocity_moments: update_neutral_density!
 
 using ..manufactured_solns: manufactured_solutions
 
@@ -124,9 +125,11 @@ function init_pdf_and_moments(vz, vr, vzeta, vpa, vperp, z, r, composition, spec
                                 end
                             end
                         end
+                        
                     end
                 end
             end
+            #update_neutral_density!(moments.neutral.dens, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
         end
         
     end 
@@ -343,13 +346,13 @@ function init_pdf_neutral_over_density!(pdf, spec, vz, vr, vzeta, z, uz, ur, uze
             ivr = 1
             ivzeta = 1 
             for ivz ∈ 1:vz.n
-                pdf[ivz,ivr,ivzeta,iz] = exp(-vz.scratch[ivz]^2 - vr.scratch[ivr]^2 - vzeta.scratch[ivr]^2  ) / vth[iz]
+                pdf[ivz,ivr,ivzeta,iz] = exp(-vz.scratch[ivz]^2 - vr.scratch[ivr]^2 - vzeta.scratch[ivzeta]^2  ) / vth[iz]
             end
         else # 3D case with vr & vzeta
             for ivzeta ∈ 1:vzeta.n
                 for ivr ∈ 1:vr.n
                     for ivz ∈ 1:vz.n
-                        pdf[ivz,ivr,ivzeta,iz] = exp(-vz.scratch[ivz]^2 - vr.scratch[ivr]^2 - vzeta.scratch[ivr]^2  ) / vth[iz]^3
+                        pdf[ivz,ivr,ivzeta,iz] = exp(-vz.scratch[ivz]^2 - vr.scratch[ivr]^2 - vzeta.scratch[ivzeta]^2  ) / vth[iz]^3
                     end
                 end
             end
