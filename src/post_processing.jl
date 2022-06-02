@@ -145,35 +145,39 @@ function analyze_and_plot_data(path)
         density_norm = zeros(mk_float,ntime)
         for it in 1:ntime
             dummy = 0.0
+            dummy_N = 0.0
             for ir in 1:nr
                 for iz in 1:nz
                     dummy += (density[iz,ir,is,it] - densi_func(z[iz],r[ir],time[it]))^2
+                    dummy_N += (densi_func(z[iz],r[ir],time[it]))^2
                 end
             end
-            density_norm[it] = dummy
+            density_norm[it] = dummy/dummy_N
         end
-        println("test density || n - n^{sym} ||^2: ",spec_string," ",density_norm)
-        @views plot(time, density_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=L" \sum || n_i - n_i^{sym} ||^2") #, yaxis=:log)
+        println("test density: ",spec_string,": ||n - n^{sym}||^2/||n^{sym}||^2 = \n ",density_norm)
+        @views plot(time, density_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=L" \sum || n_i - n_i^{sym} ||^2 / \sum || n_i^{sym} ||^2") #, yaxis=:log)
         outfile = string(run_name, "_dens_norm_vs_t_", spec_string, ".pdf")
         savefig(outfile)
         
         pdf_norm = zeros(mk_float,ntime)
         for it in 1:ntime
             dummy = 0.0
+            dummy_N = 0.0
             for ir in 1:nr
                 for iz in 1:nz
                     for ivperp in 1:nvperp
                         for ivpa in 1:nvpa
                             dummy += (ff[ivpa,ivperp,iz,ir,is,it] - dfni_func(vpa[ivpa],vperp[ivperp],z[iz],r[ir],time[it]))^2
+                            dummy_N += (dfni_func(vpa[ivpa],vperp[ivperp],z[iz],r[ir],time[it]))^2
                         end
                     end
                 end
             end
-            pdf_norm[it] = dummy
+            pdf_norm[it] = dummy/dummy_N
         end
-        println("test pdf || f - f^{sym} ||^2: ",spec_string," ",pdf_norm)
-        @views plot(time, pdf_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=L" \sum || f_i - f_i^{sym} ||^2") #, yaxis=:log)
-        outfile = string(run_name, "_dens_norm_vs_t_", spec_string, ".pdf")
+        println("test pdf: ",spec_string,": ||f - f^{sym}||^2/||f^{sym}||^2 = \n",pdf_norm)
+        @views plot(time, pdf_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=L" \sum || f_i - f_i^{sym} ||^2 / \sum ||f_i^{sym} ||^2") #, yaxis=:log)
+        outfile = string(run_name, "_pdf_norm_vs_t_", spec_string, ".pdf")
         savefig(outfile)
         
         if n_neutral_species > 0
@@ -202,37 +206,41 @@ function analyze_and_plot_data(path)
             density_norm = zeros(mk_float,ntime)
             for it in 1:ntime
                 dummy = 0.0
+                dummy_N = 0.0
                 for ir in 1:nr
                     for iz in 1:nz
                         dummy += (neutral_density[iz,ir,is,it] - densn_func(z[iz],r[ir],time[it]))^2
+                        dummy_N += (densn_func(z[iz],r[ir],time[it]))^2
                     end
                 end
-                density_norm[it] = dummy
+                density_norm[it] = dummy/dummy_N
             end
-            println("test density || n - n^{sym} ||^2: ",spec_string," ",density_norm)
-            @views plot(time, density_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=L" \sum || n_n - n_n^{sym} ||^2") #, yaxis=:log)
+            println("test density: ",spec_string,": ||n - n^{sym}||^2/||n^{sym}||^2 = \n ",density_norm)
+            @views plot(time, density_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=L" \sum || n_n - n_n^{sym} ||^2/ \sum ||n_n^{sym} ||^2") #, yaxis=:log)
             outfile = string(run_name, "_dens_norm_vs_t_", spec_string, ".pdf")
             savefig(outfile)
             
             pdf_norm = zeros(mk_float,ntime)
             for it in 1:ntime
                 dummy = 0.0
+                dummy_N = 0.0
                 for ir in 1:nr
                     for iz in 1:nz
                         for ivzeta in 1:nvzeta
                             for ivr in 1:nvr
                                 for ivz in 1:nvz
                                     dummy += (neutral_ff[ivz,ivr,ivzeta,iz,ir,is,it] - dfnn_func(vz[ivz],vr[ivr],vzeta[ivzeta],z[iz],r[ir],time[it]))^2
+                                    dummy_N += (dfnn_func(vz[ivz],vr[ivr],vzeta[ivzeta],z[iz],r[ir],time[it]))^2
                                 end
                             end
                         end
                     end
                 end
-                pdf_norm[it] = dummy
+                pdf_norm[it] = dummy/dummy_N
             end
-            println("test pdf || f - f^{sym} ||^2: ",spec_string," ",pdf_norm)
-            @views plot(time, pdf_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=L" \sum || f_n - f_n^{sym} ||^2") #, yaxis=:log)
-            outfile = string(run_name, "_dens_norm_vs_t_", spec_string, ".pdf")
+            println("test pdf: ",spec_string,": ||f - f^{sym}||^2 / ||f^{sym}||^2 = \n",pdf_norm)
+            @views plot(time, pdf_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=L" \sum || f_n - f_n^{sym} ||^2 / \sum || f_n^{sym} ||^2 ") #, yaxis=:log)
+            outfile = string(run_name, "_pdf_norm_vs_t_", spec_string, ".pdf")
             savefig(outfile)
             
         end
