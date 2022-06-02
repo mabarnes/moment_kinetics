@@ -757,7 +757,7 @@ function update_solution_vector!(evolved, moments, istage, composition, vpa, vpe
     end
     if composition.n_neutral_species > 0 
         @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
-            new_evolved.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] - old_evolved.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn]
+            new_evolved.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] = old_evolved.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn]
         end
         @loop_sn_r_z isn ir iz begin
             new_evolved.density_neutral[iz,ir,isn] = old_evolved.density_neutral[iz,ir,isn]
