@@ -12,6 +12,7 @@ using Symbolics
 using IfElse
 using ..input_structs
 
+using ..input_structs: advance_info
 using ..array_allocation: allocate_float
 using ..coordinates: coordinate
 using ..input_structs: geometry_input
@@ -257,7 +258,7 @@ using ..type_definitions
         return manufactured_E_fields
     end 
 
-    function manufactured_solutions(Lr,Lz,r_bc,z_bc,geometry,composition,nr)
+    function manufactured_rhs_sym(Lr,Lz,r_bc,z_bc,composition,geometry,collisions,nr,advance=nothing)
 
         # ion manufactured solutions
         densi = densi_sym(Lr,Lz,r_bc,z_bc)
@@ -298,22 +299,66 @@ using ..type_definitions
         # calculate the electric fields and the potential
         Er, Ez, phi = electric_fields(Lr,Lz,r_bc,z_bc,composition,nr)
         
-        rhs_ion = -( vpa * (Bzed/Bmag) - 0.5*rhostar*Er ) * Dz(dfni) - ( 0.5*rhostar*Ez ) * Dr(dfni) - ( 0.5*Ez*Bzed/Bmag ) * Dvpa(dfni)
-        rhs_neutral = -vz * Dz(dfnn) - rfac*vr * Dr(dfnn) - cx_frequency* (densi*dfnn - densn*vrvzvzeta_dfni) - ionization_frequency*dense*dfnn
+        rhs_ion = 0
+        if advance === nothing || advance.vpa_advection
+            rhs_ion += - ( 0.5*Ez*Bzed/Bmag ) * Dvpa(dfni)
+        end
+        if advance === nothing || advance.z_advection
+            rhs_ion += -( vpa * (Bzed/Bmag) - 0.5*rhostar*Er ) * Dz(dfni)
+        end
+        if advance === nothing || advance.r_advection
+            rhs_ion += - ( 0.5*rhostar*Ez ) * Dr(dfni)
+        end
+        #if advance === nothing || advance.cx_collsions
+        #    # placeholder
+        #end
+        #if advance === nothing || advance.ionization_collsions
+        #    # placeholder
+        #end
+        #if advance === nothing || advance.source_terms
+        #    # placeholder
+        #end
+        #if advance === nothing || advance.continuity
+        #    # placeholder
+        #end
+        #if advance === nothing || advance.force_balance
+        #    # placeholder
+        #end
+        #if advance === nothing || advance.energy
+        #    # placeholder
+        #end
+        rhs_neutral = 0
+        if advance == nothing || advance.neutral_z_advection
+            rhs_neutral += -vz * Dz(dfnn)
+        end
+        if advance == nothing || advance.neutral_r_advection
+            rhs_neutral += - rfac*vr * Dr(dfnn)
+        end
+        if advance == nothing || advance.cx_collisions
+            rhs_neutral += - cx_frequency* (densi*dfnn - densn*vrvzvzeta_dfni)
+        end
+        if advance == nothing || advance.ionization_collisions
+            rhs_neutral += - ionization_frequency*dense*dfnn
+        end
 
         return expand_derivatives(rhs_ion), expand_derivatives(rhs_neutral)
     end
 
-    function manufactured_rhs(Lr,Lz,r_bc,z_bc,geometry)
-        rhs_sym = manufactured_rhs_sym(Lr,Lz,r_bc,z_bc,geometry)
-        return build_function(rhs_sym, vpa, vperp, z, r, t, expression=Val{false})
+    function manufactured_rhs(Lr::mk_float, Lz::mk_float, Lvpa::mk_float,
+                              Lvperp::mk_float, r_bc::String, z_bc::String,
+                              composition::species_composition,
+                              geometry::geometry_input, collisions::collisions_input,
+                              nr::mk_int, advance::Union{advance_info,Nothing}=nothing)
+        rhs_ion_sym, rhs_neutral_sym = manufactured_rhs_sym(Lr,Lz,Lvpa,Lvperp,r_bc,z_bc,composition,geometry,collisions,nr,advance)
+        return build_function(rhs_ion_sym, vpa, vperp, z, r, t, expression=Val{false}),
+               build_function(rhs_neutral_sym, vpa, vperp, z, r, t, expression=Val{false})
     end
 
     function manufactured_sources(Lr,Lz,r_bc,z_bc,composition,geometry,collisions,nr)
 
         dfni = dfni_sym(Lr,Lz,r_bc,z_bc)
         dfnn = dfnn_sym(Lr,Lz,r_bc,z_bc)
-        rhs_ion, rhs_neutral = manufactured_rhs_sym(Lr,Lz,r_bc,z_bc,composition,geometry,collisions,nr)
+        rhs_ion, rhs_neutral = manufactured_rhs_sym(Lr,Lz,Lvpa,Lvperp,r_bc,z_bc,composition,geometry,collisions,nr)
 
         Dt = Differential(t)
 
@@ -365,8 +410,9 @@ using ..type_definitions
 
     """
         manufactured_rhs_as_array(
-            t::mk_float, r::AbstractVector, z::AbstractVector, vperp::AbstractVector,
-            vpa::AbstractVector, geometry::geometry_input)
+            t::mk_float, r::coordinate, z::coordinate, vperp::coordinate, vpa::coordinate,
+            composition::species_composition, geometry::geometry_input,
+            collisions::collisions_input, advance::Union{advance_info,Nothing})
 
     Create array filled with manufactured rhs.
 
@@ -375,21 +421,23 @@ using ..type_definitions
     rhs
     """
     function manufactured_rhs_as_array(
-        t::mk_float, r::coordinate, z::coordinate, vperp::coordinate,
-        vpa::coordinate, geometry::geometry_input)
+        t::mk_float, r::coordinate, z::coordinate, vperp::coordinate, vpa::coordinate,
+        composition::species_composition, geometry::geometry_input,
+        collisions::collisions_input, advance::Union{advance_info,Nothing})
 
-        rhs_func = manufactured_rhs(r.L, z.L, r.bc, z.bc, geometry)
+        rhs_ion_func, rhs_neutral_func = manufactured_rhs(r.L, z.L, vpa.L, vperp.L, r.bc, z.bc, composition, geometry, collisions, r.n, advance)
 
-        rhs = allocate_float(vpa.n, vperp.n, z.n, r.n)
+        rhs_ion = allocate_float(vpa.n, vperp.n, z.n, r.n)
 
         for ir ∈ 1:r.n, iz ∈ 1:z.n
             for ivperp ∈ 1:vperp.n, ivpa ∈ 1:vpa.n
-                rhs[ivpa,ivperp,iz,ir] = rhs_func(vpa.grid[ivpa], vperp.grid[ivperp],
-                                                  z.grid[iz], r.grid[ir], t)
+                rhs_ion[ivpa,ivperp,iz,ir] =
+                    rhs_ion_func(vpa.grid[ivpa], vperp.grid[ivperp], z.grid[iz],
+                                 r.grid[ir], t)
             end
         end
 
-        return rhs
+        return rhs_ion
     end
 
 end
