@@ -29,7 +29,7 @@ using ..neutral_advection: update_speed_neutral_r!, neutral_advection_r!, update
 using ..vperp_advection: update_speed_vperp!, vperp_advection!
 using ..vpa_advection: update_speed_vpa!, vpa_advection!
 using ..charge_exchange: charge_exchange_collisions_1V!
-using ..ionization: ionization_collisions!
+using ..ionization: ionization_collisions_1V!
 using ..source_terms: source_terms!, source_terms_manufactured!
 using ..continuity: continuity_equation!
 using ..force_balance: force_balance!
@@ -53,6 +53,7 @@ mutable struct advance_info
     cx_collisions::Bool
     cx_collisions_1V::Bool
     ionization_collisions::Bool
+    ionization_collisions_1V::Bool
     source_terms::Bool
     continuity::Bool
     force_balance::Bool
@@ -101,7 +102,12 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
         else
             advance_cx = false
         end
-        if collisions.ionization > 0.0
+        if collisions.ionization > 0.0 &&  vz.n == vpa.n && vperp.n == 1 && vr.n == 1 && vzeta.n == 1
+            advance_ionization_1V = true
+        else
+            advance_ionization_1V = false
+        end
+        if collisions.ionization > 0.0 &&  vperp.n > 1 && vr.n > 1 && vzeta.n > 1
             advance_ionization = true
         else
             advance_ionization = false
@@ -117,7 +123,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     advance_force_balance = false
     advance_energy = false
     advance = advance_info(true, true, true, advance_neutral_z_advection, advance_neutral_r_advection,
-                           advance_cx, advance_cx_1V, advance_ionization, advance_sources,
+                           advance_cx, advance_cx_1V, advance_ionization, advance_ionization_1V, advance_sources,
                            advance_continuity, advance_force_balance, advance_energy, rk_coefs,
                            manufactured_solns_test)
 
@@ -728,9 +734,8 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
                                     collisions.charge_exchange, dt)
     end
     # account for ionization collisions between ions and neutrals
-    if advance.ionization_collisions
-        ionization_collisions!(fvec_out.pdf, fvec_in, moments, n_ion_species,
-            composition.n_neutral_species, vpa, vperp, z, r, composition, collisions, z.n, dt)
+    if advance.ionization_collisions_1V
+        ionization_collisions_1V!(fvec_out.pdf, fvec_out.pdf_neutral, fvec_in, vpa, vperp, z, r, composition, collisions, dt)
     end
     
     # enforce boundary conditions in r, z and vpa on the charged particle distribution function
