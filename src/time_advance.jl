@@ -28,7 +28,7 @@ using ..r_advection: update_speed_r!, r_advection!
 using ..neutral_advection: update_speed_neutral_r!, neutral_advection_r!, update_speed_neutral_z!, neutral_advection_z!
 using ..vperp_advection: update_speed_vperp!, vperp_advection!
 using ..vpa_advection: update_speed_vpa!, vpa_advection!
-using ..charge_exchange: charge_exchange_collisions!
+using ..charge_exchange: charge_exchange_collisions_1V!
 using ..ionization: ionization_collisions!
 using ..source_terms: source_terms!, source_terms_manufactured!
 using ..continuity: continuity_equation!
@@ -51,6 +51,7 @@ mutable struct advance_info
     neutral_z_advection::Bool
     neutral_r_advection::Bool
     cx_collisions::Bool
+    cx_collisions_1V::Bool
     ionization_collisions::Bool
     source_terms::Bool
     continuity::Bool
@@ -90,7 +91,12 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     if composition.n_neutral_species > 0
         advance_neutral_z_advection = true
         advance_neutral_r_advection = true
-        if collisions.charge_exchange > 0.0
+        if collisions.charge_exchange > 0.0 &&  vz.n == vpa.n && vperp.n == 1 && vr.n == 1 && vzeta.n == 1
+            advance_cx_1V = true
+        else
+            advance_cx_1V = false
+        end
+        if collisions.charge_exchange > 0.0 &&  vperp.n > 1 && vr.n > 1 && vzeta.n > 1
             advance_cx = true
         else
             advance_cx = false
@@ -111,7 +117,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     advance_force_balance = false
     advance_energy = false
     advance = advance_info(true, true, true, advance_neutral_z_advection, advance_neutral_r_advection,
-                           advance_cx, advance_ionization, advance_sources,
+                           advance_cx, advance_cx_1V, advance_ionization, advance_sources,
                            advance_continuity, advance_force_balance, advance_energy, rk_coefs,
                            manufactured_solns_test)
 
@@ -717,8 +723,8 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     end
     
     # account for charge exchange collisions between ions and neutrals
-    if advance.cx_collisions
-        charge_exchange_collisions!(fvec_out.pdf, fvec_in, moments, composition, vpa, vperp, z, r,
+    if advance.cx_collisions_1V
+        charge_exchange_collisions_1V!(fvec_out.pdf, fvec_out.pdf_neutral, fvec_in, composition, vpa, vperp, z, r,
                                     collisions.charge_exchange, dt)
     end
     # account for ionization collisions between ions and neutrals
