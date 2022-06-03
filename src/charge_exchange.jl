@@ -55,8 +55,8 @@ function charge_exchange_collisions_1V!(f_out, f_neutral_out, fvec_in, compositi
             @loop_r_z_vpa ir iz ivpa begin
                 f_neutral_out[ivpa,1,1,iz,ir,isn] +=
                     dt*charge_exchange_frequency*(
-                        fvec_in.pdf_neutral[ivpa,1,1,iz,ir,isn]*fvec_in.density[iz,ir,is]
-                        - fvec_in.pdf[ivpa,1,iz,ir,is]*fvec_in.density_neutral[iz,ir,isn])
+                        fvec_in.pdf[ivpa,1,iz,ir,is]*fvec_in.density_neutral[iz,ir,isn]
+                        - fvec_in.pdf_neutral[ivpa,1,1,iz,ir,isn]*fvec_in.density[iz,ir,is])
             end
         end
     end
