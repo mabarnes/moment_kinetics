@@ -40,6 +40,22 @@ end
 
 """
 """
+mutable struct advance_info
+    vpa_advection::Bool
+    z_advection::Bool
+    r_advection::Bool
+    cx_collisions::Bool
+    ionization_collisions::Bool
+    source_terms::Bool
+    continuity::Bool
+    force_balance::Bool
+    energy::Bool
+    rk_coefs::Array{mk_float,2}
+    manufactured_solns_test::Bool
+end
+
+"""
+"""
 mutable struct advection_input_mutable
     # advection speed option
     option::String
