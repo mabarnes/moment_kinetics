@@ -9,6 +9,7 @@ export manufactured_rhs_as_array
 
 using Symbolics
 
+using ..input_structs: advance_info
 using ..array_allocation: allocate_float
 using ..coordinates: coordinate
 using ..input_structs: geometry_input
@@ -59,7 +60,7 @@ using ..type_definitions
         return dfni_func, densi_func
     end 
 
-    function manufactured_rhs_sym(Lr,Lz,r_bc,z_bc,geometry)
+    function manufactured_rhs_sym(Lr,Lz,r_bc,z_bc,geometry,advance=nothing)
 
         densi = densi_sym(Lr,Lz,r_bc,z_bc)
         dfni = dfni_sym(Lr,Lz,r_bc,z_bc)
@@ -80,13 +81,40 @@ using ..type_definitions
         Er = -Dr(phi)
         Ez = -Dz(phi)
     
-        rhs = -( vpa * (Bzed/Bmag) - 0.5*rhostar*Er ) * Dz(dfni) - ( 0.5*rhostar*Ez ) * Dr(dfni) - ( 0.5*Ez*Bzed/Bmag ) * Dvpa(dfni)
+        rhs = 0
+        if advance === nothing || advance.vpa_advection
+            rhs += - ( 0.5*Ez*Bzed/Bmag ) * Dvpa(dfni)
+        end
+        if advance === nothing || advance.z_advection
+            rhs += -( vpa * (Bzed/Bmag) - 0.5*rhostar*Er ) * Dz(dfni)
+        end
+        if advance === nothing || advance.r_advection
+            rhs += - ( 0.5*rhostar*Ez ) * Dr(dfni)
+        end
+        #if advance === nothing || advance.cx_collsions
+        #    # placeholder
+        #end
+        #if advance === nothing || advance.ionization_collsions
+        #    # placeholder
+        #end
+        #if advance === nothing || advance.source_terms
+        #    # placeholder
+        #end
+        #if advance === nothing || advance.continuity
+        #    # placeholder
+        #end
+        #if advance === nothing || advance.force_balance
+        #    # placeholder
+        #end
+        #if advance === nothing || advance.energy
+        #    # placeholder
+        #end
 
         return expand_derivatives(rhs)
     end
 
-    function manufactured_rhs(Lr,Lz,r_bc,z_bc,geometry)
-        rhs_sym = manufactured_rhs_sym(Lr,Lz,r_bc,z_bc,geometry)
+    function manufactured_rhs(Lr,Lz,r_bc,z_bc,geometry,advance=nothing)
+        rhs_sym = manufactured_rhs_sym(Lr,Lz,r_bc,z_bc,geometry,advance)
         return build_function(rhs_sym, vpa, vperp, z, r, t, expression=Val{false})
     end
 
@@ -140,7 +168,7 @@ using ..type_definitions
     """
         manufactured_rhs_as_array(
             t::mk_float, r::AbstractVector, z::AbstractVector, vperp::AbstractVector,
-            vpa::AbstractVector, geometry::geometry_input)
+            vpa::AbstractVector, geometry::geometry_input, advance::advance_info)
 
     Create array filled with manufactured rhs.
 
@@ -150,9 +178,9 @@ using ..type_definitions
     """
     function manufactured_rhs_as_array(
         t::mk_float, r::coordinate, z::coordinate, vperp::coordinate,
-        vpa::coordinate, geometry::geometry_input)
+        vpa::coordinate, geometry::geometry_input, advance::advance_info)
 
-        rhs_func = manufactured_rhs(r.L, z.L, r.bc, z.bc, geometry)
+        rhs_func = manufactured_rhs(r.L, z.L, r.bc, z.bc, geometry, advance)
 
         rhs = allocate_float(vpa.n, vperp.n, z.n, r.n)
 

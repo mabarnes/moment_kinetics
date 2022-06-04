@@ -81,14 +81,14 @@ const input_sound_wave_periodic = Dict(
 )
 
 """
-    evaluate_initial_ddt(input_dict::Dict)
+    evaluate_initial_ddt(input_dict::Dict, advance_input::advance_info)
 
 Evaluate df/dt for the initial state of f.
 
 Very similar to combination of run_moment_kinetics function and various parts of
 time_advance module.
 """
-function evaluate_initial_ddt(input_dict::Dict)
+function evaluate_initial_ddt(input_dict::Dict, advance_input::advance_info)
     # set up all the structs, etc. needed for a run
     mk_state = setup_moment_kinetics(input_dict)
 
@@ -117,11 +117,13 @@ function evaluate_initial_ddt(input_dict::Dict)
 
     # modify advance_info argument so that no manufactured sources are added when
     # evaluating the time advance, as in this test we only want manufactured initial
-    # conditions
-    modified_advance = advance_info(advance.vpa_advection, advance.z_advection,
-        advance.r_advection, advance.cx_collisions, advance.ionization_collisions,
-        advance.source_terms, advance.continuity, advance.force_balance, advance.energy,
-        advance.rk_coefs, false)
+    # conditions. Also take the terms to evaluate from advance_input so that the calling
+    # function can control which term to use.
+    modified_advance = advance_info(advance_input.vpa_advection,
+        advance_input.z_advection, advance_input.r_advection,
+        advance_input.cx_collisions, advance_input.ionization_collisions,
+        advance_input.source_terms, advance_input.continuity,
+        advance_input.force_balance, advance_input.energy, advance.rk_coefs, false)
 
     evaluate_ddt!(output, first_scratch, pdf, fields, moments, vpa_SL, vperp_SL, z_SL,
         r_SL, vpa_advect, vperp_advect, z_advect, r_advect, vpa, vperp, z, r, t,
@@ -143,12 +145,12 @@ function evaluate_initial_ddt(input_dict::Dict)
 end
 
 """
-    runcase(input::Dict)
+    runcase(input::Dict, advance::advance_info, returnstuff=false)
 
 Run a simulation with parameters set by `input` using manufactured sources and return
 the errors in each variable compared to the manufactured solution.
 """
-function runcase(input::Dict)
+function runcase(input::Dict, advance::advance_info, returnstuff=false)
     dfdt = nothing
     r = nothing
     z = nothing
@@ -156,13 +158,13 @@ function runcase(input::Dict)
     vpa = nothing
     geometry = nothing
     quietoutput() do
-        dfdt, r, z, vperp, vpa, geometry = evaluate_initial_ddt(input)
+        dfdt, r, z, vperp, vpa, geometry = evaluate_initial_ddt(input, advance)
     end
 
     error_2 = nothing
     error_inf = nothing
     if global_rank[] == 0
-        rhs_manf = manufactured_rhs_as_array(mk_float(0.0), r, z, vperp, vpa, geometry)
+        rhs_manf = manufactured_rhs_as_array(mk_float(0.0), r, z, vperp, vpa, geometry, advance)
 
         # Only one species, so get rid of species index
         dfdt = dfdt[:,:,:,:,1]
@@ -173,29 +175,44 @@ function runcase(input::Dict)
         println("error ", error_2, " ", error_inf)
     end
 
-    return error_2, error_inf
+    if returnstuff
+        return error_2, error_inf, dfdt, rhs_manf
+    else
+        return error_2, error_inf
+    end
 end
 
 """
-    testconvergence(input::Dict)
+    testconvergence(input::Dict, advance::advance_info; returnstuff::Bool)
 
 Test convergence with spatial resolution
 
-The parameters for the run are given in `input::Dict`.
+The parameters for the run are given in `input::Dict`. 
+`which_term` controls which term to include in the evolution equation, or include all terms.
+`returnstuff` can be set to true to return the calculated and manfactured RHS of df/dt=(...).
 """
-function testconvergence(input::Dict)
+function testconvergence(input::Dict, advance::advance_info; returnstuff=false)
     errors_2 = Vector{mk_float}(undef, 0)
     errors_inf = Vector{mk_float}(undef, 0)
 
     ngrid = get_and_check_ngrid(input)
+    global_rank[] == 0 && println("ngrid=$ngrid")
 
     #nelement_values = [2, 4, 6, 8, 10, 12, 14, 16]
-    nelement_values = [2, 4, 6, 8]
+    nelement_values = ngrid > 6 ? [2, 4, 6] : [2, 4, 6, 8]
+    if returnstuff
+        nelement_values = [nelement_values[end]]
+    end
+    lastf, lastf_manf = nothing, nothing
     for nelement ∈ nelement_values
         global_rank[] == 0 && println("testing nelement=$nelement")
         case_input = increase_resolution(input, nelement)
 
-        error_2, error_inf = runcase(case_input)
+        if returnstuff
+            error_2, error_inf, lastrhs, lastrhs_manf = runcase(case_input, advance, returnstuff)
+        else
+            error_2, error_inf = runcase(case_input, advance)
+        end
 
         if global_rank[] == 0
             push!(errors_2, error_2)
@@ -216,6 +233,49 @@ function testconvergence(input::Dict)
         println("expected convergence")
         println(expected_convergence)
     end
+
+    if returnstuff
+        return lastrhs, lastrhs_manf
+    else
+        return nothing
+    end
+end
+
+function setup_advance(which_term)
+    advance = advance_info(false, false, false, false, false, false, false, false,
+        false, zeros(1,1), false)
+
+    if which_term == :all
+        advance.vpa_advection = true
+        advance.z_advection = true
+        advance.r_advection = true
+        advance.cx_collisions = true
+        advance.ionization_collisions = true
+        advance.source_terms = true
+        advance.continuity = true
+        advance.force_balance = true
+        advance.energy = true
+    elseif which_term == :vpa_advection
+        advance.vpa_advection = true
+    elseif which_term == :z_advection
+        advance.z_advection = true
+    elseif which_term == :r_advection
+        advance.r_advection = true
+    elseif which_term == :cx_collisions
+        advance.cx_collisions = true
+    elseif which_term == :ionization_collisions
+        advance.ionization_collisions = true
+    elseif which_term == :source_terms
+        advance.source_terms = true
+    elseif which_term == :continuity
+        advance.continuity = true
+    elseif which_term == :force_balance
+        advance.force_balance = true
+    elseif which_term == :energy
+        advance.energy = true
+    end
+
+    return advance
 end
 
 function runtests()
@@ -223,11 +283,59 @@ function runtests()
         global_rank[] == 0 && println("MMS tests")
 
         @testset "r-periodic, z-periodic" begin
-            testconvergence(input_sound_wave_periodic)
+            @testset "vpa_advection" begin
+                global_rank[] == 0 && println("\nvpa_advection")
+                testconvergence(input_sound_wave_periodic,
+                                setup_advance(:vpa_advection))
+            end
+            @testset "z_advection" begin
+                global_rank[] == 0 && println("\nz_advection")
+                testconvergence(input_sound_wave_periodic, setup_advance(:z_advection))
+            end
+            @testset "r_advection" begin
+                global_rank[] == 0 && println("\nr_advection")
+                testconvergence(input_sound_wave_periodic, setup_advance(:r_advection))
+            end
+            #@testset "cx_collisions" begin
+            #    global_rank[] == 0 && println("\ncx_collisions")
+            #    testconvergence(input_sound_wave_periodic,
+            #                    setup_advance(:cx_collisions))
+            #end
+            #@testset "ionization_collisions" begin
+            #    global_rank[] == 0 && println("\nionization_collisions")
+            #    testconvergence(input_sound_wave_periodic,
+            #                    setup_advance(:ionization_collisions))
+            #end
+            #@testset "continuity" begin
+            #    global_rank[] == 0 && println("\ncontinuity")
+            #    testconvergence(input_sound_wave_periodic, setup_advance(:continuity))
+            #end
+            #@testset "force_balance" begin
+            #    global_rank[] == 0 && println("\nforce_balance")
+            #    testconvergence(input_sound_wave_periodic,
+            #                    setup_advance(:force_balance))
+            #end
+            #@testset "energy" begin
+            #    global_rank[] == 0 && println("\nenergy")
+            #    testconvergence(input_sound_wave_periodic, setup_advance(:energy))
+            #end
+            @testset "all" begin
+                global_rank[] == 0 && println("\nall terms")
+                testconvergence(input_sound_wave_periodic, setup_advance(:all))
+            end
         end
     end
 
     return nothing
+end
+
+function runtests_return(which_term::Symbol=:all)
+    global_rank[] == 0 && println("MMS tests with return")
+
+    rhs, rhs_manf = testconvergence(input_sound_wave_periodic,
+                                    setup_advance(which_term); returnstuff=true)
+
+    return rhs, rhs_manf
 end
 
 end # ManufacturedSolutionsTests
