@@ -213,18 +213,19 @@ function mk_input(scan_input=Dict())
     vperp.discretization = get(scan_input, "vperp_discretization", "chebyshev_pseudospectral_vperp")
     
     # overwrite some default parameters related to the vz grid
+    # use vpa grid values as defaults
     # ngrid is the number of grid points per element
-    vz.ngrid = get(scan_input, "vz_ngrid", 17)
+    vz.ngrid = get(scan_input, "vz_ngrid", vpa.ngrid)
     # nelement is the number of elements
-    vz.nelement = get(scan_input, "vz_nelement", 10)
+    vz.nelement = get(scan_input, "vz_nelement", vpa.nelement)
     # L is the box length in units of vthermal_species
-    vz.L = get(scan_input, "vz_L", 8.0*sqrt(species.charged[1].initial_temperature))
+    vz.L = get(scan_input, "vz_L", vpa.L)
     # determine the boundary condition
     # only supported option at present is "zero" and "periodic"
-    vz.bc = get(scan_input, "vz_bc", "periodic")
+    vz.bc = get(scan_input, "vz_bc", vpa.bc)
     # determine the discretization option for the vz grid
     # supported options are "chebyshev_pseudospectral" and "finite_difference"
-    vz.discretization = get(scan_input, "vz_discretization", "chebyshev_pseudospectral")
+    vz.discretization = get(scan_input, "vz_discretization", vpa.discretization)
     
     # overwrite some default parameters related to the vr grid
     # ngrid is the number of grid points per element
