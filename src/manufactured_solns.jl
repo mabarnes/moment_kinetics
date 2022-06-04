@@ -32,7 +32,8 @@ using ..type_definitions
     function dfni_sym(Lr,Lz,r_bc,z_bc)
         densi = densi_sym(Lr,Lz,r_bc,z_bc)
         if (r_bc == "periodic" && z_bc == "periodic") || (r_bc == "Dirichlet" && z_bc == "periodic")
-            dfni = densi * exp( - vpa^2 - vperp^2) #/ sqrt(pi^3)
+            dfni = densi * (1.0 + 0.1*vpa*(sin(2.0*pi*r/Lr) + sin(2.0*pi*z/Lz))) *
+                       exp( - vpa^2 - vperp^2) #/ sqrt(pi^3)
         elseif r_bc == "periodic" && z_bc == "wall"
             Hplus = 0.5*(sign(vpa) + 1.0)
             Hminus = 0.5*(sign(-vpa) + 1.0)
