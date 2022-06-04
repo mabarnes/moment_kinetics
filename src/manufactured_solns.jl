@@ -130,6 +130,7 @@ using ..type_definitions
         
         if (r_bc == "periodic" && z_bc == "periodic") || (r_bc == "Dirichlet" && z_bc == "periodic")
             dfni = densi * exp( - vpa^2 - vperp^2) 
+                       exp( - vpa^2 - vperp^2)
         elseif r_bc == "periodic" && z_bc == "wall"
             vpabar = vpa - (rhostar/2.0)*(Bmag/Bzed)*expand_derivatives(Er)*rfac # effective velocity in z direction * (Bmag/Bzed)
             Hplus = 0.5*(sign(vpabar) + 1.0)
