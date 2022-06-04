@@ -150,7 +150,7 @@ end
 const MPISharedArray = @debug_shared_array_ifelse(DebugMPISharedArray, Array)
 
 """
-Get a shared-memory array of `mk_float` (shared by all processes in a 'block')
+Get a shared-memory array of type `T` (shared by all processes in a 'block')
 
 Create a shared-memory array using `MPI.Win_allocate_shared()`. Pointer to the memory
 allocated is wrapped in a Julia array. Memory is not managed by the Julia array though.
@@ -168,7 +168,7 @@ dims - mk_int or Tuple{mk_int}
 
 Returns
 -------
-Array{mk_float}
+Array{T}
 """
 function allocate_shared(T, dims)
     br = block_rank[]
