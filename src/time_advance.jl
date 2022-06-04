@@ -24,7 +24,7 @@ using ..initial_conditions: enforce_z_boundary_condition!, enforce_boundary_cond
 using ..initial_conditions: enforce_vpa_boundary_condition!, enforce_r_boundary_condition!
 using ..initial_conditions: enforce_neutral_boundary_conditions!
 using ..initial_conditions: enforce_neutral_z_boundary_condition!, enforce_neutral_r_boundary_condition!
-using ..input_structs: time_input
+using ..input_structs: advance_info, time_input
 using ..advection: setup_advection, update_boundary_indices!
 using ..z_advection: update_speed_z!, z_advection!
 using ..r_advection: update_speed_r!, r_advection!
@@ -42,28 +42,7 @@ using ..em_fields: setup_em_fields, update_phi!
 
 using ..manufactured_solns: manufactured_sources
 using ..advection: advection_info
-
 @debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
-
-"""
-"""
-mutable struct advance_info
-    vpa_advection::Bool
-    z_advection::Bool
-    r_advection::Bool
-    neutral_z_advection::Bool
-    neutral_r_advection::Bool
-    cx_collisions::Bool
-    cx_collisions_1V::Bool
-    ionization_collisions::Bool
-    ionization_collisions_1V::Bool
-    source_terms::Bool
-    continuity::Bool
-    force_balance::Bool
-    energy::Bool
-    rk_coefs::Array{mk_float,2}
-    manufactured_solns_test::Bool
-end
 
 mutable struct scratch_dummy_arrays
     dummy_sr::Array{mk_float,2}
