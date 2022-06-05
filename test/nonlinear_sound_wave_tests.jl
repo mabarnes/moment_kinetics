@@ -9,7 +9,7 @@ using moment_kinetics.chebyshev: setup_chebyshev_pseudospectral
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.load_data: open_netcdf_file, load_coordinate_data,
-                                 load_fields_data, load_moments_data, load_pdf_data
+                                 load_fields_data, load_charged_particle_moments_data, load_pdf_data
 using moment_kinetics.interpolation: interpolate_to_grid_z, interpolate_to_grid_vpa
 using moment_kinetics.type_definitions: mk_float
 
@@ -253,13 +253,13 @@ function run_test(test_input, rtol; args...)
             fid = open_netcdf_file(path)
 
             # load space-time coordinate data
-            nvpa, vpa, vpa_wgts, nz, z, z_wgts, Lz, nr, r, r_wgts, Lr, ntime, time = load_coordinate_data(fid)
+            nvpa, vpa, vpa_wgts, nz, z, z_wgts, Lz, nr, r, r_wgts, Lr, ntime, time, n_ion_species, n_neutral_species = load_coordinate_data(fid)
 
             # load fields data
             phi_zrt = load_fields_data(fid)
 
             # load velocity moments data
-            n_zrst, upar_zrst, ppar_zrst, qpar_zrst, v_t_zrst, n_species, evolve_ppar = load_moments_data(fid)
+            n_zrst, upar_zrst, ppar_zrst, qpar_zrst, v_t_zrst, evolve_ppar = load_charged_particle_moments_data(fid)
 
             # load particle distribution function (pdf) data
             f_vpavperpzrst = load_pdf_data(fid)
