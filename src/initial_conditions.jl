@@ -32,6 +32,7 @@ using ..manufactured_solns: manufactured_solutions
 struct pdf_substruct{n_distribution}
     norm::MPISharedArray{mk_float,n_distribution}
     unnorm::MPISharedArray{mk_float,n_distribution}
+    buffer::MPISharedArray{mk_float,n_distribution} # for collision operator terms when pdfs must be interpolated onto different velocity space grids
 end
 
 # struct of structs neatly contains i+n info?
@@ -146,9 +147,11 @@ function create_and_init_pdf(moments, vz, vr, vzeta, vpa, vperp, z, r, n_ion_spe
     # allocate pdf arrays
     pdf_charged_norm = allocate_shared_float(vpa.n, vperp.n, z.n, r.n, n_ion_species)
     pdf_charged_unnorm = allocate_shared_float(vpa.n, vperp.n, z.n, r.n, n_ion_species)
+    pdf_charged_buffer = allocate_shared_float(vpa.n, vperp.n, z.n, r.n, n_neutral_species) # n.b. n_species is n_neutral_species here
     #if n_neutral_species > 0
         pdf_neutral_norm = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, r.n, n_neutral_species)
         pdf_neutral_unnorm = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, r.n, n_neutral_species)
+        pdf_neutral_buffer = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, r.n, n_ion_species)
     #end
     @serial_region begin
         for is ∈ 1:n_ion_species
@@ -184,7 +187,8 @@ function create_and_init_pdf(moments, vz, vr, vzeta, vpa, vperp, z, r, n_ion_spe
             end
         end
     end
-    return pdf_struct(pdf_substruct(pdf_charged_norm, pdf_charged_unnorm),pdf_substruct(pdf_neutral_norm, pdf_neutral_unnorm))
+    return pdf_struct(pdf_substruct(pdf_charged_norm, pdf_charged_unnorm, pdf_charged_buffer), 
+                        pdf_substruct(pdf_neutral_norm, pdf_neutral_unnorm, pdf_neutral_buffer))
 end
 
 """
