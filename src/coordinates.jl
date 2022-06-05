@@ -82,7 +82,7 @@ function define_coordinate(input, composition=nothing)
     # initialize the grid and the integration weights associated with the grid
     # also obtain the Chebyshev theta grid and spacing if chosen as discretization option
     grid, wgts, uniform_grid = init_grid(input.ngrid, input.nelement, n, input.L,
-        imin, imax, igrid, input.discretization)
+        imin, imax, igrid, input.discretization, input.name)
     # calculate the widths of the cells between neighboring grid points
     cell_width = grid_spacing(grid, n)
     # duniform_dgrid is the local derivative of the uniform grid with respect to
@@ -104,41 +104,50 @@ end
 """
 setup a grid with n grid points on the interval [-L/2,L/2]
 """
-function init_grid(ngrid, nelement, n, L, imin, imax, igrid, discretization)
+function init_grid(ngrid, nelement, n, L, imin, imax, igrid, discretization, name)
     uniform_grid = equally_spaced_grid(n,L)
     uniform_grid_shifted = equally_spaced_grid_shifted(n,L)
     if n == 1
         grid = allocate_float(n)
         grid[1] = 0.0
         wgts = allocate_float(n)
-        wgts[1] = 1.0
+        if name == "vr" || name == "vz"
+            wgts[1] = sqrt(pi) # to cancel factor of 1/sqrt{pi} in integrate_over_neutral_vspace, velocity_moments.jl
+                               # in the case that the code runs in 1V mode
+        else
+            wgts[1] = 1.0
+        end
     elseif discretization == "chebyshev_pseudospectral"
-        # initialize chebyshev grid defined on [-L/2,L/2]
-        # with n grid points chosen to facilitate
-        # the fast Chebyshev transform (aka the discrete cosine transform)
-        # needed to obtain Chebyshev spectral coefficients
-        # 'wgts' are the integration weights attached to each grid points
-        # that are those associated with Clenshaw-Curtis quadrature
-        grid, wgts = scaled_chebyshev_grid(ngrid, nelement, n, L, imin, imax)
+        if name == "vperp"
+            # initialize chebyshev grid defined on [-L/2,L/2]
+            grid, wgts = scaled_chebyshev_grid(ngrid, nelement, n, L, imin, imax)
+            grid .= grid .+ L/2.0 # shift to [0,L] appropriate to vperp variable
+            wgts = 2.0 .* wgts .* grid # to include 2 vperp in jacobian of integral
+                                        # see note above on normalisation
+        else
+            # initialize chebyshev grid defined on [-L/2,L/2]
+            # with n grid points chosen to facilitate
+            # the fast Chebyshev transform (aka the discrete cosine transform)
+            # needed to obtain Chebyshev spectral coefficients
+            # 'wgts' are the integration weights attached to each grid points
+            # that are those associated with Clenshaw-Curtis quadrature
+            grid, wgts = scaled_chebyshev_grid(ngrid, nelement, n, L, imin, imax)
+        end
     elseif discretization == "finite_difference"
-        # initialize equally spaced grid defined on [-L/2,L/2]
-        grid = uniform_grid
-        # use composite Simpson's rule to obtain integration weights associated with this coordinate
-        wgts = composite_simpson_weights(grid)
-    elseif discretization == "finite_difference_vperp"
-        # initialize equally spaced grid defined on [0,L]
-        grid = uniform_grid_shifted
-        # use composite Simpson's rule to obtain integration weights associated with this coordinate
-        wgts = composite_simpson_weights(grid)
-        wgts = 2.0 .* wgts .* grid # to include 2 vperp in jacobian of integral
-                                 # assumes pdf normalised like 
-                                 # f^N = Pi^{3/2} c_s^3 f / n_ref 
-    elseif discretization == "chebyshev_pseudospectral_vperp"
-        # initialize chebyshev grid defined on [-L/2,L/2]
-        grid, wgts = scaled_chebyshev_grid(ngrid, nelement, n, L, imin, imax)
-        grid .= grid .+ L/2.0 # shift to [0,L] appropriate to vperp variable
-        wgts = 2.0 .* wgts .* grid # to include 2 vperp in jacobian of integral
-                                    # see note above on normalisation
+        if name == "vperp"
+            # initialize equally spaced grid defined on [0,L]
+            grid = uniform_grid_shifted
+            # use composite Simpson's rule to obtain integration weights associated with this coordinate
+            wgts = composite_simpson_weights(grid)
+            wgts = 2.0 .* wgts .* grid # to include 2 vperp in jacobian of integral
+                                     # assumes pdf normalised like 
+                                     # f^N = Pi^{3/2} c_s^3 f / n_ref         
+        else #default case 
+            # initialize equally spaced grid defined on [-L/2,L/2]
+            grid = uniform_grid
+            # use composite Simpson's rule to obtain integration weights associated with this coordinate
+            wgts = composite_simpson_weights(grid)
+        end    
     else
         error("discretization option '$discretization' unrecognized")
     end

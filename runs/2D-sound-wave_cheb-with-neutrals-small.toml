@@ -52,8 +52,8 @@ vperp_ngrid = 5
 vperp_nelement = 2
 vperp_L = 8.0
 vperp_bc = "periodic"
-#vperp_discretization = "finite_difference_vperp"
-vperp_discretization = "chebyshev_pseudospectral_vperp"
+#vperp_discretization = "finite_difference"
+vperp_discretization = "chebyshev_pseudospectral"
 
 vz_ngrid = 5
 vz_nelement = 2

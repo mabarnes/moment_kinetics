@@ -291,7 +291,8 @@ function integrate_over_vspace(args...)
     return integral(args...)/sqrt(pi)
 end
 # factor of Pi^3/2 assumes normalisation f^N_neutral = Pi^3/2 c_neutral^3 f_neutral / n_ref 
-# works for 3D but what about 1D?
+# For 1D case we multiply wgts of vr & vzeta by sqrt(pi) to return
+# to 1D normalisation f^N_neutral = Pi^1/2 c_neutral f_neutral / n_ref 
 function integrate_over_neutral_vspace(args...)
     return integral(args...)/(sqrt(pi)^3)
 end
