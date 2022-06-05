@@ -52,7 +52,7 @@ function mk_input(scan_input=Dict())
     #   reference value using J_||e + J_||i = 0 at z = 0
     electron_physics = get(scan_input, "electron_physics", boltzmann_electron_response)
     
-    z, r, vpa, vperp, vz, vr, vzeta, species, composition, drive, evolve_moments, collisions, geometry =
+    z, r, vpa, vperp, gyrophase, vz, vr, vzeta, species, composition, drive, evolve_moments, collisions, geometry =
         load_defaults(n_ion_species, n_neutral_species, electron_physics)
 
     # this is the prefix for all output files associated with this run
@@ -80,6 +80,9 @@ function mk_input(scan_input=Dict())
     ## set geometry_input
     geometry.Bzed = get(scan_input, "Bzed", 1.0)
     geometry.Bmag = get(scan_input, "Bmag", 1.0)
+    geometry.bzed = geometry.Bzed/geometry.Bmag
+    geometry.bzeta = sqrt(1.0 - geometry.bzed^2.0)
+    geometry.Bzeta = geometry.Bmag*geometry.bzeta
     geometry.rstar = get(scan_input, "rhostar", 0.0)
     #println("Info: Bzed is ",geometry.Bzed)
     #println("Info: Bmag is ",geometry.Bmag)
@@ -212,6 +215,12 @@ function mk_input(scan_input=Dict())
     # supported options are "finite_difference_vperp" "chebyshev_pseudospectral_vperp"
     vperp.discretization = get(scan_input, "vperp_discretization", "chebyshev_pseudospectral_vperp")
     
+    # overwrite some default parameters related to the gyrophase grid
+    # ngrid is the number of grid points per element
+    gyrophase.ngrid = get(scan_input, "gyrophase_ngrid", 17)
+    # nelement is the number of elements
+    gyrophase.nelement = get(scan_input, "gyrophase_nelement", 10)
+    
     # overwrite some default parameters related to the vz grid
     # use vpa grid values as defaults
     # ngrid is the number of grid points per element
@@ -278,6 +287,10 @@ function mk_input(scan_input=Dict())
         vperp.advection.frequency, vperp.advection.oscillation_amplitude)
     vperp_immutable = grid_input("vperp", vperp.ngrid, vperp.nelement, vperp.L,
         vperp.discretization, vperp.fd_option, vperp.bc, vperp_advection_immutable)
+    gyrophase_advection_immutable = advection_input(gyrophase.advection.option, gyrophase.advection.constant_speed,
+        gyrophase.advection.frequency, gyrophase.advection.oscillation_amplitude)
+    gyrophase_immutable = grid_input("gyrophase", gyrophase.ngrid, gyrophase.nelement, gyrophase.L,
+        gyrophase.discretization, gyrophase.fd_option, gyrophase.bc, gyrophase_advection_immutable)
     vz_advection_immutable = advection_input(vz.advection.option, vz.advection.constant_speed,
         vz.advection.frequency, vz.advection.oscillation_amplitude)
     vz_immutable = grid_input("vz", vz.ngrid, vz.nelement, vz.L,
@@ -351,7 +364,7 @@ function mk_input(scan_input=Dict())
 
     # return immutable structs for z, vpa, species and composition
     all_inputs = (run_name, output_dir, evolve_moments, t, 
-                  z_immutable, r_immutable, vpa_immutable, vperp_immutable, vz_immutable, vr_immutable, vzeta_immutable,
+                  z_immutable, r_immutable, vpa_immutable, vperp_immutable, gyrophase_immutable, vz_immutable, vr_immutable, vzeta_immutable,
                   composition, species_immutable, collisions, geometry, drive_immutable)
     println(io, "\nAll inputs returned from mk_input():")
     println(io, all_inputs)
@@ -521,6 +534,29 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     vperp = grid_input_mutable("vperp", ngrid_vperp, nelement_vperp, L_vperp,
         discretization_option_vperp, finite_difference_option_vperp, boundary_option_vperp,
         advection_vperp)
+    ############################################################################
+    ################### parameters related to the gyrophase grid #####################
+    # ngrid_gyrophase is the number of grid points per element
+    ngrid_gyrophase = 300
+    # nelement_gyrophase is the number of elements
+    nelement_gyrophase = 1
+    # L_gyrophase is the box length in units of vthermal_species
+    L_gyrophase = 2*pi
+    # determine the boundary condition
+    # currently supported option is "periodic"
+    boundary_option_gyrophase = "periodic"
+    discretization_option_gyrophase = "finite_difference"
+    finite_difference_option_gyrophase = "third_order_upwind"
+    advection_option_gyrophase = "default"
+    advection_speed_gyrophase = 0.0
+    frequency_gyrophase = 1.0
+    oscillation_amplitude_gyrophase = 1.0
+    advection_gyrophase = advection_input_mutable(advection_option_gyrophase, advection_speed_gyrophase,
+        frequency_gyrophase, oscillation_amplitude_gyrophase)
+    # create a mutable structure containing the input info related to the gyrophase grid
+    gyrophase = grid_input_mutable("gyrophase", ngrid_gyrophase, nelement_gyrophase, L_gyrophase,
+        discretization_option_gyrophase, finite_difference_option_gyrophase, boundary_option_gyrophase,
+        advection_gyrophase)
     ############################################################################
     ################### parameters related to the vr grid #####################
     # ngrid_vr is the number of grid points per element
@@ -726,10 +762,13 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
 
     Bzed = 1.0 # magnetic field component along z
     Bmag = 1.0 # magnetic field strength
+    bzed = 1.0 # component of b unit vector along z
+    bzeta = 0.0 # component of b unit vector along zeta
+    Bzeta = 0.0 # magnetic field component along zeta
     rstar = 0.0 #rhostar of ions for ExB drift
-    geometry = geometry_input(Bzed,Bmag,rstar)
+    geometry = geometry_input(Bzed,Bmag,bzed,bzeta,Bzeta,rstar)
 
-    return z, r, vpa, vperp, vz, vr, vzeta, species, composition, drive, evolve_moments, collisions, geometry
+    return z, r, vpa, vperp, gyrophase, vz, vr, vzeta, species, composition, drive, evolve_moments, collisions, geometry
 end
 
 """

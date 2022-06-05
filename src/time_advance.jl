@@ -18,6 +18,7 @@ using ..velocity_moments: update_moments!, reset_moments_status!
 using ..velocity_moments: enforce_moment_constraints!
 using ..velocity_moments: update_density!, update_upar!, update_ppar!, update_qpar!
 using ..velocity_moments: update_neutral_density!
+using ..velocity_grid_transforms: vzvrvzeta_to_vpavperp!, vpavperp_to_vzvrvzeta!
 using ..initial_conditions: enforce_z_boundary_condition!, enforce_boundary_conditions!
 using ..initial_conditions: enforce_vpa_boundary_condition!, enforce_r_boundary_condition!
 using ..initial_conditions: enforce_neutral_boundary_conditions!
@@ -470,7 +471,7 @@ df/dt + δv⋅∂f/∂z = 0, with δv(z,t)=v(z,t)-v₀(z)
 for prudent choice of v₀, expect δv≪v so that explicit
 time integrator can be used without severe CFL condition
 """
-function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, z, r,
+function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
            moments, fields, spectral_objects, advect_objects,
            composition, collisions, geometry, advance, scratch_dummy, manufactured_source_list, io, cdf)
 
@@ -484,7 +485,7 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, z, r
     iwrite = 2
     for i ∈ 1:t_input.nstep
        
-        time_advance_no_splitting!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, z, r,
+        time_advance_no_splitting!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
                 moments, fields, spectral_objects, advect_objects,
                 composition, collisions, geometry, advance,  scratch_dummy, manufactured_source_list, i)
         # update the time
@@ -516,7 +517,7 @@ end
 
 """
 """
-function time_advance_no_splitting!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, z, r, 
+function time_advance_no_splitting!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r, 
            moments, fields, spectral_objects, advect_objects,
            composition, collisions, geometry, advance, scratch_dummy, manufactured_source_list, istep)
     
@@ -524,12 +525,12 @@ function time_advance_no_splitting!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa
     #use pdf.norm for this fn for now.
     
     if t_input.n_rk_stages > 1
-        ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, z, r, 
+        ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r, 
             moments, fields, spectral_objects, advect_objects,
             composition, collisions, geometry, advance,  scratch_dummy, manufactured_source_list, istep)#pdf_in, 
     else
         euler_time_advance!(scratch, scratch, pdf, fields, moments,
-            advect_objects, vz, vr, vzeta, vpa, vperp, z, r, t,
+            advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z, r, t,
             t_input, spectral_objects, composition,
             collisions, geometry, scratch_dummy, manufactured_source_list, advance, 1)#pdf_in, 
         # NB: this must be broken -- scratch is updated in euler_time_advance!,
@@ -597,7 +598,7 @@ end
 
 """
 """
-function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, z, r, 
+function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r, 
            moments, fields, spectral_objects, advect_objects,
            composition, collisions, geometry, advance, scratch_dummy, manufactured_source_list,  istep)#pdf_in,
     
@@ -634,7 +635,7 @@ function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, z, r,
         # calculate f^{(1)} = fⁿ + Δt*G[fⁿ] = scratch[2].pdf
         euler_time_advance!(scratch[istage+1], scratch[istage],
             pdf, fields, moments, 
-            advect_objects, vz, vr, vzeta, vpa, vperp, z, r, t,
+            advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z, r, t,
             t_input, spectral_objects, composition,
             collisions, geometry, scratch_dummy, manufactured_source_list, advance, istage) #pdf_in,
         @views rk_update!(scratch, pdf, moments, fields, vz, vr, vzeta, vpa, vperp, z, r, advance.rk_coefs[:,istage], 
@@ -676,7 +677,7 @@ using the forward Euler method: fvec_out = fvec_in + dt*fvec_in,
 with fvec_in an input and fvec_out the output
 """
 function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, 
-    advect_objects, vz, vr, vzeta, vpa, vperp, z, r, t, t_input,
+    advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z, r, t, t_input,
     spectral_objects, composition, collisions, geometry,
     scratch_dummy, manufactured_source_list, advance, istage) #pdf_in, 
     # define some abbreviated variables for tidiness
@@ -726,6 +727,13 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     
     if advance.manufactured_solns_test
         source_terms_manufactured!(fvec_out.pdf, fvec_out.pdf_neutral, vz, vr, vzeta, vpa, vperp, z, r, t, dt, composition, manufactured_source_list)
+    end
+    
+    if advance.cx_collisions || advance.ionization_collisions
+        # gyroaverage neutral dfn and place it in the charged.buffer array for use in the collisions step
+        vzvrvzeta_to_vpavperp!(pdf.charged.buffer, fvec_in.pdf_neutral, vz, vr, vzeta, vpa, vperp, gyrophase, z, r, geometry, composition)
+        # interpolate charged particle dfn and place it in the neutral.buffer array for use in the collisions step
+        vpavperp_to_vzvrvzeta!(pdf.neutral.buffer, fvec_in.pdf, vz, vr, vzeta, vpa, vperp, z, r, geometry, composition)
     end
     
     # account for charge exchange collisions between ions and neutrals

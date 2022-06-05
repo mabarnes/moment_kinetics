@@ -26,6 +26,7 @@ include("file_io.jl")
 include("input_structs.jl")
 include("coordinates.jl")
 include("velocity_moments.jl")
+include("velocity_grid_transforms.jl")
 include("em_fields.jl")
 include("bgk.jl")
 include("manufactured_solns.jl") # MRH Here?
@@ -134,7 +135,8 @@ function setup_moment_kinetics(input_dict::Dict)
     # and check input to catch errors
     run_name, output_dir, evolve_moments, 
         t_input, z_input, r_input, 
-        vpa_input, vperp_input, vz_input, vr_input, vzeta_input, 
+        vpa_input, vperp_input, gyrophase_input,
+        vz_input, vr_input, vzeta_input, 
         composition, species, collisions, geometry, drive_input = input
     # initialize z grid and write grid point locations to file
     z = define_coordinate(z_input, composition)
@@ -144,6 +146,8 @@ function setup_moment_kinetics(input_dict::Dict)
     vpa = define_coordinate(vpa_input, composition)
     # initialize vperp grid and write grid point locations to file
     vperp = define_coordinate(vperp_input, composition)
+    # initialize gyrophase grid and write grid point locations to file
+    gyrophase = define_coordinate(gyrophase_input, composition)
     # initialize vz grid and write grid point locations to file
     vz = define_coordinate(vz_input, composition)
     # initialize vr grid and write grid point locations to file
@@ -178,7 +182,7 @@ function setup_moment_kinetics(input_dict::Dict)
 
     begin_s_r_z_vperp_region()
 
-    return pdf, scratch, code_time, t_input, vz, vr, vzeta, vpa, vperp, z, r,
+    return pdf, scratch, code_time, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
            moments, fields, spectral_objects, advect_objects,
            composition, collisions, geometry, advance, scratch_dummy, manufactured_source_list, io, cdf
 end
