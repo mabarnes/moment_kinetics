@@ -96,7 +96,7 @@ function load_coordinate_data(fid)
 end
 
 function load_neutral_coordinate_data(fid)
-    print("Loading coordinate data...")
+    print("Loading neutral coordinate data...")
     # define a handle for the vz coordinate
     cdfvar = fid["vz"]
     # get the number of vz grid points
@@ -126,6 +126,8 @@ function load_neutral_coordinate_data(fid)
     # get the weights associated with the vzeta coordinate
     cdfvar = fid["vzeta_wgts"]
     vzeta_wgts = cdfvar.var[:]
+
+    println("done.")
 
     return nvz, vz, vz_wgts, nvr, vr, vr_wgts, nvzeta, vzeta, vzeta_wgts
 end
