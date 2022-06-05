@@ -68,4 +68,4 @@ vperp_ngrid = 8
 vperp_nelement = 5
 vperp_L = 8.0
 vperp_bc = "periodic"
-vperp_discretization = "chebyshev_pseudospectral_vperp"
+vperp_discretization = "chebyshev_pseudospectral"
