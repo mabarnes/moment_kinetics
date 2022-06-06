@@ -30,7 +30,7 @@ using ..neutral_advection: update_speed_neutral_r!, neutral_advection_r!, update
 using ..vperp_advection: update_speed_vperp!, vperp_advection!
 using ..vpa_advection: update_speed_vpa!, vpa_advection!
 using ..charge_exchange: charge_exchange_collisions_1V!, charge_exchange_collisions_3V!
-using ..ionization: ionization_collisions_1V!
+using ..ionization: ionization_collisions_1V!, ionization_collisions_3V!
 using ..source_terms: source_terms!, source_terms_manufactured!
 using ..continuity: continuity_equation!
 using ..force_balance: force_balance!
@@ -747,6 +747,9 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     # account for ionization collisions between ions and neutrals
     if advance.ionization_collisions_1V
         ionization_collisions_1V!(fvec_out.pdf, fvec_out.pdf_neutral, fvec_in, vpa, vperp, z, r, composition, collisions, dt)
+    elseif advance.ionization_collisions
+        ionization_collisions_3V!(fvec_out.pdf, fvec_out.pdf_neutral, pdf.charged.buffer, fvec_in, composition, 
+                                        vz, vr, vzeta, vpa, vperp, z, r, collisions, dt)
     end
     
     # enforce boundary conditions in r, z and vpa on the charged particle distribution function
