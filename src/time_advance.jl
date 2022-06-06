@@ -29,7 +29,7 @@ using ..r_advection: update_speed_r!, r_advection!
 using ..neutral_advection: update_speed_neutral_r!, neutral_advection_r!, update_speed_neutral_z!, neutral_advection_z!
 using ..vperp_advection: update_speed_vperp!, vperp_advection!
 using ..vpa_advection: update_speed_vpa!, vpa_advection!
-using ..charge_exchange: charge_exchange_collisions_1V!
+using ..charge_exchange: charge_exchange_collisions_1V!, charge_exchange_collisions_3V!
 using ..ionization: ionization_collisions_1V!
 using ..source_terms: source_terms!, source_terms_manufactured!
 using ..continuity: continuity_equation!
@@ -740,6 +740,9 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     if advance.cx_collisions_1V
         charge_exchange_collisions_1V!(fvec_out.pdf, fvec_out.pdf_neutral, fvec_in, composition, vpa, vperp, z, r,
                                     collisions.charge_exchange, dt)
+    elseif advance.cx_collisions
+        charge_exchange_collisions_3V!(fvec_out.pdf, fvec_out.pdf_neutral, pdf.charged.buffer, pdf.neutral.buffer, fvec_in, composition, 
+                                        vz, vr, vzeta, vpa, vperp, z, r, collisions.charge_exchange, dt)
     end
     # account for ionization collisions between ions and neutrals
     if advance.ionization_collisions_1V
