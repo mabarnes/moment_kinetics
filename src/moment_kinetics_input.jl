@@ -604,8 +604,10 @@ function check_coordinate_input(coord, coord_name, io)
     end
     # boundary_option determines coord boundary condition
     # supported options are "constant" and "periodic"
-    if coord.bc == "constant"
+    if !occursin("v", coord_name) && coord.bc == "constant"
         println(io,">$coord_name.bc = 'constant'.  enforcing constant incoming BC in $coord_name.")
+    elseif occursin("v", coord_name) && coord.bc == "zero"
+        println(io,">$coord_name.bc = 'zero'.  enforcing constant incoming BC in $coord_name.")
     elseif coord.bc == "periodic"
         println(io,">$coord_name.bc = 'periodic'.  enforcing periodicity in $coord_name.")
     elseif coord_name == "z" && coord.bc == "wall"
