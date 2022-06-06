@@ -25,6 +25,14 @@ using Symbolics
         end
         return dfnn
     end
+    function gyroaveraged_dfnn_sym(Lr,Lz,r_bc,z_bc)
+        densn = densn_sym(Lr,Lz,r_bc,z_bc)
+        if (r_bc == "periodic" && z_bc == "periodic")
+            dfnn = densn * exp( - vpa^2 - vperp^2 )
+        end
+        return dfnn
+    end
+    
     # ion density symbolic function
     function densi_sym(Lr,Lz,r_bc,z_bc)
         if r_bc == "periodic" && z_bc == "periodic"
@@ -49,6 +57,13 @@ using Symbolics
             Hminus = 0.5*(sign(-vpa) + 1.0)
             ffa =  exp(- vperp^2)
             dfni = ffa * ( (0.5 - z/Lz) * Hminus * vpa^2 + (z/Lz + 0.5) * Hplus * vpa^2 + 0.2*(z/Lz + 0.5)*(0.5 - z/Lz) ) * exp( - vpa^2 )
+        end
+        return dfni
+    end
+    function cartesian_dfni_sym(Lr,Lz,r_bc,z_bc)
+        densi = densi_sym(Lr,Lz,r_bc,z_bc)
+        if (r_bc == "periodic" && z_bc == "periodic") || (r_bc == "Dirichlet" && z_bc == "periodic")
+            dfni = densi * exp( - vz^2 - vr^2 - vzeta^2) 
         end
         return dfni
     end
@@ -79,14 +94,17 @@ using Symbolics
         return manufactured_solns_list
     end 
 
-    function manufactured_sources(Lr,Lz,r_bc,z_bc,geometry)
+    function manufactured_sources(Lr,Lz,r_bc,z_bc,geometry,collisions)
         
         # ion manufactured solutions
         densi = densi_sym(Lr,Lz,r_bc,z_bc)
         dfni = dfni_sym(Lr,Lz,r_bc,z_bc)
+        vrvzvzeta_dfni = cartesian_dfni_sym(Lr,Lz,r_bc,z_bc) #dfni in vr vz vzeta coordinates
+        
         # neutral manufactured solutions
         densn = densn_sym(Lr,Lz,r_bc,z_bc)
         dfnn = dfnn_sym(Lr,Lz,r_bc,z_bc)
+        gav_dfnn = gyroaveraged_dfnn_sym(Lr,Lz,r_bc,z_bc) # gyroaverage < dfnn > in vpa vperp coordinates
         
         # define derivative operators
         Dr = Differential(r) 
@@ -99,6 +117,7 @@ using Symbolics
         Bzed = geometry.Bzed
         Bmag = geometry.Bmag
         rhostar = geometry.rstar
+        cx_frequency = collisions.charge_exchange
         
         # calculate the electric fields
         phi = log(densi)
@@ -106,11 +125,12 @@ using Symbolics
         Ez = -Dz(phi)
     
         # the ion source to maintain the manufactured solution
-        Si = Dt(dfni) + ( vpa * (Bzed/Bmag) - 0.5*rhostar*Er ) * Dz(dfni) + ( 0.5*rhostar*Ez ) * Dr(dfni) + ( 0.5*Ez*Bzed/Bmag ) * Dvpa(dfni)
+        Si = ( Dt(dfni) + ( vpa * (Bzed/Bmag) - 0.5*rhostar*Er ) * Dz(dfni) + ( 0.5*rhostar*Ez ) * Dr(dfni) + ( 0.5*Ez*Bzed/Bmag ) * Dvpa(dfni)
+               + cx_frequency*( densn*dfni - densi*gav_dfnn ) ) 
         Source_i = expand_derivatives(Si)
         
         # the neutral source to maintain the manufactured solution
-        Sn = Dt(dfnn) + vz * Dz(dfnn) + vr * Dr(dfnn)
+        Sn = Dt(dfnn) + vz * Dz(dfnn) + vr * Dr(dfnn) + cx_frequency* (densi*dfnn - densn*vrvzvzeta_dfni)
         Source_n = expand_derivatives(Sn)
         
         Source_i_func = build_function(Source_i, vpa, vperp, z, r, t, expression=Val{false})
