@@ -27,33 +27,40 @@ z_IC_upar_amplitude2 = 0.0
 z_IC_upar_phase2 = 0.0
 z_IC_temperature_amplitude2 = 0.0
 z_IC_temperature_phase2 = 0.0
-charge_exchange_frequency = 0.0
-ionization_frequency = 0.0
-nstep = 1500
+charge_exchange_frequency = 1.0
+ionization_frequency = 1.0
+nstep = 1375
 dt = 0.002
 nwrite = 50
 use_semi_lagrange = false
 n_rk_stages = 4
 split_operators = false
+
 z_ngrid = 5
 z_nelement = 2
 z_bc = "periodic"
 z_discretization = "chebyshev_pseudospectral"
+
 r_ngrid = 5
 r_nelement = 2
 r_bc = "periodic"
 r_discretization = "chebyshev_pseudospectral"
+
 vpa_ngrid = 5
 vpa_nelement = 8
 vpa_L = 8.0
 vpa_bc = "periodic"
 vpa_discretization = "chebyshev_pseudospectral"
+
 vperp_ngrid = 5
 vperp_nelement = 8
 vperp_L = 8.0
 vperp_bc = "periodic"
 #vperp_discretization = "finite_difference"
 vperp_discretization = "chebyshev_pseudospectral"
+
+gyrophase_ngrid = 5
+gyrophase_nelement = 8
 
 vz_ngrid = 5
 vz_nelement = 8

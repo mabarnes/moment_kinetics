@@ -118,19 +118,21 @@ using Symbolics
         Bmag = geometry.Bmag
         rhostar = geometry.rstar
         cx_frequency = collisions.charge_exchange
+        ionization_frequency = collisions.ionization
         
         # calculate the electric fields
-        phi = log(densi)
+        dense = densi # get the electron density via quasineutrality with Zi = 1
+        phi = log(dense) # use the adiabatic response of electrons for me/mi -> 0
         Er = -Dr(phi)
         Ez = -Dz(phi)
     
         # the ion source to maintain the manufactured solution
         Si = ( Dt(dfni) + ( vpa * (Bzed/Bmag) - 0.5*rhostar*Er ) * Dz(dfni) + ( 0.5*rhostar*Ez ) * Dr(dfni) + ( 0.5*Ez*Bzed/Bmag ) * Dvpa(dfni)
-               + cx_frequency*( densn*dfni - densi*gav_dfnn ) ) 
+               + cx_frequency*( densn*dfni - densi*gav_dfnn ) ) - ionization_frequency*dense*gav_dfnn 
         Source_i = expand_derivatives(Si)
         
         # the neutral source to maintain the manufactured solution
-        Sn = Dt(dfnn) + vz * Dz(dfnn) + vr * Dr(dfnn) + cx_frequency* (densi*dfnn - densn*vrvzvzeta_dfni)
+        Sn = Dt(dfnn) + vz * Dz(dfnn) + vr * Dr(dfnn) + cx_frequency* (densi*dfnn - densn*vrvzvzeta_dfni) + ionization_frequency*dense*dfnn
         Source_n = expand_derivatives(Sn)
         
         Source_i_func = build_function(Source_i, vpa, vperp, z, r, t, expression=Val{false})
