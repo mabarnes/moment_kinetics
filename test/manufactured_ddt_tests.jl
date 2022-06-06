@@ -203,7 +203,7 @@ function testconvergence(input::Dict, advance::advance_info; returnstuff=false)
     if returnstuff
         nelement_values = [nelement_values[end]]
     end
-    lastf, lastf_manf = nothing, nothing
+    lastrhs, lastrhs_manf = nothing, nothing
     for nelement ∈ nelement_values
         global_rank[] == 0 && println("testing nelement=$nelement")
         case_input = increase_resolution(input, nelement)
