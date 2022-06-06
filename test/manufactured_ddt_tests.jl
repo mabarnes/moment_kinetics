@@ -71,12 +71,12 @@ const input_sound_wave_periodic = Dict(
     "vpa_ngrid" => ngrid,
     "vpa_nelement" => 4,
     "vpa_L" => 8.0,
-    "vpa_bc" => "periodic",
+    "vpa_bc" => "zero",
     "vpa_discretization" => "chebyshev_pseudospectral_matrix_multiply",
     "vperp_ngrid" => ngrid,
     "vperp_nelement" => 4,
     "vperp_L" => 8.0,
-    "vperp_bc" => "periodic",
+    "vperp_bc" => "zero",
     "vperp_discretization" => "chebyshev_pseudospectral_matrix_multiply_vperp",
 )
 
