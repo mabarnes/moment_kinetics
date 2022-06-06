@@ -190,18 +190,12 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
     dfnn_func = manufactured_solns_list.dfnn_func
     densn_func = manufactured_solns_list.densn_func
     #nb manufactured functions not functions of species
-    for is in 1:n_ion_species
-        for ir in 1:r.n
-            for iz in 1:z.n
-                moments.charged.dens[iz,ir,is] = densi_func(z.grid[iz],r.grid[ir],0.0)
-                for ivperp in 1:vperp.n
-                    for ivpa in 1:vpa.n
-                        pdf.charged.unnorm[ivpa,ivperp,iz,ir,is] = dfni_func(vpa.grid[ivpa],vperp.grid[ivperp],z.grid[iz],r.grid[ir],0.0)
-                        pdf.charged.norm[ivpa,ivperp,iz,ir,is] = pdf.charged.unnorm[ivpa,ivperp,iz,ir,is]
-                        
-                    end
-                end
-            end
+    begin_s_r_z_region()
+    @loop_s_r_z is ir iz begin
+        moments.charged.dens[iz,ir,is] = densi_func(z.grid[iz],r.grid[ir],0.0)
+        @loop_vperp_vpa ivperp ivpa begin
+            pdf.charged.unnorm[ivpa,ivperp,iz,ir,is] = dfni_func(vpa.grid[ivpa],vperp.grid[ivperp],z.grid[iz],r.grid[ir],0.0)
+            pdf.charged.norm[ivpa,ivperp,iz,ir,is] = pdf.charged.unnorm[ivpa,ivperp,iz,ir,is]
         end
     end
     # update upar, ppar, qpar, vth consistent with manufactured solns
@@ -210,6 +204,7 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
     # get particle flux
     update_upar!(moments.charged.upar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
     # convert from particle particle flux to parallel flow
+    begin_s_r_z_region()
     @loop_s_r_z is ir iz begin
         moments.charged.upar[iz,ir,is] /= moments.charged.dens[iz,ir,is]
     # update the thermal speed
@@ -217,20 +212,12 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
     end
     
     if n_neutral_species > 0
-        for isn in 1:n_neutral_species
-            for ir in 1:r.n
-                for iz in 1:z.n
-                    moments.neutral.dens[iz,ir,isn] = densn_func(z.grid[iz],r.grid[ir],0.0)
-                    for ivzeta in 1:vzeta.n
-                        for ivr in 1:vr.n
-                            for ivz in 1:vz.n
-                                pdf.neutral.unnorm[ivz,ivr,ivzeta,iz,ir,isn] = dfnn_func(vz.grid[ivz],vr.grid[ivr],vzeta.grid[ivzeta],z.grid[iz],r.grid[ir],0.0)
-                                pdf.neutral.norm[ivz,ivr,ivzeta,iz,ir,isn] = pdf.neutral.unnorm[ivz,ivr,ivzeta,iz,ir,isn]
-                            end
-                        end
-                    end
-                    
-                end
+        begin_sn_r_z_region()
+        @loop_sn_r_z isn ir iz begin
+            moments.neutral.dens[iz,ir,isn] = densn_func(z.grid[iz],r.grid[ir],0.0)
+            @loop_vzeta_vr_vz ivzeta ivr ivz begin
+                pdf.neutral.unnorm[ivz,ivr,ivzeta,iz,ir,isn] = dfnn_func(vz.grid[ivz],vr.grid[ivr],vzeta.grid[ivzeta],z.grid[iz],r.grid[ir],0.0)
+                pdf.neutral.norm[ivz,ivr,ivzeta,iz,ir,isn] = pdf.neutral.unnorm[ivz,ivr,ivzeta,iz,ir,isn]
             end
         end
         # get consistent moments with manufactured solutions 
@@ -241,8 +228,9 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
         update_neutral_pzeta!(moments.neutral.pzeta, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
         #update ptot (isotropic pressure)
         if r.n > 1 #if 2D geometry
+            begin_sn_r_z_region()
             @loop_sn_r_z isn ir iz begin            
-            moments.neutral.ptot[iz,ir,isn] = (moments.neutral.pz[iz,ir,isn] + moments.neutral.pr[iz,ir,isn] + moments.neutral.pzeta[iz,ir,isn])/3.0
+                moments.neutral.ptot[iz,ir,isn] = (moments.neutral.pz[iz,ir,isn] + moments.neutral.pr[iz,ir,isn] + moments.neutral.pzeta[iz,ir,isn])/3.0
             end
         else #1D model
             moments.neutral.ptot .= moments.neutral.pz
@@ -252,6 +240,7 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
         update_neutral_ur!(moments.neutral.ur, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
         update_neutral_uzeta!(moments.neutral.uzeta, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
         # now convert from particle particle flux to parallel flow
+        begin_sn_r_z_region()
         @loop_sn_r_z isn ir iz begin
             moments.neutral.uz[iz,ir,isn] /= moments.neutral.dens[iz,ir,isn]
             moments.neutral.ur[iz,ir,isn] /= moments.neutral.dens[iz,ir,isn]
