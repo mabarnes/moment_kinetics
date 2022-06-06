@@ -57,7 +57,7 @@ function vzvrvzeta_to_vpavperp_species!(f_out,f_in,vz,vr,vzeta,vpa,vperp,gyropha
             vr_val = vperp.grid[ivperp]*cos(gyrophase.grid[igyro])
             vzeta_val = vpa.grid[ivpa]*bzeta + vperp.grid[ivperp]*sin(gyrophase.grid[igyro])*bzed
             
-            gyroaverage += gyrophase.wgts[igyro] * pdf_interp(vz_val, vr_val, vzeta_val)
+            gyroaverage += gyrophase.wgts[igyro] * pdf_interp(vz_val, vr_val, vzeta_val) / (2.0*pi)
         end
         f_out[ivpa,ivperp] = gyroaverage
     end
