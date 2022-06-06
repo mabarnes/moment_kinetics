@@ -8,14 +8,13 @@ export manufactured_electric_fields
 export manufactured_solutions_as_arrays
 export manufactured_rhs_as_array
 
+using SpecialFunctions
 using Symbolics
 using IfElse
 using ..input_structs
-
-using ..input_structs: advance_info
 using ..array_allocation: allocate_float
 using ..coordinates: coordinate
-using ..input_structs: geometry_input
+using ..input_structs: geometry_input, advance_info, species_composition, collisions_input
 using ..type_definitions
 
     @variables r z vpa vperp t vz vr vzeta
@@ -109,7 +108,7 @@ using ..type_definitions
             Bmag = geometry.Bmag
             Gamma_minus = 0.5*(Bzed/Bmag)*nminus_sym(Lr,Lz,r_bc,z_bc)/sqrt(pi)
             Gamma_plus = 0.5*(Bzed/Bmag)*nplus_sym(Lr,Lz,r_bc,z_bc)/sqrt(pi)
-            dfnn = Hplus *( Gamma_minus*( 0.5 - z/Lz)^2 + 1.0 )*FKw + Hminus*( Gamma_plus*( 0.5 + z/Lz)^2 + 1.0 )*FKw 
+            dfnn = Hplus *( ( 0.5 - z/Lz)*Gamma_minus + 1.0 )*FKw + Hminus*( ( 0.5 + z/Lz)*Gamma_plus + 1.0 )*FKw 
         end
         return dfnn
     end
@@ -121,18 +120,21 @@ using ..type_definitions
         return dfnn
     end
     
-    # ion density symbolic function
     function densi_sym(Lr,Lz,r_bc,z_bc)
+        # Note: explicitly convert numerical factors to mk_float so the output gets full
+        # precision if we use quad-precision (Float128)
         if z_bc == "periodic"
             if r_bc == "periodic"
-                densi = 1.5 +  0.1*(sin(2.0*pi*r/Lr) + sin(2.0*pi*z/Lz))*cos(2.0*pi*t)
+               densi = 1.5 + (sin(2.0*pi*r/Lr) + sin(2.0*pi*z/Lz))/10.0*cos(2.0*pi*t)
             elseif r_bc == "Dirichlet" 
-                #densi = 1.0 +  0.5*sin(2.0*pi*z/Lz)*(r/Lr + 0.5) + 0.2*sin(2.0*pi*r/Lr)*sin(2.0*pi*t)
-                #densi = 1.0 +  0.5*sin(2.0*pi*z/Lz)*(r/Lr + 0.5) + sin(2.0*pi*r/Lr)*sin(2.0*pi*t)
-                densi = 1.0 +  0.5*(r/Lr)*sin(2.0*pi*z/Lz)
+                #densi = 1 +  1//2*sin(2*pi*z/Lz)*(r/Lr + 1//2) + 0.2*sin(2*pi*r/Lr)*sin(2*pi*t)
+                #densi = 1 +  1//2*sin(2*pi*z/Lz)*(r/Lr + 1//2) + sin(2*pi*r/Lr)*sin(2*pi*t)
+                densi = 1.0 +  0.5*(r/Lr + 0.5)/2.0
             end
         elseif z_bc == "wall"
             densi = 0.25*(0.5 - z/Lz)*nminus_sym(Lr,Lz,r_bc,z_bc) + 0.25*(z/Lz + 0.5)*nplus_sym(Lr,Lz,r_bc,z_bc) + (z/Lz + 0.5)*(0.5 - z/Lz)*nzero_sym(Lr,Lz,r_bc,z_bc)  #+  0.5*(r/Lr + 0.5) + 0.5*(z/Lz + 0.5)
+        else
+            error("Unsupported options r_bc=$r_bc, z_bc=$z_bc")
         end
         return densi
     end
@@ -149,6 +151,8 @@ using ..type_definitions
     
     # ion distribution symbolic function
     function dfni_sym(Lr,Lz,r_bc,z_bc,composition,geometry,nr)
+        # Note: explicitly convert numerical factors to mk_float so the output gets full
+        # precision if we use quad-precision (Float128)
         densi = densi_sym(Lr,Lz,r_bc,z_bc)
         
         # calculate the electric fields and the potential
@@ -160,20 +164,47 @@ using ..type_definitions
         rhostar = geometry.rhostar
         
         if z_bc == "periodic"
-            dfni = densi * exp( - vpa^2 - vperp^2) 
+            #MHversion dfni = densi * exp( - vpa^2 - vperp^2) 
+            ## This version with upar is very expensive to evaluate, probably due to
+            ## spatially-varying erf()?
+            #upar = (sin(2.0*pi*r/Lr) + sin(2*pi*z/Lz))/10.0
+            #dfni = densi * exp(- (vpa-upar)^2 - vperp^2) #/ pi^1.5
+            ## Force the symbolic function dfni to vanish when vpa=±Lvpa/2, so that it is
+            ## consistent with "zero" bc in vpa.
+            ## Normalisation factors on 2nd and 3rd lines ensure that when this f is
+            ## integrated on -Lvpa/2≤vpa≤Lvpa/2 and 0≤vperp≤Lvperp the result (taking
+            ## into account the normalisations used by moment_kinetics) is exactly n.
+            ## Note that:
+            ##  ∫_-Lvpa/2^Lvpa/2  [1-(2*(vpa-upar)/Lvpa)^2]exp(-(vpa-upar)^2) dvpa
+            ##  = [sqrt(π)(Lvpa^2-4*upar^2-2)*(erf(Lvpa/2-upar)+erf(Lvpa/2+upar))
+            ##     +2*exp(-(Lvpa+2upar)^2/4)*(exp(2*Lvpa*upar)*(Lvpa+2upar)+Lvpa-2*upar)] / 2 / Lvpa^2
+            ##
+            ##  ∫_0^Lvperp vperp*exp(-vperp^2) = (1 - exp(-Lvperp^2))/2
+            #dfni = (1.0 - (2.0*vpa/Lvpa)^2) * dfni *
+            #          2.0*Lvpa / ((Lvpa^2-4.0*upar^2-2)*(erf(Lvpa/2.0-upar)+erf(Lvpa/2.0+upar)) + 2.0/sqrt(π)*exp(-(Lvpa+2.0*upar)^2/4.0)*(exp(2.0*Lvpa*upar)+Lvpa-2.0*upar)) / # vpa normalization
+            #         (1.0 - exp(-Lvperp^2)) # vperp normalisation
+
+            # Ad-hoc odd-in-vpa component of dfni which gives non-zero upar and dfni
+            # positive everywhere, while the odd component integrates to 0 so does not
+            # need to be accounted for in normalisation.
+            dfni = densi * (exp(- vpa^2 - vperp^2)
+                            + (sin(2.0*pi*r/Lr) + sin(2*pi*z/Lz))/10.0
+                              * vpa * exp(-2.0*(vpa^2+vperp^2))) #/ pi^1.5
         elseif z_bc == "wall"
             vpabar = vpa - (rhostar/2.0)*(Bmag/Bzed)*Er # effective velocity in z direction * (Bmag/Bzed)
             Hplus = 0.5*(sign(vpabar) + 1.0)
             Hminus = 0.5*(sign(-vpabar) + 1.0)
             ffa =  exp(- vperp^2)
             dfni = ffa * ( nminus_sym(Lr,Lz,r_bc,z_bc)* (0.5 - z/Lz) * Hminus * vpabar^2 + nplus_sym(Lr,Lz,r_bc,z_bc)*(z/Lz + 0.5) * Hplus * vpabar^2 + nzero_sym(Lr,Lz,r_bc,z_bc)*(z/Lz + 0.5)*(0.5 - z/Lz) ) * exp( - vpabar^2 )
+        else
+            error("Unsupported options r_bc=$r_bc, z_bc=$z_bc")
         end
         return dfni
     end
     function cartesian_dfni_sym(Lr,Lz,r_bc,z_bc)
         densi = densi_sym(Lr,Lz,r_bc,z_bc)
         #if (r_bc == "periodic" && z_bc == "periodic") || (r_bc == "Dirichlet" && z_bc == "periodic")
-            dfni = densi * exp( - vz^2 - vr^2 - vzeta^2) 
+            dfni = densi * exp( - vz^2 - vr^2 - vzeta^2)
         #end
         return dfni
     end
@@ -197,13 +228,13 @@ using ..type_definitions
         elseif composition.electron_physics == boltzmann_electron_response 
             # all other cases
             # N_e equal to reference density 
-            N_e = 1.0 
+            N_e = 1.0
         end 
         
         if nr > 1 # keep radial electric field
             rfac = 1.0
         else      # drop radial electric field
-            rfac = 0.0
+            rfac = 0
         end
         
         densi = densi_sym(Lr,Lz,r_bc,z_bc)
@@ -243,7 +274,7 @@ using ..type_definitions
         
         return manufactured_solns_list
     end 
-    
+
     function manufactured_electric_fields(Lr,Lz,r_bc,z_bc,composition,nr)
         
         # calculate the electric fields and the potential
@@ -258,7 +289,11 @@ using ..type_definitions
         return manufactured_E_fields
     end 
 
-    function manufactured_rhs_sym(Lr,Lz,r_bc,z_bc,composition,geometry,collisions,nr,advance=nothing)
+    function manufactured_rhs_sym(Lr::mk_float,Lz::mk_float,r_bc::String,z_bc::String,
+                                  composition::species_composition,geometry::geometry_input,collisions::collisions_input,
+                                  nr::mk_int,advance::Union{advance_info,Nothing}=nothing)
+        # Note: explicitly convert numerical factors to mk_float so the output gets full
+        # precision if we use quad-precision (Float128)
 
         # ion manufactured solutions
         densi = densi_sym(Lr,Lz,r_bc,z_bc)
@@ -293,13 +328,13 @@ using ..type_definitions
         if nr > 1 # keep radial derivatives
             rfac = 1.0
         else      # drop radial derivative terms
-            rfac = 0.0
+            rfac = 0
         end
         
         # calculate the electric fields and the potential
         Er, Ez, phi = electric_fields(Lr,Lz,r_bc,z_bc,composition,nr)
         
-        rhs_ion = 0
+        rhs_ion = 0 * z
         if advance === nothing || advance.vpa_advection
             rhs_ion += - ( 0.5*Ez*Bzed/Bmag ) * Dvpa(dfni)
         end
@@ -327,7 +362,7 @@ using ..type_definitions
         #if advance === nothing || advance.energy
         #    # placeholder
         #end
-        rhs_neutral = 0
+        rhs_neutral = 0 * z
         if advance == nothing || advance.neutral_z_advection
             rhs_neutral += -vz * Dz(dfnn)
         end
@@ -344,21 +379,24 @@ using ..type_definitions
         return expand_derivatives(rhs_ion), expand_derivatives(rhs_neutral)
     end
 
-    function manufactured_rhs(Lr::mk_float, Lz::mk_float, Lvpa::mk_float,
-                              Lvperp::mk_float, r_bc::String, z_bc::String,
-                              composition::species_composition,
-                              geometry::geometry_input, collisions::collisions_input,
-                              nr::mk_int, advance::Union{advance_info,Nothing}=nothing)
-        rhs_ion_sym, rhs_neutral_sym = manufactured_rhs_sym(Lr,Lz,Lvpa,Lvperp,r_bc,z_bc,composition,geometry,collisions,nr,advance)
+    function manufactured_rhs(Lr::mk_float, Lz::mk_float, r_bc::String, z_bc::String,
+                              composition::species_composition, geometry::geometry_input,
+                              collisions::collisions_input, nr::mk_int,
+                              advance::Union{advance_info,Nothing}=nothing)
+        rhs_ion_sym, rhs_neutral_sym = manufactured_rhs_sym(Lr, Lz, r_bc, z_bc,
+            composition, geometry, collisions, nr, advance)
         return build_function(rhs_ion_sym, vpa, vperp, z, r, t, expression=Val{false}),
                build_function(rhs_neutral_sym, vpa, vperp, z, r, t, expression=Val{false})
     end
 
-    function manufactured_sources(Lr,Lz,r_bc,z_bc,composition,geometry,collisions,nr)
+    function manufactured_sources(Lr::mk_float, Lz::mk_float, r_bc::String, z_bc::String,
+                                  composition::species_composition,
+                                  geometry::geometry_input, collisions::collisions_input,
+                                  nr::mk_int)
 
-        dfni = dfni_sym(Lr,Lz,r_bc,z_bc)
-        dfnn = dfnn_sym(Lr,Lz,r_bc,z_bc)
-        rhs_ion, rhs_neutral = manufactured_rhs_sym(Lr,Lz,Lvpa,Lvperp,r_bc,z_bc,composition,geometry,collisions,nr)
+        dfni = dfni_sym(Lr,Lz,r_bc,z_bc,composition,geometry,nr)
+        dfnn = dfnn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
+        rhs_ion, rhs_neutral = manufactured_rhs_sym(Lr,Lz,r_bc,z_bc,composition,geometry,collisions,nr)
 
         Dt = Differential(t)
 
@@ -377,8 +415,8 @@ using ..type_definitions
 
     """
         manufactured_solutions_as_arrays(
-            t::mk_float, r::AbstractVector, z::AbstractVector, vperp::AbstractVector,
-            vpa::AbstractVector)
+            t::mk_float, r::coordinate, z::coordinate, vperp::coordinate,
+            vpa::coordinate)
 
     Create array filled with manufactured solutions.
 
@@ -388,9 +426,10 @@ using ..type_definitions
     """
     function manufactured_solutions_as_arrays(
         t::mk_float, r::coordinate, z::coordinate, vperp::coordinate,
-        vpa::coordinate)
+        vpa::coordinate, vzeta::coordinate, vr::coordinate, vz::coordinate)
 
-        dfni_func, densi_func = manufactured_solutions(r.L, z.L, r.bc, z.bc)
+        dfni_func, densi_func = manufactured_solutions(r.L, z.L, vperp.L, vpa.L, vzeta.L,
+                                                       vr.L, vz.L, r.bc, z.bc)
 
         densi = allocate_float(z.n, r.n)
         dfni = allocate_float(vpa.n, vperp.n, z.n, r.n)
@@ -425,7 +464,8 @@ using ..type_definitions
         composition::species_composition, geometry::geometry_input,
         collisions::collisions_input, advance::Union{advance_info,Nothing})
 
-        rhs_ion_func, rhs_neutral_func = manufactured_rhs(r.L, z.L, vpa.L, vperp.L, r.bc, z.bc, composition, geometry, collisions, r.n, advance)
+        rhs_ion_func, rhs_neutral_func = manufactured_rhs(r.L, z.L, r.bc, z.bc,
+            composition, geometry, collisions, r.n, advance)
 
         rhs_ion = allocate_float(vpa.n, vperp.n, z.n, r.n)
 

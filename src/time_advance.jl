@@ -280,7 +280,8 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, spectral_obje
     # r_advect = r_advect, neutral_z_advect = neutral_z_advect, neutral_r_advect = neutral_r_advect)
     advect_objects = advect_object_struct(vpa_advect, vperp_advect, z_advect, r_advect, neutral_z_advect, neutral_r_advect)
     if(advance.manufactured_solns_test)
-        manufactured_source_list = manufactured_sources(r.L,z.L,vpa.L,vperp.L,r.bc,z.bc,composition,geometry,collisions,r.n)
+        manufactured_source_list = manufactured_sources(r.L, z.L, r.bc, z.bc, composition,
+                                                        geometry, collisions, r.n)
     else
         manufactured_source_list = false # dummy Bool to be passed as argument instead of list
     end
