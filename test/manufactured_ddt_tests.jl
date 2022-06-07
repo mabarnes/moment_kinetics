@@ -338,11 +338,12 @@ function runtests(ngrid=nothing)
     return nothing
 end
 
-function runtests_return(which_term::Symbol=:all)
+function runtests_return(which_term::Symbol=:all; ngrid=nothing)
     global_rank[] == 0 && println("MMS tests with return")
 
     rhs, rhs_manf = testconvergence(input_sound_wave_periodic,
-                                    setup_advance(which_term); returnstuff=true)
+                                    setup_advance(which_term); ngrid=ngrid,
+                                    returnstuff=true)
 
     return rhs, rhs_manf
 end
