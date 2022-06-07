@@ -163,6 +163,7 @@ function runcase(input::Dict, advance::advance_info, returnstuff=false)
 
     error_2 = nothing
     error_inf = nothing
+    rhs_manf = nothing
     if global_rank[] == 0
         rhs_manf = manufactured_rhs_as_array(mk_float(0.0), r, z, vperp, vpa, geometry, advance)
 
