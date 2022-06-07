@@ -11,8 +11,10 @@ using Symbolics
 
     # neutral density symbolic function
     function densn_sym(Lr,Lz,r_bc,z_bc)
-        if r_bc == "periodic" && z_bc == "periodic"
+        if r_bc == "periodic" && z_bc == "periodic" 
             densn = 1.0 +  0.1*(cos(2.0*pi*r/Lr) + cos(2.0*pi*z/Lz))*sin(2.0*pi*t)  
+        else
+            densn = 1.0
         end
         return densn
     end
@@ -20,16 +22,16 @@ using Symbolics
     # neutral distribution symbolic function
     function dfnn_sym(Lr,Lz,r_bc,z_bc)
         densn = densn_sym(Lr,Lz,r_bc,z_bc)
-        if (r_bc == "periodic" && z_bc == "periodic")
+        #if (r_bc == "periodic" && z_bc == "periodic")
             dfnn = densn * exp( - vz^2 - vr^2 - vzeta^2)
-        end
+        #end
         return dfnn
     end
     function gyroaveraged_dfnn_sym(Lr,Lz,r_bc,z_bc)
         densn = densn_sym(Lr,Lz,r_bc,z_bc)
-        if (r_bc == "periodic" && z_bc == "periodic")
+        #if (r_bc == "periodic" && z_bc == "periodic")
             dfnn = densn * exp( - vpa^2 - vperp^2 )
-        end
+        #end
         return dfnn
     end
     
@@ -62,9 +64,9 @@ using Symbolics
     end
     function cartesian_dfni_sym(Lr,Lz,r_bc,z_bc)
         densi = densi_sym(Lr,Lz,r_bc,z_bc)
-        if (r_bc == "periodic" && z_bc == "periodic") || (r_bc == "Dirichlet" && z_bc == "periodic")
+        #if (r_bc == "periodic" && z_bc == "periodic") || (r_bc == "Dirichlet" && z_bc == "periodic")
             dfni = densi * exp( - vz^2 - vr^2 - vzeta^2) 
-        end
+        #end
         return dfni
     end
 
@@ -94,7 +96,7 @@ using Symbolics
         return manufactured_solns_list
     end 
 
-    function manufactured_sources(Lr,Lz,r_bc,z_bc,geometry,collisions)
+    function manufactured_sources(Lr,Lz,r_bc,z_bc,composition,geometry,collisions)
         
         # ion manufactured solutions
         densi = densi_sym(Lr,Lz,r_bc,z_bc)
@@ -117,8 +119,13 @@ using Symbolics
         Bzed = geometry.Bzed
         Bmag = geometry.Bmag
         rhostar = geometry.rstar
-        cx_frequency = collisions.charge_exchange
-        ionization_frequency = collisions.ionization
+        if composition.n_neutral_species > 0
+            cx_frequency = collisions.charge_exchange
+            ionization_frequency = collisions.ionization
+        else 
+            cx_frequency = 0.0
+            ionization_frequency = 0.0
+        end
         
         # calculate the electric fields
         dense = densi # get the electron density via quasineutrality with Zi = 1
