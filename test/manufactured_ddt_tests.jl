@@ -208,6 +208,24 @@ function runcase(input::Dict, advance::advance_info, returnstuff=false)
 end
 
 """
+    calculate_convergence_orders(nelements, errors)
+
+Calculate estimated convergence order between consecutive steps of the nelement
+scan.
+
+Don't assume the final error is the 'best' value in case it is affected by
+rounding errors, etc.
+"""
+function calculate_convergence_orders(nelements, errors)
+    @assert size(nelements) == size(errors)
+
+    error_ratios = errors[1:end-1] ./ errors[2:end]
+    nelements_ratios = nelements[2:end] ./ nelements[1:end-1]
+    orders = @. log(error_ratios) / log(nelements_ratios)
+    return orders
+end
+
+"""
     testconvergence(input::Dict, advance::advance_info; returnstuff::Bool)
 
 Test convergence with spatial resolution
@@ -261,6 +279,9 @@ function testconvergence(input::Dict, advance::advance_info; ngrid=nothing, retu
         println(convergence_inf)
         println("expected convergence")
         println(expected_convergence)
+        println("convergence orders")
+        println(calculate_convergence_orders(nelement_values, errors_2))
+        println(calculate_convergence_orders(nelement_values, errors_inf))
     end
 
     if returnstuff
