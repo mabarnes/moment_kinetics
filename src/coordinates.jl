@@ -111,7 +111,7 @@ function init_grid(ngrid, nelement, n, L, imin, imax, igrid, discretization, nam
         grid = allocate_float(n)
         grid[1] = 0.0
         wgts = allocate_float(n)
-        if name == "vr" || name == "vz"
+        if name == "vr" || name == "vzeta"
             wgts[1] = sqrt(pi) # to cancel factor of 1/sqrt{pi} in integrate_over_neutral_vspace, velocity_moments.jl
                                # in the case that the code runs in 1V mode
         else
