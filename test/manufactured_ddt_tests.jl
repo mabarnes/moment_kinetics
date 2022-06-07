@@ -147,6 +147,25 @@ function evaluate_initial_ddt(input_dict::Dict, advance_input::advance_info)
 end
 
 """
+    remove_boundary_points(f::AbstractArray{mk_float,4})
+
+Remove points which are modified by boundary conditions* and therefore not
+expected to match the manufactured rhs.
+
+* Boundary conditions are applied at the end of the euler_time_advance!()
+function. In normal operation, these are applied to the distribution function
+(and possibly the moments). Here we hack around to get df/dt stored in the
+fvec_out argument, so the bcs are applied to our df/dt. Physically this makes
+sense for zero-value bcs (as df/dt=0 on the boundary for them), but means that
+the calculated df/dt does not match the one evaluated from the manufactured
+solution, for which evaluating the rhs doesn't necessarily give zero at the
+boundary.
+"""
+function remove_boundary_points(f::AbstractArray{mk_float,4})
+    return f[2:end-1,:,:,:]
+end
+
+"""
     runcase(input::Dict, advance::advance_info, returnstuff=false)
 
 Run a simulation with parameters set by `input` using manufactured sources and return
@@ -167,6 +186,11 @@ function runcase(input::Dict, advance::advance_info, returnstuff=false)
 
         # Only one species, so get rid of species index
         dfdt = dfdt[:,:,:,:,1]
+
+        # Get rid of vpa boundary points which are (possibly) overwritten by
+        # boundary conditions in the numerically evaluated result
+        dfdt = remove_boundary_points(dfdt)
+        rhs_manf = remove_boundary_points(rhs_manf)
 
         error_2 = L2_error_norm(dfdt, rhs_manf)
         error_inf = L_infinity_error_norm(dfdt, rhs_manf)
