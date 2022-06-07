@@ -39,16 +39,20 @@ nc_var_type{N} = Union{
    NCDatasets.CFVariable{io_float, N,
                          NCDatasets.Variable{io_float, N, NCDatasets.NCDataset},
                          NCDatasets.Attributes{NCDatasets.NCDataset{Nothing}},
-                         NamedTuple{(:fillvalue, :scale_factor, :add_offset,
-                                     :calendar, :time_origin, :time_factor),
-                                    NTuple{6, Nothing}}},
+                         NamedTuple{(:fillvalue, :missing_values, :scale_factor,
+                                     :add_offset, :calendar, :time_origin,
+                                     :time_factor),
+                                    Tuple{Nothing, Tuple{}, Nothing, Nothing, Nothing,
+                                          Nothing, Nothing}}},
    NCDatasets.CFVariable{io_float, N,
                          NCDatasets.Variable{io_float, N,
                                              NCDatasets.NCDataset{Nothing}},
                          NCDatasets.Attributes{NCDatasets.NCDataset{Nothing}},
-                         NamedTuple{(:fillvalue, :scale_factor, :add_offset,
-                                     :calendar, :time_origin, :time_factor),
-                                    NTuple{6, Nothing}}}}
+                         NamedTuple{(:fillvalue, :missing_values, :scale_factor,
+                                     :add_offset, :calendar, :time_origin,
+                                     :time_factor),
+                                    Tuple{Nothing, Tuple{}, Nothing, Nothing, Nothing,
+                                          Nothing, Nothing}}}}
 
 """
 structure containing the data/metadata needed for netcdf file i/o
