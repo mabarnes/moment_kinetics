@@ -77,7 +77,7 @@ for Chebyshev transforms, velocity space moments,
 EM fields, semi-Lagrange treatment, and advection terms
 """
 function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, drive_input, moments,
-                             t_input, collisions, species, geometry)
+                             t_input, collisions, species, geometry, boundary_distributions)
     # define some local variables for convenience/tidiness
     n_species = composition.n_species
     n_ion_species = composition.n_ion_species
@@ -117,7 +117,9 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
         advance_neutral_z_advection = false
         advance_neutral_r_advection = false
         advance_cx = false
+        advance_cx_1V = false
         advance_ionization = false
+        advance_ionization_1V = false
     end
     advance_sources = false
     advance_continuity = false
@@ -337,7 +339,8 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
             update_boundary_indices!(neutral_z_advect[isn], loop_ranges[].vz, loop_ranges[].vr, loop_ranges[].vzeta, loop_ranges[].r)
         end
         # enforce prescribed boundary condition in r on the neutral distribution function f
-        @views enforce_neutral_z_boundary_condition!(pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
+        @views enforce_neutral_z_boundary_condition!(pdf.neutral.unnorm, pdf.charged.unnorm, boundary_distributions,
+            neutral_z_advect, z_advect, vz, vr, vzeta, vpa, vperp, z, r, composition)
     end
     
     ##
@@ -350,7 +353,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
      vpa_spectral = vpa_spectral, vperp_spectral = vperp_spectral, z_spectral = z_spectral, r_spectral = r_spectral)
     
     if(t_input.use_manufactured_solns)
-        manufactured_source_list = manufactured_sources(r.L,z.L,r.bc,z.bc,geometry,collisions)
+        manufactured_source_list = manufactured_sources(r.L,z.L,r.bc,z.bc,composition,geometry,collisions)
     else
         manufactured_source_list = false # dummy Bool to be passed as argument instead of list
     end
@@ -473,7 +476,7 @@ time integrator can be used without severe CFL condition
 """
 function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
            moments, fields, spectral_objects, advect_objects,
-           composition, collisions, geometry, advance, scratch_dummy, manufactured_source_list, io, cdf)
+           composition, collisions, geometry, boundary_distributions, advance, scratch_dummy, manufactured_source_list, io, cdf)
 
     @debug_detect_redundant_block_synchronize begin
         # Only want to check for redundant _block_synchronize() calls during the
@@ -487,7 +490,8 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
        
         time_advance_no_splitting!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
                 moments, fields, spectral_objects, advect_objects,
-                composition, collisions, geometry, advance,  scratch_dummy, manufactured_source_list, i)
+                composition, collisions, geometry, boundary_distributions, 
+                advance,  scratch_dummy, manufactured_source_list, i)
         # update the time
         t += t_input.dt
         # write data to file every nwrite time steps
@@ -519,7 +523,8 @@ end
 """
 function time_advance_no_splitting!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r, 
            moments, fields, spectral_objects, advect_objects,
-           composition, collisions, geometry, advance, scratch_dummy, manufactured_source_list, istep)
+           composition, collisions, geometry, boundary_distributions, 
+           advance, scratch_dummy, manufactured_source_list, istep)
     
     #pdf_in = pdf.unnorm #get input pdf values in case we wish to impose a constant-in-time boundary condition in r
     #use pdf.norm for this fn for now.
@@ -527,12 +532,12 @@ function time_advance_no_splitting!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa
     if t_input.n_rk_stages > 1
         ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r, 
             moments, fields, spectral_objects, advect_objects,
-            composition, collisions, geometry, advance,  scratch_dummy, manufactured_source_list, istep)#pdf_in, 
+            composition, collisions, geometry, boundary_distributions, advance,  scratch_dummy, manufactured_source_list, istep)#pdf_in, 
     else
         euler_time_advance!(scratch, scratch, pdf, fields, moments,
             advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z, r, t,
             t_input, spectral_objects, composition,
-            collisions, geometry, scratch_dummy, manufactured_source_list, advance, 1)#pdf_in, 
+            collisions, geometry, boundary_distributions, scratch_dummy, manufactured_source_list, advance, 1)#pdf_in, 
         # NB: this must be broken -- scratch is updated in euler_time_advance!,
         # but not the pdf or moments.  need to add update to these quantities here
     end
@@ -600,7 +605,8 @@ end
 """
 function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r, 
            moments, fields, spectral_objects, advect_objects,
-           composition, collisions, geometry, advance, scratch_dummy, manufactured_source_list,  istep)#pdf_in,
+           composition, collisions, geometry, boundary_distributions, 
+           advance, scratch_dummy, manufactured_source_list,  istep)#pdf_in,
     
     begin_s_r_z_vperp_region()
     
@@ -637,7 +643,8 @@ function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase,
             pdf, fields, moments, 
             advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z, r, t,
             t_input, spectral_objects, composition,
-            collisions, geometry, scratch_dummy, manufactured_source_list, advance, istage) #pdf_in,
+            collisions, geometry, boundary_distributions, 
+            scratch_dummy, manufactured_source_list, advance, istage) #pdf_in,
         @views rk_update!(scratch, pdf, moments, fields, vz, vr, vzeta, vpa, vperp, z, r, advance.rk_coefs[:,istage], 
          istage, composition, spectral_objects.z_spectral, spectral_objects.r_spectral)
     end
@@ -678,10 +685,11 @@ with fvec_in an input and fvec_out the output
 """
 function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, 
     advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z, r, t, t_input,
-    spectral_objects, composition, collisions, geometry,
+    spectral_objects, composition, collisions, geometry, boundary_distributions,
     scratch_dummy, manufactured_source_list, advance, istage) #pdf_in, 
     # define some abbreviated variables for tidiness
     n_ion_species = composition.n_ion_species
+    n_neutral_species = composition.n_neutral_species
     dt = t_input.dt
     use_semi_lagrange = t_input.use_semi_lagrange
     # vpa_advection! advances the 1D advection equation in vpa.
@@ -756,7 +764,10 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     enforce_boundary_conditions!(fvec_out.pdf, pdf.charged.norm, vpa.bc, z.bc, r.bc, vpa, vperp, z, r,
      vpa_advect, z_advect, r_advect, composition)
     # enforce boundary conditions in r and z on the neutral particle distribution function
-    enforce_neutral_boundary_conditions!(fvec_out.pdf_neutral, r_advect, vz, vr, vzeta, z, r, composition)
+    if n_neutral_species > 0
+        enforce_neutral_boundary_conditions!(fvec_out.pdf_neutral, fvec_out.pdf, boundary_distributions, 
+         neutral_r_advect, neutral_z_advect, z_advect, vz, vr, vzeta, vpa, vperp, z, r, composition)
+    end
     # End of advance for distribution function
 
     # reset "xx.updated" flags to false since ff has been updated

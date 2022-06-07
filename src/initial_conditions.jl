@@ -19,8 +19,9 @@ using ..array_allocation: allocate_shared_float
 using ..bgk: init_bgk_pdf!
 using ..communication
 using ..looping
-using ..velocity_moments: integrate_over_vspace
+using ..velocity_moments: integrate_over_vspace, integrate_over_neutral_vspace
 using ..velocity_moments: integrate_over_positive_vpa, integrate_over_negative_vpa
+using ..velocity_moments: integrate_over_positive_vz, integrate_over_negative_vz
 using ..velocity_moments: create_moments_charged, create_moments_neutral, update_qpar!
 using ..velocity_moments: moments_charged_substruct, moments_neutral_substruct
 using ..velocity_moments: update_neutral_density!
@@ -47,6 +48,11 @@ end
 struct moments_struct
     charged::moments_charged_substruct
     neutral::moments_neutral_substruct
+end
+
+struct boundary_distributions_struct{n_neutral_vspace}
+    # knudsen cosine distribution for imposing the neutral wall boundary condition
+    knudsen::MPISharedArray{mk_float,n_neutral_vspace}
 end
 """
 creates the normalised pdf and the velocity-space moments and populates them
@@ -90,6 +96,8 @@ function init_pdf_and_moments(vz, vr, vzeta, vpa, vperp, z, r, composition, spec
     end
     # create and initialise the normalised particle distribution function (pdf)
     pdf = create_and_init_pdf(moments, vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_species, species)
+    
+    boundary_distributions = create_and_init_boundary_distributions(vz, vr, vzeta, vpa, vperp, composition)
     
     if(use_manufactured_solns)
         manufactured_solns_list = manufactured_solutions(r.L,z.L,r.bc,z.bc) 
@@ -138,7 +146,7 @@ function init_pdf_and_moments(vz, vr, vzeta, vpa, vperp, z, r, composition, spec
     # calculate the initial parallel heat flux from the initial un-normalised pdf
     update_qpar!(moments.charged.qpar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
     # need neutral version!!! update_qpar!(moments.charged.qpar, moments.charged.qpar_updated, pdf.charged.unnorm, vpa, vperp, z, r, composition, moments.charged.vpa_norm_fac)
-    return pdf, moments
+    return pdf, moments, boundary_distributions
 end
 
 """
@@ -190,6 +198,53 @@ function create_and_init_pdf(moments, vz, vr, vzeta, vpa, vperp, z, r, n_ion_spe
     return pdf_struct(pdf_substruct(pdf_charged_norm, pdf_charged_unnorm, pdf_charged_buffer), 
                         pdf_substruct(pdf_neutral_norm, pdf_neutral_unnorm, pdf_neutral_buffer))
 end
+
+function create_and_init_boundary_distributions(vz, vr, vzeta, vpa, vperp, composition)
+    knudsen_cosine = allocate_shared_float(vz.n, vr.n, vzeta.n)
+    integrand = zeros(mk_float, vz.n, vr.n, vzeta.n)
+    
+    vtfac = sqrt(composition.T_wall * composition.mn_over_mi)
+    
+    if vzeta.n > 1 && vr.n > 1
+        # get the Knudsen cosine distribution for neutral particle wall emission
+        for ivzeta in 1:vzeta.n
+            for ivr in 1:vr.n
+                for ivz in 1:vz.n
+                    v_transverse = sqrt(vzeta.grid[ivzeta]^2 + vr.grid[ivr]^2)
+                    v_normal = abs(vz.grid[ivz])
+                    v_tot = sqrt(v_normal^2 + v_transverse^2)
+                    if  v_tot > 0.0
+                        prefac = v_normal/v_tot 
+                    else
+                        prefac = 1.0
+                    end 
+                    knudsen_cosine[ivz,ivr,ivzeta] = (3.0*sqrt(pi)/vtfac^4)*prefac*exp( - (v_normal/vtfac)^2 - (v_transverse/vtfac)^2 )
+                    integrand[ivz,ivr,ivzeta] = vz.grid[ivz]*knudsen_cosine[ivz,ivr,ivzeta]
+                end
+            end
+        end
+        normalisation = integrate_over_positive_vz(integrand, vz.grid, vz.wgts,
+                                                    vz.scratch, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
+        # uncomment this line to test:
+        #println("normalisation should be 1, it is = ", normalisation)
+        #correct knudsen_cosine to conserve particle fluxes numerically
+        @. knudsen_cosine /= normalisation 
+
+    elseif vzeta.n == 1 && vr.n == 1
+        # get the marginalised Knudsen cosine distribution after integrating over vperp
+        # appropriate for 1V model 
+        @. vz.scratch = (3.0*pi/vtfac^3)*abs(vz.grid)*erfc(abs(vz.grid)/vtfac)
+        normalisation = integrate_over_positive_vz(vz.grid .* vz.scratch, vz.grid, vz.wgts, vz.scratch2, 
+                                                     vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
+        # uncomment this line to test:
+        #println("normalisation should be 1, it is = ", normalisation)
+        #correct knudsen_cosine to conserve particle fluxes numerically
+        @. vz.scratch /= normalisation
+        @. knudsen_cosine[:,1,1] = vz.scratch[:]        
+                
+    end    
+    return boundary_distributions_struct(knudsen_cosine)
+end 
 
 """
 for now the only initialisation option for the temperature is constant in z
@@ -439,74 +494,24 @@ function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, vperp, r, com
     elseif bc == "wall"
         @loop_s is begin
             # zero incoming BC for ions, as they recombine at the wall
-            if is ∈ composition.ion_species_range
-                @loop_r_vperp_vpa ir ivperp ivpa begin
-                    # no parallel BC should be enforced for vpa = 0
-                    # adv.speed is signed 
-                    # adv.speed =  vpa*kpar - 0.5 *rhostar*Er
-                    
-                    iz = 1 # z = -L/2
-                    if adv[is].speed[iz,ivpa,ivperp,ir] > zero
-                        f[ivpa,ivperp,iz,ir,is] = 0.0
-                    end
-                    iz = nz # z = L/2
-                    if adv[is].speed[iz,ivpa,ivperp,ir] < -zero
-                        f[ivpa,ivperp,iz,ir,is] = 0.0
-                    end
-                    
+            @loop_r_vperp_vpa ir ivperp ivpa begin
+                # no parallel BC should be enforced for vpa = 0
+                # adv.speed is signed 
+                # adv.speed =  vpa*kpar - 0.5 *rhostar*Er
+                
+                iz = 1 # z = -L/2
+                if adv[is].speed[iz,ivpa,ivperp,ir] > zero
+                    f[ivpa,ivperp,iz,ir,is] = 0.0
                 end
-            end
-        end
-        # BC for neutrals
-        if composition.n_neutral_species > 0
-            begin_serial_region()
-            # TODO: parallelise this...
-            @serial_region begin
-                for ir ∈ 1:r.n
-                    for ivperp ∈ 1:vperp.n
-                        # define vtfac to avoid repeated computation below
-                        vtfac = sqrt(composition.T_wall * composition.mn_over_mi)
-                        # initialise the combined ion/neutral fluxes into the walls to be zero
-                        wall_flux_0 = 0.0
-                        wall_flux_L = 0.0
-                        # include the contribution to the wall fluxes due to species with index 'is'
-                        for is ∈ 1:composition.n_ion_species
-                                @views wall_flux_0 += (sqrt(composition.mn_over_mi) *
-                                                       integrate_over_negative_vpa(abs.(vpa.grid) .* f[:,ivperp,1,ir,is], vpa.grid, vpa.wgts, vpa.scratch))
-                                @views wall_flux_L += (sqrt(composition.mn_over_mi) *
-                                                       integrate_over_positive_vpa(abs.(vpa.grid) .* f[:,ivperp,end,ir,is], vpa.grid, vpa.wgts, vpa.scratch))
-                        end
-                        for isn ∈ 1:composition.n_neutral_species
-                                is = isn + composition.n_ion_species
-                                @views wall_flux_0 += integrate_over_negative_vpa(abs.(vpa.grid) .* f[:,ivperp,1,ir,is], vpa.grid, vpa.wgts, vpa.scratch)
-                                @views wall_flux_L += integrate_over_positive_vpa(abs.(vpa.grid) .* f[:,ivperp,end,ir,is], vpa.grid, vpa.wgts, vpa.scratch)
-                        end
-                        # NB: need to generalise to more than one ion species
-                        # get the Knudsen cosine distribution
-                        # NB: as vtfac is time-independent, can be made more efficient by creating
-                        # array for Knudsen cosine distribution and carrying out following four lines
-                        # of calculation at initialization
-                        @. vpa.scratch = (3*pi/vtfac^3)*abs(vpa.grid)*erfc(abs(vpa.grid)/vtfac)
-                        tmparr = copy(vpa.scratch)
-                        tmp = integrate_over_positive_vpa(vpa.grid .* vpa.scratch, vpa.grid, vpa.wgts, tmparr)
-                        @. vpa.scratch /= tmp
-                        for isn ∈ 1:composition.n_neutral_species
-                            is = isn + composition.n_ion_species
-                            for ivpa ∈ 1:nvpa
-                                # no parallel BC should be enforced for vpa = 0
-                                if abs(vpa.grid[ivpa]) > zero
-                                    if adv[is].upwind_idx[ivpa,ir] == 1
-                                        f[ivpa,ivperp,1,ir,is] = wall_flux_0 * vpa.scratch[ivpa]
-                                    else
-                                        f[ivpa,ivperp,end,ir,is] = wall_flux_L * vpa.scratch[ivpa]
-                                    end
-                                end
-                            end
-                        end
-                    end
+                iz = nz # z = L/2
+                if adv[is].speed[iz,ivpa,ivperp,ir] < -zero
+                    f[ivpa,ivperp,iz,ir,is] = 0.0
                 end
+                
             end
+        
         end
+        
     end
 end
 
@@ -540,29 +545,98 @@ function enforce_vpa_boundary_condition_local!(f::T, bc, upwind_idx, downwind_id
     end
 end
 
-function enforce_neutral_boundary_conditions!(f, r_adv::T, vz, vr, vzeta, z, r, composition) where T #f_initial,
+function enforce_neutral_boundary_conditions!(f_neutral, f_charged, boundary_distributions, r_adv_neutral::T1, z_adv_neutral::T2, z_adv_charged::T3, vz, vr, vzeta, vpa, vperp, z, r, composition) where {T1, T2, T3} #f_initial,
     
     # f_initial contains the initial condition for enforcing a fixed-boundary-value condition 
     # no bc on vz vr vzeta required as no advection in these coordinates
     begin_sn_r_vzeta_vr_vz_region()
-    @views enforce_neutral_z_boundary_condition!(f, vz, vr, vzeta, z, r, composition)
+    @views enforce_neutral_z_boundary_condition!(f_neutral, f_charged, boundary_distributions, z_adv_neutral, z_adv_charged, vz, vr, vzeta, vpa, vperp, z, r, composition)
     begin_sn_z_vzeta_vr_vz_region()
-    @views enforce_neutral_r_boundary_condition!(f, r_adv, vz, vr, vzeta, z, r, composition) #f_initial, 
+    @views enforce_neutral_r_boundary_condition!(f_neutral, r_adv_neutral, vz, vr, vzeta, z, r, composition) #f_initial, 
 end
 
-function enforce_neutral_z_boundary_condition!(f, vz, vr, vzeta, z, r, composition)
+function enforce_neutral_z_boundary_condition!(f_neutral, f_charged, boundary_distributions, z_adv_neutral::T1, z_adv_charged::T2, vz, vr, vzeta, vpa, vperp, z, r, composition) where {T1, T2}
     bc = z.bc
     nz = z.n
+    # define a zero that accounts for finite precision
+    zero = 1.0e-10
+    
     # 'periodic' BC enforces periodicity by taking the average of the boundary points
     if bc == "periodic"
         @loop_sn_r_vzeta_vr_vz isn ir ivzeta ivr ivz begin
-            f[ivz,ivr,ivzeta,1,ir,isn] = 0.5*(f[ivz,ivr,ivzeta,1,ir,isn]+f[ivz,ivr,ivzeta,nz,ir,isn])
-            f[ivz,ivr,ivzeta,nz,ir,isn] = f[ivz,ivr,ivzeta,1,ir,isn]
+            f_neutral[ivz,ivr,ivzeta,1,ir,isn] = 0.5*(f_neutral[ivz,ivr,ivzeta,1,ir,isn]+f_neutral[ivz,ivr,ivzeta,nz,ir,isn])
+            f_neutral[ivz,ivr,ivzeta,nz,ir,isn] = f_neutral[ivz,ivr,ivzeta,1,ir,isn]
         end
+    elseif bc == "wall"
+    # wall BC for neutrals
+        begin_serial_region()
+        # TODO: parallelise this...
+        @serial_region begin
+            for ir ∈ 1:r.n
+                # initialise the combined ion/neutral fluxes into the walls to be zero
+                wall_flux_0 = 0.0
+                wall_flux_L = 0.0
+                # include the contribution to the wall fluxes due to species with index 'is'
+                for is ∈ 1:composition.n_ion_species
+                        # get velocity into the wall at this r = -L/2 at z = -L/2, vz(vpa,vperp)
+                        vz_charged = z_adv_charged[is].speed[1,:,:,ir]
+                        #n.b. vz_charged independent of vperp in current 2D model so 
+                        # vz_charged[:,n] identical for all n in 1:end -> for convenience we pass 
+                        # dzdt = vz_charged[:,1] as a 1-D velocity variable for the half-sided integration routines
+                        # if vz_charged becomes a fn of vperp then these routines must be generalised
+                        @views wall_flux_0 += (sqrt(composition.mn_over_mi) *
+                                               integrate_over_negative_vpa(abs.(vz_charged[:,:]) .* f_charged[:,:,1,ir,is], vz_charged[:,1], vpa.wgts, vpa.scratch, vperp.grid, vperp.wgts))
+                        # get velocity into the wall at this r = L/2 at z = L/2, vz(vpa,vperp)
+                        vz_charged = z_adv_charged[is].speed[end,:,:,ir]
+                        @views wall_flux_L += (sqrt(composition.mn_over_mi) *
+                                               integrate_over_positive_vpa(abs.(vz_charged[:,:]) .* f_charged[:,:,end,ir,is], vz_charged[:,1], vpa.wgts, vpa.scratch, vperp.grid, vperp.wgts))
+                end
+                for isn ∈ 1:composition.n_neutral_species
+                        # get velocity into the wall at this r = -L/2 at z = -L/2, vz(vpa,vperp)
+                        vz_neutral = z_adv_neutral[isn].speed[1,:,:,:,ir]
+                        #n.b. vz_neutral independent of vr, vzeta in current 2D model so 
+                        # vz_neutral[:,n,m] = vz.grid[:] is identical for all n, m in 1:end -> for convenience we pass 
+                        # dzdt = vz.grid[:] as a 1-D velocity variable for the half-sided integration routines
+                        # if vz_neutral becomes a fn of vr vzeta then these routines must be generalised
+                        @views wall_flux_0 += integrate_over_negative_vz(abs.(vz_neutral) .* f_neutral[:,:,:,1,ir,isn], vz.grid, vz.wgts, vz.scratch, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
+                        vz_neutral = z_adv_neutral[isn].speed[end,:,:,:,ir]
+                        @views wall_flux_L += integrate_over_positive_vz(abs.(vz_neutral) .* f_neutral[:,:,:,end,ir,isn], vz.grid, vz.wgts, vz.scratch, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
+                end
+                # NB: as vtfac is time-independent, can be made more efficient by creating
+                # array for Knudsen cosine distribution and carrying out following four lines
+                # of calculation at initialization
+                
+                #@. vz.scratch = (3*pi/vtfac^3)*abs(vz.grid)*erfc(abs(vz.grid)/vtfac)
+                #tmparr = copy(vz.scratch)
+                #tmp = integrate_over_positive_vpa(vz.grid .* vz.scratch, vz.grid, vz.wgts, tmparr)
+                #@. vz.scratch /= tmp
+                
+                knudsen_cosine = boundary_distributions.knudsen
+                for isn ∈ 1:composition.n_neutral_species
+                    for ivzeta ∈ 1:vzeta.n
+                        for ivr ∈ 1:vr.n
+                            for ivz ∈ 1:vz.n
+                                # no parallel BC should be enforced for vz = 0
+                                iz = 1 # z = -L/2
+                                if vz.grid[ivz] > zero
+                                    f_neutral[ivz,ivr,ivzeta,iz,ir,isn] = wall_flux_0 * knudsen_cosine[ivz,ivr,ivzeta]
+                                end
+                                iz = nz # z = L/2
+                                if vz.grid[ivz] < -zero
+                                    f_neutral[ivz,ivr,ivzeta,iz,ir,isn] = wall_flux_L * knudsen_cosine[ivz,ivr,ivzeta]
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    
+    
     end
 end
 
-function enforce_neutral_r_boundary_condition!(f, adv::T, vz, vr, vzeta, z, r, composition) where T #f_initial, 
+function enforce_neutral_r_boundary_condition!(f, r_adv::T, vz, vr, vzeta, z, r, composition) where T #f_initial, 
     bc = r.bc
     nr = r.n
     # 'periodic' BC enforces periodicity by taking the average of the boundary points

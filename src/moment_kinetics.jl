@@ -164,14 +164,14 @@ function setup_moment_kinetics(input_dict::Dict)
                                r=r.n, z=z.n, vperp=vperp.n, vpa=vpa.n, vzeta=vzeta.n, vr=vr.n, vz=vz.n)
     # initialize f and the lowest three v-space moments (density, upar and ppar),
     # each of which may be evolved separately depending on input choices.
-    pdf, moments = init_pdf_and_moments(vz, vr, vzeta, vpa, vperp, z, r, composition, species, t_input.n_rk_stages, evolve_moments, t_input.use_manufactured_solns) 
+    pdf, moments, boundary_distributions = init_pdf_and_moments(vz, vr, vzeta, vpa, vperp, z, r, composition, species, t_input.n_rk_stages, evolve_moments, t_input.use_manufactured_solns) 
     # initialize time variable
     code_time = 0.
     # create arrays and do other work needed to setup
     # the main time advance loop -- including normalisation of f by density if requested
     moments, fields, spectral_objects, advect_objects, 
     scratch, advance, scratch_dummy, manufactured_source_list = setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition,
-        drive_input, moments, t_input, collisions, species, geometry)
+        drive_input, moments, t_input, collisions, species, geometry, boundary_distributions)
     # setup i/o
     io, cdf = setup_file_io(output_dir, run_name, vz, vr, vzeta, vpa, vperp, z, r, composition, collisions)
     # write initial data to ascii files
@@ -184,7 +184,7 @@ function setup_moment_kinetics(input_dict::Dict)
 
     return pdf, scratch, code_time, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
            moments, fields, spectral_objects, advect_objects,
-           composition, collisions, geometry, advance, scratch_dummy, manufactured_source_list, io, cdf
+           composition, collisions, geometry, boundary_distributions, advance, scratch_dummy, manufactured_source_list, io, cdf
 end
 
 """

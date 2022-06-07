@@ -4,6 +4,7 @@ module velocity_moments
 
 export integrate_over_vspace
 export integrate_over_positive_vpa, integrate_over_negative_vpa
+export integrate_over_positive_vz, integrate_over_negative_vz
 export create_moments_chrg, create_moments_ntrl
 export update_moments!
 export update_density!
@@ -303,21 +304,22 @@ this could be made more efficient for the case that dz/dt = vpa is time-independ
 but it has been left general for the cases where, e.g., dz/dt = wpa*vth + upar
 varies in time
 """
-function integrate_over_positive_vpa(integrand, dzdt, vpa_wgts, wgts_mod)
+function integrate_over_positive_vpa(integrand, dzdt, vpa_wgts, wgts_mod, vperp_grid, vperp_wgts)
     # define the nvpa variable for convenience
-    nvpa = length(dzdt)
+    nvpa = length(vpa_wgts)
+    nvperp = length(vperp_wgts)
     # define an approximation to zero that allows for finite-precision arithmetic
     zero = -1.0e-8
     # if dzdt at the maximum vpa index is negative, then dzdt < 0 everywhere
     # the integral over positive dzdt is thus zero, as we assume the distribution
     # function is zero beyond the simulated vpa domain
     if dzdt[nvpa] < zero
-        vpa_integral = 0.0
+        velocity_integral = 0.0
     else
         # do bounds checks on arrays that will be used in the below loop
-        @boundscheck nvpa == length(integrand) || throw(BoundsError(integrand))
+        @boundscheck nvpa == size(integrand,1) || throw(BoundsError(integrand))
+        @boundscheck nvperp == size(integrand,2) || throw(BoundsError(integrand))
         @boundscheck nvpa == length(dzdt) || throw(BoundsError(dzdt))
-        @boundscheck nvpa == length(vpa_wgts) || throw(BoundsError(vpa_wgts))
         @boundscheck nvpa == length(wgts_mod) || throw(BoundsError(wgts_mod))
         # initialise the integration weights, wgts_mod, to be the input vpa_wgts
         # this will only change at the dzdt = 0 point, if it exists on the grid
@@ -335,9 +337,58 @@ function integrate_over_positive_vpa(integrand, dzdt, vpa_wgts, wgts_mod)
                 break
             end
         end
-        @views vpa_integral = integral(integrand[ivpa_zero:end], wgts_mod[ivpa_zero:end])/sqrt(pi)
+        @views velocity_integral = integrate_over_vspace(integrand[ivpa_zero:end,:], 
+          dzdt[ivpa_zero:end], 0, wgts_mod[ivpa_zero:end], vperp_grid, 0, vperp_wgts)
+        # n.b. we pass more arguments than might appear to be required here
+        # to avoid needing a special integral function definition
+        # the 0 integers are the powers by which dzdt and vperp_grid are raised to in the integral
     end
-    return vpa_integral
+    return velocity_integral
+end
+
+function integrate_over_positive_vz(integrand, dzdt, vz_wgts, wgts_mod, 
+ vr_grid, vr_wgts, vzeta_grid, vzeta_wgts)
+    # define the nvz nvr nvzeta variable for convenience
+    nvz = length(vz_wgts)
+    nvr = length(vr_wgts)
+    nvzeta = length(vzeta_wgts)
+    # define an approximation to zero that allows for finite-precision arithmetic
+    zero = -1.0e-8
+    # if dzdt at the maximum vz index is negative, then dzdt < 0 everywhere
+    # the integral over positive dzdt is thus zero, as we assume the distribution
+    # function is zero beyond the simulated vpa domain
+    if dzdt[nvz] < zero
+        velocity_integral = 0.0
+    else
+        # do bounds checks on arrays that will be used in the below loop
+        @boundscheck nvz == size(integrand,1) || throw(BoundsError(integrand))
+        @boundscheck nvr == size(integrand,2) || throw(BoundsError(integrand))
+        @boundscheck nvzeta == size(integrand,3) || throw(BoundsError(integrand))
+        @boundscheck nvz == length(dzdt) || throw(BoundsError(dzdt))
+        @boundscheck nvz == length(wgts_mod) || throw(BoundsError(wgts_mod))
+        # initialise the integration weights, wgts_mod, to be the input vz_wgts
+        # this will only change at the dzdt = 0 point, if it exists on the grid
+        @. wgts_mod = vz_wgts
+        # ivz_zero will be the minimum index for which dzdt[ivz_zero] >= 0
+        ivz_zero = 0
+        @inbounds for ivz ∈ 1:nvz
+            if dzdt[ivz] >= zero
+                ivz_zero = ivz
+                # if dzdt = 0, need to divide its associated integration
+                # weight by a factor of 2 to avoid double-counting
+                if abs(dzdt[ivz]) < abs(zero)
+                    wgts_mod[ivz] /= 2.0
+                end
+                break
+            end
+        end
+        @views velocity_integral = integrate_over_neutral_vspace(integrand[ivz_zero:end,:,:], 
+          dzdt[ivz_zero:end], 0, wgts_mod[ivz_zero:end], vr_grid, 0, vr_wgts, vzeta_grid, 0, vzeta_wgts)
+        # n.b. we pass more arguments than might appear to be required here
+        # to avoid needing a special integral function definition
+        # the 0 integers are the powers by which dzdt vr_grid and vzeta_grid are raised to in the integral
+    end
+    return velocity_integral
 end
 
 """
@@ -346,21 +397,22 @@ this could be made more efficient for the case that dz/dt = vpa is time-independ
 but it has been left general for the cases where, e.g., dz/dt = wpa*vth + upar
 varies in time
 """
-function integrate_over_negative_vpa(integrand, dzdt, vpa_wgts, wgts_mod)
-    # define the nvpa variable for convenience
-    nvpa = length(integrand)
+function integrate_over_negative_vpa(integrand, dzdt, vpa_wgts, wgts_mod, vperp_grid, vperp_wgts)
+    # define the nvpa nvperp variables for convenience
+    nvpa = length(vpa_wgts)
+    nvperp = length(vperp_wgts)
     # define an approximation to zero that allows for finite-precision arithmetic
     zero = 1.0e-8
     # if dzdt at the mimimum vpa index is positive, then dzdt > 0 everywhere
     # the integral over negative dzdt is thus zero, as we assume the distribution
     # function is zero beyond the simulated vpa domain
     if dzdt[1] > zero
-        vpa_integral = 0.0
+        velocity_integral = 0.0
     else
         # do bounds checks on arrays that will be used in the below loop
-        @boundscheck nvpa == length(integrand) || throw(BoundsError(integrand))
+        @boundscheck nvpa == size(integrand,1) || throw(BoundsError(integrand))
+        @boundscheck nvperp == size(integrand,2) || throw(BoundsError(integrand))
         @boundscheck nvpa == length(dzdt) || throw(BoundsError(dzdt))
-        @boundscheck nvpa == length(vpa_wgts) || throw(BoundsError(vpa_wgts))
         @boundscheck nvpa == length(wgts_mod) || throw(BoundsError(wgts_mod))
         # initialise the integration weights, wgts_mod, to be the input vpa_wgts
         # this will only change at the dzdt = 0 point, if it exists on the grid
@@ -378,9 +430,57 @@ function integrate_over_negative_vpa(integrand, dzdt, vpa_wgts, wgts_mod)
                 break
             end
         end
-        @views vpa_integral = integral(integrand[1:ivpa_zero], wgts_mod[1:ivpa_zero])/sqrt(pi)
+        @views velocity_integral = integrate_over_vspace(integrand[1:ivpa_zero,:], 
+                dzdt[1:ivpa_zero], 0, wgts_mod[1:ivpa_zero], vperp_grid, 0, vperp_wgts)
+        # n.b. we pass more arguments than might appear to be required here
+        # to avoid needing a special integral function definition
+        # the 0 integers are the powers by which dzdt and vperp_grid are raised to in the integral
     end
-    return vpa_integral
+    return velocity_integral
+end
+function integrate_over_negative_vz(integrand, dzdt, vz_wgts, wgts_mod,
+        vr_grid, vr_wgts, vzeta_grid, vzeta_wgts)
+    # define the nvz nvr nvzeta variables for convenience
+    nvz = length(vz_wgts)
+    nvr = length(vr_wgts)
+    nvzeta = length(vzeta_wgts)
+    # define an approximation to zero that allows for finite-precision arithmetic
+    zero = 1.0e-8
+    # if dzdt at the mimimum vz index is positive, then dzdt > 0 everywhere
+    # the integral over negative dzdt is thus zero, as we assume the distribution
+    # function is zero beyond the simulated vpa domain
+    if dzdt[1] > zero
+        velocity_integral = 0.0
+    else
+        # do bounds checks on arrays that will be used in the below loop
+        @boundscheck nvz == size(integrand,1) || throw(BoundsError(integrand))
+        @boundscheck nvr == size(integrand,2) || throw(BoundsError(integrand))
+        @boundscheck nvzeta == size(integrand,3) || throw(BoundsError(integrand))
+        @boundscheck nvz == length(dzdt) || throw(BoundsError(dzdt))
+        @boundscheck nvz == length(wgts_mod) || throw(BoundsError(wgts_mod))
+        # initialise the integration weights, wgts_mod, to be the input vz_wgts
+        # this will only change at the dzdt = 0 point, if it exists on the grid
+        @. wgts_mod = vz_wgts
+        # ivz_zero will be the maximum index for which dzdt[ivz_zero] <= 0
+        ivz_zero = 0
+        @inbounds for ivz ∈ nvz:-1:1
+            if dzdt[ivz] <= zero
+                ivz_zero = ivz
+                # if dzdt = 0, need to divide its associated integration
+                # weight by a factor of 2 to avoid double-counting
+                if abs(dzdt[ivz]) < zero
+                    wgts_mod[ivz] /= 2.0
+                end
+                break
+            end
+        end
+        @views velocity_integral = integrate_over_neutral_vspace(integrand[1:ivz_zero,:,:], 
+                dzdt[1:ivz_zero], 0, wgts_mod[1:ivz_zero], vr_grid, 0, vr_wgts, vzeta_grid, 0, vzeta_wgts)
+        # n.b. we pass more arguments than might appear to be required here
+        # to avoid needing a special integral function definition
+        # the 0 integers are the powers by which dzdt and vperp_grid are raised to in the integral
+    end
+    return velocity_integral
 end
 
 """
