@@ -191,11 +191,15 @@ The parameters for the run are given in `input::Dict`.
 `which_term` controls which term to include in the evolution equation, or include all terms.
 `returnstuff` can be set to true to return the calculated and manfactured RHS of df/dt=(...).
 """
-function testconvergence(input::Dict, advance::advance_info; returnstuff=false)
+function testconvergence(input::Dict, advance::advance_info; ngrid=nothing, returnstuff=false)
     errors_2 = Vector{mk_float}(undef, 0)
     errors_inf = Vector{mk_float}(undef, 0)
 
-    ngrid = get_and_check_ngrid(input)
+    if ngrid === nothing
+        ngrid = get_and_check_ngrid(input)
+    else
+        set_ngrid(input, ngrid)
+    end
     global_rank[] == 0 && println("ngrid=$ngrid")
 
     #nelement_values = [2, 4, 6, 8, 10, 12, 14, 16]
@@ -278,7 +282,7 @@ function setup_advance(which_term)
     return advance
 end
 
-function runtests()
+function runtests(ngrid=nothing)
     @testset "MMS" verbose=use_verbose begin
         global_rank[] == 0 && println("MMS tests")
 
@@ -286,42 +290,47 @@ function runtests()
             @testset "vpa_advection" begin
                 global_rank[] == 0 && println("\nvpa_advection")
                 testconvergence(input_sound_wave_periodic,
-                                setup_advance(:vpa_advection))
+                                setup_advance(:vpa_advection), ngrid=ngrid)
             end
             @testset "z_advection" begin
                 global_rank[] == 0 && println("\nz_advection")
-                testconvergence(input_sound_wave_periodic, setup_advance(:z_advection))
+                testconvergence(input_sound_wave_periodic, setup_advance(:z_advection),
+                                ngrid=ngrid)
             end
             @testset "r_advection" begin
                 global_rank[] == 0 && println("\nr_advection")
-                testconvergence(input_sound_wave_periodic, setup_advance(:r_advection))
+                testconvergence(input_sound_wave_periodic, setup_advance(:r_advection),
+                                ngrid=ngrid)
             end
             #@testset "cx_collisions" begin
             #    global_rank[] == 0 && println("\ncx_collisions")
             #    testconvergence(input_sound_wave_periodic,
-            #                    setup_advance(:cx_collisions))
+            #                    setup_advance(:cx_collisions), ngrid=ngrid)
             #end
             #@testset "ionization_collisions" begin
             #    global_rank[] == 0 && println("\nionization_collisions")
             #    testconvergence(input_sound_wave_periodic,
-            #                    setup_advance(:ionization_collisions))
+            #                    setup_advance(:ionization_collisions), ngrid=ngrid)
             #end
             #@testset "continuity" begin
             #    global_rank[] == 0 && println("\ncontinuity")
-            #    testconvergence(input_sound_wave_periodic, setup_advance(:continuity))
+            #    testconvergence(input_sound_wave_periodic, setup_advance(:continuity),
+            #                    ngrid=ngrid)
             #end
             #@testset "force_balance" begin
             #    global_rank[] == 0 && println("\nforce_balance")
             #    testconvergence(input_sound_wave_periodic,
-            #                    setup_advance(:force_balance))
+            #                    setup_advance(:force_balance), ngrid=ngrid)
             #end
             #@testset "energy" begin
             #    global_rank[] == 0 && println("\nenergy")
-            #    testconvergence(input_sound_wave_periodic, setup_advance(:energy))
+            #    testconvergence(input_sound_wave_periodic, setup_advance(:energy),
+            #                    ngrid=ngrid)
             #end
             @testset "all" begin
                 global_rank[] == 0 && println("\nall terms")
-                testconvergence(input_sound_wave_periodic, setup_advance(:all))
+                testconvergence(input_sound_wave_periodic, setup_advance(:all),
+                                ngrid=ngrid)
             end
         end
     end

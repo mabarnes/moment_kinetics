@@ -3,7 +3,7 @@ Some shared functions used by MMS tests
 """
 module MMSTestUtils
 
-export increase_resolution, get_and_check_ngrid, test_error_series
+export increase_resolution, get_and_check_ngrid, set_ngrid, test_error_series
 
 using moment_kinetics.type_definitions
 
@@ -53,6 +53,21 @@ function get_and_check_ngrid(input::Dict)::mk_int
     end
 
     return ngrid
+end
+
+"""
+    set_ngrid(input::Dict, ngrid::mk_int)
+
+Set value of `ngrid`, the same for all dimensions.
+"""
+function set_ngrid(input::Dict, ngrid::mk_int)
+    for key ∈ keys(input)
+        if occursin("_ngrid", key)
+            input[key] = ngrid
+        end
+    end
+
+    return nothing
 end
 
 """
