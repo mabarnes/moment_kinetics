@@ -93,25 +93,29 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     if composition.n_neutral_species > 0
         advance_neutral_z_advection = true
         advance_neutral_r_advection = true
-        if collisions.charge_exchange > 0.0 &&  vz.n == vpa.n && vperp.n == 1 && vr.n == 1 && vzeta.n == 1
-            advance_cx_1V = true
-        else
-            advance_cx_1V = false
-        end
-        if collisions.charge_exchange > 0.0 &&  vperp.n > 1 && vr.n > 1 && vzeta.n > 1
-            advance_cx = true
+        if collisions.charge_exchange > 0.0 
+            if vz.n == vpa.n && vperp.n == 1 && vr.n == 1 && vzeta.n == 1
+                advance_cx_1V = true
+                advance_cx = false
+            elseif vperp.n > 1 && vr.n > 1 && vzeta.n > 1
+                advance_cx = true
+                advance_cx_1V = false
+            end            
         else
             advance_cx = false
+            advance_cx_1V = false
         end
-        if collisions.ionization > 0.0 &&  vz.n == vpa.n && vperp.n == 1 && vr.n == 1 && vzeta.n == 1
-            advance_ionization_1V = true
-        else
-            advance_ionization_1V = false
-        end
-        if collisions.ionization > 0.0 &&  vperp.n > 1 && vr.n > 1 && vzeta.n > 1
-            advance_ionization = true
+        if collisions.ionization > 0.0
+            if vz.n == vpa.n && vperp.n == 1 && vr.n == 1 && vzeta.n == 1
+                advance_ionization_1V = true
+                advance_ionization = false
+            elseif vperp.n > 1 && vr.n > 1 && vzeta.n > 1
+                advance_ionization_1V = false
+                advance_ionization = true
+            end
         else
             advance_ionization = false
+            advance_ionization_1V = false
         end
     else
         advance_neutral_z_advection = false
@@ -353,7 +357,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
      vpa_spectral = vpa_spectral, vperp_spectral = vperp_spectral, z_spectral = z_spectral, r_spectral = r_spectral)
     
     if(t_input.use_manufactured_solns)
-        manufactured_source_list = manufactured_sources(r.L,z.L,r.bc,z.bc,composition,geometry,collisions)
+        manufactured_source_list = manufactured_sources(r.L,z.L,r.bc,z.bc,composition,geometry,collisions,r.n)
     else
         manufactured_source_list = false # dummy Bool to be passed as argument instead of list
     end

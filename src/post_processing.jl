@@ -114,10 +114,17 @@ function analyze_and_plot_data(path)
     manufactured_solns_test = true
     # MRH hack condition on these plots for now
     # Plots compare density and density_symbolic at last timestep 
-    if(manufactured_solns_test && nr > 1)
+    #if(manufactured_solns_test && nr > 1)
+    if(manufactured_solns_test)
         r_bc = get(scan_input, "r_bc", "periodic")
         z_bc = get(scan_input, "z_bc", "periodic")
-        manufactured_solns_list = manufactured_solutions(Lr,Lz,r_bc,z_bc) 
+        # avoid passing Lr = 0 into manufactured_solns functions 
+        if nr > 1
+            Lr_in = Lr 
+        else 
+            Lr_in = 1.0
+        end
+        manufactured_solns_list = manufactured_solutions(Lr_in,Lz,r_bc,z_bc) 
         dfni_func = manufactured_solns_list.dfni_func
         densi_func = manufactured_solns_list.densi_func
         dfnn_func = manufactured_solns_list.dfnn_func
@@ -143,15 +150,18 @@ function analyze_and_plot_data(path)
         savefig(outfile)
         
         density_norm = zeros(mk_float,ntime)
+        #println(densi_func(0.0,0.0,0.0))
         for it in 1:ntime
             dummy = 0.0
             dummy_N = 0.0
             for ir in 1:nr
                 for iz in 1:nz
+         #           println(density[iz,ir,is,it],densi_func(z[iz],r[ir],time[it]))
                     dummy += (density[iz,ir,is,it] - densi_func(z[iz],r[ir],time[it]))^2
                     dummy_N += (densi_func(z[iz],r[ir],time[it]))^2
                 end
             end
+            #println(dummy,dummy_N)
             density_norm[it] = dummy/dummy_N
         end
         println("test density: ",spec_string,": ||n - n^{sym}||^2/||n^{sym}||^2 = \n ",density_norm)

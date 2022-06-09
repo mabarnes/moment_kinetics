@@ -12,7 +12,7 @@ using Symbolics
     # neutral density symbolic function
     function densn_sym(Lr,Lz,r_bc,z_bc)
         if r_bc == "periodic" && z_bc == "periodic" 
-            densn = 1.0 +  0.1*(cos(2.0*pi*r/Lr) + cos(2.0*pi*z/Lz))*sin(2.0*pi*t)  
+            densn = 1.5 +  0.1*(cos(2.0*pi*r/Lr) + cos(2.0*pi*z/Lz))*sin(2.0*pi*t)  
         else
             densn = 1.0
         end
@@ -38,7 +38,7 @@ using Symbolics
     # ion density symbolic function
     function densi_sym(Lr,Lz,r_bc,z_bc)
         if r_bc == "periodic" && z_bc == "periodic"
-            densi = 1.0 +  0.1*(sin(2.0*pi*r/Lr) + sin(2.0*pi*z/Lz))*sin(2.0*pi*t)  
+            densi = 1.5 +  0.1*(sin(2.0*pi*r/Lr) + sin(2.0*pi*z/Lz))*sin(2.0*pi*t)  
         elseif r_bc == "Dirichlet" && z_bc == "periodic"
             #densi = 1.0 +  0.5*sin(2.0*pi*z/Lz)*(r/Lr + 0.5) + 0.2*sin(2.0*pi*r/Lr)*sin(2.0*pi*t)
             #densi = 1.0 +  0.5*sin(2.0*pi*z/Lz)*(r/Lr + 0.5) + sin(2.0*pi*r/Lr)*sin(2.0*pi*t)
@@ -96,7 +96,7 @@ using Symbolics
         return manufactured_solns_list
     end 
 
-    function manufactured_sources(Lr,Lz,r_bc,z_bc,composition,geometry,collisions)
+    function manufactured_sources(Lr,Lz,r_bc,z_bc,composition,geometry,collisions,nr)
         
         # ion manufactured solutions
         densi = densi_sym(Lr,Lz,r_bc,z_bc)
@@ -119,12 +119,18 @@ using Symbolics
         Bzed = geometry.Bzed
         Bmag = geometry.Bmag
         rhostar = geometry.rstar
+        #exceptions for cases with missing terms 
         if composition.n_neutral_species > 0
             cx_frequency = collisions.charge_exchange
             ionization_frequency = collisions.ionization
         else 
             cx_frequency = 0.0
             ionization_frequency = 0.0
+        end
+        if nr > 1
+            rfac = 1.0
+        else
+            rfac = 0.0
         end
         
         # calculate the electric fields
@@ -134,12 +140,12 @@ using Symbolics
         Ez = -Dz(phi)
     
         # the ion source to maintain the manufactured solution
-        Si = ( Dt(dfni) + ( vpa * (Bzed/Bmag) - 0.5*rhostar*Er ) * Dz(dfni) + ( 0.5*rhostar*Ez ) * Dr(dfni) + ( 0.5*Ez*Bzed/Bmag ) * Dvpa(dfni)
+        Si = ( Dt(dfni) + ( vpa * (Bzed/Bmag) - 0.5*rhostar*Er*rfac ) * Dz(dfni) + ( 0.5*rhostar*Ez*rfac ) * Dr(dfni) + ( 0.5*Ez*Bzed/Bmag ) * Dvpa(dfni)
                + cx_frequency*( densn*dfni - densi*gav_dfnn ) ) - ionization_frequency*dense*gav_dfnn 
         Source_i = expand_derivatives(Si)
         
         # the neutral source to maintain the manufactured solution
-        Sn = Dt(dfnn) + vz * Dz(dfnn) + vr * Dr(dfnn) + cx_frequency* (densi*dfnn - densn*vrvzvzeta_dfni) + ionization_frequency*dense*dfnn
+        Sn = Dt(dfnn) + vz * Dz(dfnn) + rfac*vr * Dr(dfnn) + cx_frequency* (densi*dfnn - densn*vrvzvzeta_dfni) + ionization_frequency*dense*dfnn
         Source_n = expand_derivatives(Sn)
         
         Source_i_func = build_function(Source_i, vpa, vperp, z, r, t, expression=Val{false})
