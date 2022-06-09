@@ -71,7 +71,6 @@ using ..type_definitions
             # Ad-hoc odd-in-vpa component of dfni which gives non-zero upar and dfni
             # positive everywhere, while the odd component integrates to 0 so does not
             # need to be accounted for in normalisation.
-            upar = (sin(two*pi*r/Lr) + sin(2*pi*z/Lz)/ten)
             dfni = densi * (exp(- vpa^2 - vperp^2)
                             + (sin(two*pi*r/Lr) + sin(2*pi*z/Lz))/ten
                               * vpa * exp(-two*(vpa^2+vperp^2))) #/ pi^1.5
