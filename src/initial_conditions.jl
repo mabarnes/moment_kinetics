@@ -183,6 +183,8 @@ function create_and_init_pdf(moments, vz, vr, vzeta, vpa, vperp, z, r, n_ion_spe
         for ivperp ∈ 1:vperp.n
             for ivpa ∈ 1:vpa.n
                 @. pdf_charged_unnorm[ivpa,ivperp,:,:,:] = pdf_charged_norm[ivpa,ivperp,:,:,:] .* moments.charged.dens[:,:,:]
+                # No evolving moments, so need to set pdf.norm = pdf.unnorm
+                @. pdf_charged_norm[ivpa,ivperp,:,:,:] = pdf_charged_unnorm[ivpa,ivperp,:,:,:]
             end
         end
         if n_neutral_species > 0 
@@ -190,6 +192,8 @@ function create_and_init_pdf(moments, vz, vr, vzeta, vpa, vperp, z, r, n_ion_spe
                 for ivr in 1:vr.n
                     for ivz in 1:vz.n
                         @. pdf_neutral_unnorm[ivz,ivr,ivzeta,:,:,:] = pdf_neutral_norm[ivz,ivr,ivzeta,:,:,:] .* moments.neutral.dens[:,:,:]
+                        # No evolving moments, so need to set pdf.norm = pdf.unnorm
+                        @. pdf_neutral_norm[ivz,ivr,ivzeta,:,:,:] = pdf_neutral_unnorm[ivz,ivr,ivzeta,:,:,:]
                     end
                 end
             end
