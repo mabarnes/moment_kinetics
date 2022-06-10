@@ -24,7 +24,9 @@ using ..velocity_moments: integrate_over_positive_vpa, integrate_over_negative_v
 using ..velocity_moments: integrate_over_positive_vz, integrate_over_negative_vz
 using ..velocity_moments: create_moments_charged, create_moments_neutral, update_qpar!
 using ..velocity_moments: moments_charged_substruct, moments_neutral_substruct
-using ..velocity_moments: update_neutral_density!
+using ..velocity_moments: update_neutral_density!, update_neutral_pz!, update_neutral_pr!, update_neutral_pzeta!
+using ..velocity_moments: update_neutral_uz!, update_neutral_ur!, update_neutral_uzeta!, update_neutral_qz!
+using ..velocity_moments: update_ppar!, update_upar!
 
 using ..manufactured_solns: manufactured_solutions
 
@@ -92,11 +94,21 @@ function init_pdf_and_moments(vz, vr, vzeta, vpa, vperp, z, r, composition, spec
             init_ur!(moments.neutral.ur, z, r, species.neutral, n_neutral_species)
             init_uzeta!(moments.neutral.uzeta, z, r, species.neutral, n_neutral_species)
             init_vth!(moments.neutral.vth, z, r, species.neutral, n_neutral_species)
+            @. moments.neutral.ptot = 0.5 * moments.neutral.dens * moments.neutral.vth^2
         end
     end
     # create and initialise the normalised particle distribution function (pdf)
     pdf = create_and_init_pdf(moments, vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_species, species)
     
+    # calculate the self-consistent initial parallel heat flux and pressure from the initial un-normalised pdf
+    update_qpar!(moments.charged.qpar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
+    # need neutral version!!! update_qpar!(moments.charged.qpar, moments.charged.qpar_updated, pdf.charged.unnorm, vpa, vperp, z, r, composition, moments.charged.vpa_norm_fac)
+    # calculate self-consistent neutral moments 
+    update_neutral_qz!(moments.neutral.qz, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
+    update_neutral_pz!(moments.neutral.pz, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
+    update_neutral_pr!(moments.neutral.pr, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
+    update_neutral_pzeta!(moments.neutral.pzeta, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
+
     boundary_distributions = create_and_init_boundary_distributions(vz, vr, vzeta, vpa, vperp, composition)
     
     if(use_manufactured_solns)
@@ -120,6 +132,17 @@ function init_pdf_and_moments(vz, vr, vzeta, vpa, vperp, z, r, composition, spec
                 end
             end
         end
+        # update upar, ppar, qpar, vth consistent with manufactured solns
+        update_qpar!(moments.charged.qpar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
+        update_ppar!(moments.charged.ppar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
+        # get particle flux
+        update_upar!(moments.charged.upar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
+        # convert from particle particle flux to parallel flow
+        @loop_s_r_z is ir iz begin
+            moments.charged.upar[iz,ir,is] /= moments.charged.dens[iz,ir,is]
+        # update the thermal speed
+            moments.charged.vth[iz,ir,is] = sqrt(2.0*moments.charged.ppar[iz,ir,is]/moments.charged.dens[iz,ir,is])
+        end
         
         if n_neutral_species > 0
             for isn in 1:n_neutral_species
@@ -138,14 +161,29 @@ function init_pdf_and_moments(vz, vr, vzeta, vpa, vperp, z, r, composition, spec
                     end
                 end
             end
+            # get consistent moments with manufactured solutions 
             #update_neutral_density!(moments.neutral.dens, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
+            update_neutral_qz!(moments.neutral.qz, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
+            update_neutral_pz!(moments.neutral.pz, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
+            update_neutral_pr!(moments.neutral.pr, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
+            update_neutral_pzeta!(moments.neutral.pzeta, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
+            # nb bad naming convention uz -> n uz below
+            update_neutral_uz!(moments.neutral.uz, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
+            update_neutral_ur!(moments.neutral.ur, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
+            update_neutral_uzeta!(moments.neutral.uzeta, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
+            # now convert from particle particle flux to parallel flow
+            @loop_sn_r_z isn ir iz begin
+                moments.neutral.uz[iz,ir,isn] /= moments.neutral.dens[iz,ir,isn]
+                moments.neutral.ur[iz,ir,isn] /= moments.neutral.dens[iz,ir,isn]
+                moments.neutral.uzeta[iz,ir,isn] /= moments.neutral.dens[iz,ir,isn]
+                #update ptot (isotropic pressure)
+                moments.neutral.ptot[iz,ir,isn] = (moments.neutral.pz[iz,ir,isn] + moments.neutral.pr[iz,ir,isn] + moments.neutral.pzeta[iz,ir,isn])/3.0
+                # get vth for neutrals
+                moments.charged.vth[iz,ir,isn] = sqrt(2.0*moments.neutral.ptot[iz,ir,isn]/moments.neutral.dens[iz,ir,isn])
+            end
         end
         
     end 
-    #begin_s_r_z_vperp_region()
-    # calculate the initial parallel heat flux from the initial un-normalised pdf
-    update_qpar!(moments.charged.qpar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
-    # need neutral version!!! update_qpar!(moments.charged.qpar, moments.charged.qpar_updated, pdf.charged.unnorm, vpa, vperp, z, r, composition, moments.charged.vpa_norm_fac)
     return pdf, moments, boundary_distributions
 end
 

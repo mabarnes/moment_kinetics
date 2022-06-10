@@ -17,7 +17,9 @@ using ..chebyshev: chebyshev_derivative!
 using ..velocity_moments: update_moments!, reset_moments_status!
 using ..velocity_moments: enforce_moment_constraints!
 using ..velocity_moments: update_density!, update_upar!, update_ppar!, update_qpar!
-using ..velocity_moments: update_neutral_density!
+using ..velocity_moments: update_neutral_density!, update_neutral_qz!
+using ..velocity_moments: update_neutral_uzeta!, update_neutral_uz!, update_neutral_ur!
+using ..velocity_moments: update_neutral_pzeta!, update_neutral_pz!, update_neutral_pr!
 using ..velocity_grid_transforms: vzvrvzeta_to_vpavperp!, vpavperp_to_vzvrvzeta!
 using ..initial_conditions: enforce_z_boundary_condition!, enforce_boundary_conditions!
 using ..initial_conditions: enforce_vpa_boundary_condition!, enforce_r_boundary_condition!
@@ -597,7 +599,7 @@ function rk_update!(scratch, pdf, moments, fields, vz, vr, vzeta, vpa, vperp, z,
             pdf.neutral.unnorm[ivz,ivr,ivzeta,iz,ir,isn] = new_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn]
         end
         update_neutral_density!(new_scratch.density_neutral, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
-        # other neutral moments here if needed
+        # other neutral moments here if needed for individual Runga-Kutta steps
     end 
     
     # update the electrostatic potential phi
@@ -671,9 +673,27 @@ function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase,
             pdf.neutral.norm[ivz,ivr,ivzeta,iz,ir,isn] = final_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] 
             # change norm -> unnorm if remove moment-based evolution?
         end
+        # for now update moments.neutral object directly for diagnostic moments 
+        # that are not used in Runga-Kutta steps
+        update_neutral_qz!(moments.neutral.qz, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
+        update_neutral_pz!(moments.neutral.pz, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
+        update_neutral_pr!(moments.neutral.pr, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
+        update_neutral_pzeta!(moments.neutral.pzeta, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
+        # get particle fluxes (n.b. bad naming convention uz -> means -> n uz here)
+        update_neutral_uz!(moments.neutral.uz, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
+        update_neutral_ur!(moments.neutral.ur, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
+        update_neutral_uzeta!(moments.neutral.uzeta, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
         @loop_sn_r_z isn ir iz begin
+            # update density using last density from Runga-Kutta stages
             moments.neutral.dens[iz,ir,isn] = final_scratch.density_neutral[iz,ir,isn] 
-            # other neutral moments here if required
+            # convert from particle flux to mean velocity
+            moments.neutral.uz[iz,ir,isn] /= moments.neutral.dens[iz,ir,isn]
+            moments.neutral.ur[iz,ir,isn] /= moments.neutral.dens[iz,ir,isn]
+            moments.neutral.uzeta[iz,ir,isn] /= moments.neutral.dens[iz,ir,isn]
+            #update ptot (isotropic pressure)
+            moments.neutral.ptot[iz,ir,isn] = (moments.neutral.pz[iz,ir,isn] + moments.neutral.pr[iz,ir,isn] + moments.neutral.pzeta[iz,ir,isn])/3.0
+            # get vth for neutrals
+            moments.neutral.vth[iz,ir,isn] = sqrt(2.0*moments.neutral.ptot[iz,ir,isn]/moments.neutral.dens[iz,ir,isn])
         end
     end
     

@@ -15,6 +15,13 @@ export reset_moments_status!
 export enforce_moment_constraints!
 export moments_chrg_substruct, moments_ntrl_substruct
 export update_neutral_density!
+export update_neutral_uz!
+export update_neutral_ur!
+export update_neutral_uzeta!
+export update_neutral_pz!
+export update_neutral_pr!
+export update_neutral_pzeta!
+export update_neutral_qz!
 
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_shared_float, allocate_bool
@@ -54,10 +61,18 @@ mutable struct moments_neutral_substruct
     ur::MPISharedArray{mk_float,3}
     # this is the particle mean velocity in zeta 
     uzeta::MPISharedArray{mk_float,3}
-    # this is the total particle pressure 
+    # this is the zz particle pressure tensor component 
+    pz::MPISharedArray{mk_float,3}
+    # this is the rr particle pressure tensor component 
+    pr::MPISharedArray{mk_float,3}
+    # this is the zetazeta particle pressure tensor component 
+    pzeta::MPISharedArray{mk_float,3}
+    # this is the total (isotropic) particle pressure 
     ptot::MPISharedArray{mk_float,3}
     # this is the thermal speed based on the temperature T = ptot/dens: vth = sqrt(2*T/m)
     vth::MPISharedArray{mk_float,3}
+    # this is the heat flux along z
+    qz::MPISharedArray{mk_float,3}
 end
 
 """
@@ -90,10 +105,14 @@ function create_moments_neutral(nz, nr, n_species)
     uz = allocate_shared_float(nz, nr, n_species)
     ur = allocate_shared_float(nz, nr, n_species)
     uzeta = allocate_shared_float(nz, nr, n_species)
+    pz = allocate_shared_float(nz, nr, n_species)
+    pr = allocate_shared_float(nz, nr, n_species)
+    pzeta = allocate_shared_float(nz, nr, n_species)
     ptot = allocate_shared_float(nz, nr, n_species)
     vth = allocate_shared_float(nz, nr, n_species)
+    qz = allocate_shared_float(nz, nr, n_species)
     # return struct containing arrays needed to update moments
-    return moments_neutral_substruct(density,uz,ur,uzeta,ptot,vth)
+    return moments_neutral_substruct(density,uz,ur,uzeta,pz,pr,pzeta,ptot,vth,qz)
 end
 
 """
@@ -189,8 +208,6 @@ function update_upar_species!(upar, ff, vpa, vperp, z, r)
 end
 
 """
-NB: if this function is called and if ppar_updated is false, then
-the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
 """
 function update_ppar!(ppar, pdf, vpa, vperp, z, r, composition)
     @boundscheck composition.n_ion_species == size(ppar,3) || throw(BoundsError(ppar))
@@ -284,6 +301,215 @@ function update_neutral_density_species!(dens, ff, vz, vr, vzeta, z, r)
     end
     return nothing
 end
+
+function update_neutral_uz!(uz, pdf, vz, vr, vzeta, z, r, composition)
+    
+    begin_sn_r_z_region()
+    @boundscheck composition.n_neutral_species == size(pdf, 6) || throw(BoundsError(pdf))
+    @boundscheck composition.n_neutral_species == size(uz, 3) || throw(BoundsError(uz))
+    @loop_sn isn begin
+        @views update_neutral_uz_species!(uz[:,:,isn], pdf[:,:,:,:,:,isn], vz, vr, vzeta, z, r)
+    end
+end
+
+"""
+calculate the updated uz (mean velocity in z) for a given species
+"""
+function update_neutral_uz_species!(uz, ff, vz, vr, vzeta, z, r)
+    @boundscheck vz.n == size(ff, 1) || throw(BoundsError(ff))
+    @boundscheck vr.n == size(ff, 2) || throw(BoundsError(ff))
+    @boundscheck vzeta.n == size(ff, 3) || throw(BoundsError(ff))
+    @boundscheck z.n == size(ff, 4) || throw(BoundsError(ff))
+    @boundscheck r.n == size(ff, 5) || throw(BoundsError(ff))
+    @boundscheck z.n == size(uz, 1) || throw(BoundsError(uz))
+    @boundscheck r.n == size(uz, 2) || throw(BoundsError(uz))
+    @loop_r_z ir iz begin
+        uz[iz,ir] = integrate_over_neutral_vspace(@view(ff[:,:,:,iz,ir]), 
+         vz.grid, 1, vz.wgts, vr.grid, 0, vr.wgts, vzeta.grid, 0, vzeta.wgts)
+    end
+    return nothing
+end
+
+function update_neutral_ur!(ur, pdf, vz, vr, vzeta, z, r, composition)
+    
+    begin_sn_r_z_region()
+    @boundscheck composition.n_neutral_species == size(pdf, 6) || throw(BoundsError(pdf))
+    @boundscheck composition.n_neutral_species == size(ur, 3) || throw(BoundsError(ur))
+    @loop_sn isn begin
+        @views update_neutral_ur_species!(ur[:,:,isn], pdf[:,:,:,:,:,isn], vz, vr, vzeta, z, r)
+    end
+end
+
+"""
+calculate the updated ur (mean velocity in r) for a given species
+"""
+function update_neutral_ur_species!(ur, ff, vz, vr, vzeta, z, r)
+    @boundscheck vz.n == size(ff, 1) || throw(BoundsError(ff))
+    @boundscheck vr.n == size(ff, 2) || throw(BoundsError(ff))
+    @boundscheck vzeta.n == size(ff, 3) || throw(BoundsError(ff))
+    @boundscheck z.n == size(ff, 4) || throw(BoundsError(ff))
+    @boundscheck r.n == size(ff, 5) || throw(BoundsError(ff))
+    @boundscheck z.n == size(ur, 1) || throw(BoundsError(ur))
+    @boundscheck r.n == size(ur, 2) || throw(BoundsError(ur))
+    @loop_r_z ir iz begin
+        ur[iz,ir] = integrate_over_neutral_vspace(@view(ff[:,:,:,iz,ir]), 
+         vz.grid, 0, vz.wgts, vr.grid, 1, vr.wgts, vzeta.grid, 0, vzeta.wgts)
+    end
+    return nothing
+end
+
+function update_neutral_uzeta!(uzeta, pdf, vz, vr, vzeta, z, r, composition)
+    
+    begin_sn_r_z_region()
+    @boundscheck composition.n_neutral_species == size(pdf, 6) || throw(BoundsError(pdf))
+    @boundscheck composition.n_neutral_species == size(uzeta, 3) || throw(BoundsError(uzeta))
+    @loop_sn isn begin
+        @views update_neutral_uzeta_species!(uzeta[:,:,isn], pdf[:,:,:,:,:,isn], vz, vr, vzeta, z, r)
+    end
+end
+
+"""
+calculate the updated uzeta (mean velocity in zeta) for a given species
+"""
+function update_neutral_uzeta_species!(uzeta, ff, vz, vr, vzeta, z, r)
+    @boundscheck vz.n == size(ff, 1) || throw(BoundsError(ff))
+    @boundscheck vr.n == size(ff, 2) || throw(BoundsError(ff))
+    @boundscheck vzeta.n == size(ff, 3) || throw(BoundsError(ff))
+    @boundscheck z.n == size(ff, 4) || throw(BoundsError(ff))
+    @boundscheck r.n == size(ff, 5) || throw(BoundsError(ff))
+    @boundscheck z.n == size(uzeta, 1) || throw(BoundsError(uzeta))
+    @boundscheck r.n == size(uzeta, 2) || throw(BoundsError(uzeta))
+    @loop_r_z ir iz begin
+        uzeta[iz,ir] = integrate_over_neutral_vspace(@view(ff[:,:,:,iz,ir]), 
+         vz.grid, 0, vz.wgts, vr.grid, 0, vr.wgts, vzeta.grid, 1, vzeta.wgts)
+    end
+    return nothing
+end
+
+function update_neutral_pz!(pz, pdf, vz, vr, vzeta, z, r, composition)
+    @boundscheck r.n == size(pz,2) || throw(BoundsError(pz))
+    @boundscheck z.n == size(pz,1) || throw(BoundsError(pz))
+    
+    begin_sn_r_z_region()
+    @boundscheck composition.n_neutral_species == size(pdf, 6) || throw(BoundsError(pdf))
+    @boundscheck composition.n_neutral_species == size(pz, 3) || throw(BoundsError(pz))
+    
+    @loop_sn isn begin
+        @views update_neutral_pz_species!(pz[:,:,isn], pdf[:,:,:,:,:,isn], vz, vr, vzeta, z, r)
+    end
+end
+
+"""
+calculate the updated pressure in zz direction (pz) for a given species
+"""
+function update_neutral_pz_species!(pz, ff, vz, vr, vzeta, z, r)
+    @boundscheck vz.n == size(ff, 1) || throw(BoundsError(ff))
+    @boundscheck vr.n == size(ff, 2) || throw(BoundsError(ff))
+    @boundscheck vzeta.n == size(ff, 3) || throw(BoundsError(ff))
+    @boundscheck z.n == size(ff, 4) || throw(BoundsError(ff))
+    @boundscheck r.n == size(ff, 5) || throw(BoundsError(ff))
+    @boundscheck z.n == size(pz, 1) || throw(BoundsError(pz))
+    @boundscheck r.n == size(pz, 2) || throw(BoundsError(pz))
+    @loop_r_z ir iz begin
+        pz[iz,ir] = integrate_over_vspace(@view(ff[:,:,:,iz,ir]), 
+         vz.grid, 2, vz.wgts, vr.grid, 0, vr.wgts, vzeta.grid, 0, vzeta.wgts)
+    end
+    return nothing
+end
+
+function update_neutral_pr!(pr, pdf, vz, vr, vzeta, z, r, composition)
+    @boundscheck r.n == size(pr,2) || throw(BoundsError(pr))
+    @boundscheck z.n == size(pr,1) || throw(BoundsError(pr))
+    
+    begin_sn_r_z_region()
+    @boundscheck composition.n_neutral_species == size(pdf, 6) || throw(BoundsError(pdf))
+    @boundscheck composition.n_neutral_species == size(pr, 3) || throw(BoundsError(pr))
+    
+    @loop_sn isn begin
+        @views update_neutral_pr_species!(pr[:,:,isn], pdf[:,:,:,:,:,isn], vz, vr, vzeta, z, r)
+    end
+end
+
+"""
+calculate the updated pressure in the rr direction (pr) for a given species
+"""
+function update_neutral_pr_species!(pr, ff, vz, vr, vzeta, z, r)
+    @boundscheck vz.n == size(ff, 1) || throw(BoundsError(ff))
+    @boundscheck vr.n == size(ff, 2) || throw(BoundsError(ff))
+    @boundscheck vzeta.n == size(ff, 3) || throw(BoundsError(ff))
+    @boundscheck z.n == size(ff, 4) || throw(BoundsError(ff))
+    @boundscheck r.n == size(ff, 5) || throw(BoundsError(ff))
+    @boundscheck z.n == size(pr, 1) || throw(BoundsError(pr))
+    @boundscheck r.n == size(pr, 2) || throw(BoundsError(pr))
+    @loop_r_z ir iz begin
+        pr[iz,ir] = integrate_over_vspace(@view(ff[:,:,:,iz,ir]), 
+         vz.grid, 0, vz.wgts, vr.grid, 2, vr.wgts, vzeta.grid, 0, vzeta.wgts)
+    end
+    return nothing
+end
+
+function update_neutral_pzeta!(pzeta, pdf, vz, vr, vzeta, z, r, composition)
+    @boundscheck r.n == size(pzeta,2) || throw(BoundsError(pzeta))
+    @boundscheck z.n == size(pzeta,1) || throw(BoundsError(pzeta))
+    
+    begin_sn_r_z_region()
+    @boundscheck composition.n_neutral_species == size(pdf, 6) || throw(BoundsError(pdf))
+    @boundscheck composition.n_neutral_species == size(pzeta, 3) || throw(BoundsError(pzeta))
+    
+    @loop_sn isn begin
+        @views update_neutral_pzeta_species!(pzeta[:,:,isn], pdf[:,:,:,:,:,isn], vz, vr, vzeta, z, r)
+    end
+end
+
+"""
+calculate the updated pressure in the zeta zeta direction (pzeta) for a given species
+"""
+function update_neutral_pzeta_species!(pzeta, ff, vz, vr, vzeta, z, r)
+    @boundscheck vz.n == size(ff, 1) || throw(BoundsError(ff))
+    @boundscheck vr.n == size(ff, 2) || throw(BoundsError(ff))
+    @boundscheck vzeta.n == size(ff, 3) || throw(BoundsError(ff))
+    @boundscheck z.n == size(ff, 4) || throw(BoundsError(ff))
+    @boundscheck r.n == size(ff, 5) || throw(BoundsError(ff))
+    @boundscheck z.n == size(pzeta, 1) || throw(BoundsError(pzeta))
+    @boundscheck r.n == size(pzeta, 2) || throw(BoundsError(pzeta))
+    @loop_r_z ir iz begin
+        pzeta[iz,ir] = integrate_over_vspace(@view(ff[:,:,:,iz,ir]), 
+         vz.grid, 0, vz.wgts, vr.grid, 0, vr.wgts, vzeta.grid, 2, vzeta.wgts)
+    end
+    return nothing
+end
+
+function update_neutral_qz!(qz, pdf, vz, vr, vzeta, z, r, composition)
+    @boundscheck r.n == size(qz,2) || throw(BoundsError(qz))
+    @boundscheck z.n == size(qz,1) || throw(BoundsError(qz))
+    
+    begin_sn_r_z_region()
+    @boundscheck composition.n_neutral_species == size(pdf, 6) || throw(BoundsError(pdf))
+    @boundscheck composition.n_neutral_species == size(qz, 3) || throw(BoundsError(qz))
+    
+    @loop_sn isn begin
+        @views update_neutral_qz_species!(qz[:,:,isn], pdf[:,:,:,:,:,isn], vz, vr, vzeta, z, r)
+    end
+end
+
+"""
+calculate the updated heat flux zzz direction (qz) for a given species
+"""
+function update_neutral_qz_species!(qz, ff, vz, vr, vzeta, z, r)
+    @boundscheck vz.n == size(ff, 1) || throw(BoundsError(ff))
+    @boundscheck vr.n == size(ff, 2) || throw(BoundsError(ff))
+    @boundscheck vzeta.n == size(ff, 3) || throw(BoundsError(ff))
+    @boundscheck z.n == size(ff, 4) || throw(BoundsError(ff))
+    @boundscheck r.n == size(ff, 5) || throw(BoundsError(ff))
+    @boundscheck z.n == size(qz, 1) || throw(BoundsError(qz))
+    @boundscheck r.n == size(qz, 2) || throw(BoundsError(qz))
+    @loop_r_z ir iz begin
+        qz[iz,ir] = integrate_over_vspace(@view(ff[:,:,:,iz,ir]), 
+         vz.grid, 3, vz.wgts, vr.grid, 0, vr.wgts, vzeta.grid, 0, vzeta.wgts)
+    end
+    return nothing
+end
+
 
 """
 computes the integral over vpa of the integrand, using the input vpa_wgts
