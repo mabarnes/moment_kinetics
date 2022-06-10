@@ -76,143 +76,79 @@ function init_pdf_and_moments(vz, vr, vzeta, vpa, vperp, z, r, composition, spec
     charged = create_moments_charged(z.n, r.n, n_ion_species)
     neutral = create_moments_neutral(z.n, r.n, n_neutral_species)
     moments = moments_struct(charged,neutral)
+    pdf = create_pdf(vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_species)
     
-    @serial_region begin
-        #charged particles
-        # initialise the density profile
-        init_density!(moments.charged.dens, z, r, species.charged, n_ion_species)
-        # initialise the parallel flow profile
-        init_upar!(moments.charged.upar, z, r, species.charged, n_ion_species)
-        # initialise the parallel thermal speed profile
-        init_vth!(moments.charged.vth, z, r, species.charged, n_ion_species)
-        @. moments.charged.ppar = 0.5 * moments.charged.dens * moments.charged.vth^2
-        if(n_neutral_species > 0)
-            #neutral particles
+    if use_manufactured_solns
+        init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_species, composition)
+    else 
+        @serial_region begin
+            #charged particles
             # initialise the density profile
-            init_density!(moments.neutral.dens, z, r, species.neutral, n_neutral_species)
-            init_uz!(moments.neutral.uz, z, r, species.neutral, n_neutral_species)
-            init_ur!(moments.neutral.ur, z, r, species.neutral, n_neutral_species)
-            init_uzeta!(moments.neutral.uzeta, z, r, species.neutral, n_neutral_species)
-            init_vth!(moments.neutral.vth, z, r, species.neutral, n_neutral_species)
-            @. moments.neutral.ptot = 0.5 * moments.neutral.dens * moments.neutral.vth^2
+            init_density!(moments.charged.dens, z, r, species.charged, n_ion_species)
+            # initialise the parallel flow profile
+            init_upar!(moments.charged.upar, z, r, species.charged, n_ion_species)
+            # initialise the parallel thermal speed profile
+            init_vth!(moments.charged.vth, z, r, species.charged, n_ion_species)
+            @. moments.charged.ppar = 0.5 * moments.charged.dens * moments.charged.vth^2
+            if(n_neutral_species > 0)
+                #neutral particles
+                init_density!(moments.neutral.dens, z, r, species.neutral, n_neutral_species)
+                init_uz!(moments.neutral.uz, z, r, species.neutral, n_neutral_species)
+                init_ur!(moments.neutral.ur, z, r, species.neutral, n_neutral_species)
+                init_uzeta!(moments.neutral.uzeta, z, r, species.neutral, n_neutral_species)
+                init_vth!(moments.neutral.vth, z, r, species.neutral, n_neutral_species)
+                @. moments.neutral.ptot = 0.5 * moments.neutral.dens * moments.neutral.vth^2
+            end
         end
-    end
-    # create and initialise the normalised particle distribution function (pdf)
-    pdf = create_and_init_pdf(moments, vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_species, species)
+        # initialise the normalised particle distribution function (pdf)
+        init_pdf!(pdf, moments, vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_species, species)
+            
+        # calculate the self-consistent initial parallel heat flux and pressure from the initial un-normalised pdf
+        update_qpar!(moments.charged.qpar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
+        # need neutral version!!! update_qpar!(moments.charged.qpar, moments.charged.qpar_updated, pdf.charged.unnorm, vpa, vperp, z, r, composition, moments.charged.vpa_norm_fac)
+        # calculate self-consistent neutral moments 
+        update_neutral_qz!(moments.neutral.qz, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
+        update_neutral_pz!(moments.neutral.pz, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
+        update_neutral_pr!(moments.neutral.pr, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
+        update_neutral_pzeta!(moments.neutral.pzeta, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
+    end 
     
-    # calculate the self-consistent initial parallel heat flux and pressure from the initial un-normalised pdf
-    update_qpar!(moments.charged.qpar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
-    # need neutral version!!! update_qpar!(moments.charged.qpar, moments.charged.qpar_updated, pdf.charged.unnorm, vpa, vperp, z, r, composition, moments.charged.vpa_norm_fac)
-    # calculate self-consistent neutral moments 
-    update_neutral_qz!(moments.neutral.qz, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
-    update_neutral_pz!(moments.neutral.pz, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
-    update_neutral_pr!(moments.neutral.pr, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
-    update_neutral_pzeta!(moments.neutral.pzeta, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
-
     boundary_distributions = create_and_init_boundary_distributions(vz, vr, vzeta, vpa, vperp, composition)
     
-    if(use_manufactured_solns)
-        manufactured_solns_list = manufactured_solutions(r.L,z.L,r.bc,z.bc) 
-        dfni_func = manufactured_solns_list.dfni_func
-        densi_func = manufactured_solns_list.densi_func
-        dfnn_func = manufactured_solns_list.dfnn_func
-        densn_func = manufactured_solns_list.densn_func
-        #nb manufactured functions not functions of species
-        for is in 1:n_ion_species
-            for ir in 1:r.n
-                for iz in 1:z.n
-                    moments.charged.dens[iz,ir,is] = densi_func(z.grid[iz],r.grid[ir],0.0)
-                    for ivperp in 1:vperp.n
-                        for ivpa in 1:vpa.n
-                            pdf.charged.unnorm[ivpa,ivperp,iz,ir,is] = dfni_func(vpa.grid[ivpa],vperp.grid[ivperp],z.grid[iz],r.grid[ir],0.0)
-                            pdf.charged.norm[ivpa,ivperp,iz,ir,is] = pdf.charged.unnorm[ivpa,ivperp,iz,ir,is]
-                            
-                        end
-                    end
-                end
-            end
-        end
-        # update upar, ppar, qpar, vth consistent with manufactured solns
-        update_qpar!(moments.charged.qpar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
-        update_ppar!(moments.charged.ppar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
-        # get particle flux
-        update_upar!(moments.charged.upar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
-        # convert from particle particle flux to parallel flow
-        @loop_s_r_z is ir iz begin
-            moments.charged.upar[iz,ir,is] /= moments.charged.dens[iz,ir,is]
-        # update the thermal speed
-            moments.charged.vth[iz,ir,is] = sqrt(2.0*moments.charged.ppar[iz,ir,is]/moments.charged.dens[iz,ir,is])
-        end
-        
-        if n_neutral_species > 0
-            for isn in 1:n_neutral_species
-                for ir in 1:r.n
-                    for iz in 1:z.n
-                        moments.neutral.dens[iz,ir,isn] = densn_func(z.grid[iz],r.grid[ir],0.0)
-                        for ivzeta in 1:vzeta.n
-                            for ivr in 1:vr.n
-                                for ivz in 1:vz.n
-                                    pdf.neutral.unnorm[ivz,ivr,ivzeta,iz,ir,isn] = dfnn_func(vz.grid[ivz],vr.grid[ivr],vzeta.grid[ivzeta],z.grid[iz],r.grid[ir],0.0)
-                                    pdf.neutral.norm[ivz,ivr,ivzeta,iz,ir,isn] = pdf.neutral.unnorm[ivz,ivr,ivzeta,iz,ir,isn]
-                                end
-                            end
-                        end
-                        
-                    end
-                end
-            end
-            # get consistent moments with manufactured solutions 
-            #update_neutral_density!(moments.neutral.dens, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
-            update_neutral_qz!(moments.neutral.qz, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
-            update_neutral_pz!(moments.neutral.pz, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
-            update_neutral_pr!(moments.neutral.pr, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
-            update_neutral_pzeta!(moments.neutral.pzeta, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
-            # nb bad naming convention uz -> n uz below
-            update_neutral_uz!(moments.neutral.uz, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
-            update_neutral_ur!(moments.neutral.ur, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
-            update_neutral_uzeta!(moments.neutral.uzeta, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
-            # now convert from particle particle flux to parallel flow
-            @loop_sn_r_z isn ir iz begin
-                moments.neutral.uz[iz,ir,isn] /= moments.neutral.dens[iz,ir,isn]
-                moments.neutral.ur[iz,ir,isn] /= moments.neutral.dens[iz,ir,isn]
-                moments.neutral.uzeta[iz,ir,isn] /= moments.neutral.dens[iz,ir,isn]
-                #update ptot (isotropic pressure)
-                moments.neutral.ptot[iz,ir,isn] = (moments.neutral.pz[iz,ir,isn] + moments.neutral.pr[iz,ir,isn] + moments.neutral.pzeta[iz,ir,isn])/3.0
-                # get vth for neutrals
-                moments.charged.vth[iz,ir,isn] = sqrt(2.0*moments.neutral.ptot[iz,ir,isn]/moments.neutral.dens[iz,ir,isn])
-            end
-        end
-        
-    end 
     return pdf, moments, boundary_distributions
 end
 
 """
 """
-function create_and_init_pdf(moments, vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_species, species)
+function create_pdf(vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_species)
     # allocate pdf arrays
     pdf_charged_norm = allocate_shared_float(vpa.n, vperp.n, z.n, r.n, n_ion_species)
     pdf_charged_unnorm = allocate_shared_float(vpa.n, vperp.n, z.n, r.n, n_ion_species)
     pdf_charged_buffer = allocate_shared_float(vpa.n, vperp.n, z.n, r.n, n_neutral_species) # n.b. n_species is n_neutral_species here
-    #if n_neutral_species > 0
-        pdf_neutral_norm = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, r.n, n_neutral_species)
-        pdf_neutral_unnorm = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, r.n, n_neutral_species)
-        pdf_neutral_buffer = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, r.n, n_ion_species)
-    #end
+    pdf_neutral_norm = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, r.n, n_neutral_species)
+    pdf_neutral_unnorm = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, r.n, n_neutral_species)
+    pdf_neutral_buffer = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, r.n, n_ion_species)
+
+    return pdf_struct(pdf_substruct(pdf_charged_norm, pdf_charged_unnorm, pdf_charged_buffer), 
+                    pdf_substruct(pdf_neutral_norm, pdf_neutral_unnorm, pdf_neutral_buffer))
+
+end
+
+function init_pdf!(pdf, moments, vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_species, species)
     @serial_region begin
         for is ∈ 1:n_ion_species
             for ir ∈ 1:r.n
                 # updates pdf_norm to contain pdf / density, so that ∫dvpa pdf.norm = 1,
                 # ∫dwpa wpa * pdf.norm = 0, and ∫dwpa m_s (wpa/vths)^2 pdf.norm = 1/2
                 # to machine precision
-                @views init_pdf_charged_over_density!(pdf_charged_norm[:,:,:,ir,is], species.charged[is], vpa, vperp, z, moments.charged.vth[:,ir,is],
+                @views init_pdf_charged_over_density!(pdf.charged.norm[:,:,:,ir,is], species.charged[is], vpa, vperp, z, moments.charged.vth[:,ir,is],
                                               moments.charged.upar[:,ir,is])
             end
         end
         if n_neutral_species > 0
             for is ∈ 1:n_neutral_species
                 for ir ∈ 1:r.n
-                    @views init_pdf_neutral_over_density!(pdf_neutral_norm[:,:,:,:,ir,is], species.neutral[is], vz, vr, vzeta, z, moments.neutral.uz, moments.neutral.ur, moments.neutral.uzeta, moments.neutral.vth)
+                    @views init_pdf_neutral_over_density!(pdf.neutral.norm[:,:,:,:,ir,is], species.neutral[is], vz, vr, vzeta, z, moments.neutral.uz, moments.neutral.ur, moments.neutral.uzeta, moments.neutral.vth)
                 end
             end
         end
@@ -220,25 +156,98 @@ function create_and_init_pdf(moments, vz, vr, vzeta, vpa, vperp, z, r, n_ion_spe
         
         for ivperp ∈ 1:vperp.n
             for ivpa ∈ 1:vpa.n
-                @. pdf_charged_unnorm[ivpa,ivperp,:,:,:] = pdf_charged_norm[ivpa,ivperp,:,:,:] .* moments.charged.dens[:,:,:]
+                @. pdf.charged.unnorm[ivpa,ivperp,:,:,:] = pdf.charged.norm[ivpa,ivperp,:,:,:] .* moments.charged.dens[:,:,:]
                 # No evolving moments, so need to set pdf.norm = pdf.unnorm
-                @. pdf_charged_norm[ivpa,ivperp,:,:,:] = pdf_charged_unnorm[ivpa,ivperp,:,:,:]
+                @. pdf.charged.norm[ivpa,ivperp,:,:,:] = pdf.charged.unnorm[ivpa,ivperp,:,:,:]
             end
         end
         if n_neutral_species > 0 
             for ivzeta in 1:vzeta.n
                 for ivr in 1:vr.n
                     for ivz in 1:vz.n
-                        @. pdf_neutral_unnorm[ivz,ivr,ivzeta,:,:,:] = pdf_neutral_norm[ivz,ivr,ivzeta,:,:,:] .* moments.neutral.dens[:,:,:]
+                        @. pdf.neutral.unnorm[ivz,ivr,ivzeta,:,:,:] = pdf.neutral.norm[ivz,ivr,ivzeta,:,:,:] .* moments.neutral.dens[:,:,:]
                         # No evolving moments, so need to set pdf.norm = pdf.unnorm
-                        @. pdf_neutral_norm[ivz,ivr,ivzeta,:,:,:] = pdf_neutral_unnorm[ivz,ivr,ivzeta,:,:,:]
+                        @. pdf.neutral.norm[ivz,ivr,ivzeta,:,:,:] = pdf.neutral.unnorm[ivz,ivr,ivzeta,:,:,:]
                     end
                 end
             end
         end
     end
-    return pdf_struct(pdf_substruct(pdf_charged_norm, pdf_charged_unnorm, pdf_charged_buffer), 
-                        pdf_substruct(pdf_neutral_norm, pdf_neutral_unnorm, pdf_neutral_buffer))
+    return nothing
+end
+
+function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_species, composition)
+    manufactured_solns_list = manufactured_solutions(r.L,z.L,r.bc,z.bc) 
+    dfni_func = manufactured_solns_list.dfni_func
+    densi_func = manufactured_solns_list.densi_func
+    dfnn_func = manufactured_solns_list.dfnn_func
+    densn_func = manufactured_solns_list.densn_func
+    #nb manufactured functions not functions of species
+    for is in 1:n_ion_species
+        for ir in 1:r.n
+            for iz in 1:z.n
+                moments.charged.dens[iz,ir,is] = densi_func(z.grid[iz],r.grid[ir],0.0)
+                for ivperp in 1:vperp.n
+                    for ivpa in 1:vpa.n
+                        pdf.charged.unnorm[ivpa,ivperp,iz,ir,is] = dfni_func(vpa.grid[ivpa],vperp.grid[ivperp],z.grid[iz],r.grid[ir],0.0)
+                        pdf.charged.norm[ivpa,ivperp,iz,ir,is] = pdf.charged.unnorm[ivpa,ivperp,iz,ir,is]
+                        
+                    end
+                end
+            end
+        end
+    end
+    # update upar, ppar, qpar, vth consistent with manufactured solns
+    update_qpar!(moments.charged.qpar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
+    update_ppar!(moments.charged.ppar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
+    # get particle flux
+    update_upar!(moments.charged.upar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
+    # convert from particle particle flux to parallel flow
+    @loop_s_r_z is ir iz begin
+        moments.charged.upar[iz,ir,is] /= moments.charged.dens[iz,ir,is]
+    # update the thermal speed
+        moments.charged.vth[iz,ir,is] = sqrt(2.0*moments.charged.ppar[iz,ir,is]/moments.charged.dens[iz,ir,is])
+    end
+    
+    if n_neutral_species > 0
+        for isn in 1:n_neutral_species
+            for ir in 1:r.n
+                for iz in 1:z.n
+                    moments.neutral.dens[iz,ir,isn] = densn_func(z.grid[iz],r.grid[ir],0.0)
+                    for ivzeta in 1:vzeta.n
+                        for ivr in 1:vr.n
+                            for ivz in 1:vz.n
+                                pdf.neutral.unnorm[ivz,ivr,ivzeta,iz,ir,isn] = dfnn_func(vz.grid[ivz],vr.grid[ivr],vzeta.grid[ivzeta],z.grid[iz],r.grid[ir],0.0)
+                                pdf.neutral.norm[ivz,ivr,ivzeta,iz,ir,isn] = pdf.neutral.unnorm[ivz,ivr,ivzeta,iz,ir,isn]
+                            end
+                        end
+                    end
+                    
+                end
+            end
+        end
+        # get consistent moments with manufactured solutions 
+        #update_neutral_density!(moments.neutral.dens, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
+        update_neutral_qz!(moments.neutral.qz, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
+        update_neutral_pz!(moments.neutral.pz, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
+        update_neutral_pr!(moments.neutral.pr, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
+        update_neutral_pzeta!(moments.neutral.pzeta, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
+        # nb bad naming convention uz -> n uz below
+        update_neutral_uz!(moments.neutral.uz, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
+        update_neutral_ur!(moments.neutral.ur, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
+        update_neutral_uzeta!(moments.neutral.uzeta, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
+        # now convert from particle particle flux to parallel flow
+        @loop_sn_r_z isn ir iz begin
+            moments.neutral.uz[iz,ir,isn] /= moments.neutral.dens[iz,ir,isn]
+            moments.neutral.ur[iz,ir,isn] /= moments.neutral.dens[iz,ir,isn]
+            moments.neutral.uzeta[iz,ir,isn] /= moments.neutral.dens[iz,ir,isn]
+            #update ptot (isotropic pressure)
+            moments.neutral.ptot[iz,ir,isn] = (moments.neutral.pz[iz,ir,isn] + moments.neutral.pr[iz,ir,isn] + moments.neutral.pzeta[iz,ir,isn])/3.0
+            # get vth for neutrals
+            moments.charged.vth[iz,ir,isn] = sqrt(2.0*moments.neutral.ptot[iz,ir,isn]/moments.neutral.dens[iz,ir,isn])
+        end
+    end
+    return nothing
 end
 
 function create_and_init_boundary_distributions(vz, vr, vzeta, vpa, vperp, composition)
