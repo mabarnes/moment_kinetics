@@ -41,7 +41,7 @@ using ..em_fields: setup_em_fields, update_phi!
 #using ..semi_lagrange: setup_semi_lagrange
 
 using ..manufactured_solns: manufactured_sources
-
+using ..advection: advection_info
 
 @debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
 
@@ -70,6 +70,15 @@ mutable struct scratch_dummy_arrays
     dummy_vpavperp::Array{mk_float,2}
     dummy_zr::Array{mk_float,2}
 end 
+
+struct advect_object_struct
+    vpa_advect::Vector{advection_info{4,5,3}}
+    vperp_advect::Vector{advection_info{4,5,3}}
+    z_advect::Vector{advection_info{4,5,3}}
+    r_advect::Vector{advection_info{4,5,3}}
+    neutral_z_advect::Vector{advection_info{5,6,4}}
+    neutral_r_advect::Vector{advection_info{5,6,4}}
+end
 
 """
 create arrays and do other work needed to setup
@@ -353,8 +362,9 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     # construct named list of advect & spectral objects to compactify arguments
     ##
     
-    advect_objects = (vpa_advect = vpa_advect, vperp_advect = vperp_advect, z_advect = z_advect, 
-     r_advect = r_advect, neutral_z_advect = neutral_z_advect, neutral_r_advect = neutral_r_advect)
+    #advect_objects = (vpa_advect = vpa_advect, vperp_advect = vperp_advect, z_advect = z_advect, 
+    # r_advect = r_advect, neutral_z_advect = neutral_z_advect, neutral_r_advect = neutral_r_advect)
+    advect_objects = advect_object_struct(vpa_advect, vperp_advect, z_advect, r_advect, neutral_z_advect, neutral_r_advect)
     spectral_objects = (vz_spectral = vz_spectral, vr_spectral = vr_spectral, vzeta_spectral = vzeta_spectral,
      vpa_spectral = vpa_spectral, vperp_spectral = vperp_spectral, z_spectral = z_spectral, r_spectral = r_spectral)
     

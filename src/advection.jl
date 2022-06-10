@@ -7,6 +7,7 @@ export update_advection_factor!
 export calculate_explicit_advection!
 export update_boundary_indices!
 export advance_f_local!
+export advection_info
 
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_shared_float, allocate_shared_int
