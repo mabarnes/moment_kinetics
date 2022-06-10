@@ -232,6 +232,14 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
         update_neutral_pz!(moments.neutral.pz, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
         update_neutral_pr!(moments.neutral.pr, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
         update_neutral_pzeta!(moments.neutral.pzeta, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
+        #update ptot (isotropic pressure)
+        if r.n > 1 #if 2D geometry
+            @loop_sn_r_z isn ir iz begin            
+            moments.neutral.ptot[iz,ir,isn] = (moments.neutral.pz[iz,ir,isn] + moments.neutral.pr[iz,ir,isn] + moments.neutral.pzeta[iz,ir,isn])/3.0
+            end
+        else #1D model
+            moments.neutral.ptot .= moments.neutral.pz
+        end
         # nb bad naming convention uz -> n uz below
         update_neutral_uz!(moments.neutral.uz, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
         update_neutral_ur!(moments.neutral.ur, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
@@ -241,8 +249,6 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
             moments.neutral.uz[iz,ir,isn] /= moments.neutral.dens[iz,ir,isn]
             moments.neutral.ur[iz,ir,isn] /= moments.neutral.dens[iz,ir,isn]
             moments.neutral.uzeta[iz,ir,isn] /= moments.neutral.dens[iz,ir,isn]
-            #update ptot (isotropic pressure)
-            moments.neutral.ptot[iz,ir,isn] = (moments.neutral.pz[iz,ir,isn] + moments.neutral.pr[iz,ir,isn] + moments.neutral.pzeta[iz,ir,isn])/3.0
             # get vth for neutrals
             moments.charged.vth[iz,ir,isn] = sqrt(2.0*moments.neutral.ptot[iz,ir,isn]/moments.neutral.dens[iz,ir,isn])
         end
