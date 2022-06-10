@@ -13,6 +13,7 @@ using ..looping
 using ..moment_kinetics_structs: em_fields_struct
 using ..velocity_moments: update_density!
 using ..calculus: derivative!
+using ..manufactured_solns: manufactured_electric_fields
 
 """
 """
@@ -27,7 +28,7 @@ end
 """
 update_phi updates the electrostatic potential, phi
 """
-function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral)
+function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral, use_manufactured_electric_fields, t)
     n_ion_species = composition.n_ion_species
     @boundscheck size(fields.phi,1) == z.n || throw(BoundsError(fields.phi))
     @boundscheck size(fields.phi,2) == r.n || throw(BoundsError(fields.phi))
@@ -127,6 +128,23 @@ function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral)
                 fields.Ez[iz,ir] = -z.scratch[iz]
             end
         end
+        
+        if use_manufactured_electric_fields
+            electric_fields = manufactured_electric_fields(r.L,z.L,r.bc,z.bc)
+            Er_func = electric_fields.Er_func
+            Ez_func = electric_fields.Ez_func
+            if r.n > 1
+                @loop_r_z ir iz begin
+                    fields.Er[iz,ir] = Er_func(z.grid[iz],r.grid[ir],t)
+                end
+            else
+                fields.Er[:,:] .= 0.0
+            end
+            @loop_r_z ir iz begin
+                fields.Ez[iz,ir] = Ez_func(z.grid[iz],r.grid[ir],t)
+            end
+        end     
+        
     end
 end
 

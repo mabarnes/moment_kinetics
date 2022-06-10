@@ -36,6 +36,7 @@ struct time_input
     n_rk_stages::mk_int
     split_operators::Bool
     use_manufactured_solns::Bool
+    use_manufactured_electric_fields::Bool
 end
 
 """

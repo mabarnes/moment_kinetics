@@ -162,6 +162,7 @@ function mk_input(scan_input=Dict())
     n_rk_stages = get(scan_input, "n_rk_stages", 4)
     split_operators = get(scan_input, "split_operators", false)
     use_manufactured_solns = get(scan_input, "use_manufactured_solns", false)
+    use_manufactured_electric_fields = get(scan_input, "use_manufactured_electric_fields", false)
     #println("Info: The flag use_manufactured_solns is ",use_manufactured_solns)
     
     # overwrite some default parameters related to the r grid
@@ -271,7 +272,7 @@ function mk_input(scan_input=Dict())
     ########## end user inputs. do not modify following code! ###############
     #########################################################################
 
-    t = time_input(nstep, dt, nwrite, use_semi_lagrange, n_rk_stages, split_operators, use_manufactured_solns)
+    t = time_input(nstep, dt, nwrite, use_semi_lagrange, n_rk_stages, split_operators, use_manufactured_solns, use_manufactured_electric_fields)
     # replace mutable structures with immutable ones to optimize performance
     # and avoid possible misunderstandings
     z_advection_immutable = advection_input(z.advection.option, z.advection.constant_speed,

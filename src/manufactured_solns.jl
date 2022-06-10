@@ -4,6 +4,7 @@ module manufactured_solns
 
 export manufactured_solutions
 export manufactured_sources
+export manufactured_electric_fields
 
 using Symbolics
 
@@ -70,6 +71,16 @@ using Symbolics
         return dfni
     end
 
+    function electric_fields(densi,Dr,Dz)
+        # impose quasineutrality
+        dense = densi
+        phi = log(dense) # use the adiabatic response of electrons for me/mi -> 0
+        
+        Er = -Dr(phi)
+        Ez = -Dz(phi)    
+        return Er, Ez, phi
+    end
+
     function manufactured_solutions(Lr,Lz,r_bc,z_bc)
 
         densi = densi_sym(Lr,Lz,r_bc,z_bc)
@@ -95,6 +106,28 @@ using Symbolics
         
         return manufactured_solns_list
     end 
+    
+    function manufactured_electric_fields(Lr,Lz,r_bc,z_bc)
+        
+        # get the ion density
+        densi = densi_sym(Lr,Lz,r_bc,z_bc)
+        
+        # define derivative operators
+        Dr = Differential(r) 
+        Dz = Differential(z) 
+        
+        # calculate the electric fields and the potential
+        Er, Ez, phi = electric_fields(densi,Dr,Dz)
+        Er_expanded = expand_derivatives(Er)
+        Ez_expanded = expand_derivatives(Ez)
+        
+        Er_func = build_function(Er_expanded, z, r, t, expression=Val{false})
+        Ez_func = build_function(Ez_expanded, z, r, t, expression=Val{false})
+        
+        manufactured_E = (Er_func = Er_func, Ez_func = Ez_func)
+        
+        return manufactured_E
+    end 
 
     function manufactured_sources(Lr,Lz,r_bc,z_bc,composition,geometry,collisions,nr)
         
@@ -107,6 +140,8 @@ using Symbolics
         densn = densn_sym(Lr,Lz,r_bc,z_bc)
         dfnn = dfnn_sym(Lr,Lz,r_bc,z_bc)
         gav_dfnn = gyroaveraged_dfnn_sym(Lr,Lz,r_bc,z_bc) # gyroaverage < dfnn > in vpa vperp coordinates
+        
+        dense = densi # get the electron density via quasineutrality with Zi = 1
         
         # define derivative operators
         Dr = Differential(r) 
@@ -133,11 +168,8 @@ using Symbolics
             rfac = 0.0
         end
         
-        # calculate the electric fields
-        dense = densi # get the electron density via quasineutrality with Zi = 1
-        phi = log(dense) # use the adiabatic response of electrons for me/mi -> 0
-        Er = -Dr(phi)
-        Ez = -Dz(phi)
+        # calculate the electric fields and the potential
+        Er, Ez, phi = electric_fields(densi,Dr,Dz)
     
         # the ion source to maintain the manufactured solution
         Si = ( Dt(dfni) + ( vpa * (Bzed/Bmag) - 0.5*rhostar*Er*rfac ) * Dz(dfni) + ( 0.5*rhostar*Ez*rfac ) * Dr(dfni) + ( 0.5*Ez*Bzed/Bmag ) * Dvpa(dfni)

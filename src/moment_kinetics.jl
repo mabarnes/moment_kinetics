@@ -27,9 +27,9 @@ include("input_structs.jl")
 include("coordinates.jl")
 include("velocity_moments.jl")
 include("velocity_grid_transforms.jl")
+include("manufactured_solns.jl") # MRH Here?
 include("em_fields.jl")
 include("bgk.jl")
-include("manufactured_solns.jl") # MRH Here?
 include("initial_conditions.jl")
 #include("semi_lagrange.jl")
 include("advection.jl")

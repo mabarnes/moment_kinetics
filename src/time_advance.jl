@@ -63,6 +63,7 @@ mutable struct advance_info
     energy::Bool
     rk_coefs::Array{mk_float,2}
     manufactured_solns_test::Bool
+    use_manufactured_electric_fields::Bool
 end
 
 mutable struct scratch_dummy_arrays
@@ -91,6 +92,12 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     # if no splitting of operators, all terms advanced concurrently;
     # else, will advance one term at a time.
     manufactured_solns_test = t_input.use_manufactured_solns
+    use_manufactured_electric_fields = t_input.use_manufactured_electric_fields
+    if manufactured_solns_test && use_manufactured_electric_fields
+        use_manufactured_electric_fields = true
+    else
+        use_manufactured_electric_fields = false
+    end
     
     if composition.n_neutral_species > 0
         advance_neutral_z_advection = true
@@ -134,7 +141,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     advance = advance_info(true, true, true, advance_neutral_z_advection, advance_neutral_r_advection,
                            advance_cx, advance_cx_1V, advance_ionization, advance_ionization_1V, advance_sources,
                            advance_continuity, advance_force_balance, advance_energy, rk_coefs,
-                           manufactured_solns_test)
+                           manufactured_solns_test,use_manufactured_electric_fields)
 
     
     if z.discretization == "chebyshev_pseudospectral"
@@ -235,7 +242,8 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     fields = setup_em_fields(z.n, r.n, drive_input.force_phi, drive_input.amplitude, drive_input.frequency)
     # initialize the electrostatic potential
     begin_serial_region()
-    update_phi!(fields, scratch[1], z, r, composition, z_spectral, r_spectral)
+    update_phi!(fields, scratch[1], z, r, composition, z_spectral, r_spectral, 
+     use_manufactured_electric_fields, 0.0)
     @serial_region begin
         # save the initial phi(z) for possible use later (e.g., if forcing phi)
         fields.phi0 .= fields.phi
@@ -552,7 +560,8 @@ end
 
 """
 """
-function rk_update!(scratch, pdf, moments, fields, vz, vr, vzeta, vpa, vperp, z, r, rk_coefs, istage, composition, z_spectral, r_spectral)
+function rk_update!(scratch, pdf, moments, fields, vz, vr, vzeta, vpa, vperp, z, r, t, rk_coefs, 
+    use_manufactured_electric_fields, istage, composition, z_spectral, r_spectral)
     begin_s_r_z_vperp_region()
     nvpa = vpa.n
     new_scratch = scratch[istage+1]
@@ -603,7 +612,8 @@ function rk_update!(scratch, pdf, moments, fields, vz, vr, vzeta, vpa, vperp, z,
     end 
     
     # update the electrostatic potential phi
-    update_phi!(fields, scratch[istage+1], z, r, composition, z_spectral, r_spectral)
+    update_phi!(fields, scratch[istage+1], z, r, composition, z_spectral, r_spectral,
+     use_manufactured_electric_fields, t)
     #begin_s_r_z_vperp_region()
 end
 
@@ -651,7 +661,8 @@ function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase,
             t_input, spectral_objects, composition,
             collisions, geometry, boundary_distributions, 
             scratch_dummy, manufactured_source_list, advance, istage) #pdf_in,
-        @views rk_update!(scratch, pdf, moments, fields, vz, vr, vzeta, vpa, vperp, z, r, advance.rk_coefs[:,istage], 
+        @views rk_update!(scratch, pdf, moments, fields, vz, vr, vzeta, vpa, vperp, z, r, t, 
+         advance.rk_coefs[:,istage], advance.use_manufactured_electric_fields,
          istage, composition, spectral_objects.z_spectral, spectral_objects.r_spectral)
     end
 
