@@ -178,8 +178,20 @@ function load_neutral_particle_moments_data(fid)
     cdfvar = fid["density_neutral"]
     # load the neutral species density data
     neutral_density = cdfvar.var[:,:,:,:]
+    cdfvar = fid["uz_neutral"]
+    # load the neutral species uz data
+    neutral_uz = cdfvar.var[:,:,:,:]
+    cdfvar = fid["pz_neutral"]
+    # load the neutral species pz data
+    neutral_pz = cdfvar.var[:,:,:,:]
+    cdfvar = fid["qz_neutral"]
+    # load the neutral species qz data
+    neutral_qz = cdfvar.var[:,:,:,:]
+    cdfvar = fid["thermal_speed_neutral"]
+    # load the neutral species thermal_speed data
+    neutral_thermal_speed = cdfvar.var[:,:,:,:]
     println("done.")
-    return neutral_density
+    return neutral_density, neutral_uz, neutral_pz, neutral_qz, neutral_qz, neutral_thermal_speed
 end
 
 """

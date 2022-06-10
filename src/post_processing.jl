@@ -83,7 +83,7 @@ function analyze_and_plot_data(path)
     ff = load_pdf_data(fid)
     # load neutral particle data
     if n_neutral_species > 0
-        neutral_density = load_neutral_particle_moments_data(fid)
+        neutral_density, neutral_uz, neutral_pz, neutral_qz, neutral_qz, neutral_thermal_speed = load_neutral_particle_moments_data(fid)
         neutral_ff = load_neutral_pdf_data(fid)
     end
     

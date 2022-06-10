@@ -75,6 +75,10 @@ struct netcdf_info
     f_neutral::nc_var_type{7}
     # handle for the neutral species density
     density_neutral::nc_var_type{4}
+    uz_neutral::nc_var_type{4}
+    pz_neutral::nc_var_type{4}
+    qz_neutral::nc_var_type{4}
+    thermal_speed_neutral::nc_var_type{4}
 
 end
 
@@ -320,14 +324,30 @@ function define_dynamic_variables!(fid)
     dims = ("nvz","nvr","nvzeta","nz","nr","n_neutral_species","ntime")
     cdf_f_neutral = defVar(fid, varname, vartype, dims, attrib=attributes)
     # create the "density_neutral" variable, which will contain the neutral species densities
-    varname = "density_neutral"
     dims = ("nz","nr","n_neutral_species","ntime")
+    varname = "density_neutral"
     attributes = Dict("description" => "neutral species density",
                       "units" => "Ne")
     cdf_density_neutral = defVar(fid, varname, vartype, dims, attrib=attributes)
+    varname = "uz_neutral"
+    attributes = Dict("description" => "neutral species mean z velocity",
+                      "units" => "sqrt(2*Te/ms)")
+    cdf_uz_neutral = defVar(fid, varname, vartype, dims, attrib=attributes)
+    varname = "pz_neutral"
+    attributes = Dict("description" => "neutral species zz pressure",
+                      "units" => "Ne*Te")
+    cdf_pz_neutral = defVar(fid, varname, vartype, dims, attrib=attributes)
+    varname = "qz_neutral"
+    attributes = Dict("description" => "neutral species z heat flux",
+                      "units" => "Ne*Te*vth")
+    cdf_qz_neutral = defVar(fid, varname, vartype, dims, attrib=attributes)
+    varname = "thermal_speed_neutral"
+    attributes = Dict("description" => "neutral species thermal speed",
+                      "units" => "vth")
+    cdf_vth_neutral = defVar(fid, varname, vartype, dims, attrib=attributes)
     
     
-    return cdf_time, cdf_f, cdf_phi, cdf_density, cdf_upar, cdf_ppar, cdf_qpar, cdf_vth, cdf_f_neutral, cdf_density_neutral
+    return cdf_time, cdf_f, cdf_phi, cdf_density, cdf_upar, cdf_ppar, cdf_qpar, cdf_vth, cdf_f_neutral, cdf_density_neutral, cdf_uz_neutral, cdf_pz_neutral, cdf_qz_neutral, cdf_vth_neutral
 end
 
 """
@@ -349,13 +369,14 @@ function setup_netcdf_io(prefix, r, z, vperp, vpa, vzeta, vr, vz, composition, c
     define_static_variables!(fid,vz,vr,vzeta,vpa,vperp,z,r,composition,collisions)
     ### create variables for time-dependent quantities and store them ###
     ### in a struct for later access ###
-    cdf_time, cdf_f, cdf_phi, cdf_density, cdf_upar, cdf_ppar, cdf_qpar, cdf_vth, cdf_f_neutral, cdf_density_neutral =
+    cdf_time, cdf_f, cdf_phi, cdf_density, cdf_upar, cdf_ppar, cdf_qpar, cdf_vth, cdf_f_neutral, cdf_density_neutral, cdf_uz_neutral, cdf_pz_neutral, cdf_qz_neutral, cdf_vth_neutral =
         define_dynamic_variables!(fid)
 
     # create a struct that stores the variables and other info needed for
     # writing to the netcdf file during run-time
     return netcdf_info(fid, cdf_time, cdf_f, cdf_phi, cdf_density, cdf_upar,
-                       cdf_ppar, cdf_qpar, cdf_vth, cdf_f_neutral, cdf_density_neutral)
+                       cdf_ppar, cdf_qpar, cdf_vth, cdf_f_neutral, cdf_density_neutral,
+                       cdf_uz_neutral, cdf_pz_neutral, cdf_qz_neutral, cdf_vth_neutral)
 end
 
 """
@@ -506,6 +527,10 @@ function write_data_to_binary(ff, ff_neutral, moments, fields, t, n_ion_species,
             cdf.f_neutral[:,:,:,:,:,:,t_idx] = ff_neutral
             for is ∈ 1:n_neutral_species
                 cdf.density_neutral[:,:,:,t_idx] = moments.neutral.dens
+                cdf.uz_neutral[:,:,:,t_idx] = moments.neutral.uz
+                cdf.pz_neutral[:,:,:,t_idx] = moments.neutral.pz
+                cdf.qz_neutral[:,:,:,t_idx] = moments.neutral.qz
+                cdf.thermal_speed_neutral[:,:,:,t_idx] = moments.neutral.vth
             end
         end
     end
