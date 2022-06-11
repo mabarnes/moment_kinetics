@@ -495,15 +495,15 @@ function init_pdf_neutral_over_density!(pdf, spec, vz, vr, vzeta, z, uz, ur, uze
     for iz ∈ 1:z.n
         # densfac = the integral of the pdf over v-space, which should be unity,
         # but may not be exactly unity due to quadrature errors
-        densfac = integrate_over_vspace(view(pdf,:,:,:,iz), vz.grid, 0, vz.wgts, vr.grid, 0, vr.wgts, vzeta.grid, 0, vzeta.wgts)
+        densfac = integrate_over_neutral_vspace(view(pdf,:,:,:,iz), vz.grid, 0, vz.wgts, vr.grid, 0, vr.wgts, vzeta.grid, 0, vzeta.wgts)
         # pparfac = the integral of the pdf over v-space, weighted by m_s w_s^2 / vths^2,
         # where w_s = vz - upar_s;
         # should be equal to 1/2, but may not be exactly 1/2 due to quadrature errors
         @views @. vz.scratch = vz.grid^2 / vth[iz]^2
-        pparfac = integrate_over_vspace(pdf[:,:,:,iz], vz.scratch, 1, vz.wgts, vr.grid, 0, vr.wgts, vzeta.grid, 0, vzeta.wgts)
+        pparfac = integrate_over_neutral_vspace(pdf[:,:,:,iz], vz.scratch, 1, vz.wgts, vr.grid, 0, vr.wgts, vzeta.grid, 0, vzeta.wgts)
         # pparfac2 = the integral of the pdf over v-space, weighted by m_s w_s^2 (w_s^2 - vths^2 / 2) / vth^4
         @views @. vz.scratch = vz.grid^2 *(vz.grid^2/pparfac - 1.0/densfac) / vth[iz]^4
-        pparfac2 = @views integrate_over_vspace(pdf[:,:,:,iz], vz.scratch, 1, vz.wgts, vr.grid, 0, vr.wgts, vzeta.grid, 0, vzeta.wgts)
+        pparfac2 = @views integrate_over_neutral_vspace(pdf[:,:,:,iz], vz.scratch, 1, vz.wgts, vr.grid, 0, vr.wgts, vzeta.grid, 0, vzeta.wgts)
 
         for ivzeta ∈ 1:vzeta.n, ivr ∈ 1:vr.n
             @views @. pdf[:,ivr,ivzeta,iz] = pdf[:,ivr,ivzeta,iz]/densfac + (0.5 - pparfac/densfac)/pparfac2*(vz.grid^2/pparfac - 1.0/densfac)*pdf[:,ivr,ivzeta,iz] / vth[iz]^2
