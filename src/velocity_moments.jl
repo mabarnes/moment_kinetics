@@ -411,7 +411,7 @@ function update_neutral_pz_species!(pz, ff, vz, vr, vzeta, z, r)
     @boundscheck z.n == size(pz, 1) || throw(BoundsError(pz))
     @boundscheck r.n == size(pz, 2) || throw(BoundsError(pz))
     @loop_r_z ir iz begin
-        pz[iz,ir] = integrate_over_vspace(@view(ff[:,:,:,iz,ir]), 
+        pz[iz,ir] = integrate_over_neutral_vspace(@view(ff[:,:,:,iz,ir]),
          vz.grid, 2, vz.wgts, vr.grid, 0, vr.wgts, vzeta.grid, 0, vzeta.wgts)
     end
     return nothing
@@ -442,7 +442,7 @@ function update_neutral_pr_species!(pr, ff, vz, vr, vzeta, z, r)
     @boundscheck z.n == size(pr, 1) || throw(BoundsError(pr))
     @boundscheck r.n == size(pr, 2) || throw(BoundsError(pr))
     @loop_r_z ir iz begin
-        pr[iz,ir] = integrate_over_vspace(@view(ff[:,:,:,iz,ir]), 
+        pr[iz,ir] = integrate_over_neutral_vspace(@view(ff[:,:,:,iz,ir]),
          vz.grid, 0, vz.wgts, vr.grid, 2, vr.wgts, vzeta.grid, 0, vzeta.wgts)
     end
     return nothing
@@ -473,7 +473,7 @@ function update_neutral_pzeta_species!(pzeta, ff, vz, vr, vzeta, z, r)
     @boundscheck z.n == size(pzeta, 1) || throw(BoundsError(pzeta))
     @boundscheck r.n == size(pzeta, 2) || throw(BoundsError(pzeta))
     @loop_r_z ir iz begin
-        pzeta[iz,ir] = integrate_over_vspace(@view(ff[:,:,:,iz,ir]), 
+        pzeta[iz,ir] = integrate_over_neutral_vspace(@view(ff[:,:,:,iz,ir]),
          vz.grid, 0, vz.wgts, vr.grid, 0, vr.wgts, vzeta.grid, 2, vzeta.wgts)
     end
     return nothing
@@ -504,7 +504,7 @@ function update_neutral_qz_species!(qz, ff, vz, vr, vzeta, z, r)
     @boundscheck z.n == size(qz, 1) || throw(BoundsError(qz))
     @boundscheck r.n == size(qz, 2) || throw(BoundsError(qz))
     @loop_r_z ir iz begin
-        qz[iz,ir] = integrate_over_vspace(@view(ff[:,:,:,iz,ir]), 
+        qz[iz,ir] = integrate_over_neutral_vspace(@view(ff[:,:,:,iz,ir]),
          vz.grid, 3, vz.wgts, vr.grid, 0, vr.wgts, vzeta.grid, 0, vzeta.wgts)
     end
     return nothing
