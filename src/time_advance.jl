@@ -80,6 +80,18 @@ struct advect_object_struct
     neutral_r_advect::Vector{advection_info{5,6,4}}
 end
 
+# consider changing code structure so that 
+# we can avoid arbitrary types below?
+struct spectral_object_struct
+    vz_spectral::T where T
+    vr_spectral::T where T
+    vzeta_spectral::T where T
+    vpa_spectral::T where T
+    vperp_spectral::T where T
+    z_spectral::T where T
+    r_spectral::T where T
+end
+
 """
 create arrays and do other work needed to setup
 the main time advance loop.
@@ -365,9 +377,9 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     #advect_objects = (vpa_advect = vpa_advect, vperp_advect = vperp_advect, z_advect = z_advect, 
     # r_advect = r_advect, neutral_z_advect = neutral_z_advect, neutral_r_advect = neutral_r_advect)
     advect_objects = advect_object_struct(vpa_advect, vperp_advect, z_advect, r_advect, neutral_z_advect, neutral_r_advect)
-    spectral_objects = (vz_spectral = vz_spectral, vr_spectral = vr_spectral, vzeta_spectral = vzeta_spectral,
-     vpa_spectral = vpa_spectral, vperp_spectral = vperp_spectral, z_spectral = z_spectral, r_spectral = r_spectral)
-    
+    #spectral_objects = (vz_spectral = vz_spectral, vr_spectral = vr_spectral, vzeta_spectral = vzeta_spectral,
+    # vpa_spectral = vpa_spectral, vperp_spectral = vperp_spectral, z_spectral = z_spectral, r_spectral = r_spectral)
+    spectral_objects = spectral_object_struct(vz_spectral, vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral, z_spectral, r_spectral)
     if(t_input.use_manufactured_solns)
         manufactured_source_list = manufactured_sources(r.L,z.L,r.bc,z.bc,composition,geometry,collisions,r.n)
     else
