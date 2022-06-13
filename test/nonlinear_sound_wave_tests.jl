@@ -380,13 +380,13 @@ function run_test(test_input, rtol; args...)
                 ######################################
 
                 newgrid_n_charged = interpolate_to_grid_z(expected.z, n_charged[:, :, tind], z, z_spectral)
-                @test isapprox(expected.n_charged[:, tind], newgrid_n_charged[:,:,1], rtol=rtol)
+                @test isapprox(expected.n_charged[:, tind], newgrid_n_charged[:,1], rtol=rtol)
 
                 newgrid_upar_charged = interpolate_to_grid_z(expected.z, upar_charged[:, :, tind], z, z_spectral)
-                @test isapprox(expected.upar_charged[:, tind], newgrid_upar_charged[:,:,1], rtol=rtol)
+                @test isapprox(expected.upar_charged[:, tind], newgrid_upar_charged[:,1], rtol=rtol)
 
                 newgrid_ppar_charged = interpolate_to_grid_z(expected.z, ppar_charged[:, :, tind], z, z_spectral)
-                @test isapprox(expected.ppar_charged[:, tind], newgrid_ppar_charged[:,:,1], rtol=rtol)
+                @test isapprox(expected.ppar_charged[:, tind], newgrid_ppar_charged[:,1], rtol=rtol)
 
                 newgrid_f_charged = interpolate_to_grid_z(expected.z, f_charged[:, :, :, tind], z, z_spectral)
                 newgrid_f_charged = interpolate_to_grid_vpa(expected.vpa, newgrid_f_charged, vpa, vpa_spectral)
