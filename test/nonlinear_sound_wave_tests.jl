@@ -9,7 +9,8 @@ using moment_kinetics.chebyshev: setup_chebyshev_pseudospectral
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.load_data: open_netcdf_file, load_coordinate_data,
-                                 load_fields_data, load_charged_particle_moments_data, load_pdf_data
+                                 load_fields_data, load_charged_particle_moments_data, load_pdf_data,
+                                 load_neutral_particle_moments_data, load_neutral_pdf_data
 using moment_kinetics.interpolation: interpolate_to_grid_z, interpolate_to_grid_vpa
 using moment_kinetics.type_definitions: mk_float
 
@@ -264,9 +265,11 @@ function run_test(test_input, rtol; args...)
 
             # load velocity moments data
             n_charged_zrst, upar_charged_zrst, ppar_charged_zrst, qpar_charged_zrst, v_t_charged_zrst, evolve_ppar = load_charged_particle_moments_data(fid)
+            n_neutral_zrst, upar_neutral_zrst, ppar_neutral_zrst, qpar_neutral_zrst, v_t_neutral_zrst = load_neutral_particle_moments_data(fid)
 
             # load particle distribution function (pdf) data
             f_charged_vpavperpzrst = load_pdf_data(fid)
+            f_neutral_vzvrvzetazrst = load_neutral_pdf_data(fid)
 
             close(fid)
             
@@ -277,6 +280,12 @@ function run_test(test_input, rtol; args...)
             qpar_charged = qpar_charged_zrst[:,1,:,:]
             v_t_charged = v_t_charged_zrst[:,1,:,:]
             f_charged = f_charged_vpavperpzrst[:,1,:,1,:,:]
+            n_neutral = n_neutral_zrst[:,1,:,:]
+            upar_neutral = upar_neutral_zrst[:,1,:,:]
+            ppar_neutral = ppar_neutral_zrst[:,1,:,:]
+            qpar_neutral = qpar_neutral_zrst[:,1,:,:]
+            v_t_neutral = v_t_neutral_zrst[:,1,:,:]
+            f_neutral = f_neutral_vzvrvzetazrst[:,1,1,:,1,:,:]
         end
 
         # Create coordinates
@@ -386,18 +395,18 @@ function run_test(test_input, rtol; args...)
                 # Check neutral particle moments and f
                 ######################################
 
-                #newgrid_n_neutral = interpolate_to_grid_z(expected.z, n_neutral[:, :, tind], z, z_spectral)
-                #@test isapprox(expected.n_neutral[:, tind], newgrid_n_neutral[:,:,1], rtol=rtol)
+                newgrid_n_neutral = interpolate_to_grid_z(expected.z, n_neutral[:, :, tind], z, z_spectral)
+                @test isapprox(expected.n_neutral[:, tind], newgrid_n_neutral[:,:,1], rtol=rtol)
 
-                #newgrid_upar_neutral = interpolate_to_grid_z(expected.z, upar_neutral[:, :, tind], z, z_spectral)
-                #@test isapprox(expected.upar_neutral[:, tind], newgrid_upar_neutral[:,:,1], rtol=rtol)
+                newgrid_upar_neutral = interpolate_to_grid_z(expected.z, upar_neutral[:, :, tind], z, z_spectral)
+                @test isapprox(expected.upar_neutral[:, tind], newgrid_upar_neutral[:,:,1], rtol=rtol)
 
-                #newgrid_ppar_neutral = interpolate_to_grid_z(expected.z, ppar_neutral[:, :, tind], z, z_spectral)
-                #@test isapprox(expected.ppar_neutral[:, tind], newgrid_ppar_neutral[:,:,1], rtol=rtol)
+                newgrid_ppar_neutral = interpolate_to_grid_z(expected.z, ppar_neutral[:, :, tind], z, z_spectral)
+                @test isapprox(expected.ppar_neutral[:, tind], newgrid_ppar_neutral[:,:,1], rtol=rtol)
 
-                #newgrid_f_neutral = interpolate_to_grid_z(expected.z, f_neutral[:, :, :, tind], z, z_spectral)
-                #newgrid_f_neutral = interpolate_to_grid_vpa(expected.vpa, newgrid_f_neutral, vpa, vpa_spectral)
-                #@test isapprox(expected.f_neutral[:, :, tind], newgrid_f_neutral[:,:,1], rtol=rtol)
+                newgrid_f_neutral = interpolate_to_grid_z(expected.z, f_neutral[:, :, :, tind], z, z_spectral)
+                newgrid_f_neutral = interpolate_to_grid_vpa(expected.vpa, newgrid_f_neutral, vpa, vpa_spectral)
+                @test isapprox(expected.f_neutral[:, :, tind], newgrid_f_neutral[:,:,1], rtol=rtol)
             end
         end
 
