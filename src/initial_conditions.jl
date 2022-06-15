@@ -60,7 +60,7 @@ end
 creates the normalised pdf and the velocity-space moments and populates them
 with a self-consistent initial condition
 """
-function init_pdf_and_moments(vz, vr, vzeta, vpa, vperp, z, r, composition, species, n_rk_stages, evolve_moments, use_manufactured_solns)
+function init_pdf_and_moments(vz, vr, vzeta, vpa, vperp, z, r, composition, geometry, species, n_rk_stages, evolve_moments, use_manufactured_solns)
     
     begin_serial_region()
     
@@ -79,7 +79,7 @@ function init_pdf_and_moments(vz, vr, vzeta, vpa, vperp, z, r, composition, spec
     pdf = create_pdf(vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_species)
     
     if use_manufactured_solns
-        init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_species, composition)
+        init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_species, geometry, composition)
     else 
         @serial_region begin
             #charged particles
@@ -176,8 +176,8 @@ function init_pdf!(pdf, moments, vz, vr, vzeta, vpa, vperp, z, r, n_ion_species,
     return nothing
 end
 
-function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_species, composition)
-    manufactured_solns_list = manufactured_solutions(r.L,z.L,r.bc,z.bc) 
+function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_species, geometry,composition)
+    manufactured_solns_list = manufactured_solutions(r.L,z.L,r.bc,z.bc,geometry,composition,r.n) 
     dfni_func = manufactured_solns_list.dfni_func
     densi_func = manufactured_solns_list.densi_func
     dfnn_func = manufactured_solns_list.dfnn_func

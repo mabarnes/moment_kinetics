@@ -9,10 +9,50 @@ using Symbolics
 
     @variables r z vpa vperp t vz vr vzeta
 
+    #standard functions for building densities
+    function nplus_sym(Lr,r_bc)
+        #if r_bc == "periodic"
+        nplus = 1.0 + 0.1*sin(2.0*pi*r/Lr)
+        #end
+        return nplus
+    end
+    
+    function nminus_sym(Lr,r_bc)
+        #if r_bc == "periodic"
+        nminus = 1.0 + 0.1*cos(2.0*pi*r/Lr)
+        #end
+        return nminus
+    end
+    
+    function nzero_sym(Lr,r_bc)
+        #if r_bc == "periodic"
+        nzero = 1.0 + (r/Lr + 0.5)*(0.5 - r/Lr)
+        #end
+        return nzero
+    end
+
+    function knudsen_cosine(composition)
+        T_wall = composition.T_wall
+        # prefac here may cause problems with NaNs if vz = vr = vzeta = 0 is on grid
+        prefac = abs(vz)/sqrt(vz^2 + vr^2 + vzeta^2)
+        exponetial = exp( - (vz^2 + vr^2 + vzeta^2)/T_wall )
+        knudsen_pdf = (3.0/pi)*(T_wall^(-2))*prefac*exponetial
+    
+        return knudsen_pdf
+    end
+
     # neutral density symbolic function
-    function densn_sym(Lr,Lz,r_bc,z_bc)
+    function densn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
         if r_bc == "periodic" && z_bc == "periodic" 
             densn = 1.5 +  0.1*(cos(2.0*pi*r/Lr) + cos(2.0*pi*z/Lz))*sin(2.0*pi*t)  
+        elseif (r_bc == "periodic" && z_bc == "wall")
+            T_wall = composition.T_wall
+            Bzed = geometry.Bzed
+            Bmag = geometry.Bmag
+            Gamma_minus = 0.5*(Bzed/Bmag)*nminus_sym(Lr,r_bc)/sqrt(pi)
+            Gamma_plus = 0.5*(Bzed/Bmag)*nplus_sym(Lr,r_bc)/sqrt(pi)
+            # exact integral of corresponding dfnn below
+            densn = (3.0/(4.0*pi))*( (0.5 - z/Lz)*Gamma_minus + (0.5 + z/Lz)*Gamma_plus + 2.0 )
         else
             densn = 1.0
         end
@@ -20,15 +60,24 @@ using Symbolics
     end
 
     # neutral distribution symbolic function
-    function dfnn_sym(Lr,Lz,r_bc,z_bc)
-        densn = densn_sym(Lr,Lz,r_bc,z_bc)
-        #if (r_bc == "periodic" && z_bc == "periodic")
+    function dfnn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
+        densn = densn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
+        if (r_bc == "periodic" && z_bc == "periodic")
             dfnn = densn * exp( - vz^2 - vr^2 - vzeta^2)
-        #end
+        elseif (r_bc == "periodic" && z_bc == "wall")
+            Hplus = 0.5*(sign(vz) + 1.0)
+            Hminus = 0.5*(sign(-vz) + 1.0)
+            FKw = knudsen_cosine(composition)
+            Bzed = geometry.Bzed
+            Bmag = geometry.Bmag
+            Gamma_minus = 0.5*(Bzed/Bmag)*nminus_sym(Lr,r_bc)/sqrt(pi)
+            Gamma_plus = 0.5*(Bzed/Bmag)*nplus_sym(Lr,r_bc)/sqrt(pi)
+            dfnn = Hplus *( ( 0.5 - z/Lz)*Gamma_minus + 1.0 )*FKw + Hminus*( ( 0.5 + z/Lz)*Gamma_plus + 1.0 )*FKw 
+        end
         return dfnn
     end
-    function gyroaveraged_dfnn_sym(Lr,Lz,r_bc,z_bc)
-        densn = densn_sym(Lr,Lz,r_bc,z_bc)
+    function gyroaveraged_dfnn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
+        densn = densn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
         #if (r_bc == "periodic" && z_bc == "periodic")
             dfnn = densn * exp( - vpa^2 - vperp^2 )
         #end
@@ -44,21 +93,42 @@ using Symbolics
             #densi = 1.0 +  0.5*sin(2.0*pi*z/Lz)*(r/Lr + 0.5) + sin(2.0*pi*r/Lr)*sin(2.0*pi*t)
             densi = 1.0 +  0.5*(r/Lr + 0.5) 
         elseif r_bc == "periodic" && z_bc == "wall"
-            densi = 0.25*(0.5 - z/Lz) + 0.25*(z/Lz + 0.5)+ 0.2*(z/Lz + 0.5)*(0.5 - z/Lz)  #+  0.5*(r/Lr + 0.5) + 0.5*(z/Lz + 0.5)
+            densi = 0.25*(0.5 - z/Lz)*nminus_sym(Lr,r_bc) + 0.25*(z/Lz + 0.5)*nplus_sym(Lr,r_bc) + 0.2*(z/Lz + 0.5)*(0.5 - z/Lz)*nzero_sym(Lr,r_bc)  #+  0.5*(r/Lr + 0.5) + 0.5*(z/Lz + 0.5)
         end
         return densi
     end
 
+    
+
     # ion distribution symbolic function
-    function dfni_sym(Lr,Lz,r_bc,z_bc)
+    function dfni_sym(Lr,Lz,r_bc,z_bc,geometry,nr)
         densi = densi_sym(Lr,Lz,r_bc,z_bc)
+        # define derivative operators
+        Dr = Differential(r) 
+        Dz = Differential(z) 
+        # calculate the necessary electric fields
+        dense = densi # get the electron density via quasineutrality with Zi = 1
+        phi = log(dense) # use the adiabatic response of electrons for me/mi -> 0
+        Er = -Dr(phi)
+        #Ez = -Dz(phi)
+        # get geometric/composition data
+        Bzed = geometry.Bzed
+        Bmag = geometry.Bmag
+        rhostar = geometry.rstar
+        if nr > 1 #keep radial derivatives
+            rfac = 1.0
+        else # drop radial derivative terms
+            rfac = 0.0
+        end
+        
         if (r_bc == "periodic" && z_bc == "periodic") || (r_bc == "Dirichlet" && z_bc == "periodic")
             dfni = densi * exp( - vpa^2 - vperp^2) 
         elseif r_bc == "periodic" && z_bc == "wall"
-            Hplus = 0.5*(sign(vpa) + 1.0)
-            Hminus = 0.5*(sign(-vpa) + 1.0)
+            vpabar = vpa - (rhostar/2.0)*(Bmag/Bzed)*expand_derivatives(Er)*rfac # effective velocity in z direction * (Bmag/Bzed)
+            Hplus = 0.5*(sign(vpabar) + 1.0)
+            Hminus = 0.5*(sign(-vpabar) + 1.0)
             ffa =  exp(- vperp^2)
-            dfni = ffa * ( (0.5 - z/Lz) * Hminus * vpa^2 + (z/Lz + 0.5) * Hplus * vpa^2 + 0.2*(z/Lz + 0.5)*(0.5 - z/Lz) ) * exp( - vpa^2 )
+            dfni = ffa * ( (0.5 - z/Lz) * Hminus * vpabar^2 + (z/Lz + 0.5) * Hplus * vpabar^2 + 0.2*(z/Lz + 0.5)*(0.5 - z/Lz) ) * exp( - vpabar^2 )
         end
         return dfni
     end
@@ -70,13 +140,13 @@ using Symbolics
         return dfni
     end
 
-    function manufactured_solutions(Lr,Lz,r_bc,z_bc)
+    function manufactured_solutions(Lr,Lz,r_bc,z_bc,geometry,composition,nr)
 
         densi = densi_sym(Lr,Lz,r_bc,z_bc)
-        dfni = dfni_sym(Lr,Lz,r_bc,z_bc)
+        dfni = dfni_sym(Lr,Lz,r_bc,z_bc,geometry,nr)
         
-        densn = densn_sym(Lr,Lz,r_bc,z_bc)
-        dfnn = dfnn_sym(Lr,Lz,r_bc,z_bc)
+        densn = densn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
+        dfnn = dfnn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
         
         #build julia functions from these symbolic expressions
         # cf. https://docs.juliahub.com/Symbolics/eABRO/3.4.0/tutorials/symbolic_functions/
@@ -100,13 +170,13 @@ using Symbolics
         
         # ion manufactured solutions
         densi = densi_sym(Lr,Lz,r_bc,z_bc)
-        dfni = dfni_sym(Lr,Lz,r_bc,z_bc)
+        dfni = dfni_sym(Lr,Lz,r_bc,z_bc,geometry,nr)
         vrvzvzeta_dfni = cartesian_dfni_sym(Lr,Lz,r_bc,z_bc) #dfni in vr vz vzeta coordinates
         
         # neutral manufactured solutions
-        densn = densn_sym(Lr,Lz,r_bc,z_bc)
-        dfnn = dfnn_sym(Lr,Lz,r_bc,z_bc)
-        gav_dfnn = gyroaveraged_dfnn_sym(Lr,Lz,r_bc,z_bc) # gyroaverage < dfnn > in vpa vperp coordinates
+        densn = densn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
+        dfnn = dfnn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
+        gav_dfnn = gyroaveraged_dfnn_sym(Lr,Lz,r_bc,z_bc,geometry,composition) # gyroaverage < dfnn > in vpa vperp coordinates
         
         # define derivative operators
         Dr = Differential(r) 

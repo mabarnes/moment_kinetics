@@ -129,7 +129,7 @@ Perform all the initialization steps for a run.
 function setup_moment_kinetics(input_dict::Dict)
     # Set up MPI
     initialize_comms!()
-
+    
     input = mk_input(input_dict)
     # obtain input options from moment_kinetics_input.jl
     # and check input to catch errors
@@ -164,7 +164,7 @@ function setup_moment_kinetics(input_dict::Dict)
                                r=r.n, z=z.n, vperp=vperp.n, vpa=vpa.n, vzeta=vzeta.n, vr=vr.n, vz=vz.n)
     # initialize f and the lowest three v-space moments (density, upar and ppar),
     # each of which may be evolved separately depending on input choices.
-    pdf, moments, boundary_distributions = init_pdf_and_moments(vz, vr, vzeta, vpa, vperp, z, r, composition, species, t_input.n_rk_stages, evolve_moments, t_input.use_manufactured_solns) 
+    pdf, moments, boundary_distributions = init_pdf_and_moments(vz, vr, vzeta, vpa, vperp, z, r, composition, geometry, species, t_input.n_rk_stages, evolve_moments, t_input.use_manufactured_solns) 
     # initialize time variable
     code_time = 0.
     # create arrays and do other work needed to setup

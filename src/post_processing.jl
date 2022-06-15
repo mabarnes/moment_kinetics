@@ -25,6 +25,7 @@ using ..load_data: load_neutral_pdf_data, load_neutral_coordinate_data
 using ..analysis: analyze_fields_data, analyze_moments_data, analyze_pdf_data
 using ..velocity_moments: integrate_over_vspace
 using ..manufactured_solns: manufactured_solutions
+using ..moment_kinetics_input: mk_input
 
 using TOML
 import Base: get
@@ -62,7 +63,13 @@ function analyze_and_plot_data(path)
     run_name = joinpath(path, basename(path))
     input_filename = path * ".toml"
     scan_input = TOML.parsefile(input_filename)
-        
+    # get run-time input/composition/geometry/collisions/species info for convenience
+    run_name_internal, output_dir, evolve_moments, 
+        t_input, z_input, r_input, 
+        vpa_input, vperp_input, gyrophase_input,
+        vz_input, vr_input, vzeta_input, 
+        composition, species, collisions, geometry, drive_input = mk_input(scan_input)
+    
     # open the netcdf file and give it the handle 'fid'
     fid = open_netcdf_file(run_name)
     # load space-time coordinate data
@@ -83,7 +90,7 @@ function analyze_and_plot_data(path)
     ff = load_pdf_data(fid)
     # load neutral particle data
     if n_neutral_species > 0
-        neutral_density, neutral_uz, neutral_pz, neutral_qz, neutral_qz, neutral_thermal_speed = load_neutral_particle_moments_data(fid)
+        neutral_density, neutral_uz, neutral_pz, neutral_qz, neutral_thermal_speed = load_neutral_particle_moments_data(fid)
         neutral_ff = load_neutral_pdf_data(fid)
     end
     
@@ -124,7 +131,7 @@ function analyze_and_plot_data(path)
         else 
             Lr_in = 1.0
         end
-        manufactured_solns_list = manufactured_solutions(Lr_in,Lz,r_bc,z_bc) 
+        manufactured_solns_list = manufactured_solutions(Lr_in,Lz,r_bc,z_bc,geometry,composition,nr) 
         dfni_func = manufactured_solns_list.dfni_func
         densi_func = manufactured_solns_list.densi_func
         dfnn_func = manufactured_solns_list.dfnn_func
