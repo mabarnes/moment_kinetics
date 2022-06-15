@@ -74,7 +74,7 @@ do a single stage time advance in z (potentially as part of a multi-stage RK sch
 """
 function neutral_advection_z!(f_out, fvec_in, advect, r, z, vzeta, vr, vz, dt, z_spectral, composition, geometry)
     
-    begin_sn_z_vzeta_vr_vz_region()
+    begin_sn_r_vzeta_vr_vz_region()
     
     @loop_sn isn begin
         # get the updated speed along the r direction using the current f
