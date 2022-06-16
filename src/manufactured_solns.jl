@@ -19,14 +19,14 @@ using Symbolics
     
     function nminus_sym(Lr,r_bc)
         #if r_bc == "periodic"
-        nminus = 1.0 + 0.1*cos(2.0*pi*r/Lr)
+        nminus = 2.0 + 0.1*sin(2.0*pi*r/Lr)
         #end
         return nminus
     end
     
     function nzero_sym(Lr,r_bc)
         #if r_bc == "periodic"
-        nzero = 1.0 + (r/Lr + 0.5)*(0.5 - r/Lr)
+        nzero = sin(2.0*pi*r/Lr)# 1.0 #+ (r/Lr + 0.5)*(0.5 - r/Lr)
         #end
         return nzero
     end
@@ -36,7 +36,7 @@ using Symbolics
         # prefac here may cause problems with NaNs if vz = vr = vzeta = 0 is on grid
         prefac = abs(vz)/sqrt(vz^2 + vr^2 + vzeta^2)
         exponetial = exp( - (vz^2 + vr^2 + vzeta^2)/T_wall )
-        knudsen_pdf = (3.0/pi)*(T_wall^(-2))*prefac*exponetial
+        knudsen_pdf = (3.0*sqrt(pi)/T_wall^2)*prefac*exponetial
     
         return knudsen_pdf
     end
@@ -52,7 +52,7 @@ using Symbolics
             Gamma_minus = 0.5*(Bzed/Bmag)*nminus_sym(Lr,r_bc)/sqrt(pi)
             Gamma_plus = 0.5*(Bzed/Bmag)*nplus_sym(Lr,r_bc)/sqrt(pi)
             # exact integral of corresponding dfnn below
-            densn = (3.0/(4.0*pi))*( (0.5 - z/Lz)*Gamma_minus + (0.5 + z/Lz)*Gamma_plus + 2.0 )
+            densn = 3.0*sqrt(pi)/(4.0*sqrt(T_wall))*( (0.5 - z/Lz)*Gamma_minus + (0.5 + z/Lz)*Gamma_plus + 2.0 )
         else
             densn = 1.0
         end
