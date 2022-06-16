@@ -12,21 +12,21 @@ using Symbolics
     #standard functions for building densities
     function nplus_sym(Lr,r_bc)
         #if r_bc == "periodic"
-        nplus = 1.0 + 0.1*sin(2.0*pi*r/Lr)
+        nplus = 1.0 + 0.3*sin(2.0*pi*r/Lr)
         #end
         return nplus
     end
     
     function nminus_sym(Lr,r_bc)
         #if r_bc == "periodic"
-        nminus = 2.0 + 0.1*sin(2.0*pi*r/Lr)
+        nminus = 1.0 + 0.3*sin(2.0*pi*r/Lr)
         #end
         return nminus
     end
     
     function nzero_sym(Lr,r_bc)
         #if r_bc == "periodic"
-        nzero = sin(2.0*pi*r/Lr)# 1.0 #+ (r/Lr + 0.5)*(0.5 - r/Lr)
+        nzero = 1.0 + 0.3*sin(2.0*pi*r/Lr)# 1.0 #+ (r/Lr + 0.5)*(0.5 - r/Lr)
         #end
         return nzero
     end
@@ -93,7 +93,7 @@ using Symbolics
             #densi = 1.0 +  0.5*sin(2.0*pi*z/Lz)*(r/Lr + 0.5) + sin(2.0*pi*r/Lr)*sin(2.0*pi*t)
             densi = 1.0 +  0.5*(r/Lr + 0.5) 
         elseif r_bc == "periodic" && z_bc == "wall"
-            densi = 0.25*(0.5 - z/Lz)*nminus_sym(Lr,r_bc) + 0.25*(z/Lz + 0.5)*nplus_sym(Lr,r_bc) + 0.2*(z/Lz + 0.5)*(0.5 - z/Lz)*nzero_sym(Lr,r_bc)  #+  0.5*(r/Lr + 0.5) + 0.5*(z/Lz + 0.5)
+            densi = 0.25*(0.5 - z/Lz)*nminus_sym(Lr,r_bc) + 0.25*(z/Lz + 0.5)*nplus_sym(Lr,r_bc) + (z/Lz + 0.5)*(0.5 - z/Lz)*nzero_sym(Lr,r_bc)  #+  0.5*(r/Lr + 0.5) + 0.5*(z/Lz + 0.5)
         end
         return densi
     end
@@ -128,7 +128,7 @@ using Symbolics
             Hplus = 0.5*(sign(vpabar) + 1.0)
             Hminus = 0.5*(sign(-vpabar) + 1.0)
             ffa =  exp(- vperp^2)
-            dfni = ffa * ( (0.5 - z/Lz) * Hminus * vpabar^2 + (z/Lz + 0.5) * Hplus * vpabar^2 + 0.2*(z/Lz + 0.5)*(0.5 - z/Lz) ) * exp( - vpabar^2 )
+            dfni = ffa * ( nminus_sym(Lr,r_bc)* (0.5 - z/Lz) * Hminus * vpabar^2 + nminus_sym(Lr,r_bc)*(z/Lz + 0.5) * Hplus * vpabar^2 + nzero_sym(Lr,r_bc)*(z/Lz + 0.5)*(0.5 - z/Lz) ) * exp( - vpabar^2 )
         end
         return dfni
     end

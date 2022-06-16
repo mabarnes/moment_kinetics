@@ -68,15 +68,20 @@ function init_pdf_and_moments(vz, vr, vzeta, vpa, vperp, z, r, composition, geom
     n_species = composition.n_species
     n_ion_species = composition.n_ion_species
     n_neutral_species = composition.n_neutral_species
+    if n_neutral_species > 0 
+        n_neutral_species_alloc = n_neutral_species
+    else
+        n_neutral_species_alloc = 1
+    end
     # create the 'moments' struct that contains various v-space moments and other
     # information related to these moments.
     # the time-dependent entries are not initialised.
     # moments arrays have same r and z grids for both ion and neutral species 
     # and so are included in the same struct
     charged = create_moments_charged(z.n, r.n, n_ion_species)
-    neutral = create_moments_neutral(z.n, r.n, n_neutral_species)
+    neutral = create_moments_neutral(z.n, r.n, n_neutral_species_alloc)
     moments = moments_struct(charged,neutral)
-    pdf = create_pdf(vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_species)
+    pdf = create_pdf(vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_species_alloc)
     
     if use_manufactured_solns
         init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_species, geometry, composition)
@@ -107,10 +112,12 @@ function init_pdf_and_moments(vz, vr, vzeta, vpa, vperp, z, r, composition, geom
         update_qpar!(moments.charged.qpar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
         # need neutral version!!! update_qpar!(moments.charged.qpar, moments.charged.qpar_updated, pdf.charged.unnorm, vpa, vperp, z, r, composition, moments.charged.vpa_norm_fac)
         # calculate self-consistent neutral moments 
-        update_neutral_qz!(moments.neutral.qz, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
-        update_neutral_pz!(moments.neutral.pz, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
-        update_neutral_pr!(moments.neutral.pr, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
-        update_neutral_pzeta!(moments.neutral.pzeta, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
+        if n_neutral_species > 0
+            update_neutral_qz!(moments.neutral.qz, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
+            update_neutral_pz!(moments.neutral.pz, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
+            update_neutral_pr!(moments.neutral.pr, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
+            update_neutral_pzeta!(moments.neutral.pzeta, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
+        end
     end 
     
     boundary_distributions = create_and_init_boundary_distributions(vz, vr, vzeta, vpa, vperp, composition)
