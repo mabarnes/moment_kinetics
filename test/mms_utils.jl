@@ -18,7 +18,7 @@ function increase_resolution(input::Dict, nelement)
     result["run_name"] = input["run_name"] * "_$nelement"
     for key ∈ keys(result)
         if occursin("_nelement", key)
-            if occursin("v", key)
+            if occursin("v", key) || occursin("gyrophase", key)
                 result[key] = 4 * nelement
             else
                 result[key] = nelement
