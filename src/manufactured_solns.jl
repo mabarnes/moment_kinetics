@@ -51,7 +51,7 @@ using ..type_definitions
     # neutral density symbolic function
     function densn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
         if r_bc == "periodic" && z_bc == "periodic" 
-            densn = 1.5 +  0.1*(cos(2.0*pi*r/Lr) + cos(2.0*pi*z/Lz))*sin(2.0*pi*t)  
+            densn = 1.5 +  0.1*(cos(2.0*pi*r/Lr) + cos(2.0*pi*z/Lz))*cos(2.0*pi*t)
         elseif (r_bc == "periodic" && z_bc == "wall")
             T_wall = composition.T_wall
             Bzed = geometry.Bzed
