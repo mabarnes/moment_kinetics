@@ -184,7 +184,7 @@ function init_pdf!(pdf, moments, vz, vr, vzeta, vpa, vperp, z, r, n_ion_species,
 end
 
 function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_species, geometry,composition)
-    manufactured_solns_list = manufactured_solutions(r.L,z.L,vpa.L,vperp.L,r.bc,z.bc,geometry,composition,r.n) 
+    manufactured_solns_list = manufactured_solutions(r.L,z.L,vperp.L,vpa.L,vzeta.L,vr.L,vz.L,r.bc,z.bc,geometry,composition,r.n) 
     dfni_func = manufactured_solns_list.dfni_func
     densi_func = manufactured_solns_list.densi_func
     dfnn_func = manufactured_solns_list.dfnn_func
