@@ -325,7 +325,7 @@ using ..type_definitions
                               nr::mk_int, advance::Union{advance_info,Nothing}=nothing)
         rhs_ion_sym, rhs_neutral_sym = manufactured_rhs_sym(Lr,Lz,Lvpa,Lvperp,r_bc,z_bc,composition,geometry,collisions,nr,advance)
         return build_function(rhs_ion_sym, vpa, vperp, z, r, t, expression=Val{false}),
-               build_function(rhs_neutral_sym, vpa, vperp, z, r, t, expression=Val{false})
+               build_function(rhs_neutral_sym, vz, vr, vzeta, z, r, t, expression=Val{false})
     end
 
     function manufactured_sources(Lr::mk_float,Lz::mk_float,Lvpa::mk_float,Lvperp::mk_float,r_bc::String,z_bc::String,
@@ -390,14 +390,15 @@ using ..type_definitions
             composition::species_composition, geometry::geometry_input,
             collisions::collisions_input, advance::Union{advance_info,Nothing})
 
-    Create array filled with manufactured rhs.
+    Create arrays filled with manufactured rhs.
 
     Returns
     -------
-    rhs
+    rhs_ion, rhs_neutral
     """
     function manufactured_rhs_as_array(
         t::mk_float, r::coordinate, z::coordinate, vperp::coordinate, vpa::coordinate,
+        vzeta::coordinate, vr::coordinate, vz::coordinate,
         composition::species_composition, geometry::geometry_input,
         collisions::collisions_input, advance::Union{advance_info,Nothing})
 
@@ -413,7 +414,17 @@ using ..type_definitions
             end
         end
 
-        return rhs_ion
+        rhs_neutral = allocate_float(vz.n, vr.n, vzeta.n, z.n, r.n)
+
+        for ir ∈ 1:r.n, iz ∈ 1:z.n
+            for ivz ∈ 1:vz.n, ivr ∈ 1:vr.n, ivzeta ∈ 1:vzeta.n
+                rhs_neutral[ivz,ivr,ivzeta,iz,ir] =
+                    rhs_neutral_func(vz.grid[ivz], vr.grid[ivr], vzeta.grid[ivzeta],
+                                     z.grid[iz], r.grid[ir], t)
+            end
+        end
+
+        return rhs_ion, rhs_neutral
     end
 
 end
