@@ -70,7 +70,7 @@ using ..type_definitions
     function densn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
         if z_bc == "periodic" 
             if r_bc == "periodic" 
-                densn = 1.5 +  0.1*(cos(2.0*pi*r/Lr) + cos(2.0*pi*z/Lz))*sin(2.0*pi*t)  
+                densn = 1.5 +  0.1*(cos(2.0*pi*r/Lr) + cos(2.0*pi*z/Lz))*cos(2.0*pi*t)  
             elseif r_bc == "Dirichlet"
                 densn = 1.5 + 0.3*r/Lr
             end
