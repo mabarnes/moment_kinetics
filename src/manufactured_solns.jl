@@ -305,9 +305,9 @@ using ..type_definitions
         if advance === nothing || advance.r_advection
             rhs_ion += - ( half*rhostar*Ez ) * Dr(dfni)
         end
-        #if advance === nothing || advance.cx_collsions
-        #    # placeholder
-        #end
+        if advance === nothing || advance.cx_collisions
+            rhs_ion += cx_frequency * (gav_dfnn*densi - dfni*densn)
+        end
         #if advance === nothing || advance.ionization_collsions
         #    # placeholder
         #end
