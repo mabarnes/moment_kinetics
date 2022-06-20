@@ -102,12 +102,13 @@ using ..type_definitions
         end
         return dfnn
     end
-    function gyroaveraged_dfnn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
-        densn = densn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
-        #if (r_bc == "periodic" && z_bc == "periodic")
-            dfnn = densn * exp( - vpa^2 - vperp^2 )
-        #end
-        return dfnn
+    function gyroaveraged_dfnn_sym(Lr,Lz,Lvzeta,Lvr,Lvz,r_bc,z_bc,geometry,composition)
+        dfnn = dfnn_sym(Lr,Lz,Lvzeta,Lvr,Lvz,r_bc,z_bc,geometry,composition)
+        # Because of particular form of odd component in dfnn_sym, if we set vzeta=-vr
+        # then we eliminate the odd component in the perpendicular velocities,
+        # effectively gyro-averaging
+        gav_dfnn = substitute(dfnn, Dict(vzeta=>vperp/sqrt(two), vr=>-vperp/sqrt(two), vz=>vpa))
+        return gav_dfnn
     end
     
     # Define some constants in mk_float. Avoids loss of precision due to implicit
@@ -212,12 +213,10 @@ using ..type_definitions
         end
         return dfni
     end
-    function cartesian_dfni_sym(Lr,Lz,r_bc,z_bc)
-        densi = densi_sym(Lr,Lz,r_bc,z_bc)
-        #if (r_bc == "periodic" && z_bc == "periodic") || (r_bc == "Dirichlet" && z_bc == "periodic")
-            dfni = densi * exp( - vz^2 - vr^2 - vzeta^2) 
-        #end
-        return dfni
+    function cartesian_dfni_sym(Lr,Lz,Lvperp,Lvpa,r_bc,z_bc,geometry,nr)
+        dfni = dfni_sym(Lr,Lz,Lvperp,Lvpa,r_bc,z_bc,geometry,nr)
+        vrvzvzeta_dfni = substitute(dfni, Dict(vperp=>sqrt(vzeta^2+vr^2), vpa=>vz))
+        return vrvzvzeta_dfni
     end
 
     function manufactured_solutions(Lr,Lz,Lvperp,Lvpa,Lvzeta,Lvr,Lvz,r_bc,z_bc,geometry,composition,nr)
@@ -259,12 +258,12 @@ using ..type_definitions
         # ion manufactured solutions
         densi = densi_sym(Lr,Lz,r_bc,z_bc)
         dfni = dfni_sym(Lr,Lz,Lvperp,Lvpa,r_bc,z_bc,geometry,nr)
-        vrvzvzeta_dfni = cartesian_dfni_sym(Lr,Lz,r_bc,z_bc) #dfni in vr vz vzeta coordinates
+        vrvzvzeta_dfni = cartesian_dfni_sym(Lr,Lz,Lvperp,Lvpa,r_bc,z_bc,geometry,nr) #dfni in vr vz vzeta coordinates
         
         # neutral manufactured solutions
         densn = densn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
         dfnn = dfnn_sym(Lr,Lz,Lvzeta,Lvr,Lvz,r_bc,z_bc,geometry,composition)
-        gav_dfnn = gyroaveraged_dfnn_sym(Lr,Lz,r_bc,z_bc,geometry,composition) # gyroaverage < dfnn > in vpa vperp coordinates
+        gav_dfnn = gyroaveraged_dfnn_sym(Lr,Lz,Lvzeta,Lvr,Lvz,r_bc,z_bc,geometry,composition) # gyroaverage < dfnn > in vpa vperp coordinates
         
         # define derivative operators
         Dr = Differential(r) 
