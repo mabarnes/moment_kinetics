@@ -12,6 +12,7 @@ using moment_kinetics.manufactured_solns
 using moment_kinetics.post_processing: L2_error_norm, L_infinity_error_norm
 using moment_kinetics.time_advance: evaluate_ddt!, advance_info
 using moment_kinetics.type_definitions
+using Statistics: mean
 
 # Create a temporary directory for test output
 test_output_directory = tempname()
@@ -21,7 +22,7 @@ ngrid = 7
 const input_sound_wave_periodic = Dict(
     "use_manufactured_solns" => true,
     "n_ion_species" => 1,
-    "n_neutral_species" => 0,
+    "n_neutral_species" => 1,
     "boltzmann_electron_response" => true,
     "run_name" => "MMS-rperiodic",
     "base_directory" => test_output_directory,
@@ -78,6 +79,24 @@ const input_sound_wave_periodic = Dict(
     "vperp_L" => 8.0,
     "vperp_bc" => "zero",
     "vperp_discretization" => "chebyshev_pseudospectral",
+    "gyrophase_ngrid" => ngrid,
+    "gyrophase_nelement" => 4,
+    "vperp_discretization" => "chebyshev_pseudospectral",
+    "vz_ngrid" => ngrid,
+    "vz_nelement" => 4,
+    "vz_L" => 8.0,
+    "vz_bc" => "zero",
+    "vz_discretization" => "chebyshev_pseudospectral",
+    "vr_ngrid" => ngrid,
+    "vr_nelement" => 4,
+    "vr_L" => 8.0,
+    "vr_bc" => "zero",
+    "vr_discretization" => "chebyshev_pseudospectral",
+    "vzeta_ngrid" => ngrid,
+    "vzeta_nelement" => 4,
+    "vzeta_L" => 8.0,
+    "vzeta_bc" => "zero",
+    "vzeta_discretization" => "chebyshev_pseudospectral",
 )
 
 """
@@ -114,6 +133,15 @@ function evaluate_initial_ddt(input_dict::Dict, advance_input::advance_info)
         output.upar[iz,ir,is] = 0.0
         output.ppar[iz,ir,is] = 0.0
     end
+    begin_sn_r_z_region()
+    @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
+        first_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] = pdf.neutral.norm[ivz,ivr,ivzeta,iz,ir,isn]
+        output.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] = 0.0
+    end
+    @loop_sn_r_z isn ir iz begin
+        first_scratch.density_neutral[iz,ir,isn] = moments.neutral.dens[iz,ir,isn]
+        output.density_neutral[iz,ir,isn] = 0.0
+    end
 
     # modify advance_info argument so that no manufactured sources are added when
     # evaluating the time advance, as in this test we only want manufactured initial
@@ -134,16 +162,19 @@ function evaluate_initial_ddt(input_dict::Dict, advance_input::advance_info)
 
     # Make a copy of the array with df/dt so it doesn't get messed up by MPI cleanup in
     # cleanup_moment_kinetics!()
-    dfdt = nothing
+    dfdt_ion = nothing
+    dfdt_neutral = nothing
     if global_rank[] == 0
-        dfdt = copy(output.pdf)
+        dfdt_ion = copy(output.pdf)
+        dfdt_neutral = copy(output.pdf_neutral)
     end
 
     # clean up i/o and communications
     # last 2 elements of mk_state are `io` and `cdf`
     cleanup_moment_kinetics!(mk_state[end-1:end]...)
 
-    return dfdt, r, z, vperp, vpa, composition, geometry, collisions, modified_advance
+    return dfdt_ion, dfdt_neutral, r, z, vperp, vpa, vzeta, vr, vz, composition,
+           geometry, collisions, modified_advance
 end
 
 """
@@ -161,7 +192,7 @@ the calculated df/dt does not match the one evaluated from the manufactured
 solution, for which evaluating the rhs doesn't necessarily give zero at the
 boundary.
 """
-function remove_boundary_points(f::AbstractArray{mk_float,4})
+function remove_ion_boundary_points(f::AbstractArray{mk_float,4})
     return f[2:end-1,:,:,:]
 end
 
@@ -172,34 +203,48 @@ Run a simulation with parameters set by `input` using manufactured sources and r
 the errors in each variable compared to the manufactured solution.
 """
 function runcase(input::Dict, advance::advance_info, returnstuff=false)
-    dfdt = nothing
+    dfdt_ion = nothing
+    dfdt_neutral = nothing
     manufactured_inputs = nothing
     quietoutput() do
-        dfdt, manufactured_inputs... = evaluate_initial_ddt(input, advance)
+        dfdt_ion, dfdt_neutral, manufactured_inputs... = evaluate_initial_ddt(input, advance)
     end
 
     error_2 = nothing
     error_inf = nothing
-    rhs_manf = nothing
+    rhs_ion_manf = nothing
+    rhs_neutral_manf = nothing
     if global_rank[] == 0
-        rhs_manf = manufactured_rhs_as_array(mk_float(0.0), manufactured_inputs...)
+        rhs_ion_manf, rhs_neutral_manf = manufactured_rhs_as_array(mk_float(0.0),
+                                                                   manufactured_inputs...)
 
         # Only one species, so get rid of species index
-        dfdt = dfdt[:,:,:,:,1]
+        dfdt_ion = dfdt_ion[:,:,:,:,1]
+        dfdt_neutral = dfdt_neutral[:,:,:,:,:,1]
 
         # Get rid of vpa boundary points which are (possibly) overwritten by
-        # boundary conditions in the numerically evaluated result
-        dfdt = remove_boundary_points(dfdt)
-        rhs_manf = remove_boundary_points(rhs_manf)
+        # boundary conditions in the numerically evaluated result.
+        # Not necessary for neutrals as there are no v-space boundary conditions for
+        # neutrals.
+        dfdt_ion = remove_ion_boundary_points(dfdt_ion)
+        rhs_ion_manf = remove_ion_boundary_points(rhs_ion_manf)
 
-        error_2 = L2_error_norm(dfdt, rhs_manf)
-        error_inf = L_infinity_error_norm(dfdt, rhs_manf)
+        error_2_ion = L2_error_norm(dfdt_ion, rhs_ion_manf)
+        error_inf_ion = L_infinity_error_norm(dfdt_ion, rhs_ion_manf)
+        error_2_neutral = L2_error_norm(dfdt_neutral, rhs_neutral_manf)
+        error_inf_neutral = L_infinity_error_norm(dfdt_neutral, rhs_neutral_manf)
 
-        println("error ", error_2, " ", error_inf)
+        # Create combined errors
+        error_2 = mean([error_2_ion, error_2_neutral])
+        error_inf = max(error_inf_ion, error_inf_neutral)
+
+        println("ion error ", error_2_ion, " ", error_inf_ion)
+        println("neutral error ", error_2_neutral, " ", error_inf_neutral)
+        println("combined error ", error_2, " ", error_inf)
     end
 
     if returnstuff
-        return error_2, error_inf, dfdt, rhs_manf
+        return error_2, error_inf, dfdt_ion, rhs_ion_manf, dfdt_neutral, rhs_neutral_manf
     else
         return error_2, error_inf
     end
@@ -248,13 +293,14 @@ function testconvergence(input::Dict, advance::advance_info; ngrid=nothing, retu
     if returnstuff
         nelement_values = [nelement_values[end]]
     end
-    lastrhs, lastrhs_manf = nothing, nothing
+    lastrhs_ion, lastrhs_manf_ion, lastrhs_neutral, lastrhs_manf_neutral = nothing, nothing, nothing, nothing
     for nelement ∈ nelement_values
         global_rank[] == 0 && println("testing nelement=$nelement")
         case_input = increase_resolution(input, nelement)
 
         if returnstuff
-            error_2, error_inf, lastrhs, lastrhs_manf = runcase(case_input, advance, returnstuff)
+            error_2, error_inf, lastrhs_ion, lastrhs_manf_ion, lastrhs_neutral,
+            lastrhs_manf_neutral = runcase(case_input, advance, returnstuff)
         else
             error_2, error_inf = runcase(case_input, advance)
         end
@@ -283,7 +329,7 @@ function testconvergence(input::Dict, advance::advance_info; ngrid=nothing, retu
     end
 
     if returnstuff
-        return lastrhs, lastrhs_manf
+        return lastrhs_ion, lastrhs_manf_ion, lastrhs_neutral, lastrhs_manf_neutral
     else
         return nothing
     end
@@ -297,14 +343,14 @@ function setup_advance(which_term)
         advance.vpa_advection = true
         advance.z_advection = true
         advance.r_advection = true
-        #advance.neutral_z_advection = true
-        #advance.neutral_r_advection = true
-        #advance.cx_collisions = true
+        advance.neutral_z_advection = true
+        advance.neutral_r_advection = true
+        advance.cx_collisions = true
         #advance.ionization_collisions = true
-        #advance.source_terms = true
-        #advance.continuity = true
-        #advance.force_balance = true
-        #advance.energy = true
+        advance.source_terms = true
+        advance.continuity = true
+        advance.force_balance = true
+        advance.energy = true
     elseif which_term == :vpa_advection
         advance.vpa_advection = true
     elseif which_term == :z_advection
@@ -352,11 +398,21 @@ function runtests(ngrid=nothing)
                 testconvergence(input_sound_wave_periodic, setup_advance(:r_advection),
                                 ngrid=ngrid)
             end
-            #@testset "cx_collisions" begin
-            #    global_rank[] == 0 && println("\ncx_collisions")
-            #    testconvergence(input_sound_wave_periodic,
-            #                    setup_advance(:cx_collisions), ngrid=ngrid)
-            #end
+            @testset "neutral_z_advection" begin
+                global_rank[] == 0 && println("\nneutral_z_advection")
+                testconvergence(input_sound_wave_periodic,
+                                setup_advance(:neutral_z_advection), ngrid=ngrid)
+            end
+            @testset "neutral_r_advection" begin
+                global_rank[] == 0 && println("\nneutral_r_advection")
+                testconvergence(input_sound_wave_periodic,
+                                setup_advance(:neutral_r_advection), ngrid=ngrid)
+            end
+            @testset "cx_collisions" begin
+                global_rank[] == 0 && println("\ncx_collisions")
+                testconvergence(input_sound_wave_periodic,
+                                setup_advance(:cx_collisions), ngrid=ngrid)
+            end
             #@testset "ionization_collisions" begin
             #    global_rank[] == 0 && println("\nionization_collisions")
             #    testconvergence(input_sound_wave_periodic,
@@ -391,11 +447,10 @@ end
 function runtests_return(which_term::Symbol=:all; ngrid=nothing)
     global_rank[] == 0 && println("MMS tests with return")
 
-    rhs, rhs_manf = testconvergence(input_sound_wave_periodic,
-                                    setup_advance(which_term); ngrid=ngrid,
-                                    returnstuff=true)
+    results = testconvergence(input_sound_wave_periodic,
+                              setup_advance(which_term); ngrid=ngrid, returnstuff=true)
 
-    return rhs, rhs_manf
+    return results
 end
 
 end # ManufacturedSolutionsTests
