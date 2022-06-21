@@ -90,7 +90,7 @@ function charge_exchange_collisions_3V!(f_out, f_neutral_out, f_neutral_gav_in, 
                     # apply CX collisions to all ion species 
                     # for each ion species, obtain affect of charge exchange collisions
                     # with all of the neutral species
-                    f_out[ivpa,1,iz,ir,is] +=
+                    f_out[ivpa,ivperp,iz,ir,is] +=
                         dt*charge_exchange_frequency*(
                             f_neutral_gav_in[ivpa,ivperp,iz,ir,isn]*fvec_in.density[iz,ir,is]
                             - fvec_in.pdf[ivpa,ivperp,iz,ir,is]*fvec_in.density_neutral[iz,ir,isn])
