@@ -162,10 +162,7 @@ function run_test(test_input, analytic_frequency, analytic_growth_rate,
 
             output = load_test_output(input, (:phi,))
 
-            nz = output["nz"]
             z = output["z"]
-            z_wgts = output["z_wgts"]
-            Lz = output["Lz"]
             ntime = output["ntime"]
             time = output["time"]
 
