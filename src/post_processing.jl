@@ -138,128 +138,66 @@ function analyze_and_plot_data(path)
         densn_func = manufactured_solns_list.densn_func
         
         # ion test
-        #compare_densities_symbolic_test(run_name,density,densi_func,"ion",z,r,nz,nr,ntime)
-        is = 1
-        spec_string = "ion"
-        it = ntime
-        heatmap(r, z, density[:,:,is,it], xlabel=L"r", ylabel=L"z", title=L"n_i/n_{ref}", c = :deep)
-        outfile = string(run_name, "_dens_vs_r_z_", spec_string, ".pdf")
-        savefig(outfile)
-        
         density_sym = copy(density[:,:,:,:])
-        for ir in 1:nr
-            for iz in 1:nz
-                density_sym[iz,ir,is,it] = densi_func(z[iz],r[ir],time[it])
-            end
-        end
-        heatmap(r, z, density_sym[:,:,is,it], xlabel=L"r", ylabel=L"z", title=L"n_i^{sym}/n_{ref}", c = :deep)
-        outfile = string(run_name, "_dens_sym_vs_r_z_", spec_string, ".pdf")
-        savefig(outfile)
-        
-        density_norm = zeros(mk_float,ntime)
-        #println(densi_func(0.0,0.0,0.0))
+        is = 1
         for it in 1:ntime
-            dummy = 0.0
-            dummy_N = 0.0
             for ir in 1:nr
                 for iz in 1:nz
-         #           println(density[iz,ir,is,it],densi_func(z[iz],r[ir],time[it]))
-                    dummy += (density[iz,ir,is,it] - densi_func(z[iz],r[ir],time[it]))^2
-                    dummy_N += (densi_func(z[iz],r[ir],time[it]))^2
+                    density_sym[iz,ir,is,it] = densi_func(z[iz],r[ir],time[it])
                 end
             end
-            #println(dummy,dummy_N)
-            density_norm[it] = dummy/dummy_N
         end
-        println("test density: ",spec_string,": ||n - n^{sym}||^2/||n^{sym}||^2 = \n ",density_norm)
-        @views plot(time, density_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=L" \sum || n_i - n_i^{sym} ||^2 / \sum || n_i^{sym} ||^2") #, yaxis=:log)
-        outfile = string(run_name, "_dens_norm_vs_t_", spec_string, ".pdf")
-        savefig(outfile)
+        compare_moments_symbolic_test(run_name,density,density_sym,"ion",z,r,time,nz,nr,ntime,
+         L"\widetilde{n}_i",L"\widetilde{n}_i^{sym}",L"\sum || \widetilde{n}_i - \widetilde{n}_i^{sym} ||^2 ","dens")
         
-        pdf_norm = zeros(mk_float,ntime)
+        ff_sym = copy(ff)
+        is = 1
         for it in 1:ntime
-            dummy = 0.0
-            dummy_N = 0.0
             for ir in 1:nr
                 for iz in 1:nz
                     for ivperp in 1:nvperp
                         for ivpa in 1:nvpa
-                            dummy += (ff[ivpa,ivperp,iz,ir,is,it] - dfni_func(vpa[ivpa],vperp[ivperp],z[iz],r[ir],time[it]))^2
-                            dummy_N += (dfni_func(vpa[ivpa],vperp[ivperp],z[iz],r[ir],time[it]))^2
+                            ff_sym[ivpa,ivperp,iz,ir,is,it] = dfni_func(vpa[ivpa],vperp[ivperp],z[iz],r[ir],time[it])
                         end
                     end
                 end
             end
-            pdf_norm[it] = dummy/dummy_N
         end
-        println("test pdf: ",spec_string,": ||f - f^{sym}||^2/||f^{sym}||^2 = \n",pdf_norm)
-        @views plot(time, pdf_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=L" \sum || f_i - f_i^{sym} ||^2 / \sum ||f_i^{sym} ||^2") #, yaxis=:log)
-        outfile = string(run_name, "_pdf_norm_vs_t_", spec_string, ".pdf")
-        savefig(outfile)
-        
+        compare_charged_pdf_symbolic_test(run_name,ff,ff_sym,"ion",vpa,vperp,z,r,time,nvpa,nvperp,nz,nr,ntime,
+         L"\widetilde{f}_i",L"\widetilde{f}^{sym}_i",L"\sum || \widetilde{f}_i - \widetilde{f}_i^{sym} ||^2","pdf")
+                
         if n_neutral_species > 0
             # neutral test
-            #compare_densities_symbolic_test(run_name,neutral_density,densn_func,"neutral",z,r,nz,nr,ntime)
-            # would rather use function above but getting errors 
-            #  LoadError: MethodError: no method matching getindex(::typeof(time), ::Int64)
-            # copy and paste body of function twice instead...
+            density_sym = copy(density[:,:,:,:])
             is = 1
-            spec_string = "neutral"
-            it = ntime
-            heatmap(r, z, neutral_density[:,:,is,it], xlabel=L"r", ylabel=L"z", title=L"n_n/n_{ref}", c = :deep)
-            outfile = string(run_name, "_dens_vs_r_z_", spec_string, ".pdf")
-            savefig(outfile)
-            
-            density_sym = copy(neutral_density[:,:,:,:])
-            for ir in 1:nr
-                for iz in 1:nz
-                    density_sym[iz,ir,is,it] = densn_func(z[iz],r[ir],time[it])
-                end
-            end
-            heatmap(r, z, density_sym[:,:,is,it], xlabel=L"r", ylabel=L"z", title=L"n_n^{sym}/n_{ref}", c = :deep)
-            outfile = string(run_name, "_dens_sym_vs_r_z_", spec_string, ".pdf")
-            savefig(outfile)
-            
-            density_norm = zeros(mk_float,ntime)
             for it in 1:ntime
-                dummy = 0.0
-                dummy_N = 0.0
                 for ir in 1:nr
                     for iz in 1:nz
-                        dummy += (neutral_density[iz,ir,is,it] - densn_func(z[iz],r[ir],time[it]))^2
-                        dummy_N += (densn_func(z[iz],r[ir],time[it]))^2
+                        density_sym[iz,ir,is,it] = densn_func(z[iz],r[ir],time[it])
                     end
                 end
-                density_norm[it] = dummy/dummy_N
             end
-            println("test density: ",spec_string,": ||n - n^{sym}||^2/||n^{sym}||^2 = \n ",density_norm)
-            @views plot(time, density_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=L" \sum || n_n - n_n^{sym} ||^2/ \sum ||n_n^{sym} ||^2") #, yaxis=:log)
-            outfile = string(run_name, "_dens_norm_vs_t_", spec_string, ".pdf")
-            savefig(outfile)
+            compare_moments_symbolic_test(run_name,density,density_sym,"neutral",z,r,time,nz,nr,ntime,
+             L"\widetilde{n}_n",L"\widetilde{n}_n^{sym}",L"\sum || \widetilde{n}_n - \widetilde{n}_n^{sym} ||^2 ","dens")
             
-            pdf_norm = zeros(mk_float,ntime)
+            neutral_ff_sym = copy(neutral_ff)
+            is = 1
             for it in 1:ntime
-                dummy = 0.0
-                dummy_N = 0.0
                 for ir in 1:nr
                     for iz in 1:nz
                         for ivzeta in 1:nvzeta
                             for ivr in 1:nvr
                                 for ivz in 1:nvz
-                                    dummy += (neutral_ff[ivz,ivr,ivzeta,iz,ir,is,it] - dfnn_func(vz[ivz],vr[ivr],vzeta[ivzeta],z[iz],r[ir],time[it]))^2
-                                    dummy_N += (dfnn_func(vz[ivz],vr[ivr],vzeta[ivzeta],z[iz],r[ir],time[it]))^2
+                                    neutral_ff_sym[ivz,ivr,ivzeta,iz,ir,is,it] = dfnn_func(vz[ivr],vr[ivr],vzeta[ivzeta],z[iz],r[ir],time[it])
                                 end
                             end
                         end
                     end
                 end
-                pdf_norm[it] = dummy/dummy_N
             end
-            println("test pdf: ",spec_string,": ||f - f^{sym}||^2 / ||f^{sym}||^2 = \n",pdf_norm)
-            @views plot(time, pdf_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=L" \sum || f_n - f_n^{sym} ||^2 / \sum || f_n^{sym} ||^2 ") #, yaxis=:log)
-            outfile = string(run_name, "_pdf_norm_vs_t_", spec_string, ".pdf")
-            savefig(outfile)
-            
+            compare_neutral_pdf_symbolic_test(run_name,neutral_ff,neutral_ff_sym,"neutral",vz,vr,vzeta,z,r,time,nvz,nvr,nvzeta,nz,nr,ntime,
+             L"\widetilde{f}_n",L"\widetilde{f}^{sym}_n",L"\sum || \widetilde{f}_n - \widetilde{f}_n^{sym} ||^2","pdf")
+
         end
     end 
     
@@ -269,38 +207,107 @@ end
 """
 """
 
-function compare_densities_symbolic_test(run_name,density,density_function,spec_string,z,r,nz,nr,ntime)
-    #density_function = function_list.density_function
+function compare_moments_symbolic_test(run_name,moment,moment_sym,spec_string,z,r,time,nz,nr,ntime,moment_label,moment_sym_label,norm_label,file_string)
     is = 1
-    #spec_string = ""
     it = ntime
-    heatmap(r, z, density[:,:,is,it], xlabel=L"r", ylabel=L"z", title=L"n_i/n_{ref}", c = :deep)
-    outfile = string(run_name, "_dens_vs_r_z_", spec_string, ".pdf")
+    heatmap(r, z, moment[:,:,is,it], xlabel=L"r", ylabel=L"z", title=moment_label, c = :deep)
+    outfile = string(run_name, "_"*file_string*"_vs_r_z_", spec_string, ".pdf")
     savefig(outfile)
     
-    density_sym = copy(density[:,:,:,:])
-    for ir in 1:nr
-        for iz in 1:nz
-            density_sym[iz,ir,is,it] = density_function(z[iz],r[ir],time[it])
-        end
-    end
-    heatmap(r, z, density_sym[:,:,is,it], xlabel=L"r", ylabel=L"z", title=L"n_i^{sym}/n_{ref}", c = :deep)
-    outfile = string(run_name, "_dens_sym_vs_r_z_", spec_string, ".pdf")
+    heatmap(r, z, moment_sym[:,:,is,it], xlabel=L"r", ylabel=L"z", title=moment_sym_label, c = :deep)
+    outfile = string(run_name, "_"*file_string*"_sym_vs_r_z_", spec_string, ".pdf")
     savefig(outfile)
     
-    density_norm = zeros(mk_float,ntime)
+    moment_norm = zeros(mk_float,ntime)
     for it in 1:ntime
         dummy = 0.0
+        dummy_N = 0.0
         for ir in 1:nr
             for iz in 1:nz
-                dummy += (density[iz,ir,is,it] - density_function(z[iz],r[ir],time[it]))^2
+                dummy += (moment[iz,ir,is,it] - moment_sym[iz,ir,is,it])^2
+                dummy_N +=  (moment_sym[iz,ir,is,it])^2
             end
         end
-        density_norm[it] = dummy
+        #moment_norm[it] = dummy/dummy_N
+        moment_norm[it] = dummy
     end
-    println("test: ",spec_string," ",density_norm)
-    @views plot(time, density_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=L" \sum || n_i - n_i^{sym} ||^2") #, yaxis=:log)
-    outfile = string(run_name, "_dens_norm_vs_t_", spec_string, ".pdf")
+    println("test: ",file_string,": ",spec_string," ",moment_norm)
+    @views plot(time, moment_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=norm_label) #, yaxis=:log)
+    outfile = string(run_name, "_"*file_string*"_norm_vs_t_", spec_string, ".pdf")
+    savefig(outfile)
+end
+
+function compare_charged_pdf_symbolic_test(run_name,pdf,pdf_sym,spec_string,
+ vpa,vperp,z,r,time,nvpa,nvperp,nz,nr,ntime,pdf_label,pdf_sym_label,norm_label,file_string)
+    is = 1
+    it = ntime
+    
+    # Heatmaps for future use 
+    #heatmap(r, z, pdf[:,:,is,it], xlabel=L"r", ylabel=L"z", title=pdf_label, c = :deep)
+    #outfile = string(run_name, "_"*file_string*"_vs_r_z_", spec_string, ".pdf")
+    #savefig(outfile)
+    #heatmap(r, z, pdf_sym[:,:,is,it], xlabel=L"r", ylabel=L"z", title=pdf_sym_label, c = :deep)
+    #outfile = string(run_name, "_"*file_string*"_sym_vs_r_z_", spec_string, ".pdf")
+    #savefig(outfile)
+    
+    pdf_norm = zeros(mk_float,ntime)
+    for it in 1:ntime
+        dummy = 0.0
+        dummy_N = 0.0
+        for ir in 1:nr
+            for iz in 1:nz
+                for ivperp in 1:nvperp
+                    for ivpa in 1:nvpa
+                        dummy += (pdf[ivpa,ivperp,iz,ir,is,it] - pdf_sym[ivpa,ivperp,iz,ir,is,it])^2
+                        dummy_N += (pdf_sym[ivpa,ivperp,iz,ir,is,it])^2
+                    end 
+                end 
+            end
+        end
+        #pdf_norm[it] = dummy/dummy_N
+        pdf_norm[it] = dummy
+    end
+    println("test: ",file_string,": ",spec_string," ",pdf_norm)
+    @views plot(time, pdf_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=norm_label) #, yaxis=:log)
+    outfile = string(run_name, "_"*file_string*"_norm_vs_t_", spec_string, ".pdf")
+    savefig(outfile)
+end
+
+function compare_neutral_pdf_symbolic_test(run_name,pdf,pdf_sym,spec_string,
+ vz,vr,vzeta,z,r,time,nvz,nvr,nvzeta,nz,nr,ntime,pdf_label,pdf_sym_label,norm_label,file_string)
+    is = 1
+    it = ntime
+    
+    # Heatmaps for future use 
+    #heatmap(r, z, pdf[:,:,is,it], xlabel=L"r", ylabel=L"z", title=pdf_label, c = :deep)
+    #outfile = string(run_name, "_"*file_string*"_vs_r_z_", spec_string, ".pdf")
+    #savefig(outfile)
+    #heatmap(r, z, pdf_sym[:,:,is,it], xlabel=L"r", ylabel=L"z", title=pdf_sym_label, c = :deep)
+    #outfile = string(run_name, "_"*file_string*"_sym_vs_r_z_", spec_string, ".pdf")
+    #savefig(outfile)
+    
+    pdf_norm = zeros(mk_float,ntime)
+    for it in 1:ntime
+        dummy = 0.0
+        dummy_N = 0.0
+        for ir in 1:nr
+            for iz in 1:nz
+                for ivzeta in 1:nvzeta
+                    for ivr in 1:nvr
+                        for ivz in 1:nvz
+                            dummy += (pdf[ivz,ivr,ivzeta,iz,ir,is,it] - pdf_sym[ivz,ivr,ivzeta,iz,ir,is,it])^2
+                            dummy_N += (pdf_sym[ivz,ivr,ivzeta,iz,ir,is,it])^2
+                        end 
+                    end 
+                end 
+            end
+        end
+        #pdf_norm[it] = dummy/dummy_N
+        pdf_norm[it] = dummy
+    end
+    println("test: ",file_string,": ",spec_string," ",pdf_norm)
+    @views plot(time, pdf_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=norm_label) #, yaxis=:log)
+    outfile = string(run_name, "_"*file_string*"_norm_vs_t_", spec_string, ".pdf")
     savefig(outfile)
 end
 
