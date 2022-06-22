@@ -69,7 +69,7 @@ function load_coordinate_data(fid)
 
         input = grid_input(name, ngrid, nelement, L, discretization, fd_option, bc, nothing)
 
-        coord = define_coordinate(input)
+        coord, spectral = define_coordinate(input)
 
         # grid is recreated in define_coordinate, so check it is consistent with the
         # saved grid positions
