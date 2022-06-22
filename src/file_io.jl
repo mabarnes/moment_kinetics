@@ -29,60 +29,41 @@ struct ios
     fields::IOStream
 end
 
-# Use this long-winded type (found by using `typeof(v)` where `v` is a variable
-# returned from `NCDatasets.defVar()`) because compiler does not seem to be
-# able to pick up the return types of `defVar()` at compile time, so without
-# using it the result returned from `setup_file_io()` is not a concrete type.
-nc_var_type{N} = Union{
-   NCDatasets.CFVariable{mk_float, N,
-                         NCDatasets.Variable{mk_float, N, NCDatasets.NCDataset},
-                         NCDatasets.Attributes{NCDatasets.NCDataset{Nothing}},
-                         NamedTuple{(:fillvalue, :scale_factor, :add_offset,
-                                     :calendar, :time_origin, :time_factor),
-                                    NTuple{6, Nothing}}},
-   NCDatasets.CFVariable{mk_float, N,
-                         NCDatasets.Variable{mk_float, N,
-                                             NCDatasets.NCDataset{Nothing}},
-                         NCDatasets.Attributes{NCDatasets.NCDataset{Nothing}},
-                         NamedTuple{(:fillvalue, :scale_factor, :add_offset,
-                                     :calendar, :time_origin, :time_factor),
-                                    NTuple{6, Nothing}}}}
-
 """
 structure containing the data/metadata needed for netcdf file i/o
 """
-struct netcdf_info
+struct netcdf_info{Ttime, Tfi, Tfn, Tphi, Tmomi, Tmomn}
     # file identifier for the netcdf file to which data is written
     fid::NCDataset
     # handle for the time variable
-    time::nc_var_type{1}
+    time::Ttime
     # handle for the charged species distribution function variable
-    f::nc_var_type{6}
+    f::Tfi
     # handle for the electrostatic potential variable
-    phi::nc_var_type{3}
+    phi::Tphi
     # handle for the radial electric field variable
-    Er::nc_var_type{3}
+    Er::Tphi
     # handle for the z electric field variable
-    Ez::nc_var_type{3}
+    Ez::Tphi
     # handle for the charged species density
-    density::nc_var_type{4}
+    density::Tmomi
     # handle for the charged species parallel flow
-    parallel_flow::nc_var_type{4}
+    parallel_flow::Tmomi
     # handle for the charged species parallel pressure
-    parallel_pressure::nc_var_type{4}
+    parallel_pressure::Tmomi
     # handle for the charged species parallel heat flux
-    parallel_heat_flux::nc_var_type{4}
+    parallel_heat_flux::Tmomi
     # handle for the charged species thermal speed
-    thermal_speed::nc_var_type{4}
+    thermal_speed::Tmomi
     
     # handle for the neutral species distribution function variable
-    f_neutral::nc_var_type{7}
+    f_neutral::Tfn
     # handle for the neutral species density
-    density_neutral::nc_var_type{4}
-    uz_neutral::nc_var_type{4}
-    pz_neutral::nc_var_type{4}
-    qz_neutral::nc_var_type{4}
-    thermal_speed_neutral::nc_var_type{4}
+    density_neutral::Tmomn
+    uz_neutral::Tmomn
+    pz_neutral::Tmomn
+    qz_neutral::Tmomn
+    thermal_speed_neutral::Tmomn
 
 end
 
