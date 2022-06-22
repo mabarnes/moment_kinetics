@@ -281,7 +281,7 @@ function create_and_init_boundary_distributions(vz, vr, vzeta, vpa, vperp, compo
         # uncomment this line to test:
         #println("normalisation should be 1, it is = ", normalisation)
         #correct knudsen_cosine to conserve particle fluxes numerically
-        @. knudsen_cosine /= normalisation 
+#        @. knudsen_cosine /= normalisation 
 
     elseif vzeta.n == 1 && vr.n == 1
         # get the marginalised Knudsen cosine distribution after integrating over vperp
