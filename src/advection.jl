@@ -192,6 +192,7 @@ function update_rhs!(advection, i_outer, j_outer, k_outer, f_current, coord, dt,
     
     # calculate df/dcoord
     @views derivative!(coord.scratch, f_current, coord, advection.adv_fac[:,i_outer,j_outer,k_outer], spectral)
+    #@views derivative!(coord.scratch, f_current, coord, spectral)
     
     #derivative!(coord.scratch, f_current, coord, spectral)
     # calculate the explicit advection terms on the rhs of the equation;
@@ -210,6 +211,7 @@ function update_rhs!(advection, i_outer, j_outer, k_outer, l_outer, f_current, c
     
     # calculate df/dcoord
     @views derivative!(coord.scratch, f_current, coord, advection.adv_fac[:,i_outer,j_outer,k_outer,l_outer], spectral)
+    #@views derivative!(coord.scratch, f_current, coord, spectral)
     
     #derivative!(coord.scratch, f_current, coord, spectral)
     # calculate the explicit advection terms on the rhs of the equation;
