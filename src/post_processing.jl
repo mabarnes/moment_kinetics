@@ -168,16 +168,16 @@ function analyze_and_plot_data(path)
                 
         if n_neutral_species > 0
             # neutral test
-            density_sym = copy(density[:,:,:,:])
+            neutral_density_sym = copy(density[:,:,:,:])
             is = 1
             for it in 1:ntime
                 for ir in 1:nr
                     for iz in 1:nz
-                        density_sym[iz,ir,is,it] = densn_func(z[iz],r[ir],time[it])
+                        neutral_density_sym[iz,ir,is,it] = densn_func(z[iz],r[ir],time[it])
                     end
                 end
             end
-            compare_moments_symbolic_test(run_name,density,density_sym,"neutral",z,r,time,nz,nr,ntime,
+            compare_moments_symbolic_test(run_name,neutral_density,neutral_density_sym,"neutral",z,r,time,nz,nr,ntime,
              L"\widetilde{n}_n",L"\widetilde{n}_n^{sym}",L"\sum || \widetilde{n}_n - \widetilde{n}_n^{sym} ||^2 ","dens")
             
             neutral_ff_sym = copy(neutral_ff)
@@ -188,7 +188,7 @@ function analyze_and_plot_data(path)
                         for ivzeta in 1:nvzeta
                             for ivr in 1:nvr
                                 for ivz in 1:nvz
-                                    neutral_ff_sym[ivz,ivr,ivzeta,iz,ir,is,it] = dfnn_func(vz[ivr],vr[ivr],vzeta[ivzeta],z[iz],r[ir],time[it])
+                                    neutral_ff_sym[ivz,ivr,ivzeta,iz,ir,is,it] = dfnn_func(vz[ivz],vr[ivr],vzeta[ivzeta],z[iz],r[ir],time[it])
                                 end
                             end
                         end
