@@ -3,6 +3,9 @@
 module post_processing
 
 export analyze_and_plot
+export compare_charged_pdf_symbolic_test
+export compare_moments_symbolic_test
+export compare_neutral_pdf_symbolic_test
 
 # packages
 using Plots
@@ -235,6 +238,9 @@ function compare_moments_symbolic_test(run_name,moment,moment_sym,spec_string,z,
     @views plot(time, moment_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=norm_label) #, yaxis=:log)
     outfile = string(run_name, "_"*file_string*"_norm_vs_t_", spec_string, ".pdf")
     savefig(outfile)
+    
+    return moment_norm
+
 end
 
 function compare_charged_pdf_symbolic_test(run_name,pdf,pdf_sym,spec_string,
@@ -271,6 +277,8 @@ function compare_charged_pdf_symbolic_test(run_name,pdf,pdf_sym,spec_string,
     @views plot(time, pdf_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=norm_label) #, yaxis=:log)
     outfile = string(run_name, "_"*file_string*"_norm_vs_t_", spec_string, ".pdf")
     savefig(outfile)
+    
+    return pdf_norm
 end
 
 function compare_neutral_pdf_symbolic_test(run_name,pdf,pdf_sym,spec_string,
