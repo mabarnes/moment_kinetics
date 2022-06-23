@@ -309,8 +309,8 @@ function testconvergence(input::Dict, advance::advance_info; ngrid=nothing, retu
 
     global_rank[] == 0 && println("ngrid=$ngrid")
 
-    #nelement_values = [2, 4, 6, 8, 10, 12, 14, 16]
-    nelement_values = ngrid > 6 ? [2, 4, 6] : [2, 4, 6, 8]
+    n_max = neutrals ? 35 : 50
+    nelement_values = collect(2:2:n_max(ngrid-1))
     if returnstuff
         nelement_values = [nelement_values[end]]
     end
