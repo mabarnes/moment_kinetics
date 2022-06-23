@@ -99,6 +99,9 @@ const input_sound_wave_periodic = Dict(
     "vzeta_discretization" => "chebyshev_pseudospectral",
 )
 
+const input_sound_wave_periodic_no_neutrals =
+    merge(input_sound_wave_periodic, Dict( "n_neutral_species" => 0))
+
 """
     evaluate_initial_ddt(input_dict::Dict, advance_input::advance_info)
 
@@ -202,7 +205,7 @@ end
 Run a simulation with parameters set by `input` using manufactured sources and return
 the errors in each variable compared to the manufactured solution.
 """
-function runcase(input::Dict, advance::advance_info, returnstuff=false)
+function runcase(input::Dict, advance::advance_info; neutrals, returnstuff=false)
     dfdt_ion = nothing
     dfdt_neutral = nothing
     manufactured_inputs = nothing
@@ -220,7 +223,9 @@ function runcase(input::Dict, advance::advance_info, returnstuff=false)
 
         # Only one species, so get rid of species index
         dfdt_ion = dfdt_ion[:,:,:,:,1]
-        dfdt_neutral = dfdt_neutral[:,:,:,:,:,1]
+        if neutrals
+            dfdt_neutral = dfdt_neutral[:,:,:,:,:,1]
+        end
 
         # Get rid of vpa boundary points which are (possibly) overwritten by
         # boundary conditions in the numerically evaluated result.
@@ -231,16 +236,21 @@ function runcase(input::Dict, advance::advance_info, returnstuff=false)
 
         error_2_ion = L2_error_norm(dfdt_ion, rhs_ion_manf)
         error_inf_ion = L_infinity_error_norm(dfdt_ion, rhs_ion_manf)
-        error_2_neutral = L2_error_norm(dfdt_neutral, rhs_neutral_manf)
-        error_inf_neutral = L_infinity_error_norm(dfdt_neutral, rhs_neutral_manf)
-
-        # Create combined errors
-        error_2 = mean([error_2_ion, error_2_neutral])
-        error_inf = max(error_inf_ion, error_inf_neutral)
-
         println("ion error ", error_2_ion, " ", error_inf_ion)
-        println("neutral error ", error_2_neutral, " ", error_inf_neutral)
-        println("combined error ", error_2, " ", error_inf)
+        if neutrals
+            error_2_neutral = L2_error_norm(dfdt_neutral, rhs_neutral_manf)
+            error_inf_neutral = L_infinity_error_norm(dfdt_neutral, rhs_neutral_manf)
+
+            # Create combined errors
+            error_2 = mean([error_2_ion, error_2_neutral])
+            error_inf = max(error_inf_ion, error_inf_neutral)
+
+            println("neutral error ", error_2_neutral, " ", error_inf_neutral)
+            println("combined error ", error_2, " ", error_inf)
+        else
+            error_2 = error_2_ion
+            error_inf = error_inf_ion
+        end
     end
 
     if returnstuff
@@ -286,6 +296,10 @@ function testconvergence(input::Dict, advance::advance_info; ngrid=nothing, retu
     else
         set_ngrid(input, ngrid)
     end
+
+    # Are there any neutrals?
+    neutrals = input["n_neutral_species"] > 0
+
     global_rank[] == 0 && println("ngrid=$ngrid")
 
     #nelement_values = [2, 4, 6, 8, 10, 12, 14, 16]
@@ -300,9 +314,12 @@ function testconvergence(input::Dict, advance::advance_info; ngrid=nothing, retu
 
         if returnstuff
             error_2, error_inf, lastrhs_ion, lastrhs_manf_ion, lastrhs_neutral,
-            lastrhs_manf_neutral = runcase(case_input, advance, returnstuff)
+            lastrhs_manf_neutral = runcase(case_input, advance,
+                                           neutrals=neutrals,
+                                           returnstuff=returnstuff)
         else
-            error_2, error_inf = runcase(case_input, advance)
+            error_2, error_inf = runcase(case_input, advance,
+                                         neutrals=neutrals)
         end
 
         if global_rank[] == 0
@@ -335,7 +352,7 @@ function testconvergence(input::Dict, advance::advance_info; ngrid=nothing, retu
     end
 end
 
-function setup_advance(which_term)
+function setup_advance(which_term, neutrals=true)
     advance = advance_info(false, false, false, false, false, false, false, false,
         false, false, false, false, false, zeros(1,1), false)
 
@@ -343,10 +360,10 @@ function setup_advance(which_term)
         advance.vpa_advection = true
         advance.z_advection = true
         advance.r_advection = true
-        advance.neutral_z_advection = true
-        advance.neutral_r_advection = true
-        advance.cx_collisions = true
-        #advance.ionization_collisions = true
+        advance.neutral_z_advection = neutrals
+        advance.neutral_r_advection = neutrals
+        advance.cx_collisions = neutrals
+        #advance.ionization_collisions = neutrals
         advance.source_terms = true
         advance.continuity = true
         advance.force_balance = true
@@ -382,61 +399,69 @@ function runtests(ngrid=nothing)
     @testset "MMS" verbose=use_verbose begin
         global_rank[] == 0 && println("MMS tests")
 
-        @testset "r-periodic, z-periodic" begin
-            @testset "vpa_advection" begin
-                global_rank[] == 0 && println("\nvpa_advection")
-                testconvergence(input_sound_wave_periodic,
-                                setup_advance(:vpa_advection), ngrid=ngrid)
-            end
-            @testset "z_advection" begin
-                global_rank[] == 0 && println("\nz_advection")
-                testconvergence(input_sound_wave_periodic, setup_advance(:z_advection),
-                                ngrid=ngrid)
-            end
-            @testset "r_advection" begin
-                global_rank[] == 0 && println("\nr_advection")
-                testconvergence(input_sound_wave_periodic, setup_advance(:r_advection),
-                                ngrid=ngrid)
-            end
-            @testset "neutral_z_advection" begin
-                global_rank[] == 0 && println("\nneutral_z_advection")
-                testconvergence(input_sound_wave_periodic,
-                                setup_advance(:neutral_z_advection), ngrid=ngrid)
-            end
-            @testset "neutral_r_advection" begin
-                global_rank[] == 0 && println("\nneutral_r_advection")
-                testconvergence(input_sound_wave_periodic,
-                                setup_advance(:neutral_r_advection), ngrid=ngrid)
-            end
-            @testset "cx_collisions" begin
-                global_rank[] == 0 && println("\ncx_collisions")
-                testconvergence(input_sound_wave_periodic,
-                                setup_advance(:cx_collisions), ngrid=ngrid)
-            end
-            #@testset "ionization_collisions" begin
-            #    global_rank[] == 0 && println("\nionization_collisions")
-            #    testconvergence(input_sound_wave_periodic,
-            #                    setup_advance(:ionization_collisions), ngrid=ngrid)
-            #end
-            #@testset "continuity" begin
-            #    global_rank[] == 0 && println("\ncontinuity")
-            #    testconvergence(input_sound_wave_periodic, setup_advance(:continuity),
-            #                    ngrid=ngrid)
-            #end
-            #@testset "force_balance" begin
-            #    global_rank[] == 0 && println("\nforce_balance")
-            #    testconvergence(input_sound_wave_periodic,
-            #                    setup_advance(:force_balance), ngrid=ngrid)
-            #end
-            #@testset "energy" begin
-            #    global_rank[] == 0 && println("\nenergy")
-            #    testconvergence(input_sound_wave_periodic, setup_advance(:energy),
-            #                    ngrid=ngrid)
-            #end
-            @testset "all" begin
-                global_rank[] == 0 && println("\nall terms")
-                testconvergence(input_sound_wave_periodic, setup_advance(:all),
-                                ngrid=ngrid)
+        for (input, label, neutrals) ∈ (
+                                        (input_sound_wave_periodic_no_neutrals, "no neutrals", false),
+                                        (input_sound_wave_periodic, "default", true),
+                                       )
+            global_rank[] == 0 && println("$label case")
+            @testset "r-periodic, z-periodic $label" begin
+                @testset "vpa_advection" begin
+                    global_rank[] == 0 && println("\nvpa_advection")
+                    testconvergence(input,
+                                    setup_advance(:vpa_advection, neutrals), ngrid=ngrid)
+                end
+                @testset "z_advection" begin
+                    global_rank[] == 0 && println("\nz_advection")
+                    testconvergence(input, setup_advance(:z_advection, neutrals),
+                                    ngrid=ngrid)
+                end
+                @testset "r_advection" begin
+                    global_rank[] == 0 && println("\nr_advection")
+                    testconvergence(input, setup_advance(:r_advection, neutrals),
+                                    ngrid=ngrid)
+                end
+                if neutrals
+                    @testset "neutral_z_advection" begin
+                        global_rank[] == 0 && println("\nneutral_z_advection")
+                        testconvergence(input,
+                                        setup_advance(:neutral_z_advection, neutrals), ngrid=ngrid)
+                    end
+                    @testset "neutral_r_advection" begin
+                        global_rank[] == 0 && println("\nneutral_r_advection")
+                        testconvergence(input,
+                                        setup_advance(:neutral_r_advection, neutrals), ngrid=ngrid)
+                    end
+                    @testset "cx_collisions" begin
+                        global_rank[] == 0 && println("\ncx_collisions")
+                        testconvergence(input,
+                                        setup_advance(:cx_collisions, neutrals), ngrid=ngrid)
+                    end
+                    @testset "ionization_collisions" begin
+                        global_rank[] == 0 && println("\nionization_collisions")
+                        testconvergence(input,
+                                        setup_advance(:ionization_collisions, neutrals), ngrid=ngrid)
+                    end
+                end
+                #@testset "continuity" begin
+                #    global_rank[] == 0 && println("\ncontinuity")
+                #    testconvergence(input, setup_advance(:continuity, neutrals),
+                #                    ngrid=ngrid)
+                #end
+                #@testset "force_balance" begin
+                #    global_rank[] == 0 && println("\nforce_balance")
+                #    testconvergence(input,
+                #                    setup_advance(:force_balance, neutrals), ngrid=ngrid)
+                #end
+                #@testset "energy" begin
+                #    global_rank[] == 0 && println("\nenergy")
+                #    testconvergence(input, setup_advance(:energy, neutrals),
+                #                    ngrid=ngrid)
+                #end
+                @testset "all" begin
+                    global_rank[] == 0 && println("\nall terms")
+                    testconvergence(input, setup_advance(:all, neutrals),
+                                    ngrid=ngrid)
+                end
             end
         end
     end
@@ -444,11 +469,17 @@ function runtests(ngrid=nothing)
     return nothing
 end
 
-function runtests_return(which_term::Symbol=:all; ngrid=nothing)
+function runtests_return(which_term::Symbol=:all; ngrid=nothing, neutrals=true)
     global_rank[] == 0 && println("MMS tests with return")
 
-    results = testconvergence(input_sound_wave_periodic,
-                              setup_advance(which_term); ngrid=ngrid, returnstuff=true)
+    if neutrals
+        input = input_sound_wave_periodic
+    else
+        input = input_sound_wave_periodic_no_neutrals
+    end
+
+    results = testconvergence(input, setup_advance(which_term, neutrals);
+                              ngrid=ngrid, returnstuff=true)
 
     return results
 end
