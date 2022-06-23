@@ -7,15 +7,15 @@ export equally_spaced_grid
 
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_int
-using ..file_io: open_output_file
-using ..chebyshev: scaled_chebyshev_grid
+using ..calculus: derivative!
+using ..chebyshev: scaled_chebyshev_grid, setup_chebyshev_pseudospectral
 using ..quadrature: composite_simpson_weights
 using ..input_structs: advection_input
 
 """
 structure containing basic information related to coordinates
 """
-struct coordinate
+struct coordinate{Tadvection<:Union{advection_input,Nothing}}
     # name is the name of the variable associated with this coordiante
     name::String
     # n is the total number of grid points associated with this coordinate
@@ -60,7 +60,7 @@ struct coordinate
     # nelement entries
     scratch_2d::Array{mk_float,2}
     # struct containing advection speed options/inputs
-    advection::advection_input
+    advection::Tadvection
 end
 
 """
@@ -95,10 +95,25 @@ function define_coordinate(input, composition=nothing)
     # struct containing the advection speed options/inputs for this coordinate
     advection = input.advection
 
-    return coordinate(input.name, n, input.ngrid, input.nelement, input.L, grid,
+    coord = coordinate(input.name, n, input.ngrid, input.nelement, input.L, grid,
         cell_width, igrid, ielement, imin, imax, input.discretization, input.fd_option,
         input.bc, wgts, uniform_grid, duniform_dgrid, scratch, copy(scratch),
         scratch_2d, advection)
+
+    if input.discretization == "chebyshev_pseudospectral" && coord.ngrid > 1
+        # create arrays needed for explicit Chebyshev pseudospectral treatment in this
+        # coordinate and create the plans for the forward and backward fast Chebyshev
+        # transforms
+        spectral = setup_chebyshev_pseudospectral(coord)
+        # obtain the local derivatives of the uniform grid with respect to the used grid
+        derivative!(coord.duniform_dgrid, coord.uniform_grid, coord, spectral)
+    else
+        # create dummy Bool variable to return in place of the above struct
+        spectral = false
+        coord.duniform_dgrid .= 1.0
+    end
+
+    return coord, spectral
 end
 
 """

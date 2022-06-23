@@ -10,6 +10,7 @@ export write_data_to_binary
 
 using NCDatasets
 using ..communication: _block_synchronize
+using ..coordinates: coordinate
 using ..looping
 using ..moment_kinetics_structs: scratch_pdf, em_fields_struct
 using ..type_definitions: mk_float, mk_int
@@ -29,56 +30,37 @@ struct ios
     fields::IOStream
 end
 
-# Use this long-winded type (found by using `typeof(v)` where `v` is a variable
-# returned from `NCDatasets.defVar()`) because compiler does not seem to be
-# able to pick up the return types of `defVar()` at compile time, so without
-# using it the result returned from `setup_file_io()` is not a concrete type.
-nc_var_type{N} = Union{
-   NCDatasets.CFVariable{mk_float, N,
-                         NCDatasets.Variable{mk_float, N, NCDatasets.NCDataset},
-                         NCDatasets.Attributes{NCDatasets.NCDataset{Nothing}},
-                         NamedTuple{(:fillvalue, :scale_factor, :add_offset,
-                                     :calendar, :time_origin, :time_factor),
-                                    NTuple{6, Nothing}}},
-   NCDatasets.CFVariable{mk_float, N,
-                         NCDatasets.Variable{mk_float, N,
-                                             NCDatasets.NCDataset{Nothing}},
-                         NCDatasets.Attributes{NCDatasets.NCDataset{Nothing}},
-                         NamedTuple{(:fillvalue, :scale_factor, :add_offset,
-                                     :calendar, :time_origin, :time_factor),
-                                    NTuple{6, Nothing}}}}
-
 """
 structure containing the data/metadata needed for netcdf file i/o
 """
-struct netcdf_info
+struct netcdf_info{Ttime, Tfi, Tphi, Tmom, Tfn}
     # file identifier for the netcdf file to which data is written
     fid::NCDataset
     # handle for the time variable
-    time::nc_var_type{1}
+    time::Ttime
     # handle for the charged species distribution function variable
-    f::nc_var_type{6}
+    f::Tfi
     # handle for the electrostatic potential variable
-    phi::nc_var_type{3}
+    phi::Tphi
     # handle for the charged species density
-    density::nc_var_type{4}
+    density::Tmom
     # handle for the charged species parallel flow
-    parallel_flow::nc_var_type{4}
+    parallel_flow::Tmom
     # handle for the charged species parallel pressure
-    parallel_pressure::nc_var_type{4}
+    parallel_pressure::Tmom
     # handle for the charged species parallel heat flux
-    parallel_heat_flux::nc_var_type{4}
+    parallel_heat_flux::Tmom
     # handle for the charged species thermal speed
-    thermal_speed::nc_var_type{4}
+    thermal_speed::Tmom
     
     # handle for the neutral species distribution function variable
-    f_neutral::nc_var_type{7}
+    f_neutral::Tfn
     # handle for the neutral species density
-    density_neutral::nc_var_type{4}
-    uz_neutral::nc_var_type{4}
-    pz_neutral::nc_var_type{4}
-    qz_neutral::nc_var_type{4}
-    thermal_speed_neutral::nc_var_type{4}
+    density_neutral::Tmom
+    uz_neutral::Tmom
+    pz_neutral::Tmom
+    qz_neutral::Tmom
+    thermal_speed_neutral::Tmom
 
 end
 
@@ -142,6 +124,10 @@ function define_dimensions!(fid, nvz, nvr, nvzeta, nvpa, nvperp, nz, nr, n_speci
     end
     # define the time dimension, with an expandable size (denoted by Inf)
     defDim(fid, "ntime", Inf)
+    # define a length-1 dimension for storing strings. Don't know why they cannot be
+    # stored as scalars, maybe did not find the right function/method, maybe a missing
+    # feature or bug in NCDatasets.jl?
+    defDim(fid, "str_dim", 1)
 
     return nothing
 end
@@ -152,97 +138,71 @@ end
 Define static (i.e. time-independent) variables for an output file.
 """
 function define_static_variables!(fid,vz,vr,vzeta,vpa,vperp,z,r,composition,collisions)
-    # create and write the "r" variable to file
-    varname = "r"
-    attributes = Dict("description" => "radial coordinate")
-    dims = ("nr",)
-    vartype = mk_float
-    var = defVar(fid, varname, vartype, dims, attrib=attributes)
-    var[:] = r.grid
-    # create and write the "r_wgts" variable to file
-    varname = "r_wgts"
-    attributes = Dict("description" => "integration weights for radial coordinate")
-    vartype = mk_float
-    var = defVar(fid, varname, vartype, dims, attrib=attributes)
-    var[:] = r.wgts
-    # create and write the "z" variable to file
-    varname = "z"
-    attributes = Dict("description" => "parallel coordinate")
-    dims = ("nz",)
-    vartype = mk_float
-    var = defVar(fid, varname, vartype, dims, attrib=attributes)
-    var[:] = z.grid
-    # create and write the "z_wgts" variable to file
-    varname = "z_wgts"
-    attributes = Dict("description" => "integration weights for parallel coordinate")
-    vartype = mk_float
-    var = defVar(fid, varname, vartype, dims, attrib=attributes)
-    var[:] = z.wgts
-    # create and write the "vperp" variable to file
-    varname = "vperp"
-    attributes = Dict("description" => "parallel velocity")
-    dims = ("nvperp",)
-    vartype = mk_float
-    var = defVar(fid, varname, vartype, dims, attrib=attributes)
-    var[:] = vperp.grid
-    # create and write the "vperp_wgts" variable to file
-    varname = "vperp_wgts"
-    attributes = Dict("description" => "integration weights for parallel velocity coordinate")
-    vartype = mk_float
-    var = defVar(fid, varname, vartype, dims, attrib=attributes)
-    var[:] = vperp.wgts
-    # create and write the "vpa" variable to file
-    varname = "vpa"
-    attributes = Dict("description" => "parallel velocity")
-    dims = ("nvpa",)
-    vartype = mk_float
-    var = defVar(fid, varname, vartype, dims, attrib=attributes)
-    var[:] = vpa.grid
-    # create and write the "vpa_wgts" variable to file
-    varname = "vpa_wgts"
-    attributes = Dict("description" => "integration weights for parallel velocity coordinate")
-    vartype = mk_float
-    var = defVar(fid, varname, vartype, dims, attrib=attributes)
-    var[:] = vpa.wgts
-    # create and write the "vzeta" variable to file
-    varname = "vzeta"
-    attributes = Dict("description" => "parallel velocity")
-    dims = ("nvzeta",)
-    vartype = mk_float
-    var = defVar(fid, varname, vartype, dims, attrib=attributes)
-    var[:] = vzeta.grid
-    # create and write the "vzeta_wgts" variable to file
-    varname = "vzeta_wgts"
-    attributes = Dict("description" => "integration weights for parallel velocity coordinate")
-    vartype = mk_float
-    var = defVar(fid, varname, vartype, dims, attrib=attributes)
-    var[:] = vzeta.wgts
-    # create and write the "vr" variable to file
-    varname = "vr"
-    attributes = Dict("description" => "parallel velocity")
-    dims = ("nvr",)
-    vartype = mk_float
-    var = defVar(fid, varname, vartype, dims, attrib=attributes)
-    var[:] = vr.grid
-    # create and write the "vr_wgts" variable to file
-    varname = "vr_wgts"
-    attributes = Dict("description" => "integration weights for parallel velocity coordinate")
-    vartype = mk_float
-    var = defVar(fid, varname, vartype, dims, attrib=attributes)
-    var[:] = vr.wgts
-    # create and write the "vz" variable to file
-    varname = "vz"
-    attributes = Dict("description" => "parallel velocity")
-    dims = ("nvz",)
-    vartype = mk_float
-    var = defVar(fid, varname, vartype, dims, attrib=attributes)
-    var[:] = vz.grid
-    # create and write the "vz_wgts" variable to file
-    varname = "vz_wgts"
-    attributes = Dict("description" => "integration weights for parallel velocity coordinate")
-    vartype = mk_float
-    var = defVar(fid, varname, vartype, dims, attrib=attributes)
-    var[:] = vz.wgts
+    function save_coordinate(coord::coordinate, description::String)
+        # Create and write the grid for coord
+        varname = coord.name
+        attributes = Dict("description" => description)
+        dims = ("n$(coord.name)",)
+        vartype = mk_float
+        var = defVar(fid, varname, vartype, dims, attrib=attributes)
+        var[:] = coord.grid
+
+        # create and write the weights for coord
+        varname = "$(coord.name)_wgts"
+        attributes = Dict("description" => "integration weights for $(coord.name) coordinate")
+        vartype = mk_float
+        var = defVar(fid, varname, vartype, dims, attrib=attributes)
+        var[:] = coord.wgts
+
+        # create and write ngrid for coord
+        varname = "$(coord.name)_ngrid"
+        attributes = Dict("description" => "ngrid for $(coord.name) coordinate")
+        dims = ()
+        vartype = mk_int
+        var = defVar(fid, varname, vartype, dims, attrib=attributes)
+        var[:] = coord.ngrid
+
+        # create and write nelement for coord
+        varname = "$(coord.name)_nelement"
+        attributes = Dict("description" => "nelement for $(coord.name) coordinate")
+        dims = ()
+        vartype = mk_int
+        var = defVar(fid, varname, vartype, dims, attrib=attributes)
+        var[:] = coord.nelement
+
+        # create and write discretization for coord
+        varname = "$(coord.name)_discretization"
+        attributes = Dict("description" => "discretization for $(coord.name) coordinate")
+        dims = ("str_dim",)
+        vartype = String
+        var = defVar(fid, varname, vartype, dims, attrib=attributes)
+        var[:] = coord.discretization
+
+        # create and write fd_option for coord
+        varname = "$(coord.name)_fd_option"
+        attributes = Dict("description" => "fd_option for $(coord.name) coordinate")
+        dims = ("str_dim",)
+        vartype = String
+        var = defVar(fid, varname, vartype, dims, attrib=attributes)
+        var[:] = coord.fd_option
+
+        # create and write bc for coord
+        varname = "$(coord.name)_bc"
+        attributes = Dict("description" => "bc for $(coord.name) coordinate")
+        dims = ("str_dim",)
+        vartype = String
+        var = defVar(fid, varname, vartype, dims, attrib=attributes)
+        var[:] = coord.bc
+    end
+
+    # create and write the coordinate variables
+    save_coordinate(r, "radial coordinate")
+    save_coordinate(z, "parallel coordinate")
+    save_coordinate(vperp, "perpendicular velocity")
+    save_coordinate(vpa, "parallel velocity")
+    save_coordinate(vzeta, "neutral binormal velocity")
+    save_coordinate(vr, "neutral radial velocity")
+    save_coordinate(vz, "neutral parallel velocity")
     # create and write the "T_e" variable to file
     varname = "T_e"
     attributes = Dict("description" => "electron temperature")

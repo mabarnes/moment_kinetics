@@ -7,8 +7,6 @@ using TimerOutputs
 #using Plots: plot, plot!, gui
 
 using moment_kinetics.array_allocation: allocate_float
-using moment_kinetics.load_data: open_netcdf_file
-using moment_kinetics.load_data: load_coordinate_data, load_fields_data
 using moment_kinetics.analysis: analyze_fields_data
 using moment_kinetics.post_processing: fit_delta_phi_mode
 
@@ -162,44 +160,38 @@ function run_test(test_input, analytic_frequency, analytic_growth_rate,
             # Load and analyse output
             #########################
 
-            path = joinpath(realpath(input["base_directory"]), name, name)
+            output = load_test_output(input, (:phi,))
 
-            # open the netcdf file and give it the handle 'fid'
-            fid = open_netcdf_file(path)
+            z = output["z"]
+            ntime = output["ntime"]
+            time = output["time"]
 
-            # load space-time coordinate data
-            nvpa, vpa, vpa_wgts, nvperp, vperp, vperp_wgts,
-            nz, z, z_wgts, Lz, nr, r, r_wgts, Lr, ntime, time, n_ion_species, n_neutral_species = load_coordinate_data(fid)
+            phi_zrt = output["phi"]
 
-            # load fields data
-            phi_zrt = load_fields_data(fid)
-
-            close(fid)
-            
             ir0 = 1 
             
             phi = phi_zrt[:,ir0,:]
 
             # analyze the fields data
-            phi_fldline_avg, delta_phi = analyze_fields_data(phi, ntime, nz, z_wgts, Lz)
+            phi_fldline_avg, delta_phi = analyze_fields_data(phi, ntime, z.n, z.wgts, z.L)
 
             # use a fit to calculate the damping rate and growth rate of the perturbed
             # electrostatic potential
             itime_max = ntime
-            iz0 = cld(nz, 3)
+            iz0 = cld(z.n, 3)
             shifted_time = allocate_float(ntime)
             @. shifted_time = time - time[itime_min]
-            @views phi_fit = fit_delta_phi_mode(shifted_time[itime_min:itime_max], z,
+            @views phi_fit = fit_delta_phi_mode(shifted_time[itime_min:itime_max], z.grid,
                                                 delta_phi[:, itime_min:itime_max])
             ## The following plot code (copied from post_processing.jl) may be helpful for
             ## debugging tests. Uncomment to use, and also uncomment
             ## `using Plots: plot, plot!, gui at the top of the file.
-            #L = z[end] - z[begin]
+            #L = z.grid[end] - z.grid[begin]
             #fitted_delta_phi =
-            #    @. (phi_fit.amplitude0 * cos(2.0 * π * (z[iz0] + phi_fit.offset0) / L)
+            #    @. (phi_fit.amplitude0 * cos(2.0 * π * (z.grid[iz0] + phi_fit.offset0) / L)
             #        * exp(phi_fit.growth_rate * shifted_time)
             #        * cos(phi_fit.frequency * shifted_time + phi_fit.phase))
-            #@views plot(time, abs.(delta_phi[iz0,:]), xlabel="t*Lz/vti", ylabel="δϕ", yaxis=:log)
+            #@views plot(time, abs.(delta_phi[iz0,:]), xlabel="t*z.L/vti", ylabel="δϕ", yaxis=:log)
             #plot!(time, abs.(fitted_delta_phi))
             #gui()
         end

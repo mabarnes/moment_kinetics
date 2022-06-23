@@ -28,7 +28,7 @@ function neutral_advection_r!(f_out, fvec_in, advect, r, z, vzeta, vr, vz, dt, r
         @loop_z_vzeta_vr_vz iz ivzeta ivr ivz begin
             # take the normalized pdf contained in fvec_in.pdf and remove the normalization,
             # returning the true (un-normalized) particle distribution function in r.scratch
-            @. r.scratch = fvec_in.pdf_neutral[ivz,ivr,ivzeta,iz,:,isn]
+            @. r.scratch = @views fvec_in.pdf_neutral[ivz,ivr,ivzeta,iz,:,isn]
 
             @views advance_f_local!(f_out[ivz,ivr,ivzeta,iz,:,isn], r.scratch,
                                     advect[isn], ivz, ivr, ivzeta, iz,
@@ -86,7 +86,7 @@ function neutral_advection_z!(f_out, fvec_in, advect, r, z, vzeta, vr, vz, dt, z
         @loop_r_vzeta_vr_vz ir ivzeta ivr ivz begin
             # take the normalized pdf contained in fvec_in.pdf and remove the normalization,
             # returning the true (un-normalized) particle distribution function in r.scratch
-            @. z.scratch = fvec_in.pdf_neutral[ivz,ivr,ivzeta,:,ir,isn]
+            @. z.scratch = @views fvec_in.pdf_neutral[ivz,ivr,ivzeta,:,ir,isn]
 
             @views advance_f_local!(f_out[ivz,ivr,ivzeta,:,ir,isn], z.scratch,
                                     advect[isn], ivz, ivr, ivzeta, ir,

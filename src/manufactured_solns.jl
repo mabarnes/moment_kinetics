@@ -4,8 +4,16 @@ module manufactured_solns
 
 export manufactured_solutions
 export manufactured_sources
+export manufactured_solutions_as_arrays
+export manufactured_rhs_as_array
 
+using SpecialFunctions
 using Symbolics
+using ..array_allocation: allocate_shared_float
+using ..coordinates: coordinate
+using ..input_structs: geometry_input, advance_info, species_composition, collisions_input
+using ..looping
+using ..type_definitions
 
     @variables r z vpa vperp t vz vr vzeta
 
@@ -44,7 +52,7 @@ using Symbolics
     # neutral density symbolic function
     function densn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
         if r_bc == "periodic" && z_bc == "periodic" 
-            densn = 1.5 +  0.1*(cos(2.0*pi*r/Lr) + cos(2.0*pi*z/Lz))*sin(2.0*pi*t)  
+            densn = 1.5 +  0.1*(cos(2.0*pi*r/Lr) + cos(2.0*pi*z/Lz))*cos(2.0*pi*t)
         elseif (r_bc == "periodic" && z_bc == "wall")
             T_wall = composition.T_wall
             Bzed = geometry.Bzed
@@ -60,40 +68,73 @@ using Symbolics
     end
 
     # neutral distribution symbolic function
-    function dfnn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
+    function dfnn_sym(Lr,Lz,Lvzeta,Lvr,Lvz,r_bc,z_bc,geometry,composition)
         densn = densn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
         if (r_bc == "periodic" && z_bc == "periodic")
-            dfnn = densn * exp( - vz^2 - vr^2 - vzeta^2)
+            # Ad-hoc odd-in-v* component of dfnn which gives non-zero u* and dfnn
+            # positive everywhere, while the odd components integrate to 0 so do not
+            # need to be accounted for in normalisation.
+            dfnn = densn * (exp( - vz^2 - vr^2 - vzeta^2)
+                            + (sin(two*pi*r/Lr) + sin(2*pi*z/Lz))/ten
+                              * (vz + vr + vzeta) * exp(-two*(vz^2+vr^2+vzeta^2)))
+            # Force the symbolic function dfnn to vanish when v*=±Lv*/2, so that it is
+            # consistent with "zero" bc in v*.
+            # Normalisation factors ensure that when this f is
+            # integrated on -Lv*/2≤v*≤Lv*/2 the result (taking into account the
+            # normalisations used by moment_kinetics) is exactly n.
+            # Note that:
+            #  ∫_-Lv/2^Lv/2  [1-(2*v/Lv)^2]exp(-v^2) dv
+            #  = [sqrt(π)(Lv^2-2)*erf(Lv/2) + 2*exp(-Lv^2/4)Lv] / Lv^2
+            dfnn = (one - (two*vzeta/Lvzeta)^2) * dfnn *
+                      Lvzeta / ((Lvzeta^2-2)*erf(Lvzeta/two) + two/sqrt(π)*exp(-Lvzeta^2/four)*Lvzeta) # vzeta normalization
+            dfnn = (one - (two*vr/Lvr)^2) * dfnn *
+                      Lvr / ((Lvr^2-2)*erf(Lvr/two) + two/sqrt(π)*exp(-Lvr^2/four)*Lvr) # vr normalization
+            dfnn = (one - (two*vz/Lvz)^2) * dfnn *
+                      Lvz / ((Lvz^2-2)*erf(Lvz/two) + two/sqrt(π)*exp(-Lvz^2/four)*Lvz) # vz normalization
         elseif (r_bc == "periodic" && z_bc == "wall")
-            Hplus = 0.5*(sign(vz) + 1.0)
-            Hminus = 0.5*(sign(-vz) + 1.0)
+            Hplus = half*(sign(vz) + one)
+            Hminus = half*(sign(-vz) + one)
             FKw = knudsen_cosine(composition)
             Bzed = geometry.Bzed
             Bmag = geometry.Bmag
-            Gamma_minus = 0.5*(Bzed/Bmag)*nminus_sym(Lr,r_bc)/sqrt(pi)
-            Gamma_plus = 0.5*(Bzed/Bmag)*nplus_sym(Lr,r_bc)/sqrt(pi)
-            dfnn = Hplus *( ( 0.5 - z/Lz)*Gamma_minus + 1.0 )*FKw + Hminus*( ( 0.5 + z/Lz)*Gamma_plus + 1.0 )*FKw 
+            Gamma_minus = half*(Bzed/Bmag)*nminus_sym(Lr,r_bc)/sqrt(pi)
+            Gamma_plus = half*(Bzed/Bmag)*nplus_sym(Lr,r_bc)/sqrt(pi)
+            dfnn = Hplus *( ( half - z/Lz)*Gamma_minus + one )*FKw + Hminus*( ( half + z/Lz)*Gamma_plus + one )*FKw 
         end
         return dfnn
     end
-    function gyroaveraged_dfnn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
-        densn = densn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
-        #if (r_bc == "periodic" && z_bc == "periodic")
-            dfnn = densn * exp( - vpa^2 - vperp^2 )
-        #end
-        return dfnn
+    function gyroaveraged_dfnn_sym(Lr,Lz,Lvzeta,Lvr,Lvz,r_bc,z_bc,geometry,composition)
+        dfnn = dfnn_sym(Lr,Lz,Lvzeta,Lvr,Lvz,r_bc,z_bc,geometry,composition)
+        # Because of particular form of odd component in dfnn_sym, if we set vzeta=-vr
+        # then we eliminate the odd component in the perpendicular velocities,
+        # effectively gyro-averaging
+        gav_dfnn = substitute(dfnn, Dict(vzeta=>vperp/sqrt(two), vr=>-vperp/sqrt(two), vz=>vpa))
+        return gav_dfnn
     end
     
-    # ion density symbolic function
+    # Define some constants in mk_float. Avoids loss of precision due to implicit
+    # conversions from FLoat64->Float128 if we use Float128.
+    const half = 1/mk_float(2)
+    const one = mk_float(1)
+    const three_over_two = mk_float(3)/mk_float(2)
+    const two = mk_float(2)
+    const four = mk_float(4)
+    const five = mk_float(5)
+    const ten = mk_float(10)
+
     function densi_sym(Lr,Lz,r_bc,z_bc)
+        # Note: explicitly convert numerical factors to mk_float so the output gets full
+        # precision if we use quad-precision (Float128)
         if r_bc == "periodic" && z_bc == "periodic"
-            densi = 1.5 +  0.1*(sin(2.0*pi*r/Lr) + sin(2.0*pi*z/Lz))*sin(2.0*pi*t)  
+            densi = three_over_two +  (sin(two*pi*r/Lr) + sin(two*pi*z/Lz))/ten*cos(two*pi*t)
         elseif r_bc == "Dirichlet" && z_bc == "periodic"
-            #densi = 1.0 +  0.5*sin(2.0*pi*z/Lz)*(r/Lr + 0.5) + 0.2*sin(2.0*pi*r/Lr)*sin(2.0*pi*t)
-            #densi = 1.0 +  0.5*sin(2.0*pi*z/Lz)*(r/Lr + 0.5) + sin(2.0*pi*r/Lr)*sin(2.0*pi*t)
-            densi = 1.0 +  0.5*(r/Lr + 0.5) 
+            #densi = 1 +  1//2*sin(2*pi*z/Lz)*(r/Lr + 1//2) + 0.2*sin(2*pi*r/Lr)*sin(2*pi*t)
+            #densi = 1 +  1//2*sin(2*pi*z/Lz)*(r/Lr + 1//2) + sin(2*pi*r/Lr)*sin(2*pi*t)
+            densi = one +  half*(r/Lr + half)/two
         elseif r_bc == "periodic" && z_bc == "wall"
-            densi = 0.25*(0.5 - z/Lz)*nminus_sym(Lr,r_bc) + 0.25*(z/Lz + 0.5)*nplus_sym(Lr,r_bc) + (z/Lz + 0.5)*(0.5 - z/Lz)*nzero_sym(Lr,r_bc)  #+  0.5*(r/Lr + 0.5) + 0.5*(z/Lz + 0.5)
+            densi = (half - z/Lz)/four + (z/Lz + half)/four + (z/Lz + half)*(half - z/Lz)/five  #+  1//2*(r/Lr + 1//2) + 1//2*(z/Lz + 1//2)
+        else
+            error("Unsupported options r_bc=$r_bc, z_bc=$z_bc")
         end
         return densi
     end
@@ -101,7 +142,9 @@ using Symbolics
     
 
     # ion distribution symbolic function
-    function dfni_sym(Lr,Lz,r_bc,z_bc,geometry,nr)
+    function dfni_sym(Lr,Lz,Lvperp,Lvpa,r_bc,z_bc,geometry,nr)
+        # Note: explicitly convert numerical factors to mk_float so the output gets full
+        # precision if we use quad-precision (Float128)
         densi = densi_sym(Lr,Lz,r_bc,z_bc)
         # define derivative operators
         Dr = Differential(r) 
@@ -122,31 +165,68 @@ using Symbolics
         end
         
         if (r_bc == "periodic" && z_bc == "periodic") || (r_bc == "Dirichlet" && z_bc == "periodic")
-            dfni = densi * exp( - vpa^2 - vperp^2) 
+            ## This version with upar is very expensive to evaluate, probably due to
+            ## spatially-varying erf()?
+            #upar = (sin(two*pi*r/Lr) + sin(2*pi*z/Lz))/ten
+            #dfni = densi * exp(- (vpa-upar)^2 - vperp^2) #/ pi^1.5
+            ## Force the symbolic function dfni to vanish when vpa=±Lvpa/2, so that it is
+            ## consistent with "zero" bc in vpa.
+            ## Normalisation factors on 2nd and 3rd lines ensure that when this f is
+            ## integrated on -Lvpa/2≤vpa≤Lvpa/2 and 0≤vperp≤Lvperp the result (taking
+            ## into account the normalisations used by moment_kinetics) is exactly n.
+            ## Note that:
+            ##  ∫_-Lvpa/2^Lvpa/2  [1-(2*(vpa-upar)/Lvpa)^2]exp(-(vpa-upar)^2) dvpa
+            ##  = [sqrt(π)(Lvpa^2-4*upar^2-2)*(erf(Lvpa/2-upar)+erf(Lvpa/2+upar))
+            ##     +2*exp(-(Lvpa+2upar)^2/4)*(exp(2*Lvpa*upar)*(Lvpa+2upar)+Lvpa-2*upar)] / 2 / Lvpa^2
+            ##
+            ##  ∫_0^Lvperp vperp*exp(-vperp^2) = (1 - exp(-Lvperp^2))/2
+            #dfni = (one - (two*vpa/Lvpa)^2) * dfni *
+            #          two*Lvpa / ((Lvpa^2-four*upar^2-2)*(erf(Lvpa/two-upar)+erf(Lvpa/two+upar)) + two/sqrt(π)*exp(-(Lvpa+two*upar)^2/four)*(exp(two*Lvpa*upar)+Lvpa-two*upar)) / # vpa normalization
+            #         (one - exp(-Lvperp^2)) # vperp normalisation
+
+            # Ad-hoc odd-in-vpa component of dfni which gives non-zero upar and dfni
+            # positive everywhere, while the odd component integrates to 0 so does not
+            # need to be accounted for in normalisation.
+            dfni = densi * (exp(- vpa^2 - vperp^2)
+                            + (sin(two*pi*r/Lr) + sin(2*pi*z/Lz))/ten
+                              * vpa * exp(-two*(vpa^2+vperp^2))) #/ pi^1.5
+            # Force the symbolic function dfni to vanish when vpa=±Lvpa/2, so that it is
+            # consistent with "zero" bc in vpa.
+            # Normalisation factors on 2nd and 3rd lines ensure that when this f is
+            # integrated on -Lvpa/2≤vpa≤Lvpa/2 and 0≤vperp≤Lvperp the result (taking
+            # into account the normalisations used by moment_kinetics) is exactly n.
+            # Note that:
+            #  ∫_-Lvpa/2^Lvpa/2  [1-(2*vpa/Lvpa)^2]exp(-vpa^2) dvpa
+            #  = [sqrt(π)(Lvpa^2-2)*erf(Lvpa/2) + 2*exp(-Lvpa^2/4)Lvpa] / Lvpa^2
+            #
+            #  ∫_0^Lvperp vperp*exp(-vperp^2) = (1 - exp(-Lvperp^2))/2
+            dfni = (one - (two*vpa/Lvpa)^2) * dfni *
+                      Lvpa / ((Lvpa^2-2)*erf(Lvpa/two) + two/sqrt(π)*exp(-Lvpa^2/four)*Lvpa) / # vpa normalization
+                     (one - exp(-Lvperp^2)) # vperp normalisation
         elseif r_bc == "periodic" && z_bc == "wall"
-            vpabar = vpa - (rhostar/2.0)*(Bmag/Bzed)*expand_derivatives(Er)*rfac # effective velocity in z direction * (Bmag/Bzed)
-            Hplus = 0.5*(sign(vpabar) + 1.0)
-            Hminus = 0.5*(sign(-vpabar) + 1.0)
+            vpabar = vpa - (rhostar/two)*(Bmag/Bzed)*expand_derivatives(Er)*rfac # effective velocity in z direction * (Bmag/Bzed)
+            Hplus = half*(sign(vpabar) + one)
+            Hminus = half*(sign(-vpabar) + one)
             ffa =  exp(- vperp^2)
-            dfni = ffa * ( nminus_sym(Lr,r_bc)* (0.5 - z/Lz) * Hminus * vpabar^2 + nminus_sym(Lr,r_bc)*(z/Lz + 0.5) * Hplus * vpabar^2 + nzero_sym(Lr,r_bc)*(z/Lz + 0.5)*(0.5 - z/Lz) ) * exp( - vpabar^2 )
+            dfni = ffa * ( nminus_sym(Lr,r_bc)* (half - z/Lz) * Hminus * vpabar^2 + nminus_sym(Lr,r_bc)*(z/Lz + half) * Hplus * vpabar^2 + nzero_sym(Lr,r_bc)*(z/Lz + half)*(half - z/Lz) ) * exp( - vpabar^2 )
+        else
+            error("Unsupported options r_bc=$r_bc, z_bc=$z_bc")
         end
         return dfni
     end
-    function cartesian_dfni_sym(Lr,Lz,r_bc,z_bc)
-        densi = densi_sym(Lr,Lz,r_bc,z_bc)
-        #if (r_bc == "periodic" && z_bc == "periodic") || (r_bc == "Dirichlet" && z_bc == "periodic")
-            dfni = densi * exp( - vz^2 - vr^2 - vzeta^2) 
-        #end
-        return dfni
+    function cartesian_dfni_sym(Lr,Lz,Lvperp,Lvpa,r_bc,z_bc,geometry,nr)
+        dfni = dfni_sym(Lr,Lz,Lvperp,Lvpa,r_bc,z_bc,geometry,nr)
+        vrvzvzeta_dfni = substitute(dfni, Dict(vperp=>sqrt(vzeta^2+vr^2), vpa=>vz))
+        return vrvzvzeta_dfni
     end
 
-    function manufactured_solutions(Lr,Lz,r_bc,z_bc,geometry,composition,nr)
+    function manufactured_solutions(Lr,Lz,Lvperp,Lvpa,Lvzeta,Lvr,Lvz,r_bc,z_bc,geometry,composition,nr)
 
         densi = densi_sym(Lr,Lz,r_bc,z_bc)
-        dfni = dfni_sym(Lr,Lz,r_bc,z_bc,geometry,nr)
+        dfni = dfni_sym(Lr,Lz,Lvperp,Lvpa,r_bc,z_bc,geometry,nr)
         
         densn = densn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
-        dfnn = dfnn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
+        dfnn = dfnn_sym(Lr,Lz,Lvzeta,Lvr,Lvz,r_bc,z_bc,geometry,composition)
         
         #build julia functions from these symbolic expressions
         # cf. https://docs.juliahub.com/Symbolics/eABRO/3.4.0/tutorials/symbolic_functions/
@@ -166,24 +246,31 @@ using Symbolics
         return manufactured_solns_list
     end 
 
-    function manufactured_sources(Lr,Lz,r_bc,z_bc,composition,geometry,collisions,nr)
-        
+    function manufactured_rhs_sym(Lr::mk_float, Lz::mk_float, Lvperp::mk_float,
+                                  Lvpa::mk_float,Lvzeta::mk_float, Lvr::mk_float,
+                                  Lvz::mk_float, r_bc::String, z_bc::String,
+                                  composition::species_composition,
+                                  geometry::geometry_input,
+                                  collisions::collisions_input, nr::mk_int,
+                                  advance::Union{advance_info,Nothing}=nothing)
+        # Note: explicitly convert numerical factors to mk_float so the output gets full
+        # precision if we use quad-precision (Float128)
+
         # ion manufactured solutions
         densi = densi_sym(Lr,Lz,r_bc,z_bc)
-        dfni = dfni_sym(Lr,Lz,r_bc,z_bc,geometry,nr)
-        vrvzvzeta_dfni = cartesian_dfni_sym(Lr,Lz,r_bc,z_bc) #dfni in vr vz vzeta coordinates
+        dfni = dfni_sym(Lr,Lz,Lvperp,Lvpa,r_bc,z_bc,geometry,nr)
+        vrvzvzeta_dfni = cartesian_dfni_sym(Lr,Lz,Lvperp,Lvpa,r_bc,z_bc,geometry,nr) #dfni in vr vz vzeta coordinates
         
         # neutral manufactured solutions
         densn = densn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
-        dfnn = dfnn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
-        gav_dfnn = gyroaveraged_dfnn_sym(Lr,Lz,r_bc,z_bc,geometry,composition) # gyroaverage < dfnn > in vpa vperp coordinates
+        dfnn = dfnn_sym(Lr,Lz,Lvzeta,Lvr,Lvz,r_bc,z_bc,geometry,composition)
+        gav_dfnn = gyroaveraged_dfnn_sym(Lr,Lz,Lvzeta,Lvr,Lvz,r_bc,z_bc,geometry,composition) # gyroaverage < dfnn > in vpa vperp coordinates
         
         # define derivative operators
         Dr = Differential(r) 
         Dz = Differential(z) 
         Dvpa = Differential(vpa) 
         Dvperp = Differential(vperp) 
-        Dt = Differential(t) 
     
         # get geometric/composition data
         Bzed = geometry.Bzed
@@ -209,13 +296,81 @@ using Symbolics
         Er = -Dr(phi)
         Ez = -Dz(phi)
     
-        # the ion source to maintain the manufactured solution
-        Si = ( Dt(dfni) + ( vpa * (Bzed/Bmag) - 0.5*rhostar*Er*rfac ) * Dz(dfni) + ( 0.5*rhostar*Ez*rfac ) * Dr(dfni) + ( 0.5*Ez*Bzed/Bmag ) * Dvpa(dfni)
-               + cx_frequency*( densn*dfni - densi*gav_dfnn ) ) - ionization_frequency*dense*gav_dfnn 
+        rhs_ion = 0 * z
+        if advance === nothing || advance.vpa_advection
+            rhs_ion += - ( half*Ez*Bzed/Bmag ) * Dvpa(dfni)
+        end
+        if advance === nothing || advance.z_advection
+            rhs_ion += -( vpa * (Bzed/Bmag) - half*rhostar*Er ) * Dz(dfni)
+        end
+        if advance === nothing || advance.r_advection
+            rhs_ion += - ( half*rhostar*Ez ) * Dr(dfni)
+        end
+        if advance === nothing || advance.cx_collisions
+            rhs_ion += cx_frequency * (gav_dfnn*densi - dfni*densn)
+        end
+        #if advance === nothing || advance.ionization_collsions
+        #    # placeholder
+        #end
+        #if advance === nothing || advance.source_terms
+        #    # placeholder
+        #end
+        #if advance === nothing || advance.continuity
+        #    # placeholder
+        #end
+        #if advance === nothing || advance.force_balance
+        #    # placeholder
+        #end
+        #if advance === nothing || advance.energy
+        #    # placeholder
+        #end
+        rhs_neutral = 0 * z
+        if advance == nothing || advance.neutral_z_advection
+            rhs_neutral += -vz * Dz(dfnn)
+        end
+        if advance == nothing || advance.neutral_r_advection
+            rhs_neutral += - rfac*vr * Dr(dfnn)
+        end
+        if advance == nothing || advance.cx_collisions
+            rhs_neutral += - cx_frequency* (densi*dfnn - densn*vrvzvzeta_dfni)
+        end
+        if advance == nothing || advance.ionization_collisions
+            rhs_neutral += - ionization_frequency*dense*dfnn
+        end
+
+        return expand_derivatives(rhs_ion), expand_derivatives(rhs_neutral)
+    end
+
+    function manufactured_rhs(Lr::mk_float, Lz::mk_float, Lvperp::mk_float,
+                              Lvpa::mk_float, Lvzeta::mk_float, Lvr::mk_float,
+                              Lvz::mk_float, r_bc::String, z_bc::String,
+                              composition::species_composition,
+                              geometry::geometry_input, collisions::collisions_input,
+                              nr::mk_int, advance::Union{advance_info,Nothing}=nothing)
+        rhs_ion_sym, rhs_neutral_sym = manufactured_rhs_sym(Lr, Lz, Lvperp, Lvpa,
+            Lvzeta, Lvr, Lvz, r_bc, z_bc, composition, geometry, collisions, nr,
+            advance)
+        return build_function(rhs_ion_sym, vpa, vperp, z, r, t, expression=Val{false}),
+               build_function(rhs_neutral_sym, vz, vr, vzeta, z, r, t, expression=Val{false})
+    end
+
+    function manufactured_sources(Lr::mk_float, Lz::mk_float, Lvperp::mk_float,
+                                  Lvpa::mk_float, Lvzeta::mk_float, Lvr::mk_float,
+                                  Lvz::mk_float, r_bc::String, z_bc::String,
+                                  composition::species_composition,
+                                  geometry::geometry_input,
+                                  collisions::collisions_input, nr::mk_int)
+
+        dfni = dfni_sym(Lr,Lz,Lvperp,Lvpa,r_bc,z_bc,geometry,nr)
+        dfnn = dfnn_sym(Lr,Lz,Lvzeta,Lvr,Lvz,r_bc,z_bc,geometry,composition)
+        rhs_ion, rhs_neutral = manufactured_rhs_sym(Lr, Lz, Lvperp, Lvpa, Lvzeta, Lvr,
+            Lvz, r_bc, z_bc, composition, geometry, collisions, nr)
+
+        Dt = Differential(t)
+
+        Si = Dt(dfni) - rhs_ion
         Source_i = expand_derivatives(Si)
-        
-        # the neutral source to maintain the manufactured solution
-        Sn = Dt(dfnn) + vz * Dz(dfnn) + rfac*vr * Dr(dfnn) + cx_frequency* (densi*dfnn - densn*vrvzvzeta_dfni) + ionization_frequency*dense*dfnn
+        Sn = Dt(dfnn) - rhs_neutral
         Source_n = expand_derivatives(Sn)
         
         Source_i_func = build_function(Source_i, vpa, vperp, z, r, t, expression=Val{false})
@@ -225,5 +380,83 @@ using Symbolics
         
         return manufactured_sources_list
     end 
-    
+
+    """
+        manufactured_solutions_as_arrays(
+            t::mk_float, r::coordinate, z::coordinate, vperp::coordinate,
+            vpa::coordinate)
+
+    Create array filled with manufactured solutions.
+
+    Returns
+    -------
+    (densi, phi, dfni)
+    """
+    function manufactured_solutions_as_arrays(
+        t::mk_float, r::coordinate, z::coordinate, vperp::coordinate,
+        vpa::coordinate, vzeta::coordinate, vr::coordinate, vz::coordinate)
+
+        dfni_func, densi_func = manufactured_solutions(r.L, z.L, vperp.L, vpa.L, vzeta.L,
+                                                       vr.L, vz.L, r.bc, z.bc)
+
+        densi = allocate_shared_float(z.n, r.n)
+        dfni = allocate_shared_float(vpa.n, vperp.n, z.n, r.n)
+
+        begin_r_z_region()
+        @loop_r_z ir iz begin
+            densi[iz,ir] = densi_func(z.grid[iz], r.grid[ir], t)
+            @loop_vperp_vpa ivperp ivpa begin
+                dfni[ivpa,ivperp,iz,ir] = dfni_func(vpa.grid[ivpa], vperp.grid[ivperp], z.grid[iz],
+                                        r.grid[ir], t)
+            end
+        end
+
+        phi = log.(densi)
+
+        return densi, phi, dfni
+    end
+
+    """
+        manufactured_rhs_as_array(
+            t::mk_float, r::coordinate, z::coordinate, vperp::coordinate, vpa::coordinate,
+            composition::species_composition, geometry::geometry_input,
+            collisions::collisions_input, advance::Union{advance_info,Nothing})
+
+    Create arrays filled with manufactured rhs.
+
+    Returns
+    -------
+    rhs_ion, rhs_neutral
+    """
+    function manufactured_rhs_as_array(
+        t::mk_float, r::coordinate, z::coordinate, vperp::coordinate, vpa::coordinate,
+        vzeta::coordinate, vr::coordinate, vz::coordinate,
+        composition::species_composition, geometry::geometry_input,
+        collisions::collisions_input, advance::Union{advance_info,Nothing})
+
+        rhs_ion_func, rhs_neutral_func = manufactured_rhs(r.L, z.L, vperp.L, vpa.L,
+            vzeta.L, vr.L, vz.L, r.bc, z.bc, composition, geometry, collisions, r.n,
+            advance)
+
+        rhs_ion = allocate_shared_float(vpa.n, vperp.n, z.n, r.n)
+
+        begin_r_z_vperp_vpa_region()
+        @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
+            rhs_ion[ivpa,ivperp,iz,ir] =
+            rhs_ion_func(vpa.grid[ivpa], vperp.grid[ivperp], z.grid[iz],
+                         r.grid[ir], t)
+        end
+
+        rhs_neutral = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, r.n)
+
+        begin_r_z_vzeta_vr_vz_region()
+        @loop_r_z_vzeta_vr_vz ir iz ivzeta ivr ivz begin
+            rhs_neutral[ivz,ivr,ivzeta,iz,ir] =
+            rhs_neutral_func(vz.grid[ivz], vr.grid[ivr], vzeta.grid[ivzeta],
+                             z.grid[iz], r.grid[ir], t)
+        end
+
+        return rhs_ion, rhs_neutral
+    end
+
 end

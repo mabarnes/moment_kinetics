@@ -112,7 +112,7 @@ end
 
 """
 """
-struct grid_input
+struct grid_input{Tadvection<:Union{advection_input,Nothing}}
     # name of the variable associated with this coordinate
     name::String
     # number of grid points per element
@@ -128,7 +128,7 @@ struct grid_input
     # boundary option
     bc::String
     # struct containing advection speed options
-    advection::advection_input
+    advection::Tadvection
 end
 
 """
