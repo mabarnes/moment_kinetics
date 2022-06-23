@@ -19,7 +19,7 @@ function increase_resolution(input::Dict, nelement)
     for key ∈ keys(result)
         if occursin("_nelement", key)
             if occursin("v", key) || occursin("gyrophase", key)
-                result[key] = 4 * nelement
+                result[key] = 2 * nelement
             else
                 result[key] = nelement
             end
