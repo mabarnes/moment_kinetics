@@ -83,9 +83,30 @@ Run a simulation with parameters set by `input` using manufactured sources and r
 the errors in each variable compared to the manufactured solution.
 """
 function runcase(input::Dict)
+    in_manf, phi_manf, f_manf = nothing, nothing, nothing
+    # call setup_moment_kinetics(), time_advance!(), cleanup_moment_kinetics!()
+    # separately so we can run manufactured_solutions_as_arrays() in parallel
     quietoutput() do
         # run simulation
-        run_moment_kinetics(input)
+        pdf, vz, vr, vzeta, vpa, vperp, z, r, spectral_objects, composition,
+        drive_input, moments, t_input, collisions, species, geometry,
+        boundary_distributions = setup_moment_kinetics(input_dict)
+        time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, spectral_objects,
+                      composition, drive_input, moments, t_input, collisions,
+                      species, geometry, boundary_distributions)
+
+        n_manf, phi_manf, f_manf =
+            manufactured_solutions_as_arrays(t, r, z, vperp, vpa)
+
+        if global_rank[] == 0
+            # Need to copy as cleanup_moment_kinetics!() will invalidate
+            # shared-memory arrays
+            n_manf = copy(n_manf)
+            phi_manf = copy(phi_manf)
+            f_manf = copy(f_manf)
+        end
+
+        cleanup_moment_kinetics!(io, cdf)
     end
 
     n_error_2 = nothing
@@ -103,8 +124,6 @@ function runcase(input::Dict)
         f = output["f"][:,:,:,:,1,end]
         f0 = f[size(f,1)÷2, 1, :, :]
 
-        n_manf, phi_manf, f_manf = manufactured_solutions_as_arrays(t, output["r"],
-                                       output["z"], output["vperp"], output["vpa"])
         f0_manf = f_manf[size(f,1)÷2, 1, :, :]
 
         n_error_2 = L2_error_norm(n, n_manf)

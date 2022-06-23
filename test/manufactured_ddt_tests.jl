@@ -172,12 +172,22 @@ function evaluate_initial_ddt(input_dict::Dict, advance_input::advance_info)
         dfdt_neutral = copy(output.pdf_neutral)
     end
 
-    # clean up i/o and communications
-    # last 2 elements of mk_state are `io` and `cdf`
-    cleanup_moment_kinetics!(mk_state[end-1:end]...)
+    rhs_ion_manf, rhs_neutral_manf =
+        manufactured_rhs_as_array(mk_float(0.0), r, z, vperp, vpa,
+           vzeta, vr, vz, composition, geometry, collisions, modified_advance)
 
-    return dfdt_ion, dfdt_neutral, r, z, vperp, vpa, vzeta, vr, vz, composition,
-           geometry, collisions, modified_advance
+    if global_rank[] == 0
+        rhs_ion_manf = copy(rhs_ion_manf)
+        rhs_neutral_manf = copy(rhs_neutral_manf)
+    else
+        rhs_ion_manf = nothing
+        rhs_neutral_manf = nothing
+    end
+
+    # clean up i/o and communications
+    cleanup_moment_kinetics!(io, cdf)
+
+    return dfdt_ion, dfdt_neutral, rhs_ion_manf, rhs_neutral_manf
 end
 
 """
@@ -208,19 +218,16 @@ the errors in each variable compared to the manufactured solution.
 function runcase(input::Dict, advance::advance_info; neutrals, returnstuff=false)
     dfdt_ion = nothing
     dfdt_neutral = nothing
-    manufactured_inputs = nothing
-    quietoutput() do
-        dfdt_ion, dfdt_neutral, manufactured_inputs... = evaluate_initial_ddt(input, advance)
-    end
-
-    error_2 = nothing
-    error_inf = nothing
     rhs_ion_manf = nothing
     rhs_neutral_manf = nothing
-    if global_rank[] == 0
-        rhs_ion_manf, rhs_neutral_manf = manufactured_rhs_as_array(mk_float(0.0),
-                                                                   manufactured_inputs...)
+    quietoutput() do
+        dfdt_ion, dfdt_neutral, rhs_ion_manf, rhs_neutral_manf = evaluate_initial_ddt(input, advance)
+    end
 
+    # last 2 elements of mk_state are `io` and `cdf`
+    error_2 = nothing
+    error_inf = nothing
+    if global_rank[] == 0
         # Only one species, so get rid of species index
         dfdt_ion = dfdt_ion[:,:,:,:,1]
         if neutrals
