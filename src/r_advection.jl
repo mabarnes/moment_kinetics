@@ -27,7 +27,7 @@ function r_advection!(f_out, fvec_in, fields, advect, r, z, vperp, vpa,
         @loop_z_vperp_vpa iz ivperp ivpa begin
             # take the normalized pdf contained in fvec_in.pdf and remove the normalization,
             # returning the true (un-normalized) particle distribution function in r.scratch
-            @. r.scratch = fvec_in.pdf[ivpa,ivperp,iz,:,is]
+            @. r.scratch = @views fvec_in.pdf[ivpa,ivperp,iz,:,is]
 
             @views advance_f_local!(f_out[ivpa,ivperp,iz,:,is], r.scratch,
                                     advect[is], ivpa, ivperp, iz,
@@ -49,7 +49,7 @@ function update_speed_r!(advect, fields, vpa, vperp, z, r, geometry)
         ExBfac = 0.5*geometry.rhostar
         @inbounds begin
             @loop_z_vperp_vpa iz ivperp ivpa begin
-                @views advect.speed[:,ivpa,ivperp,iz] .= ExBfac*fields.Ez[iz,:]
+                @views @. advect.speed[:,ivpa,ivperp,iz] = ExBfac*fields.Ez[iz,:]
             end
         end
     elseif r.advection.option == "default" && r.n == 1 

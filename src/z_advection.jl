@@ -24,7 +24,7 @@ function z_advection!(f_out, fvec_in, fields, advect, z, vpa, vperp, r, dt, t, z
 
         # advance z-advection equation
         @loop_r_vperp_vpa ir ivperp ivpa begin
-            @. z.scratch = fvec_in.pdf[ivpa,ivperp,:,ir,is]
+            @. z.scratch = @views fvec_in.pdf[ivpa,ivperp,:,ir,is]
             @views advance_f_local!(f_out[ivpa,ivperp,:,ir,is], z.scratch, advect[is], ivpa, ivperp, ir,
                                     z, dt, z_spectral)
         end
@@ -47,7 +47,7 @@ function update_speed_z!(advect, fields, vpa, vperp, z, r, t, geometry)
         @inbounds begin
             
             @loop_r_vperp_vpa ir ivperp ivpa begin
-                    @views advect.speed[:,ivpa,ivperp,ir] .= vpa.grid[ivpa]*bzed .+ ExBfac*fields.Er[:,ir]
+                @views @. advect.speed[:,ivpa,ivperp,ir] = vpa.grid[ivpa]*bzed + ExBfac*fields.Er[:,ir]
             end
         
         end
