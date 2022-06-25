@@ -485,6 +485,11 @@ function integrate_over_negative_vpa(integrand, dzdt, vpa_wgts, wgts_mod)
 end
 
 """
+    enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, r, composition, moments, dummy_sr)
+
+Force moment constraints to be true for fvec_new if they were true for fvec_old. Should
+always be a small correction because the time step is 'small' so fvec_new should only
+violate the constraints by a small amount.
 """
 function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, r, composition, moments, dummy_sr)
 
@@ -575,6 +580,42 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, r, composition,
     update_qpar!(moments.qpar, moments.qpar_updated, fvec_new.density, fvec_new.upar,
                  moments.vth, fvec_new.pdf, vpa, z, r, composition,
                  moments.evolve_density, moments.evolve_upar, moments.evolve_ppar)
+end
+
+"""
+
+Force the moment constraints needed for the system being evolved to be applied to `f`.
+Not guaranteed to be a small correction, if `f` does not approximately obey the
+constraints to start with, but can be useful at initialisation to ensure a consistent
+initial state, and when applying boundary conditions.
+
+Note this function assumes the input is given at a single spatial position.
+"""
+function hard_force_moment_constraints!(f, moments, vpa)
+    if moments.evolve_ppar
+        I0 = integrate_over_vspace(f, vpa.wgts)
+        I1 = integrate_over_vspace(f, vpa.grid, vpa.wgts)
+        I2 = integrate_over_vspace(f, vpa.grid, 2, vpa.wgts)
+        I3 = integrate_over_vspace(f, vpa.grid, 3, vpa.wgts)
+        I4 = integrate_over_vspace(f, vpa.grid, 4, vpa.wgts)
+        A = ((1.0 - 0.5*I2)*(I2 - I3^2/I4) + 0.5*I3/I4*(I1-I2*I3/I4)) /
+            ((I0 - I2^2)*(I2 - I3^2/I4) - (I1 - I2*I3/I4)^2)
+        B = -(0.5*I3/I4 + A*(I1 - I2*I3/I4)) / (I2 - I3^2/I4)
+        C = -(A*I1 + B*I2) / I3
+        @. f = A*f + B*vpa.grid*f + C*vpa.grid*vpa.grid*f
+    elseif moments.evolve_upar
+        I0 = integrate_over_vspace(f, vpa.wgts)
+        I1 = integrate_over_vspace(f, vpa.grid, vpa.wgts)
+        I2 = integrate_over_vspace(f, vpa.grid, 2, vpa.wgts)
+        A = 1.0 / (I0 + I1*I1/I2)
+        B = -I1*A/I2
+        @. f = A*f + B*vpa.grid*f
+    elseif moments.evolve_density
+        I0 = integrate_over_vspace(f, vpa.wgts)
+        @. f = f / I0
+    end
+
+    return nothing
 end
 
 """
