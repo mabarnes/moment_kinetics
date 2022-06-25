@@ -555,7 +555,8 @@ from the 'true', un-modified pdf, either: update them using info from Runge Kutt
 stages, if the quantities are evolved separately from the modified pdf;
 or update them by taking the appropriate velocity moment of the evolved pdf
 """
-function rk_update!(scratch, pdf, moments, fields, vpa, z, r, rk_coefs, istage, composition)
+function rk_update!(scratch, pdf, moments, fields, vpa, z, r, vpa_advect, z_advect,
+                    rk_coefs, istage, composition)
     begin_s_r_z_region()
     nvpa = size(pdf.unnorm, 1)
     new_scratch = scratch[istage+1]
@@ -566,6 +567,17 @@ function rk_update!(scratch, pdf, moments, fields, vpa, z, r, rk_coefs, istage, 
     end
     # use Runge Kutta to update any velocity moments evolved separately from the pdf
     rk_update_evolved_moments!(new_scratch, old_scratch, moments, rk_coefs)
+
+    # Enforce boundary conditions in z and vpa on the distribution function.
+    # Must be done after Runge Kutta update so that the boundary condition applied to
+    # the updated pdf is consistent with the updated moments - otherwise different upar
+    # between 'pdf', 'old_scratch' and 'new_scratch' might mean a point that should be
+    # set to zero at the sheath boundary according to the final upar has a non-zero
+    # contribution from one or more of the terms.
+    # NB: probably need to do the same for the evolved moments
+    enforce_boundary_conditions!(new_scratch, moments, vpa.bc, z.bc, vpa, z, r,
+                                 vpa_advect, z_advect, composition)
+
     # update remaining velocity moments that are calculable from the evolved pdf
     update_derived_moments!(new_scratch, moments, vpa, z, r, composition)
     # update the thermal speed from the updated pressure and density
@@ -729,7 +741,8 @@ function ssp_rk!(pdf, scratch, t, t_input, vpa, z, r,
             pdf, fields, moments, vpa_SL, z_SL, r_SL, vpa_advect, z_advect, r_advect, vpa, z, r, t,
             t_input, vpa_spectral, z_spectral, r_spectral, composition,
             collisions, advance, istage)
-        @views rk_update!(scratch, pdf, moments, fields, vpa, z, r, advance.rk_coefs[:,istage], istage, composition)
+        @views rk_update!(scratch, pdf, moments, fields, vpa, z, r, vpa_advect,
+                          z_advect, advance.rk_coefs[:,istage], istage, composition)
     end
 
     istage = n_rk_stages+1
@@ -799,9 +812,6 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, z_
             composition.n_neutral_species, vpa, z, r, vpa_spectral, composition,
             collisions, z.n, dt)
     end
-    # enforce boundary conditions in z and vpa on the distribution function
-    # NB: probably need to do the same for the evolved moments
-    enforce_boundary_conditions!(fvec_out, moments, vpa.bc, z.bc, vpa, z, r, vpa_advect, z_advect, composition)
     # End of advance of distribution function
 
     # Start advancing moments
