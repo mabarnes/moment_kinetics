@@ -786,7 +786,8 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, z_
     # account for ionization collisions between ions and neutrals
     if advance.ionization_collisions
         ionization_collisions!(fvec_out.pdf, fvec_in, moments, n_ion_species,
-            composition.n_neutral_species, vpa, z, r, composition, collisions, z.n, dt)
+            composition.n_neutral_species, vpa, z, r, vpa_spectral, composition,
+            collisions, z.n, dt)
     end
     # enforce boundary conditions in z and vpa on the distribution function
     # NB: probably need to do the same for the evolved moments
