@@ -4,12 +4,13 @@ module ionization
 
 export ionization_collisions!
 
+using ..interpolation: interpolate_to_grid_vpa!
 using ..looping
 
 """
 """
 function ionization_collisions!(f_out, fvec_in, moments, n_ion_species,
-        n_neutral_species, vpa, z, r, composition, collisions, nz, dt)
+        n_neutral_species, vpa, z, r, vpa_spectral, composition, collisions, nz, dt)
 
     if moments.evolve_density
         @loop_s is begin
@@ -19,7 +20,7 @@ function ionization_collisions!(f_out, fvec_in, moments, n_ion_species,
                 # with all of the neutral species
                 for isp ∈ composition.neutral_species_range
                     @views ionization_collisions_single_species!(f_out[:,:,:,is], fvec_in,
-                        moments, vpa, collisions.ionization, dt, is, isp)
+                        moments, vpa, vpa_spectral, collisions.ionization, dt, is, isp)
                 end
             end
             # when working with the normalised distribution (pdf_unnorm / density),
@@ -66,7 +67,7 @@ function ionization_collisions!(f_out, fvec_in, moments, n_ion_species,
     end
 end
 
-function ionization_collisions_single_species!(f_out, fvec_in, moments, vpa, ionization, dt, is, isp)
+function ionization_collisions_single_species!(f_out, fvec_in, moments, vpa, vpa_spectral, ionization, dt, is, isp)
     @loop_r_z ir iz begin
         if moments.evolve_ppar
             # will need the ratio of thermal speeds both to interpolate between vpa grids
@@ -109,7 +110,7 @@ function ionization_collisions_single_species!(f_out, fvec_in, moments, vpa, ion
             end
             # interpolate to the new grid (passed in as vpa.scratch)
             # and return interpolated values in vpa.scratch2
-            @views interpolate_to_grid_vpa!(vpa.scratch2, vpa.scratch, fvec_in.pdf[:,iz,ir,isp], vpa, spectral)
+            @views interpolate_to_grid_vpa!(vpa.scratch2, vpa.scratch, fvec_in.pdf[:,iz,ir,isp], vpa, vpa_spectral)
         else
             # no need to interpolate if neither upar or ppar evolved separately from pdf
             vpa.scratch2 .= fvec_in.pdf[:,iz,ir,isp]
