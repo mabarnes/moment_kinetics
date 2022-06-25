@@ -409,28 +409,30 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, r, composition,
                     upar_integral = integrate_over_vspace(fnew_view, vpa.grid, vpa.wgts)
                 end
                 if moments.evolve_ppar
-                    ppar_integral = integrate_over_vspace(fnew_view, vpa.grid, 2, vpa.wgts) - 0.5*density_integral
+                    ppar_integral = integrate_over_vspace(fnew_view, vpa.grid, 2, vpa.wgts)
                 end
                 # update the pdf to account for the density-conserving correction
                 @. fnew_view += fold_view * (1.0 - density_integral)
                 if moments.evolve_upar
-                    # next form the even part of the old distribution function that is needed
-                    # to ensure momentum and energy conservation
-                    @. vpa.scratch = fold_view
-                    reverse!(vpa.scratch)
-                    @. vpa.scratch = 0.5*(vpa.scratch + fold_view)
-                    # calculate the integrals involving this even pdf
-                    vpa2_moment = integrate_over_vspace(vpa.scratch, vpa.grid, 2, vpa.wgts)
-                    upar_integral /= vpa2_moment
+                    if !moments.evolve_ppar
+                        upar_coefficient = upar_integral /
+                            integrate_over_vspace(fold_view, vpa.grid, 2, vpa.wgts)
+                    else
+                        vpa3_moment = integrate_over_vspace(fold_view, vpa.grid, 3, vpa.wgts)
+                        vpa4_moment = integrate_over_vspace(fold_view, vpa.grid, 4, vpa.wgts)
+                        ppar_coefficient = (-ppar_integral + 0.5*density_integral +
+                                            2.0*upar_integral*vpa3_moment) /
+                                            (vpa4_moment - 0.25 - 2.0*vpa3_moment*vpa3_moment)
+                        upar_coefficient = 2.0 * (upar_integral + ppar_coefficient * vpa3_moment)
+                    end
                     # update the pdf to account for the momentum-conserving correction
-                    @. fnew_view -= vpa.scratch * vpa.grid * upar_integral
+                    @. fnew_view -= upar_coefficient * vpa.grid * fold_view
                     if moments.evolve_ppar
-                        ppar_integral /= integrate_over_vspace(vpa.scratch, vpa.grid, 4, vpa.wgts) - 0.5 * vpa2_moment
                         # update the pdf to account for the energy-conserving correction
-                        #@. fnew_view -= vpa.scratch * (vpa.grid^2 - 0.5) * ppar_integral
+                        #@. fnew_view += ppar_coefficient * (vpa.grid^2 - 0.5) * fold_view
                         # Until julia-1.8 is released, prefer x*x to x^2 to avoid
                         # extra allocations when broadcasting.
-                        @. fnew_view -= vpa.scratch * (vpa.grid * vpa.grid - 0.5) * ppar_integral
+                        @. fnew_view += ppar_coefficient * (vpa.grid * vpa.grid - 0.5) * fold_view
                     end
                 end
             end
