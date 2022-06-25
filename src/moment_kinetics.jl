@@ -60,7 +60,7 @@ using .command_line_options: get_options
 using .communication
 using .coordinates: define_coordinate
 using .debugging
-using .initial_conditions: init_pdf_and_moments
+using .initial_conditions: init_pdf_and_moments, enforce_boundary_conditions!
 using .looping
 using .moment_kinetics_input: mk_input, run_type, performance_test
 using .time_advance: setup_time_advance!, time_advance!
@@ -152,6 +152,7 @@ function setup_moment_kinetics(input_dict::Dict)
     moments, fields, vpa_advect, z_advect, r_advect, vpa_SL, z_SL, r_SL, scratch,
         advance, scratch_dummy_sr = setup_time_advance!(pdf, vpa, z, r, z_spectral,
             composition, drive_input, moments, t_input, collisions, species)
+
     # setup i/o
     io, cdf = setup_file_io(output_dir, run_name, vpa, z, r, composition, collisions,
                             moments.evolve_ppar)

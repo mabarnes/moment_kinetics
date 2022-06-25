@@ -13,7 +13,7 @@ using ..file_io: write_data_to_ascii, write_data_to_binary, debug_dump
 using ..looping
 using ..moment_kinetics_structs: scratch_pdf
 using ..velocity_moments: update_moments!, reset_moments_status!
-using ..velocity_moments: enforce_moment_constraints!
+using ..velocity_moments: enforce_moment_constraints!, hard_force_moment_constraints!
 using ..velocity_moments: update_density!, update_upar!, update_ppar!, update_qpar!
 using ..initial_conditions: enforce_z_boundary_condition!, enforce_boundary_conditions!
 using ..initial_conditions: enforce_z_boundary_condition_moments!
@@ -97,11 +97,6 @@ function setup_time_advance!(pdf, vpa, z, r, z_spectral, composition, drive_inpu
         # initialise the upwind/downwind boundary indices in z
         update_boundary_indices!(z_advect[is], loop_ranges[].vpa, loop_ranges[].r)
     end
-    # enforce prescribed boundary condition in z on the distribution function f
-    @views enforce_z_boundary_condition!(pdf.unnorm, moments.dens, moments.upar, moments,
-                                         z.bc, z_advect, vpa, r, composition)
-    # enforce prescribed boundary condition in z on the velocity space moments of f
-    @views enforce_z_boundary_condition_moments!(moments.dens, moments, z.bc)
 
     if z.bc != "wall" || composition.n_neutral_species == 0
         begin_serial_region()
@@ -141,10 +136,24 @@ function setup_time_advance!(pdf, vpa, z, r, z_spectral, composition, drive_inpu
         for is ∈ 1:nspec
             # initialise the upwind/downwind boundary indices in vpa
             update_boundary_indices!(vpa_advect[is], 1:z.n, 1:r.n)
-            # enforce prescribed boundary condition in vpa on the distribution function f
-            @views enforce_vpa_boundary_condition!(pdf.norm[:,:,:,is], vpa.bc, vpa_advect[is])
         end
     end
+
+    # enforce boundary conditions and moment constraints to ensure a consistent initial
+    # condition
+    enforce_boundary_conditions!(pdf.norm, moments.dens, moments.upar,
+        moments, vpa.bc, z.bc, vpa, z, r, vpa_advect, z_advect, composition)
+    # Ensure normalised pdf exactly obeys integral constraints if evolving moments
+    begin_s_r_z_region()
+    @loop_s_r_z is ir iz begin
+        @views hard_force_moment_constraints!(pdf.norm[:,iz,ir,is], moments, vpa)
+    end
+    # update unnormalised pdf, moments and phi in case they were affected by applying
+    # boundary conditions or constraints to the pdf
+    update_pdf_unnorm!(pdf, moments, scratch[1].temp_z_s, composition, vpa)
+    update_moments!(moments, pdf.unnorm, vpa, z.n, r.n, composition)
+    update_phi!(fields, scratch[1], z, r, composition)
+
     # create an array of structures containing the arrays needed for the semi-Lagrange
     # solve and initialize the characteristic speed and departure indices
     # so that the code can gracefully run without using the semi-Lagrange
@@ -532,7 +541,9 @@ function time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z, r,
             t_input, vpa_spectral, z_spectral, r_spectral, composition,
             collisions, advance, 1)
         # NB: this must be broken -- scratch is updated in euler_time_advance!,
-        # but not the pdf or moments.  need to add update to these quantities here
+        # but not the pdf or moments. need to add update to these quantities here. Also
+        # need to apply boundary conditions, possibly other things that are taken care
+        # of in rk_update!() for the ssp_rk!() method.
     end
     return nothing
 end
