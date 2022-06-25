@@ -158,9 +158,17 @@ function init_upar!(upar, z, r, spec, n_species)
                 # this is designed to give a nonzero J_{||i} at endpoints in z
                 # necessary for an electron sheath condition involving J_{||i}
                 # option "gaussian" to be consistent with usual init option for now
+                mid_ind = z.n ÷ 2
+                if z.n % 2 == 0
+                    z_midpoint = 0.5*(z.grid[mid_ind] + z.grid[mid_ind+1])
+                else
+                    # because ÷ does integer division (which floors the result), the
+                    # actual index of the mid-point is mid_ind+1
+                    z_midpoint = z.grid[mid_ind+1]
+                end
                 @. upar[:,ir,is] =
                     (spec[is].z_IC.upar_amplitude * 2.0 *
-                           (z.grid[:] - z.grid[floor(Int,z.n/2)])/z.L)
+                           (z.grid[:] - z_midpoint)/z.L)
             else
                 @. upar[:,ir,is] = 0.0
             end
