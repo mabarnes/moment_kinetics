@@ -15,6 +15,7 @@ using ..array_allocation: allocate_shared_float
 using ..bgk: init_bgk_pdf!
 using ..communication
 using ..looping
+using ..moment_kinetics_structs: scratch_pdf
 using ..velocity_moments: integrate_over_vspace
 using ..velocity_moments: integrate_over_positive_vpa, integrate_over_negative_vpa
 using ..velocity_moments: create_moments, update_qpar!
@@ -243,21 +244,27 @@ end
 enforce boundary conditions in vpa and z on the evolved pdf;
 also enforce boundary conditions in z on all separately evolved velocity space moments of the pdf
 """
-function enforce_boundary_conditions!(fvec_out, fvec_in, moments, vpa_bc, z_bc, vpa, z, r, vpa_adv::T1, z_adv::T2, composition) where {T1, T2}
+function enforce_boundary_conditions!(f_out, density, upar, moments, vpa_bc, z_bc, vpa,
+        z, r, vpa_adv, z_adv, composition)
     @loop_s_r_z is ir iz begin
         if is ∈ composition.ion_species_range
             # enforce the vpa BC
             # no bc needed for neutrals, as there is no acceleration for neutrals (i.e.
             # no advection in v-space).
-            @views enforce_vpa_boundary_condition_local!(fvec_out.pdf[:,iz,ir,is], vpa_bc, vpa_adv[is].upwind_idx[iz,ir],
+            @views enforce_vpa_boundary_condition_local!(f_out[:,iz,ir,is], vpa_bc, vpa_adv[is].upwind_idx[iz,ir],
                                                          vpa_adv[is].downwind_idx[iz,ir])
         end
     end
     begin_s_r_vpa_region()
-    @views enforce_z_boundary_condition!(fvec_out.pdf, fvec_in.density, fvec_in.upar, moments, z_bc, z_adv, vpa, r, composition)
     # enforce the z BC on the evolved velocity space moments of the pdf
-    @views enforce_z_boundary_condition_moments!(fvec_out.density, moments, z_bc)
+    @views enforce_z_boundary_condition_moments!(density, moments, z_bc)
+    @views enforce_z_boundary_condition!(f_out, density, upar, moments, z_bc, z_adv, vpa, r, composition)
 
+end
+function enforce_boundary_conditions!(fvec_out::scratch_pdf, moments, vpa_bc, z_bc, vpa,
+        z, r, vpa_adv, z_adv, composition)
+    enforce_boundary_conditions!(fvec_out.pdf, fvec_out.density, fvec_out.upar, moments,
+        vpa_bc, z_bc, vpa, z, r, vpa_adv, z_adv, composition)
 end
 
 """
