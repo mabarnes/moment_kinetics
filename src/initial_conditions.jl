@@ -245,9 +245,13 @@ also enforce boundary conditions in z on all separately evolved velocity space m
 """
 function enforce_boundary_conditions!(fvec_out, fvec_in, moments, vpa_bc, z_bc, vpa, z, r, vpa_adv::T1, z_adv::T2, composition) where {T1, T2}
     @loop_s_r_z is ir iz begin
-        # enforce the vpa BC
-        @views enforce_vpa_boundary_condition_local!(fvec_out.pdf[:,iz,ir,is], vpa_bc, vpa_adv[is].upwind_idx[iz,ir],
-                                                     vpa_adv[is].downwind_idx[iz,ir])
+        if is ∈ composition.ion_species_range
+            # enforce the vpa BC
+            # no bc needed for neutrals, as there is no acceleration for neutrals (i.e.
+            # no advection in v-space).
+            @views enforce_vpa_boundary_condition_local!(fvec_out.pdf[:,iz,ir,is], vpa_bc, vpa_adv[is].upwind_idx[iz,ir],
+                                                         vpa_adv[is].downwind_idx[iz,ir])
+        end
     end
     begin_s_r_vpa_region()
     @views enforce_z_boundary_condition!(fvec_out.pdf, fvec_in.density, fvec_in.upar, moments, z_bc, z_adv, vpa, r, composition)
