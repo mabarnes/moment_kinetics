@@ -491,20 +491,20 @@ end
 enforce the z boundary condition on the evolved velocity space moments of f
 """
 function enforce_z_boundary_condition_moments!(density, moments, bc::String)
-    # TODO: parallelise
-    @serial_region begin
-        # enforce z boundary condition on density if it is evolved separately from f
-    	if moments.evolve_density
-            # TODO: extend to 'periodic' BC case, as this requires further code modifications to be consistent
-            # with finite difference derivatives (should be fine for Chebyshev)
-            if bc == "wall"
-                @loop_s_r is ir begin
-                    density[1,ir,is] = 0.5*(density[1,ir,is] + density[end,ir,is])
-                    density[end,ir,is] = density[1,ir,is]
-            	end
-            end
-        end
-    end
+    ## TODO: parallelise
+    #@serial_region begin
+    #    # enforce z boundary condition on density if it is evolved separately from f
+    #	if moments.evolve_density
+    #        # TODO: extend to 'periodic' BC case, as this requires further code modifications to be consistent
+    #        # with finite difference derivatives (should be fine for Chebyshev)
+    #        if bc == "wall"
+    #            @loop_s_r is ir begin
+    #                density[1,ir,is] = 0.5*(density[1,ir,is] + density[end,ir,is])
+    #                density[end,ir,is] = density[1,ir,is]
+    #        	end
+    #        end
+    #    end
+    #end
 end
 """
 impose the prescribed vpa boundary condition on f
