@@ -549,11 +549,19 @@ function plot_moments(density, delta_density, density_fldline_avg,
             gif(anim, outfile, fps=5)
         end
         if pp.animate_upar_vs_z
-            # make a gif animation of ϕ(z) at different times
+            # make a gif animation of upar(z) at different times
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
                 @views plot(z, parallel_flow[:,is,i], xlabel="z", ylabel="upars/vt", ylims = (upar_min,upar_max))
             end
             outfile = string(run_name, "_upar_vs_z_spec", spec_string, ".gif")
+            gif(anim, outfile, fps=5)
+        end
+        if pp.animate_ppar_vs_z
+            # make a gif animation of ppar(z) at different times
+            anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+                @views plot(z, parallel_pressure[:,is,i], xlabel="z", ylabel="ppars", ylims = (ppar_min,ppar_max))
+            end
+            outfile = string(run_name, "_ppar_vs_z_spec", spec_string, ".gif")
             gif(anim, outfile, fps=5)
         end
     end
