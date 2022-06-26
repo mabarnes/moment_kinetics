@@ -14,6 +14,7 @@ using ..type_definitions: mk_float
 using ..array_allocation: allocate_shared_float
 using ..bgk: init_bgk_pdf!
 using ..communication
+using ..coordinates: coordinate
 using ..looping
 using ..moment_kinetics_structs: scratch_pdf
 using ..velocity_moments: integrate_over_vspace
@@ -294,10 +295,17 @@ function enforce_z_boundary_condition!(pdf, density, upar, ppar, moments, bc::St
     # 'wall' BC enforces wall boundary conditions
     elseif bc == "wall"
         @loop_s is begin
-            # zero incoming BC for ions, as they recombine at the wall
             if is ∈ composition.ion_species_range
-                @loop_r ir begin
-                    @views enforce_zero_incoming_bc!(pdf[:,:,ir,is], adv[is].speed[:,:,ir], zero)
+                # zero incoming BC for ions, as they recombine at the wall
+                if moments.evolve_upar
+                    @loop_r ir begin
+                        @views enforce_zero_incoming_bc!(pdf[:,:,ir,is], vpa,
+                                                         upar[:,ir,is], zero)
+                    end
+                else
+                    @loop_r ir begin
+                        @views enforce_zero_incoming_bc!(pdf[:,:,ir,is], vpa, zero)
+                    end
                 end
             end
         end
@@ -370,7 +378,7 @@ end
 """
 enforce a zero incoming BC in z for given species pdf at each radial location
 """
-function enforce_zero_incoming_bc!(pdf, advection_speed, zero)
+function enforce_zero_incoming_bc!(pdf, vpa::coordinate, zero)
     nvpa = size(pdf,1)
     # no parallel BC should be enforced for dz/dt = 0
     # note that the parallel velocity coordinate vpa may be dz/dt or
@@ -379,12 +387,31 @@ function enforce_zero_incoming_bc!(pdf, advection_speed, zero)
     @loop_vpa ivpa begin
         # for left boundary in zed (z = -Lz/2), want
         # f(z=-Lz/2, v_parallel > 0) = 0
-        if advection_speed[1,ivpa] > zero
+        if vpa.grid[ivpa] > zero
             pdf[ivpa,1] = 0.0
         end
         # for right boundary in zed (z = Lz/2), want
         # f(z=Lz/2, v_parallel < 0) = 0
-        if advection_speed[end,ivpa] < -zero
+        if vpa.grid[ivpa] < -zero
+            pdf[ivpa,end] = 0.0
+        end
+    end
+end
+function enforce_zero_incoming_bc!(pdf, vpa::coordinate, upar, zero)
+    nvpa = size(pdf,1)
+    # no parallel BC should be enforced for dz/dt = 0
+    # note that the parallel velocity coordinate vpa may be dz/dt or
+    # some version of the peculiar velocity (dz/dt - upar),
+    # so use advection speed below instead of vpa
+    @loop_vpa ivpa begin
+        # for left boundary in zed (z = -Lz/2), want
+        # f(z=-Lz/2, v_parallel > 0) = 0
+        if vpa.grid[ivpa] > zero - upar[1]
+            pdf[ivpa,1] = 0.0
+        end
+        # for right boundary in zed (z = Lz/2), want
+        # f(z=Lz/2, v_parallel < 0) = 0
+        if vpa.grid[ivpa] < zero - upar[end]
             pdf[ivpa,end] = 0.0
         end
     end
@@ -506,9 +533,9 @@ function enforce_neutral_wall_bc!(pdf, vpa, ppar, upar, density, wall_flux_0,
         # the Knudsen distribution (in vpa.scratch) by a normalisation factor given by
         # the integral (over positive v_parallel) of the outgoing Knudsen distribution
         # and (over negative v_parallel) of the incoming pdf.
-        knudsen_integral = integrate_over_positive_vpa(vpa.scratch2 .* vpa.grid, vpa.scratch2, vpa.wgts, vpa.scratch3)
+        knudsen_integral = integrate_over_positive_vpa(vpa.grid .* vpa.scratch, vpa.scratch2, vpa.wgts, vpa.scratch3)
 
-        @views pdf_integral = integrate_over_negative_vpa(pdf[:,1] .* vpa.grid, vpa.scratch2, vpa.wgts, vpa.scratch3)
+        @views pdf_integral = integrate_over_negative_vpa(vpa.grid .* pdf[:,1], vpa.scratch2, vpa.wgts, vpa.scratch3)
         knudsen_norm_fac = -pdf_integral / knudsen_integral
         # for left boundary in zed (z = -Lz/2), want
         # f_n(z=-Lz/2, v_parallel > 0) = knudsen_norm_fac * f_KW(v_parallel)
@@ -536,15 +563,15 @@ function enforce_neutral_wall_bc!(pdf, vpa, ppar, upar, density, wall_flux_0,
         # the Knudsen distribution (in vpa.scratch) by a normalisation factor given by
         # the integral (over negative v_parallel) of the outgoing Knudsen distribution
         # and (over positive v_parallel) of the incoming pdf.
-        knudsen_integral = integrate_over_negative_vpa(vpa.scratch2 .* vpa.grid, vpa.scratch2, vpa.wgts, vpa.scratch3)
+        knudsen_integral = integrate_over_negative_vpa(vpa.grid .* vpa.scratch, vpa.scratch2, vpa.wgts, vpa.scratch3)
 
-        @views pdf_integral = integrate_over_positive_vpa(pdf[:,1] .* vpa.grid, vpa.scratch2, vpa.wgts, vpa.scratch3)
+        @views pdf_integral = integrate_over_positive_vpa(vpa.grid .* pdf[:,end], vpa.scratch2, vpa.wgts, vpa.scratch3)
         knudsen_norm_fac = -pdf_integral / knudsen_integral
-        # for left boundary in zed (z = -Lz/2), want
-        # f_n(z=-Lz/2, v_parallel > 0) = knudsen_norm_fac * f_KW(v_parallel)
+        # for right boundary in zed (z = Lz/2), want
+        # f_n(z=Lz/2, v_parallel < 0) = knudsen_norm_fac * f_KW(v_parallel)
         for ivpa ∈ 1:nvpa
             if vpa.scratch2[ivpa] < zero
-                pdf[ivpa,1] = knudsen_norm_fac * vpa.scratch[ivpa]
+                pdf[ivpa,end] = knudsen_norm_fac * vpa.scratch[ivpa]
             end
         end
     end
