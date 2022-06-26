@@ -319,32 +319,38 @@ function enforce_z_boundary_condition!(pdf, density, upar, ppar, moments, bc::St
                     for is ∈ 1:composition.n_species
                         # include the contribution to the wall fluxes due to species with index 'is'
                         if is ∈ composition.ion_species_range
-                            ## treat the boundary at z = -Lz/2 ##
-                            # create an array of dz/dt values at z = -Lz/2
-                            vth = sqrt(2.0*ppar[1,ir,is]/density[1,ir,is])
-                            @. vpa.scratch2 = vpagrid_to_dzdt(vpa.grid, vth, upar[1,ir,is],
-                                                              moments.evolve_ppar, moments.evolve_upar)
-                            # account for the fact that the pdf here is the normalised pdf,
-                            # and the integration in wall_flux is defined relative to the un-normalised pdf
-                            if moments.evolve_density
-                                pdf_norm_fac = density[1,ir,is]
+                            if moments.evolve_upar
+                                # Flux to sheath boundary given by the moments
+                                ion_flux_0 += density[1,ir,is] * upar[1,ir,is]
+                                ion_flux_L += density[end,ir,is] * upar[end,ir,is]
+                            else
+                                ## treat the boundary at z = -Lz/2 ##
+                                # create an array of dz/dt values at z = -Lz/2
+                                vth = sqrt(2.0*ppar[1,ir,is]/density[1,ir,is])
+                                @. vpa.scratch2 = vpagrid_to_dzdt(vpa.grid, vth, upar[1,ir,is],
+                                                                  moments.evolve_ppar, moments.evolve_upar)
+                                # account for the fact that the pdf here is the normalised pdf,
+                                # and the integration in wall_flux is defined relative to the un-normalised pdf
+                                if moments.evolve_density
+                                    pdf_norm_fac = density[1,ir,is]
+                                end
+                                # add this species' contribution to the combined ion/neutral particle flux out of the domain at z=-Lz/2
+                                @views ion_flux_0 += (sqrt(composition.mn_over_mi) * pdf_norm_fac *
+                                                      integrate_over_negative_vpa(abs.(vpa.scratch2) .* pdf[:,1,ir,is], vpa.scratch2, vpa.wgts, vpa.scratch))
+                                ## treat the boundary at z = Lz/2 ##
+                                # create an array of dz/dt values at z = Lz/2
+                                vth = sqrt(2.0*ppar[end,ir,is]/density[end,ir,is])
+                                @. vpa.scratch2 = vpagrid_to_dzdt(vpa.grid, vth, upar[end,ir,is],
+                                                                  moments.evolve_ppar, moments.evolve_upar)
+                                # account for the fact that the pdf here is the normalised pdf,
+                                # and the integration in wall_flux is defined relative to the un-normalised pdf
+                                if moments.evolve_density
+                                    pdf_norm_fac = density[end,ir,is]
+                                end
+                                # add this species' contribution to the combined ion/neutral particle flux out of the domain at z=Lz/2
+                                @views ion_flux_L += (sqrt(composition.mn_over_mi) * pdf_norm_fac *
+                                                      integrate_over_positive_vpa(abs.(vpa.scratch2) .* pdf[:,end,ir,is], vpa.scratch2, vpa.wgts, vpa.scratch))
                             end
-                            # add this species' contribution to the combined ion/neutral particle flux out of the domain at z=-Lz/2
-                            @views ion_flux_0 += (sqrt(composition.mn_over_mi) * pdf_norm_fac *
-                                                   integrate_over_negative_vpa(abs.(vpa.scratch2) .* pdf[:,1,ir,is], vpa.scratch2, vpa.wgts, vpa.scratch))
-                            ## treat the boundary at z = Lz/2 ##
-                            # create an array of dz/dt values at z = Lz/2
-                            vth = sqrt(2.0*ppar[end,ir,is]/density[end,ir,is])
-                            @. vpa.scratch2 = vpagrid_to_dzdt(vpa.grid, vth, upar[end,ir,is],
-                                                              moments.evolve_ppar, moments.evolve_upar)
-                            # account for the fact that the pdf here is the normalised pdf,
-                            # and the integration in wall_flux is defined relative to the un-normalised pdf
-                            if moments.evolve_density
-                                pdf_norm_fac = density[end,ir,is]
-                            end
-                            # add this species' contribution to the combined ion/neutral particle flux out of the domain at z=Lz/2
-                            @views ion_flux_L += (sqrt(composition.mn_over_mi) * pdf_norm_fac *
-                                                   integrate_over_positive_vpa(abs.(vpa.scratch2) .* pdf[:,end,ir,is], vpa.scratch2, vpa.wgts, vpa.scratch))
                         end
                     end
                     # enforce boundary condition on the neutral pdf that all ions and neutrals
