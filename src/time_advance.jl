@@ -141,7 +141,7 @@ function setup_time_advance!(pdf, vpa, z, r, z_spectral, composition, drive_inpu
 
     # enforce boundary conditions and moment constraints to ensure a consistent initial
     # condition
-    enforce_boundary_conditions!(pdf.norm, moments.dens, moments.upar,
+    enforce_boundary_conditions!(pdf.norm, moments.dens, moments.upar, moments.ppar,
         moments, vpa.bc, z.bc, vpa, z, r, vpa_advect, z_advect, composition)
     # Ensure normalised pdf exactly obeys integral constraints if evolving moments
     begin_s_r_z_region()
