@@ -403,6 +403,26 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, r, composition,
             end
         end
         @loop_r ir begin
+            if moments.evolve_upar && is ∈ composition.ion_species_range && z.bc == "wall"
+                # Enforce zero-incoming boundary condition on the old distribution
+                # function with the new parallel flow, then force the updated old
+                # distribution function to obey the integral constraints exactly, which
+                # should be a small correction here as the boundary condition should
+                # only modify a few points due to the small change in upar.
+                # This procedure ensures that fvec_old obeys both the new boundary
+                # conditions and the moment constraints, so that when it is used to
+                # update f_new, f_new also does.
+                # Note fvec_old is never used after this function, so it is OK to modify
+                # it in-place.
+
+                # define a zero that accounts for finite precision
+                zero = 1.0e-10
+
+                @views enforce_zero_incoming_bc!(fvec_old.pdf[:,:,ir,is],
+                                                 vpa, upar[:,ir,is], zero)
+                @views hard_force_moment_constraints!(fvec_old.pdf[:,:,ir,is], moments,
+                                                      vpa)
+            end
             @loop_z iz begin
                 # Create views once to save overhead
                 fnew_view = @view(fvec_new.pdf[:,iz,ir,is])
