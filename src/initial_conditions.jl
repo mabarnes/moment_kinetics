@@ -414,10 +414,10 @@ function enforce_neutral_wall_bc!(pdf, vpa, ppar, upar, density, wall_flux_0,
     # obtain the Knudsen cosine distribution at z = -Lz/2
     # the z-dependence is only introduced if the peculiar velocity is used as vpa
     @. vpa.scratch = (3.0*pi/vtfac^3)*abs(vpa.scratch2)*erfc(abs(vpa.scratch2)/vtfac)
-    # the integral of -v_parallel*f_{Kw} over negative v_parallel should be one,
+    # the integral of v_parallel*f_{Kw} over positive v_parallel should be one,
     # but may not be exactly this due to quadrature errors;
     # ensure that this is true to machine precision to make sure particle number in/out of wall is conserved
-    knudsen_norm_fac = -integrate_over_negative_vpa(vpa.scratch2 .* vpa.scratch, vpa.scratch2, vpa.wgts, vpa.scratch3)
+    knudsen_norm_fac = integrate_over_positive_vpa(vpa.scratch2 .* vpa.scratch, vpa.scratch2, vpa.wgts, vpa.scratch3)
     @. vpa.scratch /= knudsen_norm_fac
     # depending on which moments (if any) are evolved, there is a different factor
     # multiplying the neutral pdf in the wall BC
@@ -457,10 +457,10 @@ function enforce_neutral_wall_bc!(pdf, vpa, ppar, upar, density, wall_flux_0,
     # obtain the Knudsen cosine distribution at z = Lz/2
     # the z-dependence is only introduced if the peculiiar velocity is used as vpa
     @. vpa.scratch = (3.0*pi/vtfac^3)*abs(vpa.scratch2)*erfc(abs(vpa.scratch2)/vtfac)
-    # the integral of v_parallel*f_{Kw} over positive v_parallel should be one,
+    # the integral of -v_parallel*f_{Kw} over negative v_parallel should be one,
     # but may not be exactly this due to quadrature errors;
     # ensure that this is true to machine precision to make sure particle number in/out of wall is conserved
-    knudsen_norm_fac = integrate_over_positive_vpa(vpa.scratch2 .* vpa.scratch, vpa.scratch2, vpa.wgts, vpa.scratch3)
+    knudsen_norm_fac = -integrate_over_negative_vpa(vpa.scratch2 .* vpa.scratch, vpa.scratch2, vpa.wgts, vpa.scratch3)
     @. vpa.scratch /= knudsen_norm_fac
     # depending on which moments (if any) are evolved, there is a different factor
     # multiplying the neutral pdf in the wall BC
