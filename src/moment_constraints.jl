@@ -10,7 +10,7 @@ using ..initial_conditions: enforce_zero_incoming_bc!
 using ..looping
 using ..velocity_moments: integrate_over_vspace, update_qpar!
 
-export enforce_moment_constraints!, hard_force_moment_constraints!
+export enforce_moment_constraints!, hard_force_moment_constraints!, force_non_negative!
 
 """
     enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, r, composition, moments, dummy_sr)
@@ -181,6 +181,19 @@ function hard_force_moment_constraints!(f, moments, vpa)
     end
 
     return nothing
+end
+
+"""
+    force_non_negative(f)
+
+Set any negative elements in the pdf-sized array `f` to 0.
+"""
+function force_non_negative!(f)
+    @loop_s_r_z_vpa is ir iz ivpa begin
+        if f[ivpa,iz,ir,is] < 0.0
+            f[ivpa,iz,ir,is] = 0.0
+        end
+    end
 end
 
 end

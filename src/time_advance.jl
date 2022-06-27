@@ -11,7 +11,8 @@ using ..communication: _block_synchronize
 using ..debugging
 using ..file_io: write_data_to_ascii, write_data_to_binary, debug_dump
 using ..looping
-using ..moment_constraints: enforce_moment_constraints!, hard_force_moment_constraints!
+using ..moment_constraints: enforce_moment_constraints!, hard_force_moment_constraints!,
+                            force_non_negative!
 using ..moment_kinetics_structs: scratch_pdf
 using ..velocity_moments: update_moments!, reset_moments_status!
 using ..velocity_moments: update_density!, update_upar!, update_ppar!, update_qpar!
@@ -145,6 +146,7 @@ function setup_time_advance!(pdf, vpa, z, r, z_spectral, composition, drive_inpu
     # condition
     enforce_boundary_conditions!(pdf.norm, moments.dens, moments.upar, moments.ppar,
         moments, vpa.bc, z.bc, vpa, z, r, vpa_advect, z_advect, composition)
+    force_non_negative!(pdf.norm)
     # Ensure normalised pdf exactly obeys integral constraints if evolving moments
     begin_s_r_z_region()
     @loop_s_r_z is ir iz begin
@@ -574,6 +576,11 @@ function rk_update!(scratch, pdf, moments, fields, vpa, z, r, vpa_advect, z_adve
     end
     # use Runge Kutta to update any velocity moments evolved separately from the pdf
     rk_update_evolved_moments!(new_scratch, old_scratch, moments, rk_coefs)
+
+    # Ensure there are no negative values in the pdf before applying boundary
+    # conditions, so that negative deviations do not mess up the integral-constraint
+    # corrections in the sheath boundary conditions.
+    force_non_negative!(new_scratch.pdf)
 
     # Enforce boundary conditions in z and vpa on the distribution function.
     # Must be done after Runge Kutta update so that the boundary condition applied to
