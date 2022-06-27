@@ -26,7 +26,8 @@ using ..charge_exchange: charge_exchange_collisions!
 using ..ionization: ionization_collisions!
 using ..numerical_dissipation: vpa_boundary_buffer_decay!,
                                vpa_boundary_buffer_diffusion!, vpa_dissipation!,
-                               z_dissipation!, vpa_boundary_force_decreasing!
+                               z_dissipation!, vpa_boundary_force_decreasing!,
+                               force_minimum_pdf_value!
 using ..source_terms: source_terms!
 using ..continuity: continuity_equation!
 using ..force_balance: force_balance!
@@ -61,7 +62,7 @@ for Chebyshev transforms, velocity space moments,
 EM fields, semi-Lagrange treatment, and advection terms
 """
 function setup_time_advance!(pdf, vpa, z, r, z_spectral, composition, drive_input,
-                             moments, t_input, collisions, species)
+                             moments, t_input, collisions, species, num_diss_params)
     # define some local variables for convenience/tidiness
     n_species = composition.n_species
     n_ion_species = composition.n_ion_species
@@ -143,6 +144,8 @@ function setup_time_advance!(pdf, vpa, z, r, z_spectral, composition, drive_inpu
         end
     end
 
+    # ensure initial pdf has no negative values
+    force_minimum_pdf_value!(pdf.norm, num_diss_params)
     # enforce boundary conditions and moment constraints to ensure a consistent initial
     # condition
     enforce_boundary_conditions!(pdf.norm, moments.dens, moments.upar, moments.ppar,
@@ -582,7 +585,7 @@ stages, if the quantities are evolved separately from the modified pdf;
 or update them by taking the appropriate velocity moment of the evolved pdf
 """
 function rk_update!(scratch, pdf, moments, fields, vpa, z, r, vpa_advect, z_advect,
-                    rk_coefs, istage, composition)
+                    rk_coefs, istage, composition, num_diss_params)
     begin_s_r_z_region()
     nvpa = size(pdf.unnorm, 1)
     new_scratch = scratch[istage+1]
@@ -593,6 +596,11 @@ function rk_update!(scratch, pdf, moments, fields, vpa, z, r, vpa_advect, z_adve
     end
     # use Runge Kutta to update any velocity moments evolved separately from the pdf
     rk_update_evolved_moments!(new_scratch, old_scratch, moments, rk_coefs)
+
+    # Ensure there are no negative values in the pdf before applying boundary
+    # conditions, so that negative deviations do not mess up the integral-constraint
+    # corrections in the sheath boundary conditions.
+    force_minimum_pdf_value!(new_scratch.pdf, num_diss_params)
 
     # Enforce boundary conditions in z and vpa on the distribution function.
     # Must be done after Runge Kutta update so that the boundary condition applied to
@@ -741,7 +749,8 @@ function ssp_rk!(pdf, scratch, t, t_input, vpa, z, r,
             t_input, vpa_spectral, z_spectral, r_spectral, composition,
             collisions, num_diss_params, advance, istage)
         @views rk_update!(scratch, pdf, moments, fields, vpa, z, r, vpa_advect,
-                          z_advect, advance.rk_coefs[:,istage], istage, composition)
+                          z_advect, advance.rk_coefs[:,istage], istage, composition,
+                          num_diss_params)
     end
 
     istage = n_rk_stages+1

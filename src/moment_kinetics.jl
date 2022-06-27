@@ -260,7 +260,8 @@ function setup_moment_kinetics(input_dict::Dict; backup_filename=nothing,
     # the main time advance loop -- including normalisation of f by density if requested
     moments, fields, vpa_advect, z_advect, r_advect, vpa_SL, z_SL, r_SL, scratch,
         advance, scratch_dummy_sr = setup_time_advance!(pdf, vpa, z, r, z_spectral,
-            composition, drive_input, moments, t_input, collisions, species)
+            composition, drive_input, moments, t_input, collisions, species,
+            num_diss_params)
 
     if backup_filename !== nothing
         # Have done unnecessary initialisation of pdf and moments, which is overwritten
