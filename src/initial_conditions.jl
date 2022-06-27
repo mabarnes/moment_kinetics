@@ -404,16 +404,20 @@ function enforce_zero_incoming_bc!(pdf, vpa::coordinate, upar, zero)
     # note that the parallel velocity coordinate vpa may be dz/dt or
     # some version of the peculiar velocity (dz/dt - upar),
     # so use advection speed below instead of vpa
-    @loop_vpa ivpa begin
+    for ielement ∈ 1:vpa.nelement
         # for left boundary in zed (z = -Lz/2), want
         # f(z=-Lz/2, v_parallel > 0) = 0
-        if vpa.grid[ivpa] > zero - upar[1]
-            pdf[ivpa,1] = 0.0
+        if vpa.grid[vpa.imax[ielement]] > zero - upar[1]
+            for ivpa ∈ max(1,vpa.imin[ielement]):vpa.imax[ielement]
+                pdf[ivpa,1] = 0.0
+            end
         end
         # for right boundary in zed (z = Lz/2), want
         # f(z=Lz/2, v_parallel < 0) = 0
-        if vpa.grid[ivpa] < zero - upar[end]
-            pdf[ivpa,end] = 0.0
+        if vpa.grid[vpa.imin[ielement]] < zero - upar[end]
+            for ivpa ∈ max(1,vpa.imin[ielement]):vpa.imax[ielement]
+                pdf[ivpa,end] = 0.0
+            end
         end
     end
 end
