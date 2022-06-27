@@ -30,6 +30,7 @@ include("velocity_moments.jl")
 include("em_fields.jl")
 include("bgk.jl")
 include("initial_conditions.jl")
+include("moment_constraints.jl")
 include("semi_lagrange.jl")
 include("advection.jl")
 include("vpa_advection.jl")
@@ -62,6 +63,7 @@ using .coordinates: define_coordinate
 using .debugging
 using .initial_conditions: init_pdf_and_moments, enforce_boundary_conditions!
 using .looping
+using .moment_constraints: hard_force_moment_constraints!
 using .moment_kinetics_input: mk_input, run_type, performance_test
 using .time_advance: setup_time_advance!, time_advance!
 

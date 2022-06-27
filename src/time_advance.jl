@@ -11,9 +11,9 @@ using ..communication: _block_synchronize
 using ..debugging
 using ..file_io: write_data_to_ascii, write_data_to_binary, debug_dump
 using ..looping
+using ..moment_constraints: enforce_moment_constraints!, hard_force_moment_constraints!
 using ..moment_kinetics_structs: scratch_pdf
 using ..velocity_moments: update_moments!, reset_moments_status!
-using ..velocity_moments: enforce_moment_constraints!, hard_force_moment_constraints!
 using ..velocity_moments: update_density!, update_upar!, update_ppar!, update_qpar!
 using ..initial_conditions: enforce_z_boundary_condition!, enforce_boundary_conditions!
 using ..initial_conditions: enforce_z_boundary_condition_moments!
