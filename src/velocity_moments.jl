@@ -551,7 +551,7 @@ function integrate_over_positive_vpa(integrand, dzdt, vpa_wgts, wgts_mod, vperp_
         # this will only change at the dzdt = 0 point, if it exists on the grid
         @. wgts_mod = vpa_wgts
         # ivpa_zero will be the minimum index for which dzdt[ivpa_zero] >= 0
-        ivpa_zero = 0
+        ivpa_zero = nvpa
         @inbounds for ivpa ∈ 1:nvpa
             if dzdt[ivpa] >= zero
                 ivpa_zero = ivpa
@@ -596,7 +596,7 @@ function integrate_over_positive_vz(integrand, dzdt, vz_wgts, wgts_mod,
         # this will only change at the dzdt = 0 point, if it exists on the grid
         @. wgts_mod = vz_wgts
         # ivz_zero will be the minimum index for which dzdt[ivz_zero] >= 0
-        ivz_zero = 0
+        ivz_zero = nvz
         @inbounds for ivz ∈ 1:nvz
             if dzdt[ivz] >= zero
                 ivz_zero = ivz
@@ -644,7 +644,7 @@ function integrate_over_negative_vpa(integrand, dzdt, vpa_wgts, wgts_mod, vperp_
         # this will only change at the dzdt = 0 point, if it exists on the grid
         @. wgts_mod = vpa_wgts
         # ivpa_zero will be the maximum index for which dzdt[ivpa_zero] <= 0
-        ivpa_zero = 0
+        ivpa_zero = 1
         @inbounds for ivpa ∈ nvpa:-1:1
             if dzdt[ivpa] <= zero
                 ivpa_zero = ivpa
@@ -688,7 +688,7 @@ function integrate_over_negative_vz(integrand, dzdt, vz_wgts, wgts_mod,
         # this will only change at the dzdt = 0 point, if it exists on the grid
         @. wgts_mod = vz_wgts
         # ivz_zero will be the maximum index for which dzdt[ivz_zero] <= 0
-        ivz_zero = 0
+        ivz_zero = 1
         @inbounds for ivz ∈ nvz:-1:1
             if dzdt[ivz] <= zero
                 ivz_zero = ivz
