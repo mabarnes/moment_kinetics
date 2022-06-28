@@ -317,6 +317,8 @@ function compare_neutral_pdf_symbolic_test(run_name,pdf,pdf_sym,spec_string,
     @views plot(time, pdf_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=norm_label) #, yaxis=:log)
     outfile = string(run_name, "_"*file_string*"_norm_vs_t_", spec_string, ".pdf")
     savefig(outfile)
+
+    return pdf_norm
 end
 
 function init_postprocessing_options(pp, nvpa, nvperp, nz, nr, ntime)
