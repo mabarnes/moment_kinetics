@@ -540,10 +540,24 @@ function enforce_neutral_wall_bc!(pdf, vpa, ppar, upar, density, wall_flux_0,
         knudsen_norm_fac = -pdf_integral / knudsen_integral
         # for left boundary in zed (z = -Lz/2), want
         # f_n(z=-Lz/2, v_parallel > 0) = knudsen_norm_fac * f_KW(v_parallel)
+        zero_vpa_ind = 0
         for ivpa ∈ 1:nvpa
-            if vpa.scratch2[ivpa] > zero
-                pdf[ivpa,1] = knudsen_norm_fac * vpa.scratch[ivpa]
+            if vpa.scratch2[ivpa] > -zero
+                zero_vpa_ind = ivpa
+                if abs(vpa.scratch2[ivpa]) < zero
+                    # v_parallel = 0 point, half contribution from original pdf and half
+                    # from Knudsen cosine distribution, to be consistent with weights
+                    # used in
+                    # integrate_over_positive_vpa()/integrate_over_negative_vpa().
+                    pdf[ivpa,1] = 0.5 * (pdf[ivpa,1] + knudsen_norm_fac * vpa.scratch[ivpa])
+                else
+                    pdf[ivpa,1] = knudsen_norm_fac * vpa.scratch[ivpa]
+                end
+                break
             end
+        end
+        for ivpa ∈ zero_vpa_ind+1:nvpa
+            pdf[ivpa,1] = knudsen_norm_fac * vpa.scratch[ivpa]
         end
 
         ## treat the right boundary at z = Lz/2 ##
@@ -570,10 +584,24 @@ function enforce_neutral_wall_bc!(pdf, vpa, ppar, upar, density, wall_flux_0,
         knudsen_norm_fac = -pdf_integral / knudsen_integral
         # for right boundary in zed (z = Lz/2), want
         # f_n(z=Lz/2, v_parallel < 0) = knudsen_norm_fac * f_KW(v_parallel)
-        for ivpa ∈ 1:nvpa
+        zero_vpa_ind = 0
+        for ivpa ∈ nvpa:-1:1
             if vpa.scratch2[ivpa] < zero
-                pdf[ivpa,end] = knudsen_norm_fac * vpa.scratch[ivpa]
+                zero_vpa_ind = ivpa
+                if abs(vpa.scratch2[ivpa]) < zero
+                    # v_parallel = 0 point, half contribution from original pdf and half
+                    # from Knudsen cosine distribution, to be consistent with weights
+                    # used in
+                    # integrate_over_positive_vpa()/integrate_over_negative_vpa().
+                    pdf[ivpa,end] = 0.5 * (pdf[ivpa,end] + knudsen_norm_fac * vpa.scratch[ivpa])
+                else
+                    pdf[ivpa,end] = knudsen_norm_fac * vpa.scratch[ivpa]
+                end
+                break
             end
+        end
+        for ivpa ∈ 1:zero_vpa_ind-1
+            pdf[ivpa,end] = knudsen_norm_fac * vpa.scratch[ivpa]
         end
     end
 end
