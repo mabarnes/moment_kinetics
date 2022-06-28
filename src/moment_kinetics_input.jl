@@ -76,6 +76,8 @@ function mk_input(scan_input=Dict())
     # set initial nᵢ/Nₑ = 1.0
     # set phi_wall at z = 0
     composition.phi_wall = get(scan_input, "phi_wall", 0.0)
+    # if false use true Knudsen cosine for neutral wall bc
+    composition.use_test_neutral_wall_pdf = get(scan_input, "use_test_neutral_wall_pdf", false)
     
     ## set geometry_input
     geometry.Bzed = get(scan_input, "Bzed", 1.0)
@@ -673,6 +675,7 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     else
         n_species = n_ion_speces + n_neutral_species + 1
     end
+    use_test_neutral_wall_pdf = false
     # electron temperature over reference temperature
     T_e = 1.0
     # temperature at the entrance to the wall in terms of the electron temperature
@@ -684,7 +687,7 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     # ratio of the electron particle mass to the ion particle mass
     me_over_mi = 1.0/1836.0
     composition = species_composition(n_species, n_ion_species, n_neutral_species,
-        electron_physics, 1:n_ion_species, n_ion_species+1:n_species, T_e, T_wall,
+        electron_physics, use_test_neutral_wall_pdf, 1:n_ion_species, n_ion_species+1:n_species, T_e, T_wall,
         phi_wall, mn_over_mi, me_over_mi, allocate_float(n_species))
     
     species_charged = Array{species_parameters_mutable,1}(undef,n_ion_species)

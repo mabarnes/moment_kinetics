@@ -37,8 +37,13 @@ using ..input_structs
         # prefac here may cause problems with NaNs if vz = vr = vzeta = 0 is on grid
         prefac = abs(vz)/sqrt(vz^2 + vr^2 + vzeta^2)
         exponetial = exp( - (vz^2 + vr^2 + vzeta^2)/T_wall )
-        knudsen_pdf = (3.0*sqrt(pi)/T_wall^2)*prefac*exponetial
-    
+        if composition.use_test_neutral_wall_pdf
+            #test dfn
+            knudsen_pdf = (4.0/T_wall^(5.0/2.0))*abs(vz)*exponetial
+        else
+            #proper Knudsen dfn
+            knudsen_pdf = (3.0*sqrt(pi)/T_wall^2)*prefac*exponetial
+        end
         return knudsen_pdf
     end
 
@@ -53,7 +58,14 @@ using ..input_structs
             Gamma_minus = 0.5*(Bzed/Bmag)*nminus_sym(Lr,r_bc)/sqrt(pi)
             Gamma_plus = 0.5*(Bzed/Bmag)*nplus_sym(Lr,r_bc)/sqrt(pi)
             # exact integral of corresponding dfnn below
-            densn = 3.0*sqrt(pi)/(4.0*sqrt(T_wall))*( (0.5 - z/Lz)*Gamma_minus + (0.5 + z/Lz)*Gamma_plus + 2.0 )
+            if composition.use_test_neutral_wall_pdf
+                #test 
+                prefactor = 2.0/sqrt(pi*T_wall)
+            else
+                #proper prefactor
+                prefactor = 3.0*sqrt(pi)/(4.0*sqrt(T_wall))
+            end
+            densn = prefactor*( (0.5 - z/Lz)*Gamma_minus + (0.5 + z/Lz)*Gamma_plus + 2.0 )
         else
             densn = 1.0
         end
