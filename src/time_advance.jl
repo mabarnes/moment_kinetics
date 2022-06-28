@@ -150,7 +150,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
         z.duniform_dgrid .= 1.0
     end
     
-    if r.discretization == "chebyshev_pseudospectral"
+    if r.discretization == "chebyshev_pseudospectral" && r.n > 1
         # create arrays needed for explicit Chebyshev pseudospectral treatment in vpa
         # and create the plans for the forward and backward fast Chebyshev transforms
         r_spectral = setup_chebyshev_pseudospectral(r)
@@ -345,7 +345,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
             # initialise the upwind/downwind boundary indices in z
             update_boundary_indices!(neutral_z_advect[isn], loop_ranges[].vz, loop_ranges[].vr, loop_ranges[].vzeta, loop_ranges[].r)
         end
-        # enforce prescribed boundary condition in r on the neutral distribution function f
+        # enforce prescribed boundary condition in z on the neutral distribution function f
         @views enforce_neutral_z_boundary_condition!(pdf.neutral.unnorm, pdf.charged.unnorm, boundary_distributions,
             neutral_z_advect, z_advect, vz, vr, vzeta, vpa, vperp, z, r, composition)
     end
