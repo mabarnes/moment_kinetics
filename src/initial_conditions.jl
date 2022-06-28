@@ -299,8 +299,10 @@ function enforce_z_boundary_condition!(pdf, density, upar, ppar, moments, bc::St
                 # zero incoming BC for ions, as they recombine at the wall
                 if moments.evolve_upar
                     @loop_r ir begin
-                        @views enforce_zero_incoming_bc!(pdf[:,:,ir,is], vpa,
-                                                         upar[:,ir,is], zero)
+                        @views enforce_zero_incoming_bc!(
+                            pdf[:,:,ir,is], vpa, density[:,ir,is], upar[:,ir,is],
+                            ppar[:,ir,is], moments.evolve_upar, moments.evolve_ppar,
+                            zero)
                     end
                 else
                     @loop_r ir begin
@@ -397,21 +399,29 @@ function enforce_zero_incoming_bc!(pdf, vpa::coordinate, zero)
         end
     end
 end
-function enforce_zero_incoming_bc!(pdf, vpa::coordinate, upar, zero)
+function enforce_zero_incoming_bc!(pdf, vpa::coordinate, density, upar, ppar,
+                                   evolve_upar, evolve_ppar, zero)
     nvpa = size(pdf,1)
     # no parallel BC should be enforced for dz/dt = 0
     # note that the parallel velocity coordinate vpa may be dz/dt or
     # some version of the peculiar velocity (dz/dt - upar),
     # so use advection speed below instead of vpa
-    @loop_vpa ivpa begin
+
+    # absolute velocity at left boundary
+    @. vpa.scratch = vpagrid_to_dzdt(vpa.grid, sqrt(2.0*(ppar[1]/density[1])),
+                                     upar[1], evolve_ppar, evolve_upar)
+    # absolute velocity at right boundary
+    @. vpa.scratch2 = vpagrid_to_dzdt(vpa.grid, sqrt(2.0*(ppar[end]/density[end])),
+                                      upar[end], evolve_ppar, evolve_upar)
+    for ivpa ∈ 1:nvpa
         # for left boundary in zed (z = -Lz/2), want
         # f(z=-Lz/2, v_parallel > 0) = 0
-        if vpa.grid[ivpa] > zero - upar[1]
+        if vpa.scratch[ivpa] > zero
             pdf[ivpa,1] = 0.0
         end
         # for right boundary in zed (z = Lz/2), want
         # f(z=Lz/2, v_parallel < 0) = 0
-        if vpa.grid[ivpa] < zero - upar[end]
+        if vpa.scratch2[ivpa] < -zero
             pdf[ivpa,end] = 0.0
         end
     end
@@ -539,10 +549,24 @@ function enforce_neutral_wall_bc!(pdf, vpa, ppar, upar, density, wall_flux_0,
         knudsen_norm_fac = -pdf_integral / knudsen_integral
         # for left boundary in zed (z = -Lz/2), want
         # f_n(z=-Lz/2, v_parallel > 0) = knudsen_norm_fac * f_KW(v_parallel)
+        zero_vpa_ind = 0
         for ivpa ∈ 1:nvpa
-            if vpa.scratch2[ivpa] > zero
-                pdf[ivpa,1] = knudsen_norm_fac * vpa.scratch[ivpa]
+            if vpa.scratch2[ivpa] > -zero
+                zero_vpa_ind = ivpa
+                if abs(vpa.scratch2[ivpa]) < zero
+                    # v_parallel = 0 point, half contribution from original pdf and half
+                    # from Knudsen cosine distribution, to be consistent with weights
+                    # used in
+                    # integrate_over_positive_vpa()/integrate_over_negative_vpa().
+                    pdf[ivpa,1] = 0.5 * (pdf[ivpa,1] + knudsen_norm_fac * vpa.scratch[ivpa])
+                else
+                    pdf[ivpa,1] = knudsen_norm_fac * vpa.scratch[ivpa]
+                end
+                break
             end
+        end
+        for ivpa ∈ zero_vpa_ind+1:nvpa
+            pdf[ivpa,1] = knudsen_norm_fac * vpa.scratch[ivpa]
         end
 
         ## treat the right boundary at z = Lz/2 ##
@@ -569,10 +593,24 @@ function enforce_neutral_wall_bc!(pdf, vpa, ppar, upar, density, wall_flux_0,
         knudsen_norm_fac = -pdf_integral / knudsen_integral
         # for right boundary in zed (z = Lz/2), want
         # f_n(z=Lz/2, v_parallel < 0) = knudsen_norm_fac * f_KW(v_parallel)
-        for ivpa ∈ 1:nvpa
+        zero_vpa_ind = 0
+        for ivpa ∈ nvpa:-1:1
             if vpa.scratch2[ivpa] < zero
-                pdf[ivpa,end] = knudsen_norm_fac * vpa.scratch[ivpa]
+                zero_vpa_ind = ivpa
+                if abs(vpa.scratch2[ivpa]) < zero
+                    # v_parallel = 0 point, half contribution from original pdf and half
+                    # from Knudsen cosine distribution, to be consistent with weights
+                    # used in
+                    # integrate_over_positive_vpa()/integrate_over_negative_vpa().
+                    pdf[ivpa,end] = 0.5 * (pdf[ivpa,end] + knudsen_norm_fac * vpa.scratch[ivpa])
+                else
+                    pdf[ivpa,end] = knudsen_norm_fac * vpa.scratch[ivpa]
+                end
+                break
             end
+        end
+        for ivpa ∈ 1:zero_vpa_ind-1
+            pdf[ivpa,end] = knudsen_norm_fac * vpa.scratch[ivpa]
         end
     end
 end
