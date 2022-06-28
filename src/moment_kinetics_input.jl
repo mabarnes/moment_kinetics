@@ -391,7 +391,7 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     ngrid_z = 100
     # nelement_z is the number of elements
     nelement_z = 1
-    # L_z is the box length
+    # L_z is the box length in z
     L_z = 1.0
     # determine the boundary condition in z
     # currently supported options are "constant" and "periodic"
@@ -429,7 +429,7 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     ngrid_r = 1
     # nelement_r is the number of elements
     nelement_r = 1
-    # L_r is the box length
+    # L_r is the box length in r
     L_r = 1.0
     # determine the boundary condition in r
     # currently supported options are "constant" and "periodic"
