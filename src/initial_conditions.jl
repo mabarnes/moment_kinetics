@@ -26,7 +26,7 @@ using ..velocity_moments: create_moments_charged, create_moments_neutral, update
 using ..velocity_moments: moments_charged_substruct, moments_neutral_substruct
 using ..velocity_moments: update_neutral_density!, update_neutral_pz!, update_neutral_pr!, update_neutral_pzeta!
 using ..velocity_moments: update_neutral_uz!, update_neutral_ur!, update_neutral_uzeta!, update_neutral_qz!
-using ..velocity_moments: update_ppar!, update_upar!
+using ..velocity_moments: update_ppar!, update_upar!, update_density!
 
 using ..manufactured_solns: manufactured_solutions
 
@@ -199,6 +199,7 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
         end
     end
     # update upar, ppar, qpar, vth consistent with manufactured solns
+    update_density!(moments.charged.dens, pdf.charged.unnorm, vpa, vperp, z, r, composition)
     update_qpar!(moments.charged.qpar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
     update_ppar!(moments.charged.ppar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
     # get particle flux
@@ -221,7 +222,7 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
             end
         end
         # get consistent moments with manufactured solutions 
-        #update_neutral_density!(moments.neutral.dens, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
+        update_neutral_density!(moments.neutral.dens, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
         update_neutral_qz!(moments.neutral.qz, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
         update_neutral_pz!(moments.neutral.pz, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
         update_neutral_pr!(moments.neutral.pr, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
@@ -666,7 +667,7 @@ function enforce_neutral_z_boundary_condition!(f_neutral, f_charged, boundary_di
                 wall_flux_L = 0.0
                 # include the contribution to the wall fluxes due to species with index 'is'
                 for is ∈ 1:composition.n_ion_species
-                        # get velocity into the wall at this r = -L/2 at z = -L/2, vz(vpa,vperp)
+                        # get velocity into the wall at this r at z = -L/2, vz(vpa,vperp)
                         vz_charged = z_adv_charged[is].speed[1,:,:,ir]
                         #n.b. vz_charged independent of vperp in current 2D model so 
                         # vz_charged[:,n] identical for all n in 1:end -> for convenience we pass 
@@ -674,7 +675,7 @@ function enforce_neutral_z_boundary_condition!(f_neutral, f_charged, boundary_di
                         # if vz_charged becomes a fn of vperp then these routines must be generalised
                         @views wall_flux_0 += (sqrt(composition.mn_over_mi) *
                                                integrate_over_negative_vpa(abs.(vz_charged[:,:]) .* f_charged[:,:,1,ir,is], vz_charged[:,1], vpa.wgts, vpa.scratch, vperp.grid, vperp.wgts))
-                        # get velocity into the wall at this r = L/2 at z = L/2, vz(vpa,vperp)
+                        # get velocity into the wall at this r at z = L/2, vz(vpa,vperp)
                         vz_charged = z_adv_charged[is].speed[end,:,:,ir]
                         @views wall_flux_L += (sqrt(composition.mn_over_mi) *
                                                integrate_over_positive_vpa(abs.(vz_charged[:,:]) .* f_charged[:,:,end,ir,is], vz_charged[:,1], vpa.wgts, vpa.scratch, vperp.grid, vperp.wgts))
