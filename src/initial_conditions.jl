@@ -277,7 +277,7 @@ function enforce_z_boundary_condition!(pdf, density, upar, ppar, moments, bc::St
     # define nvpa variable for convenience
     nvpa = vpa.n
     # define a zero that accounts for finite precision
-    zero = 1.0e-10
+    zero = 1.0e-15
     # 'constant' BC is time-independent f at upwind boundary
     # and constant f beyond boundary
     if bc == "constant"
