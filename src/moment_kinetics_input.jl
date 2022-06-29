@@ -86,9 +86,9 @@ function mk_input(scan_input=Dict())
     geometry.bzeta = sqrt(1.0 - geometry.bzed^2.0)
     geometry.Bzeta = geometry.Bmag*geometry.bzeta
     geometry.rhostar = get(scan_input, "rhostar", 0.0)
-    println("Info: Bzed is ",geometry.Bzed)
-    println("Info: Bmag is ",geometry.Bmag)
-    println("Info: rhostar is ",geometry.rhostar)
+    #println("Info: Bzed is ",geometry.Bzed)
+    #println("Info: Bmag is ",geometry.Bmag)
+    #println("Info: rhostar is ",geometry.rhostar)
     
     ispecies = 1
     species.charged[1].z_IC.initialization_option = get(scan_input, "z_IC_option$ispecies", "gaussian")
