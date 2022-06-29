@@ -100,13 +100,13 @@ function vpavperp_to_vzvrvzeta_species!(f_out,f_in,vz,vr,vzeta,vpa,vperp,geometr
     bzeta = geometry.bzeta
     
     @loop_vzeta_vr_vz ivzeta ivr ivz begin
-        # for each ivpa, ivperp, compute gyroaverage of f_in
+        # for each ivzeta, ivr, ivz interpolate f_in onto f_out
         # use 
         # vz = vpa b_zed - vperp sin gyrophase b_zeta
         # vr = vperp cos gyrophase
         # vzeta = vpa b_zeta + vperp sin gyrophase b_zed
         vpa_val = bzed*vz.grid[ivz] + bzeta*vzeta.grid[ivzeta]
-        vperp_val = sqrt( vr.grid[ivr]^2.0 + (bzed*vzeta.grid[ivzeta] - bzeta*vz.grid[ivzeta])^2.0)
+        vperp_val = sqrt( vr.grid[ivr]^2.0 + (bzed*vzeta.grid[ivzeta] - bzeta*vz.grid[ivz])^2.0)
         
         f_out[ivz,ivr,ivzeta] = pdf_interp(vpa_val,vperp_val)
     end
