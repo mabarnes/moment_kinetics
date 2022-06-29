@@ -86,14 +86,14 @@ end
 """
 """
 function update_speed_default!(advect, fields, vpa, vperp, z, r, composition, geometry)
-    kpar = geometry.Bzed/geometry.Bmag
+    bzed = geometry.bzed
     @inbounds @fastmath begin
         @loop_s is begin
             # Neutrals hardcoded to have no vpa_advection as vpa not a neutral coordinate
             @loop_r ir begin
-                # kpar = Bzed/Bmag
+                # bzed = B_z/B
                 @loop_z_vperp iz ivperp begin
-                    @views advect[is].speed[:,ivperp,iz,ir] .= 0.5*kpar*fields.Ez[iz,ir]
+                    @views advect[is].speed[:,ivperp,iz,ir] .= 0.5*bzed*fields.Ez[iz,ir]
                 end
             end
         end

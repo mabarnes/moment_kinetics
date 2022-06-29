@@ -600,7 +600,7 @@ function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, vperp, r, com
             @loop_r_vperp_vpa ir ivperp ivpa begin
                 # no parallel BC should be enforced for vpa = 0
                 # adv.speed is signed 
-                # adv.speed =  vpa*kpar - 0.5 *rhostar*Er
+                # adv.speed =  vpa*bzed - 0.5 *rhostar*Er
                 
                 iz = 1 # z = -L/2
                 if adv[is].speed[iz,ivpa,ivperp,ir] > zero

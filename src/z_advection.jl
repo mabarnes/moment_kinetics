@@ -41,13 +41,13 @@ function update_speed_z!(advect, fields, vpa, vperp, z, r, t, geometry)
     @boundscheck vpa.n == size(advect.speed,2) || throw(BoundsError(advect))
     @boundscheck z.n == size(advect.speed,1) || throw(BoundsError(speed))
     if z.advection.option == "default"
-        # kpar only used for z.advection.option == "default"
-        kpar = geometry.Bzed/geometry.Bmag
+        # bzed = B_z/B only used for z.advection.option == "default"
+        bzed = geometry.bzed
         ExBfac = -0.5*geometry.rhostar
         @inbounds begin
             
             @loop_r_vperp_vpa ir ivperp ivpa begin
-                    @views advect.speed[:,ivpa,ivperp,ir] .= vpa.grid[ivpa]*kpar .+ ExBfac*fields.Er[:,ir]
+                    @views advect.speed[:,ivpa,ivperp,ir] .= vpa.grid[ivpa]*bzed .+ ExBfac*fields.Er[:,ir]
             end
         
         end
