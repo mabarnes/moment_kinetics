@@ -74,16 +74,19 @@ function run_moment_kinetics(to::TimerOutput, input_dict=Dict())
     # set up all the structs, etc. needed for a run
     mk_state = setup_moment_kinetics(input_dict)
 
-    # solve the 1+1D kinetic equation to advance f in time by nstep time steps
-    if run_type == performance_test
-        @timeit to "time_advance" time_advance!(mk_state...)
-    else
-        time_advance!(mk_state...)
-    end
+    try
+        # solve the 1+1D kinetic equation to advance f in time by nstep time steps
+        if run_type == performance_test
+            @timeit to "time_advance" time_advance!(mk_state...)
+        else
+            time_advance!(mk_state...)
+        end
+    finally
 
-    # clean up i/o and communications
-    # last 2 elements of mk_state are `io` and `cdf`
-    cleanup_moment_kinetics!(mk_state[end-1:end]...)
+        # clean up i/o and communications
+        # last 2 elements of mk_state are `io` and `cdf`
+        cleanup_moment_kinetics!(mk_state[end-1:end]...)
+    end
 
     if block_rank[] == 0 && run_type == performance_test
         # Print the timing information if this is a performance test
