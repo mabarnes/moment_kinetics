@@ -33,7 +33,7 @@ import Base: get
 # assume in function below that we have a list of simulations 
 # where only a single nelement parameter is varied
 # we plot the MMS error measurements as a fn of nelement
-function get_MMS_error_data(path_list,scan_type)
+function get_MMS_error_data(path_list,scan_type,scan_name)
     
     nsimulation = length(path_list)
     ion_density_error_sequence = zeros(mk_float,nsimulation)
@@ -62,6 +62,13 @@ function get_MMS_error_data(path_list,scan_type)
         if scan_type == "vpa_nelement"
             # get the number of elements for plot
             nelement_sequence[isim] = vpa_input.nelement
+        elseif scan_type == "velocity_nelement"
+            nelement = vpa_input.nelement
+            if nelement == vperp_input.nelement && nelement == vz_input.nelement && nelement == vr_input.nelement && nelement == vzeta_input.nelement
+                nelement_sequence[isim] = nelement
+            else 
+                println("ERROR: scan_type = ",scan_type," requires velocity elements equal in all dimensions")
+            end
         else 
             println("ERROR: scan_type = ",scan_type," is unsupported")
         end
@@ -174,10 +181,10 @@ function get_MMS_error_data(path_list,scan_type)
     end
     
     # set plot labels 
-    ylabel_ion_density = L"\sum || \widetilde{n}_i - \widetilde{n}^{sym}_i ||^2"
-    ylabel_ion_pdf = L"\sum || \widetilde{f}_i - \widetilde{f}^{sym}_i ||^2"
-    ylabel_neutral_density = L"\sum || \widetilde{n}_n - \widetilde{n}^{sym}_n ||^2"
-    ylabel_neutral_pdf = L"\sum || \widetilde{f}_n - \widetilde{f}^{sym}_n ||^2"
+    ylabel_ion_density = L"\varepsilon(\widetilde{n}_i)"#L"\sum || \widetilde{n}_i - \widetilde{n}^{sym}_i ||^2"
+    ylabel_ion_pdf =  L"\varepsilon(\widetilde{f}_i)"#L"\sum || \widetilde{f}_i - \widetilde{f}^{sym}_i ||^2"
+    ylabel_neutral_density =  L"\varepsilon(\widetilde{n}_n)"#L"\sum || \widetilde{n}_n - \widetilde{n}^{sym}_n ||^2"
+    ylabel_neutral_pdf =  L"\varepsilon(\widetilde{f}_n)"#L"\sum || \widetilde{f}_n - \widetilde{f}^{sym}_n ||^2"
     if scan_type == "vpa_nelement"
         xlabel = L"v_{||}"*" "*L"N_{element}"
     elseif scan_type == "vperp_nelement"
@@ -192,13 +199,23 @@ function get_MMS_error_data(path_list,scan_type)
         xlabel = L"r"*" "*L"N_{element}"
     elseif scan_type == "z_nelement"
         xlabel = L"z"*" "*L"N_{element}"
+    elseif scan_type == "velocity_nelement"
+        xlabel = L"N_{element}"
     else 
         println("ERROR: scan_type = ",scan_type," is unsupported")
     end
     
-    outprefix = "MMS_test_"*scan_type
+    outprefix = "MMS_test_"*scan_type*"_"*scan_name
     nelmin = nelement_sequence[1]
     nelmax = nelement_sequence[end]
+    ymax = 1.0e1
+    ymin = 1.0e-5
+    
+    plot(nelement_sequence, [ion_density_error_sequence,ion_pdf_error_sequence], xlabel=xlabel, label=[ylabel_ion_density ylabel_ion_pdf], ylabel="",
+     shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelmin:nelmax, nelmin:nelmax), ylims = (ymin,ymax), markersize = 5, linewidth=2)
+    outfile = outprefix*".pdf"
+    savefig(outfile)
+    println(outfile)
     
     plot(nelement_sequence, ion_density_error_sequence, xlabel=xlabel, ylabel=ylabel_ion_density, label="",
      shape =:circle, color =:black, yscale=:log10, xticks = (nelmin:nelmax, nelmin:nelmax), markersize = 5, linewidth=2)
@@ -213,6 +230,13 @@ function get_MMS_error_data(path_list,scan_type)
     println(outfile)
 
     if n_neutral_species > 0
+        plot(nelement_sequence, [ion_density_error_sequence, ion_pdf_error_sequence, neutral_density_error_sequence, neutral_pdf_error_sequence], xlabel=xlabel, 
+        label=[ylabel_ion_density ylabel_ion_pdf ylabel_neutral_density ylabel_neutral_pdf], ylabel="",
+         shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelmin:nelmax, nelmin:nelmax), ylims = (ymin,ymax), markersize = 5, linewidth=2)
+        outfile = outprefix*".pdf"
+        savefig(outfile)
+        println(outfile)
+        
         plot(nelement_sequence, neutral_density_error_sequence, xlabel=xlabel, ylabel=ylabel_neutral_density, label="",
          shape =:circle, color =:black, yscale=:log10, xticks = (nelmin:nelmax, nelmin:nelmax), markersize = 5, linewidth=2)
         outfile = outprefix*"_neutral_density.pdf"

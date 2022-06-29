@@ -213,11 +213,11 @@ end
 function compare_moments_symbolic_test(run_name,moment,moment_sym,spec_string,z,r,time,nz,nr,ntime,moment_label,moment_sym_label,norm_label,file_string)
     is = 1
     it = ntime
-    heatmap(r, z, moment[:,:,is,it], xlabel=L"r", ylabel=L"z", title=moment_label, c = :deep)
+    heatmap(r, z, moment[:,:,is,it], xlabel=L"r / L_r", ylabel=L"z / L_z", title=moment_label, c = :deep)
     outfile = string(run_name, "_"*file_string*"_vs_r_z_", spec_string, ".pdf")
     savefig(outfile)
     
-    heatmap(r, z, moment_sym[:,:,is,it], xlabel=L"r", ylabel=L"z", title=moment_sym_label, c = :deep)
+    heatmap(r, z, moment_sym[:,:,is,it], xlabel=L"r / L_r", ylabel=L"z / L_z", title=moment_sym_label, c = :deep)
     outfile = string(run_name, "_"*file_string*"_sym_vs_r_z_", spec_string, ".pdf")
     savefig(outfile)
     
@@ -232,7 +232,7 @@ function compare_moments_symbolic_test(run_name,moment,moment_sym,spec_string,z,
             end
         end
         #moment_norm[it] = dummy/dummy_N
-        moment_norm[it] = dummy
+        moment_norm[it] = sqrt(dummy/(nr*nz))
     end
     println("test: ",file_string,": ",spec_string," ",moment_norm)
     @views plot(time, moment_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=norm_label) #, yaxis=:log)
@@ -271,7 +271,7 @@ function compare_charged_pdf_symbolic_test(run_name,pdf,pdf_sym,spec_string,
             end
         end
         #pdf_norm[it] = dummy/dummy_N
-        pdf_norm[it] = dummy
+        pdf_norm[it] = sqrt(dummy/(nr*nz*nvpa*nvperp))
     end
     println("test: ",file_string,": ",spec_string," ",pdf_norm)
     @views plot(time, pdf_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=norm_label) #, yaxis=:log)
@@ -311,7 +311,7 @@ function compare_neutral_pdf_symbolic_test(run_name,pdf,pdf_sym,spec_string,
             end
         end
         #pdf_norm[it] = dummy/dummy_N
-        pdf_norm[it] = dummy
+        pdf_norm[it] = sqrt(dummy/(nr*nz*nvz*nvr*nvzeta))
     end
     println("test: ",file_string,": ",spec_string," ",pdf_norm)
     @views plot(time, pdf_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=norm_label) #, yaxis=:log)
