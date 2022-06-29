@@ -701,12 +701,14 @@ function ssp_rk!(pdf, scratch, t, t_input, vpa, z, r,
     end
 
     istage = n_rk_stages+1
+    final_scratch = scratch[istage]
     if moments.evolve_density && moments.enforce_conservation
-        enforce_moment_constraints!(scratch[istage], scratch[1], vpa, z, r, composition, moments, scratch_dummy_sr)
+        @loop_s_r_z is ir iz begin
+            @views hard_force_moment_constraints!(final_scratch.pdf[:,iz,ir,is], moments, vpa)
+        end
     end
 
     # update the pdf.norm and moments arrays as needed
-    final_scratch = scratch[istage]
     @loop_s_r_z_vpa is ir iz ivpa begin
         pdf.norm[ivpa,iz,ir,is] = final_scratch.pdf[ivpa,iz,ir,is]
     end
