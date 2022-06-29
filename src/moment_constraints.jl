@@ -70,10 +70,12 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, r, composition,
 
                 @views enforce_zero_incoming_bc!(fvec_old.pdf[:,:,ir,is],
                                                  vpa, fvec_new.upar[:,ir,is], zero)
-                @loop_z iz begin
-                    @views hard_force_moment_constraints!(fvec_old.pdf[:,iz,ir,is],
-                                                          moments, vpa)
-                end
+                # Correct fvec_old.pdf in case applying new bc messed up moment
+                # constraints
+                @views hard_force_moment_constraints!(fvec_old.pdf[:,1,ir,is], moments,
+                                                      vpa)
+                @views hard_force_moment_constraints!(fvec_old.pdf[:,end,ir,is],
+                                                      moments, vpa)
             end
             @loop_z iz begin
                 # Create views once to save overhead
