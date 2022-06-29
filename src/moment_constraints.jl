@@ -161,8 +161,8 @@ function hard_force_moment_constraints!(f, moments, vpa)
         I2 = integrate_over_vspace(f, vpa.grid, 2, vpa.wgts)
         I3 = integrate_over_vspace(f, vpa.grid, 3, vpa.wgts)
         I4 = integrate_over_vspace(f, vpa.grid, 4, vpa.wgts)
-        A = ((1.0 - 0.5*I2)*(I2 - I3^2/I4) + 0.5*I3/I4*(I1-I2*I3/I4)) /
-            ((I0 - I2^2)*(I2 - I3^2/I4) - (I1 - I2*I3/I4)^2)
+        A = ((1.0 - 0.5*I2/I4)*(I2 - I3^2/I4) + 0.5*I3/I4*(I1-I2*I3/I4)) /
+            ((I0 - I2^2/I4)*(I2 - I3^2/I4) - (I1 - I2*I3/I4)^2)
         B = -(0.5*I3/I4 + A*(I1 - I2*I3/I4)) / (I2 - I3^2/I4)
         C = -(A*I1 + B*I2) / I3
         @. f = A*f + B*vpa.grid*f + C*vpa.grid*vpa.grid*f
