@@ -43,7 +43,7 @@ function update_speed_z!(advect, fields, vpa, vperp, z, r, t, geometry)
     if z.advection.option == "default"
         # kpar only used for z.advection.option == "default"
         kpar = geometry.Bzed/geometry.Bmag
-        ExBfac = -0.5*geometry.rstar
+        ExBfac = -0.5*geometry.rhostar
         @inbounds begin
             
             @loop_r_vperp_vpa ir ivperp ivpa begin

@@ -135,7 +135,7 @@ using ..input_structs
         # get geometric/composition data
         Bzed = geometry.Bzed
         Bmag = geometry.Bmag
-        rhostar = geometry.rstar
+        rhostar = geometry.rhostar
         if nr > 1 #keep radial derivatives
             rfac = 1.0
         else # drop radial derivative terms
@@ -209,7 +209,7 @@ using ..input_structs
         # get geometric/composition data
         Bzed = geometry.Bzed
         Bmag = geometry.Bmag
-        rhostar = geometry.rstar
+        rhostar = geometry.rhostar
         #exceptions for cases with missing terms 
         if composition.n_neutral_species > 0
             cx_frequency = collisions.charge_exchange

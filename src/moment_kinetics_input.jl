@@ -85,10 +85,10 @@ function mk_input(scan_input=Dict())
     geometry.bzed = geometry.Bzed/geometry.Bmag
     geometry.bzeta = sqrt(1.0 - geometry.bzed^2.0)
     geometry.Bzeta = geometry.Bmag*geometry.bzeta
-    geometry.rstar = get(scan_input, "rhostar", 0.0)
-    #println("Info: Bzed is ",geometry.Bzed)
-    #println("Info: Bmag is ",geometry.Bmag)
-    #println("Info: rhostar is ",geometry.rstar)
+    geometry.rhostar = get(scan_input, "rhostar", 0.0)
+    println("Info: Bzed is ",geometry.Bzed)
+    println("Info: Bmag is ",geometry.Bmag)
+    println("Info: rhostar is ",geometry.rhostar)
     
     ispecies = 1
     species.charged[1].z_IC.initialization_option = get(scan_input, "z_IC_option$ispecies", "gaussian")
@@ -771,8 +771,8 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     bzed = 1.0 # component of b unit vector along z
     bzeta = 0.0 # component of b unit vector along zeta
     Bzeta = 0.0 # magnetic field component along zeta
-    rstar = 0.0 #rhostar of ions for ExB drift
-    geometry = geometry_input(Bzed,Bmag,bzed,bzeta,Bzeta,rstar)
+    rhostar = 0.0 #rhostar of ions for ExB drift
+    geometry = geometry_input(Bzed,Bmag,bzed,bzeta,Bzeta,rhostar)
 
     return z, r, vpa, vperp, gyrophase, vz, vr, vzeta, species, composition, drive, evolve_moments, collisions, geometry
 end

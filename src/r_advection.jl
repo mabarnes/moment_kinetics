@@ -46,7 +46,7 @@ function update_speed_r!(advect, fields, vpa, vperp, z, r, geometry)
     @boundscheck vpa.n == size(advect.speed,2) || throw(BoundsError(advect))
     @boundscheck r.n == size(advect.speed,1) || throw(BoundsError(speed))
     if r.advection.option == "default" && r.n > 1
-        ExBfac = 0.5*geometry.rstar
+        ExBfac = 0.5*geometry.rhostar
         @inbounds begin
             @loop_z_vperp_vpa iz ivperp ivpa begin
                 @views advect.speed[:,ivpa,ivperp,iz] .= ExBfac*fields.Ez[iz,:]
