@@ -15,6 +15,10 @@ function vpa_dissipation!(f_out, fvec_in, moments, vpa, spectral, dt)
 
     diffusion_coefficient = 1.0
 
+    if diffusion_coefficient <= 0.0
+        return nothing
+    end
+
     @loop_s_r_z is ir iz begin
         # Don't want to dissipate the fluid moments, so divide out the Maxwellian, then
         # diffuse the result, i.e.
@@ -41,6 +45,8 @@ function vpa_dissipation!(f_out, fvec_in, moments, vpa, spectral, dt)
         @views @. f_out[:,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch *
                                        vpa.scratch3
     end
+
+    return nothing
 end
 
 end
