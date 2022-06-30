@@ -42,6 +42,7 @@ include("continuity.jl")
 include("energy_equation.jl")
 include("force_balance.jl")
 include("source_terms.jl")
+include("numerical_dissipation.jl")
 include("time_advance.jl")
 
 include("moment_kinetics_input.jl")
