@@ -300,8 +300,10 @@ function enforce_z_boundary_condition!(pdf, density, upar, ppar, moments, bc::St
                 # zero incoming BC for ions, as they recombine at the wall
                 if moments.evolve_upar
                     @loop_r ir begin
-                        @views enforce_zero_incoming_bc!(pdf[:,:,ir,is], vpa,
-                                                         upar[:,ir,is], zero)
+                        @views enforce_zero_incoming_bc!(
+                            pdf[:,:,ir,is], vpa, density[:,ir,is], upar[:,ir,is],
+                            ppar[:,ir,is], moments.evolve_upar, moments.evolve_ppar,
+                            zero)
                     end
                 else
                     @loop_r ir begin
@@ -398,26 +400,30 @@ function enforce_zero_incoming_bc!(pdf, vpa::coordinate, zero)
         end
     end
 end
-function enforce_zero_incoming_bc!(pdf, vpa::coordinate, upar, zero)
+function enforce_zero_incoming_bc!(pdf, vpa::coordinate, density, upar, ppar,
+                                   evolve_upar, evolve_ppar, zero)
     nvpa = size(pdf,1)
     # no parallel BC should be enforced for dz/dt = 0
     # note that the parallel velocity coordinate vpa may be dz/dt or
     # some version of the peculiar velocity (dz/dt - upar),
     # so use advection speed below instead of vpa
-    for ielement ∈ 1:vpa.nelement
+
+    # absolute velocity at left boundary
+    @. vpa.scratch = vpagrid_to_dzdt(vpa.grid, sqrt(2.0*(ppar[1]/density[1])),
+                                     upar[1], evolve_ppar, evolve_upar)
+    # absolute velocity at right boundary
+    @. vpa.scratch2 = vpagrid_to_dzdt(vpa.grid, sqrt(2.0*(ppar[end]/density[end])),
+                                      upar[end], evolve_ppar, evolve_upar)
+    for ivpa ∈ 1:nvpa
         # for left boundary in zed (z = -Lz/2), want
         # f(z=-Lz/2, v_parallel > 0) = 0
-        if vpa.grid[vpa.imax[ielement]] > zero - upar[1]
-            for ivpa ∈ max(1,vpa.imin[ielement]):vpa.imax[ielement]
-                pdf[ivpa,1] = 0.0
-            end
+        if vpa.scratch[ivpa] > zero
+            pdf[ivpa,1] = 0.0
         end
         # for right boundary in zed (z = Lz/2), want
         # f(z=Lz/2, v_parallel < 0) = 0
-        if vpa.grid[vpa.imin[ielement]] < zero - upar[end]
-            for ivpa ∈ max(1,vpa.imin[ielement]):vpa.imax[ielement]
-                pdf[ivpa,end] = 0.0
-            end
+        if vpa.scratch2[ivpa] < -zero
+            pdf[ivpa,end] = 0.0
         end
     end
 end

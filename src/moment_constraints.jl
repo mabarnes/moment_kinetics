@@ -68,8 +68,10 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, r, composition,
                 # define a zero that accounts for finite precision
                 zero = 1.0e-10
 
-                @views enforce_zero_incoming_bc!(fvec_old.pdf[:,:,ir,is],
-                                                 vpa, fvec_new.upar[:,ir,is], zero)
+                @views enforce_zero_incoming_bc!(
+                    fvec_old.pdf[:,:,ir,is], vpa, fvec_new.density[:,ir,is],
+                    fvec_new.upar[:,ir,is], fvec_new.ppar[:,ir,is], moments.evolve_upar,
+                    moments.evolve_ppar, zero)
                 # Correct fvec_old.pdf in case applying new bc messed up moment
                 # constraints
                 @views hard_force_moment_constraints!(fvec_old.pdf[:,1,ir,is], moments,
