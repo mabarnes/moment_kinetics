@@ -24,6 +24,7 @@ using ..r_advection: update_speed_r!, r_advection!
 using ..vpa_advection: update_speed_vpa!, vpa_advection!
 using ..charge_exchange: charge_exchange_collisions!
 using ..ionization: ionization_collisions!
+using ..numerical_dissipation: vpa_dissipation!
 using ..source_terms: source_terms!
 using ..continuity: continuity_equation!
 using ..force_balance: force_balance!
@@ -41,6 +42,7 @@ mutable struct advance_info
     cx_collisions::Bool
     ionization_collisions::Bool
     source_terms::Bool
+    numerical_dissipation::Bool
     continuity::Bool
     force_balance::Bool
     energy::Bool
@@ -180,6 +182,7 @@ function setup_advance_flags(moments, composition, split_operators, collisions, 
     advance_cx = false
     advance_ionization = false
     advance_sources = false
+    advance_numerical_dissipation = false
     advance_continuity = false
     advance_force_balance = false
     advance_energy = false
@@ -203,6 +206,7 @@ function setup_advance_flags(moments, composition, split_operators, collisions, 
                 advance_ionization = true
             end
         end
+        advance_numerical_dissipation = true
         # if evolving the density, must advance the continuity equation,
         # in addition to including sources arising from the use of a modified distribution
         # function in the kinetic equation
@@ -226,7 +230,8 @@ function setup_advance_flags(moments, composition, split_operators, collisions, 
         end
     end
     return advance_info(advance_vpa_advection, advance_z_advection, advance_cx,
-                        advance_ionization, advance_sources, advance_continuity,
+                        advance_ionization, advance_sources,
+                        advance_numerical_dissipation, advance_continuity,
                         advance_force_balance, advance_energy, rk_coefs)
 end
 
@@ -811,6 +816,10 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, z_
         ionization_collisions!(fvec_out.pdf, fvec_in, moments, n_ion_species,
             composition.n_neutral_species, vpa, z, r, vpa_spectral, composition,
             collisions, z.n, dt)
+    end
+    # add numerical dissipation
+    if advance.numerical_dissipation
+        vpa_dissipation(fvec_out.pdf, fvec_in, moments, vpa, vpa_spectral, dt)
     end
     # End of advance of distribution function
 
