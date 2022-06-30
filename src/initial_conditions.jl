@@ -283,7 +283,7 @@ function create_and_init_boundary_distributions(vz, vr, vzeta, vpa, vperp, compo
                         if  v_tot > 0.0
                             prefac = v_normal/v_tot 
                         else
-                            prefac = 1.0
+                            prefac = 0.0
                         end 
                         knudsen_cosine[ivz,ivr,ivzeta] = (3.0*sqrt(pi)/vtfac^4)*prefac*exp( - (v_normal/vtfac)^2 - (v_transverse/vtfac)^2 )
                         integrand[ivz,ivr,ivzeta] = vz.grid[ivz]*knudsen_cosine[ivz,ivr,ivzeta]

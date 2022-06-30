@@ -6,10 +6,14 @@ export manufactured_solutions
 export manufactured_sources
 
 using Symbolics
+using IfElse
 using ..input_structs
 
     @variables r z vpa vperp t vz vr vzeta
-
+    typed_zero(vz) = zero(vz)
+    @register_symbolic typed_zero(vz)
+    zero_val = 1.0e-8
+    
     #standard functions for building densities
     function nplus_sym(Lr,r_bc)
         #if r_bc == "periodic"
@@ -34,14 +38,15 @@ using ..input_structs
 
     function knudsen_cosine(composition)
         T_wall = composition.T_wall
-        # prefac here may cause problems with NaNs if vz = vr = vzeta = 0 is on grid
-        prefac = abs(vz)/sqrt(vz^2 + vr^2 + vzeta^2)
         exponetial = exp( - (vz^2 + vr^2 + vzeta^2)/T_wall )
         if composition.use_test_neutral_wall_pdf
             #test dfn
             knudsen_pdf = (4.0/T_wall^(5.0/2.0))*abs(vz)*exponetial
         else
             #proper Knudsen dfn
+            # prefac here may cause problems with NaNs if vz = vr = vzeta = 0 is on grid
+            fac = abs(vz)/sqrt(vz^2 + vr^2 + vzeta^2)
+            prefac = IfElse.ifelse( abs(vz) < 1000.0*zero_val,typed_zero(vz),fac)
             knudsen_pdf = (3.0*sqrt(pi)/T_wall^2)*prefac*exponetial
         end
         return knudsen_pdf
