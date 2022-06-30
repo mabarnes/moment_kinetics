@@ -5,6 +5,7 @@ module calculus
 export derivative!
 export integral
 
+using ..chebyshev: chebyshev_info
 using ..type_definitions: mk_float
 
 """
@@ -25,7 +26,7 @@ function elementwise_derivative! end
 
 Upwinding derivative.
 """
-function derivative!(df, f, coord, adv_fac, spectral, order=Val(1))
+function derivative!(df, f, coord, adv_fac, spectral::Union{Bool,<:chebyshev_info}, order=Val(1))
     # get the derivative at each grid point within each element and store in
     # coord.scratch_2d
     elementwise_derivative!(coord, f, adv_fac, spectral, order)
@@ -39,10 +40,10 @@ end
 
 Non-upwinding derivative.
 """
-function derivative!(df, f, coord, spectral)
+function derivative!(df, f, coord, spectral, order=Val(1))
     # get the derivative at each grid point within each element and store in
     # coord.scratch_2d
-    elementwise_derivative!(coord, f, spectral)
+    elementwise_derivative!(coord, f, spectral, order)
     # map the derivative from the elem;ntal grid to the full grid;
     # at element boundaries, use the average of the derivatives from neighboring elements.
     derivative_elements_to_full_grid!(df, coord.scratch_2d, coord)

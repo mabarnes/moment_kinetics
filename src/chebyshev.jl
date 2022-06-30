@@ -232,7 +232,7 @@ function chebyshev_spectral_derivative!(d2f,f,::Val{2})
     # Coefficients are just applying the first derivative twice, written out by hand
     # here to avoid a double loop
     m = length(f)
-    @boundscheck m == length(df) || throw(BoundsError(df))
+    @boundscheck m == length(d2f) || throw(BoundsError(d2f))
     @inbounds begin
         df_i_plus_3 = 0.0
         df_i_plus_2 = 2*(m-1)*f[m]
