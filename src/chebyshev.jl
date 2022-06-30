@@ -152,7 +152,7 @@ function chebyshev_derivative_single_element!(df, ff, cheby_f, cheby_df, cheby_f
     # as cheby_f
     chebyshev_forward_transform!(cheby_f, cheby_fext, ff, forward, coord.ngrid)
     # calculate the Chebyshev coefficients of the derivative of ff with respect to coord.grid
-    chebyshev_spectral_derivative!(cheby_df, cheby_f)
+    chebyshev_spectral_derivative!(cheby_df, cheby_f, order)
     # inverse Chebyshev transform to get df/dcoord
     chebyshev_backward_transform!(df, cheby_fext, cheby_df, forward, coord.ngrid)
 end
