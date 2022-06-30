@@ -15,25 +15,7 @@ using ..array_allocation: allocate_float, allocate_complex
 using ..clenshaw_curtis: clenshawcurtisweights
 import ..calculus: elementwise_derivative!
 import ..interpolation: interpolate_to_grid_1d!
-
-"""
-"""
-struct chebyshev_info{TForward <: FFTW.cFFTWPlan, TBackward <: AbstractFFTs.ScaledPlan}
-    # fext is an array for storing f(z) on the extended domain needed
-    # to perform complex-to-complex FFT using the fact that f(theta) is even in theta
-    fext::Array{Complex{mk_float},1}
-    # Chebyshev spectral coefficients of distribution function f
-    # first dimension contains location within element
-    # second dimension indicates the element
-    f::Array{mk_float,2}
-    # Chebyshev spectral coefficients of derivative of f
-    df::Array{mk_float,1}
-    # plan for the complex-to-complex, in-place, forward Fourier transform on Chebyshev-Gauss-Lobatto grid
-    forward::TForward
-    # plan for the complex-to-complex, in-place, backward Fourier transform on Chebyshev-Gauss-Lobatto grid
-    #backward_transform::FFTW.cFFTWPlan
-    backward::TBackward
-end
+using ..moment_kinetics_structs: chebyshev_info
 
 """
 create arrays needed for explicit Chebyshev pseudospectral treatment
@@ -97,7 +79,7 @@ end
 
 Chebyshev transform f to get Chebyshev spectral coefficients and use them to calculate f'.
 """
-function elementwise_derivative!(coord, ff, chebyshev::chebyshev_info)
+function elementwise_derivative!(coord, ff, chebyshev::chebyshev_info, order=Val(1))
     df = coord.scratch_2d
     # define local variable nelement for convenience
     nelement = coord.nelement
@@ -122,7 +104,8 @@ function elementwise_derivative!(coord, ff, chebyshev::chebyshev_info)
         # imax is the maximum index on the full grid for this (jth) element
         imax = coord.imax[j]
         @views chebyshev_derivative_single_element!(df[:,j], ff[imin:imax],
-            chebyshev.f[:,j], chebyshev.df, chebyshev.fext, chebyshev.forward, coord)
+            chebyshev.f[:,j], chebyshev.df, chebyshev.fext, chebyshev.forward, coord,
+            order)
         # and multiply by scaling factor needed to go
         # from Chebyshev z coordinate to actual z
         for i ∈ 1:coord.ngrid
@@ -139,18 +122,19 @@ Chebyshev transform f to get Chebyshev spectral coefficients and use them to cal
 
 Note: Chebyshev derivative does not make use of upwinding information within each element.
 """
-function elementwise_derivative!(coord, ff, adv_fac, spectral::chebyshev_info)
-    return elementwise_derivative!(coord, ff, spectral)
+function elementwise_derivative!(coord, ff, adv_fac, spectral::chebyshev_info, order=Val(1))
+    return elementwise_derivative!(coord, ff, spectral, order)
 end
 
 """
 """
-function chebyshev_derivative_single_element!(df, ff, cheby_f, cheby_df, cheby_fext, forward, coord)
+function chebyshev_derivative_single_element!(df, ff, cheby_f, cheby_df, cheby_fext,
+        forward, coord, order=Val(1))
     # calculate the Chebyshev coefficients of the real-space function ff and return
     # as cheby_f
     chebyshev_forward_transform!(cheby_f, cheby_fext, ff, forward, coord.ngrid)
     # calculate the Chebyshev coefficients of the derivative of ff with respect to coord.grid
-    chebyshev_spectral_derivative!(cheby_df, cheby_f)
+    chebyshev_spectral_derivative!(cheby_df, cheby_f, order)
     # inverse Chebyshev transform to get df/dcoord
     chebyshev_backward_transform!(df, cheby_fext, cheby_df, forward, coord.ngrid)
 end
@@ -182,7 +166,7 @@ end
 """
 compute the Chebyshev spectral coefficients of the spatial derivative of f
 """
-function update_df_chebyshev!(df, chebyshev, coord)
+function update_df_chebyshev!(df, chebyshev, coord, order=Val(1))
     ngrid = coord.ngrid
     nelement = coord.nelement
     L = coord.L
@@ -194,7 +178,7 @@ function update_df_chebyshev!(df, chebyshev, coord)
     scale_factor = 2*nelement/L
     # scan over elements
     @inbounds for j ∈ 1:nelement
-        chebyshev_spectral_derivative!(chebyshev.df,view(chebyshev.f,:,j))
+        chebyshev_spectral_derivative!(chebyshev.df,view(chebyshev.f,:,j), order)
         # inverse Chebyshev transform to get df/dz
         # and multiply by scaling factor needed to go
         # from Chebyshev z coordinate to actual z
@@ -207,9 +191,9 @@ function update_df_chebyshev!(df, chebyshev, coord)
 end
 
 """
-use Chebyshev basis to compute the derivative of f
+use Chebyshev basis to compute the first derivative of f
 """
-function chebyshev_spectral_derivative!(df,f)
+function chebyshev_spectral_derivative!(df,f,::Val{1})
     m = length(f)
     @boundscheck m == length(df) || throw(BoundsError(df))
     @inbounds begin
@@ -220,6 +204,30 @@ function chebyshev_spectral_derivative!(df,f)
             df[i] = 2*i*f[i+1] + df[i+2]
         end
         df[1] = f[2] + 0.5*df[3]
+    end
+end
+
+"""
+use Chebyshev basis to compute the second derivative of f
+"""
+function chebyshev_spectral_derivative!(d2f,f,::Val{2})
+    # Coefficients are just applying the first derivative twice, written out by hand
+    # here to avoid a double loop
+    m = length(f)
+    @boundscheck m == length(d2f) || throw(BoundsError(d2f))
+    @inbounds begin
+        df_i_plus_3 = 0.0
+        df_i_plus_2 = 2*(m-1)*f[m]
+        d2f[m] = 0.0
+        d2f[m-1] = 0.0
+        d2f[m-2] = 2*(m-2)*df_i_plus_2
+        for i ∈ m-3:-1:2
+            df_i_plus_1 = (2*(i+1)*f[i+2]) + df_i_plus_3
+            d2f[i] = 2*i*df_i_plus_1 + d2f[i+2]
+            df_i_plus_3, df_i_plus_2 = df_i_plus_2, df_i_plus_1
+        end
+        df_i_plus_1 = 4*f[3] + df_i_plus_3
+        d2f[1] = df_i_plus_1 + 0.5*d2f[3]
     end
 end
 

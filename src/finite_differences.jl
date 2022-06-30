@@ -31,7 +31,7 @@ end
 Calculate the derivative of f using finite differences, with particular scheme
 specified by coord.fd_option; result stored in coord.scratch_2d.
 """
-function elementwise_derivative!(coord, f, adv_fac, not_spectral::Bool)
+function elementwise_derivative!(coord, f, adv_fac, not_spectral::Bool, ::Val{1})
     return derivative_finite_difference!(coord.scratch_2d, f, coord.cell_width, adv_fac,
         coord.bc, coord.fd_option, coord.igrid, coord.ielement)
 end
