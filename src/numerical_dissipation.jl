@@ -31,13 +31,13 @@ function vpa_dissipation!(f_out, fvec_in, moments, vpa, spectral, dt)
         elseif moments.evolve_density
             vth = sqrt(2.0*fvec_in.ppar[iz,ir,is]/fvec_in.density[iz,ir,is])
             @views @. vpa.scratch = exp(-((vpa.grid - fvec_in.upar[iz,ir,is])/vth)^2)
-        elseif
+        else
             vth = sqrt(2.0*fvec_in.ppar[iz,ir,is]/fvec_in.density[iz,ir,is])
             @views @. vpa.scratch = (fvec_in.density[iz,ir,is] *
                                      exp(-((vpa.grid - fvec_in.upar[iz,ir,is])/vth)^2))
         end
-        @views vpa.scratch2 = fvec_in.pdf[:,iz,ir,is] ./ vpa.scratch
-        derivative(vpa.scratch3, vpa.scratch2, vpa, spectral, Val(2))
+        @views @. vpa.scratch2 = fvec_in.pdf[:,iz,ir,is] / vpa.scratch
+        derivative!(vpa.scratch3, vpa.scratch2, vpa, spectral, Val(2))
         @views @. f_out[:,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch *
                                        vpa.scratch3
     end

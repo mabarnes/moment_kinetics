@@ -819,7 +819,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, z_
     end
     # add numerical dissipation
     if advance.numerical_dissipation
-        vpa_dissipation(fvec_out.pdf, fvec_in, moments, vpa, vpa_spectral, dt)
+        vpa_dissipation!(fvec_out.pdf, fvec_in, moments, vpa, vpa_spectral, dt)
     end
     # End of advance of distribution function
 
