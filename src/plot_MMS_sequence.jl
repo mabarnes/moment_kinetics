@@ -182,9 +182,9 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
     
     # set plot labels 
     ylabel_ion_density = L"\varepsilon(\widetilde{n}_i)"#L"\sum || \widetilde{n}_i - \widetilde{n}^{sym}_i ||^2"
-    ylabel_ion_pdf =  L"\varepsilon(\widetilde{f}_i)"#L"\sum || \widetilde{f}_i - \widetilde{f}^{sym}_i ||^2"
+    ylabel_ion_pdf =  L"\varepsilon(\widetilde{F}_i)"#L"\sum || \widetilde{f}_i - \widetilde{f}^{sym}_i ||^2"
     ylabel_neutral_density =  L"\varepsilon(\widetilde{n}_n)"#L"\sum || \widetilde{n}_n - \widetilde{n}^{sym}_n ||^2"
-    ylabel_neutral_pdf =  L"\varepsilon(\widetilde{f}_n)"#L"\sum || \widetilde{f}_n - \widetilde{f}^{sym}_n ||^2"
+    ylabel_neutral_pdf =  L"\varepsilon(\widetilde{F}_n)"#L"\sum || \widetilde{f}_n - \widetilde{f}^{sym}_n ||^2"
     if scan_type == "vpa_nelement"
         xlabel = L"v_{||}"*" "*L"N_{element}"
     elseif scan_type == "vperp_nelement"
