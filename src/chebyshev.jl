@@ -15,25 +15,7 @@ using ..array_allocation: allocate_float, allocate_complex
 using ..clenshaw_curtis: clenshawcurtisweights
 import ..calculus: elementwise_derivative!
 import ..interpolation: interpolate_to_grid_1d!
-
-"""
-"""
-struct chebyshev_info{TForward <: FFTW.cFFTWPlan, TBackward <: AbstractFFTs.ScaledPlan}
-    # fext is an array for storing f(z) on the extended domain needed
-    # to perform complex-to-complex FFT using the fact that f(theta) is even in theta
-    fext::Array{Complex{mk_float},1}
-    # Chebyshev spectral coefficients of distribution function f
-    # first dimension contains location within element
-    # second dimension indicates the element
-    f::Array{mk_float,2}
-    # Chebyshev spectral coefficients of derivative of f
-    df::Array{mk_float,1}
-    # plan for the complex-to-complex, in-place, forward Fourier transform on Chebyshev-Gauss-Lobatto grid
-    forward::TForward
-    # plan for the complex-to-complex, in-place, backward Fourier transform on Chebyshev-Gauss-Lobatto grid
-    #backward_transform::FFTW.cFFTWPlan
-    backward::TBackward
-end
+using ..moment_kinetics_structs: chebyshev_info
 
 """
 create arrays needed for explicit Chebyshev pseudospectral treatment

@@ -5,7 +5,7 @@ module calculus
 export derivative!
 export integral
 
-using ..chebyshev: chebyshev_info
+using ..moment_kinetics_structs: chebyshev_info
 using ..type_definitions: mk_float
 
 """
