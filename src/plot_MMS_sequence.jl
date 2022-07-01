@@ -209,10 +209,19 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
     nelmin = nelement_sequence[1]
     nelmax = nelement_sequence[end]
     ymax = 1.0e1
-    ymin = 1.0e-5
+    ymin = 1.0e-7
+    fontsize = 10
+    if scan_name == "2D-3V-wall_cheb" || scan_name == "1D-3V-wall_cheb" || scan_name == "1D-3V-wall-sheath_cheb"
+        ytick_sequence = Array([1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0,1.0e1])
+    elseif scan_name == "2D-sound-wave_cheb_cxiz" || scan_name == "2D-sound-wave_cheb"
+        ytick_sequence = Array([1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0,1.0e1])
+    else
+        ytick_sequence = Array([1.0e-7,1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0,1.0e1])
+    end
     
     plot(nelement_sequence, [ion_density_error_sequence,ion_pdf_error_sequence], xlabel=xlabel, label=[ylabel_ion_density ylabel_ion_pdf], ylabel="",
-     shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelmin:nelmax, nelmin:nelmax), ylims = (ymin,ymax), markersize = 5, linewidth=2)
+     shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_sequence, nelement_sequence), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2, 
+      xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize)
     outfile = outprefix*".pdf"
     savefig(outfile)
     println(outfile)
@@ -232,7 +241,8 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
     if n_neutral_species > 0
         plot(nelement_sequence, [ion_density_error_sequence, ion_pdf_error_sequence, neutral_density_error_sequence, neutral_pdf_error_sequence], xlabel=xlabel, 
         label=[ylabel_ion_density ylabel_ion_pdf ylabel_neutral_density ylabel_neutral_pdf], ylabel="",
-         shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelmin:nelmax, nelmin:nelmax), ylims = (ymin,ymax), markersize = 5, linewidth=2)
+         shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_sequence, nelement_sequence), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2,
+         xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize)
         outfile = outprefix*".pdf"
         savefig(outfile)
         println(outfile)
