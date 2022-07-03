@@ -52,9 +52,13 @@ struct moments_struct
     neutral::moments_neutral_substruct
 end
 
-struct boundary_distributions_struct{n_neutral_vspace}
+struct boundary_distributions_struct
     # knudsen cosine distribution for imposing the neutral wall boundary condition
-    knudsen::MPISharedArray{mk_float,n_neutral_vspace}
+    knudsen::MPISharedArray{mk_float,3}
+    # charged particle r boundary values (vpa,vperp,z,r,s)
+    pdf_rboundary_charged::MPISharedArray{mk_float,5}
+    # neutral particle r boundary values (vz,vr,vzeta,z,r,s)
+    pdf_rboundary_neutral::MPISharedArray{mk_float,6}
 end
 """
 creates the normalised pdf and the velocity-space moments and populates them
@@ -120,7 +124,7 @@ function init_pdf_and_moments(vz, vr, vzeta, vpa, vperp, z, r, composition, geom
         end
     end 
     
-    boundary_distributions = create_and_init_boundary_distributions(vz, vr, vzeta, vpa, vperp, composition)
+    boundary_distributions = create_and_init_boundary_distributions(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition)
     
     return pdf, moments, boundary_distributions
 end
@@ -253,7 +257,7 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
     return nothing
 end
 
-function create_and_init_boundary_distributions(vz, vr, vzeta, vpa, vperp, composition)
+function init_knudsen_cosine(vz, vr, vzeta, vpa, vperp, composition)
     knudsen_cosine = allocate_shared_float(vz.n, vr.n, vzeta.n)
     integrand = zeros(mk_float, vz.n, vr.n, vzeta.n)
     
@@ -311,7 +315,39 @@ function create_and_init_boundary_distributions(vz, vr, vzeta, vpa, vperp, compo
         @. knudsen_cosine[:,1,1] = vz.scratch[:]        
                 
     end    
-    return boundary_distributions_struct(knudsen_cosine)
+    return knudsen_cosine
+end 
+
+function init_rboundary_pdfs(pdf::pdf_struct, vz, vr, vzeta, vpa, vperp, z, r, composition)
+    n_ion_species = composition.n_ion_species
+    n_neutral_species = composition.n_neutral_species
+    n_neutral_species_alloc = max(1, n_neutral_species)
+    
+    rboundary_charged = allocate_shared_float(vpa.n, vperp.n, z.n, 2, n_ion_species)
+    rboundary_neutral = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, 2, n_neutral_species_alloc)
+    
+    begin_s_r_z_region()
+    @loop_s_z_vperp_vpa is iz ivperp ivpa begin
+        rboundary_charged[ivpa,ivperp,iz,1,is] = pdf.charged.unnorm[ivpa,ivperp,iz,1,is]
+        rboundary_charged[ivpa,ivperp,iz,end,is] = pdf.charged.unnorm[ivpa,ivperp,iz,end,is]
+    end
+    if n_neutral_species > 0 
+        begin_sn_r_z_region()
+        @loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
+            rboundary_neutral[ivz,ivr,ivzeta,iz,1,isn] = pdf.neutral.unnorm[ivz,ivr,ivzeta,iz,1,isn]
+            rboundary_neutral[ivz,ivr,ivzeta,iz,end,isn] = pdf.neutral.unnorm[ivz,ivr,ivzeta,iz,end,isn]
+        end
+    end
+    return rboundary_charged, rboundary_neutral
+end
+
+function create_and_init_boundary_distributions(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition)
+    #initialise knudsen distribution for neutral wall bc
+    knudsen_cosine = init_knudsen_cosine(vz, vr, vzeta, vpa, vperp, composition)
+    #initialise fixed-in-time radial boundary condition based on initial condition values
+    pdf_rboundary_charged, pdf_rboundary_neutral = init_rboundary_pdfs(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition)
+    
+    return boundary_distributions_struct(knudsen_cosine, pdf_rboundary_charged, pdf_rboundary_neutral)
 end 
 
 """
@@ -529,7 +565,7 @@ end
 # Can we have an explicit loop or explain what it does?
 # Seems to make the fn a operator elementwise in the vector f
 # but loop is over a part of mysterious x_adv objects...
-function enforce_boundary_conditions!(f, f_old, vpa_bc, z_bc, r_bc, vpa, vperp, z, r, vpa_adv::T1, z_adv::T2, r_adv::T3, composition) where {T1, T2, T3}
+function enforce_boundary_conditions!(f, f_r_bc, vpa_bc, z_bc, r_bc, vpa, vperp, z, r, vpa_adv::T1, z_adv::T2, r_adv::T3, composition) where {T1, T2, T3}
     
     begin_s_r_z_vperp_region()
     @loop_s_r_z_vperp is ir iz ivperp begin
@@ -540,14 +576,14 @@ function enforce_boundary_conditions!(f, f_old, vpa_bc, z_bc, r_bc, vpa, vperp, 
     begin_s_r_vperp_vpa_region()
     @views enforce_z_boundary_condition!(f, z_bc, z_adv, vpa, vperp, r, composition)
     begin_s_z_vperp_vpa_region()
-    @views enforce_r_boundary_condition!(f, f_old, r_bc, r_adv, vpa, vperp, z, r, composition)
+    @views enforce_r_boundary_condition!(f, f_r_bc, r_bc, r_adv, vpa, vperp, z, r, composition)
 end
 
 
 """
 enforce boundary conditions on f in r
 """
-function enforce_r_boundary_condition!(f, f_old, bc::String, adv::T, vpa, vperp, z, r, composition) where T
+function enforce_r_boundary_condition!(f, f_r_bc, bc::String, adv::T, vpa, vperp, z, r, composition) where T
     # 'periodic' BC enforces periodicity by taking the average of the boundary points
     if bc == "periodic"
         @loop_s_z_vperp_vpa is iz ivperp ivpa begin
@@ -557,12 +593,21 @@ function enforce_r_boundary_condition!(f, f_old, bc::String, adv::T, vpa, vperp,
             f[ivpa,ivperp,iz,upwind_idx,is] = f[ivpa,ivperp,iz,downwind_idx,is]
         end
     elseif bc == "Dirichlet"
+        zero = 1.0e-10
         # use the old distribution to force the new distribution to have 
         # consistant-in-time values at the boundary
-        # impose bc on upwind boundary only (Hyperbolic PDE)
+        # impose bc for incoming parts of velocity space only (Hyperbolic PDE)
         @loop_s_z_vperp_vpa is iz ivperp ivpa begin
-            upwind_idx = adv[is].upwind_idx[ivpa,ivperp,iz] # r.n #
-            f[ivpa,ivperp,iz,upwind_idx,is] = f_old[ivpa,ivperp,iz,upwind_idx,is]
+            ir = 1 # r = -L/2
+            if adv[is].speed[ir,ivpa,ivperp,iz] > zero
+                f[ivpa,ivperp,iz,ir,is] = f_r_bc[ivpa,ivperp,iz,1,is]
+            end
+            ir = r.n # r = L/2
+            if adv[is].speed[ir,ivpa,ivperp,iz] < -zero
+                f[ivpa,ivperp,iz,ir,is] = f_r_bc[ivpa,ivperp,iz,end,is]
+            end    
+            #upwind_idx = adv[is].upwind_idx[ivpa,ivperp,iz] # r.n #
+            #f[ivpa,ivperp,iz,upwind_idx,is] = f_r_bc[ivpa,ivperp,iz,upwind_idx,is]
         end
     end
 end
@@ -655,7 +700,8 @@ function enforce_neutral_boundary_conditions!(f_neutral, f_charged, boundary_dis
     begin_sn_r_vzeta_vr_vz_region()
     @views enforce_neutral_z_boundary_condition!(f_neutral, f_charged, boundary_distributions, z_adv_neutral, z_adv_charged, vz, vr, vzeta, vpa, vperp, z, r, composition)
     begin_sn_z_vzeta_vr_vz_region()
-    @views enforce_neutral_r_boundary_condition!(f_neutral, r_adv_neutral, vz, vr, vzeta, z, r, composition) #f_initial, 
+    @views enforce_neutral_r_boundary_condition!(f_neutral, boundary_distributions.pdf_rboundary_neutral,
+                                r_adv_neutral, vz, vr, vzeta, z, r, composition)
 end
 
 function enforce_neutral_z_boundary_condition!(f_neutral, f_charged, boundary_distributions, z_adv_neutral::T1, z_adv_charged::T2, vz, vr, vzeta, vpa, vperp, z, r, composition) where {T1, T2}
@@ -739,7 +785,7 @@ function enforce_neutral_z_boundary_condition!(f_neutral, f_charged, boundary_di
     end
 end
 
-function enforce_neutral_r_boundary_condition!(f, r_adv::T, vz, vr, vzeta, z, r, composition) where T #f_initial, 
+function enforce_neutral_r_boundary_condition!(f, f_r_bc, adv::T, vz, vr, vzeta, z, r, composition) where T #f_initial, 
     bc = r.bc
     nr = r.n
     # 'periodic' BC enforces periodicity by taking the average of the boundary points
@@ -748,20 +794,21 @@ function enforce_neutral_r_boundary_condition!(f, r_adv::T, vz, vr, vzeta, z, r,
             f[ivz,ivr,ivzeta,iz,1,isn] = 0.5*(f[ivz,ivr,ivzeta,iz,1,isn]+f[ivz,ivr,ivzeta,iz,nr,isn])
             f[ivz,ivr,ivzeta,iz,nr,isn] = f[ivz,ivr,ivzeta,iz,1,isn]
         end
-    #elseif bc == "Dirichlet"
-    #    # use the old distribution to force the new distribution to have 
-    #    # consistant-in-time values at the boundary
-    #    # impose bc on upwind boundary only (Hyperbolic PDE)
-    #    @loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
-    #    #ir = 1 # r = -L/2
-    #    #if adv[isn].speed[ir,ivz,ivr,ivzeta,ir] > zero
-    #    #    f[ivz,ivr,ivzeta,iz,ir,isn] = f_initial[ivz,ivr,ivzeta,iz,ir,isn]
-    #    #end
-    #    #ir = nr # r = L/2
-    #    #if adv[isn].speed[ir,ivz,ivr,ivzeta,ir] < -zero
-    #    #    f[ivz,ivr,ivzeta,iz,ir,isn] = f_initial[ivz,ivr,ivzeta,iz,ir,isn]
-    #    #end
-    #    end
+    elseif bc == "Dirichlet"
+        zero = 1.0e-10
+        # use the old distribution to force the new distribution to have 
+        # consistant-in-time values at the boundary
+        # impose bc on incoming parts of velocity space only (Hyperbolic PDE)
+        @loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
+            ir = 1 # r = -L/2
+            if adv[isn].speed[ir,ivz,ivr,ivzeta,iz] > zero
+                f[ivz,ivr,ivzeta,iz,ir,isn] = f_r_bc[ivz,ivr,ivzeta,iz,1,isn]
+            end
+            ir = nr # r = L/2
+            if adv[isn].speed[ir,ivz,ivr,ivzeta,iz] < -zero
+                f[ivz,ivr,ivzeta,iz,ir,isn] = f_r_bc[ivz,ivr,ivzeta,iz,end,isn]
+            end
+        end
     end
 end
 

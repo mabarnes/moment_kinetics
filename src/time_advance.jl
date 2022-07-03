@@ -259,8 +259,8 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
         update_boundary_indices!(r_advect[is], loop_ranges[].vpa, loop_ranges[].vperp, loop_ranges[].z)
     end
     # enforce prescribed boundary condition in r on the distribution function f
-    # use present distribution as f_old in case of Dirichlet bc
-    @views enforce_r_boundary_condition!(pdf.charged.unnorm, pdf.charged.unnorm, r.bc, r_advect, vpa, vperp, z, r, composition)
+    @views enforce_r_boundary_condition!(pdf.charged.unnorm, boundary_distributions.pdf_rboundary_charged,
+                                                r.bc, r_advect, vpa, vperp, z, r, composition)
     
     # create structure z_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the split part of the GK equation dealing
@@ -331,7 +331,8 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
             update_boundary_indices!(neutral_r_advect[isn], loop_ranges[].vz, loop_ranges[].vr, loop_ranges[].vzeta, loop_ranges[].z)
         end
         # enforce prescribed boundary condition in r on the neutral distribution function f
-        @views enforce_neutral_r_boundary_condition!(pdf.neutral.unnorm, r_advect, vz, vr, vzeta, z, r, composition)
+        @views enforce_neutral_r_boundary_condition!(pdf.neutral.unnorm, 
+            boundary_distributions.pdf_rboundary_neutral, neutral_r_advect, vz, vr, vzeta, z, r, composition)
     end 
     
     # create structure neutral_z_advect for neutral particle advection
@@ -793,8 +794,8 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     end
     
     # enforce boundary conditions in r, z and vpa on the charged particle distribution function
-    enforce_boundary_conditions!(fvec_out.pdf, pdf.charged.norm, vpa.bc, z.bc, r.bc, vpa, vperp, z, r,
-     vpa_advect, z_advect, r_advect, composition)
+    enforce_boundary_conditions!(fvec_out.pdf, boundary_distributions.pdf_rboundary_charged,
+      vpa.bc, z.bc, r.bc, vpa, vperp, z, r, vpa_advect, z_advect, r_advect, composition)
     # enforce boundary conditions in r and z on the neutral particle distribution function
     if n_neutral_species > 0
         enforce_neutral_boundary_conditions!(fvec_out.pdf_neutral, fvec_out.pdf, boundary_distributions, 

@@ -16,23 +16,29 @@ using ..input_structs
     
     #standard functions for building densities
     function nplus_sym(Lr,r_bc)
-        #if r_bc == "periodic"
-        nplus = 1.0 + 0.05*sin(2.0*pi*r/Lr)
-        #end
+        if r_bc == "periodic"
+            nplus = 1.0 + 0.05*sin(2.0*pi*r/Lr)
+        elseif r_bc == "Dirichlet"
+            nplus = 1.0 - 0.8*r/Lr 
+        end
         return nplus
     end
     
     function nminus_sym(Lr,r_bc)
-        #if r_bc == "periodic"
-        nminus = 1.0 + 0.05*sin(2.0*pi*r/Lr)
-        #end
+        if r_bc == "periodic"
+            nminus = 1.0 + 0.05*sin(2.0*pi*r/Lr)
+        elseif r_bc == "Dirichlet"
+            nminus = 1.0 - 0.8*r/Lr
+        end
         return nminus
     end
     
     function nzero_sym(Lr,r_bc)
-        #if r_bc == "periodic"
-        nzero = 1.0 + 0.05*sin(2.0*pi*r/Lr)# 1.0 #+ (r/Lr + 0.5)*(0.5 - r/Lr)
-        #end
+        if r_bc == "periodic"
+            nzero = 1.0 + 0.05*sin(2.0*pi*r/Lr)# 1.0 #+ (r/Lr + 0.5)*(0.5 - r/Lr)
+        elseif r_bc == "Dirichlet" 
+            nzero = 1.0 - 0.4*r/Lr
+        end
         return nzero
     end
 
@@ -54,9 +60,13 @@ using ..input_structs
 
     # neutral density symbolic function
     function densn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
-        if r_bc == "periodic" && z_bc == "periodic" 
-            densn = 1.5 +  0.1*(cos(2.0*pi*r/Lr) + cos(2.0*pi*z/Lz))*sin(2.0*pi*t)  
-        elseif (r_bc == "periodic" && z_bc == "wall")
+        if z_bc == "periodic" 
+            if r_bc == "periodic" 
+                densn = 1.5 +  0.1*(cos(2.0*pi*r/Lr) + cos(2.0*pi*z/Lz))*sin(2.0*pi*t)  
+            elseif r_bc == "Dirichlet"
+                densn = 1.5 + 0.3*r/Lr
+            end
+        elseif z_bc == "wall"
             T_wall = composition.T_wall
             Bzed = geometry.Bzed
             Bmag = geometry.Bmag
@@ -80,9 +90,9 @@ using ..input_structs
     # neutral distribution symbolic function
     function dfnn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
         densn = densn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
-        if (r_bc == "periodic" && z_bc == "periodic")
+        if z_bc == "periodic"
             dfnn = densn * exp( - vz^2 - vr^2 - vzeta^2)
-        elseif (r_bc == "periodic" && z_bc == "wall")
+        elseif z_bc == "wall"
             Hplus = 0.5*(sign(vz) + 1.0)
             Hminus = 0.5*(sign(-vz) + 1.0)
             FKw = knudsen_cosine(composition)
@@ -104,22 +114,24 @@ using ..input_structs
     
     # ion density symbolic function
     function densi_sym(Lr,Lz,r_bc,z_bc)
-        if r_bc == "periodic" && z_bc == "periodic"
-            densi = 1.5 +  0.1*(sin(2.0*pi*r/Lr) + sin(2.0*pi*z/Lz))*sin(2.0*pi*t)  
-        elseif r_bc == "Dirichlet" && z_bc == "periodic"
-            #densi = 1.0 +  0.5*sin(2.0*pi*z/Lz)*(r/Lr + 0.5) + 0.2*sin(2.0*pi*r/Lr)*sin(2.0*pi*t)
-            #densi = 1.0 +  0.5*sin(2.0*pi*z/Lz)*(r/Lr + 0.5) + sin(2.0*pi*r/Lr)*sin(2.0*pi*t)
-            densi = 1.0 +  0.5*(r/Lr + 0.5) 
-        elseif r_bc == "periodic" && z_bc == "wall"
+        if z_bc == "periodic"
+            if r_bc == "periodic"
+                densi = 1.5 +  0.1*(sin(2.0*pi*r/Lr) + sin(2.0*pi*z/Lz))*sin(2.0*pi*t)  
+            elseif r_bc == "Dirichlet" 
+                #densi = 1.0 +  0.5*sin(2.0*pi*z/Lz)*(r/Lr + 0.5) + 0.2*sin(2.0*pi*r/Lr)*sin(2.0*pi*t)
+                #densi = 1.0 +  0.5*sin(2.0*pi*z/Lz)*(r/Lr + 0.5) + sin(2.0*pi*r/Lr)*sin(2.0*pi*t)
+                densi = 1.0 +  0.5*(r/Lr)*sin(2.0*pi*z/Lz)
+            end
+        elseif z_bc == "wall"
             densi = 0.25*(0.5 - z/Lz)*nminus_sym(Lr,r_bc) + 0.25*(z/Lz + 0.5)*nplus_sym(Lr,r_bc) + (z/Lz + 0.5)*(0.5 - z/Lz)*nzero_sym(Lr,r_bc)  #+  0.5*(r/Lr + 0.5) + 0.5*(z/Lz + 0.5)
         end
         return densi
     end
 
     function jpari_into_LHS_wall_sym(Lr,Lz,r_bc,z_bc)
-        if r_bc == "periodic" && z_bc == "periodic"
+        if z_bc == "periodic"
             jpari_into_LHS_wall_sym = 0.0
-        elseif r_bc == "periodic" && z_bc == "wall"
+        elseif z_bc == "wall"
             #appropriate for wall bc test when Er = 0 (nr == 1)
             jpari_into_LHS_wall_sym = -0.5*nminus_sym(Lr,r_bc)/sqrt(pi)
         end
@@ -147,9 +159,9 @@ using ..input_structs
             rfac = 0.0
         end
         
-        if (r_bc == "periodic" && z_bc == "periodic") || (r_bc == "Dirichlet" && z_bc == "periodic")
+        if z_bc == "periodic"
             dfni = densi * exp( - vpa^2 - vperp^2) 
-        elseif r_bc == "periodic" && z_bc == "wall"
+        elseif z_bc == "wall"
             vpabar = vpa - (rhostar/2.0)*(Bmag/Bzed)*expand_derivatives(Er)*rfac # effective velocity in z direction * (Bmag/Bzed)
             Hplus = 0.5*(sign(vpabar) + 1.0)
             Hminus = 0.5*(sign(-vpabar) + 1.0)
