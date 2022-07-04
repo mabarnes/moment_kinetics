@@ -60,6 +60,10 @@ struct netcdf_info
     f::nc_var_type{6}
     # handle for the electrostatic potential variable
     phi::nc_var_type{3}
+    # handle for the radial electric field variable
+    Er::nc_var_type{3}
+    # handle for the z electric field variable
+    Ez::nc_var_type{3}
     # handle for the charged species density
     density::nc_var_type{4}
     # handle for the charged species parallel flow
@@ -287,6 +291,16 @@ function define_dynamic_variables!(fid)
     attributes = Dict("description" => "electrostatic potential",
                       "units" => "T_ref/e")
     cdf_phi = defVar(fid, varname, vartype, dims, attrib=attributes)
+    # create the "Er" variable, which will contain the radial electric field
+    varname = "Er"
+    attributes = Dict("description" => "electrostatic potential",
+                      "units" => "T_ref/e L_ref")
+    cdf_Er = defVar(fid, varname, vartype, dims, attrib=attributes)
+    # create the "Ez" variable, which will contain the electric field along z
+    varname = "Ez"
+    attributes = Dict("description" => "electrostatic potential",
+                      "units" => "T_ref/e L_ref")
+    cdf_Ez = defVar(fid, varname, vartype, dims, attrib=attributes)
     # create variables that are floats with data in the z, ion species and time dimensions
     vartype = mk_float
     dims = ("nz","nr","n_ion_species","ntime")
@@ -347,7 +361,7 @@ function define_dynamic_variables!(fid)
     cdf_vth_neutral = defVar(fid, varname, vartype, dims, attrib=attributes)
     
     
-    return cdf_time, cdf_f, cdf_phi, cdf_density, cdf_upar, cdf_ppar, cdf_qpar, cdf_vth, cdf_f_neutral, cdf_density_neutral, cdf_uz_neutral, cdf_pz_neutral, cdf_qz_neutral, cdf_vth_neutral
+    return cdf_time, cdf_f, cdf_phi, cdf_Er, cdf_Ez, cdf_density, cdf_upar, cdf_ppar, cdf_qpar, cdf_vth, cdf_f_neutral, cdf_density_neutral, cdf_uz_neutral, cdf_pz_neutral, cdf_qz_neutral, cdf_vth_neutral
 end
 
 """
@@ -369,12 +383,12 @@ function setup_netcdf_io(prefix, r, z, vperp, vpa, vzeta, vr, vz, composition, c
     define_static_variables!(fid,vz,vr,vzeta,vpa,vperp,z,r,composition,collisions)
     ### create variables for time-dependent quantities and store them ###
     ### in a struct for later access ###
-    cdf_time, cdf_f, cdf_phi, cdf_density, cdf_upar, cdf_ppar, cdf_qpar, cdf_vth, cdf_f_neutral, cdf_density_neutral, cdf_uz_neutral, cdf_pz_neutral, cdf_qz_neutral, cdf_vth_neutral =
+    cdf_time, cdf_f, cdf_phi, cdf_Er, cdf_Ez, cdf_density, cdf_upar, cdf_ppar, cdf_qpar, cdf_vth, cdf_f_neutral, cdf_density_neutral, cdf_uz_neutral, cdf_pz_neutral, cdf_qz_neutral, cdf_vth_neutral =
         define_dynamic_variables!(fid)
 
     # create a struct that stores the variables and other info needed for
     # writing to the netcdf file during run-time
-    return netcdf_info(fid, cdf_time, cdf_f, cdf_phi, cdf_density, cdf_upar,
+    return netcdf_info(fid, cdf_time, cdf_f, cdf_phi, cdf_Er, cdf_Ez, cdf_density, cdf_upar,
                        cdf_ppar, cdf_qpar, cdf_vth, cdf_f_neutral, cdf_density_neutral,
                        cdf_uz_neutral, cdf_pz_neutral, cdf_qz_neutral, cdf_vth_neutral)
 end
@@ -515,6 +529,8 @@ function write_data_to_binary(ff, ff_neutral, moments, fields, t, n_ion_species,
         cdf.f[:,:,:,:,:,t_idx] = ff
         # add the electrostatic potential data at this time slice to the netcdf file
         cdf.phi[:,:,t_idx] = fields.phi
+        cdf.Er[:,:,t_idx] = fields.Er
+        cdf.Ez[:,:,t_idx] = fields.Ez
         # add the density data at this time slice to the netcdf file
         for is ∈ 1:n_ion_species
             cdf.density[:,:,:,t_idx] = moments.charged.dens
