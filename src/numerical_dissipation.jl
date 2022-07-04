@@ -49,4 +49,24 @@ function vpa_dissipation!(f_out, fvec_in, moments, vpa, spectral, dt)
     return nothing
 end
 
+"""
+Add diffusion in the z direction to suppress oscillations
+"""
+function z_dissipation!(f_out, fvec_in, moments, z, vpa, spectral, dt)
+    begin_s_r_vpa_region()
+
+    diffusion_coefficient = -1.0
+
+    if diffusion_coefficient <= 0.0
+        return nothing
+    end
+
+    @loop_s_r_vpa is ir ivpa begin
+        @views derivative!(z.scratch, fvec_in.pdf[ivpa,:,ir,is], z, spectral, Val(2))
+        @views @. f_out[ivpa,:,ir,is] += dt * diffusion_coefficient * z.scratch
+    end
+
+    return nothing
+end
+
 end
