@@ -193,6 +193,8 @@ function setup_advance_flags(moments, composition, split_operators, collisions, 
             if abs(collisions.ionization) > 0.0
                 advance_ionization = true
             end
+        elseif collisions.constant_ionization_rate && collisions.ionization > 0.0
+            advance_ionization = true
         end
         # if evolving the density, must advance the continuity equation,
         # in addition to including sources arising from the use of a modified distribution
