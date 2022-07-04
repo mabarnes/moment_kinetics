@@ -4,10 +4,11 @@ if abspath(PROGRAM_FILE) == @__FILE__
 
     import moment_kinetics as mk
 
-   test_option = "collisional_soundwaves"
+   #test_option = "collisional_soundwaves"
    #test_option = "collisionless_soundwaves"
    #test_option = "collisionless_wall-1D-3V"
    #test_option = "collisionless_wall-2D-3V"
+   test_option = "collisionless_biased_wall-2D-3V"
    #test_option = "collisionless_wall-1D-3V-with-sheath"
 
     if test_option == "collisional_soundwaves"
@@ -30,12 +31,18 @@ if abspath(PROGRAM_FILE) == @__FILE__
                         "runs/2D-wall_cheb-with-neutrals_nel_r_2_z_2_vpa_16_vperp_16"                       ]
         scan_type = "velocity_nelement"
         scan_name = "2D-3V-wall_cheb"
+    elseif test_option == "collisionless_biased_wall-2D-3V"
+        # collisionless wall test, no sheath for electrons, no radial coordinate
+        path_list = ["runs/2D-wall-Dirichlet_nel_r_2_z_2_vpa_2","runs/2D-wall-Dirichlet_nel_r_2_z_2_vpa_4",
+                     "runs/2D-wall-Dirichlet_nel_r_2_z_2_vpa_8","runs/2D-wall-Dirichlet_nel_r_2_z_2_vpa_16"]
+        scan_type = "velocity_nelement"
+        scan_name = "2D-3V-biased_wall_cheb"
     
     elseif test_option == "collisionless_wall-1D-3V"
         # collisionless wall test, no sheath for electrons, no radial coordinate
         path_list = ["runs/2D-wall_cheb-with-neutrals_nel_r_1_z_2_vpa_2_vperp_2","runs/2D-wall_cheb-with-neutrals_nel_r_1_z_2_vpa_4_vperp_4",
-                        "runs/2D-wall_cheb-with-neutrals_nel_r_1_z_2_vpa_8_vperp_8","runs/2D-wall_cheb-with-neutrals_nel_r_1_z_2_vpa_12_vperp_12",
-                        "runs/2D-wall_cheb-with-neutrals_nel_r_1_z_2_vpa_16_vperp_16","runs/2D-wall_cheb-with-neutrals_nel_r_1_z_2_vpa_24_vperp_24"
+                        "runs/2D-wall_cheb-with-neutrals_nel_r_1_z_2_vpa_8_vperp_8",#"runs/2D-wall_cheb-with-neutrals_nel_r_1_z_2_vpa_12_vperp_12",
+                        "runs/2D-wall_cheb-with-neutrals_nel_r_1_z_2_vpa_16_vperp_16"#,"runs/2D-wall_cheb-with-neutrals_nel_r_1_z_2_vpa_24_vperp_24"
                        ]
         scan_type = "velocity_nelement"
         scan_name = "1D-3V-wall_cheb"
@@ -43,8 +50,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
     elseif test_option == "collisionless_wall-1D-3V-with-sheath"
         # collisionless wall test, no sheath for electrons, no radial coordinate
         path_list = ["runs/2D-wall_cheb-with-neutrals-with-sheath_nel_r_1_z_2_vpa_2_vperp_2","runs/2D-wall_cheb-with-neutrals-with-sheath_nel_r_1_z_2_vpa_4_vperp_4",
-                        "runs/2D-wall_cheb-with-neutrals-with-sheath_nel_r_1_z_2_vpa_8_vperp_8","runs/2D-wall_cheb-with-neutrals-with-sheath_nel_r_1_z_2_vpa_12_vperp_12",
-                        "runs/2D-wall_cheb-with-neutrals-with-sheath_nel_r_1_z_2_vpa_16_vperp_16","runs/2D-wall_cheb-with-neutrals-with-sheath_nel_r_1_z_2_vpa_24_vperp_24"
+                        "runs/2D-wall_cheb-with-neutrals-with-sheath_nel_r_1_z_2_vpa_8_vperp_8",#"runs/2D-wall_cheb-with-neutrals-with-sheath_nel_r_1_z_2_vpa_12_vperp_12",
+                        "runs/2D-wall_cheb-with-neutrals-with-sheath_nel_r_1_z_2_vpa_16_vperp_16"#,"runs/2D-wall_cheb-with-neutrals-with-sheath_nel_r_1_z_2_vpa_24_vperp_24"
                        ]
         scan_type = "velocity_nelement"
         scan_name = "1D-3V-wall-sheath_cheb"
