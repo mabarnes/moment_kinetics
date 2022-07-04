@@ -285,7 +285,7 @@ function define_dynamic_variables!(fid)
     # create the "phi" variable, which will contain the electrostatic potential
     varname = "phi"
     attributes = Dict("description" => "electrostatic potential",
-                      "units" => "Te/e")
+                      "units" => "T_ref/e")
     cdf_phi = defVar(fid, varname, vartype, dims, attrib=attributes)
     # create variables that are floats with data in the z, ion species and time dimensions
     vartype = mk_float
@@ -293,27 +293,27 @@ function define_dynamic_variables!(fid)
     # create the "density" variable, which will contain the charged species densities
     varname = "density"
     attributes = Dict("description" => "charged species density",
-                      "units" => "Ne")
+                      "units" => "n_ref")
     cdf_density = defVar(fid, varname, vartype, dims, attrib=attributes)
     # create the "parallel_flow" variable, which will contain the charged species parallel flows
     varname = "parallel_flow"
     attributes = Dict("description" => "charged species parallel flow",
-                      "units" => "sqrt(2*Te/ms)")
+                      "units" => "c_ref = sqrt(2*T_ref/mi)")
     cdf_upar = defVar(fid, varname, vartype, dims, attrib=attributes)
     # create the "parallel_pressure" variable, which will contain the charged species parallel pressures
     varname = "parallel_pressure"
     attributes = Dict("description" => "charged species parallel pressure",
-                      "units" => "Ne*Te")
+                      "units" => "n_ref*T_ref")
     cdf_ppar = defVar(fid, varname, vartype, dims, attrib=attributes)
     # create the "parallel_heat_flux" variable, which will contain the charged species parallel heat fluxes
     varname = "parallel_heat_flux"
     attributes = Dict("description" => "charged species parallel heat flux",
-                      "units" => "Ne*Te*vth")
+                      "units" => "n_ref*T_ref*c_ref")
     cdf_qpar = defVar(fid, varname, vartype, dims, attrib=attributes)
     # create the "thermal_speed" variable, which will contain the charged  species thermal speed
     varname = "thermal_speed"
     attributes = Dict("description" => "charged species thermal speed",
-                      "units" => "vth")
+                      "units" => "c_ref")
     cdf_vth = defVar(fid, varname, vartype, dims, attrib=attributes)
     
     # create variables that are floats with data in the z, neutral species and time dimensions
@@ -327,23 +327,23 @@ function define_dynamic_variables!(fid)
     dims = ("nz","nr","n_neutral_species","ntime")
     varname = "density_neutral"
     attributes = Dict("description" => "neutral species density",
-                      "units" => "Ne")
+                      "units" => "n_ref")
     cdf_density_neutral = defVar(fid, varname, vartype, dims, attrib=attributes)
     varname = "uz_neutral"
     attributes = Dict("description" => "neutral species mean z velocity",
-                      "units" => "sqrt(2*Te/ms)")
+                      "units" => "c_ref = sqrt(2*T_ref/mi)")
     cdf_uz_neutral = defVar(fid, varname, vartype, dims, attrib=attributes)
     varname = "pz_neutral"
     attributes = Dict("description" => "neutral species zz pressure",
-                      "units" => "Ne*Te")
+                      "units" => "n_ref*T_ref")
     cdf_pz_neutral = defVar(fid, varname, vartype, dims, attrib=attributes)
     varname = "qz_neutral"
     attributes = Dict("description" => "neutral species z heat flux",
-                      "units" => "Ne*Te*vth")
+                      "units" => "n_ref*T_ref*c_ref")
     cdf_qz_neutral = defVar(fid, varname, vartype, dims, attrib=attributes)
     varname = "thermal_speed_neutral"
     attributes = Dict("description" => "neutral species thermal speed",
-                      "units" => "vth")
+                      "units" => "c_ref")
     cdf_vth_neutral = defVar(fid, varname, vartype, dims, attrib=attributes)
     
     
