@@ -9,6 +9,7 @@ export enforce_boundary_conditions!
 
 # package
 using SpecialFunctions: erfc
+using NLsolve
 # modules
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_shared_float
@@ -201,7 +202,21 @@ function init_pdf_over_density!(pdf, spec, vpa, z, vth, upar, vpa_norm_fac, evol
             else
                 @. vpa.scratch = (vpa.grid - upar[iz])/vth[iz]
             end
-            @. pdf[:,iz] = exp(-vpa.scratch^2) / vth[iz]
+            #@. pdf[:,iz] = exp(-vpa.scratch^2) / vth[iz]
+            # Hack to have zero pdf at zero v_parallel
+            function f(x)
+                # From density integral of \tilde{f}
+                residual1 = x[1]*(0.5 + x[2]^2/x[3]^2) - 1.0
+                residual2 = x[1]*x[2]*(1.5 + x[2]^2/x[3]^2) - upar[iz]
+                residual3 = x[1]*x[3]^2*(0.75 + 3.0*x[2]^2/x[3]^2 + x[2]^4/x[3]^4) -
+                            0.75*vth[iz] - upar[iz]^2
+                return [residual1, residual2, residual3]
+            end
+            ntilde, upartilde, vthtilde = nlsolve(f, [2.0, 0.0, 0.5]).zero
+            # Note v_parallel = w_parallel * vth + upar is given by
+            # (vpa.scratch * vth + upar) for any set of options
+            @. pdf[:,iz] = ntilde * (vpa.scratch * vth[iz] + upar[iz])^2 / vthtilde^3 *
+                           exp(-(vpa.scratch * vth[iz] + upar[iz] - upartilde)^2/vthtilde^2)
         end
         for iz ∈ 1:z.n
             # densfac = the integral of the pdf over v-space, which should be unity,
