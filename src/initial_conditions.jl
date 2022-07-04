@@ -559,6 +559,8 @@ function enforce_neutral_wall_bc!(pdf, vpa, ppar, upar, density, wall_flux_0,
         # First apply boundary condition that total neutral outflux is equat to ion
         # influx to upar
         upar[1] = - wall_flux_0 / density[1]
+        #would setting density work better??
+        #density[1] = - wall_flux_0 / upar[1]
 
         # Create normalised Knudsen cosine distribution, to use for positive v_parallel
         # at z = -Lz/2
@@ -606,6 +608,8 @@ function enforce_neutral_wall_bc!(pdf, vpa, ppar, upar, density, wall_flux_0,
         # First apply boundary condition that total neutral outflux is equat to ion
         # influx to upar
         upar[end] = - wall_flux_L / density[end]
+        #would setting density work better??
+        #density[end] = - wall_flux_L / upar[end]
 
         # obtain the Knudsen cosine distribution at z = Lz/2
         # the z-dependence is only introduced if the peculiiar velocity is used as vpa
