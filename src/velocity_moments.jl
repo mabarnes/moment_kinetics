@@ -131,7 +131,7 @@ end
 """
 calculate the updated density (dens) and parallel pressure (ppar) for all species
 """
-function update_moments!(moments, ff, vpa, nz, nr, composition)
+function update_moments!(moments, ff, vpa, z, r, composition)
     n_species = size(ff,4)
     @boundscheck n_species == size(moments.dens,3) || throw(BoundsError(moments))
     @loop_s is begin

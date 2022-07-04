@@ -153,7 +153,7 @@ function setup_time_advance!(pdf, vpa, z, r, z_spectral, composition, drive_inpu
     # update unnormalised pdf, moments and phi in case they were affected by applying
     # boundary conditions or constraints to the pdf
     update_pdf_unnorm!(pdf, moments, scratch[1].temp_z_s, composition, vpa)
-    update_moments!(moments, pdf.unnorm, vpa, z.n, r.n, composition)
+    update_moments!(moments, pdf.unnorm, vpa, z, r, composition)
     update_phi!(fields, scratch[1], z, r, composition)
 
     # create an array of structures containing the arrays needed for the semi-Lagrange
