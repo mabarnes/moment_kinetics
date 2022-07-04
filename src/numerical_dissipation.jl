@@ -13,7 +13,7 @@ Add diffusion in the vpa direction to suppress oscillations
 function vpa_dissipation!(f_out, fvec_in, moments, vpa, spectral, dt)
     begin_s_r_z_region()
 
-    diffusion_coefficient = 1.0
+    diffusion_coefficient = -1.0
 
     if diffusion_coefficient <= 0.0
         return nothing
