@@ -204,15 +204,36 @@ function init_pdf_over_density!(pdf, spec, vpa, z, vth, upar, vpa_norm_fac, evol
             end
             #@. pdf[:,iz] = exp(-vpa.scratch^2) / vth[iz]
             # Hack to have zero pdf at zero v_parallel
-            function f(x)
-                # From density integral of \tilde{f}
-                residual1 = x[1]*(0.5 + x[2]^2/x[3]^2) - 1.0
-                residual2 = x[1]*x[2]*(1.5 + x[2]^2/x[3]^2) - upar[iz]
-                residual3 = x[1]*x[3]^2*(0.75 + 3.0*x[2]^2/x[3]^2 + x[2]^4/x[3]^4) -
-                            0.75*vth[iz] - upar[iz]^2
-                return [residual1, residual2, residual3]
+            if evolve_ppar && evolve_upar
+                function f(x)
+                    # From density integral of \tilde{f}
+                    residual1 = x[1]*(0.5 + x[2]^2/x[3]^2) - 1.0
+                    residual2 = x[1]*x[2]*(1.5 + x[2]^2/x[3]^2) - upar[iz]
+                    residual3 = x[1]*x[3]^2*(0.75 + 3.0*x[2]^2/x[3]^2 + x[2]^4/x[3]^4) -
+                                0.75*vth[iz] - upar[iz]^2
+                    return [residual1, residual2, residual3]
+                end
+                ntilde, upartilde, vthtilde = nlsolve(f, [2.0, 0.0, sqrt(0.5*vth[iz])]).zero
+            elseif evolve_ppar
+                # upartilde=0 always, which makes equation system solvable
+                upartilde = 0.0
+                ntilde = 2.0
+                vthtilde = sqrt(0.5*vth[iz])
+            elseif evolve_upar
+                # vthtilde=1 always
+                vthtilde = 1.0
+                function f2(x)
+                    # From density integral of \tilde{f}
+                    residual1 = x[1]*(0.5 + x[2]^2) - 1.0
+                    residual2 = x[1]*x[2]*(1.5 + x[2]^2) - upar[iz]
+                    return [residual1, residual2]
+                end
+                ntilde, upartilde = nlsolve(f2, [2.0, 0.0]).zero
+            else
+                upartilde = 0.0
+                ntilde = 2.0
+                vthtilde = sqrt(0.5)
             end
-            ntilde, upartilde, vthtilde = nlsolve(f, [2.0, 0.0, 0.5]).zero
             # Note v_parallel = w_parallel * vth + upar is given by
             # (vpa.scratch * vth + upar) for any set of options
             @. pdf[:,iz] = ntilde * (vpa.scratch * vth[iz] + upar[iz])^2 / vthtilde^3 *
