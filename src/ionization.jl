@@ -12,7 +12,45 @@ using ..looping
 function ionization_collisions!(f_out, fvec_in, moments, n_ion_species,
         n_neutral_species, vpa, z, r, vpa_spectral, composition, collisions, nz, dt)
 
-    if moments.evolve_density
+    if collisions.constant_ionization_rate
+        # Oddly the test in test/harrisonthompson.jl matches the analytical
+        # solution (which assumes width=0.0) better with width=0.5 than with,
+        # e.g., width=0.15. Possibly narrower widths would require more vpa
+        # resolution, which then causes crashes due to overshoots giving
+        # negative f??
+        width = 0.5
+        @loop_s is begin
+            if is ∈ composition.ion_species_range
+                @loop_r_z ir iz begin
+                    if moments.evolve_ppar && moments.evolve_upar
+                        @. vpa.scratch = vpa.grid / moments.vth[iz] + moments.upar[iz] 
+                        prefactor = moments.vth[iz] / moments.dens[iz]
+                    elseif moments.evolve_ppar
+                        @. vpa.scratch = vpa.grid / moments.vth[iz]
+                        prefactor = moments.vth[iz] / moments.dens[iz]
+                    elseif moments.evolve_upar
+                        @. vpa.scratch = vpa.grid + moments.upar[iz]
+                        prefactor = 1.0 / moments.dens[iz]
+                    elseif moments.evolve_density
+                        @. vpa.scratch = vpa.grid
+                        prefactor = 1.0 / moments.dens[iz]
+                    else
+                        @. vpa.scratch = vpa.grid
+                        prefactor = 1.0
+                    end
+                    #if moments.evolve_density
+                    #    @. fvec_out.density += dt*collisions.ionization
+                    #end
+                    #if moments.evolve_ppar
+                    #    @. fvec_out.ppar += dt*collisions.ionization
+                    #end
+                    @loop_vpa ivpa begin
+                        f_out[ivpa,iz,ir,is] += dt*collisions.ionization/width*prefactor*exp(-(vpa.scratch[ivpa]/width)^2)
+                    end
+                end
+            end
+        end
+    elseif moments.evolve_density
         @loop_s is begin
             # apply ionization collisions to all ion species
             if is ∈ composition.ion_species_range
@@ -25,20 +63,6 @@ function ionization_collisions!(f_out, fvec_in, moments, n_ion_species,
             end
             # when working with the normalised distribution (pdf_unnorm / density),
             # the ionisation collisions drop out of the neutral kinetic equation
-        end
-    elseif collisions.constant_ionization_rate
-        # Oddly the test in test/harrisonthompson.jl matches the analytical
-        # solution (which assumes width=0.0) better with width=0.5 than with,
-        # e.g., width=0.15. Possibly narrower widths would require more vpa
-        # resolution, which then causes crashes due to overshoots giving
-        # negative f??
-        width = 0.5
-        @loop_s is begin
-            if is ∈ composition.ion_species_range
-                @loop_r_z_vpa ir iz ivpa begin
-                    f_out[ivpa,iz,ir,is] += dt*collisions.ionization/width*exp(-(vpa.grid[ivpa]/width)^2)
-                end
-            end
         end
     else
         @loop_s is begin
