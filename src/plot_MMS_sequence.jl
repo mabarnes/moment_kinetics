@@ -14,7 +14,7 @@ using SpecialFunctions: erfi
 using LaTeXStrings
 # modules
 using ..post_processing_input: pp
-using ..post_processing: compare_charged_pdf_symbolic_test
+using ..post_processing: compare_charged_pdf_symbolic_test, compare_fields_symbolic_test
 using ..post_processing:  compare_moments_symbolic_test, compare_neutral_pdf_symbolic_test
 using ..array_allocation: allocate_float
 using ..file_io: open_output_file
@@ -24,7 +24,7 @@ using ..load_data: load_coordinate_data, load_fields_data, load_pdf_data
 using ..load_data: load_charged_particle_moments_data, load_neutral_particle_moments_data
 using ..load_data: load_neutral_pdf_data, load_neutral_coordinate_data
 using ..velocity_moments: integrate_over_vspace
-using ..manufactured_solns: manufactured_solutions
+using ..manufactured_solns: manufactured_solutions, manufactured_electric_fields
 using ..moment_kinetics_input: mk_input
 
 using TOML
@@ -36,6 +36,9 @@ import Base: get
 function get_MMS_error_data(path_list,scan_type,scan_name)
     
     nsimulation = length(path_list)
+    phi_error_sequence = zeros(mk_float,nsimulation)
+    Er_error_sequence = zeros(mk_float,nsimulation)
+    Ez_error_sequence = zeros(mk_float,nsimulation)
     ion_density_error_sequence = zeros(mk_float,nsimulation)
     ion_pdf_error_sequence = zeros(mk_float,nsimulation)
     neutral_density_error_sequence = zeros(mk_float,nsimulation)
@@ -110,6 +113,34 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         densi_func = manufactured_solns_list.densi_func
         dfnn_func = manufactured_solns_list.dfnn_func
         densn_func = manufactured_solns_list.densn_func
+        
+        manufactured_E_fields = manufactured_electric_fields(Lr_in,Lz,r_bc,z_bc,composition,nr)
+        Er_func = manufactured_E_fields.Er_func
+        Ez_func = manufactured_E_fields.Ez_func
+        phi_func = manufactured_E_fields.phi_func
+        
+        # phi, Er, Ez test
+        phi_sym = copy(phi[:,:,:])
+        Er_sym = copy(phi[:,:,:])
+        Ez_sym = copy(phi[:,:,:])
+        for it in 1:ntime
+            for ir in 1:nr
+                for iz in 1:nz
+                    phi_sym[iz,ir,it] = phi_func(z[iz],r[ir],time[it])
+                    Ez_sym[iz,ir,it] = Ez_func(z[iz],r[ir],time[it])
+                    Er_sym[iz,ir,it] = Er_func(z[iz],r[ir],time[it])
+                end
+            end
+        end
+        phi_error_t = compare_fields_symbolic_test(run_name,phi,phi_sym,z,r,time,nz,nr,ntime,
+         L"\widetilde{\phi}",L"\widetilde{\phi}^{sym}",L"\sqrt{\sum || \widetilde{\phi} - \widetilde{\phi}^{sym} ||^2 / N} ","phi")
+        phi_error_sequence[isim] = phi_error_t[end]
+        Er_error_t = compare_fields_symbolic_test(run_name,Er,Er_sym,z,r,time,nz,nr,ntime,
+         L"\widetilde{E_r}",L"\widetilde{E_r}^{sym}",L"\sqrt{\sum || \widetilde{E_r} - \widetilde{E_r}^{sym} ||^2 /N} ","Er")
+        Er_error_sequence[isim] = Er_error_t[end]
+        Ez_error_t = compare_fields_symbolic_test(run_name,Ez,Ez_sym,z,r,time,nz,nr,ntime,
+         L"\widetilde{E_z}",L"\widetilde{E_z}^{sym}",L"\sqrt{\sum || \widetilde{E_z} - \widetilde{E_z}^{sym} ||^2 /N} ","Ez")
+        Ez_error_sequence[isim] = Ez_error_t[end]
         
         # ion test
         density_sym = copy(density[:,:,:,:])

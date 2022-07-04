@@ -6,6 +6,7 @@ export analyze_and_plot
 export compare_charged_pdf_symbolic_test
 export compare_moments_symbolic_test
 export compare_neutral_pdf_symbolic_test
+export compare_fields_symbolic_test
 
 # packages
 using Plots
@@ -27,7 +28,7 @@ using ..load_data: load_charged_particle_moments_data, load_neutral_particle_mom
 using ..load_data: load_neutral_pdf_data, load_neutral_coordinate_data
 using ..analysis: analyze_fields_data, analyze_moments_data, analyze_pdf_data
 using ..velocity_moments: integrate_over_vspace
-using ..manufactured_solns: manufactured_solutions
+using ..manufactured_solns: manufactured_solutions, manufactured_electric_fields
 using ..moment_kinetics_input: mk_input
 
 using TOML
@@ -139,6 +140,30 @@ function analyze_and_plot_data(path)
         densi_func = manufactured_solns_list.densi_func
         dfnn_func = manufactured_solns_list.dfnn_func
         densn_func = manufactured_solns_list.densn_func
+        manufactured_E_fields = manufactured_electric_fields(Lr_in,Lz,r_bc,z_bc,composition,nr)
+        Er_func = manufactured_E_fields.Er_func
+        Ez_func = manufactured_E_fields.Ez_func
+        phi_func = manufactured_E_fields.phi_func
+        
+        # phi, Er, Ez test
+        phi_sym = copy(phi[:,:,:])
+        Er_sym = copy(phi[:,:,:])
+        Ez_sym = copy(phi[:,:,:])
+        for it in 1:ntime
+            for ir in 1:nr
+                for iz in 1:nz
+                    phi_sym[iz,ir,it] = phi_func(z[iz],r[ir],time[it])
+                    Ez_sym[iz,ir,it] = Ez_func(z[iz],r[ir],time[it])
+                    Er_sym[iz,ir,it] = Er_func(z[iz],r[ir],time[it])
+                end
+            end
+        end
+        compare_fields_symbolic_test(run_name,phi,phi_sym,z,r,time,nz,nr,ntime,
+         L"\widetilde{\phi}",L"\widetilde{\phi}^{sym}",L"\sqrt{\sum || \widetilde{\phi} - \widetilde{\phi}^{sym} ||^2 / N} ","phi")
+        compare_fields_symbolic_test(run_name,Er,Er_sym,z,r,time,nz,nr,ntime,
+         L"\widetilde{E_r}",L"\widetilde{E_r}^{sym}",L"\sqrt{\sum || \widetilde{E_r} - \widetilde{E_r}^{sym} ||^2 /N} ","Er")
+        compare_fields_symbolic_test(run_name,Ez,Ez_sym,z,r,time,nz,nr,ntime,
+         L"\widetilde{E_z}",L"\widetilde{E_z}^{sym}",L"\sqrt{\sum || \widetilde{E_z} - \widetilde{E_z}^{sym} ||^2 /N} ","Ez")
         
         # ion test
         density_sym = copy(density[:,:,:,:])
@@ -151,7 +176,7 @@ function analyze_and_plot_data(path)
             end
         end
         compare_moments_symbolic_test(run_name,density,density_sym,"ion",z,r,time,nz,nr,ntime,
-         L"\widetilde{n}_i",L"\widetilde{n}_i^{sym}",L"\sum || \widetilde{n}_i - \widetilde{n}_i^{sym} ||^2 ","dens")
+         L"\widetilde{n}_i",L"\widetilde{n}_i^{sym}",L"\sqrt{\sum || \widetilde{n}_i - \widetilde{n}_i^{sym} ||^2 / N }","dens")
         
         ff_sym = copy(ff)
         is = 1
@@ -167,7 +192,7 @@ function analyze_and_plot_data(path)
             end
         end
         compare_charged_pdf_symbolic_test(run_name,ff,ff_sym,"ion",vpa,vperp,z,r,time,nvpa,nvperp,nz,nr,ntime,
-         L"\widetilde{f}_i",L"\widetilde{f}^{sym}_i",L"\sum || \widetilde{f}_i - \widetilde{f}_i^{sym} ||^2","pdf")
+         L"\widetilde{f}_i",L"\widetilde{f}^{sym}_i",L"\sqrt{ \sum || \widetilde{f}_i - \widetilde{f}_i^{sym} ||^2 / N}","pdf")
                 
         if n_neutral_species > 0
             # neutral test
@@ -181,7 +206,7 @@ function analyze_and_plot_data(path)
                 end
             end
             compare_moments_symbolic_test(run_name,neutral_density,neutral_density_sym,"neutral",z,r,time,nz,nr,ntime,
-             L"\widetilde{n}_n",L"\widetilde{n}_n^{sym}",L"\sum || \widetilde{n}_n - \widetilde{n}_n^{sym} ||^2 ","dens")
+             L"\widetilde{n}_n",L"\widetilde{n}_n^{sym}",L"\sqrt{ \sum || \widetilde{n}_n - \widetilde{n}_n^{sym} ||^2 /N}","dens")
             
             neutral_ff_sym = copy(neutral_ff)
             is = 1
@@ -199,7 +224,7 @@ function analyze_and_plot_data(path)
                 end
             end
             compare_neutral_pdf_symbolic_test(run_name,neutral_ff,neutral_ff_sym,"neutral",vz,vr,vzeta,z,r,time,nvz,nvr,nvzeta,nz,nr,ntime,
-             L"\widetilde{f}_n",L"\widetilde{f}^{sym}_n",L"\sum || \widetilde{f}_n - \widetilde{f}_n^{sym} ||^2","pdf")
+             L"\widetilde{f}_n",L"\widetilde{f}^{sym}_n",L"\sqrt{\sum || \widetilde{f}_n - \widetilde{f}_n^{sym} ||^2 /N}","pdf")
 
         end
     end 
@@ -209,6 +234,38 @@ end
 
 """
 """
+
+function compare_fields_symbolic_test(run_name,field,field_sym,z,r,time,nz,nr,ntime,field_label,field_sym_label,norm_label,file_string)
+    it = ntime
+    heatmap(r, z, field[:,:,it], xlabel=L"r / L_r", ylabel=L"z / L_z", title=field_label, c = :deep)
+    outfile = string(run_name, "_"*file_string*"_vs_r_z.pdf")
+    savefig(outfile)
+    
+    heatmap(r, z, field_sym[:,:,it], xlabel=L"r / L_r", ylabel=L"z / L_z", title=field_sym_label, c = :deep)
+    outfile = string(run_name, "_"*file_string*"_sym_vs_r_z.pdf")
+    savefig(outfile)
+    
+    field_norm = zeros(mk_float,ntime)
+    for it in 1:ntime
+        dummy = 0.0
+        dummy_N = 0.0
+        for ir in 1:nr
+            for iz in 1:nz
+                dummy += (field[iz,ir,it] - field_sym[iz,ir,it])^2
+                dummy_N +=  (field_sym[iz,ir,it])^2
+            end
+        end
+        #field_norm[it] = dummy/dummy_N
+        field_norm[it] = sqrt(dummy/(nr*nz))
+    end
+    println("test: ",file_string,": ",field_norm)
+    @views plot(time, field_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=norm_label) #, yaxis=:log)
+    outfile = string(run_name, "_"*file_string*"_norm_vs_t.pdf")
+    savefig(outfile)
+    
+    return field_norm
+
+end
 
 function compare_moments_symbolic_test(run_name,moment,moment_sym,spec_string,z,r,time,nz,nr,ntime,moment_label,moment_sym_label,norm_label,file_string)
     is = 1
