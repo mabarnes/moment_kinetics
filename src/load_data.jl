@@ -139,8 +139,16 @@ function load_fields_data(fid)
     cdfvar = fid["phi"]
     # load the electrostatic potential data
     phi = cdfvar.var[:,:,:]
+    # define a handle for the radial electric field
+    cdfvar = fid["Er"]
+    # load the radial electric field data
+    Er = cdfvar.var[:,:,:]
+    # define a handle for the z electric field
+    cdfvar = fid["Ez"]
+    # load the z electric field data
+    Ez = cdfvar.var[:,:,:]
     println("done.")
-    return phi
+    return phi, Er, Ez
 end
 
 """

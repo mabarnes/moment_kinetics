@@ -261,7 +261,7 @@ function run_test(test_input, rtol; args...)
             nvpa, vpa, vpa_wgts, nz, z, z_wgts, Lz, nr, r, r_wgts, Lr, ntime, time, n_ion_species, n_neutral_species = load_coordinate_data(fid)
 
             # load fields data
-            phi_zrt = load_fields_data(fid)
+            phi_zrt, Er_zrt, Ez_zrt = load_fields_data(fid)
 
             # load velocity moments data
             n_charged_zrst, upar_charged_zrst, ppar_charged_zrst, qpar_charged_zrst, v_t_charged_zrst, evolve_ppar = load_charged_particle_moments_data(fid)

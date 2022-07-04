@@ -85,7 +85,7 @@ function analyze_and_plot_data(path)
     # initialise the post-processing input options
     nwrite_movie, itime_min, itime_max, ivpa0, ivperp0, iz0, ir0 = init_postprocessing_options(pp, nvpa, nvperp, nz, nr, ntime)
     # load full (z,r,t) fields data
-    phi = load_fields_data(fid)
+    phi, Er, Ez = load_fields_data(fid)
     # load full (z,r,species,t) charged particle velocity moments data
     density, parallel_flow, parallel_pressure, parallel_heat_flux,
         thermal_speed, evolve_ppar = load_charged_particle_moments_data(fid)

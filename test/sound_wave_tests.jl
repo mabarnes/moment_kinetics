@@ -172,7 +172,7 @@ function run_test(test_input, analytic_frequency, analytic_growth_rate,
             nz, z, z_wgts, Lz, nr, r, r_wgts, Lr, ntime, time, n_ion_species, n_neutral_species = load_coordinate_data(fid)
 
             # load fields data
-            phi_zrt = load_fields_data(fid)
+            phi_zrt, Er_zrt, Ez_zrt = load_fields_data(fid)
 
             close(fid)
             

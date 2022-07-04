@@ -83,7 +83,7 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
             nvz, vz, vz_wgts, nvr, vr, vr_wgts, nvzeta, vzeta, vzeta_wgts = load_neutral_coordinate_data(fid)
         end
         # load full (z,r,t) fields data
-        phi = load_fields_data(fid)
+        phi, Er, Ez = load_fields_data(fid)
         # load full (z,r,species,t) charged particle velocity moments data
         density, parallel_flow, parallel_pressure, parallel_heat_flux,
             thermal_speed, evolve_ppar = load_charged_particle_moments_data(fid)
