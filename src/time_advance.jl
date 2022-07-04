@@ -24,7 +24,7 @@ using ..r_advection: update_speed_r!, r_advection!
 using ..vpa_advection: update_speed_vpa!, vpa_advection!
 using ..charge_exchange: charge_exchange_collisions!
 using ..ionization: ionization_collisions!
-using ..numerical_dissipation: vpa_dissipation!
+using ..numerical_dissipation: vpa_dissipation!, z_dissipation!
 using ..source_terms: source_terms!
 using ..continuity: continuity_equation!
 using ..force_balance: force_balance!
@@ -799,6 +799,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, z_
     # add numerical dissipation
     if advance.numerical_dissipation
         vpa_dissipation!(fvec_out.pdf, fvec_in, moments, vpa, vpa_spectral, dt)
+        z_dissipation!(fvec_out.pdf, fvec_in, moments, z, vpa, z_spectral, dt)
     end
     # End of advance of distribution function
 

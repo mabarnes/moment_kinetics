@@ -69,4 +69,38 @@ function vpa_dissipation!(f_out, fvec_in, moments, vpa, spectral::T_spectral, dt
     return nothing
 end
 
+"""
+Add diffusion in the z direction to suppress oscillations
+"""
+function z_dissipation!(f_out, fvec_in, moments, z, vpa, spectral::T_spectral, dt) where T_spectral
+
+    diffusion_coefficient = -0.1
+    if diffusion_coefficient <= 0.0
+        return nothing
+    end
+
+    begin_s_r_vpa_region()
+
+    #if T_spectral <: Bool
+    #    # Scale diffusion coefficient like square of grid spacing, so convergence will
+    #    # be second order accurate despite presence of numerical dissipation.
+    #    # Assume constant grid spacing, so all cell_width entries are the same.
+    #    diffusion_coefficient *= z.cell_width[1]^2
+    #else
+    #    # Dissipation should decrease with element size at order (ngrid-1) to preserve
+    #    # expected convergence of Chebyshev pseudospectral scheme
+    #    diffusion_coefficient *= (z.L/z.nelement)^(z.ngrid-1)
+    #end
+
+    #@. z.scratch2 = 1.e-2 * (1.0 - (2.0*z.grid/z.L)^2)
+    #diffusion_coefficient = z.scratch2
+
+    @loop_s_r_vpa is ir ivpa begin
+        @views derivative!(z.scratch, fvec_in.pdf[ivpa,:,ir,is], z, spectral, Val(2))
+        @views @. f_out[ivpa,:,ir,is] += dt * diffusion_coefficient * z.scratch
+    end
+
+    return nothing
+end
+
 end
