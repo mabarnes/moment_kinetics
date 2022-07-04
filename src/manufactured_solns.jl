@@ -4,6 +4,7 @@ module manufactured_solns
 
 export manufactured_solutions
 export manufactured_sources
+export manufactured_electric_fields
 
 using Symbolics
 using IfElse
@@ -141,28 +142,19 @@ using ..input_structs
     # ion distribution symbolic function
     function dfni_sym(Lr,Lz,r_bc,z_bc,composition,geometry,nr)
         densi = densi_sym(Lr,Lz,r_bc,z_bc)
-        # define derivative operators
-        Dr = Differential(r) 
-        Dz = Differential(z) 
-        # calculate the necessary electric fields
-        dense = densi # get the electron density via quasineutrality with Zi = 1
-        phi = composition.T_e*log(dense) # use the adiabatic response of electrons for me/mi -> 0
-        Er = -Dr(phi)
-        #Ez = -Dz(phi)
+        
+        # calculate the electric fields and the potential
+        Er, Ez, phi = electric_fields(Lr,Lz,r_bc,z_bc,composition,nr)
+        
         # get geometric/composition data
         Bzed = geometry.Bzed
         Bmag = geometry.Bmag
         rhostar = geometry.rhostar
-        if nr > 1 #keep radial derivatives
-            rfac = 1.0
-        else # drop radial derivative terms
-            rfac = 0.0
-        end
         
         if z_bc == "periodic"
             dfni = densi * exp( - vpa^2 - vperp^2) 
         elseif z_bc == "wall"
-            vpabar = vpa - (rhostar/2.0)*(Bmag/Bzed)*expand_derivatives(Er)*rfac # effective velocity in z direction * (Bmag/Bzed)
+            vpabar = vpa - (rhostar/2.0)*(Bmag/Bzed)*Er # effective velocity in z direction * (Bmag/Bzed)
             Hplus = 0.5*(sign(vpabar) + 1.0)
             Hminus = 0.5*(sign(-vpabar) + 1.0)
             ffa =  exp(- vperp^2)
@@ -178,8 +170,48 @@ using ..input_structs
         return dfni
     end
 
-    function manufactured_solutions(Lr,Lz,r_bc,z_bc,geometry,composition,nr)
+    function electric_fields(Lr,Lz,r_bc,z_bc,composition,nr)
+       
+        # define derivative operators
+        Dr = Differential(r) 
+        Dz = Differential(z) 
+ 
+        # get N_e factor for boltzmann response
+        if composition.electron_physics == boltzmann_electron_response_with_simple_sheath && nr == 1 
+            # so 1D MMS test with 3V neutrals where ion current can be calculated prior to knowing Er
+            jpari_into_LHS_wall = jpari_into_LHS_wall_sym(Lr,Lz,r_bc,z_bc)
+            N_e = -2.0*sqrt(pi*composition.me_over_mi)*exp(-composition.phi_wall/composition.T_e)*jpari_into_LHS_wall
+        elseif composition.electron_physics == boltzmann_electron_response_with_simple_sheath && nr > 1 
+            println("ERROR: simple sheath MMS test not supported for nr > 1")
+            println("INFO: In general, not possible to analytically calculate jpari for sheath prior to knowing Er, but Er depends on jpari")
+            println("Setting N_e = 1.0. Expect MMS test to fail!")
+            N_e = 1.0
+        elseif composition.electron_physics == boltzmann_electron_response 
+            # all other cases
+            # N_e equal to reference density 
+            N_e = 1.0 
+        end 
+        
+        if nr > 1 # keep radial electric field
+            rfac = 1.0
+        else      # drop radial electric field
+            rfac = 0.0
+        end
+        
+        densi = densi_sym(Lr,Lz,r_bc,z_bc)
+        # calculate the electric fields
+        dense = densi # get the electron density via quasineutrality with Zi = 1
+        phi = composition.T_e*log(dense/N_e) # use the adiabatic response of electrons for me/mi -> 0
+        Er = -Dr(phi)*rfac
+        Ez = -Dz(phi)
+        
+        Er_expanded = expand_derivatives(Er)
+        Ez_expanded = expand_derivatives(Ez)
+       
+        return Er_expanded, Ez_expanded, phi
+    end
 
+    function manufactured_solutions(Lr,Lz,r_bc,z_bc,geometry,composition,nr)
         densi = densi_sym(Lr,Lz,r_bc,z_bc)
         dfni = dfni_sym(Lr,Lz,r_bc,z_bc,composition,geometry,nr)
         
@@ -203,6 +235,20 @@ using ..input_structs
         
         return manufactured_solns_list
     end 
+    
+    function manufactured_electric_fields(Lr,Lz,r_bc,z_bc,composition,nr)
+        
+        # calculate the electric fields and the potential
+        Er, Ez, phi = electric_fields(Lr,Lz,r_bc,z_bc,composition,nr)
+        
+        Er_func = build_function(Er, z, r, t, expression=Val{false})
+        Ez_func = build_function(Ez, z, r, t, expression=Val{false})
+        phi_func = build_function(phi, z, r, t, expression=Val{false})
+        
+        manufactured_E_fields = (Er_func = Er_func, Ez_func = Ez_func, phi_func = phi_func)
+        
+        return manufactured_E_fields
+    end 
 
     function manufactured_sources(Lr,Lz,r_bc,z_bc,composition,geometry,collisions,nr)
         
@@ -215,6 +261,8 @@ using ..input_structs
         densn = densn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
         dfnn = dfnn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
         gav_dfnn = gyroaveraged_dfnn_sym(Lr,Lz,r_bc,z_bc,geometry,composition) # gyroaverage < dfnn > in vpa vperp coordinates
+        
+        dense = densi # get the electron density via quasineutrality with Zi = 1
         
         # define derivative operators
         Dr = Differential(r) 
@@ -235,33 +283,17 @@ using ..input_structs
             cx_frequency = 0.0
             ionization_frequency = 0.0
         end
-        if nr > 1
+        if nr > 1 # keep radial derivatives
             rfac = 1.0
-        else
+        else      # drop radial derivative terms
             rfac = 0.0
         end
         
-        # get N_e factor for boltzmann response
-        if composition.electron_physics == boltzmann_electron_response_with_simple_sheath && nr == 1 
-            # so 1D MMS test with 3V neutrals where ion current can be calculated prior to knowing Er
-            jpari_into_LHS_wall = jpari_into_LHS_wall_sym(Lr,Lz,r_bc,z_bc)
-            N_e = -2.0*sqrt(pi*composition.me_over_mi)*exp(-composition.phi_wall/composition.T_e)*jpari_into_LHS_wall
-        elseif composition.electron_physics == boltzmann_electron_response_with_simple_sheath && nr > 1 
-            println("simple sheath MMS test not supported for nr > 1")
-            N_e = 1.0
-        elseif composition.electron_physics == boltzmann_electron_response 
-            # all other cases
-            # N_e equal to reference density 
-            N_e = 1.0 
-        end 
-        # calculate the electric fields
-        dense = densi # get the electron density via quasineutrality with Zi = 1
-        phi = composition.T_e*log(dense/N_e) # use the adiabatic response of electrons for me/mi -> 0
-        Er = -Dr(phi)
-        Ez = -Dz(phi)
-    
+        # calculate the electric fields and the potential
+        Er, Ez, phi = electric_fields(Lr,Lz,r_bc,z_bc,composition,nr)
+        
         # the ion source to maintain the manufactured solution
-        Si = ( Dt(dfni) + ( vpa * (Bzed/Bmag) - 0.5*rhostar*Er*rfac ) * Dz(dfni) + ( 0.5*rhostar*Ez*rfac ) * Dr(dfni) + ( 0.5*Ez*Bzed/Bmag ) * Dvpa(dfni)
+        Si = ( Dt(dfni) + ( vpa * (Bzed/Bmag) - 0.5*rhostar*Er ) * Dz(dfni) + ( 0.5*rhostar*Ez*rfac ) * Dr(dfni) + ( 0.5*Ez*Bzed/Bmag ) * Dvpa(dfni)
                + cx_frequency*( densn*dfni - densi*gav_dfnn ) ) - ionization_frequency*dense*gav_dfnn 
         Source_i = expand_derivatives(Si)
         
