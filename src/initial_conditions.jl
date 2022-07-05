@@ -446,7 +446,7 @@ function enforce_neutral_wall_bc!(pdf, vpa, ppar, upar, density, wall_flux_0,
         # account for the fact that the pdf here is the normalised pdf,
         # and the integration in wall_flux is defined relative to the un-normalised pdf
         if evolve_density
-            pdf_norm_fac = density[1,ir,is]
+            pdf_norm_fac = density[1]
         else
             pdf_norm_fac = 1.0
         end
@@ -493,7 +493,7 @@ function enforce_neutral_wall_bc!(pdf, vpa, ppar, upar, density, wall_flux_0,
         # account for the fact that the pdf here is the normalised pdf,
         # and the integration in wall_flux is defined relative to the un-normalised pdf
         if evolve_density
-            pdf_norm_fac = density[end,ir,is]
+            pdf_norm_fac = density[end]
         else
             pdf_norm_fac = 1.0
         end
@@ -541,34 +541,95 @@ function enforce_neutral_wall_bc!(pdf, vpa, ppar, upar, density, wall_flux_0,
         @. vpa.scratch = (3.0*pi/vtfac^3)*abs(vpa.scratch2)*erfc(abs(vpa.scratch2)/vtfac)
 
         # The v_parallel>0 part of the pdf is replaced by the Knudsen cosine
-        # distribution. To ensure the constraint ∫dwpa wpa F = 0 is satisfied, multiply
-        # the Knudsen distribution (in vpa.scratch) by a normalisation factor given by
-        # the integral (over positive v_parallel) of the outgoing Knudsen distribution
-        # and (over negative v_parallel) of the incoming pdf.
-        knudsen_integral = integrate_over_positive_vpa(vpa.grid .* vpa.scratch, vpa.scratch2, vpa.wgts, vpa.scratch3)
+        # distribution. To ensure the constraints ∫dwpa wpa^m F = 0 are satisfied when
+        # necessary, calculate a normalisation factor for the Knudsen distribution (in
+        # vpa.scratch) and correction terms for the incoming pdf similar to
+        # enforce_moment_constraints!().
+        #
+        # Note that it seems to be important that this boundary condition not be
+        # modified by the moment constraints, as that could cause numerical instability.
+        # By ensuring that the constraints are satisfied already here,
+        # enforce_moment_constraints!() will not change the pdf at the boundary. For
+        # ions this is not an issue, because points set to 0 by the bc are not modified
+        # from 0 by enforce_moment_constraints!().
+        knudsen_integral_0 = integrate_over_positive_vpa(vpa.scratch, vpa.scratch2, vpa.wgts, vpa.scratch3)
+        knudsen_integral_1 = integrate_over_positive_vpa(vpa.grid .* vpa.scratch, vpa.scratch2, vpa.wgts, vpa.scratch3)
 
-        @views pdf_integral = integrate_over_negative_vpa(vpa.grid .* pdf[:,1], vpa.scratch2, vpa.wgts, vpa.scratch3)
-        knudsen_norm_fac = -pdf_integral / knudsen_integral
-        # for left boundary in zed (z = -Lz/2), want
-        # f_n(z=-Lz/2, v_parallel > 0) = knudsen_norm_fac * f_KW(v_parallel)
-        zero_vpa_ind = 0
-        for ivpa ∈ 1:nvpa
-            if vpa.scratch2[ivpa] > -zero
-                zero_vpa_ind = ivpa
-                if abs(vpa.scratch2[ivpa]) < zero
-                    # v_parallel = 0 point, half contribution from original pdf and half
-                    # from Knudsen cosine distribution, to be consistent with weights
-                    # used in
-                    # integrate_over_positive_vpa()/integrate_over_negative_vpa().
-                    pdf[ivpa,1] = 0.5 * (pdf[ivpa,1] + knudsen_norm_fac * vpa.scratch[ivpa])
+        @views pdf_integral_0 = integrate_over_negative_vpa(pdf[:,1], vpa.scratch2, vpa.wgts, vpa.scratch3)
+        @views pdf_integral_1 = integrate_over_negative_vpa(vpa.grid .* pdf[:,1], vpa.scratch2, vpa.wgts, vpa.scratch3)
+        if !evolve_ppar
+            # Calculate normalisation factors N_in for the incoming and N_out for the
+            # Knudsen parts of the distirbution so that ∫dwpa F = 0 and ∫dwpa wpa F = 0
+            # ⇒ N_in*pdf_integral_0 + N_out*knudsen_integral_0 = 1
+            #   N_in*pdf_integral_1 + N_out*knudsen_integral_1 = 0
+            N_in = 1.0 / (pdf_integral_0 - pdf_integral_1/knudsen_integral_1*knudsen_integral_0)
+            N_out = -N_in * pdf_integral_1 / knudsen_integral_1
+
+            zero_vpa_ind = 0
+            for ivpa ∈ 1:nvpa
+                if vpa.scratch2[ivpa] <= -zero
+                    pdf[ivpa,1] = N_in*pdf[ivpa,1]
                 else
-                    pdf[ivpa,1] = knudsen_norm_fac * vpa.scratch[ivpa]
+                    zero_vpa_ind = ivpa
+                    if abs(vpa.scratch2[ivpa]) < zero
+                        # v_parallel = 0 point, half contribution from original pdf and half
+                        # from Knudsen cosine distribution, to be consistent with weights
+                        # used in
+                        # integrate_over_positive_vpa()/integrate_over_negative_vpa().
+                        pdf[ivpa,1] = 0.5*(N_in*pdf[ivpa,1] + N_out*vpa.scratch[ivpa])
+                    else
+                        pdf[ivpa,1] = N_out*vpa.scratch[ivpa]
+                    end
+                    break
                 end
-                break
             end
-        end
-        for ivpa ∈ zero_vpa_ind+1:nvpa
-            pdf[ivpa,1] = knudsen_norm_fac * vpa.scratch[ivpa]
+            for ivpa ∈ zero_vpa_ind+1:nvpa
+                pdf[ivpa,1] = N_out*vpa.scratch[ivpa]
+            end
+        else
+            knudsen_integral_2 = integrate_over_positive_vpa(vpa.grid .* vpa.grid .* vpa.scratch, vpa.scratch2, vpa.wgts, vpa.scratch3)
+            @views pdf_integral_2 = integrate_over_negative_vpa(vpa.grid .* vpa.grid .* pdf[:,1], vpa.scratch2, vpa.wgts, vpa.scratch3)
+            @views pdf_integral_3 = integrate_over_negative_vpa(vpa.grid .* vpa.grid .* vpa.grid .* pdf[:,1], vpa.scratch2, vpa.wgts, vpa.scratch3)
+            # Calculate normalisation factor N_out for the Knudsen part of the
+            # distirbution and normalisation factor N_in and correction term C*wpa*F_in
+            # for the incoming distribution so that ∫dwpa F = 0, ∫dwpa wpa F = 0, and
+            # ∫dwpa wpa^2 F = 0
+            # ⇒ N_in*pdf_integral_0 + C*pdf_integral_1 + N_out*knudsen_integral_0 = 1
+            #   N_in*pdf_integral_1 + C*pdf_integral_2 + N_out*knudsen_integral_1 = 0
+            #   N_in*pdf_integral_2 + C*pdf_integral_3 + N_out*knudsen_integral_2 = 1/2
+            N_in = (0.5*knudsen_integral_0*pdf_integral_2 +
+                    knudsen_integral_1*(pdf_integral_3 - 0.5*pdf_integral_1) -
+                    knudsen_integral_2*pdf_integral_2) /
+                   (knudsen_integral_0*(pdf_integral_2^2 - pdf_integral_1*pdf_integral_3) +
+                    knudsen_integral_1*(pdf_integral_0*pdf_integral_3 - pdf_integral_1*pdf_integral_2) +
+                    knudsen_integral_2*(pdf_integral_1^2 - pdf_integral_0*pdf_integral_2))
+            N_out = -(N_in*(pdf_integral_1*pdf_integral_3 - pdf_integral_2^2) + 0.5*pdf_integral_2) /
+                     (knudsen_integral_1*pdf_integral_3 - knudsen_integral_2*pdf_integral_2)
+            C = (0.5 - N_out*knudsen_integral_2 - N_in*pdf_integral_2)/pdf_integral_3
+
+            zero_vpa_ind = 0
+            for ivpa ∈ 1:nvpa
+                if vpa.scratch2[ivpa] <= -zero
+                    pdf[ivpa,1] = N_in*pdf[ivpa,1] + C*vpa.grid[ivpa]*pdf[ivpa,1]
+                else
+                    zero_vpa_ind = ivpa
+                    if abs(vpa.scratch2[ivpa]) < zero
+                        # v_parallel = 0 point, half contribution from original pdf and half
+                        # from Knudsen cosine distribution, to be consistent with weights
+                        # used in
+                        # integrate_over_positive_vpa()/integrate_over_negative_vpa().
+                        pdf[ivpa,1] = 0.5*(N_in*pdf[ivpa,1] +
+                                           C*vpa.grid[ivpa]*pdf[ivpa,1] +
+                                           N_out*vpa.scratch[ivpa])
+                    else
+                        pdf[ivpa,1] = N_out*vpa.scratch[ivpa]
+                    end
+                    break
+                end
+            end
+            for ivpa ∈ zero_vpa_ind+1:nvpa
+                pdf[ivpa,1] = N_out*vpa.scratch[ivpa]
+            end
         end
 
         ## treat the right boundary at z = Lz/2 ##
@@ -591,31 +652,87 @@ function enforce_neutral_wall_bc!(pdf, vpa, ppar, upar, density, wall_flux_0,
         # the Knudsen distribution (in vpa.scratch) by a normalisation factor given by
         # the integral (over negative v_parallel) of the outgoing Knudsen distribution
         # and (over positive v_parallel) of the incoming pdf.
-        knudsen_integral = integrate_over_negative_vpa(vpa.grid .* vpa.scratch, vpa.scratch2, vpa.wgts, vpa.scratch3)
+        knudsen_integral_0 = integrate_over_negative_vpa(vpa.scratch, vpa.scratch2, vpa.wgts, vpa.scratch3)
+        knudsen_integral_1 = integrate_over_negative_vpa(vpa.grid .* vpa.scratch, vpa.scratch2, vpa.wgts, vpa.scratch3)
 
-        @views pdf_integral = integrate_over_positive_vpa(vpa.grid .* pdf[:,end], vpa.scratch2, vpa.wgts, vpa.scratch3)
-        knudsen_norm_fac = -pdf_integral / knudsen_integral
-        # for right boundary in zed (z = Lz/2), want
-        # f_n(z=Lz/2, v_parallel < 0) = knudsen_norm_fac * f_KW(v_parallel)
-        zero_vpa_ind = 0
-        for ivpa ∈ nvpa:-1:1
-            if vpa.scratch2[ivpa] < zero
-                zero_vpa_ind = ivpa
-                if abs(vpa.scratch2[ivpa]) < zero
-                    # v_parallel = 0 point, half contribution from original pdf and half
-                    # from Knudsen cosine distribution, to be consistent with weights
-                    # used in
-                    # integrate_over_positive_vpa()/integrate_over_negative_vpa().
-                    pdf[ivpa,end] = 0.5 * (pdf[ivpa,end] + knudsen_norm_fac * vpa.scratch[ivpa])
+        @views pdf_integral_0 = integrate_over_positive_vpa(pdf[:,end], vpa.scratch2, vpa.wgts, vpa.scratch3)
+        @views pdf_integral_1 = integrate_over_positive_vpa(vpa.grid .* pdf[:,end], vpa.scratch2, vpa.wgts, vpa.scratch3)
+
+        if !evolve_ppar
+            # Calculate normalisation factors N_in for the incoming and N_out for the
+            # Knudsen parts of the distirbution so that ∫dwpa F = 0 and ∫dwpa wpa F = 0
+            # ⇒ N_in*pdf_integral_0 + N_out*knudsen_integral_0 = 1
+            #   N_in*pdf_integral_1 + N_out*knudsen_integral_1 = 0
+            N_in = 1.0 / (pdf_integral_0 - pdf_integral_1/knudsen_integral_1*knudsen_integral_0)
+            N_out = -N_in * pdf_integral_1 / knudsen_integral_1
+
+            zero_vpa_ind = 0
+            for ivpa ∈ nvpa:-1:1
+                if vpa.scratch2[ivpa] >= zero
+                    pdf[ivpa,end] = N_in*pdf[ivpa,end]
                 else
-                    pdf[ivpa,end] = knudsen_norm_fac * vpa.scratch[ivpa]
+                    zero_vpa_ind = ivpa
+                    if abs(vpa.scratch2[ivpa]) < zero
+                        # v_parallel = 0 point, half contribution from original pdf and half
+                        # from Knudsen cosine distribution, to be consistent with weights
+                        # used in
+                        # integrate_over_positive_vpa()/integrate_over_negative_vpa().
+                        pdf[ivpa,end] = 0.5*(N_in*pdf[ivpa,end] + N_out*vpa.scratch[ivpa])
+                    else
+                        pdf[ivpa,end] = N_out*vpa.scratch[ivpa]
+                    end
+                    break
                 end
-                break
+            end
+            for ivpa ∈ 1:zero_vpa_ind-1
+                pdf[ivpa,end] = N_out*vpa.scratch[ivpa]
+            end
+        else
+            knudsen_integral_2 = integrate_over_negative_vpa(vpa.grid .* vpa.grid .* vpa.scratch, vpa.scratch2, vpa.wgts, vpa.scratch3)
+            @views pdf_integral_2 = integrate_over_positive_vpa(vpa.grid .* vpa.grid .* pdf[:,end], vpa.scratch2, vpa.wgts, vpa.scratch3)
+            @views pdf_integral_3 = integrate_over_positive_vpa(vpa.grid .* vpa.grid .* vpa.grid .* pdf[:,end], vpa.scratch2, vpa.wgts, vpa.scratch3)
+            # Calculate normalisation factor N_out for the Knudsen part of the
+            # distirbution and normalisation factor N_in and correction term C*wpa*F_in
+            # for the incoming distribution so that ∫dwpa F = 0, ∫dwpa wpa F = 0, and
+            # ∫dwpa wpa^2 F = 0
+            # ⇒ N_in*pdf_integral_0 + C*pdf_integral_1 + N_out*knudsen_integral_0 = 1
+            #   N_in*pdf_integral_1 + C*pdf_integral_2 + N_out*knudsen_integral_1 = 0
+            #   N_in*pdf_integral_2 + C*pdf_integral_3 + N_out*knudsen_integral_2 = 1/2
+            N_in = (0.5*knudsen_integral_0*pdf_integral_2 +
+                    knudsen_integral_1*(pdf_integral_3 - 0.5*pdf_integral_1) -
+                    knudsen_integral_2*pdf_integral_2) /
+                   (knudsen_integral_0*(pdf_integral_2^2 - pdf_integral_1*pdf_integral_3) +
+                    knudsen_integral_1*(pdf_integral_0*pdf_integral_3 - pdf_integral_1*pdf_integral_2) +
+                    knudsen_integral_2*(pdf_integral_1^2 - pdf_integral_0*pdf_integral_2))
+            N_out = -(N_in*(pdf_integral_1*pdf_integral_3 - pdf_integral_2^2) + 0.5*pdf_integral_2) /
+                     (knudsen_integral_1*pdf_integral_3 - knudsen_integral_2*pdf_integral_2)
+            C = (0.5 - N_out*knudsen_integral_2 - N_in*pdf_integral_2)/pdf_integral_3
+
+            zero_vpa_ind = 0
+            for ivpa ∈ nvpa:-1:1
+                if vpa.scratch2[ivpa] >= zero
+                    pdf[ivpa,end] = N_in*pdf[ivpa,end] + C*vpa.grid[ivpa]*pdf[ivpa,end]
+                else
+                    zero_vpa_ind = ivpa
+                    if abs(vpa.scratch2[ivpa]) < zero
+                        # v_parallel = 0 point, half contribution from original pdf and half
+                        # from Knudsen cosine distribution, to be consistent with weights
+                        # used in
+                        # integrate_over_positive_vpa()/integrate_over_negative_vpa().
+                        pdf[ivpa,end] = 0.5*(N_in*pdf[ivpa,end] +
+                                             C*vpa.grid[ivpa]*pdf[ivpa,end] +
+                                             N_out*vpa.scratch[ivpa])
+                    else
+                        pdf[ivpa,end] = N_out*vpa.scratch[ivpa]
+                    end
+                    break
+                end
+            end
+            for ivpa ∈ 1:zero_vpa_ind-1
+                pdf[ivpa,end] = N_out*vpa.scratch[ivpa]
             end
         end
-        for ivpa ∈ 1:zero_vpa_ind-1
-            pdf[ivpa,end] = knudsen_norm_fac * vpa.scratch[ivpa]
-        end
+
     end
 end
 
