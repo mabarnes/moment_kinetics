@@ -560,6 +560,14 @@ function plot_moments(density, delta_density, density_fldline_avg,
             outfile = string(run_name, "_ppar_vs_z_spec", spec_string, ".gif")
             gif(anim, outfile, fps=5)
         end
+        if pp.animate_qpar_vs_z
+            # make a gif animation of ppar(z) at different times
+            anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+                @views plot(z, parallel_heat_flux[:,is,i], xlabel="z", ylabel="qpars", ylims = (qpar_min,qpar_max))
+            end
+            outfile = string(run_name, "_qpar_vs_z_spec", spec_string, ".gif")
+            gif(anim, outfile, fps=5)
+        end
     end
     println("done.")
 end

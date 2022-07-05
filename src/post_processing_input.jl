@@ -39,6 +39,7 @@ const animate_dens_vs_z = true
 const animate_upar_vs_z = false
 # if animate_ppar_vs_z = true, create animation of species parallel pressure(z) at different time slices
 const animate_ppar_vs_z = false
+const animate_qpar_vs_z = false
 # if animate_f_vs_vpa_z = true, create animation of f(vpa,z) at different time slices
 const animate_f_vs_vpa_z = false
 # if animate_deltaf_vs_vpa_z = true, create animation of δf(vpa,z) at different time slices
