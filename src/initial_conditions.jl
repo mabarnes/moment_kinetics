@@ -56,7 +56,7 @@ function init_pdf_and_moments(vpa, z, r, composition, species, n_rk_stages, evol
     # note that wpa = vpa - upar, unless moments.evolve_ppar = true, in which case wpa = (vpa - upar)/vth
     # the definition of pdf.norm changes accordingly from pdf.unnorm / density to pdf.unnorm * vth / density
     # when evolve_ppar = true.
-    pdf = create_and_init_pdf(moments, vpa, z, r, n_species, species)
+    pdf = create_and_init_pdf(moments, vpa, z, r, n_species, species, composition)
     begin_s_r_z_region()
     # calculate the initial parallel heat flux from the initial un-normalised pdf
     update_qpar!(moments.qpar, moments.qpar_updated, moments.dens, moments.upar,
@@ -67,7 +67,7 @@ end
 
 """
 """
-function create_and_init_pdf(moments, vpa, z, r, n_species, species)
+function create_and_init_pdf(moments, vpa, z, r, n_species, species, composition)
     pdf_norm = allocate_shared_float(vpa.n, z.n, r.n, n_species)
     pdf_unnorm = allocate_shared_float(vpa.n, z.n, r.n, n_species)
     @serial_region begin
@@ -81,7 +81,8 @@ function create_and_init_pdf(moments, vpa, z, r, n_species, species)
                     # to machine precision
                     @views init_pdf_over_density!(pdf_norm[:,:,ir,is], species[is], vpa, z, moments.vth[:,ir,is],
                                                   moments.upar[:,ir,is], moments.vpa_norm_fac[:,ir,is],
-                                                  moments.evolve_upar, moments.evolve_ppar)
+                                                  moments.evolve_upar, moments.evolve_ppar,
+                                                  is ∈ composition.ion_species_range)
                 end
             end
         end
@@ -183,7 +184,8 @@ end
 
 """
 """
-function init_pdf_over_density!(pdf, spec, vpa, z, vth, upar, vpa_norm_fac, evolve_upar, evolve_ppar)
+function init_pdf_over_density!(pdf, spec, vpa, z, vth, upar, vpa_norm_fac, evolve_upar,
+                                evolve_ppar, ions::Bool)
     if spec.vpa_IC.initialization_option == "gaussian"
         # initial condition is a Gaussian in the peculiar velocity
         for iz ∈ 1:z.n
@@ -204,6 +206,41 @@ function init_pdf_over_density!(pdf, spec, vpa, z, vth, upar, vpa_norm_fac, evol
                 @. vpa.scratch = (vpa.grid - upar[iz])/vth[iz]
             end
             @. pdf[:,iz] = exp(-vpa.scratch^2) / vth[iz]
+
+            if z.bc == "wall"
+                # Ensure both species go to zero smoothly at v_parallel=0 at the wall,
+                # where the boundary conditions require that distribution functions for
+                # both ions (where f_ion(v_parallel) = 0 for ±v_parallel<0) and neutrals
+                # (f_neutral=f_Kw, and f_Kw(v_parallel=0)=0) vanish.
+                #
+                # Implemented by multiplying by a smooth 'notch' function
+                # notch(v,u0,width) = 1 - exp(-(v-u0)^2/width^2)
+                width = 0.1
+                inverse_width = 1.0 / width
+
+                # v_parallel
+                vpa.scratch2 .= vpagrid_to_dzdt(vpa.grid, vth[iz], upar[iz],
+                                                evolve_ppar, evolve_upar)
+
+                # Choose u0 so that u0=0 at the targets, and u0->±vpa.L at the midplane
+                if ions
+                    u0 = (2.0*z.grid[iz]/z.L - sign(z.grid[iz])) * vpa.L / 2.0
+
+                    if abs(z.grid[iz]) > 1.0e-14
+                        @. pdf[:,iz] *= 1.0 - exp(-(vpa.scratch2 - u0)^2*inverse_width)
+                    end
+
+                    enforce_initial_tapered_zero_incoming!(pdf, z, vpa, upar, vth,
+                                                           evolve_upar, evolve_ppar)
+                else
+                    # Just smooth out boundary points for neutrals, using u0=0. Will
+                    # apply boundary conditions and then taper the boundary pdfs into
+                    # the domain below
+                    if iz ∈ (1, z.n)
+                        @. pdf[:,iz] *= 1.0 - exp(-vpa.scratch2^2*inverse_width)
+                    end
+                end
+            end
         end
         for iz ∈ 1:z.n
             # densfac = the integral of the pdf over v-space, which should be unity,
@@ -471,6 +508,42 @@ function enforce_zero_incoming_bc!(pdf, vpa::coordinate, density, upar, ppar,
         elseif evolve_density
             I0 = integrate_over_vspace(f, vpa.wgts)
             @. f = f / I0
+        end
+    end
+end
+
+"""
+Set up an initial condition that tries to be smoothly compatible with the sheath
+boundary condition for ions, by setting f(±(v_parallel-u0)<0) where u0=0 at the sheath
+boundaries and for z<0 increases linearly to u0=vpa.L at z=0, while for z>0 increases
+from u0=-vpa.L at z=0 to zero at the z=z.L/2 sheath.
+"""
+function enforce_initial_tapered_zero_incoming!(pdf, z::coordinate, vpa::coordinate,
+        upar, vth, evolve_upar, evolve_ppar)
+    nvpa = size(pdf,1)
+    zero = 1.0e-14
+    # no parallel BC should be enforced for dz/dt = 0
+    # note that the parallel velocity coordinate vpa may be dz/dt or
+    # some version of the peculiar velocity (dz/dt - upar),
+    # so use advection speed below instead of vpa
+
+    for iz ∈ 1:z.n
+        # absolute velocity
+        @. vpa.scratch = vpagrid_to_dzdt(vpa.grid, vth[iz], upar[iz], evolve_ppar,
+                                         evolve_upar)
+        u0 = (2.0*z.grid[iz]/z.L - sign(z.grid[iz])) * vpa.L / 2.0
+        if z.grid[iz] < -zero
+            for ivpa ∈ 1:nvpa
+                if vpa.scratch[ivpa] > u0 + zero
+                    pdf[ivpa,iz] = 0.0
+                end
+            end
+        elseif z.grid[iz] > zero
+            for ivpa ∈ 1:nvpa
+                if vpa.scratch[ivpa] < u0 - zero
+                    pdf[ivpa,iz] = 0.0
+                end
+            end
         end
     end
 end
