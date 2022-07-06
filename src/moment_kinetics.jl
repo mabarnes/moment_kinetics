@@ -250,8 +250,9 @@ function setup_moment_kinetics(input_dict::Dict; backup_filename=nothing,
                                z=z.n, vpa=vpa.n)
     # initialize f(z,vpa) and the lowest three v-space moments (density(z), upar(z) and ppar(z)),
     # each of which may be evolved separately depending on input choices.
-    pdf, moments = init_pdf_and_moments(vpa, z, r, composition, species, t_input.n_rk_stages,
-    	 	   			evolve_moments, collisions.ionization)
+    pdf, moments = init_pdf_and_moments(vpa, z, r, vpa_spectral, composition, species,
+                                        t_input.n_rk_stages, evolve_moments,
+                                        collisions.ionization)
     # initialize time variable
     code_time = 0.
     # create arrays and do other work needed to setup

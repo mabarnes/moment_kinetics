@@ -143,26 +143,6 @@ function setup_time_advance!(pdf, vpa, z, r, z_spectral, composition, drive_inpu
     # condition
     enforce_boundary_conditions!(pdf.norm, moments.dens, moments.upar, moments.ppar,
         moments, vpa.bc, z.bc, vpa, z, r, vpa_advect, z_advect, composition)
-    # For neutrals, taper the boundary distribution into the rest of the grid, to avoid
-    # sharp gradients in qpar, etc. at the walls
-    @serial_region begin
-        for is ∈ composition.neutral_species_range
-            for ir ∈ 1:r.n
-                for iz ∈ 1:z.n÷2
-                    linear_weight = -2.0*z.grid[iz]/z.L
-                    @views @. pdf.norm[:,iz,ir,is] =
-                        linear_weight*pdf.norm[:,1,ir,is] +
-                        (1.0 - linear_weight)*pdf.norm[:,iz,ir,is]
-                end
-                for iz ∈ (z.n+3)÷2:z.n
-                    linear_weight = 2.0*z.grid[iz]/z.L
-                    @views @. pdf.norm[:,iz,ir,is] =
-                        linear_weight*pdf.norm[:,end,ir,is] +
-                        (1.0 - linear_weight)*pdf.norm[:,iz,ir,is]
-                end
-            end
-        end
-    end
     # Ensure normalised pdf exactly obeys integral constraints if evolving moments
     begin_s_r_z_region()
     @loop_s_r_z is ir iz begin
