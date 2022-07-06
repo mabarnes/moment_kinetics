@@ -740,7 +740,7 @@ function enforce_neutral_wall_bc!(pdf, vpa, ppar, upar, density, wall_flux_0,
             # Knudsen parts of the distirbution so that ∫dwpa F = 0 and ∫dwpa wpa F = 0
             # ⇒ N_in*pdf_integral_0 + N_out*knudsen_integral_0 = 1
             #   N_in*pdf_integral_1 + N_out*knudsen_integral_1 = 0
-            N_in = (1.0 + pdf_integral_1 / knudsen_integral_1 * knudsen_integral_0) / pdf_integral_0
+            N_in = 1.0 / (pdf_integral_0 - pdf_integral_1/knudsen_integral_1*knudsen_integral_0)
             N_out = -N_in * pdf_integral_1 / knudsen_integral_1
 
             zero_vpa_ind = 0
@@ -844,7 +844,7 @@ function enforce_neutral_wall_bc!(pdf, vpa, ppar, upar, density, wall_flux_0,
             # Knudsen parts of the distirbution so that ∫dwpa F = 0 and ∫dwpa wpa F = 0
             # ⇒ N_in*pdf_integral_0 + N_out*knudsen_integral_0 = 1
             #   N_in*pdf_integral_1 + N_out*knudsen_integral_1 = 0
-            N_in = (1.0 + pdf_integral_1 / knudsen_integral_1 * knudsen_integral_0) / pdf_integral_0
+            N_in = 1.0 / (pdf_integral_0 - pdf_integral_1/knudsen_integral_1*knudsen_integral_0)
             N_out = -N_in * pdf_integral_1 / knudsen_integral_1
 
             zero_vpa_ind = 0
