@@ -15,6 +15,7 @@ using ..array_allocation: allocate_shared_float
 using ..bgk: init_bgk_pdf!
 using ..communication
 using ..coordinates: coordinate
+using ..interpolation: interpolate_to_grid_1d!
 using ..looping
 using ..moment_kinetics_structs: scratch_pdf
 using ..velocity_moments: integrate_over_vspace
@@ -32,7 +33,8 @@ end
 creates the normalised pdf and the velocity-space moments and populates them
 with a self-consistent initial condition
 """
-function init_pdf_and_moments(vpa, z, r, composition, species, n_rk_stages, evolve_moments, ionization)
+function init_pdf_and_moments(vpa, z, r, vpa_spectral, composition, species,
+                              n_rk_stages, evolve_moments, ionization)
     # define the n_species variable for convenience
     n_species = composition.n_species
     # create the 'moments' struct that contains various v-space moments and other
@@ -56,7 +58,8 @@ function init_pdf_and_moments(vpa, z, r, composition, species, n_rk_stages, evol
     # note that wpa = vpa - upar, unless moments.evolve_ppar = true, in which case wpa = (vpa - upar)/vth
     # the definition of pdf.norm changes accordingly from pdf.unnorm / density to pdf.unnorm * vth / density
     # when evolve_ppar = true.
-    pdf = create_and_init_pdf(moments, vpa, z, r, n_species, species, composition)
+    pdf = create_and_init_pdf(moments, vpa, z, r, vpa_spectral, n_species, species,
+                              composition)
     begin_s_r_z_region()
     # calculate the initial parallel heat flux from the initial un-normalised pdf
     update_qpar!(moments.qpar, moments.qpar_updated, pdf.unnorm, vpa, z, r, composition, moments.vpa_norm_fac)
@@ -65,22 +68,30 @@ end
 
 """
 """
-function create_and_init_pdf(moments, vpa, z, r, n_species, species, composition)
+function create_and_init_pdf(moments, vpa, z, r, vpa_spectral, n_species, species,
+                             composition)
     pdf_norm = allocate_shared_float(vpa.n, z.n, r.n, n_species)
     pdf_unnorm = allocate_shared_float(vpa.n, z.n, r.n, n_species)
     @serial_region begin
         for is ∈ 1:n_species
             for ir ∈ 1:r.n
+                @views wall_flux_0 = -sum(moments.dens[1,ir,composition.ion_species_range] .*
+                                          moments.upar[1,ir,composition.ion_species_range])
+                @views wall_flux_L = sum(moments.dens[end,ir,composition.ion_species_range] .*
+                                         moments.upar[end,ir,composition.ion_species_range])
                 if species[is].z_IC.initialization_option == "bgk" || species[is].vpa_IC.initialization_option == "bgk"
                     @views init_bgk_pdf!(f[:,:,ir,is], 0.0, species[is].initial_temperature, z.grid, z.L, vpa.grid)
                 else
                     # updates pdf_norm to contain pdf / density, so that ∫dvpa pdf.norm = 1,
                     # ∫dwpa wpa * pdf.norm = 0, and ∫dwpa m_s (wpa/vths)^2 pdf.norm = 1/2
                     # to machine precision
-                    @views init_pdf_over_density!(pdf_norm[:,:,ir,is], species[is], vpa, z, moments.vth[:,ir,is],
-                                                  moments.upar[:,ir,is], moments.vpa_norm_fac[:,ir,is],
-                                                  moments.evolve_upar, moments.evolve_ppar,
-                                                  is ∈ composition.ion_species_range)
+                    @views init_pdf_over_density!(
+                        pdf_norm[:,:,ir,is], species[is], composition, vpa, z,
+                        vpa_spectral, moments.dens[:,ir,is], moments.upar[:,ir,is],
+                        moments.ppar[:,ir,is], moments.vth[:,ir,is],
+                        moments.vpa_norm_fac[:,ir,is], moments.evolve_density,
+                        moments.evolve_upar, moments.evolve_ppar,
+                        is ∈ composition.ion_species_range, wall_flux_0, wall_flux_L)
                 end
             end
         end
@@ -182,8 +193,10 @@ end
 
 """
 """
-function init_pdf_over_density!(pdf, spec, vpa, z, vth, upar, vpa_norm_fac, evolve_upar,
-                                evolve_ppar, ions::Bool)
+function init_pdf_over_density!(pdf, spec, composition, vpa, z, vpa_spectral, density,
+                                upar, ppar, vth, vpa_norm_fac, evolve_density,
+                                evolve_upar, evolve_ppar, ions::Bool, wall_flux_0,
+                                wall_flux_L)
     if spec.vpa_IC.initialization_option == "gaussian"
         # initial condition is a Gaussian in the peculiar velocity
         for iz ∈ 1:z.n
@@ -234,11 +247,89 @@ function init_pdf_over_density!(pdf, spec, vpa, z, vth, upar, vpa_norm_fac, evol
                     # Just smooth out boundary points for neutrals, using u0=0. Will
                     # apply boundary conditions and then taper the boundary pdfs into
                     # the domain below
+                    #if iz ∈ (1, z.n)
+                    #    @. pdf[:,iz] *= 1.0 - exp(-vpa.scratch2^2*inverse_width)
+                    #end
+
+                    ## Replace Maxwellian pdf with a double-Knudsen distribution to be
+                    ## more compatible with boundary conditions
+                    #if evolve_ppar
+                    #    vtfac = 1.0
+                    #else
+                    #    vtfac = vth[iz]
+                    #end
+                    #@. pdf[:,iz] = (3.0*pi/vtfac^3)*abs(vpa.scratch2)*erfc(abs(vpa.scratch2)/vtfac)
+
+                    # Initialise full-f distribution function, then convert to
+                    # normalised distribution function plus moments. Make it easier  to
+                    # set up boundary values that are consistent with the moments.
+                    @. pdf[:,iz] = density[iz]*exp(-(vpa.grid - upar[iz])^2/vth[iz]^2)
+                    # Smooth out boundary points for neutrals, using u0=0. Will
+                    # apply boundary conditions and then taper the boundary pdfs into
+                    # the domain below.
                     if iz ∈ (1, z.n)
-                        @. pdf[:,iz] *= 1.0 - exp(-vpa.scratch2^2*inverse_width)
+                        @. pdf[:,iz] *= 1.0 - exp(-vpa.grid^2*inverse_width)
                     end
                 end
             end
+        end
+        if !ions && z.bc == "wall"
+            # Apply neutral boundary condition to full-f distribution function
+            #@. vpa.scratch = (3.0*pi/vtfac^3)*abs(vpa.scratch2)*erfc(abs(vpa.scratch2)/vtfac)
+
+            # Hack to have smooth distribution at v_parallel=0
+            vtfac = sqrt(composition.T_wall * composition.mn_over_mi)
+            @. vpa.scratch = (3.0*pi/vtfac^3)*(vpa.grid*vpa.grid)*erfc(abs(vpa.grid)/vtfac)
+
+            # the integral of -v_parallel*f_{Kw} over positive v_parallel should be one,
+            # but may not be exactly this due to quadrature errors; ensure that this is
+            # true to machine precision to make sure particle number in/out of wall is
+            # conserved
+            knudsen_norm_fac = integrate_over_positive_vpa(vpa.grid .* vpa.scratch, vpa.grid, vpa.wgts, vpa.scratch3)
+            @. vpa.scratch /= knudsen_norm_fac
+
+            zero = 1.0e-14
+
+            # add this species' contribution to the combined ion/neutral particle flux
+            # out of the domain at z=-Lz/2
+            @views wall_flux_0 += integrate_over_negative_vpa(abs.(vpa.grid) .* pdf[:,1], vpa.grid, vpa.wgts, vpa.scratch3)
+            # for left boundary in zed (z = -Lz/2), want
+            # f_n(z=-Lz/2, v_parallel > 0) = Γ_0 * f_KW(v_parallel) * pdf_norm_fac(-Lz/2)
+            for ivpa ∈ 1:vpa.n
+                if vpa.grid[ivpa] > zero
+                    pdf[ivpa,1] = wall_flux_0 * vpa.scratch[ivpa]
+                end
+            end
+
+            # add this species' contribution to the combined ion/neutral particle flux
+            # out of the domain at z=-Lz/2
+            @views wall_flux_L += integrate_over_positive_vpa(abs.(vpa.grid) .* pdf[:,end], vpa.grid, vpa.wgts, vpa.scratch3)
+            # for right boundary in zed (z = Lz/2), want
+            # f_n(z=Lz/2, v_parallel < 0) = Γ_Lz * f_KW(v_parallel) * pdf_norm_fac(Lz/2)
+            for ivpa ∈ 1:vpa.n
+                if vpa.grid[ivpa] < -zero
+                    pdf[ivpa,end] = wall_flux_L * vpa.scratch[ivpa]
+                end
+            end
+
+            # Taper boundary distribution function into domain to avoid jumps at the
+            # boundary
+            for iz ∈ 1:z.n÷2
+                linear_weight = -2.0*z.grid[iz]/z.L
+                @views @. pdf[:,iz] = linear_weight*pdf[:,1] +
+                                      (1.0 - linear_weight)*pdf[:,iz]
+            end
+            for iz ∈ (z.n+3)÷2:z.n
+                linear_weight = 2.0*z.grid[iz]/z.L
+                @views @. pdf[:,iz] = linear_weight*pdf[:,end] +
+                                      (1.0 - linear_weight)*pdf[:,iz]
+            end
+
+            # Get the unnormalised pdf and the moments of the constructed full-f
+            # distribution function (which will be modified from the input moments).
+            convert_full_f_to_normalised!(pdf, density, upar, ppar, vth, vpa,
+                                          vpa_spectral, evolve_density, evolve_upar,
+                                          evolve_ppar)
         end
         for iz ∈ 1:z.n
             # densfac = the integral of the pdf over v-space, which should be unity,
@@ -840,6 +931,47 @@ function vpagrid_to_dzdt(vpagrid, vth, upar, evolve_ppar, evolve_upar)
         return vpagrid .+ upar
     else
         return vpagrid
+    end
+end
+
+"""
+Take the full distribution function, calculate the moments, then normalise and shift to
+the moment-kinetic grid.
+
+Uses input value of `f` and modifies in place to the normalised distribution functions.
+Input `density`, `upar`, `ppar`, and `vth` are not used, the values are overwritten with
+the moments of `f`.
+
+Inputs/outputs depend on z and vpa (should be inside loops over species, r)
+"""
+function convert_full_f_to_normalised!(f, density, upar, ppar, vth, vpa, vpa_spectral,
+                                       evolve_density, evolve_upar, evolve_ppar)
+    @loop_z iz begin
+        # Calculate moments
+        @views density[iz] = integrate_over_vspace(f[:,iz], vpa.wgts)
+        @views upar[iz] = integrate_over_vspace(f[:,iz], vpa.grid, vpa.wgts) /
+                             density[iz]
+        @views ppar[iz] = integrate_over_vspace(f[:,iz], vpa.grid, 2, vpa.wgts) -
+                             density[iz]*upar[iz]^2
+        vth[iz] = sqrt(2.0*ppar[iz]/density[iz])
+
+        # Normalise f
+        if evolve_ppar
+            f[:,iz] .*= vth[iz] / density[iz]
+        elseif evolve_density
+            f[:,iz] ./= density[iz]
+        end
+
+        # Interpolate f to moment kinetic grid
+        if evolve_ppar || evolve_upar
+            # The values to interpolate *to* are the v_parallel values corresponding to
+            # the w_parallel grid
+            vpa.scratch .= vpagrid_to_dzdt(vpa.grid, vth[iz], upar[iz], evolve_ppar,
+                                           evolve_upar)
+            @views vpa.scratch2 .= f[:,iz] # Copy to use as input to interpolation
+            @views interpolate_to_grid_1d!(f[:,iz], vpa.scratch, vpa.scratch2, vpa,
+                                           vpa_spectral)
+        end
     end
 end
 
