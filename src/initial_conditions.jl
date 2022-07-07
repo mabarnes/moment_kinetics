@@ -376,13 +376,13 @@ also enforce boundary conditions in z on all separately evolved velocity space m
 function enforce_boundary_conditions!(f_out, density, upar, ppar, moments, vpa_bc, z_bc, vpa,
         z, r, vpa_adv, z_adv, composition)
     @loop_s_r_z is ir iz begin
-        if is ∈ composition.ion_species_range
+        #if is ∈ composition.ion_species_range
             # enforce the vpa BC
             # no bc needed for neutrals, as there is no acceleration for neutrals (i.e.
             # no advection in v-space).
             @views enforce_vpa_boundary_condition_local!(f_out[:,iz,ir,is], vpa_bc, vpa_adv[is].upwind_idx[iz,ir],
                                                          vpa_adv[is].downwind_idx[iz,ir])
-        end
+        #end
     end
     begin_s_r_vpa_region()
     # enforce the z BC on the evolved velocity space moments of the pdf
@@ -1014,7 +1014,7 @@ end
 function enforce_vpa_boundary_condition_local!(f::T, bc, upwind_idx, downwind_idx) where T
     if bc == "zero"
         f[upwind_idx] = 0.0
-        #f[downwind_idx] = 0.0
+        f[downwind_idx] = 0.0
     elseif bc == "periodic"
         f[downwind_idx] = 0.5*(f[upwind_idx]+f[downwind_idx])
         f[upwind_idx] = f[downwind_idx]
