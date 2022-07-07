@@ -207,29 +207,39 @@ function chebyshev_spectral_derivative!(df,f,::Val{1})
     end
 end
 
-"""
-use Chebyshev basis to compute the second derivative of f
-"""
-function chebyshev_spectral_derivative!(d2f,f,::Val{2})
-    # Coefficients are just applying the first derivative twice, written out by hand
-    # here to avoid a double loop
-    m = length(f)
-    @boundscheck m == length(d2f) || throw(BoundsError(d2f))
-    @inbounds begin
-        df_i_plus_3 = 0.0
-        df_i_plus_2 = 2*(m-1)*f[m]
-        d2f[m] = 0.0
-        d2f[m-1] = 0.0
-        d2f[m-2] = 2*(m-2)*df_i_plus_2
-        for i ∈ m-3:-1:2
-            df_i_plus_1 = (2*(i+1)*f[i+2]) + df_i_plus_3
-            d2f[i] = 2*i*df_i_plus_1 + d2f[i+2]
-            df_i_plus_3, df_i_plus_2 = df_i_plus_2, df_i_plus_1
-        end
-        df_i_plus_1 = 4*f[3] + df_i_plus_3
-        d2f[1] = df_i_plus_1 + 0.5*d2f[3]
-    end
-end
+# Following function would calculate a second derivative within an element, but should
+# not be used because it would lead to numerical instability at element boundaries.
+# Because the derivative of f is not required to be continuous when calculating like
+# this, it is possible to get 'wrong' results, e.g. if the point at an element boundary
+# is a maximum, the second derivative within the elements on either side could still be
+# positive up to the boundary, because neither knows about the 'discontinuous' first
+# derivative. So a better way to calculate the second derivative is to calculate the
+# first derivative, fix the element boundaries to make the result continuous, and then
+# take the derivative again (i.e. apply the full first-derivative function twice, which
+# is now done in `calculus.jl`.
+#"""
+#use Chebyshev basis to compute the second derivative of f
+#"""
+#function chebyshev_spectral_derivative!(d2f,f,::Val{2})
+#    # Coefficients are just applying the first derivative twice, written out by hand
+#    # here to avoid a double loop
+#    m = length(f)
+#    @boundscheck m == length(d2f) || throw(BoundsError(d2f))
+#    @inbounds begin
+#        df_i_plus_3 = 0.0
+#        df_i_plus_2 = 2*(m-1)*f[m]
+#        d2f[m] = 0.0
+#        d2f[m-1] = 0.0
+#        d2f[m-2] = 2*(m-2)*df_i_plus_2
+#        for i ∈ m-3:-1:2
+#            df_i_plus_1 = (2*(i+1)*f[i+2]) + df_i_plus_3
+#            d2f[i] = 2*i*df_i_plus_1 + d2f[i+2]
+#            df_i_plus_3, df_i_plus_2 = df_i_plus_2, df_i_plus_1
+#        end
+#        df_i_plus_1 = 4*f[3] + df_i_plus_3
+#        d2f[1] = df_i_plus_1 + 0.5*d2f[3]
+#    end
+#end
 
 """
 Interpolation from a regular grid to a 1d grid with arbitrary spacing
