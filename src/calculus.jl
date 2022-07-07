@@ -26,27 +26,57 @@ function elementwise_derivative! end
 
 Upwinding derivative.
 """
-function derivative!(df, f, coord, adv_fac, spectral::Union{Bool,<:chebyshev_info}, order=Val(1))
+function derivative!(df, f, coord, adv_fac, spectral::Union{Bool,<:chebyshev_info})
     # get the derivative at each grid point within each element and store in
     # coord.scratch_2d
-    elementwise_derivative!(coord, f, adv_fac, spectral, order)
+    elementwise_derivative!(coord, f, adv_fac, spectral, Val(1))
     # map the derivative from the elemental grid to the full grid;
     # at element boundaries, use the derivative from the upwind element.
     derivative_elements_to_full_grid!(df, coord.scratch_2d, coord, adv_fac)
 end
 
 """
-    derivative!(df, f, coord, spectral)
+    derivative!(df, f, coord, spectral, order=Val(1))
 
 Non-upwinding derivative.
 """
-function derivative!(df, f, coord, spectral, order=Val(1))
+function derivative!(df, f, coord, spectral)
+    return derivative!(df, f, coord, spectral, Val(1))
+end
+
+function derivative!(df, f, coord, spectral, ::Val{1})
+    # get the derivative at each grid point within each element and store in
+    # coord.scratch_2d
+    elementwise_derivative!(coord, f, spectral, Val(1))
+    # map the derivative from the elem;ntal grid to the full grid;
+    # at element boundaries, use the average of the derivatives from neighboring elements.
+    derivative_elements_to_full_grid!(df, coord.scratch_2d, coord)
+end
+
+function derivative!(df, f, coord, spectral::Bool, ::Val{2})
+    # Finite difference version must use an appropriate second derivative stencil, not
+    # apply the 1st derivative twice as for the spectral element method
+
     # get the derivative at each grid point within each element and store in
     # coord.scratch_2d
     elementwise_derivative!(coord, f, spectral, order)
     # map the derivative from the elem;ntal grid to the full grid;
     # at element boundaries, use the average of the derivatives from neighboring elements.
     derivative_elements_to_full_grid!(df, coord.scratch_2d, coord)
+end
+
+function derivative!(df, f, coord, spectral, ::Val{2})
+    # For spectral element method, apply the first derivative twice. This is necessary
+    # so that the first derivative is made continuous at the element boundaries,
+    # avoiding numerical instability due to e.g. a maximum at an element boundary where
+    # the second derivative on both sides as calculated in each element individually is
+    # positive, so averaging between the two elements would give a positive, but in
+    # reality the second derivative must be negative, because the value is a maximum.
+
+    derivative!(df, f, coord, spectral, Val(1))
+    derivative!(df, df, coord, spectral, Val(1))
+
+    return nothing
 end
 
 """
