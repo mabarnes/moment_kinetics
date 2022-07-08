@@ -134,6 +134,7 @@ end
 calculate the updated density (dens) and parallel pressure (ppar) for all species
 """
 function update_moments!(moments, ff, vpa, z, r, composition)
+    begin_s_r_z_region()
     n_species = size(ff,4)
     @boundscheck n_species == size(moments.dens,3) || throw(BoundsError(moments))
     @loop_s is begin
@@ -149,7 +150,9 @@ function update_moments!(moments, ff, vpa, z, r, composition)
             @views update_ppar_species!(moments.ppar[:,:,is], ff[:,:,:,is], vpa, z, r)
             moments.ppar_updated[is] = true
         end
-        @. moments.vth = sqrt(2*moments.ppar/moments.dens)
+        @loop_r_z ir iz begin
+            moments.vth[iz,ir,is] = sqrt(2*moments.ppar[iz,ir,is]/moments.dens[iz,ir,is])
+        end
         if moments.qpar_updated[is] == false
             @views update_qpar_species!(moments.qpar[:,is], ff[:,:,is], vpa, z, r, moments.vpa_norm_fac[:,:,is])
             moments.qpar_updated[is] = true
