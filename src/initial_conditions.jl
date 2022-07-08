@@ -413,7 +413,7 @@ function enforce_zero_incoming_bc!(pdf, vpa::coordinate, density, upar, ppar,
     # absolute velocity at right boundary
     @. vpa.scratch2 = vpagrid_to_dzdt(vpa.grid, sqrt(2.0*(ppar[end]/density[end])),
                                       upar[end], evolve_ppar, evolve_upar)
-    for ivpa ∈ 1:nvpa
+    @loop_vpa ivpa begin
         # for left boundary in zed (z = -Lz/2), want
         # f(z=-Lz/2, v_parallel > 0) = 0
         if vpa.scratch[ivpa] > zero
