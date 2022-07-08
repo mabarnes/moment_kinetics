@@ -612,7 +612,7 @@ function enforce_neutral_wall_bc!(pdf, vpa, ppar, upar, density, wall_flux_0,
         # account for the fact that the pdf here is the normalised pdf,
         # and the integration in wall_flux is defined relative to the un-normalised pdf
         if evolve_density
-            pdf_norm_fac = density[1,ir,is]
+            pdf_norm_fac = density[1]
         else
             pdf_norm_fac = 1.0
         end
@@ -665,7 +665,7 @@ function enforce_neutral_wall_bc!(pdf, vpa, ppar, upar, density, wall_flux_0,
         # account for the fact that the pdf here is the normalised pdf,
         # and the integration in wall_flux is defined relative to the un-normalised pdf
         if evolve_density
-            pdf_norm_fac = density[end,ir,is]
+            pdf_norm_fac = density[end]
         else
             pdf_norm_fac = 1.0
         end
