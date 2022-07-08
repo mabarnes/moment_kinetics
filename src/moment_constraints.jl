@@ -189,7 +189,7 @@ function hard_force_moment_constraints!(f, moments, vpa)
         B = -A*I1/J2
 
         @. f = A*f + B*vpa.grid*vpa.scratch
-    elseif moment.evolve_density
+    elseif moments.evolve_density
         I0 = integrate_over_vspace(f, vpa.wgts)
         @. f = f / I0
     end
