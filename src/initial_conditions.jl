@@ -40,15 +40,15 @@ function init_pdf_and_moments(vpa, z, r, composition, species, n_rk_stages, evol
     @serial_region begin
         # initialise the density profile
         init_density!(moments.dens, z, r, species, n_species)
-        moments.dens_updated .= true
         # initialise the parallel flow profile
         init_upar!(moments.upar, z, r, species, n_species)
-        moments.upar_updated .= true
         # initialise the parallel thermal speed profile
         init_vth!(moments.vth, z, r, species, n_species)
         @. moments.ppar = 0.5 * moments.dens * moments.vth^2
-        moments.ppar_updated .= true
     end
+    moments.dens_updated .= true
+    moments.upar_updated .= true
+    moments.ppar_updated .= true
     # create and initialise the normalised particle distribution function (pdf)
     # such that ∫dwpa pdf.norm = 1, ∫dwpa wpa * pdf.norm = 0, and ∫dwpa wpa^2 * pdf.norm = 1/2
     # note that wpa = vpa - upar, unless moments.evolve_ppar = true, in which case wpa = (vpa - upar)/vth
