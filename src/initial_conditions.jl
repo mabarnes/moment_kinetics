@@ -265,7 +265,7 @@ function init_pdf_over_density!(pdf, spec, composition, vpa, z, vpa_spectral, de
                     # Initialise full-f distribution function, then convert to
                     # normalised distribution function plus moments. Make it easier  to
                     # set up boundary values that are consistent with the moments.
-                    @. pdf[:,iz] = density[iz]*exp(-(vpa.grid - upar[iz])^2/vth[iz]^2)
+                    @. pdf[:,iz] = density[iz]*exp(-(vpa.grid - upar[iz])^2/vth[iz]^2) / vth[iz]
                     # Smooth out boundary points for neutrals, using u0=0. Will
                     # apply boundary conditions and then taper the boundary pdfs into
                     # the domain below.
