@@ -372,16 +372,16 @@ function write_data_to_binary(ff, moments, fields, t, n_species, cdf, t_idx)
         # add the time for this time slice to the netcdf file
         cdf.time[t_idx] = t
         # add the distribution function data at this time slice to the netcdf file
-        cdf.f[:,:,:,:,t_idx] = ff
+        cdf.f[:,:,:,:,t_idx] .= ff
         # add the electrostatic potential data at this time slice to the netcdf file
-        cdf.phi[:,:,t_idx] = fields.phi
+        cdf.phi[:,:,t_idx] .= fields.phi
         # add the density data at this time slice to the netcdf file
         for is ∈ 1:n_species
-            cdf.density[:,:,:,t_idx] = moments.dens
-            cdf.parallel_flow[:,:,:,t_idx] = moments.upar
-            cdf.parallel_pressure[:,:,:,t_idx] = moments.ppar
-            cdf.parallel_heat_flux[:,:,:,t_idx] = moments.qpar
-            cdf.thermal_speed[:,:,:,t_idx] = moments.vth
+            cdf.density[:,:,:,t_idx] .= moments.dens
+            cdf.parallel_flow[:,:,:,t_idx] .= moments.upar
+            cdf.parallel_pressure[:,:,:,t_idx] .= moments.ppar
+            cdf.parallel_heat_flux[:,:,:,t_idx] .= moments.qpar
+            cdf.thermal_speed[:,:,:,t_idx] .= moments.vth
         end
     end
     return nothing
