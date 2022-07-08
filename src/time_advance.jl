@@ -566,10 +566,12 @@ function rk_update!(scratch, pdf, moments, fields, vpa, z, r, rk_coefs, istage, 
     @loop_s_r_z is ir iz begin
         moments.vth[iz,ir,is] = sqrt(2.0*new_scratch.ppar[iz,ir,is]/new_scratch.density[iz,ir,is])
     end
+    # update the parallel heat flux
+    update_qpar!(moments.qpar, moments.qpar_updated, new_scratch.density,
+                 new_scratch.upar, moments.vth, new_scratch.pdf, vpa, z, r, composition,
+                 moments.evolve_density, moments.evolve_upar, moments.evolve_ppar)
     # update the 'true', un-normalized pdf
     update_unnormalized_pdf!(pdf.unnorm, new_scratch, moments)
-    # update the parallel heat flux
-    update_qpar!(moments.qpar, moments.qpar_updated, pdf.unnorm, vpa, z, r, composition, moments.vpa_norm_fac)
     # update the electrostatic potential phi
     update_phi!(fields, scratch[istage+1], z, r, composition)
     # _block_synchronize() here because phi needs to be read on different ranks than it
@@ -606,62 +608,18 @@ update velocity moments that are calculable from the evolved pdf
 """
 function update_derived_moments!(new_scratch, moments, vpa, z, r, composition)
     if !moments.evolve_density
-        # NB: it is assumed that if evolve_density = false, so too is evolve_upar and evolve_ppar
-        # if evolve_density = false, the evolved pdf is the 'true' pdf,
-        # and the vpa coordinate is (dz/dt) / c_s
-
-        # update_density! calculates n_s / N_e = (1/√π)∫d(vpa/c_s) (√π f_s c_s / N_e)
         update_density!(new_scratch.density, moments.dens_updated, new_scratch.pdf, vpa, z, r, composition)
-        # update_upar! calculates (n_s / N_e) * (upar_s / c_s) = (1/√π)∫d(vpa/c_s) * (vpa/c_s) * (√π f_s c_s / N_e)
-        update_upar!(new_scratch.upar, moments.upar_updated, new_scratch.pdf, vpa, z, r, composition)
-        # divide by the density to get parallel flow from the parallel particle flux
-        @loop_s_r_z is ir iz begin
-            new_scratch.upar[iz,ir,is] /= new_scratch.density[iz,ir,is]
-        end
+    end
+    if !moments.evolve_upar
+        update_upar!(new_scratch.upar, moments.upar_updated, new_scratch.density,
+                     new_scratch.ppar, new_scratch.pdf, vpa, z, r, composition,
+                     moments.evolve_density, moments.evolve_ppar)
+    end
+    if !moments.evolve_ppar
         # update_ppar! calculates (p_parallel/m_s N_e c_s^2) + (n_s/N_e)*(upar_s/c_s)^2 = (1/√π)∫d(vpa/c_s) (vpa/c_s)^2 * (√π f_s c_s / N_e)
-        update_ppar!(new_scratch.ppar, moments.ppar_updated, new_scratch.pdf, vpa, z, r, composition)
-        # ppar currently contains total energy density; subtract off the mean kinetic energy density
-        # to get the internal energy density (aka pressure)
-        @loop_s_r_z is ir iz begin
-            new_scratch.ppar[iz,ir,is] -= new_scratch.density[iz,ir,is]*new_scratch.upar[iz,ir,is]^2
-        end
-    elseif !moments.evolve_upar && !moments.evolve_ppar
-        # corresponds to case where only the density is evolved separately from the
-        # normalised pdf, given by g_s = (√π f_s c_s / n_s);
-        # the vpa coordinate is (dz/dt) / c_s
-
-        # update_upar! calculates (upar_s / c_s) = (1/√π)∫d(vpa/c_s) * (vpa/c_s) * (√π f_s c_s / n_s)
-        update_upar!(new_scratch.upar, moments.upar_updated, new_scratch.pdf, vpa, z, r, composition)
-        # update_ppar! calculates (p_parallel/m_s n_s c_s^2) + (upar_s/c_s)^2 = (1/√π)∫d(vpa/c_s) (vpa/c_s)^2 * (√π f_s c_s / n_s)
-        update_ppar!(new_scratch.ppar, moments.ppar_updated, new_scratch.pdf, vpa, z, r, composition)
-        # ppar currently contains total energy; subtract off the mean kinetic energy and multiply by density
-        # to get the internal energy density (aka pressure)
-        @loop_s_r_z is ir iz begin
-            new_scratch.ppar[iz,ir,is] -= new_scratch.upar[iz,ir,is]^2
-            new_scratch.ppar[iz,ir,is] *= new_scratch.density[iz,ir,is]
-        end
-    elseif !moments.evolve_upar
-        # this is the case where the density and parallel pressure are evolved separately
-        # from the normalized pdf, g_s = (√π f_s vth_s / n_s);
-        # the vpa coordinate is (dz/dt) / vth_s
-
-        # update_upar! calculates (upar_s / vth_s) = (1/√π)∫d(vpa/vth_s) * (vpa/vth_s) * (√π f_s vth_s / n_s)
-        update_upar!(new_scratch.upar, moments.upar_updated, new_scratch.pdf, vpa, z, r, composition)
-        # convert from upar_s / vth_s to upar_s / c_s
-        @loop_s_r_z is ir iz begin
-            new_scratch.upar[iz,ir,is] *= sqrt(2.0*new_scratch.ppar[iz,ir,is]/new_scratch.density[iz,ir,is])
-        end
-    elseif !moments.evolve_ppar
-        # this is the case where the parallel flow and density are evolved separately from the
-        # normalized pdf, g_s = (√π f_s c_s / n_s);
-        # the vpa coordinate is ((dz/dt) - upar_s) / c_s
-
-        # update_ppar! calculates (p_parallel/m_s n_s c_s^2) = (1/√π)∫d((vpa-upar_s)/c_s) (1/2)*((vpa-upar_s)/c_s)^2 * (√π f_s c_s / n_s)
-        update_ppar!(new_scratch.ppar, moments.ppar_updated, new_scratch.pdf, vpa, z, r, composition)
-        # convert from p_s / m_s n_s c_s^2 to ppar_s = p_s / m_s N_e c_s^2
-        @loop_s_r_z is ir iz begin
-            new_scratch.ppar[iz,ir,is] *= new_scratch.density[iz,ir,is]
-        end
+        update_ppar!(new_scratch.ppar, moments.ppar_updated, new_scratch.density,
+                     new_scratch.upar, new_scratch.pdf, vpa, z, r, composition,
+                     moments.evolve_density, moments.evolve_upar)
     end
 end
 
