@@ -15,6 +15,10 @@ const s = ArgParseSettings()
         help = "Name of TOML input file."
         arg_type = String
         default = nothing
+    "restartfile"
+        help = "Name of NetCDF file to restart from"
+        arg_type = String
+        default = nothing
     "--debug", "-d"
         help = "Set debugging level, default is 0 (no extra debugging). Higher " *
                "integer values activate more checks (and increase run time)"
@@ -24,6 +28,10 @@ const s = ArgParseSettings()
     "--long"
         help = "Include more tests, increasing test run time."
         action = :store_true
+    "--restart-time-index"
+        help = "Time index in output file to restart from, defaults to final time point"
+        arg_type = Int
+        default = -1
     "--verbose", "-v"
         help = "Print verbose output from tests."
         action = :store_true

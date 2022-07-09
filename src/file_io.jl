@@ -408,6 +408,44 @@ function open_output_file(prefix, ext)
 end
 
 """
+Reload pdf and moments from an existing output file.
+"""
+function reload_evolving_fields!(pdf, moments, restart_filename, time_index,
+                                 composition, r, z, vpa)
+    begin_serial_region()
+    @serial_region begin
+        fid = NCDataset(restart_filename,"r")
+        try
+            if time_index < 0
+                time_index = fid.dim["ntime"]
+            end
+            restart_n_species = fid.dim["n_species"]
+            restart_nr = fid.dim["nr"]
+            restart_nz = fid.dim["nz"]
+            restart_nvpa = fid.dim["nvpa"]
+            if restart_n_species != composition.n_species || restart_nr != r.n ||
+                restart_nz != z.n || restart_nvpa != vpa.n
+
+                error("Dimensions of restart file and input do not match.\n" *
+                      "Restart file was n_species=$restart_n_species, nr=$restart_nr, " *
+                      "nz=$restart_nz, nvpa=$restart_nvpa.\n" *
+                      "Input file gave  n_species=$(composition.n_species), nr=$(r.n), " *
+                      "nz=$(z.n), nvpa=$(vpa.n).")
+            end
+
+            pdf.norm .= fid["f"].var[:,:,:,:,time_index]
+            moments.dens .= fid["density"].var[:,:,:,time_index]
+            moments.upar .= fid["parallel_flow"].var[:,:,:,time_index]
+            moments.ppar .= fid["parallel_pressure"].var[:,:,:,time_index]
+            moments.qpar .= fid["parallel_heat_flux"].var[:,:,:,time_index]
+            moments.vth .= fid["thermal_speed"].var[:,:,:,time_index]
+        finally
+            close(fid)
+        end
+    end
+end
+
+"""
 An nc_info instance that may be initialised for writing debug output
 
 This is a non-const module variable, so does cause type instability, but it is only used
