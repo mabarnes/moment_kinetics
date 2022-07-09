@@ -334,6 +334,13 @@ function init_pdf_over_density!(pdf, spec, composition, vpa, z, vpa_spectral, de
             convert_full_f_to_normalised!(pdf, density, upar, ppar, vth, vpa,
                                           vpa_spectral, evolve_density, evolve_upar,
                                           evolve_ppar)
+
+            if !evolve_density
+                # Need to divide out density to return pdf/density
+                for ivpa ∈ 1:vpa.n
+                    pdf[ivpa,:,:,:] ./= density
+                end
+            end
         end
         for iz ∈ 1:z.n
             # densfac = the integral of the pdf over v-space, which should be unity,
