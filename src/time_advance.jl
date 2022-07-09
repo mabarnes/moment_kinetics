@@ -355,9 +355,9 @@ function time_advance!(pdf, scratch, t, t_input, vpa, z, r, vpa_spectral, z_spec
             end
             begin_serial_region()
             @serial_region println("finished time step ", i)
-            write_data_to_ascii(pdf.unnorm, moments, fields, vpa, z, r, t, composition.n_species, io)
+            write_data_to_ascii(pdf.norm, moments, fields, vpa, z, r, t, composition.n_species, io)
             # write initial data to binary file (netcdf)
-            write_data_to_binary(pdf.unnorm, moments, fields, t, composition.n_species, cdf, iwrite)
+            write_data_to_binary(pdf.norm, moments, fields, t, composition.n_species, cdf, iwrite)
             iwrite += 1
 
             # Restore to same region type as in rk_update!() so that execution after a
