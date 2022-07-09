@@ -218,33 +218,34 @@ function init_pdf_over_density!(pdf, spec, composition, vpa, z, vpa_spectral, de
             else
                 @. vpa.scratch = (vpa.grid - upar[iz])/vth[iz]
             end
-            @. pdf[:,iz] = exp(-vpa.scratch^2) / vth[iz]
 
-            if z.bc == "wall"
-                # Ensure both species go to zero smoothly at v_parallel=0 at the wall,
-                # where the boundary conditions require that distribution functions for
-                # both ions (where f_ion(v_parallel) = 0 for ±v_parallel<0) and neutrals
-                # (f_neutral=f_Kw, and f_Kw(v_parallel=0)=0) vanish.
+            if z.bc != "wall"
+                @. pdf[:,iz] = exp(-vpa.scratch^2) / vth[iz]
+            else
+                # Initialise as full-f distribution functions, then
+                # normalise/interpolate (if necessary). This makes it easier to
+                # initialise a normalised pdf consistent with the moments, although it
+                # modifies the moments from the 'input' values.
+                @. pdf[:,iz] = density[iz]*exp(-(vpa.grid - upar[iz])^2/vth[iz]^2) / vth[iz]
+
+                # Also ensure both species go to zero smoothly at v_parallel=0 at the
+                # wall, where the boundary conditions require that distribution
+                # functions for both ions (where f_ion(v_parallel) = 0 for
+                # ±v_parallel<0) and neutrals (f_neutral=f_Kw, and f_Kw(v_parallel=0)=0)
+                # vanish.
                 #
                 # Implemented by multiplying by a smooth 'notch' function
                 # notch(v,u0,width) = 1 - exp(-(v-u0)^2/width^2)
                 width = 0.1
                 inverse_width = 1.0 / width
 
-                # v_parallel
-                vpa.scratch2 .= vpagrid_to_dzdt(vpa.grid, vth[iz], upar[iz],
-                                                evolve_ppar, evolve_upar)
-
                 # Choose u0 so that u0=0 at the targets, and u0->±vpa.L at the midplane
                 if ions
                     u0 = (2.0*z.grid[iz]/z.L - sign(z.grid[iz])) * vpa.L / 2.0
 
                     if abs(z.grid[iz]) > 1.0e-14
-                        @. pdf[:,iz] *= 1.0 - exp(-(vpa.scratch2 - u0)^2*inverse_width)
+                        @. pdf[:,iz] *= 1.0 - exp(-(vpa.grid - u0)^2*inverse_width)
                     end
-
-                    enforce_initial_tapered_zero_incoming!(pdf, z, vpa, upar, vth,
-                                                           evolve_upar, evolve_ppar)
                 else
                     # Just smooth out boundary points for neutrals, using u0=0. Will
                     # apply boundary conditions and then taper the boundary pdfs into
@@ -262,10 +263,6 @@ function init_pdf_over_density!(pdf, spec, composition, vpa, z, vpa_spectral, de
                     #end
                     #@. pdf[:,iz] = (3.0*pi/vtfac^3)*abs(vpa.scratch2)*erfc(abs(vpa.scratch2)/vtfac)
 
-                    # Initialise full-f distribution function, then convert to
-                    # normalised distribution function plus moments. Make it easier  to
-                    # set up boundary values that are consistent with the moments.
-                    @. pdf[:,iz] = density[iz]*exp(-(vpa.grid - upar[iz])^2/vth[iz]^2) / vth[iz]
                     # Smooth out boundary points for neutrals, using u0=0. Will
                     # apply boundary conditions and then taper the boundary pdfs into
                     # the domain below.
@@ -275,53 +272,58 @@ function init_pdf_over_density!(pdf, spec, composition, vpa, z, vpa_spectral, de
                 end
             end
         end
-        if !ions && z.bc == "wall"
-            # Apply neutral boundary condition to full-f distribution function
-            vtfac = sqrt(composition.T_wall * composition.mn_over_mi)
-            @. vpa.scratch = (3.0*pi/vtfac^3)*abs(vpa.grid)*erfc(abs(vpa.grid)/vtfac)
+        if z.bc == "wall"
+            if ions
+                enforce_initial_tapered_zero_incoming!(pdf, z, vpa)
+            else
+                # Apply neutral boundary condition to full-f distribution function
+                vtfac = sqrt(composition.T_wall * composition.mn_over_mi)
+                @. vpa.scratch = (3.0*pi/vtfac^3)*abs(vpa.grid)*erfc(abs(vpa.grid)/vtfac)
 
-            # the integral of -v_parallel*f_{Kw} over positive v_parallel should be one,
-            # but may not be exactly this due to quadrature errors; ensure that this is
-            # true to machine precision to make sure particle number in/out of wall is
-            # conserved
-            knudsen_norm_fac = integrate_over_positive_vpa(vpa.grid .* vpa.scratch, vpa.grid, vpa.wgts, vpa.scratch3)
-            @. vpa.scratch /= knudsen_norm_fac
+                # the integral of -v_parallel*f_{Kw} over positive v_parallel should be one,
+                # but may not be exactly this due to quadrature errors; ensure that this is
+                # true to machine precision to make sure particle number in/out of wall is
+                # conserved
+                knudsen_norm_fac = integrate_over_positive_vpa(vpa.grid .* vpa.scratch, vpa.grid, vpa.wgts, vpa.scratch3)
+                @. vpa.scratch /= knudsen_norm_fac
 
-            zero = 1.0e-14
+                zero = 1.0e-14
 
-            # add this species' contribution to the combined ion/neutral particle flux
-            # out of the domain at z=-Lz/2
-            @views wall_flux_0 += integrate_over_negative_vpa(abs.(vpa.grid) .* pdf[:,1], vpa.grid, vpa.wgts, vpa.scratch3)
-            # for left boundary in zed (z = -Lz/2), want
-            # f_n(z=-Lz/2, v_parallel > 0) = Γ_0 * f_KW(v_parallel) * pdf_norm_fac(-Lz/2)
-            for ivpa ∈ 1:vpa.n
-                if vpa.grid[ivpa] > zero
-                    pdf[ivpa,1] = wall_flux_0 * vpa.scratch[ivpa]
+                # add this species' contribution to the combined ion/neutral particle flux
+                # out of the domain at z=-Lz/2
+                @views wall_flux_0 += integrate_over_negative_vpa(abs.(vpa.grid) .* pdf[:,1], vpa.grid, vpa.wgts, vpa.scratch3)
+                # for left boundary in zed (z = -Lz/2), want
+                # f_n(z=-Lz/2, v_parallel > 0) = Γ_0 * f_KW(v_parallel) * pdf_norm_fac(-Lz/2)
+                for ivpa ∈ 1:vpa.n
+                    if vpa.grid[ivpa] > zero
+                        pdf[ivpa,1] = wall_flux_0 * vpa.scratch[ivpa]
+                    end
                 end
-            end
 
-            # add this species' contribution to the combined ion/neutral particle flux
-            # out of the domain at z=-Lz/2
-            @views wall_flux_L += integrate_over_positive_vpa(abs.(vpa.grid) .* pdf[:,end], vpa.grid, vpa.wgts, vpa.scratch3)
-            # for right boundary in zed (z = Lz/2), want
-            # f_n(z=Lz/2, v_parallel < 0) = Γ_Lz * f_KW(v_parallel) * pdf_norm_fac(Lz/2)
-            for ivpa ∈ 1:vpa.n
-                if vpa.grid[ivpa] < -zero
-                    pdf[ivpa,end] = wall_flux_L * vpa.scratch[ivpa]
+                # add this species' contribution to the combined ion/neutral particle flux
+                # out of the domain at z=-Lz/2
+                @views wall_flux_L += integrate_over_positive_vpa(abs.(vpa.grid) .* pdf[:,end], vpa.grid, vpa.wgts, vpa.scratch3)
+                # for right boundary in zed (z = Lz/2), want
+                # f_n(z=Lz/2, v_parallel < 0) = Γ_Lz * f_KW(v_parallel) * pdf_norm_fac(Lz/2)
+                for ivpa ∈ 1:vpa.n
+                    if vpa.grid[ivpa] < -zero
+                        pdf[ivpa,end] = wall_flux_L * vpa.scratch[ivpa]
+                    end
                 end
-            end
 
-            # Taper boundary distribution function into domain to avoid jumps at the
-            # boundary
-            for iz ∈ 1:z.n÷2
-                linear_weight = -2.0*z.grid[iz]/z.L
-                @views @. pdf[:,iz] = linear_weight*pdf[:,1] +
-                                      (1.0 - linear_weight)*pdf[:,iz]
-            end
-            for iz ∈ (z.n+3)÷2:z.n
-                linear_weight = 2.0*z.grid[iz]/z.L
-                @views @. pdf[:,iz] = linear_weight*pdf[:,end] +
-                                      (1.0 - linear_weight)*pdf[:,iz]
+                # Taper boundary distribution function into domain to avoid jumps at the
+                # boundary
+                for iz ∈ 1:z.n÷2
+                    linear_weight = -2.0*z.grid[iz]/z.L
+                    @views @. pdf[:,iz] = linear_weight*pdf[:,1] +
+                    (1.0 - linear_weight)*pdf[:,iz]
+                end
+                for iz ∈ (z.n+3)÷2:z.n
+                    linear_weight = 2.0*z.grid[iz]/z.L
+                    @views @. pdf[:,iz] = linear_weight*pdf[:,end] +
+                    (1.0 - linear_weight)*pdf[:,iz]
+                end
+
             end
 
             # Get the unnormalised pdf and the moments of the constructed full-f
@@ -605,9 +607,11 @@ Set up an initial condition that tries to be smoothly compatible with the sheath
 boundary condition for ions, by setting f(±(v_parallel-u0)<0) where u0=0 at the sheath
 boundaries and for z<0 increases linearly to u0=vpa.L at z=0, while for z>0 increases
 from u0=-vpa.L at z=0 to zero at the z=z.L/2 sheath.
+
+To be applied to 'full-f' distribution function on v_parallel grid (not w_parallel
+grid).
 """
-function enforce_initial_tapered_zero_incoming!(pdf, z::coordinate, vpa::coordinate,
-        upar, vth, evolve_upar, evolve_ppar)
+function enforce_initial_tapered_zero_incoming!(pdf, z::coordinate, vpa::coordinate)
     nvpa = size(pdf,1)
     zero = 1.0e-14
     # no parallel BC should be enforced for dz/dt = 0
@@ -616,19 +620,16 @@ function enforce_initial_tapered_zero_incoming!(pdf, z::coordinate, vpa::coordin
     # so use advection speed below instead of vpa
 
     for iz ∈ 1:z.n
-        # absolute velocity
-        @. vpa.scratch = vpagrid_to_dzdt(vpa.grid, vth[iz], upar[iz], evolve_ppar,
-                                         evolve_upar)
         u0 = (2.0*z.grid[iz]/z.L - sign(z.grid[iz])) * vpa.L / 2.0
         if z.grid[iz] < -zero
             for ivpa ∈ 1:nvpa
-                if vpa.scratch[ivpa] > u0 + zero
+                if vpa.grid[ivpa] > u0 + zero
                     pdf[ivpa,iz] = 0.0
                 end
             end
         elseif z.grid[iz] > zero
             for ivpa ∈ 1:nvpa
-                if vpa.scratch[ivpa] < u0 - zero
+                if vpa.grid[ivpa] < u0 - zero
                     pdf[ivpa,iz] = 0.0
                 end
             end
