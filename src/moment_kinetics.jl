@@ -159,9 +159,9 @@ function setup_moment_kinetics(input_dict::Dict)
     io, cdf = setup_file_io(output_dir, run_name, vpa, z, r, composition, collisions,
                             moments.evolve_ppar)
     # write initial data to ascii files
-    write_data_to_ascii(pdf.unnorm, moments, fields, vpa, z, r, code_time, composition.n_species, io)
+    write_data_to_ascii(pdf.norm, moments, fields, vpa, z, r, code_time, composition.n_species, io)
     # write initial data to binary file (netcdf)
-    write_data_to_binary(pdf.unnorm, moments, fields, code_time, composition.n_species, cdf, 1)
+    write_data_to_binary(pdf.norm, moments, fields, code_time, composition.n_species, cdf, 1)
 
     begin_s_r_z_region()
 
