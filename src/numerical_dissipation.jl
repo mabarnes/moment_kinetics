@@ -2,10 +2,102 @@
 """
 module numerical_dissipation
 
-export vpa_dissipation!
+export vpa_boundary_buffer!, vpa_dissipation!, z_dissipation!
+
+using Base.Iterators: flatten
 
 using ..looping
 using ..calculus: derivative!
+
+"""
+Suppress the distribution function by damping towards a Maxwellian in the last element
+before the vpa boundaries, to avoid numerical instabilities there.
+"""
+function vpa_boundary_buffer!(f_out, fvec_in, moments, vpa, dt)
+    damping_rate_prefactor = -0.01 / dt
+
+    if damping_rate_prefactor <= 0.0
+        return nothing
+    end
+
+    if vpa.nelement > 2
+        # Damping rate decays quadratically through the first/last elements
+        # Hopefully this makes it smooth...
+        # Note vpa is antisymmetric with vpa=0 in the centre of the grid, so the following
+        # should work for both ends of the grid.
+        @. vpa.scratch = damping_rate_prefactor *
+                         (abs(vpa.grid) - abs(vpa.grid[vpa.ngrid])^2) /
+                         (abs(vpa.grid[1]) - abs(vpa.grid[vpa.ngrid])^2)
+
+        # Iterate over the first and last element in the vpa dimension
+        vpa_inds = flatten((1:vpa.ngrid, vpa.n-vpa.ngrid+1:vpa.n))
+    else
+        # ≤2 elements, so applying a 'buffer' in the boundary elements would apply it
+        # across the whole grid. Instead, hard-code a number of grid points to use as
+        # the 'buffer'.
+        nbuffer = 16
+
+        @. vpa.scratch = damping_rate_prefactor *
+                         (abs(vpa.grid) - abs(vpa.grid[nbuffer])^2) /
+                         (abs(vpa.grid[1]) - abs(vpa.grid[nbuffer])^2)
+
+        # Iterate over the first and last element in the vpa dimension
+        vpa_inds = flatten((1:nbuffer, vpa.n-nbuffer+1:vpa.n))
+    end
+
+    begin_s_r_z_region()
+
+    if moments.evolve_upar && moments.evolve_ppar
+        @loop_s_r_z is ir iz begin
+            for ivpa ∈ vpa_inds
+                f_out[ivpa,iz,ir,is] += dt*vpa.scratch[ivpa]*
+                                        (exp(-vpa.grid[ivpa]^2) - fvec_in.pdf[ivpa,iz,ir,is])
+            end
+        end
+    elseif moments.evolve_ppar
+        @loop_s_r_z is ir iz begin
+            vth = sqrt(2.0*fvec_in.ppar[iz,ir,is]/fvec_in.density[iz,ir,is])
+            for ivpa ∈ vpa_inds
+                f_out[ivpa,iz,ir,is] += dt*vpa.scratch[ivpa]*
+                                        (exp(-(vpa.grid[ivpa] -
+                                               fvec_in.upar[iz,ir,is]/vth)^2) -
+                                         fvec_in.pdf[ivpa,iz,ir,is])
+            end
+        end
+    elseif moments.evolve_upar
+        @loop_s_r_z is ir iz begin
+            vth = sqrt(2.0*fvec_in.ppar[iz,ir,is]/fvec_in.density[iz,ir,is])
+            for ivpa ∈ vpa_inds
+                f_out[ivpa,iz,ir,is] += dt*vpa.scratch[ivpa]*
+                                        (exp(-(vpa.grid[ivpa])^2)/vth -
+                                         fvec_in.pdf[ivpa,iz,ir,is])
+            end
+        end
+    elseif moments.evolve_density
+        @loop_s_r_z is ir iz begin
+            vth = sqrt(2.0*fvec_in.ppar[iz,ir,is]/fvec_in.density[iz,ir,is])
+            for ivpa ∈ vpa_inds
+                f_out[ivpa,iz,ir,is] += dt*vpa.scratch[ivpa]*
+                                        (exp(-(vpa.grid[ivpa] -
+                                               fvec_in.upar[iz,ir,is])^2)/vth -
+                                         fvec_in.pdf[ivpa,iz,ir,is])
+            end
+        end
+    else
+        @loop_s_r_z is ir iz begin
+            vth = sqrt(2.0*fvec_in.ppar[iz,ir,is]/fvec_in.density[iz,ir,is])
+            for ivpa ∈ vpa_inds
+                f_out[ivpa,iz,ir,is] += dt*vpa.scratch[ivpa]*
+                                        (fvec_in.density[iz,ir,is]/vth*
+                                         exp(-(vpa.grid[ivpa] -
+                                               fvec_in.upar[iz,ir,is])^2)/vth -
+                                         fvec_in.pdf[ivpa,iz,ir,is])
+            end
+        end
+    end
+
+    return nothing
+end
 
 """
 Add diffusion in the vpa direction to suppress oscillations
