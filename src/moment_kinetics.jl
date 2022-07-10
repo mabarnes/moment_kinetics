@@ -75,27 +75,33 @@ using .time_advance: setup_time_advance!, time_advance!
 main function that contains all of the content of the program
 """
 function run_moment_kinetics(to::TimerOutput, input_dict=Dict())
-    # set up all the structs, etc. needed for a run
-    mk_state = setup_moment_kinetics(input_dict)
-
     try
-        # solve the 1+1D kinetic equation to advance f in time by nstep time steps
-        if run_type == performance_test
-            @timeit to "time_advance" time_advance!(mk_state...)
-        else
-            time_advance!(mk_state...)
+        # set up all the structs, etc. needed for a run
+        mk_state = setup_moment_kinetics(input_dict)
+
+        try
+            # solve the 1+1D kinetic equation to advance f in time by nstep time steps
+            if run_type == performance_test
+                @timeit to "time_advance" time_advance!(mk_state...)
+            else
+                time_advance!(mk_state...)
+            end
+        finally
+
+            # clean up i/o and communications
+            # last 2 elements of mk_state are `io` and `cdf`
+            cleanup_moment_kinetics!(mk_state[end-1:end]...)
         end
-    finally
 
-        # clean up i/o and communications
-        # last 2 elements of mk_state are `io` and `cdf`
-        cleanup_moment_kinetics!(mk_state[end-1:end]...)
-    end
-
-    if block_rank[] == 0 && run_type == performance_test
-        # Print the timing information if this is a performance test
-        display(to)
-        println()
+        if block_rank[] == 0 && run_type == performance_test
+            # Print the timing information if this is a performance test
+            display(to)
+            println()
+        end
+    catch
+        # Stop code from hanging when running on multiple processes if only one of them
+        # throws an error
+        global_size[] > 1 && MPI.Abort(comm_world, 1)
     end
 
     return nothing
@@ -174,29 +180,40 @@ function restart_moment_kinetics()
 end
 function restart_moment_kinetics(restart_filename::String, input_dict::Dict,
                                  time_index::Int=-1)
-    # Move the output file being restarted from to make sure it doesn't get overwritten.
-    backup_filename = get_backup_filename(restart_filename)
-    global_rank[] == 0 && mv(restart_filename, backup_filename)
-
-    # Set up all the structs, etc. needed for a run.
-    # Does unnecessary initialisation of pdf and moments, which will be overwritten by
-    # reload_evolving_fields!()
-    pdf, scratch, code_time, t_input, vpa, z, r, vpa_spectral, z_spectral, r_spectral,
-    moments, fields, vpa_advect, z_advect, r_advect, vpa_SL, z_SL, r_SL, composition,
-    collisions, advance, scratch_dummy_sr, io, cdf = setup_moment_kinetics(input_dict)
-
-    reload_evolving_fields!(pdf, moments, backup_filename, time_index, composition, r, z, vpa)
-    _block_synchronize()
-
     try
-        time_advance!(pdf, scratch, code_time, t_input, vpa, z, r, vpa_spectral,
-                      z_spectral, r_spectral, moments, fields, vpa_advect, z_advect,
-                      r_advect, vpa_SL, z_SL, r_SL, composition, collisions, advance,
-                      scratch_dummy_sr, io, cdf)
-    finally
-        # clean up i/o and communications
-        # last 2 elements of mk_state are `io` and `cdf`
-        cleanup_moment_kinetics!(io, cdf)
+        # Move the output file being restarted from to make sure it doesn't get
+        # overwritten.
+        backup_filename = get_backup_filename(restart_filename)
+        global_rank[] == 0 && mv(restart_filename, backup_filename)
+
+        # Set up all the structs, etc. needed for a run.
+        # Does unnecessary initialisation of pdf and moments, which will be overwritten
+        # by reload_evolving_fields!()
+        pdf, scratch, code_time, t_input, vpa, z, r, vpa_spectral, z_spectral,
+        r_spectral, moments, fields, vpa_advect, z_advect, r_advect, vpa_SL, z_SL, r_SL,
+        composition, collisions, advance, scratch_dummy_sr, io, cdf =
+        setup_moment_kinetics(input_dict)
+
+        reload_evolving_fields!(pdf, moments, backup_filename, time_index, composition,
+                                r, z, vpa)
+        _block_synchronize()
+
+        try
+            time_advance!(pdf, scratch, code_time, t_input, vpa, z, r, vpa_spectral,
+                          z_spectral, r_spectral, moments, fields, vpa_advect, z_advect,
+                          r_advect, vpa_SL, z_SL, r_SL, composition, collisions,
+                          advance, scratch_dummy_sr, io, cdf)
+        finally
+            # clean up i/o and communications
+            # last 2 elements of mk_state are `io` and `cdf`
+            cleanup_moment_kinetics!(io, cdf)
+        end
+    catch e
+        # Stop code from hanging when running on multiple processes if only one of them
+        # throws an error
+        global_size[] > 1 && MPI.Abort(comm_world, 1)
+
+        rethrow(e)
     end
 
     return nothing
