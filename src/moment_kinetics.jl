@@ -98,10 +98,15 @@ function run_moment_kinetics(to::TimerOutput, input_dict=Dict())
             display(to)
             println()
         end
-    catch
+    catch e
         # Stop code from hanging when running on multiple processes if only one of them
         # throws an error
-        global_size[] > 1 && MPI.Abort(comm_world, 1)
+        if global_size[] > 1
+            println(e)
+            MPI.Abort(comm_world, 1)
+        end
+
+        rethrow(e)
     end
 
     return nothing
@@ -206,7 +211,10 @@ function restart_moment_kinetics(restart_filename::String, input_dict::Dict,
     catch e
         # Stop code from hanging when running on multiple processes if only one of them
         # throws an error
-        global_size[] > 1 && MPI.Abort(comm_world, 1)
+        if global_size[] > 1
+            println(e)
+            MPI.Abort(comm_world, 1)
+        end
 
         rethrow(e)
     end
