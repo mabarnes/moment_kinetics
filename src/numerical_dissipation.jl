@@ -2,10 +2,80 @@
 """
 module numerical_dissipation
 
-export vpa_dissipation!
+export vpa_boundary_buffer!, vpa_dissipation!, z_dissipation!
+
+using Base.Iterators: flatten
 
 using ..looping
 using ..calculus: derivative!
+
+"""
+Suppress the distribution function by damping towards a Maxwellian in the last element
+before the vpa boundaries, to avoid numerical instabilities there.
+"""
+function vpa_boundary_buffer!(f_out, fvec_in, moments, vpa, dt)
+    damping_rate = 1.e5
+
+    if damping_rate <= 0.0
+        return nothing
+    end
+
+    begin_s_r_z_region()
+
+    # Iterate over the first and last element in the vpa dimension
+    vpa_inds = flatten((1:vpa.ngrid, vpa.n-vpa.ngrid+1:vpa.n))
+
+    if moments.evolve_upar && moments.evolve_ppar
+        @loop_s_r_z_vpa is ir iz ivpa begin
+            for ivpa ∈ vpa_inds
+                f_out[ivpa,iz,ir,is] += dt*damping_rate*
+                                        (exp(-vpa.grid[ivpa]^2) - fvec_in.pdf[ivpa,iz,ir,is])
+            end
+        end
+    elseif moments.evolve_ppar
+        @loop_s_r_z is ir iz begin
+            vth = sqrt(2.0*fvec_in.ppar[iz,ir,is]/fvec_in.density[iz,ir,is])
+            for ivpa ∈ vpa_inds
+                f_out[ivpa,iz,ir,is] += dt*damping_rate*
+                                        (exp(-(vpa.grid[ivpa] -
+                                               fvec_in.upar[iz,ir,is]/vth)^2) -
+                                         fvec_in.pdf[ivpa,iz,ir,is])
+            end
+        end
+    elseif moments.evolve_upar
+        @loop_s_r_z is ir iz begin
+            vth = sqrt(2.0*fvec_in.ppar[iz,ir,is]/fvec_in.density[iz,ir,is])
+            for ivpa ∈ vpa_inds
+                f_out[ivpa,iz,ir,is] += dt*damping_rate*
+                                        (exp(-(vpa.grid[ivpa])^2)/vth -
+                                         fvec_in.pdf[ivpa,iz,ir,is])
+            end
+        end
+    elseif moments.evolve_density
+        @loop_s_r_z is ir iz begin
+            vth = sqrt(2.0*fvec_in.ppar[iz,ir,is]/fvec_in.density[iz,ir,is])
+            for ivpa ∈ vpa_inds
+                f_out[ivpa,iz,ir,is] += dt*damping_rate*
+                                        (exp(-(vpa.grid[ivpa] -
+                                               fvec_in.upar[iz,ir,is])^2)/vth -
+                                         fvec_in.pdf[ivpa,iz,ir,is])
+            end
+        end
+    else
+        @loop_s_r_z is ir iz begin
+            vth = sqrt(2.0*fvec_in.ppar[iz,ir,is]/fvec_in.density[iz,ir,is])
+            for ivpa ∈ vpa_inds
+                f_out[ivpa,iz,ir,is] += dt*damping_rate*
+                                        (fvec_in.density[iz,ir,is]/vth*
+                                         exp(-(vpa.grid[ivpa] -
+                                               fvec_in.upar[iz,ir,is])^2)/vth -
+                                         fvec_in.pdf[ivpa,iz,ir,is])
+            end
+        end
+    end
+
+    return nothing
+end
 
 """
 Add diffusion in the vpa direction to suppress oscillations
