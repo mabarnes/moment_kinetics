@@ -187,16 +187,11 @@ function restart_moment_kinetics(restart_filename::String, input_dict::Dict,
         global_rank[] == 0 && mv(restart_filename, backup_filename)
 
         # Set up all the structs, etc. needed for a run.
-        # Does unnecessary initialisation of pdf and moments, which will be overwritten
-        # by reload_evolving_fields!()
         pdf, scratch, code_time, t_input, vpa, z, r, vpa_spectral, z_spectral,
         r_spectral, moments, fields, vpa_advect, z_advect, r_advect, vpa_SL, z_SL, r_SL,
         composition, collisions, advance, scratch_dummy_sr, io, cdf =
-        setup_moment_kinetics(input_dict)
-
-        reload_evolving_fields!(pdf, moments, backup_filename, time_index, composition,
-                                r, z, vpa)
-        _block_synchronize()
+        setup_moment_kinetics(input_dict, backup_filename=backup_filename,
+                              restart_time_index=time_index)
 
         try
             time_advance!(pdf, scratch, code_time, t_input, vpa, z, r, vpa_spectral,
@@ -221,8 +216,12 @@ end
 
 """
 Perform all the initialization steps for a run.
+
+If `backup_filename` is `nothing`, set up for a regular run; if a filename is passed,
+reload data from time index given by `restart_time_index` for a restart.
 """
-function setup_moment_kinetics(input_dict::Dict)
+function setup_moment_kinetics(input_dict::Dict; backup_filename=nothing,
+                               restart_time_index=-1)
     # Set up MPI
     initialize_comms!()
 
@@ -252,6 +251,14 @@ function setup_moment_kinetics(input_dict::Dict)
     moments, fields, vpa_advect, z_advect, r_advect, vpa_SL, z_SL, r_SL, scratch,
         advance, scratch_dummy_sr = setup_time_advance!(pdf, vpa, z, r, z_spectral,
             composition, drive_input, moments, t_input, collisions, species)
+
+    if backup_filename !== nothing
+        # Have done unnecessary initialisation of pdf and moments, which is overwritten
+        # here
+        reload_evolving_fields!(pdf, moments, backup_filename, restart_time_index,
+                                composition, r, z, vpa)
+        _block_synchronize()
+    end
 
     # setup i/o
     io, cdf = setup_file_io(output_dir, run_name, vpa, z, r, composition, collisions,
