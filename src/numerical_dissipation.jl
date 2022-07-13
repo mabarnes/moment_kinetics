@@ -14,7 +14,7 @@ Suppress the distribution function by damping towards a Maxwellian in the last e
 before the vpa boundaries, to avoid numerical instabilities there.
 """
 function vpa_boundary_buffer!(f_out, fvec_in, moments, vpa, dt)
-    damping_rate = 1.e5
+    damping_rate = 0.1 / dt
 
     if damping_rate <= 0.0
         return nothing
