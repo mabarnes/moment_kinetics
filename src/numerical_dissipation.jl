@@ -14,9 +14,16 @@ Suppress the distribution function by damping towards a Maxwellian in the last e
 before the vpa boundaries, to avoid numerical instabilities there.
 """
 function vpa_boundary_buffer!(f_out, fvec_in, moments, vpa, dt)
-    damping_rate = 0.1 / dt
+    damping_rate_prefactor = 1.0 / dt
+    # Damping rate decays quadratically through the first/last elements
+    # Hopefully this makes it smooth...
+    # Note vpa is antisymmetric with vpa=0 in the centre of the grid, so the following
+    # should work for both ends of the grid.
+    @. vpa.scratch = damping_rate_prefactor *
+                     (abs(vpa.grid) - abs(vpa.grid[vpa.ngrid])^2) /
+                     (abs(vpa.grid[1]) - abs(vpa.grid[vpa.ngrid])^2)
 
-    if damping_rate <= 0.0
+    if damping_rate_prefactor <= 0.0
         return nothing
     end
 
@@ -28,7 +35,7 @@ function vpa_boundary_buffer!(f_out, fvec_in, moments, vpa, dt)
     if moments.evolve_upar && moments.evolve_ppar
         @loop_s_r_z_vpa is ir iz ivpa begin
             for ivpa ∈ vpa_inds
-                f_out[ivpa,iz,ir,is] += dt*damping_rate*
+                f_out[ivpa,iz,ir,is] += dt*vpa.scratch*
                                         (exp(-vpa.grid[ivpa]^2) - fvec_in.pdf[ivpa,iz,ir,is])
             end
         end
@@ -36,7 +43,7 @@ function vpa_boundary_buffer!(f_out, fvec_in, moments, vpa, dt)
         @loop_s_r_z is ir iz begin
             vth = sqrt(2.0*fvec_in.ppar[iz,ir,is]/fvec_in.density[iz,ir,is])
             for ivpa ∈ vpa_inds
-                f_out[ivpa,iz,ir,is] += dt*damping_rate*
+                f_out[ivpa,iz,ir,is] += dt*vpa.scratch*
                                         (exp(-(vpa.grid[ivpa] -
                                                fvec_in.upar[iz,ir,is]/vth)^2) -
                                          fvec_in.pdf[ivpa,iz,ir,is])
@@ -46,7 +53,7 @@ function vpa_boundary_buffer!(f_out, fvec_in, moments, vpa, dt)
         @loop_s_r_z is ir iz begin
             vth = sqrt(2.0*fvec_in.ppar[iz,ir,is]/fvec_in.density[iz,ir,is])
             for ivpa ∈ vpa_inds
-                f_out[ivpa,iz,ir,is] += dt*damping_rate*
+                f_out[ivpa,iz,ir,is] += dt*vpa.scratch*
                                         (exp(-(vpa.grid[ivpa])^2)/vth -
                                          fvec_in.pdf[ivpa,iz,ir,is])
             end
@@ -55,7 +62,7 @@ function vpa_boundary_buffer!(f_out, fvec_in, moments, vpa, dt)
         @loop_s_r_z is ir iz begin
             vth = sqrt(2.0*fvec_in.ppar[iz,ir,is]/fvec_in.density[iz,ir,is])
             for ivpa ∈ vpa_inds
-                f_out[ivpa,iz,ir,is] += dt*damping_rate*
+                f_out[ivpa,iz,ir,is] += dt*vpa.scratch*
                                         (exp(-(vpa.grid[ivpa] -
                                                fvec_in.upar[iz,ir,is])^2)/vth -
                                          fvec_in.pdf[ivpa,iz,ir,is])
@@ -65,7 +72,7 @@ function vpa_boundary_buffer!(f_out, fvec_in, moments, vpa, dt)
         @loop_s_r_z is ir iz begin
             vth = sqrt(2.0*fvec_in.ppar[iz,ir,is]/fvec_in.density[iz,ir,is])
             for ivpa ∈ vpa_inds
-                f_out[ivpa,iz,ir,is] += dt*damping_rate*
+                f_out[ivpa,iz,ir,is] += dt*vpa.scratch*
                                         (fvec_in.density[iz,ir,is]/vth*
                                          exp(-(vpa.grid[ivpa] -
                                                fvec_in.upar[iz,ir,is])^2)/vth -
