@@ -35,7 +35,7 @@ function vpa_boundary_buffer!(f_out, fvec_in, moments, vpa, dt)
     if moments.evolve_upar && moments.evolve_ppar
         @loop_s_r_z_vpa is ir iz ivpa begin
             for ivpa ∈ vpa_inds
-                f_out[ivpa,iz,ir,is] += dt*vpa.scratch*
+                f_out[ivpa,iz,ir,is] += dt*vpa.scratch[ivpa]*
                                         (exp(-vpa.grid[ivpa]^2) - fvec_in.pdf[ivpa,iz,ir,is])
             end
         end
@@ -43,7 +43,7 @@ function vpa_boundary_buffer!(f_out, fvec_in, moments, vpa, dt)
         @loop_s_r_z is ir iz begin
             vth = sqrt(2.0*fvec_in.ppar[iz,ir,is]/fvec_in.density[iz,ir,is])
             for ivpa ∈ vpa_inds
-                f_out[ivpa,iz,ir,is] += dt*vpa.scratch*
+                f_out[ivpa,iz,ir,is] += dt*vpa.scratch[ivpa]*
                                         (exp(-(vpa.grid[ivpa] -
                                                fvec_in.upar[iz,ir,is]/vth)^2) -
                                          fvec_in.pdf[ivpa,iz,ir,is])
@@ -53,7 +53,7 @@ function vpa_boundary_buffer!(f_out, fvec_in, moments, vpa, dt)
         @loop_s_r_z is ir iz begin
             vth = sqrt(2.0*fvec_in.ppar[iz,ir,is]/fvec_in.density[iz,ir,is])
             for ivpa ∈ vpa_inds
-                f_out[ivpa,iz,ir,is] += dt*vpa.scratch*
+                f_out[ivpa,iz,ir,is] += dt*vpa.scratch[ivpa]*
                                         (exp(-(vpa.grid[ivpa])^2)/vth -
                                          fvec_in.pdf[ivpa,iz,ir,is])
             end
@@ -62,7 +62,7 @@ function vpa_boundary_buffer!(f_out, fvec_in, moments, vpa, dt)
         @loop_s_r_z is ir iz begin
             vth = sqrt(2.0*fvec_in.ppar[iz,ir,is]/fvec_in.density[iz,ir,is])
             for ivpa ∈ vpa_inds
-                f_out[ivpa,iz,ir,is] += dt*vpa.scratch*
+                f_out[ivpa,iz,ir,is] += dt*vpa.scratch[ivpa]*
                                         (exp(-(vpa.grid[ivpa] -
                                                fvec_in.upar[iz,ir,is])^2)/vth -
                                          fvec_in.pdf[ivpa,iz,ir,is])
@@ -72,7 +72,7 @@ function vpa_boundary_buffer!(f_out, fvec_in, moments, vpa, dt)
         @loop_s_r_z is ir iz begin
             vth = sqrt(2.0*fvec_in.ppar[iz,ir,is]/fvec_in.density[iz,ir,is])
             for ivpa ∈ vpa_inds
-                f_out[ivpa,iz,ir,is] += dt*vpa.scratch*
+                f_out[ivpa,iz,ir,is] += dt*vpa.scratch[ivpa]*
                                         (fvec_in.density[iz,ir,is]/vth*
                                          exp(-(vpa.grid[ivpa] -
                                                fvec_in.upar[iz,ir,is])^2)/vth -
