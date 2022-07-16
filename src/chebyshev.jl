@@ -277,8 +277,8 @@ function interpolate_to_grid_1d!(result, newgrid, f, coord, chebyshev::chebyshev
     # check to see if any of the newgrid points are to the left of the first grid point
     for j ∈ 1:kstart[1]-1
         # if the new grid location is outside the bounds of the original grid,
-        # extrapolate f assuming f is constant beyond the domain
-        result[j] = f[1]
+        # extrapolate f with Gaussian-like decay beyond the domain
+        result[j] = f[1] * exp(-(newgrid[1] - coord.grid[j])^2)
     end
     @inbounds for j ∈ 1:nelement
         # Search from kstart[j] to try to speed up the sort, but means result of
@@ -312,7 +312,7 @@ function interpolate_to_grid_1d!(result, newgrid, f, coord, chebyshev::chebyshev
     end
 
     for k ∈ kstart[nelement+1]:n_new
-        result[k] = f[end]
+        result[k] = f[end] * exp(-(coord.grid[k] - newgrid[end])^2)
     end
 
     return nothing
