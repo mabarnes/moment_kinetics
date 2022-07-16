@@ -36,7 +36,7 @@ function interpolate_to_grid_1d!(result, new_grid, f, coord, not_spectral::Bool)
         if new_grid[new_grid_ind] > x[1]
             break
         end
-        result[new_grid_ind] = f[1]
+        result[new_grid_ind] = f[1] * exp(-(x[1] - new_grid[new_grid_ind])^2)
         new_grid_ind += 1
     end
 
@@ -93,7 +93,7 @@ function interpolate_to_grid_1d!(result, new_grid, f, coord, not_spectral::Bool)
 
     # Finally handle any points that are above the range of x
     for k ∈ new_grid_ind:length(new_grid)
-        result[k] = f[end]
+        result[k] = f[end] * exp(-(new_grid[k] - x[end])^2)
     end
 
     return nothing
