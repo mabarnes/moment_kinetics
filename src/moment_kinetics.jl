@@ -263,8 +263,8 @@ function setup_moment_kinetics(input_dict::Dict; backup_filename=nothing,
     if backup_filename !== nothing
         # Have done unnecessary initialisation of pdf and moments, which is overwritten
         # here
-        reload_evolving_fields!(pdf, moments, backup_filename, restart_time_index,
-                                composition, r, z, vpa)
+        code_time = reload_evolving_fields!(pdf, moments, backup_filename,
+                                            restart_time_index, composition, r, z, vpa)
         _block_synchronize()
     end
 

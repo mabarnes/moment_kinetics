@@ -412,6 +412,7 @@ Reload pdf and moments from an existing output file.
 """
 function reload_evolving_fields!(pdf, moments, restart_filename, time_index,
                                  composition, r, z, vpa)
+    code_time = 0.0
     begin_serial_region()
     @serial_region begin
         fid = NCDataset(restart_filename,"r")
@@ -433,6 +434,7 @@ function reload_evolving_fields!(pdf, moments, restart_filename, time_index,
                       "nz=$(z.n), nvpa=$(vpa.n).")
             end
 
+            code_time = fid["time"].var[time_index]
             pdf.norm .= fid["f"].var[:,:,:,:,time_index]
             moments.dens .= fid["density"].var[:,:,:,time_index]
             moments.upar .= fid["parallel_flow"].var[:,:,:,time_index]
@@ -443,6 +445,8 @@ function reload_evolving_fields!(pdf, moments, restart_filename, time_index,
             close(fid)
         end
     end
+
+    return code_time
 end
 
 """
