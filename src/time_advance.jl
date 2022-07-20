@@ -591,6 +591,12 @@ function rk_update!(scratch, pdf, moments, fields, vpa, z, r, vpa_advect, z_adve
     # NB: probably need to do the same for the evolved moments
     enforce_boundary_conditions!(new_scratch, moments, vpa.bc, z.bc, vpa, z, r,
                                  vpa_advect, z_advect, composition)
+    if moments.evolve_density && moments.enforce_conservation
+        #enforce_moment_constraints!(new_scratch, scratch[1], vpa, z, r, composition, moments, scratch_dummy_sr)
+        @loop_s_r_z is ir iz begin
+            @views hard_force_moment_constraints!(new_scratch.pdf[:,iz,ir,is], moments, vpa)
+        end
+    end
 
     # update remaining velocity moments that are calculable from the evolved pdf
     update_derived_moments!(new_scratch, moments, vpa, z, r, composition)
@@ -719,11 +725,6 @@ function ssp_rk!(pdf, scratch, t, t_input, vpa, z, r,
 
     istage = n_rk_stages+1
     final_scratch = scratch[istage]
-    if moments.evolve_density && moments.enforce_conservation
-        @loop_s_r_z is ir iz begin
-            @views hard_force_moment_constraints!(final_scratch.pdf[:,iz,ir,is], moments, vpa)
-        end
-    end
 
     # update the pdf.norm and moments arrays as needed
     @loop_s_r_z_vpa is ir iz ivpa begin
