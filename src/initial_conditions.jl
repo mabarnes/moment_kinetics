@@ -1025,7 +1025,7 @@ end
 function enforce_vpa_boundary_condition_local!(f::T, bc, upwind_idx, downwind_idx) where T
     if bc == "zero"
         f[upwind_idx] = 0.0
-        f[downwind_idx] = 0.0
+        #f[downwind_idx] = 0.0
     elseif bc == "periodic"
         f[downwind_idx] = 0.5*(f[upwind_idx]+f[downwind_idx])
         f[upwind_idx] = f[downwind_idx]
