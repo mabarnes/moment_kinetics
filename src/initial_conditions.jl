@@ -1040,8 +1040,8 @@ function enforce_vpa_boundary_condition_local!(f, bc, speed, ions::Bool)
             f[end] = 0.0
         end
     elseif bc == "periodic"
-        f[downwind_idx] = 0.5*(f[upwind_idx]+f[downwind_idx])
-        f[upwind_idx] = f[downwind_idx]
+        f[1] = 0.5*(f[1]+f[end])
+        f[end] = f[1]
     end
 end
 
