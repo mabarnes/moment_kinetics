@@ -393,7 +393,8 @@ function enforce_boundary_conditions!(f_out, density, upar, ppar, moments, vpa_b
             # no bc needed for neutrals, as there is no acceleration for neutrals (i.e.
             # no advection in v-space).
             @views enforce_vpa_boundary_condition_local!(f_out[:,iz,ir,is], vpa_bc, vpa_adv[is].upwind_idx[iz,ir],
-                                                         vpa_adv[is].downwind_idx[iz,ir])
+                                                         vpa_adv[is].downwind_idx[iz,ir],
+                                                         is ∈ composition.ion_species_range)
         #end
     end
     begin_s_r_vpa_region()
@@ -1009,23 +1010,31 @@ end
 impose the prescribed vpa boundary condition on f
 at every z grid point
 """
-function enforce_vpa_boundary_condition!(f, bc, src::T) where T
+function enforce_vpa_boundary_condition!(f, bc, src::T, ions::Bool) where T
     nz = size(f,2)
     nr = size(f,3)
     for ir ∈ 1:nr
         for iz ∈ 1:nz
             enforce_vpa_boundary_condition_local!(view(f,:,iz,ir), bc, src.upwind_idx[iz],
-                src.downwind_idx[iz])
+                src.downwind_idx[iz], ions)
         end
     end
 end
 
 """
 """
-function enforce_vpa_boundary_condition_local!(f::T, bc, upwind_idx, downwind_idx) where T
+function enforce_vpa_boundary_condition_local!(f::T, bc, upwind_idx, downwind_idx,
+                                               ions::Bool) where T
     if bc == "zero"
-        f[upwind_idx] = 0.0
-        #f[downwind_idx] = 0.0
+        if ions
+            f[upwind_idx] = 0.0
+            #f[downwind_idx] = 0.0
+        else
+            # Apply at both boundaries for neutrals, hopefully gives better numerical
+            # stability...
+            f[1] = 0.0
+            f[end] = 0.0
+        end
     elseif bc == "periodic"
         f[downwind_idx] = 0.5*(f[upwind_idx]+f[downwind_idx])
         f[upwind_idx] = f[downwind_idx]
