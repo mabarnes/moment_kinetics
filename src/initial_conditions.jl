@@ -1025,19 +1025,12 @@ end
 """
 function enforce_vpa_boundary_condition_local!(f, bc, speed, ions::Bool)
     if bc == "zero"
-        if ions
-            if speed[1] > 0.0
-                # 'upwind' boundary
-                f[1] = 0.0
-            end
-            if speed[end] < 0.0
-                # 'upwind' boundary
-                f[end] = 0.0
-            end
-        else
-            # Apply at both boundaries for neutrals, hopefully gives better numerical
-            # stability...
+        if speed[1] > 0.0
+            # 'upwind' boundary
             f[1] = 0.0
+        end
+        if speed[end] < 0.0
+            # 'upwind' boundary
             f[end] = 0.0
         end
     elseif bc == "periodic"
