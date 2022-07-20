@@ -277,11 +277,12 @@ function init_pdf_over_density!(pdf, spec, composition, vpa, z, vpa_spectral, de
                 enforce_initial_tapered_zero_incoming!(pdf, z, vpa)
             else
                 # Apply neutral boundary condition to full-f distribution function
-                #@. vpa.scratch = (3.0*pi/vtfac^3)*abs(vpa.scratch2)*erfc(abs(vpa.scratch2)/vtfac)
+                vtfac = sqrt(composition.T_wall * composition.mn_over_mi)
+                @. vpa.scratch = (3.0*pi/vtfac^3)*abs(vpa.grid)*erfc(abs(vpa.grid)/vtfac)
 
                 # Hack to have smooth distribution at v_parallel=0
-                vtfac = sqrt(composition.T_wall * composition.mn_over_mi)
-                @. vpa.scratch = (3.0*pi/vtfac^3)*(vpa.grid*vpa.grid)*erfc(abs(vpa.grid)/vtfac)
+                #vtfac = sqrt(composition.T_wall * composition.mn_over_mi)
+                #@. vpa.scratch = (3.0*pi/vtfac^3)*(vpa.grid*vpa.grid)*erfc(abs(vpa.grid)/vtfac)
 
                 # the integral of -v_parallel*f_{Kw} over positive v_parallel should be one,
                 # but may not be exactly this due to quadrature errors; ensure that this is
@@ -634,15 +635,15 @@ function enforce_neutral_wall_bc!(pdf, vpa, ppar, upar, density, wall_flux_0,
         # the z-dependence is only introduced if the peculiar velocity is used as vpa
         if evolve_ppar
             # Need to normalise velocities by vth
-            #@. vpa.scratch = (3.0*pi/vtfac^3)*abs(vpa.scratch2)*erfc(abs(vpa.scratch2)/vtfac)
+            @. vpa.scratch = (3.0*pi/vtfac^3)*abs(vpa.scratch2)*erfc(abs(vpa.scratch2)/vtfac)
 
             # Hack to have smooth distribution at v_parallel=0
-            @. vpa.scratch = (3.0*pi/vtfac^3)*(vpa.scratch2*vpa.scratch2)*erfc(abs(vpa.scratch2)/vtfac)
+            #@. vpa.scratch = (3.0*pi/vtfac^3)*(vpa.scratch2*vpa.scratch2)*erfc(abs(vpa.scratch2)/vtfac)
         else
-            #@. vpa.scratch = (3.0*pi/vtfac^3)*abs(vpa.scratch2)*erfc(abs(vpa.scratch2)/vtfac)
+            @. vpa.scratch = (3.0*pi/vtfac^3)*abs(vpa.scratch2)*erfc(abs(vpa.scratch2)/vtfac)
 
             # Hack to have smooth distribution at v_parallel=0
-            @. vpa.scratch = (3.0*pi/vtfac^3)*(vpa.scratch2*vpa.scratch2)*erfc(abs(vpa.scratch2)/vtfac)
+            #@. vpa.scratch = (3.0*pi/vtfac^3)*(vpa.scratch2*vpa.scratch2)*erfc(abs(vpa.scratch2)/vtfac)
         end
         # the integral of -v_parallel*f_{Kw} over positive v_parallel should be one,
         # but may not be exactly this due to quadrature errors;
@@ -685,10 +686,10 @@ function enforce_neutral_wall_bc!(pdf, vpa, ppar, upar, density, wall_flux_0,
 
         # obtain the Knudsen cosine distribution at z = Lz/2
         # the z-dependence is only introduced if the peculiiar velocity is used as vpa
-        #@. vpa.scratch = (3.0*pi/vtfac^3)*abs(vpa.scratch2)*erfc(abs(vpa.scratch2)/vtfac)
+        @. vpa.scratch = (3.0*pi/vtfac^3)*abs(vpa.scratch2)*erfc(abs(vpa.scratch2)/vtfac)
 
         # Hack to have smooth distribution at v_parallel=0
-        @. vpa.scratch = (3.0*pi/vtfac^3)*(vpa.scratch2*vpa.scratch2)*erfc(abs(vpa.scratch2)/vtfac)
+        #@. vpa.scratch = (3.0*pi/vtfac^3)*(vpa.scratch2*vpa.scratch2)*erfc(abs(vpa.scratch2)/vtfac)
 
         # the integral of -v_parallel*f_{Kw} over negative v_parallel should be one,
         # but may not be exactly this due to quadrature errors;
@@ -725,10 +726,10 @@ function enforce_neutral_wall_bc!(pdf, vpa, ppar, upar, density, wall_flux_0,
 
         # Create normalised Knudsen cosine distribution, to use for positive v_parallel
         # at z = -Lz/2
-        #@. vpa.scratch = (3.0*pi/vtfac^3)*abs(vpa.scratch2)*erfc(abs(vpa.scratch2)/vtfac)
+        @. vpa.scratch = (3.0*pi/vtfac^3)*abs(vpa.scratch2)*erfc(abs(vpa.scratch2)/vtfac)
 
         # Hack to have smooth distribution at v_parallel=0
-        @. vpa.scratch = (3.0*pi/vtfac^3)*(vpa.scratch2*vpa.scratch2)*erfc(abs(vpa.scratch2)/vtfac)
+        #@. vpa.scratch = (3.0*pi/vtfac^3)*(vpa.scratch2*vpa.scratch2)*erfc(abs(vpa.scratch2)/vtfac)
 
         # The v_parallel>0 part of the pdf is replaced by the Knudsen cosine
         # distribution. To ensure the constraints ∫dwpa wpa^m F = 0 are satisfied when
@@ -835,10 +836,10 @@ function enforce_neutral_wall_bc!(pdf, vpa, ppar, upar, density, wall_flux_0,
 
         # obtain the Knudsen cosine distribution at z = Lz/2
         # the z-dependence is only introduced if the peculiiar velocity is used as vpa
-        #@. vpa.scratch = (3.0*pi/vtfac^3)*abs(vpa.scratch2)*erfc(abs(vpa.scratch2)/vtfac)
+        @. vpa.scratch = (3.0*pi/vtfac^3)*abs(vpa.scratch2)*erfc(abs(vpa.scratch2)/vtfac)
 
         # Hack to have smooth distribution at v_parallel=0
-        @. vpa.scratch = (3.0*pi/vtfac^3)*(vpa.scratch2*vpa.scratch2)*erfc(abs(vpa.scratch2)/vtfac)
+        #@. vpa.scratch = (3.0*pi/vtfac^3)*(vpa.scratch2*vpa.scratch2)*erfc(abs(vpa.scratch2)/vtfac)
 
         # The v_parallel<0 part of the pdf is replaced by the Knudsen cosine
         # distribution. To ensure the constraint ∫dwpa wpa F = 0 is satisfied, multiply
