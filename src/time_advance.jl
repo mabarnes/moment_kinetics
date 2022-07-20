@@ -567,6 +567,12 @@ function rk_update!(scratch, pdf, moments, fields, vpa, z, r, rk_coefs, istage, 
     end
     # use Runge Kutta to update any velocity moments evolved separately from the pdf
     rk_update_evolved_moments!(new_scratch, old_scratch, moments, rk_coefs)
+    if moments.evolve_density && moments.enforce_conservation
+        #enforce_moment_constraints!(new_scratch, scratch[1], vpa, z, r, composition, moments, scratch_dummy_sr)
+        @loop_s_r_z is ir iz begin
+            @views hard_force_moment_constraints!(new_scratch.pdf[:,iz,ir,is], moments, vpa)
+        end
+    end
     # update remaining velocity moments that are calculable from the evolved pdf
     update_derived_moments!(new_scratch, moments, vpa, z, r, composition)
     # update the thermal speed from the updated pressure and density
@@ -581,14 +587,11 @@ function rk_update!(scratch, pdf, moments, fields, vpa, z, r, rk_coefs, istage, 
     update_unnormalized_pdf!(pdf.unnorm, new_scratch, moments)
     # update the electrostatic potential phi
     update_phi!(fields, scratch[istage+1], z, r, composition)
-    if !(( (moments.evolve_density && any(moments.particle_number_conserved)) ||
-           moments.evolve_upar || moments.evolve_ppar) &&
+    if !(( moments.evolve_upar || moments.evolve_ppar) &&
               istage == length(scratch)-1)
         # _block_synchronize() here because phi needs to be read on different ranks than
         # it was written on, even though the loop-type does not change here. However,
         # after the final RK stage can skip if:
-        #  * conserving particle number, as enforce_moment_constraints!() will trigger
-        #    synchronization
         #  * evolving upar or ppar as synchronization will be triggered after moments
         #    updates at the beginning of the next RK step
         _block_synchronize()
@@ -702,11 +705,6 @@ function ssp_rk!(pdf, scratch, t, t_input, vpa, z, r,
 
     istage = n_rk_stages+1
     final_scratch = scratch[istage]
-    if moments.evolve_density && moments.enforce_conservation
-        @loop_s_r_z is ir iz begin
-            @views hard_force_moment_constraints!(final_scratch.pdf[:,iz,ir,is], moments, vpa)
-        end
-    end
 
     # update the pdf.norm and moments arrays as needed
     @loop_s_r_z_vpa is ir iz ivpa begin
