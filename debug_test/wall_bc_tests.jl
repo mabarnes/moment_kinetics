@@ -70,7 +70,7 @@ test_input_finite_difference = Dict("n_ion_species" => 1,
                                     "vpa_ngrid" => 8,
                                     "vpa_nelement" => 1,
                                     "vpa_L" => 8.0,
-                                    "vpa_bc" => "periodic",
+                                    "vpa_bc" => "zero",
                                     "vpa_discretization" => "finite_difference")
 
 test_input_finite_difference_simple_sheath = merge(
