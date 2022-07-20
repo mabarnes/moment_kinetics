@@ -392,8 +392,8 @@ function enforce_boundary_conditions!(f_out, density, upar, ppar, moments, vpa_b
             # enforce the vpa BC
             # no bc needed for neutrals, as there is no acceleration for neutrals (i.e.
             # no advection in v-space).
-            @views enforce_vpa_boundary_condition_local!(f_out[:,iz,ir,is], vpa_bc, vpa_adv[is].upwind_idx[iz,ir],
-                                                         vpa_adv[is].downwind_idx[iz,ir],
+            @views enforce_vpa_boundary_condition_local!(f_out[:,iz,ir,is], vpa_bc,
+                                                         vpa_adv[is].speed[:,iz,ir],
                                                          is ∈ composition.ion_species_range)
         #end
     end
@@ -1015,20 +1015,24 @@ function enforce_vpa_boundary_condition!(f, bc, src::T, ions::Bool) where T
     nr = size(f,3)
     for ir ∈ 1:nr
         for iz ∈ 1:nz
-            enforce_vpa_boundary_condition_local!(view(f,:,iz,ir), bc, src.upwind_idx[iz],
-                src.downwind_idx[iz], ions)
+            enforce_vpa_boundary_condition_local!(view(f,:,iz,ir), bc, src.speed[:,iz,ir], ions)
         end
     end
 end
 
 """
 """
-function enforce_vpa_boundary_condition_local!(f::T, bc, upwind_idx, downwind_idx,
-                                               ions::Bool) where T
+function enforce_vpa_boundary_condition_local!(f, bc, speed, ions::Bool)
     if bc == "zero"
         if ions
-            f[upwind_idx] = 0.0
-            #f[downwind_idx] = 0.0
+            if speed[1] > 0.0
+                # 'upwind' boundary
+                f[1] = 0.0
+            end
+            if speed[end] < 0.0
+                # 'upwind' boundary
+                f[end] = 0.0
+            end
         else
             # Apply at both boundaries for neutrals, hopefully gives better numerical
             # stability...
