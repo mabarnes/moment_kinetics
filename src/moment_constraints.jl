@@ -198,7 +198,7 @@ function hard_force_moment_constraints!(f, moments, vpa)
         A = (J3^2 - J2*J4 + 0.5*(J2^2 - J1*J3)) /
             (I0*(J3^2 - J2*J4) + I1*(J1*J4 - J2*J3) + I2*(J2^2 - J1*J3))
         B = (0.5*J3 + A*(I1*J4 - I2*J3)) / (J3^2 - J2*J4)
-        C = -(A*I1 + B*J2) / J3
+        C = (0.5 - A*I2 -B*J3) / J4
 
         @. f = A*f + B*vpa.grid*vpa.scratch + C*vpa.grid*vpa.grid*vpa.scratch
     elseif moments.evolve_upar
