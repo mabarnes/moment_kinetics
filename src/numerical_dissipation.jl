@@ -14,7 +14,12 @@ Suppress the distribution function by damping towards a Maxwellian in the last e
 before the vpa boundaries, to avoid numerical instabilities there.
 """
 function vpa_boundary_buffer!(f_out, fvec_in, moments, vpa, dt)
-    damping_rate_prefactor = 1.0 / dt
+    damping_rate_prefactor = -0.01 / dt
+
+    if damping_rate_prefactor <= 0.0
+        return nothing
+    end
+
     # Damping rate decays quadratically through the first/last elements
     # Hopefully this makes it smooth...
     # Note vpa is antisymmetric with vpa=0 in the centre of the grid, so the following
@@ -22,10 +27,6 @@ function vpa_boundary_buffer!(f_out, fvec_in, moments, vpa, dt)
     @. vpa.scratch = damping_rate_prefactor *
                      (abs(vpa.grid) - abs(vpa.grid[vpa.ngrid])^2) /
                      (abs(vpa.grid[1]) - abs(vpa.grid[vpa.ngrid])^2)
-
-    if damping_rate_prefactor <= 0.0
-        return nothing
-    end
 
     begin_s_r_z_region()
 
