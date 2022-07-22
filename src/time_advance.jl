@@ -145,7 +145,7 @@ function setup_time_advance!(pdf, vpa, z, r, z_spectral, composition, drive_inpu
     # enforce boundary conditions and moment constraints to ensure a consistent initial
     # condition
     enforce_boundary_conditions!(pdf.norm, moments.dens, moments.upar, moments.ppar,
-        moments, vpa.bc, z.bc, vpa, z, r, vpa_advect, z_advect, composition)
+        moments, vpa.bc, z.bc, vpa, z, r, vpa_advect, z_advect, composition, 0.0)
     force_non_negative!(pdf.norm)
     # Ensure normalised pdf exactly obeys integral constraints if evolving moments
     begin_s_r_z_region()
@@ -565,7 +565,7 @@ stages, if the quantities are evolved separately from the modified pdf;
 or update them by taking the appropriate velocity moment of the evolved pdf
 """
 function rk_update!(scratch, pdf, moments, fields, vpa, z, r, vpa_advect, z_advect,
-                    rk_coefs, istage, composition)
+                    rk_coefs, istage, composition, dt)
     begin_s_r_z_region()
     nvpa = size(pdf.unnorm, 1)
     new_scratch = scratch[istage+1]
@@ -590,7 +590,7 @@ function rk_update!(scratch, pdf, moments, fields, vpa, z, r, vpa_advect, z_adve
     # contribution from one or more of the terms.
     # NB: probably need to do the same for the evolved moments
     enforce_boundary_conditions!(new_scratch, moments, vpa.bc, z.bc, vpa, z, r,
-                                 vpa_advect, z_advect, composition)
+                                 vpa_advect, z_advect, composition, dt)
     if moments.evolve_density && moments.enforce_conservation
         #enforce_moment_constraints!(new_scratch, scratch[1], vpa, z, r, composition, moments, scratch_dummy_sr)
         @loop_s_r_z is ir iz begin
