@@ -143,6 +143,7 @@ function mk_input(scan_input=Dict())
     # determine the discretization option for the r grid
     # supported options are "chebyshev_pseudospectral" and "finite_difference"
     r.discretization = get(scan_input, "r_discretization", "finite_difference")
+    r.fd_option = get(scan_input, "r_finite_difference_option", "third_order_upwind")
     # determine the boundary condition to impose in r
     # supported options are "constant", "periodic" and "wall"
     r.bc = get(scan_input, "r_bc", "periodic")
@@ -155,6 +156,7 @@ function mk_input(scan_input=Dict())
     # determine the discretization option for the z grid
     # supported options are "chebyshev_pseudospectral" and "finite_difference"
     z.discretization = get(scan_input, "z_discretization", "chebyshev_pseudospectral")
+    z.fd_option = get(scan_input, "z_finite_difference_option", "third_order_upwind")
     # determine the boundary condition to impose in z
     # supported options are "constant", "periodic" and "wall"
     z.bc = get(scan_input, "z_bc", "wall")
@@ -172,6 +174,7 @@ function mk_input(scan_input=Dict())
     # determine the discretization option for the vpa grid
     # supported options are "chebyshev_pseudospectral" and "finite_difference"
     vpa.discretization = get(scan_input, "vpa_discretization", "chebyshev_pseudospectral")
+    vpa.fd_option = get(scan_input, "vpa_finite_difference_option", "third_order_upwind")
 
     #########################################################################
     ########## end user inputs. do not modify following code! ###############
