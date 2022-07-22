@@ -184,39 +184,24 @@ function hard_force_moment_constraints!(f, moments, vpa)
         I0 = integrate_over_vspace(f, vpa.wgts)
         I1 = integrate_over_vspace(f, vpa.grid, vpa.wgts)
         I2 = integrate_over_vspace(f, vpa.grid, 2, vpa.wgts)
+        I3 = integrate_over_vspace(f, vpa.grid, 3, vpa.wgts)
+        I4 = integrate_over_vspace(f, vpa.grid, 4, vpa.wgts)
 
-        # Divide by factor so that corrections do not have large effect at large
-        # w_parallel. Use (3.0 + vpa^2) so that denominator only kicks in well above
-        # vth, so that correction factors can fix the momentum/pressure moments
-        # effectively.
-        @. vpa.scratch = f / (3.0 + vpa.grid*vpa.grid*vpa.grid*vpa.grid)
-        J1 = integrate_over_vspace(vpa.scratch, vpa.grid, vpa.wgts)
-        J2 = integrate_over_vspace(vpa.scratch, vpa.grid, 2, vpa.wgts)
-        J3 = integrate_over_vspace(vpa.scratch, vpa.grid, 3, vpa.wgts)
-        J4 = integrate_over_vspace(vpa.scratch, vpa.grid, 4, vpa.wgts)
+        A = (I3^2 - I2*I4 + 0.5*(I2^2 - I1*I3)) /
+            (I0*(I3^2 - I2*I4) + I1*I1*I4 - 2.0*I1*I2*I3 + I2^3)
+        B = (0.5*I3 + A*(I1*I4 - I2*I3)) / (I3^2 - I2*I4)
+        C = (0.5 - A*I2 -B*I3) / I4
 
-        A = (J3^2 - J2*J4 + 0.5*(J2^2 - J1*J3)) /
-            (I0*(J3^2 - J2*J4) + I1*(J1*J4 - J2*J3) + I2*(J2^2 - J1*J3))
-        B = (0.5*J3 + A*(I1*J4 - I2*J3)) / (J3^2 - J2*J4)
-        C = (0.5 - A*I2 -B*J3) / J4
-
-        @. f = A*f + B*vpa.grid*vpa.scratch + C*vpa.grid*vpa.grid*vpa.scratch
+        @. f = A*f + B*vpa.grid*f + C*vpa.grid*vpa.grid*f
     elseif moments.evolve_upar
         I0 = integrate_over_vspace(f, vpa.wgts)
         I1 = integrate_over_vspace(f, vpa.grid, vpa.wgts)
+        I2 = integrate_over_vspace(f, vpa.grid, 2, vpa.wgts)
 
-        # Divide by factor so that corrections do not have large effect at large
-        # w_parallel. Use (3.0 + vpa^2) so that denominator only kicks in well above
-        # vth, so that correction factors can fix the momentum/pressure moments
-        # effectively.
-        @. vpa.scratch = f / (3.0 + vpa.grid*vpa.grid*vpa.grid*vpa.grid)
-        J1 = integrate_over_vspace(vpa.scratch, vpa.grid, vpa.wgts)
-        J2 = integrate_over_vspace(vpa.scratch, vpa.grid, 2, vpa.wgts)
+        A = 1.0 / (I0 - I1^2/I2)
+        B = -A*I1/I2
 
-        A = 1.0 / (I0 - I1*J1/J2)
-        B = -A*I1/J2
-
-        @. f = A*f + B*vpa.grid*vpa.scratch
+        @. f = A*f + B*vpa.grid*f
     elseif moments.evolve_density
         I0 = integrate_over_vspace(f, vpa.wgts)
         @. f = f / I0
