@@ -386,7 +386,7 @@ enforce boundary conditions in vpa and z on the evolved pdf;
 also enforce boundary conditions in z on all separately evolved velocity space moments of the pdf
 """
 function enforce_boundary_conditions!(f_out, density, upar, ppar, moments, vpa_bc, z_bc, vpa,
-        z, r, vpa_adv, z_adv, composition, dt)
+        z, r, vpa_adv, z_adv, composition)
     begin_s_r_z_region()
     @loop_s_r_z is ir iz begin
         #if is ∈ composition.ion_species_range
@@ -401,19 +401,19 @@ function enforce_boundary_conditions!(f_out, density, upar, ppar, moments, vpa_b
     begin_s_r_vpa_region()
     # enforce the z BC on the evolved velocity space moments of the pdf
     @views enforce_z_boundary_condition_moments!(density, moments, z_bc)
-    @views enforce_z_boundary_condition!(f_out, density, upar, ppar, moments, z_bc, z_adv, vpa, r, composition, dt)
+    @views enforce_z_boundary_condition!(f_out, density, upar, ppar, moments, z_bc, z_adv, vpa, r, composition)
 
 end
 function enforce_boundary_conditions!(fvec_out::scratch_pdf, moments, vpa_bc, z_bc, vpa,
-        z, r, vpa_adv, z_adv, composition, dt)
+        z, r, vpa_adv, z_adv, composition)
     enforce_boundary_conditions!(fvec_out.pdf, fvec_out.density, fvec_out.upar,
-        fvec_out.ppar, moments, vpa_bc, z_bc, vpa, z, r, vpa_adv, z_adv, composition, dt)
+        fvec_out.ppar, moments, vpa_bc, z_bc, vpa, z, r, vpa_adv, z_adv, composition)
 end
 
 """
 enforce boundary conditions on f in z
 """
-function enforce_z_boundary_condition!(pdf, density, upar, ppar, moments, bc::String, adv::T, vpa, r, composition, dt) where T
+function enforce_z_boundary_condition!(pdf, density, upar, ppar, moments, bc::String, adv::T, vpa, r, composition) where T
     # define n_species variable for convenience
     n_species = composition.n_species
     # define nvpa variable for convenience
@@ -444,7 +444,7 @@ function enforce_z_boundary_condition!(pdf, density, upar, ppar, moments, bc::St
                     @loop_r ir begin
                         @views enforce_zero_incoming_bc!(
                             pdf[:,:,ir,is], vpa, density[:,ir,is], upar[:,ir,is],
-                            ppar[:,ir,is], dt, moments.evolve_upar, moments.evolve_ppar,
+                            ppar[:,ir,is], moments.evolve_upar, moments.evolve_ppar,
                             zero)
                     end
                 else
@@ -542,12 +542,8 @@ function enforce_zero_incoming_bc!(pdf, vpa::coordinate, zero)
         end
     end
 end
-function enforce_zero_incoming_bc!(pdf, vpa::coordinate, density, upar, ppar, dt,
+function enforce_zero_incoming_bc!(pdf, vpa::coordinate, density, upar, ppar,
                                    evolve_upar, evolve_ppar, zero)
-    # Rate of decay used for last/first non-zero grid point to stop spike appearing
-    bc_decay_rate = 1.0e3
-    bc_decay_factor = exp(-bc_decay_rate*dt)
-
     nvpa = size(pdf,1)
     # no parallel BC should be enforced for dz/dt = 0
     # note that the parallel velocity coordinate vpa may be dz/dt or
@@ -560,25 +556,18 @@ function enforce_zero_incoming_bc!(pdf, vpa::coordinate, density, upar, ppar, dt
     # absolute velocity at right boundary
     @. vpa.scratch2 = vpagrid_to_dzdt(vpa.grid, sqrt(2.0*(ppar[end]/density[end])),
                                       upar[end], evolve_ppar, evolve_upar)
-    # Lower-z boundary
-    ivpa = vpa.n
-    while vpa.scratch[ivpa] > zero
-        pdf[ivpa,1] = 0.0
-        ivpa -= 1
+    @loop_vpa ivpa begin
+        # for left boundary in zed (z = -Lz/2), want
+        # f(z=-Lz/2, v_parallel > 0) = 0
+        if vpa.scratch[ivpa] > zero
+            pdf[ivpa,1] = 0.0
+        end
+        # for right boundary in zed (z = Lz/2), want
+        # f(z=Lz/2, v_parallel < 0) = 0
+        if vpa.scratch2[ivpa] < -zero
+            pdf[ivpa,end] = 0.0
+        end
     end
-    # Decay to stop spike at last non-zero grid point
-    pdf[ivpa,1] *= bc_decay_factor
-
-    # Upper-z boundary
-    ivpa = 1
-    while vpa.scratch2[ivpa] < -zero
-        pdf[ivpa,end] = 0.0
-        ivpa += 1
-    end
-    # Decay to stop spike at first non-zero grid point
-    pdf[ivpa,end] *= bc_decay_factor
-
-    return nothing
 end
 
 """
