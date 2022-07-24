@@ -798,6 +798,9 @@ function enforce_vpa_boundary_condition_local!(f, bc, speed)
             # 'upwind' boundary
             f[end] = 0.0
         end
+    elseif bc == "both_zero"
+        f[1] = 0.0
+        f[end] = 0.0
     elseif bc == "periodic"
         f[1] = 0.5*(f[1]+f[end])
         f[end] = f[1]
