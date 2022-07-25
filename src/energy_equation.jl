@@ -33,8 +33,10 @@ end
 include all contributions to the energy equation aside from collisions
 """
 function energy_equation_no_collisions!(ppar_out, upar, ppar, qpar, dt, z, spectral)
+    # Use as 'adv_fac' for upwinding
+    @. z.scratch3 = -upar
     # calculate dppar/dz and store in z.scratch
-    derivative!(z.scratch, ppar, z, spectral)
+    derivative!(z.scratch, ppar, z, z.scratch3, spectral)
     # update ppar to account for contribution from parallel pressure gradient
     @. ppar_out -= dt*upar*z.scratch
     # calculate dqpar/dz and store in z.scratch
