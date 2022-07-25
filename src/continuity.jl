@@ -28,13 +28,22 @@ end
 use the continuity equation dn/dt + d(n*upar)/dz to update the density n
 """
 function continuity_equation_single_species!(dens_out, dens_in, upar, z, dt, spectral, ionization, composition, is)
-    # calculate the particle flux nu
-    @. z.scratch = dens_in[:,is]*upar
-    # calculate d(nu)/dz, averaging the derivative values at element boundaries
-    derivative!(z.scratch, z.scratch, z, spectral)
-    #derivative!(z.scratch, z.scratch, z, -upar, spectral)
-    # update the density to account for the divergence of the particle flux
-    @. dens_out -= dt*z.scratch
+    ## calculate the particle flux nu
+    #@. z.scratch = dens_in[:,is]*upar
+    ## Use as 'adv_fac' for upwinding
+    #@. z.scratch3 = -upar
+    ## calculate d(nu)/dz, averaging the derivative values at element boundaries
+    #derivative!(z.scratch, z.scratch, z, z.scratch3, spectral)
+    ##derivative!(z.scratch, z.scratch, z, -upar, spectral)
+    ## update the density to account for the divergence of the particle flux
+    #@. dens_out -= dt*z.scratch
+
+    # Use as 'adv_fac' for upwinding
+    @. z.scratch3 = -upar
+    @views derivative!(z.scratch, dens_in[:,is], z, z.scratch3, spectral)
+    derivative!(z.scratch2, upar, z, spectral)
+    @. dens_out -= dt*(upar*z.scratch + dens_in[:,is]*z.scratch2)
+
     # update the density to account for ionization collisions;
     # ionization collisions increase the density for ions and decrease the density for neutrals
     if is ∈ composition.ion_species_range
