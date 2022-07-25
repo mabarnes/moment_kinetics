@@ -33,6 +33,8 @@ using ..semi_lagrange: setup_semi_lagrange
 
 @debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
 
+using Dates
+
 """
 """
 mutable struct advance_info
@@ -331,6 +333,10 @@ function time_advance!(pdf, scratch, t, t_input, vpa, z, r, vpa_spectral, z_spec
         debug_detect_redundant_is_active[] = true
     end
 
+    @serial_region begin
+        println("beginning time advance...", Dates.format(now(), dateformat"H:MM:SS"))
+    end
+
     # main time advance loop
     iwrite = 2
     for i ∈ 1:t_input.nstep
@@ -354,7 +360,8 @@ function time_advance!(pdf, scratch, t, t_input, vpa, z, r, vpa_spectral, z_spec
                 debug_detect_redundant_is_active[] = false
             end
             begin_serial_region()
-            @serial_region println("finished time step ", i)
+            @serial_region println("finished time step ", i, "  ",
+                                   Dates.format(now(), dateformat"H:MM:SS"))
             write_data_to_ascii(pdf.norm, moments, fields, vpa, z, r, t, composition.n_species, io)
             # write initial data to binary file (netcdf)
             write_data_to_binary(pdf.norm, moments, fields, t, composition.n_species, cdf, iwrite)
