@@ -127,7 +127,7 @@ function upwind_first_order!(df, f, del, adv_fac, bc, igrid, ielement)
 				tmp = f[n-1]
 			elseif bc == "constant"
 				tmp = f[1]
-			elseif bc == "zero" || bc == "wall"
+			elseif bc == "zero" || bc == "both_zero" || bc == "wall"
 				tmp = 0.0
 			end
 			#df[i] = (f[i]-tmp)/del[i]
@@ -142,7 +142,7 @@ function upwind_first_order!(df, f, del, adv_fac, bc, igrid, ielement)
 				tmp = f[2]
 			elseif bc == "constant"
 				tmp = f[n]
-			elseif bc == "zero" || bc == "wall"
+			elseif bc == "zero" || bc == "both_zero" || bc == "wall"
 				tmp = 0.0
 			end
 			#df[i] = (tmp-f[i])/del[1]
@@ -178,7 +178,7 @@ function upwind_second_order!(df, f, del, adv_fac, bc, igrid, ielement)
 				tmp1 = f[n-1]
 			elseif bc == "constant"
 				tmp1 = f[1]
-			elseif bc == "zero" || bc == "wall"
+			elseif bc == "zero" || bc == "both_zero" || bc == "wall"
 				tmp1 = 0.0
 			end
 			#df[i] = (3.0*f[i]-4.0*f[i-1]+tmp1)/(2.0*del[i])
@@ -195,7 +195,7 @@ function upwind_second_order!(df, f, del, adv_fac, bc, igrid, ielement)
 			elseif bc == "constant"
 				tmp2 = f[1]
 				tmp1 = tmp2
-			elseif bc == "zero" || bc == "wall"
+			elseif bc == "zero" || bc == "both_zero" || bc == "wall"
 				tmp2 = 0.0
 				tmp1 = tmp2
 			end
@@ -210,7 +210,7 @@ function upwind_second_order!(df, f, del, adv_fac, bc, igrid, ielement)
 				tmp1 = f[2]
 			elseif bc == "constant"
 				tmp1 = f[n]
-			elseif bc == "zero" || bc == "wall"
+			elseif bc == "zero" || bc == "both_zero" || bc == "wall"
 				tmp1 = 0.0
 			end
 			i = n-1
@@ -229,7 +229,7 @@ function upwind_second_order!(df, f, del, adv_fac, bc, igrid, ielement)
 			elseif bc == "constant"
 				tmp2 = f[n]
 				tmp1 = tmp2
-			elseif bc == "zero" || bc == "wall"
+			elseif bc == "zero" || bc == "both_zero" || bc == "wall"
 				tmp2 = 0.0
 				tmp1 = tmp2
 			end
@@ -268,7 +268,7 @@ function upwind_third_order!(df, f, del, adv_fac, bc, igrid, ielement)
 				tmp1 = f[n-1]
 			elseif bc == "constant"
 				tmp1 = f[1]
-			elseif bc == "zero" || bc == "wall"
+			elseif bc == "zero" || bc == "both_zero" || bc == "wall"
 				tmp1 = 0.0
 			end
 			df[igrid[i],ielement[i]] = (2.0*f[i+1]+3.0*f[i]-6.0*f[i-1]+tmp1)/(6.0*del[i])
@@ -282,7 +282,7 @@ function upwind_third_order!(df, f, del, adv_fac, bc, igrid, ielement)
 		elseif bc == "constant"
 			tmp2 = f[1]
 			tmp1 = tmp2
-		elseif bc == "zero" || bc == "wall"
+		elseif bc == "zero" || bc == "both_zero" || bc == "wall"
 			tmp2 = 0.0
 			tmp1 = tmp2
 		end
@@ -302,7 +302,7 @@ function upwind_third_order!(df, f, del, adv_fac, bc, igrid, ielement)
 				tmp1 = f[2]
 			elseif bc == "constant"
 				tmp1 = f[n]
-			elseif bc == "zero" || bc == "wall"
+			elseif bc == "zero" || bc == "both_zero" || bc == "wall"
 				tmp1 = 0.0
 			end
 			i = n-1
@@ -317,7 +317,7 @@ function upwind_third_order!(df, f, del, adv_fac, bc, igrid, ielement)
 		elseif bc == "constant"
 			tmp2 = f[n]
 			tmp1 = tmp2
-		elseif bc == "zero" || bc == "wall"
+		elseif bc == "zero" || bc == "both_zero" || bc == "wall"
 			tmp2 = 0.0
 			tmp1 = tmp2
 		end
@@ -370,7 +370,7 @@ function centered_second_order!(df::Array{mk_float,2}, f, del, bc, igrid, ieleme
 		i = n
 		ghost = f[n]
 		df[igrid[i],ielement[i]] = 0.5*(ghost-f[i-1])/del[n-1]
-	elseif bc == "zero" || bc == "wall"
+	elseif bc == "zero" || bc == "both_zero" || bc == "wall"
 		i = 1
 		df[igrid[i],ielement[i]] = 0.5*f[i+1]/del[i]
 		i = n
@@ -408,7 +408,7 @@ function centered_second_order!(df::Array{mk_float,1}, f, del, bc, igrid, ieleme
 		i = n
 		ghost = f[n]
 		df[i] = 0.5*(ghost-f[i-1])/del[n-1]
-	elseif bc == "zero" || bc == "wall"
+	elseif bc == "zero" || bc == "both_zero" || bc == "wall"
 		i = 1
 		df[i] = 0.5*f[i+1]/del[i]
 		i = n
@@ -452,7 +452,7 @@ function centered_fourth_order!(df::Array{mk_float,2}, f, del, bc, igrid, ieleme
 		df[igrid[i],ielement[i]] = (8.0*(ghost-f[i-1])+f[i-2]-ghost)/(12.0*del[i])
 		i = n-1
 		df[igrid[i],ielement[i]] = (8.0*(f[i+1]-f[i-1])+f[i-2]-ghost)/(12.0*del[i])
-	elseif bc == "zero" || bc == "wall"
+	elseif bc == "zero" || bc == "both_zero" || bc == "wall"
 		i = 1
 		df[igrid[i],ielement[i]] = (8.0*f[i+1]-f[i+2])/(12.0*del[i])
 		i = 2
