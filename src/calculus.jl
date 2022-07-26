@@ -53,7 +53,7 @@ function derivative!(df, f, coord, spectral, ::Val{1})
     derivative_elements_to_full_grid!(df, coord.scratch_2d, coord)
 end
 
-function derivative!(df, f, coord, spectral::Bool, ::Val{2})
+function derivative!(df, f, coord, spectral::Bool, order::Val{2})
     # Finite difference version must use an appropriate second derivative stencil, not
     # apply the 1st derivative twice as for the spectral element method
 
