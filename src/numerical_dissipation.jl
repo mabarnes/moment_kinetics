@@ -34,7 +34,7 @@ function vpa_boundary_buffer!(f_out, fvec_in, moments, vpa, dt)
     vpa_inds = flatten((1:vpa.ngrid, vpa.n-vpa.ngrid+1:vpa.n))
 
     if moments.evolve_upar && moments.evolve_ppar
-        @loop_s_r_z_vpa is ir iz ivpa begin
+        @loop_s_r_z is ir iz begin
             for ivpa ∈ vpa_inds
                 f_out[ivpa,iz,ir,is] += dt*vpa.scratch[ivpa]*
                                         (exp(-vpa.grid[ivpa]^2) - fvec_in.pdf[ivpa,iz,ir,is])
