@@ -50,6 +50,17 @@ function elementwise_derivative!(coord, f, not_spectral::fd_info, order::Val{1})
 end
 
 """
+    elementwise_derivative!(coord, f, not_spectral::fd_info, Val(2))
+
+Calculate the second derivative of f using 2nd order centered finite differences; result
+stored in coord.scratch_2d.
+"""
+function elementwise_derivative!(coord, f, not_spectral::fd_info, ::Val{2})
+    return second_derivative_finite_difference!(coord.scratch_2d, f, coord.cell_width,
+        coord.bc, coord.igrid, coord.ielement)
+end
+
+"""
 """
 function derivative_finite_difference!(df, f, del, adv_fac, bc, fd_option, igrid, ielement)
 	if fd_option == "second_order_upwind"
@@ -457,6 +468,44 @@ function centered_fourth_order!(df::Array{mk_float,2}, f, del, bc, igrid, ieleme
         for j ∈ 2:ielement[end]
             df[1, j] = df[end, j-1]
         end
+end
+
+"""
+Take the second derivative of input function f and return as df using second-order,
+centered differences.
+output array df is 2D array of size ngrid x nelement
+"""
+function second_derivative_finite_difference!(df::Array{mk_float,2}, f, del, bc, igrid, ielement)
+    n = length(f)
+    # get derivative at internal points
+    for i ∈ 2:n-1
+        df[igrid[i],ielement[i]] = (f[i+1] - 2.0*f[i] + f[i-1]) / del[i]^2
+    end
+    # fill in points at start of elements, in case we are using more than one
+    for j ∈ 2:ielement[end]
+        df[1, j] = df[end, j-1]
+    end
+    # use BCs to treat boundary points
+    if bc == "periodic"
+        i = 1
+        ghost = f[n-1]
+        df[igrid[i],ielement[i]] = (f[i+1] - 2.0*f[i] + ghost) / del[i]^2
+        i = n
+        ghost = f[2]
+        df[igrid[i],ielement[i]] = (ghost - 2.0*f[i] + f[i-1]) / del[i]^2
+    elseif bc == "constant"
+        i = 1
+        ghost = f[1]
+        df[igrid[i],ielement[i]] = (f[i+1] - 2.0*f[i] + ghost) / del[i]^2
+        i = n
+        ghost = f[n]
+        df[igrid[i],ielement[i]] = (ghost - 2.0*f[i] + f[i-1]) / del[i]^2
+    elseif bc == "zero" || bc == "both_zero" || bc == "wall"
+        i = 1
+        df[igrid[i],ielement[i]] = (f[i+1] - 2.0*f[i]) / del[i]^2
+        i = n
+        df[igrid[i],ielement[i]] = (-2.0*f[i] + f[i-1]) / del[i]^2
+    end
 end
 
 end
