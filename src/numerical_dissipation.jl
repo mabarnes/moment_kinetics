@@ -2,7 +2,8 @@
 """
 module numerical_dissipation
 
-export vpa_boundary_buffer!, vpa_dissipation!, z_dissipation!
+export vpa_boundary_buffer_decay!, vpa_boundary_buffer_diffusion!, vpa_dissipation!,
+       z_dissipation!
 
 using Base.Iterators: flatten
 
@@ -13,7 +14,7 @@ using ..calculus: derivative!
 Suppress the distribution function by damping towards a Maxwellian in the last element
 before the vpa boundaries, to avoid numerical instabilities there.
 """
-function vpa_boundary_buffer!(f_out, fvec_in, moments, vpa, dt)
+function vpa_boundary_buffer_decay!(f_out, fvec_in, moments, vpa, dt)
     damping_rate_prefactor = -0.01 / dt
 
     if damping_rate_prefactor <= 0.0
@@ -92,6 +93,85 @@ function vpa_boundary_buffer!(f_out, fvec_in, moments, vpa, dt)
                                          exp(-(vpa.grid[ivpa] -
                                                fvec_in.upar[iz,ir,is])^2)/vth -
                                          fvec_in.pdf[ivpa,iz,ir,is])
+            end
+        end
+    end
+
+    return nothing
+end
+
+"""
+Suppress the distribution function by applying diffusion in the last element before the
+vpa boundaries, to avoid numerical instabilities there.
+"""
+function vpa_boundary_buffer_diffusion!(f_out, fvec_in, vpa, vpa_spectral, dt)
+    diffusion_prefactor = -1.0
+
+    if diffusion_prefactor <= 0.0
+        return nothing
+    end
+
+    if vpa.nelement > 2
+        # Damping rate decays quadratically through the first/last elements
+        # Hopefully this makes it smooth...
+        # Note vpa is antisymmetric with vpa=0 in the centre of the grid, so the following
+        # should work for both ends of the grid.
+        @. vpa.scratch = diffusion_prefactor *
+        (abs(vpa.grid) - abs(vpa.grid[vpa.ngrid])^2) /
+        (abs(vpa.grid[1]) - abs(vpa.grid[vpa.ngrid])^2)
+
+        # Iterate over the first and last element in the vpa dimension
+        vpa_inds = flatten((1:vpa.ngrid, vpa.n-vpa.ngrid+1:vpa.n))
+    else
+        # ≤2 elements, so applying a 'buffer' in the boundary elements would apply it
+        # across the whole grid. Instead, hard-code a number of grid points to use as
+        # the 'buffer'.
+        nbuffer = 16
+
+        @. vpa.scratch = diffusion_prefactor *
+        (abs(vpa.grid) - abs(vpa.grid[nbuffer])^2) /
+        (abs(vpa.grid[1]) - abs(vpa.grid[nbuffer])^2)
+
+        # Iterate over the first and last element in the vpa dimension
+        vpa_inds = flatten((1:nbuffer, vpa.n-nbuffer+1:vpa.n))
+    end
+
+    begin_s_r_z_region()
+
+    @loop_s_r_z is ir iz begin
+        # Calculate second derivative
+        @views derivative!(vpa.scratch2, fvec_in.pdf[:,iz,ir,is], vpa, vpa_spectral,
+                           Val(2))
+        for ivpa ∈ vpa_inds
+            f_out[ivpa,iz,ir,is] += dt*vpa.scratch[ivpa]*vpa.scratch2[ivpa]
+        end
+    end
+
+    return nothing
+end
+
+"""
+Try to suppress oscillations near the boundary by ensuring that every point in the final
+element is ≤ the innermost value. The distribution function should be decreasing near
+the boundaries, so this should be an OK thing to force.
+"""
+function vpa_boundary_force_decreasing!(f_out, vpa)
+    begin_s_r_z_region()
+
+    ngrid = vpa.ngrid
+    n = vpa.n
+    last_start = n - ngrid + 1
+    @loop_s_r_z is ir iz begin
+        # First element in vpa
+        for ivpa ∈ 1:ngrid-1
+            if f_out[ivpa,iz,ir,is] > f_out[ngrid,iz,ir,is]
+                f_out[ivpa,iz,ir,is] = f_out[ngrid,iz,ir,is]
+            end
+        end
+        # Last element in vpa
+        for ivpa ∈ last_start+1:n
+            if f_out[ivpa,iz,ir,is] > f_out[last_start,iz,ir,is]
+                f_out[ivpa,iz,ir,is] = f_out[last_start,iz,ir,is]
             end
         end
     end
