@@ -20,18 +20,32 @@ function vpa_boundary_buffer!(f_out, fvec_in, moments, vpa, dt)
         return nothing
     end
 
-    # Damping rate decays quadratically through the first/last elements
-    # Hopefully this makes it smooth...
-    # Note vpa is antisymmetric with vpa=0 in the centre of the grid, so the following
-    # should work for both ends of the grid.
-    @. vpa.scratch = damping_rate_prefactor *
-                     (abs(vpa.grid) - abs(vpa.grid[vpa.ngrid])^2) /
-                     (abs(vpa.grid[1]) - abs(vpa.grid[vpa.ngrid])^2)
+    if vpa.nelement > 2
+        # Damping rate decays quadratically through the first/last elements
+        # Hopefully this makes it smooth...
+        # Note vpa is antisymmetric with vpa=0 in the centre of the grid, so the following
+        # should work for both ends of the grid.
+        @. vpa.scratch = damping_rate_prefactor *
+                         (abs(vpa.grid) - abs(vpa.grid[vpa.ngrid])^2) /
+                         (abs(vpa.grid[1]) - abs(vpa.grid[vpa.ngrid])^2)
+
+        # Iterate over the first and last element in the vpa dimension
+        vpa_inds = flatten((1:vpa.ngrid, vpa.n-vpa.ngrid+1:vpa.n))
+    else
+        # ≤2 elements, so applying a 'buffer' in the boundary elements would apply it
+        # across the whole grid. Instead, hard-code a number of grid points to use as
+        # the 'buffer'.
+        nbuffer = 16
+
+        @. vpa.scratch = damping_rate_prefactor *
+                         (abs(vpa.grid) - abs(vpa.grid[nbuffer])^2) /
+                         (abs(vpa.grid[1]) - abs(vpa.grid[nbuffer])^2)
+
+        # Iterate over the first and last element in the vpa dimension
+        vpa_inds = flatten((1:nbuffer, vpa.n-nbuffer+1:vpa.n))
+    end
 
     begin_s_r_z_region()
-
-    # Iterate over the first and last element in the vpa dimension
-    vpa_inds = flatten((1:vpa.ngrid, vpa.n-vpa.ngrid+1:vpa.n))
 
     if moments.evolve_upar && moments.evolve_ppar
         @loop_s_r_z is ir iz begin
