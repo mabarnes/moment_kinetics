@@ -241,10 +241,28 @@ function init_pdf_over_density!(pdf, spec, composition, vpa, z, vpa_spectral, de
 
                 # Choose u0 so that u0=0 at the targets, and u0->±vpa.L at the midplane
                 if ions
-                    u0 = (2.0*z.grid[iz]/z.L - sign(z.grid[iz])) * vpa.L / 2.0
+                    #u0 = (2.0*z.grid[iz]/z.L - sign(z.grid[iz])) * vpa.L / 2.0
 
-                    if abs(z.grid[iz]) > 1.0e-14
-                        @. pdf[:,iz] *= 1.0 - exp(-(vpa.grid - u0)^2*inverse_width)
+                    #if abs(z.grid[iz]) > 1.0e-14
+                    #    @. pdf[:,iz] *= 1.0 - exp(-(vpa.grid - u0)^2*inverse_width)
+                    #end
+
+                    zero = 1.e-14
+                    if iz == 1
+                        for ivpa ∈ 1:vpa.n
+                            if vpa.grid[ivpa] > zero
+                                pdf[ivpa,iz] = 0.0
+                            end
+                        end
+                    elseif iz == z.n
+                        for ivpa ∈ 1:vpa.n
+                            if vpa.grid[ivpa] < -zero
+                                pdf[ivpa,iz] = 0.0
+                            end
+                        end
+                    end
+                    if iz ∈ (1, z.n)
+                        @. pdf[:,iz] *= 1.0 - exp(-vpa.grid^2*inverse_width)
                     end
                 else
                     # Just smooth out boundary points for neutrals, using u0=0. Will
@@ -274,7 +292,7 @@ function init_pdf_over_density!(pdf, spec, composition, vpa, z, vpa_spectral, de
         end
         if z.bc == "wall"
             if ions
-                enforce_initial_tapered_zero_incoming!(pdf, z, vpa)
+                #enforce_initial_tapered_zero_incoming!(pdf, z, vpa)
             else
                 # Apply neutral boundary condition to full-f distribution function
                 vtfac = sqrt(composition.T_wall * composition.mn_over_mi)
@@ -314,21 +332,28 @@ function init_pdf_over_density!(pdf, spec, composition, vpa, z, vpa_spectral, de
                         pdf[ivpa,end] = wall_flux_L * vpa.scratch[ivpa]
                     end
                 end
+            end
 
                 # Taper boundary distribution function into domain to avoid jumps at the
                 # boundary
                 for iz ∈ 1:z.n÷2
-                    linear_weight = -2.0*z.grid[iz]/z.L
-                    @views @. pdf[:,iz] = linear_weight*pdf[:,1] +
-                    (1.0 - linear_weight)*pdf[:,iz]
+                    #boundary_weight = -2.0*z.grid[iz]/z.L
+                    # znorm is 1.0 at the boundary and 0.0 at the midplane
+                    znorm = -2.0*z.grid[iz]/z.L
+                    boundary_weight = 1.0 - (0.5*(1.0 + cos(π*znorm)))^2
+                    @views @. pdf[:,iz] = boundary_weight*pdf[:,1] +
+                    (1.0 - boundary_weight)*pdf[:,iz]
                 end
                 for iz ∈ (z.n+3)÷2:z.n
-                    linear_weight = 2.0*z.grid[iz]/z.L
-                    @views @. pdf[:,iz] = linear_weight*pdf[:,end] +
-                    (1.0 - linear_weight)*pdf[:,iz]
+                    #boundary_weight = 2.0*z.grid[iz]/z.L
+                    # znorm is 1.0 at the boundary and 0.0 at the midplane
+                    znorm = 2.0*z.grid[iz]/z.L
+                    boundary_weight = 1.0 - (0.5*(1.0 + cos(π*znorm)))^2
+                    @views @. pdf[:,iz] = boundary_weight*pdf[:,end] +
+                    (1.0 - boundary_weight)*pdf[:,iz]
                 end
 
-            end
+            #end
 
             # Get the unnormalised pdf and the moments of the constructed full-f
             # distribution function (which will be modified from the input moments).
