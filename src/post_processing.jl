@@ -53,7 +53,11 @@ end
 function analyze_and_plot_data(path)
     # Create run_name from the path to the run directory
     path = realpath(path)
-    run_name = joinpath(path, basename(path))
+    if isdir(path)
+        run_name = joinpath(path, basename(path))
+    else
+        run_name = path
+    end
     # open the netcdf file and give it the handle 'fid'
     fid = open_netcdf_file(run_name)
     # load space-time coordinate data
