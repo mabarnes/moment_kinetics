@@ -20,7 +20,7 @@ function fd_check_option(option, ngrid)
         if ngrid < 3
             error("ngrid < 3 incompatible with 4th order centered differences.")
         end
-    elseif ! option in ("first_order_upwind", "second_order_centered")
+    elseif !(option in ("first_order_upwind", "second_order_centered"))
         error("finite difference option '$option' is not recognised")
     end
 end
