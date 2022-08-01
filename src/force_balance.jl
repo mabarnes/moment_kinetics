@@ -45,14 +45,23 @@ flux term above
 function force_balance_flux_species!(pflx, dens, upar, ppar, z, dt, spectral)
     # calculate the parallel flux of parallel momentum densitg at the previous time level/RK stage
     derivative!(z.scratch, ppar, z, spectral)
-    #@. z.scratch2 = dens*upar^2
-    # Until julia-1.8 is released, prefer x*x to x^2 to avoid extra allocations when broadcasting.
-    @. z.scratch2 = dens*upar*upar
+
+    ##@. z.scratch2 = dens*upar^2
+    ## Until julia-1.8 is released, prefer x*x to x^2 to avoid extra allocations when broadcasting.
+    #@. z.scratch2 = dens*upar*upar
+    ## Use as 'adv_fac' for upwinding
+    #@. z.scratch3 = -upar
+    #derivative!(z.scratch2, z.scratch2, z, z.scratch3, spectral)
+
+    @. z.scratch2 = dens*upar
     # Use as 'adv_fac' for upwinding
     @. z.scratch3 = -upar
     derivative!(z.scratch2, z.scratch2, z, z.scratch3, spectral)
+    derivative!(z.scratch3, upar, z, spectral)
+
     # update the parallel momentum density to account for the parallel flux of parallel momentum
-    @. pflx = dens*upar - dt*(z.scratch + z.scratch2)
+    #@. pflx = dens*upar - dt*(z.scratch + z.scratch2)
+    @. pflx = dens*upar - dt*(z.scratch + upar*z.scratch2 + dens.*upar*z.scratch3)
 end
 
 """
