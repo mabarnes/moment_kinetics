@@ -373,11 +373,11 @@ function centered_second_order!(df::Array{mk_float,2}, f, del, bc, igrid, ieleme
 		df[igrid[i],ielement[i]] = 0.5*(ghost-f[i-1])/del[n-1]
 	elseif bc == "zero" || bc == "both_zero" || bc == "wall"
                 # For boundary conditions that set the values of fields at the boundary,
-                # just use a one-sided difference away from the boundary.
+                # just use a first-order, one-sided difference away from the boundary.
 		i = 1
-                df[igrid[i],ielement[i]] = (-f[i+2]+4*f[i+1]-3*f[i])/(2*del[i+1])
+                df[igrid[i],ielement[i]] = (f[i+1]-f[i])/del[i+1]
 		i = n
-                df[igrid[i],ielement[i]] =  (3*f[i]-4*f[i-1]+f[i-2])/(2*del[i-1])
+                df[igrid[i],ielement[i]] =  (f[i]-f[i-1])/del[i-1]
 	end
 end
 
@@ -415,9 +415,9 @@ function centered_second_order!(df::Array{mk_float,1}, f, del, bc, igrid, ieleme
                 # For boundary conditions that set the values of fields at the boundary,
                 # just use a one-sided difference away from the boundary.
 		i = 1
-                df[igrid[i],ielement[i]] = (-f[i+2]+4*f[i+1]-3*f[i])/(2*del[i+1])
+                df[igrid[i],ielement[i]] = (f[i+1]-f[i])/del[i+1]
 		i = n
-                df[igrid[i],ielement[i]] =  (3*f[i]-4*f[i-1]+f[i-2])/(2*del[i-1])
+                df[igrid[i],ielement[i]] =  (f[i]-f[i-1])/del[i-1]
 	end
 end
 

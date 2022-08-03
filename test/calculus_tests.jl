@@ -230,8 +230,14 @@ function runtests()
                     # Note: only get 1st order convergence at the boundary for an input
                     # function that has zero gradient at the boundary
                     rtol = rtol_prefactor / (nelement*(ngrid-1))
-                    @test isapprox(df, expected_df, rtol=rtol, atol=1.e-15,
+                    @test isapprox(df[2:end-1], expected_df[2:end-1], rtol=rtol, atol=1.e-15,
                                    norm=maxabs_norm)
+                    # Some methods use 1st order one-sided derivative at boundaries
+                    # (where derivative is zero for this example), so need higher atol
+                    for ix ∈ (1,x.n)
+                        @test isapprox(df[ix], expected_df[ix], rtol=rtol, atol=2.0*rtol,
+                                       norm=maxabs_norm)
+                    end
                 end
             end
         end
