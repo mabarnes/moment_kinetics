@@ -44,7 +44,8 @@ in coord.scratch_2d.
 """
 function elementwise_derivative!(coord, f, not_spectral::Bool, ::Val{1})
     return derivative_finite_difference!(coord.scratch_2d, f, coord.cell_width,
-        coord.bc, "fourth_order_centered", coord.igrid, coord.ielement)
+        #coord.bc, "fourth_order_centered", coord.igrid, coord.ielement)
+        coord.bc, "second_order_centered", coord.igrid, coord.ielement)
 end
 
 """
