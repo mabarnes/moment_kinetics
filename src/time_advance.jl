@@ -38,6 +38,8 @@ using ..semi_lagrange: setup_semi_lagrange
 @debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
 
 using Dates
+using Plots
+using ..post_processing: draw_v_parallel_zero!
 
 """
 """
@@ -383,6 +385,53 @@ function time_advance!(pdf, scratch, t, t_input, vpa, z, r, vpa_spectral, z_spec
             write_data_to_ascii(pdf.norm, moments, fields, vpa, z, r, t, composition.n_species, io)
             # write initial data to binary file (netcdf)
             write_data_to_binary(pdf.norm, moments, fields, t, composition.n_species, cdf, iwrite)
+            # Hack to save *.pdf of current pdf
+            @serial_region begin
+                #pyplot()
+                cmlog(cmlin::ColorGradient) = RGB[cmlin[x] for x=LinRange(0,1,30)]
+                logdeep = cgrad(:deep, scale=:log) |> cmlog
+                f_plots = [
+                    heatmap(z.grid, vpa.grid, pdf.norm[:,:,1,is], xlabel="z", ylabel="vpa", c=:deep, colorbar=false)
+                    for is ∈ 1:composition.n_species]
+                for (is, p) in enumerate(f_plots)
+                    @views draw_v_parallel_zero!(p, z.grid, moments.upar[:,1,is],
+                                                 moments.vth[:,1,is],
+                                                 moments.evolve_upar,
+                                                 moments.evolve_ppar)
+                end
+                logf_plots = [
+                    heatmap(z.grid, vpa.grid, log.(abs.(pdf.norm[:,:,1,is])), xlabel="z", ylabel="vpa", fillcolor=logdeep, colorbar=false)
+                    for is ∈ 1:composition.n_species]
+                for (is, p) in enumerate(logf_plots)
+                    @views draw_v_parallel_zero!(p, z.grid, moments.upar[:,1,is],
+                                                 moments.vth[:,1,is],
+                                                 moments.evolve_upar,
+                                                 moments.evolve_ppar)
+                end
+                f0_plots = [
+                    plot(vpa.grid, pdf.norm[:,1,1,is], xlabel="vpa", ylabel="f0")
+                    for is ∈ 1:composition.n_species]
+                fL_plots = [
+                    plot(vpa.grid, pdf.norm[:,end,1,is], xlabel="vpa", ylabel="fL")
+                    for is ∈ 1:composition.n_species]
+                density_plots = [
+                    plot(z.grid, moments.dens[:,1,is], xlabel="z", ylabel="density")
+                    for is ∈ 1:composition.n_species]
+                upar_plots = [
+                    plot(z.grid, moments.upar[:,1,is], xlabel="z", ylabel="upar")
+                    for is ∈ 1:composition.n_species]
+                ppar_plots = [
+                    plot(z.grid, moments.ppar[:,1,is], xlabel="z", ylabel="ppar")
+                    for is ∈ 1:composition.n_species]
+                qpar_plots = [
+                    plot(z.grid, moments.qpar[:,1,is], xlabel="z", ylabel="qpar")
+                    for is ∈ 1:composition.n_species]
+                # Put all plots into subplots of a single figure
+                plot(f_plots..., logf_plots..., f0_plots..., fL_plots...,
+                     density_plots..., upar_plots..., ppar_plots..., qpar_plots...,
+                     layout=(8,composition.n_species), size=(800,3200), plot_title="$t")
+                savefig("latest_plots.png")
+            end
             iwrite += 1
             begin_s_r_z_region()
             @debug_detect_redundant_block_synchronize begin
