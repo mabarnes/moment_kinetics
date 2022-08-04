@@ -34,6 +34,7 @@ struct time_input
     use_semi_lagrange::Bool
     n_rk_stages::mk_int
     split_operators::Bool
+    runtime_plots::Bool
 end
 
 """

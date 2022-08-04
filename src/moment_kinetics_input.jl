@@ -135,6 +135,7 @@ function mk_input(scan_input=Dict())
     # Heun's method, SSP RK3 and 4-stage SSP RK3)
     n_rk_stages = get(scan_input, "n_rk_stages", 4)
     split_operators = get(scan_input, "split_operators", false)
+    runtime_plots = get(scan_input, "runtime_plots", false)
 
     # overwrite some default parameters related to the r grid
     # ngrid is number of grid points per element
@@ -184,7 +185,8 @@ function mk_input(scan_input=Dict())
     ########## end user inputs. do not modify following code! ###############
     #########################################################################
 
-    t = time_input(nstep, dt, nwrite, use_semi_lagrange, n_rk_stages, split_operators)
+    t = time_input(nstep, dt, nwrite, use_semi_lagrange, n_rk_stages, split_operators,
+                   runtime_plots)
     # replace mutable structures with immutable ones to optimize performance
     # and avoid possible misunderstandings
     z_advection_immutable = advection_input(z.advection.option, z.advection.constant_speed,

@@ -90,7 +90,8 @@ test_input_chebyshev_split_2_moments =
 test_input_chebyshev_split_3_moments =
     merge(test_input_chebyshev_split_2_moments,
           Dict("run_name" => "chebyshev_pseudospectral_split_3_moments",
-               "evolve_moments_parallel_pressure" => true))
+               "evolve_moments_parallel_pressure" => true,
+               "runtime_plots" => true))
 
 
 """
