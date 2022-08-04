@@ -800,4 +800,25 @@ end
 #    println("advection_test_1d rms error: ", rmserr)
 #end
 
+"""
+Add a thin, red, dashed line showing v_parallel=(vth*w_parallel+upar)=0 to a 2d plot
+with axes (z,vpa).
+"""
+function draw_v_parallel_zero!(plt::Plots.Plot, z::AbstractVector, upar, vth,
+                               evolve_upar::Bool, evolve_ppar::Bool)
+    if evolve_ppar && evolve_upar
+        zero_value = @. -upar/vth
+    elseif evolve_upar
+        zero_value = @. -upar
+    else
+        zero_value = zeros(size(upar))
+    end
+    plot!(plt, z, zero_value, color=:red, linestyle=:dash, linewidth=1,
+          xlims=xlims(plt), ylims=ylims(plt), label="")
+end
+function draw_v_parallel_zero!(z::AbstractVector, upar, vth, evolve_upar::Bool,
+                               evolve_ppar::Bool)
+    draw_v_parallel_zero!(Plots.CURRENT_PLOT, z, upar, vth, evolve_upar, evolve_ppar)
+end
+
 end
