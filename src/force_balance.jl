@@ -63,7 +63,7 @@ function force_balance_flux_species!(pflx, dens, upar, ppar, z, dt, spectral)
     @. z.scratch3 = -upar
     derivative!(z.scratch2, dens, z, z.scratch3, spectral)
 
-    derivative!(z.scratch3, upar, z, z.scratch3, spectral)
+    derivative!(z.scratch3, upar, z, spectral)
 
     # update the parallel momentum density to account for the parallel flux of parallel momentum
     #@. pflx = dens*upar - dt*(z.scratch + z.scratch2)
