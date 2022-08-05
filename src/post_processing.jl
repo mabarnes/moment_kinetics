@@ -57,7 +57,7 @@ function analyze_and_plot_data(path)
     if isdir(path)
         run_name = joinpath(path, basename(path))
     else
-        run_name = path
+        run_name = splitext(path)[1]
     end
     # open the netcdf file and give it the handle 'fid'
     fid = open_netcdf_file(run_name)
