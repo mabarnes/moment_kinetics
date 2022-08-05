@@ -69,7 +69,8 @@ function analyze_and_plot_data(path)
     phi = load_fields_data(fid)
     # load full (z,r,species,t) velocity moments data
     density, parallel_flow, parallel_pressure, parallel_heat_flux,
-        thermal_speed, n_species, evolve_ppar = load_moments_data(fid)
+        thermal_speed, n_species, evolve_density, evolve_upar, evolve_ppar =
+        load_moments_data(fid)
     # load full (vpa,z,r,species,t) particle distribution function (pdf) data
     ff = load_pdf_data(fid)
 
