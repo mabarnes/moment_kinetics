@@ -187,6 +187,17 @@ function update_speed_n_u_p_evolution!(advect, fvec, moments, vpa, z, r, composi
             @loop_z iz begin
                 @views @. advect[is].speed[:,iz,ir] += 0.5*vpa.grid^2*moments.vth[iz,ir,is]*z.scratch[iz]/fvec.density[iz,ir,is]
             end
+            # Add difference between upwinded and non-upwinded d(upar)/dz terms. This
+            # cancels in the limit of high resolution, but may be important for large
+            # upar gradients near the sheath, especially with low-order
+            # finite-difference discretization.
+            # Calculate upwinded d(upar)/dz
+            derivative!(z.scratch, view(fvec.upar,:,ir,is), z, z.scratch3, z_spectral)
+            # Calculate centered d(upar)/dz
+            derivative!(z.scratch2, view(fvec.upar,:,ir,is), z, z_spectral)
+            @loop_z iz begin
+                @views @. advect[is].speed[:,iz,ir] += fvec.upar[iz,ir,is]/moments.vth[iz,ir,is]*(z.scratch[iz] - z.scratch2[iz])
+            end
         end
     end
     # add in contributions from charge exchange collisions
