@@ -47,6 +47,9 @@ const animate_vth_vs_z = false
 const animate_qpar_vs_z = false
 # if animate_f_vs_vpa_z = true, create animation of f(vpa,z) at different time slices
 const animate_f_vs_vpa_z = false
+# if animate_f_unnormalized = true, create animation of f_unnorm(v_parallel_unnorm,z) at
+# different time slices
+const animate_f_unnormalized = false
 # if animate_deltaf_vs_vpa_z = true, create animation of δf(vpa,z) at different time slices
 const animate_deltaf_vs_vpa_z = false
 # if animate_f_vs_vpa_z0 = true, create animation of f(vpa0,z) at different time slices
@@ -78,8 +81,8 @@ pp = pp_input(calculate_frequencies, plot_phi0_vs_t, plot_phi_vs_z_t,
     animate_phi_vs_z, plot_dens0_vs_t, plot_upar0_vs_t, plot_ppar0_vs_t, plot_vth0_vs_t, plot_qpar0_vs_t,
     plot_dens_vs_z_t, plot_upar_vs_z_t, plot_ppar_vs_z_t, plot_qpar_vs_z_t,
     animate_dens_vs_z, animate_upar_vs_z, animate_ppar_vs_z, animate_vth_vs_z, animate_qpar_vs_z,
-    animate_f_vs_vpa_z, animate_f_vs_vpa_z0, animate_f_vs_z0_vpa,
-    animate_deltaf_vs_vpa_z, animate_deltaf_vs_vpa_z0, animate_deltaf_vs_vpa_z0,
-    nwrite_movie, itime_min, itime_max, ivpa0, iz0, ir0)
+    animate_f_vs_vpa_z, animate_f_unnormalized, animate_f_vs_vpa_z0,
+    animate_f_vs_z0_vpa, animate_deltaf_vs_vpa_z, animate_deltaf_vs_vpa_z0,
+    animate_deltaf_vs_vpa_z0, nwrite_movie, itime_min, itime_max, ivpa0, iz0, ir0)
 
 end

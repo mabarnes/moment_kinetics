@@ -18,6 +18,7 @@ using ..quadrature: composite_simpson_weights
 using ..array_allocation: allocate_float
 using ..file_io: open_output_file
 using ..type_definitions: mk_float, mk_int
+using ..initial_conditions: vpagrid_to_dzdt
 using ..load_data: open_netcdf_file
 using ..load_data: load_coordinate_data, load_fields_data, load_moments_data, load_pdf_data
 using ..analysis: analyze_fields_data, analyze_moments_data, analyze_pdf_data
@@ -83,7 +84,7 @@ function analyze_and_plot_data(path)
         parallel_heat_flux[:,ir0,:,:],
         thermal_speed[:,ir0,:,:],
         ff[:,:,ir0,:,:],
-        n_species, evolve_ppar, nvpa, vpa, vpa_wgts,
+        n_species, evolve_density, evolve_upar, evolve_ppar, nvpa, vpa, vpa_wgts,
         nz, z, z_wgts, Lz, ntime, time)
 
     close(fid)
@@ -138,8 +139,13 @@ end
 """
 function plot_1D_1V_diagnostics(run_name, fid, nwrite_movie, itime_min, itime_max, ivpa0, iz0, ir0, r,
     phi, density, parallel_flow, parallel_pressure, parallel_heat_flux,
-    thermal_speed, ff, n_species, evolve_ppar, nvpa, vpa, vpa_wgts,
-    nz, z, z_wgts, Lz, ntime, time)
+    thermal_speed, ff, n_species, evolve_density, evolve_upar, evolve_ppar, nvpa, vpa,
+    vpa_wgts, nz, z, z_wgts, Lz, ntime, time)
+
+    # plot_unnormalised() requires PyPlot, so ensure it is used for all plots for
+    # consistency
+    pyplot()
+
     # analyze the fields data
     phi_fldline_avg, delta_phi = analyze_fields_data(phi, ntime, nz, z_wgts, Lz)
     # use a fit to calculate and write to file the damping rate and growth rate of the
@@ -222,6 +228,16 @@ function plot_1D_1V_diagnostics(run_name, fid, nwrite_movie, itime_min, itime_ma
             @views heatmap(z, vpa, ff[:,:,is,end], xlabel="vpa", ylabel="z", c = :deep, interpolation = :cubic, title=str)
             outfile = string(run_name, "_f_vs_z_vpa_final", spec_string, ".pdf")
             savefig(outfile)
+        end
+        if pp.animate_f_unnormalized
+            # make a gif animation of f_unnorm(v_parallel_unnorm,z,t)
+            anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+                @views plot_unnormalised(ff[:,:,is,i], z, vpa, density[:,is,i],
+                                         parallel_flow[:,is,i], thermal_speed[:,is,i],
+                                         evolve_density, evolve_upar, evolve_ppar)
+            end
+            outfile = string(run_name, "_f_unnorm_vs_vpa_z", spec_string, ".gif")
+            gif(anim, outfile, fps=5)
         end
         if pp.animate_deltaf_vs_vpa_z
             # make a gif animation of δf(vpa,z,t)
@@ -820,6 +836,57 @@ end
 function draw_v_parallel_zero!(z::AbstractVector, upar, vth, evolve_upar::Bool,
                                evolve_ppar::Bool)
     draw_v_parallel_zero!(Plots.CURRENT_PLOT, z, upar, vth, evolve_upar, evolve_ppar)
+end
+
+"""
+Plot the unnormalised distribution function against unnormalised ('lab space')
+coordinates.
+
+Inputs should depend only on z and vpa.
+
+Note this function requires using the PyPlot backend to support 2d coordinates being
+passed to `heatmap()`.
+"""
+function plot_unnormalised(f, z_grid, vpa_grid, density, upar, vth, evolve_density,
+                           evolve_upar, evolve_ppar; plot_log=false)
+
+    if backend_name() != :pyplot
+        error("PyPlot backend is required for plot_unnormalised(). Call pyplot() "
+              * "first.")
+    end
+
+    nvpa, nz = size(f)
+    z2d = zeros(nvpa, nz)
+    dzdt2d = zeros(nvpa, nz)
+    for iz ∈ 1:nz
+        @views z2d[:,iz] .= z_grid[iz]
+        @views dzdt2d[:,iz] .= vpagrid_to_dzdt(vpa_grid, vth[iz], upar[iz], evolve_ppar,
+                                             evolve_upar)
+    end
+
+    if evolve_ppar
+        f_unnorm = similar(f)
+        for iz ∈ 1:nz, ivpa ∈ 1:nvpa
+            f_unnorm[ivpa,iz] = @. f[ivpa,iz] * density[iz] / vth[iz]
+        end
+    elseif evolve_density
+        f_unnorm = similar(f)
+        for iz ∈ 1:nz, ivpa ∈ 1:nvpa
+            f_unnorm[ivpa,iz] = @. f[ivpa,iz] * density[iz]
+        end
+    else
+        f_unnorm = f
+    end
+
+    if plot_log
+        @. f_unnorm = log(abs(f_unnorm))
+        cmlog(cmlin::ColorGradient) = RGB[cmlin[x] for x=LinRange(0,1,30)]
+        cmap = cgrad(:deep, scale=:log) |> cmlog
+    else
+        cmap = :deep
+    end
+
+    return heatmap(z2d, dzdt2d, f_unnorm, xlabel="z", ylabel="vpa", c=cmap)
 end
 
 end
