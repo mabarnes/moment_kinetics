@@ -272,6 +272,7 @@ function setup_moment_kinetics(input_dict::Dict; backup_filename=nothing,
 
     # setup i/o
     io, cdf = setup_file_io(output_dir, run_name, vpa, z, r, composition, collisions,
+                            moments.evolve_density, moments.evolve_upar,
                             moments.evolve_ppar)
     # write initial data to ascii files
     write_data_to_ascii(pdf.norm, moments, fields, vpa, z, r, code_time, composition.n_species, io)
