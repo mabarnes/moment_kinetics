@@ -142,10 +142,28 @@ wpahat = (vpa - upar)/vth
 function update_speed_n_u_p_evolution!(advect, fvec, moments, vpa, z, r, composition, collisions, z_spectral)
     @loop_s is begin
         @loop_r ir begin
-            # get d(ppar)/dz
+            # # get d(ppar)/dz
+            # derivative!(z.scratch, view(fvec.ppar,:,ir,is), z, z_spectral)
+            # # update parallel acceleration to account for parallel derivative of parallel pressure
+            # # NB: no vpa-dependence so compute as a scalar and broadcast to all entries
+            # @loop_z iz begin
+            #     @views advect[is].speed[:,iz,ir] .= z.scratch[iz]/(fvec.density[iz,ir,is]*moments.vth[iz,ir,is])
+            # end
+            # # calculate d(qpar)/dz
+            # derivative!(z.scratch, view(moments.qpar,:,ir,is), z, z_spectral)
+            # # update parallel acceleration to account for (wpar/2*ppar)*dqpar/dz
+            # @loop_z iz begin
+            #     @views @. advect[is].speed[:,iz,ir] += 0.5*vpa.grid*z.scratch[iz]/fvec.ppar[iz,ir,is]
+            # end
+            # # calculate d(vth)/dz
+            # derivative!(z.scratch, view(moments.vth,:,ir,is), z, z_spectral)
+            # # update parallel acceleration to account for -wpar^2 * d(vth)/dz term
+            # @loop_z iz begin
+            #     @views @. advect[is].speed[:,iz,ir] -= vpa.grid^2*z.scratch[iz]
+            # end
+
+            # get non-upwinded d(ppar)/dz (form used in force_balance!())
             derivative!(z.scratch, view(fvec.ppar,:,ir,is), z, z_spectral)
-            # update parallel acceleration to account for parallel derivative of parallel pressure
-            # NB: no vpa-dependence so compute as a scalar and broadcast to all entries
             @loop_z iz begin
                 @views advect[is].speed[:,iz,ir] .= z.scratch[iz]/(fvec.density[iz,ir,is]*moments.vth[iz,ir,is])
             end
@@ -155,11 +173,19 @@ function update_speed_n_u_p_evolution!(advect, fvec, moments, vpa, z, r, composi
             @loop_z iz begin
                 @views @. advect[is].speed[:,iz,ir] += 0.5*vpa.grid*z.scratch[iz]/fvec.ppar[iz,ir,is]
             end
-            # calculate d(vth)/dz
-            derivative!(z.scratch, view(moments.vth,:,ir,is), z, z_spectral)
-            # update parallel acceleration to account for -wpar^2 * d(vth)/dz term
+            # calculate upwinded d(ppar)/dz (form used in energy_equation!())
+            # Use as 'adv_fac' for upwinding
+            @views @. z.scratch3 = -fvec.upar[:,ir,is]
+            derivative!(z.scratch, view(fvec.ppar,:,ir,is), z, z.scratch3, z_spectral)
+            # update parallel acceleration to account for -wpar^2 / (m*n*vth) * d(ppar)/dz term
             @loop_z iz begin
-                @views @. advect[is].speed[:,iz,ir] -= vpa.grid^2*z.scratch[iz]
+                @views @. advect[is].speed[:,iz,ir] -= vpa.grid^2*z.scratch[iz]/(fvec.density[iz,ir,is]*moments.vth[iz,ir,is])
+            end
+            # calculate upwinded d(n)/dz
+            derivative!(z.scratch, view(fvec.density,:,ir,is), z, z.scratch3, z_spectral)
+            # update parallel acceleration to account for wpar^2*vt/(2*n) * d(n)/dz term
+            @loop_z iz begin
+                @views @. advect[is].speed[:,iz,ir] += 0.5*vpa.grid^2*moments.vth[iz,ir,is]*z.scratch[iz]/fvec.density[iz,ir,is]
             end
         end
     end
