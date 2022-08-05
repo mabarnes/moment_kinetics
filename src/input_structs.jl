@@ -279,8 +279,11 @@ struct pp_input
     animate_ppar_vs_z::Bool
     # if animate_qpar_vs_z = true, create animation of species parallel heat flux vs z at different time slices
     animate_qpar_vs_z::Bool
-    # if animate_f_vs_z_vpa = true, create animation of f(z,vpa) at different time slices
+    # if animate_f_vs_vpa_z = true, create animation of f(z,vpa) at different time slices
     animate_f_vs_vpa_z::Bool
+    # if animate_f_unnormalized = true, create animation of
+    # f_unnorm(v_parallel_unnorm,z) at different time slices
+    animate_f_unnormalized::Bool
     # if animate_f_vs_z_vpa0 = true, create animation of f(z,vpa0) at different time slices
     animate_f_vs_vpa0_z::Bool
     # if animate_f_vs_z0_vpa = true, create animation of f(z0,vpa) at different time slices
