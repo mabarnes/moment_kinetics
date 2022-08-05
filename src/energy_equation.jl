@@ -44,7 +44,7 @@ function energy_equation_no_collisions!(ppar_out, upar, ppar, qpar, dt, z, spect
     # update ppar to account for contribution from parallel heat flux gradient
     @. ppar_out -= dt*z.scratch
     # calculate dupar/dz and store in z.scratch
-    derivative!(z.scratch, upar, z, spectral)
+    derivative!(z.scratch, upar, z, z.scratch3, spectral)
     # update ppar to account for contribution from parallel flow gradient
     @. ppar_out -= 3.0*dt*ppar*z.scratch
 end

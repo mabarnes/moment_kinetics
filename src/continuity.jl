@@ -38,7 +38,7 @@ function continuity_equation_single_species!(dens_out, dens_in, upar, z, dt, spe
     # Use as 'adv_fac' for upwinding
     @. z.scratch3 = -upar
     @views derivative!(z.scratch, dens_in[:,is], z, z.scratch3, spectral)
-    derivative!(z.scratch2, upar, z, spectral)
+    derivative!(z.scratch2, upar, z, z.scratch3, spectral)
     @. dens_out -= dt*(upar*z.scratch + dens_in[:,is]*z.scratch2)
 
     # update the density to account for ionization collisions;
