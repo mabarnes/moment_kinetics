@@ -400,7 +400,7 @@ function enforce_zero_incoming_bc!(pdf, vpa::coordinate, zero)
 end
 function enforce_zero_incoming_bc!(pdf, vpa::coordinate, density, upar, ppar,
                                    evolve_upar, evolve_ppar, zero)
-    nvpa = size(pdf,1)
+    nvpa, nz = size(pdf)
     # no parallel BC should be enforced for dz/dt = 0
     # note that the parallel velocity coordinate vpa may be dz/dt or
     # some version of the peculiar velocity (dz/dt - upar),
@@ -422,6 +422,54 @@ function enforce_zero_incoming_bc!(pdf, vpa::coordinate, density, upar, ppar,
         # f(z=Lz/2, v_parallel < 0) = 0
         if vpa.scratch2[ivpa] < -zero
             pdf[ivpa,end] = 0.0
+        end
+    end
+
+    # Special constraint-forcing code that tries to keep the modifications smooth at
+    # v_parallel=0.
+    for iz ∈ (1,nz)
+        f = @view pdf[:,iz]
+        if evolve_ppar && evolve_upar
+            I0 = integrate_over_vspace(f, vpa.wgts)
+            I1 = integrate_over_vspace(f, vpa.grid, vpa.wgts)
+            I2 = integrate_over_vspace(f, vpa.grid, 2, vpa.wgts)
+
+            # Store v_parallel with upar shift removed in vpa.scratch
+            vth = sqrt(2.0*ppar[iz]/density[iz])
+            @. vpa.scratch = vpa.grid + upar[iz]/vth
+            # Introduce factor to ensure corrections go smoothly to zero near
+            # v_parallel=0
+            @. vpa.scratch2 = f * abs(vpa.scratch) / (1.0 + abs(vpa.scratch))
+            J1 = integrate_over_vspace(vpa.scratch2, vpa.grid, vpa.wgts)
+            J2 = integrate_over_vspace(vpa.scratch2, vpa.grid, 2, vpa.wgts)
+            J3 = integrate_over_vspace(vpa.scratch2, vpa.grid, 3, vpa.wgts)
+            J4 = integrate_over_vspace(vpa.scratch2, vpa.grid, 4, vpa.wgts)
+
+            A = (J3^2 - J2*J4 + 0.5*(J2^2 - J1*J3)) /
+                (I0*(J3^2 - J2*J4) + I1*(J1*J4 - J2*J3) + I2*(J2^2 - J1*J3))
+            B = (0.5*J3 + A*(I1*J4 - I2*J3)) / (J3^2 - J2*J4)
+            C = (0.5 - A*I2 -B*J3) / J4
+
+            @. f = A*f + B*vpa.grid*vpa.scratch2 + C*vpa.grid*vpa.grid*vpa.scratch2
+        elseif evolve_upar
+            I0 = integrate_over_vspace(f, vpa.wgts)
+            I1 = integrate_over_vspace(f, vpa.grid, vpa.wgts)
+
+            # Store v_parallel with upar shift removed in vpa.scratch
+            @. vpa.scratch = vpa.grid + upar[iz]
+            # Introduce factor to ensure corrections go smoothly to zero near
+            # v_parallel=0
+            @. vpa.scratch2 = f * abs(vpa.scratch) / (1.0 + abs(vpa.scratch))
+            J1 = integrate_over_vspace(vpa.scratch2, vpa.grid, vpa.wgts)
+            J2 = integrate_over_vspace(vpa.scratch2, vpa.grid, 2, vpa.wgts)
+
+            A = 1.0 / (I0 - I1*J1/J2)
+            B = -A*I1/J2
+
+            @. f = A*f + B*vpa.grid*vpa.scratch2
+        elseif evolve_density
+            I0 = integrate_over_vspace(f, vpa.wgts)
+            @. f = f / I0
         end
     end
 end
