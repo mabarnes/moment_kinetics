@@ -409,22 +409,22 @@ function time_advance!(pdf, scratch, t, t_input, vpa, z, r, vpa_spectral, z_spec
                                                  moments.evolve_ppar)
                 end
                 f0_plots = [
-                    plot(vpa.grid, pdf.norm[:,1,1,is], xlabel="vpa", ylabel="f0")
+                    plot(vpa.grid, pdf.norm[:,1,1,is], xlabel="vpa", ylabel="f0", legend=false)
                     for is ∈ 1:composition.n_species]
                 fL_plots = [
-                    plot(vpa.grid, pdf.norm[:,end,1,is], xlabel="vpa", ylabel="fL")
+                    plot(vpa.grid, pdf.norm[:,end,1,is], xlabel="vpa", ylabel="fL", legend=false)
                     for is ∈ 1:composition.n_species]
                 density_plots = [
-                    plot(z.grid, moments.dens[:,1,is], xlabel="z", ylabel="density")
+                    plot(z.grid, moments.dens[:,1,is], xlabel="z", ylabel="density", legend=false)
                     for is ∈ 1:composition.n_species]
                 upar_plots = [
-                    plot(z.grid, moments.upar[:,1,is], xlabel="z", ylabel="upar")
+                    plot(z.grid, moments.upar[:,1,is], xlabel="z", ylabel="upar", legend=false)
                     for is ∈ 1:composition.n_species]
                 ppar_plots = [
-                    plot(z.grid, moments.ppar[:,1,is], xlabel="z", ylabel="ppar")
+                    plot(z.grid, moments.ppar[:,1,is], xlabel="z", ylabel="ppar", legend=false)
                     for is ∈ 1:composition.n_species]
                 qpar_plots = [
-                    plot(z.grid, moments.qpar[:,1,is], xlabel="z", ylabel="qpar")
+                    plot(z.grid, moments.qpar[:,1,is], xlabel="z", ylabel="qpar", legend=false)
                     for is ∈ 1:composition.n_species]
                 # Put all plots into subplots of a single figure
                 plot(f_plots..., logf_plots..., f0_plots..., fL_plots...,
