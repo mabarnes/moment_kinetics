@@ -15,41 +15,50 @@ discretization scheme.
 abstract type abstract_spectral_info end
 
 """
-    elementwise_derivative!(coord, f, adv_fac, spectral::abstract_spectral_info)
-    elementwise_derivative!(coord, f, spectral::abstract_spectral_info)
+    elementwise_derivative!(coord, f, adv_fac, spectral::abstract_spectral_info, order)
+    elementwise_derivative!(coord, f, spectral::abstract_spectral_info, order)
 
 Generic function for element-by-element derivatives
 
 First signature, with `adv_fac`, calculates an upwind derivative, the second signature
 calculates a derivative without upwinding information.
 
+The order of the derivative (first, second, etc.) can be chosen by passing Val(n) to get
+the n'th-order derivative.
+
 Result is stored in coord.scratch_2d.
 """
 function elementwise_derivative! end
 
 """
-    derivative!(df, f, coord, adv_fac, spectral::abstract_spectral_info)
+    derivative!(df, f, coord, adv_fac, spectral::abstract_spectral_info, order=Val(1))
 
 Upwinding derivative.
+
+The order of the derivative (first, second, etc.) can be chosen by passing Val(n) to get
+the n'th-order derivative.
 """
-function derivative!(df, f, coord, adv_fac, spectral::abstract_spectral_info)
+function derivative!(df, f, coord, adv_fac, spectral::abstract_spectral_info, order=Val(1))
     # get the derivative at each grid point within each element and store in
     # coord.scratch_2d
-    elementwise_derivative!(coord, f, adv_fac, spectral)
+    elementwise_derivative!(coord, f, adv_fac, spectral, order)
     # map the derivative from the elemental grid to the full grid;
     # at element boundaries, use the derivative from the upwind element.
     derivative_elements_to_full_grid!(df, coord.scratch_2d, coord, adv_fac)
 end
 
 """
-    derivative!(df, f, coord, spectral)
+    derivative!(df, f, coord, spectral::abstract_spectral_info, order=Val(1))
 
 Non-upwinding derivative.
+
+The order of the derivative (first, second, etc.) can be chosen by passing Val(n) to get
+the n'th-order derivative.
 """
-function derivative!(df, f, coord, spectral::abstract_spectral_info)
+function derivative!(df, f, coord, spectral::abstract_spectral_info, order=Val(1))
     # get the derivative at each grid point within each element and store in
     # coord.scratch_2d
-    elementwise_derivative!(coord, f, spectral)
+    elementwise_derivative!(coord, f, spectral, order)
     # map the derivative from the elem;ntal grid to the full grid;
     # at element boundaries, use the average of the derivatives from neighboring elements.
     derivative_elements_to_full_grid!(df, coord.scratch_2d, coord)

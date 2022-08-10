@@ -130,11 +130,11 @@ function construct_derivative_matrix(collocation_points_in)::Matrix{mk_float}
 end
 
 """
-    elementwise_derivative!(coord, ff, lagrange::lagrange_info)
+    elementwise_derivative!(coord, ff, lagrange::lagrange_info, order::Val{1})
 
 Calculate f' using a spectral polynomial method, implemented as a matrix multiplication.
 """
-function elementwise_derivative!(coord, ff, lagrange::lagrange_info)
+function elementwise_derivative!(coord, ff, lagrange::lagrange_info, order::Val{1})
     df = coord.scratch_2d
 
     k = 0
@@ -160,13 +160,13 @@ function elementwise_derivative!(coord, ff, lagrange::lagrange_info)
 end
 
 """
-    elementwise_derivative!(coord, ff, lagrange::scaled_lagrange_info)
+    elementwise_derivative!(coord, ff, lagrange::scaled_lagrange_info, order::Val{1})
 
 Calculate f' using a spectral polynomial method, implemented as a matrix multiplication
 and including a scale factor to convert from a coordinate on the interval [-1,1] to the
 physical coordinate.
 """
-function elementwise_derivative!(coord, ff, lagrange::scaled_lagrange_info)
+function elementwise_derivative!(coord, ff, lagrange::scaled_lagrange_info, order::Val{1})
     df = coord.scratch_2d
 
     k = 0
@@ -195,15 +195,17 @@ function elementwise_derivative!(coord, ff, lagrange::scaled_lagrange_info)
 end
 
 """
-    elementwise_derivative!(coord, ff, adv_fac, lagrange::lagrange_info)
+    elementwise_derivative!(coord, ff, adv_fac,
+                            lagrange::Union{lagrange_info,scaled_lagrange_info}, order)
 
 Calculate f' using a spectral polynomial method, implemented as a matrix multiplication.
 
 Note: Lagrange derivative does not make use of upwinding information within each element.
 """
 function elementwise_derivative!(coord, ff, adv_fac,
-                                 lagrange::Union{lagrange_info,scaled_lagrange_info})
-    return elementwise_derivative!(coord, ff, lagrange)
+                                 lagrange::Union{lagrange_info,scaled_lagrange_info},
+                                 order)
+    return elementwise_derivative!(coord, ff, lagrange, order)
 end
 
 """

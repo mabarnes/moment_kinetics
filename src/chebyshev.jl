@@ -113,11 +113,11 @@ function scaled_chebyshev_grid(ngrid, nelement, n, box_length, imin, imax)
 end
 
 """
-    elementwise_derivative!(coord, ff, chebyshev::chebyshev_info)
+    elementwise_derivative!(coord, ff, chebyshev::chebyshev_info, order::Val{1})
 
 Chebyshev transform f to get Chebyshev spectral coefficients and use them to calculate f'.
 """
-function elementwise_derivative!(coord, ff, chebyshev::chebyshev_info)
+function elementwise_derivative!(coord, ff, chebyshev::chebyshev_info, order::Val{1})
     df = coord.scratch_2d
     # define local variable nelement for convenience
     nelement = coord.nelement
@@ -153,14 +153,24 @@ function elementwise_derivative!(coord, ff, chebyshev::chebyshev_info)
     return nothing
 end
 """
-    elementwise_derivative!(coord, ff, adv_fac, spectral::chebyshev_info)
+    elementwise_derivative!(coord, ff, adv_fac, spectral::chebyshev_info, order)
 
 Chebyshev transform f to get Chebyshev spectral coefficients and use them to calculate f'.
 
 Note: Chebyshev derivative does not make use of upwinding information within each element.
 """
-function elementwise_derivative!(coord, ff, adv_fac, spectral::chebyshev_info)
-    return elementwise_derivative!(coord, ff, spectral)
+function elementwise_derivative!(coord, ff, adv_fac, spectral::chebyshev_info, order)
+    return elementwise_derivative!(coord, ff, spectral, order)
+end
+
+"""
+    elementwise_derivative!(coord, ff, chebyshev::chebyshev_info, order::Val{2})
+
+Chebyshev transform f to get Chebyshev spectral coefficients and use them to calculate f''.
+"""
+function elementwise_derivative!(coord, ff, chebyshev::chebyshev_info, order::Val{2})
+    error("Second derivatives not implemented for FFT-based Chebyshev pseudospectral "
+          * "method")
 end
 
 """
