@@ -13,7 +13,7 @@ using FFTW
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_complex
 using ..clenshaw_curtis: clenshawcurtisweights
-using ..lagrange: setup_lagrange_pseudospectral
+using ..lagrange: lagrange_float, setup_lagrange_pseudospectral
 import ..calculus: abstract_spectral_info, elementwise_derivative!
 import ..interpolation: interpolate_to_grid_1d!
 
@@ -65,15 +65,26 @@ create arrays needed for Chebyshev pseudospectral treatment using matrix-multipl
 function setup_chebyshev_pseudospectral_matrix_multiply(coord)
     # Collocation points within an element on a grid scaled to a range of [-1,1].
     # Need to reverse because the result of `chebyshevpoints()` is on [1,-1].
-    scaled_collocation_points = reverse(chebyshevpoints(coord.ngrid))
+    # Recreate here to get high-precision version to use for matrix generation.
+    scaled_collocation_points = reverse(chebyshevpoints(lagrange_float, coord.ngrid))
 
     # Factor to scale between [-1,1] grid and physically-spaced (but possibly
     # normalized) points
-    scale_factor = 2.0 * coord.nelement / coord.L
+    scale_factor = lagrange_float(2.0) * lagrange_float(coord.nelement) /
+                   lagrange_float(coord.L)
 
     collocation_points = scaled_collocation_points ./ scale_factor
 
-    return setup_lagrange_pseudospectral(collocation_points)
+    # Fine grid to allow exact integration of functions up to polynomial order
+    # 2p=2(ngrid-1)
+    ngrid_fine = 2*coord.ngrid - 1
+    fine_collocation_points = reverse(chebyshevpoints(lagrange_float, ngrid_fine))
+    @. fine_collocation_points = fine_collocation_points / scale_factor
+    fine_wgts = clenshaw_curtis_weights(lagrange_float, ngrid_fine, 1, ngrid_fine, [1],
+                                        [ngrid_fine], lagrange_float(1)/scale_factor)
+
+    return setup_lagrange_pseudospectral(collocation_points, fine_collocation_points,
+                                         fine_wgts)
     #return setup_lagrange_pseudospectral(scaled_collocation_points; scale_factor=scale_factor)
 end
 
@@ -86,7 +97,8 @@ function scaled_chebyshev_grid(ngrid, nelement, n, box_length, imin, imax)
     # the fast Chebyshev transform (aka the discrete cosine transform)
     # needed to obtain Chebyshev spectral coefficients
     # this grid goes from +1 to -1
-    chebyshev_grid = chebyshevpoints(ngrid)
+    # reverse the order of the original chebyshev_grid (ran from [1,-1])
+    chebyshev_grid = reverse(chebyshevpoints(ngrid))
     # create array for the full grid
     grid = allocate_float(n)
     # setup the scale factor by which the Chebyshev grid on [-1,1]
@@ -101,9 +113,8 @@ function scaled_chebyshev_grid(ngrid, nelement, n, box_length, imin, imax)
         #wgts[imin[j]:imax[j]] .= sqrt.(1.0 .- reverse(chebyshev_grid)[k:ngrid].^2) * scale_factor
         # amount by which to shift the centre of this element from zero
         shift = box_length*((j-0.5)/nelement - 0.5)
-        # reverse the order of the original chebyshev_grid (ran from [1,-1])
-        # and apply the scale factor and shift
-        grid[imin[j]:imax[j]] .= (reverse(chebyshev_grid)[k:ngrid] * scale_factor) .+ shift
+        # apply the scale factor and shift
+        grid[imin[j]:imax[j]] .= (chebyshev_grid[k:ngrid] * scale_factor) .+ shift
         # after first element, increase minimum index for chebyshev_grid to 2
         # to avoid double-counting boundary element
         k = 2
@@ -365,11 +376,13 @@ end
 returns wgts array containing the integration weights associated
 with all grid points for Clenshaw-Curtis quadrature
 """
-function clenshaw_curtis_weights(ngrid, nelement, n, imin, imax, scale_factor)
+function clenshaw_curtis_weights(float_type, ngrid, nelement, n, imin, imax, scale_factor)
     # create array containing the integration weights
-    wgts = zeros(n)
+    wgts = zeros(float_type, n)
     # calculate the modified Chebshev moments of the first kind
-    μ = chebyshevmoments(ngrid)
+    # Have to use mk_float because clenshawcurtisweights(μ) uses FFT, which is not
+    # compatible with Float128
+    μ = chebyshevmoments(float_type, ngrid)
     @inbounds begin
         # calculate the weights within a single element and
         # scale to account for modified domain (not [-1,1])
@@ -381,20 +394,23 @@ function clenshaw_curtis_weights(ngrid, nelement, n, imin, imax, scale_factor)
                 wgts[imin[j]:imax[j]] .= wgts[2:ngrid]
             end
             # remove double-counting of outer element boundary for last element
-            wgts[n] *= 0.5
+            wgts[n] /= 2
         end
     end
     return wgts
+end
+function clenshaw_curtis_weights(ngrid, nelement, n, imin, imax, scale_factor)
+    return clenshaw_curtis_weights(mk_float, ngrid, nelement, n, imin, imax, scale_factor)
 end
 
 """
 compute and return modified Chebyshev moments of the first kind:
 ∫dx Tᵢ(x) over range [-1,1]
 """
-function chebyshevmoments(N)
-    μ = zeros(N)
+function chebyshevmoments(float_type, N)
+    μ = zeros(float_type, N)
     @inbounds for i = 0:2:N-1
-        μ[i+1] = 2/(1-i^2)
+        μ[i+1] = float_type(2)/float_type(1-i^2)
     end
     return μ
 end
@@ -402,16 +418,19 @@ end
 """
 returns the Chebyshev-Gauss-Lobatto grid points on an n point grid
 """
-function chebyshevpoints(n)
-    grid = allocate_float(n)
-    nfac = 1/(n-1)
+function chebyshevpoints(float_type, n)
+    grid = zeros(float_type, n)
+    nfac = float_type(1)/float_type(n-1)
     @inbounds begin
         # calculate z = cos(θ) ∈ [1,-1]
         for j ∈ 1:n
-            grid[j] = cospi((j-1)*nfac)
+            grid[j] = cospi(float_type(j-1)*nfac)
         end
     end
     return grid
+end
+function chebyshevpoints(n)
+    return chebyshevpoints(mk_float, n)
 end
 
 """
