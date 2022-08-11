@@ -501,10 +501,13 @@ function second_derivative_finite_difference!(df::Array{mk_float,2}, f, del, bc,
         ghost = f[n]
         df[igrid[i],ielement[i]] = (ghost - 2.0*f[i] + f[i-1]) / del[i]^2
     elseif bc == "zero" || bc == "both_zero" || bc == "wall"
+        # Use one-sided difference as this value will only ever have an effect at a
+        # downwind boundary, as at upwind boundaries the value of the variable will be
+        # set by the boundary condition
         i = 1
-        df[igrid[i],ielement[i]] = (f[i+1] - 2.0*f[i]) / del[i]^2
+        df[igrid[i],ielement[i]] = (f[i+2] - 2.0*f[i+1] + f[i]) / del[i]^2
         i = n
-        df[igrid[i],ielement[i]] = (-2.0*f[i] + f[i-1]) / del[i]^2
+        df[igrid[i],ielement[i]] = (f[i] - 2.0*f[i-1] + f[i-2]) / del[i]^2
     end
 end
 
