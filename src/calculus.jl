@@ -4,12 +4,19 @@ module calculus
 
 export derivative!
 export integral
+export abstract_spectral_info
 
 using ..type_definitions: mk_float
 
 """
-    elementwise_derivative!(coord, f, adv_fac, spectral)
-    elementwise_derivative!(coord, f, spectral)
+Type to be inherited by *_info structs defined by each implementation of a
+discretization scheme.
+"""
+abstract type abstract_spectral_info end
+
+"""
+    elementwise_derivative!(coord, f, adv_fac, spectral::abstract_spectral_info)
+    elementwise_derivative!(coord, f, spectral::abstract_spectral_info)
 
 Generic function for element-by-element derivatives
 
@@ -21,11 +28,11 @@ Result is stored in coord.scratch_2d.
 function elementwise_derivative! end
 
 """
-    derivative!(df, f, coord, adv_fac, spectral)
+    derivative!(df, f, coord, adv_fac, spectral::abstract_spectral_info)
 
 Upwinding derivative.
 """
-function derivative!(df, f, coord, adv_fac, spectral)
+function derivative!(df, f, coord, adv_fac, spectral::abstract_spectral_info)
     # get the derivative at each grid point within each element and store in
     # coord.scratch_2d
     elementwise_derivative!(coord, f, adv_fac, spectral)
@@ -39,7 +46,7 @@ end
 
 Non-upwinding derivative.
 """
-function derivative!(df, f, coord, spectral)
+function derivative!(df, f, coord, spectral::abstract_spectral_info)
     # get the derivative at each grid point within each element and store in
     # coord.scratch_2d
     elementwise_derivative!(coord, f, spectral)

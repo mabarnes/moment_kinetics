@@ -11,7 +11,7 @@ using LinearAlgebra
 
 using ..array_allocation: allocate_float
 using ..type_definitions: mk_float
-import ..calculus: elementwise_derivative!
+import ..calculus: abstract_spectral_info, elementwise_derivative!
 import ..interpolation: interpolate_to_grid_1d!
 
 # Quadmath provides the Float128 type, which we use for increased precision when
@@ -26,7 +26,7 @@ This version is for the case when the collocation points are separated by 'physi
 (possibly normalised) distances, so that no scale factor is required for the result of
 the derivative operation.
 """
-struct lagrange_info
+struct lagrange_info <: abstract_spectral_info
     collocation_points::Vector{mk_float}
     derivative::Matrix{mk_float}
     barycentric_weights::Vector{mk_float}
@@ -39,7 +39,7 @@ Information for operations with Lagrange polynomials
 This version is for the case when the collocation points are given on the interval
 [-1,1], so that a scale factor is required for the result of the derivative operation.
 """
-struct scaled_lagrange_info
+struct scaled_lagrange_info <: abstract_spectral_info
     collocation_points::Vector{mk_float}
     derivative::Matrix{mk_float}
     barycentric_weights::Vector{mk_float}

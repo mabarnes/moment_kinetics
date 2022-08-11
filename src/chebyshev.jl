@@ -14,12 +14,13 @@ using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_complex
 using ..clenshaw_curtis: clenshawcurtisweights
 using ..lagrange: setup_lagrange_pseudospectral
-import ..calculus: elementwise_derivative!
+import ..calculus: abstract_spectral_info, elementwise_derivative!
 import ..interpolation: interpolate_to_grid_1d!
 
 """
 """
-struct chebyshev_info{TForward <: FFTW.cFFTWPlan, TBackward <: AbstractFFTs.ScaledPlan}
+struct chebyshev_info{TForward <: FFTW.cFFTWPlan,
+                      TBackward <: AbstractFFTs.ScaledPlan} <: abstract_spectral_info
     # fext is an array for storing f(z) on the extended domain needed
     # to perform complex-to-complex FFT using the fact that f(theta) is even in theta
     fext::Array{Complex{mk_float},1}

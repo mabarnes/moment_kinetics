@@ -3,7 +3,9 @@
 module finite_differences
 
 using ..type_definitions: mk_float
-import ..calculus: elementwise_derivative!
+import ..calculus: abstract_spectral_info, elementwise_derivative!
+
+struct fd_info <: abstract_spectral_info end
 
 """
 """
@@ -26,23 +28,23 @@ function fd_check_option(option, ngrid)
 end
 
 """
-    elementwise_derivative!(coord, f, adv_fac, not_spectral::Bool)
+    elementwise_derivative!(coord, f, adv_fac, not_spectral::fd_info)
 
 Calculate the derivative of f using finite differences, with particular scheme
 specified by coord.fd_option; result stored in coord.scratch_2d.
 """
-function elementwise_derivative!(coord, f, adv_fac, not_spectral::Bool)
+function elementwise_derivative!(coord, f, adv_fac, not_spectral::fd_info)
     return derivative_finite_difference!(coord.scratch_2d, f, coord.cell_width, adv_fac,
         coord.bc, coord.fd_option, coord.igrid, coord.ielement)
 end
 
 """
-    elementwise_derivative!(coord, f, not_spectral::Bool)
+    elementwise_derivative!(coord, f, not_spectral::fd_info)
 
 Calculate the derivative of f using 4th order centered finite differences; result stored
 in coord.scratch_2d.
 """
-function elementwise_derivative!(coord, f, not_spectral::Bool)
+function elementwise_derivative!(coord, f, not_spectral::fd_info)
     return derivative_finite_difference!(coord.scratch_2d, f, coord.cell_width,
         coord.bc, "fourth_order_centered", coord.igrid, coord.ielement)
 end

@@ -11,6 +11,7 @@ using ..calculus: derivative!
 using ..file_io: open_output_file
 using ..chebyshev: scaled_chebyshev_grid, setup_chebyshev_pseudospectral,
                    setup_chebyshev_pseudospectral_matrix_multiply
+using ..finite_differences: fd_info
 using ..lagrange: setup_lagrange_pseudospectral
 using ..quadrature: composite_simpson_weights
 using ..input_structs: advection_input
@@ -120,7 +121,7 @@ function define_coordinate(input, composition=nothing)
         derivative!(coord.duniform_dgrid, coord.uniform_grid, coord, spectral)
     else
         # create dummy Bool variable to return in place of the above struct
-        spectral = false
+        spectral = fd_info()
         coord.duniform_dgrid .= 1.0
     end
 

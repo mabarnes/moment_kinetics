@@ -5,6 +5,7 @@ include("setup.jl")
 using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.calculus: derivative!, integral
+using moment_kinetics.finite_differences: fd_info
 
 using Random
 
@@ -91,7 +92,7 @@ function runtests()
                 expected_df = @. 2.0 * π / L * cospi(2.0 * x.grid / L)
 
                 # differentiate f
-                derivative!(df, f, x, false)
+                derivative!(df, f, x, fd_info())
 
                 rtol = 1.e2 / (nelement*(ngrid-1))^4
                 @test isapprox(df, expected_df, rtol=rtol, atol=1.e-15,
@@ -137,7 +138,7 @@ function runtests()
                     adv_fac .= advection
 
                     # differentiate f
-                    derivative!(df, f, x, adv_fac, false)
+                    derivative!(df, f, x, adv_fac, fd_info())
 
                     rtol = 1.e2 / (nelement*(ngrid-1))^order
                     @test isapprox(df, expected_df, rtol=rtol, atol=1.e-15,
@@ -176,7 +177,7 @@ function runtests()
                 expected_df = @. -2.0 * π / L * sinpi(2.0 * x.grid / L)
 
                 # differentiate f
-                derivative!(df, f, x, false)
+                derivative!(df, f, x, fd_info())
 
                 # Note: only get 1st order convergence at the boundary for an input
                 # function that has zero gradient at the boundary
@@ -226,7 +227,7 @@ function runtests()
                     adv_fac .= advection
 
                     # differentiate f
-                    derivative!(df, f, x, adv_fac, false)
+                    derivative!(df, f, x, adv_fac, fd_info())
 
                     # Note: only get 1st order convergence at the boundary for an input
                     # function that has zero gradient at the boundary
