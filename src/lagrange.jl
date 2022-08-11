@@ -186,7 +186,7 @@ function elementwise_derivative!(coord, ff, lagrange::scaled_lagrange_info)
         @views mul!(df[:,j], lagrange.derivative, ff[imin:imax])
         # and multiply by scaling factor needed to go from scaled coordinate on [-1,1]
         # to actual coordinate
-        @views df[:,j] .= lagrange.scale_factor
+        @views df[:,j] .*= lagrange.scale_factor
 
         k = 1
     end
