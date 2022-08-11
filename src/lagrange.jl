@@ -122,7 +122,7 @@ function construct_derivative_matrix(collocation_points_in)::Matrix{mk_float}
     end
 
     derivative_matrix = Matrix{mk_float}(undef, n, n)
-    for i ∈ 1:n, j ∈ 1:n
+    for j ∈ 1:n, i ∈ 1:n
         derivative_matrix[i,j] = l_prime(j, collocation_points[i])
     end
 
