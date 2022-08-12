@@ -257,6 +257,13 @@ function init_pdf_over_density!(pdf, spec, composition, vpa, z, vpa_spectral, de
                     if iz ∈ (1, z.n)
                         @. pdf[:,iz] *= 1.0 - exp(-vpa.grid^2*inverse_width)
                     end
+                else
+                    # Smooth out boundary points for neutrals, using u0=0. Will
+                    # apply boundary conditions and then taper the boundary pdfs into
+                    # the domain below.
+                    if iz ∈ (1, z.n)
+                        @. pdf[:,iz] *= 1.0 - exp(-vpa.grid^2*inverse_width)
+                    end
                 end
             end
         end
