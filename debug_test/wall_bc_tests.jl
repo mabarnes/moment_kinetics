@@ -81,14 +81,26 @@ test_input_finite_difference_simple_sheath = merge(
 test_input_chebyshev = merge(test_input_finite_difference,
                              Dict("run_name" => "chebyshev_pseudospectral",
                                   "z_discretization" => "chebyshev_pseudospectral",
-                                  "z_ngrid" => 3,
+                                  "z_ngrid" => 4,
                                   "z_nelement" => 2,
                                   "vpa_discretization" => "chebyshev_pseudospectral",
-                                  "vpa_ngrid" => 3,
-                                  "vpa_nelement" => 2))
+                                  "vpa_ngrid" => 4,
+                                  "vpa_nelement" => 8))
+
+test_input_chebyshev_split1 = merge(test_input_chebyshev,
+                                     Dict("run_name" => "chebyshev_pseudospectral_split1",
+                                          "evolve_moments_density" => true))
+
+test_input_chebyshev_split2 = merge(test_input_chebyshev_split1,
+                                     Dict("run_name" => "chebyshev_pseudospectral_split2",
+                                          "evolve_moments_parallel_flow" => true))
+
+test_input_chebyshev_split3 = merge(test_input_chebyshev_split2,
+                                     Dict("run_name" => "chebyshev_pseudospectral_split3",
+                                          "evolve_moments_parallel_pressure" => true))
 
 test_input_chebyshev_simple_sheath = merge(
-    test_input_finite_difference,
+    test_input_chebyshev,
     Dict("run_name" => "chebyshev_pseudospectral_simple_sheath",
          "electron_physics" => "boltzmann_electron_response_with_simple_sheath"))
 
@@ -138,6 +150,9 @@ function runtests()
 
         @testset "Chebyshev" begin
             run_test(test_input_chebyshev)
+            run_test(test_input_chebyshev_split1)
+            run_test(test_input_chebyshev_split2)
+            run_test(test_input_chebyshev_split3)
             run_test(test_input_chebyshev_simple_sheath)
         end
     end
