@@ -703,7 +703,7 @@ function enforce_neutral_wall_bc!(pdf, vpa, ppar, upar, density, wall_flux_0,
         # for left boundary in zed (z = -Lz/2), want
         # f_n(z=-Lz/2, v_parallel > 0) = Γ_0 * f_KW(v_parallel) * pdf_norm_fac(-Lz/2)
         for ivpa ∈ 1:nvpa
-            if vpa.scratch2[ivpa] > zero
+            if vpa.scratch2[ivpa] >= -zero
                 pdf[ivpa,1] = wall_flux_0 * vpa.scratch[ivpa] * pdf_norm_fac
             end
         end
@@ -749,7 +749,7 @@ function enforce_neutral_wall_bc!(pdf, vpa, ppar, upar, density, wall_flux_0,
         # for right boundary in zed (z = Lz/2), want
         # f_n(z=Lz/2, v_parallel < 0) = Γ_Lz * f_KW(v_parallel) * pdf_norm_fac(Lz/2)
         for ivpa ∈ 1:nvpa
-            if vpa.scratch2[ivpa] < -zero
+            if vpa.scratch2[ivpa] <= zero
                 pdf[ivpa,end] = wall_flux_L * vpa.scratch[ivpa] * pdf_norm_fac
             end
         end
