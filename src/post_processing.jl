@@ -801,10 +801,10 @@ function draw_v_parallel_zero!(plt::Plots.Plot, z::AbstractVector, upar, vth,
     elseif evolve_upar
         zero_value = @. -upar
     else
-        zero_value = 0.0
+        zero_value = zeros(size(upar))
     end
     plot!(plt, z, zero_value, color=:red, linestyle=:dash, linewidth=1,
-          xlims=xlims(plt), ylims=ylims(plt))
+          xlims=xlims(plt), ylims=ylims(plt), label="")
 end
 function draw_v_parallel_zero!(z::AbstractVector, upar, vth, evolve_upar::Bool,
                                evolve_ppar::Bool)
@@ -821,7 +821,7 @@ Note this function requires using the PyPlot backend to support 2d coordinates b
 passed to `heatmap()`.
 """
 function plot_unnormalised(f, z_grid, vpa_grid, density, upar, vth, evolve_density,
-                           evolve_upar, evolve_ppar)
+                           evolve_upar, evolve_ppar; plot_log=false)
     nvpa, nz = size(f)
     z2d = zeros(nvpa, nz)
     dzdt2d = zeros(nvpa, nz)
@@ -832,12 +832,28 @@ function plot_unnormalised(f, z_grid, vpa_grid, density, upar, vth, evolve_densi
     end
 
     if evolve_ppar
-        f_unnorm = @. f * density / vth
+        f_unnorm = similar(f)
+        for iz ∈ 1:nz, ivpa ∈ 1:nvpa
+            f_unnorm[ivpa,iz] = @. f[ivpa,iz] * density[iz] / vth[iz]
+        end
     elseif evolve_density
-        f_unnorm = @. f * density
+        f_unnorm = similar(f)
+        for iz ∈ 1:nz, ivpa ∈ 1:nvpa
+            f_unnorm[ivpa,iz] = @. f[ivpa,iz] * density[iz]
+        end
+    else
+        f_unnorm = f
     end
 
-    return heatmap(z2d, dzdt2d, f_unnorm, xlabel="z", ylabel="vpa", c=:deep)
+    if plot_log
+        @. f_unnorm = log(abs(f_unnorm))
+        cmlog(cmlin::ColorGradient) = RGB[cmlin[x] for x=LinRange(0,1,30)]
+        cmap = cgrad(:deep, scale=:log) |> cmlog
+    else
+        cmap = :deep
+    end
+
+    return heatmap(z2d, dzdt2d, f_unnorm, xlabel="z", ylabel="vpa", c=cmap)
 end
 
 end
