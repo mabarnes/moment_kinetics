@@ -227,6 +227,7 @@ function plot_1D_1V_diagnostics(run_name, fid, nwrite_movie, itime_min, itime_ma
             @views heatmap(z, vpa, ff[:,:,is,end], xlabel="vpa", ylabel="z", c = :deep, interpolation = :cubic, title=str)
             outfile = string(run_name, "_f_vs_z_vpa_final", spec_string, ".pdf")
             savefig(outfile)
+        end
         if pp.animate_f_unnormalized
             # make a gif animation of f_unnorm(v_parallel_unnorm,z,t)
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
