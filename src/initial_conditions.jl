@@ -294,6 +294,9 @@ function enforce_z_boundary_condition!(pdf, density, upar, ppar, moments, bc::St
         end
     # 'wall' BC enforces wall boundary conditions
     elseif bc == "wall"
+        # Need integrals over vpa at wall boundaries in z, so cannot parallelize over z
+        # or vpa.
+        begin_s_r_region()
         @loop_s is begin
             if is ∈ composition.ion_species_range
                 # zero incoming BC for ions, as they recombine at the wall
@@ -310,13 +313,9 @@ function enforce_z_boundary_condition!(pdf, density, upar, ppar, moments, bc::St
                     end
                 end
             end
-        end
-        # BC for neutrals
-        if composition.n_neutral_species > 0
-            begin_serial_region()
-            # TODO: parallelise this...
-            @serial_region begin
-                for ir ∈ 1:r.n
+            if is ∈ composition.neutral_species_range
+                # BC for neutrals
+                @loop_r ir begin
                     # define vtfac to avoid repeated computation below
                     vtfac = sqrt(composition.T_wall * composition.mn_over_mi)
                     # initialise the combined ion/neutral fluxes into the walls to be zero
