@@ -16,6 +16,7 @@ using NCDatasets
 using Statistics: mean
 using SpecialFunctions: erfi
 using LaTeXStrings
+using Measures
 # modules
 using ..post_processing_input: pp
 using ..quadrature: composite_simpson_weights
@@ -237,11 +238,17 @@ end
 
 function compare_fields_symbolic_test(run_name,field,field_sym,z,r,time,nz,nr,ntime,field_label,field_sym_label,norm_label,file_string)
     it = ntime
-    heatmap(r, z, field[:,:,it], xlabel=L"r / L_r", ylabel=L"z / L_z", title=field_label, c = :deep)
+    fontsize = 20
+    ticksfontsize = 10
+    heatmap(r, z, field[:,:,it], xlabel=L"r / L_r", ylabel=L"z / L_z", title=field_label, c = :deep, 
+     #xtickfontsize = ticksfontsize, xguidefontsize = fontsize, ytickfontsize = ticksfontsize, yguidefontsize = fontsize, titlefontsize = fontsize)
+     windowsize = (360,240), margin = 15pt)
     outfile = string(run_name, "_"*file_string*"_vs_r_z.pdf")
     savefig(outfile)
     
-    heatmap(r, z, field_sym[:,:,it], xlabel=L"r / L_r", ylabel=L"z / L_z", title=field_sym_label, c = :deep)
+    heatmap(r, z, field_sym[:,:,it], xlabel=L"r / L_r", ylabel=L"z / L_z", title=field_sym_label, c = :deep,
+    #xtickfontsize = ticksfontsize, xguidefontsize = fontsize, ytickfontsize = ticksfontsize, yguidefontsize = fontsize, titlefontsize = fontsize)
+    windowsize = (360,240), margin = 15pt)
     outfile = string(run_name, "_"*file_string*"_sym_vs_r_z.pdf")
     savefig(outfile)
     
@@ -270,11 +277,16 @@ end
 function compare_moments_symbolic_test(run_name,moment,moment_sym,spec_string,z,r,time,nz,nr,ntime,moment_label,moment_sym_label,norm_label,file_string)
     is = 1
     it = ntime
-    heatmap(r, z, moment[:,:,is,it], xlabel=L"r / L_r", ylabel=L"z / L_z", title=moment_label, c = :deep)
+    fontsize = 20
+    heatmap(r, z, moment[:,:,is,it], xlabel=L"r / L_r", ylabel=L"z / L_z", title=moment_label, c = :deep,
+    #xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, titlefontsize = fontsize
+    windowsize = (360,240), margin = 15pt)
     outfile = string(run_name, "_"*file_string*"_vs_r_z_", spec_string, ".pdf")
     savefig(outfile)
     
-    heatmap(r, z, moment_sym[:,:,is,it], xlabel=L"r / L_r", ylabel=L"z / L_z", title=moment_sym_label, c = :deep)
+    heatmap(r, z, moment_sym[:,:,is,it], xlabel=L"r / L_r", ylabel=L"z / L_z", title=moment_sym_label, c = :deep,
+    #xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, titlefontsize = fontsize
+    windowsize = (360,240), margin = 15pt)
     outfile = string(run_name, "_"*file_string*"_sym_vs_r_z_", spec_string, ".pdf")
     savefig(outfile)
     
