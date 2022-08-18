@@ -19,7 +19,7 @@ jobs:
           mpi: 'openmpi'
       - uses: julia-actions/setup-julia@v1
         with:
-          version: '1'
+          version: '1.7.2'
           arch: x64
       - uses: julia-actions/julia-buildpkg@v1
       - run: |
