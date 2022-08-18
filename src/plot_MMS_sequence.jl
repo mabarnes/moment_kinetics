@@ -242,8 +242,12 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
     ymax = 1.0e1
     ymin = 1.0e-7
     fontsize = 10
-    if scan_name == "2D-3V-wall_cheb" || scan_name == "1D-3V-wall_cheb" || scan_name == "1D-3V-wall-sheath_cheb"
+    if scan_name == "2D-3V-wall_cheb" 
         ytick_sequence = Array([1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0,1.0e1])
+    elseif scan_name == "1D-3V-wall_cheb" || scan_name == "1D-3V-wall-sheath_cheb"
+        ytick_sequence = Array([1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1])
+    elseif scan_name == "2D-sound-wave_cheb_cxiz"
+        ytick_sequence = Array([1.0e-3,1.0e-2,1.0e-1,1.0e-0,1.0e1])
     elseif scan_name == "2D-sound-wave_cheb_cxiz" || scan_name == "2D-sound-wave_cheb"
         ytick_sequence = Array([1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0,1.0e1])
     else
