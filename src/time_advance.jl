@@ -105,6 +105,9 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
             elseif vperp.n > 1 && vr.n > 1 && vzeta.n > 1
                 advance_cx = true
                 advance_cx_1V = false
+            else
+                error("If any perpendicular velocity has length>1 they all must. "
+                      * "vperp.n=$(vperp.n), vr.n=$(vr.n), vzeta.n=$(vzeta.n)")
             end            
         else
             advance_cx = false
