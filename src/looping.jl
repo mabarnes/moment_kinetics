@@ -10,8 +10,19 @@ using ..type_definitions: mk_int
 using Combinatorics
 using Primes
 
-const all_dimensions = (:s, :sn, :r, :z, :vperp, :vpa, :vzeta, :vr, :vz)
-const dimension_combinations = Tuple(Tuple(c) for c in combinations(all_dimensions))
+# The ion dimensions and neutral dimensions are separated in order to reduce the number
+# of combinations. For some of the debugging features this helps. 'Moment dimensions"
+# are included separately so that they can include loops over both ion and neutral
+# species while excluding the 7-level loop s_sn_r_z_vzeta_vr_vz.
+const moment_dimensions = (:s, :sn, :r, :z)
+const ion_dimensions = (:s, :r, :z, :vperp, :vpa)
+const neutral_dimensions = (:sn, :r, :z, :vzeta, :vr, :vz)
+const all_dimensions = unique((moment_dimensions..., ion_dimensions...,
+                               neutral_dimensions...))
+const dimension_combinations = Tuple(Tuple(c) for c in
+                                     unique((combinations(moment_dimensions)...,
+                                             combinations(ion_dimensions)...,
+                                             combinations(neutral_dimensions)...)))
 
 """
 Construct a string composed of the dimension names given in the Tuple `dims`,
@@ -188,6 +199,29 @@ end
 """
 function get_best_ranges_from_sizes(block_rank, block_size, dim_sizes_list)
     splits = get_splits(block_size, length(dim_sizes_list))
+    @debug_detect_redundant_block_synchronize begin
+        if any(dim_sizes_list .== 1)
+            println("dim sizes ", dim_sizes_list)
+            error("Some dimension has size 1. Does not make sense to use "
+                  * "@debug_detect_redundant_block_synchronize as not all dimensions "
+                  * "can be split over more than one process.")
+        end
+        # This debug mode requires all dimensions to be split
+        filtered_splits = Vector{Vector{mk_int}}(undef, 0)
+        for s in splits
+            if !any(s .== 1)
+                # Every dimension is split, so detection of redundant
+                # _block_synchronize() calls can be done.
+                push!(filtered_splits, s)
+            end
+        end
+        if isempty(filtered_splits)
+            error("No combinations of factors of `block_size` resulted in all "
+                  * "dimensions being split. Probably need to use a number of "
+                  * "processes with more prime factors.")
+        end
+        splits = filtered_splits
+    end
     load_balance = Inf
     best_split = splits[1]
     for split in splits
