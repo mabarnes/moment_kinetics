@@ -7,8 +7,8 @@ test_output_directory = tempname()
 mkpath(test_output_directory)
 
 # default inputs for tests
-test_input_finite_difference = Dict("n_ion_species" => 1,
-                                    "n_neutral_species" => 1,
+test_input_finite_difference = Dict("n_ion_species" => 2,
+                                    "n_neutral_species" => 2,
                                     "boltzmann_electron_response" => true,
                                     "run_name" => "finite_difference",
                                     "base_directory" => test_output_directory,
@@ -43,15 +43,30 @@ test_input_finite_difference = Dict("n_ion_species" => 1,
                                     "use_semi_lagrange" => false,
                                     "n_rk_stages" => 4,
                                     "split_operators" => false,
+                                    "r_ngrid" => 4,
+                                    "r_nelement" => 1,
+                                    "r_discretization" => "finite_difference",
                                     "z_ngrid" => 8,
                                     "z_nelement" => 1,
                                     "z_bc" => "periodic",
                                     "z_discretization" => "finite_difference",
+                                    "vperp_ngrid" => 4,
+                                    "vperp_nelement" => 1,
+                                    "vperp_discretization" => "finite_difference",
                                     "vpa_ngrid" => 8,
                                     "vpa_nelement" => 1,
                                     "vpa_L" => 8.0,
                                     "vpa_bc" => "periodic",
-                                    "vpa_discretization" => "finite_difference")
+                                    "vpa_discretization" => "finite_difference",
+                                    "vz_ngrid" => 4,
+                                    "vz_nelement" => 1,
+                                    "vz_discretization" => "finite_difference",
+                                    "vr_ngrid" => 4,
+                                    "vr_nelement" => 1,
+                                    "vr_discretization" => "finite_difference",
+                                    "vzeta_ngrid" => 4,
+                                    "vzeta_nelement" => 1,
+                                    "vzeta_discretization" => "finite_difference")
 
 test_input_finite_difference_split_1_moment =
     merge(test_input_finite_difference,
@@ -70,12 +85,27 @@ test_input_finite_difference_split_3_moments =
 
 test_input_chebyshev = merge(test_input_finite_difference,
                              Dict("run_name" => "chebyshev_pseudospectral",
+                                  "r_discretization" => "chebyshev_pseudospectral",
+                                  "r_ngrid" => 3,
+                                  "r_nelement" => 1,
                                   "z_discretization" => "chebyshev_pseudospectral",
                                   "z_ngrid" => 3,
                                   "z_nelement" => 2,
+                                  "vperp_discretization" => "chebyshev_pseudospectral",
+                                  "vperp_ngrid" => 3,
+                                  "vperp_nelement" => 1,
                                   "vpa_discretization" => "chebyshev_pseudospectral",
                                   "vpa_ngrid" => 3,
-                                  "vpa_nelement" => 2))
+                                  "vpa_nelement" => 2,
+                                  "vz_discretization" => "chebyshev_pseudospectral",
+                                  "vz_ngrid" => 3,
+                                  "vz_nelement" => 2,
+                                  "vr_discretization" => "chebyshev_pseudospectral",
+                                  "vr_ngrid" => 3,
+                                  "vr_nelement" => 1,
+                                  "vzeta_discretization" => "chebyshev_pseudospectral",
+                                  "vzeta_ngrid" => 3,
+                                  "vzeta_nelement" => 1))
 
 test_input_chebyshev_split_1_moment =
     merge(test_input_chebyshev,
