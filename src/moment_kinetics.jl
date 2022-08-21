@@ -66,6 +66,7 @@ using .coordinates: define_coordinate
 using .debugging
 using .initial_conditions: init_pdf_and_moments
 using .looping
+using .looping: debug_setup_loop_ranges_split_one_combination!
 using .moment_kinetics_input: mk_input, run_type, performance_test
 using .time_advance: setup_time_advance!, time_advance!
 
@@ -145,8 +146,14 @@ end
 
 """
 Perform all the initialization steps for a run.
+
+`debug_loop_type` and `debug_loop_parallel_dims` are used to force specific set ups for
+parallel loop ranges, and are only used by the tests in `debug_test/`.
 """
-function setup_moment_kinetics(input_dict::Dict)
+function setup_moment_kinetics(input_dict::Dict;
+        debug_loop_type::Union{Nothing,NTuple{N,Symbol} where N}=nothing,
+        debug_loop_parallel_dims::Union{Nothing,NTuple{N,Symbol} where N}=nothing)
+
     # Set up MPI
     initialize_comms!()
     
@@ -180,8 +187,23 @@ function setup_moment_kinetics(input_dict::Dict)
     else
         n_neutral_loop_size = composition.n_neutral_species
     end
-    looping.setup_loop_ranges!(block_rank[], block_size[]; s=composition.n_ion_species, sn=n_neutral_loop_size, 
-                               r=r.n, z=z.n, vperp=vperp.n, vpa=vpa.n, vzeta=vzeta.n, vr=vr.n, vz=vz.n)
+    if debug_loop_type === nothing
+        # Non-debug case used for all simulations
+        looping.setup_loop_ranges!(block_rank[], block_size[];
+                                   s=composition.n_ion_species, sn=n_neutral_loop_size,
+                                   r=r.n, z=z.n, vperp=vperp.n, vpa=vpa.n,
+                                   vzeta=vzeta.n, vr=vr.n, vz=vz.n)
+    else
+        if debug_loop_parallel_dims === nothing
+            error("debug_loop_parallel_dims must not be `nothing` when debug_loop_type "
+                  * "is not `nothing`.")
+        end
+        # Debug initialisation only used by tests in `debug_test/`
+        debug_setup_loop_ranges_split_one_combination!(
+            block_rank[], block_size[], debug_loop_type, debug_loop_parallel_dims...;
+            s=composition.n_ion_species, sn=n_neutral_loop_size, r=r.n, z=z.n,
+            vperp=vperp.n, vpa=vpa.n, vzeta=vzeta.n, vr=vr.n, vz=vz.n)
+    end
     # initialize f and the lowest three v-space moments (density, upar and ppar),
     # each of which may be evolved separately depending on input choices.
     pdf, moments, boundary_distributions = init_pdf_and_moments(vz, vr, vzeta, vpa, vperp, z, r, composition, geometry, species, t_input.n_rk_stages, evolve_moments, t_input.use_manufactured_solns_for_init) 

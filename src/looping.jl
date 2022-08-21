@@ -303,6 +303,78 @@ eval(quote
          end
      end)
 
+ """
+ For debugging the shared-memory parallelism, create ranges where only the loops for a
+ single combinations of variables (given by `combination_to_split`) are parallelised,
+ and which dimensions are parallelised can be set with the `dims_to_split...` arguments.
+
+ Arguments
+ ---------
+ Keyword arguments `dim=n` are required for each dim in `all_dimensions` where `n` is
+ an integer giving the size of the dimension.
+ """
+ function debug_setup_loop_ranges_split_one_combination!(
+         block_rank, block_size, combination_to_split::NTuple{N,Symbol} where N,
+         dims_to_split::Symbol...;
+         dim_sizes...)
+
+     block_rank >= block_size && error("block_rank ($block_rank) is >= block_size "
+                                       * "($block_size).")
+
+     rank0 = (block_rank == 0)
+
+     # Use empty tuple for serial region
+     if rank0
+         serial_ranges = Dict(d=>1:n for (d,n) in dim_sizes)
+         loop_ranges_store[()] = LoopRanges(;
+             parallel_dims=(), rank0=rank0,
+             serial_ranges...)
+     else
+         serial_ranges = Dict(d=>1:0 for (d,_) in dim_sizes)
+         loop_ranges_store[()] = LoopRanges(;
+             parallel_dims=(), rank0=rank0,
+             serial_ranges...)
+     end
+
+     for dims ∈ dimension_combinations
+         if dims == combination_to_split
+             factors = factor(Vector, block_size)
+             if length(factors) < length(dims_to_split)
+                 error("Not enough factors ($factors) to split all of $dims_to_split")
+             end
+             ranges = Dict(d=>1:n for (d,n) in dim_sizes)
+             remaining_block_size = block_size
+             sub_rank = block_rank
+             for (i,dim) ∈ enumerate(dims_to_split[1:end-1])
+                 sub_block_size = factors[i]
+                 remaining_block_size = remaining_block_size ÷ sub_block_size
+                 sub_block_rank = sub_rank ÷ remaining_block_size
+                 sub_rank = sub_rank % remaining_block_size
+                 ranges[dim] = get_local_range(sub_block_rank, sub_block_size, dim_sizes[dim])
+             end
+             # For the 'last' dim, use the product of any remaining factors, in case
+             # there were more factors than dims in dims_to_split
+             dim = dims_to_split[end]
+             sub_block_size = prod(factors[length(dims_to_split):end])
+             remaining_block_size = remaining_block_size ÷ sub_block_size
+             sub_block_rank = sub_rank ÷ remaining_block_size
+             ranges[dim] = get_local_range(sub_block_rank,
+                                           sub_block_size,
+                                           dim_sizes[dim])
+             loop_ranges_store[dims] = LoopRanges(;
+                 parallel_dims=dims, rank0 = rank0, ranges...)
+         else
+             # Use the same ranges as serial loops
+             loop_ranges_store[dims] = LoopRanges(;
+                 parallel_dims=dims, rank0 = rank0, serial_ranges...)
+         end
+     end
+
+     loop_ranges[] = loop_ranges_store[()]
+
+     return nothing
+ end
+
 export setup_loop_ranges!
 
 # Create macros for looping over any set of dimensions

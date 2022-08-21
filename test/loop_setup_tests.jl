@@ -3,7 +3,9 @@ module LoopSetupTests
 include("setup.jl")
 
 using moment_kinetics.looping: dims_string, get_splits, get_load_balance,
-                               get_best_ranges, get_best_ranges_from_sizes
+                               get_best_ranges, get_best_ranges_from_sizes,
+                               debug_setup_loop_ranges_split_one_combination!,
+                               loop_ranges_store
 
 function runtests()
     @testset "loop setup" verbose=use_verbose begin
@@ -148,6 +150,259 @@ function runtests()
                                        :vzeta=>11, :vr=>13, :vz=>17)) ==
                 Dict(:s=>1:3, :r=>4:4, :z=>3:5, :sn=>1:1, :vperp=>1:2, :vpa=>1:7,
                      :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
+        end
+        @testset "debug_setup_loop_ranges_split_one_combination" begin
+            debug_setup_loop_ranges_split_one_combination!(
+                0, 2, (:s, :z), :s; s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
+                vr=17, vz=19)
+
+            @test loop_ranges_store[()].s == 1:2
+            @test loop_ranges_store[()].r == 1:3
+            @test loop_ranges_store[()].z == 1:4
+
+            @test loop_ranges_store[(:s,)].s == 1:2
+            @test loop_ranges_store[(:s,)].r == 1:3
+            @test loop_ranges_store[(:s,)].z == 1:4
+
+            @test loop_ranges_store[(:r,)].s == 1:2
+            @test loop_ranges_store[(:r,)].r == 1:3
+            @test loop_ranges_store[(:r,)].z == 1:4
+
+            @test loop_ranges_store[(:z,)].s == 1:2
+            @test loop_ranges_store[(:z,)].r == 1:3
+            @test loop_ranges_store[(:z,)].z == 1:4
+
+            @test loop_ranges_store[(:s,:r)].s == 1:2
+            @test loop_ranges_store[(:s,:r)].r == 1:3
+            @test loop_ranges_store[(:s,:r)].z == 1:4
+
+            @test loop_ranges_store[(:s,:z)].s == 1:1
+            @test loop_ranges_store[(:s,:z)].r == 1:3
+            @test loop_ranges_store[(:s,:z)].z == 1:4
+
+            @test loop_ranges_store[(:r,:z)].s == 1:2
+            @test loop_ranges_store[(:r,:z)].r == 1:3
+            @test loop_ranges_store[(:r,:z)].z == 1:4
+
+            @test loop_ranges_store[(:s,:r,:z)].s == 1:2
+            @test loop_ranges_store[(:s,:r,:z)].r == 1:3
+            @test loop_ranges_store[(:s,:r,:z)].z == 1:4
+
+            debug_setup_loop_ranges_split_one_combination!(
+                1, 2, (:s, :z), :s; s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
+                vr=17, vz=19)
+
+            @test loop_ranges_store[()].s == 1:0
+            @test loop_ranges_store[()].r == 1:0
+            @test loop_ranges_store[()].z == 1:0
+
+            @test loop_ranges_store[(:s,)].s == 1:0
+            @test loop_ranges_store[(:s,)].r == 1:0
+            @test loop_ranges_store[(:s,)].z == 1:0
+
+            @test loop_ranges_store[(:r,)].s == 1:0
+            @test loop_ranges_store[(:r,)].r == 1:0
+            @test loop_ranges_store[(:r,)].z == 1:0
+
+            @test loop_ranges_store[(:z,)].s == 1:0
+            @test loop_ranges_store[(:z,)].r == 1:0
+            @test loop_ranges_store[(:z,)].z == 1:0
+
+            @test loop_ranges_store[(:s,:r)].s == 1:0
+            @test loop_ranges_store[(:s,:r)].r == 1:0
+            @test loop_ranges_store[(:s,:r)].z == 1:0
+
+            @test loop_ranges_store[(:s,:z)].s == 2:2
+            @test loop_ranges_store[(:s,:z)].r == 1:3
+            @test loop_ranges_store[(:s,:z)].z == 1:4
+
+            @test loop_ranges_store[(:r,:z)].s == 1:0
+            @test loop_ranges_store[(:r,:z)].r == 1:0
+            @test loop_ranges_store[(:r,:z)].z == 1:0
+
+            @test loop_ranges_store[(:s,:r,:z)].s == 1:0
+            @test loop_ranges_store[(:s,:r,:z)].r == 1:0
+            @test loop_ranges_store[(:s,:r,:z)].z == 1:0
+
+            debug_setup_loop_ranges_split_one_combination!(
+                0, 4, (:r, :z), :r, :z; s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
+                vr=17, vz=19)
+
+            @test loop_ranges_store[()].s == 1:2
+            @test loop_ranges_store[()].r == 1:3
+            @test loop_ranges_store[()].z == 1:4
+
+            @test loop_ranges_store[(:s,)].s == 1:2
+            @test loop_ranges_store[(:s,)].r == 1:3
+            @test loop_ranges_store[(:s,)].z == 1:4
+
+            @test loop_ranges_store[(:r,)].s == 1:2
+            @test loop_ranges_store[(:r,)].r == 1:3
+            @test loop_ranges_store[(:r,)].z == 1:4
+
+            @test loop_ranges_store[(:z,)].s == 1:2
+            @test loop_ranges_store[(:z,)].r == 1:3
+            @test loop_ranges_store[(:z,)].z == 1:4
+
+            @test loop_ranges_store[(:s,:r)].s == 1:2
+            @test loop_ranges_store[(:s,:r)].r == 1:3
+            @test loop_ranges_store[(:s,:r)].z == 1:4
+
+            @test loop_ranges_store[(:s,:z)].s == 1:2
+            @test loop_ranges_store[(:s,:z)].r == 1:3
+            @test loop_ranges_store[(:s,:z)].z == 1:4
+
+            @test loop_ranges_store[(:r,:z)].s == 1:2
+            @test loop_ranges_store[(:r,:z)].r == 1:1
+            @test loop_ranges_store[(:r,:z)].z == 1:2
+
+            @test loop_ranges_store[(:s,:r,:z)].s == 1:2
+            @test loop_ranges_store[(:s,:r,:z)].r == 1:3
+            @test loop_ranges_store[(:s,:r,:z)].z == 1:4
+
+            debug_setup_loop_ranges_split_one_combination!(
+                1, 4, (:r, :z), :r, :z; s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
+                vr=17, vz=19)
+
+            @test loop_ranges_store[()].s == 1:0
+            @test loop_ranges_store[()].r == 1:0
+            @test loop_ranges_store[()].z == 1:0
+
+            @test loop_ranges_store[(:s,)].s == 1:0
+            @test loop_ranges_store[(:s,)].r == 1:0
+            @test loop_ranges_store[(:s,)].z == 1:0
+
+            @test loop_ranges_store[(:r,)].s == 1:0
+            @test loop_ranges_store[(:r,)].r == 1:0
+            @test loop_ranges_store[(:r,)].z == 1:0
+
+            @test loop_ranges_store[(:z,)].s == 1:0
+            @test loop_ranges_store[(:z,)].r == 1:0
+            @test loop_ranges_store[(:z,)].z == 1:0
+
+            @test loop_ranges_store[(:s,:r)].s == 1:0
+            @test loop_ranges_store[(:s,:r)].r == 1:0
+            @test loop_ranges_store[(:s,:r)].z == 1:0
+
+            @test loop_ranges_store[(:s,:z)].s == 1:0
+            @test loop_ranges_store[(:s,:z)].r == 1:0
+            @test loop_ranges_store[(:s,:z)].z == 1:0
+
+            @test loop_ranges_store[(:r,:z)].s == 1:2
+            @test loop_ranges_store[(:r,:z)].r == 1:1
+            @test loop_ranges_store[(:r,:z)].z == 3:4
+
+            @test loop_ranges_store[(:s,:r,:z)].s == 1:0
+            @test loop_ranges_store[(:s,:r,:z)].r == 1:0
+            @test loop_ranges_store[(:s,:r,:z)].z == 1:0
+
+            debug_setup_loop_ranges_split_one_combination!(
+                2, 4, (:r, :z), :r, :z; s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
+                vr=17, vz=19)
+
+            @test loop_ranges_store[()].s == 1:0
+            @test loop_ranges_store[()].r == 1:0
+            @test loop_ranges_store[()].z == 1:0
+
+            @test loop_ranges_store[(:s,)].s == 1:0
+            @test loop_ranges_store[(:s,)].r == 1:0
+            @test loop_ranges_store[(:s,)].z == 1:0
+
+            @test loop_ranges_store[(:r,)].s == 1:0
+            @test loop_ranges_store[(:r,)].r == 1:0
+            @test loop_ranges_store[(:r,)].z == 1:0
+
+            @test loop_ranges_store[(:z,)].s == 1:0
+            @test loop_ranges_store[(:z,)].r == 1:0
+            @test loop_ranges_store[(:z,)].z == 1:0
+
+            @test loop_ranges_store[(:s,:r)].s == 1:0
+            @test loop_ranges_store[(:s,:r)].r == 1:0
+            @test loop_ranges_store[(:s,:r)].z == 1:0
+
+            @test loop_ranges_store[(:s,:z)].s == 1:0
+            @test loop_ranges_store[(:s,:z)].r == 1:0
+            @test loop_ranges_store[(:s,:z)].z == 1:0
+
+            @test loop_ranges_store[(:r,:z)].s == 1:2
+            @test loop_ranges_store[(:r,:z)].r == 2:3
+            @test loop_ranges_store[(:r,:z)].z == 1:2
+
+            @test loop_ranges_store[(:s,:r,:z)].s == 1:0
+            @test loop_ranges_store[(:s,:r,:z)].r == 1:0
+            @test loop_ranges_store[(:s,:r,:z)].z == 1:0
+
+            debug_setup_loop_ranges_split_one_combination!(
+                3, 4, (:r, :z), :r, :z; s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
+                vr=17, vz=19)
+
+            @test loop_ranges_store[()].s == 1:0
+            @test loop_ranges_store[()].r == 1:0
+            @test loop_ranges_store[()].z == 1:0
+
+            @test loop_ranges_store[(:s,)].s == 1:0
+            @test loop_ranges_store[(:s,)].r == 1:0
+            @test loop_ranges_store[(:s,)].z == 1:0
+
+            @test loop_ranges_store[(:r,)].s == 1:0
+            @test loop_ranges_store[(:r,)].r == 1:0
+            @test loop_ranges_store[(:r,)].z == 1:0
+
+            @test loop_ranges_store[(:z,)].s == 1:0
+            @test loop_ranges_store[(:z,)].r == 1:0
+            @test loop_ranges_store[(:z,)].z == 1:0
+
+            @test loop_ranges_store[(:s,:r)].s == 1:0
+            @test loop_ranges_store[(:s,:r)].r == 1:0
+            @test loop_ranges_store[(:s,:r)].z == 1:0
+
+            @test loop_ranges_store[(:s,:z)].s == 1:0
+            @test loop_ranges_store[(:s,:z)].r == 1:0
+            @test loop_ranges_store[(:s,:z)].z == 1:0
+
+            @test loop_ranges_store[(:r,:z)].s == 1:2
+            @test loop_ranges_store[(:r,:z)].r == 2:3
+            @test loop_ranges_store[(:r,:z)].z == 3:4
+
+            @test loop_ranges_store[(:s,:r,:z)].s == 1:0
+            @test loop_ranges_store[(:s,:r,:z)].r == 1:0
+            @test loop_ranges_store[(:s,:r,:z)].z == 1:0
+
+            debug_setup_loop_ranges_split_one_combination!(
+                3, 8, (:s, :r, :z), :s, :r, :z; s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
+                vr=17, vz=19)
+
+            @test loop_ranges_store[()].s == 1:0
+            @test loop_ranges_store[()].r == 1:0
+            @test loop_ranges_store[()].z == 1:0
+
+            @test loop_ranges_store[(:s,)].s == 1:0
+            @test loop_ranges_store[(:s,)].r == 1:0
+            @test loop_ranges_store[(:s,)].z == 1:0
+
+            @test loop_ranges_store[(:r,)].s == 1:0
+            @test loop_ranges_store[(:r,)].r == 1:0
+            @test loop_ranges_store[(:r,)].z == 1:0
+
+            @test loop_ranges_store[(:z,)].s == 1:0
+            @test loop_ranges_store[(:z,)].r == 1:0
+            @test loop_ranges_store[(:z,)].z == 1:0
+
+            @test loop_ranges_store[(:s,:r)].s == 1:0
+            @test loop_ranges_store[(:s,:r)].r == 1:0
+            @test loop_ranges_store[(:s,:r)].z == 1:0
+
+            @test loop_ranges_store[(:s,:z)].s == 1:0
+            @test loop_ranges_store[(:s,:z)].r == 1:0
+            @test loop_ranges_store[(:s,:z)].z == 1:0
+
+            @test loop_ranges_store[(:r,:z)].s == 1:0
+            @test loop_ranges_store[(:r,:z)].r == 1:0
+            @test loop_ranges_store[(:r,:z)].z == 1:0
+
+            @test loop_ranges_store[(:s,:r,:z)].s == 1:1
+            @test loop_ranges_store[(:s,:r,:z)].r == 2:3
+            @test loop_ranges_store[(:s,:r,:z)].z == 3:4
         end
     end
 end

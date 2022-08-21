@@ -1,43 +1,45 @@
+using moment_kinetics: setup_moment_kinetics, cleanup_moment_kinetics!
+using moment_kinetics.time_advance: time_advance!
+using moment_kinetics.communication
+using moment_kinetics.looping: dimension_combinations
+using Primes
+
 """
 Run a test for a single set of parameters
 """
 # Note 'name' should not be shared by any two tests in this file
-function run_test(test_input; args...)
-    # by passing keyword arguments to run_test, args becomes a Dict which can be used to
-    # update the default inputs
+function run_test(test_input, debug_loop_type, debug_loop_parallel_dims)
 
-    # Convert keyword arguments to a unique name
     name = test_input["run_name"]
-    if length(args) > 0
-        name = string(name, "_", (string(k, "-", v, "_") for (k, v) in args)...)
-
-        # Remove trailing "_"
-        name = chop(name)
-    end
 
     @testset "$name" begin
         # Provide some progress info
-        println("    - bug-checking ", name)
-
-        # Convert dict from symbol keys to String keys
-        modified_inputs = Dict(String(k) => v for (k, v) in args)
-
-        # Update default inputs with values to be changed
-        input = merge(test_input, modified_inputs)
-
-        input["run_name"] = name
+        block_rank[] == 0 && println("    - bug-checking $name, $debug_loop_type, $debug_loop_parallel_dims")
 
         # run simulation
-        run_moment_kinetics(input)
+        mk_state = setup_moment_kinetics(test_input; debug_loop_type=debug_loop_type,
+                                         debug_loop_parallel_dims=debug_loop_parallel_dims)
+        time_advance!(mk_state...)
+        cleanup_moment_kinetics!(mk_state[end-1:end]...)
     end
 end
 
 function runtests()
-    @testset "$test_type" begin
-        println("$test_type tests")
 
-        for input ∈ test_input_list
-            run_test(input)
+    block_size[] == 1 && error("Cannot run debug checks in serial")
+
+    @testset "$test_type" begin
+        block_rank[] == 0 && println("$test_type tests")
+
+        n_factors = length(factor(Vector, block_size[]))
+
+        for input ∈ test_input_list, debug_loop_type ∈ dimension_combinations
+            ndims = length(debug_loop_type)
+            for i ∈ 1:(ndims+n_factors-1)÷n_factors
+                debug_loop_parallel_dims =
+                    debug_loop_type[(i-1)*n_factors+1:min(i*n_factors, ndims)]
+                run_test(input, debug_loop_type, debug_loop_parallel_dims)
+            end
         end
     end
 end

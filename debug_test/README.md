@@ -76,6 +76,11 @@ Suggested debugging strategy for race conditions is:
       ..communication: debug_check_shared_memory()`. The function runs the same
       error checks as are added by `@debug_shared_array` in
       `_block_synchronize()`.
+    * The tests in `debug_test/` check for correctness by looping over the
+      dimensions and forcing each to be split over separate processes in turn.
+      This allows the correctness checks to be run using only 2 processes,
+      which would not be possible if all dimensions had to be split at the same
+      time.
 * Run `debug_test/debug_redundant_synchronization/runtests.jl` with
   `@debug_detect_redundant_block_synchronize` activated. This should show if
   any call to `_block_synchronize()` (including the ones inside
