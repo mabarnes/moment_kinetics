@@ -586,12 +586,14 @@ function rk_update!(scratch, pdf, moments, fields, vz, vr, vzeta, vpa, vperp, z,
     
     update_upar!(new_scratch.upar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
     # convert from particle particle flux to parallel flow
+    begin_s_r_z_region()
     @loop_s_r_z is ir iz begin
         new_scratch.upar[iz,ir,is] /= new_scratch.density[iz,ir,is]
     end
     
     update_ppar!(new_scratch.ppar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
     # update the thermal speed
+    begin_s_r_z_region()
     try #below block causes DomainError if ppar < 0 or density, so exit cleanly if possible
 		@loop_s_r_z is ir iz begin
 			moments.charged.vth[iz,ir,is] = sqrt(2.0*new_scratch.ppar[iz,ir,is]/new_scratch.density[iz,ir,is])
@@ -615,6 +617,7 @@ function rk_update!(scratch, pdf, moments, fields, vz, vr, vzeta, vpa, vperp, z,
     ##
     
     if composition.n_neutral_species > 0
+        begin_sn_r_z_vzeta_vr_vz_region()
         @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
             new_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] = ( rk_coefs[1]*pdf.neutral.norm[ivz,ivr,ivzeta,iz,ir,isn] 
              + rk_coefs[2]*old_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] + rk_coefs[3]*new_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn])
@@ -654,6 +657,7 @@ function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase,
     end
     
     if composition.n_neutral_species > 0
+        begin_sn_r_z_region()
         @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
             first_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] = pdf.neutral.norm[ivz,ivr,ivzeta,iz,ir,isn]
             # change norm -> unnorm if remove moment-based evolution?
@@ -694,7 +698,9 @@ function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase,
         moments.charged.ppar[iz,ir,is] = final_scratch.ppar[iz,ir,is]
     end
     if composition.n_neutral_species > 0
-        begin_sn_r_z_region()
+        # No need to synchronize here as we only change neutral quantities and previous
+        # region only changed plasma quantities.
+        begin_sn_r_z_region(no_synchronize=true)
         @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
             pdf.neutral.norm[ivz,ivr,ivzeta,iz,ir,isn] = final_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] 
             # change norm -> unnorm if remove moment-based evolution?
@@ -853,6 +859,7 @@ for use in the Runge-Kutta time advance
 function update_solution_vector!(evolved, moments, istage, composition, vpa, vperp, z, r)
     new_evolved = evolved[istage+1]
     old_evolved = evolved[istage]
+    begin_s_r_z_region()
     @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
         new_evolved.pdf[ivpa,ivperp,iz,ir,is] = old_evolved.pdf[ivpa,ivperp,iz,ir,is]
     end
@@ -862,6 +869,7 @@ function update_solution_vector!(evolved, moments, istage, composition, vpa, vpe
         new_evolved.ppar[iz,ir,is] = old_evolved.ppar[iz,ir,is]
     end
     if composition.n_neutral_species > 0 
+        begin_sn_r_z_region()
         @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
             new_evolved.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] = old_evolved.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn]
         end
@@ -879,10 +887,12 @@ the evolved pdf has been normalised by the particle density
 undo this normalisation to get the true particle distribution function
 """
 function update_pdf_unnorm!(pdf, moments, scratch, composition, vpa, vperp)
+    begin_s_r_z_vperp_vpa_region()
     @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
         pdf.charged.unnorm[ivpa,ivperp,iz,ir,is] = pdf.charged.norm[ivpa,ivperp,iz,ir,is]
     end
     if composition.n_neutral_species > 0
+        begin_sn_r_z_vzeta_vr_vz_region()
         @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
             pdf.neutral.unnorm[ivz,ivr,ivzeta,iz,ir,isn] = pdf.neutral.norm[ivz,ivr,ivzeta,iz,ir,isn]
         end

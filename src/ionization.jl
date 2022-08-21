@@ -27,9 +27,9 @@ function ionization_collisions_1V!(f_out, f_neutral_out, fvec_in, vpa, vperp, z,
     @boundscheck composition.n_ion_species == size(f_out,5) || throw(BoundsError(f_out))
     
     
-    # keep vpa vperp vz vr vzeta local so that 
-    # vpa loop below can also be used for vz 
-    begin_s_sn_r_z_region()
+    # keep vpa vperp vz vr vzeta local so that
+    # vpa loop below can also be used for vz
+    begin_r_z_vpa_region()
 
     if collisions.constant_ionization_rate
         # Oddly the test in test/harrisonthompson.jl matches the analitical
@@ -45,8 +45,8 @@ function ionization_collisions_1V!(f_out, f_neutral_out, fvec_in, vpa, vperp, z,
         end
     else
         @loop_s is begin
-            # ion ionisation rate =   < f_n > n_e R_ion  
-            # neutral "ionisation" (depopulation) rate =   -  f_n  n_e R_ion  
+            # ion ionisation rate =   < f_n > n_e R_ion
+            # neutral "ionisation" (depopulation) rate =   -  f_n  n_e R_ion
             # no gyroaverage here as 1V code
             #NB: used quasineutrality to replace electron density n_e with ion density
             #NEEDS GENERALISATION TO n_ion_species > 1 (missing species charge: Sum_i Z_i n_i = n_e)
@@ -83,29 +83,27 @@ function ionization_collisions_3V!(f_out, f_neutral_out, f_neutral_gav_in, fvec_
     
     ionization_frequency = collisions.ionization
     
-    # keep vpa vperp vz vr vzeta local so that 
-    # vpa loop below can also be used for vz 
-    begin_s_sn_r_z_region()
-
+    begin_s_r_z_vperp_vpa_region()
+    # ion ionization rate =   < f_n > n_e R_ion
+    # neutral "ionization" (depopulation) rate =   -  f_n  n_e R_ion
+    #NB: used quasineutrality to replace electron density n_e with ion density
+    #NEEDS GENERALISATION TO n_ion_species > 1 (missing species charge: Sum_i Z_i n_i = n_e)
+    # for ion species we need gyroaveraged neutral pdf, which is not stored in fvec (scratch[istage])
     @loop_s is begin
-        # ion ionization rate =   < f_n > n_e R_ion  
-        # neutral "ionization" (depopulation) rate =   -  f_n  n_e R_ion  
-        # no gyroaverage here as 1V code
-        #NB: used quasineutrality to replace electron density n_e with ion density
-        #NEEDS GENERALISATION TO n_ion_species > 1 (missing species charge: Sum_i Z_i n_i = n_e)
-        # for ion species we need gyroaveraged neutral pdf, which is not stored in fvec (scratch[istage])
-        @loop_sn isn begin
-            @loop_r_z ir iz begin
-                @loop_vperp_vpa ivperp ivpa begin
-                    # apply ionization collisions to all ion species
-                    f_out[ivpa,ivperp,iz,ir,is] += dt*ionization_frequency*f_neutral_gav_in[ivpa,ivperp,iz,ir,isn]*fvec_in.density[iz,ir,is]
-                end 
-                @loop_vzeta_vr_vz ivzeta ivr ivz begin
-                    # apply ionization collisions to all neutral species
-                    f_neutral_out[ivz,ivr,ivzeta,iz,ir,isn] -= dt*ionization_frequency*fvec_in.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn]*fvec_in.density[iz,ir,is]
-                end
+        for isn ∈ 1:composition.n_neutral_species
+            @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
+                # apply ionization collisions to all ion species
+                f_out[ivpa,ivperp,iz,ir,is] += dt*ionization_frequency*f_neutral_gav_in[ivpa,ivperp,iz,ir,isn]*fvec_in.density[iz,ir,is]
             end
-            
+        end
+    end
+    begin_sn_r_z_vzeta_vr_vz_region()
+    @loop_sn isn begin
+        for is ∈ 1:composition.n_ion_species
+            @loop_r_z_vzeta_vr_vz ir iz ivzeta ivr ivz begin
+                # apply ionization collisions to all neutral species
+                f_neutral_out[ivz,ivr,ivzeta,iz,ir,isn] -= dt*ionization_frequency*fvec_in.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn]*fvec_in.density[iz,ir,is]
+            end
         end
     end
 

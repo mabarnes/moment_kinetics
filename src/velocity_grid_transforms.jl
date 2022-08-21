@@ -23,7 +23,7 @@ function vzvrvzeta_to_vpavperp!(f_out,f_in,vz,vr,vzeta,vpa,vperp,gyrophase,z,r,g
     @boundscheck r.n == size(f_out, 4) || throw(BoundsError(f_out))
     @boundscheck composition.n_neutral_species == size(f_out, 5) || throw(BoundsError(f_out))
 
-    begin_s_sn_r_z_region()
+    begin_sn_r_z_region()
     @loop_sn_r_z isn ir iz begin
         @views vzvrvzeta_to_vpavperp_species!(f_out[:,:,iz,ir,isn],f_in[:,:,:,iz,ir,isn],
                                 vz,vr,vzeta,vpa,vperp,gyrophase,geometry)
@@ -76,7 +76,7 @@ function vpavperp_to_vzvrvzeta!(f_out,f_in,vz,vr,vzeta,vpa,vperp,z,r,geometry,co
     @boundscheck r.n == size(f_out, 5) || throw(BoundsError(f_out))
     @boundscheck composition.n_ion_species == size(f_out, 6) || throw(BoundsError(f_out))
     
-    begin_s_sn_r_z_region()
+    begin_s_r_z_region()
     @loop_s_r_z is ir iz begin
         @views vpavperp_to_vzvrvzeta_species!(f_out[:,:,:,iz,ir,is],f_in[:,:,iz,ir,is],
                                 vz,vr,vzeta,vpa,vperp,geometry)
