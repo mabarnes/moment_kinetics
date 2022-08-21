@@ -274,6 +274,10 @@ eval(quote
          `n` is an integer giving the size of the dimension.
          """
          function setup_loop_ranges!(block_rank, block_size; dim_sizes...)
+
+             block_rank >= block_size && error("block_rank ($block_rank) is >= "
+                                               * "block_size ($block_size).")
+
              rank0 = (block_rank == 0)
 
              # Use empty tuple for serial region
