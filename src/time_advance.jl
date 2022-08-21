@@ -703,13 +703,15 @@ function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase,
         update_neutral_pz!(moments.neutral.pz, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
         update_neutral_pr!(moments.neutral.pr, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
         update_neutral_pzeta!(moments.neutral.pzeta, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
-        #update ptot (isotropic pressure)
+        # Update ptot (isotropic pressure)
         if r.n > 1 #if 2D geometry
             @loop_sn_r_z isn ir iz begin
                 moments.neutral.ptot[iz,ir,isn] = (moments.neutral.pz[iz,ir,isn] + moments.neutral.pr[iz,ir,isn] + moments.neutral.pzeta[iz,ir,isn])/3.0
             end
         else # 1D model
-            moments.neutral.ptot .= moments.neutral.pz
+            @loop_sn_r_z isn ir iz begin
+                moments.neutral.ptot[iz,ir,isn] = moments.neutral.pz[iz,ir,isn]
+            end
         end
         # get particle fluxes (n.b. bad naming convention uz -> means -> n uz here)
         update_neutral_uz!(moments.neutral.uz, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
