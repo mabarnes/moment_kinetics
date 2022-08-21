@@ -682,6 +682,7 @@ function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase,
     istage = n_rk_stages+1
     
     # update the pdf.norm and moments arrays as needed
+    begin_s_r_z_region()
     final_scratch = scratch[istage]
     @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
         pdf.charged.norm[ivpa,ivperp,iz,ir,is] = final_scratch.pdf[ivpa,ivperp,iz,ir,is]
@@ -693,6 +694,7 @@ function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase,
         moments.charged.ppar[iz,ir,is] = final_scratch.ppar[iz,ir,is]
     end
     if composition.n_neutral_species > 0
+        begin_sn_r_z_region()
         @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
             pdf.neutral.norm[ivz,ivr,ivzeta,iz,ir,isn] = final_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] 
             # change norm -> unnorm if remove moment-based evolution?
