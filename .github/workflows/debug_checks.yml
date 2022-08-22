@@ -27,12 +27,18 @@ jobs:
   #    - uses: julia-actions/julia-buildpkg@v1
   #    - name: Debug test
   #      run: |
-  #        julia --project -e 'ENV["JULIA_MPI_BINARY"]="system"; using Pkg; Pkg.build("MPI"; verbose=true)'
+  #        # Hard code the debug level so that we can run without using the
+  #        # `--compiled-modules=no` flag, which breaks Symbolics.jl at the
+  #        # moment.
+  #        sed -i -e "s/_debug_level = get_options.*/_debug_level = 3/" src/debugging.jl
+  #        julia --project -e 'ENV["JULIA_MPI_BINARY"]="system"; push!(ARGS, "--debug", "3"); using Pkg; Pkg.build("MPI"; verbose=true)'
   #        # Need to use openmpi so that the following arguments work:
   #        # * `--mca rmaps_base_oversubscribe 1` allows oversubscription (more processes
   #        #   than physical cores).
   #        # * `--mca mpi_yield_when_idle 1` changes a setting to prevent excessively
   #        #   terrible performance when oversubscribing.
+  #        ## Don't use --compiled-modules=no for now, as it currently breaks Symbolics.jl
+  #        #mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes --compiled-modules=no debug_test/runtests.jl --debug 3
   #        mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes debug_test/runtests.jl --debug 3
 
   debug-checks-sound-wave:
@@ -56,12 +62,19 @@ jobs:
       - uses: julia-actions/julia-buildpkg@v1
       - name: Debug test sound-wave
         run: |
+          # Hard code the debug level so that we can run without using the
+          # `--compiled-modules=no` flag, which breaks Symbolics.jl at the
+          # moment.
+          sed -i -e "s/_debug_level = get_options.*/_debug_level = 3/" src/debugging.jl
+
           julia --project -e 'ENV["JULIA_MPI_BINARY"]="system"; using Pkg; Pkg.build("MPI"; verbose=true)'
           # Need to use openmpi so that the following arguments work:
           # * `--mca rmaps_base_oversubscribe 1` allows oversubscription (more processes
           #   than physical cores).
           # * `--mca mpi_yield_when_idle 1` changes a setting to prevent excessively
           #   terrible performance when oversubscribing.
+          ## Don't use --compiled-modules=no for now, as it currently breaks Symbolics.jl
+          #mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes --compiled-modules=no debug_test/sound_wave_tests.jl --debug 3
           mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes debug_test/sound_wave_tests.jl --debug 3
 
   debug-checks-wall-bc:
@@ -85,12 +98,19 @@ jobs:
       - uses: julia-actions/julia-buildpkg@v1
       - name: Debug test wall-bc
         run: |
-          julia --project -e 'ENV["JULIA_MPI_BINARY"]="system"; using Pkg; Pkg.build("MPI"; verbose=true)'
+          # Hard code the debug level so that we can run without using the
+          # `--compiled-modules=no` flag, which breaks Symbolics.jl at the
+          # moment.
+          sed -i -e "s/_debug_level = get_options.*/_debug_level = 3/" src/debugging.jl
+
+          julia --project -e 'ENV["JULIA_MPI_BINARY"]="system"; push!(ARGS, "--debug", "3"); using Pkg; Pkg.build("MPI"; verbose=true)'
           # Need to use openmpi so that the following arguments work:
           # * `--mca rmaps_base_oversubscribe 1` allows oversubscription (more processes
           #   than physical cores).
           # * `--mca mpi_yield_when_idle 1` changes a setting to prevent excessively
           #   terrible performance when oversubscribing.
+          ## Don't use --compiled-modules=no for now, as it currently breaks Symbolics.jl
+          #mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes --compiled-modules=no debug_test/wall_bc_tests.jl --debug 3
           mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes debug_test/wall_bc_tests.jl --debug 3
 
   debug-checks-harrisonthompson:
@@ -114,12 +134,19 @@ jobs:
       - uses: julia-actions/julia-buildpkg@v1
       - name: Debug test Harrison-Thompson
         run: |
-          julia --project -e 'ENV["JULIA_MPI_BINARY"]="system"; using Pkg; Pkg.build("MPI"; verbose=true)'
+          # Hard code the debug level so that we can run without using the
+          # `--compiled-modules=no` flag, which breaks Symbolics.jl at the
+          # moment.
+          sed -i -e "s/_debug_level = get_options.*/_debug_level = 3/" src/debugging.jl
+
+          julia --project -e 'ENV["JULIA_MPI_BINARY"]="system"; push!(ARGS, "--debug", "3"); using Pkg; Pkg.build("MPI"; verbose=true)'
           # Need to use openmpi so that the following arguments work:
           # * `--mca rmaps_base_oversubscribe 1` allows oversubscription (more processes
           #   than physical cores).
           # * `--mca mpi_yield_when_idle 1` changes a setting to prevent excessively
           #   terrible performance when oversubscribing.
+          ## Don't use --compiled-modules=no for now, as it currently breaks Symbolics.jl
+          #mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes --compiled-modules=no debug_test/harrisonthompson.jl --debug 3
           mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes debug_test/harrisonthompson.jl --debug 3
 
   debug-checks-mms:
@@ -143,10 +170,17 @@ jobs:
       - uses: julia-actions/julia-buildpkg@v1
       - name: Debug test MMS
         run: |
-          julia --project -e 'ENV["JULIA_MPI_BINARY"]="system"; using Pkg; Pkg.build("MPI"; verbose=true)'
+          # Hard code the debug level so that we can run without using the
+          # `--compiled-modules=no` flag, which breaks Symbolics.jl at the
+          # moment.
+          sed -i -e "s/_debug_level = get_options.*/_debug_level = 3/" src/debugging.jl
+
+          julia --project -e 'ENV["JULIA_MPI_BINARY"]="system"; push!(ARGS, "--debug", "3"); using Pkg; Pkg.build("MPI"; verbose=true)'
           # Need to use openmpi so that the following arguments work:
           # * `--mca rmaps_base_oversubscribe 1` allows oversubscription (more processes
           #   than physical cores).
           # * `--mca mpi_yield_when_idle 1` changes a setting to prevent excessively
           #   terrible performance when oversubscribing.
+          ## Don't use --compiled-modules=no for now, as it currently breaks Symbolics.jl
+          #mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes --compiled-modules=no debug_test/mms_tests.jl --debug 3
           mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes debug_test/mms_tests.jl --debug 3
