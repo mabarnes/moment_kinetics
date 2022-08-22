@@ -39,6 +39,8 @@ macronames = [
 
 using ..command_line_options: get_options
 
+const active_debug_macros = Vector{String}(undef, 0)
+
 """
 """
 _debug_level = get_options()["debug"]
@@ -55,6 +57,7 @@ for (macroname, minlevel, macro_docstring) ∈ macronames
 
     if _debug_level >= minlevel
         println("$export_string activated")
+        push!(active_debug_macros, string(export_string))
         macro_docstring *= "\n Currently active (`_debug_level = $_debug_level`)."
         ifelse_docstring *= "\n $macroname is active (`_debug_level = $_debug_level " *
                             ">= $minlevel`)."
@@ -106,6 +109,12 @@ for (macroname, minlevel, macro_docstring) ∈ macronames
     end
 
     eval(macro_block)
+end
+
+function __init__()
+    for name in active_debug_macros
+        println("$name is active")
+    end
 end
 
 end # debugging
