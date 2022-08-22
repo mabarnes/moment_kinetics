@@ -4,11 +4,43 @@ name: Debug checks for correctness
 on: [push, pull_request]
 
 jobs:
-  debug-checks:
+  # The commented out job would run all debug checks, but they are slow so it
+  # is better to run each type in a separate job so that the separate jobs can
+  # run at the same time
+  #debug-checks:
+  #  runs-on: ${{ matrix.os }}
+  #  strategy:
+  #    matrix:
+  #      os: [ubuntu-latest, macOS-latest]
+  #    fail-fast: false
+  #  timeout-minutes: 120
+
+  #  steps:
+  #    - uses: actions/checkout@v2
+  #    - uses: mpi4py/setup-mpi@v1
+  #      with:
+  #        mpi: 'openmpi'
+  #    - uses: julia-actions/setup-julia@v1
+  #      with:
+  #        version: '1.7.2'
+  #        arch: x64
+  #    - uses: julia-actions/julia-buildpkg@v1
+  #    - name: Debug test
+  #      run: |
+  #        julia --project -e 'ENV["JULIA_MPI_BINARY"]="system"; using Pkg; Pkg.build("MPI"; verbose=true)'
+  #        # Need to use openmpi so that the following arguments work:
+  #        # * `--mca rmaps_base_oversubscribe 1` allows oversubscription (more processes
+  #        #   than physical cores).
+  #        # * `--mca mpi_yield_when_idle 1` changes a setting to prevent excessively
+  #        #   terrible performance when oversubscribing.
+  #        mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes debug_test/runtests.jl --debug 3
+
+  debug-checks-sound-wave:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macOS-latest]
+        # Only run on linux to save CI server cpu-hours
+        os: [ubuntu-latest]
       fail-fast: false
     timeout-minutes: 120
 
@@ -22,7 +54,7 @@ jobs:
           version: '1.7.2'
           arch: x64
       - uses: julia-actions/julia-buildpkg@v1
-      - name: Test examples
+      - name: Debug test sound-wave
         run: |
           julia --project -e 'ENV["JULIA_MPI_BINARY"]="system"; using Pkg; Pkg.build("MPI"; verbose=true)'
           # Need to use openmpi so that the following arguments work:
@@ -30,4 +62,62 @@ jobs:
           #   than physical cores).
           # * `--mca mpi_yield_when_idle 1` changes a setting to prevent excessively
           #   terrible performance when oversubscribing.
-          mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes debug_test/runtests.jl --debug 3
+          mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes debug_test/sound_wave_tests.jl --debug 3
+
+  debug-checks-wall-bc:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        # Only run on linux to save CI server cpu-hours
+        os: [ubuntu-latest]
+      fail-fast: false
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v2
+      - uses: mpi4py/setup-mpi@v1
+        with:
+          mpi: 'openmpi'
+      - uses: julia-actions/setup-julia@v1
+        with:
+          version: '1.7.2'
+          arch: x64
+      - uses: julia-actions/julia-buildpkg@v1
+      - name: Debug test wall-bc
+        run: |
+          julia --project -e 'ENV["JULIA_MPI_BINARY"]="system"; using Pkg; Pkg.build("MPI"; verbose=true)'
+          # Need to use openmpi so that the following arguments work:
+          # * `--mca rmaps_base_oversubscribe 1` allows oversubscription (more processes
+          #   than physical cores).
+          # * `--mca mpi_yield_when_idle 1` changes a setting to prevent excessively
+          #   terrible performance when oversubscribing.
+          mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes debug_test/wall_bc_tests.jl --debug 3
+
+  debug-checks-harrisonthompson:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        # Only run on linux to save CI server cpu-hours
+        os: [ubuntu-latest]
+      fail-fast: false
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v2
+      - uses: mpi4py/setup-mpi@v1
+        with:
+          mpi: 'openmpi'
+      - uses: julia-actions/setup-julia@v1
+        with:
+          version: '1.7.2'
+          arch: x64
+      - uses: julia-actions/julia-buildpkg@v1
+      - name: Debug test Harrison-Thompson
+        run: |
+          julia --project -e 'ENV["JULIA_MPI_BINARY"]="system"; using Pkg; Pkg.build("MPI"; verbose=true)'
+          # Need to use openmpi so that the following arguments work:
+          # * `--mca rmaps_base_oversubscribe 1` allows oversubscription (more processes
+          #   than physical cores).
+          # * `--mca mpi_yield_when_idle 1` changes a setting to prevent excessively
+          #   terrible performance when oversubscribing.
+          mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes debug_test/harrisonthompson.jl --debug 3
