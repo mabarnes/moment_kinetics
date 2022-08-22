@@ -141,7 +141,7 @@ jobs:
           version: '1.7.2'
           arch: x64
       - uses: julia-actions/julia-buildpkg@v1
-      - name: Test examples
+      - name: Debug test MMS
         run: |
           julia --project -e 'ENV["JULIA_MPI_BINARY"]="system"; using Pkg; Pkg.build("MPI"; verbose=true)'
           # Need to use openmpi so that the following arguments work:
