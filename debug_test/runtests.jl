@@ -7,6 +7,7 @@ function runtests()
         include(joinpath(@__DIR__, "sound_wave_tests.jl"))
         include(joinpath(@__DIR__, "wall_bc_tests.jl"))
         include(joinpath(@__DIR__, "harrisonthompson.jl"))
+        include(joinpath(@__DIR__, "mms_tests.jl"))
     end
 end
 
