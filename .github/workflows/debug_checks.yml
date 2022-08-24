@@ -13,7 +13,7 @@ jobs:
   #    matrix:
   #      os: [ubuntu-latest, macOS-latest]
   #    fail-fast: false
-  #  timeout-minutes: 120
+  #  timeout-minutes: 240
 
   #  steps:
   #    - uses: actions/checkout@v2
@@ -48,7 +48,7 @@ jobs:
         # Only run on linux to save CI server cpu-hours
         os: [ubuntu-latest]
       fail-fast: false
-    timeout-minutes: 120
+    timeout-minutes: 240
 
     steps:
       - uses: actions/checkout@v2
@@ -84,7 +84,7 @@ jobs:
         # Only run on linux to save CI server cpu-hours
         os: [ubuntu-latest]
       fail-fast: false
-    timeout-minutes: 120
+    timeout-minutes: 240
 
     steps:
       - uses: actions/checkout@v2
@@ -120,7 +120,7 @@ jobs:
         # Only run on linux to save CI server cpu-hours
         os: [ubuntu-latest]
       fail-fast: false
-    timeout-minutes: 120
+    timeout-minutes: 240
 
     steps:
       - uses: actions/checkout@v2
@@ -156,7 +156,7 @@ jobs:
         # Only run on linux to save CI server cpu-hours
         os: [ubuntu-latest]
       fail-fast: false
-    timeout-minutes: 120
+    timeout-minutes: 240
 
     steps:
       - uses: actions/checkout@v2
