@@ -29,7 +29,8 @@ end
 
 """
 """
-function analyze_moments_data(density, parallel_flow, parallel_pressure, parallel_heat_flux, ntime, n_species, nz, z_wgts, Lz)
+function analyze_moments_data(density, parallel_flow, parallel_pressure, thermal_speed,
+                              parallel_heat_flux, ntime, n_species, nz, z_wgts, Lz)
     print("Analyzing velocity moments data...")
     density_fldline_avg = allocate_float(n_species, ntime)
     for is ∈ 1:n_species
@@ -47,6 +48,12 @@ function analyze_moments_data(density, parallel_flow, parallel_pressure, paralle
     for is ∈ 1:n_species
         for i ∈ 1:ntime
             ppar_fldline_avg[is,i] = field_line_average(view(parallel_pressure,:,is,i), z_wgts, Lz)
+        end
+    end
+    vth_fldline_avg = allocate_float(n_species, ntime)
+    for is ∈ 1:n_species
+        for i ∈ 1:ntime
+            vth_fldline_avg[is,i] = field_line_average(view(thermal_speed,:,is,i), z_wgts, Lz)
         end
     end
     qpar_fldline_avg = allocate_float(n_species, ntime)
@@ -76,6 +83,13 @@ function analyze_moments_data(density, parallel_flow, parallel_pressure, paralle
             @. delta_ppar[iz,is,:] = parallel_pressure[iz,is,:] - ppar_fldline_avg[is,:]
         end
     end
+    # delta_vth = vth_s - <vth_s> is the fluctuating thermal_speed
+    delta_vth = allocate_float(nz,n_species,ntime)
+    for is ∈ 1:n_species
+        for iz ∈ 1:nz
+            @. delta_vth[iz,is,:] = thermal_speed[iz,is,:] - vth_fldline_avg[is,:]
+        end
+    end
     # delta_qpar = qpar_s - <qpar_s> is the fluctuating parallel heat flux
     delta_qpar = allocate_float(nz,n_species,ntime)
     for is ∈ 1:n_species
@@ -84,8 +98,8 @@ function analyze_moments_data(density, parallel_flow, parallel_pressure, paralle
         end
     end
     println("done.")
-    return density_fldline_avg, upar_fldline_avg, ppar_fldline_avg, qpar_fldline_avg,
-           delta_density, delta_upar, delta_ppar, delta_qpar
+    return density_fldline_avg, upar_fldline_avg, ppar_fldline_avg, vth_fldline_avg, qpar_fldline_avg,
+           delta_density, delta_upar, delta_ppar, delta_vth, delta_qpar
 end
 
 """
