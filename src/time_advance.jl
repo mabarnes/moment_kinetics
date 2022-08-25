@@ -429,13 +429,17 @@ function time_advance!(pdf, scratch, t, t_input, vpa, z, r, vpa_spectral, z_spec
                 ppar_plots = [
                     plot(z.grid, moments.ppar[:,1,is], xlabel="z", ylabel="ppar", legend=false)
                     for is ∈ 1:composition.n_species]
+                vth_plots = [
+                    plot(z.grid, moments.vth[:,1,is], xlabel="z", ylabel="vth", legend=false)
+                    for is ∈ 1:composition.n_species]
                 qpar_plots = [
                     plot(z.grid, moments.qpar[:,1,is], xlabel="z", ylabel="qpar", legend=false)
                     for is ∈ 1:composition.n_species]
                 # Put all plots into subplots of a single figure
                 plot(f_plots..., logf_plots..., f0_plots..., fL_plots...,
-                     density_plots..., upar_plots..., ppar_plots..., qpar_plots...,
-                     layout=(8,composition.n_species), size=(800,3200), plot_title="$t")
+                     density_plots..., upar_plots..., ppar_plots..., vth_plots...,
+                     qpar_plots...,
+                     layout=(9,composition.n_species), size=(800,3600), plot_title="$t")
                 savefig("latest_plots.png")
             end
             iwrite += 1
