@@ -391,7 +391,10 @@ function time_advance!(pdf, scratch, t, t_input, vpa, z, r, vpa_spectral, z_spec
                 cmlog(cmlin::ColorGradient) = RGB[cmlin[x] for x=LinRange(0,1,30)]
                 logdeep = cgrad(:deep, scale=:log) |> cmlog
                 f_plots = [
-                    heatmap(z.grid, vpa.grid, pdf.norm[:,:,1,is], xlabel="z", ylabel="vpa", c=:deep, colorbar=false)
+                    heatmap(z.grid, vpa.grid, pdf.norm[:,:,1,is],
+                            xlim=(z.grid[1] - z.L / 100.0, z.grid[end] + z.L / 100.0),
+                            ylim=(vpa.grid[1] - vpa.L / 100.0, vpa.grid[end] + vpa.L / 100.0),
+                            xlabel="z", ylabel="vpa", c=:deep, colorbar=false)
                     for is ∈ 1:composition.n_species]
                 for (is, p) in enumerate(f_plots)
                     @views draw_v_parallel_zero!(p, z.grid, moments.upar[:,1,is],
@@ -400,7 +403,10 @@ function time_advance!(pdf, scratch, t, t_input, vpa, z, r, vpa_spectral, z_spec
                                                  moments.evolve_ppar)
                 end
                 logf_plots = [
-                    heatmap(z.grid, vpa.grid, log.(abs.(pdf.norm[:,:,1,is])), xlabel="z", ylabel="vpa", fillcolor=logdeep, colorbar=false)
+                    heatmap(z.grid, vpa.grid, log.(abs.(pdf.norm[:,:,1,is])),
+                            xlim=(z.grid[1] - z.L / 100.0, z.grid[end] + z.L / 100.0),
+                            ylim=(vpa.grid[1] - vpa.L / 100.0, vpa.grid[end] + vpa.L / 100.0),
+                            xlabel="z", ylabel="vpa", fillcolor=logdeep, colorbar=false)
                     for is ∈ 1:composition.n_species]
                 for (is, p) in enumerate(logf_plots)
                     @views draw_v_parallel_zero!(p, z.grid, moments.upar[:,1,is],
