@@ -151,14 +151,15 @@ function plot_1D_1V_diagnostics(run_name, fid, nwrite_movie, itime_min, itime_ma
                 z, iz0, run_name, fitted_delta_phi, pp)
     # load velocity moments data
     # analyze the velocity moments data
-    density_fldline_avg, upar_fldline_avg, ppar_fldline_avg, qpar_fldline_avg,
-        delta_density, delta_upar, delta_ppar, delta_qpar =
-        analyze_moments_data(density, parallel_flow, parallel_pressure, parallel_heat_flux,
-                             ntime, n_species, nz, z_wgts, Lz)
+    density_fldline_avg, upar_fldline_avg, ppar_fldline_avg, vth_fldline_avg, qpar_fldline_avg,
+        delta_density, delta_upar, delta_ppar, delta_vth, delta_qpar =
+        analyze_moments_data(density, parallel_flow, parallel_pressure, thermal_speed,
+                             parallel_heat_flux, ntime, n_species, nz, z_wgts, Lz)
     # create the requested plots of the moments
     plot_moments(density, delta_density, density_fldline_avg,
         parallel_flow, delta_upar, upar_fldline_avg,
         parallel_pressure, delta_ppar, ppar_fldline_avg,
+        thermal_speed, delta_vth, vth_fldline_avg,
         parallel_heat_flux, delta_qpar, qpar_fldline_avg,
         pp, run_name, time, itime_min, itime_max,
         nwrite_movie, z, iz0, n_species)
@@ -433,6 +434,7 @@ end
 function plot_moments(density, delta_density, density_fldline_avg,
     parallel_flow, delta_upar, upar_fldline_avg,
     parallel_pressure, delta_ppar, ppar_fldline_avg,
+    thermal_speed, delta_vth, vth_fldline_avg,
     parallel_heat_flux, delta_qpar, qpar_fldline_avg,
     pp, run_name, time, itime_min, itime_max, nwrite_movie,
     z, iz0, n_species)
@@ -500,6 +502,22 @@ function plot_moments(density, delta_density, density_fldline_avg,
             outfile = string(run_name, "_fldline_avg_ppar_vs_t_spec", spec_string, ".pdf")
             savefig(outfile)
         end
+        vth_min = minimum(thermal_speed[:,is,:])
+        vth_max = maximum(thermal_speed[:,is,:])
+        if pp.plot_vth0_vs_t
+            # plot the time trace of n_s(z=z0)
+            @views plot(time, thermal_speed[iz0,is,:])
+            outfile = string(run_name, "_vth0_vs_t_spec", spec_string, ".pdf")
+            savefig(outfile)
+            # plot the time trace of n_s(z=z0)-density_fldline_avg
+            @views plot(time, abs.(delta_vth[iz0,is,:]), yaxis=:log)
+            outfile = string(run_name, "_delta_vth0_vs_t_spec", spec_string, ".pdf")
+            savefig(outfile)
+            # plot the time trace of vth_fldline_avg
+            @views plot(time, vth_fldline_avg[is,:], xlabel="time", ylabel="<vths/cₛ₀>", ylims=(vth_min,vth_max))
+            outfile = string(run_name, "_fldline_avg_vth_vs_t_spec", spec_string, ".pdf")
+            savefig(outfile)
+        end
         qpar_min = minimum(parallel_heat_flux[:,is,:])
         qpar_max = maximum(parallel_heat_flux[:,is,:])
         if pp.plot_qpar0_vs_t
@@ -562,6 +580,14 @@ function plot_moments(density, delta_density, density_fldline_avg,
                 @views plot(z, parallel_pressure[:,is,i], xlabel="z", ylabel="ppars", ylims = (ppar_min,ppar_max))
             end
             outfile = string(run_name, "_ppar_vs_z_spec", spec_string, ".gif")
+            gif(anim, outfile, fps=5)
+        end
+        if pp.animate_vth_vs_z
+            # make a gif animation of vth(z) at different times
+            anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+                @views plot(z, thermal_speed[:,is,i], xlabel="z", ylabel="vths", ylims = (vth_min,vth_max))
+            end
+            outfile = string(run_name, "_vth_vs_z_spec", spec_string, ".gif")
             gif(anim, outfile, fps=5)
         end
         if pp.animate_qpar_vs_z
