@@ -13,11 +13,11 @@ flow and/or pressure, and use them to update the pdf
 """
 function source_terms!(pdf_out, fvec_in, moments, vpa, z, r, dt, spectral, composition, collisions)
     #n_species = size(pdf_out,3)
-    if moments.evolve_ppar
+    if moments.evolve_ppar || moments.evolve_vth
         @loop_s is begin
             @views source_terms_evolve_ppar_no_collisions!(pdf_out[:,:,:,is], fvec_in.pdf[:,:,:,is],
                                              fvec_in.density[:,:,is], fvec_in.upar[:,:,is], fvec_in.ppar[:,:,is],
-                                             moments.vth[:,:,is], moments.qpar[:,:,is], z, r, dt, spectral)
+                                             fvec_in.vth[:,:,is], moments.qpar[:,:,is], z, r, dt, spectral)
         end
         if composition.n_neutral_species > 0
             if abs(collisions.charge_exchange) > 0.0 || abs(collisions.ionization) > 0.0

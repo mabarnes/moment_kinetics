@@ -21,6 +21,7 @@ mutable struct evolve_moments_options
     density::Bool
     parallel_flow::Bool
     parallel_pressure::Bool
+    thermal_speed::Bool
     conservation::Bool
     #advective_form::Bool
 end

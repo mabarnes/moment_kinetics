@@ -55,16 +55,17 @@ function init_pdf_and_moments(vpa, z, r, vpa_spectral, composition, species,
     moments.ppar_updated .= true
     # create and initialise the normalised particle distribution function (pdf)
     # such that ∫dwpa pdf.norm = 1, ∫dwpa wpa * pdf.norm = 0, and ∫dwpa wpa^2 * pdf.norm = 1/2
-    # note that wpa = vpa - upar, unless moments.evolve_ppar = true, in which case wpa = (vpa - upar)/vth
+    # note that wpa = vpa - upar, unless moments.evolve_ppar = true or
+    # moments.evolve_vth = true, in which case wpa = (vpa - upar)/vth
     # the definition of pdf.norm changes accordingly from pdf.unnorm / density to pdf.unnorm * vth / density
-    # when evolve_ppar = true.
+    # when evolve_ppar = true or evolve_vth = true.
     pdf = create_and_init_pdf(moments, vpa, z, r, vpa_spectral, n_species, species,
                               composition)
     begin_s_r_z_region()
     # calculate the initial parallel heat flux from the initial un-normalised pdf
     update_qpar!(moments.qpar, moments.qpar_updated, moments.dens, moments.upar,
                  moments.vth, pdf.norm, vpa, z, r, composition, moments.evolve_density,
-                 moments.evolve_upar, moments.evolve_ppar)
+                 moments.evolve_upar, moments.evolve_ppar || moments.evolve_vth)
     return pdf, moments
 end
 
@@ -92,7 +93,7 @@ function create_and_init_pdf(moments, vpa, z, r, vpa_spectral, n_species, specie
                         vpa_spectral, moments.dens[:,ir,is], moments.upar[:,ir,is],
                         moments.ppar[:,ir,is], moments.vth[:,ir,is],
                         moments.vpa_norm_fac[:,ir,is], moments.evolve_density,
-                        moments.evolve_upar, moments.evolve_ppar,
+                        moments.evolve_upar, moments.evolve_ppar || moments.evolve_vth,
                         is ∈ composition.ion_species_range, wall_flux_0, wall_flux_L)
                 end
             end
@@ -100,7 +101,7 @@ function create_and_init_pdf(moments, vpa, z, r, vpa_spectral, n_species, specie
         pdf_unnorm .= pdf_norm
         for ivpa ∈ 1:vpa.n
             @. pdf_unnorm[ivpa,:,:,:] *= moments.dens
-            if moments.evolve_ppar
+            if moments.evolve_ppar || moments.evolve_vth
                 @. pdf_norm[ivpa,:,:,:] *= moments.vth
             elseif moments.evolve_density == false
                 @. pdf_norm[ivpa,:,:,:] = pdf_unnorm[ivpa,:,:,:]
@@ -197,24 +198,24 @@ end
 """
 function init_pdf_over_density!(pdf, spec, composition, vpa, z, vpa_spectral, density,
                                 upar, ppar, vth, vpa_norm_fac, evolve_density,
-                                evolve_upar, evolve_ppar, ions::Bool, wall_flux_0,
+                                evolve_upar, evolve_ppar_or_vth, ions::Bool, wall_flux_0,
                                 wall_flux_L)
     if spec.vpa_IC.initialization_option == "gaussian"
         # initial condition is a Gaussian in the peculiar velocity
         for iz ∈ 1:z.n
             # obtain (vpa - upar)/vth
-            if evolve_ppar
-                # if evolve_upar = true and evolve_ppar = true, then vpa coordinate is (vpa-upar)/vth;
+            if evolve_ppar_or_vth
+                # if evolve_upar = true and evolve_ppar_or_vth = true, then vpa coordinate is (vpa-upar)/vth;
                 if evolve_upar
                     @. vpa.scratch = vpa.grid
-                # if evolve_upar = false and evolve_ppar = true, then vpa coordinate is vpa/vth;
+                # if evolve_upar = false and evolve_ppar_or_vth = true, then vpa coordinate is vpa/vth;
                 else
                     @. vpa.scratch = vpa.grid - upar[iz]/vth[iz]
                 end
-            # if evolve_upar = true and evolve_ppar = false, then vpa coordinate is vpa-upar;
+            # if evolve_upar = true and evolve_ppar_or_vth = false, then vpa coordinate is vpa-upar;
             elseif evolve_upar
                 @. vpa.scratch = vpa.grid/vth[iz]
-            # if evolve_upar = false and evolve_ppar = false, then vpa coordinate is vpa;
+            # if evolve_upar = false and evolve_ppar_or_vth = false, then vpa coordinate is vpa;
             else
                 @. vpa.scratch = (vpa.grid - upar[iz])/vth[iz]
             end
@@ -323,7 +324,7 @@ function init_pdf_over_density!(pdf, spec, composition, vpa, z, vpa_spectral, de
             # distribution function (which will be modified from the input moments).
             convert_full_f_to_normalised!(pdf, density, upar, ppar, vth, vpa,
                                           vpa_spectral, evolve_density, evolve_upar,
-                                          evolve_ppar)
+                                          evolve_ppar_or_vth)
 
             if !evolve_density
                 # Need to divide out density to return pdf/density
@@ -378,7 +379,7 @@ end
 enforce boundary conditions in vpa and z on the evolved pdf;
 also enforce boundary conditions in z on all separately evolved velocity space moments of the pdf
 """
-function enforce_boundary_conditions!(f_out, density, upar, ppar, moments, vpa_bc, z_bc, vpa,
+function enforce_boundary_conditions!(f_out, density, upar, ppar, vth, moments, vpa_bc, z_bc, vpa,
         z, r, vpa_adv, z_adv, composition)
     begin_s_r_z_region()
     @loop_s_r_z is ir iz begin
@@ -394,19 +395,19 @@ function enforce_boundary_conditions!(f_out, density, upar, ppar, moments, vpa_b
     begin_s_r_vpa_region()
     # enforce the z BC on the evolved velocity space moments of the pdf
     @views enforce_z_boundary_condition_moments!(density, moments, z_bc)
-    @views enforce_z_boundary_condition!(f_out, density, upar, ppar, moments, z_bc, z_adv, vpa, r, composition)
+    @views enforce_z_boundary_condition!(f_out, density, upar, ppar, vth, moments, z_bc, z_adv, vpa, r, composition)
 
 end
 function enforce_boundary_conditions!(fvec_out::scratch_pdf, moments, vpa_bc, z_bc, vpa,
         z, r, vpa_adv, z_adv, composition)
     enforce_boundary_conditions!(fvec_out.pdf, fvec_out.density, fvec_out.upar,
-        fvec_out.ppar, moments, vpa_bc, z_bc, vpa, z, r, vpa_adv, z_adv, composition)
+        fvec_out.ppar, fvec_out.vth, moments, vpa_bc, z_bc, vpa, z, r, vpa_adv, z_adv, composition)
 end
 
 """
 enforce boundary conditions on f in z
 """
-function enforce_z_boundary_condition!(pdf, density, upar, ppar, moments, bc::String, adv::T, vpa, r, composition) where T
+function enforce_z_boundary_condition!(pdf, density, upar, ppar, vth, moments, bc::String, adv::T, vpa, r, composition) where T
     # define n_species variable for convenience
     n_species = composition.n_species
     # define nvpa variable for convenience
@@ -440,8 +441,8 @@ function enforce_z_boundary_condition!(pdf, density, upar, ppar, moments, bc::St
                     @loop_r ir begin
                         @views enforce_zero_incoming_bc!(
                             pdf[:,:,ir,is], vpa, density[:,ir,is], upar[:,ir,is],
-                            ppar[:,ir,is], moments.evolve_upar, moments.evolve_ppar,
-                            zero)
+                            ppar[:,ir,is], vth[:,ir,is], moments.evolve_upar,
+                            moments.evolve_ppar || moments.evolve_vth, zero)
                     end
                 else
                     @loop_r ir begin
@@ -470,9 +471,10 @@ function enforce_z_boundary_condition!(pdf, density, upar, ppar, moments, bc::St
                             else
                                 ## treat the boundary at z = -Lz/2 ##
                                 # create an array of dz/dt values at z = -Lz/2
-                                vth = sqrt(2.0*ppar[1,ir,is]/density[1,ir,is])
-                                @. vpa.scratch2 = vpagrid_to_dzdt(vpa.grid, vth, upar[1,ir,is],
-                                                                  moments.evolve_ppar, moments.evolve_upar)
+                                @. vpa.scratch2 = vpagrid_to_dzdt(
+                                    vpa.grid, vth[1,ir,is], upar[1,ir,is],
+                                    moments.evolve_ppar || moments.evolve_vth,
+                                    moments.evolve_upar)
                                 # account for the fact that the pdf here is the normalised pdf,
                                 # and the integration in wall_flux is defined relative to the un-normalised pdf
                                 if moments.evolve_density
@@ -483,9 +485,10 @@ function enforce_z_boundary_condition!(pdf, density, upar, ppar, moments, bc::St
                                                       integrate_over_negative_vpa(abs.(vpa.scratch2) .* pdf[:,1,ir,is], vpa.scratch2, vpa.wgts, vpa.scratch))
                                 ## treat the boundary at z = Lz/2 ##
                                 # create an array of dz/dt values at z = Lz/2
-                                vth = sqrt(2.0*ppar[end,ir,is]/density[end,ir,is])
-                                @. vpa.scratch2 = vpagrid_to_dzdt(vpa.grid, vth, upar[end,ir,is],
-                                                                  moments.evolve_ppar, moments.evolve_upar)
+                                @. vpa.scratch2 = vpagrid_to_dzdt(
+                                    vpa.grid, vth[end,ir,is], upar[end,ir,is],
+                                    moments.evolve_ppar || moments.evolve_vth,
+                                    moments.evolve_upar)
                                 # account for the fact that the pdf here is the normalised pdf,
                                 # and the integration in wall_flux is defined relative to the un-normalised pdf
                                 if moments.evolve_density
@@ -501,10 +504,10 @@ function enforce_z_boundary_condition!(pdf, density, upar, ppar, moments, bc::St
                     # that leave the domain re-enter as neutrals
                     for is ∈ composition.neutral_species_range
                         @views enforce_neutral_wall_bc!(
-                            pdf[:,:,ir,is], vpa, ppar[:,ir,is], upar[:,ir,is],
-                            density[:,ir,is], ion_flux_0, ion_flux_L, vtfac,
-                            moments.evolve_ppar, moments.evolve_upar,
-                            moments.evolve_density, zero)
+                            pdf[:,:,ir,is], vpa, ppar[:,ir,is], vth[:,ir,is],
+                            upar[:,ir,is], density[:,ir,is], ion_flux_0, ion_flux_L,
+                            vtfac, moments.evolve_ppar || moments.evolve_vth,
+                            moments.evolve_upar, moments.evolve_density, zero)
                     end
                 end
             end
@@ -534,8 +537,8 @@ function enforce_zero_incoming_bc!(pdf, vpa::coordinate, zero)
         end
     end
 end
-function enforce_zero_incoming_bc!(pdf, vpa::coordinate, density, upar, ppar,
-                                   evolve_upar, evolve_ppar, zero)
+function enforce_zero_incoming_bc!(pdf, vpa::coordinate, density, upar, ppar, vth,
+                                   evolve_upar, evolve_ppar_or_vth, zero)
     nvpa, nz = size(pdf)
     # no parallel BC should be enforced for dz/dt = 0
     # note that the parallel velocity coordinate vpa may be dz/dt or
@@ -544,10 +547,10 @@ function enforce_zero_incoming_bc!(pdf, vpa::coordinate, density, upar, ppar,
 
     # absolute velocity at left boundary
     @. vpa.scratch = vpagrid_to_dzdt(vpa.grid, sqrt(2.0*(ppar[1]/density[1])),
-                                     upar[1], evolve_ppar, evolve_upar)
+                                     upar[1], evolve_ppar_or_vth, evolve_upar)
     # absolute velocity at right boundary
     @. vpa.scratch2 = vpagrid_to_dzdt(vpa.grid, sqrt(2.0*(ppar[end]/density[end])),
-                                      upar[end], evolve_ppar, evolve_upar)
+                                      upar[end], evolve_ppar_or_vth, evolve_upar)
     @loop_vpa ivpa begin
         # for left boundary in zed (z = -Lz/2), want
         # f(z=-Lz/2, v_parallel > 0) = 0
@@ -565,14 +568,13 @@ function enforce_zero_incoming_bc!(pdf, vpa::coordinate, density, upar, ppar,
     # v_parallel=0.
     for iz ∈ (1,nz)
         f = @view pdf[:,iz]
-        if evolve_ppar && evolve_upar
+        if evolve_ppar_or_vth && evolve_upar
             I0 = integrate_over_vspace(f, vpa.wgts)
             I1 = integrate_over_vspace(f, vpa.grid, vpa.wgts)
             I2 = integrate_over_vspace(f, vpa.grid, 2, vpa.wgts)
 
             # Store v_parallel with upar shift removed in vpa.scratch
-            vth = sqrt(2.0*ppar[iz]/density[iz])
-            @. vpa.scratch = vpa.grid + upar[iz]/vth
+            @. vpa.scratch = vpa.grid + upar[iz]/vth[iz]
             # Introduce factor to ensure corrections go smoothly to zero near
             # v_parallel=0
             @. vpa.scratch2 = f * abs(vpa.scratch) / (1.0 + abs(vpa.scratch))
@@ -649,15 +651,14 @@ end
 enforce the wall boundary condition on neutrals;
 i.e., the incoming flux of neutrals equals the sum of the ion/neutral outgoing fluxes
 """
-function enforce_neutral_wall_bc!(pdf, vpa, ppar, upar, density, wall_flux_0,
-                                  wall_flux_L, vtfac, evolve_ppar, evolve_upar,
+function enforce_neutral_wall_bc!(pdf, vpa, ppar, vth, upar, density, wall_flux_0,
+                                  wall_flux_L, vtfac, evolve_ppar_or_vth, evolve_upar,
                                   evolve_density, zero)
     nvpa = size(pdf,1)
     if !evolve_upar
         ## treat z = -Lz/2 boundary ##
         # populate vpa.scratch2 array with dz/dt values at z = -Lz/2
-        vth = sqrt(2.0*ppar[1]/density[1])
-        @. vpa.scratch2 = vpagrid_to_dzdt(vpa.grid, vth, upar[1], evolve_ppar, evolve_upar)
+        @. vpa.scratch2 = vpagrid_to_dzdt(vpa.grid, vth[1], upar[1], evolve_ppar_or_vth, evolve_upar)
 
         # Need to add incoming neutral flux to ion flux to get amplitude for Knudsen
         # distribution
@@ -673,7 +674,7 @@ function enforce_neutral_wall_bc!(pdf, vpa, ppar, upar, density, wall_flux_0,
 
         # obtain the Knudsen cosine distribution at z = -Lz/2
         # the z-dependence is only introduced if the peculiar velocity is used as vpa
-        if evolve_ppar
+        if evolve_ppar_or_vth
             # Need to normalise velocities by vth
             @. vpa.scratch = (3.0*pi/vtfac^3)*abs(vpa.scratch2)*erfc(abs(vpa.scratch2)/vtfac)
 
@@ -692,8 +693,8 @@ function enforce_neutral_wall_bc!(pdf, vpa, ppar, upar, density, wall_flux_0,
         @. vpa.scratch /= knudsen_norm_fac
         # depending on which moments (if any) are evolved, there is a different factor
         # multiplying the neutral pdf in the wall BC
-        if evolve_ppar
-            pdf_norm_fac = vth / density[1]
+        if evolve_ppar_or_vth
+            pdf_norm_fac = vth[1] / density[1]
         elseif evolve_density
             pdf_norm_fac = 1.0 / density[1]
         else
@@ -709,8 +710,7 @@ function enforce_neutral_wall_bc!(pdf, vpa, ppar, upar, density, wall_flux_0,
 
         ## treat the right boundary at z = Lz/2 ##
         # populate vpa.scratch2 array with dz/dt values at z = Lz/2
-        vth = sqrt(2.0*ppar[end]/density[end])
-        @. vpa.scratch2 = vpagrid_to_dzdt(vpa.grid, vth, upar[end], evolve_ppar, evolve_upar)
+        @. vpa.scratch2 = vpagrid_to_dzdt(vpa.grid, vth[end], upar[end], evolve_ppar_or_vth, evolve_upar)
 
         # Need to add incoming neutral flux to ion flux to get amplitude for Knudsen
         # distribution
@@ -738,8 +738,8 @@ function enforce_neutral_wall_bc!(pdf, vpa, ppar, upar, density, wall_flux_0,
         @. vpa.scratch /= knudsen_norm_fac
         # depending on which moments (if any) are evolved, there is a different factor
         # multiplying the neutral pdf in the wall BC
-        if evolve_ppar
-            pdf_norm_fac = vth / density[end]
+        if evolve_ppar_or_vth
+            pdf_norm_fac = vth[end] / density[end]
         elseif evolve_density
             pdf_norm_fac = 1.0 / density[end]
         else
@@ -755,8 +755,7 @@ function enforce_neutral_wall_bc!(pdf, vpa, ppar, upar, density, wall_flux_0,
     else
         ## treat z = -Lz/2 boundary ##
         # populate vpa.scratch2 array with dz/dt values at z = -Lz/2
-        vth = sqrt(2.0*ppar[1]/density[1])
-        @. vpa.scratch2 = vpagrid_to_dzdt(vpa.grid, vth, upar[1], evolve_ppar, evolve_upar)
+        @. vpa.scratch2 = vpagrid_to_dzdt(vpa.grid, vth[1], upar[1], evolve_ppar_or_vth, evolve_upar)
 
         # First apply boundary condition that total neutral outflux is equat to ion
         # influx to upar
@@ -788,7 +787,7 @@ function enforce_neutral_wall_bc!(pdf, vpa, ppar, upar, density, wall_flux_0,
 
         @views pdf_integral_0 = integrate_over_negative_vpa(pdf[:,1], vpa.scratch2, vpa.wgts, vpa.scratch3)
         @views pdf_integral_1 = integrate_over_negative_vpa(vpa.grid .* pdf[:,1], vpa.scratch2, vpa.wgts, vpa.scratch3)
-        if !evolve_ppar
+        if !evolve_ppar_or_vth
             # Calculate normalisation factors N_in for the incoming and N_out for the
             # Knudsen parts of the distirbution so that ∫dwpa F = 0 and ∫dwpa wpa F = 0
             # ⇒ N_in*pdf_integral_0 + N_out*knudsen_integral_0 = 1
@@ -865,8 +864,7 @@ function enforce_neutral_wall_bc!(pdf, vpa, ppar, upar, density, wall_flux_0,
 
         ## treat the right boundary at z = Lz/2 ##
         # populate vpa.scratch2 array with dz/dt values at z = Lz/2
-        vth = sqrt(2.0*ppar[end]/density[end])
-        @. vpa.scratch2 = vpagrid_to_dzdt(vpa.grid, vth, upar[end], evolve_ppar, evolve_upar)
+        @. vpa.scratch2 = vpagrid_to_dzdt(vpa.grid, vth[end], upar[end], evolve_ppar_or_vth, evolve_upar)
 
         # First apply boundary condition that total neutral outflux is equat to ion
         # influx to upar
@@ -892,7 +890,7 @@ function enforce_neutral_wall_bc!(pdf, vpa, ppar, upar, density, wall_flux_0,
         @views pdf_integral_0 = integrate_over_positive_vpa(pdf[:,end], vpa.scratch2, vpa.wgts, vpa.scratch3)
         @views pdf_integral_1 = integrate_over_positive_vpa(vpa.grid .* pdf[:,end], vpa.scratch2, vpa.wgts, vpa.scratch3)
 
-        if !evolve_ppar
+        if !evolve_ppar_or_vth
             # Calculate normalisation factors N_in for the incoming and N_out for the
             # Knudsen parts of the distirbution so that ∫dwpa F = 0 and ∫dwpa wpa F = 0
             # ⇒ N_in*pdf_integral_0 + N_out*knudsen_integral_0 = 1
@@ -973,8 +971,8 @@ end
 """
 create an array of dz/dt values corresponding to the given vpagrid values
 """
-function vpagrid_to_dzdt(vpagrid, vth, upar, evolve_ppar, evolve_upar)
-    if evolve_ppar
+function vpagrid_to_dzdt(vpagrid, vth, upar, evolve_ppar_or_vth, evolve_upar)
+    if evolve_ppar_or_vth
         if evolve_upar
             return vpagrid .* vth .+ upar
         else
@@ -998,7 +996,7 @@ the moments of `f`.
 Inputs/outputs depend on z and vpa (should be inside loops over species, r)
 """
 function convert_full_f_to_normalised!(f, density, upar, ppar, vth, vpa, vpa_spectral,
-                                       evolve_density, evolve_upar, evolve_ppar)
+                                       evolve_density, evolve_upar, evolve_ppar_or_vth)
     @loop_z iz begin
         # Calculate moments
         @views density[iz] = integrate_over_vspace(f[:,iz], vpa.wgts)
@@ -1009,17 +1007,17 @@ function convert_full_f_to_normalised!(f, density, upar, ppar, vth, vpa, vpa_spe
         vth[iz] = sqrt(2.0*ppar[iz]/density[iz])
 
         # Normalise f
-        if evolve_ppar
+        if evolve_ppar_or_vth
             f[:,iz] .*= vth[iz] / density[iz]
         elseif evolve_density
             f[:,iz] ./= density[iz]
         end
 
         # Interpolate f to moment kinetic grid
-        if evolve_ppar || evolve_upar
+        if evolve_ppar_or_vth || evolve_upar
             # The values to interpolate *to* are the v_parallel values corresponding to
             # the w_parallel grid
-            vpa.scratch .= vpagrid_to_dzdt(vpa.grid, vth[iz], upar[iz], evolve_ppar,
+            vpa.scratch .= vpagrid_to_dzdt(vpa.grid, vth[iz], upar[iz], evolve_ppar_or_vth,
                                            evolve_upar)
             @views vpa.scratch2 .= f[:,iz] # Copy to use as input to interpolation
             @views interpolate_to_grid_1d!(f[:,iz], vpa.scratch, vpa.scratch2, vpa,

@@ -84,7 +84,9 @@ function setup_time_advance!(pdf, vpa, z, r, z_spectral, composition, drive_inpu
     begin_s_z_vpa_region()
     @loop_s is begin
         @views update_speed_r!(r_advect[is], moments.upar[:,:,is], moments.vth[:,:,is],
-                               moments.evolve_upar, moments.evolve_ppar, vpa, z, r, 0.0)
+                               moments.evolve_upar,
+                               moments.evolve_ppar || moments.evolve_vth, vpa, z, r,
+                               0.0)
         # initialise the upwind/downwind boundary indices in z
         update_boundary_indices!(r_advect[is], loop_ranges[].vpa, loop_ranges[].z)
     end
@@ -102,7 +104,9 @@ function setup_time_advance!(pdf, vpa, z, r, z_spectral, composition, drive_inpu
     begin_s_r_vpa_region()
     @loop_s is begin
         @views update_speed_z!(z_advect[is], moments.upar[:,:,is], moments.vth[:,:,is],
-                               moments.evolve_upar, moments.evolve_ppar, vpa, z, r, 0.0)
+                               moments.evolve_upar,
+                               moments.evolve_ppar || moments.evolve_vth, vpa, z, r,
+                               0.0)
         # initialise the upwind/downwind boundary indices in z
         update_boundary_indices!(z_advect[is], loop_ranges[].vpa, loop_ranges[].r)
     end
@@ -151,7 +155,8 @@ function setup_time_advance!(pdf, vpa, z, r, z_spectral, composition, drive_inpu
     # enforce boundary conditions and moment constraints to ensure a consistent initial
     # condition
     enforce_boundary_conditions!(pdf.norm, moments.dens, moments.upar, moments.ppar,
-        moments, vpa.bc, z.bc, vpa, z, r, vpa_advect, z_advect, composition)
+        moments.vth, moments, vpa.bc, z.bc, vpa, z, r, vpa_advect, z_advect,
+        composition)
     force_non_negative!(pdf.norm)
     # Ensure normalised pdf exactly obeys integral constraints if evolving moments
     begin_s_r_z_region()
@@ -234,7 +239,7 @@ function setup_advance_flags(moments, composition, split_operators, collisions, 
         # if evolving the parallel pressure, must advance the energy equation,
         # in addition to including sources arising from the use of a modified distribution
         # function in the kinetic equation
-        if moments.evolve_ppar
+        if moments.evolve_ppar || moments.evolve_vth
             advance_sources = true
             advance_energy = true
         end
@@ -253,7 +258,7 @@ if evolving the parallel pressure via energy equation, redefine f -> f * vth / n
 function normalize_pdf!(pdf, moments, scratch)
     error("Function normalise_pdf() has not been updated to be parallelized. Does not "
           * "seem to be used at the moment.")
-    if moments.evolve_ppar
+    if moments.evolve_ppar || moments.evolve_vth
         @. scratch = moments.vth/moments.dens
         nvpa, nz, nspecies = size(pdf)
         for is ∈ 1:nspecies, iz ∈ 1:nz, ivpa ∈ 1:nvpa
@@ -287,14 +292,16 @@ function setup_scratch_arrays(moments, pdf_in, n_rk_stages)
         density_array = allocate_shared_float(moment_dims...)
         upar_array = allocate_shared_float(moment_dims...)
         ppar_array = allocate_shared_float(moment_dims...)
+        vth_array = allocate_shared_float(moment_dims...)
         temp_z_s_array = allocate_shared_float(moment_dims...)
         scratch[istage] = scratch_pdf(pdf_array, density_array, upar_array,
-                                      ppar_array, temp_z_s_array)
+                                      ppar_array, vth_array, temp_z_s_array)
         @serial_region begin
             scratch[istage].pdf .= pdf_in
             scratch[istage].density .= moments.dens
             scratch[istage].upar .= moments.upar
             scratch[istage].ppar .= moments.ppar
+            scratch[istage].vth .= moments.vth
         end
     end
     return scratch
@@ -400,7 +407,7 @@ function time_advance!(pdf, scratch, t, t_input, vpa, z, r, vpa_spectral, z_spec
                     @views draw_v_parallel_zero!(p, z.grid, moments.upar[:,1,is],
                                                  moments.vth[:,1,is],
                                                  moments.evolve_upar,
-                                                 moments.evolve_ppar)
+                                                 moments.evolve_ppar || moments.evolve_vth)
                 end
                 logf_plots = [
                     heatmap(z.grid, vpa.grid, log.(abs.(pdf.norm[:,:,1,is])),
@@ -412,7 +419,7 @@ function time_advance!(pdf, scratch, t, t_input, vpa, z, r, vpa_spectral, z_spec
                     @views draw_v_parallel_zero!(p, z.grid, moments.upar[:,1,is],
                                                  moments.vth[:,1,is],
                                                  moments.evolve_upar,
-                                                 moments.evolve_ppar)
+                                                 moments.evolve_ppar || moments.evolve_vth)
                 end
                 f0_plots = [
                     plot(vpa.grid, pdf.norm[:,1,1,is], xlabel="vpa", ylabel="f0", legend=false)
@@ -502,7 +509,9 @@ function time_advance_split_operators!(pdf, scratch, t, t_input, vpa, z,
         end
         # and add the source terms associated with redefining g = pdf/density or pdf*vth/density
         # to the kinetic equation
-        if moments.evolve_density || moments.evolve_upar || moments.evolve_ppar
+        if moments.evolve_density || moments.evolve_upar || moments.evolve_ppar ||
+                moments.evolve_vth
+
             advance.source_terms = true
             time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
                 vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
@@ -526,7 +535,7 @@ function time_advance_split_operators!(pdf, scratch, t, t_input, vpa, z,
             advance.force_balance = false
         end
         # use the energy equation to update the parallel pressure
-        if moments.evolve_ppar
+        if moments.evolve_ppar || moments.evolve_vth
             advance.energy = true
             time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
                 vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
@@ -535,7 +544,7 @@ function time_advance_split_operators!(pdf, scratch, t, t_input, vpa, z,
         end
     else
         # use the energy equation to update the parallel pressure
-        if moments.evolve_ppar
+        if moments.evolve_ppar || moments.evolve_vth
             advance.energy = true
             time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
                 vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
@@ -560,7 +569,9 @@ function time_advance_split_operators!(pdf, scratch, t, t_input, vpa, z,
         end
         # and add the source terms associated with redefining g = pdf/density or pdf*vth/density
         # to the kinetic equation
-        if moments.evolve_density || moments.evolve_upar || moments.evolve_ppar
+        if moments.evolve_density || moments.evolve_upar || moments.evolve_ppar ||
+                moments.evolve_vth
+
             advance.source_terms = true
             time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
                 vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
@@ -670,12 +681,13 @@ function rk_update!(scratch, pdf, moments, fields, vpa, z, r, vpa_advect, z_adve
     update_derived_moments!(new_scratch, moments, vpa, z, r, composition)
     # update the thermal speed from the updated pressure and density
     @loop_s_r_z is ir iz begin
-        moments.vth[iz,ir,is] = sqrt(2.0*new_scratch.ppar[iz,ir,is]/new_scratch.density[iz,ir,is])
+        moments.vth[iz,ir,is] = new_scratch.vth[iz,ir,is]
     end
     # update the parallel heat flux
     update_qpar!(moments.qpar, moments.qpar_updated, new_scratch.density,
-                 new_scratch.upar, moments.vth, new_scratch.pdf, vpa, z, r, composition,
-                 moments.evolve_density, moments.evolve_upar, moments.evolve_ppar)
+                 new_scratch.upar, new_scratch.vth, new_scratch.pdf, vpa, z, r, composition,
+                 moments.evolve_density, moments.evolve_upar,
+                 moments.evolve_ppar || moments.evolve_vth)
     # update the 'true', un-normalized pdf
     update_unnormalized_pdf!(pdf.unnorm, new_scratch, moments)
     # update the electrostatic potential phi
@@ -707,6 +719,12 @@ function rk_update_evolved_moments!(new_scratch, old_scratch, moments, rk_coefs)
             new_scratch.ppar[iz,ir,is] = rk_coefs[1]*moments.ppar[iz,ir,is] + rk_coefs[2]*old_scratch.ppar[iz,ir,is] + rk_coefs[3]*new_scratch.ppar[iz,ir,is]
         end
     end
+    # if separately evolving the parallel pressure, update using RK;
+    if moments.evolve_vth
+        @loop_s_r_z is ir iz begin
+            new_scratch.vth[iz,ir,is] = rk_coefs[1]*moments.vth[iz,ir,is] + rk_coefs[2]*old_scratch.vth[iz,ir,is] + rk_coefs[3]*new_scratch.vth[iz,ir,is]
+        end
+    end
 end
 
 """
@@ -719,13 +737,18 @@ function update_derived_moments!(new_scratch, moments, vpa, z, r, composition)
     if !moments.evolve_upar
         update_upar!(new_scratch.upar, moments.upar_updated, new_scratch.density,
                      new_scratch.ppar, new_scratch.pdf, vpa, z, r, composition,
-                     moments.evolve_density, moments.evolve_ppar)
+                     moments.evolve_density, moments.evolve_ppar || moments.evolve_vth)
     end
-    if !moments.evolve_ppar
-        # update_ppar! calculates (p_parallel/m_s N_e c_s^2) + (n_s/N_e)*(upar_s/c_s)^2 = (1/√π)∫d(vpa/c_s) (vpa/c_s)^2 * (√π f_s c_s / N_e)
-        update_ppar!(new_scratch.ppar, moments.ppar_updated, new_scratch.density,
-                     new_scratch.upar, new_scratch.pdf, vpa, z, r, composition,
-                     moments.evolve_density, moments.evolve_upar)
+    if moments.evolve_vth
+        @. new_scratch.ppar = 0.5*new_scratch.density*new_scratch.vth*new_scratch.vth
+    else
+        if !moments.evolve_ppar
+            # update_ppar! calculates (p_parallel/m_s N_e c_s^2) + (n_s/N_e)*(upar_s/c_s)^2 = (1/√π)∫d(vpa/c_s) (vpa/c_s)^2 * (√π f_s c_s / N_e)
+            update_ppar!(new_scratch.ppar, moments.ppar_updated, new_scratch.density,
+                         new_scratch.upar, new_scratch.pdf, vpa, z, r, composition,
+                         moments.evolve_density, moments.evolve_upar)
+        end
+        @. new_scratch.vth = sqrt(2.0*new_scratch.ppar/new_scratch.density)
     end
 end
 
@@ -748,7 +771,7 @@ function update_unnormalized_pdf!(pdf_unnorm, new_scratch, moments)
     end
     # if separately evolving the parallel pressure, the evolved
     # pdf is the 'true' pdf multiplied by the thermal speed
-    if moments.evolve_ppar
+    if moments.evolve_ppar || moments.evolve_vth
         @loop_s_r_z_vpa is ir iz ivpa begin
             pdf_unnorm[ivpa,iz,ir,is] /= moments.vth[iz,ir,is]
         end
@@ -771,6 +794,7 @@ function ssp_rk!(pdf, scratch, t, t_input, vpa, z, r,
         first_scratch.density[iz,ir,is] = moments.dens[iz,ir,is]
         first_scratch.upar[iz,ir,is] = moments.upar[iz,ir,is]
         first_scratch.ppar[iz,ir,is] = moments.ppar[iz,ir,is]
+        first_scratch.vth[iz,ir,is] = moments.vth[iz,ir,is]
     end
     if moments.evolve_upar
         # moments may be read on all ranks, even though loop type is z_s, so need to
@@ -861,6 +885,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, z_
         vpa_boundary_buffer_diffusion!(fvec_out.pdf, fvec_in, vpa, vpa_spectral, dt)
         vpa_dissipation!(fvec_out.pdf, fvec_in, moments, vpa, vpa_spectral, dt)
         z_dissipation!(fvec_out.pdf, fvec_in, moments, z, vpa, z_spectral, dt)
+        #vpa_boundary_force_decreasing!(fvec_out.pdf, vpa)
     end
     # End of advance of distribution function
 
@@ -882,7 +907,8 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, z_
         end
     end
     if advance.energy
-        energy_equation!(fvec_out.ppar, fvec_in, moments, collisions, z, r, dt, z_spectral, composition)
+        energy_equation!(fvec_out.ppar, fvec_out.vth, fvec_in, moments, collisions, z,
+                         r, dt, z_spectral, composition)
     end
     # reset "xx.updated" flags to false since ff has been updated
     # and the corresponding moments have not
@@ -904,6 +930,7 @@ function update_solution_vector!(evolved, moments, istage, composition, vpa, z, 
         new_evolved.density[iz,ir,is] = old_evolved.density[iz,ir,is]
         new_evolved.upar[iz,ir,is] = old_evolved.upar[iz,ir,is]
         new_evolved.ppar[iz,ir,is] = old_evolved.ppar[iz,ir,is]
+        new_evolved.vth[iz,ir,is] = old_evolved.vth[iz,ir,is]
     end
     return nothing
 end
@@ -917,7 +944,7 @@ scratch should be a (nz,nspecies) array
 """
 function update_pdf_unnorm!(pdf, moments, scratch, composition, vpa)
     nvpa = size(pdf.unnorm, 1)
-    if moments.evolve_ppar
+    if moments.evolve_ppar || moments.evolve_vth
         @loop_s_r_z is ir iz begin
             scratch[iz,ir,is] = moments.dens[iz,ir,is]/moments.vth[iz,ir,is]
         end

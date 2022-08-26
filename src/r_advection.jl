@@ -18,7 +18,8 @@ function r_advection!(f_out, fvec_in, ff, moments, SL, advect, r, z, vpa,
     @loop_s is begin
         # get the updated speed along the r direction using the current f
         @views update_speed_r!(advect[is], fvec_in.upar[:,:,is], moments.vth[:,:,is],
-                               moments.evolve_upar, moments.evolve_ppar, vpa, z, r, t)
+                               moments.evolve_upar,
+                               moments.evolve_ppar || moments.evolve_vth, vpa, z, r, t)
         # update the upwind/downwind boundary indices and upwind_increment
         @views update_boundary_indices!(advect[is], loop_ranges[].vpa, loop_ranges[].z)
 
@@ -48,12 +49,14 @@ function r_advection!(f_out, fvec_in, ff, moments, SL, advect, r, z, vpa,
         @loop_z_vpa iz ivpa begin
             @views adjust_advection_speed!(advect[is].speed[:,ivpa,iz], advect[is].modified_speed[:,ivpa,iz],
                                            fvec_in.density[iz,:,is], moments.vth[iz,:,is],
-                                           moments.evolve_density, moments.evolve_ppar)
+                                           moments.evolve_density,
+                                           moments.evolve_ppar || moments.evolve_vth)
             # take the normalized pdf contained in fvec_in.pdf and remove the normalization,
             # returning the true (un-normalized) particle distribution function in r.scratch
 
             @views unnormalize_pdf!(r.scratch, fvec_in.pdf[ivpa,iz,:,is], fvec_in.density[iz,:,is], moments.vth[iz,:,is],
-                                    moments.evolve_density, moments.evolve_ppar)
+                                    moments.evolve_density,
+                                    moments.evolve_ppar || moments.evolve_vth)
             @views advance_f_local!(f_out[ivpa,iz,:,is], r.scratch, ff[ivpa,iz,:,is], SL, advect[is], ivpa,
                                     r, dt, istage, spectral, use_semi_lagrange)
         end
@@ -62,8 +65,8 @@ end
 
 """
 """
-function adjust_advection_speed!(speed, mod_speed, dens, vth, evolve_density, evolve_ppar)
-    if evolve_ppar
+function adjust_advection_speed!(speed, mod_speed, dens, vth, evolve_density, evolve_ppar_or_vth)
+    if evolve_ppar_or_vth
         @. speed *= vth/dens
         @. mod_speed *= vth/dens
     elseif evolve_density
@@ -75,8 +78,8 @@ end
 
 """
 """
-function unnormalize_pdf!(unnorm, norm, dens, vth, evolve_density, evolve_ppar)
-    if evolve_ppar
+function unnormalize_pdf!(unnorm, norm, dens, vth, evolve_density, evolve_ppar_or_vth)
+    if evolve_ppar_or_vth
         @. unnorm = norm * dens/vth
     elseif evolve_density
         @. unnorm = norm * dens
@@ -89,7 +92,7 @@ end
 """
 calculate the advection speed in the r-direction at each grid point
 """
-function update_speed_r!(advect, upar, vth, evolve_upar, evolve_ppar, vpa, z, r, t)
+function update_speed_r!(advect, upar, vth, evolve_upar, evolve_ppar_or_vth, vpa, z, r, t)
     @boundscheck z.n == size(advect.speed,3) || throw(BoundsError(advect))
     @boundscheck vpa.n == size(advect.speed,2) || throw(BoundsError(advect))
     @boundscheck r.n == size(advect.speed,1) || throw(BoundsError(speed))

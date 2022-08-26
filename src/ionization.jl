@@ -22,10 +22,10 @@ function ionization_collisions!(f_out, fvec_in, moments, n_ion_species,
         @loop_s is begin
             if is ∈ composition.ion_species_range
                 @loop_r_z ir iz begin
-                    if moments.evolve_ppar && moments.evolve_upar
+                    if (moments.evolve_ppar || moments.evolve_vth) && moments.evolve_upar
                         @. vpa.scratch = vpa.grid / moments.vth[iz] + moments.upar[iz] 
                         prefactor = moments.vth[iz] / moments.dens[iz]
-                    elseif moments.evolve_ppar
+                    elseif (moments.evolve_ppar || moments.evolve_vth)
                         @. vpa.scratch = vpa.grid / moments.vth[iz]
                         prefactor = moments.vth[iz] / moments.dens[iz]
                     elseif moments.evolve_upar
@@ -41,7 +41,7 @@ function ionization_collisions!(f_out, fvec_in, moments, n_ion_species,
                     #if moments.evolve_density
                     #    @. fvec_out.density += dt*collisions.ionization
                     #end
-                    #if moments.evolve_ppar
+                    #if moments.evolve_ppar || moments.evolve_vth
                     #    @. fvec_out.ppar += dt*collisions.ionization
                     #end
                     @loop_vpa ivpa begin
@@ -93,7 +93,7 @@ end
 
 function ionization_collisions_single_species!(f_out, fvec_in, moments, vpa, vpa_spectral, ionization, dt, is, isp)
     @loop_r_z ir iz begin
-        if moments.evolve_ppar
+        if moments.evolve_ppar || moments.evolve_vth
             # will need the ratio of thermal speeds both to interpolate between vpa grids
             # for different species and to account for different normalizations of each species' pdf
             vth_ratio = moments.vth[iz,ir,is]/moments.vth[iz,ir,isp]
@@ -106,26 +106,26 @@ function ionization_collisions_single_species!(f_out, fvec_in, moments, vpa, vpa
         # values of dz/dt; as charge exchange and ionization collisions require
         # the evaluation of the pdf for species s' to obtain the update for species s,
         # will thus have to interpolate between the different vpa grids
-        if moments.evolve_ppar || moments.evolve_upar
+        if moments.evolve_ppar || moments.evolve_vth || moments.evolve_upar
             if !moments.evolve_upar
-                # if evolve_ppar = true and evolve_upar = false, vpa coordinate is
-                # vpahat_s = vpa/vth_s;
+                # if (evolve_ppar = true or evolve_vth = true) and evolve_upar = false,
+                # vpa coordinate is vpahat_s = vpa/vth_s;
                 # we have f_{s'}(vpahat_{s'}) = f_{s'}(vpahat_s * vth_s / vth_{s'});
                 # to get f_{s'}(vpahat_s), need to obtain vpahat_s grid locations
                 # in terms of the vpahat_{s'} coordinate:
                 # (vpahat_s)_j = (vpahat_{s'})_j * vth_{s'} / vth_{s}
                 @. vpa.scratch = vpa.grid / vth_ratio
-            elseif !moments.evolve_ppar
+            elseif !(moments.evolve_ppar || moments.evolve_vth)
                 # if evolve_ppar = false and evolve_upar = true, vpa coordinate is
                 # wpa_s = vpa-upar_s;
                 # we have f_{s'}(wpa_{s'}) = f_{s'}((wpa_s + upar_s - upar_{s'};
                 # to get f_{s'}(wpa_s), need to obtain wpa_s grid locations
                 # in terms of the wpa_{s'} coordinate:
                 # (wpa_s)_j = (wpa_{s'})_j + upar_{s'} - upar_{s}
-                @. vpa.scratch = vpa.grid + fvec_in.upar[iz,ir,isp] - fvec_in.upar[iz,ir,is]
+                @. vpa.scratch = vpa.grid + fvec_in.upar[iz,ir,is] - fvec_in.upar[iz,ir,isp]
             else
-                # if evolve_ppar = true and evolve_upar = true, vpa coordinate is
-                # wpahat_s = (vpa-upar_s)/vth_s;
+                # if (evolve_ppar = true or evolve_vth = true) and evolve_upar = true,
+                # vpa coordinate is wpahat_s = (vpa-upar_s)/vth_s;
                 # we have f_{s'}(wpahat_{s'}) = f_{s'}((wpahat_s * vth_s + upar_s - upar_{s'}) / vth_{s'});
                 # to get f_{s'}(wpahat_s), need to obtain wpahat_s grid locations
                 # in terms of the wpahat_{s'} coordinate:

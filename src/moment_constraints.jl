@@ -71,7 +71,7 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, r, composition,
                 @views enforce_zero_incoming_bc!(
                     fvec_old.pdf[:,:,ir,is], vpa, fvec_new.density[:,ir,is],
                     fvec_new.upar[:,ir,is], fvec_new.ppar[:,ir,is], moments.evolve_upar,
-                    moments.evolve_ppar, zero)
+                    moments.evolve_ppar || moments.evolve_vth, zero)
                 # Correct fvec_old.pdf in case applying new bc messed up moment
                 # constraints
                 @views hard_force_moment_constraints!(fvec_old.pdf[:,1,ir,is], moments,
@@ -89,13 +89,13 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, r, composition,
                 if moments.evolve_upar
                     upar_integral = integrate_over_vspace(fnew_view, vpa.grid, vpa.wgts)
                 end
-                if moments.evolve_ppar
+                if moments.evolve_ppar || moments.evolve_vth
                     ppar_integral = integrate_over_vspace(fnew_view, vpa.grid, 2, vpa.wgts)
                 end
                 # update the pdf to account for the density-conserving correction
                 @. fnew_view += fold_view * (1.0 - density_integral)
                 if moments.evolve_upar
-                    if !moments.evolve_ppar
+                    if !(moments.evolve_ppar || moments.evolve_vth)
                         upar_coefficient = upar_integral /
                             integrate_over_vspace(fold_view, vpa.grid, 2, vpa.wgts)
                     else
@@ -108,7 +108,7 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, r, composition,
                     end
                     # update the pdf to account for the momentum-conserving correction
                     @. fnew_view -= upar_coefficient * vpa.grid * fold_view
-                    if moments.evolve_ppar
+                    if moments.evolve_ppar || moments.evolve_vth
                         # update the pdf to account for the energy-conserving correction
                         #@. fnew_view += ppar_coefficient * (vpa.grid^2 - 0.5) * fold_view
                         # Until julia-1.8 is released, prefer x*x to x^2 to avoid
@@ -123,7 +123,7 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, r, composition,
     moments.qpar_updated .= false
     # update the parallel heat flux
     # NB: no longer need fvec_old.pdf so can use for temporary storage of un-normalised pdf
-    if moments.evolve_ppar
+    if moments.evolve_ppar || moments.evolve_vth
         @loop_s is begin
             @loop_r ir begin
                 @loop_z iz begin
@@ -157,7 +157,7 @@ initial state, and when applying boundary conditions.
 Note this function assumes the input is given at a single spatial position.
 """
 function hard_force_moment_constraints!(f, moments, vpa)
-    #if moments.evolve_ppar
+    #if moments.evolve_ppar || moments.evolve_vth
     #    I0 = integrate_over_vspace(f, vpa.wgts)
     #    I1 = integrate_over_vspace(f, vpa.grid, vpa.wgts)
     #    I2 = integrate_over_vspace(f, vpa.grid, 2, vpa.wgts)
@@ -180,7 +180,7 @@ function hard_force_moment_constraints!(f, moments, vpa)
     #    @. f = f / I0
     #end
 
-    if moments.evolve_ppar
+    if moments.evolve_ppar || moments.evolve_vth
         I0 = integrate_over_vspace(f, vpa.wgts)
         I1 = integrate_over_vspace(f, vpa.grid, vpa.wgts)
         I2 = integrate_over_vspace(f, vpa.grid, 2, vpa.wgts)

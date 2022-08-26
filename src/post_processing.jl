@@ -70,7 +70,7 @@ function analyze_and_plot_data(path)
     phi = load_fields_data(fid)
     # load full (z,r,species,t) velocity moments data
     density, parallel_flow, parallel_pressure, parallel_heat_flux,
-        thermal_speed, n_species, evolve_density, evolve_upar, evolve_ppar =
+        thermal_speed, n_species, evolve_density, evolve_upar, evolve_ppar, evolve_vth =
         load_moments_data(fid)
     # load full (vpa,z,r,species,t) particle distribution function (pdf) data
     ff = load_pdf_data(fid)
@@ -84,8 +84,8 @@ function analyze_and_plot_data(path)
         parallel_heat_flux[:,ir0,:,:],
         thermal_speed[:,ir0,:,:],
         ff[:,:,ir0,:,:],
-        n_species, evolve_density, evolve_upar, evolve_ppar, nvpa, vpa, vpa_wgts,
-        nz, z, z_wgts, Lz, ntime, time)
+        n_species, evolve_density, evolve_upar, evolve_ppar || evolve_vth, nvpa,
+        vpa, vpa_wgts, nz, z, z_wgts, Lz, ntime, time)
 
     close(fid)
 
@@ -139,8 +139,8 @@ end
 """
 function plot_1D_1V_diagnostics(run_name, fid, nwrite_movie, itime_min, itime_max, ivpa0, iz0, ir0, r,
     phi, density, parallel_flow, parallel_pressure, parallel_heat_flux,
-    thermal_speed, ff, n_species, evolve_density, evolve_upar, evolve_ppar, nvpa, vpa,
-    vpa_wgts, nz, z, z_wgts, Lz, ntime, time)
+    thermal_speed, ff, n_species, evolve_density, evolve_upar, evolve_ppar_or_vth, nvpa,
+    vpa, vpa_wgts, nz, z, z_wgts, Lz, ntime, time)
 
     # plot_unnormalised() requires PyPlot, so ensure it is used for all plots for
     # consistency
@@ -174,7 +174,7 @@ function plot_1D_1V_diagnostics(run_name, fid, nwrite_movie, itime_min, itime_ma
     # analyze the pdf data
     f_fldline_avg, delta_f, dens_moment, upar_moment, ppar_moment =
         analyze_pdf_data(ff, vpa, nvpa, nz, n_species, ntime, vpa_wgts, z_wgts,
-                         Lz, thermal_speed, evolve_ppar)
+                         Lz, thermal_speed, evolve_ppar_or_vth)
 
     println("Plotting distribution function data...")
     cmlog(cmlin::ColorGradient) = RGB[cmlin[x] for x=LinRange(0,1,30)]
@@ -248,7 +248,7 @@ function plot_1D_1V_diagnostics(run_name, fid, nwrite_movie, itime_min, itime_ma
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
                 @views plot_unnormalised(ff[:,:,is,i], z, vpa, density[:,is,i],
                                          parallel_flow[:,is,i], thermal_speed[:,is,i],
-                                         evolve_density, evolve_upar, evolve_ppar)
+                                         evolve_density, evolve_upar, evolve_ppar_or_vth)
             end
             outfile = string(run_name, "_f_unnorm_vs_vpa_z", spec_string, ".gif")
             gif(anim, outfile, fps=5)
@@ -256,7 +256,7 @@ function plot_1D_1V_diagnostics(run_name, fid, nwrite_movie, itime_min, itime_ma
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
                 @views plot_unnormalised(ff[:,:,is,i], z, vpa, density[:,is,i],
                                          parallel_flow[:,is,i], thermal_speed[:,is,i],
-                                         evolve_density, evolve_upar, evolve_ppar,
+                                         evolve_density, evolve_upar, evolve_ppar_or_vth,
                                          plot_log=true)
             end
             outfile = string(run_name, "_logf_unnorm_vs_vpa_z", spec_string, ".gif")
@@ -845,8 +845,8 @@ Add a thin, red, dashed line showing v_parallel=(vth*w_parallel+upar)=0 to a 2d 
 with axes (z,vpa).
 """
 function draw_v_parallel_zero!(plt::Plots.Plot, z::AbstractVector, upar, vth,
-                               evolve_upar::Bool, evolve_ppar::Bool)
-    if evolve_ppar && evolve_upar
+                               evolve_upar::Bool, evolve_ppar_or_vth::Bool)
+    if evolve_ppar_or_vth && evolve_upar
         zero_value = @. -upar/vth
     elseif evolve_upar
         zero_value = @. -upar
@@ -857,8 +857,8 @@ function draw_v_parallel_zero!(plt::Plots.Plot, z::AbstractVector, upar, vth,
           xlims=xlims(plt), ylims=ylims(plt), label="")
 end
 function draw_v_parallel_zero!(z::AbstractVector, upar, vth, evolve_upar::Bool,
-                               evolve_ppar::Bool)
-    draw_v_parallel_zero!(Plots.CURRENT_PLOT, z, upar, vth, evolve_upar, evolve_ppar)
+                               evolve_ppar_or_vth::Bool)
+    draw_v_parallel_zero!(Plots.CURRENT_PLOT, z, upar, vth, evolve_upar, evolve_ppar_or_vth)
 end
 
 """
@@ -871,17 +871,17 @@ Note this function requires using the PyPlot backend to support 2d coordinates b
 passed to `heatmap()`.
 """
 function plot_unnormalised(f, z_grid, vpa_grid, density, upar, vth, evolve_density,
-                           evolve_upar, evolve_ppar; plot_log=false)
+                           evolve_upar, evolve_ppar_or_vth; plot_log=false)
     nvpa, nz = size(f)
     z2d = zeros(nvpa, nz)
     dzdt2d = zeros(nvpa, nz)
     for iz ∈ 1:nz
         @views z2d[:,iz] .= z_grid[iz]
-        @views dzdt2d[:,iz] .= vpagrid_to_dzdt(vpa_grid, vth[iz], upar[iz], evolve_ppar,
+        @views dzdt2d[:,iz] .= vpagrid_to_dzdt(vpa_grid, vth[iz], upar[iz], evolve_ppar_or_vth,
                                              evolve_upar)
     end
 
-    if evolve_ppar
+    if evolve_ppar_or_vth
         f_unnorm = similar(f)
         for iz ∈ 1:nz, ivpa ∈ 1:nvpa
             f_unnorm[ivpa,iz] = @. f[ivpa,iz] * density[iz] / vth[iz]

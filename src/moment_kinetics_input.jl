@@ -65,6 +65,7 @@ function mk_input(scan_input=Dict())
     evolve_moments.density = get(scan_input, "evolve_moments_density", false)
     evolve_moments.parallel_flow = get(scan_input, "evolve_moments_parallel_flow", false)
     evolve_moments.parallel_pressure = get(scan_input, "evolve_moments_parallel_pressure", false)
+    evolve_moments.thermal_speed = get(scan_input, "evolve_moments_thermal_speed", false)
     evolve_moments.conservation = get(scan_input, "evolve_moments_conservation", false)
 
     ####### specify any deviations from default inputs for evolved species #######
@@ -253,9 +254,11 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     evolve_density = false
     evolve_parallel_flow = false
     evolve_parallel_pressure = false
+    evolve_thermal_speed = false
     conservation = true
     #advective_form = false
-    evolve_moments = evolve_moments_options(evolve_density, evolve_parallel_flow, evolve_parallel_pressure, conservation)#advective_form)
+    evolve_moments = evolve_moments_options(evolve_density, evolve_parallel_flow,
+        evolve_thermal_speed , evolve_parallel_pressure, conservation)#advective_form)
     #################### parameters related to the z grid ######################
     # ngrid_z is number of grid points per element
     ngrid_z = 100
@@ -486,6 +489,13 @@ function check_input(io, output_dir, nstep, dt, use_semi_lagrange, r, z, vpa,
         print(io,">evolve_moments.parallel_flow = true, but evolve_moments.density = false.")
         println(io, "this is not a supported option.  forcing evolve_moments.density = true.")
         evolve_moments.density = true
+    end
+    if evolve_moments.parallel_pressure && evolve_moments.thermal_speed
+        # The energy equation is used to evolve either parallel pressure or thermal
+        # speed. They are different ways of representing the same moment, so does not
+        # make sense to evolve both.
+        error("Cannot set both evolve_moments_parallel_pressure=true and "
+              * "evolve_moments_thermal_speed=true.")
     end
 end
 

@@ -104,9 +104,9 @@ end
 """
 """
 function update_speed_default!(advect, fields, fvec, moments, vpa, z, r, composition, collisions, t, z_spectral)
-    if moments.evolve_ppar && moments.evolve_upar
+    if (moments.evolve_ppar || moments.evolve_vth) && moments.evolve_upar
         update_speed_n_u_p_evolution!(advect, fvec, moments, vpa, z, r, composition, collisions, z_spectral)
-    elseif moments.evolve_ppar
+    elseif moments.evolve_ppar || moments.evolve_vth
         update_speed_n_p_evolution!(advect, fields, fvec, moments, vpa, z, r, composition, collisions, z_spectral)
     elseif moments.evolve_upar
         update_speed_n_u_evolution!(advect, fvec, moments, vpa, z, r, composition, collisions, z_spectral)

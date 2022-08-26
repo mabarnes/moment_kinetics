@@ -139,9 +139,18 @@ function load_moments_data(fid)
     else
         evolve_ppar = false
     end
+    # define a handle for the flag indicating if the thermal speed should be separately advanced
+    cdfvar = fid["evolve_vth"]
+    # load the parallel pressure evolution flag
+    evolve_vth_int = cdfvar.var[:]
+    if evolve_vth_int[1] == 1
+        evolve_vth = true
+    else
+        evolve_vth = false
+    end
     println("done.")
     return density, parallel_flow, parallel_pressure, parallel_heat_flux, thermal_speed,
-           n_species, evolve_density, evolve_upar, evolve_ppar
+           n_species, evolve_density, evolve_upar, evolve_ppar, evolve_vth
 end
 
 """

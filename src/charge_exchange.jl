@@ -78,10 +78,10 @@ with a single species of the opposite type; e.g., ions with neutrals or neutrals
 function charge_exchange_collisions_single_species!(f_out, fvec_in, moments, vpa,
     charge_exchange_frequency, spectral, dt, is, isp)
     @loop_r_z ir iz begin
-        if moments.evolve_ppar
+        if moments.evolve_ppar || moments.evolve_vth
             # will need the ratio of thermal speeds both to interpolate between vpa grids
             # for different species and to account for different normalizations of each species' pdf
-            vth_ratio = moments.vth[iz,ir,is]/moments.vth[iz,ir,isp]
+            vth_ratio = fvec_in.vth[iz,ir,is]/fvec_in.vth[iz,ir,isp]
         else
             vth_ratio = 1.0
         end
@@ -91,7 +91,7 @@ function charge_exchange_collisions_single_species!(f_out, fvec_in, moments, vpa
         # values of dz/dt; as charge exchange and ionization collisions require
         # the evaluation of the pdf for species s' to obtain the update for species s,
         # will thus have to interpolate between the different vpa grids
-        if moments.evolve_ppar || moments.evolve_upar
+        if moments.evolve_ppar || moments.evolve_vth || moments.evolve_upar
             if !moments.evolve_upar
                 # if evolve_ppar = true and evolve_upar = false, vpa coordinate is
                 # vpahat_s = vpa/vth_s;
@@ -100,7 +100,7 @@ function charge_exchange_collisions_single_species!(f_out, fvec_in, moments, vpa
                 # in terms of the vpahat_{s'} coordinate:
                 # (vpahat_s)_j = (vpahat_{s'})_j * vth_{s'} / vth_{s}
                 @. vpa.scratch = vpa.grid / vth_ratio
-            elseif !moments.evolve_ppar
+            elseif !(moments.evolve_ppar || moments.evolve_vth)
                 # if evolve_ppar = false and evolve_upar = true, vpa coordinate is
                 # wpa_s = vpa-upar_s;
                 # we have f_{s'}(wpa_{s'}) = f_{s'}((wpa_s + upar_s - upar_{s'};
@@ -109,13 +109,13 @@ function charge_exchange_collisions_single_species!(f_out, fvec_in, moments, vpa
                 # (wpa_s)_j = (wpa_{s'})_j + upar_{s'} - upar_{s}
                 @. vpa.scratch = vpa.grid + fvec_in.upar[iz,ir,isp] - fvec_in.upar[iz,ir,is]
             else
-                # if evolve_ppar = true and evolve_upar = true, vpa coordinate is
-                # wpahat_s = (vpa-upar_s)/vth_s;
+                # if (evolve_ppar = true or evolve_vth = true) and evolve_upar = true,
+                # vpa coordinate is wpahat_s = (vpa-upar_s)/vth_s;
                 # we have f_{s'}(wpahat_{s'}) = f_{s'}((wpahat_s * vth_s + upar_s - upar_{s'}) / vth_{s'});
                 # to get f_{s'}(wpahat_s), need to obtain wpahat_s grid locations
                 # in terms of the wpahat_{s'} coordinate:
                 # (wpahat_{s'})_j = ((wpahat_{s})_j * vth_{s} + upar_{s} - upar_{s'}) / vth_{s'}
-                @. vpa.scratch = (vpa.grid * moments.vth[iz,ir,is] + fvec_in.upar[iz,ir,is] - fvec_in.upar[iz,ir,isp]) / moments.vth[iz,ir,isp]
+                @. vpa.scratch = (vpa.grid * fvec_in.vth[iz,ir,is] + fvec_in.upar[iz,ir,is] - fvec_in.upar[iz,ir,isp]) / fvec_in.vth[iz,ir,isp]
             end
             # interpolate to the new grid (passed in as vpa.scratch)
             # and return interpolated values in vpa.scratch2

@@ -15,6 +15,7 @@ struct scratch_pdf{n_distribution, n_moment}
     density::MPISharedArray{mk_float, n_moment}
     upar::MPISharedArray{mk_float, n_moment}
     ppar::MPISharedArray{mk_float, n_moment}
+    vth::MPISharedArray{mk_float, n_moment}
     temp_z_s::MPISharedArray{mk_float, n_moment}
 end
 

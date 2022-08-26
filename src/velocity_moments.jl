@@ -68,6 +68,13 @@ mutable struct moments
     qpar_updated::Vector{Bool}
     # this is the thermal speed based on the parallel temperature Tpar = ppar/dens: vth = sqrt(2*Tpar/m)
     vth::MPISharedArray{mk_float,3}
+    # flag that keeps track of whether or not vth needs updating before use
+    # Note: may not be set for all species on this process, but this process only ever
+    # sets/uses the value for the same subset of species. This means vth_update does
+    # not need to be a shared memory array.
+    vth_updated::Vector{Bool}
+    # flag that indicates if the thermal speed should be evolved via the energy equation
+    evolve_vth::Bool
     # if evolve_ppar = true, then the velocity variable is (vpa - upa)/vth, which introduces
     # a factor of vth for each power of wpa in velocity space integrals.
     # vpa_norm_fac accounts for this: it is vth if using the above definition for the parallel velocity,
@@ -95,6 +102,9 @@ function create_moments(nz, nr, n_species, evolve_moments, ionization, z_bc)
     # allocate array of Bools that indicate if the parallel pressure is updated for each species
     parallel_pressure_updated = allocate_bool(n_species)
     parallel_pressure_updated .= false
+    # allocate array of Bools that indicate if the thermal speed is updated for each species
+    thermal_speed_updated = allocate_bool(n_species)
+    thermal_speed_updated .= false
     # allocate array used for the parallel flow
     parallel_heat_flux = allocate_shared_float(nz, nr, n_species)
     # allocate array of Bools that indicate if the parallel flow is updated for each species
@@ -102,7 +112,7 @@ function create_moments(nz, nr, n_species, evolve_moments, ionization, z_bc)
     parallel_heat_flux_updated .= false
     # allocate array used for the thermal speed
     thermal_speed = allocate_shared_float(nz, nr, n_species)
-    if evolve_moments.parallel_pressure
+    if evolve_moments.parallel_pressure || evolve_moments.thermal_speed
         vpa_norm_fac = thermal_speed
     else
         vpa_norm_fac = allocate_shared_float(nz, nr, n_species)
@@ -125,7 +135,8 @@ function create_moments(nz, nr, n_species, evolve_moments, ionization, z_bc)
         evolve_moments.conservation,
         parallel_flow, parallel_flow_updated, evolve_moments.parallel_flow,
         parallel_pressure, parallel_pressure_updated, evolve_moments.parallel_pressure,
-        parallel_heat_flux, parallel_heat_flux_updated, thermal_speed, vpa_norm_fac)
+        parallel_heat_flux, parallel_heat_flux_updated, thermal_speed,
+        thermal_speed_updated, evolve_moments.thermal_speed, vpa_norm_fac)
 end
 
 """
@@ -147,7 +158,8 @@ function update_moments!(moments, ff, vpa, z, r, composition)
             # function
             @views update_upar_species!(moments.upar[:,:,is], moments.dens[:,:,is],
                                         moments.ppar[:,:,is], ff[:,:,:,is], vpa, z, r,
-                                        moments.evolve_density, moments.evolve_ppar)
+                                        moments.evolve_density,
+                                        moments.evolve_ppar || moments.evolve_vth)
             moments.upar_updated[is] = true
         end
         if moments.ppar_updated[is] == false
@@ -156,14 +168,17 @@ function update_moments!(moments, ff, vpa, z, r, composition)
                                         moments.evolve_density, moments.evolve_upar)
             moments.ppar_updated[is] = true
         end
-        @loop_r_z ir iz begin
-            moments.vth[iz,ir,is] = sqrt(2*moments.ppar[iz,ir,is]/moments.dens[iz,ir,is])
+        if moments.vth_updated[is] == false
+            @loop_r_z ir iz begin
+                moments.vth[iz,ir,is] = sqrt(2*moments.ppar[iz,ir,is]/moments.dens[iz,ir,is])
+            end
+            moments.vth_updated[is] = true
         end
         if moments.qpar_updated[is] == false
             @views update_qpar_species!(moments.qpar[:,is], moments.dens[:,:,is],
                                         moments.vth[:,:,is], ff[:,:,is], vpa, z, r,
                                         moments.evolve_density, moments.evolve_upar,
-                                        moments.evolve_ppar)
+                                        moments.evolve_ppar || moments.evolve_vth)
             moments.qpar_updated[is] = true
         end
     end
@@ -207,14 +222,14 @@ NB: if this function is called and if upar_updated is false, then
 the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
 """
 function update_upar!(upar, upar_updated, density, ppar, pdf, vpa, z, r, composition,
-                      evolve_density, evolve_ppar)
+                      evolve_density, evolve_ppar_or_vth)
     n_species = size(pdf,4)
     @boundscheck n_species == size(upar,3) || throw(BoundsError(upar))
     @loop_s is begin
         if upar_updated[is] == false
             @views update_upar_species!(upar[:,:,is], density[:,:,is], ppar[:,:,is],
                                         pdf[:,:,:,is], vpa, z, r, evolve_density,
-                                        evolve_ppar)
+                                        evolve_ppar_or_vth)
             upar_updated[is] = true
         end
     end
@@ -224,10 +239,10 @@ end
 calculate the updated parallel flow (upar) for a given species
 """
 function update_upar_species!(upar, density, ppar, ff, vpa, z, r, evolve_density,
-                              evolve_ppar)
+                              evolve_ppar_or_vth)
     @boundscheck z.n == size(ff, 2) || throw(BoundsError(ff))
     @boundscheck z.n == size(upar, 1) || throw(BoundsError(upar))
-    if evolve_density && evolve_ppar
+    if evolve_density && evolve_ppar_or_vth
         # this is the case where the density and parallel pressure are evolved
         # separately from the normalized pdf, g_s = (√π f_s vth_s / n_s); the vpa
         # coordinate is (dz/dt) / vth_s.
@@ -327,13 +342,13 @@ end
 NB: the incoming pdf is the normalized pdf
 """
 function update_qpar!(qpar, qpar_updated, density, upar, vth, pdf, vpa, z, r,
-                      composition, evolve_density, evolve_upar, evolve_ppar)
+                      composition, evolve_density, evolve_upar, evolve_ppar_or_vth)
     @boundscheck composition.n_species == size(qpar,3) || throw(BoundsError(qpar))
     @loop_s is begin
         if qpar_updated[is] == false
             @views update_qpar_species!(qpar[:,:,is], density[:,:,is], upar[:,:,is],
                                         vth[:,:,is], pdf[:,:,:,is], vpa, z, r,
-                                        evolve_density, evolve_upar, evolve_ppar)
+                                        evolve_density, evolve_upar, evolve_ppar_or_vth)
             qpar_updated[is] = true
         end
     end
@@ -343,10 +358,10 @@ end
 calculate the updated parallel heat flux (qpar) for a given species
 """
 function update_qpar_species!(qpar, density, upar, vth, ff, vpa, z, r, evolve_density,
-                              evolve_upar, evolve_ppar)
+                              evolve_upar, evolve_ppar_or_vth)
     @boundscheck z.n == size(ff, 2) || throw(BoundsError(ff))
     @boundscheck z.n == size(qpar, 1) || throw(BoundsError(qpar))
-    if evolve_upar && evolve_ppar
+    if evolve_upar && evolve_ppar_or_vth
         @loop_r_z ir iz begin
             qpar[iz,ir] = integrate_over_vspace(@view(ff[:,iz,ir]), vpa.grid, 3, vpa.wgts) *
                           density[iz,ir] * vth[iz,ir]^4
@@ -356,7 +371,7 @@ function update_qpar_species!(qpar, density, upar, vth, ff, vpa, z, r, evolve_de
             qpar[iz,ir] = integrate_over_vspace(@view(ff[:,iz,ir]), vpa.grid, 3, vpa.wgts) *
                           density[iz,ir]
         end
-    elseif evolve_ppar
+    elseif evolve_ppar_or_vth
         @loop_r_z ir iz begin
             @. vpa.scratch = vpa.grid - upar[iz,ir]
             qpar[iz,ir] = integrate_over_vspace(@view(ff[:,iz,ir]), vpa.scratch, 3, vpa.wgts) *
@@ -481,6 +496,9 @@ function reset_moments_status!(moments, composition, z)
     end
     if moments.evolve_ppar == false
         moments.ppar_updated .= false
+    end
+    if moments.evolve_vth == false
+        moments.vth_updated .= false
     end
     moments.qpar_updated .= false
 end

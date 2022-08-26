@@ -105,7 +105,7 @@ end
 """
 """
 function analyze_pdf_data(ff, vpa, nvpa, nz, n_species, ntime, vpa_wgts, z_wgts, Lz,
-                          vth, evolve_ppar)
+                          vth, evolve_ppar_or_vth)
     print("Analyzing distribution function data...")
     f_fldline_avg = allocate_float(nvpa,n_species,ntime)
     for i ∈ 1:ntime
@@ -132,7 +132,7 @@ function analyze_pdf_data(ff, vpa, nvpa, nz, n_species, ntime, vpa_wgts, z_wgts,
             end
         end
     end
-    if evolve_ppar
+    if evolve_ppar_or_vth
         @. dens_moment *= vth
         @. upar_moment *= vth^2
         @. ppar_moment *= vth^3

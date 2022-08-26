@@ -48,14 +48,14 @@ function vpa_boundary_buffer_decay!(f_out, fvec_in, moments, vpa, dt)
 
     begin_s_r_z_region()
 
-    if moments.evolve_upar && moments.evolve_ppar
+    if moments.evolve_upar && (moments.evolve_ppar || moments.evolve_vth)
         @loop_s_r_z is ir iz begin
             for ivpa ∈ vpa_inds
                 f_out[ivpa,iz,ir,is] += dt*vpa.scratch[ivpa]*
                                         (exp(-vpa.grid[ivpa]^2) - fvec_in.pdf[ivpa,iz,ir,is])
             end
         end
-    elseif moments.evolve_ppar
+    elseif (moments.evolve_ppar || moments.evolve_vth)
         @loop_s_r_z is ir iz begin
             vth = sqrt(2.0*fvec_in.ppar[iz,ir,is]/fvec_in.density[iz,ir,is])
             for ivpa ∈ vpa_inds
