@@ -244,14 +244,34 @@ end
 """
 Add diffusion in the z direction to suppress oscillations
 """
-function z_dissipation!(f_out, fvec_in, moments, z, vpa, spectral, dt)
+function z_dissipation!(f_out, fvec_in, moments, z, vpa, spectral::T_spectral, dt) where T_spectral
     begin_s_r_vpa_region()
 
-    diffusion_coefficient = -1.0
+    ##diffusion_coefficient = 1.0e4
+    #diffusion_coefficient = -2.0e1
 
+    #if diffusion_coefficient <= 0.0
+    #    return nothing
+    #end
+
+    #if T_spectral <: Bool
+    #    # Scale diffusion coefficient like square of grid spacing, so convergence will
+    #    # be second order accurate despite presence of numerical dissipation.
+    #    # Assume constant grid spacing, so all cell_width entries are the same.
+    #    diffusion_coefficient *= z.cell_width[1]^2
+    #else
+    #    # Dissipation should decrease with element size at order (ngrid-1) to preserve
+    #    # expected convergence of Chebyshev pseudospectral scheme
+    #    diffusion_coefficient *= (z.L/z.nelement)^(z.ngrid-1)
+    #end
+
+    diffusion_coefficient = -1.0e-2
     if diffusion_coefficient <= 0.0
         return nothing
     end
+
+    #@. z.scratch2 = 1.e-2 * (1.0 - (2.0*z.grid/z.L)^2)
+    #diffusion_coefficient = z.scratch2
 
     @loop_s_r_vpa is ir ivpa begin
         @views derivative!(z.scratch, fvec_in.pdf[ivpa,:,ir,is], z, spectral, Val(2))
