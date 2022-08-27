@@ -838,12 +838,12 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, z_
     end
     if advance.continuity
         continuity_equation!(fvec_out.density, fvec_in, moments, composition, vpa, z, r,
-                             dt, z_spectral, collisions.ionization)
+                             dt, z_spectral, collisions.ionization, num_diss_params)
     end
     if advance.force_balance
         # fvec_out.upar is over-written in force_balance! and contains the particle flux
         force_balance!(fvec_out.upar, fvec_in, fields, collisions, vpa, z, r, dt,
-                       z_spectral, composition)
+                       z_spectral, composition, num_diss_params)
         # convert from the particle flux to the parallel flow
         @loop_s_r_z is ir iz begin
             fvec_out.upar[iz,ir,is] /= fvec_out.density[iz,ir,is]
@@ -851,7 +851,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, z_
     end
     if advance.energy
         energy_equation!(fvec_out.ppar, fvec_in, moments, collisions, z,
-                         r, dt, z_spectral, composition)
+                         r, dt, z_spectral, composition, num_diss_params)
     end
     # reset "xx.updated" flags to false since ff has been updated
     # and the corresponding moments have not

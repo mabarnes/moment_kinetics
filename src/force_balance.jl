@@ -12,14 +12,17 @@ use the force balance equation d(nu)/dt + d(ppar + n*upar*upar)/dz =
 -(dens/2)*dphi/dz + R*dens_i*dens_n*(upar_n-upar_i)
 to update the parallel particle flux dens*upar for each species
 """
-function force_balance!(pflx, fvec, fields, collisions, vpa, z, r, dt, spectral, composition)
+function force_balance!(pflx, fvec, fields, collisions, vpa, z, r, dt, spectral,
+                        composition, num_diss_params)
 
     begin_s_r_region()
 
     # account for momentum flux contribution to force balance
     @loop_s is begin
         @loop_r ir begin
-            @views force_balance_flux_species!(pflx[:,ir,is], fvec.density[:,ir,is], fvec.upar[:,ir,is], fvec.ppar[:,ir,is], z, dt, spectral)
+            @views force_balance_flux_species!(pflx[:,ir,is], fvec.density[:,ir,is],
+                                               fvec.upar[:,ir,is], fvec.ppar[:,ir,is],
+                                               z, dt, spectral, num_diss_params)
             if is ∈ composition.ion_species_range
                 # account for parallel electric field contribution to force balance
                 @views force_balance_Epar_species!(pflx[:,ir,is], fields.phi[:,ir], fvec.density[:,ir,is], z, dt, spectral)
@@ -45,7 +48,8 @@ use the force balance equation d(mnu)/dt + d(ppar + mnu * u)/dz = ...
 to update the momentum flux mnu; this function accounts for the contribution from the
 flux term above
 """
-function force_balance_flux_species!(pflx, dens, upar, ppar, z, dt, spectral)
+function force_balance_flux_species!(pflx, dens, upar, ppar, z, dt, spectral,
+                                     num_diss_params)
     # calculate the parallel flux of parallel momentum densitg at the previous time level/RK stage
     derivative!(z.scratch, ppar, z, spectral)
 
@@ -72,6 +76,15 @@ function force_balance_flux_species!(pflx, dens, upar, ppar, z, dt, spectral)
     #@. pflx = dens*upar - dt*(z.scratch + z.scratch2)
     #@. pflx = dens*upar - dt*(z.scratch + upar*z.scratch2 + dens.*upar*z.scratch3)
     @. pflx = dens*upar - dt*(z.scratch + upar*upar*z.scratch2 + 2.0*dens*upar*z.scratch3)
+
+    # Ad-hoc diffusion to stabilise numerics...
+    diffusion_coefficient = num_diss_params.moment_dissipation_coefficient
+    if diffusion_coefficient > 0.0
+        derivative!(z.scratch, upar, z, spectral, Val(2))
+        @. pflx += dt*diffusion_coefficient*z.scratch*dens
+    end
+
+    return nothing
 end
 
 """

@@ -10,7 +10,8 @@ using ..looping
 """
 use the continuity equation dn/dt + d(n*upar)/dz to update the density n for all species
 """
-function continuity_equation!(dens_out, fvec_in, moments, composition, vpa, z, r, dt, spectral, ionization)
+function continuity_equation!(dens_out, fvec_in, moments, composition, vpa, z, r, dt,
+                              spectral, ionization, num_diss_params)
     # use the continuity equation dn/dt + d(n*upar)/dz to update the density n
     # for each species
 
@@ -19,7 +20,7 @@ function continuity_equation!(dens_out, fvec_in, moments, composition, vpa, z, r
     @loop_s is begin
         @loop_r ir begin #MRH NOT SURE ABOUT THIS!
             @views continuity_equation_single_species!(dens_out[:,ir,is],
-                fvec_in.density[:,ir,:], fvec_in.upar[:,ir,is], z, dt, spectral, ionization, composition, is)
+                fvec_in.density[:,ir,:], fvec_in.upar[:,ir,is], z, dt, spectral, ionization, composition, is, num_diss_params)
         end
     end
 end
@@ -27,7 +28,9 @@ end
 """
 use the continuity equation dn/dt + d(n*upar)/dz to update the density n
 """
-function continuity_equation_single_species!(dens_out, dens_in, upar, z, dt, spectral, ionization, composition, is)
+function continuity_equation_single_species!(dens_out, dens_in, upar, z, dt, spectral,
+                                             ionization, composition, is,
+                                             num_diss_params)
     ## calculate the particle flux nu
     #@. z.scratch = dens_in[:,is]*upar
     ## Use as 'adv_fac' for upwinding
@@ -57,6 +60,15 @@ function continuity_equation_single_species!(dens_out, dens_in, upar, z, dt, spe
             @. dens_out -= dt*ionization*dens_in[:,is]*dens_in[:,isi]
         end
     end
+
+    # Ad-hoc diffusion to stabilise numerics...
+    diffusion_coefficient = num_diss_params.moment_dissipation_coefficient
+    if diffusion_coefficient > 0.0
+        derivative!(z.scratch, dens_in[:,is], z, spectral, Val(2))
+        @. dens_out += dt*diffusion_coefficient*z.scratch
+    end
+
+    return nothing
 end
 
 end

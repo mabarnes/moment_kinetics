@@ -10,14 +10,15 @@ using ..looping
 """
 evolve the parallel pressure by solving the energy equation
 """
-function energy_equation!(ppar, fvec, moments, collisions, z, r, dt, spectral, composition)
+function energy_equation!(ppar, fvec, moments, collisions, z, r, dt, spectral,
+                          composition, num_diss_params)
 
     begin_s_r_region()
 
     @loop_s is begin
         @loop_r ir begin
             @views energy_equation_no_collisions!(ppar[:,ir,is], fvec.upar[:,ir,is], fvec.ppar[:,ir,is],
-                                                  moments.qpar[:,ir,is], dt, z, spectral)
+                                                  moments.qpar[:,ir,is], dt, z, spectral, num_diss_params)
         end
     end
     # add in contributions due to charge exchange/ionization collisions
@@ -35,7 +36,8 @@ end
 """
 include all contributions to the energy equation aside from collisions
 """
-function energy_equation_no_collisions!(ppar_out, upar, ppar, qpar, dt, z, spectral)
+function energy_equation_no_collisions!(ppar_out, upar, ppar, qpar, dt, z, spectral,
+                                        num_diss_params)
     # calculate dppar/dz and store in z.scratch
     # Use as 'adv_fac' for upwinding
     @. z.scratch3 = -upar
@@ -50,6 +52,15 @@ function energy_equation_no_collisions!(ppar_out, upar, ppar, qpar, dt, z, spect
     derivative!(z.scratch, upar, z, spectral)
     # update ppar to account for contribution from parallel flow gradient
     @. ppar_out -= 3.0*dt*ppar*z.scratch
+
+    # Ad-hoc diffusion to stabilise numerics...
+    diffusion_coefficient = num_diss_params.moment_dissipation_coefficient
+    if diffusion_coefficient > 0.0
+        derivative!(z.scratch, ppar, z, spectral, Val(2))
+        @. ppar_out += dt*diffusion_coefficient*z.scratch
+    end
+
+    return nothing
 end
 
 """
