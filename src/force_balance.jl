@@ -69,6 +69,14 @@ function force_balance_flux_species!(pflx, dens, upar, ppar, z, dt, spectral)
     #@. pflx = dens*upar - dt*(z.scratch + z.scratch2)
     #@. pflx = dens*upar - dt*(z.scratch + upar*z.scratch2 + dens.*upar*z.scratch3)
     @. pflx = dens*upar - dt*(z.scratch + upar*upar*z.scratch2 + 2.0*dens*upar*z.scratch3)
+
+    # Ad-hoc diffusion to stabilise numerics...
+    diffusion_coefficient = -1.e-3
+    diffusion_coefficient < 0.0 && return nothing
+    derivative!(z.scratch, upar, z, spectral, Val(2))
+    @. pflx += dt*diffusion_coefficient*z.scratch*dens
+
+    return nothing
 end
 
 """

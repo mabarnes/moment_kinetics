@@ -68,6 +68,14 @@ function energy_equation_no_collisions!(ppar_out, upar, ppar, qpar, dt, z, spect
     derivative!(z.scratch, upar, z, spectral)
     # update ppar to account for contribution from parallel flow gradient
     @. ppar_out -= 3.0*dt*ppar*z.scratch
+
+    # Ad-hoc diffusion to stabilise numerics...
+    diffusion_coefficient = -1.e-3
+    diffusion_coefficient < 0.0 && return nothing
+    derivative!(z.scratch, ppar, z, spectral, Val(2))
+    @. ppar_out += dt*diffusion_coefficient*z.scratch
+
+    return nothing
 end
 
 """

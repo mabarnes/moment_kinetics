@@ -54,6 +54,14 @@ function continuity_equation_single_species!(dens_out, dens_in, upar, z, dt, spe
             @. dens_out -= dt*ionization*dens_in[:,is]*dens_in[:,isi]
         end
     end
+
+    # Ad-hoc diffusion to stabilise numerics...
+    diffusion_coefficient = -1.e-3
+    diffusion_coefficient < 0.0 && return nothing
+    derivative!(z.scratch, dens_in[:,is], z, spectral, Val(2))
+    @. dens_out += dt*diffusion_coefficient*z.scratch
+
+    return nothing
 end
 
 end
