@@ -12,11 +12,11 @@ use the force balance equation d(nu)/dt + d(ppar + n*upar*upar)/dz =
 -(dens/2)*dphi/dz + R*dens_i*dens_n*(upar_n-upar_i)
 to update the parallel particle flux dens*upar for each species
 """
-function force_balance!(pflx, fvec, fields, collisions, vpa, z, r, dt, spectral, composition)
+function force_balance!(pflx, fvec, fields, collisions, vpa, z, r, dt, spectral, composition, evolve_vth)
     # account for momentum flux contribution to force balance
     @loop_s is begin
         @loop_r ir begin
-            @views force_balance_flux_species!(pflx[:,ir,is], fvec.density[:,ir,is], fvec.upar[:,ir,is], fvec.ppar[:,ir,is], z, dt, spectral)
+            @views force_balance_flux_species!(pflx[:,ir,is], fvec.density[:,ir,is], fvec.upar[:,ir,is], fvec.ppar[:,ir,is], fvec.vth[:,ir,is], z, dt, spectral, evolve_vth)
             if is ∈ composition.ion_species_range
                 # account for parallel electric field contribution to force balance
                 @views force_balance_Epar_species!(pflx[:,ir,is], fields.phi[:,ir], fvec.density[:,ir,is], z, dt, spectral)
@@ -42,33 +42,51 @@ use the force balance equation d(mnu)/dt + d(ppar + mnu * u)/dz = ...
 to update the momentum flux mnu; this function accounts for the contribution from the
 flux term above
 """
-function force_balance_flux_species!(pflx, dens, upar, ppar, z, dt, spectral)
-    # calculate the parallel flux of parallel momentum densitg at the previous time level/RK stage
-    derivative!(z.scratch, ppar, z, spectral)
+function force_balance_flux_species!(pflx, dens, upar, ppar, vth, z, dt, spectral, evolve_vth)
+    if !evolve_vth
+        # calculate the parallel flux of parallel momentum densitg at the previous time level/RK stage
+        derivative!(z.scratch, ppar, z, spectral)
 
-    ##@. z.scratch2 = dens*upar^2
-    ## Until julia-1.8 is released, prefer x*x to x^2 to avoid extra allocations when broadcasting.
-    #@. z.scratch2 = dens*upar*upar
-    ## Use as 'adv_fac' for upwinding
-    #@. z.scratch3 = -upar
-    #derivative!(z.scratch2, z.scratch2, z, z.scratch3, spectral)
+        ##@. z.scratch2 = dens*upar^2
+        ## Until julia-1.8 is released, prefer x*x to x^2 to avoid extra allocations when broadcasting.
+        #@. z.scratch2 = dens*upar*upar
+        ## Use as 'adv_fac' for upwinding
+        #@. z.scratch3 = -upar
+        #derivative!(z.scratch2, z.scratch2, z, z.scratch3, spectral)
 
-    #@. z.scratch2 = dens*upar
-    ## Use as 'adv_fac' for upwinding
-    #@. z.scratch3 = -upar
-    #derivative!(z.scratch2, z.scratch2, z, z.scratch3, spectral)
-    #derivative!(z.scratch3, upar, z, spectral)
+        #@. z.scratch2 = dens*upar
+        ## Use as 'adv_fac' for upwinding
+        #@. z.scratch3 = -upar
+        #derivative!(z.scratch2, z.scratch2, z, z.scratch3, spectral)
+        #derivative!(z.scratch3, upar, z, spectral)
 
-    # Use as 'adv_fac' for upwinding
-    @. z.scratch3 = -upar
-    derivative!(z.scratch2, dens, z, z.scratch3, spectral)
+        # Use as 'adv_fac' for upwinding
+        @. z.scratch3 = -upar
+        derivative!(z.scratch2, dens, z, z.scratch3, spectral)
 
-    derivative!(z.scratch3, upar, z, z.scratch3, spectral)
+        derivative!(z.scratch3, upar, z, z.scratch3, spectral)
 
-    # update the parallel momentum density to account for the parallel flux of parallel momentum
-    #@. pflx = dens*upar - dt*(z.scratch + z.scratch2)
-    #@. pflx = dens*upar - dt*(z.scratch + upar*z.scratch2 + dens.*upar*z.scratch3)
-    @. pflx = dens*upar - dt*(z.scratch + upar*upar*z.scratch2 + 2.0*dens*upar*z.scratch3)
+        # update the parallel momentum density to account for the parallel flux of parallel momentum
+        #@. pflx = dens*upar - dt*(z.scratch + z.scratch2)
+        #@. pflx = dens*upar - dt*(z.scratch + upar*z.scratch2 + dens.*upar*z.scratch3)
+        @. pflx = dens*upar - dt*(z.scratch + upar*upar*z.scratch2 + 2.0*dens*upar*z.scratch3)
+    else
+        # calculate the parallel flux of parallel momentum density at the previous time level/RK stage
+
+        # Pressure gradient d(ppar)/dz = 0.5*vth^2*dn/dz + n*vth*d(vth)/dz
+        derivative!(z.scratch, vth, z, spectral)
+        derivative!(z.scratch2, dens, z, spectral)
+        @. pflx = dens*upar - dt*(0.5*vth*vth*z.scratch2 + dens*vth*z.scratch)
+
+        # Use as 'adv_fac' for upwinding
+        @. z.scratch3 = -upar
+        derivative!(z.scratch2, dens, z, z.scratch3, spectral)
+
+        derivative!(z.scratch3, upar, z, z.scratch3, spectral)
+
+        # update the parallel momentum density to account for the parallel flux of parallel momentum
+        @. pflx -= dt*(upar*upar*z.scratch2 + 2.0*dens*upar*z.scratch3)
+    end
 
     # Ad-hoc diffusion to stabilise numerics...
     diffusion_coefficient = -1.e-3
