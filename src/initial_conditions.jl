@@ -312,12 +312,23 @@ function init_pdf_over_density!(pdf, spec, composition, vpa, z, vpa_spectral, de
 
             # Taper boundary distribution functions into each other across the
             # domain to avoid jumps.
+            # Add some profile for density by scaling the pdf.
+            if ions
+                @. z.scratch = 1.0 + 0.5 * (1.0 - (2.0 * z.grid / z.L)^2)
+            else
+                @. z.scratch = 1.0 - 0.5 * (1.0 - (2.0 * z.grid / z.L)^2)
+            end
             for iz ∈ 1:z.n
                 # right_weight is 0 on left boundary and 1 on right boundary
                 right_weight = (z.grid[iz] - z.grid[1])/z.L
+                #right_weight = min(max(0.5 + 0.5*(2.0*z.grid[iz]/z.L)^5, 0.0), 1.0)
+                #right_weight = min(max(0.5 +
+                #                       0.7*(2.0*z.grid[iz]/z.L) -
+                #                       0.2*(2.0*z.grid[iz]/z.L)^3, 0.0), 1.0)
                 # znorm is 1.0 at the boundary and 0.0 at the midplane
-                @views @. pdf[:,iz] = (1.0 - right_weight)*pdf[:,1] +
-                                      right_weight*pdf[:,end]
+                @views @. pdf[:,iz] = z.scratch[iz] * (
+                                          (1.0 - right_weight)*pdf[:,1] +
+                                          right_weight*pdf[:,end])
             end
 
             # Get the unnormalised pdf and the moments of the constructed full-f
