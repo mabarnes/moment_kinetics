@@ -6,6 +6,7 @@ export energy_equation!
 
 using ..calculus: derivative!
 using ..looping
+using ..numerical_dissipation: penalise_non_smoothness!
 
 """
 evolve the parallel pressure by solving the energy equation
@@ -79,6 +80,8 @@ function energy_equation_no_collisions!(ppar_out, upar, ppar, qpar, dt, z, spect
     diffusion_coefficient < 0.0 && return nothing
     derivative!(z.scratch, ppar, z, spectral, Val(2))
     @. ppar_out += dt*diffusion_coefficient*z.scratch
+
+    @views penalise_non_smoothness!(ppar_out, dt, z, spectral)
 
     return nothing
 end

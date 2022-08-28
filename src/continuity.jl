@@ -6,6 +6,7 @@ export continuity_equation!
 
 using ..calculus: derivative!
 using ..looping
+using ..numerical_dissipation#: penalise_non_smoothness!
 
 """
 use the continuity equation dn/dt + d(n*upar)/dz to update the density n for all species
@@ -64,6 +65,8 @@ function continuity_equation_single_species!(dens_out, dens_in, upar, z, dt, spe
     diffusion_coefficient < 0.0 && return nothing
     derivative!(z.scratch, dens_in[:,is], z, spectral, Val(2))
     @. dens_out += dt*diffusion_coefficient*z.scratch
+
+    penalise_non_smoothness!(dens_out, dt, z, spectral)
 
     return nothing
 end

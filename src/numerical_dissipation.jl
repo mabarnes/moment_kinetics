@@ -8,7 +8,9 @@ export vpa_boundary_buffer_decay!, vpa_boundary_buffer_diffusion!, vpa_dissipati
 using Base.Iterators: flatten
 
 using ..looping
-using ..calculus: derivative!
+using ..calculus: derivative!, elementwise_derivative!
+using ..coordinates: coordinate
+using ..type_definitions: mk_float
 
 """
 Suppress the distribution function by damping towards a Maxwellian in the last element
@@ -276,6 +278,24 @@ function z_dissipation!(f_out, fvec_in, moments, z, vpa, spectral::T_spectral, d
     @loop_s_r_vpa is ir ivpa begin
         @views derivative!(z.scratch, fvec_in.pdf[ivpa,:,ir,is], z, spectral, Val(2))
         @views @. f_out[ivpa,:,ir,is] += dt * diffusion_coefficient * z.scratch
+    end
+
+    return nothing
+end
+
+"""
+Make first derivative smoother by penalising jumps in derivative between elements
+"""
+function penalise_non_smoothness!(f::AbstractVector, dt::mk_float, coord::coordinate, spectral)
+    penalisation_rate = 1.0e-3
+
+    elementwise_derivative!(coord, f, spectral)
+
+    df_elementwise = coord.scratch_2d
+    for ielement ∈ 1:coord.nelement-1
+        f[coord.imax[ielement]] +=
+            dt*penalisation_rate*(df_elementwise[1,ielement+1] -
+                                  df_elementwise[end,ielement])
     end
 
     return nothing

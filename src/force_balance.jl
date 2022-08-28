@@ -6,13 +6,15 @@ export force_balance!
 
 using ..calculus: derivative!
 using ..looping
+using ..numerical_dissipation: penalise_non_smoothness!
 
 """
 use the force balance equation d(nu)/dt + d(ppar + n*upar*upar)/dz =
 -(dens/2)*dphi/dz + R*dens_i*dens_n*(upar_n-upar_i)
 to update the parallel particle flux dens*upar for each species
 """
-function force_balance!(pflx, fvec, fields, collisions, vpa, z, r, dt, spectral, composition, evolve_vth)
+function force_balance!(pflx, density, fvec, fields, collisions, vpa, z, r, dt,
+                        spectral, composition, evolve_vth)
     # account for momentum flux contribution to force balance
     @loop_s is begin
         @loop_r ir begin
@@ -36,7 +38,9 @@ function force_balance!(pflx, fvec, fields, collisions, vpa, z, r, dt, spectral,
         end
     end
 
-    @loop_s_r_z is ir begin
+    @loop_s_r is ir begin
+        # Make pflx smoother
+        @views penalise_non_smoothness!(pflx[:,ir,is], dt, z, spectral)
         # convert from the particle flux to the parallel flow
         @views @. pflx[:,ir,is] /= fvec_out.density[:,ir,is]
     end
