@@ -42,7 +42,7 @@ function force_balance!(pflx, density, fvec, fields, collisions, vpa, z, r, dt,
         # Make pflx smoother
         @views penalise_non_smoothness!(pflx[:,ir,is], dt, z, spectral)
         # convert from the particle flux to the parallel flow
-        @views @. pflx[:,ir,is] /= fvec_out.density[:,ir,is]
+        @views @. pflx[:,ir,is] /= density[:,ir,is]
     end
 end
 
