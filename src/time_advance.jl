@@ -902,10 +902,6 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, z_
         # fvec_out.upar is over-written in force_balance! and contains the particle flux
         force_balance!(fvec_out.upar, fvec_in, fields, collisions, vpa, z, r, dt,
                        z_spectral, composition, moments.evolve_vth)
-        # convert from the particle flux to the parallel flow
-        @loop_s_r_z is ir iz begin
-            fvec_out.upar[iz,ir,is] /= fvec_out.density[iz,ir,is]
-        end
     end
     if advance.energy
         energy_equation!(fvec_out.ppar, fvec_out.vth, fvec_in, moments, collisions, z,

@@ -35,6 +35,11 @@ function force_balance!(pflx, fvec, fields, collisions, vpa, z, r, dt, spectral,
                                       composition, z.n, dt)
         end
     end
+
+    @loop_s_r_z is ir begin
+        # convert from the particle flux to the parallel flow
+        @views @. pflx[:,ir,is] /= fvec_out.density[:,ir,is]
+    end
 end
 
 """
