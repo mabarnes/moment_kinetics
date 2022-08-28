@@ -12,8 +12,8 @@ use the force balance equation d(nu)/dt + d(ppar + n*upar*upar)/dz =
 -(dens/2)*dphi/dz + R*dens_i*dens_n*(upar_n-upar_i)
 to update the parallel particle flux dens*upar for each species
 """
-function force_balance!(pflx, fvec, fields, collisions, vpa, z, r, dt, spectral,
-                        composition, num_diss_params)
+function force_balance!(pflx, density, fvec, fields, collisions, vpa, z, r, dt,
+                        spectral, composition, num_diss_params)
 
     begin_s_r_region()
 
@@ -40,6 +40,11 @@ function force_balance!(pflx, fvec, fields, collisions, vpa, z, r, dt, spectral,
             force_balance_ionization!(pflx, fvec.density, fvec.upar, collisions.ionization,
                                       composition, z.n, dt)
         end
+    end
+
+    @loop_s_r_z is ir iz begin
+        # convert from the particle flux to the parallel flow
+        pflx[iz,ir,is] /= density[iz,ir,is]
     end
 end
 
