@@ -287,7 +287,9 @@ end
 Make first derivative smoother by penalising jumps in derivative between elements
 """
 function penalise_non_smoothness!(f::AbstractVector, dt::mk_float, coord::coordinate, spectral)
-    penalisation_rate = 1.0e-3
+    return nothing
+
+    penalisation_rate = 1.0e-4
 
     elementwise_derivative!(coord, f, spectral)
 
