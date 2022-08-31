@@ -36,15 +36,15 @@ function continuity_equation_single_species!(dens_out, dens_in, upar, z, dt, spe
     ## update the density to account for the divergence of the particle flux
     #@. dens_out -= dt*z.scratch
 
-    ## Use as 'adv_fac' for upwinding
-    #@. z.scratch3 = -upar
-    #@views derivative!(z.scratch, dens_in[:,is], z, z.scratch3, spectral)
-    #derivative!(z.scratch2, upar, z, spectral)
-    #@. dens_out -= dt*(upar*z.scratch + dens_in[:,is]*z.scratch2)
-
-    @views derivative!(z.scratch, dens_in[:,is], z, spectral)
+    # Use as 'adv_fac' for upwinding
+    @. z.scratch3 = -upar
+    @views derivative!(z.scratch, dens_in[:,is], z, z.scratch3, spectral)
     derivative!(z.scratch2, upar, z, spectral)
     @. dens_out -= dt*(upar*z.scratch + dens_in[:,is]*z.scratch2)
+
+    #@views derivative!(z.scratch, dens_in[:,is], z, spectral)
+    #derivative!(z.scratch2, upar, z, spectral)
+    #@. dens_out -= dt*(upar*z.scratch + dens_in[:,is]*z.scratch2)
 
     # update the density to account for ionization collisions;
     # ionization collisions increase the density for ions and decrease the density for neutrals
