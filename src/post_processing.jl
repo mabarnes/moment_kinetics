@@ -2,7 +2,7 @@
 """
 module post_processing
 
-export analyze_and_plot
+export analyze_and_plot_data
 
 # packages
 using Plots
