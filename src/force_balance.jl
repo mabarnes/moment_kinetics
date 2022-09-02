@@ -14,7 +14,7 @@ use the force balance equation d(nu)/dt + d(ppar + n*upar*upar)/dz =
 to update the parallel particle flux dens*upar for each species
 """
 function force_balance!(pflx, density, fvec, fields, collisions, vpa, z, r, dt,
-                        spectral, composition, evolve_vth)
+                        spectral, composition, evolve_vth, num_diss_params)
     # account for momentum flux contribution to force balance
     @loop_s is begin
         @loop_r ir begin
@@ -40,7 +40,7 @@ function force_balance!(pflx, density, fvec, fields, collisions, vpa, z, r, dt,
 
     @loop_s_r is ir begin
         # Make pflx smoother
-        @views penalise_non_smoothness!(pflx[:,ir,is], dt, z, spectral)
+        @views penalise_non_smoothness!(pflx[:,ir,is], dt, z, spectral, num_diss_params)
         # convert from the particle flux to the parallel flow
         @views @. pflx[:,ir,is] /= density[:,ir,is]
     end
