@@ -195,7 +195,7 @@ function restart_moment_kinetics(restart_filename::String, input_dict::Dict,
         # Set up all the structs, etc. needed for a run.
         pdf, scratch, code_time, t_input, vpa, z, r, vpa_spectral, z_spectral,
         r_spectral, moments, fields, vpa_advect, z_advect, r_advect, vpa_SL, z_SL, r_SL,
-        composition, collisions, advance, scratch_dummy_sr, io, cdf =
+        composition, collisions, num_diss_params, advance, scratch_dummy_sr, io, cdf =
         setup_moment_kinetics(input_dict, backup_filename=backup_filename,
                               restart_time_index=time_index)
 
@@ -203,7 +203,7 @@ function restart_moment_kinetics(restart_filename::String, input_dict::Dict,
             time_advance!(pdf, scratch, code_time, t_input, vpa, z, r, vpa_spectral,
                           z_spectral, r_spectral, moments, fields, vpa_advect, z_advect,
                           r_advect, vpa_SL, z_SL, r_SL, composition, collisions,
-                          advance, scratch_dummy_sr, io, cdf)
+                          num_diss_params, advance, scratch_dummy_sr, io, cdf)
         finally
             # clean up i/o and communications
             # last 2 elements of mk_state are `io` and `cdf`
@@ -239,7 +239,7 @@ function setup_moment_kinetics(input_dict::Dict; backup_filename=nothing,
     # obtain input options from moment_kinetics_input.jl
     # and check input to catch errors
     run_name, output_dir, evolve_moments, t_input, z_input, r_input, vpa_input,
-        composition, species, collisions, drive_input = input
+        composition, species, collisions, drive_input, num_diss_params = input
     # initialize z grid and write grid point locations to file
     z, z_spectral = define_coordinate(z_input, composition)
     # initialize r grid and write grid point locations to file
@@ -281,8 +281,8 @@ function setup_moment_kinetics(input_dict::Dict; backup_filename=nothing,
     begin_s_r_z_region()
 
     return pdf, scratch, code_time, t_input, vpa, z, r, vpa_spectral, z_spectral, r_spectral, moments,
-           fields, vpa_advect, z_advect, r_advect, vpa_SL, z_SL, r_SL, composition, collisions, advance,
-           scratch_dummy_sr, io, cdf
+           fields, vpa_advect, z_advect, r_advect, vpa_SL, z_SL, r_SL, composition,
+           collisions, num_diss_params, advance, scratch_dummy_sr, io, cdf
 end
 
 """

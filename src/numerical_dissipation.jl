@@ -2,20 +2,35 @@
 """
 module numerical_dissipation
 
-export vpa_boundary_buffer_decay!, vpa_boundary_buffer_diffusion!, vpa_dissipation!,
-       z_dissipation!
+export setup_numerical_dissipation, vpa_boundary_buffer_decay!,
+       vpa_boundary_buffer_diffusion!, vpa_dissipation!, z_dissipation!
 
 using Base.Iterators: flatten
 
 using ..looping
 using ..calculus: derivative!
+using ..type_definitions: mk_float
+
+Base.@kwdef struct numerical_dissipation_parameters
+    vpa_boundary_buffer_damping_rate::mk_float = -1.0
+    vpa_boundary_buffer_diffusion_coefficient::mk_float = -1.0
+    vpa_dissipation_coefficient::mk_float = -1.0
+    z_dissipation_coefficient::mk_float = -1.0
+end
+
+function setup_numerical_dissipation(input_section::Dict)
+    input = Dict(Symbol(k)=>v for (k,v) in input_section)
+
+    return numerical_dissipation_parameters(; input...)
+end
 
 """
 Suppress the distribution function by damping towards a Maxwellian in the last element
 before the vpa boundaries, to avoid numerical instabilities there.
 """
-function vpa_boundary_buffer_decay!(f_out, fvec_in, moments, vpa, dt)
-    damping_rate_prefactor = -0.01 / dt
+function vpa_boundary_buffer_decay!(f_out, fvec_in, moments, vpa, dt,
+                                    num_diss_params::numerical_dissipation_parameters)
+    damping_rate_prefactor = num_diss_params.vpa_boundary_buffer_damping_rate
 
     if damping_rate_prefactor <= 0.0
         return nothing
@@ -104,8 +119,9 @@ end
 Suppress the distribution function by applying diffusion in the last element before the
 vpa boundaries, to avoid numerical instabilities there.
 """
-function vpa_boundary_buffer_diffusion!(f_out, fvec_in, vpa, vpa_spectral, dt)
-    diffusion_prefactor = -1.0
+function vpa_boundary_buffer_diffusion!(f_out, fvec_in, vpa, vpa_spectral, dt,
+                                        num_diss_params::numerical_dissipation_parameters)
+    diffusion_prefactor = num_diss_params.vpa_boundary_buffer_diffusion_coefficient
 
     if diffusion_prefactor <= 0.0
         return nothing
@@ -182,15 +198,14 @@ end
 """
 Add diffusion in the vpa direction to suppress oscillations
 """
-function vpa_dissipation!(f_out, fvec_in, moments, vpa, spectral::T_spectral, dt) where T_spectral
+function vpa_dissipation!(f_out, fvec_in, moments, vpa, spectral::T_spectral, dt,
+        num_diss_params::numerical_dissipation_parameters) where T_spectral
     begin_s_r_z_region()
 
-    # #diffusion_coefficient = 1.0e4
-    # diffusion_coefficient = 2.0e1
-
-    # if diffusion_coefficient <= 0.0
-    #     return nothing
-    # end
+    diffusion_coefficient = num_diss_params.vpa_dissipation_coefficient
+    if diffusion_coefficient <= 0.0
+        return nothing
+    end
 
     # if T_spectral <: Bool
     #     # Scale diffusion coefficient like square of grid spacing, so convergence will
@@ -202,11 +217,6 @@ function vpa_dissipation!(f_out, fvec_in, moments, vpa, spectral::T_spectral, dt
     #     # expected convergence of Chebyshev pseudospectral scheme
     #     diffusion_coefficient *= (vpa.L/vpa.nelement)^(vpa.ngrid-1)
     # end
-
-    diffusion_coefficient = -1.0 #1.e-1 #1.0e-3
-    if diffusion_coefficient <= 0.0
-        return nothing
-    end
 
     @loop_s_r_z is ir iz begin
         # # Don't want to dissipate the fluid moments, so divide out the Maxwellian, then
@@ -244,9 +254,10 @@ end
 """
 Add diffusion in the z direction to suppress oscillations
 """
-function z_dissipation!(f_out, fvec_in, moments, z, vpa, spectral::T_spectral, dt) where T_spectral
+function z_dissipation!(f_out, fvec_in, moments, z, vpa, spectral::T_spectral, dt,
+        num_diss_params::numerical_dissipation_parameters) where T_spectral
 
-    diffusion_coefficient = -0.1
+    diffusion_coefficient = num_diss_params.z_dissipation_coefficient
     if diffusion_coefficient <= 0.0
         return nothing
     end
