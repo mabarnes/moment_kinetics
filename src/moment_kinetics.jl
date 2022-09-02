@@ -103,7 +103,7 @@ function run_moment_kinetics(to::TimerOutput, input_dict=Dict())
         if global_size[] > 1
             println("Abort called on rank $(block_rank[]) due to error. Error message "
                     * "was:\n", e)
-            MPI.Abort(comm_world, 1)
+            #MPI.Abort(comm_world, 1)
         end
 
         rethrow(e)
@@ -214,7 +214,7 @@ function restart_moment_kinetics(restart_filename::String, input_dict::Dict,
         if global_size[] > 1
             println("Abort called on rank $(block_rank[]) due to error. Error message "
                     * "was:\n", e)
-            MPI.Abort(comm_world, 1)
+            #MPI.Abort(comm_world, 1)
         end
 
         rethrow(e)
