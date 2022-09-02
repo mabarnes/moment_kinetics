@@ -13,6 +13,9 @@ use the force balance equation d(nu)/dt + d(ppar + n*upar*upar)/dz =
 to update the parallel particle flux dens*upar for each species
 """
 function force_balance!(pflx, fvec, fields, collisions, vpa, z, r, dt, spectral, composition)
+
+    begin_s_r_region()
+
     # account for momentum flux contribution to force balance
     @loop_s is begin
         @loop_r ir begin

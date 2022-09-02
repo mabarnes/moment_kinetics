@@ -11,6 +11,9 @@ using ..looping
 evolve the parallel pressure by solving the energy equation
 """
 function energy_equation!(ppar, fvec, moments, collisions, z, r, dt, spectral, composition)
+
+    begin_s_r_region()
+
     @loop_s is begin
         @loop_r ir begin
             @views energy_equation_no_collisions!(ppar[:,ir,is], fvec.upar[:,ir,is], fvec.ppar[:,ir,is],

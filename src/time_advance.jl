@@ -103,9 +103,7 @@ function setup_time_advance!(pdf, vpa, z, r, z_spectral, composition, drive_inpu
     # enforce prescribed boundary condition in z on the velocity space moments of f
     @views enforce_z_boundary_condition_moments!(moments.dens, moments, z.bc)
 
-    if z.bc != "wall" || composition.n_neutral_species == 0
-        begin_serial_region()
-    end
+    begin_serial_region()
 
     # create an array of structs containing scratch arrays for the pdf and low-order moments
     # that may be evolved separately via fluid equations
@@ -153,7 +151,9 @@ function setup_time_advance!(pdf, vpa, z, r, z_spectral, composition, drive_inpu
     vpa_SL = setup_semi_lagrange(vpa.n, z.n, r.n)
     r_SL = setup_semi_lagrange(r.n, vpa.n, z.n)
 
-    begin_s_r_z_region()
+    # Ensure all processes are synchronized at the end of the setup
+    _block_synchronize()
+
     return moments, fields, vpa_advect, z_advect, r_advect, vpa_SL, z_SL, r_SL, scratch,
            advance, scratch_dummy_sr
 end
@@ -357,6 +357,9 @@ function time_advance!(pdf, scratch, t, t_input, vpa, z, r, vpa_spectral, z_spec
             # write initial data to binary file (netcdf)
             write_data_to_binary(pdf.unnorm, moments, fields, t, composition.n_species, cdf, iwrite)
             iwrite += 1
+
+            # Restore to same region type as in rk_update!() so that execution after a
+            # write is the same as after no write
             begin_s_r_z_region()
             @debug_detect_redundant_block_synchronize begin
                 # Reactivate check for redundant _block_synchronize()
@@ -767,10 +770,8 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, z_
     # apply z-advection operation to all species (charged and neutral)
 
     if advance.z_advection
-        begin_s_r_vpa_region()
         z_advection!(fvec_out.pdf, fvec_in, pdf.norm, moments, z_SL, z_advect, z, vpa, r,
             use_semi_lagrange, dt, t, z_spectral, composition, istage)
-        begin_s_r_z_region()
     end
 
     if advance.source_terms

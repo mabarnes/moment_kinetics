@@ -163,6 +163,9 @@ NB: if this function is called and if dens_updated is false, then
 the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
 """
 function update_density!(dens, dens_updated, pdf, vpa, z, r, composition)
+
+    begin_s_r_z_region()
+
     n_species = size(pdf,4)
     @boundscheck n_species == size(dens,3) || throw(BoundsError(dens))
     @loop_s is begin
@@ -192,6 +195,9 @@ NB: if this function is called and if upar_updated is false, then
 the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
 """
 function update_upar!(upar, upar_updated, pdf, vpa, z, r, composition)
+
+    begin_s_r_z_region()
+
     n_species = size(pdf,4)
     @boundscheck n_species == size(upar,3) || throw(BoundsError(upar))
     @loop_s is begin
@@ -222,6 +228,9 @@ function update_ppar!(ppar, ppar_updated, pdf, vpa, z, r, composition)
     @boundscheck composition.n_species == size(ppar,3) || throw(BoundsError(ppar))
     @boundscheck r.n == size(ppar,2) || throw(BoundsError(ppar))
     @boundscheck z.n == size(ppar,1) || throw(BoundsError(ppar))
+
+    begin_s_r_z_region()
+
     @loop_s is begin
         if ppar_updated[is] == false
             @views update_ppar_species!(ppar[:,:,is], pdf[:,:,:,is], vpa, z, r)
@@ -249,6 +258,9 @@ the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
 """
 function update_qpar!(qpar, qpar_updated, pdf, vpa, z, r, composition, vpanorm)
     @boundscheck composition.n_species == size(qpar,3) || throw(BoundsError(qpar))
+
+    begin_s_r_z_region()
+
     @loop_s is begin
         if qpar_updated[is] == false
             @views update_qpar_species!(qpar[:,:,is], pdf[:,:,:,is], vpa, z, r, vpanorm[:,:,is])
@@ -365,6 +377,9 @@ end
 """
 """
 function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, r, composition, moments, dummy_sr)
+
+    begin_s_r_z_region()
+
     # pre-calculate avgdens_ratio so that we don't read fvec_new.density[:,is] on every
     # process in the next loop - that would be an error because different processes
     # write to fvec_new.density[:,is]

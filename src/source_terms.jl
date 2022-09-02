@@ -12,6 +12,9 @@ calculate the source terms due to redefinition of the pdf to split off density,
 flow and/or pressure, and use them to update the pdf
 """
 function source_terms!(pdf_out, fvec_in, moments, vpa, z, r, dt, spectral, composition, collisions)
+
+    begin_s_r_z_region()
+
     #n_species = size(pdf_out,3)
     if moments.evolve_ppar
         @loop_s is begin
