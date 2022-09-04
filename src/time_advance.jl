@@ -581,9 +581,18 @@ function rk_update!(scratch, pdf, moments, fields, vpa, z, r, rk_coefs, istage, 
     update_unnormalized_pdf!(pdf.unnorm, new_scratch, moments)
     # update the electrostatic potential phi
     update_phi!(fields, scratch[istage+1], z, r, composition)
-    # _block_synchronize() here because phi needs to be read on different ranks than it
-    # was written on, even though the loop-type does not change here
-    _block_synchronize()
+    if !(( (moments.evolve_density && any(moments.particle_number_conserved)) ||
+           moments.evolve_upar || moments.evolve_ppar) &&
+              istage == length(scratch)-1)
+        # _block_synchronize() here because phi needs to be read on different ranks than
+        # it was written on, even though the loop-type does not change here. However,
+        # after the final RK stage can skip if:
+        #  * conserving particle number, as enforce_moment_constraints!() will trigger
+        #    synchronization
+        #  * evolving upar or ppar as synchronization will be triggered after moments
+        #    updates at the beginning of the next RK step
+        _block_synchronize()
+    end
 end
 
 """
@@ -762,10 +771,13 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, z_
     # End of advance of distribution function
 
     # Start advancing moments
-    # Do not actually need to synchronize here because above we only modify the
-    # distribution function and below we only modify the moments, so there is no
-    # possibility of race conditions.
-    begin_s_r_region(no_synchronize=true)
+    if moments.evolve_density || moments.evolve_upar || moments.evolve_ppar
+        # Only need to change region type if moment evolution equations will be used.
+        # Exept when using wall boundary conditions, do not actually need to synchronize
+        # here because above we only modify the distribution function and below we only
+        # modify the moments, so there is no possibility of race conditions.
+        begin_s_r_region(no_synchronize=(z.bc!="wall"))
+    end
     if advance.continuity
         continuity_equation!(fvec_out.density, fvec_in, moments, composition, vpa, z, r,
                              dt, z_spectral, collisions.ionization)

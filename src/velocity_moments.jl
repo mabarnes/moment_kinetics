@@ -496,6 +496,11 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, r, composition,
     # This loop needs to be @loop_s_r because it fills the (not-shared)
     # dummy_sr buffer to be used within the @loop_s_r below, so the values
     # of is looped over by this process need to be the same.
+    # Need to call _block_synchronize() even though loop type does not change because
+    # all spatial ranks read fvec_new.density, but it will be written below.
+    if any(moments.particle_number_conserved)
+        _block_synchronize()
+    end
     @loop_s_r is ir begin
         if moments.particle_number_conserved[is]
             @views @. z.scratch = fvec_old.density[:,ir,is] - fvec_new.density[:,ir,is]
@@ -504,7 +509,9 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, r, composition,
     end
     # Need to call _block_synchronize() even though loop type does not change because
     # all spatial ranks read fvec_new.density, but it will be written below.
-    _block_synchronize()
+    if any(moments.particle_number_conserved)
+        _block_synchronize()
+    end
 
     @loop_s is begin
         # add a small correction to the density for each species to ensure that
