@@ -799,7 +799,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, z_
         # Exept when using wall boundary conditions, do not actually need to synchronize
         # here because above we only modify the distribution function and below we only
         # modify the moments, so there is no possibility of race conditions.
-        begin_s_r_region(no_synchronize=(z.bc!="wall"))
+        begin_s_r_region(no_synchronize=true)
     end
     if advance.continuity
         continuity_equation!(fvec_out.density, fvec_in, moments, composition, vpa, z, r,
