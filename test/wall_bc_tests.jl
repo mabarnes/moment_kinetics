@@ -99,9 +99,9 @@ test_input_chebyshev = merge(test_input_finite_difference,
 # different discretizations, taken from a Chebyshev run with z_grid=9,
 # z_nelement=8, nstep=40000, dt=0.00025
 cross_compare_points = collect(LinRange(-0.5, 0.5, 7))
-cross_compare_phi = [-0.4241408388741297, 0.640325859561629, 0.793031525808564,
-                     0.8223015607020117, 0.7930326116263438, 0.6403261120674382,
-                     -0.4241407750783586]
+cross_compare_phi = [-1.3523940369807992, -0.5645430722921387, -0.3379040854117448,
+                     -0.2800009859304605, -0.337904088478436, -0.5645430733796851,
+                     -1.3523940383103292]
 
 
 # Not actually used in the tests, but needed for first argument of run_moment_kinetics
@@ -200,8 +200,8 @@ function runtests()
 
         @testset "Chebyshev" begin
             run_test(test_input_chebyshev,
-                     [-0.4231774825085832, 0.6171451999192499, 0.8153349515959497,
-                      0.8231473779382417, 0.7429579286317924, -0.0983952452472692],
+                     [-1.3523940369807992, -0.5928689217347234, -0.28985931483114774,
+                      -0.27863554179763156, -0.42325421389921636, -1.163618867748355],
                      2.e-3)
         end
     end
