@@ -255,7 +255,6 @@ function enforce_boundary_conditions!(f_out, density, upar, ppar, moments, vpa_b
         @views enforce_vpa_boundary_condition_local!(f_out[:,iz,ir,is], vpa_bc,
                                                      vpa_adv[is].speed[:,iz,ir])
     end
-    begin_s_r_vpa_region()
     # enforce the z BC on the evolved velocity space moments of the pdf
     @views enforce_z_boundary_condition_moments!(density, moments, z_bc)
     @views enforce_z_boundary_condition!(f_out, density, upar, ppar, moments, z_bc, z_adv, vpa, r, composition)
@@ -280,12 +279,14 @@ function enforce_z_boundary_condition!(pdf, density, upar, ppar, moments, bc::St
     # 'constant' BC is time-independent f at upwind boundary
     # and constant f beyond boundary
     if bc == "constant"
+        begin_s_r_vpa_region()
         @loop_s_r_vpa is ir ivpa begin
             upwind_idx = adv[is].upwind_idx[ivpa,ir]
             pdf[ivpa,upwind_idx,ir,is] = density_offset * exp(-(vpa.grid[ivpa]/vpawidth)^2) / sqrt(pi)
         end
     # 'periodic' BC enforces periodicity by taking the average of the boundary points
     elseif bc == "periodic"
+        begin_s_r_vpa_region()
         @loop_s_r_vpa is ir ivpa begin
             downwind_idx = adv[is].downwind_idx[ivpa,ir]
             upwind_idx = adv[is].upwind_idx[ivpa,ir]
@@ -805,6 +806,7 @@ enforce the z boundary condition on the evolved velocity space moments of f
 """
 function enforce_z_boundary_condition_moments!(density, moments, bc::String)
     ## TODO: parallelise
+    #begin_serial_region()
     #@serial_region begin
     #    # enforce z boundary condition on density if it is evolved separately from f
     #	if moments.evolve_density
