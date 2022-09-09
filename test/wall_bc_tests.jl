@@ -67,7 +67,7 @@ test_input_finite_difference = Dict("n_ion_species" => 1,
                                     "ionization_frequency" => 2.0,
                                     "constant_ionization_rate" => false,
                                     "nstep" => 10000,
-                                    "dt" => 0.001,
+                                    "dt" => 1.0e-5,
                                     "nwrite" => 100,
                                     "use_semi_lagrange" => false,
                                     "n_rk_stages" => 4,
@@ -99,10 +99,9 @@ test_input_chebyshev = merge(test_input_finite_difference,
 # different discretizations, taken from a Chebyshev run with z_grid=9,
 # z_nelement=8, nstep=40000, dt=0.00025
 cross_compare_points = collect(LinRange(-0.5, 0.5, 7))
-cross_compare_phi = [-1.3523940369807992, -0.5645430722921387, -0.3379040854117448,
-                     -0.2800009859304605, -0.337904088478436, -0.5645430733796851,
-                     -1.3523940383103292]
-
+cross_compare_phi = [-1.1689445031600723, -0.7419935821024918, -0.7028946489842773,
+                     -0.6917192346866861, -0.7028946489842764, -0.7419935821024903,
+                     -1.1689445031600707]
 
 # Not actually used in the tests, but needed for first argument of run_moment_kinetics
 to = TimerOutput()
@@ -200,8 +199,8 @@ function runtests()
 
         @testset "Chebyshev" begin
             run_test(test_input_chebyshev,
-                     [-1.3523940369807992, -0.5928689217347234, -0.28985931483114774,
-                      -0.27863554179763156, -0.42325421389921636, -1.163618867748355],
+                     [-1.1689445031600718, -0.7479504438063098, -0.6947559936893813,
+                      -0.6917252442591313, -0.7180152498764835, -0.9980114095597415],
                      2.e-3)
         end
     end
