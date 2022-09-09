@@ -20,6 +20,7 @@ base_input = Dict("nstep"=>1,
                   "vpa_ngrid" => 5,
                   "vpa_nelement" => 1,
                   "vpa_bc" => "periodic",
+                  "vpa_L" => 4.0,
                   "vpa_discretization" => "finite_difference")
 cheb_input = merge(base_input, Dict("z_discretization" => "chebyshev_pseudospectral",
                                     "vpa_discretization" => "chebyshev_pseudospectral"))
