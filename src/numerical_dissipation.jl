@@ -27,6 +27,14 @@ end
 """
 Suppress the distribution function by damping towards a Maxwellian in the last element
 before the vpa boundaries, to avoid numerical instabilities there.
+
+Disabled by default.
+
+The damping rate is set in the input TOML file by the parameter
+```
+[numerical_dissipation]
+vpa_boundary_buffer_damping_rate = 0.1
+```
 """
 function vpa_boundary_buffer_decay!(f_out, fvec_in, moments, vpa, dt,
                                     num_diss_params::numerical_dissipation_parameters)
@@ -118,6 +126,14 @@ end
 """
 Suppress the distribution function by applying diffusion in the last element before the
 vpa boundaries, to avoid numerical instabilities there.
+
+Disabled by default.
+
+The maximum diffusion rate in the buffer is set in the input TOML file by the parameter
+```
+[numerical_dissipation]
+vpa_boundary_buffer_diffusion_coefficient = 0.1
+```
 """
 function vpa_boundary_buffer_diffusion!(f_out, fvec_in, vpa, vpa_spectral, dt,
                                         num_diss_params::numerical_dissipation_parameters)
@@ -170,6 +186,8 @@ end
 Try to suppress oscillations near the boundary by ensuring that every point in the final
 element is ≤ the innermost value. The distribution function should be decreasing near
 the boundaries, so this should be an OK thing to force.
+
+Note: not currently used.
 """
 function vpa_boundary_force_decreasing!(f_out, vpa)
     begin_s_r_z_region()
@@ -197,6 +215,14 @@ end
 
 """
 Add diffusion in the vpa direction to suppress oscillations
+
+Disabled by default.
+
+The diffusion coefficient is set in the input TOML file by the parameter
+```
+[numerical_dissipation]
+vpa_dissipation_coefficient = 0.1
+```
 """
 function vpa_dissipation!(f_out, fvec_in, moments, vpa, spectral::T_spectral, dt,
         num_diss_params::numerical_dissipation_parameters) where T_spectral
@@ -253,6 +279,14 @@ end
 
 """
 Add diffusion in the z direction to suppress oscillations
+
+Disabled by default.
+
+The diffusion coefficient is set in the input TOML file by the parameter
+```
+[numerical_dissipation]
+z_dissipation_coefficient = 0.1
+```
 """
 function z_dissipation!(f_out, fvec_in, moments, z, vpa, spectral::T_spectral, dt,
         num_diss_params::numerical_dissipation_parameters) where T_spectral
