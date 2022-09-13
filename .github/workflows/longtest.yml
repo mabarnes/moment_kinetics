@@ -28,5 +28,6 @@ jobs:
         # in order to pass customised arguments to `Pkg.test()`
         #
       - run: |
+          pip install --user matplotlib
           julia --check-bounds=yes --color=yes --depwarn=yes --inline=yes --project=@. -e 'import Pkg; Pkg.test(; coverage = :true, test_args=["--long"])'
         shell: bash

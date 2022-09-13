@@ -21,4 +21,5 @@ jobs:
       - uses: julia-actions/julia-buildpkg@v1
       - name: Test examples
         run: |
+          pip install --user matplotlib
           julia --project -O3 -e 'using moment_kinetics; for (root, dirs, files) in walkdir("examples") for file in files if endswith(file, ".toml") println(joinpath(root, file)); run_moment_kinetics(joinpath(root, file)) end end end'
