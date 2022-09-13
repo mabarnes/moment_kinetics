@@ -4,6 +4,10 @@ module post_processing
 
 export analyze_and_plot_data
 
+# Next three lines only used for workaround needed by plot_unnormalised()
+using PyCall
+import PyPlot
+
 # packages
 using Plots
 using IJulia
@@ -344,34 +348,84 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
             gif(anim, outfile, fps=5)
         end
         if pp.animate_f_unnormalized
-            # make a gif animation of f_unnorm(v_parallel_unnorm,z,t)
-            anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-                subplots = (@views plot_unnormalised(f[:,:,is,i], this_z, this_vpa,
-                                       n[:,is,i], upar[:,is,i], vth[:,is,i], ev_n, ev_u,
-                                       ev_p, title=run_label)
-                            for (f, n, upar, vth, ev_n, ev_u, ev_p, this_z,
-                                 this_vpa, run_label) ∈
-                            zip(ff, density, parallel_flow, thermal_speed,
-                                evolve_density, evolve_upar, evolve_ppar, z, vpa,
-                                run_labels))
-                plot(subplots..., layout=(1,n_runs), size=(400*n_runs, 400))
+            ## The nice, commented out version will only work when plot_unnormalised can
+            ## use Plots.jl...
+            ## make a gif animation of f_unnorm(v_parallel_unnorm,z,t)
+            #anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+            #    subplots = (@views plot_unnormalised(f[:,:,is,i], this_z, this_vpa,
+            #                           n[:,is,i], upar[:,is,i], vth[:,is,i], ev_n, ev_u,
+            #                           ev_p, title=run_label)
+            #                for (f, n, upar, vth, ev_n, ev_u, ev_p, this_z,
+            #                     this_vpa, run_label) ∈
+            #                zip(ff, density, parallel_flow, thermal_speed,
+            #                    evolve_density, evolve_upar, evolve_ppar, z, vpa,
+            #                    run_labels))
+            #    plot(subplots..., layout=(1,n_runs), size=(400*n_runs, 400))
+            #end
+            #outfile = string(prefix, "_f_unnorm_vs_vpa_z", spec_string, ".gif")
+            #gif(anim, outfile, fps=5)
+            ## make a gif animation of log(f_unnorm)(v_parallel_unnorm,z,t)
+            #anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+            #    subplots = (@views plot_unnormalised(f[:,:,is,i], this_z, this_vpa, n[:,is,i],
+            #                           upar[:,is,i], vth[:,is,i], ev_n, ev_u, ev_p,
+            #                           plot_log=true, title=run_label)
+            #                for (f, n, upar, vth, ev_n, ev_u, ev_p, this_z,
+            #                     this_vpa, run_label) ∈
+            #                    zip(ff, density, parallel_flow, thermal_speed,
+            #                        evolve_density, evolve_upar, evolve_ppar, z,
+            #                        vpa, run_labels))
+            #    plot(subplots..., layout=(1,n_runs), size=(400*n_runs, 400))
+            #end
+            #outfile = string(prefix, "_logf_unnorm_vs_vpa_z", spec_string, ".gif")
+            #gif(anim, outfile, fps=5)
+
+            matplotlib = pyimport("matplotlib")
+            matplotlib.use("agg")
+            matplotlib_animation = pyimport("matplotlib.animation")
+            iframes = collect(itime_min:nwrite_movie:itime_max)
+            nframes = length(iframes)
+            function make_frame(i)
+                PyPlot.clf()
+                iframe = iframes[i+1]
+                # i counts from 0, Python-style
+                for (run_ind, f, n, upar, vth, ev_n, ev_u, ev_p, this_z, this_vpa,
+                     run_label) ∈ zip(1:n_runs, ff, density, parallel_flow,
+                                      thermal_speed, evolve_density, evolve_upar,
+                                      evolve_ppar, z, vpa, run_labels)
+
+                    PyPlot.subplot(1, n_runs, run_ind)
+                    @views plot_unnormalised(f[:,:,is,iframe], this_z, this_vpa,
+                                             n[:,is,iframe], upar[:,is,iframe],
+                                             vth[:,is,iframe], ev_n, ev_u, ev_p,
+                                             title=run_label)
+                end
             end
+            fig = PyPlot.figure(1, figsize=(4,4))
+            fig.clf()
+            myanim = matplotlib_animation.FuncAnimation(fig, make_frame, frames=nframes)
             outfile = string(prefix, "_f_unnorm_vs_vpa_z", spec_string, ".gif")
-            gif(anim, outfile, fps=5)
-            # make a gif animation of log(f_unnorm)(v_parallel_unnorm,z,t)
-            anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-                subplots = (@views plot_unnormalised(f[:,:,is,i], this_z, this_vpa, n[:,is,i],
-                                       upar[:,is,i], vth[:,is,i], ev_n, ev_u, ev_p,
-                                       plot_log=true, title=run_label)
-                            for (f, n, upar, vth, ev_n, ev_u, ev_p, this_z,
-                                 this_vpa, run_label) ∈
-                                zip(ff, density, parallel_flow, thermal_speed,
-                                    evolve_density, evolve_upar, evolve_ppar, z,
-                                    vpa, run_labels))
-                plot(subplots..., layout=(1,n_runs), size=(400*n_runs, 400))
+            myanim.save(outfile, writer=matplotlib_animation.PillowWriter(fps=30))
+
+            function make_frame_log(i)
+                PyPlot.clf()
+                iframe = iframes[i+1]
+                # i counts from 0, Python-style
+                for (run_ind, f, n, upar, vth, ev_n, ev_u, ev_p, this_z, this_vpa,
+                     run_label) ∈ zip(1:n_runs, ff, density, parallel_flow,
+                                      thermal_speed, evolve_density, evolve_upar,
+                                      evolve_ppar, z, vpa, run_labels)
+
+                    PyPlot.subplot(1, n_runs, run_ind)
+                    @views plot_unnormalised(f[:,:,is,iframe], this_z, this_vpa,
+                                             n[:,is,iframe], upar[:,is,iframe],
+                                             vth[:,is,iframe], ev_n, ev_u, ev_p,
+                                             title=run_label, plot_log=true)
+                end
             end
+            fig = PyPlot.figure(figsize=(4,4))
+            myanim = matplotlib_animation.FuncAnimation(fig, make_frame_log, frames=nframes)
             outfile = string(prefix, "_logf_unnorm_vs_vpa_z", spec_string, ".gif")
-            gif(anim, outfile, fps=5)
+            myanim.save(outfile, writer=matplotlib_animation.PillowWriter(fps=30))
         end
         if pp.animate_deltaf_vs_vpa_z
             # make a gif animation of δf(vpa,z,t)
@@ -1170,15 +1224,34 @@ function plot_unnormalised(f, z_grid, vpa_grid, density, upar, vth, evolve_densi
         f_unnorm = f
     end
 
-    if plot_log
-        @. f_unnorm = log(abs(f_unnorm))
-        cmlog(cmlin::ColorGradient) = RGB[cmlin[x] for x=LinRange(0,1,30)]
-        cmap = cgrad(:deep, scale=:log) |> cmlog
-    else
-        cmap = :deep
-    end
+    ## The following commented out section does not work at the moment because
+    ## Plots.heatmap() does not support 2d coordinates.
+    ## https://github.com/JuliaPlots/Plots.jl/pull/4298 would add this feature...
+    #if plot_log
+    #    @. f_unnorm = log(abs(f_unnorm))
+    #    cmlog(cmlin::ColorGradient) = RGB[cmlin[x] for x=LinRange(0,1,30)]
+    #    cmap = cgrad(:deep, scale=:log) |> cmlog
+    #else
+    #    cmap = :deep
+    #end
 
-    return heatmap(z2d, dzdt2d, f_unnorm; xlabel="z", ylabel="vpa", c=cmap, kwargs...)
+    #p = plot(; xlabel="z", ylabel="vpa", c=cmap, kwargs...)
+
+    #heatmap(z2d, dzdt2d, f_unnorm)
+
+    # Use PyPlot directly instead. Unfortunately makes animation a pain...
+    if plot_log
+        vmin = minimum(x for x in f if x > 0.0)
+        norm = PyPlot.matplotlib.colors.LogNorm(vmin=vmin, vmax=maximum(f))
+    else
+        norm = nothing
+    end
+    p = PyPlot.pcolormesh(z2d, dzdt2d, f_unnorm; norm=norm, cmap="viridis_r")
+    PyPlot.xlabel("z")
+    PyPlot.ylabel("vpa")
+    PyPlot.colorbar()
+
+    return p
 end
 
 end
