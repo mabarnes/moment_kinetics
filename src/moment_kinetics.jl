@@ -62,7 +62,8 @@ using .communication
 using .communication: _block_synchronize
 using .coordinates: define_coordinate
 using .debugging
-using .initial_conditions: init_pdf_and_moments, enforce_boundary_conditions!
+using .initial_conditions: allocate_pdf_and_moments, init_pdf_and_moments!,
+                           enforce_boundary_conditions!
 using .looping
 using .moment_constraints: hard_force_moment_constraints!
 using .moment_kinetics_input: mk_input, run_type, performance_test
@@ -248,26 +249,31 @@ function setup_moment_kinetics(input_dict::Dict; backup_filename=nothing,
     # Create loop range variables for shared-memory-parallel loops
     looping.setup_loop_ranges!(block_rank[], block_size[]; s=composition.n_species, r=r.n,
                                z=z.n, vpa=vpa.n)
-    # initialize f(z,vpa) and the lowest three v-space moments (density(z), upar(z) and ppar(z)),
-    # each of which may be evolved separately depending on input choices.
-    pdf, moments = init_pdf_and_moments(vpa, z, r, vpa_spectral, composition, species,
-                                        t_input.n_rk_stages, evolve_moments,
-                                        collisions.ionization)
-    # initialize time variable
-    code_time = 0.
-    # create arrays and do other work needed to setup
-    # the main time advance loop -- including normalisation of f by density if requested
-    moments, fields, vpa_advect, z_advect, r_advect, vpa_SL, z_SL, r_SL, scratch,
-        advance, scratch_dummy_sr = setup_time_advance!(pdf, vpa, z, r, z_spectral,
-            composition, drive_input, moments, t_input, collisions, species)
+    # Allocate arrays and create the pdf and moments structs
+    pdf, moments = allocate_pdf_and_moments(composition, r, z, vpa, evolve_moments,
+                                            collisions.ionization)
+    if backup_filename === nothing
+        restarting = false
 
-    if backup_filename !== nothing
-        # Have done unnecessary initialisation of pdf and moments, which is overwritten
-        # here
+        # initialize f(z,vpa) and the lowest three v-space moments (density(z), upar(z) and ppar(z)),
+        # each of which may be evolved separately depending on input choices.
+        init_pdf_and_moments!(pdf, moments, composition, r, z, vpa, vpa_spectral,
+                              species)
+        # initialize time variable
+        code_time = 0.
+    else
+        restarting = true
+
+        # Reload pdf and moments from an existing output file
         code_time = reload_evolving_fields!(pdf, moments, backup_filename,
                                             restart_time_index, composition, r, z, vpa)
         _block_synchronize()
     end
+    # create arrays and do other work needed to setup
+    # the main time advance loop -- including normalisation of f by density if requested
+    moments, fields, vpa_advect, z_advect, r_advect, vpa_SL, z_SL, r_SL, scratch,
+        advance, scratch_dummy_sr = setup_time_advance!(pdf, vpa, z, r, z_spectral,
+            composition, drive_input, moments, t_input, collisions, species, restarting)
 
     # setup i/o
     io, cdf = setup_file_io(output_dir, run_name, vpa, z, r, composition, collisions,
