@@ -185,7 +185,8 @@ test_input_chebyshev = merge(test_input_finite_difference,
 test_input_chebyshev_split_1_moment =
     merge(test_input_chebyshev,
           Dict("run_name" => "chebyshev_pseudospectral_split_1_moment",
-               "evolve_moments_density" => true))
+               "evolve_moments_density" => true,
+               "z_nelement" => 4))
 
 test_input_chebyshev_split_2_moments =
     merge(test_input_chebyshev_split_1_moment,
