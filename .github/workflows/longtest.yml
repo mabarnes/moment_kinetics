@@ -18,16 +18,20 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
       - uses: julia-actions/setup-julia@v1
         with:
           version: '1.7'
           arch: x64
       - uses: julia-actions/julia-buildpkg@v1
+        env:
+          # Use the system Python for PyCall - avoids library linking error on macOS
+          PYTHON: "${{ env.pythonLocation }}/bin/python"
         # The following is copied and simplified from
         # https://github.com/julia-actions/julia-runtest/blob/master/action.yml
         # in order to pass customised arguments to `Pkg.test()`
         #
       - run: |
-          pip install --user matplotlib
+          pip3 install --user matplotlib
           julia --check-bounds=yes --color=yes --depwarn=yes --inline=yes --project=@. -e 'import Pkg; Pkg.test(; coverage = :true, test_args=["--long"])'
         shell: bash
