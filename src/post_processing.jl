@@ -302,7 +302,7 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
                 subplots = (@views heatmap(z, vpa, log.(abs.(f[:,:,is,i])), xlabel="z",
                                            ylabel="vpa", fillcolor = logdeep, title=run_label)
                             for (f, this_z, this_vpa, run_label) ∈ zip(ff, z, vpa, run_labels))
-                plot(subplots..., layout=(1,n_runs), size=(400*n_runs, 400))
+                plot(subplots..., layout=(1,n_runs), size=(600*n_runs, 400))
             end
             outfile = string(prefix, "_logf_vs_vpa_z", spec_string, ".gif")
             gif(anim, outfile, fps=5)
@@ -313,7 +313,7 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
                                            ylabel="vpa", c = :deep, interpolation =
                                            :cubic, title=run_label)
                             for (f, this_z, this_vpa, run_label) ∈ zip(ff, z, vpa, run_labels))
-                plot(subplots..., layout=(1,n_runs), size=(400*n_runs, 400))
+                plot(subplots..., layout=(1,n_runs), size=(600*n_runs, 400))
             end
             outfile = string(prefix, "_f_vs_vpa_z", spec_string, ".gif")
             gif(anim, outfile, fps=5)
@@ -323,7 +323,7 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
                                        c = :deep, interpolation = :cubic,
                                        title=string(run_label, str))
                         for (f, this_z, this_vpa, run_label) ∈ zip(ff, z, vpa, run_labels))
-            plot(subplots..., layout=(1,n_runs), size=(400*n_runs, 400))
+            plot(subplots..., layout=(1,n_runs), size=(600*n_runs, 400))
             outfile = string(prefix, "_f_vs_z_vpa_final", spec_string, ".pdf")
             savefig(outfile)
 
@@ -360,7 +360,7 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
             #                zip(ff, density, parallel_flow, thermal_speed,
             #                    evolve_density, evolve_upar, evolve_ppar, z, vpa,
             #                    run_labels))
-            #    plot(subplots..., layout=(1,n_runs), size=(400*n_runs, 400))
+            #    plot(subplots..., layout=(1,n_runs), size=(600*n_runs, 400))
             #end
             #outfile = string(prefix, "_f_unnorm_vs_vpa_z", spec_string, ".gif")
             #gif(anim, outfile, fps=5)
@@ -374,7 +374,7 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
             #                    zip(ff, density, parallel_flow, thermal_speed,
             #                        evolve_density, evolve_upar, evolve_ppar, z,
             #                        vpa, run_labels))
-            #    plot(subplots..., layout=(1,n_runs), size=(400*n_runs, 400))
+            #    plot(subplots..., layout=(1,n_runs), size=(600*n_runs, 400))
             #end
             #outfile = string(prefix, "_logf_unnorm_vs_vpa_z", spec_string, ".gif")
             #gif(anim, outfile, fps=5)
@@ -400,7 +400,7 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
                                              title=run_label)
                 end
             end
-            fig = PyPlot.figure(1, figsize=(4,4))
+            fig = PyPlot.figure(1, figsize=(6,4))
             fig.clf()
             myanim = matplotlib_animation.FuncAnimation(fig, make_frame, frames=nframes)
             outfile = string(prefix, "_f_unnorm_vs_vpa_z", spec_string, ".gif")
@@ -422,7 +422,7 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
                                              title=run_label, plot_log=true)
                 end
             end
-            fig = PyPlot.figure(figsize=(4,4))
+            fig = PyPlot.figure(figsize=(6,4))
             myanim = matplotlib_animation.FuncAnimation(fig, make_frame_log, frames=nframes)
             outfile = string(prefix, "_logf_unnorm_vs_vpa_z", spec_string, ".gif")
             myanim.save(outfile, writer=matplotlib_animation.PillowWriter(fps=30))
@@ -435,7 +435,7 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
                                        interpolation = :cubic, title=run_label)
                             for (df, this_z, this_vpa, run_label) ∈
                                 zip(delta_f, z, vpa, run_labels))
-                plot(subplots..., layout=(1,n_runs), size=(400*n_runs, 400))
+                plot(subplots..., layout=(1,n_runs), size=(600*n_runs, 400))
             end
             outfile = string(prefix, "_deltaf_vs_vpa_z", spec_string, ".gif")
             gif(anim, outfile, fps=5)
@@ -651,7 +651,7 @@ function plot_fields(phi, delta_phi, time, itime_min, itime_max, nwrite_movie,
         subplots = (heatmap(t, this_z, p, xlabel="time", ylabel="z", title=run_label, c =
                             :deep)
                     for (t, this_z, p, run_label) ∈ zip(time, z, phi, run_labels))
-        plot(subplots..., layout=(1,n_runs), size=(400*n_runs, 400))
+        plot(subplots..., layout=(1,n_runs), size=(600*n_runs, 400))
         outfile = string(prefix, "_phi_vs_z_t.pdf")
         savefig(outfile)
     end
@@ -866,7 +866,7 @@ function plot_moments(density, delta_density, density_fldline_avg,
             subplots = (heatmap(t, this_z, n[:,is,:], xlabel="time", ylabel="z",
                                 title=run_label, c = :deep)
                         for (t, this_z, n, run_label) ∈ zip(time, z, density, run_labels))
-            plot(subplots..., layout=(1,n_runs), size=(400*n_runs, 400))
+            plot(subplots..., layout=(1,n_runs), size=(600*n_runs, 400))
             outfile = string(prefix, "_dens_vs_z_t_spec", spec_string, ".pdf")
             savefig(outfile)
         end
@@ -876,7 +876,7 @@ function plot_moments(density, delta_density, density_fldline_avg,
                                 title=run_label, c = :deep)
                         for (t, this_z, upar, run_label) ∈ zip(time, z, parallel_flow,
                                                               run_labels))
-            plot(subplots..., layout=(1,n_runs), size=(400*n_runs, 400))
+            plot(subplots..., layout=(1,n_runs), size=(600*n_runs, 400))
             outfile = string(prefix, "_upar_vs_z_t_spec", spec_string, ".pdf")
             savefig(outfile)
         end
@@ -886,7 +886,7 @@ function plot_moments(density, delta_density, density_fldline_avg,
                                 title=run_label, c = :deep)
                         for (t, this_z, ppar, run_label) ∈
                             zip(time, z, parallel_pressure, run_labels))
-            plot(subplots..., layout=(1,n_runs), size=(400*n_runs, 400))
+            plot(subplots..., layout=(1,n_runs), size=(600*n_runs, 400))
             outfile = string(prefix, "_ppar_vs_z_t_spec", spec_string, ".pdf")
             savefig(outfile)
         end
@@ -896,7 +896,7 @@ function plot_moments(density, delta_density, density_fldline_avg,
                                 title=run_label, c = :deep)
                         for (t, this_z, qpar, run_label) ∈
                             zip(time, z, parallel_heat_flux, run_labels))
-            plot(subplots..., layout=(1,n_runs), size=(400*n_runs, 400))
+            plot(subplots..., layout=(1,n_runs), size=(600*n_runs, 400))
             outfile = string(prefix, "_qpar_vs_z_t_spec", spec_string, ".pdf")
             savefig(outfile)
         end
