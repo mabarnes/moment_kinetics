@@ -568,6 +568,15 @@ end
 function enforce_boundary_conditions!(f, f_r_bc, vpa_bc, z_bc, r_bc, vpa, vperp, z, r, vpa_adv::T1, z_adv::T2, r_adv::T3, composition) where {T1, T2, T3}
     
     begin_s_r_z_vperp_region()
+    
+    # prevent f_charged going negative with this hack
+    zero = 1.0e-10        
+    @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+        if f[ivpa,ivperp,iz,ir,is] < zero 
+            f[ivpa,ivperp,iz,ir,is] = 0.0
+        end
+    end
+    
     @loop_s_r_z_vperp is ir iz ivperp begin
         # enforce the vpa BC
         # use that adv.speed independent of vpa 
