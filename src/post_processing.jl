@@ -299,8 +299,9 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
             # make a gif animation of ln f(vpa,z,t)
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
                 #heatmap(z, vpa, log.(abs.(ff[:,:,i])), xlabel="z", ylabel="vpa", clims = (fmin,fmax), c = :deep)
-                subplots = (@views heatmap(z, vpa, log.(abs.(f[:,:,is,i])), xlabel="z",
-                                           ylabel="vpa", fillcolor = logdeep, title=run_label)
+                subplots = (@views heatmap(this_z, this_vpa, log.(abs.(f[:,:,is,i])),
+                                           xlabel="z", ylabel="vpa", fillcolor =
+                                           logdeep, title=run_label)
                             for (f, this_z, this_vpa, run_label) ∈ zip(ff, z, vpa, run_labels))
                 plot(subplots..., layout=(1,n_runs), size=(600*n_runs, 400))
             end
