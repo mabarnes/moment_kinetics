@@ -395,10 +395,11 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
                                       evolve_ppar, z, vpa, run_labels)
 
                     PyPlot.subplot(1, n_runs, run_ind)
-                    @views plot_unnormalised(f[:,:,is,iframe], this_z, this_vpa,
-                                             n[:,is,iframe], upar[:,is,iframe],
-                                             vth[:,is,iframe], ev_n, ev_u, ev_p,
-                                             title=run_label)
+                    @views f_unnorm, z2d, dzdt2d = get_unnormalised_f_coords_2d(
+                        f[:,:,is,iframe], this_z, this_vpa, n[:,is,iframe],
+                        upar[:,is,iframe], vth[:,is,iframe], ev_n, ev_u, ev_p)
+                    plot_unnormalised_f2d(f_unnorm, z2d, dzdt2d; title=run_label,
+                                          plot_log=false)
                 end
             end
             fig = PyPlot.figure(1, figsize=(6,4))
@@ -417,10 +418,11 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
                                       evolve_ppar, z, vpa, run_labels)
 
                     PyPlot.subplot(1, n_runs, run_ind)
-                    @views plot_unnormalised(f[:,:,is,iframe], this_z, this_vpa,
-                                             n[:,is,iframe], upar[:,is,iframe],
-                                             vth[:,is,iframe], ev_n, ev_u, ev_p,
-                                             title=run_label, plot_log=true)
+                    @views f_unnorm, z2d, dzdt2d = get_unnormalised_f_coords_2d(
+                        f[:,:,is,iframe], this_z, this_vpa, n[:,is,iframe],
+                        upar[:,is,iframe], vth[:,is,iframe], ev_n, ev_u, ev_p)
+                    plot_unnormalised_f2d(f_unnorm, z2d, dzdt2d; title=run_label,
+                                          plot_log=true)
                 end
             end
             fig = PyPlot.figure(figsize=(6,4))
@@ -431,6 +433,35 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
             # Ensure PyPlot figure is cleared
             closeall()
 
+            anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+                plot(legend=legend)
+                for (f, n, upar, vth, ev_n, ev_u, ev_p, this_vpa, run_label) ∈
+                    zip(ff, density, parallel_flow, thermal_speed, evolve_density,
+                        evolve_upar, evolve_ppar, vpa, run_labels)
+                    @views f_unnorm, dzdt = get_unnormalised_f_dzdt_1d(
+                        f[:,1,is,i], this_vpa, n[1,is,i], upar[1,is,i], vth[1,is,i],
+                        ev_n, ev_u, ev_p)
+                    @views plot!(dzdt, f_unnorm, xlabel="vpa", ylabel="f_unnorm(z=0)",
+                                 label=run_label)
+                end
+            end
+            outfile = string(prefix, "_f0_unnorm_vs_vpa", spec_string, ".gif")
+            gif(anim, outfile, fps=5)
+
+            anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+                plot(legend=legend)
+                for (f, n, upar, vth, ev_n, ev_u, ev_p, this_vpa, run_label) ∈
+                    zip(ff, density, parallel_flow, thermal_speed, evolve_density,
+                        evolve_upar, evolve_ppar, vpa, run_labels)
+                    @views f_unnorm, dzdt = get_unnormalised_f_dzdt_1d(
+                        f[:,end,is,i], this_vpa, n[end,is,i], upar[end,is,i],
+                        vth[end,is,i], ev_n, ev_u, ev_p)
+                    @views plot!(dzdt, f_unnorm, xlabel="vpa", ylabel="f_unnorm(z=L)",
+                                 label=run_label)
+                end
+            end
+            outfile = string(prefix, "_fL_unnorm_vs_vpa", spec_string, ".gif")
+            gif(anim, outfile, fps=5)
         end
         if pp.animate_deltaf_vs_vpa_z
             # make a gif animation of δf(vpa,z,t)
@@ -1190,43 +1221,62 @@ function draw_v_parallel_zero!(z::AbstractVector, upar, vth, evolve_upar::Bool,
 end
 
 """
-Plot the unnormalised distribution function against unnormalised ('lab space')
-coordinates.
+Get the unnormalised distribution function and unnormalised ('lab space') dzdt
+coordinate at a point in space.
+
+Inputs should depend only on vpa.
+"""
+function get_unnormalised_f_dzdt_1d(f, vpa_grid, density, upar, vth, evolve_density,
+                                    evolve_upar, evolve_ppar)
+
+    dzdt = vpagrid_to_dzdt(vpa_grid, vth, upar, evolve_ppar, evolve_upar)
+
+    if evolve_ppar
+        f_unnorm = @. f * density / vth
+    elseif evolve_density
+        f_unnorm = @. f * density
+    else
+        f_unnorm = copy(f)
+    end
+
+    return f_unnorm, dzdt
+end
+
+"""
+Get the unnormalised distribution function and unnormalised ('lab space') coordinates.
 
 Inputs should depend only on z and vpa.
-
-Note this function requires using the PyPlot backend to support 2d coordinates being
-passed to `heatmap()`.
 """
-function plot_unnormalised(f, z_grid, vpa_grid, density, upar, vth, evolve_density,
-                           evolve_upar, evolve_ppar; plot_log=false, kwargs...)
-
-    if backend_name() != :pyplot
-        error("PyPlot backend is required for plot_unnormalised(). Call pyplot() "
-              * "first.")
-    end
+function get_unnormalised_f_coords_2d(f, z_grid, vpa_grid, density, upar, vth,
+                                      evolve_density, evolve_upar, evolve_ppar)
 
     nvpa, nz = size(f)
     z2d = zeros(nvpa, nz)
     dzdt2d = zeros(nvpa, nz)
+    f_unnorm = similar(f)
     for iz ∈ 1:nz
         @views z2d[:,iz] .= z_grid[iz]
-        @views dzdt2d[:,iz] .= vpagrid_to_dzdt(vpa_grid, vth[iz], upar[iz], evolve_ppar,
-                                             evolve_upar)
+        f_unnorm[:,iz], dzdt2d[:,iz] =
+            get_unnormalised_f_dzdt_1d(f[:,iz], vpa_grid, density[iz], upar[iz],
+                                       vth[iz], evolve_density, evolve_upar,
+                                       evolve_ppar)
     end
 
-    if evolve_ppar
-        f_unnorm = similar(f)
-        for iz ∈ 1:nz, ivpa ∈ 1:nvpa
-            f_unnorm[ivpa,iz] = @. f[ivpa,iz] * density[iz] / vth[iz]
-        end
-    elseif evolve_density
-        f_unnorm = similar(f)
-        for iz ∈ 1:nz, ivpa ∈ 1:nvpa
-            f_unnorm[ivpa,iz] = @. f[ivpa,iz] * density[iz]
-        end
-    else
-        f_unnorm = f
+    return f_unnorm, z2d, dzdt2d
+end
+
+"""
+Make a 2d plot of an unnormalised f on unnormalised coordinates, as returned from
+get_unnormalised_f_coords()
+
+Note this function requires using the PyPlot backend to support 2d coordinates being
+passed to `heatmap()`.
+"""
+function plot_unnormalised_f2d(f_unnorm, z2d, dzdt2d; plot_log=false, kwargs...)
+
+    if backend_name() != :pyplot
+        error("PyPlot backend is required for plot_unnormalised(). Call pyplot() "
+              * "first.")
     end
 
     ## The following commented out section does not work at the moment because
@@ -1246,8 +1296,8 @@ function plot_unnormalised(f, z_grid, vpa_grid, density, upar, vth, evolve_densi
 
     # Use PyPlot directly instead. Unfortunately makes animation a pain...
     if plot_log
-        vmin = minimum(x for x in f if x > 0.0)
-        norm = PyPlot.matplotlib.colors.LogNorm(vmin=vmin, vmax=maximum(f))
+        vmin = minimum(x for x in f_unnorm if x > 0.0)
+        norm = PyPlot.matplotlib.colors.LogNorm(vmin=vmin, vmax=maximum(f_unnorm))
     else
         norm = nothing
     end
