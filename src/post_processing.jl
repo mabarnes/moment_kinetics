@@ -402,10 +402,10 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
                 end
             end
             fig = PyPlot.figure(1, figsize=(6,4))
-            fig.clf()
             myanim = matplotlib_animation.FuncAnimation(fig, make_frame, frames=nframes)
             outfile = string(prefix, "_f_unnorm_vs_vpa_z", spec_string, ".gif")
             myanim.save(outfile, writer=matplotlib_animation.PillowWriter(fps=30))
+            PyPlot.clf()
 
             function make_frame_log(i)
                 PyPlot.clf()
@@ -427,6 +427,10 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
             myanim = matplotlib_animation.FuncAnimation(fig, make_frame_log, frames=nframes)
             outfile = string(prefix, "_logf_unnorm_vs_vpa_z", spec_string, ".gif")
             myanim.save(outfile, writer=matplotlib_animation.PillowWriter(fps=30))
+
+            # Ensure PyPlot figure is cleared
+            closeall()
+
         end
         if pp.animate_deltaf_vs_vpa_z
             # make a gif animation of δf(vpa,z,t)
