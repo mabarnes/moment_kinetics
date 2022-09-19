@@ -213,10 +213,10 @@ function update_speed_n_p_evolution!(advect, fields, fvec, moments, vpa, z, r, c
             # update parallel acceleration to account for vpahat*(upar/vth-vpahat) * d(vth)/dz term
             @loop_z iz begin
                 @views @. advect[is].speed[:,iz,ir] += vpa.grid*z.scratch[iz] *
-                                                    (moments.upar[iz,ir,is]/moments.vth[iz,ir,is] - vpa.grid)
+                                                    (fvec.upar[iz,ir,is]/moments.vth[iz,ir,is] - vpa.grid)
             end
             # calculate d(upar)/dz
-            derivative!(z.scratch, view(moments.upar,:,ir,is), z, z_spectral)
+            derivative!(z.scratch, view(fvec.upar,:,ir,is), z, z_spectral)
             # update parallel acceleration to account for vpahat*d(upar)/dz
             @loop_z iz begin
                 @views @. advect[is].speed[:,iz,ir] += vpa.grid*z.scratch[iz]
