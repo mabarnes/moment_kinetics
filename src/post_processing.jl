@@ -402,7 +402,7 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
                                           plot_log=false)
                 end
             end
-            fig = PyPlot.figure(1, figsize=(6,4))
+            fig = PyPlot.figure(1, figsize=(6*n_runs,4))
             myanim = matplotlib_animation.FuncAnimation(fig, make_frame, frames=nframes)
             outfile = string(prefix, "_f_unnorm_vs_vpa_z", spec_string, ".gif")
             myanim.save(outfile, writer=matplotlib_animation.PillowWriter(fps=30))
@@ -425,7 +425,7 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
                                           plot_log=true)
                 end
             end
-            fig = PyPlot.figure(figsize=(6,4))
+            fig = PyPlot.figure(figsize=(6*n_runs,4))
             myanim = matplotlib_animation.FuncAnimation(fig, make_frame_log, frames=nframes)
             outfile = string(prefix, "_logf_unnorm_vs_vpa_z", spec_string, ".gif")
             myanim.save(outfile, writer=matplotlib_animation.PillowWriter(fps=30))
