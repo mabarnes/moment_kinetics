@@ -12,7 +12,7 @@ if get(ENV, "CI", nothing) == "true"
     # See "Hosting Documentation" and deploydocs() in the Documenter manual
     # for more information.
     deploydocs(
-        repo = "github.com/mabarnes/moment_kinetics",
+        repo = "github.com/johnomotani/moment_kinetics",
         push_preview = true,
     )
 end
