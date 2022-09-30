@@ -50,6 +50,7 @@ include("time_advance.jl")
 
 include("moment_kinetics_input.jl")
 include("scan_input.jl")
+include("utils.jl")
 
 include("load_data.jl")
 include("analysis.jl")
