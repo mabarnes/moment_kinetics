@@ -51,6 +51,7 @@ include("time_advance.jl")
 
 include("moment_kinetics_input.jl")
 include("scan_input.jl")
+include("utils.jl")
 
 using TimerOutputs
 
