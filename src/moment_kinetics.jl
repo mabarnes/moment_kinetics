@@ -62,6 +62,7 @@ include("plot_sequence.jl")
 include("makie_post_processing.jl")
 include("time_advance.jl")
 
+include("utils.jl")
 using TimerOutputs
 using Dates
 using Glob
