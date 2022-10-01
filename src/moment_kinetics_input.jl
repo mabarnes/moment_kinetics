@@ -37,6 +37,18 @@ function get(d::Dict, key, default::Enum)
 end
 
 """
+    set_default(input::Dict, name::String, default_value)
+
+If `name` is not present in `input`, set to `default_value`
+"""
+function set_default!(input::Dict, name::String, default_value)
+    if !(name ∈ keys(input))
+        input[name] = default_value
+    end
+    return nothing
+end
+
+"""
 """
 function mk_input(scan_input=Dict())
 
