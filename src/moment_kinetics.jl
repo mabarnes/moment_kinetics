@@ -193,21 +193,15 @@ function restart_moment_kinetics(restart_filename::String, input_dict::Dict,
         global_rank[] == 0 && mv(restart_filename, backup_filename)
 
         # Set up all the structs, etc. needed for a run.
-        pdf, scratch, code_time, t_input, vpa, z, r, vpa_spectral, z_spectral,
-        r_spectral, moments, fields, vpa_advect, z_advect, r_advect, vpa_SL, z_SL, r_SL,
-        composition, collisions, num_diss_params, advance, scratch_dummy_sr, io, cdf =
-        setup_moment_kinetics(input_dict, backup_filename=backup_filename,
-                              restart_time_index=time_index)
+        mk_state = setup_moment_kinetics(input_dict, backup_filename=backup_filename,
+                                         restart_time_index=time_index)
 
         try
-            time_advance!(pdf, scratch, code_time, t_input, vpa, z, r, vpa_spectral,
-                          z_spectral, r_spectral, moments, fields, vpa_advect, z_advect,
-                          r_advect, vpa_SL, z_SL, r_SL, composition, collisions,
-                          num_diss_params, advance, scratch_dummy_sr, io, cdf)
+            time_advance!(mk_state...)
         finally
             # clean up i/o and communications
             # last 2 elements of mk_state are `io` and `cdf`
-            cleanup_moment_kinetics!(io, cdf)
+            cleanup_moment_kinetics!(mk_state[end-1:end]...)
         end
     catch e
         # Stop code from hanging when running on multiple processes if only one of them
