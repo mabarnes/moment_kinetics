@@ -9,6 +9,7 @@ Pages = ["getting_started.md",
          "input_options.md",
          "moment_kinetic_equations.md",
          "moment_constraints_notes.md",
+         "sources_notes.md",
          "developing.md",
          "debugging-hints.md",
         ]
