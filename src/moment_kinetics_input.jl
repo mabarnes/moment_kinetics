@@ -240,6 +240,8 @@ function mk_input(scan_input=Dict())
     end
     drive_immutable = drive_input(drive.force_phi, drive.amplitude, drive.frequency)
 
+    source_input = setup_external_sources(scan_input)
+
     # Make file to log some information about inputs into.
     # check to see if output_dir exists in the current directory
     # if not, create it
@@ -256,7 +258,8 @@ function mk_input(scan_input=Dict())
 
     # return immutable structs for z, vpa, species and composition
     all_inputs = (run_name, output_dir, evolve_moments, t, z_immutable, r_immutable, vpa_immutable,
-                  composition, species_immutable, collisions, drive_immutable, num_diss_params)
+                  composition, species_immutable, collisions, drive_immutable, source_input,
+                  num_diss_params)
     println(io, "\nAll inputs returned from mk_input():")
     println(io, all_inputs)
     close(io)
@@ -619,6 +622,19 @@ function check_input_initialization(composition, species, io)
         end
         println(io)
     end
+end
+
+"""
+Set any missing options for external source terms to default values
+"""
+function setup_external_sources(input::Dict)
+    # Get the section (if it exists) from input
+    source_input = get(input, "external_sources", Dict{String,Any}())
+
+    set_default!(source_input, "ion_heating_amplitude", -1.0)
+    set_default!(source_input, "ion_heating_width", 1.0)
+
+    return source_input
 end
 
 end

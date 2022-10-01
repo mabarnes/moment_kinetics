@@ -67,6 +67,7 @@ using .initial_conditions: init_pdf_and_moments, enforce_boundary_conditions!
 using .looping
 using .moment_constraints: hard_force_moment_constraints!
 using .moment_kinetics_input: mk_input, run_type, performance_test
+using .source_terms: init_external_sources
 using .time_advance: setup_time_advance!, time_advance!
 
 @debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
@@ -233,7 +234,8 @@ function setup_moment_kinetics(input_dict::Dict; backup_filename=nothing,
     # obtain input options from moment_kinetics_input.jl
     # and check input to catch errors
     run_name, output_dir, evolve_moments, t_input, z_input, r_input, vpa_input,
-        composition, species, collisions, drive_input, num_diss_params = input
+        composition, species, collisions, drive_input, source_input, num_diss_params =
+        input
     # initialize z grid and write grid point locations to file
     z, z_spectral = define_coordinate(z_input, composition)
     # initialize r grid and write grid point locations to file
@@ -248,6 +250,10 @@ function setup_moment_kinetics(input_dict::Dict; backup_filename=nothing,
     pdf, moments = init_pdf_and_moments(vpa, z, r, vpa_spectral, composition, species,
                                         t_input.n_rk_stages, evolve_moments,
                                         collisions.ionization)
+
+    # Create arrays and parameters for external sources, e.g. ion heating
+    sources = init_external_sources(source_input, z, composition)
+
     # initialize time variable
     code_time = 0.
     # create arrays and do other work needed to setup
@@ -278,7 +284,7 @@ function setup_moment_kinetics(input_dict::Dict; backup_filename=nothing,
 
     return pdf, scratch, code_time, t_input, vpa, z, r, vpa_spectral, z_spectral, r_spectral, moments,
            fields, vpa_advect, z_advect, r_advect, vpa_SL, z_SL, r_SL, composition,
-           collisions, num_diss_params, advance, scratch_dummy_sr, io, cdf
+           collisions, sources, num_diss_params, advance, scratch_dummy_sr, io, cdf
 end
 
 """

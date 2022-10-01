@@ -10,7 +10,7 @@ using ..looping
 """
 evolve the parallel pressure by solving the energy equation
 """
-function energy_equation!(ppar, fvec, moments, collisions, z, r, dt, spectral,
+function energy_equation!(ppar, fvec, moments, collisions, sources, z, r, dt, spectral,
                           composition, num_diss_params)
 
     begin_s_r_region()
@@ -19,6 +19,8 @@ function energy_equation!(ppar, fvec, moments, collisions, z, r, dt, spectral,
         @loop_r ir begin
             @views energy_equation_no_collisions!(ppar[:,ir,is], fvec.upar[:,ir,is], fvec.ppar[:,ir,is],
                                                   moments.qpar[:,ir,is], dt, z, spectral, num_diss_params)
+            @views energy_equation_external_sources!(ppar[:,ir,is], sources, composition,
+                                                     dt, is, ir)
         end
     end
     # add in contributions due to charge exchange/ionization collisions
@@ -125,6 +127,18 @@ function energy_equation_ionization!(ppar_out, dens, upar, ppar, z, composition,
             end
         end
     end
+end
+
+"""
+include the contribution of external sources to the energy equation
+"""
+function energy_equation_external_sources!(ppar_out, sources, composition, dt, is, ir)
+    if sources.ion_heating
+        if is ∈ composition.ion_species_range
+            @views @. ppar_out += dt * sources.S_heat[:,ir,is]
+        end
+    end
+    return nothing
 end
 
 end

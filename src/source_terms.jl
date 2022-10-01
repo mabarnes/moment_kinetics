@@ -4,8 +4,22 @@ module source_terms
 
 export source_terms!
 
+using ..array_allocation: allocate_float
 using ..calculus: derivative!
+using ..coordinates: coordinate
+using ..input_structs: species_composition
 using ..looping
+using ..type_definitions: mk_float
+
+"""
+Parameters for external source terms, e.g. ion heating
+"""
+struct source_info
+    # Include ion heating?
+    ion_heating::Bool
+    # Heat source
+    S_heat::Array{mk_float,2}
+end
 
 """
 calculate the source terms due to redefinition of the pdf to split off density,
@@ -122,6 +136,84 @@ function source_terms_evolve_ppar_collisions!(pdf_out, pdf_in, dens, upar, ppar,
         end
     end
     return nothing
+end
+
+"""
+Add external sources, e.g. ion heating.
+"""
+function external_sources!(pdf_out, fvec_in, moments, sources, vpa, vpa_spectral,
+                           composition, dt)
+    if sources.ion_heating
+        if moments.evolve_ppar
+            # Ion heating does not affect normalized distribution function
+        elseif moments.evolve_upar
+            # Heating source does not enter force_balance equation, so compared to
+            # evolve_density version just need to account for vpa.grid being
+            # w_parallel=(v_parallel-u_parallel)
+            begin_s_r_z_region()
+            @loop_s_r_z is ir iz begin
+                if is ∈ composition.ion_species_range
+                    @views derivative!(vpa.scratch, fvec_in.pdf[:,iz,ir,is], vpa, vpa_spectral)
+                    @views @. pdf_out[:,iz,ir,is] -=
+                        dt * sources.S_heat[iz,is] *
+                        (fvec_in.pdf[:,iz,ir,is] + vpa.grid * vpa.scratch) /
+                        (fvec_in.density[iz,ir,is] * moments.vth[iz,ir,is])^2
+                end
+            end
+        elseif moments.evolve_density
+            # Heating source does not enter continuity equation, so just need to divide
+            # full-f source term by n_i to account for normalized g_i.
+            begin_s_r_z_region()
+            @loop_s_r_z is ir iz begin
+                if is ∈ composition.ion_species_range
+                    @views derivative!(vpa.scratch, fvec_in.pdf[:,iz,ir,is], vpa, vpa_spectral)
+                    @views @. pdf_out[:,iz,ir,is] -=
+                        dt * sources.S_heat[iz,is] *
+                        (fvec_in.pdf[:,iz,ir,is]
+                         + (vpa.grid - fvec_in.upar[iz,ir,is]) * vpa.scratch) /
+                        (fvec_in.density[iz,ir,is] * moments.vth[iz,ir,is])^2
+                end
+            end
+        else
+            # 'full-f' case
+            begin_s_r_z_region()
+            @loop_s_r_z is ir iz begin
+                if is ∈ composition.ion_species_range
+                    @views derivative!(vpa.scratch, fvec_in.pdf[:,iz,ir,is], vpa, vpa_spectral)
+                    @views @. pdf_out[:,iz,ir,is] -=
+                        dt * sources.S_heat[iz,is] *
+                        (fvec_in.pdf[:,iz,ir,is]
+                         + (vpa.grid - fvec_in.upar[iz,ir,is]) * vpa.scratch) /
+                        (fvec_in.density[iz,ir,is] * moments.vth[iz,ir,is]^2)
+                end
+            end
+        end
+    end
+
+    return nothing
+end
+
+"""
+Create arrays and parameters for external sources, e.g. ion heating
+"""
+function init_external_sources(source_input::Dict, z::coordinate,
+                               composition::species_composition)
+
+    ion_heating_amplitude = source_input["ion_heating_amplitude"]
+    S_heat = allocate_float(z.n, composition.n_ion_species)
+    if ion_heating_amplitude <= 0.0
+        ion_heating = false
+        S_heat .= 0.0
+    else
+        ion_heating = true
+        ion_heating_width = source_input["ion_heating_width"]
+
+        for is ∈ 1:composition.n_ion_species, iz ∈ 1:z.n
+            S_heat[iz,is] = ion_heating_amplitude * exp(-(z.grid[iz]/ion_heating_width)^2)
+        end
+    end
+
+    return source_info(ion_heating, S_heat)
 end
 
 end
