@@ -9,6 +9,9 @@ export performance_test
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float
 using ..communication
+using ..constants: proton_charge
+using ..coulomb_collisions: setup_coulomb_collisions
+using ..constants: electron_mass, proton_mass
 using ..file_io: input_option_error, open_output_file
 using ..finite_differences: fd_check_option
 using ..input_structs
@@ -90,6 +93,20 @@ function mk_input(scan_input=Dict())
     # set phi_wall at z = 0
     composition.phi_wall = get(scan_input, "phi_wall", 0.0)
     
+    # Ion mass in units of mnorm
+    composition.mi = get(scan_input, "mi", 2.0)
+    composition.mn_over_mi = get(scan_input, "mn_over_mi", 1.0)
+
+    composition.Nnorm = get(scan_input, "Nnorm", 1.0e19)
+    composition.Tnorm = get(scan_input, "Tnorm", 100.0)
+    composition.Lnorm = get(scan_input, "Lnorm", 100.0)
+    composition.Bnorm = get(scan_input, "Bnorm", 1.0)
+    composition.mnorm = get(scan_input, "mnorm", proton_mass)
+
+    cs0 = sqrt(2.0*composition.Tnorm*proton_charge/(composition.mi * composition.mnorm))
+    composition.timenorm = composition.Lnorm / cs0
+    composition.me_over_mi = electron_mass / (composition.mi * composition.mnorm)
+
     
     species[1].z_IC.initialization_option = get(scan_input, "z_IC_option1", "gaussian")
     species[1].initial_density = get(scan_input, "initial_density1", 1.0)
@@ -135,6 +152,12 @@ function mk_input(scan_input=Dict())
     collisions.charge_exchange = get(scan_input, "charge_exchange_frequency", 2.0*sqrt(species[1].initial_temperature))
     collisions.ionization = get(scan_input, "ionization_frequency", collisions.charge_exchange)
     collisions.constant_ionization_rate = get(scan_input, "constant_ionization_rate", false)
+    include_coulomb_collisions = get(scan_input, "coulomb_collisions", false)
+    if include_coulomb_collisions
+        collisions.coulomb_collision_frequency_prefactor = setup_coulomb_collisions(composition)
+    else
+        collisions.coulomb_collision_frequency_prefactor = -1.0
+    end
 
     # parameters related to the time stepping
     nstep = get(scan_input, "nstep", 40000)
@@ -399,19 +422,30 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     else
         n_species = n_ion_speces + n_neutral_species + 1
     end
+    # Normalization parameters
+    Nnorm = 1.0e19 # m^-3
+    Tnorm = 100.0 # eV
+    Bnorm = 1.0 # eV
+    Lnorm = 100.0 # m
+    timenorm = 1.0 # s - NB this is overwritten in mk_input(), so don't bother to
+                   #     calculate properly here
+    mnorm = proton_mass # kg
     # electron temperature over reference temperature
     T_e = 1.0
     # temperature at the entrance to the wall in terms of the electron temperature
     T_wall = 1.0
     # wall potential at z = 0
     phi_wall = 0.0
+    # ion mass in units of mnorm
+    mi = 2.0
     # ratio of the neutral particle mass to the ion particle mass
     mn_over_mi = 1.0
     # ratio of the electron particle mass to the ion particle mass
-    me_over_mi = 1.0/1836.0
+    me_over_mi = electron_mass / (mi * mnorm)
     composition = species_composition(n_species, n_ion_species, n_neutral_species,
         electron_physics, 1:n_ion_species, n_ion_species+1:n_species, T_e, T_wall,
-        phi_wall, mn_over_mi, me_over_mi, allocate_float(n_species))
+        phi_wall, mn_over_mi, me_over_mi, allocate_float(n_species), Nnorm, Tnorm, Bnorm,
+        Lnorm, timenorm, mnorm, mi)
     species = Array{species_parameters_mutable,1}(undef,n_species)
     # initial temperature for each species defaults to Tₑ
     initial_temperature = 1.0
@@ -482,7 +516,9 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     # ionization collision frequency
     ionization = 0.0
     constant_ionization_rate = false
-    collisions = collisions_input(charge_exchange, ionization, constant_ionization_rate)
+    coulomb_collision_frequency_prefactor = -1.0
+    collisions = collisions_input(charge_exchange, ionization, constant_ionization_rate,
+                                  coulomb_collision_frequency_prefactor)
 
     return z, r, vpa, species, composition, drive, evolve_moments, collisions
 end

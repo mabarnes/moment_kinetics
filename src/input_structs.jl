@@ -209,6 +209,23 @@ mutable struct species_composition
     me_over_mi::mk_float
     # scratch buffer whose size is n_species
     scratch::Vector{mk_float}
+
+    # Normalization parameters
+    ##########################
+    # Reference density
+    Nnorm::mk_float
+    # Reference temperature
+    Tnorm::mk_float
+    # Reference magnetic field
+    Bnorm::mk_float
+    # Referece length
+    Lnorm::mk_float
+    # Reference time
+    timenorm::mk_float
+    # Reference mass
+    mnorm::mk_float
+    # ion mass (in units of mnorm)
+    mi::mk_float
 end
 
 """
@@ -242,6 +259,8 @@ mutable struct collisions_input
     ionization::mk_float
     # if constant_ionization_rate = true, use an ionization term that is constant in z
     constant_ionization_rate::Bool
+    # Coulomb collision rate at the reference density and temperature
+    coulomb_collision_frequency_prefactor::mk_float
 end
 
 """

@@ -24,6 +24,7 @@ using ..r_advection: update_speed_r!, r_advection!
 using ..vpa_advection: update_speed_vpa!, vpa_advection!
 using ..charge_exchange: charge_exchange_collisions!
 using ..ionization: ionization_collisions!
+using ..coulomb_collisions: coulomb_collisions!
 using ..numerical_dissipation: vpa_boundary_buffer_decay!,
                                vpa_boundary_buffer_diffusion!, vpa_dissipation!,
                                z_dissipation!, vpa_boundary_force_decreasing!,
@@ -48,6 +49,7 @@ mutable struct advance_info
     z_advection::Bool
     cx_collisions::Bool
     ionization_collisions::Bool
+    coulomb_collisions::Bool
     source_terms::Bool
     external_sources::Bool
     numerical_dissipation::Bool
@@ -191,6 +193,7 @@ function setup_advance_flags(moments, composition, split_operators, collisions, 
     advance_z_advection = false
     advance_cx = false
     advance_ionization = false
+    advance_coulomb_collisions = false
     advance_sources = false
     advance_external_sources = false
     advance_numerical_dissipation = false
@@ -219,6 +222,9 @@ function setup_advance_flags(moments, composition, split_operators, collisions, 
         elseif collisions.constant_ionization_rate && collisions.ionization > 0.0
             advance_ionization = true
         end
+        if collisions.coulomb_collision_frequency_prefactor > 0.0
+            advance_coulomb_collisions = true
+        end
         advance_external_sources = true
         advance_numerical_dissipation = true
         # if evolving the density, must advance the continuity equation,
@@ -244,9 +250,10 @@ function setup_advance_flags(moments, composition, split_operators, collisions, 
         end
     end
     return advance_info(advance_vpa_advection, advance_z_advection, advance_cx,
-                        advance_ionization, advance_sources, advance_external_sources,
-                        advance_numerical_dissipation, advance_continuity,
-                        advance_force_balance, advance_energy, rk_coefs)
+                        advance_ionization, advance_coulomb_collisions, advance_sources,
+                        advance_external_sources, advance_numerical_dissipation,
+                        advance_continuity, advance_force_balance, advance_energy,
+                        rk_coefs)
 end
 
 """
@@ -514,6 +521,14 @@ function time_advance_split_operators!(pdf, scratch, t, t_input, vpa, z,
                     advance, istep)
                 advance.ionization_collisions = false
             end
+        end
+        if collisions.coulomb_collisions > 0.0
+            advance.coulomb_collisions = true
+            time_advance_no_splitting!(pdf, scratch, t, t_input, z, vpa,
+                z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
+                z_SL, vpa_SL, composition, collisions, sources, num_diss_params,
+                advance, istep)
+            advance.coulomb_collisions = false
         end
         # and add the source terms associated with redefining g = pdf/density or pdf*vth/density
         # to the kinetic equation
@@ -913,6 +928,11 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_SL, z_
         ionization_collisions!(fvec_out.pdf, fvec_in, moments, n_ion_species,
             composition.n_neutral_species, vpa, z, r, vpa_spectral, composition,
             collisions, z.n, dt)
+    end
+    # account for coulomb collisions between ions
+    if advance.coulomb_collisions
+        coulomb_collisions!(fvec_out.pdf, fvec_in, moments, composition, collisions, vpa,
+                            dt)
     end
     # add numerical dissipation
     if advance.numerical_dissipation

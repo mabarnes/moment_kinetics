@@ -23,34 +23,23 @@ Get many parameters for the simulation setup given by `input` or in the file
 `input_filename`, in SI units and eV, returned as an OrderedDict.
 """
 function get_unnormalized_parameters end
-function get_unnormalized_parameters(input::Dict; Nnorm::Number, Tnorm::Number,
-                                     Lnorm::Number, Bnorm::Number)
+function get_unnormalized_parameters(input::Dict)
     run_name, output_dir, evolve_moments, t_input, z_input, r_input, vpa_input,
     composition, species_input, collisions, drive_input, num_diss_params =
     mk_input(input)
 
-    if !(Nnorm isa Unitful.AbstractQuantity)
-        Nnorm *= Unitful.m^(-3)
-    end
-    if !(Tnorm isa Unitful.AbstractQuantity)
-        Tnorm *= eV
-    end
-    if !(Lnorm isa Unitful.AbstractQuantity)
-        Lnorm *= Unitful.m
-    end
-    if !(Bnorm isa Unitful.AbstractQuantity)
-        Bnorm *= Unitful.T
-    end
+    Nnorm = composition.Nnorm * Unitful.m^(-3)
+    Tnorm = composition.Tnorm * eV
+    Lnorm = composition.Lnorm * Unitful.m
+    Bnorm = composition.Bnorm * Unitful.T
+    timenorm = composition.timenorm * Unitful.s
 
     # Assume ions are Deuterium
-    mi = 3.3435837724e-27*Unitful.kg
+    mi = composition.mi * composition.mnorm * Unitful.kg
 
     # Cold-ion sound speed with constant input electron temperature used for
     # normalization
     cs = Unitful.upreferred(sqrt(2.0*Tnorm/mi))
-
-    # Time normalization
-    timenorm = Unitful.upreferred(Lnorm / cs)
 
     parameters = OrderedDict{String,Any}()
     parameters["run_name"] = run_name
@@ -73,6 +62,8 @@ function get_unnormalized_parameters(input::Dict; Nnorm::Number, Tnorm::Number,
 
     parameters["CX_rate_coefficient"] = collisions.charge_exchange / Nnorm / timenorm
     parameters["ionization_rate_coefficient"] = collisions.ionization / Nnorm / timenorm
+    parameters["coulomb_collision_frequency0"] =
+        collisions.coulomb_collision_frequency_prefactor / timenorm
 
     return parameters
 end
