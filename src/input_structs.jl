@@ -61,6 +61,7 @@ mutable struct advance_info
     ionization_collisions::Bool
     ionization_collisions_1V::Bool
     ionization_source::Bool
+    krook_collisions::Bool
     numerical_dissipation::Bool
     source_terms::Bool
     continuity::Bool
@@ -305,6 +306,8 @@ mutable struct collisions_input
     ionization::mk_float
     # if constant_ionization_rate = true, use an ionization term that is constant in z
     constant_ionization_rate::Bool
+    # Coulomb collision rate at the reference density and temperature
+    krook_collision_frequency_prefactor::mk_float
 end
 
 """
