@@ -13,6 +13,7 @@ using ..communication
 using ..coordinates: define_coordinate
 using ..file_io: io_has_parallel, input_option_error, open_ascii_output_file
 using ..constants
+using ..coulomb_collisions: setup_coulomb_collisions
 using ..finite_differences: fd_check_option
 using ..input_structs
 using ..numerical_dissipation: setup_numerical_dissipation
@@ -177,6 +178,12 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     collisions.charge_exchange = get(scan_input, "charge_exchange_frequency", 2.0*sqrt(species.charged[1].initial_temperature))
     collisions.ionization = get(scan_input, "ionization_frequency", collisions.charge_exchange)
     collisions.constant_ionization_rate = get(scan_input, "constant_ionization_rate", false)
+    include_coulomb_collisions = get(scan_input, "coulomb_collisions", false)
+    if include_coulomb_collisions
+        collisions.coulomb_collision_frequency_prefactor = setup_coulomb_collisions(reference_parameters)
+    else
+        collisions.coulomb_collision_frequency_prefactor = -1.0
+    end
 
     # parameters related to the time stepping
     nstep = get(scan_input, "nstep", 5)
@@ -947,7 +954,9 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     # ionization collision frequency
     ionization = 0.0
     constant_ionization_rate = false
-    collisions = collisions_input(charge_exchange, ionization, constant_ionization_rate)
+    coulomb_collision_frequency_prefactor = -1.0
+    collisions = collisions_input(charge_exchange, ionization, constant_ionization_rate,
+                                  coulomb_collision_frequency_prefactor)
 
     Bzed = 1.0 # magnetic field component along z
     Bmag = 1.0 # magnetic field strength

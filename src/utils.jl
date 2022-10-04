@@ -61,6 +61,8 @@ function get_unnormalized_parameters(input::Dict)
 
     parameters["CX_rate_coefficient"] = collisions.charge_exchange / Nnorm / timenorm
     parameters["ionization_rate_coefficient"] = collisions.ionization / Nnorm / timenorm
+    parameters["coulomb_collision_frequency0"] =
+        collisions.coulomb_collision_frequency_prefactor / timenorm
 
     return parameters
 end
