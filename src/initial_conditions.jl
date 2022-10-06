@@ -147,7 +147,7 @@ function init_density!(dens, z, r, spec, n_species)
                      * (1.0 + spec[is].z_IC.density_amplitude
                               * cos(2.0*π*spec[is].z_IC.wavenumber*z.grid/z.L
                                     + spec[is].z_IC.density_phase)))
-            elseif spec[is].z_IC.inititalization_option == "monomial"
+            elseif spec[is].z_IC.initialization_option == "monomial"
                 # linear variation in z, with offset so that
                 # function passes through zero at upwind boundary
                 @. dens[:,ir,is] = (z.grid + 0.5*z.L)^spec[is].z_IC.monomial_degree
