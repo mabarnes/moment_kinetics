@@ -215,7 +215,7 @@ mutable struct species_composition
     #   condition at the wall
     electron_physics::electron_physics_type
     # if false -- wall bc uses true Knudsen cosine to specify neutral pdf leaving the wall
-    # if true -- use a simpler pdf that is easier to integrate 
+    # if true -- use a simpler pdf that is easier to integrate
     use_test_neutral_wall_pdf::Bool
     # Species indices that represent ions
     ion_species_range::UnitRange{mk_int}
@@ -225,7 +225,7 @@ mutable struct species_composition
     T_e::mk_float
     # wall temperature used if 'wall' BC selected for z coordinate; normalised by electron temperature
     T_wall::mk_float
-    # wall potential used if electron_physics=boltzmann_electron_response_with_simple_sheath 
+    # wall potential used if electron_physics=boltzmann_electron_response_with_simple_sheath
     phi_wall::mk_float
     # ratio of the neutral particle mass to the ion mass
     mn_over_mi::mk_float
@@ -282,7 +282,7 @@ mutable struct geometry_input
     # Bzeta/Bref
     Bzeta::mk_float
     # rhostar ion (ref)
-    rhostar::mk_float #used to premultiply ExB drift terms 
+    rhostar::mk_float #used to premultiply ExB drift terms
 end
 
 """
@@ -329,6 +329,21 @@ struct pp_input
     animate_deltaf_vs_vpa0_z::Bool
     # if animate_deltaf_vs_z0_vpa = true, create animation of δf(z0,vpa) at different time slices
     animate_deltaf_vs_vpa_z0::Bool
+    # if animate_f_vs_vpa_r = true, create animation of f(vpa,r) at different time slices
+    animate_f_vs_vpa_r::Bool
+    # if animate_f_vs_vperp_z = true, create animation of f(vperp,z) at different time slices
+    animate_f_vs_vperp_z::Bool
+    # if animate_f_vs_vperp_r = true, create animation of f(vperp,r) at different time slices
+    animate_f_vs_vperp_r::Bool
+    # if animate_f_vs_vperp_vpa = true, create animation of f(vperp,vpa) at different time slices
+    animate_f_vs_vperp_vpa::Bool
+    # if animate_f_vs_r_z = true, create animation of f(r,z) at different time slices
+    animate_f_vs_r_z::Bool
+    # if animate_f_vs_vz_z = true, create animation of f(vz,z) at different time slices
+    animate_f_vs_vz_z::Bool
+    # if animate_f_vs_vr_r = true, create animation of f(vr,r) at different time slices
+    animate_f_vs_vr_r::Bool
+
     # animations will use one in every nwrite_movie data slices
     nwrite_movie::mk_int
     # itime_min is the minimum time index at which to start animations
@@ -344,6 +359,12 @@ struct pp_input
     iz0::mk_int
     # ir0 is the ir index used when plotting data at a single r location
     ir0::mk_int
+    # ivz0 is the ivz index used when plotting data at a single vz location
+    ivz0::mk_int
+    # ivr0 is the ivr index used when plotting data at a single vr location
+    ivr0::mk_int
+    # ivzeta0 is the ivzeta index used when plotting data at a single vzeta location
+    ivzeta0::mk_int
 end
 
 end

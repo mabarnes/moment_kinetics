@@ -69,23 +69,24 @@ function analyze_and_plot_data(path)
     input_filename = path * ".toml"
     scan_input = TOML.parsefile(input_filename)
     # get run-time input/composition/geometry/collisions/species info for convenience
-    run_name_internal, output_dir, evolve_moments, 
-        t_input, z_input, r_input, 
+    run_name_internal, output_dir, evolve_moments,
+        t_input, z_input, r_input,
         vpa_input, vperp_input, gyrophase_input,
-        vz_input, vr_input, vzeta_input, 
+        vz_input, vr_input, vzeta_input,
         composition, species, collisions, geometry, drive_input = mk_input(scan_input)
-    
+
     # open the netcdf file and give it the handle 'fid'
     fid = open_netcdf_file(run_name)
     # load space-time coordinate data
-    nvpa, vpa, vpa_wgts, nvperp, vperp, vperp_wgts, nz, z, z_wgts, Lz, 
+    nvpa, vpa, vpa_wgts, nvperp, vperp, vperp_wgts, nz, z, z_wgts, Lz,
      nr, r, r_wgts, Lr, ntime, time, n_ion_species, n_neutral_species = load_coordinate_data(fid)
     #println("\n Info: n_neutral_species = ",n_neutral_species,", n_ion_species = ",n_ion_species,"\n")
     if n_neutral_species > 0
         nvz, vz, vz_wgts, nvr, vr, vr_wgts, nvzeta, vzeta, vzeta_wgts = load_neutral_coordinate_data(fid)
     end
     # initialise the post-processing input options
-    nwrite_movie, itime_min, itime_max, ivpa0, ivperp0, iz0, ir0 = init_postprocessing_options(pp, nvpa, nvperp, nz, nr, ntime)
+    nwrite_movie, itime_min, itime_max, ivpa0, ivperp0, iz0, ir0,
+        ivz0, ivr0, ivzeta0 = init_postprocessing_options(pp, nvpa, nvperp, nz, nr, nvz, nvr, nvzeta, ntime)
     # load full (z,r,t) fields data
     phi, Er, Ez = load_fields_data(fid)
     # load full (z,r,species,t) charged particle velocity moments data
@@ -98,12 +99,12 @@ function analyze_and_plot_data(path)
         neutral_density, neutral_uz, neutral_pz, neutral_qz, neutral_thermal_speed = load_neutral_particle_moments_data(fid)
         neutral_ff = load_neutral_pdf_data(fid)
     end
-    
+
     #evaluate 1D-1V diagnostics at fixed ir0
     diagnostics_1d = false
     if diagnostics_1d
         plot_1D_1V_diagnostics(run_name, fid, nwrite_movie, itime_min, itime_max, ivpa0, iz0, ir0, r,
-            phi[:,ir0,:], 
+            phi[:,ir0,:],
             density[:,ir0,:,:],
             parallel_flow[:,ir0,:,:],
             parallel_pressure[:,ir0,:,:],
@@ -112,31 +113,43 @@ function analyze_and_plot_data(path)
             ff[:,ivperp0,:,ir0,:,:],
             n_ion_species, evolve_ppar, nvpa, vpa, vpa_wgts,
             nz, z, z_wgts, Lz, ntime, time)
-    end 
+    end
     close(fid)
-    
+
     diagnostics_2d = false
     if diagnostics_2d
         # analyze the fields data
-        phi_fldline_avg, delta_phi = analyze_fields_data(phi[iz0,:,:], ntime, nr, r_wgts, Lr)    
+        phi_fldline_avg, delta_phi = analyze_fields_data(phi[iz0,:,:], ntime, nr, r_wgts, Lr)
         plot_fields_rt(phi[iz0,:,:], delta_phi, time, itime_min, itime_max, nwrite_movie,
         r, ir0, run_name, delta_phi, pp)
-    end 
-    
+    end
+
+    # make plots and animations of the ion pdf
+    spec_type = "ion"
+    plot_charged_pdf(ff, vpa, vperp, z, r, ivpa0, ivperp0, iz0, ir0,
+        spec_type, n_ion_species,
+        itime_min, itime_max, nwrite_movie, run_name, pp)
+    # make plots and animations of the neutral pdf
+    spec_type = "neutral"
+    plot_neutral_pdf(neutral_ff, vz, vr, vzeta, z, r,
+        ivz0, ivr0, ivzeta0, iz0, ir0,
+        spec_type, n_neutral_species,
+        itime_min, itime_max, nwrite_movie, run_name, pp)
+
     manufactured_solns_test = true
     # MRH hack condition on these plots for now
-    # Plots compare density and density_symbolic at last timestep 
+    # Plots compare density and density_symbolic at last timestep
     #if(manufactured_solns_test && nr > 1)
     if(manufactured_solns_test)
         r_bc = get(scan_input, "r_bc", "periodic")
         z_bc = get(scan_input, "z_bc", "periodic")
-        # avoid passing Lr = 0 into manufactured_solns functions 
+        # avoid passing Lr = 0 into manufactured_solns functions
         if nr > 1
-            Lr_in = Lr 
-        else 
+            Lr_in = Lr
+        else
             Lr_in = 1.0
         end
-        manufactured_solns_list = manufactured_solutions(Lr_in,Lz,r_bc,z_bc,geometry,composition,nr) 
+        manufactured_solns_list = manufactured_solutions(Lr_in,Lz,r_bc,z_bc,geometry,composition,nr)
         dfni_func = manufactured_solns_list.dfni_func
         densi_func = manufactured_solns_list.densi_func
         dfnn_func = manufactured_solns_list.dfnn_func
@@ -145,7 +158,7 @@ function analyze_and_plot_data(path)
         Er_func = manufactured_E_fields.Er_func
         Ez_func = manufactured_E_fields.Ez_func
         phi_func = manufactured_E_fields.phi_func
-        
+
         # phi, Er, Ez test
         phi_sym = copy(phi[:,:,:])
         Er_sym = copy(phi[:,:,:])
@@ -165,7 +178,7 @@ function analyze_and_plot_data(path)
          L"\widetilde{E_r}",L"\widetilde{E_r}^{sym}",L"\sqrt{\sum || \widetilde{E_r} - \widetilde{E_r}^{sym} ||^2 /N} ","Er")
         compare_fields_symbolic_test(run_name,Ez,Ez_sym,z,r,time,nz,nr,ntime,
          L"\widetilde{E_z}",L"\widetilde{E_z}^{sym}",L"\sqrt{\sum || \widetilde{E_z} - \widetilde{E_z}^{sym} ||^2 /N} ","Ez")
-        
+
         # ion test
         density_sym = copy(density[:,:,:,:])
         is = 1
@@ -178,7 +191,7 @@ function analyze_and_plot_data(path)
         end
         compare_moments_symbolic_test(run_name,density,density_sym,"ion",z,r,time,nz,nr,ntime,
          L"\widetilde{n}_i",L"\widetilde{n}_i^{sym}",L"\sqrt{\sum || \widetilde{n}_i - \widetilde{n}_i^{sym} ||^2 / N }","dens")
-        
+
         ff_sym = copy(ff)
         is = 1
         for it in 1:ntime
@@ -194,7 +207,7 @@ function analyze_and_plot_data(path)
         end
         compare_charged_pdf_symbolic_test(run_name,ff,ff_sym,"ion",vpa,vperp,z,r,time,nvpa,nvperp,nz,nr,ntime,
          L"\widetilde{f}_i",L"\widetilde{f}^{sym}_i",L"\sqrt{ \sum || \widetilde{f}_i - \widetilde{f}_i^{sym} ||^2 / N}","pdf")
-                
+
         if n_neutral_species > 0
             # neutral test
             neutral_density_sym = copy(density[:,:,:,:])
@@ -208,7 +221,7 @@ function analyze_and_plot_data(path)
             end
             compare_moments_symbolic_test(run_name,neutral_density,neutral_density_sym,"neutral",z,r,time,nz,nr,ntime,
              L"\widetilde{n}_n",L"\widetilde{n}_n^{sym}",L"\sqrt{ \sum || \widetilde{n}_n - \widetilde{n}_n^{sym} ||^2 /N}","dens")
-            
+
             neutral_ff_sym = copy(neutral_ff)
             is = 1
             for it in 1:ntime
@@ -228,9 +241,9 @@ function analyze_and_plot_data(path)
              L"\widetilde{f}_n",L"\widetilde{f}^{sym}_n",L"\sqrt{\sum || \widetilde{f}_n - \widetilde{f}_n^{sym} ||^2 /N}","pdf")
 
         end
-    end 
-    
-    
+    end
+
+
 end
 
 """
@@ -240,18 +253,18 @@ function compare_fields_symbolic_test(run_name,field,field_sym,z,r,time,nz,nr,nt
     it = ntime
     fontsize = 20
     ticksfontsize = 10
-    heatmap(r, z, field[:,:,it], xlabel=L"r / L_r", ylabel=L"z / L_z", title=field_label, c = :deep, 
+    heatmap(r, z, field[:,:,it], xlabel=L"r / L_r", ylabel=L"z / L_z", title=field_label, c = :deep,
      #xtickfontsize = ticksfontsize, xguidefontsize = fontsize, ytickfontsize = ticksfontsize, yguidefontsize = fontsize, titlefontsize = fontsize)
      windowsize = (360,240), margin = 15pt)
     outfile = string(run_name, "_"*file_string*"_vs_r_z.pdf")
     savefig(outfile)
-    
+
     heatmap(r, z, field_sym[:,:,it], xlabel=L"r / L_r", ylabel=L"z / L_z", title=field_sym_label, c = :deep,
     #xtickfontsize = ticksfontsize, xguidefontsize = fontsize, ytickfontsize = ticksfontsize, yguidefontsize = fontsize, titlefontsize = fontsize)
     windowsize = (360,240), margin = 15pt)
     outfile = string(run_name, "_"*file_string*"_sym_vs_r_z.pdf")
     savefig(outfile)
-    
+
     field_norm = zeros(mk_float,ntime)
     for it in 1:ntime
         dummy = 0.0
@@ -269,7 +282,7 @@ function compare_fields_symbolic_test(run_name,field,field_sym,z,r,time,nz,nr,nt
     @views plot(time, field_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=norm_label) #, yaxis=:log)
     outfile = string(run_name, "_"*file_string*"_norm_vs_t.pdf")
     savefig(outfile)
-    
+
     return field_norm
 
 end
@@ -283,13 +296,13 @@ function compare_moments_symbolic_test(run_name,moment,moment_sym,spec_string,z,
     windowsize = (360,240), margin = 15pt)
     outfile = string(run_name, "_"*file_string*"_vs_r_z_", spec_string, ".pdf")
     savefig(outfile)
-    
+
     heatmap(r, z, moment_sym[:,:,is,it], xlabel=L"r / L_r", ylabel=L"z / L_z", title=moment_sym_label, c = :deep,
     #xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, titlefontsize = fontsize
     windowsize = (360,240), margin = 15pt)
     outfile = string(run_name, "_"*file_string*"_sym_vs_r_z_", spec_string, ".pdf")
     savefig(outfile)
-    
+
     moment_norm = zeros(mk_float,ntime)
     for it in 1:ntime
         dummy = 0.0
@@ -307,7 +320,7 @@ function compare_moments_symbolic_test(run_name,moment,moment_sym,spec_string,z,
     @views plot(time, moment_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=norm_label) #, yaxis=:log)
     outfile = string(run_name, "_"*file_string*"_norm_vs_t_", spec_string, ".pdf")
     savefig(outfile)
-    
+
     return moment_norm
 
 end
@@ -316,15 +329,15 @@ function compare_charged_pdf_symbolic_test(run_name,pdf,pdf_sym,spec_string,
  vpa,vperp,z,r,time,nvpa,nvperp,nz,nr,ntime,pdf_label,pdf_sym_label,norm_label,file_string)
     is = 1
     it = ntime
-    
-    # Heatmaps for future use 
+
+    # Heatmaps for future use
     #heatmap(r, z, pdf[:,:,is,it], xlabel=L"r", ylabel=L"z", title=pdf_label, c = :deep)
     #outfile = string(run_name, "_"*file_string*"_vs_r_z_", spec_string, ".pdf")
     #savefig(outfile)
     #heatmap(r, z, pdf_sym[:,:,is,it], xlabel=L"r", ylabel=L"z", title=pdf_sym_label, c = :deep)
     #outfile = string(run_name, "_"*file_string*"_sym_vs_r_z_", spec_string, ".pdf")
     #savefig(outfile)
-    
+
     pdf_norm = zeros(mk_float,ntime)
     for it in 1:ntime
         dummy = 0.0
@@ -335,8 +348,8 @@ function compare_charged_pdf_symbolic_test(run_name,pdf,pdf_sym,spec_string,
                     for ivpa in 1:nvpa
                         dummy += (pdf[ivpa,ivperp,iz,ir,is,it] - pdf_sym[ivpa,ivperp,iz,ir,is,it])^2
                         dummy_N += (pdf_sym[ivpa,ivperp,iz,ir,is,it])^2
-                    end 
-                end 
+                    end
+                end
             end
         end
         #pdf_norm[it] = dummy/dummy_N
@@ -346,7 +359,7 @@ function compare_charged_pdf_symbolic_test(run_name,pdf,pdf_sym,spec_string,
     @views plot(time, pdf_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=norm_label) #, yaxis=:log)
     outfile = string(run_name, "_"*file_string*"_norm_vs_t_", spec_string, ".pdf")
     savefig(outfile)
-    
+
     return pdf_norm
 end
 
@@ -354,15 +367,15 @@ function compare_neutral_pdf_symbolic_test(run_name,pdf,pdf_sym,spec_string,
  vz,vr,vzeta,z,r,time,nvz,nvr,nvzeta,nz,nr,ntime,pdf_label,pdf_sym_label,norm_label,file_string)
     is = 1
     it = ntime
-    
-    # Heatmaps for future use 
+
+    # Heatmaps for future use
     #heatmap(r, z, pdf[:,:,is,it], xlabel=L"r", ylabel=L"z", title=pdf_label, c = :deep)
     #outfile = string(run_name, "_"*file_string*"_vs_r_z_", spec_string, ".pdf")
     #savefig(outfile)
     #heatmap(r, z, pdf_sym[:,:,is,it], xlabel=L"r", ylabel=L"z", title=pdf_sym_label, c = :deep)
     #outfile = string(run_name, "_"*file_string*"_sym_vs_r_z_", spec_string, ".pdf")
     #savefig(outfile)
-    
+
     pdf_norm = zeros(mk_float,ntime)
     for it in 1:ntime
         dummy = 0.0
@@ -374,9 +387,9 @@ function compare_neutral_pdf_symbolic_test(run_name,pdf,pdf_sym,spec_string,
                         for ivz in 1:nvz
                             dummy += (pdf[ivz,ivr,ivzeta,iz,ir,is,it] - pdf_sym[ivz,ivr,ivzeta,iz,ir,is,it])^2
                             dummy_N += (pdf_sym[ivz,ivr,ivzeta,iz,ir,is,it])^2
-                        end 
-                    end 
-                end 
+                        end
+                    end
+                end
             end
         end
         #pdf_norm[it] = dummy/dummy_N
@@ -390,7 +403,7 @@ function compare_neutral_pdf_symbolic_test(run_name,pdf,pdf_sym,spec_string,
     return pdf_norm
 end
 
-function init_postprocessing_options(pp, nvpa, nvperp, nz, nr, ntime)
+function init_postprocessing_options(pp, nvpa, nvperp, nz, nr, nvz, nvr, nvzeta, ntime)
     print("Initializing the post-processing input options...")
     # nwrite_movie is the stride used when making animations
     nwrite_movie = pp.nwrite_movie
@@ -435,8 +448,29 @@ function init_postprocessing_options(pp, nvpa, nvperp, nz, nr, ntime)
     else
         ivpa0 = cld(nvpa,3)
     end
+    # ivz0 is the ivr index used when plotting data at a single vz location
+    # by default, it will be set to cld(nvz,3) unless a non-negative value provided
+    if pp.ivz0 > 0
+        ivz0 = pp.ivz0
+    else
+        ivz0 = cld(nvz,3)
+    end
+    # ivr0 is the ivr index used when plotting data at a single vr location
+    # by default, it will be set to cld(nvr,3) unless a non-negative value provided
+    if pp.ivr0 > 0
+        ivr0 = pp.ivr0
+    else
+        ivr0 = cld(nvr,3)
+    end
+    # ivzeta0 is the ivzeta index used when plotting data at a single vzeta location
+    # by default, it will be set to cld(nvr,3) unless a non-negative value provided
+    if pp.ivzeta0 > 0
+        ivzeta0 = pp.ivzeta0
+    else
+        ivzeta0 = cld(nvzeta,3)
+    end
     println("done.")
-    return nwrite_movie, itime_min, itime_max, ivpa0, ivperp0, iz0, ir0
+    return nwrite_movie, itime_min, itime_max, ivpa0, ivperp0, iz0, ir0, ivz0, ivr0, ivzeta0
 end
 
 """
@@ -602,7 +636,7 @@ function plot_1D_1V_diagnostics(run_name, fid, nwrite_movie, itime_min, itime_ma
     end
     println("done.")
 
-end 
+end
 
 """
 """
@@ -1109,6 +1143,137 @@ function plot_fields_rt(phi, delta_phi, time, itime_min, itime_max, nwrite_movie
     savefig(outfile)
 
     println("done.")
+end
+
+"""
+plots various slices of the ion pdf (1d and 2d, stills and animations)
+"""
+function plot_charged_pdf(pdf, vpa, vperp, z, r,
+    ivpa0, ivperp0, iz0, ir0,
+    spec_type, n_species,
+    itime_min, itime_max, nwrite_movie, run_name, pp)
+
+    println("Plotting ion distribution function data...")
+
+    # set up a color scheme for heat maps
+    cmlog(cmlin::ColorGradient) = RGB[cmlin[x] for x=LinRange(0,1,30)]
+    logdeep = cgrad(:deep, scale=:log) |> cmlog
+    # create strings to help identify phase space location and species
+    # in file names
+    ivpa0_string = string("_ivpa0", string(ivpa0))
+    ivperp0_string = string("_ivperp0", string(ivperp0))
+    iz0_string = string("_iz0", string(iz0))
+    ir0_string = string("_ir0", string(ir0))
+    # create animations of the ion pdf
+    for is ∈ 1:n_species
+        if n_species > 1
+            spec_string = string("_", spec_type, "_spec", string(is))
+        else
+            spec_string = string("_", spec_type)
+        end
+        # make a gif animation of f(vpa,z,t) at a given (vperp,r) location
+        if pp.animate_f_vs_vpa_z
+            anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+                @views heatmap(z, vpa, pdf[:,ivperp0,:,ir0,is,i], xlabel="z", ylabel="vpa", c = :deep, interpolation = :cubic)
+            end
+            outfile = string(run_name, "_pdf_vs_vpa_z", ivperp0_string, ir0_string, spec_string, ".gif")
+            gif(anim, outfile, fps=5)
+        end
+        # make a gif animation of f(vpa,r,t) at a given (vperp,z) location
+        if pp.animate_f_vs_vpa_r
+            anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+                @views heatmap(r, vpa, pdf[:,ivperp0,iz0,:,is,i], xlabel="r", ylabel="vpa", c = :deep, interpolation = :cubic)
+            end
+            outfile = string(run_name, "_pdf_vs_vpa_r", ivperp0_string, iz0_string, spec_string, ".gif")
+            gif(anim, outfile, fps=5)
+        end
+        # make a gif animation of f(vperp,z,t) at a given (vpa,r) location
+        if pp.animate_f_vs_vperp_z
+            anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+                @views heatmap(z, vperp, pdf[ivpa0,:,:,ir0,is,i], xlabel="z", ylabel="vperp", c = :deep, interpolation = :cubic)
+            end
+            outfile = string(run_name, "_pdf_vs_vperp_z", ivpa0_string, ir0_string, spec_string, ".gif")
+            gif(anim, outfile, fps=5)
+        end
+        # make a gif animation of f(vperp,r,t) at a given (vpa,z) location
+        if pp.animate_f_vs_vperp_r
+            anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+                @views heatmap(r, vperp, pdf[ivpa0,:,iz0,:,is,i], xlabel="r", ylabel="vperp", c = :deep, interpolation = :cubic)
+            end
+            outfile = string(run_name, "_pdf_vs_vperp_r", ivperp0_string, iz0_string, spec_string, ".gif")
+            gif(anim, outfile, fps=5)
+        end
+        # make a gif animation of f(vpa,vperp,t) at a given (z,r) location
+        if pp.animate_f_vs_vperp_vpa
+            anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+                @views heatmap(vperp, vpa, pdf[:,:,iz0,ir0,is,i], xlabel="vperp", ylabel="vpa", c = :deep, interpolation = :cubic)
+            end
+            outfile = string(run_name, "_pdf_vs_vperp_vpa", iz0_string, ir0_string, spec_string, ".gif")
+            gif(anim, outfile, fps=5)
+        end
+        # make a gif animation of f(z,r,t) at a given (vpa,vperp) location
+        if pp.animate_f_vs_r_z
+            anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+                @views heatmap(r, z, pdf[ivpa0,ivperp0,:,:,is,i], xlabel="r", ylabel="z", c = :deep, interpolation = :cubic)
+            end
+            outfile = string(run_name, "_pdf_vs_r_z", ivpa0_string, ivperp0_string, spec_string, ".gif")
+            gif(anim, outfile, fps=5)
+        end
+    end
+end
+
+"""
+plots various slices of the neutral pdf (1d and 2d, stills and animations)
+"""
+function plot_neutral_pdf(pdf, vz, vr, vzeta, z, r,
+    ivz0, ivr0, ivzeta0, iz0, ir0,
+    spec_type, n_species,
+    itime_min, itime_max, nwrite_movie, run_name, pp)
+
+    println("Plotting neutral distribution function data...")
+
+    # set up a color scheme for heat maps
+    cmlog(cmlin::ColorGradient) = RGB[cmlin[x] for x=LinRange(0,1,30)]
+    logdeep = cgrad(:deep, scale=:log) |> cmlog
+    # create strings to help identify phase space location and species
+    # in file names
+    ivz0_string = string("_ivz0", string(ivz0))
+    ivr0_string = string("_ivr0", string(ivr0))
+    ivzeta0_string = string("_ivzeta0", string(ivzeta0))
+    iz0_string = string("_iz0", string(iz0))
+    ir0_string = string("_ir0", string(ir0))
+    # create animations of the neutral pdf
+    for is ∈ 1:n_species
+        if n_species > 1
+            spec_string = string("_", spec_type, "_spec", string(is))
+        else
+            spec_string = string("_", spec_type)
+        end
+        # make a gif animation of f(vz,z,t) at a given (vr,vzeta,r) location
+        if pp.animate_f_vs_vz_z
+            anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+                @views heatmap(z, vz, pdf[:,ivr0,ivzeta0,:,ir0,is,i], xlabel="z", ylabel="vz", c = :deep, interpolation = :cubic)
+            end
+            outfile = string(run_name, "_pdf_vs_vz_z", ivr0_string, ivzeta0_string, ir0_string, spec_string, ".gif")
+            gif(anim, outfile, fps=5)
+        end
+        # make a gif animation of f(vr,r,t) at a given (vz,vzeta,z) location
+        if pp.animate_f_vs_vr_r
+            anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+                @views heatmap(r, vr, pdf[ivz0,:,ivzeta0,iz0,:,is,i], xlabel="r", ylabel="vr", c = :deep, interpolation = :cubic)
+            end
+            outfile = string(run_name, "_pdf_vs_vr_r", ivz0_string, ivzeta0_string, iz0_string, spec_string, ".gif")
+            gif(anim, outfile, fps=5)
+        end
+        # make a gif animation of f(z,r,t) at a given (vz,vr,vzeta) location
+        if pp.animate_f_vs_r_z
+            anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+                @views heatmap(r, z, pdf[ivz0,ivr0,ivzeta0,:,:,is,i], xlabel="r", ylabel="z", c = :deep, interpolation = :cubic)
+            end
+            outfile = string(run_name, "_pdf_vs_z_r", ivz0_string, ivr0_string, ivzeta0_string, spec_string, ".gif")
+            gif(anim, outfile, fps=5)
+        end
+    end
 end
 
 end
