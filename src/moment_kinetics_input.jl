@@ -629,6 +629,9 @@ function check_input_initialization(composition, species, io)
         elseif species[is].z_IC.initialization_option == "monomial"
             print(io,">z_intialization_option = 'monomial'.")
             println(io,"  setting F(z) = (z + L_z/2)^", species[is].z_IC.monomial_degree, ".")
+        elseif species[is].z_IC.initialization_option == "parabola"
+            print(io,">z_intialization_option = 'parabola'.")
+            println(io,"  setting F(z) = F0 + (1 - (2*z/L_z)^2)", species[is].z_IC.monomial_degree, ".")
         elseif species[is].z_IC.initialization_option == "sinusoid"
             print(io,">z_initialization_option = 'sinusoid'.")
             println(io,"  setting F(z) = initial_density + z_amplitude*sinpi(z_wavenumber*z/L_z).")

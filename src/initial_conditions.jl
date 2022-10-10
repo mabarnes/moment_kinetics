@@ -151,6 +151,10 @@ function init_density!(dens, z, r, spec, n_species)
                 # linear variation in z, with offset so that
                 # function passes through zero at upwind boundary
                 @. dens[:,ir,is] = (z.grid + 0.5*z.L)^spec[is].z_IC.monomial_degree
+            elseif spec[is].z_IC.initialization_option == "parabola"
+                @. dens[:,ir,is] = spec[is].initial_density +
+                                   spec[is].z_IC.density_amplitude *
+                                   (1.0 - (2.0*z.grid/z.L)^2)
             end
         end
     end
@@ -169,7 +173,7 @@ function init_upar!(upar, z, r, spec, n_species)
                     (spec[is].z_IC.upar_amplitude
                      * cos(2.0*π*spec[is].z_IC.wavenumber*z.grid/z.L
                            + spec[is].z_IC.upar_phase))
-            elseif spec[is].z_IC.initialization_option == "gaussian" # "linear"
+            elseif spec[is].z_IC.initialization_option ∈ ("gaussian", "parabola")
                 # initial condition is linear in z
                 # this is designed to give a nonzero J_{||i} at endpoints in z
                 # necessary for an electron sheath condition involving J_{||i}
@@ -334,6 +338,16 @@ function init_pdf_over_density!(pdf, spec, composition, vpa, z, vpa_spectral, de
                 @views @. pdf[:,iz] = z.scratch[iz] * (
                                           (1.0 - right_weight)*pdf[:,1] +
                                           right_weight*pdf[:,end])
+            end
+            if ions
+                # Initial condition inputs for moments so far only used at boundaries, so
+                # here add a Maxwellian with density that vanishes at the boundaries to
+                # include the rest
+                @. z.scratch = density - 0.5*(density[1] + density[end])
+                @loop_z_vpa iz ivpa begin
+                    pdf[ivpa,iz] += z.scratch[iz]/vth[iz] *
+                                    exp(-((vpa.grid[ivpa] - upar[iz])/vth[iz])^2)
+                end
             end
 
             # Get the unnormalised pdf and the moments of the constructed full-f
