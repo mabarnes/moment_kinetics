@@ -27,7 +27,7 @@ end
 """
 update_phi updates the electrostatic potential, phi
 """
-function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral)
+function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral, update_electric_fields)
     n_ion_species = composition.n_ion_species
     @boundscheck size(fields.phi,1) == z.n || throw(BoundsError(fields.phi))
     @boundscheck size(fields.phi,2) == r.n || throw(BoundsError(fields.phi))
@@ -107,24 +107,27 @@ function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral)
     ## can calculate phi at z = L and hence phi_wall(z=L) using jpar_i at z =L if needed
     end # end of r loop
     
-    ## calculate the electric fields after obtaining phi
-    #Er = - d phi / dr 
-    if 1 ∈ loop_ranges[].s
-        if r.n > 1
-            @loop_z iz begin
-                derivative!(r.scratch, view(fields.phi,iz,:), r, r_spectral)
-                @loop_r ir begin
-                    fields.Er[iz,ir] = -r.scratch[ir]
+    if update_electric_fields # make sure update_electric_fields is true in function calls 
+        ## calculate the electric fields after obtaining phi
+        #Er = - d phi / dr 
+        println("updating Er Ez")
+        if 1 ∈ loop_ranges[].s
+            if r.n > 1
+                @loop_z iz begin
+                    derivative!(r.scratch, view(fields.phi,iz,:), r, r_spectral)
+                    @loop_r ir begin
+                        fields.Er[iz,ir] = -r.scratch[ir]
+                    end
                 end
+            else
+                fields.Er[:,:] .= 0.0
             end
-        else
-            fields.Er[:,:] .= 0.0
-        end
-        #Ez = - d phi / dz
-        @loop_r ir begin
-            derivative!(z.scratch, view(fields.phi,:,ir), z, z_spectral)
-            @loop_z iz begin
-                fields.Ez[iz,ir] = -z.scratch[iz]
+            #Ez = - d phi / dz
+            @loop_r ir begin
+                derivative!(z.scratch, view(fields.phi,:,ir), z, z_spectral)
+                @loop_z iz begin
+                    fields.Ez[iz,ir] = -z.scratch[iz]
+                end
             end
         end
     end
