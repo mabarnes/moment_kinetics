@@ -22,7 +22,7 @@ ngrid = 7
 const input_sound_wave_periodic = Dict(
     "use_manufactured_solns" => true,
     "n_ion_species" => 1,
-    "n_neutral_species" => 1,
+    "n_neutral_species" => 0,
     "boltzmann_electron_response" => true,
     "run_name" => "MMS-rperiodic",
     "base_directory" => test_output_directory,
@@ -422,20 +422,20 @@ function runtests(ngrid=nothing)
                 global_rank[] == 0 && println("\nr_advection")
                 testconvergence(input_sound_wave_periodic, :r_advection, ngrid=ngrid)
             end
-            @testset "neutral_z_advection" begin
-                global_rank[] == 0 && println("\nneutral_z_advection")
-                testconvergence(input_sound_wave_periodic, :neutral_z_advection,
-                                ngrid=ngrid)
-            end
-            @testset "neutral_r_advection" begin
-                global_rank[] == 0 && println("\nneutral_r_advection")
-                testconvergence(input_sound_wave_periodic, :neutral_r_advection,
-                                ngrid=ngrid)
-            end
-            @testset "cx_collisions" begin
-                global_rank[] == 0 && println("\ncx_collisions")
-                testconvergence(input_sound_wave_periodic, :cx_collisions, ngrid=ngrid)
-            end
+            #@testset "neutral_z_advection" begin
+            #    global_rank[] == 0 && println("\nneutral_z_advection")
+            #    testconvergence(input_sound_wave_periodic, :neutral_z_advection,
+            #                    ngrid=ngrid)
+            #end
+            #@testset "neutral_r_advection" begin
+            #    global_rank[] == 0 && println("\nneutral_r_advection")
+            #    testconvergence(input_sound_wave_periodic, :neutral_r_advection,
+            #                    ngrid=ngrid)
+            #end
+            #@testset "cx_collisions" begin
+            #    global_rank[] == 0 && println("\ncx_collisions")
+            #    testconvergence(input_sound_wave_periodic, :cx_collisions, ngrid=ngrid)
+            #end
             #@testset "ionization_collisions" begin
             #    global_rank[] == 0 && println("\nionization_collisions")
             #    testconvergence(input_sound_wave_periodic, :ionization_collisions,
