@@ -176,10 +176,15 @@ end
 Find the ranges for loop variables that optimize load balance for a certain block_size
 """
 function get_best_ranges(block_rank, block_size, dims, dim_sizes)
-    # Find ranges for 'dims', which should be parallelized
-    ranges = get_best_ranges_from_sizes(block_rank, block_size,
-                                        (dim_sizes[d] for d ∈ dims))
-    result = Dict(d=>r for (d,r) ∈ zip(dims, ranges))
+    if any(dim_sizes[d] == 0 for d in dims)
+        # Nothing to do in loop, as at least one dimension has 0 points
+        result = Dict(d=>1:0 for d ∈ dims)
+    else
+        # Find ranges for 'dims', which should be parallelized
+        ranges = get_best_ranges_from_sizes(block_rank, block_size,
+                                            (dim_sizes[d] for d ∈ dims))
+        result = Dict(d=>r for (d,r) ∈ zip(dims, ranges))
+    end
 
     # Iterate over all points in ranges not being parallelized
     for d in all_dimensions
