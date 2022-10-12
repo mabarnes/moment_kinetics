@@ -68,6 +68,9 @@ using ..type_definitions
 
     # neutral density symbolic function
     function densn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
+        if composition.n_neutral_species == 0
+            return 0 * z * r
+        end
         if z_bc == "periodic" 
             if r_bc == "periodic" 
                 densn = 1.5 +  0.1*(cos(2.0*pi*r/Lr) + cos(2.0*pi*z/Lz))*cos(2.0*pi*t)  
@@ -120,9 +123,12 @@ using ..type_definitions
         return dfnn
     end
     
-    function densi_sym(Lr,Lz,r_bc,z_bc)
+    function densi_sym(Lr,Lz,r_bc,z_bc,composition)
         # Note: explicitly convert numerical factors to mk_float so the output gets full
         # precision if we use quad-precision (Float128)
+        if composition.n_ion_species == 0
+            return 0 * z * r
+        end
         if z_bc == "periodic"
             if r_bc == "periodic"
                densi = 1.5 + (sin(2.0*pi*r/Lr) + sin(2.0*pi*z/Lz))/10.0*cos(2.0*pi*t)
@@ -153,7 +159,7 @@ using ..type_definitions
     function dfni_sym(Lr,Lz,r_bc,z_bc,composition,geometry,nr)
         # Note: explicitly convert numerical factors to mk_float so the output gets full
         # precision if we use quad-precision (Float128)
-        densi = densi_sym(Lr,Lz,r_bc,z_bc)
+        densi = densi_sym(Lr,Lz,r_bc,z_bc,composition)
         
         # calculate the electric fields and the potential
         Er, Ez, phi = electric_fields(Lr,Lz,r_bc,z_bc,composition,nr)
@@ -201,8 +207,8 @@ using ..type_definitions
         end
         return dfni
     end
-    function cartesian_dfni_sym(Lr,Lz,r_bc,z_bc)
-        densi = densi_sym(Lr,Lz,r_bc,z_bc)
+    function cartesian_dfni_sym(Lr,Lz,r_bc,z_bc,composition)
+        densi = densi_sym(Lr,Lz,r_bc,z_bc,composition)
         #if (r_bc == "periodic" && z_bc == "periodic") || (r_bc == "Dirichlet" && z_bc == "periodic")
             dfni = densi * exp( - vz^2 - vr^2 - vzeta^2)
         #end
@@ -237,7 +243,7 @@ using ..type_definitions
             rfac = 0
         end
         
-        densi = densi_sym(Lr,Lz,r_bc,z_bc)
+        densi = densi_sym(Lr,Lz,r_bc,z_bc,composition)
         # calculate the electric fields
         dense = densi # get the electron density via quasineutrality with Zi = 1
         phi = composition.T_e*log(dense/N_e) # use the adiabatic response of electrons for me/mi -> 0
@@ -251,7 +257,7 @@ using ..type_definitions
     end
 
     function manufactured_solutions(Lr,Lz,r_bc,z_bc,geometry,composition,nr)
-        densi = densi_sym(Lr,Lz,r_bc,z_bc)
+        densi = densi_sym(Lr,Lz,r_bc,z_bc,composition)
         dfni = dfni_sym(Lr,Lz,r_bc,z_bc,composition,geometry,nr)
         
         densn = densn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
@@ -296,9 +302,9 @@ using ..type_definitions
         # precision if we use quad-precision (Float128)
 
         # ion manufactured solutions
-        densi = densi_sym(Lr,Lz,r_bc,z_bc)
+        densi = densi_sym(Lr,Lz,r_bc,z_bc,composition)
         dfni = dfni_sym(Lr,Lz,r_bc,z_bc,composition,geometry,nr)
-        vrvzvzeta_dfni = cartesian_dfni_sym(Lr,Lz,r_bc,z_bc) #dfni in vr vz vzeta coordinates
+        vrvzvzeta_dfni = cartesian_dfni_sym(Lr,Lz,r_bc,z_bc,composition) #dfni in vr vz vzeta coordinates
         
         # neutral manufactured solutions
         densn = densn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
