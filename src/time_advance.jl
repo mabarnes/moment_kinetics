@@ -46,6 +46,8 @@ using ..manufactured_solns: manufactured_sources
 using ..advection: advection_info
 @debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
 
+using Dates
+
 mutable struct scratch_dummy_arrays
     dummy_sr::Array{mk_float,2}
     dummy_vpavperp::Array{mk_float,2}
@@ -411,9 +413,10 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
         # time advance loop, so activate these checks here
         debug_detect_redundant_is_active[] = true
     end
-	
-	@serial_region begin
+
+    @serial_region begin
         println("beginning time advance...", Dates.format(now(), dateformat"H:MM:SS"))
+        flush(stdout)
     end
 
     # main time advance loop
@@ -434,8 +437,11 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
                 debug_detect_redundant_is_active[] = false
             end
             begin_serial_region()
-            @serial_region println("finished time step ", i,"  ",
-                                   Dates.format(now(), dateformat"H:MM:SS"))
+            @serial_region begin
+                println("finished time step ", i, "  ",
+                        Dates.format(now(), dateformat"H:MM:SS"))
+                flush(stdout)
+            end
             write_data_to_ascii(moments, fields, vpa, vperp, z, r, t,
              composition.n_ion_species, composition.n_neutral_species, io)
             # write initial data to binary file (netcdf)
