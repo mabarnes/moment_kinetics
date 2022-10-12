@@ -190,15 +190,10 @@ function setup_moment_kinetics(input_dict::Dict;
                         vperp_spectral = vperp_spectral, z_spectral = z_spectral,
                         r_spectral = r_spectral)
     # Create loop range variables for shared-memory-parallel loops
-    if composition.n_neutral_species == 0
-        n_neutral_loop_size = 1 # Need this to have looping setup. Avoid neutral loops with if statements.
-    else
-        n_neutral_loop_size = composition.n_neutral_species
-    end
     if debug_loop_type === nothing
         # Non-debug case used for all simulations
         looping.setup_loop_ranges!(block_rank[], block_size[];
-                                   s=composition.n_ion_species, sn=n_neutral_loop_size,
+                                   s=composition.n_ion_species, sn=composition.n_neutral_species,
                                    r=r.n, z=z.n, vperp=vperp.n, vpa=vpa.n,
                                    vzeta=vzeta.n, vr=vr.n, vz=vz.n)
     else
@@ -209,7 +204,7 @@ function setup_moment_kinetics(input_dict::Dict;
         # Debug initialisation only used by tests in `debug_test/`
         debug_setup_loop_ranges_split_one_combination!(
             block_rank[], block_size[], debug_loop_type, debug_loop_parallel_dims...;
-            s=composition.n_ion_species, sn=n_neutral_loop_size, r=r.n, z=z.n,
+            s=composition.n_ion_species, sn=composition.n_neutral_species, r=r.n, z=z.n,
             vperp=vperp.n, vpa=vpa.n, vzeta=vzeta.n, vr=vr.n, vz=vz.n)
     end
     # initialize f and the lowest three v-space moments (density, upar and ppar),

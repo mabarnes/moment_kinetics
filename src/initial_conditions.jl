@@ -72,20 +72,15 @@ function init_pdf_and_moments(vz, vr, vzeta, vpa, vperp, z, r, composition, geom
     n_species = composition.n_species
     n_ion_species = composition.n_ion_species
     n_neutral_species = composition.n_neutral_species
-    if n_neutral_species > 0 
-        n_neutral_species_alloc = n_neutral_species
-    else
-        n_neutral_species_alloc = 1
-    end
     # create the 'moments' struct that contains various v-space moments and other
     # information related to these moments.
     # the time-dependent entries are not initialised.
     # moments arrays have same r and z grids for both ion and neutral species 
     # and so are included in the same struct
     charged = create_moments_charged(z.n, r.n, n_ion_species)
-    neutral = create_moments_neutral(z.n, r.n, n_neutral_species_alloc)
+    neutral = create_moments_neutral(z.n, r.n, n_neutral_species)
     moments = moments_struct(charged,neutral)
-    pdf = create_pdf(vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_species_alloc)
+    pdf = create_pdf(vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_species)
     
     if use_manufactured_solns
         init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_species, geometry, composition)
@@ -325,10 +320,9 @@ end
 function init_rboundary_pdfs(pdf::pdf_struct, vz, vr, vzeta, vpa, vperp, z, r, composition)
     n_ion_species = composition.n_ion_species
     n_neutral_species = composition.n_neutral_species
-    n_neutral_species_alloc = max(1, n_neutral_species)
     
     rboundary_charged = allocate_shared_float(vpa.n, vperp.n, z.n, 2, n_ion_species)
-    rboundary_neutral = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, 2, n_neutral_species_alloc)
+    rboundary_neutral = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, 2, n_neutral_species)
     
     begin_s_z_region() #do not parallelise r here 
     @loop_s_z_vperp_vpa is iz ivperp ivpa begin
