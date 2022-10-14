@@ -71,8 +71,11 @@ using ..input_structs
             T_wall = composition.T_wall
             Bzed = geometry.Bzed
             Bmag = geometry.Bmag
-            Gamma_minus = 0.5*(Bzed/Bmag)*nminus_sym(Lr,r_bc)/sqrt(pi)
-            Gamma_plus = 0.5*(Bzed/Bmag)*nplus_sym(Lr,r_bc)/sqrt(pi)
+            #changes to reflect updated dfni below
+            #Gamma_minus = 0.5*(Bzed/Bmag)*nminus_sym(Lr,r_bc)/sqrt(pi)
+            #Gamma_plus = 0.5*(Bzed/Bmag)*nplus_sym(Lr,r_bc)/sqrt(pi)
+            Gamma_minus = (Bzed/Bmag)*nminus_sym(Lr,r_bc)/sqrt(pi)
+            Gamma_plus = (Bzed/Bmag)*nplus_sym(Lr,r_bc)/sqrt(pi)
             # exact integral of corresponding dfnn below
             if composition.use_test_neutral_wall_pdf
                 #test 
@@ -99,8 +102,11 @@ using ..input_structs
             FKw = knudsen_cosine(composition)
             Bzed = geometry.Bzed
             Bmag = geometry.Bmag
-            Gamma_minus = 0.5*(Bzed/Bmag)*nminus_sym(Lr,r_bc)/sqrt(pi)
-            Gamma_plus = 0.5*(Bzed/Bmag)*nplus_sym(Lr,r_bc)/sqrt(pi)
+            #changes to reflect updated dfni below
+            #Gamma_minus = 0.5*(Bzed/Bmag)*nminus_sym(Lr,r_bc)/sqrt(pi)
+            #Gamma_plus = 0.5*(Bzed/Bmag)*nplus_sym(Lr,r_bc)/sqrt(pi)
+            Gamma_minus = (Bzed/Bmag)*nminus_sym(Lr,r_bc)/sqrt(pi)
+            Gamma_plus = (Bzed/Bmag)*nplus_sym(Lr,r_bc)/sqrt(pi)
             dfnn = Hplus *( Gamma_minus*( 0.5 - z/Lz)^2 + 1.0 )*FKw + Hminus*( Gamma_plus*( 0.5 + z/Lz)^2 + 1.0 )*FKw 
         end
         return dfnn
@@ -124,7 +130,9 @@ using ..input_structs
                 densi = 1.0 +  0.5*(r/Lr)*sin(2.0*pi*z/Lz)
             end
         elseif z_bc == "wall"
-            densi = 0.25*(0.5 - z/Lz)*nminus_sym(Lr,r_bc) + 0.25*(z/Lz + 0.5)*nplus_sym(Lr,r_bc) + (z/Lz + 0.5)*(0.5 - z/Lz)*nzero_sym(Lr,r_bc)  #+  0.5*(r/Lr + 0.5) + 0.5*(z/Lz + 0.5)
+            #changes to reflect updated dfni below
+            #densi = 0.25*(0.5 - z/Lz)*nminus_sym(Lr,r_bc) + 0.25*(z/Lz + 0.5)*nplus_sym(Lr,r_bc) + (z/Lz + 0.5)*(0.5 - z/Lz)*nzero_sym(Lr,r_bc)  #+  0.5*(r/Lr + 0.5) + 0.5*(z/Lz + 0.5)
+            densi = (3.0/8.0)*(0.5 - z/Lz)*nminus_sym(Lr,r_bc) + (3.0/8.0)*(z/Lz + 0.5)*nplus_sym(Lr,r_bc) + (z/Lz + 0.5)*(0.5 - z/Lz)*nzero_sym(Lr,r_bc)  #+  0.5*(r/Lr + 0.5) + 0.5*(z/Lz + 0.5)
         end
         return densi
     end
@@ -134,7 +142,9 @@ using ..input_structs
             jpari_into_LHS_wall_sym = 0.0
         elseif z_bc == "wall"
             #appropriate for wall bc test when Er = 0 (nr == 1)
-            jpari_into_LHS_wall_sym = -0.5*nminus_sym(Lr,r_bc)/sqrt(pi)
+            #changes to reflect updated dfni below
+            #jpari_into_LHS_wall_sym = -0.5*nminus_sym(Lr,r_bc)/sqrt(pi)
+            jpari_into_LHS_wall_sym = -nminus_sym(Lr,r_bc)/sqrt(pi)
         end
         return jpari_into_LHS_wall_sym
     end
@@ -158,7 +168,10 @@ using ..input_structs
             Hplus = 0.5*(sign(vpabar) + 1.0)
             Hminus = 0.5*(sign(-vpabar) + 1.0)
             ffa =  exp(- vperp^2)
-            dfni = ffa * ( nminus_sym(Lr,r_bc)* (0.5 - z/Lz) * Hminus * vpabar^2 + nplus_sym(Lr,r_bc)*(z/Lz + 0.5) * Hplus * vpabar^2 + nzero_sym(Lr,r_bc)*(z/Lz + 0.5)*(0.5 - z/Lz) ) * exp( - vpabar^2 )
+            dfni = ffa * ( nminus_sym(Lr,r_bc)* (0.5 - z/Lz) * Hminus * vpabar^4 + nplus_sym(Lr,r_bc)*(z/Lz + 0.5) * Hplus * vpabar^4 + nzero_sym(Lr,r_bc)*(z/Lz + 0.5)*(0.5 - z/Lz) ) * exp( - vpabar^2 )
+            # above factors of vpabar^4 to oversatisfy Kinetic Chodura condition 
+            # below original with vpabar^2
+            #dfni = ffa * ( nminus_sym(Lr,r_bc)* (0.5 - z/Lz) * Hminus * vpabar^2 + nplus_sym(Lr,r_bc)*(z/Lz + 0.5) * Hplus * vpabar^2 + nzero_sym(Lr,r_bc)*(z/Lz + 0.5)*(0.5 - z/Lz) ) * exp( - vpabar^2 )
         end
         return dfni
     end
