@@ -570,7 +570,8 @@ function enforce_boundary_conditions!(f, f_r_bc, vpa_bc, z_bc, r_bc, vpa, vperp,
     begin_s_r_z_vperp_region()
     @loop_s_r_z_vperp is ir iz ivperp begin
         # enforce the vpa BC
-        @views enforce_vpa_boundary_condition_local!(f[:,ivperp,iz,ir,is], vpa_bc, vpa_adv[is].upwind_idx[ivperp,iz,ir],
+        # use that adv.speed independent of vpa 
+        @views enforce_vpa_boundary_condition_local!(f[:,ivperp,iz,ir,is], vpa_bc, vpa_adv[is].speed[:,ivperp,iz,ir], vpa_adv[is].upwind_idx[ivperp,iz,ir],
                                                      vpa_adv[is].downwind_idx[ivperp,iz,ir])
     end
     begin_s_r_vperp_vpa_region()
@@ -674,7 +675,7 @@ function enforce_vpa_boundary_condition!(f, bc, src::T) where T
     for ir ∈ 1:nr
         for iz ∈ 1:nz
             for ivperp ∈ 1:nvperp
-                enforce_vpa_boundary_condition_local!(view(f,:,ivperp,iz,ir), bc, src.upwind_idx[ivperp,iz,ir],
+                enforce_vpa_boundary_condition_local!(view(f,:,ivperp,iz,ir), bc, src.speed[:,ivperp,iz,ir], src.upwind_idx[ivperp,iz,ir],
                 src.downwind_idx[ivperp,iz,ir])
             end
         end
@@ -683,10 +684,19 @@ end
 
 """
 """
-function enforce_vpa_boundary_condition_local!(f::T, bc, upwind_idx, downwind_idx) where T
+function enforce_vpa_boundary_condition_local!(f::T, bc, adv_speed, upwind_idx, downwind_idx) where T
+    # define a zero that accounts for finite precision
+    zero = 1.0e-10
+    dvpadt = adv_speed[1] #use that dvpa/dt is indendent of vpa in the current model 
     if bc == "zero"
-        f[upwind_idx] = 0.0
-        #f[downwind_idx] = 0.0
+        if dvpadt > zero
+            f[1] = 0.0 # -infty forced to zero
+        elseif dvpadt < zero 
+            f[end] = 0.0 # +infty forced to zero
+        end
+    #if bc == "zero"
+    #    f[upwind_idx] = 0.0
+    #    #f[downwind_idx] = 0.0
     elseif bc == "periodic"
         f[downwind_idx] = 0.5*(f[upwind_idx]+f[downwind_idx])
         f[upwind_idx] = f[downwind_idx]
