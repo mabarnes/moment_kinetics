@@ -38,7 +38,7 @@ const animate_dens_vs_z = true
 # if animate_upar_vs_z = true, create animation of species parallel flow(z) at different time slices
 const animate_upar_vs_z = false
 # if animate_f_vs_vpa_z = true, create animation of f(vpa,z) at different time slices
-const animate_f_vs_vpa_z = false
+const animate_f_vs_vpa_z = true
 # if animate_deltaf_vs_vpa_z = true, create animation of δf(vpa,z) at different time slices
 const animate_deltaf_vs_vpa_z = false
 # if animate_f_vs_vpa_z0 = true, create animation of f(vpa0,z) at different time slices
@@ -50,21 +50,27 @@ const animate_f_vs_z0_vpa = true
 # if animate_deltaf_vs_z0_vpa = true, create animation of δf(vpa,z0) at different time slices
 const animate_deltaf_vs_vpa_z0 = false
 # if animate_f_vs_vpa_r = true, create animation of f(vpa,r) at different time slices
-const animate_f_vs_vpa_r = false
+const animate_f_vs_vpa_r = true
 # if animate_f_vs_vperp_z = true, create animation of f(vperp,z) at different time slices
-const animate_f_vs_vperp_z = false
+const animate_f_vs_vperp_z = true
 # if animate_f_vs_vperp_r = true, create animation of f(vperp,r) at different time slices
 const animate_f_vs_vperp_r = false
 # if animate_f_vs_vperp_vpa = true, create animation of f(vperp,vpa) at different time slices
 const animate_f_vs_vperp_vpa = false
 # if animate_f_vs_r_z = true, create animation of f(r,z) at different time slices
-const animate_f_vs_r_z = false
+const animate_f_vs_r_z = true
 # if animate_f_vs_vz_z = true, create animation of f(vz,z) at different time slices
 const animate_f_vs_vz_z = false
 # if animate_f_vs_vr_r = true, create animation of f(vr,r) at different time slices
 const animate_f_vs_vr_r = false
 # animations will use one in every nwrite_movie data slices
-const nwrite_movie = 10
+const animate_Er_vs_r_z = true
+# if animate_Er_vs_r_z = true, create animation of Er(r,z) at different time slices
+const animate_Ez_vs_r_z = true
+# if animate_Ez_vs_r_z = true, create animation of Ez(r,z) at different time slices
+const animate_phi_vs_r_z = true
+# if animate_phi_vs_r_z = true, create animation of phi(r,z) at different time slices
+const nwrite_movie = 1
 # itime_min is the minimum time index at which to start animations
 const itime_min = -1
 # itime_max is the final time index at which to end animations
@@ -78,7 +84,7 @@ const ivpa0 = -1
 const ivperp0 = -1
 # iz0 is the iz index used when plotting data at a single z location
 # by default, it will be set to cld(nz,3) unless a non-negative value provided here
-const iz0 = -1
+const iz0 = 0
 # ir0 is the ir index used when plotting data at a single r location
 # by default, it will be set to cld(nr,3) unless a non-negative value provided here
 const ir0 = -1
@@ -100,6 +106,7 @@ pp = pp_input(calculate_frequencies, plot_phi0_vs_t, plot_phi_vs_z_t,
     animate_deltaf_vs_vpa_z, animate_deltaf_vs_vpa_z0, animate_deltaf_vs_vpa_z0,
     animate_f_vs_vpa_r, animate_f_vs_vperp_z, animate_f_vs_vperp_r,
     animate_f_vs_vperp_vpa, animate_f_vs_r_z, animate_f_vs_vz_z, animate_f_vs_vr_r,
+    animate_Er_vs_r_z, animate_Ez_vs_r_z, animate_phi_vs_r_z,
     nwrite_movie, itime_min, itime_max, ivpa0, ivperp0, iz0, ir0, ivz0, ivr0, ivzeta0)
 
 end

@@ -343,7 +343,12 @@ struct pp_input
     animate_f_vs_vz_z::Bool
     # if animate_f_vs_vr_r = true, create animation of f(vr,r) at different time slices
     animate_f_vs_vr_r::Bool
-
+    # if animate_Er_vs_r_z = true, create animation of Er(r,z) at different time slices
+    animate_Er_vs_r_z::Bool
+    # if animate_Ez_vs_r_z = true, create animation of Ez(r,z) at different time slices
+    animate_Ez_vs_r_z::Bool
+    # if animate_phi_vs_r_z = true, create animation of phi(r,z) at different time slices
+    animate_phi_vs_r_z::Bool
     # animations will use one in every nwrite_movie data slices
     nwrite_movie::mk_int
     # itime_min is the minimum time index at which to start animations

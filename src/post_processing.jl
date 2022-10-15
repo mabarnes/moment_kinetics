@@ -123,7 +123,9 @@ function analyze_and_plot_data(path)
         plot_fields_rt(phi[iz0,:,:], delta_phi, time, itime_min, itime_max, nwrite_movie,
         r, ir0, run_name, delta_phi, pp)
     end
-
+    # make plots and animations of the phi, Ez and Er 
+    plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
+     itime_min, itime_max, nwrite_movie, run_name, pp)
     # make plots and animations of the ion pdf
     spec_type = "ion"
     plot_charged_pdf(ff, vpa, vperp, z, r, ivpa0, ivperp0, iz0, ir0,
@@ -1153,7 +1155,7 @@ function plot_charged_pdf(pdf, vpa, vperp, z, r,
     spec_type, n_species,
     itime_min, itime_max, nwrite_movie, run_name, pp)
 
-    println("Plotting ion distribution function data...")
+    print("Plotting ion distribution function data...")
 
     # set up a color scheme for heat maps
     cmlog(cmlin::ColorGradient) = RGB[cmlin[x] for x=LinRange(0,1,30)]
@@ -1220,6 +1222,7 @@ function plot_charged_pdf(pdf, vpa, vperp, z, r,
             gif(anim, outfile, fps=5)
         end
     end
+    println("done.")
 end
 
 """
@@ -1230,7 +1233,7 @@ function plot_neutral_pdf(pdf, vz, vr, vzeta, z, r,
     spec_type, n_species,
     itime_min, itime_max, nwrite_movie, run_name, pp)
 
-    println("Plotting neutral distribution function data...")
+    print("Plotting neutral distribution function data...")
 
     # set up a color scheme for heat maps
     cmlog(cmlin::ColorGradient) = RGB[cmlin[x] for x=LinRange(0,1,30)]
@@ -1274,6 +1277,45 @@ function plot_neutral_pdf(pdf, vz, vr, vzeta, z, r,
             gif(anim, outfile, fps=5)
         end
     end
+    println("done.")
 end
+
+function plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
+    itime_min, itime_max, nwrite_movie, run_name, pp)
+
+    println("Plotting fields data...")
+    phimin = minimum(phi)
+    phimax = maximum(phi)
+    if pp.animate_phi_vs_r_z
+        # make a gif animation of ϕ(z) at different times
+        anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+            @views heatmap(r, z, phi[:,:,i], xlabel="r", ylabel="z", c = :deep, interpolation = :cubic)
+        end
+        outfile = string(run_name, "_phi_vs_r_z.gif")
+        gif(anim, outfile, fps=5)
+    end
+    Ezmin = minimum(Ez)
+    Ezmax = maximum(Ez)
+    if pp.animate_Ez_vs_r_z
+        # make a gif animation of ϕ(z) at different times
+        anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+            @views heatmap(r, z, Ez[:,:,i], xlabel="r", ylabel="z", c = :deep, interpolation = :cubic)
+        end
+        outfile = string(run_name, "_Ez_vs_r_z.gif")
+        gif(anim, outfile, fps=5)
+    end
+    Ermin = minimum(Er)
+    Ermax = maximum(Er)
+    if pp.animate_Er_vs_r_z
+        # make a gif animation of ϕ(z) at different times
+        anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+            @views heatmap(r, z, Er[:,:,i], xlabel="r", ylabel="z", c = :deep, interpolation = :cubic)
+        end
+        outfile = string(run_name, "_Er_vs_r_z.gif")
+        gif(anim, outfile, fps=5)
+    end
+    println("done.")
+end
+
 
 end
