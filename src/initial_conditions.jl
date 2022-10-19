@@ -130,10 +130,12 @@ function create_pdf(vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_sp
     # allocate pdf arrays
     pdf_charged_norm = allocate_shared_float(vpa.n, vperp.n, z.n, r.n, n_ion_species)
     pdf_charged_unnorm = allocate_shared_float(vpa.n, vperp.n, z.n, r.n, n_ion_species)
-    pdf_charged_buffer = allocate_shared_float(vpa.n, vperp.n, z.n, r.n, n_neutral_species) # n.b. n_species is n_neutral_species here
+    ns_buffer_i = (n_ion_species == 0 || n_neutral_species == 0) ? 0 : n_neutral_species
+    pdf_charged_buffer = allocate_shared_float(vpa.n, vperp.n, z.n, r.n, ns_buffer_i) # n.b. n_species is n_neutral_species here
     pdf_neutral_norm = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, r.n, n_neutral_species)
     pdf_neutral_unnorm = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, r.n, n_neutral_species)
-    pdf_neutral_buffer = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, r.n, n_ion_species)
+    ns_buffer_n = (n_ion_species == 0 || n_neutral_species == 0) ? 0 : n_ion_species
+    pdf_neutral_buffer = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, r.n, ns_buffer_n)
 
     return pdf_struct(pdf_substruct(pdf_charged_norm, pdf_charged_unnorm, pdf_charged_buffer), 
                     pdf_substruct(pdf_neutral_norm, pdf_neutral_unnorm, pdf_neutral_buffer))
