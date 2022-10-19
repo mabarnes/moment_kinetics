@@ -179,10 +179,10 @@ function evaluate_initial_ddt(input_dict::Dict, advance_input::advance_info)
 end
 
 """
-    remove_boundary_points(f::AbstractArray{mk_float,4})
+    remove_ion_boundary_points(f::AbstractArray{mk_float,4}, input::Dict)
 
-Remove points which are modified by boundary conditions* and therefore not
-expected to match the manufactured rhs.
+Remove points from the ion rhs which are modified by boundary conditions* and
+therefore not expected to match the manufactured rhs.
 
 * Boundary conditions are applied at the end of the euler_time_advance!()
 function. In normal operation, these are applied to the distribution function
@@ -193,8 +193,48 @@ the calculated df/dt does not match the one evaluated from the manufactured
 solution, for which evaluating the rhs doesn't necessarily give zero at the
 boundary.
 """
-function remove_ion_boundary_points(f::AbstractArray{mk_float,4})
-    return f[2:end-1,:,:,:]
+function remove_ion_boundary_points(f::AbstractArray{mk_float,4}, input::Dict)
+    result = @view f[2:end-1,:,:,:]
+
+    if input["z_bc"] == "wall"
+        # This allows the error to converge properly, but means we don't test the
+        # z-boundary points that are actually evolved, rather than set by a boundary
+        # condition (i.e. the points with ingoing v_normal)
+        result = @view result[:,:,2:end-1,:]
+    end
+
+    return result
+end
+
+"""
+    remove_neutral_boundary_points(f::AbstractArray{mk_float,4}, input::Dict)
+
+Remove points from the neutral rhs which are modified by boundary conditions*
+and therefore not expected to match the manufactured rhs.
+
+* Boundary conditions are applied at the end of the euler_time_advance!()
+function. In normal operation, these are applied to the distribution function
+(and possibly the moments). Here we hack around to get df/dt stored in the
+fvec_out argument, so the bcs are applied to our df/dt. Physically this makes
+sense for zero-value bcs (as df/dt=0 on the boundary for them), but means that
+the calculated df/dt does not match the one evaluated from the manufactured
+solution, for which evaluating the rhs doesn't necessarily give zero at the
+boundary.
+"""
+function remove_neutral_boundary_points(f::AbstractArray{mk_float,5}, input::Dict)
+    # No advection in velocity directions, so no boundary condition applied (at the
+    # moment)
+    #result = @view f[2:end-1,2:end-1,2:end-1,:,:]
+    result = @view f[:,:,:,:,:]
+
+    if input["z_bc"] == "wall"
+        # This allows the error to converge properly, but means we don't test the
+        # z-boundary points that are actually evolved, rather than set by a boundary
+        # condition (i.e. the points with ingoing v_normal)
+        result = @view result[:,:,:,2:end-1,:]
+    end
+
+    return result
 end
 
 """
@@ -223,12 +263,12 @@ function runcase(input::Dict, advance::advance_info, returnstuff=false)
             # Only one species, so get rid of species index
             dfdt_ion = dfdt_ion[:,:,:,:,1]
 
-            # Get rid of vpa boundary points which are (possibly) overwritten by
+            # Get rid of z/vpa boundary points which are (possibly) overwritten by
             # boundary conditions in the numerically evaluated result.
             # Not necessary for neutrals as there are no v-space boundary conditions for
             # neutrals.
-            dfdt_ion = remove_ion_boundary_points(dfdt_ion)
-            rhs_ion_manf = remove_ion_boundary_points(rhs_ion_manf)
+            dfdt_ion = remove_ion_boundary_points(dfdt_ion, input)
+            rhs_ion_manf = remove_ion_boundary_points(rhs_ion_manf, input)
 
             error_2_ion = L2_error_norm(dfdt_ion, rhs_ion_manf)
             error_inf_ion = L_infinity_error_norm(dfdt_ion, rhs_ion_manf)
@@ -240,6 +280,14 @@ function runcase(input::Dict, advance::advance_info, returnstuff=false)
         if input["n_neutral_species"] > 0
             # Only one species, so get rid of species index
             dfdt_neutral = dfdt_neutral[:,:,:,:,:,1]
+
+            # Get rid of z/vpa boundary points which are (possibly) overwritten by
+            # boundary conditions in the numerically evaluated result.
+            # Not necessary for neutrals as there are no v-space boundary conditions for
+            # neutrals.
+            dfdt_neutral = remove_neutral_boundary_points(dfdt_neutral, input)
+            rhs_neutral_manf = remove_neutral_boundary_points(rhs_neutral_manf, input)
+
             error_2_neutral = L2_error_norm(dfdt_neutral, rhs_neutral_manf)
             error_inf_neutral = L_infinity_error_norm(dfdt_neutral, rhs_neutral_manf)
         else
