@@ -216,7 +216,10 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
     ylabel_ion_pdf =  L"\varepsilon(\widetilde{F}_i)"#L"\sum || \widetilde{f}_i - \widetilde{f}^{sym}_i ||^2"
     ylabel_neutral_density =  L"\varepsilon(\widetilde{n}_n)"#L"\sum || \widetilde{n}_n - \widetilde{n}^{sym}_n ||^2"
     ylabel_neutral_pdf =  L"\varepsilon(\widetilde{F}_n)"#L"\sum || \widetilde{f}_n - \widetilde{f}^{sym}_n ||^2"
-    if scan_type == "vpa_nelement"
+    ylabel_phi = L"\varepsilon(\widetilde{\phi})"
+    ylabel_Er = L"\varepsilon(\widetilde{E}_r)"
+    ylabel_Ez = L"\varepsilon(\widetilde{E}_z)"
+	if scan_type == "vpa_nelement"
         xlabel = L"v_{||}"*" "*L"N_{element}"
     elseif scan_type == "vperp_nelement"
         xlabel = L"v_{\perp}"*" "*L"N_{element}"
@@ -250,6 +253,8 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         ytick_sequence = Array([1.0e-3,1.0e-2,1.0e-1,1.0e-0,1.0e1])
     elseif scan_name == "2D-sound-wave_cheb_cxiz" || scan_name == "2D-sound-wave_cheb"
         ytick_sequence = Array([1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0,1.0e1])
+    elseif scan_name == "1D-3V-wall_cheb-updated"
+        ytick_sequence = Array([1.0e-10,1.0e-9,1.0e-8,1.0e-7,1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0,1.0e1])
     else
         ytick_sequence = Array([1.0e-7,1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0,1.0e1])
     end
@@ -258,6 +263,22 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
      shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_sequence, nelement_sequence), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2, 
       xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize)
     outfile = outprefix*".pdf"
+    savefig(outfile)
+    println(outfile)
+    
+	plot(nelement_sequence, [ion_density_error_sequence,phi_error_sequence,Er_error_sequence,Ez_error_sequence], xlabel=xlabel,
+	label=[ylabel_ion_density ylabel_phi ylabel_Er ylabel_Ez], ylabel="",
+     shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_sequence, nelement_sequence), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2, 
+      xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize)
+    outfile = outprefix*"_fields.pdf"
+    savefig(outfile)
+    println(outfile)
+    
+	plot(nelement_sequence, [ion_density_error_sequence,phi_error_sequence,Ez_error_sequence], xlabel=xlabel,
+	label=[ylabel_ion_density ylabel_phi ylabel_Ez], ylabel="",
+     shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_sequence, nelement_sequence), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2, 
+      xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize)
+    outfile = outprefix*"_fields_no_Er.pdf"
     savefig(outfile)
     println(outfile)
     
@@ -279,6 +300,22 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
          shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_sequence, nelement_sequence), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2,
          xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize)
         outfile = outprefix*".pdf"
+        savefig(outfile)
+        println(outfile)
+        
+		plot(nelement_sequence, [ion_density_error_sequence, neutral_density_error_sequence, phi_error_sequence, Er_error_sequence, Ez_error_sequence], xlabel=xlabel, 
+        label=[ylabel_ion_density ylabel_neutral_density ylabel_phi ylabel_Er ylabel_Ez], ylabel="",
+         shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_sequence, nelement_sequence), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2,
+         xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize)
+        outfile = outprefix*"_fields.pdf"
+        savefig(outfile)
+        println(outfile)
+
+		plot(nelement_sequence, [ion_density_error_sequence, neutral_density_error_sequence, phi_error_sequence, Ez_error_sequence], xlabel=xlabel, 
+        label=[ylabel_ion_density ylabel_neutral_density ylabel_phi ylabel_Ez], ylabel="",
+         shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_sequence, nelement_sequence), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2,
+         xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize)
+        outfile = outprefix*"_fields_no_Er.pdf"
         savefig(outfile)
         println(outfile)
         
