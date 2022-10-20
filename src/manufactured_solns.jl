@@ -16,27 +16,27 @@ using ..input_structs
     zero_val = 1.0e-8
     
     #standard functions for building densities
-    function nplus_sym(Lr,r_bc)
+    function nplus_sym(Lr,Lz,r_bc,z_bc)
         if r_bc == "periodic"
-            nplus = 1.0 + 0.05*sin(2.0*pi*r/Lr)
+            nplus = 1.0 + 0.05*sin(2.0*pi*r/Lr)*cos(pi*z/Lz)
         elseif r_bc == "Dirichlet"
             nplus = 1.0 - 0.2*r/Lr 
         end
         return nplus
     end
     
-    function nminus_sym(Lr,r_bc)
+    function nminus_sym(Lr,Lz,r_bc,z_bc)
         if r_bc == "periodic"
-            nminus = 1.0 + 0.05*sin(2.0*pi*r/Lr)
+            nminus = 1.0 + 0.05*sin(2.0*pi*r/Lr)*cos(pi*z/Lz)
         elseif r_bc == "Dirichlet"
             nminus = 1.0 - 0.2*r/Lr
         end
         return nminus
     end
     
-    function nzero_sym(Lr,r_bc)
+    function nzero_sym(Lr,Lz,r_bc,z_bc)
         if r_bc == "periodic"
-            nzero = 1.0 + 0.05*sin(2.0*pi*r/Lr)# 1.0 #+ (r/Lr + 0.5)*(0.5 - r/Lr)
+            nzero = 1.0 + 0.05*sin(2.0*pi*r/Lr)*cos(pi*z/Lz) # 1.0 #+ (r/Lr + 0.5)*(0.5 - r/Lr)
         elseif r_bc == "Dirichlet" 
             nzero = 1.0 - 0.2*r/Lr
         end
@@ -71,8 +71,8 @@ using ..input_structs
             T_wall = composition.T_wall
             Bzed = geometry.Bzed
             Bmag = geometry.Bmag
-            Gamma_minus = 0.5*(Bzed/Bmag)*nminus_sym(Lr,r_bc)/sqrt(pi)
-            Gamma_plus = 0.5*(Bzed/Bmag)*nplus_sym(Lr,r_bc)/sqrt(pi)
+            Gamma_minus = 0.5*(Bzed/Bmag)*nminus_sym(Lr,Lz,r_bc,z_bc)/sqrt(pi)
+            Gamma_plus = 0.5*(Bzed/Bmag)*nplus_sym(Lr,Lz,r_bc,z_bc)/sqrt(pi)
             # exact integral of corresponding dfnn below
             if composition.use_test_neutral_wall_pdf
                 #test 
@@ -99,8 +99,8 @@ using ..input_structs
             FKw = knudsen_cosine(composition)
             Bzed = geometry.Bzed
             Bmag = geometry.Bmag
-            Gamma_minus = 0.5*(Bzed/Bmag)*nminus_sym(Lr,r_bc)/sqrt(pi)
-            Gamma_plus = 0.5*(Bzed/Bmag)*nplus_sym(Lr,r_bc)/sqrt(pi)
+            Gamma_minus = 0.5*(Bzed/Bmag)*nminus_sym(Lr,Lz,r_bc,z_bc)/sqrt(pi)
+            Gamma_plus = 0.5*(Bzed/Bmag)*nplus_sym(Lr,Lz,r_bc,z_bc)/sqrt(pi)
             dfnn = Hplus *( Gamma_minus*( 0.5 - z/Lz)^2 + 1.0 )*FKw + Hminus*( Gamma_plus*( 0.5 + z/Lz)^2 + 1.0 )*FKw 
         end
         return dfnn
@@ -124,7 +124,7 @@ using ..input_structs
                 densi = 1.0 +  0.5*(r/Lr)*sin(2.0*pi*z/Lz)
             end
         elseif z_bc == "wall"
-            densi = 0.25*(0.5 - z/Lz)*nminus_sym(Lr,r_bc) + 0.25*(z/Lz + 0.5)*nplus_sym(Lr,r_bc) + (z/Lz + 0.5)*(0.5 - z/Lz)*nzero_sym(Lr,r_bc)  #+  0.5*(r/Lr + 0.5) + 0.5*(z/Lz + 0.5)
+            densi = 0.25*(0.5 - z/Lz)*nminus_sym(Lr,Lz,r_bc,z_bc) + 0.25*(z/Lz + 0.5)*nplus_sym(Lr,Lz,r_bc,z_bc) + (z/Lz + 0.5)*(0.5 - z/Lz)*nzero_sym(Lr,Lz,r_bc,z_bc)  #+  0.5*(r/Lr + 0.5) + 0.5*(z/Lz + 0.5)
         end
         return densi
     end
@@ -134,7 +134,7 @@ using ..input_structs
             jpari_into_LHS_wall_sym = 0.0
         elseif z_bc == "wall"
             #appropriate for wall bc test when Er = 0 (nr == 1)
-            jpari_into_LHS_wall_sym = -0.5*nminus_sym(Lr,r_bc)/sqrt(pi)
+            jpari_into_LHS_wall_sym = -0.5*nminus_sym(Lr,Lz,r_bc,z_bc)/sqrt(pi)
         end
         return jpari_into_LHS_wall_sym
     end
@@ -158,7 +158,7 @@ using ..input_structs
             Hplus = 0.5*(sign(vpabar) + 1.0)
             Hminus = 0.5*(sign(-vpabar) + 1.0)
             ffa =  exp(- vperp^2)
-            dfni = ffa * ( nminus_sym(Lr,r_bc)* (0.5 - z/Lz) * Hminus * vpabar^2 + nplus_sym(Lr,r_bc)*(z/Lz + 0.5) * Hplus * vpabar^2 + nzero_sym(Lr,r_bc)*(z/Lz + 0.5)*(0.5 - z/Lz) ) * exp( - vpabar^2 )
+            dfni = ffa * ( nminus_sym(Lr,Lz,r_bc,z_bc)* (0.5 - z/Lz) * Hminus * vpabar^2 + nplus_sym(Lr,Lz,r_bc,z_bc)*(z/Lz + 0.5) * Hplus * vpabar^2 + nzero_sym(Lr,Lz,r_bc,z_bc)*(z/Lz + 0.5)*(0.5 - z/Lz) ) * exp( - vpabar^2 )
         end
         return dfni
     end
