@@ -40,6 +40,7 @@ using ..force_balance: force_balance!
 using ..energy_equation: energy_equation!
 using ..em_fields: setup_em_fields, update_phi!
 #using ..semi_lagrange: setup_semi_lagrange
+using Dates
 
 using ..manufactured_solns: manufactured_sources
 using ..advection: advection_info
@@ -492,6 +493,10 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
         # time advance loop, so activate these checks here
         debug_detect_redundant_is_active[] = true
     end
+	
+	@serial_region begin
+        println("beginning time advance...", Dates.format(now(), dateformat"H:MM:SS"))
+    end
 
     # main time advance loop
     iwrite = 2
@@ -511,7 +516,8 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
                 debug_detect_redundant_is_active[] = false
             end
             begin_serial_region()
-            @serial_region println("finished time step ", i)
+            @serial_region println("finished time step ", i,"  ",
+                                   Dates.format(now(), dateformat"H:MM:SS"))
             write_data_to_ascii(moments, fields, vpa, vperp, z, r, t,
              composition.n_ion_species, composition.n_neutral_species, io)
             # write initial data to binary file (netcdf)
