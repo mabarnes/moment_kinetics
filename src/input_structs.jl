@@ -349,6 +349,16 @@ struct pp_input
     animate_Ez_vs_r_z::Bool
     # if animate_phi_vs_r_z = true, create animation of phi(r,z) at different time slices
     animate_phi_vs_r_z::Bool
+    # if plot_phi_vs_r0_z = true, plot last timestep phi[z,ir0]
+    plot_phi_vs_r0_z::Bool
+    # if plot_Ez_vs_r0_z = true, plot last timestep Ez[z,ir0]
+    plot_Ez_vs_r0_z::Bool
+    # if plot_wall_Ez_vs_r = true, plot last timestep Ez[z_wall,r]
+    plot_wall_Ez_vs_r::Bool
+    # if plot_Er_vs_r0_z  = true, plot last timestep Er[z,ir0]
+    plot_Er_vs_r0_z::Bool
+    # if plot_wall_Er_vs_r = true, plot last timestep Er[z_wall,r]
+    plot_wall_Er_vs_r::Bool
     # animations will use one in every nwrite_movie data slices
     nwrite_movie::mk_int
     # itime_min is the minimum time index at which to start animations

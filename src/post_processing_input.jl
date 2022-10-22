@@ -70,6 +70,11 @@ const animate_Ez_vs_r_z = false #true
 # if animate_Ez_vs_r_z = true, create animation of Ez(r,z) at different time slices
 const animate_phi_vs_r_z = false #true
 # if animate_phi_vs_r_z = true, create animation of phi(r,z) at different time slices
+const plot_phi_vs_r0_z  = true # plot last timestep phi[z,ir0]
+const plot_Ez_vs_r0_z = true # plot last timestep Ez[z,ir0]
+const plot_wall_Ez_vs_r = true # plot last timestep Ez[z_wall,r]
+const plot_Er_vs_r0_z  = true # plot last timestep Er[z,ir0]
+const plot_wall_Er_vs_r = true # plot last timestep Er[z_wall,r]
 const nwrite_movie = 1
 # itime_min is the minimum time index at which to start animations
 const itime_min = -1
@@ -107,6 +112,7 @@ pp = pp_input(calculate_frequencies, plot_phi0_vs_t, plot_phi_vs_z_t,
     animate_f_vs_vpa_r, animate_f_vs_vperp_z, animate_f_vs_vperp_r,
     animate_f_vs_vperp_vpa, animate_f_vs_r_z, animate_f_vs_vz_z, animate_f_vs_vr_r,
     animate_Er_vs_r_z, animate_Ez_vs_r_z, animate_phi_vs_r_z,
+    plot_phi_vs_r0_z, plot_Ez_vs_r0_z, plot_wall_Ez_vs_r, plot_Er_vs_r0_z, plot_wall_Er_vs_r,
     nwrite_movie, itime_min, itime_max, ivpa0, ivperp0, iz0, ir0, ivz0, ivr0, ivzeta0)
 
 end
