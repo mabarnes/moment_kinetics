@@ -1,4 +1,5 @@
-use_manufactured_solns = true
+use_manufactured_solns_for_advance = true 
+
 n_ion_species = 1
 n_neutral_species = 1
 #electron_physics = "boltzmann_electron_response"

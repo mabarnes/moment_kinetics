@@ -92,7 +92,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     # indicate which parts of the equations are to be advanced concurrently.
     # if no splitting of operators, all terms advanced concurrently;
     # else, will advance one term at a time.
-    manufactured_solns_test = t_input.use_manufactured_solns
+    manufactured_solns_test = t_input.use_manufactured_solns_for_advance
     
     if composition.n_neutral_species > 0
         advance_neutral_z_advection = true
@@ -362,7 +362,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     #spectral_objects = (vz_spectral = vz_spectral, vr_spectral = vr_spectral, vzeta_spectral = vzeta_spectral,
     # vpa_spectral = vpa_spectral, vperp_spectral = vperp_spectral, z_spectral = z_spectral, r_spectral = r_spectral)
     spectral_objects = spectral_object_struct(vz_spectral, vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral, z_spectral, r_spectral)
-    if(t_input.use_manufactured_solns)
+    if(advance.manufactured_solns_test)
         manufactured_source_list = manufactured_sources(r.L,z.L,r.bc,z.bc,composition,geometry,collisions,r.n)
     else
         manufactured_source_list = false # dummy Bool to be passed as argument instead of list

@@ -163,7 +163,12 @@ function mk_input(scan_input=Dict())
     # Heun's method, SSP RK3 and 4-stage SSP RK3)
     n_rk_stages = get(scan_input, "n_rk_stages", 4)
     split_operators = get(scan_input, "split_operators", false)
-    use_manufactured_solns = get(scan_input, "use_manufactured_solns", false)
+    use_manufactured_solns_for_advance = get(scan_input, "use_manufactured_solns_for_advance", false)
+    use_manufactured_solns_for_init = get(scan_input, "use_manufactured_solns_for_init", false)
+	if use_manufactured_solns_for_advance && !use_manufactured_solns_for_init
+	# if not (use_manufactured_solns_for_init == true) force use_manufactured_solns_for_init == true
+		use_manufactured_solns_for_init = true
+	end
     #println("Info: The flag use_manufactured_solns is ",use_manufactured_solns)
     
     # overwrite some default parameters related to the r grid
@@ -273,7 +278,8 @@ function mk_input(scan_input=Dict())
     ########## end user inputs. do not modify following code! ###############
     #########################################################################
 
-    t = time_input(nstep, dt, nwrite, use_semi_lagrange, n_rk_stages, split_operators, use_manufactured_solns)
+    t_input = time_input(nstep, dt, nwrite, use_semi_lagrange, n_rk_stages, split_operators,
+    	use_manufactured_solns_for_advance, use_manufactured_solns_for_init)
     # replace mutable structures with immutable ones to optimize performance
     # and avoid possible misunderstandings
     z_advection_immutable = advection_input(z.advection.option, z.advection.constant_speed,
@@ -368,7 +374,7 @@ function mk_input(scan_input=Dict())
         z_immutable, vpa_immutable, composition, species_immutable, evolve_moments)
 
     # return immutable structs for z, vpa, species and composition
-    all_inputs = (run_name, output_dir, evolve_moments, t, 
+    all_inputs = (run_name, output_dir, evolve_moments, t_input, 
                   z_immutable, r_immutable, vpa_immutable, vperp_immutable, gyrophase_immutable, vz_immutable, vr_immutable, vzeta_immutable,
                   composition, species_immutable, collisions, geometry, drive_immutable)
     println(io, "\nAll inputs returned from mk_input():")

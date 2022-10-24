@@ -35,7 +35,8 @@ struct time_input
     use_semi_lagrange::Bool
     n_rk_stages::mk_int
     split_operators::Bool
-    use_manufactured_solns::Bool
+    use_manufactured_solns_for_advance::Bool
+    use_manufactured_solns_for_init::Bool
 end
 
 """
