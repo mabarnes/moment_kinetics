@@ -175,8 +175,8 @@ function analyze_and_plot_data(path)
             end
         end
         # make plots and animations of the phi, Ez and Er 
-        plot_fields_2D(phi_sym, Ez_sym, Er_sym, time, z, r, iz0, ir0,
-            itime_min, itime_max, nwrite_movie, run_name, pp, "_sym")
+        #plot_fields_2D(phi_sym, Ez_sym, Er_sym, time, z, r, iz0, ir0,
+        #    itime_min, itime_max, nwrite_movie, run_name, pp, "_sym")
     
         compare_fields_symbolic_test(run_name,phi,phi_sym,z,r,time,nz,nr,ntime,
          L"\widetilde{\phi}",L"\widetilde{\phi}^{sym}",L"\sqrt{\sum || \widetilde{\phi} - \widetilde{\phi}^{sym} ||^2 / N} ","phi")
@@ -256,6 +256,21 @@ end
 """
 
 function compare_fields_symbolic_test(run_name,field,field_sym,z,r,time,nz,nr,ntime,field_label,field_sym_label,norm_label,file_string)
+	
+	# plot last timestep field vs z at r0 
+	ir0 = div(nr,2)
+	fieldmin = minimum(field[:,ir0,end])
+    fieldmax = maximum(field[:,ir0,end])
+	@views plot(z, [field[:,ir0,end], field_sym[:,ir0,end] ], xlabel=L"z/L_z", ylabel=field_label, label=["num" "sym"], ylims = (fieldmin,fieldmax))
+    outfile = string(run_name, "_"*file_string*"(r0,z)_vs_z.pdf")
+    savefig(outfile)    
+    # plot last timestep field vs r at z_wall 
+	fieldmin = minimum(field[end,:,end])
+    fieldmax = maximum(field[end,:,end])
+    @views plot(r, [field[end,:,end], field_sym[end,:,end]], xlabel=L"r/L_r", ylabel=field_label, label=["num" "sym"], ylims = (fieldmin,fieldmax))
+    outfile = string(run_name, "_"*file_string*"(r,z_wall)_vs_r.pdf")
+    savefig(outfile)
+    
     it = ntime
     fontsize = 20
     ticksfontsize = 10
@@ -1291,7 +1306,7 @@ function plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
     phimin = minimum(phi)
     phimax = maximum(phi)
     if pp.plot_phi_vs_r0_z # plot last timestep phi[z,ir0]
-        @views plot(z, abs.(phi[:,ir0,end]), xlabel=L"z/L_z", ylabel=L"\phi")
+        @views plot(z, phi[:,ir0,end], xlabel=L"z/L_z", ylabel=L"\phi")
     end
     outfile = string(run_name, "_phi"*description*"(r0,z)_vs_z.pdf")
     savefig(outfile)    
@@ -1306,12 +1321,12 @@ function plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
     Ezmin = minimum(Ez)
     Ezmax = maximum(Ez)
     if pp.plot_Ez_vs_r0_z # plot last timestep Ez[z,ir0]
-        @views plot(z, abs.(Ez[:,ir0,end]), xlabel=L"z/L_z", ylabel=L"E_z")
+        @views plot(z, Ez[:,ir0,end], xlabel=L"z/L_z", ylabel=L"E_z")
     end
     outfile = string(run_name, "_Ez"*description*"(r0,z)_vs_z.pdf")
     savefig(outfile)    
     if pp.plot_wall_Ez_vs_r # plot last timestep Ez[z_wall,r]
-        @views plot(r, abs.(Ez[end,:,end]), xlabel=L"r/L_r", ylabel=L"E_z")
+        @views plot(r, Ez[end,:,end], xlabel=L"r/L_r", ylabel=L"E_z")
     end
     outfile = string(run_name, "_Ez"*description*"(r,z_wall)_vs_r.pdf")
     savefig(outfile)
@@ -1326,12 +1341,12 @@ function plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
     Ermin = minimum(Er)
     Ermax = maximum(Er)
     if pp.plot_Er_vs_r0_z # plot last timestep Er[z,ir0]
-        @views plot(z, abs.(Er[:,ir0,end]), xlabel=L"z/L_z", ylabel=L"E_r")
+        @views plot(z, Er[:,ir0,end], xlabel=L"z/L_z", ylabel=L"E_r")
     end
     outfile = string(run_name, "_Er"*description*"(r0,z)_vs_z.pdf")
     savefig(outfile)    
     if pp.plot_wall_Er_vs_r # plot last timestep Er[z_wall,r]
-        @views plot(r, abs.(Er[end,:,end]), xlabel=L"r/L_r", ylabel=L"E_r")
+        @views plot(r, Er[end,:,end], xlabel=L"r/L_r", ylabel=L"E_r")
     end
     outfile = string(run_name, "_Er"*description*"(r,z_wall)_vs_r.pdf")
     savefig(outfile)
