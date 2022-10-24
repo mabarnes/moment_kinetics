@@ -258,19 +258,25 @@ end
 function compare_fields_symbolic_test(run_name,field,field_sym,z,r,time,nz,nr,ntime,field_label,field_sym_label,norm_label,file_string)
 	
 	# plot last timestep field vs z at r0 
-	ir0 = div(nr,2)
+	if nr > 1 
+		ir0 = div(nr,2)
+	else
+		ir0 = 1
+	end
 	fieldmin = minimum(field[:,ir0,end])
     fieldmax = maximum(field[:,ir0,end])
 	@views plot(z, [field[:,ir0,end], field_sym[:,ir0,end] ], xlabel=L"z/L_z", ylabel=field_label, label=["num" "sym"], ylims = (fieldmin,fieldmax))
     outfile = string(run_name, "_"*file_string*"(r0,z)_vs_z.pdf")
     savefig(outfile)    
-    # plot last timestep field vs r at z_wall 
-	fieldmin = minimum(field[end,:,end])
-    fieldmax = maximum(field[end,:,end])
-    @views plot(r, [field[end,:,end], field_sym[end,:,end]], xlabel=L"r/L_r", ylabel=field_label, label=["num" "sym"], ylims = (fieldmin,fieldmax))
-    outfile = string(run_name, "_"*file_string*"(r,z_wall)_vs_r.pdf")
-    savefig(outfile)
     
+	if nr > 1
+		# plot last timestep field vs r at z_wall 
+		fieldmin = minimum(field[end,:,end])
+		fieldmax = maximum(field[end,:,end])
+		@views plot(r, [field[end,:,end], field_sym[end,:,end]], xlabel=L"r/L_r", ylabel=field_label, label=["num" "sym"], ylims = (fieldmin,fieldmax))
+		outfile = string(run_name, "_"*file_string*"(r,z_wall)_vs_r.pdf")
+		savefig(outfile)
+	end	
     it = ntime
     fontsize = 20
     ticksfontsize = 10
