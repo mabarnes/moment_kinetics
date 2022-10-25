@@ -138,8 +138,7 @@ function analyze_and_plot_data(path)
         spec_type, n_neutral_species,
         itime_min, itime_max, nwrite_movie, run_name, pp)
 
-    manufactured_solns_test = true
-    # MRH hack condition on these plots for now
+    manufactured_solns_test = t_input.use_manufactured_solns_for_advance
     # Plots compare density and density_symbolic at last timestep
     #if(manufactured_solns_test && nr > 1)
     if(manufactured_solns_test)
