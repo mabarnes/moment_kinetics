@@ -5,9 +5,10 @@ module time_advance
 export setup_time_advance!
 export time_advance!
 
+using MPI
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_float, allocate_shared_float
-using ..communication: _block_synchronize
+using ..communication: _block_synchronize, global_size, comm_world
 using ..debugging
 using ..file_io: write_data_to_ascii, write_data_to_binary, debug_dump
 using ..looping
@@ -588,10 +589,17 @@ function rk_update!(scratch, pdf, moments, fields, vz, vr, vzeta, vpa, vperp, z,
     
     update_ppar!(new_scratch.ppar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
     # update the thermal speed
-    @loop_s_r_z is ir iz begin
-        moments.charged.vth[iz,ir,is] = sqrt(2.0*new_scratch.ppar[iz,ir,is]/new_scratch.density[iz,ir,is])
-    end
-    
+    try #below block causes DomainError if ppar < 0 or density, so exit cleanly if possible
+		@loop_s_r_z is ir iz begin
+			moments.charged.vth[iz,ir,is] = sqrt(2.0*new_scratch.ppar[iz,ir,is]/new_scratch.density[iz,ir,is])
+		end
+	catch e
+		if global_size[] > 1
+			println(e)
+			MPI.Abort(comm_world, 1)
+		end 
+		rethrow(e)
+	end
     # update the parallel heat flux
     update_qpar!(moments.charged.qpar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
     
@@ -700,16 +708,24 @@ function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase,
         update_neutral_uz!(moments.neutral.uz, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
         update_neutral_ur!(moments.neutral.ur, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
         update_neutral_uzeta!(moments.neutral.uzeta, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
-        @loop_sn_r_z isn ir iz begin
-            # update density using last density from Runga-Kutta stages
-            moments.neutral.dens[iz,ir,isn] = final_scratch.density_neutral[iz,ir,isn] 
-            # convert from particle flux to mean velocity
-            moments.neutral.uz[iz,ir,isn] /= moments.neutral.dens[iz,ir,isn]
-            moments.neutral.ur[iz,ir,isn] /= moments.neutral.dens[iz,ir,isn]
-            moments.neutral.uzeta[iz,ir,isn] /= moments.neutral.dens[iz,ir,isn]
-            # get vth for neutrals
-            moments.neutral.vth[iz,ir,isn] = sqrt(2.0*moments.neutral.ptot[iz,ir,isn]/moments.neutral.dens[iz,ir,isn])
-        end
+		try #below loop can cause DomainError if ptot < 0 or density < 0, so exit cleanly if possible
+			@loop_sn_r_z isn ir iz begin
+				# update density using last density from Runga-Kutta stages
+				moments.neutral.dens[iz,ir,isn] = final_scratch.density_neutral[iz,ir,isn] 
+				# convert from particle flux to mean velocity
+				moments.neutral.uz[iz,ir,isn] /= moments.neutral.dens[iz,ir,isn]
+				moments.neutral.ur[iz,ir,isn] /= moments.neutral.dens[iz,ir,isn]
+				moments.neutral.uzeta[iz,ir,isn] /= moments.neutral.dens[iz,ir,isn]
+				# get vth for neutrals
+				moments.neutral.vth[iz,ir,isn] = sqrt(2.0*moments.neutral.ptot[iz,ir,isn]/moments.neutral.dens[iz,ir,isn])
+			end
+		catch e
+			if global_size[] > 1
+				println(e)
+				MPI.Abort(comm_world, 1)
+			end 
+			rethrow(e)
+		end 
     end
     
     update_pdf_unnorm!(pdf, moments, scratch[istage].temp_z_s, composition, vpa, vperp)

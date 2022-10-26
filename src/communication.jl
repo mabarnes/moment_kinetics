@@ -13,7 +13,7 @@ loop ranges), as at the moment we only run with 1 ion species and 1 neutral spec
 module communication
 
 export allocate_shared, block_rank, block_size, comm_block,
-       comm_world, finalize_comms!, initialize_comms!, global_rank, MPISharedArray
+       comm_world, finalize_comms!, initialize_comms!, global_rank, MPISharedArray, global_size
 
 using MPI
 using SHA
