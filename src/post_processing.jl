@@ -83,8 +83,13 @@ function analyze_and_plot_data(path)
     #println("\n Info: n_neutral_species = ",n_neutral_species,", n_ion_species = ",n_ion_species,"\n")
     if n_neutral_species > 0
         nvz, vz, vz_wgts, nvr, vr, vr_wgts, nvzeta, vzeta, vzeta_wgts = load_neutral_coordinate_data(fid)
-    end
-    # initialise the post-processing input options
+    else # define nvz nvr nvzeta to avoid errors below
+		nvz = 1
+		nvr = 1
+		nvzeta = 1
+	end
+	
+	# initialise the post-processing input options
     nwrite_movie, itime_min, itime_max, ivpa0, ivperp0, iz0, ir0,
         ivz0, ivr0, ivzeta0 = init_postprocessing_options(pp, nvpa, nvperp, nz, nr, nvz, nvr, nvzeta, ntime)
     # load full (z,r,t) fields data
@@ -132,12 +137,13 @@ function analyze_and_plot_data(path)
         spec_type, n_ion_species,
         itime_min, itime_max, nwrite_movie, run_name, pp)
     # make plots and animations of the neutral pdf
-    spec_type = "neutral"
-    plot_neutral_pdf(neutral_ff, vz, vr, vzeta, z, r,
-        ivz0, ivr0, ivzeta0, iz0, ir0,
-        spec_type, n_neutral_species,
-        itime_min, itime_max, nwrite_movie, run_name, pp)
-
+    if n_neutral_species > 0
+		spec_type = "neutral"
+		plot_neutral_pdf(neutral_ff, vz, vr, vzeta, z, r,
+			ivz0, ivr0, ivzeta0, iz0, ir0,
+			spec_type, n_neutral_species,
+			itime_min, itime_max, nwrite_movie, run_name, pp)
+	end 
     manufactured_solns_test = t_input.use_manufactured_solns_for_advance
     # Plots compare density and density_symbolic at last timestep
     #if(manufactured_solns_test && nr > 1)
