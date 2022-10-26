@@ -103,6 +103,7 @@ function run_moment_kinetics(to::TimerOutput, input_dict=Dict())
         # throws an error
         if global_size[] > 1
             println(e)
+            display(stacktrace(catch_backtrace()))
             MPI.Abort(comm_world, 1)
         end
 
