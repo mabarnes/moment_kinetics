@@ -595,6 +595,7 @@ function rk_update!(scratch, pdf, moments, fields, vz, vr, vzeta, vpa, vperp, z,
 		end
 	catch e
 		if global_size[] > 1
+			println("ERROR: error at line 598 of time_advance.jl")
 			println(e)
 			MPI.Abort(comm_world, 1)
 		end 
@@ -721,6 +722,7 @@ function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase,
 			end
 		catch e
 			if global_size[] > 1
+				println("ERROR: error at line 724 of time_advance.jl")
 				println(e)
 				MPI.Abort(comm_world, 1)
 			end 
