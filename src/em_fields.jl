@@ -109,6 +109,7 @@ function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral)
 			if global_size[] > 1
 				println("ERROR: error at line 110 of em_fields.jl")
 				println(e)
+				display(stacktrace(catch_backtrace()))
 				MPI.Abort(comm_world, 1)
 			end
 			rethrow(e)
