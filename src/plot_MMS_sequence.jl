@@ -65,6 +65,13 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         if scan_type == "vpa_nelement"
             # get the number of elements for plot
             nelement_sequence[isim] = vpa_input.nelement
+        elseif scan_type == "nelement"
+            nelement = vpa_input.nelement
+            if  nelement == r_input.nelement &&nelement == z_input.nelement && nelement == vperp_input.nelement && nelement == vz_input.nelement && nelement == vr_input.nelement && nelement == vzeta_input.nelement
+                nelement_sequence[isim] = nelement
+            else 
+                println("ERROR: scan_type = ",scan_type," requires element number to be equal in all dimensions")
+            end
         elseif scan_type == "velocity_nelement"
             nelement = vpa_input.nelement
             if nelement == vperp_input.nelement && nelement == vz_input.nelement && nelement == vr_input.nelement && nelement == vzeta_input.nelement
@@ -234,6 +241,8 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
     elseif scan_type == "z_nelement"
         xlabel = L"z"*" "*L"N_{element}"
     elseif scan_type == "velocity_nelement"
+        xlabel = L"N_{element}"
+    elseif scan_type == "nelement"
         xlabel = L"N_{element}"
     else 
         println("ERROR: scan_type = ",scan_type," is unsupported")

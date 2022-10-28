@@ -5,11 +5,12 @@ if abspath(PROGRAM_FILE) == @__FILE__
     import moment_kinetics as mk
 
    #test_option = "collisional_soundwaves"
-   #test_option = "collisionless_soundwaves"
+   #test_option = "collisionless_soundwaves_ions_only"
+   test_option = "collisionless_soundwaves"
    #test_option = "collisionless_wall-1D-3V-updated"
    #test_option = "collisionless_wall-1D-3V"
    #test_option = "collisionless_wall-2D-3V"
-   test_option = "collisionless_wall-2D-3V-Er-zero-at-plate"
+   #test_option = "collisionless_wall-2D-3V-Er-zero-at-plate"
    #test_option = "collisionless_biased_wall-2D-3V"
    #test_option = "collisionless_wall-1D-3V-with-sheath"
 
@@ -22,10 +23,20 @@ if abspath(PROGRAM_FILE) == @__FILE__
   
     elseif test_option == "collisionless_soundwaves"
         # collisionless
-        path_list = ["runs/2D-sound-wave_cheb_nel_r_2_z_2_vpa_2_vperp_2","runs/2D-sound-wave_cheb_nel_r_2_z_2_vpa_4_vperp_4",
-                        "runs/2D-sound-wave_cheb_nel_r_2_z_2_vpa_8_vperp_8","runs/2D-sound-wave_cheb_nel_r_2_z_2_vpa_16_vperp_16"]
-        scan_type = "velocity_nelement"
+        path_list = ["runs/2D-sound-wave_cheb_nel_r_2_z_2_vpa_2_vperp_2","runs/2D-sound-wave_cheb_nel_r_4_z_4_vpa_4_vperp_4",# "runs/2D-sound-wave_cheb_nel_r_6_z_6_vpa_6_vperp_6",
+#                        "runs/2D-sound-wave_cheb_nel_r_8_z_8_vpa_8_vperp_8"
+#,"runs/2D-sound-wave_cheb_nel_r_2_z_2_vpa_16_vperp_16"
+                     ]
+        scan_type = "nelement"
         scan_name = "2D-sound-wave_cheb"
+    elseif test_option == "collisionless_soundwaves_ions_only"
+        # collisionless
+        path_list = ["runs/2D-sound-wave_cheb_ion_only_nel_r_2_z_2_vpa_2_vperp_2","runs/2D-sound-wave_cheb_ion_only_nel_r_4_z_4_vpa_4_vperp_4", "runs/2D-sound-wave_cheb_ion_only_nel_r_8_z_8_vpa_8_vperp_8",
+#                        "runs/2D-sound-wave_cheb_nel_r_8_z_8_vpa_8_vperp_8"
+#,"runs/2D-sound-wave_cheb_nel_r_2_z_2_vpa_16_vperp_16"
+                     ]
+        scan_type = "nelement"
+        scan_name = "2D-sound-wave_cheb_ions_only"
     elseif test_option == "collisionless_wall-2D-3V-Er-zero-at-plate"
         # collisionless wall test, no sheath for electrons, no radial coordinate
         path_list = ["runs/2D-wall_cheb-with-neutrals_nel_r_2_z_2_vpa_2_vperp_2",
