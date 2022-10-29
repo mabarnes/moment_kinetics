@@ -259,62 +259,66 @@ end
 
 function init_knudsen_cosine(vz, vr, vzeta, vpa, vperp, composition)
     knudsen_cosine = allocate_shared_float(vz.n, vr.n, vzeta.n)
-    integrand = zeros(mk_float, vz.n, vr.n, vzeta.n)
-    
-    vtfac = sqrt(composition.T_wall * composition.mn_over_mi)
-    
-    if vzeta.n > 1 && vr.n > 1
-        # 3V specification of neutral wall emission distribution for boundary condition 
-        if composition.use_test_neutral_wall_pdf
-        # use test distribution that is easy for integration scheme to handle
-            for ivzeta in 1:vzeta.n
-                for ivr in 1:vr.n
-                    for ivz in 1:vz.n
-                        v_transverse = sqrt(vzeta.grid[ivzeta]^2 + vr.grid[ivr]^2)
-                        v_normal = abs(vz.grid[ivz])                    
-                        knudsen_cosine[ivz,ivr,ivzeta] = (4.0/vtfac^5)*v_normal*exp( - (v_normal/vtfac)^2 - (v_transverse/vtfac)^2 )
-                        integrand[ivz,ivr,ivzeta] = vz.grid[ivz]*knudsen_cosine[ivz,ivr,ivzeta]
-                    end
-                end
-            end
-        else # get the true Knudsen cosine distribution for neutral particle wall emission
-            for ivzeta in 1:vzeta.n
-                for ivr in 1:vr.n
-                    for ivz in 1:vz.n
-                        v_transverse = sqrt(vzeta.grid[ivzeta]^2 + vr.grid[ivr]^2)
-                        v_normal = abs(vz.grid[ivz])
-                        v_tot = sqrt(v_normal^2 + v_transverse^2)
-                        if  v_tot > 0.0
-                            prefac = v_normal/v_tot 
-                        else
-                            prefac = 0.0
-                        end 
-                        knudsen_cosine[ivz,ivr,ivzeta] = (3.0*sqrt(pi)/vtfac^4)*prefac*exp( - (v_normal/vtfac)^2 - (v_transverse/vtfac)^2 )
-                        integrand[ivz,ivr,ivzeta] = vz.grid[ivz]*knudsen_cosine[ivz,ivr,ivzeta]
-                    end
-                end
-            end
-        end 
-        normalisation = integrate_over_positive_vz(integrand, vz.grid, vz.wgts,
-                                                    vz.scratch, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
-        # uncomment this line to test:
-        #println("normalisation should be 1, it is = ", normalisation)
-        #correct knudsen_cosine to conserve particle fluxes numerically
-        @. knudsen_cosine /= normalisation 
 
-    elseif vzeta.n == 1 && vr.n == 1
-        # get the marginalised Knudsen cosine distribution after integrating over vperp
-        # appropriate for 1V model 
-        @. vz.scratch = (3.0*pi/vtfac^3)*abs(vz.grid)*erfc(abs(vz.grid)/vtfac)
-        normalisation = integrate_over_positive_vz(vz.grid .* vz.scratch, vz.grid, vz.wgts, vz.scratch2, 
-                                                     vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
-        # uncomment this line to test:
-        #println("normalisation should be 1, it is = ", normalisation)
-        #correct knudsen_cosine to conserve particle fluxes numerically
-        @. vz.scratch /= normalisation
-        @. knudsen_cosine[:,1,1] = vz.scratch[:]        
-                
-    end    
+    begin_serial_region()
+    @serial_region begin
+        integrand = zeros(mk_float, vz.n, vr.n, vzeta.n)
+
+        vtfac = sqrt(composition.T_wall * composition.mn_over_mi)
+
+        if vzeta.n > 1 && vr.n > 1
+            # 3V specification of neutral wall emission distribution for boundary condition
+            if composition.use_test_neutral_wall_pdf
+                # use test distribution that is easy for integration scheme to handle
+                for ivzeta in 1:vzeta.n
+                    for ivr in 1:vr.n
+                        for ivz in 1:vz.n
+                            v_transverse = sqrt(vzeta.grid[ivzeta]^2 + vr.grid[ivr]^2)
+                            v_normal = abs(vz.grid[ivz])
+                            knudsen_cosine[ivz,ivr,ivzeta] = (4.0/vtfac^5)*v_normal*exp( - (v_normal/vtfac)^2 - (v_transverse/vtfac)^2 )
+                            integrand[ivz,ivr,ivzeta] = vz.grid[ivz]*knudsen_cosine[ivz,ivr,ivzeta]
+                        end
+                    end
+                end
+            else # get the true Knudsen cosine distribution for neutral particle wall emission
+                for ivzeta in 1:vzeta.n
+                    for ivr in 1:vr.n
+                        for ivz in 1:vz.n
+                            v_transverse = sqrt(vzeta.grid[ivzeta]^2 + vr.grid[ivr]^2)
+                            v_normal = abs(vz.grid[ivz])
+                            v_tot = sqrt(v_normal^2 + v_transverse^2)
+                            if  v_tot > 0.0
+                                prefac = v_normal/v_tot
+                            else
+                                prefac = 0.0
+                            end
+                            knudsen_cosine[ivz,ivr,ivzeta] = (3.0*sqrt(pi)/vtfac^4)*prefac*exp( - (v_normal/vtfac)^2 - (v_transverse/vtfac)^2 )
+                            integrand[ivz,ivr,ivzeta] = vz.grid[ivz]*knudsen_cosine[ivz,ivr,ivzeta]
+                        end
+                    end
+                end
+            end
+            normalisation = integrate_over_positive_vz(integrand, vz.grid, vz.wgts,
+                                                       vz.scratch, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
+            # uncomment this line to test:
+            #println("normalisation should be 1, it is = ", normalisation)
+            #correct knudsen_cosine to conserve particle fluxes numerically
+            @. knudsen_cosine /= normalisation
+
+        elseif vzeta.n == 1 && vr.n == 1
+            # get the marginalised Knudsen cosine distribution after integrating over vperp
+            # appropriate for 1V model
+            @. vz.scratch = (3.0*pi/vtfac^3)*abs(vz.grid)*erfc(abs(vz.grid)/vtfac)
+            normalisation = integrate_over_positive_vz(vz.grid .* vz.scratch, vz.grid, vz.wgts, vz.scratch2,
+                                                       vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
+            # uncomment this line to test:
+            #println("normalisation should be 1, it is = ", normalisation)
+            #correct knudsen_cosine to conserve particle fluxes numerically
+            @. vz.scratch /= normalisation
+            @. knudsen_cosine[:,1,1] = vz.scratch[:]
+
+        end
+    end
     return knudsen_cosine
 end 
 
