@@ -165,17 +165,35 @@ function evaluate_initial_ddt(input_dict::Dict, advance_input::advance_info)
     # cleanup_moment_kinetics!()
     dfdt_ion = nothing
     dfdt_neutral = nothing
+    plasma_fields = nothing
+    em_fields = nothing
     if global_rank[] == 0
         dfdt_ion = copy(output.pdf)
         dfdt_neutral = copy(output.pdf_neutral)
+
+        plasma_fields = (
+                         pdf=copy(first_scratch.pdf),
+                         density=copy(first_scratch.density),
+                         upar=copy(first_scratch.upar),
+                         ppar=copy(first_scratch.ppar),
+                         pdf_neutral=copy(first_scratch.pdf_neutral),
+                         density_neutral=copy(first_scratch.density_neutral),
+                        )
+
+        em_fields = (
+                     phi=copy(fields.phi),
+                     phi0=copy(fields.phi0),
+                     Er=copy(fields.Er),
+                     Ez=copy(fields.Ez),
+                    )
     end
 
     # clean up i/o and communications
     # last 2 elements of mk_state are `io` and `cdf`
     cleanup_moment_kinetics!(mk_state[end-1:end]...)
 
-    return dfdt_ion, dfdt_neutral, r, z, vperp, vpa, vzeta, vr, vz, composition,
-           geometry, collisions, modified_advance
+    return dfdt_ion, dfdt_neutral, plasma_fields, em_fields, r, z, vperp, vpa, vzeta, vr,
+           vz, composition, geometry, collisions, modified_advance
 end
 
 """
@@ -248,16 +266,21 @@ function runcase(input::Dict, advance::advance_info, returnstuff=false)
     dfdt_neutral = nothing
     manufactured_inputs = nothing
     quietoutput() do
-        dfdt_ion, dfdt_neutral, manufactured_inputs... = evaluate_initial_ddt(input, advance)
+        dfdt_ion, dfdt_neutral, plasma_fields, em_fields, manufactured_inputs... =
+        evaluate_initial_ddt(input, advance)
     end
 
     error_2 = nothing
     error_inf = nothing
     rhs_ion_manf = nothing
     rhs_neutral_manf = nothing
+    plasma_manf = nothing
+    em_manf = nothing
     if global_rank[] == 0
         rhs_ion_manf, rhs_neutral_manf = manufactured_rhs_as_array(mk_float(0.0),
                                                                    manufactured_inputs...)
+        plasma_manf, em_manf = manufactured_solutions_as_arrays(0.0,
+                                                                manufactured_inputs[1:9]...)
 
         if input["n_ion_species"] > 0
             # Only one species, so get rid of species index
@@ -305,7 +328,9 @@ function runcase(input::Dict, advance::advance_info, returnstuff=false)
     end
 
     if returnstuff
-        return error_2, error_inf, dfdt_ion, rhs_ion_manf, dfdt_neutral, rhs_neutral_manf
+
+        return error_2, error_inf, dfdt_ion, rhs_ion_manf, dfdt_neutral, rhs_neutral_manf,
+               plasma_fields, plasma_manf, em_fields, em_manf
     else
         return error_2, error_inf
     end
@@ -357,13 +382,15 @@ function testconvergence(input::Dict, which_term::Symbol; ngrid=nothing, returns
         nelement_values = [nelement_values[end]]
     end
     lastrhs_ion, lastrhs_manf_ion, lastrhs_neutral, lastrhs_manf_neutral = nothing, nothing, nothing, nothing
+    plasma_fields, plasma_manf, em_fields, em_manf = nothing, nothing, nothing, nothing
     for nelement ∈ nelement_values
         global_rank[] == 0 && println("testing nelement=$nelement")
         case_input = increase_resolution(input, nelement)
 
         if returnstuff
             error_2, error_inf, lastrhs_ion, lastrhs_manf_ion, lastrhs_neutral,
-            lastrhs_manf_neutral = runcase(case_input, advance, returnstuff)
+            lastrhs_manf_neutral, plasma_fields, plasma_manf, em_fields, em_manf =
+            runcase(case_input, advance, returnstuff)
         else
             error_2, error_inf = runcase(case_input, advance)
         end
@@ -392,7 +419,8 @@ function testconvergence(input::Dict, which_term::Symbol; ngrid=nothing, returns
     end
 
     if returnstuff
-        return lastrhs_ion, lastrhs_manf_ion, lastrhs_neutral, lastrhs_manf_neutral
+        return lastrhs_ion, lastrhs_manf_ion, lastrhs_neutral, lastrhs_manf_neutral,
+               plasma_fields, plasma_manf, em_fields, em_manf
     else
         return nothing
     end

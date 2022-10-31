@@ -256,12 +256,12 @@ using ..type_definitions
         return Er_expanded, Ez_expanded, phi
     end
 
-    function manufactured_solutions(Lr,Lz,r_bc,z_bc,geometry,composition,nr)
-        densi = densi_sym(Lr,Lz,r_bc,z_bc,composition)
-        dfni = dfni_sym(Lr,Lz,r_bc,z_bc,composition,geometry,nr)
+    function manufactured_solutions(rcoord, zcoord, geometry, composition)
+        densi = densi_sym(rcoord.L,zcoord.L,rcoord.bc,zcoord.bc,composition)
+        dfni = dfni_sym(rcoord.L,zcoord.L,rcoord.bc,zcoord.bc,composition,geometry,rcoord.n)
         
-        densn = densn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
-        dfnn = dfnn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
+        densn = densn_sym(rcoord.L,zcoord.L,rcoord.bc,zcoord.bc,geometry,composition)
+        dfnn = dfnn_sym(rcoord.L,zcoord.L,rcoord.bc,zcoord.bc,geometry,composition)
         
         #build julia functions from these symbolic expressions
         # cf. https://docs.juliahub.com/Symbolics/eABRO/3.4.0/tutorials/symbolic_functions/
@@ -422,7 +422,8 @@ using ..type_definitions
     """
         manufactured_solutions_as_arrays(
             t::mk_float, r::coordinate, z::coordinate, vperp::coordinate,
-            vpa::coordinate)
+            vpa::coordinate, vzeta::coordinate, vr::coordinate, vz::coordinate,
+            composition::species_composition)
 
     Create array filled with manufactured solutions.
 
@@ -432,25 +433,57 @@ using ..type_definitions
     """
     function manufactured_solutions_as_arrays(
         t::mk_float, r::coordinate, z::coordinate, vperp::coordinate,
-        vpa::coordinate, vzeta::coordinate, vr::coordinate, vz::coordinate)
+        vpa::coordinate, vzeta::coordinate, vr::coordinate, vz::coordinate,
+        composition::species_composition, geometry::geometry_input)
 
-        dfni_func, densi_func = manufactured_solutions(r.L, z.L, vperp.L, vpa.L, vzeta.L,
-                                                       vr.L, vz.L, r.bc, z.bc)
+        solns =  manufactured_solutions(r, z, geometry, composition)
+        densi_func = solns.densi_func
+        dfni_func = solns.dfni_func
+        densn_func = solns.densn_func
+        dfnn_func = solns.dfnn_func
+
+        em_solns = manufactured_electric_fields(r.L, z.L, r.bc, z.bc, composition, r.n)
+        phi_func = em_solns.phi_func
+        Er_func = em_solns.Er_func
+        Ez_func = em_solns.Ez_func
 
         densi = allocate_float(z.n, r.n)
+        upari = allocate_float(z.n, r.n)
+        ppari = allocate_float(z.n, r.n)
+        temp_z_s = allocate_float(z.n, r.n)
         dfni = allocate_float(vpa.n, vperp.n, z.n, r.n)
+
+        densn = allocate_float(z.n, r.n)
+        dfnn = allocate_float(vz.n, vr.n, vzeta.n, z.n, r.n)
+
+        phi = allocate_float(z.n, r.n)
+        Er = allocate_float(z.n, r.n)
+        Ez = allocate_float(z.n, r.n)
 
         for ir ∈ 1:r.n, iz ∈ 1:z.n
             densi[iz,ir] = densi_func(z.grid[iz], r.grid[ir], t)
+            upari[iz,ir] = NaN
+            ppari[iz,ir] = NaN
             for ivperp ∈ 1:vperp.n, ivpa ∈ 1:vpa.n
                 dfni[ivpa,ivperp,iz,ir] = dfni_func(vpa.grid[ivpa], vperp.grid[ivperp], z.grid[iz],
                                         r.grid[ir], t)
             end
+
+            densn[iz,ir] = densn_func(z.grid[iz], r.grid[ir], t)
+            for ivzeta ∈ 1:vzeta.n, ivr ∈ 1:vr.n, ivz ∈ 1:vz.n
+                dfnn[ivz,ivr,ivzeta,iz,ir] =
+                    dfnn_func(vz.grid[ivz], vr.grid[ivr], vzeta.grid[ivzeta], z.grid[iz],
+                              r.grid[ir], t)
+            end
+
+            phi[iz,ir] = phi_func(z.grid[iz], r.grid[ir], t)
+            Er[iz,ir] = Er_func(z.grid[iz], r.grid[ir], t)
+            Ez[iz,ir] = Ez_func(z.grid[iz], r.grid[ir], t)
         end
 
-        phi = log.(densi)
-
-        return densi, phi, dfni
+        return (pdf=dfni, density=densi, upar=upari, ppar=ppari, pdf_neutral=dfnn,
+                density_neutral=densn),
+               (phi=phi, phi0=copy(phi), Er=Er, Ez=Ez)
     end
 
     """
