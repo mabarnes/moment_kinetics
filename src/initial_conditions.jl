@@ -330,13 +330,13 @@ function init_rboundary_pdfs(pdf::pdf_struct, vz, vr, vzeta, vpa, vperp, z, r, c
     rboundary_charged = allocate_shared_float(vpa.n, vperp.n, z.n, 2, n_ion_species)
     rboundary_neutral = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, 2, n_neutral_species_alloc)
     
-    begin_s_r_z_region()
+    begin_s_z_region() #do not parallelise r here 
     @loop_s_z_vperp_vpa is iz ivperp ivpa begin
         rboundary_charged[ivpa,ivperp,iz,1,is] = pdf.charged.unnorm[ivpa,ivperp,iz,1,is]
         rboundary_charged[ivpa,ivperp,iz,end,is] = pdf.charged.unnorm[ivpa,ivperp,iz,end,is]
     end
     if n_neutral_species > 0 
-        begin_sn_r_z_region()
+        begin_sn_z_region() #do not parallelise r here
         @loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
             rboundary_neutral[ivz,ivr,ivzeta,iz,1,isn] = pdf.neutral.unnorm[ivz,ivr,ivzeta,iz,1,isn]
             rboundary_neutral[ivz,ivr,ivzeta,iz,end,isn] = pdf.neutral.unnorm[ivz,ivr,ivzeta,iz,end,isn]
