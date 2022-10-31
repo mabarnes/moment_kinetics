@@ -102,6 +102,8 @@ function run_moment_kinetics(to::TimerOutput, input_dict=Dict())
             println("$(typeof(e)) on process $(global_rank[]):")
             println(e.msg, "\n")
             display(stacktrace(catch_backtrace()))
+            flush(stdout)
+            flush(stderr)
             MPI.Abort(comm_world, 1)
         else
             # Error almost certainly occured before cleanup. If running in serial we can

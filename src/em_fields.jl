@@ -110,6 +110,8 @@ function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral)
 				println("ERROR: error at line 110 of em_fields.jl")
 				println(e)
 				display(stacktrace(catch_backtrace()))
+                flush(stdout)
+                flush(stderr)
 				MPI.Abort(comm_world, 1)
 			end
 			rethrow(e)
