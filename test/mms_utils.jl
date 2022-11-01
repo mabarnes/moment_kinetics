@@ -10,7 +10,7 @@ export increase_resolution, get_and_check_ngrid, set_ngrid, test_error_series,
        calculate_convergence_orders, testconvergence, setup_advance
 
 using moment_kinetics: setup_moment_kinetics, cleanup_moment_kinetics!
-using moment_kinetics.communication: global_rank
+using moment_kinetics.communication: finalize_comms!, global_rank
 using moment_kinetics.looping
 using moment_kinetics.manufactured_solns
 using moment_kinetics.post_processing: L2_error_norm, L_infinity_error_norm
@@ -110,7 +110,7 @@ time_advance module.
 """
 function evaluate_initial_ddt(input_dict::Dict, advance_input::advance_info)
     # set up all the structs, etc. needed for a run
-    mk_state = setup_moment_kinetics(input_dict)
+    mk_state = setup_moment_kinetics(input_dict, setup_output=false)
 
     # Split mk_state tuple into separate variables
     pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r, moments,
@@ -188,12 +188,8 @@ function evaluate_initial_ddt(input_dict::Dict, advance_input::advance_info)
                     )
     end
 
-    # arguments to pass to cleanup_moment_kinetics!()
-    # last 2 elements of mk_state are `io` and `cdf`
-    to_cleanup = mk_state[end-1:end]
-
-    return dfdt_ion, dfdt_neutral, plasma_fields, em_fields, to_cleanup, r, z, vperp, vpa,
-           vzeta, vr, vz, composition, geometry, collisions, modified_advance
+    return dfdt_ion, dfdt_neutral, plasma_fields, em_fields, r, z, vperp, vpa, vzeta, vr,
+           vz, composition, geometry, collisions, modified_advance
 end
 
 """
@@ -266,8 +262,8 @@ function runcase(input::Dict, advance::advance_info, returnstuff=false)
     dfdt_neutral = nothing
     manufactured_inputs = nothing
     quietoutput() do
-        dfdt_ion, dfdt_neutral, plasma_fields, em_fields, to_cleanup,
-        manufactured_inputs... = evaluate_initial_ddt(input, advance)
+        dfdt_ion, dfdt_neutral, plasma_fields, em_fields, manufactured_inputs... =
+        evaluate_initial_ddt(input, advance)
     end
 
     error_2 = nothing
@@ -335,7 +331,8 @@ function runcase(input::Dict, advance::advance_info, returnstuff=false)
     end
 
     # clean up i/o and communications
-    cleanup_moment_kinetics!(to_cleanup...)
+    # clean up MPI objects
+    finalize_comms!()
 
     if returnstuff
 

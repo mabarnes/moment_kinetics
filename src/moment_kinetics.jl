@@ -151,6 +151,7 @@ Perform all the initialization steps for a run.
 parallel loop ranges, and are only used by the tests in `debug_test/`.
 """
 function setup_moment_kinetics(input_dict::Dict;
+        setup_output::Bool=true,
         debug_loop_type::Union{Nothing,NTuple{N,Symbol} where N}=nothing,
         debug_loop_parallel_dims::Union{Nothing,NTuple{N,Symbol} where N}=nothing)
 
@@ -218,13 +219,21 @@ function setup_moment_kinetics(input_dict::Dict;
         advance, scratch_dummy, manufactured_source_list = setup_time_advance!(pdf, vz,
             vr, vzeta, vpa, vperp, z, r, spectral_objects, composition, drive_input,
             moments, t_input, collisions, species, geometry, boundary_distributions)
-    # setup i/o
-    io, cdf = setup_file_io(output_dir, run_name, vz, vr, vzeta, vpa, vperp, z, r, composition, collisions)
-    # write initial data to ascii files
-    write_data_to_ascii(moments, fields, vpa, vperp, z, r, code_time, composition.n_ion_species, composition.n_neutral_species, io)
-    # write initial data to binary file (netcdf)
-    write_data_to_binary(pdf.charged.unnorm, pdf.neutral.unnorm, moments, fields, code_time, composition.n_ion_species, 
-     composition.n_neutral_species, cdf, 1)
+    if setup_output
+        # setup i/o
+        io, cdf = setup_file_io(output_dir, run_name, vz, vr, vzeta, vpa, vperp, z, r,
+                                composition, collisions)
+        # write initial data to ascii files
+        write_data_to_ascii(moments, fields, vpa, vperp, z, r, code_time,
+                            composition.n_ion_species, composition.n_neutral_species, io)
+        # write initial data to binary file (netcdf)
+        write_data_to_binary(pdf.charged.unnorm, pdf.neutral.unnorm, moments, fields,
+                             code_time, composition.n_ion_species,
+                             composition.n_neutral_species, cdf, 1)
+    else
+        io = nothing
+        cdf = nothing
+    end
 
     begin_s_r_z_vperp_region()
 
