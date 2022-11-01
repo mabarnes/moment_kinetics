@@ -12,9 +12,10 @@ using SpecialFunctions
 using Symbolics
 using IfElse
 using ..input_structs
-using ..array_allocation: allocate_float
+using ..array_allocation: allocate_shared_float
 using ..coordinates: coordinate
 using ..input_structs: geometry_input, advance_info, species_composition, collisions_input
+using ..looping
 using ..type_definitions
 
     @variables r z vpa vperp t vz vr vzeta
@@ -447,38 +448,46 @@ using ..type_definitions
         Er_func = em_solns.Er_func
         Ez_func = em_solns.Ez_func
 
-        densi = allocate_float(z.n, r.n)
-        upari = allocate_float(z.n, r.n)
-        ppari = allocate_float(z.n, r.n)
-        temp_z_s = allocate_float(z.n, r.n)
-        dfni = allocate_float(vpa.n, vperp.n, z.n, r.n)
+        densi = allocate_shared_float(z.n, r.n)
+        upari = allocate_shared_float(z.n, r.n)
+        ppari = allocate_shared_float(z.n, r.n)
+        temp_z_s = allocate_shared_float(z.n, r.n)
+        dfni = allocate_shared_float(vpa.n, vperp.n, z.n, r.n)
 
-        densn = allocate_float(z.n, r.n)
-        dfnn = allocate_float(vz.n, vr.n, vzeta.n, z.n, r.n)
+        phi = allocate_shared_float(z.n, r.n)
+        Er = allocate_shared_float(z.n, r.n)
+        Ez = allocate_shared_float(z.n, r.n)
 
-        phi = allocate_float(z.n, r.n)
-        Er = allocate_float(z.n, r.n)
-        Ez = allocate_float(z.n, r.n)
-
-        for ir ∈ 1:r.n, iz ∈ 1:z.n
+        begin_r_z_region()
+        @loop_r_z ir iz begin
             densi[iz,ir] = densi_func(z.grid[iz], r.grid[ir], t)
             upari[iz,ir] = NaN
             ppari[iz,ir] = NaN
             for ivperp ∈ 1:vperp.n, ivpa ∈ 1:vpa.n
                 dfni[ivpa,ivperp,iz,ir] = dfni_func(vpa.grid[ivpa], vperp.grid[ivperp], z.grid[iz],
-                                        r.grid[ir], t)
-            end
-
-            densn[iz,ir] = densn_func(z.grid[iz], r.grid[ir], t)
-            for ivzeta ∈ 1:vzeta.n, ivr ∈ 1:vr.n, ivz ∈ 1:vz.n
-                dfnn[ivz,ivr,ivzeta,iz,ir] =
-                    dfnn_func(vz.grid[ivz], vr.grid[ivr], vzeta.grid[ivzeta], z.grid[iz],
-                              r.grid[ir], t)
+                                                    r.grid[ir], t)
             end
 
             phi[iz,ir] = phi_func(z.grid[iz], r.grid[ir], t)
             Er[iz,ir] = Er_func(z.grid[iz], r.grid[ir], t)
             Ez[iz,ir] = Ez_func(z.grid[iz], r.grid[ir], t)
+        end
+
+        if composition.n_neutral_species > 0
+            densn = allocate_shared_float(z.n, r.n)
+            dfnn = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, r.n)
+
+            @loop_r_z ir iz begin
+                densn[iz,ir] = densn_func(z.grid[iz], r.grid[ir], t)
+                for ivzeta ∈ 1:vzeta.n, ivr ∈ 1:vr.n, ivz ∈ 1:vz.n
+                    dfnn[ivz,ivr,ivzeta,iz,ir] =
+                    dfnn_func(vz.grid[ivz], vr.grid[ivr], vzeta.grid[ivzeta], z.grid[iz],
+                              r.grid[ir], t)
+                end
+            end
+        else
+            densn = nothing
+            dfnn = nothing
         end
 
         return (pdf=dfni, density=densi, upar=upari, ppar=ppari, pdf_neutral=dfnn,
@@ -507,25 +516,23 @@ using ..type_definitions
         rhs_ion_func, rhs_neutral_func = manufactured_rhs(r.L, z.L, r.bc, z.bc,
             composition, geometry, collisions, r.n, advance)
 
-        rhs_ion = allocate_float(vpa.n, vperp.n, z.n, r.n)
+        rhs_ion = allocate_shared_float(vpa.n, vperp.n, z.n, r.n)
 
-        for ir ∈ 1:r.n, iz ∈ 1:z.n
-            for ivperp ∈ 1:vperp.n, ivpa ∈ 1:vpa.n
-                rhs_ion[ivpa,ivperp,iz,ir] =
-                    rhs_ion_func(vpa.grid[ivpa], vperp.grid[ivperp], z.grid[iz],
-                                 r.grid[ir], t)
-            end
+        begin_r_z_vperp_vpa_region()
+        @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
+            rhs_ion[ivpa,ivperp,iz,ir] =
+                rhs_ion_func(vpa.grid[ivpa], vperp.grid[ivperp], z.grid[iz],
+                             r.grid[ir], t)
         end
 
         if composition.n_neutral_species > 0
-            rhs_neutral = allocate_float(vz.n, vr.n, vzeta.n, z.n, r.n)
+            rhs_neutral = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, r.n)
 
-            for ir ∈ 1:r.n, iz ∈ 1:z.n
-                for ivz ∈ 1:vz.n, ivr ∈ 1:vr.n, ivzeta ∈ 1:vzeta.n
-                    rhs_neutral[ivz,ivr,ivzeta,iz,ir] =
-                    rhs_neutral_func(vz.grid[ivz], vr.grid[ivr], vzeta.grid[ivzeta],
-                                     z.grid[iz], r.grid[ir], t)
-                end
+            begin_r_z_vzeta_vr_vz_region()
+            @loop_r_z_vzeta_vr_vz ir iz ivzeta ivr ivz begin
+                rhs_neutral[ivz,ivr,ivzeta,iz,ir] =
+                rhs_neutral_func(vz.grid[ivz], vr.grid[ivr], vzeta.grid[ivzeta],
+                                 z.grid[iz], r.grid[ir], t)
             end
         else
             rhs_neutral = nothing

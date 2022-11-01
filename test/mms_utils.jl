@@ -188,12 +188,12 @@ function evaluate_initial_ddt(input_dict::Dict, advance_input::advance_info)
                     )
     end
 
-    # clean up i/o and communications
+    # arguments to pass to cleanup_moment_kinetics!()
     # last 2 elements of mk_state are `io` and `cdf`
-    cleanup_moment_kinetics!(mk_state[end-1:end]...)
+    to_cleanup = mk_state[end-1:end]
 
-    return dfdt_ion, dfdt_neutral, plasma_fields, em_fields, r, z, vperp, vpa, vzeta, vr,
-           vz, composition, geometry, collisions, modified_advance
+    return dfdt_ion, dfdt_neutral, plasma_fields, em_fields, to_cleanup, r, z, vperp, vpa,
+           vzeta, vr, vz, composition, geometry, collisions, modified_advance
 end
 
 """
@@ -266,22 +266,24 @@ function runcase(input::Dict, advance::advance_info, returnstuff=false)
     dfdt_neutral = nothing
     manufactured_inputs = nothing
     quietoutput() do
-        dfdt_ion, dfdt_neutral, plasma_fields, em_fields, manufactured_inputs... =
-        evaluate_initial_ddt(input, advance)
+        dfdt_ion, dfdt_neutral, plasma_fields, em_fields, to_cleanup,
+        manufactured_inputs... = evaluate_initial_ddt(input, advance)
     end
 
     error_2 = nothing
     error_inf = nothing
-    rhs_ion_manf = nothing
-    rhs_neutral_manf = nothing
-    plasma_manf = nothing
-    em_manf = nothing
-    if global_rank[] == 0
-        rhs_ion_manf, rhs_neutral_manf = manufactured_rhs_as_array(mk_float(0.0),
-                                                                   manufactured_inputs...)
-        plasma_manf, em_manf = manufactured_solutions_as_arrays(0.0,
-                                                                manufactured_inputs[1:9]...)
+    rhs_ion_manf, rhs_neutral_manf = manufactured_rhs_as_array(mk_float(0.0),
+                                                               manufactured_inputs...)
+    plasma_manf, em_manf = manufactured_solutions_as_arrays(0.0,
+                                                            manufactured_inputs[1:9]...)
 
+    if global_rank[] == 0
+        rhs_ion_manf = copy(rhs_ion_manf)
+        if rhs_neutral_manf !== nothing
+            rhs_neutral_manf = copy(rhs_neutral_manf)
+        end
+        plasma_manf = deepcopy(plasma_manf)
+        em_manf = deepcopy(em_manf)
         if input["n_ion_species"] > 0
             # Only one species, so get rid of species index
             dfdt_ion = dfdt_ion[:,:,:,:,1]
@@ -325,7 +327,15 @@ function runcase(input::Dict, advance::advance_info, returnstuff=false)
         println("ion error ", error_2_ion, " ", error_inf_ion)
         println("neutral error ", error_2_neutral, " ", error_inf_neutral)
         println("combined error ", error_2, " ", error_inf)
+    else
+        rhs_ion_manf = nothing
+        rhs_neutral_manf = nothing
+        plasma_manf = nothing
+        em_manf = nothing
     end
+
+    # clean up i/o and communications
+    cleanup_moment_kinetics!(to_cleanup...)
 
     if returnstuff
 
