@@ -231,49 +231,50 @@ function mk_input(scan_input=Dict())
     # nelement is the number of elements
     gyrophase.nelement = get(scan_input, "gyrophase_nelement", 10)
     
-    # overwrite some default parameters related to the vz grid
-    # use vpa grid values as defaults
-    # ngrid is the number of grid points per element
-    vz.ngrid = get(scan_input, "vz_ngrid", vpa.ngrid)
-    # nelement is the number of elements
-    vz.nelement = get(scan_input, "vz_nelement", vpa.nelement)
-    # L is the box length in units of vthermal_species
-    vz.L = get(scan_input, "vz_L", vpa.L)
-    # determine the boundary condition
-    # only supported option at present is "zero" and "periodic"
-    vz.bc = get(scan_input, "vz_bc", vpa.bc)
-    # determine the discretization option for the vz grid
-    # supported options are "chebyshev_pseudospectral" and "finite_difference"
-    vz.discretization = get(scan_input, "vz_discretization", vpa.discretization)
-    
-    # overwrite some default parameters related to the vr grid
-    # ngrid is the number of grid points per element
-    vr.ngrid = get(scan_input, "vr_ngrid", 1)
-    # nelement is the number of elements
-    vr.nelement = get(scan_input, "vr_nelement", 1)
-    # L is the box length in units of vthermal_species
-    vr.L = get(scan_input, "vr_L", 8.0*sqrt(species.charged[1].initial_temperature))
-    # determine the boundary condition
-    # only supported option at present is "zero" and "periodic"
-    vr.bc = get(scan_input, "vr_bc", "periodic")
-    # determine the discretization option for the vr grid
-    # supported options are "chebyshev_pseudospectral" and "finite_difference"
-    vr.discretization = get(scan_input, "vr_discretization", "chebyshev_pseudospectral")
+	if n_neutral_species > 0
+		# overwrite some default parameters related to the vz grid
+		# use vpa grid values as defaults
+		# ngrid is the number of grid points per element
+		vz.ngrid = get(scan_input, "vz_ngrid", vpa.ngrid)
+		# nelement is the number of elements
+		vz.nelement = get(scan_input, "vz_nelement", vpa.nelement)
+		# L is the box length in units of vthermal_species
+		vz.L = get(scan_input, "vz_L", vpa.L)
+		# determine the boundary condition
+		# only supported option at present is "zero" and "periodic"
+		vz.bc = get(scan_input, "vz_bc", vpa.bc)
+		# determine the discretization option for the vz grid
+		# supported options are "chebyshev_pseudospectral" and "finite_difference"
+		vz.discretization = get(scan_input, "vz_discretization", vpa.discretization)
+		
+		# overwrite some default parameters related to the vr grid
+		# ngrid is the number of grid points per element
+		vr.ngrid = get(scan_input, "vr_ngrid", 1)
+		# nelement is the number of elements
+		vr.nelement = get(scan_input, "vr_nelement", 1)
+		# L is the box length in units of vthermal_species
+		vr.L = get(scan_input, "vr_L", 8.0*sqrt(species.charged[1].initial_temperature))
+		# determine the boundary condition
+		# only supported option at present is "zero" and "periodic"
+		vr.bc = get(scan_input, "vr_bc", "periodic")
+		# determine the discretization option for the vr grid
+		# supported options are "chebyshev_pseudospectral" and "finite_difference"
+		vr.discretization = get(scan_input, "vr_discretization", "chebyshev_pseudospectral")
 
-    # overwrite some default parameters related to the vzeta grid
-    # ngrid is the number of grid points per element
-    vzeta.ngrid = get(scan_input, "vzeta_ngrid", 1)
-    # nelement is the number of elements
-    vzeta.nelement = get(scan_input, "vzeta_nelement", 1)
-    # L is the box length in units of vthermal_species
-    vzeta.L = get(scan_input, "vzeta_L", 8.0*sqrt(species.charged[1].initial_temperature))
-    # determine the boundary condition
-    # only supported option at present is "zero" and "periodic"
-    vzeta.bc = get(scan_input, "vzeta_bc", "periodic")
-    # determine the discretization option for the vzeta grid
-    # supported options are "chebyshev_pseudospectral" and "finite_difference"
-    vzeta.discretization = get(scan_input, "vzeta_discretization", "chebyshev_pseudospectral")
-
+		# overwrite some default parameters related to the vzeta grid
+		# ngrid is the number of grid points per element
+		vzeta.ngrid = get(scan_input, "vzeta_ngrid", 1)
+		# nelement is the number of elements
+		vzeta.nelement = get(scan_input, "vzeta_nelement", 1)
+		# L is the box length in units of vthermal_species
+		vzeta.L = get(scan_input, "vzeta_L", 8.0*sqrt(species.charged[1].initial_temperature))
+		# determine the boundary condition
+		# only supported option at present is "zero" and "periodic"
+		vzeta.bc = get(scan_input, "vzeta_bc", "periodic")
+		# determine the discretization option for the vzeta grid
+		# supported options are "chebyshev_pseudospectral" and "finite_difference"
+		vzeta.discretization = get(scan_input, "vzeta_discretization", "chebyshev_pseudospectral")
+	end
     #########################################################################
     ########## end user inputs. do not modify following code! ###############
     #########################################################################

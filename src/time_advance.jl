@@ -189,7 +189,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
         vperp.duniform_dgrid .= 1.0
     end
     
-    if vz.discretization == "chebyshev_pseudospectral" 
+    if vz.discretization == "chebyshev_pseudospectral" && vz.n > 1
         # create arrays needed for explicit Chebyshev pseudospectral treatment in vz
         # and create the plans for the forward and backward fast Chebyshev transforms
         vz_spectral = setup_chebyshev_pseudospectral(vz)
