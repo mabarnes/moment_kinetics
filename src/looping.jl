@@ -10,18 +10,14 @@ using ..type_definitions: mk_int
 using Combinatorics
 using Primes
 
-# The ion dimensions and neutral dimensions are separated in order to reduce the number
-# of combinations. For some of the debugging features this helps. 'Moment dimensions"
-# are included separately so that they can include loops over both ion and neutral
-# species while excluding the 7-level loop s_sn_r_z_vzeta_vr_vz.
-const moment_dimensions = (:s, :sn, :r, :z)
+# The ion dimensions and neutral dimensions are separated in order to restrict the
+# supported parallel loop types to correct combinations. This also reduces the number
+# of combinations - for some of the debugging features this helps.
 const ion_dimensions = (:s, :r, :z, :vperp, :vpa)
 const neutral_dimensions = (:sn, :r, :z, :vzeta, :vr, :vz)
-const all_dimensions = unique((moment_dimensions..., ion_dimensions...,
-                               neutral_dimensions...))
+const all_dimensions = unique((ion_dimensions..., neutral_dimensions...))
 const dimension_combinations = Tuple(Tuple(c) for c in
-                                     unique((combinations(moment_dimensions)...,
-                                             combinations(ion_dimensions)...,
+                                     unique((combinations(ion_dimensions)...,
                                              combinations(neutral_dimensions)...)))
 
 """

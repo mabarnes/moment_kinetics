@@ -31,22 +31,24 @@ function charge_exchange_collisions_1V!(f_out, f_neutral_out, fvec_in, compositi
     # vpa loop below can also be used for vz 
     begin_r_z_vpa_region()
     
-    @loop_s_sn is isn begin
-        @loop_r_z_vpa ir iz ivpa begin
-            # apply CX collisions to all ion species
-            # for each ion species, obtain affect of charge exchange collisions
-            # with all of the neutral species
-            f_out[ivpa,1,iz,ir,is] +=
+    @loop_s is begin
+        @loop_sn isn begin
+            @loop_r_z_vpa ir iz ivpa begin
+                # apply CX collisions to all ion species
+                # for each ion species, obtain affect of charge exchange collisions
+                # with all of the neutral species
+                f_out[ivpa,1,iz,ir,is] +=
                 dt*charge_exchange_frequency*(
-                    fvec_in.pdf_neutral[ivpa,1,1,iz,ir,isn]*fvec_in.density[iz,ir,is]
-                    - fvec_in.pdf[ivpa,1,iz,ir,is]*fvec_in.density_neutral[iz,ir,isn])
-            # apply CX collisions to all neutral species
-            # for each neutral species, obtain affect of charge exchange collisions
-            # with all of the ion species
-            f_neutral_out[ivpa,1,1,iz,ir,isn] +=
+                                              fvec_in.pdf_neutral[ivpa,1,1,iz,ir,isn]*fvec_in.density[iz,ir,is]
+                                              - fvec_in.pdf[ivpa,1,iz,ir,is]*fvec_in.density_neutral[iz,ir,isn])
+                # apply CX collisions to all neutral species
+                # for each neutral species, obtain affect of charge exchange collisions
+                # with all of the ion species
+                f_neutral_out[ivpa,1,1,iz,ir,isn] +=
                 dt*charge_exchange_frequency*(
-                    fvec_in.pdf[ivpa,1,iz,ir,is]*fvec_in.density_neutral[iz,ir,isn]
-                    - fvec_in.pdf_neutral[ivpa,1,1,iz,ir,isn]*fvec_in.density[iz,ir,is])
+                                              fvec_in.pdf[ivpa,1,iz,ir,is]*fvec_in.density_neutral[iz,ir,isn]
+                                              - fvec_in.pdf_neutral[ivpa,1,1,iz,ir,isn]*fvec_in.density[iz,ir,is])
+            end
         end
     end
 end
