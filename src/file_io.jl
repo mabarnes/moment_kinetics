@@ -10,6 +10,7 @@ export write_data_to_binary
 
 using NCDatasets
 using ..communication: _block_synchronize
+using ..debugging
 using ..looping
 using ..moment_kinetics_structs: scratch_pdf, em_fields_struct
 using ..type_definitions: mk_float, mk_int
@@ -507,31 +508,70 @@ function write_data_to_binary(ff, ff_neutral, moments, fields, t, n_ion_species,
         # add the time for this time slice to the netcdf file
         cdf.time[t_idx] = t
         # add the distribution function data at this time slice to the netcdf file
-        cdf.f[:,:,:,:,:,t_idx] .= ff
+        cdf.f[:,:,:,:,:,t_idx] = ff
         # add the electrostatic potential data at this time slice to the netcdf file
-        cdf.phi[:,:,t_idx] .= fields.phi
-        cdf.Er[:,:,t_idx] .= fields.Er
-        cdf.Ez[:,:,t_idx] .= fields.Ez
+        cdf.phi[:,:,t_idx] = fields.phi
+        cdf.Er[:,:,t_idx] = fields.Er
+        cdf.Ez[:,:,t_idx] = fields.Ez
         # add the density data at this time slice to the netcdf file
         for is ∈ 1:n_ion_species
-            cdf.density[:,:,:,t_idx] .= moments.charged.dens
-            cdf.parallel_flow[:,:,:,t_idx] .= moments.charged.upar
-            cdf.parallel_pressure[:,:,:,t_idx] .= moments.charged.ppar
-            cdf.parallel_heat_flux[:,:,:,t_idx] .= moments.charged.qpar
-            cdf.thermal_speed[:,:,:,t_idx] .= moments.charged.vth
+            cdf.density[:,:,:,t_idx] = moments.charged.dens
+            cdf.parallel_flow[:,:,:,t_idx] = moments.charged.upar
+            cdf.parallel_pressure[:,:,:,t_idx] = moments.charged.ppar
+            cdf.parallel_heat_flux[:,:,:,t_idx] = moments.charged.qpar
+            cdf.thermal_speed[:,:,:,t_idx] = moments.charged.vth
         end
         if n_neutral_species > 0
-            cdf.f_neutral[:,:,:,:,:,:,t_idx] .= ff_neutral
+            cdf.f_neutral[:,:,:,:,:,:,t_idx] = ff_neutral
             for is ∈ 1:n_neutral_species
-                cdf.density_neutral[:,:,:,t_idx] .= moments.neutral.dens
-                cdf.uz_neutral[:,:,:,t_idx] .= moments.neutral.uz
-                cdf.pz_neutral[:,:,:,t_idx] .= moments.neutral.pz
-                cdf.qz_neutral[:,:,:,t_idx] .= moments.neutral.qz
-                cdf.thermal_speed_neutral[:,:,:,t_idx] .= moments.neutral.vth
+                cdf.density_neutral[:,:,:,t_idx] = moments.neutral.dens
+                cdf.uz_neutral[:,:,:,t_idx] = moments.neutral.uz
+                cdf.pz_neutral[:,:,:,t_idx] = moments.neutral.pz
+                cdf.qz_neutral[:,:,:,t_idx] = moments.neutral.qz
+                cdf.thermal_speed_neutral[:,:,:,t_idx] = moments.neutral.vth
             end
         end
     end
     return nothing
+end
+@debug_shared_array begin
+    # Special version when using DebugMPISharedArray to avoid implicit conversion to
+    # Array, which is forbidden.
+    function write_data_to_binary(ff::DebugMPISharedArray,
+                                  ff_neutral::DebugMPISharedArray, moments, fields, t,
+                                  n_ion_species, n_neutral_species, cdf, t_idx)
+        @serial_region begin
+            # Only read/write from first process in each 'block'
+
+            # add the time for this time slice to the netcdf file
+            cdf.time[t_idx] = t
+            # add the distribution function data at this time slice to the netcdf file
+            cdf.f[:,:,:,:,:,t_idx] = ff.data
+            # add the electrostatic potential data at this time slice to the netcdf file
+            cdf.phi[:,:,t_idx] = fields.phi.data
+            cdf.Er[:,:,t_idx] = fields.Er.data
+            cdf.Ez[:,:,t_idx] = fields.Ez.data
+            # add the density data at this time slice to the netcdf file
+            for is ∈ 1:n_ion_species
+                cdf.density[:,:,:,t_idx] = moments.charged.dens.data
+                cdf.parallel_flow[:,:,:,t_idx] = moments.charged.upar.data
+                cdf.parallel_pressure[:,:,:,t_idx] = moments.charged.ppar.data
+                cdf.parallel_heat_flux[:,:,:,t_idx] = moments.charged.qpar.data
+                cdf.thermal_speed[:,:,:,t_idx] = moments.charged.vth.data
+            end
+            if n_neutral_species > 0
+                cdf.f_neutral[:,:,:,:,:,:,t_idx] = ff_neutral.data
+                for is ∈ 1:n_neutral_species
+                    cdf.density_neutral[:,:,:,t_idx] = moments.neutral.dens.data
+                    cdf.uz_neutral[:,:,:,t_idx] = moments.neutral.uz.data
+                    cdf.pz_neutral[:,:,:,t_idx] = moments.neutral.pz.data
+                    cdf.qz_neutral[:,:,:,t_idx] = moments.neutral.qz.data
+                    cdf.thermal_speed_neutral[:,:,:,t_idx] = moments.neutral.vth.data
+                end
+            end
+        end
+        return nothing
+    end
 end
 
 """
