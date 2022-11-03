@@ -14,6 +14,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
+      - uses: mpi4py/setup-mpi@v1
+        with:
+          mpi: 'openmpi'
       - uses: julia-actions/setup-julia@v1
         with:
           version: '1.7.2'
@@ -21,4 +24,5 @@ jobs:
       - uses: julia-actions/julia-buildpkg@v1
       - name: Test examples
         run: |
+          julia --project -e 'ENV["JULIA_MPI_BINARY"]="system"; using Pkg; Pkg.build("MPI"; verbose=true)'
           julia --project -O3 -e 'using moment_kinetics; for (root, dirs, files) in walkdir("examples") for file in files if endswith(file, ".toml") println(joinpath(root, file)); run_moment_kinetics(joinpath(root, file)) end end end'

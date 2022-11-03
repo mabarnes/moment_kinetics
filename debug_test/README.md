@@ -52,6 +52,12 @@ check is made whether there would be a race-condition error if the previous
 `_block_synchronize()` call was removed. If there would not be, then the
 previous call was unnecessary and could be removed. The tricky part is that
 whether it was necessary or not could depend on the options being used...
+Detecting redundant `block_synchronize()` calls requires that all dimensions
+that could be split over processes are actually split over processes, which
+demands a large number of processes are used. The
+`@debug_detect_redundant_block_synchronize` flag, when activated, modifies the
+splitting algorithm to force every dimension to be split if possible, and raise
+an error if not.
 
 Suggested debugging strategy for race conditions is:
 * Look at the loop types and ensure that there is an appropriate
@@ -70,22 +76,32 @@ Suggested debugging strategy for race conditions is:
       ..communication: debug_check_shared_memory()`. The function runs the same
       error checks as are added by `@debug_shared_array` in
       `_block_synchronize()`.
-* Run `debug_test/runtests.jl` with `@debug_detect_redundant_block_synchronize`
-  activated. This should show if any call to `_block_synchronize()` (including
-  the ones inside `begin_*_region()` calls) was 'unnecessary' - i.e. there
-  would be no incorrect array accesses if it was removed. This test needs to be
-  run on a suitable combination of grid sizes and numbers of processes so that
-  all dimensions are split across multiple processes to avoid false positives.
-  Any redundant calls which appear in all tests can be deleted.  Redundant
-  calls that appear in only some tests (unless they are in some code block that
-  is just not called in all the other tests) should preferably be moved inside
-  a conditional block, so that they are called only when necessary, if a
-  suitable one exists. If there is no conditional block that the call can be
-  moved to, it may sometimes be necessary to just test one or more options
-  before calling, e.g.
+    * The tests in `debug_test/` check for correctness by looping over the
+      dimensions and forcing each to be split over separate processes in turn.
+      This allows the correctness checks to be run using only 2 processes,
+      which would not be possible if all dimensions had to be split at the same
+      time.
+* Run `debug_test/debug_redundant_synchronization/runtests.jl` with
+  `@debug_detect_redundant_block_synchronize` activated. This should show if
+  any call to `_block_synchronize()` (including the ones inside
+  `begin_*_region()` calls) was 'unnecessary' - i.e. there would be no
+  incorrect array accesses if it was removed. This test needs to be run on a
+  suitable combination of grid sizes and numbers of processes so that all
+  dimensions are split across multiple processes to avoid false positives.  Any
+  redundant calls which appear in all tests can be deleted.  Redundant calls
+  that appear in only some tests (unless they are in some code block that is
+  just not called in all the other tests) should preferably be moved inside a
+  conditional block, so that they are called only when necessary, if a suitable
+  one exists. If there is no conditional block that the call can be moved to,
+  it may sometimes be necessary to just test one or more options before
+  calling, e.g.
   ```
   moments.evolve_upar && _block_synchronize()
   ```
+    * The checks for redundant `_block_synchronize()` calls have been separated
+      from the correctness checks so that the correctness checks can be run in
+      the CI using only 2 processes, while the redundancy checks can be run
+      manually on a machine with enough memory and cpu cores.
 
 You can find out what loop type is currently active by looking at
 `loop_ranges[].parallel_dims`. This variable is a Tuple containing Symbols for

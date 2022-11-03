@@ -41,7 +41,7 @@ function mk_input(scan_input=Dict())
 
     # n_ion_species is the number of evolved ion species
     # currently only n_ion_species = 1 is supported
-    n_ion_species = 1
+    n_ion_species = get(scan_input, "n_ion_species", 1)
     # n_neutral_species is the number of evolved neutral species
     # currently only n_neutral_species = 0,1 is supported
     n_neutral_species = get(scan_input, "n_neutral_species", 1)

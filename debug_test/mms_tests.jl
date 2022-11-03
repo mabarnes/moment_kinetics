@@ -1,4 +1,4 @@
-module WallBCDebug
+module MMSDebug
 
 # Debug test using wall boundary conditions.
 
@@ -10,14 +10,14 @@ mkpath(test_output_directory)
 
 
 # Input parameters for the test
-include("wall_bc_inputs.jl")
+include("mms_inputs.jl")
 
 # Defines the test functions, using variables defined in the *_inputs.jl file
 include("runtest_template.jl")
 
-end # WallBCDebug
+end # MMSDebug
 
 
-using .WallBCDebug
+using .MMSDebug
 
-WallBCDebug.runtests()
+MMSDebug.runtests()
