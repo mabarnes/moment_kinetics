@@ -24,10 +24,11 @@ function vpa_advection!(f_out, fvec_in, fields, advect,
     # calculate the advection speed corresponding to current f
     update_speed_vpa!(advect, fields, vpa, vperp, z, r, composition, geometry)
     @loop_s is begin
-        if is in composition.neutral_species_range
+        # MRH comment out exception below, neutral_species_range not assigned. 
+		#if is in composition.neutral_species_range
             # No acceleration for neutrals
-            continue
-        end
+        #    continue
+        #end
         # update the upwind/downwind boundary indices and upwind_increment
         update_boundary_indices!(advect[is], loop_ranges[].vperp, loop_ranges[].z, loop_ranges[].r)
 
@@ -57,8 +58,9 @@ function update_speed_vpa!(advect, fields, vpa, vperp, z, r, composition, geomet
             # Not usually used - just run in serial
             #
             # dvpa/dt = constant
-            s_range = composition.ion_species_range
-            for is ∈ s_range
+            #s_range = composition.ion_species_range
+            #for is ∈ s_range
+            for is ∈ 1:composition.n_ion_species
                 update_speed_constant!(advect[is], vpa, 1:vperp.n, 1:z.n, 1:r.n)
             end
         end
@@ -68,8 +70,9 @@ function update_speed_vpa!(advect, fields, vpa, vperp, z, r, composition, geomet
             # Not usually used - just run in serial
             #
             # dvpa/dt = constant ⋅ (vpa + L_vpa/2)
-            s_range = composition.ion_species_range
-            for is ∈ s_range
+            #s_range = composition.ion_species_range
+            #for is ∈ s_range
+            for is ∈ 1:composition.n_ion_species
                 update_speed_linear!(advect[is], vpa, 1:vperp.n, 1:z.n, 1:r.n)
             end
         end
