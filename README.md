@@ -62,6 +62,28 @@
     ```
     passing the directories to process as command line arguments. Optionally pass a number as the first argument to parallelise post processing of different directories. Input options for post-processing can be specified in `post_processing_input.jl`.
 
+7) In the course of development, it is sometimes helpful to upgrade the Julia veriosn. Upgrading the version of Julia or upgrading packages may require a fresh installation of `moment_kinetics`. To make a fresh install with the latest package versions it is necessary to remove (or rename) the `Manifest.jl` file in the main directory, and generate a new `Manifest.jl` with step 1) above. It can sometimes be necessary to remove or rename the `.julia/` folder in your root directory for this step to be successful.
+
+8) One may have to set an environment variable to avoid error messages from the Qt library. If you execute the command 
+
+    ```
+    $ julia --project run_post_processing.jl runs/your_run_dir/
+    ```
+
+and see the error message    
+    
+    
+    qt.qpa.xcb: could not connect to display
+    qt.qpa.plugin: Could not load the Qt platform plugin "xcb" in "" even though it was found.
+    This application failed to start because no Qt platform plugin could be initialized. Reinstalling the application may fix this problem.
+    
+    
+this can be suppressed by setting 
+    ```
+    export QT_QPA_PLATFORM=offscreen
+    ```
+in your `.bashrc` or `.bash_profile` files. 
+    
 ## Running parameter scans
 Parameter scans can be run, and can (optionally) use multiple processors. Short summary of implementation and usage:
 1) `mk_input()` takes a Dict argument, which can modify values. So `mk_input()` sets the 'defaults' (for a scan), which are overridden by any key/value pairs in the Dict.
