@@ -360,6 +360,30 @@ struct pp_input
     plot_Er_vs_r0_z::Bool
     # if plot_wall_Er_vs_r = true, plot last timestep Er[z_wall,r]
     plot_wall_Er_vs_r::Bool
+	# if plot_density_vs_r0_z = true  plot last timestep density[z,ir0]
+	plot_density_vs_r0_z::Bool
+	# if plot_wall_density_vs_r = true  plot last timestep density[z_wall,r]
+	plot_wall_density_vs_r::Bool
+    # if plot_density_vs_r_z = true plot density vs r z at last timestep
+	plot_density_vs_r_z::Bool
+	# if animate_density_vs_r_z = true animate density vs r z
+	animate_density_vs_r_z::Bool
+	# if plot_parallel_flow_vs_r0_z = true  plot last timestep parallel_flow[z,ir0]
+	plot_parallel_flow_vs_r0_z::Bool
+	# if plot_wall_parallel_flow_vs_r = true  plot last timestep parallel_flow[z_wall,r]
+	plot_wall_parallel_flow_vs_r::Bool
+    # if plot_parallel_flow_vs_r_z = true plot parallel_flow vs r z at last timestep
+	plot_parallel_flow_vs_r_z::Bool
+	# if animate_parallel_flow_vs_r_z = true animate parallel_flow vs r z
+	animate_parallel_flow_vs_r_z::Bool
+	# if plot_parallel_pressure_vs_r0_z = true  plot last timestep parallel_pressure[z,ir0]
+	plot_parallel_pressure_vs_r0_z::Bool
+	# if plot_wall_parallel_pressure_vs_r = true  plot last timestep parallel_pressure[z_wall,r]
+	plot_wall_parallel_pressure_vs_r::Bool
+    # if plot_parallel_pressure_vs_r_z = true plot parallel_pressure vs r z at last timestep 
+	plot_parallel_pressure_vs_r_z::Bool
+    # if animate_parallel_pressure_vs_r_z = true animate parallel_pressure vs r z
+	animate_parallel_pressure_vs_r_z::Bool
     # animations will use one in every nwrite_movie data slices
     nwrite_movie::mk_int
     # itime_min is the minimum time index at which to start animations

@@ -129,6 +129,9 @@ function analyze_and_plot_data(path)
         r, ir0, run_name, delta_phi, pp)
     end
     # make plots and animations of the phi, Ez and Er 
+    plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time, z, r, iz0, ir0, n_ion_species,
+     itime_min, itime_max, nwrite_movie, run_name, pp)
+    # make plots and animations of the phi, Ez and Er 
     plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
      itime_min, itime_max, nwrite_movie, run_name, pp, "")
     # make plots and animations of the ion pdf
@@ -1369,6 +1372,99 @@ function plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
         outfile = string(run_name, "_Er"*description*"_vs_r_z.gif")
         gif(anim, outfile, fps=5)
     end
+    println("done.")
+end
+
+function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time, z, r, iz0, ir0, n_ion_species,
+    itime_min, itime_max, nwrite_movie, run_name, pp)
+
+    print("Plotting charged moments data...")
+    for is in 1:n_ion_species
+		description = "_ion_spec"*string(is)*"_"
+		# the density
+		densitymin = minimum(density[:,:,is,:])
+		densitymax = maximum(density)
+		if pp.plot_density_vs_r0_z # plot last timestep density[z,ir0]
+			@views plot(z, density[:,ir0,is,end], xlabel=L"z/L_z", ylabel=L"n_i")
+			outfile = string(run_name, "_density"*description*"(r0,z)_vs_z.pdf")
+			savefig(outfile)    
+		end
+		if pp.plot_wall_density_vs_r # plot last timestep density[z_wall,r]
+			@views plot(r, density[end,:,is,end], xlabel=L"r/L_r", ylabel=L"n_i")
+			outfile = string(run_name, "_density"*description*"(r,z_wall)_vs_r.pdf")
+			savefig(outfile)
+		end
+		if pp.animate_density_vs_r_z
+			# make a gif animation of ϕ(z) at different times
+			anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+				@views heatmap(r, z, density[:,:,is,i], xlabel="r", ylabel="z", c = :deep, interpolation = :cubic)
+			end
+			outfile = string(run_name, "_density"*description*"_vs_r_z.gif")
+			gif(anim, outfile, fps=5)
+		end
+		if pp.plot_density_vs_r_z
+			@views heatmap(r, z, density[:,:,is,end], xlabel=L"r", ylabel=L"z", c = :deep, interpolation = :cubic,
+			windowsize = (360,240), margin = 15pt)
+			outfile = string(run_name, "_density"*description*"_vs_r_z.pdf")
+			savefig(outfile)
+		end
+		
+		# the parallel flow
+		parallel_flowmin = minimum(parallel_flow[:,:,is,:])
+		parallel_flowmax = maximum(parallel_flow)
+		if pp.plot_parallel_flow_vs_r0_z # plot last timestep parallel_flow[z,ir0]
+			@views plot(z, parallel_flow[:,ir0,is,end], xlabel=L"z/L_z", ylabel=L"n_i")
+			outfile = string(run_name, "_parallel_flow"*description*"(r0,z)_vs_z.pdf")
+			savefig(outfile)    
+		end
+		if pp.plot_wall_parallel_flow_vs_r # plot last timestep parallel_flow[z_wall,r]
+			@views plot(r, parallel_flow[end,:,is,end], xlabel=L"r/L_r", ylabel=L"n_i")
+			outfile = string(run_name, "_parallel_flow"*description*"(r,z_wall)_vs_r.pdf")
+			savefig(outfile)
+		end
+		if pp.animate_parallel_flow_vs_r_z
+			# make a gif animation of ϕ(z) at different times
+			anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+				@views heatmap(r, z, parallel_flow[:,:,is,i], xlabel="r", ylabel="z", c = :deep, interpolation = :cubic)
+			end
+			outfile = string(run_name, "_parallel_flow"*description*"_vs_r_z.gif")
+			gif(anim, outfile, fps=5)
+		end
+		if pp.plot_parallel_flow_vs_r_z
+			@views heatmap(r, z, parallel_flow[:,:,is,end], xlabel=L"r", ylabel=L"z", c = :deep, interpolation = :cubic,
+			windowsize = (360,240), margin = 15pt)
+			outfile = string(run_name, "_parallel_flow"*description*"_vs_r_z.pdf")
+			savefig(outfile)
+		end
+		
+		# the parallel pressure
+		parallel_pressuremin = minimum(parallel_pressure[:,:,is,:])
+		parallel_pressuremax = maximum(parallel_pressure)
+		if pp.plot_parallel_pressure_vs_r0_z # plot last timestep parallel_pressure[z,ir0]
+			@views plot(z, parallel_pressure[:,ir0,is,end], xlabel=L"z/L_z", ylabel=L"n_i")
+			outfile = string(run_name, "_parallel_pressure"*description*"(r0,z)_vs_z.pdf")
+			savefig(outfile)    
+		end
+		if pp.plot_wall_parallel_pressure_vs_r # plot last timestep parallel_pressure[z_wall,r]
+			@views plot(r, parallel_pressure[end,:,is,end], xlabel=L"r/L_r", ylabel=L"n_i")
+			outfile = string(run_name, "_parallel_pressure"*description*"(r,z_wall)_vs_r.pdf")
+			savefig(outfile)
+		end
+		if pp.animate_parallel_pressure_vs_r_z
+			# make a gif animation of ϕ(z) at different times
+			anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+				@views heatmap(r, z, parallel_pressure[:,:,is,i], xlabel="r", ylabel="z", c = :deep, interpolation = :cubic)
+			end
+			outfile = string(run_name, "_parallel_pressure"*description*"_vs_r_z.gif")
+			gif(anim, outfile, fps=5)
+		end
+		if pp.plot_parallel_pressure_vs_r_z
+			@views heatmap(r, z, parallel_pressure[:,:,is,end], xlabel=L"r", ylabel=L"z", c = :deep, interpolation = :cubic,
+			windowsize = (360,240), margin = 15pt)
+			outfile = string(run_name, "_parallel_pressure"*description*"_vs_r_z.pdf")
+			savefig(outfile)
+		end
+	end
     println("done.")
 end
 
