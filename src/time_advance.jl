@@ -567,7 +567,7 @@ end
 """
 function rk_update!(scratch, pdf, moments, fields, vz, vr, vzeta, vpa, vperp, z, r, rk_coefs, istage, composition, z_spectral, r_spectral)
     begin_s_r_z_vperp_region()
-    nvpa = vpa.n
+    #nvpa = vpa.n
     new_scratch = scratch[istage+1]
     old_scratch = scratch[istage]
     
