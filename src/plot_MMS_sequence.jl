@@ -69,6 +69,8 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
             nelement = vpa_input.nelement
             if  nelement == r_input.nelement &&nelement == z_input.nelement && nelement == vperp_input.nelement && nelement == vz_input.nelement && nelement == vr_input.nelement && nelement == vzeta_input.nelement
                 nelement_sequence[isim] = nelement
+            elseif  1 == r_input.nelement && nelement == z_input.nelement && nelement == vperp_input.nelement && nelement == vz_input.nelement && nelement == vr_input.nelement && nelement == vzeta_input.nelement
+                nelement_sequence[isim] = nelement
             else 
                 println("ERROR: scan_type = ",scan_type," requires element number to be equal in all dimensions")
             end
