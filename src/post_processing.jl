@@ -348,6 +348,26 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
             outfile = string(prefix, "_fL_vs_vpa", spec_string, ".gif")
             gif(anim, outfile, fps=5)
         end
+        if pp.plot_f_unnormalized_vs_vpa_z
+            PyPlot.clf()
+            fig = PyPlot.figure(1, figsize=(6*n_runs,4))
+            it = itime_max
+            # i counts from 0, Python-style
+            for (run_ind, f, n, upar, vth, ev_n, ev_u, ev_p, this_z, this_vpa,
+                 run_label) ∈ zip(1:n_runs, ff, density, parallel_flow,
+                                  thermal_speed, evolve_density, evolve_upar,
+                                  evolve_ppar, z, vpa, run_labels)
+
+                PyPlot.subplot(1, n_runs, run_ind)
+                @views f_unnorm, z2d, dzdt2d = get_unnormalised_f_coords_2d(
+                    f[:,:,is,it], this_z, this_vpa, n[:,is,it],
+                    upar[:,is,it], vth[:,is,it], ev_n, ev_u, ev_p)
+                plot_unnormalised_f2d(f_unnorm, z2d, dzdt2d; title=run_label,
+                                      plot_log=false)
+            end
+            PyPlot.savefig(string(prefix, "_f_unnorm_vs_vpa_z", spec_string, ".pdf"))
+            PyPlot.clf()
+        end
         if pp.animate_f_unnormalized
             ## The nice, commented out version will only work when plot_unnormalised can
             ## use Plots.jl...
