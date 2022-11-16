@@ -97,8 +97,12 @@ mutable struct grid_input_mutable
     name::String
     # number of grid points per element
     ngrid::mk_int
-    # number of elements
-    nelement::mk_int
+    # number of elements in global grid across ranks 
+    nelement_global::mk_int
+    # number of elements in local grid on this rank 
+    nelement_local::mk_int
+	# rank of this process
+	irank::mk_int
     # box length
     L::mk_float
     # discretization option
@@ -118,8 +122,14 @@ struct grid_input
     name::String
     # number of grid points per element
     ngrid::mk_int
-    # number of elements
-    nelement::mk_int
+    # number of elements globally
+    nelement_global::mk_int
+    # number of elements locally
+    nelement_local::mk_int
+    # number of ranks involved in the calculation
+    nrank::mk_int
+    # rank of this process
+    irank::mk_int
     # box length
     L::mk_float
     # discretization option
@@ -130,6 +140,8 @@ struct grid_input
     bc::String
     # struct containing advection speed options
     advection::advection_input
+	# MPI communicator
+	comm::T where T
 end
 
 """

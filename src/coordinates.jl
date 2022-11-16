@@ -18,12 +18,20 @@ structure containing basic information related to coordinates
 struct coordinate
     # name is the name of the variable associated with this coordiante
     name::String
-    # n is the total number of grid points associated with this coordinate
+    # n_global is the total number of grid points associated with this coordinate
+    n_global::mk_int
+    # n is the total number of local grid points associated with this coordinate
     n::mk_int
     # ngrid is the number of grid points per element in this coordinate
     ngrid::mk_int
-    # nelement is the number of elements associated with this coordinate
-    nelement::mk_int
+    # nelement is the number of elements associated with this coordinate globally
+    nelement_global::mk_int
+    # nelement_local is the number of elements associated with this coordinate on this rank
+    nelement_local::mk_int
+    # nrank is total number of ranks in the calculation of this coord
+    nrank::mk_int
+    # irank is the rank of this process
+    irank::mk_int
     # L is the box length in this coordinate
     L::mk_float
     # grid is the location of the grid points
@@ -61,6 +69,10 @@ struct coordinate
     scratch_2d::Array{mk_float,2}
     # struct containing advection speed options/inputs
     advection::advection_input
+	# buffer of size nrank+1 (allocated elsewhere) for communicating information about cell boundaries
+	buffer::Array{mk_float,1}
+	# the MPI communicator appropriate for this calculation
+	comm::T where T
 end
 
 """
@@ -72,39 +84,45 @@ function define_coordinate(input, composition=nothing)
     # total number of grid points is ngrid for the first element
     # plus ngrid-1 unique points for each additional element due
     # to the repetition of a point at the element boundary
-    n = (input.ngrid-1)*input.nelement + 1
-    # obtain index mapping from full grid to the
+    n_global = (input.ngrid-1)*input.nelement_global + 1
+    # local number of points on this process
+	n_local = (input.ngrid-1)*input.nelement_local + 1
+	# obtain index mapping from full (local) grid to the
     # grid within each element (igrid, ielement)
-    igrid, ielement = full_to_elemental_grid_map(input.ngrid, input.nelement, n)
-    # obtain index mapping from the grid within each element
+    igrid, ielement = full_to_elemental_grid_map(input.ngrid,
+    	input.nelement_local, n_local)
+    # obtain (local) index mapping from the grid within each element
     # to the full grid
-    imin, imax = elemental_to_full_grid_map(input.ngrid, input.nelement)
+    imin, imax = elemental_to_full_grid_map(input.ngrid, input.nelement_local)
     # initialize the grid and the integration weights associated with the grid
     # also obtain the Chebyshev theta grid and spacing if chosen as discretization option
-    grid, wgts, uniform_grid = init_grid(input.ngrid, input.nelement, n, input.L,
-        imin, imax, igrid, input.discretization, input.name)
+    grid, wgts, uniform_grid = init_grid(input.ngrid, input.nelement_global,
+	 input.nelement_local, n_local, input.irank, input.L,
+	 imin, imax, igrid, input.discretization, input.name)
     # calculate the widths of the cells between neighboring grid points
-    cell_width = grid_spacing(grid, n)
+    cell_width = grid_spacing(grid, n_local)
     # duniform_dgrid is the local derivative of the uniform grid with respect to
     # the coordinate grid
-    duniform_dgrid = allocate_float(input.ngrid, input.nelement)
+    duniform_dgrid = allocate_float(input.ngrid, input.nelement_local)
     # scratch is an array used for intermediate calculations requiring n entries
-    scratch = allocate_float(n)
+    scratch = allocate_float(n_local)
     # scratch_2d is an array used for intermediate calculations requiring ngrid x nelement entries
-    scratch_2d = allocate_float(input.ngrid, input.nelement)
+    scratch_2d = allocate_float(input.ngrid, input.nelement_local)
     # struct containing the advection speed options/inputs for this coordinate
     advection = input.advection
-
-    return coordinate(input.name, n, input.ngrid, input.nelement, input.L, grid,
+	buffer = allocate_float(input.nrank+1)
+    return coordinate(input.name, n_global, n_local, input.ngrid, 
+	    input.nelement_global, input.nelement_local, input.nrank, input.irank, input.L, grid,
         cell_width, igrid, ielement, imin, imax, input.discretization, input.fd_option,
         input.bc, wgts, uniform_grid, duniform_dgrid, scratch, copy(scratch),
-        scratch_2d, advection)
+        scratch_2d, advection, buffer, input.comm)
 end
 
 """
 setup a grid with n grid points on the interval [-L/2,L/2]
 """
-function init_grid(ngrid, nelement, n, L, imin, imax, igrid, discretization, name)
+function init_grid(ngrid, nelement_global, nelement_local, n, irank,
+			L, imin, imax, igrid, discretization, name)
     uniform_grid = equally_spaced_grid(n,L)
     uniform_grid_shifted = equally_spaced_grid_shifted(n,L)
     if n == 1
@@ -131,7 +149,7 @@ function init_grid(ngrid, nelement, n, L, imin, imax, igrid, discretization, nam
             # needed to obtain Chebyshev spectral coefficients
             # 'wgts' are the integration weights attached to each grid points
             # that are those associated with Clenshaw-Curtis quadrature
-            grid, wgts = scaled_chebyshev_grid(ngrid, nelement, n, L, imin, imax)
+            grid, wgts = scaled_chebyshev_grid(ngrid, nelement_global, nelement_local, n, irank, L, imin, imax)
         end
     elseif discretization == "finite_difference"
         if name == "vperp"

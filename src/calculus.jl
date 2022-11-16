@@ -8,6 +8,7 @@ export integral
 using ..chebyshev: chebyshev_info, chebyshev_derivative!
 using ..finite_differences: derivative_finite_difference!
 using ..type_definitions: mk_float
+using MPI 
 
 """
 Chebyshev transform f to get Chebyshev spectral coefficients and use them to calculate f'
@@ -88,8 +89,8 @@ function elements_to_full_grid_interior_pts!(df1d, df2d, coord)
     # treat the first element
     df1d[2:ngm1] .= @view df2d[2:ngm1,1]
     # deal with any additional elements
-    if coord.nelement > 1
-        for ielem ∈ 2:coord.nelement
+    if coord.nelement_local > 1
+        for ielem ∈ 2:coord.nelement_local
             @. df1d[coord.imin[ielem]:coord.imax[ielem]-1] = @view df2d[2:ngm1,ielem]
         end
     end
@@ -165,6 +166,12 @@ function reconcile_element_boundaries_upwind!(df1d, df2d, coord, adv_fac::Abstra
     return nothing
 end
 
+function sum_array(a::Array{mk_float,1},b::Array{mk_float,1})
+	c::Array{mk_float,1}
+	c = a .+ b
+end
+
+
 """
 if at the boundary point within the element, must carefully
 choose which value of df to use; this is because
@@ -172,29 +179,80 @@ df is multi-valued at the overlapping point at the boundary
 between neighboring elements.
 here we choose to use the value of df from the upwind element.
 """
+#MRH needs updating to allow for MPI
 function reconcile_element_boundaries_centered!(df1d, df2d, coord)
     # note that the first ngrid points are classified as belonging to the first element
     # and the next ngrid-1 points belonging to second element, etc.
-
-    # first deal with domain boundaries
-    if coord.bc == "periodic"
-        # consider left domain boundary
-        df1d[1] = 0.5*(df2d[1,1]+df2d[coord.ngrid,coord.nelement])
-        # consider right domain boundary
-        df1d[coord.n] = df1d[1]
-    else
-        df1d[1] = df2d[1,1]
-        df1d[coord.n] = df2d[coord.ngrid,coord.nelement]
-    end
-    # next consider remaining elements, if any.
-    # only need to consider interior element boundaries
-    if coord.nelement > 1
-        for ielem ∈ 2:coord.nelement
-            im1 = ielem-1
-            # consider left element boundary
-            df1d[coord.imax[im1]] = 0.5*(df2d[1,ielem]+df2d[coord.ngrid,im1])
-        end
-    end
+	# MRH bug in this block below
+	if coord.nelement_local < coord.nelement_global
+		# first deal with internal points within a rank
+		if coord.nelement_local > 1 && true
+			for ielem ∈ 2:coord.nelement_local
+				im1 = ielem-1
+				# consider left element boundary
+				df1d[coord.imax[im1]] = 0.5*(df2d[1,ielem]+df2d[coord.ngrid,im1])
+			end
+		end
+		if true
+			# now deal with endpoints that are stored across ranks
+			buffer = coord.buffer
+			# initialise the buffer with zeros 
+			buffer .= 0.0
+			# now fill the buffer
+			# buffer[1], buffer[2], ... buffer[nrank - 1] contain average of internal boundaries
+			# buffer[end] contains average of extreme boundaries 
+			# (irank = 0 and irank = nrank -1 contain the extreme elements on the grid)
+			if coord.irank == 0
+				buffer[end] = 0.5*df2d[1,1] #lowest end point on rank 
+				buffer[1] = 0.5*df2d[end,end] #highest end point on rank
+			else
+				buffer[coord.irank] = 0.5*df2d[1,1] #lowest end point on rank
+				buffer[coord.irank+1] = 0.5*df2d[end,end] #highest end point on rank
+			end
+			#println(coord.irank,buffer)
+			MPI.Allreduce!(buffer,.+,coord.comm)
+			#print("I made it!")
+			#println(coord.irank,buffer)
+			if coord.irank == 0
+				if coord.bc == "periodic"
+					#update the extreme endpoint with data from buffer[end]	
+					df1d[1] = buffer[end]
+				end
+				# update the internal endpoint
+				df1d[end] = buffer[1]
+			elseif coord.irank == coord.nrank - 1 
+				if coord.bc == "periodic"
+					#update the extreme endpoint with data from buffer[end]	
+					df1d[end] = buffer[end]
+				end
+				# update the internal endpoint
+				df1d[1] = buffer[coord.irank]
+			else
+				df1d[1] = buffer[coord.irank]
+				df1d[end] = buffer[coord.irank+1]
+			end
+		end
+	else # coord.nelement_local == coord.nelement_global
+		# first deal with domain boundaries
+		if coord.bc == "periodic"
+			# consider left domain boundary
+			df1d[1] = 0.5*(df2d[1,1]+df2d[coord.ngrid,coord.nelement_local])
+			# consider right domain boundary
+			df1d[coord.n] = df1d[1]
+		else
+			df1d[1] = df2d[1,1]
+			df1d[coord.n] = df2d[coord.ngrid,coord.nelement_local]
+		end
+		# next consider remaining elements, if any.
+		# only need to consider interior element boundaries
+		if coord.nelement_local > 1
+			for ielem ∈ 2:coord.nelement_local
+				im1 = ielem-1
+				# consider left element boundary
+				df1d[coord.imax[im1]] = 0.5*(df2d[1,ielem]+df2d[coord.ngrid,im1])
+			end
+		end
+	end
     return nothing
 end
 

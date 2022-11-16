@@ -47,7 +47,7 @@ function setup_chebyshev_pseudospectral(coord)
     # create array for f on extended [0,2π] domain in theta = ArcCos[z]
     fext = allocate_complex(ngrid_fft)
     # create arrays for storing Chebyshev spectral coefficients of f and f'
-    fcheby = allocate_float(coord.ngrid, coord.nelement)
+    fcheby = allocate_float(coord.ngrid, coord.nelement_local)
     dcheby = allocate_float(coord.ngrid)
     # setup the plans for the forward and backward Fourier transforms
     forward_transform = plan_fft!(fext, flags=FFTW.MEASURE)
@@ -60,7 +60,8 @@ end
 """
 initialize chebyshev grid scaled to interval [-box_length/2, box_length/2]
 """
-function scaled_chebyshev_grid(ngrid, nelement, n, box_length, imin, imax)
+function scaled_chebyshev_grid(ngrid, nelement_global, nelement_local, n,
+			irank, box_length, imin, imax)
     # initialize chebyshev grid defined on [1,-1]
     # with n grid points chosen to facilitate
     # the fast Chebyshev transform (aka the discrete cosine transform)
@@ -72,15 +73,16 @@ function scaled_chebyshev_grid(ngrid, nelement, n, box_length, imin, imax)
     # setup the scale factor by which the Chebyshev grid on [-1,1]
     # is to be multiplied to account for the full domain [-L/2,L/2]
     # and the splitting into nelement elements with ngrid grid points
-    scale_factor = 0.5*box_length/nelement
+    scale_factor = 0.5*box_length/nelement_global
     # account for the fact that the minimum index needed for the chebyshev_grid
     # within each element changes from 1 to 2 in going from the first element
     # to the remaining elements
     k = 1
-    @inbounds for j ∈ 1:nelement
+    @inbounds for j ∈ 1:nelement_local
         #wgts[imin[j]:imax[j]] .= sqrt.(1.0 .- reverse(chebyshev_grid)[k:ngrid].^2) * scale_factor
         # amount by which to shift the centre of this element from zero
-        shift = box_length*((j-0.5)/nelement - 0.5)
+        iel_global = j + irank*nelement_local 
+		shift = box_length*((iel_global-0.5)/nelement_global - 0.5)
         # reverse the order of the original chebyshev_grid (ran from [1,-1])
         # and apply the scale factor and shift
         grid[imin[j]:imax[j]] .= (reverse(chebyshev_grid)[k:ngrid] * scale_factor) .+ shift
@@ -88,7 +90,7 @@ function scaled_chebyshev_grid(ngrid, nelement, n, box_length, imin, imax)
         # to avoid double-counting boundary element
         k = 2
     end
-    wgts = clenshaw_curtis_weights(ngrid, nelement, n, imin, imax, scale_factor)
+    wgts = clenshaw_curtis_weights(ngrid, nelement_local, n, imin, imax, scale_factor)
     return grid, wgts
 end
 
@@ -96,13 +98,15 @@ end
 """
 function chebyshev_derivative!(df, ff, chebyshev, coord)
     # define local variable nelement for convenience
-    nelement = coord.nelement
+    nelement = coord.nelement_local
     # check array bounds
     @boundscheck nelement == size(chebyshev.f,2) || throw(BoundsError(chebyshev.f))
     @boundscheck nelement == size(df,2) && coord.ngrid == size(df,1) || throw(BoundsError(df))
     # note that one must multiply by 2*nelement/L to get derivative
     # in scaled coordinate
-    scale_factor = 2*nelement/coord.L
+    scale_factor = 2*coord.nelement_global/coord.L
+	# scale factor is (length of a single element/2)^{-1}
+	
     # variable k will be used to avoid double counting of overlapping point
     # at element boundaries (see below for further explanation)
     k = 0
@@ -320,7 +324,7 @@ end
 returns wgts array containing the integration weights associated
 with all grid points for Clenshaw-Curtis quadrature
 """
-function clenshaw_curtis_weights(ngrid, nelement, n, imin, imax, scale_factor)
+function clenshaw_curtis_weights(ngrid, nelement_local, n, imin, imax, scale_factor)
     # create array containing the integration weights
     wgts = zeros(mk_float, n)
     # calculate the modified Chebshev moments of the first kind
@@ -329,10 +333,10 @@ function clenshaw_curtis_weights(ngrid, nelement, n, imin, imax, scale_factor)
         # calculate the weights within a single element and
         # scale to account for modified domain (not [-1,1])
         wgts[1:ngrid] = clenshawcurtisweights(μ)*scale_factor
-        if nelement > 1
+        if nelement_local > 1
             # account for double-counting of points at inner element boundaries
             wgts[ngrid] *= 2
-            for j ∈ 2:nelement
+            for j ∈ 2:nelement_local
                 wgts[imin[j]:imax[j]] .= wgts[2:ngrid]
             end
             # remove double-counting of outer element boundary for last element
