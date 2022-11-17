@@ -166,7 +166,6 @@ function reconcile_element_boundaries_upwind!(df1d, df2d, coord, adv_fac::Abstra
     return nothing
 end
 
-
 """
 if at the boundary point within the element, must carefully
 choose which value of df to use; this is because
@@ -192,9 +191,9 @@ function reconcile_element_boundaries_centered!(df1d, df2d, coord)
 		# initialise the buffer with zeros 
 		buffer .= 0.0
 		# now fill the buffer
-		# buffer[1], buffer[2], ... buffer[nrank - 1] contain average of internal boundaries
-		# buffer[end] contains average of extreme boundaries 
-		# (irank = 0 and irank = nrank -1 contain the extreme elements on the grid)
+		# buffer[1], buffer[2], ... buffer[nrank] contain average of internal boundaries
+		# buffer[end] == buffer[nrank+1] contains average of extreme boundaries 
+		# (irank = 0 and irank = nrank - 1 contain the extreme elements on the grid)
 		if coord.irank == 0
 			buffer[end] = 0.5*df2d[1,1] #lowest end point on rank 
 			buffer[1] = 0.5*df2d[end,end] #highest end point on rank
@@ -208,6 +207,8 @@ function reconcile_element_boundaries_centered!(df1d, df2d, coord)
 			if coord.bc == "periodic"
 				#update the extreme endpoint with data from buffer[end]	
 				df1d[1] = buffer[end]
+			else #directly use value from Cheb
+				df1d[1] = df2d[1,1]
 			end
 			# update the internal endpoint
 			df1d[end] = buffer[1]
@@ -215,6 +216,8 @@ function reconcile_element_boundaries_centered!(df1d, df2d, coord)
 			if coord.bc == "periodic"
 				#update the extreme endpoint with data from buffer[end]	
 				df1d[end] = buffer[end]
+			else #directly use value from Cheb
+				df1d[end] = df2d[end,end]
 			end
 			# update the internal endpoint
 			df1d[1] = buffer[coord.irank]
