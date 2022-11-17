@@ -13,20 +13,28 @@ if abspath(PROGRAM_FILE) == @__FILE__
 	comm = MPI.COMM_WORLD
 	nrank = MPI.Comm_size(comm) # number of ranks 
 	irank = MPI.Comm_rank(comm) # rank of this process
-	println("Hello world, I am $(irank) of $(nrank)")
+	#println("Hello world, I am $(irank) of $(nrank)")
 	MPI.Barrier(comm)
-	println("comm: ",comm)
+	#println("comm: ",comm)
 	discretization = "chebyshev_pseudospectral"
 
 	etol = 1.0e-15
+	
+	
+	###################
+	## df/dx Nonperiodic (No) BC test
+	###################
+	
 	# define inputs needed for the test
-	ngrid = 100 #number of points per element 
-	nelement_local = 5 # number of elements per rank
+	ngrid = 20 #number of points per element 
+	nelement_local = 2 # number of elements per rank
 	nelement_global = nelement_local*nrank # total number of elements 
-	println("ngrid = ",ngrid," nelement_local = ",nelement_local,
-	 " nelement_global = ",nelement_global," nrank = ",nrank)
+	if irank == 0
+		println("ngrid = ",ngrid," nelement_local = ",nelement_local,
+			" nelement_global = ",nelement_global," nrank = ",nrank)
+	end
 	L = 6.0 #physical box size in reference units 
-	bc = "periodic"
+	bc = "" #not required to take a particular value, not used 
 	# fd_option and adv_input not actually used so given values unimportant
 	fd_option = ""
 	adv_input = advection_input("default", 1.0, 0.0, 0.0)
@@ -35,14 +43,14 @@ if abspath(PROGRAM_FILE) == @__FILE__
 	input = grid_input("coord", ngrid, nelement_global, nelement_local, 
 		nrank, irank, L, discretization, fd_option, bc, adv_input,comm)
 	# create the coordinate struct 'x'
-	println("made inputs")
+	#println("made inputs")
 	x = define_coordinate(input)
-	println("made x")
+	#println("made x")
 	# create arrays needed for Chebyshev pseudospectral treatment in x
 	# and create the plans for the forward and backward fast Chebyshev
 	# transforms
 	spectral = setup_chebyshev_pseudospectral(x)
-	println("made spectral")
+	#println("made spectral")
 	# create array for the function f(x) to be differentiated/integrated
 	f = Array{Float64,1}(undef, x.n)
 	g = Array{Float64,1}(undef, x.n)
@@ -53,22 +61,19 @@ if abspath(PROGRAM_FILE) == @__FILE__
 	df = Array{Float64,1}(undef, x.n)
 	# initialize f
 	for ix ∈ 1:x.n
-		#f[ix] = ( (cospi(2.0*x.grid[ix]/x.L)+sinpi(2.0*x.grid[ix]/x.L))
-		#		  * exp(-x.grid[ix]^2) )
-	    f[ix] =  cospi(2.0*x.grid[ix]/x.L)
-	    g[ix] =  -2.0 * (π / x.L) *sinpi(2.0*x.grid[ix]/x.L)
+		f[ix] = ( (cospi(2.0*x.grid[ix]/x.L)+sinpi(2.0*x.grid[ix]/x.L))
+				  * exp(-x.grid[ix]^2) )
+	    g[ix] = (2.0*pi/x.L)*( (cospi(2.0*x.grid[ix]/x.L)-sinpi(2.0*x.grid[ix]/x.L))
+				  * exp(-x.grid[ix]^2) )  - 2.0*x.grid[ix]*f[ix]
 	end
 	# differentiate f
 	derivative!(df, f, x, spectral)
-	#println(g)
-	#println(df)
 	# plot df and g per process
 	outprefix = "run_MPI_test.plot."
 	plot([x.grid,x.grid], [g,df], xlabel="x", ylabel="", label=["g" "df"],
          shape =:circle, markersize = 5, linewidth=2)
 	outfile = outprefix*string(irank)*".pdf"
 	savefig(outfile)
-	#println(outfile)
 	# plot df and g on rank 0
 	x_for_plot .= 0.0
 	g_for_plot .= 0.0
@@ -86,7 +91,6 @@ if abspath(PROGRAM_FILE) == @__FILE__
 		xlist = [x_for_plot[:,1]]
 		ylist = [g_for_plot[:,1]]
 		labels = Matrix{String}(undef, 1, 2*nrank)
-		#labels = ["g"]
 		labels[1] = "g"
 		for iproc in 2:nrank
 			push!(xlist,x_for_plot[:,iproc])
@@ -99,10 +103,89 @@ if abspath(PROGRAM_FILE) == @__FILE__
 		for iproc in 2:nrank
 			push!(xlist,x_for_plot[:,iproc])
 			push!(ylist,df_for_plot[:,iproc])
-			#push!(labels,"df")
 			labels[iproc+nrank]="df"
 		end
-		println(labels)
+		#println(labels)
+		plot(xlist, ylist, xlabel="x", ylabel="", label=labels, markersize = 1, linewidth=1)
+		outfile = outprefix*"global.pdf"
+		savefig(outfile)
+		println(outfile)	
+	end
+	# integrate df/dx
+	#println("x.grid",x.grid)
+	#println("x.wgts",x.wgts)
+	#println("df",df)
+	intdf = integral(df, x.wgts)
+	#println(intdf)
+	intdf_out = MPI.Reduce(intdf,+,comm)
+	# Test that error intdf is less than the specified error tolerance etol
+	#@test abs(intdf) < etol
+	if(irank == 0)
+		println( "abs(intdf_out) = ", abs(intdf_out), ": etol = ",etol)
+	end
+	
+	###################
+	##  df/dx Periodic BC test
+	###################
+	MPI.Barrier(comm)
+	
+	
+	bc = "periodic" 
+	# create the 'input' struct containing input info needed to create a
+	# coordinate, other values taken from above
+	input = grid_input("coord", ngrid, nelement_global, nelement_local, 
+		nrank, irank, L, discretization, fd_option, bc, adv_input,comm)
+	# create the coordinate struct 'x'
+	x = define_coordinate(input)
+	# create arrays needed for Chebyshev pseudospectral treatment in x
+	# and create the plans for the forward and backward fast Chebyshev
+	# transforms
+	spectral = setup_chebyshev_pseudospectral(x)
+	# initialize f
+	for ix ∈ 1:x.n
+	    # sine wave test
+		f[ix] =  - cospi(2.0*x.grid[ix]/x.L) +2.0*x.grid[ix]/x.L
+	    g[ix] =  (2.0*pi/x.L)*sinpi(2.0*x.grid[ix]/x.L) + 2.0/x.L  
+	end
+	# differentiate f
+	derivative!(df, f, x, spectral)
+	# plot df and g per process
+	outprefix = "run_MPI_test.dfperiodic.plot."
+	plot([x.grid,x.grid], [g,df], xlabel="x", ylabel="", label=["g" "df"],
+         shape =:circle, markersize = 5, linewidth=2)
+	outfile = outprefix*string(irank)*".pdf"
+	savefig(outfile)
+	# plot df and g on rank 0
+	x_for_plot .= 0.0
+	g_for_plot .= 0.0
+	df_for_plot .= 0.0
+	for ix ∈ 1:x.n
+		x_for_plot[ix,irank+1] = x.grid[ix]
+		g_for_plot[ix,irank+1] = g[ix]
+		df_for_plot[ix,irank+1] = df[ix]
+	end
+	MPI.Reduce!(x_for_plot,.+,comm)
+	MPI.Reduce!(g_for_plot,.+,comm)
+	MPI.Reduce!(df_for_plot,.+,comm)
+	if irank == 0
+		outprefix = "run_MPI_test.dfperiodic.plot."
+		xlist = [x_for_plot[:,1]]
+		ylist = [g_for_plot[:,1]]
+		labels = Matrix{String}(undef, 1, 2*nrank)
+		labels[1] = "g"
+		for iproc in 2:nrank
+			push!(xlist,x_for_plot[:,iproc])
+			push!(ylist,g_for_plot[:,iproc])
+			labels[iproc] ="g"
+		end
+		push!(xlist,x_for_plot[:,1])
+		push!(ylist,df_for_plot[:,1])
+		labels[1+nrank]="df"
+		for iproc in 2:nrank
+			push!(xlist,x_for_plot[:,iproc])
+			push!(ylist,df_for_plot[:,iproc])
+			labels[iproc+nrank]="df"
+		end
 		plot(xlist, ylist, xlabel="x", ylabel="", label=labels, markersize = 1, linewidth=1)
 		outfile = outprefix*"global.pdf"
 		savefig(outfile)
@@ -110,12 +193,11 @@ if abspath(PROGRAM_FILE) == @__FILE__
 	end
 	# integrate df/dx
 	intdf = integral(df, x.wgts)
-	println(intdf)
 	intdf_out = MPI.Reduce(intdf,+,comm)
-	# Test that error intdf is less than the specified error tolerance etol
+	# Test that error intdf -2.0 is less than the specified error tolerance etol
 	#@test abs(intdf) < etol
 	if(irank == 0)
-		println( "abs(intdf_out) = ", abs(intdf_out), ": etol = ",etol)
+		println( "abs(intdf_out-2.0) = ", abs(intdf_out-2.0), ": etol = ",etol)
 	end
 	MPI.Finalize()
 end 
