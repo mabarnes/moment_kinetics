@@ -56,7 +56,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
 		#f[ix] = ( (cospi(2.0*x.grid[ix]/x.L)+sinpi(2.0*x.grid[ix]/x.L))
 		#		  * exp(-x.grid[ix]^2) )
 	    f[ix] =  cospi(2.0*x.grid[ix]/x.L)
-	    g[ix] =  -sinpi(2.0*x.grid[ix]/x.L)
+	    g[ix] =  -2.0 * (π / x.L) *sinpi(2.0*x.grid[ix]/x.L)
 	end
 	# differentiate f
 	derivative!(df, f, x, spectral)
