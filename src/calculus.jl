@@ -166,11 +166,6 @@ function reconcile_element_boundaries_upwind!(df1d, df2d, coord, adv_fac::Abstra
     return nothing
 end
 
-function sum_array(a::Array{mk_float,1},b::Array{mk_float,1})
-	c::Array{mk_float,1}
-	c = a .+ b
-end
-
 
 """
 if at the boundary point within the element, must carefully
@@ -183,7 +178,6 @@ here we choose to use the value of df from the upwind element.
 function reconcile_element_boundaries_centered!(df1d, df2d, coord)
     # note that the first ngrid points are classified as belonging to the first element
     # and the next ngrid-1 points belonging to second element, etc.
-	# MRH bug in this block below
 	if coord.nelement_local < coord.nelement_global
 		# first deal with internal points within a rank
 		if coord.nelement_local > 1 && true
@@ -193,44 +187,40 @@ function reconcile_element_boundaries_centered!(df1d, df2d, coord)
 				df1d[coord.imax[im1]] = 0.5*(df2d[1,ielem]+df2d[coord.ngrid,im1])
 			end
 		end
-		if true
-			# now deal with endpoints that are stored across ranks
-			buffer = coord.buffer
-			# initialise the buffer with zeros 
-			buffer .= 0.0
-			# now fill the buffer
-			# buffer[1], buffer[2], ... buffer[nrank - 1] contain average of internal boundaries
-			# buffer[end] contains average of extreme boundaries 
-			# (irank = 0 and irank = nrank -1 contain the extreme elements on the grid)
-			if coord.irank == 0
-				buffer[end] = 0.5*df2d[1,1] #lowest end point on rank 
-				buffer[1] = 0.5*df2d[end,end] #highest end point on rank
-			else
-				buffer[coord.irank] = 0.5*df2d[1,1] #lowest end point on rank
-				buffer[coord.irank+1] = 0.5*df2d[end,end] #highest end point on rank
+		# now deal with endpoints that are stored across ranks
+		buffer = coord.buffer
+		# initialise the buffer with zeros 
+		buffer .= 0.0
+		# now fill the buffer
+		# buffer[1], buffer[2], ... buffer[nrank - 1] contain average of internal boundaries
+		# buffer[end] contains average of extreme boundaries 
+		# (irank = 0 and irank = nrank -1 contain the extreme elements on the grid)
+		if coord.irank == 0
+			buffer[end] = 0.5*df2d[1,1] #lowest end point on rank 
+			buffer[1] = 0.5*df2d[end,end] #highest end point on rank
+		else
+			buffer[coord.irank] = 0.5*df2d[1,1] #lowest end point on rank
+			buffer[coord.irank+1] = 0.5*df2d[end,end] #highest end point on rank
+		end
+		# add buffer data together and redistribute to all processes
+		MPI.Allreduce!(buffer,.+,coord.comm)
+		if coord.irank == 0
+			if coord.bc == "periodic"
+				#update the extreme endpoint with data from buffer[end]	
+				df1d[1] = buffer[end]
 			end
-			#println(coord.irank,buffer)
-			MPI.Allreduce!(buffer,.+,coord.comm)
-			#print("I made it!")
-			#println(coord.irank,buffer)
-			if coord.irank == 0
-				if coord.bc == "periodic"
-					#update the extreme endpoint with data from buffer[end]	
-					df1d[1] = buffer[end]
-				end
-				# update the internal endpoint
-				df1d[end] = buffer[1]
-			elseif coord.irank == coord.nrank - 1 
-				if coord.bc == "periodic"
-					#update the extreme endpoint with data from buffer[end]	
-					df1d[end] = buffer[end]
-				end
-				# update the internal endpoint
-				df1d[1] = buffer[coord.irank]
-			else
-				df1d[1] = buffer[coord.irank]
-				df1d[end] = buffer[coord.irank+1]
+			# update the internal endpoint
+			df1d[end] = buffer[1]
+		elseif coord.irank == coord.nrank - 1 
+			if coord.bc == "periodic"
+				#update the extreme endpoint with data from buffer[end]	
+				df1d[end] = buffer[end]
 			end
+			# update the internal endpoint
+			df1d[1] = buffer[coord.irank]
+		else
+			df1d[1] = buffer[coord.irank]
+			df1d[end] = buffer[coord.irank+1]
 		end
 	else # coord.nelement_local == coord.nelement_global
 		# first deal with domain boundaries

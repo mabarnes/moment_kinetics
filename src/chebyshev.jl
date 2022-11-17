@@ -73,7 +73,7 @@ function scaled_chebyshev_grid(ngrid, nelement_global, nelement_local, n,
     # setup the scale factor by which the Chebyshev grid on [-1,1]
     # is to be multiplied to account for the full domain [-L/2,L/2]
     # and the splitting into nelement elements with ngrid grid points
-    scale_factor = 0.5*box_length/nelement_global
+    scale_factor = 0.5*box_length/float(nelement_global)
     # account for the fact that the minimum index needed for the chebyshev_grid
     # within each element changes from 1 to 2 in going from the first element
     # to the remaining elements
@@ -81,8 +81,8 @@ function scaled_chebyshev_grid(ngrid, nelement_global, nelement_local, n,
     @inbounds for j ∈ 1:nelement_local
         #wgts[imin[j]:imax[j]] .= sqrt.(1.0 .- reverse(chebyshev_grid)[k:ngrid].^2) * scale_factor
         # amount by which to shift the centre of this element from zero
-        iel_global = j + irank*nelement_local 
-		shift = box_length*((iel_global-0.5)/nelement_global - 0.5)
+        iel_global = j + irank*nelement_local
+        shift = box_length*((float(iel_global)-0.5)/float(nelement_global) - 0.5)
         # reverse the order of the original chebyshev_grid (ran from [1,-1])
         # and apply the scale factor and shift
         grid[imin[j]:imax[j]] .= (reverse(chebyshev_grid)[k:ngrid] * scale_factor) .+ shift
@@ -104,7 +104,7 @@ function chebyshev_derivative!(df, ff, chebyshev, coord)
     @boundscheck nelement == size(df,2) && coord.ngrid == size(df,1) || throw(BoundsError(df))
     # note that one must multiply by 2*nelement/L to get derivative
     # in scaled coordinate
-    scale_factor = 2*coord.nelement_global/coord.L
+    scale_factor = 2.0*float(coord.nelement_global)/coord.L
 	# scale factor is (length of a single element/2)^{-1}
 	
     # variable k will be used to avoid double counting of overlapping point
