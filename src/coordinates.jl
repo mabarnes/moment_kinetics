@@ -110,7 +110,10 @@ function define_coordinate(input, composition=nothing)
     scratch_2d = allocate_float(input.ngrid, input.nelement_local)
     # struct containing the advection speed options/inputs for this coordinate
     advection = input.advection
-	buffer = allocate_float(input.nrank+1)
+	buffer = allocate_float(input.nrank)
+    # buffer for collective communication of boundary points
+    # --> nrank groups of elements have nrank-1 internal boundaries 
+    #     and 1 external boundary that could be forced to be periodic
     return coordinate(input.name, n_global, n_local, input.ngrid, 
 	    input.nelement_global, input.nelement_local, input.nrank, input.irank, input.L, grid,
         cell_width, igrid, ielement, imin, imax, input.discretization, input.fd_option,

@@ -191,9 +191,9 @@ function reconcile_element_boundaries_centered!(df1d, df2d, coord)
 		# initialise the buffer with zeros 
 		buffer .= 0.0
 		# now fill the buffer
-		# buffer[1], buffer[2], ... buffer[nrank] contain average of internal boundaries
-		# buffer[end] == buffer[nrank+1] contains average of extreme boundaries 
-		# (irank = 0 and irank = nrank - 1 contain the extreme elements on the grid)
+		# buffer[1], buffer[2], ... buffer[nrank-1] contain average of internal boundaries
+		# buffer[end] == buffer[nrank] contains average of extreme boundaries 
+		# (processes irank = 0 and irank = nrank - 1 contain the extreme elements on the grid)
 		if coord.irank == 0
 			buffer[end] = 0.5*df2d[1,1] #lowest end point on rank 
 			buffer[1] = 0.5*df2d[end,end] #highest end point on rank
