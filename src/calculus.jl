@@ -204,9 +204,9 @@ function reconcile_element_boundaries_centered!(df1d, df2d, coord)
 		#MRH what value should tag take here and below? Esp if nrank >= 32
 		rreq = MPI.Irecv!(receive_buffer, comm; source=isrc, tag=isrc+32)
 		sreq = MPI.Isend(send_buffer, comm; dest=idst, tag=irank+32)
-		print("$irank: Sending   $irank -> $idst = $send_buffer\n")
+		#print("$irank: Sending   $irank -> $idst = $send_buffer\n")
 		stats = MPI.Waitall([rreq, sreq])
-		print("$irank: Received $isrc -> $irank = $receive_buffer\n")
+		#print("$irank: Received $isrc -> $irank = $receive_buffer\n")
 		MPI.Barrier(comm)
 		
 		if irank == 0
@@ -227,9 +227,9 @@ function reconcile_element_boundaries_centered!(df1d, df2d, coord)
 		#MRH what value should tag take here and below? Esp if nrank >= 32
 		rreq = MPI.Irecv!(receive_buffer, comm; source=isrc, tag=isrc+32)
 		sreq = MPI.Isend(send_buffer, comm; dest=idst, tag=irank+32)
-		print("$irank: Sending   $irank -> $idst = $send_buffer\n")
+		#print("$irank: Sending   $irank -> $idst = $send_buffer\n")
 		stats = MPI.Waitall([rreq, sreq])
-		print("$irank: Received $isrc -> $irank = $receive_buffer\n")
+		#print("$irank: Received $isrc -> $irank = $receive_buffer\n")
 		MPI.Barrier(comm)
 		
 		if irank == nrank-1
