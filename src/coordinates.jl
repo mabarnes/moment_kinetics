@@ -69,8 +69,10 @@ struct coordinate
     scratch_2d::Array{mk_float,2}
     # struct containing advection speed options/inputs
     advection::advection_input
-	# buffer of size nrank+1 (allocated elsewhere) for communicating information about cell boundaries
-	buffer::Array{mk_float,1}
+	# buffer of size 1 for communicating information about cell boundaries
+	send_buffer::Array{mk_float,1}
+	# buffer of size 1 for communicating information about cell boundaries
+	receive_buffer::Array{mk_float,1}
 	# the MPI communicator appropriate for this calculation
 	comm::T where T
 end
@@ -110,15 +112,16 @@ function define_coordinate(input, composition=nothing)
     scratch_2d = allocate_float(input.ngrid, input.nelement_local)
     # struct containing the advection speed options/inputs for this coordinate
     advection = input.advection
-	buffer = allocate_float(input.nrank)
-    # buffer for collective communication of boundary points
-    # --> nrank groups of elements have nrank-1 internal boundaries 
-    #     and 1 external boundary that could be forced to be periodic
-    return coordinate(input.name, n_global, n_local, input.ngrid, 
+	send_buffer = allocate_float(1)
+	receive_buffer = allocate_float(1)
+    # buffer for cyclic communication of boundary points
+    # each chain of elements has only two external (off-rank) 
+	#endpoints, so only two pieces of information must be shared
+	return coordinate(input.name, n_global, n_local, input.ngrid, 
 	    input.nelement_global, input.nelement_local, input.nrank, input.irank, input.L, grid,
         cell_width, igrid, ielement, imin, imax, input.discretization, input.fd_option,
         input.bc, wgts, uniform_grid, duniform_dgrid, scratch, copy(scratch),
-        scratch_2d, advection, buffer, input.comm)
+        scratch_2d, advection, send_buffer, receive_buffer, input.comm)
 end
 
 """

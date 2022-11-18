@@ -187,44 +187,62 @@ function reconcile_element_boundaries_centered!(df1d, df2d, coord)
 			end
 		end
 		# now deal with endpoints that are stored across ranks
-		buffer = coord.buffer
-		# initialise the buffer with zeros 
-		buffer .= 0.0
-		# now fill the buffer
-		# buffer[1], buffer[2], ... buffer[nrank-1] contain average of internal boundaries
-		# buffer[end] == buffer[nrank] contains average of extreme boundaries 
-		# (processes irank = 0 and irank = nrank - 1 contain the extreme elements on the grid)
-		if coord.irank == 0
-			buffer[end] = 0.5*df2d[1,1] #lowest end point on rank 
-			buffer[1] = 0.5*df2d[end,end] #highest end point on rank
-		else
-			buffer[coord.irank] = 0.5*df2d[1,1] #lowest end point on rank
-			buffer[coord.irank+1] = 0.5*df2d[end,end] #highest end point on rank
-		end
-		# add buffer data together and redistribute to all processes
-		MPI.Allreduce!(buffer,.+,coord.comm)
-		if coord.irank == 0
+		comm = coord.comm
+		nrank = coord.nrank 
+		irank = coord.irank 
+		send_buffer = coord.send_buffer
+		receive_buffer = coord.receive_buffer
+		# sending pattern is cyclic. First we send data form irank -> irank + 1
+		# to fix the lower endpoints, then we send data from irank -> irank - 1
+		# to fix upper endpoints. Special exception for the periodic points.
+		# receive_buffer[1] is for data received, send_buffer[1] is data to be sent
+		
+		send_buffer[1] = df2d[end,end] #highest end point on THIS rank
+		# pass data from irank -> irank + 1, receive data from irank - 1
+		idst = mod(irank+1,nrank) # destination rank for sent data
+		isrc = mod(irank-1,nrank) # source rank for received data
+		#MRH what value should tag take here and below? Esp if nrank >= 32
+		rreq = MPI.Irecv!(receive_buffer, comm; source=isrc, tag=isrc+32)
+		sreq = MPI.Isend(send_buffer, comm; dest=idst, tag=irank+32)
+		print("$irank: Sending   $irank -> $idst = $send_buffer\n")
+		stats = MPI.Waitall([rreq, sreq])
+		print("$irank: Received $isrc -> $irank = $receive_buffer\n")
+		MPI.Barrier(comm)
+		
+		if irank == 0
 			if coord.bc == "periodic"
-				#update the extreme endpoint with data from buffer[end]	
-				df1d[1] = buffer[end]
+				#update the extreme lower endpoint with data from irank = nrank -1	
+				df1d[1] = 0.5*(receive_buffer[1] + df2d[1,1])
 			else #directly use value from Cheb
 				df1d[1] = df2d[1,1]
 			end
-			# update the internal endpoint
-			df1d[end] = buffer[1]
-		elseif coord.irank == coord.nrank - 1 
+		else # enforce continuity at lower endpoint
+			df1d[1] = 0.5*(receive_buffer[1] + df2d[1,1])
+		end
+		
+		send_buffer[1] = df2d[1,1] #lowest end point on THIS rank
+		# pass data from irank -> irank - 1, receive data from irank + 1
+		idst = mod(irank-1,nrank) # destination rank for sent data
+		isrc = mod(irank+1,nrank) # source rank for received data
+		#MRH what value should tag take here and below? Esp if nrank >= 32
+		rreq = MPI.Irecv!(receive_buffer, comm; source=isrc, tag=isrc+32)
+		sreq = MPI.Isend(send_buffer, comm; dest=idst, tag=irank+32)
+		print("$irank: Sending   $irank -> $idst = $send_buffer\n")
+		stats = MPI.Waitall([rreq, sreq])
+		print("$irank: Received $isrc -> $irank = $receive_buffer\n")
+		MPI.Barrier(comm)
+		
+		if irank == nrank-1
 			if coord.bc == "periodic"
-				#update the extreme endpoint with data from buffer[end]	
-				df1d[end] = buffer[end]
+				#update the extreme upper endpoint with data from irank = 0
+				df1d[end] = 0.5*(receive_buffer[1] + df2d[end,end])
 			else #directly use value from Cheb
 				df1d[end] = df2d[end,end]
 			end
-			# update the internal endpoint
-			df1d[1] = buffer[coord.irank]
-		else
-			df1d[1] = buffer[coord.irank]
-			df1d[end] = buffer[coord.irank+1]
+		else # enforce continuity at upper endpoint
+			df1d[end] = 0.5*(receive_buffer[1] + df2d[end,end])
 		end
+		
 	else # coord.nelement_local == coord.nelement_global
 		# first deal with domain boundaries
 		if coord.bc == "periodic"
