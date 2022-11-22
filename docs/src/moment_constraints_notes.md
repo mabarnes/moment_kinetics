@@ -37,7 +37,7 @@ and define the moments of $\hat{g}_{s}$
 
 ```math
 \begin{align}
-  I_{n}=\int dw_{\|}w_{\|}^{n}\hat{g}_{s}.
+  I_{n}=\frac{1}{\sqrt{\pi}}\int dw_{\|}w_{\|}^{n}\hat{g}_{s}.
 \end{align}
 ```
 
@@ -45,9 +45,9 @@ Then the moments of $\tilde{g}_{s}$ are
 
 ```math
 \begin{align}
-  \int dw_{\|}=1 & =\int dw_{\|}\left(A\hat{g}_{s}+Bw_{\|}\hat{g}_{s}+Cw_{\|}^{2}\hat{g}_{s}\right)=AI_{0}+BI_{1}+CI_{2}\\
-  \int dw_{\|}w_{\|}\tilde{g}_{s}=0 & =\int dw_{\|}\left(Aw_{\|}\hat{g}_{s}+Bw_{\|}^{2}\hat{g}_{s}+Cw_{\|}^{3}\hat{g}_{s}\right)=AI_{1}+BI_{2}+CI_{3}\\
-  \int dw_{\|}w_{\|}^{2}\tilde{g}_{s}=\frac{1}{2} & =\int dw_{\|}\left(Aw_{\|}^{2}\hat{g}_{s}+Bw_{\|}^{3}\hat{g}_{s}+Cw_{\|}^{4}\hat{g}_{s}\right)=AI_{2}+BI_{3}+CI_{4}.
+  \frac{1}{\sqrt{\pi}}\int dw_{\|}\tilde{g}_{s}=1 & =\frac{1}{\sqrt{\pi}}\int dw_{\|}\left(A\hat{g}_{s}+Bw_{\|}\hat{g}_{s}+Cw_{\|}^{2}\hat{g}_{s}\right)=AI_{0}+BI_{1}+CI_{2}\\
+  \frac{1}{\sqrt{\pi}}\int dw_{\|}w_{\|}\tilde{g}_{s}=0 & =\frac{1}{\sqrt{\pi}}\int dw_{\|}\left(Aw_{\|}\hat{g}_{s}+Bw_{\|}^{2}\hat{g}_{s}+Cw_{\|}^{3}\hat{g}_{s}\right)=AI_{1}+BI_{2}+CI_{3}\\
+  \frac{1}{\sqrt{\pi}}\int dw_{\|}w_{\|}^{2}\tilde{g}_{s}=\frac{1}{2} & =\frac{1}{\sqrt{\pi}}\int dw_{\|}\left(Aw_{\|}^{2}\hat{g}_{s}+Bw_{\|}^{3}\hat{g}_{s}+Cw_{\|}^{4}\hat{g}_{s}\right)=AI_{2}+BI_{3}+CI_{4}.
 \end{align}
 ```
 
