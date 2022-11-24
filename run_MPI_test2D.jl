@@ -37,15 +37,23 @@ if abspath(PROGRAM_FILE) == @__FILE__
 		#print("$irank: Received $isrc -> $irank = $receive_buffer\n")
 		MPI.Barrier(comm)
 		
+		# no update receive buffer, taking into account the reconciliation
 		if irank == 0
 			if coord.bc == "periodic"
 				#update the extreme lower endpoint with data from irank = nrank -1	
-				df1d[1,:] .= 0.5*(receive_buffer[:] .+ dfdx_endpoints[1,:])
+				receive_buffer[:] .= 0.5*(receive_buffer[:] .+ dfdx_endpoints[1,:])
 			else #directly use value from Cheb
-				df1d[1,:] .= dfdx_endpoints[1,:]
+				receive_buffer[:] .= dfdx_endpoints[1,:]
 			end
 		else # enforce continuity at lower endpoint
-			df1d[1,:] .= 0.5*(receive_buffer[:] .+ dfdx_endpoints[1,:])
+			receive_buffer[:] .= 0.5*(receive_buffer[:] .+ dfdx_endpoints[1,:])
+		end
+		
+		#now update the df1d array -- using a slice appropriate to the dimension reconciled
+		if coord.name == 'x'
+			df1d[1,:] .= receive_buffer[:]
+		elseif coord.name == 'y'
+			df1d[:,1] .= receive_buffer[:]
 		end
 		
 		send_buffer[:] .= dfdx_endpoints[1,:] #lowest end point on THIS rank
@@ -63,25 +71,69 @@ if abspath(PROGRAM_FILE) == @__FILE__
 		if irank == nrank-1
 			if coord.bc == "periodic"
 				#update the extreme upper endpoint with data from irank = 0
-				df1d[end,:] .= 0.5*(receive_buffer[:] .+ dfdx_endpoints[end,:])
+				receive_buffer[:] .= 0.5*(receive_buffer[:] .+ dfdx_endpoints[end,:])
 			else #directly use value from Cheb
-				df1d[end,:] .= dfdx_endpoints[end,:]
+				receive_buffer[:] .= dfdx_endpoints[end,:]
 			end
 		else # enforce continuity at upper endpoint
-			df1d[end,:] .= 0.5*(receive_buffer[:] .+ dfdx_endpoints[end,:])
+			receive_buffer[:] .= 0.5*(receive_buffer[:] .+ dfdx_endpoints[end,:])
+		end
+	
+		#now update the df1d array -- using a slice appropriate to the dimension reconciled
+		if coord.name == 'x'
+			df1d[end,:] .= receive_buffer[:]
+		elseif coord.name == 'y'
+			df1d[:,end] .= receive_buffer[:]
 		end
 	
 	end
 	
+	function derivative_x!(dfdx::Array{Float64,2},f::Array{Float64,2},dfdx_endpoints::Array{Float64,2},
+		x_send_buffer::Array{Float64,1},x_receive_buffer::Array{Float64,1},
+		x_spectral,x,y)
+	
+		# differentiate f w.r.t x
+		for iy in 1:y.n
+			@views derivative!(dfdx[:,iy], f[:,iy], x, x_spectral)
+			# get external endpoints to reconcile via MPI
+			dfdx_endpoints[1,iy] = x.scratch_2d[1,1]
+			dfdx_endpoints[end,iy] = x.scratch_2d[end,end] 
+		end
+		# now reconcile element boundaries across
+		# processes with large message involving all y 
+		if x.nelement_local < x.nelement_global
+			reconcile_element_boundaries_MPI!(dfdx,dfdx_endpoints,x_send_buffer, x_receive_buffer, x)
+		end
+		
+	end
+	
+	function derivative_y!(dfdy::Array{Float64,2},f::Array{Float64,2},dfdy_endpoints::Array{Float64,2},
+		y_send_buffer::Array{Float64,1},y_receive_buffer::Array{Float64,1},
+		y_spectral,x,y)
+	
+		# differentiate f w.r.t y
+		for ix in 1:x.n
+			@views derivative!(dfdy[ix,:], f[ix,:], y, y_spectral)
+			# get external endpoints to reconcile via MPI
+			dfdy_endpoints[1,ix] = y.scratch_2d[1,1]
+			dfdy_endpoints[end,ix] = y.scratch_2d[end,end] 
+		end
+		# now reconcile element boundaries across
+		# processes with large message involving all y 
+		if y.nelement_local < y.nelement_global
+			reconcile_element_boundaries_MPI!(dfdy,dfdy_endpoints,y_send_buffer, y_receive_buffer, y)
+		end
+	end
+	
 	# define inputs needed for the xy calculus test
-	# nrank must be y_nblocks*x_nblocks, i.e.,
+	# nrank must be nrank = y_nblocks*x_nblocks, i.e.,
 	# mpirun -n nrank run_MPI_test2D.jl
 	x_ngrid = 10 #number of points per element 
-	x_nelement_local  = 1 
-	x_nelement_global = 6 # number of elements 
+	x_nelement_local  = 2 
+	x_nelement_global = 8 # number of elements 
 	y_ngrid = 12
-	y_nelement_local  = 1 
-	y_nelement_global = 1 
+	y_nelement_local  = 2 
+	y_nelement_global = 10 
 	
 	y_nblocks = floor(Int,x_nelement_global/x_nelement_local)
 	x_nblocks = floor(Int,y_nelement_global/y_nelement_local)
@@ -183,32 +235,13 @@ if abspath(PROGRAM_FILE) == @__FILE__
 	x_receive_buffer = Array{Float64,1}(undef,y.n)
 	dfdx_endpoints = Array{Float64,2}(undef,2,y.n)
 	# differentiate f w.r.t x
-	for iy in 1:y.n
-		@views derivative!(dfdx[:,iy], f[:,iy], x, x_spectral)
-		# get external endpoints to reconcile via MPI
-		dfdx_endpoints[1,iy] = x.scratch_2d[1,1]
-		dfdx_endpoints[end,iy] = x.scratch_2d[end,end] 
-	end
-	# now reconcile element boundaries across
-	# processes with large message involving all y 
-	if x.nelement_local < x.nelement_global
-		reconcile_element_boundaries_MPI!(dfdx,dfdx_endpoints,x_send_buffer, x_receive_buffer, x)
-	end
-	
+	derivative_x!(dfdx,f,dfdx_endpoints,x_send_buffer,x_receive_buffer,x_spectral,x,y)
+		
 	y_send_buffer = Array{Float64,1}(undef,x.n)
 	y_receive_buffer = Array{Float64,1}(undef,x.n)
 	dkdy_endpoints = Array{Float64,2}(undef,2,x.n)
-	# differentiate f w.r.t y
-	for ix in 1:x.n
-		@views derivative!(dkdy[ix,:], k[ix,:], y, y_spectral)
-	end
-	# now reconcile element boundaries across
-	# processes with large message involving all y 
-	if y.nelement_local < y.nelement_global
-		# Need to address how to deal fact that y is 2nd index, 
-		# and rountine below assumes 1st index is the index of the coord
-		#reconcile_element_boundaries_MPI!(dkdy,dkdy_endpoints,y_send_buffer, y_receive_buffer, y)
-	end
+	# differentiate k w.r.t y
+	derivative_y!(dkdy,k,dkdy_endpoints,y_send_buffer,y_receive_buffer,y_spectral,x,y)
 	# Test that error intdf is less than the specified error tolerance etol
 	#@test abs(intdf) < etol
 	# here we do a 1D integral in the x and y dimensions separately
