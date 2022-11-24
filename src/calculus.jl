@@ -177,94 +177,28 @@ here we choose to use the value of df from the upwind element.
 function reconcile_element_boundaries_centered!(df1d, df2d, coord)
     # note that the first ngrid points are classified as belonging to the first element
     # and the next ngrid-1 points belonging to second element, etc.
-	if coord.nelement_local < coord.nelement_global
-		# first deal with internal points within a rank
-		if coord.nelement_local > 1 && true
-			for ielem ∈ 2:coord.nelement_local
-				im1 = ielem-1
-				# consider left element boundary
-				df1d[coord.imax[im1]] = 0.5*(df2d[1,ielem]+df2d[coord.ngrid,im1])
-			end
-		end
-		# now deal with endpoints that are stored across ranks
-		comm = coord.comm
-		nrank = coord.nrank 
-		irank = coord.irank 
-		send_buffer = coord.send_buffer
-		receive_buffer = coord.receive_buffer
-		# sending pattern is cyclic. First we send data form irank -> irank + 1
-		# to fix the lower endpoints, then we send data from irank -> irank - 1
-		# to fix upper endpoints. Special exception for the periodic points.
-		# receive_buffer[1] is for data received, send_buffer[1] is data to be sent
-		
-		send_buffer[1] = df2d[end,end] #highest end point on THIS rank
-		# pass data from irank -> irank + 1, receive data from irank - 1
-		idst = mod(irank+1,nrank) # destination rank for sent data
-		isrc = mod(irank-1,nrank) # source rank for received data
-		#MRH what value should tag take here and below? Esp if nrank >= 32
-		rreq = MPI.Irecv!(receive_buffer, comm; source=isrc, tag=isrc+32)
-		sreq = MPI.Isend(send_buffer, comm; dest=idst, tag=irank+32)
-		#print("$irank: Sending   $irank -> $idst = $send_buffer\n")
-		stats = MPI.Waitall([rreq, sreq])
-		#print("$irank: Received $isrc -> $irank = $receive_buffer\n")
-		MPI.Barrier(comm)
-		
-		if irank == 0
-			if coord.bc == "periodic"
-				#update the extreme lower endpoint with data from irank = nrank -1	
-				df1d[1] = 0.5*(receive_buffer[1] + df2d[1,1])
-			else #directly use value from Cheb
-				df1d[1] = df2d[1,1]
-			end
-		else # enforce continuity at lower endpoint
-			df1d[1] = 0.5*(receive_buffer[1] + df2d[1,1])
-		end
-		
-		send_buffer[1] = df2d[1,1] #lowest end point on THIS rank
-		# pass data from irank -> irank - 1, receive data from irank + 1
-		idst = mod(irank-1,nrank) # destination rank for sent data
-		isrc = mod(irank+1,nrank) # source rank for received data
-		#MRH what value should tag take here and below? Esp if nrank >= 32
-		rreq = MPI.Irecv!(receive_buffer, comm; source=isrc, tag=isrc+32)
-		sreq = MPI.Isend(send_buffer, comm; dest=idst, tag=irank+32)
-		#print("$irank: Sending   $irank -> $idst = $send_buffer\n")
-		stats = MPI.Waitall([rreq, sreq])
-		#print("$irank: Received $isrc -> $irank = $receive_buffer\n")
-		MPI.Barrier(comm)
-		
-		if irank == nrank-1
-			if coord.bc == "periodic"
-				#update the extreme upper endpoint with data from irank = 0
-				df1d[end] = 0.5*(receive_buffer[1] + df2d[end,end])
-			else #directly use value from Cheb
-				df1d[end] = df2d[end,end]
-			end
-		else # enforce continuity at upper endpoint
-			df1d[end] = 0.5*(receive_buffer[1] + df2d[end,end])
-		end
-		
-	else # coord.nelement_local == coord.nelement_global
-		# first deal with domain boundaries
-		if coord.bc == "periodic"
-			# consider left domain boundary
-			df1d[1] = 0.5*(df2d[1,1]+df2d[coord.ngrid,coord.nelement_local])
-			# consider right domain boundary
-			df1d[coord.n] = df1d[1]
-		else
-			df1d[1] = df2d[1,1]
-			df1d[coord.n] = df2d[coord.ngrid,coord.nelement_local]
-		end
-		# next consider remaining elements, if any.
-		# only need to consider interior element boundaries
-		if coord.nelement_local > 1
-			for ielem ∈ 2:coord.nelement_local
-				im1 = ielem-1
-				# consider left element boundary
-				df1d[coord.imax[im1]] = 0.5*(df2d[1,ielem]+df2d[coord.ngrid,im1])
-			end
+	# first deal with domain boundaries
+	if coord.bc == "periodic" && coord.nelement_local == coord.nelement_global
+		# consider left domain boundary
+		df1d[1] = 0.5*(df2d[1,1]+df2d[coord.ngrid,coord.nelement_local])
+		# consider right domain boundary
+		df1d[coord.n] = df1d[1]
+	else 
+	# put endpoints into 1D array to be reconciled
+	# across processes at a higher scope -> larger message sizes possible
+		df1d[1] = df2d[1,1]
+		df1d[coord.n] = df2d[coord.ngrid,coord.nelement_local]
+	end
+	# next consider remaining elements, if any.
+	# only need to consider interior element boundaries
+	if coord.nelement_local > 1
+		for ielem ∈ 2:coord.nelement_local
+			im1 = ielem-1
+			# consider left element boundary
+			df1d[coord.imax[im1]] = 0.5*(df2d[1,ielem]+df2d[coord.ngrid,im1])
 		end
 	end
-    return nothing
+	return nothing
 end
 
 """

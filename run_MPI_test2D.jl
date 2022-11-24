@@ -7,18 +7,81 @@ if abspath(PROGRAM_FILE) == @__FILE__
 	using moment_kinetics.coordinates: define_coordinate
 	using moment_kinetics.chebyshev: setup_chebyshev_pseudospectral
 	using moment_kinetics.calculus: derivative!, integral
+	#using coordinates: coordinate_info
 	import MPI 
 	using Plots
+	
+	function reconcile_element_boundaries_MPI!(df1d::Array{Float64,2},dfdx_endpoints::Array{Float64,2},
+	send_buffer::Array{Float64,1}, receive_buffer::Array{Float64,1}, coord)
+	
+	# now deal with endpoints that are stored across ranks
+		comm = coord.comm
+		nrank = coord.nrank 
+		irank = coord.irank 
+		#send_buffer = coord.send_buffer
+		#receive_buffer = coord.receive_buffer
+		# sending pattern is cyclic. First we send data form irank -> irank + 1
+		# to fix the lower endpoints, then we send data from irank -> irank - 1
+		# to fix upper endpoints. Special exception for the periodic points.
+		# receive_buffer[1] is for data received, send_buffer[1] is data to be sent
+		
+		send_buffer[:] .= dfdx_endpoints[end,:] #highest end point on THIS rank
+		# pass data from irank -> irank + 1, receive data from irank - 1
+		idst = mod(irank+1,nrank) # destination rank for sent data
+		isrc = mod(irank-1,nrank) # source rank for received data
+		#MRH what value should tag take here and below? Esp if nrank >= 32
+		rreq = MPI.Irecv!(receive_buffer, comm; source=isrc, tag=isrc+32)
+		sreq = MPI.Isend(send_buffer, comm; dest=idst, tag=irank+32)
+		#print("$irank: Sending   $irank -> $idst = $send_buffer\n")
+		stats = MPI.Waitall([rreq, sreq])
+		#print("$irank: Received $isrc -> $irank = $receive_buffer\n")
+		MPI.Barrier(comm)
+		
+		if irank == 0
+			if coord.bc == "periodic"
+				#update the extreme lower endpoint with data from irank = nrank -1	
+				df1d[1,:] .= 0.5*(receive_buffer[:] .+ dfdx_endpoints[1,:])
+			else #directly use value from Cheb
+				df1d[1,:] .= dfdx_endpoints[1,:]
+			end
+		else # enforce continuity at lower endpoint
+			df1d[1,:] .= 0.5*(receive_buffer[:] .+ dfdx_endpoints[1,:])
+		end
+		
+		send_buffer[:] .= dfdx_endpoints[1,:] #lowest end point on THIS rank
+		# pass data from irank -> irank - 1, receive data from irank + 1
+		idst = mod(irank-1,nrank) # destination rank for sent data
+		isrc = mod(irank+1,nrank) # source rank for received data
+		#MRH what value should tag take here and below? Esp if nrank >= 32
+		rreq = MPI.Irecv!(receive_buffer, comm; source=isrc, tag=isrc+32)
+		sreq = MPI.Isend(send_buffer, comm; dest=idst, tag=irank+32)
+		#print("$irank: Sending   $irank -> $idst = $send_buffer\n")
+		stats = MPI.Waitall([rreq, sreq])
+		#print("$irank: Received $isrc -> $irank = $receive_buffer\n")
+		MPI.Barrier(comm)
+		
+		if irank == nrank-1
+			if coord.bc == "periodic"
+				#update the extreme upper endpoint with data from irank = 0
+				df1d[end,:] .= 0.5*(receive_buffer[:] .+ dfdx_endpoints[end,:])
+			else #directly use value from Cheb
+				df1d[end,:] .= dfdx_endpoints[end,:]
+			end
+		else # enforce continuity at upper endpoint
+			df1d[end,:] .= 0.5*(receive_buffer[:] .+ dfdx_endpoints[end,:])
+		end
+	
+	end
 	
 	# define inputs needed for the xy calculus test
 	# nrank must be y_nblocks*x_nblocks, i.e.,
 	# mpirun -n nrank run_MPI_test2D.jl
 	x_ngrid = 10 #number of points per element 
 	x_nelement_local  = 1 
-	x_nelement_global = 2 # number of elements 
+	x_nelement_global = 6 # number of elements 
 	y_ngrid = 12
 	y_nelement_local  = 1 
-	y_nelement_global = 3 
+	y_nelement_global = 1 
 	
 	y_nblocks = floor(Int,x_nelement_global/x_nelement_local)
 	x_nblocks = floor(Int,y_nelement_global/y_nelement_local)
@@ -115,15 +178,37 @@ if abspath(PROGRAM_FILE) == @__FILE__
 			h[ix,iy] =  (2.0*pi/y.L)*cospi(2.0*y.grid[iy]/y.L) #*cospi(2.0*x.grid[ix]/x.L) 
 		end
 	end
+	
+	x_send_buffer = Array{Float64,1}(undef,y.n)
+	x_receive_buffer = Array{Float64,1}(undef,y.n)
+	dfdx_endpoints = Array{Float64,2}(undef,2,y.n)
 	# differentiate f w.r.t x
 	for iy in 1:y.n
 		@views derivative!(dfdx[:,iy], f[:,iy], x, x_spectral)
+		# get external endpoints to reconcile via MPI
+		dfdx_endpoints[1,iy] = x.scratch_2d[1,1]
+		dfdx_endpoints[end,iy] = x.scratch_2d[end,end] 
 	end
+	# now reconcile element boundaries across
+	# processes with large message involving all y 
+	if x.nelement_local < x.nelement_global
+		reconcile_element_boundaries_MPI!(dfdx,dfdx_endpoints,x_send_buffer, x_receive_buffer, x)
+	end
+	
+	y_send_buffer = Array{Float64,1}(undef,x.n)
+	y_receive_buffer = Array{Float64,1}(undef,x.n)
+	dkdy_endpoints = Array{Float64,2}(undef,2,x.n)
 	# differentiate f w.r.t y
 	for ix in 1:x.n
 		@views derivative!(dkdy[ix,:], k[ix,:], y, y_spectral)
 	end
-	
+	# now reconcile element boundaries across
+	# processes with large message involving all y 
+	if y.nelement_local < y.nelement_global
+		# Need to address how to deal fact that y is 2nd index, 
+		# and rountine below assumes 1st index is the index of the coord
+		#reconcile_element_boundaries_MPI!(dkdy,dkdy_endpoints,y_send_buffer, y_receive_buffer, y)
+	end
 	# Test that error intdf is less than the specified error tolerance etol
 	#@test abs(intdf) < etol
 	# here we do a 1D integral in the x and y dimensions separately
