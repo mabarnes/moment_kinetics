@@ -51,12 +51,12 @@ function mk_input(scan_input=Dict())
     #   electron density is fixed to be N_e*(eϕ/T_e) and N_e is calculated w.r.t a
     #   reference value using J_||e + J_||i = 0 at z = 0
     electron_physics = get(scan_input, "electron_physics", boltzmann_electron_response)
-    
+
     z, r, vpa, vperp, gyrophase, vz, vr, vzeta, species, composition, drive, evolve_moments, collisions, geometry =
         load_defaults(n_ion_species, n_neutral_species, electron_physics)
 
     # this is the prefix for all output files associated with this run
-    run_name = get(scan_input, "run_name", "wallBC")
+    run_name = get(scan_input, "run_name", "hdf5")
     # this is the directory where the simulation data will be stored
     base_directory = get(scan_input, "base_directory", "runs")
     output_dir = string(base_directory, "/", run_name)
@@ -78,7 +78,7 @@ function mk_input(scan_input=Dict())
     composition.phi_wall = get(scan_input, "phi_wall", 0.0)
     # if false use true Knudsen cosine for neutral wall bc
     composition.use_test_neutral_wall_pdf = get(scan_input, "use_test_neutral_wall_pdf", false)
-    
+
     ## set geometry_input
     geometry.Bzed = get(scan_input, "Bzed", 1.0)
     geometry.Bmag = get(scan_input, "Bmag", 1.0)
@@ -89,7 +89,7 @@ function mk_input(scan_input=Dict())
     #println("Info: Bzed is ",geometry.Bzed)
     #println("Info: Bmag is ",geometry.Bmag)
     #println("Info: rhostar is ",geometry.rhostar)
-    
+
     ispecies = 1
     species.charged[1].z_IC.initialization_option = get(scan_input, "z_IC_option$ispecies", "gaussian")
     species.charged[1].initial_density = get(scan_input, "initial_density$ispecies", 1.0)
@@ -153,9 +153,9 @@ function mk_input(scan_input=Dict())
     collisions.constant_ionization_rate = get(scan_input, "constant_ionization_rate", false)
 
     # parameters related to the time stepping
-    nstep = get(scan_input, "nstep", 40000)
+    nstep = get(scan_input, "nstep", 100)
     dt = get(scan_input, "dt", 0.00025/sqrt(species.charged[1].initial_temperature))
-    nwrite = get(scan_input, "nwrite", 80)
+    nwrite = get(scan_input, "nwrite", 10)
     # use_semi_lagrange = true to use interpolation-free semi-Lagrange treatment
     # otherwise, solve problem solely using the discretization_option above
     use_semi_lagrange = get(scan_input, "use_semi_lagrange", false)
@@ -170,7 +170,7 @@ function mk_input(scan_input=Dict())
 		use_manufactured_solns_for_init = true
 	end
     #println("Info: The flag use_manufactured_solns is ",use_manufactured_solns)
-    
+
     # overwrite some default parameters related to the r grid
     # ngrid is number of grid points per element
     r.ngrid = get(scan_input, "r_ngrid", 1)
@@ -224,13 +224,13 @@ function mk_input(scan_input=Dict())
     # determine the discretization option for the vperp grid
     # supported options are "finite_difference_vperp" "chebyshev_pseudospectral_vperp"
     vperp.discretization = get(scan_input, "vperp_discretization", "chebyshev_pseudospectral_vperp")
-    
+
     # overwrite some default parameters related to the gyrophase grid
     # ngrid is the number of grid points per element
     gyrophase.ngrid = get(scan_input, "gyrophase_ngrid", 17)
     # nelement is the number of elements
     gyrophase.nelement = get(scan_input, "gyrophase_nelement", 10)
-    
+
 	if n_neutral_species > 0
 		# overwrite some default parameters related to the vz grid
 		# use vpa grid values as defaults
@@ -246,7 +246,7 @@ function mk_input(scan_input=Dict())
 		# determine the discretization option for the vz grid
 		# supported options are "chebyshev_pseudospectral" and "finite_difference"
 		vz.discretization = get(scan_input, "vz_discretization", vpa.discretization)
-		
+
 		# overwrite some default parameters related to the vr grid
 		# ngrid is the number of grid points per element
 		vr.ngrid = get(scan_input, "vr_ngrid", 1)
@@ -315,10 +315,10 @@ function mk_input(scan_input=Dict())
         vzeta.advection.frequency, vzeta.advection.oscillation_amplitude)
     vzeta_immutable = grid_input("vzeta", vzeta.ngrid, vzeta.nelement, vzeta.L,
         vzeta.discretization, vzeta.fd_option, vzeta.bc, vzeta_advection_immutable)
-    
+
     species_charged_immutable = Array{species_parameters,1}(undef,n_ion_species)
     species_neutral_immutable = Array{species_parameters,1}(undef,n_neutral_species)
-    
+
     for is ∈ 1:n_ion_species
         species_type = "ion"
         #    species_type = "electron"
@@ -355,9 +355,9 @@ function mk_input(scan_input=Dict())
             species_neutral_immutable[is] = species_parameters(species_type, species.neutral[is].initial_temperature,
                 species.neutral[is].initial_density, z_IC, vpa_IC)
         end
-    end 
+    end
     species_immutable = (charged = species_charged_immutable, neutral = species_neutral_immutable)
-    
+
     drive_immutable = drive_input(drive.force_phi, drive.amplitude, drive.frequency)
 
     # Make file to log some information about inputs into.
@@ -375,7 +375,7 @@ function mk_input(scan_input=Dict())
         z_immutable, vpa_immutable, composition, species_immutable, evolve_moments)
 
     # return immutable structs for z, vpa, species and composition
-    all_inputs = (run_name, output_dir, evolve_moments, t_input, 
+    all_inputs = (run_name, output_dir, evolve_moments, t_input,
                   z_immutable, r_immutable, vpa_immutable, vperp_immutable, gyrophase_immutable, vz_immutable, vr_immutable, vzeta_immutable,
                   composition, species_immutable, collisions, geometry, drive_immutable)
     println(io, "\nAll inputs returned from mk_input():")
@@ -519,7 +519,7 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     L_vperp = 6.0
     # determine the boundary condition
     # currently supported options are "zero" and "periodic"
-    # MRH probably need new bc option here 
+    # MRH probably need new bc option here
     #boundary_option_vperp = "zero"
     boundary_option_vperp = "periodic"
     # determine the discretization option for the vperp grid
@@ -696,10 +696,10 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     composition = species_composition(n_species, n_ion_species, n_neutral_species,
         electron_physics, use_test_neutral_wall_pdf, 1:n_ion_species, n_ion_species+1:n_species, T_e, T_wall,
         phi_wall, mn_over_mi, me_over_mi, allocate_float(n_species))
-    
+
     species_charged = Array{species_parameters_mutable,1}(undef,n_ion_species)
     species_neutral = Array{species_parameters_mutable,1}(undef,n_neutral_species)
-    
+
     # initial temperature for each species defaults to Tₑ
     initial_temperature = 1.0
     # initial density for each species defaults to Nₑ
@@ -759,7 +759,7 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
         end
     end
     species = (charged = species_charged, neutral = species_neutral)
-    
+
     # if drive_phi = true, include external electrostatic potential of form
     # phi(z,t=0)*drive_amplitude*sinpi(time*drive_frequency)
     drive_phi = false
