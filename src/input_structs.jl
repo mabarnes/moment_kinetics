@@ -101,9 +101,7 @@ mutable struct grid_input_mutable
     nelement_global::mk_int
     # number of elements in local grid on this rank 
     nelement_local::mk_int
-	# rank of this process
-	irank::mk_int
-    # box length
+	# box length
     L::mk_float
     # discretization option
     discretization::String
