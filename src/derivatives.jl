@@ -57,7 +57,7 @@ function derivative_r_chrg!(dfdr::Array{mk_float,3},f::Array{mk_float,3},
 	r_spectral,r)
 
 	# differentiate f w.r.t r
-	@loop_z_s iz is begin
+	@loop_s_z is iz begin
 		@views derivative!(dfdr[iz,:,is], f[iz,:,is], r, r_spectral)
 		# get external endpoints to reconcile via MPI
 		dfdr_lower_endpoints[iz,is] = r.scratch_2d[1,1]
@@ -79,7 +79,7 @@ function derivative_r_ntrl!(dfdr::Array{mk_float,3},f::Array{mk_float,3},
 	r_spectral,r)
 
 	# differentiate f w.r.t r
-	@loop_z_sn iz isn begin
+	@loop_sn_z isn iz begin
 		@views derivative!(dfdr[iz,:,isn], f[iz,:,isn], r, r_spectral)
 		# get external endpoints to reconcile via MPI
 		dfdr_lower_endpoints[iz,isn] = r.scratch_2d[1,1]
@@ -103,7 +103,7 @@ function derivative_r_chrg!(dfdr::Array{mk_float,5},f::Array{mk_float,5},
 	r_spectral,r)
 
 	# differentiate f w.r.t r
-	@loop_vpa_vperp_z_s ivpa ivperp iz is begin
+	@loop_s_z_vperp_vpa is iz ivperp ivpa begin
 		@views derivative!(dfdr[ivpa,ivperp,iz,:,is], f[ivpa,ivperp,iz,:,is], r, r_spectral)
 		# get external endpoints to reconcile via MPI
 		dfdr_lower_endpoints[ivpa,ivperp,iz,is] = r.scratch_2d[1,1]
@@ -126,11 +126,11 @@ function derivative_r_ntrl!(dfdr::Array{mk_float,6},f::Array{mk_float,6},
 	r_spectral,r)
 
 	# differentiate f w.r.t r
-	@loop_vz_vz_vzeta_z_s ivz ivr ivzeta iz is begin
-		@views derivative!(dfdr[ivz,ivr,ivzeta,iz,:,is], f[ivz,ivr,ivzeta,iz,:,is], r, r_spectral)
+	@loop_sn_z_vzeta_vr_vz is iz ivzeta ivr ivz begin
+		@views derivative!(dfdr[ivz,ivr,ivzeta,iz,:,isn], f[ivz,ivr,ivzeta,iz,:,isn], r, r_spectral)
 		# get external endpoints to reconcile via MPI
-		dfdr_lower_endpoints[ivz,ivr,ivzeta,iz,is] = r.scratch_2d[1,1]
-		dfdr_upper_endpoints[ivz,ivr,ivzeta,iz,is] = r.scratch_2d[end,end] 
+		dfdr_lower_endpoints[ivz,ivr,ivzeta,iz,isn] = r.scratch_2d[1,1]
+		dfdr_upper_endpoints[ivz,ivr,ivzeta,iz,isn] = r.scratch_2d[end,end] 
 	end
 	# now reconcile element boundaries across
 	# processes with large message involving all other dimensions 
@@ -182,7 +182,7 @@ function derivative_z_chrg!(dfdz::Array{mk_float,3},f::Array{mk_float,3},
 	z_spectral,z)
 
 	# differentiate f w.r.t z
-	@loop_r_s ir is begin
+	@loop_s_r is ir begin
 		@views derivative!(dfdz[:,ir,is], f[:,ir,is], z, z_spectral)
 		# get ezternal endpoints to reconcile via MPI
 		dfdz_lower_endpoints[ir,is] = z.scratch_2d[1,1]
@@ -205,7 +205,7 @@ function derivative_z_ntrl!(dfdz::Array{mk_float,3},f::Array{mk_float,3},
 	z_spectral,z)
 
 	# differentiate f w.r.t z
-	@loop_r_sn ir isn begin
+	@loop_sn_r isn ir begin
 		@views derivative!(dfdz[:,ir,isn], f[:,ir,isn], z, z_spectral)
 		# get ezternal endpoints to reconcile via MPI
 		dfdz_lower_endpoints[ir,isn] = z.scratch_2d[1,1]
@@ -228,7 +228,7 @@ function derivative_z_chrg!(dfdz::Array{mk_float,5},f::Array{mk_float,5},
 	z_spectral,z)
 
 	# differentiate f w.r.t z
-	@loop_vpa_vperp_r_s ivz ivr ivzeta ir is begin
+	@loop_s_r_vperp_vpa is ir ivperp ivpa begin
 		@views derivative!(dfdz[ivpa,ivperp,:,ir,is], f[ivpa,ivperp,:,ir,is], z, z_spectral)
 		# get ezternal endpoints to reconcile via MPI
 		dfdz_lower_endpoints[ivpa,ivperp,ir,is] = z.scratch_2d[1,1]
@@ -251,7 +251,7 @@ function derivative_z_ntrl!(dfdz::Array{mk_float,6},f::Array{mk_float,6},
 	z_spectral,z)
 
 	# differentiate f w.r.t z
-	@loop_vz_vr_vzeta_r_sn ivz ivr ivzeta ir isn begin
+	@loop_sn_r_vzeta_vr_vz isn ir ivzeta ivr ivz begin
 		@views derivative!(dfdz[ivz,ivr,ivzeta,:,ir,isn], f[ivz,ivr,ivzeta,:,ir,isn], z, z_spectral)
 		# get ezternal endpoints to reconcile via MPI
 		dfdz_lower_endpoints[ivz,ivr,ivzeta,ir,isn] = z.scratch_2d[1,1]
