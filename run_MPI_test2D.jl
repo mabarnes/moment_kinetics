@@ -117,6 +117,157 @@ if abspath(PROGRAM_FILE) == @__FILE__
 		end
 	end
 	
+	function apply_adv_fac!(buffer::Array{Float64,1},adv_fac::Array{Float64,1},sgn::Int64,endpoints::Array{Float64,1})
+		#buffer contains off-process endpoint
+		#adv_fac < 0 is positive advection speed
+		#adv_fac > 0 is negative advection speed
+		#endpoint is local on-process endpoint
+		#sgn = 1 for send irank -> irank + 1
+		#sgn = -1 for send irank + 1 -> irank
+		n = size(buffer,1) 
+		for i in 1:n
+			if sgn*adv_fac[i] > 0.0 
+			# replace buffer value (c with endpoint value 
+				buffer[i] = endpoints[i]
+			elseif sgn*adv_fac[i] < 0.0
+				break #do nothing
+			else #average values 
+				buffer[i] = 0.5*(buffer[i] + endpoints[i])
+			end
+		end
+		
+	end
+	
+	function apply_adv_fac!(buffer::Array{Float64,2},adv_fac::Array{Float64,2},sgn::Int64,endpoints::Array{Float64,2})
+		#buffer contains off-process endpoint
+		#adv_fac < 0 is positive advection speed
+		#adv_fac > 0 is negative advection speed
+		#endpoint is local on-process endpoint
+		#sgn = 1 for send irank -> irank + 1
+		#sgn = -1 for send irank + 1 -> irank
+		n = size(buffer,1) 
+		m = size(buffer,2) 
+		for j in 1:m
+			for i in 1:n
+				if sgn*adv_fac[i,j] > 0.0 
+				# replace buffer value (c with endpoint value 
+					buffer[i,j] = endpoints[i,j]
+				elseif sgn*adv_fac[i,j] < 0.0
+					break #do nothing
+				else #average values 
+					buffer[i,j] = 0.5*(buffer[i,j] + endpoints[i,j])
+				end
+			end
+		end
+	end
+	
+	function reconcile_element_boundaries_upwind_MPI!(df1d::Array{Float64,Ndims}, 
+	adv_fac_lower_endpoints::Array{Float64,N}, adv_fac_upper_endpoints::Array{Float64,N},
+	dfdx_lower_endpoints::Array{Float64,N}, dfdx_upper_endpoints::Array{Float64,N},
+	send_buffer::Array{Float64,N}, receive_buffer::Array{Float64,N}, coord) where {Ndims,N}
+		
+		#counter to test if endpoint data assigned
+		assignment_counter = 0
+		
+		# now deal with endpoints that are stored across ranks
+		comm = coord.comm
+		nrank = coord.nrank 
+		irank = coord.irank 
+		#send_buffer = coord.send_buffer
+		#receive_buffer = coord.receive_buffer
+		# sending pattern is cyclic. First we send data form irank -> irank + 1
+		# to fix the lower endpoints, then we send data from irank -> irank - 1
+		# to fix upper endpoints. Special exception for the periodic points.
+		# receive_buffer[1] is for data received, send_buffer[1] is data to be sent
+		
+		send_buffer .= dfdx_upper_endpoints #highest end point on THIS rank
+		# pass data from irank -> irank + 1, receive data from irank - 1
+		idst = mod(irank+1,nrank) # destination rank for sent data
+		isrc = mod(irank-1,nrank) # source rank for received data
+		#MRH what value should tag take here and below? Esp if nrank >= 32
+		rreq = MPI.Irecv!(receive_buffer, comm; source=isrc, tag=isrc+32)
+		sreq = MPI.Isend(send_buffer, comm; dest=idst, tag=irank+32)
+		#print("$irank: Sending   $irank -> $idst = $send_buffer\n")
+		stats = MPI.Waitall([rreq, sreq])
+		#print("$irank: Received $isrc -> $irank = $receive_buffer\n")
+		MPI.Barrier(comm)
+		
+		# no update receive buffer, taking into account the reconciliation
+		if irank == 0
+			if coord.bc == "periodic"
+				# depending on adv_fac, update the extreme lower endpoint with data from irank = nrank -1	
+				apply_adv_fac!(receive_buffer,adv_fac_lower_endpoints,1,dfdx_lower_endpoints)
+			else # directly use value from Cheb at extreme lower point 
+				receive_buffer .= dfdx_lower_endpoints
+			end
+		else # depending on adv_fac, update the lower endpoint with data from irank = nrank -1	
+			apply_adv_fac!(receive_buffer,adv_fac_lower_endpoints,1,dfdx_lower_endpoints)
+		end
+		
+		#now update the df1d array -- using a slice appropriate to the dimension reconciled
+		# test against coord name -- make sure to use exact string delimiters e.g. "x" not 'x'
+		# test against Ndims (autodetermined) to choose which array slices to use in assigning endpoints
+		#println("coord.name: ",coord.name," Ndims: ",Ndims)
+		if coord.name == "x" && Ndims==2
+			df1d[1,:] .= receive_buffer[:]
+			assignment_counter += 1
+		elseif coord.name == "x" && Ndims==3
+			df1d[1,:,:] .= receive_buffer[:,:]
+			assignment_counter += 1
+		elseif coord.name == "y" && Ndims==2
+			df1d[:,1] .= receive_buffer[:]
+			assignment_counter += 1
+		elseif coord.name == "y" && Ndims==3
+			df1d[:,1,:] .= receive_buffer[:,:]
+			assignment_counter += 1
+		end
+		
+		send_buffer .= dfdx_lower_endpoints #lowest end point on THIS rank
+		# pass data from irank -> irank - 1, receive data from irank + 1
+		idst = mod(irank-1,nrank) # destination rank for sent data
+		isrc = mod(irank+1,nrank) # source rank for received data
+		#MRH what value should tag take here and below? Esp if nrank >= 32
+		rreq = MPI.Irecv!(receive_buffer, comm; source=isrc, tag=isrc+32)
+		sreq = MPI.Isend(send_buffer, comm; dest=idst, tag=irank+32)
+		#print("$irank: Sending   $irank -> $idst = $send_buffer\n")
+		stats = MPI.Waitall([rreq, sreq])
+		#print("$irank: Received $isrc -> $irank = $receive_buffer\n")
+		MPI.Barrier(comm)
+		
+		if irank == nrank-1
+			if coord.bc == "periodic"
+				# depending on adv_fac, update the extreme upper endpoint with data from irank = 0
+				apply_adv_fac!(receive_buffer,adv_fac_lower_endpoints,-1,dfdx_upper_endpoints)
+			else #directly use value from Cheb
+				receive_buffer .= dfdx_upper_endpoints
+			end
+		else # enforce continuity at upper endpoint
+			apply_adv_fac!(receive_buffer,adv_fac_lower_endpoints,-1,dfdx_upper_endpoints)
+		end
+	
+		#now update the df1d array -- using a slice appropriate to the dimension reconciled
+		# test against coord name -- make sure to use exact string delimiters e.g. "x" not 'x'
+		# test against Ndims (autodetermined) to choose which array slices to use in assigning endpoints
+		#println("coord.name: ",coord.name," Ndims: ",Ndims)
+		if coord.name=="x" && Ndims ==2
+			df1d[end,:] .= receive_buffer[:]
+			assignment_counter += 1
+		elseif coord.name=="x" && Ndims ==3
+			df1d[end,:,:] .= receive_buffer[:,:]
+			assignment_counter += 1
+		elseif coord.name=="y" && Ndims ==2
+			df1d[:,end] .= receive_buffer[:]
+			assignment_counter += 1
+		elseif coord.name=="y" && Ndims ==3
+			df1d[:,end,:] .= receive_buffer[:,:]
+			assignment_counter += 1
+		end
+	
+		if  !(assignment_counter == 2)
+			println("ERROR: failure to assign endpoints in reconcile_element_boundaries_centered_MPI!: coord.name: ",coord.name," Ndims: ",Ndims)
+		end
+	end
+	
 	#3D version
 	function derivative_x!(dfdx::Array{Float64,3},f::Array{Float64,3},
 		dfdx_lower_endpoints::Array{Float64,2}, dfdx_upper_endpoints::Array{Float64,2},
@@ -126,7 +277,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
 		# differentiate f w.r.t x
 		for iz in 1:z.n
 			for iy in 1:y.n
-				@views derivative!(dfdx[:,iy,iz], f[:,iy,iz], x, x_spectral)
+				@views derivative!(dfdx[:,iy,iz], f[:,iy,iz], x, adv_fac[:,iy,iz], x_spectral)
 				# get external endpoints to reconcile via MPI
 				dfdx_lower_endpoints[iy,iz] = x.scratch_2d[1,1]
 				dfdx_upper_endpoints[iy,iz] = x.scratch_2d[end,end] 
@@ -135,7 +286,37 @@ if abspath(PROGRAM_FILE) == @__FILE__
 		# now reconcile element boundaries across
 		# processes with large message involving all y 
 		if x.nelement_local < x.nelement_global
-			reconcile_element_boundaries_MPI!(dfdx,
+			reconcile_element_boundaries_centered_MPI!(dfdx,
+			 adv_fac[1,:,:], adv_fac[end,:,:],
+			 dfdx_lower_endpoints,dfdx_upper_endpoints,
+			 x_send_buffer, x_receive_buffer, x)
+		end
+		
+	end
+	
+	#3D version with upwind
+	function derivative_x!(dfdx::Array{Float64,3},f::Array{Float64,3},
+		dfdx_lower_endpoints::Array{Float64,2}, dfdx_upper_endpoints::Array{Float64,2},
+		x_send_buffer::Array{Float64,2},x_receive_buffer::Array{Float64,2},
+		x_spectral,x,y,z,adv_fac::Array{Float64,3},
+		adv_fac_lower_buffer::Array{Float64,2},adv_fac_upper_buffer::Array{Float64,2})
+	
+		# differentiate f w.r.t x
+		for iz in 1:z.n
+			for iy in 1:y.n
+				@views derivative!(dfdx[:,iy,iz], f[:,iy,iz], x, x_spectral)
+				# get external endpoints to reconcile via MPI
+				dfdx_lower_endpoints[iy,iz] = x.scratch_2d[1,1]
+				dfdx_upper_endpoints[iy,iz] = x.scratch_2d[end,end] 
+				adv_fac_lower_buffer[iy,iz] = adv_fac[1,iy,iz]
+				adv_fac_upper_buffer[iy,iz] = adv_fac[end,iy,iz] 
+			end
+		end
+		# now reconcile element boundaries across
+		# processes with large message involving all y 
+		if x.nelement_local < x.nelement_global
+			reconcile_element_boundaries_upwind_MPI!(dfdx,
+			 adv_fac_lower_buffer, adv_fac_upper_buffer,
 			 dfdx_lower_endpoints,dfdx_upper_endpoints,
 			 x_send_buffer, x_receive_buffer, x)
 		end
@@ -158,7 +339,36 @@ if abspath(PROGRAM_FILE) == @__FILE__
 		# now reconcile element boundaries across
 		# processes with large message involving all y 
 		if x.nelement_local < x.nelement_global
-			reconcile_element_boundaries_MPI!(dfdx,
+			reconcile_element_boundaries_centered_MPI!(dfdx,
+			 dfdx_lower_endpoints,dfdx_upper_endpoints,
+			 x_send_buffer, x_receive_buffer, x)
+		end
+		
+	end
+	
+	#2D version with upwind
+	function derivative_x!(dfdx::Array{Float64,2},f::Array{Float64,2},
+		dfdx_lower_endpoints::Array{Float64,1}, dfdx_upper_endpoints::Array{Float64,1},
+		x_send_buffer::Array{Float64,1},x_receive_buffer::Array{Float64,1},
+		x_spectral,x,y,adv_fac::Array{Float64,2},
+		adv_fac_lower_buffer::Array{Float64,1},adv_fac_upper_buffer::Array{Float64,1})
+	
+		# differentiate f w.r.t x
+		for iy in 1:y.n
+			@views derivative!(dfdx[:,iy], f[:,iy], x, adv_fac[:,iy], x_spectral)
+			# get external endpoints to reconcile via MPI
+			dfdx_lower_endpoints[iy] = x.scratch_2d[1,1]
+			dfdx_upper_endpoints[iy] = x.scratch_2d[end,end] 
+			adv_fac_lower_buffer[iy] = adv_fac[1,iy]
+			adv_fac_upper_buffer[iy] = adv_fac[end,iy]
+		end
+		# now reconcile element boundaries across
+		# processes with large message involving all y 
+		# pass adv_fac[1,:] -- lower x endpoints for all y
+		# and adv_fac[end,:] -- upper x endpoints for all y
+		if x.nelement_local < x.nelement_global
+			@views reconcile_element_boundaries_upwind_MPI!(dfdx, 
+			adv_fac_lower_buffer, adv_fac_upper_buffer,
 			 dfdx_lower_endpoints,dfdx_upper_endpoints,
 			 x_send_buffer, x_receive_buffer, x)
 		end
@@ -183,7 +393,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
 		# now reconcile element boundaries across
 		# processes with large message involving all y 
 		if y.nelement_local < y.nelement_global
-			reconcile_element_boundaries_MPI!(dfdy,
+			reconcile_element_boundaries_centered_MPI!(dfdy,
 			 dfdy_lower_endpoints,dfdy_upper_endpoints,
 			 y_send_buffer, y_receive_buffer, y)
 		end
@@ -205,7 +415,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
 		# now reconcile element boundaries across
 		# processes with large message involving all y 
 		if y.nelement_local < y.nelement_global
-			reconcile_element_boundaries_MPI!(dfdy,
+			reconcile_element_boundaries_centered_MPI!(dfdy,
 			 dfdy_lower_endpoints,dfdy_upper_endpoints,
 			 y_send_buffer, y_receive_buffer, y)
 		end
@@ -216,10 +426,10 @@ if abspath(PROGRAM_FILE) == @__FILE__
 	# mpirun -n nrank run_MPI_test2D.jl
 	x_ngrid = 4 #number of points per element 
 	x_nelement_local  = 1 
-	x_nelement_global = 5 # number of elements 
+	x_nelement_global = 4 # number of elements 
 	y_ngrid = 4
 	y_nelement_local  = 1
-	y_nelement_global = 7
+	y_nelement_global = 1
 	
 	y_nblocks = floor(Int,x_nelement_global/x_nelement_local)
 	x_nblocks = floor(Int,y_nelement_global/y_nelement_local)
@@ -303,6 +513,9 @@ if abspath(PROGRAM_FILE) == @__FILE__
 	# create a 3D array for the function f(x,y) to be differentiated/integrated
 	df3Ddx = Array{Float64,3}(undef, x.n, y.n, z.n)
 	f3D = Array{Float64,3}(undef, x.n, y.n, z.n)
+	adv_fac3D = Array{Float64,3}(undef, x.n, y.n, z.n)
+	adv_lw3D = Array{Float64,2}(undef, y.n, z.n)
+	adv_up3D = Array{Float64,2}(undef, y.n, z.n)
 	g3D = Array{Float64,3}(undef, x.n, y.n, z.n)
 	dk3Ddy = Array{Float64,3}(undef, x.n, y.n, z.n)
 	k3D = Array{Float64,3}(undef, x.n, y.n, z.n)
@@ -310,6 +523,9 @@ if abspath(PROGRAM_FILE) == @__FILE__
 	# create a 2D array for the function f(x,y) to be differentiated/integrated
 	k = Array{Float64,2}(undef, x.n, y.n)
 	f = Array{Float64,2}(undef, x.n, y.n)
+	adv_fac = Array{Float64,2}(undef, x.n, y.n)
+	adv_lw = Array{Float64,1}(undef, y.n)
+	adv_up = Array{Float64,1}(undef, y.n)
 	g = Array{Float64,2}(undef, x.n, y.n)
 	h = Array{Float64,2}(undef, x.n, y.n)
 	# create array for the derivative df/dx
@@ -330,6 +546,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
 	for iz ∈ 1:z.n
 		for iy ∈ 1:y.n
 			for ix ∈ 1:x.n
+				adv_fac3D[ix,iy,iz] = 1.0 # so always take upper endpoint
 				f3D[ix,iy,iz] =  sinpi(2.0*x.grid[ix]/x.L) #*sinpi(2.0*y.grid[iy]/y.L) 
 				g3D[ix,iy,iz] =  (2.0*pi/x.L)*cospi(2.0*x.grid[ix]/x.L) #*sinpi(2.0*y.grid[iy]/y.L)
 				k3D[ix,iy,iz] =  sinpi(2.0*y.grid[iy]/y.L) #*sinpi(2.0*y.grid[iy]/y.L) 
@@ -340,6 +557,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
 	
 	for iy ∈ 1:y.n
 		for ix ∈ 1:x.n
+			adv_fac[ix,iy] = 1.0 # so always take upper endpoint
 			k[ix,iy] =  sinpi(2.0*y.grid[iy]/y.L) #*sinpi(2.0*y.grid[iy]/y.L) 
 			f[ix,iy] =  sinpi(2.0*x.grid[ix]/x.L) #*sinpi(2.0*y.grid[iy]/y.L) 
 			g[ix,iy] =  (2.0*pi/x.L)*cospi(2.0*x.grid[ix]/x.L) #*sinpi(2.0*y.grid[iy]/y.L)
@@ -352,14 +570,16 @@ if abspath(PROGRAM_FILE) == @__FILE__
 	dfdx_lower_endpoints = Array{Float64,1}(undef,y.n)
 	dfdx_upper_endpoints = Array{Float64,1}(undef,y.n)
 	# differentiate f w.r.t x
-	derivative_x!(dfdx,f,dfdx_lower_endpoints,dfdx_upper_endpoints,x_send_buffer,x_receive_buffer,x_spectral,x,y)
+	#derivative_x!(dfdx,f,dfdx_lower_endpoints,dfdx_upper_endpoints,x_send_buffer,x_receive_buffer,x_spectral,x,y)
+	derivative_x!(dfdx,f,dfdx_lower_endpoints,dfdx_upper_endpoints,x_send_buffer,x_receive_buffer,x_spectral,x,y,adv_fac,adv_lw,adv_up)
 
 	x3D_send_buffer = Array{Float64,2}(undef,y.n,z.n)
 	x3D_receive_buffer = Array{Float64,2}(undef,y.n,z.n)
 	df3Ddx_lower_endpoints = Array{Float64,2}(undef,y.n,z.n)
 	df3Ddx_upper_endpoints = Array{Float64,2}(undef,y.n,z.n)
 	# differentiate f w.r.t x
-	derivative_x!(df3Ddx,f3D,df3Ddx_lower_endpoints,df3Ddx_upper_endpoints,x3D_send_buffer,x3D_receive_buffer,x_spectral,x,y,z)
+	#derivative_x!(df3Ddx,f3D,df3Ddx_lower_endpoints,df3Ddx_upper_endpoints,x3D_send_buffer,x3D_receive_buffer,x_spectral,x,y,z)
+	derivative_x!(df3Ddx,f3D,df3Ddx_lower_endpoints,df3Ddx_upper_endpoints,x3D_send_buffer,x3D_receive_buffer,x_spectral,x,y,z,adv_fac3D,adv_lw3D,adv_up3D)
 		
 	y_send_buffer = Array{Float64,1}(undef,x.n)
 	y_receive_buffer = Array{Float64,1}(undef,x.n)
