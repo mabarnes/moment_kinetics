@@ -14,8 +14,11 @@ if abspath(PROGRAM_FILE) == @__FILE__
 	function reconcile_element_boundaries_MPI!(df1d::Array{Float64,Ndims},
 	dfdx_lower_endpoints::Array{Float64,N}, dfdx_upper_endpoints::Array{Float64,N},
 	send_buffer::Array{Float64,N}, receive_buffer::Array{Float64,N}, coord) where {Ndims,N}
-	
-	# now deal with endpoints that are stored across ranks
+		
+		#counter to test if endpoint data assigned
+		assignment_counter = 0
+		
+		# now deal with endpoints that are stored across ranks
 		comm = coord.comm
 		nrank = coord.nrank 
 		irank = coord.irank 
@@ -53,16 +56,19 @@ if abspath(PROGRAM_FILE) == @__FILE__
 		#now update the df1d array -- using a slice appropriate to the dimension reconciled
 		# test against coord name -- make sure to use exact string delimiters e.g. "x" not 'x'
 		# test against Ndims (autodetermined) to choose which array slices to use in assigning endpoints
-		println("coord.name: ",coord.name," Ndims: ",Ndims)
+		#println("coord.name: ",coord.name," Ndims: ",Ndims)
 		if coord.name == "x" && Ndims==2
 			df1d[1,:] .= receive_buffer[:]
-			println("I am patching x lower")
+			assignment_counter += 1
 		elseif coord.name == "x" && Ndims==3
 			df1d[1,:,:] .= receive_buffer[:,:]
-			println("I am patching x lower")
+			assignment_counter += 1
 		elseif coord.name == "y" && Ndims==2
 			df1d[:,1] .= receive_buffer[:]
-			println("I am patching y lower")
+			assignment_counter += 1
+		elseif coord.name == "y" && Ndims==3
+			df1d[:,1,:] .= receive_buffer[:,:]
+			assignment_counter += 1
 		end
 		
 		send_buffer .= dfdx_lower_endpoints #lowest end point on THIS rank
@@ -91,18 +97,24 @@ if abspath(PROGRAM_FILE) == @__FILE__
 		#now update the df1d array -- using a slice appropriate to the dimension reconciled
 		# test against coord name -- make sure to use exact string delimiters e.g. "x" not 'x'
 		# test against Ndims (autodetermined) to choose which array slices to use in assigning endpoints
-		println("coord.name: ",coord.name," Ndims: ",Ndims)
+		#println("coord.name: ",coord.name," Ndims: ",Ndims)
 		if coord.name=="x" && Ndims ==2
 			df1d[end,:] .= receive_buffer[:]
-			println("I am patching x upper")
+			assignment_counter += 1
 		elseif coord.name=="x" && Ndims ==3
 			df1d[end,:,:] .= receive_buffer[:,:]
-			println("I am patching y upper")
+			assignment_counter += 1
 		elseif coord.name=="y" && Ndims ==2
 			df1d[:,end] .= receive_buffer[:]
-			println("I am patching y upper")
+			assignment_counter += 1
+		elseif coord.name=="y" && Ndims ==3
+			df1d[:,end,:] .= receive_buffer[:,:]
+			assignment_counter += 1
 		end
 	
+		if  !(assignment_counter == 2)
+			println("ERROR: failure to assign endpoints in reconcile_element_boundaries_MPI!: coord.name: ",coord.name," Ndims: ",Ndims)
+		end
 	end
 	
 	#3D version
@@ -153,6 +165,31 @@ if abspath(PROGRAM_FILE) == @__FILE__
 		
 	end
 	
+	#3D version
+	function derivative_y!(dfdy::Array{Float64,3},f::Array{Float64,3},
+		dfdy_lower_endpoints::Array{Float64,2}, dfdy_upper_endpoints::Array{Float64,2},
+		y_send_buffer::Array{Float64,2},y_receive_buffer::Array{Float64,2},
+		y_spectral,x,y,z)
+	
+		# differentiate f w.r.t y
+		for iz in 1:z.n
+			for ix in 1:x.n
+				@views derivative!(dfdy[ix,:,iz], f[ix,:,iz], y, y_spectral)
+				# get external endpoints to reconcile via MPI
+				dfdy_lower_endpoints[ix,iz] = y.scratch_2d[1,1]
+				dfdy_upper_endpoints[ix,iz] = y.scratch_2d[end,end] 
+			end
+		end
+		# now reconcile element boundaries across
+		# processes with large message involving all y 
+		if y.nelement_local < y.nelement_global
+			reconcile_element_boundaries_MPI!(dfdy,
+			 dfdy_lower_endpoints,dfdy_upper_endpoints,
+			 y_send_buffer, y_receive_buffer, y)
+		end
+	end
+	
+	#2D version
 	function derivative_y!(dfdy::Array{Float64,2},f::Array{Float64,2},
 		dfdy_lower_endpoints::Array{Float64,1}, dfdy_upper_endpoints::Array{Float64,1},
 		y_send_buffer::Array{Float64,1},y_receive_buffer::Array{Float64,1},
@@ -177,10 +214,10 @@ if abspath(PROGRAM_FILE) == @__FILE__
 	# define inputs needed for the xy calculus test
 	# nrank must be nrank = y_nblocks*x_nblocks, i.e.,
 	# mpirun -n nrank run_MPI_test2D.jl
-	x_ngrid = 10 #number of points per element 
+	x_ngrid = 4 #number of points per element 
 	x_nelement_local  = 1 
 	x_nelement_global = 5 # number of elements 
-	y_ngrid = 12
+	y_ngrid = 4
 	y_nelement_local  = 1
 	y_nelement_global = 7
 	
@@ -267,6 +304,9 @@ if abspath(PROGRAM_FILE) == @__FILE__
 	df3Ddx = Array{Float64,3}(undef, x.n, y.n, z.n)
 	f3D = Array{Float64,3}(undef, x.n, y.n, z.n)
 	g3D = Array{Float64,3}(undef, x.n, y.n, z.n)
+	dk3Ddy = Array{Float64,3}(undef, x.n, y.n, z.n)
+	k3D = Array{Float64,3}(undef, x.n, y.n, z.n)
+	h3D = Array{Float64,3}(undef, x.n, y.n, z.n)
 	# create a 2D array for the function f(x,y) to be differentiated/integrated
 	k = Array{Float64,2}(undef, x.n, y.n)
 	f = Array{Float64,2}(undef, x.n, y.n)
@@ -292,6 +332,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
 			for ix ∈ 1:x.n
 				f3D[ix,iy,iz] =  sinpi(2.0*x.grid[ix]/x.L) #*sinpi(2.0*y.grid[iy]/y.L) 
 				g3D[ix,iy,iz] =  (2.0*pi/x.L)*cospi(2.0*x.grid[ix]/x.L) #*sinpi(2.0*y.grid[iy]/y.L)
+				k3D[ix,iy,iz] =  sinpi(2.0*y.grid[iy]/y.L) #*sinpi(2.0*y.grid[iy]/y.L) 
+				h3D[ix,iy,iz] =  (2.0*pi/y.L)*cospi(2.0*y.grid[iy]/y.L) #*cospi(2.0*x.grid[ix]/x.L) 
 			end
 		end
 	end
@@ -325,6 +367,14 @@ if abspath(PROGRAM_FILE) == @__FILE__
 	dkdy_upper_endpoints = Array{Float64,1}(undef,x.n)
 	# differentiate k w.r.t y
 	derivative_y!(dkdy,k,dkdy_lower_endpoints,dkdy_upper_endpoints,y_send_buffer,y_receive_buffer,y_spectral,x,y)
+	
+	y3D_send_buffer = Array{Float64,2}(undef,x.n,z.n)
+	y3D_receive_buffer = Array{Float64,2}(undef,x.n,z.n)
+	dk3Ddy_lower_endpoints = Array{Float64,2}(undef,x.n,z.n)
+	dk3Ddy_upper_endpoints = Array{Float64,2}(undef,x.n,z.n)
+	# differentiate f w.r.t x
+	derivative_y!(dk3Ddy,k3D,dk3Ddy_lower_endpoints,dk3Ddy_upper_endpoints,y3D_send_buffer,y3D_receive_buffer,y_spectral,x,y,z)
+	
 	# Test that error intdf is less than the specified error tolerance etol
 	#@test abs(intdf) < etol
 	# here we do a 1D integral in the x and y dimensions separately
@@ -347,6 +397,16 @@ if abspath(PROGRAM_FILE) == @__FILE__
 		end
 	end
 
+	for iz in 1:1
+		for ix in 1:1
+			intdk3D = integral(dkdy[ix,:,iz], y.wgts)
+			intdk3D_out = MPI.Reduce(intdk3D,+,y.comm)
+			if(y_irank_sub == 0 && y_iblock == 0)
+				println( "abs(intdk3D_out) = ", abs(intdk3D_out), ": etol = ",etol)
+			end
+		end
+	end
+	
 	for ix in 1:1
 		intdk = integral(dkdy[ix,:], y.wgts)
 		intdk_out = MPI.Reduce(intdk,+,y.comm)
