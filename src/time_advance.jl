@@ -526,8 +526,9 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
              composition.n_ion_species, composition.n_neutral_species, io)
             # write initial data to binary file (netcdf)
             write_data_to_netcdf(pdf.charged.unnorm, pdf.neutral.unnorm, moments,
-             fields, t, composition.n_ion_species, composition.n_neutral_species, cdf, iwrite)
-            write_data_to_hdf5(fields, t, h5, iwrite)
+                fields, t, composition.n_ion_species, composition.n_neutral_species, cdf, iwrite)
+            write_data_to_hdf5(pdf.charged.unnorm, pdf.neutral.unnorm, moments,
+                fields, t, composition.n_ion_species, composition.n_neutral_species, h5, iwrite)
 
             iwrite += 1
             begin_s_r_z_vperp_region()
