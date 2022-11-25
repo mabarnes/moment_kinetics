@@ -174,8 +174,10 @@ function mk_input(scan_input=Dict())
     # overwrite some default parameters related to the r grid
     # ngrid is number of grid points per element
     r.ngrid = get(scan_input, "r_ngrid", 1)
-    # nelement is the number of elements
-    r.nelement = get(scan_input, "r_nelement", 1)
+    # nelement_global is the number of elements in total
+    r.nelement_global = get(scan_input, "r_nelement", 1)
+	# nelement_local is the number of elements on each process
+    r.nelement_local = get(scan_input, "r_nelement_local", 1)
     # determine the discretization option for the r grid
     # supported options are "chebyshev_pseudospectral" and "finite_difference"
     r.discretization = get(scan_input, "r_discretization", "finite_difference")
@@ -186,8 +188,10 @@ function mk_input(scan_input=Dict())
     # overwrite some default parameters related to the z grid
     # ngrid is number of grid points per element
     z.ngrid = get(scan_input, "z_ngrid", 9)
-    # nelement is the number of elements
-    z.nelement = get(scan_input, "z_nelement", 8)
+    # nelement_global is the number of elements in total
+    z.nelement_global = get(scan_input, "z_nelement", 8)
+    # nelement_local is the number of elements on each process
+    z.nelement_local = get(scan_input, "z_nelement_local", 1)
     # determine the discretization option for the z grid
     # supported options are "chebyshev_pseudospectral" and "finite_difference"
     z.discretization = get(scan_input, "z_discretization", "chebyshev_pseudospectral")
@@ -199,7 +203,9 @@ function mk_input(scan_input=Dict())
     # ngrid is the number of grid points per element
     vpa.ngrid = get(scan_input, "vpa_ngrid", 17)
     # nelement is the number of elements
-    vpa.nelement = get(scan_input, "vpa_nelement", 10)
+    vpa.nelement_global = get(scan_input, "vpa_nelement", 10)
+	# do not parallelise vpa with distributed-memory MPI
+    vpa.nelement_local = vpa.nelement_global 
     # L is the box length in units of vthermal_species
     vpa.L = get(scan_input, "vpa_L", 8.0*sqrt(species.charged[1].initial_temperature))
     # determine the boundary condition
@@ -213,7 +219,9 @@ function mk_input(scan_input=Dict())
     # ngrid is the number of grid points per element
     vperp.ngrid = get(scan_input, "vperp_ngrid", 1)
     # nelement is the number of elements
-    vperp.nelement = get(scan_input, "vperp_nelement", 1)
+    vperp.nelement_global = get(scan_input, "vperp_nelement", 1)
+	# do not parallelise vperp with distributed-memory MPI
+    vperp.nelement_local = vperp.nelement_global 
     # L is the box length in units of vthermal_species
     vperp.L = get(scan_input, "vperp_L", 8.0*sqrt(species.charged[1].initial_temperature))
     # determine the boundary condition
@@ -229,15 +237,19 @@ function mk_input(scan_input=Dict())
     # ngrid is the number of grid points per element
     gyrophase.ngrid = get(scan_input, "gyrophase_ngrid", 17)
     # nelement is the number of elements
-    gyrophase.nelement = get(scan_input, "gyrophase_nelement", 10)
-    
+    gyrophase.nelement_global = get(scan_input, "gyrophase_nelement", 10)
+    # do not parallelise gyrophase with distributed-memory MPI
+	gyrophase.nelement_local = gyrophase.nelement_global
+	
 	if n_neutral_species > 0
 		# overwrite some default parameters related to the vz grid
 		# use vpa grid values as defaults
 		# ngrid is the number of grid points per element
 		vz.ngrid = get(scan_input, "vz_ngrid", vpa.ngrid)
 		# nelement is the number of elements
-		vz.nelement = get(scan_input, "vz_nelement", vpa.nelement)
+		vz.nelement_global = get(scan_input, "vz_nelement", vpa.nelement_global)
+		# do not parallelise vz with distributed-memory MPI
+		vz.nelement_local = vz.nelement_global
 		# L is the box length in units of vthermal_species
 		vz.L = get(scan_input, "vz_L", vpa.L)
 		# determine the boundary condition
@@ -251,7 +263,9 @@ function mk_input(scan_input=Dict())
 		# ngrid is the number of grid points per element
 		vr.ngrid = get(scan_input, "vr_ngrid", 1)
 		# nelement is the number of elements
-		vr.nelement = get(scan_input, "vr_nelement", 1)
+		vr.nelement_global = get(scan_input, "vr_nelement", 1)
+		# do not parallelise vz with distributed-memory MPI
+		vr.nelement_local = vr.nelement_global
 		# L is the box length in units of vthermal_species
 		vr.L = get(scan_input, "vr_L", 8.0*sqrt(species.charged[1].initial_temperature))
 		# determine the boundary condition
@@ -265,7 +279,9 @@ function mk_input(scan_input=Dict())
 		# ngrid is the number of grid points per element
 		vzeta.ngrid = get(scan_input, "vzeta_ngrid", 1)
 		# nelement is the number of elements
-		vzeta.nelement = get(scan_input, "vzeta_nelement", 1)
+		vzeta.nelement_global = get(scan_input, "vzeta_nelement", 1)
+		# do not parallelise vz with distributed-memory MPI
+		vzeta.nelement_local = vzeta.nelement_global
 		# L is the box length in units of vthermal_species
 		vzeta.L = get(scan_input, "vzeta_L", 8.0*sqrt(species.charged[1].initial_temperature))
 		# determine the boundary condition
@@ -279,42 +295,54 @@ function mk_input(scan_input=Dict())
     ########## end user inputs. do not modify following code! ###############
     #########################################################################
 
+	# set up distributed-memory MPI information for z and r coords
+	# need grid and MPI information to determine these values 
+	# MRH just put dummy values now 
+	comm_sub_r = false
+	irank_r = 0
+	nrank_r = 0
+	comm_sub_z = false
+	irank_z = 0
+	nrank_z = 0
+
     t_input = time_input(nstep, dt, nwrite, use_semi_lagrange, n_rk_stages, split_operators,
     	use_manufactured_solns_for_advance, use_manufactured_solns_for_init)
     # replace mutable structures with immutable ones to optimize performance
-    # and avoid possible misunderstandings
-    z_advection_immutable = advection_input(z.advection.option, z.advection.constant_speed,
+    # and avoid possible misunderstandings	
+	z_advection_immutable = advection_input(z.advection.option, z.advection.constant_speed,
         z.advection.frequency, z.advection.oscillation_amplitude)
-    z_immutable = grid_input("z", z.ngrid, z.nelement, z.L,
-        z.discretization, z.fd_option, z.bc, z_advection_immutable)
+    z_immutable = grid_input("z", z.ngrid, z.nelement_global, z.nelement_local, nrank_z, irank_z, z.L, 
+        z.discretization, z.fd_option, z.bc, z_advection_immutable, comm_sub_z)
     r_advection_immutable = advection_input(r.advection.option, r.advection.constant_speed,
         r.advection.frequency, r.advection.oscillation_amplitude)
-    r_immutable = grid_input("r", r.ngrid, r.nelement, r.L,
-        r.discretization, r.fd_option, r.bc, r_advection_immutable)
+    r_immutable = grid_input("r", r.ngrid, r.nelement_global, r.nelement_local, nrank_r, irank_r, r.L,
+        r.discretization, r.fd_option, r.bc, r_advection_immutable, comm_sub_r)
+	# for dimensions below which do not currently use distributed-memory MPI
+	# assign dummy values to nrank, irank and comm of coord struct
     vpa_advection_immutable = advection_input(vpa.advection.option, vpa.advection.constant_speed,
         vpa.advection.frequency, vpa.advection.oscillation_amplitude)
-    vpa_immutable = grid_input("vpa", vpa.ngrid, vpa.nelement, vpa.L,
-        vpa.discretization, vpa.fd_option, vpa.bc, vpa_advection_immutable)
+    vpa_immutable = grid_input("vpa", vpa.ngrid, vpa.nelement_global, vpa.nelement_local, 0, 0, vpa.L,
+        vpa.discretization, vpa.fd_option, vpa.bc, vpa_advection_immutable, false)
     vperp_advection_immutable = advection_input(vperp.advection.option, vperp.advection.constant_speed,
         vperp.advection.frequency, vperp.advection.oscillation_amplitude)
-    vperp_immutable = grid_input("vperp", vperp.ngrid, vperp.nelement, vperp.L,
-        vperp.discretization, vperp.fd_option, vperp.bc, vperp_advection_immutable)
+    vperp_immutable = grid_input("vperp", vperp.ngrid, vperp.nelement_global, vperp.nelement_local, 0, 0, vperp.L,
+        vperp.discretization, vperp.fd_option, vperp.bc, vperp_advection_immutable, false)
     gyrophase_advection_immutable = advection_input(gyrophase.advection.option, gyrophase.advection.constant_speed,
         gyrophase.advection.frequency, gyrophase.advection.oscillation_amplitude)
-    gyrophase_immutable = grid_input("gyrophase", gyrophase.ngrid, gyrophase.nelement, gyrophase.L,
-        gyrophase.discretization, gyrophase.fd_option, gyrophase.bc, gyrophase_advection_immutable)
+    gyrophase_immutable = grid_input("gyrophase", gyrophase.ngrid, gyrophase.nelement_global, gyrophase.nelement_local, 0, 0, gyrophase.L,
+        gyrophase.discretization, gyrophase.fd_option, gyrophase.bc, gyrophase_advection_immutable, false)
     vz_advection_immutable = advection_input(vz.advection.option, vz.advection.constant_speed,
         vz.advection.frequency, vz.advection.oscillation_amplitude)
-    vz_immutable = grid_input("vz", vz.ngrid, vz.nelement, vz.L,
-        vz.discretization, vz.fd_option, vz.bc, vz_advection_immutable)
+    vz_immutable = grid_input("vz", vz.ngrid, vz.nelement_global, vz.nelement_local, 0, 0, vz.L,
+        vz.discretization, vz.fd_option, vz.bc, vz_advection_immutable, false)
     vr_advection_immutable = advection_input(vr.advection.option, vr.advection.constant_speed,
         vr.advection.frequency, vr.advection.oscillation_amplitude)
-    vr_immutable = grid_input("vr", vr.ngrid, vr.nelement, vr.L,
-        vr.discretization, vr.fd_option, vr.bc, vr_advection_immutable)
+    vr_immutable = grid_input("vr", vr.ngrid, vr.nelement_global, vr.nelement_local, 0, 0, vr.L,
+        vr.discretization, vr.fd_option, vr.bc, vr_advection_immutable, false)
     vzeta_advection_immutable = advection_input(vzeta.advection.option, vzeta.advection.constant_speed,
         vzeta.advection.frequency, vzeta.advection.oscillation_amplitude)
-    vzeta_immutable = grid_input("vzeta", vzeta.ngrid, vzeta.nelement, vzeta.L,
-        vzeta.discretization, vzeta.fd_option, vzeta.bc, vzeta_advection_immutable)
+    vzeta_immutable = grid_input("vzeta", vzeta.ngrid, vzeta.nelement_global, vzeta.nelement_local, 0, 0, vzeta.L,
+        vzeta.discretization, vzeta.fd_option, vzeta.bc, vzeta_advection_immutable, false)
     
     species_charged_immutable = Array{species_parameters,1}(undef,n_ion_species)
     species_neutral_immutable = Array{species_parameters,1}(undef,n_neutral_species)
@@ -398,8 +426,10 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     #################### parameters related to the z grid ######################
     # ngrid_z is number of grid points per element
     ngrid_z = 100
-    # nelement_z is the number of elements
-    nelement_z = 1
+    # nelement_z is the number of elements on each process
+    nelement_local_z = 1
+    # nelement_z is the number of elements in total
+    nelement_global_z = 1
     # L_z is the box length in z
     L_z = 1.0
     # determine the boundary condition in z
@@ -430,14 +460,16 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     advection_z = advection_input_mutable(advection_option_z, advection_speed_z,
         frequency_z, oscillation_amplitude_z)
     # create a mutable structure containing the input info related to the z grid
-    z = grid_input_mutable("z", ngrid_z, nelement_z, L_z,
+    z = grid_input_mutable("z", ngrid_z, nelement_global_z, nelement_local_z, L_z,
         discretization_option_z, finite_difference_option_z, boundary_option_z,
         advection_z)
     #################### parameters related to the r grid ######################
     # ngrid_r is number of grid points per element
     ngrid_r = 1
-    # nelement_r is the number of elements
-    nelement_r = 1
+    # nelement_r is the number of elements in total
+    nelement_global_r = 1
+    # nelement_r is the number of elements on each process
+    nelement_local_r = 1
     # L_r is the box length in r
     L_r = 1.0
     # determine the boundary condition in r
@@ -468,7 +500,7 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     advection_r = advection_input_mutable(advection_option_r, advection_speed_r,
         frequency_r, oscillation_amplitude_r)
     # create a mutable structure containing the input info related to the r grid
-    r = grid_input_mutable("r", ngrid_r, nelement_r, L_r,
+    r = grid_input_mutable("r", ngrid_r, nelement_global_r, nelement_local_r, L_r,
         discretization_option_r, finite_difference_option_r, boundary_option_r,
         advection_r)
     ############################################################################
@@ -506,7 +538,7 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     advection_vpa = advection_input_mutable(advection_option_vpa, advection_speed_vpa,
         frequency_vpa, oscillation_amplitude_vpa)
     # create a mutable structure containing the input info related to the vpa grid
-    vpa = grid_input_mutable("vpa", ngrid_vpa, nelement_vpa, L_vpa,
+    vpa = grid_input_mutable("vpa", ngrid_vpa, nelement_vpa, nelement_vpa, L_vpa,
         discretization_option_vpa, finite_difference_option_vpa, boundary_option_vpa,
         advection_vpa)
     ############################################################################
@@ -543,7 +575,7 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     advection_vperp = advection_input_mutable(advection_option_vperp, advection_speed_vperp,
         frequency_vperp, oscillation_amplitude_vperp)
     # create a mutable structure containing the input info related to the vperp grid
-    vperp = grid_input_mutable("vperp", ngrid_vperp, nelement_vperp, L_vperp,
+    vperp = grid_input_mutable("vperp", ngrid_vperp, nelement_vperp, nelement_vperp, L_vperp,
         discretization_option_vperp, finite_difference_option_vperp, boundary_option_vperp,
         advection_vperp)
     ############################################################################
@@ -566,7 +598,7 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     advection_gyrophase = advection_input_mutable(advection_option_gyrophase, advection_speed_gyrophase,
         frequency_gyrophase, oscillation_amplitude_gyrophase)
     # create a mutable structure containing the input info related to the gyrophase grid
-    gyrophase = grid_input_mutable("gyrophase", ngrid_gyrophase, nelement_gyrophase, L_gyrophase,
+    gyrophase = grid_input_mutable("gyrophase", ngrid_gyrophase, nelement_gyrophase, nelement_gyrophase, L_gyrophase,
         discretization_option_gyrophase, finite_difference_option_gyrophase, boundary_option_gyrophase,
         advection_gyrophase)
     ############################################################################
@@ -601,7 +633,7 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     advection_vr = advection_input_mutable(advection_option_vr, advection_speed_vr,
         frequency_vr, oscillation_amplitude_vr)
     # create a mutable structure containing the input info related to the vr grid
-    vr = grid_input_mutable("vr", ngrid_vr, nelement_vr, L_vr,
+    vr = grid_input_mutable("vr", ngrid_vr, nelement_vr, nelement_vr, L_vr,
         discretization_option_vr, finite_difference_option_vr, boundary_option_vr,
         advection_vr)
     ############################################################################
@@ -636,7 +668,7 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     advection_vz = advection_input_mutable(advection_option_vz, advection_speed_vz,
         frequency_vz, oscillation_amplitude_vz)
     # create a mutable structure containing the input info related to the vz grid
-    vz = grid_input_mutable("vz", ngrid_vz, nelement_vz, L_vz,
+    vz = grid_input_mutable("vz", ngrid_vz, nelement_vz, nelement_vz, L_vz,
         discretization_option_vz, finite_difference_option_vz, boundary_option_vz,
         advection_vz)
     ############################################################################
@@ -671,7 +703,7 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     advection_vzeta = advection_input_mutable(advection_option_vzeta, advection_speed_vzeta,
         frequency_vzeta, oscillation_amplitude_vzeta)
     # create a mutable structure containing the input info related to the vzeta grid
-    vzeta = grid_input_mutable("vzeta", ngrid_vzeta, nelement_vzeta, L_vzeta,
+    vzeta = grid_input_mutable("vzeta", ngrid_vzeta, nelement_vzeta, nelement_vzeta, L_vzeta,
         discretization_option_vzeta, finite_difference_option_vzeta, boundary_option_vzeta,
         advection_vzeta)
     #############################################################################
@@ -850,7 +882,7 @@ function check_input_z(z, io)
     else
         input_option_error("z.bc", z.bc)
     end
-    println(io,">using ", z.ngrid, " grid points per z element on ", z.nelement,
+    println(io,">using ", z.ngrid, " grid points per z element on ", z.nelement_global,
         " elements across the z domain [", -0.5*z.L, ",", 0.5*z.L, "].")
 end
 
@@ -882,7 +914,7 @@ function check_input_vpa(vpa, io)
     else
         input_option_error("vpa.bc", vpa.bc)
     end
-    println(io,">using ", vpa.ngrid, " grid points per vpa element on ", vpa.nelement,
+    println(io,">using ", vpa.ngrid, " grid points per vpa element on ", vpa.nelement_global,
         " elements across the vpa domain [", -0.5*vpa.L, ",", 0.5*vpa.L, "].")
 end
 
