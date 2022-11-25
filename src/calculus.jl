@@ -111,7 +111,7 @@ function reconcile_element_boundaries_upwind!(df1d, df2d, coord, adv_fac::Abstra
     # and the next ngrid-1 points belonging to second element, etc.
 
     # first deal with domain boundaries
-    if coord.bc == "periodic"
+    if coord.bc == "periodic" && coord.nelement_global == coord.nelement_local
         # consider left domain boundary
         if adv_fac[1] > 0.0
             # adv_fac > 0 corresponds to negative advection speed, so
@@ -120,11 +120,11 @@ function reconcile_element_boundaries_upwind!(df1d, df2d, coord, adv_fac::Abstra
         elseif adv_fac[1] < 0.0
             # adv_fac < 0 corresponds to positive advection speed, so
             # use derivative information from upwind element at smaller coordinate value
-            df1d[1] = df2d[coord.ngrid,coord.nelement]
+            df1d[1] = df2d[coord.ngrid,coord.nelement_local]
         else
             # adv_fac = 0, so no upwinding required;
             # use average value
-            df1d[1] = 0.5*(df2d[1,1]+df2d[coord.ngrid,coord.nelement])
+            df1d[1] = 0.5*(df2d[1,1]+df2d[coord.ngrid,coord.nelement_local])
         end
         # consider right domain boundary
         if adv_fac[coord.n] > 0.0
@@ -134,20 +134,20 @@ function reconcile_element_boundaries_upwind!(df1d, df2d, coord, adv_fac::Abstra
         elseif adv_fac[coord.ngrid] < 0.0
             # adv_fac < 0 corresponds to positive advection speed, so
             # use derivative information from upwind element at smaller coordinate value
-            df1d[coord.n] = df2d[coord.ngrid,coord.nelement]
+            df1d[coord.n] = df2d[coord.ngrid,coord.nelement_local]
         else
             # adv_fac = 0, so no upwinding required;
             # use average value
-            df1d[coord.n] = 0.5*(df2d[1,1]+df2d[coord.ngrid,coord.nelement])
+            df1d[coord.n] = 0.5*(df2d[1,1]+df2d[coord.ngrid,coord.nelement_local])
         end
     else
         df1d[1] = df2d[1,1]
-        df1d[coord.n] = df2d[coord.ngrid,coord.nelement]
+        df1d[coord.n] = df2d[coord.ngrid,coord.nelement_local]
     end
     # next consider remaining elements, if any.
     # only need to consider interior element boundaries
-    if coord.nelement > 1
-        for ielem ∈ 2:coord.nelement
+    if coord.nelement_local > 1
+        for ielem ∈ 2:coord.nelement_local
             im1 = ielem-1
             # consider left element boundary
             if adv_fac[coord.imax[im1]] > 0.0
