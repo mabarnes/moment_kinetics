@@ -7,6 +7,7 @@ export update_advection_factor!
 export calculate_explicit_advection!
 export update_boundary_indices!
 export advance_f_local!
+export advance_f_df_precomputed!
 export advection_info
 
 using ..type_definitions: mk_float, mk_int
@@ -223,6 +224,7 @@ end
 """
 do all the work needed to update f(coord) at a single value of other coords
 """
+
 function advance_f_local!(f_new, f_current, advection, i_outer, j_outer, k_outer, coord, dt, spectral)
     # update the rhs of the equation accounting for 1d advection in coord
     update_rhs!(advection, i_outer, j_outer, k_outer, f_current, coord, dt, spectral)
@@ -234,6 +236,20 @@ function advance_f_local!(f_new, f_current, advection, i_outer, j_outer, k_outer
     # update the rhs of the equation accounting for 1d advection in coord
     update_rhs!(advection, i_outer, j_outer, k_outer, l_outer, f_current, coord, dt, spectral)
     # update f to take into account the explicit advection
+    @views update_f!(f_new, advection.rhs[:,i_outer,j_outer,k_outer,l_outer], coord.n)
+end
+
+function advance_f_df_precomputed!(f_new, df_current, advection, i_outer, j_outer, k_outer, coord, dt, spectral)
+    # update the rhs of the equation accounting for 1d advection in coord
+    @views calculate_explicit_advection!(advection.rhs[:,i_outer,j_outer,k_outer], df_current, advection.adv_fac[:,i_outer,j_outer,k_outer], coord.n)
+	# update f to take into account the explicit advection
+    @views update_f!(f_new, advection.rhs[:,i_outer,j_outer,k_outer], coord.n)
+end
+
+function advance_f_df_precomputed!(f_new, df_current, advection, i_outer, j_outer, k_outer, l_outer, coord, dt, spectral)
+    # update the rhs of the equation accounting for 1d advection in coord
+    @views calculate_explicit_advection!(advection.rhs[:,i_outer,j_outer,k_outer,l_outer], df_current, advection.adv_fac[:,i_outer,j_outer,k_outer,l_outer], coord.n)
+	# update f to take into account the explicit advection
     @views update_f!(f_new, advection.rhs[:,i_outer,j_outer,k_outer,l_outer], coord.n)
 end
 

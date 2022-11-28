@@ -67,21 +67,33 @@ mutable struct scratch_dummy_arrays
 	buffer_vpavperpz_2::Array{mk_float,3}
 	buffer_vpavperpz_3::Array{mk_float,3}
 	buffer_vpavperpz_4::Array{mk_float,3}
+	buffer_vpavperpz_5::Array{mk_float,3}
+	buffer_vpavperpz_6::Array{mk_float,3}
 	
 	buffer_vpavperpr_1::Array{mk_float,3}
 	buffer_vpavperpr_2::Array{mk_float,3}
 	buffer_vpavperpr_3::Array{mk_float,3}
 	buffer_vpavperpr_4::Array{mk_float,3}
+	buffer_vpavperpr_5::Array{mk_float,3}
+	buffer_vpavperpr_6::Array{mk_float,3}
+	
+	buffer_vpavperpzr::Array{mk_float,4}
 	
 	buffer_vzvrvzetaz_1::Array{mk_float,4}
 	buffer_vzvrvzetaz_2::Array{mk_float,4}
 	buffer_vzvrvzetaz_3::Array{mk_float,4}
 	buffer_vzvrvzetaz_4::Array{mk_float,4}
+	buffer_vzvrvzetaz_5::Array{mk_float,4}
+	buffer_vzvrvzetaz_6::Array{mk_float,4}
 	
 	buffer_vzvrvzetar_1::Array{mk_float,4}
 	buffer_vzvrvzetar_2::Array{mk_float,4}
 	buffer_vzvrvzetar_3::Array{mk_float,4}
-	buffer_vzvrvzetar_4::Array{mk_float,4}	
+	buffer_vzvrvzetar_4::Array{mk_float,4}
+	buffer_vzvrvzetar_5::Array{mk_float,4}
+	buffer_vzvrvzetar_6::Array{mk_float,4}
+	
+	buffer_vzvrvzetazr::Array{mk_float,5}	
 	
 end 
 
@@ -429,29 +441,43 @@ function setup_dummy_and_buffer_arrays(nr,nz,nvpa,nvperp,nvz,nvr,nvzeta,nspecies
 	buffer_vpavperpz_2 = allocate_float(nvpa,nvperp,nz)
 	buffer_vpavperpz_3 = allocate_float(nvpa,nvperp,nz)
 	buffer_vpavperpz_4 = allocate_float(nvpa,nvperp,nz)
+	buffer_vpavperpz_5 = allocate_float(nvpa,nvperp,nz)
+	buffer_vpavperpz_6 = allocate_float(nvpa,nvperp,nz)
 	
 	buffer_vpavperpr_1 = allocate_float(nvpa,nvperp,nr)
 	buffer_vpavperpr_2 = allocate_float(nvpa,nvperp,nr)
 	buffer_vpavperpr_3 = allocate_float(nvpa,nvperp,nr)
 	buffer_vpavperpr_4 = allocate_float(nvpa,nvperp,nr)
+	buffer_vpavperpr_5 = allocate_float(nvpa,nvperp,nr)
+	buffer_vpavperpr_6 = allocate_float(nvpa,nvperp,nr)
+	
+	buffer_vpavperpzr = allocate_float(nvpa,nvperp,nz,nr)
 	
 	buffer_vzvrvzetaz_1 = allocate_float(nvz,nvr,nvzeta,nz)
 	buffer_vzvrvzetaz_2 = allocate_float(nvz,nvr,nvzeta,nz)
 	buffer_vzvrvzetaz_3 = allocate_float(nvz,nvr,nvzeta,nz)
 	buffer_vzvrvzetaz_4 = allocate_float(nvz,nvr,nvzeta,nz)
+	buffer_vzvrvzetaz_5 = allocate_float(nvz,nvr,nvzeta,nz)
+	buffer_vzvrvzetaz_6 = allocate_float(nvz,nvr,nvzeta,nz)
 	
 	buffer_vzvrvzetar_1 = allocate_float(nvz,nvr,nvzeta,nr)
 	buffer_vzvrvzetar_2 = allocate_float(nvz,nvr,nvzeta,nr)
 	buffer_vzvrvzetar_3 = allocate_float(nvz,nvr,nvzeta,nr)
-	buffer_vzvrvzetar_4 = allocate_float(nvz,nvr,nvzeta,nr)		
+	buffer_vzvrvzetar_4 = allocate_float(nvz,nvr,nvzeta,nr)
+	buffer_vzvrvzetar_5 = allocate_float(nvz,nvr,nvzeta,nr)
+	buffer_vzvrvzetar_6 = allocate_float(nvz,nvr,nvzeta,nr)
+	
+	buffer_vzvrvzetazr = allocate_float(nvz,nvr,nvzeta,nz,nr)		
 	
 	return scratch_dummy_arrays(dummy_sr,dummy_vpavperp,dummy_zr,
 		buffer_z_1,buffer_z_2,buffer_z_3,buffer_z_4,
 		buffer_r_1,buffer_r_2,buffer_r_3,buffer_r_4,
-		buffer_vpavperpz_1,buffer_vpavperpz_2,buffer_vpavperpz_3,buffer_vpavperpz_4,
-		buffer_vpavperpr_1,buffer_vpavperpr_2,buffer_vpavperpr_3,buffer_vpavperpr_4,
-		buffer_vzvrvzetaz_1,buffer_vzvrvzetaz_2,buffer_vzvrvzetaz_3,buffer_vzvrvzetaz_4,
-		buffer_vzvrvzetar_1,buffer_vzvrvzetar_2,buffer_vzvrvzetar_3,buffer_vzvrvzetar_4)
+		buffer_vpavperpz_1,buffer_vpavperpz_2,buffer_vpavperpz_3,buffer_vpavperpz_4,buffer_vpavperpz_5,buffer_vpavperpz_6,
+		buffer_vpavperpr_1,buffer_vpavperpr_2,buffer_vpavperpr_3,buffer_vpavperpr_4,buffer_vpavperpr_5,buffer_vpavperpr_6,
+		buffer_vpavperpzr,
+		buffer_vzvrvzetaz_1,buffer_vzvrvzetaz_2,buffer_vzvrvzetaz_3,buffer_vzvrvzetaz_4,buffer_vzvrvzetaz_5,buffer_vzvrvzetaz_6,
+		buffer_vzvrvzetar_1,buffer_vzvrvzetar_2,buffer_vzvrvzetar_3,buffer_vzvrvzetar_4,buffer_vzvrvzetar_5,buffer_vzvrvzetar_6,
+		buffer_vzvrvzetazr)
 
 end
 
@@ -862,7 +888,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     
     if advance.z_advection
         z_advection!(fvec_out.pdf, fvec_in, fields, z_advect, z, vpa, vperp, r, 
-            dt, t, z_spectral, composition, geometry)
+            dt, t, z_spectral, composition, geometry, scratch_dummy)
     end
     
     # r advection relies on derivatives in z to get ExB

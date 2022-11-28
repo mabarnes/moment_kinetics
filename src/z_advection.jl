@@ -5,14 +5,15 @@ module z_advection
 export z_advection!
 export update_speed_z!
 
-using ..advection: advance_f_local!, update_boundary_indices!
+using ..advection: advance_f_df_precomputed!, update_boundary_indices!
 using ..chebyshev: chebyshev_info
 using ..looping
+using ..derivatives: derivative_z!
 
 """
 do a single stage time advance (potentially as part of a multi-stage RK scheme)
 """
-function z_advection!(f_out, fvec_in, fields, advect, z, vpa, vperp, r, dt, t, z_spectral, composition, geometry)
+function z_advection!(f_out, fvec_in, fields, advect, z, vpa, vperp, r, dt, t, z_spectral, composition, geometry, scratch_dummy)
     
     begin_s_r_vperp_vpa_region()
     
@@ -21,12 +22,26 @@ function z_advection!(f_out, fvec_in, fields, advect, z, vpa, vperp, r, dt, t, z
         @views update_speed_z!(advect[is], fields, vpa, vperp, z, r, t, geometry)
         # update the upwind/downwind boundary indices and upwind_increment
         @views update_boundary_indices!(advect[is], loop_ranges[].vpa, loop_ranges[].vperp, loop_ranges[].r)
-
+		# update adv_fac 
+		advect[is].adv_fac[:,:,:,:] .= -dt.*advect[is].speed[:,:,:,:]
+		# calculate the derivative along z
+		# centered
+	#	derivative_z!(scratch_dummy.buffer_vpavperpzr,fvec_in.pdf[:,:,:,:,is],
+	#				scratch_dummy.buffer_vpavperpr_1, scratch_dummy.buffer_vpavperpr_2,
+	#				scratch_dummy.buffer_vpavperpr_3,scratch_dummy.buffer_vpavperpr_4,
+	#				z_spectral,z)
+		#upwind
+		derivative_z!(scratch_dummy.buffer_vpavperpzr,fvec_in.pdf[:,:,:,:,is], advect[is].adv_fac[:,:,:,:],
+					scratch_dummy.buffer_vpavperpr_1, scratch_dummy.buffer_vpavperpr_2,
+					scratch_dummy.buffer_vpavperpr_3,scratch_dummy.buffer_vpavperpr_4,
+					scratch_dummy.buffer_vpavperpr_5,scratch_dummy.buffer_vpavperpr_6,
+					z_spectral,z)
+					
         # advance z-advection equation
         @loop_r_vperp_vpa ir ivperp ivpa begin
-            @. z.scratch = fvec_in.pdf[ivpa,ivperp,:,ir,is]
-            @views advance_f_local!(f_out[ivpa,ivperp,:,ir,is], z.scratch, advect[is], ivpa, ivperp, ir,
-                                    z, dt, z_spectral)
+            @. z.scratch = scratch_dummy.buffer_vpavperpzr[ivpa,ivperp,:,ir]
+            @views advance_f_df_precomputed!(f_out[ivpa,ivperp,:,ir,is], 
+			  z.scratch, advect[is], ivpa, ivperp, ir, z, dt, z_spectral)
         end
     end
 end
