@@ -113,7 +113,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
 		end
 	
 		if  !(assignment_counter == 2)
-			println("ERROR: failure to assign endpoints in reconcile_element_boundaries_MPI!: coord.name: ",coord.name," Ndims: ",Ndims)
+			println("ERROR: failure to assign endpoints in reconcile_element_boundaries_MPI! (centered): coord.name: ",coord.name," Ndims: ",Ndims)
 		end
 	end
 	
@@ -138,7 +138,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
 		
 	end
 	
-	function reconcile_element_boundaries_upwind_MPI!(df1d::Array{Float64,Ndims}, 
+	function reconcile_element_boundaries_MPI!(df1d::Array{Float64,Ndims}, 
 	adv_fac_lower_endpoints::Array{Float64,N}, adv_fac_upper_endpoints::Array{Float64,N},
 	dfdx_lower_endpoints::Array{Float64,N}, dfdx_upper_endpoints::Array{Float64,N},
 	send_buffer::Array{Float64,N}, receive_buffer::Array{Float64,N}, coord) where {Ndims,N}
@@ -241,7 +241,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
 		end
 	
 		if  !(assignment_counter == 2)
-			println("ERROR: failure to assign endpoints in reconcile_element_boundaries_centered_MPI!: coord.name: ",coord.name," Ndims: ",Ndims)
+			println("ERROR: failure to assign endpoints in reconcile_element_boundaries_MPI! (upwind): coord.name: ",coord.name," Ndims: ",Ndims)
 		end
 	end
 	
@@ -263,7 +263,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
 		# now reconcile element boundaries across
 		# processes with large message involving all y 
 		if x.nelement_local < x.nelement_global
-			reconcile_element_boundaries_centered_MPI!(dfdx,
+			reconcile_element_boundaries_MPI!(dfdx,
 			 adv_fac[1,:,:], adv_fac[end,:,:],
 			 dfdx_lower_endpoints,dfdx_upper_endpoints,
 			 x_send_buffer, x_receive_buffer, x)
@@ -292,7 +292,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
 		# now reconcile element boundaries across
 		# processes with large message involving all y 
 		if x.nelement_local < x.nelement_global
-			reconcile_element_boundaries_upwind_MPI!(dfdx,
+			reconcile_element_boundaries_MPI!(dfdx,
 			 adv_fac_lower_buffer, adv_fac_upper_buffer,
 			 dfdx_lower_endpoints,dfdx_upper_endpoints,
 			 x_send_buffer, x_receive_buffer, x)
@@ -316,7 +316,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
 		# now reconcile element boundaries across
 		# processes with large message involving all y 
 		if x.nelement_local < x.nelement_global
-			reconcile_element_boundaries_centered_MPI!(dfdx,
+			reconcile_element_boundaries_MPI!(dfdx,
 			 dfdx_lower_endpoints,dfdx_upper_endpoints,
 			 x_send_buffer, x_receive_buffer, x)
 		end
@@ -344,7 +344,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
 		# pass adv_fac[1,:] -- lower x endpoints for all y
 		# and adv_fac[end,:] -- upper x endpoints for all y
 		if x.nelement_local < x.nelement_global
-			@views reconcile_element_boundaries_upwind_MPI!(dfdx, 
+			@views reconcile_element_boundaries_MPI!(dfdx, 
 			adv_fac_lower_buffer, adv_fac_upper_buffer,
 			 dfdx_lower_endpoints,dfdx_upper_endpoints,
 			 x_send_buffer, x_receive_buffer, x)
@@ -370,7 +370,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
 		# now reconcile element boundaries across
 		# processes with large message involving all y 
 		if y.nelement_local < y.nelement_global
-			reconcile_element_boundaries_centered_MPI!(dfdy,
+			reconcile_element_boundaries_MPI!(dfdy,
 			 dfdy_lower_endpoints,dfdy_upper_endpoints,
 			 y_send_buffer, y_receive_buffer, y)
 		end
@@ -392,7 +392,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
 		# now reconcile element boundaries across
 		# processes with large message involving all y 
 		if y.nelement_local < y.nelement_global
-			reconcile_element_boundaries_centered_MPI!(dfdy,
+			reconcile_element_boundaries_MPI!(dfdy,
 			 dfdy_lower_endpoints,dfdy_upper_endpoints,
 			 y_send_buffer, y_receive_buffer, y)
 		end
@@ -403,10 +403,10 @@ if abspath(PROGRAM_FILE) == @__FILE__
 	# mpirun -n nrank run_MPI_test2D.jl
 	x_ngrid = 10 #number of points per element 
 	x_nelement_local  = 1 
-	x_nelement_global = 4 # number of elements 
+	x_nelement_global = 1 # number of elements 
 	y_ngrid = 12
 	y_nelement_local  = 1
-	y_nelement_global = 1
+	y_nelement_global = 4
 	
 	y_nblocks = floor(Int,x_nelement_global/x_nelement_local)
 	x_nblocks = floor(Int,y_nelement_global/y_nelement_local)
