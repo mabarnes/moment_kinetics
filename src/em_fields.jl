@@ -13,7 +13,8 @@ using ..input_structs
 using ..looping
 using ..moment_kinetics_structs: em_fields_struct
 using ..velocity_moments: update_density!
-using ..calculus: derivative!
+#using ..calculus: derivative!
+using ..derivatives: derivative_r!, derivative_z!
 
 """
 """
@@ -28,7 +29,7 @@ end
 """
 update_phi updates the electrostatic potential, phi
 """
-function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral)
+function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral, scratch_dummy)
     n_ion_species = composition.n_ion_species
     @boundscheck size(fields.phi,1) == z.n || throw(BoundsError(fields.phi))
     @boundscheck size(fields.phi,2) == r.n || throw(BoundsError(fields.phi))
@@ -123,22 +124,18 @@ function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral)
     #Er = - d phi / dr 
     if 1 ∈ loop_ranges[].s
         if r.n > 1
-            @loop_z iz begin
-                derivative!(r.scratch, view(fields.phi,iz,:), r, r_spectral)
-                @loop_r ir begin
-                    fields.Er[iz,ir] = -r.scratch[ir]
-                end
-            end
+            @views derivative_r!(fields.Er,-fields.phi,
+					scratch_dummy.buffer_z_1, scratch_dummy.buffer_z_2,
+					scratch_dummy.buffer_z_3,scratch_dummy.buffer_z_4,
+					r_spectral,r)
         else
             fields.Er[:,:] .= 0.0
         end
         #Ez = - d phi / dz
-        @loop_r ir begin
-            derivative!(z.scratch, view(fields.phi,:,ir), z, z_spectral)
-            @loop_z iz begin
-                fields.Ez[iz,ir] = -z.scratch[iz]
-            end
-        end
+        @views derivative_z!(fields.Ez,-fields.phi,
+					scratch_dummy.buffer_r_1, scratch_dummy.buffer_r_2,
+					scratch_dummy.buffer_r_3,scratch_dummy.buffer_r_4,
+					z_spectral,z)
     end
 end
 

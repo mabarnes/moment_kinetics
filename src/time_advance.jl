@@ -270,7 +270,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     fields = setup_em_fields(z.n, r.n, drive_input.force_phi, drive_input.amplitude, drive_input.frequency)
     # initialize the electrostatic potential
     begin_serial_region()
-    update_phi!(fields, scratch[1], z, r, composition, z_spectral, r_spectral)
+    update_phi!(fields, scratch[1], z, r, composition, z_spectral, r_spectral, scratch_dummy)
     @serial_region begin
         # save the initial phi(z) for possible use later (e.g., if forcing phi)
         fields.phi0 .= fields.phi
@@ -641,7 +641,7 @@ end
 
 """
 """
-function rk_update!(scratch, pdf, moments, fields, vz, vr, vzeta, vpa, vperp, z, r, rk_coefs, istage, composition, z_spectral, r_spectral)
+function rk_update!(scratch, pdf, moments, fields, vz, vr, vzeta, vpa, vperp, z, r, rk_coefs, istage, composition, z_spectral, r_spectral, scratch_dummy)
     begin_s_r_z_vperp_region()
     #nvpa = vpa.n
     new_scratch = scratch[istage+1]
@@ -706,7 +706,7 @@ function rk_update!(scratch, pdf, moments, fields, vz, vr, vzeta, vpa, vperp, z,
     end 
     
     # update the electrostatic potential phi
-    update_phi!(fields, scratch[istage+1], z, r, composition, z_spectral, r_spectral)
+    update_phi!(fields, scratch[istage+1], z, r, composition, z_spectral, r_spectral, scratch_dummy)
     #begin_s_r_z_vperp_region()
 end
 
@@ -756,7 +756,7 @@ function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase,
             collisions, geometry, boundary_distributions, 
             scratch_dummy, manufactured_source_list, advance, istage) #pdf_in,
         @views rk_update!(scratch, pdf, moments, fields, vz, vr, vzeta, vpa, vperp, z, r, advance.rk_coefs[:,istage], 
-         istage, composition, spectral_objects.z_spectral, spectral_objects.r_spectral)
+         istage, composition, spectral_objects.z_spectral, spectral_objects.r_spectral, scratch_dummy)
     end
 
     istage = n_rk_stages+1
