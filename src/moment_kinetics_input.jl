@@ -191,7 +191,7 @@ function mk_input(scan_input=Dict())
     # nelement_global is the number of elements in total
     z.nelement_global = get(scan_input, "z_nelement", 8)
     # nelement_local is the number of elements on each process
-    z.nelement_local = get(scan_input, "z_nelement_local", 1)
+    z.nelement_local = get(scan_input, "z_nelement_local", z.nelement_global)
     # determine the discretization option for the z grid
     # supported options are "chebyshev_pseudospectral" and "finite_difference"
     z.discretization = get(scan_input, "z_discretization", "chebyshev_pseudospectral")
