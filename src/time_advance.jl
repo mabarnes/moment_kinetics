@@ -51,6 +51,38 @@ mutable struct scratch_dummy_arrays
     dummy_sr::Array{mk_float,2}
     dummy_vpavperp::Array{mk_float,2}
     dummy_zr::Array{mk_float,2}
+	
+	#buffer arrays for MPI 
+	buffer_z_1::Array{mk_float,1}
+	buffer_z_2::Array{mk_float,1}
+	buffer_z_3::Array{mk_float,1}
+	buffer_z_4::Array{mk_float,1}
+	
+	buffer_r_1::Array{mk_float,1}
+	buffer_r_2::Array{mk_float,1}
+	buffer_r_3::Array{mk_float,1}
+	buffer_r_4::Array{mk_float,1}
+	
+	buffer_vpavperpz_1::Array{mk_float,3}
+	buffer_vpavperpz_2::Array{mk_float,3}
+	buffer_vpavperpz_3::Array{mk_float,3}
+	buffer_vpavperpz_4::Array{mk_float,3}
+	
+	buffer_vpavperpr_1::Array{mk_float,3}
+	buffer_vpavperpr_2::Array{mk_float,3}
+	buffer_vpavperpr_3::Array{mk_float,3}
+	buffer_vpavperpr_4::Array{mk_float,3}
+	
+	buffer_vzvrvzetaz_1::Array{mk_float,4}
+	buffer_vzvrvzetaz_2::Array{mk_float,4}
+	buffer_vzvrvzetaz_3::Array{mk_float,4}
+	buffer_vzvrvzetaz_4::Array{mk_float,4}
+	
+	buffer_vzvrvzetar_1::Array{mk_float,4}
+	buffer_vzvrvzetar_2::Array{mk_float,4}
+	buffer_vzvrvzetar_3::Array{mk_float,4}
+	buffer_vzvrvzetar_4::Array{mk_float,4}	
+	
 end 
 
 struct advect_object_struct
@@ -231,11 +263,8 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     # create an array of structs containing scratch arrays for the pdf and low-order moments
     # that may be evolved separately via fluid equations
     scratch = setup_scratch_arrays(moments, pdf.charged.norm, pdf.neutral.norm, t_input.n_rk_stages)
-    # setup dummy arrays
-    dummy_sr = allocate_float(r.n, composition.n_species)
-    dummy_zr = allocate_float(z.n, r.n)
-    dummy_vpavperp = allocate_float(vpa.n, vperp.n)
-    scratch_dummy = scratch_dummy_arrays(dummy_sr,dummy_vpavperp,dummy_zr)
+    # setup dummy arrays & buffer arrays for z r MPI
+    scratch_dummy = setup_dummy_and_buffer_arrays(r.n,z.n,vpa.n,vperp.n,vz.n,vr.n,vzeta.n,composition.n_ion_species)
     # create the "fields" structure that contains arrays
     # for the electrostatic potential phi and eventually the electromagnetic fields
     fields = setup_em_fields(z.n, r.n, drive_input.force_phi, drive_input.amplitude, drive_input.frequency)
@@ -377,6 +406,53 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
 
     return moments, fields, spectral_objects, advect_objects, 
     scratch, advance, scratch_dummy, manufactured_source_list
+end
+
+function setup_dummy_and_buffer_arrays(nr,nz,nvpa,nvperp,nvz,nvr,nvzeta,nspecies_ion)
+
+	dummy_sr = allocate_float(nr, nspecies_ion)
+    dummy_zr = allocate_float(nz, nr)
+    dummy_vpavperp = allocate_float(nvpa, nvperp)
+	
+	# should the arrays below be shared memory arrays? MRH
+	buffer_z_1 = allocate_float(nz)
+	buffer_z_2 = allocate_float(nz)
+	buffer_z_3 = allocate_float(nz)
+	buffer_z_4 = allocate_float(nz)
+	
+	buffer_r_1 = allocate_float(nr)
+	buffer_r_2 = allocate_float(nr)
+	buffer_r_3 = allocate_float(nr)
+	buffer_r_4 = allocate_float(nr)
+	
+	buffer_vpavperpz_1 = allocate_float(nvpa,nvperp,nz)
+	buffer_vpavperpz_2 = allocate_float(nvpa,nvperp,nz)
+	buffer_vpavperpz_3 = allocate_float(nvpa,nvperp,nz)
+	buffer_vpavperpz_4 = allocate_float(nvpa,nvperp,nz)
+	
+	buffer_vpavperpr_1 = allocate_float(nvpa,nvperp,nr)
+	buffer_vpavperpr_2 = allocate_float(nvpa,nvperp,nr)
+	buffer_vpavperpr_3 = allocate_float(nvpa,nvperp,nr)
+	buffer_vpavperpr_4 = allocate_float(nvpa,nvperp,nr)
+	
+	buffer_vzvrvzetaz_1 = allocate_float(nvz,nvr,nvzeta,nz)
+	buffer_vzvrvzetaz_2 = allocate_float(nvz,nvr,nvzeta,nz)
+	buffer_vzvrvzetaz_3 = allocate_float(nvz,nvr,nvzeta,nz)
+	buffer_vzvrvzetaz_4 = allocate_float(nvz,nvr,nvzeta,nz)
+	
+	buffer_vzvrvzetar_1 = allocate_float(nvz,nvr,nvzeta,nr)
+	buffer_vzvrvzetar_2 = allocate_float(nvz,nvr,nvzeta,nr)
+	buffer_vzvrvzetar_3 = allocate_float(nvz,nvr,nvzeta,nr)
+	buffer_vzvrvzetar_4 = allocate_float(nvz,nvr,nvzeta,nr)		
+	
+	return scratch_dummy_arrays(dummy_sr,dummy_vpavperp,dummy_zr,
+		buffer_z_1,buffer_z_2,buffer_z_3,buffer_z_4,
+		buffer_r_1,buffer_r_2,buffer_r_3,buffer_r_4,
+		buffer_vpavperpz_1,buffer_vpavperpz_2,buffer_vpavperpz_3,buffer_vpavperpz_4,
+		buffer_vpavperpr_1,buffer_vpavperpr_2,buffer_vpavperpr_3,buffer_vpavperpr_4,
+		buffer_vzvrvzetaz_1,buffer_vzvrvzetaz_2,buffer_vzvrvzetaz_3,buffer_vzvrvzetaz_4,
+		buffer_vzvrvzetar_1,buffer_vzvrvzetar_2,buffer_vzvrvzetar_3,buffer_vzvrvzetar_4)
+
 end
 
 """
