@@ -5,15 +5,16 @@ module r_advection
 export r_advection!
 export update_speed_r!
 
-using ..advection: advance_f_local!, update_boundary_indices!
+using ..advection: advance_f_df_precomputed!, update_boundary_indices!
 using ..chebyshev: chebyshev_info
 using ..looping
+using ..derivatives: derivative_r!
 
 """
 do a single stage time advance (potentially as part of a multi-stage RK scheme)
 """
 function r_advection!(f_out, fvec_in, fields, advect, r, z, vperp, vpa, 
-                      dt, r_spectral, composition, geometry)
+                      dt, r_spectral, composition, geometry, scratch_dummy)
     
     begin_s_z_vperp_vpa_region()
     
@@ -22,17 +23,22 @@ function r_advection!(f_out, fvec_in, fields, advect, r, z, vperp, vpa,
         @views update_speed_r!(advect[is], fields, vpa, vperp, z, r, geometry)
         # update the upwind/downwind boundary indices and upwind_increment
         @views update_boundary_indices!(advect[is], loop_ranges[].vpa, loop_ranges[].vperp, loop_ranges[].z)
-        
-        # advance r-advection equation
-        @loop_z_vperp_vpa iz ivperp ivpa begin
-            # take the normalized pdf contained in fvec_in.pdf and remove the normalization,
-            # returning the true (un-normalized) particle distribution function in r.scratch
-            @. r.scratch = fvec_in.pdf[ivpa,ivperp,iz,:,is]
+        # update adv_fac
+        advect[is].adv_fac[:,:,:,:] .= -dt.*advect[is].speed[:,:,:,:]
+		# calculate the upwind derivative along r
+        derivative_r!(scratch_dummy.buffer_vpavperpzr,fvec_in.pdf[:,:,:,:,is], advect[is].adv_fac[:,:,:,:],
+					scratch_dummy.buffer_vpavperpz_1, scratch_dummy.buffer_vpavperpz_2,
+					scratch_dummy.buffer_vpavperpz_3,scratch_dummy.buffer_vpavperpz_4,
+					scratch_dummy.buffer_vpavperpz_5,scratch_dummy.buffer_vpavperpz_6,
+					r_spectral,r)
 
-            @views advance_f_local!(f_out[ivpa,ivperp,iz,:,is], r.scratch,
-                                    advect[is], ivpa, ivperp, iz,
-                                    r, dt, r_spectral)
+		# advance r-advection equation
+        @loop_z_vperp_vpa iz ivperp ivpa begin
+            @. r.scratch = scratch_dummy.buffer_vpavperpzr[ivpa,ivperp,iz,:]
+            @views advance_f_df_precomputed!(f_out[ivpa,ivperp,iz,:,is], 
+			  r.scratch, advect[is], ivpa, ivperp, iz, r, dt, r_spectral)
         end
+		
     end
 end
 

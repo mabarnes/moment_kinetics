@@ -894,7 +894,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     # r advection relies on derivatives in z to get ExB
     if advance.r_advection && r.n > 1
         r_advection!(fvec_out.pdf, fvec_in, fields, r_advect, r, z, vperp, vpa, 
-            dt, r_spectral, composition, geometry)
+            dt, r_spectral, composition, geometry, scratch_dummy)
     end 
     
     #if advance.vperp_advection
