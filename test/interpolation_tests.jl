@@ -34,8 +34,13 @@ function runtests()
                     ntest ∈ (3, 14), nelement ∈ (2, 8), zlim ∈ (L/2.0, L/5.0)
 
             # create the 'input' struct containing input info needed to create a coordinate
-            input = grid_input("coord", ngrid, nelement, L,
-                discretization, fd_option, bc, adv_input)
+			nelement_local = nelement
+			nrank_per_block = 0 # dummy value
+			irank = 0 # dummy value
+			comm = false # dummy value 
+			input = grid_input("coord", ngrid, nelement,
+				nelement_local, nrank_per_block, irank, L,
+				discretization, fd_option, bc, adv_input, comm)
             # create the coordinate struct 'z'
             z = define_coordinate(input)
             # For Chebyshev method, create arrays needed for Chebyshev pseudospectral

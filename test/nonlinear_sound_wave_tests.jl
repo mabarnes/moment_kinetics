@@ -293,10 +293,14 @@ function run_test(test_input, rtol; args...)
         # create the 'input' struct containing input info needed to create a coordinate
         # adv_input not actually used in this test so given values unimportant
         adv_input = advection_input("default", 1.0, 0.0, 0.0)
-        input = grid_input("coord", test_input["z_ngrid"], test_input["z_nelement"],
-                           z_L, test_input["z_discretization"], "",
+        nrank_per_block = 0 # dummy value
+		irank = 0 # dummy value
+		comm = false # dummy value 
+		input = grid_input("coord", test_input["z_ngrid"], test_input["z_nelement"], 
+                           test_input["z_nelement"], nrank_per_block, irank,
+						   z_L, test_input["z_discretization"], "",
                            "periodic", #test_input["z_bc"],
-                           adv_input)
+                           adv_input,comm)
         z = define_coordinate(input)
         if test_input["z_discretization"] == "chebyshev_pseudospectral"
             z_spectral = setup_chebyshev_pseudospectral(z)
@@ -304,8 +308,9 @@ function run_test(test_input, rtol; args...)
             z_spectral = false
         end
         input = grid_input("coord", test_input["vpa_ngrid"], test_input["vpa_nelement"],
-                           vpa_L, test_input["vpa_discretization"], "",
-                           test_input["vpa_bc"], adv_input)
+                           test_input["vpa_nelement"], nrank_per_block, irank,
+						   vpa_L, test_input["vpa_discretization"], "",
+                           test_input["vpa_bc"], adv_input, comm)
         vpa = define_coordinate(input)
         if test_input["vpa_discretization"] == "chebyshev_pseudospectral"
             vpa_spectral = setup_chebyshev_pseudospectral(vpa)

@@ -38,8 +38,13 @@ function runtests()
                 adv_input = advection_input("default", 1.0, 0.0, 0.0)
                 # create the 'input' struct containing input info needed to create a
                 # coordinate
-                input = grid_input("coord", ngrid, nelement, L,
-                    discretization, fd_option, bc, adv_input)
+                nelement_local = nelement
+				nrank_per_block = 0 # dummy value
+				irank = 0 # dummy value
+				comm = false # dummy value 
+				input = grid_input("coord", ngrid, nelement,
+                    nelement_local, nrank_per_block, irank, L,
+                    discretization, fd_option, bc, adv_input, comm)
                 # create the coordinate struct 'x'
                 x = define_coordinate(input)
                 # create arrays needed for Chebyshev pseudospectral treatment in x
@@ -84,8 +89,13 @@ function runtests()
                 adv_input = advection_input("default", 1.0, 0.0, 0.0)
                 # create the 'input' struct containing input info needed to create a
                 # coordinate
-                input = grid_input("coord", ngrid, nelement, L,
-                    "finite_difference", fd_option, bc, adv_input)
+                nelement_local = nelement
+				nrank_per_block = 0 # dummy value
+				irank = 0 # dummy value
+				comm = false # dummy value 
+				input = grid_input("coord", ngrid, nelement,
+                    nelement_local, nrank_per_block, irank, L,
+                    "finite_difference", fd_option, bc, adv_input, comm)
                 # create the coordinate struct 'x'
                 x = define_coordinate(input)
 
@@ -126,8 +136,13 @@ function runtests()
                 adv_input = advection_input("default", 1.0, 0.0, 0.0)
                 # create the 'input' struct containing input info needed to create a
                 # coordinate
-                input = grid_input("coord", ngrid, nelement, L,
-                    "finite_difference", fd_option, bc, adv_input)
+                nelement_local = nelement
+				nrank_per_block = 0 # dummy value
+				irank = 0 # dummy value
+				comm = false # dummy value 
+				input = grid_input("coord", ngrid, nelement,
+                    nelement_local, nrank_per_block, irank, L,
+                    "finite_difference", fd_option, bc, adv_input, comm)
                 # create the coordinate struct 'x'
                 x = define_coordinate(input)
 
@@ -164,8 +179,13 @@ function runtests()
                 adv_input = advection_input("default", 1.0, 0.0, 0.0)
                 # create the 'input' struct containing input info needed to create a
                 # coordinate
-                input = grid_input("coord", ngrid, nelement, L,
-                    "finite_difference", fd_option, bc, adv_input)
+                nelement_local = nelement
+				nrank_per_block = 0 # dummy value
+				irank = 0 # dummy value
+				comm = false # dummy value 
+				input = grid_input("coord", ngrid, nelement,
+                    nelement_local, nrank_per_block, irank, L,
+                    "finite_difference", fd_option, bc, adv_input, comm)
                 # create the coordinate struct 'x'
                 x = define_coordinate(input)
 
@@ -210,9 +230,14 @@ function runtests()
                 adv_input = advection_input("default", 1.0, 0.0, 0.0)
                 # create the 'input' struct containing input info needed to create a
                 # coordinate
-                input = grid_input("coord", ngrid, nelement, L,
-                    "finite_difference", fd_option, bc, adv_input)
-                # create the coordinate struct 'x'
+                nelement_local = nelement
+				nrank_per_block = 0 # dummy value
+				irank = 0 # dummy value
+				comm = false # dummy value 
+				input = grid_input("coord", ngrid, nelement,
+                    nelement_local, nrank_per_block, irank, L,
+                    "finite_difference", fd_option, bc, adv_input, comm)
+               # create the coordinate struct 'x'
                 x = define_coordinate(input)
 
                 # create array for the derivative df/dx and the expected result
@@ -413,8 +438,13 @@ function runtests()
                 adv_input = advection_input("default", 1.0, 0.0, 0.0)
                 # create the 'input' struct containing input info needed to create a
                 # coordinate
-                input = grid_input("coord", ngrid, nelement, L,
-                    "chebyshev_pseudospectral", fd_option, bc, adv_input)
+                nelement_local = nelement
+				nrank_per_block = 0 # dummy value
+				irank = 0 # dummy value
+				comm = false # dummy value 
+				input = grid_input("coord", ngrid, nelement,
+                    nelement_local, nrank_per_block, irank, L,
+                    "chebyshev_pseudospectral", fd_option, bc, adv_input, comm)
                 # create the coordinate struct 'x'
                 x = define_coordinate(input)
                 # create arrays needed for Chebyshev pseudospectral treatment in x
@@ -606,8 +636,13 @@ function runtests()
                 adv_input = advection_input("default", 1.0, 0.0, 0.0)
                 # create the 'input' struct containing input info needed to create a
                 # coordinate
-                input = grid_input("coord", ngrid, nelement, L,
-                    "chebyshev_pseudospectral", fd_option, bc, adv_input)
+                nelement_local = nelement
+				nrank_per_block = 0 # dummy value
+				irank = 0 # dummy value
+				comm = false # dummy value 
+				input = grid_input("coord", ngrid, nelement,
+                    nelement_local, nrank_per_block, irank, L,
+                    "chebyshev_pseudospectral", fd_option, bc, adv_input, comm)
                 # create the coordinate struct 'x'
                 x = define_coordinate(input)
                 # create arrays needed for Chebyshev pseudospectral treatment in x
@@ -647,8 +682,13 @@ function runtests()
                 adv_input = advection_input("default", 1.0, 0.0, 0.0)
                 # create the 'input' struct containing input info needed to create a
                 # coordinate
-                input = grid_input("coord", ngrid, nelement, L,
-                    "chebyshev_pseudospectral", fd_option, bc, adv_input)
+                nelement_local = nelement
+				nrank_per_block = 0 # dummy value
+				irank = 0 # dummy value
+				comm = false # dummy value 
+				input = grid_input("coord", ngrid, nelement,
+                    nelement_local, nrank_per_block, irank, L,
+                    "chebyshev_pseudospectral", fd_option, bc, adv_input, comm)
                 # create the coordinate struct 'x'
                 x = define_coordinate(input)
                 # create arrays needed for Chebyshev pseudospectral treatment in x
@@ -696,8 +736,13 @@ function runtests()
                 adv_input = advection_input("default", 1.0, 0.0, 0.0)
                 # create the 'input' struct containing input info needed to create a
                 # coordinate
-                input = grid_input("coord", ngrid, nelement, L,
-                    "chebyshev_pseudospectral", fd_option, bc, adv_input)
+                nelement_local = nelement
+				nrank_per_block = 0 # dummy value
+				irank = 0 # dummy value
+				comm = false # dummy value 
+				input = grid_input("coord", ngrid, nelement,
+                    nelement_local, nrank_per_block, irank, L,
+                    "chebyshev_pseudospectral", fd_option, bc, adv_input, comm)
                 # create the coordinate struct 'x'
                 x = define_coordinate(input)
                 # create arrays needed for Chebyshev pseudospectral treatment in x
