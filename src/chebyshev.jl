@@ -234,7 +234,7 @@ result : Array
 """
 function interpolate_to_grid_1d(newgrid, f, coord, chebyshev::chebyshev_info)
     # define local variable nelement for convenience
-    nelement = coord.nelement
+    nelement = coord.nelement_local
     # check array bounds
     @boundscheck nelement == size(chebyshev.f,2) || throw(BoundsError(chebyshev.f))
 
