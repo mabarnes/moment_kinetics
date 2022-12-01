@@ -12,8 +12,9 @@ loop ranges), as at the moment we only run with 1 ion species and 1 neutral spec
 """
 module communication
 
-export allocate_shared, block_rank, block_size, comm_block,
+export allocate_shared, block_rank, block_size, comm_block, iblock_index,
        comm_world, finalize_comms!, initialize_comms!, global_rank, MPISharedArray, global_size
+export setup_distributed_memory_MPI
 
 using MPI
 using SHA
@@ -41,6 +42,10 @@ const global_size = Ref{mk_int}()
 
 """
 """
+const iblock_index = Ref{mk_int}()
+
+"""
+"""
 const block_rank = Ref{mk_int}()
 
 """
@@ -65,8 +70,110 @@ function __init__()
 
     global_rank[] = MPI.Comm_rank(comm_world)
     global_size[] = MPI.Comm_size(comm_world)
-    block_rank[] = MPI.Comm_rank(comm_block)
-    block_size[] = MPI.Comm_size(comm_block)
+    #block_rank[] = MPI.Comm_rank(comm_block)
+    #block_size[] = MPI.Comm_size(comm_block)
+end
+
+"""
+Function to take information from user about r z grids and 
+number of processes allocated to set up communicators
+notation definitions:
+    - block: group of processes that share data with shared memory
+    - z group: group of processes that need to communicate data for z derivatives
+    - r group: group of processes that need to communicate data for r derivatives
+"""
+function setup_distributed_memory_MPI(z_nelement_global,z_nelement_local,r_nelement_global,r_nelement_local)
+    # setup some local constants and dummy variables
+    irank_global = global_rank[] # rank index within global processes
+    nrank_global = global_size[] # number of processes 
+    
+    # get information about how the grid is divided up
+    # number of sections `chunks' of the x grid
+    r_nchunks = floor(Int,r_nelement_global/r_nelement_local)
+    # number of sections `chunks' of the z grid
+	z_nchunks = floor(Int,z_nelement_global/z_nelement_local) # number of sections of the z grid
+	# get the number of shared-memorz blocks in the z r decomposition
+    nblocks = r_nchunks*z_nchunks
+    # get the number of ranks per block
+    nrank_per_zr_block = floor(Int,nrank_global/nblocks)
+    
+	# throw an error if user specified information is inconsistent
+    if (nrank_per_zr_block*nblocks < nrank_global)
+        if irank_global ==0 
+            println("ERROR: You must choose global number of processes to be an integer multiple of the number of \n 
+                     nblocks = (r_nelement_global/r_nelement_local)*(z_nelement_global/z_nelement_local)")
+        end
+        MPI.Abort(comm,1)
+    end
+    
+    # assign information regarding shared-memory blocks
+    # block index -- which block is this process in 
+    iblock = floor(Int,irank_global/nrank_per_zr_block)
+    # rank index within a block
+    irank_block = mod(irank_global,nrank_per_zr_block)
+ 
+    # assign the block rank to the global variables
+    iblock_index[] = iblock
+    block_rank[] = irank_block
+    block_size[] = nrank_per_zr_block
+    # construct a communicator for intra-block communication
+    comm_block = MPI.Comm_split(comm_world,iblock,irank_block)
+    # MPI.Comm_split(comm,color,key)
+	# comm -> communicator to be split
+	# color -> label of group of processes
+	# key -> label of process in group
+    
+    # now create the communicators for the r z derivatives across blocks 
+    z_ngroup = r_nchunks
+    z_nrank_per_group = z_nchunks
+	z_igroup = floor(Int,iblock/z_nchunks) # iblock(irank) - > z_igroup 
+	z_irank =  mod(iblock,z_nchunks) # iblock(irank) -> z_irank
+	# iblock = z_igroup * z_nchunks + z_irank_sub 
+	# useful information for debugging
+    println("z_ngroup: ",z_ngroup)
+	println("z_nrank_per_group: ",z_nrank_per_group)
+	println("z_igroup: ",z_igroup)
+	println("z_irank_sub: ",z_irank)	
+    println("iblock: ",iblock, " ", z_igroup * z_nchunks + z_irank)
+    println("")
+    
+    r_ngroup = z_nchunks
+	r_nrank_per_group = r_nchunks
+	r_igroup = z_irank # block(irank) - > r_igroup 
+	r_irank = z_igroup # block(irank) -> r_irank
+    #  MPI.API.MPI_UNDEFINED
+    # irank = r_igroup + z_nrank_per_group * r_irank
+	# useful information for debugging
+    println("r_ngroup: ",r_ngroup)
+	println("r_nrank_per_group: ",r_nrank_per_group)
+	println("r_igroup: ",r_igroup)
+	println("r_irank: ",r_irank)
+	println("iblock: ",iblock, " ", r_irank * r_ngroup + r_igroup)
+    println("")
+    
+	# construct communicators for inter-block communication
+	# only communicate between lead processes on a block
+    #if !(block_rank[] == 0)
+        # set colors to MPI_UNDEFINED to eliminate non-lead processes from communicators 
+        # suggested here https://mpitutorial.com/tutorials/introduction-to-groups-and-communicators/
+    #    r_igroup =  MPI.API.MPI_UNDEFINED
+    #    z_igroup =  MPI.API.MPI_UNDEFINED
+    #end
+    #r_comm = MPI.Comm_split(comm_world,r_igroup,r_irank)
+    #z_comm = MPI.Comm_split(comm_world,z_igroup,z_irank)
+    
+    # or only call MPI.Comm_split on appropriate processes
+    # this might fail if all processes in comm_world 
+    # have to join in with the Comm_split call
+    if block_rank[] == 0
+        r_comm = MPI.Comm_split(comm_world,r_igroup,r_irank)
+        z_comm = MPI.Comm_split(comm_world,z_igroup,z_irank)
+    else # assign a dummy value 
+        r_comm = false
+        z_comm = false
+    end
+    
+    return z_irank, z_nrank_per_group, z_comm, r_irank, r_nrank_per_group, r_comm
 end
 
 @debug_shared_array begin

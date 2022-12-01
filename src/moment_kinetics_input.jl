@@ -173,11 +173,11 @@ function mk_input(scan_input=Dict())
     
     # overwrite some default parameters related to the r grid
     # ngrid is number of grid points per element
-    r.ngrid = get(scan_input, "r_ngrid", 1)
+    r.ngrid = get(scan_input, "r_ngrid", 9)
     # nelement_global is the number of elements in total
-    r.nelement_global = get(scan_input, "r_nelement", 1)
+    r.nelement_global = get(scan_input, "r_nelement", 8)
 	# nelement_local is the number of elements on each process
-    r.nelement_local = get(scan_input, "r_nelement_local", 1)
+    r.nelement_local = get(scan_input, "r_nelement_local", r.nelement_global)
     # determine the discretization option for the r grid
     # supported options are "chebyshev_pseudospectral" and "finite_difference"
     r.discretization = get(scan_input, "r_discretization", "finite_difference")
@@ -298,12 +298,13 @@ function mk_input(scan_input=Dict())
 	# set up distributed-memory MPI information for z and r coords
 	# need grid and MPI information to determine these values 
 	# MRH just put dummy values now 
-	comm_sub_r = false
-	irank_r = 0
-	nrank_r = 0
-	comm_sub_z = false
-	irank_z = 0
-	nrank_z = 0
+	irank_z, nrank_z, comm_sub_z, irank_r, nrank_r, comm_sub_r = setup_distributed_memory_MPI(z.nelement_global,z.nelement_local,r.nelement_global,r.nelement_local)
+    #comm_sub_r = false
+	#irank_r = 0
+	#nrank_r = 0
+	#comm_sub_z = false
+	#irank_z = 0
+	#nrank_z = 0
 
     t_input = time_input(nstep, dt, nwrite, use_semi_lagrange, n_rk_stages, split_operators,
     	use_manufactured_solns_for_advance, use_manufactured_solns_for_init)
@@ -391,7 +392,7 @@ function mk_input(scan_input=Dict())
     # Make file to log some information about inputs into.
     # check to see if output_dir exists in the current directory
     # if not, create it
-    if block_rank[] == 0
+    if global_rank[] == 0
         isdir(output_dir) || mkdir(output_dir)
         io = open_output_file(string(output_dir,"/",run_name), "input")
     else
@@ -822,7 +823,7 @@ check various input options to ensure they are all valid/consistent
 function check_input(io, output_dir, nstep, dt, use_semi_lagrange, z, vpa,
     composition, species, evolve_moments)
     # copy the input file to the output directory to be saved
-    if block_rank[] == 0
+    if global_rank[] == 0
         cp(joinpath(@__DIR__, "moment_kinetics_input.jl"), joinpath(output_dir, "moment_kinetics_input.jl"), force=true)
     end
     # open ascii file in which informtaion about input choices will be written
