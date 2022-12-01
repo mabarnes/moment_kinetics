@@ -9,7 +9,7 @@ export write_data_to_ascii
 export write_data_to_binary
 
 using NCDatasets
-using ..communication: _block_synchronize
+using ..communication: _block_synchronize, iblock_index
 using ..debugging
 using ..looping
 using ..moment_kinetics_structs: scratch_pdf, em_fields_struct
@@ -79,7 +79,7 @@ function setup_file_io(output_dir, run_name, vz, vr, vzeta, vpa, vperp, z, r, co
         # check to see if output_dir exists in the current directory
         # if not, create it
         isdir(output_dir) || mkdir(output_dir)
-        out_prefix = string(output_dir, "/", run_name)
+        out_prefix = string(output_dir, "/", run_name, ".", iblock_index[])
         #ff_io = open_output_file(out_prefix, "f_vs_t")
         mom_chrg_io = open_output_file(out_prefix, "moments_charged_vs_t")
         mom_ntrl_io = open_output_file(out_prefix, "moments_neutral_vs_t")
