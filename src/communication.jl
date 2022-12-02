@@ -23,12 +23,18 @@ using ..debugging
 using ..type_definitions: mk_float, mk_int
 
 """
+Can use a const `MPI.Comm` for `comm_world` and just copy the pointer from
+`MPI.COMM_WORLD` because `MPI.COMM_WORLD` is never deleted, so pointer stays valid.
 """
 const comm_world = MPI.Comm()
 
 """
+Must use a `Ref{MPI.Comm}` to allow a non-const `MPI.Comm` to be stored. Need to actually
+assign to this and not just copy a pointer into the `.val` member because otherwise the
+`MPI.Comm` object created by `MPI.Comm_split()` would be deleted, which probably makes
+MPI.jl delete the communicator.
 """
-const comm_block = MPI.Comm()
+const comm_block = Ref(MPI.Comm())
 
 # Use Ref for these variables so that they can be made `const` (so have a definite
 # type), but contain a value assigned at run-time.
@@ -62,11 +68,6 @@ function __init__()
     MPI.Init()
 
     comm_world.val = MPI.COMM_WORLD.val
-
-    # For now, just use comm_world. In future should probably somehow figure out which
-    # processors are in a 'NUMA region'... OpenMPI has a special communicator for this,
-    # but MPICH doesn't seem to. Might be simplest to rely on user input??
-    comm_block.val = comm_world.val
 
     global_rank[] = MPI.Comm_rank(comm_world)
     global_size[] = MPI.Comm_size(comm_world)
@@ -117,7 +118,7 @@ function setup_distributed_memory_MPI(z_nelement_global,z_nelement_local,r_nelem
     block_rank[] = irank_block
     block_size[] = nrank_per_zr_block
     # construct a communicator for intra-block communication
-    comm_block = MPI.Comm_split(comm_world,iblock,irank_block)
+    comm_block[] = MPI.Comm_split(comm_world,iblock,irank_block)
     # MPI.Comm_split(comm,color,key)
 	# comm -> communicator to be split
 	# color -> label of group of processes
@@ -301,7 +302,7 @@ function allocate_shared(T, dims)
         signaturestring = string([string(s.file, s.line) for s ∈ st]...)
 
         hash = sha256(signaturestring)
-        all_hashes = MPI.Allgather(hash, comm_block)
+        all_hashes = MPI.Allgather(hash, comm_block[])
         l = length(hash)
         for i ∈ 1:length(all_hashes)÷l
             if all_hashes[(i - 1) * l + 1: i * l] != hash
@@ -312,7 +313,7 @@ function allocate_shared(T, dims)
         end
     end
 
-    win, ptr = MPI.Win_allocate_shared(T, n_local, comm_block)
+    win, ptr = MPI.Win_allocate_shared(T, n_local, comm_block[])
 
     # Array is allocated contiguously, but `ptr` points to the 'locally owned' part.
     # We want to use as a shared array, so want to wrap the entire shared array.
@@ -454,9 +455,9 @@ end
         end
 
         @debug_error_stop_all _gather_errors()
-        global_is_read = reshape(MPI.Allgather(is_read, comm_block),
+        global_is_read = reshape(MPI.Allgather(is_read, comm_block[]),
                                  global_dims...)
-        global_is_written = reshape(MPI.Allgather(is_written, comm_block),
+        global_is_written = reshape(MPI.Allgather(is_written, comm_block[]),
                                     global_dims...)
         for i ∈ CartesianIndices(array)
             n_reads = sum(global_is_read[i, :])
@@ -536,7 +537,7 @@ the debugging routines need to be updated.
 """
 function _block_synchronize()
     @debug_error_stop_all _gather_errors()
-    MPI.Barrier(comm_block)
+    MPI.Barrier(comm_block[])
 
     @debug_block_synchronize begin
         st = stacktrace()
@@ -549,7 +550,7 @@ function _block_synchronize()
         signaturestring = string([string(s.file, s.line) for s ∈ st]...)
 
         hash = sha256(signaturestring)
-        all_hashes = reshape(MPI.Allgather(hash, comm_block), length(hash),
+        all_hashes = reshape(MPI.Allgather(hash, comm_block[]), length(hash),
                              block_size[])
         for i ∈ 1:block_size[]
             h = all_hashes[:, i]
@@ -633,7 +634,7 @@ function _block_synchronize()
         end
 
         @debug_error_stop_all _gather_errors()
-        MPI.Barrier(comm_block)
+        MPI.Barrier(comm_block[])
     end
 end
 
