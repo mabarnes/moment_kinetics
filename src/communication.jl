@@ -98,13 +98,20 @@ function setup_distributed_memory_MPI(z_nelement_global,z_nelement_local,r_nelem
     # get the number of ranks per block
     nrank_per_zr_block = floor(Int,nrank_global/nblocks)
     
+    println("debug info:")
+    println("r_nchunks: ",r_nchunks)
+    println("z_nchunks: ",z_nchunks)
+    println("nblocks: ",nblocks)
+    println("nrank_per_zr_block: ",nrank_per_zr_block)
+    
 	# throw an error if user specified information is inconsistent
     if (nrank_per_zr_block*nblocks < nrank_global)
         if irank_global ==0 
             println("ERROR: You must choose global number of processes to be an integer multiple of the number of \n 
                      nblocks = (r_nelement_global/r_nelement_local)*(z_nelement_global/z_nelement_local)")
+            flush(stdout)
         end
-        MPI.Abort(comm,1)
+        MPI.Abort(comm_world,1)
     end
     
     # assign information regarding shared-memory blocks
@@ -112,6 +119,9 @@ function setup_distributed_memory_MPI(z_nelement_global,z_nelement_local,r_nelem
     iblock = floor(Int,irank_global/nrank_per_zr_block)
     # rank index within a block
     irank_block = mod(irank_global,nrank_per_zr_block)
+ 
+    println("iblock: ",iblock)
+    println("irank_block: ",irank_block)
  
     # assign the block rank to the global variables
     iblock_index[] = iblock
