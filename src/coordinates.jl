@@ -144,7 +144,7 @@ function init_grid(ngrid, nelement_global, nelement_local, n, irank,
     elseif discretization == "chebyshev_pseudospectral"
         if name == "vperp"
             # initialize chebyshev grid defined on [-L/2,L/2]
-            grid, wgts = scaled_chebyshev_grid(ngrid, nelement, n, L, imin, imax)
+            grid, wgts = scaled_chebyshev_grid(ngrid, nelement_global, nelement_local, n, irank, L, imin, imax)
             grid .= grid .+ L/2.0 # shift to [0,L] appropriate to vperp variable
             wgts = 2.0 .* wgts .* grid # to include 2 vperp in jacobian of integral
                                         # see note above on normalisation
