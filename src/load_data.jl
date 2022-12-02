@@ -15,9 +15,10 @@ using NCDatasets
 
 """
 """
-function open_netcdf_file(run_name)
+function open_netcdf_file(run_name; iblock=0)
     # create the netcdf filename from the given run_name
-    filename = string(run_name, ".cdf")
+    # and the shared-memory block index
+    filename = string(run_name, ".", iblock, ".cdf")
 
     print("Opening ", filename, " to read NetCDF data...")
     # open the netcdf file with given filename for reading
