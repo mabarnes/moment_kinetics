@@ -142,7 +142,6 @@ function setup_distributed_memory_MPI(z_nelement_global,z_nelement_local,r_nelem
 	r_nrank_per_group = r_nchunks
 	r_igroup = z_irank # block(irank) - > r_igroup 
 	r_irank = z_igroup # block(irank) -> r_irank
-    #  MPI.API.MPI_UNDEFINED
     # irank = r_igroup + z_nrank_per_group * r_irank
 	# useful information for debugging
     println("r_ngroup: ",r_ngroup)
@@ -154,25 +153,18 @@ function setup_distributed_memory_MPI(z_nelement_global,z_nelement_local,r_nelem
     
 	# construct communicators for inter-block communication
 	# only communicate between lead processes on a block
-    #if !(block_rank[] == 0)
-        # set colors to MPI_UNDEFINED to eliminate non-lead processes from communicators 
-        # suggested here https://mpitutorial.com/tutorials/introduction-to-groups-and-communicators/
-    #    r_igroup =  MPI.API.MPI_UNDEFINED
-    #    z_igroup =  MPI.API.MPI_UNDEFINED
-    #end
-    #r_comm = MPI.Comm_split(comm_world,r_igroup,r_irank)
-    #z_comm = MPI.Comm_split(comm_world,z_igroup,z_irank)
-    
-    # or only call MPI.Comm_split on appropriate processes
-    # this might fail if all processes in comm_world 
-    # have to join in with the Comm_split call
     if block_rank[] == 0
         r_comm = MPI.Comm_split(comm_world,r_igroup,r_irank)
         z_comm = MPI.Comm_split(comm_world,z_igroup,z_irank)
     else # assign a dummy value 
-        r_comm = false
-        z_comm = false
+        r_comm = MPI.Comm_split(comm_world,nothing,r_irank)
+        z_comm = MPI.Comm_split(comm_world,nothing,z_irank)
     end
+    # MPI.Comm_split(comm,color,key)
+	# comm -> communicator to be split
+	# color -> label of group of processes
+	# key -> label of process in group
+    # if color == nothing then this process is excluded from the communicator
     
     return z_irank, z_nrank_per_group, z_comm, r_irank, r_nrank_per_group, r_comm
 end
