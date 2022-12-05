@@ -10,7 +10,7 @@ using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.load_data: open_netcdf_file, load_coordinate_data,
                                  load_fields_data, load_charged_particle_moments_data, load_pdf_data,
-                                 load_neutral_particle_moments_data, load_neutral_pdf_data
+                                 load_neutral_particle_moments_data, load_neutral_pdf_data, load_time_data
 using moment_kinetics.interpolation: interpolate_to_grid_z, interpolate_to_grid_vpa
 using moment_kinetics.type_definitions: mk_float
 
@@ -143,6 +143,7 @@ test_input_finite_difference = Dict("n_ion_species" => 1,
                                     "nstep" => 100,
                                     "dt" => 0.001,
                                     "nwrite" => 100,
+                                    "nwrite_dfns" => 100,
                                     "use_semi_lagrange" => false,
                                     "n_rk_stages" => 4,
                                     "split_operators" => false,
@@ -254,12 +255,13 @@ function run_test(test_input, rtol; args...)
 
             path = joinpath(realpath(input["base_directory"]), name, name)
 
-            # open the netcdf file and give it the handle 'fid'
-            fid = open_netcdf_file(path)
+            # open the netcdf file containing moments data and give it the handle 'fid'
+            fid = open_netcdf_file(path,"moments")
 
             # load space-time coordinate data
-            nvpa, vpa, vpa_wgts, nz, z, z_wgts, Lz, nr, r, r_wgts, Lr, ntime, time, n_ion_species, n_neutral_species = load_coordinate_data(fid)
-
+            nvpa, vpa, vpa_wgts, nz, z, z_wgts, Lz, nr, r, r_wgts, Lr, n_ion_species, n_neutral_species = load_coordinate_data(fid)
+            ntime, time = load_time_data(fid)
+            
             # load fields data
             phi_zrt, Er_zrt, Ez_zrt = load_fields_data(fid)
 
@@ -267,6 +269,11 @@ function run_test(test_input, rtol; args...)
             n_charged_zrst, upar_charged_zrst, ppar_charged_zrst, qpar_charged_zrst, v_t_charged_zrst, evolve_ppar = load_charged_particle_moments_data(fid)
             n_neutral_zrst, upar_neutral_zrst, ppar_neutral_zrst, qpar_neutral_zrst, v_t_neutral_zrst = load_neutral_particle_moments_data(fid)
 
+            close(fid)
+            
+            # open the netcdf file containing pdf data
+            fid = open_netcdf_file(path,"dfns")
+            
             # load particle distribution function (pdf) data
             f_charged_vpavperpzrst = load_pdf_data(fid)
             f_neutral_vzvrvzetazrst = load_neutral_pdf_data(fid)
