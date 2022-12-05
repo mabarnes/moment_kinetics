@@ -58,9 +58,11 @@ include("plot_MMS_sequence.jl")
 
 using TimerOutputs
 using TOML
+using Dates
 
 using .file_io: setup_file_io, finish_file_io
-using .file_io: write_data_to_ascii, write_data_to_binary
+using .file_io: write_data_to_ascii
+using .file_io: write_moments_data_to_binary, write_dfns_data_to_binary
 using .command_line_options: get_options
 using .communication
 using .coordinates: define_coordinate
@@ -90,7 +92,7 @@ function run_moment_kinetics(to::TimerOutput, input_dict=Dict())
 
         # clean up i/o and communications
         # last 2 elements of mk_state are `io` and `cdf`
-        cleanup_moment_kinetics!(mk_state[end-1:end]...)
+        cleanup_moment_kinetics!(mk_state[end-2:end]...)
 
         if block_rank[] == 0 && run_type == performance_test
             # Print the timing information if this is a performance test
@@ -110,7 +112,7 @@ function run_moment_kinetics(to::TimerOutput, input_dict=Dict())
         else
             # Error almost certainly occured before cleanup. If running in serial we can
             # still finalise file I/O
-            cleanup_moment_kinetics!(mk_state[end-1:end]...)
+            cleanup_moment_kinetics!(mk_state[end-2:end]...)
         end
 
         rethrow(e)
@@ -216,25 +218,28 @@ function setup_moment_kinetics(input_dict::Dict;
     scratch, advance, scratch_dummy, manufactured_source_list = setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition,
         drive_input, moments, t_input, collisions, species, geometry, boundary_distributions)
     # setup i/o
-    io, cdf = setup_file_io(output_dir, run_name, vz, vr, vzeta, vpa, vperp, z, r, composition, collisions)
+    io, cdf_moments, cdf_dfns = setup_file_io(output_dir, run_name, vz, vr, vzeta, vpa, vperp, z, r, composition, collisions)
     # write initial data to ascii files
     write_data_to_ascii(moments, fields, vpa, vperp, z, r, code_time, composition.n_ion_species, composition.n_neutral_species, io)
     # write initial data to binary file (netcdf)
-    write_data_to_binary(pdf.charged.unnorm, pdf.neutral.unnorm, moments, fields, code_time, composition.n_ion_species, 
-     composition.n_neutral_species, cdf, 1)
+    write_moments_data_to_binary(moments, fields, code_time, composition.n_ion_species, 
+     composition.n_neutral_species, cdf_moments, 1)
+    write_dfns_data_to_binary(pdf.charged.unnorm, pdf.neutral.unnorm,code_time, composition.n_ion_species, 
+     composition.n_neutral_species, cdf_dfns, 1)
 
     begin_s_r_z_vperp_region()
 
     return pdf, scratch, code_time, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
            moments, fields, spectral_objects, advect_objects,
-           composition, collisions, geometry, boundary_distributions, advance, scratch_dummy, manufactured_source_list, io, cdf
+           composition, collisions, geometry, boundary_distributions, advance, scratch_dummy, manufactured_source_list, io, cdf_moments, cdf_dfns
 end
 
 """
 Clean up after a run
 """
 function cleanup_moment_kinetics!(io::Union{file_io.ios,Nothing},
-                                  cdf::Union{file_io.netcdf_info,Nothing})
+                                  cdf_moments::Union{file_io.netcdf_moments_info,Nothing},
+                                  cdf_dfns::Union{file_io.netcdf_dfns_info,Nothing})
     @debug_detect_redundant_block_synchronize begin
         # Disable check for redundant _block_synchronize() during finalization, as this
         # only runs once so any failure is not important.
@@ -244,7 +249,10 @@ function cleanup_moment_kinetics!(io::Union{file_io.ios,Nothing},
     begin_serial_region()
 
     # finish i/o
-    finish_file_io(io, cdf)
+    finish_file_io(io, cdf_moments, cdf_dfns)
+
+    @serial_region println("finished file io         ",
+           Dates.format(now(), dateformat"H:MM:SS"))
 
     # clean up MPI objects
     finalize_comms!()

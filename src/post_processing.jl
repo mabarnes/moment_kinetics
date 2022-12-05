@@ -23,7 +23,7 @@ using ..quadrature: composite_simpson_weights
 using ..array_allocation: allocate_float
 using ..file_io: open_output_file
 using ..type_definitions: mk_float, mk_int
-using ..load_data: open_netcdf_file
+using ..load_data: open_netcdf_file, load_time_data
 using ..load_data: load_coordinate_data, load_fields_data, load_pdf_data
 using ..load_data: load_charged_particle_moments_data, load_neutral_particle_moments_data
 using ..load_data: load_neutral_pdf_data, load_neutral_coordinate_data
@@ -76,10 +76,16 @@ function analyze_and_plot_data(path)
         composition, species, collisions, geometry, drive_input = mk_input(scan_input)
 
     # open the netcdf file and give it the handle 'fid'
-    fid = open_netcdf_file(run_name)
-    # load space-time coordinate data
+    fid = open_netcdf_file(run_name,"moments")
+    fid_pdfs = open_netcdf_file(run_name,"dfns")
+    # note that ntime may differ in these output files
+    
+    # load space-time coordinate data from `moments' cdf
     nvpa, vpa, vpa_wgts, nvperp, vperp, vperp_wgts, nz, z, z_wgts, Lz,
-     nr, r, r_wgts, Lr, ntime, time, n_ion_species, n_neutral_species = load_coordinate_data(fid)
+     nr, r, r_wgts, Lr, n_ion_species, n_neutral_species = load_coordinate_data(fid)
+    ntime, time = load_time_data(fid)
+    # load time data from `dfns' cdf
+    ntime_pdfs, time_pdfs = load_time_data(fid_pdfs)
     #println("\n Info: n_neutral_species = ",n_neutral_species,", n_ion_species = ",n_ion_species,"\n")
     if n_neutral_species > 0
         nvz, vz, vz_wgts, nvr, vr, vr_wgts, nvzeta, vzeta, vzeta_wgts = load_neutral_coordinate_data(fid)
@@ -97,12 +103,13 @@ function analyze_and_plot_data(path)
     # load full (z,r,species,t) charged particle velocity moments data
     density, parallel_flow, parallel_pressure, parallel_heat_flux,
         thermal_speed, evolve_ppar = load_charged_particle_moments_data(fid)
+    
     # load full (vpa,vperp,z,r,species,t) charged particle distribution function (pdf) data
-    ff = load_pdf_data(fid)
+    ff = load_pdf_data(fid_pdfs)
     # load neutral particle data
     if n_neutral_species > 0
         neutral_density, neutral_uz, neutral_pz, neutral_qz, neutral_thermal_speed = load_neutral_particle_moments_data(fid)
-        neutral_ff = load_neutral_pdf_data(fid)
+        neutral_ff = load_neutral_pdf_data(fid_pdfs)
     end
 
     #evaluate 1D-1V diagnostics at fixed ir0
@@ -120,6 +127,7 @@ function analyze_and_plot_data(path)
             nz, z, z_wgts, Lz, ntime, time)
     end
     close(fid)
+    close(fid_pdfs)
 
     diagnostics_2d = false
     if diagnostics_2d
@@ -135,18 +143,21 @@ function analyze_and_plot_data(path)
     plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
      itime_min, itime_max, nwrite_movie, run_name, pp, "")
     # make plots and animations of the ion pdf
-    spec_type = "ion"
-    plot_charged_pdf(ff, vpa, vperp, z, r, ivpa0, ivperp0, iz0, ir0,
-        spec_type, n_ion_species,
-        itime_min, itime_max, nwrite_movie, run_name, pp)
-    # make plots and animations of the neutral pdf
-    if n_neutral_species > 0
-		spec_type = "neutral"
-		plot_neutral_pdf(neutral_ff, vz, vr, vzeta, z, r,
-			ivz0, ivr0, ivzeta0, iz0, ir0,
-			spec_type, n_neutral_species,
-			itime_min, itime_max, nwrite_movie, run_name, pp)
-	end 
+    # only if ntime == ntime_pdfs
+    if ntime == ntime_pdfs 
+        spec_type = "ion"
+        plot_charged_pdf(ff, vpa, vperp, z, r, ivpa0, ivperp0, iz0, ir0,
+            spec_type, n_ion_species,
+            itime_min, itime_max, nwrite_movie, run_name, pp)
+        # make plots and animations of the neutral pdf
+        if n_neutral_species > 0
+            spec_type = "neutral"
+            plot_neutral_pdf(neutral_ff, vz, vr, vzeta, z, r,
+                ivz0, ivr0, ivzeta0, iz0, ir0,
+                spec_type, n_neutral_species,
+                itime_min, itime_max, nwrite_movie, run_name, pp)
+        end 
+    end
     manufactured_solns_test = t_input.use_manufactured_solns_for_advance
     # Plots compare density and density_symbolic at last timestep
     #if(manufactured_solns_test && nr > 1)
@@ -208,18 +219,18 @@ function analyze_and_plot_data(path)
 
         ff_sym = copy(ff)
         is = 1
-        for it in 1:ntime
+        for it in 1:ntime_pdfs
             for ir in 1:nr
                 for iz in 1:nz
                     for ivperp in 1:nvperp
                         for ivpa in 1:nvpa
-                            ff_sym[ivpa,ivperp,iz,ir,is,it] = dfni_func(vpa[ivpa],vperp[ivperp],z[iz],r[ir],time[it])
+                            ff_sym[ivpa,ivperp,iz,ir,is,it] = dfni_func(vpa[ivpa],vperp[ivperp],z[iz],r[ir],time_pdfs[it])
                         end
                     end
                 end
             end
         end
-        compare_charged_pdf_symbolic_test(run_name,ff,ff_sym,"ion",vpa,vperp,z,r,time,nvpa,nvperp,nz,nr,ntime,
+        compare_charged_pdf_symbolic_test(run_name,ff,ff_sym,"ion",vpa,vperp,z,r,time_pdfs,nvpa,nvperp,nz,nr,ntime_pdfs,
          L"\widetilde{f}_i",L"\widetilde{f}^{sym}_i",L"\sqrt{ \sum || \widetilde{f}_i - \widetilde{f}_i^{sym} ||^2 / N}","pdf")
 
         if n_neutral_species > 0
@@ -238,20 +249,20 @@ function analyze_and_plot_data(path)
 
             neutral_ff_sym = copy(neutral_ff)
             is = 1
-            for it in 1:ntime
+            for it in 1:ntime_pdfs
                 for ir in 1:nr
                     for iz in 1:nz
                         for ivzeta in 1:nvzeta
                             for ivr in 1:nvr
                                 for ivz in 1:nvz
-                                    neutral_ff_sym[ivz,ivr,ivzeta,iz,ir,is,it] = dfnn_func(vz[ivz],vr[ivr],vzeta[ivzeta],z[iz],r[ir],time[it])
+                                    neutral_ff_sym[ivz,ivr,ivzeta,iz,ir,is,it] = dfnn_func(vz[ivz],vr[ivr],vzeta[ivzeta],z[iz],r[ir],time_pdfs[it])
                                 end
                             end
                         end
                     end
                 end
             end
-            compare_neutral_pdf_symbolic_test(run_name,neutral_ff,neutral_ff_sym,"neutral",vz,vr,vzeta,z,r,time,nvz,nvr,nvzeta,nz,nr,ntime,
+            compare_neutral_pdf_symbolic_test(run_name,neutral_ff,neutral_ff_sym,"neutral",vz,vr,vzeta,z,r,time_pdfs,nvz,nvr,nvzeta,nz,nr,ntime_pdfs,
              L"\widetilde{f}_n",L"\widetilde{f}^{sym}_n",L"\sqrt{\sum || \widetilde{f}_n - \widetilde{f}_n^{sym} ||^2 /N}","pdf")
 
         end

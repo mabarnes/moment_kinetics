@@ -155,7 +155,8 @@ function mk_input(scan_input=Dict())
     # parameters related to the time stepping
     nstep = get(scan_input, "nstep", 40000)
     dt = get(scan_input, "dt", 0.00025/sqrt(species.charged[1].initial_temperature))
-    nwrite = get(scan_input, "nwrite", 80)
+    nwrite_moments = get(scan_input, "nwrite", 80)
+    nwrite_dfns = get(scan_input, "nwrite_dfns", nstep)
     # use_semi_lagrange = true to use interpolation-free semi-Lagrange treatment
     # otherwise, solve problem solely using the discretization_option above
     use_semi_lagrange = get(scan_input, "use_semi_lagrange", false)
@@ -306,7 +307,7 @@ function mk_input(scan_input=Dict())
 	#irank_z = 0
 	#nrank_z = 0
 
-    t_input = time_input(nstep, dt, nwrite, use_semi_lagrange, n_rk_stages, split_operators,
+    t_input = time_input(nstep, dt, nwrite_moments, nwrite_dfns, use_semi_lagrange, n_rk_stages, split_operators,
     	use_manufactured_solns_for_advance, use_manufactured_solns_for_init)
     # replace mutable structures with immutable ones to optimize performance
     # and avoid possible misunderstandings	

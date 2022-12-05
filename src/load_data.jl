@@ -10,15 +10,16 @@ export load_neutral_particle_moments_data
 export load_pdf_data
 export load_neutral_pdf_data
 export load_neutral_coordinate_data
+export load_time_data
 
 using NCDatasets
 
 """
 """
-function open_netcdf_file(run_name; iblock=0)
+function open_netcdf_file(run_name, ext; iblock=0)
     # create the netcdf filename from the given run_name
     # and the shared-memory block index
-    filename = string(run_name, ".", iblock, ".cdf")
+    filename = string(run_name, ".", iblock,".", ext,  ".cdf")
 
     print("Opening ", filename, " to read NetCDF data...")
     # open the netcdf file with given filename for reading
@@ -79,13 +80,6 @@ function load_coordinate_data(fid)
     # get the weights associated with the vpa coordinate
     cdfvar = fid["vpa_wgts"]
     vpa_wgts = cdfvar.var[:]
-
-    # define a handle for the time coordinate
-    cdfvar = fid["time"]
-    # get the number of time grid points
-    ntime = length(cdfvar)
-    # load the data for time
-    time = cdfvar.var[:]
     
     # get the lengths of the ion species dimension
     n_ion_species = fid.dim["n_ion_species"]
@@ -93,7 +87,22 @@ function load_coordinate_data(fid)
     n_neutral_species = fid.dim["n_neutral_species"]
     println("done.")
 
-    return nvpa, vpa, vpa_wgts, nvperp, vperp, vperp_wgts, nz, z, z_wgts, Lz, nr, r, r_wgts, Lr, ntime, time, n_ion_species, n_neutral_species
+    return nvpa, vpa, vpa_wgts, nvperp, vperp, vperp_wgts, nz, z, z_wgts, Lz, nr, r, r_wgts, Lr, n_ion_species, n_neutral_species
+end
+
+"""
+"""
+function load_time_data(fid)
+    print("Loading time data...")
+    # define a handle for the time coordinate
+    cdfvar = fid["time"]
+    # get the number of time grid points
+    ntime = length(cdfvar)
+    # load the data for time
+    time = cdfvar.var[:]
+    println("done.")
+
+    return  ntime, time
 end
 
 function load_neutral_coordinate_data(fid)

@@ -31,7 +31,8 @@ end
 struct time_input
     nstep::mk_int
     dt::mk_float
-    nwrite::mk_int
+    nwrite_moments::mk_int
+    nwrite_dfns::mk_int
     use_semi_lagrange::Bool
     n_rk_stages::mk_int
     split_operators::Bool
