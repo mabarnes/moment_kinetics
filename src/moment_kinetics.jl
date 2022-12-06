@@ -163,7 +163,7 @@ function setup_moment_kinetics(input_dict::Dict;
     input = mk_input(input_dict)
     # obtain input options from moment_kinetics_input.jl
     # and check input to catch errors
-    run_name, output_dir, evolve_moments,
+    io_input, evolve_moments,
         t_input, z_input, r_input,
         vpa_input, vperp_input, gyrophase_input,
         vz_input, vr_input, vzeta_input,
@@ -218,7 +218,7 @@ function setup_moment_kinetics(input_dict::Dict;
     scratch, advance, scratch_dummy, manufactured_source_list = setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition,
         drive_input, moments, t_input, collisions, species, geometry, boundary_distributions)
     # setup i/o
-    io, cdf_moments, cdf_dfns, h5 = setup_file_io(output_dir, run_name, vz, vr, vzeta, vpa, vperp, z, r, composition, collisions)
+    io, cdf_moments, cdf_dfns, h5 = setup_file_io(io_input, vz, vr, vzeta, vpa, vperp, z, r, composition, collisions)
     # write initial data to ascii files
     write_data_to_ascii(moments, fields, vpa, vperp, z, r, code_time, composition.n_ion_species, composition.n_neutral_species, io)
     # write initial data to binary file (netcdf)

@@ -122,15 +122,15 @@ struct hdf5_info{Ttime, Tfi, Tfn, Tphi, Tmomi, Tmomn}
 """
 open the necessary output files
 """
-function setup_file_io(output_dir, run_name, vz, vr, vzeta, vpa, vperp, z, r, composition, collisions)
+function setup_file_io(io_input, vz, vr, vzeta, vpa, vperp, z, r, composition, collisions)
     begin_serial_region()
     @serial_region begin
         # Only read/write from first process in each 'block'
 
         # check to see if output_dir exists in the current directory
         # if not, create it
-        isdir(output_dir) || mkdir(output_dir)
-        out_prefix = string(output_dir, "/", run_name, ".", iblock_index[])
+        isdir(io_input.output_dir) || mkdir(io_input.output_dir)
+        out_prefix = string(io_input.output_dir, "/", io_input.run_name, ".", iblock_index[])
         #ff_io = open_output_file(out_prefix, "f_vs_t")
         mom_chrg_io = open_output_file(out_prefix, "moments_charged_vs_t")
         mom_ntrl_io = open_output_file(out_prefix, "moments_neutral_vs_t")

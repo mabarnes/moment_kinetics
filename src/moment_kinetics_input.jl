@@ -407,6 +407,9 @@ function mk_input(scan_input=Dict())
     
     drive_immutable = drive_input(drive.force_phi, drive.amplitude, drive.frequency)
 
+    # inputs for file I/O
+    io_immutable = io_input(; output_dir=output_dir, run_name=run_name)
+
     # Make file to log some information about inputs into.
     # check to see if output_dir exists in the current directory
     # if not, create it
@@ -422,7 +425,7 @@ function mk_input(scan_input=Dict())
         z_immutable, vpa_immutable, composition, species_immutable, evolve_moments)
 
     # return immutable structs for z, vpa, species and composition
-    all_inputs = (run_name, output_dir, evolve_moments, t_input, 
+    all_inputs = (io_immutable, evolve_moments, t_input,
                   z_immutable, r_immutable, vpa_immutable, vperp_immutable, gyrophase_immutable, vz_immutable, vr_immutable, vzeta_immutable,
                   composition, species_immutable, collisions, geometry, drive_immutable)
     println(io, "\nAll inputs returned from mk_input():")
