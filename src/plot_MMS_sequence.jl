@@ -25,9 +25,8 @@ using ..load_data: load_charged_particle_moments_data, load_neutral_particle_mom
 using ..load_data: load_neutral_pdf_data, load_neutral_coordinate_data
 using ..velocity_moments: integrate_over_vspace
 using ..manufactured_solns: manufactured_solutions, manufactured_electric_fields
-using ..moment_kinetics_input: mk_input
+using ..moment_kinetics_input: mk_input, read_input_file
 
-using TOML
 import Base: get
 
 # assume in function below that we have a list of simulations 
@@ -54,7 +53,7 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         path = realpath(path)
         run_name = joinpath(path, basename(path))
         input_filename = path * ".toml"
-        scan_input = TOML.parsefile(input_filename)
+        scan_input = read_input_file(input_filename)
         # get run-time input/composition/geometry/collisions/species info for convenience
         run_name_internal, output_dir, evolve_moments, 
             t_input, z_input, r_input, 

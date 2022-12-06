@@ -5,6 +5,7 @@ module moment_kinetics_input
 export mk_input
 export performance_test
 #export advective_form
+export read_input_file
 
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float
@@ -13,8 +14,24 @@ using ..file_io: input_option_error, open_output_file
 using ..finite_differences: fd_check_option
 using ..input_structs
 
+using TOML
+
 @enum RunType single performance_test scan
 const run_type = single
+
+"""
+Read input from a TOML file
+"""
+function read_input_file(input_filename::String)
+    input = TOML.parsefile(input_filename)
+
+    # Use input_filename (without the extension) as default for "run_name"
+    if !("run_name" in keys(input))
+        input["run_name"] = splitdir(splitext(s)[1])[end]
+    end
+
+    return input
+end
 
 import Base: get
 """

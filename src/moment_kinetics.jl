@@ -57,7 +57,6 @@ include("post_processing.jl")
 include("plot_MMS_sequence.jl")
 
 using TimerOutputs
-using TOML
 using Dates
 
 using .file_io: setup_file_io, finish_file_io
@@ -70,7 +69,7 @@ using .debugging
 using .initial_conditions: init_pdf_and_moments
 using .looping
 using .looping: debug_setup_loop_ranges_split_one_combination!
-using .moment_kinetics_input: mk_input, run_type, performance_test
+using .moment_kinetics_input: mk_input, read_input_file, run_type, performance_test
 using .time_advance: setup_time_advance!, time_advance!
 
 @debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
@@ -126,7 +125,7 @@ end
 overload which takes a filename and loads input
 """
 function run_moment_kinetics(to::TimerOutput, input_filename::String)
-    return run_moment_kinetics(to, TOML.parsefile(input_filename))
+    return run_moment_kinetics(to, read_input_file(input_filename))
 end
 
 """
