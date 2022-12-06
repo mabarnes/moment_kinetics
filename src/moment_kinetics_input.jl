@@ -408,7 +408,11 @@ function mk_input(scan_input=Dict())
     drive_immutable = drive_input(drive.force_phi, drive.amplitude, drive.frequency)
 
     # inputs for file I/O
-    io_immutable = io_input(; output_dir=output_dir, run_name=run_name)
+    # Make copy of the section to avoid modifying the passed-in Dict
+    io_settings = copy(get(scan_input, "output", Dict{String,Any}()))
+    io_settings["ascii_output"] = get(io_settings, "ascii_output", false)
+    io_immutable = io_input(; output_dir=output_dir, run_name=run_name,
+                              Dict(Symbol(k)=>v for (k,v) in io_settings)...)
 
     # Make file to log some information about inputs into.
     # check to see if output_dir exists in the current directory

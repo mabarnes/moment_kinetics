@@ -592,7 +592,7 @@ time integrator can be used without severe CFL condition
 """
 function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
            moments, fields, spectral_objects, advect_objects,
-           composition, collisions, geometry, boundary_distributions, advance, scratch_dummy, manufactured_source_list, io, cdf_moments, cdf_dfns, h5)
+           composition, collisions, geometry, boundary_distributions, advance, scratch_dummy, manufactured_source_list, ascii_io, cdf_moments, cdf_dfns, h5)
 
     @debug_detect_redundant_block_synchronize begin
         # Only want to check for redundant _block_synchronize() calls during the
@@ -626,7 +626,7 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
             @serial_region println("finished time step ", i,"  ",
                                    Dates.format(now(), dateformat"H:MM:SS"))
             write_data_to_ascii(moments, fields, vpa, vperp, z, r, t,
-             composition.n_ion_species, composition.n_neutral_species, io)
+             composition.n_ion_species, composition.n_neutral_species, ascii_io)
             write_data_to_hdf5(pdf.charged.unnorm, pdf.neutral.unnorm, moments,
                 fields, t, composition.n_ion_species, composition.n_neutral_species, h5, iwrite)
             begin_s_r_z_vperp_region()

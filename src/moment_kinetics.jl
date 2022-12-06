@@ -218,9 +218,9 @@ function setup_moment_kinetics(input_dict::Dict;
     scratch, advance, scratch_dummy, manufactured_source_list = setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition,
         drive_input, moments, t_input, collisions, species, geometry, boundary_distributions)
     # setup i/o
-    io, cdf_moments, cdf_dfns, h5 = setup_file_io(io_input, vz, vr, vzeta, vpa, vperp, z, r, composition, collisions)
+    ascii_io, cdf_moments, cdf_dfns, h5 = setup_file_io(io_input, vz, vr, vzeta, vpa, vperp, z, r, composition, collisions)
     # write initial data to ascii files
-    write_data_to_ascii(moments, fields, vpa, vperp, z, r, code_time, composition.n_ion_species, composition.n_neutral_species, io)
+    write_data_to_ascii(moments, fields, vpa, vperp, z, r, code_time, composition.n_ion_species, composition.n_neutral_species, ascii_io)
     # write initial data to binary file (netcdf)
     write_moments_data_to_binary(moments, fields, code_time, composition.n_ion_species, 
      composition.n_neutral_species, cdf_moments, 1)
@@ -231,13 +231,13 @@ function setup_moment_kinetics(input_dict::Dict;
 
     return pdf, scratch, code_time, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
            moments, fields, spectral_objects, advect_objects,
-           composition, collisions, geometry, boundary_distributions, advance, scratch_dummy, manufactured_source_list, io, cdf_moments, cdf_dfns, h5
+           composition, collisions, geometry, boundary_distributions, advance, scratch_dummy, manufactured_source_list, ascii_io, cdf_moments, cdf_dfns, h5
 end
 
 """
 Clean up after a run
 """
-function cleanup_moment_kinetics!(io::Union{file_io.ios,Nothing},
+function cleanup_moment_kinetics!(ascii_io::Union{file_io.ascii_ios,Nothing},
                                   cdf_moments::Union{file_io.netcdf_moments_info,Nothing},
                                   cdf_dfns::Union{file_io.netcdf_dfns_info,Nothing},
                                   h5::Union{file_io.hdf5_info,Nothing})
@@ -250,7 +250,7 @@ function cleanup_moment_kinetics!(io::Union{file_io.ios,Nothing},
     begin_serial_region()
 
     # finish i/o
-    finish_file_io(io, cdf_moments, cdf_dfns, h5)
+    finish_file_io(ascii_io, cdf_moments, cdf_dfns, h5)
 
     # clean up MPI objects
     finalize_comms!()

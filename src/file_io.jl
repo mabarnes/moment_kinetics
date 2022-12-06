@@ -19,16 +19,16 @@ using ..type_definitions: mk_float, mk_int
 """
 structure containing the various input/output streams
 """
-struct ios
+struct ascii_ios{T <: Union{IOStream,Nothing}}
     # corresponds to the ascii file to which the distribution function is written
-    #ff::IOStream
+    #ff::T
     # corresponds to the ascii file to which velocity space moments of the
     # distribution function such as density and pressure are written
-    moments_charged::IOStream
-    moments_neutral::IOStream
+    moments_charged::T
+    moments_neutral::T
     # corresponds to the ascii file to which electromagnetic fields
     # such as the electrostatic potential are written
-    fields::IOStream
+    fields::T
 end
 
 """
@@ -131,15 +131,22 @@ function setup_file_io(io_input, vz, vr, vzeta, vpa, vperp, z, r, composition, c
         # if not, create it
         isdir(io_input.output_dir) || mkdir(io_input.output_dir)
         out_prefix = string(io_input.output_dir, "/", io_input.run_name, ".", iblock_index[])
-        #ff_io = open_output_file(out_prefix, "f_vs_t")
-        mom_chrg_io = open_output_file(out_prefix, "moments_charged_vs_t")
-        mom_ntrl_io = open_output_file(out_prefix, "moments_neutral_vs_t")
-        fields_io = open_output_file(out_prefix, "fields_vs_t")
+        if io_input.ascii_output
+            #ff_io = open_output_file(out_prefix, "f_vs_t")
+            mom_chrg_io = open_output_file(out_prefix, "moments_charged_vs_t")
+            mom_ntrl_io = open_output_file(out_prefix, "moments_neutral_vs_t")
+            fields_io = open_output_file(out_prefix, "fields_vs_t")
+        else
+            #ff_io = nothing
+            mom_chrg_io = nothing
+            mom_ntrl_io = nothing
+            fields_io = nothing
+        end
         cdf_moments = setup_moments_netcdf_io(out_prefix, r, z, vperp, vpa, vzeta, vr, vz, composition, collisions)
         cdf_dfns = setup_dfns_netcdf_io(out_prefix, r, z, vperp, vpa, vzeta, vr, vz, composition, collisions)
         h5 = setup_hdf5_io(out_prefix, r, z, vperp, vpa, vzeta, vr, vz, composition, collisions)
-        #return ios(ff_io, mom_io, fields_io), cdf
-        return ios(mom_chrg_io, mom_ntrl_io, fields_io), cdf_moments, cdf_dfns, h5
+        #return ascii_ios(ff_io, mom_io, fields_io), cdf
+        return ascii_ios(mom_chrg_io, mom_ntrl_io, fields_io), cdf_moments, cdf_dfns, h5
     end
     # For other processes in the block, return (nothing, nothing, nothing)
     return nothing, nothing, nothing
@@ -691,14 +698,17 @@ end
 """
 close all opened output files
 """
-function finish_file_io(io, cdf_moments, cdf_dfns, hdf5)
+function finish_file_io(ascii_io, cdf_moments, cdf_dfns, hdf5)
     @serial_region begin
         # Only read/write from first process in each 'block'
 
-        # get the fields in the ios struct
-        io_fields = fieldnames(typeof(io))
-        for i ∈ 1:length(io_fields)
-            close(getfield(io, io_fields[i]))
+        # get the fields in the ascii_ios struct
+        ascii_io_fields = fieldnames(typeof(ascii_io))
+        for x ∈ ascii_io_fields
+            io = getfield(ascii_io, x)
+            if io !== nothing
+                close(io)
+            end
         end
         close(hdf5.fid)
     end
@@ -707,16 +717,22 @@ end
 
 """
 """
-function write_data_to_ascii(moments, fields, vpa, vperp, z, r, t, n_ion_species, n_neutral_species, io)
+function write_data_to_ascii(moments, fields, vpa, vperp, z, r, t, n_ion_species,
+                             n_neutral_species, ascii_io)
+    if ascii_io.moments_charged === nothing
+        # ascii I/O is disabled
+        return nothing
+    end
+
     @serial_region begin
         # Only read/write from first process in each 'block'
 
-        #write_f_ascii(ff, z, vpa, t, io.ff)
-        write_moments_charged_ascii(moments.charged, z, r, t, n_ion_species, io.moments_charged)
+        #write_f_ascii(ff, z, vpa, t, ascii_io.ff)
+        write_moments_charged_ascii(moments.charged, z, r, t, n_ion_species, ascii_io.moments_charged)
         if n_neutral_species > 0
-            write_moments_neutral_ascii(moments.neutral, z, r, t, n_neutral_species, io.moments_neutral)
+            write_moments_neutral_ascii(moments.neutral, z, r, t, n_neutral_species, ascii_io.moments_neutral)
         end
-        write_fields_ascii(fields, z, r, t, io.fields)
+        write_fields_ascii(fields, z, r, t, ascii_io.fields)
     end
     return nothing
 end
@@ -724,7 +740,7 @@ end
 """
 write the function f(z,vpa) at this time slice
 """
-function write_f_ascii(f, z, vpa, t, io)
+function write_f_ascii(f, z, vpa, t, ascii_io)
     @serial_region begin
         # Only read/write from first process in each 'block'
 
@@ -733,14 +749,14 @@ function write_f_ascii(f, z, vpa, t, io)
             for is ∈ 1:n_species
                 for j ∈ 1:vpa.n
                     for i ∈ 1:z.n
-                        println(io,"t: ", t, "   spec: ", is, ",   z: ", z.grid[i],
+                        println(ascii_io,"t: ", t, "   spec: ", is, ",   z: ", z.grid[i],
                             ",  vpa: ", vpa.grid[j], ",   f: ", f[i,j,is])
                     end
-                    println(io)
+                    println(ascii_io)
                 end
-                println(io)
+                println(ascii_io)
             end
-            println(io)
+            println(ascii_io)
         end
     end
     return nothing
@@ -749,7 +765,7 @@ end
 """
 write moments of the charged species distribution function f at this time slice
 """
-function write_moments_charged_ascii(mom, z, r, t, n_species, io)
+function write_moments_charged_ascii(mom, z, r, t, n_species, ascii_io)
     @serial_region begin
         # Only read/write from first process in each 'block'
 
@@ -757,14 +773,14 @@ function write_moments_charged_ascii(mom, z, r, t, n_species, io)
             for is ∈ 1:n_species
                 for ir ∈ 1:r.n
                     for iz ∈ 1:z.n
-                        println(io,"t: ", t, "   species: ", is, "   r: ", r.grid[ir], "   z: ", z.grid[iz],
+                        println(ascii_io,"t: ", t, "   species: ", is, "   r: ", r.grid[ir], "   z: ", z.grid[iz],
                             "  dens: ", mom.dens[iz,ir,is], "   upar: ", mom.upar[iz,ir,is],
                             "   ppar: ", mom.ppar[iz,ir,is], "   qpar: ", mom.qpar[iz,ir,is])
                     end
                 end
             end
         end
-        println(io,"")
+        println(ascii_io,"")
     end
     return nothing
 end
@@ -772,7 +788,7 @@ end
 """
 write moments of the neutral species distribution function f_neutral at this time slice
 """
-function write_moments_neutral_ascii(mom, z, r, t, n_species, io)
+function write_moments_neutral_ascii(mom, z, r, t, n_species, ascii_io)
     @serial_region begin
         # Only read/write from first process in each 'block'
 
@@ -780,14 +796,14 @@ function write_moments_neutral_ascii(mom, z, r, t, n_species, io)
             for is ∈ 1:n_species
                 for ir ∈ 1:r.n
                     for iz ∈ 1:z.n
-                        println(io,"t: ", t, "   species: ", is, "   r: ", r.grid[ir], "   z: ", z.grid[iz],
+                        println(ascii_io,"t: ", t, "   species: ", is, "   r: ", r.grid[ir], "   z: ", z.grid[iz],
                             "  dens: ", mom.dens[iz,ir,is], "   uz: ", mom.uz[iz,ir,is],
                             "   ur: ", mom.ur[iz,ir,is], "   uzeta: ", mom.uzeta[iz,ir,is])
                     end
                 end
             end
         end
-        println(io,"")
+        println(ascii_io,"")
     end
     return nothing
 end
@@ -795,18 +811,18 @@ end
 """
 write electrostatic potential at this time slice
 """
-function write_fields_ascii(flds, z, r, t, io)
+function write_fields_ascii(flds, z, r, t, ascii_io)
     @serial_region begin
         # Only read/write from first process in each 'block'
 
         @inbounds begin
             for ir ∈ 1:r.n
                 for iz ∈ 1:z.n
-                    println(io,"t: ", t, "   r: ", r.grid[ir],"   z: ", z.grid[iz], "  phi: ", flds.phi[iz,ir])
+                    println(ascii_io,"t: ", t, "   r: ", r.grid[ir],"   z: ", z.grid[iz], "  phi: ", flds.phi[iz,ir])
                 end
             end
         end
-        println(io,"")
+        println(ascii_io,"")
     end
     return nothing
 end

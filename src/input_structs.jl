@@ -304,6 +304,7 @@ Settings and input for setting up file I/O
 @kw_def struct io_input
     output_dir::String
     run_name::String
+    ascii_output::Bool
 end
 
 """
