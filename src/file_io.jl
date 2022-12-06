@@ -82,16 +82,15 @@ struct netcdf_dfns_info{Ttime, Tfi, Tfn}
     
 end
 
- """
+"""
 structure containing the data/metadata needed for hdf5 file i/o
- """
-struct hdf5_info{Ttime, Tfi, Tfn, Tphi, Tmomi, Tmomn}
+moments & fields only
+"""
+struct hdf5_moments_info{Ttime, Tphi, Tmomi, Tmomn}
      # file identifier for the netcdf file to which data is written
     fid::HDF5.File
-     # handle for the time variable
-     time::Ttime
-     # handle for the charged species distribution function variable
-     f::Tfi
+    # handle for the time variable
+    time::Ttime
     # handle for the electrostatic potential variable
     phi::Tphi
     # handle for the radial electric field variable
@@ -109,14 +108,27 @@ struct hdf5_info{Ttime, Tfi, Tfn, Tphi, Tmomi, Tmomn}
     # handle for the charged species thermal speed
     thermal_speed::Tmomi
 
-     # handle for the neutral species distribution function variable
-     f_neutral::Tfn
     # handle for the neutral species density
     density_neutral::Tmomn
     uz_neutral::Tmomn
     pz_neutral::Tmomn
     qz_neutral::Tmomn
     thermal_speed_neutral::Tmomn
+ end
+
+"""
+structure containing the data/metadata needed for hdf5 file i/o
+distribution function data only
+"""
+struct hdf5_dfns_info{Ttime, Tfi, Tfn}
+     # file identifier for the netcdf file to which data is written
+    fid::HDF5.File
+    # handle for the time variable
+    time::Ttime
+    # handle for the charged species distribution function variable
+    f::Tfi
+    # handle for the neutral species distribution function variable
+    f_neutral::Tfn
  end
 
 """
@@ -136,17 +148,15 @@ function setup_file_io(io_input, vz, vr, vzeta, vpa, vperp, z, r, composition, c
             mom_chrg_io = open_output_file(out_prefix, "moments_charged_vs_t")
             mom_ntrl_io = open_output_file(out_prefix, "moments_neutral_vs_t")
             fields_io = open_output_file(out_prefix, "fields_vs_t")
+            ascii = ascii_ios(mom_chrg_io, mom_ntrl_io, fields_io)
         else
-            #ff_io = nothing
-            mom_chrg_io = nothing
-            mom_ntrl_io = nothing
-            fields_io = nothing
+            ascii = ascii_ios(nothing, nothing, nothing)
         end
         cdf_moments = setup_moments_netcdf_io(out_prefix, r, z, vperp, vpa, vzeta, vr, vz, composition, collisions)
         cdf_dfns = setup_dfns_netcdf_io(out_prefix, r, z, vperp, vpa, vzeta, vr, vz, composition, collisions)
-        h5 = setup_hdf5_io(out_prefix, r, z, vperp, vpa, vzeta, vr, vz, composition, collisions)
-        #return ascii_ios(ff_io, mom_io, fields_io), cdf
-        return ascii_ios(mom_chrg_io, mom_ntrl_io, fields_io), cdf_moments, cdf_dfns, h5
+        h5_moments = setup_moments_hdf5_io(out_prefix, r, z, vperp, vpa, vzeta, vr, vz, composition, collisions)
+        h5_dfns = setup_dfns_hdf5_io(out_prefix, r, z, vperp, vpa, vzeta, vr, vz, composition, collisions)
+        return ascii, cdf_moments, cdf_dfns, h5_moments, hy_dfns
     end
     # For other processes in the block, return (nothing, nothing, nothing)
     return nothing, nothing, nothing
@@ -210,11 +220,26 @@ function write_overview_hdf5!(fid, composition, collisions)
 end
 
 """
-Define coords group containing information about coordinate grids and write to hdf5 file
+Define coords group for coordinate information in the hdf5 file and write information
+about spatial coordinate grids
 """
-function define_coordinates_hdf5!(fid, vz, vr, vzeta, vpa, vperp, z, r)
+function define_spatial_coordinates_hdf5!(fid, z, r)
     # create the "coords" group that will contain coordinate information
     coords = create_group(fid, "coords")
+    # create the "z" sub-group of "coords" that will contain z coordinate info,
+    # including total number of grid points and grid point locations
+    z_h5 = define_coordinate_hdf5!(coords, z, "z", "spatial coordinate z")
+    # create the "r" sub-group of "coords" that will contain r coordinate info,
+    # including total number of grid points and grid point locations
+    r_h5 = define_coordinate_hdf5!(coords, r, "r", "spatial coordinate r")
+
+    return coords
+end
+
+"""
+Add to coords group in hdf5 file information about vspace coordinate grids
+"""
+function add_vspace_coordinates_hdf5!(coords, vz, vr, vzeta, vpa, vperp)
     # create the "vz" sub-group of "coords" that will contain vz coordinate info,
     # including total number of grid points and grid point locations
     vz_h5 = define_coordinate_hdf5!(coords, vz, "vz", "velocity coordinate v_z")
@@ -230,12 +255,6 @@ function define_coordinates_hdf5!(fid, vz, vr, vzeta, vpa, vperp, z, r)
     # create the "vperp" sub-group of "coords" that will contain vperp coordinate info,
     # including total number of grid points and grid point locations
     vperp_h5 = define_coordinate_hdf5!(coords, vperp, "vperp", "velocity coordinate v_perp")
-    # create the "z" sub-group of "coords" that will contain z coordinate info,
-    # including total number of grid points and grid point locations
-    z_h5 = define_coordinate_hdf5!(coords, z, "z", "spatial coordinate z")
-    # create the "r" sub-group of "coords" that will contain r coordinate info,
-    # including total number of grid points and grid point locations
-    r_h5 = define_coordinate_hdf5!(coords, r, "r", "spatial coordinate r")
 
     return nothing
 end
@@ -278,14 +297,15 @@ function hdf5_dynamic_dims(reduced_dims)
 end
 
 """
-define dynamic (time-evolving) variables for writing to the hdf5 file
+define dynamic (time-evolving) moment variables for writing to the hdf5 file
 """
-function define_dynamic_variables_hdf5!(fid, nz, nr, nvz, nvr, nvzeta, nvpa, nvperp,
-                                        n_ion_species, n_neutral_species)
+function define_dynamic_moment_variables_hdf5!(fid, nz, nr, n_ion_species,
+                                               n_neutral_species)
     dynamic = create_group(fid, "dynamic_data")
     # create the time variable initially to have one element but allow it to be expanded
     # indefinitely (up to the largest unsigned integer in size)
     h5_time = create_dataset(dynamic, "time", mk_float, ((1,),(-1,)), chunk=(1,))
+
     # reduced_dims is a tuple containing all dimensions for the relevant data aside from time
     reduced_dims = (nz, nr)
     # given the tuple reduced_dims that contains all dimensions except the time dimension,
@@ -306,15 +326,7 @@ function define_dynamic_variables_hdf5!(fid, nz, nr, nvz, nvr, nvzeta, nvpa, nvp
     h5_Er = create_dataset(dynamic, "Er", mk_float, dims, chunk=chunk_dims)
     # h5_Ez is the handle for the zed component of the electric field
     h5_Ez = create_dataset(dynamic, "Ez", mk_float, dims, chunk=chunk_dims)
-    # reduced_dims is a tuple containing all dimensions for the relevant data aside from time
-    reduced_dims = (nvpa, nvperp, nz, nr, n_ion_species)
-    # given the tuple reduced_dims that contains all dimensions except the time dimension,
-    # return chunk_dims tuple that indicates the data chunk written to hdf5 file each write
-    # and the dims tuple which also contains the max size of the dataset, accounting for
-    # multiple time slices
-    chunk_dims, dims = hdf5_dynamic_dims(reduced_dims)
-    # h5_f is the handle for the ion pdf
-    h5_f = create_dataset(dynamic, "f", mk_float, dims, chunk=chunk_dims)
+
     # reduced_dims is a tuple containing all dimensions for the relevant data aside from time
     reduced_dims = (nz, nr, n_ion_species)
     # given the tuple reduced_dims that contains all dimensions except the time dimension,
@@ -332,15 +344,7 @@ function define_dynamic_variables_hdf5!(fid, nz, nr, nvz, nvr, nvzeta, nvpa, nvp
     h5_qpar = create_dataset(dynamic, "parallel_heat_flux", mk_float, dims, chunk=chunk_dims)
     # h5_vth is the handle for the ion thermal speed
     h5_vth = create_dataset(dynamic, "thermal_speed", mk_float, dims, chunk=chunk_dims)
-    # reduced_dims is a tuple containing all dimensions for the relevant data aside from time
-    reduced_dims = (nvz, nvr, nvzeta, nz, nr, n_neutral_species)
-    # given the tuple reduced_dims that contains all dimensions except the time dimension,
-    # return chunk_dims tuple that indicates the data chunk written to hdf5 file each write
-    # and the dims tuple which also contains the max size of the dataset, accounting for
-    # multiple time slices
-    chunk_dims, dims = hdf5_dynamic_dims(reduced_dims)
-    # h5_f_neutral is the handle for the neutral pdf
-    h5_f_neutral = create_dataset(dynamic, "f_neutral", mk_float, dims, chunk=chunk_dims)
+
     # reduced_dims is a tuple containing all dimensions for the relevant data aside from time
     reduced_dims = (nz, nr, n_neutral_species)
     # given the tuple reduced_dims that contains all dimensions except the time dimension,
@@ -359,9 +363,43 @@ function define_dynamic_variables_hdf5!(fid, nz, nr, nvz, nvr, nvzeta, nvpa, nvp
     # h5_thermal_speed_neutral is the handle for the neutral thermal speed
     h5_thermal_speed_neutral = create_dataset(dynamic, "thermal_speed_neutral", mk_float, dims, chunk=chunk_dims)
 
-    return h5_time, h5_f, h5_phi, h5_Er, h5_Ez, h5_density, h5_upar, h5_ppar, h5_qpar, h5_vth,
-        h5_f_neutral, h5_density_neutral, h5_uz_neutral, h5_pz_neutral, h5_qz_neutral,
+    return h5_time, h5_phi, h5_Er, h5_Ez, h5_density, h5_upar, h5_ppar, h5_qpar, h5_vth,
+        h5_density_neutral, h5_uz_neutral, h5_pz_neutral, h5_qz_neutral,
         h5_thermal_speed_neutral
+end
+
+"""
+define dynamic (time-evolving) distribution function variables for writing to the hdf5
+file
+"""
+function define_dynamic_dfn_variables_hdf5!(fid, nz, nr, nvz, nvr, nvzeta, nvpa, nvperp,
+                                            n_ion_species, n_neutral_species)
+    dynamic = create_group(fid, "dynamic_data")
+    # create the time variable initially to have one element but allow it to be expanded
+    # indefinitely (up to the largest unsigned integer in size)
+    h5_time = create_dataset(dynamic, "time", mk_float, ((1,),(-1,)), chunk=(1,))
+
+    # reduced_dims is a tuple containing all dimensions for the relevant data aside from time
+    reduced_dims = (nvpa, nvperp, nz, nr, n_ion_species)
+    # given the tuple reduced_dims that contains all dimensions except the time dimension,
+    # return chunk_dims tuple that indicates the data chunk written to hdf5 file each write
+    # and the dims tuple which also contains the max size of the dataset, accounting for
+    # multiple time slices
+    chunk_dims, dims = hdf5_dynamic_dims(reduced_dims)
+    # h5_f is the handle for the ion pdf
+    h5_f = create_dataset(dynamic, "f", mk_float, dims, chunk=chunk_dims)
+
+    # reduced_dims is a tuple containing all dimensions for the relevant data aside from time
+    reduced_dims = (nvz, nvr, nvzeta, nz, nr, n_neutral_species)
+    # given the tuple reduced_dims that contains all dimensions except the time dimension,
+    # return chunk_dims tuple that indicates the data chunk written to hdf5 file each write
+    # and the dims tuple which also contains the max size of the dataset, accounting for
+    # multiple time slices
+    chunk_dims, dims = hdf5_dynamic_dims(reduced_dims)
+    # h5_f_neutral is the handle for the neutral pdf
+    h5_f_neutral = create_dataset(dynamic, "f_neutral", mk_float, dims, chunk=chunk_dims)
+
+    return h5_time, h5_f, h5_f_neutral
 end
 
 function extend_time_index!(h5, t_idx)
@@ -664,10 +702,11 @@ end
 
 """
 setup file i/o for hdf5
+moment variables only
 """
-function setup_hdf5_io(prefix, r, z, vperp, vpa, vzeta, vr, vz, composition, collisions)
+function setup_moments_hdf5_io(prefix, r, z, vperp, vpa, vzeta, vr, vz, composition, collisions)
     # the netcdf file will be given by output_dir/run_name with .cdf appended
-    filename = string(prefix,".h5")
+    filename = string(prefix,".moments.h5")
     # if a netcdf file with the requested name already exists, remove it
     isfile(filename) && rm(filename)
     # create the new NetCDF file
@@ -677,22 +716,52 @@ function setup_hdf5_io(prefix, r, z, vperp, vpa, vzeta, vr, vz, composition, col
     # write some overview information to the hdf5 file
     write_overview_hdf5!(fid, composition, collisions)
     ### define coordinate dimensions ###
-    define_coordinates_hdf5!(fid, vz, vr, vzeta, vpa, vperp, z, r)
+    define_spatial_coordinates_hdf5!(fid, z, r)
     # ### create and write static variables to file ###
     # define_static_variables!(fid,vz,vr,vzeta,vpa,vperp,z,r,composition,collisions)
     # ### create variables for time-dependent quantities and store them ###
     # ### in a struct for later access ###
-    h5_time, h5_f, h5_phi, h5_Er, h5_Ez, h5_density, h5_upar, h5_ppar, h5_qpar, h5_vth,
-        h5_f_neutral, h5_density_neutral, h5_uz_neutral, h5_pz_neutral, h5_qz_neutral,
-        h5_vth_neutral = define_dynamic_variables_hdf5!(fid, z.n, r.n,
-        vz.n, vr.n, vzeta.n, vpa.n, vperp.n,
-        composition.n_ion_species, composition.n_neutral_species)
+    h5_time, h5_phi, h5_Er, h5_Ez, h5_density, h5_upar, h5_ppar, h5_qpar, h5_vth,
+        h5_density_neutral, h5_uz_neutral, h5_pz_neutral, h5_qz_neutral, h5_vth_neutral =
+        define_dynamic_moment_variables_hdf5!(fid, z.n, r.n, composition.n_ion_species,
+                                              composition.n_neutral_species)
 
     # create a struct that stores the variables and other info needed for
     # writing to the netcdf file during run-time
-    return hdf5_info(fid, h5_time, h5_f, h5_phi, h5_Er, h5_Ez, h5_density, h5_upar,
-                     h5_ppar, h5_qpar, h5_vth, h5_f_neutral, h5_density_neutral,
-                     h5_uz_neutral, h5_pz_neutral, h5_qz_neutral, h5_vth_neutral)
+    return hdf5_moments_info(fid, h5_time, h5_phi, h5_Er, h5_Ez, h5_density, h5_upar,
+                             h5_ppar, h5_qpar, h5_vth, h5_density_neutral, h5_uz_neutral,
+                             h5_pz_neutral, h5_qz_neutral, h5_vth_neutral)
+end
+
+"""
+setup file i/o for hdf5
+dfn variables only
+"""
+function setup_dfn_hdf5_io(prefix, r, z, vperp, vpa, vzeta, vr, vz, composition, collisions)
+    # the netcdf file will be given by output_dir/run_name with .cdf appended
+    filename = string(prefix,".dfns.h5")
+    # if a netcdf file with the requested name already exists, remove it
+    isfile(filename) && rm(filename)
+    # create the new NetCDF file
+    fid = h5open(filename,"cw")
+    # write a header to the hdf5 file
+    #fid.attrib["file_info"] = "This is a NetCDF file containing output data from the moment_kinetics code"
+    # write some overview information to the hdf5 file
+    write_overview_hdf5!(fid, composition, collisions)
+    ### define coordinate dimensions ###
+    coords_group = define_spatial_coordinates_hdf5!(fid, z, r)
+    add_vspace_coordinates_hdf5!(coords_group, vz, vr, vzeta, vpa, vperp)
+    # ### create and write static variables to file ###
+    # define_static_variables!(fid,vz,vr,vzeta,vpa,vperp,z,r,composition,collisions)
+    # ### create variables for time-dependent quantities and store them ###
+    # ### in a struct for later access ###
+    h5_time, h5_f, h5_f_neutral = define_dynamic_dfn_variables_hdf5!(fid, z.n, r.n, vz.n,
+        vr.n, vzeta.n, vpa.n, vperp.n, composition.n_ion_species,
+        composition.n_neutral_species)
+
+    # create a struct that stores the variables and other info needed for
+    # writing to the netcdf file during run-time
+    return hdf5_dfns_info(fid, h5_time, h5_f, h5_f_neutral)
 end
 
 """
@@ -831,7 +900,7 @@ end
 write time-dependent data to the netcdf file
 moments data only 
 """
-function write_moments_data_to_binary(moments, fields, t, n_ion_species, n_neutral_species, cdf, t_idx)
+function write_moments_data_to_netcdf(moments, fields, t, n_ion_species, n_neutral_species, cdf, t_idx)
     @serial_region begin
         # Only read/write from first process in each 'block'
 
@@ -862,7 +931,7 @@ end
 write time-dependent data to the netcdf file
 dfns data only 
 """
-function write_dfns_data_to_binary(ff, ff_neutral, t, n_ion_species, n_neutral_species, cdf, t_idx)
+function write_dfns_data_to_netcdf(ff, ff_neutral, t, n_ion_species, n_neutral_species, cdf, t_idx)
     @serial_region begin
         # Only read/write from first process in each 'block'
 
@@ -881,7 +950,7 @@ end
     # Special versions when using DebugMPISharedArray to avoid implicit conversion to
     # Array, which is forbidden.
     function write_dfns_data_to_binary(ff::DebugMPISharedArray, ff_neutral::DebugMPISharedArray,
-            t, n_ion_species, n_neutral_species, cdf, t_idx)
+            t, n_ion_species, n_neutral_species, cdf::netcdf_dfns_info, t_idx)
         @serial_region begin
             # Only read/write from first process in each 'block'
 
@@ -900,8 +969,8 @@ end
 @debug_shared_array begin
     # Special versions when using DebugMPISharedArray to avoid implicit conversion to
     # Array, which is forbidden.
-    function write_moments_data_to_binary(moments, fields, t,
-                                  n_ion_species, n_neutral_species, cdf, t_idx)
+    function write_moments_data_to_binary(moments, fields, t, n_ion_species,
+            n_neutral_species, cdf::netcdf_moments_info, t_idx)
         @serial_region begin
             # Only read/write from first process in each 'block'
 
@@ -931,8 +1000,44 @@ end
 
 """
 write time-dependent data to the hdf5 file
+moments data only
 """
-function write_data_to_hdf5(ff, ff_neutral, moments, fields, t, n_ion_species, n_neutral_species, h5, t_idx)
+function write_moments_data_to_hdf5(moments, fields, t, n_ion_species, n_neutral_species,
+        h5::hdf5_moments_info, t_idx)
+    @serial_region begin
+        # Only read/write from first process in each 'block'
+
+        # extend the size of the time dimension for all time-evolving quantities
+        extend_time_index!(h5, t_idx)
+        # add the time for this time slice to the hdf5 file
+        h5.time[t_idx] = t
+        # add the electrostatic potential and electric field components at this time slice to the hdf5 file
+        h5.phi[:,:,t_idx] = fields.phi
+        h5.Er[:,:,t_idx] = fields.Er
+        h5.Ez[:,:,t_idx] = fields.Ez
+        # add the density data at this time slice to the netcdf file
+        h5.density[:,:,:,t_idx] = moments.charged.dens
+        h5.parallel_flow[:,:,:,t_idx] = moments.charged.upar
+        h5.parallel_pressure[:,:,:,t_idx] = moments.charged.ppar
+        h5.parallel_heat_flux[:,:,:,t_idx] = moments.charged.qpar
+        h5.thermal_speed[:,:,:,t_idx] = moments.charged.vth
+        if n_neutral_species > 0
+            h5.density_neutral[:,:,:,t_idx] = moments.neutral.dens
+            h5.uz_neutral[:,:,:,t_idx] = moments.neutral.uz
+            h5.pz_neutral[:,:,:,t_idx] = moments.neutral.pz
+            h5.qz_neutral[:,:,:,t_idx] = moments.neutral.qz
+            h5.thermal_speed_neutral[:,:,:,t_idx] = moments.neutral.vth
+        end
+    end
+    return nothing
+end
+
+"""
+write time-dependent data to the hdf5 file
+dfns data only
+"""
+function write_dfns_data_to_hdf5(ff, ff_neutral, moments, fields, t, n_ion_species,
+                                    n_neutral_species, h5, t_idx)
     @serial_region begin
         # Only read/write from first process in each 'block'
 
@@ -942,28 +1047,9 @@ function write_data_to_hdf5(ff, ff_neutral, moments, fields, t, n_ion_species, n
         h5.time[t_idx] = t
         # add the distribution function data at this time slice to the netcdf file
         h5.f[:,:,:,:,:,t_idx] = ff
-        # add the electrostatic potential and electric field components at this time slice to the hdf5 file
-        h5.phi[:,:,t_idx] = fields.phi
-        h5.Er[:,:,t_idx] = fields.Er
-        h5.Ez[:,:,t_idx] = fields.Ez
-        # # add the density data at this time slice to the netcdf file
-        # for is ∈ 1:n_ion_species
-        #     cdf.density[:,:,:,t_idx] = moments.charged.dens
-        #     cdf.parallel_flow[:,:,:,t_idx] = moments.charged.upar
-        #     cdf.parallel_pressure[:,:,:,t_idx] = moments.charged.ppar
-        #     cdf.parallel_heat_flux[:,:,:,t_idx] = moments.charged.qpar
-        #     cdf.thermal_speed[:,:,:,t_idx] = moments.charged.vth
-        # end
-        # if n_neutral_species > 0
-        #     cdf.f_neutral[:,:,:,:,:,:,t_idx] = ff_neutral
-        #     for is ∈ 1:n_neutral_species
-        #         cdf.density_neutral[:,:,:,t_idx] = moments.neutral.dens
-        #         cdf.uz_neutral[:,:,:,t_idx] = moments.neutral.uz
-        #         cdf.pz_neutral[:,:,:,t_idx] = moments.neutral.pz
-        #         cdf.qz_neutral[:,:,:,t_idx] = moments.neutral.qz
-        #         cdf.thermal_speed_neutral[:,:,:,t_idx] = moments.neutral.vth
-        #     end
-        # end
+        if n_neutral_species > 0
+            h5.f_neutral[:,:,:,:,:,:,t_idx] = ff_neutral
+        end
     end
     return nothing
 end
