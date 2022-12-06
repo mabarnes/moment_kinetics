@@ -298,13 +298,17 @@ mutable struct geometry_input
     rhostar::mk_float #used to premultiply ExB drift terms
 end
 
+@enum binary_format_type hdf5 netcdf
+export hdf5, netcdf
+
 """
 Settings and input for setting up file I/O
 """
-@kw_def struct io_input
+Base.@kwdef struct io_input
     output_dir::String
     run_name::String
     ascii_output::Bool
+    binary_format::binary_format_type
 end
 
 """

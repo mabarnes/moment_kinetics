@@ -20,7 +20,7 @@ using ..array_allocation: allocate_float
 using ..file_io: open_output_file
 using ..type_definitions: mk_float, mk_int
 using ..load_data: open_netcdf_file
-using ..load_data: load_coordinate_data, load_fields_data, load_pdf_data
+using ..load_data: load_coordinate_data, load_vspace_coordinate_data, load_fields_data, load_pdf_data
 using ..load_data: load_charged_particle_moments_data, load_neutral_particle_moments_data
 using ..load_data: load_neutral_pdf_data, load_neutral_coordinate_data
 using ..velocity_moments: integrate_over_vspace
@@ -87,8 +87,9 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         # open the netcdf file and give it the handle 'fid'
         fid = open_netcdf_file(run_name)
         # load space-time coordinate data
-        nvpa, vpa, vpa_wgts, nvperp, vperp, vperp_wgts, nz, z, z_wgts, Lz, 
-         nr, r, r_wgts, Lr, ntime, time, n_ion_species, n_neutral_species = load_coordinate_data(fid)
+        nz, z, z_wgts, Lz, nr, r, r_wgts, Lr, ntime, time, n_ion_species,
+            n_neutral_species = load_coordinate_data(fid)
+        nvpa, vpa, vpa_wgts, nvperp, vperp, vperp_wgts = load_vspace_coordinate_data(fid)
         #println("\n Info: n_neutral_species = ",n_neutral_species,", n_ion_species = ",n_ion_species,"\n")
         if n_neutral_species > 0
             nvz, vz, vz_wgts, nvr, vr, vr_wgts, nvzeta, vzeta, vzeta_wgts = load_neutral_coordinate_data(fid)

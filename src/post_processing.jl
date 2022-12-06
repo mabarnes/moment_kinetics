@@ -24,7 +24,7 @@ using ..array_allocation: allocate_float
 using ..file_io: open_output_file
 using ..type_definitions: mk_float, mk_int
 using ..load_data: open_netcdf_file, load_time_data
-using ..load_data: load_coordinate_data, load_fields_data, load_pdf_data
+using ..load_data: load_coordinate_data, load_vspace_coordinate_data, load_fields_data, load_pdf_data
 using ..load_data: load_charged_particle_moments_data, load_neutral_particle_moments_data
 using ..load_data: load_neutral_pdf_data, load_neutral_coordinate_data
 using ..analysis: analyze_fields_data, analyze_moments_data, analyze_pdf_data
@@ -81,8 +81,9 @@ function analyze_and_plot_data(path)
     # note that ntime may differ in these output files
     
     # load space-time coordinate data from `moments' cdf
-    nvpa, vpa, vpa_wgts, nvperp, vperp, vperp_wgts, nz, z, z_wgts, Lz,
-     nr, r, r_wgts, Lr, n_ion_species, n_neutral_species = load_coordinate_data(fid)
+    nz, z, z_wgts, Lz, nr, r, r_wgts, Lr, n_ion_species, n_neutral_species =
+        load_coordinate_data(fid)
+    nvpa, vpa, vpa_wgts, nvperp, vperp, vperp_wgts = load_vspace_coordinate_data(fid_pdfs)
     ntime, time = load_time_data(fid)
     # load time data from `dfns' cdf
     ntime_pdfs, time_pdfs = load_time_data(fid_pdfs)

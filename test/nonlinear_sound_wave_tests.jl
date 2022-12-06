@@ -259,7 +259,7 @@ function run_test(test_input, rtol; args...)
             fid = open_netcdf_file(path,"moments")
 
             # load space-time coordinate data
-            nvpa, vpa, vpa_wgts, nz, z, z_wgts, Lz, nr, r, r_wgts, Lr, n_ion_species, n_neutral_species = load_coordinate_data(fid)
+            nz, z, z_wgts, Lz, nr, r, r_wgts, Lr, n_ion_species, n_neutral_species = load_coordinate_data(fid)
             ntime, time = load_time_data(fid)
             
             # load fields data

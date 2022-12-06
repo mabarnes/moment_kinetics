@@ -34,6 +34,10 @@ function open_netcdf_file(run_name, ext; iblock=0)
 end
 
 """
+Load data for spatial coordinates and numbers of species
+
+Velocity space coordinate data handled separately as it may not be present in all output
+files.
 """
 function load_coordinate_data(fid)
     print("Loading coordinate data...")
@@ -61,6 +65,21 @@ function load_coordinate_data(fid)
     # Lz = z box length
     Lz = z[end]-z[1]
 
+    # get the lengths of the ion species dimension
+    n_ion_species = fid.dim["n_ion_species"]
+    # get the lengths of the neutral species dimension
+    n_neutral_species = fid.dim["n_neutral_species"]
+    println("done.")
+
+    return nz, z, z_wgts, Lz, nr, r, r_wgts, Lr, n_ion_species, n_neutral_species
+end
+
+"""
+Load data for velocity space coordinates
+"""
+function load_vspace_coordinate_data(fid)
+    print("Loading velocity space coordinate data...")
+
     # define a handle for the vperp coordinate
     cdfvar = fid["vperp"]
     # get the number of vperp grid points
@@ -81,13 +100,7 @@ function load_coordinate_data(fid)
     cdfvar = fid["vpa_wgts"]
     vpa_wgts = cdfvar.var[:]
     
-    # get the lengths of the ion species dimension
-    n_ion_species = fid.dim["n_ion_species"]
-    # get the lengths of the neutral species dimension
-    n_neutral_species = fid.dim["n_neutral_species"]
-    println("done.")
-
-    return nvpa, vpa, vpa_wgts, nvperp, vperp, vperp_wgts, nz, z, z_wgts, Lz, nr, r, r_wgts, Lr, n_ion_species, n_neutral_species
+    return nvpa, vpa, vpa_wgts, nvperp, vperp, vperp_wgts
 end
 
 """

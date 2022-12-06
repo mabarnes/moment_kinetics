@@ -10,7 +10,7 @@ using ..type_definitions: mk_float
 using ..array_allocation: allocate_float, allocate_shared_float
 using ..communication: _block_synchronize, global_size, comm_world
 using ..debugging
-using ..file_io: write_data_to_ascii, write_moments_data_to_binary, write_dfns_data_to_binary, write_data_to_hdf5, debug_dump
+using ..file_io: write_data_to_ascii, write_moments_data_to_binary, write_dfns_data_to_binary, debug_dump
 using ..looping
 using ..moment_kinetics_structs: scratch_pdf
 using ..chebyshev: setup_chebyshev_pseudospectral
@@ -592,7 +592,7 @@ time integrator can be used without severe CFL condition
 """
 function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
            moments, fields, spectral_objects, advect_objects,
-           composition, collisions, geometry, boundary_distributions, advance, scratch_dummy, manufactured_source_list, ascii_io, cdf_moments, cdf_dfns, h5)
+           composition, collisions, geometry, boundary_distributions, advance, scratch_dummy, manufactured_source_list, ascii_io, io_moments, io_dfns)
 
     @debug_detect_redundant_block_synchronize begin
         # Only want to check for redundant _block_synchronize() calls during the
@@ -626,9 +626,13 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
             @serial_region println("finished time step ", i,"  ",
                                    Dates.format(now(), dateformat"H:MM:SS"))
             write_data_to_ascii(moments, fields, vpa, vperp, z, r, t,
-             composition.n_ion_species, composition.n_neutral_species, ascii_io)
-            write_data_to_hdf5(pdf.charged.unnorm, pdf.neutral.unnorm, moments,
-                fields, t, composition.n_ion_species, composition.n_neutral_species, h5, iwrite)
+                                composition.n_ion_species, composition.n_neutral_species,
+                                ascii_io)
+            write_moments_data_to_binary(moments, fields, t, composition.n_ion_species,
+                                         composition.n_neutral_species, io_moments, iwrite_dfns)
+            write_dfns_data_to_binary(pdf.charged.unnorm, pdf.neutral.unnorm, t,
+                                      composition.n_ion_species,
+                                      composition.n_neutral_species, io_dfns, iwrite_moments)
             begin_s_r_z_vperp_region()
             @debug_detect_redundant_block_synchronize begin
                 # Reactivate check for redundant _block_synchronize()
