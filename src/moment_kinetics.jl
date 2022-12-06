@@ -79,6 +79,7 @@ using .time_advance: setup_time_advance!, time_advance!
 main function that contains all of the content of the program
 """
 function run_moment_kinetics(to::TimerOutput, input_dict=Dict())
+    mk_state = nothing
     try
         # set up all the structs, etc. needed for a run
         mk_state = setup_moment_kinetics(input_dict)
