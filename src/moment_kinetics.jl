@@ -92,7 +92,7 @@ function run_moment_kinetics(to::TimerOutput, input_dict=Dict())
         end
 
         # clean up i/o and communications
-        # last 2 elements of mk_state are `io` and `cdf`
+        # last 3 elements of mk_state are `io`, `cdf` and `h5`
         cleanup_moment_kinetics!(mk_state[end-2:end]...)
 
         if block_rank[] == 0 && run_type == performance_test
@@ -160,14 +160,14 @@ function setup_moment_kinetics(input_dict::Dict;
 
     # Set up MPI
     initialize_comms!()
-    
+
     input = mk_input(input_dict)
     # obtain input options from moment_kinetics_input.jl
     # and check input to catch errors
-    run_name, output_dir, evolve_moments, 
-        t_input, z_input, r_input, 
+    run_name, output_dir, evolve_moments,
+        t_input, z_input, r_input,
         vpa_input, vperp_input, gyrophase_input,
-        vz_input, vr_input, vzeta_input, 
+        vz_input, vr_input, vzeta_input,
         composition, species, collisions, geometry, drive_input = input
     # initialize z grid and write grid point locations to file
     z = define_coordinate(z_input, composition)
@@ -210,16 +210,16 @@ function setup_moment_kinetics(input_dict::Dict;
     end
     # initialize f and the lowest three v-space moments (density, upar and ppar),
     # each of which may be evolved separately depending on input choices.
-    pdf, moments, boundary_distributions = init_pdf_and_moments(vz, vr, vzeta, vpa, vperp, z, r, composition, geometry, species, t_input.n_rk_stages, evolve_moments, t_input.use_manufactured_solns_for_init) 
+    pdf, moments, boundary_distributions = init_pdf_and_moments(vz, vr, vzeta, vpa, vperp, z, r, composition, geometry, species, t_input.n_rk_stages, evolve_moments, t_input.use_manufactured_solns_for_init)
     # initialize time variable
     code_time = 0.
     # create arrays and do other work needed to setup
     # the main time advance loop -- including normalisation of f by density if requested
-    moments, fields, spectral_objects, advect_objects, 
+    moments, fields, spectral_objects, advect_objects,
     scratch, advance, scratch_dummy, manufactured_source_list = setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition,
         drive_input, moments, t_input, collisions, species, geometry, boundary_distributions)
     # setup i/o
-    io, cdf_moments, cdf_dfns = setup_file_io(output_dir, run_name, vz, vr, vzeta, vpa, vperp, z, r, composition, collisions)
+    io, cdf_moments, cdf_dfns, h5 = setup_file_io(output_dir, run_name, vz, vr, vzeta, vpa, vperp, z, r, composition, collisions)
     # write initial data to ascii files
     write_data_to_ascii(moments, fields, vpa, vperp, z, r, code_time, composition.n_ion_species, composition.n_neutral_species, io)
     # write initial data to binary file (netcdf)
@@ -232,7 +232,7 @@ function setup_moment_kinetics(input_dict::Dict;
 
     return pdf, scratch, code_time, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
            moments, fields, spectral_objects, advect_objects,
-           composition, collisions, geometry, boundary_distributions, advance, scratch_dummy, manufactured_source_list, io, cdf_moments, cdf_dfns
+           composition, collisions, geometry, boundary_distributions, advance, scratch_dummy, manufactured_source_list, io, cdf_moments, cdf_dfns, h5
 end
 
 """
@@ -240,7 +240,8 @@ Clean up after a run
 """
 function cleanup_moment_kinetics!(io::Union{file_io.ios,Nothing},
                                   cdf_moments::Union{file_io.netcdf_moments_info,Nothing},
-                                  cdf_dfns::Union{file_io.netcdf_dfns_info,Nothing})
+                                  cdf_dfns::Union{file_io.netcdf_dfns_info,Nothing},
+                                  h5::Union{file_io.hdf5_info,Nothing})
     @debug_detect_redundant_block_synchronize begin
         # Disable check for redundant _block_synchronize() during finalization, as this
         # only runs once so any failure is not important.
@@ -250,10 +251,7 @@ function cleanup_moment_kinetics!(io::Union{file_io.ios,Nothing},
     begin_serial_region()
 
     # finish i/o
-    finish_file_io(io, cdf_moments, cdf_dfns)
-
-    @serial_region println("finished file io         ",
-           Dates.format(now(), dateformat"H:MM:SS"))
+    finish_file_io(io, cdf_moments, cdf_dfns, h5)
 
     # clean up MPI objects
     finalize_comms!()
