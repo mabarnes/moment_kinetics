@@ -12,7 +12,7 @@ using moment_kinetics.chebyshev: setup_chebyshev_pseudospectral
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.interpolation: interpolate_to_grid_z
-using moment_kinetics.load_data: open_netcdf_file
+using moment_kinetics.load_data: open_output_file
 using moment_kinetics.load_data: load_coordinate_data, load_fields_data,
                                  load_pdf_data, load_time_data
 
@@ -151,7 +151,7 @@ function run_test(test_input, expected_phi, tolerance; args...)
             path = joinpath(realpath(input["base_directory"]), name, name)
 
             # open the netcdf file and give it the handle 'fid'
-            fid = open_netcdf_file(path,"moments")
+            fid = open_output_file(path,"moments")
 
             # load space-time coordinate data
             nz, z, z_wgts, Lz, nr, r, r_wgts, Lr, n_ion_species, n_neutral_species = load_coordinate_data(fid)

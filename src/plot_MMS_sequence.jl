@@ -19,7 +19,7 @@ using ..post_processing:  compare_moments_symbolic_test, compare_neutral_pdf_sym
 using ..array_allocation: allocate_float
 using ..file_io: open_output_file
 using ..type_definitions: mk_float, mk_int
-using ..load_data: open_netcdf_file
+using ..load_data: open_output_file
 using ..load_data: load_coordinate_data, load_vspace_coordinate_data, load_fields_data, load_pdf_data
 using ..load_data: load_charged_particle_moments_data, load_neutral_particle_moments_data
 using ..load_data: load_neutral_pdf_data, load_neutral_coordinate_data
@@ -85,7 +85,7 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         end
 
         # open the netcdf file and give it the handle 'fid'
-        fid = open_netcdf_file(run_name)
+        fid = open_output_file(run_name)
         # load space-time coordinate data
         nz, z, z_wgts, Lz, nr, r, r_wgts, Lr, ntime, time, n_ion_species,
             n_neutral_species = load_coordinate_data(fid)
