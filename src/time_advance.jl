@@ -629,10 +629,27 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
                                 composition.n_ion_species, composition.n_neutral_species,
                                 ascii_io)
             write_moments_data_to_binary(moments, fields, t, composition.n_ion_species,
-                                         composition.n_neutral_species, io_moments, iwrite_dfns)
+                                         composition.n_neutral_species, io_moments, iwrite_moments)
+            iwrite_moments += 1
+            begin_s_r_z_vperp_region()
+            @debug_detect_redundant_block_synchronize begin
+                # Reactivate check for redundant _block_synchronize()
+                debug_detect_redundant_is_active[] = true
+            end
+        end
+        if mod(i,t_input.nwrite_dfns) == 0
+            @debug_detect_redundant_block_synchronize begin
+                # Skip check for redundant _block_synchronize() during file I/O because
+                # it only runs infrequently
+                debug_detect_redundant_is_active[] = false
+            end
+            begin_serial_region()
+            @serial_region println("writing distribution functions at step ", i,"  ",
+                                   Dates.format(now(), dateformat"H:MM:SS"))
             write_dfns_data_to_binary(pdf.charged.unnorm, pdf.neutral.unnorm, t,
                                       composition.n_ion_species,
-                                      composition.n_neutral_species, io_dfns, iwrite_moments)
+                                      composition.n_neutral_species, io_dfns, iwrite_dfns)
+            iwrite_dfns += 1
             begin_s_r_z_vperp_region()
             @debug_detect_redundant_block_synchronize begin
                 # Reactivate check for redundant _block_synchronize()
