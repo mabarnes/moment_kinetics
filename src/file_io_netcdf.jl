@@ -1,5 +1,7 @@
 # No separate module defined here as this file is included within the file_io module
 
+using NCDatasets
+
 """
 structure containing the data/metadata needed for netcdf file i/o
 moments & fields only 

@@ -8,8 +8,6 @@ export setup_file_io, finish_file_io
 export write_data_to_ascii
 export write_data_to_netcdf, write_data_to_hdf5
 
-using HDF5
-using NCDatasets
 using ..communication: _block_synchronize, iblock_index
 using ..debugging
 using ..input_structs

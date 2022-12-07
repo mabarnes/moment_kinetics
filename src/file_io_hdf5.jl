@@ -1,5 +1,7 @@
 # No separate module defined here as this file is included within the file_io module
 
+using HDF5
+
 """
 structure containing the data/metadata needed for hdf5 file i/o
 moments & fields only
