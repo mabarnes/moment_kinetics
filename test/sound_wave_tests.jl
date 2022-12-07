@@ -74,7 +74,9 @@ test_input_finite_difference = Dict("n_ion_species" => 1,
                                     "vpa_nelement" => 1,
                                     "vpa_L" => 8.0,
                                     "vpa_bc" => "periodic",
-                                    "vpa_discretization" => "finite_difference")
+                                    "vpa_discretization" => "finite_difference",
+                                    "output" => Dict{String,Any}("binary_format" => "netcdf")
+                                   )
 
 test_input_finite_difference_split_1_moment =
     merge(test_input_finite_difference,
