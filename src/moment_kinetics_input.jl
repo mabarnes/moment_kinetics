@@ -35,7 +35,7 @@ end
 
 import Base: get
 """
-Utility mothod for converting a string to an Enum when getting from a Dict, based on the
+Utility method for converting a string to an Enum when getting from a Dict, based on the
 type of the default value
 """
 function get(d::Dict, key, default::Enum)
@@ -44,7 +44,7 @@ function get(d::Dict, key, default::Enum)
         return default
     # instances(typeof(default)) gets the possible values of the Enum. Then convert to
     # Symbol, then to String.
-    elseif valstring ∈ String.(Symbol.(instances(typeof(default))))
+    elseif valstring ∈ (split(s, ".")[end] for s ∈ String.(Symbol.(instances(typeof(default)))))
         return eval(Symbol(valstring))
     else
         error("Expected a $(typeof(default)), but '$valstring' is not in "
