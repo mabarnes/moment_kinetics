@@ -10,7 +10,7 @@ export write_moments_data_to_binary
 export write_dfns_data_to_binary
 
 using NCDatasets
-using ..communication: _block_synchronize, iblock_index
+using ..communication: _block_synchronize, iblock_index, block_size, global_size
 using ..debugging
 using ..looping
 using ..moment_kinetics_structs: scratch_pdf, em_fields_struct
@@ -151,8 +151,42 @@ end
     define_static_variables!(vz,vr,vzeta,vpa,vperp,z,r,composition,collisions,evolve_ppar)
 
 Define static (i.e. time-independent) variables for an output file.
+
+to create a scalar integer variable, we use the syntax
+    attributes = Dict("description" => "my variable") 
+    dims = ()
+    vartype = mk_int
+    var = defVar(fid, varname, vartype, dims, attrib=attributes)
+    var[] = the_int
+    
+
 """
 function define_static_variables!(fid,vz,vr,vzeta,vpa,vperp,z,r,composition,collisions)
+    # create ancillary data describing how the data is distributed across cores 
+    attributes = Dict("description" => "number of z points in the global grid")
+    var = defVar(fid, "nz_global", mk_int, (), attrib=attributes)
+    var[] = z.n_global
+
+    attributes = Dict("description" => "number of r points in the global grid")
+    var = defVar(fid, "nr_global", mk_int, (), attrib=attributes)
+    var[] = r.n_global   
+
+    attributes = Dict("description" => "rank of this block in the z grid communicator")
+    var = defVar(fid, "z_irank", mk_int, (), attrib=attributes)
+    var[] = z.irank      
+
+    attributes = Dict("description" => "rank of this block in the r grid communicator")
+    var = defVar(fid, "r_irank", mk_int, (), attrib=attributes)
+    var[] = r.irank
+    
+    attributes = Dict("description" => "index of this zr block")
+    var = defVar(fid, "iblock", mk_int, (), attrib=attributes)
+    var[] = iblock_index[]
+    
+    attributes = Dict("description" => "number of zr blocks")
+    var = defVar(fid, "nblocks", mk_int, (), attrib=attributes)
+    var[] = floor(mk_int,global_size[]/block_size[])
+    
     # create and write the "r" variable to file
     varname = "r"
     attributes = Dict("description" => "radial coordinate")
@@ -166,6 +200,9 @@ function define_static_variables!(fid,vz,vr,vzeta,vpa,vperp,z,r,composition,coll
     vartype = mk_float
     var = defVar(fid, varname, vartype, dims, attrib=attributes)
     var[:] = r.wgts
+    attributes = Dict("description" => "box length, radial coordinate")
+    var = defVar(fid, "Lr", mk_float, (), attrib=attributes)
+    var[] = r.L
     # create and write the "z" variable to file
     varname = "z"
     attributes = Dict("description" => "parallel coordinate")
@@ -179,6 +216,9 @@ function define_static_variables!(fid,vz,vr,vzeta,vpa,vperp,z,r,composition,coll
     vartype = mk_float
     var = defVar(fid, varname, vartype, dims, attrib=attributes)
     var[:] = z.wgts
+    attributes = Dict("description" => "box length, parallel coordinate")
+    var = defVar(fid, "Lz", mk_float, (), attrib=attributes)
+    var[] = z.L
     # create and write the "vperp" variable to file
     varname = "vperp"
     attributes = Dict("description" => "parallel velocity")
