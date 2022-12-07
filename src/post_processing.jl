@@ -24,14 +24,18 @@ using ..array_allocation: allocate_float
 using ..file_io: open_output_file
 using ..type_definitions: mk_float, mk_int
 using ..load_data: open_netcdf_file, load_time_data
-using ..load_data: load_coordinate_data, load_fields_data, load_pdf_data
+using ..load_data: load_fields_data, load_pdf_data
 using ..load_data: load_charged_particle_moments_data, load_neutral_particle_moments_data
-using ..load_data: load_neutral_pdf_data, load_neutral_coordinate_data
+using ..load_data: load_neutral_pdf_data, load_neutral_velocity_coordinate_data
+using ..load_data: load_global_zr_coordinate_data, load_block_data, load_rank_data
+using ..load_data: load_species_data, load_charged_velocity_coordinate_data
+using ..load_data: load_local_zr_coordinate_data 
 using ..analysis: analyze_fields_data, analyze_moments_data, analyze_pdf_data
 using ..velocity_moments: integrate_over_vspace
 using ..manufactured_solns: manufactured_solutions, manufactured_electric_fields
-using ..moment_kinetics_input: mk_input
-
+using ..moment_kinetics_input: mk_input, get
+using ..input_structs: geometry_input, species_composition
+using ..input_structs: electron_physics_type, boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath
 using TOML
 import Base: get
 
@@ -62,6 +66,188 @@ end
 
 """
 """
+function read_distributed_zr_data!(var::Array{mk_float,3}, var_name::String,
+   run_name::String, file_key::String, nblocks::mk_int, nz_local::mk_int,nr_local::mk_int)
+    # dimension of var is [z,r,t]
+    
+    if nr_local > 1
+        for iblock in 0:nblocks-1
+            fid = open_netcdf_file(run_name,file_key,iblock=iblock,printout=false)
+            cdfhandle =  fid[var_name]
+            var_local = cdfhandle.var[:,:,:]
+            
+            z_irank, r_irank = load_rank_data(fid,printout=false)
+            #z_irank = mod(iblock,z_nchunks)
+            #r_irank = floor(mk_int,iblock/z_nchunks)
+            
+            if z_irank == 0
+                var[1,1:nr_local,:] .= var_local[1,1:nr_local,:]    
+            end
+            if r_irank == 0
+                var[1:nz_local,1,:] .= var_local[1:nz_local,1,:]    
+            end
+            for ir_local in 2:nr_local
+                for iz_local in 2:nz_local
+                    ir_global = iglobal_func(ir_local,r_irank,nr_local)
+                    iz_global = iglobal_func(iz_local,z_irank,nz_local)
+                    var[iz_global,ir_global,:] .= var_local[iz_local,ir_local,:]
+                end
+            end
+        end
+    else
+        for iblock in 0:nblocks-1
+            fid = open_netcdf_file(run_name,file_key,iblock=iblock,printout=false)
+            cdfhandle =  fid[var_name]
+            var_local = cdfhandle.var[:,:,:]
+            
+            z_irank, r_irank = load_rank_data(fid,printout=false)
+            #z_irank = mod(iblock,z_nchunks)
+            #r_irank = floor(mk_int,iblock/z_nchunks)
+            
+            if z_irank == 0
+                var[1,1,:] .= var_local[1,1,:]    
+            end
+            for iz_local in 2:nz_local
+                ir_global = 1
+                iz_global = iglobal_func(iz_local,z_irank,nz_local)
+                var[iz_global,ir_global,:] .= var_local[iz_local,1,:]
+            end
+        
+        end
+    end
+end
+
+function read_distributed_zr_data!(var::Array{mk_float,4}, var_name::String,
+   run_name::String, file_key::String, nblocks::mk_int, nz_local::mk_int,nr_local::mk_int)
+    # dimension of var is [z,r,species,t]
+    if nr_local > 1
+        for iblock in 0:nblocks-1
+            fid = open_netcdf_file(run_name,file_key,iblock=iblock,printout=false)
+            cdfhandle =  fid[var_name]
+            var_local = cdfhandle.var[:,:,:,:]
+            
+            z_irank, r_irank = load_rank_data(fid,printout=false)
+            #z_irank = mod(iblock,z_nchunks)
+            #r_irank = floor(mk_int,iblock/z_nchunks)
+            
+            if z_irank == 0
+                var[1,1:nr_local,:,:] .= var_local[1,1:nr_local,:,:]    
+            end
+            if r_irank == 0
+                var[1:nz_local,1,:,:] .= var_local[1:nz_local,1,:,:]    
+            end
+            for ir_local in 2:nr_local
+                for iz_local in 2:nz_local
+                    ir_global = iglobal_func(ir_local,r_irank,nr_local)
+                    iz_global = iglobal_func(iz_local,z_irank,nz_local)
+                    var[iz_global,ir_global,:,:] .= var_local[iz_local,ir_local,:,:]
+                end
+            end
+        end
+    else
+        for iblock in 0:nblocks-1
+            fid = open_netcdf_file(run_name,file_key,iblock=iblock,printout=false)
+            cdfhandle =  fid[var_name]
+            var_local = cdfhandle.var[:,:,:,:]
+            
+            z_irank, r_irank = load_rank_data(fid,printout=false)
+            #z_irank = mod(iblock,z_nchunks)
+            #r_irank = floor(mk_int,iblock/z_nchunks)
+            
+            if z_irank == 0
+                var[1,1,:,:] .= var_local[1,1,:,:]    
+            end
+            for iz_local in 2:nz_local
+                ir_global = 1
+                iz_global = iglobal_func(iz_local,z_irank,nz_local)
+                var[iz_global,ir_global,:,:] .= var_local[iz_local,1,:,:]
+            end
+        
+        end
+    end
+end
+
+function iglobal_func(ilocal,irank,nlocal)
+    if irank == 0
+        iglobal = ilocal
+    elseif irank > 0 && ilocal > 1 
+        iglobal = ilocal + irank*(nlocal - 1)
+    else
+        println("ERROR: Invalid call to iglobal_func") 
+    end
+    return iglobal
+end
+
+function construct_global_zr_grids(run_name::String,file_key::String,nz_global::mk_int,nr_global::mk_int,nblocks::mk_int)
+    zgrid = allocate_float(nz_global)
+    zwgts = allocate_float(nz_global)
+    rgrid = allocate_float(nr_global)
+    rwgts = allocate_float(nr_global)
+
+    # current routine loops over blocks 
+    # whereas the optimal routine would loop over a single z/r group
+    for iblock in 0:nblocks-1
+        fid = open_netcdf_file(run_name,file_key,iblock=iblock,printout=false)
+        nz_local, z_local, z_local_wgts, Lz, nr_local, r_local,
+         r_local_wgts, Lr = load_local_zr_coordinate_data(fid,printout=false)
+    
+        z_irank, r_irank = load_rank_data(fid,printout=false)
+        # MRH should wgts at element boundaries be doubled 
+        # MRH in the main code duplicated points have half the integration wgt
+        if z_irank == 0
+            zgrid[1] = z_local[1]
+            zwgts[1] = z_local_wgts[1]
+        end
+        for iz_local in 2:nz_local
+            iz_global = iglobal_func(iz_local,z_irank,nz_local)
+            zgrid[iz_global] = z_local[iz_local]  
+            zwgts[iz_global] = z_local_wgts[iz_local]  
+        end
+
+        if r_irank == 0
+            rgrid[1] = r_local[1]
+            rwgts[1] = r_local_wgts[1]
+        end
+        for ir_local in 2:nr_local
+            ir_global = iglobal_func(ir_local,r_irank,nr_local)
+            rgrid[ir_global] = r_local[ir_local]  
+            rwgts[ir_global] = r_local_wgts[ir_local]  
+        end
+    end 
+    return zgrid, zwgts, rgrid, rwgts
+end 
+
+
+"""
+functions to allocate arrays that are used at run-time to postprocess
+data that is stored in the netcdf files 
+"""
+function allocate_global_zr_fields(nz_global,nr_global,ntime)
+    Er = allocate_float(nz_global,nr_global,ntime)
+    Ez = allocate_float(nz_global,nr_global,ntime)
+    phi = allocate_float(nz_global,nr_global,ntime)
+    return phi, Ez, Er 
+end
+
+function allocate_global_zr_charged_moments(nz_global,nr_global,n_ion_species,ntime)
+    density = allocate_float(nz_global,nr_global,n_ion_species,ntime)
+    parallel_flow = allocate_float(nz_global,nr_global,n_ion_species,ntime)
+    parallel_pressure = allocate_float(nz_global,nr_global,n_ion_species,ntime)
+    parallel_heat_flux = allocate_float(nz_global,nr_global,n_ion_species,ntime)
+    thermal_speed = allocate_float(nz_global,nr_global,n_ion_species,ntime)
+    return density, parallel_flow, parallel_pressure, parallel_heat_flux, thermal_speed
+end
+
+function allocate_global_zr_neutral_moments(nz_global,nr_global,n_neutral_species,ntime)
+    neutral_density = allocate_float(nz_global,nr_global,n_neutral_species,ntime)
+    neutral_uz = allocate_float(nz_global,nr_global,n_neutral_species,ntime)
+    neutral_pz = allocate_float(nz_global,nr_global,n_neutral_species,ntime)
+    neutral_qz = allocate_float(nz_global,nr_global,n_neutral_species,ntime)
+    neutral_thermal_speed = allocate_float(nz_global,nr_global,n_neutral_species,ntime)
+    return neutral_density, neutral_uz, neutral_pz, neutral_qz, neutral_thermal_speed
+end
+"""
+"""
 function analyze_and_plot_data(path)
     # Create run_name from the path to the run directory
     path = realpath(path)
@@ -69,48 +255,95 @@ function analyze_and_plot_data(path)
     input_filename = path * ".toml"
     scan_input = TOML.parsefile(input_filename)
     # get run-time input/composition/geometry/collisions/species info for convenience
-    run_name_internal, output_dir, evolve_moments,
-        t_input, z_input, r_input,
-        vpa_input, vperp_input, gyrophase_input,
-        vz_input, vr_input, vzeta_input,
-        composition, species, collisions, geometry, drive_input = mk_input(scan_input)
+    # run_name_internal, output_dir, evolve_moments,
+    #    t_input, z_input, r_input,
+    #    vpa_input, vperp_input, gyrophase_input,
+    #    vz_input, vr_input, vzeta_input,
+    #    composition, species, collisions, geometry, drive_input = mk_input(scan_input)
 
     # open the netcdf file and give it the handle 'fid'
     fid = open_netcdf_file(run_name,"moments")
-    fid_pdfs = open_netcdf_file(run_name,"dfns")
-    # note that ntime may differ in these output files
-    
-    # load space-time coordinate data from `moments' cdf
-    nvpa, vpa, vpa_wgts, nvperp, vperp, vperp_wgts, nz, z, z_wgts, Lz,
-     nr, r, r_wgts, Lr, n_ion_species, n_neutral_species = load_coordinate_data(fid)
+    # load block data on iblock=0
+    nblocks, iblock = load_block_data(fid)
+         
+    # load global sizes of grids that are distributed in memory
+    nz_global, nr_global = load_global_zr_coordinate_data(fid)
+    # load local sizes of grids stored on each netCDF file 
+    # z z_wgts r r_wgts may take different values on different blocks
+    # we need to construct the global grid below
+    nz, z_local, z_local_wgts, Lz, nr, r_local, r_local_wgts, Lr = load_local_zr_coordinate_data(fid)
+    # load time data 
     ntime, time = load_time_data(fid)
-    # load time data from `dfns' cdf
-    ntime_pdfs, time_pdfs = load_time_data(fid_pdfs)
-    #println("\n Info: n_neutral_species = ",n_neutral_species,", n_ion_species = ",n_ion_species,"\n")
+    # load species data 
+    n_ion_species, n_neutral_species = load_species_data(fid)
+    # load local velocity coordinate data from `moments' cdf
+    # these values are currently the same for all blocks 
+    nvpa, vpa, vpa_wgts, nvperp, vperp, vperp_wgts = load_charged_velocity_coordinate_data(fid)
     if n_neutral_species > 0
-        nvz, vz, vz_wgts, nvr, vr, vr_wgts, nvzeta, vzeta, vzeta_wgts = load_neutral_coordinate_data(fid)
+        nvz, vz, vz_wgts, nvr, vr, vr_wgts, nvzeta, vzeta, vzeta_wgts = load_neutral_velocity_coordinate_data(fid)
     else # define nvz nvr nvzeta to avoid errors below
 		nvz = 1
 		nvr = 1
 		nvzeta = 1
 	end
+    close(fid)
+    
+    
+    # allocate arrays to contain the global fields as a function of (z,r,t)
+    phi, Ez, Er = allocate_global_zr_fields(nz_global,nr_global,ntime)
+    density, parallel_flow, parallel_pressure, parallel_heat_flux,
+        thermal_speed = allocate_global_zr_charged_moments(nz_global,nr_global,n_ion_species,ntime)
+    if n_neutral_species > 0
+        neutral_density, neutral_uz, neutral_pz, 
+         neutral_qz, neutral_thermal_speed = allocate_global_zr_neutral_moments(nz_global,nr_global,n_neutral_species,ntime)
+    end 
+    # read in the data from different block netcdf files
+    # grids 
+    z, z_wgts, r, r_wgts = construct_global_zr_grids(run_name,
+       "moments",nz_global,nr_global,nblocks)
+    println("z",z)
+    println("r",r)
+    # fields 
+    read_distributed_zr_data!(phi,"phi",run_name,"moments",nblocks,nz,nr) 
+    read_distributed_zr_data!(Ez,"Ez",run_name,"moments",nblocks,nz,nr) 
+    read_distributed_zr_data!(Er,"Er",run_name,"moments",nblocks,nz,nr) 
+    # charged particle moments
+    read_distributed_zr_data!(density,"density",run_name,"moments",nblocks,nz,nr) 
+    read_distributed_zr_data!(parallel_flow,"parallel_flow",run_name,"moments",nblocks,nz,nr) 
+    read_distributed_zr_data!(parallel_pressure,"parallel_pressure",run_name,"moments",nblocks,nz,nr) 
+    read_distributed_zr_data!(parallel_heat_flux,"parallel_heat_flux",run_name,"moments",nblocks,nz,nr) 
+    read_distributed_zr_data!(thermal_speed,"thermal_speed",run_name,"moments",nblocks,nz,nr) 
+    # neutral particle moments 
+    if n_neutral_species > 0
+        read_distributed_zr_data!(neutral_density,"density_neutral",run_name,"moments",nblocks,nz,nr) 
+        read_distributed_zr_data!(neutral_uz,"uz_neutral",run_name,"moments",nblocks,nz,nr) 
+        read_distributed_zr_data!(neutral_pz,"pz_neutral",run_name,"moments",nblocks,nz,nr) 
+        read_distributed_zr_data!(neutral_qz,"qz_neutral",run_name,"moments",nblocks,nz,nr) 
+        read_distributed_zr_data!(neutral_thermal_speed,"thermal_speed_neutral",run_name,"moments",nblocks,nz,nr) 
+    end 
+    # load time data from `dfns' cdf
+    fid_pdfs = open_netcdf_file(run_name,"dfns")
+    # note that ntime may differ in these output files
+     
+    ntime_pdfs, time_pdfs = load_time_data(fid_pdfs)
+    
 	
 	# initialise the post-processing input options
     nwrite_movie, itime_min, itime_max, ivpa0, ivperp0, iz0, ir0,
         ivz0, ivr0, ivzeta0 = init_postprocessing_options(pp, nvpa, nvperp, nz, nr, nvz, nvr, nvzeta, ntime)
     # load full (z,r,t) fields data
-    phi, Er, Ez = load_fields_data(fid)
+    #phi, Er, Ez = load_fields_data(fid)
     # load full (z,r,species,t) charged particle velocity moments data
-    density, parallel_flow, parallel_pressure, parallel_heat_flux,
-        thermal_speed, evolve_ppar = load_charged_particle_moments_data(fid)
+    #density, parallel_flow, parallel_pressure, parallel_heat_flux,
+    #    thermal_speed, evolve_ppar = load_charged_particle_moments_data(fid)
     
     # load full (vpa,vperp,z,r,species,t) charged particle distribution function (pdf) data
     ff = load_pdf_data(fid_pdfs)
     # load neutral particle data
-    if n_neutral_species > 0
-        neutral_density, neutral_uz, neutral_pz, neutral_qz, neutral_thermal_speed = load_neutral_particle_moments_data(fid)
-        neutral_ff = load_neutral_pdf_data(fid_pdfs)
-    end
+    #if n_neutral_species > 0
+    #    neutral_density, neutral_uz, neutral_pz, neutral_qz, neutral_thermal_speed = load_neutral_particle_moments_data(fid)
+    #    neutral_ff = load_neutral_pdf_data(fid_pdfs)
+    #end
 
     #evaluate 1D-1V diagnostics at fixed ir0
     diagnostics_1d = false
@@ -126,7 +359,6 @@ function analyze_and_plot_data(path)
             n_ion_species, evolve_ppar, nvpa, vpa, vpa_wgts,
             nz, z, z_wgts, Lz, ntime, time)
     end
-    close(fid)
     close(fid_pdfs)
 
     diagnostics_2d = false
@@ -144,7 +376,7 @@ function analyze_and_plot_data(path)
      itime_min, itime_max, nwrite_movie, run_name, pp, "")
     # make plots and animations of the ion pdf
     # only if ntime == ntime_pdfs
-    if ntime == ntime_pdfs 
+    if ntime == ntime_pdfs && false 
         spec_type = "ion"
         plot_charged_pdf(ff, vpa, vperp, z, r, ivpa0, ivperp0, iz0, ir0,
             spec_type, n_ion_species,
@@ -158,7 +390,10 @@ function analyze_and_plot_data(path)
                 itime_min, itime_max, nwrite_movie, run_name, pp)
         end 
     end
-    manufactured_solns_test = t_input.use_manufactured_solns_for_advance
+    
+    # MRH need to get some run-time data here without copy-paste from mk_input
+    
+    manufactured_solns_test = use_manufactured_solns_for_advance = get(scan_input, "use_manufactured_solns_for_advance", false)
     # Plots compare density and density_symbolic at last timestep
     #if(manufactured_solns_test && nr > 1)
     if(manufactured_solns_test)
@@ -170,6 +405,47 @@ function analyze_and_plot_data(path)
         else
             Lr_in = 1.0
         end
+        
+        
+        # set geometry_input
+        # MRH need to get this in way that does not duplicate code 
+        # MRH from moment_kinetics_input.jl
+        Bzed = get(scan_input, "Bzed", 1.0)
+        Bmag = get(scan_input, "Bmag", 1.0)
+        bzed = Bzed/Bmag
+        bzeta = sqrt(1.0 - bzed^2.0)
+        Bzeta = Bmag*bzeta
+        rhostar = get(scan_input, "rhostar", 0.0)
+        geometry = geometry_input(Bzed,Bmag,bzed,bzeta,Bzeta,rhostar)
+
+        # set composition input  
+        # MRH need to get this in way that does not duplicate code 
+        # MRH from moment_kinetics_input.jl
+        electron_physics = get(scan_input, "electron_physics", boltzmann_electron_response)
+    
+        if electron_physics ∈ (boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath)
+            n_species = n_ion_species + n_neutral_species
+        else
+            n_species = n_ion_speces + n_neutral_species + 1
+        end
+        T_e = get(scan_input, "T_e", 1.0)
+        # set wall temperature T_wall = Tw/Te
+        T_wall = get(scan_input, "T_wall", 1.0)
+        # set initial neutral temperature Tn/Tₑ = 1
+        # set initial nᵢ/Nₑ = 1.0
+        # set phi_wall at z = 0
+        phi_wall = get(scan_input, "phi_wall", 0.0)
+        # if false use true Knudsen cosine for neutral wall bc
+        use_test_neutral_wall_pdf = get(scan_input, "use_test_neutral_wall_pdf", false)
+        # ratio of the neutral particle mass to the ion particle mass
+        mn_over_mi = 1.0
+        # ratio of the electron particle mass to the ion particle mass
+        me_over_mi = 1.0/1836.0
+        composition = species_composition(n_species, n_ion_species, n_neutral_species,
+            electron_physics, use_test_neutral_wall_pdf, 1:n_ion_species, n_ion_species+1:n_species, T_e, T_wall,
+            phi_wall, mn_over_mi, me_over_mi, allocate_float(n_species))
+        
+
         manufactured_solns_list = manufactured_solutions(Lr_in,Lz,r_bc,z_bc,geometry,composition,nr)
         dfni_func = manufactured_solns_list.dfni_func
         densi_func = manufactured_solns_list.densi_func
@@ -185,8 +461,8 @@ function analyze_and_plot_data(path)
         Er_sym = copy(phi[:,:,:])
         Ez_sym = copy(phi[:,:,:])
         for it in 1:ntime
-            for ir in 1:nr
-                for iz in 1:nz
+            for ir in 1:nr_global
+                for iz in 1:nz_global
                     phi_sym[iz,ir,it] = phi_func(z[iz],r[ir],time[it])
                     Ez_sym[iz,ir,it] = Ez_func(z[iz],r[ir],time[it])
                     Er_sym[iz,ir,it] = Er_func(z[iz],r[ir],time[it])
@@ -197,74 +473,76 @@ function analyze_and_plot_data(path)
         #plot_fields_2D(phi_sym, Ez_sym, Er_sym, time, z, r, iz0, ir0,
         #    itime_min, itime_max, nwrite_movie, run_name, pp, "_sym")
     
-        compare_fields_symbolic_test(run_name,phi,phi_sym,z,r,time,nz,nr,ntime,
+        compare_fields_symbolic_test(run_name,phi,phi_sym,z,r,time,nz_global,nr_global,ntime,
          L"\widetilde{\phi}",L"\widetilde{\phi}^{sym}",L"\sqrt{\sum || \widetilde{\phi} - \widetilde{\phi}^{sym} ||^2 / N} ","phi")
-        compare_fields_symbolic_test(run_name,Er,Er_sym,z,r,time,nz,nr,ntime,
+        compare_fields_symbolic_test(run_name,Er,Er_sym,z,r,time,nz_global,nr_global,ntime,
          L"\widetilde{E_r}",L"\widetilde{E_r}^{sym}",L"\sqrt{\sum || \widetilde{E_r} - \widetilde{E_r}^{sym} ||^2 /N} ","Er")
-        compare_fields_symbolic_test(run_name,Ez,Ez_sym,z,r,time,nz,nr,ntime,
+        compare_fields_symbolic_test(run_name,Ez,Ez_sym,z,r,time,nz_global,nr_global,ntime,
          L"\widetilde{E_z}",L"\widetilde{E_z}^{sym}",L"\sqrt{\sum || \widetilde{E_z} - \widetilde{E_z}^{sym} ||^2 /N} ","Ez")
 
         # ion test
         density_sym = copy(density[:,:,:,:])
         is = 1
         for it in 1:ntime
-            for ir in 1:nr
-                for iz in 1:nz
+            for ir in 1:nr_global
+                for iz in 1:nz_global
                     density_sym[iz,ir,is,it] = densi_func(z[iz],r[ir],time[it])
                 end
             end
         end
-        compare_moments_symbolic_test(run_name,density,density_sym,"ion",z,r,time,nz,nr,ntime,
+        compare_moments_symbolic_test(run_name,density,density_sym,"ion",z,r,time,nz_global,nr_global,ntime,
          L"\widetilde{n}_i",L"\widetilde{n}_i^{sym}",L"\sqrt{\sum || \widetilde{n}_i - \widetilde{n}_i^{sym} ||^2 / N }","dens")
-
-        ff_sym = copy(ff)
-        is = 1
-        for it in 1:ntime_pdfs
-            for ir in 1:nr
-                for iz in 1:nz
-                    for ivperp in 1:nvperp
-                        for ivpa in 1:nvpa
-                            ff_sym[ivpa,ivperp,iz,ir,is,it] = dfni_func(vpa[ivpa],vperp[ivperp],z[iz],r[ir],time_pdfs[it])
-                        end
-                    end
-                end
-            end
-        end
-        compare_charged_pdf_symbolic_test(run_name,ff,ff_sym,"ion",vpa,vperp,z,r,time_pdfs,nvpa,nvperp,nz,nr,ntime_pdfs,
-         L"\widetilde{f}_i",L"\widetilde{f}^{sym}_i",L"\sqrt{ \sum || \widetilde{f}_i - \widetilde{f}_i^{sym} ||^2 / N}","pdf")
-
-        if n_neutral_species > 0
-            # neutral test
-            neutral_density_sym = copy(density[:,:,:,:])
-            is = 1
-            for it in 1:ntime
-                for ir in 1:nr
-                    for iz in 1:nz
-                        neutral_density_sym[iz,ir,is,it] = densn_func(z[iz],r[ir],time[it])
-                    end
-                end
-            end
-            compare_moments_symbolic_test(run_name,neutral_density,neutral_density_sym,"neutral",z,r,time,nz,nr,ntime,
-             L"\widetilde{n}_n",L"\widetilde{n}_n^{sym}",L"\sqrt{ \sum || \widetilde{n}_n - \widetilde{n}_n^{sym} ||^2 /N}","dens")
-
-            neutral_ff_sym = copy(neutral_ff)
+        
+        if false 
+            ff_sym = copy(ff)
             is = 1
             for it in 1:ntime_pdfs
                 for ir in 1:nr
                     for iz in 1:nz
-                        for ivzeta in 1:nvzeta
-                            for ivr in 1:nvr
-                                for ivz in 1:nvz
-                                    neutral_ff_sym[ivz,ivr,ivzeta,iz,ir,is,it] = dfnn_func(vz[ivz],vr[ivr],vzeta[ivzeta],z[iz],r[ir],time_pdfs[it])
-                                end
+                        for ivperp in 1:nvperp
+                            for ivpa in 1:nvpa
+                                ff_sym[ivpa,ivperp,iz,ir,is,it] = dfni_func(vpa[ivpa],vperp[ivperp],z[iz],r[ir],time_pdfs[it])
                             end
                         end
                     end
                 end
             end
-            compare_neutral_pdf_symbolic_test(run_name,neutral_ff,neutral_ff_sym,"neutral",vz,vr,vzeta,z,r,time_pdfs,nvz,nvr,nvzeta,nz,nr,ntime_pdfs,
-             L"\widetilde{f}_n",L"\widetilde{f}^{sym}_n",L"\sqrt{\sum || \widetilde{f}_n - \widetilde{f}_n^{sym} ||^2 /N}","pdf")
-
+            compare_charged_pdf_symbolic_test(run_name,ff,ff_sym,"ion",vpa,vperp,z,r,time_pdfs,nvpa,nvperp,nz,nr,ntime_pdfs,
+             L"\widetilde{f}_i",L"\widetilde{f}^{sym}_i",L"\sqrt{ \sum || \widetilde{f}_i - \widetilde{f}_i^{sym} ||^2 / N}","pdf")
+        end
+        if n_neutral_species > 0
+            # neutral test
+            neutral_density_sym = copy(density[:,:,:,:])
+            is = 1
+            for it in 1:ntime
+                for ir in 1:nr_global
+                    for iz in 1:nz_global
+                        neutral_density_sym[iz,ir,is,it] = densn_func(z[iz],r[ir],time[it])
+                    end
+                end
+            end
+            compare_moments_symbolic_test(run_name,neutral_density,neutral_density_sym,"neutral",z,r,time,nz_global,nr_global,ntime,
+             L"\widetilde{n}_n",L"\widetilde{n}_n^{sym}",L"\sqrt{ \sum || \widetilde{n}_n - \widetilde{n}_n^{sym} ||^2 /N}","dens")
+            
+            if false 
+                neutral_ff_sym = copy(neutral_ff)
+                is = 1
+                for it in 1:ntime_pdfs
+                    for ir in 1:nr
+                        for iz in 1:nz
+                            for ivzeta in 1:nvzeta
+                                for ivr in 1:nvr
+                                    for ivz in 1:nvz
+                                        neutral_ff_sym[ivz,ivr,ivzeta,iz,ir,is,it] = dfnn_func(vz[ivz],vr[ivr],vzeta[ivzeta],z[iz],r[ir],time_pdfs[it])
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+                compare_neutral_pdf_symbolic_test(run_name,neutral_ff,neutral_ff_sym,"neutral",vz,vr,vzeta,z,r,time_pdfs,nvz,nvr,nvzeta,nz,nr,ntime_pdfs,
+                 L"\widetilde{f}_n",L"\widetilde{f}^{sym}_n",L"\sqrt{\sum || \widetilde{f}_n - \widetilde{f}_n^{sym} ||^2 /N}","pdf")
+            end
         end
     end
 
@@ -970,7 +1248,7 @@ delta_phi : Array{mk_float, 2}
 Returns
 -------
 phi_fit_result struct whose fields are:
-    growth_rate : mk_flaot
+    growth_rate : mk_float
         Fitted growth rate of the mode
     amplitude0 : mk_float
         Fitted amplitude at t=0
