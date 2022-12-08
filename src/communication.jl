@@ -90,13 +90,13 @@ function setup_distributed_memory_MPI(z_nelement_global,z_nelement_local,r_nelem
     
     # get information about how the grid is divided up
     # number of sections `chunks' of the x grid
-    r_nchunks = floor(Int,r_nelement_global/r_nelement_local)
+    r_nchunks = floor(mk_int,r_nelement_global/r_nelement_local)
     # number of sections `chunks' of the z grid
-	z_nchunks = floor(Int,z_nelement_global/z_nelement_local) # number of sections of the z grid
+	z_nchunks = floor(mk_int,z_nelement_global/z_nelement_local) # number of sections of the z grid
 	# get the number of shared-memorz blocks in the z r decomposition
     nblocks = r_nchunks*z_nchunks
     # get the number of ranks per block
-    nrank_per_zr_block = floor(Int,nrank_global/nblocks)
+    nrank_per_zr_block = floor(mk_int,nrank_global/nblocks)
     
     println("debug info:")
     println("r_nchunks: ",r_nchunks)
@@ -116,7 +116,7 @@ function setup_distributed_memory_MPI(z_nelement_global,z_nelement_local,r_nelem
     
     # assign information regarding shared-memory blocks
     # block index -- which block is this process in 
-    iblock = floor(Int,irank_global/nrank_per_zr_block)
+    iblock = floor(mk_int,irank_global/nrank_per_zr_block)
     # rank index within a block
     irank_block = mod(irank_global,nrank_per_zr_block)
  
@@ -137,7 +137,7 @@ function setup_distributed_memory_MPI(z_nelement_global,z_nelement_local,r_nelem
     # now create the communicators for the r z derivatives across blocks 
     z_ngroup = r_nchunks
     z_nrank_per_group = z_nchunks
-	z_igroup = floor(Int,iblock/z_nchunks) # iblock(irank) - > z_igroup 
+	z_igroup = floor(mk_int,iblock/z_nchunks) # iblock(irank) - > z_igroup 
 	z_irank =  mod(iblock,z_nchunks) # iblock(irank) -> z_irank
 	# iblock = z_igroup * z_nchunks + z_irank_sub 
 	# useful information for debugging

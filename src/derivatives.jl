@@ -259,7 +259,7 @@ function derivative_z!(dfdz::Array{mk_float,4},f::Array{mk_float,4}, adv_fac::Ar
 		adv_fac_upper_buffer[ivpa,ivperp,ir] = adv_fac[end,ivpa,ivperp,ir]	
 	end
 	# now reconcile element boundaries across
-	# processes with large message involving all y 
+	# processes with large message
 	if z.nelement_local < z.nelement_global
 		reconcile_element_boundaries_MPI!(dfdz,
 		 adv_fac_lower_buffer, adv_fac_upper_buffer,
@@ -286,7 +286,7 @@ function derivative_z!(dfdz::Array{mk_float,5},f::Array{mk_float,5}, adv_fac::Ar
 		adv_fac_upper_buffer[ivz,ivr,ivzeta,ir] = adv_fac[end,ivz,ivr,ivzeta,ir]	
 	end
 	# now reconcile element boundaries across
-	# processes with large message involving all y 
+	# processes with large message
 	if z.nelement_local < z.nelement_global
 		reconcile_element_boundaries_MPI!(dfdz,
 		 adv_fac_lower_buffer, adv_fac_upper_buffer,

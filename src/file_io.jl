@@ -8,7 +8,7 @@ export setup_file_io, finish_file_io
 export write_data_to_ascii
 export write_data_to_netcdf, write_data_to_hdf5
 
-using ..communication: _block_synchronize, iblock_index
+using ..communication: _block_synchronize, iblock_index, block_size, global_size
 using ..coordinates: coordinate
 using ..debugging
 using ..input_structs

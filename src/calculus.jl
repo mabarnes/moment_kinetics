@@ -328,7 +328,7 @@ function apply_adv_fac!(buffer::Array{Float64,Ndims},adv_fac::Array{Float64,Ndim
 		#loop over all indices in array
 		for i in eachindex(buffer,adv_fac,endpoints)
 			if sgn*adv_fac[i] > 0.0 
-			# replace buffer value (c with endpoint value 
+			# replace buffer value with endpoint value 
 				buffer[i] = endpoints[i]
 			elseif sgn*adv_fac[i] < 0.0
 				break #do nothing
@@ -398,12 +398,12 @@ function reconcile_element_boundaries_MPI!(df1d::Array{Float64,Ndims},
         if irank == nrank-1
             if coord.bc == "periodic"
                 # depending on adv_fac, update the extreme upper endpoint with data from irank = 0
-                apply_adv_fac!(receive_buffer,adv_fac_lower_endpoints,dfdx_upper_endpoints,-1)
+                apply_adv_fac!(receive_buffer,adv_fac_upper_endpoints,dfdx_upper_endpoints,-1)
             else #directly use value from Cheb
                 receive_buffer .= dfdx_upper_endpoints
             end
         else # enforce continuity at upper endpoint
-            apply_adv_fac!(receive_buffer,adv_fac_lower_endpoints,dfdx_upper_endpoints,-1)
+            apply_adv_fac!(receive_buffer,adv_fac_upper_endpoints,dfdx_upper_endpoints,-1)
         end
         #now update the df1d array -- using a slice appropriate to the dimension reconciled
         assign_endpoint!(df1d,receive_buffer,"upper",coord)
