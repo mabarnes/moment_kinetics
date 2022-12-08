@@ -70,49 +70,25 @@ function read_distributed_zr_data!(var::Array{mk_float,3}, var_name::String,
    run_name::String, file_key::String, nblocks::mk_int, nz_local::mk_int,nr_local::mk_int)
     # dimension of var is [z,r,t]
     
-    if nr_local > 1
-        for iblock in 0:nblocks-1
-            fid = open_netcdf_file(run_name,file_key,iblock=iblock,printout=false)
-            cdfhandle =  fid[var_name]
-            var_local = cdfhandle.var[:,:,:]
-            
-            z_irank, r_irank = load_rank_data(fid,printout=false)
-            #z_irank = mod(iblock,z_nchunks)
-            #r_irank = floor(mk_int,iblock/z_nchunks)
-            
-            if z_irank == 0
-                var[1,1:nr_local,:] .= var_local[1,1:nr_local,:]    
-            end
-            if r_irank == 0
-                var[1:nz_local,1,:] .= var_local[1:nz_local,1,:]    
-            end
-            for ir_local in 2:nr_local
-                for iz_local in 2:nz_local
-                    ir_global = iglobal_func(ir_local,r_irank,nr_local)
-                    iz_global = iglobal_func(iz_local,z_irank,nz_local)
-                    var[iz_global,ir_global,:] .= var_local[iz_local,ir_local,:]
-                end
-            end
-        end
-    else
-        for iblock in 0:nblocks-1
-            fid = open_netcdf_file(run_name,file_key,iblock=iblock,printout=false)
-            cdfhandle =  fid[var_name]
-            var_local = cdfhandle.var[:,:,:]
-            
-            z_irank, r_irank = load_rank_data(fid,printout=false)
-            #z_irank = mod(iblock,z_nchunks)
-            #r_irank = floor(mk_int,iblock/z_nchunks)
-            
-            if z_irank == 0
-                var[1,1,:] .= var_local[1,1,:]    
-            end
-            for iz_local in 2:nz_local
-                ir_global = 1
-                iz_global = iglobal_func(iz_local,z_irank,nz_local)
-                var[iz_global,ir_global,:] .= var_local[iz_local,1,:]
-            end
+    for iblock in 0:nblocks-1
+        fid = open_netcdf_file(run_name,file_key,iblock=iblock,printout=false)
+        cdfhandle =  fid[var_name]
+        var_local = cdfhandle.var[:,:,:]
         
+        z_irank, r_irank = load_rank_data(fid,printout=false)
+        #z_irank = mod(iblock,z_nchunks)
+        #r_irank = floor(mk_int,iblock/z_nchunks)
+        
+        # min index set to avoid double assignment of repeated points 
+        # 1 if irank = 0, 2 otherwise
+        imin_r = min(1,r_irank) + 1
+        imin_z = min(1,z_irank) + 1
+        for ir_local in imin_r:nr_local
+            for iz_local in imin_z:nz_local
+                ir_global = iglobal_func(ir_local,r_irank,nr_local)
+                iz_global = iglobal_func(iz_local,z_irank,nz_local)
+                var[iz_global,ir_global,:] .= var_local[iz_local,ir_local,:]
+            end
         end
     end
 end
@@ -120,49 +96,26 @@ end
 function read_distributed_zr_data!(var::Array{mk_float,4}, var_name::String,
    run_name::String, file_key::String, nblocks::mk_int, nz_local::mk_int,nr_local::mk_int)
     # dimension of var is [z,r,species,t]
-    if nr_local > 1
-        for iblock in 0:nblocks-1
-            fid = open_netcdf_file(run_name,file_key,iblock=iblock,printout=false)
-            cdfhandle =  fid[var_name]
-            var_local = cdfhandle.var[:,:,:,:]
-            
-            z_irank, r_irank = load_rank_data(fid,printout=false)
-            #z_irank = mod(iblock,z_nchunks)
-            #r_irank = floor(mk_int,iblock/z_nchunks)
-            
-            if z_irank == 0
-                var[1,1:nr_local,:,:] .= var_local[1,1:nr_local,:,:]    
-            end
-            if r_irank == 0
-                var[1:nz_local,1,:,:] .= var_local[1:nz_local,1,:,:]    
-            end
-            for ir_local in 2:nr_local
-                for iz_local in 2:nz_local
-                    ir_global = iglobal_func(ir_local,r_irank,nr_local)
-                    iz_global = iglobal_func(iz_local,z_irank,nz_local)
-                    var[iz_global,ir_global,:,:] .= var_local[iz_local,ir_local,:,:]
-                end
-            end
-        end
-    else
-        for iblock in 0:nblocks-1
-            fid = open_netcdf_file(run_name,file_key,iblock=iblock,printout=false)
-            cdfhandle =  fid[var_name]
-            var_local = cdfhandle.var[:,:,:,:]
-            
-            z_irank, r_irank = load_rank_data(fid,printout=false)
-            #z_irank = mod(iblock,z_nchunks)
-            #r_irank = floor(mk_int,iblock/z_nchunks)
-            
-            if z_irank == 0
-                var[1,1,:,:] .= var_local[1,1,:,:]    
-            end
-            for iz_local in 2:nz_local
-                ir_global = 1
-                iz_global = iglobal_func(iz_local,z_irank,nz_local)
-                var[iz_global,ir_global,:,:] .= var_local[iz_local,1,:,:]
-            end
+    for iblock in 0:nblocks-1
+        fid = open_netcdf_file(run_name,file_key,iblock=iblock,printout=false)
+        cdfhandle =  fid[var_name]
+        var_local = cdfhandle.var[:,:,:,:]
         
+        z_irank, r_irank = load_rank_data(fid,printout=false)
+        #z_irank = mod(iblock,z_nchunks)
+        #r_irank = floor(mk_int,iblock/z_nchunks)
+        
+        
+        # min index set to avoid double assignment of repeated points 
+        # 1 if irank = 0, 2 otherwise
+        imin_r = min(1,r_irank) + 1
+        imin_z = min(1,z_irank) + 1
+        for ir_local in imin_r:nr_local
+            for iz_local in imin_z:nz_local
+                ir_global = iglobal_func(ir_local,r_irank,nr_local)
+                iz_global = iglobal_func(iz_local,z_irank,nz_local)
+                var[iz_global,ir_global,:,:] .= var_local[iz_local,ir_local,:,:]
+            end
         end
     end
 end
