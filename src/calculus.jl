@@ -318,7 +318,7 @@ function reconcile_element_boundaries_MPI!(df1d::Array{mk_float,Ndims},
     end
 end
 	
-function apply_adv_fac!(buffer::Array{Float64,Ndims},adv_fac::Array{Float64,Ndims},endpoints::Array{Float64,Ndims},sgn::Int64) where Ndims
+function apply_adv_fac!(buffer::Array{mk_float,Ndims},adv_fac::Array{mk_float,Ndims},endpoints::Array{mk_float,Ndims},sgn::mk_int) where Ndims
 		#buffer contains off-process endpoint
 		#adv_fac < 0 is positive advection speed
 		#adv_fac > 0 is negative advection speed
@@ -339,10 +339,10 @@ function apply_adv_fac!(buffer::Array{Float64,Ndims},adv_fac::Array{Float64,Ndim
 		
 	end
 	
-function reconcile_element_boundaries_MPI!(df1d::Array{Float64,Ndims}, 
-	adv_fac_lower_endpoints::Array{Float64,Mdims}, adv_fac_upper_endpoints::Array{Float64,Mdims},
-	dfdx_lower_endpoints::Array{Float64,Mdims}, dfdx_upper_endpoints::Array{Float64,Mdims},
-	send_buffer::Array{Float64,Mdims}, receive_buffer::Array{Float64,Mdims}, coord) where {Ndims,Mdims}
+function reconcile_element_boundaries_MPI!(df1d::Array{mk_float,Ndims}, 
+	adv_fac_lower_endpoints::Array{mk_float,Mdims}, adv_fac_upper_endpoints::Array{mk_float,Mdims},
+	dfdx_lower_endpoints::Array{mk_float,Mdims}, dfdx_upper_endpoints::Array{mk_float,Mdims},
+	send_buffer::Array{mk_float,Mdims}, receive_buffer::Array{mk_float,Mdims}, coord) where {Ndims,Mdims}
 	
     if block_rank[] == 0 # lead process on this shared-memory block
         
