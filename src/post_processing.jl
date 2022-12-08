@@ -569,6 +569,18 @@ end
 function compare_moments_symbolic_test(run_name,moment,moment_sym,spec_string,z,r,time,nz,nr,ntime,moment_label,moment_sym_label,norm_label,file_string)
     
     is = 1
+    # plot last timestep moment vs z at r0 
+	if nr > 1 
+		ir0 = div(nr,2)
+	else
+		ir0 = 1
+	end
+	momentmin = minimum(moment[:,ir0,is,end])
+    momentmax = maximum(moment[:,ir0,is,end])
+	@views plot(z, [moment[:,ir0,is,end], moment_sym[:,ir0,is,end] ], xlabel=L"z/L_z", ylabel=moment_label, label=["num" "sym"], ylims = (momentmin,momentmax))
+    outfile = string(run_name, "_"*file_string*"(r0,z)_vs_z_", spec_string, ".pdf")
+    savefig(outfile)
+    
     
     if nr > 1
         it = ntime
