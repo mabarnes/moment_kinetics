@@ -9,7 +9,7 @@ using Base.Filesystem: tempname
 using SpecialFunctions: dawson
 using TimerOutputs
 
-using moment_kinetics.load_data: open_output_file
+using moment_kinetics.load_data: open_readonly_output_file
 using moment_kinetics.load_data: load_coordinate_data, load_fields_data, load_time_data
 
 # Create a temporary directory for test output
@@ -172,7 +172,7 @@ function run_test(test_input, analytic_rtol, analytic_atol, expected_phi,
             path = joinpath(realpath(input["base_directory"]), name, name)
 
             # open the netcdf file and give it the handle 'fid'
-            fid = open_output_file(path,"moments")
+            fid = open_readonly_output_file(path,"moments")
 
             # load space-time coordinate data
             nz, z, z_wgts, Lz, nr, r, r_wgts, Lr, n_ion_species, n_neutral_species = load_coordinate_data(fid)

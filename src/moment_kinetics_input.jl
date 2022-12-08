@@ -10,7 +10,7 @@ export read_input_file
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float
 using ..communication
-using ..file_io: input_option_error, open_output_file
+using ..file_io: input_option_error, open_ascii_output_file
 using ..finite_differences: fd_check_option
 using ..input_structs
 
@@ -420,7 +420,7 @@ function mk_input(scan_input=Dict())
     # if not, create it
     if global_rank[] == 0
         isdir(output_dir) || mkdir(output_dir)
-        io = open_output_file(string(output_dir,"/",run_name), "input")
+        io = open_ascii_output_file(string(output_dir,"/",run_name), "input")
     else
         io = devnull
     end

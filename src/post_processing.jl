@@ -21,9 +21,9 @@ using Measures
 using ..post_processing_input: pp
 using ..quadrature: composite_simpson_weights
 using ..array_allocation: allocate_float
-using ..file_io: open_output_file
+using ..file_io: open_ascii_output_file
 using ..type_definitions: mk_float, mk_int
-using ..load_data: open_output_file, load_time_data
+using ..load_data: open_readonly_output_file, load_time_data
 using ..load_data: load_coordinate_data, load_vspace_coordinate_data, load_fields_data, load_pdf_data
 using ..load_data: load_charged_particle_moments_data, load_neutral_particle_moments_data
 using ..load_data: load_neutral_pdf_data, load_neutral_coordinate_data
@@ -76,8 +76,8 @@ function analyze_and_plot_data(path)
         composition, species, collisions, geometry, drive_input = mk_input(scan_input)
 
     # open the netcdf file and give it the handle 'fid'
-    fid = open_output_file(run_name,"moments")
-    fid_pdfs = open_output_file(run_name,"dfns")
+    fid = open_readonly_output_file(run_name,"moments")
+    fid_pdfs = open_readonly_output_file(run_name,"dfns")
     # note that ntime may differ in these output files
     
     # load space-time coordinate data from `moments' cdf
@@ -702,7 +702,7 @@ function calculate_and_write_frequencies(fid, run_name, ntime, time, z, itime_mi
         growth_rate = phi_fit.growth_rate
 
         # write info related to fit to file
-        io = open_output_file(run_name, "frequency_fit.txt")
+        io = open_ascii_output_file(run_name, "frequency_fit.txt")
         println(io, "#growth_rate: ", phi_fit.growth_rate,
                 "  frequency: ", phi_fit.frequency,
                 " fit_errors: ", phi_fit.amplitude_fit_error, " ",

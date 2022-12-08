@@ -2,7 +2,7 @@
 """
 module load_data
 
-export open_output_file
+export open_readonly_output_file
 export load_coordinate_data
 export load_fields_data
 export load_charged_particle_moments_data
@@ -17,7 +17,7 @@ using NCDatasets
 
 """
 """
-function open_output_file(run_name, ext; iblock=0)
+function open_readonly_output_file(run_name, ext; iblock=0)
     # create the HDF5 filename from the given run_name
     # and the shared-memory block index
     hdf5_filename = string(run_name, ".", iblock,".", ext, ".h5")
