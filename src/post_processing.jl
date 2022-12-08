@@ -254,8 +254,9 @@ function analyze_and_plot_data(path)
     # grids 
     z, z_wgts, r, r_wgts = construct_global_zr_grids(run_name,
        "moments",nz_global,nr_global,nblocks)
-    println("z",z)
-    println("r",r)
+    #println("z: ",z)
+    #println("r: ",r)
+    
     # fields 
     read_distributed_zr_data!(phi,"phi",run_name,"moments",nblocks,nz,nr) 
     read_distributed_zr_data!(Ez,"Ez",run_name,"moments",nblocks,nz,nr) 
@@ -526,22 +527,23 @@ function compare_fields_symbolic_test(run_name,field,field_sym,z,r,time,nz,nr,nt
 		@views plot(r, [field[end,:,end], field_sym[end,:,end]], xlabel=L"r/L_r", ylabel=field_label, label=["num" "sym"], ylims = (fieldmin,fieldmax))
 		outfile = string(run_name, "_"*file_string*"(r,z_wall)_vs_r.pdf")
 		savefig(outfile)
-	end	
-    it = ntime
-    fontsize = 20
-    ticksfontsize = 10
-    heatmap(r, z, field[:,:,it], xlabel=L"r / L_r", ylabel=L"z / L_z", title=field_label, c = :deep,
-     #xtickfontsize = ticksfontsize, xguidefontsize = fontsize, ytickfontsize = ticksfontsize, yguidefontsize = fontsize, titlefontsize = fontsize)
-     windowsize = (360,240), margin = 15pt)
-    outfile = string(run_name, "_"*file_string*"_vs_r_z.pdf")
-    savefig(outfile)
 
-    heatmap(r, z, field_sym[:,:,it], xlabel=L"r / L_r", ylabel=L"z / L_z", title=field_sym_label, c = :deep,
-    #xtickfontsize = ticksfontsize, xguidefontsize = fontsize, ytickfontsize = ticksfontsize, yguidefontsize = fontsize, titlefontsize = fontsize)
-    windowsize = (360,240), margin = 15pt)
-    outfile = string(run_name, "_"*file_string*"_sym_vs_r_z.pdf")
-    savefig(outfile)
+        it = ntime
+        fontsize = 20
+        ticksfontsize = 10
+        heatmap(r, z, field[:,:,it], xlabel=L"r / L_r", ylabel=L"z / L_z", title=field_label, c = :deep,
+         #xtickfontsize = ticksfontsize, xguidefontsize = fontsize, ytickfontsize = ticksfontsize, yguidefontsize = fontsize, titlefontsize = fontsize)
+         windowsize = (360,240), margin = 15pt)
+        outfile = string(run_name, "_"*file_string*"_vs_r_z.pdf")
+        savefig(outfile)
 
+        heatmap(r, z, field_sym[:,:,it], xlabel=L"r / L_r", ylabel=L"z / L_z", title=field_sym_label, c = :deep,
+        #xtickfontsize = ticksfontsize, xguidefontsize = fontsize, ytickfontsize = ticksfontsize, yguidefontsize = fontsize, titlefontsize = fontsize)
+        windowsize = (360,240), margin = 15pt)
+        outfile = string(run_name, "_"*file_string*"_sym_vs_r_z.pdf")
+        savefig(outfile)
+    end	
+    
     field_norm = zeros(mk_float,ntime)
     for it in 1:ntime
         dummy = 0.0
@@ -565,21 +567,25 @@ function compare_fields_symbolic_test(run_name,field,field_sym,z,r,time,nz,nr,nt
 end
 
 function compare_moments_symbolic_test(run_name,moment,moment_sym,spec_string,z,r,time,nz,nr,ntime,moment_label,moment_sym_label,norm_label,file_string)
+    
     is = 1
-    it = ntime
-    fontsize = 20
-    heatmap(r, z, moment[:,:,is,it], xlabel=L"r / L_r", ylabel=L"z / L_z", title=moment_label, c = :deep,
-    #xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, titlefontsize = fontsize
-    windowsize = (360,240), margin = 15pt)
-    outfile = string(run_name, "_"*file_string*"_vs_r_z_", spec_string, ".pdf")
-    savefig(outfile)
+    
+    if nr > 1
+        it = ntime
+        fontsize = 20
+        heatmap(r, z, moment[:,:,is,it], xlabel=L"r / L_r", ylabel=L"z / L_z", title=moment_label, c = :deep,
+        #xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, titlefontsize = fontsize
+        windowsize = (360,240), margin = 15pt)
+        outfile = string(run_name, "_"*file_string*"_vs_r_z_", spec_string, ".pdf")
+        savefig(outfile)
 
-    heatmap(r, z, moment_sym[:,:,is,it], xlabel=L"r / L_r", ylabel=L"z / L_z", title=moment_sym_label, c = :deep,
-    #xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, titlefontsize = fontsize
-    windowsize = (360,240), margin = 15pt)
-    outfile = string(run_name, "_"*file_string*"_sym_vs_r_z_", spec_string, ".pdf")
-    savefig(outfile)
-
+        heatmap(r, z, moment_sym[:,:,is,it], xlabel=L"r / L_r", ylabel=L"z / L_z", title=moment_sym_label, c = :deep,
+        #xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, titlefontsize = fontsize
+        windowsize = (360,240), margin = 15pt)
+        outfile = string(run_name, "_"*file_string*"_sym_vs_r_z_", spec_string, ".pdf")
+        savefig(outfile)
+    end 
+    
     moment_norm = zeros(mk_float,ntime)
     for it in 1:ntime
         dummy = 0.0
@@ -1557,16 +1563,16 @@ end
 
 function plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
     itime_min, itime_max, nwrite_movie, run_name, pp, description)
-
+    nr = size(r,1)
     print("Plotting fields data...")
     phimin = minimum(phi)
     phimax = maximum(phi)
     if pp.plot_phi_vs_r0_z # plot last timestep phi[z,ir0]
         @views plot(z, phi[:,ir0,end], xlabel=L"z/L_z", ylabel=L"\phi")
+        outfile = string(run_name, "_phi"*description*"(r0,z)_vs_z.pdf")
+        savefig(outfile)    
     end
-    outfile = string(run_name, "_phi"*description*"(r0,z)_vs_z.pdf")
-    savefig(outfile)    
-    if pp.animate_phi_vs_r_z
+    if pp.animate_phi_vs_r_z && nr > 1
         # make a gif animation of ϕ(z) at different times
         anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
             @views heatmap(r, z, phi[:,:,i], xlabel="r", ylabel="z", c = :deep, interpolation = :cubic)
@@ -1578,15 +1584,15 @@ function plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
     Ezmax = maximum(Ez)
     if pp.plot_Ez_vs_r0_z # plot last timestep Ez[z,ir0]
         @views plot(z, Ez[:,ir0,end], xlabel=L"z/L_z", ylabel=L"E_z")
+        outfile = string(run_name, "_Ez"*description*"(r0,z)_vs_z.pdf")
+        savefig(outfile)    
     end
-    outfile = string(run_name, "_Ez"*description*"(r0,z)_vs_z.pdf")
-    savefig(outfile)    
-    if pp.plot_wall_Ez_vs_r # plot last timestep Ez[z_wall,r]
+    if pp.plot_wall_Ez_vs_r && nr > 1 # plot last timestep Ez[z_wall,r]
         @views plot(r, Ez[end,:,end], xlabel=L"r/L_r", ylabel=L"E_z")
+        outfile = string(run_name, "_Ez"*description*"(r,z_wall)_vs_r.pdf")
+        savefig(outfile)
     end
-    outfile = string(run_name, "_Ez"*description*"(r,z_wall)_vs_r.pdf")
-    savefig(outfile)
-    if pp.animate_Ez_vs_r_z
+    if pp.animate_Ez_vs_r_z && nr > 1
         # make a gif animation of ϕ(z) at different times
         anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
             @views heatmap(r, z, Ez[:,:,i], xlabel="r", ylabel="z", c = :deep, interpolation = :cubic)
@@ -1598,15 +1604,15 @@ function plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
     Ermax = maximum(Er)
     if pp.plot_Er_vs_r0_z # plot last timestep Er[z,ir0]
         @views plot(z, Er[:,ir0,end], xlabel=L"z/L_z", ylabel=L"E_r")
+        outfile = string(run_name, "_Er"*description*"(r0,z)_vs_z.pdf")
+        savefig(outfile)    
     end
-    outfile = string(run_name, "_Er"*description*"(r0,z)_vs_z.pdf")
-    savefig(outfile)    
-    if pp.plot_wall_Er_vs_r # plot last timestep Er[z_wall,r]
+    if pp.plot_wall_Er_vs_r && nr > 1 # plot last timestep Er[z_wall,r]
         @views plot(r, Er[end,:,end], xlabel=L"r/L_r", ylabel=L"E_r")
+        outfile = string(run_name, "_Er"*description*"(r,z_wall)_vs_r.pdf")
+        savefig(outfile)
     end
-    outfile = string(run_name, "_Er"*description*"(r,z_wall)_vs_r.pdf")
-    savefig(outfile)
-    if pp.animate_Er_vs_r_z
+    if pp.animate_Er_vs_r_z && nr > 1
         # make a gif animation of ϕ(z) at different times
         anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
             @views heatmap(r, z, Er[:,:,i], xlabel="r", ylabel="z", c = :deep, interpolation = :cubic)
@@ -1619,7 +1625,7 @@ end
 
 function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time, z, r, iz0, ir0, n_ion_species,
     itime_min, itime_max, nwrite_movie, run_name, pp)
-
+    nr = size(r,1)
     print("Plotting charged moments data...")
     for is in 1:n_ion_species
 		description = "_ion_spec"*string(is)*"_"
@@ -1631,12 +1637,12 @@ function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time
 			outfile = string(run_name, "_density"*description*"(r0,z)_vs_z.pdf")
 			savefig(outfile)    
 		end
-		if pp.plot_wall_density_vs_r # plot last timestep density[z_wall,r]
+		if pp.plot_wall_density_vs_r && nr > 1 # plot last timestep density[z_wall,r]
 			@views plot(r, density[end,:,is,end], xlabel=L"r/L_r", ylabel=L"n_i")
 			outfile = string(run_name, "_density"*description*"(r,z_wall)_vs_r.pdf")
 			savefig(outfile)
 		end
-		if pp.animate_density_vs_r_z
+		if pp.animate_density_vs_r_z && nr > 1
 			# make a gif animation of ϕ(z) at different times
 			anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
 				@views heatmap(r, z, density[:,:,is,i], xlabel="r", ylabel="z", c = :deep, interpolation = :cubic)
@@ -1644,7 +1650,7 @@ function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time
 			outfile = string(run_name, "_density"*description*"_vs_r_z.gif")
 			gif(anim, outfile, fps=5)
 		end
-		if pp.plot_density_vs_r_z
+		if pp.plot_density_vs_r_z && nr > 1
 			@views heatmap(r, z, density[:,:,is,end], xlabel=L"r", ylabel=L"z", c = :deep, interpolation = :cubic,
 			windowsize = (360,240), margin = 15pt)
 			outfile = string(run_name, "_density"*description*"_vs_r_z.pdf")
@@ -1659,12 +1665,12 @@ function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time
 			outfile = string(run_name, "_parallel_flow"*description*"(r0,z)_vs_z.pdf")
 			savefig(outfile)    
 		end
-		if pp.plot_wall_parallel_flow_vs_r # plot last timestep parallel_flow[z_wall,r]
+		if pp.plot_wall_parallel_flow_vs_r && nr > 1 # plot last timestep parallel_flow[z_wall,r]
 			@views plot(r, parallel_flow[end,:,is,end], xlabel=L"r/L_r", ylabel=L"n_i")
 			outfile = string(run_name, "_parallel_flow"*description*"(r,z_wall)_vs_r.pdf")
 			savefig(outfile)
 		end
-		if pp.animate_parallel_flow_vs_r_z
+		if pp.animate_parallel_flow_vs_r_z && nr > 1
 			# make a gif animation of ϕ(z) at different times
 			anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
 				@views heatmap(r, z, parallel_flow[:,:,is,i], xlabel="r", ylabel="z", c = :deep, interpolation = :cubic)
@@ -1672,7 +1678,7 @@ function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time
 			outfile = string(run_name, "_parallel_flow"*description*"_vs_r_z.gif")
 			gif(anim, outfile, fps=5)
 		end
-		if pp.plot_parallel_flow_vs_r_z
+		if pp.plot_parallel_flow_vs_r_z && nr > 1
 			@views heatmap(r, z, parallel_flow[:,:,is,end], xlabel=L"r", ylabel=L"z", c = :deep, interpolation = :cubic,
 			windowsize = (360,240), margin = 15pt)
 			outfile = string(run_name, "_parallel_flow"*description*"_vs_r_z.pdf")
@@ -1687,12 +1693,12 @@ function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time
 			outfile = string(run_name, "_parallel_pressure"*description*"(r0,z)_vs_z.pdf")
 			savefig(outfile)    
 		end
-		if pp.plot_wall_parallel_pressure_vs_r # plot last timestep parallel_pressure[z_wall,r]
+		if pp.plot_wall_parallel_pressure_vs_r && nr > 1 # plot last timestep parallel_pressure[z_wall,r]
 			@views plot(r, parallel_pressure[end,:,is,end], xlabel=L"r/L_r", ylabel=L"n_i")
 			outfile = string(run_name, "_parallel_pressure"*description*"(r,z_wall)_vs_r.pdf")
 			savefig(outfile)
 		end
-		if pp.animate_parallel_pressure_vs_r_z
+		if pp.animate_parallel_pressure_vs_r_z && nr > 1
 			# make a gif animation of ϕ(z) at different times
 			anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
 				@views heatmap(r, z, parallel_pressure[:,:,is,i], xlabel="r", ylabel="z", c = :deep, interpolation = :cubic)
@@ -1700,7 +1706,7 @@ function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time
 			outfile = string(run_name, "_parallel_pressure"*description*"_vs_r_z.gif")
 			gif(anim, outfile, fps=5)
 		end
-		if pp.plot_parallel_pressure_vs_r_z
+		if pp.plot_parallel_pressure_vs_r_z && nr > 1
 			@views heatmap(r, z, parallel_pressure[:,:,is,end], xlabel=L"r", ylabel=L"z", c = :deep, interpolation = :cubic,
 			windowsize = (360,240), margin = 15pt)
 			outfile = string(run_name, "_parallel_pressure"*description*"_vs_r_z.pdf")
