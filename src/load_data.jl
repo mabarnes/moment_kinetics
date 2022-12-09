@@ -8,13 +8,10 @@ export load_charged_particle_moments_data
 export load_neutral_particle_moments_data
 export load_pdf_data
 export load_neutral_pdf_data
-export load_neutral_velocity_coordinate_data
-export load_charged_velocity_coordinate_data
+export load_coordinate_data
 export load_time_data
 export load_block_data
 export load_rank_data
-export load_global_zr_coordinate_data
-export load_local_zr_coordinate_data
 export load_species_data
 
 using HDF5
@@ -22,7 +19,7 @@ using NCDatasets
 
 """
 """
-function open_readonly_output_file(run_name, ext; iblock=0, printout=true)
+function open_readonly_output_file(run_name, ext; iblock=0, printout=false)
     # create the HDF5 filename from the given run_name
     # and the shared-memory block index
     hdf5_filename = string(run_name, ".", iblock,".", ext, ".h5")
@@ -41,7 +38,7 @@ function open_readonly_output_file(run_name, ext; iblock=0, printout=true)
             print("Opening ", filename, " to read NetCDF data...")
         end
         # open the netcdf file with given filename for reading
-        fid = NCDataset(netcdf_filename,"a")
+        fid = NCDataset(netcdf_filename, "r")
     end
     if printout
         println("done.")
@@ -80,75 +77,36 @@ function get_group(file_or_group::NCDataset, name::String)
 end
 
 """
-Load data for spatial coordinates
-
-Velocity space coordinate data handled separately as it may not be present in all output
-files.
+Load data for a coordinate
 """
-function load_local_zr_coordinate_data(fid; printout=false)
+function load_coordinate_data(fid, name; printout=false)
     if printout
-        print("Loading coordinate data...")
+        println("Loading coordinate data...")
     end
 
-    coords_group = get_group(fid, "coords")
+    coord_group = get_group(get_group(fid, "coords"), name)
 
-    # Get r coordinate quantities
-    r_group = get_group(coords_group, "r")
-    nr = load_variable(r_group, "npts")
-    r = load_variable(r_group, "grid")
-    r_wgts = load_variable(r_group, "wgts")
-    # Lr = global r box length
-    Lr = load_variable(r_group, "L")
+    n_local = load_variable(coord_group, "n_local")
+    n_global = load_variable(coord_group, "n_global")
+    grid = load_variable(coord_group, "grid")
+    wgts = load_variable(coord_group, "wgts")
+    # L = global box length
+    L = load_variable(coord_group, "L")
 
-    # Get z coordinate quantities
-    z_group = get_group(coords_group, "z")
-    nz = load_variable(z_group, "npts")
-    z = load_variable(z_group, "grid")
-    z_wgts = load_variable(z_group, "wgts")
-    # Lz = global z box length
-    Lz = load_variable(z_group, "L")
-
-    if printout
-        println("done.")
-    end
-    return nz, z, z_wgts, Lz, nr, r, r_wgts, Lr
-end
-
-function load_charged_velocity_coordinate_data(fid)
-    print("Loading coordinate data...")
-    # define a handle for the vperp coordinate
-    cdfvar = fid["vperp"]
-    # get the number of vperp grid points
-    nvperp = length(cdfvar)
-    # load the data for vperp
-    vperp = cdfvar.var[:]
-    # get the weights associated with the vperp coordinate
-    cdfvar = fid["vperp_wgts"]
-    vperp_wgts = cdfvar.var[:]
-
-    # define a handle for the vpa coordinate
-    cdfvar = fid["vpa"]
-    # get the number of vpa grid points
-    nvpa = length(cdfvar)
-    # load the data for vpa
-    vpa = cdfvar.var[:]
-    # get the weights associated with the vpa coordinate
-    cdfvar = fid["vpa_wgts"]
-    vpa_wgts = cdfvar.var[:]
-    println("done.")
-
-    return nvpa, vpa, vpa_wgts, nvperp, vperp, vperp_wgts
+    return n_local, n_global, grid, wgts, L
 end
 
 """
 """
 function load_species_data(fid)
     print("Loading species data...")
-    # get the lengths of the ion species dimension
-    n_ion_species = fid.dim["n_ion_species"]
-    # get the lengths of the neutral species dimension
-    n_neutral_species = fid.dim["n_neutral_species"]
+
+    overview = get_group(fid, "overview")
+    n_ion_species = load_variable(overview, "n_ion_species")
+    n_neutral_species = load_variable(overview, "n_neutral_species")
+
     println("done.")
+
     return n_ion_species, n_neutral_species
 end
 
@@ -170,82 +128,34 @@ end
 """
 function load_block_data(fid)
     print("Loading block data...")
-    cdfvar = fid["nblocks"]
-    nblocks = cdfvar.var[]
-    
-    cdfvar = fid["iblock"]
-    iblock = cdfvar.var[]
+
+    coords = get_group(fid, "coords")
+    nblocks = load_variable(coords, "nblocks")
+    iblock = load_variable(coords, "iblock")
+
     println("done.")
+
     return  nblocks, iblock
 end
 
 """
 """
-function load_rank_data(fid; printout=true)
+function load_rank_data(fid; printout=false)
     if printout
         print("Loading rank data...")
     end
-    cdfvar = fid["z_irank"]
-    z_irank = cdfvar.var[]
+
+    coords = get_group(fid, "coords")
+    z_irank = load_variable(get_group(coords, "z"), "irank")
+    r_irank = load_variable(get_group(coords, "r"), "irank")
     
-    cdfvar = fid["r_irank"]
-    r_irank = cdfvar.var[]
     if printout
         println("done.")
     end
+
     return z_irank, r_irank
 end
 
-function load_global_zr_coordinate_data(fid)
-    print("Loading process data...")
-    cdfvar = fid["nz_global"]
-    nz_global = cdfvar.var[]
-    
-    cdfvar = fid["nr_global"]
-    nr_global = cdfvar.var[]
-    println("done.")
-    return  nz_global, nr_global
-end
-
-"""
-"""
-
-function load_neutral_velocity_coordinate_data(fid)
-    print("Loading neutral coordinate data...")
-    # define a handle for the vz coordinate
-    cdfvar = fid["vz"]
-    # get the number of vz grid points
-    nvz = length(cdfvar)
-    # load the data for vz
-    vz = cdfvar.var[:]
-    # get the weights associated with the vz coordinate
-    cdfvar = fid["vz_wgts"]
-    vz_wgts = cdfvar.var[:]
-    
-    # define a handle for the vr coordinate
-    cdfvar = fid["vr"]
-    # get the number of vr grid points
-    nvr = length(cdfvar)
-    # load the data for vr
-    vr = cdfvar.var[:]
-    # get the weights associated with the vr coordinate
-    cdfvar = fid["vr_wgts"]
-    vr_wgts = cdfvar.var[:]
-
-    # define a handle for the vzeta coordinate
-    cdfvar = fid["vzeta"]
-    # get the number of vzeta grid points
-    nvzeta = length(cdfvar)
-    # load the data for vzeta
-    vzeta = cdfvar.var[:]
-    # get the weights associated with the vzeta coordinate
-    cdfvar = fid["vzeta_wgts"]
-    vzeta_wgts = cdfvar.var[:]
-
-    println("done.")
-
-    return nvz, vz, vz_wgts, nvr, vr, vr_wgts, nvzeta, vzeta, vzeta_wgts
-end
 """
 """
 function load_fields_data(fid)

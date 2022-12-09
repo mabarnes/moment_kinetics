@@ -155,6 +155,16 @@ function define_spatial_coordinates!(fid, z, r)
     # including total number of grid points and grid point locations
     define_coordinate!(coords, r, "r", "spatial coordinate r")
 
+    # Write variable recording the index of the block within the global domain
+    # decomposition
+    write_single_value!(coords, "iblock", iblock_index[],
+                        description="index of this zr block")
+
+    # Write variable recording the total number of blocks in the global domain
+    # decomposition
+    write_single_value!(coords, "nblocks", global_size[]÷block_size[],
+                        description="number of zr blocks")
+
     return coords
 end
 
@@ -188,9 +198,24 @@ function define_coordinate!(parent, coord, coord_name, description)
     # create the "group" sub-group of "parent" that will contain coord_str coordinate info
     group = create_io_group(parent, coord_name, description=description)
 
-    # write the number of grid points for this coordinate to variable "npts" within "coords/coord_name" group
-    write_single_value!(group, "npts", coord.n;
+    # write the number of local grid points for this coordinate to variable "n_local"
+    # within "coords/coord_name" group
+    write_single_value!(group, "n_local", coord.n;
+                        description="number of local $coord_name grid points")
+
+    # write the number of global grid points for this coordinate to variable "n_local"
+    # within "coords/coord_name" group
+    write_single_value!(group, "n_global", coord.n_global;
                         description="total number of $coord_name grid points")
+
+    # write the rank in the coord-direction of this process
+    write_single_value!(group, "irank", coord.irank,
+                        description="rank of this block in the $(coord.name) grid communicator")
+
+    # write the global length of this coordinate to variable "L"
+    # within "coords/coord_name" group
+    write_single_value!(group, "L", coord.L;
+                        description="box length in $coord_name")
 
     # write the locations of this coordinate's grid points to variable "grid" within "coords/coord_name" group
     write_single_value!(group, "grid", coord.grid, coord;
@@ -514,21 +539,28 @@ end
 """
 close all opened output files
 """
-function finish_file_io(ascii_io, binary_moments::io_moments_info,
-                        binary_dfns::io_dfns_info)
+function finish_file_io(ascii_io::Union{ascii_ios,Nothing},
+                        binary_moments::Union{io_moments_info,Nothing},
+                        binary_dfns::Union{io_dfns_info,Nothing})
     @serial_region begin
         # Only read/write from first process in each 'block'
 
-        # get the fields in the ascii_ios struct
-        ascii_io_fields = fieldnames(typeof(ascii_io))
-        for x ∈ ascii_io_fields
-            io = getfield(ascii_io, x)
-            if io !== nothing
-                close(io)
+        if ascii_io !== nothing
+            # get the fields in the ascii_ios struct
+            ascii_io_fields = fieldnames(typeof(ascii_io))
+            for x ∈ ascii_io_fields
+                io = getfield(ascii_io, x)
+                if io !== nothing
+                    close(io)
+                end
             end
         end
-        close(binary_moments.fid)
-        close(binary_dfns.fid)
+        if binary_moments !== nothing
+            close(binary_moments.fid)
+        end
+        if binary_dfns !== nothing
+            close(binary_dfns.fid)
+        end
     end
     return nothing
 end
@@ -540,8 +572,8 @@ include("file_io_hdf5.jl")
 """
 """
 function write_data_to_ascii(moments, fields, vpa, vperp, z, r, t, n_ion_species,
-                             n_neutral_species, ascii_io)
-    if ascii_io.moments_charged === nothing
+                             n_neutral_species, ascii_io::Union{ascii_ios,Nothing})
+    if ascii_io === nothing || ascii_io.moments_charged === nothing
         # ascii I/O is disabled
         return nothing
     end

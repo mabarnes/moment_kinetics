@@ -8,7 +8,7 @@ using TimerOutputs
 
 using moment_kinetics.array_allocation: allocate_float
 using moment_kinetics.load_data: open_readonly_output_file
-using moment_kinetics.load_data: load_coordinate_data, load_fields_data, load_time_data
+using moment_kinetics.load_data: load_coordinate_data, load_species_data, load_fields_data, load_time_data
 using moment_kinetics.analysis: analyze_fields_data
 using moment_kinetics.post_processing: fit_delta_phi_mode
 
@@ -170,7 +170,9 @@ function run_test(test_input, analytic_frequency, analytic_growth_rate,
             fid = open_readonly_output_file(path,"moments")
 
             # load space-time coordinate data
-            nz, z, z_wgts, Lz, nr, r, r_wgts, Lr, n_ion_species, n_neutral_species = load_coordinate_data(fid)
+            nz, nz_global, z, z_wgts, Lz = load_coordinate_data(fid, "z")
+            nr, nr_global, r, r_wgts, Lr = load_coordinate_data(fid, "r")
+            n_ion_species, n_neutral_species = load_species_data(fid)
             ntime, time = load_time_data(fid)
             
             # load fields data
