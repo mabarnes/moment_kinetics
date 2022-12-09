@@ -104,7 +104,7 @@ function run_moment_kinetics(to::TimerOutput, input_dict=Dict())
         # throws an error
         if global_size[] > 1
             println("$(typeof(e)) on process $(global_rank[]):")
-            println(e.msg, "\n")
+            showerror(stdout, e)
             display(stacktrace(catch_backtrace()))
             flush(stdout)
             flush(stderr)
