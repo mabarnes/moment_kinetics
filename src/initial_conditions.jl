@@ -579,7 +579,7 @@ function enforce_boundary_conditions!(f, f_r_bc, vpa_bc, z_bc, r_bc, vpa, vperp,
                                                      vpa_adv[is].downwind_idx[ivperp,iz,ir])
     end
     begin_s_r_vperp_vpa_region()
-    @views enforce_z_boundary_condition!(f, z_bc, z_adv, vpa, vperp, r, composition)
+    @views enforce_z_boundary_condition!(f, z_bc, z_adv, vpa, vperp, z, r, composition)
     begin_s_z_vperp_vpa_region()
     @views enforce_r_boundary_condition!(f, f_r_bc, r_bc, r_adv, vpa, vperp, z, r, composition)
 end
@@ -619,13 +619,13 @@ end
 """
 enforce boundary conditions on f in z
 """
-function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, vperp, r, composition) where T
+function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, vperp, z, r, composition) where T
     # define n_species variable for convenience
     n_species = composition.n_species
     # define nvpa variable for convenience
     nvpa = vpa.n
     # define nz variable for convenience
-    nz = size(f, 3)
+    nz = z.n
     # define a zero that accounts for finite precision
     zero = 1.0e-10
     # 'constant' BC is time-independent f at upwind boundary
@@ -651,13 +651,13 @@ function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, vperp, r, com
                 # no parallel BC should be enforced for vpa = 0
                 # adv.speed is signed 
                 # adv.speed =  vpa*bzed - 0.5 *rhostar*Er
-                
+                # check that this rank includes the lower/upper boundary
                 iz = 1 # z = -L/2
-                if adv[is].speed[iz,ivpa,ivperp,ir] > zero
+                if adv[is].speed[iz,ivpa,ivperp,ir] > zero && z.irank == 0
                     f[ivpa,ivperp,iz,ir,is] = 0.0
                 end
                 iz = nz # z = L/2
-                if adv[is].speed[iz,ivpa,ivperp,ir] < -zero
+                if adv[is].speed[iz,ivpa,ivperp,ir] < -zero && z.irank == z.nrank - 1
                     f[ivpa,ivperp,iz,ir,is] = 0.0
                 end
                 
@@ -781,11 +781,11 @@ function enforce_neutral_z_boundary_condition!(f_neutral, f_charged, boundary_di
                             for ivz ∈ 1:vz.n
                                 # no parallel BC should be enforced for vz = 0
                                 iz = 1 # z = -L/2
-                                if vz.grid[ivz] > zero
+                                if vz.grid[ivz] > zero && z.irank == 0
                                     f_neutral[ivz,ivr,ivzeta,iz,ir,isn] = wall_flux_0 * knudsen_cosine[ivz,ivr,ivzeta]
                                 end
                                 iz = nz # z = L/2
-                                if vz.grid[ivz] < -zero
+                                if vz.grid[ivz] < -zero && z.irank == z.nrank - 1
                                     f_neutral[ivz,ivr,ivzeta,iz,ir,isn] = wall_flux_L * knudsen_cosine[ivz,ivr,ivzeta]
                                 end
                             end

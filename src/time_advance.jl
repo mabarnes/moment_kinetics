@@ -8,7 +8,7 @@ export time_advance!
 using MPI
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_float, allocate_shared_float
-using ..communication: _block_synchronize, global_size, comm_world
+using ..communication: _block_synchronize, global_size, comm_world, MPISharedArray
 using ..debugging
 using ..file_io: write_data_to_ascii, debug_dump
 using ..file_io: write_moments_data_to_binary, write_dfns_data_to_binary
@@ -54,47 +54,51 @@ mutable struct scratch_dummy_arrays
     dummy_zr::Array{mk_float,2}
 	
 	#buffer arrays for MPI 
-	buffer_z_1::Array{mk_float,1}
-	buffer_z_2::Array{mk_float,1}
-	buffer_z_3::Array{mk_float,1}
-	buffer_z_4::Array{mk_float,1}
+	buffer_z_1::MPISharedArray{mk_float,1}
+	buffer_z_2::MPISharedArray{mk_float,1}
+	buffer_z_3::MPISharedArray{mk_float,1}
+	buffer_z_4::MPISharedArray{mk_float,1}
 	
-	buffer_r_1::Array{mk_float,1}
-	buffer_r_2::Array{mk_float,1}
-	buffer_r_3::Array{mk_float,1}
-	buffer_r_4::Array{mk_float,1}
+	buffer_r_1::MPISharedArray{mk_float,1}
+	buffer_r_2::MPISharedArray{mk_float,1}
+	buffer_r_3::MPISharedArray{mk_float,1}
+	buffer_r_4::MPISharedArray{mk_float,1}
 	
-	buffer_vpavperpz_1::Array{mk_float,3}
-	buffer_vpavperpz_2::Array{mk_float,3}
-	buffer_vpavperpz_3::Array{mk_float,3}
-	buffer_vpavperpz_4::Array{mk_float,3}
-	buffer_vpavperpz_5::Array{mk_float,3}
-	buffer_vpavperpz_6::Array{mk_float,3}
+	buffer_vpavperpz_1::MPISharedArray{mk_float,3}
+	buffer_vpavperpz_2::MPISharedArray{mk_float,3}
+	buffer_vpavperpz_3::MPISharedArray{mk_float,3}
+	buffer_vpavperpz_4::MPISharedArray{mk_float,3}
+	buffer_vpavperpz_5::MPISharedArray{mk_float,3}
+	buffer_vpavperpz_6::MPISharedArray{mk_float,3}
 	
-	buffer_vpavperpr_1::Array{mk_float,3}
-	buffer_vpavperpr_2::Array{mk_float,3}
-	buffer_vpavperpr_3::Array{mk_float,3}
-	buffer_vpavperpr_4::Array{mk_float,3}
-	buffer_vpavperpr_5::Array{mk_float,3}
-	buffer_vpavperpr_6::Array{mk_float,3}
+	buffer_vpavperpr_1::MPISharedArray{mk_float,3}
+	buffer_vpavperpr_2::MPISharedArray{mk_float,3}
+	buffer_vpavperpr_3::MPISharedArray{mk_float,3}
+	buffer_vpavperpr_4::MPISharedArray{mk_float,3}
+	buffer_vpavperpr_5::MPISharedArray{mk_float,3}
+	buffer_vpavperpr_6::MPISharedArray{mk_float,3}
 	
-	buffer_vpavperpzr::Array{mk_float,4}
+    # buffer to hold derivative after MPI communicates
+    # needs to be shared memory
+	buffer_vpavperpzr::MPISharedArray{mk_float,4}
 	
-	buffer_vzvrvzetaz_1::Array{mk_float,4}
-	buffer_vzvrvzetaz_2::Array{mk_float,4}
-	buffer_vzvrvzetaz_3::Array{mk_float,4}
-	buffer_vzvrvzetaz_4::Array{mk_float,4}
-	buffer_vzvrvzetaz_5::Array{mk_float,4}
-	buffer_vzvrvzetaz_6::Array{mk_float,4}
+	buffer_vzvrvzetaz_1::MPISharedArray{mk_float,4}
+	buffer_vzvrvzetaz_2::MPISharedArray{mk_float,4}
+	buffer_vzvrvzetaz_3::MPISharedArray{mk_float,4}
+	buffer_vzvrvzetaz_4::MPISharedArray{mk_float,4}
+	buffer_vzvrvzetaz_5::MPISharedArray{mk_float,4}
+	buffer_vzvrvzetaz_6::MPISharedArray{mk_float,4}
 	
-	buffer_vzvrvzetar_1::Array{mk_float,4}
-	buffer_vzvrvzetar_2::Array{mk_float,4}
-	buffer_vzvrvzetar_3::Array{mk_float,4}
-	buffer_vzvrvzetar_4::Array{mk_float,4}
-	buffer_vzvrvzetar_5::Array{mk_float,4}
-	buffer_vzvrvzetar_6::Array{mk_float,4}
+	buffer_vzvrvzetar_1::MPISharedArray{mk_float,4}
+	buffer_vzvrvzetar_2::MPISharedArray{mk_float,4}
+	buffer_vzvrvzetar_3::MPISharedArray{mk_float,4}
+	buffer_vzvrvzetar_4::MPISharedArray{mk_float,4}
+	buffer_vzvrvzetar_5::MPISharedArray{mk_float,4}
+	buffer_vzvrvzetar_6::MPISharedArray{mk_float,4}
 	
-	buffer_vzvrvzetazr::Array{mk_float,5}	
+    # buffer to hold derivative after MPI communicates
+    # needs to be shared memory
+	buffer_vzvrvzetazr::MPISharedArray{mk_float,5}
 	
 end 
 
@@ -322,7 +326,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
         update_boundary_indices!(z_advect[is], loop_ranges[].vpa, loop_ranges[].vperp, loop_ranges[].r)
     end
     # enforce prescribed boundary condition in z on the distribution function f
-    @views enforce_z_boundary_condition!(pdf.charged.unnorm, z.bc, z_advect, vpa, vperp, r, composition)
+    @views enforce_z_boundary_condition!(pdf.charged.unnorm, z.bc, z_advect, vpa, vperp, z, r, composition)
     
     begin_serial_region()
     
@@ -428,47 +432,47 @@ function setup_dummy_and_buffer_arrays(nr,nz,nvpa,nvperp,nvz,nvr,nvzeta,nspecies
     dummy_vpavperp = allocate_float(nvpa, nvperp)
 	
 	# should the arrays below be shared memory arrays? MRH
-	buffer_z_1 = allocate_float(nz)
-	buffer_z_2 = allocate_float(nz)
-	buffer_z_3 = allocate_float(nz)
-	buffer_z_4 = allocate_float(nz)
+	buffer_z_1 = allocate_shared_float(nz)
+	buffer_z_2 = allocate_shared_float(nz)
+	buffer_z_3 = allocate_shared_float(nz)
+	buffer_z_4 = allocate_shared_float(nz)
 	
-	buffer_r_1 = allocate_float(nr)
-	buffer_r_2 = allocate_float(nr)
-	buffer_r_3 = allocate_float(nr)
-	buffer_r_4 = allocate_float(nr)
+	buffer_r_1 = allocate_shared_float(nr)
+	buffer_r_2 = allocate_shared_float(nr)
+	buffer_r_3 = allocate_shared_float(nr)
+	buffer_r_4 = allocate_shared_float(nr)
 	
-	buffer_vpavperpz_1 = allocate_float(nvpa,nvperp,nz)
-	buffer_vpavperpz_2 = allocate_float(nvpa,nvperp,nz)
-	buffer_vpavperpz_3 = allocate_float(nvpa,nvperp,nz)
-	buffer_vpavperpz_4 = allocate_float(nvpa,nvperp,nz)
-	buffer_vpavperpz_5 = allocate_float(nvpa,nvperp,nz)
-	buffer_vpavperpz_6 = allocate_float(nvpa,nvperp,nz)
+	buffer_vpavperpz_1 = allocate_shared_float(nvpa,nvperp,nz)
+	buffer_vpavperpz_2 = allocate_shared_float(nvpa,nvperp,nz)
+	buffer_vpavperpz_3 = allocate_shared_float(nvpa,nvperp,nz)
+	buffer_vpavperpz_4 = allocate_shared_float(nvpa,nvperp,nz)
+	buffer_vpavperpz_5 = allocate_shared_float(nvpa,nvperp,nz)
+	buffer_vpavperpz_6 = allocate_shared_float(nvpa,nvperp,nz)
 	
-	buffer_vpavperpr_1 = allocate_float(nvpa,nvperp,nr)
-	buffer_vpavperpr_2 = allocate_float(nvpa,nvperp,nr)
-	buffer_vpavperpr_3 = allocate_float(nvpa,nvperp,nr)
-	buffer_vpavperpr_4 = allocate_float(nvpa,nvperp,nr)
-	buffer_vpavperpr_5 = allocate_float(nvpa,nvperp,nr)
-	buffer_vpavperpr_6 = allocate_float(nvpa,nvperp,nr)
+	buffer_vpavperpr_1 = allocate_shared_float(nvpa,nvperp,nr)
+	buffer_vpavperpr_2 = allocate_shared_float(nvpa,nvperp,nr)
+	buffer_vpavperpr_3 = allocate_shared_float(nvpa,nvperp,nr)
+	buffer_vpavperpr_4 = allocate_shared_float(nvpa,nvperp,nr)
+	buffer_vpavperpr_5 = allocate_shared_float(nvpa,nvperp,nr)
+	buffer_vpavperpr_6 = allocate_shared_float(nvpa,nvperp,nr)
 	
-	buffer_vpavperpzr = allocate_float(nvpa,nvperp,nz,nr)
+	buffer_vpavperpzr = allocate_shared_float(nvpa,nvperp,nz,nr)
 	
-	buffer_vzvrvzetaz_1 = allocate_float(nvz,nvr,nvzeta,nz)
-	buffer_vzvrvzetaz_2 = allocate_float(nvz,nvr,nvzeta,nz)
-	buffer_vzvrvzetaz_3 = allocate_float(nvz,nvr,nvzeta,nz)
-	buffer_vzvrvzetaz_4 = allocate_float(nvz,nvr,nvzeta,nz)
-	buffer_vzvrvzetaz_5 = allocate_float(nvz,nvr,nvzeta,nz)
-	buffer_vzvrvzetaz_6 = allocate_float(nvz,nvr,nvzeta,nz)
+	buffer_vzvrvzetaz_1 = allocate_shared_float(nvz,nvr,nvzeta,nz)
+	buffer_vzvrvzetaz_2 = allocate_shared_float(nvz,nvr,nvzeta,nz)
+	buffer_vzvrvzetaz_3 = allocate_shared_float(nvz,nvr,nvzeta,nz)
+	buffer_vzvrvzetaz_4 = allocate_shared_float(nvz,nvr,nvzeta,nz)
+	buffer_vzvrvzetaz_5 = allocate_shared_float(nvz,nvr,nvzeta,nz)
+	buffer_vzvrvzetaz_6 = allocate_shared_float(nvz,nvr,nvzeta,nz)
 	
-	buffer_vzvrvzetar_1 = allocate_float(nvz,nvr,nvzeta,nr)
-	buffer_vzvrvzetar_2 = allocate_float(nvz,nvr,nvzeta,nr)
-	buffer_vzvrvzetar_3 = allocate_float(nvz,nvr,nvzeta,nr)
-	buffer_vzvrvzetar_4 = allocate_float(nvz,nvr,nvzeta,nr)
-	buffer_vzvrvzetar_5 = allocate_float(nvz,nvr,nvzeta,nr)
-	buffer_vzvrvzetar_6 = allocate_float(nvz,nvr,nvzeta,nr)
+	buffer_vzvrvzetar_1 = allocate_shared_float(nvz,nvr,nvzeta,nr)
+	buffer_vzvrvzetar_2 = allocate_shared_float(nvz,nvr,nvzeta,nr)
+	buffer_vzvrvzetar_3 = allocate_shared_float(nvz,nvr,nvzeta,nr)
+	buffer_vzvrvzetar_4 = allocate_shared_float(nvz,nvr,nvzeta,nr)
+	buffer_vzvrvzetar_5 = allocate_shared_float(nvz,nvr,nvzeta,nr)
+	buffer_vzvrvzetar_6 = allocate_shared_float(nvz,nvr,nvzeta,nr)
 	
-	buffer_vzvrvzetazr = allocate_float(nvz,nvr,nvzeta,nz,nr)		
+	buffer_vzvrvzetazr = allocate_shared_float(nvz,nvr,nvzeta,nz,nr)
 	
 	return scratch_dummy_arrays(dummy_sr,dummy_vpavperp,dummy_zr,
 		buffer_z_1,buffer_z_2,buffer_z_3,buffer_z_4,
