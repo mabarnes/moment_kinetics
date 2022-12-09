@@ -2,7 +2,7 @@
 """
 module post_processing
 
-export analyze_and_plot
+export analyze_and_plot_data
 export compare_charged_pdf_symbolic_test
 export compare_moments_symbolic_test
 export compare_neutral_pdf_symbolic_test
