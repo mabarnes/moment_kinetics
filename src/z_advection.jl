@@ -5,7 +5,7 @@ module z_advection
 export z_advection!
 export update_speed_z!
 
-using ..advection: advance_f_df_precomputed!, update_boundary_indices!
+using ..advection: advance_f_df_precomputed!
 using ..chebyshev: chebyshev_info
 using ..looping
 using ..derivatives: derivative_z!
@@ -20,9 +20,7 @@ function z_advection!(f_out, fvec_in, fields, advect, z, vpa, vperp, r, dt, t, z
     @loop_s is begin
         # get the updated speed along the z direction using the current f
         @views update_speed_z!(advect[is], fields, vpa, vperp, z, r, t, geometry)
-        # update the upwind/downwind boundary indices and upwind_increment
-        @views update_boundary_indices!(advect[is], loop_ranges[].vpa, loop_ranges[].vperp, loop_ranges[].r)
-		# update adv_fac 
+        # update adv_fac
 		advect[is].adv_fac[:,:,:,:] .= -dt.*advect[is].speed[:,:,:,:]
 		# calculate the derivative along z
 		# centered

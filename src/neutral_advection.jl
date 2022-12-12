@@ -7,7 +7,7 @@ export update_speed_neutral_r!
 export neutral_advection_z!
 export update_speed_neutral_z!
 
-using ..advection: advance_f_df_precomputed!, update_boundary_indices!
+using ..advection: advance_f_df_precomputed!
 using ..chebyshev: chebyshev_info
 using ..looping
 using ..derivatives: derivative_r!, derivative_z!
@@ -23,8 +23,6 @@ function neutral_advection_r!(f_out, fvec_in, advect, r, z, vzeta, vr, vz, dt,
     @loop_sn isn begin
         # get the updated speed along the r direction using the current f
         @views update_speed_neutral_r!(advect[isn], r, z, vzeta, vr, vz)
-        # update the upwind/downwind boundary indices and upwind_increment
-        @views update_boundary_indices!(advect[isn], loop_ranges[].vz, loop_ranges[].vr, loop_ranges[].vzeta, loop_ranges[].z)
         # update adv_fac
         advect[isn].adv_fac[:,:,:,:,:] .= -dt.*advect[isn].speed[:,:,:,:,:]
 		# calculate the upwind derivative along r
@@ -86,8 +84,6 @@ function neutral_advection_z!(f_out, fvec_in, advect, r, z, vzeta, vr, vz, dt,
     @loop_sn isn begin
         # get the updated speed along the r direction using the current f
         @views update_speed_neutral_z!(advect[isn], r, z, vzeta, vr, vz)
-        # update the upwind/downwind boundary indices and upwind_increment
-        @views update_boundary_indices!(advect[isn], loop_ranges[].vz, loop_ranges[].vr, loop_ranges[].vzeta, loop_ranges[].r)
         # update adv_fac
         advect[isn].adv_fac[:,:,:,:,:] .= -dt.*advect[isn].speed[:,:,:,:,:]
 		# calculate the upwind derivative along z

@@ -5,7 +5,7 @@ module r_advection
 export r_advection!
 export update_speed_r!
 
-using ..advection: advance_f_df_precomputed!, update_boundary_indices!
+using ..advection: advance_f_df_precomputed!
 using ..chebyshev: chebyshev_info
 using ..looping
 using ..derivatives: derivative_r!
@@ -21,8 +21,6 @@ function r_advection!(f_out, fvec_in, fields, advect, r, z, vperp, vpa,
     @loop_s is begin
         # get the updated speed along the r direction using the current f
         @views update_speed_r!(advect[is], fields, vpa, vperp, z, r, geometry)
-        # update the upwind/downwind boundary indices and upwind_increment
-        @views update_boundary_indices!(advect[is], loop_ranges[].vpa, loop_ranges[].vperp, loop_ranges[].z)
         # update adv_fac
         advect[is].adv_fac[:,:,:,:] .= -dt.*advect[is].speed[:,:,:,:]
 		# calculate the upwind derivative along r

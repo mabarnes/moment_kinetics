@@ -3,7 +3,7 @@ module vperp_advection
 export vperp_advection!
 export update_speed_vperp!
 
-using ..advection: advance_f_local!, update_boundary_indices!
+using ..advection: advance_f_local!
 using ..chebyshev: chebyshev_info
 using ..looping
 
@@ -13,9 +13,6 @@ function vperp_advection!(f_out, fvec_in, advect, r, z, vperp, vpa,
     @loop_s is begin
         # get the updated speed along the r direction using the current f
         @views update_speed_vperp!(advect[is], vpa, vperp, z, r)
-        # update the upwind/downwind boundary indices and upwind_increment
-        @views update_boundary_indices!(advect[is], loop_ranges[].vpa, loop_ranges[].z, loop_ranges[].r)
-
         @loop_r_z_vpa ir iz ivpa begin
             @views advance_f_local!(f_out[ivpa,:,iz,ir,is], vperp.scratch, advect[is], ivpa,
                                     r, dt, spectral)

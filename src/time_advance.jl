@@ -28,7 +28,7 @@ using ..initial_conditions: enforce_vpa_boundary_condition!, enforce_r_boundary_
 using ..initial_conditions: enforce_neutral_boundary_conditions!
 using ..initial_conditions: enforce_neutral_z_boundary_condition!, enforce_neutral_r_boundary_condition!
 using ..input_structs: advance_info, time_input
-using ..advection: setup_advection, update_boundary_indices!
+using ..advection: setup_advection #, update_boundary_indices!
 using ..z_advection: update_speed_z!, z_advection!
 using ..r_advection: update_speed_r!, r_advection!
 using ..neutral_advection: update_speed_neutral_r!, neutral_advection_r!, update_speed_neutral_z!, neutral_advection_z!
@@ -103,12 +103,12 @@ mutable struct scratch_dummy_arrays
 end 
 
 struct advect_object_struct
-    vpa_advect::Vector{advection_info{4,5,3}}
-    vperp_advect::Vector{advection_info{4,5,3}}
-    z_advect::Vector{advection_info{4,5,3}}
-    r_advect::Vector{advection_info{4,5,3}}
-    neutral_z_advect::Vector{advection_info{5,6,4}}
-    neutral_r_advect::Vector{advection_info{5,6,4}}
+    vpa_advect::Vector{advection_info{4,5}}
+    vperp_advect::Vector{advection_info{4,5}}
+    z_advect::Vector{advection_info{4,5}}
+    r_advect::Vector{advection_info{4,5}}
+    neutral_z_advect::Vector{advection_info{5,6}}
+    neutral_r_advect::Vector{advection_info{5,6}}
 end
 
 # consider changing code structure so that 
@@ -306,8 +306,6 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     begin_s_z_vperp_vpa_region()
     @loop_s is begin
         @views update_speed_r!(r_advect[is], fields, vpa, vperp, z, r, geometry)
-        # initialise the upwind/downwind boundary indices in z
-        update_boundary_indices!(r_advect[is], loop_ranges[].vpa, loop_ranges[].vperp, loop_ranges[].z)
     end
     # enforce prescribed boundary condition in r on the distribution function f
     @views enforce_r_boundary_condition!(pdf.charged.unnorm, boundary_distributions.pdf_rboundary_charged,
@@ -325,8 +323,6 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     begin_s_r_vperp_vpa_region()
     @loop_s is begin
         @views update_speed_z!(z_advect[is], fields, vpa, vperp, z, r, 0.0, geometry)
-        # initialise the upwind/downwind boundary indices in z
-        update_boundary_indices!(z_advect[is], loop_ranges[].vpa, loop_ranges[].vperp, loop_ranges[].r)
     end
     # enforce prescribed boundary condition in z on the distribution function f
     @views enforce_z_boundary_condition!(pdf.charged.unnorm, z.bc, z_advect, vpa, vperp, z, r, composition,
@@ -348,8 +344,6 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     begin_serial_region()
     @serial_region begin
         for is ∈ 1:n_ion_species
-            # initialise the upwind/downwind boundary indices in vpa
-            update_boundary_indices!(vpa_advect[is], 1:vperp.n, 1:z.n, 1:r.n)
             # enforce prescribed boundary condition in vpa on the distribution function f
             @views enforce_vpa_boundary_condition!(pdf.charged.norm[:,:,:,:,is], vpa.bc, vpa_advect[is])
         end
@@ -364,8 +358,6 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     @serial_region begin
         for is ∈ 1:n_ion_species
             @views update_speed_vperp!(vperp_advect[is], vpa, vperp, z, r)
-            # initialise the upwind/downwind boundary indices in vpa
-            update_boundary_indices!(vperp_advect[is], 1:vpa.n, 1:z.n, 1:r.n)
             # enforce prescribed boundary condition in vpa on the distribution function f
             #PLACEHOLDER
             #@views enforce_vperp_boundary_condition!(pdf.norm[:,:,:,:,is], vpa.bc, vpa_advect[is])
@@ -384,8 +376,6 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
         begin_sn_vzeta_vr_vz_region()
         @loop_sn isn begin
             @views update_speed_neutral_r!(neutral_r_advect[isn], r, z, vzeta, vr, vz)
-            # initialise the upwind/downwind boundary indices in z
-            update_boundary_indices!(neutral_r_advect[isn], loop_ranges[].vz, loop_ranges[].vr, loop_ranges[].vzeta, loop_ranges[].z)
         end
         # enforce prescribed boundary condition in r on the neutral distribution function f
         @views enforce_neutral_r_boundary_condition!(pdf.neutral.unnorm, 
@@ -403,8 +393,6 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
         begin_sn_vzeta_vr_vz_region()
         @loop_sn isn begin
             @views update_speed_neutral_z!(neutral_z_advect[isn], r, z, vzeta, vr, vz)
-            # initialise the upwind/downwind boundary indices in z
-            update_boundary_indices!(neutral_z_advect[isn], loop_ranges[].vz, loop_ranges[].vr, loop_ranges[].vzeta, loop_ranges[].r)
         end
         # enforce prescribed boundary condition in z on the neutral distribution function f
         @views enforce_neutral_z_boundary_condition!(pdf.neutral.unnorm, pdf.charged.unnorm, boundary_distributions,
