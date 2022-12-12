@@ -383,7 +383,10 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
         end
         # enforce prescribed boundary condition in r on the neutral distribution function f
         @views enforce_neutral_r_boundary_condition!(pdf.neutral.unnorm, 
-            boundary_distributions.pdf_rboundary_neutral, neutral_r_advect, vz, vr, vzeta, z, r, composition)
+            boundary_distributions.pdf_rboundary_neutral, neutral_r_advect, vz, vr, vzeta, z, r, composition,
+            scratch_dummy.buffer_vzvrvzetaz_1, scratch_dummy.buffer_vzvrvzetaz_2,
+            scratch_dummy.buffer_vzvrvzetaz_3, scratch_dummy.buffer_vzvrvzetaz_4,
+            scratch_dummy.buffer_vzvrvzetazr)
     end 
     
     # create structure neutral_z_advect for neutral particle advection
@@ -968,7 +971,8 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     # enforce boundary conditions in r and z on the neutral particle distribution function
     if n_neutral_species > 0
         enforce_neutral_boundary_conditions!(fvec_out.pdf_neutral, fvec_out.pdf, boundary_distributions, 
-         neutral_r_advect, neutral_z_advect, z_advect, vz, vr, vzeta, vpa, vperp, z, r, composition)
+         neutral_r_advect, neutral_z_advect, z_advect, vz, vr, vzeta, vpa, vperp, z, r, composition,
+         scratch_dummy)
     end
     # End of advance for distribution function
 

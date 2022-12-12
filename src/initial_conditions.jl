@@ -18,6 +18,7 @@ using ..type_definitions: mk_float
 using ..array_allocation: allocate_shared_float
 using ..bgk: init_bgk_pdf!
 using ..communication
+using ..calculus: reconcile_element_boundaries_MPI!
 using ..looping
 using ..velocity_moments: integrate_over_vspace, integrate_over_neutral_vspace
 using ..velocity_moments: integrate_over_positive_vpa, integrate_over_negative_vpa
@@ -707,7 +708,7 @@ function enforce_vpa_boundary_condition_local!(f::T, bc, adv_speed, upwind_idx, 
     end
 end
 
-function enforce_neutral_boundary_conditions!(f_neutral, f_charged, boundary_distributions, r_adv_neutral::T1, z_adv_neutral::T2, z_adv_charged::T3, vz, vr, vzeta, vpa, vperp, z, r, composition) where {T1, T2, T3} #f_initial,
+function enforce_neutral_boundary_conditions!(f_neutral, f_charged, boundary_distributions, r_adv_neutral::T1, z_adv_neutral::T2, z_adv_charged::T3, vz, vr, vzeta, vpa, vperp, z, r, composition, scratch_dummy::T4) where {T1, T2, T3, T4} #f_initial,
     
     # f_initial contains the initial condition for enforcing a fixed-boundary-value condition 
     # no bc on vz vr vzeta required as no advection in these coordinates
@@ -715,7 +716,10 @@ function enforce_neutral_boundary_conditions!(f_neutral, f_charged, boundary_dis
     @views enforce_neutral_z_boundary_condition!(f_neutral, f_charged, boundary_distributions, z_adv_neutral, z_adv_charged, vz, vr, vzeta, vpa, vperp, z, r, composition)
     begin_sn_z_vzeta_vr_vz_region()
     @views enforce_neutral_r_boundary_condition!(f_neutral, boundary_distributions.pdf_rboundary_neutral,
-                                r_adv_neutral, vz, vr, vzeta, z, r, composition)
+                                r_adv_neutral, vz, vr, vzeta, z, r, composition,
+                                scratch_dummy.buffer_vzvrvzetaz_1, scratch_dummy.buffer_vzvrvzetaz_2,
+                                scratch_dummy.buffer_vzvrvzetaz_3, scratch_dummy.buffer_vzvrvzetaz_4,
+                                scratch_dummy.buffer_vzvrvzetazr)
 end
 
 function enforce_neutral_z_boundary_condition!(f_neutral, f_charged, boundary_distributions, z_adv_neutral::T1, z_adv_charged::T2, vz, vr, vzeta, vpa, vperp, z, r, composition) where {T1, T2}
@@ -799,27 +803,50 @@ function enforce_neutral_z_boundary_condition!(f_neutral, f_charged, boundary_di
     end
 end
 
-function enforce_neutral_r_boundary_condition!(f, f_r_bc, adv::T, vz, vr, vzeta, z, r, composition) where T #f_initial, 
+function enforce_neutral_r_boundary_condition!(f::Array{mk_float,6}, f_r_bc::Array{mk_float,6},
+  adv::T, vz, vr, vzeta, z, r, composition,
+  end1::Array{mk_float,4}, end2::Array{mk_float,4},
+  buffer1::Array{mk_float,4}, buffer2::Array{mk_float,4},
+  buffer_dfn::Array{mk_float,5}) where T #f_initial,
+
     bc = r.bc
     nr = r.n
+
+    if r.nelement_global > r.nelement_local
+    # reconcile internal element boundaries across processes
+    # & enforce periodicity and external boundaries if needed
+        @loop_sn isn begin
+            end1[:,:,:,:] .= f[:,:,:,:,1,isn]
+            end2[:,:,:,:] .= f[:,:,:,:,end,isn]
+            buffer_dfn[:,:,:,:,:] .= f[:,:,:,:,:,isn]
+            @views reconcile_element_boundaries_MPI!(buffer_dfn,
+                end1, end2,	buffer1, buffer2, r)
+            f[:,:,:,:,:,isn] .= buffer_dfn[:,:,:,:,:]
+        end
+    end
     # 'periodic' BC enforces periodicity by taking the average of the boundary points
-    if bc == "periodic"
+    # local case only when no communication required
+    if bc == "periodic" && r.nelement_global == r.nelement_local
         @loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
             f[ivz,ivr,ivzeta,iz,1,isn] = 0.5*(f[ivz,ivr,ivzeta,iz,1,isn]+f[ivz,ivr,ivzeta,iz,nr,isn])
             f[ivz,ivr,ivzeta,iz,nr,isn] = f[ivz,ivr,ivzeta,iz,1,isn]
         end
-    elseif bc == "Dirichlet"
+    end
+    # Dirichlet boundary condition for external endpoints
+    if bc == "Dirichlet"
         zero = 1.0e-10
         # use the old distribution to force the new distribution to have 
         # consistant-in-time values at the boundary
         # impose bc on incoming parts of velocity space only (Hyperbolic PDE)
         @loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
             ir = 1 # r = -L/2
-            if adv[isn].speed[ir,ivz,ivr,ivzeta,iz] > zero
+            # incoming particles and on lowest rank
+            if adv[isn].speed[ir,ivz,ivr,ivzeta,iz] > zero && r.irank == 0
                 f[ivz,ivr,ivzeta,iz,ir,isn] = f_r_bc[ivz,ivr,ivzeta,iz,1,isn]
             end
             ir = nr # r = L/2
-            if adv[isn].speed[ir,ivz,ivr,ivzeta,iz] < -zero
+            # incoming particles and on highest rank
+            if adv[isn].speed[ir,ivz,ivr,ivzeta,iz] < -zero && r.irank == r.nrank - 1
                 f[ivz,ivr,ivzeta,iz,ir,isn] = f_r_bc[ivz,ivr,ivzeta,iz,end,isn]
             end
         end
