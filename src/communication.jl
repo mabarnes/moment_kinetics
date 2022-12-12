@@ -99,6 +99,7 @@ function setup_distributed_memory_MPI(z_nelement_global,z_nelement_local,r_nelem
     nrank_per_zr_block = floor(mk_int,nrank_global/nblocks)
     
     println("debug info:")
+    println("nrank_global: ",nrank_global)
     println("r_nchunks: ",r_nchunks)
     println("z_nchunks: ",z_nchunks)
     println("nblocks: ",nblocks)
