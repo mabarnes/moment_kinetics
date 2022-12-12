@@ -579,8 +579,7 @@ function enforce_boundary_conditions!(f, f_r_bc,
     @loop_s_r_z_vperp is ir iz ivperp begin
         # enforce the vpa BC
         # use that adv.speed independent of vpa 
-        @views enforce_vpa_boundary_condition_local!(f[:,ivperp,iz,ir,is], vpa_bc, vpa_adv[is].speed[:,ivperp,iz,ir], vpa_adv[is].upwind_idx[ivperp,iz,ir],
-                                                     vpa_adv[is].downwind_idx[ivperp,iz,ir])
+        @views enforce_vpa_boundary_condition_local!(f[:,ivperp,iz,ir,is], vpa_bc, vpa_adv[is].speed[:,ivperp,iz,ir])
     end
     begin_s_r_vperp_vpa_region()
     @views enforce_z_boundary_condition!(f, z_bc, z_adv, vpa, vperp, z, r, composition,
@@ -623,10 +622,8 @@ function enforce_r_boundary_condition!(f::Array{mk_float,5},
     # enforce the condition if r is local
     if bc == "periodic" && r.nelement_global == r.nelement_local
         @loop_s_z_vperp_vpa is iz ivperp ivpa begin
-            downwind_idx = adv[is].downwind_idx[ivpa,ivperp,iz] # 1 #
-            upwind_idx = adv[is].upwind_idx[ivpa,ivperp,iz] # r.n #
-            f[ivpa,ivperp,iz,downwind_idx,is] = 0.5*(f[ivpa,ivperp,iz,upwind_idx,is]+f[ivpa,ivperp,iz,downwind_idx,is])
-            f[ivpa,ivperp,iz,upwind_idx,is] = f[ivpa,ivperp,iz,downwind_idx,is]
+            f[ivpa,ivperp,iz,1,is] = 0.5*(f[ivpa,ivperp,iz,nr,is]+f[ivpa,ivperp,iz,1,is])
+            f[ivpa,ivperp,iz,nr,is] = f[ivpa,ivperp,iz,1,is]
         end
     end
     if bc == "Dirichlet"
@@ -643,8 +640,6 @@ function enforce_r_boundary_condition!(f::Array{mk_float,5},
             if adv[is].speed[ir,ivpa,ivperp,iz] < -zero && r.irank == r.nrank - 1
                 f[ivpa,ivperp,iz,ir,is] = f_r_bc[ivpa,ivperp,iz,end,is]
             end    
-            #upwind_idx = adv[is].upwind_idx[ivpa,ivperp,iz] # r.n #
-            #f[ivpa,ivperp,iz,upwind_idx,is] = f_r_bc[ivpa,ivperp,iz,upwind_idx,is]
         end
     end
 end
@@ -678,18 +673,20 @@ function enforce_z_boundary_condition!(f::Array{mk_float,5},
     # only supported for z local
     if bc == "constant" && z.nelement_global == z.nelement_local
         @loop_s_r_vperp_vpa is ir ivperp ivpa begin
-            upwind_idx = adv[is].upwind_idx[ivpa,ivperp,ir]
-            f[ivpa,ivperp,upwind_idx,ir,is] = density_offset * exp(-(vpa.grid[ivpa]/vpawidth)^2) / sqrt(pi)
+            if adv[is].speed[ivpa,ivperp,1,ir] > zero
+                f[ivpa,ivperp,1,ir,is] = density_offset * exp(-(vpa.grid[ivpa]/vpawidth)^2) / sqrt(pi)
+            end
+            if adv[is].speed[ivpa,ivperp,nz,ir] < -zero
+                f[ivpa,ivperp,nz,ir,is] = density_offset * exp(-(vpa.grid[ivpa]/vpawidth)^2) / sqrt(pi)
+            end
         end
     end
     # 'periodic' BC enforces periodicity by taking the average of the boundary points
     # enforced here for case when z is entirely local
     if bc == "periodic" && z.nelement_global == z.nelement_local
         @loop_s_r_vperp_vpa is ir ivperp ivpa begin
-            downwind_idx = adv[is].downwind_idx[ivpa,ivperp,ir]
-            upwind_idx = adv[is].upwind_idx[ivpa,ivperp,ir]
-            f[ivpa,ivperp,downwind_idx,ir,is] = 0.5*(f[ivpa,ivperp,upwind_idx,ir,is]+f[ivpa,ivperp,downwind_idx,ir,is])
-            f[ivpa,ivperp,upwind_idx,ir,is] = f[ivpa,ivperp,downwind_idx,ir,is]
+            f[ivpa,ivperp,1,ir,is] = 0.5*(f[ivpa,ivperp,nz,ir,is]+f[ivpa,ivperp,1,ir,is])
+            f[ivpa,ivperp,nz,ir,is] = f[ivpa,ivperp,1,ir,is]
         end
     end
     # 'wall' BC enforces wall boundary conditions
@@ -728,8 +725,7 @@ function enforce_vpa_boundary_condition!(f, bc, src::T) where T
     for ir ∈ 1:nr
         for iz ∈ 1:nz
             for ivperp ∈ 1:nvperp
-                enforce_vpa_boundary_condition_local!(view(f,:,ivperp,iz,ir), bc, src.speed[:,ivperp,iz,ir], src.upwind_idx[ivperp,iz,ir],
-                src.downwind_idx[ivperp,iz,ir])
+                enforce_vpa_boundary_condition_local!(view(f,:,ivperp,iz,ir), bc, src.speed[:,ivperp,iz,ir])
             end
         end
     end
@@ -737,22 +733,20 @@ end
 
 """
 """
-function enforce_vpa_boundary_condition_local!(f::T, bc, adv_speed, upwind_idx, downwind_idx) where T
+function enforce_vpa_boundary_condition_local!(f::T, bc, adv_speed) where T
     # define a zero that accounts for finite precision
     zero = 1.0e-10
     dvpadt = adv_speed[1] #use that dvpa/dt is indendent of vpa in the current model 
+    nvpa = size(f,1)
     if bc == "zero"
         if dvpadt > zero
             f[1] = 0.0 # -infty forced to zero
         elseif dvpadt < zero 
             f[end] = 0.0 # +infty forced to zero
         end
-    #if bc == "zero"
-    #    f[upwind_idx] = 0.0
-    #    #f[downwind_idx] = 0.0
     elseif bc == "periodic"
-        f[downwind_idx] = 0.5*(f[upwind_idx]+f[downwind_idx])
-        f[upwind_idx] = f[downwind_idx]
+        f[1] = 0.5*(f[nvpa]+f[1])
+        f[nvpa] = f[1]
     end
 end
 
