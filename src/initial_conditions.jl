@@ -588,34 +588,59 @@ function enforce_boundary_conditions!(f, f_r_bc,
             scratch_dummy.buffer_vpavperpr_3, scratch_dummy.buffer_vpavperpr_4,
             scratch_dummy.buffer_vpavperpzr)
     begin_s_z_vperp_vpa_region()
-    @views enforce_r_boundary_condition!(f, f_r_bc, r_bc, r_adv, vpa, vperp, z, r, composition)
+    @views enforce_r_boundary_condition!(f, f_r_bc, r_bc, r_adv, vpa, vperp, z, r, composition,
+            scratch_dummy.buffer_vpavperpz_1, scratch_dummy.buffer_vpavperpz_2,
+            scratch_dummy.buffer_vpavperpz_3, scratch_dummy.buffer_vpavperpz_4,
+            scratch_dummy.buffer_vpavperpzr)
 end
 
 
 """
 enforce boundary conditions on f in r
 """
-function enforce_r_boundary_condition!(f, f_r_bc, bc::String, adv::T, vpa, vperp, z, r, composition) where T
+function enforce_r_boundary_condition!(f::Array{mk_float,5},
+    f_r_bc, bc::String, adv::T, vpa, vperp, z, r, composition,
+    end1::Array{mk_float,3},end2::Array{mk_float,3},
+    buffer1::Array{mk_float,3},buffer2::Array{mk_float,3},
+    buffer_dfn::Array{mk_float,4}) where T
+    
+    nr = r.n
+    
+    if r.nelement_global > r.nelement_local
+    # reconcile internal element boundaries across processes
+    # & enforce periodicity and external boundaries if needed
+        @loop_s is begin
+            end1[:,:,:] .= f[:,:,:,1,is]
+            end2[:,:,:] .= f[:,:,:,nr,is]
+            buffer_dfn[:,:,:,:] .= f[:,:,:,:,is]
+            @views reconcile_element_boundaries_MPI!(buffer_dfn,
+                end1, end2,	buffer1, buffer2, r)
+            f[:,:,:,:,is] .= buffer_dfn[:,:,:,:]
+        end
+    end
+    
     # 'periodic' BC enforces periodicity by taking the average of the boundary points
-    if bc == "periodic"
+    # enforce the condition if r is local
+    if bc == "periodic" && r.nelement_global == r.nelement_local
         @loop_s_z_vperp_vpa is iz ivperp ivpa begin
             downwind_idx = adv[is].downwind_idx[ivpa,ivperp,iz] # 1 #
             upwind_idx = adv[is].upwind_idx[ivpa,ivperp,iz] # r.n #
             f[ivpa,ivperp,iz,downwind_idx,is] = 0.5*(f[ivpa,ivperp,iz,upwind_idx,is]+f[ivpa,ivperp,iz,downwind_idx,is])
             f[ivpa,ivperp,iz,upwind_idx,is] = f[ivpa,ivperp,iz,downwind_idx,is]
         end
-    elseif bc == "Dirichlet"
+    end
+    if bc == "Dirichlet"
         zero = 1.0e-10
         # use the old distribution to force the new distribution to have 
         # consistant-in-time values at the boundary
         # impose bc for incoming parts of velocity space only (Hyperbolic PDE)
         @loop_s_z_vperp_vpa is iz ivperp ivpa begin
-            ir = 1 # r = -L/2
-            if adv[is].speed[ir,ivpa,ivperp,iz] > zero
+            ir = 1 # r = -L/2 -- check that the point is on lowest rank
+            if adv[is].speed[ir,ivpa,ivperp,iz] > zero && r.irank == 0
                 f[ivpa,ivperp,iz,ir,is] = f_r_bc[ivpa,ivperp,iz,1,is]
             end
-            ir = r.n # r = L/2
-            if adv[is].speed[ir,ivpa,ivperp,iz] < -zero
+            ir = r.n # r = L/2 -- check that the point is on highest rank
+            if adv[is].speed[ir,ivpa,ivperp,iz] < -zero && r.irank == r.nrank - 1
                 f[ivpa,ivperp,iz,ir,is] = f_r_bc[ivpa,ivperp,iz,end,is]
             end    
             #upwind_idx = adv[is].upwind_idx[ivpa,ivperp,iz] # r.n #

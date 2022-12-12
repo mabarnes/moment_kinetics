@@ -311,7 +311,10 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     end
     # enforce prescribed boundary condition in r on the distribution function f
     @views enforce_r_boundary_condition!(pdf.charged.unnorm, boundary_distributions.pdf_rboundary_charged,
-                                                r.bc, r_advect, vpa, vperp, z, r, composition)
+                                        r.bc, r_advect, vpa, vperp, z, r, composition,
+                                        scratch_dummy.buffer_vpavperpz_1, scratch_dummy.buffer_vpavperpz_2,
+                                        scratch_dummy.buffer_vpavperpz_3, scratch_dummy.buffer_vpavperpz_4,
+                                        scratch_dummy.buffer_vpavperpzr)
     
     # create structure z_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the split part of the GK equation dealing
