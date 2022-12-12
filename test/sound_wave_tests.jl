@@ -8,7 +8,9 @@ using TimerOutputs
 
 using moment_kinetics.array_allocation: allocate_float
 using moment_kinetics.load_data: open_netcdf_file
-using moment_kinetics.load_data: load_coordinate_data, load_fields_data, load_time_data
+using moment_kinetics.load_data: load_fields_data, load_time_data
+using moment_kinetics.load_data: load_species_data, load_local_zr_coordinate_data
+using moment_kinetics.load_data: load_charged_velocity_coordinate_data
 using moment_kinetics.analysis: analyze_fields_data
 using moment_kinetics.post_processing: fit_delta_phi_mode
 
@@ -168,9 +170,10 @@ function run_test(test_input, analytic_frequency, analytic_growth_rate,
             fid = open_netcdf_file(path,"moments")
 
             # load space-time coordinate data
-            nvpa, vpa, vpa_wgts, nvperp, vperp, vperp_wgts,
-            nz, z, z_wgts, Lz, nr, r, r_wgts, Lr, n_ion_species, n_neutral_species = load_coordinate_data(fid)
+            nz, z, z_wgts, Lz, nr, r, r_wgts, Lr = load_local_zr_coordinate_data(fid)
             ntime, time = load_time_data(fid)
+            n_ion_species, n_neutral_species = load_species_data(fid)
+            nvpa, vpa, vpa_wgts, nvperp, vperp, vperp_wgts = load_charged_velocity_coordinate_data(fid)
             
             # load fields data
             phi_zrt, Er_zrt, Ez_zrt = load_fields_data(fid)

@@ -10,7 +10,9 @@ using SpecialFunctions: dawson
 using TimerOutputs
 
 using moment_kinetics.load_data: open_netcdf_file
-using moment_kinetics.load_data: load_coordinate_data, load_fields_data, load_time_data
+using moment_kinetics.load_data: load_fields_data, load_time_data
+using moment_kinetics.load_data: load_species_data, load_local_zr_coordinate_data
+using moment_kinetics.load_data: load_charged_velocity_coordinate_data
 
 # Create a temporary directory for test output
 test_output_directory = tempname()
@@ -175,8 +177,11 @@ function run_test(test_input, analytic_rtol, analytic_atol, expected_phi,
             fid = open_netcdf_file(path,"moments")
 
             # load space-time coordinate data
-            nvpa, vpa, vpa_wgts, nz, z, z_wgts, Lz, nr, r, r_wgts, Lr, n_ion_species, n_neutral_species = load_coordinate_data(fid)
+            nz, z, z_wgts, Lz, nr, r, r_wgts, Lr = load_local_zr_coordinate_data(fid)
             ntime, time = load_time_data(fid)
+            n_ion_species, n_neutral_species = load_species_data(fid)
+            nvpa, vpa, vpa_wgts, nvperp, vperp, vperp_wgts = load_charged_velocity_coordinate_data(fid)
+
             
             # load fields data
             phi_zrt, Er_zrt, Ez_zrt = load_fields_data(fid)
