@@ -51,7 +51,7 @@ using ..advection: advection_info
 mutable struct scratch_dummy_arrays
     dummy_sr::Array{mk_float,2}
     dummy_vpavperp::Array{mk_float,2}
-    dummy_zr::Array{mk_float,2}
+    dummy_zr::MPISharedArray{mk_float,2}
 	
 	#buffer arrays for MPI 
 	buffer_z_1::MPISharedArray{mk_float,1}
@@ -429,7 +429,7 @@ end
 function setup_dummy_and_buffer_arrays(nr,nz,nvpa,nvperp,nvz,nvr,nvzeta,nspecies_ion,nspecies_neutral)
 
 	dummy_sr = allocate_float(nr, nspecies_ion)
-    dummy_zr = allocate_float(nz, nr)
+    dummy_zr = allocate_shared_float(nz, nr)
     dummy_vpavperp = allocate_float(nvpa, nvperp)
 	
 	# should the arrays below be shared memory arrays? MRH
