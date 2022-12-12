@@ -12,6 +12,7 @@ using ..finite_differences: derivative_finite_difference!
 using ..type_definitions: mk_float, mk_int
 using MPI 
 using ..communication: block_rank
+using ..communication: _block_synchronize
 
 """
 Chebyshev transform f to get Chebyshev spectral coefficients and use them to calculate f'
@@ -227,20 +228,20 @@ function assign_endpoint!(df1d::Array{mk_float,Ndims},
 	if coord.name == "z" && Ndims==2
 		df1d[j,:] .= receive_buffer[:]
 		#println("ASSIGNING DATA")
-	elseif coord.name == "z" && Ndims==4
-		df1d[:,:,j,:] .= receive_buffer[:,:,:]
+	elseif coord.name == "z" && Ndims==5
+		df1d[:,:,j,:,:] .= receive_buffer[:,:,:,:]
 		#println("ASSIGNING DATA")
-    elseif coord.name == "z" && Ndims==5
-		df1d[:,:,:,j,:] .= receive_buffer[:,:,:,:]
+    elseif coord.name == "z" && Ndims==6
+		df1d[:,:,:,j,:,:] .= receive_buffer[:,:,:,:,:]
 		#println("ASSIGNING DATA")
 	elseif coord.name == "r" && Ndims==2
 		df1d[:,j] .= receive_buffer[:]
 		#println("ASSIGNING DATA")
-	elseif coord.name == "r" && Ndims==4
-		df1d[:,:,:,j] .= receive_buffer[:,:,:]
-		#println("ASSIGNING DATA")
 	elseif coord.name == "r" && Ndims==5
-		df1d[:,:,:,:,j] .= receive_buffer[:,:,:,:]
+		df1d[:,:,:,j,:] .= receive_buffer[:,:,:,:]
+		#println("ASSIGNING DATA")
+	elseif coord.name == "r" && Ndims==6
+		df1d[:,:,:,:,j,:] .= receive_buffer[:,:,:,:,:]
 		#println("ASSIGNING DATA")
 	else
         println("ERROR: failure to assign endpoints in reconcile_element_boundaries_MPI! (centered): coord.name: ",coord.name," Ndims: ",Ndims," key: ",key)
@@ -251,6 +252,8 @@ function reconcile_element_boundaries_MPI!(df1d::Array{mk_float,Ndims},
 	dfdx_lower_endpoints::Array{mk_float,Mdims}, dfdx_upper_endpoints::Array{mk_float,Mdims},
 	send_buffer::Array{mk_float,Mdims}, receive_buffer::Array{mk_float,Mdims}, coord) where {Ndims,Mdims}
 	
+    # synchronize buffers
+    _block_synchronize()
     if block_rank[] == 0 # lead process on this shared-memory block
         
         # now deal with endpoints that are stored across ranks
@@ -316,6 +319,8 @@ function reconcile_element_boundaries_MPI!(df1d::Array{mk_float,Ndims},
         assign_endpoint!(df1d,receive_buffer,"upper",coord)
         
     end
+    # synchronize buffers
+    _block_synchronize()
 end
 	
 function apply_adv_fac!(buffer::Array{mk_float,Ndims},adv_fac::Array{mk_float,Ndims},endpoints::Array{mk_float,Ndims},sgn::mk_int) where Ndims
@@ -344,6 +349,8 @@ function reconcile_element_boundaries_MPI!(df1d::Array{mk_float,Ndims},
 	dfdx_lower_endpoints::Array{mk_float,Mdims}, dfdx_upper_endpoints::Array{mk_float,Mdims},
 	send_buffer::Array{mk_float,Mdims}, receive_buffer::Array{mk_float,Mdims}, coord) where {Ndims,Mdims}
 	
+    # synchronize buffers
+    _block_synchronize()
     if block_rank[] == 0 # lead process on this shared-memory block
         
         # now deal with endpoints that are stored across ranks
@@ -409,6 +416,8 @@ function reconcile_element_boundaries_MPI!(df1d::Array{mk_float,Ndims},
         assign_endpoint!(df1d,receive_buffer,"upper",coord)
 
     end
+    # synchronize buffers
+    _block_synchronize()
 end
 	
 
