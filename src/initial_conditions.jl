@@ -570,7 +570,10 @@ end
 # Can we have an explicit loop or explain what it does?
 # Seems to make the fn a operator elementwise in the vector f
 # but loop is over a part of mysterious x_adv objects...
-function enforce_boundary_conditions!(f, f_r_bc, vpa_bc, z_bc, r_bc, vpa, vperp, z, r, vpa_adv::T1, z_adv::T2, r_adv::T3, composition) where {T1, T2, T3}
+function enforce_boundary_conditions!(f, f_r_bc,
+          vpa_bc, z_bc, r_bc, vpa, vperp, z, r,
+          vpa_adv::T1, z_adv::T2, r_adv::T3, composition,
+          scratch_dummy::T4) where {T1, T2, T3, T4}
     
     begin_s_r_z_vperp_region()
     @loop_s_r_z_vperp is ir iz ivperp begin
@@ -580,7 +583,10 @@ function enforce_boundary_conditions!(f, f_r_bc, vpa_bc, z_bc, r_bc, vpa, vperp,
                                                      vpa_adv[is].downwind_idx[ivperp,iz,ir])
     end
     begin_s_r_vperp_vpa_region()
-    @views enforce_z_boundary_condition!(f, z_bc, z_adv, vpa, vperp, z, r, composition)
+    @views enforce_z_boundary_condition!(f, z_bc, z_adv, vpa, vperp, z, r, composition,
+            scratch_dummy.buffer_vpavperpr_1, scratch_dummy.buffer_vpavperpr_2,
+            scratch_dummy.buffer_vpavperpr_3, scratch_dummy.buffer_vpavperpr_4,
+            scratch_dummy.buffer_vpavperpzr)
     begin_s_z_vperp_vpa_region()
     @views enforce_r_boundary_condition!(f, f_r_bc, r_bc, r_adv, vpa, vperp, z, r, composition)
 end
@@ -620,32 +626,49 @@ end
 """
 enforce boundary conditions on f in z
 """
-function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, vperp, z, r, composition) where T
-    # define n_species variable for convenience
-    n_species = composition.n_species
-    # define nvpa variable for convenience
-    nvpa = vpa.n
+function enforce_z_boundary_condition!(f::Array{mk_float,5},
+     bc::String, adv::T, vpa, vperp, z, r, composition,
+     end1::Array{mk_float,3}, end2::Array{mk_float,3},
+     buffer1::Array{mk_float,3}, buffer2::Array{mk_float,3},
+     buffer_dfn::Array{mk_float,4}) where T
     # define nz variable for convenience
     nz = z.n
     # define a zero that accounts for finite precision
     zero = 1.0e-10
+
+    if z.nelement_global > z.nelement_local
+    # reconcile internal element boundaries across processes
+    # & enforce periodicity and external boundaries if needed
+        @loop_s is begin
+            end1[:,:,:] .= f[:,:,1,:,is]
+            end2[:,:,:] .= f[:,:,nz,:,is]
+            buffer_dfn[:,:,:,:] .= f[:,:,:,:,is]
+            @views reconcile_element_boundaries_MPI!(buffer_dfn,
+                end1, end2,	buffer1, buffer2, z)
+            f[:,:,:,:,is] .= buffer_dfn[:,:,:,:]
+        end
+    end
     # 'constant' BC is time-independent f at upwind boundary
     # and constant f beyond boundary
-    if bc == "constant"
+    # only supported for z local
+    if bc == "constant" && z.nelement_global == z.nelement_local
         @loop_s_r_vperp_vpa is ir ivperp ivpa begin
             upwind_idx = adv[is].upwind_idx[ivpa,ivperp,ir]
             f[ivpa,ivperp,upwind_idx,ir,is] = density_offset * exp(-(vpa.grid[ivpa]/vpawidth)^2) / sqrt(pi)
         end
+    end
     # 'periodic' BC enforces periodicity by taking the average of the boundary points
-    elseif bc == "periodic"
+    # enforced here for case when z is entirely local
+    if bc == "periodic" && z.nelement_global == z.nelement_local
         @loop_s_r_vperp_vpa is ir ivperp ivpa begin
             downwind_idx = adv[is].downwind_idx[ivpa,ivperp,ir]
             upwind_idx = adv[is].upwind_idx[ivpa,ivperp,ir]
             f[ivpa,ivperp,downwind_idx,ir,is] = 0.5*(f[ivpa,ivperp,upwind_idx,ir,is]+f[ivpa,ivperp,downwind_idx,ir,is])
             f[ivpa,ivperp,upwind_idx,ir,is] = f[ivpa,ivperp,downwind_idx,ir,is]
         end
+    end
     # 'wall' BC enforces wall boundary conditions
-    elseif bc == "wall"
+    if bc == "wall"
         @loop_s is begin
             # zero incoming BC for ions, as they recombine at the wall
             @loop_r_vperp_vpa ir ivperp ivpa begin
