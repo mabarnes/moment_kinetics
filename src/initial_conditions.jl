@@ -713,7 +713,11 @@ function enforce_neutral_boundary_conditions!(f_neutral, f_charged, boundary_dis
     # f_initial contains the initial condition for enforcing a fixed-boundary-value condition 
     # no bc on vz vr vzeta required as no advection in these coordinates
     begin_sn_r_vzeta_vr_vz_region()
-    @views enforce_neutral_z_boundary_condition!(f_neutral, f_charged, boundary_distributions, z_adv_neutral, z_adv_charged, vz, vr, vzeta, vpa, vperp, z, r, composition)
+    @views enforce_neutral_z_boundary_condition!(f_neutral, f_charged, boundary_distributions,
+            z_adv_neutral, z_adv_charged, vz, vr, vzeta, vpa, vperp, z, r, composition,
+            scratch_dummy.buffer_vzvrvzetar_1, scratch_dummy.buffer_vzvrvzetar_2,
+            scratch_dummy.buffer_vzvrvzetar_3, scratch_dummy.buffer_vzvrvzetar_4,
+            scratch_dummy.buffer_vzvrvzetazr)
     begin_sn_z_vzeta_vr_vz_region()
     @views enforce_neutral_r_boundary_condition!(f_neutral, boundary_distributions.pdf_rboundary_neutral,
                                 r_adv_neutral, vz, vr, vzeta, z, r, composition,
@@ -722,19 +726,39 @@ function enforce_neutral_boundary_conditions!(f_neutral, f_charged, boundary_dis
                                 scratch_dummy.buffer_vzvrvzetazr)
 end
 
-function enforce_neutral_z_boundary_condition!(f_neutral, f_charged, boundary_distributions, z_adv_neutral::T1, z_adv_charged::T2, vz, vr, vzeta, vpa, vperp, z, r, composition) where {T1, T2}
+function enforce_neutral_z_boundary_condition!(f_neutral::Array{mk_float,6},
+ f_charged::Array{mk_float,5}, boundary_distributions, z_adv_neutral::T1,
+ z_adv_charged::T2, vz, vr, vzeta, vpa, vperp, z, r, composition,
+ end1::Array{mk_float,4}, end2::Array{mk_float,4},
+ buffer1::Array{mk_float,4}, buffer2::Array{mk_float,4},
+ buffer_dfn::Array{mk_float,5}) where {T1, T2}
     bc = z.bc
     nz = z.n
     # define a zero that accounts for finite precision
     zero = 1.0e-10
     
+    if z.nelement_global > z.nelement_local
+    # reconcile internal element boundaries across processes
+    # & enforce periodicity and external boundaries if needed
+        @loop_sn isn begin
+            end1[:,:,:,:] .= f_neutral[:,:,:,1,:,isn]
+            end2[:,:,:,:] .= f_neutral[:,:,:,nz,:,isn]
+            buffer_dfn[:,:,:,:,:] .= f_neutral[:,:,:,:,:,isn]
+            @views reconcile_element_boundaries_MPI!(buffer_dfn,
+                end1, end2,	buffer1, buffer2, z)
+            f_neutral[:,:,:,:,:,isn] .= buffer_dfn[:,:,:,:,:]
+        end
+    end
     # 'periodic' BC enforces periodicity by taking the average of the boundary points
-    if bc == "periodic"
+    # if z data is entirely local, enforce periodic boundary condition on external endpoint
+    if bc == "periodic" && z.nelement_global == z.nelement_local
         @loop_sn_r_vzeta_vr_vz isn ir ivzeta ivr ivz begin
             f_neutral[ivz,ivr,ivzeta,1,ir,isn] = 0.5*(f_neutral[ivz,ivr,ivzeta,1,ir,isn]+f_neutral[ivz,ivr,ivzeta,nz,ir,isn])
             f_neutral[ivz,ivr,ivzeta,nz,ir,isn] = f_neutral[ivz,ivr,ivzeta,1,ir,isn]
         end
-    elseif bc == "wall"
+    end
+    # If required, enforce wall boundary condition on external endpoints
+    if bc == "wall"
     # wall BC for neutrals
         begin_serial_region()
         # TODO: parallelise this...
@@ -784,11 +808,11 @@ function enforce_neutral_z_boundary_condition!(f_neutral, f_charged, boundary_di
                         for ivr ∈ 1:vr.n
                             for ivz ∈ 1:vz.n
                                 # no parallel BC should be enforced for vz = 0
-                                iz = 1 # z = -L/2
+                                iz = 1 # z = -L/2, ensure data is on lowest rank
                                 if vz.grid[ivz] > zero && z.irank == 0
                                     f_neutral[ivz,ivr,ivzeta,iz,ir,isn] = wall_flux_0 * knudsen_cosine[ivz,ivr,ivzeta]
                                 end
-                                iz = nz # z = L/2
+                                iz = nz # z = L/2, ensure data is on highest rank
                                 if vz.grid[ivz] < -zero && z.irank == z.nrank - 1
                                     f_neutral[ivz,ivr,ivzeta,iz,ir,isn] = wall_flux_L * knudsen_cosine[ivz,ivr,ivzeta]
                                 end
@@ -817,7 +841,7 @@ function enforce_neutral_r_boundary_condition!(f::Array{mk_float,6}, f_r_bc::Arr
     # & enforce periodicity and external boundaries if needed
         @loop_sn isn begin
             end1[:,:,:,:] .= f[:,:,:,:,1,isn]
-            end2[:,:,:,:] .= f[:,:,:,:,end,isn]
+            end2[:,:,:,:] .= f[:,:,:,:,nr,isn]
             buffer_dfn[:,:,:,:,:] .= f[:,:,:,:,:,isn]
             @views reconcile_element_boundaries_MPI!(buffer_dfn,
                 end1, end2,	buffer1, buffer2, r)

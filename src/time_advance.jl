@@ -402,7 +402,10 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
         end
         # enforce prescribed boundary condition in z on the neutral distribution function f
         @views enforce_neutral_z_boundary_condition!(pdf.neutral.unnorm, pdf.charged.unnorm, boundary_distributions,
-            neutral_z_advect, z_advect, vz, vr, vzeta, vpa, vperp, z, r, composition)
+            neutral_z_advect, z_advect, vz, vr, vzeta, vpa, vperp, z, r, composition,
+            scratch_dummy.buffer_vzvrvzetar_1, scratch_dummy.buffer_vzvrvzetar_2,
+            scratch_dummy.buffer_vzvrvzetar_3, scratch_dummy.buffer_vzvrvzetar_4,
+            scratch_dummy.buffer_vzvrvzetazr)
     end
     
     ##
