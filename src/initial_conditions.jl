@@ -605,14 +605,14 @@ function enforce_r_boundary_condition!(f::AbstractArray{mk_float,5}, f_r_bc, bc:
     nr = r.n
     
     if r.nelement_global > r.nelement_local
-    # reconcile internal element boundaries across processes
-    # & enforce periodicity and external boundaries if needed
-        end1[:,:,:,:] .= f[:,:,:,1,:]
-        end2[:,:,:,:] .= f[:,:,:,nr,:]
-        buffer_dfn[:,:,:,:,:] .= f[:,:,:,:,:]
-        @views reconcile_element_boundaries_MPI!(buffer_dfn,
+        # reconcile internal element boundaries across processes
+        # & enforce periodicity and external boundaries if needed
+        @loop_s_z_vperp_vpa is iz ivperp ivpa begin
+            end1[ivpa,ivperp,iz,is] = f[ivpa,ivperp,iz,1,is]
+            end2[ivpa,ivperp,iz,is] = f[ivpa,ivperp,iz,nr,is]
+        end
+        @views reconcile_element_boundaries_MPI!(f,
             end1, end2,	buffer1, buffer2, r)
-        f[:,:,:,:,:] .= buffer_dfn[:,:,:,:,:]
     end
     
     # 'periodic' BC enforces periodicity by taking the average of the boundary points
@@ -653,14 +653,14 @@ function enforce_z_boundary_condition!(f::AbstractArray{mk_float,5}, bc::String,
     zero = 1.0e-10
 
     if z.nelement_global > z.nelement_local
-    # reconcile internal element boundaries across processes
-    # & enforce periodicity and external boundaries if needed
-        end1[:,:,:,:] .= f[:,:,1,:,:]
-        end2[:,:,:,:] .= f[:,:,nz,:,:]
-        buffer_dfn[:,:,:,:,:] .= f[:,:,:,:,:]
-        @views reconcile_element_boundaries_MPI!(buffer_dfn,
+        # reconcile internal element boundaries across processes
+        # & enforce periodicity and external boundaries if needed
+        @loop_s_r_vperp_vpa is ir ivperp ivpa begin
+            end1[ivpa,ivperp,ir,is] = f[ivpa,ivperp,1,ir,is]
+            end2[ivpa,ivperp,ir,is] = f[ivpa,ivperp,nz,ir,is]
+        end
+        @views reconcile_element_boundaries_MPI!(f,
             end1, end2,	buffer1, buffer2, z)
-        f[:,:,:,:,:] .= buffer_dfn[:,:,:,:,:]
     end
     # 'constant' BC is time-independent f at upwind boundary
     # and constant f beyond boundary
@@ -774,14 +774,14 @@ function enforce_neutral_z_boundary_condition!(f_neutral::AbstractArray{mk_float
     zero = 1.0e-10
     
     if z.nelement_global > z.nelement_local
-    # reconcile internal element boundaries across processes
-    # & enforce periodicity and external boundaries if needed
-        end1[:,:,:,:,:] .= f_neutral[:,:,:,1,:,:]
-        end2[:,:,:,:,:] .= f_neutral[:,:,:,nz,:,:]
-        buffer_dfn[:,:,:,:,:,:] .= f_neutral[:,:,:,:,:,:]
-        @views reconcile_element_boundaries_MPI!(buffer_dfn,
+        # reconcile internal element boundaries across processes
+        # & enforce periodicity and external boundaries if needed
+        @loop_sn_r_vzeta_vr_vz isn ir ivzeta ivr ivz begin
+            end1[ivz,ivr,ivzeta,ir,isn] = f_neutral[ivz,ivr,ivzeta,1,ir,isn]
+            end2[ivz,ivr,ivzeta,ir,isn] = f_neutral[ivz,ivr,ivzeta,nz,ir,isn]
+        end
+        @views reconcile_element_boundaries_MPI!(f_neutral,
             end1, end2,	buffer1, buffer2, z)
-        f_neutral[:,:,:,:,:,:] .= buffer_dfn[:,:,:,:,:,:]
     end
     # 'periodic' BC enforces periodicity by taking the average of the boundary points
     # if z data is entirely local, enforce periodic boundary condition on external endpoint
@@ -871,14 +871,14 @@ function enforce_neutral_r_boundary_condition!(f::AbstractArray{mk_float,6},
     nr = r.n
 
     if r.nelement_global > r.nelement_local
-    # reconcile internal element boundaries across processes
-    # & enforce periodicity and external boundaries if needed
-        end1[:,:,:,:,:] .= f[:,:,:,:,1,:]
-        end2[:,:,:,:,:] .= f[:,:,:,:,nr,:]
-        buffer_dfn[:,:,:,:,:,:] .= f[:,:,:,:,:,:]
-        @views reconcile_element_boundaries_MPI!(buffer_dfn,
+        # reconcile internal element boundaries across processes
+        # & enforce periodicity and external boundaries if needed
+        @loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
+            end1[ivz,ivr,ivzeta,iz,isn] = f[ivz,ivr,ivzeta,iz,1,isn]
+            end2[ivz,ivr,ivzeta,iz,isn] = f[ivz,ivr,ivzeta,iz,nr,isn]
+        end
+        @views reconcile_element_boundaries_MPI!(f,
             end1, end2,	buffer1, buffer2, r)
-        f[:,:,:,:,:,:] .= buffer_dfn[:,:,:,:,:,:]
     end
     # 'periodic' BC enforces periodicity by taking the average of the boundary points
     # local case only when no communication required
