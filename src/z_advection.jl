@@ -21,7 +21,9 @@ function z_advection!(f_out, fvec_in, fields, advect, z, vpa, vperp, r, dt, t, z
         # get the updated speed along the z direction using the current f
         @views update_speed_z!(advect[is], fields, vpa, vperp, z, r, t, geometry)
         # update adv_fac
-		advect[is].adv_fac[:,:,:,:] .= -dt.*advect[is].speed[:,:,:,:]
+        @loop_r_vperp_vpa ir ivperp ivpa begin
+            advect[is].adv_fac[:,ivpa,ivperp,ir] .= -dt.*advect[is].speed[:,ivpa,ivperp,ir]
+        end
     end
 	#calculate the upwind derivative
     derivative_z!(scratch_dummy.buffer_vpavperpzrs, fvec_in.pdf[:,:,:,:,:], advect,
