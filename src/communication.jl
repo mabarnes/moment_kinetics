@@ -250,6 +250,11 @@ end
               * "silently disable the debug checks")
     end
 
+    import MPI: Buffer
+    function Buffer(A::DebugMPISharedArray)
+        return Buffer(A.data)
+    end
+
     # Keep a global Vector of references to all created DebugMPISharedArray
     # instances, so their is_read and is_written members can be checked and
     # reset by _block_synchronize()
