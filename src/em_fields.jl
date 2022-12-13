@@ -118,6 +118,7 @@ function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral, sc
 	rethrow(e)
     end
     ## can calculate phi at z = L and hence phi_wall(z=L) using jpar_i at z =L if needed
+    _block_synchronize()
 
     ## calculate the electric fields after obtaining phi
     #Er = - d phi / dr 
@@ -127,7 +128,9 @@ function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral, sc
                 scratch_dummy.buffer_z_3,scratch_dummy.buffer_z_4,
                 r_spectral,r)
     else
-        fields.Er[:,:] .= 0.0
+        @serial_region begin
+            fields.Er[:,:] .= 0.0
+        end
     end
     #Ez = - d phi / dz
     @views derivative_z!(fields.Ez,-fields.phi,
