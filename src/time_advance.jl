@@ -8,7 +8,7 @@ export time_advance!
 using MPI
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_float, allocate_shared_float
-using ..communication: _block_synchronize, global_size, comm_world, MPISharedArray
+using ..communication: _block_synchronize, global_size, comm_world, MPISharedArray, global_rank
 using ..debugging
 using ..file_io: write_data_to_ascii, debug_dump
 using ..file_io: write_moments_data_to_binary, write_dfns_data_to_binary
@@ -143,7 +143,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     # if no splitting of operators, all terms advanced concurrently;
     # else, will advance one term at a time.
     manufactured_solns_test = t_input.use_manufactured_solns_for_advance
-    
+
     if composition.n_neutral_species > 0
         advance_neutral_z_advection = true
         advance_neutral_r_advection = true
@@ -349,6 +349,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
             @views enforce_vpa_boundary_condition!(pdf.charged.norm[:,:,:,:,is], vpa.bc, vpa_advect[is])
         end
     end
+
     # create structure vperp_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the split part of the GK equation dealing
     # with advection in vperp
@@ -606,8 +607,10 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
         debug_detect_redundant_is_active[] = true
     end
 	
-	@serial_region begin
-        println("beginning time advance   ", Dates.format(now(), dateformat"H:MM:SS"))
+    @serial_region begin
+        if global_rank[] == 0
+             println("beginning time advance   ", Dates.format(now(), dateformat"H:MM:SS"))
+        end
     end
 
     # main time advance loop
@@ -629,8 +632,14 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
                 debug_detect_redundant_is_active[] = false
             end
             begin_serial_region()
-            @serial_region println("finished time step ", i,"    ",
+            @serial_region begin
+                if global_rank[] == 0
+                     println("finished time step ", i,"    ",
                                    Dates.format(now(), dateformat"H:MM:SS"))
+                end
+            end
+           # @serial_region println("finished time step ", i,"    ",
+           #                        Dates.format(now(), dateformat"H:MM:SS"))
             write_data_to_ascii(moments, fields, vpa, vperp, z, r, t,
              composition.n_ion_species, composition.n_neutral_species, io)
             # write moments data to binary file (netcdf)

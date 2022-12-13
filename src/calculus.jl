@@ -13,7 +13,7 @@ using ..type_definitions: mk_float, mk_int
 using MPI 
 using ..communication: block_rank
 using ..communication: _block_synchronize
-
+using ..looping
 """
 Chebyshev transform f to get Chebyshev spectral coefficients and use them to calculate f'
 """
@@ -253,9 +253,12 @@ function reconcile_element_boundaries_MPI!(df1d::Array{mk_float,Ndims},
 	send_buffer::Array{mk_float,Mdims}, receive_buffer::Array{mk_float,Mdims}, coord) where {Ndims,Mdims}
 	
     # synchronize buffers
+    # -- this all-to-all block communicate here requires that this function is NOT called from within a parallelised loop
+    # -- or from a @serial_region or from an if statment isolating a single rank on a block 
     _block_synchronize()
-    if block_rank[] == 0 # lead process on this shared-memory block
-        
+    #if block_rank[] == 0 # lead process on this shared-memory block
+    @serial_region begin
+
         # now deal with endpoints that are stored across ranks
         comm = coord.comm
         nrank = coord.nrank 
@@ -350,8 +353,11 @@ function reconcile_element_boundaries_MPI!(df1d::Array{mk_float,Ndims},
 	send_buffer::Array{mk_float,Mdims}, receive_buffer::Array{mk_float,Mdims}, coord) where {Ndims,Mdims}
 	
     # synchronize buffers
+    # -- this all-to-all block communicate here requires that this function is NOT called from within a parallelised loop
+    # -- or from a @serial_region or from an if statment isolating a single rank on a block 
     _block_synchronize()
-    if block_rank[] == 0 # lead process on this shared-memory block
+    #if block_rank[] == 0 # lead process on this shared-memory block
+    @serial_region begin
         
         # now deal with endpoints that are stored across ranks
         comm = coord.comm

@@ -49,7 +49,6 @@ function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral, sc
     
     begin_serial_region()#(no_synchronize=true)
     # in serial as both s, r and z required locally
-    
     if (composition.n_ion_species > 1 || true ||
         composition.electron_physics == boltzmann_electron_response_with_simple_sheath)
         # If there is more than 1 ion species, the ranks that handle species 1 have to
@@ -64,90 +63,78 @@ function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral, sc
     #@loop_r ir begin # radial locations uncoupled so perform boltzmann solve 
                            # for each radial position in parallel if possible 
         
-		try 
-            # TODO: parallelise this...
-            @serial_region begin
-			#if 1 ∈ loop_ranges[].s
-				ne = scratch_dummy.dummy_zr
-				jpar_i = scratch_dummy.buffer_r_1
-				N_e = scratch_dummy.buffer_r_2
-                
-                ne .= 0.0
+    try
+        # TODO: parallelise this...
+        @serial_region begin
+            ne = scratch_dummy.dummy_zr
+            jpar_i = scratch_dummy.buffer_r_1
+            N_e = scratch_dummy.buffer_r_2
+            ne .= 0.0
+            for is in 1:n_ion_species
+                @loop_r_z ir iz begin
+                     ne[iz,ir] += fvec.density[iz,ir,is]
+                end
+            end
+            if composition.electron_physics == boltzmann_electron_response
+                N_e .= 1.0
+            elseif composition.electron_physics == boltzmann_electron_response_with_simple_sheath
+                # calculate Sum_{i} Z_i n_i u_i = J_||i at z = 0
+                jpar_i .= 0.0
                 for is in 1:n_ion_species
-                    @loop_r_z ir iz begin
-                        ne[iz,ir] += fvec.density[iz,ir,is]
+                    @loop_r ir begin
+                         jpar_i[ir] +=  fvec.density[1,ir,is]*fvec.upar[1,ir,is]
                     end
-				end
-				if composition.electron_physics == boltzmann_electron_response
-					N_e .= 1.0
-				elseif composition.electron_physics == boltzmann_electron_response_with_simple_sheath
-					# calculate Sum_{i} Z_i n_i u_i = J_||i at z = 0
-					jpar_i .= 0.0
-                    for is in 1:n_ion_species
-                        @loop_r ir begin
-                            jpar_i[ir] +=  fvec.density[1,ir,is]*fvec.upar[1,ir,is]
-                        end
-                    end
-					# Calculate N_e using J_||e at sheath entrance at z = 0 (lower boundary).
-					# Assuming pdf is a half maxwellian with boltzmann factor at wall, we have
-					# J_||e = e N_e v_{th,e} exp[ e phi_wall / T_e ] / 2 sqrt{pi},
-					# where positive sign above (and negative sign below)
-					# is due to the fact that electrons reaching the wall flow towards more negative z.
-					# Using J_||e + J_||i = 0, and rearranging for N_e, we have
-					#N_e = - 2.0 * sqrt( pi * composition.me_over_mi) * jpar_i * exp( - composition.phi_wall / composition.T_e)
-					@loop_r ir begin
-                        N_e[ir] .= - 2.0 * sqrt( pi * composition.me_over_mi) * jpar_i[ir] * exp( - composition.phi_wall / composition.T_e)
-                        # N_e must be positive, so force this in case a numerical error or something
-                        # made jpar_i negative
-                        N_e[ir] .= max(N_e[ir], 1.e-16)
-                    end
-                    # See P.C. Stangeby, The Plasma Boundary of Magnetic Fusion Devices, IOP Publishing, Chpt 2, p75
-				end
-
-				if composition.electron_physics ∈ (boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath)
-					@loop_r_z ir iz begin
-                    	fields.phi[iz,ir] = composition.T_e * log(ne[iz,ir] / N_e[ir])
-					end
-					# if fields.force_phi
-					#     @inbounds for iz ∈ 1:z.n
-					#         fields.phi[iz] += fields.phi0[iz]*fields.drive_amplitude*sin(t*fields.drive_frequency)
-					#     end
-					# end
-				end
-			end
-		catch e
-			if global_size[] > 1
-				println("ERROR: error at line 110 of em_fields.jl")
-				println(e)
-				display(stacktrace(catch_backtrace()))
-                flush(stdout)
-                flush(stderr)
-				MPI.Abort(comm_world, 1)
-			end
-			rethrow(e)
-		end	
+                end
+                # Calculate N_e using J_||e at sheath entrance at z = 0 (lower boundary).
+                # Assuming pdf is a half maxwellian with boltzmann factor at wall, we have
+                # J_||e = e N_e v_{th,e} exp[ e phi_wall / T_e ] / 2 sqrt{pi},
+                # where positive sign above (and negative sign below)
+                # is due to the fact that electrons reaching the wall flow towards more negative z.
+                # Using J_||e + J_||i = 0, and rearranging for N_e, we have
+                #N_e = - 2.0 * sqrt( pi * composition.me_over_mi) * jpar_i * exp( - composition.phi_wall / composition.T_e)
+                @loop_r ir begin
+                     N_e[ir] .= - 2.0 * sqrt( pi * composition.me_over_mi) * jpar_i[ir] * exp( - composition.phi_wall / composition.T_e)
+                     # N_e must be positive, so force this in case a numerical error or something
+                     # made jpar_i negative
+                     N_e[ir] .= max(N_e[ir], 1.e-16)
+                end
+                # See P.C. Stangeby, The Plasma Boundary of Magnetic Fusion Devices, IOP Publishing, Chpt 2, p75
+            end
+            if composition.electron_physics ∈ (boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath)
+                @loop_r_z ir iz begin
+                     fields.phi[iz,ir] = composition.T_e * log(ne[iz,ir] / N_e[ir])
+                end
+            end
+        end
+    catch e
+        if global_size[] > 1
+            println("ERROR: error at line 110 of em_fields.jl")
+            println(e)
+            display(stacktrace(catch_backtrace()))
+            flush(stdout)
+            flush(stderr)
+            MPI.Abort(comm_world, 1)
+        end
+	rethrow(e)
+    end
     ## can calculate phi at z = L and hence phi_wall(z=L) using jpar_i at z =L if needed
-    #end # end of r loop
-    
+
     ## calculate the electric fields after obtaining phi
     #Er = - d phi / dr 
-    #if 1 ∈ loop_ranges[].s
-    # TODO: parallelise this...
-    @serial_region begin
-        if r.n > 1
-            @views derivative_r!(fields.Er,-fields.phi,
-                    scratch_dummy.buffer_z_1, scratch_dummy.buffer_z_2,
-                    scratch_dummy.buffer_z_3,scratch_dummy.buffer_z_4,
-                    r_spectral,r)
-        else
-            fields.Er[:,:] .= 0.0
-        end
-        #Ez = - d phi / dz
-        @views derivative_z!(fields.Ez,-fields.phi,
-                    scratch_dummy.buffer_r_1, scratch_dummy.buffer_r_2,
-                    scratch_dummy.buffer_r_3,scratch_dummy.buffer_r_4,
-                    z_spectral,z)
+    if r.n > 1
+        @views derivative_r!(fields.Er,-fields.phi,
+                scratch_dummy.buffer_z_1, scratch_dummy.buffer_z_2,
+                scratch_dummy.buffer_z_3,scratch_dummy.buffer_z_4,
+                r_spectral,r)
+    else
+        fields.Er[:,:] .= 0.0
     end
+    #Ez = - d phi / dz
+    @views derivative_z!(fields.Ez,-fields.phi,
+                scratch_dummy.buffer_r_1, scratch_dummy.buffer_r_2,
+                scratch_dummy.buffer_r_3,scratch_dummy.buffer_r_4,
+                z_spectral,z)
+
 end
 
 end
