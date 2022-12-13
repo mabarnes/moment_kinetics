@@ -16,6 +16,8 @@ using ..looping
 using ..moment_kinetics_structs: scratch_pdf, em_fields_struct
 using ..type_definitions: mk_float, mk_int
 
+@debug_shared_array using ..communication: DebugMPISharedArray
+
 """
 structure containing the various input/output streams
 """

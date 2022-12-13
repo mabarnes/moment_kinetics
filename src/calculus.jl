@@ -213,8 +213,8 @@ updated to include each physical dimension required
 in the main code
 """
 
-function assign_endpoint!(df1d::Array{mk_float,Ndims},
- receive_buffer::Array{mk_float,Mdims},key::String,coord) where {Ndims,Mdims}
+function assign_endpoint!(df1d::AbstractArray{mk_float,Ndims},
+ receive_buffer::AbstractArray{mk_float,Mdims},key::String,coord) where {Ndims,Mdims}
 	if key == "lower"
 		j = 1
 	elseif key == "upper"
@@ -248,9 +248,9 @@ function assign_endpoint!(df1d::Array{mk_float,Ndims},
     end
 end
 
-function reconcile_element_boundaries_MPI!(df1d::Array{mk_float,Ndims},
-	dfdx_lower_endpoints::Array{mk_float,Mdims}, dfdx_upper_endpoints::Array{mk_float,Mdims},
-	send_buffer::Array{mk_float,Mdims}, receive_buffer::Array{mk_float,Mdims}, coord) where {Ndims,Mdims}
+function reconcile_element_boundaries_MPI!(df1d::AbstractArray{mk_float,Ndims},
+	dfdx_lower_endpoints::AbstractArray{mk_float,Mdims}, dfdx_upper_endpoints::AbstractArray{mk_float,Mdims},
+	send_buffer::AbstractArray{mk_float,Mdims}, receive_buffer::AbstractArray{mk_float,Mdims}, coord) where {Ndims,Mdims}
 	
     # synchronize buffers
     # -- this all-to-all block communicate here requires that this function is NOT called from within a parallelised loop
@@ -326,7 +326,7 @@ function reconcile_element_boundaries_MPI!(df1d::Array{mk_float,Ndims},
     _block_synchronize()
 end
 	
-function apply_adv_fac!(buffer::Array{mk_float,Ndims},adv_fac::Array{mk_float,Ndims},endpoints::Array{mk_float,Ndims},sgn::mk_int) where Ndims
+function apply_adv_fac!(buffer::AbstractArray{mk_float,Ndims},adv_fac::AbstractArray{mk_float,Ndims},endpoints::AbstractArray{mk_float,Ndims},sgn::mk_int) where Ndims
 		#buffer contains off-process endpoint
 		#adv_fac < 0 is positive advection speed
 		#adv_fac > 0 is negative advection speed
@@ -347,10 +347,10 @@ function apply_adv_fac!(buffer::Array{mk_float,Ndims},adv_fac::Array{mk_float,Nd
 		
 	end
 	
-function reconcile_element_boundaries_MPI!(df1d::Array{mk_float,Ndims}, 
-	adv_fac_lower_endpoints::Array{mk_float,Mdims}, adv_fac_upper_endpoints::Array{mk_float,Mdims},
-	dfdx_lower_endpoints::Array{mk_float,Mdims}, dfdx_upper_endpoints::Array{mk_float,Mdims},
-	send_buffer::Array{mk_float,Mdims}, receive_buffer::Array{mk_float,Mdims}, coord) where {Ndims,Mdims}
+function reconcile_element_boundaries_MPI!(df1d::AbstractArray{mk_float,Ndims}, 
+	adv_fac_lower_endpoints::AbstractArray{mk_float,Mdims}, adv_fac_upper_endpoints::AbstractArray{mk_float,Mdims},
+	dfdx_lower_endpoints::AbstractArray{mk_float,Mdims}, dfdx_upper_endpoints::AbstractArray{mk_float,Mdims},
+	send_buffer::AbstractArray{mk_float,Mdims}, receive_buffer::AbstractArray{mk_float,Mdims}, coord) where {Ndims,Mdims}
 	
     # synchronize buffers
     # -- this all-to-all block communicate here requires that this function is NOT called from within a parallelised loop

@@ -597,11 +597,10 @@ end
 """
 enforce boundary conditions on f in r
 """
-function enforce_r_boundary_condition!(f::Array{mk_float,5},
-    f_r_bc, bc::String, adv::T, vpa, vperp, z, r, composition,
-    end1::Array{mk_float,4},end2::Array{mk_float,4},
-    buffer1::Array{mk_float,4},buffer2::Array{mk_float,4},
-    buffer_dfn::Array{mk_float,5}) where T
+function enforce_r_boundary_condition!(f::AbstractArray{mk_float,5}, f_r_bc, bc::String,
+        adv::T, vpa, vperp, z, r, composition, end1::AbstractArray{mk_float,4},
+        end2::AbstractArray{mk_float,4}, buffer1::AbstractArray{mk_float,4},
+        buffer2::AbstractArray{mk_float,4}, buffer_dfn::AbstractArray{mk_float,5}) where T
     
     nr = r.n
     
@@ -644,11 +643,10 @@ end
 """
 enforce boundary conditions on f in z
 """
-function enforce_z_boundary_condition!(f::Array{mk_float,5},
-     bc::String, adv::T, vpa, vperp, z, r, composition,
-     end1::Array{mk_float,4}, end2::Array{mk_float,4},
-     buffer1::Array{mk_float,4}, buffer2::Array{mk_float,4},
-     buffer_dfn::Array{mk_float,5}) where T
+function enforce_z_boundary_condition!(f::AbstractArray{mk_float,5}, bc::String, adv::T,
+        vpa, vperp, z, r, composition, end1::AbstractArray{mk_float,4},
+        end2::AbstractArray{mk_float,4}, buffer1::AbstractArray{mk_float,4},
+        buffer2::AbstractArray{mk_float,4}, buffer_dfn::AbstractArray{mk_float,5}) where T
     # define nz variable for convenience
     nz = z.n
     # define a zero that accounts for finite precision
@@ -764,12 +762,12 @@ function enforce_neutral_boundary_conditions!(f_neutral, f_charged, boundary_dis
                                 scratch_dummy.buffer_vzvrvzetazrsn)
 end
 
-function enforce_neutral_z_boundary_condition!(f_neutral::Array{mk_float,6},
- f_charged::Array{mk_float,5}, boundary_distributions, z_adv_neutral::T1,
- z_adv_charged::T2, vz, vr, vzeta, vpa, vperp, z, r, composition,
- end1::Array{mk_float,5}, end2::Array{mk_float,5},
- buffer1::Array{mk_float,5}, buffer2::Array{mk_float,5},
- buffer_dfn::Array{mk_float,6}) where {T1, T2}
+function enforce_neutral_z_boundary_condition!(f_neutral::AbstractArray{mk_float,6},
+        f_charged::AbstractArray{mk_float,5}, boundary_distributions, z_adv_neutral::T1,
+        z_adv_charged::T2, vz, vr, vzeta, vpa, vperp, z, r, composition,
+        end1::AbstractArray{mk_float,5}, end2::AbstractArray{mk_float,5},
+        buffer1::AbstractArray{mk_float,5}, buffer2::AbstractArray{mk_float,5},
+        buffer_dfn::AbstractArray{mk_float,6}) where {T1, T2}
     bc = z.bc
     nz = z.n
     # define a zero that accounts for finite precision
@@ -863,11 +861,11 @@ function enforce_neutral_z_boundary_condition!(f_neutral::Array{mk_float,6},
     end
 end
 
-function enforce_neutral_r_boundary_condition!(f::Array{mk_float,6}, f_r_bc::Array{mk_float,6},
-  adv::T, vz, vr, vzeta, z, r, composition,
-  end1::Array{mk_float,5}, end2::Array{mk_float,5},
-  buffer1::Array{mk_float,5}, buffer2::Array{mk_float,5},
-  buffer_dfn::Array{mk_float,6}) where T #f_initial,
+function enforce_neutral_r_boundary_condition!(f::AbstractArray{mk_float,6},
+        f_r_bc::AbstractArray{mk_float,6}, adv::T, vz, vr, vzeta, z, r, composition,
+        end1::AbstractArray{mk_float,5}, end2::AbstractArray{mk_float,5},
+        buffer1::AbstractArray{mk_float,5}, buffer2::AbstractArray{mk_float,5},
+        buffer_dfn::AbstractArray{mk_float,6}) where T #f_initial,
 
     bc = r.bc
     nr = r.n
