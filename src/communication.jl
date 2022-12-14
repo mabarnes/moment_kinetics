@@ -83,7 +83,7 @@ notation definitions:
     - z group: group of processes that need to communicate data for z derivatives
     - r group: group of processes that need to communicate data for r derivatives
 """
-function setup_distributed_memory_MPI(z_nelement_global,z_nelement_local,r_nelement_global,r_nelement_local)
+function setup_distributed_memory_MPI(z_nelement_global,z_nelement_local,r_nelement_global,r_nelement_local; printout=false)
     # setup some local constants and dummy variables
     irank_global = global_rank[] # rank index within global processes
     nrank_global = global_size[] # number of processes 
@@ -98,13 +98,14 @@ function setup_distributed_memory_MPI(z_nelement_global,z_nelement_local,r_nelem
     # get the number of ranks per block
     nrank_per_zr_block = floor(mk_int,nrank_global/nblocks)
     
-    println("debug info:")
-    println("nrank_global: ",nrank_global)
-    println("r_nchunks: ",r_nchunks)
-    println("z_nchunks: ",z_nchunks)
-    println("nblocks: ",nblocks)
-    println("nrank_per_zr_block: ",nrank_per_zr_block)
-    
+    if printout
+        println("debug info:")
+        println("nrank_global: ",nrank_global)
+        println("r_nchunks: ",r_nchunks)
+        println("z_nchunks: ",z_nchunks)
+        println("nblocks: ",nblocks)
+        println("nrank_per_zr_block: ",nrank_per_zr_block)
+    end
 	# throw an error if user specified information is inconsistent
     if (nrank_per_zr_block*nblocks < nrank_global)
         if irank_global ==0 
@@ -120,10 +121,11 @@ function setup_distributed_memory_MPI(z_nelement_global,z_nelement_local,r_nelem
     iblock = floor(mk_int,irank_global/nrank_per_zr_block)
     # rank index within a block
     irank_block = mod(irank_global,nrank_per_zr_block)
- 
-    println("iblock: ",iblock)
-    println("irank_block: ",irank_block)
- 
+
+    if printout
+        println("iblock: ",iblock)
+        println("irank_block: ",irank_block)
+    end
     # assign the block rank to the global variables
     iblock_index[] = iblock
     block_rank[] = irank_block
@@ -141,27 +143,33 @@ function setup_distributed_memory_MPI(z_nelement_global,z_nelement_local,r_nelem
 	z_igroup = floor(mk_int,iblock/z_nchunks) # iblock(irank) - > z_igroup 
 	z_irank =  mod(iblock,z_nchunks) # iblock(irank) -> z_irank
 	# iblock = z_igroup * z_nchunks + z_irank_sub 
-	# useful information for debugging
-    println("z_ngroup: ",z_ngroup)
-	println("z_nrank_per_group: ",z_nrank_per_group)
-	println("z_igroup: ",z_igroup)
-	println("z_irank_sub: ",z_irank)	
-    println("iblock: ",iblock, " ", z_igroup * z_nchunks + z_irank)
-    println("")
-    
+
+    if printout
+        # useful information for debugging
+        println("z_ngroup: ",z_ngroup)
+        println("z_nrank_per_group: ",z_nrank_per_group)
+        println("z_igroup: ",z_igroup)
+        println("z_irank_sub: ",z_irank)
+        println("iblock: ",iblock, " ", z_igroup * z_nchunks + z_irank)
+        println("")
+    end
+
     r_ngroup = z_nchunks
 	r_nrank_per_group = r_nchunks
 	r_igroup = z_irank # block(irank) - > r_igroup 
 	r_irank = z_igroup # block(irank) -> r_irank
     # irank = r_igroup + z_nrank_per_group * r_irank
-	# useful information for debugging
-    println("r_ngroup: ",r_ngroup)
-	println("r_nrank_per_group: ",r_nrank_per_group)
-	println("r_igroup: ",r_igroup)
-	println("r_irank: ",r_irank)
-	println("iblock: ",iblock, " ", r_irank * r_ngroup + r_igroup)
-    println("")
-    
+
+    if printout
+        # useful information for debugging
+        println("r_ngroup: ",r_ngroup)
+        println("r_nrank_per_group: ",r_nrank_per_group)
+        println("r_igroup: ",r_igroup)
+        println("r_irank: ",r_irank)
+        println("iblock: ",iblock, " ", r_irank * r_ngroup + r_igroup)
+        println("")
+    end
+
 	# construct communicators for inter-block communication
 	# only communicate between lead processes on a block
     if block_rank[] == 0
