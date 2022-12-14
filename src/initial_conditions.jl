@@ -586,11 +586,13 @@ function enforce_boundary_conditions!(f, f_r_bc,
             scratch_dummy.buffer_vpavperprs_1, scratch_dummy.buffer_vpavperprs_2,
             scratch_dummy.buffer_vpavperprs_3, scratch_dummy.buffer_vpavperprs_4,
             scratch_dummy.buffer_vpavperpzrs)
-    begin_s_z_vperp_vpa_region()
-    @views enforce_r_boundary_condition!(f, f_r_bc, r_bc, r_adv, vpa, vperp, z, r, composition,
+    if r.n > 1
+        begin_s_z_vperp_vpa_region()
+        @views enforce_r_boundary_condition!(f, f_r_bc, r_bc, r_adv, vpa, vperp, z, r, composition,
             scratch_dummy.buffer_vpavperpzs_1, scratch_dummy.buffer_vpavperpzs_2,
             scratch_dummy.buffer_vpavperpzs_3, scratch_dummy.buffer_vpavperpzs_4,
             scratch_dummy.buffer_vpavperpzrs)
+    end
 end
 
 
@@ -754,12 +756,14 @@ function enforce_neutral_boundary_conditions!(f_neutral, f_charged, boundary_dis
             scratch_dummy.buffer_vzvrvzetarsn_1, scratch_dummy.buffer_vzvrvzetarsn_2,
             scratch_dummy.buffer_vzvrvzetarsn_3, scratch_dummy.buffer_vzvrvzetarsn_4,
             scratch_dummy.buffer_vzvrvzetazrsn)
-    begin_sn_z_vzeta_vr_vz_region()
-    @views enforce_neutral_r_boundary_condition!(f_neutral, boundary_distributions.pdf_rboundary_neutral,
-                                r_adv_neutral, vz, vr, vzeta, z, r, composition,
-                                scratch_dummy.buffer_vzvrvzetazsn_1, scratch_dummy.buffer_vzvrvzetazsn_2,
-                                scratch_dummy.buffer_vzvrvzetazsn_3, scratch_dummy.buffer_vzvrvzetazsn_4,
-                                scratch_dummy.buffer_vzvrvzetazrsn)
+    if r.n > 1
+        begin_sn_z_vzeta_vr_vz_region()
+        @views enforce_neutral_r_boundary_condition!(f_neutral, boundary_distributions.pdf_rboundary_neutral,
+                                    r_adv_neutral, vz, vr, vzeta, z, r, composition,
+                                    scratch_dummy.buffer_vzvrvzetazsn_1, scratch_dummy.buffer_vzvrvzetazsn_2,
+                                    scratch_dummy.buffer_vzvrvzetazsn_3, scratch_dummy.buffer_vzvrvzetazsn_4,
+                                    scratch_dummy.buffer_vzvrvzetazrsn)
+    end
 end
 
 function enforce_neutral_z_boundary_condition!(f_neutral::AbstractArray{mk_float,6},

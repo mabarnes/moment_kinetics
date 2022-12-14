@@ -303,18 +303,20 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     # with advection in r
     begin_serial_region()
     r_advect = setup_advection(n_ion_species, r, vpa, vperp, z)
-    # initialise the r advection speed
-    begin_s_z_vperp_vpa_region()
-    @loop_s is begin
-        @views update_speed_r!(r_advect[is], fields, vpa, vperp, z, r, geometry)
+    if r.n > 1
+        # initialise the r advection speed
+        begin_s_z_vperp_vpa_region()
+        @loop_s is begin
+            @views update_speed_r!(r_advect[is], fields, vpa, vperp, z, r, geometry)
+        end
+        # enforce prescribed boundary condition in r on the distribution function f
+        @views enforce_r_boundary_condition!(pdf.charged.unnorm, boundary_distributions.pdf_rboundary_charged,
+                                            r.bc, r_advect, vpa, vperp, z, r, composition,
+                                            scratch_dummy.buffer_vpavperpzs_1, scratch_dummy.buffer_vpavperpzs_2,
+                                            scratch_dummy.buffer_vpavperpzs_3, scratch_dummy.buffer_vpavperpzs_4,
+                                            scratch_dummy.buffer_vpavperpzrs)
     end
-    # enforce prescribed boundary condition in r on the distribution function f
-    @views enforce_r_boundary_condition!(pdf.charged.unnorm, boundary_distributions.pdf_rboundary_charged,
-                                        r.bc, r_advect, vpa, vperp, z, r, composition,
-                                        scratch_dummy.buffer_vpavperpzs_1, scratch_dummy.buffer_vpavperpzs_2,
-                                        scratch_dummy.buffer_vpavperpzs_3, scratch_dummy.buffer_vpavperpzs_4,
-                                        scratch_dummy.buffer_vpavperpzrs)
-    
+
     # create structure z_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the split part of the GK equation dealing
     # with advection in z
@@ -373,7 +375,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     # create structure neutral_r_advect for neutral particle advection
     begin_serial_region()
     neutral_r_advect = setup_advection(n_neutral_species, r, vz, vr, vzeta, z)
-    if n_neutral_species > 0
+    if n_neutral_species > 0 && r.n > 1
         # initialise the r advection speed
         begin_sn_vzeta_vr_vz_region()
         @loop_sn isn begin
