@@ -339,7 +339,7 @@ function apply_adv_fac!(buffer::AbstractArray{mk_float,Ndims},adv_fac::AbstractA
 			# replace buffer value with endpoint value 
 				buffer[i] = endpoints[i]
 			elseif sgn*adv_fac[i] < 0.0
-				break #do nothing
+				#do nothing
 			else #average values 
 				buffer[i] = 0.5*(buffer[i] + endpoints[i])
 			end
