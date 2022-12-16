@@ -446,24 +446,9 @@ function analyze_and_plot_data(path)
         end
         compare_moments_symbolic_test(run_name,density,density_sym,"ion",z,r,time,nz_global,nr_global,ntime,
          L"\widetilde{n}_i",L"\widetilde{n}_i^{sym}",L"\sqrt{\sum || \widetilde{n}_i - \widetilde{n}_i^{sym} ||^2 / N }","dens")
-        
-        if false 
-            ff_sym = copy(ff)
-            is = 1
-            for it in 1:ntime_pdfs
-                for ir in 1:nr
-                    for iz in 1:nz
-                        for ivperp in 1:nvperp
-                            for ivpa in 1:nvpa
-                                ff_sym[ivpa,ivperp,iz,ir,is,it] = dfni_func(vpa[ivpa],vperp[ivperp],z[iz],r[ir],time_pdfs[it])
-                            end
-                        end
-                    end
-                end
-            end
-            compare_charged_pdf_symbolic_test(run_name,ff,ff_sym,"ion",vpa,vperp,z,r,time_pdfs,nvpa,nvperp,nz,nr,ntime_pdfs,
-             L"\widetilde{f}_i",L"\widetilde{f}^{sym}_i",L"\sqrt{ \sum || \widetilde{f}_i - \widetilde{f}_i^{sym} ||^2 / N}","pdf")
-        end
+
+        compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,"ion",
+          L"\widetilde{f}_i",L"\widetilde{f}^{sym}_i",L"\sqrt{ \sum || \widetilde{f}_i - \widetilde{f}_i^{sym} ||^2 / N}","pdf")
         if n_neutral_species > 0
             # neutral test
             neutral_density_sym = copy(density[:,:,:,:])
@@ -478,25 +463,8 @@ function analyze_and_plot_data(path)
             compare_moments_symbolic_test(run_name,neutral_density,neutral_density_sym,"neutral",z,r,time,nz_global,nr_global,ntime,
              L"\widetilde{n}_n",L"\widetilde{n}_n^{sym}",L"\sqrt{ \sum || \widetilde{n}_n - \widetilde{n}_n^{sym} ||^2 /N}","dens")
             
-            if false 
-                neutral_ff_sym = copy(neutral_ff)
-                is = 1
-                for it in 1:ntime_pdfs
-                    for ir in 1:nr
-                        for iz in 1:nz
-                            for ivzeta in 1:nvzeta
-                                for ivr in 1:nvr
-                                    for ivz in 1:nvz
-                                        neutral_ff_sym[ivz,ivr,ivzeta,iz,ir,is,it] = dfnn_func(vz[ivz],vr[ivr],vzeta[ivzeta],z[iz],r[ir],time_pdfs[it])
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end
-                compare_neutral_pdf_symbolic_test(run_name,neutral_ff,neutral_ff_sym,"neutral",vz,vr,vzeta,z,r,time_pdfs,nvz,nvr,nvzeta,nz,nr,ntime_pdfs,
-                 L"\widetilde{f}_n",L"\widetilde{f}^{sym}_n",L"\sqrt{\sum || \widetilde{f}_n - \widetilde{f}_n^{sym} ||^2 /N}","pdf")
-            end
+            compare_neutral_pdf_symbolic_test(run_name,manufactured_solns_list,"neutral",
+             L"\widetilde{f}_n",L"\widetilde{f}^{sym}_n",L"\sqrt{\sum || \widetilde{f}_n - \widetilde{f}_n^{sym} ||^2 /N}","pdf")
         end
     end
 
@@ -620,35 +588,44 @@ function compare_moments_symbolic_test(run_name,moment,moment_sym,spec_string,z,
 
 end
 
-function compare_charged_pdf_symbolic_test(run_name,pdf,pdf_sym,spec_string,
- vpa,vperp,z,r,time,nvpa,nvperp,nz,nr,ntime,pdf_label,pdf_sym_label,norm_label,file_string)
-    is = 1
-    it = ntime
-
-    # Heatmaps for future use
-    #heatmap(r, z, pdf[:,:,is,it], xlabel=L"r", ylabel=L"z", title=pdf_label, c = :deep)
-    #outfile = string(run_name, "_"*file_string*"_vs_r_z_", spec_string, ".pdf")
-    #savefig(outfile)
-    #heatmap(r, z, pdf_sym[:,:,is,it], xlabel=L"r", ylabel=L"z", title=pdf_sym_label, c = :deep)
-    #outfile = string(run_name, "_"*file_string*"_sym_vs_r_z_", spec_string, ".pdf")
-    #savefig(outfile)
-
+function compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,spec_string,
+    pdf_label,pdf_sym_label,norm_label,file_string)
+    fid = open_netcdf_file(run_name,"dfns", printout=false)
+    # load block data on iblock=0
+    nblocks, iblock = load_block_data(fid, printout=false)
+    # load global sizes of grids that are distributed in memory
+    nz_global, nr_global = load_global_zr_coordinate_data(fid, printout=false)
+    # local local grid data on iblock=0
+    nz_local, z_local, z_local_wgts, Lz, nr_local, r_local, r_local_wgts, Lr = load_local_zr_coordinate_data(fid, printout=false)
+    # velocity grid data on iblock=0 (same for all blocks)
+    nvpa, vpa, vpa_wgts, nvperp, vperp, vperp_wgts = load_charged_velocity_coordinate_data(fid, printout=false)
+    # load time data (unique to pdf, may differ to moment values depending on user nwrite_dfns value)
+    ntime, time = load_time_data(fid, printout=false)
+    # get the charged particle pdf
+    dfni_func = manufactured_solns_list.dfni_func
+    is = 1 # only one species supported currently
+    
     pdf_norm = zeros(mk_float,ntime)
     for it in 1:ntime
         dummy = 0.0
         dummy_N = 0.0
-        for ir in 1:nr
-            for iz in 1:nz
-                for ivperp in 1:nvperp
-                    for ivpa in 1:nvpa
-                        dummy += (pdf[ivpa,ivperp,iz,ir,is,it] - pdf_sym[ivpa,ivperp,iz,ir,is,it])^2
-                        dummy_N += (pdf_sym[ivpa,ivperp,iz,ir,is,it])^2
+        for iblock in 0:nblocks-1
+            fid_pdfs = open_netcdf_file(run_name,"dfns",iblock=iblock, printout=false)
+            pdf = load_pdf_data(fid_pdfs, printout=false)
+            for ir in 1:nr_local
+                for iz in 1:nz_local
+                    for ivperp in 1:nvperp
+                        for ivpa in 1:nvpa
+                            pdf_sym = dfni_func(vpa[ivpa],vperp[ivperp],z_local[iz],r_local[ir],time[it])
+                            dummy += (pdf[ivpa,ivperp,iz,ir,is,it] - pdf_sym)^2
+                            dummy_N += (pdf_sym)^2
+                        end
                     end
                 end
             end
         end
         #pdf_norm[it] = dummy/dummy_N
-        pdf_norm[it] = sqrt(dummy/(nr*nz*nvpa*nvperp))
+        pdf_norm[it] = sqrt(dummy/(nr_global*nz_global*nvpa*nvperp))
     end
     println("test: ",file_string,": ",spec_string," ",pdf_norm)
     @views plot(time, pdf_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=norm_label) #, yaxis=:log)
@@ -658,37 +635,46 @@ function compare_charged_pdf_symbolic_test(run_name,pdf,pdf_sym,spec_string,
     return pdf_norm
 end
 
-function compare_neutral_pdf_symbolic_test(run_name,pdf,pdf_sym,spec_string,
- vz,vr,vzeta,z,r,time,nvz,nvr,nvzeta,nz,nr,ntime,pdf_label,pdf_sym_label,norm_label,file_string)
-    is = 1
-    it = ntime
-
-    # Heatmaps for future use
-    #heatmap(r, z, pdf[:,:,is,it], xlabel=L"r", ylabel=L"z", title=pdf_label, c = :deep)
-    #outfile = string(run_name, "_"*file_string*"_vs_r_z_", spec_string, ".pdf")
-    #savefig(outfile)
-    #heatmap(r, z, pdf_sym[:,:,is,it], xlabel=L"r", ylabel=L"z", title=pdf_sym_label, c = :deep)
-    #outfile = string(run_name, "_"*file_string*"_sym_vs_r_z_", spec_string, ".pdf")
-    #savefig(outfile)
-
+function compare_neutral_pdf_symbolic_test(run_name,manufactured_solns_list,spec_string,
+    pdf_label,pdf_sym_label,norm_label,file_string)
+    fid = open_netcdf_file(run_name,"dfns", printout=false)
+    # load block data on iblock=0
+    nblocks, iblock = load_block_data(fid, printout=false)
+    # load global sizes of grids that are distributed in memory
+    nz_global, nr_global = load_global_zr_coordinate_data(fid, printout=false)
+    # local local grid data on iblock=0
+    nz_local, z_local, z_local_wgts, Lz, nr_local, r_local, r_local_wgts, Lr = load_local_zr_coordinate_data(fid, printout=false)
+    # velocity grid data on iblock=0 (same for all blocks)
+    nvz, vz, vz_wgts, nvr, vr, vr_wgts, nvzeta, vzeta, vzeta_wgts = load_neutral_velocity_coordinate_data(fid, printout=false)# load time data (unique to pdf, may differ to moment values depending on user nwrite_dfns value)
+    # load time data (unique to pdf, may differ to moment values depending on user nwrite_dfns value)
+    ntime, time = load_time_data(fid, printout=false)
+    # get the charged particle pdf
+    dfnn_func = manufactured_solns_list.dfnn_func
+    is = 1 # only one species supported currently
+    
     pdf_norm = zeros(mk_float,ntime)
     for it in 1:ntime
         dummy = 0.0
         dummy_N = 0.0
-        for ir in 1:nr
-            for iz in 1:nz
-                for ivzeta in 1:nvzeta
-                    for ivr in 1:nvr
-                        for ivz in 1:nvz
-                            dummy += (pdf[ivz,ivr,ivzeta,iz,ir,is,it] - pdf_sym[ivz,ivr,ivzeta,iz,ir,is,it])^2
-                            dummy_N += (pdf_sym[ivz,ivr,ivzeta,iz,ir,is,it])^2
+        for iblock in 0:nblocks-1
+            fid_pdfs = open_netcdf_file(run_name,"dfns",iblock=iblock, printout=false)
+            pdf = load_neutral_pdf_data(fid_pdfs, printout=false)
+            for ir in 1:nr_local
+                for iz in 1:nz_local
+                    for ivzeta in 1:nvzeta
+                        for ivr in 1:nvr
+                            for ivz in 1:nvz
+                                pdf_sym = dfnn_func(vz[ivz],vr[ivr],vzeta[ivzeta],z_local[iz],r_local[ir],time[it])
+                                dummy += (pdf[ivz,ivr,ivzeta,iz,ir,is,it] - pdf_sym)^2
+                                dummy_N += (pdf_sym)^2
+                            end
                         end
                     end
                 end
             end
         end
         #pdf_norm[it] = dummy/dummy_N
-        pdf_norm[it] = sqrt(dummy/(nr*nz*nvz*nvr*nvzeta))
+        pdf_norm[it] = sqrt(dummy/(nr_global*nz_global*nvz*nvr*nvzeta))
     end
     println("test: ",file_string,": ",spec_string," ",pdf_norm)
     @views plot(time, pdf_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=norm_label) #, yaxis=:log)

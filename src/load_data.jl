@@ -43,7 +43,7 @@ end
 
 """
 """
-function load_local_zr_coordinate_data(fid; printout=false)
+function load_local_zr_coordinate_data(fid; printout=true)
     if printout
         print("Loading coordinate data...")
     end
@@ -79,8 +79,10 @@ function load_local_zr_coordinate_data(fid; printout=false)
     return nz, z, z_wgts, Lz, nr, r, r_wgts, Lr
 end
 
-function load_charged_velocity_coordinate_data(fid)
-    print("Loading coordinate data...")
+function load_charged_velocity_coordinate_data(fid; printout=true)
+    if printout
+        print("Loading coordinate data...")
+    end
     # define a handle for the vperp coordinate
     cdfvar = fid["vperp"]
     # get the number of vperp grid points
@@ -100,49 +102,61 @@ function load_charged_velocity_coordinate_data(fid)
     # get the weights associated with the vpa coordinate
     cdfvar = fid["vpa_wgts"]
     vpa_wgts = cdfvar.var[:]
-    println("done.")
-
+    if printout
+        println("done.")
+    end
     return nvpa, vpa, vpa_wgts, nvperp, vperp, vperp_wgts
 end
 
 """
 """
 
-function load_species_data(fid)
-    print("Loading species data...")
+function load_species_data(fid; printout=true)
+    if printout
+        print("Loading species data...")
+    end
     # get the lengths of the ion species dimension
     n_ion_species = fid.dim["n_ion_species"]
     # get the lengths of the neutral species dimension
     n_neutral_species = fid.dim["n_neutral_species"]
-    println("done.")
+    if printout 
+        println("done.")
+    end
     return n_ion_species, n_neutral_species
 end
 
 """
 """
-function load_time_data(fid)
-    print("Loading time data...")
+function load_time_data(fid; printout=true)
+    if printout 
+        print("Loading time data...")
+    end
     # define a handle for the time coordinate
     cdfvar = fid["time"]
     # get the number of time grid points
     ntime = length(cdfvar)
     # load the data for time
     time = cdfvar.var[:]
-    println("done.")
-
+    if printout
+        println("done.")
+    end
     return  ntime, time
 end
 
 """
 """
-function load_block_data(fid)
-    print("Loading block data...")
+function load_block_data(fid; printout=true)
+    if printout
+        print("Loading block data...")
+    end
     cdfvar = fid["nblocks"]
     nblocks = cdfvar.var[]
     
     cdfvar = fid["iblock"]
     iblock = cdfvar.var[]
-    println("done.")
+    if printout
+        println("done.")
+    end
     return  nblocks, iblock
 end
 
@@ -163,22 +177,28 @@ function load_rank_data(fid; printout=true)
     return z_irank, r_irank
 end
 
-function load_global_zr_coordinate_data(fid)
-    print("Loading process data...")
+function load_global_zr_coordinate_data(fid; printout=true)
+    if printout
+        print("Loading process data...")
+    end
     cdfvar = fid["nz_global"]
     nz_global = cdfvar.var[]
     
     cdfvar = fid["nr_global"]
     nr_global = cdfvar.var[]
-    println("done.")
+    if printout
+        println("done.")
+    end
     return  nz_global, nr_global
 end
 
 """
 """
 
-function load_neutral_velocity_coordinate_data(fid)
-    print("Loading neutral coordinate data...")
+function load_neutral_velocity_coordinate_data(fid; printout=true)
+    if printout
+        print("Loading neutral coordinate data...")
+    end
     # define a handle for the vz coordinate
     cdfvar = fid["vz"]
     # get the number of vz grid points
@@ -208,9 +228,9 @@ function load_neutral_velocity_coordinate_data(fid)
     # get the weights associated with the vzeta coordinate
     cdfvar = fid["vzeta_wgts"]
     vzeta_wgts = cdfvar.var[:]
-
-    println("done.")
-
+    if printout
+        println("done.")
+    end
     return nvz, vz, vz_wgts, nvr, vr, vr_wgts, nvzeta, vzeta, vzeta_wgts
 end
 """
@@ -286,24 +306,32 @@ end
 
 """
 """
-function load_pdf_data(fid)
-    print("Loading charged particle distribution function data...")
+function load_pdf_data(fid; printout=true)
+    if printout
+        print("Loading charged particle distribution function data...")
+    end
     # define a handle for the distribution function
     cdfvar = fid["f"]
     # load the distribution function data
     pdf = cdfvar.var[:,:,:,:,:,:]
-    println("done.")
+    if printout
+        println("done.")
+    end
     return pdf
 end
 """
 """
-function load_neutral_pdf_data(fid)
-    print("Loading neutral particle distribution function data...")
+function load_neutral_pdf_data(fid; printout=true)
+    if printout 
+        print("Loading neutral particle distribution function data...")
+    end
     # define a handle for the distribution function
     cdfvar = fid["f_neutral"]
     # load the distribution function data
     neutral_pdf = cdfvar.var[:,:,:,:,:,:]
-    println("done.")
+    if printout 
+        println("done.")
+    end
     return neutral_pdf
 end
 
