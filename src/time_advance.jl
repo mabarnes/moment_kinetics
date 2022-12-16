@@ -281,8 +281,9 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     # that may be evolved separately via fluid equations
     scratch = setup_scratch_arrays(moments, pdf.charged.norm, pdf.neutral.norm, t_input.n_rk_stages)
     # setup dummy arrays & buffer arrays for z r MPI
+    n_neutral_species_alloc = max(1,composition.n_neutral_species)
     scratch_dummy = setup_dummy_and_buffer_arrays(r.n,z.n,vpa.n,vperp.n,vz.n,vr.n,vzeta.n,
-                                   composition.n_ion_species,composition.n_neutral_species)
+                                   composition.n_ion_species,n_neutral_species_alloc)
     # create the "fields" structure that contains arrays
     # for the electrostatic potential phi and eventually the electromagnetic fields
     fields = setup_em_fields(z.n, r.n, drive_input.force_phi, drive_input.amplitude, drive_input.frequency)
@@ -374,7 +375,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     
     # create structure neutral_r_advect for neutral particle advection
     begin_serial_region()
-    neutral_r_advect = setup_advection(n_neutral_species, r, vz, vr, vzeta, z)
+    neutral_r_advect = setup_advection(n_neutral_species_alloc, r, vz, vr, vzeta, z)
     if n_neutral_species > 0 && r.n > 1
         # initialise the r advection speed
         begin_sn_vzeta_vr_vz_region()
@@ -391,7 +392,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     
     # create structure neutral_z_advect for neutral particle advection
     begin_serial_region()
-    neutral_z_advect = setup_advection(n_neutral_species, z, vz, vr, vzeta, r)
+    neutral_z_advect = setup_advection(n_neutral_species_alloc, z, vz, vr, vzeta, r)
     if n_neutral_species > 0
         # initialise the z advection speed
         begin_sn_vzeta_vr_vz_region()
