@@ -595,12 +595,11 @@ function compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,spec
     nblocks, iblock = load_block_data(fid, printout=false)
     # load global sizes of grids that are distributed in memory
     nz_global, nr_global = load_global_zr_coordinate_data(fid, printout=false)
-    # local local grid data on iblock=0
-    nz_local, z_local, z_local_wgts, Lz, nr_local, r_local, r_local_wgts, Lr = load_local_zr_coordinate_data(fid, printout=false)
     # velocity grid data on iblock=0 (same for all blocks)
     nvpa, vpa, vpa_wgts, nvperp, vperp, vperp_wgts = load_charged_velocity_coordinate_data(fid, printout=false)
     # load time data (unique to pdf, may differ to moment values depending on user nwrite_dfns value)
     ntime, time = load_time_data(fid, printout=false)
+    close(fid)
     # get the charged particle pdf
     dfni_func = manufactured_solns_list.dfni_func
     is = 1 # only one species supported currently
@@ -612,6 +611,9 @@ function compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,spec
         for iblock in 0:nblocks-1
             fid_pdfs = open_netcdf_file(run_name,"dfns",iblock=iblock, printout=false)
             pdf = load_pdf_data(fid_pdfs, printout=false)
+            # local local grid data on iblock=0
+            nz_local, z_local, z_local_wgts, Lz, nr_local, r_local, r_local_wgts, Lr = load_local_zr_coordinate_data(fid_pdfs, printout=false)
+            close(fid_pdfs)
             for ir in 1:nr_local
                 for iz in 1:nz_local
                     for ivperp in 1:nvperp
@@ -642,12 +644,11 @@ function compare_neutral_pdf_symbolic_test(run_name,manufactured_solns_list,spec
     nblocks, iblock = load_block_data(fid, printout=false)
     # load global sizes of grids that are distributed in memory
     nz_global, nr_global = load_global_zr_coordinate_data(fid, printout=false)
-    # local local grid data on iblock=0
-    nz_local, z_local, z_local_wgts, Lz, nr_local, r_local, r_local_wgts, Lr = load_local_zr_coordinate_data(fid, printout=false)
     # velocity grid data on iblock=0 (same for all blocks)
     nvz, vz, vz_wgts, nvr, vr, vr_wgts, nvzeta, vzeta, vzeta_wgts = load_neutral_velocity_coordinate_data(fid, printout=false)# load time data (unique to pdf, may differ to moment values depending on user nwrite_dfns value)
     # load time data (unique to pdf, may differ to moment values depending on user nwrite_dfns value)
     ntime, time = load_time_data(fid, printout=false)
+    close(fid)
     # get the charged particle pdf
     dfnn_func = manufactured_solns_list.dfnn_func
     is = 1 # only one species supported currently
@@ -659,6 +660,9 @@ function compare_neutral_pdf_symbolic_test(run_name,manufactured_solns_list,spec
         for iblock in 0:nblocks-1
             fid_pdfs = open_netcdf_file(run_name,"dfns",iblock=iblock, printout=false)
             pdf = load_neutral_pdf_data(fid_pdfs, printout=false)
+            # local local grid data
+            nz_local, z_local, z_local_wgts, Lz, nr_local, r_local, r_local_wgts, Lr = load_local_zr_coordinate_data(fid_pdfs, printout=false)
+            close(fid_pdfs)
             for ir in 1:nr_local
                 for iz in 1:nz_local
                     for ivzeta in 1:nvzeta
