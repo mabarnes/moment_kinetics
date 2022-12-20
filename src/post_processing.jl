@@ -7,6 +7,11 @@ export compare_charged_pdf_symbolic_test
 export compare_moments_symbolic_test
 export compare_neutral_pdf_symbolic_test
 export compare_fields_symbolic_test
+export read_distributed_zr_data!
+export construct_global_zr_grids
+export allocate_global_zr_charged_moments
+export allocate_global_zr_neutral_moments
+export allocate_global_zr_fields
 
 # packages
 using Plots
@@ -199,6 +204,54 @@ function allocate_global_zr_neutral_moments(nz_global,nr_global,n_neutral_specie
     neutral_thermal_speed = allocate_float(nz_global,nr_global,n_neutral_species,ntime)
     return neutral_density, neutral_uz, neutral_pz, neutral_qz, neutral_thermal_speed
 end
+
+
+"""
+Function below duplicates code from moment_kinetics_input.jl
+ -- need to make better functions there that can be called here
+"""
+
+function get_geometry_and_composition(scan_input,n_ion_species,n_neutral_species)
+    # set geometry_input
+    # MRH need to get this in way that does not duplicate code
+    # MRH from moment_kinetics_input.jl
+    Bzed = get(scan_input, "Bzed", 1.0)
+    Bmag = get(scan_input, "Bmag", 1.0)
+    bzed = Bzed/Bmag
+    bzeta = sqrt(1.0 - bzed^2.0)
+    Bzeta = Bmag*bzeta
+    rhostar = get(scan_input, "rhostar", 0.0)
+    geometry = geometry_input(Bzed,Bmag,bzed,bzeta,Bzeta,rhostar)
+
+    # set composition input
+    # MRH need to get this in way that does not duplicate code
+    # MRH from moment_kinetics_input.jl
+    electron_physics = get(scan_input, "electron_physics", boltzmann_electron_response)
+
+    if electron_physics ∈ (boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath)
+        n_species = n_ion_species + n_neutral_species
+    else
+        n_species = n_ion_species + n_neutral_species + 1
+    end
+    T_e = get(scan_input, "T_e", 1.0)
+    # set wall temperature T_wall = Tw/Te
+    T_wall = get(scan_input, "T_wall", 1.0)
+    # set initial neutral temperature Tn/Tₑ = 1
+    # set initial nᵢ/Nₑ = 1.0
+    # set phi_wall at z = 0
+    phi_wall = get(scan_input, "phi_wall", 0.0)
+    # if false use true Knudsen cosine for neutral wall bc
+    use_test_neutral_wall_pdf = get(scan_input, "use_test_neutral_wall_pdf", false)
+    # ratio of the neutral particle mass to the ion particle mass
+    mn_over_mi = 1.0
+    # ratio of the electron particle mass to the ion particle mass
+    me_over_mi = 1.0/1836.0
+    composition = species_composition(n_species, n_ion_species, n_neutral_species,
+        electron_physics, use_test_neutral_wall_pdf, 1:n_ion_species, n_ion_species+1:n_species, T_e, T_wall,
+        phi_wall, mn_over_mi, me_over_mi, allocate_float(n_species))
+    return geometry, composition
+
+end
 """
 """
 function analyze_and_plot_data(path)
@@ -360,45 +413,7 @@ function analyze_and_plot_data(path)
             Lr_in = 1.0
         end
         
-        
-        # set geometry_input
-        # MRH need to get this in way that does not duplicate code 
-        # MRH from moment_kinetics_input.jl
-        Bzed = get(scan_input, "Bzed", 1.0)
-        Bmag = get(scan_input, "Bmag", 1.0)
-        bzed = Bzed/Bmag
-        bzeta = sqrt(1.0 - bzed^2.0)
-        Bzeta = Bmag*bzeta
-        rhostar = get(scan_input, "rhostar", 0.0)
-        geometry = geometry_input(Bzed,Bmag,bzed,bzeta,Bzeta,rhostar)
-
-        # set composition input  
-        # MRH need to get this in way that does not duplicate code 
-        # MRH from moment_kinetics_input.jl
-        electron_physics = get(scan_input, "electron_physics", boltzmann_electron_response)
-    
-        if electron_physics ∈ (boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath)
-            n_species = n_ion_species + n_neutral_species
-        else
-            n_species = n_ion_speces + n_neutral_species + 1
-        end
-        T_e = get(scan_input, "T_e", 1.0)
-        # set wall temperature T_wall = Tw/Te
-        T_wall = get(scan_input, "T_wall", 1.0)
-        # set initial neutral temperature Tn/Tₑ = 1
-        # set initial nᵢ/Nₑ = 1.0
-        # set phi_wall at z = 0
-        phi_wall = get(scan_input, "phi_wall", 0.0)
-        # if false use true Knudsen cosine for neutral wall bc
-        use_test_neutral_wall_pdf = get(scan_input, "use_test_neutral_wall_pdf", false)
-        # ratio of the neutral particle mass to the ion particle mass
-        mn_over_mi = 1.0
-        # ratio of the electron particle mass to the ion particle mass
-        me_over_mi = 1.0/1836.0
-        composition = species_composition(n_species, n_ion_species, n_neutral_species,
-            electron_physics, use_test_neutral_wall_pdf, 1:n_ion_species, n_ion_species+1:n_species, T_e, T_wall,
-            phi_wall, mn_over_mi, me_over_mi, allocate_float(n_species))
-        
+        geometry, composition = get_geometry_and_composition(scan_input,n_ion_species,n_neutral_species)
 
         manufactured_solns_list = manufactured_solutions(Lr_in,Lz,r_bc,z_bc,geometry,composition,nr)
         dfni_func = manufactured_solns_list.dfni_func

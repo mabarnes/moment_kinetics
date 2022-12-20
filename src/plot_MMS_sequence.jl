@@ -15,14 +15,19 @@ using LaTeXStrings
 # modules
 using ..post_processing_input: pp
 using ..post_processing: compare_charged_pdf_symbolic_test, compare_fields_symbolic_test
-using ..post_processing:  compare_moments_symbolic_test, compare_neutral_pdf_symbolic_test
+using ..post_processing: compare_moments_symbolic_test, compare_neutral_pdf_symbolic_test
+using ..post_processing: read_distributed_zr_data!, construct_global_zr_grids
+using ..post_processing: allocate_global_zr_neutral_moments, allocate_global_zr_charged_moments
+using ..post_processing: allocate_global_zr_fields, get_geometry_and_composition
 using ..array_allocation: allocate_float
 using ..file_io: open_output_file
 using ..type_definitions: mk_float, mk_int
-using ..load_data: open_netcdf_file
-using ..load_data: load_coordinate_data, load_fields_data, load_pdf_data
+using ..load_data: open_netcdf_file, load_time_data, load_species_data
+using ..load_data: load_local_zr_coordinate_data, load_fields_data, load_pdf_data
 using ..load_data: load_charged_particle_moments_data, load_neutral_particle_moments_data
-using ..load_data: load_neutral_pdf_data, load_neutral_coordinate_data
+using ..load_data: load_neutral_pdf_data, load_neutral_velocity_coordinate_data
+using ..load_data: load_charged_velocity_coordinate_data
+using ..load_data: load_block_data, load_global_zr_coordinate_data
 using ..velocity_moments: integrate_over_vspace
 using ..manufactured_solns: manufactured_solutions, manufactured_electric_fields
 using ..moment_kinetics_input: mk_input
@@ -56,27 +61,28 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         input_filename = path * ".toml"
         scan_input = TOML.parsefile(input_filename)
         # get run-time input/composition/geometry/collisions/species info for convenience
-        run_name_internal, output_dir, evolve_moments, 
-            t_input, z_input, r_input, 
-            vpa_input, vperp_input, gyrophase_input,
-            vz_input, vr_input, vzeta_input, 
-            composition, species, collisions, geometry, drive_input = mk_input(scan_input)
-        
+        #run_name_internal, output_dir, evolve_moments, 
+        #    t_input, z_input, r_input, 
+        #    vpa_input, vperp_input, gyrophase_input,
+        #    vz_input, vr_input, vzeta_input, 
+        #    composition, species, collisions, geometry, drive_input = mk_input(scan_input)
+        z_nelement, r_nelement, vpa_nelement, vperp_nelement, 
+          vz_nelement, vr_nelement, vzeta_nelement = get_coords_nelement(scan_input)
         if scan_type == "vpa_nelement"
             # get the number of elements for plot
-            nelement_sequence[isim] = vpa_input.nelement
+            nelement_sequence[isim] = vpa_nelement
         elseif scan_type == "nelement"
-            nelement = vpa_input.nelement
-            if  nelement == r_input.nelement &&nelement == z_input.nelement && nelement == vperp_input.nelement && nelement == vz_input.nelement && nelement == vr_input.nelement && nelement == vzeta_input.nelement
+            nelement = vpa_nelement
+            if  nelement == r_nelement &&nelement == z_nelement && nelement == vperp_nelement && nelement == vz_nelement && nelement == vr_nelement && nelement == vzeta_nelement
                 nelement_sequence[isim] = nelement
-            elseif  1 == r_input.nelement && nelement == z_input.nelement && nelement == vperp_input.nelement && nelement == vz_input.nelement && nelement == vr_input.nelement && nelement == vzeta_input.nelement
+            elseif  1 == r_nelement && nelement == z_nelement && nelement == vperp_nelement && nelement == vz_nelement && nelement == vr_nelement && nelement == vzeta_nelement
                 nelement_sequence[isim] = nelement
             else 
                 println("ERROR: scan_type = ",scan_type," requires element number to be equal in all dimensions")
             end
         elseif scan_type == "velocity_nelement"
-            nelement = vpa_input.nelement
-            if nelement == vperp_input.nelement && nelement == vz_input.nelement && nelement == vr_input.nelement && nelement == vzeta_input.nelement
+            nelement = vpa_nelement
+            if nelement == vperp_nelement && nelement == vz_nelement && nelement == vr_nelement && nelement == vzeta_nelement
                 nelement_sequence[isim] = nelement
             else 
                 println("ERROR: scan_type = ",scan_type," requires velocity elements equal in all dimensions")
@@ -86,44 +92,85 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         end
 
         # open the netcdf file and give it the handle 'fid'
-        fid = open_netcdf_file(run_name)
-        # load space-time coordinate data
-        nvpa, vpa, vpa_wgts, nvperp, vperp, vperp_wgts, nz, z, z_wgts, Lz, 
-         nr, r, r_wgts, Lr, ntime, time, n_ion_species, n_neutral_species = load_coordinate_data(fid)
-        #println("\n Info: n_neutral_species = ",n_neutral_species,", n_ion_species = ",n_ion_species,"\n")
+        fid = open_netcdf_file(run_name,"moments")
+        # load block data on iblock=0
+        nblocks, iblock = load_block_data(fid)
+             
+        # load global sizes of grids that are distributed in memory
+        nz_global, nr_global = load_global_zr_coordinate_data(fid)
+        # load local sizes of grids stored on each netCDF file 
+        # z z_wgts r r_wgts may take different values on different blocks
+        # we need to construct the global grid below
+        nz_local, z_local, z_local_wgts, Lz, nr_local, r_local, r_local_wgts, Lr = load_local_zr_coordinate_data(fid)
+        # load time data 
+        ntime, time = load_time_data(fid)
+        # load species data 
+        n_ion_species, n_neutral_species = load_species_data(fid)
+        # load local velocity coordinate data from `moments' cdf
+        # these values are currently the same for all blocks 
+        nvpa, vpa, vpa_wgts, nvperp, vperp, vperp_wgts = load_charged_velocity_coordinate_data(fid)
         if n_neutral_species > 0
-            nvz, vz, vz_wgts, nvr, vr, vr_wgts, nvzeta, vzeta, vzeta_wgts = load_neutral_coordinate_data(fid)
-        end
-        # load full (z,r,t) fields data
-        phi, Er, Ez = load_fields_data(fid)
-        # load full (z,r,species,t) charged particle velocity moments data
-        density, parallel_flow, parallel_pressure, parallel_heat_flux,
-            thermal_speed, evolve_ppar = load_charged_particle_moments_data(fid)
-        # load full (vpa,vperp,z,r,species,t) charged particle distribution function (pdf) data
-        ff = load_pdf_data(fid)
-        # load neutral particle data
-        if n_neutral_species > 0
-            neutral_density, neutral_uz, neutral_pz, neutral_qz, neutral_thermal_speed = load_neutral_particle_moments_data(fid)
-            neutral_ff = load_neutral_pdf_data(fid)
+            nvz, vz, vz_wgts, nvr, vr, vr_wgts, nvzeta, vzeta, vzeta_wgts = load_neutral_velocity_coordinate_data(fid)
+        else # define nvz nvr nvzeta to avoid errors below
+            nvz = 1
+            nvr = 1
+            nvzeta = 1
         end
         close(fid)
+        
+        
+        # allocate arrays to contain the global fields as a function of (z,r,t)
+        phi, Ez, Er = allocate_global_zr_fields(nz_global,nr_global,ntime)
+        density, parallel_flow, parallel_pressure, parallel_heat_flux,
+            thermal_speed = allocate_global_zr_charged_moments(nz_global,nr_global,n_ion_species,ntime)
+        if n_neutral_species > 0
+            neutral_density, neutral_uz, neutral_pz, 
+             neutral_qz, neutral_thermal_speed = allocate_global_zr_neutral_moments(nz_global,nr_global,n_neutral_species,ntime)
+        end 
+        # read in the data from different block netcdf files
+        # grids 
+        z, z_wgts, r, r_wgts = construct_global_zr_grids(run_name,
+           "moments",nz_global,nr_global,nblocks)
+        #println("z: ",z)
+        #println("r: ",r)
+        
+        # fields 
+        read_distributed_zr_data!(phi,"phi",run_name,"moments",nblocks,nz_local,nr_local) 
+        read_distributed_zr_data!(Ez,"Ez",run_name,"moments",nblocks,nz_local,nr_local) 
+        read_distributed_zr_data!(Er,"Er",run_name,"moments",nblocks,nz_local,nr_local) 
+        # charged particle moments
+        read_distributed_zr_data!(density,"density",run_name,"moments",nblocks,nz_local,nr_local) 
+        read_distributed_zr_data!(parallel_flow,"parallel_flow",run_name,"moments",nblocks,nz_local,nr_local) 
+        read_distributed_zr_data!(parallel_pressure,"parallel_pressure",run_name,"moments",nblocks,nz_local,nr_local) 
+        read_distributed_zr_data!(parallel_heat_flux,"parallel_heat_flux",run_name,"moments",nblocks,nz_local,nr_local) 
+        read_distributed_zr_data!(thermal_speed,"thermal_speed",run_name,"moments",nblocks,nz_local,nr_local) 
+        # neutral particle moments 
+        if n_neutral_species > 0
+            read_distributed_zr_data!(neutral_density,"density_neutral",run_name,"moments",nblocks,nz_local,nr_local) 
+            read_distributed_zr_data!(neutral_uz,"uz_neutral",run_name,"moments",nblocks,nz_local,nr_local) 
+            read_distributed_zr_data!(neutral_pz,"pz_neutral",run_name,"moments",nblocks,nz_local,nr_local) 
+            read_distributed_zr_data!(neutral_qz,"qz_neutral",run_name,"moments",nblocks,nz_local,nr_local) 
+            read_distributed_zr_data!(neutral_thermal_speed,"thermal_speed_neutral",run_name,"moments",nblocks,nz_local,nr_local) 
+        end
         
         
         r_bc = get(scan_input, "r_bc", "periodic")
         z_bc = get(scan_input, "z_bc", "periodic")
         # avoid passing Lr = 0 into manufactured_solns functions 
-        if nr > 1
+        if nr_local > 1
             Lr_in = Lr 
         else 
             Lr_in = 1.0
         end
-        manufactured_solns_list = manufactured_solutions(Lr_in,Lz,r_bc,z_bc,geometry,composition,nr) 
+        geometry, composition = get_geometry_and_composition(scan_input,n_ion_species,n_neutral_species)
+        
+        manufactured_solns_list = manufactured_solutions(Lr_in,Lz,r_bc,z_bc,geometry,composition,nr_local) 
         dfni_func = manufactured_solns_list.dfni_func
         densi_func = manufactured_solns_list.densi_func
         dfnn_func = manufactured_solns_list.dfnn_func
         densn_func = manufactured_solns_list.densn_func
         
-        manufactured_E_fields = manufactured_electric_fields(Lr_in,Lz,r_bc,z_bc,composition,nr)
+        manufactured_E_fields = manufactured_electric_fields(Lr_in,Lz,r_bc,z_bc,composition,nr_local)
         Er_func = manufactured_E_fields.Er_func
         Ez_func = manufactured_E_fields.Ez_func
         phi_func = manufactured_E_fields.phi_func
@@ -133,21 +180,21 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         Er_sym = copy(phi[:,:,:])
         Ez_sym = copy(phi[:,:,:])
         for it in 1:ntime
-            for ir in 1:nr
-                for iz in 1:nz
+            for ir in 1:nr_global
+                for iz in 1:nz_global
                     phi_sym[iz,ir,it] = phi_func(z[iz],r[ir],time[it])
                     Ez_sym[iz,ir,it] = Ez_func(z[iz],r[ir],time[it])
                     Er_sym[iz,ir,it] = Er_func(z[iz],r[ir],time[it])
                 end
             end
         end
-        phi_error_t = compare_fields_symbolic_test(run_name,phi,phi_sym,z,r,time,nz,nr,ntime,
+        phi_error_t = compare_fields_symbolic_test(run_name,phi,phi_sym,z,r,time,nz_global,nr_global,ntime,
          L"\widetilde{\phi}",L"\widetilde{\phi}^{sym}",L"\sqrt{\sum || \widetilde{\phi} - \widetilde{\phi}^{sym} ||^2 / N} ","phi")
         phi_error_sequence[isim] = phi_error_t[end]
-        Er_error_t = compare_fields_symbolic_test(run_name,Er,Er_sym,z,r,time,nz,nr,ntime,
+        Er_error_t = compare_fields_symbolic_test(run_name,Er,Er_sym,z,r,time,nz_global,nr_global,ntime,
          L"\widetilde{E_r}",L"\widetilde{E_r}^{sym}",L"\sqrt{\sum || \widetilde{E_r} - \widetilde{E_r}^{sym} ||^2 /N} ","Er")
         Er_error_sequence[isim] = Er_error_t[end]
-        Ez_error_t = compare_fields_symbolic_test(run_name,Ez,Ez_sym,z,r,time,nz,nr,ntime,
+        Ez_error_t = compare_fields_symbolic_test(run_name,Ez,Ez_sym,z,r,time,nz_global,nr_global,ntime,
          L"\widetilde{E_z}",L"\widetilde{E_z}^{sym}",L"\sqrt{\sum || \widetilde{E_z} - \widetilde{E_z}^{sym} ||^2 /N} ","Ez")
         Ez_error_sequence[isim] = Ez_error_t[end]
         
@@ -155,31 +202,18 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         density_sym = copy(density[:,:,:,:])
         is = 1
         for it in 1:ntime
-            for ir in 1:nr
-                for iz in 1:nz
+            for ir in 1:nr_global
+                for iz in 1:nz_global
                     density_sym[iz,ir,is,it] = densi_func(z[iz],r[ir],time[it])
                 end
             end
         end
-        ion_density_error_t = compare_moments_symbolic_test(run_name,density,density_sym,"ion",z,r,time,nz,nr,ntime,
+        ion_density_error_t = compare_moments_symbolic_test(run_name,density,density_sym,"ion",z,r,time,nz_global,nr_global,ntime,
          L"\widetilde{n}_i",L"\widetilde{n}_i^{sym}",L"\sum || \widetilde{n}_i - \widetilde{n}_i^{sym} ||^2 ","dens")
         # use final time point for analysis
         ion_density_error_sequence[isim] = ion_density_error_t[end] 
         
-        ff_sym = copy(ff)
-        is = 1
-        for it in 1:ntime
-            for ir in 1:nr
-                for iz in 1:nz
-                    for ivperp in 1:nvperp
-                        for ivpa in 1:nvpa
-                            ff_sym[ivpa,ivperp,iz,ir,is,it] = dfni_func(vpa[ivpa],vperp[ivperp],z[iz],r[ir],time[it])
-                        end
-                    end
-                end
-            end
-        end
-        ion_pdf_error_t = compare_charged_pdf_symbolic_test(run_name,ff,ff_sym,"ion",vpa,vperp,z,r,time,nvpa,nvperp,nz,nr,ntime,
+        ion_pdf_error_t = compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,"ion",
          L"\widetilde{f}_i",L"\widetilde{f}^{sym}_i",L"\sum || \widetilde{f}_i - \widetilde{f}_i^{sym} ||^2","pdf")
         ion_pdf_error_sequence[isim] = ion_pdf_error_t[end]
         
@@ -188,32 +222,17 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
             neutral_density_sym = copy(density[:,:,:,:])
             is = 1
             for it in 1:ntime
-                for ir in 1:nr
-                    for iz in 1:nz
+                for ir in 1:nr_global
+                    for iz in 1:nz_global
                         neutral_density_sym[iz,ir,is,it] = densn_func(z[iz],r[ir],time[it])
                     end
                 end
             end
-            neutral_density_error_t = compare_moments_symbolic_test(run_name,neutral_density,neutral_density_sym,"neutral",z,r,time,nz,nr,ntime,
+            neutral_density_error_t = compare_moments_symbolic_test(run_name,neutral_density,neutral_density_sym,"neutral",z,r,time,nz_global,nr_global,ntime,
              L"\widetilde{n}_n",L"\widetilde{n}_n^{sym}",L"\sum || \widetilde{n}_n - \widetilde{n}_n^{sym} ||^2 ","dens")
             neutral_density_error_sequence[isim] = neutral_density_error_t[end]
         
-            neutral_ff_sym = copy(neutral_ff)
-            is = 1
-            for it in 1:ntime
-                for ir in 1:nr
-                    for iz in 1:nz
-                        for ivzeta in 1:nvzeta
-                            for ivr in 1:nvr
-                                for ivz in 1:nvz
-                                    neutral_ff_sym[ivz,ivr,ivzeta,iz,ir,is,it] = dfnn_func(vz[ivz],vr[ivr],vzeta[ivzeta],z[iz],r[ir],time[it])
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-            neutral_pdf_error_t = compare_neutral_pdf_symbolic_test(run_name,neutral_ff,neutral_ff_sym,"neutral",vz,vr,vzeta,z,r,time,nvz,nvr,nvzeta,nz,nr,ntime,
+            neutral_pdf_error_t = compare_neutral_pdf_symbolic_test(run_name,manufactured_solns_list,"neutral",
              L"\widetilde{f}_n",L"\widetilde{f}^{sym}_n",L"\sum || \widetilde{f}_n - \widetilde{f}_n^{sym} ||^2","pdf")
             neutral_pdf_error_sequence[isim] = neutral_pdf_error_t[end]
         end
@@ -262,9 +281,9 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         ytick_sequence = Array([1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1])
     elseif scan_name == "2D-sound-wave_cheb_cxiz"
         ytick_sequence = Array([1.0e-3,1.0e-2,1.0e-1,1.0e-0,1.0e1])
-    elseif scan_name == "2D-sound-wave_cheb_cxiz" || scan_name == "2D-sound-wave_cheb"
+    elseif scan_name == "2D-sound-wave_cheb_cxiz" 
         ytick_sequence = Array([1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0,1.0e1])
-    elseif scan_name == "1D-3V-wall_cheb-updated"
+    elseif scan_name == "1D-3V-wall_cheb-updated" || scan_name == "2D-sound-wave_cheb"
         ytick_sequence = Array([1.0e-10,1.0e-9,1.0e-8,1.0e-7,1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0,1.0e1])
     else
         ytick_sequence = Array([1.0e-7,1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0,1.0e1])
@@ -343,6 +362,18 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         println(outfile)
     end
 
+end
+
+function get_coords_nelement(scan_input)
+    # use 1 as default because these values should be set in input .toml
+    z_nelement = get(scan_input, "z_nelement", 1)
+    r_nelement = get(scan_input, "r_nelement", 1)
+    vpa_nelement = get(scan_input, "vpa_nelement", 1)
+    vperp_nelement = get(scan_input, "vperp_nelement", 1)
+    vz_nelement = get(scan_input, "vz_nelement", 1)
+    vr_nelement = get(scan_input, "vr_nelement", 1)
+    vzeta_nelement = get(scan_input, "vzeta_nelement", 1)
+    return z_nelement, r_nelement, vpa_nelement, vperp_nelement, vz_nelement, vr_nelement, vzeta_nelement
 end
 
 end
