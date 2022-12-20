@@ -277,7 +277,7 @@ function analyze_and_plot_data(path)
     # load local sizes of grids stored on each netCDF file 
     # z z_wgts r r_wgts may take different values on different blocks
     # we need to construct the global grid below
-    nz, z_local, z_local_wgts, Lz, nr, r_local, r_local_wgts, Lr = load_local_zr_coordinate_data(fid)
+    nz_local, z_local, z_local_wgts, Lz, nr_local, r_local, r_local_wgts, Lr = load_local_zr_coordinate_data(fid)
     # load time data 
     ntime, time = load_time_data(fid)
     # load species data 
@@ -311,22 +311,22 @@ function analyze_and_plot_data(path)
     #println("r: ",r)
     
     # fields 
-    read_distributed_zr_data!(phi,"phi",run_name,"moments",nblocks,nz,nr) 
-    read_distributed_zr_data!(Ez,"Ez",run_name,"moments",nblocks,nz,nr) 
-    read_distributed_zr_data!(Er,"Er",run_name,"moments",nblocks,nz,nr) 
+    read_distributed_zr_data!(phi,"phi",run_name,"moments",nblocks,nz_local,nr_local)
+    read_distributed_zr_data!(Ez,"Ez",run_name,"moments",nblocks,nz_local,nr_local)
+    read_distributed_zr_data!(Er,"Er",run_name,"moments",nblocks,nz_local,nr_local)
     # charged particle moments
-    read_distributed_zr_data!(density,"density",run_name,"moments",nblocks,nz,nr) 
-    read_distributed_zr_data!(parallel_flow,"parallel_flow",run_name,"moments",nblocks,nz,nr) 
-    read_distributed_zr_data!(parallel_pressure,"parallel_pressure",run_name,"moments",nblocks,nz,nr) 
-    read_distributed_zr_data!(parallel_heat_flux,"parallel_heat_flux",run_name,"moments",nblocks,nz,nr) 
-    read_distributed_zr_data!(thermal_speed,"thermal_speed",run_name,"moments",nblocks,nz,nr) 
+    read_distributed_zr_data!(density,"density",run_name,"moments",nblocks,nz_local,nr_local)
+    read_distributed_zr_data!(parallel_flow,"parallel_flow",run_name,"moments",nblocks,nz_local,nr_local)
+    read_distributed_zr_data!(parallel_pressure,"parallel_pressure",run_name,"moments",nblocks,nz_local,nr_local)
+    read_distributed_zr_data!(parallel_heat_flux,"parallel_heat_flux",run_name,"moments",nblocks,nz_local,nr_local)
+    read_distributed_zr_data!(thermal_speed,"thermal_speed",run_name,"moments",nblocks,nz_local,nr_local)
     # neutral particle moments 
     if n_neutral_species > 0
-        read_distributed_zr_data!(neutral_density,"density_neutral",run_name,"moments",nblocks,nz,nr) 
-        read_distributed_zr_data!(neutral_uz,"uz_neutral",run_name,"moments",nblocks,nz,nr) 
-        read_distributed_zr_data!(neutral_pz,"pz_neutral",run_name,"moments",nblocks,nz,nr) 
-        read_distributed_zr_data!(neutral_qz,"qz_neutral",run_name,"moments",nblocks,nz,nr) 
-        read_distributed_zr_data!(neutral_thermal_speed,"thermal_speed_neutral",run_name,"moments",nblocks,nz,nr) 
+        read_distributed_zr_data!(neutral_density,"density_neutral",run_name,"moments",nblocks,nz_local,nr_local)
+        read_distributed_zr_data!(neutral_uz,"uz_neutral",run_name,"moments",nblocks,nz_local,nr_local)
+        read_distributed_zr_data!(neutral_pz,"pz_neutral",run_name,"moments",nblocks,nz_local,nr_local)
+        read_distributed_zr_data!(neutral_qz,"qz_neutral",run_name,"moments",nblocks,nz_local,nr_local)
+        read_distributed_zr_data!(neutral_thermal_speed,"thermal_speed_neutral",run_name,"moments",nblocks,nz_local,nr_local)
     end 
     # load time data from `dfns' cdf
     fid_pdfs = open_netcdf_file(run_name,"dfns")
@@ -337,7 +337,7 @@ function analyze_and_plot_data(path)
 	
 	# initialise the post-processing input options
     nwrite_movie, itime_min, itime_max, ivpa0, ivperp0, iz0, ir0,
-        ivz0, ivr0, ivzeta0 = init_postprocessing_options(pp, nvpa, nvperp, nz, nr, nvz, nvr, nvzeta, ntime)
+        ivz0, ivr0, ivzeta0 = init_postprocessing_options(pp, nvpa, nvperp, nz_global, nr_global, nvz, nvr, nvzeta, ntime)
     # load full (z,r,t) fields data
     #phi, Er, Ez = load_fields_data(fid)
     # load full (z,r,species,t) charged particle velocity moments data
@@ -407,7 +407,7 @@ function analyze_and_plot_data(path)
         r_bc = get(scan_input, "r_bc", "periodic")
         z_bc = get(scan_input, "z_bc", "periodic")
         # avoid passing Lr = 0 into manufactured_solns functions
-        if nr > 1
+        if nr_local > 1
             Lr_in = Lr
         else
             Lr_in = 1.0
@@ -415,12 +415,12 @@ function analyze_and_plot_data(path)
         
         geometry, composition = get_geometry_and_composition(scan_input,n_ion_species,n_neutral_species)
 
-        manufactured_solns_list = manufactured_solutions(Lr_in,Lz,r_bc,z_bc,geometry,composition,nr)
+        manufactured_solns_list = manufactured_solutions(Lr_in,Lz,r_bc,z_bc,geometry,composition,nr_local)
         dfni_func = manufactured_solns_list.dfni_func
         densi_func = manufactured_solns_list.densi_func
         dfnn_func = manufactured_solns_list.dfnn_func
         densn_func = manufactured_solns_list.densn_func
-        manufactured_E_fields = manufactured_electric_fields(Lr_in,Lz,r_bc,z_bc,composition,nr)
+        manufactured_E_fields = manufactured_electric_fields(Lr_in,Lz,r_bc,z_bc,composition,nr_local)
         Er_func = manufactured_E_fields.Er_func
         Ez_func = manufactured_E_fields.Ez_func
         phi_func = manufactured_E_fields.phi_func
