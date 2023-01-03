@@ -280,7 +280,6 @@ function reconcile_element_boundaries_MPI!(df1d::AbstractArray{mk_float,Ndims},
         #print("$irank: Sending   $irank -> $idst = $send_buffer\n")
         stats = MPI.Waitall([rreq, sreq])
         #print("$irank: Received $isrc -> $irank = $receive_buffer\n")
-        MPI.Barrier(comm)
         
         # no update receive buffer, taking into account the reconciliation
         if irank == 0
@@ -306,7 +305,6 @@ function reconcile_element_boundaries_MPI!(df1d::AbstractArray{mk_float,Ndims},
         #print("$irank: Sending   $irank -> $idst = $send_buffer\n")
         stats = MPI.Waitall([rreq, sreq])
         #print("$irank: Received $isrc -> $irank = $receive_buffer\n")
-        MPI.Barrier(comm)
         
         if irank == nrank-1
             if coord.bc == "periodic"
@@ -380,7 +378,6 @@ function reconcile_element_boundaries_MPI!(df1d::AbstractArray{mk_float,Ndims},
         #print("$irank: Sending   $irank -> $idst = $send_buffer\n")
         stats = MPI.Waitall([rreq, sreq])
         #print("$irank: Received $isrc -> $irank = $receive_buffer\n")
-        MPI.Barrier(comm)
         
         # no update receive buffer, taking into account the reconciliation
         if irank == 0
@@ -406,7 +403,6 @@ function reconcile_element_boundaries_MPI!(df1d::AbstractArray{mk_float,Ndims},
         #print("$irank: Sending   $irank -> $idst = $send_buffer\n")
         stats = MPI.Waitall([rreq, sreq])
         #print("$irank: Received $isrc -> $irank = $receive_buffer\n")
-        MPI.Barrier(comm)
         
         if irank == nrank-1
             if coord.bc == "periodic"
