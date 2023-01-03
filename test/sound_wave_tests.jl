@@ -7,10 +7,9 @@ using TimerOutputs
 #using Plots: plot, plot!, gui
 
 using moment_kinetics.array_allocation: allocate_float
-using moment_kinetics.load_data: open_netcdf_file
+using moment_kinetics.load_data: open_readonly_output_file
 using moment_kinetics.load_data: load_fields_data, load_time_data
-using moment_kinetics.load_data: load_species_data, load_local_zr_coordinate_data
-using moment_kinetics.load_data: load_charged_velocity_coordinate_data
+using moment_kinetics.load_data: load_species_data, load_coordinate_data
 using moment_kinetics.analysis: analyze_fields_data
 using moment_kinetics.post_processing: fit_delta_phi_mode
 
@@ -76,7 +75,9 @@ test_input_finite_difference = Dict("n_ion_species" => 1,
                                     "vpa_nelement" => 1,
                                     "vpa_L" => 8.0,
                                     "vpa_bc" => "periodic",
-                                    "vpa_discretization" => "finite_difference")
+                                    "vpa_discretization" => "finite_difference",
+                                    "output" => Dict{String,Any}("binary_format" => "netcdf")
+                                   )
 
 test_input_finite_difference_split_1_moment =
     merge(test_input_finite_difference,
@@ -167,13 +168,13 @@ function run_test(test_input, analytic_frequency, analytic_growth_rate,
             path = joinpath(realpath(input["base_directory"]), name, name)
 
             # open the netcdf file and give it the handle 'fid'
-            fid = open_netcdf_file(path,"moments")
+            fid = open_readonly_output_file(path,"moments")
 
             # load space-time coordinate data
-            nz, z, z_wgts, Lz, nr, r, r_wgts, Lr = load_local_zr_coordinate_data(fid)
-            ntime, time = load_time_data(fid)
+            nz, nz_global, z, z_wgts, Lz = load_coordinate_data(fid, "z")
+            nr, nr_global, r, r_wgts, Lr = load_coordinate_data(fid, "r")
             n_ion_species, n_neutral_species = load_species_data(fid)
-            nvpa, vpa, vpa_wgts, nvperp, vperp, vperp_wgts = load_charged_velocity_coordinate_data(fid)
+            ntime, time = load_time_data(fid)
             
             # load fields data
             phi_zrt, Er_zrt, Ez_zrt = load_fields_data(fid)

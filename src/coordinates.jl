@@ -7,7 +7,6 @@ export equally_spaced_grid
 
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_int
-using ..file_io: open_output_file
 using ..chebyshev: scaled_chebyshev_grid
 using ..quadrature: composite_simpson_weights
 using ..input_structs: advection_input

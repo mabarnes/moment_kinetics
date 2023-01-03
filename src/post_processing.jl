@@ -2,7 +2,7 @@
 """
 module post_processing
 
-export analyze_and_plot
+export analyze_and_plot_data
 export compare_charged_pdf_symbolic_test
 export compare_moments_symbolic_test
 export compare_neutral_pdf_symbolic_test
@@ -26,15 +26,14 @@ using Measures
 using ..post_processing_input: pp
 using ..quadrature: composite_simpson_weights
 using ..array_allocation: allocate_float
-using ..file_io: open_output_file
+using ..file_io: open_ascii_output_file
 using ..type_definitions: mk_float, mk_int
-using ..load_data: open_netcdf_file, load_time_data
+using ..load_data: open_readonly_output_file, load_time_data
 using ..load_data: load_fields_data, load_pdf_data
 using ..load_data: load_charged_particle_moments_data, load_neutral_particle_moments_data
-using ..load_data: load_neutral_pdf_data, load_neutral_velocity_coordinate_data
-using ..load_data: load_global_zr_coordinate_data, load_block_data, load_rank_data
-using ..load_data: load_species_data, load_charged_velocity_coordinate_data
-using ..load_data: load_local_zr_coordinate_data 
+using ..load_data: load_neutral_pdf_data
+using ..load_data: load_variable
+using ..load_data: load_coordinate_data, load_block_data, load_rank_data, load_species_data
 using ..analysis: analyze_fields_data, analyze_moments_data, analyze_pdf_data
 using ..velocity_moments: integrate_over_vspace
 using ..manufactured_solns: manufactured_solutions, manufactured_electric_fields
@@ -76,13 +75,10 @@ function read_distributed_zr_data!(var::Array{mk_float,3}, var_name::String,
     # dimension of var is [z,r,t]
     
     for iblock in 0:nblocks-1
-        fid = open_netcdf_file(run_name,file_key,iblock=iblock,printout=false)
-        cdfhandle =  fid[var_name]
-        var_local = cdfhandle.var[:,:,:]
+        fid = open_readonly_output_file(run_name,file_key,iblock=iblock,printout=false)
+        var_local = load_variable(fid, string("dynamic_data/", var_name))
         
-        z_irank, r_irank = load_rank_data(fid,printout=false)
-        #z_irank = mod(iblock,z_nchunks)
-        #r_irank = floor(mk_int,iblock/z_nchunks)
+        z_irank, r_irank = load_rank_data(fid)
         
         # min index set to avoid double assignment of repeated points 
         # 1 if irank = 0, 2 otherwise
@@ -95,6 +91,7 @@ function read_distributed_zr_data!(var::Array{mk_float,3}, var_name::String,
                 var[iz_global,ir_global,:] .= var_local[iz_local,ir_local,:]
             end
         end
+        close(fid)
     end
 end
 
@@ -102,13 +99,10 @@ function read_distributed_zr_data!(var::Array{mk_float,4}, var_name::String,
    run_name::String, file_key::String, nblocks::mk_int, nz_local::mk_int,nr_local::mk_int)
     # dimension of var is [z,r,species,t]
     for iblock in 0:nblocks-1
-        fid = open_netcdf_file(run_name,file_key,iblock=iblock,printout=false)
-        cdfhandle =  fid[var_name]
-        var_local = cdfhandle.var[:,:,:,:]
+        fid = open_readonly_output_file(run_name,file_key,iblock=iblock,printout=false)
+        var_local = load_variable(fid, string("dynamic_data/", var_name))
         
-        z_irank, r_irank = load_rank_data(fid,printout=false)
-        #z_irank = mod(iblock,z_nchunks)
-        #r_irank = floor(mk_int,iblock/z_nchunks)
+        z_irank, r_irank = load_rank_data(fid)
         
         
         # min index set to avoid double assignment of repeated points 
@@ -122,6 +116,7 @@ function read_distributed_zr_data!(var::Array{mk_float,4}, var_name::String,
                 var[iz_global,ir_global,:,:] .= var_local[iz_local,ir_local,:,:]
             end
         end
+        close(fid)
     end
 end
 
@@ -145,11 +140,11 @@ function construct_global_zr_grids(run_name::String,file_key::String,nz_global::
     # current routine loops over blocks 
     # whereas the optimal routine would loop over a single z/r group
     for iblock in 0:nblocks-1
-        fid = open_netcdf_file(run_name,file_key,iblock=iblock,printout=false)
-        nz_local, z_local, z_local_wgts, Lz, nr_local, r_local,
-         r_local_wgts, Lr = load_local_zr_coordinate_data(fid,printout=false)
+        fid = open_readonly_output_file(run_name,file_key,iblock=iblock,printout=false)
+        nz_local, nz_global, z_local, z_local_wgts, Lz = load_coordinate_data(fid, "z")
+        nr_local, nr_global, r_local, r_local_wgts, Lr = load_coordinate_data(fid, "r")
     
-        z_irank, r_irank = load_rank_data(fid,printout=false)
+        z_irank, r_irank = load_rank_data(fid)
         # MRH should wgts at element boundaries be doubled 
         # MRH in the main code duplicated points have half the integration wgt
         if z_irank == 0
@@ -267,41 +262,31 @@ function analyze_and_plot_data(path)
     #    vz_input, vr_input, vzeta_input,
     #    composition, species, collisions, geometry, drive_input = mk_input(scan_input)
 
-    # open the netcdf file and give it the handle 'fid'
-    fid = open_netcdf_file(run_name,"moments")
+    # open the output file and give it the handle 'fid'
+    fid = open_readonly_output_file(run_name,"moments")
     # load block data on iblock=0
     nblocks, iblock = load_block_data(fid)
          
-    # load global sizes of grids that are distributed in memory
-    nz_global, nr_global = load_global_zr_coordinate_data(fid)
-    # load local sizes of grids stored on each netCDF file 
+    # load global and local sizes of grids stored on each output file 
     # z z_wgts r r_wgts may take different values on different blocks
     # we need to construct the global grid below
-    nz_local, z_local, z_local_wgts, Lz, nr_local, r_local, r_local_wgts, Lr = load_local_zr_coordinate_data(fid)
+    nz_local, nz_global, z_local, z_local_wgts, Lz = load_coordinate_data(fid, "z")
+    nr_local, nr_global, r_local, r_local_wgts, Lr = load_coordinate_data(fid, "r")
     # load time data 
     ntime, time = load_time_data(fid)
     # load species data 
     n_ion_species, n_neutral_species = load_species_data(fid)
-    # load local velocity coordinate data from `moments' cdf
-    # these values are currently the same for all blocks 
-    nvpa, vpa, vpa_wgts, nvperp, vperp, vperp_wgts = load_charged_velocity_coordinate_data(fid)
-    if n_neutral_species > 0
-        nvz, vz, vz_wgts, nvr, vr, vr_wgts, nvzeta, vzeta, vzeta_wgts = load_neutral_velocity_coordinate_data(fid)
-    else # define nvz nvr nvzeta to avoid errors below
-		nvz = 1
-		nvr = 1
-		nvzeta = 1
-	end
+
     close(fid)
     
     
     # allocate arrays to contain the global fields as a function of (z,r,t)
     phi, Ez, Er = allocate_global_zr_fields(nz_global,nr_global,ntime)
-    density, parallel_flow, parallel_pressure, parallel_heat_flux,
-        thermal_speed = allocate_global_zr_charged_moments(nz_global,nr_global,n_ion_species,ntime)
+    density, parallel_flow, parallel_pressure, parallel_heat_flux, thermal_speed =
+        allocate_global_zr_charged_moments(nz_global,nr_global,n_ion_species,ntime)
     if n_neutral_species > 0
-        neutral_density, neutral_uz, neutral_pz, 
-         neutral_qz, neutral_thermal_speed = allocate_global_zr_neutral_moments(nz_global,nr_global,n_neutral_species,ntime)
+        neutral_density, neutral_uz, neutral_pz, neutral_qz, neutral_thermal_speed =
+            allocate_global_zr_neutral_moments(nz_global,nr_global,n_neutral_species,ntime)
     end 
     # read in the data from different block netcdf files
     # grids 
@@ -329,11 +314,24 @@ function analyze_and_plot_data(path)
         read_distributed_zr_data!(neutral_thermal_speed,"thermal_speed_neutral",run_name,"moments",nblocks,nz_local,nr_local)
     end 
     # load time data from `dfns' cdf
-    fid_pdfs = open_netcdf_file(run_name,"dfns")
+    fid_pdfs = open_readonly_output_file(run_name,"dfns")
     # note that ntime may differ in these output files
      
     ntime_pdfs, time_pdfs = load_time_data(fid_pdfs)
     
+    # load local velocity coordinate data from `dfns' cdf
+    # these values are currently the same for all blocks 
+    nvpa, nvpa_global, vpa_local, vpa_local_wgts, Lvpa = load_coordinate_data(fid_pdfs, "vpa")
+    nvperp, nvperp_global, vperp_local, vperp_local_wgts, Lvperp = load_coordinate_data(fid_pdfs, "vperp")
+    if n_neutral_species > 0
+        nvzeta, nvzeta_global, vzeta_local, vzeta_local_wgts, Lvzeta = load_coordinate_data(fid_pdfs, "vzeta")
+        nvr, nvr_global, vr_local, vr_local_wgts, Lvr = load_coordinate_data(fid_pdfs, "vr")
+        nvz, nvz_global, vz_local, vz_local_wgts, Lvz = load_coordinate_data(fid_pdfs, "vz")
+    else # define nvz nvr nvzeta to avoid errors below
+        nvz = 1
+        nvr = 1
+        nvzeta = 1
+    end
 	
 	# initialise the post-processing input options
     nwrite_movie, itime_min, itime_max, ivpa0, ivperp0, iz0, ir0,
@@ -605,13 +603,15 @@ end
 
 function compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,spec_string,
     pdf_label,pdf_sym_label,norm_label,file_string)
-    fid = open_netcdf_file(run_name,"dfns", printout=false)
+    fid = open_readonly_output_file(run_name,"dfns", printout=false)
     # load block data on iblock=0
     nblocks, iblock = load_block_data(fid, printout=false)
     # load global sizes of grids that are distributed in memory
-    nz_global, nr_global = load_global_zr_coordinate_data(fid, printout=false)
+    nz_local, nz_global, z_local, z_wgts_local, Lz = load_coordinate_data(fid, "z", printout=false)
+    nr_local, nr_global, r_local, r_wgts_local, Lr = load_coordinate_data(fid, "r", printout=false)
     # velocity grid data on iblock=0 (same for all blocks)
-    nvpa, vpa, vpa_wgts, nvperp, vperp, vperp_wgts = load_charged_velocity_coordinate_data(fid, printout=false)
+    nvpa, _, vpa, vpa_wgts, Lvpa = load_coordinate_data(fid, "vpa", printout=false)
+    nvperp, _, vperp, vperp_wgts, Lvperp = load_coordinate_data(fid, "vperp", printout=false)
     # load time data (unique to pdf, may differ to moment values depending on user nwrite_dfns value)
     ntime, time = load_time_data(fid, printout=false)
     close(fid)
@@ -624,11 +624,12 @@ function compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,spec
         dummy = 0.0
         dummy_N = 0.0
         for iblock in 0:nblocks-1
-            fid_pdfs = open_netcdf_file(run_name,"dfns",iblock=iblock, printout=false)
+            fid_pdfs = open_readonly_output_file(run_name,"dfns",iblock=iblock, printout=false)
             z_irank, r_irank = load_rank_data(fid_pdfs,printout=false)
             pdf = load_pdf_data(fid_pdfs, printout=false)
             # local local grid data on iblock=0
-            nz_local, z_local, z_local_wgts, Lz, nr_local, r_local, r_local_wgts, Lr = load_local_zr_coordinate_data(fid_pdfs, printout=false)
+            nz_local, _, z_local, z_wgts_local, Lz = load_coordinate_data(fid_pdfs, "z")
+            nr_local, _, r_local, r_wgts_local, Lr = load_coordinate_data(fid_pdfs, "r")
             close(fid_pdfs)
             imin_r = min(1,r_irank) + 1
             imin_z = min(1,z_irank) + 1
@@ -657,13 +658,16 @@ end
 
 function compare_neutral_pdf_symbolic_test(run_name,manufactured_solns_list,spec_string,
     pdf_label,pdf_sym_label,norm_label,file_string)
-    fid = open_netcdf_file(run_name,"dfns", printout=false)
+    fid = open_readonly_output_file(run_name,"dfns", printout=false)
     # load block data on iblock=0
     nblocks, iblock = load_block_data(fid, printout=false)
     # load global sizes of grids that are distributed in memory
-    nz_global, nr_global = load_global_zr_coordinate_data(fid, printout=false)
+    nz_local, nz_global, z_local, z_wgts_local, Lz = load_coordinate_data(fid, "z", printout=false)
+    nr_local, nr_global, r_local, r_wgts_local, Lr = load_coordinate_data(fid, "r", printout=false)
     # velocity grid data on iblock=0 (same for all blocks)
-    nvz, vz, vz_wgts, nvr, vr, vr_wgts, nvzeta, vzeta, vzeta_wgts = load_neutral_velocity_coordinate_data(fid, printout=false)# load time data (unique to pdf, may differ to moment values depending on user nwrite_dfns value)
+    nvz, _, vz, vz_wgts, Lvz = load_coordinate_data(fid, "vz", printout=false)
+    nvr, _, vr, vr_wgts, Lvr = load_coordinate_data(fid, "vr", printout=false)
+    nvzeta, _, vzeta, vzeta_wgts, Lvzeta = load_coordinate_data(fid, "vzeta", printout=false)
     # load time data (unique to pdf, may differ to moment values depending on user nwrite_dfns value)
     ntime, time = load_time_data(fid, printout=false)
     close(fid)
@@ -676,11 +680,12 @@ function compare_neutral_pdf_symbolic_test(run_name,manufactured_solns_list,spec
         dummy = 0.0
         dummy_N = 0.0
         for iblock in 0:nblocks-1
-            fid_pdfs = open_netcdf_file(run_name,"dfns",iblock=iblock, printout=false)
+            fid_pdfs = open_readonly_output_file(run_name,"dfns",iblock=iblock, printout=false)
             z_irank, r_irank = load_rank_data(fid_pdfs,printout=false)
             pdf = load_neutral_pdf_data(fid_pdfs, printout=false)
             # local local grid data
-            nz_local, z_local, z_local_wgts, Lz, nr_local, r_local, r_local_wgts, Lr = load_local_zr_coordinate_data(fid_pdfs, printout=false)
+            nz_local, _, z_local, z_wgts_local, Lz = load_coordinate_data(fid_pdfs, "z", printout=false)
+            nr_local, _, r_local, r_wgts_local, Lr = load_coordinate_data(fid_pdfs, "r", printout=false)
             close(fid_pdfs)
             imin_r = min(1,r_irank) + 1
             imin_z = min(1,z_irank) + 1
@@ -961,7 +966,7 @@ function calculate_and_write_frequencies(fid, run_name, ntime, time, z, itime_mi
         growth_rate = phi_fit.growth_rate
 
         # write info related to fit to file
-        io = open_output_file(run_name, "frequency_fit.txt")
+        io = open_ascii_output_file(run_name, "frequency_fit.txt")
         println(io, "#growth_rate: ", phi_fit.growth_rate,
                 "  frequency: ", phi_fit.frequency,
                 " fit_errors: ", phi_fit.amplitude_fit_error, " ",

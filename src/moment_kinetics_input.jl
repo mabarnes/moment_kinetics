@@ -5,20 +5,37 @@ module moment_kinetics_input
 export mk_input
 export performance_test
 #export advective_form
+export read_input_file
 
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float
 using ..communication
-using ..file_io: input_option_error, open_output_file
+using ..file_io: input_option_error, open_ascii_output_file
 using ..finite_differences: fd_check_option
 using ..input_structs
+
+using TOML
 
 @enum RunType single performance_test scan
 const run_type = single
 
+"""
+Read input from a TOML file
+"""
+function read_input_file(input_filename::String)
+    input = TOML.parsefile(input_filename)
+
+    # Use input_filename (without the extension) as default for "run_name"
+    if !("run_name" in keys(input))
+        input["run_name"] = splitdir(splitext(s)[1])[end]
+    end
+
+    return input
+end
+
 import Base: get
 """
-Utility mothod for converting a string to an Enum when getting from a Dict, based on the
+Utility method for converting a string to an Enum when getting from a Dict, based on the
 type of the default value
 """
 function get(d::Dict, key, default::Enum)
@@ -27,7 +44,7 @@ function get(d::Dict, key, default::Enum)
         return default
     # instances(typeof(default)) gets the possible values of the Enum. Then convert to
     # Symbol, then to String.
-    elseif valstring ∈ String.(Symbol.(instances(typeof(default))))
+    elseif valstring ∈ (split(s, ".")[end] for s ∈ String.(Symbol.(instances(typeof(default)))))
         return eval(Symbol(valstring))
     else
         error("Expected a $(typeof(default)), but '$valstring' is not in "
@@ -390,12 +407,20 @@ function mk_input(scan_input=Dict())
     
     drive_immutable = drive_input(drive.force_phi, drive.amplitude, drive.frequency)
 
+    # inputs for file I/O
+    # Make copy of the section to avoid modifying the passed-in Dict
+    io_settings = copy(get(scan_input, "output", Dict{String,Any}()))
+    io_settings["ascii_output"] = get(io_settings, "ascii_output", false)
+    io_settings["binary_format"] = get(io_settings, "binary_format", hdf5)
+    io_immutable = io_input(; output_dir=output_dir, run_name=run_name,
+                              Dict(Symbol(k)=>v for (k,v) in io_settings)...)
+
     # Make file to log some information about inputs into.
     # check to see if output_dir exists in the current directory
     # if not, create it
     if global_rank[] == 0
         isdir(output_dir) || mkdir(output_dir)
-        io = open_output_file(string(output_dir,"/",run_name), "input")
+        io = open_ascii_output_file(string(output_dir,"/",run_name), "input")
     else
         io = devnull
     end
@@ -405,7 +430,7 @@ function mk_input(scan_input=Dict())
         z_immutable, vpa_immutable, composition, species_immutable, evolve_moments)
 
     # return immutable structs for z, vpa, species and composition
-    all_inputs = (run_name, output_dir, evolve_moments, t_input, 
+    all_inputs = (io_immutable, evolve_moments, t_input,
                   z_immutable, r_immutable, vpa_immutable, vperp_immutable, gyrophase_immutable, vz_immutable, vr_immutable, vzeta_immutable,
                   composition, species_immutable, collisions, geometry, drive_immutable)
     println(io, "\nAll inputs returned from mk_input():")

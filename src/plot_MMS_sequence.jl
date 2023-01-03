@@ -20,19 +20,16 @@ using ..post_processing: read_distributed_zr_data!, construct_global_zr_grids
 using ..post_processing: allocate_global_zr_neutral_moments, allocate_global_zr_charged_moments
 using ..post_processing: allocate_global_zr_fields, get_geometry_and_composition
 using ..array_allocation: allocate_float
-using ..file_io: open_output_file
 using ..type_definitions: mk_float, mk_int
-using ..load_data: open_netcdf_file, load_time_data, load_species_data
-using ..load_data: load_local_zr_coordinate_data, load_fields_data, load_pdf_data
+using ..load_data: open_readonly_output_file
+using ..load_data: load_fields_data, load_pdf_data
 using ..load_data: load_charged_particle_moments_data, load_neutral_particle_moments_data
-using ..load_data: load_neutral_pdf_data, load_neutral_velocity_coordinate_data
-using ..load_data: load_charged_velocity_coordinate_data
-using ..load_data: load_block_data, load_global_zr_coordinate_data
+using ..load_data: load_neutral_pdf_data
+using ..load_data: load_block_data, load_coordinate_data
 using ..velocity_moments: integrate_over_vspace
 using ..manufactured_solns: manufactured_solutions, manufactured_electric_fields
-using ..moment_kinetics_input: mk_input
+using ..moment_kinetics_input: mk_input, read_input_file
 
-using TOML
 import Base: get
 
 # assume in function below that we have a list of simulations 
@@ -59,7 +56,7 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         path = realpath(path)
         run_name = joinpath(path, basename(path))
         input_filename = path * ".toml"
-        scan_input = TOML.parsefile(input_filename)
+        scan_input = read_input_file(input_filename)
         # get run-time input/composition/geometry/collisions/species info for convenience
         #run_name_internal, output_dir, evolve_moments, 
         #    t_input, z_input, r_input, 
@@ -92,25 +89,28 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         end
 
         # open the netcdf file and give it the handle 'fid'
-        fid = open_netcdf_file(run_name,"moments")
+        fid = open_readonly_output_file(run_name)
         # load block data on iblock=0
         nblocks, iblock = load_block_data(fid)
              
         # load global sizes of grids that are distributed in memory
-        nz_global, nr_global = load_global_zr_coordinate_data(fid)
         # load local sizes of grids stored on each netCDF file 
         # z z_wgts r r_wgts may take different values on different blocks
         # we need to construct the global grid below
-        nz_local, z_local, z_local_wgts, Lz, nr_local, r_local, r_local_wgts, Lr = load_local_zr_coordinate_data(fid)
+        nz_local, z, z_wgts, z_local, vz, z_wgts = load_coordinate_data(fid, "z")
+        nr_local, nr_global, r_local, r_wgts, nr, vr, r_wgts = load_coordinate_data(fid, "r")
         # load time data 
         ntime, time = load_time_data(fid)
         # load species data 
         n_ion_species, n_neutral_species = load_species_data(fid)
         # load local velocity coordinate data from `moments' cdf
         # these values are currently the same for all blocks 
-        nvpa, vpa, vpa_wgts, nvperp, vperp, vperp_wgts = load_charged_velocity_coordinate_data(fid)
+        nvpa, nvpa_global, vpa, vpa_wgts, Lvpa = load_coordinate_data(fid, "vpa")
+        nvperp, nvperp_global, vperp, vperp_wgts, Lvperp = load_coordinate_data(fid, "vperp")
         if n_neutral_species > 0
-            nvz, vz, vz_wgts, nvr, vr, vr_wgts, nvzeta, vzeta, vzeta_wgts = load_neutral_velocity_coordinate_data(fid)
+            nvz, nvz_global, vz, vz_wgts, Lvz = load_coordinate_data(fid, "vz")
+            nvr, nvr_global, vr, vr_wgts, Lvr = load_coordinate_data(fid, "vr")
+            nvzeta, nvzeta_global, vzeta, vzeta_wgts, Lvzeta = load_coordinate_data(fid, "vzeta")
         else # define nvz nvr nvzeta to avoid errors below
             nvz = 1
             nvr = 1

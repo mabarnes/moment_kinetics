@@ -11,6 +11,7 @@ export species_parameters, species_parameters_mutable
 export species_composition
 export drive_input, drive_input_mutable
 export collisions_input
+export io_input
 export pp_input
 export geometry_input
 
@@ -295,6 +296,19 @@ mutable struct geometry_input
     Bzeta::mk_float
     # rhostar ion (ref)
     rhostar::mk_float #used to premultiply ExB drift terms
+end
+
+@enum binary_format_type hdf5 netcdf
+export hdf5, netcdf
+
+"""
+Settings and input for setting up file I/O
+"""
+Base.@kwdef struct io_input
+    output_dir::String
+    run_name::String
+    ascii_output::Bool
+    binary_format::binary_format_type
 end
 
 """
