@@ -625,12 +625,15 @@ function compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,spec
         dummy_N = 0.0
         for iblock in 0:nblocks-1
             fid_pdfs = open_netcdf_file(run_name,"dfns",iblock=iblock, printout=false)
+            z_irank, r_irank = load_rank_data(fid_pdfs,printout=false)
             pdf = load_pdf_data(fid_pdfs, printout=false)
             # local local grid data on iblock=0
             nz_local, z_local, z_local_wgts, Lz, nr_local, r_local, r_local_wgts, Lr = load_local_zr_coordinate_data(fid_pdfs, printout=false)
             close(fid_pdfs)
-            for ir in 1:nr_local
-                for iz in 1:nz_local
+            imin_r = min(1,r_irank) + 1
+            imin_z = min(1,z_irank) + 1
+            for ir in imin_r:nr_local
+                for iz in imin_z:nz_local
                     for ivperp in 1:nvperp
                         for ivpa in 1:nvpa
                             pdf_sym = dfni_func(vpa[ivpa],vperp[ivperp],z_local[iz],r_local[ir],time[it])
@@ -674,12 +677,15 @@ function compare_neutral_pdf_symbolic_test(run_name,manufactured_solns_list,spec
         dummy_N = 0.0
         for iblock in 0:nblocks-1
             fid_pdfs = open_netcdf_file(run_name,"dfns",iblock=iblock, printout=false)
+            z_irank, r_irank = load_rank_data(fid_pdfs,printout=false)
             pdf = load_neutral_pdf_data(fid_pdfs, printout=false)
             # local local grid data
             nz_local, z_local, z_local_wgts, Lz, nr_local, r_local, r_local_wgts, Lr = load_local_zr_coordinate_data(fid_pdfs, printout=false)
             close(fid_pdfs)
-            for ir in 1:nr_local
-                for iz in 1:nz_local
+            imin_r = min(1,r_irank) + 1
+            imin_z = min(1,z_irank) + 1
+            for ir in imin_r:nr_local
+                for iz in imin_z:nz_local
                     for ivzeta in 1:nvzeta
                         for ivr in 1:nvr
                             for ivz in 1:nvz
