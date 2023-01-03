@@ -29,8 +29,8 @@ dfns (neutrals) -> [vz,vr,vzeta,z,r]
 function derivative_r!(dfdr::AbstractArray{mk_float,2}, f::AbstractArray{mk_float,2},
         dfdr_lower_endpoints::AbstractArray{mk_float,1},
         dfdr_upper_endpoints::AbstractArray{mk_float,1},
-        r_send_buffer::AbstractArray{mk_float,1},
-        r_receive_buffer::AbstractArray{mk_float,1}, r_spectral, r)
+        r_receive_buffer1::AbstractArray{mk_float,1},
+        r_receive_buffer2::AbstractArray{mk_float,1}, r_spectral, r)
 
 	# differentiate f w.r.t r
 	@loop_z iz begin
@@ -44,7 +44,7 @@ function derivative_r!(dfdr::AbstractArray{mk_float,2}, f::AbstractArray{mk_floa
 	if r.nelement_local < r.nelement_global
 		reconcile_element_boundaries_MPI!(dfdr,
 		 dfdr_lower_endpoints,dfdr_upper_endpoints,
-		 r_send_buffer, r_receive_buffer, r)
+		 r_receive_buffer1, r_receive_buffer2, r)
 	end
 	
 end
@@ -54,8 +54,8 @@ end
 function derivative_r!(dfdr::AbstractArray{mk_float,5}, f::AbstractArray{mk_float,5},
         dfdr_lower_endpoints::AbstractArray{mk_float,4},
         dfdr_upper_endpoints::AbstractArray{mk_float,4},
-        r_send_buffer::AbstractArray{mk_float,4},
-        r_receive_buffer::AbstractArray{mk_float,4}, r_spectral, r)
+        r_receive_buffer1::AbstractArray{mk_float,4},
+        r_receive_buffer2::AbstractArray{mk_float,4}, r_spectral, r)
 
 	# differentiate f w.r.t r
 	@loop_s_z_vperp_vpa is iz ivperp ivpa begin
@@ -69,7 +69,7 @@ function derivative_r!(dfdr::AbstractArray{mk_float,5}, f::AbstractArray{mk_floa
 	if r.nelement_local < r.nelement_global
 		reconcile_element_boundaries_MPI!(dfdr,
 		 dfdr_lower_endpoints,dfdr_upper_endpoints,
-		 r_send_buffer, r_receive_buffer, r)
+		 r_receive_buffer1, r_receive_buffer2, r)
 	end
 	
 end
@@ -78,8 +78,8 @@ end
 function derivative_r!(dfdr::AbstractArray{mk_float,6}, f::AbstractArray{mk_float,6},
         dfdr_lower_endpoints::AbstractArray{mk_float,5},
         dfdr_upper_endpoints::AbstractArray{mk_float,5},
-        r_send_buffer::AbstractArray{mk_float,5},
-        r_receive_buffer::AbstractArray{mk_float,5}, r_spectral, r)
+        r_receive_buffer1::AbstractArray{mk_float,5},
+        r_receive_buffer2::AbstractArray{mk_float,5}, r_spectral, r)
 
 	# differentiate f w.r.t r
 	@loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
@@ -93,7 +93,7 @@ function derivative_r!(dfdr::AbstractArray{mk_float,6}, f::AbstractArray{mk_floa
 	if r.nelement_local < r.nelement_global
 		reconcile_element_boundaries_MPI!(dfdr,
 		 dfdr_lower_endpoints,dfdr_upper_endpoints,
-		 r_send_buffer, r_receive_buffer, r)
+		 r_receive_buffer1, r_receive_buffer2, r)
 	end
 	
 end
@@ -193,8 +193,8 @@ function derivative_r!(dfdr::AbstractArray{mk_float,5}, f::AbstractArray{mk_floa
         adv_fac_upper_buffer::AbstractArray{mk_float,4},
         dfdr_lower_endpoints::AbstractArray{mk_float,4},
         dfdr_upper_endpoints::AbstractArray{mk_float,4},
-        r_send_buffer::AbstractArray{mk_float,4},
-        r_receive_buffer::AbstractArray{mk_float,4}, r_spectral, r) where T
+        r_receive_buffer1::AbstractArray{mk_float,4},
+        r_receive_buffer2::AbstractArray{mk_float,4}, r_spectral, r) where T
 
 	# differentiate f w.r.t r
 	@loop_s_z_vperp_vpa is iz ivperp ivpa begin
@@ -211,7 +211,7 @@ function derivative_r!(dfdr::AbstractArray{mk_float,5}, f::AbstractArray{mk_floa
 		reconcile_element_boundaries_MPI!(dfdr,
 		 adv_fac_lower_buffer, adv_fac_upper_buffer,
 		 dfdr_lower_endpoints,dfdr_upper_endpoints,
-		 r_send_buffer, r_receive_buffer, r)
+		 r_receive_buffer1, r_receive_buffer2, r)
 	end
 	
 end
@@ -222,8 +222,8 @@ function derivative_r!(dfdr::AbstractArray{mk_float,6}, f::AbstractArray{mk_floa
         adv_fac_upper_buffer::AbstractArray{mk_float,5},
         dfdr_lower_endpoints::AbstractArray{mk_float,5},
         dfdr_upper_endpoints::AbstractArray{mk_float,5},
-        r_send_buffer::AbstractArray{mk_float,5},
-        r_receive_buffer::AbstractArray{mk_float,5}, r_spectral, r) where T
+        r_receive_buffer1::AbstractArray{mk_float,5},
+        r_receive_buffer2::AbstractArray{mk_float,5}, r_spectral, r) where T
 
 	# differentiate f w.r.t r
 	@loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
@@ -241,7 +241,7 @@ function derivative_r!(dfdr::AbstractArray{mk_float,6}, f::AbstractArray{mk_floa
 		reconcile_element_boundaries_MPI!(dfdr,
 		 adv_fac_lower_buffer, adv_fac_upper_buffer,
 		 dfdr_lower_endpoints,dfdr_upper_endpoints,
-		 r_send_buffer, r_receive_buffer, r)
+		 r_receive_buffer1, r_receive_buffer2, r)
 	end
 	
 end
