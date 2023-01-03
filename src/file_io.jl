@@ -336,9 +336,17 @@ file
 function define_dynamic_dfn_variables!(fid, r, z, vperp, vpa, vzeta, vr, vz,
                                        n_ion_species, n_neutral_species)
 
-    dynamic = create_io_group(fid, "dynamic_data", description="time evolving variables")
+    if !haskey(fid, "dynamic_data")
+        dynamic = create_io_group(fid, "dynamic_data", description="time evolving
+                                  variables")
+    else
+        dynamic = fid["dynamic_data"]
+    end
 
-    io_time = create_dynamic_variable!(dynamic, "time", mk_float; description="simulation time")
+    if !haskey(dynamic, "time")
+        io_time = create_dynamic_variable!(dynamic, "time", mk_float;
+                                           description="simulation time")
+    end
 
     # io_f is the handle for the ion pdf
     io_f = create_dynamic_variable!(dynamic, "f", mk_float, vpa, vperp, z, r;
@@ -722,10 +730,10 @@ const debug_output_counter = Ref(1)
 
 Dump variables into a NetCDF file for debugging
 
-Intended to be called more frequently than `write_data_to_netcdf()`, possibly several
+Intended to be called more frequently than `write_data_to_binary()`, possibly several
 times within a timestep, so includes a `label` argument to identify the call site.
 
-Writes to a file called `debug_output.cdf` in the current directory.
+Writes to a file called `debug_output.h5` in the current directory.
 
 Can either be called directly with the arrays to be dumped (fist signature), or using
 `scratch_pdf` and `em_fields_struct` structs.
@@ -737,12 +745,23 @@ other arguments will set that array to `0.0` for this call (need to write some v
 all the arrays have the same length, with an entry for each call to `debug_dump()`).
 """
 function debug_dump end
-function debug_dump(ff, dens, upar, ppar, phi, t; istage=0, label="")
+function debug_dump(vz::coordinate, vr::coordinate, vzeta::coordinate, vpa::coordinate,
+                    vperp::coordinate, z::coordinate, r::coordinate, t::mk_float;
+                    ff=nothing, dens=nothing, upar=nothing, ppar=nothing, qpar=nothing,
+                    vth=nothing,
+                    ff_neutral=nothing, dens_neutral=nothing, uz_neutral=nothing,
+                    #ur_neutral=nothing, uzeta_neutral=nothing,
+                    pz_neutral=nothing,
+                    #pr_neutral=nothing, pzeta_neutral=nothing,
+                    qz_neutral=nothing,
+                    #qr_neutral=nothing, qzeta_neutral=nothing,
+                    vth_neutral=nothing,
+                    phi=nothing, Er=nothing, Ez=nothing,
+                    istage=0, label="")
     global debug_output_file
 
     # Only read/write from first process in each 'block'
-    original_loop_region = loop_ranges[].parallel_dims
-    begin_serial_region()
+    _block_synchronize()
     @serial_region begin
         if debug_output_file === nothing
             # Open the file the first time`debug_dump()` is called
@@ -750,63 +769,54 @@ function debug_dump(ff, dens, upar, ppar, phi, t; istage=0, label="")
             debug_output_counter[] = 1
 
             (nvpa, nvperp, nz, nr, n_species) = size(ff)
-            # the netcdf file will be given by output_dir/run_name with .cdf appended
-            filename = string("debug_output.cdf")
-            # if a netcdf file with the requested name already exists, remove it
+            prefix = "debug_output.$(iblock_index[])"
+            filename = string(prefix, ".h5")
+            # if a file with the requested name already exists, remove it
             isfile(filename) && rm(filename)
             # create the new NetCDF file
-            fid = NCDataset(filename,"c")
+            fid = open_output_file_hdf5(prefix)
             # write a header to the NetCDF file
-            fid.attrib["file_info"] = "This is a NetCDF file containing debug output from the moment_kinetics code"
+            add_attribute!(fid, "file_info",
+                           "This is a file containing debug output from the moment_kinetics code")
+
             ### define coordinate dimensions ###
-            define_spatial_dimensions_netcdf!(fid, nz, nr, n_species)
-            define_vspace_dimensions_netcdf!(fid, nvpa, nvperp)
+            coords_group = define_spatial_coordinates!(fid, z, r)
+            add_vspace_coordinates!(coords_group, vz, vr, vzeta, vpa, vperp)
+
             ### create variables for time-dependent quantities and store them ###
             ### in a struct for later access ###
-            cdf_time, cdf_phi, cdf_Er, cdf_Ez, cdf_density, cdf_upar, cdf_ppar, cdf_qpar, cdf_vth,
-            cdf_density_neutral, cdf_uz_neutral, cdf_pz_neutral, cdf_qz_neutral, cdf_vth_neutral =
-                define_dynamic_moment_variables!(fid)
-            cdf_dfns_time, cdf_charged_f, cdf_neutral_f =
-                define_dynamic_dfns_variables_netcdf!(fid)
+            io_moments = define_dynamic_moment_variables!(fid, composition.n_ion_species,
+                                                          composition.n_neutral_species,
+                                                          r, z)
+            io_dfns = define_dynamic_dfn_variables!(
+                fid, r, z, vperp, vpa, vzeta, vr, vz, composition.n_ion_species,
+                composition.n_neutral_species)
 
             # create the "istage" variable, used to identify the rk stage where
             # `debug_dump()` was called
-            varname = "istage"
-            attributes = Dict("description" => "rk istage")
-            dims = ("ntime",)
-            vartype = mk_int
-            cdf_istage = defVar(fid, varname, vartype, dims, attrib=attributes)
+            dynamic = fid["dynamic_data"]
+            io_istage = create_dynamic_variable!(dynamic, "istage", mk_int;
+                                                 description="rk istage")
             # create the "label" variable, used to identify the `debug_dump()` call-site
-            varname = "label"
-            attributes = Dict("description" => "call-site label")
-            dims = ("ntime",)
-            vartype = String
-            cdf_label = defVar(fid, varname, vartype, dims, attrib=attributes)
+            io_label = create_dynamic_variable!(dynamic, "label", String;
+                                                description="call-site label")
 
             # create a struct that stores the variables and other info needed for
             # writing to the netcdf file during run-time
-            debug_output_file = (fid=fid, time=cdf_time, charged_f=cdf_charged_f,
-                                 phi=cdf_phi, Er=cdf_Er, Ez=cdf_Ez, density=cdf_density,
-                                 parallel_flow=cdf_upar, parallel_pressure=cdf_ppar,
-                                 parallel_heat_flux=cdf_qpar, thermal_speed=cdf_vth,
-                                 neutral_f=cdf_neutral_f,
-                                 density_neutral=cdf_density_neutral,
-                                 uz_neutral=cdf_uz_neutral, pz_neutral=cdf_pz_neutral,
-                                 qz_neutral=cdf_qz_neutral,
-                                 thermal_speed_neutral=cdf_vth_neutral, istage=cdf_istage,
-                                 label=cdf_label)
+            debug_output_file = (fid=fid, moments=io_moments, dfns=io_dfns,
+                                 istage=io_istage, label=io_label)
         end
 
         # add the time for this time slice to the netcdf file
         if t === nothing
             if debug_output_counter[] == 1
-                debug_output_file.time[debug_output_counter[]] = 0.0
+                debug_output_file.moments.time[debug_output_counter[]] = 0.0
             else
-                debug_output_file.time[debug_output_counter[]] =
-                debug_output_file.time[debug_output_counter[]-1]
+                debug_output_file.moments.time[debug_output_counter[]] =
+                debug_output_file.moments.time[debug_output_counter[]-1]
             end
         else
-            debug_output_file.time[debug_output_counter[]] = t
+            debug_output_file.moments.time[debug_output_counter[]] = t
         end
         # add the rk istage for this call to the netcdf file
         debug_output_file.istage[debug_output_counter[]] = istage
@@ -814,61 +824,124 @@ function debug_dump(ff, dens, upar, ppar, phi, t; istage=0, label="")
         debug_output_file.label[debug_output_counter[]] = label
         # add the distribution function data at this time slice to the netcdf file
         if ff === nothing
-            debug_output_file.charged_f[:,:,:,:,:,debug_output_counter[]] .= 0.0
+            debug_output_file.dfns.charged_f[:,:,:,:,:,debug_output_counter[]] = 0.0
         else
-            debug_output_file.charged_f[:,:,:,:,:,debug_output_counter[]] = ff
-        end
-        # add the electrostatic potential data at this time slice to the netcdf file
-        if phi === nothing
-            debug_output_file.phi[:,:,debug_output_counter[]] .= 0.0
-        else
-            debug_output_file.phi[:,:,debug_output_counter[]] = phi
+            debug_output_file.dfns.charged_f[:,:,:,:,:,debug_output_counter[]] = ff
         end
         # add the moments data at this time slice to the netcdf file
         if dens === nothing
-            debug_output_file.density[:,:,:,debug_output_counter[]] .= 0.0
+            debug_output_file.moments.density[:,:,:,debug_output_counter[]] = 0.0
         else
-            debug_output_file.density[:,:,:,debug_output_counter[]] = dens
+            debug_output_file.moments.density[:,:,:,debug_output_counter[]] = dens
         end
         if upar === nothing
-            debug_output_file.parallel_flow[:,:,:,debug_output_counter[]] .= 0.0
+            debug_output_file.moments.parallel_flow[:,:,:,debug_output_counter[]] = 0.0
         else
-            debug_output_file.parallel_flow[:,:,:,debug_output_counter[]] = upar
+            debug_output_file.moments.parallel_flow[:,:,:,debug_output_counter[]] = upar
         end
         if ppar === nothing
-            debug_output_file.parallel_pressure[:,:,:,debug_output_counter[]] .= 0.0
+            debug_output_file.moments.parallel_pressure[:,:,:,debug_output_counter[]] = 0.0
         else
-            debug_output_file.parallel_pressure[:,:,:,debug_output_counter[]] = ppar
+            debug_output_file.moments.parallel_pressure[:,:,:,debug_output_counter[]] = ppar
+        end
+        if qpar === nothing
+            debug_output_file.moments.parallel_heat_flux[:,:,:,debug_output_counter[]] = 0.0
+        else
+            debug_output_file.moments.parallel_heat_flux[:,:,:,debug_output_counter[]] = qpar
+        end
+        if vth === nothing
+            debug_output_file.moments.thermal_speed[:,:,:,debug_output_counter[]] = 0.0
+        else
+            debug_output_file.moments.thermal_speed[:,:,:,debug_output_counter[]] = vth
+        end
+
+        # add the neutral distribution function data at this time slice to the netcdf file
+        if ff_neutral === nothing
+            debug_output_file.dfns.f_neutral[:,:,:,:,:,:,debug_output_counter[]] = 0.0
+        else
+            debug_output_file.dfns.f_neutral[:,:,:,:,:,:,debug_output_counter[]] = ff_neutral
+        end
+        # add the neutral moments data at this time slice to the netcdf file
+        if dens === nothing
+            debug_output_file.moments.density_neutral[:,:,:,debug_output_counter[]] = 0.0
+        else
+            debug_output_file.moments.density_neutral[:,:,:,debug_output_counter[]] = dens_neutral
+        end
+        if uz_neutral === nothing
+            debug_output_file.moments.uz_neutral[:,:,:,debug_output_counter[]] = 0.0
+        else
+            debug_output_file.moments.uz_neutral[:,:,:,debug_output_counter[]] = uz_neutral
+        end
+        if pz_neutral === nothing
+            debug_output_file.moments.pz_neutral[:,:,:,debug_output_counter[]] = 0.0
+        else
+            debug_output_file.moments.pz_neutral[:,:,:,debug_output_counter[]] = pz_neutral
+        end
+        if qz_neutral === nothing
+            debug_output_file.moments.qz_neutral[:,:,:,debug_output_counter[]] = 0.0
+        else
+            debug_output_file.moments.qz_neutral[:,:,:,debug_output_counter[]] = qz_neutral
+        end
+        if vth_neutral === nothing
+            debug_output_file.moments.thermal_speed_neutral[:,:,:,debug_output_counter[]] = 0.0
+        else
+            debug_output_file.moments.thermal_speed_neutral[:,:,:,debug_output_counter[]] = vth_neutral
+        end
+
+        # add the electrostatic potential data at this time slice to the netcdf file
+        if phi === nothing
+            debug_output_file.moments.phi[:,:,debug_output_counter[]] = 0.0
+        else
+            debug_output_file.moments.phi[:,:,debug_output_counter[]] = phi
+        end
+        if Er === nothing
+            debug_output_file.moments.Er[:,:,debug_output_counter[]] = 0.0
+        else
+            debug_output_file.moments.Er[:,:,debug_output_counter[]] = Er
+        end
+        if Ez === nothing
+            debug_output_file.moments.Ez[:,:,debug_output_counter[]] = 0.0
+        else
+            debug_output_file.moments.Ez[:,:,debug_output_counter[]] = Ez
         end
     end
 
     debug_output_counter[] += 1
 
-    # hacky work-around to restore original region
     _block_synchronize()
-    loop_ranges[] = looping.loop_ranges_store[original_loop_region]
 
     return nothing
 end
 function debug_dump(fvec::Union{scratch_pdf,Nothing},
-                    fields::Union{em_fields_struct,Nothing}, t; istage=0, label="")
+                    fields::Union{em_fields_struct,Nothing}, vz, vr, vzeta, vpa, vperp, z,
+                    r, t; istage=0, label="")
     if fvec === nothing
         pdf = nothing
         density = nothing
         upar = nothing
         ppar = nothing
+        pdf_neutral = nothing
+        density_neutral = nothing
     else
         pdf = fvec.pdf
         density = fvec.density
         upar = fvec.upar
         ppar = fvec.ppar
+        pdf_neutral = fvec.pdf_neutral
+        density_neutral = fvec.density_neutral
     end
     if fields === nothing
         phi = nothing
+        Er = nothing
+        Ez = nothing
     else
         phi = fields.phi
+        Er = fields.Er
+        Ez = fields.Ez
     end
-    return debug_dump(pdf, density, upar, ppar, phi, t; istage=istage, label=label)
+    return debug_dump(vz, vr, vzeta, vpa, vperp, z, r, t; ff=pdf, dens=density, upar=upar,
+                      ppar=ppar, ff_neutral=pdf_neutral, dens_neutral=density_neutral,
+                      phi=phi, Er=Er, Ez=Ez, t, istage=istage, label=label)
 end
 
 end
