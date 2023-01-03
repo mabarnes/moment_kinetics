@@ -54,7 +54,7 @@ include("analysis.jl")
 include("load_data.jl")
 include("post_processing_input.jl")
 include("post_processing.jl")
-#include("plot_MMS_sequence.jl")
+include("plot_MMS_sequence.jl")
 
 using TimerOutputs
 using Dates
@@ -214,6 +214,7 @@ function setup_moment_kinetics(input_dict::Dict;
     code_time = 0.
     # create arrays and do other work needed to setup
     # the main time advance loop -- including normalisation of f by density if requested
+
     moments, fields, spectral_objects, advect_objects,
     scratch, advance, scratch_dummy, manufactured_source_list = setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition,
         drive_input, moments, t_input, collisions, species, geometry, boundary_distributions)
@@ -222,6 +223,7 @@ function setup_moment_kinetics(input_dict::Dict;
     # write initial data to ascii files
     write_data_to_ascii(moments, fields, vpa, vperp, z, r, code_time, composition.n_ion_species, composition.n_neutral_species, ascii_io)
     # write initial data to binary file (netcdf)
+
     write_moments_data_to_binary(moments, fields, code_time, composition.n_ion_species,
         composition.n_neutral_species, io_moments, 1)
     write_dfns_data_to_binary(pdf.charged.unnorm, pdf.neutral.unnorm, code_time,
@@ -250,6 +252,13 @@ function cleanup_moment_kinetics!(ascii_io::Union{file_io.ascii_ios,Nothing},
 
     # finish i/o
     finish_file_io(ascii_io, io_moments, io_dfns)
+
+    @serial_region begin
+        if global_rank[] == 0
+            println("finished file io         ",
+               Dates.format(now(), dateformat"H:MM:SS"))
+        end
+    end
 
     # clean up MPI objects
     finalize_comms!()

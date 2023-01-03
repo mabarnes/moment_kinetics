@@ -10,7 +10,8 @@ using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.load_data: open_readonly_output_file, load_coordinate_data, load_species_data,
                                  load_fields_data, load_charged_particle_moments_data, load_pdf_data,
-                                 load_neutral_particle_moments_data, load_neutral_pdf_data, load_time_data
+                                 load_neutral_particle_moments_data, load_neutral_pdf_data, load_time_data,
+                                 load_species_data
 using moment_kinetics.interpolation: interpolate_to_grid_z, interpolate_to_grid_vpa
 using moment_kinetics.type_definitions: mk_float
 
@@ -263,6 +264,7 @@ function run_test(test_input, rtol; args...)
             nr, nr_global, r, r_wgts, Lr = load_coordinate_data(fid, "r")
             n_ion_species, n_neutral_species = load_species_data(fid)
             ntime, time = load_time_data(fid)
+            n_ion_species, n_neutral_species = load_species_data(fid)
             
             # load fields data
             phi_zrt, Er_zrt, Ez_zrt = load_fields_data(fid)

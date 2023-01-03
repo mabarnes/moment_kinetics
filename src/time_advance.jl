@@ -8,7 +8,7 @@ export time_advance!
 using MPI
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_float, allocate_shared_float
-using ..communication: _block_synchronize, global_size, comm_world
+using ..communication: _block_synchronize, global_size, comm_world, MPISharedArray, global_rank
 using ..debugging
 using ..file_io: write_data_to_ascii, write_moments_data_to_binary, write_dfns_data_to_binary, debug_dump
 using ..looping
@@ -27,7 +27,7 @@ using ..initial_conditions: enforce_vpa_boundary_condition!, enforce_r_boundary_
 using ..initial_conditions: enforce_neutral_boundary_conditions!
 using ..initial_conditions: enforce_neutral_z_boundary_condition!, enforce_neutral_r_boundary_condition!
 using ..input_structs: advance_info, time_input
-using ..advection: setup_advection, update_boundary_indices!
+using ..advection: setup_advection #, update_boundary_indices!
 using ..z_advection: update_speed_z!, z_advection!
 using ..r_advection: update_speed_r!, r_advection!
 using ..neutral_advection: update_speed_neutral_r!, neutral_advection_r!, update_speed_neutral_z!, neutral_advection_z!
@@ -50,60 +50,64 @@ using ..advection: advection_info
 mutable struct scratch_dummy_arrays
     dummy_sr::Array{mk_float,2}
     dummy_vpavperp::Array{mk_float,2}
-    dummy_zr::Array{mk_float,2}
+    dummy_zr::MPISharedArray{mk_float,2}
 	
 	#buffer arrays for MPI 
-	buffer_z_1::Array{mk_float,1}
-	buffer_z_2::Array{mk_float,1}
-	buffer_z_3::Array{mk_float,1}
-	buffer_z_4::Array{mk_float,1}
+	buffer_z_1::MPISharedArray{mk_float,1}
+	buffer_z_2::MPISharedArray{mk_float,1}
+	buffer_z_3::MPISharedArray{mk_float,1}
+	buffer_z_4::MPISharedArray{mk_float,1}
 	
-	buffer_r_1::Array{mk_float,1}
-	buffer_r_2::Array{mk_float,1}
-	buffer_r_3::Array{mk_float,1}
-	buffer_r_4::Array{mk_float,1}
+	buffer_r_1::MPISharedArray{mk_float,1}
+	buffer_r_2::MPISharedArray{mk_float,1}
+	buffer_r_3::MPISharedArray{mk_float,1}
+	buffer_r_4::MPISharedArray{mk_float,1}
 	
-	buffer_vpavperpz_1::Array{mk_float,3}
-	buffer_vpavperpz_2::Array{mk_float,3}
-	buffer_vpavperpz_3::Array{mk_float,3}
-	buffer_vpavperpz_4::Array{mk_float,3}
-	buffer_vpavperpz_5::Array{mk_float,3}
-	buffer_vpavperpz_6::Array{mk_float,3}
+	buffer_vpavperpzs_1::MPISharedArray{mk_float,4}
+	buffer_vpavperpzs_2::MPISharedArray{mk_float,4}
+	buffer_vpavperpzs_3::MPISharedArray{mk_float,4}
+	buffer_vpavperpzs_4::MPISharedArray{mk_float,4}
+	buffer_vpavperpzs_5::MPISharedArray{mk_float,4}
+	buffer_vpavperpzs_6::MPISharedArray{mk_float,4}
 	
-	buffer_vpavperpr_1::Array{mk_float,3}
-	buffer_vpavperpr_2::Array{mk_float,3}
-	buffer_vpavperpr_3::Array{mk_float,3}
-	buffer_vpavperpr_4::Array{mk_float,3}
-	buffer_vpavperpr_5::Array{mk_float,3}
-	buffer_vpavperpr_6::Array{mk_float,3}
+	buffer_vpavperprs_1::MPISharedArray{mk_float,4}
+	buffer_vpavperprs_2::MPISharedArray{mk_float,4}
+	buffer_vpavperprs_3::MPISharedArray{mk_float,4}
+	buffer_vpavperprs_4::MPISharedArray{mk_float,4}
+	buffer_vpavperprs_5::MPISharedArray{mk_float,4}
+	buffer_vpavperprs_6::MPISharedArray{mk_float,4}
 	
-	buffer_vpavperpzr::Array{mk_float,4}
+    # buffer to hold derivative after MPI communicates
+    # needs to be shared memory
+	buffer_vpavperpzrs::MPISharedArray{mk_float,5}
 	
-	buffer_vzvrvzetaz_1::Array{mk_float,4}
-	buffer_vzvrvzetaz_2::Array{mk_float,4}
-	buffer_vzvrvzetaz_3::Array{mk_float,4}
-	buffer_vzvrvzetaz_4::Array{mk_float,4}
-	buffer_vzvrvzetaz_5::Array{mk_float,4}
-	buffer_vzvrvzetaz_6::Array{mk_float,4}
+	buffer_vzvrvzetazsn_1::MPISharedArray{mk_float,5}
+	buffer_vzvrvzetazsn_2::MPISharedArray{mk_float,5}
+	buffer_vzvrvzetazsn_3::MPISharedArray{mk_float,5}
+	buffer_vzvrvzetazsn_4::MPISharedArray{mk_float,5}
+	buffer_vzvrvzetazsn_5::MPISharedArray{mk_float,5}
+	buffer_vzvrvzetazsn_6::MPISharedArray{mk_float,5}
 	
-	buffer_vzvrvzetar_1::Array{mk_float,4}
-	buffer_vzvrvzetar_2::Array{mk_float,4}
-	buffer_vzvrvzetar_3::Array{mk_float,4}
-	buffer_vzvrvzetar_4::Array{mk_float,4}
-	buffer_vzvrvzetar_5::Array{mk_float,4}
-	buffer_vzvrvzetar_6::Array{mk_float,4}
+	buffer_vzvrvzetarsn_1::MPISharedArray{mk_float,5}
+	buffer_vzvrvzetarsn_2::MPISharedArray{mk_float,5}
+	buffer_vzvrvzetarsn_3::MPISharedArray{mk_float,5}
+	buffer_vzvrvzetarsn_4::MPISharedArray{mk_float,5}
+	buffer_vzvrvzetarsn_5::MPISharedArray{mk_float,5}
+	buffer_vzvrvzetarsn_6::MPISharedArray{mk_float,5}
 	
-	buffer_vzvrvzetazr::Array{mk_float,5}	
+    # buffer to hold derivative after MPI communicates
+    # needs to be shared memory
+	buffer_vzvrvzetazrsn::MPISharedArray{mk_float,6}
 	
 end 
 
 struct advect_object_struct
-    vpa_advect::Vector{advection_info{4,5,3}}
-    vperp_advect::Vector{advection_info{4,5,3}}
-    z_advect::Vector{advection_info{4,5,3}}
-    r_advect::Vector{advection_info{4,5,3}}
-    neutral_z_advect::Vector{advection_info{5,6,4}}
-    neutral_r_advect::Vector{advection_info{5,6,4}}
+    vpa_advect::Vector{advection_info{4,5}}
+    vperp_advect::Vector{advection_info{4,5}}
+    z_advect::Vector{advection_info{4,5}}
+    r_advect::Vector{advection_info{4,5}}
+    neutral_z_advect::Vector{advection_info{5,6}}
+    neutral_r_advect::Vector{advection_info{5,6}}
 end
 
 # consider changing code structure so that
@@ -276,7 +280,9 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     # that may be evolved separately via fluid equations
     scratch = setup_scratch_arrays(moments, pdf.charged.norm, pdf.neutral.norm, t_input.n_rk_stages)
     # setup dummy arrays & buffer arrays for z r MPI
-    scratch_dummy = setup_dummy_and_buffer_arrays(r.n,z.n,vpa.n,vperp.n,vz.n,vr.n,vzeta.n,composition.n_ion_species)
+    n_neutral_species_alloc = max(1,composition.n_neutral_species)
+    scratch_dummy = setup_dummy_and_buffer_arrays(r.n,z.n,vpa.n,vperp.n,vz.n,vr.n,vzeta.n,
+                                   composition.n_ion_species,n_neutral_species_alloc)
     # create the "fields" structure that contains arrays
     # for the electrostatic potential phi and eventually the electromagnetic fields
     fields = setup_em_fields(z.n, r.n, drive_input.force_phi, drive_input.amplitude, drive_input.frequency)
@@ -297,16 +303,19 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     # with advection in r
     begin_serial_region()
     r_advect = setup_advection(n_ion_species, r, vpa, vperp, z)
-    # initialise the r advection speed
-    begin_s_z_vperp_vpa_region()
-    @loop_s is begin
-        @views update_speed_r!(r_advect[is], fields, vpa, vperp, z, r, geometry)
-        # initialise the upwind/downwind boundary indices in z
-        update_boundary_indices!(r_advect[is], loop_ranges[].vpa, loop_ranges[].vperp, loop_ranges[].z)
+    if r.n > 1
+        # initialise the r advection speed
+        begin_s_z_vperp_vpa_region()
+        @loop_s is begin
+            @views update_speed_r!(r_advect[is], fields, vpa, vperp, z, r, geometry)
+        end
+        # enforce prescribed boundary condition in r on the distribution function f
+        @views enforce_r_boundary_condition!(pdf.charged.unnorm, boundary_distributions.pdf_rboundary_charged,
+                                            r.bc, r_advect, vpa, vperp, z, r, composition,
+                                            scratch_dummy.buffer_vpavperpzs_1, scratch_dummy.buffer_vpavperpzs_2,
+                                            scratch_dummy.buffer_vpavperpzs_3, scratch_dummy.buffer_vpavperpzs_4,
+                                            scratch_dummy.buffer_vpavperpzrs)
     end
-    # enforce prescribed boundary condition in r on the distribution function f
-    @views enforce_r_boundary_condition!(pdf.charged.unnorm, boundary_distributions.pdf_rboundary_charged,
-                                                r.bc, r_advect, vpa, vperp, z, r, composition)
 
     # create structure z_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the split part of the GK equation dealing
@@ -317,11 +326,12 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     begin_s_r_vperp_vpa_region()
     @loop_s is begin
         @views update_speed_z!(z_advect[is], fields, vpa, vperp, z, r, 0.0, geometry)
-        # initialise the upwind/downwind boundary indices in z
-        update_boundary_indices!(z_advect[is], loop_ranges[].vpa, loop_ranges[].vperp, loop_ranges[].r)
     end
     # enforce prescribed boundary condition in z on the distribution function f
-    @views enforce_z_boundary_condition!(pdf.charged.unnorm, z.bc, z_advect, vpa, vperp, r, composition)
+    @views enforce_z_boundary_condition!(pdf.charged.unnorm, z.bc, z_advect, vpa, vperp, z, r, composition,
+            scratch_dummy.buffer_vpavperprs_1, scratch_dummy.buffer_vpavperprs_2,
+            scratch_dummy.buffer_vpavperprs_3, scratch_dummy.buffer_vpavperprs_4,
+            scratch_dummy.buffer_vpavperpzrs)
 
     begin_serial_region()
 
@@ -337,12 +347,11 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     begin_serial_region()
     @serial_region begin
         for is ∈ 1:n_ion_species
-            # initialise the upwind/downwind boundary indices in vpa
-            update_boundary_indices!(vpa_advect[is], 1:vperp.n, 1:z.n, 1:r.n)
             # enforce prescribed boundary condition in vpa on the distribution function f
             @views enforce_vpa_boundary_condition!(pdf.charged.norm[:,:,:,:,is], vpa.bc, vpa_advect[is])
         end
     end
+
     # create structure vperp_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the split part of the GK equation dealing
     # with advection in vperp
@@ -353,8 +362,6 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     @serial_region begin
         for is ∈ 1:n_ion_species
             @views update_speed_vperp!(vperp_advect[is], vpa, vperp, z, r)
-            # initialise the upwind/downwind boundary indices in vpa
-            update_boundary_indices!(vperp_advect[is], 1:vpa.n, 1:z.n, 1:r.n)
             # enforce prescribed boundary condition in vpa on the distribution function f
             #PLACEHOLDER
             #@views enforce_vperp_boundary_condition!(pdf.norm[:,:,:,:,is], vpa.bc, vpa_advect[is])
@@ -367,34 +374,36 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
 
     # create structure neutral_r_advect for neutral particle advection
     begin_serial_region()
-    neutral_r_advect = setup_advection(n_neutral_species, r, vz, vr, vzeta, z)
-    if n_neutral_species > 0
+    neutral_r_advect = setup_advection(n_neutral_species_alloc, r, vz, vr, vzeta, z)
+    if n_neutral_species > 0 && r.n > 1
         # initialise the r advection speed
         begin_sn_vzeta_vr_vz_region()
         @loop_sn isn begin
             @views update_speed_neutral_r!(neutral_r_advect[isn], r, z, vzeta, vr, vz)
-            # initialise the upwind/downwind boundary indices in z
-            update_boundary_indices!(neutral_r_advect[isn], loop_ranges[].vz, loop_ranges[].vr, loop_ranges[].vzeta, loop_ranges[].z)
         end
         # enforce prescribed boundary condition in r on the neutral distribution function f
         @views enforce_neutral_r_boundary_condition!(pdf.neutral.unnorm,
-            boundary_distributions.pdf_rboundary_neutral, neutral_r_advect, vz, vr, vzeta, z, r, composition)
+            boundary_distributions.pdf_rboundary_neutral, neutral_r_advect, vz, vr, vzeta, z, r, composition,
+            scratch_dummy.buffer_vzvrvzetazsn_1, scratch_dummy.buffer_vzvrvzetazsn_2,
+            scratch_dummy.buffer_vzvrvzetazsn_3, scratch_dummy.buffer_vzvrvzetazsn_4,
+            scratch_dummy.buffer_vzvrvzetazrsn)
     end
 
     # create structure neutral_z_advect for neutral particle advection
     begin_serial_region()
-    neutral_z_advect = setup_advection(n_neutral_species, z, vz, vr, vzeta, r)
+    neutral_z_advect = setup_advection(n_neutral_species_alloc, z, vz, vr, vzeta, r)
     if n_neutral_species > 0
         # initialise the z advection speed
         begin_sn_vzeta_vr_vz_region()
         @loop_sn isn begin
             @views update_speed_neutral_z!(neutral_z_advect[isn], r, z, vzeta, vr, vz)
-            # initialise the upwind/downwind boundary indices in z
-            update_boundary_indices!(neutral_z_advect[isn], loop_ranges[].vz, loop_ranges[].vr, loop_ranges[].vzeta, loop_ranges[].r)
         end
         # enforce prescribed boundary condition in z on the neutral distribution function f
         @views enforce_neutral_z_boundary_condition!(pdf.neutral.unnorm, pdf.charged.unnorm, boundary_distributions,
-            neutral_z_advect, z_advect, vz, vr, vzeta, vpa, vperp, z, r, composition)
+            neutral_z_advect, z_advect, vz, vr, vzeta, vpa, vperp, z, r, composition,
+            scratch_dummy.buffer_vzvrvzetarsn_1, scratch_dummy.buffer_vzvrvzetarsn_2,
+            scratch_dummy.buffer_vzvrvzetarsn_3, scratch_dummy.buffer_vzvrvzetarsn_4,
+            scratch_dummy.buffer_vzvrvzetazrsn)
     end
 
     ##
@@ -420,64 +429,64 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     scratch, advance, scratch_dummy, manufactured_source_list
 end
 
-function setup_dummy_and_buffer_arrays(nr,nz,nvpa,nvperp,nvz,nvr,nvzeta,nspecies_ion)
+function setup_dummy_and_buffer_arrays(nr,nz,nvpa,nvperp,nvz,nvr,nvzeta,nspecies_ion,nspecies_neutral)
 
 	dummy_sr = allocate_float(nr, nspecies_ion)
-    dummy_zr = allocate_float(nz, nr)
+    dummy_zr = allocate_shared_float(nz, nr)
     dummy_vpavperp = allocate_float(nvpa, nvperp)
 	
 	# should the arrays below be shared memory arrays? MRH
-	buffer_z_1 = allocate_float(nz)
-	buffer_z_2 = allocate_float(nz)
-	buffer_z_3 = allocate_float(nz)
-	buffer_z_4 = allocate_float(nz)
+	buffer_z_1 = allocate_shared_float(nz)
+	buffer_z_2 = allocate_shared_float(nz)
+	buffer_z_3 = allocate_shared_float(nz)
+	buffer_z_4 = allocate_shared_float(nz)
 	
-	buffer_r_1 = allocate_float(nr)
-	buffer_r_2 = allocate_float(nr)
-	buffer_r_3 = allocate_float(nr)
-	buffer_r_4 = allocate_float(nr)
+	buffer_r_1 = allocate_shared_float(nr)
+	buffer_r_2 = allocate_shared_float(nr)
+	buffer_r_3 = allocate_shared_float(nr)
+	buffer_r_4 = allocate_shared_float(nr)
 	
-	buffer_vpavperpz_1 = allocate_float(nvpa,nvperp,nz)
-	buffer_vpavperpz_2 = allocate_float(nvpa,nvperp,nz)
-	buffer_vpavperpz_3 = allocate_float(nvpa,nvperp,nz)
-	buffer_vpavperpz_4 = allocate_float(nvpa,nvperp,nz)
-	buffer_vpavperpz_5 = allocate_float(nvpa,nvperp,nz)
-	buffer_vpavperpz_6 = allocate_float(nvpa,nvperp,nz)
+	buffer_vpavperpzs_1 = allocate_shared_float(nvpa,nvperp,nz,nspecies_ion)
+	buffer_vpavperpzs_2 = allocate_shared_float(nvpa,nvperp,nz,nspecies_ion)
+	buffer_vpavperpzs_3 = allocate_shared_float(nvpa,nvperp,nz,nspecies_ion)
+	buffer_vpavperpzs_4 = allocate_shared_float(nvpa,nvperp,nz,nspecies_ion)
+	buffer_vpavperpzs_5 = allocate_shared_float(nvpa,nvperp,nz,nspecies_ion)
+	buffer_vpavperpzs_6 = allocate_shared_float(nvpa,nvperp,nz,nspecies_ion)
 	
-	buffer_vpavperpr_1 = allocate_float(nvpa,nvperp,nr)
-	buffer_vpavperpr_2 = allocate_float(nvpa,nvperp,nr)
-	buffer_vpavperpr_3 = allocate_float(nvpa,nvperp,nr)
-	buffer_vpavperpr_4 = allocate_float(nvpa,nvperp,nr)
-	buffer_vpavperpr_5 = allocate_float(nvpa,nvperp,nr)
-	buffer_vpavperpr_6 = allocate_float(nvpa,nvperp,nr)
+	buffer_vpavperprs_1 = allocate_shared_float(nvpa,nvperp,nr,nspecies_ion)
+	buffer_vpavperprs_2 = allocate_shared_float(nvpa,nvperp,nr,nspecies_ion)
+	buffer_vpavperprs_3 = allocate_shared_float(nvpa,nvperp,nr,nspecies_ion)
+	buffer_vpavperprs_4 = allocate_shared_float(nvpa,nvperp,nr,nspecies_ion)
+	buffer_vpavperprs_5 = allocate_shared_float(nvpa,nvperp,nr,nspecies_ion)
+	buffer_vpavperprs_6 = allocate_shared_float(nvpa,nvperp,nr,nspecies_ion)
 	
-	buffer_vpavperpzr = allocate_float(nvpa,nvperp,nz,nr)
+	buffer_vpavperpzrs = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
 	
-	buffer_vzvrvzetaz_1 = allocate_float(nvz,nvr,nvzeta,nz)
-	buffer_vzvrvzetaz_2 = allocate_float(nvz,nvr,nvzeta,nz)
-	buffer_vzvrvzetaz_3 = allocate_float(nvz,nvr,nvzeta,nz)
-	buffer_vzvrvzetaz_4 = allocate_float(nvz,nvr,nvzeta,nz)
-	buffer_vzvrvzetaz_5 = allocate_float(nvz,nvr,nvzeta,nz)
-	buffer_vzvrvzetaz_6 = allocate_float(nvz,nvr,nvzeta,nz)
+	buffer_vzvrvzetazsn_1 = allocate_shared_float(nvz,nvr,nvzeta,nz,nspecies_neutral)
+	buffer_vzvrvzetazsn_2 = allocate_shared_float(nvz,nvr,nvzeta,nz,nspecies_neutral)
+	buffer_vzvrvzetazsn_3 = allocate_shared_float(nvz,nvr,nvzeta,nz,nspecies_neutral)
+	buffer_vzvrvzetazsn_4 = allocate_shared_float(nvz,nvr,nvzeta,nz,nspecies_neutral)
+	buffer_vzvrvzetazsn_5 = allocate_shared_float(nvz,nvr,nvzeta,nz,nspecies_neutral)
+	buffer_vzvrvzetazsn_6 = allocate_shared_float(nvz,nvr,nvzeta,nz,nspecies_neutral)
 	
-	buffer_vzvrvzetar_1 = allocate_float(nvz,nvr,nvzeta,nr)
-	buffer_vzvrvzetar_2 = allocate_float(nvz,nvr,nvzeta,nr)
-	buffer_vzvrvzetar_3 = allocate_float(nvz,nvr,nvzeta,nr)
-	buffer_vzvrvzetar_4 = allocate_float(nvz,nvr,nvzeta,nr)
-	buffer_vzvrvzetar_5 = allocate_float(nvz,nvr,nvzeta,nr)
-	buffer_vzvrvzetar_6 = allocate_float(nvz,nvr,nvzeta,nr)
+	buffer_vzvrvzetarsn_1 = allocate_shared_float(nvz,nvr,nvzeta,nr,nspecies_neutral)
+	buffer_vzvrvzetarsn_2 = allocate_shared_float(nvz,nvr,nvzeta,nr,nspecies_neutral)
+	buffer_vzvrvzetarsn_3 = allocate_shared_float(nvz,nvr,nvzeta,nr,nspecies_neutral)
+	buffer_vzvrvzetarsn_4 = allocate_shared_float(nvz,nvr,nvzeta,nr,nspecies_neutral)
+	buffer_vzvrvzetarsn_5 = allocate_shared_float(nvz,nvr,nvzeta,nr,nspecies_neutral)
+	buffer_vzvrvzetarsn_6 = allocate_shared_float(nvz,nvr,nvzeta,nr,nspecies_neutral)
 	
-	buffer_vzvrvzetazr = allocate_float(nvz,nvr,nvzeta,nz,nr)		
+	buffer_vzvrvzetazrsn = allocate_shared_float(nvz,nvr,nvzeta,nz,nr,nspecies_neutral)
 	
 	return scratch_dummy_arrays(dummy_sr,dummy_vpavperp,dummy_zr,
 		buffer_z_1,buffer_z_2,buffer_z_3,buffer_z_4,
 		buffer_r_1,buffer_r_2,buffer_r_3,buffer_r_4,
-		buffer_vpavperpz_1,buffer_vpavperpz_2,buffer_vpavperpz_3,buffer_vpavperpz_4,buffer_vpavperpz_5,buffer_vpavperpz_6,
-		buffer_vpavperpr_1,buffer_vpavperpr_2,buffer_vpavperpr_3,buffer_vpavperpr_4,buffer_vpavperpr_5,buffer_vpavperpr_6,
-		buffer_vpavperpzr,
-		buffer_vzvrvzetaz_1,buffer_vzvrvzetaz_2,buffer_vzvrvzetaz_3,buffer_vzvrvzetaz_4,buffer_vzvrvzetaz_5,buffer_vzvrvzetaz_6,
-		buffer_vzvrvzetar_1,buffer_vzvrvzetar_2,buffer_vzvrvzetar_3,buffer_vzvrvzetar_4,buffer_vzvrvzetar_5,buffer_vzvrvzetar_6,
-		buffer_vzvrvzetazr)
+		buffer_vpavperpzs_1,buffer_vpavperpzs_2,buffer_vpavperpzs_3,buffer_vpavperpzs_4,buffer_vpavperpzs_5,buffer_vpavperpzs_6,
+		buffer_vpavperprs_1,buffer_vpavperprs_2,buffer_vpavperprs_3,buffer_vpavperprs_4,buffer_vpavperprs_5,buffer_vpavperprs_6,
+		buffer_vpavperpzrs,
+		buffer_vzvrvzetazsn_1,buffer_vzvrvzetazsn_2,buffer_vzvrvzetazsn_3,buffer_vzvrvzetazsn_4,buffer_vzvrvzetazsn_5,buffer_vzvrvzetazsn_6,
+		buffer_vzvrvzetarsn_1,buffer_vzvrvzetarsn_2,buffer_vzvrvzetarsn_3,buffer_vzvrvzetarsn_4,buffer_vzvrvzetarsn_5,buffer_vzvrvzetarsn_6,
+		buffer_vzvrvzetazrsn)
 
 end
 
@@ -600,8 +609,10 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
         debug_detect_redundant_is_active[] = true
     end
 
-	@serial_region begin
-        println("beginning time advance...", Dates.format(now(), dateformat"H:MM:SS"))
+    @serial_region begin
+        if global_rank[] == 0
+             println("beginning time advance   ", Dates.format(now(), dateformat"H:MM:SS"))
+        end
     end
 
     # main time advance loop
@@ -623,8 +634,14 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
                 debug_detect_redundant_is_active[] = false
             end
             begin_serial_region()
-            @serial_region println("finished time step ", i,"  ",
+            @serial_region begin
+                if global_rank[] == 0
+                     println("finished time step ", i,"    ",
                                    Dates.format(now(), dateformat"H:MM:SS"))
+                end
+            end
+           # @serial_region println("finished time step ", i,"    ",
+           #                        Dates.format(now(), dateformat"H:MM:SS"))
             write_data_to_ascii(moments, fields, vpa, vperp, z, r, t,
                                 composition.n_ion_species, composition.n_neutral_species,
                                 ascii_io)
@@ -960,11 +977,13 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
 
     # enforce boundary conditions in r, z and vpa on the charged particle distribution function
     enforce_boundary_conditions!(fvec_out.pdf, boundary_distributions.pdf_rboundary_charged,
-      vpa.bc, z.bc, r.bc, vpa, vperp, z, r, vpa_advect, z_advect, r_advect, composition)
+      vpa.bc, z.bc, r.bc, vpa, vperp, z, r, vpa_advect, z_advect, r_advect, composition,
+      scratch_dummy)
     # enforce boundary conditions in r and z on the neutral particle distribution function
     if n_neutral_species > 0
         enforce_neutral_boundary_conditions!(fvec_out.pdf_neutral, fvec_out.pdf, boundary_distributions,
-         neutral_r_advect, neutral_z_advect, z_advect, vz, vr, vzeta, vpa, vperp, z, r, composition)
+         neutral_r_advect, neutral_z_advect, z_advect, vz, vr, vzeta, vpa, vperp, z, r, composition,
+         scratch_dummy)
     end
     # End of advance for distribution function
 

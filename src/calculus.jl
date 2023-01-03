@@ -12,7 +12,8 @@ using ..finite_differences: derivative_finite_difference!
 using ..type_definitions: mk_float, mk_int
 using MPI 
 using ..communication: block_rank
-
+using ..communication: _block_synchronize
+using ..looping
 """
 Chebyshev transform f to get Chebyshev spectral coefficients and use them to calculate f'
 """
@@ -132,7 +133,7 @@ function reconcile_element_boundaries_upwind!(df1d, df2d, coord, adv_fac::Abstra
             # adv_fac > 0 corresponds to negative advection speed, so
             # use derivative information from upwind element at larger coordinate value
             df1d[coord.n] = df2d[1,1]
-        elseif adv_fac[coord.ngrid] < 0.0
+        elseif adv_fac[coord.n] < 0.0
             # adv_fac < 0 corresponds to positive advection speed, so
             # use derivative information from upwind element at smaller coordinate value
             df1d[coord.n] = df2d[coord.ngrid,coord.nelement_local]
@@ -212,8 +213,8 @@ updated to include each physical dimension required
 in the main code
 """
 
-function assign_endpoint!(df1d::Array{mk_float,Ndims},
- receive_buffer::Array{mk_float,Mdims},key::String,coord) where {Ndims,Mdims}
+function assign_endpoint!(df1d::AbstractArray{mk_float,Ndims},
+ receive_buffer::AbstractArray{mk_float,Mdims},key::String,coord) where {Ndims,Mdims}
 	if key == "lower"
 		j = 1
 	elseif key == "upper"
@@ -227,32 +228,37 @@ function assign_endpoint!(df1d::Array{mk_float,Ndims},
 	if coord.name == "z" && Ndims==2
 		df1d[j,:] .= receive_buffer[:]
 		#println("ASSIGNING DATA")
-	elseif coord.name == "z" && Ndims==4
-		df1d[:,:,j,:] .= receive_buffer[:,:,:]
+	elseif coord.name == "z" && Ndims==5
+		df1d[:,:,j,:,:] .= receive_buffer[:,:,:,:]
 		#println("ASSIGNING DATA")
-    elseif coord.name == "z" && Ndims==5
-		df1d[:,:,:,j,:] .= receive_buffer[:,:,:,:]
+    elseif coord.name == "z" && Ndims==6
+		df1d[:,:,:,j,:,:] .= receive_buffer[:,:,:,:,:]
 		#println("ASSIGNING DATA")
 	elseif coord.name == "r" && Ndims==2
 		df1d[:,j] .= receive_buffer[:]
 		#println("ASSIGNING DATA")
-	elseif coord.name == "r" && Ndims==4
-		df1d[:,:,:,j] .= receive_buffer[:,:,:]
-		#println("ASSIGNING DATA")
 	elseif coord.name == "r" && Ndims==5
-		df1d[:,:,:,:,j] .= receive_buffer[:,:,:,:]
+		df1d[:,:,:,j,:] .= receive_buffer[:,:,:,:]
+		#println("ASSIGNING DATA")
+	elseif coord.name == "r" && Ndims==6
+		df1d[:,:,:,:,j,:] .= receive_buffer[:,:,:,:,:]
 		#println("ASSIGNING DATA")
 	else
         println("ERROR: failure to assign endpoints in reconcile_element_boundaries_MPI! (centered): coord.name: ",coord.name," Ndims: ",Ndims," key: ",key)
     end
 end
 
-function reconcile_element_boundaries_MPI!(df1d::Array{mk_float,Ndims},
-	dfdx_lower_endpoints::Array{mk_float,Mdims}, dfdx_upper_endpoints::Array{mk_float,Mdims},
-	send_buffer::Array{mk_float,Mdims}, receive_buffer::Array{mk_float,Mdims}, coord) where {Ndims,Mdims}
+function reconcile_element_boundaries_MPI!(df1d::AbstractArray{mk_float,Ndims},
+	dfdx_lower_endpoints::AbstractArray{mk_float,Mdims}, dfdx_upper_endpoints::AbstractArray{mk_float,Mdims},
+	receive_buffer1::AbstractArray{mk_float,Mdims}, receive_buffer2::AbstractArray{mk_float,Mdims}, coord) where {Ndims,Mdims}
 	
-    if block_rank[] == 0 # lead process on this shared-memory block
-        
+    # synchronize buffers
+    # -- this all-to-all block communicate here requires that this function is NOT called from within a parallelised loop
+    # -- or from a @serial_region or from an if statment isolating a single rank on a block 
+    _block_synchronize()
+    #if block_rank[] == 0 # lead process on this shared-memory block
+    @serial_region begin
+
         # now deal with endpoints that are stored across ranks
         comm = coord.comm
         nrank = coord.nrank 
@@ -264,61 +270,58 @@ function reconcile_element_boundaries_MPI!(df1d::Array{mk_float,Ndims},
         # to fix upper endpoints. Special exception for the periodic points.
         # receive_buffer[1] is for data received, send_buffer[1] is data to be sent
         
-        send_buffer .= dfdx_upper_endpoints #highest end point on THIS rank
         # pass data from irank -> irank + 1, receive data from irank - 1
         idst = mod(irank+1,nrank) # destination rank for sent data
         isrc = mod(irank-1,nrank) # source rank for received data
         #MRH what value should tag take here and below? Esp if nrank >= 32
-        rreq = MPI.Irecv!(receive_buffer, comm; source=isrc, tag=isrc+32)
-        sreq = MPI.Isend(send_buffer, comm; dest=idst, tag=irank+32)
-        #print("$irank: Sending   $irank -> $idst = $send_buffer\n")
-        stats = MPI.Waitall([rreq, sreq])
-        #print("$irank: Received $isrc -> $irank = $receive_buffer\n")
-        MPI.Barrier(comm)
+        rreq1 = MPI.Irecv!(receive_buffer1, comm; source=isrc, tag=1)
+        sreq1 = MPI.Isend(dfdx_upper_endpoints, comm; dest=idst, tag=1)
+        #print("$irank: Sending   $irank -> $idst = $dfdx_upper_endpoints\n")
         
-        # no update receive buffer, taking into account the reconciliation
-        if irank == 0
-            if coord.bc == "periodic"
-                #update the extreme lower endpoint with data from irank = nrank -1	
-                receive_buffer .= 0.5*(receive_buffer .+ dfdx_lower_endpoints)
-            else #directly use value from Cheb
-                receive_buffer .= dfdx_lower_endpoints
-            end
-        else # enforce continuity at lower endpoint
-            receive_buffer .= 0.5*(receive_buffer .+ dfdx_lower_endpoints)
-        end
-        #now update the df1d array -- using a slice appropriate to the dimension reconciled
-        assign_endpoint!(df1d,receive_buffer,"lower",coord)
-        
-        send_buffer .= dfdx_lower_endpoints #lowest end point on THIS rank
         # pass data from irank -> irank - 1, receive data from irank + 1
         idst = mod(irank-1,nrank) # destination rank for sent data
         isrc = mod(irank+1,nrank) # source rank for received data
         #MRH what value should tag take here and below? Esp if nrank >= 32
-        rreq = MPI.Irecv!(receive_buffer, comm; source=isrc, tag=isrc+32)
-        sreq = MPI.Isend(send_buffer, comm; dest=idst, tag=irank+32)
-        #print("$irank: Sending   $irank -> $idst = $send_buffer\n")
-        stats = MPI.Waitall([rreq, sreq])
-        #print("$irank: Received $isrc -> $irank = $receive_buffer\n")
-        MPI.Barrier(comm)
+        rreq2 = MPI.Irecv!(receive_buffer2, comm; source=isrc, tag=2)
+        sreq2 = MPI.Isend(dfdx_lower_endpoints, comm; dest=idst, tag=2)
+        #print("$irank: Sending   $irank -> $idst = $dfdx_lower_endpoints\n")
+        stats = MPI.Waitall([rreq1, sreq1, rreq2, sreq2])
+        #print("$irank: Received $isrc -> $irank = $receive_buffer1\n")
+        #print("$irank: Received $isrc -> $irank = $receive_buffer2\n")
+
+        # now update receive buffers, taking into account the reconciliation
+        if irank == 0
+            if coord.bc == "periodic"
+                #update the extreme lower endpoint with data from irank = nrank -1	
+                receive_buffer1 .= 0.5*(receive_buffer1 .+ dfdx_lower_endpoints)
+            else #directly use value from Cheb
+                receive_buffer1 .= dfdx_lower_endpoints
+            end
+        else # enforce continuity at lower endpoint
+            receive_buffer1 .= 0.5*(receive_buffer1 .+ dfdx_lower_endpoints)
+        end
+        #now update the df1d array -- using a slice appropriate to the dimension reconciled
+        assign_endpoint!(df1d,receive_buffer1,"lower",coord)
         
         if irank == nrank-1
             if coord.bc == "periodic"
                 #update the extreme upper endpoint with data from irank = 0
-                receive_buffer .= 0.5*(receive_buffer .+ dfdx_upper_endpoints)
+                receive_buffer2 .= 0.5*(receive_buffer2 .+ dfdx_upper_endpoints)
             else #directly use value from Cheb
-                receive_buffer .= dfdx_upper_endpoints
+                receive_buffer2 .= dfdx_upper_endpoints
             end
         else # enforce continuity at upper endpoint
-            receive_buffer .= 0.5*(receive_buffer .+ dfdx_upper_endpoints)
+            receive_buffer2 .= 0.5*(receive_buffer2 .+ dfdx_upper_endpoints)
         end
         #now update the df1d array -- using a slice appropriate to the dimension reconciled
-        assign_endpoint!(df1d,receive_buffer,"upper",coord)
+        assign_endpoint!(df1d,receive_buffer2,"upper",coord)
         
     end
+    # synchronize buffers
+    _block_synchronize()
 end
 	
-function apply_adv_fac!(buffer::Array{Float64,Ndims},adv_fac::Array{Float64,Ndims},endpoints::Array{Float64,Ndims},sgn::Int64) where Ndims
+function apply_adv_fac!(buffer::AbstractArray{mk_float,Ndims},adv_fac::AbstractArray{mk_float,Ndims},endpoints::AbstractArray{mk_float,Ndims},sgn::mk_int) where Ndims
 		#buffer contains off-process endpoint
 		#adv_fac < 0 is positive advection speed
 		#adv_fac > 0 is negative advection speed
@@ -331,7 +334,7 @@ function apply_adv_fac!(buffer::Array{Float64,Ndims},adv_fac::Array{Float64,Ndim
 			# replace buffer value with endpoint value 
 				buffer[i] = endpoints[i]
 			elseif sgn*adv_fac[i] < 0.0
-				break #do nothing
+				#do nothing
 			else #average values 
 				buffer[i] = 0.5*(buffer[i] + endpoints[i])
 			end
@@ -339,12 +342,17 @@ function apply_adv_fac!(buffer::Array{Float64,Ndims},adv_fac::Array{Float64,Ndim
 		
 	end
 	
-function reconcile_element_boundaries_MPI!(df1d::Array{Float64,Ndims}, 
-	adv_fac_lower_endpoints::Array{Float64,Mdims}, adv_fac_upper_endpoints::Array{Float64,Mdims},
-	dfdx_lower_endpoints::Array{Float64,Mdims}, dfdx_upper_endpoints::Array{Float64,Mdims},
-	send_buffer::Array{Float64,Mdims}, receive_buffer::Array{Float64,Mdims}, coord) where {Ndims,Mdims}
+function reconcile_element_boundaries_MPI!(df1d::AbstractArray{mk_float,Ndims}, 
+	adv_fac_lower_endpoints::AbstractArray{mk_float,Mdims}, adv_fac_upper_endpoints::AbstractArray{mk_float,Mdims},
+	dfdx_lower_endpoints::AbstractArray{mk_float,Mdims}, dfdx_upper_endpoints::AbstractArray{mk_float,Mdims},
+	receive_buffer1::AbstractArray{mk_float,Mdims}, receive_buffer2::AbstractArray{mk_float,Mdims}, coord) where {Ndims,Mdims}
 	
-    if block_rank[] == 0 # lead process on this shared-memory block
+    # synchronize buffers
+    # -- this all-to-all block communicate here requires that this function is NOT called from within a parallelised loop
+    # -- or from a @serial_region or from an if statment isolating a single rank on a block 
+    _block_synchronize()
+    #if block_rank[] == 0 # lead process on this shared-memory block
+    @serial_region begin
         
         # now deal with endpoints that are stored across ranks
         comm = coord.comm
@@ -357,58 +365,57 @@ function reconcile_element_boundaries_MPI!(df1d::Array{Float64,Ndims},
         # to fix upper endpoints. Special exception for the periodic points.
         # receive_buffer[1] is for data received, send_buffer[1] is data to be sent
         
-        send_buffer .= dfdx_upper_endpoints #highest end point on THIS rank
+        # send highest end point on THIS rank
         # pass data from irank -> irank + 1, receive data from irank - 1
         idst = mod(irank+1,nrank) # destination rank for sent data
         isrc = mod(irank-1,nrank) # source rank for received data
         #MRH what value should tag take here and below? Esp if nrank >= 32
-        rreq = MPI.Irecv!(receive_buffer, comm; source=isrc, tag=isrc+32)
-        sreq = MPI.Isend(send_buffer, comm; dest=idst, tag=irank+32)
-        #print("$irank: Sending   $irank -> $idst = $send_buffer\n")
-        stats = MPI.Waitall([rreq, sreq])
-        #print("$irank: Received $isrc -> $irank = $receive_buffer\n")
-        MPI.Barrier(comm)
+        rreq1 = MPI.Irecv!(receive_buffer1, comm; source=isrc, tag=1)
+        sreq1 = MPI.Isend(dfdx_upper_endpoints, comm; dest=idst, tag=1)
+        #print("$irank: Sending   $irank -> $idst = $dfdx_upper_endpoints\n")
         
-        # no update receive buffer, taking into account the reconciliation
-        if irank == 0
-            if coord.bc == "periodic"
-                # depending on adv_fac, update the extreme lower endpoint with data from irank = nrank -1	
-                apply_adv_fac!(receive_buffer,adv_fac_lower_endpoints,dfdx_lower_endpoints,1)
-            else # directly use value from Cheb at extreme lower point 
-                receive_buffer .= dfdx_lower_endpoints
-            end
-        else # depending on adv_fac, update the lower endpoint with data from irank = nrank -1	
-            apply_adv_fac!(receive_buffer,adv_fac_lower_endpoints,dfdx_lower_endpoints,1)
-        end
-        #now update the df1d array -- using a slice appropriate to the dimension reconciled
-        assign_endpoint!(df1d,receive_buffer,"lower",coord)
-        
-        send_buffer .= dfdx_lower_endpoints #lowest end point on THIS rank
+        # send lowest end point on THIS rank
         # pass data from irank -> irank - 1, receive data from irank + 1
         idst = mod(irank-1,nrank) # destination rank for sent data
         isrc = mod(irank+1,nrank) # source rank for received data
         #MRH what value should tag take here and below? Esp if nrank >= 32
-        rreq = MPI.Irecv!(receive_buffer, comm; source=isrc, tag=isrc+32)
-        sreq = MPI.Isend(send_buffer, comm; dest=idst, tag=irank+32)
-        #print("$irank: Sending   $irank -> $idst = $send_buffer\n")
-        stats = MPI.Waitall([rreq, sreq])
-        #print("$irank: Received $isrc -> $irank = $receive_buffer\n")
-        MPI.Barrier(comm)
+        rreq2 = MPI.Irecv!(receive_buffer2, comm; source=isrc, tag=2)
+        sreq2 = MPI.Isend(dfdx_lower_endpoints, comm; dest=idst, tag=2)
+        #print("$irank: Sending   $irank -> $idst = $dfdx_lower_endpoints\n")
+        stats = MPI.Waitall([rreq1, sreq1, rreq2, sreq2])
+        #print("$irank: Received $isrc -> $irank = $receive_buffer1\n")
+        #print("$irank: Received $isrc -> $irank = $receive_buffer2\n")
+
+        # now update receive buffers, taking into account the reconciliation
+        if irank == 0
+            if coord.bc == "periodic"
+                # depending on adv_fac, update the extreme lower endpoint with data from irank = nrank -1	
+                apply_adv_fac!(receive_buffer1,adv_fac_lower_endpoints,dfdx_lower_endpoints,1)
+            else # directly use value from Cheb at extreme lower point 
+                receive_buffer1 .= dfdx_lower_endpoints
+            end
+        else # depending on adv_fac, update the lower endpoint with data from irank = nrank -1	
+            apply_adv_fac!(receive_buffer1,adv_fac_lower_endpoints,dfdx_lower_endpoints,1)
+        end
+        #now update the df1d array -- using a slice appropriate to the dimension reconciled
+        assign_endpoint!(df1d,receive_buffer1,"lower",coord)
         
         if irank == nrank-1
             if coord.bc == "periodic"
                 # depending on adv_fac, update the extreme upper endpoint with data from irank = 0
-                apply_adv_fac!(receive_buffer,adv_fac_upper_endpoints,dfdx_upper_endpoints,-1)
+                apply_adv_fac!(receive_buffer2,adv_fac_upper_endpoints,dfdx_upper_endpoints,-1)
             else #directly use value from Cheb
-                receive_buffer .= dfdx_upper_endpoints
+                receive_buffer2 .= dfdx_upper_endpoints
             end
         else # enforce continuity at upper endpoint
-            apply_adv_fac!(receive_buffer,adv_fac_upper_endpoints,dfdx_upper_endpoints,-1)
+            apply_adv_fac!(receive_buffer2,adv_fac_upper_endpoints,dfdx_upper_endpoints,-1)
         end
         #now update the df1d array -- using a slice appropriate to the dimension reconciled
-        assign_endpoint!(df1d,receive_buffer,"upper",coord)
+        assign_endpoint!(df1d,receive_buffer2,"upper",coord)
 
     end
+    # synchronize buffers
+    _block_synchronize()
 end
 	
 

@@ -18,6 +18,7 @@ using ..type_definitions: mk_float
 using ..array_allocation: allocate_shared_float
 using ..bgk: init_bgk_pdf!
 using ..communication
+using ..calculus: reconcile_element_boundaries_MPI!
 using ..looping
 using ..velocity_moments: integrate_over_vspace, integrate_over_neutral_vspace
 using ..velocity_moments: integrate_over_positive_vpa, integrate_over_negative_vpa
@@ -569,95 +570,136 @@ end
 # Can we have an explicit loop or explain what it does?
 # Seems to make the fn a operator elementwise in the vector f
 # but loop is over a part of mysterious x_adv objects...
-function enforce_boundary_conditions!(f, f_r_bc, vpa_bc, z_bc, r_bc, vpa, vperp, z, r, vpa_adv::T1, z_adv::T2, r_adv::T3, composition) where {T1, T2, T3}
+function enforce_boundary_conditions!(f, f_r_bc,
+          vpa_bc, z_bc, r_bc, vpa, vperp, z, r,
+          vpa_adv::T1, z_adv::T2, r_adv::T3, composition,
+          scratch_dummy::T4) where {T1, T2, T3, T4}
     
     begin_s_r_z_vperp_region()
     @loop_s_r_z_vperp is ir iz ivperp begin
         # enforce the vpa BC
         # use that adv.speed independent of vpa 
-        @views enforce_vpa_boundary_condition_local!(f[:,ivperp,iz,ir,is], vpa_bc, vpa_adv[is].speed[:,ivperp,iz,ir], vpa_adv[is].upwind_idx[ivperp,iz,ir],
-                                                     vpa_adv[is].downwind_idx[ivperp,iz,ir])
+        @views enforce_vpa_boundary_condition_local!(f[:,ivperp,iz,ir,is], vpa_bc, vpa_adv[is].speed[:,ivperp,iz,ir])
     end
     begin_s_r_vperp_vpa_region()
-    @views enforce_z_boundary_condition!(f, z_bc, z_adv, vpa, vperp, r, composition)
-    begin_s_z_vperp_vpa_region()
-    @views enforce_r_boundary_condition!(f, f_r_bc, r_bc, r_adv, vpa, vperp, z, r, composition)
+    @views enforce_z_boundary_condition!(f, z_bc, z_adv, vpa, vperp, z, r, composition,
+            scratch_dummy.buffer_vpavperprs_1, scratch_dummy.buffer_vpavperprs_2,
+            scratch_dummy.buffer_vpavperprs_3, scratch_dummy.buffer_vpavperprs_4,
+            scratch_dummy.buffer_vpavperpzrs)
+    if r.n > 1
+        begin_s_z_vperp_vpa_region()
+        @views enforce_r_boundary_condition!(f, f_r_bc, r_bc, r_adv, vpa, vperp, z, r, composition,
+            scratch_dummy.buffer_vpavperpzs_1, scratch_dummy.buffer_vpavperpzs_2,
+            scratch_dummy.buffer_vpavperpzs_3, scratch_dummy.buffer_vpavperpzs_4,
+            scratch_dummy.buffer_vpavperpzrs)
+    end
 end
 
 
 """
 enforce boundary conditions on f in r
 """
-function enforce_r_boundary_condition!(f, f_r_bc, bc::String, adv::T, vpa, vperp, z, r, composition) where T
-    # 'periodic' BC enforces periodicity by taking the average of the boundary points
-    if bc == "periodic"
+function enforce_r_boundary_condition!(f::AbstractArray{mk_float,5}, f_r_bc, bc::String,
+        adv::T, vpa, vperp, z, r, composition, end1::AbstractArray{mk_float,4},
+        end2::AbstractArray{mk_float,4}, buffer1::AbstractArray{mk_float,4},
+        buffer2::AbstractArray{mk_float,4}, buffer_dfn::AbstractArray{mk_float,5}) where T
+    
+    nr = r.n
+    
+    if r.nelement_global > r.nelement_local
+        # reconcile internal element boundaries across processes
+        # & enforce periodicity and external boundaries if needed
         @loop_s_z_vperp_vpa is iz ivperp ivpa begin
-            downwind_idx = adv[is].downwind_idx[ivpa,ivperp,iz] # 1 #
-            upwind_idx = adv[is].upwind_idx[ivpa,ivperp,iz] # r.n #
-            f[ivpa,ivperp,iz,downwind_idx,is] = 0.5*(f[ivpa,ivperp,iz,upwind_idx,is]+f[ivpa,ivperp,iz,downwind_idx,is])
-            f[ivpa,ivperp,iz,upwind_idx,is] = f[ivpa,ivperp,iz,downwind_idx,is]
+            end1[ivpa,ivperp,iz,is] = f[ivpa,ivperp,iz,1,is]
+            end2[ivpa,ivperp,iz,is] = f[ivpa,ivperp,iz,nr,is]
         end
-    elseif bc == "Dirichlet"
+        @views reconcile_element_boundaries_MPI!(f,
+            end1, end2,	buffer1, buffer2, r)
+    end
+    
+    # 'periodic' BC enforces periodicity by taking the average of the boundary points
+    # enforce the condition if r is local
+    if bc == "periodic" && r.nelement_global == r.nelement_local
+        @loop_s_z_vperp_vpa is iz ivperp ivpa begin
+            f[ivpa,ivperp,iz,1,is] = 0.5*(f[ivpa,ivperp,iz,nr,is]+f[ivpa,ivperp,iz,1,is])
+            f[ivpa,ivperp,iz,nr,is] = f[ivpa,ivperp,iz,1,is]
+        end
+    end
+    if bc == "Dirichlet"
         zero = 1.0e-10
         # use the old distribution to force the new distribution to have 
         # consistant-in-time values at the boundary
         # impose bc for incoming parts of velocity space only (Hyperbolic PDE)
         @loop_s_z_vperp_vpa is iz ivperp ivpa begin
-            ir = 1 # r = -L/2
-            if adv[is].speed[ir,ivpa,ivperp,iz] > zero
+            ir = 1 # r = -L/2 -- check that the point is on lowest rank
+            if adv[is].speed[ir,ivpa,ivperp,iz] > zero && r.irank == 0
                 f[ivpa,ivperp,iz,ir,is] = f_r_bc[ivpa,ivperp,iz,1,is]
             end
-            ir = r.n # r = L/2
-            if adv[is].speed[ir,ivpa,ivperp,iz] < -zero
+            ir = r.n # r = L/2 -- check that the point is on highest rank
+            if adv[is].speed[ir,ivpa,ivperp,iz] < -zero && r.irank == r.nrank - 1
                 f[ivpa,ivperp,iz,ir,is] = f_r_bc[ivpa,ivperp,iz,end,is]
             end    
-            #upwind_idx = adv[is].upwind_idx[ivpa,ivperp,iz] # r.n #
-            #f[ivpa,ivperp,iz,upwind_idx,is] = f_r_bc[ivpa,ivperp,iz,upwind_idx,is]
         end
     end
 end
 """
 enforce boundary conditions on f in z
 """
-function enforce_z_boundary_condition!(f, bc::String, adv::T, vpa, vperp, r, composition) where T
-    # define n_species variable for convenience
-    n_species = composition.n_species
-    # define nvpa variable for convenience
-    nvpa = vpa.n
+function enforce_z_boundary_condition!(f::AbstractArray{mk_float,5}, bc::String, adv::T,
+        vpa, vperp, z, r, composition, end1::AbstractArray{mk_float,4},
+        end2::AbstractArray{mk_float,4}, buffer1::AbstractArray{mk_float,4},
+        buffer2::AbstractArray{mk_float,4}, buffer_dfn::AbstractArray{mk_float,5}) where T
     # define nz variable for convenience
-    nz = size(f, 3)
+    nz = z.n
     # define a zero that accounts for finite precision
     zero = 1.0e-10
+
+    if z.nelement_global > z.nelement_local
+        # reconcile internal element boundaries across processes
+        # & enforce periodicity and external boundaries if needed
+        @loop_s_r_vperp_vpa is ir ivperp ivpa begin
+            end1[ivpa,ivperp,ir,is] = f[ivpa,ivperp,1,ir,is]
+            end2[ivpa,ivperp,ir,is] = f[ivpa,ivperp,nz,ir,is]
+        end
+        @views reconcile_element_boundaries_MPI!(f,
+            end1, end2,	buffer1, buffer2, z)
+    end
     # 'constant' BC is time-independent f at upwind boundary
     # and constant f beyond boundary
-    if bc == "constant"
+    # only supported for z local
+    if bc == "constant" && z.nelement_global == z.nelement_local
         @loop_s_r_vperp_vpa is ir ivperp ivpa begin
-            upwind_idx = adv[is].upwind_idx[ivpa,ivperp,ir]
-            f[ivpa,ivperp,upwind_idx,ir,is] = density_offset * exp(-(vpa.grid[ivpa]/vpawidth)^2) / sqrt(pi)
+            if adv[is].speed[ivpa,ivperp,1,ir] > zero
+                f[ivpa,ivperp,1,ir,is] = density_offset * exp(-(vpa.grid[ivpa]/vpawidth)^2) / sqrt(pi)
+            end
+            if adv[is].speed[ivpa,ivperp,nz,ir] < -zero
+                f[ivpa,ivperp,nz,ir,is] = density_offset * exp(-(vpa.grid[ivpa]/vpawidth)^2) / sqrt(pi)
+            end
         end
+    end
     # 'periodic' BC enforces periodicity by taking the average of the boundary points
-    elseif bc == "periodic"
+    # enforced here for case when z is entirely local
+    if bc == "periodic" && z.nelement_global == z.nelement_local
         @loop_s_r_vperp_vpa is ir ivperp ivpa begin
-            downwind_idx = adv[is].downwind_idx[ivpa,ivperp,ir]
-            upwind_idx = adv[is].upwind_idx[ivpa,ivperp,ir]
-            f[ivpa,ivperp,downwind_idx,ir,is] = 0.5*(f[ivpa,ivperp,upwind_idx,ir,is]+f[ivpa,ivperp,downwind_idx,ir,is])
-            f[ivpa,ivperp,upwind_idx,ir,is] = f[ivpa,ivperp,downwind_idx,ir,is]
+            f[ivpa,ivperp,1,ir,is] = 0.5*(f[ivpa,ivperp,nz,ir,is]+f[ivpa,ivperp,1,ir,is])
+            f[ivpa,ivperp,nz,ir,is] = f[ivpa,ivperp,1,ir,is]
         end
+    end
     # 'wall' BC enforces wall boundary conditions
-    elseif bc == "wall"
+    if bc == "wall"
         @loop_s is begin
             # zero incoming BC for ions, as they recombine at the wall
             @loop_r_vperp_vpa ir ivperp ivpa begin
                 # no parallel BC should be enforced for vpa = 0
                 # adv.speed is signed 
                 # adv.speed =  vpa*bzed - 0.5 *rhostar*Er
-                
+                # check that this rank includes the lower/upper boundary
                 iz = 1 # z = -L/2
-                if adv[is].speed[iz,ivpa,ivperp,ir] > zero
+                if adv[is].speed[iz,ivpa,ivperp,ir] > zero && z.irank == 0
                     f[ivpa,ivperp,iz,ir,is] = 0.0
                 end
                 iz = nz # z = L/2
-                if adv[is].speed[iz,ivpa,ivperp,ir] < -zero
+                if adv[is].speed[iz,ivpa,ivperp,ir] < -zero && z.irank == z.nrank - 1
                     f[ivpa,ivperp,iz,ir,is] = 0.0
                 end
                 
@@ -679,8 +721,7 @@ function enforce_vpa_boundary_condition!(f, bc, src::T) where T
     for ir ∈ 1:nr
         for iz ∈ 1:nz
             for ivperp ∈ 1:nvperp
-                enforce_vpa_boundary_condition_local!(view(f,:,ivperp,iz,ir), bc, src.speed[:,ivperp,iz,ir], src.upwind_idx[ivperp,iz,ir],
-                src.downwind_idx[ivperp,iz,ir])
+                enforce_vpa_boundary_condition_local!(view(f,:,ivperp,iz,ir), bc, src.speed[:,ivperp,iz,ir])
             end
         end
     end
@@ -688,49 +729,74 @@ end
 
 """
 """
-function enforce_vpa_boundary_condition_local!(f::T, bc, adv_speed, upwind_idx, downwind_idx) where T
+function enforce_vpa_boundary_condition_local!(f::T, bc, adv_speed) where T
     # define a zero that accounts for finite precision
     zero = 1.0e-10
     dvpadt = adv_speed[1] #use that dvpa/dt is indendent of vpa in the current model 
+    nvpa = size(f,1)
     if bc == "zero"
         if dvpadt > zero
             f[1] = 0.0 # -infty forced to zero
         elseif dvpadt < zero 
             f[end] = 0.0 # +infty forced to zero
         end
-    #if bc == "zero"
-    #    f[upwind_idx] = 0.0
-    #    #f[downwind_idx] = 0.0
     elseif bc == "periodic"
-        f[downwind_idx] = 0.5*(f[upwind_idx]+f[downwind_idx])
-        f[upwind_idx] = f[downwind_idx]
+        f[1] = 0.5*(f[nvpa]+f[1])
+        f[nvpa] = f[1]
     end
 end
 
-function enforce_neutral_boundary_conditions!(f_neutral, f_charged, boundary_distributions, r_adv_neutral::T1, z_adv_neutral::T2, z_adv_charged::T3, vz, vr, vzeta, vpa, vperp, z, r, composition) where {T1, T2, T3} #f_initial,
+function enforce_neutral_boundary_conditions!(f_neutral, f_charged, boundary_distributions, r_adv_neutral::T1, z_adv_neutral::T2, z_adv_charged::T3, vz, vr, vzeta, vpa, vperp, z, r, composition, scratch_dummy::T4) where {T1, T2, T3, T4} #f_initial,
     
     # f_initial contains the initial condition for enforcing a fixed-boundary-value condition 
     # no bc on vz vr vzeta required as no advection in these coordinates
     begin_sn_r_vzeta_vr_vz_region()
-    @views enforce_neutral_z_boundary_condition!(f_neutral, f_charged, boundary_distributions, z_adv_neutral, z_adv_charged, vz, vr, vzeta, vpa, vperp, z, r, composition)
-    begin_sn_z_vzeta_vr_vz_region()
-    @views enforce_neutral_r_boundary_condition!(f_neutral, boundary_distributions.pdf_rboundary_neutral,
-                                r_adv_neutral, vz, vr, vzeta, z, r, composition)
+    @views enforce_neutral_z_boundary_condition!(f_neutral, f_charged, boundary_distributions,
+            z_adv_neutral, z_adv_charged, vz, vr, vzeta, vpa, vperp, z, r, composition,
+            scratch_dummy.buffer_vzvrvzetarsn_1, scratch_dummy.buffer_vzvrvzetarsn_2,
+            scratch_dummy.buffer_vzvrvzetarsn_3, scratch_dummy.buffer_vzvrvzetarsn_4,
+            scratch_dummy.buffer_vzvrvzetazrsn)
+    if r.n > 1
+        begin_sn_z_vzeta_vr_vz_region()
+        @views enforce_neutral_r_boundary_condition!(f_neutral, boundary_distributions.pdf_rboundary_neutral,
+                                    r_adv_neutral, vz, vr, vzeta, z, r, composition,
+                                    scratch_dummy.buffer_vzvrvzetazsn_1, scratch_dummy.buffer_vzvrvzetazsn_2,
+                                    scratch_dummy.buffer_vzvrvzetazsn_3, scratch_dummy.buffer_vzvrvzetazsn_4,
+                                    scratch_dummy.buffer_vzvrvzetazrsn)
+    end
 end
 
-function enforce_neutral_z_boundary_condition!(f_neutral, f_charged, boundary_distributions, z_adv_neutral::T1, z_adv_charged::T2, vz, vr, vzeta, vpa, vperp, z, r, composition) where {T1, T2}
+function enforce_neutral_z_boundary_condition!(f_neutral::AbstractArray{mk_float,6},
+        f_charged::AbstractArray{mk_float,5}, boundary_distributions, z_adv_neutral::T1,
+        z_adv_charged::T2, vz, vr, vzeta, vpa, vperp, z, r, composition,
+        end1::AbstractArray{mk_float,5}, end2::AbstractArray{mk_float,5},
+        buffer1::AbstractArray{mk_float,5}, buffer2::AbstractArray{mk_float,5},
+        buffer_dfn::AbstractArray{mk_float,6}) where {T1, T2}
     bc = z.bc
     nz = z.n
     # define a zero that accounts for finite precision
     zero = 1.0e-10
     
+    if z.nelement_global > z.nelement_local
+        # reconcile internal element boundaries across processes
+        # & enforce periodicity and external boundaries if needed
+        @loop_sn_r_vzeta_vr_vz isn ir ivzeta ivr ivz begin
+            end1[ivz,ivr,ivzeta,ir,isn] = f_neutral[ivz,ivr,ivzeta,1,ir,isn]
+            end2[ivz,ivr,ivzeta,ir,isn] = f_neutral[ivz,ivr,ivzeta,nz,ir,isn]
+        end
+        @views reconcile_element_boundaries_MPI!(f_neutral,
+            end1, end2,	buffer1, buffer2, z)
+    end
     # 'periodic' BC enforces periodicity by taking the average of the boundary points
-    if bc == "periodic"
+    # if z data is entirely local, enforce periodic boundary condition on external endpoint
+    if bc == "periodic" && z.nelement_global == z.nelement_local
         @loop_sn_r_vzeta_vr_vz isn ir ivzeta ivr ivz begin
             f_neutral[ivz,ivr,ivzeta,1,ir,isn] = 0.5*(f_neutral[ivz,ivr,ivzeta,1,ir,isn]+f_neutral[ivz,ivr,ivzeta,nz,ir,isn])
             f_neutral[ivz,ivr,ivzeta,nz,ir,isn] = f_neutral[ivz,ivr,ivzeta,1,ir,isn]
         end
-    elseif bc == "wall"
+    end
+    # If required, enforce wall boundary condition on external endpoints
+    if bc == "wall"
     # wall BC for neutrals
         begin_serial_region()
         # TODO: parallelise this...
@@ -780,12 +846,12 @@ function enforce_neutral_z_boundary_condition!(f_neutral, f_charged, boundary_di
                         for ivr ∈ 1:vr.n
                             for ivz ∈ 1:vz.n
                                 # no parallel BC should be enforced for vz = 0
-                                iz = 1 # z = -L/2
-                                if vz.grid[ivz] > zero
+                                iz = 1 # z = -L/2, ensure data is on lowest rank
+                                if vz.grid[ivz] > zero && z.irank == 0
                                     f_neutral[ivz,ivr,ivzeta,iz,ir,isn] = wall_flux_0 * knudsen_cosine[ivz,ivr,ivzeta]
                                 end
-                                iz = nz # z = L/2
-                                if vz.grid[ivz] < -zero
+                                iz = nz # z = L/2, ensure data is on highest rank
+                                if vz.grid[ivz] < -zero && z.irank == z.nrank - 1
                                     f_neutral[ivz,ivr,ivzeta,iz,ir,isn] = wall_flux_L * knudsen_cosine[ivz,ivr,ivzeta]
                                 end
                             end
@@ -799,27 +865,48 @@ function enforce_neutral_z_boundary_condition!(f_neutral, f_charged, boundary_di
     end
 end
 
-function enforce_neutral_r_boundary_condition!(f, f_r_bc, adv::T, vz, vr, vzeta, z, r, composition) where T #f_initial, 
+function enforce_neutral_r_boundary_condition!(f::AbstractArray{mk_float,6},
+        f_r_bc::AbstractArray{mk_float,6}, adv::T, vz, vr, vzeta, z, r, composition,
+        end1::AbstractArray{mk_float,5}, end2::AbstractArray{mk_float,5},
+        buffer1::AbstractArray{mk_float,5}, buffer2::AbstractArray{mk_float,5},
+        buffer_dfn::AbstractArray{mk_float,6}) where T #f_initial,
+
     bc = r.bc
     nr = r.n
+
+    if r.nelement_global > r.nelement_local
+        # reconcile internal element boundaries across processes
+        # & enforce periodicity and external boundaries if needed
+        @loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
+            end1[ivz,ivr,ivzeta,iz,isn] = f[ivz,ivr,ivzeta,iz,1,isn]
+            end2[ivz,ivr,ivzeta,iz,isn] = f[ivz,ivr,ivzeta,iz,nr,isn]
+        end
+        @views reconcile_element_boundaries_MPI!(f,
+            end1, end2,	buffer1, buffer2, r)
+    end
     # 'periodic' BC enforces periodicity by taking the average of the boundary points
-    if bc == "periodic"
+    # local case only when no communication required
+    if bc == "periodic" && r.nelement_global == r.nelement_local
         @loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
             f[ivz,ivr,ivzeta,iz,1,isn] = 0.5*(f[ivz,ivr,ivzeta,iz,1,isn]+f[ivz,ivr,ivzeta,iz,nr,isn])
             f[ivz,ivr,ivzeta,iz,nr,isn] = f[ivz,ivr,ivzeta,iz,1,isn]
         end
-    elseif bc == "Dirichlet"
+    end
+    # Dirichlet boundary condition for external endpoints
+    if bc == "Dirichlet"
         zero = 1.0e-10
         # use the old distribution to force the new distribution to have 
         # consistant-in-time values at the boundary
         # impose bc on incoming parts of velocity space only (Hyperbolic PDE)
         @loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
             ir = 1 # r = -L/2
-            if adv[isn].speed[ir,ivz,ivr,ivzeta,iz] > zero
+            # incoming particles and on lowest rank
+            if adv[isn].speed[ir,ivz,ivr,ivzeta,iz] > zero && r.irank == 0
                 f[ivz,ivr,ivzeta,iz,ir,isn] = f_r_bc[ivz,ivr,ivzeta,iz,1,isn]
             end
             ir = nr # r = L/2
-            if adv[isn].speed[ir,ivz,ivr,ivzeta,iz] < -zero
+            # incoming particles and on highest rank
+            if adv[isn].speed[ir,ivz,ivr,ivzeta,iz] < -zero && r.irank == r.nrank - 1
                 f[ivz,ivr,ivzeta,iz,ir,isn] = f_r_bc[ivz,ivr,ivzeta,iz,end,isn]
             end
         end

@@ -5,7 +5,7 @@ module advection
 export setup_advection
 export update_advection_factor!
 export calculate_explicit_advection!
-export update_boundary_indices!
+#export update_boundary_indices!
 export advance_f_local!
 export advance_f_df_precomputed!
 export advection_info
@@ -20,7 +20,7 @@ using ..looping
 structure containing the basic arrays associated with the
 advection terms appearing in the advection equation for each coordinate
 """
-mutable struct advection_info{L,M,N}
+mutable struct advection_info{L,M}
     # rhs is the sum of the advection terms appearing on the righthand side
     # of the equation
     rhs::MPISharedArray{mk_float, L}
@@ -39,12 +39,6 @@ mutable struct advection_info{L,M,N}
     modified_speed::MPISharedArray{mk_float, L}
     # adv_fac is the advection factor that multiplies df in the advection term
     adv_fac::MPISharedArray{mk_float, L}
-    # upwind_idx is the boundary index for the upwind boundary
-    upwind_idx::MPISharedArray{mk_int, N}
-    # downwind_idx is the boundary index for the downwind boundary
-    downwind_idx::MPISharedArray{mk_int, N}
-    # upwind_increment is the index increment used when sweeping in the upwind direction
-    upwind_increment::MPISharedArray{mk_int, N}
 end
 
 """
@@ -54,7 +48,7 @@ function setup_advection(nspec, coords...)
     # allocate an array containing structures with much of the info needed
     # to do the 1D advection time advance
     ncoord = length(coords)
-    advection = Array{advection_info{ncoord,ncoord+1,ncoord-1},1}(undef, nspec)
+    advection = Array{advection_info{ncoord,ncoord+1},1}(undef, nspec)
     # store all of this information in a structure and return it
     for is ∈ 1:nspec
         advection[is] = setup_advection_per_species(coords...)
@@ -80,19 +74,8 @@ function setup_advection_per_species(coords...)
     speed = allocate_shared_float([coord.n for coord in coords]...)
     # create array for storing the modified speed along this coordinate
     modified_speed = allocate_shared_float([coord.n for coord in coords]...)
-    # index for the upwind boundary; will be updated before use so value irrelevant
-    upwind_idx = allocate_shared_int([coord.n for coord in coords[2:end]]...)
-    # index for the downwind boundary; will be updated before use so value irrelevant
-    downwind_idx = allocate_shared_int([coord.n for coord in coords[2:end]]...)
-    # index increment used when sweeping in the upwind direction; will be updated before use
-    upwind_increment = allocate_shared_int([coord.n for coord in coords[2:end]]...)
-    @serial_region begin
-        upwind_idx[:] .= 1
-        downwind_idx[:] .= coords[1].n
-        upwind_increment[:] .= -1
-    end
     # return advection_info struct containing necessary arrays
-    return advection_info(rhs, df, speed, modified_speed, adv_fac, upwind_idx, downwind_idx, upwind_increment)
+    return advection_info(rhs, df, speed, modified_speed, adv_fac)
 end
 
 """

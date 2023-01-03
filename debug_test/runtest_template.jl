@@ -21,7 +21,7 @@ function run_test(test_input, debug_loop_type, debug_loop_parallel_dims)
         mk_state = setup_moment_kinetics(test_input; debug_loop_type=debug_loop_type,
                                          debug_loop_parallel_dims=debug_loop_parallel_dims)
         time_advance!(mk_state...)
-        cleanup_moment_kinetics!(mk_state[end-1:end]...)
+        cleanup_moment_kinetics!(mk_state[end-2:end]...)
     end
 end
 

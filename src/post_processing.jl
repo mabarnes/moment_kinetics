@@ -7,6 +7,11 @@ export compare_charged_pdf_symbolic_test
 export compare_moments_symbolic_test
 export compare_neutral_pdf_symbolic_test
 export compare_fields_symbolic_test
+export read_distributed_zr_data!
+export construct_global_zr_grids
+export allocate_global_zr_charged_moments
+export allocate_global_zr_neutral_moments
+export allocate_global_zr_fields
 
 # packages
 using Plots
@@ -194,6 +199,54 @@ function allocate_global_zr_neutral_moments(nz_global,nr_global,n_neutral_specie
     neutral_thermal_speed = allocate_float(nz_global,nr_global,n_neutral_species,ntime)
     return neutral_density, neutral_uz, neutral_pz, neutral_qz, neutral_thermal_speed
 end
+
+
+"""
+Function below duplicates code from moment_kinetics_input.jl
+ -- need to make better functions there that can be called here
+"""
+
+function get_geometry_and_composition(scan_input,n_ion_species,n_neutral_species)
+    # set geometry_input
+    # MRH need to get this in way that does not duplicate code
+    # MRH from moment_kinetics_input.jl
+    Bzed = get(scan_input, "Bzed", 1.0)
+    Bmag = get(scan_input, "Bmag", 1.0)
+    bzed = Bzed/Bmag
+    bzeta = sqrt(1.0 - bzed^2.0)
+    Bzeta = Bmag*bzeta
+    rhostar = get(scan_input, "rhostar", 0.0)
+    geometry = geometry_input(Bzed,Bmag,bzed,bzeta,Bzeta,rhostar)
+
+    # set composition input
+    # MRH need to get this in way that does not duplicate code
+    # MRH from moment_kinetics_input.jl
+    electron_physics = get(scan_input, "electron_physics", boltzmann_electron_response)
+
+    if electron_physics ∈ (boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath)
+        n_species = n_ion_species + n_neutral_species
+    else
+        n_species = n_ion_species + n_neutral_species + 1
+    end
+    T_e = get(scan_input, "T_e", 1.0)
+    # set wall temperature T_wall = Tw/Te
+    T_wall = get(scan_input, "T_wall", 1.0)
+    # set initial neutral temperature Tn/Tₑ = 1
+    # set initial nᵢ/Nₑ = 1.0
+    # set phi_wall at z = 0
+    phi_wall = get(scan_input, "phi_wall", 0.0)
+    # if false use true Knudsen cosine for neutral wall bc
+    use_test_neutral_wall_pdf = get(scan_input, "use_test_neutral_wall_pdf", false)
+    # ratio of the neutral particle mass to the ion particle mass
+    mn_over_mi = 1.0
+    # ratio of the electron particle mass to the ion particle mass
+    me_over_mi = 1.0/1836.0
+    composition = species_composition(n_species, n_ion_species, n_neutral_species,
+        electron_physics, use_test_neutral_wall_pdf, 1:n_ion_species, n_ion_species+1:n_species, T_e, T_wall,
+        phi_wall, mn_over_mi, me_over_mi, allocate_float(n_species))
+    return geometry, composition
+
+end
 """
 """
 function analyze_and_plot_data(path)
@@ -217,8 +270,8 @@ function analyze_and_plot_data(path)
     # load global and local sizes of grids stored on each output file 
     # z z_wgts r r_wgts may take different values on different blocks
     # we need to construct the global grid below
-    nz, nz_global, z_local, z_local_wgts, Lz = load_coordinate_data(fid, "z")
-    nr, nr_global, r_local, r_local_wgts, Lr = load_coordinate_data(fid, "r")
+    nz_local, nz_global, z_local, z_local_wgts, Lz = load_coordinate_data(fid, "z")
+    nr_local, nr_global, r_local, r_local_wgts, Lr = load_coordinate_data(fid, "r")
     # load time data 
     ntime, time = load_time_data(fid)
     # load species data 
@@ -243,22 +296,22 @@ function analyze_and_plot_data(path)
     #println("r: ",r)
     
     # fields 
-    read_distributed_zr_data!(phi,"phi",run_name,"moments",nblocks,nz,nr) 
-    read_distributed_zr_data!(Ez,"Ez",run_name,"moments",nblocks,nz,nr) 
-    read_distributed_zr_data!(Er,"Er",run_name,"moments",nblocks,nz,nr) 
+    read_distributed_zr_data!(phi,"phi",run_name,"moments",nblocks,nz_local,nr_local)
+    read_distributed_zr_data!(Ez,"Ez",run_name,"moments",nblocks,nz_local,nr_local)
+    read_distributed_zr_data!(Er,"Er",run_name,"moments",nblocks,nz_local,nr_local)
     # charged particle moments
-    read_distributed_zr_data!(density,"density",run_name,"moments",nblocks,nz,nr) 
-    read_distributed_zr_data!(parallel_flow,"parallel_flow",run_name,"moments",nblocks,nz,nr) 
-    read_distributed_zr_data!(parallel_pressure,"parallel_pressure",run_name,"moments",nblocks,nz,nr) 
-    read_distributed_zr_data!(parallel_heat_flux,"parallel_heat_flux",run_name,"moments",nblocks,nz,nr) 
-    read_distributed_zr_data!(thermal_speed,"thermal_speed",run_name,"moments",nblocks,nz,nr) 
+    read_distributed_zr_data!(density,"density",run_name,"moments",nblocks,nz_local,nr_local)
+    read_distributed_zr_data!(parallel_flow,"parallel_flow",run_name,"moments",nblocks,nz_local,nr_local)
+    read_distributed_zr_data!(parallel_pressure,"parallel_pressure",run_name,"moments",nblocks,nz_local,nr_local)
+    read_distributed_zr_data!(parallel_heat_flux,"parallel_heat_flux",run_name,"moments",nblocks,nz_local,nr_local)
+    read_distributed_zr_data!(thermal_speed,"thermal_speed",run_name,"moments",nblocks,nz_local,nr_local)
     # neutral particle moments 
     if n_neutral_species > 0
-        read_distributed_zr_data!(neutral_density,"density_neutral",run_name,"moments",nblocks,nz,nr) 
-        read_distributed_zr_data!(neutral_uz,"uz_neutral",run_name,"moments",nblocks,nz,nr) 
-        read_distributed_zr_data!(neutral_pz,"pz_neutral",run_name,"moments",nblocks,nz,nr) 
-        read_distributed_zr_data!(neutral_qz,"qz_neutral",run_name,"moments",nblocks,nz,nr) 
-        read_distributed_zr_data!(neutral_thermal_speed,"thermal_speed_neutral",run_name,"moments",nblocks,nz,nr) 
+        read_distributed_zr_data!(neutral_density,"density_neutral",run_name,"moments",nblocks,nz_local,nr_local)
+        read_distributed_zr_data!(neutral_uz,"uz_neutral",run_name,"moments",nblocks,nz_local,nr_local)
+        read_distributed_zr_data!(neutral_pz,"pz_neutral",run_name,"moments",nblocks,nz_local,nr_local)
+        read_distributed_zr_data!(neutral_qz,"qz_neutral",run_name,"moments",nblocks,nz_local,nr_local)
+        read_distributed_zr_data!(neutral_thermal_speed,"thermal_speed_neutral",run_name,"moments",nblocks,nz_local,nr_local)
     end 
     # load time data from `dfns' cdf
     fid_pdfs = open_readonly_output_file(run_name,"dfns")
@@ -282,7 +335,7 @@ function analyze_and_plot_data(path)
 	
 	# initialise the post-processing input options
     nwrite_movie, itime_min, itime_max, ivpa0, ivperp0, iz0, ir0,
-        ivz0, ivr0, ivzeta0 = init_postprocessing_options(pp, nvpa, nvperp, nz, nr, nvz, nvr, nvzeta, ntime)
+        ivz0, ivr0, ivzeta0 = init_postprocessing_options(pp, nvpa, nvperp, nz_global, nr_global, nvz, nvr, nvzeta, ntime)
     # load full (z,r,t) fields data
     #phi, Er, Ez = load_fields_data(fid)
     # load full (z,r,species,t) charged particle velocity moments data
@@ -352,58 +405,20 @@ function analyze_and_plot_data(path)
         r_bc = get(scan_input, "r_bc", "periodic")
         z_bc = get(scan_input, "z_bc", "periodic")
         # avoid passing Lr = 0 into manufactured_solns functions
-        if nr > 1
+        if nr_local > 1
             Lr_in = Lr
         else
             Lr_in = 1.0
         end
         
-        
-        # set geometry_input
-        # MRH need to get this in way that does not duplicate code 
-        # MRH from moment_kinetics_input.jl
-        Bzed = get(scan_input, "Bzed", 1.0)
-        Bmag = get(scan_input, "Bmag", 1.0)
-        bzed = Bzed/Bmag
-        bzeta = sqrt(1.0 - bzed^2.0)
-        Bzeta = Bmag*bzeta
-        rhostar = get(scan_input, "rhostar", 0.0)
-        geometry = geometry_input(Bzed,Bmag,bzed,bzeta,Bzeta,rhostar)
+        geometry, composition = get_geometry_and_composition(scan_input,n_ion_species,n_neutral_species)
 
-        # set composition input  
-        # MRH need to get this in way that does not duplicate code 
-        # MRH from moment_kinetics_input.jl
-        electron_physics = get(scan_input, "electron_physics", boltzmann_electron_response)
-    
-        if electron_physics ∈ (boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath)
-            n_species = n_ion_species + n_neutral_species
-        else
-            n_species = n_ion_speces + n_neutral_species + 1
-        end
-        T_e = get(scan_input, "T_e", 1.0)
-        # set wall temperature T_wall = Tw/Te
-        T_wall = get(scan_input, "T_wall", 1.0)
-        # set initial neutral temperature Tn/Tₑ = 1
-        # set initial nᵢ/Nₑ = 1.0
-        # set phi_wall at z = 0
-        phi_wall = get(scan_input, "phi_wall", 0.0)
-        # if false use true Knudsen cosine for neutral wall bc
-        use_test_neutral_wall_pdf = get(scan_input, "use_test_neutral_wall_pdf", false)
-        # ratio of the neutral particle mass to the ion particle mass
-        mn_over_mi = 1.0
-        # ratio of the electron particle mass to the ion particle mass
-        me_over_mi = 1.0/1836.0
-        composition = species_composition(n_species, n_ion_species, n_neutral_species,
-            electron_physics, use_test_neutral_wall_pdf, 1:n_ion_species, n_ion_species+1:n_species, T_e, T_wall,
-            phi_wall, mn_over_mi, me_over_mi, allocate_float(n_species))
-        
-
-        manufactured_solns_list = manufactured_solutions(Lr_in,Lz,r_bc,z_bc,geometry,composition,nr)
+        manufactured_solns_list = manufactured_solutions(Lr_in,Lz,r_bc,z_bc,geometry,composition,nr_local)
         dfni_func = manufactured_solns_list.dfni_func
         densi_func = manufactured_solns_list.densi_func
         dfnn_func = manufactured_solns_list.dfnn_func
         densn_func = manufactured_solns_list.densn_func
-        manufactured_E_fields = manufactured_electric_fields(Lr_in,Lz,r_bc,z_bc,composition,nr)
+        manufactured_E_fields = manufactured_electric_fields(Lr_in,Lz,r_bc,z_bc,composition,nr_local)
         Er_func = manufactured_E_fields.Er_func
         Ez_func = manufactured_E_fields.Ez_func
         phi_func = manufactured_E_fields.phi_func
@@ -444,24 +459,9 @@ function analyze_and_plot_data(path)
         end
         compare_moments_symbolic_test(run_name,density,density_sym,"ion",z,r,time,nz_global,nr_global,ntime,
          L"\widetilde{n}_i",L"\widetilde{n}_i^{sym}",L"\sqrt{\sum || \widetilde{n}_i - \widetilde{n}_i^{sym} ||^2 / N }","dens")
-        
-        if false 
-            ff_sym = copy(ff)
-            is = 1
-            for it in 1:ntime_pdfs
-                for ir in 1:nr
-                    for iz in 1:nz
-                        for ivperp in 1:nvperp
-                            for ivpa in 1:nvpa
-                                ff_sym[ivpa,ivperp,iz,ir,is,it] = dfni_func(vpa[ivpa],vperp[ivperp],z[iz],r[ir],time_pdfs[it])
-                            end
-                        end
-                    end
-                end
-            end
-            compare_charged_pdf_symbolic_test(run_name,ff,ff_sym,"ion",vpa,vperp,z,r,time_pdfs,nvpa,nvperp,nz,nr,ntime_pdfs,
-             L"\widetilde{f}_i",L"\widetilde{f}^{sym}_i",L"\sqrt{ \sum || \widetilde{f}_i - \widetilde{f}_i^{sym} ||^2 / N}","pdf")
-        end
+
+        compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,"ion",
+          L"\widetilde{f}_i",L"\widetilde{f}^{sym}_i",L"\sqrt{ \sum || \widetilde{f}_i - \widetilde{f}_i^{sym} ||^2 / N}","pdf")
         if n_neutral_species > 0
             # neutral test
             neutral_density_sym = copy(density[:,:,:,:])
@@ -476,25 +476,8 @@ function analyze_and_plot_data(path)
             compare_moments_symbolic_test(run_name,neutral_density,neutral_density_sym,"neutral",z,r,time,nz_global,nr_global,ntime,
              L"\widetilde{n}_n",L"\widetilde{n}_n^{sym}",L"\sqrt{ \sum || \widetilde{n}_n - \widetilde{n}_n^{sym} ||^2 /N}","dens")
             
-            if false 
-                neutral_ff_sym = copy(neutral_ff)
-                is = 1
-                for it in 1:ntime_pdfs
-                    for ir in 1:nr
-                        for iz in 1:nz
-                            for ivzeta in 1:nvzeta
-                                for ivr in 1:nvr
-                                    for ivz in 1:nvz
-                                        neutral_ff_sym[ivz,ivr,ivzeta,iz,ir,is,it] = dfnn_func(vz[ivz],vr[ivr],vzeta[ivzeta],z[iz],r[ir],time_pdfs[it])
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end
-                compare_neutral_pdf_symbolic_test(run_name,neutral_ff,neutral_ff_sym,"neutral",vz,vr,vzeta,z,r,time_pdfs,nvz,nvr,nvzeta,nz,nr,ntime_pdfs,
-                 L"\widetilde{f}_n",L"\widetilde{f}^{sym}_n",L"\sqrt{\sum || \widetilde{f}_n - \widetilde{f}_n^{sym} ||^2 /N}","pdf")
-            end
+            compare_neutral_pdf_symbolic_test(run_name,manufactured_solns_list,"neutral",
+             L"\widetilde{f}_n",L"\widetilde{f}^{sym}_n",L"\sqrt{\sum || \widetilde{f}_n - \widetilde{f}_n^{sym} ||^2 /N}","pdf")
         end
     end
 
@@ -618,35 +601,52 @@ function compare_moments_symbolic_test(run_name,moment,moment_sym,spec_string,z,
 
 end
 
-function compare_charged_pdf_symbolic_test(run_name,pdf,pdf_sym,spec_string,
- vpa,vperp,z,r,time,nvpa,nvperp,nz,nr,ntime,pdf_label,pdf_sym_label,norm_label,file_string)
-    is = 1
-    it = ntime
-
-    # Heatmaps for future use
-    #heatmap(r, z, pdf[:,:,is,it], xlabel=L"r", ylabel=L"z", title=pdf_label, c = :deep)
-    #outfile = string(run_name, "_"*file_string*"_vs_r_z_", spec_string, ".pdf")
-    #savefig(outfile)
-    #heatmap(r, z, pdf_sym[:,:,is,it], xlabel=L"r", ylabel=L"z", title=pdf_sym_label, c = :deep)
-    #outfile = string(run_name, "_"*file_string*"_sym_vs_r_z_", spec_string, ".pdf")
-    #savefig(outfile)
-
+function compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,spec_string,
+    pdf_label,pdf_sym_label,norm_label,file_string)
+    fid = open_readonly_output_file(run_name,"dfns", printout=false)
+    # load block data on iblock=0
+    nblocks, iblock = load_block_data(fid, printout=false)
+    # load global sizes of grids that are distributed in memory
+    nz_local, nz_global, z_local, z_wgts_local, Lz = load_coordinate_data(fid, "z", printout=false)
+    nr_local, nr_global, r_local, r_wgts_local, Lr = load_coordinate_data(fid, "r", printout=false)
+    # velocity grid data on iblock=0 (same for all blocks)
+    nvpa, _, vpa, vpa_wgts, Lvpa = load_coordinate_data(fid, "vpa", printout=false)
+    nvperp, _, vperp, vperp_wgts, Lvperp = load_coordinate_data(fid, "vperp", printout=false)
+    # load time data (unique to pdf, may differ to moment values depending on user nwrite_dfns value)
+    ntime, time = load_time_data(fid, printout=false)
+    close(fid)
+    # get the charged particle pdf
+    dfni_func = manufactured_solns_list.dfni_func
+    is = 1 # only one species supported currently
+    
     pdf_norm = zeros(mk_float,ntime)
     for it in 1:ntime
         dummy = 0.0
         dummy_N = 0.0
-        for ir in 1:nr
-            for iz in 1:nz
-                for ivperp in 1:nvperp
-                    for ivpa in 1:nvpa
-                        dummy += (pdf[ivpa,ivperp,iz,ir,is,it] - pdf_sym[ivpa,ivperp,iz,ir,is,it])^2
-                        dummy_N += (pdf_sym[ivpa,ivperp,iz,ir,is,it])^2
+        for iblock in 0:nblocks-1
+            fid_pdfs = open_readonly_output_file(run_name,"dfns",iblock=iblock, printout=false)
+            z_irank, r_irank = load_rank_data(fid_pdfs,printout=false)
+            pdf = load_pdf_data(fid_pdfs, printout=false)
+            # local local grid data on iblock=0
+            nz_local, _, z_local, z_wgts_local, Lz = load_coordinate_data(fid_pdfs, "z")
+            nr_local, _, r_local, r_wgts_local, Lr = load_coordinate_data(fid_pdfs, "r")
+            close(fid_pdfs)
+            imin_r = min(1,r_irank) + 1
+            imin_z = min(1,z_irank) + 1
+            for ir in imin_r:nr_local
+                for iz in imin_z:nz_local
+                    for ivperp in 1:nvperp
+                        for ivpa in 1:nvpa
+                            pdf_sym = dfni_func(vpa[ivpa],vperp[ivperp],z_local[iz],r_local[ir],time[it])
+                            dummy += (pdf[ivpa,ivperp,iz,ir,is,it] - pdf_sym)^2
+                            dummy_N += (pdf_sym)^2
+                        end
                     end
                 end
             end
         end
         #pdf_norm[it] = dummy/dummy_N
-        pdf_norm[it] = sqrt(dummy/(nr*nz*nvpa*nvperp))
+        pdf_norm[it] = sqrt(dummy/(nr_global*nz_global*nvpa*nvperp))
     end
     println("test: ",file_string,": ",spec_string," ",pdf_norm)
     @views plot(time, pdf_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=norm_label) #, yaxis=:log)
@@ -656,37 +656,55 @@ function compare_charged_pdf_symbolic_test(run_name,pdf,pdf_sym,spec_string,
     return pdf_norm
 end
 
-function compare_neutral_pdf_symbolic_test(run_name,pdf,pdf_sym,spec_string,
- vz,vr,vzeta,z,r,time,nvz,nvr,nvzeta,nz,nr,ntime,pdf_label,pdf_sym_label,norm_label,file_string)
-    is = 1
-    it = ntime
-
-    # Heatmaps for future use
-    #heatmap(r, z, pdf[:,:,is,it], xlabel=L"r", ylabel=L"z", title=pdf_label, c = :deep)
-    #outfile = string(run_name, "_"*file_string*"_vs_r_z_", spec_string, ".pdf")
-    #savefig(outfile)
-    #heatmap(r, z, pdf_sym[:,:,is,it], xlabel=L"r", ylabel=L"z", title=pdf_sym_label, c = :deep)
-    #outfile = string(run_name, "_"*file_string*"_sym_vs_r_z_", spec_string, ".pdf")
-    #savefig(outfile)
-
+function compare_neutral_pdf_symbolic_test(run_name,manufactured_solns_list,spec_string,
+    pdf_label,pdf_sym_label,norm_label,file_string)
+    fid = open_readonly_output_file(run_name,"dfns", printout=false)
+    # load block data on iblock=0
+    nblocks, iblock = load_block_data(fid, printout=false)
+    # load global sizes of grids that are distributed in memory
+    nz_local, nz_global, z_local, z_wgts_local, Lz = load_coordinate_data(fid, "z", printout=false)
+    nr_local, nr_global, r_local, r_wgts_local, Lr = load_coordinate_data(fid, "r", printout=false)
+    # velocity grid data on iblock=0 (same for all blocks)
+    nvz, _, vz, vz_wgts, Lvz = load_coordinate_data(fid, "vz", printout=false)
+    nvr, _, vr, vr_wgts, Lvr = load_coordinate_data(fid, "vr", printout=false)
+    nvzeta, _, vzeta, vzeta_wgts, Lvzeta = load_coordinate_data(fid, "vzeta", printout=false)
+    # load time data (unique to pdf, may differ to moment values depending on user nwrite_dfns value)
+    ntime, time = load_time_data(fid, printout=false)
+    close(fid)
+    # get the charged particle pdf
+    dfnn_func = manufactured_solns_list.dfnn_func
+    is = 1 # only one species supported currently
+    
     pdf_norm = zeros(mk_float,ntime)
     for it in 1:ntime
         dummy = 0.0
         dummy_N = 0.0
-        for ir in 1:nr
-            for iz in 1:nz
-                for ivzeta in 1:nvzeta
-                    for ivr in 1:nvr
-                        for ivz in 1:nvz
-                            dummy += (pdf[ivz,ivr,ivzeta,iz,ir,is,it] - pdf_sym[ivz,ivr,ivzeta,iz,ir,is,it])^2
-                            dummy_N += (pdf_sym[ivz,ivr,ivzeta,iz,ir,is,it])^2
+        for iblock in 0:nblocks-1
+            fid_pdfs = open_readonly_output_file(run_name,"dfns",iblock=iblock, printout=false)
+            z_irank, r_irank = load_rank_data(fid_pdfs,printout=false)
+            pdf = load_neutral_pdf_data(fid_pdfs, printout=false)
+            # local local grid data
+            nz_local, _, z_local, z_wgts_local, Lz = load_coordinate_data(fid_pdfs, "z", printout=false)
+            nr_local, _, r_local, r_wgts_local, Lr = load_coordinate_data(fid_pdfs, "r", printout=false)
+            close(fid_pdfs)
+            imin_r = min(1,r_irank) + 1
+            imin_z = min(1,z_irank) + 1
+            for ir in imin_r:nr_local
+                for iz in imin_z:nz_local
+                    for ivzeta in 1:nvzeta
+                        for ivr in 1:nvr
+                            for ivz in 1:nvz
+                                pdf_sym = dfnn_func(vz[ivz],vr[ivr],vzeta[ivzeta],z_local[iz],r_local[ir],time[it])
+                                dummy += (pdf[ivz,ivr,ivzeta,iz,ir,is,it] - pdf_sym)^2
+                                dummy_N += (pdf_sym)^2
+                            end
                         end
                     end
                 end
             end
         end
         #pdf_norm[it] = dummy/dummy_N
-        pdf_norm[it] = sqrt(dummy/(nr*nz*nvz*nvr*nvzeta))
+        pdf_norm[it] = sqrt(dummy/(nr_global*nz_global*nvz*nvr*nvzeta))
     end
     println("test: ",file_string,": ",spec_string," ",pdf_norm)
     @views plot(time, pdf_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=norm_label) #, yaxis=:log)

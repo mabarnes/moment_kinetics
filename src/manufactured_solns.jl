@@ -63,7 +63,7 @@ using ..input_structs
     function densn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
         if z_bc == "periodic" 
             if r_bc == "periodic" 
-                densn = 1.5 +  0.1*(cos(2.0*pi*r/Lr) + cos(2.0*pi*z/Lz))*sin(2.0*pi*t)  
+                densn = 1.5 +  0.1*(cos(2.0*pi*r/Lr) + cos(2.0*pi*z/Lz)) #*sin(2.0*pi*t)  
             elseif r_bc == "Dirichlet"
                 densn = 1.5 + 0.3*r/Lr
             end
@@ -117,7 +117,7 @@ using ..input_structs
     function densi_sym(Lr,Lz,r_bc,z_bc)
         if z_bc == "periodic"
             if r_bc == "periodic"
-                densi = 1.5 +  0.1*(sin(2.0*pi*r/Lr) + sin(2.0*pi*z/Lz))*sin(2.0*pi*t)  
+                densi = 1.5 +  0.1*(sin(2.0*pi*r/Lr) + sin(2.0*pi*z/Lz))#*sin(2.0*pi*t)  
             elseif r_bc == "Dirichlet" 
                 #densi = 1.0 +  0.5*sin(2.0*pi*z/Lz)*(r/Lr + 0.5) + 0.2*sin(2.0*pi*r/Lr)*sin(2.0*pi*t)
                 #densi = 1.0 +  0.5*sin(2.0*pi*z/Lz)*(r/Lr + 0.5) + sin(2.0*pi*r/Lr)*sin(2.0*pi*t)

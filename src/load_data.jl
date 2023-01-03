@@ -98,42 +98,54 @@ end
 
 """
 """
-function load_species_data(fid)
-    print("Loading species data...")
+function load_species_data(fid; printout=false)
+    if printout
+        print("Loading species data...")
+    end
 
     overview = get_group(fid, "overview")
     n_ion_species = load_variable(overview, "n_ion_species")
     n_neutral_species = load_variable(overview, "n_neutral_species")
 
-    println("done.")
+    if printout
+        println("done.")
+    end
 
     return n_ion_species, n_neutral_species
 end
 
 """
 """
-function load_time_data(fid)
-    print("Loading time data...")
+function load_time_data(fid; printout=false)
+    if printout
+        print("Loading time data...")
+    end
 
     group = get_group(fid, "dynamic_data")
     time = load_variable(group, "time")
     ntime = length(time)
 
-    println("done.")
+    if printout
+        println("done.")
+    end
 
     return  ntime, time
 end
 
 """
 """
-function load_block_data(fid)
-    print("Loading block data...")
+function load_block_data(fid; printout=false)
+    if printout
+        print("Loading block data...")
+    end
 
     coords = get_group(fid, "coords")
     nblocks = load_variable(coords, "nblocks")
     iblock = load_variable(coords, "iblock")
 
-    println("done.")
+    if printout
+        println("done.")
+    end
 
     return  nblocks, iblock
 end
@@ -158,8 +170,10 @@ end
 
 """
 """
-function load_fields_data(fid)
-    print("Loading fields data...")
+function load_fields_data(fid; printout=false)
+    if printout
+        print("Loading fields data...")
+    end
 
     group = get_group(fid, "dynamic_data")
 
@@ -172,15 +186,19 @@ function load_fields_data(fid)
     # Read z electric field
     Ez = load_variable(group, "Ez")
 
-    println("done.")
+    if printout
+        println("done.")
+    end
 
     return phi, Er, Ez
 end
 
 """
 """
-function load_charged_particle_moments_data(fid)
-    print("Loading charged particle velocity moments data...")
+function load_charged_particle_moments_data(fid; printout=false)
+    if printout
+        print("Loading charged particle velocity moments data...")
+    end
 
     group = get_group(fid, "dynamic_data")
 
@@ -201,13 +219,17 @@ function load_charged_particle_moments_data(fid)
     
     evolve_ppar = false
 
-    println("done.")
+    if printout
+        println("done.")
+    end
 
     return density, parallel_flow, parallel_pressure, parallel_heat_flux, thermal_speed, evolve_ppar
 end
 
-function load_neutral_particle_moments_data(fid)
-    print("Loading neutral particle velocity moments data...")
+function load_neutral_particle_moments_data(fid; printout=false)
+    if printout
+        print("Loading neutral particle velocity moments data...")
+    end
 
     group = get_group(fid, "dynamic_data")
 
@@ -226,36 +248,46 @@ function load_neutral_particle_moments_data(fid)
     # Read neutral species thermal speed
     neutral_thermal_speed = load_variable(group, "thermal_speed_neutral")
 
-    println("done.")
+    if printout
+        println("done.")
+    end
 
     return neutral_density, neutral_uz, neutral_pz, neutral_qz, neutral_thermal_speed
 end
 
 """
 """
-function load_pdf_data(fid)
-    print("Loading charged particle distribution function data...")
+function load_pdf_data(fid; printout=false)
+    if printout
+        print("Loading charged particle distribution function data...")
+    end
 
     group = get_group(fid, "dynamic_data")
 
     # Read charged distribution function
     pdf = load_variable(group, "f")
 
-    println("done.")
+    if printout
+        println("done.")
+    end
 
     return pdf
 end
 """
 """
-function load_neutral_pdf_data(fid)
-    print("Loading neutral particle distribution function data...")
+function load_neutral_pdf_data(fid; printout=false)
+    if printout
+        print("Loading neutral particle distribution function data...")
+    end
 
     group = get_group(fid, "dynamic_data")
 
     # Read neutral distribution function
     neutral_pdf = load_variable(group, "f_neutral")
 
-    println("done.")
+    if printout
+        println("done.")
+    end
 
     return neutral_pdf
 end
