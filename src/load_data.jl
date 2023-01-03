@@ -101,7 +101,7 @@ Load data for a coordinate
 """
 function load_coordinate_data(fid, name; printout=false)
     if printout
-        println("Loading coordinate data...")
+        println("Loading $name coordinate data...")
     end
 
     coord_group = get_group(get_group(fid, "coords"), name)
