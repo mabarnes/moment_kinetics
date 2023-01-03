@@ -80,7 +80,7 @@ struct io_dfns_info{Tfile, Ttime, Tfi, Tfn}
     f::Tfi
     # handle for the neutral species distribution function variable
     f_neutral::Tfn
- end
+end
 
 """
 open the necessary output files
@@ -125,7 +125,7 @@ attribute of the variable.
 function write_single_value!() end
 
 """
-write some overview information for the simulation to the hdf5 file
+write some overview information for the simulation to the binary file
 """
 function write_overview!(fid, composition, collisions)
     overview = create_io_group(fid, "overview")

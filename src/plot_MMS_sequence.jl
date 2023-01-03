@@ -97,8 +97,8 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         # load local sizes of grids stored on each netCDF file 
         # z z_wgts r r_wgts may take different values on different blocks
         # we need to construct the global grid below
-        nz, z, z_wgts, nz, vz, z_wgts = load_coordinate_data(fid, "z")
-        nr, nr_global, r, r_wgts, nr, vr, r_wgts = load_coordinate_data(fid, "r")
+        nz_local, z, z_wgts, z_local, vz, z_wgts = load_coordinate_data(fid, "z")
+        nr_local, nr_global, r_local, r_wgts, nr, vr, r_wgts = load_coordinate_data(fid, "r")
         # load time data 
         ntime, time = load_time_data(fid)
         # load species data 

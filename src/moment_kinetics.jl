@@ -91,7 +91,7 @@ function run_moment_kinetics(to::TimerOutput, input_dict=Dict())
         end
 
         # clean up i/o and communications
-        # last 3 elements of mk_state are `io`, `cdf` and `h5`
+        # last 3 elements of mk_state are ascii_io, io_moments, and io_dfns
         cleanup_moment_kinetics!(mk_state[end-2:end]...)
 
         if block_rank[] == 0 && run_type == performance_test
