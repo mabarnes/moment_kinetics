@@ -35,7 +35,7 @@ function open_readonly_output_file(run_name, ext; iblock=0, printout=false)
         netcdf_filename = string(run_name, ".", iblock,".", ext,  ".cdf")
 
         if printout
-            print("Opening ", filename, " to read NetCDF data...")
+            print("Opening ", netcdf_filename, " to read NetCDF data...")
         end
         # open the netcdf file with given filename for reading
         fid = NCDataset(netcdf_filename, "r")
