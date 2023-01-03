@@ -53,12 +53,22 @@ function load_variable() end
 function load_variable(file_or_group::HDF5.H5DataStore, name::String)
     # This overload deals with cases where fid is an HDF5 `File` or `Group` (`H5DataStore`
     # is the abstract super-type for both
-    return read(file_or_group[name])
+    try
+        return read(file_or_group[name])
+    catch
+        println("An error occured while loading $name")
+        rethrow()
+    end
 end
 function load_variable(file_or_group::NCDataset, name::String)
     # This overload deals with cases where fid is a NetCDF `Dataset` (which could be a
     # file or a group).
-    return file_or_group[name].var[:]
+    try
+        return file_or_group[name].var[:]
+    catch
+        println("An error occured while loading $name")
+        rethrow()
+    end
 end
 
 """
@@ -68,12 +78,22 @@ function get_group() end
 function get_group(file_or_group::HDF5.H5DataStore, name::String)
     # This overload deals with cases where fid is an HDF5 `File` or `Group` (`H5DataStore`
     # is the abstract super-type for both
-    return file_or_group[name]
+    try
+        return file_or_group[name]
+    catch
+        println("An error occured while opening the $name group")
+        rethrow()
+    end
 end
 function get_group(file_or_group::NCDataset, name::String)
     # This overload deals with cases where fid is a NetCDF `Dataset` (which could be a
     # file or a group).
-    return file_or_group.group[name]
+    try
+        return file_or_group.group[name]
+    catch
+        println("An error occured while opening the $name group")
+        rethrow()
+    end
 end
 
 """
