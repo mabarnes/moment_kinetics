@@ -222,7 +222,7 @@ function setup_wrapper!(input)
     mk_state_ref[] = setup_moment_kinetics(input)
 end
 function cleanup_wrapper!()
-    cleanup_moment_kinetics!(mk_state_ref[][end-1:end]...)
+    cleanup_moment_kinetics!(mk_state_ref[][end-2:end]...)
 end
 
 _println0(s="") = block_rank[] == 0 && println(s)
@@ -254,7 +254,7 @@ function run_test(input)
 
     result = @benchmark(time_advance!(mk_state...),
                         setup=(mk_state = setup_moment_kinetics($input)),
-                        teardown=cleanup_moment_kinetics!(mk_state[end-1:end]...),
+                        teardown=cleanup_moment_kinetics!(mk_state[end-2:end]...),
                         seconds=benchmark_seconds,
                         samples=benchmark_samples,
                         evals=benchmark_evals)
