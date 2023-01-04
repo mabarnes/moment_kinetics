@@ -25,11 +25,11 @@ function neutral_advection_r!(f_out, fvec_in, advect, r, z, vzeta, vr, vz, dt,
         @views update_speed_neutral_r!(advect[isn], r, z, vzeta, vr, vz)
         # update adv_fac
         @loop_z_vzeta_vr_vz iz ivzeta ivr ivz begin
-            advect[isn].adv_fac[:,ivz,ivr,ivzeta,iz] .= -dt.*advect[isn].speed[:,ivz,ivr,ivzeta,iz]
+            @. @views advect[isn].adv_fac[:,ivz,ivr,ivzeta,iz] = -dt*advect[isn].speed[:,ivz,ivr,ivzeta,iz]
         end
     end
     # calculate the upwind derivative along r
-    derivative_r!(scratch_dummy.buffer_vzvrvzetazrsn, fvec_in.pdf_neutral[:,:,:,:,:,:], advect,
+    derivative_r!(scratch_dummy.buffer_vzvrvzetazrsn, fvec_in.pdf_neutral, advect,
 					scratch_dummy.buffer_vzvrvzetazsn_1, scratch_dummy.buffer_vzvrvzetazsn_2,
 					scratch_dummy.buffer_vzvrvzetazsn_3,scratch_dummy.buffer_vzvrvzetazsn_4,
 					scratch_dummy.buffer_vzvrvzetazsn_5,scratch_dummy.buffer_vzvrvzetazsn_6,
@@ -37,7 +37,7 @@ function neutral_advection_r!(f_out, fvec_in, advect, r, z, vzeta, vr, vz, dt,
 
     # advance r-advection equation
     @loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
-        @. r.scratch = scratch_dummy.buffer_vzvrvzetazrsn[ivz,ivr,ivzeta,iz,:,isn]
+        @. @views r.scratch = scratch_dummy.buffer_vzvrvzetazrsn[ivz,ivr,ivzeta,iz,:,isn]
         @views advance_f_df_precomputed!(f_out[ivz,ivr,ivzeta,iz,:,isn],
           r.scratch, advect[isn], ivz, ivr, ivzeta, iz, r, dt, r_spectral)
     end
