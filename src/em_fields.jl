@@ -93,10 +93,10 @@ function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral, sc
                 # Using J_||e + J_||i = 0, and rearranging for N_e, we have
                 #N_e = - 2.0 * sqrt( pi * composition.me_over_mi) * jpar_i * exp( - composition.phi_wall / composition.T_e)
                 @loop_r ir begin
-                     N_e[ir] .= - 2.0 * sqrt( pi * composition.me_over_mi) * jpar_i[ir] * exp( - composition.phi_wall / composition.T_e)
+                     N_e[ir] = - 2.0 * sqrt( pi * composition.me_over_mi) * jpar_i[ir] * exp( - composition.phi_wall / composition.T_e)
                      # N_e must be positive, so force this in case a numerical error or something
                      # made jpar_i negative
-                     N_e[ir] .= max(N_e[ir], 1.e-16)
+                     N_e[ir] = max(N_e[ir], 1.e-16)
                 end
                 # See P.C. Stangeby, The Plasma Boundary of Magnetic Fusion Devices, IOP Publishing, Chpt 2, p75
             end
