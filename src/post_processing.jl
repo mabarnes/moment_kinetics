@@ -237,13 +237,15 @@ function get_geometry_and_composition(scan_input,n_ion_species,n_neutral_species
     phi_wall = get(scan_input, "phi_wall", 0.0)
     # if false use true Knudsen cosine for neutral wall bc
     use_test_neutral_wall_pdf = get(scan_input, "use_test_neutral_wall_pdf", false)
+    # constant to be used to test nonzero Er in wall boundary condition
+    Er_constant = get(scan_input, "Er_constant", 0.0)
     # ratio of the neutral particle mass to the ion particle mass
     mn_over_mi = 1.0
     # ratio of the electron particle mass to the ion particle mass
     me_over_mi = 1.0/1836.0
     composition = species_composition(n_species, n_ion_species, n_neutral_species,
         electron_physics, use_test_neutral_wall_pdf, 1:n_ion_species, n_ion_species+1:n_species, T_e, T_wall,
-        phi_wall, mn_over_mi, me_over_mi, allocate_float(n_species))
+        phi_wall, Er_constant, mn_over_mi, me_over_mi, allocate_float(n_species))
     return geometry, composition
 
 end

@@ -202,7 +202,7 @@ using ..input_structs
         # calculate the electric fields
         dense = densi # get the electron density via quasineutrality with Zi = 1
         phi = composition.T_e*log(dense/N_e) # use the adiabatic response of electrons for me/mi -> 0
-        Er = -Dr(phi)*rfac
+        Er = -Dr(phi)*rfac + composition.Er_constant
         Ez = -Dz(phi)
         
         Er_expanded = expand_derivatives(Er)

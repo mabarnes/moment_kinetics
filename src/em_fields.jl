@@ -129,7 +129,8 @@ function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral, sc
                 r_spectral,r)
     else
         @serial_region begin
-            fields.Er[:,:] .= 0.0
+            fields.Er[:,:] .= composition.Er_constant
+            # Er_constant defaults to 0.0 in moment_kinetics_input.jl
         end
     end
     #Ez = - d phi / dz

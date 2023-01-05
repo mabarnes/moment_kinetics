@@ -240,6 +240,8 @@ mutable struct species_composition
     T_wall::mk_float
     # wall potential used if electron_physics=boltzmann_electron_response_with_simple_sheath
     phi_wall::mk_float
+    # constant for testing nonzero Er
+    Er_constant::mk_float
     # ratio of the neutral particle mass to the ion mass
     mn_over_mi::mk_float
     # ratio of the electron particle mass to the ion mass
