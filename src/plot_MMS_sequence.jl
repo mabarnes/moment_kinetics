@@ -24,7 +24,7 @@ using ..type_definitions: mk_float, mk_int
 using ..load_data: open_readonly_output_file
 using ..load_data: load_fields_data, load_pdf_data
 using ..load_data: load_charged_particle_moments_data, load_neutral_particle_moments_data
-using ..load_data: load_neutral_pdf_data
+using ..load_data: load_neutral_pdf_data, load_time_data, load_species_data
 using ..load_data: load_block_data, load_coordinate_data
 using ..velocity_moments: integrate_over_vspace
 using ..manufactured_solns: manufactured_solutions, manufactured_electric_fields
@@ -89,7 +89,7 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         end
 
         # open the netcdf file and give it the handle 'fid'
-        fid = open_readonly_output_file(run_name)
+        fid = open_readonly_output_file(run_name,"moments")
         # load block data on iblock=0
         nblocks, iblock = load_block_data(fid)
              
@@ -97,14 +97,17 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         # load local sizes of grids stored on each netCDF file 
         # z z_wgts r r_wgts may take different values on different blocks
         # we need to construct the global grid below
-        nz_local, z, z_wgts, z_local, vz, z_wgts = load_coordinate_data(fid, "z")
-        nr_local, nr_global, r_local, r_wgts, nr, vr, r_wgts = load_coordinate_data(fid, "r")
+        nz_local, nz_global, z_local, z_wgts, Lz = load_coordinate_data(fid, "z")
+        nr_local, nr_global, r_local, r_wgts, Lr = load_coordinate_data(fid, "r")
         # load time data 
         ntime, time = load_time_data(fid)
         # load species data 
         n_ion_species, n_neutral_species = load_species_data(fid)
+        close(fid)
+        
         # load local velocity coordinate data from `moments' cdf
         # these values are currently the same for all blocks 
+        fid = open_readonly_output_file(run_name,"dfns")
         nvpa, nvpa_global, vpa, vpa_wgts, Lvpa = load_coordinate_data(fid, "vpa")
         nvperp, nvperp_global, vperp, vperp_wgts, Lvperp = load_coordinate_data(fid, "vperp")
         if n_neutral_species > 0
