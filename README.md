@@ -83,7 +83,23 @@ this can be suppressed by setting
     export QT_QPA_PLATFORM=offscreen
     ```
 in your `.bashrc` or `.bash_profile` files. 
-    
+
+## Parallel I/O
+
+Note that to enable parallel I/O, you need to get HDF5.jl to use the system
+HDF5 library (which must be MPI-enabled and compiled using the same MPI as you
+run Julia with). To do this (see [the HDF5.jl
+docs](https://juliaio.github.io/HDF5.jl/stable/#Using-custom-or-system-provided-HDF5-binaries))
+run (with the `moment_kinetics` project activated in Julia)
+```
+julia> ENV["JULIA_HDF5_PATH"] = "/path/to/your/hdf5/directory"; using Pkg(); Pkg.build()
+```
+JTO also found that (on a Linux laptop) it was necessary to compile HDF5 from
+source. The system-provided, MPI-linked libhdf5 depended on libcurl, and Julia
+links to an incompatible libcurl, causing an error. When compiled from source
+(enabling MPI!), HDF5 does not require libcurl (guess it is an optional
+dependency), avoiding the problem.
+
 ## Running parameter scans
 Parameter scans can be run, and can (optionally) use multiple processors. Short summary of implementation and usage:
 1) `mk_input()` takes a Dict argument, which can modify values. So `mk_input()` sets the 'defaults' (for a scan), which are overridden by any key/value pairs in the Dict.

@@ -1,18 +1,31 @@
 # No separate module defined here as this file is included within the file_io module
 
 using HDF5
+using MPI
 
 function io_has_parallel(::Val{hdf5})
     return HDF5.has_parallel()
 end
 
-function open_output_file_hdf5(prefix)
+function open_output_file_hdf5(prefix, parallel_io, io_comm)
     # the hdf5 file will be given by output_dir/run_name with .h5 appended
     filename = string(prefix, ".h5")
-    # if a file with the requested name already exists, remove it
-    isfile(filename) && rm(filename)
     # create the new HDF5 file
-    fid = h5open(filename,"cw")
+    if parallel_io
+        # if a file with the requested name already exists, remove it
+        if MPI.Comm_rank(io_comm) == 0 && isfile(filename)
+            rm(filename)
+        end
+        MPI.Barrier(io_comm)
+
+        fid = h5open(filename, "cw", io_comm)
+    else
+        # if a file with the requested name already exists, remove it
+        isfile(filename) && rm(filename)
+
+        # Not doing parallel I/O, so do not need to pass communicator
+        fid = h5open(filename, "cw")
+    end
 
     return fid
 end
@@ -37,9 +50,53 @@ function add_attribute!(var::HDF5.Dataset, name, value)
 end
 
 # HDF5.H5DataStore is the supertype for HDF5.File and HDF5.Group
-function write_single_value!(file_or_group::HDF5.H5DataStore, name, value,
-                             coords::coordinate...; description=nothing)
-    file_or_group[name] = value
+function write_single_value!(file_or_group::HDF5.H5DataStore, name,
+                             data::Union{Number,AbstractArray{T,N}},
+                             coords::coordinate...; parallel_io, description=nothing) where {T,N}
+    if isa(data, Number)
+        file_or_group[name] = data
+        return nothing
+    end
+
+    dim_sizes, chunk_sizes = hdf5_get_fixed_dim_sizes(coords, parallel_io)
+    io_var = create_dataset(file_or_group, name, T, dim_sizes, chunk=chunk_sizes)
+    local_ranges = Tuple(c.local_io_range for c ∈ coords)
+    global_ranges = Tuple(c.global_io_range for c ∈ coords)
+
+    if N == 1
+        io_var[global_ranges[1]] = @view data[local_ranges[1]]
+    elseif N == 2
+        io_var[global_ranges[1], global_ranges[2]] =
+            @view data[local_ranges[1], local_ranges[2]]
+    elseif N == 3
+        io_var[global_ranges[1], global_ranges[2], global_ranges[3]] =
+            @view data[local_ranges[1], local_ranges[2], local_ranges[3]]
+    elseif N == 4
+        io_var[global_ranges[1], global_ranges[2], global_ranges[3], global_ranges[4]] =
+            @view data[local_ranges[1], local_ranges[2], local_ranges[3], local_ranges[4]]
+    elseif N == 5
+        io_var[global_ranges[1], global_ranges[2], global_ranges[3], global_ranges[4],
+               global_ranges[5]] =
+            @view data[local_ranges[1], local_ranges[2], local_ranges[3], local_ranges[4],
+                       local_ranges[5]]
+    elseif N == 6
+        io_var[global_ranges[1], global_ranges[2], global_ranges[3], global_ranges[4],
+               global_ranges[5], global_ranges[6]] =
+            @view data[local_ranges[1], local_ranges[2], local_ranges[3], local_ranges[4],
+                       local_ranges[5], local_ranges[6]]
+    elseif N == 7
+        io_var[global_ranges[1], global_ranges[2], global_ranges[3], global_ranges[4],
+               global_ranges[5], global_ranges[6], global_ranges[6], global_ranges[7]] =
+            @view data[local_ranges[1], local_ranges[2], local_ranges[3], local_ranges[4],
+                       local_ranges[5], local_ranges[6], local_ranges[7]]
+    elseif N == 8
+        io_var[global_ranges[1], global_ranges[2], global_ranges[3], global_ranges[4],
+               global_ranges[5], global_ranges[6], global_ranges[7], global_ranges[8]] =
+            @view data[local_ranges[1], local_ranges[2], local_ranges[3], local_ranges[4],
+                       local_ranges[5], local_ranges[6], local_ranges[7], local_ranges[8]]
+    else
+        error("data of dimension $N not supported yet")
+    end
 
     if description !== nothing
         add_attribute!(file_or_group[name], "description", description)
@@ -49,25 +106,47 @@ function write_single_value!(file_or_group::HDF5.H5DataStore, name, value,
 end
 
 """
-given a tuple, reduced_dims, containing all dimensions except the time dimension,
-return chunk_dims tuple that indicates the data chunk written to hdf5 file each write
-and the dims tuple which also contains the max size of the dataset, accounting for multiple
-time slices
-"""
-function hdf5_dynamic_dims(reduced_dims)
-    # chunk_dims is a tuple indicating the data chunk size to be written each step
-    chunk_dims = tuple(reduced_dims..., 1)
-    # dims contains the initial allocated data size in chunk_dims and the maximum
-    # data size in the second argument; the -1 indicates that the time index is
-    # effectively unlimited (as large as the largest unsigned integer value).
-    # the time index will be dynamically extended as more data is written to file
-    dims = (chunk_dims, tuple(reduced_dims..., -1))
+Get sizes of fixed dimensions and chunks (i.e. everything but time) for I/O
 
-    return chunk_dims, dims
+`coords` should be a tuple whose elements are coordinate structs or integers (e.g. number
+of species).
+"""
+function hdf5_get_fixed_dim_sizes(coords, parallel_io)
+    if parallel_io
+        dim_sizes = Tuple(isa(c, coordinate) ? c.n_global : c for c in coords)
+    else
+        dim_sizes = Tuple(isa(c, coordinate) ? c.n : c for c in coords)
+    end
+    if parallel_io
+        chunk_sizes = Tuple(isa(c, coordinate) ? max(c.n-1,1) : c for c in coords)
+    else
+        chunk_sizes = dim_sizes
+    end
+
+    return dim_sizes, chunk_sizes
+end
+
+"""
+given a tuple, fixed_coords, containing all dimensions except the time dimension,
+get the dimension sizes and chunk sizes
+"""
+function hdf5_get_dynamic_dim_sizes(fixed_coords, parallel_io)
+    fixed_dim_sizes, fixed_chunk_sizes =
+        hdf5_get_fixed_dim_sizes(fixed_coords, parallel_io)
+
+    initial_dim_sizes = tuple(fixed_dim_sizes..., 1)
+
+    # 'maximum size' of -1 for time dimension indicates that the time dimension has an
+    # unlimited length (it can be extended)
+    max_dim_sizes = tuple(fixed_dim_sizes..., -1)
+
+    chunk_size = tuple(fixed_chunk_sizes..., 1)
+
+    return initial_dim_sizes, max_dim_sizes, chunk_size
 end
 
 function create_dynamic_variable!(file_or_group::HDF5.H5DataStore, name, type,
-                                  coords::coordinate...;
+                                  coords::coordinate...; parallel_io,
                                   n_ion_species=0, n_neutral_species=0,
                                   description=nothing, units=nothing)
 
@@ -79,18 +158,18 @@ function create_dynamic_variable!(file_or_group::HDF5.H5DataStore, name, type,
     n_ion_species < 0 && error("n_ion_species must be non-negative, got $n_ion_species")
     n_neutral_species < 0 && error("n_neutral_species must be non-negative, got $n_neutral_species")
 
-    # create the variable so it can be expanded indefinitely (up to the largest unsigned
-    # integer in size) in the time dimension
-    coord_dims = Tuple(c.n for c ∈ coords)
+    # Add the number of species to the spatial/velocity-space coordinates
     if n_ion_species > 0
-        fixed_dims = tuple(coord_dims..., n_ion_species)
+        fixed_coords = tuple(coords..., n_ion_species)
     elseif n_neutral_species > 0
-        fixed_dims = tuple(coord_dims..., n_neutral_species)
+        fixed_coords = tuple(coords..., n_neutral_species)
     else
-        fixed_dims = coord_dims
+        fixed_coords = coords
     end
-    chunk, dims = hdf5_dynamic_dims(fixed_dims)
-    var = create_dataset(file_or_group, name, type, dims, chunk=chunk)
+    initial_dim_sizes, max_dim_sizes, chunk_size =
+        hdf5_get_dynamic_dim_sizes(fixed_coords, parallel_io)
+    var = create_dataset(file_or_group, name, type, (initial_dim_sizes, max_dim_sizes),
+                         chunk=chunk_size)
 
     # Add attribute listing the dimensions belonging to this variable
     dim_names = Tuple(c.name for c ∈ coords)
@@ -122,30 +201,51 @@ function extend_time_index!(h5, t_idx)
 end
 
 function append_to_dynamic_var(io_var::HDF5.Dataset,
-                               data::Union{Number,AbstractArray{T,N}}, t_idx) where {T,N}
+                               data::Union{Number,AbstractArray{T,N}}, t_idx,
+                               coords::Union{coordinate,Integer}...) where {T,N}
     # Extend time dimension for this variable
     dims = size(io_var)
     dims_mod = (dims[1:end-1]..., t_idx)
     HDF5.set_extent_dims(io_var, dims_mod)
+    local_ranges = Tuple(isa(c, coordinate) ? c.local_io_range : 1:c for c ∈ coords)
+    global_ranges = Tuple(isa(c, coordinate) ? c.global_io_range : 1:c for c ∈ coords)
 
     if isa(data, Number)
         io_var[t_idx] = data
     elseif N == 1
-        io_var[:,t_idx] = data
+        io_var[global_ranges[1], t_idx] = @view data[local_ranges[1]]
     elseif N == 2
-        io_var[:,:,t_idx] = data
+        io_var[global_ranges[1], global_ranges[2], t_idx] =
+            @view data[local_ranges[1], local_ranges[2]]
     elseif N == 3
-        io_var[:,:,:,t_idx] = data
+        io_var[global_ranges[1], global_ranges[2], global_ranges[3], t_idx] =
+            @view data[local_ranges[1], local_ranges[2], local_ranges[3]]
     elseif N == 4
-        io_var[:,:,:,:,t_idx] = data
+        io_var[global_ranges[1], global_ranges[2], global_ranges[3], global_ranges[4],
+               t_idx] =
+            @view data[local_ranges[1], local_ranges[2], local_ranges[3], local_ranges[4]]
     elseif N == 5
-        io_var[:,:,:,:,:,t_idx] = data
+        io_var[global_ranges[1], global_ranges[2], global_ranges[3], global_ranges[4],
+               global_ranges[5], t_idx] =
+            @view data[local_ranges[1], local_ranges[2], local_ranges[3], local_ranges[4],
+                       local_ranges[5]]
     elseif N == 6
-        io_var[:,:,:,:,:,:,t_idx] = data
+        io_var[global_ranges[1], global_ranges[2], global_ranges[3], global_ranges[4],
+               global_ranges[5], global_ranges[6], t_idx] =
+            @view data[local_ranges[1], local_ranges[2], local_ranges[3], local_ranges[4],
+                       local_ranges[5], local_ranges[6]]
     elseif N == 7
-        io_var[:,:,:,:,:,:,:,t_idx] = data
+        io_var[global_ranges[1], global_ranges[2], global_ranges[3], global_ranges[4],
+               global_ranges[5], global_ranges[6], global_ranges[6], global_ranges[7],
+               t_idx] =
+            @view data[local_ranges[1], local_ranges[2], local_ranges[3], local_ranges[4],
+                       local_ranges[5], local_ranges[6], local_ranges[7]]
     elseif N == 8
-        io_var[:,:,:,:,:,:,:,:,t_idx] = data
+        io_var[global_ranges[1], global_ranges[2], global_ranges[3], global_ranges[4],
+               global_ranges[5], global_ranges[6], global_ranges[7], global_ranges[8],
+               t_idx] =
+            @view data[local_ranges[1], local_ranges[2], local_ranges[3], local_ranges[4],
+                       local_ranges[5], local_ranges[6], local_ranges[7], local_ranges[8]]
     else
         error("data of dimension $N not supported yet")
     end

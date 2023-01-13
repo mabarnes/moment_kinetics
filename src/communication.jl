@@ -12,8 +12,9 @@ loop ranges), as at the moment we only run with 1 ion species and 1 neutral spec
 """
 module communication
 
-export allocate_shared, block_rank, block_size, comm_block, iblock_index,
-       comm_world, finalize_comms!, initialize_comms!, global_rank, MPISharedArray, global_size
+export allocate_shared, block_rank, block_size, comm_block, comm_inter_block,
+       iblock_index, comm_world, finalize_comms!, initialize_comms!, global_rank,
+       MPISharedArray, global_size
 export setup_distributed_memory_MPI
 
 using MPI
@@ -29,12 +30,24 @@ Can use a const `MPI.Comm` for `comm_world` and just copy the pointer from
 const comm_world = MPI.Comm()
 
 """
+Communicator connecting a shared-memory region
+
 Must use a `Ref{MPI.Comm}` to allow a non-const `MPI.Comm` to be stored. Need to actually
 assign to this and not just copy a pointer into the `.val` member because otherwise the
 `MPI.Comm` object created by `MPI.Comm_split()` would be deleted, which probably makes
 MPI.jl delete the communicator.
 """
 const comm_block = Ref(MPI.Comm())
+
+"""
+Communicator connecting the root processes of each shared memory block
+
+Must use a `Ref{MPI.Comm}` to allow a non-const `MPI.Comm` to be stored. Need to actually
+assign to this and not just copy a pointer into the `.val` member because otherwise the
+`MPI.Comm` object created by `MPI.Comm_split()` would be deleted, which probably makes
+MPI.jl delete the communicator.
+"""
+const comm_inter_block = Ref(MPI.Comm())
 
 # Use Ref for these variables so that they can be made `const` (so have a definite
 # type), but contain a value assigned at run-time.
@@ -173,9 +186,11 @@ function setup_distributed_memory_MPI(z_nelement_global,z_nelement_local,r_nelem
 	# construct communicators for inter-block communication
 	# only communicate between lead processes on a block
     if block_rank[] == 0
+        comm_inter_block[] = MPI.Comm_split(comm_world, 0, iblock)
         r_comm = MPI.Comm_split(comm_world,r_igroup,r_irank)
         z_comm = MPI.Comm_split(comm_world,z_igroup,z_irank)
     else # assign a dummy value 
+        comm_inter_block[] = MPI.Comm_split(comm_world, nothing, iblock)
         r_comm = MPI.Comm_split(comm_world,nothing,r_irank)
         z_comm = MPI.Comm_split(comm_world,nothing,z_irank)
     end

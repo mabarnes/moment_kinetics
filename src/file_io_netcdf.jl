@@ -7,7 +7,9 @@ function io_has_parallel(::Val{netcdf})
     return false
 end
 
-function open_output_file_netcdf(prefix)
+function open_output_file_netcdf(prefix, parallel_io, io_comm)
+    parallel_io && error("NetCDF interface does not support parallel I/O")
+
     # the netcdf file will be given by output_dir/run_name with .cdf appended
     filename = string(prefix, ".cdf")
     # if a netcdf file with the requested name already exists, remove it
@@ -127,7 +129,8 @@ function create_dynamic_variable!(file_or_group::NCDataset, name, type,
 end
 
 function append_to_dynamic_var(io_var::NCDatasets.CFVariable,
-                               data::Union{Number,AbstractArray{T,N}}, t_idx) where {T,N}
+                               data::Union{Number,AbstractArray{T,N}}, t_idx,
+                               coords...) where {T,N}
 
     if isa(data, Number)
         io_var[t_idx] = data

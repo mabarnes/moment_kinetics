@@ -671,7 +671,8 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
                                 composition.n_ion_species, composition.n_neutral_species,
                                 ascii_io)
             write_moments_data_to_binary(moments, fields, t, composition.n_ion_species,
-                                         composition.n_neutral_species, io_moments, iwrite_moments)
+                                         composition.n_neutral_species, io_moments,
+                                         iwrite_moments, r, z)
             iwrite_moments += 1
             begin_s_r_z_vperp_region()
             @debug_detect_redundant_block_synchronize begin
@@ -694,7 +695,8 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
             end
             write_dfns_data_to_binary(pdf.charged.unnorm, pdf.neutral.unnorm, t,
                                       composition.n_ion_species,
-                                      composition.n_neutral_species, io_dfns, iwrite_dfns)
+                                      composition.n_neutral_species, io_dfns, iwrite_dfns,
+                                      r, z, vperp, vpa, vzeta, vr, vz)
             iwrite_dfns += 1
             begin_s_r_z_vperp_region()
             @debug_detect_redundant_block_synchronize begin
