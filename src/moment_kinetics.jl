@@ -172,21 +172,21 @@ function setup_moment_kinetics(input_dict::Dict;
         composition, species, collisions,
         geometry, drive_input, num_diss_params  = input
     # initialize z grid and write grid point locations to file
-    z = define_coordinate(z_input, composition)
+    z = define_coordinate(z_input)
     # initialize r grid and write grid point locations to file
-    r = define_coordinate(r_input, composition)
+    r = define_coordinate(r_input)
     # initialize vpa grid and write grid point locations to file
-    vpa = define_coordinate(vpa_input, composition)
+    vpa = define_coordinate(vpa_input)
     # initialize vperp grid and write grid point locations to file
-    vperp = define_coordinate(vperp_input, composition)
+    vperp = define_coordinate(vperp_input)
     # initialize gyrophase grid and write grid point locations to file
-    gyrophase = define_coordinate(gyrophase_input, composition)
+    gyrophase = define_coordinate(gyrophase_input)
     # initialize vz grid and write grid point locations to file
-    vz = define_coordinate(vz_input, composition)
+    vz = define_coordinate(vz_input)
     # initialize vr grid and write grid point locations to file
-    vr = define_coordinate(vr_input, composition)
+    vr = define_coordinate(vr_input)
     # initialize vr grid and write grid point locations to file
-    vzeta = define_coordinate(vzeta_input, composition)
+    vzeta = define_coordinate(vzeta_input)
     # Create loop range variables for shared-memory-parallel loops
     if composition.n_neutral_species == 0
         n_neutral_loop_size = 1 # Need this to have looping setup. Avoid neutral loops with if statements.
