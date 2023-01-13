@@ -7,6 +7,7 @@ using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.chebyshev: setup_chebyshev_pseudospectral
 using moment_kinetics.calculus: derivative!, second_derivative!, integral
 
+using MPI
 using Random
 
 fd_fake_setup(x) = return false
@@ -41,7 +42,7 @@ function runtests()
                 nelement_local = nelement
 				nrank_per_block = 0 # dummy value
 				irank = 0 # dummy value
-				comm = false # dummy value 
+				comm = MPI.COMM_NULL # dummy value 
 				input = grid_input("coord", ngrid, nelement,
                     nelement_local, nrank_per_block, irank, L,
                     discretization, fd_option, bc, adv_input, comm)
@@ -92,7 +93,7 @@ function runtests()
                 nelement_local = nelement
 				nrank_per_block = 0 # dummy value
 				irank = 0 # dummy value
-				comm = false # dummy value 
+				comm = MPI.COMM_NULL # dummy value 
 				input = grid_input("coord", ngrid, nelement,
                     nelement_local, nrank_per_block, irank, L,
                     "finite_difference", fd_option, bc, adv_input, comm)
@@ -139,7 +140,7 @@ function runtests()
                 nelement_local = nelement
 				nrank_per_block = 0 # dummy value
 				irank = 0 # dummy value
-				comm = false # dummy value 
+				comm = MPI.COMM_NULL # dummy value 
 				input = grid_input("coord", ngrid, nelement,
                     nelement_local, nrank_per_block, irank, L,
                     "finite_difference", fd_option, bc, adv_input, comm)
@@ -182,7 +183,7 @@ function runtests()
                 nelement_local = nelement
 				nrank_per_block = 0 # dummy value
 				irank = 0 # dummy value
-				comm = false # dummy value 
+				comm = MPI.COMM_NULL # dummy value 
 				input = grid_input("coord", ngrid, nelement,
                     nelement_local, nrank_per_block, irank, L,
                     "finite_difference", fd_option, bc, adv_input, comm)
@@ -233,7 +234,7 @@ function runtests()
                 nelement_local = nelement
 				nrank_per_block = 0 # dummy value
 				irank = 0 # dummy value
-				comm = false # dummy value 
+				comm = MPI.COMM_NULL # dummy value 
 				input = grid_input("coord", ngrid, nelement,
                     nelement_local, nrank_per_block, irank, L,
                     "finite_difference", fd_option, bc, adv_input, comm)
@@ -441,7 +442,7 @@ function runtests()
                 nelement_local = nelement
 				nrank_per_block = 0 # dummy value
 				irank = 0 # dummy value
-				comm = false # dummy value 
+				comm = MPI.COMM_NULL # dummy value 
 				input = grid_input("coord", ngrid, nelement,
                     nelement_local, nrank_per_block, irank, L,
                     "chebyshev_pseudospectral", fd_option, bc, adv_input, comm)
@@ -639,7 +640,7 @@ function runtests()
                 nelement_local = nelement
 				nrank_per_block = 0 # dummy value
 				irank = 0 # dummy value
-				comm = false # dummy value 
+				comm = MPI.COMM_NULL # dummy value 
 				input = grid_input("coord", ngrid, nelement,
                     nelement_local, nrank_per_block, irank, L,
                     "chebyshev_pseudospectral", fd_option, bc, adv_input, comm)
@@ -685,7 +686,7 @@ function runtests()
                 nelement_local = nelement
 				nrank_per_block = 0 # dummy value
 				irank = 0 # dummy value
-				comm = false # dummy value 
+				comm = MPI.COMM_NULL # dummy value 
 				input = grid_input("coord", ngrid, nelement,
                     nelement_local, nrank_per_block, irank, L,
                     "chebyshev_pseudospectral", fd_option, bc, adv_input, comm)
@@ -739,7 +740,7 @@ function runtests()
                 nelement_local = nelement
 				nrank_per_block = 0 # dummy value
 				irank = 0 # dummy value
-				comm = false # dummy value 
+				comm = MPI.COMM_NULL # dummy value 
 				input = grid_input("coord", ngrid, nelement,
                     nelement_local, nrank_per_block, irank, L,
                     "chebyshev_pseudospectral", fd_option, bc, adv_input, comm)
@@ -956,7 +957,7 @@ function runtests()
                 nelement_local = nelement
 				nrank_per_block = 0 # dummy value
 				irank = 0 # dummy value
-				comm = false # dummy value
+				comm = MPI.COMM_NULL # dummy value
 				input = grid_input("coord", ngrid, nelement,
                     nelement_local, nrank_per_block, irank, L,
                     "chebyshev_pseudospectral", fd_option, bc, adv_input, comm)

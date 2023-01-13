@@ -11,6 +11,8 @@ using ..chebyshev: scaled_chebyshev_grid
 using ..quadrature: composite_simpson_weights
 using ..input_structs: advection_input
 
+using MPI
+
 """
 structure containing basic information related to coordinates
 """
@@ -71,12 +73,12 @@ struct coordinate
     scratch2_2d::Array{mk_float,2}
     # struct containing advection speed options/inputs
     advection::advection_input
-	# buffer of size 1 for communicating information about cell boundaries
-	send_buffer::Array{mk_float,1}
-	# buffer of size 1 for communicating information about cell boundaries
-	receive_buffer::Array{mk_float,1}
-	# the MPI communicator appropriate for this calculation
-	comm::T where T
+    # buffer of size 1 for communicating information about cell boundaries
+    send_buffer::Array{mk_float,1}
+    # buffer of size 1 for communicating information about cell boundaries
+    receive_buffer::Array{mk_float,1}
+    # the MPI communicator appropriate for this calculation
+    comm::MPI.Comm
 end
 
 """
