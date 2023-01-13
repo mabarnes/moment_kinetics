@@ -152,10 +152,10 @@ function define_spatial_coordinates!(fid, z, r)
     coords = create_io_group(fid, "coords")
     # create the "z" sub-group of "coords" that will contain z coordinate info,
     # including total number of grid points and grid point locations
-    define_coordinate!(coords, z, "z", "spatial coordinate z")
+    define_io_coordinate!(coords, z, "z", "spatial coordinate z")
     # create the "r" sub-group of "coords" that will contain r coordinate info,
     # including total number of grid points and grid point locations
-    define_coordinate!(coords, r, "r", "spatial coordinate r")
+    define_io_coordinate!(coords, r, "r", "spatial coordinate r")
 
     # Write variable recording the index of the block within the global domain
     # decomposition
@@ -176,19 +176,19 @@ Add to coords group in output file information about vspace coordinate grids
 function add_vspace_coordinates!(coords, vz, vr, vzeta, vpa, vperp)
     # create the "vz" sub-group of "coords" that will contain vz coordinate info,
     # including total number of grid points and grid point locations
-    define_coordinate!(coords, vz, "vz", "velocity coordinate v_z")
+    define_io_coordinate!(coords, vz, "vz", "velocity coordinate v_z")
     # create the "vr" sub-group of "coords" that will contain vr coordinate info,
     # including total number of grid points and grid point locations
-    define_coordinate!(coords, vr, "vr", "velocity coordinate v_r")
+    define_io_coordinate!(coords, vr, "vr", "velocity coordinate v_r")
     # create the "vzeta" sub-group of "coords" that will contain vzeta coordinate info,
     # including total number of grid points and grid point locations
-    define_coordinate!(coords, vzeta, "vzeta", "velocity coordinate v_zeta")
+    define_io_coordinate!(coords, vzeta, "vzeta", "velocity coordinate v_zeta")
     # create the "vpa" sub-group of "coords" that will contain vpa coordinate info,
     # including total number of grid points and grid point locations
-    define_coordinate!(coords, vpa, "vpa", "velocity coordinate v_parallel")
+    define_io_coordinate!(coords, vpa, "vpa", "velocity coordinate v_parallel")
     # create the "vperp" sub-group of "coords" that will contain vperp coordinate info,
     # including total number of grid points and grid point locations
-    define_coordinate!(coords, vperp, "vperp", "velocity coordinate v_perp")
+    define_io_coordinate!(coords, vperp, "vperp", "velocity coordinate v_perp")
 
     return nothing
 end
@@ -196,7 +196,7 @@ end
 """
 define a sub-group for each code coordinate and write to output file
 """
-function define_coordinate!(parent, coord, coord_name, description)
+function define_io_coordinate!(parent, coord, coord_name, description)
     # create the "group" sub-group of "parent" that will contain coord_str coordinate info
     group = create_io_group(parent, coord_name, description=description)
 
