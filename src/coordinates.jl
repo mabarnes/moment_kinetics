@@ -79,6 +79,10 @@ struct coordinate
     receive_buffer::Array{mk_float,1}
     # the MPI communicator appropriate for this calculation
     comm::MPI.Comm
+    # local range to slice from variables to write to output file
+    local_io_range::UnitRange{Int64}
+    # global range to write into in output file
+    global_io_range::UnitRange{Int64}
 end
 
 """
@@ -86,7 +90,7 @@ create arrays associated with a given coordinate,
 setup the coordinate grid, and populate the coordinate structure
 containing all of this information
 """
-function define_coordinate(input)
+function define_coordinate(input, parallel_io::Bool=false)
     # total number of grid points is ngrid for the first element
     # plus ngrid-1 unique points for each additional element due
     # to the repetition of a point at the element boundary
@@ -121,11 +125,30 @@ function define_coordinate(input)
     # endpoints, so only two pieces of information must be shared
     send_buffer = allocate_float(1)
     receive_buffer = allocate_float(1)
+
+    # Add some ranges to support parallel file io
+    if !parallel_io
+        # No parallel io, just write everything
+        local_io_range = 1:n_local
+        global_io_range = 1:n_local
+    elseif input.irank == input.nrank-1
+        # Include endpoint on final block
+        local_io_range = 1:n_local
+        global_io_range = input.irank*(n_local-1)+1:n_global
+    else
+        # Skip final point, because it is shared with the next block
+        # Choose to skip final point in each block so all blocks (except the final one)
+        # write a 'chunk' of the same size to the output file. This makes it simple to
+        # align HDF5 'chunks' with the data being written
+        local_io_range = 1 : n_local-1
+        global_io_range = input.irank*(n_local-1)+1 : (input.irank+1)*(n_local-1)
+    end
     return coordinate(input.name, n_global, n_local, input.ngrid,
         input.nelement_global, input.nelement_local, input.nrank, input.irank, input.L, grid,
         cell_width, igrid, ielement, imin, imax, input.discretization, input.fd_option,
         input.bc, wgts, uniform_grid, duniform_dgrid, scratch, copy(scratch), copy(scratch),
-        scratch_2d, copy(scratch_2d), advection, send_buffer, receive_buffer, input.comm)
+        scratch_2d, copy(scratch_2d), advection, send_buffer, receive_buffer, input.comm,
+        local_io_range, global_io_range)
 end
 
 """

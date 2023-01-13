@@ -172,21 +172,21 @@ function setup_moment_kinetics(input_dict::Dict;
         composition, species, collisions,
         geometry, drive_input, num_diss_params  = input
     # initialize z grid and write grid point locations to file
-    z = define_coordinate(z_input)
+    z = define_coordinate(z_input, io_input.parallel_io)
     # initialize r grid and write grid point locations to file
-    r = define_coordinate(r_input)
+    r = define_coordinate(r_input, io_input.parallel_io)
     # initialize vpa grid and write grid point locations to file
-    vpa = define_coordinate(vpa_input)
+    vpa = define_coordinate(vpa_input, io_input.parallel_io)
     # initialize vperp grid and write grid point locations to file
-    vperp = define_coordinate(vperp_input)
+    vperp = define_coordinate(vperp_input, io_input.parallel_io)
     # initialize gyrophase grid and write grid point locations to file
-    gyrophase = define_coordinate(gyrophase_input)
+    gyrophase = define_coordinate(gyrophase_input, io_input.parallel_io)
     # initialize vz grid and write grid point locations to file
-    vz = define_coordinate(vz_input)
+    vz = define_coordinate(vz_input, io_input.parallel_io)
     # initialize vr grid and write grid point locations to file
-    vr = define_coordinate(vr_input)
+    vr = define_coordinate(vr_input, io_input.parallel_io)
     # initialize vr grid and write grid point locations to file
-    vzeta = define_coordinate(vzeta_input)
+    vzeta = define_coordinate(vzeta_input, io_input.parallel_io)
     # Create loop range variables for shared-memory-parallel loops
     if composition.n_neutral_species == 0
         n_neutral_loop_size = 1 # Need this to have looping setup. Avoid neutral loops with if statements.

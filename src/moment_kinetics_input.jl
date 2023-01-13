@@ -358,27 +358,27 @@ function mk_input(scan_input=Dict())
 	# assign dummy values to nrank, irank and comm of coord struct
     vpa_advection_immutable = advection_input(vpa.advection.option, vpa.advection.constant_speed,
         vpa.advection.frequency, vpa.advection.oscillation_amplitude)
-    vpa_immutable = grid_input("vpa", vpa.ngrid, vpa.nelement_global, vpa.nelement_local, 0, 0, vpa.L,
+    vpa_immutable = grid_input("vpa", vpa.ngrid, vpa.nelement_global, vpa.nelement_local, 1, 0, vpa.L,
         vpa.discretization, vpa.fd_option, vpa.bc, vpa_advection_immutable, MPI.COMM_NULL)
     vperp_advection_immutable = advection_input(vperp.advection.option, vperp.advection.constant_speed,
         vperp.advection.frequency, vperp.advection.oscillation_amplitude)
-    vperp_immutable = grid_input("vperp", vperp.ngrid, vperp.nelement_global, vperp.nelement_local, 0, 0, vperp.L,
+    vperp_immutable = grid_input("vperp", vperp.ngrid, vperp.nelement_global, vperp.nelement_local, 1, 0, vperp.L,
         vperp.discretization, vperp.fd_option, vperp.bc, vperp_advection_immutable, MPI.COMM_NULL)
     gyrophase_advection_immutable = advection_input(gyrophase.advection.option, gyrophase.advection.constant_speed,
         gyrophase.advection.frequency, gyrophase.advection.oscillation_amplitude)
-    gyrophase_immutable = grid_input("gyrophase", gyrophase.ngrid, gyrophase.nelement_global, gyrophase.nelement_local, 0, 0, gyrophase.L,
+    gyrophase_immutable = grid_input("gyrophase", gyrophase.ngrid, gyrophase.nelement_global, gyrophase.nelement_local, 1, 0, gyrophase.L,
         gyrophase.discretization, gyrophase.fd_option, gyrophase.bc, gyrophase_advection_immutable, MPI.COMM_NULL)
     vz_advection_immutable = advection_input(vz.advection.option, vz.advection.constant_speed,
         vz.advection.frequency, vz.advection.oscillation_amplitude)
-    vz_immutable = grid_input("vz", vz.ngrid, vz.nelement_global, vz.nelement_local, 0, 0, vz.L,
+    vz_immutable = grid_input("vz", vz.ngrid, vz.nelement_global, vz.nelement_local, 1, 0, vz.L,
         vz.discretization, vz.fd_option, vz.bc, vz_advection_immutable, MPI.COMM_NULL)
     vr_advection_immutable = advection_input(vr.advection.option, vr.advection.constant_speed,
         vr.advection.frequency, vr.advection.oscillation_amplitude)
-    vr_immutable = grid_input("vr", vr.ngrid, vr.nelement_global, vr.nelement_local, 0, 0, vr.L,
+    vr_immutable = grid_input("vr", vr.ngrid, vr.nelement_global, vr.nelement_local, 1, 0, vr.L,
         vr.discretization, vr.fd_option, vr.bc, vr_advection_immutable, MPI.COMM_NULL)
     vzeta_advection_immutable = advection_input(vzeta.advection.option, vzeta.advection.constant_speed,
         vzeta.advection.frequency, vzeta.advection.oscillation_amplitude)
-    vzeta_immutable = grid_input("vzeta", vzeta.ngrid, vzeta.nelement_global, vzeta.nelement_local, 0, 0, vzeta.L,
+    vzeta_immutable = grid_input("vzeta", vzeta.ngrid, vzeta.nelement_global, vzeta.nelement_local, 1, 0, vzeta.L,
         vzeta.discretization, vzeta.fd_option, vzeta.bc, vzeta_advection_immutable, MPI.COMM_NULL)
     
     species_charged_immutable = Array{species_parameters,1}(undef,n_ion_species)
