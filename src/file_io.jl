@@ -65,6 +65,9 @@ struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmomn}
     pz_neutral::Tmomn
     qz_neutral::Tmomn
     thermal_speed_neutral::Tmomn
+
+    # Use parallel I/O?
+    parallel_io::Bool
  end
 
 """
@@ -80,6 +83,9 @@ struct io_dfns_info{Tfile, Ttime, Tfi, Tfn}
     f::Tfi
     # handle for the neutral species distribution function variable
     f_neutral::Tfn
+
+    # Use parallel I/O?
+    parallel_io::Bool
 end
 
 """
@@ -106,9 +112,10 @@ function setup_file_io(io_input, vz, vr, vzeta, vpa, vperp, z, r, composition, c
         end
 
         io_moments = setup_moments_io(out_prefix, io_input.binary_format, r, z,
-                                      composition, collisions)
+                                      composition, collisions, io_input.parallel_io)
         io_dfns = setup_dfns_io(out_prefix, io_input.binary_format, r, z, vperp, vpa,
-                                vzeta, vr, vz, composition, collisions)
+                                vzeta, vr, vz, composition, collisions,
+                                io_input.parallel_io)
 
         return ascii, io_moments, io_dfns
     end
@@ -147,7 +154,7 @@ end
 Define coords group for coordinate information in the output file and write information
 about spatial coordinate grids
 """
-function define_spatial_coordinates!(fid, z, r)
+function define_spatial_coordinates!(fid, z, r, parallel_io)
     # create the "coords" group that will contain coordinate information
     coords = create_io_group(fid, "coords")
     # create the "z" sub-group of "coords" that will contain z coordinate info,
@@ -246,7 +253,7 @@ function create_dynamic_variable!() end
 define dynamic (time-evolving) moment variables for writing to the hdf5 file
 """
 function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
-                                          r::coordinate, z::coordinate)
+                                          r::coordinate, z::coordinate, parallel_io)
     dynamic = create_io_group(fid, "dynamic_data", description="time evolving variables")
 
     io_time = create_dynamic_variable!(dynamic, "time", mk_float; description="simulation time")
@@ -326,7 +333,8 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
 
     return io_moments_info(fid, io_time, io_phi, io_Er, io_Ez, io_density, io_upar,
                            io_ppar, io_qpar, io_vth, io_density_neutral, io_uz_neutral,
-                           io_pz_neutral, io_qz_neutral, io_thermal_speed_neutral)
+                           io_pz_neutral, io_qz_neutral, io_thermal_speed_neutral,
+                           parallel_io)
 end
 
 """
@@ -334,7 +342,7 @@ define dynamic (time-evolving) distribution function variables for writing to th
 file
 """
 function define_dynamic_dfn_variables!(fid, r, z, vperp, vpa, vzeta, vr, vz,
-                                       n_ion_species, n_neutral_species)
+                                       n_ion_species, n_neutral_species, parallel_io)
 
     if !haskey(fid, "dynamic_data")
         dynamic = create_io_group(fid, "dynamic_data", description="time evolving
@@ -358,7 +366,7 @@ function define_dynamic_dfn_variables!(fid, r, z, vperp, vpa, vzeta, vr, vz,
                                             n_neutral_species=n_neutral_species,
                                             description="neutral species distribution function")
 
-    return io_dfns_info(fid, io_time, io_f, io_f_neutral)
+    return io_dfns_info(fid, io_time, io_f, io_f_neutral, parallel_io)
 end
 
 """
@@ -382,7 +390,8 @@ end
 """
 setup file i/o for moment variables
 """
-function setup_moments_io(prefix, binary_format, r, z, composition, collisions)
+function setup_moments_io(prefix, binary_format, r, z, composition, collisions,
+                          parallel_io)
     fid = open_output_file(string(prefix, ".moments"), binary_format)
 
     # write a header to the output file
@@ -397,7 +406,7 @@ function setup_moments_io(prefix, binary_format, r, z, composition, collisions)
     ### create variables for time-dependent quantities and store them ###
     ### in a struct for later access ###
     io_moments = define_dynamic_moment_variables!(
-        fid, composition.n_ion_species, composition.n_neutral_species, r, z)
+        fid, composition.n_ion_species, composition.n_neutral_species, r, z, parallel_io)
 
     return io_moments
 end
@@ -406,7 +415,7 @@ end
 setup file i/o for distribution function variables
 """
 function setup_dfns_io(prefix, binary_format, r, z, vperp, vpa, vzeta, vr, vz, composition,
-                       collisions)
+                       collisions, parallel_io)
 
     fid = open_output_file(string(prefix, ".dfns"), binary_format)
 
@@ -425,7 +434,7 @@ function setup_dfns_io(prefix, binary_format, r, z, vperp, vpa, vzeta, vr, vz, c
     ### in a struct for later access ###
     io_dfns = define_dynamic_dfn_variables!(
         fid, r, z, vperp, vpa, vzeta, vr, vz, composition.n_ion_species,
-        composition.n_neutral_species)
+        composition.n_neutral_species, parallel_io)
 
     return io_dfns
 end

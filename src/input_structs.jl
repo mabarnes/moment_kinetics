@@ -325,6 +325,7 @@ Base.@kwdef struct io_input
     run_name::String
     ascii_output::Bool
     binary_format::binary_format_type
+    parallel_io::Bool
 end
 
 """

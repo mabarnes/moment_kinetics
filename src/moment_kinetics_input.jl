@@ -431,6 +431,7 @@ function mk_input(scan_input=Dict())
     io_settings = copy(get(scan_input, "output", Dict{String,Any}()))
     io_settings["ascii_output"] = get(io_settings, "ascii_output", false)
     io_settings["binary_format"] = get(io_settings, "binary_format", hdf5)
+    io_settings["parallel_io"] = get(io_settings, "parallel_io", true)
     io_immutable = io_input(; output_dir=output_dir, run_name=run_name,
                               Dict(Symbol(k)=>v for (k,v) in io_settings)...)
 
