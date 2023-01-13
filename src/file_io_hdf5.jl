@@ -2,6 +2,10 @@
 
 using HDF5
 
+function io_has_parallel(::Val{hdf5})
+    return HDF5.has_parallel()
+end
+
 function open_output_file_hdf5(prefix)
     # the hdf5 file will be given by output_dir/run_name with .h5 appended
     filename = string(prefix, ".h5")

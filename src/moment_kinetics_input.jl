@@ -10,7 +10,7 @@ export read_input_file
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float
 using ..communication
-using ..file_io: input_option_error, open_ascii_output_file
+using ..file_io: io_has_parallel, input_option_error, open_ascii_output_file
 using ..finite_differences: fd_check_option
 using ..input_structs
 using ..numerical_dissipation: setup_numerical_dissipation
@@ -431,7 +431,8 @@ function mk_input(scan_input=Dict())
     io_settings = copy(get(scan_input, "output", Dict{String,Any}()))
     io_settings["ascii_output"] = get(io_settings, "ascii_output", false)
     io_settings["binary_format"] = get(io_settings, "binary_format", hdf5)
-    io_settings["parallel_io"] = get(io_settings, "parallel_io", true)
+    io_settings["parallel_io"] = get(io_settings, "parallel_io",
+                                     io_has_parallel(Val(io_settings["binary_format"])))
     io_immutable = io_input(; output_dir=output_dir, run_name=run_name,
                               Dict(Symbol(k)=>v for (k,v) in io_settings)...)
 

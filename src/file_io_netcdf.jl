@@ -2,6 +2,11 @@
 
 using NCDatasets
 
+function io_has_parallel(::Val{netcdf})
+    # NCDatasets.jl does not support parallel I/O yet
+    return false
+end
+
 function open_output_file_netcdf(prefix)
     # the netcdf file will be given by output_dir/run_name with .cdf appended
     filename = string(prefix, ".cdf")
