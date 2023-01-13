@@ -90,11 +90,11 @@ function define_coordinate(input, composition=nothing)
     # to the repetition of a point at the element boundary
     n_global = (input.ngrid-1)*input.nelement_global + 1
     # local number of points on this process
-	n_local = (input.ngrid-1)*input.nelement_local + 1
-	# obtain index mapping from full (local) grid to the
+    n_local = (input.ngrid-1)*input.nelement_local + 1
+    # obtain index mapping from full (local) grid to the
     # grid within each element (igrid, ielement)
     igrid, ielement = full_to_elemental_grid_map(input.ngrid,
-    	input.nelement_local, n_local)
+        input.nelement_local, n_local)
     # obtain (local) index mapping from the grid within each element
     # to the full grid
     imin, imax = elemental_to_full_grid_map(input.ngrid, input.nelement_local)
@@ -114,13 +114,13 @@ function define_coordinate(input, composition=nothing)
     scratch_2d = allocate_float(input.ngrid, input.nelement_local)
     # struct containing the advection speed options/inputs for this coordinate
     advection = input.advection
-	send_buffer = allocate_float(1)
-	receive_buffer = allocate_float(1)
-    # buffer for cyclic communication of boundary points
-    # each chain of elements has only two external (off-rank) 
-	#endpoints, so only two pieces of information must be shared
-	return coordinate(input.name, n_global, n_local, input.ngrid, 
-	    input.nelement_global, input.nelement_local, input.nrank, input.irank, input.L, grid,
+    # buffers for cyclic communication of boundary points
+    # each chain of elements has only two external (off-rank)
+    # endpoints, so only two pieces of information must be shared
+    send_buffer = allocate_float(1)
+    receive_buffer = allocate_float(1)
+    return coordinate(input.name, n_global, n_local, input.ngrid,
+        input.nelement_global, input.nelement_local, input.nrank, input.irank, input.L, grid,
         cell_width, igrid, ielement, imin, imax, input.discretization, input.fd_option,
         input.bc, wgts, uniform_grid, duniform_dgrid, scratch, copy(scratch), copy(scratch),
         scratch_2d, copy(scratch_2d), advection, send_buffer, receive_buffer, input.comm)
