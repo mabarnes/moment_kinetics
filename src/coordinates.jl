@@ -101,8 +101,8 @@ function define_coordinate(input, composition=nothing)
     # initialize the grid and the integration weights associated with the grid
     # also obtain the Chebyshev theta grid and spacing if chosen as discretization option
     grid, wgts, uniform_grid = init_grid(input.ngrid, input.nelement_global,
-	 input.nelement_local, n_local, input.irank, input.L,
-	 imin, imax, igrid, input.discretization, input.name)
+        input.nelement_local, n_global, n_local, input.irank, input.L,
+        imin, imax, igrid, input.discretization, input.name)
     # calculate the widths of the cells between neighboring grid points
     cell_width = grid_spacing(grid, n_local)
     # duniform_dgrid is the local derivative of the uniform grid with respect to
@@ -127,16 +127,16 @@ function define_coordinate(input, composition=nothing)
 end
 
 """
-setup a grid with n grid points on the interval [-L/2,L/2]
+setup a grid with n_global grid points on the interval [-L/2,L/2]
 """
-function init_grid(ngrid, nelement_global, nelement_local, n, irank,
-			L, imin, imax, igrid, discretization, name)
-    uniform_grid = equally_spaced_grid(n,L,nelement_global,nelement_local,irank)
-    uniform_grid_shifted = equally_spaced_grid_shifted(n,L)
-    if n == 1
-        grid = allocate_float(n)
+function init_grid(ngrid, nelement_global, nelement_local, n_global, n_local, irank, L,
+                   imin, imax, igrid, discretization, name)
+    uniform_grid = equally_spaced_grid(n_global, n_local, irank, L)
+    uniform_grid_shifted = equally_spaced_grid_shifted(n_global, n_local, irank, L)
+    if n_global == 1
+        grid = allocate_float(n_local)
         grid[1] = 0.0
-        wgts = allocate_float(n)
+        wgts = allocate_float(n_local)
         if name == "vr" || name == "vzeta"
             wgts[1] = sqrt(pi) # to cancel factor of 1/sqrt{pi} in integrate_over_neutral_vspace, velocity_moments.jl
                                # in the case that the code runs in 1V mode
@@ -146,7 +146,7 @@ function init_grid(ngrid, nelement_global, nelement_local, n, irank,
     elseif discretization == "chebyshev_pseudospectral"
         if name == "vperp"
             # initialize chebyshev grid defined on [-L/2,L/2]
-            grid, wgts = scaled_chebyshev_grid(ngrid, nelement_global, nelement_local, n, irank, L, imin, imax)
+            grid, wgts = scaled_chebyshev_grid(ngrid, nelement_global, nelement_local, n_local, irank, L, imin, imax)
             grid .= grid .+ L/2.0 # shift to [0,L] appropriate to vperp variable
             wgts = 2.0 .* wgts .* grid # to include 2 vperp in jacobian of integral
                                         # see note above on normalisation
@@ -157,7 +157,7 @@ function init_grid(ngrid, nelement_global, nelement_local, n, irank,
             # needed to obtain Chebyshev spectral coefficients
             # 'wgts' are the integration weights attached to each grid points
             # that are those associated with Clenshaw-Curtis quadrature
-            grid, wgts = scaled_chebyshev_grid(ngrid, nelement_global, nelement_local, n, irank, L, imin, imax)
+            grid, wgts = scaled_chebyshev_grid(ngrid, nelement_global, nelement_local, n_local, irank, L, imin, imax)
         end
     elseif discretization == "finite_difference"
         if name == "vperp"
@@ -182,32 +182,33 @@ function init_grid(ngrid, nelement_global, nelement_local, n, irank,
 end
 
 """
-setup an equally spaced grid with n grid points
+setup an equally spaced grid with n_global grid points
 between [-L/2,L/2]
 """
-function equally_spaced_grid(n, L, nelement_global, nelement_local, irank)
-    # create array for the equally spaced grid with n grid points
-    grid = allocate_float(n)
-    if nelement_global == nelement_local
-        @inbounds for i ∈ 1:n
-            grid[i] = -0.5*L + (i-1)*L/(n-1)
-        end
-    else # set up grid distributed over cores: grid split into float(nelement_global)/ float(nelement_local) sections
-        L_per_element = L*(float(nelement_local)/float(nelement_global))
-        nlocal = n
-        @inbounds for i ∈ 1:nlocal
-            grid[i] = -0.5*L + irank*L_per_element + (i-1)*L_per_element/(nlocal-1)
-        end
+function equally_spaced_grid(n_global, n_local, irank, L)
+    # create array for the equally spaced grid with n_local grid points
+    grid = allocate_float(n_local)
+    istart = (n_local - 1)*irank + 1
+    grid_spacing = L / (n_global - 1)
+    coord_start = -0.5*L + (istart-1)*grid_spacing
+    @inbounds for i ∈ 1:n_local
+        grid[i] =  coord_start + (i-1)*grid_spacing
     end
     return grid
 end
-# setup an equally spaced grid with n grid points
-# between [0,L]
-function equally_spaced_grid_shifted(n, L)
-    # create array for the equally spaced grid with n grid points
-    grid = allocate_float(n)
-    @inbounds for i ∈ 1:n
-        grid[i] =  (i-1)*L/(n-1)
+
+"""
+setup an equally spaced grid with n_global grid points
+between [0,L]
+"""
+function equally_spaced_grid_shifted(n_global, n_local, irank, L)
+    # create array for the equally spaced grid with n_local grid points
+    grid = allocate_float(n_local)
+    istart = (n_local - 1)*irank + 1
+    grid_spacing = L / (n_global - 1)
+    coord_start = (istart-1)*grid_spacing
+    @inbounds for i ∈ 1:n_local
+        grid[i] =  coord_start + (i-1)*grid_spacing
     end
     return grid
 end
