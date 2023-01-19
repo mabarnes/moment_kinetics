@@ -53,7 +53,6 @@ include("moment_kinetics_input.jl")
 include("scan_input.jl")
 
 using TimerOutputs
-using TOML
 
 using .file_io: setup_file_io, finish_file_io, reload_evolving_fields!
 using .file_io: write_data_to_ascii, write_data_to_binary
@@ -65,7 +64,7 @@ using .debugging
 using .initial_conditions: init_pdf_and_moments, enforce_boundary_conditions!
 using .looping
 using .moment_constraints: hard_force_moment_constraints!
-using .moment_kinetics_input: mk_input, run_type, performance_test
+using .moment_kinetics_input: input_from_TOML, mk_input, run_type, performance_test
 using .time_advance: setup_time_advance!, time_advance!
 
 @debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
@@ -116,7 +115,7 @@ end
 overload which takes a filename and loads input
 """
 function run_moment_kinetics(to::TimerOutput, input_filename::String)
-    return run_moment_kinetics(to, TOML.parsefile(input_filename))
+    return run_moment_kinetics(to, input_from_TOML(input_filename))
 end
 
 """
@@ -163,7 +162,7 @@ input must be the same as for the original run.
 """
 function restart_moment_kinetics(restart_filename::String, input_filename::String,
                                  time_index::Int=-1)
-    restart_moment_kinetics(restart_filename, TOML.parsefile(input_filename),
+    restart_moment_kinetics(restart_filename, input_from_TOML(input_filename),
                             time_index)
     return nothing
 end
