@@ -443,7 +443,6 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
             iframes = collect(itime_min:nwrite_movie:itime_max)
             nframes = length(iframes)
             function make_frame(i)
-                PyPlot.clf()
                 iframe = iframes[i+1]
                 # i counts from 0, Python-style
                 for (run_ind, f, n, upar, vth, ev_n, ev_u, ev_p, this_z, this_vpa,
@@ -459,14 +458,20 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
                                           plot_log=false)
                 end
             end
-            fig = PyPlot.figure(1, figsize=(6*n_runs,4))
+            PyPlot.clf()
+            fig = PyPlot.figure(1)
             myanim = matplotlib_animation.FuncAnimation(fig, make_frame, frames=nframes)
+
+            # Setting width and height here seems to work, whereas passing them to the
+            # `figsize` argument in PyPlot.figure() does not. Don't know why...
+            fig.set_figwidth(6*n_runs)
+            fig.set_figheight(4)
+
             outfile = string(prefix, "_f_unnorm_vs_vpa_z", spec_string, ".gif")
             myanim.save(outfile, writer=matplotlib_animation.PillowWriter(fps=30))
             PyPlot.clf()
 
             function make_frame_log(i)
-                PyPlot.clf()
                 iframe = iframes[i+1]
                 # i counts from 0, Python-style
                 for (run_ind, f, n, upar, vth, ev_n, ev_u, ev_p, this_z, this_vpa,
@@ -482,8 +487,11 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
                                           plot_log=true)
                 end
             end
-            fig = PyPlot.figure(figsize=(6*n_runs,4))
+            PyPlot.clf()
+            fig = PyPlot.figure()
             myanim = matplotlib_animation.FuncAnimation(fig, make_frame_log, frames=nframes)
+            fig.set_figwidth(6*n_runs)
+            fig.set_figheight(4)
             outfile = string(prefix, "_logf_unnorm_vs_vpa_z", spec_string, ".gif")
             myanim.save(outfile, writer=matplotlib_animation.PillowWriter(fps=30))
 
