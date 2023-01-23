@@ -315,6 +315,8 @@ struct pp_input
     iz0::mk_int
     # ir0 is the ir index used when plotting data at a single r location
     ir0::mk_int
+    # resolution for output figures in non-vector formats
+    dpi::mk_float
 end
 
 end

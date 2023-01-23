@@ -79,6 +79,8 @@ const iz0 = -1
 # ir0 is the ir index used when plotting data at a single r location
 # by default, it will be set to cld(nr,3) unless a non-negative value provided here
 const ir0 = -1
+# Set the dpi for saved figures in non-vector formats
+const dpi = 100
 
 pp = pp_input(calculate_frequencies, plot_phi0_vs_t, plot_phi_vs_z_t,
     animate_phi_vs_z, plot_dens0_vs_t, plot_upar0_vs_t, plot_ppar0_vs_t, plot_vth0_vs_t, plot_qpar0_vs_t,
@@ -87,6 +89,6 @@ pp = pp_input(calculate_frequencies, plot_phi0_vs_t, plot_phi_vs_z_t,
     plot_f_unnormalized_vs_vpa_z, animate_f_vs_vpa_z, animate_f_unnormalized,
     animate_f_vs_vpa_z0, animate_f_vs_z0_vpa, animate_deltaf_vs_vpa_z,
     animate_deltaf_vs_vpa_z0, animate_deltaf_vs_vpa_z0, nwrite_movie, itime_min,
-    itime_max, ivpa0, iz0, ir0)
+    itime_max, ivpa0, iz0, ir0, dpi)
 
 end

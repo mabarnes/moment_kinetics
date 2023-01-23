@@ -154,6 +154,11 @@ end
 """
 function init_postprocessing_options(pp, nvpa, nz, nr, ntime)
     print("Initializing the post-processing input options...")
+
+    # Set default dpi for non-vector plot output
+    default(dpi=pp.dpi)
+    PyPlot.rc("figure", dpi=pp.dpi)
+
     # nwrite_movie is the stride used when making animations
     nwrite_movie = pp.nwrite_movie
     # itime_min is the minimum time index at which to start animations
