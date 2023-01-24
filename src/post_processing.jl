@@ -404,6 +404,118 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
                              label=run_label)
             end
             savefig(string(prefix, "_fL_unnorm_vs_vpa", spec_string, ".pdf"))
+
+            # Plot f/vpa to check what f is like near vpa=0
+            plot(legend=legend)
+            it = itime_max
+            # i counts from 0, Python-style
+            for (run_ind, f, n, upar, vth, ev_n, ev_u, ev_p, this_z, this_vpa,
+                 run_label) ∈ zip(1:n_runs, ff, density, parallel_flow,
+                                  thermal_speed, evolve_density, evolve_upar,
+                                  evolve_ppar, z, vpa, run_labels)
+
+                @views f_unnorm, dzdt = get_unnormalised_f_dzdt_1d(
+                    f[:,1,is,it], this_vpa, n[1,is,it], upar[1,is,it], vth[1,is,it],
+                    ev_n, ev_u, ev_p)
+                @views plot!(dzdt, f_unnorm./abs.(dzdt), xlabel="vpa", ylabel="f_unnorm(z=0)/vpa",
+                             label=run_label)
+            end
+            savefig(string(prefix, "_f0_unnorm_over_vpa_vs_vpa", spec_string, ".pdf"))
+
+            # Plot f/vpa to check what f is like near vpa=0
+            plot(legend=legend)
+            it = itime_max
+            # i counts from 0, Python-style
+            for (run_ind, f, n, upar, vth, ev_n, ev_u, ev_p, this_z, this_vpa,
+                 run_label) ∈ zip(1:n_runs, ff, density, parallel_flow,
+                                  thermal_speed, evolve_density, evolve_upar,
+                                  evolve_ppar, z, vpa, run_labels)
+
+                @views f_unnorm, dzdt = get_unnormalised_f_dzdt_1d(
+                    f[:,end,is,it], this_vpa, n[end,is,it], upar[end,is,it], vth[end,is,it],
+                    ev_n, ev_u, ev_p)
+                @views plot!(dzdt, f_unnorm./abs.(dzdt), xlabel="vpa", ylabel="f_unnorm(z=L)/vpa",
+                             label=run_label)
+            end
+            savefig(string(prefix, "_fL_unnorm_over_vpa_vs_vpa", spec_string, ".pdf"))
+
+            # Plot f/vpa^2 to check what f is like near vpa=0
+            plot(legend=legend)
+            it = itime_max
+            # i counts from 0, Python-style
+            for (run_ind, f, n, upar, vth, ev_n, ev_u, ev_p, this_z, this_vpa,
+                 run_label) ∈ zip(1:n_runs, ff, density, parallel_flow,
+                                  thermal_speed, evolve_density, evolve_upar,
+                                  evolve_ppar, z, vpa, run_labels)
+
+                @views f_unnorm, dzdt = get_unnormalised_f_dzdt_1d(
+                    f[:,1,is,it], this_vpa, n[1,is,it], upar[1,is,it], vth[1,is,it],
+                    ev_n, ev_u, ev_p)
+                @views plot!(dzdt, f_unnorm./dzdt.^2, xlabel="vpa", ylabel="f_unnorm(z=0)/vpa^2",
+                             label=run_label)
+            end
+            savefig(string(prefix, "_f0_unnorm_over_vpa2_vs_vpa", spec_string, ".pdf"))
+
+            # Plot f/vpa^2 to check what f is like near vpa=0
+            plot(legend=legend)
+            it = itime_max
+            # i counts from 0, Python-style
+            for (run_ind, f, n, upar, vth, ev_n, ev_u, ev_p, this_z, this_vpa,
+                 run_label) ∈ zip(1:n_runs, ff, density, parallel_flow,
+                                  thermal_speed, evolve_density, evolve_upar,
+                                  evolve_ppar, z, vpa, run_labels)
+
+                @views f_unnorm, dzdt = get_unnormalised_f_dzdt_1d(
+                    f[:,end,is,it], this_vpa, n[end,is,it], upar[end,is,it], vth[end,is,it],
+                    ev_n, ev_u, ev_p)
+                @views plot!(dzdt, f_unnorm./dzdt.^2, xlabel="vpa", ylabel="f_unnorm(z=L)/vpa^2",
+                             label=run_label)
+            end
+            savefig(string(prefix, "_fL_unnorm_over_vpa2_vs_vpa", spec_string, ".pdf"))
+
+            # Plot f*wpa^2 to check if ppar integral should be well behaved near vpa=0
+            plot(legend=legend)
+            it = itime_max
+            # i counts from 0, Python-style
+            for (run_ind, f, n, upar, vth, ev_n, ev_u, ev_p, this_z, this_vpa,
+                 run_label) ∈ zip(1:n_runs, ff, density, parallel_flow,
+                                  thermal_speed, evolve_density, evolve_upar,
+                                  evolve_ppar, z, vpa, run_labels)
+
+                @views f_unnorm, dzdt = get_unnormalised_f_dzdt_1d(
+                    f[:,1,is,it], this_vpa, n[1,is,it], upar[1,is,it], vth[1,is,it],
+                    ev_n, ev_u, ev_p)
+                if ev_u
+                    wpa = this_vpa
+                else
+                    wpa = this_vpa .- upar[1,is,it]
+                end
+                @views plot!(dzdt, f_unnorm.*wpa.^2, xlabel="vpa", ylabel="f_unnorm(z=0)/wpa^2",
+                             label=run_label)
+            end
+            savefig(string(prefix, "_f0_unnorm_wpa2_vs_vpa", spec_string, ".pdf"))
+
+            # Plot f*wpa^2 to check if ppar integral should be well behaved near vpa=0
+            plot(legend=legend)
+            it = itime_max
+            # i counts from 0, Python-style
+            for (run_ind, f, n, upar, vth, ev_n, ev_u, ev_p, this_z, this_vpa,
+                 run_label) ∈ zip(1:n_runs, ff, density, parallel_flow,
+                                  thermal_speed, evolve_density, evolve_upar,
+                                  evolve_ppar, z, vpa, run_labels)
+
+                @views f_unnorm, dzdt = get_unnormalised_f_dzdt_1d(
+                    f[:,end,is,it], this_vpa, n[end,is,it], upar[end,is,it], vth[end,is,it],
+                    ev_n, ev_u, ev_p)
+                if ev_u
+                    wpa = this_vpa
+                else
+                    wpa = this_vpa .- upar[end,is,it]
+                end
+                @views plot!(dzdt, f_unnorm.*wpa.^2, xlabel="vpa", ylabel="f_unnorm(z=L)/wpa^2",
+                             label=run_label)
+            end
+            savefig(string(prefix, "_fL_unnorm_wpa2_vs_vpa", spec_string, ".pdf"))
         end
         if pp.animate_f_unnormalized
             ## The nice, commented out version will only work when plot_unnormalised can
