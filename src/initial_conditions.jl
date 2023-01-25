@@ -567,17 +567,17 @@ function enforce_zero_incoming_bc!(pdf, vpa::coordinate, density, upar, ppar,
             # Introduce factor to ensure corrections go smoothly to zero near
             # v_parallel=0
             @. vpa.scratch2 = f * abs(vpa.scratch) / (1.0 + abs(vpa.scratch))
-            J1 = integrate_over_vspace(vpa.scratch2, vpa.grid, vpa.wgts)
-            J2 = integrate_over_vspace(vpa.scratch2, vpa.grid, 2, vpa.wgts)
-            J3 = integrate_over_vspace(vpa.scratch2, vpa.grid, 3, vpa.wgts)
-            J4 = integrate_over_vspace(vpa.scratch2, vpa.grid, 4, vpa.wgts)
+            J1 = integrate_over_vspace(vpa.scratch2, vpa.scratch, vpa.wgts)
+            J2 = integrate_over_vspace(vpa.scratch2, vpa.scratch, 2, vpa.wgts)
+            J3 = integrate_over_vspace(vpa.scratch2, vpa.scratch, 3, vpa.wgts)
+            J4 = integrate_over_vspace(vpa.scratch2, vpa.scratch, 4, vpa.wgts)
 
             A = (J3^2 - J2*J4 + 0.5*(J2^2 - J1*J3)) /
                 (I0*(J3^2 - J2*J4) + I1*(J1*J4 - J2*J3) + I2*(J2^2 - J1*J3))
             B = (0.5*J3 + A*(I1*J4 - I2*J3)) / (J3^2 - J2*J4)
             C = (0.5 - A*I2 -B*J3) / J4
 
-            @. f = A*f + B*vpa.grid*vpa.scratch2 + C*vpa.grid*vpa.grid*vpa.scratch2
+            @. f = A*f + B*vpa.scratch*vpa.scratch2 + C*vpa.scratch*vpa.scratch*vpa.scratch2
         elseif evolve_upar
             I0 = integrate_over_vspace(f, vpa.wgts)
             I1 = integrate_over_vspace(f, vpa.grid, vpa.wgts)
@@ -587,13 +587,13 @@ function enforce_zero_incoming_bc!(pdf, vpa::coordinate, density, upar, ppar,
             # Introduce factor to ensure corrections go smoothly to zero near
             # v_parallel=0
             @. vpa.scratch2 = f * abs(vpa.scratch) / (1.0 + abs(vpa.scratch))
-            J1 = integrate_over_vspace(vpa.scratch2, vpa.grid, vpa.wgts)
-            J2 = integrate_over_vspace(vpa.scratch2, vpa.grid, 2, vpa.wgts)
+            J1 = integrate_over_vspace(vpa.scratch2, vpa.scratch, vpa.wgts)
+            J2 = integrate_over_vspace(vpa.scratch2, vpa.scratch, 2, vpa.wgts)
 
             A = 1.0 / (I0 - I1*J1/J2)
             B = -A*I1/J2
 
-            @. f = A*f + B*vpa.grid*vpa.scratch2
+            @. f = A*f + B*vpa.scratch*vpa.scratch2
         elseif evolve_density
             I0 = integrate_over_vspace(f, vpa.wgts)
             @. f = f / I0
