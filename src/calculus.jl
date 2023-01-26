@@ -2,7 +2,7 @@
 """
 module calculus
 
-export derivative!
+export derivative!, second_derivative!
 export reconcile_element_boundaries_MPI!
 export integral
 
@@ -38,7 +38,7 @@ end
 
 """
 calculate the derivative of f using finite differences, with particular scheme
-specifiied by coord.fd_option; stored in df
+specified by coord.fd_option; stored in df
 """
 function derivative!(df, f, coord, adv_fac, not_spectral::Bool)
     # get the derivative at each grid point within each element and store in df
@@ -422,6 +422,72 @@ function reconcile_element_boundaries_MPI!(df1d::AbstractArray{mk_float,Ndims},
     _block_synchronize()
 end
 	
+function second_derivative!(d2f, f, Q, coord, spectral)
+    # computes d / d coord ( Q . d f / d coord)
+    # For spectral element methods, calculate second derivative by applying first
+    # derivative twice, with special treatment for element boundaries
+
+    # First derivative
+    chebyshev_derivative!(coord.scratch_2d, f, spectral, coord)
+    derivative_elements_to_full_grid!(coord.scratch3, coord.scratch_2d, coord)
+    # MPI reconcile code here if used with z or r coords
+    
+    # Save elementwise first derivative result
+    coord.scratch2_2d .= coord.scratch_2d
+
+    #form Q . d f / d coord
+    coord.scratch3 .= Q .* coord.scratch3
+    
+    # Second derivative for element interiors
+    chebyshev_derivative!(coord.scratch_2d, coord.scratch3, spectral, coord)
+    derivative_elements_to_full_grid!(d2f, coord.scratch_2d, coord)
+    # MPI reconcile code here if used with z or r coords
+    
+    
+    # Add contribution to penalise discontinuous first derivatives at element
+    # boundaries. For smooth functions this would do nothing so should not affect
+    # convergence of the second derivative. Aims to stabilise numerical instability when
+    # spike develops at an element boundary. The coefficient is an arbitrary choice, it
+    # should probably be large enough for stability but as small as possible.
+    function penalise_discontinuous_first_derivative!(d2f, imin, imax, df)
+        # Arbitrary numerical coefficient
+        C = 1.0
+
+        # Left element boundary
+        d2f[imin] += C * df[1]
+
+        # Right element boundary
+        d2f[imax] -= C * df[end]
+
+        return nothing
+    end
+    @views penalise_discontinuous_first_derivative!(d2f, 1, coord.imax[1],
+                                                    coord.scratch2_2d[:,1])
+    for ielement ∈ 2:coord.nelement_local
+        @views penalise_discontinuous_first_derivative!(d2f, coord.imin[ielement]-1,
+                                                        coord.imax[ielement],
+                                                        coord.scratch2_2d[:,ielement])
+    end
+
+    # For stability don't contribute to evolution at boundaries, in case these
+    # points are not set by a boundary condition.    
+    if coord.nelement_global == coord.nelement_global
+        if coord.bc ∈ ("wall", "zero", "both_zero")
+            d2f[1] = 0.0
+            d2f[end] = 0.0
+        end
+    else # full grid is across processes and bc only applied to extreme ends of the domain
+        if coord.bc ∈ ("wall", "zero", "both_zero") && coord.irank == 0
+            d2f[1] = 0.0
+        end
+        if coord.bc ∈ ("wall", "zero", "both_zero") && coord.irank == coord.nrank - 1
+            d2f[end] = 0.0
+        end
+    end
+    return nothing
+end
+
+
 
 """
 Computes the integral of the integrand, using the input wgts

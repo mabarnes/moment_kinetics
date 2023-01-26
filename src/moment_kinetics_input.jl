@@ -13,6 +13,7 @@ using ..communication
 using ..file_io: input_option_error, open_ascii_output_file
 using ..finite_differences: fd_check_option
 using ..input_structs
+using ..numerical_dissipation: setup_numerical_dissipation
 
 using TOML
 
@@ -172,9 +173,9 @@ function mk_input(scan_input=Dict())
     collisions.constant_ionization_rate = get(scan_input, "constant_ionization_rate", false)
 
     # parameters related to the time stepping
-    nstep = get(scan_input, "nstep", 40000)
+    nstep = get(scan_input, "nstep", 5)
     dt = get(scan_input, "dt", 0.00025/sqrt(species.charged[1].initial_temperature))
-    nwrite_moments = get(scan_input, "nwrite", 80)
+    nwrite_moments = get(scan_input, "nwrite", 1)
     nwrite_dfns = get(scan_input, "nwrite_dfns", nstep)
     # use_semi_lagrange = true to use interpolation-free semi-Lagrange treatment
     # otherwise, solve problem solely using the discretization_option above
@@ -311,6 +312,10 @@ function mk_input(scan_input=Dict())
 		# supported options are "chebyshev_pseudospectral" and "finite_difference"
 		vzeta.discretization = get(scan_input, "vzeta_discretization", "chebyshev_pseudospectral")
 	end
+    
+    num_diss_params = setup_numerical_dissipation(
+        get(scan_input, "numerical_dissipation", Dict{String,Any}()))
+    
     #########################################################################
     ########## end user inputs. do not modify following code! ###############
     #########################################################################
@@ -434,7 +439,7 @@ function mk_input(scan_input=Dict())
     # return immutable structs for z, vpa, species and composition
     all_inputs = (io_immutable, evolve_moments, t_input,
                   z_immutable, r_immutable, vpa_immutable, vperp_immutable, gyrophase_immutable, vz_immutable, vr_immutable, vzeta_immutable,
-                  composition, species_immutable, collisions, geometry, drive_immutable)
+                  composition, species_immutable, collisions, geometry, drive_immutable, num_diss_params)
     println(io, "\nAll inputs returned from mk_input():")
     println(io, all_inputs)
     close(io)

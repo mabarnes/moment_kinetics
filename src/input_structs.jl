@@ -53,6 +53,7 @@ mutable struct advance_info
     cx_collisions_1V::Bool
     ionization_collisions::Bool
     ionization_collisions_1V::Bool
+    numerical_dissipation::Bool
     source_terms::Bool
     continuity::Bool
     force_balance::Bool

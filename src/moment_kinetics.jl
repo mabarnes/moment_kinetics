@@ -45,6 +45,7 @@ include("continuity.jl")
 include("energy_equation.jl")
 include("force_balance.jl")
 include("source_terms.jl")
+include("numerical_dissipation.jl")
 include("time_advance.jl")
 
 include("moment_kinetics_input.jl")
@@ -167,7 +168,8 @@ function setup_moment_kinetics(input_dict::Dict;
         t_input, z_input, r_input,
         vpa_input, vperp_input, gyrophase_input,
         vz_input, vr_input, vzeta_input,
-        composition, species, collisions, geometry, drive_input = input
+        composition, species, collisions,
+        geometry, drive_input, num_diss_params  = input
     # initialize z grid and write grid point locations to file
     z = define_coordinate(z_input, composition)
     # initialize r grid and write grid point locations to file
@@ -233,7 +235,9 @@ function setup_moment_kinetics(input_dict::Dict;
 
     return pdf, scratch, code_time, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
            moments, fields, spectral_objects, advect_objects,
-           composition, collisions, geometry, boundary_distributions, advance, scratch_dummy, manufactured_source_list, ascii_io, io_moments, io_dfns
+           composition, collisions, geometry, boundary_distributions,
+           num_diss_params, advance, scratch_dummy, manufactured_source_list,
+           ascii_io, io_moments, io_dfns
 end
 
 """

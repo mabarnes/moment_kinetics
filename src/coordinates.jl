@@ -61,11 +61,14 @@ struct coordinate
     duniform_dgrid::Array{mk_float,2}
     # scratch is an array used for intermediate calculations requiring n entries
     scratch::Array{mk_float,1}
-    # scratch2d is an array used for intermediate calculations requiring ngrid x nelement entries
+    # scratch2 is an array used for intermediate calculations requiring n entries
     scratch2::Array{mk_float,1}
-    # scratch_2d is an array used for intermediate calculations requiring ngrid x
-    # nelement entries
+    # scratch3 is an array used for intermediate calculations requiring n entries
+    scratch3::Array{mk_float,1}
+    # scratch_2d and scratch2_2d are arrays used for intermediate calculations requiring
+    # ngrid x nelement entries
     scratch_2d::Array{mk_float,2}
+    scratch2_2d::Array{mk_float,2}
     # struct containing advection speed options/inputs
     advection::advection_input
 	# buffer of size 1 for communicating information about cell boundaries
@@ -119,8 +122,8 @@ function define_coordinate(input, composition=nothing)
 	return coordinate(input.name, n_global, n_local, input.ngrid, 
 	    input.nelement_global, input.nelement_local, input.nrank, input.irank, input.L, grid,
         cell_width, igrid, ielement, imin, imax, input.discretization, input.fd_option,
-        input.bc, wgts, uniform_grid, duniform_dgrid, scratch, copy(scratch),
-        scratch_2d, advection, send_buffer, receive_buffer, input.comm)
+        input.bc, wgts, uniform_grid, duniform_dgrid, scratch, copy(scratch), copy(scratch),
+        scratch_2d, copy(scratch_2d), advection, send_buffer, receive_buffer, input.comm)
 end
 
 """
