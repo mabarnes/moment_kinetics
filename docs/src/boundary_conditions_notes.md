@@ -123,3 +123,104 @@ B &= \frac{\left( (I_2 L_1 - I_1 L_2)A - \frac{L_1}{2} \right)}{(K_1 L_2 - K_2 L
 C &= \frac{\frac{1}{2} - AI_2 - BK_2}{L_2}
 \end{align}
 ```
+
+Neutral boundary condition and moment constraints
+-------------------------------------------------
+
+The neutral boundary condition is that all ions and neutrals incoming to the
+wallare recycled as neutrals, and the neutrals are emitted from the wall with a
+Knudsen cosine distribution (see eq. (7) of TN-08, "Numerical study of drift
+kinetic model with wall BCs").
+```math
+F_\mathrm{Kw}(v_\|, v_\perp) = \frac{3}{\pi}\left( \frac{m_i}{2T_w} \right)^2
+                               \frac{|v_\||}{\sqrt{v_\|^2+v_\perp^2}}
+                               \exp\left( -\frac{m_i(v_\|^2+v_\perp^2)}{2T_w} \right)
+```
+For the 1D1V code where distribution functions are marginalised over
+perpendicular velocities, this is (see eq. (12) of TN-08)
+```math
+f_\mathrm{Kw}(v_\|) \doteq 2\pi\int_0^\infty dv_\perp v_\perp F_\mathrm{Kw}(v_\|,v_\perp)
+                    = 3\sqrt{\pi}\left( \frac{m_i}{2T_w} \right)^{3/2} |v_\||
+                      \,\mathrm{erfc}\left( \sqrt{\frac{m_i}{2T_w}}|v_\|| \right)
+```
+For this boundary condition, there are two distinct (and non-zero) parts of the
+distribution function, the incoming (to the wall) $f$ and the outgoing (from
+the wall) Knudsen distribution.  We therefore adjust the overall amplitudes of
+each component separately to give us two coefficients to apply constraints. For
+the final constraint, we add one more coefficient that modifies only the
+outgoing $f$ so that the incoming Knudsen distribution is not distorted.
+
+Consider the upper boundary where the 'incoming' neutrals have $v_\|>0$ and the
+'outgoing' Knudsen distribution is used for neutrals with $v_\|<0$ for
+definiteness (for the other boundary just swap $v_\|<0 \leftrightarrow
+v_\|>0$). Given the initial 'guess' $\hat{g}(v_\|>0)$ for the normalised
+distribution function from the time solver, the corrected normalised
+distribution function that obeys the constraints is
+```math
+\tilde{g}(w_\|(v_\|)) = \begin{cases}
+    N_\mathrm{out} f_\mathrm{Kw}(v_\|)           & v_\| < 0 \\
+    (N_\mathrm{in} + C w_\|)\hat{g}(w_\|(v_\|))  & v_\| > 0
+\end{cases}
+```
+
+Defining the integrals
+```math
+\begin{align}
+I_n &= \int_{-u_\|/v_\mathrm{th}}^\infty dw_\| w_\|^n \hat{g}(w_\|) \\
+K_n &= \int_{-\infty}^{-u_\|/v_\mathrm{th}} dw_\| w_\|^n f_\mathrm{Kw}(v_\|(w_\|))
+\end{align}
+```
+the constraints are
+```math
+\begin{align}
+\int dw_\| \tilde{g} &= 1 = N_\mathrm{out} K_0 + N_\mathrm{in} I_0 + C I_1 \\
+\int dw_\| w_\| \tilde{g} &= 0 = N_\mathrm{out} K_1 + N_\mathrm{in} I_1 + C I_2 \\
+\int dw_\| w_\|^2 \tilde{g} &= \frac{1}{2} = N_\mathrm{out} K_2 + N_\mathrm{in} I_2 + C I_3 \\
+\end{align}
+```
+Solving the simultaneous equations
+```@raw html
+<details>
+<summary style="text-align:center">[ intermediate steps ]</summary>
+```
+```math
+\begin{align}
+C &= \frac{\frac{1}{2} - N_\mathrm{out} K_2 - N_\mathrm{in} I_2}{I_3} \\
+N_\mathrm{out} &= - \frac{N_\mathrm{in} I_1 + C I_2}{K_1} \\
+               &= - \frac{N_\mathrm{in} I_1}{K_1}
+                  - \frac{\frac{1}{2} - N_\mathrm{out} K_2 - N_\mathrm{in} I_2}{I_3} \frac{I_2}{K_1}\\
+(I_3 K_1 - I_2 K_2) N_\mathrm{out} &= (I_2^2 - I_1 I_3)N_\mathrm{in} - \frac{I_2}{2} \\
+N_\mathrm{out} &= \frac{(I_2^2 - I_1 I_3)N_\mathrm{in} - \frac{I_2}{2}}{I_3 K_1 - I_2 K_2} \\
+I_0 N_\mathrm{in} &= 1 - N_\mathrm{out} K_0 - C I_1 \\
+                  &= 1
+                     - \frac{(I_2^2 - I_1 I_3)N_\mathrm{in} - \frac{I_2}{2}}{I_3 K_1 - I_2 K_2} K_0 \\
+              &\quad - \left(\frac{1}{2 I_3} - \frac{(I_2^2 - I_1 I_3)N_\mathrm{in} - \frac{I_2}{2}}{I_3 K_1 - I_2 K_2} \frac{K_2}{I_3} - N_\mathrm{in} \frac{I_2}{I_3} \right) I_1 \\
+(I_0 I_3 - I_1 I_2) N_\mathrm{in} &= (I_3 - \frac{I_1}{2})
+                                 - \frac{(I_2^2 - I_1 I_3)N_\mathrm{in} - \frac{I_2}{2}}{I_3 K_1 - I_2 K_2} I_3 K_0 \\
+                          &\quad + \frac{(I_2^2 - I_1 I_3)N_\mathrm{in} - \frac{I_2}{2}}{I_3 K_1 - I_2 K_2} I_1 K_2 \\
+(I_0 I_3 - I_1 I_2) N_\mathrm{in} &= (I_3 - \frac{I_1}{2})
+                                 + \frac{(I_2^2 - I_1 I_3)N_\mathrm{in} - \frac{I_2}{2}}{I_3 K_1 - I_2 K_2} (I_1 K_2 - I_3 K_0) \\
+\end{align}
+```
+```math
+\begin{align}
+& ((I_0 I_3 - I_1 I_2)(I_3 K_1 - I_2 K_2) - (I_2^2 - I_1 I_3)(I_1 K_2 - I_3 K_0)) N_\mathrm{in} \\
+&= (I_3 - \frac{I_1}{2})(I_3 K_1 - I_2 K_2) - \frac{I_2}{2} (I_1 K_2 - I_3 K_0) \\
+
+& (I_0 I_3^2 K_1 - I_0 I_2 I_3 K_2 - I_1 I_2 I_3 K_1 + I_2^2 I_3 K_0 + I_1^2 I_3 K_2 - I_1 I_3^2 K_0) N_\mathrm{in} \\
+&= I_3^2 K_1 - I_2 I_3 K_2 - \frac{1}{2} I_1 I_3 K_1 + \frac{1}{2} I_2 I_3 K_0 \\
+& (I_0 I_3 K_1 - I_0 I_2 K_2 - I_1 I_2 K_1 + I_2^2 K_0 + I_1^2 K_2 - I_1 I_3 K_0) N_\mathrm{in} \\
+&= I_3 K_1 - I_2 K_2 - \frac{1}{2} I_1 K_1 + \frac{1}{2} I_2 K_0 \\
+\end{align}
+```
+```@raw html
+</details>
+```
+
+```math
+\begin{align}
+N_\mathrm{in} &= \frac{I_2 (\frac{1}{2} K_0 - K_2) + (I_3 - \frac{1}{2} I_1) K_1}{(I_2^2 - I_1 I_3) K_0 + (I_0 I_3 - I_1 I_2) K_1 + (I_1^2 - I_0 I_2) K_2} \\
+N_\mathrm{out} &= \frac{(I_2^2 - I_1 I_3)N_\mathrm{in} - \frac{I_2}{2}}{I_3 K_1 - I_2 K_2} \\
+C &= \frac{\frac{1}{2} - N_\mathrm{out} K_2 - N_\mathrm{in} I_2}{I_3} \\
+\end{align}
+```
