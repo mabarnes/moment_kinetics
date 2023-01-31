@@ -219,7 +219,7 @@ function setup_moment_kinetics(input_dict::Dict;
 
     moments, fields, spectral_objects, advect_objects,
     scratch, advance, scratch_dummy, manufactured_source_list = setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition,
-        drive_input, moments, t_input, collisions, species, geometry, boundary_distributions)
+        drive_input, moments, t_input, collisions, species, geometry, boundary_distributions, num_diss_params)
     # setup i/o
     ascii_io, io_moments, io_dfns = setup_file_io(io_input, vz, vr, vzeta, vpa, vperp, z, r, composition, collisions)
     # write initial data to ascii files

@@ -250,7 +250,7 @@ using ..input_structs
         return manufactured_E_fields
     end 
 
-    function manufactured_sources(Lr,Lz,r_bc,z_bc,composition,geometry,collisions,nr)
+    function manufactured_sources(Lr,Lz,r_bc,z_bc,composition,geometry,collisions,nr,num_diss_params)
         
         # ion manufactured solutions
         densi = densi_sym(Lr,Lz,r_bc,z_bc)
@@ -295,6 +295,7 @@ using ..input_structs
         # the ion source to maintain the manufactured solution
         Si = ( Dt(dfni) + ( vpa * (Bzed/Bmag) - 0.5*rhostar*Er ) * Dz(dfni) + ( 0.5*rhostar*Ez*rfac ) * Dr(dfni) + ( 0.5*Ez*Bzed/Bmag ) * Dvpa(dfni)
                + cx_frequency*( densn*dfni - densi*gav_dfnn ) ) - ionization_frequency*dense*gav_dfnn 
+               - num_diss_params.vpa_dissipation_coefficient*Dvpa(Dvpa(dfni))
         Source_i = expand_derivatives(Si)
         
         # the neutral source to maintain the manufactured solution
