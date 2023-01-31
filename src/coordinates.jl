@@ -131,7 +131,7 @@ setup a grid with n grid points on the interval [-L/2,L/2]
 """
 function init_grid(ngrid, nelement_global, nelement_local, n, irank,
 			L, imin, imax, igrid, discretization, name)
-    uniform_grid = equally_spaced_grid(n,L)
+    uniform_grid = equally_spaced_grid(n,L,nelement_global,nelement_local,irank)
     uniform_grid_shifted = equally_spaced_grid_shifted(n,L)
     if n == 1
         grid = allocate_float(n)
@@ -185,11 +185,19 @@ end
 setup an equally spaced grid with n grid points
 between [-L/2,L/2]
 """
-function equally_spaced_grid(n, L)
+function equally_spaced_grid(n, L, nelement_global, nelement_local, irank)
     # create array for the equally spaced grid with n grid points
     grid = allocate_float(n)
-    @inbounds for i ∈ 1:n
-        grid[i] = -0.5*L + (i-1)*L/(n-1)
+    if nelement_global == nelement_local
+        @inbounds for i ∈ 1:n
+            grid[i] = -0.5*L + (i-1)*L/(n-1)
+        end
+    else # set up grid distributed over cores: grid split into float(nelement_global)/ float(nelement_local) sections
+        L_per_element = L*(float(nelement_local)/float(nelement_global))
+        nlocal = n
+        @inbounds for i ∈ 1:nlocal
+            grid[i] = -0.5*L + irank*L_per_element + (i-1)*L_per_element/(nlocal-1)
+        end
     end
     return grid
 end
