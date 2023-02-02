@@ -1691,12 +1691,12 @@ function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time
 		parallel_flowmin = minimum(parallel_flow[:,:,is,:])
 		parallel_flowmax = maximum(parallel_flow)
 		if pp.plot_parallel_flow_vs_r0_z # plot last timestep parallel_flow[z,ir0]
-			@views plot(z, parallel_flow[:,ir0,is,end], xlabel=L"z/L_z", ylabel=L"n_i")
+			@views plot(z, parallel_flow[:,ir0,is,end], xlabel=L"z/L_z", ylabel=L"u_{i\|\|}")
 			outfile = string(run_name, "_parallel_flow"*description*"(r0,z)_vs_z.pdf")
 			savefig(outfile)    
 		end
 		if pp.plot_wall_parallel_flow_vs_r && nr > 1 # plot last timestep parallel_flow[z_wall,r]
-			@views plot(r, parallel_flow[end,:,is,end], xlabel=L"r/L_r", ylabel=L"n_i")
+			@views plot(r, parallel_flow[end,:,is,end], xlabel=L"r/L_r", ylabel=L"u_{i\|\|}")
 			outfile = string(run_name, "_parallel_flow"*description*"(r,z_wall)_vs_r.pdf")
 			savefig(outfile)
 		end
@@ -1719,12 +1719,12 @@ function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time
 		parallel_pressuremin = minimum(parallel_pressure[:,:,is,:])
 		parallel_pressuremax = maximum(parallel_pressure)
 		if pp.plot_parallel_pressure_vs_r0_z # plot last timestep parallel_pressure[z,ir0]
-			@views plot(z, parallel_pressure[:,ir0,is,end], xlabel=L"z/L_z", ylabel=L"n_i")
+			@views plot(z, parallel_pressure[:,ir0,is,end], xlabel=L"z/L_z", ylabel=L"p_{i\|\|}")
 			outfile = string(run_name, "_parallel_pressure"*description*"(r0,z)_vs_z.pdf")
 			savefig(outfile)    
 		end
 		if pp.plot_wall_parallel_pressure_vs_r && nr > 1 # plot last timestep parallel_pressure[z_wall,r]
-			@views plot(r, parallel_pressure[end,:,is,end], xlabel=L"r/L_r", ylabel=L"n_i")
+			@views plot(r, parallel_pressure[end,:,is,end], xlabel=L"r/L_r", ylabel=L"p_{i\|\|}")
 			outfile = string(run_name, "_parallel_pressure"*description*"(r,z_wall)_vs_r.pdf")
 			savefig(outfile)
 		end
