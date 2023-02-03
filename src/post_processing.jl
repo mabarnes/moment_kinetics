@@ -24,7 +24,8 @@ using ..file_io: open_output_file
 using ..type_definitions: mk_float, mk_int
 using ..initial_conditions: vpagrid_to_dzdt
 using ..load_data: open_netcdf_file
-using ..load_data: load_coordinate_data, load_fields_data, load_moments_data, load_pdf_data
+using ..load_data: load_coordinate_data, load_fields_data, load_moments_data,
+                   load_pdf_data, load_time_data
 using ..analysis: analyze_fields_data, analyze_moments_data, analyze_pdf_data
 using ..velocity_moments: integrate_over_vspace
 
@@ -119,8 +120,11 @@ function analyze_and_plot_data(path...)
     run_labels = Tuple(basename(x) for x ∈ run_names)
 
     # load space-time coordinate data
-    nvpa, vpa, vpa_wgts, nz, z, z_wgts, Lz, nr, r, r_wgts, Lr, ntime, time =
-        get_tuple_of_return_values(load_coordinate_data, nc_files)
+    nvpa, vpa, vpa_wgts, Lvpa = get_tuple_of_return_values(load_coordinate_data, nc_files,
+                                                           "vpa")
+    nr, r, r_wgts, Lr = get_tuple_of_return_values(load_coordinate_data, nc_files, "r")
+    nz, z, z_wgts, Lz = get_tuple_of_return_values(load_coordinate_data, nc_files, "z")
+    ntime, time = get_tuple_of_return_values(load_time_data, nc_files)
 
     # initialise the post-processing input options
     nwrite_movie, itime_min, itime_max, ivpa0, iz0, ir0 =

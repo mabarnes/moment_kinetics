@@ -26,52 +26,35 @@ function open_netcdf_file(run_name)
 end
 
 """
+Load data for a coordinate
 """
-function load_coordinate_data(fid)
-    print("Loading coordinate data...")
-    # define a handle for the r coordinate
-    cdfvar = fid["r"]
-    # get the number of r grid points
-    nr = length(cdfvar)
-    # load the data for r
-    r = cdfvar.var[:]
-    # get the weights associated with the r coordinate
-    cdfvar = fid["r_wgts"]
-    r_wgts = cdfvar.var[:]
-    # Lr = r box length
-    Lr = r[end]-r[1]
+function load_coordinate_data(fid, name)
+    # define a handle for the coordinate
+    cdfvar = fid[name]
+    # get the number of grid points
+    n = length(cdfvar)
+    # load the grid for the coordinate
+    grid = cdfvar.var[:]
+    # get the weights associated with the coordinate
+    cdfvar = fid["$(name)_wgts"]
+    wgts = cdfvar.var[:]
+    # L = box length
+    L = grid[end]-grid[1]
 
-    # define a handle for the z coordinate
-    cdfvar = fid["z"]
-    # get the number of z grid points
-    nz = length(cdfvar)
-    # load the data for z
-    z = cdfvar.var[:]
-    # get the weights associated with the z coordinate
-    cdfvar = fid["z_wgts"]
-    z_wgts = cdfvar.var[:]
-    # Lz = z box length
-    Lz = z[end]-z[1]
+    return n, grid, wgts, L
+end
 
-    # define a handle for the vpa coordinate
-    cdfvar = fid["vpa"]
-    # get the number of vpa grid points
-    nvpa = length(cdfvar)
-    # load the data for vpa
-    vpa = cdfvar.var[:]
-    # get the weights associated with the vpa coordinate
-    cdfvar = fid["vpa_wgts"]
-    vpa_wgts = cdfvar.var[:]
-
+"""
+"""
+function load_time_data(fid)
     # define a handle for the time coordinate
     cdfvar = fid["time"]
     # get the number of time grid points
     ntime = length(cdfvar)
     # load the data for time
     time = cdfvar.var[:]
-    println("done.")
 
-    return nvpa, vpa, vpa_wgts, nz, z, z_wgts, Lz, nr, r, r_wgts, Lr, ntime, time
+    return ntime, time
 end
 
 """
