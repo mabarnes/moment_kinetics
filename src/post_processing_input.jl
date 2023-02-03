@@ -17,6 +17,12 @@ const plot_phi0_vs_t = true
 const plot_phi_vs_z_t = true
 # if animate_phi_vs_z = true, create animation of phi(z) at different time slices
 const animate_phi_vs_z = true
+# if plot_fields_comparison = true and more than one simulation is passed, plot the
+# differences in phi, etc. between the first simulation passed and each of the others
+const plot_fields_comparison = true
+# if animate_fields_comparison = true and more than one simulation is passed, animate the
+# differences in phi, etc. between the first simulation passed and each of the others
+const animate_fields_comparison = true
 # if plot_dens0_vs_t = true, create plots of species density(z0) vs time
 const plot_dens0_vs_t = true
 # if plot_upar0_vs_t = true, create plots of species upar(z0) vs time
@@ -83,9 +89,10 @@ const ir0 = -1
 const dpi = 100
 
 pp = pp_input(calculate_frequencies, plot_phi0_vs_t, plot_phi_vs_z_t,
-    animate_phi_vs_z, plot_dens0_vs_t, plot_upar0_vs_t, plot_ppar0_vs_t, plot_vth0_vs_t, plot_qpar0_vs_t,
-    plot_dens_vs_z_t, plot_upar_vs_z_t, plot_ppar_vs_z_t, plot_qpar_vs_z_t,
-    animate_dens_vs_z, animate_upar_vs_z, animate_ppar_vs_z, animate_vth_vs_z, animate_qpar_vs_z,
+    animate_phi_vs_z, plot_fields_comparison, animate_fields_comparison, plot_dens0_vs_t,
+    plot_upar0_vs_t, plot_ppar0_vs_t, plot_vth0_vs_t, plot_qpar0_vs_t, plot_dens_vs_z_t,
+    plot_upar_vs_z_t, plot_ppar_vs_z_t, plot_qpar_vs_z_t, animate_dens_vs_z,
+    animate_upar_vs_z, animate_ppar_vs_z, animate_vth_vs_z, animate_qpar_vs_z,
     plot_f_unnormalized_vs_vpa_z, animate_f_vs_vpa_z, animate_f_unnormalized,
     animate_f_vs_vpa_z0, animate_f_vs_z0_vpa, animate_deltaf_vs_vpa_z,
     animate_deltaf_vs_vpa_z0, animate_deltaf_vs_vpa_z0, nwrite_movie, itime_min,

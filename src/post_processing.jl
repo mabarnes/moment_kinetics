@@ -23,6 +23,7 @@ using ..array_allocation: allocate_float
 using ..file_io: open_output_file
 using ..type_definitions: mk_float, mk_int
 using ..initial_conditions: vpagrid_to_dzdt
+using ..interpolation: interpolate_to_grid_z
 using ..load_data: open_netcdf_file
 using ..load_data: load_coordinate_data, load_fields_data, load_moments_data,
                    load_pdf_data, load_time_data
@@ -157,7 +158,7 @@ function analyze_and_plot_data(path...)
     plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie, itime_min,
         itime_max, ivpa0, iz0, ir0, r, phi, E_parallel, density, parallel_flow,
         parallel_pressure, parallel_heat_flux, thermal_speed, ff, n_species,
-        evolve_density, evolve_upar, evolve_ppar, vpa, z, ntime, time)
+        evolve_density, evolve_upar, evolve_ppar, vpa, z, z_spectral, ntime, time)
 
     for f ∈ nc_files
         close(f)
@@ -219,7 +220,7 @@ end
 function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
         itime_min, itime_max, ivpa0, iz0, ir0, r, phi, E_parallel, density, parallel_flow,
         parallel_pressure, parallel_heat_flux, thermal_speed, ff, n_species,
-        evolve_density, evolve_upar, evolve_ppar, vpa, z, ntime, time)
+        evolve_density, evolve_upar, evolve_ppar, vpa, z, z_spectral, ntime, time)
 
     n_runs = length(run_names)
 
@@ -243,7 +244,7 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
             delta_phi, as_tuple(pp))
     # create the requested plots of the fields
     plot_fields(phi, delta_phi, E_parallel, time, itime_min, itime_max, nwrite_movie, z,
-                iz0, run_names, run_labels, fitted_delta_phi, pp)
+                z_spectral, iz0, run_names, run_labels, fitted_delta_phi, pp)
     # load velocity moments data
     # analyze the velocity moments data
     density_fldline_avg, upar_fldline_avg, ppar_fldline_avg, vth_fldline_avg, qpar_fldline_avg,
@@ -837,7 +838,7 @@ end
 """
 """
 function plot_fields(phi, delta_phi, E_parallel, time, itime_min, itime_max, nwrite_movie,
-        z, iz0, run_names, run_labels, fitted_delta_phi, pp)
+        z, z_spectral, iz0, run_names, run_labels, fitted_delta_phi, pp)
 
     println("Plotting fields data...")
 
@@ -914,6 +915,142 @@ function plot_fields(phi, delta_phi, E_parallel, time, itime_min, itime_max, nwr
             end
         end
         outfile = string(prefix, "_Epar_vs_z.gif")
+        gif(anim, outfile, fps=5)
+    end
+    if pp.plot_fields_comparison && n_runs > 1
+        base_z = z[1]
+        base_z_spectral = z_spectral[1]
+        base_phi = phi[1]
+        base_E_parallel = E_parallel[1]
+        base_run_label = run_labels[1]
+
+        plot(legend=legend)
+        for (this_z, p, run_label) ∈ zip(z[2:end], phi[2:end], run_labels[2:end])
+            # Interpolate 'base' values to grid of this run for comparison
+            interp_base_phi = interpolate_to_grid_z(this_z.grid, base_phi[:,end], base_z,
+                                                    base_z_spectral)
+
+            plot!(this_z.grid, p[:,end] .- interp_base_phi, xlabel="z/Lz",
+                  ylabel="eϕ/Te difference from $base_run_label",
+                  label=run_label, linewidth=2)
+        end
+        outfile = string(prefix, "_phi_differences.pdf")
+        savefig(outfile)
+
+        plot(legend=legend)
+        for (this_z, E, run_label) ∈ zip(z[2:end], E_parallel[2:end], run_labels[2:end])
+            # Interpolate 'base' values to grid of this run for comparison
+            interp_base_E_parallel =
+                interpolate_to_grid_z(this_z.grid, base_E_parallel[:,end], base_z,
+                                      base_z_spectral)
+
+            plot!(this_z.grid, E[:,end] .- interp_base_E_parallel,
+                  xlabel="z/Lz", ylabel="E_∥ difference from $base_run_label",
+                  label=run_label, linewidth=2)
+        end
+        outfile = string(prefix, "_Epar_differences.pdf")
+
+        plot(legend=legend)
+        for (this_z, p, run_label) ∈ zip(z[2:end], phi[2:end], run_labels[2:end])
+            # Interpolate 'base' values to grid of this run for comparison
+            interp_base_phi = interpolate_to_grid_z(this_z.grid, base_phi[:,end], base_z,
+                                                    base_z_spectral)
+
+            plot!(this_z.grid, abs.(p[:,end] .- interp_base_phi), xlabel="z/Lz",
+                  ylabel="absolute eϕ/Te difference from $base_run_label", yaxis=:log,
+                  label=run_label, linewidth=2)
+        end
+        outfile = string(prefix, "_phi_log_differences.pdf")
+        savefig(outfile)
+
+        plot(legend=legend)
+        for (this_z, E, run_label) ∈ zip(z[2:end], E_parallel[2:end], run_labels[2:end])
+            # Interpolate 'base' values to grid of this run for comparison
+            interp_base_E_parallel =
+                interpolate_to_grid_z(this_z.grid, base_E_parallel[:,end], base_z,
+                                      base_z_spectral)
+
+            plot!(this_z.grid, abs.(E[:,end] .- interp_base_E_parallel),
+                  xlabel="z/Lz", ylabel="absolute E_∥ difference from $base_run_label",
+                  yaxis=:log, label=run_label, linewidth=2)
+        end
+        outfile = string(prefix, "_Epar_log_differences.pdf")
+        savefig(outfile)
+    end
+    if pp.animate_fields_comparison && n_runs > 1
+        base_z = z[1]
+        base_z_spectral = z_spectral[1]
+        base_phi = phi[1]
+        base_E_parallel = E_parallel[1]
+        base_run_label = run_labels[1]
+
+        # make a gif animation of differences in ϕ(z) at different times
+        anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+            plot(legend=legend)
+            for (t, this_z, p, run_label) ∈ zip(time[2:end], z[2:end], phi[2:end],
+                                                run_labels[2:end])
+                # Interpolate 'base' values to grid of this run for comparison
+                interp_base_phi = interpolate_to_grid_z(this_z.grid, base_phi[:,i],
+                                                        base_z, base_z_spectral)
+
+                @views plot!(this_z.grid, p[:,i] .- interp_base_phi, xlabel="z",
+                             ylabel="eϕ/Te difference from $base_run_label",
+                             label=run_label)
+            end
+        end
+        outfile = string(prefix, "_phi_differences.gif")
+        gif(anim, outfile, fps=5)
+
+        # make a gif animation of differences in E_∥(z) at different times
+        anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+            plot(legend=legend)
+            for (t, this_z, E, run_label) ∈ zip(time[2:end], z[2:end], E_parallel[2:end],
+                                                run_labels[2:end])
+                interp_base_E_parallel =
+                    interpolate_to_grid_z(this_z.grid, base_E_parallel[:,i], base_z,
+                                          base_z_spectral)
+
+                @views plot!(this_z.grid, E[:,i] .- interp_base_E_parallel, xlabel="z",
+                             ylabel="E_∥ difference from $base_run_label",
+                             label=run_label)
+            end
+        end
+        outfile = string(prefix, "_Epar_differences.gif")
+        gif(anim, outfile, fps=5)
+
+        # make a gif animation of differences in ϕ(z) at different times
+        anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+            plot(legend=legend)
+            for (t, this_z, p, run_label) ∈ zip(time[2:end], z[2:end], phi[2:end],
+                                                run_labels[2:end])
+                # Interpolate 'base' values to grid of this run for comparison
+                interp_base_phi = interpolate_to_grid_z(this_z.grid, base_phi[:,i],
+                                                        base_z, base_z_spectral)
+
+                @views plot!(this_z.grid, abs.(p[:,i] .- interp_base_phi), xlabel="z",
+                             ylabel="absolute eϕ/Te difference from $base_run_label",
+                             yaxis=:log, label=run_label)
+            end
+        end
+        outfile = string(prefix, "_phi_log_differences.gif")
+        gif(anim, outfile, fps=5)
+
+        # make a gif animation of differences in E_∥(z) at different times
+        anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+            plot(legend=legend)
+            for (t, this_z, E, run_label) ∈ zip(time[2:end], z[2:end], E_parallel[2:end],
+                                                run_labels[2:end])
+                interp_base_E_parallel =
+                    interpolate_to_grid_z(this_z.grid, base_E_parallel[:,i], base_z,
+                                          base_z_spectral)
+
+                @views plot!(this_z.grid, abs.(E[:,i] .- interp_base_E_parallel),
+                             xlabel="z",
+                             ylabel="absolute E_∥ difference from $base_run_label",
+                             yaxis=:log, label=run_label)
+            end
+        end
+        outfile = string(prefix, "_Epar_log_differences.gif")
         gif(anim, outfile, fps=5)
     end
     # nz = length(z)

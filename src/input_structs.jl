@@ -256,6 +256,12 @@ struct pp_input
     plot_phi_vs_z_t::Bool
     # if animate_phi_vs_z = true, create animation of phi vs z at different time slices
     animate_phi_vs_z::Bool
+    # if plot_fields_comparison = true and more than one simulation is passed, plot the
+    # differences in phi, etc. between the first simulation passed and each of the others
+    plot_fields_comparison::Bool
+    # if animate_fields_comparison = true and more than one simulation is passed, animate the
+    # differences in phi, etc. between the first simulation passed and each of the others
+    animate_fields_comparison::Bool
     # if plot_dens0_vs_t = true, create plots of species density(z0) vs time
     plot_dens0_vs_t::Bool
     # if plot_upar0_vs_t = true, create plots of species upar(z0) vs time
