@@ -7,7 +7,7 @@ export analyze_moments_data
 export analyze_pdf_data
 
 using ..array_allocation: allocate_float
-using ..calculus: integral
+using ..calculus: derivative!, integral
 using ..velocity_moments: integrate_over_vspace
 
 """
@@ -25,6 +25,24 @@ function analyze_fields_data(phi, ntime, z)
     end
     println("done.")
     return phi_fldline_avg, delta_phi
+end
+
+"""
+Calculate E_parallel (from phi) as an array.
+
+Only included in `analysis` as this function allocates a new array for the result, and
+includes a loop over the whole grid.
+"""
+function calc_E_parallel(phi, z, z_spectral)
+    ntime = size(phi, 3)
+    nr = size(phi, 2)
+    E_parallel = similar(phi)
+    for it ∈ 1:ntime, ir ∈ 1:nr
+        @views derivative!(z.scratch, phi[:,ir,it], z, z_spectral)
+        @. E_parallel[:,ir,it] = -z.scratch
+    end
+
+    return E_parallel
 end
 
 """

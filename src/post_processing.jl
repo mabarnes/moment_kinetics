@@ -26,7 +26,7 @@ using ..initial_conditions: vpagrid_to_dzdt
 using ..load_data: open_netcdf_file
 using ..load_data: load_coordinate_data, load_fields_data, load_moments_data,
                    load_pdf_data, load_time_data
-using ..analysis: analyze_fields_data, analyze_moments_data, analyze_pdf_data
+using ..analysis: analyze_fields_data, analyze_moments_data, analyze_pdf_data, calc_E_parallel
 using ..velocity_moments: integrate_over_vspace
 
 const default_compare_prefix = "comparison_plots/compare"
@@ -134,7 +134,11 @@ function analyze_and_plot_data(path...)
         init_postprocessing_options(pp, minimum(nvpa), minimum(nz), minimum(nr),
                                     minimum(ntime))
     # load full (z,r,t) fields data
-    phi = Tuple(load_fields_data(f)[:,ir0,:] for f ∈ nc_files)
+    phi_2d = Tuple(load_fields_data(f) for f ∈ nc_files)
+    E_parallel_2d = Tuple(calc_E_parallel(p, this_z, this_z_spectral)
+                          for (p, this_z, this_z_spectral) in zip(phi_2d, z, z_spectral))
+    phi = Tuple(p[:,ir0,:] for p in phi_2d)
+    E_parallel = Tuple(E[:,ir0,:] for E in E_parallel_2d)
 
     # load full (z,r,species,t) velocity moments data
     density, parallel_flow, parallel_pressure, parallel_heat_flux,
@@ -151,9 +155,9 @@ function analyze_and_plot_data(path...)
 
     #evaluate 1D-1V diagnostics at fixed ir0
     plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie, itime_min,
-        itime_max, ivpa0, iz0, ir0, r, phi, density, parallel_flow, parallel_pressure,
-        parallel_heat_flux, thermal_speed, ff, n_species, evolve_density, evolve_upar,
-        evolve_ppar, vpa, z, ntime, time)
+        itime_max, ivpa0, iz0, ir0, r, phi, E_parallel, density, parallel_flow,
+        parallel_pressure, parallel_heat_flux, thermal_speed, ff, n_species,
+        evolve_density, evolve_upar, evolve_ppar, vpa, z, ntime, time)
 
     for f ∈ nc_files
         close(f)
@@ -213,7 +217,7 @@ end
 """
 """
 function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
-        itime_min, itime_max, ivpa0, iz0, ir0, r, phi, density, parallel_flow,
+        itime_min, itime_max, ivpa0, iz0, ir0, r, phi, E_parallel, density, parallel_flow,
         parallel_pressure, parallel_heat_flux, thermal_speed, ff, n_species,
         evolve_density, evolve_upar, evolve_ppar, vpa, z, ntime, time)
 
@@ -832,8 +836,8 @@ end
 
 """
 """
-function plot_fields(phi, delta_phi, time, itime_min, itime_max, nwrite_movie,
-    z, iz0, run_names, run_labels, fitted_delta_phi, pp)
+function plot_fields(phi, delta_phi, E_parallel, time, itime_min, itime_max, nwrite_movie,
+        z, iz0, run_names, run_labels, fitted_delta_phi, pp)
 
     println("Plotting fields data...")
 
@@ -848,6 +852,8 @@ function plot_fields(phi, delta_phi, time, itime_min, itime_max, nwrite_movie,
 
     phimin = minimum(minimum(p) for p ∈ phi)
     phimax = maximum(maximum(p) for p ∈ phi)
+    Emin = minimum(minimum(E) for E ∈ E_parallel)
+    Emax = maximum(maximum(E) for E ∈ E_parallel)
 
     if pp.plot_phi0_vs_t
         # plot the time trace of phi(z=z0)
@@ -878,6 +884,14 @@ function plot_fields(phi, delta_phi, time, itime_min, itime_max, nwrite_movie,
         plot(subplots..., layout=(1,n_runs), size=(600*n_runs, 400))
         outfile = string(prefix, "_phi_vs_z_t.pdf")
         savefig(outfile)
+
+        # make a heatmap plot of E_∥(z,t)
+        subplots = (heatmap(t, this_z.grid, E, xlabel="time", ylabel="z", title=run_label,
+                            c = :deep)
+                    for (t, this_z, E, run_label) ∈ zip(time, z, E_parallel, run_labels))
+        plot(subplots..., layout=(1,n_runs), size=(600*n_runs, 400))
+        outfile = string(prefix, "_Epar_vs_z_t.pdf")
+        savefig(outfile)
     end
     if pp.animate_phi_vs_z
         # make a gif animation of ϕ(z) at different times
@@ -889,6 +903,17 @@ function plot_fields(phi, delta_phi, time, itime_min, itime_max, nwrite_movie,
             end
         end
         outfile = string(prefix, "_phi_vs_z.gif")
+        gif(anim, outfile, fps=5)
+
+        # make a gif animation of E_∥(z) at different times
+        anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+            plot(legend=legend)
+            for (t, this_z, E, run_label) ∈ zip(time, z, E_parallel, run_labels)
+                @views plot!(this_z.grid, E[:,i], xlabel="z", ylabel="E_∥",
+                             ylims=(Emin, Emax), label=run_label)
+            end
+        end
+        outfile = string(prefix, "_Epar_vs_z.gif")
         gif(anim, outfile, fps=5)
     end
     # nz = length(z)
@@ -903,6 +928,14 @@ function plot_fields(phi, delta_phi, time, itime_min, itime_max, nwrite_movie,
               linewidth=2)
     end
     outfile = string(prefix, "_phi_final.pdf")
+    savefig(outfile)
+
+    plot(legend=legend)
+    for (t, this_z, E, run_label) ∈ zip(time, z, E_parallel, run_labels)
+        plot!(this_z.grid, E[:,end], xlabel="z/Lz", ylabel="E_∥", label=run_label,
+              linewidth=2)
+    end
+    outfile = string(prefix, "_Epar_final.pdf")
     savefig(outfile)
 
     println("done.")
