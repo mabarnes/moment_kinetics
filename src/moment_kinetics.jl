@@ -66,6 +66,7 @@ using .looping
 using .moment_constraints: hard_force_moment_constraints!
 using .moment_kinetics_input: input_from_TOML, mk_input, run_type, performance_test
 using .time_advance: setup_time_advance!, time_advance!
+using .em_fields: update_phi!
 
 @debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
 
@@ -266,6 +267,16 @@ function setup_moment_kinetics(input_dict::Dict; backup_filename=nothing,
         # here
         code_time = reload_evolving_fields!(pdf, moments, backup_filename,
                                             restart_time_index, composition, r, z, vpa)
+
+        # Re-initialise scratch[1] (even though this is done at the beginning of the time
+        # loop anyway) in order to calculate ϕ
+        scratch[1].pdf .= pdf.norm
+        scratch[1].density .= moments.dens
+        scratch[1].upar .= moments.upar
+        scratch[1].ppar .= moments.ppar
+
+        # Re-initialise ϕ consistent with the reloaded evolving variables
+        update_phi!(fields, scratch[1], z, r, composition)
         _block_synchronize()
     end
 
