@@ -128,6 +128,37 @@ function define_static_variables!(fid,vpa,z,r,composition,collisions,evolve_dens
     vartype = mk_float
     var = defVar(fid, varname, vartype, dims, attrib=attributes)
     var[:] = r.wgts
+    # create and write the "r_ngrid" variable to file
+    varname = "r_ngrid"
+    attributes = Dict("description" => "number of points per element in r")
+    dims = ()
+    vartype = mk_int
+    var = defVar(fid, varname, vartype, dims, attrib=attributes)
+    var[:] = r.ngrid
+    # create and write the "r_nelement" variable to file
+    varname = "r_nelement"
+    attributes = Dict("description" => "number elements in r")
+    vartype = mk_int
+    var = defVar(fid, varname, vartype, dims, attrib=attributes)
+    var[:] = r.nelement
+    # create and write the "r_discretization" variable to file
+    varname = "r_discretization"
+    attributes = Dict("description" => "discretization used for r dimension")
+    vartype = String
+    var = defVar(fid, varname, vartype, dims, attrib=attributes)
+    var[:] = r.discretization
+    # create and write the "r_fd_option" variable to file
+    varname = "r_fd_option"
+    attributes = Dict("description" => "finite difference option for r dimension")
+    vartype = String
+    var = defVar(fid, varname, vartype, dims, attrib=attributes)
+    var[:] = r.fd_option
+    # create and write the "r_bc" variable to file
+    varname = "r_bc"
+    attributes = Dict("description" => "boundary condition for r dimension")
+    vartype = String
+    var = defVar(fid, varname, vartype, dims, attrib=attributes)
+    var[:] = r.bc
     # create and write the "z" variable to file
     varname = "z"
     attributes = Dict("description" => "parallel coordinate")
@@ -141,6 +172,37 @@ function define_static_variables!(fid,vpa,z,r,composition,collisions,evolve_dens
     vartype = mk_float
     var = defVar(fid, varname, vartype, dims, attrib=attributes)
     var[:] = z.wgts
+    # create and write the "z_ngrid" variable to file
+    varname = "z_ngrid"
+    attributes = Dict("description" => "number of points per element in z")
+    dims = ()
+    vartype = mk_int
+    var = defVar(fid, varname, vartype, dims, attrib=attributes)
+    var[:] = z.ngrid
+    # create and write the "z_nelement" variable to file
+    varname = "z_nelement"
+    attributes = Dict("description" => "number elements in z")
+    vartype = mk_int
+    var = defVar(fid, varname, vartype, dims, attrib=attributes)
+    var[:] = z.nelement
+    # create and write the "z_discretization" variable to file
+    varname = "z_discretization"
+    attributes = Dict("description" => "discretization used for z dimension")
+    vartype = String
+    var = defVar(fid, varname, vartype, dims, attrib=attributes)
+    var[:] = z.discretization
+    # create and write the "z_fd_option" variable to file
+    varname = "z_fd_option"
+    attributes = Dict("description" => "finite difference option for z dimension")
+    vartype = String
+    var = defVar(fid, varname, vartype, dims, attrib=attributes)
+    var[:] = z.fd_option
+    # create and write the "z_bc" variable to file
+    varname = "z_bc"
+    attributes = Dict("description" => "boundary condition for z dimension")
+    vartype = String
+    var = defVar(fid, varname, vartype, dims, attrib=attributes)
+    var[:] = z.bc
     # create and write the "vpa" variable to file
     varname = "vpa"
     attributes = Dict("description" => "parallel velocity")
@@ -154,6 +216,37 @@ function define_static_variables!(fid,vpa,z,r,composition,collisions,evolve_dens
     vartype = mk_float
     var = defVar(fid, varname, vartype, dims, attrib=attributes)
     var[:] = vpa.wgts
+    # create and write the "vpa_ngrid" variable to file
+    varname = "vpa_ngrid"
+    attributes = Dict("description" => "number of points per element in vpa")
+    dims = ()
+    vartype = mk_int
+    var = defVar(fid, varname, vartype, dims, attrib=attributes)
+    var[:] = vpa.ngrid
+    # create and write the "vpa_nelement" variable to file
+    varname = "vpa_nelement"
+    attributes = Dict("description" => "number elements in vpa")
+    vartype = mk_int
+    var = defVar(fid, varname, vartype, dims, attrib=attributes)
+    var[:] = vpa.nelement
+    # create and write the "vpa_discretization" variable to file
+    varname = "vpa_discretization"
+    attributes = Dict("description" => "discretization used for vpa dimension")
+    vartype = String
+    var = defVar(fid, varname, vartype, dims, attrib=attributes)
+    var[:] = vpa.discretization
+    # create and write the "vpa_fd_option" variable to file
+    varname = "vpa_fd_option"
+    attributes = Dict("description" => "finite difference option for vpa dimension")
+    vartype = String
+    var = defVar(fid, varname, vartype, dims, attrib=attributes)
+    var[:] = vpa.fd_option
+    # create and write the "vpa_bc" variable to file
+    varname = "vpa_bc"
+    attributes = Dict("description" => "boundary condition for vpa dimension")
+    vartype = String
+    var = defVar(fid, varname, vartype, dims, attrib=attributes)
+    var[:] = vpa.bc
     # create and write the "T_e" variable to file
     varname = "T_e"
     attributes = Dict("description" => "electron temperature")
