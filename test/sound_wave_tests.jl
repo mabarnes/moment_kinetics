@@ -165,9 +165,7 @@ function run_test(test_input, analytic_frequency, analytic_growth_rate,
             fid = open_netcdf_file(path)
 
             # load space-time coordinate data
-            nvpa, vpa, vpa_wgts, Lvpa = load_coordinate_data(fid, "vpa")
-            nr, r, r_wgts, Lr = load_coordinate_data(fid, "r")
-            nz, z, z_wgts, Lz = load_coordinate_data(fid, "z")
+            z, _ = load_coordinate_data(fid, "z")
             ntime, time = load_time_data(fid)
 
             # load fields data
@@ -178,12 +176,12 @@ function run_test(test_input, analytic_frequency, analytic_growth_rate,
             phi = phi_zrt[:,1,:]
 
             # analyze the fields data
-            phi_fldline_avg, delta_phi = analyze_fields_data(phi, ntime, nz, z_wgts, Lz)
+            phi_fldline_avg, delta_phi = analyze_fields_data(phi, ntime, z.n, z.wgts, z.L)
 
             # use a fit to calculate the damping rate and growth rate of the perturbed
             # electrostatic potential
             itime_max = ntime
-            iz0 = cld(nz, 3)
+            iz0 = cld(z.n, 3)
             shifted_time = allocate_float(ntime)
             @. shifted_time = time - time[itime_min]
             @views phi_fit = fit_delta_phi_mode(shifted_time[itime_min:itime_max], z,

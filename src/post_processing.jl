@@ -120,10 +120,13 @@ function analyze_and_plot_data(path...)
     run_labels = Tuple(basename(x) for x ∈ run_names)
 
     # load space-time coordinate data
-    nvpa, vpa, vpa_wgts, Lvpa = get_tuple_of_return_values(load_coordinate_data, nc_files,
+    vpa, vpa_spectral = get_tuple_of_return_values(load_coordinate_data, nc_files,
                                                            "vpa")
-    nr, r, r_wgts, Lr = get_tuple_of_return_values(load_coordinate_data, nc_files, "r")
-    nz, z, z_wgts, Lz = get_tuple_of_return_values(load_coordinate_data, nc_files, "z")
+    nvpa = (x.n for x ∈ vpa)
+    r, r_spectral = get_tuple_of_return_values(load_coordinate_data, nc_files, "r")
+    nr = (x.n for x ∈ r)
+    z, z_spectral = get_tuple_of_return_values(load_coordinate_data, nc_files, "z")
+    nz = (x.n for x ∈ z)
     ntime, time = get_tuple_of_return_values(load_time_data, nc_files)
 
     # initialise the post-processing input options
@@ -150,7 +153,7 @@ function analyze_and_plot_data(path...)
     plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie, itime_min,
         itime_max, ivpa0, iz0, ir0, r, phi, density, parallel_flow, parallel_pressure,
         parallel_heat_flux, thermal_speed, ff, n_species, evolve_density, evolve_upar,
-        evolve_ppar, nvpa, vpa, vpa_wgts, nz, z, z_wgts, Lz, ntime, time)
+        evolve_ppar, vpa, z, ntime, time)
 
     for f ∈ nc_files
         close(f)
@@ -212,8 +215,7 @@ end
 function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
         itime_min, itime_max, ivpa0, iz0, ir0, r, phi, density, parallel_flow,
         parallel_pressure, parallel_heat_flux, thermal_speed, ff, n_species,
-        evolve_density, evolve_upar, evolve_ppar, nvpa, vpa, vpa_wgts, nz, z, z_wgts,
-        Lz, ntime, time)
+        evolve_density, evolve_upar, evolve_ppar, vpa, z, ntime, time)
 
     n_runs = length(run_names)
 
@@ -223,7 +225,7 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
 
     # analyze the fields data
     phi_fldline_avg, delta_phi = get_tuple_of_return_values(analyze_fields_data, phi,
-                                                            ntime, nz, z_wgts, Lz)
+                                                            ntime, z)
 
     function as_tuple(x)
         return Tuple(x for _ ∈ 1:n_runs)
@@ -236,15 +238,14 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
             ntime, time, z, as_tuple(itime_min), as_tuple(itime_max), as_tuple(iz0),
             delta_phi, as_tuple(pp))
     # create the requested plots of the fields
-    plot_fields(phi, delta_phi, time, itime_min, itime_max, nwrite_movie,
-                z, iz0, run_names, run_labels, fitted_delta_phi, pp)
+    plot_fields(phi, delta_phi, E_parallel, time, itime_min, itime_max, nwrite_movie, z,
+                iz0, run_names, run_labels, fitted_delta_phi, pp)
     # load velocity moments data
     # analyze the velocity moments data
     density_fldline_avg, upar_fldline_avg, ppar_fldline_avg, vth_fldline_avg, qpar_fldline_avg,
         delta_density, delta_upar, delta_ppar, delta_vth, delta_qpar =
         get_tuple_of_return_values(analyze_moments_data, density, parallel_flow,
-            parallel_pressure, thermal_speed, parallel_heat_flux, ntime, n_species, nz,
-            z_wgts, Lz)
+            parallel_pressure, thermal_speed, parallel_heat_flux, ntime, n_species, z)
     # create the requested plots of the moments
     plot_moments(density, delta_density, density_fldline_avg,
         parallel_flow, delta_upar, upar_fldline_avg,
@@ -256,8 +257,8 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
     # load particle distribution function (pdf) data
     # analyze the pdf data
     f_fldline_avg, delta_f, dens_moment, upar_moment, ppar_moment =
-        get_tuple_of_return_values(analyze_pdf_data, ff, vpa, nvpa, nz, n_species,
-            ntime, vpa_wgts, z_wgts, Lz, thermal_speed, evolve_ppar)
+        get_tuple_of_return_values(analyze_pdf_data, ff, vpa, z, n_species, ntime,
+                                   thermal_speed, evolve_ppar)
 
     println("Plotting distribution function data...")
     cmlog(cmlin::ColorGradient) = RGB[cmlin[x] for x=LinRange(0,1,30)]
@@ -312,9 +313,10 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
             # make a gif animation of ln f(vpa,z,t)
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
                 #heatmap(z, vpa, log.(abs.(ff[:,:,i])), xlabel="z", ylabel="vpa", clims = (fmin,fmax), c = :deep)
-                subplots = (@views heatmap(this_z, this_vpa, log.(abs.(f[:,:,is,i])),
-                                           xlabel="z", ylabel="vpa", fillcolor =
-                                           logdeep, title=run_label)
+                subplots = (@views heatmap(this_z.grid, this_vpa.grid,
+                                           log.(abs.(f[:,:,is,i])), xlabel="z",
+                                           ylabel="vpa", fillcolor = logdeep,
+                                           title=run_label)
                             for (f, this_z, this_vpa, run_label) ∈ zip(ff, z, vpa, run_labels))
                 plot(subplots..., layout=(1,n_runs), size=(600*n_runs, 400))
             end
@@ -323,9 +325,9 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
             # make a gif animation of f(vpa,z,t)
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
                 #heatmap(z, vpa, log.(abs.(ff[:,:,i])), xlabel="z", ylabel="vpa", clims = (fmin,fmax), c = :deep)
-                subplots = (@views heatmap(this_z, this_vpa, f[:,:,is,i], xlabel="z",
-                                           ylabel="vpa", c = :deep, interpolation =
-                                           :cubic, title=run_label)
+                subplots = (@views heatmap(this_z.grid, this_vpa.grid, f[:,:,is,i],
+                                           xlabel="z", ylabel="vpa", c = :deep,
+                                           interpolation = :cubic, title=run_label)
                             for (f, this_z, this_vpa, run_label) ∈ zip(ff, z, vpa, run_labels))
                 plot(subplots..., layout=(1,n_runs), size=(600*n_runs, 400))
             end
@@ -333,8 +335,9 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
             gif(anim, outfile, fps=5)
             # make pdf of f(vpa,z,t_final) for each species
             str = string("spec ", string(is), " pdf")
-            subplots = (@views heatmap(this_z, this_vpa, f[:,:,is,end], xlabel="vpa", ylabel="z",
-                                       c = :deep, interpolation = :cubic,
+            subplots = (@views heatmap(this_z.grid, this_vpa.grid, f[:,:,is,end],
+                                       xlabel="vpa", ylabel="z", c = :deep,
+                                       interpolation = :cubic,
                                        title=string(run_label, str))
                         for (f, this_z, this_vpa, run_label) ∈ zip(ff, z, vpa, run_labels))
             plot(subplots..., layout=(1,n_runs), size=(600*n_runs, 400))
@@ -344,8 +347,8 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
                 plot(legend=legend)
                 for (f, this_vpa, run_label) ∈ zip(ff, vpa, run_labels)
-                    @views plot!(this_vpa, f[:,1,is,i], xlabel="vpa", ylabel="f(z=0)",
-                                 label=run_label)
+                    @views plot!(this_vpa.grid, f[:,1,is,i], xlabel="vpa",
+                                 ylabel="f(z=0)", label=run_label)
                 end
             end
             outfile = string(prefix, "_f0_vs_vpa", spec_string, ".gif")
@@ -354,8 +357,8 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
                 plot(legend=legend)
                 for (f, this_vpa, run_label) ∈ zip(ff, vpa, run_labels)
-                    @views plot!(this_vpa, f[:,end,is,i], xlabel="vpa", ylabel="f(z=L)",
-                                 label=run_label)
+                    @views plot!(this_vpa.grid, f[:,end,is,i], xlabel="vpa",
+                                 ylabel="f(z=L)", label=run_label)
                 end
             end
             outfile = string(prefix, "_fL_vs_vpa", spec_string, ".gif")
@@ -373,7 +376,7 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
 
                 PyPlot.subplot(1, n_runs, run_ind)
                 @views f_unnorm, z2d, dzdt2d = get_unnormalised_f_coords_2d(
-                    f[:,:,is,it], this_z, this_vpa, n[:,is,it],
+                    f[:,:,is,it], this_z.grid, this_vpa.grid, n[:,is,it],
                     upar[:,is,it], vth[:,is,it], ev_n, ev_u, ev_p)
                 plot_unnormalised_f2d(f_unnorm, z2d, dzdt2d; title=run_label,
                                       plot_log=false)
@@ -390,7 +393,7 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
                                   evolve_ppar, z, vpa, run_labels)
 
                 @views f_unnorm, dzdt = get_unnormalised_f_dzdt_1d(
-                    f[:,1,is,it], this_vpa, n[1,is,it], upar[1,is,it], vth[1,is,it],
+                    f[:,1,is,it], this_vpa.grid, n[1,is,it], upar[1,is,it], vth[1,is,it],
                     ev_n, ev_u, ev_p)
                 @views plot!(dzdt, f_unnorm, xlabel="vpa", ylabel="f_unnorm(z=0)",
                              label=run_label)
@@ -406,8 +409,8 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
                                   evolve_ppar, z, vpa, run_labels)
 
                 @views f_unnorm, dzdt = get_unnormalised_f_dzdt_1d(
-                    f[:,end,is,it], this_vpa, n[end,is,it], upar[end,is,it], vth[end,is,it],
-                    ev_n, ev_u, ev_p)
+                    f[:,end,is,it], this_vpa.grid, n[end,is,it], upar[end,is,it],
+                    vth[end,is,it], ev_n, ev_u, ev_p)
                 @views plot!(dzdt, f_unnorm, xlabel="vpa", ylabel="f_unnorm(z=L)",
                              label=run_label)
             end
@@ -423,7 +426,7 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
                                   evolve_ppar, z, vpa, run_labels)
 
                 @views f_unnorm, dzdt = get_unnormalised_f_dzdt_1d(
-                    f[:,1,is,it], this_vpa, n[1,is,it], upar[1,is,it], vth[1,is,it],
+                    f[:,1,is,it], this_vpa.grid, n[1,is,it], upar[1,is,it], vth[1,is,it],
                     ev_n, ev_u, ev_p)
                 @views plot!(dzdt, f_unnorm./abs.(dzdt), xlabel="vpa", ylabel="f_unnorm(z=0)/vpa",
                              label=run_label)
@@ -440,8 +443,8 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
                                   evolve_ppar, z, vpa, run_labels)
 
                 @views f_unnorm, dzdt = get_unnormalised_f_dzdt_1d(
-                    f[:,end,is,it], this_vpa, n[end,is,it], upar[end,is,it], vth[end,is,it],
-                    ev_n, ev_u, ev_p)
+                    f[:,end,is,it], this_vpa.grid, n[end,is,it], upar[end,is,it],
+                    vth[end,is,it], ev_n, ev_u, ev_p)
                 @views plot!(dzdt, f_unnorm./abs.(dzdt), xlabel="vpa", ylabel="f_unnorm(z=L)/vpa",
                              label=run_label)
             end
@@ -457,7 +460,7 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
                                   evolve_ppar, z, vpa, run_labels)
 
                 @views f_unnorm, dzdt = get_unnormalised_f_dzdt_1d(
-                    f[:,1,is,it], this_vpa, n[1,is,it], upar[1,is,it], vth[1,is,it],
+                    f[:,1,is,it], this_vpa.grid, n[1,is,it], upar[1,is,it], vth[1,is,it],
                     ev_n, ev_u, ev_p)
                 @views plot!(dzdt, f_unnorm./dzdt.^2, xlabel="vpa", ylabel="f_unnorm(z=0)/vpa^2",
                              label=run_label)
@@ -474,8 +477,8 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
                                   evolve_ppar, z, vpa, run_labels)
 
                 @views f_unnorm, dzdt = get_unnormalised_f_dzdt_1d(
-                    f[:,end,is,it], this_vpa, n[end,is,it], upar[end,is,it], vth[end,is,it],
-                    ev_n, ev_u, ev_p)
+                    f[:,end,is,it], this_vpa.grid, n[end,is,it], upar[end,is,it],
+                    vth[end,is,it], ev_n, ev_u, ev_p)
                 @views plot!(dzdt, f_unnorm./dzdt.^2, xlabel="vpa", ylabel="f_unnorm(z=L)/vpa^2",
                              label=run_label)
             end
@@ -491,12 +494,12 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
                                   evolve_ppar, z, vpa, run_labels)
 
                 @views f_unnorm, dzdt = get_unnormalised_f_dzdt_1d(
-                    f[:,1,is,it], this_vpa, n[1,is,it], upar[1,is,it], vth[1,is,it],
+                    f[:,1,is,it], this_vpa.grid, n[1,is,it], upar[1,is,it], vth[1,is,it],
                     ev_n, ev_u, ev_p)
                 if ev_u
-                    wpa = this_vpa
+                    wpa = this_vpa.grid
                 else
-                    wpa = this_vpa .- upar[1,is,it]
+                    wpa = this_vpa.grid .- upar[1,is,it]
                 end
                 @views plot!(dzdt, f_unnorm.*wpa.^2, xlabel="vpa", ylabel="f_unnorm(z=0)/wpa^2",
                              label=run_label)
@@ -513,12 +516,12 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
                                   evolve_ppar, z, vpa, run_labels)
 
                 @views f_unnorm, dzdt = get_unnormalised_f_dzdt_1d(
-                    f[:,end,is,it], this_vpa, n[end,is,it], upar[end,is,it], vth[end,is,it],
+                    f[:,end,is,it], this_vpa.grid, n[end,is,it], upar[end,is,it], vth[end,is,it],
                     ev_n, ev_u, ev_p)
                 if ev_u
-                    wpa = this_vpa
+                    wpa = this_vpa.grid
                 else
-                    wpa = this_vpa .- upar[end,is,it]
+                    wpa = this_vpa.grid .- upar[end,is,it]
                 end
                 @views plot!(dzdt, f_unnorm.*wpa.^2, xlabel="vpa", ylabel="f_unnorm(z=L)/wpa^2",
                              label=run_label)
@@ -530,7 +533,7 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
             ## use Plots.jl...
             ## make a gif animation of f_unnorm(v_parallel_unnorm,z,t)
             #anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-            #    subplots = (@views plot_unnormalised(f[:,:,is,i], this_z, this_vpa,
+            #    subplots = (@views plot_unnormalised(f[:,:,is,i], this_z, this_vpa.grid,
             #                           n[:,is,i], upar[:,is,i], vth[:,is,i], ev_n, ev_u,
             #                           ev_p, title=run_label)
             #                for (f, n, upar, vth, ev_n, ev_u, ev_p, this_z,
@@ -544,9 +547,9 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
             #gif(anim, outfile, fps=5)
             ## make a gif animation of log(f_unnorm)(v_parallel_unnorm,z,t)
             #anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-            #    subplots = (@views plot_unnormalised(f[:,:,is,i], this_z, this_vpa, n[:,is,i],
-            #                           upar[:,is,i], vth[:,is,i], ev_n, ev_u, ev_p,
-            #                           plot_log=true, title=run_label)
+            #    subplots = (@views plot_unnormalised(f[:,:,is,i], this_z, this_vpa.grid,
+            #                           n[:,is,i], upar[:,is,i], vth[:,is,i], ev_n, ev_u,
+            #                           ev_p, plot_log=true, title=run_label)
             #                for (f, n, upar, vth, ev_n, ev_u, ev_p, this_z,
             #                     this_vpa, run_label) ∈
             #                    zip(ff, density, parallel_flow, thermal_speed,
@@ -572,7 +575,7 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
 
                     PyPlot.subplot(1, n_runs, run_ind)
                     @views f_unnorm, z2d, dzdt2d = get_unnormalised_f_coords_2d(
-                        f[:,:,is,iframe], this_z, this_vpa, n[:,is,iframe],
+                        f[:,:,is,iframe], this_z.grid, this_vpa.grid, n[:,is,iframe],
                         upar[:,is,iframe], vth[:,is,iframe], ev_n, ev_u, ev_p)
                     plot_unnormalised_f2d(f_unnorm, z2d, dzdt2d; title=run_label,
                                           plot_log=false)
@@ -601,7 +604,7 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
 
                     PyPlot.subplot(1, n_runs, run_ind)
                     @views f_unnorm, z2d, dzdt2d = get_unnormalised_f_coords_2d(
-                        f[:,:,is,iframe], this_z, this_vpa, n[:,is,iframe],
+                        f[:,:,is,iframe], this_z.grid, this_vpa.grid, n[:,is,iframe],
                         upar[:,is,iframe], vth[:,is,iframe], ev_n, ev_u, ev_p)
                     plot_unnormalised_f2d(f_unnorm, z2d, dzdt2d; title=run_label,
                                           plot_log=true)
@@ -624,7 +627,7 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
                     zip(ff, density, parallel_flow, thermal_speed, evolve_density,
                         evolve_upar, evolve_ppar, vpa, run_labels)
                     @views f_unnorm, dzdt = get_unnormalised_f_dzdt_1d(
-                        f[:,1,is,i], this_vpa, n[1,is,i], upar[1,is,i], vth[1,is,i],
+                        f[:,1,is,i], this_vpa.grid, n[1,is,i], upar[1,is,i], vth[1,is,i],
                         ev_n, ev_u, ev_p)
                     @views plot!(dzdt, f_unnorm, xlabel="vpa", ylabel="f_unnorm(z=0)",
                                  label=run_label)
@@ -639,7 +642,7 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
                     zip(ff, density, parallel_flow, thermal_speed, evolve_density,
                         evolve_upar, evolve_ppar, vpa, run_labels)
                     @views f_unnorm, dzdt = get_unnormalised_f_dzdt_1d(
-                        f[:,end,is,i], this_vpa, n[end,is,i], upar[end,is,i],
+                        f[:,end,is,i], this_vpa.grid, n[end,is,i], upar[end,is,i],
                         vth[end,is,i], ev_n, ev_u, ev_p)
                     @views plot!(dzdt, f_unnorm, xlabel="vpa", ylabel="f_unnorm(z=L)",
                                  label=run_label)
@@ -651,10 +654,10 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
         if pp.animate_deltaf_vs_vpa_z
             # make a gif animation of δf(vpa,z,t)
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-                subplots = (@views heatmap(this_z, this_vpa, delta_f[:,:,is,i],
+                subplots = (@views heatmap(this_z.grid, this_vpa.grid, delta_f[:,:,is,i],
                                        xlabel="z", ylabel="vpa", c = :deep,
                                        interpolation = :cubic, title=run_label)
-                            for (df, this_z, this_vpa, run_label) ∈
+                            for (df, this_z, this_vpa.grid, run_label) ∈
                                 zip(delta_f, z, vpa, run_labels))
                 plot(subplots..., layout=(1,n_runs), size=(600*n_runs, 400))
             end
@@ -668,7 +671,7 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
                 plot(legend=legend)
                 for (f, this_z, run_label) ∈ zip(ff, z, run_labels)
-                    @views plot!(this_z, f[ivpa0,:,is,i], ylims = (fmin,fmax),
+                    @views plot!(this_z.grid, f[ivpa0,:,is,i], ylims = (fmin,fmax),
                                  label=run_label)
                 end
             end
@@ -682,7 +685,7 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
                 plot(legend=legend)
                 for (df, this_z, run_label) ∈ zip(delta_f, z, run_labels)
-                    @views plot!(this_z, df[ivpa0,:,is,i], ylims = (fmin,fmax),
+                    @views plot!(this_z.grid, df[ivpa0,:,is,i], ylims = (fmin,fmax),
                                  label=run_label)
                 end
             end
@@ -720,7 +723,7 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
                 #@views plot(vpa, ff[iz0,:,is,i], ylims = (fmin,fmax))
                 plot(legend=legend)
                 for (f, this_vpa, run_label) ∈ zip(ff, vpa, run_labels)
-                    @views plot!(this_vpa, f[:,iz0,is,i], label=run_label)
+                    @views plot!(this_vpa.grid, f[:,iz0,is,i], label=run_label)
                 end
             end
             outfile = string(prefix, "_f_vs_vpa", spec_string, ".gif")
@@ -734,7 +737,7 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
                 plot(legend=legend)
                 for (df, this_vpa, fn, fx, run_label) ∈
                         zip(delta_f, vpa, fmin, fmax, run_labels)
-                    @views plot!(this_vpa, delta_f[:,iz0,is,i], ylims = (fn,fx),
+                    @views plot!(this_vpa.grid, delta_f[:,iz0,is,i], ylims = (fn,fx),
                                 label=run_label)
                 end
             end
@@ -869,8 +872,8 @@ function plot_fields(phi, delta_phi, time, itime_min, itime_max, nwrite_movie,
     end
     if pp.plot_phi_vs_z_t
         # make a heatmap plot of ϕ(z,t)
-        subplots = (heatmap(t, this_z, p, xlabel="time", ylabel="z", title=run_label, c =
-                            :deep)
+        subplots = (heatmap(t, this_z.grid, p, xlabel="time", ylabel="z", title=run_label,
+                            c = :deep)
                     for (t, this_z, p, run_label) ∈ zip(time, z, phi, run_labels))
         plot(subplots..., layout=(1,n_runs), size=(600*n_runs, 400))
         outfile = string(prefix, "_phi_vs_z_t.pdf")
@@ -881,7 +884,7 @@ function plot_fields(phi, delta_phi, time, itime_min, itime_max, nwrite_movie,
         anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
             plot(legend=legend)
             for (t, this_z, p, run_label) ∈ zip(time, z, phi, run_labels)
-                @views plot!(this_z, p[:,i], xlabel="z", ylabel="ϕ",
+                @views plot!(this_z.grid, p[:,i], xlabel="z", ylabel="ϕ",
                              ylims=(phimin, phimax), label=run_label)
             end
         end
@@ -896,8 +899,8 @@ function plot_fields(phi, delta_phi, time, itime_min, itime_max, nwrite_movie,
     # savefig(outfile)
     plot(legend=legend)
     for (t, this_z, p, run_label) ∈ zip(time, z, phi, run_labels)
-        plot!(this_z, p[:,end], xlabel="z/Lz", ylabel="eϕ/Te", label=run_label,
-             linewidth=2)
+        plot!(this_z.grid, p[:,end], xlabel="z/Lz", ylabel="eϕ/Te", label=run_label,
+              linewidth=2)
     end
     outfile = string(prefix, "_phi_final.pdf")
     savefig(outfile)
@@ -1084,7 +1087,7 @@ function plot_moments(density, delta_density, density_fldline_avg,
         end
         if pp.plot_dens_vs_z_t
             # make a heatmap plot of n_s(z,t)
-            subplots = (heatmap(t, this_z, n[:,is,:], xlabel="time", ylabel="z",
+            subplots = (heatmap(t, this_z.grid, n[:,is,:], xlabel="time", ylabel="z",
                                 title=run_label, c = :deep)
                         for (t, this_z, n, run_label) ∈ zip(time, z, density, run_labels))
             plot(subplots..., layout=(1,n_runs), size=(600*n_runs, 400))
@@ -1093,7 +1096,7 @@ function plot_moments(density, delta_density, density_fldline_avg,
         end
         if pp.plot_upar_vs_z_t
             # make a heatmap plot of upar_s(z,t)
-            subplots = (heatmap(t, this_z, upar[:,is,:], xlabel="time", ylabel="z",
+            subplots = (heatmap(t, this_z.grid, upar[:,is,:], xlabel="time", ylabel="z",
                                 title=run_label, c = :deep)
                         for (t, this_z, upar, run_label) ∈ zip(time, z, parallel_flow,
                                                               run_labels))
@@ -1103,7 +1106,7 @@ function plot_moments(density, delta_density, density_fldline_avg,
         end
         if pp.plot_ppar_vs_z_t
             # make a heatmap plot of upar_s(z,t)
-            subplots = (heatmap(t, this_z, ppar[:,is,:], xlabel="time", ylabel="z",
+            subplots = (heatmap(t, this_z.grid, ppar[:,is,:], xlabel="time", ylabel="z",
                                 title=run_label, c = :deep)
                         for (t, this_z, ppar, run_label) ∈
                             zip(time, z, parallel_pressure, run_labels))
@@ -1113,7 +1116,7 @@ function plot_moments(density, delta_density, density_fldline_avg,
         end
         if pp.plot_qpar_vs_z_t
             # make a heatmap plot of upar_s(z,t)
-            subplots = (heatmap(t, this_z, qpar[:,is,:], xlabel="time", ylabel="z",
+            subplots = (heatmap(t, this_z.grid, qpar[:,is,:], xlabel="time", ylabel="z",
                                 title=run_label, c = :deep)
                         for (t, this_z, qpar, run_label) ∈
                             zip(time, z, parallel_heat_flux, run_labels))
@@ -1126,7 +1129,7 @@ function plot_moments(density, delta_density, density_fldline_avg,
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
                 plot(legend=legend)
                 for (t, this_z, n, run_label) ∈ zip(time, z, density, run_labels)
-                    @views plot!(this_z, n[:,is,i], xlabel="z", ylabel="nᵢ/Nₑ",
+                    @views plot!(this_z.grid, n[:,is,i], xlabel="z", ylabel="nᵢ/Nₑ",
                                  ylims=(dens_min, dens_max), label=run_label)
                 end
             end
@@ -1138,7 +1141,7 @@ function plot_moments(density, delta_density, density_fldline_avg,
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
                 plot(legend=legend)
                 for (t, this_z, upar, run_label) ∈ zip(time, z, parallel_flow, run_labels)
-                    @views plot!(this_z, upar[:,is,i], xlabel="z", ylabel="upars/vt",
+                    @views plot!(this_z.grid, upar[:,is,i], xlabel="z", ylabel="upars/vt",
                                  ylims=(upar_min, upar_max), label=run_label)
                 end
             end
@@ -1150,7 +1153,7 @@ function plot_moments(density, delta_density, density_fldline_avg,
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
                 plot(legend=legend)
                 for (t, this_z, ppar, run_label) ∈ zip(time, z, parallel_pressure, run_labels)
-                    @views plot!(this_z, ppar[:,is,i], xlabel="z", ylabel="ppars",
+                    @views plot!(this_z.grid, ppar[:,is,i], xlabel="z", ylabel="ppars",
                                  ylims=(ppar_min, ppar_max), label=run_label)
                 end
             end
@@ -1162,7 +1165,7 @@ function plot_moments(density, delta_density, density_fldline_avg,
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
                 plot(legend=legend)
                 for (t, this_z, vth, run_label) ∈ zip(time, z, thermal_speed, run_labels)
-                    @views plot!(this_z, vth[:,is,i], xlabel="z", ylabel="vths",
+                    @views plot!(this_z.grid, vth[:,is,i], xlabel="z", ylabel="vths",
                                  ylims=(vth_min, vth_max), label=run_label)
                 end
             end
@@ -1175,7 +1178,7 @@ function plot_moments(density, delta_density, density_fldline_avg,
                 plot(legend=legend)
                 for (t, this_z, qpar, run_label) ∈ zip(time, z, parallel_heat_flux,
                                                       run_labels)
-                    @views plot!(this_z, qpar[:,is,i], xlabel="z", ylabel="qpars",
+                    @views plot!(this_z.grid, qpar[:,is,i], xlabel="z", ylabel="qpars",
                                  ylims=(qpar_min, qpar_max), label=run_label)
                 end
             end
@@ -1235,7 +1238,7 @@ function fit_delta_phi_mode(t, z, delta_phi)
     amplitude_guess = 1.0
     offset_guess = 0.0
     for (i, phi_z) in enumerate(eachcol(delta_phi))
-        results[:, i] .= fit_cosine(z, phi_z, amplitude_guess, offset_guess)
+        results[:, i] .= fit_cosine(z.grid, phi_z, amplitude_guess, offset_guess)
         (amplitude_guess, offset_guess) = results[1:2, i]
     end
 
@@ -1243,7 +1246,7 @@ function fit_delta_phi_mode(t, z, delta_phi)
     offset = results[2, :]
     cosine_fit_error = results[3, :]
 
-    L = z[end] - z[begin]
+    L = z.grid[end] - z.grid[begin]
 
     # Choose initial amplitude to be positive, for convenience.
     if amplitude[1] < 0

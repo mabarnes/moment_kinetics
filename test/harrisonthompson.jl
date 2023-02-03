@@ -175,9 +175,7 @@ function run_test(test_input, analytic_rtol, analytic_atol, expected_phi,
             fid = open_netcdf_file(path)
 
             # load space-time coordinate data
-            nvpa, vpa, vpa_wgts, Lvpa = load_coordinate_data(fid, "vpa")
-            nr, r, r_wgts, Lr = load_coordinate_data(fid, "r")
-            nz, z, z_wgts, Lz = load_coordinate_data(fid, "z")
+            z, _ = load_coordinate_data(fid, "z")
             ntime, time = load_time_data(fid)
 
             # load fields data
@@ -187,10 +185,10 @@ function run_test(test_input, analytic_rtol, analytic_atol, expected_phi,
 
             phi = phi_zrt[:,1,:]
             
-            analytic_phi = [findphi(zval, input["ionization_frequency"]) for zval ∈ z]
+            analytic_phi = [findphi(zval, input["ionization_frequency"]) for zval ∈ z.grid]
         end
 
-        nz = length(z)
+        nz = z.n
         # Analytic solution defines phi=0 at mid-point, so need to offset the code solution
         offset = phi[(nz+1)÷2, end]
         # Error is large on the boundary points, so test those separately

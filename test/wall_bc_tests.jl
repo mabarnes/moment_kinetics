@@ -142,6 +142,8 @@ function run_test(test_input, expected_phi, tolerance; args...)
     end
 
     if global_rank[] == 0
+        z = nothing
+        z_spectral = nothing
         quietoutput() do
             # Load and analyse output
             #########################
@@ -152,9 +154,7 @@ function run_test(test_input, expected_phi, tolerance; args...)
             fid = open_netcdf_file(path)
 
             # load space-time coordinate data
-            nvpa, vpa, vpa_wgts, Lvpa = load_coordinate_data(fid, "vpa")
-            nr, r, r_wgts, Lr = load_coordinate_data(fid, "r")
-            nz, z, z_wgts, Lz = load_coordinate_data(fid, "z")
+            z, z_spectral = load_coordinate_data(fid, "z")
             ntime, time = load_time_data(fid)
 
             # load fields data
@@ -174,16 +174,6 @@ function run_test(test_input, expected_phi, tolerance; args...)
         else
             @test isapprox(actual_phi, expected_phi, rtol=3.e-10, atol=1.e-15)
         end
-
-        # Create coordinates
-        #
-        # create the 'input' struct containing input info needed to create a coordinate
-        # adv_input not actually used in this test so given values unimportant
-        adv_input = advection_input("default", 1.0, 0.0, 0.0)
-        input = grid_input("coord", test_input["z_ngrid"], test_input["z_nelement"], 1.0,
-                           test_input["z_discretization"], "", test_input["z_bc"],
-                           adv_input)
-        z, z_spectral = define_coordinate(input)
 
         # Cross comparison of all discretizations to same benchmark
         phi_interp = interpolate_to_grid_z(cross_compare_points, phi[:, end], z, z_spectral)

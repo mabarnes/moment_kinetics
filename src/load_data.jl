@@ -8,6 +8,9 @@ export load_fields_data
 export load_moments_data
 export load_pdf_data
 
+using ..coordinates: define_coordinate
+using ..input_structs: advection_input, grid_input
+
 using NCDatasets
 
 """
@@ -36,12 +39,28 @@ function load_coordinate_data(fid, name)
     # load the grid for the coordinate
     grid = cdfvar.var[:]
     # get the weights associated with the coordinate
-    cdfvar = fid["$(name)_wgts"]
-    wgts = cdfvar.var[:]
+    wgts = fid["$(name)_wgts"].var[:]
     # L = box length
     L = grid[end]-grid[1]
+    # get ngrid for the coordinate
+    ngrid = fid["$(name)_ngrid"].var[]
+    # get nelement for the coordinate
+    nelement = fid["$(name)_nelement"].var[]
+    # get the discretization used for the coordinate
+    discretization = fid["$(name)_discretization"].var[]
+    # get the fd_option used for the coordinate
+    fd_option = fid["$(name)_fd_option"].var[]
+    # get the boundary condition for the coordinate
+    bc = fid["$(name)_bc"].var[]
 
-    return n, grid, wgts, L
+    # fake input for the advection_input member of the coordinate, which is not needed for
+    # post-processing
+    fake_advection = advection_input("", 0.0, 0.0, 0.0)
+
+    input = grid_input(name, ngrid, nelement, L, discretization, fd_option, bc,
+                       fake_advection)
+
+    return define_coordinate(input)
 end
 
 """

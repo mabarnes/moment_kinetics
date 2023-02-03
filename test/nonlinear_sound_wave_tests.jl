@@ -242,6 +242,10 @@ function run_test(test_input, rtol; args...)
         run_moment_kinetics(to, input)
     end
 
+    vpa = nothing
+    vpa_spectral = nothing
+    z = nothing
+    z_spectral = nothing
     if global_rank[] == 0
         quietoutput() do
 
@@ -254,9 +258,8 @@ function run_test(test_input, rtol; args...)
             fid = open_netcdf_file(path)
 
             # load space-time coordinate data
-            nvpa, vpa, vpa_wgts, Lvpa = load_coordinate_data(fid, "vpa")
-            nr, r, r_wgts, Lr = load_coordinate_data(fid, "r")
-            nz, z, z_wgts, Lz = load_coordinate_data(fid, "z")
+            vpa, vpa_spectral = load_coordinate_data(fid, "vpa")
+            z, z_spectral = load_coordinate_data(fid, "z")
             ntime, time = load_time_data(fid)
 
             # load fields data
@@ -276,32 +279,17 @@ function run_test(test_input, rtol; args...)
 
             # Unnormalize f
             if input["evolve_moments_density"]
-                for it ∈ 1:length(time), is ∈ 1:n_species, iz ∈ 1:nz
+                for it ∈ 1:length(time), is ∈ 1:n_species, iz ∈ 1:z.n
                     f[:,iz,is,it] .*= n[iz,is,it]
                 end
             end
             if input["evolve_moments_parallel_pressure"]
-                for it ∈ 1:length(time), is ∈ 1:n_species, iz ∈ 1:nz
+                for it ∈ 1:length(time), is ∈ 1:n_species, iz ∈ 1:z.n
                     vth = sqrt(2.0*ppar[iz,is,it]/n[iz,is,it])
                     f[:,iz,is,it] ./= vth
                 end
             end
         end
-
-        # Create coordinates
-        #
-        # create the 'input' struct containing input info needed to create a coordinate
-        # adv_input not actually used in this test so given values unimportant
-        adv_input = advection_input("default", 1.0, 0.0, 0.0)
-        input = grid_input("coord", test_input["z_ngrid"], test_input["z_nelement"],
-                           z_L, test_input["z_discretization"], "",
-                           "periodic", #test_input["z_bc"],
-                           adv_input)
-        z, z_spectral = define_coordinate(input)
-        input = grid_input("coord", test_input["vpa_ngrid"], test_input["vpa_nelement"],
-                           vpa_L, test_input["vpa_discretization"], "",
-                           test_input["vpa_bc"], adv_input)
-        vpa, vpa_spectral = define_coordinate(input)
 
         # Test against values interpolated onto 'expected' grid which is fairly coarse no we
         # do not have to save too much data in this file
