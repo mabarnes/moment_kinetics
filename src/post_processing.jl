@@ -61,21 +61,25 @@ end
 Suppose `func(args...)` returns a tuple of return values, then
 `get_tuple_of_return_values(func, arg_tuples...)` returns a tuple (with an entry for each
 return value of `func`) of tuples (one for each argument in each of `arg_tuples...`) of
-return values.
+return values. A single (non-tuple) value can also be passed for any argument, which will
+be used for each call of `func`.
 """
 function get_tuple_of_return_values(func, arg_tuples...)
 
     if isempty(arg_tuples)
         return ()
     end
-    n_args_tuple = Tuple(length(a) for a ∈ arg_tuples)
+    n_args_tuple = Tuple(length(a) for a ∈ arg_tuples if isa(a, Tuple))
+    if length(n_args_tuple) == 0
+        error("At least one argument must be a Tuple")
+    end
     if !all(n==n_args_tuple[1] for n ∈ n_args_tuple)
         error("All argument tuples passed to `get_tuple_of_return_values()` must have "
               * "the same length")
     end
     n_args = n_args_tuple[1]
 
-    collected_args = Tuple(Tuple(a[i] for a ∈ arg_tuples) for i ∈ 1:n_args)
+    collected_args = Tuple(Tuple(isa(a, Tuple) ? a[i] : a for a ∈ arg_tuples) for i ∈ 1:n_args)
 
     wrong_way_tuple = Tuple(func(args...) for args ∈ collected_args)
 
