@@ -239,13 +239,15 @@ function get_geometry_and_composition(scan_input,n_ion_species,n_neutral_species
     use_test_neutral_wall_pdf = get(scan_input, "use_test_neutral_wall_pdf", false)
     # constant to be used to test nonzero Er in wall boundary condition
     Er_constant = get(scan_input, "Er_constant", 0.0)
+    # constant to be used to control Ez divergences
+    epsilon_offset = get(scan_input, "epsilon_offset", 0.001)
     # ratio of the neutral particle mass to the ion particle mass
     mn_over_mi = 1.0
     # ratio of the electron particle mass to the ion particle mass
     me_over_mi = 1.0/1836.0
     composition = species_composition(n_species, n_ion_species, n_neutral_species,
         electron_physics, use_test_neutral_wall_pdf, 1:n_ion_species, n_ion_species+1:n_species, T_e, T_wall,
-        phi_wall, Er_constant, mn_over_mi, me_over_mi, allocate_float(n_species))
+        phi_wall, Er_constant, epsilon_offset, mn_over_mi, me_over_mi, allocate_float(n_species))
     return geometry, composition
 
 end

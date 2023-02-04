@@ -14,20 +14,20 @@ using ..input_structs
     typed_zero(vz) = zero(vz)
     @register_symbolic typed_zero(vz)
     zero_val = 1.0e-8
-    epsilon_offset = 0.001 
+    #epsilon_offset = 0.001 
     #standard functions for building densities
-    function nplus_sym(Lr,Lz,r_bc,z_bc)
+    function nplus_sym(Lr,Lz,r_bc,z_bc,epsilon)
         if r_bc == "periodic"
-            nplus = exp(sqrt(epsilon_offset + 0.5 - z/Lz)) #+ 0.05*sin(2.0*pi*r/Lr)*cos(pi*z/Lz)
+            nplus = exp(sqrt(epsilon + 0.5 - z/Lz)) #+ 0.05*sin(2.0*pi*r/Lr)*cos(pi*z/Lz)
         elseif r_bc == "Dirichlet"
             nplus = 1.0 - 0.2*r/Lr 
         end
         return nplus
     end
     
-    function nminus_sym(Lr,Lz,r_bc,z_bc)
+    function nminus_sym(Lr,Lz,r_bc,z_bc,epsilon)
         if r_bc == "periodic"
-            nminus = exp(sqrt(epsilon_offset + 0.5 + z/Lz)) #+ 0.05*sin(2.0*pi*r/Lr)*cos(pi*z/Lz)
+            nminus = exp(sqrt(epsilon + 0.5 + z/Lz)) #+ 0.05*sin(2.0*pi*r/Lr)*cos(pi*z/Lz)
         elseif r_bc == "Dirichlet"
             nminus = 1.0 - 0.2*r/Lr
         end
@@ -71,8 +71,9 @@ using ..input_structs
             T_wall = composition.T_wall
             Bzed = geometry.Bzed
             Bmag = geometry.Bmag
-            Gamma_minus = 0.5*(Bzed/Bmag)*nminus_sym(Lr,Lz,r_bc,z_bc)/sqrt(pi)
-            Gamma_plus = 0.5*(Bzed/Bmag)*nplus_sym(Lr,Lz,r_bc,z_bc)/sqrt(pi)
+            epsilon = composition.epsilon_offset
+            Gamma_minus = 0.5*(Bzed/Bmag)*nminus_sym(Lr,Lz,r_bc,z_bc,epsilon)/sqrt(pi)
+            Gamma_plus = 0.5*(Bzed/Bmag)*nplus_sym(Lr,Lz,r_bc,z_bc,epsilon)/sqrt(pi)
             # exact integral of corresponding dfnn below
             if composition.use_test_neutral_wall_pdf
                 #test 
@@ -99,8 +100,9 @@ using ..input_structs
             FKw = knudsen_cosine(composition)
             Bzed = geometry.Bzed
             Bmag = geometry.Bmag
-            Gamma_minus = 0.5*(Bzed/Bmag)*nminus_sym(Lr,Lz,r_bc,z_bc)/sqrt(pi)
-            Gamma_plus = 0.5*(Bzed/Bmag)*nplus_sym(Lr,Lz,r_bc,z_bc)/sqrt(pi)
+            epsilon = composition.epsilon_offset
+            Gamma_minus = 0.5*(Bzed/Bmag)*nminus_sym(Lr,Lz,r_bc,z_bc,epsilon)/sqrt(pi)
+            Gamma_plus = 0.5*(Bzed/Bmag)*nplus_sym(Lr,Lz,r_bc,z_bc,epsilon)/sqrt(pi)
             dfnn = Hplus *( Gamma_minus*( 0.5 - z/Lz)^2 + 1.0 )*FKw + Hminus*( Gamma_plus*( 0.5 + z/Lz)^2 + 1.0 )*FKw 
         end
         return dfnn
@@ -114,7 +116,7 @@ using ..input_structs
     end
     
     # ion density symbolic function
-    function densi_sym(Lr,Lz,r_bc,z_bc)
+    function densi_sym(Lr,Lz,r_bc,z_bc,composition)
         if z_bc == "periodic"
             if r_bc == "periodic"
                 densi = 1.5 +  0.1*(sin(2.0*pi*r/Lr) + sin(2.0*pi*z/Lz))#*sin(2.0*pi*t)  
@@ -124,24 +126,26 @@ using ..input_structs
                 densi = 1.0 +  0.5*(r/Lr)*sin(2.0*pi*z/Lz)
             end
         elseif z_bc == "wall"
-            densi = 0.25*(0.5 - z/Lz)*nminus_sym(Lr,Lz,r_bc,z_bc) + 0.25*(z/Lz + 0.5)*nplus_sym(Lr,Lz,r_bc,z_bc) + (z/Lz + 0.5)*(0.5 - z/Lz)*nzero_sym(Lr,Lz,r_bc,z_bc)  #+  0.5*(r/Lr + 0.5) + 0.5*(z/Lz + 0.5)
+            epsilon = composition.epsilon_offset
+            densi = 0.25*(0.5 - z/Lz)*nminus_sym(Lr,Lz,r_bc,z_bc,epsilon) + 0.25*(z/Lz + 0.5)*nplus_sym(Lr,Lz,r_bc,z_bc,epsilon) + (z/Lz + 0.5)*(0.5 - z/Lz)*nzero_sym(Lr,Lz,r_bc,z_bc)  #+  0.5*(r/Lr + 0.5) + 0.5*(z/Lz + 0.5)
         end
         return densi
     end
 
-    function jpari_into_LHS_wall_sym(Lr,Lz,r_bc,z_bc)
+    function jpari_into_LHS_wall_sym(Lr,Lz,r_bc,z_bc,composition)
         if z_bc == "periodic"
             jpari_into_LHS_wall_sym = 0.0
         elseif z_bc == "wall"
             #appropriate for wall bc test when Er = 0 (nr == 1)
-            jpari_into_LHS_wall_sym = -0.5*nminus_sym(Lr,Lz,r_bc,z_bc)/sqrt(pi)
+            epsilon = composition.epsilon_offset
+            jpari_into_LHS_wall_sym = -0.5*nminus_sym(Lr,Lz,r_bc,z_bc,epsilon)/sqrt(pi)
         end
         return jpari_into_LHS_wall_sym
     end
     
     # ion distribution symbolic function
     function dfni_sym(Lr,Lz,r_bc,z_bc,composition,geometry,nr)
-        densi = densi_sym(Lr,Lz,r_bc,z_bc)
+        densi = densi_sym(Lr,Lz,r_bc,z_bc,composition)
         
         # calculate the electric fields and the potential
         Er, Ez, phi = electric_fields(Lr,Lz,r_bc,z_bc,composition,nr)
@@ -150,7 +154,7 @@ using ..input_structs
         Bzed = geometry.Bzed
         Bmag = geometry.Bmag
         rhostar = geometry.rhostar
-        
+        epsilon = composition.epsilon_offset
         if z_bc == "periodic"
             dfni = densi * exp( - vpa^2 - vperp^2) 
         elseif z_bc == "wall"
@@ -158,12 +162,12 @@ using ..input_structs
             Hplus = 0.5*(sign(vpabar) + 1.0)
             Hminus = 0.5*(sign(-vpabar) + 1.0)
             ffa =  exp(- vperp^2)
-            dfni = ffa * ( nminus_sym(Lr,Lz,r_bc,z_bc)* (0.5 - z/Lz) * Hminus * vpabar^2 + nplus_sym(Lr,Lz,r_bc,z_bc)*(z/Lz + 0.5) * Hplus * vpabar^2 + nzero_sym(Lr,Lz,r_bc,z_bc)*(z/Lz + 0.5)*(0.5 - z/Lz) ) * exp( - vpabar^2 )
+            dfni = ffa * ( nminus_sym(Lr,Lz,r_bc,z_bc,epsilon)* (0.5 - z/Lz) * Hminus * vpabar^2 + nplus_sym(Lr,Lz,r_bc,z_bc,epsilon)*(z/Lz + 0.5) * Hplus * vpabar^2 + nzero_sym(Lr,Lz,r_bc,z_bc)*(z/Lz + 0.5)*(0.5 - z/Lz) ) * exp( - vpabar^2 )
         end
         return dfni
     end
-    function cartesian_dfni_sym(Lr,Lz,r_bc,z_bc)
-        densi = densi_sym(Lr,Lz,r_bc,z_bc)
+    function cartesian_dfni_sym(Lr,Lz,r_bc,z_bc,composition)
+        densi = densi_sym(Lr,Lz,r_bc,z_bc,composition)
         #if (r_bc == "periodic" && z_bc == "periodic") || (r_bc == "Dirichlet" && z_bc == "periodic")
             dfni = densi * exp( - vz^2 - vr^2 - vzeta^2) 
         #end
@@ -179,7 +183,7 @@ using ..input_structs
         # get N_e factor for boltzmann response
         if composition.electron_physics == boltzmann_electron_response_with_simple_sheath && nr == 1 
             # so 1D MMS test with 3V neutrals where ion current can be calculated prior to knowing Er
-            jpari_into_LHS_wall = jpari_into_LHS_wall_sym(Lr,Lz,r_bc,z_bc)
+            jpari_into_LHS_wall = jpari_into_LHS_wall_sym(Lr,Lz,r_bc,z_bc,composition)
             N_e = -2.0*sqrt(pi*composition.me_over_mi)*exp(-composition.phi_wall/composition.T_e)*jpari_into_LHS_wall
         elseif composition.electron_physics == boltzmann_electron_response_with_simple_sheath && nr > 1 
             println("ERROR: simple sheath MMS test not supported for nr > 1")
@@ -198,7 +202,7 @@ using ..input_structs
             rfac = 0.0
         end
         
-        densi = densi_sym(Lr,Lz,r_bc,z_bc)
+        densi = densi_sym(Lr,Lz,r_bc,z_bc,composition)
         # calculate the electric fields
         dense = densi # get the electron density via quasineutrality with Zi = 1
         phi = composition.T_e*log(dense/N_e) # use the adiabatic response of electrons for me/mi -> 0
@@ -212,7 +216,7 @@ using ..input_structs
     end
 
     function manufactured_solutions(Lr,Lz,r_bc,z_bc,geometry,composition,nr)
-        densi = densi_sym(Lr,Lz,r_bc,z_bc)
+        densi = densi_sym(Lr,Lz,r_bc,z_bc,composition)
         dfni = dfni_sym(Lr,Lz,r_bc,z_bc,composition,geometry,nr)
         
         densn = densn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
@@ -253,9 +257,9 @@ using ..input_structs
     function manufactured_sources(Lr,Lz,r_bc,z_bc,composition,geometry,collisions,nr,num_diss_params)
         
         # ion manufactured solutions
-        densi = densi_sym(Lr,Lz,r_bc,z_bc)
+        densi = densi_sym(Lr,Lz,r_bc,z_bc,composition)
         dfni = dfni_sym(Lr,Lz,r_bc,z_bc,composition,geometry,nr)
-        vrvzvzeta_dfni = cartesian_dfni_sym(Lr,Lz,r_bc,z_bc) #dfni in vr vz vzeta coordinates
+        vrvzvzeta_dfni = cartesian_dfni_sym(Lr,Lz,r_bc,z_bc,composition) #dfni in vr vz vzeta coordinates
         
         # neutral manufactured solutions
         densn = densn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)

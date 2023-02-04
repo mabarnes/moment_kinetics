@@ -98,6 +98,8 @@ function mk_input(scan_input=Dict())
     composition.use_test_neutral_wall_pdf = get(scan_input, "use_test_neutral_wall_pdf", false)
     # constant to be used to test nonzero Er in wall boundary condition
     composition.Er_constant = get(scan_input, "Er_constant", 0.0)
+    # constant to be used to control Ez divergence in MMS tests
+    composition.epsilon_offset = get(scan_input, "epsilon_offset", 0.001)
     
     ## set geometry_input
     geometry.Bzed = get(scan_input, "Bzed", 1.0)
@@ -757,13 +759,15 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     phi_wall = 0.0
     # constant to test nonzero Er
     Er_constant = 0.0
+    # constant to control Ez divergence 
+    epsilon_offset = 0.001
     # ratio of the neutral particle mass to the ion particle mass
     mn_over_mi = 1.0
     # ratio of the electron particle mass to the ion particle mass
     me_over_mi = 1.0/1836.0
     composition = species_composition(n_species, n_ion_species, n_neutral_species,
         electron_physics, use_test_neutral_wall_pdf, 1:n_ion_species, n_ion_species+1:n_species, T_e, T_wall,
-        phi_wall, Er_constant, mn_over_mi, me_over_mi, allocate_float(n_species))
+        phi_wall, Er_constant, epsilon_offset, mn_over_mi, me_over_mi, allocate_float(n_species))
     
     species_charged = Array{species_parameters_mutable,1}(undef,n_ion_species)
     species_neutral = Array{species_parameters_mutable,1}(undef,n_neutral_species)

@@ -243,7 +243,9 @@ mutable struct species_composition
     phi_wall::mk_float
     # constant for testing nonzero Er
     Er_constant::mk_float
-    # ratio of the neutral particle mass to the ion mass
+    # constant controlling divergence at wall boundaries in MMS test
+	epsilon_offset::mk_float
+	# ratio of the neutral particle mass to the ion mass
     mn_over_mi::mk_float
     # ratio of the electron particle mass to the ion mass
     me_over_mi::mk_float
