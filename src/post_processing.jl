@@ -399,6 +399,8 @@ function analyze_and_plot_data(path)
                 itime_min, itime_max, nwrite_movie, run_name, pp)
         end 
     end
+    # plot ion pdf data near the wall boundary
+    plot_charged_pdf_2D_at_wall(run_name)
     
     # MRH need to get some run-time data here without copy-paste from mk_input
     
@@ -687,7 +689,7 @@ function compare_neutral_pdf_symbolic_test(run_name,manufactured_solns_list,spec
             fid_pdfs = open_readonly_output_file(run_name,"dfns",iblock=iblock, printout=false)
             z_irank, r_irank = load_rank_data(fid_pdfs,printout=false)
             pdf = load_neutral_pdf_data(fid_pdfs, printout=false)
-            # local local grid data
+            # load local grid data
             nz_local, _, z_local, z_wgts_local, Lz = load_coordinate_data(fid_pdfs, "z", printout=false)
             nr_local, _, r_local, r_wgts_local, Lr = load_coordinate_data(fid_pdfs, "r", printout=false)
             close(fid_pdfs)
@@ -1748,5 +1750,128 @@ function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time
     println("done.")
 end
 
+function plot_charged_pdf_2D_at_wall(run_name)
+    print("Plotting charged pdf data at wall boundaries...")
+    # open a dfn file
+    fid = open_readonly_output_file(run_name,"dfns", printout=false)
+    # load block data on iblock=0
+    nblocks, iblock = load_block_data(fid, printout=false)
+    # velocity grid data on iblock=0 (same for all blocks)
+    nvpa, _, vpa, vpa_wgts, Lvpa = load_coordinate_data(fid, "vpa", printout=false)
+    nvperp, _, vperp, vperp_wgts, Lvperp = load_coordinate_data(fid, "vperp", printout=false)
+    # load time data (unique to pdf, may differ to moment values depending on user nwrite_dfns value)
+    ntime, time = load_time_data(fid, printout=false)
+    # load species data 
+    n_ion_species, n_neutral_species = load_species_data(fid)
+    close(fid)
+    
+    # plot only data at last timestep
+    itime0 = ntime
+    # plot a thermal vpa on line plots
+    ivpa0 = floor(mk_int,nvpa/3)
+    # plot a thermal vperp on line plots
+    ivperp0 = floor(mk_int,nvpa/3)
+    # plot a typical r on line plots
+    ir0 = 1
+    
+    # find the number of ranks
+    z_nrank = 0
+    r_nrank = 0 
+    for iblock in 0:nblocks-1
+        fid_pdfs = open_readonly_output_file(run_name,"dfns",iblock=iblock, printout=false)
+        z_irank, r_irank = load_rank_data(fid_pdfs,printout=false)
+        z_nrank = max(z_irank,z_nrank)
+        r_nrank = max(r_irank,r_nrank)
+        close(fid_pdfs)
+    end
+    r_nrank = r_nrank + 1
+    z_nrank = z_nrank + 1
+    
+    # find the relevant dfn data that includes the wall boundaries
+    for iblock in 0:nblocks-1
+        fid_pdfs = open_readonly_output_file(run_name,"dfns",iblock=iblock, printout=false)
+        z_irank, r_irank = load_rank_data(fid_pdfs,printout=false)
+        if z_irank == 0 && r_irank == 0
+            # plot data from lower wall boundary near z = -L/2
+            # load local grid data
+            nz_local, _, z_local, z_wgts_local, Lz = load_coordinate_data(fid_pdfs, "z", printout=false)
+            nr_local, _, r_local, r_wgts_local, Lr = load_coordinate_data(fid_pdfs, "r", printout=false)
+            
+            iz_wall = 1
+            #print("z_local[iz_wall-]: ",z_local[iz_wall])
+            # load local pdf data 
+            pdf = load_pdf_data(fid_pdfs, printout=false)
+            for is in 1:n_ion_species
+                description = "_ion_spec"*string(is)*"_"
+                
+                # plot f(vpa,ivperp0,iz_wall,ir0,is,itime) at the wall
+                @views plot(vpa, pdf[:,ivperp0,iz_wall,ir0,is,itime0], xlabel=L"v_{\|\|}/L_{v_{\|\|}}", ylabel=L"f_i")
+                outfile = string(run_name, "_pdf(vpa,vperp0,iz_wall-,ir0)"*description*"_vs_vpa.pdf")
+                savefig(outfile) 
+                
+                # plot f(vpa,vperp,iz_wall,ir0,is,itime) at the wall                
+                @views heatmap(vperp, vpa, pdf[:,:,iz_wall,ir0,is,itime0], xlabel=L"vperp", ylabel=L"vpa", c = :deep, interpolation = :cubic,
+                windowsize = (360,240), margin = 15pt)
+                outfile = string(run_name, "_pdf(vpa,vperp,iz_wall-,ir0)"*description*"_vs_vperp_vpa.pdf")
+                savefig(outfile)
+                
+                # plot f(vpa,ivperp0,z,ir0,is,itime) near the wall                
+                @views heatmap(z_local, vpa, pdf[:,ivperp0,:,ir0,is,itime0], xlabel=L"z", ylabel=L"vpa", c = :deep, interpolation = :cubic,
+                windowsize = (360,240), margin = 15pt)
+                outfile = string(run_name, "_pdf(vpa,ivperp0,z-,ir0)"*description*"_vs_z_vpa.pdf")
+                savefig(outfile)
+
+                # plot f(ivpa0,ivperp0,z,r,is,itime) near the wall                  
+                if nr_local > 1
+                    @views heatmap(r_local, z_local, pdf[ivpa0,ivperp0,:,:,is,itime0], xlabel=L"r", ylabel=L"z", c = :deep, interpolation = :cubic,
+                    windowsize = (360,240), margin = 15pt)
+                    outfile = string(run_name, "_pdf(ivpa0,ivperp0,z-,r)"*description*"_vs_r_z.pdf")
+                    savefig(outfile)
+                end
+            end
+        end
+        if z_irank == z_nrank-1 && r_irank == 0
+            # plot data from upper wall boundary near z = L/2
+            # load local grid data
+            nz_local, _, z_local, z_wgts_local, Lz = load_coordinate_data(fid_pdfs, "z", printout=false)
+            nr_local, _, r_local, r_wgts_local, Lr = load_coordinate_data(fid_pdfs, "r", printout=false)
+            
+            iz_wall = nz_local
+            #print("z_local[iz_wall+]: ",z_local[iz_wall])
+            # load local pdf data 
+            pdf = load_pdf_data(fid_pdfs, printout=false)
+            for is in 1:n_ion_species
+                description = "_ion_spec"*string(is)*"_"
+                
+                # plot f(vpa,ivperp0,iz_wall,ir0,is,itime) at the wall
+                @views plot(vpa, pdf[:,ivperp0,iz_wall,ir0,is,itime0], xlabel=L"v_{\|\|}/L_{v_{\|\|}}", ylabel=L"f_i")
+                outfile = string(run_name, "_pdf(vpa,vperp0,iz_wall+,ir0)"*description*"_vs_vpa.pdf")
+                savefig(outfile) 
+                
+                # plot f(vpa,vperp,iz_wall,ir0,is,itime) at the wall                
+                @views heatmap(vperp, vpa, pdf[:,:,iz_wall,ir0,is,itime0], xlabel=L"vperp", ylabel=L"vpa", c = :deep, interpolation = :cubic,
+                windowsize = (360,240), margin = 15pt)
+                outfile = string(run_name, "_pdf(vpa,vperp,iz_wall+,ir0)"*description*"_vs_vperp_vpa.pdf")
+                savefig(outfile)
+                
+                # plot f(vpa,ivperp0,z,ir0,is,itime) near the wall                
+                @views heatmap(z_local, vpa, pdf[:,ivperp0,:,ir0,is,itime0], xlabel=L"z", ylabel=L"vpa", c = :deep, interpolation = :cubic,
+                windowsize = (360,240), margin = 15pt)
+                outfile = string(run_name, "_pdf(vpa,ivperp0,z+,ir0)"*description*"_vs_z_vpa.pdf")
+                savefig(outfile)
+
+                # plot f(ivpa0,ivperp0,z,r,is,itime) near the wall                  
+                if nr_local > 1
+                    @views heatmap(r_local, z_local, pdf[ivpa0,ivperp0,:,:,is,itime0], xlabel=L"r", ylabel=L"z", c = :deep, interpolation = :cubic,
+                    windowsize = (360,240), margin = 15pt)
+                    outfile = string(run_name, "_pdf(ivpa0,ivperp0,z+,r)"*description*"_vs_r_z.pdf")
+                    savefig(outfile)
+                end
+            end
+        end
+        close(fid_pdfs)
+    end
+    println("done.")
+end
 
 end
