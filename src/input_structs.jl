@@ -262,6 +262,13 @@ struct pp_input
     # if animate_fields_comparison = true and more than one simulation is passed, animate the
     # differences in phi, etc. between the first simulation passed and each of the others
     animate_fields_comparison::Bool
+    # if plot_dfn_comparison = true and more than one simulation is passed, plot some
+    # selected differences in f between the first simulation passed and each of the others
+    plot_dfn_comparison::Bool
+    # if animate_dfn_comparison = true and more than one simulation is passed, animate
+    # some selected differences in f between the first simulation passed and each of the
+    # others
+    animate_dfn_comparison::Bool
     # if plot_dens0_vs_t = true, create plots of species density(z0) vs time
     plot_dens0_vs_t::Bool
     # if plot_upar0_vs_t = true, create plots of species upar(z0) vs time

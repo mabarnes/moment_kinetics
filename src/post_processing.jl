@@ -23,7 +23,7 @@ using ..array_allocation: allocate_float
 using ..file_io: open_output_file
 using ..type_definitions: mk_float, mk_int
 using ..initial_conditions: vpagrid_to_dzdt
-using ..interpolation: interpolate_to_grid_z
+using ..interpolation: interpolate_to_grid_z, interpolate_to_grid_vpa
 using ..load_data: open_netcdf_file
 using ..load_data: load_coordinate_data, load_fields_data, load_moments_data,
                    load_pdf_data, load_time_data
@@ -158,7 +158,8 @@ function analyze_and_plot_data(path...)
     plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie, itime_min,
         itime_max, ivpa0, iz0, ir0, r, phi, E_parallel, density, parallel_flow,
         parallel_pressure, parallel_heat_flux, thermal_speed, ff, n_species,
-        evolve_density, evolve_upar, evolve_ppar, vpa, z, z_spectral, ntime, time)
+        evolve_density, evolve_upar, evolve_ppar, vpa, vpa_spectral, z, z_spectral, ntime,
+        time)
 
     for f ∈ nc_files
         close(f)
@@ -220,7 +221,8 @@ end
 function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
         itime_min, itime_max, ivpa0, iz0, ir0, r, phi, E_parallel, density, parallel_flow,
         parallel_pressure, parallel_heat_flux, thermal_speed, ff, n_species,
-        evolve_density, evolve_upar, evolve_ppar, vpa, z, z_spectral, ntime, time)
+        evolve_density, evolve_upar, evolve_ppar, vpa, vpa_spectral, z, z_spectral, ntime,
+        time)
 
     n_runs = length(run_names)
 
@@ -367,6 +369,160 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
                 end
             end
             outfile = string(prefix, "_fL_vs_vpa", spec_string, ".gif")
+            gif(anim, outfile, fps=5)
+        end
+
+        function filter_zeros(f)
+            for i ∈ eachindex(f)
+                if f[i] == 0.0
+                    f[i] = NaN
+                end
+            end
+            return f
+        end
+        if pp.plot_dfn_comparison && n_runs > 1
+            base_vpa = vpa[1]
+            base_vpa_spectral = vpa_spectral[1]
+            base_f = ff[1]
+            base_run_label = run_labels[1]
+
+            plot(legend=legend)
+            for (this_vpa, f, run_label) ∈ zip(vpa[2:end], ff[2:end], run_labels[2:end])
+                # Interpolate 'base' values to grid of this run for comparison
+                interp_base_f = interpolate_to_grid_vpa(this_vpa.grid, base_f[:,1,1,is,end],
+                                                        base_vpa, base_vpa_spectral)
+
+                plot!(this_vpa.grid, f[:,1,1,is,end] .- interp_base_f, xlabel="vpa",
+                      ylabel="f difference from $base_run_label at z=0",
+                      label=run_label, linewidth=2)
+            end
+            outfile = string(prefix, "_f0_differences", spec_string, ".pdf")
+            savefig(outfile)
+
+            plot(legend=legend)
+            for (this_vpa, f, run_label) ∈ zip(vpa[2:end], ff[2:end], run_labels[2:end])
+                # Interpolate 'base' values to grid of this run for comparison
+                interp_base_f = interpolate_to_grid_vpa(this_vpa.grid, base_f[:,1,1,is,end],
+                                                        base_vpa, base_vpa_spectral)
+
+                plot!(this_vpa.grid, filter_zeros(abs.(f[:,1,1,is,end] .- interp_base_f)),
+                      xlabel="vpa", ylims=(1.e-20, :auto),
+                      ylabel="f difference from $base_run_label at z=0", yaxis=:log,
+                      label=run_label, linewidth=2)
+            end
+            outfile = string(prefix, "_f0_log_differences", spec_string, ".pdf")
+            savefig(outfile)
+
+            plot(legend=legend)
+            for (this_vpa, f, run_label) ∈ zip(vpa[2:end], ff[2:end], run_labels[2:end])
+                # Interpolate 'base' values to grid of this run for comparison
+                interp_base_f = interpolate_to_grid_vpa(this_vpa.grid, base_f[:,end,1,is,end],
+                                                        base_vpa, base_vpa_spectral)
+
+                plot!(this_vpa.grid, f[:,end,1,is,end] .- interp_base_f, xlabel="vpa",
+                      ylabel="f difference from $base_run_label at z=L",
+                      label=run_label, linewidth=2)
+            end
+            outfile = string(prefix, "_fL_differences.pdf")
+            savefig(outfile)
+
+            plot(legend=legend)
+            for (this_vpa, f, run_label) ∈ zip(vpa[2:end], ff[2:end], run_labels[2:end])
+                # Interpolate 'base' values to grid of this run for comparison
+                interp_base_f = interpolate_to_grid_vpa(this_vpa.grid, base_f[:,end,1,is,end],
+                                                        base_vpa, base_vpa_spectral)
+
+                plot!(this_vpa.grid,
+                      filter_zeros(abs.(f[:,end,1,is,end] .- interp_base_f)),
+                      xlabel="vpa", ylims=(1.e-20, :auto),
+                      ylabel="f difference from $base_run_label at z=L", yaxis=:log,
+                      label=run_label, linewidth=2)
+            end
+            outfile = string(prefix, "_fL_log_differences", spec_string, ".pdf")
+            savefig(outfile)
+        end
+        if pp.animate_dfn_comparison && n_runs > 1
+            base_vpa = vpa[1]
+            base_vpa_spectral = vpa_spectral[1]
+            base_f = ff[1]
+            base_run_label = run_labels[1]
+
+            # make a gif animation of differences in f(z=0) at different times
+            anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+                plot(legend=legend)
+                for (t, this_vpa, f, run_label) ∈ zip(time[2:end], vpa[2:end], ff[2:end],
+                                                      run_labels[2:end])
+                    # Interpolate 'base' values to grid of this run for comparison
+                    interp_base_f =
+                        interpolate_to_grid_vpa(this_vpa.grid, base_f[:,1,is,i],
+                                                base_vpa, base_vpa_spectral)
+
+                    @views plot!(this_vpa.grid, f[:,1,is,i] .- interp_base_f,
+                                 xlabel="vpa",
+                                 ylabel="f difference from $base_run_label at z=0",
+                                 label=run_label)
+                end
+            end
+            outfile = string(prefix, "_f0_differences", spec_string, ".gif")
+            gif(anim, outfile, fps=5)
+
+            # make a gif animation of differences in f(z=0) at different times
+            anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+                plot(legend=legend)
+                for (t, this_vpa, f, run_label) ∈ zip(time[2:end], vpa[2:end], ff[2:end],
+                                                      run_labels[2:end])
+                    # Interpolate 'base' values to grid of this run for comparison
+                    interp_base_f =
+                        interpolate_to_grid_vpa(this_vpa.grid, base_f[:,1,is,i],
+                                                base_vpa, base_vpa_spectral)
+
+                    @views plot!(this_vpa.grid,
+                                 filter_zeros(abs.(f[:,1,is,i] .- interp_base_f)),
+                                 xlabel="vpa", yaxis=:log, ylims=(1.e-20, :auto),
+                                 ylabel="f difference from $base_run_label at z=0",
+                                 label=run_label)
+                end
+            end
+            outfile = string(prefix, "_f0_log_differences", spec_string, ".gif")
+            gif(anim, outfile, fps=5)
+
+            # make a gif animation of differences in f(z=L) at different times
+            anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+                plot(legend=legend)
+                for (t, this_vpa, f, run_label) ∈ zip(time[2:end], vpa[2:end], ff[2:end],
+                                                      run_labels[2:end])
+                    # Interpolate 'base' values to grid of this run for comparison
+                    interp_base_f =
+                        interpolate_to_grid_vpa(this_vpa.grid, base_f[:,end,is,i],
+                                                base_vpa, base_vpa_spectral)
+
+                    @views plot!(this_vpa.grid, f[:,end,is,i] .- interp_base_f,
+                                 xlabel="vpa",
+                                 ylabel="f difference from $base_run_label at z=L",
+                                 label=run_label)
+                end
+            end
+            outfile = string(prefix, "_fL_differences", spec_string, ".gif")
+            gif(anim, outfile, fps=5)
+
+            # make a gif animation of differences in f(z=0) at different times
+            anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+                plot(legend=legend)
+                for (t, this_vpa, f, run_label) ∈ zip(time[2:end], vpa[2:end], ff[2:end],
+                                                      run_labels[2:end])
+                    # Interpolate 'base' values to grid of this run for comparison
+                    interp_base_f =
+                        interpolate_to_grid_vpa(this_vpa.grid, base_f[:,end,is,i],
+                                                base_vpa, base_vpa_spectral)
+
+                    @views plot!(this_vpa.grid,
+                                 filter_zeros(abs.(f[:,end,is,i] .- interp_base_f)),
+                                 xlabel="vpa", yaxis=:log, ylims=(1.e-20, :auto),
+                                 ylabel="f difference from $base_run_label at z=L",
+                                 label=run_label)
+                end
+            end
+            outfile = string(prefix, "_fL_log_differences", spec_string, ".gif")
             gif(anim, outfile, fps=5)
         end
         if pp.plot_f_unnormalized_vs_vpa_z

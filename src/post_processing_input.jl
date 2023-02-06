@@ -23,6 +23,12 @@ const plot_fields_comparison = true
 # if animate_fields_comparison = true and more than one simulation is passed, animate the
 # differences in phi, etc. between the first simulation passed and each of the others
 const animate_fields_comparison = true
+# if plot_dfn_comparison = true and more than one simulation is passed, plot some selected
+# differences in f between the first simulation passed and each of the others
+const plot_dfn_comparison = false
+# if animate_dfn_comparison = true and more than one simulation is passed, animate some
+# selected differences in f between the first simulation passed and each of the others
+const animate_dfn_comparison = false
 # if plot_dens0_vs_t = true, create plots of species density(z0) vs time
 const plot_dens0_vs_t = true
 # if plot_upar0_vs_t = true, create plots of species upar(z0) vs time
@@ -89,7 +95,8 @@ const ir0 = -1
 const dpi = 100
 
 pp = pp_input(calculate_frequencies, plot_phi0_vs_t, plot_phi_vs_z_t,
-    animate_phi_vs_z, plot_fields_comparison, animate_fields_comparison, plot_dens0_vs_t,
+    animate_phi_vs_z, plot_fields_comparison, animate_fields_comparison,
+    plot_dfn_comparison, animate_dfn_comparison, plot_dens0_vs_t,
     plot_upar0_vs_t, plot_ppar0_vs_t, plot_vth0_vs_t, plot_qpar0_vs_t, plot_dens_vs_z_t,
     plot_upar_vs_z_t, plot_ppar_vs_z_t, plot_qpar_vs_z_t, animate_dens_vs_z,
     animate_upar_vs_z, animate_ppar_vs_z, animate_vth_vs_z, animate_qpar_vs_z,
