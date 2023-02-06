@@ -414,6 +414,8 @@ struct pp_input
 	plot_parallel_pressure_vs_r_z::Bool
     # if animate_parallel_pressure_vs_r_z = true animate parallel_pressure vs r z
 	animate_parallel_pressure_vs_r_z::Bool
+    # if plot_wall_pdf = true then plot the ion distribution (vpa,vperp,z,r) in the element nearest the wall at the last timestep 
+    plot_wall_pdf::Bool
     # animations will use one in every nwrite_movie data slices
     nwrite_movie::mk_int
     # itime_min is the minimum time index at which to start animations

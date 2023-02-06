@@ -87,6 +87,7 @@ const plot_parallel_pressure_vs_r0_z = true # plot last timestep parallel_pressu
 const plot_wall_parallel_pressure_vs_r = true # plot last timestep parallel_pressure[z_wall,r]
 const plot_parallel_pressure_vs_r_z = true
 const animate_parallel_pressure_vs_r_z = true
+const plot_wall_pdf = true # plot last time step ion distribution function at the wall and in the element nearest the wall 
 const nwrite_movie = 1
 # itime_min is the minimum time index at which to start animations
 const itime_min = -1
@@ -128,6 +129,6 @@ pp = pp_input(calculate_frequencies, plot_phi0_vs_t, plot_phi_vs_z_t,
 	plot_density_vs_r0_z, plot_wall_density_vs_r, plot_density_vs_r_z, animate_density_vs_r_z,
 	plot_parallel_flow_vs_r0_z, plot_wall_parallel_flow_vs_r, plot_parallel_flow_vs_r_z, animate_parallel_flow_vs_r_z,
 	plot_parallel_pressure_vs_r0_z, plot_wall_parallel_pressure_vs_r, plot_parallel_pressure_vs_r_z, animate_parallel_pressure_vs_r_z,
-    nwrite_movie, itime_min, itime_max, ivpa0, ivperp0, iz0, ir0, ivz0, ivr0, ivzeta0)
+    plot_wall_pdf, nwrite_movie, itime_min, itime_max, ivpa0, ivperp0, iz0, ir0, ivz0, ivr0, ivzeta0)
 
 end
