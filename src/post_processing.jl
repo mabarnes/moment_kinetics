@@ -372,14 +372,6 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
             gif(anim, outfile, fps=5)
         end
 
-        function filter_zeros(f)
-            for i ∈ eachindex(f)
-                if f[i] == 0.0
-                    f[i] = NaN
-                end
-            end
-            return f
-        end
         if pp.plot_dfn_comparison && n_runs > 1
             base_vpa = vpa[1]
             base_vpa_spectral = vpa_spectral[1]
@@ -1112,9 +1104,9 @@ function plot_fields(phi, delta_phi, E_parallel, time, itime_min, itime_max, nwr
             interp_base_phi = interpolate_to_grid_z(this_z.grid, base_phi[:,end], base_z,
                                                     base_z_spectral)
 
-            plot!(this_z.grid, abs.(p[:,end] .- interp_base_phi), xlabel="z/Lz",
-                  ylabel="absolute eϕ/Te difference from $base_run_label", yaxis=:log,
-                  label=run_label, linewidth=2)
+            plot!(this_z.grid, filter_zeros(abs.(p[:,end] .- interp_base_phi)),
+                  xlabel="z/Lz", ylabel="absolute eϕ/Te difference from $base_run_label",
+                  yaxis=:log, label=run_label, linewidth=2)
         end
         outfile = string(prefix, "_phi_log_differences.pdf")
         savefig(outfile)
@@ -1126,7 +1118,7 @@ function plot_fields(phi, delta_phi, E_parallel, time, itime_min, itime_max, nwr
                 interpolate_to_grid_z(this_z.grid, base_E_parallel[:,end], base_z,
                                       base_z_spectral)
 
-            plot!(this_z.grid, abs.(E[:,end] .- interp_base_E_parallel),
+            plot!(this_z.grid, filter_zeros(abs.(E[:,end] .- interp_base_E_parallel)),
                   xlabel="z/Lz", ylabel="absolute E_∥ difference from $base_run_label",
                   yaxis=:log, label=run_label, linewidth=2)
         end
@@ -1183,7 +1175,8 @@ function plot_fields(phi, delta_phi, E_parallel, time, itime_min, itime_max, nwr
                 interp_base_phi = interpolate_to_grid_z(this_z.grid, base_phi[:,i],
                                                         base_z, base_z_spectral)
 
-                @views plot!(this_z.grid, abs.(p[:,i] .- interp_base_phi), xlabel="z",
+                @views plot!(this_z.grid, filter_zeros(abs.(p[:,i] .- interp_base_phi)),
+                             xlabel="z",
                              ylabel="absolute eϕ/Te difference from $base_run_label",
                              yaxis=:log, label=run_label)
             end
@@ -1200,7 +1193,8 @@ function plot_fields(phi, delta_phi, E_parallel, time, itime_min, itime_max, nwr
                     interpolate_to_grid_z(this_z.grid, base_E_parallel[:,i], base_z,
                                           base_z_spectral)
 
-                @views plot!(this_z.grid, abs.(E[:,i] .- interp_base_E_parallel),
+                @views plot!(this_z.grid,
+                             filter_zeros(abs.(E[:,i] .- interp_base_E_parallel)),
                              xlabel="z",
                              ylabel="absolute E_∥ difference from $base_run_label",
                              yaxis=:log, label=run_label)
@@ -1821,6 +1815,20 @@ function plot_unnormalised_f2d(f_unnorm, z2d, dzdt2d; plot_log=false, kwargs...)
     PyPlot.colorbar()
 
     return p
+end
+
+"""
+Replace zeros with NaNs
+
+Useful to avoid errors in log-scale plots
+"""
+function filter_zeros(f)
+    for i ∈ eachindex(f)
+        if f[i] == 0.0
+            f[i] = NaN
+        end
+    end
+    return f
 end
 
 end
