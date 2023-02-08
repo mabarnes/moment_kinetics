@@ -92,6 +92,13 @@ function get_tuple_of_return_values(func, arg_tuples...)
 end
 
 """
+Concatenate all the arrays in `t` along their last dimension
+"""
+function concatenate_tuple(t::Tuple)
+    return (cat(t...; dims=ndims(t[1])),)
+end
+
+"""
     analyze_and_plot_data(path...)
 
 Make some plots for the simulation at `path`. If more than one argument is passed to
@@ -101,8 +108,12 @@ If a single value is passed for `path` the plots/movies are created in the same
 directory as the run, and given names based on the name of the run. If multiple values
 are passed, the plots/movies are given names beginning with `compare_` and are created
 in the current directory.
+
+If `concatenate=true` is passed, then instead of comparing the different runs, concatenate
+them all in the time dimension. Note that for this to work they must all have the same
+number of space and velocity-space grid points.
 """
-function analyze_and_plot_data(path...)
+function analyze_and_plot_data(path...; concatenate::Bool=false)
     # Create run_name from the path to the run directory
     run_names = Vector{String}(undef,0)
     for p ∈ path
@@ -123,12 +134,17 @@ function analyze_and_plot_data(path...)
     # load space-time coordinate data
     vpa, vpa_spectral = get_tuple_of_return_values(load_coordinate_data, nc_files,
                                                            "vpa")
-    nvpa = (x.n for x ∈ vpa)
+    nvpa = Tuple(x.n for x ∈ vpa)
     r, r_spectral = get_tuple_of_return_values(load_coordinate_data, nc_files, "r")
-    nr = (x.n for x ∈ r)
+    nr = Tuple(x.n for x ∈ r)
     z, z_spectral = get_tuple_of_return_values(load_coordinate_data, nc_files, "z")
-    nz = (x.n for x ∈ z)
+    nz = Tuple(x.n for x ∈ z)
     ntime, time = get_tuple_of_return_values(load_time_data, nc_files)
+
+    if concatenate
+        time = concatenate_tuple(time)
+        ntime = (sum(ntime),)
+    end
 
     # initialise the post-processing input options
     nwrite_movie, itime_min, itime_max, ivpa0, iz0, ir0 =
@@ -153,6 +169,34 @@ function analyze_and_plot_data(path...)
 
     # load full (vpa,z,r,species,t) particle distribution function (pdf) data
     ff = Tuple(load_pdf_data(f)[:,:,ir0,:,:] for f ∈ nc_files)
+
+    if concatenate
+        run_names = (run_names[1],)
+        run_labels = (run_labels[1],)
+        vpa = (vpa[1],)
+        vpa_spectral = (vpa_spectral[1],)
+        nvpa = (nvpa[1],)
+        r = (r[1],)
+        r_spectral = (r_spectral[1],)
+        nr = (nr[1],)
+        z = (z[1],)
+        z_spectral = (z_spectral[1],)
+        nz = (nz[1],)
+        phi_2d = concatenate_tuple(phi_2d)
+        E_parallel_2d = concatenate_tuple(E_parallel_2d)
+        phi = concatenate_tuple(phi)
+        E_parallel = concatenate_tuple(E_parallel)
+        density = concatenate_tuple(density)
+        parallel_flow = concatenate_tuple(parallel_flow)
+        parallel_pressure = concatenate_tuple(parallel_pressure)
+        parallel_heat_flux = concatenate_tuple(parallel_heat_flux)
+        thermal_speed = concatenate_tuple(thermal_speed)
+        n_species = (n_species[1],)
+        evolve_density = (evolve_density[1],)
+        evolve_upar = (evolve_upar[1],)
+        evolve_ppar = (evolve_ppar[1],)
+        ff = concatenate_tuple(ff)
+    end
 
     #evaluate 1D-1V diagnostics at fixed ir0
     plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie, itime_min,
@@ -240,10 +284,17 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
 
     # use a fit to calculate and write to file the damping rate and growth rate of the
     # perturbed electrostatic potential
-    frequency, growth_rate, shifted_time, fitted_delta_phi =
-        get_tuple_of_return_values(calculate_and_write_frequencies, nc_files, run_names,
-            ntime, time, z, as_tuple(itime_min), as_tuple(itime_max), as_tuple(iz0),
-            delta_phi, as_tuple(pp))
+    # If `concatenate=true` was passed to `analyze_and_plot_data()`, then `nc_files` and
+    # the other tuples will be different lengths, and it is not possible to write the
+    # frequencies.
+    if length(nc_files) == length(run_names)
+        frequency, growth_rate, shifted_time, fitted_delta_phi =
+            get_tuple_of_return_values(calculate_and_write_frequencies, nc_files,
+                run_names, ntime, time, z, as_tuple(itime_min), as_tuple(itime_max),
+                as_tuple(iz0), delta_phi, as_tuple(pp))
+    else
+        fitted_delta_phi = nothing
+    end
     # create the requested plots of the fields
     plot_fields(phi, delta_phi, E_parallel, time, itime_min, itime_max, nwrite_movie, z,
                 z_spectral, iz0, run_names, run_labels, fitted_delta_phi, pp)
@@ -1004,7 +1055,7 @@ function plot_fields(phi, delta_phi, E_parallel, time, itime_min, itime_max, nwr
     Emin = minimum(minimum(E) for E ∈ E_parallel)
     Emax = maximum(maximum(E) for E ∈ E_parallel)
 
-    if pp.plot_phi0_vs_t
+    if pp.plot_phi0_vs_t && fitted_delta_phi !== nothing
         # plot the time trace of phi(z=z0)
         #plot(time, log.(phi[i,:]), yscale = :log10)
         plot(legend=legend)
