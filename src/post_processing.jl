@@ -27,7 +27,8 @@ using ..interpolation: interpolate_to_grid_z, interpolate_to_grid_vpa
 using ..load_data: open_netcdf_file
 using ..load_data: load_coordinate_data, load_fields_data, load_moments_data,
                    load_pdf_data, load_time_data
-using ..analysis: analyze_fields_data, analyze_moments_data, analyze_pdf_data, calc_E_parallel
+using ..analysis: analyze_fields_data, analyze_moments_data, analyze_pdf_data,
+                  calc_E_parallel, check_Chodura_condition
 using ..velocity_moments: integrate_over_vspace
 
 const default_compare_prefix = "comparison_plots/compare"
@@ -159,16 +160,25 @@ function analyze_and_plot_data(path...; concatenate::Bool=false)
 
     # load full (z,r,species,t) velocity moments data
     density, parallel_flow, parallel_pressure, parallel_heat_flux,
-        thermal_speed, n_species, evolve_density, evolve_upar, evolve_ppar =
+        thermal_speed, T_e, n_species, evolve_density, evolve_upar, evolve_ppar =
         get_tuple_of_return_values(load_moments_data, nc_files)
+
+    # load full (vpa,z,r,species,t) particle distribution function (pdf) data
+    ff = Tuple(load_pdf_data(f) for f ∈ nc_files)
+
+    Chodura_ratio_lower, Chodura_ratio_upper = get_tuple_of_return_values(
+        check_Chodura_condition, ff, vpa, vpa_spectral, density, parallel_flow,
+        thermal_speed, T_e, evolve_density, evolve_upar, evolve_ppar,
+        Tuple(this_z.bc for this_z ∈ z))
+
     density = Tuple(n[:,ir0,:,:] for n ∈ density)
     parallel_flow = Tuple(upar[:,ir0,:,:] for upar ∈ parallel_flow)
     parallel_pressure = Tuple(ppar[:,ir0,:,:] for ppar ∈ parallel_pressure)
     parallel_heat_flux = Tuple(qpar[:,ir0,:,:] for qpar ∈ parallel_heat_flux)
     thermal_speed = Tuple(vth[:,ir0,:,:] for vth ∈ thermal_speed)
-
-    # load full (vpa,z,r,species,t) particle distribution function (pdf) data
-    ff = Tuple(load_pdf_data(f)[:,:,ir0,:,:] for f ∈ nc_files)
+    ff = Tuple(f[:,:,ir0,:,:] for f ∈ ff)
+    Chodura_ratio_lower = Tuple(c[ir0,:] for c ∈ Chodura_ratio_lower)
+    Chodura_ratio_upper = Tuple(c[ir0,:] for c ∈ Chodura_ratio_upper)
 
     if concatenate
         run_names = (run_names[1],)
@@ -196,14 +206,16 @@ function analyze_and_plot_data(path...; concatenate::Bool=false)
         evolve_upar = (evolve_upar[1],)
         evolve_ppar = (evolve_ppar[1],)
         ff = concatenate_tuple(ff)
+        Chodura_ratio_lower = concatenate_tuple(Chodura_ratio_lower)
+        Chodura_ratio_upper = concatenate_tuple(Chodura_ratio_upper)
     end
 
     #evaluate 1D-1V diagnostics at fixed ir0
     plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie, itime_min,
         itime_max, ivpa0, iz0, ir0, r, phi, E_parallel, density, parallel_flow,
-        parallel_pressure, parallel_heat_flux, thermal_speed, ff, n_species,
-        evolve_density, evolve_upar, evolve_ppar, vpa, vpa_spectral, z, z_spectral, ntime,
-        time)
+        parallel_pressure, parallel_heat_flux, thermal_speed, ff, Chodura_ratio_lower,
+        Chodura_ratio_upper, n_species, evolve_density, evolve_upar, evolve_ppar, vpa,
+        vpa_spectral, z, z_spectral, ntime, time)
 
     for f ∈ nc_files
         close(f)
@@ -264,9 +276,9 @@ end
 """
 function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
         itime_min, itime_max, ivpa0, iz0, ir0, r, phi, E_parallel, density, parallel_flow,
-        parallel_pressure, parallel_heat_flux, thermal_speed, ff, n_species,
-        evolve_density, evolve_upar, evolve_ppar, vpa, vpa_spectral, z, z_spectral, ntime,
-        time)
+        parallel_pressure, parallel_heat_flux, thermal_speed, ff, Chodura_ratio_lower,
+        Chodura_ratio_upper, n_species, evolve_density, evolve_upar, evolve_ppar, vpa,
+        vpa_spectral, z, z_spectral, ntime, time)
 
     n_runs = length(run_names)
 
@@ -329,6 +341,22 @@ function plot_1D_1V_diagnostics(run_names, run_labels, nc_files, nwrite_movie,
         prefix = default_compare_prefix
         legend = true
     end
+
+    plot(legend=legend)
+    for (t, c, run_label) ∈ zip(time, Chodura_ratio_lower, run_labels)
+        plot!(t, c, xlabel="time", ylabel="Chodura ratio at z=-L/2", label=run_label,
+              ylims=(:auto, 1000.0))
+    end
+    outfile = string(prefix, "_Chodura_ratio_lower.pdf")
+    savefig(outfile)
+    plot(legend=legend)
+    for (t, c, run_label) ∈ zip(time, Chodura_ratio_upper, run_labels)
+        plot!(t, c, xlabel="time", ylabel="Chodura ratio at z=+L/2", label=run_label,
+              ylims=(:auto, 1000.0))
+    end
+    outfile = string(prefix, "_Chodura_ratio_upper.pdf")
+    savefig(outfile)
+
     for is ∈ 1:n_species_max
         if n_species_max > 1
             spec_string = string("_spec", string(is))

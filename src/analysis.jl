@@ -8,6 +8,7 @@ export analyze_pdf_data
 
 using ..array_allocation: allocate_float
 using ..calculus: derivative!, integral
+using ..initial_conditions: vpagrid_to_dzdt
 using ..velocity_moments: integrate_over_vspace
 
 """
@@ -43,6 +44,105 @@ function calc_E_parallel(phi, z, z_spectral)
     end
 
     return E_parallel
+end
+
+"""
+Check the (kinetic) Chodura condition
+
+Chodura condition is:
+∫d^3v F/vpa^2 ≤ mi ne/Te
+
+Return a tuple (whose first entry is the result for the lower boundary and second for the
+upper) of the ratio which is 1 if the Chodura condition is satisfied (with equality):
+Te/(mi ne) * ∫d^3v F/vpa^2
+
+Currently only evaluates condition for the first species: is=1
+
+The 1D1V code evolves the marginalised distribution function f = ∫d^2vperp F so the
+Chodura condition becomes
+∫dvpa f/vpa^2 ≤ mi ne/Te
+
+In normalised form (normalised variables suffixed with 'N'):
+vpa = cref vpaN
+ne = nref neN
+Te = Tref TeN
+f = fN nref / cref sqrt(pi)
+cref = sqrt(2 Tref / mi)
+
+cref ∫dvpaN fN nref / cref sqrt(pi) cref^2 vpaN^2 ≤ mi nref neN / Tref TeN
+nref / (sqrt(pi) cref^2) * ∫dvpaN fN / vpaN^2 ≤ mi nref neN / Tref TeN
+mi nref / (sqrt(pi) 2 Tref) * ∫dvpaN fN / vpaN^2 ≤ mi nref neN / Tref TeN
+1 / (2 sqrt(pi)) * ∫dvpaN fN / vpaN^2 ≤ neN / TeN
+1 / (2 sqrt(pi)) * ∫dvpaN fN / vpaN^2 ≤ neN / TeN
+TeN / (2 neN sqrt(pi)) * ∫dvpaN fN / vpaN^2 ≤ 1
+
+Note that `integrate_over_vspace()` includes the 1/sqrt(pi) factor already.
+"""
+function check_Chodura_condition(f, vpa, dens, upar, vth, T_e, evolve_density,
+                                 evolve_upar, evolve_ppar, z_bc)
+
+    if z_bc != "wall"
+        return nothing, nothing
+    end
+
+    ntime = size(f, 5)
+    is = 1
+    nr = size(f, 3)
+    lower_result = zeros(nr, ntime)
+    upper_result = zeros(nr, ntime)
+    for it ∈ 1:ntime, ir ∈ 1:nr
+        # create an array of dz/dt values at z = -Lz/2
+        @. vpa.scratch = vpagrid_to_dzdt(vpa.grid, vth[1,ir,is,it], upar[1,ir,is,it],
+                                          evolve_ppar, evolve_upar)
+
+        # Get rid of a zero if it is there to avoid a blow up - f should be zero at that
+        # point anyway
+        for ivpa ∈ eachindex(vpa.scratch)
+            if abs(vpa.scratch[ivpa]) < 1.e-14
+                vpa.scratch[ivpa] = 1.0
+            end
+        end
+
+        @views lower_result[ir,it] = integrate_over_vspace(f[:,1,ir,is,it], vpa.scratch,
+                                                           -2, vpa.wgts)
+        if evolve_ppar
+            # vpagrid_to_dzdt already includes the factor of vth, so just need to multiply
+            # by one for the d(wpa) in the integral
+            lower_result[ir,it] *= vth[1,ir,is,it]
+        end
+        if !evolve_density
+            # If evolve_dens=true, f is already normalised by dens
+            lower_result[ir,it] /= dens[1,ir,is,it]
+        end
+        lower_result[ir,it] *= 0.5*T_e
+
+        # create an array of dz/dt values at z = +Lz/2
+        @. vpa.scratch = vpagrid_to_dzdt(vpa.grid, vth[end,ir,is,it], upar[end,ir,is,it],
+                                          evolve_ppar, evolve_upar)
+
+        # Get rid of a zero if it is there to avoid a blow up - f should be zero at that
+        # point anyway
+        for ivpa ∈ eachindex(vpa.scratch)
+            if abs(vpa.scratch[ivpa]) < 1.e-14
+                vpa.scratch[ivpa] = 1.0
+            end
+        end
+
+        @views upper_result[ir,it] = integrate_over_vspace(f[:,end,ir,is,it], vpa.scratch,
+                                                           -2, vpa.wgts)
+        if evolve_ppar
+            # vpagrid_to_dzdt already includes the factor of vth, so just need to multiply
+            # by one for the d(wpa) in the integral
+            upper_result[ir,it] *= vth[end,ir,is,it]
+        end
+        if !evolve_density
+            # If evolve_dens=true, f is already normalised by dens
+            upper_result[ir,it] /= dens[end,ir,is,it]
+        end
+        upper_result[ir,it] *= 0.5*T_e
+    end
+
+    return lower_result, upper_result
 end
 
 """

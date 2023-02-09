@@ -114,6 +114,10 @@ function load_moments_data(fid)
     thermal_speed = cdfvar.var[:,:,:,:]
     # define the number of species
     n_species = size(cdfvar,3)
+    # define a handle for the electron temperature
+    cdfvar = fid["T_e"]
+    # load the electron temperature
+    T_e = cdfvar.var[]
     # define a handle for the flag indicating if the density should be separately advanced
     cdfvar = fid["evolve_density"]
     # load the parallel pressure evolution flag
@@ -143,7 +147,7 @@ function load_moments_data(fid)
     end
     println("done.")
     return density, parallel_flow, parallel_pressure, parallel_heat_flux, thermal_speed,
-           n_species, evolve_density, evolve_upar, evolve_ppar
+           T_e, n_species, evolve_density, evolve_upar, evolve_ppar
 end
 
 """
