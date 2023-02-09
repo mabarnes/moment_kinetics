@@ -28,7 +28,7 @@ using ..quadrature: composite_simpson_weights
 using ..array_allocation: allocate_float
 using ..file_io: open_ascii_output_file
 using ..type_definitions: mk_float, mk_int
-using ..load_data: open_readonly_output_file, load_time_data
+using ..load_data: open_readonly_output_file, get_group, load_time_data
 using ..load_data: load_fields_data, load_pdf_data
 using ..load_data: load_charged_particle_moments_data, load_neutral_particle_moments_data
 using ..load_data: load_neutral_pdf_data
@@ -76,7 +76,8 @@ function read_distributed_zr_data!(var::Array{mk_float,3}, var_name::String,
     
     for iblock in 0:nblocks-1
         fid = open_readonly_output_file(run_name,file_key,iblock=iblock,printout=false)
-        var_local = load_variable(fid, string("dynamic_data/", var_name))
+        group = get_group(fid, "dynamic_data")
+        var_local = load_variable(group, var_name)
         
         z_irank, r_irank = load_rank_data(fid)
         
@@ -100,7 +101,8 @@ function read_distributed_zr_data!(var::Array{mk_float,4}, var_name::String,
     # dimension of var is [z,r,species,t]
     for iblock in 0:nblocks-1
         fid = open_readonly_output_file(run_name,file_key,iblock=iblock,printout=false)
-        var_local = load_variable(fid, string("dynamic_data/", var_name))
+        group = get_group(fid, "dynamic_data")
+        var_local = load_variable(group, var_name)
         
         z_irank, r_irank = load_rank_data(fid)
         
