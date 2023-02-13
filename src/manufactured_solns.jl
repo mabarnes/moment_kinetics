@@ -18,7 +18,7 @@ using ..input_structs
     #standard functions for building densities
     function nplus_sym(Lr,Lz,r_bc,z_bc,epsilon)
         if r_bc == "periodic"
-            nplus = exp(sqrt(epsilon + 0.5 - z/Lz)) #+ 0.05*sin(2.0*pi*r/Lr)*cos(pi*z/Lz)
+            nplus = exp(sqrt(epsilon + 0.5 - z/Lz))*(1.0 + 0.05*sin(2.0*pi*r/Lr)*cos(pi*z/Lz))
         elseif r_bc == "Dirichlet"
             nplus = 1.0 - 0.2*r/Lr 
         end
@@ -27,7 +27,7 @@ using ..input_structs
     
     function nminus_sym(Lr,Lz,r_bc,z_bc,epsilon)
         if r_bc == "periodic"
-            nminus = exp(sqrt(epsilon + 0.5 + z/Lz)) #+ 0.05*sin(2.0*pi*r/Lr)*cos(pi*z/Lz)
+            nminus = exp(sqrt(epsilon + 0.5 + z/Lz))*(1.0 + 0.05*sin(2.0*pi*r/Lr)*cos(pi*z/Lz))
         elseif r_bc == "Dirichlet"
             nminus = 1.0 - 0.2*r/Lr
         end
@@ -36,7 +36,7 @@ using ..input_structs
     
     function nzero_sym(Lr,Lz,r_bc,z_bc)
         if r_bc == "periodic"
-            nzero = 1.0 #+ 0.05*sin(2.0*pi*r/Lr)*cos(pi*z/Lz) # 1.0 #+ (r/Lr + 0.5)*(0.5 - r/Lr)
+            nzero = 1.0 + 0.05*sin(2.0*pi*r/Lr)*cos(pi*z/Lz) # 1.0 #+ (r/Lr + 0.5)*(0.5 - r/Lr)
         elseif r_bc == "Dirichlet" 
             nzero = 1.0 - 0.2*r/Lr
         end
