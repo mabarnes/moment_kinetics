@@ -37,6 +37,8 @@ struct em_fields_struct
     force_phi::Bool
     drive_amplitude::mk_float
     drive_frequency::mk_float
+    # if true, force Er = 0 at wall plates
+    force_Er_zero_at_wall::Bool
 end
 
 end

@@ -414,7 +414,8 @@ function mk_input(scan_input=Dict())
     end 
     species_immutable = (charged = species_charged_immutable, neutral = species_neutral_immutable)
     
-    drive_immutable = drive_input(drive.force_phi, drive.amplitude, drive.frequency)
+    force_Er_zero = get(scan_input, "force_Er_zero_at_wall", false)
+    drive_immutable = drive_input(drive.force_phi, drive.amplitude, drive.frequency, force_Er_zero)
 
     # inputs for file I/O
     # Make copy of the section to avoid modifying the passed-in Dict

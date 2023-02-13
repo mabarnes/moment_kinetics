@@ -273,6 +273,8 @@ struct drive_input
     # phi(z,t=0)*amplitude*sinpi(t*frequency)
     amplitude::mk_float
     frequency::mk_float
+    # if true, forces Er = 0.0 at wall plates 
+    force_Er_zero_at_wall::Bool 
 end
 
 """

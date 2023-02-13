@@ -287,7 +287,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
                                    composition.n_ion_species,n_neutral_species_alloc)
     # create the "fields" structure that contains arrays
     # for the electrostatic potential phi and eventually the electromagnetic fields
-    fields = setup_em_fields(z.n, r.n, drive_input.force_phi, drive_input.amplitude, drive_input.frequency)
+    fields = setup_em_fields(z.n, r.n, drive_input.force_phi, drive_input.amplitude, drive_input.frequency, drive_input.force_Er_zero_at_wall)
     # initialize the electrostatic potential
     begin_serial_region()
     update_phi!(fields, scratch[1], z, r, composition, z_spectral, r_spectral, scratch_dummy)

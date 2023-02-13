@@ -18,12 +18,12 @@ using ..derivatives: derivative_r!, derivative_z!
 
 """
 """
-function setup_em_fields(nz, nr, force_phi, drive_amplitude, drive_frequency)
+function setup_em_fields(nz, nr, force_phi, drive_amplitude, drive_frequency, force_Er_zero)
     phi = allocate_shared_float(nz,nr)
     phi0 = allocate_shared_float(nz,nr)
     Er = allocate_shared_float(nz,nr)
     Ez = allocate_shared_float(nz,nr)
-    return em_fields_struct(phi, phi0, Er, Ez, force_phi, drive_amplitude, drive_frequency)
+    return em_fields_struct(phi, phi0, Er, Ez, force_phi, drive_amplitude, drive_frequency, force_Er_zero)
 end
 
 """
@@ -127,6 +127,12 @@ function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral, sc
                 scratch_dummy.buffer_z_1, scratch_dummy.buffer_z_2,
                 scratch_dummy.buffer_z_3,scratch_dummy.buffer_z_4,
                 r_spectral,r)
+        if z.irank == 0 && fields.force_Er_zero_at_wall
+            fields.Er[1,:] .= 0.0
+        end
+        if z.irank == z.nrank - 1 && fields.force_Er_zero_at_wall
+            fields.Er[z.n,:] .= 0.0
+        end
     else
         @serial_region begin
             fields.Er[:,:] .= composition.Er_constant
