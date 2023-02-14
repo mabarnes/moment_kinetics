@@ -84,6 +84,22 @@ function ionization_collisions_3V!(f_out, f_neutral_out, f_neutral_gav_in, fvec_
     ionization_frequency = collisions.ionization
     
     begin_s_r_z_vperp_vpa_region()
+
+    if collisions.constant_ionization_rate
+        # Oddly the test in test/harrisonthompson.jl matches the analitical
+        # solution (which assumes width=0.0) better with width=0.5 than with,
+        # e.g., width=0.15. Possibly narrower widths would require more vpa
+        # resolution, which then causes crashes due to overshoots giving
+        # negative f??
+        width = 0.5
+        @loop_s is begin
+            @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
+                f_out[ivpa,ivperp,iz,ir,is] += dt*collisions.ionization/width^3*exp(-((vpa.grid[ivpa]^2 + vperp.grid[ivperp]^2)/width^2))
+            end
+        end
+        return nothing
+    end
+
     # ion ionization rate =   < f_n > n_e R_ion
     # neutral "ionization" (depopulation) rate =   -  f_n  n_e R_ion
     #NB: used quasineutrality to replace electron density n_e with ion density
