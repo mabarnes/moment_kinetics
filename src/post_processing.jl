@@ -699,33 +699,25 @@ function compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,spec
     is = 1 # only one species supported currently
     
     pdf_norm = zeros(mk_float,ntime)
-    for it in 1:ntime
-        dummy = 0.0
-        dummy_N = 0.0
-        for iblock in 0:nblocks-1
-            fid_pdfs = open_readonly_output_file(run_name,"dfns",iblock=iblock, printout=false)
-            z_irank, r_irank = load_rank_data(fid_pdfs,printout=false)
-            pdf = load_pdf_data(fid_pdfs, printout=false)
-            # local local grid data on iblock=0
-            nz_local, _, z_local, z_wgts_local, Lz = load_coordinate_data(fid_pdfs, "z")
-            nr_local, _, r_local, r_wgts_local, Lr = load_coordinate_data(fid_pdfs, "r")
-            close(fid_pdfs)
-            imin_r = min(1,r_irank) + 1
-            imin_z = min(1,z_irank) + 1
-            for ir in imin_r:nr_local
-                for iz in imin_z:nz_local
-                    for ivperp in 1:nvperp
-                        for ivpa in 1:nvpa
-                            pdf_sym = dfni_func(vpa[ivpa],vperp[ivperp],z_local[iz],r_local[ir],time[it])
-                            dummy += (pdf[ivpa,ivperp,iz,ir,is,it] - pdf_sym)^2
-                            dummy_N += (pdf_sym)^2
-                        end
-                    end
-                end
-            end
+    for iblock in 0:nblocks-1
+        fid_pdfs = open_readonly_output_file(run_name,"dfns",iblock=iblock, printout=false)
+        z_irank, r_irank = load_rank_data(fid_pdfs,printout=false)
+        pdf = load_pdf_data(fid_pdfs, printout=false)
+        # local local grid data on iblock=0
+        nz_local, _, z_local, z_wgts_local, Lz = load_coordinate_data(fid_pdfs, "z")
+        nr_local, _, r_local, r_wgts_local, Lr = load_coordinate_data(fid_pdfs, "r")
+        close(fid_pdfs)
+        imin_r = min(1,r_irank) + 1
+        imin_z = min(1,z_irank) + 1
+        for it in 1:ntime, ir in imin_r:nr_local, iz in imin_z:nz_local,
+                ivperp in 1:nvperp, ivpa in 1:nvpa
+
+            pdf_sym = dfni_func(vpa[ivpa],vperp[ivperp],z_local[iz],r_local[ir],time[it])
+            pdf_norm[it] += (pdf[ivpa,ivperp,iz,ir,is,it] - pdf_sym)^2
         end
-        #pdf_norm[it] = dummy/dummy_N
-        pdf_norm[it] = sqrt(dummy/(nr_global*nz_global*nvpa*nvperp))
+    end
+    for it in 1:ntime
+        pdf_norm[it] = sqrt(pdf_norm[it]/(nr_global*nz_global*nvpa*nvperp))
     end
     println("test: ",file_string,": ",spec_string," ",pdf_norm)
     @views plot(time, pdf_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=norm_label) #, yaxis=:log)
@@ -789,35 +781,25 @@ function compare_neutral_pdf_symbolic_test(run_name,manufactured_solns_list,spec
     is = 1 # only one species supported currently
     
     pdf_norm = zeros(mk_float,ntime)
-    for it in 1:ntime
-        dummy = 0.0
-        dummy_N = 0.0
-        for iblock in 0:nblocks-1
-            fid_pdfs = open_readonly_output_file(run_name,"dfns",iblock=iblock, printout=false)
-            z_irank, r_irank = load_rank_data(fid_pdfs,printout=false)
-            pdf = load_neutral_pdf_data(fid_pdfs, printout=false)
-            # load local grid data
-            nz_local, _, z_local, z_wgts_local, Lz = load_coordinate_data(fid_pdfs, "z", printout=false)
-            nr_local, _, r_local, r_wgts_local, Lr = load_coordinate_data(fid_pdfs, "r", printout=false)
-            close(fid_pdfs)
-            imin_r = min(1,r_irank) + 1
-            imin_z = min(1,z_irank) + 1
-            for ir in imin_r:nr_local
-                for iz in imin_z:nz_local
-                    for ivzeta in 1:nvzeta
-                        for ivr in 1:nvr
-                            for ivz in 1:nvz
-                                pdf_sym = dfnn_func(vz[ivz],vr[ivr],vzeta[ivzeta],z_local[iz],r_local[ir],time[it])
-                                dummy += (pdf[ivz,ivr,ivzeta,iz,ir,is,it] - pdf_sym)^2
-                                dummy_N += (pdf_sym)^2
-                            end
-                        end
-                    end
-                end
-            end
+    for iblock in 0:nblocks-1
+        fid_pdfs = open_readonly_output_file(run_name,"dfns",iblock=iblock, printout=false)
+        z_irank, r_irank = load_rank_data(fid_pdfs,printout=false)
+        pdf = load_neutral_pdf_data(fid_pdfs, printout=false)
+        # load local grid data
+        nz_local, _, z_local, z_wgts_local, Lz = load_coordinate_data(fid_pdfs, "z", printout=false)
+        nr_local, _, r_local, r_wgts_local, Lr = load_coordinate_data(fid_pdfs, "r", printout=false)
+        close(fid_pdfs)
+        imin_r = min(1,r_irank) + 1
+        imin_z = min(1,z_irank) + 1
+        for it in 1:ntime, ir in imin_r:nr_local, iz in imin_z:nz_local,
+                ivzeta in 1:nvzeta, ivr in 1:nvr, ivz in 1:nvz
+
+            pdf_sym = dfnn_func(vz[ivz],vr[ivr],vzeta[ivzeta],z_local[iz],r_local[ir],time[it])
+            pdf_norm[it] += (pdf[ivz,ivr,ivzeta,iz,ir,is,it] - pdf_sym)^2
         end
-        #pdf_norm[it] = dummy/dummy_N
-        pdf_norm[it] = sqrt(dummy/(nr_global*nz_global*nvz*nvr*nvzeta))
+    end
+    for it in 1:ntime
+        pdf_norm[it] = sqrt(pdf_norm[it]/(nr_global*nz_global*nvz*nvr*nvzeta))
     end
     println("test: ",file_string,": ",spec_string," ",pdf_norm)
     @views plot(time, pdf_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=norm_label) #, yaxis=:log)
