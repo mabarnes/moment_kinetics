@@ -814,11 +814,11 @@ function enforce_neutral_z_boundary_condition!(f_neutral::AbstractArray{mk_float
                         # dzdt = vz_charged[:,1] as a 1-D velocity variable for the half-sided integration routines
                         # if vz_charged becomes a fn of vperp then these routines must be generalised
                         @views wall_flux_0 += (sqrt(composition.mn_over_mi) *
-                                               integrate_over_negative_vpa(abs.(vz_charged[:,:]) .* f_charged[:,:,1,ir,is], vz_charged[:,1], vpa.wgts, vpa.scratch, vperp.grid, vperp.wgts))
+                                               integrate_over_negative_vpa(abs.(vz_charged[:,:]) .* f_charged[:,:,1,ir,is], vz_charged[:,1], vpa.wgts, vpa.scratch, vpa.ngrid, vperp.grid, vperp.wgts))
                         # get velocity into the wall at this r at z = L/2, vz(vpa,vperp)
                         vz_charged = z_adv_charged[is].speed[end,:,:,ir]
                         @views wall_flux_L += (sqrt(composition.mn_over_mi) *
-                                               integrate_over_positive_vpa(abs.(vz_charged[:,:]) .* f_charged[:,:,end,ir,is], vz_charged[:,1], vpa.wgts, vpa.scratch, vperp.grid, vperp.wgts))
+                                               integrate_over_positive_vpa(abs.(vz_charged[:,:]) .* f_charged[:,:,end,ir,is], vz_charged[:,1], vpa.wgts, vpa.scratch, vpa.ngrid, vperp.grid, vperp.wgts))
                 end
                 for isn ∈ 1:composition.n_neutral_species
                         # get velocity into the wall at this r = -L/2 at z = -L/2, vz(vpa,vperp)

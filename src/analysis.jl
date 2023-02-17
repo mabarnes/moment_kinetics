@@ -9,7 +9,8 @@ export analyze_pdf_data
 using ..array_allocation: allocate_float
 using ..calculus: integral
 using ..load_data: open_readonly_output_file, get_nranks, load_pdf_data, load_rank_data
-using ..velocity_moments: integrate_over_vspace
+using ..velocity_moments: integrate_over_vspace, integrate_over_positive_vpa,
+                          integrate_over_negative_vpa
 
 """
 """
@@ -58,7 +59,8 @@ mi nref / (pi^3/2 2 Tref) * ∫d^3vN FN / vpaN^2 ≤ mi nref neN / Tref TeN
 1 / (2 pi^3/2) * ∫d^3vN FN / vpaN^2 ≤ neN / TeN
 TeN / (2 neN pi^3/2) * ∫d^3vN FN / vpaN^2 ≤ 1
 
-Note that `integrate_over_vspace()` includes the 1/pi^3/2 factor already.
+Note that `integrate_over_positive_vpa()` and `integrate_over_negative_vpa()` include the
+1/pi^3/2 factor already.
 
 1D1V
 ----
@@ -81,7 +83,8 @@ mi nref / (sqrt(pi) 2 Tref) * ∫dvpaN fN / vpaN^2 ≤ mi nref neN / Tref TeN
 1 / (2 sqrt(pi)) * ∫dvpaN fN / vpaN^2 ≤ neN / TeN
 TeN / (2 neN sqrt(pi)) * ∫dvpaN fN / vpaN^2 ≤ 1
 
-Note that `integrate_over_vspace()` includes the 1/sqrt(pi) factor already.
+Note that `integrate_over_positive_vpa()` and `integrate_over_negative_vpa()` include the
+1/sqrt(pi) factor already.
 """
 function check_Chodura_condition(run_name, vpa_grid, vpa_wgts, vperp_grid, vperp_wgts,
                                  dens, T_e, Er, geometry, z_bc, nblocks)
@@ -93,6 +96,7 @@ function check_Chodura_condition(run_name, vpa_grid, vpa_wgts, vperp_grid, vperp
     ntime = size(Er, 3)
     is = 1
     nr = size(Er, 2)
+    nvpa = length(vpa_grid)
     lower_result = zeros(nr, ntime)
     upper_result = zeros(nr, ntime)
     f_lower = nothing
@@ -130,8 +134,9 @@ function check_Chodura_condition(run_name, vpa_grid, vpa_wgts, vperp_grid, vperp
         end
 
         @views lower_result[ir,it] =
-            integrate_over_vspace(f_lower[:,:,1,ir,is,it], vpabar, -2, vpa_wgts,
-                                  vperp_grid, 1, vperp_wgts)
+            integrate_over_negative_vpa(f_lower[:,:,1,ir,is,it] ./ vpabar.^2, vpabar,
+                                        vpa_wgts, zeros(nvpa), nvpa, vperp_grid,
+                                        vperp_wgts, false)
         if it == ntime
             println("check vpabar lower", vpabar)
             println("result lower ", lower_result[ir,it])
@@ -150,8 +155,9 @@ function check_Chodura_condition(run_name, vpa_grid, vpa_wgts, vperp_grid, vperp
         end
 
         @views upper_result[ir,it] =
-            integrate_over_vspace(f_upper[:,:,end,ir,is,it], vpabar, -2, vpa_wgts,
-                                  vperp_grid, 1, vperp_wgts)
+            integrate_over_positive_vpa(f_upper[:,:,end,ir,is,it] ./ vpabar.^2, vpabar,
+                                        vpa_wgts, zeros(nvpa), nvpa, vperp_grid,
+                                        vperp_wgts, false)
         if it == ntime
             println("check vpabar upper ", vpabar)
             println("result upper ", upper_result[ir,it])
