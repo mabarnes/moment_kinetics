@@ -194,6 +194,7 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
     densi_func = manufactured_solns_list.densi_func
     dfnn_func = manufactured_solns_list.dfnn_func
     densn_func = manufactured_solns_list.densn_func
+    Er_func = manufactured_solns_list.Er_func
     #nb manufactured functions not functions of species
     begin_s_r_z_region()
     @loop_s_r_z is ir iz begin
@@ -203,8 +204,16 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
             pdf.charged.norm[ivpa,ivperp,iz,ir,is] = pdf.charged.unnorm[ivpa,ivperp,iz,ir,is]
         end
     end
+    Er = allocate_shared_float(z.n, r.n)
+    @loop_s_r_z is ir iz begin
+        if is != 1
+            continue
+        end
+        Er[iz,ir] = Er_func(z.grid[iz], r.grid[ir])
+    end
     # update upar, ppar, qpar, vth consistent with manufactured solns
-    update_density!(moments.charged.dens, pdf.charged.unnorm, vpa, vperp, z, r, composition)
+    update_density!(moments.charged.dens, pdf.charged.unnorm, vpa, vperp, z, r,
+                    composition, geometry, Er)
     update_qpar!(moments.charged.qpar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
     update_ppar!(moments.charged.ppar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
     # get particle flux

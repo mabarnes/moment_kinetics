@@ -371,7 +371,7 @@ function analyze_and_plot_data(path)
             parallel_heat_flux[:,ir0,:,:],
             thermal_speed[:,ir0,:,:],
             ff[:,ivperp0,:,ir0,:,:],
-            n_ion_species, evolve_ppar, nvpa, vpa, vpa_wgts,
+            n_ion_species, evolve_ppar, nvpa, vpa_local, vpa_local_wgts,
             nz, z, z_wgts, Lz, ntime, time)
     end
     close(fid_pdfs)

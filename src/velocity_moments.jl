@@ -118,12 +118,13 @@ end
 """
 calculate the updated density (dens) and parallel pressure (ppar) for all species
 """
-function update_moments!(moments, ff, vpa, nz, nr, composition)
+function update_moments!(moments, ff, vpa, nz, nr, composition, geometry, Er)
     n_species = size(ff,4)
     @boundscheck n_species == size(moments.dens,3) || throw(BoundsError(moments))
     @loop_s is begin
         if moments.dens_updated[is] == false
-            @views update_density_species!(moments.dens[:,:,is], ff[:,:,:,is], vpa, z, r)
+            @views update_density_species!(moments.dens[:,:,is], ff[:,:,:,is], vpa, z, r,
+                                           geometry, Er)
             moments.dens_updated[is] = true
         end
         if moments.upar_updated[is] == false
@@ -147,21 +148,22 @@ end
 NB: if this function is called and if dens_updated is false, then
 the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
 """
-function update_density!(dens, pdf, vpa, vperp, z, r, composition)
+function update_density!(dens, pdf, vpa, vperp, z, r, composition, geometry, Er)
     
     begin_s_r_z_region()
     
     n_species = size(pdf,5)
     @boundscheck n_species == size(dens,3) || throw(BoundsError(dens))
     @loop_s is begin
-        @views update_density_species!(dens[:,:,is], pdf[:,:,:,:,is], vpa, vperp, z, r)
+        @views update_density_species!(dens[:,:,is], pdf[:,:,:,:,is], vpa, vperp, z, r,
+                                       geometry, Er)
     end
 end
 
 """
 calculate the updated density (dens) for a given species
 """
-function update_density_species!(dens, ff, vpa, vperp, z, r)
+function update_density_species!(dens, ff, vpa, vperp, z, r, geometry, Er)
     @boundscheck vpa.n == size(ff, 1) || throw(BoundsError(ff))
     @boundscheck vperp.n == size(ff, 2) || throw(BoundsError(ff))
     @boundscheck z.n == size(ff, 3) || throw(BoundsError(ff))
@@ -169,6 +171,24 @@ function update_density_species!(dens, ff, vpa, vperp, z, r)
     @boundscheck z.n == size(dens, 1) || throw(BoundsError(dens))
     @boundscheck r.n == size(dens, 2) || throw(BoundsError(dens))
     @loop_r_z ir iz begin
+        if z.has_wall_lower && iz == 1
+            vpabar = @. vpa.scratch2 = vpa_grid -
+                                       0.5 * geometry.rhostar * Er[1,ir] / geometry.bzed
+            dens[iz,ir] = integrate_over_negative_vpa(
+                @view(ff[:,:,iz,ir]), vpabar, vpa.wgts, vpa.scratch, vperp.grid,
+                vperp.wgts)
+        elseif z.has_wall_upper && iz == z.n
+            vpabar = @. vpa.scratch2 = vpa_grid -
+                                       0.5 * geometry.rhostar * Er[end,ir] / geometry.bzed
+            dens[iz,ir] = integrate_over_positive_vpa(
+                @view(ff[:,:,iz,ir]), vpabar, vpa.wgts, vpa.scratch, vperp.grid,
+                vperp.wgts)
+        else
+            dens[iz,ir] = integrate_over_vspace(@view(ff[:,:,iz,ir]), vpa.grid, 0,
+                                                vpa.wgts, vperp.grid, 0, vperp.wgts)
+        end
+    end
+    @loop_r ir begin
         dens[iz,ir] = integrate_over_vspace(@view(ff[:,:,iz,ir]), 
          vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
     end

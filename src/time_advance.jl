@@ -726,7 +726,10 @@ function rk_update!(scratch, pdf, moments, fields, vz, vr, vzeta, vpa, vperp, z,
     @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
         pdf.charged.unnorm[ivpa,ivperp,iz,ir,is] = new_scratch.pdf[ivpa,ivperp,iz,ir,is]
     end
-    update_density!(new_scratch.density, pdf.charged.unnorm, vpa, vperp, z, r, composition)
+    # Does this need to be done with the new Er? But that would make the density and Er
+    # only implicitly defined, so would need some kind of iteration here...
+    update_density!(new_scratch.density, pdf.charged.unnorm, vpa, vperp, z, r,
+                    composition, geometry, fields.Er)
 
     update_upar!(new_scratch.upar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
     # convert from particle particle flux to parallel flow

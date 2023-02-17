@@ -136,7 +136,7 @@ function define_coordinate(input, composition=nothing)
     return coordinate(input.name, n_global, n_local, input.ngrid,
         input.nelement_global, input.nelement_local, input.nrank, input.irank, input.L, grid,
         cell_width, igrid, ielement, imin, imax, input.discretization, input.fd_option,
-        input.bc, wgts, has_wall_lower, has_wall_upper, uniform_grid, duniform_dgrid,
+        input.bc, has_wall_lower, has_wall_upper, wgts, uniform_grid, duniform_dgrid,
         scratch, copy(scratch), copy(scratch), scratch_2d, copy(scratch_2d), advection,
         send_buffer, receive_buffer, input.comm)
 end
