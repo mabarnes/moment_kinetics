@@ -134,9 +134,9 @@ function check_Chodura_condition(run_name, vpa_grid, vpa_wgts, vperp_grid, vperp
         end
 
         @views lower_result[ir,it] =
-            integrate_over_negative_vpa(f_lower[:,:,1,ir,is,it] ./ vpabar.^2, vpabar,
-                                        vpa_wgts, zeros(nvpa), nvpa, vperp_grid,
-                                        vperp_wgts, false)
+            integrate_over_negative_vpa(f_lower[:,:,1,ir,is,it], vpabar, -2, vpa_wgts,
+                                        zeros(nvpa), nvpa, vperp_grid, 1, vperp_wgts,
+                                        false)
         if it == ntime
             println("check vpabar lower", vpabar)
             println("result lower ", lower_result[ir,it])
@@ -155,9 +155,9 @@ function check_Chodura_condition(run_name, vpa_grid, vpa_wgts, vperp_grid, vperp
         end
 
         @views upper_result[ir,it] =
-            integrate_over_positive_vpa(f_upper[:,:,end,ir,is,it] ./ vpabar.^2, vpabar,
-                                        vpa_wgts, zeros(nvpa), nvpa, vperp_grid,
-                                        vperp_wgts, false)
+            integrate_over_positive_vpa(f_upper[:,:,end,ir,is,it], vpabar, -2, vpa_wgts,
+                                        zeros(nvpa), nvpa, vperp_grid, 1, vperp_wgts,
+                                        false)
         if it == ntime
             println("check vpabar upper ", vpabar)
             println("result upper ", upper_result[ir,it])

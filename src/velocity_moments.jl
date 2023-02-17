@@ -550,8 +550,8 @@ this could be made more efficient for the case that dz/dt = vpa is time-independ
 but it has been left general for the cases where, e.g., dz/dt = wpa*vth + upar
 varies in time
 """
-function integrate_over_positive_vpa(integrand, dzdt, vpa_wgts, wgts_mod, vpa_ngrid,
-                                     vperp_grid, vperp_wgts, zero_at_zero=true)
+function integrate_over_positive_vpa(integrand, dzdt, dzdt_pow, vpa_wgts, wgts_mod, vpa_ngrid,
+                                     vperp_grid, vperp_pow, vperp_wgts, zero_at_zero=true)
     # define the nvpa variable for convenience
     nvpa = length(vpa_wgts)
     nvperp = length(vperp_wgts)
@@ -615,7 +615,8 @@ function integrate_over_positive_vpa(integrand, dzdt, vpa_wgts, wgts_mod, vpa_ng
         end
     end
     @views velocity_integral = integrate_over_vspace(integrand[ivpa_zero:end,:],
-      dzdt[ivpa_zero:end], 0, wgts_mod[ivpa_zero:end], vperp_grid, 0, vperp_wgts)
+      dzdt[ivpa_zero:end], dzdt_pow, wgts_mod[ivpa_zero:end], vperp_grid, vperp_pow,
+      vperp_wgts)
     # n.b. we pass more arguments than might appear to be required here
     # to avoid needing a special integral function definition
     # the 0 integers are the powers by which dzdt and vperp_grid are raised to in the integral
@@ -674,8 +675,9 @@ this could be made more efficient for the case that dz/dt = vpa is time-independ
 but it has been left general for the cases where, e.g., dz/dt = wpa*vth + upar
 varies in time
 """
-function integrate_over_negative_vpa(integrand, dzdt, vpa_wgts, wgts_mod, vpa_ngrid,
-                                     vperp_grid, vperp_wgts, zero_at_zero=true)
+function integrate_over_negative_vpa(integrand, dzdt, dzdt_pow, vpa_wgts, wgts_mod,
+                                     vpa_ngrid, vperp_grid, vperp_pow, vperp_wgts,
+                                     zero_at_zero=true)
     # define the nvpa nvperp variables for convenience
     nvpa = length(vpa_wgts)
     nvperp = length(vperp_wgts)
@@ -739,7 +741,7 @@ function integrate_over_negative_vpa(integrand, dzdt, vpa_wgts, wgts_mod, vpa_ng
         end
     end
     @views velocity_integral = integrate_over_vspace(integrand[1:ivpa_zero,:],
-            dzdt[1:ivpa_zero], 0, wgts_mod[1:ivpa_zero], vperp_grid, 0, vperp_wgts)
+            dzdt[1:ivpa_zero], dzdt_pow, wgts_mod[1:ivpa_zero], vperp_grid, vperp_pow, vperp_wgts)
     # n.b. we pass more arguments than might appear to be required here
     # to avoid needing a special integral function definition
     # the 0 integers are the powers by which dzdt and vperp_grid are raised to in the integral
