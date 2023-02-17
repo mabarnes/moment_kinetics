@@ -51,6 +51,10 @@ struct coordinate
     fd_option::String
     # bc is the boundary condition option for this coordinate
     bc::String
+    # Does this block have a wall at the lower boundary?
+    has_wall_lower::Bool
+    # Does this block have a wall at the upper boundary?
+    has_wall_upper::Bool
     # wgts contains the integration weights associated with each grid point
     wgts::Array{mk_float,1}
     # uniform_grid contains location of grid points mapped to a uniform grid
@@ -71,12 +75,12 @@ struct coordinate
     scratch2_2d::Array{mk_float,2}
     # struct containing advection speed options/inputs
     advection::advection_input
-	# buffer of size 1 for communicating information about cell boundaries
-	send_buffer::Array{mk_float,1}
-	# buffer of size 1 for communicating information about cell boundaries
-	receive_buffer::Array{mk_float,1}
-	# the MPI communicator appropriate for this calculation
-	comm::T where T
+    # buffer of size 1 for communicating information about cell boundaries
+    send_buffer::Array{mk_float,1}
+    # buffer of size 1 for communicating information about cell boundaries
+    receive_buffer::Array{mk_float,1}
+    # the MPI communicator appropriate for this calculation
+    comm::T where T
 end
 
 """
@@ -90,21 +94,31 @@ function define_coordinate(input, composition=nothing)
     # to the repetition of a point at the element boundary
     n_global = (input.ngrid-1)*input.nelement_global + 1
     # local number of points on this process
-	n_local = (input.ngrid-1)*input.nelement_local + 1
-	# obtain index mapping from full (local) grid to the
+    n_local = (input.ngrid-1)*input.nelement_local + 1
+    # obtain index mapping from full (local) grid to the
     # grid within each element (igrid, ielement)
     igrid, ielement = full_to_elemental_grid_map(input.ngrid,
-    	input.nelement_local, n_local)
+        input.nelement_local, n_local)
     # obtain (local) index mapping from the grid within each element
     # to the full grid
     imin, imax = elemental_to_full_grid_map(input.ngrid, input.nelement_local)
     # initialize the grid and the integration weights associated with the grid
     # also obtain the Chebyshev theta grid and spacing if chosen as discretization option
     grid, wgts, uniform_grid = init_grid(input.ngrid, input.nelement_global,
-	 input.nelement_local, n_local, input.irank, input.L,
-	 imin, imax, igrid, input.discretization, input.name)
+        input.nelement_local, n_local, input.irank, input.L,
+        imin, imax, igrid, input.discretization, input.name)
     # calculate the widths of the cells between neighboring grid points
     cell_width = grid_spacing(grid, n_local)
+    if input.bc == "wall" && input.irank == 0
+        has_wall_lower = true
+    else
+        has_wall_lower = false
+    end
+    if input.bc == "wall" && input.irank == input.nrank - 1
+        has_wall_upper = true
+    else
+        has_wall_upper = false
+    end
     # duniform_dgrid is the local derivative of the uniform grid with respect to
     # the coordinate grid
     duniform_dgrid = allocate_float(input.ngrid, input.nelement_local)
@@ -114,16 +128,17 @@ function define_coordinate(input, composition=nothing)
     scratch_2d = allocate_float(input.ngrid, input.nelement_local)
     # struct containing the advection speed options/inputs for this coordinate
     advection = input.advection
-	send_buffer = allocate_float(1)
-	receive_buffer = allocate_float(1)
+    send_buffer = allocate_float(1)
+    receive_buffer = allocate_float(1)
     # buffer for cyclic communication of boundary points
     # each chain of elements has only two external (off-rank) 
-	#endpoints, so only two pieces of information must be shared
-	return coordinate(input.name, n_global, n_local, input.ngrid, 
-	    input.nelement_global, input.nelement_local, input.nrank, input.irank, input.L, grid,
+    #endpoints, so only two pieces of information must be shared
+    return coordinate(input.name, n_global, n_local, input.ngrid,
+        input.nelement_global, input.nelement_local, input.nrank, input.irank, input.L, grid,
         cell_width, igrid, ielement, imin, imax, input.discretization, input.fd_option,
-        input.bc, wgts, uniform_grid, duniform_dgrid, scratch, copy(scratch), copy(scratch),
-        scratch_2d, copy(scratch_2d), advection, send_buffer, receive_buffer, input.comm)
+        input.bc, wgts, has_wall_lower, has_wall_upper, uniform_grid, duniform_dgrid,
+        scratch, copy(scratch), copy(scratch), scratch_2d, copy(scratch_2d), advection,
+        send_buffer, receive_buffer, input.comm)
 end
 
 """
