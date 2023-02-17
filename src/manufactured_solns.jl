@@ -221,6 +221,8 @@ using ..input_structs
         
         densn = densn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
         dfnn = dfnn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
+
+        Er, Ez, phi = electric_fields(Lr,Lz,r_bc,z_bc,composition,nr)
         
         #build julia functions from these symbolic expressions
         # cf. https://docs.juliahub.com/Symbolics/eABRO/3.4.0/tutorials/symbolic_functions/
@@ -228,6 +230,7 @@ using ..input_structs
         densn_func = build_function(densn, z, r, t, expression=Val{false})
         dfni_func = build_function(dfni, vpa, vperp, z, r, t, expression=Val{false})
         dfnn_func = build_function(dfnn, vz, vr, vzeta, z, r, t, expression=Val{false})
+        Er_func = build_function(Er, z, r, t, expression=Val(false))
         # return function
         # call like: 
         # densi_func(zval, rval, tval) 
@@ -235,7 +238,7 @@ using ..input_structs
         # densn_func(zval, rval, tval) 
         # dfnn_func(vzval, vrval, vzetapval, zval, rval, tval) 
         
-        manufactured_solns_list = (densi_func = densi_func, densn_func = densn_func, dfni_func = dfni_func, dfnn_func = dfnn_func)
+        manufactured_solns_list = (densi_func = densi_func, densn_func = densn_func, dfni_func = dfni_func, dfnn_func = dfnn_func, Er_func = Er_func)
         
         return manufactured_solns_list
     end 
