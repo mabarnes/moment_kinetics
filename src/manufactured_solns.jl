@@ -155,10 +155,15 @@ using ..input_structs
         Bmag = geometry.Bmag
         rhostar = geometry.rhostar
         epsilon = composition.epsilon_offset
+        use_vpabar = composition.use_vpabar_in_mms_dfni
         if z_bc == "periodic"
             dfni = densi * exp( - vpa^2 - vperp^2) 
         elseif z_bc == "wall"
-            vpabar = vpa - (rhostar/2.0)*(Bmag/Bzed)*Er # effective velocity in z direction * (Bmag/Bzed)
+            if use_vpabar  
+                vpabar = vpa - (rhostar/2.0)*(Bmag/Bzed)*Er # effective velocity in z direction * (Bmag/Bzed)
+            else 
+                vpavar = vpa
+            end 
             Hplus = 0.5*(sign(vpabar) + 1.0)
             Hminus = 0.5*(sign(-vpabar) + 1.0)
             ffa =  exp(- vperp^2)

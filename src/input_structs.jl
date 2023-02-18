@@ -245,6 +245,8 @@ mutable struct species_composition
     Er_constant::mk_float
     # constant controlling divergence at wall boundaries in MMS test
 	epsilon_offset::mk_float
+    # logical controlling whether or not dfni(vpabar,z,r) or dfni(vpa,z,r) in MMS test
+    use_vpabar_in_mms_dfni::Bool    
 	# ratio of the neutral particle mass to the ion mass
     mn_over_mi::mk_float
     # ratio of the electron particle mass to the ion mass
