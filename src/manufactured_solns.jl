@@ -162,7 +162,7 @@ using ..input_structs
             if use_vpabar  
                 vpabar = vpa - (rhostar/2.0)*(Bmag/Bzed)*Er # effective velocity in z direction * (Bmag/Bzed)
             else 
-                vpavar = vpa
+                vpabar = vpa
             end 
             Hplus = 0.5*(sign(vpabar) + 1.0)
             Hminus = 0.5*(sign(-vpabar) + 1.0)
