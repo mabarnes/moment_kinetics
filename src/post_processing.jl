@@ -527,8 +527,45 @@ function analyze_and_plot_data(path)
 end
 
 """
+Get values of 'moment' variable at time points where distribution functions were saved
 """
+function moment_at_pdf_times(moment, ntime, ntime_pdfs)
+    if ntime_pdfs == 1
+        # Distribution functions only written at initial time
+        step = ntime + 1
+    else
+        if (ntime-1) % (ntime_pdfs-1) != 0
+            #error("ntime is not a multiple of ntime_pdfs => nwrite_pdfs was not a multiple "
+            #      * "of nwrite so cannot get moment at time points where pdf was saved.")
+            ntime = ((ntime-1)÷(ntime_pdfs-1)) * (ntime_pdfs-1) + 1
+        end
 
+        step = (ntime-1) ÷ (ntime_pdfs-1)
+    end
+    n = ndims(moment)
+    if n == 1
+        return moment[begin:step:end]
+    elseif n == 2
+        return moment[:,begin:step:end]
+    elseif n == 3
+        return moment[:,:,begin:step:end]
+    elseif n == 4
+        return moment[:,:,:,begin:step:end]
+    elseif n == 5
+        return moment[:,:,:,:,begin:step:end]
+    elseif n == 6
+        return moment[:,:,:,:,:,begin:step:end]
+    elseif n == 7
+        return moment[:,:,:,:,:,:,begin:step:end]
+    elseif n == 8
+        return moment[:,:,:,:,:,:,:,begin:step:end]
+    else
+        error("ndims=$n is not supported yet")
+    end
+end
+
+"""
+"""
 function compare_fields_symbolic_test(run_name,field,field_sym,z,r,time,nz,nr,ntime,field_label,field_sym_label,norm_label,file_string)
 	
 	# plot last timestep field vs z at r0 
