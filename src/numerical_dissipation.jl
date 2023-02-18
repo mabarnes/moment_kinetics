@@ -1,11 +1,13 @@
 """
-"""
+-"""
 module numerical_dissipation
 
 export setup_numerical_dissipation
        #vpa_boundary_buffer_decay!,
        #vpa_boundary_buffer_diffusion!, , z_dissipation!
 export vpa_dissipation!
+export r_dissipation!
+export z_dissipation!
 
 using Base.Iterators: flatten
 
@@ -18,6 +20,7 @@ Base.@kwdef struct numerical_dissipation_parameters
     vpa_boundary_buffer_diffusion_coefficient::mk_float = -1.0
     vpa_dissipation_coefficient::mk_float = -1.0
     z_dissipation_coefficient::mk_float = -1.0
+    r_dissipation_coefficient::mk_float = -1.0
 end
 
 function setup_numerical_dissipation(input_section::Dict)
@@ -101,7 +104,7 @@ The diffusion coefficient is set in the input TOML file by the parameter
 z_dissipation_coefficient = 0.1
 ```
 """
-function z_dissipation!(f_out, f_in, moments, z, vpa, spectral::T_spectral, dt,
+function z_dissipation!(f_out, f_in, z, spectral::T_spectral, dt,
         num_diss_params::numerical_dissipation_parameters) where T_spectral
 
     diffusion_coefficient = num_diss_params.z_dissipation_coefficient
@@ -111,25 +114,31 @@ function z_dissipation!(f_out, f_in, moments, z, vpa, spectral::T_spectral, dt,
 
     begin_s_r_vperp_vpa_region()
 
-    #if T_spectral <: Bool
-    #    # Scale diffusion coefficient like square of grid spacing, so convergence will
-    #    # be second order accurate despite presence of numerical dissipation.
-    #    # Assume constant grid spacing, so all cell_width entries are the same.
-    #    diffusion_coefficient *= z.cell_width[1]^2
-    #else
-    #    # Dissipation should decrease with element size at order (ngrid-1) to preserve
-    #    # expected convergence of Chebyshev pseudospectral scheme
-    #    diffusion_coefficient *= (z.L/z.nelement)^(z.ngrid-1)
-    #end
-
-    #@. z.scratch2 = 1.e-2 * (1.0 - (2.0*z.grid/z.L)^2)
-    #diffusion_coefficient = z.scratch2
-
     z.scratch2  .= 1.0 # placeholder for Q in d / d z ( Q d f / d z)
     # N.B. routine below not consistent with distributed memory MPI
     @loop_s_r_vperp_vpa is ir ivperp ivpa begin
         @views second_derivative!(z.scratch, f_in[ivpa,ivperp,:,ir,is], z.scratch2, z, spectral)
         @views @. f_out[ivpa,ivperp,:,ir,is] += dt * diffusion_coefficient * z.scratch
+    end
+
+    return nothing
+end
+
+function r_dissipation!(f_out, f_in, r, spectral::T_spectral, dt,
+        num_diss_params::numerical_dissipation_parameters) where T_spectral
+
+    diffusion_coefficient = num_diss_params.r_dissipation_coefficient
+    if diffusion_coefficient <= 0.0
+        return nothing
+    end
+
+    begin_s_z_vperp_vpa_region()
+
+    r.scratch2  .= 1.0 # placeholder for Q in d / d r ( Q d f / d r)
+    # N.B. routine below not consistent with distributed memory MPI
+    @loop_s_z_vperp_vpa is iz ivperp ivpa begin
+        @views second_derivative!(r.scratch, f_in[ivpa,ivperp,iz,:,is], r.scratch2, r, spectral)
+        @views @. f_out[ivpa,ivperp,iz,:,is] += dt * diffusion_coefficient * r.scratch
     end
 
     return nothing

@@ -300,6 +300,8 @@ using ..input_structs
         Si = ( Dt(dfni) + ( vpa * (Bzed/Bmag) - 0.5*rhostar*Er ) * Dz(dfni) + ( 0.5*rhostar*Ez*rfac ) * Dr(dfni) + ( 0.5*Ez*Bzed/Bmag ) * Dvpa(dfni)
                + cx_frequency*( densn*dfni - densi*gav_dfnn ) ) - ionization_frequency*dense*gav_dfnn 
                - num_diss_params.vpa_dissipation_coefficient*Dvpa(Dvpa(dfni))
+               - num_diss_params.r_dissipation_coefficient*Dr(Dr(dfni))
+               - num_diss_params.z_dissipation_coefficient*Dz(Dz(dfni))
         Source_i = expand_derivatives(Si)
         
         # the neutral source to maintain the manufactured solution
