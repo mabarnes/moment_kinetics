@@ -28,13 +28,15 @@ using ..quadrature: composite_simpson_weights
 using ..array_allocation: allocate_float
 using ..file_io: open_ascii_output_file
 using ..type_definitions: mk_float, mk_int
-using ..load_data: open_readonly_output_file, load_time_data
+using ..load_data: open_readonly_output_file, get_group, load_time_data
+using ..load_data: get_nranks
 using ..load_data: load_fields_data, load_pdf_data
 using ..load_data: load_charged_particle_moments_data, load_neutral_particle_moments_data
 using ..load_data: load_neutral_pdf_data
 using ..load_data: load_variable
 using ..load_data: load_coordinate_data, load_block_data, load_rank_data, load_species_data
-using ..analysis: analyze_fields_data, analyze_moments_data, analyze_pdf_data
+using ..analysis: analyze_fields_data, analyze_moments_data, analyze_pdf_data,
+                  check_Chodura_condition
 using ..velocity_moments: integrate_over_vspace
 using ..manufactured_solns: manufactured_solutions, manufactured_electric_fields
 using ..moment_kinetics_input: mk_input, get
@@ -76,7 +78,8 @@ function read_distributed_zr_data!(var::Array{mk_float,3}, var_name::String,
     
     for iblock in 0:nblocks-1
         fid = open_readonly_output_file(run_name,file_key,iblock=iblock,printout=false)
-        var_local = load_variable(fid, string("dynamic_data/", var_name))
+        group = get_group(fid, "dynamic_data")
+        var_local = load_variable(group, var_name)
         
         z_irank, r_irank = load_rank_data(fid)
         
@@ -100,7 +103,8 @@ function read_distributed_zr_data!(var::Array{mk_float,4}, var_name::String,
     # dimension of var is [z,r,species,t]
     for iblock in 0:nblocks-1
         fid = open_readonly_output_file(run_name,file_key,iblock=iblock,printout=false)
-        var_local = load_variable(fid, string("dynamic_data/", var_name))
+        group = get_group(fid, "dynamic_data")
+        var_local = load_variable(group, var_name)
         
         z_irank, r_irank = load_rank_data(fid)
         
@@ -336,6 +340,8 @@ function analyze_and_plot_data(path)
         nvr = 1
         nvzeta = 1
     end
+
+    geometry, composition = get_geometry_and_composition(scan_input,n_ion_species,n_neutral_species)
 	
 	# initialise the post-processing input options
     nwrite_movie, itime_min, itime_max, ivpa0, ivperp0, iz0, ir0,
@@ -377,6 +383,30 @@ function analyze_and_plot_data(path)
         plot_fields_rt(phi[iz0,:,:], delta_phi, time, itime_min, itime_max, nwrite_movie,
         r, ir0, run_name, delta_phi, pp)
     end
+
+    Chodura_ratio_lower, Chodura_ratio_upper =
+        check_Chodura_condition(run_name, vpa_local, vpa_local_wgts, vperp_local,
+                                vperp_local_wgts,
+                                moment_at_pdf_times(density, ntime, ntime_pdfs),
+                                composition.T_e,
+                                moment_at_pdf_times(Er, ntime, ntime_pdfs),
+                                geometry, "wall", nblocks)
+
+    plot(legend=true)
+    for ir ∈ 1:nr_global
+        plot!(time_pdfs, Chodura_ratio_lower[ir,:], xlabel="time",
+              ylabel="Chodura ratio at z=-L/2", label="ir=$ir")
+    end
+    outfile = string(run_name, "_Chodura_ratio_lower.pdf")
+    savefig(outfile)
+    plot(legend=true)
+    for ir ∈ 1:nr_global
+        plot(time_pdfs, Chodura_ratio_upper[ir,:], xlabel="time",
+             ylabel="Chodura ratio at z=+L/2", label="ir=$ir")
+    end
+    outfile = string(run_name, "_Chodura_ratio_upper.pdf")
+    savefig(outfile)
+
     # make plots and animations of the phi, Ez and Er 
     plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time, z, r, iz0, ir0, n_ion_species,
      itime_min, itime_max, nwrite_movie, run_name, pp)
@@ -418,7 +448,7 @@ function analyze_and_plot_data(path)
             Lr_in = 1.0
         end
         
-        geometry, composition = get_geometry_and_composition(scan_input,n_ion_species,n_neutral_species)
+        #geometry, composition = get_geometry_and_composition(scan_input,n_ion_species,n_neutral_species)
 
         manufactured_solns_list = manufactured_solutions(Lr_in,Lz,r_bc,z_bc,geometry,composition,nr_local)
         dfni_func = manufactured_solns_list.dfni_func
@@ -1865,21 +1895,6 @@ function plot_charged_pdf_2D_at_wall(run_name)
         close(fid_pdfs)
     end
     println("done.")
-end
-
-function get_nranks(run_name,nblocks,description)
-    z_nrank = 0
-    r_nrank = 0 
-    for iblock in 0:nblocks-1
-        fid = open_readonly_output_file(run_name,description,iblock=iblock, printout=false)
-        z_irank, r_irank = load_rank_data(fid,printout=false)
-        z_nrank = max(z_irank,z_nrank)
-        r_nrank = max(r_irank,r_nrank)
-        close(fid)
-    end
-    r_nrank = r_nrank + 1
-    z_nrank = z_nrank + 1
-    return z_nrank, r_nrank
 end
 
 end

@@ -46,6 +46,21 @@ function open_readonly_output_file(run_name, ext; iblock=0, printout=false)
     return fid
 end
 
+function get_nranks(run_name,nblocks,description)
+    z_nrank = 0
+    r_nrank = 0
+    for iblock in 0:nblocks-1
+        fid = open_readonly_output_file(run_name,description,iblock=iblock, printout=false)
+        z_irank, r_irank = load_rank_data(fid,printout=false)
+        z_nrank = max(z_irank,z_nrank)
+        r_nrank = max(r_irank,r_nrank)
+        close(fid)
+    end
+    r_nrank = r_nrank + 1
+    z_nrank = z_nrank + 1
+    return z_nrank, r_nrank
+end
+
 """
 Load a single variable from a file
 """
