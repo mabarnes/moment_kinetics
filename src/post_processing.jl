@@ -245,13 +245,15 @@ function get_geometry_and_composition(scan_input,n_ion_species,n_neutral_species
     Er_constant = get(scan_input, "Er_constant", 0.0)
     # constant to be used to control Ez divergences
     epsilon_offset = get(scan_input, "epsilon_offset", 0.001)
+    # bool to control if dfni is a function of vpa or vpabar in MMS test 
+    use_vpabar_in_mms_dfni = get(scan_input, "use_vpabar_in_mms_dfni", true)
     # ratio of the neutral particle mass to the ion particle mass
     mn_over_mi = 1.0
     # ratio of the electron particle mass to the ion particle mass
     me_over_mi = 1.0/1836.0
     composition = species_composition(n_species, n_ion_species, n_neutral_species,
         electron_physics, use_test_neutral_wall_pdf, 1:n_ion_species, n_ion_species+1:n_species, T_e, T_wall,
-        phi_wall, Er_constant, epsilon_offset, mn_over_mi, me_over_mi, allocate_float(n_species))
+        phi_wall, Er_constant, epsilon_offset, use_vpabar_in_mms_dfni, mn_over_mi, me_over_mi, allocate_float(n_species))
     return geometry, composition
 
 end
@@ -383,30 +385,33 @@ function analyze_and_plot_data(path)
         plot_fields_rt(phi[iz0,:,:], delta_phi, time, itime_min, itime_max, nwrite_movie,
         r, ir0, run_name, delta_phi, pp)
     end
+    
+    diagnostics_chodura = false
+    if diagnostics_chodura
+        Chodura_ratio_lower, Chodura_ratio_upper =
+            check_Chodura_condition(run_name, vpa_local, vpa_local_wgts, vperp_local,
+                                    vperp_local_wgts,
+                                    moment_at_pdf_times(density, ntime, ntime_pdfs),
+                                    composition.T_e,
+                                    moment_at_pdf_times(Er, ntime, ntime_pdfs),
+                                    geometry, "wall", nblocks)
 
-    Chodura_ratio_lower, Chodura_ratio_upper =
-        check_Chodura_condition(run_name, vpa_local, vpa_local_wgts, vperp_local,
-                                vperp_local_wgts,
-                                moment_at_pdf_times(density, ntime, ntime_pdfs),
-                                composition.T_e,
-                                moment_at_pdf_times(Er, ntime, ntime_pdfs),
-                                geometry, "wall", nblocks)
-
-    plot(legend=true)
-    for ir ∈ 1:nr_global
-        plot!(time_pdfs, Chodura_ratio_lower[ir,:], xlabel="time",
-              ylabel="Chodura ratio at z=-L/2", label="ir=$ir")
-    end
-    outfile = string(run_name, "_Chodura_ratio_lower.pdf")
-    savefig(outfile)
-    plot(legend=true)
-    for ir ∈ 1:nr_global
-        plot(time_pdfs, Chodura_ratio_upper[ir,:], xlabel="time",
-             ylabel="Chodura ratio at z=+L/2", label="ir=$ir")
-    end
-    outfile = string(run_name, "_Chodura_ratio_upper.pdf")
-    savefig(outfile)
-
+        plot(legend=true)
+        for ir ∈ 1:nr_global
+            plot!(time_pdfs, Chodura_ratio_lower[ir,:], xlabel="time",
+                  ylabel="Chodura ratio at z=-L/2", label="ir=$ir")
+        end
+        outfile = string(run_name, "_Chodura_ratio_lower.pdf")
+        savefig(outfile)
+        plot(legend=true)
+        for ir ∈ 1:nr_global
+            plot(time_pdfs, Chodura_ratio_upper[ir,:], xlabel="time",
+                 ylabel="Chodura ratio at z=+L/2", label="ir=$ir")
+        end
+        outfile = string(run_name, "_Chodura_ratio_upper.pdf")
+        savefig(outfile)
+    end 
+    
     # make plots and animations of the phi, Ez and Er 
     plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time, z, r, iz0, ir0, n_ion_species,
      itime_min, itime_max, nwrite_movie, run_name, pp)
