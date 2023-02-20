@@ -209,7 +209,7 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
         if is != 1
             continue
         end
-        Er[iz,ir] = Er_func(z.grid[iz], r.grid[ir])
+        Er[iz,ir] = Er_func(z.grid[iz], r.grid[ir], 0.0)
     end
     # update upar, ppar, qpar, vth consistent with manufactured solns
     update_density!(moments.charged.dens, pdf.charged.unnorm, vpa, vperp, z, r,
