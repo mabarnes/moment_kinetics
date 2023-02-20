@@ -5,7 +5,7 @@ include("setup.jl")
 using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.chebyshev: setup_chebyshev_pseudospectral
-using moment_kinetics.calculus: derivative!, integral
+using moment_kinetics.calculus: derivative!, second_derivative!, integral
 
 using Random
 
@@ -781,6 +781,205 @@ function runtests()
                                        norm=maxabs_norm)
                     end
                 end
+            end
+        end
+
+        @testset "Chebyshev pseudospectral second derivatives (4 argument), periodic" verbose=false begin
+            @testset "$nelement $ngrid" for (nelement, ngrid, rtol) ∈
+                    (
+                     (1, 5, 8.e-1),
+                     (1, 6, 2.e-1),
+                     (1, 7, 1.e-1),
+                     (1, 8, 1.e-2),
+                     (1, 9, 5.e-3),
+                     (1, 10, 3.e-3),
+                     (1, 11, 2.e-4),
+                     (1, 12, 5.e-6),
+                     (1, 13, 4.e-6),
+                     (1, 14, 1.e-7),
+                     (1, 15, 1.e-7),
+                     (1, 16, 2.e-9),
+                     (1, 17, 1.e-9),
+                     (1, 18, 4.e-12),
+                     (1, 19, 2.e-12),
+                     (1, 20, 2.e-13),
+                     (1, 21, 2.e-13),
+                     (1, 22, 2.e-13),
+                     (1, 23, 2.e-13),
+                     (1, 24, 2.e-13),
+                     (1, 25, 2.e-13),
+                     (1, 26, 2.e-13),
+                     (1, 27, 2.e-13),
+                     (1, 28, 2.e-13),
+                     (1, 29, 2.e-13),
+                     (1, 30, 2.e-13),
+                     (1, 31, 2.e-13),
+                     (1, 32, 2.e-13),
+                     (1, 33, 2.e-13),
+
+                     (2, 4, 2.e-1),
+                     (2, 5, 4.e-2),
+                     (2, 6, 2.e-2),
+                     (2, 7, 4.e-4),
+                     (2, 8, 2.e-4),
+                     (2, 9, 4.e-6),
+                     (2, 10, 4.e-6),
+                     (2, 11, 4.e-8),
+                     (2, 12, 4.e-8),
+                     (2, 13, 2.e-10),
+                     (2, 14, 2.e-10),
+                     (2, 15, 4.e-13),
+                     (2, 16, 2.e-13),
+                     (2, 17, 2.e-13),
+                     (2, 18, 2.e-13),
+                     (2, 19, 2.e-13),
+                     (2, 20, 2.e-13),
+                     (2, 21, 2.e-13),
+                     (2, 22, 2.e-13),
+                     (2, 23, 2.e-13),
+                     (2, 24, 2.e-13),
+                     (2, 25, 2.e-13),
+                     (2, 26, 2.e-13),
+                     (2, 27, 2.e-13),
+                     (2, 28, 2.e-13),
+                     (2, 29, 2.e-13),
+                     (2, 30, 4.e-13),
+                     (2, 31, 4.e-13),
+                     (2, 32, 4.e-13),
+                     (2, 33, 4.e-13),
+
+                     (3, 3, 4.e-1),
+                     (3, 4, 1.e-1),
+                     (3, 5, 2.e-2),
+                     (3, 6, 4.e-3),
+                     (3, 7, 1.e-3),
+                     (3, 8, 1.e-4),
+                     (3, 9, 1.e-5),
+                     (3, 10, 4.e-7),
+                     (3, 11, 4.e-8),
+                     (3, 12, 2.e-9),
+                     (3, 13, 2.e-10),
+                     (3, 14, 3.e-13),
+                     (3, 15, 2.e-13),
+                     (3, 16, 2.e-13),
+                     (3, 17, 2.e-13),
+                     (3, 18, 2.e-13),
+                     (3, 19, 2.e-13),
+                     (3, 20, 2.e-13),
+                     (3, 21, 2.e-13),
+                     (3, 22, 2.e-13),
+                     (3, 23, 2.e-13),
+                     (3, 24, 2.e-13),
+                     (3, 25, 2.e-13),
+                     (3, 26, 2.e-13),
+                     (3, 27, 2.e-13),
+                     (3, 28, 2.e-13),
+                     (3, 29, 4.e-13),
+                     (3, 30, 4.e-13),
+                     (3, 31, 4.e-13),
+                     (3, 32, 4.e-13),
+                     (3, 33, 4.e-13),
+
+                     (4, 3, 3.e-1),
+                     (4, 4, 1.e-1),
+                     (4, 5, 1.e-2),
+                     (4, 6, 2.e-3),
+                     (4, 7, 2.e-4),
+                     (4, 8, 2.e-5),
+                     (4, 9, 1.e-6),
+                     (4, 10, 1.e-7),
+                     (4, 11, 4.e-9),
+                     (4, 12, 2.e-10),
+                     (4, 13, 2.e-13),
+                     (4, 14, 2.e-13),
+                     (4, 15, 2.e-13),
+                     (4, 16, 2.e-13),
+                     (4, 17, 2.e-13),
+                     (4, 18, 2.e-13),
+                     (4, 19, 2.e-13),
+                     (4, 20, 2.e-13),
+                     (4, 21, 2.e-13),
+                     (4, 22, 2.e-13),
+                     (4, 23, 2.e-13),
+                     (4, 24, 4.e-13),
+                     (4, 25, 4.e-13),
+                     (4, 26, 4.e-13),
+                     (4, 27, 4.e-13),
+                     (4, 28, 4.e-13),
+                     (4, 29, 4.e-13),
+                     (4, 30, 4.e-13),
+                     (4, 31, 4.e-13),
+                     (4, 32, 4.e-13),
+                     (4, 33, 4.e-13),
+
+                     (5, 3, 4.e-1),
+                     (5, 4, 4.e-2),
+                     (5, 5, 4.e-3),
+                     (5, 6, 1.e-3),
+                     (5, 7, 4.e-5),
+                     (5, 8, 1.e-5),
+                     (5, 9, 2.e-7),
+                     (5, 10, 1.e-8),
+                     (5, 11, 4.e-10),
+                     (5, 12, 3.e-13),
+                     (5, 13, 2.e-13),
+                     (5, 14, 2.e-13),
+                     (5, 15, 2.e-13),
+                     (5, 16, 2.e-13),
+                     (5, 17, 4.e-13),
+                     (5, 18, 4.e-13),
+                     (5, 19, 4.e-13),
+                     (5, 20, 4.e-13),
+                     (5, 21, 4.e-13),
+                     (5, 22, 8.e-13),
+                     (5, 23, 8.e-13),
+                     (5, 24, 8.e-13),
+                     (5, 25, 8.e-13),
+                     (5, 26, 8.e-13),
+                     (5, 27, 8.e-13),
+                     (5, 28, 8.e-13),
+                     (5, 29, 8.e-13),
+                     (5, 30, 8.e-13),
+                     (5, 31, 8.e-13),
+                     (5, 32, 8.e-13),
+                     (5, 33, 8.e-13),
+                    )
+
+                # define inputs needed for the test
+                L = 6.0
+                bc = "periodic"
+                # fd_option and adv_input not actually used so given values unimportant
+                fd_option = ""
+                adv_input = advection_input("default", 1.0, 0.0, 0.0)
+                # create the 'input' struct containing input info needed to create a
+                # coordinate
+                nelement_local = nelement
+				nrank_per_block = 0 # dummy value
+				irank = 0 # dummy value
+				comm = false # dummy value
+				input = grid_input("coord", ngrid, nelement,
+                    nelement_local, nrank_per_block, irank, L,
+                    "chebyshev_pseudospectral", fd_option, bc, adv_input, comm)
+                # create the coordinate struct 'x'
+                x = define_coordinate(input)
+                # create arrays needed for Chebyshev pseudospectral treatment in x
+                # and create the plans for the forward and backward fast Chebyshev
+                # transforms
+                spectral = setup_chebyshev_pseudospectral(x)
+
+                offset = randn(rng)
+                f = @. sinpi(2.0 * x.grid / L) + offset
+                expected_d2f = @. -4.0 * π^2 / L^2 * sinpi(2.0 * x.grid / L)
+
+                # create array for the derivative d2f/dx2
+                d2f = similar(f)
+
+                # differentiate f
+                x.scratch2 .= 1.0 # placeholder for Q in d / d x ( Q d f / d x)
+                second_derivative!(d2f, f, x.scratch2, x, spectral)
+
+                @test isapprox(d2f, expected_d2f, rtol=rtol, atol=1.e-10,
+                               norm=maxabs_norm)
             end
         end
     end
