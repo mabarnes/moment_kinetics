@@ -133,9 +133,12 @@ function check_Chodura_condition(run_name, vpa_grid, vpa_wgts, vperp_grid, vperp
             end
         end
 
+        # Note factor of (2π v_perp) from the volume element and integration over
+        # gyro-angle is already included in vperp_wgts (and the π is removed by the
+        # definition of normalisation of f).
         @views lower_result[ir,it] =
             integrate_over_negative_vpa(f_lower[:,:,1,ir,is,it], vpabar, -2, vpa_wgts,
-                                        zeros(nvpa), nvpa, vperp_grid, 1, vperp_wgts,
+                                        zeros(nvpa), nvpa, vperp_grid, 0, vperp_wgts,
                                         false)
         if it == ntime
             println("check vpabar lower", vpabar)
@@ -154,9 +157,12 @@ function check_Chodura_condition(run_name, vpa_grid, vpa_wgts, vperp_grid, vperp
             end
         end
 
+        # Note factor of (2π v_perp) from the volume element and integration over
+        # gyro-angle is already included in vperp_wgts (and the π is removed by the
+        # definition of normalisation of f).
         @views upper_result[ir,it] =
             integrate_over_positive_vpa(f_upper[:,:,end,ir,is,it], vpabar, -2, vpa_wgts,
-                                        zeros(nvpa), nvpa, vperp_grid, 1, vperp_wgts,
+                                        zeros(nvpa), nvpa, vperp_grid, 0, vperp_wgts,
                                         false)
         if it == ntime
             println("check vpabar upper ", vpabar)
