@@ -193,7 +193,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
                            manufactured_solns_test)
 
 
-    if z.discretization == "chebyshev_pseudospectral"
+    if z.discretization == "chebyshev_pseudospectral" && z.n > 1
         # create arrays needed for explicit Chebyshev pseudospectral treatment in vpa
         # and create the plans for the forward and backward fast Chebyshev transforms
         z_spectral = setup_chebyshev_pseudospectral(z)
@@ -419,7 +419,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     # vpa_spectral = vpa_spectral, vperp_spectral = vperp_spectral, z_spectral = z_spectral, r_spectral = r_spectral)
     spectral_objects = spectral_object_struct(vz_spectral, vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral, z_spectral, r_spectral)
     if(advance.manufactured_solns_test)
-        manufactured_source_list = manufactured_sources(r.L,z.L,r.bc,z.bc,composition,geometry,collisions,r.n,num_diss_params)
+        manufactured_source_list = manufactured_sources(r.L,z.L,r.bc,z.bc,composition,geometry,collisions,r.n,z.n,num_diss_params)
     else
         manufactured_source_list = false # dummy Bool to be passed as argument instead of list
     end
@@ -932,7 +932,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     # z_advection! advances 1D advection equation in z
     # apply z-advection operation to charged species
 
-    if advance.z_advection
+    if advance.z_advection && z.n > 1
         z_advection!(fvec_out.pdf, fvec_in, fields, z_advect, z, vpa, vperp, r,
             dt, t, z_spectral, composition, geometry, scratch_dummy)
     end

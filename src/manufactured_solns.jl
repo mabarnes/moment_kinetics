@@ -144,11 +144,11 @@ using ..input_structs
     end
     
     # ion distribution symbolic function
-    function dfni_sym(Lr,Lz,r_bc,z_bc,composition,geometry,nr)
+    function dfni_sym(Lr,Lz,r_bc,z_bc,composition,geometry,nr,nz)
         densi = densi_sym(Lr,Lz,r_bc,z_bc,composition)
         
         # calculate the electric fields and the potential
-        Er, Ez, phi = electric_fields(Lr,Lz,r_bc,z_bc,composition,nr)
+        Er, Ez, phi = electric_fields(Lr,Lz,r_bc,z_bc,composition,nr,nz)
         
         # get geometric/composition data
         Bzed = geometry.Bzed
@@ -174,7 +174,7 @@ using ..input_structs
         return dfni
     end
 
-    function electric_fields(Lr,Lz,r_bc,z_bc,composition,nr)
+    function electric_fields(Lr,Lz,r_bc,z_bc,composition,nr,nz)
        
         # define derivative operators
         Dr = Differential(r) 
@@ -195,19 +195,25 @@ using ..input_structs
             # N_e equal to reference density 
             N_e = 1.0 
         end 
-        
+
         if nr > 1 # keep radial electric field
             rfac = 1.0
         else      # drop radial electric field
             rfac = 0.0
         end
-        
+
+        if nz > 1 # keep radial electric field
+            zfac = 1.0
+        else      # drop radial electric field
+            zfac = 0.0
+        end
+
         densi = densi_sym(Lr,Lz,r_bc,z_bc,composition)
         # calculate the electric fields
         dense = densi # get the electron density via quasineutrality with Zi = 1
         phi = composition.T_e*log(dense/N_e) # use the adiabatic response of electrons for me/mi -> 0
         Er = -Dr(phi)*rfac + composition.Er_constant
-        Ez = -Dz(phi)
+        Ez = -Dz(phi)*zfac
         
         Er_expanded = expand_derivatives(Er)
         Ez_expanded = expand_derivatives(Ez)
@@ -215,14 +221,14 @@ using ..input_structs
         return Er_expanded, Ez_expanded, phi
     end
 
-    function manufactured_solutions(Lr,Lz,r_bc,z_bc,geometry,composition,nr)
+    function manufactured_solutions(Lr,Lz,r_bc,z_bc,geometry,composition,nr,nz)
         densi = densi_sym(Lr,Lz,r_bc,z_bc,composition)
-        dfni = dfni_sym(Lr,Lz,r_bc,z_bc,composition,geometry,nr)
+        dfni = dfni_sym(Lr,Lz,r_bc,z_bc,composition,geometry,nr,nz)
         
         densn = densn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
         dfnn = dfnn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
 
-        Er, Ez, phi = electric_fields(Lr,Lz,r_bc,z_bc,composition,nr)
+        Er, Ez, phi = electric_fields(Lr,Lz,r_bc,z_bc,composition,nr,nz)
         
         #build julia functions from these symbolic expressions
         # cf. https://docs.juliahub.com/Symbolics/eABRO/3.4.0/tutorials/symbolic_functions/
@@ -243,10 +249,10 @@ using ..input_structs
         return manufactured_solns_list
     end 
     
-    function manufactured_electric_fields(Lr,Lz,r_bc,z_bc,composition,nr)
+    function manufactured_electric_fields(Lr,Lz,r_bc,z_bc,composition,nr,nz)
         
         # calculate the electric fields and the potential
-        Er, Ez, phi = electric_fields(Lr,Lz,r_bc,z_bc,composition,nr)
+        Er, Ez, phi = electric_fields(Lr,Lz,r_bc,z_bc,composition,nr,nz)
         
         Er_func = build_function(Er, z, r, t, expression=Val{false})
         Ez_func = build_function(Ez, z, r, t, expression=Val{false})
@@ -257,11 +263,11 @@ using ..input_structs
         return manufactured_E_fields
     end 
 
-    function manufactured_sources(Lr,Lz,r_bc,z_bc,composition,geometry,collisions,nr,num_diss_params)
+    function manufactured_sources(Lr,Lz,r_bc,z_bc,composition,geometry,collisions,nr,nz,num_diss_params)
         
         # ion manufactured solutions
         densi = densi_sym(Lr,Lz,r_bc,z_bc,composition)
-        dfni = dfni_sym(Lr,Lz,r_bc,z_bc,composition,geometry,nr)
+        dfni = dfni_sym(Lr,Lz,r_bc,z_bc,composition,geometry,nr,nz)
         vrvzvzeta_dfni = cartesian_dfni_sym(Lr,Lz,r_bc,z_bc,composition) #dfni in vr vz vzeta coordinates
         
         # neutral manufactured solutions
@@ -297,7 +303,7 @@ using ..input_structs
         end
         
         # calculate the electric fields and the potential
-        Er, Ez, phi = electric_fields(Lr,Lz,r_bc,z_bc,composition,nr)
+        Er, Ez, phi = electric_fields(Lr,Lz,r_bc,z_bc,composition,nr,nz)
         
         # the ion source to maintain the manufactured solution
         Si = ( Dt(dfni) + ( vpa * (Bzed/Bmag) - 0.5*rhostar*Er ) * Dz(dfni) + ( 0.5*rhostar*Ez*rfac ) * Dr(dfni) + ( 0.5*Ez*Bzed/Bmag ) * Dvpa(dfni)

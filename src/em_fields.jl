@@ -139,10 +139,14 @@ function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral, sc
         end
     end
     #Ez = - d phi / dz
-    @views derivative_z!(fields.Ez,-fields.phi,
-                scratch_dummy.buffer_r_1, scratch_dummy.buffer_r_2,
-                scratch_dummy.buffer_r_3,scratch_dummy.buffer_r_4,
-                z_spectral,z)
+    if z.n > 1
+        @views derivative_z!(fields.Ez,-fields.phi,
+                    scratch_dummy.buffer_r_1, scratch_dummy.buffer_r_2,
+                    scratch_dummy.buffer_r_3,scratch_dummy.buffer_r_4,
+                    z_spectral,z)
+    else
+        fields.Ez .= 0.0
+    end
 
 end
 
