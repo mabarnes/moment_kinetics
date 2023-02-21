@@ -449,10 +449,10 @@ function second_derivative!(d2f, f, Q, coord, spectral)
     # convergence of the second derivative. Aims to stabilise numerical instability when
     # spike develops at an element boundary. The coefficient is an arbitrary choice, it
     # should probably be large enough for stability but as small as possible.
+    #
+    # Arbitrary numerical coefficient
+    C = 1.0
     function penalise_discontinuous_first_derivative!(d2f, imin, imax, df)
-        # Arbitrary numerical coefficient
-        C = 1.0
-
         # Left element boundary
         d2f[imin] += C * df[1]
 
@@ -469,20 +469,26 @@ function second_derivative!(d2f, f, Q, coord, spectral)
                                                         coord.scratch2_2d[:,ielement])
     end
 
-    # For stability don't contribute to evolution at boundaries, in case these
-    # points are not set by a boundary condition.    
-    if coord.nelement_global == coord.nelement_global
-        if coord.bc ∈ ("wall", "zero", "both_zero")
-            d2f[1] = 0.0
-            d2f[end] = 0.0
-        end
-    else # full grid is across processes and bc only applied to extreme ends of the domain
-        if coord.bc ∈ ("wall", "zero", "both_zero") && coord.irank == 0
+    if coord.bc ∈ ("wall", "zero", "both_zero")
+        # For stability don't contribute to evolution at boundaries, in case these
+        # points are not set by a boundary condition.    
+        # Full grid may be across processes and bc only applied to extreme ends of the
+        # domain.
+        if coord.irank == 0
             d2f[1] = 0.0
         end
-        if coord.bc ∈ ("wall", "zero", "both_zero") && coord.irank == coord.nrank - 1
+        if coord.irank == coord.nrank - 1
             d2f[end] = 0.0
         end
+    elseif coord.bc == "periodic"
+        # Need to get first derivatives from opposite ends of grid
+        if coord.nelement_local != coord.nelement_global
+            error("Distributed memory MPI not yet supported here")
+        end
+        d2f[1] -= C * coord.scratch2_2d[end,end]
+        d2f[end] += C * coord.scratch2_2d[1,1]
+    else
+        error("Unsupported bc '$coord.bc'")
     end
     return nothing
 end
