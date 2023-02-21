@@ -16,18 +16,18 @@ using ..input_structs
     zero_val = 1.0e-8
     #epsilon_offset = 0.001 
     #standard functions for building densities
-    function nplus_sym(Lr,Lz,r_bc,z_bc,epsilon)
+    function nplus_sym(Lr,Lz,r_bc,z_bc)
         if r_bc == "periodic"
-            nplus = exp(sqrt(epsilon + 0.5 - z/Lz))*(1.0 + 0.05*sin(2.0*pi*r/Lr)*cos(pi*z/Lz))
+            nplus = 1.0 + 0.05*sin(2.0*pi*r/Lr)*cos(pi*z/Lz)
         elseif r_bc == "Dirichlet"
             nplus = 1.0 - 0.2*r/Lr 
         end
         return nplus
     end
     
-    function nminus_sym(Lr,Lz,r_bc,z_bc,epsilon)
+    function nminus_sym(Lr,Lz,r_bc,z_bc)
         if r_bc == "periodic"
-            nminus = exp(sqrt(epsilon + 0.5 + z/Lz))*(1.0 + 0.05*sin(2.0*pi*r/Lr)*cos(pi*z/Lz))
+            nminus = 1.0 + 0.05*sin(2.0*pi*r/Lr)*cos(pi*z/Lz)
         elseif r_bc == "Dirichlet"
             nminus = 1.0 - 0.2*r/Lr
         end
@@ -72,8 +72,8 @@ using ..input_structs
             Bzed = geometry.Bzed
             Bmag = geometry.Bmag
             epsilon = composition.epsilon_offset
-            Gamma_minus = 0.5*(Bzed/Bmag)*nminus_sym(Lr,Lz,r_bc,z_bc,epsilon)/sqrt(pi)
-            Gamma_plus = 0.5*(Bzed/Bmag)*nplus_sym(Lr,Lz,r_bc,z_bc,epsilon)/sqrt(pi)
+            Gamma_minus = 0.5*(Bzed/Bmag)*nminus_sym(Lr,Lz,r_bc,z_bc)/sqrt(pi)
+            Gamma_plus = 0.5*(Bzed/Bmag)*nplus_sym(Lr,Lz,r_bc,z_bc)/sqrt(pi)
             # exact integral of corresponding dfnn below
             if composition.use_test_neutral_wall_pdf
                 #test 
@@ -101,8 +101,8 @@ using ..input_structs
             Bzed = geometry.Bzed
             Bmag = geometry.Bmag
             epsilon = composition.epsilon_offset
-            Gamma_minus = 0.5*(Bzed/Bmag)*nminus_sym(Lr,Lz,r_bc,z_bc,epsilon)/sqrt(pi)
-            Gamma_plus = 0.5*(Bzed/Bmag)*nplus_sym(Lr,Lz,r_bc,z_bc,epsilon)/sqrt(pi)
+            Gamma_minus = 0.5*(Bzed/Bmag)*nminus_sym(Lr,Lz,r_bc,z_bc)/sqrt(pi)
+            Gamma_plus = 0.5*(Bzed/Bmag)*nplus_sym(Lr,Lz,r_bc,z_bc)/sqrt(pi)
             dfnn = Hplus *( Gamma_minus*( 0.5 - z/Lz)^2 + 1.0 )*FKw + Hminus*( Gamma_plus*( 0.5 + z/Lz)^2 + 1.0 )*FKw 
         end
         return dfnn
@@ -126,8 +126,9 @@ using ..input_structs
                 densi = 1.0 +  0.5*(r/Lr)*sin(2.0*pi*z/Lz)
             end
         elseif z_bc == "wall"
-            epsilon = composition.epsilon_offset
-            densi = 0.25*(0.5 - z/Lz)*nminus_sym(Lr,Lz,r_bc,z_bc,epsilon) + 0.25*(z/Lz + 0.5)*nplus_sym(Lr,Lz,r_bc,z_bc,epsilon) + (z/Lz + 0.5)*(0.5 - z/Lz)*nzero_sym(Lr,Lz,r_bc,z_bc)  #+  0.5*(r/Lr + 0.5) + 0.5*(z/Lz + 0.5)
+            _, _, phi = electric_fields(Lr,Lz,r_bc,z_bc,composition,nr,nz)
+            phi_w = substitute(phi, z=>0.5*Lz)
+            densi = (1+2*(phi-phi_w))*(nplus_sym(Lr,Lz,r_bc,z_bc)/4*(0.5+z/Lz) + nminus_sym(Lr,Lz,r_bc,z_bc)/4*(0.5-z/Lz) + (0.5+z/Lz)*(0.5-z/Lz)*nzero_sym(Lr,Lz,r_bc,z_bc)) * exp(-(phi-phi_w))
         end
         return densi
     end
@@ -158,11 +159,12 @@ using ..input_structs
         if z_bc == "periodic"
             dfni = densi * exp( - vpa^2 - vperp^2) 
         elseif z_bc == "wall"
+            phi_w = substitute(phi, z=>0.5*Lz)
             vpabar = vpa - (rhostar/2.0)*(Bmag/Bzed)*Er # effective velocity in z direction * (Bmag/Bzed)
             Hplus = 0.5*(sign(vpabar) + 1.0)
             Hminus = 0.5*(sign(-vpabar) + 1.0)
             ffa =  exp(- vperp^2)
-            dfni = ffa * ( nminus_sym(Lr,Lz,r_bc,z_bc,epsilon)* (0.5 - z/Lz) * Hminus * vpabar^2 + nplus_sym(Lr,Lz,r_bc,z_bc,epsilon)*(z/Lz + 0.5) * Hplus * vpabar^2 + nzero_sym(Lr,Lz,r_bc,z_bc)*(z/Lz + 0.5)*(0.5 - z/Lz) ) * exp( - vpabar^2 )
+            dfni = ffa * (Hplus*(vpabar^2 + (phi-phi_w))*(0.5+z/Lz)*nplus_sym(Lr,Lz,r_bc,z_bc) + Hminus*(vpabar^2 + (phi-phi_w))*(0.5-z/Lz)*nminus_sym(Lr,Lz,r_bc,z_bc) + (0.5+z/Lz)*(0.5-z/Lz)*nzero_sym(Lr,Lz,r_bc,z_bc))*exp(-vpabar^2-(phi-phi_w))
         end
         return dfni
     end
@@ -208,10 +210,14 @@ using ..input_structs
             zfac = 0.0
         end
 
-        densi = densi_sym(Lr,Lz,r_bc,z_bc,composition)
-        # calculate the electric fields
-        dense = densi # get the electron density via quasineutrality with Zi = 1
-        phi = composition.T_e*log(dense/N_e) # use the adiabatic response of electrons for me/mi -> 0
+        if z_bc == wall
+            @variables phi
+        else
+            densi = densi_sym(Lr,Lz,r_bc,z_bc,composition)
+            # calculate the electric fields
+            dense = densi # get the electron density via quasineutrality with Zi = 1
+            phi = composition.T_e*log(dense/N_e) # use the adiabatic response of electrons for me/mi -> 0
+        end
         Er = -Dr(phi)*rfac + composition.Er_constant
         Ez = -Dz(phi)*zfac
         
@@ -229,6 +235,18 @@ using ..input_structs
         dfnn = dfnn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
 
         Er, Ez, phi = electric_fields(Lr,Lz,r_bc,z_bc,composition,nr,nz)
+
+        if z_bc == "wall"
+            # Replace phi using the Lambert W function
+            Dr = Differential(r)
+            Dz = Differential(z)
+            phi_expr = error("not implemented yet!")
+            dphidz_expr = error("not implemented yet!")
+            Er = substitute(Er, Dr(phi)=>0)
+            Ez = substitute(Ez, Dz(phi)=>dphidz_expr)
+            densi = substitute(densi, phi=>phi_expr)
+            dfni = substitute(substitute(substitute(dfni, Dr(phi)=>0), Dz(phi)=>dphidz_expr), phi=>phi_expr)
+        end
         
         #build julia functions from these symbolic expressions
         # cf. https://docs.juliahub.com/Symbolics/eABRO/3.4.0/tutorials/symbolic_functions/
