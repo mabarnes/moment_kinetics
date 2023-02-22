@@ -9,6 +9,7 @@ export manufactured_electric_fields
 using Symbolics
 using IfElse
 using ..input_structs
+import LambertW: lambertw
 
     @variables r z vpa vperp t vz vr vzeta
     typed_zero(vz) = zero(vz)
@@ -116,7 +117,7 @@ using ..input_structs
     end
     
     # ion density symbolic function
-    function densi_sym(Lr,Lz,r_bc,z_bc,composition)
+    function densi_sym(Lr,Lz,r_bc,z_bc,composition,nr,nz)
         if z_bc == "periodic"
             if r_bc == "periodic"
                 densi = 1.5 +  0.1*(sin(2.0*pi*r/Lr) + sin(2.0*pi*z/Lz))#*sin(2.0*pi*t)  
@@ -144,9 +145,26 @@ using ..input_structs
         return jpari_into_LHS_wall_sym
     end
     
+    function Heaviside(x)
+        if x > 0.0
+            return 1.0
+        elseif x < 0.0
+            return 0.0
+        else
+            return 0.5
+        end
+    end
+    @register_symbolic Heaviside(x)
+    @register_symbolic HeavisidePrime(x)
+    Symbolics.derivative(::typeof(Heaviside), args::NTuple{1,Any}, ::Val{1}) =
+    HeavisidePrime(args[1])
+    @register_symbolic lambertw(x,i::Integer)
+    Symbolics.derivative(::typeof(lambertw), args::NTuple{2,Any}, ::Val{1}) =
+        lambertw(args...) / args[1] / (1 + lambertw(args...))
+
     # ion distribution symbolic function
     function dfni_sym(Lr,Lz,r_bc,z_bc,composition,geometry,nr,nz)
-        densi = densi_sym(Lr,Lz,r_bc,z_bc,composition)
+        densi = densi_sym(Lr,Lz,r_bc,z_bc,composition,nr,nz)
         
         # calculate the electric fields and the potential
         Er, Ez, phi = electric_fields(Lr,Lz,r_bc,z_bc,composition,nr,nz)
@@ -161,15 +179,13 @@ using ..input_structs
         elseif z_bc == "wall"
             phi_w = substitute(phi, z=>0.5*Lz)
             vpabar = vpa - (rhostar/2.0)*(Bmag/Bzed)*Er # effective velocity in z direction * (Bmag/Bzed)
-            Hplus = 0.5*(sign(vpabar) + 1.0)
-            Hminus = 0.5*(sign(-vpabar) + 1.0)
             ffa =  exp(- vperp^2)
-            dfni = ffa * (Hplus*(vpabar^2 + (phi-phi_w))*(0.5+z/Lz)*nplus_sym(Lr,Lz,r_bc,z_bc) + Hminus*(vpabar^2 + (phi-phi_w))*(0.5-z/Lz)*nminus_sym(Lr,Lz,r_bc,z_bc) + (0.5+z/Lz)*(0.5-z/Lz)*nzero_sym(Lr,Lz,r_bc,z_bc))*exp(-vpabar^2-(phi-phi_w))
+            dfni = ffa * (Heaviside(vpabar)*(vpabar^2 + (phi-phi_w))*(0.5+z/Lz)*nplus_sym(Lr,Lz,r_bc,z_bc) + Heaviside(-vpabar)*(vpabar^2 + (phi-phi_w))*(0.5-z/Lz)*nminus_sym(Lr,Lz,r_bc,z_bc) + (0.5+z/Lz)*(0.5-z/Lz)*nzero_sym(Lr,Lz,r_bc,z_bc))*exp(-vpabar^2-(phi-phi_w))
         end
         return dfni
     end
-    function cartesian_dfni_sym(Lr,Lz,r_bc,z_bc,composition)
-        densi = densi_sym(Lr,Lz,r_bc,z_bc,composition)
+    function cartesian_dfni_sym(Lr,Lz,r_bc,z_bc,composition,nr,nz)
+        densi = densi_sym(Lr,Lz,r_bc,z_bc,composition,nr,nz)
         #if (r_bc == "periodic" && z_bc == "periodic") || (r_bc == "Dirichlet" && z_bc == "periodic")
             dfni = densi * exp( - vz^2 - vr^2 - vzeta^2) 
         #end
@@ -210,10 +226,15 @@ using ..input_structs
             zfac = 0.0
         end
 
-        if z_bc == wall
-            @variables phi
+        if z_bc == "wall"
+            # At the wall, density is nminus/4=nplus/4
+            phi_wall = 0 #composition.T_e*log(nminus_sym(Lr,Lz,r_bc,z_bc)/4/N_e)
+            # Note need the '-1' branch of the Lambert W function, not the '0' branch, to
+            # give phi(z)>=phi_wall.
+            calZ = -1*exp(4*z^2/Lz^2-2)
+            phi = phi_wall - lambertw(calZ,-1)/2 - 1 + 2*z^2/Lz
         else
-            densi = densi_sym(Lr,Lz,r_bc,z_bc,composition)
+            densi = densi_sym(Lr,Lz,r_bc,z_bc,composition,nr,nz)
             # calculate the electric fields
             dense = densi # get the electron density via quasineutrality with Zi = 1
             phi = composition.T_e*log(dense/N_e) # use the adiabatic response of electrons for me/mi -> 0
@@ -228,7 +249,7 @@ using ..input_structs
     end
 
     function manufactured_solutions(Lr,Lz,r_bc,z_bc,geometry,composition,nr,nz)
-        densi = densi_sym(Lr,Lz,r_bc,z_bc,composition)
+        densi = densi_sym(Lr,Lz,r_bc,z_bc,composition,nr,nz)
         dfni = dfni_sym(Lr,Lz,r_bc,z_bc,composition,geometry,nr,nz)
         
         densn = densn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
@@ -236,18 +257,6 @@ using ..input_structs
 
         Er, Ez, phi = electric_fields(Lr,Lz,r_bc,z_bc,composition,nr,nz)
 
-        if z_bc == "wall"
-            # Replace phi using the Lambert W function
-            Dr = Differential(r)
-            Dz = Differential(z)
-            phi_expr = error("not implemented yet!")
-            dphidz_expr = error("not implemented yet!")
-            Er = substitute(Er, Dr(phi)=>0)
-            Ez = substitute(Ez, Dz(phi)=>dphidz_expr)
-            densi = substitute(densi, phi=>phi_expr)
-            dfni = substitute(substitute(substitute(dfni, Dr(phi)=>0), Dz(phi)=>dphidz_expr), phi=>phi_expr)
-        end
-        
         #build julia functions from these symbolic expressions
         # cf. https://docs.juliahub.com/Symbolics/eABRO/3.4.0/tutorials/symbolic_functions/
         densi_func = build_function(densi, z, r, t, expression=Val{false})
@@ -281,12 +290,12 @@ using ..input_structs
         return manufactured_E_fields
     end 
 
-    function manufactured_sources(Lr,Lz,r_bc,z_bc,composition,geometry,collisions,nr,nz,num_diss_params)
+    function manufactured_sources(Lr,Lz,r_bc,z_bc,composition,geometry,collisions,nr,nz,nvpa,num_diss_params)
         
         # ion manufactured solutions
-        densi = densi_sym(Lr,Lz,r_bc,z_bc,composition)
+        densi = densi_sym(Lr,Lz,r_bc,z_bc,composition,nr,nz)
         dfni = dfni_sym(Lr,Lz,r_bc,z_bc,composition,geometry,nr,nz)
-        vrvzvzeta_dfni = cartesian_dfni_sym(Lr,Lz,r_bc,z_bc,composition) #dfni in vr vz vzeta coordinates
+        vrvzvzeta_dfni = cartesian_dfni_sym(Lr,Lz,r_bc,z_bc,composition,nr,nz) #dfni in vr vz vzeta coordinates
         
         # neutral manufactured solutions
         densn = densn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
@@ -328,6 +337,14 @@ using ..input_structs
                + cx_frequency*( densn*dfni - densi*gav_dfnn ) ) - ionization_frequency*dense*gav_dfnn 
                - num_diss_params.vpa_dissipation_coefficient*Dvpa(Dvpa(dfni))
         Source_i = expand_derivatives(Si)
+        if z_bc == "wall"
+            Source_i = substitute(Source_i, HeavisidePrime(-vpa)=>HeavisidePrime(vpa))
+            # Use ~1/sqrt(nvpa) for the width so that as resolution increases the source
+            # is narrower but also contains more grid points, so can be better resolved
+            delta_width = Lz/sqrt(nvpa)
+            approx_delta_func = 1/sqrt(π)/delta_width * exp(-vpa^2/delta_width^2)
+            Source_i = substitute(Source_i, HeavisidePrime(vpa)=>approx_delta_func)
+        end
         
         # the neutral source to maintain the manufactured solution
         Sn = Dt(dfnn) + vz * Dz(dfnn) + rfac*vr * Dr(dfnn) + cx_frequency* (densi*dfnn - densn*vrvzvzeta_dfni) + ionization_frequency*dense*dfnn
