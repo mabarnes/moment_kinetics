@@ -113,7 +113,9 @@ function run_moment_kinetics(to::TimerOutput, input_dict=Dict())
         else
             # Error almost certainly occured before cleanup. If running in serial we can
             # still finalise file I/O
-            cleanup_moment_kinetics!(mk_state[end-2:end]...)
+            if mk_state !== nothing
+                cleanup_moment_kinetics!(mk_state[end-2:end]...)
+            end
         end
 
         rethrow(e)
