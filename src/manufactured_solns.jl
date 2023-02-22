@@ -6,9 +6,13 @@ export manufactured_solutions
 export manufactured_sources
 export manufactured_electric_fields
 
+using ..array_allocation: allocate_shared_float
+using ..input_structs
+using ..looping
+using ..type_definitions: mk_float
+
 using Symbolics
 using IfElse
-using ..input_structs
 
     @variables r z vpa vperp t vz vr vzeta
     typed_zero(vz) = zero(vz)
@@ -271,17 +275,17 @@ using ..input_structs
         return manufactured_E_fields
     end 
 
-    function manufactured_sources(Lr,Lz,r_bc,z_bc,composition,geometry,collisions,nr,num_diss_params)
+    function manufactured_sources(r_coord,z_coord,vperp_coord,vpa_coord,vzeta_coord,vr_coord,vz_coord,composition,geometry,collisions,num_diss_params)
         
         # ion manufactured solutions
-        densi = densi_sym(Lr,Lz,r_bc,z_bc,composition)
-        dfni = dfni_sym(Lr,Lz,r_bc,z_bc,composition,geometry,nr)
-        vrvzvzeta_dfni = cartesian_dfni_sym(Lr,Lz,r_bc,z_bc,composition) #dfni in vr vz vzeta coordinates
+        densi = densi_sym(r_coord.L,z_coord.L,r_coord.bc,z_coord.bc,composition)
+        dfni = dfni_sym(r_coord.L,z_coord.L,r_coord.bc,z_coord.bc,composition,geometry,r_coord.n)
+        vrvzvzeta_dfni = cartesian_dfni_sym(r_coord.L,z_coord.L,r_coord.bc,z_coord.bc,composition) #dfni in vr vz vzeta coordinates
         
         # neutral manufactured solutions
-        densn = densn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
-        dfnn = dfnn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
-        gav_dfnn = gyroaveraged_dfnn_sym(Lr,Lz,r_bc,z_bc,geometry,composition) # gyroaverage < dfnn > in vpa vperp coordinates
+        densn = densn_sym(r_coord.L,z_coord.L,r_coord.bc,z_coord.bc,geometry,composition)
+        dfnn = dfnn_sym(r_coord.L,z_coord.L,r_coord.bc,z_coord.bc,geometry,composition)
+        gav_dfnn = gyroaveraged_dfnn_sym(r_coord.L,z_coord.L,r_coord.bc,z_coord.bc,geometry,composition) # gyroaverage < dfnn > in vpa vperp coordinates
         
         dense = densi # get the electron density via quasineutrality with Zi = 1
         
@@ -304,14 +308,14 @@ using ..input_structs
             cx_frequency = 0.0
             ionization_frequency = 0.0
         end
-        if nr > 1 # keep radial derivatives
+        if r_coord.n > 1 # keep radial derivatives
             rfac = 1.0
         else      # drop radial derivative terms
             rfac = 0.0
         end
         
         # calculate the electric fields and the potential
-        Er, Ez, phi = electric_fields(Lr,Lz,r_bc,z_bc,composition,nr)
+        Er, Ez, phi = electric_fields(r_coord.L,z_coord.L,r_coord.bc,z_coord.bc,composition,r_coord.n)
         
         # the ion source to maintain the manufactured solution
         Si = ( Dt(dfni) + ( vpa * (Bzed/Bmag) - 0.5*rhostar*Er ) * Dz(dfni) + ( 0.5*rhostar*Ez*rfac ) * Dr(dfni) + ( 0.5*Ez*Bzed/Bmag ) * Dvpa(dfni)
@@ -337,7 +341,37 @@ using ..input_structs
         Source_i_func = build_function(Source_i, vpa, vperp, z, r, t, expression=Val{false})
         Source_n_func = build_function(Source_n, vz, vr, vzeta, z, r, t, expression=Val{false})
         
-        manufactured_sources_list = (Source_i_func = Source_i_func, Source_n_func = Source_n_func)
+        if expand_derivatives(Dt(Source_i)) == 0 && expand_derivatives(Dt(Source_n)) == 0
+            # Time independent, so store arrays instead of functions
+
+            Source_i_array = allocate_shared_float(vpa_coord.n,vperp_coord.n,z_coord.n,r_coord.n)
+            begin_s_r_z_region()
+            @loop_s is begin
+                if is == 1
+                    @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
+                        Source_i_array[ivpa,ivperp,iz,ir,is] = Source_i_func(vpa_coord.grid[ivpa],vperp_coord.grid[ivperp],z_coord.grid[iz],r_coord.grid[ir],0.0)
+                    end
+                end
+            end
+
+            if composition.n_neutral_species > 0
+                Source_n_array = allocate_shared_float(vz_coord.n,vr_coord.n,vzeta_coord.n,z_coord.n,r_coord.n)
+                begin_sn_r_z_region()
+                @loop_sn isn begin
+                    if isn == 1
+                        @loop_r_z_vzeta_vr_vz ir iz ivzeta ivr ivz begin
+                            Source_n_array[ivz,ivr,ivzeta,iz,ir,isn] = Source_n_func(vz_coord.grid[ivz],vr_coord.grid[ivr],vzeta_coord.grid[ivzeta],z_coord.grid[iz],r_coord.grid[ir],0.0)
+                        end
+                    end
+                end
+            else
+                Source_n_array = zeros(mk_float,0)
+            end
+
+            manufactured_sources_list = (time_independent_sources = true, Source_i_array = Source_i_array, Source_n_array = Source_n_array)
+        else
+            manufactured_sources_list = (time_independent_sources = false, Source_i_func = Source_i_func, Source_n_func = Source_n_func)
+        end
         
         return manufactured_sources_list
     end 

@@ -422,7 +422,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     # vpa_spectral = vpa_spectral, vperp_spectral = vperp_spectral, z_spectral = z_spectral, r_spectral = r_spectral)
     spectral_objects = spectral_object_struct(vz_spectral, vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral, z_spectral, r_spectral)
     if(advance.manufactured_solns_test)
-        manufactured_source_list = manufactured_sources(r.L,z.L,r.bc,z.bc,composition,geometry,collisions,r.n,num_diss_params)
+        manufactured_source_list = manufactured_sources(r,z,vperp,vpa,vzeta,vr,vz,composition,geometry,collisions,num_diss_params)
     else
         manufactured_source_list = false # dummy Bool to be passed as argument instead of list
     end
