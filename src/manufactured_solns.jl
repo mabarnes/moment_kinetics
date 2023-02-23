@@ -15,6 +15,18 @@ using ..input_structs
     @register_symbolic typed_zero(vz)
     zero_val = 1.0e-8
     #epsilon_offset = 0.001 
+
+    dfni_vpa_power_opt = "4" #"2"
+    if dfni_vpa_power_opt == "2"
+       pvpa = 2
+       nconst = 0.25
+       fluxconst = 0.5
+    elseif dfni_vpa_power_opt == "4"
+       pvpa = 4
+       nconst = (3.0/8.0)
+       fluxconst = 1.0
+    end
+
     #standard functions for building densities
     function nplus_sym(Lr,Lz,r_bc,z_bc,epsilon)
         if r_bc == "periodic"
@@ -72,8 +84,8 @@ using ..input_structs
             Bzed = geometry.Bzed
             Bmag = geometry.Bmag
             epsilon = composition.epsilon_offset
-            Gamma_minus = 0.5*(Bzed/Bmag)*nminus_sym(Lr,Lz,r_bc,z_bc,epsilon)/sqrt(pi)
-            Gamma_plus = 0.5*(Bzed/Bmag)*nplus_sym(Lr,Lz,r_bc,z_bc,epsilon)/sqrt(pi)
+            Gamma_minus = fluxconst*(Bzed/Bmag)*nminus_sym(Lr,Lz,r_bc,z_bc,epsilon)/sqrt(pi)
+            Gamma_plus = fluxconst*(Bzed/Bmag)*nplus_sym(Lr,Lz,r_bc,z_bc,epsilon)/sqrt(pi)
             # exact integral of corresponding dfnn below
             if composition.use_test_neutral_wall_pdf
                 #test 
@@ -101,8 +113,8 @@ using ..input_structs
             Bzed = geometry.Bzed
             Bmag = geometry.Bmag
             epsilon = composition.epsilon_offset
-            Gamma_minus = 0.5*(Bzed/Bmag)*nminus_sym(Lr,Lz,r_bc,z_bc,epsilon)/sqrt(pi)
-            Gamma_plus = 0.5*(Bzed/Bmag)*nplus_sym(Lr,Lz,r_bc,z_bc,epsilon)/sqrt(pi)
+            Gamma_minus = fluxconst*(Bzed/Bmag)*nminus_sym(Lr,Lz,r_bc,z_bc,epsilon)/sqrt(pi)
+            Gamma_plus = fluxconst*(Bzed/Bmag)*nplus_sym(Lr,Lz,r_bc,z_bc,epsilon)/sqrt(pi)
             dfnn = Hplus *( Gamma_minus*( 0.5 - z/Lz)^2 + 1.0 )*FKw + Hminus*( Gamma_plus*( 0.5 + z/Lz)^2 + 1.0 )*FKw 
         end
         return dfnn
@@ -127,7 +139,7 @@ using ..input_structs
             end
         elseif z_bc == "wall"
             epsilon = composition.epsilon_offset
-            densi = 0.25*(0.5 - z/Lz)*nminus_sym(Lr,Lz,r_bc,z_bc,epsilon) + 0.25*(z/Lz + 0.5)*nplus_sym(Lr,Lz,r_bc,z_bc,epsilon) + (z/Lz + 0.5)*(0.5 - z/Lz)*nzero_sym(Lr,Lz,r_bc,z_bc)  #+  0.5*(r/Lr + 0.5) + 0.5*(z/Lz + 0.5)
+            densi = nconst*(0.5 - z/Lz)*nminus_sym(Lr,Lz,r_bc,z_bc,epsilon) + nconst*(z/Lz + 0.5)*nplus_sym(Lr,Lz,r_bc,z_bc,epsilon) + (z/Lz + 0.5)*(0.5 - z/Lz)*nzero_sym(Lr,Lz,r_bc,z_bc)  #+  0.5*(r/Lr + 0.5) + 0.5*(z/Lz + 0.5)
         end
         return densi
     end
@@ -138,7 +150,7 @@ using ..input_structs
         elseif z_bc == "wall"
             #appropriate for wall bc test when Er = 0 (nr == 1)
             epsilon = composition.epsilon_offset
-            jpari_into_LHS_wall_sym = -0.5*nminus_sym(Lr,Lz,r_bc,z_bc,epsilon)/sqrt(pi)
+            jpari_into_LHS_wall_sym = -fluxconst*nminus_sym(Lr,Lz,r_bc,z_bc,epsilon)/sqrt(pi)
         end
         return jpari_into_LHS_wall_sym
     end
@@ -167,7 +179,7 @@ using ..input_structs
             Hplus = 0.5*(sign(vpabar) + 1.0)
             Hminus = 0.5*(sign(-vpabar) + 1.0)
             ffa =  exp(- vperp^2)
-            dfni = ffa * ( nminus_sym(Lr,Lz,r_bc,z_bc,epsilon)* (0.5 - z/Lz) * Hminus * vpabar^2 + nplus_sym(Lr,Lz,r_bc,z_bc,epsilon)*(z/Lz + 0.5) * Hplus * vpabar^2 + nzero_sym(Lr,Lz,r_bc,z_bc)*(z/Lz + 0.5)*(0.5 - z/Lz) ) * exp( - vpabar^2 )
+            dfni = ffa * ( nminus_sym(Lr,Lz,r_bc,z_bc,epsilon)* (0.5 - z/Lz) * Hminus * vpabar^pvpa + nplus_sym(Lr,Lz,r_bc,z_bc,epsilon)*(z/Lz + 0.5) * Hplus * vpabar^pvpa + nzero_sym(Lr,Lz,r_bc,z_bc)*(z/Lz + 0.5)*(0.5 - z/Lz) ) * exp( - vpabar^2 )
         end
         return dfni
     end
@@ -303,10 +315,19 @@ using ..input_structs
         
         # the ion source to maintain the manufactured solution
         Si = ( Dt(dfni) + ( vpa * (Bzed/Bmag) - 0.5*rhostar*Er ) * Dz(dfni) + ( 0.5*rhostar*Ez*rfac ) * Dr(dfni) + ( 0.5*Ez*Bzed/Bmag ) * Dvpa(dfni)
-               + cx_frequency*( densn*dfni - densi*gav_dfnn ) ) - ionization_frequency*dense*gav_dfnn 
-               - num_diss_params.vpa_dissipation_coefficient*Dvpa(Dvpa(dfni))
-               - num_diss_params.r_dissipation_coefficient*Dr(Dr(dfni))
-               - num_diss_params.z_dissipation_coefficient*Dz(Dz(dfni))
+               + cx_frequency*( densn*dfni - densi*gav_dfnn )  - ionization_frequency*dense*gav_dfnn)
+
+        include_num_diss_in_MMS = true
+        if num_diss_params.vpa_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
+            Si += - num_diss_params.vpa_dissipation_coefficient*Dvpa(Dvpa(dfni))
+        end
+        if num_diss_params.r_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
+            Si += - num_diss_params.r_dissipation_coefficient*Dr(Dr(dfni))
+        end
+        if num_diss_params.z_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
+            Si += - num_diss_params.z_dissipation_coefficient*Dz(Dz(dfni))
+        end
+
         Source_i = expand_derivatives(Si)
         
         # the neutral source to maintain the manufactured solution
