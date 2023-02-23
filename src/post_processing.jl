@@ -745,7 +745,7 @@ function compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,spec
             nr_local, _, r_local, r_wgts_local, Lr = load_coordinate_data(fid_pdfs, "r")
             pdf_sym_array = copy(vpa)
             # plot a thermal vperp on line plots
-            ivperp0 = floor(mk_int,nvpa/3)
+            ivperp0 = max(floor(mk_int,nvperp/3),1)
             # plot a typical r on line plots
             ir0 = 1
             # plot at the wall boundary 
@@ -1602,6 +1602,10 @@ function plot_charged_pdf(pdf, vpa, vperp, z, r,
             end
             outfile = string(run_name, "_pdf_vs_vpa_z", ivperp0_string, ir0_string, spec_string, ".gif")
             gif(anim, outfile, fps=5)
+            
+            @views heatmap(z, vpa, pdf[:,ivperp0,:,ir0,is,itime_max], xlabel="z", ylabel="vpa", c = :deep, interpolation = :cubic)
+            outfile = string(run_name, "_pdf_vs_vpa_z", ivperp0_string, ir0_string, spec_string, ".pdf")
+            savefig(outfile)
         end
         # make a gif animation of f(vpa,r,t) at a given (vperp,z) location
         if pp.animate_f_vs_vpa_r
@@ -1610,6 +1614,10 @@ function plot_charged_pdf(pdf, vpa, vperp, z, r,
             end
             outfile = string(run_name, "_pdf_vs_vpa_r", ivperp0_string, iz0_string, spec_string, ".gif")
             gif(anim, outfile, fps=5)
+            
+            @views heatmap(r, vpa, pdf[:,ivperp0,iz0,:,is,itime_max], xlabel="r", ylabel="vpa", c = :deep, interpolation = :cubic)
+            outfile = string(run_name, "_pdf_vs_vpa_r", ivperp0_string, iz0_string, spec_string, ".pdf")
+            savefig(outfile)
         end
         # make a gif animation of f(vperp,z,t) at a given (vpa,r) location
         if pp.animate_f_vs_vperp_z
@@ -1642,6 +1650,10 @@ function plot_charged_pdf(pdf, vpa, vperp, z, r,
             end
             outfile = string(run_name, "_pdf_vs_r_z", ivpa0_string, ivperp0_string, spec_string, ".gif")
             gif(anim, outfile, fps=5)
+            
+            @views heatmap(r, z, pdf[ivpa0,ivperp0,:,:,is,itime_max], xlabel="r", ylabel="z", c = :deep, interpolation = :cubic)
+            outfile = string(run_name, "_pdf_vs_r_z", ivpa0_string, ivperp0_string, spec_string, ".pdf")
+            savefig(outfile)
         end
     end
     println("done.")
@@ -1877,7 +1889,7 @@ function plot_charged_pdf_2D_at_wall(run_name)
     # plot a thermal vpa on line plots
     ivpa0 = floor(mk_int,nvpa/3)
     # plot a thermal vperp on line plots
-    ivperp0 = floor(mk_int,nvpa/3)
+    ivperp0 = max(1,floor(mk_int,nvperp/3))
     # plot a typical r on line plots
     ir0 = 1
     
