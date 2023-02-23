@@ -182,12 +182,15 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
         advance_ionization = false
         advance_ionization_1V = false
     end
+    advance_vpa_advection = true
+    advance_z_advection = true
+    advance_r_advection = true
     advance_numerical_dissipation = true
     advance_sources = false
     advance_continuity = false
     advance_force_balance = false
     advance_energy = false
-    advance = advance_info(true, true, true, advance_neutral_z_advection, advance_neutral_r_advection,
+    advance = advance_info(advance_vpa_advection, advance_z_advection, advance_r_advection, advance_neutral_z_advection, advance_neutral_r_advection,
                            advance_cx, advance_cx_1V, advance_ionization, advance_ionization_1V, advance_numerical_dissipation, 
                            advance_sources, advance_continuity, advance_force_balance, advance_energy, rk_coefs,
                            manufactured_solns_test)
