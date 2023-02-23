@@ -109,23 +109,46 @@ advance the dfn with an arbitrary source function
 """
 
 function source_terms_manufactured!(pdf_charged_out, pdf_neutral_out, vz, vr, vzeta, vpa, vperp, z, r, t, dt, composition, manufactured_source_list)
-    # the manufactured source functions 
-    Source_i_func = manufactured_source_list.Source_i_func
-    Source_n_func = manufactured_source_list.Source_n_func
-    
-    begin_s_r_z_region() 
-    
-    @loop_s is begin
-        @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
-            pdf_charged_out[ivpa,ivperp,iz,ir,is] += dt*Source_i_func(vpa.grid[ivpa],vperp.grid[ivperp],z.grid[iz],r.grid[ir],t)
+    if manufactured_source_list.time_independent_sources
+        # the (time-independent) manufactured source arrays
+        Source_i = manufactured_source_list.Source_i_array
+        Source_n = manufactured_source_list.Source_n_array
+
+        begin_s_r_z_region()
+
+        @loop_s is begin
+            @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
+                pdf_charged_out[ivpa,ivperp,iz,ir,is] += dt*Source_i[ivpa,ivperp,iz,ir]
+            end
         end
-    end
-    
-    if composition.n_neutral_species > 0
-        begin_sn_r_z_region()
-        @loop_sn isn begin
-            @loop_r_z_vzeta_vr_vz ir iz ivzeta ivr ivz begin
-                pdf_neutral_out[ivz,ivr,ivzeta,iz,ir,isn] += dt*Source_n_func(vz.grid[ivz],vr.grid[ivr],vzeta.grid[ivzeta],z.grid[iz],r.grid[ir],t)
+
+        if composition.n_neutral_species > 0
+            begin_sn_r_z_region()
+            @loop_sn isn begin
+                @loop_r_z_vzeta_vr_vz ir iz ivzeta ivr ivz begin
+                    pdf_neutral_out[ivz,ivr,ivzeta,iz,ir,isn] += dt*Source_n[ivz,ivr,ivzeta,iz,ir]
+                end
+            end
+        end
+    else
+        # the manufactured source functions
+        Source_i_func = manufactured_source_list.Source_i_func
+        Source_n_func = manufactured_source_list.Source_n_func
+
+        begin_s_r_z_region()
+
+        @loop_s is begin
+            @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
+                pdf_charged_out[ivpa,ivperp,iz,ir,is] += dt*Source_i_func(vpa.grid[ivpa],vperp.grid[ivperp],z.grid[iz],r.grid[ir],t)
+            end
+        end
+
+        if composition.n_neutral_species > 0
+            begin_sn_r_z_region()
+            @loop_sn isn begin
+                @loop_r_z_vzeta_vr_vz ir iz ivzeta ivr ivz begin
+                    pdf_neutral_out[ivz,ivr,ivzeta,iz,ir,isn] += dt*Source_n_func(vz.grid[ivz],vr.grid[ivr],vzeta.grid[ivzeta],z.grid[iz],r.grid[ir],t)
+                end
             end
         end
     end
