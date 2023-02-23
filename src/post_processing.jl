@@ -481,7 +481,7 @@ function analyze_and_plot_data(path)
         # make plots and animations of the phi, Ez and Er 
         #plot_fields_2D(phi_sym, Ez_sym, Er_sym, time, z, r, iz0, ir0,
         #    itime_min, itime_max, nwrite_movie, run_name, pp, "_sym")
-    
+        println("time/ (Lref/cref): ", time)
         compare_fields_symbolic_test(run_name,phi,phi_sym,z,r,time,nz_global,nr_global,ntime,
          L"\widetilde{\phi}",L"\widetilde{\phi}^{sym}",L"\sqrt{\sum || \widetilde{\phi} - \widetilde{\phi}^{sym} ||^2 / N} ","phi")
         compare_fields_symbolic_test(run_name,Er,Er_sym,z,r,time,nz_global,nr_global,ntime,
