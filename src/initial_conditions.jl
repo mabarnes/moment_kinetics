@@ -749,6 +749,9 @@ function enforce_vpa_boundary_condition_local!(f::T, bc, adv_speed) where T
         elseif dvpadt < zero 
             f[end] = 0.0 # +infty forced to zero
         end
+    elseif bc == "both_zero"
+        f[1] = 0.0 # -infty forced to zero
+        f[end] = 0.0 # +infty forced to zero
     elseif bc == "periodic"
         f[1] = 0.5*(f[nvpa]+f[1])
         f[nvpa] = f[1]

@@ -950,6 +950,8 @@ function check_input_vpa(vpa, io)
     # supported options are "zero" and "periodic"
     if vpa.bc == "zero"
         println(io,">vpa.bc = 'zero'.  enforcing zero incoming BC in vpa.")
+    elseif vpa.bc == "both_zero"
+        println(io,">vpa.bc = 'both_zero'.  enforcing zero BC in vpa.")
     elseif vpa.bc == "periodic"
         println(io,">vpa.bc = 'periodic'.  enforcing periodicity in vpa.")
     else
