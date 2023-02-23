@@ -419,16 +419,16 @@ function analyze_and_plot_data(path)
     plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
      itime_min, itime_max, nwrite_movie, run_name, pp, "")
     # make plots and animations of the ion pdf
-    # only if ntime == ntime_pdfs
-    if ntime == ntime_pdfs && false 
+    # only if ntime == ntime_pdfs & data on one shared memory process
+    if ntime == ntime_pdfs && nr_global == nr_local && nz_global == nz_local
         spec_type = "ion"
-        plot_charged_pdf(ff, vpa, vperp, z, r, ivpa0, ivperp0, iz0, ir0,
+        plot_charged_pdf(ff, vpa_local, vperp_local, z_local, r_local, ivpa0, ivperp0, iz0, ir0,
             spec_type, n_ion_species,
             itime_min, itime_max, nwrite_movie, run_name, pp)
         # make plots and animations of the neutral pdf
         if n_neutral_species > 0
             spec_type = "neutral"
-            plot_neutral_pdf(neutral_ff, vz, vr, vzeta, z, r,
+            plot_neutral_pdf(neutral_ff, vz_local, vr_local, vzeta_local, z_local, r_local,
                 ivz0, ivr0, ivzeta0, iz0, ir0,
                 spec_type, n_neutral_species,
                 itime_min, itime_max, nwrite_movie, run_name, pp)
