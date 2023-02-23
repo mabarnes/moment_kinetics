@@ -132,8 +132,8 @@ import LambertW: lambertw
             end
         elseif z_bc == "wall"
             _, _, phi = electric_fields(Lr,Lz,r_bc,z_bc,composition,nr,nz)
-            phi_w = substitute(phi, z=>0.5*Lz)
-            densi = (1+2*(phi-phi_w))*(nplus_sym(Lr,Lz,r_bc,z_bc)/4*(0.5+z/Lz) + nminus_sym(Lr,Lz,r_bc,z_bc)/4*(0.5-z/Lz) + (0.5+z/Lz)*(0.5-z/Lz)*nzero_sym(Lr,Lz,r_bc,z_bc)) * exp(-(phi-phi_w))
+            phi_wall = substitute(phi, z=>0.5*Lz)
+            densi = (1+2*(phi-phi_wall))*(nplus_sym(Lr,Lz,r_bc,z_bc)/4*(0.5+z/Lz) + nminus_sym(Lr,Lz,r_bc,z_bc)/4*(0.5-z/Lz) + (0.5+z/Lz)*(0.5-z/Lz)*nzero_sym(Lr,Lz,r_bc,z_bc)) * exp(-(phi-phi_wall))
         end
         return densi
     end
@@ -181,10 +181,10 @@ import LambertW: lambertw
         if z_bc == "periodic"
             dfni = densi * exp( - vpa^2 - vperp^2) 
         elseif z_bc == "wall"
-            phi_w = substitute(phi, z=>0.5*Lz)
+            phi_wall = substitute(phi, z=>0.5*Lz)
             vpabar = vpa - (rhostar/2.0)*(Bmag/Bzed)*Er # effective velocity in z direction * (Bmag/Bzed)
             ffa =  exp(- vperp^2)
-            dfni = ffa * (Heaviside(vpabar)*(vpabar^2 + (phi-phi_w))*(0.5+z/Lz)*nplus_sym(Lr,Lz,r_bc,z_bc) + Heaviside(-vpabar)*(vpabar^2 + (phi-phi_w))*(0.5-z/Lz)*nminus_sym(Lr,Lz,r_bc,z_bc) + (0.5+z/Lz)*(0.5-z/Lz)*nzero_sym(Lr,Lz,r_bc,z_bc))*exp(-vpabar^2-(phi-phi_w))
+            dfni = ffa * (Heaviside(vpabar)*(vpabar^2 + (phi-phi_wall))*(0.5+z/Lz)*nplus_sym(Lr,Lz,r_bc,z_bc) + Heaviside(-vpabar)*(vpabar^2 + (phi-phi_wall))*(0.5-z/Lz)*nminus_sym(Lr,Lz,r_bc,z_bc) + (0.5+z/Lz)*(0.5-z/Lz)*nzero_sym(Lr,Lz,r_bc,z_bc))*exp(-vpabar^2-(phi-phi_wall))
         end
         return dfni
     end
@@ -232,10 +232,10 @@ import LambertW: lambertw
 
         if z_bc == "wall"
             # At the wall, density is nminus/4=nplus/4
-            phi_wall = 0 #composition.T_e*log(nminus_sym(Lr,Lz,r_bc,z_bc)/4/N_e)
+            phi_wall = composition.T_e*log(nminus_sym(Lr,Lz,r_bc,z_bc)/4/N_e)
             # Note need the '-1' branch of the Lambert W function, not the '0' branch, to
             # give phi(z)>=phi_wall.
-            calZ = -1*exp(4*z^2/Lz^2-2)
+            calZ = -exp(4*z^2/Lz^2-2)
             phi = phi_wall - lambertw(calZ,-1)/2 - 1 + 2*z^2/Lz
         else
             densi = densi_sym(Lr,Lz,r_bc,z_bc,composition,nr,nz)
@@ -336,19 +336,49 @@ import LambertW: lambertw
         # calculate the electric fields and the potential
         Er, Ez, phi = electric_fields(r_coord.L,z_coord.L,r_coord.bc,z_coord.bc,composition,r_coord.n,z_coord.n)
         
-        # the ion source to maintain the manufactured solution
-        Si = ( Dt(dfni) + ( vpa * (Bzed/Bmag) - 0.5*rhostar*Er ) * Dz(dfni) + ( 0.5*rhostar*Ez*rfac ) * Dr(dfni) + ( 0.5*Ez*Bzed/Bmag ) * Dvpa(dfni)
-               + cx_frequency*( densn*dfni - densi*gav_dfnn ) ) - ionization_frequency*dense*gav_dfnn 
-               - num_diss_params.vpa_dissipation_coefficient*Dvpa(Dvpa(dfni))
-        Source_i = expand_derivatives(Si)
         if z_coord.bc == "wall"
-            Source_i = substitute(Source_i, HeavisidePrime(-vpa)=>HeavisidePrime(vpa))
+            # Cannot evaluate the source symbolically from the kinetic equation, as we
+            # need simplifications by hand to avoid evaluating 0*Infinity.
+
+            bzed = geometry.bzed
+            vpabar = vpa - (rhostar/2.0)*(Bmag/Bzed)*Er # effective velocity in z direction * (Bmag/Bzed)
+            phi_wall = substitute(phi, z=>0.5*z_coord.L)
+
+            # Include delta-function δ(v_∥) as a variable, which we will substitute for
+            # afterwards
+            @variables delta_vpa
+
+            # d((phi-phi_wall)^2)/dz
+            # = 2*(phi-phi_wall)*dphi/dz
+            # = -2*(phi-phi_wall)*Ez
+            # = -(m+2-4*z^2/Lz^2)*(-4*z/Lz^2/(m+1))
+            # = 4*z/Lz^2*(m+2-4*z^2/Lz^2)/(m+1)
+            # = 4*z/Lz^2*(m+1+1-4*z^2/Lz^2)/(m+1)
+            # = 4*z/Lz^2*(1+(1-4*z^2/Lz^2)/(m+1))
+            #
+            # where m=lambertw(Z)=lambertw(-exp(4*z^2/Lz^2-2))
+            #
+            # We know by Talor expanding around z=±Lz/2 that (1-4*z^2/Lz^2)/(m+1) is zero
+            # at z=±Lz/2, so avoid evaluating 0/0 with an ifelse
+            calZ = -exp(4*z^2/z_coord.L^2-2)
+            m = lambertw(calZ, -1)
+            ddz_phi_minus_phi_wall_squared = 4*z/z_coord.L^2 * (1 + IfElse.ifelse(1-4*z^2/z_coord.L^2==0, 0, 1-4*z^2/z_coord.L^2/(m+1)))
+            Si = bzed*(
+                    (Heaviside(vpabar) - Heaviside(-vpabar)) * (vpabar^3 + vpabar*(phi - phi_wall))
+                    - 2*z/z_coord.L*vpa - z/2*ddz_phi_minus_phi_wall_squared * delta_vpa
+                ) * 1/z_coord.L * exp(-vpabar^2 - vperp^2 - (phi - phi_wall))
             # Use ~1/sqrt(nvpa) for the width so that as resolution increases the source
             # is narrower but also contains more grid points, so can be better resolved
             delta_width = z_coord.L/sqrt(vpa_coord.n)
             approx_delta_func = 1/sqrt(π)/delta_width * exp(-vpa^2/delta_width^2)
-            Source_i = substitute(Source_i, HeavisidePrime(vpa)=>approx_delta_func)
+            Si = substitute(Si, delta_vpa=>approx_delta_func)
+        else
+            # the ion source to maintain the manufactured solution
+            Si = ( Dt(dfni) + ( vpa * (Bzed/Bmag) - 0.5*rhostar*Er ) * Dz(dfni) + ( 0.5*rhostar*Ez*rfac ) * Dr(dfni) + ( 0.5*Ez*Bzed/Bmag ) * Dvpa(dfni)
+                   + cx_frequency*( densn*dfni - densi*gav_dfnn ) ) - ionization_frequency*dense*gav_dfnn
+                   - num_diss_params.vpa_dissipation_coefficient*Dvpa(Dvpa(dfni))
         end
+        Source_i = expand_derivatives(Si)
         
         # the neutral source to maintain the manufactured solution
         Sn = Dt(dfnn) + vz * Dz(dfnn) + rfac*vr * Dr(dfnn) + cx_frequency* (densi*dfnn - densn*vrvzvzeta_dfni) + ionization_frequency*dense*dfnn
