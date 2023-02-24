@@ -737,7 +737,7 @@ function compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,spec
             nr_local, _, r_local, r_wgts_local, Lr = load_coordinate_data(fid_pdfs, "r")
             pdf_sym_array = copy(vpa)
             # plot a thermal vperp on line plots
-            ivperp0 = floor(mk_int,nvpa/3)
+            ivperp0 = max(floor(mk_int,nvperp/3), 1)
             # plot a typical r on line plots
             ir0 = 1
             # plot at the wall boundary 
@@ -1859,7 +1859,7 @@ function plot_charged_pdf_2D_at_wall(run_name)
     # plot a thermal vpa on line plots
     ivpa0 = floor(mk_int,nvpa/3)
     # plot a thermal vperp on line plots
-    ivperp0 = floor(mk_int,nvpa/3)
+    ivperp0 = max(floor(mk_int,nvperp/3), 1)
     # plot a typical r on line plots
     ir0 = 1
     
