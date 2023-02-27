@@ -567,18 +567,42 @@ end
 """
 """
 function compare_fields_symbolic_test(run_name,field,field_sym,z,r,time,nz,nr,ntime,field_label,field_sym_label,norm_label,file_string)
-	
-	# plot last timestep field vs z at r0 
-	if nr > 1 
-		ir0 = div(nr,2)
-	else
-		ir0 = 1
-	end
-	fieldmin = minimum(field[:,ir0,end])
+
+    # plot last timestep field vs z at r0
+    if nr > 1
+        ir0 = div(nr,2)
+    else
+        ir0 = 1
+    end
+    fieldmin = minimum(field[:,ir0,end])
     fieldmax = maximum(field[:,ir0,end])
-	@views plot(z, [field[:,ir0,end], field_sym[:,ir0,end] ], xlabel=L"z/L_z", ylabel=field_label, label=["num" "sym"], ylims = (fieldmin,fieldmax))
+    @views plot(z, [field[:,ir0,end], field_sym[:,ir0,end] ], xlabel=L"z/L_z", ylabel=field_label, label=["num" "sym"], ylims = (fieldmin,fieldmax), legend=:outerright)
     outfile = string(run_name, "_"*file_string*"(r0,z)_vs_z.pdf")
     savefig(outfile)    
+
+    anim = @animate for i ∈ 1:ntime
+        @views plot(z, [field[:,ir0,i], field_sym[:,ir0,i] ], xlabel=L"z/L_z",
+                    ylabel=field_label, label=["num" "sym"], ylims = (fieldmin,fieldmax),
+                    legend=:outerright)
+    end
+    outfile = string(run_name, "_", file_string, "(r0,z)_vs_z.gif")
+    gif(anim, outfile, fps=5)
+
+    anim = @animate for i ∈ 1:ntime
+        @views plot(z, field[:,ir0,i] - field_sym[:,ir0,i], xlabel=L"z/L_z",
+                    ylabel=field_label * " absolute error", label=["num" "sym"])
+    end
+    outfile = string(run_name, "_", file_string, "_abserror(r0,z)_vs_z.gif")
+    gif(anim, outfile, fps=5)
+
+    anim = @animate for i ∈ 1:ntime
+        @views plot(z, (field[:,ir0,i] .- field_sym[:,ir0,i])./field_sym[:,ir0,i],
+                    xlabel=L"z/L_z", ylabel=field_label * " relative error",
+                    label=["num" "sym"])
+    end
+    outfile = string(run_name, "_", file_string, "_relerror(r0,z)_vs_z.gif")
+    gif(anim, outfile, fps=5)
+
     
 	if nr > 1
 		# plot last timestep field vs r at z_wall 
@@ -755,6 +779,40 @@ function compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,spec
             @views plot(vpa, [pdf[:,ivperp0,iz0,ir0,is,ntime], pdf_sym_array], xlabel=L"v_{\|\|}/L_{v_{\|\|}}", ylabel=L"f_i", label=["num" "sym"])
             outfile = string(run_name, "_pdf(vpa,vperp0,iz_"*zlabel*",ir0)_sym_vs_vpa.pdf")
             savefig(outfile) 
+
+            @views pdf_sym_array2 = similar(pdf[:,ivperp0,:,ir0,is,:])
+            for it in 1:ntime, iz in 1:nz_global, ivpa in 1:nvpa
+                pdf_sym_array2[ivpa,iz,it] = dfni_func(vpa[ivpa],vperp[ivperp0],z_local[iz],r_local[ir0],time[it])
+            end
+            anim = @animate for it ∈ 1:ntime
+                @views heatmap(z_local, vpa, pdf[:,ivperp0,:,ir0,is,it] .- pdf_sym_array2[:,:,it], xlabel="z", ylabel="vpa", c = :deep, interpolation = :cubic)
+            end
+            outfile = string(run_name, "_pdf_abserror_vs_vpa_z", spec_string, ".gif")
+            gif(anim, outfile, fps=5)
+
+            anim = @animate for it ∈ 1:ntime
+                @views heatmap(z_local, vpa,
+                               (pdf[:,ivperp0,:,ir0,is,it] .- pdf_sym_array2[:,:,it]) ./
+                               pdf_sym_array2[:,:,it],
+                               xlabel="z", ylabel="vpa", c = :deep,
+                               interpolation = :cubic)
+            end
+            outfile = string(run_name, "_pdf_relerror_vs_vpa_z", spec_string, ".gif")
+            gif(anim, outfile, fps=5)
+
+            anim = @animate for iz ∈ 1:nz_global
+                @views plot(vpa, pdf[:,ivperp0,iz,ir0,is,end] .- pdf_sym_array2[:,iz,end], xlabel="vpa", ylabel="f abserror", title="iz=$iz")
+            end
+            outfile = string(run_name, "_pdf_abserror_vs_vpa_final", spec_string, ".gif")
+            gif(anim, outfile, fps=5)
+
+            anim = @animate for iz ∈ 1:nz_global
+                @views plot(vpa, (pdf[:,ivperp0,iz,ir0,is,end] .-
+                                  pdf_sym_array2[:,iz,end]) ./ pdf_sym_array2[:,iz,end],
+                            xlabel="vpa", ylabel="f relerror", title="iz=$iz")
+            end
+            outfile = string(run_name, "_pdf_relerror_vs_vpa_final", spec_string, ".gif")
+            gif(anim, outfile, fps=5)
         end
         close(fid_pdfs)
     end    
