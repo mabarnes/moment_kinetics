@@ -32,6 +32,10 @@ struct em_fields_struct
     Er::MPISharedArray{mk_float,2}
     # Ez is the parallel electric field
     Ez::MPISharedArray{mk_float,2}
+    # dErdr is the radial derivative of the radial electric field
+    dErdr::MPISharedArray{mk_float,2}
+    # dErdz is the z derivative of the radial electric field
+    dErdz::MPISharedArray{mk_float,2}
     # if including an external forcing for phi, it is of the form
     # phi_external = phi0*drive_amplitude*sinpi(t*drive_frequency)
     force_phi::Bool

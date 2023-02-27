@@ -74,12 +74,15 @@ end
 """
 function update_speed_default!(advect, fields, vpa, vperp, z, r, composition, geometry)
     bzed = geometry.bzed
+    rhostar = geometry.rhostar
     @inbounds @fastmath begin
         @loop_s is begin
             @loop_r ir begin
                 # bzed = B_z/B
                 @loop_z_vperp iz ivperp begin
-                    @views advect[is].speed[:,ivperp,iz,ir] .= 0.5*bzed*fields.Ez[iz,ir]
+                    # dErdt = bzed*vpa dErdz + 0.5 rhostar*Ez*dErdr + dErdt (missing currently)
+                    @. vpa.scratch[:] = bzed*vpa.grid[:]*fields.dErdz[iz,ir] + 0.5*rhostar*fields.Ez[iz,ir]*fields.dErdr[iz,ir]
+                    @. @views advect[is].speed[:,ivperp,iz,ir] = 0.5*bzed*fields.Ez[iz,ir] - 0.5*(rhostar/bzed)*vpa.scratch[:]
                 end
             end
         end

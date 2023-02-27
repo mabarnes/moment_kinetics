@@ -316,9 +316,14 @@ using IfElse
         
         # calculate the electric fields and the potential
         Er, Ez, phi = electric_fields(r_coord.L,z_coord.L,r_coord.bc,z_coord.bc,composition,r_coord.n)
+        # calculate the transport of Er along charged particle characteristics
+        dErdt = Dt(Er) + (Bzed/Bmag)*vpa*Dz(Er) + 0.5*rhostar*Ez*Dr(Er)
         
         # the ion source to maintain the manufactured solution
-        Si = ( Dt(dfni) + ( vpa * (Bzed/Bmag) - 0.5*rhostar*Er ) * Dz(dfni) + ( 0.5*rhostar*Ez*rfac ) * Dr(dfni) + ( 0.5*Ez*Bzed/Bmag ) * Dvpa(dfni)
+        Si = ( Dt(dfni) + ( vpa * (Bzed/Bmag) #- 0.5*rhostar*Er 
+                          ) * Dz(dfni) 
+              + ( 0.5*rhostar*Ez*rfac ) * Dr(dfni) 
+              + ( 0.5*Ez*Bzed/Bmag - 0.5*(rhostar*Bmag/Bzed)*dErdt ) * Dvpa(dfni)
                + cx_frequency*( densn*dfni - densi*gav_dfnn )  - ionization_frequency*dense*gav_dfnn)
 
         include_num_diss_in_MMS = true

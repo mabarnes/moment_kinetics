@@ -54,9 +54,9 @@ function update_speed_z!(advect, fields, vpa, vperp, z, r, t, geometry)
         bzed = geometry.bzed
         ExBfac = -0.5*geometry.rhostar
         @inbounds begin
-            
+            # MRH remove ExB term below as using vpabar coordinate
             @loop_r_vperp_vpa ir ivperp ivpa begin
-                @. @views advect.speed[:,ivpa,ivperp,ir] = vpa.grid[ivpa]*bzed + ExBfac*fields.Er[:,ir]
+                @. @views advect.speed[:,ivpa,ivperp,ir] = vpa.grid[ivpa]*bzed #+ ExBfac*fields.Er[:,ir]
             end
         
         end

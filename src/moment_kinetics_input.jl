@@ -100,8 +100,8 @@ function mk_input(scan_input=Dict())
     composition.Er_constant = get(scan_input, "Er_constant", 0.0)
     # constant to be used to control Ez divergence in MMS tests
     composition.epsilon_offset = get(scan_input, "epsilon_offset", 0.001)
-    # bool to control if dfni is a function of vpa or vpabar in MMS test 
-    composition.use_vpabar_in_mms_dfni = get(scan_input, "use_vpabar_in_mms_dfni", true)
+    # bool to control if dfni is a function of vpa or vpabar in MMS test # default false as vpabar is the vpa coordinate in this branch
+    composition.use_vpabar_in_mms_dfni = get(scan_input, "use_vpabar_in_mms_dfni", false)
     
     ## set geometry_input
     geometry.Bzed = get(scan_input, "Bzed", 1.0)

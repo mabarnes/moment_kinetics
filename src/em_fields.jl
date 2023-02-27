@@ -23,7 +23,9 @@ function setup_em_fields(nz, nr, force_phi, drive_amplitude, drive_frequency, fo
     phi0 = allocate_shared_float(nz,nr)
     Er = allocate_shared_float(nz,nr)
     Ez = allocate_shared_float(nz,nr)
-    return em_fields_struct(phi, phi0, Er, Ez, force_phi, drive_amplitude, drive_frequency, force_Er_zero)
+    dErdr = allocate_shared_float(nz,nr)
+    dErdz = allocate_shared_float(nz,nr)
+    return em_fields_struct(phi, phi0, Er, Ez, dErdr, dErdz, force_phi, drive_amplitude, drive_frequency, force_Er_zero)
 end
 
 """
@@ -133,10 +135,22 @@ function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral, sc
         if z.irank == z.nrank - 1 && fields.force_Er_zero_at_wall
             fields.Er[z.n,:] .= 0.0
         end
+
+        @views derivative_r!(fields.dErdr,fields.Er,
+                scratch_dummy.buffer_z_1, scratch_dummy.buffer_z_2,
+                scratch_dummy.buffer_z_3,scratch_dummy.buffer_z_4,
+                r_spectral,r)
+        @views derivative_z!(fields.dErdz,fields.Er,
+                scratch_dummy.buffer_r_1, scratch_dummy.buffer_r_2,
+                scratch_dummy.buffer_r_3,scratch_dummy.buffer_r_4,
+                z_spectral,z)
+
     else
         @serial_region begin
             fields.Er[:,:] .= composition.Er_constant
             # Er_constant defaults to 0.0 in moment_kinetics_input.jl
+            fields.dErdr .= 0.0
+            fields.dErdz .= 0.0
         end
     end
     #Ez = - d phi / dz
