@@ -1261,6 +1261,30 @@ function calculate_differences(prefix...)
                                                 "moments")
     # load block data on iblock=0
     nblocks, iblock = get_tuple_of_return_values(load_block_data, moments_files0)
+    anim = @animate for i ∈ 1:ntime
+        @views plot(z, [field[:,ir0,i], field_sym[:,ir0,i] ], xlabel=L"z/L_z",
+                    ylabel=field_label, label=["num" "sym"], ylims = (fieldmin,fieldmax),
+                    legend=:outerright)
+    end
+    outfile = string(run_name, "_", file_string, "(r0,z)_vs_z.gif")
+    trygif(anim, outfile, fps=5)
+
+    anim = @animate for i ∈ 1:ntime
+        @views plot(z, field[:,ir0,i] - field_sym[:,ir0,i], xlabel=L"z/L_z",
+                    ylabel=field_label * " absolute error", label=["num" "sym"])
+    end
+    outfile = string(run_name, "_", file_string, "_abserror(r0,z)_vs_z.gif")
+    trygif(anim, outfile, fps=5)
+
+    anim = @animate for i ∈ 1:ntime
+        @views plot(z, (field[:,ir0,i] .- field_sym[:,ir0,i])./field_sym[:,ir0,i],
+                    xlabel=L"z/L_z", ylabel=field_label * " relative error",
+                    label=["num" "sym"])
+    end
+    outfile = string(run_name, "_", file_string, "_relerror(r0,z)_vs_z.gif")
+    trygif(anim, outfile, fps=5)
+
+    
 
     # load input used for the run(s)
     scan_input = get_tuple_of_return_values(load_input, moments_files0)
@@ -1486,6 +1510,40 @@ function calculate_differences(prefix...)
             maxdiff = maximum(diff, dims=1:nd-1)
 
             println("$i $name $maxdiff")
+
+            @views pdf_sym_array2 = similar(pdf[:,ivperp0,:,ir0,is,:])
+            for it in 1:ntime, iz in 1:nz_global, ivpa in 1:nvpa
+                pdf_sym_array2[ivpa,iz,it] = dfni_func(vpa[ivpa],vperp[ivperp0],z_local[iz],r_local[ir0],time[it])
+            end
+            anim = @animate for it ∈ 1:ntime
+                @views heatmap(z_local, vpa, pdf[:,ivperp0,:,ir0,is,it] .- pdf_sym_array2[:,:,it], xlabel="z", ylabel="vpa", c = :deep, interpolation = :cubic)
+            end
+            outfile = string(run_name, "_pdf_abserror_vs_vpa_z", spec_string, ".gif")
+            trygif(anim, outfile, fps=5)
+
+            anim = @animate for it ∈ 1:ntime
+                @views heatmap(z_local, vpa,
+                               (pdf[:,ivperp0,:,ir0,is,it] .- pdf_sym_array2[:,:,it]) ./
+                               pdf_sym_array2[:,:,it],
+                               xlabel="z", ylabel="vpa", c = :deep,
+                               interpolation = :cubic)
+            end
+            outfile = string(run_name, "_pdf_relerror_vs_vpa_z", spec_string, ".gif")
+            trygif(anim, outfile, fps=5)
+
+            anim = @animate for iz ∈ 1:nz_global
+                @views plot(vpa, pdf[:,ivperp0,iz,ir0,is,end] .- pdf_sym_array2[:,iz,end], xlabel="vpa", ylabel="f abserror", title="iz=$iz")
+            end
+            outfile = string(run_name, "_pdf_abserror_vs_vpa_final", spec_string, ".gif")
+            trygif(anim, outfile, fps=5)
+
+            anim = @animate for iz ∈ 1:nz_global
+                @views plot(vpa, (pdf[:,ivperp0,iz,ir0,is,end] .-
+                                  pdf_sym_array2[:,iz,end]) ./ pdf_sym_array2[:,iz,end],
+                            xlabel="vpa", ylabel="f relerror", title="iz=$iz")
+            end
+            outfile = string(run_name, "_pdf_relerror_vs_vpa_final", spec_string, ".gif")
+            trygif(anim, outfile, fps=5)
         end
         return nothing
     end
