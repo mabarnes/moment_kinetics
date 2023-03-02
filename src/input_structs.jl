@@ -205,6 +205,8 @@ mutable struct species_parameters_mutable
     initial_density::mk_float
     # struct containing the initial condition info in z for this species
     z_IC::initial_condition_input_mutable
+    # struct containing the initial condition info in r for this species
+    r_IC::initial_condition_input_mutable
     # struct containing the initial condition info in vpa for this species
     vpa_IC::initial_condition_input_mutable
 end
@@ -220,6 +222,8 @@ struct species_parameters
     initial_density::mk_float
     # struct containing the initial condition info in z for this species
     z_IC::initial_condition_input
+    # struct containing the initial condition info in r for this species
+    r_IC::initial_condition_input
     # struct containing the initial condition info in vpa for this species
     vpa_IC::initial_condition_input
 end
