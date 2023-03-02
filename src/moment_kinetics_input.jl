@@ -124,6 +124,13 @@ function mk_input(scan_input=Dict())
     species.charged[1].z_IC.upar_phase = get(scan_input, "z_IC_upar_phase$ispecies", 0.0)
     species.charged[1].z_IC.temperature_amplitude = get(scan_input, "z_IC_temperature_amplitude$ispecies", 0.0)
     species.charged[1].z_IC.temperature_phase = get(scan_input, "z_IC_temperature_phase$ispecies", 0.0)
+    species.charged[1].r_IC.initialization_option = get(scan_input, "r_IC_option$ispecies", "gaussian")
+    species.charged[1].r_IC.density_amplitude = get(scan_input, "r_IC_density_amplitude$ispecies", 0.0)
+    species.charged[1].r_IC.density_phase = get(scan_input, "r_IC_density_phase$ispecies", 0.0)
+    species.charged[1].r_IC.upar_amplitude = get(scan_input, "r_IC_upar_amplitude$ispecies", 0.0)
+    species.charged[1].r_IC.upar_phase = get(scan_input, "r_IC_upar_phase$ispecies", 0.0)
+    species.charged[1].r_IC.temperature_amplitude = get(scan_input, "r_IC_temperature_amplitude$ispecies", 0.0)
+    species.charged[1].r_IC.temperature_phase = get(scan_input, "r_IC_temperature_phase$ispecies", 0.0)
     species.charged[1].vpa_IC.initialization_option = get(scan_input, "vpa_IC_option$ispecies", "gaussian")
     species.charged[1].vpa_IC.density_amplitude = get(scan_input, "vpa_IC_density_amplitude$ispecies", 1.000)
     species.charged[1].vpa_IC.density_phase = get(scan_input, "vpa_IC_density_phase$ispecies", 0.0)
@@ -142,6 +149,13 @@ function mk_input(scan_input=Dict())
         species.neutral[1].z_IC.upar_phase = get(scan_input, "z_IC_upar_phase$ispecies", 0.0)
         species.neutral[1].z_IC.temperature_amplitude = get(scan_input, "z_IC_temperature_amplitude$ispecies", 0.0)
         species.neutral[1].z_IC.temperature_phase = get(scan_input, "z_IC_temperature_phase$ispecies", 0.0)
+        species.neutral[1].r_IC.initialization_option = get(scan_input, "r_IC_option$ispecies", "gaussian")
+        species.neutral[1].r_IC.density_amplitude = get(scan_input, "r_IC_density_amplitude$ispecies", 0.001)
+        species.neutral[1].r_IC.density_phase = get(scan_input, "r_IC_density_phase$ispecies", 0.0)
+        species.neutral[1].r_IC.upar_amplitude = get(scan_input, "r_IC_upar_amplitude$ispecies", 0.0)
+        species.neutral[1].r_IC.upar_phase = get(scan_input, "r_IC_upar_phase$ispecies", 0.0)
+        species.neutral[1].r_IC.temperature_amplitude = get(scan_input, "r_IC_temperature_amplitude$ispecies", 0.0)
+        species.neutral[1].r_IC.temperature_phase = get(scan_input, "r_IC_temperature_phase$ispecies", 0.0)
         species.neutral[1].vpa_IC.initialization_option = get(scan_input, "vpa_IC_option$ispecies", "gaussian")
         species.neutral[1].vpa_IC.density_amplitude = get(scan_input, "vpa_IC_density_amplitude$ispecies", 1.000)
         species.neutral[1].vpa_IC.density_phase = get(scan_input, "vpa_IC_density_phase$ispecies", 0.0)
@@ -386,6 +400,12 @@ function mk_input(scan_input=Dict())
             species.charged[is].z_IC.upar_amplitude, species.charged[is].z_IC.upar_phase,
             species.charged[is].z_IC.temperature_amplitude, species.charged[is].z_IC.temperature_phase,
             species.charged[is].z_IC.monomial_degree)
+        r_IC = initial_condition_input(species.charged[is].r_IC.initialization_option,
+            species.charged[is].r_IC.width, species.charged[is].r_IC.wavenumber,
+            species.charged[is].r_IC.density_amplitude, species.charged[is].r_IC.density_phase,
+            species.charged[is].r_IC.upar_amplitude, species.charged[is].r_IC.upar_phase,
+            species.charged[is].r_IC.temperature_amplitude, species.charged[is].r_IC.temperature_phase,
+            species.charged[is].r_IC.monomial_degree)
         vpa_IC = initial_condition_input(species.charged[is].vpa_IC.initialization_option,
             species.charged[is].vpa_IC.width, species.charged[is].vpa_IC.wavenumber,
             species.charged[is].vpa_IC.density_amplitude, species.charged[is].vpa_IC.density_phase,
@@ -393,7 +413,7 @@ function mk_input(scan_input=Dict())
             species.charged[is].vpa_IC.temperature_amplitude,
             species.charged[is].vpa_IC.temperature_phase, species.charged[is].vpa_IC.monomial_degree)
         species_charged_immutable[is] = species_parameters(species_type, species.charged[is].initial_temperature,
-            species.charged[is].initial_density, z_IC, vpa_IC)
+            species.charged[is].initial_density, z_IC, r_IC, vpa_IC)
     end
     if n_neutral_species > 0
         for is ∈ 1:n_neutral_species
@@ -404,6 +424,12 @@ function mk_input(scan_input=Dict())
                 species.neutral[is].z_IC.upar_amplitude, species.neutral[is].z_IC.upar_phase,
                 species.neutral[is].z_IC.temperature_amplitude, species.neutral[is].z_IC.temperature_phase,
                 species.neutral[is].z_IC.monomial_degree)
+            r_IC = initial_condition_input(species.neutral[is].r_IC.initialization_option,
+                species.neutral[is].r_IC.width, species.neutral[is].r_IC.wavenumber,
+                species.neutral[is].r_IC.density_amplitude, species.neutral[is].r_IC.density_phase,
+                species.neutral[is].r_IC.upar_amplitude, species.neutral[is].r_IC.upar_phase,
+                species.neutral[is].r_IC.temperature_amplitude, species.neutral[is].r_IC.temperature_phase,
+                species.neutral[is].r_IC.monomial_degree)
             vpa_IC = initial_condition_input(species.neutral[is].vpa_IC.initialization_option,
                 species.neutral[is].vpa_IC.width, species.neutral[is].vpa_IC.wavenumber,
                 species.neutral[is].vpa_IC.density_amplitude, species.neutral[is].vpa_IC.density_phase,
@@ -411,7 +437,7 @@ function mk_input(scan_input=Dict())
                 species.neutral[is].vpa_IC.temperature_amplitude,
                 species.neutral[is].vpa_IC.temperature_phase, species.neutral[is].vpa_IC.monomial_degree)
             species_neutral_immutable[is] = species_parameters(species_type, species.neutral[is].initial_temperature,
-                species.neutral[is].initial_density, z_IC, vpa_IC)
+                species.neutral[is].initial_density, z_IC, r_IC, vpa_IC)
         end
     end 
     species_immutable = (charged = species_charged_immutable, neutral = species_neutral_immutable)
@@ -801,6 +827,26 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     z_initial_conditions = initial_condition_input_mutable(z_initialization_option,
         z_width, z_wavenumber, z_density_amplitude, z_density_phase, z_upar_amplitude,
         z_upar_phase, z_temperature_amplitude, z_temperature_phase, z_monomial_degree)
+    # initialization inputs for r part of distribution function
+    # supported options are "gaussian", "sinusoid" and "monomial"
+    r_initialization_option = "sinusoid"
+    # inputs for "gaussian" initial condition
+    # width of the Gaussian in r
+    r_width = 0.125
+    # inputs for "sinusoid" initial condition
+    # r_wavenumber should be an integer
+    r_wavenumber = 1
+    r_density_amplitude = 0.0
+    r_density_phase = 0.0
+    r_upar_amplitude = 0.0
+    r_upar_phase = 0.0
+    r_temperature_amplitude = 0.0
+    r_temperature_phase = 0.0
+    # inputs for "monomial" initial condition
+    r_monomial_degree = 2
+    r_initial_conditions = initial_condition_input_mutable(r_initialization_option,
+        r_width, r_wavenumber, r_density_amplitude, r_density_phase, r_upar_amplitude,
+        r_upar_phase, r_temperature_amplitude, r_temperature_phase, r_monomial_degree)
     # initialization inputs for vpa part of distribution function
     # supported options are "gaussian", "sinusoid" and "monomial"
     # inputs for 'gaussian' initial condition
@@ -826,13 +872,15 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     # fill in entries in species struct corresponding to ion species
     for is ∈ 1:n_ion_species
         species_charged[is] = species_parameters_mutable("ion", initial_temperature, initial_density,
-            deepcopy(z_initial_conditions), deepcopy(vpa_initial_conditions))
+            deepcopy(z_initial_conditions), deepcopy(r_initial_conditions),
+            deepcopy(vpa_initial_conditions))
     end
     # if there are neutrals, fill in corresponding entries in species struct
     if n_neutral_species > 0
         for is ∈ 1:n_neutral_species
             species_neutral[is] = species_parameters_mutable("neutral", initial_temperature,
-                initial_density, deepcopy(z_initial_conditions), deepcopy(vpa_initial_conditions))
+                initial_density, deepcopy(z_initial_conditions),
+                deepcopy(r_initial_conditions), deepcopy(vpa_initial_conditions))
         end
     end
     species = (charged = species_charged, neutral = species_neutral)
@@ -983,21 +1031,33 @@ function check_input_initialization(composition, species, io)
         else
             print(io,">initial distribution function for the electrons")
         end
-        println(io," is of the form f(z,vpa,t=0)=F(z)*G(vpa).")
+        println(io," is of the form f(z,vpa,t=0)=Fz(z)*Fr(r)*G(vpa).")
         if species[is].z_IC.initialization_option == "gaussian"
             print(io,">z intialization_option = 'gaussian'.")
-            println(io,"  setting F(z) = initial_density + exp(-(z/z_width)^2).")
+            println(io,"  setting Fz(z) = initial_density + exp(-(z/z_width)^2).")
         elseif species[is].z_IC.initialization_option == "monomial"
             print(io,">z_intialization_option = 'monomial'.")
-            println(io,"  setting F(z) = (z + L_z/2)^", species[is].z_IC.monomial_degree, ".")
+            println(io,"  setting Fz(z) = (z + L_z/2)^", species[is].z_IC.monomial_degree, ".")
         elseif species[is].z_IC.initialization_option == "sinusoid"
             print(io,">z_initialization_option = 'sinusoid'.")
-            println(io,"  setting F(z) = initial_density + z_amplitude*sinpi(z_wavenumber*z/L_z).")
+            println(io,"  setting Fz(z) = initial_density + z_amplitude*sinpi(z_wavenumber*z/L_z).")
         elseif species[is].z_IC.initialization_option == "bgk"
             print(io,">z_initialization_option = 'bgk'.")
-            println(io,"  setting F(z,vpa) = F(vpa^2 + phi), with phi_max = 0.")
+            println(io,"  setting Fz(z,vpa) = F(vpa^2 + phi), with phi_max = 0.")
         else
             input_option_error("z_initialization_option", species[is].z_IC.initialization_option)
+        end
+        if species[is].r_IC.initialization_option == "gaussian"
+            print(io,">r intialization_option = 'gaussian'.")
+            println(io,"  setting Fr(r) = initial_density + exp(-(r/r_width)^2).")
+        elseif species[is].r_IC.initialization_option == "monomial"
+            print(io,">r_intialization_option = 'monomial'.")
+            println(io,"  setting Fr(r) = (r + L_r/2)^", species[is].r_IC.monomial_degree, ".")
+        elseif species[is].r_IC.initialization_option == "sinusoid"
+            print(io,">r_initialization_option = 'sinusoid'.")
+            println(io,"  setting Fr(r) = initial_density + r_amplitude*sinpi(r_wavenumber*r/L_r).")
+        else
+            input_option_error("r_initialization_option", species[is].r_IC.initialization_option)
         end
         if species[is].vpa_IC.initialization_option == "gaussian"
             print(io,">vpa_intialization_option = 'gaussian'.")
