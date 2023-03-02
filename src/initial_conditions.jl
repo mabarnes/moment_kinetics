@@ -363,7 +363,7 @@ function init_vth!(vth, z, r, spec, n_species)
     for is ∈ 1:n_species
         # Initialise as temperature first, then square root.
         for ir ∈ 1:r.n
-            if spec[is].z_IC.initialization_option == "sinusoid"
+            if spec[is].z_IC.initialization_option ∈ ("sinusoid", "smoothedsquare")
                 # initial condition is sinusoid in z
                 @. vth[:,ir,is] =
                     (spec[is].initial_temperature
@@ -376,7 +376,7 @@ function init_vth!(vth, z, r, spec, n_species)
         end
         if r.n > 1
             for iz ∈ 1:z.n
-                if spec[is].r_IC.initialization_option == "sinusoid"
+                if spec[is].r_IC.initialization_option ∈ ("sinusoid", "smoothedsquare")
                     # initial condition is sinusoid in z
                     @. vth[iz,:,is] +=
                     (spec[is].initial_temperature
@@ -406,6 +406,17 @@ function init_density!(dens, z, r, spec, n_species)
                      * (1.0 + spec[is].z_IC.density_amplitude
                               * cos(2.0*π*spec[is].z_IC.wavenumber*z.grid/z.L
                                     + spec[is].z_IC.density_phase)))
+            elseif spec[is].z_IC.initialization_option == "smoothedsquare"
+                # initial condition is first 3 Fourier harmonics of a square wave
+                @. dens[:,ir,is] =
+                    (spec[is].initial_density
+                     * (1.0 + spec[is].z_IC.density_amplitude * 4.0 / π
+                              * (cos(2.0*π*spec[is].z_IC.wavenumber*z.grid/z.L
+                                     + spec[is].z_IC.density_phase)
+                                 + cos(3.0*(2.0*π*spec[is].z_IC.wavenumber*z.grid/z.L
+                                            + spec[is].z_IC.density_phase)) / 3.0
+                                 + cos(5.0*(2.0*π*spec[is].z_IC.wavenumber*z.grid/z.L
+                                            + spec[is].z_IC.density_phase)) / 5.0)))
             elseif spec[is].z_IC.inititalization_option == "monomial"
                 # linear variation in z, with offset so that
                 # function passes through zero at upwind boundary
@@ -423,6 +434,17 @@ function init_density!(dens, z, r, spec, n_species)
                         (spec[is].r_IC.density_amplitude
                          * cos(2.0*π*spec[is].r_IC.wavenumber*r.grid/r.L
                                + spec[is].r_IC.density_phase))
+                elseif spec[is].z_IC.initialization_option == "smoothedsquare"
+                    # initial condition is first 3 Fourier harmonics of a square wave
+                    @. dens[iz,:,is] +=
+                        (spec[is].initial_density
+                         * spec[is].r_IC.density_amplitude * 4.0 / π
+                           * (cos(2.0*π*spec[is].r_IC.wavenumber*r.grid/r.L
+                                  + spec[is].r_IC.density_phase)
+                              + cos(3.0*(2.0*π*spec[is].r_IC.wavenumber*r.grid/r.L
+                                         + spec[is].r_IC.density_phase)) / 3.0
+                              + cos(5.0*(2.0*π*spec[is].r_IC.wavenumber*r.grid/r.L
+                                         + spec[is].r_IC.density_phase)) / 5.0))
                 elseif spec[is].r_IC.inititalization_option == "monomial"
                     # linear variation in r, with offset so that
                     # function passes through zero at upwind boundary
@@ -440,7 +462,7 @@ for now the only initialisation option is zero parallel flow
 function init_upar!(upar, z, r, spec, n_species)
     for is ∈ 1:n_species
         for ir ∈ 1:r.n
-            if spec[is].z_IC.initialization_option == "sinusoid"
+            if spec[is].z_IC.initialization_option ∈ ("sinusoid", "smoothedsquare")
                 # initial condition is sinusoid in z
                 @. upar[:,ir,is] =
                     (spec[is].z_IC.upar_amplitude
@@ -460,7 +482,7 @@ function init_upar!(upar, z, r, spec, n_species)
         end
         if r.n > 1
             for iz ∈ 1:z.n
-                if spec[is].r_IC.initialization_option == "sinusoid"
+                if spec[is].r_IC.initialization_option ∈ ("sinusoid", "smoothedsquare")
                     # initial condition is sinusoid in r
                     @. upar[iz,:,is] +=
                         (spec[is].r_IC.upar_amplitude
