@@ -1063,9 +1063,6 @@ function check_input_initialization(composition, species, io)
         elseif species[is].r_IC.initialization_option == "sinusoid"
             print(io,">r_initialization_option = 'sinusoid'.")
             println(io,"  setting Fr(r) = initial_density + r_amplitude*sinpi(r_wavenumber*r/L_r).")
-        elseif species[is].r_IC.initialization_option == "2D-instability-test"
-            print(io,">r_initialization_option = '2D-instability-test'.")
-            println(io,"  setting Fr(r) for 2D instability test.")
         else
             input_option_error("r_initialization_option", species[is].r_IC.initialization_option)
         end
