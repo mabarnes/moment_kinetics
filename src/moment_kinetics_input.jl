@@ -1041,9 +1041,9 @@ function check_input_initialization(composition, species, io)
         elseif species[is].z_IC.initialization_option == "sinusoid"
             print(io,">z_initialization_option = 'sinusoid'.")
             println(io,"  setting Fz(z) = initial_density + z_amplitude*sinpi(z_wavenumber*z/L_z).")
-        elseif species[is].z_IC.initialization_option == "smoothedsquare"
-            print(io,">z_initialization_option = 'smoothedsquare'.")
-            println(io,"  setting Fz(z) = initial_density + z_amplitude*4/π*(sinpi(z_wavenumber*z/L_z)+sinpi(3*z_wavenumber*z/L_z)/3+sinpi(5*z_wavenumber*z/L_z)/5).")
+        elseif species[is].z_IC.initialization_option == "2D-instability-test"
+            print(io,">z_initialization_option = '2D-instability-test'.")
+            println(io,"  setting Fz(z) for 2D instability test.")
         elseif species[is].z_IC.initialization_option == "bgk"
             print(io,">z_initialization_option = 'bgk'.")
             println(io,"  setting Fz(z,vpa) = F(vpa^2 + phi), with phi_max = 0.")
@@ -1059,9 +1059,9 @@ function check_input_initialization(composition, species, io)
         elseif species[is].r_IC.initialization_option == "sinusoid"
             print(io,">r_initialization_option = 'sinusoid'.")
             println(io,"  setting Fr(r) = initial_density + r_amplitude*sinpi(r_wavenumber*r/L_r).")
-        elseif species[is].r_IC.initialization_option == "smoothedsquare"
-            print(io,">r_initialization_option = 'smoothedsquare'.")
-            println(io,"  setting Fr(r) = initial_density + r_amplitude*4/π*(sinpi(r_wavenumber*r/L_r)+sinpi(3*r_wavenumber*r/L_r)/3+sinpi(5*r_wavenumber*r/L_r)/5).")
+        elseif species[is].r_IC.initialization_option == "2D-instability-test"
+            print(io,">r_initialization_option = '2D-instability-test'.")
+            println(io,"  setting Fr(r) for 2D instability test.")
         else
             input_option_error("r_initialization_option", species[is].r_IC.initialization_option)
         end
