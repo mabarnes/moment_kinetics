@@ -288,26 +288,45 @@ function init_vth!(vth, z, r, spec, n_species)
     for is ∈ 1:n_species
         # Initialise as temperature first, then square root.
         for ir ∈ 1:r.n
-            if spec[is].z_IC.initialization_option ∈ ("sinusoid", "smoothedsquare")
+            if spec[is].z_IC.initialization_option == "sinusoid"
                 # initial condition is sinusoid in z
                 @. vth[:,ir,is] =
                     (spec[is].initial_temperature
                      * (1.0 + spec[is].z_IC.temperature_amplitude
                               * cos(2.0*π*spec[is].z_IC.wavenumber*z.grid/z.L +
                                     spec[is].z_IC.temperature_phase)))
+            elseif spec[is].z_IC.initialization_option == "2D-instability-test"
+                background_wavenumber = 1
+                @. vth[:,ir,is] =
+                    (spec[is].initial_temperature
+                     * (1.0 + spec[is].z_IC.temperature_amplitude
+                              * sin(2.0*π*background_wavenumber*z.grid/z.L +
+                                    spec[is].z_IC.temperature_phase)))
+
+                # initial perturbation with amplitude set by 'r' initial condition
+                # settings, but using the z_IC.wavenumber as the background is always
+                # 'wavenumber=1'.
+                @. vth[:,ir,is] +=
+                (spec[is].initial_temperature
+                 * spec[is].r_IC.temperature_amplitude
+                 * cos(2.0*π*(spec[is].z_IC.wavenumber*z.grid/z.L +
+                              spec[is].r_IC.wavenumber*r.grid[ir]/r.L) +
+                       spec[is].r_IC.temperature_phase))
             else
                 @. vth[:,ir,is] =  spec[is].initial_temperature
             end
         end
         if r.n > 1
             for iz ∈ 1:z.n
-                if spec[is].r_IC.initialization_option ∈ ("sinusoid", "smoothedsquare")
-                    # initial condition is sinusoid in z
+                if spec[is].r_IC.initialization_option == "sinusoid"
+                    # initial condition is sinusoid in r
                     @. vth[iz,:,is] +=
                     (spec[is].initial_temperature
                      * spec[is].r_IC.temperature_amplitude
                      * cos(2.0*π*spec[is].r_IC.wavenumber*r.grid/r.L +
                            spec[is].r_IC.temperature_phase))
+                elseif spec[is].r_IC.initialization_option == "2D-instability-test"
+                    # do nothing here
                 end
             end
         end
@@ -339,6 +358,28 @@ function init_density!(dens, z, r, spec, n_species)
                     (spec[is].initial_density
                      * (1.0 + spec[is].z_IC.density_amplitude
                               * cos(argument - sin(2.0*argument)) ))
+            elseif spec[is].z_IC.initialization_option == "2D-instability-test"
+                background_wavenumber = 1
+                eta0 = @. (spec[is].initial_density
+                           * (1.0 + spec[is].z_IC.density_amplitude
+                              * sin(2.0*π*background_wavenumber*z.grid/z.L
+                                    + spec[is].z_IC.density_phase)))
+                T0 = @. (spec[is].initial_temperature
+                         * (1.0 + spec[is].z_IC.temperature_amplitude
+                            * sin(2.0*π*background_wavenumber*z.grid/z.L +
+                                  spec[is].z_IC.temperature_phase)
+                           ))
+                @. dens[:,ir,is] = eta0^((T0/(1+T0)))
+
+                # initial perturbation with amplitude set by 'r' initial condition
+                # settings, but using the z_IC.wavenumber as the background is always
+                # 'wavenumber=1'.
+                @. dens[:,ir,is] +=
+                (spec[is].initial_density
+                 * spec[is].r_IC.density_amplitude
+                 * cos(2.0*π*(spec[is].z_IC.wavenumber*z.grid/z.L +
+                              spec[is].r_IC.wavenumber*r.grid[ir]/r.L) +
+                       spec[is].r_IC.density_phase))
             elseif spec[is].z_IC.initialization_option == "monomial"
                 # linear variation in z, with offset so that
                 # function passes through zero at upwind boundary
@@ -363,6 +404,8 @@ function init_density!(dens, z, r, spec, n_species)
                     @. dens[iz,:,is] +=
                         spec[is].initial_density * spec[is].r_IC.density_amplitude *
                         cos(argument - sin(2.0*argument))
+                elseif spec[is].r_IC.initialization_option == "2D-instability-test"
+                    # do nothing here
                 elseif spec[is].r_IC.initialization_option == "monomial"
                     # linear variation in r, with offset so that
                     # function passes through zero at upwind boundary
@@ -379,7 +422,7 @@ end
 function init_upar!(upar, z, r, spec, n_species)
     for is ∈ 1:n_species
         for ir ∈ 1:r.n
-            if spec[is].z_IC.initialization_option ∈ ("sinusoid", "smoothedsquare")
+            if spec[is].z_IC.initialization_option == "sinusoid"
                 # initial condition is sinusoid in z
                 @. upar[:,ir,is] =
                     (spec[is].z_IC.upar_amplitude
@@ -397,7 +440,7 @@ function init_upar!(upar, z, r, spec, n_species)
         end
         if r.n > 1
             for iz ∈ 1:z.n
-                if spec[is].r_IC.initialization_option ∈ ("sinusoid", "smoothedsquare")
+                if spec[is].r_IC.initialization_option == "sinusoid"
                     # initial condition is sinusoid in r
                     @. upar[iz,:,is] +=
                         (spec[is].r_IC.upar_amplitude

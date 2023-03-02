@@ -1028,6 +1028,9 @@ function check_input_initialization(composition, species, io)
         elseif species[is].z_IC.initialization_option == "smoothedsquare"
             print(io,">z_initialization_option = 'smoothedsquare'.")
             println(io,"  setting Fz(z) = initial_density + z_amplitude*(cospi(z_wavenumber*z/L_z - sinpi(2*z_wavenumber*z/Lz))).")
+        elseif species[is].z_IC.initialization_option == "2D-instability-test"
+            print(io,">z_initialization_option = '2D-instability-test'.")
+            println(io,"  setting Fz(z) for 2D instability test.")
         elseif species[is].z_IC.initialization_option == "bgk"
             print(io,">z_initialization_option = 'bgk'.")
             println(io,"  setting Fz(z,vpa) = F(vpa^2 + phi), with phi_max = 0.")
