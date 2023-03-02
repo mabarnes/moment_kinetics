@@ -217,6 +217,8 @@ function mk_input(scan_input=Dict())
     r.nelement_global = get(scan_input, "r_nelement", 8)
 	# nelement_local is the number of elements on each process
     r.nelement_local = get(scan_input, "r_nelement_local", r.nelement_global)
+    # L is the box length in units of cs0/Omega_i
+    r.L = get(scan_input, "r_L", 1.0)
     # determine the discretization option for the r grid
     # supported options are "chebyshev_pseudospectral" and "finite_difference"
     r.discretization = get(scan_input, "r_discretization", "finite_difference")
@@ -231,6 +233,8 @@ function mk_input(scan_input=Dict())
     z.nelement_global = get(scan_input, "z_nelement", 8)
     # nelement_local is the number of elements on each process
     z.nelement_local = get(scan_input, "z_nelement_local", z.nelement_global)
+    # L is the box length in units of cs0/Omega_i
+    z.L = get(scan_input, "z_L", 1.0)
     # determine the discretization option for the z grid
     # supported options are "chebyshev_pseudospectral" and "finite_difference"
     z.discretization = get(scan_input, "z_discretization", "chebyshev_pseudospectral")
