@@ -84,6 +84,13 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
             else 
                 println("ERROR: scan_type = ",scan_type," requires velocity elements equal in all dimensions")
             end
+        elseif scan_type == "zr_nelement"
+            nelement = z_nelement
+            if nelement == r_nelement
+                nelement_sequence[isim] = nelement
+            else 
+                println("ERROR: scan_type = ",scan_type," requires z & r elements equal in all dimensions")
+            end
         else 
             println("ERROR: scan_type = ",scan_type," is unsupported")
         end
@@ -264,6 +271,8 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         xlabel = L"r"*" "*L"N_{element}"
     elseif scan_type == "z_nelement"
         xlabel = L"z"*" "*L"N_{element}"
+    elseif scan_type == "zr_nelement"
+        xlabel = L"z "*" & "*L"r "*" "*L"N_{element}"
     elseif scan_type == "velocity_nelement"
         xlabel = L"N_{element}"
     elseif scan_type == "nelement"
@@ -288,6 +297,8 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         ytick_sequence = Array([1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0,1.0e1])
     elseif scan_name == "1D-3V-wall_cheb-updated" || scan_name == "1D-3V-wall_cheb-new-dfni-Er" || scan_name == "1D-3V-wall_cheb-new-dfni" || scan_name == "2D-sound-wave_cheb"
         ytick_sequence = Array([1.0e-10,1.0e-9,1.0e-8,1.0e-7,1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0,1.0e1])
+    elseif scan_name == "2D-1V-wall_cheb" 
+        ytick_sequence = Array([1.0e-8,1.0e-7,1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0])
     else
         ytick_sequence = Array([1.0e-7,1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0,1.0e1])
     end
@@ -320,6 +331,14 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
      shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_sequence, nelement_sequence), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2, 
       xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize)
     outfile = outprefix*"_fields_and_ion_pdf_no_Er.pdf"
+    savefig(outfile)
+    println(outfile)
+    
+    plot(nelement_sequence, [ion_density_error_sequence,phi_error_sequence,Ez_error_sequence,Er_error_sequence,ion_pdf_error_sequence], xlabel=xlabel,
+	label=[ylabel_ion_density ylabel_phi ylabel_Ez ylabel_Er ylabel_ion_pdf], ylabel="",
+     shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_sequence, nelement_sequence), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2, 
+      xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize)
+    outfile = outprefix*"_fields_and_ion_pdf.pdf"
     savefig(outfile)
     println(outfile)
     
