@@ -26,7 +26,7 @@ function z_advection!(f_out, fvec_in, fields, advect, z, vpa, vperp, r, dt, t, z
         end
     end
 	#calculate the upwind derivative
-    derivative_z!(scratch_dummy.buffer_vpavperpzrs, fvec_in.pdf, advect,
+    derivative_z!(scratch_dummy.buffer_vpavperpzrs_1, fvec_in.pdf, advect,
 					scratch_dummy.buffer_vpavperprs_1, scratch_dummy.buffer_vpavperprs_2,
 					scratch_dummy.buffer_vpavperprs_3,scratch_dummy.buffer_vpavperprs_4,
 					scratch_dummy.buffer_vpavperprs_5,scratch_dummy.buffer_vpavperprs_6,
@@ -34,7 +34,7 @@ function z_advection!(f_out, fvec_in, fields, advect, z, vpa, vperp, r, dt, t, z
 					
     # advance z-advection equation
     @loop_s_r_vperp_vpa is ir ivperp ivpa begin
-        @. @views z.scratch = scratch_dummy.buffer_vpavperpzrs[ivpa,ivperp,:,ir,is]
+        @. @views z.scratch = scratch_dummy.buffer_vpavperpzrs_1[ivpa,ivperp,:,ir,is]
         @views advance_f_df_precomputed!(f_out[ivpa,ivperp,:,ir,is],
           z.scratch, advect[is], ivpa, ivperp, ir, z, dt, z_spectral)
     end

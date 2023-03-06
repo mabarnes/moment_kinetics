@@ -585,13 +585,13 @@ function enforce_boundary_conditions!(f, f_r_bc,
     @views enforce_z_boundary_condition!(f, z_bc, z_adv, vpa, vperp, z, r, composition,
             scratch_dummy.buffer_vpavperprs_1, scratch_dummy.buffer_vpavperprs_2,
             scratch_dummy.buffer_vpavperprs_3, scratch_dummy.buffer_vpavperprs_4,
-            scratch_dummy.buffer_vpavperpzrs)
+            scratch_dummy.buffer_vpavperpzrs_1)
     if r.n > 1
         begin_s_z_vperp_vpa_region()
         @views enforce_r_boundary_condition!(f, f_r_bc, r_bc, r_adv, vpa, vperp, z, r, composition,
             scratch_dummy.buffer_vpavperpzs_1, scratch_dummy.buffer_vpavperpzs_2,
             scratch_dummy.buffer_vpavperpzs_3, scratch_dummy.buffer_vpavperpzs_4,
-            scratch_dummy.buffer_vpavperpzrs)
+            scratch_dummy.buffer_vpavperpzrs_1)
     end
 end
 

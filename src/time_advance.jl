@@ -80,7 +80,8 @@ mutable struct scratch_dummy_arrays
 	
     # buffer to hold derivative after MPI communicates
     # needs to be shared memory
-	buffer_vpavperpzrs::MPISharedArray{mk_float,5}
+	buffer_vpavperpzrs_1::MPISharedArray{mk_float,5}
+	buffer_vpavperpzrs_2::MPISharedArray{mk_float,5}
 	
 	buffer_vzvrvzetazsn_1::MPISharedArray{mk_float,5}
 	buffer_vzvrvzetazsn_2::MPISharedArray{mk_float,5}
@@ -319,7 +320,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
                                             r.bc, r_advect, vpa, vperp, z, r, composition,
                                             scratch_dummy.buffer_vpavperpzs_1, scratch_dummy.buffer_vpavperpzs_2,
                                             scratch_dummy.buffer_vpavperpzs_3, scratch_dummy.buffer_vpavperpzs_4,
-                                            scratch_dummy.buffer_vpavperpzrs)
+                                            scratch_dummy.buffer_vpavperpzrs_1)
     end
 
     # create structure z_advect whose members are the arrays needed to compute
@@ -336,7 +337,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     @views enforce_z_boundary_condition!(pdf.charged.unnorm, z.bc, z_advect, vpa, vperp, z, r, composition,
             scratch_dummy.buffer_vpavperprs_1, scratch_dummy.buffer_vpavperprs_2,
             scratch_dummy.buffer_vpavperprs_3, scratch_dummy.buffer_vpavperprs_4,
-            scratch_dummy.buffer_vpavperpzrs)
+            scratch_dummy.buffer_vpavperpzrs_1)
 
     begin_serial_region()
 
@@ -465,7 +466,8 @@ function setup_dummy_and_buffer_arrays(nr,nz,nvpa,nvperp,nvz,nvr,nvzeta,nspecies
 	buffer_vpavperprs_5 = allocate_shared_float(nvpa,nvperp,nr,nspecies_ion)
 	buffer_vpavperprs_6 = allocate_shared_float(nvpa,nvperp,nr,nspecies_ion)
 	
-	buffer_vpavperpzrs = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
+	buffer_vpavperpzrs_1 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
+	buffer_vpavperpzrs_2 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
 	
 	buffer_vzvrvzetazsn_1 = allocate_shared_float(nvz,nvr,nvzeta,nz,nspecies_neutral)
 	buffer_vzvrvzetazsn_2 = allocate_shared_float(nvz,nvr,nvzeta,nz,nspecies_neutral)
@@ -488,7 +490,7 @@ function setup_dummy_and_buffer_arrays(nr,nz,nvpa,nvperp,nvz,nvr,nvzeta,nspecies
 		buffer_r_1,buffer_r_2,buffer_r_3,buffer_r_4,
 		buffer_vpavperpzs_1,buffer_vpavperpzs_2,buffer_vpavperpzs_3,buffer_vpavperpzs_4,buffer_vpavperpzs_5,buffer_vpavperpzs_6,
 		buffer_vpavperprs_1,buffer_vpavperprs_2,buffer_vpavperprs_3,buffer_vpavperprs_4,buffer_vpavperprs_5,buffer_vpavperprs_6,
-		buffer_vpavperpzrs,
+		buffer_vpavperpzrs_1,buffer_vpavperpzrs_2,
 		buffer_vzvrvzetazsn_1,buffer_vzvrvzetazsn_2,buffer_vzvrvzetazsn_3,buffer_vzvrvzetazsn_4,buffer_vzvrvzetazsn_5,buffer_vzvrvzetazsn_6,
 		buffer_vzvrvzetarsn_1,buffer_vzvrvzetarsn_2,buffer_vzvrvzetarsn_3,buffer_vzvrvzetarsn_4,buffer_vzvrvzetarsn_5,buffer_vzvrvzetarsn_6,
 		buffer_vzvrvzetazrsn)
@@ -668,8 +670,12 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
                 debug_detect_redundant_is_active[] = false
             end
             begin_serial_region()
-            @serial_region println("writing distribution functions at step ", i,"  ",
+            @serial_region begin
+                if global_rank[] == 0
+                    println("writing distribution functions at step ", i,"  ",
                                    Dates.format(now(), dateformat"H:MM:SS"))
+                end
+            end
             write_dfns_data_to_binary(pdf.charged.unnorm, pdf.neutral.unnorm, t,
                                       composition.n_ion_species,
                                       composition.n_neutral_species, io_dfns, iwrite_dfns)
@@ -989,9 +995,9 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
         vpa_dissipation!(fvec_out.pdf, fvec_in.pdf, vpa, vpa_spectral, dt,
                          num_diss_params)
         z_dissipation!(fvec_out.pdf, fvec_in.pdf, z, z_spectral, dt,
-                       num_diss_params)
+                       num_diss_params, scratch_dummy)
         r_dissipation!(fvec_out.pdf, fvec_in.pdf, r, r_spectral, dt,
-                       num_diss_params)
+                       num_diss_params, scratch_dummy)
     end
 
     # enforce boundary conditions in r, z and vpa on the charged particle distribution function

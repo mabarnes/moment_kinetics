@@ -27,7 +27,7 @@ function r_advection!(f_out, fvec_in, fields, advect, r, z, vperp, vpa,
         end
     end
     # calculate the upwind derivative along r
-    derivative_r!(scratch_dummy.buffer_vpavperpzrs, fvec_in.pdf[:,:,:,:,:], advect,
+    derivative_r!(scratch_dummy.buffer_vpavperpzrs_1, fvec_in.pdf[:,:,:,:,:], advect,
 					scratch_dummy.buffer_vpavperpzs_1, scratch_dummy.buffer_vpavperpzs_2,
 					scratch_dummy.buffer_vpavperpzs_3,scratch_dummy.buffer_vpavperpzs_4,
 					scratch_dummy.buffer_vpavperpzs_5,scratch_dummy.buffer_vpavperpzs_6,
@@ -35,7 +35,7 @@ function r_advection!(f_out, fvec_in, fields, advect, r, z, vperp, vpa,
 
 		# advance r-advection equation
     @loop_s_z_vperp_vpa is iz ivperp ivpa begin
-        @. r.scratch = scratch_dummy.buffer_vpavperpzrs[ivpa,ivperp,iz,:,is]
+        @. r.scratch = scratch_dummy.buffer_vpavperpzrs_1[ivpa,ivperp,iz,:,is]
         @views advance_f_df_precomputed!(f_out[ivpa,ivperp,iz,:,is],
           r.scratch, advect[is], ivpa, ivperp, iz, r, dt, r_spectral)
     end

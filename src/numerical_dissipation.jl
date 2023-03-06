@@ -13,6 +13,7 @@ using Base.Iterators: flatten
 
 using ..looping
 using ..calculus: derivative!, second_derivative!
+using ..derivatives: derivative_r!, derivative_z!
 using ..type_definitions: mk_float
 
 Base.@kwdef struct numerical_dissipation_parameters
@@ -94,18 +95,24 @@ function vpa_dissipation!(f_out, f_in, vpa, spectral::T_spectral, dt,
 end
 
 """
-Add diffusion in the z direction to suppress oscillations
+Add diffusion in the z & r direction to suppress oscillations
 
-Disabled by default.
+Disabled by default or if negative value is set.
 
 The diffusion coefficient is set in the input TOML file by the parameter
 ```
 [numerical_dissipation]
 z_dissipation_coefficient = 0.1
+r_dissipation_coefficient = 0.1
 ```
+
+Note that the current distributed-memory compatible
+implementation does not impose a penalisation term
+on internal or external element boundaries
+
 """
-function z_dissipation!(f_out, f_in, z, spectral::T_spectral, dt,
-        num_diss_params::numerical_dissipation_parameters) where T_spectral
+function z_dissipation!(f_out, f_in, z, z_spectral::T_spectral, dt,
+        num_diss_params::numerical_dissipation_parameters, scratch_dummy) where T_spectral
 
     diffusion_coefficient = num_diss_params.z_dissipation_coefficient
     if diffusion_coefficient <= 0.0
@@ -114,18 +121,32 @@ function z_dissipation!(f_out, f_in, z, spectral::T_spectral, dt,
 
     begin_s_r_vperp_vpa_region()
 
-    z.scratch2  .= 1.0 # placeholder for Q in d / d z ( Q d f / d z)
-    # N.B. routine below not consistent with distributed memory MPI
+    # calculate d / d z ( Q d f / d z ) using distributed memory compatible routines
+    # first compute d f / d z using centred reconciliation and place in dummy array #1
+    derivative_z!(scratch_dummy.buffer_vpavperpzrs_1, f_in[:,:,:,:,:],
+					scratch_dummy.buffer_vpavperprs_1, scratch_dummy.buffer_vpavperprs_2,
+					scratch_dummy.buffer_vpavperprs_3,scratch_dummy.buffer_vpavperprs_4,
+					z_spectral,z)
+    # form Q d f / d r and place in dummy array #2
     @loop_s_r_vperp_vpa is ir ivperp ivpa begin
-        @views second_derivative!(z.scratch, f_in[ivpa,ivperp,:,ir,is], z.scratch2, z, spectral)
-        @views @. f_out[ivpa,ivperp,:,ir,is] += dt * diffusion_coefficient * z.scratch
+        Q = 1.0 # placeholder for geometrical or velocity space dependent metric coefficient
+        @. scratch_dummy.buffer_vpavperpzrs_2[ivpa,ivperp,:,ir,is] =  Q * scratch_dummy.buffer_vpavperpzrs_1[ivpa,ivperp,:,ir,is]
+    end
+    # compute d / d z ( Q d f / d z ) using centred reconciliation and place in dummy array #1
+    derivative_z!(scratch_dummy.buffer_vpavperpzrs_1, scratch_dummy.buffer_vpavperpzrs_2[:,:,:,:,:],
+					scratch_dummy.buffer_vpavperprs_1, scratch_dummy.buffer_vpavperprs_2,
+					scratch_dummy.buffer_vpavperprs_3,scratch_dummy.buffer_vpavperprs_4,
+					z_spectral,z)
+    # advance f due to diffusion_coefficient * d / d z ( Q d f / d z )
+    @loop_s_r_vperp_vpa is ir ivperp ivpa begin
+        @views @. f_out[ivpa,ivperp,:,ir,is] += dt * diffusion_coefficient * scratch_dummy.buffer_vpavperpzrs_1[ivpa,ivperp,:,ir,is]
     end
 
     return nothing
 end
 
-function r_dissipation!(f_out, f_in, r, spectral::T_spectral, dt,
-        num_diss_params::numerical_dissipation_parameters) where T_spectral
+function r_dissipation!(f_out, f_in, r, r_spectral::T_spectral, dt,
+        num_diss_params::numerical_dissipation_parameters, scratch_dummy) where T_spectral
 
     diffusion_coefficient = num_diss_params.r_dissipation_coefficient
     if diffusion_coefficient <= 0.0
@@ -134,11 +155,25 @@ function r_dissipation!(f_out, f_in, r, spectral::T_spectral, dt,
 
     begin_s_z_vperp_vpa_region()
 
-    r.scratch2  .= 1.0 # placeholder for Q in d / d r ( Q d f / d r)
-    # N.B. routine below not consistent with distributed memory MPI
+    # calculate d / d r ( Q d f / d r ) using distributed memory compatible routines
+    # first compute d f / d r using centred reconciliation and place in dummy array #1
+    derivative_r!(scratch_dummy.buffer_vpavperpzrs_1, f_in[:,:,:,:,:],
+					scratch_dummy.buffer_vpavperpzs_1, scratch_dummy.buffer_vpavperpzs_2,
+					scratch_dummy.buffer_vpavperpzs_3,scratch_dummy.buffer_vpavperpzs_4,
+					r_spectral,r)
+    # form Q d f / d r and place in dummy array #2
     @loop_s_z_vperp_vpa is iz ivperp ivpa begin
-        @views second_derivative!(r.scratch, f_in[ivpa,ivperp,iz,:,is], r.scratch2, r, spectral)
-        @views @. f_out[ivpa,ivperp,iz,:,is] += dt * diffusion_coefficient * r.scratch
+        Q = 1.0 # placeholder for geometrical or velocity space dependent metric coefficient
+        @. scratch_dummy.buffer_vpavperpzrs_2[ivpa,ivperp,iz,:,is] =  Q * scratch_dummy.buffer_vpavperpzrs_1[ivpa,ivperp,iz,:,is]
+    end
+    # compute d / d r ( Q d f / d r ) using centred reconciliation and place in dummy array #1
+    derivative_r!(scratch_dummy.buffer_vpavperpzrs_1, scratch_dummy.buffer_vpavperpzrs_2[:,:,:,:,:],
+					scratch_dummy.buffer_vpavperpzs_1, scratch_dummy.buffer_vpavperpzs_2,
+					scratch_dummy.buffer_vpavperpzs_3,scratch_dummy.buffer_vpavperpzs_4,
+					r_spectral,r)
+    # advance f due to diffusion_coefficient * d / d r ( Q d f / d r )
+    @loop_s_z_vperp_vpa is iz ivperp ivpa begin
+        @views @. f_out[ivpa,ivperp,iz,:,is] += dt * diffusion_coefficient * scratch_dummy.buffer_vpavperpzrs_1[ivpa,ivperp,iz,:,is]
     end
 
     return nothing
