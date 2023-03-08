@@ -13,6 +13,7 @@ rhostar = 1.0
 initial_density1 = 1.0
 initial_temperature1 = 1.0
 z_IC_option1 = "2D-instability-test"
+z_IC_wavenumber1 = 20
 z_IC_density_amplitude1 = 0.1
 z_IC_density_phase1 = 0.0
 z_IC_upar_amplitude1 = 0.0
