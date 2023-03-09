@@ -191,10 +191,14 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     advance_continuity = false
     advance_force_balance = false
     advance_energy = false
+    # flag to determine if a d^2/dr^2 operator is present 
+    r_diffusion = (advance_numerical_dissipation && num_diss_params.r_dissipation_coefficient > 0.0)
+    # flag to determine if a d^2/dvpa^2 operator is present
+    vpa_diffusion = (advance_numerical_dissipation && num_diss_params.vpa_dissipation_coefficient > 0.0)
     advance = advance_info(advance_vpa_advection, advance_z_advection, advance_r_advection, advance_neutral_z_advection, advance_neutral_r_advection,
                            advance_cx, advance_cx_1V, advance_ionization, advance_ionization_1V, advance_numerical_dissipation, 
                            advance_sources, advance_continuity, advance_force_balance, advance_energy, rk_coefs,
-                           manufactured_solns_test)
+                           manufactured_solns_test, r_diffusion, vpa_diffusion)
 
 
     if z.discretization == "chebyshev_pseudospectral"
@@ -320,7 +324,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
                                             r.bc, r_advect, vpa, vperp, z, r, composition,
                                             scratch_dummy.buffer_vpavperpzs_1, scratch_dummy.buffer_vpavperpzs_2,
                                             scratch_dummy.buffer_vpavperpzs_3, scratch_dummy.buffer_vpavperpzs_4,
-                                            scratch_dummy.buffer_vpavperpzrs_1)
+                                            scratch_dummy.buffer_vpavperpzrs_1, advance.r_diffusion)
     end
 
     # create structure z_advect whose members are the arrays needed to compute
@@ -354,7 +358,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     @serial_region begin
         for is ∈ 1:n_ion_species
             # enforce prescribed boundary condition in vpa on the distribution function f
-            @views enforce_vpa_boundary_condition!(pdf.charged.norm[:,:,:,:,is], vpa.bc, vpa_advect[is])
+            @views enforce_vpa_boundary_condition!(pdf.charged.norm[:,:,:,:,is], vpa.bc, vpa_advect[is], advance.vpa_diffusion)
         end
     end
 
@@ -1003,7 +1007,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     # enforce boundary conditions in r, z and vpa on the charged particle distribution function
     enforce_boundary_conditions!(fvec_out.pdf, boundary_distributions.pdf_rboundary_charged,
       vpa.bc, z.bc, r.bc, vpa, vperp, z, r, vpa_advect, z_advect, r_advect, composition,
-      scratch_dummy)
+      scratch_dummy, advance)
     # enforce boundary conditions in r and z on the neutral particle distribution function
     if n_neutral_species > 0
         enforce_neutral_boundary_conditions!(fvec_out.pdf_neutral, fvec_out.pdf, boundary_distributions,

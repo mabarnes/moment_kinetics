@@ -573,13 +573,13 @@ end
 function enforce_boundary_conditions!(f, f_r_bc,
           vpa_bc, z_bc, r_bc, vpa, vperp, z, r,
           vpa_adv::T1, z_adv::T2, r_adv::T3, composition,
-          scratch_dummy::T4) where {T1, T2, T3, T4}
+          scratch_dummy::T4, advance::T5) where {T1, T2, T3, T4, T5}
     
     begin_s_r_z_vperp_region()
     @loop_s_r_z_vperp is ir iz ivperp begin
         # enforce the vpa BC
         # use that adv.speed independent of vpa 
-        @views enforce_vpa_boundary_condition_local!(f[:,ivperp,iz,ir,is], vpa_bc, vpa_adv[is].speed[:,ivperp,iz,ir])
+        @views enforce_vpa_boundary_condition_local!(f[:,ivperp,iz,ir,is], vpa_bc, vpa_adv[is].speed[:,ivperp,iz,ir], advance.vpa_diffusion)
     end
     begin_s_r_vperp_vpa_region()
     @views enforce_z_boundary_condition!(f, z_bc, z_adv, vpa, vperp, z, r, composition,
@@ -591,7 +591,7 @@ function enforce_boundary_conditions!(f, f_r_bc,
         @views enforce_r_boundary_condition!(f, f_r_bc, r_bc, r_adv, vpa, vperp, z, r, composition,
             scratch_dummy.buffer_vpavperpzs_1, scratch_dummy.buffer_vpavperpzs_2,
             scratch_dummy.buffer_vpavperpzs_3, scratch_dummy.buffer_vpavperpzs_4,
-            scratch_dummy.buffer_vpavperpzrs_1)
+            scratch_dummy.buffer_vpavperpzrs_1, advance.r_diffusion)
     end
 end
 
@@ -602,7 +602,7 @@ enforce boundary conditions on f in r
 function enforce_r_boundary_condition!(f::AbstractArray{mk_float,5}, f_r_bc, bc::String,
         adv::T, vpa, vperp, z, r, composition, end1::AbstractArray{mk_float,4},
         end2::AbstractArray{mk_float,4}, buffer1::AbstractArray{mk_float,4},
-        buffer2::AbstractArray{mk_float,4}, buffer_dfn::AbstractArray{mk_float,5}) where T
+        buffer2::AbstractArray{mk_float,4}, buffer_dfn::AbstractArray{mk_float,5}, r_diffusion::Bool) where T
     
     nr = r.n
     
@@ -629,14 +629,17 @@ function enforce_r_boundary_condition!(f::AbstractArray{mk_float,5}, f_r_bc, bc:
         zero = 1.0e-10
         # use the old distribution to force the new distribution to have 
         # consistant-in-time values at the boundary
+        # with bc = "Dirichlet" and r_diffusion = false
         # impose bc for incoming parts of velocity space only (Hyperbolic PDE)
+        # with bc = "Dirichlet" and r_diffusion = true 
+        # impose bc on both sides of the domain to accomodate a diffusion operator d^2 / d r^2
         @loop_s_z_vperp_vpa is iz ivperp ivpa begin
             ir = 1 # r = -L/2 -- check that the point is on lowest rank
-            if adv[is].speed[ir,ivpa,ivperp,iz] > zero && r.irank == 0
+            if (adv[is].speed[ir,ivpa,ivperp,iz] > zero || r_diffusion) && r.irank == 0
                 f[ivpa,ivperp,iz,ir,is] = f_r_bc[ivpa,ivperp,iz,1,is]
             end
             ir = r.n # r = L/2 -- check that the point is on highest rank
-            if adv[is].speed[ir,ivpa,ivperp,iz] < -zero && r.irank == r.nrank - 1
+            if (adv[is].speed[ir,ivpa,ivperp,iz] < -zero || r_diffusion) && r.irank == r.nrank - 1
                 f[ivpa,ivperp,iz,ir,is] = f_r_bc[ivpa,ivperp,iz,end,is]
             end    
         end
@@ -714,14 +717,14 @@ end
 impose the prescribed vpa boundary condition on f
 at every z grid point
 """
-function enforce_vpa_boundary_condition!(f, bc, src::T) where T
+function enforce_vpa_boundary_condition!(f, bc, src::T, vpa_diffusion::Bool) where T
     nvperp = size(f,2)
     nz = size(f,3)
     nr = size(f,4)
     for ir ∈ 1:nr
         for iz ∈ 1:nz
             for ivperp ∈ 1:nvperp
-                enforce_vpa_boundary_condition_local!(view(f,:,ivperp,iz,ir), bc, src.speed[:,ivperp,iz,ir])
+                enforce_vpa_boundary_condition_local!(view(f,:,ivperp,iz,ir), bc, src.speed[:,ivperp,iz,ir], vpa_diffusion)
             end
         end
     end
@@ -729,20 +732,17 @@ end
 
 """
 """
-function enforce_vpa_boundary_condition_local!(f::T, bc, adv_speed) where T
+function enforce_vpa_boundary_condition_local!(f::T, bc, adv_speed, vpa_diffusion::Bool) where T
     # define a zero that accounts for finite precision
     zero = 1.0e-10
     dvpadt = adv_speed[1] #use that dvpa/dt is indendent of vpa in the current model 
     nvpa = size(f,1)
     if bc == "zero"
-        if dvpadt > zero
+        if dvpadt > zero || vpa_diffusion
             f[1] = 0.0 # -infty forced to zero
-        elseif dvpadt < zero 
+        elseif dvpadt < zero || vpa_diffusion
             f[end] = 0.0 # +infty forced to zero
         end
-    elseif bc == "both_zero"
-        f[1] = 0.0 # -infty forced to zero
-        f[end] = 0.0 # +infty forced to zero
     elseif bc == "periodic"
         f[1] = 0.5*(f[nvpa]+f[1])
         f[nvpa] = f[1]
@@ -900,7 +900,7 @@ function enforce_neutral_r_boundary_condition!(f::AbstractArray{mk_float,6},
         zero = 1.0e-10
         # use the old distribution to force the new distribution to have 
         # consistant-in-time values at the boundary
-        # impose bc on incoming parts of velocity space only (Hyperbolic PDE)
+        # impose bc for incoming parts of velocity space only (Hyperbolic PDE)
         @loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
             ir = 1 # r = -L/2
             # incoming particles and on lowest rank

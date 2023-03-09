@@ -469,7 +469,7 @@ function second_derivative!(d2f, f, Q, coord, spectral)
                                                         coord.scratch2_2d[:,ielement])
     end
 
-    if coord.bc ∈ ("wall", "zero", "both_zero")
+    if coord.bc ∈ ("wall", "zero")
         # For stability don't contribute to evolution at boundaries, in case these
         # points are not set by a boundary condition.    
         # Full grid may be across processes and bc only applied to extreme ends of the

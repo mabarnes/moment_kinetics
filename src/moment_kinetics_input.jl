@@ -439,7 +439,7 @@ function mk_input(scan_input=Dict())
 
     # check input to catch errors/unsupported options
     check_input(io, output_dir, nstep, dt, use_semi_lagrange,
-        z_immutable, vpa_immutable, composition, species_immutable, evolve_moments)
+        z_immutable, vpa_immutable, composition, species_immutable, evolve_moments, num_diss_params)
 
     # return immutable structs for z, vpa, species and composition
     all_inputs = (io_immutable, evolve_moments, t_input,
@@ -865,7 +865,7 @@ end
 check various input options to ensure they are all valid/consistent
 """
 function check_input(io, output_dir, nstep, dt, use_semi_lagrange, z, vpa,
-    composition, species, evolve_moments)
+    composition, species, evolve_moments, num_diss_params)
     # copy the input file to the output directory to be saved
     if global_rank[] == 0
         cp(joinpath(@__DIR__, "moment_kinetics_input.jl"), joinpath(output_dir, "moment_kinetics_input.jl"), force=true)
@@ -873,7 +873,7 @@ function check_input(io, output_dir, nstep, dt, use_semi_lagrange, z, vpa,
     # open ascii file in which informtaion about input choices will be written
     check_input_time_advance(nstep, dt, use_semi_lagrange, io)
     check_input_z(z, io)
-    check_input_vpa(vpa, io)
+    check_input_vpa(vpa, io, num_diss_params.vpa_dissipation_coefficient)
     #check_input_initialization(composition, species, io) MRH Need to update
     # if the parallel flow is evolved separately, then the density must also be evolved separately
     if evolve_moments.parallel_flow && !evolve_moments.density
@@ -933,7 +933,7 @@ end
 
 """
 """
-function check_input_vpa(vpa, io)
+function check_input_vpa(vpa, io, vpa_dissipation_coefficient)
     println(io)
     println(io,"######## vpa-grid ########")
     println(io)
@@ -952,10 +952,10 @@ function check_input_vpa(vpa, io)
     end
     # boundary_option determines vpa boundary condition
     # supported options are "zero" and "periodic"
-    if vpa.bc == "zero"
+    if vpa.bc == "zero" && vpa_dissipation_coefficient <= 0.0
         println(io,">vpa.bc = 'zero'.  enforcing zero incoming BC in vpa.")
-    elseif vpa.bc == "both_zero"
-        println(io,">vpa.bc = 'both_zero'.  enforcing zero BC in vpa.")
+    elseif vpa.bc == "zero" && vpa_dissipation_coefficient > 0.0
+        println(io,">vpa.bc = 'zero', with vpa collision/diffusion terms: enforcing zero BC in vpa.")
     elseif vpa.bc == "periodic"
         println(io,">vpa.bc = 'periodic'.  enforcing periodicity in vpa.")
     else

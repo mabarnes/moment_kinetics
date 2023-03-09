@@ -60,6 +60,8 @@ mutable struct advance_info
     energy::Bool
     rk_coefs::Array{mk_float,2}
     manufactured_solns_test::Bool
+    r_diffusion::Bool #flag to control how r bc is imposed when r diffusion terms are present
+    vpa_diffusion::Bool #flag to control how vpa bc is imposed when vpa diffusion terms are present
 end
 
 """
