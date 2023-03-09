@@ -7,7 +7,6 @@ export update_speed_vpa!
 
 using ..advection: advance_f_local!
 using ..communication
-using ..initial_conditions: enforce_vpa_boundary_condition!
 using ..looping
 
 """
