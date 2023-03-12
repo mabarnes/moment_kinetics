@@ -184,8 +184,8 @@ function run_test(test_input, analytic_rtol, analytic_atol, expected_phi,
             fid = open_readonly_output_file(path,"moments")
 
             # load space-time coordinate data
-            nz, nz_global, z, z_wgts, Lz = load_coordinate_data(fid, "z")
-            nr, nr_global, r, r_wgts, Lr = load_coordinate_data(fid, "r")
+            z, z_spectral = load_coordinate_data(fid, "z")
+            r, r_spectral = load_coordinate_data(fid, "r")
             ntime, time = load_time_data(fid)
             n_ion_species, n_neutral_species = load_species_data(fid)
             
@@ -196,12 +196,11 @@ function run_test(test_input, analytic_rtol, analytic_atol, expected_phi,
 
             phi = phi_zrt[:,1,:]
             
-            analytic_phi = [findphi(zval, input["ionization_frequency"]) for zval ∈ z]
+            analytic_phi = [findphi(zval, input["ionization_frequency"]) for zval ∈ z.grid]
         end
 
-        nz = length(z)
         # Analytic solution defines phi=0 at mid-point, so need to offset the code solution
-        offset = phi[(nz+1)÷2, end]
+        offset = phi[(z.n+1)÷2, end]
         # Error is large on the boundary points, so test those separately
         @test isapprox(phi[2:end-1, end] .- offset, analytic_phi[2:end-1],
                        rtol=analytic_rtol, atol=analytic_atol)

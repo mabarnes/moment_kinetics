@@ -201,30 +201,30 @@ function construct_global_zr_grids(run_name::String,file_key::String,nz_global::
     # whereas the optimal routine would loop over a single z/r group
     for iblock in 0:nblocks-1
         fid = open_readonly_output_file(run_name,file_key,iblock=iblock,printout=false)
-        nz_local, nz_global, z_local, z_local_wgts, Lz = load_coordinate_data(fid, "z")
-        nr_local, nr_global, r_local, r_local_wgts, Lr = load_coordinate_data(fid, "r")
+        z, z_spectral = load_coordinate_data(fid, "z")
+        r, r_spectral = load_coordinate_data(fid, "r")
 
         z_irank, r_irank = load_rank_data(fid)
         # MRH should wgts at element boundaries be doubled
         # MRH in the main code duplicated points have half the integration wgt
         if z_irank == 0
-            zgrid[1] = z_local[1]
-            zwgts[1] = z_local_wgts[1]
+            zgrid[1] = z.grid[1]
+            zwgts[1] = z.wgts[1]
         end
-        for iz_local in 2:nz_local
-            iz_global = iglobal_func(iz_local,z_irank,nz_local)
-            zgrid[iz_global] = z_local[iz_local]
-            zwgts[iz_global] = z_local_wgts[iz_local]
+        for iz_local in 2:z.n
+            iz_global = iglobal_func(iz_local,z_irank,z.n)
+            zgrid[iz_global] = z.grid[iz_local]
+            zwgts[iz_global] = z.wgts[iz_local]
         end
 
         if r_irank == 0
-            rgrid[1] = r_local[1]
-            rwgts[1] = r_local_wgts[1]
+            rgrid[1] = r.grid[1]
+            rwgts[1] = r.wgts[1]
         end
-        for ir_local in 2:nr_local
-            ir_global = iglobal_func(ir_local,r_irank,nr_local)
-            rgrid[ir_global] = r_local[ir_local]
-            rwgts[ir_global] = r_local_wgts[ir_local]
+        for ir_local in 2:r.n
+            ir_global = iglobal_func(ir_local,r_irank,r.n)
+            rgrid[ir_global] = r.grid[ir_local]
+            rwgts[ir_global] = r.wgts[ir_local]
         end
     end
     return zgrid, zwgts, rgrid, rwgts
@@ -404,10 +404,8 @@ function analyze_and_plot_data(prefix...)
     # load global and local sizes of grids stored on each output file
     # z z_wgts r r_wgts may take different values on different blocks
     # we need to construct the global grid below
-    nz_local, nz_global, z_local, z_local_wgts, Lz =
-        get_tuple_of_return_values(load_coordinate_data, moments_files0, "z")
-    nr_local, nr_global, r_local, r_local_wgts, Lr =
-        get_tuple_of_return_values(load_coordinate_data, moments_files0, "r")
+    z, z_spectral = get_tuple_of_return_values(load_coordinate_data, moments_files0, "z")
+    r, r_spectral = get_tuple_of_return_values(load_coordinate_data, moments_files0, "r")
     # load time data
     ntime, time = get_tuple_of_return_values(load_time_data, moments_files0)
     # load species data
@@ -419,110 +417,88 @@ function analyze_and_plot_data(prefix...)
     end
 
     # allocate arrays to contain the global fields as a function of (z,r,t)
-    phi, Ez, Er = get_tuple_of_return_values(allocate_global_zr_fields, nz_global,
-                                             nr_global, ntime)
+    phi, Ez, Er = get_tuple_of_return_values(allocate_global_zr_fields,
+                                             Tuple(this_z.n_global for this_z ∈ z),
+                                             Tuple(this_r.n_global for this_r ∈ r),
+                                             ntime)
     density, parallel_flow, parallel_pressure, parallel_heat_flux, thermal_speed =
-        get_tuple_of_return_values(allocate_global_zr_charged_moments, nz_global,
-                                   nr_global, n_ion_species, ntime)
+        get_tuple_of_return_values(allocate_global_zr_charged_moments,
+                                   Tuple(this_z.n_global for this_z ∈ z),
+                                   Tuple(this_r.n_global for this_r ∈ r),
+                                   n_ion_species, ntime)
     if any(n_neutral_species .> 0)
         neutral_density, neutral_uz, neutral_pz, neutral_qz, neutral_thermal_speed =
-            get_tuple_of_return_values(allocate_global_zr_neutral_moments, nz_global,
-                                       nr_global, n_neutral_species, ntime)
-    end
-    phi_at_pdf_times, Ez_at_pdf_times, Er_at_pdf_times =
-        get_tuple_of_return_values(allocate_global_zr_fields, nz_global, nr_global, ntime)
-    density_at_pdf_times, parallel_flow_at_pdf_times, parallel_pressure_at_pdf_times,
-    parallel_heat_flux_at_pdf_times, thermal_speed_at_pdf_times =
-        get_tuple_of_return_values(allocate_global_zr_charged_moments, nz_global,
-                                   nr_global, n_ion_species, ntime)
-    if any(n_neutral_species .> 0)
-        neutral_density_at_pdf_times, neutral_uz_at_pdf_times, neutral_pz_at_pdf_times,
-        neutral_qz_at_pdf_times, neutral_thermal_speed_at_pdf_times =
-            get_tuple_of_return_values(allocate_global_zr_neutral_moments, nz_global,
-                                       nr_global, n_neutral_species, ntime)
+            get_tuple_of_return_values(allocate_global_zr_neutral_moments,
+                                       Tuple(this_z.n_global for this_z ∈ z),
+                                       Tuple(this_r.n_global for this_r ∈ r),
+                                       n_neutral_species, ntime)
     end
     # read in the data from different block files
     # grids
-    z, z_wgts, r, r_wgts =
+    z_global, z_wgts, r_global, r_wgts =
         get_tuple_of_return_values(construct_global_zr_grids, run_names, "moments",
-                                   nz_global, nr_global, nblocks)
+                                   Tuple(this_z.n_global for this_z ∈ z),
+                                   Tuple(this_r.n_global for this_r ∈ r),
+                                   nblocks)
 
     # fields
     get_tuple_of_return_values(read_distributed_zr_data!, phi, "phi", run_names, "moments",
-                               nblocks, nz_local, nr_local)
+                               nblocks,
+                               Tuple(this_z.n for this_z ∈ z),
+                               Tuple(this_r.n for this_r ∈ r))
     get_tuple_of_return_values(read_distributed_zr_data!, Ez, "Ez", run_names, "moments",
-                               nblocks, nz_local, nr_local)
+                               nblocks,
+                               Tuple(this_z.n for this_z ∈ z),
+                               Tuple(this_r.n for this_r ∈ r))
     get_tuple_of_return_values(read_distributed_zr_data!, Er, "Er", run_names, "moments",
-                               nblocks, nz_local, nr_local)
+                               nblocks,
+                               Tuple(this_z.n for this_z ∈ z),
+                               Tuple(this_r.n for this_r ∈ r))
     # charged particle moments
     get_tuple_of_return_values(read_distributed_zr_data!, density, "density", run_names,
-                               "moments", nblocks, nz_local, nr_local)
+                               "moments", nblocks,
+                               Tuple(this_z.n for this_z ∈ z),
+                               Tuple(this_r.n for this_r ∈ r))
     get_tuple_of_return_values(read_distributed_zr_data!, parallel_flow, "parallel_flow",
-                               run_names, "moments", nblocks, nz_local, nr_local)
+                               run_names, "moments", nblocks,
+                               Tuple(this_z.n for this_z ∈ z),
+                               Tuple(this_r.n for this_r ∈ r))
     get_tuple_of_return_values(read_distributed_zr_data!, parallel_pressure,
                                "parallel_pressure", run_names, "moments", nblocks,
-                               nz_local, nr_local)
+                               Tuple(this_z.n for this_z ∈ z),
+                               Tuple(this_r.n for this_r ∈ r))
     get_tuple_of_return_values(read_distributed_zr_data!, parallel_heat_flux,
                                "parallel_heat_flux", run_names, "moments", nblocks,
-                               nz_local, nr_local)
+                               Tuple(this_z.n for this_z ∈ z),
+                               Tuple(this_r.n for this_r ∈ r))
     get_tuple_of_return_values(read_distributed_zr_data!, thermal_speed, "thermal_speed",
-                               run_names, "moments", nblocks, nz_local, nr_local)
+                               run_names, "moments", nblocks,
+                               Tuple(this_z.n for this_z ∈ z),
+                               Tuple(this_r.n for this_r ∈ r))
     # neutral particle moments
     if any(n_neutral_species .> 0)
         get_tuple_of_return_values(read_distributed_zr_data!, neutral_density,
                                    "density_neutral", run_names, "moments", nblocks,
-                                   nz_local, nr_local)
+                                   Tuple(this_z.n for this_z ∈ z),
+                                   Tuple(this_r.n for this_r ∈ r))
         get_tuple_of_return_values(read_distributed_zr_data!, neutral_uz, "uz_neutral",
-                                   run_names, "moments", nblocks, nz_local, nr_local)
+                                   run_names, "moments", nblocks,
+                                   Tuple(this_z.n for this_z ∈ z),
+                                   Tuple(this_r.n for this_r ∈ r))
         get_tuple_of_return_values(read_distributed_zr_data!, neutral_pz, "pz_neutral",
-                                   run_names, "moments", nblocks, nz_local, nr_local)
+                                   run_names, "moments", nblocks,
+                                   Tuple(this_z.n for this_z ∈ z),
+                                   Tuple(this_r.n for this_r ∈ r))
         get_tuple_of_return_values(read_distributed_zr_data!, neutral_qz, "qz_neutral",
-                                   run_names, "moments", nblocks, nz_local, nr_local)
+                                   run_names, "moments", nblocks,
+                                   Tuple(this_z.n for this_z ∈ z),
+                                   Tuple(this_r.n for this_r ∈ r))
         get_tuple_of_return_values(read_distributed_zr_data!, neutral_thermal_speed,
                                    "thermal_speed_neutral", run_names, "moments", nblocks,
-                                   nz_local, nr_local)
+                                   Tuple(this_z.n for this_z ∈ z),
+                                   Tuple(this_r.n for this_r ∈ r))
     end
-    # fields
-    get_tuple_of_return_values(read_distributed_zr_data!, phi_at_pdf_times, "phi",
-                               run_names, "dfns", nblocks, nz_local, nr_local)
-    get_tuple_of_return_values(read_distributed_zr_data!, Ez_at_pdf_times, "Ez",
-                               run_names, "dfns", nblocks, nz_local, nr_local)
-    get_tuple_of_return_values(read_distributed_zr_data!, Er_at_pdf_times, "Er",
-                               run_names, "dfns", nblocks, nz_local, nr_local)
-    # charged particle moments
-    get_tuple_of_return_values(read_distributed_zr_data!, density_at_pdf_times, "density",
-                               run_names, "dfns", nblocks, nz_local, nr_local)
-    get_tuple_of_return_values(read_distributed_zr_data!, parallel_flow_at_pdf_times,
-                               "parallel_flow", run_names, "dfns", nblocks, nz_local,
-                               nr_local)
-    get_tuple_of_return_values(read_distributed_zr_data!, parallel_pressure_at_pdf_times,
-                               "parallel_pressure", run_names, "dfns", nblocks,
-                               nz_local, nr_local)
-    get_tuple_of_return_values(read_distributed_zr_data!, parallel_heat_flux_at_pdf_times,
-                               "parallel_heat_flux", run_names, "dfns", nblocks,
-                               nz_local, nr_local)
-    get_tuple_of_return_values(read_distributed_zr_data!, thermal_speed_at_pdf_times,
-                               "thermal_speed", run_names, "dfns", nblocks, nz_local,
-                               nr_local)
-    # neutral particle moments
-    if any(n_neutral_species .> 0)
-        get_tuple_of_return_values(read_distributed_zr_data!,
-                                   neutral_density_at_pdf_times, "density_neutral",
-                                   run_names, "dfns", nblocks, nz_local, nr_local)
-        get_tuple_of_return_values(read_distributed_zr_data!, neutral_uz_at_pdf_times,
-                                   "uz_neutral", run_names, "dfns", nblocks, nz_local,
-                                   nr_local)
-        get_tuple_of_return_values(read_distributed_zr_data!, neutral_pz_at_pdf_times,
-                                   "pz_neutral", run_names, "dfns", nblocks, nz_local,
-                                   nr_local)
-        get_tuple_of_return_values(read_distributed_zr_data!, neutral_qz_at_pdf_times,
-                                   "qz_neutral", run_names, "dfns", nblocks, nz_local,
-                                   nr_local)
-        get_tuple_of_return_values(read_distributed_zr_data!,
-                                   neutral_thermal_speed_at_pdf_times,
-                                   "thermal_speed_neutral", run_names, "dfns", nblocks,
-                                   nz_local, nr_local)
-    end
+
     # load time data from `dfns' cdf
     dfns_files0 = get_tuple_of_return_values(open_readonly_output_file, run_names, "dfns")
     # note that ntime may differ in these output files
@@ -531,46 +507,128 @@ function analyze_and_plot_data(prefix...)
 
     # load local velocity coordinate data from `dfns' cdf
     # these values are currently the same for all blocks
-    nvpa, nvpa_global, vpa, vpa_wgts, Lvpa =
-        get_tuple_of_return_values(load_coordinate_data, dfns_files0, "vpa")
-    nvperp, nvperp_global, vperp, vperp_wgts, Lvperp =
-        get_tuple_of_return_values(load_coordinate_data, dfns_files0, "vperp")
+    vpa, vpa_spectral = get_tuple_of_return_values(load_coordinate_data, dfns_files0, "vpa")
+    vperp, vperp_spectral = get_tuple_of_return_values(load_coordinate_data, dfns_files0, "vperp")
     if any(n_neutral_species .> 0)
-        nvzeta, nvzeta_global, vzeta, vzeta_wgts, Lvzeta =
-            get_tuple_of_return_values(load_coordinate_data, dfns_files0, "vzeta")
-        nvr, nvr_global, vr, vr_wgts, Lvr =
-            get_tuple_of_return_values(load_coordinate_data, dfns_files0, "vr")
-        nvz, nvz_global, vz, vz_wgts, Lvz =
-            get_tuple_of_return_values(load_coordinate_data, dfns_files0, "vz")
+        vzeta, vzeta_spectral = get_tuple_of_return_values(load_coordinate_data, dfns_files0, "vzeta")
+        vr, vr_spectral = get_tuple_of_return_values(load_coordinate_data, dfns_files0, "vr")
+        vz, vz_spectral = get_tuple_of_return_values(load_coordinate_data, dfns_files0, "vz")
     else # define nvz nvr nvzeta to avoid errors below
-        nvz = 0
-        nvr = 0
-        nvzeta = 0
+        vzeta = vzeta_spectral = nothing
+        vr = vr_spectral = nothing
+        vz = vz_spectral = nothing
+    end
+
+    phi_at_pdf_times, Ez_at_pdf_times, Er_at_pdf_times =
+        get_tuple_of_return_values(allocate_global_zr_fields,
+                                   Tuple(this_z.n_global for this_z ∈ z),
+                                   Tuple(this_r.n_global for this_r ∈ r), ntime_pdfs)
+    density_at_pdf_times, parallel_flow_at_pdf_times, parallel_pressure_at_pdf_times,
+    parallel_heat_flux_at_pdf_times, thermal_speed_at_pdf_times =
+        get_tuple_of_return_values(allocate_global_zr_charged_moments,
+                                   Tuple(this_z.n_global for this_z ∈ z),
+                                   Tuple(this_r.n_global for this_r ∈ r), n_ion_species,
+                                   ntime_pdfs)
+    if any(n_neutral_species .> 0)
+        neutral_density_at_pdf_times, neutral_uz_at_pdf_times, neutral_pz_at_pdf_times,
+        neutral_qz_at_pdf_times, neutral_thermal_speed_at_pdf_times =
+            get_tuple_of_return_values(allocate_global_zr_neutral_moments,
+                                       Tuple(this_z.n_global for this_z ∈ z),
+                                       Tuple(this_r.n_global for this_r ∈ r),
+                                       n_neutral_species, ntime_pdfs)
+    end
+    # fields
+    get_tuple_of_return_values(read_distributed_zr_data!, phi_at_pdf_times, "phi",
+                               run_names, "dfns", nblocks,
+                               Tuple(this_z.n for this_z ∈ z),
+                               Tuple(this_r.n for this_r ∈ r))
+    get_tuple_of_return_values(read_distributed_zr_data!, Ez_at_pdf_times, "Ez",
+                               run_names, "dfns", nblocks,
+                               Tuple(this_z.n for this_z ∈ z),
+                               Tuple(this_r.n for this_r ∈ r))
+    get_tuple_of_return_values(read_distributed_zr_data!, Er_at_pdf_times, "Er",
+                               run_names, "dfns", nblocks,
+                               Tuple(this_z.n for this_z ∈ z),
+                               Tuple(this_r.n for this_r ∈ r))
+    # charged particle moments
+    get_tuple_of_return_values(read_distributed_zr_data!, density_at_pdf_times, "density",
+                               run_names, "dfns", nblocks,
+                               Tuple(this_z.n for this_z ∈ z),
+                               Tuple(this_r.n for this_r ∈ r))
+    get_tuple_of_return_values(read_distributed_zr_data!, parallel_flow_at_pdf_times,
+                               "parallel_flow", run_names, "dfns", nblocks,
+                               Tuple(this_z.n for this_z ∈ z),
+                               Tuple(this_r.n for this_r ∈ r))
+    get_tuple_of_return_values(read_distributed_zr_data!, parallel_pressure_at_pdf_times,
+                               "parallel_pressure", run_names, "dfns", nblocks,
+                               Tuple(this_z.n for this_z ∈ z),
+                               Tuple(this_r.n for this_r ∈ r))
+    get_tuple_of_return_values(read_distributed_zr_data!, parallel_heat_flux_at_pdf_times,
+                               "parallel_heat_flux", run_names, "dfns", nblocks,
+                               Tuple(this_z.n for this_z ∈ z),
+                               Tuple(this_r.n for this_r ∈ r))
+    get_tuple_of_return_values(read_distributed_zr_data!, thermal_speed_at_pdf_times,
+                               "thermal_speed", run_names, "dfns", nblocks,
+                               Tuple(this_z.n for this_z ∈ z),
+                               Tuple(this_r.n for this_r ∈ r))
+    # neutral particle moments
+    if any(n_neutral_species .> 0)
+        get_tuple_of_return_values(read_distributed_zr_data!,
+                                   neutral_density_at_pdf_times, "density_neutral",
+                                   run_names, "dfns", nblocks,
+                                   Tuple(this_z.n for this_z ∈ z),
+                                   Tuple(this_r.n for this_r ∈ r))
+        get_tuple_of_return_values(read_distributed_zr_data!, neutral_uz_at_pdf_times,
+                                   "uz_neutral", run_names, "dfns", nblocks,
+                                   Tuple(this_z.n for this_z ∈ z),
+                                   Tuple(this_r.n for this_r ∈ r))
+        get_tuple_of_return_values(read_distributed_zr_data!, neutral_pz_at_pdf_times,
+                                   "pz_neutral", run_names, "dfns", nblocks,
+                                   Tuple(this_z.n for this_z ∈ z),
+                                   Tuple(this_r.n for this_r ∈ r))
+        get_tuple_of_return_values(read_distributed_zr_data!, neutral_qz_at_pdf_times,
+                                   "qz_neutral", run_names, "dfns", nblocks,
+                                   Tuple(this_z.n for this_z ∈ z),
+                                   Tuple(this_r.n for this_r ∈ r))
+        get_tuple_of_return_values(read_distributed_zr_data!,
+                                   neutral_thermal_speed_at_pdf_times,
+                                   "thermal_speed_neutral", run_names, "dfns", nblocks,
+                                   Tuple(this_z.n for this_z ∈ z),
+                                   Tuple(this_r.n for this_r ∈ r))
     end
 
     for f in dfns_files0
         close(f)
     end
 
-    geometry, composition =
-        get_tuple_of_return_values(get_geometry_and_composition, scan_input,
-                                   n_ion_species, n_neutral_species)
+    #geometry, composition =
+    #    get_tuple_of_return_values(get_geometry_and_composition, scan_input,
+    #                               n_ion_species, n_neutral_species)
 
     # initialise the post-processing input options
     nwrite_movie, itime_min, itime_max, nwrite_movie_pdfs, itime_min_pdfs, itime_max_pdfs,
     ivpa0, ivperp0, iz0, ir0, ivz0, ivr0, ivzeta0 =
-        init_postprocessing_options(pp, minimum(nvpa), minimum(nvperp),
-            minimum(nz_global), minimum(nr_global), minimum(nvz), minimum(nvr),
-            minimum(nvzeta), minimum(ntime), minimum(ntime_pdfs))
+        init_postprocessing_options(pp, minimum(this_vpa.n_global for this_vpa ∈ vpa),
+            minimum(this_vperp.n_global for this_vperp ∈ vperp),
+            minimum(this_z.n_global for this_z ∈ z),
+            minimum(this_r.n_global for this_r ∈ r),
+            minimum(this_vz.n_global for this_vz ∈ vz),
+            minimum(this_vr.n_global for this_vr ∈ vr),
+            minimum(this_vzeta.n_global for this_vzeta ∈ vzeta),
+            minimum(ntime), minimum(ntime_pdfs))
 
-    diagnostics_1d = false
+    diagnostics_1d = true
     if diagnostics_1d
         # load full (vpa,z,r,species,t) particle distribution function (pdf) data
-        ff = get_tuple_of_return_values(allocate_global_zr_charged_dfns, nvpa_global,
-                                        nvperp_global, nz_global, nr_global,
+        ff = get_tuple_of_return_values(allocate_global_zr_charged_dfns,
+                                        Tuple(this_vpa.n_global for this_vpa ∈ vpa),
+                                        Tuple(this_vperp.n_global for this_vperp ∈ vperp),
+                                        Tuple(this_z.n_global for this_z ∈ z),
+                                        Tuple(this_r.n_global for this_r ∈ r),
                                         n_ion_species, ntime_pdfs)
         get_tuple_of_return_values(read_distributed_zr_data!, ff, "f", run_names, "dfns",
-                                   nblocks, nz_local, nr_local)
+                                   nblocks, Tuple(this_z.n for this_z ∈ z),
+                                   Tuple(this_r.n for this_r ∈ r))
 
         #evaluate 1D-1V diagnostics at fixed ir0
         plot_1D_1V_diagnostics(run_names, nwrite_movie, itime_min, itime_max,
@@ -590,8 +648,7 @@ function analyze_and_plot_data(prefix...)
             Tuple(vth[:,ir0,:,:] for vth ∈ thermal_speed_at_pdf_times),
             Tuple(f[:,ivperp0,:,ir0,:,:] for f ∈ ff),
             n_ion_species, n_neutral_species, evolve_density, evolve_upar, evolve_ppar,
-            nvpa, vpa, vpa_wgts, nz_global, z, z_wgts, Lz, ntime, time, ntime_pdfs,
-            time_pdfs)
+            vpa, z, ntime, time, ntime_pdfs, time_pdfs)
     end
 
     diagnostics_2d = false
@@ -599,8 +656,7 @@ function analyze_and_plot_data(prefix...)
         # analyze the fields data
         phi_iz0 = Tuple(p[iz0,:,:] for p ∈ phi)
         phi_fldline_avg, delta_phi =
-            get_tuple_of_return_values(analyze_fields_data, phi_iz0, ntime, nr_global,
-                                       r_wgts, Lr)
+            get_tuple_of_return_values(analyze_fields_data, phi_iz0, ntime, r)
         get_tuple_of_return_values(plot_fields_rt, phi_iz0, delta_phi, time, itime_min,
                                    itime_max, nwrite_movie, r, ir0, run_name, delta_phi,
                                    pp)
@@ -609,8 +665,7 @@ function analyze_and_plot_data(prefix...)
     diagnostics_chodura = false
     if diagnostics_chodura
         Chodura_ratio_lower, Chodura_ratio_upper =
-            get_tuple_of_return_values(check_Chodura_condition, run_name, vpa_local,
-                                       vpa_local_wgts, vperp_local, vperp_local_wgts,
+            get_tuple_of_return_values(check_Chodura_condition, run_name, vpa, vperp,
                                        density_at_pdf_times, composition.T_e,
                                        Er_at_pdf_times, geometry, "wall", nblocks)
 
@@ -643,40 +698,35 @@ function analyze_and_plot_data(prefix...)
     phi = phi[1]
     Ez = Ez[1]
     Er = Er[1]
-    nvpa_global = nvpa_global[1]
-    nvperp_global = nvperp_global[1]
-    nz_global = nz_global[1]
-    nr_global = nr_global[1]
-    ntime = ntime[1]
-    nz_local = nz_local[1]
-    nr_local = nr_local[1]
+    vpa = vpa[1]
+    vperp = vperp[1]
     geometry = geometry[1]
     composition = composition[1]
 
     # make plots and animations of the phi, Ez and Er
-    plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time, z, r, iz0,
+    plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time, z.grid, r.grid, iz0,
                             ir0, n_ion_species, itime_min, itime_max, nwrite_movie,
                             run_name, pp)
     # make plots and animations of the phi, Ez and Er
-    plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0, itime_min, itime_max, nwrite_movie,
+    plot_fields_2D(phi, Ez, Er, time, z.grid, r.grid, iz0, ir0, itime_min, itime_max, nwrite_movie,
                    run_name, pp, "")
     # make plots and animations of the ion pdf
     # only if ntime == ntime_pdfs & data on one shared memory process
-    if ntime == ntime_pdfs && nr_global == nr_local && nz_global == nz_local
+    if ntime == ntime_pdfs && r.n_global == r.n && z.n_global == z.n
         # load full (vpa,z,r,species,t) particle distribution function (pdf) data
-        ff = allocate_global_zr_charged_dfns(nvpa_global, nvperp_global, nz_global,
-                                             nr_global, n_ion_species, ntime)
-        read_distributed_zr_data!(ff, "f", run_names, "dfns", nblocks, nz_local, nr_local)
+        ff = allocate_global_zr_charged_dfns(vpa.n_global, vperp.n_global, z.n_global,
+                                             r.n_global, n_ion_species, ntime)
+        read_distributed_zr_data!(ff, "f", run_names, "dfns", nblocks, z.n, r.n)
 
         spec_type = "ion"
-        plot_charged_pdf(ff, vpa_local, vperp_local, z_local, r_local, ivpa0, ivperp0,
+        plot_charged_pdf(ff, vpa_local, vperp_local, z.grid, r.grid, ivpa0, ivperp0,
                          iz0, ir0, spec_type, n_ion_species, itime_min_pdfs,
                          itime_max_pdfs, nwrite_movie_pdfs, run_name, pp)
         # make plots and animations of the neutral pdf
         if n_neutral_species > 0
             spec_type = "neutral"
-            plot_neutral_pdf(neutral_ff, vz_local, vr_local, vzeta_local, z_local,
-                             r_local, ivz0, ivr0, ivzeta0, iz0, ir0, spec_type,
+            plot_neutral_pdf(neutral_ff, vz.grid, vr.grid, vzeta.grid, z.grid,
+                             r.grid, ivz0, ivr0, ivzeta0, iz0, ir0, spec_type,
                              n_neutral_species, itime_min_pdfs, itime_max_pdfs,
                              nwrite_movie_pdfs, run_name, pp)
         end
@@ -694,20 +744,20 @@ function analyze_and_plot_data(prefix...)
         r_bc = get(scan_input, "r_bc", "periodic")
         z_bc = get(scan_input, "z_bc", "periodic")
         # avoid passing Lr = 0 into manufactured_solns functions
-        if nr_local > 1
-            Lr_in = Lr
+        if r.n > 1
+            Lr_in = r.L
         else
             Lr_in = 1.0
         end
 
         #geometry, composition = get_geometry_and_composition(scan_input,n_ion_species,n_neutral_species)
 
-        manufactured_solns_list = manufactured_solutions(Lr_in,Lz,r_bc,z_bc,geometry,composition,nr_local)
+        manufactured_solns_list = manufactured_solutions(Lr_in,z.L,r_bc,z_bc,geometry,composition,r.n)
         dfni_func = manufactured_solns_list.dfni_func
         densi_func = manufactured_solns_list.densi_func
         dfnn_func = manufactured_solns_list.dfnn_func
         densn_func = manufactured_solns_list.densn_func
-        manufactured_E_fields = manufactured_electric_fields(Lr_in,Lz,r_bc,z_bc,composition,nr_local)
+        manufactured_E_fields = manufactured_electric_fields(Lr_in,z.L,r_bc,z_bc,composition,r.n)
         Er_func = manufactured_E_fields.Er_func
         Ez_func = manufactured_E_fields.Ez_func
         phi_func = manufactured_E_fields.phi_func
@@ -719,21 +769,21 @@ function analyze_and_plot_data(prefix...)
         for it in 1:ntime
             for ir in 1:nr_global
                 for iz in 1:nz_global
-                    phi_sym[iz,ir,it] = phi_func(z[iz],r[ir],time[it])
-                    Ez_sym[iz,ir,it] = Ez_func(z[iz],r[ir],time[it])
-                    Er_sym[iz,ir,it] = Er_func(z[iz],r[ir],time[it])
+                    phi_sym[iz,ir,it] = phi_func(z_grid[iz],r_grid[ir],time[it])
+                    Ez_sym[iz,ir,it] = Ez_func(z_grid[iz],r_grid[ir],time[it])
+                    Er_sym[iz,ir,it] = Er_func(z_grid[iz],r_grid[ir],time[it])
                 end
             end
         end
         # make plots and animations of the phi, Ez and Er
-        #plot_fields_2D(phi_sym, Ez_sym, Er_sym, time, z, r, iz0, ir0,
+        #plot_fields_2D(phi_sym, Ez_sym, Er_sym, time, z_grid, r_grid, iz0, ir0,
         #    itime_min, itime_max, nwrite_movie, run_name, pp, "_sym")
         println("time/ (Lref/cref): ", time)
-        compare_fields_symbolic_test(run_name,phi,phi_sym,z,r,time,nz_global,nr_global,ntime,
+        compare_fields_symbolic_test(run_name,phi,phi_sym,z_grid,r_grid,time,nz_global,nr_global,ntime,
          L"\widetilde{\phi}",L"\widetilde{\phi}^{sym}",L"\varepsilon(\widetilde{\phi})","phi")
-        compare_fields_symbolic_test(run_name,Er,Er_sym,z,r,time,nz_global,nr_global,ntime,
+        compare_fields_symbolic_test(run_name,Er,Er_sym,z_grid,r_grid,time,nz_global,nr_global,ntime,
          L"\widetilde{E}_r",L"\widetilde{E}^{sym}_r",L"\varepsilon(\widetilde{E}_r)","Er")
-        compare_fields_symbolic_test(run_name,Ez,Ez_sym,z,r,time,nz_global,nr_global,ntime,
+        compare_fields_symbolic_test(run_name,Ez,Ez_sym,z_grid,r_grid,time,nz_global,nr_global,ntime,
          L"\widetilde{E}_z",L"\widetilde{E}^{sym}_z",L"\varepsilon(\widetilde{E}_z)","Ez")
 
         # ion test
@@ -742,11 +792,11 @@ function analyze_and_plot_data(prefix...)
         for it in 1:ntime
             for ir in 1:nr_global
                 for iz in 1:nz_global
-                    density_sym[iz,ir,is,it] = densi_func(z[iz],r[ir],time[it])
+                    density_sym[iz,ir,is,it] = densi_func(z_grid[iz],r_grid[ir],time[it])
                 end
             end
         end
-        compare_moments_symbolic_test(run_name,density,density_sym,"ion",z,r,time,nz_global,nr_global,ntime,
+        compare_moments_symbolic_test(run_name,density,density_sym,"ion",z_grid,r_grid,time,nz_global,nr_global,ntime,
          L"\widetilde{n}_i",L"\widetilde{n}_i^{sym}",L"\varepsilon(\widetilde{n}_i)","dens")
 
         compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,"ion",
@@ -758,11 +808,11 @@ function analyze_and_plot_data(prefix...)
             for it in 1:ntime
                 for ir in 1:nr_global
                     for iz in 1:nz_global
-                        neutral_density_sym[iz,ir,is,it] = densn_func(z[iz],r[ir],time[it])
+                        neutral_density_sym[iz,ir,is,it] = densn_func(z_grid[iz],r_grid[ir],time[it])
                     end
                 end
             end
-            compare_moments_symbolic_test(run_name,neutral_density,neutral_density_sym,"neutral",z,r,time,nz_global,nr_global,ntime,
+            compare_moments_symbolic_test(run_name,neutral_density,neutral_density_sym,"neutral",z_grid,r_grid,time,nz_global,nr_global,ntime,
              L"\widetilde{n}_n",L"\widetilde{n}_n^{sym}",L"\varepsilon(\widetilde{n}_n)","dens")
 
             compare_neutral_pdf_symbolic_test(run_name,manufactured_solns_list,"neutral",
@@ -868,8 +918,7 @@ function plot_1D_1V_diagnostics(run_names, nwrite_movie, itime_min, itime_max,
         phi_at_pdf_times, density_at_pdf_times, parallel_flow_at_pdf_times,
         parallel_pressure_at_pdf_times, parallel_heat_flux_at_pdf_times,
         thermal_speed_at_pdf_times, ff, n_ion_species, n_neutral_species, evolve_density,
-        evolve_upar, evolve_ppar, nvpa, vpa, vpa_wgts, nz, z, z_wgts, Lz, ntime, time,
-        ntime_pdfs, time_pdfs)
+        evolve_upar, evolve_ppar, vpa, z, ntime, time, ntime_pdfs, time_pdfs)
 
     n_runs = length(run_names)
 
@@ -879,7 +928,7 @@ function plot_1D_1V_diagnostics(run_names, nwrite_movie, itime_min, itime_max,
 
     # analyze the fields data
     phi_fldline_avg, delta_phi = get_tuple_of_return_values(analyze_fields_data, phi,
-                                                            ntime, nz, z_wgts, Lz)
+                                                            ntime, z)
 
     # use a fit to calculate and write to file the damping rate and growth rate of the
     # perturbed electrostatic potential
@@ -894,8 +943,7 @@ function plot_1D_1V_diagnostics(run_names, nwrite_movie, itime_min, itime_max,
     density_fldline_avg, upar_fldline_avg, ppar_fldline_avg, vth_fldline_avg, qpar_fldline_avg,
         delta_density, delta_upar, delta_ppar, delta_vth, delta_qpar =
         get_tuple_of_return_values(analyze_moments_data, density, parallel_flow,
-            parallel_pressure, thermal_speed, parallel_heat_flux, ntime, n_ion_species,
-            nz, z_wgts, Lz)
+            parallel_pressure, thermal_speed, parallel_heat_flux, ntime, n_ion_species, z)
     # create the requested plots of the moments
     plot_moments(density, delta_density, density_fldline_avg,
         parallel_flow, delta_upar, upar_fldline_avg,
@@ -906,8 +954,8 @@ function plot_1D_1V_diagnostics(run_names, nwrite_movie, itime_min, itime_max,
     # load particle distribution function (pdf) data
     # analyze the pdf data
     f_fldline_avg, delta_f, dens_moment, upar_moment, ppar_moment =
-        get_tuple_of_return_values(analyze_pdf_data, ff, vpa, nvpa, nz, n_ion_species,
-            ntime_pdfs, vpa_wgts, z_wgts, Lz, thermal_speed, evolve_ppar)
+        get_tuple_of_return_values(analyze_pdf_data, ff, n_ion_species, ntime_pdfs, z,
+                                   vpa, thermal_speed_at_pdf_times, evolve_ppar)
 
     println("Plotting distribution function data...")
     cmlog(cmlin::ColorGradient) = RGB[cmlin[x] for x=LinRange(0,1,30)]
@@ -962,7 +1010,7 @@ function plot_1D_1V_diagnostics(run_names, nwrite_movie, itime_min, itime_max,
             # make a gif animation of ln f(vpa,z,t)
             anim = @animate for i ∈ itime_min_pdfs:nwrite_movie_pdfs:itime_max_pdfs
                 #heatmap(z, vpa, log.(abs.(ff[:,:,i])), xlabel="z", ylabel="vpa", clims = (fmin,fmax), c = :deep)
-                subplots = (@views heatmap(this_z, this_vpa, log.(abs.(f[:,:,is,i])),
+                subplots = (@views heatmap(this_z.grid, this_vpa.grid, log.(abs.(f[:,:,is,i])),
                                            xlabel="z", ylabel="vpa", fillcolor =
                                            logdeep, title=run_label)
                             for (f, this_z, this_vpa, run_label) ∈ zip(ff, z, vpa, run_names))
@@ -973,7 +1021,7 @@ function plot_1D_1V_diagnostics(run_names, nwrite_movie, itime_min, itime_max,
             # make a gif animation of f(vpa,z,t)
             anim = @animate for i ∈ itime_min_pdfs:nwrite_movie_pdfs:itime_max_pdfs
                 #heatmap(z, vpa, log.(abs.(ff[:,:,i])), xlabel="z", ylabel="vpa", clims = (fmin,fmax), c = :deep)
-                subplots = (@views heatmap(this_z, this_vpa, f[:,:,is,i], xlabel="z",
+                subplots = (@views heatmap(this_z.grid, this_vpa.grid, f[:,:,is,i], xlabel="z",
                                            ylabel="vpa", c = :deep, interpolation =
                                            :cubic, title=run_label)
                             for (f, this_z, this_vpa, run_label) ∈ zip(ff, z, vpa, run_names))
@@ -983,9 +1031,9 @@ function plot_1D_1V_diagnostics(run_names, nwrite_movie, itime_min, itime_max,
             gif(anim, outfile, fps=5)
             # make pdf of f(vpa,z,t_final) for each species
             str = string("spec ", string(is), " pdf")
-            subplots = (@views heatmap(this_z, this_vpa, f[:,:,is,end], xlabel="vpa", ylabel="z",
-                                       c = :deep, interpolation = :cubic,
-                                       title=string(run_label, str))
+            subplots = (@views heatmap(this_z.grid, this_vpa.grid, f[:,:,is,end],
+                                       xlabel="vpa", ylabel="z", c = :deep, interpolation
+                                       = :cubic, title=string(run_label, str))
                         for (f, this_z, this_vpa, run_label) ∈ zip(ff, z, vpa, run_names))
             plot(subplots..., layout=(1,n_runs), size=(600*n_runs, 400))
             outfile = string(prefix, "_f_vs_z_vpa_final", spec_string, ".pdf")
@@ -994,7 +1042,7 @@ function plot_1D_1V_diagnostics(run_names, nwrite_movie, itime_min, itime_max,
             anim = @animate for i ∈ itime_min_pdfs:nwrite_movie_pdfs:itime_max_pdfs
                 plot(legend=legend)
                 for (f, this_vpa, run_label) ∈ zip(ff, vpa, run_names)
-                    @views plot!(this_vpa, f[:,1,is,i], xlabel="vpa", ylabel="f(z=0)",
+                    @views plot!(this_vpa.grid, f[:,1,is,i], xlabel="vpa", ylabel="f(z=0)",
                                  label=run_label)
                 end
             end
@@ -1004,7 +1052,7 @@ function plot_1D_1V_diagnostics(run_names, nwrite_movie, itime_min, itime_max,
             anim = @animate for i ∈ itime_min_pdfs:nwrite_movie_pdfs:itime_max_pdfs
                 plot(legend=legend)
                 for (f, this_vpa, run_label) ∈ zip(ff, vpa, run_names)
-                    @views plot!(this_vpa, f[:,end,is,i], xlabel="vpa", ylabel="f(z=L)",
+                    @views plot!(this_vpa.grid, f[:,end,is,i], xlabel="vpa", ylabel="f(z=L)",
                                  label=run_label)
                 end
             end
@@ -1024,7 +1072,7 @@ function plot_1D_1V_diagnostics(run_names, nwrite_movie, itime_min, itime_max,
 
                 PyPlot.subplot(1, n_runs, run_ind)
                 @views f_unnorm, z2d, dzdt2d = get_unnormalised_f_coords_2d(
-                    f[:,:,is,it], this_z, this_vpa, n[:,is,it],
+                    f[:,:,is,it], this_z.grid, this_vpa.grid, n[:,is,it],
                     upar[:,is,it], vth[:,is,it], ev_n, ev_u, ev_p)
                 plot_unnormalised_f2d(f_unnorm, z2d, dzdt2d; title=run_label,
                                       plot_log=false)
@@ -1042,7 +1090,7 @@ function plot_1D_1V_diagnostics(run_names, nwrite_movie, itime_min, itime_max,
                                   run_names)
 
                 @views f_unnorm, dzdt = get_unnormalised_f_dzdt_1d(
-                    f[:,1,is,it], this_vpa, n[1,is,it], upar[1,is,it], vth[1,is,it],
+                    f[:,1,is,it], this_vpa.grid, n[1,is,it], upar[1,is,it], vth[1,is,it],
                     ev_n, ev_u, ev_p)
                 @views plot!(dzdt, f_unnorm, xlabel="vpa", ylabel="f_unnorm(z=0)",
                              label=run_label)
@@ -1059,7 +1107,7 @@ function plot_1D_1V_diagnostics(run_names, nwrite_movie, itime_min, itime_max,
                                   run_names)
 
                 @views f_unnorm, dzdt = get_unnormalised_f_dzdt_1d(
-                    f[:,end,is,it], this_vpa, n[end,is,it], upar[end,is,it], vth[end,is,it],
+                    f[:,end,is,it], this_vpa.grid, n[end,is,it], upar[end,is,it], vth[end,is,it],
                     ev_n, ev_u, ev_p)
                 @views plot!(dzdt, f_unnorm, xlabel="vpa", ylabel="f_unnorm(z=L)",
                              label=run_label)
@@ -1071,7 +1119,7 @@ function plot_1D_1V_diagnostics(run_names, nwrite_movie, itime_min, itime_max,
             ## use Plots.jl...
             ## make a gif animation of f_unnorm(v_parallel_unnorm,z,t)
             #anim = @animate for i ∈ itime_min_pdfs:nwrite_movie_pdfs:itime_max_pdfs
-            #    subplots = (@views plot_unnormalised(f[:,:,is,i], this_z, this_vpa,
+            #    subplots = (@views plot_unnormalised(f[:,:,is,i], this_z.grid, this_vpa.grid,
             #                           n[:,is,i], upar[:,is,i], vth[:,is,i], ev_n, ev_u,
             #                           ev_p, title=run_label)
             #                for (f, n, upar, vth, ev_n, ev_u, ev_p, this_z,
@@ -1085,7 +1133,7 @@ function plot_1D_1V_diagnostics(run_names, nwrite_movie, itime_min, itime_max,
             #gif(anim, outfile, fps=5)
             ## make a gif animation of log(f_unnorm)(v_parallel_unnorm,z,t)
             #anim = @animate for i ∈ itime_min_pdfs:nwrite_movie_pdfs:itime_max_pdfs
-            #    subplots = (@views plot_unnormalised(f[:,:,is,i], this_z, this_vpa, n[:,is,i],
+            #    subplots = (@views plot_unnormalised(f[:,:,is,i], this_z.grid, this_vpa.grid, n[:,is,i],
             #                           upar[:,is,i], vth[:,is,i], ev_n, ev_u, ev_p,
             #                           plot_log=true, title=run_label)
             #                for (f, n, upar, vth, ev_n, ev_u, ev_p, this_z,
@@ -1115,7 +1163,7 @@ function plot_1D_1V_diagnostics(run_names, nwrite_movie, itime_min, itime_max,
 
                     PyPlot.subplot(1, n_runs, run_ind)
                     @views f_unnorm, z2d, dzdt2d = get_unnormalised_f_coords_2d(
-                        f[:,:,is,iframe], this_z, this_vpa, n[:,is,iframe],
+                        f[:,:,is,iframe], this_z.grid, this_vpa.grid, n[:,is,iframe],
                         upar[:,is,iframe], vth[:,is,iframe], ev_n, ev_u, ev_p)
                     plot_unnormalised_f2d(f_unnorm, z2d, dzdt2d; title=run_label,
                                           plot_log=false)
@@ -1139,7 +1187,7 @@ function plot_1D_1V_diagnostics(run_names, nwrite_movie, itime_min, itime_max,
 
                     PyPlot.subplot(1, n_runs, run_ind)
                     @views f_unnorm, z2d, dzdt2d = get_unnormalised_f_coords_2d(
-                        f[:,:,is,iframe], this_z, this_vpa, n[:,is,iframe],
+                        f[:,:,is,iframe], this_z.grid, this_vpa.grid, n[:,is,iframe],
                         upar[:,is,iframe], vth[:,is,iframe], ev_n, ev_u, ev_p)
                     plot_unnormalised_f2d(f_unnorm, z2d, dzdt2d; title=run_label,
                                           plot_log=true)
@@ -1160,7 +1208,7 @@ function plot_1D_1V_diagnostics(run_names, nwrite_movie, itime_min, itime_max,
                         thermal_speed_at_pdf_times, evolve_density, evolve_upar,
                         evolve_ppar, vpa, run_names)
                     @views f_unnorm, dzdt = get_unnormalised_f_dzdt_1d(
-                        f[:,1,is,i], this_vpa, n[1,is,i], upar[1,is,i], vth[1,is,i],
+                        f[:,1,is,i], this_vpa.grid, n[1,is,i], upar[1,is,i], vth[1,is,i],
                         ev_n, ev_u, ev_p)
                     @views plot!(dzdt, f_unnorm, xlabel="vpa", ylabel="f_unnorm(z=0)",
                                  label=run_label)
@@ -1176,7 +1224,7 @@ function plot_1D_1V_diagnostics(run_names, nwrite_movie, itime_min, itime_max,
                         thermal_speed_at_pdf_times, evolve_density, evolve_upar,
                         evolve_ppar, vpa, run_names)
                     @views f_unnorm, dzdt = get_unnormalised_f_dzdt_1d(
-                        f[:,end,is,i], this_vpa, n[end,is,i], upar[end,is,i],
+                        f[:,end,is,i], this_vpa.grid, n[end,is,i], upar[end,is,i],
                         vth[end,is,i], ev_n, ev_u, ev_p)
                     @views plot!(dzdt, f_unnorm, xlabel="vpa", ylabel="f_unnorm(z=L)",
                                  label=run_label)
@@ -1188,7 +1236,7 @@ function plot_1D_1V_diagnostics(run_names, nwrite_movie, itime_min, itime_max,
         if pp.animate_deltaf_vs_vpa_z
             # make a gif animation of δf(vpa,z,t)
             anim = @animate for i ∈ itime_min_pdfs:nwrite_movie_pdfs:itime_max_pdfs
-                subplots = (@views heatmap(this_z, this_vpa, delta_f[:,:,is,i],
+                subplots = (@views heatmap(this_z, this_vpa.grid, delta_f[:,:,is,i],
                                        xlabel="z", ylabel="vpa", c = :deep,
                                        interpolation = :cubic, title=run_label)
                             for (df, this_z, this_vpa, run_label) ∈
@@ -1257,7 +1305,7 @@ function plot_1D_1V_diagnostics(run_names, nwrite_movie, itime_min, itime_max,
                 #@views plot(vpa, ff[iz0,:,is,i], ylims = (fmin,fmax))
                 plot(legend=legend)
                 for (f, this_vpa, run_label) ∈ zip(ff, vpa, run_names)
-                    @views plot!(this_vpa, f[:,iz0,is,i], label=run_label)
+                    @views plot!(this_vpa.grid, f[:,iz0,is,i], label=run_label)
                 end
             end
             outfile = string(prefix, "_f_vs_vpa", spec_string, ".gif")
@@ -1271,7 +1319,7 @@ function plot_1D_1V_diagnostics(run_names, nwrite_movie, itime_min, itime_max,
                 plot(legend=legend)
                 for (df, this_vpa, fn, fx, run_label) ∈
                         zip(delta_f, vpa, fmin, fmax, run_names)
-                    @views plot!(this_vpa, delta_f[:,iz0,is,i], ylims = (fn,fx),
+                    @views plot!(this_vpa.grid, delta_f[:,iz0,is,i], ylims = (fn,fx),
                                 label=run_label)
                 end
             end
@@ -1372,8 +1420,8 @@ function plot_fields(phi, delta_phi, time, itime_min, itime_max, nwrite_movie,
     end
     if pp.plot_phi_vs_z_t
         # make a heatmap plot of ϕ(z,t)
-        subplots = (heatmap(t, this_z, p, xlabel="time", ylabel="z", title=run_label, c =
-                            :deep)
+        subplots = (heatmap(t, this_z.grid, p, xlabel="time", ylabel="z", title=run_label,
+                            c = :deep)
                     for (t, this_z, p, run_label) ∈ zip(time, z, phi, run_names))
         plot(subplots..., layout=(1,n_runs), size=(600*n_runs, 400))
         outfile = string(prefix, "_phi_vs_z_t.pdf")
@@ -1384,7 +1432,7 @@ function plot_fields(phi, delta_phi, time, itime_min, itime_max, nwrite_movie,
         anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
             plot(legend=legend)
             for (t, this_z, p, run_label) ∈ zip(time, z, phi, run_names)
-                @views plot!(this_z, p[:,i], xlabel="z", ylabel="ϕ",
+                @views plot!(this_z.grid, p[:,i], xlabel="z", ylabel="ϕ",
                              ylims=(phimin, phimax), label=run_label)
             end
         end
@@ -1399,8 +1447,8 @@ function plot_fields(phi, delta_phi, time, itime_min, itime_max, nwrite_movie,
     # savefig(outfile)
     plot(legend=legend)
     for (t, this_z, p, run_label) ∈ zip(time, z, phi, run_names)
-        plot!(this_z, p[:,end], xlabel="z/Lz", ylabel="eϕ/Te", label=run_label,
-             linewidth=2)
+        plot!(this_z.grid, p[:,end], xlabel="z/Lz", ylabel="eϕ/Te", label=run_label,
+              linewidth=2)
     end
     outfile = string(prefix, "_phi_final.pdf")
     savefig(outfile)
@@ -1586,7 +1634,7 @@ function plot_moments(density, delta_density, density_fldline_avg,
         end
         if pp.plot_dens_vs_z_t
             # make a heatmap plot of n_s(z,t)
-            subplots = (heatmap(t, this_z, n[:,is,:], xlabel="time", ylabel="z",
+            subplots = (heatmap(t, this_z.grid, n[:,is,:], xlabel="time", ylabel="z",
                                 title=run_label, c = :deep)
                         for (t, this_z, n, run_label) ∈ zip(time, z, density, run_names))
             plot(subplots..., layout=(1,n_runs), size=(600*n_runs, 400))
@@ -1595,7 +1643,7 @@ function plot_moments(density, delta_density, density_fldline_avg,
         end
         if pp.plot_upar_vs_z_t
             # make a heatmap plot of upar_s(z,t)
-            subplots = (heatmap(t, this_z, upar[:,is,:], xlabel="time", ylabel="z",
+            subplots = (heatmap(t, this_z.grid, upar[:,is,:], xlabel="time", ylabel="z",
                                 title=run_label, c = :deep)
                         for (t, this_z, upar, run_label) ∈ zip(time, z, parallel_flow,
                                                               run_names))
@@ -1605,7 +1653,7 @@ function plot_moments(density, delta_density, density_fldline_avg,
         end
         if pp.plot_ppar_vs_z_t
             # make a heatmap plot of upar_s(z,t)
-            subplots = (heatmap(t, this_z, ppar[:,is,:], xlabel="time", ylabel="z",
+            subplots = (heatmap(t, this_z.grid, ppar[:,is,:], xlabel="time", ylabel="z",
                                 title=run_label, c = :deep)
                         for (t, this_z, ppar, run_label) ∈
                             zip(time, z, parallel_pressure, run_names))
@@ -1615,7 +1663,7 @@ function plot_moments(density, delta_density, density_fldline_avg,
         end
         if pp.plot_qpar_vs_z_t
             # make a heatmap plot of upar_s(z,t)
-            subplots = (heatmap(t, this_z, qpar[:,is,:], xlabel="time", ylabel="z",
+            subplots = (heatmap(t, this_z.grid, qpar[:,is,:], xlabel="time", ylabel="z",
                                 title=run_label, c = :deep)
                         for (t, this_z, qpar, run_label) ∈
                             zip(time, z, parallel_heat_flux, run_names))
@@ -1628,7 +1676,7 @@ function plot_moments(density, delta_density, density_fldline_avg,
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
                 plot(legend=legend)
                 for (t, this_z, n, run_label) ∈ zip(time, z, density, run_names)
-                    @views plot!(this_z, n[:,is,i], xlabel="z", ylabel="nᵢ/Nₑ",
+                    @views plot!(this_z.grid, n[:,is,i], xlabel="z", ylabel="nᵢ/Nₑ",
                                  ylims=(dens_min, dens_max), label=run_label)
                 end
             end
@@ -1640,7 +1688,7 @@ function plot_moments(density, delta_density, density_fldline_avg,
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
                 plot(legend=legend)
                 for (t, this_z, upar, run_label) ∈ zip(time, z, parallel_flow, run_names)
-                    @views plot!(this_z, upar[:,is,i], xlabel="z", ylabel="upars/vt",
+                    @views plot!(this_z.grid, upar[:,is,i], xlabel="z", ylabel="upars/vt",
                                  ylims=(upar_min, upar_max), label=run_label)
                 end
             end
@@ -1652,7 +1700,7 @@ function plot_moments(density, delta_density, density_fldline_avg,
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
                 plot(legend=legend)
                 for (t, this_z, ppar, run_label) ∈ zip(time, z, parallel_pressure, run_names)
-                    @views plot!(this_z, ppar[:,is,i], xlabel="z", ylabel="ppars",
+                    @views plot!(this_z.grid, ppar[:,is,i], xlabel="z", ylabel="ppars",
                                  ylims=(ppar_min, ppar_max), label=run_label)
                 end
             end
@@ -1664,7 +1712,7 @@ function plot_moments(density, delta_density, density_fldline_avg,
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
                 plot(legend=legend)
                 for (t, this_z, vth, run_label) ∈ zip(time, z, thermal_speed, run_names)
-                    @views plot!(this_z, vth[:,is,i], xlabel="z", ylabel="vths",
+                    @views plot!(this_z.grid, vth[:,is,i], xlabel="z", ylabel="vths",
                                  ylims=(vth_min, vth_max), label=run_label)
                 end
             end
@@ -1677,7 +1725,7 @@ function plot_moments(density, delta_density, density_fldline_avg,
                 plot(legend=legend)
                 for (t, this_z, qpar, run_label) ∈ zip(time, z, parallel_heat_flux,
                                                        run_names)
-                    @views plot!(this_z, qpar[:,is,i], xlabel="z", ylabel="qpars",
+                    @views plot!(this_z.grid, qpar[:,is,i], xlabel="z", ylabel="qpars",
                                  ylims=(qpar_min, qpar_max), label=run_label)
                 end
             end
@@ -2117,11 +2165,11 @@ function compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,spec
     # load block data on iblock=0
     nblocks, iblock = load_block_data(fid, printout=false)
     # load global sizes of grids that are distributed in memory
-    nz_local, nz_global, z_local, z_wgts_local, Lz = load_coordinate_data(fid, "z", printout=false)
-    nr_local, nr_global, r_local, r_wgts_local, Lr = load_coordinate_data(fid, "r", printout=false)
+    z0, _ = load_coordinate_data(fid, "z", printout=false)
+    r0, _ = load_coordinate_data(fid, "r", printout=false)
     # velocity grid data on iblock=0 (same for all blocks)
-    nvpa, _, vpa, vpa_wgts, Lvpa = load_coordinate_data(fid, "vpa", printout=false)
-    nvperp, _, vperp, vperp_wgts, Lvperp = load_coordinate_data(fid, "vperp", printout=false)
+    vpa, _ = load_coordinate_data(fid, "vpa", printout=false)
+    vperp, _ = load_coordinate_data(fid, "vperp", printout=false)
     # load time data (unique to pdf, may differ to moment values depending on user nwrite_dfns value)
     ntime, time = load_time_data(fid, printout=false)
     close(fid)
@@ -2135,20 +2183,20 @@ function compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,spec
         z_irank, r_irank = load_rank_data(fid_pdfs,printout=false)
         pdf = load_pdf_data(fid_pdfs, printout=false)
         # local local grid data on iblock=0
-        nz_local, _, z_local, z_wgts_local, Lz = load_coordinate_data(fid_pdfs, "z")
-        nr_local, _, r_local, r_wgts_local, Lr = load_coordinate_data(fid_pdfs, "r")
+        z_local, _ = load_coordinate_data(fid_pdfs, "z")
+        r_local, _ = load_coordinate_data(fid_pdfs, "r")
         close(fid_pdfs)
         imin_r = min(1,r_irank) + 1
         imin_z = min(1,z_irank) + 1
-        for it in 1:ntime, ir in imin_r:nr_local, iz in imin_z:nz_local,
-                ivperp in 1:nvperp, ivpa in 1:nvpa
+        for it in 1:ntime, ir in imin_r:r_local.n, iz in imin_z:z_local.n,
+                ivperp in 1:vperp.n, ivpa in 1:vpa.n
 
-            pdf_sym = dfni_func(vpa[ivpa],vperp[ivperp],z_local[iz],r_local[ir],time[it])
+            pdf_sym = dfni_func(vpa.grid[ivpa],vperp.grid[ivperp],z_local.grid[iz],r_local.grid[ir],time[it])
             pdf_norm[it] += (pdf[ivpa,ivperp,iz,ir,is,it] - pdf_sym)^2
         end
     end
     for it in 1:ntime
-        pdf_norm[it] = sqrt(pdf_norm[it]/(nr_global*nz_global*nvpa*nvperp))
+        pdf_norm[it] = sqrt(pdf_norm[it]/(r0.n_global*z0.n_global*vpa.n*vperp.n))
     end
     println("test: ",file_string,": ",spec_string," ",pdf_norm)
     @views plot(time, pdf_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=norm_label) #, yaxis=:log)
@@ -2164,11 +2212,11 @@ function compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,spec
         if (z_irank == 0 || z_irank == z_nrank - 1) && r_irank == 0
             pdf = load_pdf_data(fid_pdfs, printout=false)
             # local local grid data on iblock=0
-            nz_local, _, z_local, z_wgts_local, Lz = load_coordinate_data(fid_pdfs, "z")
-            nr_local, _, r_local, r_wgts_local, Lr = load_coordinate_data(fid_pdfs, "r")
-            pdf_sym_array = copy(vpa)
+            z_local, _ = load_coordinate_data(fid_pdfs, "z")
+            r_local = load_coordinate_data(fid_pdfs, "r")
+            pdf_sym_array = copy(vpa.grid)
             # plot a thermal vperp on line plots
-            ivperp0 = max(floor(mk_int,nvperp/3),1)
+            ivperp0 = max(floor(mk_int,vperp.n/3),1)
             # plot a typical r on line plots
             ir0 = 1
             # plot at the wall boundary
@@ -2176,14 +2224,14 @@ function compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,spec
                 iz0 = 1
                 zlabel="wall-"
             elseif z_irank == z_nrank - 1
-                iz0 = nz_local
+                iz0 = z_local.n
                 zlabel="wall+"
             end
-            for ivpa in 1:nvpa
-                pdf_sym_array[ivpa] = dfni_func(vpa[ivpa],vperp[ivperp0],z_local[iz0],r_local[ir0],time[ntime])
+            for ivpa in 1:vpa.n
+                pdf_sym_array[ivpa] = dfni_func(vpa.grid[ivpa],vperp.grid[ivperp0],z_local.grid[iz0],r_local.grid[ir0],time[ntime])
             end
             # plot f(vpa,ivperp0,iz_wall,ir0,is,itime) at the wall
-            @views plot(vpa, [pdf[:,ivperp0,iz0,ir0,is,ntime], pdf_sym_array], xlabel=L"v_{\|\|}/L_{v_{\|\|}}", ylabel=L"f_i", label=["num" "sym"])
+            @views plot(vpa.grid, [pdf[:,ivperp0,iz0,ir0,is,ntime], pdf_sym_array], xlabel=L"v_{\|\|}/L_{v_{\|\|}}", ylabel=L"f_i", label=["num" "sym"])
             outfile = string(run_name, "_pdf(vpa,vperp0,iz_"*zlabel*",ir0)_sym_vs_vpa.pdf")
             savefig(outfile)
         end
@@ -2198,12 +2246,12 @@ function compare_neutral_pdf_symbolic_test(run_name,manufactured_solns_list,spec
     # load block data on iblock=0
     nblocks, iblock = load_block_data(fid, printout=false)
     # load global sizes of grids that are distributed in memory
-    nz_local, nz_global, z_local, z_wgts_local, Lz = load_coordinate_data(fid, "z", printout=false)
-    nr_local, nr_global, r_local, r_wgts_local, Lr = load_coordinate_data(fid, "r", printout=false)
+    z0, _ = load_coordinate_data(fid, "z", printout=false)
+    r0, _ = load_coordinate_data(fid, "r", printout=false)
     # velocity grid data on iblock=0 (same for all blocks)
-    nvz, _, vz, vz_wgts, Lvz = load_coordinate_data(fid, "vz", printout=false)
-    nvr, _, vr, vr_wgts, Lvr = load_coordinate_data(fid, "vr", printout=false)
-    nvzeta, _, vzeta, vzeta_wgts, Lvzeta = load_coordinate_data(fid, "vzeta", printout=false)
+    vz, _ = load_coordinate_data(fid, "vz", printout=false)
+    vr, _ = load_coordinate_data(fid, "vr", printout=false)
+    vzeta, _ = load_coordinate_data(fid, "vzeta", printout=false)
     # load time data (unique to pdf, may differ to moment values depending on user nwrite_dfns value)
     ntime, time = load_time_data(fid, printout=false)
     close(fid)
@@ -2217,20 +2265,20 @@ function compare_neutral_pdf_symbolic_test(run_name,manufactured_solns_list,spec
         z_irank, r_irank = load_rank_data(fid_pdfs,printout=false)
         pdf = load_neutral_pdf_data(fid_pdfs, printout=false)
         # load local grid data
-        nz_local, _, z_local, z_wgts_local, Lz = load_coordinate_data(fid_pdfs, "z", printout=false)
-        nr_local, _, r_local, r_wgts_local, Lr = load_coordinate_data(fid_pdfs, "r", printout=false)
+        z_local, _ = load_coordinate_data(fid_pdfs, "z", printout=false)
+        r_local, _ = load_coordinate_data(fid_pdfs, "r", printout=false)
         close(fid_pdfs)
         imin_r = min(1,r_irank) + 1
         imin_z = min(1,z_irank) + 1
-        for it in 1:ntime, ir in imin_r:nr_local, iz in imin_z:nz_local,
-                ivzeta in 1:nvzeta, ivr in 1:nvr, ivz in 1:nvz
+        for it in 1:ntime, ir in imin_r:r_local.n, iz in imin_z:z_local.n,
+                ivzeta in 1:vzeta.n, ivr in 1:vr.n, ivz in 1:vz.n
 
-            pdf_sym = dfnn_func(vz[ivz],vr[ivr],vzeta[ivzeta],z_local[iz],r_local[ir],time[it])
+            pdf_sym = dfnn_func(vz.grid[ivz],vr.grid[ivr],vzeta.grid[ivzeta],z_local.grid[iz],r_local.grid[ir],time[it])
             pdf_norm[it] += (pdf[ivz,ivr,ivzeta,iz,ir,is,it] - pdf_sym)^2
         end
     end
     for it in 1:ntime
-        pdf_norm[it] = sqrt(pdf_norm[it]/(nr_global*nz_global*nvz*nvr*nvzeta))
+        pdf_norm[it] = sqrt(pdf_norm[it]/(r0.n_global*z0.n_global*vz.n*vr.n*vzeta.n))
     end
     println("test: ",file_string,": ",spec_string," ",pdf_norm)
     @views plot(time, pdf_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=norm_label) #, yaxis=:log)
@@ -2608,8 +2656,8 @@ function plot_charged_pdf_2D_at_wall(run_name)
     # load block data on iblock=0
     nblocks, iblock = load_block_data(fid, printout=false)
     # velocity grid data on iblock=0 (same for all blocks)
-    nvpa, _, vpa, vpa_wgts, Lvpa = load_coordinate_data(fid, "vpa", printout=false)
-    nvperp, _, vperp, vperp_wgts, Lvperp = load_coordinate_data(fid, "vperp", printout=false)
+    vpa, _ = load_coordinate_data(fid, "vpa", printout=false)
+    vperp, _ = load_coordinate_data(fid, "vperp", printout=false)
     # load time data (unique to pdf, may differ to moment values depending on user nwrite_dfns value)
     ntime, time = load_time_data(fid, printout=false)
     # load species data
@@ -2619,9 +2667,9 @@ function plot_charged_pdf_2D_at_wall(run_name)
     # plot only data at last timestep
     itime0 = ntime
     # plot a thermal vpa on line plots
-    ivpa0 = floor(mk_int,nvpa/3)
+    ivpa0 = floor(mk_int,vpa.n/3)
     # plot a thermal vperp on line plots
-    ivperp0 = max(1,floor(mk_int,nvperp/3))
+    ivperp0 = max(1,floor(mk_int,vperp.n/3))
     # plot a typical r on line plots
     ir0 = 1
 
@@ -2635,16 +2683,16 @@ function plot_charged_pdf_2D_at_wall(run_name)
         if (z_irank == 0 || z_irank == z_nrank-1) && r_irank == 0
             # plot data from lower wall boundary near z = -L/2
             # load local grid data
-            nz_local, _, z_local, z_wgts_local, Lz = load_coordinate_data(fid_pdfs, "z", printout=false)
-            nr_local, _, r_local, r_wgts_local, Lr = load_coordinate_data(fid_pdfs, "r", printout=false)
+            z, _ = load_coordinate_data(fid_pdfs, "z", printout=false)
+            r, _ = load_coordinate_data(fid_pdfs, "r", printout=false)
 
             if z_irank == 0
                 iz_wall = 1
-                #print("z_local[iz_wall-]: ",z_local[iz_wall])
+                #print("z.grid[iz_wall-]: ",z.grid[iz_wall])
                 zlabel = "wall-"
             elseif z_irank == z_nrank-1
-                iz_wall = nz_local
-                #print("z_local[iz_wall+]: ",z_local[iz_wall])
+                iz_wall = z.n
+                #print("z.grid[iz_wall+]: ",z.grid[iz_wall])
                 zlabel = "wall+"
             end
             # load local pdf data
@@ -2653,29 +2701,29 @@ function plot_charged_pdf_2D_at_wall(run_name)
                 description = "_ion_spec"*string(is)*"_"
 
                 # plot f(vpa,ivperp0,iz_wall,ir0,is,itime) at the wall
-                @views plot(vpa, pdf[:,ivperp0,iz_wall,ir0,is,itime0], xlabel=L"v_{\|\|}/L_{v_{\|\|}}", ylabel=L"f_i")
+                @views plot(vpa.grid, pdf[:,ivperp0,iz_wall,ir0,is,itime0], xlabel=L"v_{\|\|}/L_{v_{\|\|}}", ylabel=L"f_i")
                 outfile = string(run_name, "_pdf(vpa,vperp0,iz_"*zlabel*",ir0)"*description*"_vs_vpa.pdf")
                 savefig(outfile)
 
                 # plot f(vpa,vperp,iz_wall,ir0,is,itime) at the wall
-                @views heatmap(vperp, vpa, pdf[:,:,iz_wall,ir0,is,itime0], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                @views heatmap(vperp.grid, vpa.grid, pdf[:,:,iz_wall,ir0,is,itime0], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
                 windowsize = (360,240), margin = 15pt)
                 outfile = string(run_name, "_pdf(vpa,vperp,iz_"*zlabel*",ir0)"*description*"_vs_vperp_vpa.pdf")
                 savefig(outfile)
 
                 # plot f(vpa,ivperp0,z,ir0,is,itime) near the wall
-                @views heatmap(z_local, vpa, pdf[:,ivperp0,:,ir0,is,itime0], xlabel=L"z", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                @views heatmap(z.grid, vpa.grid, pdf[:,ivperp0,:,ir0,is,itime0], xlabel=L"z", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
                 windowsize = (360,240), margin = 15pt)
                 outfile = string(run_name, "_pdf(vpa,ivperp0,z_"*zlabel*",ir0)"*description*"_vs_z_vpa.pdf")
                 savefig(outfile)
 
                 # plot f(ivpa0,ivperp0,z,r,is,itime) near the wall
-                if nr_local > 1
-                    @views heatmap(r_local, z_local, pdf[ivpa0,ivperp0,:,:,is,itime0], xlabel=L"r", ylabel=L"z", c = :deep, interpolation = :cubic,
+                if r.n > 1
+                    @views heatmap(r.grid, z.grid, pdf[ivpa0,ivperp0,:,:,is,itime0], xlabel=L"r", ylabel=L"z", c = :deep, interpolation = :cubic,
                     windowsize = (360,240), margin = 15pt)
                     outfile = string(run_name, "_pdf(ivpa0,ivperp0,z_"*zlabel*",r)"*description*"_vs_r_z.pdf")
                     savefig(outfile)
-                    @views heatmap(r_local, vpa, pdf[:,ivperp0,iz_wall,:,is,itime0], xlabel=L"r", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                    @views heatmap(r_local, vpa.grid, pdf[:,ivperp0,iz_wall,:,is,itime0], xlabel=L"r", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
                     windowsize = (360,240), margin = 15pt)
                     outfile = string(run_name, "_pdf(vpa,ivperp0,z_"*zlabel*",r)"*description*"_vs_r_vpa.pdf")
                     savefig(outfile)

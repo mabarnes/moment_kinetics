@@ -284,9 +284,7 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
             # open the netcdf file containing moments data and give it the handle 'fid'
             fid = open_readonly_output_file(path, "moments")
 
-            # load space-time coordinate data
-            nz, nz_global, z, z_wgts, Lz = load_coordinate_data(fid, "z")
-            nr, nr_global, r, r_wgts, Lr = load_coordinate_data(fid, "r")
+            # load species, time coordinate data
             n_ion_species, n_neutral_species = load_species_data(fid)
             ntime, time = load_time_data(fid)
             n_ion_species, n_neutral_species = load_species_data(fid)
@@ -295,8 +293,9 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
             phi_zrt, Er_zrt, Ez_zrt = load_fields_data(fid)
 
             # load velocity moments data
-            n_charged_zrst, upar_charged_zrst, ppar_charged_zrst, qpar_charged_zrst, v_t_charged_zrst, evolve_ppar = load_charged_particle_moments_data(fid)
+            n_charged_zrst, upar_charged_zrst, ppar_charged_zrst, qpar_charged_zrst, v_t_charged_zrst = load_charged_particle_moments_data(fid)
             n_neutral_zrst, upar_neutral_zrst, ppar_neutral_zrst, qpar_neutral_zrst, v_t_neutral_zrst = load_neutral_particle_moments_data(fid)
+            z, z_spectral = load_coordinate_data(fid, "z")
 
             close(fid)
             
@@ -325,18 +324,18 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
 
             # Unnormalize f
             if input["evolve_moments_density"]
-                for it ∈ 1:length(time), is ∈ 1:n_ion_species, iz ∈ 1:nz
+                for it ∈ 1:length(time), is ∈ 1:n_ion_species, iz ∈ 1:z.n
                     f_charged[:,iz,is,it] .*= n_charged[iz,is,it]
                 end
-                for it ∈ 1:length(time), isn ∈ 1:n_neutral_species, iz ∈ 1:nz
+                for it ∈ 1:length(time), isn ∈ 1:n_neutral_species, iz ∈ 1:z.n
                     f_neutral[:,iz,isn,it] .*= n_neutral[iz,isn,it]
                 end
             end
             if input["evolve_moments_parallel_pressure"]
-                for it ∈ 1:length(time), is ∈ 1:n_ion_species, iz ∈ 1:nz
+                for it ∈ 1:length(time), is ∈ 1:n_ion_species, iz ∈ 1:z.n
                     f_charged[:,iz,is,it] ./= v_t_charged[iz,is,it]
                 end
-                for it ∈ 1:length(time), isn ∈ 1:n_neutral_species, iz ∈ 1:nz
+                for it ∈ 1:length(time), isn ∈ 1:n_neutral_species, iz ∈ 1:z.n
                     f_neutral[:,iz,isn,it] ./= v_t_neutral[iz,isn,it]
                 end
             end

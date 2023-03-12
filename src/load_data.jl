@@ -14,9 +14,12 @@ export load_block_data
 export load_rank_data
 export load_species_data
 
+using ..coordinates: define_coordinate
 using ..file_io: get_group
+using ..input_structs: advection_input, grid_input
 
 using HDF5
+using MPI
 using NCDatasets
 
 """
@@ -116,14 +119,39 @@ function load_coordinate_data(fid, name; printout=false)
 
     coord_group = get_group(get_group(fid, "coords"), name)
 
+    ngrid = load_variable(coord_group, "ngrid")
     n_local = load_variable(coord_group, "n_local")
     n_global = load_variable(coord_group, "n_global")
     grid = load_variable(coord_group, "grid")
     wgts = load_variable(coord_group, "wgts")
+    irank = load_variable(coord_group, "irank")
     # L = global box length
     L = load_variable(coord_group, "L")
+    discretization = load_variable(coord_group, "discretization")
+    fd_option = load_variable(coord_group, "fd_option")
+    bc = load_variable(coord_group, "bc")
 
-    return n_local, n_global, grid, wgts, L
+    nelement_local = nothing
+    if n_local == 1 && ngrid == 1
+        nelement_local = 1
+    else
+        nelement_local = (n_local-1) ÷ (ngrid-1)
+    end
+    if n_global == 1 && ngrid == 1
+        nelement_global = 1
+    else
+        nelement_global = (n_global-1) ÷ (ngrid-1)
+    end
+
+    # Define input to create coordinate struct
+    # Some dummy inputs, at least for now: nrank=0
+    input = grid_input(name, ngrid, nelement_global, nelement_local, 0, irank, L,
+                       discretization, fd_option, bc, advection_input("", 0.0, 0.0, 0.0),
+                       MPI.COMM_NULL)
+
+    coord, spectral = define_coordinate(input)
+
+    return coord, spectral
 end
 
 """
