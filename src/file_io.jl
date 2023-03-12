@@ -288,6 +288,11 @@ function define_io_coordinate!(parent, coord, coord_name, description, parallel_
                                 description="number of local $coord_name grid points")
         end
 
+        # write the number of points within each element for this coordinate to variable
+        # "ngrid" within "coords/coord_name" group
+        write_single_value!(group, "ngrid", coord.ngrid; parallel_io=parallel_io,
+                            description="number of points in each element in $coord_name")
+
         # write the number of global grid points for this coordinate to variable "n_local"
         # within "coords/coord_name" group
         write_single_value!(group, "n_global", coord.n_global; parallel_io=parallel_io,
@@ -309,6 +314,19 @@ function define_io_coordinate!(parent, coord, coord_name, description, parallel_
         # write the integration weights attached to each coordinate grid point
         write_single_value!(group, "wgts", coord.wgts, coord; parallel_io=parallel_io,
                             description="integration weights associated with the $coord_name grid points")
+
+        # write the discretization option for the coordinate
+        write_single_value!(group, "discretization", coord.discretization;
+                            parallel_io=parallel_io,
+                            description="discretization used for $coord_name")
+
+        # write the finite-difference option for the coordinate
+        write_single_value!(group, "fd_option", coord.fd_option; parallel_io=parallel_io,
+                            description="type of finite difference for $coord_name, if used")
+
+        # write the boundary condition for the coordinate
+        write_single_value!(group, "bc", coord.bc; parallel_io=parallel_io,
+                            description="boundary condition for $coord_name")
 
         return group
     end
