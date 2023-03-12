@@ -59,7 +59,7 @@ function maybe_create_netcdf_dim(file_or_group::NCDataset, coord::coordinate)
 end
 
 function write_single_value!(file_or_group::NCDataset, name,
-                             value::Union{Number, AbstractArray{T,N}},
+                             value::Union{Number, AbstractString, AbstractArray{T,N}},
                              coords::coordinate...; parallel_io, description=nothing) where {T,N}
     if description !== nothing
         attributes = Dict("description" => description)
@@ -67,7 +67,7 @@ function write_single_value!(file_or_group::NCDataset, name,
         attributes = ()
     end
 
-    if isa(value, Number)
+    if isa(value, Number) || isa(value, String)
         coords !== () && error("cannot pass coordinates with a scalar")
         type = typeof(value)
         dims = ()
