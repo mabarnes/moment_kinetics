@@ -145,30 +145,30 @@ function construct_global_zr_grids(run_name::String,file_key::String,nz_global::
     # whereas the optimal routine would loop over a single z/r group
     for iblock in 0:nblocks-1
         fid = open_readonly_output_file(run_name,file_key,iblock=iblock,printout=false)
-        nz_local, nz_global, z_local, z_local_wgts, Lz = load_coordinate_data(fid, "z")
-        nr_local, nr_global, r_local, r_local_wgts, Lr = load_coordinate_data(fid, "r")
+        z = load_coordinate_data(fid, "z")
+        r = load_coordinate_data(fid, "r")
     
         z_irank, r_irank = load_rank_data(fid)
         # MRH should wgts at element boundaries be doubled 
         # MRH in the main code duplicated points have half the integration wgt
         if z_irank == 0
-            zgrid[1] = z_local[1]
-            zwgts[1] = z_local_wgts[1]
+            zgrid[1] = z.grid[1]
+            zwgts[1] = z.wgts[1]
         end
-        for iz_local in 2:nz_local
-            iz_global = iglobal_func(iz_local,z_irank,nz_local)
-            zgrid[iz_global] = z_local[iz_local]  
-            zwgts[iz_global] = z_local_wgts[iz_local]  
+        for iz_local in 2:z.n
+            iz_global = iglobal_func(iz_local,z_irank,z.n)
+            zgrid[iz_global] = z.grid[iz_local]  
+            zwgts[iz_global] = z.wgts[iz_local]  
         end
 
         if r_irank == 0
-            rgrid[1] = r_local[1]
-            rwgts[1] = r_local_wgts[1]
+            rgrid[1] = r.grid[1]
+            rwgts[1] = r.wgts[1]
         end
-        for ir_local in 2:nr_local
-            ir_global = iglobal_func(ir_local,r_irank,nr_local)
-            rgrid[ir_global] = r_local[ir_local]  
-            rwgts[ir_global] = r_local_wgts[ir_local]  
+        for ir_local in 2:r.n
+            ir_global = iglobal_func(ir_local,r_irank,r.n)
+            rgrid[ir_global] = r.grid[ir_local]  
+            rwgts[ir_global] = r.wgts[ir_local]  
         end
     end 
     return zgrid, zwgts, rgrid, rwgts
@@ -280,8 +280,8 @@ function analyze_and_plot_data(path)
     # load global and local sizes of grids stored on each output file 
     # z z_wgts r r_wgts may take different values on different blocks
     # we need to construct the global grid below
-    nz_local, nz_global, z_local, z_local_wgts, Lz = load_coordinate_data(fid, "z")
-    nr_local, nr_global, r_local, r_local_wgts, Lr = load_coordinate_data(fid, "r")
+    z = load_coordinate_data(fid, "z")
+    r = load_coordinate_data(fid, "r")
     # load time data 
     ntime, time = load_time_data(fid)
     # load species data 
@@ -291,37 +291,39 @@ function analyze_and_plot_data(path)
     
     
     # allocate arrays to contain the global fields as a function of (z,r,t)
-    phi, Ez, Er = allocate_global_zr_fields(nz_global,nr_global,ntime)
+    phi, Ez, Er = allocate_global_zr_fields(z.n_global,r.n_global,ntime)
     density, parallel_flow, parallel_pressure, parallel_heat_flux, thermal_speed =
-        allocate_global_zr_charged_moments(nz_global,nr_global,n_ion_species,ntime)
+        allocate_global_zr_charged_moments(z.n_global,r.n_global,n_ion_species,ntime)
     if n_neutral_species > 0
         neutral_density, neutral_uz, neutral_pz, neutral_qz, neutral_thermal_speed =
-            allocate_global_zr_neutral_moments(nz_global,nr_global,n_neutral_species,ntime)
+            allocate_global_zr_neutral_moments(z.n_global,r.n_global,n_neutral_species,ntime)
     end 
     # read in the data from different block netcdf files
     # grids 
-    z, z_wgts, r, r_wgts = construct_global_zr_grids(run_name,
-       "moments",nz_global,nr_global,nblocks)
+    z_grid, z_wgts, r_grid, r_wgts = construct_global_zr_grids(run_name,
+       "moments",z.n_global,r.n_global,nblocks)
     #println("z: ",z)
     #println("r: ",r)
+    nz_global = length(z_grid)
+    nr_global = length(r_grid)
     
     # fields 
-    read_distributed_zr_data!(phi,"phi",run_name,"moments",nblocks,nz_local,nr_local)
-    read_distributed_zr_data!(Ez,"Ez",run_name,"moments",nblocks,nz_local,nr_local)
-    read_distributed_zr_data!(Er,"Er",run_name,"moments",nblocks,nz_local,nr_local)
+    read_distributed_zr_data!(phi,"phi",run_name,"moments",nblocks,z.n,r.n)
+    read_distributed_zr_data!(Ez,"Ez",run_name,"moments",nblocks,z.n,r.n)
+    read_distributed_zr_data!(Er,"Er",run_name,"moments",nblocks,z.n,r.n)
     # charged particle moments
-    read_distributed_zr_data!(density,"density",run_name,"moments",nblocks,nz_local,nr_local)
-    read_distributed_zr_data!(parallel_flow,"parallel_flow",run_name,"moments",nblocks,nz_local,nr_local)
-    read_distributed_zr_data!(parallel_pressure,"parallel_pressure",run_name,"moments",nblocks,nz_local,nr_local)
-    read_distributed_zr_data!(parallel_heat_flux,"parallel_heat_flux",run_name,"moments",nblocks,nz_local,nr_local)
-    read_distributed_zr_data!(thermal_speed,"thermal_speed",run_name,"moments",nblocks,nz_local,nr_local)
+    read_distributed_zr_data!(density,"density",run_name,"moments",nblocks,z.n,r.n)
+    read_distributed_zr_data!(parallel_flow,"parallel_flow",run_name,"moments",nblocks,z.n,r.n)
+    read_distributed_zr_data!(parallel_pressure,"parallel_pressure",run_name,"moments",nblocks,z.n,r.n)
+    read_distributed_zr_data!(parallel_heat_flux,"parallel_heat_flux",run_name,"moments",nblocks,z.n,r.n)
+    read_distributed_zr_data!(thermal_speed,"thermal_speed",run_name,"moments",nblocks,z.n,r.n)
     # neutral particle moments 
     if n_neutral_species > 0
-        read_distributed_zr_data!(neutral_density,"density_neutral",run_name,"moments",nblocks,nz_local,nr_local)
-        read_distributed_zr_data!(neutral_uz,"uz_neutral",run_name,"moments",nblocks,nz_local,nr_local)
-        read_distributed_zr_data!(neutral_pz,"pz_neutral",run_name,"moments",nblocks,nz_local,nr_local)
-        read_distributed_zr_data!(neutral_qz,"qz_neutral",run_name,"moments",nblocks,nz_local,nr_local)
-        read_distributed_zr_data!(neutral_thermal_speed,"thermal_speed_neutral",run_name,"moments",nblocks,nz_local,nr_local)
+        read_distributed_zr_data!(neutral_density,"density_neutral",run_name,"moments",nblocks,z.n,r.n)
+        read_distributed_zr_data!(neutral_uz,"uz_neutral",run_name,"moments",nblocks,z.n,r.n)
+        read_distributed_zr_data!(neutral_pz,"pz_neutral",run_name,"moments",nblocks,z.n,r.n)
+        read_distributed_zr_data!(neutral_qz,"qz_neutral",run_name,"moments",nblocks,z.n,r.n)
+        read_distributed_zr_data!(neutral_thermal_speed,"thermal_speed_neutral",run_name,"moments",nblocks,z.n,r.n)
     end 
     # load time data from `dfns' cdf
     fid_pdfs = open_readonly_output_file(run_name,"dfns")
@@ -331,12 +333,15 @@ function analyze_and_plot_data(path)
     
     # load local velocity coordinate data from `dfns' cdf
     # these values are currently the same for all blocks 
-    nvpa, nvpa_global, vpa_local, vpa_local_wgts, Lvpa = load_coordinate_data(fid_pdfs, "vpa")
-    nvperp, nvperp_global, vperp_local, vperp_local_wgts, Lvperp = load_coordinate_data(fid_pdfs, "vperp")
+    vpa = load_coordinate_data(fid_pdfs, "vpa")
+    vperp = load_coordinate_data(fid_pdfs, "vperp")
     if n_neutral_species > 0
-        nvzeta, nvzeta_global, vzeta_local, vzeta_local_wgts, Lvzeta = load_coordinate_data(fid_pdfs, "vzeta")
-        nvr, nvr_global, vr_local, vr_local_wgts, Lvr = load_coordinate_data(fid_pdfs, "vr")
-        nvz, nvz_global, vz_local, vz_local_wgts, Lvz = load_coordinate_data(fid_pdfs, "vz")
+        vzeta = load_coordinate_data(fid_pdfs, "vzeta")
+        vr = load_coordinate_data(fid_pdfs, "vr")
+        vz = load_coordinate_data(fid_pdfs, "vz")
+        nvzeta = vzeta.n
+        nvr = vr.n
+        nvz = vz.n
     else # define nvz nvr nvzeta to avoid errors below
         nvz = 1
         nvr = 1
@@ -347,7 +352,7 @@ function analyze_and_plot_data(path)
 	
 	# initialise the post-processing input options
     nwrite_movie, itime_min, itime_max, ivpa0, ivperp0, iz0, ir0,
-        ivz0, ivr0, ivzeta0 = init_postprocessing_options(pp, nvpa, nvperp, nz_global, nr_global, nvz, nvr, nvzeta, ntime)
+        ivz0, ivr0, ivzeta0 = init_postprocessing_options(pp, vpa.n, vperp.n, nz_global, nr_global, nvz, nvr, nvzeta, ntime)
     # load full (z,r,t) fields data
     #phi, Er, Ez = load_fields_data(fid)
     # load full (z,r,species,t) charged particle velocity moments data
@@ -373,15 +378,15 @@ function analyze_and_plot_data(path)
             parallel_heat_flux[:,ir0,:,:],
             thermal_speed[:,ir0,:,:],
             ff[:,ivperp0,:,ir0,:,:],
-            n_ion_species, evolve_ppar, nvpa, vpa, vpa_wgts,
-            nz, z, z_wgts, Lz, ntime, time)
+            n_ion_species, evolve_ppar, vpa.n, vpa, vpa_wgts,
+            nz, z_grid, z_wgts, z.L, ntime, time)
     end
     close(fid_pdfs)
 
     diagnostics_2d = false
     if diagnostics_2d
         # analyze the fields data
-        phi_fldline_avg, delta_phi = analyze_fields_data(phi[iz0,:,:], ntime, nr, r_wgts, Lr)
+        phi_fldline_avg, delta_phi = analyze_fields_data(phi[iz0,:,:], ntime, nr, r_wgts, r.L)
         plot_fields_rt(phi[iz0,:,:], delta_phi, time, itime_min, itime_max, nwrite_movie,
         r, ir0, run_name, delta_phi, pp)
     end
@@ -389,8 +394,8 @@ function analyze_and_plot_data(path)
     diagnostics_chodura = false
     if diagnostics_chodura
         Chodura_ratio_lower, Chodura_ratio_upper =
-            check_Chodura_condition(run_name, vpa_local, vpa_local_wgts, vperp_local,
-                                    vperp_local_wgts,
+            check_Chodura_condition(run_name, vpa.grid, vpa.wgts, vperp.grid,
+                                    vperp.wgts,
                                     moment_at_pdf_times(density, ntime, ntime_pdfs),
                                     composition.T_e,
                                     moment_at_pdf_times(Er, ntime, ntime_pdfs),
@@ -413,22 +418,22 @@ function analyze_and_plot_data(path)
     end 
     
     # make plots and animations of the phi, Ez and Er 
-    plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time, z, r, iz0, ir0, n_ion_species,
+    plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time, z_grid, r_grid, iz0, ir0, n_ion_species,
      itime_min, itime_max, nwrite_movie, run_name, pp)
     # make plots and animations of the phi, Ez and Er 
-    plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
+    plot_fields_2D(phi, Ez, Er, time, z_grid, r_grid, iz0, ir0,
      itime_min, itime_max, nwrite_movie, run_name, pp, "")
     # make plots and animations of the ion pdf
     # only if ntime == ntime_pdfs & data on one shared memory process
-    if ntime == ntime_pdfs && nr_global == nr_local && nz_global == nz_local
+    if ntime == ntime_pdfs && nr_global == r.n && nz_global == z.n
         spec_type = "ion"
-        plot_charged_pdf(ff, vpa_local, vperp_local, z_local, r_local, ivpa0, ivperp0, iz0, ir0,
+        plot_charged_pdf(ff, vpa.grid, vperp.grid, z.grid, r.grid, ivpa0, ivperp0, iz0, ir0,
             spec_type, n_ion_species,
             itime_min, itime_max, nwrite_movie, run_name, pp)
         # make plots and animations of the neutral pdf
         if n_neutral_species > 0
             spec_type = "neutral"
-            plot_neutral_pdf(neutral_ff, vz_local, vr_local, vzeta_local, z_local, r_local,
+            plot_neutral_pdf(neutral_ff, vz.grid, vr.grid, vzeta.grid, z.grid, r.grid,
                 ivz0, ivr0, ivzeta0, iz0, ir0,
                 spec_type, n_neutral_species,
                 itime_min, itime_max, nwrite_movie, run_name, pp)
@@ -447,20 +452,20 @@ function analyze_and_plot_data(path)
         r_bc = get(scan_input, "r_bc", "periodic")
         z_bc = get(scan_input, "z_bc", "periodic")
         # avoid passing Lr = 0 into manufactured_solns functions
-        if nr_local > 1
-            Lr_in = Lr
+        if r.n > 1
+            Lr_in = r.L
         else
             Lr_in = 1.0
         end
         
         #geometry, composition = get_geometry_and_composition(scan_input,n_ion_species,n_neutral_species)
 
-        manufactured_solns_list = manufactured_solutions(Lr_in,Lz,r_bc,z_bc,geometry,composition,nr_local)
+        manufactured_solns_list = manufactured_solutions(Lr_in,z.L,r_bc,z_bc,geometry,composition,r.n)
         dfni_func = manufactured_solns_list.dfni_func
         densi_func = manufactured_solns_list.densi_func
         dfnn_func = manufactured_solns_list.dfnn_func
         densn_func = manufactured_solns_list.densn_func
-        manufactured_E_fields = manufactured_electric_fields(Lr_in,Lz,r_bc,z_bc,composition,nr_local)
+        manufactured_E_fields = manufactured_electric_fields(Lr_in,z.L,r_bc,z_bc,composition,r.n)
         Er_func = manufactured_E_fields.Er_func
         Ez_func = manufactured_E_fields.Ez_func
         phi_func = manufactured_E_fields.phi_func
@@ -472,21 +477,21 @@ function analyze_and_plot_data(path)
         for it in 1:ntime
             for ir in 1:nr_global
                 for iz in 1:nz_global
-                    phi_sym[iz,ir,it] = phi_func(z[iz],r[ir],time[it])
-                    Ez_sym[iz,ir,it] = Ez_func(z[iz],r[ir],time[it])
-                    Er_sym[iz,ir,it] = Er_func(z[iz],r[ir],time[it])
+                    phi_sym[iz,ir,it] = phi_func(z_grid[iz],r_grid[ir],time[it])
+                    Ez_sym[iz,ir,it] = Ez_func(z_grid[iz],r_grid[ir],time[it])
+                    Er_sym[iz,ir,it] = Er_func(z_grid[iz],r_grid[ir],time[it])
                 end
             end
         end
         # make plots and animations of the phi, Ez and Er 
-        #plot_fields_2D(phi_sym, Ez_sym, Er_sym, time, z, r, iz0, ir0,
+        #plot_fields_2D(phi_sym, Ez_sym, Er_sym, time, z_grid, r_grid, iz0, ir0,
         #    itime_min, itime_max, nwrite_movie, run_name, pp, "_sym")
         println("time/ (Lref/cref): ", time)
-        compare_fields_symbolic_test(run_name,phi,phi_sym,z,r,time,nz_global,nr_global,ntime,
+        compare_fields_symbolic_test(run_name,phi,phi_sym,z_grid,r_grid,time,nz_global,nr_global,ntime,
          L"\widetilde{\phi}",L"\widetilde{\phi}^{sym}",L"\sqrt{\sum || \widetilde{\phi} - \widetilde{\phi}^{sym} ||^2 / N} ","phi")
-        compare_fields_symbolic_test(run_name,Er,Er_sym,z,r,time,nz_global,nr_global,ntime,
+        compare_fields_symbolic_test(run_name,Er,Er_sym,z_grid,r_grid,time,nz_global,nr_global,ntime,
          L"\widetilde{E_r}",L"\widetilde{E_r}^{sym}",L"\sqrt{\sum || \widetilde{E_r} - \widetilde{E_r}^{sym} ||^2 /N} ","Er")
-        compare_fields_symbolic_test(run_name,Ez,Ez_sym,z,r,time,nz_global,nr_global,ntime,
+        compare_fields_symbolic_test(run_name,Ez,Ez_sym,z_grid,r_grid,time,nz_global,nr_global,ntime,
          L"\widetilde{E_z}",L"\widetilde{E_z}^{sym}",L"\sqrt{\sum || \widetilde{E_z} - \widetilde{E_z}^{sym} ||^2 /N} ","Ez")
 
         # ion test
@@ -495,11 +500,11 @@ function analyze_and_plot_data(path)
         for it in 1:ntime
             for ir in 1:nr_global
                 for iz in 1:nz_global
-                    density_sym[iz,ir,is,it] = densi_func(z[iz],r[ir],time[it])
+                    density_sym[iz,ir,is,it] = densi_func(z_grid[iz],r_grid[ir],time[it])
                 end
             end
         end
-        compare_moments_symbolic_test(run_name,density,density_sym,"ion",z,r,time,nz_global,nr_global,ntime,
+        compare_moments_symbolic_test(run_name,density,density_sym,"ion",z_grid,r_grid,time,nz_global,nr_global,ntime,
          L"\widetilde{n}_i",L"\widetilde{n}_i^{sym}",L"\sqrt{\sum || \widetilde{n}_i - \widetilde{n}_i^{sym} ||^2 / N }","dens")
 
         compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,"ion",
@@ -511,11 +516,11 @@ function analyze_and_plot_data(path)
             for it in 1:ntime
                 for ir in 1:nr_global
                     for iz in 1:nz_global
-                        neutral_density_sym[iz,ir,is,it] = densn_func(z[iz],r[ir],time[it])
+                        neutral_density_sym[iz,ir,is,it] = densn_func(z_grid[iz],r_grid[ir],time[it])
                     end
                 end
             end
-            compare_moments_symbolic_test(run_name,neutral_density,neutral_density_sym,"neutral",z,r,time,nz_global,nr_global,ntime,
+            compare_moments_symbolic_test(run_name,neutral_density,neutral_density_sym,"neutral",z_grid,r_grid,time,nz_global,nr_global,ntime,
              L"\widetilde{n}_n",L"\widetilde{n}_n^{sym}",L"\sqrt{ \sum || \widetilde{n}_n - \widetilde{n}_n^{sym} ||^2 /N}","dens")
             
             compare_neutral_pdf_symbolic_test(run_name,manufactured_solns_list,"neutral",
@@ -686,11 +691,11 @@ function compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,spec
     # load block data on iblock=0
     nblocks, iblock = load_block_data(fid, printout=false)
     # load global sizes of grids that are distributed in memory
-    nz_local, nz_global, z_local, z_wgts_local, Lz = load_coordinate_data(fid, "z", printout=false)
-    nr_local, nr_global, r_local, r_wgts_local, Lr = load_coordinate_data(fid, "r", printout=false)
+    z = load_coordinate_data(fid, "z", printout=false)
+    r = load_coordinate_data(fid, "r", printout=false)
     # velocity grid data on iblock=0 (same for all blocks)
-    nvpa, _, vpa, vpa_wgts, Lvpa = load_coordinate_data(fid, "vpa", printout=false)
-    nvperp, _, vperp, vperp_wgts, Lvperp = load_coordinate_data(fid, "vperp", printout=false)
+    vpa = load_coordinate_data(fid, "vpa", printout=false)
+    vperp = load_coordinate_data(fid, "vperp", printout=false)
     # load time data (unique to pdf, may differ to moment values depending on user nwrite_dfns value)
     ntime, time = load_time_data(fid, printout=false)
     close(fid)
@@ -704,20 +709,20 @@ function compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,spec
         z_irank, r_irank = load_rank_data(fid_pdfs,printout=false)
         pdf = load_pdf_data(fid_pdfs, printout=false)
         # local local grid data on iblock=0
-        nz_local, _, z_local, z_wgts_local, Lz = load_coordinate_data(fid_pdfs, "z")
-        nr_local, _, r_local, r_wgts_local, Lr = load_coordinate_data(fid_pdfs, "r")
+        z = load_coordinate_data(fid_pdfs, "z")
+        r = load_coordinate_data(fid_pdfs, "r")
         close(fid_pdfs)
         imin_r = min(1,r_irank) + 1
         imin_z = min(1,z_irank) + 1
-        for it in 1:ntime, ir in imin_r:nr_local, iz in imin_z:nz_local,
-                ivperp in 1:nvperp, ivpa in 1:nvpa
+        for it in 1:ntime, ir in imin_r:r.n, iz in imin_z:z.n,
+                ivperp in 1:vperp.n, ivpa in 1:vpa.n
 
-            pdf_sym = dfni_func(vpa[ivpa],vperp[ivperp],z_local[iz],r_local[ir],time[it])
+            pdf_sym = dfni_func(vpa[ivpa],vperp[ivperp],z.grid[iz],r.grid[ir],time[it])
             pdf_norm[it] += (pdf[ivpa,ivperp,iz,ir,is,it] - pdf_sym)^2
         end
     end
     for it in 1:ntime
-        pdf_norm[it] = sqrt(pdf_norm[it]/(nr_global*nz_global*nvpa*nvperp))
+        pdf_norm[it] = sqrt(pdf_norm[it]/(r.n_global*z.n_global*vpa.n*vperp.n))
     end
     println("test: ",file_string,": ",spec_string," ",pdf_norm)
     @views plot(time, pdf_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=norm_label) #, yaxis=:log)
@@ -733,11 +738,11 @@ function compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,spec
         if (z_irank == 0 || z_irank == z_nrank - 1) && r_irank == 0
             pdf = load_pdf_data(fid_pdfs, printout=false)
             # local local grid data on iblock=0
-            nz_local, _, z_local, z_wgts_local, Lz = load_coordinate_data(fid_pdfs, "z")
-            nr_local, _, r_local, r_wgts_local, Lr = load_coordinate_data(fid_pdfs, "r")
+            z = load_coordinate_data(fid_pdfs, "z")
+            r = load_coordinate_data(fid_pdfs, "r")
             pdf_sym_array = copy(vpa)
             # plot a thermal vperp on line plots
-            ivperp0 = max(floor(mk_int,nvperp/3),1)
+            ivperp0 = max(floor(mk_int,vperp.n/3),1)
             # plot a typical r on line plots
             ir0 = 1
             # plot at the wall boundary 
@@ -745,11 +750,11 @@ function compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,spec
                 iz0 = 1
                 zlabel="wall-"
             elseif z_irank == z_nrank - 1
-                iz0 = nz_local
+                iz0 = z.n
                 zlabel="wall+"
             end
-            for ivpa in 1:nvpa
-                pdf_sym_array[ivpa] = dfni_func(vpa[ivpa],vperp[ivperp0],z_local[iz0],r_local[ir0],time[ntime])
+            for ivpa in 1:vpa.n
+                pdf_sym_array[ivpa] = dfni_func(vpa[ivpa],vperp[ivperp0],z.grid[iz0],r.grid[ir0],time[ntime])
             end
             # plot f(vpa,ivperp0,iz_wall,ir0,is,itime) at the wall
             @views plot(vpa, [pdf[:,ivperp0,iz0,ir0,is,ntime], pdf_sym_array], xlabel=L"v_{\|\|}/L_{v_{\|\|}}", ylabel=L"f_i", label=["num" "sym"])
@@ -767,12 +772,12 @@ function compare_neutral_pdf_symbolic_test(run_name,manufactured_solns_list,spec
     # load block data on iblock=0
     nblocks, iblock = load_block_data(fid, printout=false)
     # load global sizes of grids that are distributed in memory
-    nz_local, nz_global, z_local, z_wgts_local, Lz = load_coordinate_data(fid, "z", printout=false)
-    nr_local, nr_global, r_local, r_wgts_local, Lr = load_coordinate_data(fid, "r", printout=false)
+    z = load_coordinate_data(fid, "z", printout=false)
+    r = load_coordinate_data(fid, "r", printout=false)
     # velocity grid data on iblock=0 (same for all blocks)
-    nvz, _, vz, vz_wgts, Lvz = load_coordinate_data(fid, "vz", printout=false)
-    nvr, _, vr, vr_wgts, Lvr = load_coordinate_data(fid, "vr", printout=false)
-    nvzeta, _, vzeta, vzeta_wgts, Lvzeta = load_coordinate_data(fid, "vzeta", printout=false)
+    vz = load_coordinate_data(fid, "vz", printout=false)
+    vr = load_coordinate_data(fid, "vr", printout=false)
+    vzeta = load_coordinate_data(fid, "vzeta", printout=false)
     # load time data (unique to pdf, may differ to moment values depending on user nwrite_dfns value)
     ntime, time = load_time_data(fid, printout=false)
     close(fid)
@@ -786,20 +791,20 @@ function compare_neutral_pdf_symbolic_test(run_name,manufactured_solns_list,spec
         z_irank, r_irank = load_rank_data(fid_pdfs,printout=false)
         pdf = load_neutral_pdf_data(fid_pdfs, printout=false)
         # load local grid data
-        nz_local, _, z_local, z_wgts_local, Lz = load_coordinate_data(fid_pdfs, "z", printout=false)
-        nr_local, _, r_local, r_wgts_local, Lr = load_coordinate_data(fid_pdfs, "r", printout=false)
+        z = load_coordinate_data(fid_pdfs, "z", printout=false)
+        r = load_coordinate_data(fid_pdfs, "r", printout=false)
         close(fid_pdfs)
         imin_r = min(1,r_irank) + 1
         imin_z = min(1,z_irank) + 1
-        for it in 1:ntime, ir in imin_r:nr_local, iz in imin_z:nz_local,
-                ivzeta in 1:nvzeta, ivr in 1:nvr, ivz in 1:nvz
+        for it in 1:ntime, ir in imin_r:r.n, iz in imin_z:z.n,
+                ivzeta in 1:vzeta.n, ivr in 1:vr.n, ivz in 1:vz.n
 
-            pdf_sym = dfnn_func(vz[ivz],vr[ivr],vzeta[ivzeta],z_local[iz],r_local[ir],time[it])
+            pdf_sym = dfnn_func(vz[ivz],vr[ivr],vzeta[ivzeta],z.grid[iz],r.grid[ir],time[it])
             pdf_norm[it] += (pdf[ivz,ivr,ivzeta,iz,ir,is,it] - pdf_sym)^2
         end
     end
     for it in 1:ntime
-        pdf_norm[it] = sqrt(pdf_norm[it]/(nr_global*nz_global*nvz*nvr*nvzeta))
+        pdf_norm[it] = sqrt(pdf_norm[it]/(r.n_global*z.n_global*vz.n*vr.n*vzeta.n))
     end
     println("test: ",file_string,": ",spec_string," ",pdf_norm)
     @views plot(time, pdf_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=norm_label) #, yaxis=:log)
@@ -1858,8 +1863,8 @@ function plot_charged_pdf_2D_at_wall(run_name)
     # load block data on iblock=0
     nblocks, iblock = load_block_data(fid, printout=false)
     # velocity grid data on iblock=0 (same for all blocks)
-    nvpa, _, vpa, vpa_wgts, Lvpa = load_coordinate_data(fid, "vpa", printout=false)
-    nvperp, _, vperp, vperp_wgts, Lvperp = load_coordinate_data(fid, "vperp", printout=false)
+    vpa = load_coordinate_data(fid, "vpa", printout=false)
+    vperp = load_coordinate_data(fid, "vperp", printout=false)
     # load time data (unique to pdf, may differ to moment values depending on user nwrite_dfns value)
     ntime, time = load_time_data(fid, printout=false)
     # load species data 
@@ -1869,9 +1874,9 @@ function plot_charged_pdf_2D_at_wall(run_name)
     # plot only data at last timestep
     itime0 = ntime
     # plot a thermal vpa on line plots
-    ivpa0 = floor(mk_int,nvpa/3)
+    ivpa0 = floor(mk_int,vpa.n/3)
     # plot a thermal vperp on line plots
-    ivperp0 = max(1,floor(mk_int,nvperp/3))
+    ivperp0 = max(1,floor(mk_int,vperp.n/3))
     # plot a typical r on line plots
     ir0 = 1
     
@@ -1885,16 +1890,16 @@ function plot_charged_pdf_2D_at_wall(run_name)
         if (z_irank == 0 || z_irank == z_nrank-1) && r_irank == 0
             # plot data from lower wall boundary near z = -L/2
             # load local grid data
-            nz_local, _, z_local, z_wgts_local, Lz = load_coordinate_data(fid_pdfs, "z", printout=false)
-            nr_local, _, r_local, r_wgts_local, Lr = load_coordinate_data(fid_pdfs, "r", printout=false)
+            z = load_coordinate_data(fid_pdfs, "z", printout=false)
+            r = load_coordinate_data(fid_pdfs, "r", printout=false)
             
             if z_irank == 0 
                 iz_wall = 1
-                #print("z_local[iz_wall-]: ",z_local[iz_wall])
+                #print("z.grid[iz_wall-]: ",z.grid[iz_wall])
                 zlabel = "wall-"
             elseif z_irank == z_nrank-1
-                iz_wall = nz_local
-                #print("z_local[iz_wall+]: ",z_local[iz_wall])
+                iz_wall = z.n
+                #print("z.grid[iz_wall+]: ",z.grid[iz_wall])
                 zlabel = "wall+"
             end
             # load local pdf data 
@@ -1903,25 +1908,25 @@ function plot_charged_pdf_2D_at_wall(run_name)
                 description = "_ion_spec"*string(is)*"_"
                 
                 # plot f(vpa,ivperp0,iz_wall,ir0,is,itime) at the wall
-                @views plot(vpa, pdf[:,ivperp0,iz_wall,ir0,is,itime0], xlabel=L"v_{\|\|}/L_{v_{\|\|}}", ylabel=L"f_i")
+                @views plot(vpa.grid, pdf[:,ivperp0,iz_wall,ir0,is,itime0], xlabel=L"v_{\|\|}/L_{v_{\|\|}}", ylabel=L"f_i")
                 outfile = string(run_name, "_pdf(vpa,vperp0,iz_"*zlabel*",ir0)"*description*"_vs_vpa.pdf")
                 savefig(outfile) 
                 
                 # plot f(vpa,vperp,iz_wall,ir0,is,itime) at the wall                
-                @views heatmap(vperp, vpa, pdf[:,:,iz_wall,ir0,is,itime0], xlabel=L"vperp", ylabel=L"vpa", c = :deep, interpolation = :cubic,
+                @views heatmap(vperp.grid, vpa.grid, pdf[:,:,iz_wall,ir0,is,itime0], xlabel=L"vperp", ylabel=L"vpa", c = :deep, interpolation = :cubic,
                 windowsize = (360,240), margin = 15pt)
                 outfile = string(run_name, "_pdf(vpa,vperp,iz_"*zlabel*",ir0)"*description*"_vs_vperp_vpa.pdf")
                 savefig(outfile)
                 
                 # plot f(vpa,ivperp0,z,ir0,is,itime) near the wall                
-                @views heatmap(z_local, vpa, pdf[:,ivperp0,:,ir0,is,itime0], xlabel=L"z", ylabel=L"vpa", c = :deep, interpolation = :cubic,
+                @views heatmap(z.grid, vpa.grid, pdf[:,ivperp0,:,ir0,is,itime0], xlabel=L"z", ylabel=L"vpa", c = :deep, interpolation = :cubic,
                 windowsize = (360,240), margin = 15pt)
                 outfile = string(run_name, "_pdf(vpa,ivperp0,z_"*zlabel*",ir0)"*description*"_vs_z_vpa.pdf")
                 savefig(outfile)
 
                 # plot f(ivpa0,ivperp0,z,r,is,itime) near the wall                  
-                if nr_local > 1
-                    @views heatmap(r_local, z_local, pdf[ivpa0,ivperp0,:,:,is,itime0], xlabel=L"r", ylabel=L"z", c = :deep, interpolation = :cubic,
+                if r.n > 1
+                    @views heatmap(r.grid, z.grid, pdf[ivpa0,ivperp0,:,:,is,itime0], xlabel=L"r", ylabel=L"z", c = :deep, interpolation = :cubic,
                     windowsize = (360,240), margin = 15pt)
                     outfile = string(run_name, "_pdf(ivpa0,ivperp0,z_"*zlabel*",r)"*description*"_vs_r_z.pdf")
                     savefig(outfile)

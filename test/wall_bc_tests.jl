@@ -15,7 +15,7 @@ using moment_kinetics.interpolation: interpolate_to_grid_z
 using moment_kinetics.load_data: open_readonly_output_file
 using moment_kinetics.load_data: load_fields_data,
                                  load_pdf_data, load_time_data,
-                                 load_species_data, load_coordinate_data
+                                 load_species_data
 
 # Create a temporary directory for test output
 test_output_directory = tempname()
@@ -154,9 +154,7 @@ function run_test(test_input, expected_phi, tolerance; args...)
             # open the netcdf file and give it the handle 'fid'
             fid = open_readonly_output_file(path,"moments")
 
-            # load space-time coordinate data
-            nz, nz_global, z, z_wgts, Lz = load_coordinate_data(fid, "z")
-            nr, nr_global, r, r_wgts, Lr = load_coordinate_data(fid, "r")
+            # load species, time coordinate data
             n_ion_species, n_neutral_species = load_species_data(fid)
             ntime, time = load_time_data(fid)
             n_ion_species, n_neutral_species = load_species_data(fid)
