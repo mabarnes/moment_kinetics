@@ -384,7 +384,7 @@ function init_vth!(vth, z, r, spec, n_species)
                 @. vth[:,ir,is] +=
                 (spec[is].initial_temperature
                  * spec[is].r_IC.temperature_amplitude
-                 * cos(2.0*π*spec[is].z_IC.wavenumber*z.grid/z.L +
+                 * cos(2.0*π*(spec[is].z_IC.wavenumber*z.grid/z.L + r.grid[ir]/r.L) +
                        spec[is].r_IC.temperature_phase))
             else
                 @. vth[:,ir,is] =  spec[is].initial_temperature
@@ -399,6 +399,8 @@ function init_vth!(vth, z, r, spec, n_species)
                      * spec[is].r_IC.temperature_amplitude
                      * cos(2.0*π*spec[is].r_IC.wavenumber*r.grid/r.L +
                            spec[is].r_IC.temperature_phase))
+                elseif spec[is].r_IC.initialization_option == "2D-instability-test"
+                    # do nothing here
                 end
             end
         end
@@ -441,7 +443,7 @@ function init_density!(dens, z, r, spec, n_species)
                 @. dens[:,ir,is] +=
                 (spec[is].initial_density
                  * spec[is].r_IC.density_amplitude
-                 * cos(2.0*π*spec[is].z_IC.wavenumber*z.grid/z.L +
+                 * cos(2.0*π*(spec[is].z_IC.wavenumber*z.grid/z.L + r.grid[ir]/r.L) +
                        spec[is].r_IC.density_phase))
             elseif spec[is].z_IC.initialization_option == "monomial"
                 # linear variation in z, with offset so that
@@ -460,6 +462,8 @@ function init_density!(dens, z, r, spec, n_species)
                         (spec[is].r_IC.density_amplitude
                          * cos(2.0*π*spec[is].r_IC.wavenumber*r.grid/r.L
                                + spec[is].r_IC.density_phase))
+                elseif spec[is].r_IC.initialization_option == "2D-instability-test"
+                    # do nothing here
                 elseif spec[is].r_IC.initialization_option == "monomial"
                     # linear variation in r, with offset so that
                     # function passes through zero at upwind boundary
