@@ -83,7 +83,11 @@ function load_variable(file_or_group::NCDataset, name::String)
     # This overload deals with cases where fid is a NetCDF `Dataset` (which could be a
     # file or a group).
     try
-        return file_or_group[name].var[:]
+        if size(file_or_group[name].var) == ()
+            return file_or_group[name].var[]
+        else
+            return file_or_group[name].var[:]
+        end
     catch
         println("An error occured while loading $name")
         rethrow()
