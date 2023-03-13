@@ -110,6 +110,7 @@ const plot_wall_parallel_temperature_vs_r = true # plot last timestep parallel_t
 const plot_parallel_temperature_vs_r_z = true
 const animate_parallel_temperature_vs_r_z = true
 const plot_wall_pdf = true # plot last time step ion distribution function at the wall and in the element nearest the wall 
+const instability2D = false # run analysis for a 2D (in R-Z) linear mode
 const nwrite_movie = 1
 # itime_min is the minimum time index at which to start animations of the moments
 const itime_min = -1
@@ -168,8 +169,8 @@ pp = pp_input(calculate_frequencies, plot_phi0_vs_t, plot_phi_vs_z_t, animate_ph
     plot_parallel_pressure_vs_r_z, animate_parallel_pressure_vs_r_z,
     plot_parallel_temperature_vs_r0_z, plot_wall_parallel_temperature_vs_r,
     plot_parallel_temperature_vs_r_z, animate_parallel_temperature_vs_r_z, plot_wall_pdf,
-    nwrite_movie, itime_min, itime_max, itime_skip, nwrite_movie_pdfs, itime_min_pdfs,
-    itime_max_pdfs, itime_skip_pdfs, ivpa0, ivperp0, iz0, ir0, ivz0, ivr0, ivzeta0,
-    diagnostics_chodura)
+    instability2D, nwrite_movie, itime_min, itime_max, itime_skip, nwrite_movie_pdfs,
+    itime_min_pdfs, itime_max_pdfs, itime_skip_pdfs, ivpa0, ivperp0, iz0, ir0, ivz0, ivr0,
+    ivzeta0, diagnostics_chodura)
 
 end

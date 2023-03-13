@@ -44,7 +44,7 @@ using ..load_data: load_variable
 using ..load_data: load_coordinate_data, load_block_data, load_rank_data,
                    load_species_data, load_mk_options
 using ..analysis: analyze_fields_data, analyze_moments_data, analyze_pdf_data,
-                  check_Chodura_condition
+                  check_Chodura_condition, analyze_2D_instability
 using ..velocity_moments: integrate_over_vspace
 using ..manufactured_solns: manufactured_solutions, manufactured_electric_fields
 using ..moment_kinetics_input: mk_input, get
@@ -944,6 +944,8 @@ function analyze_and_plot_data(prefix...)
     density = density[1]
     parallel_flow = parallel_flow[1]
     parallel_pressure = parallel_pressure[1]
+    parallel_heat_flux = parallel_heat_flux[1]
+    thermal_speed = thermal_speed[1]
     time = time[1]
     ntime = ntime[1]
     time_pdfs = time_pdfs[1]
@@ -953,6 +955,8 @@ function analyze_and_plot_data(prefix...)
     r = r[1]
     z_global = z_global[1]
     r_global = r_global[1]
+    z_global_spectral = z_global_spectral[1]
+    r_global_spectral = r_global_spectral[1]
     n_ion_species = n_ion_species[1]
     n_neutral_species = n_neutral_species[1]
     run_name = run_names[1]
@@ -996,6 +1000,56 @@ function analyze_and_plot_data(prefix...)
         if pp.plot_wall_pdf
             plot_charged_pdf_2D_at_wall(run_name)
         end
+    end
+
+    if pp.instability2D
+        phi_perturbation, density_perturbation, temperature_perturbation, phi_Fourier,
+        density_Fourier, temperature_Fourier =
+            analyze_2D_instability(phi, density, thermal_speed, r_global, z_global,
+                                   r_global_spectral, z_global_spectral)
+
+        n_kz, n_kr, nt = size(phi_Fourier)
+
+        cmlog(cmlin::ColorGradient) = RGB[cmlin[x] for x=LinRange(0,1,30)]
+        logdeep = cgrad(:deep, scale=:log) |> cmlog
+        function plot_Fourier_2D(var, symbol, name)
+            plot(title="$symbol Fourier components", xlabel="time", ylabel="amplitude",
+                 legend=false, yscale=:log)
+            for ikr ∈ 1:n_kr, ikz ∈ 1:n_kz
+                ikr!=2 && continue
+                data = abs.(var[ikz,ikr,:])
+                data[data.==0.0] .= NaN
+                plot!(time, data, annotations=(time[end], data[end], "ikr=$ikr, ikz=$ikz"),
+                      annotationhalign=:right, annotationfontsize=6)
+            end
+            outfile = string(run_name, "_$(name)_Fourier_components.pdf")
+            trysavefig(outfile)
+
+            # make a gif animation of Fourier components
+            anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+                @views heatmap(log.(abs.(var[:,:,i])), xlabel="kr", ylabel="kz",
+                               title=symbol, fillcolor = logdeep)
+            end
+            outfile = string(run_name, "_$(name)_Fourier.gif")
+            trygif(anim, outfile, fps=5)
+        end
+        plot_Fourier_2D(phi_Fourier, "ϕ", "phi")
+        plot_Fourier_2D(density_Fourier, "n", "density")
+        plot_Fourier_2D(temperature_Fourier, "T", "temperature")
+
+        function animate_perturbation(var, name)
+            # make a gif animation of perturbation
+            anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+                @views heatmap(r_global.grid, z_global.grid, var[:,:,i], xlabel="r",
+                               ylabel="z", fillcolor = :deep)
+            end
+            outfile = string(run_name, "_$name_perturbation.gif")
+            trygif(anim, outfile, fps=5)
+        end
+        animate_perturbation(phi_perturbation, "phi")
+        animate_perturbation(density_perturbation, "density")
+        animate_perturbation(temperature_perturbation, "temperature")
+
     end
 
     manufactured_solns_section = get(scan_input, "manufactured_solns", Dict{String,Any}())
