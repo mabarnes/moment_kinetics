@@ -36,7 +36,7 @@ using ..load_data: load_neutral_pdf_data
 using ..load_data: load_variable
 using ..load_data: load_coordinate_data, load_block_data, load_rank_data, load_species_data
 using ..analysis: analyze_fields_data, analyze_moments_data, analyze_pdf_data,
-                  check_Chodura_condition
+                  check_Chodura_condition, analyze_2D_instability
 using ..velocity_moments: integrate_over_vspace
 using ..manufactured_solns: manufactured_solutions, manufactured_electric_fields
 using ..moment_kinetics_input: mk_input, get
@@ -389,6 +389,63 @@ function analyze_and_plot_data(path)
         phi_fldline_avg, delta_phi = analyze_fields_data(phi[iz0,:,:], ntime, nr, r_wgts, r.L)
         plot_fields_rt(phi[iz0,:,:], delta_phi, time, itime_min, itime_max, nwrite_movie,
         r, ir0, run_name, delta_phi, pp)
+    end
+
+    if pp.instability2D
+        phi_perturbation, density_perturbation, temperature_perturbation, phi_Fourier,
+        density_Fourier, temperature_Fourier =
+            analyze_2D_instability(phi, density, thermal_speed, r, z)
+
+        # make a gif animation of phi_perturbation
+        anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+            @views heatmap(r_grid, z_grid, phi_perturbation[:,:,i], xlabel="r", ylabel="z", fillcolor = :deep)
+        end
+        outfile = string(run_name, "_phi_perturbation.gif")
+        gif(anim, outfile, fps=5)
+
+        # make a gif animation of density_perturbation
+        anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+            @views heatmap(r_grid, z_grid, density_perturbation[:,:,i], xlabel="r", ylabel="z", fillcolor = :deep)
+        end
+        outfile = string(run_name, "_density_perturbation.gif")
+        gif(anim, outfile, fps=5)
+
+        # make a gif animation of temperature_perturbation
+        anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+            @views heatmap(r_grid, z_grid, temperature_perturbation[:,:,i], xlabel="r", ylabel="z", fillcolor = :deep)
+        end
+        outfile = string(run_name, "_temperature_perturbation.gif")
+        gif(anim, outfile, fps=5)
+
+        n_kz, n_kr, nt = size(phi_Fourier)
+
+        plot(title="ϕ Fourier components", xlabel="time", ylabel="amplitude",
+             legend=false, yscale=:log)
+        for ikr ∈ 1:n_kr, ikz ∈ 1:n_kz
+            data = abs.(phi_Fourier[ikz,ikr,:])
+            plot!(time, data, annotations=(time[end], data[end], "ikr=$ikr, ikz=$ikz"),
+                  annotationhalign=:right)
+        end
+        outfile = string(run_name, "_phi_Fourier_components.pdf")
+        savefig(outfile)
+
+        plot(title="n Fourier components", xlabel="time", ylabel="amplitude",
+             legend=false, yscale=:log)
+        for ikr ∈ 1:n_kr, ikz ∈ 1:n_kz
+            data = abs.(density_Fourier[ikz,ikr,:])
+            plot!(time, data, annotations=(time[end], data[end], "ikr=$ikr, ikz=$ikz"))
+        end
+        outfile = string(run_name, "_density_Fourier_components.pdf")
+        savefig(outfile)
+
+        plot(title="T Fourier components", xlabel="time", ylabel="amplitude",
+             legend=false, yscale=:log)
+        for ikr ∈ 1:n_kr, ikz ∈ 1:n_kz
+            data = abs.(temperature_Fourier[ikz,ikr,:])
+            plot!(time, data, annotations=(time[end], data[end], "ikr=$ikr, ikz=$ikz"))
+        end
+        outfile = string(run_name, "_temperature_Fourier_components.pdf")
+        savefig(outfile)
     end
     
     diagnostics_chodura = false

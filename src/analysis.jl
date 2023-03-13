@@ -8,8 +8,13 @@ export analyze_pdf_data
 
 using ..array_allocation: allocate_float
 using ..calculus: integral
+using ..chebyshev: setup_chebyshev_pseudospectral, chebyshev_derivative!
+using ..interpolation: interpolate_to_grid_1d
 using ..load_data: open_readonly_output_file, get_nranks, load_pdf_data, load_rank_data
 using ..velocity_moments: integrate_over_vspace
+
+using FFTW
+using Statistics
 
 """
 """
@@ -270,6 +275,91 @@ end
 """
 function field_line_average(fld, wgts, L)
     return integral(fld, wgts)/L
+end
+
+"""
+"""
+function analyze_2D_instability(phi, density, thermal_speed, r, z)
+    if z.discretization == "chebyshev_pseudospectral"
+        # create arrays needed for explicit Chebyshev pseudospectral treatment in vpa
+        # and create the plans for the forward and backward fast Chebyshev transforms
+        z_spectral = setup_chebyshev_pseudospectral(z)
+        # obtain the local derivatives of the uniform z-grid with respect to the used z-grid
+        chebyshev_derivative!(z.duniform_dgrid, z.uniform_grid, z_spectral, z)
+    else
+        # create dummy Bool variable to return in place of the above struct
+        z_spectral = false
+        z.duniform_dgrid .= 1.0
+    end
+
+    if r.discretization == "chebyshev_pseudospectral" && r.n > 1
+        # create arrays needed for explicit Chebyshev pseudospectral treatment in vpa
+        # and create the plans for the forward and backward fast Chebyshev transforms
+        r_spectral = setup_chebyshev_pseudospectral(r)
+        # obtain the local derivatives of the uniform r-grid with respect to the used r-grid
+        chebyshev_derivative!(r.duniform_dgrid, r.uniform_grid, r_spectral, r)
+    else
+        # create dummy Bool variable to return in place of the above struct
+        r_spectral = false
+        r.duniform_dgrid .= 1.0
+    end
+
+    # Assume there is only one species for this test
+    density = density[:,:,1,:]
+    thermal_speed = thermal_speed[:,:,1,:]
+
+    # NB normalisation removes the factor of 1/2
+    temperature = thermal_speed.^2
+
+    # Get background as r-average of initial condition, as the initial perturbation varies
+    # sinusoidally in r
+    background_phi = @views mean(phi[:,:,1], dims=2)
+    background_density = @views mean(density[:,:,1], dims=2)
+    background_temperature = @views mean(temperature[:,:,1], dims=2)
+
+    phi_perturbation = phi .- background_phi
+    density_perturbation = density .- background_density
+    temperature_perturbation = temperature .- background_temperature
+
+    nt = size(phi, 3)
+
+    function get_Fourier_modes(non_uniform_data, r, r_spectral, z, z_spectral)
+
+        uniform_points_per_element_r = r.ngrid ÷ 4
+        n_uniform_r = r.nelement_global * uniform_points_per_element_r
+        uniform_spacing_r = r.L / n_uniform_r
+        uniform_grid_r = collect(1:n_uniform_r).*uniform_spacing_r .+ 0.5.*uniform_spacing_r .- 0.5.*r.L
+
+        uniform_points_per_element_z = z.ngrid ÷ 4
+        n_uniform_z = z.nelement_global * uniform_points_per_element_z
+        uniform_spacing_z = z.L / n_uniform_z
+        uniform_grid_z = collect(1:n_uniform_z).*uniform_spacing_z .+ 0.5.*uniform_spacing_z .- 0.5.*z.L
+
+        intermediate = allocate_float(n_uniform_z, r.n, nt)
+        for it ∈ 1:nt, ir ∈ 1:r.n
+            @views intermediate[:,ir,it] =
+                interpolate_to_grid_1d(uniform_grid_z, non_uniform_data[:,ir,it], z,
+                                       z_spectral)
+        end
+
+        uniform_data = allocate_float(n_uniform_z, n_uniform_r, nt)
+        for it ∈ 1:nt, iz ∈ 1:n_uniform_z
+            @views uniform_data[iz,:,it] =
+                interpolate_to_grid_1d(uniform_grid_r, non_uniform_data[iz,:,it], r,
+                                       r_spectral)
+        end
+
+        fourier_data = fft(uniform_data, (1,2))
+
+        return fourier_data
+    end
+
+    phi_Fourier = get_Fourier_modes(phi, r, r_spectral, z, z_spectral)
+    density_Fourier = get_Fourier_modes(density, r, r_spectral, z, z_spectral)
+    temperature_Fourier = get_Fourier_modes(temperature, r, r_spectral, z, z_spectral)
+
+    return phi_perturbation, density_perturbation, temperature_perturbation,
+           phi_Fourier, density_Fourier, temperature_Fourier
 end
 
 end
