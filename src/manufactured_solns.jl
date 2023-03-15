@@ -32,29 +32,29 @@ using IfElse
     end
 
     #standard functions for building densities
-    function nplus_sym(Lr,Lz,r_bc,z_bc,epsilon)
+    function nplus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha)
         if r_bc == "periodic"
-            nplus = exp(sqrt(epsilon + 0.5 - z/Lz))*(1.0 + 0.05*sin(2.0*pi*r/Lr)*cos(pi*z/Lz))
+            nplus = exp(sqrt(epsilon + 0.5 - z/Lz)) * exp(1.0 + 0.05*sin(2.0*pi*r/Lr)*((1.0 - alpha)*cos(pi*z/Lz) + alpha))
         elseif r_bc == "Dirichlet"
-            nplus = 1.0 - 0.2*r/Lr 
+            nplus = exp(1.0 - 0.2*r/Lr) 
         end
         return nplus
     end
     
-    function nminus_sym(Lr,Lz,r_bc,z_bc,epsilon)
+    function nminus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha)
         if r_bc == "periodic"
-            nminus = exp(sqrt(epsilon + 0.5 + z/Lz))*(1.0 + 0.05*sin(2.0*pi*r/Lr)*cos(pi*z/Lz))
+            nminus = exp(sqrt(epsilon + 0.5 + z/Lz)) * exp(1.0 + 0.05*sin(2.0*pi*r/Lr)*((1.0 - alpha)*cos(pi*z/Lz) + alpha))
         elseif r_bc == "Dirichlet"
-            nminus = 1.0 - 0.2*r/Lr
+            nminus = exp(1.0 - 0.2*r/Lr)
         end
         return nminus
     end
     
-    function nzero_sym(Lr,Lz,r_bc,z_bc)
+    function nzero_sym(Lr,Lz,r_bc,z_bc,alpha)
         if r_bc == "periodic"
-            nzero = 1.0 + 0.05*sin(2.0*pi*r/Lr)*cos(pi*z/Lz) # 1.0 #+ (r/Lr + 0.5)*(0.5 - r/Lr)
+            nzero = exp(1.0 + 0.05*sin(2.0*pi*r/Lr)*((1.0 - alpha)*cos(pi*z/Lz) + alpha))
         elseif r_bc == "Dirichlet" 
-            nzero = 1.0 - 0.2*r/Lr
+            nzero = exp(1.0 - 0.2*r/Lr)
         end
         return nzero
     end
@@ -88,8 +88,9 @@ using IfElse
             Bzed = geometry.Bzed
             Bmag = geometry.Bmag
             epsilon = composition.epsilon_offset
-            Gamma_minus = fluxconst*(Bzed/Bmag)*nminus_sym(Lr,Lz,r_bc,z_bc,epsilon)/sqrt(pi)
-            Gamma_plus = fluxconst*(Bzed/Bmag)*nplus_sym(Lr,Lz,r_bc,z_bc,epsilon)/sqrt(pi)
+            alpha = composition.alpha_switch
+            Gamma_minus = fluxconst*(Bzed/Bmag)*nminus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha)/sqrt(pi)
+            Gamma_plus = fluxconst*(Bzed/Bmag)*nplus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha)/sqrt(pi)
             # exact integral of corresponding dfnn below
             if composition.use_test_neutral_wall_pdf
                 #test 
@@ -117,8 +118,9 @@ using IfElse
             Bzed = geometry.Bzed
             Bmag = geometry.Bmag
             epsilon = composition.epsilon_offset
-            Gamma_minus = fluxconst*(Bzed/Bmag)*nminus_sym(Lr,Lz,r_bc,z_bc,epsilon)/sqrt(pi)
-            Gamma_plus = fluxconst*(Bzed/Bmag)*nplus_sym(Lr,Lz,r_bc,z_bc,epsilon)/sqrt(pi)
+            alpha = composition.alpha_switch
+            Gamma_minus = fluxconst*(Bzed/Bmag)*nminus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha)/sqrt(pi)
+            Gamma_plus = fluxconst*(Bzed/Bmag)*nplus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha)/sqrt(pi)
             dfnn = Hplus *( Gamma_minus*( 0.5 - z/Lz)^2 + 1.0 )*FKw + Hminus*( Gamma_plus*( 0.5 + z/Lz)^2 + 1.0 )*FKw 
         end
         return dfnn
@@ -143,7 +145,8 @@ using IfElse
             end
         elseif z_bc == "wall"
             epsilon = composition.epsilon_offset
-            densi = nconst*(0.5 - z/Lz)*nminus_sym(Lr,Lz,r_bc,z_bc,epsilon) + nconst*(z/Lz + 0.5)*nplus_sym(Lr,Lz,r_bc,z_bc,epsilon) + (z/Lz + 0.5)*(0.5 - z/Lz)*nzero_sym(Lr,Lz,r_bc,z_bc)  #+  0.5*(r/Lr + 0.5) + 0.5*(z/Lz + 0.5)
+            alpha = composition.alpha_switch
+             densi = nconst*(0.5 - z/Lz)*nminus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha) + nconst*(z/Lz + 0.5)*nplus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha) + (z/Lz + 0.5)*(0.5 - z/Lz)*nzero_sym(Lr,Lz,r_bc,z_bc,alpha)  #+  0.5*(r/Lr + 0.5) + 0.5*(z/Lz + 0.5)
         end
         return densi
     end
@@ -154,7 +157,8 @@ using IfElse
         elseif z_bc == "wall"
             #appropriate for wall bc test when Er = 0 (nr == 1)
             epsilon = composition.epsilon_offset
-            jpari_into_LHS_wall_sym = -fluxconst*nminus_sym(Lr,Lz,r_bc,z_bc,epsilon)/sqrt(pi)
+            alpha = composition.alpha_switch
+            jpari_into_LHS_wall_sym = -fluxconst*nminus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha)/sqrt(pi)
         end
         return jpari_into_LHS_wall_sym
     end
@@ -171,19 +175,15 @@ using IfElse
         Bmag = geometry.Bmag
         rhostar = geometry.rhostar
         epsilon = composition.epsilon_offset
-        use_vpabar = composition.use_vpabar_in_mms_dfni
+        alpha = composition.alpha_switch
         if z_bc == "periodic"
             dfni = densi * exp( - vpa^2 - vperp^2) 
         elseif z_bc == "wall"
-            if use_vpabar  
-                vpabar = vpa - (rhostar/2.0)*(Bmag/Bzed)*Er # effective velocity in z direction * (Bmag/Bzed)
-            else 
-                vpabar = vpa
-            end 
+            vpabar = vpa - alpha*(rhostar/2.0)*(Bmag/Bzed)*Er # for alpha = 1.0, effective velocity in z direction * (Bmag/Bzed)
             Hplus = 0.5*(sign(vpabar) + 1.0)
             Hminus = 0.5*(sign(-vpabar) + 1.0)
             ffa =  exp(- vperp^2)
-            dfni = ffa * ( nminus_sym(Lr,Lz,r_bc,z_bc,epsilon)* (0.5 - z/Lz) * Hminus * vpabar^pvpa + nplus_sym(Lr,Lz,r_bc,z_bc,epsilon)*(z/Lz + 0.5) * Hplus * vpabar^pvpa + nzero_sym(Lr,Lz,r_bc,z_bc)*(z/Lz + 0.5)*(0.5 - z/Lz) ) * exp( - vpabar^2 )
+            dfni = ffa * ( nminus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha)* (0.5 - z/Lz) * Hminus * vpabar^pvpa + nplus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha)*(z/Lz + 0.5) * Hplus * vpabar^pvpa + nzero_sym(Lr,Lz,r_bc,z_bc,alpha)*(z/Lz + 0.5)*(0.5 - z/Lz) ) * exp( - vpabar^2 )
         end
         return dfni
     end

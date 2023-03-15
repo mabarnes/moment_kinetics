@@ -247,13 +247,18 @@ function get_geometry_and_composition(scan_input,n_ion_species,n_neutral_species
     epsilon_offset = get(scan_input, "epsilon_offset", 0.001)
     # bool to control if dfni is a function of vpa or vpabar in MMS test 
     use_vpabar_in_mms_dfni = get(scan_input, "use_vpabar_in_mms_dfni", true)
+    if use_vpabar_in_mms_dfni
+        alpha_switch = 1.0
+    else
+        alpha_switch = 0.0
+    end
     # ratio of the neutral particle mass to the ion particle mass
     mn_over_mi = 1.0
     # ratio of the electron particle mass to the ion particle mass
     me_over_mi = 1.0/1836.0
     composition = species_composition(n_species, n_ion_species, n_neutral_species,
         electron_physics, use_test_neutral_wall_pdf, 1:n_ion_species, n_ion_species+1:n_species, T_e, T_wall,
-        phi_wall, Er_constant, epsilon_offset, use_vpabar_in_mms_dfni, mn_over_mi, me_over_mi, allocate_float(n_species))
+        phi_wall, Er_constant, epsilon_offset, use_vpabar_in_mms_dfni, alpha_switch, mn_over_mi, me_over_mi, allocate_float(n_species))
     return geometry, composition
 
 end
