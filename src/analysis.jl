@@ -304,6 +304,8 @@ function analyze_2D_instability(phi, density, thermal_speed, r, z)
         r.duniform_dgrid .= 1.0
     end
 
+    nt = size(phi, 3)
+
     # Assume there is only one species for this test
     density = density[:,:,1,:]
     thermal_speed = thermal_speed[:,:,1,:]
@@ -313,9 +315,9 @@ function analyze_2D_instability(phi, density, thermal_speed, r, z)
 
     # Get background as r-average of initial condition, as the initial perturbation varies
     # sinusoidally in r
-    background_phi = @views mean(phi[:,:,1], dims=2)
-    background_density = @views mean(density[:,:,1], dims=2)
-    background_temperature = @views mean(temperature[:,:,1], dims=2)
+    background_phi = reshape(mean(phi, dims=2), (z.n, 1, nt))
+    background_density = reshape(mean(density, dims=2), (z.n, 1, nt))
+    background_temperature = reshape(mean(temperature, dims=2), (z.n, 1, nt))
 
     phi_perturbation = phi .- background_phi
     density_perturbation = density .- background_density
