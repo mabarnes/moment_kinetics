@@ -330,12 +330,12 @@ function analyze_2D_instability(phi, density, thermal_speed, r, z)
         uniform_points_per_element_r = r.ngrid ÷ 4
         n_uniform_r = r.nelement_global * uniform_points_per_element_r
         uniform_spacing_r = r.L / n_uniform_r
-        uniform_grid_r = collect(1:n_uniform_r).*uniform_spacing_r .+ 0.5.*uniform_spacing_r .- 0.5.*r.L
+        uniform_grid_r = collect(0:(n_uniform_r-1)).*uniform_spacing_r .+ 0.5.*uniform_spacing_r .- 0.5.*r.L
 
         uniform_points_per_element_z = z.ngrid ÷ 4
         n_uniform_z = z.nelement_global * uniform_points_per_element_z
         uniform_spacing_z = z.L / n_uniform_z
-        uniform_grid_z = collect(1:n_uniform_z).*uniform_spacing_z .+ 0.5.*uniform_spacing_z .- 0.5.*z.L
+        uniform_grid_z = collect(0:(n_uniform_z-1)).*uniform_spacing_z .+ 0.5.*uniform_spacing_z .- 0.5.*z.L
 
         intermediate = allocate_float(n_uniform_z, r.n, nt)
         for it ∈ 1:nt, ir ∈ 1:r.n
@@ -347,7 +347,7 @@ function analyze_2D_instability(phi, density, thermal_speed, r, z)
         uniform_data = allocate_float(n_uniform_z, n_uniform_r, nt)
         for it ∈ 1:nt, iz ∈ 1:n_uniform_z
             @views uniform_data[iz,:,it] =
-                interpolate_to_grid_1d(uniform_grid_r, non_uniform_data[iz,:,it], r,
+                interpolate_to_grid_1d(uniform_grid_r, intermediate[iz,:,it], r,
                                        r_spectral)
         end
 
