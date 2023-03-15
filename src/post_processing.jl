@@ -423,6 +423,7 @@ function analyze_and_plot_data(path)
              legend=false, yscale=:log)
         for ikr ∈ 1:n_kr, ikz ∈ 1:n_kz
             data = abs.(phi_Fourier[ikz,ikr,:])
+            data[data.==0.0] .= NaN
             plot!(time, data, annotations=(time[end], data[end], "ikr=$ikr, ikz=$ikz"),
                   annotationhalign=:right)
         end
@@ -433,7 +434,9 @@ function analyze_and_plot_data(path)
              legend=false, yscale=:log)
         for ikr ∈ 1:n_kr, ikz ∈ 1:n_kz
             data = abs.(density_Fourier[ikz,ikr,:])
-            plot!(time, data, annotations=(time[end], data[end], "ikr=$ikr, ikz=$ikz"))
+            data[data.==0.0] .= NaN
+            plot!(time, data, annotations=(time[end], data[end], "ikr=$ikr, ikz=$ikz"),
+                  annotationhalign=:right)
         end
         outfile = string(run_name, "_density_Fourier_components.pdf")
         savefig(outfile)
@@ -442,7 +445,9 @@ function analyze_and_plot_data(path)
              legend=false, yscale=:log)
         for ikr ∈ 1:n_kr, ikz ∈ 1:n_kz
             data = abs.(temperature_Fourier[ikz,ikr,:])
-            plot!(time, data, annotations=(time[end], data[end], "ikr=$ikr, ikz=$ikz"))
+            data[data.==0.0] .= NaN
+            plot!(time, data, annotations=(time[end], data[end], "ikr=$ikr, ikz=$ikz"),
+                  annotationhalign=:right)
         end
         outfile = string(run_name, "_temperature_Fourier_components.pdf")
         savefig(outfile)
