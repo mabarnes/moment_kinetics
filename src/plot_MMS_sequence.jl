@@ -89,7 +89,35 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
             if nelement == r_nelement
                 nelement_sequence[isim] = nelement
             else 
-                println("ERROR: scan_type = ",scan_type," requires z & r elements equal in all dimensions")
+                println("ERROR: scan_type = ",scan_type," requires z & r elements equal")
+            end
+        elseif scan_type == "vpazr_nelement0.25"
+            nelement = z_nelement
+            if nelement*4 == vpa_nelement && nelement == r_nelement
+                nelement_sequence[isim] = nelement
+            else 
+                println("ERROR: scan_type = ",scan_type," requires vpa_nelement = z_nelement*4 = r_nelement*4")
+            end
+        elseif scan_type == "vpaz_nelement4"
+            nelement = z_nelement
+            if nelement/4 == vpa_nelement
+                nelement_sequence[isim] = nelement
+            else 
+                println("ERROR: scan_type = ",scan_type," requires vpa_nelement = z_nelement/4")
+            end
+        elseif scan_type == "vpaz_nelement"
+            nelement = z_nelement
+            if nelement == vpa_nelement
+                nelement_sequence[isim] = nelement
+            else 
+                println("ERROR: scan_type = ",scan_type," requires vpa & z elements equal")
+            end
+        elseif scan_type == "vpazr_nelement"
+            nelement = z_nelement
+            if nelement == r_nelement && nelement == vpa_nelement
+                nelement_sequence[isim] = nelement
+            else 
+                println("ERROR: scan_type = ",scan_type," requires vpa & z & r elements equal")
             end
         else 
             println("ERROR: scan_type = ",scan_type," is unsupported")
@@ -273,9 +301,13 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         xlabel = L"z"*" "*L"N_{element}"
     elseif scan_type == "zr_nelement"
         xlabel = L"z "*" & "*L"r "*" "*L"N_{element}"
+    elseif scan_type == "vpazr_nelement0.25"
+        xlabel = L"N_{element}(z) = N_{element}(r) = N_{element}(v_{||})/4"
+    elseif scan_type == "vpaz_nelement4"
+        xlabel = L"N_{element}(z) = 4 N_{element}(v_{||})"
     elseif scan_type == "velocity_nelement"
         xlabel = L"N_{element}"
-    elseif scan_type == "nelement"
+    elseif scan_type == "nelement" || scan_type == "vpazr_nelement" || scan_type == "vpaz_nelement"
         xlabel = L"N_{element}"
     else 
         println("ERROR: scan_type = ",scan_type," is unsupported")
@@ -289,16 +321,19 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
     fontsize = 10
     if scan_name == "2D-3V-wall_cheb" 
         ytick_sequence = Array([1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0,1.0e1])
-    elseif scan_name == "1D-3V-wall_cheb" || scan_name == "1D-3V-wall-sheath_cheb"
+    elseif scan_name == "1D-3V-wall_cheb" || scan_name == "1D-3V-wall-sheath_cheb"  || scan_name == "1D-1V-wall_cheb-constant-Er"  || scan_name == "1D-1V-wall_cheb-constant-Er-zngrid-5"  || scan_name == "1D-1V-wall_cheb-constant-Er-ngrid-5" 
         ytick_sequence = Array([1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1])
     elseif scan_name == "2D-sound-wave_cheb_cxiz"
         ytick_sequence = Array([1.0e-3,1.0e-2,1.0e-1,1.0e-0,1.0e1])
     elseif scan_name == "2D-sound-wave_cheb_cxiz" 
         ytick_sequence = Array([1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0,1.0e1])
+    elseif scan_name == "1D-1V-wall_cheb"
+        ytick_sequence = Array([1.0e-13,1.0e-12,1.0e-11,1.0e-10,1.0e-9,1.0e-8,1.0e-7,1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0,1.0e1])
     elseif scan_name == "1D-3V-wall_cheb-updated" || scan_name == "1D-3V-wall_cheb-new-dfni-Er" || scan_name == "1D-3V-wall_cheb-new-dfni" || scan_name == "2D-sound-wave_cheb"
         ytick_sequence = Array([1.0e-10,1.0e-9,1.0e-8,1.0e-7,1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0,1.0e1])
-    elseif scan_name == "2D-1V-wall_cheb" 
-        ytick_sequence = Array([1.0e-8,1.0e-7,1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0])
+    elseif scan_name == "2D-1V-wall_cheb" || scan_name == "2D-1V-wall_cheb-nonzero-Er" 
+        #ytick_sequence = Array([1.0e-8,1.0e-7,1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0])
+        ytick_sequence = Array([1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0])
     else
         ytick_sequence = Array([1.0e-7,1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0,1.0e1])
     end
