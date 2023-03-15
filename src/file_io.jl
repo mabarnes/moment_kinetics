@@ -237,11 +237,11 @@ function define_coordinate!(parent, coord, coord_name, description)
                         description="discretization used for $coord_name")
 
     # write the finite-difference option for the coordinate
-    write_single_value!(group, "fd_option", coord.discretization;
+    write_single_value!(group, "fd_option", coord.fd_option;
                         description="type of finite difference for $coord_name, if used")
 
     # write the boundary condition for the coordinate
-    write_single_value!(group, "bc", coord.discretization;
+    write_single_value!(group, "bc", coord.bc;
                         description="boundary condition for $coord_name")
 
     return group
