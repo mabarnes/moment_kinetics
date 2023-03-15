@@ -451,6 +451,32 @@ function analyze_and_plot_data(path)
         end
         outfile = string(run_name, "_temperature_Fourier_components.pdf")
         savefig(outfile)
+
+        cmlog(cmlin::ColorGradient) = RGB[cmlin[x] for x=LinRange(0,1,30)]
+        logdeep = cgrad(:deep, scale=:log) |> cmlog
+        # make a gif animation of phi Fourier components
+        anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+            @views heatmap(log.(abs.(phi_Fourier[:,:,i])), xlabel="kr", ylabel="kz", title="ϕ",
+                           fillcolor = logdeep)
+        end
+        outfile = string(run_name, "_phi_Fourier.gif")
+        gif(anim, outfile, fps=5)
+
+        # make a gif animation of density Fourier components
+        anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+            @views heatmap(log.(abs.(density_Fourier[:,:,i])), xlabel="kr", ylabel="kz", title="n",
+                           fillcolor = logdeep)
+        end
+        outfile = string(run_name, "_density_Fourier.gif")
+        gif(anim, outfile, fps=5)
+
+        # make a gif animation of temperature Fourier components
+        anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+            @views heatmap(log.(abs.(temperature_Fourier[:,:,i])), xlabel="kr", ylabel="kz",
+                           title="T", fillcolor = logdeep)
+        end
+        outfile = string(run_name, "_temperature_Fourier.gif")
+        gif(anim, outfile, fps=5)
     end
     
     diagnostics_chodura = false
