@@ -1719,6 +1719,12 @@ function plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
         end
         outfile = string(run_name, "_phi"*description*"_vs_r_z.gif")
         gif(anim, outfile, fps=5)
+    elseif pp.animate_phi_vs_r_z && nr == 1 # make a gif animation of ϕ(z) at different times
+        anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+            @views plot(z, phi[:,1,i], xlabel="z", ylabel=L"\widetilde{\phi}", ylims = (phimin,phimax))
+        end
+        outfile = string(run_name, "_phi_vs_z.gif")
+        gif(anim, outfile, fps=5)
     end
     Ezmin = minimum(Ez)
     Ezmax = maximum(Ez)
@@ -1738,6 +1744,14 @@ function plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
             @views heatmap(r, z, Ez[:,:,i], xlabel="r", ylabel="z", c = :deep, interpolation = :cubic)
         end
         outfile = string(run_name, "_Ez"*description*"_vs_r_z.gif")
+        gif(anim, outfile, fps=5)
+    elseif pp.animate_Ez_vs_r_z && nr == 1
+        Ezmin = minimum(Ez)
+        Ezmax = maximum(Ez)
+        anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+            @views plot(z, Ez[:,1,i], xlabel="z", ylabel=L"\widetilde{E}_z", ylims = (Ezmin,Ezmax))
+        end
+        outfile = string(run_name, "_Ez_vs_z.gif")
         gif(anim, outfile, fps=5)
     end
     Ermin = minimum(Er)
