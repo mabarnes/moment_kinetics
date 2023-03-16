@@ -34,7 +34,7 @@ using ..neutral_advection: update_speed_neutral_r!, neutral_advection_r!, update
 using ..vperp_advection: update_speed_vperp!, vperp_advection!
 using ..vpa_advection: update_speed_vpa!, vpa_advection!
 using ..charge_exchange: charge_exchange_collisions_1V!, charge_exchange_collisions_3V!
-using ..ionization: ionization_collisions_1V!, ionization_collisions_3V!
+using ..ionization: ionization_collisions_1V!, ionization_collisions_3V!, constant_ionization_source!
 using ..numerical_dissipation: vpa_dissipation!, z_dissipation!, r_dissipation!
 using ..source_terms: source_terms!, source_terms_manufactured!
 using ..continuity: continuity_equation!
@@ -183,6 +183,18 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
         advance_ionization = false
         advance_ionization_1V = false
     end
+    # exception for the case where ions are evolved alone but sourced by ionization
+    if collisions.ionization > 0.0 && collisions.constant_ionization_rate
+        advance_ionization_source = true
+        #println("collisions.constant_ionization_rate == true")
+        #println("set advance_ionization = false")
+        #println("set advance_ionization_1V = false")
+        advance_ionization = false
+        advance_ionization_1V = false
+    else 
+        advance_ionization_source = false 
+    end
+    
     advance_vpa_advection = true
     advance_z_advection = true
     advance_r_advection = true
@@ -196,7 +208,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     # flag to determine if a d^2/dvpa^2 operator is present
     vpa_diffusion = (advance_numerical_dissipation && num_diss_params.vpa_dissipation_coefficient > 0.0)
     advance = advance_info(advance_vpa_advection, advance_z_advection, advance_r_advection, advance_neutral_z_advection, advance_neutral_r_advection,
-                           advance_cx, advance_cx_1V, advance_ionization, advance_ionization_1V, advance_numerical_dissipation, 
+                           advance_cx, advance_cx_1V, advance_ionization, advance_ionization_1V, advance_ionization_source, advance_numerical_dissipation, 
                            advance_sources, advance_continuity, advance_force_balance, advance_energy, rk_coefs,
                            manufactured_solns_test, r_diffusion, vpa_diffusion)
 
@@ -993,7 +1005,10 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
         ionization_collisions_3V!(fvec_out.pdf, fvec_out.pdf_neutral, pdf.charged.buffer, fvec_in, composition,
                                         vz, vr, vzeta, vpa, vperp, z, r, collisions, dt)
     end
-
+    if advance.ionization_source
+        constant_ionization_source!(fvec_out.pdf, vpa, vperp, z, r, composition, collisions, dt)
+    end
+    
     # add numerical dissipation
     if advance.numerical_dissipation
         vpa_dissipation!(fvec_out.pdf, fvec_in.pdf, vpa, vpa_spectral, dt,

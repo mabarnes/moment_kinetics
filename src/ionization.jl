@@ -4,11 +4,38 @@ module ionization
 
 export ionization_collisions_1V!
 export ionization_collisions_3V!
+export constant_ionization_source!
 
 using ..looping
 
 """
 """
+
+function constant_ionization_source!(f_out, vpa, vperp, z, r, composition, collisions, dt)
+
+    @boundscheck vpa.n == size(f_out,1) || throw(BoundsError(f_out))
+    @boundscheck vperp.n == size(f_out,2) || throw(BoundsError(f_out))
+    @boundscheck z.n == size(f_out,3) || throw(BoundsError(f_out))
+    @boundscheck r.n == size(f_out,4) || throw(BoundsError(f_out))
+    @boundscheck composition.n_ion_species == size(f_out,5) || throw(BoundsError(f_out))
+    
+    # Oddly the test in test/harrisonthompson.jl matches the analitical
+    # solution (which assumes width=0.0) better with width=0.5 than with,
+    # e.g., width=0.15. Possibly narrower widths would require more vpa
+    # resolution, which then causes crashes due to overshoots giving
+    # negative f??
+    width = 0.5
+    rwidth = 0.25
+    @loop_s is begin
+        @loop_r_z_vpa ir iz ivpa begin
+            rfac = exp( - (r.grid[ir]/rwidth)^2)
+            f_out[ivpa,1,iz,ir,is] += dt*rfac*collisions.ionization/width*exp(-(vpa.grid[ivpa]/width)^2)
+        end
+    end
+
+
+end 
+
 function ionization_collisions_1V!(f_out, f_neutral_out, fvec_in, vpa, vperp, z, r, composition, collisions, dt)
     # This routine assumes a 1D model with:
     # nvz = nvpa and identical vz and vpa grids 
@@ -31,19 +58,21 @@ function ionization_collisions_1V!(f_out, f_neutral_out, fvec_in, vpa, vperp, z,
     # vpa loop below can also be used for vz
     begin_r_z_vpa_region()
 
-    if collisions.constant_ionization_rate
-        # Oddly the test in test/harrisonthompson.jl matches the analitical
-        # solution (which assumes width=0.0) better with width=0.5 than with,
-        # e.g., width=0.15. Possibly narrower widths would require more vpa
-        # resolution, which then causes crashes due to overshoots giving
-        # negative f??
-        width = 0.5
-        @loop_s is begin
-            @loop_r_z_vpa ir iz ivpa begin
-                f_out[ivpa,1,iz,ir,is] += dt*collisions.ionization/width*exp(-(vpa.grid[ivpa]/width)^2)
-            end
-        end
-    else
+    #    #if collisions.constant_ionization_rate
+    #    #    ## Oddly the test in test/harrisonthompson.jl matches the analitical
+    #    #    ## solution (which assumes width=0.0) better with width=0.5 than with,
+    #    #    ## e.g., width=0.15. Possibly narrower widths would require more vpa
+    #    #    ## resolution, which then causes crashes due to overshoots giving
+    #    #    ## negative f??
+    #    #    #width = 0.5
+    #    #    #rwidth = 0.25
+    #    #    #@loop_s is begin
+    #    #    #    #@loop_r_z_vpa ir iz ivpa begin
+    #    #    #    #    #rfac = exp( - (r.grid[ir]/rwidth)^2)
+    #    #    #    #    #f_out[ivpa,1,iz,ir,is] += dt*rfac*collisions.ionization/width*exp(-(vpa.grid[ivpa]/width)^2)
+    #    #    #    #end
+    #    #    #end
+    #    #else
         @loop_s is begin
             # ion ionisation rate =   < f_n > n_e R_ion
             # neutral "ionisation" (depopulation) rate =   -  f_n  n_e R_ion
@@ -59,7 +88,7 @@ function ionization_collisions_1V!(f_out, f_neutral_out, fvec_in, vpa, vperp, z,
                 end
             end
         end
-    end
+    #end
 end
 
 function ionization_collisions_3V!(f_out, f_neutral_out, f_neutral_gav_in, fvec_in, composition, vz, vr, vzeta, vpa, vperp, z, r, collisions, dt)
@@ -85,20 +114,20 @@ function ionization_collisions_3V!(f_out, f_neutral_out, f_neutral_gav_in, fvec_
     
     begin_s_r_z_vperp_vpa_region()
 
-    if collisions.constant_ionization_rate
-        # Oddly the test in test/harrisonthompson.jl matches the analitical
-        # solution (which assumes width=0.0) better with width=0.5 than with,
-        # e.g., width=0.15. Possibly narrower widths would require more vpa
-        # resolution, which then causes crashes due to overshoots giving
-        # negative f??
-        width = 0.5
-        @loop_s is begin
-            @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
-                f_out[ivpa,ivperp,iz,ir,is] += dt*collisions.ionization/width^3*exp(-((vpa.grid[ivpa]^2 + vperp.grid[ivperp]^2)/width^2))
-            end
-        end
-        return nothing
-    end
+    #    #if collisions.constant_ionization_rate
+    #    #    ## Oddly the test in test/harrisonthompson.jl matches the analitical
+    #    #    ## solution (which assumes width=0.0) better with width=0.5 than with,
+    #    #    ## e.g., width=0.15. Possibly narrower widths would require more vpa
+    #    #    ## resolution, which then causes crashes due to overshoots giving
+    #    #    ## negative f??
+    #    #    #width = 0.5
+    #    #    #@loop_s is begin
+    #    #    #    #@loop_r_z_vperp_vpa ir iz ivperp ivpa begin
+    #    #    #    #    #f_out[ivpa,ivperp,iz,ir,is] += dt*collisions.ionization/width^3*exp(-((vpa.grid[ivpa]^2 + vperp.grid[ivperp]^2)/width^2))
+    #    #    #    #end
+    #    #    #end
+    #    #    #return nothing
+    #    #end
 
     # ion ionization rate =   < f_n > n_e R_ion
     # neutral "ionization" (depopulation) rate =   -  f_n  n_e R_ion
