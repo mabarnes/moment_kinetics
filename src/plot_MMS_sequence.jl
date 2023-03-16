@@ -18,7 +18,7 @@ using ..post_processing: compare_charged_pdf_symbolic_test, compare_fields_symbo
 using ..post_processing: compare_moments_symbolic_test, compare_neutral_pdf_symbolic_test
 using ..post_processing: read_distributed_zr_data!, construct_global_zr_grids
 using ..post_processing: allocate_global_zr_neutral_moments, allocate_global_zr_charged_moments
-using ..post_processing: allocate_global_zr_fields, get_geometry_and_composition
+using ..post_processing: allocate_global_zr_fields, get_geometry_and_composition, get_coords_nelement
 using ..array_allocation: allocate_float
 using ..type_definitions: mk_float, mk_int
 using ..load_data: open_readonly_output_file
@@ -427,18 +427,6 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         println(outfile)
     end
 
-end
-
-function get_coords_nelement(scan_input)
-    # use 1 as default because these values should be set in input .toml
-    z_nelement = get(scan_input, "z_nelement", 1)
-    r_nelement = get(scan_input, "r_nelement", 1)
-    vpa_nelement = get(scan_input, "vpa_nelement", 1)
-    vperp_nelement = get(scan_input, "vperp_nelement", 1)
-    vz_nelement = get(scan_input, "vz_nelement", 1)
-    vr_nelement = get(scan_input, "vr_nelement", 1)
-    vzeta_nelement = get(scan_input, "vzeta_nelement", 1)
-    return z_nelement, r_nelement, vpa_nelement, vperp_nelement, vz_nelement, vr_nelement, vzeta_nelement
 end
 
 end

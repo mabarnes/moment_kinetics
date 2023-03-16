@@ -56,6 +56,7 @@ include("analysis.jl")
 include("post_processing_input.jl")
 include("post_processing.jl")
 include("plot_MMS_sequence.jl")
+include("plot_sequence.jl")
 
 using TimerOutputs
 using Dates

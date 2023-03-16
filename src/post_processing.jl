@@ -12,6 +12,7 @@ export construct_global_zr_grids
 export allocate_global_zr_charged_moments
 export allocate_global_zr_neutral_moments
 export allocate_global_zr_fields
+export get_coords_nelement
 
 # packages
 using Plots
@@ -209,6 +210,18 @@ end
 Function below duplicates code from moment_kinetics_input.jl
  -- need to make better functions there that can be called here
 """
+
+function get_coords_nelement(scan_input)
+    # use 1 as default because these values should be set in input .toml
+    z_nelement = get(scan_input, "z_nelement", 1)
+    r_nelement = get(scan_input, "r_nelement", 1)
+    vpa_nelement = get(scan_input, "vpa_nelement", 1)
+    vperp_nelement = get(scan_input, "vperp_nelement", 1)
+    vz_nelement = get(scan_input, "vz_nelement", 1)
+    vr_nelement = get(scan_input, "vr_nelement", 1)
+    vzeta_nelement = get(scan_input, "vzeta_nelement", 1)
+    return z_nelement, r_nelement, vpa_nelement, vperp_nelement, vz_nelement, vr_nelement, vzeta_nelement
+end
 
 function get_geometry_and_composition(scan_input,n_ion_species,n_neutral_species)
     # set geometry_input
