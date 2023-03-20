@@ -44,9 +44,13 @@ function compare_collision_frequencies(input_file::String, output_file::String; 
     # v_∥ dissipation term is D d^2f/dv_∥^2. Inserting factors of c_ref, this is a bit like
     # pitch angle scattering D cref^2 d^2f/dv_∥^2 ~ D d^2f/dξ^2, so D is similar to a
     # (normalised) collision frequency.
-    nu_diss = num_diss_params.vpa_dissipation_coefficient /
-              dimensional_parameters["timenorm"]
-    println("nu_diss ", nu_diss)
+    if num_diss_params.vpa_dissipation_coefficient < 0.0
+        nu_vpa_diss = 0.0
+    else
+        nu_vpa_diss = num_diss_params.vpa_dissipation_coefficient /
+                      dimensional_parameters["timenorm"]
+    end
+    println("nu_vpa_diss ", nu_vpa_diss)
 
     # Neutral collison rates:
     # The ionization term in the ion/neutral kinetic equations is ±R_ion*n_e*f_n.
@@ -66,7 +70,7 @@ function compare_collision_frequencies(input_file::String, output_file::String; 
     @views plot!(zgrid, nu_ii[:,1,1,end], label="nu_ii")
     @views plot!(zgrid, nu_ionization[:,1,end], label="nu_ionization")
     @views plot!(zgrid, nu_cx[:,1,end], label="nu_cx")
-    hline!([nu_diss], label="nu_diss")
+    hline!([nu_vpa_diss], label="nu_vpa_diss")
     ylabel!("frequency (s^-1)")
 
     savefig(joinpath("runs", io_input.run_name,
