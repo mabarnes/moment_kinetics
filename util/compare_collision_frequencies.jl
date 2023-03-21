@@ -1,5 +1,6 @@
 using moment_kinetics
 using Plots
+using Unitful
 
 function compare_collision_frequencies(input_file::String,
                                        output_file::Union{String,Nothing}=nothing;
@@ -52,6 +53,55 @@ function compare_collision_frequencies(input_file::String,
     nu_cx0 = @. collisions.charge_exchange * dimensional_parameters["Nnorm"] /
                 dimensional_parameters["timenorm"]
     println("nu_cx0 ", nu_cx0)
+
+    # Estimate classical particle and ion heat diffusion coefficients, for comparison to
+    # numerical dissipation
+    # Classical particle diffusivity estimate from Helander, D_⟂ on p.7.
+    # D_⟂ ∼ nu_ei * rho_e^2 / 2
+    classical_particle_D0 = Unitful.upreferred(dimensional_parameters["nu_ei0"] *
+                                               dimensional_parameters["rho_e0"]^2 / 2.0)
+    println("classical_particle_D0 ", classical_particle_D0)
+
+    # Classical thermal diffusivity estimate from Helander, eq. (1.8)
+    # chi_i = rho_i^2 / tau_ii / 2 = nu_ii * rho_i^2 / 2
+    classical_heat_chi_i0 = Unitful.upreferred(dimensional_parameters["nu_ii0"] *
+                                              dimensional_parameters["rho_i0"]^2 / 2.0)
+    println("classical_heat_chi_i0 ", classical_heat_chi_i0)
+
+    # rhostar is set as an input parameter. For the purposes of cross field transport,
+    # effective rho_i is rhostar*R rather than rho_i0. Might as well take R∼Lnorm for now,
+    # as difference will be O(1), if any.
+    rho_i_effective = Unitful.upreferred(geometry.rhostar *
+                                         dimensional_parameters["Lnorm"])
+    rho_e_effective =
+        Unitful.upreferred(sqrt(dimensional_parameters["me"]/dimensional_parameters["mi"])
+                           * rho_i_effective)
+    effective_classical_particle_D0 =
+        Unitful.upreferred(dimensional_parameters["nu_ei0"] * rho_e_effective^2 / 2.0)
+    effective_classical_heat_chi_i0 =
+        Unitful.upreferred(dimensional_parameters["nu_ii0"] * rho_i_effective^2 / 2.0)
+    println("rho_i_effective ", rho_i_effective)
+    println("rho_e_effective ", rho_e_effective)
+    println("classical particle D0 with effective rho_e ", effective_classical_particle_D0)
+    println("classical heat chi_i0 with effective rho_i ", effective_classical_heat_chi_i0)
+
+    # Get numerical diffusion parameters
+    if num_diss_params.r_dissipation_coefficient < 0.0
+        D_r = 0.0
+    else
+        D_r = Unitful.upreferred(num_diss_params.r_dissipation_coefficient *
+                                 dimensional_parameters["Lnorm"]^2 /
+                                 dimensional_parameters["timenorm"])
+    end
+    if num_diss_params.z_dissipation_coefficient < 0.0
+        D_z = 0.0
+    else
+        D_z = Unitful.upreferred(num_diss_params.z_dissipation_coefficient *
+                                 dimensional_parameters["Lnorm"]^2 /
+                                 dimensional_parameters["timenorm"])
+    end
+    println("numerical D_r ", D_r)
+    println("numerical D_z ", D_z)
 
     if output_file !== nothing
         println("")
