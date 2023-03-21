@@ -14,6 +14,11 @@ function compare_collision_frequencies(input_file::String,
     dimensional_parameters = moment_kinetics.utils.get_unnormalized_parameters(
         input_file; Bnorm=Bnorm, Lnorm=Lnorm, Nnorm=Nnorm, Tnorm=Tnorm)
 
+    println("Omega_i0 ", dimensional_parameters["Omega_i0"])
+    println("rho_i0 ", dimensional_parameters["rho_i0"])
+    println("Omega_e0 ", dimensional_parameters["Omega_e0"])
+    println("rho_e0 ", dimensional_parameters["rho_e0"])
+
     # Effective collision frequency for dissipation?
     # v_∥ dissipation term is D d^2f/dv_∥^2. Inserting factors of c_ref, this is a bit like
     # pitch angle scattering D cref^2 d^2f/dv_∥^2 ~ D d^2f/dξ^2, so D is similar to a
@@ -30,7 +35,9 @@ function compare_collision_frequencies(input_file::String,
     println("charge_exchange rate coefficient = ",
             dimensional_parameters["CX_rate_coefficient"])
 
+    println("nu_ei0 ", dimensional_parameters["nu_ei0"])
     println("nu_ii0 ", dimensional_parameters["nu_ii0"])
+    println("nu_ie0 ", dimensional_parameters["nu_ie0"])
     println("nu_vpa_diss ", nu_vpa_diss)
 
     # Neutral collison rates:

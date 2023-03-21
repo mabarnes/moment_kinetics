@@ -53,7 +53,13 @@ function get_unnormalized_parameters(input::Dict; Nnorm::Number, Tnorm::Number,
     # normalization
     cs = Unitful.upreferred(sqrt(2.0*Tnorm/mi))
 
+    vth_i0 = Unitful.upreferred(sqrt(2.0*Tnorm/mi))
+    Omega_i0 = Unitful.upreferred(e*Bnorm/mi)
+    rho_i0 = Unitful.upreferred(vth_i0/Omega_i0)
+
     vth_e0 = Unitful.upreferred(sqrt(2.0*Tnorm/me))
+    Omega_e0 = Unitful.upreferred(e*Bnorm/me)
+    rho_e0 = Unitful.upreferred(vth_e0 / Omega_e0)
 
     # Time normalization
     timenorm = Unitful.upreferred(Lnorm / cs)
@@ -64,11 +70,20 @@ function get_unnormalized_parameters(input::Dict; Nnorm::Number, Tnorm::Number,
     parameters["Nnorm"] = Nnorm
     parameters["Tnorm"] = Tnorm
     parameters["Lnorm"] = Lnorm
+    parameters["Bnorm"] = Bnorm
     parameters["timenorm"] = timenorm
 
     parameters["Lz"] = Lnorm * z_input.L
 
+    parameters["me"] = me
+    parameters["mi"] = mi
     parameters["cs0"] = cs
+    parameters["vth_i0"] = vth_i0
+    parameters["Omega_i0"] = Omega_i0
+    parameters["rho_i0"] = rho_i0
+    parameters["vth_ie"] = vth_e0
+    parameters["Omega_e0"] = Omega_e0
+    parameters["rho_e0"] = rho_e0
 
     dt = t_input.dt * timenorm
     parameters["dt"] = dt
