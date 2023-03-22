@@ -15,6 +15,7 @@ using ..velocity_moments: integrate_over_vspace
 
 using FFTW
 using Statistics
+using StatsBase
 
 """
 """
@@ -325,7 +326,7 @@ function analyze_2D_instability(phi, density, thermal_speed, r, z)
 
     nt = size(phi, 3)
 
-    function get_Fourier_modes(non_uniform_data, r, r_spectral, z, z_spectral)
+    function get_Fourier_modes_2D(non_uniform_data, r, r_spectral, z, z_spectral)
 
         uniform_points_per_element_r = r.ngrid ÷ 4
         n_uniform_r = r.nelement_global * uniform_points_per_element_r
@@ -356,12 +357,71 @@ function analyze_2D_instability(phi, density, thermal_speed, r, z)
         return fourier_data
     end
 
-    phi_Fourier = get_Fourier_modes(phi, r, r_spectral, z, z_spectral)
-    density_Fourier = get_Fourier_modes(density, r, r_spectral, z, z_spectral)
-    temperature_Fourier = get_Fourier_modes(temperature, r, r_spectral, z, z_spectral)
+    phi_Fourier_2D = get_Fourier_modes_2D(phi, r, r_spectral, z, z_spectral)
+    density_Fourier_2D = get_Fourier_modes_2D(density, r, r_spectral, z, z_spectral)
+    temperature_Fourier_2D = get_Fourier_modes_2D(temperature, r, r_spectral, z, z_spectral)
+
+    # Find a z-location where the mode seems to be growing most strongly to analyse
+    ###############################################################################
+
+    # Get difference between max and min over the r dimension as a measure of the mode
+    # amplitude
+    Delta_phi = maximum(phi; dims=2)[:,1,:] - minimum(phi; dims=2)[:,1,:]
+    max_Delta_phi = maximum(Delta_phi; dims=1)[1,:]
+
+    # Start searching for mode position once amplitude has grown to twice initial
+    # perturbation
+    startind = findfirst(x -> x>max_Delta_phi[1], max_Delta_phi)
+
+    # Find the z-index of the maximum of Delta_phi
+    # Need the iterator thing to convert CartesianIndex structs returned by argmax into
+    # Ints that we can do arithmetic with.
+    zind_maximum = [i[1] for i ∈ argmax(Delta_phi; dims=1)]
+    zind_maximum = zind_maximum[startind:end]
+
+    # Want the 'most common' value in zind_maximum, but maybe that is noisy?
+    # First find the most common bin for some reasonable number of bins. The background is
+    # a mode with one wave-period in the box, so 16 bins seems like plenty.
+    nbins = 16
+    bin_size = (z.n - 1) ÷ 16
+    binned_zind_maximum = @. (zind_maximum-1) ÷ bin_size
+    most_common_bin = mode(binned_zind_maximum)
+    bin_min = most_common_bin * bin_size + 1
+    bin_max = (most_common_bin+1) * bin_size
+    zinds_in_bin = [zind for zind in zind_maximum if bin_min ≤ zind ≤ bin_max]
+
+    # Find the most common zind in the bin, which might have some noise but will be in
+    # about the right region regardless as it is in the bin
+    zind = mode(zinds_in_bin)
+    println("Estimating average maximum mode amplitude at zind=$zind, z=", z.grid[zind])
+
+    # Now analyse the Fourier modes at this zind
+    function get_Fourier_modes_1D(non_uniform_data, r, r_spectral)
+
+        uniform_points_per_element_r = r.ngrid ÷ 4
+        n_uniform_r = r.nelement_global * uniform_points_per_element_r
+        uniform_spacing_r = r.L / n_uniform_r
+        uniform_grid_r = collect(0:(n_uniform_r-1)).*uniform_spacing_r .+ 0.5.*uniform_spacing_r .- 0.5.*r.L
+
+        uniform_data = allocate_float(n_uniform_r, nt)
+        for it ∈ 1:nt
+            @views uniform_data[:,it] =
+                interpolate_to_grid_1d(uniform_grid_r, non_uniform_data[:,it], r,
+                                       r_spectral)
+        end
+
+        fourier_data = fft(uniform_data, 1)
+
+        return fourier_data
+    end
+
+    @views phi_Fourier_1D = get_Fourier_modes_1D(phi[zind,:,:], r, r_spectral)
+    @views density_Fourier_1D = get_Fourier_modes_1D(density[zind,:,:], r, r_spectral)
+    @views temperature_Fourier_1D = get_Fourier_modes_1D(temperature[zind,:,:], r, r_spectral)
 
     return phi_perturbation, density_perturbation, temperature_perturbation,
-           phi_Fourier, density_Fourier, temperature_Fourier
+           phi_Fourier_2D, density_Fourier_2D, temperature_Fourier_2D,
+           phi_Fourier_1D, density_Fourier_1D, temperature_Fourier_1D
 end
 
 end
