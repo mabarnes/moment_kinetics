@@ -1003,13 +1003,39 @@ function analyze_and_plot_data(prefix...)
     end
 
     if pp.instability2D
-        phi_perturbation, density_perturbation, temperature_perturbation, phi_Fourier,
-        density_Fourier, temperature_Fourier =
+        phi_perturbation, density_perturbation, temperature_perturbation,
+        phi_Fourier, density_Fourier, temperature_Fourier,
+        phi_Fourier_1D, density_Fourier_1D, temperature_Fourier_1D =
             analyze_2D_instability(phi, density, thermal_speed, r_global, z_global,
                                    r_global_spectral, z_global_spectral)
 
-        n_kz, n_kr, nt = size(phi_Fourier)
+        n_kr, nt = size(phi_Fourier_1D)
+        function plot_Fourier_1D(var, symbol, name)
+            plot(title="$symbol Fourier components", xlabel="time", ylabel="amplitude",
+                 legend=false, yscale=:log)
+            amplitude = abs.(var)
+            #for ikr ∈ 1:n_kr
+            # Drop constant mode (ikr=1) and aliased (?) modes >n_kr/2
+            for ikr ∈ 2:n_kr÷2
+                data = amplitude[ikr,:]
+                data[data.==0.0] .= NaN
+                plot!(time, data, annotations=(time[end], data[end], "ikr=$ikr"),
+                      annotationhalign=:right, annotationfontsize=6)
+            end
+            outfile = string(run_name, "_$(name)_1D_Fourier_components.pdf")
+            trysavefig(outfile)
 
+            # Plot phase of n_r=1 mode
+            phase = angle.(var[2,:])
+            plot(time, phase, title="phase of n_r=1 mode", xlabel="time", ylabel="phase")
+            outfile = string(run_name, "_$(name)_1D_phase.pdf")
+            trysavefig(outfile)
+        end
+        plot_Fourier_1D(phi_Fourier_1D, "ϕ", "phi")
+        plot_Fourier_1D(density_Fourier_1D, "n", "density")
+        plot_Fourier_1D(temperature_Fourier_1D, "T", "temperature")
+
+        n_kz, n_kr, nt = size(phi_Fourier)
         cmlog(cmlin::ColorGradient) = RGB[cmlin[x] for x=LinRange(0,1,30)]
         logdeep = cgrad(:deep, scale=:log) |> cmlog
         function plot_Fourier_2D(var, symbol, name)
