@@ -396,87 +396,47 @@ function analyze_and_plot_data(path)
         density_Fourier, temperature_Fourier =
             analyze_2D_instability(phi, density, thermal_speed, r, z)
 
-        # make a gif animation of phi_perturbation
-        anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-            @views heatmap(r_grid, z_grid, phi_perturbation[:,:,i], xlabel="r", ylabel="z", fillcolor = :deep)
-        end
-        outfile = string(run_name, "_phi_perturbation.gif")
-        gif(anim, outfile, fps=5)
-
-        # make a gif animation of density_perturbation
-        anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-            @views heatmap(r_grid, z_grid, density_perturbation[:,:,i], xlabel="r", ylabel="z", fillcolor = :deep)
-        end
-        outfile = string(run_name, "_density_perturbation.gif")
-        gif(anim, outfile, fps=5)
-
-        # make a gif animation of temperature_perturbation
-        anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-            @views heatmap(r_grid, z_grid, temperature_perturbation[:,:,i], xlabel="r", ylabel="z", fillcolor = :deep)
-        end
-        outfile = string(run_name, "_temperature_perturbation.gif")
-        gif(anim, outfile, fps=5)
-
         n_kz, n_kr, nt = size(phi_Fourier)
-
-        plot(title="ϕ Fourier components", xlabel="time", ylabel="amplitude",
-             legend=false, yscale=:log)
-        for ikr ∈ 1:n_kr, ikz ∈ 1:n_kz
-            data = abs.(phi_Fourier[ikz,ikr,:])
-            data[data.==0.0] .= NaN
-            plot!(time, data, annotations=(time[end], data[end], "ikr=$ikr, ikz=$ikz"),
-                  annotationhalign=:right)
-        end
-        outfile = string(run_name, "_phi_Fourier_components.pdf")
-        savefig(outfile)
-
-        plot(title="n Fourier components", xlabel="time", ylabel="amplitude",
-             legend=false, yscale=:log)
-        for ikr ∈ 1:n_kr, ikz ∈ 1:n_kz
-            data = abs.(density_Fourier[ikz,ikr,:])
-            data[data.==0.0] .= NaN
-            plot!(time, data, annotations=(time[end], data[end], "ikr=$ikr, ikz=$ikz"),
-                  annotationhalign=:right)
-        end
-        outfile = string(run_name, "_density_Fourier_components.pdf")
-        savefig(outfile)
-
-        plot(title="T Fourier components", xlabel="time", ylabel="amplitude",
-             legend=false, yscale=:log)
-        for ikr ∈ 1:n_kr, ikz ∈ 1:n_kz
-            data = abs.(temperature_Fourier[ikz,ikr,:])
-            data[data.==0.0] .= NaN
-            plot!(time, data, annotations=(time[end], data[end], "ikr=$ikr, ikz=$ikz"),
-                  annotationhalign=:right)
-        end
-        outfile = string(run_name, "_temperature_Fourier_components.pdf")
-        savefig(outfile)
 
         cmlog(cmlin::ColorGradient) = RGB[cmlin[x] for x=LinRange(0,1,30)]
         logdeep = cgrad(:deep, scale=:log) |> cmlog
-        # make a gif animation of phi Fourier components
-        anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-            @views heatmap(log.(abs.(phi_Fourier[:,:,i])), xlabel="kr", ylabel="kz", title="ϕ",
-                           fillcolor = logdeep)
-        end
-        outfile = string(run_name, "_phi_Fourier.gif")
-        gif(anim, outfile, fps=5)
+        function plot_Fourier_2D(var, symbol, name)
+            plot(title="$symbol Fourier components", xlabel="time", ylabel="amplitude",
+                 legend=false, yscale=:log)
+            for ikr ∈ 1:n_kr, ikz ∈ 1:n_kz
+                ikr!=2 && continue
+                data = abs.(var[ikz,ikr,:])
+                data[data.==0.0] .= NaN
+                plot!(time, data, annotations=(time[end], data[end], "ikr=$ikr, ikz=$ikz"),
+                      annotationhalign=:right, annotationfontsize=6)
+            end
+            outfile = string(run_name, "_$(name)_Fourier_components.pdf")
+            savefig(outfile)
 
-        # make a gif animation of density Fourier components
-        anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-            @views heatmap(log.(abs.(density_Fourier[:,:,i])), xlabel="kr", ylabel="kz", title="n",
-                           fillcolor = logdeep)
+            # make a gif animation of Fourier components
+            anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+                @views heatmap(log.(abs.(var[:,:,i])), xlabel="kr", ylabel="kz",
+                               title=symbol, fillcolor = logdeep)
+            end
+            outfile = string(run_name, "_$(name)_Fourier.gif")
+            gif(anim, outfile, fps=5)
         end
-        outfile = string(run_name, "_density_Fourier.gif")
-        gif(anim, outfile, fps=5)
+        plot_Fourier_2D(phi_Fourier, "ϕ", "phi")
+        plot_Fourier_2D(density_Fourier, "n", "density")
+        plot_Fourier_2D(temperature_Fourier, "T", "temperature")
 
-        # make a gif animation of temperature Fourier components
-        anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-            @views heatmap(log.(abs.(temperature_Fourier[:,:,i])), xlabel="kr", ylabel="kz",
-                           title="T", fillcolor = logdeep)
+        function animate_perturbation(var, name)
+            # make a gif animation of perturbation
+            anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+                @views heatmap(r_grid, z_grid, var[:,:,i], xlabel="r", ylabel="z", fillcolor = :deep)
+            end
+            outfile = string(run_name, "_$name_perturbation.gif")
+            gif(anim, outfile, fps=5)
         end
-        outfile = string(run_name, "_temperature_Fourier.gif")
-        gif(anim, outfile, fps=5)
+        animate_perturbation(phi_perturbation, "phi")
+        animate_perturbation(density_perturbation, "density")
+        animate_perturbation(temperature_perturbation, "temperature")
+
     end
     
     diagnostics_chodura = false
