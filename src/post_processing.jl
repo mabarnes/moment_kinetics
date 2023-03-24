@@ -1940,13 +1940,13 @@ function plot_charged_pdf_2D_at_wall(run_name)
                 savefig(outfile) 
                 
                 # plot f(vpa,vperp,iz_wall,ir0,is,itime) at the wall                
-                @views heatmap(vperp, vpa, pdf[:,:,iz_wall,ir0,is,itime0], xlabel=L"vperp", ylabel=L"vpa", c = :deep, interpolation = :cubic,
+                @views heatmap(vperp, vpa, pdf[:,:,iz_wall,ir0,is,itime0], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
                 windowsize = (360,240), margin = 15pt)
                 outfile = string(run_name, "_pdf(vpa,vperp,iz_"*zlabel*",ir0)"*description*"_vs_vperp_vpa.pdf")
                 savefig(outfile)
                 
                 # plot f(vpa,ivperp0,z,ir0,is,itime) near the wall                
-                @views heatmap(z_local, vpa, pdf[:,ivperp0,:,ir0,is,itime0], xlabel=L"z", ylabel=L"vpa", c = :deep, interpolation = :cubic,
+                @views heatmap(z_local, vpa, pdf[:,ivperp0,:,ir0,is,itime0], xlabel=L"z", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
                 windowsize = (360,240), margin = 15pt)
                 outfile = string(run_name, "_pdf(vpa,ivperp0,z_"*zlabel*",ir0)"*description*"_vs_z_vpa.pdf")
                 savefig(outfile)
@@ -1957,7 +1957,7 @@ function plot_charged_pdf_2D_at_wall(run_name)
                     windowsize = (360,240), margin = 15pt)
                     outfile = string(run_name, "_pdf(ivpa0,ivperp0,z_"*zlabel*",r)"*description*"_vs_r_z.pdf")
                     savefig(outfile)
-                    @views heatmap(r_local, vpa, pdf[:,ivperp0,iz_wall,:,is,itime0], xlabel=L"r", ylabel=L"vpa", c = :deep, interpolation = :cubic,
+                    @views heatmap(r_local, vpa, pdf[:,ivperp0,iz_wall,:,is,itime0], xlabel=L"r", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
                     windowsize = (360,240), margin = 15pt)
                     outfile = string(run_name, "_pdf(vpa,ivperp0,z_"*zlabel*",r)"*description*"_vs_r_vpa.pdf")
                     savefig(outfile)
