@@ -9,11 +9,12 @@ if abspath(PROGRAM_FILE) == @__FILE__
    #test_option = "collisionless_soundwaves"
    #test_option = "collisionless_wall-1D-3V-new-dfni-Er"
    #test_option = "collisionless_wall-2D-1V-Er-nonzero-at-plate"
-   test_option = "collisionless_wall-2D-1V-Er-zero-at-plate"
+   #test_option = "collisionless_wall-2D-1V-Er-zero-at-plate"
    #test_option = "collisionless_wall-1D-1V"
    #test_option = "collisionless_wall-1D-1V-constant-Er"
    #test_option = "collisionless_wall-1D-1V-constant-Er-zngrid-5"
    #test_option = "collisionless_wall-1D-1V-constant-Er-ngrid-5"
+   test_option = "collisionless_wall-1D-1V-constant-Er-ngrid-5-opt"
    #test_option = "collisionless_wall-1D-3V"
    #test_option = "collisionless_wall-2D-3V"
    #test_option = "collisionless_wall-2D-3V-Er-zero-at-plate"
@@ -135,6 +136,13 @@ if abspath(PROGRAM_FILE) == @__FILE__
         #               ]
         scan_type = "vpazr_nelement0.25"
         scan_name = "2D-1V-wall_cheb-nonzero-Er"
+    elseif test_option == "collisionless_wall-1D-1V-constant-Er-ngrid-5-opt"
+        # collisionless wall test, no sheath for electrons, no radial coordinate
+        path_list = ["runs/1D-wall_MMSEr_ngrid_5_nel_r_1_z_8_vpa_32_vperp_1","runs/1D-wall_MMSEr_ngrid_5_nel_r_1_z_16_vpa_64_vperp_1",
+                        "runs/1D-wall_MMSEr_ngrid_5_nel_r_1_z_32_vpa_128_vperp_1","runs/1D-wall_MMSEr_ngrid_5_nel_r_1_z_64_vpa_256_vperp_1"
+                    ]
+        scan_type = "vpaz_nelement0.25"
+        scan_name = "1D-1V-wall_cheb-constant-Er-ngrid-5-opt"
     elseif test_option == "collisionless_wall-1D-1V-constant-Er-ngrid-5"
         # collisionless wall test, no sheath for electrons, no radial coordinate
         path_list = ["runs/1D-wall_MMSEr_ngrid_5_nel_r_1_z_8_vpa_8_vperp_1","runs/1D-wall_MMSEr_ngrid_5_nel_r_1_z_16_vpa_16_vperp_1",
