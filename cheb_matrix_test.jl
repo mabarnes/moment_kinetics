@@ -1,3 +1,5 @@
+using Printf
+
 if abspath(PROGRAM_FILE) == @__FILE__
     using Pkg
     Pkg.activate(".")
@@ -7,7 +9,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
 	using moment_kinetics.coordinates: define_coordinate
 	using moment_kinetics.chebyshev: setup_chebyshev_pseudospectral
 	using moment_kinetics.calculus: derivative!, integral
-    import LinearAlgebra
+    #import LinearAlgebra
     using LinearAlgebra: mul!
     
     function Djj(x::Array{Float64,1},j::Int64)
@@ -80,15 +82,25 @@ if abspath(PROGRAM_FILE) == @__FILE__
     
     function cheb_derivative_matrix_reversed!(D::Array{Float64,2},x) 
         D_elementwise = Array{Float64,2}(undef,x.ngrid,x.ngrid)
-        cheb_derivative_matrix_elementwise_reversed!(D_elementwise,x.ngrid,x.L,x.nelement_global)
+        cheb_derivative_matrix_elementwise_reversed!(D_elementwise,x.ngrid,x.L,x.nelement_global)    
+        assign_cheb_derivative_matrix!(D,D_elementwise,x)
+    end
+    
+    function cheb_second_derivative_matrix_reversed!(D::Array{Float64,2},x) 
+        D_elementwise = Array{Float64,2}(undef,x.ngrid,x.ngrid)
+        cheb_derivative_matrix_elementwise_reversed!(D_elementwise,x.ngrid,x.L,x.nelement_global)    
+        D2_elementwise = Array{Float64,2}(undef,x.ngrid,x.ngrid)
+        mul!(D2_elementwise,D_elementwise,D_elementwise)
+        assign_cheb_derivative_matrix!(D,D2_elementwise,x)
+    end
+    
+    function assign_cheb_derivative_matrix!(D::Array{Float64,2},D_elementwise::Array{Float64,2},x) 
         
-        # zero matrix before assignment 
-        println("D_elementwise \n ",D_elementwise)
+        # zero output matrix before assignment 
         D[:,:] .= 0.0
         imin = x.imin
         imax = x.imax
-        println(imin)
-        println(imax)
+        
         # fill in first element 
         j = 1
         if x.bc == "zero"
@@ -207,8 +219,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
 	###################
 	
 	# define inputs needed for the test
-	ngrid = 17 #number of points per element 
-	nelement_local = 4 # number of elements per rank
+	ngrid = 5 #number of points per element 
+	nelement_local = 256 # number of elements per rank
 	nelement_global = nelement_local # total number of elements 
 	L = 1.0 #physical box size in reference units 
 	bc = "" #not required to take a particular value, not used 
@@ -231,20 +243,25 @@ if abspath(PROGRAM_FILE) == @__FILE__
     for i in 1:x.n
         xchebgrid[i] = cos(pi*(i - 1)/(x.n - 1))
     end
-    println("x",xchebgrid[:])
+    #println("x",xchebgrid[:])
     cheb_derivative_matrix!(Dx,xchebgrid,x.n)
-    println("")
-    println("Dx \n")
-    for i in 1:x.n
-        println(Dx[i,:])
-    end
+    #println("")
+    #println("Dx \n")
+    #for i in 1:x.n
+    #    println(Dx[i,:])
+    #end
     
     # create array for the function f(x) to be differentiated/integrated
 	f = Array{Float64,1}(undef, x.n)
 	# create array for the derivative df/dx
 	df = Array{Float64,1}(undef, x.n)
+	df2 = Array{Float64,1}(undef, x.n)
+	df2cheb = Array{Float64,1}(undef, x.n)
     df_exact = Array{Float64,1}(undef, x.n)
+    df2_exact = Array{Float64,1}(undef, x.n)
     df_err = Array{Float64,1}(undef, x.n)
+    df2_err = Array{Float64,1}(undef, x.n)
+    df2cheb_err = Array{Float64,1}(undef, x.n)
 
     for ix in 1:x.n
         f[ix] = sin(pi*xchebgrid[ix])
@@ -254,32 +271,76 @@ if abspath(PROGRAM_FILE) == @__FILE__
     for ix in 1:x.n
         df_err[ix] = df[ix]-df_exact[ix]
     end
-    println("df \n",df)
-    println("df_exact \n",df_exact)
-    println("df_err \n",df_err)
+    # test standard cheb D f = df 
+    #println("df \n",df)
+    #println("df_exact \n",df_exact)
+    #println("df_err \n",df_err)
     
     Dxreverse = Array{Float64,2}(undef, x.n, x.n)
     cheb_derivative_matrix_reversed!(Dxreverse,x)
+    Dxreverse2 = Array{Float64,2}(undef, x.n, x.n)
+    mul!(Dxreverse2,Dxreverse,Dxreverse)
+    D2xreverse = Array{Float64,2}(undef, x.n, x.n)
+    cheb_second_derivative_matrix_reversed!(D2xreverse,x)
     
-    println("x.grid \n",x.grid)
-    println("")
-    println("Dxreverse \n")
-    for i in 1:x.n
-        println(Dxreverse[i,:])
+    #println("x.grid \n",x.grid)
+    if x.n < 20
+        println("\n Dxreverse \n")
+        for i in 1:x.n
+            for j in 1:x.n
+                @printf("%.1f ", Dxreverse[i,j])
+            end
+            println("")
+        end
+        println("\n Dxreverse*Dxreverse \n")
+        for i in 1:x.n
+            for j in 1:x.n
+                @printf("%.1f ", Dxreverse2[i,j])
+            end
+            println("")
+        end
+        
+        println("\n D2xreverse \n")
+        for i in 1:x.n
+            for j in 1:x.n
+                @printf("%.1f ", D2xreverse[i,j])
+            end
+            println("")
+        end
+        println("\n")
     end
     
     for ix in 1:x.n
-        f[ix] = sin(2.0*pi*x.grid[ix]/x.L)
-        df_exact[ix] = (2.0*pi/x.L)*cos(2.0*pi*x.grid[ix]/x.L)
+#        f[ix] = sin(2.0*pi*x.grid[ix]/x.L)
+#        df_exact[ix] = (2.0*pi/x.L)*cos(2.0*pi*x.grid[ix]/x.L)
+#        df2_exact[ix] = -(2.0*pi/x.L)*(2.0*pi/x.L)*sin(2.0*pi*x.grid[ix]/x.L)
+        f[ix] = exp(-4.0*(x.grid[ix])^2)
+        df_exact[ix] = -8.0*x.grid[ix]*exp(-4.0*(x.grid[ix])^2)
+        df2_exact[ix] = ((8.0*x.grid[ix])^2 - 8.0)*exp(-4.0*(x.grid[ix])^2)
     end
+    
+    # calculate d f / d x from matrix 
     mul!(df,Dxreverse,f)
+    # calculate d^2 f / d x from second application of Dx matrix 
+    mul!(df2,Dxreverse2,f)
+    # calculate d^2 f / d x from applition of D2x matrix 
+    mul!(df2cheb,D2xreverse,f)
     for ix in 1:x.n
         df_err[ix] = df[ix]-df_exact[ix]
+        df2_err[ix] = df2[ix]-df2_exact[ix]
+        df2cheb_err[ix] = df2cheb[ix]-df2_exact[ix]
     end
-    println("Reversed")
-    println("df \n",df)
-    println("df_exact \n",df_exact)
+    println("Reversed - multiple elements")
+    #println("df \n",df)
+    #println("df_exact \n",df_exact)
     println("df_err \n",df_err)
+    #println("df2 \n",df2)
+    #println("df2_exact \n",df2_exact)
+    println("df2_err \n",df2_err)
+    
+    println("max(df_err) \n",maximum(abs.(df_err)))
+    println("max(df2_err) \n",maximum(abs.(df2_err)))
+    println("max(df2cheb_err) \n",maximum(abs.(df2cheb_err)))
     
     
 end
