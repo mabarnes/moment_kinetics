@@ -106,109 +106,12 @@ end
 """
 """
 function update_speed_default!(advect, fields, fvec, moments, vpa, z, r, composition, collisions, t, z_spectral)
-    if moments.evolve_ppar
-        @loop_s is begin
-            @loop_r ir begin
-                # get d(ppar)/dz
-                derivative!(z.scratch, view(fvec.ppar,:,ir,is), z, z_spectral)
-                # update parallel acceleration to account for parallel derivative of parallel pressure
-                # NB: no vpa-dependence so compute as a scalar and broadcast to all entries
-                @loop_z iz begin
-                    @views advect[is].speed[:,iz,ir] .= z.scratch[iz]/(fvec.density[iz,ir,is]*moments.vth[iz,ir,is])
-                end
-                # calculate d(qpar)/dz
-                derivative!(z.scratch, view(moments.qpar,:,ir,is), z, z_spectral)
-                # update parallel acceleration to account for (wpar/2*ppar)*dqpar/dz
-                @loop_z iz begin
-                    @views @. advect[is].speed[:,iz,ir] += 0.5*vpa.grid*z.scratch[iz]/fvec.ppar[iz,ir,is]
-                end
-                # calculate d(vth)/dz
-                derivative!(z.scratch, view(moments.vth,:,ir,is), z, z_spectral)
-                # update parallel acceleration to account for -wpar^2 * d(vth)/dz term
-                @loop_z iz begin
-                    @views @. advect[is].speed[:,iz,ir] -= vpa.grid^2*z.scratch[iz]
-                end
-            end
-        end
-        # add in contributions from charge exchange collisions
-        if composition.n_neutral_species > 0 && abs(collisions.charge_exchange) > 0.0
-            @loop_s is begin
-                if is ∈ composition.ion_species_range
-                    for isp ∈ composition.neutral_species_range
-                        @loop_r_z ir iz begin
-                            @views @. advect[is].speed[:,iz,ir] += collisions.charge_exchange *
-                            (0.5*vpa.grid/fvec.ppar[iz,ir,is] * (fvec.density[iz,ir,isp]*fvec.ppar[iz,ir,is]
-                                                              - fvec.density[iz,ir,is]*fvec.ppar[iz,ir,isp])
-                             - fvec.density[iz,ir,isp] * (fvec.upar[iz,ir,isp]-fvec.upar[iz,ir,is])/moments.vth[iz,ir,is])
-                        end
-                    end
-                end
-                if is ∈ composition.neutral_species_range
-                    for isp ∈ composition.ion_species_range
-                        @loop_r_z ir iz begin
-                            @views @. advect[is].speed[:,iz,ir] += collisions.charge_exchange *
-                            (0.5*vpa.grid/fvec.ppar[iz,ir,is] * (fvec.density[iz,ir,isp]*fvec.ppar[iz,ir,is]
-                                                              - fvec.density[iz,ir,is]*fvec.ppar[iz,ir,isp])
-                             - fvec.density[iz,ir,isp] * (fvec.upar[iz,ir,isp]-fvec.upar[iz,ir,is])/moments.vth[iz,ir,is])
-                        end
-                    end
-                end
-            end
-        end
+    if moments.evolve_ppar && moments.evolve_upar
+        update_speed_n_u_p_evolution!(advect, fvec, moments, vpa, z, r, composition, collisions, z_spectral)
+    elseif moments.evolve_ppar
+        update_speed_n_p_evolution!(advect, fields, fvec, moments, vpa, z, r, composition, collisions, z_spectral)
     elseif moments.evolve_upar
-        @loop_s is begin
-            @loop_r ir begin
-                # get d(ppar)/dz
-                derivative!(z.scratch, view(fvec.ppar,:,ir,is), z, z_spectral)
-                # update parallel acceleration to account for parallel derivative of parallel pressure
-                # NB: no vpa-dependence so compute as a scalar and broadcast to all entries
-                @loop_z iz begin
-                    @views advect[is].speed[:,iz,ir] .= z.scratch[iz]/fvec.density[iz,ir,is]
-                end
-                # calculate d(upar)/dz
-                derivative!(z.scratch, view(fvec.upar,:,ir,is), z, z_spectral)
-                # update parallel acceleration to account for -wpar*dupar/dz
-                @loop_z iz begin
-                    @views @. advect[is].speed[:,iz,ir] -= vpa.grid*z.scratch[iz]
-                end
-            end
-        end
-        # if neutrals present compute contribution to parallel acceleration due to charge exchange
-        # and/or ionization collisions betweens ions and neutrals
-        if composition.n_neutral_species > 0
-            # account for collisional charge exchange friction between ions and neutrals
-            if abs(collisions.charge_exchange) > 0.0
-                @loop_s is begin
-                    if is ∈ composition.ion_species_range
-                        for isp ∈ composition.neutral_species_range
-                            @loop_r_z ir iz begin
-                                @views @. advect[is].speed[:,iz,ir] -= collisions.charge_exchange*fvec.density[iz,ir,isp]*(fvec.upar[iz,ir,isp]-fvec.upar[iz,ir,is])
-                            end
-                        end
-                    end
-                    # include contribution to neutral acceleration due to collisional friction with ions
-                    if is ∈ composition.neutral_species_range
-                        for isp ∈ composition.ion_species_range
-                            # get the absolute species index for the neutral species
-                            @loop_r_z ir iz begin
-                                @views @. advect[is].speed[:,iz,ir] -= collisions.charge_exchange*fvec.density[iz,ir,isp]*(fvec.upar[iz,ir,isp]-fvec.upar[iz,ir,is])
-                            end
-                        end
-                    end
-                end
-            end
-            if abs(collisions.ionization) > 0.0
-                @loop_s is begin
-                    if is ∈ composition.ion_species_range
-                        for isp ∈ composition.neutral_species_range
-                            @loop_r_z ir iz begin
-                                @views @. advect[is].speed[:,iz,ir] -= collisions.ionization*fvec.density[iz,ir,isp]*(fvec.upar[iz,ir,isp]-fvec.upar[iz,ir,is])
-                            end
-                        end
-                    end
-                end
-            end
-        end
+        update_speed_n_u_evolution!(advect, fvec, moments, vpa, z, r, composition, collisions, z_spectral)
     else
         @inbounds @fastmath begin
             @loop_s is begin
@@ -225,6 +128,191 @@ function update_speed_default!(advect, fields, fvec, moments, vpa, z, r, composi
                     # advection velocity in vpa is -dphi/dz = -z.scratch
                     @loop_z iz begin
                         @views advect[is].speed[:,iz,ir] .= -0.5*z.scratch[iz]
+                    end
+                end
+            end
+        end
+    end
+end
+
+"""
+update the advection speed in the parallel velocity coordinate for the case
+where density, flow and pressure are evolved independently from the pdf;
+in this case, the parallel velocity coordinate is the normalized peculiar velocity
+wpahat = (vpa - upar)/vth
+"""
+function update_speed_n_u_p_evolution!(advect, fvec, moments, vpa, z, r, composition, collisions, z_spectral)
+    @loop_s is begin
+        @loop_r ir begin
+            # get d(ppar)/dz
+            derivative!(z.scratch, view(fvec.ppar,:,ir,is), z, z_spectral)
+            # update parallel acceleration to account for parallel derivative of parallel pressure
+            # NB: no vpa-dependence so compute as a scalar and broadcast to all entries
+            @loop_z iz begin
+                @views advect[is].speed[:,iz,ir] .= z.scratch[iz]/(fvec.density[iz,ir,is]*moments.vth[iz,ir,is])
+            end
+            # calculate d(qpar)/dz
+            derivative!(z.scratch, view(moments.qpar,:,ir,is), z, z_spectral)
+            # update parallel acceleration to account for (wpar/2*ppar)*dqpar/dz
+            @loop_z iz begin
+                @views @. advect[is].speed[:,iz,ir] += 0.5*vpa.grid*z.scratch[iz]/fvec.ppar[iz,ir,is]
+            end
+            # calculate d(vth)/dz
+            derivative!(z.scratch, view(moments.vth,:,ir,is), z, z_spectral)
+            # update parallel acceleration to account for -wpar^2 * d(vth)/dz term
+            @loop_z iz begin
+                @views @. advect[is].speed[:,iz,ir] -= vpa.grid^2*z.scratch[iz]
+            end
+        end
+    end
+    # add in contributions from charge exchange collisions
+    if composition.n_neutral_species > 0 && abs(collisions.charge_exchange) > 0.0
+        @loop_s is begin
+            if is ∈ composition.ion_species_range
+                for isp ∈ composition.neutral_species_range
+                    @loop_r_z ir iz begin
+                        @views @. advect[is].speed[:,iz,ir] += collisions.charge_exchange *
+                        (0.5*vpa.grid/fvec.ppar[iz,ir,is] * (fvec.density[iz,ir,isp]*fvec.ppar[iz,ir,is]
+                                                          - fvec.density[iz,ir,is]*fvec.ppar[iz,ir,isp])
+                         - fvec.density[iz,ir,isp] * (fvec.upar[iz,ir,isp]-fvec.upar[iz,ir,is])/moments.vth[iz,ir,is])
+                    end
+                end
+            end
+            if is ∈ composition.neutral_species_range
+                for isp ∈ composition.ion_species_range
+                    @loop_r_z ir iz begin
+                        @views @. advect[is].speed[:,iz,ir] += collisions.charge_exchange *
+                        (0.5*vpa.grid/fvec.ppar[iz,ir,is] * (fvec.density[iz,ir,isp]*fvec.ppar[iz,ir,is]
+                                                          - fvec.density[iz,ir,is]*fvec.ppar[iz,ir,isp])
+                         - fvec.density[iz,ir,isp] * (fvec.upar[iz,ir,isp]-fvec.upar[iz,ir,is])/moments.vth[iz,ir,is])
+                    end
+                end
+            end
+        end
+    end
+end
+
+"""
+update the advection speed in the parallel velocity coordinate for the case
+where density and pressure are evolved independently from the pdf;
+in this case, the parallel velocity coordinate is the normalized velocity
+vpahat = vpa/vth
+"""
+function update_speed_n_p_evolution!(advect, fields, fvec, moments, vpa, z, r, composition, collisions, z_spectral)
+    @loop_s is begin
+        # include contributions common to both ion and neutral species
+        @loop_r ir begin
+            # calculate d(qpar)/dz
+            derivative!(z.scratch, view(moments.qpar,:,ir,is), z, z_spectral)
+            # update parallel acceleration to account for (vpahat/2*ppar)*dqpar/dz
+            @loop_z iz begin
+                @views @. advect[is].speed[:,iz,ir] += 0.5*vpa.grid*z.scratch[iz]/fvec.ppar[iz,ir,is]
+            end
+            # calculate d(vth)/dz
+            derivative!(z.scratch, view(moments.vth,:,ir,is), z, z_spectral)
+            # update parallel acceleration to account for vpahat*(upar/vth-vpahat) * d(vth)/dz term
+            @loop_z iz begin
+                @views @. advect[is].speed[:,iz,ir] += vpa.grid*z.scratch[iz] *
+                                                    (moments.upar[iz,ir,is]/moments.vth[iz,ir,is] - vpa.grid)
+            end
+            # calculate d(upar)/dz
+            derivative!(z.scratch, view(moments.upar,:,ir,is), z, z_spectral)
+            # update parallel acceleration to account for vpahat*d(upar)/dz
+            @loop_z iz begin
+                @views @. advect[is].speed[:,iz,ir] += vpa.grid*z.scratch[iz]
+            end
+        end
+        # update parallel acceleration to account for parallel electric field
+        # only applies to ion species
+        if is ∈ composition.ion_species_range
+            @loop_r ir begin
+                # calculate d(phi)/dz
+                derivative!(z.scratch, view(fields.phi,:,ir), z, z_spectral)
+                # add contribution from -(1/2)*(dphi/dz)/vthi
+                @loop_z iz begin
+                    @views @. advect[is].speed[:,iz,ir] -= 0.5*z.scratch[iz]/moments.vth[iz,ir,is]
+                end
+            end
+        end
+    end
+    # add in contributions from charge exchange and ionization collisions
+    if composition.n_neutral_species > 0
+        @loop_s is begin
+            if is ∈ composition.ion_species_range && abs(collisions.charge_exchange + collisions.ionization) > 0.0
+                for isp ∈ composition.neutral_species_range
+                    @loop_r_z ir iz begin
+                        @views @. advect[is].speed[:,iz,ir] += (collisions.charge_exchange + collisions.ionization) *
+                                0.5*vpa.grid*fvec.density[iz,ir,is] * (1.0-fvec.ppar[iz,ir,isp]/fvec.ppar[iz,ir,is])
+                    end
+                end
+            end
+            if is ∈ composition.neutral_species_range && abs(collisions.charge_exchange) > 0.0
+                for isp ∈ composition.ion_species_range
+                    @loop_r_z ir iz begin
+                        @views @. advect[is].speed[:,iz,ir] += collisions.charge_exchange *
+                                0.5*vpa.grid*fvec.density[iz,ir,is] * (1.0-fvec.ppar[iz,ir,isp]/fvec.ppar[iz,ir,is])
+                    end
+                end
+            end
+        end
+    end
+end
+
+"""
+update the advection speed in the parallel velocity coordinate for the case
+where density and flow are evolved independently from the pdf;
+in this case, the parallel velocity coordinate is the peculiar velocity
+wpa = vpa-upar
+"""
+function update_speed_n_u_evolution!(advect, fvec, moments, vpa, z, r, composition, collisions, z_spectral)
+    @loop_s is begin
+        @loop_r ir begin
+            # get d(ppar)/dz
+            derivative!(z.scratch, view(fvec.ppar,:,ir,is), z, z_spectral)
+            # update parallel acceleration to account for parallel derivative of parallel pressure
+            # NB: no vpa-dependence so compute as a scalar and broadcast to all entries
+            @loop_z iz begin
+                @views advect[is].speed[:,iz,ir] .= z.scratch[iz]/fvec.density[iz,ir,is]
+            end
+            # calculate d(upar)/dz
+            derivative!(z.scratch, view(fvec.upar,:,ir,is), z, z_spectral)
+            # update parallel acceleration to account for -wpar*dupar/dz
+            @loop_z iz begin
+                @views @. advect[is].speed[:,iz,ir] -= vpa.grid*z.scratch[iz]
+            end
+        end
+    end
+    # if neutrals present compute contribution to parallel acceleration due to charge exchange
+    # and/or ionization collisions betweens ions and neutrals
+    if composition.n_neutral_species > 0
+        # account for collisional charge exchange friction between ions and neutrals
+        if abs(collisions.charge_exchange) > 0.0
+            @loop_s is begin
+                if is ∈ composition.ion_species_range
+                    for isp ∈ composition.neutral_species_range
+                        @loop_r_z ir iz begin
+                            @views @. advect[is].speed[:,iz,ir] -= collisions.charge_exchange*fvec.density[iz,ir,isp]*(fvec.upar[iz,ir,isp]-fvec.upar[iz,ir,is])
+                        end
+                    end
+                end
+                # include contribution to neutral acceleration due to collisional friction with ions
+                if is ∈ composition.neutral_species_range
+                    for isp ∈ composition.ion_species_range
+                        # get the absolute species index for the neutral species
+                        @loop_r_z ir iz begin
+                            @views @. advect[is].speed[:,iz,ir] -= collisions.charge_exchange*fvec.density[iz,ir,isp]*(fvec.upar[iz,ir,isp]-fvec.upar[iz,ir,is])
+                        end
+                    end
+                end
+            end
+        end
+        if abs(collisions.ionization) > 0.0
+            @loop_s is begin
+                if is ∈ composition.ion_species_range
+                    for isp ∈ composition.neutral_species_range
+                        @loop_r_z ir iz begin
+                            @views @. advect[is].speed[:,iz,ir] -= collisions.ionization*fvec.density[iz,ir,isp]*(fvec.upar[iz,ir,isp]-fvec.upar[iz,ir,is])
+                        end
                     end
                 end
             end

@@ -106,15 +106,16 @@ function update_speed_z!(advect, upar, vth, evolve_upar, evolve_ppar, vpa, z, r,
     if z.advection.option == "default"
         @inbounds begin
             @loop_r_vpa ir ivpa begin
-                @views advect.speed[:,ivpa,ir] .= vpa.grid[ivpa]
+                @. @views advect.speed[:,ivpa,ir] = vpa.grid[ivpa]
             end
             if evolve_ppar
                 @loop_r_vpa ir ivpa begin
-                    @. @views advect.speed[:,ivpa,ir] = advect.speed[:,ivpa,ir] * vth + upar
+                    @. @views advect.speed[:,ivpa,ir] = advect.speed[:,ivpa,ir] * vth
                 end
-            elseif evolve_upar
+            end
+            if evolve_upar
                 @loop_r_vpa ir ivpa begin
-                    @views advect.speed[:,ivpa,ir] .+= upar
+                    @. @views advect.speed[:,ivpa,ir] += upar
                 end
             end
         end

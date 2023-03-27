@@ -174,14 +174,20 @@ end
 function init_pdf_over_density!(pdf, spec, vpa, z, vth, upar, vpa_norm_fac, evolve_upar, evolve_ppar)
     if spec.vpa_IC.initialization_option == "gaussian"
         # initial condition is a Gaussian in the peculiar velocity
-        # if evolve_ppar = true, then vpa coordinate is (vpa - upar)/vth;
-        # otherwise it is either (vpa-upar) or simply vpa
         for iz ∈ 1:z.n
             # obtain (vpa - upar)/vth
             if evolve_ppar
-                @. vpa.scratch = vpa.grid
+                # if evolve_upar = true and evolve_ppar = true, then vpa coordinate is (vpa-upar)/vth;
+                if evolve_upar
+                    @. vpa.scratch = vpa.grid
+                # if evolve_upar = false and evolve_ppar = true, then vpa coordinate is vpa/vth;
+                else
+                    @. vpa.scratch = vpa.grid - upar[iz]/vth[iz]
+                end
+            # if evolve_upar = true and evolve_ppar = false, then vpa coordinate is vpa-upar;
             elseif evolve_upar
                 @. vpa.scratch = vpa.grid/vth[iz]
+            # if evolve_upar = false and evolve_ppar = false, then vpa coordinate is vpa;
             else
                 @. vpa.scratch = (vpa.grid - upar[iz])/vth[iz]
             end
@@ -194,17 +200,21 @@ function init_pdf_over_density!(pdf, spec, vpa, z, vth, upar, vpa_norm_fac, evol
             # pparfac = the integral of the pdf over v-space, weighted by m_s w_s^2 / vths^2,
             # where w_s = vpa - upar_s;
             # should be equal to 1/2, but may not be exactly 1/2 due to quadrature errors
-            @views @. vpa.scratch = vpa.grid^2 * pdf[:,iz] * (vpa_norm_fac[iz]/vth[iz])^2
-            pparfac = integrate_over_vspace(vpa.scratch, vpa.wgts)
+            @views @. vpa.scratch2 = vpa.grid^2 * pdf[:,iz] * (vpa_norm_fac[iz]/vth[iz])^2
+            #@views @. vpa.scratch2 = vpa.scratch^2 * pdf[:,iz]
+            pparfac = integrate_over_vspace(vpa.scratch2, vpa.wgts)
             # pparfac2 = the integral of the pdf over v-space, weighted by m_s w_s^2 (w_s^2 - vths^2 / 2) / vth^4
-            @views @. vpa.scratch = vpa.grid^2 *(vpa.grid^2/pparfac - 1.0/densfac) * pdf[:,iz] * (vpa_norm_fac[iz]/vth[iz])^4
-            pparfac2 = integrate_over_vspace(vpa.scratch, vpa.wgts)
+            @views @. vpa.scratch2 = vpa.grid^2 *(vpa.grid^2/pparfac - 1.0/densfac) * pdf[:,iz] * (vpa_norm_fac[iz]/vth[iz])^4
+            #@views @. vpa.scratch2 = vpa.scratch^2 *(vpa.scratch^2/pparfac - 1.0/densfac) * pdf[:,iz]
+            pparfac2 = integrate_over_vspace(vpa.scratch2, vpa.wgts)
 
             @views @. pdf[:,iz] = pdf[:,iz]/densfac + (0.5 - pparfac/densfac)/pparfac2*(vpa.grid^2/pparfac - 1.0/densfac)*pdf[:,iz]*(vpa_norm_fac[iz]/vth[iz])^2
+            #@views @. pdf[:,iz] = pdf[:,iz]/densfac + (0.5 - pparfac/densfac)/pparfac2*(vpa.scratch^2/pparfac - 1.0/densfac)*pdf[:,iz]
         end
     elseif spec.vpa_IC.initialization_option == "vpagaussian"
         for iz ∈ 1:z.n
-            @. pdf[:,iz] = vpa.grid^2*exp(-(vpa.grid*(vpa_norm_fac[iz]/vth[iz]))^2) / vth[iz]
+            #@. pdf[:,iz] = vpa.grid^2*exp(-(vpa.grid*(vpa_norm_fac[iz]/vth[iz]))^2) / vth[iz]
+            @. pdf[:,iz] = vpa.grid^2*exp(-(vpa.scratch)^2) / vth[iz]
         end
     elseif spec.vpa_IC.initialization_option == "sinusoid"
         # initial condition is sinusoid in vpa
@@ -218,23 +228,6 @@ function init_pdf_over_density!(pdf, spec, vpa, z, vth, upar, vpa_norm_fac, evol
             @. pdf[:,iz] = (vpa.grid + 0.5*vpa.L)^spec.vpa_IC.monomial_degree
         end
     end
-    # for iz ∈ 1:z.n
-    #     # densfac = the integral of the pdf over v-space, which should be unity,
-    #     # but may not be exactly unity due to quadrature errors
-    #     densfac = integrate_over_vspace(view(pdf,:,iz), vpa.wgts)
-    #     # pparfac = the integral of the pdf over v-space, weighted by m_s w_s^2 / vths^2,
-    #     # where w_s = vpa - upar_s;
-    #     # should be equal to 1/2, but may not be exactly 1/2 due to quadrature errors
-    #     @. vpa.scratch = vpa.grid^2 * pdf[:,iz] * (vpa_norm_fac[iz]/vth[iz])^2
-    #     pparfac = integrate_over_vspace(vpa.scratch, vpa.wgts)
-    #     # pparfac2 = the integral of the pdf over v-space, weighted by m_s w_s^2 (w_s^2 - vths^2 / 2) / vth^4
-    #     #@. vpa.scratch = vpa.grid^2 *(vpa.grid^2/pparfac - vth[iz]^2/densfac) * pdf[iz,:] * (vpa_norm_fac[iz]/vth[iz])^4
-    #     @. vpa.scratch = vpa.grid^2 *(vpa.grid^2/pparfac - 1.0/densfac) * pdf[:,iz] * (vpa_norm_fac[iz]/vth[iz])^4
-    #     pparfac2 = integrate_over_vspace(vpa.scratch, vpa.wgts)
-    #
-    #     #@. pdf[:,iz] = pdf[:,iz]/densfac + (0.5 - pparfac/densfac)/pparfac2*(vpa.grid^2/pparfac - vth[iz]^2/densfac)*pdf[:,iz]*(vpa_norm_fac[iz]/vth[iz])^2
-    #     @. pdf[:,iz] = pdf[:,iz]/densfac + (0.5 - pparfac/densfac)/pparfac2*(vpa.grid^2/pparfac - 1.0/densfac)*pdf[:,iz]*(vpa_norm_fac[iz]/vth[iz])^2
-    # end
     return nothing
 end
 
@@ -465,7 +458,11 @@ create an array of dz/dt values corresponding to the given vpagrid values
 """
 function vpagrid_to_dzdt(vpagrid, vth, upar, evolve_ppar, evolve_upar)
     if evolve_ppar
-        return vpagrid .* vth .+ upar
+        if evolve_upar
+            return vpagrid .* vth .+ upar
+        else
+            return vpagrid .* vth
+        end
     elseif evolve_upar
         return vpagrid .+ upar
     else

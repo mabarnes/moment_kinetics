@@ -28,47 +28,28 @@ struct ios
     fields::IOStream
 end
 
-# Use this long-winded type (found by using `typeof(v)` where `v` is a variable
-# returned from `NCDatasets.defVar()`) because compiler does not seem to be
-# able to pick up the return types of `defVar()` at compile time, so without
-# using it the result returned from `setup_file_io()` is not a concrete type.
-nc_var_type{N} = Union{
-   NCDatasets.CFVariable{mk_float, N,
-                         NCDatasets.Variable{mk_float, N, NCDatasets.NCDataset},
-                         NCDatasets.Attributes{NCDatasets.NCDataset{Nothing}},
-                         NamedTuple{(:fillvalue, :scale_factor, :add_offset,
-                                     :calendar, :time_origin, :time_factor),
-                                    NTuple{6, Nothing}}},
-   NCDatasets.CFVariable{mk_float, N,
-                         NCDatasets.Variable{mk_float, N,
-                                             NCDatasets.NCDataset{Nothing}},
-                         NCDatasets.Attributes{NCDatasets.NCDataset{Nothing}},
-                         NamedTuple{(:fillvalue, :scale_factor, :add_offset,
-                                     :calendar, :time_origin, :time_factor),
-                                    NTuple{6, Nothing}}}}
-
 """
 structure containing the data/metadata needed for netcdf file i/o
 """
-struct netcdf_info
+struct netcdf_info{Ttime, Tfi, Tphi, Tmom}
     # file identifier for the netcdf file to which data is written
     fid::NCDataset
     # handle for the time variable
-    time::nc_var_type{1}
+    time::Ttime
     # handle for the distribution function variable
-    f::nc_var_type{5}
+    f::Tfi
     # handle for the electrostatic potential variable
-    phi::nc_var_type{3}
+    phi::Tphi
     # handle for the species density
-    density::nc_var_type{4}
+    density::Tmom
     # handle for the species parallel flow
-    parallel_flow::nc_var_type{4}
+    parallel_flow::Tmom
     # handle for the species parallel pressure
-    parallel_pressure::nc_var_type{4}
+    parallel_pressure::Tmom
     # handle for the species parallel heat flux
-    parallel_heat_flux::nc_var_type{4}
+    parallel_heat_flux::Tmom
     # handle for the species thermal speed
-    thermal_speed::nc_var_type{4}
+    thermal_speed::Tmom
 end
 
 """

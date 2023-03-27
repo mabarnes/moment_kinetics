@@ -11,6 +11,7 @@ export load_pdf_data
 using NCDatasets
 
 """
+open the netcdf file to read output data
 """
 function open_netcdf_file(run_name)
     # create the netcdf filename from the given run_name
@@ -39,7 +40,7 @@ function load_coordinate_data(fid)
     r_wgts = cdfvar.var[:]
     # Lr = r box length
     Lr = r[end]-r[1]
-    
+
     # define a handle for the z coordinate
     cdfvar = fid["z"]
     # get the number of z grid points
