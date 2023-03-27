@@ -109,15 +109,15 @@ function charge_exchange_collisions_single_species!(f_out, fvec_in, moments, vpa
                 # to get f_{s'}(wpa_s), need to obtain wpa_s grid locations
                 # in terms of the wpa_{s'} coordinate:
                 # (wpa_s)_j = (wpa_{s'})_j + upar_{s'} - upar_{s}
-                @. vpa.scratch = vpa.grid + fvec_in.upar[iz,ir,isp] - fvec_in.upar[iz,ir,is]
+                @. vpa.scratch = vpa.grid + fvec_in.upar[iz,ir,is] - fvec_in.upar[iz,ir,isp]
             else
                 # if evolve_ppar = true and evolve_upar = true, vpa coordinate is
                 # wpahat_s = (vpa-upar_s)/vth_s;
                 # we have f_{s'}(wpahat_{s'}) = f_{s'}((wpahat_s * vth_s + upar_s - upar_{s'}) / vth_{s'});
                 # to get f_{s'}(wpahat_s), need to obtain wpahat_s grid locations
                 # in terms of the wpahat_{s'} coordinate:
-                # (wpahat_s)_j = ((wpahat_{s'})_j * vth_{s'} + upar_{s'} - upar_{s}) / vth_{s}
-                @. vpa.scratch = (vpa.grid * moments.vth[iz,ir,isp] + fvec_in.upar[iz,ir,isp] - fvec_in.upar[iz,ir,is]) / moments.vth[iz,ir,is]
+                # (wpahat_{s'})_j = ((wpahat_{s})_j * vth_{s} + upar_{s} - upar_{s'}) / vth_{s'}
+                @. vpa.scratch = (vpa.grid * moments.vth[iz,ir,is] + fvec_in.upar[iz,ir,is] - fvec_in.upar[iz,ir,isp]) / moments.vth[iz,ir,isp]
             end
             # interpolate to the new grid (passed in as vpa.scratch)
             # and return interpolated values in vpa.scratch2

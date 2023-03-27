@@ -487,6 +487,13 @@ function _block_synchronize()
 
                     array.previous_is_read .= array.is_read
                     array.previous_is_written .= array.is_written
+                else
+                    # If checking is inactive, set as if at 'previous' the array was
+                    # always read/written so that the next set of checks don't detect a
+                    # 'redundant' call which is actually only 'redundant' just after an
+                    # inactive region (e.g. initialisation or writing output).
+                    array.previous_is_read .= true
+                    array.previous_is_written .= true
                 end
             end
 

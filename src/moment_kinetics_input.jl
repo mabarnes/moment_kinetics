@@ -44,7 +44,7 @@ function mk_input(scan_input=Dict())
     n_ion_species = 1
     # n_neutral_species is the number of evolved neutral species
     # currently only n_neutral_species = 0 is supported
-    n_neutral_species = 1
+    n_neutral_species = get(scan_input, "n_neutral_species", 1)
     # * if electron_physics=boltzmann_electron_response, then the electron density is
     #   fixed to be N_e*(eϕ/T_e)
     # * if electron_physics=boltzmann_electron_response_with_simple_sheath, then the
@@ -101,6 +101,7 @@ function mk_input(scan_input=Dict())
         s.z_IC.initialization_option = get(scan_input, "z_IC_option$i", species[1].z_IC.initialization_option)
         s.initial_density = get(scan_input, "initial_density$i", 0.5)
         s.initial_temperature = get(scan_input, "initial_temperature$i", species[1].initial_temperature)
+        s.z_IC.width = get(scan_input, "z_IC_width$i", species[1].z_IC.width)
         s.z_IC.density_amplitude = get(scan_input, "z_IC_density_amplitude$i", species[1].z_IC.density_amplitude)
         s.z_IC.density_phase = get(scan_input, "z_IC_density_phase$i", species[1].z_IC.density_phase)
         s.z_IC.upar_amplitude = get(scan_input, "z_IC_upar_amplitude$i", species[1].z_IC.upar_amplitude)
@@ -108,6 +109,7 @@ function mk_input(scan_input=Dict())
         s.z_IC.temperature_amplitude = get(scan_input, "z_IC_temperature_amplitude$i", species[1].z_IC.temperature_amplitude)
         s.z_IC.temperature_phase = get(scan_input, "z_IC_temperature_phase$i", species[1].z_IC.temperature_phase)
         s.vpa_IC.initialization_option = get(scan_input, "vpa_IC_option$i", species[1].vpa_IC.initialization_option)
+        s.vpa_IC.width = get(scan_input, "vpa_IC_width$i", species[1].vpa_IC.width)
         s.vpa_IC.density_amplitude = get(scan_input, "vpa_IC_density_amplitude$i", species[1].vpa_IC.density_amplitude)
         s.vpa_IC.density_phase = get(scan_input, "vpa_IC_density_phase$i", species[1].vpa_IC.density_phase)
         s.vpa_IC.upar_amplitude = get(scan_input, "vpa_IC_upar_amplitude$i", species[1].vpa_IC.upar_amplitude)
@@ -141,6 +143,7 @@ function mk_input(scan_input=Dict())
     # determine the discretization option for the r grid
     # supported options are "chebyshev_pseudospectral" and "finite_difference"
     r.discretization = get(scan_input, "r_discretization", "finite_difference")
+    r.fd_option = get(scan_input, "r_finite_difference_option", "third_order_upwind")
     # determine the boundary condition to impose in r
     # supported options are "constant", "periodic" and "wall"
     r.bc = get(scan_input, "r_bc", "periodic")
@@ -153,6 +156,7 @@ function mk_input(scan_input=Dict())
     # determine the discretization option for the z grid
     # supported options are "chebyshev_pseudospectral" and "finite_difference"
     z.discretization = get(scan_input, "z_discretization", "chebyshev_pseudospectral")
+    z.fd_option = get(scan_input, "z_finite_difference_option", "third_order_upwind")
     # determine the boundary condition to impose in z
     # supported options are "constant", "periodic" and "wall"
     z.bc = get(scan_input, "z_bc", "wall")
@@ -170,6 +174,7 @@ function mk_input(scan_input=Dict())
     # determine the discretization option for the vpa grid
     # supported options are "chebyshev_pseudospectral" and "finite_difference"
     vpa.discretization = get(scan_input, "vpa_discretization", "chebyshev_pseudospectral")
+    vpa.fd_option = get(scan_input, "vpa_finite_difference_option", "third_order_upwind")
 
     #########################################################################
     ########## end user inputs. do not modify following code! ###############

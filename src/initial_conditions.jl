@@ -40,15 +40,15 @@ function init_pdf_and_moments(vpa, z, r, composition, species, n_rk_stages, evol
     @serial_region begin
         # initialise the density profile
         init_density!(moments.dens, z, r, species, n_species)
-        moments.dens_updated .= true
         # initialise the parallel flow profile
         init_upar!(moments.upar, z, r, species, n_species)
-        moments.upar_updated .= true
         # initialise the parallel thermal speed profile
         init_vth!(moments.vth, z, r, species, n_species)
         @. moments.ppar = 0.5 * moments.dens * moments.vth^2
-        moments.ppar_updated .= true
     end
+    moments.dens_updated .= true
+    moments.upar_updated .= true
+    moments.ppar_updated .= true
     # create and initialise the normalised particle distribution function (pdf)
     # such that ∫dwpa pdf.norm = 1, ∫dwpa wpa * pdf.norm = 0, and ∫dwpa wpa^2 * pdf.norm = 1/2
     # note that wpa = vpa - upar, unless moments.evolve_ppar = true, in which case wpa = (vpa - upar)/vth
@@ -57,7 +57,9 @@ function init_pdf_and_moments(vpa, z, r, composition, species, n_rk_stages, evol
     pdf = create_and_init_pdf(moments, vpa, z, r, n_species, species)
     begin_s_r_z_region()
     # calculate the initial parallel heat flux from the initial un-normalised pdf
-    update_qpar!(moments.qpar, moments.qpar_updated, pdf.unnorm, vpa, z, r, composition, moments.vpa_norm_fac)
+    update_qpar!(moments.qpar, moments.qpar_updated, moments.dens, moments.upar,
+                 moments.vth, pdf.norm, vpa, z, r, composition, moments.evolve_density,
+                 moments.evolve_upar, moments.evolve_ppar)
     return pdf, moments
 end
 
@@ -158,9 +160,17 @@ function init_upar!(upar, z, r, spec, n_species)
                 # this is designed to give a nonzero J_{||i} at endpoints in z
                 # necessary for an electron sheath condition involving J_{||i}
                 # option "gaussian" to be consistent with usual init option for now
+                mid_ind = z.n ÷ 2
+                if z.n % 2 == 0
+                    z_midpoint = 0.5*(z.grid[mid_ind] + z.grid[mid_ind+1])
+                else
+                    # because ÷ does integer division (which floors the result), the
+                    # actual index of the mid-point is mid_ind+1
+                    z_midpoint = z.grid[mid_ind+1]
+                end
                 @. upar[:,ir,is] =
                     (spec[is].z_IC.upar_amplitude * 2.0 *
-                           (z.grid[:] - z.grid[floor(Int,z.n/2)])/z.L)
+                           (z.grid[:] - z_midpoint)/z.L)
             else
                 @. upar[:,ir,is] = 0.0
             end
