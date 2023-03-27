@@ -62,7 +62,8 @@ for Chebyshev transforms, velocity space moments,
 EM fields, semi-Lagrange treatment, and advection terms
 """
 function setup_time_advance!(pdf, vpa, z, r, z_spectral, composition, drive_input,
-                             moments, t_input, collisions, species, num_diss_params)
+                             moments, t_input, collisions, species, num_diss_params,
+                             restarting)
     # define some local variables for convenience/tidiness
     n_species = composition.n_species
     n_ion_species = composition.n_ion_species
@@ -144,16 +145,18 @@ function setup_time_advance!(pdf, vpa, z, r, z_spectral, composition, drive_inpu
         end
     end
 
-    # ensure initial pdf has no negative values
-    force_minimum_pdf_value!(pdf.norm, num_diss_params)
-    # enforce boundary conditions and moment constraints to ensure a consistent initial
-    # condition
-    enforce_boundary_conditions!(pdf.norm, moments.dens, moments.upar, moments.ppar,
-        moments, vpa.bc, z.bc, vpa, z, r, vpa_advect, z_advect, composition)
-    # Ensure normalised pdf exactly obeys integral constraints if evolving moments
-    begin_s_r_z_region()
-    @loop_s_r_z is ir iz begin
-        @views hard_force_moment_constraints!(pdf.norm[:,iz,ir,is], moments, vpa)
+    if !restarting
+        # ensure initial pdf has no negative values
+        force_minimum_pdf_value!(pdf.norm, num_diss_params)
+        # enforce boundary conditions and moment constraints to ensure a consistent initial
+        # condition
+        enforce_boundary_conditions!(pdf.norm, moments.dens, moments.upar, moments.ppar,
+            moments, vpa.bc, z.bc, vpa, z, r, vpa_advect, z_advect, composition)
+        # Ensure normalised pdf exactly obeys integral constraints if evolving moments
+        begin_s_r_z_region()
+        @loop_s_r_z is ir iz begin
+            @views hard_force_moment_constraints!(pdf.norm[:,iz,ir,is], moments, vpa)
+        end
     end
     # update unnormalised pdf, moments and phi in case they were affected by applying
     # boundary conditions or constraints to the pdf

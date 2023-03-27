@@ -2,7 +2,8 @@
 """
 module initial_conditions
 
-export init_pdf_and_moments
+export allocate_pdf_and_moments
+export init_pdf_and_moments!
 export enforce_z_boundary_condition!
 export enforce_vpa_boundary_condition!
 export enforce_boundary_conditions!
@@ -30,17 +31,37 @@ struct pdf_struct
 end
 
 """
-creates the normalised pdf and the velocity-space moments and populates them
-with a self-consistent initial condition
+Creates the structs for the pdf and the velocity-space moments
 """
-function init_pdf_and_moments(vpa, z, r, vpa_spectral, composition, species,
-                              n_rk_stages, evolve_moments, ionization)
-    # define the n_species variable for convenience
-    n_species = composition.n_species
+function allocate_pdf_and_moments(composition, r, z, vpa, evolve_moments, ionization)
+    pdf = create_pdf(composition, r, z, vpa)
+
     # create the 'moments' struct that contains various v-space moments and other
     # information related to these moments.
     # the time-dependent entries are not initialised.
-    moments = create_moments(z.n, r.n, n_species, evolve_moments, ionization, z.bc)
+    moments = create_moments(z.n, r.n, composition.n_species, evolve_moments, ionization, z.bc)
+
+    return pdf, moments
+end
+
+"""
+Allocate arrays for pdf
+"""
+function create_pdf(composition, r, z, vpa)
+    pdf_norm = allocate_shared_float(vpa.n, z.n, r.n, composition.n_species)
+    pdf_unnorm = allocate_shared_float(vpa.n, z.n, r.n, composition.n_species)
+
+    return pdf_struct(pdf_norm, pdf_unnorm)
+end
+
+"""
+creates the normalised pdf and the velocity-space moments and populates them
+with a self-consistent initial condition
+"""
+function init_pdf_and_moments!(pdf, moments, composition, r, z, vpa, vpa_spectral,
+                               species)
+    # define the n_species variable for convenience
+    n_species = composition.n_species
     @serial_region begin
         # initialise the density profile
         init_density!(moments.dens, z, r, species, n_species)
@@ -58,8 +79,7 @@ function init_pdf_and_moments(vpa, z, r, vpa_spectral, composition, species,
     # note that wpa = vpa - upar, unless moments.evolve_ppar = true, in which case wpa = (vpa - upar)/vth
     # the definition of pdf.norm changes accordingly from pdf.unnorm / density to pdf.unnorm * vth / density
     # when evolve_ppar = true.
-    pdf = create_and_init_pdf(moments, vpa, z, r, vpa_spectral, n_species, species,
-                              composition)
+    initialize_pdf!(pdf, moments, composition, r, z, vpa, vpa_spectral, species)
     begin_s_r_z_region()
     # calculate the initial parallel heat flux from the initial un-normalised pdf
     update_qpar!(moments.qpar, moments.qpar_updated, moments.dens, moments.upar,
@@ -70,10 +90,11 @@ end
 
 """
 """
-function create_and_init_pdf(moments, vpa, z, r, vpa_spectral, n_species, species,
-                             composition)
-    pdf_norm = allocate_shared_float(vpa.n, z.n, r.n, n_species)
-    pdf_unnorm = allocate_shared_float(vpa.n, z.n, r.n, n_species)
+function initialize_pdf!(pdf, moments, composition, r, z, vpa, vpa_spectral, species)
+    pdf_norm = pdf.norm
+    pdf_unnorm = pdf.unnorm
+
+    n_species = composition.n_species
     @serial_region begin
         for is ∈ 1:n_species
             for ir ∈ 1:r.n
@@ -107,7 +128,8 @@ function create_and_init_pdf(moments, vpa, z, r, vpa_spectral, n_species, specie
             end
         end
     end
-    return pdf_struct(pdf_norm, pdf_unnorm)
+
+    return nothing
 end
 
 """

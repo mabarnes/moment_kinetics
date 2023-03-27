@@ -437,9 +437,13 @@ function reload_evolving_fields!(pdf, moments, restart_filename, time_index,
             code_time = fid["time"].var[time_index]
             pdf.norm .= fid["f"].var[:,:,:,:,time_index]
             moments.dens .= fid["density"].var[:,:,:,time_index]
+            moments.dens_updated .= true
             moments.upar .= fid["parallel_flow"].var[:,:,:,time_index]
+            moments.upar_updated .= true
             moments.ppar .= fid["parallel_pressure"].var[:,:,:,time_index]
+            moments.ppar_updated .= true
             moments.qpar .= fid["parallel_heat_flux"].var[:,:,:,time_index]
+            moments.qpar_updated .= true
             moments.vth .= fid["thermal_speed"].var[:,:,:,time_index]
         finally
             close(fid)
