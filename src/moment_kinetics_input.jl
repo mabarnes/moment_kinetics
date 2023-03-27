@@ -2,6 +2,7 @@
 """
 module moment_kinetics_input
 
+export input_from_TOML
 export mk_input
 export performance_test
 #export advective_form
@@ -13,6 +14,8 @@ using ..file_io: input_option_error, open_output_file
 using ..finite_differences: fd_check_option
 using ..input_structs
 using ..numerical_dissipation: setup_numerical_dissipation
+
+using TOML
 
 @enum RunType single performance_test scan
 const run_type = single
@@ -34,6 +37,20 @@ function get(d::Dict, key, default::Enum)
         error("Expected a $(typeof(default)), but '$valstring' is not in "
               * "$(instances(typeof(default)))")
     end
+end
+
+function input_from_TOML(input_filepath::String)
+    input = TOML.parsefile(input_filepath)
+
+    if !("run_name" ∈ keys(input))
+        # Construct default for the run_name option from the name of the input file, minus
+        # the `.toml` extension
+        input_filename = basename(input_filepath)
+        default_run_name = splitext(input_filename)[1]
+        input["run_name"] = default_run_name
+    end
+
+    return input
 end
 
 """
