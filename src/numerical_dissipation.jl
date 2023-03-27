@@ -16,6 +16,7 @@ Base.@kwdef struct numerical_dissipation_parameters
     vpa_boundary_buffer_diffusion_coefficient::mk_float = -1.0
     vpa_dissipation_coefficient::mk_float = -1.0
     z_dissipation_coefficient::mk_float = -1.0
+    moment_dissipation_coefficient::mk_float = -1.0
     force_minimum_pdf_value::Union{Nothing,mk_float} = nothing
 end
 
