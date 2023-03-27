@@ -2,7 +2,7 @@
 """
 module moment_kinetics
 
-export run_moment_kinetics
+export run_moment_kinetics, restart_moment_kinetics
 
 using MPI
 
@@ -54,10 +54,11 @@ include("post_processing.jl")
 using TimerOutputs
 using TOML
 
-using .file_io: setup_file_io, finish_file_io
+using .file_io: setup_file_io, finish_file_io, reload_evolving_fields!
 using .file_io: write_data_to_ascii, write_data_to_binary
 using .command_line_options: get_options
 using .communication
+using .communication: _block_synchronize
 using .coordinates: define_coordinate
 using .debugging
 using .initial_conditions: init_pdf_and_moments
@@ -71,27 +72,39 @@ using .time_advance: setup_time_advance!, time_advance!
 main function that contains all of the content of the program
 """
 function run_moment_kinetics(to::TimerOutput, input_dict=Dict())
-    # set up all the structs, etc. needed for a run
-    mk_state = setup_moment_kinetics(input_dict)
-
     try
-        # solve the 1+1D kinetic equation to advance f in time by nstep time steps
-        if run_type == performance_test
-            @timeit to "time_advance" time_advance!(mk_state...)
-        else
-            time_advance!(mk_state...)
+        # set up all the structs, etc. needed for a run
+        mk_state = setup_moment_kinetics(input_dict)
+
+        try
+            # solve the 1+1D kinetic equation to advance f in time by nstep time steps
+            if run_type == performance_test
+                @timeit to "time_advance" time_advance!(mk_state...)
+            else
+                time_advance!(mk_state...)
+            end
+        finally
+
+            # clean up i/o and communications
+            # last 2 elements of mk_state are `io` and `cdf`
+            cleanup_moment_kinetics!(mk_state[end-1:end]...)
         end
-    finally
 
-        # clean up i/o and communications
-        # last 2 elements of mk_state are `io` and `cdf`
-        cleanup_moment_kinetics!(mk_state[end-1:end]...)
-    end
+        if block_rank[] == 0 && run_type == performance_test
+            # Print the timing information if this is a performance test
+            display(to)
+            println()
+        end
+    catch e
+        # Stop code from hanging when running on multiple processes if only one of them
+        # throws an error
+        if global_size[] > 1
+            println("Abort called on rank $(block_rank[]) due to error. Error message "
+                    * "was:\n", e)
+            MPI.Abort(comm_world, 1)
+        end
 
-    if block_rank[] == 0 && run_type == performance_test
-        # Print the timing information if this is a performance test
-        display(to)
-        println()
+        rethrow(e)
     end
 
     return nothing
@@ -124,9 +137,98 @@ function run_moment_kinetics()
 end
 
 """
-Perform all the initialization steps for a run.
+Append a number to the filename, to get a new, non-existing filename to backup the file
+to.
 """
-function setup_moment_kinetics(input_dict::Dict)
+function get_backup_filename(filename)
+    counter = 1
+    basename, extension = splitext(filename)
+    backup_name = ""
+    while true
+        backup_name = "$(basename)_$(counter)$(extension)"
+        if !isfile(backup_name)
+            break
+        end
+        counter += 1
+    end
+    backup_name == "" && error("Failed to find a name for backup file.")
+    return backup_name
+end
+
+"""
+Restart moment kinetics from an existing run. Space/velocity-space resolution in the
+input must be the same as for the original run.
+"""
+function restart_moment_kinetics(restart_filename::String, input_filename::String,
+                                 time_index::Int=-1)
+    restart_moment_kinetics(restart_filename, TOML.parsefile(input_filename),
+                            time_index)
+    return nothing
+end
+function restart_moment_kinetics()
+    options = get_options()
+    inputfile = options["inputfile"]
+    if inputfile === nothing
+        error("Must pass input file as first argument to restart a run.")
+    end
+    restartfile = options["restartfile"]
+    if restartfile === nothing
+        error("Must pass output file to restart from as second argument.")
+    end
+    time_index = options["restart-time-index"]
+
+    restart_moment_kinetics(restartfile, inputfile, time_index)
+
+    return nothing
+end
+function restart_moment_kinetics(restart_filename::String, input_dict::Dict,
+                                 time_index::Int=-1)
+    try
+        # Move the output file being restarted from to make sure it doesn't get
+        # overwritten.
+        backup_filename = get_backup_filename(restart_filename)
+        global_rank[] == 0 && mv(restart_filename, backup_filename)
+
+        # Set up all the structs, etc. needed for a run.
+        pdf, scratch, code_time, t_input, vpa, z, r, vpa_spectral, z_spectral,
+        r_spectral, moments, fields, vpa_advect, z_advect, r_advect, vpa_SL, z_SL, r_SL,
+        composition, collisions, advance, scratch_dummy_sr, io, cdf =
+        setup_moment_kinetics(input_dict, backup_filename=backup_filename,
+                              restart_time_index=time_index)
+
+        try
+            time_advance!(pdf, scratch, code_time, t_input, vpa, z, r, vpa_spectral,
+                          z_spectral, r_spectral, moments, fields, vpa_advect, z_advect,
+                          r_advect, vpa_SL, z_SL, r_SL, composition, collisions,
+                          advance, scratch_dummy_sr, io, cdf)
+        finally
+            # clean up i/o and communications
+            # last 2 elements of mk_state are `io` and `cdf`
+            cleanup_moment_kinetics!(io, cdf)
+        end
+    catch e
+        # Stop code from hanging when running on multiple processes if only one of them
+        # throws an error
+        if global_size[] > 1
+            println("Abort called on rank $(block_rank[]) due to error. Error message "
+                    * "was:\n", e)
+            MPI.Abort(comm_world, 1)
+        end
+
+        rethrow(e)
+    end
+
+    return nothing
+end
+
+"""
+Perform all the initialization steps for a run.
+
+If `backup_filename` is `nothing`, set up for a regular run; if a filename is passed,
+reload data from time index given by `restart_time_index` for a restart.
+"""
+function setup_moment_kinetics(input_dict::Dict; backup_filename=nothing,
+                               restart_time_index=-1)
     # Set up MPI
     initialize_comms!()
 
@@ -155,13 +257,22 @@ function setup_moment_kinetics(input_dict::Dict)
     moments, fields, vpa_advect, z_advect, r_advect, vpa_SL, z_SL, r_SL, scratch,
         advance, scratch_dummy_sr = setup_time_advance!(pdf, vpa, z, r, z_spectral,
             composition, drive_input, moments, t_input, collisions, species)
+
+    if backup_filename !== nothing
+        # Have done unnecessary initialisation of pdf and moments, which is overwritten
+        # here
+        code_time = reload_evolving_fields!(pdf, moments, backup_filename,
+                                            restart_time_index, composition, r, z, vpa)
+        _block_synchronize()
+    end
+
     # setup i/o
     io, cdf = setup_file_io(output_dir, run_name, vpa, z, r, composition, collisions,
                             moments.evolve_ppar)
     # write initial data to ascii files
-    write_data_to_ascii(pdf.unnorm, moments, fields, vpa, z, r, code_time, composition.n_species, io)
+    write_data_to_ascii(pdf.norm, moments, fields, vpa, z, r, code_time, composition.n_species, io)
     # write initial data to binary file (netcdf)
-    write_data_to_binary(pdf.unnorm, moments, fields, code_time, composition.n_species, cdf, 1)
+    write_data_to_binary(pdf.norm, moments, fields, code_time, composition.n_species, cdf, 1)
 
     begin_s_r_z_region()
 

@@ -268,6 +268,19 @@ function run_test(test_input, rtol; args...)
             phi = phi_zrt[:,1,:]
             n, upar, ppar, qpar, v_t = n_zrst[:,1,:,:], upar_zrst[:,1,:,:], ppar_zrst[:,1,:,:], qpar_zrst[:,1,:,:], v_t_zrst[:,1,:,:]
             f = f_vpazrst[:,:,1,:,:]
+
+            # Unnormalize f
+            if input["evolve_moments_density"]
+                for it ∈ 1:length(time), is ∈ 1:n_species, iz ∈ 1:nz
+                    f[:,iz,is,it] .*= n[iz,is,it]
+                end
+            end
+            if input["evolve_moments_parallel_pressure"]
+                for it ∈ 1:length(time), is ∈ 1:n_species, iz ∈ 1:nz
+                    vth = sqrt(2.0*ppar[iz,is,it]/n[iz,is,it])
+                    f[:,iz,is,it] ./= vth
+                end
+            end
         end
 
         # Create coordinates
