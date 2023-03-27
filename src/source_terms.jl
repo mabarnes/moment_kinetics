@@ -25,8 +25,9 @@ function source_terms!(pdf_out, fvec_in, moments, vpa, z, r, dt, spectral, compo
         if composition.n_neutral_species > 0
             if abs(collisions.charge_exchange) > 0.0 || abs(collisions.ionization) > 0.0
                 @views source_terms_evolve_ppar_collisions!(pdf_out[:,:,:,:], fvec_in.pdf[:,:,:,:],
-                                                fvec_in.density, fvec_in.ppar, composition,
-                                                collisions, dt, z, r)
+                                                fvec_in.density, fvec_in.upar,
+                                                fvec_in.ppar, composition, collisions,
+                                                dt, z, r)
             end
         end
     elseif moments.evolve_density
@@ -87,22 +88,35 @@ end
 update the evolved pdf to account for the charge exchange and ionization source terms in the
 kinetic equation arising due to the re-normalization of the pdf as g = f * vth / n
 """
-function source_terms_evolve_ppar_collisions!(pdf_out, pdf_in, dens, ppar, composition, collisions, dt, z, r)
+function source_terms_evolve_ppar_collisions!(pdf_out, pdf_in, dens, upar, ppar,
+                                              composition, collisions, dt, z, r)
     @loop_s is begin
         if is ∈ composition.ion_species_range
             for isp ∈ composition.neutral_species_range
                 @loop_r_z ir iz begin
                     @views @. pdf_out[:,iz,ir,is] -= 0.5*dt*pdf_in[:,iz,ir,is] *
-                    (collisions.charge_exchange + collisions.ionization) *
-                    (dens[iz,ir,isp]*ppar[iz,ir,is]-dens[iz,ir,is]*ppar[iz,ir,isp])/ppar[iz,ir,is]
+                    (collisions.charge_exchange
+                       * (dens[iz,ir,isp]*ppar[iz,ir,is] - dens[iz,ir,is]*ppar[iz,ir,isp]
+                          - dens[iz,ir,is]*dens[iz,ir,isp]
+                            * (upar[iz,ir,is] - upar[iz,ir,isp])^2)
+                       / ppar[iz,ir,is]
+                     + collisions.ionization
+                       * (3.0*dens[iz,ir,isp]
+                          - dens[iz,ir,is]*(ppar[iz,ir,isp]
+                                            + dens[iz,ir,isp]*(upar[iz,ir,is] - upar[iz,ir,isp])^2)
+                            / ppar[iz,ir,is]))
                 end
             end
         end
         if is ∈ composition.neutral_species_range
             for isp ∈ composition.ion_species_range
                 @loop_r_z ir iz begin
-                    @views @. pdf_out[:,iz,ir,is] -= 0.5*dt*pdf_in[:,iz,ir,is]*collisions.charge_exchange *
-                    (dens[iz,ir,isp]*ppar[iz,ir,is]-dens[iz,ir,is]*ppar[iz,ir,isp])/ppar[iz,ir,is]
+                    @views @. pdf_out[:,iz,ir,is] -= 0.5*dt*pdf_in[:,iz,ir,is] *
+                    (collisions.charge_exchange
+                       * (dens[iz,ir,isp]*ppar[iz,ir,is] - dens[iz,ir,is]*ppar[iz,ir,isp]
+                          - dens[iz,ir,is]*dens[iz,ir,isp]
+                            * (upar[iz,ir,is] - upar[iz,ir,isp])^2)/ppar[iz,ir,is]
+                     - 2.0*collisions.ionization*dens[iz,ir,isp])
                 end
             end
         end

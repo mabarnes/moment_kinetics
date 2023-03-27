@@ -25,17 +25,17 @@ function ionization_collisions!(f_out, fvec_in, moments, n_ion_species,
             if is ∈ composition.ion_species_range
                 @loop_r_z ir iz begin
                     if moments.evolve_ppar && moments.evolve_upar
-                        @. vpa.scratch = vpa.grid / moments.vth[iz] + moments.upar[iz] 
-                        prefactor = moments.vth[iz] / moments.dens[iz]
+                        @. vpa.scratch = vpa.grid / moments.vth[iz] + fvec_in.upar[iz]
+                        prefactor = moments.vth[iz] / fvec_in.dens[iz]
                     elseif moments.evolve_ppar
                         @. vpa.scratch = vpa.grid / moments.vth[iz]
-                        prefactor = moments.vth[iz] / moments.dens[iz]
+                        prefactor = moments.vth[iz] / fvec_in.dens[iz]
                     elseif moments.evolve_upar
-                        @. vpa.scratch = vpa.grid + moments.upar[iz]
-                        prefactor = 1.0 / moments.dens[iz]
+                        @. vpa.scratch = vpa.grid + fvec_in.upar[iz]
+                        prefactor = 1.0 / fvec_in.dens[iz]
                     elseif moments.evolve_density
                         @. vpa.scratch = vpa.grid
-                        prefactor = 1.0 / moments.dens[iz]
+                        prefactor = 1.0 / fvec_in.dens[iz]
                     else
                         @. vpa.scratch = vpa.grid
                         prefactor = 1.0
@@ -124,7 +124,7 @@ function ionization_collisions_single_species!(f_out, fvec_in, moments, vpa, vpa
                 # to get f_{s'}(wpa_s), need to obtain wpa_s grid locations
                 # in terms of the wpa_{s'} coordinate:
                 # (wpa_s)_j = (wpa_{s'})_j + upar_{s'} - upar_{s}
-                @. vpa.scratch = vpa.grid + fvec_in.upar[iz,ir,isp] - fvec_in.upar[iz,ir,is]
+                @. vpa.scratch = vpa.grid + fvec_in.upar[iz,ir,is] - fvec_in.upar[iz,ir,isp]
             else
                 # if evolve_ppar = true and evolve_upar = true, vpa coordinate is
                 # wpahat_s = (vpa-upar_s)/vth_s;

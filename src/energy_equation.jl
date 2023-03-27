@@ -24,10 +24,13 @@ function energy_equation!(ppar, fvec, moments, collisions, z, r, dt, spectral,
     # add in contributions due to charge exchange/ionization collisions
     if composition.n_neutral_species > 0
         if abs(collisions.charge_exchange) > 0.0
-            @views energy_equation_CX!(ppar, fvec.density, fvec.ppar, composition, collisions.charge_exchange, dt)
+            @views energy_equation_CX!(ppar, fvec.density, fvec.upar, fvec.ppar, z,
+                                       composition, collisions.charge_exchange, dt)
         end
         if abs(collisions.ionization) > 0.0
-            @views energy_equation_ionization!(ppar, fvec.density, fvec.ppar, composition, collisions.ionization, dt)
+            @views energy_equation_ionization!(ppar, fvec.density, fvec.upar, fvec.ppar,
+                                               z, composition, collisions.ionization,
+                                               dt)
         end
     end
 
@@ -66,17 +69,29 @@ end
 """
 include the contribution to the energy equation from charge exchange collisions
 """
-function energy_equation_CX!(ppar_out, dens, ppar, composition, CX_frequency, dt)
+function energy_equation_CX!(ppar_out, dens, upar, ppar, z, composition, CX_frequency, dt)
     @loop_s is begin
         @loop_r ir begin
             if is ∈ composition.ion_species_range
                 for isp ∈ composition.neutral_species_range
-                    @views @. ppar_out[:,ir,is] -= dt*CX_frequency*(dens[:,ir,isp]*ppar[:,ir,is]-dens[:,ir,is]*ppar[:,ir,isp])
+                    @loop_z iz begin
+                        ppar_out[iz,ir,is] -=
+                            dt*CX_frequency*(dens[iz,ir,isp]*ppar[iz,ir,is] -
+                                             dens[iz,ir,is]*ppar[iz,ir,isp] -
+                                             dens[iz,ir,is]*dens[iz,ir,isp] *
+                                             (upar[iz,ir,is] - upar[iz,ir,isp])^2)
+                    end
                 end
             end
             if is ∈ composition.neutral_species_range
                 for isp ∈ composition.ion_species_range
-                    @views @. ppar_out[:,ir,is] -= dt*CX_frequency*(dens[:,ir,isp]*ppar[:,ir,is]-dens[:,ir,is]*ppar[:,ir,isp])
+                    @loop_z iz begin
+                        ppar_out[iz,ir,is] -=
+                            dt*CX_frequency*(dens[iz,ir,isp]*ppar[iz,ir,is] -
+                                             dens[iz,ir,is]*ppar[iz,ir,isp] -
+                                             dens[iz,ir,is]*dens[iz,ir,isp] *
+                                             (upar[iz,ir,is] - upar[iz,ir,isp])^2)
+                    end
                 end
             end
         end
@@ -86,17 +101,26 @@ end
 """
 include the contribution to the energy equation from ionization collisions
 """
-function energy_equation_ionization!(ppar_out, dens, ppar, composition, ionization_frequency, dt)
+function energy_equation_ionization!(ppar_out, dens, upar, ppar, z, composition,
+                                     ionization_frequency, dt)
     @loop_s is begin
         @loop_r ir begin
             if is ∈ composition.ion_species_range
                 for isp ∈ composition.neutral_species_range
-                    @views @. ppar_out[:,ir,is] += dt*ionization_frequency*dens[:,ir,is]*ppar[:,ir,isp]
+                    @loop_z iz begin
+                        ppar_out[iz,ir,is] +=
+                            dt*ionization_frequency*dens[iz,ir,is] *
+                                (ppar[iz,ir,isp] +
+                                 dens[iz,ir,isp] * (upar[iz,ir,is] - upar[iz,ir,isp])^2)
+                    end
                 end
             end
             if is ∈ composition.neutral_species_range
                 for isp ∈ composition.ion_species_range
-                    @views @. ppar_out[:,ir,is] -= dt*ionization_frequency*dens[:,ir,isp]*ppar[:,ir,is]
+                    @loop_z iz begin
+                        ppar_out[iz,ir,is] -=
+                            dt*ionization_frequency*dens[iz,ir,isp]*ppar[iz,ir,is]
+                    end
                 end
             end
         end
