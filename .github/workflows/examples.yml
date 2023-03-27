@@ -26,4 +26,5 @@ jobs:
       - name: Test examples
         run: |
           pip3 install --user matplotlib
-          julia --project -O3 -e 'using moment_kinetics; for (root, dirs, files) in walkdir("examples") for file in files if endswith(file, ".toml") println(joinpath(root, file)); run_moment_kinetics(joinpath(root, file)) end end end'
+          # Reduce nstep for each example to 10 to avoid the CI job taking too long
+          julia --project -O3 -e 'using moment_kinetics; for (root, dirs, files) in walkdir("examples") for file in files if endswith(file, ".toml") filename = joinpath(root, file); println(filename); input = moment_kinetics.moment_kinetics_input.input_from_TOML(filename); input["nstep"] = 10; run_moment_kinetics(input) end end end'
