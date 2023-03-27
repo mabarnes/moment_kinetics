@@ -16,6 +16,7 @@ Base.@kwdef struct numerical_dissipation_parameters
     vpa_boundary_buffer_diffusion_coefficient::mk_float = -1.0
     vpa_dissipation_coefficient::mk_float = -1.0
     z_dissipation_coefficient::mk_float = -1.0
+    force_minimum_pdf_value::Union{Nothing,mk_float} = nothing
 end
 
 function setup_numerical_dissipation(input_section::Dict)
@@ -315,6 +316,32 @@ function z_dissipation!(f_out, fvec_in, moments, z, vpa, spectral::T_spectral, d
     @loop_s_r_vpa is ir ivpa begin
         @views derivative!(z.scratch, fvec_in.pdf[ivpa,:,ir,is], z, spectral, Val(2))
         @views @. f_out[ivpa,:,ir,is] += dt * diffusion_coefficient * z.scratch
+    end
+
+    return nothing
+end
+
+"""
+    force_minimum_pdf_value!(f, num_diss_paras::numerical_dissipation_parameters)
+
+Set a minimum value for the pdf-sized array `f`. Any points less than the minimum are
+set to the minimum. By default, no minimum is applied. The minimum value can be set by
+```
+[numerical_dissipation]
+force_minimum_pdf_value = 0.0
+```
+"""
+function force_minimum_pdf_value!(f, num_diss_params::numerical_dissipation_parameters)
+    minval = num_diss_params.force_minimum_pdf_value
+
+    if minval === nothing
+        return nothing
+    end
+
+    @loop_s_r_z_vpa is ir iz ivpa begin
+        if f[ivpa,iz,ir,is] < minval
+            f[ivpa,iz,ir,is] = minval
+        end
     end
 
     return nothing
