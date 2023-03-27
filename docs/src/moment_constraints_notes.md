@@ -62,3 +62,28 @@ Solving the simultaneous equations for $A$, $B$, $C$ gives
 ```
 
 Note that there is no guarantee that $\tilde{g}_{s}$ is $\geq0$ even if $\hat{g}_{s}\geq0$, although if the violations of the integral constraints are small, it should be true that $A\approx1$ while $B$ and $C$ are small.
+
+### Evolving $u_\parallel$
+
+When evolving fewer moments separately, the constraints become simpler. When evolving $n$ and $u_\parallel$, only the first two constraints are needed. This corresponds to $C=0$ so that
+
+```math
+\begin{align}
+  1 &= AI_0 + BI_1 \\
+  0 &= AI_1 + BI_2 \\
+  \Rightarrow B &= -\frac{AI_1}{I_2} \\
+  AI_0 &= 1 - BI_1 = 1 + \frac{AI_1^2}{I_2} \\
+  A &= \frac{1}{I_0 - I_1^2/I_2}
+\end{align}
+```
+
+### Evolving $n$
+
+When evolving only $n$ separately, we only need one constraint and the correction is just a re-scaling. This corresponds to $B=0,C=0$ so that
+
+```math
+\begin{align}
+  1 &= AI_0 \\
+  A &= \frac{1}{I_0}
+\end{align}
+```
