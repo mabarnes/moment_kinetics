@@ -11,13 +11,11 @@ export update_upar!
 export update_ppar!
 export update_qpar!
 export reset_moments_status!
-export enforce_moment_constraints!
 
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_shared_float, allocate_bool
 using ..calculus: integral
 using ..communication
-using ..communication: _block_synchronize
 using ..looping
 
 #global tmpsum1 = 0.0
@@ -482,97 +480,6 @@ function integrate_over_negative_vpa(integrand, dzdt, vpa_wgts, wgts_mod)
         @views vpa_integral = integral(integrand[1:ivpa_zero], wgts_mod[1:ivpa_zero])/sqrt(pi)
     end
     return vpa_integral
-end
-
-"""
-"""
-function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, r, composition, moments, dummy_sr)
-
-    begin_s_r_z_region()
-
-    # pre-calculate avgdens_ratio so that we don't read fvec_new.density[:,is] on every
-    # process in the next loop - that would be an error because different processes
-    # write to fvec_new.density[:,is]
-    # This loop needs to be @loop_s_r because it fills the (not-shared)
-    # dummy_sr buffer to be used within the @loop_s_r below, so the values
-    # of is looped over by this process need to be the same.
-    # Need to call _block_synchronize() even though loop type does not change because
-    # all spatial ranks read fvec_new.density, but it will be written below.
-    if any(moments.particle_number_conserved)
-        _block_synchronize()
-    end
-    @loop_s_r is ir begin
-        if moments.particle_number_conserved[is]
-            @views @. z.scratch = fvec_old.density[:,ir,is] - fvec_new.density[:,ir,is]
-            @views dummy_sr[ir,is] = integral(z.scratch, z.wgts)/integral(fvec_old.density[:,ir,is], z.wgts)
-        end
-    end
-    # Need to call _block_synchronize() even though loop type does not change because
-    # all spatial ranks read fvec_new.density, but it will be written below.
-    if any(moments.particle_number_conserved)
-        _block_synchronize()
-    end
-
-    @loop_s is begin
-        # add a small correction to the density for each species to ensure that
-        # that particle number is conserved if it should be;
-        # ionisation collisions and net particle flux out of the domain due to, e.g.,
-        # a wall BC break particle conservation, in which cases it should not be enforced.
-        if moments.particle_number_conserved[is]
-            @loop_r ir begin
-                avgdens_ratio = dummy_sr[ir,is]
-                @loop_z iz begin
-                    # update the density with the above factor to ensure particle conservation
-                    fvec_new.density[iz,ir,is] += fvec_old.density[iz,ir,is] * avgdens_ratio
-                    # update the thermal speed, as the density has changed
-                    moments.vth[iz,ir,is] = sqrt(2.0*fvec_new.ppar[iz,ir,is]/fvec_new.density[iz,ir,is])
-                end
-            end
-        end
-        @loop_r ir begin
-            @loop_z iz begin
-                # Create views once to save overhead
-                fnew_view = @view(fvec_new.pdf[:,iz,ir,is])
-                fold_view = @view(fvec_old.pdf[:,iz,ir,is])
-
-                # first calculate all of the integrals involving the updated pdf fvec_new.pdf
-                density_integral = integrate_over_vspace(fnew_view, vpa.wgts)
-                if moments.evolve_upar
-                    upar_integral = integrate_over_vspace(fnew_view, vpa.grid, vpa.wgts)
-                end
-                if moments.evolve_ppar
-                    ppar_integral = integrate_over_vspace(fnew_view, vpa.grid, 2, vpa.wgts) - 0.5*density_integral
-                end
-                # update the pdf to account for the density-conserving correction
-                @. fnew_view += fold_view * (1.0 - density_integral)
-                if moments.evolve_upar
-                    # next form the even part of the old distribution function that is needed
-                    # to ensure momentum and energy conservation
-                    @. vpa.scratch = fold_view
-                    reverse!(vpa.scratch)
-                    @. vpa.scratch = 0.5*(vpa.scratch + fold_view)
-                    # calculate the integrals involving this even pdf
-                    vpa2_moment = integrate_over_vspace(vpa.scratch, vpa.grid, 2, vpa.wgts)
-                    upar_integral /= vpa2_moment
-                    # update the pdf to account for the momentum-conserving correction
-                    @. fnew_view -= vpa.scratch * vpa.grid * upar_integral
-                    if moments.evolve_ppar
-                        ppar_integral /= integrate_over_vspace(vpa.scratch, vpa.grid, 4, vpa.wgts) - 0.5 * vpa2_moment
-                        # update the pdf to account for the energy-conserving correction
-                        #@. fnew_view -= vpa.scratch * (vpa.grid^2 - 0.5) * ppar_integral
-                        # Until julia-1.8 is released, prefer x*x to x^2 to avoid
-                        # extra allocations when broadcasting.
-                        @. fnew_view -= vpa.scratch * (vpa.grid * vpa.grid - 0.5) * ppar_integral
-                    end
-                end
-            end
-        end
-    end
-    # the pdf, density and thermal speed have been changed so the corresponding parallel heat flux must be updated
-    moments.qpar_updated .= false
-    update_qpar!(moments.qpar, moments.qpar_updated, fvec_new.density, fvec_new.upar,
-                 moments.vth, fvec_new.pdf, vpa, z, r, composition,
-                 moments.evolve_density, moments.evolve_upar, moments.evolve_ppar)
 end
 
 """
