@@ -62,7 +62,7 @@ using .communication
 using .communication: _block_synchronize
 using .coordinates: define_coordinate
 using .debugging
-using .initial_conditions: init_pdf_and_moments
+using .initial_conditions: init_pdf_and_moments, enforce_boundary_conditions!
 using .looping
 using .moment_constraints: hard_force_moment_constraints!
 using .moment_kinetics_input: mk_input, run_type, performance_test

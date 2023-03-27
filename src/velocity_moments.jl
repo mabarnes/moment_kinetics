@@ -406,7 +406,7 @@ function integrate_over_positive_vpa(integrand, dzdt, vpa_wgts, wgts_mod)
     # define the nvpa variable for convenience
     nvpa = length(dzdt)
     # define an approximation to zero that allows for finite-precision arithmetic
-    zero = -1.0e-8
+    zero = -1.0e-15
     # if dzdt at the maximum vpa index is negative, then dzdt < 0 everywhere
     # the integral over positive dzdt is thus zero, as we assume the distribution
     # function is zero beyond the simulated vpa domain
@@ -449,7 +449,7 @@ function integrate_over_negative_vpa(integrand, dzdt, vpa_wgts, wgts_mod)
     # define the nvpa variable for convenience
     nvpa = length(integrand)
     # define an approximation to zero that allows for finite-precision arithmetic
-    zero = 1.0e-8
+    zero = 1.0e-15
     # if dzdt at the mimimum vpa index is positive, then dzdt > 0 everywhere
     # the integral over negative dzdt is thus zero, as we assume the distribution
     # function is zero beyond the simulated vpa domain
