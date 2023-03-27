@@ -5,6 +5,7 @@ module calculus
 export derivative!
 export integral
 
+using ..moment_kinetics_structs: chebyshev_info
 using ..type_definitions: mk_float
 
 """
@@ -25,27 +26,92 @@ function elementwise_derivative! end
 
 Upwinding derivative.
 """
-function derivative!(df, f, coord, adv_fac, spectral)
+function derivative!(df, f, coord, adv_fac, spectral::Union{Bool,<:chebyshev_info})
     # get the derivative at each grid point within each element and store in
     # coord.scratch_2d
-    elementwise_derivative!(coord, f, adv_fac, spectral)
+    elementwise_derivative!(coord, f, adv_fac, spectral, Val(1))
     # map the derivative from the elemental grid to the full grid;
     # at element boundaries, use the derivative from the upwind element.
     derivative_elements_to_full_grid!(df, coord.scratch_2d, coord, adv_fac)
 end
 
 """
-    derivative!(df, f, coord, spectral)
+    derivative!(df, f, coord, spectral, order=Val(1))
 
 Non-upwinding derivative.
 """
 function derivative!(df, f, coord, spectral)
+    return derivative!(df, f, coord, spectral, Val(1))
+end
+
+function derivative!(df, f, coord, spectral, ::Val{1})
     # get the derivative at each grid point within each element and store in
     # coord.scratch_2d
-    elementwise_derivative!(coord, f, spectral)
+    elementwise_derivative!(coord, f, spectral, Val(1))
     # map the derivative from the elem;ntal grid to the full grid;
     # at element boundaries, use the average of the derivatives from neighboring elements.
     derivative_elements_to_full_grid!(df, coord.scratch_2d, coord)
+end
+
+function derivative!(df, f, coord, spectral::Bool, order::Val{2})
+    # Finite difference version must use an appropriate second derivative stencil, not
+    # apply the 1st derivative twice as for the spectral element method
+
+    # get the derivative at each grid point within each element and store in
+    # coord.scratch_2d
+    elementwise_derivative!(coord, f, spectral, order)
+    # map the derivative from the elem;ntal grid to the full grid;
+    # at element boundaries, use the average of the derivatives from neighboring elements.
+    derivative_elements_to_full_grid!(df, coord.scratch_2d, coord)
+end
+
+function derivative!(d2f, f, coord, spectral, ::Val{2})
+    # For spectral element methods, calculate second derivative by applying first
+    # derivative twice, with special treatment for element boundaries
+
+    # First derivative
+    elementwise_derivative!(coord, f, spectral, Val(1))
+    derivative_elements_to_full_grid!(coord.scratch3, coord.scratch_2d, coord)
+    # Save elementwise first derivative result
+    coord.scratch2_2d .= coord.scratch_2d
+
+    # Second derivative for element interiors
+    elementwise_derivative!(coord, coord.scratch3, spectral, Val(1))
+    derivative_elements_to_full_grid!(d2f, coord.scratch_2d, coord)
+
+    # Add contribution to penalise discontinuous first derivatives at element
+    # boundaries. For smooth functions this would do nothing so should not affect
+    # convergence of the second derivative. Aims to stabilise numerical instability when
+    # spike develops at an element boundary. The coefficient is an arbitrary choice, it
+    # should probably be large enough for stability but as small as possible.
+    function penalise_discontinuous_first_derivative!(d2f, imin, imax, df)
+        # Arbitrary numerical coefficient
+        C = 1.0
+
+        # Left element boundary
+        d2f[imin] += C * df[1]
+
+        # Right element boundary
+        d2f[imax] -= C * df[end]
+
+        return nothing
+    end
+    @views penalise_discontinuous_first_derivative!(d2f, 1, coord.imax[1],
+                                                    coord.scratch2_2d[:,1])
+    for ielement ∈ 2:coord.nelement
+        @views penalise_discontinuous_first_derivative!(d2f, coord.imin[ielement]-1,
+                                                        coord.imax[ielement],
+                                                        coord.scratch2_2d[:,ielement])
+    end
+
+    if coord.bc ∈ ("wall", "zero", "both_zero")
+        # For stability don't contribute to evolution at boundaries, in case these
+        # points are not set by a boundary condition.
+        d2f[1] = 0.0
+        d2f[end] = 0.0
+    end
+
+    return nothing
 end
 
 """

@@ -12,6 +12,7 @@ using ..communication
 using ..file_io: input_option_error, open_output_file
 using ..finite_differences: fd_check_option
 using ..input_structs
+using ..numerical_dissipation: setup_numerical_dissipation
 
 @enum RunType single performance_test scan
 const run_type = single
@@ -176,6 +177,9 @@ function mk_input(scan_input=Dict())
     vpa.discretization = get(scan_input, "vpa_discretization", "chebyshev_pseudospectral")
     vpa.fd_option = get(scan_input, "vpa_finite_difference_option", "third_order_upwind")
 
+    num_diss_params = setup_numerical_dissipation(
+        get(scan_input, "numerical_dissipation", Dict{String,Any}()))
+
     #########################################################################
     ########## end user inputs. do not modify following code! ###############
     #########################################################################
@@ -238,7 +242,7 @@ function mk_input(scan_input=Dict())
 
     # return immutable structs for z, vpa, species and composition
     all_inputs = (run_name, output_dir, evolve_moments, t, z_immutable, r_immutable, vpa_immutable,
-                  composition, species_immutable, collisions, drive_immutable)
+                  composition, species_immutable, collisions, drive_immutable, num_diss_params)
     println(io, "\nAll inputs returned from mk_input():")
     println(io, all_inputs)
     close(io)
