@@ -34,6 +34,7 @@ struct time_input
     use_semi_lagrange::Bool
     n_rk_stages::mk_int
     split_operators::Bool
+    runtime_plots::Bool
 end
 
 """
@@ -261,6 +262,8 @@ struct pp_input
     plot_upar0_vs_t::Bool
     # if plot_ppar0_vs_t = true, create plots of species ppar(z0) vs time
     plot_ppar0_vs_t::Bool
+    # if plot_vth0_vs_t = true, create plots of species vth(z0) vs time
+    plot_vth0_vs_t::Bool
     # if plot_qpar0_vs_t = true, create plots of species qpar(z0) vs time
     plot_qpar0_vs_t::Bool
     # if plot_dens_vs_z_t = true, create plot of species density vs z and time
@@ -275,8 +278,17 @@ struct pp_input
     animate_dens_vs_z::Bool
     # if animate_upar_vs_z = true, create animation of species parallel flow vs z at different time slices
     animate_upar_vs_z::Bool
-    # if animate_f_vs_z_vpa = true, create animation of f(z,vpa) at different time slices
+    # if animate_ppar_vs_z = true, create animation of species parallel pressure vs z at different time slices
+    animate_ppar_vs_z::Bool
+    # if animate_vth_vs_z = true, create animation of species thermal speed vs z at different time slices
+    animate_vth_vs_z::Bool
+    # if animate_qpar_vs_z = true, create animation of species parallel heat flux vs z at different time slices
+    animate_qpar_vs_z::Bool
+    # if animate_f_vs_vpa_z = true, create animation of f(z,vpa) at different time slices
     animate_f_vs_vpa_z::Bool
+    # if animate_f_unnormalized = true, create animation of
+    # f_unnorm(v_parallel_unnorm,z) at different time slices
+    animate_f_unnormalized::Bool
     # if animate_f_vs_z_vpa0 = true, create animation of f(z,vpa0) at different time slices
     animate_f_vs_vpa0_z::Bool
     # if animate_f_vs_z0_vpa = true, create animation of f(z0,vpa) at different time slices

@@ -17,12 +17,17 @@ jobs:
       - uses: mpi4py/setup-mpi@v1
         with:
           mpi: 'openmpi'
+      - uses: actions/setup-python@v2
       - uses: julia-actions/setup-julia@v1
         with:
           version: '1.7'
           arch: x64
       - uses: julia-actions/julia-buildpkg@v1
+        env:
+          # Use the system Python for PyCall - avoids library linking error on macOS
+          PYTHON: "${{ env.pythonLocation }}/bin/python"
       - run: |
+          pip3 install --user matplotlib
           julia --project -e 'ENV["JULIA_MPI_BINARY"]="system"; using Pkg; Pkg.build("MPI"; verbose=true)'
           julia -O3 --check-bounds=no precompile.jl --debug 1
           # Need to use openmpi so that the following arguments work:

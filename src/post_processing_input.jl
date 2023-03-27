@@ -23,6 +23,8 @@ const plot_dens0_vs_t = true
 const plot_upar0_vs_t = false
 # if plot_ppar0_vs_t = true, create plots of species ppar(z0) vs time
 const plot_ppar0_vs_t = false
+# if plot_vth0_vs_t = true, create plots of species vth(z0) vs time
+const plot_vth0_vs_t = false
 # if plot_qpar0_vs_t = true, create plots of species qpar(z0) vs time
 const plot_qpar0_vs_t = false
 # if plot_dens_vs_z_t = true, create heatmap of species density vs z and time
@@ -37,8 +39,17 @@ const plot_qpar_vs_z_t = false
 const animate_dens_vs_z = true
 # if animate_upar_vs_z = true, create animation of species parallel flow(z) at different time slices
 const animate_upar_vs_z = false
+# if animate_ppar_vs_z = true, create animation of species parallel pressure(z) at different time slices
+const animate_ppar_vs_z = false
+# if animate_vth_vs_z = true, create animation of species thermal_velocity(z) at different time slices
+const animate_vth_vs_z = false
+# if animate_qpar_vs_z = true, create animation of species parallel heat flux(z) at different time slices
+const animate_qpar_vs_z = false
 # if animate_f_vs_vpa_z = true, create animation of f(vpa,z) at different time slices
 const animate_f_vs_vpa_z = false
+# if animate_f_unnormalized = true, create animation of f_unnorm(v_parallel_unnorm,z) at
+# different time slices
+const animate_f_unnormalized = false
 # if animate_deltaf_vs_vpa_z = true, create animation of δf(vpa,z) at different time slices
 const animate_deltaf_vs_vpa_z = false
 # if animate_f_vs_vpa_z0 = true, create animation of f(vpa0,z) at different time slices
@@ -67,11 +78,11 @@ const iz0 = -1
 const ir0 = -1
 
 pp = pp_input(calculate_frequencies, plot_phi0_vs_t, plot_phi_vs_z_t,
-    animate_phi_vs_z, plot_dens0_vs_t, plot_upar0_vs_t, plot_ppar0_vs_t, plot_qpar0_vs_t,
+    animate_phi_vs_z, plot_dens0_vs_t, plot_upar0_vs_t, plot_ppar0_vs_t, plot_vth0_vs_t, plot_qpar0_vs_t,
     plot_dens_vs_z_t, plot_upar_vs_z_t, plot_ppar_vs_z_t, plot_qpar_vs_z_t,
-    animate_dens_vs_z, animate_upar_vs_z,
-    animate_f_vs_vpa_z, animate_f_vs_vpa_z0, animate_f_vs_z0_vpa,
-    animate_deltaf_vs_vpa_z, animate_deltaf_vs_vpa_z0, animate_deltaf_vs_vpa_z0,
-    nwrite_movie, itime_min, itime_max, ivpa0, iz0, ir0)
+    animate_dens_vs_z, animate_upar_vs_z, animate_ppar_vs_z, animate_vth_vs_z, animate_qpar_vs_z,
+    animate_f_vs_vpa_z, animate_f_unnormalized, animate_f_vs_vpa_z0,
+    animate_f_vs_z0_vpa, animate_deltaf_vs_vpa_z, animate_deltaf_vs_vpa_z0,
+    animate_deltaf_vs_vpa_z0, nwrite_movie, itime_min, itime_max, ivpa0, iz0, ir0)
 
 end

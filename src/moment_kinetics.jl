@@ -43,15 +43,14 @@ include("energy_equation.jl")
 include("force_balance.jl")
 include("source_terms.jl")
 include("numerical_dissipation.jl")
-include("time_advance.jl")
-
-include("moment_kinetics_input.jl")
-include("scan_input.jl")
-
 include("analysis.jl")
 include("load_data.jl")
 include("post_processing_input.jl")
 include("post_processing.jl")
+include("time_advance.jl")
+
+include("moment_kinetics_input.jl")
+include("scan_input.jl")
 
 using TimerOutputs
 using TOML
@@ -279,6 +278,7 @@ function setup_moment_kinetics(input_dict::Dict; backup_filename=nothing,
 
     # setup i/o
     io, cdf = setup_file_io(output_dir, run_name, vpa, z, r, composition, collisions,
+                            moments.evolve_density, moments.evolve_upar,
                             moments.evolve_ppar)
     # write initial data to ascii files
     write_data_to_ascii(pdf.norm, moments, fields, vpa, z, r, code_time, composition.n_species, io)
