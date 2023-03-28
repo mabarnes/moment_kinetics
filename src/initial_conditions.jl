@@ -429,17 +429,19 @@ function enforce_z_boundary_condition!(pdf, density, upar, ppar, moments, bc::St
     if bc == "constant"
         begin_s_r_vpa_region()
         @loop_s_r_vpa is ir ivpa begin
-            upwind_idx = adv[is].upwind_idx[ivpa,ir]
-            pdf[ivpa,upwind_idx,ir,is] = density_offset * exp(-(vpa.grid[ivpa]/vpawidth)^2) / sqrt(pi)
+            if adv[is].speed[ivpa,1,ir] > 0.0
+                pdf[ivpa,1,ir,is] = density_offset * exp(-(vpa.grid[ivpa]/vpawidth)^2) / sqrt(pi)
+            end
+            if adv[is].speed[ivpa,end,ir] > 0.0
+                pdf[ivpa,end,ir,is] = density_offset * exp(-(vpa.grid[ivpa]/vpawidth)^2) / sqrt(pi)
+            end
         end
     # 'periodic' BC enforces periodicity by taking the average of the boundary points
     elseif bc == "periodic"
         begin_s_r_vpa_region()
         @loop_s_r_vpa is ir ivpa begin
-            downwind_idx = adv[is].downwind_idx[ivpa,ir]
-            upwind_idx = adv[is].upwind_idx[ivpa,ir]
-            pdf[ivpa,downwind_idx,ir,is] = 0.5*(pdf[ivpa,upwind_idx,ir,is]+pdf[ivpa,downwind_idx,ir,is])
-            pdf[ivpa,upwind_idx,ir,is] = pdf[ivpa,downwind_idx,ir,is]
+            pdf[ivpa,1,ir,is] = 0.5*(pdf[ivpa,1,ir,is]+pdf[ivpa,end,ir,is])
+            pdf[ivpa,end,ir,is] = pdf[ivpa,1,ir,is]
         end
     # 'wall' BC enforces wall boundary conditions
     elseif bc == "wall"

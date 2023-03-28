@@ -31,7 +31,6 @@ struct time_input
     nstep::mk_int
     dt::mk_float
     nwrite::mk_int
-    use_semi_lagrange::Bool
     n_rk_stages::mk_int
     split_operators::Bool
     runtime_plots::Bool
