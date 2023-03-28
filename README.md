@@ -26,7 +26,7 @@ The full documentation is online at [https://mabarnes.github.io/moment_kinetics]
     ```
     $ julia -O3 precompile.jl
     ```
-   this significantly decreases the load time but prevents code changes from taking effect when `moment_kinetics.so` is used without repeating the precompilation (to use this option, replace `dependencies.so` below with `moment_kinetics.so`).
+   this significantly decreases the load time but prevents code changes from taking effect when `moment_kinetics.so` is used without repeating the precompilation (to use this option, add an option `-Jmoment_kinetics.so` when starting julia).
 3) To run julia with optimization, type
     ```
     $ julia -O3 --project run_moment_kinetics.jl
