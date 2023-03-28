@@ -2,10 +2,9 @@
 This module contains all the necessary derivatives needed to carry out 
 distributed memory differential operations on the arrays in moment kinetics.
 We provide separate derivative functions for each (i) distributed dimension
-and(ii) array shape. We do not need to provide derivatives for non-distributed
+and (ii) array shape. We do not need to provide derivatives for non-distributed
 dimensions as these can by handled by the derivative! function from calculus.jl 
 
-Currently only centered differences are supported
 """
 module derivatives
 
@@ -20,8 +19,8 @@ using ..looping
 Centered derivatives
 df/dr group of rountines for 
 fields & moments -> [z,r]
-dfns (charged) -> [vpa,vperp,z,r]
-dfns (neutrals) -> [vz,vr,vzeta,z,r]
+dfns (charged) -> [vpa,vperp,z,r,s]
+dfns (neutrals) -> [vz,vr,vzeta,z,r,sn]
 """
 
 #df/dr 
@@ -102,8 +101,8 @@ end
 Centered derivatives
 df/dz group of rountines for 
 fields & moments -> [z,r]
-dfns (charged) -> [vpa,vperp,z,r]
-dfns (neutrals) -> [vz,vr,vzeta,z,r]
+dfns (charged) -> [vpa,vperp,z,r,s]
+dfns (neutrals) -> [vz,vr,vzeta,z,r,sn]
 """
 
 #df/dz
@@ -182,8 +181,8 @@ end
 """
 Upwind derivatives 
 df/dr group of rountines for 
-dfns (charged) -> [vpa,vperp,z,r]
-dfns (neutrals) -> [vz,vr,vzeta,z,r]
+dfns (charged) -> [vpa,vperp,z,r,s]
+dfns (neutrals) -> [vz,vr,vzeta,z,r,sn]
 """
 
 #df/dr
@@ -249,8 +248,8 @@ end
 """
 Upwind derivatives
 df/dz group of rountines for 
-dfns (charged) -> [vpa,vperp,z,r]
-dfns (neutrals) -> [vz,vr,vzeta,z,r]
+dfns (charged) -> [vpa,vperp,z,r,s]
+dfns (neutrals) -> [vz,vr,vzeta,z,r,sn]
 """
 
 #5D version for f[vpa,vperp,z,r,s] -> dfn charged particles
