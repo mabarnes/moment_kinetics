@@ -28,7 +28,8 @@ jobs:
           PYTHON: "${{ env.pythonLocation }}/bin/python"
       - run: |
           pip3 install --user matplotlib
-          julia --project -e 'ENV["JULIA_MPI_BINARY"]="system"; using Pkg; Pkg.build("MPI"; verbose=true)'
+          julia --project -e 'using MPIPreferences; MPIPreferences.use_system_binary()'
+          julia --project -e 'using Pkg; Pkg.build("MPI"; verbose=true)'
           julia -O3 --check-bounds=no precompile.jl --debug 1
           # Need to use openmpi so that the following arguments work:
           # * `--mca rmaps_base_oversubscribe 1` allows oversubscription (more processes
