@@ -7,7 +7,7 @@ export reconcile_element_boundaries_MPI!
 export integral
 
 
-using ..chebyshev: chebyshev_info, chebyshev_derivative!
+using ..chebyshev: chebyshev_info, chebyshev_derivative!, chebyshev_derivative_handle_wall_bc!
 using ..finite_differences: derivative_finite_difference!
 using ..type_definitions: mk_float, mk_int
 using MPI 
@@ -31,6 +31,27 @@ Chebyshev transform f to get Chebyshev spectral coefficients and use them to cal
 function derivative!(df, f, coord, spectral::chebyshev_info)
     # get the derivative at each grid point within each element and store in df
     chebyshev_derivative!(coord.scratch_2d, f, spectral, coord)
+    # map the derivative from the elemental grid to the full grid;
+    # at element boundaries, use the average of the derivatives from neighboring elements.
+    derivative_elements_to_full_grid!(df, coord.scratch_2d, coord)
+end
+"""
+Chebyshev transform f to get Chebyshev spectral coefficients and use them to calculate f'
+"""
+function derivative!(df, f, coord, adv_fac, spectral::chebyshev_info, iz, z, vz)
+    # get the derivative at each grid point within each element and store in df
+    chebyshev_derivative_handle_wall_bc!(coord.scratch_2d, f, spectral, coord, iz, z, vz)
+    # map the derivative from the elemental grid to the full grid;
+    # at element boundaries, use the derivative from the upwind element.
+    derivative_elements_to_full_grid!(df, coord.scratch_2d, coord, adv_fac)
+end
+
+"""
+Chebyshev transform f to get Chebyshev spectral coefficients and use them to calculate f'
+"""
+function derivative!(df, f, coord, spectral::chebyshev_info, iz, z, vz)
+    # get the derivative at each grid point within each element and store in df
+    chebyshev_derivative_handle_wall_bc!(coord.scratch_2d, f, spectral, coord, iz, z, vz)
     # map the derivative from the elemental grid to the full grid;
     # at element boundaries, use the average of the derivatives from neighboring elements.
     derivative_elements_to_full_grid!(df, coord.scratch_2d, coord)
