@@ -42,7 +42,7 @@ vpa_dissipation_coefficient = 0.1
 ```
 """
 function vpa_dissipation!(f_out, f_in, vpa, spectral::T_spectral, dt,
-        num_diss_params::numerical_dissipation_parameters, z, z_advect) where T_spectral
+        num_diss_params::numerical_dissipation_parameters) where T_spectral
     
     begin_s_r_z_vperp_region()
 
@@ -60,6 +60,7 @@ function vpa_dissipation!(f_out, f_in, vpa, spectral::T_spectral, dt,
     #     # expected convergence of Chebyshev pseudospectral scheme
     #     diffusion_coefficient *= (vpa.L/vpa.nelement)^(vpa.ngrid-1)
     # end
+
     @loop_s_r_z_vperp is ir iz ivperp begin
         # # Don't want to dissipate the fluid moments, so divide out the Maxwellian, then
         # # diffuse the result, i.e.
@@ -86,8 +87,7 @@ function vpa_dissipation!(f_out, f_in, vpa, spectral::T_spectral, dt,
         # @views @. f_out[:,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch *
         #                                vpa.scratch3
         vpa.scratch2 .= 1.0 # placeholder for Q in d / d vpa ( Q d f / d vpa)
-        @views second_derivative!(vpa.scratch, f_in[:,ivperp,iz,ir,is], vpa.scratch2, vpa, spectral,
-                               iz, z, z_advect[is].speed[iz,:,ivperp,ir])
+        @views second_derivative!(vpa.scratch, f_in[:,ivperp,iz,ir,is], vpa.scratch2, vpa, spectral)
         @views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch
     end
 
@@ -146,7 +146,7 @@ function z_dissipation!(f_out, f_in, z, z_spectral::T_spectral, dt,
 end
 
 function r_dissipation!(f_out, f_in, r, r_spectral::T_spectral, dt,
-        num_diss_params::numerical_dissipation_parameters, scratch_dummy, z, z_advect::T) where {T_spectral, T}
+        num_diss_params::numerical_dissipation_parameters, scratch_dummy) where T_spectral
 
     diffusion_coefficient = num_diss_params.r_dissipation_coefficient
     if diffusion_coefficient <= 0.0
@@ -160,7 +160,7 @@ function r_dissipation!(f_out, f_in, r, r_spectral::T_spectral, dt,
     derivative_r!(scratch_dummy.buffer_vpavperpzrs_1, f_in[:,:,:,:,:],
 					scratch_dummy.buffer_vpavperpzs_1, scratch_dummy.buffer_vpavperpzs_2,
 					scratch_dummy.buffer_vpavperpzs_3,scratch_dummy.buffer_vpavperpzs_4,
-					r_spectral,r,z,z_advect)
+					r_spectral,r)
     # form Q d f / d r and place in dummy array #2
     @loop_s_z_vperp_vpa is iz ivperp ivpa begin
         Q = 1.0 # placeholder for geometrical or velocity space dependent metric coefficient
@@ -170,7 +170,7 @@ function r_dissipation!(f_out, f_in, r, r_spectral::T_spectral, dt,
     derivative_r!(scratch_dummy.buffer_vpavperpzrs_1, scratch_dummy.buffer_vpavperpzrs_2[:,:,:,:,:],
 					scratch_dummy.buffer_vpavperpzs_1, scratch_dummy.buffer_vpavperpzs_2,
 					scratch_dummy.buffer_vpavperpzs_3,scratch_dummy.buffer_vpavperpzs_4,
-					r_spectral,r,z,z_advect)
+					r_spectral,r)
     # advance f due to diffusion_coefficient * d / d r ( Q d f / d r )
     @loop_s_z_vperp_vpa is iz ivperp ivpa begin
         @views @. f_out[ivpa,ivperp,iz,:,is] += dt * diffusion_coefficient * scratch_dummy.buffer_vpavperpzrs_1[ivpa,ivperp,iz,:,is]

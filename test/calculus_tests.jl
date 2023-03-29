@@ -954,7 +954,7 @@ function runtests()
                 # create the 'input' struct containing input info needed to create a
                 # coordinate
                 nelement_local = nelement
-				nrank_per_block = 1 # dummy value
+				nrank_per_block = 0 # dummy value
 				irank = 0 # dummy value
 				comm = false # dummy value
 				input = grid_input("coord", ngrid, nelement,
@@ -962,7 +962,6 @@ function runtests()
                     "chebyshev_pseudospectral", fd_option, bc, adv_input, comm)
                 # create the coordinate struct 'x'
                 x = define_coordinate(input)
-                z = define_coordinate(input)
                 # create arrays needed for Chebyshev pseudospectral treatment in x
                 # and create the plans for the forward and backward fast Chebyshev
                 # transforms
@@ -977,9 +976,7 @@ function runtests()
 
                 # differentiate f
                 x.scratch2 .= 1.0 # placeholder for Q in d / d x ( Q d f / d x)
-                vz = similar(x.scratch2)
-                vz .= 1.0 # placeholder for vz
-                second_derivative!(d2f, f, x.scratch2, x, spectral, 1, z, vz)
+                second_derivative!(d2f, f, x.scratch2, x, spectral)
 
                 @test isapprox(d2f, expected_d2f, rtol=rtol, atol=1.e-10,
                                norm=maxabs_norm)

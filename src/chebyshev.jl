@@ -11,7 +11,6 @@ export chebyshev_spectral_derivative!
 export chebyshev_info
 
 using FFTW
-using Dierckx
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_float, allocate_complex
 using ..clenshaw_curtis: clenshawcurtisweights
@@ -134,108 +133,6 @@ function chebyshev_derivative!(df, ff, chebyshev, coord)
     return nothing
 end
 
-"""
- same as routine above but with special handling for elements
- in which a discontinuity in the derivatives is forced by the 
- wall boundary condition -- use for vpa and r derivatives 
- of the charged particle pdf
- iz - z index where this routine is called 
- z - coord object to detect whether or not iz is a wall point
- vz - velocity into the wall as a function of coord = vpa or r 
-"""
-function chebyshev_derivative_handle_wall_bc!(df, ff, chebyshev, coord, iz, z, vz)
-    # define local variable nelement for convenience
-    nelement = coord.nelement_local
-    # check array bounds
-    @boundscheck nelement == size(chebyshev.f,2) || throw(BoundsError(chebyshev.f))
-    @boundscheck nelement == size(df,2) && coord.ngrid == size(df,1) || throw(BoundsError(df))
-    # note that one must multiply by 2*nelement/L to get derivative
-    # in scaled coordinate
-    scale_factor = 2.0*float(coord.nelement_global)/coord.L
-	# scale factor is (length of a single element/2)^{-1}
-	
-    # variable k will be used to avoid double counting of overlapping point
-    # at element boundaries (see below for further explanation)
-    k = 0
-    # calculate the Chebyshev derivative on each element
-    @inbounds for j ∈ 1:nelement
-        # imin is the minimum index on the full grid for this (jth) element
-        # the 'k' below accounts for the fact that the first element includes
-        # both boundary points, while each additional element shares a boundary
-       # point with neighboring elements.  the choice was made when defining
-        # coord.imin to exclude the lower boundary point in each element other
-        # than the first so that no point is double-counted
-        imin = coord.imin[j]-k
-        # imax is the maximum index on the full grid for this (jth) element
-        imax = coord.imax[j]
-        zero = 1.0e-10 
-        #println("vz[imin:imax]: ",vz[imin:imax]) 
-        if z.bc == "wall" && ((iz == 1 && z.irank == 0) ||  (iz == z.n && z.irank == z.nrank - 1)) && vz[imin+1]*vz[imax-1] < zero 
-            #println("iz: ",iz," z.irank: ",z.irank) 
-            #println("vz[imin+1]*vz[imax-1]: ",vz[imin+1]*vz[imax-1])
-            #println("triggered spline")
-            # calculate derivative using spline, avoiding discontinuity, if vz changes sign WITHIN the element
-            #println("iz :",iz)
-            @views spline_derivative_single_element!(df[:,j], ff[imin:imax], coord.grid[imin:imax], coord.ngrid, vz[imin:imax])
-        else
-            # use standard Chebyshev method to compute the derivative
-            @views chebyshev_derivative_single_element!(df[:,j], ff[imin:imax],
-                chebyshev.f[:,j], chebyshev.df, chebyshev.fext, chebyshev.forward, coord)
-            # and multiply by scaling factor needed to go
-            # from Chebyshev z coordinate to actual z
-            for i ∈ 1:coord.ngrid
-                df[i,j] *= scale_factor
-            end
-        end
-        k = 1
-    end
-    
-    return nothing
-end
-"""
-Here, function spline_derivative_single_element
-calculates derivate df of ff using spline package Dierckx
-(https://www.juliapackages.com/p/dierckx)
-respecting the discontinuity in the derivatives at vz = 0 
-for now we assume that vz has a single zero in the domain. 
-We use Dierckx because Dierckx does not use boundary conditions 
-to set the values in the spline, see, 
-https://discourse.julialang.org/t/difference-between-two-interpolation-packages-when-evaluating-derivatives-interpolations-jl-and-dierckx-jl/61747
-"""
-function spline_derivative_single_element!(df, ff, grid, ngrid, vz)
-    zero = 1.0e-10
-    # find the index where vz changes sign
-    iroot = 0
-    for i in 2:ngrid-2
-        #println("vz[i]*vz[i+1]",vz[i]*vz[i+1]) 
-        if vz[i]*vz[i+1] < zero 
-            iroot = i 
-        end
-    end
-    # make sure zero bc is imposed
-    ff[iroot:iroot+1] .= 0.0
-    # left side  
-    # k is order of spline
-    kspl = 3
-    #println("iroot: ",iroot)
-    if iroot <= 3
-        kspl = iroot - 1
-    end
-    spl = Spline1D(grid[1:iroot], ff[1:iroot], k = kspl)
-    df[1:iroot] .= derivative(spl,grid[1:iroot])
-    # right side
-    kspl = 3
-    if ngrid - iroot <= 3
-        kspl = ngrid - iroot - 1 
-    end
-    spl = Spline1D(grid[iroot+1:ngrid], ff[iroot+1:ngrid], k = kspl)
-    df[iroot+1:ngrid] .= derivative(spl,grid[iroot+1:ngrid])
-    #println(iroot)
-    #println(ff)
-    #println(df)
-    # make sure zero bc is imposed on the derivatives 
-    df[iroot:iroot+1] .= 0.0
-end
 """
 """
 function chebyshev_derivative_single_element!(df, ff, cheby_f, cheby_df, cheby_fext, forward, coord)

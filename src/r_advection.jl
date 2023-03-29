@@ -14,7 +14,7 @@ using ..derivatives: derivative_r!
 do a single stage time advance (potentially as part of a multi-stage RK scheme)
 """
 function r_advection!(f_out, fvec_in, fields, advect, r, z, vperp, vpa, 
-                      dt, r_spectral, composition, geometry, scratch_dummy, z_advect)
+                      dt, r_spectral, composition, geometry, scratch_dummy)
     
     begin_s_z_vperp_vpa_region()
     
@@ -31,7 +31,7 @@ function r_advection!(f_out, fvec_in, fields, advect, r, z, vperp, vpa,
 					scratch_dummy.buffer_vpavperpzs_1, scratch_dummy.buffer_vpavperpzs_2,
 					scratch_dummy.buffer_vpavperpzs_3,scratch_dummy.buffer_vpavperpzs_4,
 					scratch_dummy.buffer_vpavperpzs_5,scratch_dummy.buffer_vpavperpzs_6,
-					r_spectral,r,z,z_advect)
+					r_spectral,r)
 
 		# advance r-advection equation
     @loop_s_z_vperp_vpa is iz ivperp ivpa begin

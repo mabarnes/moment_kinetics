@@ -54,11 +54,11 @@ function derivative_r!(dfdr::AbstractArray{mk_float,5}, f::AbstractArray{mk_floa
         dfdr_lower_endpoints::AbstractArray{mk_float,4},
         dfdr_upper_endpoints::AbstractArray{mk_float,4},
         r_receive_buffer1::AbstractArray{mk_float,4},
-        r_receive_buffer2::AbstractArray{mk_float,4}, r_spectral, r, z, z_advect::T) where T
+        r_receive_buffer2::AbstractArray{mk_float,4}, r_spectral, r)
 
 	# differentiate f w.r.t r
 	@loop_s_z_vperp_vpa is iz ivperp ivpa begin
-		@views derivative!(dfdr[ivpa,ivperp,iz,:,is], f[ivpa,ivperp,iz,:,is], r, r_spectral, iz, z, z_advect[is].speed[iz,ivpa,ivperp,:])
+		@views derivative!(dfdr[ivpa,ivperp,iz,:,is], f[ivpa,ivperp,iz,:,is], r, r_spectral)
 		# get external endpoints to reconcile via MPI
 		dfdr_lower_endpoints[ivpa,ivperp,iz,is] = r.scratch_2d[1,1]
 		dfdr_upper_endpoints[ivpa,ivperp,iz,is] = r.scratch_2d[end,end]
@@ -188,16 +188,16 @@ dfns (neutrals) -> [vz,vr,vzeta,z,r,sn]
 #df/dr
 #5D version for f[vpa,vperp,z,r,s] -> charged particle dfn (species indexing taken outside this loop)
 function derivative_r!(dfdr::AbstractArray{mk_float,5}, f::AbstractArray{mk_float,5},
-        advect::T1, adv_fac_lower_buffer::AbstractArray{mk_float,4},
+        advect::T, adv_fac_lower_buffer::AbstractArray{mk_float,4},
         adv_fac_upper_buffer::AbstractArray{mk_float,4},
         dfdr_lower_endpoints::AbstractArray{mk_float,4},
         dfdr_upper_endpoints::AbstractArray{mk_float,4},
         r_receive_buffer1::AbstractArray{mk_float,4},
-        r_receive_buffer2::AbstractArray{mk_float,4}, r_spectral, r, z, z_advect::T2) where {T1, T2}
+        r_receive_buffer2::AbstractArray{mk_float,4}, r_spectral, r) where T
 
 	# differentiate f w.r.t r
 	@loop_s_z_vperp_vpa is iz ivperp ivpa begin
-		@views derivative!(dfdr[ivpa,ivperp,iz,:,is], f[ivpa,ivperp,iz,:,is], r, advect[is].adv_fac[:,ivpa,ivperp,iz], r_spectral, iz, z, z_advect[is].speed[iz,ivpa,ivperp,:])
+		@views derivative!(dfdr[ivpa,ivperp,iz,:,is], f[ivpa,ivperp,iz,:,is], r, advect[is].adv_fac[:,ivpa,ivperp,iz], r_spectral)
 		# get external endpoints to reconcile via MPI
 		dfdr_lower_endpoints[ivpa,ivperp,iz,is] = r.scratch_2d[1,1]
 		dfdr_upper_endpoints[ivpa,ivperp,iz,is] = r.scratch_2d[end,end]
