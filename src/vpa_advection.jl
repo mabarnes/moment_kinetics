@@ -5,7 +5,8 @@ module vpa_advection
 export vpa_advection!
 export update_speed_vpa!
 
-using ..advection: advance_f_local!
+using ..advection: advance_f_df_precomputed!
+using ..calculus: derivative!
 using ..communication
 using ..looping
 
@@ -16,17 +17,19 @@ function vpa_advection!(f_out, fvec_in, fields, advect,
 
     begin_s_r_z_vperp_region()
     
-    # only have a parallel acceleration term for neutrals if using the peculiar velocity
-    # wpar = vpar - upar as a variable; i.e., d(wpar)/dt /=0 for neutrals even though d(vpar)/dt = 0.
-
     # calculate the advection speed corresponding to current f
     update_speed_vpa!(advect, fields, vpa, vperp, z, r, composition, geometry)
-    @loop_s is begin
-        @loop_r_z_vperp ir iz ivperp begin
-            @views advance_f_local!(f_out[:,ivperp,iz,ir,is], fvec_in.pdf[:,ivperp,iz,ir,is],
-                                    advect[is], ivperp, iz, ir, vpa, dt, vpa_spectral)
-        end
+    @loop_s_r_z_vperp is ir iz ivperp begin
+        # update advection factor 
+        @views @. advect[is].adv_fac[:,ivperp,iz,ir] = -dt*advect[is].speed[:,ivperp,iz,ir]
+        # calculate the upwind derivative along vpa
+        @views derivative!(vpa.scratch, fvec_in.pdf[:,ivperp,iz,ir,is],
+                        vpa, advect[is].adv_fac[:,ivperp,iz,ir], vpa_spectral)
+    	# advance vpa-advection equation
+        @views advance_f_df_precomputed!(f_out[:,ivperp,iz,ir,is],
+          vpa.scratch, advect[is], ivperp, iz, ir, vpa, dt, vpa_spectral)
     end
+    
 end
 
 """
