@@ -168,10 +168,14 @@ function chebyshev_derivative_handle_wall_bc!(df, ff, chebyshev, coord, iz, z, v
         imin = coord.imin[j]-k
         # imax is the maximum index on the full grid for this (jth) element
         imax = coord.imax[j]
-        zero = 1.0e-10
-        if ((iz == 1 && z.irank == 0) ||  (iz == z.n && z.irank == z.nrank - 1)) && vz[imin+1]*vz[imax-1] < zero 
-            println("triggered spline")
+        zero = 1.0e-10 
+        #println("vz[imin:imax]: ",vz[imin:imax]) 
+        if z.bc == "wall" && ((iz == 1 && z.irank == 0) ||  (iz == z.n && z.irank == z.nrank - 1)) && vz[imin+1]*vz[imax-1] < zero 
+            #println("iz: ",iz," z.irank: ",z.irank) 
+            #println("vz[imin+1]*vz[imax-1]: ",vz[imin+1]*vz[imax-1])
+            #println("triggered spline")
             # calculate derivative using spline, avoiding discontinuity, if vz changes sign WITHIN the element
+            #println("iz :",iz)
             @views spline_derivative_single_element!(df[:,j], ff[imin:imax], coord.grid[imin:imax], coord.ngrid, vz[imin:imax])
         else
             # use standard Chebyshev method to compute the derivative
@@ -202,14 +206,18 @@ function spline_derivative_single_element!(df, ff, grid, ngrid, vz)
     zero = 1.0e-10
     # find the index where vz changes sign
     iroot = 0
-    for i in 1:ngrid-1
+    for i in 2:ngrid-2
+        #println("vz[i]*vz[i+1]",vz[i]*vz[i+1]) 
         if vz[i]*vz[i+1] < zero 
             iroot = i 
         end
     end
+    # make sure zero bc is imposed
+    ff[iroot:iroot+1] .= 0.0
     # left side  
     # k is order of spline
     kspl = 3
+    #println("iroot: ",iroot)
     if iroot <= 3
         kspl = iroot - 1
     end
@@ -222,6 +230,11 @@ function spline_derivative_single_element!(df, ff, grid, ngrid, vz)
     end
     spl = Spline1D(grid[iroot+1:ngrid], ff[iroot+1:ngrid], k = kspl)
     df[iroot+1:ngrid] .= derivative(spl,grid[iroot+1:ngrid])
+    #println(iroot)
+    #println(ff)
+    #println(df)
+    # make sure zero bc is imposed on the derivatives 
+    df[iroot:iroot+1] .= 0.0
 end
 """
 """

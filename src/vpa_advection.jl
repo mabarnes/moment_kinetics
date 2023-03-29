@@ -13,7 +13,7 @@ using ..looping
 """
 """
 function vpa_advection!(f_out, fvec_in, fields, advect,
-        vpa, vperp, z, r, dt, vpa_spectral, composition, geometry)
+        vpa, vperp, z, r, dt, vpa_spectral, composition, geometry, z_advect)
 
     begin_s_r_z_vperp_region()
     
@@ -23,8 +23,11 @@ function vpa_advection!(f_out, fvec_in, fields, advect,
         # update advection factor 
         @views @. advect[is].adv_fac[:,ivperp,iz,ir] = -dt*advect[is].speed[:,ivperp,iz,ir]
         # calculate the upwind derivative along vpa
-        @views derivative!(vpa.scratch, fvec_in.pdf[:,ivperp,iz,ir,is],
-                        vpa, advect[is].adv_fac[:,ivperp,iz,ir], vpa_spectral)
+        #@views derivative!(vpa.scratch, fvec_in.pdf[:,ivperp,iz,ir,is],
+        #                   vpa, advect[is].adv_fac[:,ivperp,iz,ir], vpa_spectral)
+    	@views derivative!(vpa.scratch, fvec_in.pdf[:,ivperp,iz,ir,is],
+                         vpa, advect[is].adv_fac[:,ivperp,iz,ir], vpa_spectral,
+                         iz, z, z_advect[is].speed[iz,:,ivperp,ir])
     	# advance vpa-advection equation
         @views advance_f_df_precomputed!(f_out[:,ivperp,iz,ir,is],
           vpa.scratch, advect[is], ivperp, iz, ir, vpa, dt, vpa_spectral)

@@ -22,7 +22,6 @@ if abspath(PROGRAM_FILE) == @__FILE__
 	nelement_local = 4 # number of elements per rank
 	nelement_global = nelement_local # total number of elements 
 	L = 1.0 #physical box size in reference units 
-	bc = "" #not required to take a particular value, not used 
 	# fd_option and adv_input not actually used so given values unimportant
 	fd_option = "fourth_order_centered"
 	adv_input = advection_input("default", 1.0, 0.0, 0.0)
@@ -31,12 +30,14 @@ if abspath(PROGRAM_FILE) == @__FILE__
     comm = false
 	# create the 'input' struct containing input info needed to create a
 	# coordinate
-    input = grid_input("coord", ngrid, nelement_global, nelement_local, 
-		nrank, irank, L, discretization, fd_option, bc, adv_input,comm)
+    x_input = grid_input("coord", ngrid, nelement_global, nelement_local, 
+		nrank, irank, L, discretization, fd_option, "", adv_input,comm)
+	z_input = grid_input("coord", ngrid, nelement_global, nelement_local, 
+		nrank, irank, L, discretization, fd_option, "wall", adv_input,comm)
 	# create the coordinate struct 'x'
 	println("made inputs")
-	x = define_coordinate(input)
-	z = define_coordinate(input)
+	x = define_coordinate(x_input)
+	z = define_coordinate(z_input)
 	println("made x")
 	# create arrays needed for Chebyshev pseudospectral treatment in x
 	# and create the plans for the forward and backward fast Chebyshev

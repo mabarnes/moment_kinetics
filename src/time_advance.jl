@@ -946,13 +946,9 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     vpa_advect, r_advect, z_advect = advect_objects.vpa_advect, advect_objects.r_advect, advect_objects.z_advect
     neutral_z_advect, neutral_r_advect = advect_objects.neutral_z_advect, advect_objects.neutral_r_advect
 
-    if advance.vpa_advection
-        vpa_advection!(fvec_out.pdf, fvec_in, fields, vpa_advect, vpa, vperp, z, r, dt,
-            vpa_spectral, composition, geometry)
-    end
-
     # z_advection! advances 1D advection equation in z
     # apply z-advection operation to charged species
+    # MRH need to update z_advect before doing r or vpa advection
 
     if advance.z_advection
         z_advection!(fvec_out.pdf, fvec_in, fields, z_advect, z, vpa, vperp, r,
@@ -962,8 +958,15 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     # r advection relies on derivatives in z to get ExB
     if advance.r_advection && r.n > 1
         r_advection!(fvec_out.pdf, fvec_in, fields, r_advect, r, z, vperp, vpa,
-            dt, r_spectral, composition, geometry, scratch_dummy)
+            dt, r_spectral, composition, geometry, scratch_dummy, z_advect)
     end
+
+    if advance.vpa_advection
+        vpa_advection!(fvec_out.pdf, fvec_in, fields, vpa_advect, vpa, vperp, z, r, dt,
+            vpa_spectral, composition, geometry, z_advect)
+    end
+
+    
 
     #if advance.vperp_advection
     # PLACEHOLDER
@@ -1012,11 +1015,11 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     # add numerical dissipation
     if advance.numerical_dissipation
         vpa_dissipation!(fvec_out.pdf, fvec_in.pdf, vpa, vpa_spectral, dt,
-                         num_diss_params)
+                         num_diss_params, z, z_advect)
         z_dissipation!(fvec_out.pdf, fvec_in.pdf, z, z_spectral, dt,
                        num_diss_params, scratch_dummy)
         r_dissipation!(fvec_out.pdf, fvec_in.pdf, r, r_spectral, dt,
-                       num_diss_params, scratch_dummy)
+                       num_diss_params, scratch_dummy, z, z_advect)
     end
 
     # enforce boundary conditions in r, z and vpa on the charged particle distribution function
