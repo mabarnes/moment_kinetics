@@ -10,8 +10,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
 	using moment_kinetics.chebyshev: setup_chebyshev_pseudospectral
 	using moment_kinetics.calculus: derivative!, integral
     #import LinearAlgebra
-    using LinearAlgebra: mul!
-    
+    using LinearAlgebra: mul!, lu
+    zero = 1.0e-10
     function Djj(x::Array{Float64,1},j::Int64)
         return -0.5*x[j]/( 1.0 - x[j]^2)
     end
@@ -83,6 +83,15 @@ if abspath(PROGRAM_FILE) == @__FILE__
     function cheb_derivative_matrix_reversed!(D::Array{Float64,2},x) 
         D_elementwise = Array{Float64,2}(undef,x.ngrid,x.ngrid)
         cheb_derivative_matrix_elementwise_reversed!(D_elementwise,x.ngrid,x.L,x.nelement_global)    
+        if x.ngrid < 8
+            println("\n D_elementwise \n")
+            for i in 1:x.ngrid
+                for j in 1:x.ngrid
+                    @printf("%.1f ", D_elementwise[i,j])
+                end
+                println("")
+            end
+        end 
         assign_cheb_derivative_matrix!(D,D_elementwise,x)
     end
     
@@ -91,6 +100,15 @@ if abspath(PROGRAM_FILE) == @__FILE__
         cheb_derivative_matrix_elementwise_reversed!(D_elementwise,x.ngrid,x.L,x.nelement_global)    
         D2_elementwise = Array{Float64,2}(undef,x.ngrid,x.ngrid)
         mul!(D2_elementwise,D_elementwise,D_elementwise)
+        if x.ngrid < 8
+            println("\n D2_elementwise \n")
+            for i in 1:x.ngrid
+                for j in 1:x.ngrid
+                    @printf("%.1f ", D2_elementwise[i,j])
+                end
+                println("")
+            end
+        end
         assign_cheb_derivative_matrix!(D,D2_elementwise,x)
     end
     
@@ -105,6 +123,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         j = 1
         if x.bc == "zero"
             D[imin[j],imin[j]:imax[j]] .+= D_elementwise[1,:]./2.0
+            D[imin[j],imin[j]] += D_elementwise[x.ngrid,x.ngrid]/2.0
         else 
             D[imin[j],imin[j]:imax[j]] .+= D_elementwise[1,:]
         end
@@ -126,6 +145,9 @@ if abspath(PROGRAM_FILE) == @__FILE__
             # upper boundary condition on element 
             if j == x.nelement_local && !(x.bc == "zero")
                 D[imax[j],imin[j]-1:imax[j]] .+= D_elementwise[x.ngrid,:]
+            elseif j == x.nelement_local && x.bc == "zero"
+                D[imax[j],imin[j]-1:imax[j]] .+= D_elementwise[x.ngrid,:]./2.0
+                D[imax[j],imax[j]] += D_elementwise[1,1]/2.0
             else 
                 D[imax[j],imin[j]-1:imax[j]] .+= D_elementwise[x.ngrid,:]./2.0
             end
@@ -219,8 +241,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
 	###################
 	
 	# define inputs needed for the test
-	ngrid = 5 #number of points per element 
-	nelement_local = 256 # number of elements per rank
+	ngrid = 2 #number of points per element 
+	nelement_local = 5 # number of elements per rank
 	nelement_global = nelement_local # total number of elements 
 	L = 1.0 #physical box size in reference units 
 	bc = "" #not required to take a particular value, not used 
@@ -251,7 +273,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     #    println(Dx[i,:])
     #end
     
-    # create array for the function f(x) to be differentiated/integrated
+     # create array for the function f(x) to be differentiated/integrated
 	f = Array{Float64,1}(undef, x.n)
 	# create array for the derivative df/dx
 	df = Array{Float64,1}(undef, x.n)
@@ -275,7 +297,11 @@ if abspath(PROGRAM_FILE) == @__FILE__
     #println("df \n",df)
     #println("df_exact \n",df_exact)
     #println("df_err \n",df_err)
-    
+    input = grid_input("coord", ngrid, nelement_global, nelement_local, 
+		nrank, irank, L, discretization, fd_option, "zero", adv_input,comm)
+	# create the coordinate struct 'x'
+	x = define_coordinate(input)
+   
     Dxreverse = Array{Float64,2}(undef, x.n, x.n)
     cheb_derivative_matrix_reversed!(Dxreverse,x)
     Dxreverse2 = Array{Float64,2}(undef, x.n, x.n)
@@ -283,6 +309,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
     D2xreverse = Array{Float64,2}(undef, x.n, x.n)
     cheb_second_derivative_matrix_reversed!(D2xreverse,x)
     
+    #Dxreverse2[1,1] = 2.0*Dxreverse2[1,1]
+    #Dxreverse2[end,end] = 2.0*Dxreverse2[end,end]
     #println("x.grid \n",x.grid)
     if x.n < 20
         println("\n Dxreverse \n")
@@ -309,16 +337,18 @@ if abspath(PROGRAM_FILE) == @__FILE__
         end
         println("\n")
     end
-    
+
+    alpha = 32.0    
     for ix in 1:x.n
 #        f[ix] = sin(2.0*pi*x.grid[ix]/x.L)
 #        df_exact[ix] = (2.0*pi/x.L)*cos(2.0*pi*x.grid[ix]/x.L)
 #        df2_exact[ix] = -(2.0*pi/x.L)*(2.0*pi/x.L)*sin(2.0*pi*x.grid[ix]/x.L)
-        f[ix] = exp(-4.0*(x.grid[ix])^2)
-        df_exact[ix] = -8.0*x.grid[ix]*exp(-4.0*(x.grid[ix])^2)
-        df2_exact[ix] = ((8.0*x.grid[ix])^2 - 8.0)*exp(-4.0*(x.grid[ix])^2)
+ 
+        f[ix] = exp(-alpha*(x.grid[ix])^2)
+        df_exact[ix] = -2.0*alpha*x.grid[ix]*exp(-alpha*(x.grid[ix])^2)
+        df2_exact[ix] = ((2.0*alpha*x.grid[ix])^2 - 2.0*alpha)*exp(-alpha*(x.grid[ix])^2)
     end
-    
+    println("test f: \n",f)
     # calculate d f / d x from matrix 
     mul!(df,Dxreverse,f)
     # calculate d^2 f / d x from second application of Dx matrix 
@@ -337,10 +367,48 @@ if abspath(PROGRAM_FILE) == @__FILE__
     #println("df2 \n",df2)
     #println("df2_exact \n",df2_exact)
     println("df2_err \n",df2_err)
+    println("df2cheb_err \n",df2cheb_err)
     
     println("max(df_err) \n",maximum(abs.(df_err)))
     println("max(df2_err) \n",maximum(abs.(df2_err)))
     println("max(df2cheb_err) \n",maximum(abs.(df2cheb_err)))
+    
+    ### attempt at matrix inversion via LU decomposition
+    dt = 1.0
+    nu = 10.0
+    AA = Array{Float64,2}(undef,x.n,x.n)
+    for i in 1:x.n
+        for j in 1:x.n
+            AA[i,j] = - dt*nu*Dxreverse2[i,j]
+        end
+        AA[i,i] += 1.0
+    end
+    lu_obj = lu(AA)
+    if x.n < 20
+        println("L : \n",lu_obj.L)
+        println("U : \n",lu_obj.U)
+        println("p vector : \n",lu_obj.p)
+    end
+    LUtest = true
+    AA_test_lhs = lu_obj.L*lu_obj.U 
+    AA_test_rhs = AA[lu_obj.p,:]
+    for i in 1:x.n
+        for j in 1:x.n
+            if abs.(AA_test_lhs[i,j]-AA_test_rhs[i,j]) > zero
+                global LUtest = false
+            end
+        end
+    end
+    println("LU == AA : \n",LUtest)
+    
+    #bb = ones(x.n) try this for bc = "" rather than bc = "zero"
+    bb = Array{Float64,1}(undef,x.n)
+    for i in 1:x.n
+        bb[i] = f[i]#exp(-(4.0*x.grid[i]/x.L)^2)
+    end
+    yy = lu_obj \ bb # solution to AA yy = bb 
+    println("result", yy)
+    #println("check result", AA*yy, bb)
     
     
 end
