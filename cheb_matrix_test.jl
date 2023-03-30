@@ -1,4 +1,5 @@
 using Printf
+using Plots
 
 if abspath(PROGRAM_FILE) == @__FILE__
     using Pkg
@@ -241,8 +242,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
 	###################
 	
 	# define inputs needed for the test
-	ngrid = 2 #number of points per element 
-	nelement_local = 5 # number of elements per rank
+	ngrid = 17 #number of points per element 
+	nelement_local = 10 # number of elements per rank
 	nelement_global = nelement_local # total number of elements 
 	L = 1.0 #physical box size in reference units 
 	bc = "" #not required to take a particular value, not used 
@@ -309,8 +310,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
     D2xreverse = Array{Float64,2}(undef, x.n, x.n)
     cheb_second_derivative_matrix_reversed!(D2xreverse,x)
     
-    #Dxreverse2[1,1] = 2.0*Dxreverse2[1,1]
-    #Dxreverse2[end,end] = 2.0*Dxreverse2[end,end]
+    Dxreverse2[1,1] = 2.0*Dxreverse2[1,1]
+    Dxreverse2[end,end] = 2.0*Dxreverse2[end,end]
     #println("x.grid \n",x.grid)
     if x.n < 20
         println("\n Dxreverse \n")
@@ -338,7 +339,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         println("\n")
     end
 
-    alpha = 32.0    
+    alpha = 512.0    
     for ix in 1:x.n
 #        f[ix] = sin(2.0*pi*x.grid[ix]/x.L)
 #        df_exact[ix] = (2.0*pi/x.L)*cos(2.0*pi*x.grid[ix]/x.L)
@@ -374,8 +375,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
     println("max(df2cheb_err) \n",maximum(abs.(df2cheb_err)))
     
     ### attempt at matrix inversion via LU decomposition
-    dt = 1.0
-    nu = 10.0
+    dt = 0.001
+    nu = 1.0
     AA = Array{Float64,2}(undef,x.n,x.n)
     for i in 1:x.n
         for j in 1:x.n
@@ -410,5 +411,22 @@ if abspath(PROGRAM_FILE) == @__FILE__
     println("result", yy)
     #println("check result", AA*yy, bb)
     
+    ntime = 100
+    time = Array{Float64,1}(undef,ntime)
+    ff = Array{Float64,2}(undef,x.n,ntime)
+    time[1] = 0.0
+    ff[:,1] .= f[:] #initial condition
+    for i in 1:ntime-1
+        time[i+1] = (i+1)*dt
+        bb .= ff[:,i]
+        ff[:,i+1] .= lu_obj\bb 
+    end
     
+    ffmin = minimum(ff)
+    ffmax = maximum(ff)
+    anim = @animate for i in 1:ntime
+            @views plot(x.grid, ff[:,i], xlabel="x", ylabel="f", ylims = (ffmin,ffmax))
+        end
+    outfile = string("ff_vs_x.gif")
+    gif(anim, outfile, fps=5)
 end
