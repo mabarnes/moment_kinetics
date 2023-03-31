@@ -21,6 +21,14 @@ if abspath(PROGRAM_FILE) == @__FILE__
         return  (c_j/c_k)*((-1)^(k+j))/(x[j] - x[k])
     end
     
+    """
+    The function below is based on the numerical method outlined in 
+    Chapter 8.2 from Trefethen 1994 
+    https://people.maths.ox.ac.uk/trefethen/8all.pdf
+    full list of Chapters may be obtained here 
+    https://people.maths.ox.ac.uk/trefethen/pdetext.html
+    """
+    
     function cheb_derivative_matrix!(D::Array{Float64,2},x::Array{Float64,1},n) 
         D[:,:] .= 0.0
         
