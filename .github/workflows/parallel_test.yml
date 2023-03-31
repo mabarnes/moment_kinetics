@@ -9,6 +9,11 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macOS-latest]
+        include:
+          - julia_version: '1.8'
+          # Use  julia-1.7 for macOS because otherwise the job hangs
+          - julia_version: '1.7'
+            os: macOS-latest
       fail-fast: false
     timeout-minutes: 90
 
@@ -20,15 +25,21 @@ jobs:
       - uses: actions/setup-python@v2
       - uses: julia-actions/setup-julia@v1
         with:
-          version: '1.7'
+          version: ${{ matrix.julia_version }}
           arch: x64
+      # Install a specific Plots.jl version, because the job hangs on macOS with
+      # Plots.jl@1.38.8
+      - name: Pin dependency versions
+        if: matrix.os == 'macOS-latest'
+        run: julia --project -e 'using Pkg; Pkg.add([PackageSpec(name="Plots", version="1.24.3")])'
       - uses: julia-actions/julia-buildpkg@v1
         env:
           # Use the system Python for PyCall - avoids library linking error on macOS
           PYTHON: "${{ env.pythonLocation }}/bin/python"
       - run: |
           pip3 install --user matplotlib
-          julia --project -e 'ENV["JULIA_MPI_BINARY"]="system"; using Pkg; Pkg.build("MPI"; verbose=true)'
+          julia --project -e 'using MPIPreferences; MPIPreferences.use_system_binary()'
+          julia --project -e 'using Pkg; Pkg.build("MPI"; verbose=true)'
           julia -O3 --check-bounds=no precompile.jl --debug 1
           # Need to use openmpi so that the following arguments work:
           # * `--mca rmaps_base_oversubscribe 1` allows oversubscription (more processes
