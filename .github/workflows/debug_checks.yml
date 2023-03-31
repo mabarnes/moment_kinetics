@@ -9,6 +9,11 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macOS-latest]
+        include:
+          - julia_version: '1.8'
+          # Use  julia-1.7 for macOS because otherwise the job hangs
+          - julia_version: '1.7'
+            os: macOS-latest
       fail-fast: false
     timeout-minutes: 60
 
@@ -20,7 +25,7 @@ jobs:
       - uses: actions/setup-python@v2
       - uses: julia-actions/setup-julia@v1
         with:
-          version: '1.8'
+          version: ${{ matrix.julia_version }}
           arch: x64
       - uses: julia-actions/julia-buildpkg@v1
         env:
