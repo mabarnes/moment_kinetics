@@ -1,5 +1,6 @@
 using Printf
 using Plots
+using LaTeXStrings
 
 if abspath(PROGRAM_FILE) == @__FILE__
     using Pkg
@@ -232,6 +233,33 @@ if abspath(PROGRAM_FILE) == @__FILE__
         D .= (2.0*float(nelement)/L).*D
     end 
     
+    """
+    function integrating d y / d t = f(t)
+    """
+    function forward_euler_step!(ynew,yold,f,dt,n)
+        for i in 1:n
+            ynew[i] = yold[i] + dt*f[i]
+        end
+    end
+    """
+    function creating lu object for A = I - dt*nu*D2
+    """
+    function diffusion_matrix(D2,n,dt,nu;return_A=false)
+        A = Array{Float64,2}(undef,n,n)
+        for i in 1:n
+            for j in 1:n
+                A[i,j] = - dt*nu*D2[i,j]
+            end
+            A[i,i] += 1.0
+        end
+        lu_obj = lu(A)
+        if return_A
+            return lu_obj, A
+        else
+            return lu_obj
+        end
+    end
+    
     #using LinearAlgebra.mul
     discretization = "chebyshev_pseudospectral"
     #discretization = "finite_difference"
@@ -375,16 +403,17 @@ if abspath(PROGRAM_FILE) == @__FILE__
     println("max(df2cheb_err) \n",maximum(abs.(df2cheb_err)))
     
     ### attempt at matrix inversion via LU decomposition
-    dt = 0.001
-    nu = 1.0
-    AA = Array{Float64,2}(undef,x.n,x.n)
-    for i in 1:x.n
-        for j in 1:x.n
-            AA[i,j] = - dt*nu*Dxreverse2[i,j]
-        end
-        AA[i,i] += 1.0
-    end
-    lu_obj = lu(AA)
+    Dt = 0.1
+    Nu = 1.0
+    lu_obj, AA = diffusion_matrix(Dxreverse2,x.n,Dt,Nu,return_A=true)
+    #AA = Array{Float64,2}(undef,x.n,x.n)
+    #for i in 1:x.n
+    #    for j in 1:x.n
+    #        AA[i,j] = - Dt*Nu*Dxreverse2[i,j]
+    #    end
+    #    AA[i,i] += 1.0
+    #end
+    #lu_obj = lu(AA)
     if x.n < 20
         println("L : \n",lu_obj.L)
         println("U : \n",lu_obj.U)
@@ -404,29 +433,91 @@ if abspath(PROGRAM_FILE) == @__FILE__
     
     #bb = ones(x.n) try this for bc = "" rather than bc = "zero"
     bb = Array{Float64,1}(undef,x.n)
-    for i in 1:x.n
-        bb[i] = f[i]#exp(-(4.0*x.grid[i]/x.L)^2)
-    end
-    yy = lu_obj \ bb # solution to AA yy = bb 
-    println("result", yy)
+    yy = Array{Float64,1}(undef,x.n)
+    #for i in 1:x.n
+    #    bb[i] = f[i]#exp(-(4.0*x.grid[i]/x.L)^2)
+    #end
+    #yy = lu_obj \ bb # solution to AA yy = bb 
+    #println("result", yy)
     #println("check result", AA*yy, bb)
+    MMS_test = false 
+    evolution_test = true 
     
-    ntime = 100
-    time = Array{Float64,1}(undef,ntime)
-    ff = Array{Float64,2}(undef,x.n,ntime)
-    time[1] = 0.0
-    ff[:,1] .= f[:] #initial condition
-    for i in 1:ntime-1
-        time[i+1] = (i+1)*dt
-        bb .= ff[:,i]
-        ff[:,i+1] .= lu_obj\bb 
+    if MMS_test
+        ntest = 5
+        MMS_errors = Array{Float64,1}(undef,ntest)
+        Dt_list = Array{Float64,1}(undef,ntest)
+        fac_list = Array{Int64,1}(undef,ntest)
+        fac_list .= [1, 10, 100, 1000, 10000]
+        #for itest in [1, 10, 100, 1000, 10000]
+        for itest in 1:ntest
+            fac = fac_list[itest]
+            #println(fac)
+            ntime = 1000*fac
+            nwrite = 100*fac
+            dt = 0.001/fac
+            #println(ntime," ",dt)
+            nu = 1.0
+            LU_obj = diffusion_matrix(Dxreverse2,x.n,dt,nu)
+            
+            time = Array{Float64,1}(undef,ntime)
+            ff = Array{Float64,2}(undef,x.n,ntime)
+            ss = Array{Float64,1}(undef,x.n) #source
+
+            time[1] = 0.0
+            ff[:,1] .= f[:] #initial condition
+            for i in 1:ntime-1
+                time[i+1] = (i+1)*dt
+                bb .= ff[:,i]
+                yy .= LU_obj\bb # implicit backward euler diffusion step
+                @. ss = -nu*df2_exact # source term
+                 # explicit forward_euler_step with source
+                @views forward_euler_step!(ff[:,i+1],yy,ss,dt,x.n)
+            end
+
+            ff_error = Array{Float64,1}(undef,x.n)
+            ff_error[:] .= abs.(ff[:,end] - ff[:,1])
+            maxfferr = maximum(ff_error)
+            #println("ff_error \n",ff_error)
+            println("max(ff_error) \n",maxfferr)
+            #println("t[end]: ",time[end])
+            MMS_errors[itest] = maxfferr
+            Dt_list[itest] = dt
+        end 
+        @views plot(Dt_list, [MMS_errors, 100.0*Dt_list], label=[L"max(\epsilon(f))" L"100\Delta t"], 
+                     xlabel=L"\Delta t", ylabel="", xscale=:log10, yscale=:log10, shape =:circle)
+        outfile = string("ff_err_vs_dt.pdf")
+        savefig(outfile)
     end
     
-    ffmin = minimum(ff)
-    ffmax = maximum(ff)
-    anim = @animate for i in 1:ntime
-            @views plot(x.grid, ff[:,i], xlabel="x", ylabel="f", ylims = (ffmin,ffmax))
+    if evolution_test
+        ntime = 100
+        nwrite = 1
+        dt = 0.001
+        nu = 1.0
+        LU_obj = diffusion_matrix(Dxreverse2,x.n,dt,nu)
+        
+        time = Array{Float64,1}(undef,ntime)
+        ff = Array{Float64,2}(undef,x.n,ntime)
+        ss = Array{Float64,1}(undef,x.n) #source
+
+        time[1] = 0.0
+        ff[:,1] .= f[:] #initial condition
+        for i in 1:ntime-1
+            time[i+1] = (i+1)*dt
+            bb .= ff[:,i]
+            yy .= LU_obj\bb # implicit backward euler diffusion step
+            @. ss = 0.0 # source term
+             # explicit forward_euler_step with source
+            @views forward_euler_step!(ff[:,i+1],yy,ss,dt,x.n)
         end
-    outfile = string("ff_vs_x.gif")
-    gif(anim, outfile, fps=5)
+
+        ffmin = minimum(ff)
+        ffmax = maximum(ff)
+        anim = @animate for i in 1:nwrite:ntime
+                @views plot(x.grid, ff[:,i], xlabel="x", ylabel="f", ylims = (ffmin,ffmax))
+            end
+        outfile = string("ff_vs_x.gif")
+        gif(anim, outfile, fps=5)
+    end
 end
