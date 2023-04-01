@@ -145,9 +145,6 @@ function mk_input(scan_input=Dict())
     nstep = get(scan_input, "nstep", 40000)
     dt = get(scan_input, "dt", 0.00025/sqrt(species[1].initial_temperature))
     nwrite = get(scan_input, "nwrite", 80)
-    # use_semi_lagrange = true to use interpolation-free semi-Lagrange treatment
-    # otherwise, solve problem solely using the discretization_option above
-    use_semi_lagrange = get(scan_input, "use_semi_lagrange", false)
     # options are n_rk_stages = 1, 2, 3 or 4 (corresponding to forward Euler,
     # Heun's method, SSP RK3 and 4-stage SSP RK3)
     n_rk_stages = get(scan_input, "n_rk_stages", 4)
@@ -202,8 +199,7 @@ function mk_input(scan_input=Dict())
     ########## end user inputs. do not modify following code! ###############
     #########################################################################
 
-    t = time_input(nstep, dt, nwrite, use_semi_lagrange, n_rk_stages, split_operators,
-                   runtime_plots)
+    t = time_input(nstep, dt, nwrite, n_rk_stages, split_operators, runtime_plots)
     # replace mutable structures with immutable ones to optimize performance
     # and avoid possible misunderstandings
     z_advection_immutable = advection_input(z.advection.option, z.advection.constant_speed,
@@ -256,8 +252,8 @@ function mk_input(scan_input=Dict())
     end
 
     # check input to catch errors/unsupported options
-    check_input(io, output_dir, nstep, dt, use_semi_lagrange, r_immutable, z_immutable,
-        vpa_immutable, composition, species_immutable, evolve_moments)
+    check_input(io, output_dir, nstep, dt, r_immutable, z_immutable, vpa_immutable,
+                composition, species_immutable, evolve_moments)
 
     # return immutable structs for z, vpa, species and composition
     all_inputs = (run_name, output_dir, evolve_moments, t, z_immutable, r_immutable, vpa_immutable,
@@ -492,14 +488,14 @@ end
 """
 check various input options to ensure they are all valid/consistent
 """
-function check_input(io, output_dir, nstep, dt, use_semi_lagrange, r, z, vpa,
+function check_input(io, output_dir, nstep, dt, r, z, vpa,
     composition, species, evolve_moments)
     # copy the input file to the output directory to be saved
     if block_rank[] == 0
         cp(joinpath(@__DIR__, "moment_kinetics_input.jl"), joinpath(output_dir, "moment_kinetics_input.jl"), force=true)
     end
     # open ascii file in which informtaion about input choices will be written
-    check_input_time_advance(nstep, dt, use_semi_lagrange, io)
+    check_input_time_advance(nstep, dt, io)
     check_coordinate_input(r, "r", io)
     check_coordinate_input(z, "z", io)
     check_coordinate_input(vpa, "vpa", io)
@@ -514,15 +510,9 @@ end
 
 """
 """
-function check_input_time_advance(nstep, dt, use_semi_lagrange, io)
+function check_input_time_advance(nstep, dt, io)
     println(io,"##### time advance #####")
     println(io)
-    # use_semi_lagrange = true to use interpolation-free semi-Lagrange treatment
-    # otherwise, solve problem solely using the discretization_option above
-    if use_semi_lagrange
-        print(io,">use_semi_lagrange set to true.  ")
-        println(io,"using interpolation-free semi-Lagrange for advection terms.")
-    end
     println(io,">running for ", nstep, " time steps, with step size ", dt, ".")
 end
 

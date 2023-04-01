@@ -31,7 +31,6 @@ include("em_fields.jl")
 include("bgk.jl")
 include("initial_conditions.jl")
 include("moment_constraints.jl")
-include("semi_lagrange.jl")
 include("advection.jl")
 include("vpa_advection.jl")
 include("z_advection.jl")
@@ -190,16 +189,16 @@ function restart_moment_kinetics(restart_filename::String, input_dict::Dict,
 
         # Set up all the structs, etc. needed for a run.
         pdf, scratch, code_time, t_input, vpa, z, r, vpa_spectral, z_spectral,
-        r_spectral, moments, fields, vpa_advect, z_advect, r_advect, vpa_SL, z_SL, r_SL,
-        composition, collisions, num_diss_params, advance, scratch_dummy_sr, io, cdf =
+        r_spectral, moments, fields, vpa_advect, z_advect, r_advect, composition,
+        collisions, num_diss_params, advance, scratch_dummy_sr, io, cdf =
         setup_moment_kinetics(input_dict, backup_filename=backup_filename,
                               restart_time_index=time_index)
 
         try
             time_advance!(pdf, scratch, code_time, t_input, vpa, z, r, vpa_spectral,
                           z_spectral, r_spectral, moments, fields, vpa_advect, z_advect,
-                          r_advect, vpa_SL, z_SL, r_SL, composition, collisions,
-                          num_diss_params, advance, scratch_dummy_sr, io, cdf)
+                          r_advect, composition, collisions, num_diss_params, advance,
+                          scratch_dummy_sr, io, cdf)
         finally
             # clean up i/o and communications
             # last 2 elements of mk_state are `io` and `cdf`
@@ -267,10 +266,9 @@ function setup_moment_kinetics(input_dict::Dict; backup_filename=nothing,
     end
     # create arrays and do other work needed to setup
     # the main time advance loop -- including normalisation of f by density if requested
-    moments, fields, vpa_advect, z_advect, r_advect, vpa_SL, z_SL, r_SL, scratch,
-        advance, scratch_dummy_sr = setup_time_advance!(pdf, vpa, z, r, z_spectral,
-            composition, drive_input, moments, t_input, collisions, species,
-            num_diss_params, restarting)
+    moments, fields, vpa_advect, z_advect, r_advect, scratch, advance, scratch_dummy_sr =
+        setup_time_advance!(pdf, vpa, z, r, z_spectral, composition, drive_input, moments,
+            t_input, collisions, species, num_diss_params, restarting)
 
     # setup i/o
     io, cdf = setup_file_io(output_dir, run_name, vpa, z, r, composition, collisions,
@@ -284,8 +282,8 @@ function setup_moment_kinetics(input_dict::Dict; backup_filename=nothing,
     begin_s_r_z_region()
 
     return pdf, scratch, code_time, t_input, vpa, z, r, vpa_spectral, z_spectral, r_spectral, moments,
-           fields, vpa_advect, z_advect, r_advect, vpa_SL, z_SL, r_SL, composition,
-           collisions, num_diss_params, advance, scratch_dummy_sr, io, cdf
+           fields, vpa_advect, z_advect, r_advect, composition, collisions,
+           num_diss_params, advance, scratch_dummy_sr, io, cdf
 end
 
 """
