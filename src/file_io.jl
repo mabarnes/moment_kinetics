@@ -96,10 +96,10 @@ function setup_file_io(io_input, vz, vr, vzeta, vpa, vperp, z, r, composition, c
         out_prefix = string(io_input.output_dir, "/", io_input.run_name, ".", iblock_index[])
 
         if io_input.ascii_output
-            #ff_io = open_output_file(out_prefix, "f_vs_t")
-            mom_chrg_io = open_output_file(out_prefix, "moments_charged_vs_t")
-            mom_ntrl_io = open_output_file(out_prefix, "moments_neutral_vs_t")
-            fields_io = open_output_file(out_prefix, "fields_vs_t")
+            #ff_io = open_ascii_output_file(out_prefix, "f_vs_t")
+            mom_chrg_io = open_ascii_output_file(out_prefix, "moments_charged_vs_t")
+            mom_ntrl_io = open_ascii_output_file(out_prefix, "moments_neutral_vs_t")
+            fields_io = open_ascii_output_file(out_prefix, "fields_vs_t")
             ascii = ascii_ios(mom_chrg_io, mom_ntrl_io, fields_io)
         else
             ascii = ascii_ios(nothing, nothing, nothing)
