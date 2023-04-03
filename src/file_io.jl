@@ -255,10 +255,19 @@ function define_io_coordinate!(parent, coord, coord_name, description, parallel_
         # create the "group" sub-group of "parent" that will contain coord_str coordinate info
         group = create_io_group(parent, coord_name, description=description)
 
-        # write the number of local grid points for this coordinate to variable "n_local"
-        # within "coords/coord_name" group
-        write_single_value!(group, "n_local", coord.n; parallel_io=parallel_io,
-                            description="number of local $coord_name grid points")
+        if parallel_io
+            # When using parallel I/O, write n_global as n_local because the file is as if
+            # it had been produced by a serial run.
+            # This is a bit of a hack and should probably be removed when
+            # post_processing.jl is updated to be compatible with that.
+            write_single_value!(group, "n_local", coord.n_global; parallel_io=parallel_io,
+                                description="number of local $coord_name grid points")
+        else
+            # write the number of local grid points for this coordinate to variable
+            # "n_local" within "coords/coord_name" group
+            write_single_value!(group, "n_local", coord.n; parallel_io=parallel_io,
+                                description="number of local $coord_name grid points")
+        end
 
         # write the number of global grid points for this coordinate to variable "n_local"
         # within "coords/coord_name" group
