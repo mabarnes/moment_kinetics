@@ -49,7 +49,7 @@ end
 
 function write_single_value!(file_or_group::NCDataset, name,
                              value::Union{Number, AbstractArray{T,N}},
-                             coords::coordinate...; description=nothing) where {T,N}
+                             coords::coordinate...; parallel_io, description=nothing) where {T,N}
     if description !== nothing
         attributes = Dict("description" => description)
     else
@@ -74,7 +74,7 @@ function write_single_value!(file_or_group::NCDataset, name,
 end
 
 function create_dynamic_variable!(file_or_group::NCDataset, name, type,
-                                  coords::coordinate...;
+                                  coords::coordinate...; parallel_io,
                                   n_ion_species=0, n_neutral_species=0,
                                   description=nothing, units=nothing)
 
