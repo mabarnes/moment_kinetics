@@ -2,7 +2,14 @@
 
 using NCDatasets
 
-function open_output_file_netcdf(prefix)
+function io_has_parallel(::Val{netcdf})
+    # NCDatasets.jl does not support parallel I/O yet
+    return false
+end
+
+function open_output_file_netcdf(prefix, parallel_io, io_comm)
+    parallel_io && error("NetCDF interface does not support parallel I/O")
+
     # the netcdf file will be given by output_dir/run_name with .cdf appended
     filename = string(prefix, ".cdf")
     # if a netcdf file with the requested name already exists, remove it
@@ -42,7 +49,7 @@ end
 
 function write_single_value!(file_or_group::NCDataset, name,
                              value::Union{Number, AbstractArray{T,N}},
-                             coords::coordinate...; description=nothing) where {T,N}
+                             coords::coordinate...; parallel_io, description=nothing) where {T,N}
     if description !== nothing
         attributes = Dict("description" => description)
     else
@@ -67,7 +74,7 @@ function write_single_value!(file_or_group::NCDataset, name,
 end
 
 function create_dynamic_variable!(file_or_group::NCDataset, name, type,
-                                  coords::coordinate...;
+                                  coords::coordinate...; parallel_io,
                                   n_ion_species=0, n_neutral_species=0,
                                   description=nothing, units=nothing)
 
@@ -122,7 +129,8 @@ function create_dynamic_variable!(file_or_group::NCDataset, name, type,
 end
 
 function append_to_dynamic_var(io_var::NCDatasets.CFVariable,
-                               data::Union{Number,AbstractArray{T,N}}, t_idx) where {T,N}
+                               data::Union{Number,AbstractArray{T,N}}, t_idx,
+                               coords...) where {T,N}
 
     if isa(data, Number)
         io_var[t_idx] = data

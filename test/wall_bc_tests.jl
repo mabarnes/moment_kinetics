@@ -6,6 +6,7 @@ module WallBC
 include("setup.jl")
 
 using Base.Filesystem: tempname
+using MPI
 using TimerOutputs
 
 using moment_kinetics.chebyshev: setup_chebyshev_pseudospectral
@@ -186,7 +187,7 @@ function run_test(test_input, expected_phi, tolerance; args...)
         adv_input = advection_input("default", 1.0, 0.0, 0.0)
 		nrank_per_block = 0 # dummy value
 		irank = 0 # dummy value
-		comm = false # dummy value 
+		comm = MPI.COMM_NULL # dummy value 
         input = grid_input("coord", test_input["z_ngrid"], test_input["z_nelement"], 
 						   test_input["z_nelement"], nrank_per_block, irank, 1.0,
                            test_input["z_discretization"], "", test_input["z_bc"],

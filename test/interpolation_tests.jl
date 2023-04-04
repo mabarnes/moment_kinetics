@@ -8,6 +8,8 @@ using moment_kinetics.chebyshev: setup_chebyshev_pseudospectral
 using moment_kinetics.interpolation:
     interpolate_to_grid_1d, interpolate_to_grid_z, interpolate_to_grid_vpa
 
+using MPI
+
 fd_fake_setup(z) = return false
 
 # periodic test function
@@ -37,7 +39,7 @@ function runtests()
 			nelement_local = nelement
 			nrank_per_block = 0 # dummy value
 			irank = 0 # dummy value
-			comm = false # dummy value 
+			comm = MPI.COMM_NULL # dummy value 
 			input = grid_input("coord", ngrid, nelement,
 				nelement_local, nrank_per_block, irank, L,
 				discretization, fd_option, bc, adv_input, comm)

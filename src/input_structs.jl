@@ -17,6 +17,8 @@ export geometry_input
 
 using ..type_definitions: mk_float, mk_int
 
+using MPI
+
 """
 """
 mutable struct evolve_moments_options
@@ -144,8 +146,8 @@ struct grid_input
     bc::String
     # struct containing advection speed options
     advection::advection_input
-	# MPI communicator
-	comm::T where T
+    # MPI communicator
+    comm::MPI.Comm
 end
 
 """
@@ -323,6 +325,7 @@ Base.@kwdef struct io_input
     run_name::String
     ascii_output::Bool
     binary_format::binary_format_type
+    parallel_io::Bool
 end
 
 """

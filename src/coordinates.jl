@@ -11,6 +11,8 @@ using ..chebyshev: scaled_chebyshev_grid
 using ..quadrature: composite_simpson_weights
 using ..input_structs: advection_input
 
+using MPI
+
 """
 structure containing basic information related to coordinates
 """
@@ -71,12 +73,16 @@ struct coordinate
     scratch2_2d::Array{mk_float,2}
     # struct containing advection speed options/inputs
     advection::advection_input
-	# buffer of size 1 for communicating information about cell boundaries
-	send_buffer::Array{mk_float,1}
-	# buffer of size 1 for communicating information about cell boundaries
-	receive_buffer::Array{mk_float,1}
-	# the MPI communicator appropriate for this calculation
-	comm::T where T
+    # buffer of size 1 for communicating information about cell boundaries
+    send_buffer::Array{mk_float,1}
+    # buffer of size 1 for communicating information about cell boundaries
+    receive_buffer::Array{mk_float,1}
+    # the MPI communicator appropriate for this calculation
+    comm::MPI.Comm
+    # local range to slice from variables to write to output file
+    local_io_range::UnitRange{Int64}
+    # global range to write into in output file
+    global_io_range::UnitRange{Int64}
 end
 
 """
@@ -84,25 +90,25 @@ create arrays associated with a given coordinate,
 setup the coordinate grid, and populate the coordinate structure
 containing all of this information
 """
-function define_coordinate(input, composition=nothing)
+function define_coordinate(input, parallel_io::Bool=false)
     # total number of grid points is ngrid for the first element
     # plus ngrid-1 unique points for each additional element due
     # to the repetition of a point at the element boundary
     n_global = (input.ngrid-1)*input.nelement_global + 1
     # local number of points on this process
-	n_local = (input.ngrid-1)*input.nelement_local + 1
-	# obtain index mapping from full (local) grid to the
+    n_local = (input.ngrid-1)*input.nelement_local + 1
+    # obtain index mapping from full (local) grid to the
     # grid within each element (igrid, ielement)
     igrid, ielement = full_to_elemental_grid_map(input.ngrid,
-    	input.nelement_local, n_local)
+        input.nelement_local, n_local)
     # obtain (local) index mapping from the grid within each element
     # to the full grid
     imin, imax = elemental_to_full_grid_map(input.ngrid, input.nelement_local)
     # initialize the grid and the integration weights associated with the grid
     # also obtain the Chebyshev theta grid and spacing if chosen as discretization option
     grid, wgts, uniform_grid = init_grid(input.ngrid, input.nelement_global,
-	 input.nelement_local, n_local, input.irank, input.L,
-	 imin, imax, igrid, input.discretization, input.name)
+        input.nelement_local, n_global, n_local, input.irank, input.L,
+        imin, imax, igrid, input.discretization, input.name)
     # calculate the widths of the cells between neighboring grid points
     cell_width = grid_spacing(grid, n_local)
     # duniform_dgrid is the local derivative of the uniform grid with respect to
@@ -114,29 +120,48 @@ function define_coordinate(input, composition=nothing)
     scratch_2d = allocate_float(input.ngrid, input.nelement_local)
     # struct containing the advection speed options/inputs for this coordinate
     advection = input.advection
-	send_buffer = allocate_float(1)
-	receive_buffer = allocate_float(1)
-    # buffer for cyclic communication of boundary points
-    # each chain of elements has only two external (off-rank) 
-	#endpoints, so only two pieces of information must be shared
-	return coordinate(input.name, n_global, n_local, input.ngrid, 
-	    input.nelement_global, input.nelement_local, input.nrank, input.irank, input.L, grid,
+    # buffers for cyclic communication of boundary points
+    # each chain of elements has only two external (off-rank)
+    # endpoints, so only two pieces of information must be shared
+    send_buffer = allocate_float(1)
+    receive_buffer = allocate_float(1)
+
+    # Add some ranges to support parallel file io
+    if !parallel_io
+        # No parallel io, just write everything
+        local_io_range = 1:n_local
+        global_io_range = 1:n_local
+    elseif input.irank == input.nrank-1
+        # Include endpoint on final block
+        local_io_range = 1:n_local
+        global_io_range = input.irank*(n_local-1)+1:n_global
+    else
+        # Skip final point, because it is shared with the next block
+        # Choose to skip final point in each block so all blocks (except the final one)
+        # write a 'chunk' of the same size to the output file. This makes it simple to
+        # align HDF5 'chunks' with the data being written
+        local_io_range = 1 : n_local-1
+        global_io_range = input.irank*(n_local-1)+1 : (input.irank+1)*(n_local-1)
+    end
+    return coordinate(input.name, n_global, n_local, input.ngrid,
+        input.nelement_global, input.nelement_local, input.nrank, input.irank, input.L, grid,
         cell_width, igrid, ielement, imin, imax, input.discretization, input.fd_option,
         input.bc, wgts, uniform_grid, duniform_dgrid, scratch, copy(scratch), copy(scratch),
-        scratch_2d, copy(scratch_2d), advection, send_buffer, receive_buffer, input.comm)
+        scratch_2d, copy(scratch_2d), advection, send_buffer, receive_buffer, input.comm,
+        local_io_range, global_io_range)
 end
 
 """
-setup a grid with n grid points on the interval [-L/2,L/2]
+setup a grid with n_global grid points on the interval [-L/2,L/2]
 """
-function init_grid(ngrid, nelement_global, nelement_local, n, irank,
-			L, imin, imax, igrid, discretization, name)
-    uniform_grid = equally_spaced_grid(n,L,nelement_global,nelement_local,irank)
-    uniform_grid_shifted = equally_spaced_grid_shifted(n,L)
-    if n == 1
-        grid = allocate_float(n)
+function init_grid(ngrid, nelement_global, nelement_local, n_global, n_local, irank, L,
+                   imin, imax, igrid, discretization, name)
+    uniform_grid = equally_spaced_grid(n_global, n_local, irank, L)
+    uniform_grid_shifted = equally_spaced_grid_shifted(n_global, n_local, irank, L)
+    if n_global == 1
+        grid = allocate_float(n_local)
         grid[1] = 0.0
-        wgts = allocate_float(n)
+        wgts = allocate_float(n_local)
         if name == "vr" || name == "vzeta"
             wgts[1] = sqrt(pi) # to cancel factor of 1/sqrt{pi} in integrate_over_neutral_vspace, velocity_moments.jl
                                # in the case that the code runs in 1V mode
@@ -146,7 +171,7 @@ function init_grid(ngrid, nelement_global, nelement_local, n, irank,
     elseif discretization == "chebyshev_pseudospectral"
         if name == "vperp"
             # initialize chebyshev grid defined on [-L/2,L/2]
-            grid, wgts = scaled_chebyshev_grid(ngrid, nelement_global, nelement_local, n, irank, L, imin, imax)
+            grid, wgts = scaled_chebyshev_grid(ngrid, nelement_global, nelement_local, n_local, irank, L, imin, imax)
             grid .= grid .+ L/2.0 # shift to [0,L] appropriate to vperp variable
             wgts = 2.0 .* wgts .* grid # to include 2 vperp in jacobian of integral
                                         # see note above on normalisation
@@ -157,7 +182,7 @@ function init_grid(ngrid, nelement_global, nelement_local, n, irank,
             # needed to obtain Chebyshev spectral coefficients
             # 'wgts' are the integration weights attached to each grid points
             # that are those associated with Clenshaw-Curtis quadrature
-            grid, wgts = scaled_chebyshev_grid(ngrid, nelement_global, nelement_local, n, irank, L, imin, imax)
+            grid, wgts = scaled_chebyshev_grid(ngrid, nelement_global, nelement_local, n_local, irank, L, imin, imax)
         end
     elseif discretization == "finite_difference"
         if name == "vperp"
@@ -182,32 +207,33 @@ function init_grid(ngrid, nelement_global, nelement_local, n, irank,
 end
 
 """
-setup an equally spaced grid with n grid points
+setup an equally spaced grid with n_global grid points
 between [-L/2,L/2]
 """
-function equally_spaced_grid(n, L, nelement_global, nelement_local, irank)
-    # create array for the equally spaced grid with n grid points
-    grid = allocate_float(n)
-    if nelement_global == nelement_local
-        @inbounds for i ∈ 1:n
-            grid[i] = -0.5*L + (i-1)*L/(n-1)
-        end
-    else # set up grid distributed over cores: grid split into float(nelement_global)/ float(nelement_local) sections
-        L_per_element = L*(float(nelement_local)/float(nelement_global))
-        nlocal = n
-        @inbounds for i ∈ 1:nlocal
-            grid[i] = -0.5*L + irank*L_per_element + (i-1)*L_per_element/(nlocal-1)
-        end
+function equally_spaced_grid(n_global, n_local, irank, L)
+    # create array for the equally spaced grid with n_local grid points
+    grid = allocate_float(n_local)
+    istart = (n_local - 1)*irank + 1
+    grid_spacing = L / (n_global - 1)
+    coord_start = -0.5*L + (istart-1)*grid_spacing
+    @inbounds for i ∈ 1:n_local
+        grid[i] =  coord_start + (i-1)*grid_spacing
     end
     return grid
 end
-# setup an equally spaced grid with n grid points
-# between [0,L]
-function equally_spaced_grid_shifted(n, L)
-    # create array for the equally spaced grid with n grid points
-    grid = allocate_float(n)
-    @inbounds for i ∈ 1:n
-        grid[i] =  (i-1)*L/(n-1)
+
+"""
+setup an equally spaced grid with n_global grid points
+between [0,L]
+"""
+function equally_spaced_grid_shifted(n_global, n_local, irank, L)
+    # create array for the equally spaced grid with n_local grid points
+    grid = allocate_float(n_local)
+    istart = (n_local - 1)*irank + 1
+    grid_spacing = L / (n_global - 1)
+    coord_start = (istart-1)*grid_spacing
+    @inbounds for i ∈ 1:n_local
+        grid[i] =  coord_start + (i-1)*grid_spacing
     end
     return grid
 end

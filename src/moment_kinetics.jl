@@ -172,21 +172,21 @@ function setup_moment_kinetics(input_dict::Dict;
         composition, species, collisions,
         geometry, drive_input, num_diss_params  = input
     # initialize z grid and write grid point locations to file
-    z = define_coordinate(z_input, composition)
+    z = define_coordinate(z_input, io_input.parallel_io)
     # initialize r grid and write grid point locations to file
-    r = define_coordinate(r_input, composition)
+    r = define_coordinate(r_input, io_input.parallel_io)
     # initialize vpa grid and write grid point locations to file
-    vpa = define_coordinate(vpa_input, composition)
+    vpa = define_coordinate(vpa_input, io_input.parallel_io)
     # initialize vperp grid and write grid point locations to file
-    vperp = define_coordinate(vperp_input, composition)
+    vperp = define_coordinate(vperp_input, io_input.parallel_io)
     # initialize gyrophase grid and write grid point locations to file
-    gyrophase = define_coordinate(gyrophase_input, composition)
+    gyrophase = define_coordinate(gyrophase_input, io_input.parallel_io)
     # initialize vz grid and write grid point locations to file
-    vz = define_coordinate(vz_input, composition)
+    vz = define_coordinate(vz_input, io_input.parallel_io)
     # initialize vr grid and write grid point locations to file
-    vr = define_coordinate(vr_input, composition)
+    vr = define_coordinate(vr_input, io_input.parallel_io)
     # initialize vr grid and write grid point locations to file
-    vzeta = define_coordinate(vzeta_input, composition)
+    vzeta = define_coordinate(vzeta_input, io_input.parallel_io)
     # Create loop range variables for shared-memory-parallel loops
     if composition.n_neutral_species == 0
         n_neutral_loop_size = 1 # Need this to have looping setup. Avoid neutral loops with if statements.
@@ -228,9 +228,10 @@ function setup_moment_kinetics(input_dict::Dict;
     # write initial data to binary file (netcdf)
 
     write_moments_data_to_binary(moments, fields, code_time, composition.n_ion_species,
-        composition.n_neutral_species, io_moments, 1)
+        composition.n_neutral_species, io_moments, 1, r, z)
     write_dfns_data_to_binary(pdf.charged.unnorm, pdf.neutral.unnorm, code_time,
-        composition.n_ion_species, composition.n_neutral_species, io_dfns, 1)
+        composition.n_ion_species, composition.n_neutral_species, io_dfns, 1, r, z, vperp,
+        vpa, vzeta, vr, vz)
 
     begin_s_r_z_vperp_region()
 

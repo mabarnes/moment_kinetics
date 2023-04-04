@@ -20,25 +20,35 @@ using NCDatasets
 """
 """
 function open_readonly_output_file(run_name, ext; iblock=0, printout=false)
-    # create the HDF5 filename from the given run_name
-    # and the shared-memory block index
-    hdf5_filename = string(run_name, ".", iblock,".", ext, ".h5")
-    if isfile(hdf5_filename)
+    possible_names = (
+        string(run_name, ".", ext, ".h5"),
+        string(run_name, ".", iblock,".", ext, ".h5"),
+        string(run_name, ".", ext, ".cdf"),
+        string(run_name, ".", iblock,".", ext, ".cdf"),
+    )
+    existing_files = Tuple(f for f in possible_names if isfile(f))
+    exists_count = length(existing_files)
+    if exists_count == 0
+        error("None of $possible_names exist, cannot open output")
+    elseif exists_count > 1
+        error("Multiple files present, do not know which to open: $existing_files")
+    end
+
+    # Have checked there is only one filename in existing_files
+    filename = existing_files[1]
+
+    if splitext(filename)[2] == ".h5"
         if printout
-            print("Opening ", hdf5_filename, " to read HDF5 data...")
+            print("Opening ", filename, " to read HDF5 data...")
         end
         # open the HDF5 file with given filename for reading
-        fid = h5open(hdf5_filename, "r")
+        fid = h5open(filename, "r")
     else
-        # create the netcdf filename from the given run_name
-        # and the shared-memory block index
-        netcdf_filename = string(run_name, ".", iblock,".", ext,  ".cdf")
-
         if printout
-            print("Opening ", netcdf_filename, " to read NetCDF data...")
+            print("Opening ", filename, " to read NetCDF data...")
         end
         # open the netcdf file with given filename for reading
-        fid = NCDataset(netcdf_filename, "r")
+        fid = NCDataset(filename, "r")
     end
     if printout
         println("done.")
