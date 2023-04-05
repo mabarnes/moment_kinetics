@@ -33,6 +33,7 @@ include("bgk.jl")
 include("manufactured_solns.jl") # MRH Here?
 include("initial_conditions.jl")
 #include("semi_lagrange.jl")
+include("fokker_planck.jl")
 include("advection.jl")
 include("vpa_advection.jl")
 include("z_advection.jl")
@@ -219,7 +220,7 @@ function setup_moment_kinetics(input_dict::Dict;
     # the main time advance loop -- including normalisation of f by density if requested
 
     moments, fields, spectral_objects, advect_objects,
-    scratch, advance, scratch_dummy, manufactured_source_list = setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition,
+    scratch, advance, fp_arrays, scratch_dummy, manufactured_source_list = setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition,
         drive_input, moments, t_input, collisions, species, geometry, boundary_distributions, num_diss_params)
     # setup i/o
     ascii_io, io_moments, io_dfns = setup_file_io(io_input, vz, vr, vzeta, vpa, vperp, z, r, composition, collisions)
@@ -238,7 +239,7 @@ function setup_moment_kinetics(input_dict::Dict;
     return pdf, scratch, code_time, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
            moments, fields, spectral_objects, advect_objects,
            composition, collisions, geometry, boundary_distributions,
-           num_diss_params, advance, scratch_dummy, manufactured_source_list,
+           num_diss_params, advance, fp_arrays, scratch_dummy, manufactured_source_list,
            ascii_io, io_moments, io_dfns
 end
 

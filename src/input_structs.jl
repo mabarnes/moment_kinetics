@@ -65,6 +65,7 @@ mutable struct advance_info
     manufactured_solns_test::Bool
     r_diffusion::Bool #flag to control how r bc is imposed when r diffusion terms are present
     vpa_diffusion::Bool #flag to control how vpa bc is imposed when vpa diffusion terms are present
+    explicit_fp_collisions::Bool
 end
 
 """
@@ -295,6 +296,8 @@ mutable struct collisions_input
     ionization::mk_float
     # if constant_ionization_rate = true, use an ionization term that is constant in z
     constant_ionization_rate::Bool
+    # ion-ion self collision frequency
+    nuii::mk_float
 end
 
 """
