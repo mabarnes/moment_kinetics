@@ -7,8 +7,9 @@ using TimerOutputs
 #using Plots: plot, plot!, gui
 
 using moment_kinetics.array_allocation: allocate_float
-using moment_kinetics.load_data: open_netcdf_file
-using moment_kinetics.load_data: load_coordinate_data, load_fields_data
+using moment_kinetics.load_data: open_readonly_output_file
+using moment_kinetics.load_data: load_fields_data, load_time_data
+using moment_kinetics.load_data: load_species_data, load_coordinate_data
 using moment_kinetics.analysis: analyze_fields_data
 using moment_kinetics.post_processing: fit_delta_phi_mode
 
@@ -65,11 +66,23 @@ test_input_finite_difference = Dict("n_ion_species" => 1,
                                     "z_nelement" => 1,
                                     "z_bc" => "periodic",
                                     "z_discretization" => "finite_difference",
+                                    "vperp_ngrid" => 1,
+                                    "vperp_nelement" => 1,
+                                    "vperp_L" => 1.0,
+                                    "vperp_bc" => "periodic",
+                                    "vperp_discretization" => "finite_difference",
                                     "vpa_ngrid" => 180,
                                     "vpa_nelement" => 1,
                                     "vpa_L" => 8.0,
                                     "vpa_bc" => "periodic",
-                                    "vpa_discretization" => "finite_difference")
+                                    "vpa_discretization" => "finite_difference",
+                                    "vz_ngrid" => 180,
+                                    "vz_nelement" => 1,
+                                    "vz_L" => 8.0,
+                                    "vz_bc" => "periodic",
+                                    "vz_discretization" => "finite_difference",
+                                    "output" => Dict{String,Any}("binary_format" => "netcdf")
+                                   )
 
 test_input_finite_difference_split_1_moment =
     merge(test_input_finite_difference,
@@ -79,14 +92,14 @@ test_input_finite_difference_split_1_moment =
 test_input_finite_difference_split_2_moments =
     merge(test_input_finite_difference_split_1_moment,
           Dict("run_name" => "finite_difference_split_2_moments",
-               "evolve_moments_parallel_flow" => true, "vpa_ngrid" => 270,
-               "vpa_L" => 12.0))
+               "evolve_moments_parallel_flow" => true, "vpa_ngrid" => 270, "vpa_L" =>
+               12.0, "vz_ngrid" => 270, "vz_L" => 12.0))
 
 test_input_finite_difference_split_3_moments =
     merge(test_input_finite_difference_split_2_moments,
           Dict("run_name" => "finite_difference_split_3_moments",
-               "evolve_moments_parallel_pressure" => true, "vpa_ngrid" => 270,
-               "vpa_L" => 12.0))
+               "evolve_moments_parallel_pressure" => true, "vpa_ngrid" => 270, "vpa_L" =>
+               12.0, "vz_ngrid" => 270, "vz_L" => 12.0))
 
 test_input_chebyshev = merge(test_input_finite_difference,
                              Dict("run_name" => "chebyshev_pseudospectral",
@@ -95,7 +108,10 @@ test_input_chebyshev = merge(test_input_finite_difference,
                                   "z_nelement" => 2,
                                   "vpa_discretization" => "chebyshev_pseudospectral",
                                   "vpa_ngrid" => 17,
-                                  "vpa_nelement" => 8))
+                                  "vpa_nelement" => 8,
+                                  "vz_discretization" => "chebyshev_pseudospectral",
+                                  "vz_ngrid" => 17,
+                                  "vz_nelement" => 8))
 
 test_input_chebyshev_split_1_moment =
     merge(test_input_chebyshev,
@@ -162,17 +178,22 @@ function run_test(test_input, analytic_frequency, analytic_growth_rate,
             path = joinpath(realpath(input["base_directory"]), name, name)
 
             # open the netcdf file and give it the handle 'fid'
-            fid = open_netcdf_file(path)
+            fid = open_readonly_output_file(path,"moments")
 
             # load space-time coordinate data
-            nvpa, vpa, vpa_wgts, nz, z, z_wgts, Lz, nr, r, r_wgts, Lr, ntime, time = load_coordinate_data(fid)
-
+            nz, nz_global, z, z_wgts, Lz = load_coordinate_data(fid, "z")
+            nr, nr_global, r, r_wgts, Lr = load_coordinate_data(fid, "r")
+            n_ion_species, n_neutral_species = load_species_data(fid)
+            ntime, time = load_time_data(fid)
+            
             # load fields data
-            phi_zrt = load_fields_data(fid)
+            phi_zrt, Er_zrt, Ez_zrt = load_fields_data(fid)
 
             close(fid)
-
-            phi = phi_zrt[:,1,:]
+            
+            ir0 = 1 
+            
+            phi = phi_zrt[:,ir0,:]
 
             # analyze the fields data
             phi_fldline_avg, delta_phi = analyze_fields_data(phi, ntime, nz, z_wgts, Lz)

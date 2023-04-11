@@ -36,7 +36,7 @@ const plot_ppar_vs_z_t = false
 # if plot_qpar_vs_z_t = true, create heatmap of species parallel heat flux vs z and time
 const plot_qpar_vs_z_t = false
 # if animate_dens_vs_z = true, create animation of species density(z) at different time slices
-const animate_dens_vs_z = true
+const animate_dens_vs_z =  false #ttrue
 # if animate_upar_vs_z = true, create animation of species parallel flow(z) at different time slices
 const animate_upar_vs_z = false
 # if animate_ppar_vs_z = true, create animation of species parallel pressure(z) at different time slices
@@ -49,7 +49,7 @@ const animate_qpar_vs_z = false
 # it=itime_max
 const plot_f_unnormalized_vs_vpa_z = false
 # if animate_f_vs_vpa_z = true, create animation of f(vpa,z) at different time slices
-const animate_f_vs_vpa_z = false
+const animate_f_vs_vpa_z =  true
 # if animate_f_unnormalized = true, create animation of f_unnorm(v_parallel_unnorm,z) at
 # different time slices
 const animate_f_unnormalized = false
@@ -60,33 +60,99 @@ const animate_f_vs_vpa_z0 = false
 # if animate_deltaf_vs_vpa_z0 = true, create animation of δf(vpa0,z) at different time slices
 const animate_deltaf_vs_vpa_z0 = false
 # if animate_f_vs_z0_vpa = true, create animation of f(vpa,z0) at different time slices
-const animate_f_vs_z0_vpa = true
+const animate_f_vs_vpa0_z =  false #true
 # if animate_deltaf_vs_z0_vpa = true, create animation of δf(vpa,z0) at different time slices
-const animate_deltaf_vs_vpa_z0 = false
+const animate_deltaf_vs_vpa0_z = false
+# if animate_f_vs_vpa_r = true, create animation of f(vpa,r) at different time slices
+const animate_f_vs_vpa_r =  true
+# if animate_f_vs_vperp_z = true, create animation of f(vperp,z) at different time slices
+const animate_f_vs_vperp_z =  true
+# if animate_f_vs_vperp_r = true, create animation of f(vperp,r) at different time slices
+const animate_f_vs_vperp_r = false
+# if animate_f_vs_vperp_vpa = true, create animation of f(vperp,vpa) at different time slices
+const animate_f_vs_vperp_vpa = false
+# if animate_f_vs_r_z = true, create animation of f(r,z) at different time slices
+const animate_f_vs_r_z = true
+# if animate_f_vs_vz_z = true, create animation of f(vz,z) at different time slices
+const animate_f_vs_vz_z = false
+# if animate_f_vs_vr_r = true, create animation of f(vr,r) at different time slices
+const animate_f_vs_vr_r = false
 # animations will use one in every nwrite_movie data slices
-const nwrite_movie = 10
-# itime_min is the minimum time index at which to start animations
+const animate_Er_vs_r_z =  true
+# if animate_Er_vs_r_z = true, create animation of Er(r,z) at different time slices
+const animate_Ez_vs_r_z = true
+# if animate_Ez_vs_r_z = true, create animation of Ez(r,z) at different time slices
+const animate_phi_vs_r_z = true
+# if animate_phi_vs_r_z = true, create animation of phi(r,z) at different time slices
+const plot_phi_vs_r0_z  = true # plot last timestep phi[z,ir0]
+const plot_Ez_vs_r0_z = true # plot last timestep Ez[z,ir0]
+const plot_wall_Ez_vs_r = true # plot last timestep Ez[z_wall,r]
+const plot_Er_vs_r0_z  = true # plot last timestep Er[z,ir0]
+const plot_wall_Er_vs_r = true # plot last timestep Er[z_wall,r]
+const plot_density_vs_r0_z = true # plot last timestep density[z,ir0]
+const plot_wall_density_vs_r = true # plot last timestep density[z_wall,r]
+const plot_density_vs_r_z = true
+const animate_density_vs_r_z = true
+const plot_parallel_flow_vs_r0_z = true # plot last timestep parallel_flow[z,ir0]
+const plot_wall_parallel_flow_vs_r = true # plot last timestep parallel_flow[z_wall,r]
+const plot_parallel_flow_vs_r_z = true
+const animate_parallel_flow_vs_r_z = true
+const plot_parallel_pressure_vs_r0_z = true # plot last timestep parallel_pressure[z,ir0]
+const plot_wall_parallel_pressure_vs_r = true # plot last timestep parallel_pressure[z_wall,r]
+const plot_parallel_pressure_vs_r_z = true
+const animate_parallel_pressure_vs_r_z = true
+const plot_wall_pdf = true # plot last time step ion distribution function at the wall and in the element nearest the wall 
+const nwrite_movie = 1
+# itime_min is the minimum time index at which to start animations of the moments
 const itime_min = -1
-# itime_max is the final time index at which to end animations
+# itime_max is the final time index at which to end animations of the moments
 # if itime_max < 0, the value used will be the total number of time slices
 const itime_max = -1
+const nwrite_movie_pdfs = 1
+# itime_min_pdfs is the minimum time index at which to start animations of the pdfs
+const itime_min_pdfs = -1
+# itime_max_pdfs is the final time index at which to end animations of the pdfs
+# if itime_max < 0, the value used will be the total number of time slices
+const itime_max_pdfs = -1
 # ivpa0 is the ivpa index used when plotting data at a single vpa location
 # by default, it will be set to cld(nvpa,3) unless a non-negative value provided here
 const ivpa0 = -1
+# ivperp0 is the ivperp index used when plotting data at a single vperp location
+# by default, it will be set to cld(nvperp,3) unless a non-negative value provided here
+const ivperp0 = -1
 # iz0 is the iz index used when plotting data at a single z location
 # by default, it will be set to cld(nz,3) unless a non-negative value provided here
-const iz0 = -1
+const iz0 = 0
 # ir0 is the ir index used when plotting data at a single r location
 # by default, it will be set to cld(nr,3) unless a non-negative value provided here
 const ir0 = -1
+# ivz0 is the ivz index used when plotting data at a single vz location
+# by default, it will be set to cld(nvz,3) unless a non-negative value provided here
+const ivz0 = -1
+# ivr0 is the ivr index used when plotting data at a single vr location
+# by default, it will be set to cld(nvr,3) unless a non-negative value provided here
+const ivr0 = -1
+# ivzeta0 is the ivzeta index used when plotting data at a single vzeta location
+# by default, it will be set to cld(nvzeta,3) unless a non-negative value provided here
+const ivzeta0 = -1
 
-pp = pp_input(calculate_frequencies, plot_phi0_vs_t, plot_phi_vs_z_t,
-    animate_phi_vs_z, plot_dens0_vs_t, plot_upar0_vs_t, plot_ppar0_vs_t, plot_vth0_vs_t, plot_qpar0_vs_t,
+pp = pp_input(calculate_frequencies, plot_phi0_vs_t, plot_phi_vs_z_t, animate_phi_vs_z,
+    plot_dens0_vs_t, plot_upar0_vs_t, plot_ppar0_vs_t, plot_vth0_vs_t, plot_qpar0_vs_t,
     plot_dens_vs_z_t, plot_upar_vs_z_t, plot_ppar_vs_z_t, plot_qpar_vs_z_t,
-    animate_dens_vs_z, animate_upar_vs_z, animate_ppar_vs_z, animate_vth_vs_z, animate_qpar_vs_z,
-    plot_f_unnormalized_vs_vpa_z, animate_f_vs_vpa_z, animate_f_unnormalized,
-    animate_f_vs_vpa_z0, animate_f_vs_z0_vpa, animate_deltaf_vs_vpa_z,
-    animate_deltaf_vs_vpa_z0, animate_deltaf_vs_vpa_z0, nwrite_movie, itime_min,
-    itime_max, ivpa0, iz0, ir0)
+    animate_dens_vs_z, animate_upar_vs_z, animate_ppar_vs_z, animate_vth_vs_z,
+    animate_qpar_vs_z, plot_f_unnormalized_vs_vpa_z, animate_f_vs_vpa_z,
+    animate_f_unnormalized, animate_f_vs_vpa0_z, animate_f_vs_vpa_z0,
+    animate_deltaf_vs_vpa_z, animate_deltaf_vs_vpa0_z, animate_deltaf_vs_vpa_z0,
+    animate_f_vs_vpa_r, animate_f_vs_vperp_z, animate_f_vs_vperp_r,
+    animate_f_vs_vperp_vpa, animate_f_vs_r_z, animate_f_vs_vz_z, animate_f_vs_vr_r,
+    animate_Er_vs_r_z, animate_Ez_vs_r_z, animate_phi_vs_r_z, plot_phi_vs_r0_z,
+    plot_Ez_vs_r0_z, plot_wall_Ez_vs_r, plot_Er_vs_r0_z, plot_wall_Er_vs_r,
+    plot_density_vs_r0_z, plot_wall_density_vs_r, plot_density_vs_r_z,
+    animate_density_vs_r_z, plot_parallel_flow_vs_r0_z, plot_wall_parallel_flow_vs_r,
+    plot_parallel_flow_vs_r_z, animate_parallel_flow_vs_r_z,
+    plot_parallel_pressure_vs_r0_z, plot_wall_parallel_pressure_vs_r,
+    plot_parallel_pressure_vs_r_z, animate_parallel_pressure_vs_r_z, plot_wall_pdf,
+    nwrite_movie, itime_min, itime_max, nwrite_movie_pdfs, itime_min_pdfs, itime_max_pdfs,
+    ivpa0, ivperp0, iz0, ir0, ivz0, ivr0, ivzeta0)
 
 end

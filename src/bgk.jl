@@ -211,7 +211,7 @@ function setup_dummy_integrals()
     # on a semi-infinity domain (0,∞) over the dummy variable y
     n = 10000
     ymax = 100.0
-    y = equally_spaced_grid(n, ymax)
+    y = equally_spaced_grid(n, ymax, 1, 1, 0)
     # shift y so that it starts at zero instead of -ymax/2
     @. y += 0.5*ymax
     # assign integration weights to the y grid points using composite Simpson's rule

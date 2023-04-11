@@ -5,54 +5,146 @@ module time_advance
 export setup_time_advance!
 export time_advance!
 
+using MPI
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_float, allocate_shared_float
-using ..communication: _block_synchronize
+using ..communication: _block_synchronize, global_size, comm_world, MPISharedArray, global_rank
 using ..debugging
-using ..file_io: write_data_to_ascii, write_data_to_binary, debug_dump
+using ..file_io: write_data_to_ascii, write_moments_data_to_binary, write_dfns_data_to_binary, debug_dump
 using ..looping
-using ..moment_constraints: enforce_moment_constraints!, hard_force_moment_constraints!
 using ..moment_kinetics_structs: scratch_pdf
-using ..velocity_moments: update_moments!, reset_moments_status!
+using ..moment_kinetics_structs: scratch_pdf
+using ..velocity_moments: update_moments!, update_moments_neutral!, reset_moments_status!
 using ..velocity_moments: update_density!, update_upar!, update_ppar!, update_qpar!
+using ..velocity_moments: update_neutral_density!, update_neutral_qz!
+using ..velocity_moments: update_neutral_uzeta!, update_neutral_uz!, update_neutral_ur!
+using ..velocity_moments: update_neutral_pzeta!, update_neutral_pz!, update_neutral_pr!
+using ..velocity_moments: calculate_moment_derivatives!, calculate_moment_derivatives_neutral!
+using ..velocity_grid_transforms: vzvrvzeta_to_vpavperp!, vpavperp_to_vzvrvzeta!
 using ..initial_conditions: enforce_z_boundary_condition!, enforce_boundary_conditions!
-using ..initial_conditions: enforce_z_boundary_condition_moments!
-using ..initial_conditions: enforce_vpa_boundary_condition!
+using ..initial_conditions: enforce_vpa_boundary_condition!, enforce_r_boundary_condition!
+using ..initial_conditions: enforce_neutral_boundary_conditions!
+using ..initial_conditions: enforce_neutral_z_boundary_condition!, enforce_neutral_r_boundary_condition!
+using ..input_structs: advance_info, time_input
+using ..moment_constraints: hard_force_moment_constraints!,
+                            hard_force_moment_constraints_neutral!
 using ..advection: setup_advection
 using ..z_advection: update_speed_z!, z_advection!
 using ..r_advection: update_speed_r!, r_advection!
+using ..neutral_r_advection: update_speed_neutral_r!, neutral_advection_r!
+using ..neutral_z_advection: update_speed_neutral_z!, neutral_advection_z!
+using ..neutral_vz_advection: update_speed_neutral_vz!, neutral_advection_vz!
+using ..vperp_advection: update_speed_vperp!, vperp_advection!
 using ..vpa_advection: update_speed_vpa!, vpa_advection!
-using ..charge_exchange: charge_exchange_collisions!
-using ..ionization: ionization_collisions!
+using ..charge_exchange: charge_exchange_collisions_1V!, charge_exchange_collisions_3V!
+using ..ionization: ionization_collisions_1V!, ionization_collisions_3V!, constant_ionization_source!
 using ..numerical_dissipation: vpa_boundary_buffer_decay!,
                                vpa_boundary_buffer_diffusion!, vpa_dissipation!,
-                               z_dissipation!, vpa_boundary_force_decreasing!,
-                               force_minimum_pdf_value!
-using ..source_terms: source_terms!
-using ..continuity: continuity_equation!
-using ..force_balance: force_balance!
-using ..energy_equation: energy_equation!
+                               z_dissipation!, r_dissipation!,
+                               vpa_boundary_force_decreasing!, force_minimum_pdf_value!,
+                               force_minimum_pdf_value_neutral!
+using ..source_terms: source_terms!, source_terms_neutral!, source_terms_manufactured!
+using ..continuity: continuity_equation!, neutral_continuity_equation!
+using ..force_balance: force_balance!, neutral_force_balance!
+using ..energy_equation: energy_equation!, neutral_energy_equation!
 using ..em_fields: setup_em_fields, update_phi!
-
+using ..manufactured_solns: manufactured_sources
+using ..advection: advection_info
 @debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
 
 using Dates
 using Plots
 using ..post_processing: draw_v_parallel_zero!
 
-"""
-"""
-mutable struct advance_info
-    vpa_advection::Bool
-    z_advection::Bool
-    cx_collisions::Bool
-    ionization_collisions::Bool
-    source_terms::Bool
-    numerical_dissipation::Bool
-    continuity::Bool
-    force_balance::Bool
-    energy::Bool
-    rk_coefs::Array{mk_float,2}
+mutable struct scratch_dummy_arrays
+    dummy_sr::Array{mk_float,2}
+    dummy_vpavperp::Array{mk_float,2}
+    dummy_zrs::MPISharedArray{mk_float,3}
+    dummy_zrsn::MPISharedArray{mk_float,3}
+
+    #buffer arrays for MPI 
+    buffer_zs_1::MPISharedArray{mk_float,2}
+    buffer_zs_2::MPISharedArray{mk_float,2}
+    buffer_zs_3::MPISharedArray{mk_float,2}
+    buffer_zs_4::MPISharedArray{mk_float,2}
+    buffer_zsn_1::MPISharedArray{mk_float,2}
+    buffer_zsn_2::MPISharedArray{mk_float,2}
+    buffer_zsn_3::MPISharedArray{mk_float,2}
+    buffer_zsn_4::MPISharedArray{mk_float,2}
+
+    buffer_rs_1::MPISharedArray{mk_float,2}
+    buffer_rs_2::MPISharedArray{mk_float,2}
+    buffer_rs_3::MPISharedArray{mk_float,2}
+    buffer_rs_4::MPISharedArray{mk_float,2}
+    buffer_rs_5::MPISharedArray{mk_float,2}
+    buffer_rs_6::MPISharedArray{mk_float,2}
+    buffer_rsn_1::MPISharedArray{mk_float,2}
+    buffer_rsn_2::MPISharedArray{mk_float,2}
+    buffer_rsn_3::MPISharedArray{mk_float,2}
+    buffer_rsn_4::MPISharedArray{mk_float,2}
+    buffer_rsn_5::MPISharedArray{mk_float,2}
+    buffer_rsn_6::MPISharedArray{mk_float,2}
+
+    buffer_vpavperpzs_1::MPISharedArray{mk_float,4}
+    buffer_vpavperpzs_2::MPISharedArray{mk_float,4}
+    buffer_vpavperpzs_3::MPISharedArray{mk_float,4}
+    buffer_vpavperpzs_4::MPISharedArray{mk_float,4}
+    buffer_vpavperpzs_5::MPISharedArray{mk_float,4}
+    buffer_vpavperpzs_6::MPISharedArray{mk_float,4}
+
+    buffer_vpavperprs_1::MPISharedArray{mk_float,4}
+    buffer_vpavperprs_2::MPISharedArray{mk_float,4}
+    buffer_vpavperprs_3::MPISharedArray{mk_float,4}
+    buffer_vpavperprs_4::MPISharedArray{mk_float,4}
+    buffer_vpavperprs_5::MPISharedArray{mk_float,4}
+    buffer_vpavperprs_6::MPISharedArray{mk_float,4}
+
+    # buffer to hold derivative after MPI communicates
+    # needs to be shared memory
+    buffer_vpavperpzrs_1::MPISharedArray{mk_float,5}
+    buffer_vpavperpzrs_2::MPISharedArray{mk_float,5}
+
+    buffer_vzvrvzetazsn_1::MPISharedArray{mk_float,5}
+    buffer_vzvrvzetazsn_2::MPISharedArray{mk_float,5}
+    buffer_vzvrvzetazsn_3::MPISharedArray{mk_float,5}
+    buffer_vzvrvzetazsn_4::MPISharedArray{mk_float,5}
+    buffer_vzvrvzetazsn_5::MPISharedArray{mk_float,5}
+    buffer_vzvrvzetazsn_6::MPISharedArray{mk_float,5}
+
+    buffer_vzvrvzetarsn_1::MPISharedArray{mk_float,5}
+    buffer_vzvrvzetarsn_2::MPISharedArray{mk_float,5}
+    buffer_vzvrvzetarsn_3::MPISharedArray{mk_float,5}
+    buffer_vzvrvzetarsn_4::MPISharedArray{mk_float,5}
+    buffer_vzvrvzetarsn_5::MPISharedArray{mk_float,5}
+    buffer_vzvrvzetarsn_6::MPISharedArray{mk_float,5}
+
+    # buffer to hold derivative after MPI communicates
+    # needs to be shared memory
+    buffer_vzvrvzetazrsn_1::MPISharedArray{mk_float,6}
+    buffer_vzvrvzetazrsn_2::MPISharedArray{mk_float,6}
+
+end 
+
+struct advect_object_struct
+    vpa_advect::Vector{advection_info{4,5}}
+    vperp_advect::Vector{advection_info{4,5}}
+    z_advect::Vector{advection_info{4,5}}
+    r_advect::Vector{advection_info{4,5}}
+    neutral_z_advect::Vector{advection_info{5,6}}
+    neutral_r_advect::Vector{advection_info{5,6}}
+    neutral_vz_advect::Vector{advection_info{5,6}}
+end
+
+# consider changing code structure so that
+# we can avoid arbitrary types below?
+struct spectral_object_struct
+    vz_spectral::T where T
+    vr_spectral::T where T
+    vzeta_spectral::T where T
+    vpa_spectral::T where T
+    vperp_spectral::T where T
+    z_spectral::T where T
+    r_spectral::T where T
 end
 
 """
@@ -62,104 +154,222 @@ this includes creating and populating structs
 for Chebyshev transforms, velocity space moments,
 EM fields, and advection terms
 """
-function setup_time_advance!(pdf, vpa, z, r, z_spectral, composition, drive_input,
-                             moments, t_input, collisions, species, num_diss_params,
-                             restarting)
+function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
+                             vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral,
+                             z_spectral, r_spectral, composition, drive_input, moments,
+                             t_input, collisions, species, geometry,
+                             boundary_distributions, num_diss_params, restarting)
     # define some local variables for convenience/tidiness
     n_species = composition.n_species
     n_ion_species = composition.n_ion_species
+    n_neutral_species = composition.n_neutral_species
     # create array containing coefficients needed for the Runge Kutta time advance
     rk_coefs = setup_runge_kutta_coefficients(t_input.n_rk_stages)
     # create the 'advance' struct to be used in later Euler advance to
     # indicate which parts of the equations are to be advanced concurrently.
     # if no splitting of operators, all terms advanced concurrently;
     # else, will advance one term at a time.
-    advance = setup_advance_flags(moments, composition, t_input.split_operators, collisions, rk_coefs)
-    # create structure r_advect whose members are the arrays needed to compute
-    # the advection term(s) appearing in the split part of the GK equation dealing
-    # with advection in r
-    begin_serial_region()
-    r_advect = setup_advection(n_species, r, vpa, z)
-    # initialise the r advection speed
-    begin_s_z_vpa_region()
-    @loop_s is begin
-        @views update_speed_r!(r_advect[is], moments.upar[:,:,is], moments.vth[:,:,is],
-                               moments.evolve_upar, moments.evolve_ppar, vpa, z, r, 0.0)
-    end
-    # enforce prescribed boundary condition in r on the distribution function f
-    # PLACEHOLDER
-    #@views enforce_r_boundary_condition!(pdf.unnorm, r.bc, r_advect, vpa, z, composition)
+    advance = setup_advance_flags(moments, composition, t_input, collisions, rk_coefs, r,
+                                  vperp, vpa, vzeta, vr, vz)
 
-
-    # create structure z_advect whose members are the arrays needed to compute
-    # the advection term(s) appearing in the split part of the GK equation dealing
-    # with advection in z
-    begin_serial_region()
-    z_advect = setup_advection(n_species, z, vpa, r)
-    # initialise the z advection speed
-    begin_s_r_vpa_region()
-    @loop_s is begin
-        @views update_speed_z!(z_advect[is], moments.upar[:,:,is], moments.vth[:,:,is],
-                               moments.evolve_upar, moments.evolve_ppar, vpa, z, r, 0.0)
-    end
 
     begin_serial_region()
 
     # create an array of structs containing scratch arrays for the pdf and low-order moments
     # that may be evolved separately via fluid equations
-    scratch = setup_scratch_arrays(moments, pdf.norm, t_input.n_rk_stages)
-    # setup dummy arrays
-    scratch_dummy_sr = allocate_float(r.n, composition.n_species)
+    scratch = setup_scratch_arrays(moments, pdf.charged.norm, pdf.neutral.norm, t_input.n_rk_stages)
+    # setup dummy arrays & buffer arrays for z r MPI
+    n_neutral_species_alloc = max(1,composition.n_neutral_species)
+    scratch_dummy = setup_dummy_and_buffer_arrays(r.n,z.n,vpa.n,vperp.n,vz.n,vr.n,vzeta.n,
+                                   composition.n_ion_species,n_neutral_species_alloc)
     # create the "fields" structure that contains arrays
     # for the electrostatic potential phi and eventually the electromagnetic fields
-    fields = setup_em_fields(z.n, r.n, drive_input.force_phi, drive_input.amplitude, drive_input.frequency)
+    fields = setup_em_fields(z.n, r.n, drive_input.force_phi, drive_input.amplitude, drive_input.frequency, drive_input.force_Er_zero_at_wall)
     # initialize the electrostatic potential
-    begin_s_r_z_region()
-    update_phi!(fields, scratch[1], z, r, composition)
     begin_serial_region()
+    update_phi!(fields, scratch[1], z, r, composition, z_spectral, r_spectral, scratch_dummy)
     @serial_region begin
         # save the initial phi(z) for possible use later (e.g., if forcing phi)
         fields.phi0 .= fields.phi
     end
+
+    ##
+    # Charged particle advection only
+    ##
+
+    # create structure r_advect whose members are the arrays needed to compute
+    # the advection term(s) appearing in the split part of the GK equation dealing
+    # with advection in r
+    begin_serial_region()
+    r_advect = setup_advection(n_ion_species, r, vpa, vperp, z)
+
+    # create structure z_advect whose members are the arrays needed to compute
+    # the advection term(s) appearing in the split part of the GK equation dealing
+    # with advection in z
+    begin_serial_region()
+    z_advect = setup_advection(n_ion_species, z, vpa, vperp, r)
+    # initialise the z advection speed
+    begin_s_r_vperp_vpa_region()
+    @loop_s is begin
+        @views update_speed_z!(z_advect[is], moments.charged.upar[:,:,is],
+                               moments.charged.vth[:,:,is], moments.evolve_upar,
+                               moments.evolve_ppar, fields, vpa, vperp, z, r, 0.0,
+                               geometry)
+    end
+
     # create structure vpa_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the split part of the GK equation dealing
     # with advection in vpa
-    vpa_advect = setup_advection(n_species, vpa, z, r)
+    vpa_advect = setup_advection(n_ion_species, vpa, vperp, z, r)
     # initialise the vpa advection speed
-    begin_s_r_z_region()
-    update_speed_vpa!(vpa_advect, fields, scratch[1], moments, vpa, z, r, composition,
-                      collisions, 0.0, z_spectral)
-    if moments.evolve_upar
-        nspec = n_species
+    begin_s_r_z_vperp_region()
+    update_speed_vpa!(vpa_advect, fields, scratch[1], moments, vpa, vperp, z, r,
+                      composition, collisions, 0.0, geometry)
+
+    # create structure vperp_advect whose members are the arrays needed to compute
+    # the advection term(s) appearing in the split part of the GK equation dealing
+    # with advection in vperp
+    begin_serial_region()
+    vperp_advect = setup_advection(n_ion_species, vperp, vpa, z, r)
+    # initialise the vperp advection speed
+    begin_serial_region()
+    @serial_region begin
+        for is ∈ 1:n_ion_species
+            @views update_speed_vperp!(vperp_advect[is], vpa, vperp, z, r)
+        end
+    end
+
+    ##
+    # Neutral particle advection
+    ##
+
+    # create structure neutral_r_advect for neutral particle advection
+    begin_serial_region()
+    neutral_r_advect = setup_advection(n_neutral_species_alloc, r, vz, vr, vzeta, z)
+    if n_neutral_species > 0 && r.n > 1
+        # initialise the r advection speed
+        begin_sn_z_vzeta_vr_vz_region()
+        @loop_sn isn begin
+            @views update_speed_neutral_r!(neutral_r_advect[isn], r, z, vzeta, vr, vz)
+        end
+    end
+
+    # create structure neutral_z_advect for neutral particle advection
+    begin_serial_region()
+    neutral_z_advect = setup_advection(n_neutral_species_alloc, z, vz, vr, vzeta, r)
+    if n_neutral_species > 0
+        # initialise the z advection speed
+        begin_sn_r_vzeta_vr_vz_region()
+        @loop_sn isn begin
+            @views update_speed_neutral_z!(neutral_z_advect[isn],
+                                           moments.neutral.uz[:,:,isn],
+                                           moments.neutral.vth[:,:,isn],
+                                           moments.evolve_upar, moments.evolve_ppar, vz,
+                                           vr, vzeta, z, r, 0.0)
+        end
+    end
+
+    # create structure neutral_vz_advect for neutral particle advection
+    begin_serial_region()
+    neutral_vz_advect = setup_advection(n_neutral_species_alloc, vz, vr, vzeta, z, r)
+    if n_neutral_species > 0
+        # initialise the z advection speed
+        begin_sn_r_z_vzeta_vr_region()
+        @views update_speed_neutral_vz!(neutral_vz_advect, fields, scratch[1], moments,
+                                        vz, vr, vzeta, z, r, composition, collisions)
+    end
+
+    ##
+    # construct named list of advect & spectral objects to compactify arguments
+    ##
+
+    #advect_objects = (vpa_advect = vpa_advect, vperp_advect = vperp_advect, z_advect = z_advect,
+    # r_advect = r_advect, neutral_z_advect = neutral_z_advect, neutral_r_advect = neutral_r_advect)
+    advect_objects = advect_object_struct(vpa_advect, vperp_advect, z_advect, r_advect, neutral_z_advect, neutral_r_advect, neutral_vz_advect)
+    #spectral_objects = (vz_spectral = vz_spectral, vr_spectral = vr_spectral, vzeta_spectral = vzeta_spectral,
+    # vpa_spectral = vpa_spectral, vperp_spectral = vperp_spectral, z_spectral = z_spectral, r_spectral = r_spectral)
+    spectral_objects = spectral_object_struct(vz_spectral, vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral, z_spectral, r_spectral)
+    if(advance.manufactured_solns_test)
+        manufactured_source_list = manufactured_sources(r,z,vperp,vpa,vzeta,vr,vz,composition,geometry,collisions,num_diss_params)
     else
-        nspec = n_ion_species
+        manufactured_source_list = false # dummy Bool to be passed as argument instead of list
     end
 
     if !restarting
         begin_serial_region()
         # ensure initial pdf has no negative values
-        force_minimum_pdf_value!(pdf.norm, num_diss_params)
+        force_minimum_pdf_value!(pdf.charged.norm, num_diss_params)
+        force_minimum_pdf_value_neutral!(pdf.neutral.norm, num_diss_params)
         # enforce boundary conditions and moment constraints to ensure a consistent initial
         # condition
-        enforce_boundary_conditions!(pdf.norm, moments.dens, moments.upar, moments.ppar,
-            moments, vpa.bc, z.bc, vpa, z, r, vpa_advect, z_advect, composition)
+        enforce_boundary_conditions!(
+            pdf.charged.norm, boundary_distributions.pdf_rboundary_charged,
+            moments.charged.dens, moments.charged.upar, moments.charged.ppar, moments,
+            vpa.bc, z.bc, r.bc, vpa, vperp, z, r, vpa_advect, z_advect, r_advect,
+            composition, scratch_dummy, advance.r_diffusion)
         # Ensure normalised pdf exactly obeys integral constraints if evolving moments
         begin_s_r_z_region()
         @loop_s_r_z is ir iz begin
-            @views hard_force_moment_constraints!(pdf.norm[:,iz,ir,is], moments, vpa)
+            @views hard_force_moment_constraints!(pdf.charged.norm[:,:,iz,ir,is], moments,
+                                                  vpa)
+        end
+        # update moments in case they were affected by applying boundary conditions or
+        # constraints to the pdf
+        reset_moments_status!(moments)
+        update_moments!(moments, pdf.charged.norm, vpa, vperp, z, r, composition)
+        # enforce boundary conditions in r and z on the neutral particle distribution function
+        if n_neutral_species > 0
+            # Note, so far vr and vzeta do not need advect objects, so pass `nothing` for
+            # those as a placeholder
+            enforce_neutral_boundary_conditions!(
+                pdf.neutral.norm, pdf.charged.norm, boundary_distributions,
+                moments.neutral.dens, moments.neutral.uz, moments.neutral.pz, moments,
+                moments.charged.dens, moments.charged.upar, fields.Er, neutral_r_advect,
+                neutral_z_advect, nothing, nothing, neutral_vz_advect, r, z, vzeta, vr,
+                vz, composition, geometry, scratch_dummy)
+            begin_sn_r_z_region()
+            #enforce_moment_constraints!(new_scratch, scratch[1], vpa, z, r, composition, moments, scratch_dummy_sr)
+            @loop_sn_r_z isn ir iz begin
+                @views hard_force_moment_constraints_neutral!(
+                    pdf.neutral.norm[:,:,:,iz,ir,isn], moments, vz)
+            end
+            update_moments_neutral!(moments, pdf.neutral.norm, vz, vr, vzeta, z, r,
+                                    composition)
+        end
+
+        # update scratch arrays in case they were affected by applying boundary conditions
+        # or constraints to the pdf
+        begin_s_r_z_region()
+        @loop_s_r_z is ir iz begin
+            scratch[1].pdf[:,:,iz,ir,is] .= pdf.charged.norm[:,:,iz,ir,is]
+            scratch[1].density[iz,ir,is] = moments.charged.dens[iz,ir,is]
+            scratch[1].upar[iz,ir,is] = moments.charged.upar[iz,ir,is]
+            scratch[1].ppar[iz,ir,is] = moments.charged.ppar[iz,ir,is]
+        end
+
+        begin_sn_r_z_region(no_synchronize=true)
+        @loop_sn_r_z isn ir iz begin
+            scratch[1].pdf_neutral[:,:,:,iz,ir,isn] .= pdf.neutral.norm[:,:,:,iz,ir,isn]
+            scratch[1].density_neutral[iz,ir,isn] = moments.neutral.dens[iz,ir,isn]
+            scratch[1].uz_neutral[iz,ir,isn] = moments.neutral.uz[iz,ir,isn]
+            scratch[1].pz_neutral[iz,ir,isn] = moments.neutral.pz[iz,ir,isn]
         end
     end
-    # update unnormalised pdf, moments and phi in case they were affected by applying
-    # boundary conditions or constraints to the pdf
-    update_pdf_unnorm!(pdf, moments, scratch[1].temp_z_s, composition, vpa)
-    update_moments!(moments, pdf.norm, vpa, z, r, composition)
-    update_phi!(fields, scratch[1], z, r, composition)
+    # update unnormalised pdf and phi in case they were affected by applying boundary
+    # conditions or constraints to the pdf
+    update_pdf_unnorm!(pdf, moments, scratch[1].temp_z_s, composition)
+
+    update_phi!(fields, scratch[1], z, r, composition, z_spectral, r_spectral,
+                scratch_dummy)
+    calculate_moment_derivatives!(moments, scratch[1], scratch_dummy, z, z_spectral, num_diss_params)
+    calculate_moment_derivatives_neutral!(moments, scratch[1], scratch_dummy, z,
+                                          z_spectral, num_diss_params)
 
     # Ensure all processes are synchronized at the end of the setup
     _block_synchronize()
 
-    return moments, fields, vpa_advect, z_advect, r_advect, scratch,
-           advance, scratch_dummy_sr
+    return moments, fields, spectral_objects, advect_objects,
+    scratch, advance, scratch_dummy, manufactured_source_list
 end
 
 """
@@ -168,38 +378,78 @@ indicate which parts of the equations are to be advanced concurrently.
 if no splitting of operators, all terms advanced concurrently;
 else, will advance one term at a time.
 """
-function setup_advance_flags(moments, composition, split_operators, collisions, rk_coefs)
+function setup_advance_flags(moments, composition, t_input, collisions, rk_coefs, r,
+                             vperp, vpa, vzeta, vr, vz)
     # default is not to concurrently advance different operators
     advance_vpa_advection = false
     advance_z_advection = false
+    advance_r_advection = false
+    advance_cx_1V = false
     advance_cx = false
     advance_ionization = false
-    advance_sources = false
+    advance_ionization_1V = false
+    advance_ionization_source = false
     advance_numerical_dissipation = false
+    advance_sources = false
     advance_continuity = false
     advance_force_balance = false
     advance_energy = false
+    advance_neutral_z_advection = false
+    advance_neutral_r_advection = false
+    advance_neutral_vz_advection = false
+    advance_neutral_sources = false
+    advance_neutral_continuity = false
+    advance_neutral_force_balance = false
+    advance_neutral_energy = false
+    r_diffusion = false
+    vpa_diffusion = false
     # all advance flags remain false if using operator-splitting
     # otherwise, check to see if the flags need to be set to true
-    if !split_operators
+    if !t_input.split_operators
         # default for non-split operators is to include both vpa and z advection together
         advance_vpa_advection = true
         advance_z_advection = true
+        if r.n > 1
+            advance_r_advection = true
+        end
         # if neutrals present, check to see if different ion-neutral
         # collisions are enabled
         if composition.n_neutral_species > 0
+            advance_neutral_z_advection = true
+            if r.n > 1
+                advance_neutral_r_advection = true
+            end
+            if moments.evolve_upar || moments.evolve_ppar
+                advance_neutral_vz_advection = true
+            end
             # if charge exchange collision frequency non-zero,
             # account for charge exchange collisions
             if abs(collisions.charge_exchange) > 0.0
-                advance_cx = true
+                if vz.n == vpa.n && vperp.n == 1 && vr.n == 1 && vzeta.n == 1
+                    advance_cx_1V = true
+                elseif vperp.n > 1 && vr.n > 1 && vzeta.n > 1
+                    advance_cx = true
+                else
+                    error("If any perpendicular velocity has length>1 they all must. "
+                          * "If all perpendicular velocities have length=1, then vpa and "
+                          * "vz should be the same.\n"
+                          * "vperp.n=$(vperp.n), vr.n=$(vr.n), vzeta.n=$(vzeta.n), "
+                          * "vpa.n=$(vpa.n), vz.n=$(vz.n)")
+                end
             end
             # if ionization collision frequency non-zero,
-            # account for charge exchange collisions
+            # account for ionization collisions
             if abs(collisions.ionization) > 0.0
-                advance_ionization = true
+                if vz.n == vpa.n && vperp.n == 1 && vr.n == 1 && vzeta.n == 1
+                    advance_ionization_1V = true
+                elseif vperp.n > 1 && vr.n > 1 && vzeta.n > 1
+                    advance_ionization = true
+                end
             end
-        elseif collisions.constant_ionization_rate && collisions.ionization > 0.0
-            advance_ionization = true
+        end
+        # exception for the case where ions are evolved alone but sourced by ionization
+        if collisions.ionization > 0.0 && collisions.constant_ionization_rate
+            advance_ionization_source = true
         end
         advance_numerical_dissipation = true
         # if evolving the density, must advance the continuity equation,
@@ -208,6 +458,10 @@ function setup_advance_flags(moments, composition, split_operators, collisions, 
         if moments.evolve_density
             advance_sources = true
             advance_continuity = true
+            if composition.n_neutral_species > 0
+                advance_neutral_sources = true
+                advance_neutral_continuity = true
+            end
         end
         # if evolving the parallel flow, must advance the force balance equation,
         # in addition to including sources arising from the use of a modified distribution
@@ -215,6 +469,10 @@ function setup_advance_flags(moments, composition, split_operators, collisions, 
         if moments.evolve_upar
             advance_sources = true
             advance_force_balance = true
+            if composition.n_neutral_species > 0
+                advance_neutral_sources = true
+                advance_neutral_force_balance = true
+            end
         end
         # if evolving the parallel pressure, must advance the energy equation,
         # in addition to including sources arising from the use of a modified distribution
@@ -222,12 +480,103 @@ function setup_advance_flags(moments, composition, split_operators, collisions, 
         if moments.evolve_ppar
             advance_sources = true
             advance_energy = true
+            if composition.n_neutral_species > 0
+                advance_neutral_sources = true
+                advance_neutral_energy = true
+            end
         end
     end
-    return advance_info(advance_vpa_advection, advance_z_advection, advance_cx,
-                        advance_ionization, advance_sources,
-                        advance_numerical_dissipation, advance_continuity,
-                        advance_force_balance, advance_energy, rk_coefs)
+
+    manufactured_solns_test = t_input.use_manufactured_solns_for_advance
+
+    return advance_info(advance_vpa_advection, advance_z_advection, advance_r_advection,
+                        advance_neutral_z_advection, advance_neutral_r_advection,
+                        advance_neutral_vz_advection, advance_cx, advance_cx_1V,
+                        advance_ionization, advance_ionization_1V,
+                        advance_ionization_source, advance_numerical_dissipation,
+                        advance_sources, advance_continuity, advance_force_balance,
+                        advance_energy, advance_neutral_sources,
+                        advance_neutral_continuity, advance_neutral_force_balance,
+                        advance_neutral_energy, rk_coefs, manufactured_solns_test,
+                        r_diffusion, vpa_diffusion)
+end
+
+function setup_dummy_and_buffer_arrays(nr,nz,nvpa,nvperp,nvz,nvr,nvzeta,nspecies_ion,nspecies_neutral)
+
+    dummy_sr = allocate_float(nr, nspecies_ion)
+    dummy_zrs = allocate_shared_float(nz, nr, nspecies_ion)
+    dummy_zrsn = allocate_shared_float(nz, nr, nspecies_neutral)
+    dummy_vpavperp = allocate_float(nvpa, nvperp)
+
+    # should the arrays below be shared memory arrays? MRH
+    buffer_zs_1 = allocate_shared_float(nz,nspecies_ion)
+    buffer_zs_2 = allocate_shared_float(nz,nspecies_ion)
+    buffer_zs_3 = allocate_shared_float(nz,nspecies_ion)
+    buffer_zs_4 = allocate_shared_float(nz,nspecies_ion)
+    buffer_zsn_1 = allocate_shared_float(nz,nspecies_neutral)
+    buffer_zsn_2 = allocate_shared_float(nz,nspecies_neutral)
+    buffer_zsn_3 = allocate_shared_float(nz,nspecies_neutral)
+    buffer_zsn_4 = allocate_shared_float(nz,nspecies_neutral)
+
+    buffer_rs_1 = allocate_shared_float(nr,nspecies_ion)
+    buffer_rs_2 = allocate_shared_float(nr,nspecies_ion)
+    buffer_rs_3 = allocate_shared_float(nr,nspecies_ion)
+    buffer_rs_4 = allocate_shared_float(nr,nspecies_ion)
+    buffer_rs_5 = allocate_shared_float(nr,nspecies_ion)
+    buffer_rs_6 = allocate_shared_float(nr,nspecies_ion)
+    buffer_rsn_1 = allocate_shared_float(nr,nspecies_neutral)
+    buffer_rsn_2 = allocate_shared_float(nr,nspecies_neutral)
+    buffer_rsn_3 = allocate_shared_float(nr,nspecies_neutral)
+    buffer_rsn_4 = allocate_shared_float(nr,nspecies_neutral)
+    buffer_rsn_5 = allocate_shared_float(nr,nspecies_neutral)
+    buffer_rsn_6 = allocate_shared_float(nr,nspecies_neutral)
+
+    buffer_vpavperpzs_1 = allocate_shared_float(nvpa,nvperp,nz,nspecies_ion)
+    buffer_vpavperpzs_2 = allocate_shared_float(nvpa,nvperp,nz,nspecies_ion)
+    buffer_vpavperpzs_3 = allocate_shared_float(nvpa,nvperp,nz,nspecies_ion)
+    buffer_vpavperpzs_4 = allocate_shared_float(nvpa,nvperp,nz,nspecies_ion)
+    buffer_vpavperpzs_5 = allocate_shared_float(nvpa,nvperp,nz,nspecies_ion)
+    buffer_vpavperpzs_6 = allocate_shared_float(nvpa,nvperp,nz,nspecies_ion)
+
+    buffer_vpavperprs_1 = allocate_shared_float(nvpa,nvperp,nr,nspecies_ion)
+    buffer_vpavperprs_2 = allocate_shared_float(nvpa,nvperp,nr,nspecies_ion)
+    buffer_vpavperprs_3 = allocate_shared_float(nvpa,nvperp,nr,nspecies_ion)
+    buffer_vpavperprs_4 = allocate_shared_float(nvpa,nvperp,nr,nspecies_ion)
+    buffer_vpavperprs_5 = allocate_shared_float(nvpa,nvperp,nr,nspecies_ion)
+    buffer_vpavperprs_6 = allocate_shared_float(nvpa,nvperp,nr,nspecies_ion)
+
+    buffer_vpavperpzrs_1 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
+    buffer_vpavperpzrs_2 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
+
+    buffer_vzvrvzetazsn_1 = allocate_shared_float(nvz,nvr,nvzeta,nz,nspecies_neutral)
+    buffer_vzvrvzetazsn_2 = allocate_shared_float(nvz,nvr,nvzeta,nz,nspecies_neutral)
+    buffer_vzvrvzetazsn_3 = allocate_shared_float(nvz,nvr,nvzeta,nz,nspecies_neutral)
+    buffer_vzvrvzetazsn_4 = allocate_shared_float(nvz,nvr,nvzeta,nz,nspecies_neutral)
+    buffer_vzvrvzetazsn_5 = allocate_shared_float(nvz,nvr,nvzeta,nz,nspecies_neutral)
+    buffer_vzvrvzetazsn_6 = allocate_shared_float(nvz,nvr,nvzeta,nz,nspecies_neutral)
+
+    buffer_vzvrvzetarsn_1 = allocate_shared_float(nvz,nvr,nvzeta,nr,nspecies_neutral)
+    buffer_vzvrvzetarsn_2 = allocate_shared_float(nvz,nvr,nvzeta,nr,nspecies_neutral)
+    buffer_vzvrvzetarsn_3 = allocate_shared_float(nvz,nvr,nvzeta,nr,nspecies_neutral)
+    buffer_vzvrvzetarsn_4 = allocate_shared_float(nvz,nvr,nvzeta,nr,nspecies_neutral)
+    buffer_vzvrvzetarsn_5 = allocate_shared_float(nvz,nvr,nvzeta,nr,nspecies_neutral)
+    buffer_vzvrvzetarsn_6 = allocate_shared_float(nvz,nvr,nvzeta,nr,nspecies_neutral)
+
+    buffer_vzvrvzetazrsn_1 = allocate_shared_float(nvz,nvr,nvzeta,nz,nr,nspecies_neutral)
+    buffer_vzvrvzetazrsn_2 = allocate_shared_float(nvz,nvr,nvzeta,nz,nr,nspecies_neutral)
+
+    return scratch_dummy_arrays(dummy_sr,dummy_vpavperp,dummy_zrs,dummy_zrsn,
+        buffer_zs_1,buffer_zs_2,buffer_zs_3,buffer_zs_4,
+        buffer_zsn_1,buffer_zsn_2,buffer_zsn_3,buffer_zsn_4,
+        buffer_rs_1,buffer_rs_2,buffer_rs_3,buffer_rs_4,buffer_rs_5,buffer_rs_6,
+        buffer_rsn_1,buffer_rsn_2,buffer_rsn_3,buffer_rsn_4,buffer_rsn_5,buffer_rsn_6,
+        buffer_vpavperpzs_1,buffer_vpavperpzs_2,buffer_vpavperpzs_3,buffer_vpavperpzs_4,buffer_vpavperpzs_5,buffer_vpavperpzs_6,
+        buffer_vpavperprs_1,buffer_vpavperprs_2,buffer_vpavperprs_3,buffer_vpavperprs_4,buffer_vpavperprs_5,buffer_vpavperprs_6,
+        buffer_vpavperpzrs_1,buffer_vpavperpzrs_2,
+        buffer_vzvrvzetazsn_1,buffer_vzvrvzetazsn_2,buffer_vzvrvzetazsn_3,buffer_vzvrvzetazsn_4,buffer_vzvrvzetazsn_5,buffer_vzvrvzetazsn_6,
+        buffer_vzvrvzetarsn_1,buffer_vzvrvzetarsn_2,buffer_vzvrvzetarsn_3,buffer_vzvrvzetarsn_4,buffer_vzvrvzetarsn_5,buffer_vzvrvzetarsn_6,
+        buffer_vzvrvzetazrsn_1, buffer_vzvrvzetazrsn_2)
+
 end
 
 """
@@ -245,7 +594,7 @@ function normalize_pdf!(pdf, moments, scratch)
             pdf[ivpa,iz,is] *= scratch[iz, is]
         end
     elseif moments.evolve_density
-        @. scatch = 1.0 / moments.dens
+        @. scratch = 1.0 / moments.dens
         nvpa, nz, nspecies = size(pdf)
         for is ∈ 1:nspecies, iz ∈ 1:nz, ivpa ∈ 1:nvpa
             pdf[ivpa,iz,is] *= scratch[iz, is]
@@ -258,12 +607,14 @@ end
 create an array of structs containing scratch arrays for the normalised pdf and low-order moments
 that may be evolved separately via fluid equations
 """
-function setup_scratch_arrays(moments, pdf_in, n_rk_stages)
+function setup_scratch_arrays(moments, pdf_charged_in, pdf_neutral_in, n_rk_stages)
     # create n_rk_stages+1 structs, each of which will contain one pdf,
     # one density, and one parallel flow array
-    scratch = Vector{scratch_pdf{4,3}}(undef, n_rk_stages+1)
-    pdf_dims = size(pdf_in)
-    moment_dims = size(moments.dens)
+    scratch = Vector{scratch_pdf{5,3,6,3}}(undef, n_rk_stages+1)
+    pdf_dims = size(pdf_charged_in)
+    moment_dims = size(moments.charged.dens)
+    pdf_neutral_dims = size(pdf_neutral_in)
+    moment_neutral_dims = size(moments.neutral.dens)
     # populate each of the structs
     for istage ∈ 1:n_rk_stages+1
         # Allocate arrays in temporary variables so that we can identify them
@@ -273,13 +624,27 @@ function setup_scratch_arrays(moments, pdf_in, n_rk_stages)
         upar_array = allocate_shared_float(moment_dims...)
         ppar_array = allocate_shared_float(moment_dims...)
         temp_z_s_array = allocate_shared_float(moment_dims...)
+
+        pdf_neutral_array = allocate_shared_float(pdf_neutral_dims...)
+        density_neutral_array = allocate_shared_float(moment_neutral_dims...)
+        uz_neutral_array = allocate_shared_float(moment_neutral_dims...)
+        pz_neutral_array = allocate_shared_float(moment_neutral_dims...)
+
+
         scratch[istage] = scratch_pdf(pdf_array, density_array, upar_array,
-                                      ppar_array, temp_z_s_array)
+                                      ppar_array, temp_z_s_array,
+                                      pdf_neutral_array, density_neutral_array,
+                                      uz_neutral_array, pz_neutral_array)
         @serial_region begin
-            scratch[istage].pdf .= pdf_in
-            scratch[istage].density .= moments.dens
-            scratch[istage].upar .= moments.upar
-            scratch[istage].ppar .= moments.ppar
+            scratch[istage].pdf .= pdf_charged_in
+            scratch[istage].density .= moments.charged.dens
+            scratch[istage].upar .= moments.charged.upar
+            scratch[istage].ppar .= moments.charged.ppar
+
+            scratch[istage].pdf_neutral .= pdf_neutral_in
+            scratch[istage].density_neutral .= moments.neutral.dens
+            scratch[istage].uz_neutral .= moments.neutral.uz
+            scratch[istage].pz_neutral .= moments.neutral.pz
         end
     end
     return scratch
@@ -328,9 +693,11 @@ df/dt + δv⋅∂f/∂z = 0, with δv(z,t)=v(z,t)-v₀(z)
 for prudent choice of v₀, expect δv≪v so that explicit
 time integrator can be used without severe CFL condition
 """
-function time_advance!(pdf, scratch, t, t_input, vpa, z, r, vpa_spectral, z_spectral, r_spectral,
-    moments, fields, vpa_advect, z_advect, r_advect, composition, collisions,
-    num_diss_params, advance, scratch_dummy_sr, io, cdf)
+function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
+           moments, fields, spectral_objects, advect_objects,
+           composition, collisions, geometry, boundary_distributions,
+           num_diss_params, advance, scratch_dummy,
+           manufactured_source_list, ascii_io, io_moments, io_dfns)
 
     @debug_detect_redundant_block_synchronize begin
         # Only want to check for redundant _block_synchronize() calls during the
@@ -339,11 +706,14 @@ function time_advance!(pdf, scratch, t, t_input, vpa, z, r, vpa_spectral, z_spec
     end
 
     @serial_region begin
-        println("beginning time advance...", Dates.format(now(), dateformat"H:MM:SS"))
+        if global_rank[] == 0
+             println("beginning time advance   ", Dates.format(now(), dateformat"H:MM:SS"))
+        end
     end
 
     # main time advance loop
-    iwrite = 2
+    iwrite_moments = 2
+    iwrite_dfns = 2
     for i ∈ 1:t_input.nstep
         if t_input.split_operators
             # MRH NOT SUPPORTED
@@ -351,26 +721,34 @@ function time_advance!(pdf, scratch, t, t_input, vpa, z, r, vpa_spectral, z_spec
                 vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
                 composition, collisions, num_diss_params, advance, i)
         else
-            time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z, r,
-                vpa_spectral, z_spectral, r_spectral, moments, fields, vpa_advect,
-                z_advect, r_advect, composition, collisions, num_diss_params, advance,
-                scratch_dummy_sr, i)
+            time_advance_no_splitting!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
+                moments, fields, spectral_objects, advect_objects,
+                composition, collisions, geometry, boundary_distributions,
+                num_diss_params, advance,  scratch_dummy, manufactured_source_list, i)
         end
         # update the time
         t += t_input.dt
-        # write data to file every nwrite time steps
-        if mod(i,t_input.nwrite) == 0
+        # write moments data to file every nwrite_moments time steps
+        if mod(i,t_input.nwrite_moments) == 0
             @debug_detect_redundant_block_synchronize begin
                 # Skip check for redundant _block_synchronize() during file I/O because
                 # it only runs infrequently
                 debug_detect_redundant_is_active[] = false
             end
             begin_serial_region()
-            @serial_region println("finished time step ", i, "  ",
-                                   Dates.format(now(), dateformat"H:MM:SS"))
-            write_data_to_ascii(pdf.norm, moments, fields, vpa, z, r, t, composition.n_species, io)
-            # write initial data to binary file (netcdf)
-            write_data_to_binary(pdf.norm, moments, fields, t, composition.n_species, cdf, iwrite)
+            @serial_region begin
+                if global_rank[] == 0
+                     println("finished time step ", i,"    ",
+                             Dates.format(now(), dateformat"H:MM:SS"))
+                end
+            end
+            write_data_to_ascii(moments, fields, vpa, vperp, z, r, t,
+                                composition.n_ion_species, composition.n_neutral_species,
+                                ascii_io)
+            write_moments_data_to_binary(moments, fields, t, composition.n_ion_species,
+                                         composition.n_neutral_species, io_moments,
+                                         iwrite_moments, r, z)
+
             # Hack to save *.pdf of current pdf
             if t_input.runtime_plots
                 @serial_region begin
@@ -378,63 +756,133 @@ function time_advance!(pdf, scratch, t, t_input, vpa, z, r, vpa_spectral, z_spec
                     cmlog(cmlin::ColorGradient) = RGB[cmlin[x] for x=LinRange(0,1,30)]
                     logdeep = cgrad(:deep, scale=:log) |> cmlog
                     f_plots = [
-                        heatmap(z.grid, vpa.grid, pdf.norm[:,:,1,is],
+                        heatmap(z.grid, vpa.grid, pdf.charged.norm[:,1,:,1,is],
                                 xlim=(z.grid[1] - z.L / 100.0, z.grid[end] + z.L / 100.0),
                                 ylim=(vpa.grid[1] - vpa.L / 100.0, vpa.grid[end] + vpa.L / 100.0),
                                 xlabel="z", ylabel="vpa", c=:deep, colorbar=false)
-                        for is ∈ 1:composition.n_species]
+                        for is ∈ 1:composition.n_ion_species]
                     for (is, p) in enumerate(f_plots)
-                        @views draw_v_parallel_zero!(p, z.grid, moments.upar[:,1,is],
-                                                     moments.vth[:,1,is],
+                        @views draw_v_parallel_zero!(p, z.grid, moments.charged.upar[:,1,is],
+                                                     moments.charged.vth[:,1,is],
+                                                     moments.evolve_upar,
+                                                     moments.evolve_ppar)
+                    end
+                    f_neutral_plots = [
+                        heatmap(z.grid, vz.grid, pdf.neutral.norm[:,1,1,:,1,isn],
+                                xlim=(z.grid[1] - z.L / 100.0, z.grid[end] + z.L / 100.0),
+                                ylim=(vz.grid[1] - vz.L / 100.0, vz.grid[end] + vz.L / 100.0),
+                                xlabel="z", ylabel="vz", c=:deep, colorbar=false)
+                        for isn ∈ 1:composition.n_neutral_species]
+                    for (isn, p) in enumerate(f_neutral_plots)
+                        @views draw_v_parallel_zero!(p, z.grid, moments.neutral.uz[:,1,isn],
+                                                     moments.neutral.vth[:,1,isn],
                                                      moments.evolve_upar,
                                                      moments.evolve_ppar)
                     end
                     logf_plots = [
-                        heatmap(z.grid, vpa.grid, log.(abs.(pdf.norm[:,:,1,is])),
+                        heatmap(z.grid, vpa.grid, log.(abs.(pdf.charged.norm[:,1,:,1,is])),
                                 xlim=(z.grid[1] - z.L / 100.0, z.grid[end] + z.L / 100.0),
                                 ylim=(vpa.grid[1] - vpa.L / 100.0, vpa.grid[end] + vpa.L / 100.0),
                                 xlabel="z", ylabel="vpa", fillcolor=logdeep, colorbar=false)
-                        for is ∈ 1:composition.n_species]
+                        for is ∈ 1:composition.n_neutral_species]
                     for (is, p) in enumerate(logf_plots)
-                        @views draw_v_parallel_zero!(p, z.grid, moments.upar[:,1,is],
-                                                     moments.vth[:,1,is],
+                        @views draw_v_parallel_zero!(p, z.grid, moments.charged.upar[:,1,is],
+                                                     moments.charged.vth[:,1,is],
+                                                     moments.evolve_upar,
+                                                     moments.evolve_ppar)
+                    end
+                    logf_neutral_plots = [
+                        heatmap(z.grid, vz.grid, log.(abs.(pdf.neutral.norm[:,1,1,:,1,isn])),
+                                xlim=(z.grid[1] - z.L / 100.0, z.grid[end] + z.L / 100.0),
+                                ylim=(vz.grid[1] - vz.L / 100.0, vz.grid[end] + vz.L / 100.0),
+                                xlabel="z", ylabel="vz", fillcolor=logdeep, colorbar=false)
+                        for isn ∈ 1:composition.n_neutral_species]
+                    for (isn, p) in enumerate(logf_neutral_plots)
+                        @views draw_v_parallel_zero!(p, z.grid, moments.neutral.uz[:,1,isn],
+                                                     moments.neutral.vth[:,1,isn],
                                                      moments.evolve_upar,
                                                      moments.evolve_ppar)
                     end
                     f0_plots = [
-                        plot(vpa.grid, pdf.norm[:,1,1,is], xlabel="vpa", ylabel="f0", legend=false)
-                        for is ∈ 1:composition.n_species]
+                        plot(vpa.grid, pdf.charged.norm[:,1,1,1,is], xlabel="vpa", ylabel="f0", legend=false)
+                        for is ∈ 1:composition.n_ion_species]
+                    f0_neutral_plots = [
+                        plot(vz.grid, pdf.neutral.norm[:,1,1,1,1,isn], xlabel="vz", ylabel="f0_neutral", legend=false)
+                        for isn ∈ 1:composition.n_neutral_species]
                     fL_plots = [
-                        plot(vpa.grid, pdf.norm[:,end,1,is], xlabel="vpa", ylabel="fL", legend=false)
-                        for is ∈ 1:composition.n_species]
+                        plot(vpa.grid, pdf.charged.norm[:,1,end,1,is], xlabel="vpa", ylabel="fL", legend=false)
+                        for is ∈ 1:composition.n_ion_species]
+                    fL_neutral_plots = [
+                        plot(vz.grid, pdf.neutral.norm[:,1,1,end,1,isn], xlabel="vz", ylabel="fL_neutral", legend=false)
+                        for isn ∈ 1:composition.n_neutral_species]
                     density_plots = [
-                        plot(z.grid, moments.dens[:,1,is], xlabel="z", ylabel="density", legend=false)
-                        for is ∈ 1:composition.n_species]
+                        plot(z.grid, moments.charged.dens[:,1,is], xlabel="z", ylabel="density", legend=false)
+                        for is ∈ 1:composition.n_ion_species]
+                    density_neutral_plots = [
+                        plot(z.grid, moments.neutral.dens[:,1,isn], xlabel="z", ylabel="density_neutral", legend=false)
+                        for isn ∈ 1:composition.n_neutral_species]
                     upar_plots = [
-                        plot(z.grid, moments.upar[:,1,is], xlabel="z", ylabel="upar", legend=false)
-                        for is ∈ 1:composition.n_species]
+                        plot(z.grid, moments.charged.upar[:,1,is], xlabel="z", ylabel="upar", legend=false)
+                        for is ∈ 1:composition.n_ion_species]
+                    upar_neutral_plots = [
+                        plot(z.grid, moments.neutral.uz[:,1,isn], xlabel="z", ylabel="uz_neutral", legend=false)
+                        for isn ∈ 1:composition.n_neutral_species]
                     ppar_plots = [
-                        plot(z.grid, moments.ppar[:,1,is], xlabel="z", ylabel="ppar", legend=false)
-                        for is ∈ 1:composition.n_species]
+                        plot(z.grid, moments.charged.ppar[:,1,is], xlabel="z", ylabel="ppar", legend=false)
+                        for is ∈ 1:composition.n_ion_species]
+                    ppar_neutral_plots = [
+                        plot(z.grid, moments.neutral.pz[:,1,isn], xlabel="z", ylabel="pz_neutral", legend=false)
+                        for isn ∈ 1:composition.n_neutral_species]
                     vth_plots = [
-                        plot(z.grid, moments.vth[:,1,is], xlabel="z", ylabel="vth", legend=false)
-                        for is ∈ 1:composition.n_species]
+                        plot(z.grid, moments.charged.vth[:,1,is], xlabel="z", ylabel="vth", legend=false)
+                        for is ∈ 1:composition.n_ion_species]
+                    vth_neutral_plots = [
+                        plot(z.grid, moments.neutral.vth[:,1,isn], xlabel="z", ylabel="vth_neutral", legend=false)
+                        for isn ∈ 1:composition.n_neutral_species]
                     qpar_plots = [
-                        plot(z.grid, moments.qpar[:,1,is], xlabel="z", ylabel="qpar", legend=false)
-                        for is ∈ 1:composition.n_species]
+                        plot(z.grid, moments.charged.qpar[:,1,is], xlabel="z", ylabel="qpar", legend=false)
+                        for is ∈ 1:composition.n_ion_species]
+                    qpar_neutral_plots = [
+                        plot(z.grid, moments.neutral.qz[:,1,isn], xlabel="z", ylabel="qz_neutral", legend=false)
+                        for isn ∈ 1:composition.n_neutral_species]
                     # Put all plots into subplots of a single figure
-                    plot(f_plots..., logf_plots..., f0_plots..., fL_plots...,
-                         density_plots..., upar_plots..., ppar_plots..., vth_plots...,
-                         qpar_plots...,
-                         layout=(9,composition.n_species), size=(800,3600), plot_title="$t")
+                    plot(f_plots..., f_neutral_plots..., logf_plots...,
+                         logf_neutral_plots..., f0_plots..., f0_neutral_plots...,
+                         fL_plots..., fL_neutral_plots..., density_plots...,
+                         density_neutral_plots..., upar_plots..., upar_neutral_plots...,
+                         ppar_plots..., ppar_neutral_plots..., vth_plots...,
+                         vth_neutral_plots..., qpar_plots..., qpar_neutral_plots...,
+                         layout=(9,composition.n_ion_species+composition.n_neutral_species),
+                         size=(800,3600), plot_title="$t")
                     savefig("latest_plots.png")
                 end
             end
-            iwrite += 1
-
-            # Restore to same region type as in rk_update!() so that execution after a
-            # write is the same as after no write
-            begin_s_r_z_region()
+            iwrite_moments += 1
+            begin_s_r_z_vperp_region()
+            @debug_detect_redundant_block_synchronize begin
+                # Reactivate check for redundant _block_synchronize()
+                debug_detect_redundant_is_active[] = true
+            end
+        end
+        if mod(i,t_input.nwrite_dfns) == 0
+            @debug_detect_redundant_block_synchronize begin
+                # Skip check for redundant _block_synchronize() during file I/O because
+                # it only runs infrequently
+                debug_detect_redundant_is_active[] = false
+            end
+            begin_serial_region()
+            @serial_region begin
+                if global_rank[] == 0
+                    println("writing distribution functions at step ", i,"  ",
+                                   Dates.format(now(), dateformat"H:MM:SS"))
+                end
+            end
+            write_dfns_data_to_binary(pdf.charged.norm, pdf.neutral.norm, t,
+                                      composition.n_ion_species,
+                                      composition.n_neutral_species, io_dfns, iwrite_dfns,
+                                      r, z, vperp, vpa, vzeta, vr, vz)
+            iwrite_dfns += 1
+            begin_s_r_z_vperp_region()
             @debug_detect_redundant_block_synchronize begin
                 # Reactivate check for redundant _block_synchronize()
                 debug_detect_redundant_is_active[] = true
@@ -598,18 +1046,24 @@ end
 
 """
 """
-function time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z, r,
-    vpa_spectral, z_spectral, r_spectral, moments, fields, vpa_advect, z_advect, r_advect,
-    composition, collisions, num_diss_params, advance, scratch_dummy_sr, istep)
+function time_advance_no_splitting!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
+           moments, fields, spectral_objects, advect_objects,
+           composition, collisions, geometry, boundary_distributions,
+           num_diss_params, advance, scratch_dummy, manufactured_source_list, istep)
+
+    #pdf_in = pdf.unnorm #get input pdf values in case we wish to impose a constant-in-time boundary condition in r
+    #use pdf.norm for this fn for now.
 
     if t_input.n_rk_stages > 1
-        ssp_rk!(pdf, scratch, t, t_input, vpa, z, r,
-            vpa_spectral, z_spectral, r_spectral, moments, fields, vpa_advect, z_advect, r_advect,
-            composition, collisions, num_diss_params, advance, scratch_dummy_sr, istep)
+        ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
+            moments, fields, spectral_objects, advect_objects,
+            composition, collisions, geometry, boundary_distributions, num_diss_params,
+            advance,  scratch_dummy, manufactured_source_list, istep)#pdf_in,
     else
-        euler_time_advance!(scratch, scratch, pdf, fields, moments, vpa_advect, z_advect,
-            r_advect, vpa, z, r, t, t_input, vpa_spectral, z_spectral, r_spectral,
-            composition, collisions, num_diss_params, advance)
+        euler_time_advance!(scratch, scratch, pdf, fields, moments,
+            advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z, r, t,
+            t_input, spectral_objects, composition,
+            collisions, geometry, boundary_distributions, scratch_dummy, manufactured_source_list, advance, 1)#pdf_in,
         # NB: this must be broken -- scratch is updated in euler_time_advance!,
         # but not the pdf or moments. need to add update to these quantities here. Also
         # need to apply boundary conditions, possibly other things that are taken care
@@ -625,15 +1079,23 @@ from the 'true', un-modified pdf, either: update them using info from Runge Kutt
 stages, if the quantities are evolved separately from the modified pdf;
 or update them by taking the appropriate velocity moment of the evolved pdf
 """
-function rk_update!(scratch, pdf, moments, fields, vpa, z, r, vpa_advect, z_advect,
-                    rk_coefs, istage, composition, num_diss_params)
+function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, vr, vzeta,
+                    vpa, vperp, z, r, advect_objects, rk_coefs, istage, composition,
+                    geometry, num_diss_params, z_spectral, r_spectral, scratch_dummy)
     begin_s_r_z_region()
-    nvpa = size(pdf.unnorm, 1)
+
     new_scratch = scratch[istage+1]
     old_scratch = scratch[istage]
-    # use Runge Kutta to update the evolved pdf
-    @loop_s_r_z_vpa is ir iz ivpa begin
-        new_scratch.pdf[ivpa,iz,ir,is] = rk_coefs[1]*pdf.norm[ivpa,iz,ir,is] + rk_coefs[2]*old_scratch.pdf[ivpa,iz,ir,is] + rk_coefs[3]*new_scratch.pdf[ivpa,iz,ir,is]
+
+    vpa_advect, r_advect, z_advect = advect_objects.vpa_advect, advect_objects.r_advect, advect_objects.z_advect
+    neutral_z_advect, neutral_r_advect, neutral_vz_advect = advect_objects.neutral_z_advect, advect_objects.neutral_r_advect, advect_objects.neutral_vz_advect
+
+    ##
+    # update the charged particle distribution and moments
+    ##
+
+    @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+        new_scratch.pdf[ivpa,ivperp,iz,ir,is] = rk_coefs[1]*pdf.charged.norm[ivpa,ivperp,iz,ir,is] + rk_coefs[2]*old_scratch.pdf[ivpa,ivperp,iz,ir,is] + rk_coefs[3]*new_scratch.pdf[ivpa,ivperp,iz,ir,is]
     end
     # use Runge Kutta to update any velocity moments evolved separately from the pdf
     rk_update_evolved_moments!(new_scratch, old_scratch, moments, rk_coefs)
@@ -650,31 +1112,118 @@ function rk_update!(scratch, pdf, moments, fields, vpa, z, r, vpa_advect, z_adve
     # set to zero at the sheath boundary according to the final upar has a non-zero
     # contribution from one or more of the terms.
     # NB: probably need to do the same for the evolved moments
-    enforce_boundary_conditions!(new_scratch, moments, vpa.bc, z.bc, vpa, z, r,
-                                 vpa_advect, z_advect, composition)
+    enforce_boundary_conditions!(new_scratch, moments,
+        boundary_distributions.pdf_rboundary_charged, vpa.bc, z.bc, r.bc, vpa, vperp, z,
+        r, vpa_advect, z_advect, r_advect, composition, scratch_dummy,
+        num_diss_params.r_dissipation_coefficient>0.0)
 
     if moments.evolve_density && moments.enforce_conservation
         begin_s_r_z_region()
         #enforce_moment_constraints!(new_scratch, scratch[1], vpa, z, r, composition, moments, scratch_dummy_sr)
         @loop_s_r_z is ir iz begin
-            @views hard_force_moment_constraints!(new_scratch.pdf[:,iz,ir,is], moments, vpa)
+            @views hard_force_moment_constraints!(new_scratch.pdf[:,:,iz,ir,is], moments,
+                                                  vpa)
         end
     end
 
     # update remaining velocity moments that are calculable from the evolved pdf
-    update_derived_moments!(new_scratch, moments, vpa, z, r, composition)
-    # update the thermal speed from the updated pressure and density
-    @loop_s_r_z is ir iz begin
-        moments.vth[iz,ir,is] = sqrt(2.0*new_scratch.ppar[iz,ir,is]/new_scratch.density[iz,ir,is])
+    update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composition)
+    # update the thermal speed
+    begin_s_r_z_region()
+    try #below block causes DomainError if ppar < 0 or density, so exit cleanly if possible
+        @loop_s_r_z is ir iz begin
+            moments.charged.vth[iz,ir,is] = sqrt(2.0*new_scratch.ppar[iz,ir,is]/new_scratch.density[iz,ir,is])
+        end
+    catch e
+        if global_size[] > 1
+            println("ERROR: error calculating vth in time_advance.jl")
+            println(e)
+            display(stacktrace(catch_backtrace()))
+            flush(stdout)
+            flush(stderr)
+            MPI.Abort(comm_world, 1)
+        end
+        rethrow(e)
     end
     # update the parallel heat flux
-    update_qpar!(moments.qpar, moments.qpar_updated, new_scratch.density,
-                 new_scratch.upar, moments.vth, new_scratch.pdf, vpa, z, r, composition,
-                 moments.evolve_density, moments.evolve_upar, moments.evolve_ppar)
+    update_qpar!(moments.charged.qpar, moments.charged.qpar_updated, new_scratch.density,
+                 new_scratch.upar, moments.charged.vth, new_scratch.pdf, vpa, vperp, z, r,
+                 composition, moments.evolve_density, moments.evolve_upar,
+                 moments.evolve_ppar)
+
+    calculate_moment_derivatives!(moments, new_scratch, scratch_dummy, z, z_spectral,
+                                  num_diss_params)
+
     # update the 'true', un-normalized pdf
-    update_unnormalized_pdf!(pdf.unnorm, new_scratch, moments)
+    update_unnormalized_pdf!(pdf.charged.unnorm, new_scratch, moments)
+
+    ##
+    # update the neutral particle distribution and moments
+    ##
+
+    if composition.n_neutral_species > 0
+        begin_sn_r_z_region()
+        @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
+            new_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] = ( rk_coefs[1]*pdf.neutral.norm[ivz,ivr,ivzeta,iz,ir,isn]
+             + rk_coefs[2]*old_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] + rk_coefs[3]*new_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn])
+        end
+        # use Runge Kutta to update any velocity moments evolved separately from the pdf
+        rk_update_evolved_moments_neutral!(new_scratch, old_scratch, moments, rk_coefs)
+
+        # Ensure there are no negative values in the pdf before applying boundary
+        # conditions, so that negative deviations do not mess up the integral-constraint
+        # corrections in the sheath boundary conditions.
+        force_minimum_pdf_value_neutral!(new_scratch.pdf_neutral, num_diss_params)
+
+        # Enforce boundary conditions in z and vpa on the distribution function.
+        # Must be done after Runge Kutta update so that the boundary condition applied to
+        # the updated pdf is consistent with the updated moments - otherwise different upar
+        # between 'pdf', 'old_scratch' and 'new_scratch' might mean a point that should be
+        # set to zero at the sheath boundary according to the final upar has a non-zero
+        # contribution from one or more of the terms.
+        # NB: probably need to do the same for the evolved moments
+        # Note, so far vr and vzeta do not need advect objects, so pass `nothing` for
+        # those as a placeholder
+        enforce_neutral_boundary_conditions!(new_scratch.pdf_neutral, new_scratch.pdf,
+            boundary_distributions, new_scratch.density_neutral, new_scratch.uz_neutral,
+            new_scratch.pz_neutral, moments, new_scratch.density, new_scratch.upar,
+            fields.Er, neutral_r_advect, neutral_z_advect, nothing, nothing,
+            neutral_vz_advect, r, z, vzeta, vr, vz, composition, geometry, scratch_dummy)
+
+        if moments.evolve_density && moments.enforce_conservation
+            begin_sn_r_z_region()
+            #enforce_moment_constraints!(new_scratch, scratch[1], vpa, z, r, composition, moments, scratch_dummy_sr)
+            @loop_sn_r_z isn ir iz begin
+                @views hard_force_moment_constraints_neutral!(
+                    new_scratch.pdf_neutral[:,:,:,iz,ir,isn], moments, vz)
+            end
+        end
+
+        # update remaining velocity moments that are calculable from the evolved pdf
+        update_derived_moments_neutral!(new_scratch, moments, vz, vr, vzeta, z, r,
+                                        composition)
+        # update the thermal speed
+        begin_sn_r_z_region()
+        @loop_sn_r_z isn ir iz begin
+            moments.neutral.vth[iz,ir,isn] = sqrt(2.0*new_scratch.pz_neutral[iz,ir,isn]/new_scratch.density_neutral[iz,ir,isn])
+        end
+
+        # update the parallel heat flux
+        update_neutral_qz!(moments.neutral.qz, moments.neutral.qz_updated,
+                           new_scratch.density_neutral, new_scratch.uz_neutral,
+                           moments.neutral.vth, new_scratch.pdf_neutral, vz, vr, vzeta, z,
+                           r, composition, moments.evolve_density, moments.evolve_upar,
+                           moments.evolve_ppar)
+
+        calculate_moment_derivatives_neutral!(moments, new_scratch, scratch_dummy, z,
+                                              z_spectral, num_diss_params)
+
+        # update the 'true', un-normalized pdf
+        update_unnormalized_pdf_neutral!(pdf.neutral.unnorm, new_scratch, moments)
+    end
+
     # update the electrostatic potential phi
-    update_phi!(fields, scratch[istage+1], z, r, composition)
+    update_phi!(fields, scratch[istage+1], z, r, composition, z_spectral, r_spectral, scratch_dummy)
     if !(( moments.evolve_upar || moments.evolve_ppar) &&
               istage == length(scratch)-1)
         # _block_synchronize() here because phi needs to be read on different ranks than
@@ -687,91 +1236,184 @@ function rk_update!(scratch, pdf, moments, fields, vpa, z, r, vpa_advect, z_adve
 end
 
 """
-use Runge Kutta to update any velocity moments evolved separately from the pdf
+use Runge Kutta to update any charged-particle velocity moments evolved separately from
+the pdf
 """
 function rk_update_evolved_moments!(new_scratch, old_scratch, moments, rk_coefs)
     # if separately evolving the particle density, update using RK
     if moments.evolve_density
         @loop_s_r_z is ir iz begin
-            new_scratch.density[iz,ir,is] = rk_coefs[1]*moments.dens[iz,ir,is] + rk_coefs[2]*old_scratch.density[iz,ir,is] + rk_coefs[3]*new_scratch.density[iz,ir,is]
+            new_scratch.density[iz,ir,is] = rk_coefs[1]*moments.charged.dens[iz,ir,is] + rk_coefs[2]*old_scratch.density[iz,ir,is] + rk_coefs[3]*new_scratch.density[iz,ir,is]
         end
     end
     # if separately evolving the parallel flow, update using RK
     if moments.evolve_upar
         @loop_s_r_z is ir iz begin
-            new_scratch.upar[iz,ir,is] = rk_coefs[1]*moments.upar[iz,ir,is] + rk_coefs[2]*old_scratch.upar[iz,ir,is] + rk_coefs[3]*new_scratch.upar[iz,ir,is]
+            new_scratch.upar[iz,ir,is] = rk_coefs[1]*moments.charged.upar[iz,ir,is] + rk_coefs[2]*old_scratch.upar[iz,ir,is] + rk_coefs[3]*new_scratch.upar[iz,ir,is]
         end
     end
     # if separately evolving the parallel pressure, update using RK;
     if moments.evolve_ppar
         @loop_s_r_z is ir iz begin
-            new_scratch.ppar[iz,ir,is] = rk_coefs[1]*moments.ppar[iz,ir,is] + rk_coefs[2]*old_scratch.ppar[iz,ir,is] + rk_coefs[3]*new_scratch.ppar[iz,ir,is]
+            new_scratch.ppar[iz,ir,is] = rk_coefs[1]*moments.charged.ppar[iz,ir,is] + rk_coefs[2]*old_scratch.ppar[iz,ir,is] + rk_coefs[3]*new_scratch.ppar[iz,ir,is]
         end
     end
 end
 
 """
-update velocity moments that are calculable from the evolved pdf
+use Runge Kutta to update any neutral-particle velocity moments evolved separately from
+the pdf
 """
-function update_derived_moments!(new_scratch, moments, vpa, z, r, composition)
+function rk_update_evolved_moments_neutral!(new_scratch, old_scratch, moments, rk_coefs)
+    # if separately evolving the particle density, update using RK
+    if moments.evolve_density
+        @loop_sn_r_z isn ir iz begin
+            new_scratch.density_neutral[iz,ir,isn] = rk_coefs[1]*moments.neutral.dens[iz,ir,isn] + rk_coefs[2]*old_scratch.density_neutral[iz,ir,isn] + rk_coefs[3]*new_scratch.density_neutral[iz,ir,isn]
+        end
+    end
+    # if separately evolving the parallel flow, update using RK
+    if moments.evolve_upar
+        @loop_sn_r_z isn ir iz begin
+            new_scratch.uz_neutral[iz,ir,isn] = rk_coefs[1]*moments.neutral.uz[iz,ir,isn] + rk_coefs[2]*old_scratch.uz_neutral[iz,ir,isn] + rk_coefs[3]*new_scratch.uz_neutral[iz,ir,isn]
+        end
+    end
+    # if separately evolving the parallel pressure, update using RK;
+    if moments.evolve_ppar
+        @loop_sn_r_z isn ir iz begin
+            new_scratch.pz_neutral[iz,ir,isn] = rk_coefs[1]*moments.neutral.pz[iz,ir,isn] + rk_coefs[2]*old_scratch.pz_neutral[iz,ir,isn] + rk_coefs[3]*new_scratch.pz_neutral[iz,ir,isn]
+        end
+    end
+end
+
+"""
+update velocity moments that are calculable from the evolved charged pdf
+"""
+function update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composition)
     if !moments.evolve_density
-        update_density!(new_scratch.density, moments.dens_updated, new_scratch.pdf, vpa, z, r, composition)
+        update_density!(new_scratch.density, moments.charged.dens_updated,
+                        new_scratch.pdf, vpa, vperp, z, r, composition)
     end
     if !moments.evolve_upar
-        update_upar!(new_scratch.upar, moments.upar_updated, new_scratch.density,
-                     new_scratch.ppar, new_scratch.pdf, vpa, z, r, composition,
+        update_upar!(new_scratch.upar, moments.charged.upar_updated, new_scratch.density,
+                     new_scratch.ppar, new_scratch.pdf, vpa, vperp, z, r, composition,
                      moments.evolve_density, moments.evolve_ppar)
     end
     if !moments.evolve_ppar
         # update_ppar! calculates (p_parallel/m_s N_e c_s^2) + (n_s/N_e)*(upar_s/c_s)^2 = (1/√π)∫d(vpa/c_s) (vpa/c_s)^2 * (√π f_s c_s / N_e)
-        update_ppar!(new_scratch.ppar, moments.ppar_updated, new_scratch.density,
-                     new_scratch.upar, new_scratch.pdf, vpa, z, r, composition,
+        update_ppar!(new_scratch.ppar, moments.charged.ppar_updated, new_scratch.density,
+                     new_scratch.upar, new_scratch.pdf, vpa, vperp, z, r, composition,
                      moments.evolve_density, moments.evolve_upar)
     end
 end
 
 """
-update the 'true', un-normalized pdf
+update velocity moments that are calculable from the evolved neutral pdf
+"""
+function update_derived_moments_neutral!(new_scratch, moments, vz, vr, vzeta, z, r,
+                                         composition)
+    if !moments.evolve_density
+        update_neutral_density!(new_scratch.density_neutral, moments.neutral.dens_updated,
+                                new_scratch.pdf_neutral, vz, vr, vzeta, z, r, composition)
+    end
+    if !moments.evolve_upar
+        update_neutral_uz!(new_scratch.uz_neutral, moments.neutral.uz_updated,
+                           new_scratch.density_neutral, new_scratch.pz_neutral,
+                           new_scratch.pdf_neutral, vz, vr, vzeta, z, r, composition,
+                           moments.evolve_density, moments.evolve_ppar)
+    end
+    if !moments.evolve_ppar
+        update_neutral_pz!(new_scratch.pz_neutral, moments.neutral.pz_updated,
+                           new_scratch.density_neutral, new_scratch.uz_neutral,
+                           new_scratch.pdf_neutral, vz, vr, vzeta, z, r, composition,
+                           moments.evolve_density, moments.evolve_upar)
+    end
+end
+
+"""
+update the 'true', un-normalized, charged pdf
 """
 function update_unnormalized_pdf!(pdf_unnorm, new_scratch, moments)
     # if no moments are evolved separately from the pdf, then the
     # evolved pdf is the 'true', un-normalized pdf;
     # initialize to this value and modify below if necessary
-    @loop_s_r_z_vpa is ir iz ivpa begin
-        pdf_unnorm[ivpa,iz,ir,is] = new_scratch.pdf[ivpa,iz,ir,is]
+    @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+        pdf_unnorm[ivpa,ivperp,iz,ir,is] = new_scratch.pdf[ivpa,ivperp,iz,ir,is]
     end
     # if separately evolving the particle density, the evolved
     # pdf is the 'true' pdf divided by the particle density
     if moments.evolve_density
-        @loop_s_r_z_vpa is ir iz ivpa begin
-            pdf_unnorm[ivpa,iz,ir,is] = new_scratch.pdf[ivpa,iz,ir,is] * new_scratch.density[iz,ir,is]
+        @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+            pdf_unnorm[ivpa,ivperp,iz,ir,is] = new_scratch.pdf[ivpa,ivperp,iz,ir,is] * new_scratch.density[iz,ir,is]
         end
     end
     # if separately evolving the parallel pressure, the evolved
     # pdf is the 'true' pdf multiplied by the thermal speed
     if moments.evolve_ppar
-        @loop_s_r_z_vpa is ir iz ivpa begin
-            pdf_unnorm[ivpa,iz,ir,is] /= moments.vth[iz,ir,is]
+        @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+            pdf_unnorm[ivpa,ivperp,iz,ir,is] /= moments.charged.vth[iz,ir,is]
+        end
+    end
+end
+
+"""
+update the 'true', un-normalized, neutral pdf
+"""
+function update_unnormalized_pdf_neutral!(pdf_unnorm, new_scratch, moments)
+    # if no moments are evolved separately from the pdf, then the
+    # evolved pdf is the 'true', un-normalized pdf;
+    # initialize to this value and modify below if necessary
+    @loop_sn_r_z_vzeta_vr_vz is ir iz ivzeta ivr ivz begin
+        pdf_unnorm[ivz,ivr,ivzeta,iz,ir,is] = new_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,is]
+    end
+    # if separately evolving the particle density, the evolved
+    # pdf is the 'true' pdf divided by the particle density
+    if moments.evolve_density
+        @loop_sn_r_z_vzeta_vr_vz is ir iz ivzeta ivr ivz begin
+            pdf_unnorm[ivz,ivr,ivzeta,iz,ir,is] = new_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,is] * new_scratch.density_neutral[iz,ir,is]
+        end
+    end
+    # if separately evolving the parallel pressure, the evolved
+    # pdf is the 'true' pdf multiplied by the thermal speed
+    if moments.evolve_ppar
+        @loop_sn_r_z_vzeta_vr_vz is ir iz ivzeta ivr ivz begin
+            pdf_unnorm[ivz,ivr,ivzeta,iz,ir,is] /= moments.neutral.vth[iz,ir,is]
         end
     end
 end
 
 """
 """
-function ssp_rk!(pdf, scratch, t, t_input, vpa, z, r,
-    vpa_spectral, z_spectral, r_spectral, moments, fields, vpa_advect, z_advect, r_advect,
-    composition, collisions, num_diss_params, advance, scratch_dummy_sr, istep)
+function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
+           moments, fields, spectral_objects, advect_objects,
+           composition, collisions, geometry, boundary_distributions, num_diss_params,
+           advance, scratch_dummy, manufactured_source_list, istep)
+
+    begin_s_r_z_region()
 
     n_rk_stages = t_input.n_rk_stages
 
     first_scratch = scratch[1]
-    @loop_s_r_z_vpa is ir iz ivpa begin
-        first_scratch.pdf[ivpa,iz,ir,is] = pdf.norm[ivpa,iz,ir,is]
+    @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+        first_scratch.pdf[ivpa,ivperp,iz,ir,is] = pdf.charged.norm[ivpa,ivperp,iz,ir,is]
     end
     @loop_s_r_z is ir iz begin
-        first_scratch.density[iz,ir,is] = moments.dens[iz,ir,is]
-        first_scratch.upar[iz,ir,is] = moments.upar[iz,ir,is]
-        first_scratch.ppar[iz,ir,is] = moments.ppar[iz,ir,is]
+        first_scratch.density[iz,ir,is] = moments.charged.dens[iz,ir,is]
+        first_scratch.upar[iz,ir,is] = moments.charged.upar[iz,ir,is]
+        first_scratch.ppar[iz,ir,is] = moments.charged.ppar[iz,ir,is]
+    end
+
+    if composition.n_neutral_species > 0
+        begin_sn_r_z_region()
+        @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
+            first_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] = pdf.neutral.norm[ivz,ivr,ivzeta,iz,ir,isn]
+            # change norm -> unnorm if remove moment-based evolution?
+        end
+        @loop_sn_r_z isn ir iz begin
+            first_scratch.density_neutral[iz,ir,isn] = moments.neutral.dens[iz,ir,isn]
+            first_scratch.uz_neutral[iz,ir,isn] = moments.neutral.uz[iz,ir,isn]
+            first_scratch.pz_neutral[iz,ir,isn] = moments.neutral.pz[iz,ir,isn]
+            # other neutral moments here if required
+        end
     end
     if moments.evolve_upar
         # moments may be read on all ranks, even though loop type is z_s, so need to
@@ -782,30 +1424,90 @@ function ssp_rk!(pdf, scratch, t, t_input, vpa, z, r,
     for istage ∈ 1:n_rk_stages
         # do an Euler time advance, with scratch[2] containing the advanced quantities
         # and scratch[1] containing quantities at time level n
-        update_solution_vector!(scratch, moments, istage, composition, vpa, z, r)
+        update_solution_vector!(scratch, moments, istage, composition, vpa, vperp, z, r)
         # calculate f^{(1)} = fⁿ + Δt*G[fⁿ] = scratch[2].pdf
         euler_time_advance!(scratch[istage+1], scratch[istage],
-            pdf, fields, moments, vpa_advect, z_advect, r_advect, vpa, z, r, t, t_input,
-            vpa_spectral, z_spectral, r_spectral, composition,
-            collisions, num_diss_params, advance)
-        @views rk_update!(scratch, pdf, moments, fields, vpa, z, r, vpa_advect,
-                          z_advect, advance.rk_coefs[:,istage], istage, composition,
-                          num_diss_params)
+            pdf, fields, moments,
+            advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z, r, t,
+            t_input, spectral_objects, composition,
+            collisions, geometry, scratch_dummy, manufactured_source_list, 
+            num_diss_params, advance, istage)
+        @views rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, vr,
+                          vzeta, vpa, vperp, z, r, advect_objects,
+                          advance.rk_coefs[:,istage], istage, composition, geometry,
+                          num_diss_params, spectral_objects.z_spectral,
+                          spectral_objects.r_spectral, scratch_dummy)
     end
 
     istage = n_rk_stages+1
-    final_scratch = scratch[istage]
 
     # update the pdf.norm and moments arrays as needed
-    @loop_s_r_z_vpa is ir iz ivpa begin
-        pdf.norm[ivpa,iz,ir,is] = final_scratch.pdf[ivpa,iz,ir,is]
+    begin_s_r_z_region()
+    final_scratch = scratch[istage]
+    @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+        pdf.charged.norm[ivpa,ivperp,iz,ir,is] = final_scratch.pdf[ivpa,ivperp,iz,ir,is]
+        # change norm -> unnorm if remove moment-based evolution?
     end
     @loop_s_r_z is ir iz begin
-        moments.dens[iz,ir,is] = final_scratch.density[iz,ir,is]
-        moments.upar[iz,ir,is] = final_scratch.upar[iz,ir,is]
-        moments.ppar[iz,ir,is] = final_scratch.ppar[iz,ir,is]
+        moments.charged.dens[iz,ir,is] = final_scratch.density[iz,ir,is]
+        moments.charged.upar[iz,ir,is] = final_scratch.upar[iz,ir,is]
+        moments.charged.ppar[iz,ir,is] = final_scratch.ppar[iz,ir,is]
     end
-    update_pdf_unnorm!(pdf, moments, scratch[istage].temp_z_s, composition, vpa)
+    if composition.n_neutral_species > 0
+        # No need to synchronize here as we only change neutral quantities and previous
+        # region only changed plasma quantities.
+        begin_sn_r_z_region(no_synchronize=true)
+        @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
+            pdf.neutral.norm[ivz,ivr,ivzeta,iz,ir,isn] = final_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn]
+            # change norm -> unnorm if remove moment-based evolution?
+        end
+        @loop_sn_r_z isn ir iz begin
+            moments.neutral.dens[iz,ir,isn] = final_scratch.density_neutral[iz,ir,isn]
+            moments.neutral.uz[iz,ir,isn] = final_scratch.uz_neutral[iz,ir,isn]
+            moments.neutral.pz[iz,ir,isn] = final_scratch.pz_neutral[iz,ir,isn]
+        end
+        # for now update moments.neutral object directly for diagnostic moments
+        # that are not used in Runga-Kutta steps
+        update_neutral_pr!(moments.neutral.pr, moments.neutral.pr_updated, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
+        update_neutral_pzeta!(moments.neutral.pzeta, moments.neutral.pzeta_updated, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
+        # Update ptot (isotropic pressure)
+        if r.n > 1 #if 2D geometry
+            @loop_sn_r_z isn ir iz begin
+                moments.neutral.ptot[iz,ir,isn] = (moments.neutral.pz[iz,ir,isn] + moments.neutral.pr[iz,ir,isn] + moments.neutral.pzeta[iz,ir,isn])/3.0
+            end
+        else # 1D model
+            @loop_sn_r_z isn ir iz begin
+                moments.neutral.ptot[iz,ir,isn] = moments.neutral.pz[iz,ir,isn]
+            end
+        end
+        # get particle fluxes (n.b. bad naming convention uz -> means -> n uz here)
+        update_neutral_ur!(moments.neutral.ur, moments.neutral.ur_updated,
+                           moments.neutral.dens, pdf.neutral.norm, vz, vr, vzeta, z, r,
+                           composition)
+        update_neutral_uzeta!(moments.neutral.uzeta, moments.neutral.uzeta_updated,
+                              moments.neutral.dens, pdf.neutral.norm, vz, vr, vzeta, z,
+                              r, composition)
+        try #below loop can cause DomainError if ptot < 0 or density < 0, so exit cleanly if possible
+            @loop_sn_r_z isn ir iz begin
+                # update density using last density from Runga-Kutta stages
+                moments.neutral.dens[iz,ir,isn] = final_scratch.density_neutral[iz,ir,isn]
+                # get vth for neutrals
+                moments.neutral.vth[iz,ir,isn] = sqrt(2.0*moments.neutral.ptot[iz,ir,isn]/moments.neutral.dens[iz,ir,isn])
+            end
+        catch e
+            if global_size[] > 1
+                println("ERROR: error at line 724 of time_advance.jl")
+                println(e)
+                display(stacktrace(catch_backtrace()))
+                flush(stdout)
+                flush(stderr)
+                MPI.Abort(comm_world, 1)
+            end
+            rethrow(e)
+        end
+    end
+
+    update_pdf_unnorm!(pdf, moments, scratch[istage].temp_z_s, composition)
     return nothing
 end
 
@@ -815,57 +1517,117 @@ that includes the kinetic equation + any evolved moment equations
 using the forward Euler method: fvec_out = fvec_in + dt*fvec_in,
 with fvec_in an input and fvec_out the output
 """
-function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_advect,
-        z_advect, r_advect, vpa, z, r, t, t_input, vpa_spectral, z_spectral, r_spectral,
-        composition, collisions, num_diss_params, advance)
+function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
+    advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z, r, t, t_input,
+    spectral_objects, composition, collisions, geometry, scratch_dummy,
+    manufactured_source_list, num_diss_params, advance, istage)
     # define some abbreviated variables for tidiness
     n_ion_species = composition.n_ion_species
+    n_neutral_species = composition.n_neutral_species
     dt = t_input.dt
     # vpa_advection! advances the 1D advection equation in vpa.
     # only charged species have a force accelerating them in vpa;
     # however, neutral species do have non-zero d(wpa)/dt, so there is advection in wpa
 
+    vpa_spectral, r_spectral, z_spectral = spectral_objects.vpa_spectral, spectral_objects.r_spectral, spectral_objects.z_spectral
+    vz_spectral, vr_spectral, vzeta_spectral = spectral_objects.vz_spectral, spectral_objects.vr_spectral, spectral_objects.vzeta_spectral
+    vpa_advect, r_advect, z_advect = advect_objects.vpa_advect, advect_objects.r_advect, advect_objects.z_advect
+    neutral_z_advect, neutral_r_advect, neutral_vz_advect = advect_objects.neutral_z_advect, advect_objects.neutral_r_advect, advect_objects.neutral_vz_advect
+
     if advance.vpa_advection
-        vpa_advection!(fvec_out.pdf, fvec_in, pdf.norm, fields, moments,
-            vpa_advect, vpa, z, r, dt, t, vpa_spectral, z_spectral, composition,
-            collisions)
+        vpa_advection!(fvec_out.pdf, fvec_in, fields, moments, vpa_advect, vpa, vperp, z, r, dt, t,
+            vpa_spectral, composition, collisions, geometry)
     end
 
     # z_advection! advances 1D advection equation in z
-    # apply z-advection operation to all species (charged and neutral)
+    # apply z-advection operation to charged species
 
     if advance.z_advection
-        z_advection!(fvec_out.pdf, fvec_in, pdf.norm, moments, z_advect, z, vpa, r, dt, t,
-                     z_spectral, composition)
+        z_advection!(fvec_out.pdf, fvec_in, moments, fields, z_advect, z, vpa, vperp, r,
+                     dt, t, z_spectral, composition, geometry, scratch_dummy)
     end
+
+    # r advection relies on derivatives in z to get ExB
+    if advance.r_advection && r.n > 1
+        r_advection!(fvec_out.pdf, fvec_in, moments, fields, r_advect, r, z, vperp, vpa,
+                     dt, r_spectral, composition, geometry, scratch_dummy)
+    end
+
+    #if advance.vperp_advection
+    # PLACEHOLDER
+    #end
 
     if advance.source_terms
         source_terms!(fvec_out.pdf, fvec_in, moments, vpa, z, r, dt, z_spectral,
                       composition, collisions)
     end
+
+    if advance.neutral_z_advection
+        neutral_advection_z!(fvec_out.pdf_neutral, fvec_in, moments, neutral_z_advect,
+            r, z, vzeta, vr, vz, dt, t, z_spectral, composition, scratch_dummy)
+    end
+
+    if advance.neutral_r_advection && r.n > 1
+        neutral_advection_r!(fvec_out.pdf_neutral, fvec_in, neutral_r_advect,
+            r, z, vzeta, vr, vz, dt, r_spectral, composition, geometry, scratch_dummy)
+    end
+
+    if advance.neutral_vz_advection
+        neutral_advection_vz!(fvec_out.pdf_neutral, fvec_in, fields, moments,
+                              neutral_vz_advect, vz, vr, vzeta, z, r, dt, vz_spectral,
+                              composition, collisions)
+    end
+
+    if advance.neutral_source_terms
+        source_terms_neutral!(fvec_out.pdf_neutral, fvec_in, moments, vpa, z, r, dt, z_spectral,
+                      composition, collisions)
+    end
+
+    if advance.manufactured_solns_test
+        source_terms_manufactured!(fvec_out.pdf, fvec_out.pdf_neutral, vz, vr, vzeta, vpa, vperp, z, r, t, dt, composition, manufactured_source_list)
+    end
+
+    if advance.cx_collisions || advance.ionization_collisions
+        # gyroaverage neutral dfn and place it in the charged.buffer array for use in the collisions step
+        vzvrvzeta_to_vpavperp!(pdf.charged.buffer, fvec_in.pdf_neutral, vz, vr, vzeta, vpa, vperp, gyrophase, z, r, geometry, composition)
+        # interpolate charged particle dfn and place it in the neutral.buffer array for use in the collisions step
+        vpavperp_to_vzvrvzeta!(pdf.neutral.buffer, fvec_in.pdf, vz, vr, vzeta, vpa, vperp, z, r, geometry, composition)
+    end
+
     # account for charge exchange collisions between ions and neutrals
-    if advance.cx_collisions
-        charge_exchange_collisions!(fvec_out.pdf, fvec_in, moments, composition, vpa, z, r,
-                                    collisions.charge_exchange, vpa_spectral, dt)
+    if advance.cx_collisions_1V
+        charge_exchange_collisions_1V!(fvec_out.pdf, fvec_out.pdf_neutral, fvec_in,
+                                       moments, composition, vpa, vz,
+                                       collisions.charge_exchange, vpa_spectral,
+                                       vz_spectral, dt)
+    elseif advance.cx_collisions
+        charge_exchange_collisions_3V!(fvec_out.pdf, fvec_out.pdf_neutral, pdf.charged.buffer, pdf.neutral.buffer, fvec_in, composition,
+                                        vz, vr, vzeta, vpa, vperp, z, r, collisions.charge_exchange, dt)
     end
     # account for ionization collisions between ions and neutrals
-    if advance.ionization_collisions
-        ionization_collisions!(fvec_out.pdf, fvec_in, moments, n_ion_species,
-            composition.n_neutral_species, vpa, z, r, vpa_spectral, composition,
-            collisions, z.n, dt)
+    if advance.ionization_collisions_1V
+        ionization_collisions_1V!(fvec_out.pdf, fvec_out.pdf_neutral, fvec_in, vz, vpa,
+                                  vperp, z, r, vz_spectral, moments, composition,
+                                  collisions, dt)
+    elseif advance.ionization_collisions
+        ionization_collisions_3V!(fvec_out.pdf, fvec_out.pdf_neutral, pdf.charged.buffer, fvec_in, composition,
+                                        vz, vr, vzeta, vpa, vperp, z, r, collisions, dt)
     end
+    if advance.ionization_source
+        constant_ionization_source!(fvec_out.pdf, vpa, vperp, z, r, moments, composition,
+                                    collisions, dt)
+    end
+    
     # add numerical dissipation
     if advance.numerical_dissipation
-        vpa_boundary_buffer_decay!(fvec_out.pdf, fvec_in, moments, vpa, dt,
-                                   num_diss_params)
-        vpa_boundary_buffer_diffusion!(fvec_out.pdf, fvec_in, vpa, vpa_spectral, dt,
-                                       num_diss_params)
-        vpa_dissipation!(fvec_out.pdf, fvec_in, moments, vpa, vpa_spectral, dt,
+        vpa_dissipation!(fvec_out.pdf, fvec_in.pdf, vpa, vpa_spectral, dt,
                          num_diss_params)
-        z_dissipation!(fvec_out.pdf, fvec_in, moments, z, vpa, z_spectral, dt,
-                       num_diss_params)
+        z_dissipation!(fvec_out.pdf, fvec_in.pdf, z, z_spectral, dt,
+                       num_diss_params, scratch_dummy)
+        r_dissipation!(fvec_out.pdf, fvec_in.pdf, r, r_spectral, dt,
+                       num_diss_params, scratch_dummy)
     end
-    # End of advance of distribution function
+    # End of advance for distribution function
 
     # Start advancing moments
     if moments.evolve_density || moments.evolve_upar || moments.evolve_ppar
@@ -873,24 +1635,46 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments, vpa_advect
         # Exept when using wall boundary conditions, do not actually need to synchronize
         # here because above we only modify the distribution function and below we only
         # modify the moments, so there is no possibility of race conditions.
-        begin_s_r_region(no_synchronize=true)
+        begin_s_r_z_region(no_synchronize=true)
     end
     if advance.continuity
-        continuity_equation!(fvec_out.density, fvec_in, moments, composition, vpa, z, r,
-                             dt, z_spectral, collisions.ionization, num_diss_params)
+        continuity_equation!(fvec_out.density, fvec_in, moments, composition, dt,
+                             z_spectral, collisions.ionization, num_diss_params)
     end
     if advance.force_balance
         # fvec_out.upar is over-written in force_balance! and contains the particle flux
-        force_balance!(fvec_out.upar, fvec_out.density, fvec_in, fields, collisions,
-                       vpa, z, r, dt, z_spectral, composition, num_diss_params)
+        force_balance!(fvec_out.upar, fvec_out.density, fvec_in, moments, fields,
+                       collisions, dt, z_spectral, composition, geometry, num_diss_params)
     end
     if advance.energy
-        energy_equation!(fvec_out.ppar, fvec_in, moments, collisions, z,
-                         r, dt, z_spectral, composition, num_diss_params)
+        energy_equation!(fvec_out.ppar, fvec_in, moments, collisions, dt, z_spectral,
+                         composition, num_diss_params)
+    end
+    if moments.evolve_density || moments.evolve_upar || moments.evolve_ppar
+        # Only need to change region type if moment evolution equations will be used.
+        # Exept when using wall boundary conditions, do not actually need to synchronize
+        # here because above we only modify the distribution function and below we only
+        # modify the moments, so there is no possibility of race conditions.
+        begin_sn_r_z_region(no_synchronize=true)
+    end
+    if advance.neutral_continuity
+        neutral_continuity_equation!(fvec_out.density_neutral, fvec_in, moments,
+                                     composition, dt, z_spectral, collisions.ionization,
+                                     num_diss_params)
+    end
+    if advance.neutral_force_balance
+        # fvec_out.upar is over-written in force_balance! and contains the particle flux
+        neutral_force_balance!(fvec_out.uz_neutral, fvec_out.density_neutral, fvec_in,
+                               moments, fields, collisions, dt, z_spectral, composition,
+                               geometry, num_diss_params)
+    end
+    if advance.neutral_energy
+        neutral_energy_equation!(fvec_out.pz_neutral, fvec_in, moments, collisions, dt,
+                                 z_spectral, composition, num_diss_params)
     end
     # reset "xx.updated" flags to false since ff has been updated
     # and the corresponding moments have not
-    reset_moments_status!(moments, composition, z)
+    reset_moments_status!(moments)
     return nothing
 end
 
@@ -898,16 +1682,28 @@ end
 update the vector containing the pdf and any evolved moments of the pdf
 for use in the Runge-Kutta time advance
 """
-function update_solution_vector!(evolved, moments, istage, composition, vpa, z, r)
+function update_solution_vector!(evolved, moments, istage, composition, vpa, vperp, z, r)
     new_evolved = evolved[istage+1]
     old_evolved = evolved[istage]
-    @loop_s_r_z_vpa is ir iz ivpa begin
-        new_evolved.pdf[ivpa,iz,ir,is] = old_evolved.pdf[ivpa,iz,ir,is]
+    begin_s_r_z_region()
+    @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+        new_evolved.pdf[ivpa,ivperp,iz,ir,is] = old_evolved.pdf[ivpa,ivperp,iz,ir,is]
     end
     @loop_s_r_z is ir iz begin
         new_evolved.density[iz,ir,is] = old_evolved.density[iz,ir,is]
         new_evolved.upar[iz,ir,is] = old_evolved.upar[iz,ir,is]
         new_evolved.ppar[iz,ir,is] = old_evolved.ppar[iz,ir,is]
+    end
+    if composition.n_neutral_species > 0
+        begin_sn_r_z_region()
+        @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
+            new_evolved.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] = old_evolved.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn]
+        end
+        @loop_sn_r_z isn ir iz begin
+            new_evolved.density_neutral[iz,ir,isn] = old_evolved.density_neutral[iz,ir,isn]
+            new_evolved.uz_neutral[iz,ir,isn] = old_evolved.uz_neutral[iz,ir,isn]
+            new_evolved.pz_neutral[iz,ir,isn] = old_evolved.pz_neutral[iz,ir,isn]
+        end
     end
     return nothing
 end
@@ -916,25 +1712,16 @@ end
 if separately evolving the density via the continuity equation,
 the evolved pdf has been normalised by the particle density
 undo this normalisation to get the true particle distribution function
-
-scratch should be a (nz,nspecies) array
 """
-function update_pdf_unnorm!(pdf, moments, scratch, composition, vpa)
-    nvpa = size(pdf.unnorm, 1)
-    if moments.evolve_ppar
-        @loop_s_r_z is ir iz begin
-            scratch[iz,ir,is] = moments.dens[iz,ir,is]/moments.vth[iz,ir,is]
-        end
-        @loop_s_r_z_vpa is ir iz ivpa begin
-            pdf.unnorm[ivpa,iz,ir,is] = pdf.norm[ivpa,iz,ir,is]*scratch[iz,ir,is]
-        end
-    elseif moments.evolve_density
-        @loop_s_r_z_vpa is ir iz ivpa begin
-            pdf.unnorm[ivpa,iz,ir,is] = pdf.norm[ivpa,iz,ir,is] * moments.dens[iz,ir,is]
-        end
-    else
-        @loop_s_r_z_vpa is ir iz ivpa begin
-            pdf.unnorm[ivpa,iz,ir,is] = pdf.norm[ivpa,iz,ir,is]
+function update_pdf_unnorm!(pdf, moments, scratch, composition)
+    begin_s_r_z_vperp_vpa_region()
+    @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+        pdf.charged.unnorm[ivpa,ivperp,iz,ir,is] = pdf.charged.norm[ivpa,ivperp,iz,ir,is]
+    end
+    if composition.n_neutral_species > 0
+        begin_sn_r_z_vzeta_vr_vz_region()
+        @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
+            pdf.neutral.unnorm[ivz,ivr,ivzeta,iz,ir,isn] = pdf.neutral.norm[ivz,ivr,ivzeta,iz,ir,isn]
         end
     end
 end

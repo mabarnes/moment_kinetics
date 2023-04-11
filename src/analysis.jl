@@ -8,6 +8,7 @@ export analyze_pdf_data
 
 using ..array_allocation: allocate_float
 using ..calculus: integral
+using ..load_data: open_readonly_output_file, get_nranks, load_pdf_data, load_rank_data
 using ..velocity_moments: integrate_over_vspace
 
 """
@@ -25,6 +26,143 @@ function analyze_fields_data(phi, ntime, nz, z_wgts, Lz)
     end
     println("done.")
     return phi_fldline_avg, delta_phi
+end
+
+"""
+Check the (kinetic) Chodura condition
+
+Chodura condition is:
+∫d^3v F/vpa^2 ≤ mi ne/Te
+
+Return a tuple (whose first entry is the result for the lower boundary and second for the
+upper) of the ratio which is 1 if the Chodura condition is satisfied (with equality):
+Te/(mi ne) * ∫d^3v F/vpa^2
+
+Currently only evaluates condition for the first species: is=1
+
+2D2V
+----
+
+In normalised form (normalised variables suffixed with 'N'):
+vpa = cref vpaN
+vperp = cref vperpN
+ne = nref neN
+Te = Tref TeN
+F = FN nref / cref^3 pi^3/2
+cref = sqrt(2 Tref / mi)
+
+cref^3 ∫d^3vN FN nref / cref^3 pi^3/2 cref^2 vpaN^2 ≤ mi nref neN / Tref TeN
+nref / (pi^3/2 cref^2) * ∫d^3vN FN / vpaN^2 ≤ mi nref neN / Tref TeN
+mi nref / (pi^3/2 2 Tref) * ∫d^3vN FN / vpaN^2 ≤ mi nref neN / Tref TeN
+1 / (2 pi^3/2) * ∫d^3vN FN / vpaN^2 ≤ neN / TeN
+1 / (2 pi^3/2) * ∫d^3vN FN / vpaN^2 ≤ neN / TeN
+TeN / (2 neN pi^3/2) * ∫d^3vN FN / vpaN^2 ≤ 1
+
+Note that `integrate_over_vspace()` includes the 1/pi^3/2 factor already.
+
+1D1V
+----
+
+The 1D1V code evolves the marginalised distribution function f = ∫d^2vperp F so the
+Chodura condition becomes
+∫dvpa f/vpa^2 ≤ mi ne/Te
+
+In normalised form (normalised variables suffixed with 'N'):
+vpa = cref vpaN
+ne = nref neN
+Te = Tref TeN
+f = fN nref / cref sqrt(pi)
+cref = sqrt(2 Tref / mi)
+
+cref ∫dvpaN fN nref / cref sqrt(pi) cref^2 vpaN^2 ≤ mi nref neN / Tref TeN
+nref / (sqrt(pi) cref^2) * ∫dvpaN fN / vpaN^2 ≤ mi nref neN / Tref TeN
+mi nref / (sqrt(pi) 2 Tref) * ∫dvpaN fN / vpaN^2 ≤ mi nref neN / Tref TeN
+1 / (2 sqrt(pi)) * ∫dvpaN fN / vpaN^2 ≤ neN / TeN
+1 / (2 sqrt(pi)) * ∫dvpaN fN / vpaN^2 ≤ neN / TeN
+TeN / (2 neN sqrt(pi)) * ∫dvpaN fN / vpaN^2 ≤ 1
+
+Note that `integrate_over_vspace()` includes the 1/sqrt(pi) factor already.
+"""
+function check_Chodura_condition(run_name, vpa_grid, vpa_wgts, vperp_grid, vperp_wgts,
+                                 dens, T_e, Er, geometry, z_bc, nblocks)
+
+    if z_bc != "wall"
+        return nothing, nothing
+    end
+
+    ntime = size(Er, 3)
+    is = 1
+    nr = size(Er, 2)
+    lower_result = zeros(nr, ntime)
+    upper_result = zeros(nr, ntime)
+    f_lower = nothing
+    f_upper = nothing
+    z_nrank, r_nrank = get_nranks(run_name, nblocks, "dfns")
+    for iblock in 0:nblocks-1
+        fid_pdfs = open_readonly_output_file(run_name,"dfns",iblock=iblock)
+        z_irank, r_irank = load_rank_data(fid_pdfs)
+        if z_irank == 0
+            if f_lower === nothing
+                f_lower = load_pdf_data(fid_pdfs)
+            else
+                # Concatenate along r-dimension
+                f_lower = cat(f_lower, load_pdf_data(fid_pdfs); dims=4)
+            end
+        end
+        if z_irank == z_nrank - 1
+            if f_upper === nothing
+                f_upper = load_pdf_data(fid_pdfs)
+            else
+                # Concatenate along r-dimension
+                f_upper = cat(f_upper, load_pdf_data(fid_pdfs); dims=4)
+            end
+        end
+    end
+    for it ∈ 1:ntime, ir ∈ 1:nr
+        vpabar = @. vpa_grid - 0.5 * geometry.rhostar * Er[1,ir,it] / geometry.bzed
+
+        # Get rid of a zero if it is there to avoid a blow up - f should be zero at that
+        # point anyway
+        for ivpa ∈ eachindex(vpabar)
+            if abs(vpabar[ivpa]) < 1.e-14
+                vpabar[ivpa] = 1.0
+            end
+        end
+
+        @views lower_result[ir,it] =
+            integrate_over_vspace(f_lower[:,:,1,ir,is,it], vpabar, -2, vpa_wgts,
+                                  vperp_grid, 0, vperp_wgts)
+        if it == ntime
+            println("check vpabar lower", vpabar)
+            println("result lower ", lower_result[ir,it])
+        end
+
+        lower_result[ir,it] *= 0.5 * T_e / dens[1,ir,is,it]
+
+        vpabar = @. vpa_grid - 0.5 * geometry.rhostar * Er[end,ir,it] / geometry.bzed
+
+        # Get rid of a zero if it is there to avoid a blow up - f should be zero at that
+        # point anyway
+        for ivpa ∈ eachindex(vpabar)
+            if abs(vpabar[ivpa]) < 1.e-14
+                vpabar[ivpa] = 1.0
+            end
+        end
+
+        @views upper_result[ir,it] =
+            integrate_over_vspace(f_upper[:,:,end,ir,is,it], vpabar, -2, vpa_wgts,
+                                  vperp_grid, 0, vperp_wgts)
+        if it == ntime
+            println("check vpabar upper ", vpabar)
+            println("result upper ", upper_result[ir,it])
+        end
+
+        upper_result[ir,it] *= 0.5 * T_e / dens[end,ir,is,it]
+    end
+
+    println("final Chodura results result ", lower_result[1,end], " ", upper_result[1,end])
+
+    return lower_result, upper_result
 end
 
 """

@@ -9,8 +9,9 @@ using Base.Filesystem: tempname
 using SpecialFunctions: dawson
 using TimerOutputs
 
-using moment_kinetics.load_data: open_netcdf_file
-using moment_kinetics.load_data: load_coordinate_data, load_fields_data
+using moment_kinetics.load_data: open_readonly_output_file
+using moment_kinetics.load_data: load_fields_data, load_time_data
+using moment_kinetics.load_data: load_species_data, load_coordinate_data
 
 # Create a temporary directory for test output
 test_output_directory = tempname()
@@ -64,7 +65,7 @@ end
 
 # default inputs for tests
 test_input_finite_difference = Dict("n_ion_species" => 1,
-                                    "n_neutral_species" => 1,
+                                    "n_neutral_species" => 0,
                                     "boltzmann_electron_response" => true,
                                     "run_name" => "finite_difference",
                                     "base_directory" => test_output_directory,
@@ -111,7 +112,12 @@ test_input_finite_difference = Dict("n_ion_species" => 1,
                                     "vpa_nelement" => 1,
                                     "vpa_L" => 8.0,
                                     "vpa_bc" => "periodic",
-                                    "vpa_discretization" => "finite_difference")
+                                    "vpa_discretization" => "finite_difference",
+                                    "vz_ngrid" => 200,
+                                    "vz_nelement" => 1,
+                                    "vz_L" => 8.0,
+                                    "vz_bc" => "periodic",
+                                    "vz_discretization" => "finite_difference")
 
 test_input_chebyshev = merge(test_input_finite_difference,
                              Dict("run_name" => "chebyshev_pseudospectral",
@@ -120,7 +126,10 @@ test_input_chebyshev = merge(test_input_finite_difference,
                                   "z_nelement" => 2,
                                   "vpa_discretization" => "chebyshev_pseudospectral",
                                   "vpa_ngrid" => 17,
-                                  "vpa_nelement" => 10))
+                                  "vpa_nelement" => 10,
+                                  "vz_discretization" => "chebyshev_pseudospectral",
+                                  "vz_ngrid" => 17,
+                                  "vz_nelement" => 10))
 
 # Not actually used in the tests, but needed for first argument of run_moment_kinetics
 to = TimerOutput()
@@ -172,13 +181,16 @@ function run_test(test_input, analytic_rtol, analytic_atol, expected_phi,
             path = joinpath(realpath(input["base_directory"]), name, name)
 
             # open the netcdf file and give it the handle 'fid'
-            fid = open_netcdf_file(path)
+            fid = open_readonly_output_file(path,"moments")
 
             # load space-time coordinate data
-            nvpa, vpa, vpa_wgts, nz, z, z_wgts, Lz, nr, r, r_wgts, Lr, ntime, time = load_coordinate_data(fid)
-
+            nz, nz_global, z, z_wgts, Lz = load_coordinate_data(fid, "z")
+            nr, nr_global, r, r_wgts, Lr = load_coordinate_data(fid, "r")
+            ntime, time = load_time_data(fid)
+            n_ion_species, n_neutral_species = load_species_data(fid)
+            
             # load fields data
-            phi_zrt = load_fields_data(fid)
+            phi_zrt, Er_zrt, Ez_zrt = load_fields_data(fid)
 
             close(fid)
 

@@ -2,158 +2,339 @@
 """
 module load_data
 
-export open_netcdf_file
-export load_coordinate_data
+export open_readonly_output_file
 export load_fields_data
-export load_moments_data
+export load_charged_particle_moments_data
+export load_neutral_particle_moments_data
 export load_pdf_data
+export load_neutral_pdf_data
+export load_coordinate_data
+export load_time_data
+export load_block_data
+export load_rank_data
+export load_species_data
 
+using HDF5
 using NCDatasets
 
 """
-open the netcdf file to read output data
 """
-function open_netcdf_file(run_name)
-    # create the netcdf filename from the given run_name
-    filename = string(run_name, ".cdf")
+function open_readonly_output_file(run_name, ext; iblock=0, printout=false)
+    possible_names = (
+        string(run_name, ".", ext, ".h5"),
+        string(run_name, ".", iblock,".", ext, ".h5"),
+        string(run_name, ".", ext, ".cdf"),
+        string(run_name, ".", iblock,".", ext, ".cdf"),
+    )
+    existing_files = Tuple(f for f in possible_names if isfile(f))
+    exists_count = length(existing_files)
+    if exists_count == 0
+        error("None of $possible_names exist, cannot open output")
+    elseif exists_count > 1
+        error("Multiple files present, do not know which to open: $existing_files")
+    end
 
-    print("Opening ", filename, " to read NetCDF data...")
-    # open the netcdf file with given filename for reading
-    fid = NCDataset(filename,"a")
-    println("done.")
+    # Have checked there is only one filename in existing_files
+    filename = existing_files[1]
 
+    if splitext(filename)[2] == ".h5"
+        if printout
+            print("Opening ", filename, " to read HDF5 data...")
+        end
+        # open the HDF5 file with given filename for reading
+        fid = h5open(filename, "r")
+    else
+        if printout
+            print("Opening ", filename, " to read NetCDF data...")
+        end
+        # open the netcdf file with given filename for reading
+        fid = NCDataset(filename, "r")
+    end
+    if printout
+        println("done.")
+    end
     return fid
 end
 
+function get_nranks(run_name,nblocks,description)
+    z_nrank = 0
+    r_nrank = 0
+    for iblock in 0:nblocks-1
+        fid = open_readonly_output_file(run_name,description,iblock=iblock, printout=false)
+        z_irank, r_irank = load_rank_data(fid,printout=false)
+        z_nrank = max(z_irank,z_nrank)
+        r_nrank = max(r_irank,r_nrank)
+        close(fid)
+    end
+    r_nrank = r_nrank + 1
+    z_nrank = z_nrank + 1
+    return z_nrank, r_nrank
+end
+
 """
+Load a single variable from a file
 """
-function load_coordinate_data(fid)
-    print("Loading coordinate data...")
-    # define a handle for the r coordinate
-    cdfvar = fid["r"]
-    # get the number of r grid points
-    nr = length(cdfvar)
-    # load the data for r
-    r = cdfvar.var[:]
-    # get the weights associated with the r coordinate
-    cdfvar = fid["r_wgts"]
-    r_wgts = cdfvar.var[:]
-    # Lr = r box length
-    Lr = r[end]-r[1]
+function load_variable() end
+function load_variable(file_or_group::HDF5.H5DataStore, name::String)
+    # This overload deals with cases where fid is an HDF5 `File` or `Group` (`H5DataStore`
+    # is the abstract super-type for both
+    try
+        return read(file_or_group[name])
+    catch
+        println("An error occured while loading $name")
+        rethrow()
+    end
+end
+function load_variable(file_or_group::NCDataset, name::String)
+    # This overload deals with cases where fid is a NetCDF `Dataset` (which could be a
+    # file or a group).
+    try
+        return file_or_group[name].var[:]
+    catch
+        println("An error occured while loading $name")
+        rethrow()
+    end
+end
 
-    # define a handle for the z coordinate
-    cdfvar = fid["z"]
-    # get the number of z grid points
-    nz = length(cdfvar)
-    # load the data for z
-    z = cdfvar.var[:]
-    # get the weights associated with the z coordinate
-    cdfvar = fid["z_wgts"]
-    z_wgts = cdfvar.var[:]
-    # Lz = z box length
-    Lz = z[end]-z[1]
+"""
+Get a (sub-)group from a file or group
+"""
+function get_group() end
+function get_group(file_or_group::HDF5.H5DataStore, name::String)
+    # This overload deals with cases where fid is an HDF5 `File` or `Group` (`H5DataStore`
+    # is the abstract super-type for both
+    try
+        return file_or_group[name]
+    catch
+        println("An error occured while opening the $name group")
+        rethrow()
+    end
+end
+function get_group(file_or_group::NCDataset, name::String)
+    # This overload deals with cases where fid is a NetCDF `Dataset` (which could be a
+    # file or a group).
+    try
+        return file_or_group.group[name]
+    catch
+        println("An error occured while opening the $name group")
+        rethrow()
+    end
+end
 
-    # define a handle for the vpa coordinate
-    cdfvar = fid["vpa"]
-    # get the number of vpa grid points
-    nvpa = length(cdfvar)
-    # load the data for vpa
-    vpa = cdfvar.var[:]
-    # get the weights associated with the vpa coordinate
-    cdfvar = fid["vpa_wgts"]
-    vpa_wgts = cdfvar.var[:]
+"""
+Load data for a coordinate
+"""
+function load_coordinate_data(fid, name; printout=false)
+    if printout
+        println("Loading $name coordinate data...")
+    end
 
-    # define a handle for the time coordinate
-    cdfvar = fid["time"]
-    # get the number of time grid points
-    ntime = length(cdfvar)
-    # load the data for time
-    time = cdfvar.var[:]
-    println("done.")
+    coord_group = get_group(get_group(fid, "coords"), name)
 
-    return nvpa, vpa, vpa_wgts, nz, z, z_wgts, Lz, nr, r, r_wgts, Lr, ntime, time
+    n_local = load_variable(coord_group, "n_local")
+    n_global = load_variable(coord_group, "n_global")
+    grid = load_variable(coord_group, "grid")
+    wgts = load_variable(coord_group, "wgts")
+    # L = global box length
+    L = load_variable(coord_group, "L")
+
+    return n_local, n_global, grid, wgts, L
 end
 
 """
 """
-function load_fields_data(fid)
-    print("Loading fields data...")
-    # define a handle for the electrostatic potential
-    cdfvar = fid["phi"]
-    # load the electrostatic potential data
-    phi = cdfvar.var[:,:,:]
-    println("done.")
-    return phi
+function load_species_data(fid; printout=false)
+    if printout
+        print("Loading species data...")
+    end
+
+    overview = get_group(fid, "overview")
+    n_ion_species = load_variable(overview, "n_ion_species")
+    n_neutral_species = load_variable(overview, "n_neutral_species")
+
+    if printout
+        println("done.")
+    end
+
+    return n_ion_species, n_neutral_species
 end
 
 """
 """
-function load_moments_data(fid)
-    print("Loading velocity moments data...")
-    # define a handle for the species density
-    cdfvar = fid["density"]
-    # load the species density data
-    density = cdfvar.var[:,:,:,:]
-    # define a handle for the species parallel flow
-    cdfvar = fid["parallel_flow"]
-    # load the species parallel flow data
-    parallel_flow = cdfvar.var[:,:,:,:]
-    # define a handle for the species parallel pressure
-    cdfvar = fid["parallel_pressure"]
-    # load the species parallel pressure data
-    parallel_pressure = cdfvar.var[:,:,:,:]
-    # define a handle for the species parallel heat flux
-    cdfvar = fid["parallel_heat_flux"]
-    # load the species parallel heat flux data
-    parallel_heat_flux = cdfvar.var[:,:,:,:]
-    # define a handle for the species thermal speed
-    cdfvar = fid["thermal_speed"]
-    # load the species thermal speed data
-    thermal_speed = cdfvar.var[:,:,:,:]
-    # define the number of species
-    n_species = size(cdfvar,3)
-    # define a handle for the flag indicating if the density should be separately advanced
-    cdfvar = fid["evolve_density"]
-    # load the parallel pressure evolution flag
-    evolve_density_int = cdfvar.var[:]
-    if evolve_density_int[1] == 1
-        evolve_density = true
-    else
-        evolve_density = false
+function load_time_data(fid; printout=false)
+    if printout
+        print("Loading time data...")
     end
-    # define a handle for the flag indicating if the parallel pressure should be separately advanced
-    cdfvar = fid["evolve_upar"]
-    # load the parallel pressure evolution flag
-    evolve_upar_int = cdfvar.var[:]
-    if evolve_upar_int[1] == 1
-        evolve_upar = true
-    else
-        evolve_upar = false
+
+    group = get_group(fid, "dynamic_data")
+    time = load_variable(group, "time")
+    ntime = length(time)
+
+    if printout
+        println("done.")
     end
-    # define a handle for the flag indicating if the parallel pressure should be separately advanced
-    cdfvar = fid["evolve_ppar"]
-    # load the parallel pressure evolution flag
-    evolve_ppar_int = cdfvar.var[:]
-    if evolve_ppar_int[1] == 1
-        evolve_ppar = true
-    else
-        evolve_ppar = false
-    end
-    println("done.")
-    return density, parallel_flow, parallel_pressure, parallel_heat_flux, thermal_speed,
-           n_species, evolve_density, evolve_upar, evolve_ppar
+
+    return  ntime, time
 end
 
 """
 """
-function load_pdf_data(fid)
-    print("Loading distribution function data...")
-    # define a handle for the distribution function
-    cdfvar = fid["f"]
-    # load the distribution function data
-    pdf = cdfvar.var[:,:,:,:]
-    println("done.")
+function load_block_data(fid; printout=false)
+    if printout
+        print("Loading block data...")
+    end
+
+    coords = get_group(fid, "coords")
+    nblocks = load_variable(coords, "nblocks")
+    iblock = load_variable(coords, "iblock")
+
+    if printout
+        println("done.")
+    end
+
+    return  nblocks, iblock
+end
+
+"""
+"""
+function load_rank_data(fid; printout=false)
+    if printout
+        print("Loading rank data...")
+    end
+
+    coords = get_group(fid, "coords")
+    z_irank = load_variable(get_group(coords, "z"), "irank")
+    r_irank = load_variable(get_group(coords, "r"), "irank")
+    
+    if printout
+        println("done.")
+    end
+
+    return z_irank, r_irank
+end
+
+"""
+"""
+function load_fields_data(fid; printout=false)
+    if printout
+        print("Loading fields data...")
+    end
+
+    group = get_group(fid, "dynamic_data")
+
+    # Read electrostatic potential
+    phi = load_variable(group, "phi")
+
+    # Read radial electric field
+    Er = load_variable(group, "Er")
+
+    # Read z electric field
+    Ez = load_variable(group, "Ez")
+
+    if printout
+        println("done.")
+    end
+
+    return phi, Er, Ez
+end
+
+"""
+"""
+function load_charged_particle_moments_data(fid; printout=false)
+    if printout
+        print("Loading charged particle velocity moments data...")
+    end
+
+    group = get_group(fid, "dynamic_data")
+
+    # Read charged species density
+    density = load_variable(group, "density")
+
+    # Read charged species parallel flow
+    parallel_flow = load_variable(group, "parallel_flow")
+
+    # Read charged species parallel pressure
+    parallel_pressure = load_variable(group, "parallel_pressure")
+
+    # Read charged_species parallel heat flux
+    parallel_heat_flux = load_variable(group, "parallel_heat_flux")
+
+    # Read charged species thermal speed
+    thermal_speed = load_variable(group, "thermal_speed")
+    
+    evolve_ppar = false
+
+    if printout
+        println("done.")
+    end
+
+    return density, parallel_flow, parallel_pressure, parallel_heat_flux, thermal_speed, evolve_ppar
+end
+
+function load_neutral_particle_moments_data(fid; printout=false)
+    if printout
+        print("Loading neutral particle velocity moments data...")
+    end
+
+    group = get_group(fid, "dynamic_data")
+
+    # Read neutral species density
+    neutral_density = load_variable(group, "density_neutral")
+
+    # Read neutral species uz
+    neutral_uz = load_variable(group, "uz_neutral")
+
+    # Read neutral species pz
+    neutral_pz = load_variable(group, "pz_neutral")
+
+    # Read neutral species qz
+    neutral_qz = load_variable(group, "qz_neutral")
+
+    # Read neutral species thermal speed
+    neutral_thermal_speed = load_variable(group, "thermal_speed_neutral")
+
+    if printout
+        println("done.")
+    end
+
+    return neutral_density, neutral_uz, neutral_pz, neutral_qz, neutral_thermal_speed
+end
+
+"""
+"""
+function load_pdf_data(fid; printout=false)
+    if printout
+        print("Loading charged particle distribution function data...")
+    end
+
+    group = get_group(fid, "dynamic_data")
+
+    # Read charged distribution function
+    pdf = load_variable(group, "f")
+
+    if printout
+        println("done.")
+    end
+
     return pdf
+end
+"""
+"""
+function load_neutral_pdf_data(fid; printout=false)
+    if printout
+        print("Loading neutral particle distribution function data...")
+    end
+
+    group = get_group(fid, "dynamic_data")
+
+    # Read neutral distribution function
+    neutral_pdf = load_variable(group, "f_neutral")
+
+    if printout
+        println("done.")
+    end
+
+    return neutral_pdf
 end
 
 end

@@ -36,7 +36,7 @@ function main(input_file)
     block_rank[] == 0 && Profile.print(IOContext(stdout, :displaysize => (24, 500)))
 
     # Clean up, without profiling
-    cleanup_moment_kinetics!(mk_state[end-1:end]...)
+    cleanup_moment_kinetics!(mk_state[end-2:end]...)
 
     return nothing
 end
