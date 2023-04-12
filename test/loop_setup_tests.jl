@@ -105,55 +105,55 @@ function runtests()
         end
         @testset "get_best_ranges" begin
             @test get_best_ranges(0, 1, (:s,:r,:z),
-                                  Dict(:s=>3, :r=>4, :z=>5, :sn=>1, :vperp=>2, :vpa=>7,
+                                  Dict(:s=>3, :r=>4, :z=>5, :sn=>1, :mu=>2, :vpa=>7,
                                        :vzeta=>11, :vr=>13, :vz=>17)) ==
-                Dict(:s=>1:3, :r=>1:4, :z=>1:5, :sn=>1:1, :vperp=>1:2, :vpa=>1:7,
+                Dict(:s=>1:3, :r=>1:4, :z=>1:5, :sn=>1:1, :mu=>1:2, :vpa=>1:7,
                      :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
 
             @test get_best_ranges(0, 8, (:s,:r,:z),
-                                  Dict(:s=>3, :r=>4, :z=>5, :sn=>1, :vperp=>2, :vpa=>7,
+                                  Dict(:s=>3, :r=>4, :z=>5, :sn=>1, :mu=>2, :vpa=>7,
                                        :vzeta=>11, :vr=>13, :vz=>17)) ==
-                Dict(:s=>1:3, :r=>1:1, :z=>1:2, :sn=>1:1, :vperp=>1:2, :vpa=>1:7,
+                Dict(:s=>1:3, :r=>1:1, :z=>1:2, :sn=>1:1, :mu=>1:2, :vpa=>1:7,
                      :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
             @test get_best_ranges(1, 8, (:s,:r,:z),
-                                  Dict(:s=>3, :r=>4, :z=>5, :sn=>1, :vperp=>2, :vpa=>7,
+                                  Dict(:s=>3, :r=>4, :z=>5, :sn=>1, :mu=>2, :vpa=>7,
                                        :vzeta=>11, :vr=>13, :vz=>17)) ==
-                Dict(:s=>1:3, :r=>2:2, :z=>1:2, :sn=>1:1, :vperp=>1:2, :vpa=>1:7,
+                Dict(:s=>1:3, :r=>2:2, :z=>1:2, :sn=>1:1, :mu=>1:2, :vpa=>1:7,
                      :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
             @test get_best_ranges(2, 8, (:s,:r,:z),
-                                  Dict(:s=>3, :r=>4, :z=>5, :sn=>1, :vperp=>2, :vpa=>7,
+                                  Dict(:s=>3, :r=>4, :z=>5, :sn=>1, :mu=>2, :vpa=>7,
                                        :vzeta=>11, :vr=>13, :vz=>17)) ==
-                Dict(:s=>1:3, :r=>3:3, :z=>1:2, :sn=>1:1, :vperp=>1:2, :vpa=>1:7,
+                Dict(:s=>1:3, :r=>3:3, :z=>1:2, :sn=>1:1, :mu=>1:2, :vpa=>1:7,
                      :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
             @test get_best_ranges(3, 8, (:s,:r,:z),
-                                  Dict(:s=>3, :r=>4, :z=>5, :sn=>1, :vperp=>2, :vpa=>7,
+                                  Dict(:s=>3, :r=>4, :z=>5, :sn=>1, :mu=>2, :vpa=>7,
                                        :vzeta=>11, :vr=>13, :vz=>17)) ==
-                Dict(:s=>1:3, :r=>4:4, :z=>1:2, :sn=>1:1, :vperp=>1:2, :vpa=>1:7,
+                Dict(:s=>1:3, :r=>4:4, :z=>1:2, :sn=>1:1, :mu=>1:2, :vpa=>1:7,
                      :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
             @test get_best_ranges(4, 8, (:s,:r,:z),
-                                  Dict(:s=>3, :r=>4, :z=>5, :sn=>1, :vperp=>2, :vpa=>7,
+                                  Dict(:s=>3, :r=>4, :z=>5, :sn=>1, :mu=>2, :vpa=>7,
                                        :vzeta=>11, :vr=>13, :vz=>17)) ==
-                Dict(:s=>1:3, :r=>1:1, :z=>3:5, :sn=>1:1, :vperp=>1:2, :vpa=>1:7,
+                Dict(:s=>1:3, :r=>1:1, :z=>3:5, :sn=>1:1, :mu=>1:2, :vpa=>1:7,
                      :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
             @test get_best_ranges(5, 8, (:s,:r,:z),
-                                  Dict(:s=>3, :r=>4, :z=>5, :sn=>1, :vperp=>2, :vpa=>7,
+                                  Dict(:s=>3, :r=>4, :z=>5, :sn=>1, :mu=>2, :vpa=>7,
                                        :vzeta=>11, :vr=>13, :vz=>17)) ==
-                Dict(:s=>1:3, :r=>2:2, :z=>3:5, :sn=>1:1, :vperp=>1:2, :vpa=>1:7,
+                Dict(:s=>1:3, :r=>2:2, :z=>3:5, :sn=>1:1, :mu=>1:2, :vpa=>1:7,
                      :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
             @test get_best_ranges(6, 8, (:s,:r,:z),
-                                  Dict(:s=>3, :r=>4, :z=>5, :sn=>1, :vperp=>2, :vpa=>7,
+                                  Dict(:s=>3, :r=>4, :z=>5, :sn=>1, :mu=>2, :vpa=>7,
                                        :vzeta=>11, :vr=>13, :vz=>17)) ==
-                Dict(:s=>1:3, :r=>3:3, :z=>3:5, :sn=>1:1, :vperp=>1:2, :vpa=>1:7,
+                Dict(:s=>1:3, :r=>3:3, :z=>3:5, :sn=>1:1, :mu=>1:2, :vpa=>1:7,
                      :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
             @test get_best_ranges(7, 8, (:s,:r,:z),
-                                  Dict(:s=>3, :r=>4, :z=>5, :sn=>1, :vperp=>2, :vpa=>7,
+                                  Dict(:s=>3, :r=>4, :z=>5, :sn=>1, :mu=>2, :vpa=>7,
                                        :vzeta=>11, :vr=>13, :vz=>17)) ==
-                Dict(:s=>1:3, :r=>4:4, :z=>3:5, :sn=>1:1, :vperp=>1:2, :vpa=>1:7,
+                Dict(:s=>1:3, :r=>4:4, :z=>3:5, :sn=>1:1, :mu=>1:2, :vpa=>1:7,
                      :vzeta=>1:11, :vr=>1:13, :vz=>1:17)
         end
         @testset "debug_setup_loop_ranges_split_one_combination" begin
             debug_setup_loop_ranges_split_one_combination!(
-                0, 2, (:s, :z), :s; s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
+                0, 2, (:s, :z), :s; s=2, r=3, z=4, sn=5, mu=7, vpa=11, vzeta=13,
                 vr=17, vz=19)
 
             @test loop_ranges_store[()].s == 1:2
@@ -189,7 +189,7 @@ function runtests()
             @test loop_ranges_store[(:s,:r,:z)].z == 1:4
 
             debug_setup_loop_ranges_split_one_combination!(
-                1, 2, (:s, :z), :s; s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
+                1, 2, (:s, :z), :s; s=2, r=3, z=4, sn=5, mu=7, vpa=11, vzeta=13,
                 vr=17, vz=19)
 
             @test loop_ranges_store[()].s == 1:0
@@ -225,7 +225,7 @@ function runtests()
             @test loop_ranges_store[(:s,:r,:z)].z == 1:0
 
             debug_setup_loop_ranges_split_one_combination!(
-                0, 4, (:r, :z), :r, :z; s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
+                0, 4, (:r, :z), :r, :z; s=2, r=3, z=4, sn=5, mu=7, vpa=11, vzeta=13,
                 vr=17, vz=19)
 
             @test loop_ranges_store[()].s == 1:2
@@ -261,7 +261,7 @@ function runtests()
             @test loop_ranges_store[(:s,:r,:z)].z == 1:4
 
             debug_setup_loop_ranges_split_one_combination!(
-                1, 4, (:r, :z), :r, :z; s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
+                1, 4, (:r, :z), :r, :z; s=2, r=3, z=4, sn=5, mu=7, vpa=11, vzeta=13,
                 vr=17, vz=19)
 
             @test loop_ranges_store[()].s == 1:0
@@ -297,7 +297,7 @@ function runtests()
             @test loop_ranges_store[(:s,:r,:z)].z == 1:0
 
             debug_setup_loop_ranges_split_one_combination!(
-                2, 4, (:r, :z), :r, :z; s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
+                2, 4, (:r, :z), :r, :z; s=2, r=3, z=4, sn=5, mu=7, vpa=11, vzeta=13,
                 vr=17, vz=19)
 
             @test loop_ranges_store[()].s == 1:0
@@ -333,7 +333,7 @@ function runtests()
             @test loop_ranges_store[(:s,:r,:z)].z == 1:0
 
             debug_setup_loop_ranges_split_one_combination!(
-                3, 4, (:r, :z), :r, :z; s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
+                3, 4, (:r, :z), :r, :z; s=2, r=3, z=4, sn=5, mu=7, vpa=11, vzeta=13,
                 vr=17, vz=19)
 
             @test loop_ranges_store[()].s == 1:0
@@ -369,7 +369,7 @@ function runtests()
             @test loop_ranges_store[(:s,:r,:z)].z == 1:0
 
             debug_setup_loop_ranges_split_one_combination!(
-                3, 8, (:s, :r, :z), :s, :r, :z; s=2, r=3, z=4, sn=5, vperp=7, vpa=11, vzeta=13,
+                3, 8, (:s, :r, :z), :s, :r, :z; s=2, r=3, z=4, sn=5, mu=7, vpa=11, vzeta=13,
                 vr=17, vz=19)
 
             @test loop_ranges_store[()].s == 1:0

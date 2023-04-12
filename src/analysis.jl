@@ -45,7 +45,7 @@ Currently only evaluates condition for the first species: is=1
 
 In normalised form (normalised variables suffixed with 'N'):
 vpa = cref vpaN
-vperp = cref vperpN
+mu = cref^2 muN/ Bref
 ne = nref neN
 Te = Tref TeN
 F = FN nref / cref^3 pi^3/2
@@ -63,7 +63,7 @@ Note that `integrate_over_vspace()` includes the 1/pi^3/2 factor already.
 1D1V
 ----
 
-The 1D1V code evolves the marginalised distribution function f = ∫d^2vperp F so the
+The 1D1V code evolves the marginalised distribution function f = ∫ B d mu F so the
 Chodura condition becomes
 ∫dvpa f/vpa^2 ≤ mi ne/Te
 
@@ -83,7 +83,7 @@ TeN / (2 neN sqrt(pi)) * ∫dvpaN fN / vpaN^2 ≤ 1
 
 Note that `integrate_over_vspace()` includes the 1/sqrt(pi) factor already.
 """
-function check_Chodura_condition(run_name, vpa_grid, vpa_wgts, vperp_grid, vperp_wgts,
+function check_Chodura_condition(run_name, vpa_grid, vpa_wgts, mu_grid, mu_wgts,
                                  dens, T_e, Er, geometry, z_bc, nblocks)
 
     if z_bc != "wall"
@@ -128,10 +128,10 @@ function check_Chodura_condition(run_name, vpa_grid, vpa_wgts, vperp_grid, vperp
                 vpabar[ivpa] = 1.0
             end
         end
-
+        Bmag = geometry.Bmag
         @views lower_result[ir,it] =
             integrate_over_vspace(f_lower[:,:,1,ir,is,it], vpabar, -2, vpa_wgts,
-                                  vperp_grid, 0, vperp_wgts)
+                                  mu_grid, 0, mu_wgts, Bmag)
         if it == ntime
             println("check vpabar lower", vpabar)
             println("result lower ", lower_result[ir,it])
@@ -148,10 +148,10 @@ function check_Chodura_condition(run_name, vpa_grid, vpa_wgts, vperp_grid, vperp
                 vpabar[ivpa] = 1.0
             end
         end
-
+        Bmag = geometry.Bmag
         @views upper_result[ir,it] =
             integrate_over_vspace(f_upper[:,:,end,ir,is,it], vpabar, -2, vpa_wgts,
-                                  vperp_grid, 0, vperp_wgts)
+                                  mu_grid, 0, mu_wgts, Bmag)
         if it == ntime
             println("check vpabar upper ", vpabar)
             println("result upper ", upper_result[ir,it])

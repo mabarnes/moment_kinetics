@@ -51,12 +51,12 @@ const animate_f_vs_z0_vpa =  false #ttrue
 const animate_deltaf_vs_vpa_z0 = false
 # if animate_f_vs_vpa_r = true, create animation of f(vpa,r) at different time slices
 const animate_f_vs_vpa_r =  true
-# if animate_f_vs_vperp_z = true, create animation of f(vperp,z) at different time slices
-const animate_f_vs_vperp_z =  true
-# if animate_f_vs_vperp_r = true, create animation of f(vperp,r) at different time slices
-const animate_f_vs_vperp_r = false
-# if animate_f_vs_vperp_vpa = true, create animation of f(vperp,vpa) at different time slices
-const animate_f_vs_vperp_vpa = false
+# if animate_f_vs_mu_z = true, create animation of f(mu,z) at different time slices
+const animate_f_vs_mu_z =  true
+# if animate_f_vs_mu_r = true, create animation of f(mu,r) at different time slices
+const animate_f_vs_mu_r = false
+# if animate_f_vs_mu_vpa = true, create animation of f(mu,vpa) at different time slices
+const animate_f_vs_mu_vpa = false
 # if animate_f_vs_r_z = true, create animation of f(r,z) at different time slices
 const animate_f_vs_r_z = true
 # if animate_f_vs_vz_z = true, create animation of f(vz,z) at different time slices
@@ -97,9 +97,9 @@ const itime_max = -1
 # ivpa0 is the ivpa index used when plotting data at a single vpa location
 # by default, it will be set to cld(nvpa,3) unless a non-negative value provided here
 const ivpa0 = -1
-# ivperp0 is the ivperp index used when plotting data at a single vperp location
-# by default, it will be set to cld(nvperp,3) unless a non-negative value provided here
-const ivperp0 = -1
+# imu0 is the imu index used when plotting data at a single mu location
+# by default, it will be set to cld(nmu,3) unless a non-negative value provided here
+const imu0 = -1
 # iz0 is the iz index used when plotting data at a single z location
 # by default, it will be set to cld(nz,3) unless a non-negative value provided here
 const iz0 = 0
@@ -122,13 +122,13 @@ pp = pp_input(calculate_frequencies, plot_phi0_vs_t, plot_phi_vs_z_t,
     animate_dens_vs_z, animate_upar_vs_z,
     animate_f_vs_vpa_z, animate_f_vs_vpa_z0, animate_f_vs_z0_vpa,
     animate_deltaf_vs_vpa_z, animate_deltaf_vs_vpa_z0, animate_deltaf_vs_vpa_z0,
-    animate_f_vs_vpa_r, animate_f_vs_vperp_z, animate_f_vs_vperp_r,
-    animate_f_vs_vperp_vpa, animate_f_vs_r_z, animate_f_vs_vz_z, animate_f_vs_vr_r,
+    animate_f_vs_vpa_r, animate_f_vs_mu_z, animate_f_vs_mu_r,
+    animate_f_vs_mu_vpa, animate_f_vs_r_z, animate_f_vs_vz_z, animate_f_vs_vr_r,
     animate_Er_vs_r_z, animate_Ez_vs_r_z, animate_phi_vs_r_z,
     plot_phi_vs_r0_z, plot_Ez_vs_r0_z, plot_wall_Ez_vs_r, plot_Er_vs_r0_z, plot_wall_Er_vs_r,
 	plot_density_vs_r0_z, plot_wall_density_vs_r, plot_density_vs_r_z, animate_density_vs_r_z,
 	plot_parallel_flow_vs_r0_z, plot_wall_parallel_flow_vs_r, plot_parallel_flow_vs_r_z, animate_parallel_flow_vs_r_z,
 	plot_parallel_pressure_vs_r0_z, plot_wall_parallel_pressure_vs_r, plot_parallel_pressure_vs_r_z, animate_parallel_pressure_vs_r_z,
-    plot_wall_pdf, nwrite_movie, itime_min, itime_max, ivpa0, ivperp0, iz0, ir0, ivz0, ivr0, ivzeta0)
+    plot_wall_pdf, nwrite_movie, itime_min, itime_max, ivpa0, imu0, iz0, ir0, ivz0, ivr0, ivzeta0)
 
 end

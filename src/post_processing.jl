@@ -216,11 +216,11 @@ function get_coords_nelement(scan_input)
     z_nelement = get(scan_input, "z_nelement", 1)
     r_nelement = get(scan_input, "r_nelement", 1)
     vpa_nelement = get(scan_input, "vpa_nelement", 1)
-    vperp_nelement = get(scan_input, "vperp_nelement", 1)
+    mu_nelement = get(scan_input, "mu_nelement", 1)
     vz_nelement = get(scan_input, "vz_nelement", 1)
     vr_nelement = get(scan_input, "vr_nelement", 1)
     vzeta_nelement = get(scan_input, "vzeta_nelement", 1)
-    return z_nelement, r_nelement, vpa_nelement, vperp_nelement, vz_nelement, vr_nelement, vzeta_nelement
+    return z_nelement, r_nelement, vpa_nelement, mu_nelement, vz_nelement, vr_nelement, vzeta_nelement
 end
 
 function get_geometry_and_composition(scan_input,n_ion_species,n_neutral_species)
@@ -286,7 +286,7 @@ function analyze_and_plot_data(path)
     # get run-time input/composition/geometry/collisions/species info for convenience
     # run_name_internal, output_dir, evolve_moments,
     #    t_input, z_input, r_input,
-    #    vpa_input, vperp_input, gyrophase_input,
+    #    vpa_input, mu_input, gyrophase_input,
     #    vz_input, vr_input, vzeta_input,
     #    composition, species, collisions, geometry, drive_input = mk_input(scan_input)
 
@@ -350,7 +350,7 @@ function analyze_and_plot_data(path)
     # load local velocity coordinate data from `dfns' cdf
     # these values are currently the same for all blocks 
     nvpa, nvpa_global, vpa_local, vpa_local_wgts, Lvpa = load_coordinate_data(fid_pdfs, "vpa")
-    nvperp, nvperp_global, vperp_local, vperp_local_wgts, Lvperp = load_coordinate_data(fid_pdfs, "vperp")
+    nmu, nmu_global, mu_local, mu_local_wgts, Lmu = load_coordinate_data(fid_pdfs, "mu")
     if n_neutral_species > 0
         nvzeta, nvzeta_global, vzeta_local, vzeta_local_wgts, Lvzeta = load_coordinate_data(fid_pdfs, "vzeta")
         nvr, nvr_global, vr_local, vr_local_wgts, Lvr = load_coordinate_data(fid_pdfs, "vr")
@@ -364,15 +364,15 @@ function analyze_and_plot_data(path)
     geometry, composition = get_geometry_and_composition(scan_input,n_ion_species,n_neutral_species)
 	
 	# initialise the post-processing input options
-    nwrite_movie, itime_min, itime_max, ivpa0, ivperp0, iz0, ir0,
-        ivz0, ivr0, ivzeta0 = init_postprocessing_options(pp, nvpa, nvperp, nz_global, nr_global, nvz, nvr, nvzeta, ntime)
+    nwrite_movie, itime_min, itime_max, ivpa0, imu0, iz0, ir0,
+        ivz0, ivr0, ivzeta0 = init_postprocessing_options(pp, nvpa, nmu, nz_global, nr_global, nvz, nvr, nvzeta, ntime)
     # load full (z,r,t) fields data
     #phi, Er, Ez = load_fields_data(fid)
     # load full (z,r,species,t) charged particle velocity moments data
     #density, parallel_flow, parallel_pressure, parallel_heat_flux,
     #    thermal_speed, evolve_ppar = load_charged_particle_moments_data(fid)
     
-    # load full (vpa,vperp,z,r,species,t) charged particle distribution function (pdf) data
+    # load full (vpa,mu,z,r,species,t) charged particle distribution function (pdf) data
     ff = load_pdf_data(fid_pdfs)
     # load neutral particle data
     #if n_neutral_species > 0
@@ -390,7 +390,7 @@ function analyze_and_plot_data(path)
             parallel_pressure[:,ir0,:,:],
             parallel_heat_flux[:,ir0,:,:],
             thermal_speed[:,ir0,:,:],
-            ff[:,ivperp0,:,ir0,:,:],
+            ff[:,imu0,:,ir0,:,:],
             n_ion_species, evolve_ppar, nvpa, vpa, vpa_wgts,
             nz, z, z_wgts, Lz, ntime, time)
     end
@@ -407,8 +407,8 @@ function analyze_and_plot_data(path)
     diagnostics_chodura = false
     if diagnostics_chodura
         Chodura_ratio_lower, Chodura_ratio_upper =
-            check_Chodura_condition(run_name, vpa_local, vpa_local_wgts, vperp_local,
-                                    vperp_local_wgts,
+            check_Chodura_condition(run_name, vpa_local, vpa_local_wgts, mu_local,
+                                    mu_local_wgts,
                                     moment_at_pdf_times(density, ntime, ntime_pdfs),
                                     composition.T_e,
                                     moment_at_pdf_times(Er, ntime, ntime_pdfs),
@@ -440,7 +440,7 @@ function analyze_and_plot_data(path)
     # only if ntime == ntime_pdfs & data on one shared memory process
     if ntime == ntime_pdfs && nr_global == nr_local && nz_global == nz_local
         spec_type = "ion"
-        plot_charged_pdf(ff, vpa_local, vperp_local, z_local, r_local, ivpa0, ivperp0, iz0, ir0,
+        plot_charged_pdf(ff, vpa_local, mu_local, z_local, r_local, ivpa0, imu0, iz0, ir0,
             spec_type, n_ion_species,
             itime_min, itime_max, nwrite_movie, run_name, pp)
         # make plots and animations of the neutral pdf
@@ -708,7 +708,7 @@ function compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,spec
     nr_local, nr_global, r_local, r_wgts_local, Lr = load_coordinate_data(fid, "r", printout=false)
     # velocity grid data on iblock=0 (same for all blocks)
     nvpa, _, vpa, vpa_wgts, Lvpa = load_coordinate_data(fid, "vpa", printout=false)
-    nvperp, _, vperp, vperp_wgts, Lvperp = load_coordinate_data(fid, "vperp", printout=false)
+    nmu, _, mu, mu_wgts, Lmu = load_coordinate_data(fid, "mu", printout=false)
     # load time data (unique to pdf, may differ to moment values depending on user nwrite_dfns value)
     ntime, time = load_time_data(fid, printout=false)
     close(fid)
@@ -728,14 +728,14 @@ function compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,spec
         imin_r = min(1,r_irank) + 1
         imin_z = min(1,z_irank) + 1
         for it in 1:ntime, ir in imin_r:nr_local, iz in imin_z:nz_local,
-                ivperp in 1:nvperp, ivpa in 1:nvpa
+                imu in 1:nmu, ivpa in 1:nvpa
 
-            pdf_sym = dfni_func(vpa[ivpa],vperp[ivperp],z_local[iz],r_local[ir],time[it])
-            pdf_norm[it] += (pdf[ivpa,ivperp,iz,ir,is,it] - pdf_sym)^2
+            pdf_sym = dfni_func(vpa[ivpa],mu[imu],z_local[iz],r_local[ir],time[it])
+            pdf_norm[it] += (pdf[ivpa,imu,iz,ir,is,it] - pdf_sym)^2
         end
     end
     for it in 1:ntime
-        pdf_norm[it] = sqrt(pdf_norm[it]/(nr_global*nz_global*nvpa*nvperp))
+        pdf_norm[it] = sqrt(pdf_norm[it]/(nr_global*nz_global*nvpa*nmu))
     end
     println("test: ",file_string,": ",spec_string," ",pdf_norm)
     @views plot(time, pdf_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=norm_label) #, yaxis=:log)
@@ -754,8 +754,8 @@ function compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,spec
             nz_local, _, z_local, z_wgts_local, Lz = load_coordinate_data(fid_pdfs, "z")
             nr_local, _, r_local, r_wgts_local, Lr = load_coordinate_data(fid_pdfs, "r")
             pdf_sym_array = copy(vpa)
-            # plot a thermal vperp on line plots
-            ivperp0 = max(floor(mk_int,nvperp/3),1)
+            # plot a thermal mu on line plots
+            imu0 = max(floor(mk_int,nmu/3),1)
             # plot a typical r on line plots
             ir0 = 1
             # plot at the wall boundary 
@@ -767,11 +767,11 @@ function compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,spec
                 zlabel="wall+"
             end
             for ivpa in 1:nvpa
-                pdf_sym_array[ivpa] = dfni_func(vpa[ivpa],vperp[ivperp0],z_local[iz0],r_local[ir0],time[ntime])
+                pdf_sym_array[ivpa] = dfni_func(vpa[ivpa],mu[imu0],z_local[iz0],r_local[ir0],time[ntime])
             end
-            # plot f(vpa,ivperp0,iz_wall,ir0,is,itime) at the wall
-            @views plot(vpa, [pdf[:,ivperp0,iz0,ir0,is,ntime], pdf_sym_array], xlabel=L"v_{\|\|}/L_{v_{\|\|}}", ylabel=L"f_i", label=["num" "sym"])
-            outfile = string(run_name, "_pdf(vpa,vperp0,iz_"*zlabel*",ir0)_sym_vs_vpa.pdf")
+            # plot f(vpa,imu0,iz_wall,ir0,is,itime) at the wall
+            @views plot(vpa, [pdf[:,imu0,iz0,ir0,is,ntime], pdf_sym_array], xlabel=L"v_{\|\|}/L_{v_{\|\|}}", ylabel=L"f_i", label=["num" "sym"])
+            outfile = string(run_name, "_pdf(vpa,mu0,iz_"*zlabel*",ir0)_sym_vs_vpa.pdf")
             savefig(outfile) 
         end
         close(fid_pdfs)
@@ -827,7 +827,7 @@ function compare_neutral_pdf_symbolic_test(run_name,manufactured_solns_list,spec
     return pdf_norm
 end
 
-function init_postprocessing_options(pp, nvpa, nvperp, nz, nr, nvz, nvr, nvzeta, ntime)
+function init_postprocessing_options(pp, nvpa, nmu, nz, nr, nvz, nvr, nvzeta, ntime)
     print("Initializing the post-processing input options...")
     # nwrite_movie is the stride used when making animations
     nwrite_movie = pp.nwrite_movie
@@ -858,12 +858,12 @@ function init_postprocessing_options(pp, nvpa, nvperp, nz, nr, nvz, nvr, nvzeta,
     else
         iz0 = cld(nz,3)
     end
-    # ivperp0 is the iz index used when plotting data at a single vperp location
-    # by default, it will be set to cld(nvperp,3) unless a non-negative value provided
-    if pp.ivperp0 > 0
-        ivperp0 = pp.ivperp0
+    # imu0 is the iz index used when plotting data at a single mu location
+    # by default, it will be set to cld(nmu,3) unless a non-negative value provided
+    if pp.imu0 > 0
+        imu0 = pp.imu0
     else
-        ivperp0 = cld(nvperp,3)
+        imu0 = cld(nmu,3)
     end
     # ivpa0 is the iz index used when plotting data at a single vpa location
     # by default, it will be set to cld(nvpa,3) unless a non-negative value provided
@@ -894,7 +894,7 @@ function init_postprocessing_options(pp, nvpa, nvperp, nz, nr, nvz, nvr, nvzeta,
         ivzeta0 = cld(nvzeta,3)
     end
     println("done.")
-    return nwrite_movie, itime_min, itime_max, ivpa0, ivperp0, iz0, ir0, ivz0, ivr0, ivzeta0
+    return nwrite_movie, itime_min, itime_max, ivpa0, imu0, iz0, ir0, ivz0, ivr0, ivzeta0
 end
 
 """
@@ -1572,8 +1572,8 @@ end
 """
 plots various slices of the ion pdf (1d and 2d, stills and animations)
 """
-function plot_charged_pdf(pdf, vpa, vperp, z, r,
-    ivpa0, ivperp0, iz0, ir0,
+function plot_charged_pdf(pdf, vpa, mu, z, r,
+    ivpa0, imu0, iz0, ir0,
     spec_type, n_species,
     itime_min, itime_max, nwrite_movie, run_name, pp)
 
@@ -1585,7 +1585,7 @@ function plot_charged_pdf(pdf, vpa, vperp, z, r,
     # create strings to help identify phase space location and species
     # in file names
     ivpa0_string = string("_ivpa0", string(ivpa0))
-    ivperp0_string = string("_ivperp0", string(ivperp0))
+    imu0_string = string("_imu0", string(imu0))
     iz0_string = string("_iz0", string(iz0))
     ir0_string = string("_ir0", string(ir0))
     # create animations of the ion pdf
@@ -1595,64 +1595,64 @@ function plot_charged_pdf(pdf, vpa, vperp, z, r,
         else
             spec_string = string("_", spec_type)
         end
-        # make a gif animation of f(vpa,z,t) at a given (vperp,r) location
+        # make a gif animation of f(vpa,z,t) at a given (mu,r) location
         if pp.animate_f_vs_vpa_z
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-                @views heatmap(z, vpa, pdf[:,ivperp0,:,ir0,is,i], xlabel="z", ylabel="vpa", c = :deep, interpolation = :cubic)
+                @views heatmap(z, vpa, pdf[:,imu0,:,ir0,is,i], xlabel="z", ylabel="vpa", c = :deep, interpolation = :cubic)
             end
-            outfile = string(run_name, "_pdf_vs_vpa_z", ivperp0_string, ir0_string, spec_string, ".gif")
+            outfile = string(run_name, "_pdf_vs_vpa_z", imu0_string, ir0_string, spec_string, ".gif")
             gif(anim, outfile, fps=5)
             
-            @views heatmap(z, vpa, pdf[:,ivperp0,:,ir0,is,itime_max], xlabel="z", ylabel="vpa", c = :deep, interpolation = :cubic)
-            outfile = string(run_name, "_pdf_vs_vpa_z", ivperp0_string, ir0_string, spec_string, ".pdf")
+            @views heatmap(z, vpa, pdf[:,imu0,:,ir0,is,itime_max], xlabel="z", ylabel="vpa", c = :deep, interpolation = :cubic)
+            outfile = string(run_name, "_pdf_vs_vpa_z", imu0_string, ir0_string, spec_string, ".pdf")
             savefig(outfile)
         end
-        # make a gif animation of f(vpa,r,t) at a given (vperp,z) location
+        # make a gif animation of f(vpa,r,t) at a given (mu,z) location
         if pp.animate_f_vs_vpa_r
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-                @views heatmap(r, vpa, pdf[:,ivperp0,iz0,:,is,i], xlabel="r", ylabel="vpa", c = :deep, interpolation = :cubic)
+                @views heatmap(r, vpa, pdf[:,imu0,iz0,:,is,i], xlabel="r", ylabel="vpa", c = :deep, interpolation = :cubic)
             end
-            outfile = string(run_name, "_pdf_vs_vpa_r", ivperp0_string, iz0_string, spec_string, ".gif")
+            outfile = string(run_name, "_pdf_vs_vpa_r", imu0_string, iz0_string, spec_string, ".gif")
             gif(anim, outfile, fps=5)
             
-            @views heatmap(r, vpa, pdf[:,ivperp0,iz0,:,is,itime_max], xlabel="r", ylabel="vpa", c = :deep, interpolation = :cubic)
-            outfile = string(run_name, "_pdf_vs_vpa_r", ivperp0_string, iz0_string, spec_string, ".pdf")
+            @views heatmap(r, vpa, pdf[:,imu0,iz0,:,is,itime_max], xlabel="r", ylabel="vpa", c = :deep, interpolation = :cubic)
+            outfile = string(run_name, "_pdf_vs_vpa_r", imu0_string, iz0_string, spec_string, ".pdf")
             savefig(outfile)
         end
-        # make a gif animation of f(vperp,z,t) at a given (vpa,r) location
-        if pp.animate_f_vs_vperp_z
+        # make a gif animation of f(mu,z,t) at a given (vpa,r) location
+        if pp.animate_f_vs_mu_z
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-                @views heatmap(z, vperp, pdf[ivpa0,:,:,ir0,is,i], xlabel="z", ylabel="vperp", c = :deep, interpolation = :cubic)
+                @views heatmap(z, mu, pdf[ivpa0,:,:,ir0,is,i], xlabel="z", ylabel="mu", c = :deep, interpolation = :cubic)
             end
-            outfile = string(run_name, "_pdf_vs_vperp_z", ivpa0_string, ir0_string, spec_string, ".gif")
+            outfile = string(run_name, "_pdf_vs_mu_z", ivpa0_string, ir0_string, spec_string, ".gif")
             gif(anim, outfile, fps=5)
         end
-        # make a gif animation of f(vperp,r,t) at a given (vpa,z) location
-        if pp.animate_f_vs_vperp_r
+        # make a gif animation of f(mu,r,t) at a given (vpa,z) location
+        if pp.animate_f_vs_mu_r
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-                @views heatmap(r, vperp, pdf[ivpa0,:,iz0,:,is,i], xlabel="r", ylabel="vperp", c = :deep, interpolation = :cubic)
+                @views heatmap(r, mu, pdf[ivpa0,:,iz0,:,is,i], xlabel="r", ylabel="mu", c = :deep, interpolation = :cubic)
             end
-            outfile = string(run_name, "_pdf_vs_vperp_r", ivperp0_string, iz0_string, spec_string, ".gif")
+            outfile = string(run_name, "_pdf_vs_mu_r", imu0_string, iz0_string, spec_string, ".gif")
             gif(anim, outfile, fps=5)
         end
-        # make a gif animation of f(vpa,vperp,t) at a given (z,r) location
-        if pp.animate_f_vs_vperp_vpa
+        # make a gif animation of f(vpa,mu,t) at a given (z,r) location
+        if pp.animate_f_vs_mu_vpa
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-                @views heatmap(vperp, vpa, pdf[:,:,iz0,ir0,is,i], xlabel="vperp", ylabel="vpa", c = :deep, interpolation = :cubic)
+                @views heatmap(mu, vpa, pdf[:,:,iz0,ir0,is,i], xlabel="mu", ylabel="vpa", c = :deep, interpolation = :cubic)
             end
-            outfile = string(run_name, "_pdf_vs_vperp_vpa", iz0_string, ir0_string, spec_string, ".gif")
+            outfile = string(run_name, "_pdf_vs_mu_vpa", iz0_string, ir0_string, spec_string, ".gif")
             gif(anim, outfile, fps=5)
         end
-        # make a gif animation of f(z,r,t) at a given (vpa,vperp) location
+        # make a gif animation of f(z,r,t) at a given (vpa,mu) location
         if pp.animate_f_vs_r_z
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-                @views heatmap(r, z, pdf[ivpa0,ivperp0,:,:,is,i], xlabel="r", ylabel="z", c = :deep, interpolation = :cubic)
+                @views heatmap(r, z, pdf[ivpa0,imu0,:,:,is,i], xlabel="r", ylabel="z", c = :deep, interpolation = :cubic)
             end
-            outfile = string(run_name, "_pdf_vs_r_z", ivpa0_string, ivperp0_string, spec_string, ".gif")
+            outfile = string(run_name, "_pdf_vs_r_z", ivpa0_string, imu0_string, spec_string, ".gif")
             gif(anim, outfile, fps=5)
             
-            @views heatmap(r, z, pdf[ivpa0,ivperp0,:,:,is,itime_max], xlabel="r", ylabel="z", c = :deep, interpolation = :cubic)
-            outfile = string(run_name, "_pdf_vs_r_z", ivpa0_string, ivperp0_string, spec_string, ".pdf")
+            @views heatmap(r, z, pdf[ivpa0,imu0,:,:,is,itime_max], xlabel="r", ylabel="z", c = :deep, interpolation = :cubic)
+            outfile = string(run_name, "_pdf_vs_r_z", ivpa0_string, imu0_string, spec_string, ".pdf")
             savefig(outfile)
         end
     end
@@ -1891,7 +1891,7 @@ function plot_charged_pdf_2D_at_wall(run_name)
     nblocks, iblock = load_block_data(fid, printout=false)
     # velocity grid data on iblock=0 (same for all blocks)
     nvpa, _, vpa, vpa_wgts, Lvpa = load_coordinate_data(fid, "vpa", printout=false)
-    nvperp, _, vperp, vperp_wgts, Lvperp = load_coordinate_data(fid, "vperp", printout=false)
+    nmu, _, mu, mu_wgts, Lmu = load_coordinate_data(fid, "mu", printout=false)
     # load time data (unique to pdf, may differ to moment values depending on user nwrite_dfns value)
     ntime, time = load_time_data(fid, printout=false)
     # load species data 
@@ -1902,8 +1902,8 @@ function plot_charged_pdf_2D_at_wall(run_name)
     itime0 = ntime
     # plot a thermal vpa on line plots
     ivpa0 = floor(mk_int,nvpa/3)
-    # plot a thermal vperp on line plots
-    ivperp0 = max(1,floor(mk_int,nvperp/3))
+    # plot a thermal mu on line plots
+    imu0 = max(1,floor(mk_int,nmu/3))
     # plot a typical r on line plots
     ir0 = 1
     
@@ -1934,32 +1934,32 @@ function plot_charged_pdf_2D_at_wall(run_name)
             for is in 1:n_ion_species
                 description = "_ion_spec"*string(is)*"_"
                 
-                # plot f(vpa,ivperp0,iz_wall,ir0,is,itime) at the wall
-                @views plot(vpa, pdf[:,ivperp0,iz_wall,ir0,is,itime0], xlabel=L"v_{\|\|}/L_{v_{\|\|}}", ylabel=L"f_i")
-                outfile = string(run_name, "_pdf(vpa,vperp0,iz_"*zlabel*",ir0)"*description*"_vs_vpa.pdf")
+                # plot f(vpa,imu0,iz_wall,ir0,is,itime) at the wall
+                @views plot(vpa, pdf[:,imu0,iz_wall,ir0,is,itime0], xlabel=L"v_{\|\|}/L_{v_{\|\|}}", ylabel=L"f_i")
+                outfile = string(run_name, "_pdf(vpa,mu0,iz_"*zlabel*",ir0)"*description*"_vs_vpa.pdf")
                 savefig(outfile) 
                 
-                # plot f(vpa,vperp,iz_wall,ir0,is,itime) at the wall                
-                @views heatmap(vperp, vpa, pdf[:,:,iz_wall,ir0,is,itime0], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                # plot f(vpa,mu,iz_wall,ir0,is,itime) at the wall                
+                @views heatmap(mu, vpa, pdf[:,:,iz_wall,ir0,is,itime0], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
                 windowsize = (360,240), margin = 15pt)
-                outfile = string(run_name, "_pdf(vpa,vperp,iz_"*zlabel*",ir0)"*description*"_vs_vperp_vpa.pdf")
+                outfile = string(run_name, "_pdf(vpa,mu,iz_"*zlabel*",ir0)"*description*"_vs_mu_vpa.pdf")
                 savefig(outfile)
                 
-                # plot f(vpa,ivperp0,z,ir0,is,itime) near the wall                
-                @views heatmap(z_local, vpa, pdf[:,ivperp0,:,ir0,is,itime0], xlabel=L"z", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                # plot f(vpa,imu0,z,ir0,is,itime) near the wall                
+                @views heatmap(z_local, vpa, pdf[:,imu0,:,ir0,is,itime0], xlabel=L"z", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
                 windowsize = (360,240), margin = 15pt)
-                outfile = string(run_name, "_pdf(vpa,ivperp0,z_"*zlabel*",ir0)"*description*"_vs_z_vpa.pdf")
+                outfile = string(run_name, "_pdf(vpa,imu0,z_"*zlabel*",ir0)"*description*"_vs_z_vpa.pdf")
                 savefig(outfile)
 
-                # plot f(ivpa0,ivperp0,z,r,is,itime) near the wall                  
+                # plot f(ivpa0,imu0,z,r,is,itime) near the wall                  
                 if nr_local > 1
-                    @views heatmap(r_local, z_local, pdf[ivpa0,ivperp0,:,:,is,itime0], xlabel=L"r", ylabel=L"z", c = :deep, interpolation = :cubic,
+                    @views heatmap(r_local, z_local, pdf[ivpa0,imu0,:,:,is,itime0], xlabel=L"r", ylabel=L"z", c = :deep, interpolation = :cubic,
                     windowsize = (360,240), margin = 15pt)
-                    outfile = string(run_name, "_pdf(ivpa0,ivperp0,z_"*zlabel*",r)"*description*"_vs_r_z.pdf")
+                    outfile = string(run_name, "_pdf(ivpa0,imu0,z_"*zlabel*",r)"*description*"_vs_r_z.pdf")
                     savefig(outfile)
-                    @views heatmap(r_local, vpa, pdf[:,ivperp0,iz_wall,:,is,itime0], xlabel=L"r", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                    @views heatmap(r_local, vpa, pdf[:,imu0,iz_wall,:,is,itime0], xlabel=L"r", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
                     windowsize = (360,240), margin = 15pt)
-                    outfile = string(run_name, "_pdf(vpa,ivperp0,z_"*zlabel*",r)"*description*"_vs_r_vpa.pdf")
+                    outfile = string(run_name, "_pdf(vpa,imu0,z_"*zlabel*",r)"*description*"_vs_r_vpa.pdf")
                     savefig(outfile)
                 end
             end

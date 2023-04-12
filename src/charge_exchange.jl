@@ -9,11 +9,11 @@ using ..looping
 
 """
 """
-function charge_exchange_collisions_1V!(f_out, f_neutral_out, fvec_in, composition, vpa, vperp, z, r,
+function charge_exchange_collisions_1V!(f_out, f_neutral_out, fvec_in, composition, vpa, mu, z, r,
                                      charge_exchange_frequency, dt)
     # This routine assumes a 1D model with:
     # nvz = nvpa and identical vz and vpa grids 
-    # nvperp = nvr = nveta = 1
+    # nmu = nvr = nveta = 1
     # constant charge_exchange_frequency independent of species
     @boundscheck vpa.n == size(f_neutral_out,1) || throw(BoundsError(f_neutral_out))
     @boundscheck 1 == size(f_neutral_out,2) || throw(BoundsError(f_neutral_out))
@@ -27,7 +27,7 @@ function charge_exchange_collisions_1V!(f_out, f_neutral_out, fvec_in, compositi
     @boundscheck r.n == size(f_out,4) || throw(BoundsError(f_out))
     @boundscheck composition.n_ion_species == size(f_out,5) || throw(BoundsError(f_out))
 
-    # keep vpa vperp vz vr vzeta local so that 
+    # keep vpa mu vz vr vzeta local so that 
     # vpa loop below can also be used for vz 
     begin_r_z_vpa_region()
     
@@ -53,7 +53,7 @@ function charge_exchange_collisions_1V!(f_out, f_neutral_out, fvec_in, compositi
     end
 end
 
-function charge_exchange_collisions_3V!(f_out, f_neutral_out, f_neutral_gav_in, f_charged_vrvzvzeta_in, fvec_in, composition, vz, vr, vzeta, vpa, vperp, z, r,
+function charge_exchange_collisions_3V!(f_out, f_neutral_out, f_neutral_gav_in, f_charged_vrvzvzeta_in, fvec_in, composition, vz, vr, vzeta, vpa, mu, z, r,
                                      charge_exchange_frequency, dt)
     # This routine assumes a 3V model with:
     @boundscheck vz.n == size(f_neutral_out,1) || throw(BoundsError(f_neutral_out))
@@ -69,26 +69,26 @@ function charge_exchange_collisions_3V!(f_out, f_neutral_out, f_neutral_gav_in, 
     @boundscheck r.n == size(f_charged_vrvzvzeta_in,5) || throw(BoundsError(f_charged_vrvzvzeta_in))
     @boundscheck composition.n_neutral_species == size(f_charged_vrvzvzeta_in,6) || throw(BoundsError(f_charged_vrvzvzeta_in))
     @boundscheck vpa.n == size(f_out,1) || throw(BoundsError(f_out))
-    @boundscheck vperp.n == size(f_out,2) || throw(BoundsError(f_out))
+    @boundscheck mu.n == size(f_out,2) || throw(BoundsError(f_out))
     @boundscheck z.n == size(f_out,3) || throw(BoundsError(f_out))
     @boundscheck r.n == size(f_out,4) || throw(BoundsError(f_out))
     @boundscheck composition.n_ion_species == size(f_out,5) || throw(BoundsError(f_out))
     @boundscheck vpa.n == size(f_neutral_gav_in,1) || throw(BoundsError(f_neutral_gav_in))
-    @boundscheck vperp.n == size(f_neutral_gav_in,2) || throw(BoundsError(f_neutral_gav_in))
+    @boundscheck mu.n == size(f_neutral_gav_in,2) || throw(BoundsError(f_neutral_gav_in))
     @boundscheck z.n == size(f_neutral_gav_in,3) || throw(BoundsError(f_neutral_gav_in))
     @boundscheck r.n == size(f_neutral_gav_in,4) || throw(BoundsError(f_neutral_gav_in))
     @boundscheck composition.n_neutral_species == size(f_neutral_gav_in,5) || throw(BoundsError(f_neutral_gav_in))
 
-    begin_s_r_z_vperp_vpa_region()
-    @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+    begin_s_r_z_mu_vpa_region()
+    @loop_s_r_z_mu_vpa is ir iz imu ivpa begin
         # apply CX collisions to all ion species
         # for each ion species, obtain affect of charge exchange collisions
         # with all of the neutral species
         for isn ∈ 1:composition.n_neutral_species
-            f_out[ivpa,ivperp,iz,ir,is] +=
+            f_out[ivpa,imu,iz,ir,is] +=
                 dt*charge_exchange_frequency*(
-                    f_neutral_gav_in[ivpa,ivperp,iz,ir,isn]*fvec_in.density[iz,ir,is]
-                    - fvec_in.pdf[ivpa,ivperp,iz,ir,is]*fvec_in.density_neutral[iz,ir,isn])
+                    f_neutral_gav_in[ivpa,imu,iz,ir,isn]*fvec_in.density[iz,ir,is]
+                    - fvec_in.pdf[ivpa,imu,iz,ir,is]*fvec_in.density_neutral[iz,ir,isn])
         end
     end
     begin_sn_r_z_vzeta_vr_vz_region()

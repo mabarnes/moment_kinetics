@@ -147,30 +147,31 @@ end
 NB: if this function is called and if dens_updated is false, then
 the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
 """
-function update_density!(dens, pdf, vpa, vperp, z, r, composition)
+function update_density!(dens, pdf, vpa, mu, z, r, composition, geometry)
     
     begin_s_r_z_region()
     
     n_species = size(pdf,5)
     @boundscheck n_species == size(dens,3) || throw(BoundsError(dens))
     @loop_s is begin
-        @views update_density_species!(dens[:,:,is], pdf[:,:,:,:,is], vpa, vperp, z, r)
+        @views update_density_species!(dens[:,:,is], pdf[:,:,:,:,is], vpa, mu, z, r, geometry)
     end
 end
 
 """
 calculate the updated density (dens) for a given species
 """
-function update_density_species!(dens, ff, vpa, vperp, z, r)
+function update_density_species!(dens, ff, vpa, mu, z, r, geometry)
     @boundscheck vpa.n == size(ff, 1) || throw(BoundsError(ff))
-    @boundscheck vperp.n == size(ff, 2) || throw(BoundsError(ff))
+    @boundscheck mu.n == size(ff, 2) || throw(BoundsError(ff))
     @boundscheck z.n == size(ff, 3) || throw(BoundsError(ff))
     @boundscheck r.n == size(ff, 4) || throw(BoundsError(ff))
     @boundscheck z.n == size(dens, 1) || throw(BoundsError(dens))
     @boundscheck r.n == size(dens, 2) || throw(BoundsError(dens))
     @loop_r_z ir iz begin
+        Bmag = geometry.Bmag 
         dens[iz,ir] = integrate_over_vspace(@view(ff[:,:,iz,ir]), 
-         vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
+         vpa.grid, 0, vpa.wgts, mu.grid, 0, mu.wgts, Bmag)
     end
     return nothing
 end
@@ -179,37 +180,38 @@ end
 NB: if this function is called and if upar_updated is false, then
 the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
 """
-function update_upar!(upar, pdf, vpa, vperp, z, r, composition)
+function update_upar!(upar, pdf, vpa, mu, z, r, composition, geometry)
     
     begin_s_r_z_region()
     
     n_species = size(pdf,5)
     @boundscheck n_species == size(upar,3) || throw(BoundsError(upar))
     @loop_s is begin
-        @views update_upar_species!(upar[:,:,is], pdf[:,:,:,:,is], vpa, vperp, z, r)
+        @views update_upar_species!(upar[:,:,is], pdf[:,:,:,:,is], vpa, mu, z, r, geometry)
     end
 end
 
 """
 calculate the updated parallel flow (upar) for a given species
 """
-function update_upar_species!(upar, ff, vpa, vperp, z, r)
+function update_upar_species!(upar, ff, vpa, mu, z, r, geometry)
     @boundscheck vpa.n == size(ff, 1) || throw(BoundsError(ff))
-    @boundscheck vperp.n == size(ff, 2) || throw(BoundsError(ff))
+    @boundscheck mu.n == size(ff, 2) || throw(BoundsError(ff))
     @boundscheck z.n == size(ff, 3) || throw(BoundsError(ff))
     @boundscheck r.n == size(ff, 4) || throw(BoundsError(ff))
     @boundscheck z.n == size(upar, 1) || throw(BoundsError(upar))
     @boundscheck r.n == size(upar, 2) || throw(BoundsError(upar))
     @loop_r_z ir iz begin
+        Bmag = geometry.Bmag
         upar[iz,ir] = integrate_over_vspace(@view(ff[:,:,iz,ir]), 
-         vpa.grid, 1, vpa.wgts, vperp.grid, 0, vperp.wgts)
+         vpa.grid, 1, vpa.wgts, mu.grid, 0, mu.wgts, Bmag)
     end
     return nothing
 end
 
 """
 """
-function update_ppar!(ppar, pdf, vpa, vperp, z, r, composition)
+function update_ppar!(ppar, pdf, vpa, mu, z, r, composition, geometry)
     @boundscheck composition.n_ion_species == size(ppar,3) || throw(BoundsError(ppar))
     @boundscheck r.n == size(ppar,2) || throw(BoundsError(ppar))
     @boundscheck z.n == size(ppar,1) || throw(BoundsError(ppar))
@@ -217,23 +219,24 @@ function update_ppar!(ppar, pdf, vpa, vperp, z, r, composition)
     begin_s_r_z_region()
     
     @loop_s is begin
-        @views update_ppar_species!(ppar[:,:,is], pdf[:,:,:,:,is], vpa, vperp, z, r)
+        @views update_ppar_species!(ppar[:,:,is], pdf[:,:,:,:,is], vpa, mu, z, r, geometry)
     end
 end
 
 """
 calculate the updated parallel pressure (ppar) for a given species
 """
-function update_ppar_species!(ppar, ff, vpa, vperp, z, r)
+function update_ppar_species!(ppar, ff, vpa, mu, z, r, geometry)
     @boundscheck vpa.n == size(ff, 1) || throw(BoundsError(ff))
-    @boundscheck vperp.n == size(ff, 2) || throw(BoundsError(ff))
+    @boundscheck mu.n == size(ff, 2) || throw(BoundsError(ff))
     @boundscheck z.n == size(ff, 3) || throw(BoundsError(ff))
     @boundscheck r.n == size(ff, 4) || throw(BoundsError(ff))
     @boundscheck z.n == size(ppar, 1) || throw(BoundsError(ppar))
     @boundscheck r.n == size(ppar, 2) || throw(BoundsError(ppar))
     @loop_r_z ir iz begin
+        Bmag = geometry.Bmag
         ppar[iz,ir] = integrate_over_vspace(@view(ff[:,:,iz,ir]), 
-         vpa.grid, 2, vpa.wgts, vperp.grid, 0, vperp.wgts)
+         vpa.grid, 2, vpa.wgts, mu.grid, 0, mu.wgts, Bmag)
     end
     return nothing
 end
@@ -242,31 +245,31 @@ end
 NB: if this function is called and if ppar_updated is false, then
 the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
 """
-function update_qpar!(qpar, pdf, vpa, vperp, z, r, composition)
+function update_qpar!(qpar, pdf, vpa, mu, z, r, composition, geometry)
     @boundscheck composition.n_ion_species == size(qpar,3) || throw(BoundsError(qpar))
     
     begin_s_r_z_region()
 
     @loop_s is begin
-        @views update_qpar_species!(qpar[:,:,is], pdf[:,:,:,:,is], vpa, vperp, z, r)
+        @views update_qpar_species!(qpar[:,:,is], pdf[:,:,:,:,is], vpa, mu, z, r, geometry)
     end
 end
 
 """
 calculate the updated parallel heat flux (qpar) for a given species
 """
-function update_qpar_species!(qpar, ff, vpa, vperp, z, r)
+function update_qpar_species!(qpar, ff, vpa, mu, z, r, geometry)
     @boundscheck r.n == size(ff, 4) || throw(BoundsError(ff))
     @boundscheck z.n == size(ff, 3) || throw(BoundsError(ff))
-    @boundscheck vperp.n == size(ff, 2) || throw(BoundsError(ff))
+    @boundscheck mu.n == size(ff, 2) || throw(BoundsError(ff))
     @boundscheck vpa.n == size(ff, 1) || throw(BoundsError(ff))
     @boundscheck r.n == size(qpar, 2) || throw(BoundsError(qpar))
     @boundscheck z.n == size(qpar, 1) || throw(BoundsError(qpar))
     
     @loop_r_z ir iz begin
-        # old ! qpar[iz,ir] = integrate_over_vspace(@view(ff[:,iz,ir]), vpa.grid, 3, vpa.wgts) * vpanorm[iz,ir]^4
+        Bmag = geometry.Bmag
         qpar[iz,ir] = integrate_over_vspace(@view(ff[:,:,iz,ir]),
-         vpa.grid, 3, vpa.wgts, vperp.grid, 0, vperp.wgts)
+         vpa.grid, 3, vpa.wgts, mu.grid, 0, mu.wgts, Bmag)
     end
     return nothing
 end
@@ -513,9 +516,12 @@ end
 
 """
 computes the integral over vpa of the integrand, using the input vpa_wgts
+ factor of Bmag comes from Jacobian of (vpa,mu) integral
+
 """
-function integrate_over_vspace(args...)
-    return integral(args...)/sqrt(pi)
+# MRH perhaps we should now move (1/sqrt(pi)) weight factors in functions below to velocity weights 
+function integrate_over_vspace(integrand, vpa_grid, p_vpa, wgts_vpa, mu_grid, p_mu, wgts_mu, Bmag)
+    return Bmag*integral(integrand, vpa_grid, p_vpa, wgts_vpa, mu_grid, p_mu, wgts_mu)/sqrt(pi)
 end
 # factor of Pi^3/2 assumes normalisation f^N_neutral = Pi^3/2 c_neutral^3 f_neutral / n_ref 
 # For 1D case we multiply wgts of vr & vzeta by sqrt(pi) to return
@@ -530,10 +536,10 @@ this could be made more efficient for the case that dz/dt = vpa is time-independ
 but it has been left general for the cases where, e.g., dz/dt = wpa*vth + upar
 varies in time
 """
-function integrate_over_positive_vpa(integrand, dzdt, vpa_wgts, wgts_mod, vperp_grid, vperp_wgts)
+function integrate_over_positive_vpa(integrand, dzdt, vpa_wgts, wgts_mod, mu_grid, mu_wgts, Bmag)
     # define the nvpa variable for convenience
     nvpa = length(vpa_wgts)
-    nvperp = length(vperp_wgts)
+    nmu = length(mu_wgts)
     # define an approximation to zero that allows for finite-precision arithmetic
     zero = -1.0e-8
     # if dzdt at the maximum vpa index is negative, then dzdt < 0 everywhere
@@ -544,7 +550,7 @@ function integrate_over_positive_vpa(integrand, dzdt, vpa_wgts, wgts_mod, vperp_
     else
         # do bounds checks on arrays that will be used in the below loop
         @boundscheck nvpa == size(integrand,1) || throw(BoundsError(integrand))
-        @boundscheck nvperp == size(integrand,2) || throw(BoundsError(integrand))
+        @boundscheck nmu == size(integrand,2) || throw(BoundsError(integrand))
         @boundscheck nvpa == length(dzdt) || throw(BoundsError(dzdt))
         @boundscheck nvpa == length(wgts_mod) || throw(BoundsError(wgts_mod))
         # initialise the integration weights, wgts_mod, to be the input vpa_wgts
@@ -564,10 +570,10 @@ function integrate_over_positive_vpa(integrand, dzdt, vpa_wgts, wgts_mod, vperp_
             end
         end
         @views velocity_integral = integrate_over_vspace(integrand[ivpa_zero:end,:], 
-          dzdt[ivpa_zero:end], 0, wgts_mod[ivpa_zero:end], vperp_grid, 0, vperp_wgts)
+          dzdt[ivpa_zero:end], 0, wgts_mod[ivpa_zero:end], mu_grid, 0, mu_wgts, Bmag)
         # n.b. we pass more arguments than might appear to be required here
         # to avoid needing a special integral function definition
-        # the 0 integers are the powers by which dzdt and vperp_grid are raised to in the integral
+        # the 0 integers are the powers by which dzdt and mu_grid are raised to in the integral
     end
     return velocity_integral
 end
@@ -623,10 +629,10 @@ this could be made more efficient for the case that dz/dt = vpa is time-independ
 but it has been left general for the cases where, e.g., dz/dt = wpa*vth + upar
 varies in time
 """
-function integrate_over_negative_vpa(integrand, dzdt, vpa_wgts, wgts_mod, vperp_grid, vperp_wgts)
-    # define the nvpa nvperp variables for convenience
+function integrate_over_negative_vpa(integrand, dzdt, vpa_wgts, wgts_mod, mu_grid, mu_wgts, Bmag)
+    # define the nvpa nmu variables for convenience
     nvpa = length(vpa_wgts)
-    nvperp = length(vperp_wgts)
+    nmu = length(mu_wgts)
     # define an approximation to zero that allows for finite-precision arithmetic
     zero = 1.0e-8
     # if dzdt at the mimimum vpa index is positive, then dzdt > 0 everywhere
@@ -637,7 +643,7 @@ function integrate_over_negative_vpa(integrand, dzdt, vpa_wgts, wgts_mod, vperp_
     else
         # do bounds checks on arrays that will be used in the below loop
         @boundscheck nvpa == size(integrand,1) || throw(BoundsError(integrand))
-        @boundscheck nvperp == size(integrand,2) || throw(BoundsError(integrand))
+        @boundscheck nmu == size(integrand,2) || throw(BoundsError(integrand))
         @boundscheck nvpa == length(dzdt) || throw(BoundsError(dzdt))
         @boundscheck nvpa == length(wgts_mod) || throw(BoundsError(wgts_mod))
         # initialise the integration weights, wgts_mod, to be the input vpa_wgts
@@ -657,10 +663,10 @@ function integrate_over_negative_vpa(integrand, dzdt, vpa_wgts, wgts_mod, vperp_
             end
         end
         @views velocity_integral = integrate_over_vspace(integrand[1:ivpa_zero,:], 
-                dzdt[1:ivpa_zero], 0, wgts_mod[1:ivpa_zero], vperp_grid, 0, vperp_wgts)
+                dzdt[1:ivpa_zero], 0, wgts_mod[1:ivpa_zero], mu_grid, 0, mu_wgts, Bmag)
         # n.b. we pass more arguments than might appear to be required here
         # to avoid needing a special integral function definition
-        # the 0 integers are the powers by which dzdt and vperp_grid are raised to in the integral
+        # the 0 integers are the powers by which dzdt and mu_grid are raised to in the integral
     end
     return velocity_integral
 end
@@ -704,14 +710,14 @@ function integrate_over_negative_vz(integrand, dzdt, vz_wgts, wgts_mod,
                 dzdt[1:ivz_zero], 0, wgts_mod[1:ivz_zero], vr_grid, 0, vr_wgts, vzeta_grid, 0, vzeta_wgts)
         # n.b. we pass more arguments than might appear to be required here
         # to avoid needing a special integral function definition
-        # the 0 integers are the powers by which dzdt and vperp_grid are raised to in the integral
+        # the 0 integers are the powers by which dzdt and mu_grid are raised to in the integral
     end
     return velocity_integral
 end
 
 """
 """
-function enforce_moment_constraints!(fvec_new, fvec_old, vpa, vperp, z, r, composition, moments, dummy)
+function enforce_moment_constraints!(fvec_new, fvec_old, vpa, mu, z, r, composition, geometry, moments, dummy)
     #global @. dens_hist += fvec_old.density
     #global n_hist += 1
     
@@ -740,46 +746,48 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, vperp, z, r, compo
                 fold_view = @view(fvec_old.pdf[:,:,iz,ir,is])
 
                 # first calculate all of the integrals involving the updated pdf fvec_new.pdf
+                # get Bmag at this ir, iz (currently a constant for all r z)
+                Bmag = geometry.Bmag
                 density_integral = integrate_over_vspace(fnew_view, 
-                 vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
+                 vpa.grid, 0, vpa.wgts, mu.grid, 0, mu.wgts, Bmag)
                 if moments.evolve_upar
                     upar_integral = integrate_over_vspace(fnew_view, 
-                     vpa.grid, 1, vpa.wgts, vperp.grid, 0, vperp.wgts)
+                     vpa.grid, 1, vpa.wgts, mu.grid, 0, mu.wgts, Bmag)
                 end
                 if moments.evolve_ppar
                     ppar_integral = integrate_over_vspace(fnew_view, 
-                     vpa.grid, 2, vpa.wgts, vperp.grid, 0, vperp.wgts) - 0.5*density_integral
+                     vpa.grid, 2, vpa.wgts, mu.grid, 0, mu.wgts, Bmag) - 0.5*density_integral
                 end
                 # update the pdf to account for the density-conserving correction
                 @. fnew_view += fold_view * (1.0 - density_integral)
                 if moments.evolve_upar
                     # next form the even part of the old distribution function that is needed
                     # to ensure momentum and energy conservation
-                    @. dummy.dummy_vpavperp = fold_view
-                    @loop_vperp ivperp begin
-                        reverse!(dummy.dummy_vpavperp[:,ivperp])
-                        @. dummy.dummy_vpavperp[:,ivperp] = 
-                         0.5*(dummy.dummy_vpavperp[:,ivperp] + fold_view[:,ivperp])
+                    @. dummy.dummy_vpamu = fold_view
+                    @loop_mu imu begin
+                        reverse!(dummy.dummy_vpamu[:,imu])
+                        @. dummy.dummy_vpamu[:,imu] = 
+                         0.5*(dummy.dummy_vpamu[:,imu] + fold_view[:,imu])
                     end
                     # calculate the integrals involving this even pdf
-                    vpa2_moment = integrate_over_vspace(dummy.dummy_vpavperp,
-                     vpa.grid, 2, vpa.wgts, vperp.grid, 0, vperp.wgts)
+                    vpa2_moment = integrate_over_vspace(dummy.dummy_vpamu,
+                     vpa.grid, 2, vpa.wgts, mu.grid, 0, mu.wgts, Bmag)
                     upar_integral /= vpa2_moment
                     if moments.evolve_ppar
-                        vpa4_moment = integrate_over_vspace(dummy.dummy_vpavperp, vpa.grid, 4, vpa.wgts, vperp.grid, 0, vperp.wgts) - 0.5 * vpa2_moment
+                        vpa4_moment = integrate_over_vspace(dummy.dummy_vpamu, vpa.grid, 4, vpa.wgts, mu.grid, 0, mu.wgts, Bmag) - 0.5 * vpa2_moment
                         ppar_integral /= vpa4_moment
                     end
                     # update the pdf to account for the momentum-conserving correction
-                    @loop_vperp ivperp begin
-                        @. fnew_view[:,ivperp] -= dummy.dummy_vpavperp[:,ivperp] * vpa.grid * upar_integral
+                    @loop_mu imu begin
+                        @. fnew_view[:,imu] -= dummy.dummy_vpamu[:,imu] * vpa.grid * upar_integral
                     end
                     if moments.evolve_ppar
-                        @loop_vperp ivperp begin
+                        @loop_mu imu begin
                             # update the pdf to account for the energy-conserving correction
                             #@. fnew_view -= vpa.scratch * (vpa.grid^2 - 0.5) * ppar_integral
                             # Until julia-1.8 is released, prefer x*x to x^2 to avoid
                             # extra allocations when broadcasting.
-                            @. fnew_view[:,ivperp] -= dummy.dummy_vpavperp[:,ivperp] * (vpa.grid * vpa.grid - 0.5) * ppar_integral
+                            @. fnew_view[:,imu] -= dummy.dummy_vpamu[:,imu] * (vpa.grid * vpa.grid - 0.5) * ppar_integral
                         end
                     end
                 end
@@ -802,21 +810,21 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, vperp, z, r, compo
                 @loop_z iz begin
                     fvec_old.temp_z_s[iz,ir,is] = fvec_new.density[iz,ir,is] / moments.vth[iz,ir,is]
                 end
-                @loop_z_vperp_vpa iz ivperp ivpa begin
-                    fvec_old.pdf[ivpa,ivperp,iz,ir,is] = fvec_new.pdf[ivpa,ivperp,iz,ir,is] * fvec_old.temp_z_s[iz,ir,is]
+                @loop_z_mu_vpa iz imu ivpa begin
+                    fvec_old.pdf[ivpa,imu,iz,ir,is] = fvec_new.pdf[ivpa,imu,iz,ir,is] * fvec_old.temp_z_s[iz,ir,is]
                 end
             end
         end
     elseif moments.evolve_density
-        @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
-            fvec_old.pdf[ivpa,ivperp,iz,ir,is] = fvec_new.pdf[ivpa,ivperp,iz,ir,is] * fvec_new.density[iz,ir,is]
+        @loop_s_r_z_mu_vpa is ir iz imu ivpa begin
+            fvec_old.pdf[ivpa,imu,iz,ir,is] = fvec_new.pdf[ivpa,imu,iz,ir,is] * fvec_new.density[iz,ir,is]
         end
     else
-        @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
-            fvec_old.pdf[ivpa,ivperp,iz,ir,is] = fvec_new.pdf[ivpa,ivperp,iz,ir,is]
+        @loop_s_r_z_mu_vpa is ir iz imu ivpa begin
+            fvec_old.pdf[ivpa,imu,iz,ir,is] = fvec_new.pdf[ivpa,imu,iz,ir,is]
         end
     end
-    update_qpar!(moments.qpar, moments.qpar_updated, fvec_old.pdf, vpa, vperp, z, r, composition, moments.vpa_norm_fac)
+    update_qpar!(moments.qpar, moments.qpar_updated, fvec_old.pdf, vpa, mu, z, r, composition, moments.vpa_norm_fac, geometry)
 end
 
 """

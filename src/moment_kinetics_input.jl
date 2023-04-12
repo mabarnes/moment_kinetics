@@ -71,7 +71,7 @@ function mk_input(scan_input=Dict())
     #   reference value using J_||e + J_||i = 0 at z = 0
     electron_physics = get(scan_input, "electron_physics", boltzmann_electron_response)
     
-    z, r, vpa, vperp, gyrophase, vz, vr, vzeta, species, composition, drive, evolve_moments, collisions, geometry =
+    z, r, vpa, mu, gyrophase, vz, vr, vzeta, species, composition, drive, evolve_moments, collisions, geometry =
         load_defaults(n_ion_species, n_neutral_species, electron_physics)
 
     # this is the prefix for all output files associated with this run
@@ -248,23 +248,23 @@ function mk_input(scan_input=Dict())
     # supported options are "chebyshev_pseudospectral" and "finite_difference"
     vpa.discretization = get(scan_input, "vpa_discretization", "chebyshev_pseudospectral")
 
-    # overwrite some default parameters related to the vperp grid
+    # overwrite some default parameters related to the mu grid
     # ngrid is the number of grid points per element
-    vperp.ngrid = get(scan_input, "vperp_ngrid", 1)
+    mu.ngrid = get(scan_input, "mu_ngrid", 1)
     # nelement is the number of elements
-    vperp.nelement_global = get(scan_input, "vperp_nelement", 1)
-	# do not parallelise vperp with distributed-memory MPI
-    vperp.nelement_local = vperp.nelement_global 
-    # L is the box length in units of vthermal_species
-    vperp.L = get(scan_input, "vperp_L", 8.0*sqrt(species.charged[1].initial_temperature))
+    mu.nelement_global = get(scan_input, "mu_nelement", 1)
+	# do not parallelise mu with distributed-memory MPI
+    mu.nelement_local = mu.nelement_global 
+    # L is the box length in units of vthermal_species^2/Bref
+    mu.L = get(scan_input, "mu_L", 32.0*species.charged[1].initial_temperature/geometry.Bmag)
     # determine the boundary condition
     # only supported option at present is "zero" and "periodic"
     # MRH probably need to add new bc option here
-    # MRH no vperp bc currently imposed so option below not used
-    vperp.bc = get(scan_input, "vperp_bc", "periodic")
-    # determine the discretization option for the vperp grid
-    # supported options are "finite_difference_vperp" "chebyshev_pseudospectral_vperp"
-    vperp.discretization = get(scan_input, "vperp_discretization", "chebyshev_pseudospectral_vperp")
+    # MRH no mu bc currently imposed so option below not used
+    mu.bc = get(scan_input, "mu_bc", "periodic")
+    # determine the discretization option for the mu grid
+    # supported options are "finite_difference_mu" "chebyshev_pseudospectral_mu"
+    mu.discretization = get(scan_input, "mu_discretization", "chebyshev_pseudospectral_mu")
     
     # overwrite some default parameters related to the gyrophase grid
     # ngrid is the number of grid points per element
@@ -361,10 +361,10 @@ function mk_input(scan_input=Dict())
         vpa.advection.frequency, vpa.advection.oscillation_amplitude)
     vpa_immutable = grid_input("vpa", vpa.ngrid, vpa.nelement_global, vpa.nelement_local, 1, 0, vpa.L,
         vpa.discretization, vpa.fd_option, vpa.bc, vpa_advection_immutable, MPI.COMM_NULL)
-    vperp_advection_immutable = advection_input(vperp.advection.option, vperp.advection.constant_speed,
-        vperp.advection.frequency, vperp.advection.oscillation_amplitude)
-    vperp_immutable = grid_input("vperp", vperp.ngrid, vperp.nelement_global, vperp.nelement_local, 1, 0, vperp.L,
-        vperp.discretization, vperp.fd_option, vperp.bc, vperp_advection_immutable, MPI.COMM_NULL)
+    mu_advection_immutable = advection_input(mu.advection.option, mu.advection.constant_speed,
+        mu.advection.frequency, mu.advection.oscillation_amplitude)
+    mu_immutable = grid_input("mu", mu.ngrid, mu.nelement_global, mu.nelement_local, 1, 0, mu.L,
+        mu.discretization, mu.fd_option, mu.bc, mu_advection_immutable, MPI.COMM_NULL)
     gyrophase_advection_immutable = advection_input(gyrophase.advection.option, gyrophase.advection.constant_speed,
         gyrophase.advection.frequency, gyrophase.advection.oscillation_amplitude)
     gyrophase_immutable = grid_input("gyrophase", gyrophase.ngrid, gyrophase.nelement_global, gyrophase.nelement_local, 1, 0, gyrophase.L,
@@ -453,7 +453,7 @@ function mk_input(scan_input=Dict())
 
     # return immutable structs for z, vpa, species and composition
     all_inputs = (io_immutable, evolve_moments, t_input,
-                  z_immutable, r_immutable, vpa_immutable, vperp_immutable, gyrophase_immutable, vz_immutable, vr_immutable, vzeta_immutable,
+                  z_immutable, r_immutable, vpa_immutable, mu_immutable, gyrophase_immutable, vz_immutable, vr_immutable, vzeta_immutable,
                   composition, species_immutable, collisions, geometry, drive_immutable, num_diss_params)
     println(io, "\nAll inputs returned from mk_input():")
     println(io, all_inputs)
@@ -591,42 +591,42 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
         discretization_option_vpa, finite_difference_option_vpa, boundary_option_vpa,
         advection_vpa)
     ############################################################################
-    ################### parameters related to the vperp grid #####################
-    # ngrid_vperp is the number of grid points per element
-    ngrid_vperp = 1
-    # nelement_vperp is the number of elements
-    nelement_vperp = 1
-    # L_vperp is the box length in units of vthermal_species
-    L_vperp = 6.0
+    ################### parameters related to the mu grid #####################
+    # ngrid_mu is the number of grid points per element
+    ngrid_mu = 1
+    # nelement_mu is the number of elements
+    nelement_mu = 1
+    # L_mu is the box length in units of vthermal_species
+    L_mu = 6.0
     # determine the boundary condition
     # currently supported options are "zero" and "periodic"
     # MRH probably need new bc option here 
-    #boundary_option_vperp = "zero"
-    boundary_option_vperp = "periodic"
-    # determine the discretization option for the vperp grid
-    # supported options are "finite_difference_vperp"
-    discretization_option_vperp = "finite_difference_vperp"
-    # if discretization_option_vperp = "finite_difference_vperp", then
-    # finite_difference_option_vperp determines the finite difference scheme to be used
+    #boundary_option_mu = "zero"
+    boundary_option_mu = "periodic"
+    # determine the discretization option for the mu grid
+    # supported options are "finite_difference_mu"
+    discretization_option_mu = "finite_difference_mu"
+    # if discretization_option_mu = "finite_difference_mu", then
+    # finite_difference_option_mu determines the finite difference scheme to be used
     # supported options are "third_order_upwind", "second_order_upwind" and "first_order_upwind"
-    #finite_difference_option_vperp = "second_order_upwind"
-    finite_difference_option_vperp = "third_order_upwind"
-    # determine the option used for the advection speed in vperp
+    #finite_difference_option_mu = "second_order_upwind"
+    finite_difference_option_mu = "third_order_upwind"
+    # determine the option used for the advection speed in mu
     # supported options are "constant" and "oscillating",
-    advection_option_vperp = "default"
-    # constant advection speed in vperp to use with advection_option_vperp = "constant"
-    advection_speed_vperp = 0.0
-    # for advection_option_vperp = "oscillating", advection speed is of form
-    # speed = advection_speed_vperp*(1 + oscillation_amplitude_vperp*sinpi(frequency_vperp*t))
-    frequency_vperp = 1.0
-    oscillation_amplitude_vperp = 1.0
+    advection_option_mu = "default"
+    # constant advection speed in mu to use with advection_option_mu = "constant"
+    advection_speed_mu = 0.0
+    # for advection_option_mu = "oscillating", advection speed is of form
+    # speed = advection_speed_mu*(1 + oscillation_amplitude_mu*sinpi(frequency_mu*t))
+    frequency_mu = 1.0
+    oscillation_amplitude_mu = 1.0
     # mutable struct containing advection speed options/inputs for z
-    advection_vperp = advection_input_mutable(advection_option_vperp, advection_speed_vperp,
-        frequency_vperp, oscillation_amplitude_vperp)
-    # create a mutable structure containing the input info related to the vperp grid
-    vperp = grid_input_mutable("vperp", ngrid_vperp, nelement_vperp, nelement_vperp, L_vperp,
-        discretization_option_vperp, finite_difference_option_vperp, boundary_option_vperp,
-        advection_vperp)
+    advection_mu = advection_input_mutable(advection_option_mu, advection_speed_mu,
+        frequency_mu, oscillation_amplitude_mu)
+    # create a mutable structure containing the input info related to the mu grid
+    mu = grid_input_mutable("mu", ngrid_mu, nelement_mu, nelement_mu, L_mu,
+        discretization_option_mu, finite_difference_option_mu, boundary_option_mu,
+        advection_mu)
     ############################################################################
     ################### parameters related to the gyrophase grid #####################
     # ngrid_gyrophase is the number of grid points per element
@@ -871,7 +871,7 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     rhostar = 0.0 #rhostar of ions for ExB drift
     geometry = geometry_input(Bzed,Bmag,bzed,bzeta,Bzeta,rhostar)
 
-    return z, r, vpa, vperp, gyrophase, vz, vr, vzeta, species, composition, drive, evolve_moments, collisions, geometry
+    return z, r, vpa, mu, gyrophase, vz, vr, vzeta, species, composition, drive, evolve_moments, collisions, geometry
 end
 
 """

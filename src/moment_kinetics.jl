@@ -38,7 +38,7 @@ include("advection.jl")
 include("vpa_advection.jl")
 include("z_advection.jl")
 include("r_advection.jl")
-include("vperp_advection.jl")
+include("mu_advection.jl")
 include("neutral_advection.jl")
 include("charge_exchange.jl")
 include("ionization.jl")
@@ -168,7 +168,7 @@ function setup_moment_kinetics(input_dict::Dict;
     # and check input to catch errors
     io_input, evolve_moments,
         t_input, z_input, r_input,
-        vpa_input, vperp_input, gyrophase_input,
+        vpa_input, mu_input, gyrophase_input,
         vz_input, vr_input, vzeta_input,
         composition, species, collisions,
         geometry, drive_input, num_diss_params  = input
@@ -178,8 +178,8 @@ function setup_moment_kinetics(input_dict::Dict;
     r = define_coordinate(r_input, io_input.parallel_io)
     # initialize vpa grid and write grid point locations to file
     vpa = define_coordinate(vpa_input, io_input.parallel_io)
-    # initialize vperp grid and write grid point locations to file
-    vperp = define_coordinate(vperp_input, io_input.parallel_io)
+    # initialize mu grid and write grid point locations to file
+    mu = define_coordinate(mu_input, io_input.parallel_io)
     # initialize gyrophase grid and write grid point locations to file
     gyrophase = define_coordinate(gyrophase_input, io_input.parallel_io)
     # initialize vz grid and write grid point locations to file
@@ -198,7 +198,7 @@ function setup_moment_kinetics(input_dict::Dict;
         # Non-debug case used for all simulations
         looping.setup_loop_ranges!(block_rank[], block_size[];
                                    s=composition.n_ion_species, sn=n_neutral_loop_size,
-                                   r=r.n, z=z.n, vperp=vperp.n, vpa=vpa.n,
+                                   r=r.n, z=z.n, mu=mu.n, vpa=vpa.n,
                                    vzeta=vzeta.n, vr=vr.n, vz=vz.n)
     else
         if debug_loop_parallel_dims === nothing
@@ -209,34 +209,34 @@ function setup_moment_kinetics(input_dict::Dict;
         debug_setup_loop_ranges_split_one_combination!(
             block_rank[], block_size[], debug_loop_type, debug_loop_parallel_dims...;
             s=composition.n_ion_species, sn=n_neutral_loop_size, r=r.n, z=z.n,
-            vperp=vperp.n, vpa=vpa.n, vzeta=vzeta.n, vr=vr.n, vz=vz.n)
+            mu=mu.n, vpa=vpa.n, vzeta=vzeta.n, vr=vr.n, vz=vz.n)
     end
     # initialize f and the lowest three v-space moments (density, upar and ppar),
     # each of which may be evolved separately depending on input choices.
-    pdf, moments, boundary_distributions = init_pdf_and_moments(vz, vr, vzeta, vpa, vperp, z, r, composition, geometry, species, t_input.n_rk_stages, evolve_moments, t_input.use_manufactured_solns_for_init)
+    pdf, moments, boundary_distributions = init_pdf_and_moments(vz, vr, vzeta, vpa, mu, z, r, composition, geometry, species, t_input.n_rk_stages, evolve_moments, t_input.use_manufactured_solns_for_init)
     # initialize time variable
     code_time = 0.
     # create arrays and do other work needed to setup
     # the main time advance loop -- including normalisation of f by density if requested
 
     moments, fields, spectral_objects, advect_objects,
-    scratch, advance, fp_arrays, scratch_dummy, manufactured_source_list = setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition,
+    scratch, advance, fp_arrays, scratch_dummy, manufactured_source_list = setup_time_advance!(pdf, vz, vr, vzeta, vpa, mu, z, r, composition,
         drive_input, moments, t_input, collisions, species, geometry, boundary_distributions, num_diss_params)
     # setup i/o
-    ascii_io, io_moments, io_dfns = setup_file_io(io_input, vz, vr, vzeta, vpa, vperp, z, r, composition, collisions)
+    ascii_io, io_moments, io_dfns = setup_file_io(io_input, vz, vr, vzeta, vpa, mu, z, r, composition, collisions)
     # write initial data to ascii files
-    write_data_to_ascii(moments, fields, vpa, vperp, z, r, code_time, composition.n_ion_species, composition.n_neutral_species, ascii_io)
+    write_data_to_ascii(moments, fields, vpa, mu, z, r, code_time, composition.n_ion_species, composition.n_neutral_species, ascii_io)
     # write initial data to binary file (netcdf)
 
     write_moments_data_to_binary(moments, fields, code_time, composition.n_ion_species,
         composition.n_neutral_species, io_moments, 1, r, z)
     write_dfns_data_to_binary(pdf.charged.unnorm, pdf.neutral.unnorm, code_time,
-        composition.n_ion_species, composition.n_neutral_species, io_dfns, 1, r, z, vperp,
+        composition.n_ion_species, composition.n_neutral_species, io_dfns, 1, r, z, mu,
         vpa, vzeta, vr, vz)
 
-    begin_s_r_z_vperp_region()
+    begin_s_r_z_mu_region()
 
-    return pdf, scratch, code_time, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
+    return pdf, scratch, code_time, t_input, vz, vr, vzeta, vpa, mu, gyrophase, z, r,
            moments, fields, spectral_objects, advect_objects,
            composition, collisions, geometry, boundary_distributions,
            num_diss_params, advance, fp_arrays, scratch_dummy, manufactured_source_list,

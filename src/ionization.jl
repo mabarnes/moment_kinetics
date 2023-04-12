@@ -11,13 +11,15 @@ using ..looping
 """
 """
 
-function constant_ionization_source!(f_out, vpa, vperp, z, r, composition, collisions, dt)
+function constant_ionization_source!(f_out, vpa, mu, z, r, composition, collisions, dt, geometry)
 
     @boundscheck vpa.n == size(f_out,1) || throw(BoundsError(f_out))
-    @boundscheck vperp.n == size(f_out,2) || throw(BoundsError(f_out))
+    @boundscheck mu.n == size(f_out,2) || throw(BoundsError(f_out))
     @boundscheck z.n == size(f_out,3) || throw(BoundsError(f_out))
     @boundscheck r.n == size(f_out,4) || throw(BoundsError(f_out))
     @boundscheck composition.n_ion_species == size(f_out,5) || throw(BoundsError(f_out))
+    
+    begin_s_r_z_mu_vpa_region()
     
     # Oddly the test in test/harrisonthompson.jl matches the analitical
     # solution (which assumes width=0.0) better with width=0.5 than with,
@@ -26,20 +28,26 @@ function constant_ionization_source!(f_out, vpa, vperp, z, r, composition, colli
     # negative f??
     width = 0.5
     rwidth = 0.25
-    @loop_s is begin
-        @loop_r_z_vpa ir iz ivpa begin
+    Bmag = geometry.Bmag
+    if mu.n > 1 
+        @loop_s_r_z_mu_vpa is ir iz imu ivpa begin
+            rfac = exp( - (r.grid[ir]/rwidth)^2)
+            mu.scratch[imu] = 2.0*Bmag*mu.grid[imu]/width^2
+            f_out[ivpa,1,iz,ir,is] += (dt*rfac*collisions.ionization/(width^3))*exp(-(vpa.grid[ivpa]/width)^2 - mu.scratch[imu])
+        end    
+    else 
+        @loop_s_r_z_vpa is ir iz ivpa begin
             rfac = exp( - (r.grid[ir]/rwidth)^2)
             f_out[ivpa,1,iz,ir,is] += dt*rfac*collisions.ionization/width*exp(-(vpa.grid[ivpa]/width)^2)
         end
     end
 
-
 end 
 
-function ionization_collisions_1V!(f_out, f_neutral_out, fvec_in, vpa, vperp, z, r, composition, collisions, dt)
+function ionization_collisions_1V!(f_out, f_neutral_out, fvec_in, vpa, mu, z, r, composition, collisions, dt)
     # This routine assumes a 1D model with:
     # nvz = nvpa and identical vz and vpa grids 
-    # nvperp = nvr = nveta = 1
+    # nmu = nvr = nveta = 1
     # constant charge_exchange_frequency independent of species
     @boundscheck vpa.n == size(f_neutral_out,1) || throw(BoundsError(f_neutral_out))
     @boundscheck 1 == size(f_neutral_out,2) || throw(BoundsError(f_neutral_out))
@@ -54,7 +62,7 @@ function ionization_collisions_1V!(f_out, f_neutral_out, fvec_in, vpa, vperp, z,
     @boundscheck composition.n_ion_species == size(f_out,5) || throw(BoundsError(f_out))
     
     
-    # keep vpa vperp vz vr vzeta local so that
+    # keep vpa mu vz vr vzeta local so that
     # vpa loop below can also be used for vz
     begin_r_z_vpa_region()
 
@@ -91,7 +99,7 @@ function ionization_collisions_1V!(f_out, f_neutral_out, fvec_in, vpa, vperp, z,
     #end
 end
 
-function ionization_collisions_3V!(f_out, f_neutral_out, f_neutral_gav_in, fvec_in, composition, vz, vr, vzeta, vpa, vperp, z, r, collisions, dt)
+function ionization_collisions_3V!(f_out, f_neutral_out, f_neutral_gav_in, fvec_in, composition, vz, vr, vzeta, vpa, mu, z, r, collisions, dt)
     # This routine assumes a 3V model with:
     @boundscheck vz.n == size(f_neutral_out,1) || throw(BoundsError(f_neutral_out))
     @boundscheck vr.n == size(f_neutral_out,2) || throw(BoundsError(f_neutral_out))
@@ -100,19 +108,19 @@ function ionization_collisions_3V!(f_out, f_neutral_out, f_neutral_gav_in, fvec_
     @boundscheck r.n == size(f_neutral_out,5) || throw(BoundsError(f_neutral_out))
     @boundscheck composition.n_neutral_species == size(f_neutral_out,6) || throw(BoundsError(f_neutral_out))
     @boundscheck vpa.n == size(f_out,1) || throw(BoundsError(f_out))
-    @boundscheck vperp.n == size(f_out,2) || throw(BoundsError(f_out))
+    @boundscheck mu.n == size(f_out,2) || throw(BoundsError(f_out))
     @boundscheck z.n == size(f_out,3) || throw(BoundsError(f_out))
     @boundscheck r.n == size(f_out,4) || throw(BoundsError(f_out))
     @boundscheck composition.n_ion_species == size(f_out,5) || throw(BoundsError(f_out))
     @boundscheck vpa.n == size(f_neutral_gav_in,1) || throw(BoundsError(f_neutral_gav_in))
-    @boundscheck vperp.n == size(f_neutral_gav_in,2) || throw(BoundsError(f_neutral_gav_in))
+    @boundscheck mu.n == size(f_neutral_gav_in,2) || throw(BoundsError(f_neutral_gav_in))
     @boundscheck z.n == size(f_neutral_gav_in,3) || throw(BoundsError(f_neutral_gav_in))
     @boundscheck r.n == size(f_neutral_gav_in,4) || throw(BoundsError(f_neutral_gav_in))
     @boundscheck composition.n_neutral_species == size(f_neutral_gav_in,5) || throw(BoundsError(f_neutral_gav_in))
     
     ionization_frequency = collisions.ionization
     
-    begin_s_r_z_vperp_vpa_region()
+    begin_s_r_z_mu_vpa_region()
 
     #    #if collisions.constant_ionization_rate
     #    #    ## Oddly the test in test/harrisonthompson.jl matches the analitical
@@ -122,8 +130,8 @@ function ionization_collisions_3V!(f_out, f_neutral_out, f_neutral_gav_in, fvec_
     #    #    ## negative f??
     #    #    #width = 0.5
     #    #    #@loop_s is begin
-    #    #    #    #@loop_r_z_vperp_vpa ir iz ivperp ivpa begin
-    #    #    #    #    #f_out[ivpa,ivperp,iz,ir,is] += dt*collisions.ionization/width^3*exp(-((vpa.grid[ivpa]^2 + vperp.grid[ivperp]^2)/width^2))
+    #    #    #    #@loop_r_z_mu_vpa ir iz imu ivpa begin
+    #    #    #    #    #f_out[ivpa,imu,iz,ir,is] += dt*collisions.ionization/width^3*exp(-((vpa.grid[ivpa]^2 + mu.grid[imu]^2)/width^2))
     #    #    #    #end
     #    #    #end
     #    #    #return nothing
@@ -136,9 +144,9 @@ function ionization_collisions_3V!(f_out, f_neutral_out, f_neutral_gav_in, fvec_
     # for ion species we need gyroaveraged neutral pdf, which is not stored in fvec (scratch[istage])
     @loop_s is begin
         for isn ∈ 1:composition.n_neutral_species
-            @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
+            @loop_r_z_mu_vpa ir iz imu ivpa begin
                 # apply ionization collisions to all ion species
-                f_out[ivpa,ivperp,iz,ir,is] += dt*ionization_frequency*f_neutral_gav_in[ivpa,ivperp,iz,ir,isn]*fvec_in.density[iz,ir,is]
+                f_out[ivpa,imu,iz,ir,is] += dt*ionization_frequency*f_neutral_gav_in[ivpa,imu,iz,ir,isn]*fvec_in.density[iz,ir,is]
             end
         end
     end

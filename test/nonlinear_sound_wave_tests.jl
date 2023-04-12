@@ -280,7 +280,7 @@ function run_test(test_input, rtol; args...)
             fid = open_readonly_output_file(path, "dfns")
             
             # load particle distribution function (pdf) data
-            f_charged_vpavperpzrst = load_pdf_data(fid)
+            f_charged_vpamuzrst = load_pdf_data(fid)
             f_neutral_vzvrvzetazrst = load_neutral_pdf_data(fid)
 
             close(fid)
@@ -291,7 +291,7 @@ function run_test(test_input, rtol; args...)
             ppar_charged = ppar_charged_zrst[:,1,:,:]
             qpar_charged = qpar_charged_zrst[:,1,:,:]
             v_t_charged = v_t_charged_zrst[:,1,:,:]
-            f_charged = f_charged_vpavperpzrst[:,1,:,1,:,:]
+            f_charged = f_charged_vpamuzrst[:,1,:,1,:,:]
             n_neutral = n_neutral_zrst[:,1,:,:]
             upar_neutral = upar_neutral_zrst[:,1,:,:]
             ppar_neutral = ppar_neutral_zrst[:,1,:,:]

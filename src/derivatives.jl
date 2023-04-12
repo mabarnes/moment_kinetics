@@ -19,7 +19,7 @@ using ..looping
 Centered derivatives
 df/dr group of rountines for 
 fields & moments -> [z,r]
-dfns (charged) -> [vpa,vperp,z,r,s]
+dfns (charged) -> [vpa,mu,z,r,s]
 dfns (neutrals) -> [vz,vr,vzeta,z,r,sn]
 """
 
@@ -49,7 +49,7 @@ function derivative_r!(dfdr::AbstractArray{mk_float,2}, f::AbstractArray{mk_floa
 end
 
 #df/dr
-#5D version for f[vpa,vperp,z,r,s] -> charged particle dfn (species indexing taken outside this loop)
+#5D version for f[vpa,mu,z,r,s] -> charged particle dfn (species indexing taken outside this loop)
 function derivative_r!(dfdr::AbstractArray{mk_float,5}, f::AbstractArray{mk_float,5},
         dfdr_lower_endpoints::AbstractArray{mk_float,4},
         dfdr_upper_endpoints::AbstractArray{mk_float,4},
@@ -57,11 +57,11 @@ function derivative_r!(dfdr::AbstractArray{mk_float,5}, f::AbstractArray{mk_floa
         r_receive_buffer2::AbstractArray{mk_float,4}, r_spectral, r)
 
 	# differentiate f w.r.t r
-	@loop_s_z_vperp_vpa is iz ivperp ivpa begin
-		@views derivative!(dfdr[ivpa,ivperp,iz,:,is], f[ivpa,ivperp,iz,:,is], r, r_spectral)
+	@loop_s_z_mu_vpa is iz imu ivpa begin
+		@views derivative!(dfdr[ivpa,imu,iz,:,is], f[ivpa,imu,iz,:,is], r, r_spectral)
 		# get external endpoints to reconcile via MPI
-		dfdr_lower_endpoints[ivpa,ivperp,iz,is] = r.scratch_2d[1,1]
-		dfdr_upper_endpoints[ivpa,ivperp,iz,is] = r.scratch_2d[end,end]
+		dfdr_lower_endpoints[ivpa,imu,iz,is] = r.scratch_2d[1,1]
+		dfdr_upper_endpoints[ivpa,imu,iz,is] = r.scratch_2d[end,end]
 	end
 	# now reconcile element boundaries across
 	# processes with large message involving all other dimensions 
@@ -101,7 +101,7 @@ end
 Centered derivatives
 df/dz group of rountines for 
 fields & moments -> [z,r]
-dfns (charged) -> [vpa,vperp,z,r,s]
+dfns (charged) -> [vpa,mu,z,r,s]
 dfns (neutrals) -> [vz,vr,vzeta,z,r,sn]
 """
 
@@ -130,7 +130,7 @@ function derivative_z!(dfdz::AbstractArray{mk_float,2}, f::AbstractArray{mk_floa
 	
 end
 
-#5D version for f[vpa,vperp,z,r,s] -> dfn charged particles
+#5D version for f[vpa,mu,z,r,s] -> dfn charged particles
 function derivative_z!(dfdz::AbstractArray{mk_float,5}, f::AbstractArray{mk_float,5},
         dfdz_lower_endpoints::AbstractArray{mk_float,4},
         dfdz_upper_endpoints::AbstractArray{mk_float,4},
@@ -138,11 +138,11 @@ function derivative_z!(dfdz::AbstractArray{mk_float,5}, f::AbstractArray{mk_floa
         z_receive_buffer::AbstractArray{mk_float,4}, z_spectral, z)
 
 	# differentiate f w.r.t z
-	@loop_s_r_vperp_vpa is ir ivperp ivpa begin
-		@views derivative!(dfdz[ivpa,ivperp,:,ir,is], f[ivpa,ivperp,:,ir,is], z, z_spectral)
+	@loop_s_r_mu_vpa is ir imu ivpa begin
+		@views derivative!(dfdz[ivpa,imu,:,ir,is], f[ivpa,imu,:,ir,is], z, z_spectral)
 		# get external endpoints to reconcile via MPI
-		dfdz_lower_endpoints[ivpa,ivperp,ir,is] = z.scratch_2d[1,1]
-		dfdz_upper_endpoints[ivpa,ivperp,ir,is] = z.scratch_2d[end,end]
+		dfdz_lower_endpoints[ivpa,imu,ir,is] = z.scratch_2d[1,1]
+		dfdz_upper_endpoints[ivpa,imu,ir,is] = z.scratch_2d[end,end]
 	end
 	# now reconcile element boundaries across
 	# processes with large message involving all y 
@@ -181,12 +181,12 @@ end
 """
 Upwind derivatives 
 df/dr group of rountines for 
-dfns (charged) -> [vpa,vperp,z,r,s]
+dfns (charged) -> [vpa,mu,z,r,s]
 dfns (neutrals) -> [vz,vr,vzeta,z,r,sn]
 """
 
 #df/dr
-#5D version for f[vpa,vperp,z,r,s] -> charged particle dfn (species indexing taken outside this loop)
+#5D version for f[vpa,mu,z,r,s] -> charged particle dfn (species indexing taken outside this loop)
 function derivative_r!(dfdr::AbstractArray{mk_float,5}, f::AbstractArray{mk_float,5},
         advect::T, adv_fac_lower_buffer::AbstractArray{mk_float,4},
         adv_fac_upper_buffer::AbstractArray{mk_float,4},
@@ -196,13 +196,13 @@ function derivative_r!(dfdr::AbstractArray{mk_float,5}, f::AbstractArray{mk_floa
         r_receive_buffer2::AbstractArray{mk_float,4}, r_spectral, r) where T
 
 	# differentiate f w.r.t r
-	@loop_s_z_vperp_vpa is iz ivperp ivpa begin
-		@views derivative!(dfdr[ivpa,ivperp,iz,:,is], f[ivpa,ivperp,iz,:,is], r, advect[is].adv_fac[:,ivpa,ivperp,iz], r_spectral)
+	@loop_s_z_mu_vpa is iz imu ivpa begin
+		@views derivative!(dfdr[ivpa,imu,iz,:,is], f[ivpa,imu,iz,:,is], r, advect[is].adv_fac[:,ivpa,imu,iz], r_spectral)
 		# get external endpoints to reconcile via MPI
-		dfdr_lower_endpoints[ivpa,ivperp,iz,is] = r.scratch_2d[1,1]
-		dfdr_upper_endpoints[ivpa,ivperp,iz,is] = r.scratch_2d[end,end]
-		adv_fac_lower_buffer[ivpa,ivperp,iz,is] = advect[is].adv_fac[1,ivpa,ivperp,iz]
-		adv_fac_upper_buffer[ivpa,ivperp,iz,is] = advect[is].adv_fac[end,ivpa,ivperp,iz]
+		dfdr_lower_endpoints[ivpa,imu,iz,is] = r.scratch_2d[1,1]
+		dfdr_upper_endpoints[ivpa,imu,iz,is] = r.scratch_2d[end,end]
+		adv_fac_lower_buffer[ivpa,imu,iz,is] = advect[is].adv_fac[1,ivpa,imu,iz]
+		adv_fac_upper_buffer[ivpa,imu,iz,is] = advect[is].adv_fac[end,ivpa,imu,iz]
 	end
 	# now reconcile element boundaries across
 	# processes with large message involving all other dimensions 
@@ -248,11 +248,11 @@ end
 """
 Upwind derivatives
 df/dz group of rountines for 
-dfns (charged) -> [vpa,vperp,z,r,s]
+dfns (charged) -> [vpa,mu,z,r,s]
 dfns (neutrals) -> [vz,vr,vzeta,z,r,sn]
 """
 
-#5D version for f[vpa,vperp,z,r,s] -> dfn charged particles
+#5D version for f[vpa,mu,z,r,s] -> dfn charged particles
 function derivative_z!(dfdz::AbstractArray{mk_float,5}, f::AbstractArray{mk_float,5},
         advect::T, adv_fac_lower_buffer::AbstractArray{mk_float,4},
         adv_fac_upper_buffer::AbstractArray{mk_float,4},
@@ -262,13 +262,13 @@ function derivative_z!(dfdz::AbstractArray{mk_float,5}, f::AbstractArray{mk_floa
         z_receive_buffer::AbstractArray{mk_float,4}, z_spectral, z) where T
 
 	# differentiate f w.r.t z
-	@loop_s_r_vperp_vpa is ir ivperp ivpa begin
-		@views derivative!(dfdz[ivpa,ivperp,:,ir,is], f[ivpa,ivperp,:,ir,is], z, advect[is].adv_fac[:,ivpa,ivperp,ir], z_spectral)
+	@loop_s_r_mu_vpa is ir imu ivpa begin
+		@views derivative!(dfdz[ivpa,imu,:,ir,is], f[ivpa,imu,:,ir,is], z, advect[is].adv_fac[:,ivpa,imu,ir], z_spectral)
 		# get external endpoints to reconcile via MPI
-		dfdz_lower_endpoints[ivpa,ivperp,ir,is] = z.scratch_2d[1,1]
-		dfdz_upper_endpoints[ivpa,ivperp,ir,is] = z.scratch_2d[end,end]
-		adv_fac_lower_buffer[ivpa,ivperp,ir,is] = advect[is].adv_fac[1,ivpa,ivperp,ir]
-		adv_fac_upper_buffer[ivpa,ivperp,ir,is] = advect[is].adv_fac[end,ivpa,ivperp,ir]
+		dfdz_lower_endpoints[ivpa,imu,ir,is] = z.scratch_2d[1,1]
+		dfdz_upper_endpoints[ivpa,imu,ir,is] = z.scratch_2d[end,end]
+		adv_fac_lower_buffer[ivpa,imu,ir,is] = advect[is].adv_fac[1,ivpa,imu,ir]
+		adv_fac_upper_buffer[ivpa,imu,ir,is] = advect[is].adv_fac[end,ivpa,imu,ir]
 	end
 	# now reconcile element boundaries across
 	# processes with large message

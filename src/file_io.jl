@@ -100,7 +100,7 @@ function io_has_parallel() end
 """
 open the necessary output files
 """
-function setup_file_io(io_input, vz, vr, vzeta, vpa, vperp, z, r, composition, collisions)
+function setup_file_io(io_input, vz, vr, vzeta, vpa, mu, z, r, composition, collisions)
     begin_serial_region()
     @serial_region begin
         # Only read/write from first process in each 'block'
@@ -127,7 +127,7 @@ function setup_file_io(io_input, vz, vr, vzeta, vpa, vperp, z, r, composition, c
         io_moments = setup_moments_io(out_prefix, io_input.binary_format, r, z,
                                       composition, collisions, io_input.parallel_io,
                                       comm_inter_block[])
-        io_dfns = setup_dfns_io(out_prefix, io_input.binary_format, r, z, vperp, vpa,
+        io_dfns = setup_dfns_io(out_prefix, io_input.binary_format, r, z, mu, vpa,
                                 vzeta, vr, vz, composition, collisions,
                                 io_input.parallel_io, comm_inter_block[])
 
@@ -222,7 +222,7 @@ end
 """
 Add to coords group in output file information about vspace coordinate grids
 """
-function add_vspace_coordinates!(coords, vz, vr, vzeta, vpa, vperp, parallel_io)
+function add_vspace_coordinates!(coords, vz, vr, vzeta, vpa, mu, parallel_io)
     @serial_region begin
         # create the "vz" sub-group of "coords" that will contain vz coordinate info,
         # including total number of grid points and grid point locations
@@ -238,9 +238,9 @@ function add_vspace_coordinates!(coords, vz, vr, vzeta, vpa, vperp, parallel_io)
         # including total number of grid points and grid point locations
         define_io_coordinate!(coords, vpa, "vpa", "velocity coordinate v_parallel",
                               parallel_io)
-        # create the "vperp" sub-group of "coords" that will contain vperp coordinate info,
+        # create the "mu" sub-group of "coords" that will contain mu coordinate info,
         # including total number of grid points and grid point locations
-        define_io_coordinate!(coords, vperp, "vperp", "velocity coordinate v_perp",
+        define_io_coordinate!(coords, mu, "mu", "velocity coordinate v_perp",
                               parallel_io)
     end
 
@@ -421,7 +421,7 @@ end
 define dynamic (time-evolving) distribution function variables for writing to the output
 file
 """
-function define_dynamic_dfn_variables!(fid, r, z, vperp, vpa, vzeta, vr, vz,
+function define_dynamic_dfn_variables!(fid, r, z, mu, vpa, vzeta, vr, vz,
                                        n_ion_species, n_neutral_species, parallel_io)
 
     @serial_region begin
@@ -439,7 +439,7 @@ function define_dynamic_dfn_variables!(fid, r, z, vperp, vpa, vzeta, vr, vz,
         end
 
         # io_f is the handle for the ion pdf
-        io_f = create_dynamic_variable!(dynamic, "f", mk_float, vpa, vperp, z, r;
+        io_f = create_dynamic_variable!(dynamic, "f", mk_float, vpa, mu, z, r;
                                         n_ion_species=n_ion_species,
                                         parallel_io=parallel_io,
                                         description="charged species distribution function")
@@ -508,7 +508,7 @@ end
 """
 setup file i/o for distribution function variables
 """
-function setup_dfns_io(prefix, binary_format, r, z, vperp, vpa, vzeta, vr, vz, composition,
+function setup_dfns_io(prefix, binary_format, r, z, mu, vpa, vzeta, vr, vz, composition,
                        collisions, parallel_io, io_comm)
 
     @serial_region begin
@@ -524,12 +524,12 @@ function setup_dfns_io(prefix, binary_format, r, z, vperp, vpa, vzeta, vr, vz, c
 
         ### define coordinate dimensions ###
         coords_group = define_spatial_coordinates!(fid, z, r, parallel_io)
-        add_vspace_coordinates!(coords_group, vz, vr, vzeta, vpa, vperp, parallel_io)
+        add_vspace_coordinates!(coords_group, vz, vr, vzeta, vpa, mu, parallel_io)
 
         ### create variables for time-dependent quantities and store them ###
         ### in a struct for later access ###
         io_dfns = define_dynamic_dfn_variables!(
-            fid, r, z, vperp, vpa, vzeta, vr, vz, composition.n_ion_species,
+            fid, r, z, mu, vpa, vzeta, vr, vz, composition.n_ion_species,
             composition.n_neutral_species, parallel_io)
 
         return io_dfns
@@ -596,7 +596,7 @@ end
 write time-dependent distribution function data to the binary output file
 """
 function write_dfns_data_to_binary(ff, ff_neutral, t, n_ion_species, n_neutral_species,
-                                   io_dfns, t_idx, r, z, vperp, vpa, vzeta, vr, vz)
+                                   io_dfns, t_idx, r, z, mu, vpa, vzeta, vr, vz)
     @serial_region begin
         # Only read/write from first process in each 'block'
 
@@ -604,7 +604,7 @@ function write_dfns_data_to_binary(ff, ff_neutral, t, n_ion_species, n_neutral_s
         append_to_dynamic_var(io_dfns.time, t, t_idx)
 
         # add the distribution function data at this time slice to the output file
-        append_to_dynamic_var(io_dfns.f, ff, t_idx, vpa, vperp, z, r, n_ion_species)
+        append_to_dynamic_var(io_dfns.f, ff, t_idx, vpa, mu, z, r, n_ion_species)
         if n_neutral_species > 0
             append_to_dynamic_var(io_dfns.f_neutral, ff_neutral, t_idx, vz, vr, vzeta, z,
                                   r, n_neutral_species)
@@ -662,7 +662,7 @@ end
     # Special versions when using DebugMPISharedArray to avoid implicit conversion to
     # Array, which is forbidden.
     function write_dfns_data_to_binary(ff::DebugMPISharedArray, ff_neutral::DebugMPISharedArray,
-            t, n_ion_species, n_neutral_species, h5::hdf5_dfns_info, t_idx, r, z, vperp,
+            t, n_ion_species, n_neutral_species, h5::hdf5_dfns_info, t_idx, r, z, mu,
             vpa, vzeta, vr, vz)
         @serial_region begin
             # Only read/write from first process in each 'block'
@@ -672,7 +672,7 @@ end
 
             # add the distribution function data at this time slice to the output file
             # add the distribution function data at this time slice to the output file
-            append_to_dynamic_var(io_dfns.f, ff.data, t_idx, vpa, vperp, z, r,
+            append_to_dynamic_var(io_dfns.f, ff.data, t_idx, vpa, mu, z, r,
                                   n_ion_species)
             if n_neutral_species > 0
                 append_to_dynamic_var(io_dfns.f_neutral, ff_neutral.data, t_idx, vz, vr,
@@ -718,7 +718,7 @@ include("file_io_hdf5.jl")
 
 """
 """
-function write_data_to_ascii(moments, fields, vpa, vperp, z, r, t, n_ion_species,
+function write_data_to_ascii(moments, fields, vpa, mu, z, r, t, n_ion_species,
                              n_neutral_species, ascii_io::Union{ascii_ios,Nothing})
     if ascii_io === nothing || ascii_io.moments_charged === nothing
         # ascii I/O is disabled
@@ -883,7 +883,7 @@ all the arrays have the same length, with an entry for each call to `debug_dump(
 """
 function debug_dump end
 function debug_dump(vz::coordinate, vr::coordinate, vzeta::coordinate, vpa::coordinate,
-                    vperp::coordinate, z::coordinate, r::coordinate, t::mk_float;
+                    mu::coordinate, z::coordinate, r::coordinate, t::mk_float;
                     ff=nothing, dens=nothing, upar=nothing, ppar=nothing, qpar=nothing,
                     vth=nothing,
                     ff_neutral=nothing, dens_neutral=nothing, uz_neutral=nothing,
@@ -905,7 +905,7 @@ function debug_dump(vz::coordinate, vr::coordinate, vzeta::coordinate, vpa::coor
 
             debug_output_counter[] = 1
 
-            (nvpa, nvperp, nz, nr, n_species) = size(ff)
+            (nvpa, nmu, nz, nr, n_species) = size(ff)
             prefix = "debug_output.$(iblock_index[])"
             filename = string(prefix, ".h5")
             # if a file with the requested name already exists, remove it
@@ -918,7 +918,7 @@ function debug_dump(vz::coordinate, vr::coordinate, vzeta::coordinate, vpa::coor
 
             ### define coordinate dimensions ###
             coords_group = define_spatial_coordinates!(fid, z, r, false)
-            add_vspace_coordinates!(coords_group, vz, vr, vzeta, vpa, vperp, false)
+            add_vspace_coordinates!(coords_group, vz, vr, vzeta, vpa, mu, false)
 
             ### create variables for time-dependent quantities and store them ###
             ### in a struct for later access ###
@@ -926,7 +926,7 @@ function debug_dump(vz::coordinate, vr::coordinate, vzeta::coordinate, vpa::coor
                                                           composition.n_neutral_species,
                                                           r, z, false)
             io_dfns = define_dynamic_dfn_variables!(
-                fid, r, z, vperp, vpa, vzeta, vr, vz, composition.n_ion_species,
+                fid, r, z, mu, vpa, vzeta, vr, vz, composition.n_ion_species,
                 composition.n_neutral_species, false)
 
             # create the "istage" variable, used to identify the rk stage where
@@ -1052,7 +1052,7 @@ function debug_dump(vz::coordinate, vr::coordinate, vzeta::coordinate, vpa::coor
     return nothing
 end
 function debug_dump(fvec::Union{scratch_pdf,Nothing},
-                    fields::Union{em_fields_struct,Nothing}, vz, vr, vzeta, vpa, vperp, z,
+                    fields::Union{em_fields_struct,Nothing}, vz, vr, vzeta, vpa, mu, z,
                     r, t; istage=0, label="")
     if fvec === nothing
         pdf = nothing
@@ -1078,7 +1078,7 @@ function debug_dump(fvec::Union{scratch_pdf,Nothing},
         Er = fields.Er
         Ez = fields.Ez
     end
-    return debug_dump(vz, vr, vzeta, vpa, vperp, z, r, t; ff=pdf, dens=density, upar=upar,
+    return debug_dump(vz, vr, vzeta, vpa, mu, z, r, t; ff=pdf, dens=density, upar=upar,
                       ppar=ppar, ff_neutral=pdf_neutral, dens_neutral=density_neutral,
                       phi=phi, Er=Er, Ez=Ez, t, istage=istage, label=label)
 end

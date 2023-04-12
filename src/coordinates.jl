@@ -169,11 +169,11 @@ function init_grid(ngrid, nelement_global, nelement_local, n_global, n_local, ir
             wgts[1] = 1.0
         end
     elseif discretization == "chebyshev_pseudospectral"
-        if name == "vperp"
+        if name == "mu"
             # initialize chebyshev grid defined on [-L/2,L/2]
             grid, wgts = scaled_chebyshev_grid(ngrid, nelement_global, nelement_local, n_local, irank, L, imin, imax)
-            grid .= grid .+ L/2.0 # shift to [0,L] appropriate to vperp variable
-            wgts = 2.0 .* wgts .* grid # to include 2 vperp in jacobian of integral
+            grid .= grid .+ L/2.0 # shift to [0,L] appropriate to mu variable
+            wgts = 2.0 .* wgts # to include 2 in jacobian of integral
                                         # see note above on normalisation
         else
             # initialize chebyshev grid defined on [-L/2,L/2]
@@ -185,12 +185,12 @@ function init_grid(ngrid, nelement_global, nelement_local, n_global, n_local, ir
             grid, wgts = scaled_chebyshev_grid(ngrid, nelement_global, nelement_local, n_local, irank, L, imin, imax)
         end
     elseif discretization == "finite_difference"
-        if name == "vperp"
+        if name == "mu"
             # initialize equally spaced grid defined on [0,L]
             grid = uniform_grid_shifted
             # use composite Simpson's rule to obtain integration weights associated with this coordinate
             wgts = composite_simpson_weights(grid)
-            wgts = 2.0 .* wgts .* grid # to include 2 vperp in jacobian of integral
+            wgts = 2.0 .* wgts # to include 2 in jacobian of integral
                                      # assumes pdf normalised like 
                                      # f^N = Pi^{3/2} c_s^3 f / n_ref         
         else #default case 

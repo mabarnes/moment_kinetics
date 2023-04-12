@@ -12,7 +12,7 @@ using ..looping
 calculate the source terms due to redefinition of the pdf to split off density,
 and use them to update the pdf
 """
-function source_terms!(pdf_out, fvec_in, moments, vpa, vperp, z, r, dt, spectral, composition, CX_frequency)
+function source_terms!(pdf_out, fvec_in, moments, vpa, mu, z, r, dt, spectral, composition, CX_frequency)
 
     begin_s_r_z_region()
     
@@ -48,8 +48,8 @@ function source_terms_evolve_density!(pdf_out, pdf_in, dens, upar, z, r, dt, spe
         derivative!(z.scratch, z.scratch, z, spectral)
         @views @. z.scratch *= dt/dens[:,ir]
         #derivative!(z.scratch, z.scratch, z, -upar, spectral)
-        @loop_z_vperp_vpa iz ivperp ivpa begin
-            pdf_out[ivpa,ivperp,iz,ir] += pdf_in[ivpa,ivperp,iz,ir]*z.scratch[iz]
+        @loop_z_mu_vpa iz imu ivpa begin
+            pdf_out[ivpa,imu,iz,ir] += pdf_in[ivpa,imu,iz,ir]*z.scratch[iz]
         end
     end
     return nothing
@@ -73,8 +73,8 @@ function source_terms_evolve_ppar!(pdf_out, pdf_in, dens, upar, ppar, vth, qpar,
         # update the pdf to account for the parallel heat flux contribution to the source
         @views @. z.scratch -= 0.5*dt*z.scratch2/ppar[:,ir]
 
-        @loop_z_vperp_vpa iz ivperp ivpa begin
-            pdf_out[ivpa,ivperp,iz,ir] += pdf_in[ivpa,ivperp,iz,ir]*z.scratch[iz]
+        @loop_z_mu_vpa iz imu ivpa begin
+            pdf_out[ivpa,imu,iz,ir] += pdf_in[ivpa,imu,iz,ir]*z.scratch[iz]
         end
     end
     return nothing
@@ -86,16 +86,16 @@ function source_terms_evolve_ppar_CX!(pdf_out, pdf_in, dens, ppar, composition, 
     @loop_s is begin
         if is ∈ composition.ion_species_range
             for isp ∈ composition.neutral_species_range
-                @loop_r_z_vperp ir iz ivperp begin
-                    @views @. pdf_out[:,ivperp,iz,ir,is] -= 0.5*dt*pdf_in[:,ivperp,iz,ir,is]*CX_frequency *
+                @loop_r_z_mu ir iz imu begin
+                    @views @. pdf_out[:,imu,iz,ir,is] -= 0.5*dt*pdf_in[:,imu,iz,ir,is]*CX_frequency *
                     (dens[iz,ir,isp]*ppar[iz,ir,is]-dens[iz,ir,is]*ppar[iz,ir,isp])/ppar[iz,ir,is]
                 end
             end
         end
         if is ∈ composition.neutral_species_range
             for isp ∈ composition.ion_species_range
-                @loop_r_z_vperp ir iz ivperp begin
-                    @views @. pdf_out[:,ivperp,iz,ir,is] -= 0.5*dt*pdf_in[:,ivperp,iz,ir,is]*CX_frequency *
+                @loop_r_z_mu ir iz imu begin
+                    @views @. pdf_out[:,imu,iz,ir,is] -= 0.5*dt*pdf_in[:,imu,iz,ir,is]*CX_frequency *
                     (dens[iz,ir,isp]*ppar[iz,ir,is]-dens[iz,ir,is]*ppar[iz,ir,isp])/ppar[iz,ir,is]
                 end
             end
@@ -108,7 +108,7 @@ end
 advance the dfn with an arbitrary source function 
 """
 
-function source_terms_manufactured!(pdf_charged_out, pdf_neutral_out, vz, vr, vzeta, vpa, vperp, z, r, t, dt, composition, manufactured_source_list)
+function source_terms_manufactured!(pdf_charged_out, pdf_neutral_out, vz, vr, vzeta, vpa, mu, z, r, t, dt, composition, manufactured_source_list)
     if manufactured_source_list.time_independent_sources
         # the (time-independent) manufactured source arrays
         Source_i = manufactured_source_list.Source_i_array
@@ -117,8 +117,8 @@ function source_terms_manufactured!(pdf_charged_out, pdf_neutral_out, vz, vr, vz
         begin_s_r_z_region()
 
         @loop_s is begin
-            @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
-                pdf_charged_out[ivpa,ivperp,iz,ir,is] += dt*Source_i[ivpa,ivperp,iz,ir]
+            @loop_r_z_mu_vpa ir iz imu ivpa begin
+                pdf_charged_out[ivpa,imu,iz,ir,is] += dt*Source_i[ivpa,imu,iz,ir]
             end
         end
 
@@ -138,8 +138,8 @@ function source_terms_manufactured!(pdf_charged_out, pdf_neutral_out, vz, vr, vz
         begin_s_r_z_region()
 
         @loop_s is begin
-            @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
-                pdf_charged_out[ivpa,ivperp,iz,ir,is] += dt*Source_i_func(vpa.grid[ivpa],vperp.grid[ivperp],z.grid[iz],r.grid[ir],t)
+            @loop_r_z_mu_vpa ir iz imu ivpa begin
+                pdf_charged_out[ivpa,imu,iz,ir,is] += dt*Source_i_func(vpa.grid[ivpa],mu.grid[imu],z.grid[iz],r.grid[ir],t)
             end
         end
 

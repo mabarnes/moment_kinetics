@@ -14,7 +14,7 @@ using ..type_definitions: mk_float
 using Symbolics
 using IfElse
 
-    @variables r z vpa vperp t vz vr vzeta
+    @variables r z vpa mu t vz vr vzeta
     typed_zero(vz) = zero(vz)
     @register_symbolic typed_zero(vz)
     zero_val = 1.0e-8
@@ -128,7 +128,8 @@ using IfElse
     function gyroaveraged_dfnn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
         densn = densn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
         #if (r_bc == "periodic" && z_bc == "periodic")
-            dfnn = densn * exp( - vpa^2 - vperp^2 )
+            Bmag = geometry.Bmag
+            dfnn = densn * exp( - vpa^2 - 2.0*Bmag*mu )
         #end
         return dfnn
     end
@@ -177,13 +178,13 @@ using IfElse
         epsilon = composition.epsilon_offset
         alpha = composition.alpha_switch
         if z_bc == "periodic"
-            dfni = densi * exp( - vpa^2 - vperp^2) 
+            dfni = densi * exp( - vpa^2 - 2.0*Bmag*mu ) 
         elseif z_bc == "wall"
             vpabar = vpa - alpha*(rhostar/2.0)*(Bmag/Bzed)*Er # for alpha = 1.0, effective velocity in z direction * (Bmag/Bzed)
             Hplus = 0.5*(sign(vpabar) + 1.0)
             Hminus = 0.5*(sign(-vpabar) + 1.0)
-            ffa =  exp(- vperp^2)
-            dfni = ffa * ( nminus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha)* (0.5 - z/Lz) * Hminus * vpabar^pvpa + nplus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha)*(z/Lz + 0.5) * Hplus * vpabar^pvpa + nzero_sym(Lr,Lz,r_bc,z_bc,alpha)*(z/Lz + 0.5)*(0.5 - z/Lz) ) * exp( - vpabar^2 )
+            ffmu =  exp(- 2.0*Bmag*mu )
+            dfni = ffmu * ( nminus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha)* (0.5 - z/Lz) * Hminus * vpabar^pvpa + nplus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha)*(z/Lz + 0.5) * Hplus * vpabar^pvpa + nzero_sym(Lr,Lz,r_bc,z_bc,alpha)*(z/Lz + 0.5)*(0.5 - z/Lz) ) * exp( - vpabar^2 )
         end
         return dfni
     end
@@ -247,12 +248,12 @@ using IfElse
         # cf. https://docs.juliahub.com/Symbolics/eABRO/3.4.0/tutorials/symbolic_functions/
         densi_func = build_function(densi, z, r, t, expression=Val{false})
         densn_func = build_function(densn, z, r, t, expression=Val{false})
-        dfni_func = build_function(dfni, vpa, vperp, z, r, t, expression=Val{false})
+        dfni_func = build_function(dfni, vpa, mu, z, r, t, expression=Val{false})
         dfnn_func = build_function(dfnn, vz, vr, vzeta, z, r, t, expression=Val{false})
         # return function
         # call like: 
         # densi_func(zval, rval, tval) 
-        # dfni_func(vpaval, vperpval, zval, rval, tval) 
+        # dfni_func(vpaval, muval, zval, rval, tval) 
         # densn_func(zval, rval, tval) 
         # dfnn_func(vzval, vrval, vzetapval, zval, rval, tval) 
         
@@ -275,7 +276,7 @@ using IfElse
         return manufactured_E_fields
     end 
 
-    function manufactured_sources(r_coord,z_coord,vperp_coord,vpa_coord,vzeta_coord,vr_coord,vz_coord,composition,geometry,collisions,num_diss_params)
+    function manufactured_sources(r_coord,z_coord,mu_coord,vpa_coord,vzeta_coord,vr_coord,vz_coord,composition,geometry,collisions,num_diss_params)
         
         # ion manufactured solutions
         densi = densi_sym(r_coord.L,z_coord.L,r_coord.bc,z_coord.bc,composition)
@@ -285,7 +286,7 @@ using IfElse
         # neutral manufactured solutions
         densn = densn_sym(r_coord.L,z_coord.L,r_coord.bc,z_coord.bc,geometry,composition)
         dfnn = dfnn_sym(r_coord.L,z_coord.L,r_coord.bc,z_coord.bc,geometry,composition)
-        gav_dfnn = gyroaveraged_dfnn_sym(r_coord.L,z_coord.L,r_coord.bc,z_coord.bc,geometry,composition) # gyroaverage < dfnn > in vpa vperp coordinates
+        gav_dfnn = gyroaveraged_dfnn_sym(r_coord.L,z_coord.L,r_coord.bc,z_coord.bc,geometry,composition) # gyroaverage < dfnn > in vpa mu coordinates
         
         dense = densi # get the electron density via quasineutrality with Zi = 1
         
@@ -293,7 +294,7 @@ using IfElse
         Dr = Differential(r) 
         Dz = Differential(z) 
         Dvpa = Differential(vpa) 
-        Dvperp = Differential(vperp) 
+        Dmu = Differential(mu) 
         Dt = Differential(t) 
     
         # get geometric/composition data
@@ -338,18 +339,18 @@ using IfElse
         Sn = Dt(dfnn) + vz * Dz(dfnn) + rfac*vr * Dr(dfnn) + cx_frequency* (densi*dfnn - densn*vrvzvzeta_dfni) + ionization_frequency*dense*dfnn
         Source_n = expand_derivatives(Sn)
         
-        Source_i_func = build_function(Source_i, vpa, vperp, z, r, t, expression=Val{false})
+        Source_i_func = build_function(Source_i, vpa, mu, z, r, t, expression=Val{false})
         Source_n_func = build_function(Source_n, vz, vr, vzeta, z, r, t, expression=Val{false})
         
         if expand_derivatives(Dt(Source_i)) == 0 && expand_derivatives(Dt(Source_n)) == 0
             # Time independent, so store arrays instead of functions
 
-            Source_i_array = allocate_shared_float(vpa_coord.n,vperp_coord.n,z_coord.n,r_coord.n)
+            Source_i_array = allocate_shared_float(vpa_coord.n,mu_coord.n,z_coord.n,r_coord.n)
             begin_s_r_z_region()
             @loop_s is begin
                 if is == 1
-                    @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
-                        Source_i_array[ivpa,ivperp,iz,ir,is] = Source_i_func(vpa_coord.grid[ivpa],vperp_coord.grid[ivperp],z_coord.grid[iz],r_coord.grid[ir],0.0)
+                    @loop_r_z_mu_vpa ir iz imu ivpa begin
+                        Source_i_array[ivpa,imu,iz,ir,is] = Source_i_func(vpa_coord.grid[ivpa],mu_coord.grid[imu],z_coord.grid[iz],r_coord.grid[ir],0.0)
                     end
                 end
             end

@@ -377,12 +377,12 @@ struct pp_input
     animate_deltaf_vs_vpa_z0::Bool
     # if animate_f_vs_vpa_r = true, create animation of f(vpa,r) at different time slices
     animate_f_vs_vpa_r::Bool
-    # if animate_f_vs_vperp_z = true, create animation of f(vperp,z) at different time slices
-    animate_f_vs_vperp_z::Bool
-    # if animate_f_vs_vperp_r = true, create animation of f(vperp,r) at different time slices
-    animate_f_vs_vperp_r::Bool
-    # if animate_f_vs_vperp_vpa = true, create animation of f(vperp,vpa) at different time slices
-    animate_f_vs_vperp_vpa::Bool
+    # if animate_f_vs_mu_z = true, create animation of f(mu,z) at different time slices
+    animate_f_vs_mu_z::Bool
+    # if animate_f_vs_mu_r = true, create animation of f(mu,r) at different time slices
+    animate_f_vs_mu_r::Bool
+    # if animate_f_vs_mu_vpa = true, create animation of f(mu,vpa) at different time slices
+    animate_f_vs_mu_vpa::Bool
     # if animate_f_vs_r_z = true, create animation of f(r,z) at different time slices
     animate_f_vs_r_z::Bool
     # if animate_f_vs_vz_z = true, create animation of f(vz,z) at different time slices
@@ -429,7 +429,7 @@ struct pp_input
 	plot_parallel_pressure_vs_r_z::Bool
     # if animate_parallel_pressure_vs_r_z = true animate parallel_pressure vs r z
 	animate_parallel_pressure_vs_r_z::Bool
-    # if plot_wall_pdf = true then plot the ion distribution (vpa,vperp,z,r) in the element nearest the wall at the last timestep 
+    # if plot_wall_pdf = true then plot the ion distribution (vpa,mu,z,r) in the element nearest the wall at the last timestep 
     plot_wall_pdf::Bool
     # animations will use one in every nwrite_movie data slices
     nwrite_movie::mk_int
@@ -440,8 +440,8 @@ struct pp_input
     itime_max::mk_int
     # ivpa0 is the ivpa index used when plotting data at a single vpa location
     ivpa0::mk_int
-    # ivperp0 is the ivperp index used when plotting data at a single vperp location
-    ivperp0::mk_int
+    # imu0 is the imu index used when plotting data at a single mu location
+    imu0::mk_int
     # iz0 is the iz index used when plotting data at a single z location
     iz0::mk_int
     # ir0 is the ir index used when plotting data at a single r location

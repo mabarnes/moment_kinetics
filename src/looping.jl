@@ -13,7 +13,7 @@ using Primes
 # The ion dimensions and neutral dimensions are separated in order to restrict the
 # supported parallel loop types to correct combinations. This also reduces the number
 # of combinations - for some of the debugging features this helps.
-const ion_dimensions = (:s, :r, :z, :vperp, :vpa)
+const ion_dimensions = (:s, :r, :z, :mu, :vpa)
 const neutral_dimensions = (:sn, :r, :z, :vzeta, :vr, :vz)
 const all_dimensions = unique((ion_dimensions..., neutral_dimensions...))
 const dimension_combinations = Tuple(Tuple(c) for c in

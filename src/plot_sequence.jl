@@ -40,7 +40,7 @@ function plot_sequence_fields_data(path_list)
         run_name = joinpath(path, basename(path))
         input_filename = path * ".toml"
         scan_input = read_input_file(input_filename)
-        z_nelement, r_nelement, vpa_nelement, vperp_nelement, 
+        z_nelement, r_nelement, vpa_nelement, mu_nelement, 
           vz_nelement, vr_nelement, vzeta_nelement = get_coords_nelement(scan_input)
         
         nelement_sequence[isim] = z_nelement

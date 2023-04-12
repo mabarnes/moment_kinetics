@@ -60,26 +60,26 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         # get run-time input/composition/geometry/collisions/species info for convenience
         #run_name_internal, output_dir, evolve_moments, 
         #    t_input, z_input, r_input, 
-        #    vpa_input, vperp_input, gyrophase_input,
+        #    vpa_input, mu_input, gyrophase_input,
         #    vz_input, vr_input, vzeta_input, 
         #    composition, species, collisions, geometry, drive_input = mk_input(scan_input)
-        z_nelement, r_nelement, vpa_nelement, vperp_nelement, 
+        z_nelement, r_nelement, vpa_nelement, mu_nelement, 
           vz_nelement, vr_nelement, vzeta_nelement = get_coords_nelement(scan_input)
         if scan_type == "vpa_nelement"
             # get the number of elements for plot
             nelement_sequence[isim] = vpa_nelement
         elseif scan_type == "nelement"
             nelement = vpa_nelement
-            if  nelement == r_nelement &&nelement == z_nelement && nelement == vperp_nelement && nelement == vz_nelement && nelement == vr_nelement && nelement == vzeta_nelement
+            if  nelement == r_nelement &&nelement == z_nelement && nelement == mu_nelement && nelement == vz_nelement && nelement == vr_nelement && nelement == vzeta_nelement
                 nelement_sequence[isim] = nelement
-            elseif  1 == r_nelement && nelement == z_nelement && nelement == vperp_nelement && nelement == vz_nelement && nelement == vr_nelement && nelement == vzeta_nelement
+            elseif  1 == r_nelement && nelement == z_nelement && nelement == mu_nelement && nelement == vz_nelement && nelement == vr_nelement && nelement == vzeta_nelement
                 nelement_sequence[isim] = nelement
             else 
                 println("ERROR: scan_type = ",scan_type," requires element number to be equal in all dimensions")
             end
         elseif scan_type == "velocity_nelement"
             nelement = vpa_nelement
-            if nelement == vperp_nelement && nelement == vz_nelement && nelement == vr_nelement && nelement == vzeta_nelement
+            if nelement == mu_nelement && nelement == vz_nelement && nelement == vr_nelement && nelement == vzeta_nelement
                 nelement_sequence[isim] = nelement
             else 
                 println("ERROR: scan_type = ",scan_type," requires velocity elements equal in all dimensions")
@@ -151,7 +151,7 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         # these values are currently the same for all blocks 
         fid = open_readonly_output_file(run_name,"dfns")
         nvpa, nvpa_global, vpa, vpa_wgts, Lvpa = load_coordinate_data(fid, "vpa")
-        nvperp, nvperp_global, vperp, vperp_wgts, Lvperp = load_coordinate_data(fid, "vperp")
+        nmu, nmu_global, mu, mu_wgts, Lmu = load_coordinate_data(fid, "mu")
         if n_neutral_species > 0
             nvz, nvz_global, vz, vz_wgts, Lvz = load_coordinate_data(fid, "vz")
             nvr, nvr_global, vr, vr_wgts, Lvr = load_coordinate_data(fid, "vr")
@@ -294,8 +294,8 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
     ylabel_Ez = L"\varepsilon(\widetilde{E}_z)"
 	if scan_type == "vpa_nelement"
         xlabel = L"v_{||}"*" "*L"N_{element}"
-    elseif scan_type == "vperp_nelement"
-        xlabel = L"v_{\perp}"*" "*L"N_{element}"
+    elseif scan_type == "mu_nelement"
+        xlabel = L"\mu"*" "*L"N_{element}"
     elseif scan_type == "vzeta_nelement"
         xlabel = L"v_{\zeta}"*" "*L"N_{element}"
     elseif scan_type == "vr_nelement"
