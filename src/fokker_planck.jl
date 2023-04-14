@@ -251,13 +251,13 @@ function evaluate_RMJ_collision_operator!(Cssp_out, fs_in, fsp_in, ms, msp, cfre
     Gamma_vpa = fokkerplanck_arrays.Gamma_vpa
     Gamma_mu = fokkerplanck_arrays.Gamma_mu
     
-    # calculate the Rosenbluth potentials
-    # and store in fokkerplanck_arrays_struct
-    @views calculate_Rosenbluth_potentials!(Rosenbluth_G,Rosenbluth_H,fsp_in,
-     mu, mu_spectral, vpa, vpa_spectral, Bmag,
-     fokkerplanck_arrays.elliptic_integral_E_factor,
-     fokkerplanck_arrays.elliptic_integral_K_factor,
-     buffer_1, buffer_2, buffer_3)
+    ## calculate the Rosenbluth potentials
+    ## and store in fokkerplanck_arrays_struct
+    #@views calculate_Rosenbluth_potentials!(Rosenbluth_G,Rosenbluth_H,fsp_in,
+    # mu, mu_spectral, vpa, vpa_spectral, Bmag,
+    # fokkerplanck_arrays.elliptic_integral_E_factor,
+    # fokkerplanck_arrays.elliptic_integral_K_factor,
+    # buffer_1, buffer_2, buffer_3)
     
     
     nmu = mu.n 
@@ -372,6 +372,13 @@ function explicit_fokker_planck_collisions!(pdf_out,pdf_in,composition,geometry,
         for isp in 1:n_ion_species       
             @loop_r_z ir iz begin
                 Bmag = geometry.Bmag
+                # calculate the Rosenbluth potentials
+                # and store in fokkerplanck_arrays_struct
+                @views calculate_Rosenbluth_potentials!(fokkerplanck_arrays.Rosenbluth_G,fokkerplanck_arrays.Rosenbluth_H,fsp_in,
+                 mu, mu_spectral, vpa, vpa_spectral, Bmag,
+                 fokkerplanck_arrays.elliptic_integral_E_factor,
+                 fokkerplanck_arrays.elliptic_integral_K_factor,
+                 fokkerplanck_arrays.buffer_1, fokkerplanck_arrays.buffer_2, fokkerplanck_arrays.buffer_3)
                 @views evaluate_RMJ_collision_operator!(Cssp_result_vpamu,pdf_in[:,:,iz,ir,is],pdf_in[:,:,iz,ir,isp],
                                                         mi, mi, cfreqii, mu, vpa, mu_spectral, vpa_spectral, Bmag,
                                                         fokkerplanck_arrays)

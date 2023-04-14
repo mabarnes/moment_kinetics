@@ -49,12 +49,12 @@ if abspath(PROGRAM_FILE) == @__FILE__
 	
     # define inputs needed for the test
 	vpa_ngrid = 17 #number of points per element 
-	vpa_nelement_local = 5 # number of elements per rank
+	vpa_nelement_local = 10 # number of elements per rank
 	vpa_nelement_global = vpa_nelement_local # total number of elements 
 	vpa_L = 8.0 #physical box size in reference units 
 	bc = "zero" 
 	mu_ngrid = 17 #number of points per element 
-	mu_nelement_local = 5 # number of elements per rank
+	mu_nelement_local = 10 # number of elements per rank
 	mu_nelement_global = mu_nelement_local # total number of elements 
     mu_L = 32.0 #physical box size in reference units 
 	bc = "zero" 
@@ -149,7 +149,34 @@ if abspath(PROGRAM_FILE) == @__FILE__
         end
     end
     
-    # evaluate the collision operator
+    # evaluate the collision operator with numerically computed G & H 
+    println("TEST: Css'[F_M,F_M] with numerical G[F_M] & H[F_M]")
+    @views evaluate_RMJ_collision_operator!(Cssp, fs_in, fsp_in, ms, msp, cfreqssp, 
+     mu, vpa, mu_spectral, vpa_spectral, Bmag, fkarrays)
+    
+    zero = 1.0e1
+    Cssp_err = maximum(abs.(Cssp))
+    if Cssp_err > zero
+        println("ERROR: C_ss'[F_Ms,F_Ms] /= 0")
+        for imu in 1:mu.n
+            for ivpa in 1:vpa.n
+                if maximum(abs.(Cssp[ivpa,imu])) > zero
+                    print("ivpa: ",ivpa," imu: ",imu," C: ")
+                    #println("ivpa: ",ivpa," imu: ",imu," C: ", Cssp[ivpa,imu])
+                    #println(" imu: ",imu," C[:,imu]:")
+                    @printf("%.1e", Cssp[ivpa,imu])
+                    println("")
+                end
+            end
+        end
+    end
+    println("max(abs(C_ss'[F_Ms,F_Ms])): ", Cssp_err)
+    
+    
+    # evaluate the collision operator with analytically computed G & H 
+    println("TEST: Css'[F_M,F_M] with analytical G[F_M] & H[F_M]")
+    @views @. fkarrays.Rosenbluth_G = G_Maxwell
+    @views @. fkarrays.Rosenbluth_H = H_Maxwell
     @views evaluate_RMJ_collision_operator!(Cssp, fs_in, fsp_in, ms, msp, cfreqssp, 
      mu, vpa, mu_spectral, vpa_spectral, Bmag, fkarrays)
     
