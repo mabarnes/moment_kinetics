@@ -422,7 +422,7 @@ function reconcile_element_boundaries_MPI!(df1d::AbstractArray{mk_float,Ndims},
     _block_synchronize()
 end
 	
-function second_derivative!(d2f, f, Q, coord, spectral)
+function second_derivative!(d2f, f, Q, coord, spectral; impose_bc=true, penalise_fd=true)
     # computes d / d coord ( Q . d f / d coord)
     # For spectral element methods, calculate second derivative by applying first
     # derivative twice, with special treatment for element boundaries
@@ -461,34 +461,37 @@ function second_derivative!(d2f, f, Q, coord, spectral)
 
         return nothing
     end
-    @views penalise_discontinuous_first_derivative!(d2f, 1, coord.imax[1],
-                                                    coord.scratch2_2d[:,1])
-    for ielement ∈ 2:coord.nelement_local
-        @views penalise_discontinuous_first_derivative!(d2f, coord.imin[ielement]-1,
-                                                        coord.imax[ielement],
-                                                        coord.scratch2_2d[:,ielement])
+    if penalise_fd
+        @views penalise_discontinuous_first_derivative!(d2f, 1, coord.imax[1],
+                                                        coord.scratch2_2d[:,1])
+        for ielement ∈ 2:coord.nelement_local
+            @views penalise_discontinuous_first_derivative!(d2f, coord.imin[ielement]-1,
+                                                            coord.imax[ielement],
+                                                            coord.scratch2_2d[:,ielement])
+        end
     end
-
-    if coord.bc ∈ ("wall", "zero")
-        # For stability don't contribute to evolution at boundaries, in case these
-        # points are not set by a boundary condition.    
-        # Full grid may be across processes and bc only applied to extreme ends of the
-        # domain.
-        if coord.irank == 0
-            d2f[1] = 0.0
+    if impose_bc 
+        if coord.bc ∈ ("wall", "zero")
+            # For stability don't contribute to evolution at boundaries, in case these
+            # points are not set by a boundary condition.    
+            # Full grid may be across processes and bc only applied to extreme ends of the
+            # domain.
+            if coord.irank == 0
+                d2f[1] = 0.0
+            end
+            if coord.irank == coord.nrank - 1
+                d2f[end] = 0.0
+            end
+        elseif coord.bc == "periodic"
+            # Need to get first derivatives from opposite ends of grid
+            if coord.nelement_local != coord.nelement_global
+                error("Distributed memory MPI not yet supported here")
+            end
+            d2f[1] -= C * coord.scratch2_2d[end,end]
+            d2f[end] += C * coord.scratch2_2d[1,1]
+        else
+            error("Unsupported bc '$coord.bc'")
         end
-        if coord.irank == coord.nrank - 1
-            d2f[end] = 0.0
-        end
-    elseif coord.bc == "periodic"
-        # Need to get first derivatives from opposite ends of grid
-        if coord.nelement_local != coord.nelement_global
-            error("Distributed memory MPI not yet supported here")
-        end
-        d2f[1] -= C * coord.scratch2_2d[end,end]
-        d2f[end] += C * coord.scratch2_2d[1,1]
-    else
-        error("Unsupported bc '$coord.bc'")
     end
     return nothing
 end

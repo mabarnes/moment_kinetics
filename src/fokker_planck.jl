@@ -7,6 +7,8 @@ module fokker_planck
 export init_fokker_planck_collisions
 export explicit_fokker_planck_collisions!
 export evaluate_RMJ_collision_operator!
+export calculate_Rosenbluth_potentials!
+export calculate_Rosenbluth_H_from_G!
 
 using SpecialFunctions: ellipk, ellipe
 using ..type_definitions: mk_float, mk_int
@@ -206,29 +208,25 @@ function calculate_Rosenbluth_potentials!(Rosenbluth_G,Rosenbluth_H,fsp_in, mu, 
         end
     end
     
+    @views calculate_Rosenbluth_H_from_G!(Rosenbluth_H,Rosenbluth_G,vpa,vpa_spectral,mu,mu_spectral,Bmag,buffer_vpamu_1,buffer_vpamu_2)
+end
+"""
+Computes the Laplacian of G in vpa mu coordinates to obtain H
+""" 
+function calculate_Rosenbluth_H_from_G!(Rosenbluth_H,Rosenbluth_G,vpa,vpa_spectral,mu,mu_spectral,Bmag,buffer_vpamu_1,buffer_vpamu_2)
     Rosenbluth_H .= 0.0
     for imu in 1:mu.n
         vpa.scratch2 .= 1.0
-        @views second_derivative!(vpa.scratch, Rosenbluth_G[:,imu], vpa.scratch2, vpa, vpa_spectral)
+        @views second_derivative!(vpa.scratch, Rosenbluth_G[:,imu], vpa.scratch2, vpa, vpa_spectral, impose_bc=false, penalise_fd=false)
         @views @. buffer_vpamu_1[:,imu] = vpa.scratch
-        #println(buffer_vpamu_1[:,imu])
-        #println(vpa.scratch)
     end 
     for ivpa in 1:vpa.n
         @. mu.scratch2 = 2.0 * mu.grid/ Bmag
-        @views second_derivative!(mu.scratch, Rosenbluth_G[ivpa,:], mu.scratch2, mu, mu_spectral)
+        @views second_derivative!(mu.scratch, Rosenbluth_G[ivpa,:], mu.scratch2, mu, mu_spectral, impose_bc=false, penalise_fd=false)
         @views @. buffer_vpamu_2[ivpa,:] = mu.scratch
-        #println(buffer_vpamu_2[ivpa,:])
     end
     @views @. Rosenbluth_H = 0.5*(buffer_vpamu_1 + buffer_vpamu_2)
-    #println(Rosenbluth_H[1,2])
-    #for imu in 1:mu.n
-    #    println(buffer_vpamu_1[:,imu])
-    #    println(buffer_vpamu_2[:,imu])
-    #    println(Rosenbluth_H[:,imu])
-    #end
 end
- 
 
 """
 returns (normalised) C[Fs,Fs']
@@ -275,7 +273,7 @@ function evaluate_RMJ_collision_operator!(Cssp_out, fs_in, fsp_in, ms, msp, cfre
         vpa.scratch2 .= 1.0 # remove Q argument from second_derivative! as never different from 1?
         @views derivative!(vpa.scratch, fs_in[:,imu], vpa, vpa_spectral)
         @views @. buffer_1[:,imu] = vpa.scratch
-        @views second_derivative!(vpa.scratch, Rosenbluth_G[:,imu], vpa.scratch2, vpa, vpa_spectral)
+        @views second_derivative!(vpa.scratch, Rosenbluth_G[:,imu], vpa.scratch2, vpa, vpa_spectral, impose_bc=false, penalise_fd=false)
         @views @. buffer_2[:,imu] = vpa.scratch
     end 
     @views @. Gamma_vpa += buffer_1*buffer_2
@@ -321,18 +319,12 @@ function evaluate_RMJ_collision_operator!(Cssp_out, fs_in, fsp_in, ms, msp, cfre
     end 
     @views @. Gamma_mu += buffer_2*buffer_3
     
-    # Gamma_mu += (2 mu / Bmag)^{3/2} d F_s / d mu * d / d mu ( (2 mu / Bmag)^{1/2} d G / d mu)
-    #for imu in 1:nmu
-    #    @views derivative!(vpa.scratch, fs_in[:,imu], vpa, vpa_spectral)
-    #    @views @. buffer_1[:,imu] = vpa.scratch
-    #    @views derivative!(vpa.scratch, Rosenbluth_G[:,imu], vpa, vpa_spectral)
-    #    @views @. buffer_2[:,imu] = vpa.scratch
-    #end 
+    # Gamma_mu += (2 mu / Bmag)^{3/2} d F_s / d mu * d / d mu ( (2 mu / Bmag)^{1/2} d G / d mu) 
     for ivpa in 1:nvpa
         @views derivative!(mu.scratch, fs_in[ivpa,:], mu, mu_spectral)
         @views @. buffer_1[ivpa,:] = mu.scratch
         @. mu.scratch2 = sqrt(2.0 * mu.grid/ Bmag)
-        @views second_derivative!(mu.scratch, Rosenbluth_G[ivpa,:], mu.scratch2, mu, mu_spectral)
+        @views second_derivative!(mu.scratch, Rosenbluth_G[ivpa,:], mu.scratch2, mu, mu_spectral, impose_bc=false, penalise_fd=false)
         @views @. buffer_2[ivpa,:] = mu.scratch*(2.0 * mu.grid / Bmag)*sqrt(2.0 * mu.grid/ Bmag)
         
     end 
