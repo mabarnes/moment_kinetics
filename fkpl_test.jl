@@ -1,13 +1,14 @@
 using Printf
 using Plots
 using LaTeXStrings
+using Measures
 using MPI
 using SpecialFunctions: erf
 
 function G_Maxwellian(Bmag,vpa,mu,ivpa,imu)
     # speed variable
     eta = sqrt(vpa.grid[ivpa]^2 + 2.0*Bmag*mu.grid[imu])
-    zero = 1.0e-8
+    zero = 1.0e-10
     if eta < zero
         G = 2.0/sqrt(pi)
     else 
@@ -19,7 +20,7 @@ end
 function H_Maxwellian(Bmag,vpa,mu,ivpa,imu)
     # speed variable
     eta = sqrt(vpa.grid[ivpa]^2 + 2.0*Bmag*mu.grid[imu])
-    zero = 1.0e-8
+    zero = 1.0e-10
     if eta < zero
         # erf(eta)/eta ~ 2/sqrt(pi) + O(eta^2) for eta << 1 
         H = 2.0/sqrt(pi)
@@ -30,6 +31,68 @@ function H_Maxwellian(Bmag,vpa,mu,ivpa,imu)
     return H
 end
 
+function Gamma_vpa_Maxwellian(Bmag,vpa,mu,ivpa,imu)
+    Gamma = 0.0
+    return Gamma
+end
+function Gamma_vpa_GMaxwellian(Bmag,vpa,mu,ivpa,imu)
+    # speed variable
+    eta = sqrt(vpa.grid[ivpa]^2 + 2.0*Bmag*mu.grid[imu])
+    
+    d2Gdeta2 = (erf(eta)/(eta^3)) - (2.0/sqrt(pi))*(exp(-eta^2)/(eta^2))
+    zero = 1.0e-10
+    if eta > zero
+        Gamma = -2.0*vpa.grid[ivpa]*exp(-eta^2)*d2Gdeta2
+    else
+        Gamma = 0.0
+    end
+    return Gamma
+end
+function Gamma_vpa_HMaxwellian(Bmag,vpa,mu,ivpa,imu)
+    # speed variable
+    eta = sqrt(vpa.grid[ivpa]^2 + 2.0*Bmag*mu.grid[imu])
+    
+    dHdeta = (2.0/sqrt(pi))*(exp(-eta^2)/eta) - (erf(eta)/(eta^2))
+    zero = 1.0e-10
+    if eta > zero
+        Gamma = -2.0*vpa.grid[ivpa]*exp(-eta^2)*(1.0/eta)*dHdeta
+    else
+        Gamma = 0.0
+    end
+    return Gamma
+end
+
+function Gamma_mu_Maxwellian(Bmag,vpa,mu,ivpa,imu)
+    Gamma = 0.0
+    return Gamma
+end
+function Gamma_mu_GMaxwellian(Bmag,vpa,mu,ivpa,imu)
+    # speed variable
+    eta = sqrt(vpa.grid[ivpa]^2 + 2.0*Bmag*mu.grid[imu])
+    
+    d2Gdeta2 = (erf(eta)/(eta^3)) - (2.0/sqrt(pi))*(exp(-eta^2)/(eta^2))
+    zero = 1.0e-10
+    if eta > zero
+        Gamma = -4.0*mu.grid[imu]*exp(-eta^2)*d2Gdeta2
+    else
+        Gamma = 0.0
+    end
+    return Gamma
+end
+function Gamma_mu_HMaxwellian(Bmag,vpa,mu,ivpa,imu)
+    # speed variable
+    eta = sqrt(vpa.grid[ivpa]^2 + 2.0*Bmag*mu.grid[imu])
+    
+    dHdeta = (2.0/sqrt(pi))*(exp(-eta^2)/eta) - (erf(eta)/(eta^2))
+    zero = 1.0e-10
+    if eta > zero
+        Gamma = -4.0*mu.grid[imu]*exp(-eta^2)*(1.0/eta)*dHdeta
+    else
+        Gamma = 0.0
+    end
+    return Gamma
+end
+   
 if abspath(PROGRAM_FILE) == @__FILE__
     using Pkg
     Pkg.activate(".")
@@ -48,15 +111,15 @@ if abspath(PROGRAM_FILE) == @__FILE__
     #discretization = "finite_difference"
 	
     # define inputs needed for the test
-	vpa_ngrid = 17 #number of points per element 
-	vpa_nelement_local = 10 # number of elements per rank
+	vpa_ngrid = 4 #number of points per element 
+	vpa_nelement_local = 20 # number of elements per rank
 	vpa_nelement_global = vpa_nelement_local # total number of elements 
-	vpa_L = 8.0 #physical box size in reference units 
+	vpa_L = 6.0 #physical box size in reference units 
 	bc = "zero" 
-	mu_ngrid = 17 #number of points per element 
-	mu_nelement_local = 10 # number of elements per rank
+	mu_ngrid = 4 #number of points per element 
+	mu_nelement_local = 20 # number of elements per rank
 	mu_nelement_global = mu_nelement_local # total number of elements 
-    mu_L = 32.0 #physical box size in reference units 
+    mu_L = 6.0 #physical box size in reference units 
 	bc = "zero" 
     
     # fd_option and adv_input not actually used so given values unimportant
@@ -98,6 +161,19 @@ if abspath(PROGRAM_FILE) == @__FILE__
     G_err = Array{mk_float,2}(undef,nvpa,nmu)
     H_err = Array{mk_float,2}(undef,nvpa,nmu)
     H_check_err = Array{mk_float,2}(undef,nvpa,nmu)
+    Gam_mu_Maxwell = Array{mk_float,2}(undef,nvpa,nmu)
+    Gam_mu_err = Array{mk_float,2}(undef,nvpa,nmu)
+    Gam_mu_GMaxwell = Array{mk_float,2}(undef,nvpa,nmu)
+    Gam_mu_HMaxwell = Array{mk_float,2}(undef,nvpa,nmu)
+    Gam_mu_Gerr = Array{mk_float,2}(undef,nvpa,nmu)
+    Gam_mu_Herr = Array{mk_float,2}(undef,nvpa,nmu)
+    Gam_vpa_Maxwell = Array{mk_float,2}(undef,nvpa,nmu)
+    Gam_vpa_err = Array{mk_float,2}(undef,nvpa,nmu)
+    Gam_vpa_GMaxwell = Array{mk_float,2}(undef,nvpa,nmu)
+    Gam_vpa_HMaxwell = Array{mk_float,2}(undef,nvpa,nmu)
+    Gam_vpa_Gerr = Array{mk_float,2}(undef,nvpa,nmu)
+    Gam_vpa_Herr = Array{mk_float,2}(undef,nvpa,nmu)
+
     for imu in 1:nmu
         for ivpa in 1:nvpa
             fs_in[ivpa,imu] = exp( - vpa.grid[ivpa]^2 - 2.0*Bmag*mu.grid[imu] ) 
@@ -179,6 +255,153 @@ if abspath(PROGRAM_FILE) == @__FILE__
     @views @. fkarrays.Rosenbluth_H = H_Maxwell
     @views evaluate_RMJ_collision_operator!(Cssp, fs_in, fsp_in, ms, msp, cfreqssp, 
      mu, vpa, mu_spectral, vpa_spectral, Bmag, fkarrays)
+    
+    for imu in 1:mu.n
+        for ivpa in 1:vpa.n
+            Gam_vpa_Maxwell[ivpa,imu] = Gamma_vpa_Maxwellian(Bmag,vpa,mu,ivpa,imu)
+            Gam_mu_Maxwell[ivpa,imu] = Gamma_mu_Maxwellian(Bmag,vpa,mu,ivpa,imu)
+            
+            Gam_vpa_err[ivpa,imu] = abs(fkarrays.Gamma_vpa[ivpa,imu] - Gam_vpa_Maxwell[ivpa,imu])
+            Gam_mu_err[ivpa,imu] = abs(fkarrays.Gamma_mu[ivpa,imu] - Gam_mu_Maxwell[ivpa,imu])
+        end
+    end
+    zero = 1.0e-2
+    max_Gam_vpa_err = maximum(Gam_vpa_err)
+    println("max(abs(Gamma_vpa[F_Ms,F_Ms])): ", max_Gam_vpa_err)
+    if max_Gam_vpa_err > zero
+        for imu in 1:mu.n
+            for ivpa in 1:vpa.n
+                if Gam_vpa_err[ivpa,imu] > zero 
+                    println("ivpa: ",ivpa," imu: ",imu," Gam_vpa_err: ",Gam_vpa_err[ivpa,imu]," Gam_vpa_num: ",fkarrays.Gamma_vpa[ivpa,imu]," Gam_vpa_Maxwell: ",Gam_vpa_Maxwell[ivpa,imu])
+                end
+            end
+        end
+        @views heatmap(mu.grid, vpa.grid, Gam_vpa_Maxwell[:,:], xlabel=L"\mu", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                windowsize = (360,240), margin = 15pt)
+                outfile = string("fkpl_Gam_vpa_Maxwell.pdf")
+                savefig(outfile)
+        @views heatmap(mu.grid, vpa.grid, fkarrays.Gamma_vpa[:,:], xlabel=L"\mu", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                windowsize = (360,240), margin = 15pt)
+                outfile = string("fkpl_Gam_vpa_num.pdf")
+                savefig(outfile)
+    end
+    max_Gam_mu_err = maximum(Gam_mu_err)
+    println("max(abs(Gamma_mu[F_Ms,F_Ms])): ", max_Gam_mu_err)
+    if max_Gam_mu_err > zero
+        for imu in 1:mu.n
+            for ivpa in 1:vpa.n
+                if Gam_mu_err[ivpa,imu] > zero 
+                    println("ivpa: ",ivpa," imu: ",imu," Gam_mu_err: ",Gam_mu_err[ivpa,imu]," Gam_mu_num: ",fkarrays.Gamma_mu[ivpa,imu]," Gam_mu_Maxwell: ",Gam_mu_Maxwell[ivpa,imu])
+                end
+            end
+        end
+        @views heatmap(mu.grid, vpa.grid, Gam_mu_Maxwell[:,:], xlabel=L"\mu", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                windowsize = (360,240), margin = 15pt)
+                outfile = string("fkpl_Gam_mu_Maxwell.pdf")
+                savefig(outfile)
+        @views heatmap(mu.grid, vpa.grid, fkarrays.Gamma_mu[:,:], xlabel=L"\mu", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                windowsize = (360,240), margin = 15pt)
+                outfile = string("fkpl_Gam_mu_num.pdf")
+                savefig(outfile)
+    end
+    
+    for imu in 1:mu.n
+        for ivpa in 1:vpa.n
+            Gam_vpa_GMaxwell[ivpa,imu] = Gamma_vpa_GMaxwellian(Bmag,vpa,mu,ivpa,imu)
+            Gam_mu_GMaxwell[ivpa,imu] = Gamma_mu_GMaxwellian(Bmag,vpa,mu,ivpa,imu)
+            
+            Gam_vpa_Gerr[ivpa,imu] = abs(fkarrays.Gamma_vpa_G[ivpa,imu] - Gam_vpa_GMaxwell[ivpa,imu])
+            Gam_mu_Gerr[ivpa,imu] = abs(fkarrays.Gamma_mu_G[ivpa,imu] - Gam_mu_GMaxwell[ivpa,imu])
+        end
+    end
+    zero = 1.0e-2
+    max_Gam_vpa_Gerr = maximum(Gam_vpa_Gerr)
+    println("max(abs(Gamma_vpa_G[F_Ms,F_Ms])): ", max_Gam_vpa_Gerr)
+    if max_Gam_vpa_Gerr > zero
+        for imu in 1:mu.n
+            for ivpa in 1:vpa.n
+                if Gam_vpa_Gerr[ivpa,imu] > zero 
+                    println("ivpa: ",ivpa," imu: ",imu," Gam_vpa_Gerr: ",Gam_vpa_Gerr[ivpa,imu]," Gam_vpa_G_num: ",fkarrays.Gamma_vpa_G[ivpa,imu]," Gam_vpa_GMaxwell: ",Gam_vpa_GMaxwell[ivpa,imu])
+                end
+            end
+        end
+        @views heatmap(mu.grid, vpa.grid, Gam_vpa_GMaxwell[:,:], xlabel=L"\mu", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                windowsize = (360,240), margin = 15pt)
+                outfile = string("fkpl_Gam_vpa_GMaxwell.pdf")
+                savefig(outfile)
+        @views heatmap(mu.grid, vpa.grid, fkarrays.Gamma_vpa_G[:,:], xlabel=L"\mu", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                windowsize = (360,240), margin = 15pt)
+                outfile = string("fkpl_Gam_vpa_G_num.pdf")
+                savefig(outfile)
+    end
+    max_Gam_mu_Gerr = maximum(Gam_mu_Gerr)
+    println("max(abs(Gamma_mu_G[F_Ms,F_Ms])): ", max_Gam_mu_Gerr)
+    if max_Gam_mu_Gerr > zero
+        for imu in 1:mu.n
+            for ivpa in 1:vpa.n
+                if Gam_mu_Gerr[ivpa,imu] > zero 
+                    println("ivpa: ",ivpa," imu: ",imu," Gam_mu_Gerr: ",Gam_mu_Gerr[ivpa,imu]," Gam_mu_G_num: ",fkarrays.Gamma_mu_G[ivpa,imu]," Gam_mu_GMaxwell: ",Gam_mu_GMaxwell[ivpa,imu])
+                end
+            end
+        end
+        @views heatmap(mu.grid, vpa.grid, Gam_mu_GMaxwell[:,:], xlabel=L"\mu", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                windowsize = (360,240), margin = 15pt)
+                outfile = string("fkpl_Gam_mu_GMaxwell.pdf")
+                savefig(outfile)
+        @views heatmap(mu.grid, vpa.grid, fkarrays.Gamma_mu_G[:,:], xlabel=L"\mu", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                windowsize = (360,240), margin = 15pt)
+                outfile = string("fkpl_Gam_mu_G_num.pdf")
+                savefig(outfile)
+    end
+    
+    for imu in 1:mu.n
+        for ivpa in 1:vpa.n
+            Gam_vpa_HMaxwell[ivpa,imu] = Gamma_vpa_HMaxwellian(Bmag,vpa,mu,ivpa,imu)
+            Gam_mu_HMaxwell[ivpa,imu] = Gamma_mu_HMaxwellian(Bmag,vpa,mu,ivpa,imu)
+            
+            Gam_vpa_Herr[ivpa,imu] = abs(fkarrays.Gamma_vpa_H[ivpa,imu] - Gam_vpa_HMaxwell[ivpa,imu])
+            Gam_mu_Herr[ivpa,imu] = abs(fkarrays.Gamma_mu_H[ivpa,imu] - Gam_mu_HMaxwell[ivpa,imu])
+        end
+    end
+    zero = 1.0e-2
+    max_Gam_vpa_Herr = maximum(Gam_vpa_Herr)
+    println("max(abs(Gamma_vpa_H[F_Ms,F_Ms])): ", max_Gam_vpa_Herr)
+    if max_Gam_vpa_Herr > zero
+        for imu in 1:mu.n
+            for ivpa in 1:vpa.n
+                if Gam_vpa_Herr[ivpa,imu] > zero 
+                    println("ivpa: ",ivpa," imu: ",imu," Gam_vpa_Herr: ",Gam_vpa_Herr[ivpa,imu]," Gam_vpa_H_num: ",fkarrays.Gamma_vpa_H[ivpa,imu]," Gam_vpa_HMaxwell: ",Gam_vpa_HMaxwell[ivpa,imu])
+                end
+            end
+        end
+        @views heatmap(mu.grid, vpa.grid, Gam_vpa_HMaxwell[:,:], xlabel=L"\mu", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                windowsize = (360,240), margin = 15pt)
+                outfile = string("fkpl_Gam_vpa_HMaxwell.pdf")
+                savefig(outfile)
+        @views heatmap(mu.grid, vpa.grid, fkarrays.Gamma_vpa_H[:,:], xlabel=L"\mu", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                windowsize = (360,240), margin = 15pt)
+                outfile = string("fkpl_Gam_vpa_H_num.pdf")
+                savefig(outfile)
+    end
+    max_Gam_mu_Herr = maximum(Gam_mu_Herr)
+    println("max(abs(Gamma_mu_H[F_Ms,F_Ms])): ", max_Gam_mu_Herr)
+    if max_Gam_mu_Herr > zero
+        for imu in 1:mu.n
+            for ivpa in 1:vpa.n
+                if Gam_mu_Herr[ivpa,imu] > zero 
+                    println("ivpa: ",ivpa," imu: ",imu," Gam_mu_Herr: ",Gam_mu_Herr[ivpa,imu]," Gam_mu_H_num: ",fkarrays.Gamma_mu_H[ivpa,imu]," Gam_mu_HMaxwell: ",Gam_mu_HMaxwell[ivpa,imu])
+                end
+            end
+        end
+        @views heatmap(mu.grid, vpa.grid, Gam_mu_HMaxwell[:,:], xlabel=L"\mu", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                windowsize = (360,240), margin = 15pt)
+                outfile = string("fkpl_Gam_mu_HMaxwell.pdf")
+                savefig(outfile)
+        @views heatmap(mu.grid, vpa.grid, fkarrays.Gamma_mu_H[:,:], xlabel=L"\mu", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                windowsize = (360,240), margin = 15pt)
+                outfile = string("fkpl_Gam_mu_H_num.pdf")
+                savefig(outfile)
+    end
     
     zero = 1.0e1
     Cssp_err = maximum(abs.(Cssp))

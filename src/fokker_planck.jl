@@ -31,7 +31,11 @@ struct fokkerplanck_arrays_struct
     buffer_vpamu_2::Array{mk_float,2}
     buffer_vpamu_3::Array{mk_float,2}
     Gamma_vpa::Array{mk_float,2}
+    Gamma_vpa_G::Array{mk_float,2}
+    Gamma_vpa_H::Array{mk_float,2}
     Gamma_mu::Array{mk_float,2}
+    Gamma_mu_G::Array{mk_float,2}
+    Gamma_mu_H::Array{mk_float,2}
     #Cssp_result_vpamu::Array{mk_float,2}
 end
 
@@ -53,13 +57,18 @@ function allocate_fokkerplanck_arrays(mu,vpa)
     buffer_vpamu_2 = allocate_float(nvpa,nmu)
     buffer_vpamu_3 = allocate_float(nvpa,nmu)
     Gamma_vpa = allocate_float(nvpa,nmu)
+    Gamma_vpa_G = allocate_float(nvpa,nmu)
+    Gamma_vpa_H = allocate_float(nvpa,nmu)
     Gamma_mu = allocate_float(nvpa,nmu)
+    Gamma_mu_G = allocate_float(nvpa,nmu)
+    Gamma_mu_H = allocate_float(nvpa,nmu)
     #Cssp_result_vpamu = allocate_float(nvpa,nmu)
     
     return fokkerplanck_arrays_struct(elliptic_integral_E_factor,elliptic_integral_K_factor,
                                Rosenbluth_G,Rosenbluth_H,
                                buffer_vpamu_1,buffer_vpamu_2,buffer_vpamu_3,
-                               Gamma_vpa, Gamma_mu)
+                               Gamma_vpa, Gamma_vpa_G, Gamma_vpa_H,
+                               Gamma_mu, Gamma_mu_G, Gamma_mu_H)
                                #Cssp_result_vpamu)
 end
 
@@ -249,7 +258,11 @@ function evaluate_RMJ_collision_operator!(Cssp_out, fs_in, fsp_in, ms, msp, cfre
     Rosenbluth_G = fokkerplanck_arrays.Rosenbluth_G
     Rosenbluth_H = fokkerplanck_arrays.Rosenbluth_H
     Gamma_vpa = fokkerplanck_arrays.Gamma_vpa
+    Gamma_vpa_G = fokkerplanck_arrays.Gamma_vpa_G
+    Gamma_vpa_H = fokkerplanck_arrays.Gamma_vpa_H
     Gamma_mu = fokkerplanck_arrays.Gamma_mu
+    Gamma_mu_G = fokkerplanck_arrays.Gamma_mu_G
+    Gamma_mu_H = fokkerplanck_arrays.Gamma_mu_H
     
     ## calculate the Rosenbluth potentials
     ## and store in fokkerplanck_arrays_struct
@@ -266,7 +279,11 @@ function evaluate_RMJ_collision_operator!(Cssp_out, fs_in, fsp_in, ms, msp, cfre
     Cssp_out .= 0.0
     # zero fluxes to prepare for their calculation 
     Gamma_vpa .= 0.0
+    Gamma_vpa_G .= 0.0
+    Gamma_vpa_H .= 0.0
     Gamma_mu  .= 0.0
+    Gamma_mu_G  .= 0.0
+    Gamma_mu_H  .= 0.0
     
     # Gamma_v|| += d F_s / d vpa * d^2 G_sp / d vpa^2
     for imu in 1:nmu
@@ -276,7 +293,7 @@ function evaluate_RMJ_collision_operator!(Cssp_out, fs_in, fsp_in, ms, msp, cfre
         @views second_derivative!(vpa.scratch, Rosenbluth_G[:,imu], vpa.scratch2, vpa, vpa_spectral, impose_bc=false, penalise_fd=false)
         @views @. buffer_2[:,imu] = vpa.scratch
     end 
-    @views @. Gamma_vpa += buffer_1*buffer_2
+    @views @. Gamma_vpa_G += buffer_1*buffer_2
     
     #  Gamma_v|| += + (2 mu/Bmag) d F_s / d mu * d^2 G_sp / d vpa d mu 
     for imu in 1:nmu
@@ -289,16 +306,17 @@ function evaluate_RMJ_collision_operator!(Cssp_out, fs_in, fsp_in, ms, msp, cfre
         @views derivative!(mu.scratch, buffer_1[ivpa,:], mu, mu_spectral)
         @views @. buffer_3[ivpa,:] = mu.scratch
     end 
-    @views @. Gamma_vpa += buffer_2*buffer_3
+    @views @. Gamma_vpa_G += buffer_2*buffer_3
     
     # Gamma_v|| += - 2 (m_s/m_s') F_s * d H_s' / d vpa
     for imu in 1:nmu
         @views derivative!(vpa.scratch, Rosenbluth_H[:,imu], vpa, vpa_spectral)
         @views @. buffer_1[:,imu] = vpa.scratch
     end 
-    @views @. Gamma_vpa -= 2.0*(ms/msp)*fs_in*buffer_1
+    @views @. Gamma_vpa_H -= 2.0*(ms/msp)*fs_in*buffer_1
     
     # compute d Gamma_vpa / d vpa
+    @views @. Gamma_vpa = Gamma_vpa_G + Gamma_vpa_H
     for imu in 1:nmu
         @views derivative!(vpa.scratch, Gamma_vpa[:,imu], vpa, vpa_spectral)
         @views @. buffer_1[:,imu] = vpa.scratch
@@ -317,7 +335,7 @@ function evaluate_RMJ_collision_operator!(Cssp_out, fs_in, fsp_in, ms, msp, cfre
         @views derivative!(mu.scratch, buffer_1[ivpa,:], mu, mu_spectral)
         @views @. buffer_3[ivpa,:] = mu.scratch * (2.0 * mu.grid / Bmag)
     end 
-    @views @. Gamma_mu += buffer_2*buffer_3
+    @views @. Gamma_mu_G += buffer_2*buffer_3
     
     # Gamma_mu += (2 mu / Bmag)^{3/2} d F_s / d mu * d / d mu ( (2 mu / Bmag)^{1/2} d G / d mu) 
     for ivpa in 1:nvpa
@@ -328,16 +346,17 @@ function evaluate_RMJ_collision_operator!(Cssp_out, fs_in, fsp_in, ms, msp, cfre
         @views @. buffer_2[ivpa,:] = mu.scratch*(2.0 * mu.grid / Bmag)*sqrt(2.0 * mu.grid/ Bmag)
         
     end 
-    @views @. Gamma_mu += buffer_1*buffer_2
+    @views @. Gamma_mu_G += buffer_1*buffer_2
     
     # Gamma_mu += - 2 (ms/ms') (2 mu / Bmag)  F_s * d H_s'/ d mu 
     for ivpa in 1:nvpa
         @views derivative!(mu.scratch, Rosenbluth_H[ivpa,:], mu, mu_spectral)
         @views @. buffer_1[ivpa,:] = mu.scratch*(2.0 * mu.grid/ Bmag)
     end 
-    @views @. Gamma_mu -= 2.0*(ms/msp)*fs_in*buffer_1
+    @views @. Gamma_mu_H -= 2.0*(ms/msp)*fs_in*buffer_1
     
     # compute d Gamma_mu / d mu
+    @views @. Gamma_mu = Gamma_mu_G + Gamma_mu_H
     for ivpa in 1:nvpa
         @views derivative!(mu.scratch, Gamma_mu[ivpa,:], mu, mu_spectral)
         @views @. buffer_1[ivpa,:] = mu.scratch
