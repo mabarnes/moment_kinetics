@@ -127,6 +127,12 @@ function get_local_range(sub_block_rank, sub_block_size, dim_size)
     # because the root process might have slightly more work to do in general.
     # This calculation is not at all optimized, but is not going to take long, and is
     # only done in initialization, so it is more important to be simple and robust.
+
+    if dim_size == 0
+        # No processor includes a grid point
+        return 1:0
+    end
+
     remaining = dim_size
     done = false
     n_points_for_proc = zeros(mk_int, sub_block_size)
