@@ -67,8 +67,15 @@ function write_single_value!(file_or_group::NCDataset, name,
         end
         dims = Tuple(c.name for c in coords)
     end
-    var = defVar(file_or_group, name, type, dims, attrib=attributes)
-    var[:] = value
+    if isa(value, Bool)
+        # As a hack, write bools to NetCDF as Char, as NetCDF does not support bools (?),
+        # and we do not use Char for anything else
+        var = defVar(file_or_group, name, Char, dims, attrib=attributes)
+        var[:] = Char(value)
+    else
+        var = defVar(file_or_group, name, type, dims, attrib=attributes)
+        var[:] = value
+    end
 
     return nothing
 end
