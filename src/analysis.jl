@@ -358,6 +358,9 @@ function analyze_2D_instability(phi, density, thermal_speed, r, z, r_spectral, z
     # Start searching for mode position once amplitude has grown to twice initial
     # perturbation
     startind = findfirst(x -> x>max_Delta_phi[1], max_Delta_phi)
+    if startind === nothing
+        startind = 1
+    end
 
     # Find the z-index of the maximum of Delta_phi
     # Need the iterator thing to convert CartesianIndex structs returned by argmax into
