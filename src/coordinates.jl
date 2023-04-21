@@ -173,6 +173,7 @@ function init_grid(ngrid, nelement_global, nelement_local, n_global, n_local, ir
             # initialize chebyshev grid defined on [-L/2,L/2]
             grid, wgts = scaled_chebyshev_grid(ngrid, nelement_global, nelement_local, n_local, irank, L, imin, imax)
             grid .= grid .+ L/2.0 # shift to [0,L] appropriate to mu variable
+            @. grid = abs(grid) # prevent negative value at mu = 0
             wgts = 2.0 .* wgts # to include 2 in jacobian of integral
                                         # see note above on normalisation
         else
