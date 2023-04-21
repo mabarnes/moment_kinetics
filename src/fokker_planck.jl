@@ -338,15 +338,30 @@ function evaluate_RMJ_collision_operator!(Cssp_out, fs_in, fsp_in, ms, msp, cfre
     @views @. Gamma_mu_G += buffer_2*buffer_3
     
     # Gamma_mu += (2 mu / Bmag)^{3/2} d F_s / d mu * d / d mu ( (2 mu / Bmag)^{1/2} d G / d mu) 
+    #for ivpa in 1:nvpa
+    #    @views derivative!(mu.scratch, fs_in[ivpa,:], mu, mu_spectral)
+    #    @views @. buffer_1[ivpa,:] = mu.scratch*(2.0*mu.grid/Bmag)
+    #    @views derivative!(mu.scratch, Rosenbluth_G[ivpa,:], mu, mu_spectral)
+    #    @views @. buffer_2[ivpa,:] = mu.scratch/Bmag
+    #    @views @. mu.scratch2 = 2.0 * mu.grid/ Bmag
+    #    @views second_derivative!(mu.scratch, Rosenbluth_G[ivpa,:], mu.scratch2, mu, mu_spectral, impose_bc=false, penalise_fd=false)
+    #    @views @. buffer_3[ivpa,:] = mu.scratch
+    #end 
+    #@views @. Gamma_mu_G += buffer_1*(buffer_3 - buffer_2)
     for ivpa in 1:nvpa
         @views derivative!(mu.scratch, fs_in[ivpa,:], mu, mu_spectral)
-        @views @. buffer_1[ivpa,:] = mu.scratch
-        @. mu.scratch2 = sqrt(2.0 * mu.grid/ Bmag)
-        @views second_derivative!(mu.scratch, Rosenbluth_G[ivpa,:], mu.scratch2, mu, mu_spectral, impose_bc=false, penalise_fd=false)
-        @views @. buffer_2[ivpa,:] = mu.scratch*(2.0 * mu.grid / Bmag)*sqrt(2.0 * mu.grid/ Bmag)
-        
+        @views @. buffer_1[ivpa,:] = mu.scratch*(2.0*mu.grid/Bmag)
+        @views derivative!(mu.scratch, Rosenbluth_G[ivpa,:], mu, mu_spectral)
+        @views @. buffer_2[ivpa,:] = mu.scratch
+        @views derivative!(mu.scratch, buffer_2[ivpa,:], mu, mu_spectral)
+        @views @. buffer_3[ivpa,:] = mu.scratch*(2.0*mu.grid/Bmag)
+        @views @. buffer_2[ivpa,:] *= (1.0/Bmag)
     end 
-    @views @. Gamma_mu_G += buffer_1*buffer_2
+    @views @. Gamma_mu_G += buffer_1*(buffer_3 + buffer_2)
+
+        #@views @. mu.scratch2 = sqrt(2.0 * mu.grid/ Bmag)
+        #@views second_derivative!(mu.scratch, Rosenbluth_G[ivpa,:], mu.scratch2, mu, mu_spectral, impose_bc=false, penalise_fd=false)
+        #@views @. buffer_2[ivpa,:] = mu.scratch*(2.0 * mu.grid / Bmag)*sqrt(2.0 * mu.grid/ Bmag)
     
     # Gamma_mu += - 2 (ms/ms') (2 mu / Bmag)  F_s * d H_s'/ d mu 
     for ivpa in 1:nvpa
