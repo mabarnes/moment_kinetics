@@ -42,10 +42,16 @@ end
 
 function write_single_value!(file_or_group::NCDataset, name,
                              value::Union{Number, AbstractString, AbstractArray{T,N}},
-                             coords::coordinate...; description=nothing) where {T,N}
+                             coords::coordinate...; description=nothing,
+                             units=nothing) where {T,N}
+    attributes = Dict{String, Any}()
     if description !== nothing
-        attributes = Dict("description" => description)
-    else
+        attributes["description"] = description
+    end
+    if units !== nothing
+        attributes["units"] = units
+    end
+    if length(attributes) == 0
         attributes = ()
     end
 

@@ -117,10 +117,10 @@ function setup_file_io(io_input, vz, vr, vzeta, vpa, vperp, z, r, composition, c
 end
 
 """
-    write_single_value!(file_or_group, name, value; description=nothing)
+    write_single_value!(file_or_group, name, value; description=nothing, units=nothing)
 
-Write a single variable to a file or group. If a description is passed, add as an
-attribute of the variable.
+Write a single variable to a file or group. If a description and/or units are passed, add
+as attributes of the variable.
 """
 function write_single_value!() end
 

@@ -34,11 +34,14 @@ end
 
 # HDF5.H5DataStore is the supertype for HDF5.File and HDF5.Group
 function write_single_value!(file_or_group::HDF5.H5DataStore, name, value,
-                             coords::coordinate...; description=nothing)
+                             coords::coordinate...; description=nothing, units=nothing)
     file_or_group[name] = value
 
     if description !== nothing
         add_attribute!(file_or_group[name], "description", description)
+    end
+    if units !== nothing
+        add_attribute!(file_or_group[name], "units", units)
     end
 
     return nothing
