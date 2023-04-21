@@ -85,7 +85,8 @@ end
 """
 open the necessary output files
 """
-function setup_file_io(io_input, vz, vr, vzeta, vpa, vperp, z, r, composition, collisions)
+function setup_file_io(io_input, vz, vr, vzeta, vpa, vperp, z, r, composition, collisions,
+                       reference_parameters)
     begin_serial_region()
     @serial_region begin
         # Only read/write from first process in each 'block'
@@ -106,9 +107,9 @@ function setup_file_io(io_input, vz, vr, vzeta, vpa, vperp, z, r, composition, c
         end
 
         io_moments = setup_moments_io(out_prefix, io_input.binary_format, r, z,
-                                      composition, collisions)
+                                      composition, collisions, reference_parameters)
         io_dfns = setup_dfns_io(out_prefix, io_input.binary_format, r, z, vperp, vpa,
-                                vzeta, vr, vz, composition, collisions)
+                                vzeta, vr, vz, composition, collisions, reference_parameters)
 
         return ascii, io_moments, io_dfns
     end
@@ -127,7 +128,7 @@ function write_single_value!() end
 """
 write some overview information for the simulation to the binary file
 """
-function write_overview!(fid, composition, collisions)
+function write_overview!(fid, composition, collisions, reference_parameters)
     overview = create_io_group(fid, "overview")
     write_single_value!(overview, "nspecies", composition.n_species,
                         description="total number of evolved plasma species")
@@ -141,6 +142,14 @@ function write_overview!(fid, composition, collisions)
                         description="quantity related to the charge exchange frequency")
     write_single_value!(overview, "ionization_frequency", collisions.ionization,
                         description="quantity related to the ionization frequency")
+    write_single_value!(overview, "Bref", reference_parameters.Bref,
+                        description="Reference magnetic field", units="T")
+    write_single_value!(overview, "Lref", reference_parameters.Lref,
+                        description="Reference length", units="m")
+    write_single_value!(overview, "Nref", reference_parameters.Nref,
+                        description="Reference density", units="m^(-3)")
+    write_single_value!(overview, "Tref", reference_parameters.Tref,
+                        description="Reference temperature", units="eV")
 end
 
 """
@@ -399,14 +408,15 @@ end
 """
 setup file i/o for moment variables
 """
-function setup_moments_io(prefix, binary_format, r, z, composition, collisions)
+function setup_moments_io(prefix, binary_format, r, z, composition, collisions,
+                          reference_parameters)
     fid = open_output_file(string(prefix, ".moments"), binary_format)
 
     # write a header to the output file
     add_attribute!(fid, "file_info", "Output moments data from the moment_kinetics code")
 
     # write some overview information to the output file
-    write_overview!(fid, composition, collisions)
+    write_overview!(fid, composition, collisions, reference_parameters)
 
     ### define coordinate dimensions ###
     define_spatial_coordinates!(fid, z, r)
@@ -423,7 +433,7 @@ end
 setup file i/o for distribution function variables
 """
 function setup_dfns_io(prefix, binary_format, r, z, vperp, vpa, vzeta, vr, vz, composition,
-                       collisions)
+                       collisions, reference_parameters)
 
     fid = open_output_file(string(prefix, ".dfns"), binary_format)
 
@@ -432,7 +442,7 @@ function setup_dfns_io(prefix, binary_format, r, z, vperp, vpa, vzeta, vr, vz, c
                    "Output distribution function data from the moment_kinetics code")
 
     # write some overview information to the hdf5 file
-    write_overview!(fid, composition, collisions)
+    write_overview!(fid, composition, collisions, reference_parameters)
 
     ### define coordinate dimensions ###
     coords_group = define_spatial_coordinates!(fid, z, r)

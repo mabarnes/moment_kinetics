@@ -488,9 +488,11 @@ function mk_input(scan_input=Dict())
         z_immutable, vpa_immutable, composition, species_immutable, evolve_moments)
 
     # return immutable structs for z, vpa, species and composition
-    all_inputs = (io_immutable, evolve_moments, t_input,
-                  z_immutable, r_immutable, vpa_immutable, vperp_immutable, gyrophase_immutable, vz_immutable, vr_immutable, vzeta_immutable,
-                  composition, species_immutable, collisions, geometry, drive_immutable, num_diss_params)
+    all_inputs = (io_immutable, evolve_moments, t_input, z_immutable, r_immutable,
+                  vpa_immutable, vperp_immutable, gyrophase_immutable, vz_immutable,
+                  vr_immutable, vzeta_immutable, composition, species_immutable,
+                  collisions, reference_parameters, geometry, drive_immutable,
+                  num_diss_params)
     println(io, "\nAll inputs returned from mk_input():")
     println(io, all_inputs)
     close(io)

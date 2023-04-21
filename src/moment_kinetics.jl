@@ -170,7 +170,7 @@ function setup_moment_kinetics(input_dict::Dict;
         vpa_input, vperp_input, gyrophase_input,
         vz_input, vr_input, vzeta_input,
         composition, species, collisions,
-        geometry, drive_input, num_diss_params  = input
+        reference_parameters, geometry, drive_input, num_diss_params  = input
     # initialize z grid and write grid point locations to file
     z = define_coordinate(z_input, composition)
     # initialize r grid and write grid point locations to file
@@ -222,7 +222,7 @@ function setup_moment_kinetics(input_dict::Dict;
     scratch, advance, scratch_dummy, manufactured_source_list = setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition,
         drive_input, moments, t_input, collisions, species, geometry, boundary_distributions, num_diss_params)
     # setup i/o
-    ascii_io, io_moments, io_dfns = setup_file_io(io_input, vz, vr, vzeta, vpa, vperp, z, r, composition, collisions)
+    ascii_io, io_moments, io_dfns = setup_file_io(io_input, vz, vr, vzeta, vpa, vperp, z, r, composition, collisions, reference_parameters)
     # write initial data to ascii files
     write_data_to_ascii(moments, fields, vpa, vperp, z, r, code_time, composition.n_ion_species, composition.n_neutral_species, ascii_io)
     # write initial data to binary file (netcdf)
