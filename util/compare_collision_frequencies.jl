@@ -113,8 +113,7 @@ function compare_collision_frequencies(input_file::String,
         fid = moment_kinetics.load_data.open_readonly_output_file(basename, ext[2:end];
                                                                   iblock=iblock)
 
-        nz_local, nz_global, zgrid, z_wgts, Lz =
-            moment_kinetics.load_data.load_coordinate_data(fid, "z")
+        z = moment_kinetics.load_data.load_coordinate_data(fid, "z")
 
         density, parallel_flow, parallel_pressure, parallel_heat_flux, thermal_speed,
         evolve_ppar = moment_kinetics.load_data.load_charged_particle_moments_data(fid)
@@ -126,7 +125,7 @@ function compare_collision_frequencies(input_file::String,
 
         # Ignoring variations in logLambda...
         nu_ii = @. dimensional_parameters["nu_ii0"] * density / parallel_temperature^1.5
-        println("nu_ii ", nu_ii[nz_global÷2,1,1,end])
+        println("nu_ii ", nu_ii[z.n_global÷2,1,1,end])
 
         # Neutral collison rates:
         # The ionization term in the ion/neutral kinetic equations is ±R_ion*n_e*f_n.
@@ -134,18 +133,18 @@ function compare_collision_frequencies(input_file::String,
         # (inverse of the) characteristic time that it takes a neutral atom to be ionized.
         nu_ionization = @. collisions.ionization * density[:,:,1,:] /
                            dimensional_parameters["timenorm"]
-        println("nu_ionization ", nu_ionization[nz_global÷2,1,end])
+        println("nu_ionization ", nu_ionization[z.n_global÷2,1,end])
         # The charge-exchange term in the ion kinetic equation is -R_in*(n_n*f_i-n_i*f_n).
         # So the rate at which ions experience CX reactions is R_in*n_n
         nu_cx = @. collisions.charge_exchange * neutral_density[:,:,1,:] /
                    dimensional_parameters["timenorm"]
-        println("nu_cx ", nu_cx[nz_global÷2,1,end])
+        println("nu_cx ", nu_cx[z.n_global÷2,1,end])
 
         # Make plot (using values from the final time point)
         plot(legend=:outerright, xlabel="z", ylabel="frequency", ylims=(0.0, :auto))
-        @views plot!(zgrid, nu_ii[:,1,1,end], label="nu_ii")
-        @views plot!(zgrid, nu_ionization[:,1,end], label="nu_ionization")
-        @views plot!(zgrid, nu_cx[:,1,end], label="nu_cx")
+        @views plot!(z.grid, nu_ii[:,1,1,end], label="nu_ii")
+        @views plot!(z.grid, nu_ionization[:,1,end], label="nu_ionization")
+        @views plot!(z.grid, nu_cx[:,1,end], label="nu_cx")
         hline!([nu_vpa_diss], label="nu_vpa_diss")
         ylabel!("frequency (s^-1)")
 
