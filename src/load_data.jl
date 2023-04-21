@@ -15,6 +15,7 @@ export load_rank_data
 export load_species_data
 
 using ..coordinates: define_coordinate
+using ..file_io: get_group
 using ..input_structs: advection_input, grid_input
 
 using HDF5
@@ -90,31 +91,6 @@ function load_variable(file_or_group::NCDataset, name::String)
         end
     catch
         println("An error occured while loading $name")
-        rethrow()
-    end
-end
-
-"""
-Get a (sub-)group from a file or group
-"""
-function get_group() end
-function get_group(file_or_group::HDF5.H5DataStore, name::String)
-    # This overload deals with cases where fid is an HDF5 `File` or `Group` (`H5DataStore`
-    # is the abstract super-type for both
-    try
-        return file_or_group[name]
-    catch
-        println("An error occured while opening the $name group")
-        rethrow()
-    end
-end
-function get_group(file_or_group::NCDataset, name::String)
-    # This overload deals with cases where fid is a NetCDF `Dataset` (which could be a
-    # file or a group).
-    try
-        return file_or_group.group[name]
-    catch
-        println("An error occured while opening the $name group")
         rethrow()
     end
 end

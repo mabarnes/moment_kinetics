@@ -3,6 +3,7 @@
 module file_io
 
 export input_option_error
+export get_group
 export open_output_file, open_ascii_output_file
 export setup_file_io, finish_file_io
 export write_data_to_ascii
@@ -393,6 +394,11 @@ Add an attribute to a file, group or variable
 function add_attribute!() end
 
 """
+Get a (sub-)group from a file or group
+"""
+function get_group() end
+
+"""
 Open an output file, selecting the backend based on io_option
 """
 function open_output_file(prefix, binary_format)
@@ -406,11 +412,25 @@ function open_output_file(prefix, binary_format)
 end
 
 """
+Re-open an existing output file, selecting the backend based on io_option
+"""
+function reopen_output_file(filename)
+    prefix, format_string = splitext(filename)
+    if format_string == ".h5"
+        return open_output_file_hdf5(prefix, "r+")[1]
+    elseif format_string == ".cdf"
+        return open_output_file_netcdf(prefix, "a")[1]
+    else
+        error("Unsupported I/O format $binary_format")
+    end
+end
+
+"""
 setup file i/o for moment variables
 """
 function setup_moments_io(prefix, binary_format, r, z, composition, collisions,
                           reference_parameters)
-    fid = open_output_file(string(prefix, ".moments"), binary_format)
+    fid, filename = open_output_file(string(prefix, ".moments"), binary_format)
 
     # write a header to the output file
     add_attribute!(fid, "file_info", "Output moments data from the moment_kinetics code")
@@ -426,7 +446,23 @@ function setup_moments_io(prefix, binary_format, r, z, composition, collisions,
     io_moments = define_dynamic_moment_variables!(
         fid, composition.n_ion_species, composition.n_neutral_species, r, z)
 
-    return io_moments
+    close(fid)
+
+    return filename
+end
+
+"""
+Reopen an existing moments output file to append more data
+"""
+function reopen_moments_io(filename::String)
+    fid = reopen_output_file(filename)
+    dyn = get_group(fid, "dynamic_data")
+
+    return io_moments_info(fid, dyn["time"], dyn["phi"], dyn["Er"], dyn["Ez"],
+                           dyn["density"], dyn["parallel_flow"], dyn["parallel_pressure"],
+                           dyn["parallel_heat_flux"], dyn["thermal_speed"],
+                           dyn["density_neutral"], dyn["uz_neutral"], dyn["pz_neutral"],
+                           dyn["qz_neutral"], dyn["thermal_speed_neutral"])
 end
 
 """
@@ -435,7 +471,7 @@ setup file i/o for distribution function variables
 function setup_dfns_io(prefix, binary_format, r, z, vperp, vpa, vzeta, vr, vz, composition,
                        collisions, reference_parameters)
 
-    fid = open_output_file(string(prefix, ".dfns"), binary_format)
+    fid, filename = open_output_file(string(prefix, ".dfns"), binary_format)
 
     # write a header to the output file
     add_attribute!(fid, "file_info",
@@ -454,7 +490,19 @@ function setup_dfns_io(prefix, binary_format, r, z, vperp, vpa, vzeta, vr, vz, c
         fid, r, z, vperp, vpa, vzeta, vr, vz, composition.n_ion_species,
         composition.n_neutral_species)
 
-    return io_dfns
+    close(fid)
+
+    return filename
+end
+
+"""
+Reopen an existing distribution-functions output file to append more data
+"""
+function reopen_dfns_io(filename::String)
+    fid = reopen_output_file(filename)
+    dyn = get_group(fid, "dynamic_data")
+
+    return io_dfns_info(fid, dyn["time"], dyn["f"], dyn["f_neutral"])
 end
 
 """
@@ -469,9 +517,11 @@ function append_to_dynamic_var() end
 write time-dependent moments data to the binary output file
 """
 function write_moments_data_to_binary(moments, fields, t, n_ion_species,
-                                      n_neutral_species, io_moments, t_idx)
+                                      n_neutral_species, filename_moments, t_idx)
     @serial_region begin
         # Only read/write from first process in each 'block'
+
+        io_moments = reopen_moments_io(filename_moments)
 
         # add the time for this time slice to the hdf5 file
         append_to_dynamic_var(io_moments.time, t, t_idx)
@@ -494,6 +544,8 @@ function write_moments_data_to_binary(moments, fields, t, n_ion_species,
             append_to_dynamic_var(io_moments.qz_neutral, moments.neutral.qz, t_idx)
             append_to_dynamic_var(io_moments.thermal_speed_neutral, moments.neutral.vth, t_idx)
         end
+
+        close(io_moments.fid)
     end
     return nothing
 end
@@ -502,9 +554,11 @@ end
 write time-dependent distribution function data to the binary output file
 """
 function write_dfns_data_to_binary(ff, ff_neutral, t, n_ion_species, n_neutral_species,
-                                   io_dfns, t_idx)
+                                   filename_dfns, t_idx)
     @serial_region begin
         # Only read/write from first process in each 'block'
+
+        io_dfns = reopen_dfns_io(filename_dfns)
 
         # add the time for this time slice to the hdf5 file
         append_to_dynamic_var(io_dfns.time, t, t_idx)
@@ -514,6 +568,8 @@ function write_dfns_data_to_binary(ff, ff_neutral, t, n_ion_species, n_neutral_s
         if n_neutral_species > 0
             append_to_dynamic_var(io_dfns.f_neutral, ff_neutral, t_idx)
         end
+
+        close(io_dfns.fid)
     end
     return nothing
 end
@@ -577,8 +633,8 @@ end
 close all opened output files
 """
 function finish_file_io(ascii_io::Union{ascii_ios,Nothing},
-                        binary_moments::Union{io_moments_info,Nothing},
-                        binary_dfns::Union{io_dfns_info,Nothing})
+                        binary_moments::Union{io_moments_info,String,Nothing},
+                        binary_dfns::Union{io_dfns_info,String,Nothing})
     @serial_region begin
         # Only read/write from first process in each 'block'
 
@@ -592,10 +648,10 @@ function finish_file_io(ascii_io::Union{ascii_ios,Nothing},
                 end
             end
         end
-        if binary_moments !== nothing
+        if binary_moments !== nothing && !isa(binary_moments, String)
             close(binary_moments.fid)
         end
-        if binary_dfns !== nothing
+        if binary_dfns !== nothing && !isa(binary_dfns, String)
             close(binary_dfns.fid)
         end
     end

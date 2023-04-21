@@ -2,15 +2,15 @@
 
 using HDF5
 
-function open_output_file_hdf5(prefix)
+function open_output_file_hdf5(prefix, mode="cw")
     # the hdf5 file will be given by output_dir/run_name with .h5 appended
     filename = string(prefix, ".h5")
     # if a file with the requested name already exists, remove it
-    isfile(filename) && rm(filename)
+    mode == "cw" && isfile(filename) && rm(filename)
     # create the new HDF5 file
-    fid = h5open(filename,"cw")
+    fid = h5open(filename, mode)
 
-    return fid
+    return fid, filename
 end
 
 # HDF5.H5DataStore is the supertype for HDF5.File and HDF5.Group
@@ -30,6 +30,17 @@ function add_attribute!(file_or_group::HDF5.H5DataStore, name, value)
 end
 function add_attribute!(var::HDF5.Dataset, name, value)
     attributes(var)[name] = value
+end
+
+function get_group(file_or_group::HDF5.H5DataStore, name::String)
+    # This overload deals with cases where fid is an HDF5 `File` or `Group` (`H5DataStore`
+    # is the abstract super-type for both
+    try
+        return file_or_group[name]
+    catch
+        println("An error occured while opening the $name group")
+        rethrow()
+    end
 end
 
 # HDF5.H5DataStore is the supertype for HDF5.File and HDF5.Group

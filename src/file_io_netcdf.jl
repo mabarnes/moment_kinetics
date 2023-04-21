@@ -2,15 +2,15 @@
 
 using NCDatasets
 
-function open_output_file_netcdf(prefix)
+function open_output_file_netcdf(prefix, mode="c")
     # the netcdf file will be given by output_dir/run_name with .cdf appended
     filename = string(prefix, ".cdf")
     # if a netcdf file with the requested name already exists, remove it
-    isfile(filename) && rm(filename)
+    mode == "c" && isfile(filename) && rm(filename)
     # create the new NetCDF file
-    fid = NCDataset(filename,"c")
+    fid = NCDataset(filename, mode)
 
-    return fid
+    return fid, filename
 end
 
 function create_io_group(parent::NCDataset, name; description=nothing)
@@ -28,6 +28,17 @@ function add_attribute!(file_or_group::NCDataset, name, value)
 end
 function add_attribute!(var::NCDatasets.CFVariable, name, value)
     var.attrib[name] = value
+end
+
+function get_group(file_or_group::NCDataset, name::String)
+    # This overload deals with cases where fid is a NetCDF `Dataset` (which could be a
+    # file or a group).
+    try
+        return file_or_group.group[name]
+    catch
+        println("An error occured while opening the $name group")
+        rethrow()
+    end
 end
 
 function maybe_create_netcdf_dim(file_or_group::NCDataset, name, size)
