@@ -135,7 +135,26 @@ using IfElse
     function densi_sym(Lr,Lz,r_bc,z_bc,composition)
         if z_bc == "periodic"
             if r_bc == "periodic"
-                densi = 1.5 +  0.1*(sin(2.0*pi*r/Lr) + sin(2.0*pi*z/Lz))#*sin(2.0*pi*t)  
+                #densi = 1.5 +  0.1*(sin(2.0*pi*r/Lr) + sin(2.0*pi*z/Lz))#*sin(2.0*pi*t)  
+
+                # Input for instability test
+                background_wavenumber = 1
+                initial_density = 1.0
+                initial_temperature = 1.0
+                density_amplitude = 0.01
+                temperature_amplitude = 0.1
+                density_phase = 0.0
+                temperature_phase = 0.0
+                eta0 = (initial_density
+                        * (1.0 + density_amplitude
+                           * sin(2.0*π*background_wavenumber*z/Lz
+                                 + density_phase)))
+                T0 = (initial_temperature
+                      * (1.0 + temperature_amplitude * 4.0 / π
+                         * sin(2.0*π*background_wavenumber*z/Lz +
+                               temperature_phase)
+                        ))
+                densi = eta0^((T0/(1+T0)))
             elseif r_bc == "Dirichlet" 
                 #densi = 1.0 +  0.5*sin(2.0*pi*z/Lz)*(r/Lr + 0.5) + 0.2*sin(2.0*pi*r/Lr)*sin(2.0*pi*t)
                 #densi = 1.0 +  0.5*sin(2.0*pi*z/Lz)*(r/Lr + 0.5) + sin(2.0*pi*r/Lr)*sin(2.0*pi*t)
@@ -173,7 +192,30 @@ using IfElse
         epsilon = composition.epsilon_offset
         use_vpabar = composition.use_vpabar_in_mms_dfni
         if z_bc == "periodic"
-            dfni = densi * exp( - vpa^2 - vperp^2) 
+            #dfni = densi * exp( - vpa^2 - vperp^2) 
+
+            # Input for instability test
+            background_wavenumber = 1
+            initial_density = 1.0
+            initial_temperature = 1.0
+            density_amplitude = 0.01
+            temperature_amplitude = 0.1
+            density_phase = 0.0
+            temperature_phase = 0.0
+            eta0 = (initial_density
+                    * (1.0 + density_amplitude
+                       * sin(2.0*π*background_wavenumber*z/Lz
+                             + density_phase)))
+            T0 = (initial_temperature
+                  * (1.0 + temperature_amplitude * 4.0 / π
+                     * sin(2.0*π*background_wavenumber*z/Lz +
+                           temperature_phase)
+                    ))
+            dens = eta0^((T0/(1+T0)))
+            vth = sqrt(T0)
+
+            # Note this is for a '1V' test
+            dfni = dens/vth * exp(-(vpa/vth)^2)
         elseif z_bc == "wall"
             if use_vpabar  
                 vpabar = vpa - (rhostar/2.0)*(Bmag/Bzed)*Er # effective velocity in z direction * (Bmag/Bzed)

@@ -589,7 +589,7 @@ function analyze_and_plot_data(path)
     end
     # MRH need to get some run-time data here without copy-paste from mk_input
     
-    manufactured_solns_test = use_manufactured_solns_for_advance = get(scan_input, "use_manufactured_solns_for_advance", false)
+    manufactured_solns_test = false #use_manufactured_solns_for_advance = get(scan_input, "use_manufactured_solns_for_advance", false)
     # Plots compare density and density_symbolic at last timestep
     #if(manufactured_solns_test && nr > 1)
     if(manufactured_solns_test)

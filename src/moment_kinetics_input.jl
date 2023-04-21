@@ -220,10 +220,10 @@ function mk_input(scan_input=Dict())
     split_operators = get(scan_input, "split_operators", false)
     use_manufactured_solns_for_advance = get(scan_input, "use_manufactured_solns_for_advance", false)
     use_manufactured_solns_for_init = get(scan_input, "use_manufactured_solns_for_init", false)
-	if use_manufactured_solns_for_advance && !use_manufactured_solns_for_init
-	# if not (use_manufactured_solns_for_init == true) force use_manufactured_solns_for_init == true
-		use_manufactured_solns_for_init = true
-	end
+    #if use_manufactured_solns_for_advance && !use_manufactured_solns_for_init
+    #    # if not (use_manufactured_solns_for_init == true) force use_manufactured_solns_for_init == true
+    #    use_manufactured_solns_for_init = true
+    #end
     #println("Info: The flag use_manufactured_solns is ",use_manufactured_solns)
     
     # overwrite some default parameters related to the r grid
