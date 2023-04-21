@@ -151,6 +151,21 @@ function mk_input(scan_input=Dict())
     composition.use_test_neutral_wall_pdf = get(scan_input, "use_test_neutral_wall_pdf", false)
     # constant to be used to test nonzero Er in wall boundary condition
     composition.Er_constant = get(scan_input, "Er_constant", 0.0)
+
+    # Get reference parameters for normalizations
+    reference_parameter_section = set_defaults_and_check_section!(
+        scan_input, "reference_params";
+        Bref=1.0,
+        Lref=10.0,
+        Nref=1.0e19,
+        Tref=100.0,
+       )
+    reference_parameters = Dict_to_NamedTuple(reference_parameter_section)
+
+    elementary_charge = 1.602176634e-19 # C
+    mi = 3.3435837724e-27 # kg
+    cref = sqrt(2.0 * elementary_charge*reference_parameters.Tref / mi) # m/s
+    Omegaref = elementary_charge * reference_parameters.Bref / mi
     
     ## set geometry_input
     geometry.Bzed = get(scan_input, "Bzed", 1.0)
@@ -158,7 +173,7 @@ function mk_input(scan_input=Dict())
     geometry.bzed = geometry.Bzed/geometry.Bmag
     geometry.bzeta = sqrt(1.0 - geometry.bzed^2.0)
     geometry.Bzeta = geometry.Bmag*geometry.bzeta
-    geometry.rhostar = get(scan_input, "rhostar", 0.0)
+    geometry.rhostar = get(scan_input, "rhostar", cref/reference_parameters.Lref/Omegaref)
     #println("Info: Bzed is ",geometry.Bzed)
     #println("Info: Bmag is ",geometry.Bmag)
     #println("Info: rhostar is ",geometry.rhostar)
