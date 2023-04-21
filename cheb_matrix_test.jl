@@ -1,7 +1,7 @@
 using Printf
 using Plots
 using LaTeXStrings
-
+using MPI
 if abspath(PROGRAM_FILE) == @__FILE__
     using Pkg
     Pkg.activate(".")
@@ -13,6 +13,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
 	using moment_kinetics.calculus: derivative!, integral
     #import LinearAlgebra
     using LinearAlgebra: mul!, lu
+    using SparseArrays: sparse
     zero = 1.0e-10
     function Djj(x::Array{Float64,1},j::Int64)
         return -0.5*x[j]/( 1.0 - x[j]^2)
@@ -129,18 +130,24 @@ if abspath(PROGRAM_FILE) == @__FILE__
         imin = x.imin
         imax = x.imax
         
+        zero_bc_upper_boundary = x.bc == "zero" || x.bc == "zero_upper"
+        zero_bc_lower_boundary = x.bc == "zero" || x.bc == "zero_lower"
+        
         # fill in first element 
         j = 1
-        if x.bc == "zero"
-            D[imin[j],imin[j]:imax[j]] .+= D_elementwise[1,:]./2.0
-            D[imin[j],imin[j]] += D_elementwise[x.ngrid,x.ngrid]/2.0
+        if zero_bc_lower_boundary #x.bc == "zero"
+            D[imin[j],imin[j]:imax[j]] .+= D_elementwise[1,:]./2.0 #contributions from this element/2
+            D[imin[j],imin[j]] += D_elementwise[x.ngrid,x.ngrid]/2.0 #contribution from missing `zero' element/2
         else 
             D[imin[j],imin[j]:imax[j]] .+= D_elementwise[1,:]
         end
         for k in 2:imax[j]-imin[j] 
             D[k,imin[j]:imax[j]] .+= D_elementwise[k,:]
         end
-        if x.nelement_local > 1 || x.bc == "zero"
+        if zero_bc_upper_boundary && x.nelement_local == 1
+            D[imax[j],imin[j]-1:imax[j]] .+= D_elementwise[x.ngrid,:]./2.0 #contributions from this element/2
+            D[imax[j],imax[j]] += D_elementwise[1,1]/2.0              #contribution from missing `zero' element/2
+        elseif x.nelement_local > 1 #x.bc == "zero"
             D[imax[j],imin[j]:imax[j]] .+= D_elementwise[x.ngrid,:]./2.0
         else
             D[imax[j],imin[j]:imax[j]] .+= D_elementwise[x.ngrid,:]
@@ -153,11 +160,11 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 D[k+imin[j]-2,imin[j]-1:imax[j]] .+= D_elementwise[k,:]
             end
             # upper boundary condition on element 
-            if j == x.nelement_local && !(x.bc == "zero")
+            if j == x.nelement_local && !(zero_bc_upper_boundary)
                 D[imax[j],imin[j]-1:imax[j]] .+= D_elementwise[x.ngrid,:]
-            elseif j == x.nelement_local && x.bc == "zero"
-                D[imax[j],imin[j]-1:imax[j]] .+= D_elementwise[x.ngrid,:]./2.0
-                D[imax[j],imax[j]] += D_elementwise[1,1]/2.0
+            elseif j == x.nelement_local && zero_bc_upper_boundary
+                D[imax[j],imin[j]-1:imax[j]] .+= D_elementwise[x.ngrid,:]./2.0 #contributions from this element/2
+                D[imax[j],imax[j]] += D_elementwise[1,1]/2.0 #contribution from missing `zero' element/2
             else 
                 D[imax[j],imin[j]-1:imax[j]] .+= D_elementwise[x.ngrid,:]./2.0
             end
@@ -288,7 +295,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
 	adv_input = advection_input("default", 1.0, 0.0, 0.0)
 	nrank = 1
     irank = 0
-    comm = false
+    comm = MPI.COMM_NULL
 	# create the 'input' struct containing input info needed to create a
 	# coordinate
     input = grid_input("coord", ngrid, nelement_global, nelement_local, 
@@ -385,7 +392,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         df_exact[ix] = -2.0*alpha*x.grid[ix]*exp(-alpha*(x.grid[ix])^2)
         df2_exact[ix] = ((2.0*alpha*x.grid[ix])^2 - 2.0*alpha)*exp(-alpha*(x.grid[ix])^2)
     end
-    println("test f: \n",f)
+    #println("test f: \n",f)
     # calculate d f / d x from matrix 
     mul!(df,Dxreverse,f)
     # calculate d^2 f / d x from second application of Dx matrix 
@@ -400,11 +407,11 @@ if abspath(PROGRAM_FILE) == @__FILE__
     println("Reversed - multiple elements")
     #println("df \n",df)
     #println("df_exact \n",df_exact)
-    println("df_err \n",df_err)
+    #println("df_err \n",df_err)
     #println("df2 \n",df2)
     #println("df2_exact \n",df2_exact)
-    println("df2_err \n",df2_err)
-    println("df2cheb_err \n",df2cheb_err)
+    #println("df2_err \n",df2_err)
+    #println("df2cheb_err \n",df2cheb_err)
     
     println("max(df_err) \n",maximum(abs.(df_err)))
     println("max(df2_err) \n",maximum(abs.(df2_err)))
@@ -449,8 +456,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
     #println("result", yy)
     #println("check result", AA*yy, bb)
     MMS_test = false 
-    evolution_test = true 
-    
+    evolution_test = false#true 
+    elliptic_solve_test = true
     if MMS_test
         ntest = 5
         MMS_errors = Array{Float64,1}(undef,ntest)
@@ -527,5 +534,97 @@ if abspath(PROGRAM_FILE) == @__FILE__
             end
         outfile = string("ff_vs_x.gif")
         gif(anim, outfile, fps=5)
+    end
+    
+    if elliptic_solve_test
+        println("elliptic solve test")
+        ngrid = 17
+        nelement_local = 100
+        L = 10
+        nelement_local = nelement_local
+        input = grid_input("mu", ngrid, nelement_global, nelement_local, 
+		nrank, irank, L, discretization, fd_option, "zero_upper", adv_input,comm)
+        y = define_coordinate(input)
+        Dy = Array{Float64,2}(undef, y.n, y.n)
+        cheb_derivative_matrix_reversed!(Dy,y)
+        
+        
+        yDy = Array{Float64,2}(undef, y.n, y.n)
+        for iy in 1:y.n
+            @. yDy[iy,:] = y.grid[iy]*Dy[iy,:]
+        end
+        
+        
+        Dy_yDy = Array{Float64,2}(undef, y.n, y.n)
+        mul!(Dy_yDy,Dy,yDy)
+        #Dy_yDy[1,1] = 2.0*Dy_yDy[1,1]
+        #Dy_yDy[end,end] = 2.0*Dy_yDy[end,end]
+        
+        D2y = Array{Float64,2}(undef, y.n, y.n)
+        mul!(D2y,Dy,Dy)
+        #Dy_yDy[1,1] = 2.0*Dy_yDy[1,1]
+        D2y[end,end] = 2.0*D2y[end,end]
+        yD2y = Array{Float64,2}(undef, y.n, y.n)
+        for iy in 1:y.n
+            @. yD2y[iy,:] = y.grid[iy]*D2y[iy,:]
+        end
+        
+        if y.n < 20
+            println("\n Dy \n")
+            for i in 1:y.n
+                for j in 1:y.n
+                    @printf("%.1f ", Dy[i,j])
+                end
+                println("")
+            end
+            println("\n")
+            
+            println("\n yDy \n")
+            for i in 1:y.n
+                for j in 1:y.n
+                    @printf("%.1f ", yDy[i,j])
+                end
+                println("")
+            end
+            println("\n")
+            
+            println("\n Dy_yDy \n")
+            for i in 1:y.n
+                for j in 1:y.n
+                    @printf("%.1f ", Dy_yDy[i,j])
+                end
+                println("")
+            end
+            println("\n")
+            
+            
+            println("\n yD2y + Dy \n")
+            for i in 1:y.n
+                for j in 1:y.n
+                    @printf("%.1f ", yD2y[i,j]+Dy[i,j])
+                end
+                println("")
+            end
+            println("\n")
+        end 
+        Sy = Array{Float64,1}(undef, y.n)
+        Fy = Array{Float64,1}(undef, y.n)
+        Fy_exact = Array{Float64,1}(undef, y.n)
+        Fy_err = Array{Float64,1}(undef, y.n)
+        for iy in 1:y.n
+            Sy[iy] = (1.0 - y.grid[iy])*exp(-y.grid[iy])
+            Fy_exact[iy] = -exp(-y.grid[iy])
+        end
+        LL = Array{Float64,2}(undef, y.n, y.n)
+        @. LL = yD2y + Dy
+        LL_lu_obj = lu(sparse(LL))
+        # do elliptic solve 
+        Fy = LL_lu_obj\Sy
+        @. Fy_err = abs(Fy - Fy_exact)
+        
+        println("maximum(Fy_err)",maximum(Fy_err))
+        #println("Fy_err",Fy_err)
+        #println("Fy_exact",Fy_exact)
+        #println("Fy",Fy)
     end
 end
