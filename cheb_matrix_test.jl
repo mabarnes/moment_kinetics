@@ -12,9 +12,22 @@ if abspath(PROGRAM_FILE) == @__FILE__
 	using moment_kinetics.chebyshev: setup_chebyshev_pseudospectral
 	using moment_kinetics.calculus: derivative!, integral
     #import LinearAlgebra
-    using LinearAlgebra: mul!, lu
+    using LinearAlgebra: mul!, lu, cond
     using SparseArrays: sparse
+    using SpecialFunctions: erf
     zero = 1.0e-10
+    
+    function print_matrix(matrix,name,n,m)
+        println("\n ",name," \n")
+        for i in 1:n
+            for j in 1:m
+                @printf("%.1f ", matrix[i,j])
+            end
+            println("")
+        end
+        println("\n")
+    end 
+    
     function Djj(x::Array{Float64,1},j::Int64)
         return -0.5*x[j]/( 1.0 - x[j]^2)
     end
@@ -457,7 +470,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
     #println("check result", AA*yy, bb)
     MMS_test = false 
     evolution_test = false#true 
-    elliptic_solve_test = true
+    elliptic_solve_test = false#true
+    elliptic_2Dsolve_test = true
     if MMS_test
         ntest = 5
         MMS_errors = Array{Float64,1}(undef,ntest)
@@ -538,10 +552,10 @@ if abspath(PROGRAM_FILE) == @__FILE__
     
     if elliptic_solve_test
         println("elliptic solve test")
-        ngrid = 17
-        nelement_local = 100
-        L = 10
-        nelement_local = nelement_local
+        ngrid = 2
+        nelement_local = 400
+        L = 25
+        nelement_global = nelement_local
         input = grid_input("mu", ngrid, nelement_global, nelement_local, 
 		nrank, irank, L, discretization, fd_option, "zero_upper", adv_input,comm)
         y = define_coordinate(input)
@@ -570,42 +584,10 @@ if abspath(PROGRAM_FILE) == @__FILE__
         end
         
         if y.n < 20
-            println("\n Dy \n")
-            for i in 1:y.n
-                for j in 1:y.n
-                    @printf("%.1f ", Dy[i,j])
-                end
-                println("")
-            end
-            println("\n")
-            
-            println("\n yDy \n")
-            for i in 1:y.n
-                for j in 1:y.n
-                    @printf("%.1f ", yDy[i,j])
-                end
-                println("")
-            end
-            println("\n")
-            
-            println("\n Dy_yDy \n")
-            for i in 1:y.n
-                for j in 1:y.n
-                    @printf("%.1f ", Dy_yDy[i,j])
-                end
-                println("")
-            end
-            println("\n")
-            
-            
-            println("\n yD2y + Dy \n")
-            for i in 1:y.n
-                for j in 1:y.n
-                    @printf("%.1f ", yD2y[i,j]+Dy[i,j])
-                end
-                println("")
-            end
-            println("\n")
+            print_matrix(Dy,"Dy",y.n,y.n)
+            print_matrix(yDy,"yDy",y.n,y.n)
+            print_matrix(Dy_yDy,"Dy_yDy",y.n,y.n)
+            print_matrix(yD2y+Dy,"yD2y+Dy",y.n,y.n)
         end 
         Sy = Array{Float64,1}(undef, y.n)
         Fy = Array{Float64,1}(undef, y.n)
@@ -617,6 +599,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         end
         LL = Array{Float64,2}(undef, y.n, y.n)
         @. LL = yD2y + Dy
+        println("condition number: ", cond(LL))
         LL_lu_obj = lu(sparse(LL))
         # do elliptic solve 
         Fy = LL_lu_obj\Sy
@@ -626,5 +609,156 @@ if abspath(PROGRAM_FILE) == @__FILE__
         #println("Fy_err",Fy_err)
         #println("Fy_exact",Fy_exact)
         #println("Fy",Fy)
+        plot([y.grid,y.grid,y.grid], [Fy,Fy_exact,Fy_err], xlabel="y", ylabel="", label=["F" "F_exact" "F_err"],
+             shape =:circle, markersize = 5, linewidth=2)
+        outfile = "1D_elliptic_solve_test.pdf"
+        savefig(outfile)
+        plot([y.grid], [Fy_err], xlabel="x", ylabel="", label=["F_err"],
+             shape =:circle, markersize = 5, linewidth=2)
+        outfile = "1D_elliptic_solve_test_err.pdf"
+        savefig(outfile)
+
+    end
+    
+    if elliptic_2Dsolve_test
+        println("elliptic 2D solve test")
+        ngrid = 5
+        nelement_local = 10 
+        x_L = 25
+        y_L = 25
+        nelement_global = nelement_local
+        
+        input = grid_input("vpa", ngrid, nelement_global, nelement_local, 
+		nrank, irank, x_L, discretization, fd_option, "zero", adv_input, comm)
+        x = define_coordinate(input)
+        
+        Dx = Array{Float64,2}(undef, x.n, x.n)
+        cheb_derivative_matrix_reversed!(Dx,x)
+        D2x = Array{Float64,2}(undef, x.n, x.n)
+        mul!(D2x,Dx,Dx)
+        D2x[1,1] = 2.0*D2x[1,1]
+        D2x[end,end] = 2.0*D2x[end,end]
+        if x.n < 20
+            print_matrix(Dx,"Dx",x.n,x.n)
+            print_matrix(D2x,"D2x",x.n,x.n)
+        end 
+        
+        input = grid_input("mu", ngrid, nelement_global, nelement_local, 
+		nrank, irank, y_L, discretization, fd_option, "zero_upper", adv_input, comm)
+        y = define_coordinate(input)
+        
+        Dy = Array{Float64,2}(undef, y.n, y.n)
+        cheb_derivative_matrix_reversed!(Dy,y)
+        
+        
+        yDy = Array{Float64,2}(undef, y.n, y.n)
+        for iy in 1:y.n
+            @. yDy[iy,:] = y.grid[iy]*Dy[iy,:]
+        end
+        
+        
+        Dy_yDy = Array{Float64,2}(undef, y.n, y.n)
+        mul!(Dy_yDy,Dy,yDy)
+        #Dy_yDy[1,1] = 2.0*Dy_yDy[1,1]
+        #Dy_yDy[end,end] = 2.0*Dy_yDy[end,end]
+        
+        D2y = Array{Float64,2}(undef, y.n, y.n)
+        mul!(D2y,Dy,Dy)
+        #Dy_yDy[1,1] = 2.0*Dy_yDy[1,1]
+        D2y[end,end] = 2.0*D2y[end,end]
+        yD2y = Array{Float64,2}(undef, y.n, y.n)
+        for iy in 1:y.n
+            @. yD2y[iy,:] = y.grid[iy]*D2y[iy,:]
+        end
+        
+        if y.n < 20
+            print_matrix(Dy,"Dy",y.n,y.n)
+            print_matrix(yDy,"yDy",y.n,y.n)
+            print_matrix(Dy_yDy,"Dy_yDy",y.n,y.n)
+            print_matrix(yD2y+Dy,"yD2y+Dy",y.n,y.n)
+        end 
+        
+        ### now form 2D matrix to invert and corresponding sources 
+        function dH_Maxwellian_dvpa(Bmag,vpa,mu,ivpa,imu)
+            # speed variable
+            eta = sqrt(vpa.grid[ivpa]^2 + 2.0*Bmag*mu.grid[imu])
+            zero = 1.0e-10
+            if eta < zero
+                dHdvpa = -(4.0*vpa.grid[ivpa])/(3.0*sqrt(pi))
+            else 
+                dHdvpa = (2.0/sqrt(pi))*vpa.grid[ivpa]*((exp(-eta^2)/eta)  - (erf(eta)/(eta^2)))
+            end
+            return dHdvpa
+        end
+        # Array in 2D form 
+        nx = x.n   
+        ny = y.n 
+        Sxy = Array{Float64,2}(undef, nx, ny)
+        Fxy = Array{Float64,2}(undef, nx, ny)
+        Fxy_exact = Array{Float64,2}(undef, nx, ny)
+        Fxy_err = Array{Float64,2}(undef, nx, ny)
+        LLxy = Array{Float64,4}(undef, nx, ny, nx, ny)
+        # Array in compound 1D form 
+        # ic = (ix-1) + nx*(iy-1) + 1
+        # iy = mod(ic,nx) + 1
+        # ix = rem(ic,nx)
+        function icfunc(ix,iy,nx)
+            return ix + nx*(iy-1)
+        end
+        function iyfunc(ic,nx)
+            #return mod(ic,nx) + 1
+            return floor(Int64,(ic-1)/nx) + 1
+        end
+        function ixfunc(ic,nx)
+            ix = ic - nx*(iyfunc(ic,nx) - 1)
+            #return rem(ic,nx)
+            return ix
+        end
+        nc = nx*ny
+        Fc = Array{Float64,1}(undef, nc)
+        Sc = Array{Float64,1}(undef, nc)
+        LLc = Array{Float64,2}(undef, nc, nc)
+        
+        for iy in 1:ny
+            for ix in 1:nx
+                Sxy[ix,iy] = -2.0*x.grid[ix]*exp(-2.0*y.grid[iy]-x.grid[ix]^2)
+                Fxy_exact[ix,iy] = dH_Maxwellian_dvpa(1.0,x,y,ix,iy)
+                for iyp in 1:ny
+                    for ixp in 1:nx
+                        LLxy[ixp,iyp,ix,iy] = D2x[ixp,ix] + yD2y[iyp,iy] + Dy[iyp,iy]
+                    end
+                end
+            end
+        end
+        for ic in 1:nc
+            ix = ixfunc(ic,nx)
+            iy = iyfunc(ic,nx)
+            Sc[ic] = Sxy[ix,iy]
+            for icp in 1:nc
+                ixp = ixfunc(icp,nx)
+                iyp = iyfunc(icp,nx)
+                #println("ic: ",ic," ix: ", ix," iy: ",iy," icp: ",icp," ixp: ", ixp," iyp: ",iyp)
+                LLc[icp,ic] = LLxy[ixp,iyp,ix,iy]
+            end
+        end
+        println("condition number(LLc): ", cond(LLc))
+        LLc_lu_obj = lu(sparse(LLc))
+        # do elliptic solve 
+        Fc = LLc_lu_obj\Sc
+        #reshape to 2D vector 
+        for ic in 1:nc
+            ix = ixfunc(ic,nx)
+            iy = iyfunc(ic,nx)
+            Fxy[ix,iy] = Fc[ic]
+        end
+        
+        @. Fxy_err = abs(Fxy - Fxy_exact)
+        
+        println("maximum(Fxy_err)",maximum(Fxy_err))
+        #println("Fy_err",Fy_err)
+        #println("Fy_exact",Fy_exact)
+        #println("Fy",Fy)
+        
+
     end
 end
