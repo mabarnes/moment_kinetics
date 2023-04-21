@@ -102,6 +102,20 @@ function mk_input(scan_input=Dict())
     composition.epsilon_offset = get(scan_input, "epsilon_offset", 0.001)
     # bool to control if dfni is a function of vpa or vpabar in MMS test 
     composition.use_vpabar_in_mms_dfni = get(scan_input, "use_vpabar_in_mms_dfni", true)
+
+    # Get reference parameters for normalizations
+    reference_parameter_settings = copy(get(scan_input, "reference_params", Dict{String,Any}()))
+    reference_parameter_settings["Bref"] = get(reference_parameter_settings, "Bref", 1.0)
+    reference_parameter_settings["Lref"] = get(reference_parameter_settings, "Lref", 10.0)
+    reference_parameter_settings["Nref"] = get(reference_parameter_settings, "Nref", 1.0e19)
+    reference_parameter_settings["Tref"] = get(reference_parameter_settings, "Tref", 100.0)
+    reference_parameters = reference_parameters_input(; Dict(Symbol(k)=>v for (k,v) in
+                                                             reference_parameter_settings)...)
+
+    elementary_charge = 1.602176634e-19 # C
+    mi = 3.3435837724e-27 # kg
+    cref = sqrt(2.0 * elementary_charge*reference_parameters.Tref / mi) # m/s
+    Omegaref = elementary_charge * reference_parameters.Bref / mi
     
     ## set geometry_input
     geometry.Bzed = get(scan_input, "Bzed", 1.0)
@@ -109,7 +123,7 @@ function mk_input(scan_input=Dict())
     geometry.bzed = geometry.Bzed/geometry.Bmag
     geometry.bzeta = sqrt(1.0 - geometry.bzed^2.0)
     geometry.Bzeta = geometry.Bmag*geometry.bzeta
-    geometry.rhostar = get(scan_input, "rhostar", 0.0)
+    geometry.rhostar = get(scan_input, "rhostar", cref/reference_parameters.Lref/Omegaref)
     #println("Info: Bzed is ",geometry.Bzed)
     #println("Info: Bmag is ",geometry.Bmag)
     #println("Info: rhostar is ",geometry.rhostar)

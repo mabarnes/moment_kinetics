@@ -12,6 +12,7 @@ export species_composition
 export drive_input, drive_input_mutable
 export collisions_input
 export io_input
+export reference_parameters_input
 export pp_input
 export geometry_input
 
@@ -322,6 +323,16 @@ Base.@kwdef struct io_input
     run_name::String
     ascii_output::Bool
     binary_format::binary_format_type
+end
+
+"""
+Reference parameters for normalizations
+"""
+Base.@kwdef struct reference_parameters_input
+    Bref::mk_float
+    Lref::mk_float
+    Nref::mk_float
+    Tref::mk_float
 end
 
 """
