@@ -56,5 +56,10 @@ vperp_L = 6.0
 vperp_bc = "periodic"
 vperp_discretization = "chebyshev_pseudospectral"
 
+[manufactured_solns]
+use_for_advance = true # Use manufactured sources to maintain constant background
+use_for_init = false
+type = "2D-instability"
+
 [output]
 binary_format = "netcdf"
