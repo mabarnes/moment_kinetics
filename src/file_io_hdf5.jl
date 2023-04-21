@@ -7,27 +7,27 @@ function io_has_parallel(::Val{hdf5})
     return HDF5.has_parallel()
 end
 
-function open_output_file_hdf5(prefix, parallel_io, io_comm)
+function open_output_file_hdf5(prefix, parallel_io, io_comm, mode="cw")
     # the hdf5 file will be given by output_dir/run_name with .h5 appended
     filename = string(prefix, ".h5")
     # create the new HDF5 file
     if parallel_io
         # if a file with the requested name already exists, remove it
-        if MPI.Comm_rank(io_comm) == 0 && isfile(filename)
+        if mode == "cw" && MPI.Comm_rank(io_comm) == 0 && isfile(filename)
             rm(filename)
         end
         MPI.Barrier(io_comm)
 
-        fid = h5open(filename, "cw", io_comm)
+        fid = h5open(filename, mode, io_comm)
     else
         # if a file with the requested name already exists, remove it
-        isfile(filename) && rm(filename)
+        mode == "cw" && isfile(filename) && rm(filename)
 
         # Not doing parallel I/O, so do not need to pass communicator
-        fid = h5open(filename, "cw")
+        fid = h5open(filename, mode)
     end
 
-    return fid
+    return fid, (filename, parallel_io, io_comm)
 end
 
 # HDF5.H5DataStore is the supertype for HDF5.File and HDF5.Group

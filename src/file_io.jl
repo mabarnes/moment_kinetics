@@ -3,6 +3,7 @@
 module file_io
 
 export input_option_error
+export get_group
 export open_output_file, open_ascii_output_file
 export setup_file_io, finish_file_io
 export write_data_to_ascii
@@ -580,6 +581,20 @@ function open_output_file(prefix, binary_format, parallel_io, io_comm)
 end
 
 """
+Re-open an existing output file, selecting the backend based on io_option
+"""
+function reopen_output_file(filename, parallel_io, io_comm)
+    prefix, format_string = splitext(filename)
+    if format_string == ".h5"
+        return open_output_file_hdf5(prefix, parallel_io, io_comm, "r+")[1]
+    elseif format_string == ".cdf"
+        return open_output_file_netcdf(prefix, parallel_io, io_comm, "a")[1]
+    else
+        error("Unsupported I/O format $binary_format")
+    end
+end
+
+"""
 setup file i/o for moment variables
 """
 function setup_moments_io(prefix, binary_format, r, z, composition, collisions,
@@ -590,7 +605,7 @@ function setup_moments_io(prefix, binary_format, r, z, composition, collisions,
         if !parallel_io
             moments_prefix *= ".$(iblock_index[])"
         end
-        fid = open_output_file(moments_prefix, binary_format, parallel_io, io_comm)
+        fid, file_info = open_output_file(moments_prefix, binary_format, parallel_io, io_comm)
 
         # write a header to the output file
         add_attribute!(fid, "file_info", "Output moments data from the moment_kinetics code")
@@ -610,7 +625,39 @@ function setup_moments_io(prefix, binary_format, r, z, composition, collisions,
         io_moments = define_dynamic_moment_variables!(
             fid, composition.n_ion_species, composition.n_neutral_species, r, z, parallel_io)
 
-        return io_moments
+        close(fid)
+
+        return file_info
+    end
+
+    # For processes other than the root process of each shared-memory group...
+    return nothing
+end
+
+"""
+Reopen an existing moments output file to append more data
+"""
+function reopen_moments_io(file_info)
+    @serial_region begin
+        filename, parallel_io, io_comm = file_info
+        fid = reopen_output_file(filename, parallel_io, io_comm)
+        dyn = get_group(fid, "dynamic_data")
+
+        variable_list = get_variable_keys(dyn)
+        function getvar(name)
+            if name ∈ variable_list
+                return dyn[name]
+            else
+                return nothing
+            end
+        end
+        return io_moments_info(fid, getvar("time"), getvar("phi"), getvar("Er"),
+                               getvar("Ez"), getvar("density"), getvar("parallel_flow"),
+                               getvar("parallel_pressure"), getvar("parallel_heat_flux"),
+                               getvar("thermal_speed"), getvar("density_neutral"),
+                               getvar("uz_neutral"), getvar("pz_neutral"),
+                               getvar("qz_neutral"), getvar("thermal_speed_neutral"),
+                               parallel_io)
     end
 
     # For processes other than the root process of each shared-memory group...
@@ -629,7 +676,7 @@ function setup_dfns_io(prefix, binary_format, boundary_distributions, r, z, vper
         if !parallel_io
             dfns_prefix *= ".$(iblock_index[])"
         end
-        fid = open_output_file(dfns_prefix, binary_format, parallel_io, io_comm)
+        fid, file_info = open_output_file(dfns_prefix, binary_format, parallel_io, io_comm)
 
         # write a header to the output file
         add_attribute!(fid, "file_info",
@@ -657,7 +704,43 @@ function setup_dfns_io(prefix, binary_format, boundary_distributions, r, z, vper
             fid, r, z, vperp, vpa, vzeta, vr, vz, composition.n_ion_species,
             composition.n_neutral_species, parallel_io)
 
-        return io_dfns
+        close(fid)
+
+        return file_info
+    end
+
+    # For processes other than the root process of each shared-memory group...
+    return nothing
+end
+
+"""
+Reopen an existing distribution-functions output file to append more data
+"""
+function reopen_dfns_io(file_info)
+    @serial_region begin
+        filename, parallel_io, io_comm = file_info
+        fid = reopen_output_file(filename, parallel_io, io_comm)
+        dyn = get_group(fid, "dynamic_data")
+
+        variable_list = get_variable_keys(dyn)
+        function getvar(name)
+            if name ∈ variable_list
+                return dyn[name]
+            else
+                return nothing
+            end
+        end
+        io_moments = io_moments_info(fid, getvar("time"), getvar("phi"), getvar("Er"),
+                                     getvar("Ez"), getvar("density"),
+                                     getvar("parallel_flow"), getvar("parallel_pressure"),
+                                     getvar("parallel_heat_flux"),
+                                     getvar("thermal_speed"), getvar("density_neutral"),
+                                     getvar("uz_neutral"), getvar("pz_neutral"),
+                                     getvar("qz_neutral"),
+                                     getvar("thermal_speed_neutral"), parallel_io)
+
+        return io_dfns_info(fid, getvar("f"), getvar("f_neutral"), parallel_io,
+                            io_moments)
     end
 
     # For processes other than the root process of each shared-memory group...
@@ -678,9 +761,17 @@ function append_to_dynamic_var() end
 write time-dependent moments data to the binary output file
 """
 function write_moments_data_to_binary(moments, fields, t, n_ion_species,
-                                      n_neutral_species, io_moments, t_idx, r, z)
+                                      n_neutral_species, io_or_file_info_moments, t_idx, r, z)
     @serial_region begin
         # Only read/write from first process in each 'block'
+
+        if isa(io_or_file_info_moments, io_moments_info)
+            io_moments = io_or_file_info_moments
+            closefile = false
+        else
+            io_moments = reopen_moments_io(io_or_file_info_moments)
+            closefile = true
+        end
 
         # add the time for this time slice to the hdf5 file
         append_to_dynamic_var(io_moments.time, t, t_idx)
@@ -713,6 +804,8 @@ function write_moments_data_to_binary(moments, fields, t, n_ion_species,
             append_to_dynamic_var(io_moments.thermal_speed_neutral, moments.neutral.vth,
                                   t_idx, z, r, n_neutral_species)
         end
+
+        closefile && close(io_moments.fid)
     end
     return nothing
 end
@@ -721,10 +814,18 @@ end
 write time-dependent distribution function data to the binary output file
 """
 function write_dfns_data_to_binary(ff, ff_neutral, moments, fields, t, n_ion_species,
-                                   n_neutral_species, io_dfns, t_idx, r, z, vperp, vpa,
-                                   vzeta, vr, vz)
+                                   n_neutral_species, io_or_file_info_dfns, t_idx, r, z,
+                                   vperp, vpa, vzeta, vr, vz)
     @serial_region begin
         # Only read/write from first process in each 'block'
+
+        if isa(io_or_file_info_dfns, io_dfns_info)
+            io_dfns = io_or_file_info_dfns
+            closefile = false
+        else
+            io_dfns = reopen_dfns_io(io_or_file_info_dfns)
+            closefile = true
+        end
 
         # Write the moments for this time slice to the output file.
         # This also updates the time.
@@ -737,6 +838,8 @@ function write_dfns_data_to_binary(ff, ff_neutral, moments, fields, t, n_ion_spe
             append_to_dynamic_var(io_dfns.f_neutral, ff_neutral, t_idx, vz, vr, vzeta, z,
                                   r, n_neutral_species)
         end
+
+        closefile && close(io_dfns.fid)
     end
     return nothing
 end
@@ -745,9 +848,18 @@ end
     # Special versions when using DebugMPISharedArray to avoid implicit conversion to
     # Array, which is forbidden.
     function write_moments_data_to_binary(moments, fields, t, n_ion_species,
-            n_neutral_species, io_moments, t_idx, r, z)
+                                          n_neutral_species, io_or_file_info_moments,
+                                          t_idx, r, z)
         @serial_region begin
             # Only read/write from first process in each 'block'
+
+            if isa(io_or_file_info_moments, io_moments_info)
+                io_moments = io_or_file_info_moments
+                closefile = false
+            else
+                io_moments = reopen_moments_io(io_or_file_info_moments)
+                closefile = true
+            end
 
             # add the time for this time slice to the hdf5 file
             append_to_dynamic_var(io_moments.time, t, t_idx)
@@ -782,31 +894,45 @@ end
                                       moments.neutral.vth.data, t_idx, z, r,
                                       n_neutral_species)
             end
+
+            closefile && close(io_moments.fid)
         end
         return nothing
     end
-end
 
-@debug_shared_array begin
     # Special versions when using DebugMPISharedArray to avoid implicit conversion to
     # Array, which is forbidden.
     function write_dfns_data_to_binary(ff::DebugMPISharedArray,
-            ff_neutral::DebugMPISharedArray, moments, t, n_ion_species, n_neutral_species,
-            io_dfns, t_idx, r, z, vperp, vpa, vzeta, vr, vz)
+                                       ff_neutral::DebugMPISharedArray, moments, fields,
+                                       t, n_ion_species, n_neutral_species,
+                                       io_or_file_info_dfns, t_idx, r, z, vperp, vpa,
+                                       vzeta, vr, vz)
         @serial_region begin
             # Only read/write from first process in each 'block'
 
-            # Write the moments for this time slice to the output file
+            if isa(io_or_file_info_dfns, io_dfns_info)
+                io_dfns = io_or_file_info_dfns
+                closefile = false
+            else
+                io_dfns = reopen_dfns_io(io_or_file_info_dfns)
+                closefile = true
+            end
+
+            # Write the moments for this time slice to the output file.
             # This also updates the time.
-            write_moments_data_to_binary(moments, fields, t, n_ion_species, n_neutral_species,
-                                         io_dfns.io_moments, t_idx, r, z)
+            write_moments_data_to_binary(moments, fields, t, n_ion_species,
+                                         n_neutral_species, io_dfns.io_moments, t_idx, r,
+                                         z)
 
             # add the distribution function data at this time slice to the output file
-            append_to_dynamic_var(io_dfns.f, ff.data, t_idx, vpa, vperp, z, r, n_ion_species)
+            append_to_dynamic_var(io_dfns.f, ff.data, t_idx, vpa, vperp, z, r,
+                                  n_ion_species)
             if n_neutral_species > 0
-                append_to_dynamic_var(io_dfns.f_neutral, ff_neutral.data, t_idx, vz, vr, vzeta, z,
-                                      r, n_neutral_species)
+                append_to_dynamic_var(io_dfns.f_neutral, ff_neutral.data, t_idx, vz, vr,
+                                      vzeta, z, r, n_neutral_species)
             end
+
+            closefile && close(io_dfns.fid)
         end
         return nothing
     end
@@ -816,8 +942,8 @@ end
 close all opened output files
 """
 function finish_file_io(ascii_io::Union{ascii_ios,Nothing},
-                        binary_moments::Union{io_moments_info,Nothing},
-                        binary_dfns::Union{io_dfns_info,Nothing})
+                        binary_moments::Union{io_moments_info,Tuple,Nothing},
+                        binary_dfns::Union{io_dfns_info,Tuple,Nothing})
     @serial_region begin
         # Only read/write from first process in each 'block'
 
@@ -831,10 +957,10 @@ function finish_file_io(ascii_io::Union{ascii_ios,Nothing},
                 end
             end
         end
-        if binary_moments !== nothing
+        if binary_moments !== nothing && !isa(binary_moments, Tuple)
             close(binary_moments.fid)
         end
-        if binary_dfns !== nothing
+        if binary_dfns !== nothing && !isa(binary_dfns, Tuple)
             close(binary_dfns.fid)
         end
     end
