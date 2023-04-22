@@ -31,7 +31,7 @@ r_IC_temperature_phase1 = 0.0
 charge_exchange_frequency = 0.0
 ionization_frequency = 0.0
 nstep = 10000
-dt = 1.0e-5
+dt = 2.0e-3
 nwrite = 100
 nwrite_dfns = 1000
 use_semi_lagrange = false
@@ -58,5 +58,9 @@ vperp_L = 6.0
 vperp_bc = "periodic"
 vperp_discretization = "chebyshev_pseudospectral"
 
+[numerical_dissipation]
+#r_dissipation_coefficient = 1.0e-9
+#z_dissipation_coefficient = 1.0e-3
+
 [output]
-binary_format = "netcdf"
+#binary_format = "netcdf"
