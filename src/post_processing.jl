@@ -411,6 +411,9 @@ function analyze_and_plot_data(path)
             # Assume that once the amplitude reaches 2x initial amplitude that the mode is
             # well established, so will be able to measure phase velocity
             startind = findfirst(x -> x>amplitude[1], amplitude)
+            if startind === nothing
+                startind = 1
+            end
 
             # Linear fit to phase after startind
             linear_model(x, param) = @. param[1]*x+param[2]
@@ -425,6 +428,9 @@ function analyze_and_plot_data(path)
             # Assume that once the amplitude reaches 2x initial amplitude that the mode is
             # well established, so will be able to measure phase velocity
             startind = findfirst(x -> x>amplitude[1], amplitude)
+            if startind === nothing
+                startind = 1
+            end
 
             # Linear fit to log(amplitude) after startind
             linear_model(x, param) = @. param[1]*x+param[2]
@@ -524,9 +530,9 @@ function analyze_and_plot_data(path)
         function animate_perturbation(var, name)
             # make a gif animation of perturbation
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-                @views heatmap(r_grid, z_grid, var[:,:,i], xlabel="r", ylabel="z", fillcolor = :deep)
+                @views heatmap(r_grid, z_grid, var[:,:,i], xlabel="r", ylabel="z", fillcolor = :deep, right_margin=20*Plots.mm)
             end
-            outfile = string(run_name, "_$name_perturbation.gif")
+            outfile = string(run_name, "_$(name)_perturbation.gif")
             gif(anim, outfile, fps=5)
         end
         animate_perturbation(phi_perturbation, "phi")
