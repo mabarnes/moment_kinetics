@@ -28,10 +28,10 @@ r_IC_temperature_amplitude1 = 1.0e-7
 r_IC_temperature_phase1 = 0.0
 charge_exchange_frequency = 0.0
 ionization_frequency = 0.0
-nstep = 10000
-dt = 2.0e-3
+nstep = 10000 #10000
+dt = 1.0e-4
 nwrite = 100
-nwrite_dfns = 1000
+nwrite_dfns = 1000 #100 #1000
 use_semi_lagrange = false
 n_rk_stages = 4
 split_operators = false
@@ -41,7 +41,7 @@ z_bc = "periodic"
 z_discretization = "chebyshev_pseudospectral"
 r_ngrid = 17
 r_nelement = 2
-r_L = 0.01
+r_L = 5.0e-4
 r_bc = "periodic"
 r_discretization = "chebyshev_pseudospectral"
 vpa_ngrid = 17
@@ -57,13 +57,14 @@ vperp_bc = "periodic"
 vperp_discretization = "chebyshev_pseudospectral"
 
 [manufactured_solns]
-use_for_advance = true # Use manufactured sources to maintain constant background
+#use_for_advance = true # Use manufactured sources to maintain constant background
 use_for_init = false
 type = "2D-instability"
 
 [numerical_dissipation]
 #r_dissipation_coefficient = 1.0e-9
 #z_dissipation_coefficient = 1.0e-3
+#vpa_dissipation_coefficient = 1.0e-3
 
 [output]
 #binary_format = "netcdf"
