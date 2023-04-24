@@ -12,6 +12,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     using moment_kinetics.type_definitions: mk_float, mk_int
     using moment_kinetics.array_allocation: allocate_float, allocate_complex
     using moment_kinetics.chebyshev: chebyshev_info, chebyshev_spectral_derivative! #chebyshev_derivative_single_element!, 
+    using LinearAlgebra: mul!
     
     struct radau_coordinate
         # n is the total number of local grid points associated with this coordinate
@@ -119,7 +120,37 @@ if abspath(PROGRAM_FILE) == @__FILE__
         chebyshev_radau_backward_transform!(df, cheby_fext, cheby_df, forward, coord.ngrid)
     end
     
-    ngrid = 50
+    function calculate_chebyshev_radau_D_matrix_via_FFT!(D::Array{mk_float,2}, coord, spectral)
+        ff_buffer = Array{mk_float,1}(undef,coord.ngrid)
+        df_buffer = Array{mk_float,1}(undef,coord.ngrid)
+        # use response matrix approach to calculate derivative matrix D 
+        for j in 1:coord.ngrid 
+            ff_buffer .= 0.0 
+            ff_buffer[j] = 1.0
+            @views chebyshev_radau_derivative_single_element!(df_buffer[:], ff_buffer[:],
+                spectral.f[:,1], spectral.df, spectral.fext, spectral.forward, coord)
+            @. D[:,j] = df_buffer[:] # assign appropriate column of derivative matrix 
+        end
+        # correct diagonal elements to gurantee numerical stability
+        # gives D*[1.0, 1.0, ... 1.0] = [0.0, 0.0, ... 0.0]
+        for j in 1:coord.ngrid
+            D[j,j] = 0.0
+            D[j,j] = -sum(D[j,:])
+        end
+    end
+    
+    function print_matrix(matrix,name,n,m)
+        println("\n ",name," \n")
+        for i in 1:n
+            for j in 1:m
+                @printf("%.1f ", matrix[i,j])
+            end
+            println("")
+        end
+        println("\n")
+    end 
+    
+    ngrid = 20
     nelement_local = 1
     nelement_global = nelement_local
     npoints = (ngrid - 1)*nelement_local + 1
@@ -145,8 +176,29 @@ if abspath(PROGRAM_FILE) == @__FILE__
     
     @views chebyshev_radau_derivative_single_element!(df[:], ff[:],
             spectral.f[:,1], spectral.df, spectral.fext, spectral.forward, coord)
-            
+    
+    
     @. df_err = df - df_exact
+    println("FFT test")
+    println("df_err \n",df_err)
+    println("df_exact \n",df_exact)
+    println("df \n",df)
+    
+    Dcoord = Array{mk_float,2}(undef,coord.ngrid,coord.ngrid)
+    calculate_chebyshev_radau_D_matrix_via_FFT!(Dcoord,coord,spectral)
+    print_matrix(Dcoord,"Dcoord",coord.n,coord.n)
+    mul!(df,Dcoord,ff)
+    @. df_err = df - df_exact
+    println("Matrix test sine wave")
+    println("df_err \n",df_err)
+    println("df_exact \n",df_exact)
+    println("df \n",df)
+    
+    ff .= 1.0
+    df_exact .= 0.0
+    mul!(df,Dcoord,ff)
+    @. df_err = df - df_exact
+    println("Matrix test constant")
     println("df_err \n",df_err)
     println("df_exact \n",df_exact)
     println("df \n",df)
