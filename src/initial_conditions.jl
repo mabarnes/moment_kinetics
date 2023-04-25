@@ -431,7 +431,7 @@ function init_density!(dens, z, r, spec, n_species)
                               * sin(2.0*π*background_wavenumber*z.grid/z.L
                                     + spec[is].z_IC.density_phase)))
                 T0 = @. (spec[is].initial_temperature
-                         * (1.0 + spec[is].z_IC.temperature_amplitude * 4.0 / π
+                         * (1.0 + spec[is].z_IC.temperature_amplitude
                             * sin(2.0*π*background_wavenumber*z.grid/z.L +
                                   spec[is].z_IC.temperature_phase)
                            ))
