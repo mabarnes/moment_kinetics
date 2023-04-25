@@ -7,7 +7,7 @@ export compare_charged_pdf_symbolic_test
 export compare_moments_symbolic_test
 export compare_neutral_pdf_symbolic_test
 export compare_fields_symbolic_test
-export construct_global_zr_grids
+export construct_global_zr_coords
 export allocate_global_zr_charged_moments
 export allocate_global_zr_neutral_moments
 export allocate_global_zr_fields
@@ -26,10 +26,12 @@ using Statistics: mean
 using SpecialFunctions: erfi
 using LaTeXStrings
 using Measures
+using MPI
 # modules
 using ..post_processing_input: pp
 using ..quadrature: composite_simpson_weights
 using ..array_allocation: allocate_float
+using ..coordinates: define_coordinate
 using ..file_io: open_ascii_output_file
 using ..type_definitions: mk_float, mk_int
 using ..initial_conditions: vpagrid_to_dzdt
@@ -46,7 +48,7 @@ using ..analysis: analyze_fields_data, analyze_moments_data, analyze_pdf_data,
 using ..velocity_moments: integrate_over_vspace
 using ..manufactured_solns: manufactured_solutions, manufactured_electric_fields
 using ..moment_kinetics_input: mk_input, get
-using ..input_structs: geometry_input, species_composition
+using ..input_structs: geometry_input, grid_input, species_composition
 using ..input_structs: electron_physics_type, boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath
 using TOML
 import Base: get
@@ -192,43 +194,19 @@ function iglobal_func(ilocal,irank,nlocal)
     return iglobal
 end
 
-function construct_global_zr_grids(run_name::String,file_key::String,nz_global::mk_int,nr_global::mk_int,nblocks::mk_int)
-    zgrid = allocate_float(nz_global)
-    zwgts = allocate_float(nz_global)
-    rgrid = allocate_float(nr_global)
-    rwgts = allocate_float(nr_global)
+function construct_global_zr_coords(r_local, z_local)
 
-    # current routine loops over blocks
-    # whereas the optimal routine would loop over a single z/r group
-    for iblock in 0:nblocks-1
-        fid = open_readonly_output_file(run_name,file_key,iblock=iblock,printout=false)
-        z, z_spectral = load_coordinate_data(fid, "z")
-        r, r_spectral = load_coordinate_data(fid, "r")
-
-        z_irank, r_irank = load_rank_data(fid)
-        # MRH should wgts at element boundaries be doubled
-        # MRH in the main code duplicated points have half the integration wgt
-        if z_irank == 0
-            zgrid[1] = z.grid[1]
-            zwgts[1] = z.wgts[1]
-        end
-        for iz_local in 2:z.n
-            iz_global = iglobal_func(iz_local,z_irank,z.n)
-            zgrid[iz_global] = z.grid[iz_local]
-            zwgts[iz_global] = z.wgts[iz_local]
-        end
-
-        if r_irank == 0
-            rgrid[1] = r.grid[1]
-            rwgts[1] = r.wgts[1]
-        end
-        for ir_local in 2:r.n
-            ir_global = iglobal_func(ir_local,r_irank,r.n)
-            rgrid[ir_global] = r.grid[ir_local]
-            rwgts[ir_global] = r.wgts[ir_local]
-        end
+    function make_global_input(coord_local)
+        return grid_input(coord_local.name, coord_local.ngrid,
+            coord_local.nelement_global, coord_local.nelement_global, 1, 0, coord_local.L,
+            coord_local.discretization, coord_local.fd_option, coord_local.bc,
+            coord_local.advection, MPI.COMM_NULL)
     end
-    return zgrid, zwgts, rgrid, rwgts
+
+    r_global, r_global_spectral = define_coordinate(make_global_input(r_local))
+    z_global, z_global_spectral = define_coordinate(make_global_input(z_local))
+
+    return r_global, r_global_spectral, z_global, z_global_spectral
 end
 
 """
@@ -438,11 +416,8 @@ function analyze_and_plot_data(prefix...)
     end
     # read in the data from different block files
     # grids
-    z_global, z_wgts, r_global, r_wgts =
-        get_tuple_of_return_values(construct_global_zr_grids, run_names, "moments",
-                                   Tuple(this_z.n_global for this_z ∈ z),
-                                   Tuple(this_r.n_global for this_r ∈ r),
-                                   nblocks)
+    r_global, r_global_spectral, z_global, z_global_spectral =
+        get_tuple_of_return_values(construct_global_zr_coords, r, z)
 
     # fields
     get_tuple_of_return_values(read_distributed_zr_data!, phi, "phi", run_names, "moments",
@@ -652,7 +627,7 @@ function analyze_and_plot_data(prefix...)
         #evaluate 1D-1V diagnostics at fixed ir0
         plot_1D_1V_diagnostics(run_names, nwrite_movie, itime_min, itime_max,
             nwrite_movie_pdfs, itime_min_pdfs, itime_max_pdfs, ivpa0, iz0,
-            ir0, r,
+            ir0, r_global,
             Tuple(p[:,ir0,:] for p ∈ phi),
             Tuple(n[:,ir0,:,:] for n ∈ density),
             Tuple(upar[:,ir0,:,:] for upar ∈ parallel_flow),
@@ -678,7 +653,7 @@ function analyze_and_plot_data(prefix...)
             Tuple(neutral_vth[:,ir0,:,:] for neutral_vth ∈ neutral_thermal_speed_at_pdf_times),
             Tuple(neutral_f[:,ivr0,ivzeta0,:,ir0,:,:] for neutral_f ∈ neutral_ff),
             n_ion_species, n_neutral_species, evolve_density, evolve_upar, evolve_ppar,
-            vz, vpa, z, ntime, time, ntime_pdfs, time_pdfs)
+            vz, vpa, z_global, ntime, time, ntime_pdfs, time_pdfs)
     end
 
     diagnostics_2d = false
@@ -686,9 +661,9 @@ function analyze_and_plot_data(prefix...)
         # analyze the fields data
         phi_iz0 = Tuple(p[iz0,:,:] for p ∈ phi)
         phi_fldline_avg, delta_phi =
-            get_tuple_of_return_values(analyze_fields_data, phi_iz0, ntime, r)
+            get_tuple_of_return_values(analyze_fields_data, phi_iz0, ntime, r_global)
         get_tuple_of_return_values(plot_fields_rt, phi_iz0, delta_phi, time, itime_min,
-                                   itime_max, nwrite_movie, r, ir0, run_name, delta_phi,
+                                   itime_max, nwrite_movie, r_global, ir0, run_name, delta_phi,
                                    pp)
     end
 
@@ -723,6 +698,8 @@ function analyze_and_plot_data(prefix...)
     time = time[1]
     z = z[1]
     r = r[1]
+    z_global = z_global[1]
+    r_global = r_global[1]
     n_ion_species = n_ion_species[1]
     run_name = run_names[1]
     phi = phi[1]
@@ -734,12 +711,12 @@ function analyze_and_plot_data(prefix...)
     composition = composition[1]
 
     # make plots and animations of the phi, Ez and Er
-    plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time, z.grid, r.grid, iz0,
-                            ir0, n_ion_species, itime_min, itime_max, nwrite_movie,
-                            run_name, pp)
+    plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time,
+                            z_global.grid, r_global.grid, iz0, ir0, n_ion_species,
+                            itime_min, itime_max, nwrite_movie, run_name, pp)
     # make plots and animations of the phi, Ez and Er
-    plot_fields_2D(phi, Ez, Er, time, z.grid, r.grid, iz0, ir0, itime_min, itime_max, nwrite_movie,
-                   run_name, pp, "")
+    plot_fields_2D(phi, Ez, Er, time, z_global.grid, r_global.grid, iz0, ir0, itime_min,
+                   itime_max, nwrite_movie, run_name, pp, "")
     # make plots and animations of the ion pdf
     # only if ntime == ntime_pdfs & data on one shared memory process
     if ntime == ntime_pdfs && r.n_global == r.n && z.n_global == z.n
@@ -749,14 +726,14 @@ function analyze_and_plot_data(prefix...)
         read_distributed_zr_data!(ff, "f", run_names, "dfns", nblocks, z.n, r.n)
 
         spec_type = "ion"
-        plot_charged_pdf(ff, vpa_local, vperp_local, z.grid, r.grid, ivpa0, ivperp0,
-                         iz0, ir0, spec_type, n_ion_species, itime_min_pdfs,
+        plot_charged_pdf(ff, vpa_local, vperp_local, z_global.grid, r_global.grid, ivpa0,
+                         ivperp0, iz0, ir0, spec_type, n_ion_species, itime_min_pdfs,
                          itime_max_pdfs, nwrite_movie_pdfs, run_name, pp)
         # make plots and animations of the neutral pdf
         if n_neutral_species > 0
             spec_type = "neutral"
-            plot_neutral_pdf(neutral_ff, vz.grid, vr.grid, vzeta.grid, z.grid,
-                             r.grid, ivz0, ivr0, ivzeta0, iz0, ir0, spec_type,
+            plot_neutral_pdf(neutral_ff, vz.grid, vr.grid, vzeta.grid, z_global.grid,
+                             r_global.grid, ivz0, ivr0, ivzeta0, iz0, ir0, spec_type,
                              n_neutral_species, itime_min_pdfs, itime_max_pdfs,
                              nwrite_movie_pdfs, run_name, pp)
         end
@@ -774,20 +751,20 @@ function analyze_and_plot_data(prefix...)
         r_bc = get(scan_input, "r_bc", "periodic")
         z_bc = get(scan_input, "z_bc", "periodic")
         # avoid passing Lr = 0 into manufactured_solns functions
-        if r.n > 1
-            Lr_in = r.L
+        if r_global.n > 1
+            Lr_in = r_global.L
         else
             Lr_in = 1.0
         end
 
         #geometry, composition = get_geometry_and_composition(scan_input,n_ion_species,n_neutral_species)
 
-        manufactured_solns_list = manufactured_solutions(Lr_in,z.L,r_bc,z_bc,geometry,composition,r.n)
+        manufactured_solns_list = manufactured_solutions(Lr_in,z_global.L,r_bc,z_bc,geometry,composition,r_global.n)
         dfni_func = manufactured_solns_list.dfni_func
         densi_func = manufactured_solns_list.densi_func
         dfnn_func = manufactured_solns_list.dfnn_func
         densn_func = manufactured_solns_list.densn_func
-        manufactured_E_fields = manufactured_electric_fields(Lr_in,z.L,r_bc,z_bc,composition,r.n)
+        manufactured_E_fields = manufactured_electric_fields(Lr_in,z_global.L,r_bc,z_bc,composition,r_global.n)
         Er_func = manufactured_E_fields.Er_func
         Ez_func = manufactured_E_fields.Ez_func
         phi_func = manufactured_E_fields.phi_func
@@ -797,36 +774,36 @@ function analyze_and_plot_data(prefix...)
         Er_sym = copy(phi[:,:,:])
         Ez_sym = copy(phi[:,:,:])
         for it in 1:ntime
-            for ir in 1:nr_global
-                for iz in 1:nz_global
-                    phi_sym[iz,ir,it] = phi_func(z_grid[iz],r_grid[ir],time[it])
-                    Ez_sym[iz,ir,it] = Ez_func(z_grid[iz],r_grid[ir],time[it])
-                    Er_sym[iz,ir,it] = Er_func(z_grid[iz],r_grid[ir],time[it])
+            for ir in 1:r_global.n
+                for iz in 1:z_global.n
+                    phi_sym[iz,ir,it] = phi_func(z_global.grid[iz],r_global.grid[ir],time[it])
+                    Ez_sym[iz,ir,it] = Ez_func(z_global.grid[iz],r_global.grid[ir],time[it])
+                    Er_sym[iz,ir,it] = Er_func(z_global.grid[iz],r_global.grid[ir],time[it])
                 end
             end
         end
         # make plots and animations of the phi, Ez and Er
-        #plot_fields_2D(phi_sym, Ez_sym, Er_sym, time, z_grid, r_grid, iz0, ir0,
+        #plot_fields_2D(phi_sym, Ez_sym, Er_sym, time, z_global.grid, r_global.grid, iz0, ir0,
         #    itime_min, itime_max, nwrite_movie, run_name, pp, "_sym")
         println("time/ (Lref/cref): ", time)
-        compare_fields_symbolic_test(run_name,phi,phi_sym,z_grid,r_grid,time,nz_global,nr_global,ntime,
+        compare_fields_symbolic_test(run_name,phi,phi_sym,z_global.grid,r_global.grid,time,z_global.n,r_global.n,ntime,
          L"\widetilde{\phi}",L"\widetilde{\phi}^{sym}",L"\varepsilon(\widetilde{\phi})","phi")
-        compare_fields_symbolic_test(run_name,Er,Er_sym,z_grid,r_grid,time,nz_global,nr_global,ntime,
+        compare_fields_symbolic_test(run_name,Er,Er_sym,z_global.grid,r_global.grid,time,z_global.n,r_global.n,ntime,
          L"\widetilde{E}_r",L"\widetilde{E}^{sym}_r",L"\varepsilon(\widetilde{E}_r)","Er")
-        compare_fields_symbolic_test(run_name,Ez,Ez_sym,z_grid,r_grid,time,nz_global,nr_global,ntime,
+        compare_fields_symbolic_test(run_name,Ez,Ez_sym,z_global.grid,r_global.grid,time,z_global.n,r_global.n,ntime,
          L"\widetilde{E}_z",L"\widetilde{E}^{sym}_z",L"\varepsilon(\widetilde{E}_z)","Ez")
 
         # ion test
         density_sym = copy(density[:,:,:,:])
         is = 1
         for it in 1:ntime
-            for ir in 1:nr_global
-                for iz in 1:nz_global
-                    density_sym[iz,ir,is,it] = densi_func(z_grid[iz],r_grid[ir],time[it])
+            for ir in 1:r_global.n
+                for iz in 1:z_global.n
+                    density_sym[iz,ir,is,it] = densi_func(z_global.grid[iz],r_global.grid[ir],time[it])
                 end
             end
         end
-        compare_moments_symbolic_test(run_name,density,density_sym,"ion",z_grid,r_grid,time,nz_global,nr_global,ntime,
+        compare_moments_symbolic_test(run_name,density,density_sym,"ion",z_global.grid,r_global.grid,time,z_global.n,r_global.n,ntime,
          L"\widetilde{n}_i",L"\widetilde{n}_i^{sym}",L"\varepsilon(\widetilde{n}_i)","dens")
 
         compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,"ion",
@@ -838,11 +815,11 @@ function analyze_and_plot_data(prefix...)
             for it in 1:ntime
                 for ir in 1:nr_global
                     for iz in 1:nz_global
-                        neutral_density_sym[iz,ir,is,it] = densn_func(z_grid[iz],r_grid[ir],time[it])
+                        neutral_density_sym[iz,ir,is,it] = densn_func(z_global.grid[iz],r_global.grid[ir],time[it])
                     end
                 end
             end
-            compare_moments_symbolic_test(run_name,neutral_density,neutral_density_sym,"neutral",z_grid,r_grid,time,nz_global,nr_global,ntime,
+            compare_moments_symbolic_test(run_name,neutral_density,neutral_density_sym,"neutral",z_global.grid,r_global.grid,time,z_global.n,r_global.n,ntime,
              L"\widetilde{n}_n",L"\widetilde{n}_n^{sym}",L"\varepsilon(\widetilde{n}_n)","dens")
 
             compare_neutral_pdf_symbolic_test(run_name,manufactured_solns_list,"neutral",

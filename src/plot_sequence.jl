@@ -11,7 +11,7 @@ using Statistics: mean
 using SpecialFunctions: erfi
 using LaTeXStrings
 # modules
-using ..post_processing: read_distributed_zr_data!, construct_global_zr_grids
+using ..post_processing: read_distributed_zr_data!, construct_global_zr_coords
 using ..post_processing: allocate_global_zr_neutral_moments, allocate_global_zr_charged_moments
 using ..post_processing: allocate_global_zr_fields#, get_coords_nelement
 using ..array_allocation: allocate_float
@@ -54,8 +54,8 @@ function plot_sequence_fields_data(path_list)
         # load local sizes of grids stored on each netCDF file 
         # z z_wgts r r_wgts may take different values on different blocks
         # we need to construct the global grid below
-        nz_local, nz_global, z_local, z_wgts, Lz = load_coordinate_data(fid, "z")
-        nr_local, nr_global, r_local, r_wgts, Lr = load_coordinate_data(fid, "r")
+        z_local, z_local_spectral = load_coordinate_data(fid, "z")
+        r_local, r_local_spectral = load_coordinate_data(fid, "r")
         # load time data 
         ntime, time = load_time_data(fid)
         # load species data 
@@ -66,17 +66,16 @@ function plot_sequence_fields_data(path_list)
         phi, Ez, Er = allocate_global_zr_fields(nz_global,nr_global,ntime)
         # read in the data from different block netcdf files
         # grids 
-        z, z_wgts, r, r_wgts = construct_global_zr_grids(run_name,
-           "moments",nz_global,nr_global,nblocks)
+        r, r_spectral, z, z_spectral = construct_global_zr_coords(r_local, z_local)
         # fields 
-        read_distributed_zr_data!(phi,"phi",run_name,"moments",nblocks,nz_local,nr_local) 
-        read_distributed_zr_data!(Ez,"Ez",run_name,"moments",nblocks,nz_local,nr_local) 
-        read_distributed_zr_data!(Er,"Er",run_name,"moments",nblocks,nz_local,nr_local) 
+        read_distributed_zr_data!(phi,"phi",run_name,"moments",nblocks,z_local.n,r_local.n)
+        read_distributed_zr_data!(Ez,"Ez",run_name,"moments",nblocks,z_local.n,r_local.n)
+        read_distributed_zr_data!(Er,"Er",run_name,"moments",nblocks,z_local.n,r_local.n)
         
         # store phi, Ez at ir = 1 and itime = end
         push!(phi_z_list,phi[:,1,end])
         push!(Ez_z_list,Ez[:,1,end])
-        push!(z_list,z[:])
+        push!(z_list,z.grid[:])
         push!(phi_sheath_entrance_list,phi[1,1,end])
         push!(Ez_sheath_entrance_list,Ez[1,1,end])
     end
