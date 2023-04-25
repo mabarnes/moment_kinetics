@@ -59,7 +59,7 @@ z_bc = "periodic"
 z_discretization = "chebyshev_pseudospectral"
 r_ngrid = 17
 r_nelement = 4 #2
-r_L = 2.04349553e-8
+r_L = 2.04349553e-8 # = 1.0e-4 * 2.04349553e-4
 r_bc = "periodic"
 r_discretization = "chebyshev_pseudospectral"
 vpa_ngrid = 17
@@ -75,7 +75,7 @@ vperp_bc = "periodic"
 vperp_discretization = "chebyshev_pseudospectral"
 
 [numerical_dissipation]
-r_dissipation_coefficient = 4.175874e-17
+r_dissipation_coefficient = 4.175874e-17 # = 1.0e-9 * 2.04349553e-4^2
 z_dissipation_coefficient = 1.0e-3
 
 [output]
