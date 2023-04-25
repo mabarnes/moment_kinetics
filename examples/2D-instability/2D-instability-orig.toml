@@ -79,4 +79,4 @@ r_dissipation_coefficient = 1.0e-9
 z_dissipation_coefficient = 1.0e-3
 
 [output]
-binary_format = "netcdf"
+#binary_format = "netcdf"
