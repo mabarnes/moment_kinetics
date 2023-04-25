@@ -55,7 +55,6 @@ n_rk_stages = 4
 split_operators = false
 z_ngrid = 17
 z_nelement = 32
-z_nelement_local = 4
 z_bc = "periodic"
 z_discretization = "chebyshev_pseudospectral"
 r_ngrid = 17
