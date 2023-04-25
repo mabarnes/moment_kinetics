@@ -3,17 +3,17 @@ using Plots
 using Unitful
 
 function compare_collision_frequencies(input_file::String,
-                                       output_file::Union{String,Nothing}=nothing;
-                                       Bnorm=1, Lnorm=10, Nnorm=1.e19, Tnorm=100)
+                                       output_file::Union{String,Nothing}=nothing)
 
     input = moment_kinetics.moment_kinetics_input.read_input_file(input_file)
     io_input, evolve_moments, t_input, z_input, r_input, vpa_input, vperp_input,
     gyrophase_input, vz_input, vr_input, vzeta_input, composition, species, collisions,
-    geometry, drive_input, num_diss_params =
+    reference_parameters, geometry, drive_input, num_diss_params =
     moment_kinetics.moment_kinetics_input.mk_input(input)
 
     dimensional_parameters = moment_kinetics.utils.get_unnormalized_parameters(
-        input_file; Bnorm=Bnorm, Lnorm=Lnorm, Nnorm=Nnorm, Tnorm=Tnorm)
+        input_file; Bnorm=reference_parameters.Bref, Lnorm=reference_parameters.Lref,
+        Nnorm=reference_parameters.Nref, Tnorm=reference_parameters.Tref)
 
     println("Omega_i0 ", dimensional_parameters["Omega_i0"])
     println("rho_i0 ", dimensional_parameters["rho_i0"])
