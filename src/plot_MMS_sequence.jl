@@ -16,7 +16,7 @@ using LaTeXStrings
 using ..post_processing_input: pp
 using ..post_processing: compare_charged_pdf_symbolic_test, compare_fields_symbolic_test
 using ..post_processing: compare_moments_symbolic_test, compare_neutral_pdf_symbolic_test
-using ..post_processing: read_distributed_zr_data!, construct_global_zr_grids
+using ..post_processing: read_distributed_zr_data!, construct_global_zr_coords
 using ..post_processing: allocate_global_zr_neutral_moments, allocate_global_zr_charged_moments
 using ..post_processing: allocate_global_zr_fields, get_geometry_and_composition
 using ..array_allocation: allocate_float
@@ -132,8 +132,7 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         end 
         # read in the data from different block netcdf files
         # grids 
-        z, z_wgts, r, r_wgts = construct_global_zr_grids(run_name,
-           "moments",z.n_global,r.n_global,nblocks)
+        r_global, z_global = construct_global_zr_coords(r, z)
         #println("z: ",z)
         #println("r: ",r)
         
