@@ -9,7 +9,6 @@ evolve_moments_conservation = false
 T_e = 1.0
 Bzed = 0.1
 Bmag = 1.0
-#rhostar = 1.0
 initial_density1 = 1.0
 initial_temperature1 = 1.0
 z_IC_option1 = "2D-instability-test"
@@ -30,10 +29,10 @@ r_IC_temperature_amplitude1 = 1.0e-7
 r_IC_temperature_phase1 = 0.0
 charge_exchange_frequency = 0.0
 ionization_frequency = 0.0
-nstep = 10000 #10000
-dt = 1.0e-4
-nwrite = 100
-nwrite_dfns = 1000 #100 #1000
+nstep = 20000 #10000
+dt = 1.0e-3
+nwrite = 20
+nwrite_dfns = 2000 #100 #1000
 use_semi_lagrange = false
 n_rk_stages = 4
 split_operators = false
@@ -43,7 +42,7 @@ z_bc = "periodic"
 z_discretization = "chebyshev_pseudospectral"
 r_ngrid = 17
 r_nelement = 2
-r_L = 5.0e-4
+r_L = 1.0e-3
 r_bc = "periodic"
 r_discretization = "chebyshev_pseudospectral"
 vpa_ngrid = 17
@@ -59,9 +58,9 @@ vperp_bc = "periodic"
 vperp_discretization = "chebyshev_pseudospectral"
 
 [numerical_dissipation]
-#r_dissipation_coefficient = 1.0e-9
+r_dissipation_coefficient = 6.0e-10
 #z_dissipation_coefficient = 1.0e-3
-#vpa_dissipation_coefficient = 1.0e-3
+vpa_dissipation_coefficient = 1.5e-2
 
 [output]
 #binary_format = "netcdf"
