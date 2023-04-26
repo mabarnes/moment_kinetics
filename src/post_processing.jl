@@ -141,7 +141,7 @@ function construct_global_zr_coords(r_local, z_local)
 
     function make_global_input(coord_local)
         return grid_input(coord_local.name, coord_local.ngrid,
-            coord_local.nelement_global, coord_local.nelement_local, 1, 0, coord_local.L,
+            coord_local.nelement_global, coord_local.nelement_global, 1, 0, coord_local.L,
             coord_local.discretization, coord_local.fd_option, coord_local.bc,
             coord_local.advection, MPI.COMM_NULL)
     end
