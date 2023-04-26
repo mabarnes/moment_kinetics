@@ -77,7 +77,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         end
         return nothing
     end
-
+    
     """
     """
     function chebyshev_radau_backward_transform!(ff, fext, chebyf, transform, n)
@@ -152,6 +152,40 @@ if abspath(PROGRAM_FILE) == @__FILE__
         println("\n")
     end 
     
+    function chebyshev_radau_weights(moments::Array{mk_float,1}, n)
+        # input should have values moments[j] = (cos(pi j) + 1)/(1-j^2) for j >= 0
+        nfft = 2*n - 1
+        # create array for moments on extended [0,2π] domain in theta = ArcCos[z]
+        fext = allocate_complex(nfft)
+        # assign values of fext from moments 
+        @inbounds begin
+            for j ∈ 1:n
+                fext[j] = complex(moments[j],0.0)
+            end
+            for j ∈ 1:n-1
+                fext[n+j] = fext[n-j+1]
+            end
+        end
+        #println("ff",ff)
+        #println("fext",fext)
+        # make fft plan
+        forward_transform = plan_fft!(fext, flags=FFTW.MEASURE)
+        # perform the forward, complex-to-complex FFT in-place (fext is overwritten)
+        forward_transform*fext
+        #println("fext",fext)
+        # use reality + evenness of moments to eliminate unncessary information
+        # also sort out normalisation and order of array
+        wgts = allocate_float(n)
+        @inbounds begin
+            for j ∈ 2:n
+                wgts[n-j+1] = 2.0*real(fext[j])/nfft
+            end
+            wgts[n] = real(fext[1])/nfft
+        end
+        return wgts
+    end
+
+    
     function chebyshevmoments(N)
         μ = zeros(N)
         @inbounds for i = 0:2:N-1
@@ -215,15 +249,18 @@ if abspath(PROGRAM_FILE) == @__FILE__
     
     # Clenshaw-Curtis weights
     println("Clenshaw-Curtis Chebyshev-Radau weights and integration test")
-    moments = reverse(chebyshevmoments(coord.ngrid))
+    moments = chebyshevmoments(coord.ngrid)
     wgts = Array{mk_float,1}(undef,coord.ngrid)
     integrand = Array{mk_float,1}(undef,coord.ngrid)
     #FT_moments = Array{mk_float,1}(undef,coord.ngrid)
     println(moments)
-    @views chebyshev_radau_forward_transform!(wgts, spectral.fext, moments, spectral.forward, coord.ngrid)
+    @views chebyshev_radau_forward_transform!(wgts, spectral.fext, reverse(moments), spectral.forward, coord.ngrid)
     # put wgts from FFT order into order required for the grid
     wgts = reverse(wgts)
+    wgts_new = chebyshev_radau_weights(moments,coord.ngrid)
     println("wgts \n",wgts)
+    println("wgts_new \n",wgts_new)
+    wgts = wgts_new
     println("sum(wgts) = ", sum(wgts), " should be: 2.0")
     #@. integrand = wgts*coord.grid
     #println("integrate x from -1 to 1 = ", sum(integrand)," should be: 0.0")
