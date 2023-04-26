@@ -160,10 +160,10 @@ function update_moments!(moments, ff, vpa, z, r, composition)
             moments.vth[iz,ir,is] = sqrt(2*moments.ppar[iz,ir,is]/moments.dens[iz,ir,is])
         end
         if moments.qpar_updated[is] == false
-            @views update_qpar_species!(moments.qpar[:,is], moments.dens[:,:,is],
-                                        moments.vth[:,:,is], ff[:,:,is], vpa, z, r,
-                                        moments.evolve_density, moments.evolve_upar,
-                                        moments.evolve_ppar)
+            @views update_qpar_species!(moments.qpar[:,:,is], moments.dens[:,:,is],
+                                        moments.upar[:,:,is], moments.vth[:,:,is],
+                                        ff[:,:,:,is], vpa, z, r, moments.evolve_density,
+                                        moments.evolve_upar, moments.evolve_ppar)
             moments.qpar_updated[is] = true
         end
     end
