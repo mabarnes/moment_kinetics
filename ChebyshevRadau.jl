@@ -12,6 +12,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
     using moment_kinetics.type_definitions: mk_float, mk_int
     using moment_kinetics.array_allocation: allocate_float, allocate_complex
     using moment_kinetics.chebyshev: chebyshev_info, chebyshev_spectral_derivative! #chebyshev_derivative_single_element!, 
+    using moment_kinetics.coordinates: define_coordinate
+    using moment_kinetics.input_structs: grid_input, advection_input
     using LinearAlgebra: mul!
     
     struct radau_coordinate
@@ -150,7 +152,15 @@ if abspath(PROGRAM_FILE) == @__FILE__
         println("\n")
     end 
     
-    ngrid = 20
+    function chebyshevmoments(N)
+        μ = zeros(N)
+        @inbounds for i = 0:2:N-1
+            μ[i+1] = 2/(1-i^2)
+        end
+        return μ
+    end
+    
+    ngrid = 5
     nelement_local = 1
     nelement_global = nelement_local
     npoints = (ngrid - 1)*nelement_local + 1
@@ -202,4 +212,56 @@ if abspath(PROGRAM_FILE) == @__FILE__
     println("df_err \n",df_err)
     println("df_exact \n",df_exact)
     println("df \n",df)
+    
+    # Clenshaw-Curtis weights
+    println("Clenshaw-Curtis Chebyshev-Radau weights and integration test")
+    moments = reverse(chebyshevmoments(coord.ngrid))
+    wgts = Array{mk_float,1}(undef,coord.ngrid)
+    integrand = Array{mk_float,1}(undef,coord.ngrid)
+    #FT_moments = Array{mk_float,1}(undef,coord.ngrid)
+    println(moments)
+    @views chebyshev_radau_forward_transform!(wgts, spectral.fext, moments, spectral.forward, coord.ngrid)
+    # put wgts from FFT order into order required for the grid
+    wgts = reverse(wgts)
+    println("wgts \n",wgts)
+    println("sum(wgts) = ", sum(wgts), " should be: 2.0")
+    #@. integrand = wgts*coord.grid
+    #println("integrate x from -1 to 1 = ", sum(integrand)," should be: 0.0")
+    #@. integrand = wgts*(coord.grid^2)
+    #println("integrate x^2 from -1 to 1 = ", sum(integrand), " should be: ",2.0/3.0)
+    
+    shift = 1.0
+    scalefac = 0.5 
+    xgrid = Array{mk_float,1}(undef,coord.ngrid)
+    xwgts = Array{mk_float,1}(undef,coord.ngrid)
+    @. xgrid = scalefac*(coord.grid + shift) # shift to go from (0,1]
+    @. xwgts = scalefac*wgts
+    println("xwgts: ",xwgts)
+    println("integrate 1 from 0 to 1 = ", sum(xwgts)," should be: 1.0")
+    @. integrand = xwgts*xgrid
+    println("integrate x from 0 to 1 = ", sum(integrand)," should be: 0.5")
+    @. integrand = xwgts*(xgrid^2)
+    println("integrate x^2 from 0 to 1 = ", sum(integrand), " should be: ",1.0/3.0)
+
+    # compare to Lobotto grid 
+    L = 1.0
+    bc = "" #not required to take a particular value, not used 
+	# fd_option and adv_input not actually used so given values unimportant
+	fd_option = "fourth_order_centered"
+	adv_input = advection_input("default", 1.0, 0.0, 0.0)
+	nrank = 1
+    irank = 0
+    comm = MPI.COMM_NULL
+    discretization = "chebyshev_pseudospectral"
+    input = grid_input("mu", ngrid, nelement_global, nelement_local, 
+		nrank, irank, L, discretization, fd_option, bc, adv_input,comm)
+	# create the coordinate struct 'mu'
+	mu = define_coordinate(input)
+    mu.wgts .*= 0.5 # remove jacobian factor for this test
+    println("Comparison to Gauss-Chebyshev-Lobotto grid")
+    println("mu.wgts: ",mu.wgts)
+    println("integrate 1 from 0 to 1 = ", sum(mu.wgts)," should be: 1.0")
+    println("integrate mu from 0 to 1 = ", sum(mu.wgts.*mu.grid)," should be: 0.5")
+    println("integrate mu^2 from 0 to 1 = ", sum(mu.wgts.*(mu.grid.^2)), " should be: ",1.0/3.0)
+
 end
