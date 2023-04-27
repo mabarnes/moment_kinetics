@@ -6,6 +6,7 @@ export init_pdf_and_moments
 export enforce_r_boundary_condition!
 export enforce_z_boundary_condition!
 export enforce_vpa_boundary_condition!
+export enforce_vperp_boundary_condition!
 export enforce_boundary_conditions!
 export enforce_neutral_boundary_conditions!
 export enforce_neutral_r_boundary_condition!
@@ -581,6 +582,10 @@ function enforce_boundary_conditions!(f, f_r_bc,
         # use that adv.speed independent of vpa 
         @views enforce_vpa_boundary_condition_local!(f[:,ivperp,iz,ir,is], vpa_bc, vpa_adv[is].speed[:,ivperp,iz,ir], advance.vpa_diffusion)
     end
+    if vperp.n > 1
+        begin_s_r_z_vpa_region()
+        @views enforce_vperp_boundary_condition!(f,vperp)
+    end
     begin_s_r_vperp_vpa_region()
     @views enforce_z_boundary_condition!(f, z_bc, z_adv, vpa, vperp, z, r, composition,
             scratch_dummy.buffer_vpavperprs_1, scratch_dummy.buffer_vpavperprs_2,
@@ -748,7 +753,18 @@ function enforce_vpa_boundary_condition_local!(f::T, bc, adv_speed, vpa_diffusio
         f[nvpa] = f[1]
     end
 end
+"""
+enforce zero boundary condition at vperp -> infinity
+"""
+function enforce_vperp_boundary_condition!(f,vperp)
+    nvperp = vperp.n
+    @loop_s_r_z_vpa is ir iz ivpa begin
+        f[ivpa,nvperp,iz,ir,is] = 0.0
+    end
+end
 
+"""
+"""
 function enforce_neutral_boundary_conditions!(f_neutral, f_charged, boundary_distributions, r_adv_neutral::T1, z_adv_neutral::T2, z_adv_charged::T3, vz, vr, vzeta, vpa, vperp, z, r, composition, scratch_dummy::T4) where {T1, T2, T3, T4} #f_initial,
     
     # f_initial contains the initial condition for enforcing a fixed-boundary-value condition 

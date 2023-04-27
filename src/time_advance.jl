@@ -24,7 +24,7 @@ using ..velocity_moments: update_neutral_pzeta!, update_neutral_pz!, update_neut
 using ..velocity_grid_transforms: vzvrvzeta_to_vpavperp!, vpavperp_to_vzvrvzeta!
 using ..initial_conditions: enforce_z_boundary_condition!, enforce_boundary_conditions!
 using ..initial_conditions: enforce_vpa_boundary_condition!, enforce_r_boundary_condition!
-using ..initial_conditions: enforce_neutral_boundary_conditions!
+using ..initial_conditions: enforce_neutral_boundary_conditions!, enforce_vperp_boundary_condition!
 using ..initial_conditions: enforce_neutral_z_boundary_condition!, enforce_neutral_r_boundary_condition!
 using ..input_structs: advance_info, time_input
 using ..advection: setup_advection #, update_boundary_indices!
@@ -391,12 +391,15 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     @serial_region begin
         for is ∈ 1:n_ion_species
             @views update_speed_vperp!(vperp_advect[is], vpa, vperp, z, r)
-            # enforce prescribed boundary condition in vpa on the distribution function f
-            #PLACEHOLDER
-            #@views enforce_vperp_boundary_condition!(pdf.norm[:,:,:,:,is], vpa.bc, vpa_advect[is])
+            
         end
     end
-
+    # enforce prescribed boundary condition in vperp on the distribution function f
+    if vperp.n > 1
+        begin_s_r_z_vpa_region()
+        @views enforce_vperp_boundary_condition!(f,vperp)
+    end
+    
     ##
     # Neutral particle advection
     ##
