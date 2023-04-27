@@ -255,58 +255,6 @@ function chebyshev_derivative_single_element!(df, ff, cheby_f, cheby_df, cheby_f
     chebyshev_backward_transform!(df, cheby_fext, cheby_df, forward, coord.ngrid)
 end
 
-
-"""
-Chebyshev transform f to get Chebyshev spectral coefficients
-"""
-function update_fcheby!(cheby, ff, coord)
-    k = 0
-    # loop over the different elements and perform a Chebyshev transform
-    # using the grid within each element
-    @inbounds for j ∈ 1:coord.nelement
-        # imin is the minimum index on the full grid for this (jth) element
-        # the 'k' below accounts for the fact that the first element includes
-        # both boundary points, while each additional element shares a boundary
-        # point with neighboring elements.  the choice was made when defining
-        # coord.imin to exclude the lower boundary point in each element other
-        # than the first so that no point is double-counted
-        imin = coord.imin[j]-k
-        # imax is the maximum index on the full grid for this (jth) element
-        imax = coord.imax[j]
-        chebyshev_forward_transform!(view(cheby.f,:,j),
-            cheby.fext, view(ff,imin:imax), cheby.forward, coord.ngrid)
-        k = 1
-    end
-    return nothing
-end
-
-"""
-compute the Chebyshev spectral coefficients of the spatial derivative of f
-"""
-function update_df_chebyshev!(df, chebyshev, coord)
-    ngrid = coord.ngrid
-    nelement = coord.nelement
-    L = coord.L
-    @boundscheck nelement == size(chebyshev.f,2) || throw(BoundsError(chebyshev.f))
-    @boundscheck nelement == size(df,2) && ngrid == size(df,1) || throw(BoundsError(df))
-    # obtain Chebyshev spectral coefficients of f'[z]
-    # note that must multiply by 2/Lz to get derivative
-    # in scaled coordinate
-    scale_factor = 2*nelement/L
-    # scan over elements
-    @inbounds for j ∈ 1:nelement
-        chebyshev_spectral_derivative!(chebyshev.df,view(chebyshev.f,:,j))
-        # inverse Chebyshev transform to get df/dz
-        # and multiply by scaling factor needed to go
-        # from Chebyshev z coordinate to actual z
-        chebyshev_backward_transform!(view(df,:,j), chebyshev.fext, chebyshev.df, chebyshev.forward, coord.ngrid)
-        for i ∈ 1:ngrid
-            df[i,j] *= scale_factor
-        end
-    end
-    return nothing
-end
-
 """
 use Chebyshev basis to compute the derivative of f
 """
