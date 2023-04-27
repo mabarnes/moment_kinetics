@@ -11,7 +11,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     import moment_kinetics
     using moment_kinetics.type_definitions: mk_float, mk_int
     using moment_kinetics.array_allocation: allocate_float, allocate_complex
-    using moment_kinetics.chebyshev: chebyshev_info, chebyshev_spectral_derivative! #chebyshev_derivative_single_element!, 
+    using moment_kinetics.chebyshev: chebyshev_base_info, chebyshev_spectral_derivative! #chebyshev_derivative_single_element!, 
     using moment_kinetics.coordinates: define_coordinate
     using moment_kinetics.input_structs: grid_input, advection_input
     using LinearAlgebra: mul!
@@ -48,7 +48,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         backward_transform = plan_ifft!(fext, flags=FFTW.MEASURE)
         # return a structure containing the information needed to carry out
         # a 1D Chebyshev transform
-        return chebyshev_info(fext, fcheby, dcheby, forward_transform, backward_transform)
+        return chebyshev_base_info(fext, fcheby, dcheby, forward_transform, backward_transform)
     end
     
     function chebyshev_radau_forward_transform!(chebyf, fext, ff, transform, n)
@@ -175,6 +175,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
         #println("fext",fext)
         # use reality + evenness of moments to eliminate unncessary information
         # also sort out normalisation and order of array
+        # note that fft order output is reversed compared to the order of 
+        # the grid chosen, which runs from (-1,1]
         wgts = allocate_float(n)
         @inbounds begin
             for j ∈ 2:n
