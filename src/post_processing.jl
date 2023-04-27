@@ -2013,14 +2013,22 @@ function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time
 		# the parallel pressure
 		parallel_pressuremin = minimum(parallel_pressure[:,:,is,:])
 		parallel_pressuremax = maximum(parallel_pressure)
+                # Also plot temperature
+                temperature = parallel_pressure ./ density
 		if pp.plot_parallel_pressure_vs_r0_z # plot last timestep parallel_pressure[z,ir0]
 			@views plot(z, parallel_pressure[:,ir0,is,end], xlabel=L"z/L_z", ylabel=L"p_{i\|\|}")
 			outfile = string(run_name, "_parallel_pressure"*description*"(r0,z)_vs_z.pdf")
 			savefig(outfile)    
+			@views plot(z, temperature[:,ir0,is,end], xlabel=L"z/L_z", ylabel=L"T_i")
+			outfile = string(run_name, "_temperature"*description*"(r0,z)_vs_z.pdf")
+			savefig(outfile)
 		end
 		if pp.plot_wall_parallel_pressure_vs_r && nr > 1 # plot last timestep parallel_pressure[z_wall,r]
 			@views plot(r, parallel_pressure[end,:,is,end], xlabel=L"r/L_r", ylabel=L"p_{i\|\|}")
 			outfile = string(run_name, "_parallel_pressure"*description*"(r,z_wall)_vs_r.pdf")
+			savefig(outfile)
+			@views plot(r, temperature[end,:,is,end], xlabel=L"r/L_r", ylabel=L"T_i")
+			outfile = string(run_name, "_temperature"*description*"(r,z_wall)_vs_r.pdf")
 			savefig(outfile)
 		end
 		if pp.animate_parallel_pressure_vs_r_z && nr > 1
@@ -2030,11 +2038,20 @@ function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time
 			end
 			outfile = string(run_name, "_parallel_pressure"*description*"_vs_r_z.gif")
 			gif(anim, outfile, fps=5)
+			anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+				@views heatmap(r, z, temperature[:,:,is,i], xlabel="r", ylabel="z", c = :deep, interpolation = :cubic)
+			end
+			outfile = string(run_name, "_temperature"*description*"_vs_r_z.gif")
+			gif(anim, outfile, fps=5)
 		end
 		if pp.plot_parallel_pressure_vs_r_z && nr > 1
 			@views heatmap(r, z, parallel_pressure[:,:,is,end], xlabel=L"r", ylabel=L"z", c = :deep, interpolation = :cubic,
 			windowsize = (360,240), margin = 15pt)
 			outfile = string(run_name, "_parallel_pressure"*description*"_vs_r_z.pdf")
+			savefig(outfile)
+			@views heatmap(r, z, temperature[:,:,is,end], xlabel=L"r", ylabel=L"z", c = :deep, interpolation = :cubic,
+			windowsize = (360,240), margin = 15pt)
+			outfile = string(run_name, "_temperature"*description*"_vs_r_z.pdf")
 			savefig(outfile)
 		end
 	end
