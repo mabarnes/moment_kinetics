@@ -7,7 +7,7 @@ export equally_spaced_grid
 
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_int
-using ..chebyshev: scaled_chebyshev_grid
+using ..chebyshev: scaled_chebyshev_grid, scaled_chebyshev_radau_grid
 using ..quadrature: composite_simpson_weights
 using ..input_structs: advection_input
 
@@ -171,9 +171,8 @@ function init_grid(ngrid, nelement_global, nelement_local, n_global, n_local, ir
     elseif discretization == "chebyshev_pseudospectral"
         if name == "mu"
             # initialize chebyshev grid defined on [-L/2,L/2]
-            grid, wgts = scaled_chebyshev_grid(ngrid, nelement_global, nelement_local, n_local, irank, L, imin, imax)
+            grid, wgts = scaled_chebyshev_radau_grid(ngrid, nelement_global, nelement_local, n_local, irank, L, imin, imax)
             grid .= grid .+ L/2.0 # shift to [0,L] appropriate to mu variable
-            @. grid = abs(grid) # prevent negative value at mu = 0
             wgts = 2.0 .* wgts # to include 2 in jacobian of integral
                                         # see note above on normalisation
         else
