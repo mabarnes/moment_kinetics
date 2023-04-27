@@ -33,6 +33,8 @@ const plot_dens_vs_z_t = true
 const plot_upar_vs_z_t = false
 # if plot_ppar_vs_z_t = true, create heatmap of species parallel pressure vs z and time
 const plot_ppar_vs_z_t = false
+# if plot_Tpar_vs_z_t = true, create heatmap of species parallel pressure vs z and time
+const plot_Tpar_vs_z_t = false
 # if plot_qpar_vs_z_t = true, create heatmap of species parallel heat flux vs z and time
 const plot_qpar_vs_z_t = false
 # if animate_dens_vs_z = true, create animation of species density(z) at different time slices
@@ -41,6 +43,8 @@ const animate_dens_vs_z =  false #ttrue
 const animate_upar_vs_z = false
 # if animate_ppar_vs_z = true, create animation of species parallel pressure(z) at different time slices
 const animate_ppar_vs_z = false
+# if animate_Tpar_vs_z = true, create animation of species parallel pressure(z) at different time slices
+const animate_Tpar_vs_z = false
 # if animate_vth_vs_z = true, create animation of species thermal_velocity(z) at different time slices
 const animate_vth_vs_z = false
 # if animate_qpar_vs_z = true, create animation of species parallel heat flux(z) at different time slices
@@ -101,6 +105,10 @@ const plot_parallel_pressure_vs_r0_z = true # plot last timestep parallel_pressu
 const plot_wall_parallel_pressure_vs_r = true # plot last timestep parallel_pressure[z_wall,r]
 const plot_parallel_pressure_vs_r_z = true
 const animate_parallel_pressure_vs_r_z = true
+const plot_parallel_temperature_vs_r0_z = true # plot last timestep parallel_temperature[z,ir0]
+const plot_wall_parallel_temperature_vs_r = true # plot last timestep parallel_temperature[z_wall,r]
+const plot_parallel_temperature_vs_r_z = true
+const animate_parallel_temperature_vs_r_z = true
 const plot_wall_pdf = true # plot last time step ion distribution function at the wall and in the element nearest the wall 
 const nwrite_movie = 1
 # itime_min is the minimum time index at which to start animations of the moments
@@ -138,10 +146,10 @@ const ivzeta0 = -1
 
 pp = pp_input(calculate_frequencies, plot_phi0_vs_t, plot_phi_vs_z_t, animate_phi_vs_z,
     plot_dens0_vs_t, plot_upar0_vs_t, plot_ppar0_vs_t, plot_vth0_vs_t, plot_qpar0_vs_t,
-    plot_dens_vs_z_t, plot_upar_vs_z_t, plot_ppar_vs_z_t, plot_qpar_vs_z_t,
-    animate_dens_vs_z, animate_upar_vs_z, animate_ppar_vs_z, animate_vth_vs_z,
-    animate_qpar_vs_z, plot_f_unnormalized_vs_vpa_z, animate_f_vs_vpa_z,
-    animate_f_unnormalized, animate_f_vs_vpa0_z, animate_f_vs_vpa_z0,
+    plot_dens_vs_z_t, plot_upar_vs_z_t, plot_ppar_vs_z_t, plot_Tpar_vs_z_t,
+    plot_qpar_vs_z_t, animate_dens_vs_z, animate_upar_vs_z, animate_ppar_vs_z,
+    animate_Tpar_vs_z, animate_vth_vs_z, animate_qpar_vs_z, plot_f_unnormalized_vs_vpa_z,
+    animate_f_vs_vpa_z, animate_f_unnormalized, animate_f_vs_vpa0_z, animate_f_vs_vpa_z0,
     animate_deltaf_vs_vpa_z, animate_deltaf_vs_vpa0_z, animate_deltaf_vs_vpa_z0,
     animate_f_vs_vpa_r, animate_f_vs_vperp_z, animate_f_vs_vperp_r,
     animate_f_vs_vperp_vpa, animate_f_vs_r_z, animate_f_vs_vz_z, animate_f_vs_vr_r,
@@ -151,8 +159,10 @@ pp = pp_input(calculate_frequencies, plot_phi0_vs_t, plot_phi_vs_z_t, animate_ph
     animate_density_vs_r_z, plot_parallel_flow_vs_r0_z, plot_wall_parallel_flow_vs_r,
     plot_parallel_flow_vs_r_z, animate_parallel_flow_vs_r_z,
     plot_parallel_pressure_vs_r0_z, plot_wall_parallel_pressure_vs_r,
-    plot_parallel_pressure_vs_r_z, animate_parallel_pressure_vs_r_z, plot_wall_pdf,
-    nwrite_movie, itime_min, itime_max, nwrite_movie_pdfs, itime_min_pdfs, itime_max_pdfs,
-    ivpa0, ivperp0, iz0, ir0, ivz0, ivr0, ivzeta0)
+    plot_parallel_pressure_vs_r_z, animate_parallel_pressure_vs_r_z,
+    plot_parallel_temperature_vs_r0_z, plot_wall_parallel_temperature_vs_r,
+    plot_parallel_temperature_vs_r_z, animate_parallel_temperature_vs_r_z, plot_wall_pdf,
+    nwrite_movie, itime_min, itime_max, nwrite_movie_pdfs, itime_min_pdfs,
+    itime_max_pdfs, ivpa0, ivperp0, iz0, ir0, ivz0, ivr0, ivzeta0)
 
 end

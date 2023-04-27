@@ -362,6 +362,8 @@ struct pp_input
     plot_upar_vs_z_t::Bool
     # if plot_ppar_vs_z_t = true, create plot of species parallel pressure vs z and time
     plot_ppar_vs_z_t::Bool
+    # if plot_Tpar_vs_z_t = true, create plot of species parallel temperature vs z and time
+    plot_Tpar_vs_z_t::Bool
     # if plot_qpar_vs_z_t = true, create plot of species parallel heat flux vs z and time
     plot_qpar_vs_z_t::Bool
     # if animate_dens_vs_z = true, create animation of species density vs z at different time slices
@@ -370,6 +372,8 @@ struct pp_input
     animate_upar_vs_z::Bool
     # if animate_ppar_vs_z = true, create animation of species parallel pressure vs z at different time slices
     animate_ppar_vs_z::Bool
+    # if animate_Tpar_vs_z = true, create animation of species parallel temperature vs z at different time slices
+    animate_Tpar_vs_z::Bool
     # if animate_vth_vs_z = true, create animation of species thermal speed vs z at different time slices
     animate_vth_vs_z::Bool
     # if animate_qpar_vs_z = true, create animation of species parallel heat flux vs z at different time slices
@@ -446,6 +450,14 @@ struct pp_input
 	plot_parallel_pressure_vs_r_z::Bool
     # if animate_parallel_pressure_vs_r_z = true animate parallel_pressure vs r z
 	animate_parallel_pressure_vs_r_z::Bool
+    # if plot_parallel_temperature_vs_r0_z = true  plot last timestep parallel_temperature[z,ir0]
+    plot_parallel_temperature_vs_r0_z::Bool
+    # if plot_wall_parallel_temperature_vs_r = true  plot last timestep parallel_temperature[z_wall,r]
+    plot_wall_parallel_temperature_vs_r::Bool
+    # if plot_parallel_temperature_vs_r_z = true plot parallel_temperature vs r z at last timestep
+    plot_parallel_temperature_vs_r_z::Bool
+    # if animate_parallel_temperature_vs_r_z = true animate parallel_temperature vs r z
+    animate_parallel_temperature_vs_r_z::Bool
     # if plot_wall_pdf = true then plot the ion distribution (vpa,vperp,z,r) in the element nearest the wall at the last timestep 
     plot_wall_pdf::Bool
     # animations of moments will use one in every nwrite_movie data slices

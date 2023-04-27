@@ -1662,6 +1662,22 @@ function plot_moments(density, delta_density, density_fldline_avg,
             outfile = string(prefix, "_$(label)_ppar_vs_z_t_spec", spec_string, ".pdf")
             savefig(outfile)
         end
+        # Note factor of 2 here because currently temperatures are normalised by Tref,
+        # while pressures are normalised by m*nref*c_ref^2=2*nref*Tref
+        parallel_temperature = (2.0 .* ppar ./ n
+                                for (n, ppar) ∈ zip(density, parallel_pressure))
+        Tpar_min = minimum(minimum(Tpar[:,is,:]) for Tpar ∈ parallel_temperature)
+        Tpar_max = maximum(maximum(Tpar[:,is,:]) for Tpar ∈ parallel_temperature)
+        if pp.plot_Tpar_vs_z_t
+            # make a heatmap plot of upar_s(z,t)
+            subplots = (heatmap(t, this_z.grid, Tpar[:,is,:], xlabel="time", ylabel="z",
+                                title=run_label, c = :deep)
+                        for (t, this_z, Tpar, run_label) ∈
+                            zip(time, z, parallel_temperature, run_names))
+            plot(subplots..., layout=(1,n_runs), size=(600*n_runs, 400))
+            outfile = string(prefix, "_$(label)_Tpar_vs_z_t_spec", spec_string, ".pdf")
+            trysavefig(outfile)
+        end
         if pp.plot_qpar_vs_z_t
             # make a heatmap plot of upar_s(z,t)
             subplots = (heatmap(t, this_z.grid, qpar[:,is,:], xlabel="time", ylabel="z",
@@ -1707,6 +1723,19 @@ function plot_moments(density, delta_density, density_fldline_avg,
             end
             outfile = string(prefix, "_$(label)_ppar_vs_z_spec", spec_string, ".gif")
             gif(anim, outfile, fps=5)
+        end
+        if pp.animate_Tpar_vs_z
+            # make a gif animation of Tpar(z) at different times
+            anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+                plot(legend=legend)
+                for (t, this_z, Tpar, run_label) ∈ zip(time, z, parallel_temperature,
+                                                       run_names)
+                    @views plot!(this_z.grid, Tpar[:,is,i], xlabel="z", ylabel="Tpars",
+                                 ylims=(Tpar_min, Tpar_max), label=run_label)
+                end
+            end
+            outfile = string(prefix, "_$(label)_ppar_vs_z_spec", spec_string, ".gif")
+            trygif(anim, outfile, fps=5)
         end
         if pp.animate_vth_vs_z
             # make a gif animation of vth(z) at different times
@@ -3019,6 +3048,34 @@ function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time
 			outfile = string(run_name, "_parallel_pressure"*description*"_vs_r_z.pdf")
 			savefig(outfile)
 		end
+                # the parallel temperature
+                # Note factor of 2 here because currently temperatures are normalised by
+                # Tref, while pressures are normalised by m*nref*c_ref^2=2*nref*Tref
+                temperature = 2.0 * parallel_pressure ./ density
+                if pp.plot_parallel_temperature_vs_r0_z # plot last timestep parallel_temperature[z,ir0]
+                    @views plot(z, temperature[:,ir0,is,end], xlabel=L"z/L_z", ylabel=L"T_i")
+                    outfile = string(run_name, "_temperature"*description*"(r0,z)_vs_z.pdf")
+                    savefig(outfile)
+                end
+                if pp.plot_wall_parallel_temperature_vs_r && nr > 1 # plot last timestep parallel_temperature[z_wall,r]
+                    @views plot(r, temperature[end,:,is,end], xlabel=L"r/L_r", ylabel=L"T_i")
+                    outfile = string(run_name, "_temperature"*description*"(r,z_wall)_vs_r.pdf")
+                    savefig(outfile)
+                end
+                if pp.animate_parallel_temperature_vs_r_z && nr > 1
+                    # make a gif animation of T_||(z) at different times
+                    anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+                        @views heatmap(r, z, temperature[:,:,is,i], xlabel="r", ylabel="z", c = :deep, interpolation = :cubic)
+                    end
+                    outfile = string(run_name, "_temperature"*description*"_vs_r_z.gif")
+                    gif(anim, outfile, fps=5)
+                end
+                if pp.plot_parallel_temperature_vs_r_z && nr > 1
+                    @views heatmap(r, z, temperature[:,:,is,end], xlabel=L"r", ylabel=L"z", c = :deep, interpolation = :cubic,
+                                  windowsize = (360,240), margin = 15pt)
+                    outfile = string(run_name, "_temperature"*description*"_vs_r_z.pdf")
+                    savefig(outfile)
+                end
 	end
     println("done.")
 end
