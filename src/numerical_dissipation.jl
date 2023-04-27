@@ -88,7 +88,8 @@ function vpa_dissipation!(f_out, f_in, vpa, spectral::T_spectral, dt,
         #                                vpa.scratch3
         vpa.scratch2 .= 1.0 # placeholder for Q in d / d vpa ( Q d f / d vpa)
         @views second_derivative!(vpa.scratch, f_in[:,ivperp,iz,ir,is], vpa.scratch2, vpa, spectral)
-        @views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch
+        @views derivative!(vpa.scratch3, f_in[:,ivperp,iz,ir,is], vpa, spectral)
+        @views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * (vpa.scratch + vpa.scratch3^2)
     end
 
     return nothing
@@ -173,7 +174,7 @@ function r_dissipation!(f_out, f_in, r, r_spectral::T_spectral, dt,
 					r_spectral,r)
     # advance f due to diffusion_coefficient * d / d r ( Q d f / d r )
     @loop_s_z_vperp_vpa is iz ivperp ivpa begin
-        @views @. f_out[ivpa,ivperp,iz,:,is] += dt * diffusion_coefficient * scratch_dummy.buffer_vpavperpzrs_1[ivpa,ivperp,iz,:,is]
+        @views @. f_out[ivpa,ivperp,iz,:,is] += dt * diffusion_coefficient * (scratch_dummy.buffer_vpavperpzrs_1[ivpa,ivperp,iz,:,is] + scratch_dummy.buffer_vpavperpzrs_1[ivpa,ivperp,iz,:,is]^2)
     end
 
     return nothing

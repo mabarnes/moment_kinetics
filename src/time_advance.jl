@@ -692,7 +692,8 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
                                    Dates.format(now(), dateformat"H:MM:SS"))
                 end
             end
-            write_dfns_data_to_binary(pdf.charged.unnorm, pdf.neutral.unnorm, t,
+            #write_dfns_data_to_binary(pdf.charged.eLogf, pdf.neutral.unnorm, t,
+            write_dfns_data_to_binary(exp.(pdf.charged.unnorm), pdf.neutral.unnorm, t,
                                       composition.n_ion_species,
                                       composition.n_neutral_species, io_dfns, iwrite_dfns)
             iwrite_dfns += 1
@@ -750,17 +751,19 @@ function rk_update!(scratch, pdf, moments, fields, vz, vr, vzeta, vpa, vperp, z,
 
     @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
         pdf.charged.unnorm[ivpa,ivperp,iz,ir,is] = new_scratch.pdf[ivpa,ivperp,iz,ir,is]
+        pdf.charged.eLogf[ivpa,ivperp,iz,ir,is] = exp(pdf.charged.unnorm[ivpa,ivperp,iz,ir,is])
     end
-    update_density!(new_scratch.density, pdf.charged.unnorm, vpa, vperp, z, r, composition)
+    #update_density!(new_scratch.density, pdf.charged.eLogf, vpa, vperp, z, r, composition)
+    update_density!(new_scratch.density, exp.(pdf.charged.unnorm), vpa, vperp, z, r, composition)
 
-    update_upar!(new_scratch.upar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
+    update_upar!(new_scratch.upar, pdf.charged.eLogf, vpa, vperp, z, r, composition)
     # convert from particle particle flux to parallel flow
     begin_s_r_z_region()
     @loop_s_r_z is ir iz begin
         new_scratch.upar[iz,ir,is] /= new_scratch.density[iz,ir,is]
     end
 
-    update_ppar!(new_scratch.ppar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
+    update_ppar!(new_scratch.ppar, pdf.charged.eLogf, vpa, vperp, z, r, composition)
     # update the thermal speed
     begin_s_r_z_region()
     try #below block causes DomainError if ppar < 0 or density, so exit cleanly if possible
@@ -779,7 +782,7 @@ function rk_update!(scratch, pdf, moments, fields, vz, vr, vzeta, vpa, vperp, z,
 		rethrow(e)
 	end
     # update the parallel heat flux
-    update_qpar!(moments.charged.qpar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
+    update_qpar!(moments.charged.qpar, pdf.charged.eLogf, vpa, vperp, z, r, composition)
 
     ##
     # update the neutral particle distribution and moments
@@ -904,7 +907,7 @@ function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase,
 				moments.neutral.ur[iz,ir,isn] /= moments.neutral.dens[iz,ir,isn]
 				moments.neutral.uzeta[iz,ir,isn] /= moments.neutral.dens[iz,ir,isn]
 				# get vth for neutrals
-				moments.neutral.vth[iz,ir,isn] = sqrt(2.0*moments.neutral.ptot[iz,ir,isn]/moments.neutral.dens[iz,ir,isn])
+				moments.neutral.vth[iz,ir,isn] = sqrt(2/.0*moments.neutral.ptot[iz,ir,isn]/moments.neutral.dens[iz,ir,isn])
 			end
 		catch e
 			if global_size[] > 1

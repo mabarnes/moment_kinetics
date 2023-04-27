@@ -33,7 +33,12 @@ using ..manufactured_solns: manufactured_solutions
 
 """
 """
+
+# minimum value taken by dfn
+dfnzero = 1.0e-8
+
 struct pdf_substruct{n_distribution}
+    eLogf::MPISharedArray{mk_float,n_distribution}
     norm::MPISharedArray{mk_float,n_distribution}
     unnorm::MPISharedArray{mk_float,n_distribution}
     buffer::MPISharedArray{mk_float,n_distribution} # for collision operator terms when pdfs must be interpolated onto different velocity space grids
@@ -125,6 +130,15 @@ function init_pdf_and_moments(vz, vr, vzeta, vpa, vperp, z, r, composition, geom
         end
     end 
     
+    @serial_region begin
+        # switch to log representation
+        pdf.charged.norm .+= dfnzero
+        pdf.charged.unnorm .+= dfnzero
+        pdf.charged.norm .= log.(pdf.charged.norm)
+        pdf.charged.unnorm .= log.(pdf.charged.unnorm)
+        pdf.charged.eLogf .= exp.(pdf.charged.unnorm)
+    end 
+    
     boundary_distributions = create_and_init_boundary_distributions(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition)
     
     return pdf, moments, boundary_distributions
@@ -134,15 +148,17 @@ end
 """
 function create_pdf(vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_species)
     # allocate pdf arrays
+    pdf_charged_eLogF = allocate_shared_float(vpa.n, vperp.n, z.n, r.n, n_ion_species)
     pdf_charged_norm = allocate_shared_float(vpa.n, vperp.n, z.n, r.n, n_ion_species)
     pdf_charged_unnorm = allocate_shared_float(vpa.n, vperp.n, z.n, r.n, n_ion_species)
     pdf_charged_buffer = allocate_shared_float(vpa.n, vperp.n, z.n, r.n, n_neutral_species) # n.b. n_species is n_neutral_species here
+    pdf_neutral_eLogF = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, r.n, n_neutral_species)
     pdf_neutral_norm = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, r.n, n_neutral_species)
     pdf_neutral_unnorm = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, r.n, n_neutral_species)
     pdf_neutral_buffer = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, r.n, n_ion_species)
 
-    return pdf_struct(pdf_substruct(pdf_charged_norm, pdf_charged_unnorm, pdf_charged_buffer), 
-                    pdf_substruct(pdf_neutral_norm, pdf_neutral_unnorm, pdf_neutral_buffer))
+    return pdf_struct(pdf_substruct(pdf_charged_eLogF,pdf_charged_norm, pdf_charged_unnorm, pdf_charged_buffer), 
+                    pdf_substruct(pdf_neutral_eLogF,pdf_neutral_norm, pdf_neutral_unnorm, pdf_neutral_buffer))
 
 end
 
@@ -699,11 +715,11 @@ function enforce_z_boundary_condition!(f::AbstractArray{mk_float,5}, bc::String,
                 # check that this rank includes the lower/upper boundary
                 iz = 1 # z = -L/2
                 if adv[is].speed[iz,ivpa,ivperp,ir] > zero && z.irank == 0
-                    f[ivpa,ivperp,iz,ir,is] = 0.0
+                    f[ivpa,ivperp,iz,ir,is] = log(dfnzero) #0.0
                 end
                 iz = nz # z = L/2
                 if adv[is].speed[iz,ivpa,ivperp,ir] < -zero && z.irank == z.nrank - 1
-                    f[ivpa,ivperp,iz,ir,is] = 0.0
+                    f[ivpa,ivperp,iz,ir,is] = log(dfnzero) #0.0
                 end
                 
             end
@@ -739,9 +755,9 @@ function enforce_vpa_boundary_condition_local!(f::T, bc, adv_speed, vpa_diffusio
     nvpa = size(f,1)
     if bc == "zero"
         if dvpadt > zero || vpa_diffusion
-            f[1] = 0.0 # -infty forced to zero
+            f[1] = log(dfnzero) #0.0 # -infty forced to zero
         elseif dvpadt < zero || vpa_diffusion
-            f[end] = 0.0 # +infty forced to zero
+            f[end] = log(dfnzero) #0.0 # +infty forced to zero
         end
     elseif bc == "periodic"
         f[1] = 0.5*(f[nvpa]+f[1])
