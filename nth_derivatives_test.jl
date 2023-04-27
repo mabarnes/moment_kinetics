@@ -22,9 +22,10 @@ if abspath(PROGRAM_FILE) == @__FILE__
 	
 	# define inputs needed for the test
 	ngrid = 33 #number of points per element 
-	nelement_local = 100 # number of elements per rank
+	nelement_local = 1 # number of elements per rank
 	nelement_global = nelement_local # total number of elements 
-	L = 1.0 #physical box size in reference units 
+	L = 2.0*pi/100.0 #physical box size in reference units 
+	L = 1.0 #2.0*pi/100.0 #physical box size in reference units 
 	bc = "" #not required to take a particular value, not used 
 	# fd_option and adv_input not actually used so given values unimportant
 	fd_option = "fourth_order_centered"
@@ -65,15 +66,21 @@ if abspath(PROGRAM_FILE) == @__FILE__
     d4f_exact = Array{Float64,1}(undef, x.n)
     d4f_err = Array{Float64,1}(undef, x.n)
 
+    p = 5.0
     ## sin(2pix/L) test 
     for ix in 1:x.n
-        scale = 2.0*pi/x.L
+        scale = 1.0
         arg = x.grid[ix]*scale
-        f[ix] = sin(arg)
-        df_exact[ix] = scale*cos(arg)    
-        d2f_exact[ix] = -scale*scale*sin(arg)    
-        d3f_exact[ix] = -scale*scale*scale*cos(arg)    
-        d4f_exact[ix] = scale*scale*scale*scale*sin(arg)    
+        f[ix] = x.grid[ix]^p
+        df_exact[ix] = p*x.grid[ix]^(p-1.0)
+        d2f_exact[ix] = p*(p-1.0)*x.grid[ix]^(p-2.0)
+        d3f_exact[ix] = p*(p-1.0)*(p-2.0)*x.grid[ix]^(p-3.0)
+        d4f_exact[ix] = p*(p-1.0)*(p-2.0)*(p-3.0)*x.grid[ix]^(p-4.0)
+#        f[ix] = sin(arg)
+#        df_exact[ix] = scale*cos(arg)    
+#        d2f_exact[ix] = -scale*scale*sin(arg)    
+#        d3f_exact[ix] = -scale*scale*scale*cos(arg)    
+#        d4f_exact[ix] = scale*scale*scale*scale*sin(arg)    
     end
 
     # differentiate f
@@ -91,26 +98,44 @@ if abspath(PROGRAM_FILE) == @__FILE__
     println("max(d3f_err)",maximum(d3f_err))
     println("max(d4f_err)",maximum(d4f_err))
     
-    # plot df and f
-    plot([x.grid,x.grid,x.grid], [df,df_exact,df_err], xlabel="x", ylabel="", label=["df_num" "df_exact" "df_err"],
-         shape =:circle, markersize = 5, linewidth=2)
-    outfile = "1st_derivative_test.pdf"
-    savefig(outfile)
-    
-    plot([x.grid,x.grid,x.grid], [d2f,d2f_exact,d2f_err], xlabel="x", ylabel="", label=["d2f_num" "d2f_exact" "d2f_err"],
-         shape =:circle, markersize = 5, linewidth=2)
-    outfile = "2nd_derivative_test.pdf"
-    savefig(outfile)
-    
-    plot([x.grid,x.grid,x.grid], [d3f,d3f_exact,d3f_err], xlabel="x", ylabel="", label=["d3f_num" "d3f_exact" "d3f_err"],
-         shape =:circle, markersize = 5, linewidth=2)
-    outfile = "3rd_derivative_test.pdf"
-    savefig(outfile)
-    
-    plot([x.grid,x.grid,x.grid], [d4f,d4f_exact,d4f_err], xlabel="x", ylabel="", label=["d4f_num" "d4f_exact" "d4f_err"],
-         shape =:circle, markersize = 5, linewidth=2)
-    outfile = "4th_derivative_test.pdf"
-    savefig(outfile)
-    
+    plot_output = true
+    if plot_output
+        # plot df and f
+        plot([x.grid,x.grid,x.grid], [df,df_exact,df_err], xlabel="x", ylabel="", label=["df_num" "df_exact" "df_err"],
+             shape =:circle, markersize = 5, linewidth=2)
+        outfile = "1st_derivative_test.pdf"
+        savefig(outfile)
+        plot([x.grid], [df_err], xlabel="x", ylabel="", label=["df_err"],
+             shape =:circle, markersize = 5, linewidth=2)
+        outfile = "1st_derivative_err.pdf"
+        savefig(outfile)
+        
+        plot([x.grid,x.grid,x.grid], [d2f,d2f_exact,d2f_err], xlabel="x", ylabel="", label=["d2f_num" "d2f_exact" "d2f_err"],
+             shape =:circle, markersize = 5, linewidth=2)
+        outfile = "2nd_derivative_test.pdf"
+        savefig(outfile)
+        plot([x.grid], [d2f_err], xlabel="x", ylabel="", label=["d2f_err"],
+             shape =:circle, markersize = 5, linewidth=2)
+        outfile = "2nd_derivative_err.pdf"
+        savefig(outfile)
+        
+        plot([x.grid,x.grid,x.grid], [d3f,d3f_exact,d3f_err], xlabel="x", ylabel="", label=["d3f_num" "d3f_exact" "d3f_err"],
+             shape =:circle, markersize = 5, linewidth=2)
+        outfile = "3rd_derivative_test.pdf"
+        savefig(outfile)
+        plot([x.grid], [d3f_err], xlabel="x", ylabel="", label=["d3f_err"],
+             shape =:circle, markersize = 5, linewidth=2)
+        outfile = "3rd_derivative_err.pdf"
+        savefig(outfile)
+        
+        plot([x.grid,x.grid,x.grid], [d4f,d4f_exact,d4f_err], xlabel="x", ylabel="", label=["d4f_num" "d4f_exact" "d4f_err"],
+             shape =:circle, markersize = 5, linewidth=2)
+        outfile = "4th_derivative_test.pdf"
+        savefig(outfile)
+        plot([x.grid], [d4f_err], xlabel="x", ylabel="", label=["d4f_err"],
+             shape =:circle, markersize = 5, linewidth=2)
+        outfile = "4th_derivative_err.pdf"
+        savefig(outfile)
+    end
 end
 	
