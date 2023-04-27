@@ -298,7 +298,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
 	###################
 	
 	# define inputs needed for the test
-	ngrid = 17 #number of points per element 
+	ngrid = 2 #number of points per element 
 	nelement_local = 10 # number of elements per rank
 	nelement_global = nelement_local # total number of elements 
 	L = 1.0 #physical box size in reference units 
@@ -470,8 +470,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
     #println("check result", AA*yy, bb)
     MMS_test = false 
     evolution_test = false#true 
-    elliptic_solve_test = false#true
-    elliptic_2Dsolve_test = true
+    elliptic_solve_test = true
+    elliptic_2Dsolve_test = false#true
     if MMS_test
         ntest = 5
         MMS_errors = Array{Float64,1}(undef,ntest)
@@ -552,8 +552,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
     
     if elliptic_solve_test
         println("elliptic solve test")
-        ngrid = 2
-        nelement_local = 400
+        ngrid = 5
+        nelement_local = 50
         L = 25
         nelement_global = nelement_local
         input = grid_input("mu", ngrid, nelement_global, nelement_local, 
@@ -622,10 +622,10 @@ if abspath(PROGRAM_FILE) == @__FILE__
     
     if elliptic_2Dsolve_test
         println("elliptic 2D solve test")
-        ngrid = 5
-        nelement_local = 10 
-        x_L = 25
-        y_L = 25
+        ngrid = 2
+        nelement_local = 5 
+        x_L = 1
+        y_L = 1
         nelement_global = nelement_local
         
         input = grid_input("vpa", ngrid, nelement_global, nelement_local, 
@@ -721,7 +721,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         
         for iy in 1:ny
             for ix in 1:nx
-                Sxy[ix,iy] = -2.0*x.grid[ix]*exp(-2.0*y.grid[iy]-x.grid[ix]^2)
+                Sxy[ix,iy] = -4.0*pi*(-2.0*x.grid[ix]*exp(-2.0*y.grid[iy]-x.grid[ix]^2))
                 Fxy_exact[ix,iy] = dH_Maxwellian_dvpa(1.0,x,y,ix,iy)
                 for iyp in 1:ny
                     for ixp in 1:nx
@@ -755,9 +755,9 @@ if abspath(PROGRAM_FILE) == @__FILE__
         @. Fxy_err = abs(Fxy - Fxy_exact)
         
         println("maximum(Fxy_err)",maximum(Fxy_err))
-        #println("Fy_err",Fy_err)
-        #println("Fy_exact",Fy_exact)
-        #println("Fy",Fy)
+        println("Fxy_err",Fxy_err[1,:])
+        println("Fxy_exact",Fxy_exact[1,:])
+        println("Fxy",Fxy[1,:])
         
 
     end

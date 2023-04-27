@@ -111,13 +111,13 @@ if abspath(PROGRAM_FILE) == @__FILE__
     #discretization = "finite_difference"
 	
     # define inputs needed for the test
-	vpa_ngrid = 4 #number of points per element 
-	vpa_nelement_local = 20 # number of elements per rank
+	vpa_ngrid = 17 #number of points per element 
+	vpa_nelement_local = 10 # number of elements per rank
 	vpa_nelement_global = vpa_nelement_local # total number of elements 
 	vpa_L = 6.0 #physical box size in reference units 
 	bc = "zero" 
-	mu_ngrid = 4 #number of points per element 
-	mu_nelement_local = 20 # number of elements per rank
+	mu_ngrid = 17 #number of points per element 
+	mu_nelement_local = 10 # number of elements per rank
 	mu_nelement_global = mu_nelement_local # total number of elements 
     mu_L = 6.0 #physical box size in reference units 
 	bc = "zero" 
@@ -139,6 +139,9 @@ if abspath(PROGRAM_FILE) == @__FILE__
 	println("made inputs")
 	vpa = define_coordinate(vpa_input)
 	mu = define_coordinate(mu_input)
+    #println(mu.grid)
+    #println(mu.wgts)
+    #@views @. mu.grid = abs(mu.grid)
     vpa_spectral = setup_chebyshev_pseudospectral(vpa)
     mu_spectral = setup_chebyshev_pseudospectral(mu)
     
@@ -205,7 +208,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         for ivpa in 1:nvpa
             if (maximum(G_err[ivpa,imu]) > zero)
                 #println("ivpa: ",ivpa," imu: ",imu," G_err: ",G_err[ivpa,imu])
-                println("ivpa: ",ivpa," vpa: ",vpa.grid[ivpa]," imu: ",imu," mu: ",mu.grid[imu]," G_err: ",G_err[ivpa,imu]," G_Maxwell: ",G_Maxwell[ivpa,imu]," G_num: ",fkarrays.Rosenbluth_G[ivpa,imu])
+                ##println("ivpa: ",ivpa," vpa: ",vpa.grid[ivpa]," imu: ",imu," mu: ",mu.grid[imu]," G_err: ",G_err[ivpa,imu]," G_Maxwell: ",G_Maxwell[ivpa,imu]," G_num: ",fkarrays.Rosenbluth_G[ivpa,imu])
                 #println("ivpa: ",ivpa," vpa: ",vpa.grid[ivpa]," imu: ",imu," mu: ",mu.grid[imu]," G_err: ",G_err[ivpa,imu])
             end
             #H_err[ivpa,imu]
@@ -218,7 +221,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         for ivpa in 1:nvpa
             if (maximum(H_err[ivpa,imu]) > zero)
                 #println("ivpa: ",ivpa," imu: ",imu," G_err: ",G_err[ivpa,imu])
-                println("ivpa: ",ivpa," vpa: ",vpa.grid[ivpa]," imu: ",imu," mu: ",mu.grid[imu]," H_err: ",H_err[ivpa,imu]," H_Maxwell: ",H_Maxwell[ivpa,imu]," H_num: ",fkarrays.Rosenbluth_H[ivpa,imu])
+                ##println("ivpa: ",ivpa," vpa: ",vpa.grid[ivpa]," imu: ",imu," mu: ",mu.grid[imu]," H_err: ",H_err[ivpa,imu]," H_Maxwell: ",H_Maxwell[ivpa,imu]," H_num: ",fkarrays.Rosenbluth_H[ivpa,imu])
                 #println("ivpa: ",ivpa," vpa: ",vpa.grid[ivpa]," imu: ",imu," mu: ",mu.grid[imu]," G_err: ",G_err[ivpa,imu])
             end
             #H_err[ivpa,imu]
@@ -237,11 +240,11 @@ if abspath(PROGRAM_FILE) == @__FILE__
         for imu in 1:mu.n
             for ivpa in 1:vpa.n
                 if maximum(abs.(Cssp[ivpa,imu])) > zero
-                    print("ivpa: ",ivpa," imu: ",imu," C: ")
+                    ##print("ivpa: ",ivpa," imu: ",imu," C: ")
                     #println("ivpa: ",ivpa," imu: ",imu," C: ", Cssp[ivpa,imu])
                     #println(" imu: ",imu," C[:,imu]:")
-                    @printf("%.1e", Cssp[ivpa,imu])
-                    println("")
+                    ##@printf("%.1e", Cssp[ivpa,imu])
+                    ##println("")
                 end
             end
         end
@@ -250,6 +253,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     
     
     # evaluate the collision operator with analytically computed G & H 
+    zero = 1.0e-6
     println("TEST: Css'[F_M,F_M] with analytical G[F_M] & H[F_M]")
     @views @. fkarrays.Rosenbluth_G = G_Maxwell
     @views @. fkarrays.Rosenbluth_H = H_Maxwell
@@ -265,14 +269,13 @@ if abspath(PROGRAM_FILE) == @__FILE__
             Gam_mu_err[ivpa,imu] = abs(fkarrays.Gamma_mu[ivpa,imu] - Gam_mu_Maxwell[ivpa,imu])
         end
     end
-    zero = 1.0e-2
     max_Gam_vpa_err = maximum(Gam_vpa_err)
     println("max(abs(Gamma_vpa[F_Ms,F_Ms])): ", max_Gam_vpa_err)
     if max_Gam_vpa_err > zero
         for imu in 1:mu.n
             for ivpa in 1:vpa.n
                 if Gam_vpa_err[ivpa,imu] > zero 
-                    println("ivpa: ",ivpa," imu: ",imu," Gam_vpa_err: ",Gam_vpa_err[ivpa,imu]," Gam_vpa_num: ",fkarrays.Gamma_vpa[ivpa,imu]," Gam_vpa_Maxwell: ",Gam_vpa_Maxwell[ivpa,imu])
+                    #println("ivpa: ",ivpa," imu: ",imu," Gam_vpa_err: ",Gam_vpa_err[ivpa,imu]," Gam_vpa_num: ",fkarrays.Gamma_vpa[ivpa,imu]," Gam_vpa_Maxwell: ",Gam_vpa_Maxwell[ivpa,imu])
                 end
             end
         end
@@ -291,7 +294,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         for imu in 1:mu.n
             for ivpa in 1:vpa.n
                 if Gam_mu_err[ivpa,imu] > zero 
-                    println("ivpa: ",ivpa," imu: ",imu," Gam_mu_err: ",Gam_mu_err[ivpa,imu]," Gam_mu_num: ",fkarrays.Gamma_mu[ivpa,imu]," Gam_mu_Maxwell: ",Gam_mu_Maxwell[ivpa,imu])
+                    #println("ivpa: ",ivpa," imu: ",imu," Gam_mu_err: ",Gam_mu_err[ivpa,imu]," Gam_mu_num: ",fkarrays.Gamma_mu[ivpa,imu]," Gam_mu_Maxwell: ",Gam_mu_Maxwell[ivpa,imu])
                 end
             end
         end
@@ -314,14 +317,13 @@ if abspath(PROGRAM_FILE) == @__FILE__
             Gam_mu_Gerr[ivpa,imu] = abs(fkarrays.Gamma_mu_G[ivpa,imu] - Gam_mu_GMaxwell[ivpa,imu])
         end
     end
-    zero = 1.0e-2
     max_Gam_vpa_Gerr = maximum(Gam_vpa_Gerr)
     println("max(abs(Gamma_vpa_G[F_Ms,F_Ms])): ", max_Gam_vpa_Gerr)
     if max_Gam_vpa_Gerr > zero
         for imu in 1:mu.n
             for ivpa in 1:vpa.n
                 if Gam_vpa_Gerr[ivpa,imu] > zero 
-                    println("ivpa: ",ivpa," imu: ",imu," Gam_vpa_Gerr: ",Gam_vpa_Gerr[ivpa,imu]," Gam_vpa_G_num: ",fkarrays.Gamma_vpa_G[ivpa,imu]," Gam_vpa_GMaxwell: ",Gam_vpa_GMaxwell[ivpa,imu])
+                    #println("ivpa: ",ivpa," imu: ",imu," Gam_vpa_Gerr: ",Gam_vpa_Gerr[ivpa,imu]," Gam_vpa_G_num: ",fkarrays.Gamma_vpa_G[ivpa,imu]," Gam_vpa_GMaxwell: ",Gam_vpa_GMaxwell[ivpa,imu])
                 end
             end
         end
@@ -340,7 +342,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         for imu in 1:mu.n
             for ivpa in 1:vpa.n
                 if Gam_mu_Gerr[ivpa,imu] > zero 
-                    println("ivpa: ",ivpa," imu: ",imu," Gam_mu_Gerr: ",Gam_mu_Gerr[ivpa,imu]," Gam_mu_G_num: ",fkarrays.Gamma_mu_G[ivpa,imu]," Gam_mu_GMaxwell: ",Gam_mu_GMaxwell[ivpa,imu])
+                    #println("ivpa: ",ivpa," imu: ",imu," Gam_mu_Gerr: ",Gam_mu_Gerr[ivpa,imu]," Gam_mu_G_num: ",fkarrays.Gamma_mu_G[ivpa,imu]," Gam_mu_GMaxwell: ",Gam_mu_GMaxwell[ivpa,imu])
                 end
             end
         end
@@ -363,14 +365,13 @@ if abspath(PROGRAM_FILE) == @__FILE__
             Gam_mu_Herr[ivpa,imu] = abs(fkarrays.Gamma_mu_H[ivpa,imu] - Gam_mu_HMaxwell[ivpa,imu])
         end
     end
-    zero = 1.0e-2
     max_Gam_vpa_Herr = maximum(Gam_vpa_Herr)
     println("max(abs(Gamma_vpa_H[F_Ms,F_Ms])): ", max_Gam_vpa_Herr)
     if max_Gam_vpa_Herr > zero
         for imu in 1:mu.n
             for ivpa in 1:vpa.n
                 if Gam_vpa_Herr[ivpa,imu] > zero 
-                    println("ivpa: ",ivpa," imu: ",imu," Gam_vpa_Herr: ",Gam_vpa_Herr[ivpa,imu]," Gam_vpa_H_num: ",fkarrays.Gamma_vpa_H[ivpa,imu]," Gam_vpa_HMaxwell: ",Gam_vpa_HMaxwell[ivpa,imu])
+                    #println("ivpa: ",ivpa," imu: ",imu," Gam_vpa_Herr: ",Gam_vpa_Herr[ivpa,imu]," Gam_vpa_H_num: ",fkarrays.Gamma_vpa_H[ivpa,imu]," Gam_vpa_HMaxwell: ",Gam_vpa_HMaxwell[ivpa,imu])
                 end
             end
         end
@@ -389,7 +390,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         for imu in 1:mu.n
             for ivpa in 1:vpa.n
                 if Gam_mu_Herr[ivpa,imu] > zero 
-                    println("ivpa: ",ivpa," imu: ",imu," Gam_mu_Herr: ",Gam_mu_Herr[ivpa,imu]," Gam_mu_H_num: ",fkarrays.Gamma_mu_H[ivpa,imu]," Gam_mu_HMaxwell: ",Gam_mu_HMaxwell[ivpa,imu])
+                    #println("ivpa: ",ivpa," imu: ",imu," Gam_mu_Herr: ",Gam_mu_Herr[ivpa,imu]," Gam_mu_H_num: ",fkarrays.Gamma_mu_H[ivpa,imu]," Gam_mu_HMaxwell: ",Gam_mu_HMaxwell[ivpa,imu])
                 end
             end
         end
@@ -403,7 +404,6 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 savefig(outfile)
     end
     
-    zero = 1.0e1
     Cssp_err = maximum(abs.(Cssp))
     if Cssp_err > zero
         println("ERROR: C_ss'[F_Ms,F_Ms] /= 0")
@@ -418,6 +418,10 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 end
             end
         end
+        @views heatmap(mu.grid, vpa.grid, Cssp[:,:], xlabel=L"\mu", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                windowsize = (360,240), margin = 15pt)
+                outfile = string("fkpl_Cssp_num.pdf")
+                savefig(outfile)
     end
     println("max(abs(C_ss'[F_Ms,F_Ms])): ", Cssp_err)
     
