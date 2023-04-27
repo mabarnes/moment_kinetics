@@ -6,6 +6,7 @@ module fokker_planck
 
 export init_fokker_planck_collisions
 export explicit_fokker_planck_collisions!
+export calculate_Rosenbluth_potentials!
 
 using SpecialFunctions: ellipk, ellipe
 using ..type_definitions: mk_float, mk_int
@@ -75,15 +76,20 @@ function init_elliptic_integral_factors!(elliptic_integral_E_factor, elliptic_in
                     # mm = 4 vperp vperp' / ( (vpa- vpa')^2 + (vperp + vperp'))
                     denom = (vpa.grid[ivpa] - vpa.grid[ivpap])^2 + (vperp.grid[ivperp] + vperp.grid[ivperpp])^2 
                     if denom < zero 
-                        #then vpa = vpa' = vperp' = vperp = 0 
-                        mm = 0.0
-                        prefac = 0.0 # because vperp' wgt = 0 here 
-                    else    
+                        println("denom = zero ",ivperpp," ",ivpap," ",ivperp," ",ivpa)
+                    end
+                    #    #then vpa = vpa' = vperp' = vperp = 0 
+                    #    mm = 0.0
+                    #    prefac = 0.0 # because vperp' wgt = 0 here 
+                    #else    
                         mm = 4.0*vperp.grid[ivperp]*vperp.grid[ivperpp]/denom
                         prefac = sqrt(denom)
-                    end
+                    #end
+                    #println(mm," ",prefac," ",denom," ",ivperpp," ",ivpap," ",ivperp," ",ivpa)
                     elliptic_integral_E_factor[ivpa,ivperp,ivpap,ivperpp] = 2.0*ellipe(mm)*prefac/pi
                     elliptic_integral_K_factor[ivpa,ivperp,ivpap,ivperpp] = 2.0*ellipk(mm)/(pi*prefac)
+                    println(elliptic_integral_K_factor[ivpa,ivperp,ivpap,ivperpp]," ",mm," ",prefac," ",denom," ",ivperpp," ",ivpap," ",ivperp," ",ivpa)
+                    
                 end
             end
         end
@@ -150,7 +156,7 @@ function evaluate_RMJ_collision_operator!(Cssp_out,fs_in,fsp_in,ms,msp,cfreqssp,
     buffer_1 = fokkerplanck_arrays.buffer_vpavperp_1
     buffer_2 = fokkerplanck_arrays.buffer_vpavperp_2
     Rosenbluth_G = fokkerplanck_arrays.Rosenbluth_G
-    Rosenbluth_H = fokkerplanck_arrays.Rosenbluth_G
+    Rosenbluth_H = fokkerplanck_arrays.Rosenbluth_H
     nvperp = vperp.n 
     nvpa = vpa.n 
     # zero Cssp to prepare for addition of collision terms 
