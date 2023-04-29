@@ -9,10 +9,11 @@ if abspath(PROGRAM_FILE) == @__FILE__
     import moment_kinetics
 	using moment_kinetics.input_structs: grid_input, advection_input
 	using moment_kinetics.coordinates: define_coordinate
-	using moment_kinetics.chebyshev: setup_chebyshev_pseudospectral
+	using moment_kinetics.chebyshev: setup_chebyshev_pseudospectral, chebyshev_radau_derivative_single_element!
 	using moment_kinetics.calculus: derivative!, integral
     #import LinearAlgebra
-    using LinearAlgebra: mul!, lu, cond
+    using IterativeSolvers: jacobi!, gauss_seidel!, idrs!
+    using LinearAlgebra: mul!, lu, cond, det
     using SparseArrays: sparse
     using SpecialFunctions: erf
     zero = 1.0e-10
@@ -25,6 +26,15 @@ if abspath(PROGRAM_FILE) == @__FILE__
             end
             println("")
         end
+        println("\n")
+    end
+    
+    function print_vector(vector,name,m)
+        println("\n ",name," \n")
+        for j in 1:m
+            @printf("%.3f ", vector[j])
+        end
+        println("")
         println("\n")
     end 
     
@@ -260,6 +270,94 @@ if abspath(PROGRAM_FILE) == @__FILE__
         #multiply by scale factor for element length
         D .= (2.0*float(nelement)/L).*D
     end 
+    
+    """
+    derivative matrix for radau grid 
+    """
+    function calculate_chebyshev_radau_D_matrix_via_FFT!(D::Array{Float64,2}, coord, spectral)
+        ff_buffer = Array{Float64,1}(undef,coord.ngrid)
+        df_buffer = Array{Float64,1}(undef,coord.ngrid)
+        # use response matrix approach to calculate derivative matrix D 
+        for j in 1:coord.ngrid 
+            ff_buffer .= 0.0 
+            ff_buffer[j] = 1.0
+            @views chebyshev_radau_derivative_single_element!(df_buffer[:], ff_buffer[:],
+                spectral.radau.f[:,1], spectral.radau.df, spectral.radau.fext, spectral.radau.forward, coord)
+            @. D[:,j] = df_buffer[:] # assign appropriate column of derivative matrix 
+        end
+        # correct diagonal elements to gurantee numerical stability
+        # gives D*[1.0, 1.0, ... 1.0] = [0.0, 0.0, ... 0.0]
+        for j in 1:coord.ngrid
+            D[j,j] = 0.0
+            D[j,j] = -sum(D[j,:])
+        end
+        
+        #multiply by scale factor for element length
+        D .= (2.0*float(coord.nelement_global)/coord.L).*D
+    end
+    
+    function cheb_radau_derivative_matrix_reversed!(D::Array{Float64,2},x,x_spectral) 
+        D_lobotto_elementwise = Array{Float64,2}(undef,x.ngrid,x.ngrid)
+        cheb_derivative_matrix_elementwise_reversed!(D_lobotto_elementwise,x.ngrid,x.L,x.nelement_global) 
+
+        D_radau_elementwise = Array{Float64,2}(undef,x.ngrid,x.ngrid)
+        calculate_chebyshev_radau_D_matrix_via_FFT!(D_radau_elementwise,x,x_spectral)
+        if x.ngrid < 8
+            print_matrix(D_lobotto_elementwise,"D_lobotto_elementwise",x.ngrid,x.ngrid)
+            print_matrix(D_radau_elementwise,"D_radau_elementwise",x.ngrid,x.ngrid)
+        end 
+        assign_cheb_derivative_matrix!(D,D_lobotto_elementwise,D_radau_elementwise,x)
+    end
+    
+    
+    function assign_cheb_derivative_matrix!(D::Array{Float64,2},D_lobotto_elementwise::Array{Float64,2},D_radau_elementwise::Array{Float64,2},x) 
+        
+        # zero output matrix before assignment 
+        D[:,:] .= 0.0
+        imin = x.imin
+        imax = x.imax
+        
+        zero_bc_upper_boundary = x.bc == "zero" || x.bc == "zero_upper"
+        zero_bc_lower_boundary = x.bc == "zero" || x.bc == "zero_lower"
+        
+        # fill in first element 
+        j = 1
+        if zero_bc_lower_boundary #x.bc == "zero"
+            D[imin[j],imin[j]:imax[j]] .+= D_radau_elementwise[1,:]./2.0 #contributions from this element/2
+            D[imin[j],imin[j]] += D_radau_elementwise[x.ngrid,x.ngrid]/2.0 #contribution from missing `zero' element/2
+        else 
+            D[imin[j],imin[j]:imax[j]] .+= D_radau_elementwise[1,:]
+        end
+        for k in 2:imax[j]-imin[j] 
+            D[k,imin[j]:imax[j]] .+= D_radau_elementwise[k,:]
+        end
+        if zero_bc_upper_boundary && x.nelement_local == 1
+            D[imax[j],imin[j]-1:imax[j]] .+= D_radau_elementwise[x.ngrid,:]./2.0 #contributions from this element/2
+            D[imax[j],imax[j]] += D_lobotto_elementwise[1,1]/2.0              #contribution from missing `zero' element/2
+        elseif x.nelement_local > 1 #x.bc == "zero"
+            D[imax[j],imin[j]:imax[j]] .+= D_radau_elementwise[x.ngrid,:]./2.0
+        else
+            D[imax[j],imin[j]:imax[j]] .+= D_radau_elementwise[x.ngrid,:]
+        end 
+        # remaining elements recalling definitions of imax and imin
+        for j in 2:x.nelement_local
+            #lower boundary condition on element
+            D[imin[j]-1,imin[j]-1:imax[j]] .+= D_lobotto_elementwise[1,:]./2.0
+            for k in 2:imax[j]-imin[j]+1 
+                D[k+imin[j]-2,imin[j]-1:imax[j]] .+= D_lobotto_elementwise[k,:]
+            end
+            # upper boundary condition on element 
+            if j == x.nelement_local && !(zero_bc_upper_boundary)
+                D[imax[j],imin[j]-1:imax[j]] .+= D_lobotto_elementwise[x.ngrid,:]
+            elseif j == x.nelement_local && zero_bc_upper_boundary
+                D[imax[j],imin[j]-1:imax[j]] .+= D_lobotto_elementwise[x.ngrid,:]./2.0 #contributions from this element/2
+                D[imax[j],imax[j]] += D_lobotto_elementwise[1,1]/2.0 #contribution from missing `zero' element/2
+            else 
+                D[imax[j],imin[j]-1:imax[j]] .+= D_lobotto_elementwise[x.ngrid,:]./2.0
+            end
+        end
+        
+    end
     
     """
     function integrating d y / d t = f(t)
@@ -553,16 +651,26 @@ if abspath(PROGRAM_FILE) == @__FILE__
     
     if elliptic_solve_test
         println("elliptic solve test")
-        ngrid = 17
+        ngrid = 25
         nelement_local = 50
-        L = 25
+        L = 8
         nelement_global = nelement_local
-        input = grid_input("vperp", ngrid, nelement_global, nelement_local, 
-		nrank, irank, L, discretization, fd_option, "zero_upper", adv_input,comm)
-        y = define_coordinate(input)
-        Dy = Array{Float64,2}(undef, y.n, y.n)
-        cheb_derivative_matrix_reversed!(Dy,y)
-        
+        radau = true #false
+        if radau        
+            input = grid_input("vperp", ngrid, nelement_global, nelement_local, 
+            nrank, irank, L, discretization, fd_option, "zero_upper", adv_input,comm)
+            y = define_coordinate(input)
+            y_spectral = setup_chebyshev_pseudospectral(y)
+            Dy = Array{Float64,2}(undef, y.n, y.n)
+            cheb_radau_derivative_matrix_reversed!(Dy,y,y_spectral)
+        else #lobotto
+            input = grid_input("vpa", ngrid, nelement_global, nelement_local, 
+            nrank, irank, L, discretization, fd_option, "zero_upper", adv_input,comm)
+            y = define_coordinate(input)
+            @. y.grid += y.L/2
+            Dy = Array{Float64,2}(undef, y.n, y.n)
+            cheb_derivative_matrix_reversed!(Dy,y)
+        end  
         
         yDy = Array{Float64,2}(undef, y.n, y.n)
         for iy in 1:y.n
@@ -595,28 +703,67 @@ if abspath(PROGRAM_FILE) == @__FILE__
         Fy_exact = Array{Float64,1}(undef, y.n)
         Fy_err = Array{Float64,1}(undef, y.n)
         for iy in 1:y.n
-            Sy[iy] = (1.0 - y.grid[iy])*exp(-y.grid[iy])
-            Fy_exact[iy] = -exp(-y.grid[iy])
+            #Sy[iy] = (y.grid[iy] - 1.0)*exp(-y.grid[iy])
+            #Fy_exact[iy] = exp(-y.grid[iy])
+            Sy[iy] = 4.0*y.grid[iy]*(y.grid[iy]^2 - 1.0)*exp(-y.grid[iy]^2)
+            Fy_exact[iy] = exp(-y.grid[iy]^2)
         end
         LL = Array{Float64,2}(undef, y.n, y.n)
         #@. LL = yD2y + Dy
-        @. LL = Dy_yDy
+        for iy in 1:y.n 
+            #@. LL[iy,:] = Dy_yDy[iy,:] #*(1.0/y.grid[iy])
+            @. LL[iy,:] = yD2y[iy,:] + Dy[iy,:] #*(1.0/y.grid[iy])
+        end
         Dirichlet = true
         if Dirichlet
-            @. LL[1,:] = 0.0
+            # fixed value at orgin -- doesn't work well 
+            #@. LL[1,:] = 0.0
+            #Sy[1] = Fy_exact[1]
+            set_flux = false 
+            if set_flux
+                # set flux at origin 
+                @. LL[1,:] = 0.0
+                ilim = y.imax[1]  
+                @. LL[1,:] = yDy[ilim,:]
+                
+                print_vector(Sy,"Sy before",y.n)
+                integrand = Array{Float64,1}(undef,ilim)
+                @. integrand[1:ilim] = Sy[1:ilim]*y.wgts[1:ilim]/(2.0*y.grid[1:ilim])
+                
+                print_vector(integrand,"integrand",ilim)
+                print_vector(y.wgts,"wgts",y.n)
+                #@. integrand[1:ilim] = y.grid[1:ilim]*Sy[1:ilim]*y.wgts[1:ilim]
+                flux = sum(integrand)
+                Sy[1] = flux
+            end  
+            # zero at infinity  
             @. LL[end,:] = 0.0
             LL[end,end] = 1.0
-            LL[1,1] = 1.0
-            Sy[1] = Fy_exact[1]; Sy[end] = Fy_exact[end]
+            #LL[1,1] = 1.0
+#            @. LL[1,:] = 2.0*D2y[1,:] 
+            Sy[end] = Fy_exact[end]
+            
+            #print_matrix(LL,"LL",y.n,y.n)
+            #print_vector(Sy,"Sy",y.n)
         end
         
-        println("condition number: ", cond(LL))
-        LL_lu_obj = lu(sparse(LL))
-        
-        # do elliptic solve 
-        Fy = LL_lu_obj\Sy
-        @. Fy_err = abs(Fy - Fy_exact)
-        
+        #lu_solver = false
+        #gauss_seidel_solver = true
+        #if lu_solver
+            println("det: ", det(LL))
+            println("condition number: ", cond(LL))
+            LL_lu_obj = lu(sparse(LL))
+            
+            # do elliptic solve 
+            Fy = LL_lu_obj\Sy
+        #elseif gauss_seidel_solver
+        #    niter=100
+        #    @. Fy[:] = Fy_exact[:] # initial guess
+        #    gauss_seidel!(Fy,sparse(LL),Sy,maxiter=niter)
+        #else 
+        #    println("no solution method prescribed")
+        #end 
+        @. Fy_err = abs(Fy - Fy_exact)        
         println("maximum(Fy_err)",maximum(Fy_err))
         #println("Fy_err",Fy_err)
         #println("Fy_exact",Fy_exact)
@@ -665,8 +812,6 @@ if abspath(PROGRAM_FILE) == @__FILE__
         end 
         LLx = Array{Float64,2}(undef, x.n, x.n)
         @. LLx = D2x
-        println("condition number: ", cond(LLx))
-        LLx_lu_obj = lu(sparse(LLx))
         
         Sx = Array{Float64,1}(undef, x.n)
         Fx = Array{Float64,1}(undef, x.n)
@@ -680,7 +825,23 @@ if abspath(PROGRAM_FILE) == @__FILE__
         if Dirichlet 
             Sx[1] = 0.0; Sx[end] = 0.0 #Dirichlet BC values
         end 
-        Fx = LLx_lu_obj\Sx
+        
+        println("condition number: ", cond(LLx))
+        LLx_lu_obj = lu(sparse(LLx)) 
+        lu_solver = true#false
+        iterative_solver= false#true
+        if lu_solver
+            Fx = LLx_lu_obj\Sx
+        elseif iterative_solver
+            niter=1000
+            @. Fx[:] = 1.0/(x.grid[:]^8 + 1.0) # initial guess Fx_exact[:]
+            Fx[1] =0.0; Fx[end] =0.0
+            #gauss_seidel!(Fx,sparse(LLx),Sx,maxiter=niter)
+            #jacobi!(Fx,sparse(LLx),Sx,maxiter=niter)
+            idrs!(Fx,sparse(LLx),Sx;abstol=10^(-10))
+        else 
+            println("no solution method prescribed")
+        end
         @. Fx_err = abs(Fx - Fx_exact)
         
         println("test 1: maximum(Fx_err)",maximum(Fx_err))
@@ -703,7 +864,20 @@ if abspath(PROGRAM_FILE) == @__FILE__
         if Dirichlet 
             Sx[1] = 0.0; Sx[end] = 0.0 #Dirichlet BC values
         end 
-        Fx = LLx_lu_obj\Sx
+        
+        if lu_solver
+            Fx = LLx_lu_obj\Sx
+        elseif iterative_solver
+            niter=1000
+            @. Fx[:] = 1.0/(x.grid[:]^8 + 1.0) # initial guess Fx_exact[:]
+            Fx[1] =0.0; Fx[end] =0.0
+            #gauss_seidel!(Fx,sparse(LLx),Sx,maxiter=niter)
+            #jacobi!(Fx,sparse(LLx),Sx,maxiter=niter)
+            idrs!(Fx,sparse(LLx),Sx)
+        else 
+            println("no solution method prescribed")
+        end
+        
         @. Fx += (sqrt(pi)/2.0)*x.grid[end]
         @. Fx_err = abs(Fx - Fx_exact)
         println("test 2: maximum(Fx_err)",maximum(Fx_err))
@@ -721,7 +895,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     if elliptic_2Dsolve_test
         println("elliptic 2D solve test")
         ngrid = 2
-        nelement_local = 5 
+        nelement_local = 3 
         x_L = 1
         y_L = 1
         nelement_global = nelement_local
@@ -734,8 +908,13 @@ if abspath(PROGRAM_FILE) == @__FILE__
         cheb_derivative_matrix_reversed!(Dx,x)
         D2x = Array{Float64,2}(undef, x.n, x.n)
         mul!(D2x,Dx,Dx)
-        D2x[1,1] = 2.0*D2x[1,1]
-        D2x[end,end] = 2.0*D2x[end,end]
+        #D2x[1,1] = 2.0*D2x[1,1]
+        #D2x[end,end] = 2.0*D2x[end,end]
+        @. D2x[1,:] = 0.0 
+        @. D2x[end,:] = 0.0 
+        D2x[1,1] = 1.0
+        D2x[end,end] = 1.0
+        
         if x.n < 20
             print_matrix(Dx,"Dx",x.n,x.n)
             print_matrix(D2x,"D2x",x.n,x.n)
@@ -754,12 +933,6 @@ if abspath(PROGRAM_FILE) == @__FILE__
             @. yDy[iy,:] = y.grid[iy]*Dy[iy,:]
         end
         
-        
-        Dy_yDy = Array{Float64,2}(undef, y.n, y.n)
-        mul!(Dy_yDy,Dy,yDy)
-        #Dy_yDy[1,1] = 2.0*Dy_yDy[1,1]
-        #Dy_yDy[end,end] = 2.0*Dy_yDy[end,end]
-        
         D2y = Array{Float64,2}(undef, y.n, y.n)
         mul!(D2y,Dy,Dy)
         #Dy_yDy[1,1] = 2.0*Dy_yDy[1,1]
@@ -768,6 +941,14 @@ if abspath(PROGRAM_FILE) == @__FILE__
         for iy in 1:y.n
             @. yD2y[iy,:] = y.grid[iy]*D2y[iy,:]
         end
+        
+        Dy_yDy = Array{Float64,2}(undef, y.n, y.n)
+        mul!(Dy_yDy,Dy,yDy)
+        #Dy_yDy[1,1] = 2.0*Dy_yDy[1,1]
+        #Dy_yDy[end,end] = 2.0*Dy_yDy[end,end]
+        @. Dy_yDy[1,:] = 2.0*yD2y[1,:] 
+        @. Dy_yDy[end,:] = 0.0
+        Dy_yDy[end,end] = 1.0 
         
         if y.n < 20
             print_matrix(Dy,"Dy",y.n,y.n)
@@ -817,13 +998,15 @@ if abspath(PROGRAM_FILE) == @__FILE__
         Sc = Array{Float64,1}(undef, nc)
         LLc = Array{Float64,2}(undef, nc, nc)
         
+        
         for iy in 1:ny
             for ix in 1:nx
                 Sxy[ix,iy] = -4.0*pi*(-2.0*x.grid[ix]*exp(-2.0*y.grid[iy]-x.grid[ix]^2))
                 Fxy_exact[ix,iy] = dH_Maxwellian_dvpa(1.0,x,y,ix,iy)
                 for iyp in 1:ny
                     for ixp in 1:nx
-                        LLxy[ixp,iyp,ix,iy] = D2x[ixp,ix] + yD2y[iyp,iy] + Dy[iyp,iy]
+                        #LLxy[ixp,iyp,ix,iy] = D2x[ixp,ix] + yD2y[iyp,iy] + Dy[iyp,iy]
+                        LLxy[ixp,iyp,ix,iy] = D2x[ixp,ix] + Dy_yDy[iyp,iy]
                     end
                 end
             end
@@ -839,8 +1022,10 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 LLc[icp,ic] = LLxy[ixp,iyp,ix,iy]
             end
         end
+        print_matrix(LLc,"LLc",nc,nc)
         println("condition number(LLc): ", cond(LLc))
-        LLc_lu_obj = lu(sparse(LLc))
+        println("determinant(LLc): ", det(LLc))
+        LLc_lu_obj = lu(LLc)
         # do elliptic solve 
         Fc = LLc_lu_obj\Sc
         #reshape to 2D vector 
