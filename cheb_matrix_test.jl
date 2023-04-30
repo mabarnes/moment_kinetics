@@ -2,6 +2,8 @@ using Printf
 using Plots
 using LaTeXStrings
 using MPI
+using Measures
+
 if abspath(PROGRAM_FILE) == @__FILE__
     using Pkg
     Pkg.activate(".")
@@ -568,9 +570,9 @@ if abspath(PROGRAM_FILE) == @__FILE__
     #println("check result", AA*yy, bb)
     MMS_test = false 
     evolution_test = false#true 
-    elliptic_solve_test = true
+    elliptic_solve_test = false#true
     elliptic_solve_1D_infinite_domain_test = false#true
-    elliptic_2Dsolve_test = false#true
+    elliptic_2Dsolve_test = true
     if MMS_test
         ntest = 5
         MMS_errors = Array{Float64,1}(undef,ntest)
@@ -894,13 +896,17 @@ if abspath(PROGRAM_FILE) == @__FILE__
     
     if elliptic_2Dsolve_test
         println("elliptic 2D solve test")
-        ngrid = 2
-        nelement_local = 3 
-        x_L = 1
-        y_L = 1
-        nelement_global = nelement_local
+        x_ngrid = 5
+        x_nelement_local = 32 
+        x_L = 12
+        y_L = 6
+        y_ngrid = 5
+        y_nelement_local = 16
         
-        input = grid_input("vpa", ngrid, nelement_global, nelement_local, 
+        x_nelement_global = x_nelement_local
+        y_nelement_global = y_nelement_local
+        
+        input = grid_input("vpa", x_ngrid, x_nelement_global, x_nelement_local, 
 		nrank, irank, x_L, discretization, fd_option, "zero", adv_input, comm)
         x = define_coordinate(input)
         
@@ -920,12 +926,12 @@ if abspath(PROGRAM_FILE) == @__FILE__
             print_matrix(D2x,"D2x",x.n,x.n)
         end 
         
-        input = grid_input("vperp", ngrid, nelement_global, nelement_local, 
+        input = grid_input("vperp", y_ngrid, y_nelement_global, y_nelement_local, 
 		nrank, irank, y_L, discretization, fd_option, "zero_upper", adv_input, comm)
         y = define_coordinate(input)
-        
+        y_spectral = setup_chebyshev_pseudospectral(y)
         Dy = Array{Float64,2}(undef, y.n, y.n)
-        cheb_derivative_matrix_reversed!(Dy,y)
+        cheb_radau_derivative_matrix_reversed!(Dy,y,y_spectral)
         
         
         yDy = Array{Float64,2}(undef, y.n, y.n)
@@ -956,11 +962,11 @@ if abspath(PROGRAM_FILE) == @__FILE__
             print_matrix(Dy_yDy,"Dy_yDy",y.n,y.n)
             print_matrix(yD2y+Dy,"yD2y+Dy",y.n,y.n)
         end 
-        
+        println("Initialised 1D arrays")
         ### now form 2D matrix to invert and corresponding sources 
-        function dH_Maxwellian_dvpa(Bmag,vpa,mu,ivpa,imu)
+        function dH_Maxwellian_dvpa(vpa,vperp,ivpa,ivperp)
             # speed variable
-            eta = sqrt(vpa.grid[ivpa]^2 + 2.0*Bmag*mu.grid[imu])
+            eta = sqrt(vpa.grid[ivpa]^2 + vperp.grid[ivperp]^2)
             zero = 1.0e-10
             if eta < zero
                 dHdvpa = -(4.0*vpa.grid[ivpa])/(3.0*sqrt(pi))
@@ -998,15 +1004,24 @@ if abspath(PROGRAM_FILE) == @__FILE__
         Sc = Array{Float64,1}(undef, nc)
         LLc = Array{Float64,2}(undef, nc, nc)
         
-        
+        @. LLxy = 0.0
         for iy in 1:ny
             for ix in 1:nx
-                Sxy[ix,iy] = -4.0*pi*(-2.0*x.grid[ix]*exp(-2.0*y.grid[iy]-x.grid[ix]^2))
-                Fxy_exact[ix,iy] = dH_Maxwellian_dvpa(1.0,x,y,ix,iy)
+                #Sxy[ix,iy] = -4.0*pi*(-2.0*x.grid[ix]*exp(-y.grid[iy]^2-x.grid[ix]^2))
+                #Fxy_exact[ix,iy] = dH_Maxwellian_dvpa(x,y,ix,iy)
+                
+                Sxy[ix,iy] = ((4.0*x.grid[ix]^2 - 2.0) + (4.0*y.grid[iy]^2 - 4.0))*exp(-y.grid[iy]^2-x.grid[ix]^2)
+                Fxy_exact[ix,iy] = exp(-x.grid[ix]^2 - y.grid[iy]^2) 
                 for iyp in 1:ny
                     for ixp in 1:nx
                         #LLxy[ixp,iyp,ix,iy] = D2x[ixp,ix] + yD2y[iyp,iy] + Dy[iyp,iy]
-                        LLxy[ixp,iyp,ix,iy] = D2x[ixp,ix] + Dy_yDy[iyp,iy]
+                        if iy == iyp 
+                            LLxy[ixp,iyp,ix,iy] += D2x[ixp,ix] #+ Dy_yDy[iyp,iy]
+                        end  
+                        if ix == ixp 
+                            #LLxy[ixp,iyp,ix,iy] += yD2y[iyp,iy] + Dy[iyp,iy]
+                            LLxy[ixp,iyp,ix,iy] += D2y[iyp,iy] + (1.0/y.grid[iyp])*Dy[iyp,iy]
+                        end
                     end
                 end
             end
@@ -1022,10 +1037,15 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 LLc[icp,ic] = LLxy[ixp,iyp,ix,iy]
             end
         end
-        print_matrix(LLc,"LLc",nc,nc)
+        
+        println("Initialised 2D arrays")
+        if nc < 30
+            print_matrix(LLc,"LLc",nc,nc)
+        end 
         println("condition number(LLc): ", cond(LLc))
         println("determinant(LLc): ", det(LLc))
         LLc_lu_obj = lu(LLc)
+        println("Initialised 2D solve") 
         # do elliptic solve 
         Fc = LLc_lu_obj\Sc
         #reshape to 2D vector 
@@ -1035,13 +1055,24 @@ if abspath(PROGRAM_FILE) == @__FILE__
             Fxy[ix,iy] = Fc[ic]
         end
         
+        println("Finished 2D solve")
         @. Fxy_err = abs(Fxy - Fxy_exact)
         
         println("maximum(Fxy_err)",maximum(Fxy_err))
         println("Fxy_err",Fxy_err[1,:])
         println("Fxy_exact",Fxy_exact[1,:])
         println("Fxy",Fxy[1,:])
-        
-
+        @views heatmap(y.grid, x.grid, Fxy_exact[:,:], xlabel=L"y", ylabel=L"x", c = :deep, interpolation = :cubic,
+                windowsize = (360,240), margin = 15pt)
+                outfile = string("Fxy_exact_2D_solve.pdf")
+                savefig(outfile)
+        @views heatmap(y.grid, x.grid, Fxy[:,:], xlabel=L"y", ylabel=L"x", c = :deep, interpolation = :cubic,
+                windowsize = (360,240), margin = 15pt)
+                outfile = string("Fxy_num_2D_solve.pdf")
+                savefig(outfile)
+        @views heatmap(y.grid, x.grid, Fxy_err[:,:], xlabel=L"y", ylabel=L"x", c = :deep, interpolation = :cubic,
+                windowsize = (360,240), margin = 15pt)
+                outfile = string("Fxy_err_2D_solve.pdf")
+                savefig(outfile)
     end
 end
