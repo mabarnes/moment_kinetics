@@ -95,6 +95,8 @@ const itime_min = -1
 # itime_max is the final time index at which to end animations
 # if itime_max < 0, the value used will be the total number of time slices
 const itime_max = -1
+# Only load every itime_skip'th time-point when loading data, to save memory
+const itime_skip = 1
 # ivpa0 is the ivpa index used when plotting data at a single vpa location
 # by default, it will be set to cld(nvpa,3) unless a non-negative value provided here
 const ivpa0 = -1
@@ -130,7 +132,7 @@ pp = pp_input(calculate_frequencies, plot_phi0_vs_t, plot_phi_vs_z_t,
 	plot_density_vs_r0_z, plot_wall_density_vs_r, plot_density_vs_r_z, animate_density_vs_r_z,
 	plot_parallel_flow_vs_r0_z, plot_wall_parallel_flow_vs_r, plot_parallel_flow_vs_r_z, animate_parallel_flow_vs_r_z,
 	plot_parallel_pressure_vs_r0_z, plot_wall_parallel_pressure_vs_r, plot_parallel_pressure_vs_r_z, animate_parallel_pressure_vs_r_z,
-    plot_wall_pdf, instability2D, nwrite_movie, itime_min, itime_max, ivpa0, ivperp0, iz0,
-    ir0, ivz0, ivr0, ivzeta0)
+    plot_wall_pdf, instability2D, nwrite_movie, itime_min, itime_max, itime_skip, ivpa0,
+    ivperp0, iz0, ir0, ivz0, ivr0, ivzeta0)
 
 end

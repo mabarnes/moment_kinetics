@@ -75,7 +75,8 @@ end
 """
 """
 function read_distributed_zr_data!(var::Array{mk_float,3}, var_name::String,
-   run_name::String, file_key::String, nblocks::mk_int, nz_local::mk_int,nr_local::mk_int)
+   run_name::String, file_key::String, nblocks::mk_int,
+   nz_local::mk_int,nr_local::mk_int,iskip::mk_int)
     # dimension of var is [z,r,t]
     
     for iblock in 0:nblocks-1
@@ -93,7 +94,7 @@ function read_distributed_zr_data!(var::Array{mk_float,3}, var_name::String,
             for iz_local in imin_z:nz_local
                 ir_global = iglobal_func(ir_local,r_irank,nr_local)
                 iz_global = iglobal_func(iz_local,z_irank,nz_local)
-                var[iz_global,ir_global,:] .= var_local[iz_local,ir_local,:]
+                var[iz_global,ir_global,:] .= var_local[iz_local,ir_local,begin:iskip:end]
             end
         end
         close(fid)
@@ -101,7 +102,8 @@ function read_distributed_zr_data!(var::Array{mk_float,3}, var_name::String,
 end
 
 function read_distributed_zr_data!(var::Array{mk_float,4}, var_name::String,
-   run_name::String, file_key::String, nblocks::mk_int, nz_local::mk_int,nr_local::mk_int)
+   run_name::String, file_key::String, nblocks::mk_int,
+   nz_local::mk_int,nr_local::mk_int,iskip::mk_int)
     # dimension of var is [z,r,species,t]
     for iblock in 0:nblocks-1
         fid = open_readonly_output_file(run_name,file_key,iblock=iblock,printout=false)
@@ -119,7 +121,7 @@ function read_distributed_zr_data!(var::Array{mk_float,4}, var_name::String,
             for iz_local in imin_z:nz_local
                 ir_global = iglobal_func(ir_local,r_irank,nr_local)
                 iz_global = iglobal_func(iz_local,z_irank,nz_local)
-                var[iz_global,ir_global,:,:] .= var_local[iz_local,ir_local,:,:]
+                var[iz_global,ir_global,:,:] .= var_local[iz_local,ir_local,:,begin:iskip:end]
             end
         end
         close(fid)
@@ -267,7 +269,10 @@ function analyze_and_plot_data(path)
 
     close(fid)
     
-    
+    iskip = pp.itime_skip
+    ntime = (ntime + iskip - 1) ÷ iskip
+    time = time[begin:iskip:end]
+
     # allocate arrays to contain the global fields as a function of (z,r,t)
     phi, Ez, Er = allocate_global_zr_fields(z.n_global,r.n_global,ntime)
     density, parallel_flow, parallel_pressure, parallel_heat_flux, thermal_speed =
@@ -285,22 +290,22 @@ function analyze_and_plot_data(path)
     nr_global = r_global.n
     
     # fields 
-    read_distributed_zr_data!(phi,"phi",run_name,"moments",nblocks,z.n,r.n)
-    read_distributed_zr_data!(Ez,"Ez",run_name,"moments",nblocks,z.n,r.n)
-    read_distributed_zr_data!(Er,"Er",run_name,"moments",nblocks,z.n,r.n)
+    read_distributed_zr_data!(phi,"phi",run_name,"moments",nblocks,z.n,r.n,iskip)
+    read_distributed_zr_data!(Ez,"Ez",run_name,"moments",nblocks,z.n,r.n,iskip)
+    read_distributed_zr_data!(Er,"Er",run_name,"moments",nblocks,z.n,r.n,iskip)
     # charged particle moments
-    read_distributed_zr_data!(density,"density",run_name,"moments",nblocks,z.n,r.n)
-    read_distributed_zr_data!(parallel_flow,"parallel_flow",run_name,"moments",nblocks,z.n,r.n)
-    read_distributed_zr_data!(parallel_pressure,"parallel_pressure",run_name,"moments",nblocks,z.n,r.n)
-    read_distributed_zr_data!(parallel_heat_flux,"parallel_heat_flux",run_name,"moments",nblocks,z.n,r.n)
-    read_distributed_zr_data!(thermal_speed,"thermal_speed",run_name,"moments",nblocks,z.n,r.n)
+    read_distributed_zr_data!(density,"density",run_name,"moments",nblocks,z.n,r.n,iskip)
+    read_distributed_zr_data!(parallel_flow,"parallel_flow",run_name,"moments",nblocks,z.n,r.n,iskip)
+    read_distributed_zr_data!(parallel_pressure,"parallel_pressure",run_name,"moments",nblocks,z.n,r.n,iskip)
+    read_distributed_zr_data!(parallel_heat_flux,"parallel_heat_flux",run_name,"moments",nblocks,z.n,r.n,iskip)
+    read_distributed_zr_data!(thermal_speed,"thermal_speed",run_name,"moments",nblocks,z.n,r.n,iskip)
     # neutral particle moments 
     if n_neutral_species > 0
-        read_distributed_zr_data!(neutral_density,"density_neutral",run_name,"moments",nblocks,z.n,r.n)
-        read_distributed_zr_data!(neutral_uz,"uz_neutral",run_name,"moments",nblocks,z.n,r.n)
-        read_distributed_zr_data!(neutral_pz,"pz_neutral",run_name,"moments",nblocks,z.n,r.n)
-        read_distributed_zr_data!(neutral_qz,"qz_neutral",run_name,"moments",nblocks,z.n,r.n)
-        read_distributed_zr_data!(neutral_thermal_speed,"thermal_speed_neutral",run_name,"moments",nblocks,z.n,r.n)
+        read_distributed_zr_data!(neutral_density,"density_neutral",run_name,"moments",nblocks,z.n,r.n,iskip)
+        read_distributed_zr_data!(neutral_uz,"uz_neutral",run_name,"moments",nblocks,z.n,r.n,iskip)
+        read_distributed_zr_data!(neutral_pz,"pz_neutral",run_name,"moments",nblocks,z.n,r.n,iskip)
+        read_distributed_zr_data!(neutral_qz,"qz_neutral",run_name,"moments",nblocks,z.n,r.n,iskip)
+        read_distributed_zr_data!(neutral_thermal_speed,"thermal_speed_neutral",run_name,"moments",nblocks,z.n,r.n,iskip)
     end 
     # load time data from `dfns' cdf
     fid_pdfs = open_readonly_output_file(run_name,"dfns")
