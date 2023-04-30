@@ -116,12 +116,16 @@ const itime_min = -1
 # itime_max is the final time index at which to end animations of the moments
 # if itime_max < 0, the value used will be the total number of time slices
 const itime_max = -1
+# Only load every itime_skip'th time-point when loading data, to save memory
+const itime_skip = 1
 const nwrite_movie_pdfs = 1
 # itime_min_pdfs is the minimum time index at which to start animations of the pdfs
 const itime_min_pdfs = -1
 # itime_max_pdfs is the final time index at which to end animations of the pdfs
 # if itime_max < 0, the value used will be the total number of time slices
 const itime_max_pdfs = -1
+# Only load every itime_skip_pdfs'th time-point when loading pdf data, to save memory
+const itime_skip_pdfs = 1
 # ivpa0 is the ivpa index used when plotting data at a single vpa location
 # by default, it will be set to cld(nvpa,3) unless a non-negative value provided here
 const ivpa0 = -1
@@ -162,7 +166,7 @@ pp = pp_input(calculate_frequencies, plot_phi0_vs_t, plot_phi_vs_z_t, animate_ph
     plot_parallel_pressure_vs_r_z, animate_parallel_pressure_vs_r_z,
     plot_parallel_temperature_vs_r0_z, plot_wall_parallel_temperature_vs_r,
     plot_parallel_temperature_vs_r_z, animate_parallel_temperature_vs_r_z, plot_wall_pdf,
-    nwrite_movie, itime_min, itime_max, nwrite_movie_pdfs, itime_min_pdfs,
-    itime_max_pdfs, ivpa0, ivperp0, iz0, ir0, ivz0, ivr0, ivzeta0)
+    nwrite_movie, itime_min, itime_max, itime_skip, nwrite_movie_pdfs, itime_min_pdfs,
+    itime_max_pdfs, itime_skip_pdfs, ivpa0, ivperp0, iz0, ir0, ivz0, ivr0, ivzeta0)
 
 end

@@ -467,6 +467,8 @@ struct pp_input
     # itime_max is the final time index at which to end animations of the moments
     # if itime_max < 0, the value used will be the total number of time slices
     itime_max::mk_int
+    # Only load every itime_skip'th time-point when loading data, to save memory
+    itime_skip::mk_int
     # animations of pdfs will use one in every nwrite_movie data slices
     nwrite_movie_pdfs::mk_int
     # itime_min_pdfs is the minimum time index at which to start animations of the pdfs
@@ -474,6 +476,8 @@ struct pp_input
     # itime_max_pdfs is the final time index at which to end animations of the pdfs
     # if itime_max < 0, the value used will be the total number of time slices
     itime_max_pdfs::mk_int
+    # Only load every itime_skip_pdfs'th time-point when loading pdf data, to save memory
+    itime_skip_pdfs::mk_int
     # ivpa0 is the ivpa index used when plotting data at a single vpa location
     ivpa0::mk_int
     # ivperp0 is the ivperp index used when plotting data at a single vperp location
