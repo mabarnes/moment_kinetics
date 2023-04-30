@@ -897,7 +897,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     if elliptic_2Dsolve_test
         println("elliptic 2D solve test")
         x_ngrid = 5
-        x_nelement_local = 32 
+        x_nelement_local = 32
         x_L = 12
         y_L = 6
         y_ngrid = 5
@@ -921,9 +921,16 @@ if abspath(PROGRAM_FILE) == @__FILE__
         D2x[1,1] = 1.0
         D2x[end,end] = 1.0
         
+        IIx = Array{Float64,2}(undef,x.n,x.n) 
+        @. IIx = 0.0
+        for ix in 1:x.n
+            IIx[ix,ix] = 1.0 
+        end 
+        
         if x.n < 20
             print_matrix(Dx,"Dx",x.n,x.n)
             print_matrix(D2x,"D2x",x.n,x.n)
+            print_matrix(IIx,"IIx",x.n,x.n)
         end 
         
         input = grid_input("vperp", y_ngrid, y_nelement_global, y_nelement_local, 
@@ -956,11 +963,17 @@ if abspath(PROGRAM_FILE) == @__FILE__
         @. Dy_yDy[end,:] = 0.0
         Dy_yDy[end,end] = 1.0 
         
+        IIy = Array{Float64,2}(undef,y.n,y.n) 
+        @. IIy = 0.0
+        for iy in 1:y.n
+            IIy[iy,iy] = 1.0 
+        end      
         if y.n < 20
             print_matrix(Dy,"Dy",y.n,y.n)
             print_matrix(yDy,"yDy",y.n,y.n)
             print_matrix(Dy_yDy,"Dy_yDy",y.n,y.n)
             print_matrix(yD2y+Dy,"yD2y+Dy",y.n,y.n)
+            print_matrix(IIy,"IIy",y.n,y.n)
         end 
         println("Initialised 1D arrays")
         ### now form 2D matrix to invert and corresponding sources 
@@ -982,7 +995,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         Fxy = Array{Float64,2}(undef, nx, ny)
         Fxy_exact = Array{Float64,2}(undef, nx, ny)
         Fxy_err = Array{Float64,2}(undef, nx, ny)
-        LLxy = Array{Float64,4}(undef, nx, ny, nx, ny)
+        #LLxy = Array{Float64,4}(undef, nx, ny, nx, ny)
         # Array in compound 1D form 
         # ic = (ix-1) + nx*(iy-1) + 1
         # iy = mod(ic,nx) + 1
@@ -999,12 +1012,20 @@ if abspath(PROGRAM_FILE) == @__FILE__
             #return rem(ic,nx)
             return ix
         end
+        function kronecker_delta(i,j)
+            delta = 0.0 
+            if i == j 
+                delta = 1.0
+            end
+            return delta
+        end
         nc = nx*ny
         Fc = Array{Float64,1}(undef, nc)
         Sc = Array{Float64,1}(undef, nc)
         LLc = Array{Float64,2}(undef, nc, nc)
         
-        @. LLxy = 0.0
+        #@. LLxy = 0.0
+        @. LLc = 0.0
         for iy in 1:ny
             for ix in 1:nx
                 #Sxy[ix,iy] = -4.0*pi*(-2.0*x.grid[ix]*exp(-y.grid[iy]^2-x.grid[ix]^2))
@@ -1012,18 +1033,18 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 
                 Sxy[ix,iy] = ((4.0*x.grid[ix]^2 - 2.0) + (4.0*y.grid[iy]^2 - 4.0))*exp(-y.grid[iy]^2-x.grid[ix]^2)
                 Fxy_exact[ix,iy] = exp(-x.grid[ix]^2 - y.grid[iy]^2) 
-                for iyp in 1:ny
-                    for ixp in 1:nx
-                        #LLxy[ixp,iyp,ix,iy] = D2x[ixp,ix] + yD2y[iyp,iy] + Dy[iyp,iy]
-                        if iy == iyp 
-                            LLxy[ixp,iyp,ix,iy] += D2x[ixp,ix] #+ Dy_yDy[iyp,iy]
-                        end  
-                        if ix == ixp 
-                            #LLxy[ixp,iyp,ix,iy] += yD2y[iyp,iy] + Dy[iyp,iy]
-                            LLxy[ixp,iyp,ix,iy] += D2y[iyp,iy] + (1.0/y.grid[iyp])*Dy[iyp,iy]
-                        end
-                    end
-                end
+                #for iyp in 1:ny
+                #    for ixp in 1:nx
+                #        #LLxy[ixp,iyp,ix,iy] = D2x[ixp,ix] + yD2y[iyp,iy] + Dy[iyp,iy]
+                #        if iy == iyp 
+                #            LLxy[ixp,iyp,ix,iy] += D2x[ixp,ix] #+ Dy_yDy[iyp,iy]
+                #        end  
+                #        if ix == ixp 
+                #            #LLxy[ixp,iyp,ix,iy] += yD2y[iyp,iy] + Dy[iyp,iy]
+                #            LLxy[ixp,iyp,ix,iy] += D2y[iyp,iy] + (1.0/y.grid[iyp])*Dy[iyp,iy]
+                #        end
+                #    end
+                #end
             end
         end
         for ic in 1:nc
@@ -1034,7 +1055,9 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 ixp = ixfunc(icp,nx)
                 iyp = iyfunc(icp,nx)
                 #println("ic: ",ic," ix: ", ix," iy: ",iy," icp: ",icp," ixp: ", ixp," iyp: ",iyp)
-                LLc[icp,ic] = LLxy[ixp,iyp,ix,iy]
+                #LLc[icp,ic] = LLxy[ixp,iyp,ix,iy]
+                #LLc[icp,ic] = D2x[ixp,ix]*kronecker_delta(iyp,iy) + (D2y[iyp,iy] + (1.0/y.grid[iyp])*Dy[iyp,iy])*kronecker_delta(ixp,ix)
+                LLc[icp,ic] = D2x[ixp,ix]*IIy[iyp,iy] + (D2y[iyp,iy] + (1.0/y.grid[iyp])*Dy[iyp,iy])*IIx[ixp,ix]
             end
         end
         
@@ -1059,9 +1082,9 @@ if abspath(PROGRAM_FILE) == @__FILE__
         @. Fxy_err = abs(Fxy - Fxy_exact)
         
         println("maximum(Fxy_err)",maximum(Fxy_err))
-        println("Fxy_err",Fxy_err[1,:])
-        println("Fxy_exact",Fxy_exact[1,:])
-        println("Fxy",Fxy[1,:])
+        #println("Fxy_err",Fxy_err[1,:])
+        #println("Fxy_exact",Fxy_exact[1,:])
+        #println("Fxy",Fxy[1,:])
         @views heatmap(y.grid, x.grid, Fxy_exact[:,:], xlabel=L"y", ylabel=L"x", c = :deep, interpolation = :cubic,
                 windowsize = (360,240), margin = 15pt)
                 outfile = string("Fxy_exact_2D_solve.pdf")
