@@ -897,14 +897,19 @@ if abspath(PROGRAM_FILE) == @__FILE__
     if elliptic_2Dsolve_test
         println("elliptic 2D solve test")
         x_ngrid = 5
-        x_nelement_local = 32
-        x_L = 12
-        y_L = 6
+        x_nelement_local = 16
+        x_L = 24
+        y_L = 12
         y_ngrid = 5
-        y_nelement_local = 16
+        y_nelement_local = 8
         
         x_nelement_global = x_nelement_local
         y_nelement_global = y_nelement_local
+        # bc option
+        dirichlet_zero = false#true
+        dirichlet_fixed_value = true#false
+        # test option
+        exponential_decay_test = false
         
         input = grid_input("vpa", x_ngrid, x_nelement_global, x_nelement_local, 
 		nrank, irank, x_L, discretization, fd_option, "zero", adv_input, comm)
@@ -914,12 +919,17 @@ if abspath(PROGRAM_FILE) == @__FILE__
         cheb_derivative_matrix_reversed!(Dx,x)
         D2x = Array{Float64,2}(undef, x.n, x.n)
         mul!(D2x,Dx,Dx)
-        #D2x[1,1] = 2.0*D2x[1,1]
-        #D2x[end,end] = 2.0*D2x[end,end]
-        @. D2x[1,:] = 0.0 
-        @. D2x[end,:] = 0.0 
-        D2x[1,1] = 1.0
-        D2x[end,end] = 1.0
+        
+        # set x bc on D2x
+        if dirichlet_zero
+            D2x[1,1] = 2.0*D2x[1,1]
+            D2x[end,end] = 2.0*D2x[end,end]
+        elseif dirichlet_fixed_value
+            @. D2x[1,:] = 0.0 
+            @. D2x[end,:] = 0.0 
+            D2x[1,1] = 1.0
+            D2x[end,end] = 1.0
+        end 
         
         IIx = Array{Float64,2}(undef,x.n,x.n) 
         @. IIx = 0.0
@@ -940,29 +950,39 @@ if abspath(PROGRAM_FILE) == @__FILE__
         Dy = Array{Float64,2}(undef, y.n, y.n)
         cheb_radau_derivative_matrix_reversed!(Dy,y,y_spectral)
         
-        
-        yDy = Array{Float64,2}(undef, y.n, y.n)
-        for iy in 1:y.n
-            @. yDy[iy,:] = y.grid[iy]*Dy[iy,:]
-        end
-        
         D2y = Array{Float64,2}(undef, y.n, y.n)
         mul!(D2y,Dy,Dy)
-        #Dy_yDy[1,1] = 2.0*Dy_yDy[1,1]
-        D2y[end,end] = 2.0*D2y[end,end]
-        yD2y = Array{Float64,2}(undef, y.n, y.n)
-        for iy in 1:y.n
-            @. yD2y[iy,:] = y.grid[iy]*D2y[iy,:]
-        end
+        if dirichlet_zero
+            D2y[end,end] = 2.0*D2y[end,end]
+        end 
+        #yDy = Array{Float64,2}(undef, y.n, y.n)
+        #for iy in 1:y.n
+        #    @. yDy[iy,:] = y.grid[iy]*Dy[iy,:]
+        #end
         
-        Dy_yDy = Array{Float64,2}(undef, y.n, y.n)
-        mul!(Dy_yDy,Dy,yDy)
+        #Dy_yDy[1,1] = 2.0*Dy_yDy[1,1]
+        #yD2y = Array{Float64,2}(undef, y.n, y.n)
+        #for iy in 1:y.n
+        #    @. yD2y[iy,:] = y.grid[iy]*D2y[iy,:]
+        #end
+        
+        #Dy_yDy = Array{Float64,2}(undef, y.n, y.n)
+        #mul!(Dy_yDy,Dy,yDy)
         #Dy_yDy[1,1] = 2.0*Dy_yDy[1,1]
         #Dy_yDy[end,end] = 2.0*Dy_yDy[end,end]
-        @. Dy_yDy[1,:] = 2.0*yD2y[1,:] 
-        @. Dy_yDy[end,:] = 0.0
-        Dy_yDy[end,end] = 1.0 
+        #@. Dy_yDy[1,:] = 2.0*yD2y[1,:] 
+        #@. Dy_yDy[end,:] = 0.0
+        #Dy_yDy[end,end] = 1.0 
         
+        # y derivative operator 
+        LLy = Array{Float64,2}(undef,y.n,y.n)
+        for iy in 1:y.n 
+            @. LLy[iy,:] = D2y[iy,:] + (1.0/y.grid[iy])*Dy[iy,:]
+        end
+        if dirichlet_fixed_value
+            @. LLy[end,:] = 0.0
+            LLy[end,end] = 1.0
+        end
         IIy = Array{Float64,2}(undef,y.n,y.n) 
         @. IIy = 0.0
         for iy in 1:y.n
@@ -970,9 +990,11 @@ if abspath(PROGRAM_FILE) == @__FILE__
         end      
         if y.n < 20
             print_matrix(Dy,"Dy",y.n,y.n)
-            print_matrix(yDy,"yDy",y.n,y.n)
-            print_matrix(Dy_yDy,"Dy_yDy",y.n,y.n)
-            print_matrix(yD2y+Dy,"yD2y+Dy",y.n,y.n)
+            print_matrix(D2y,"D2y",y.n,y.n)
+            print_matrix(LLy,"LLy",y.n,y.n)
+            #print_matrix(yDy,"yDy",y.n,y.n)
+            #print_matrix(Dy_yDy,"Dy_yDy",y.n,y.n)
+            #print_matrix(yD2y+Dy,"yD2y+Dy",y.n,y.n)
             print_matrix(IIy,"IIy",y.n,y.n)
         end 
         println("Initialised 1D arrays")
@@ -984,7 +1006,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
             if eta < zero
                 dHdvpa = -(4.0*vpa.grid[ivpa])/(3.0*sqrt(pi))
             else 
-                dHdvpa = (2.0/sqrt(pi))*vpa.grid[ivpa]*((exp(-eta^2)/eta)  - (erf(eta)/(eta^2)))
+                dHdvpa = (vpa.grid[ivpa]/eta)*((2.0/sqrt(pi))*(exp(-eta^2)/eta)  - (erf(eta)/(eta^2)))
             end
             return dHdvpa
         end
@@ -1024,29 +1046,62 @@ if abspath(PROGRAM_FILE) == @__FILE__
         Sc = Array{Float64,1}(undef, nc)
         LLc = Array{Float64,2}(undef, nc, nc)
         
+        if exponential_decay_test
+            for iy in 1:ny
+                for ix in 1:nx
+                    # Exponential test inputs below 
+                    Sxy[ix,iy] = ((4.0*x.grid[ix]^2 - 2.0) + (4.0*y.grid[iy]^2 - 4.0))*exp(-y.grid[iy]^2-x.grid[ix]^2)
+                    Fxy_exact[ix,iy] = exp(-x.grid[ix]^2 - y.grid[iy]^2) 
+                end
+            end
+        else
         #@. LLxy = 0.0
-        @. LLc = 0.0
-        for iy in 1:ny
-            for ix in 1:nx
-                #Sxy[ix,iy] = -4.0*pi*(-2.0*x.grid[ix]*exp(-y.grid[iy]^2-x.grid[ix]^2))
-                #Fxy_exact[ix,iy] = dH_Maxwellian_dvpa(x,y,ix,iy)
-                
-                Sxy[ix,iy] = ((4.0*x.grid[ix]^2 - 2.0) + (4.0*y.grid[iy]^2 - 4.0))*exp(-y.grid[iy]^2-x.grid[ix]^2)
-                Fxy_exact[ix,iy] = exp(-x.grid[ix]^2 - y.grid[iy]^2) 
-                #for iyp in 1:ny
-                #    for ixp in 1:nx
-                #        #LLxy[ixp,iyp,ix,iy] = D2x[ixp,ix] + yD2y[iyp,iy] + Dy[iyp,iy]
-                #        if iy == iyp 
-                #            LLxy[ixp,iyp,ix,iy] += D2x[ixp,ix] #+ Dy_yDy[iyp,iy]
-                #        end  
-                #        if ix == ixp 
-                #            #LLxy[ixp,iyp,ix,iy] += yD2y[iyp,iy] + Dy[iyp,iy]
-                #            LLxy[ixp,iyp,ix,iy] += D2y[iyp,iy] + (1.0/y.grid[iyp])*Dy[iyp,iy]
-                #        end
-                #    end
-                #end
+            for iy in 1:ny
+                for ix in 1:nx
+                    # Rosenbluth dHdvpa test 
+                    Sxy[ix,iy] = -(4.0/sqrt(pi))*(-2.0*x.grid[ix]*exp(-y.grid[iy]^2-x.grid[ix]^2))
+                    Fxy_exact[ix,iy] = dH_Maxwellian_dvpa(x,y,ix,iy)
+                    
+                    #for iyp in 1:ny
+                    #    for ixp in 1:nx
+                    #        #LLxy[ixp,iyp,ix,iy] = D2x[ixp,ix] + yD2y[iyp,iy] + Dy[iyp,iy]
+                    #        if iy == iyp 
+                    #            LLxy[ixp,iyp,ix,iy] += D2x[ixp,ix] #+ Dy_yDy[iyp,iy]
+                    #        end  
+                    #        if ix == ixp 
+                    #            #LLxy[ixp,iyp,ix,iy] += yD2y[iyp,iy] + Dy[iyp,iy]
+                    #            LLxy[ixp,iyp,ix,iy] += D2y[iyp,iy] + (1.0/y.grid[iyp])*Dy[iyp,iy]
+                    #        end
+                    #    end
+                    #end
+                end
             end
         end
+        function dHdvpa_inf(vpa,vperp,ivpa,ivperp)
+            eta = sqrt(vpa.grid[ivpa]^2 + vperp.grid[ivperp]^2)
+            dHdvpa_inf = -vpa.grid[ivpa]/eta^3
+            return dHdvpa_inf
+        end
+        if dirichlet_fixed_value
+            # set boundary values 
+            for ix in 1:nx
+                Sxy[ix,ny] = dHdvpa_inf(x,y,ix,ny)  
+            end
+            for iy in 1:ny
+                Sxy[1,iy] = dHdvpa_inf(x,y,1,iy)  
+                Sxy[nx,iy] = dHdvpa_inf(x,y,nx,iy)  
+            end
+            #println(Sxy[:,ny])
+            println(abs.(Sxy[:,ny] .- Fxy_exact[:,ny]))
+            println(abs.(Sxy[1,:] .- Fxy_exact[1,:]))
+            println(abs.(Sxy[nx,:] .- Fxy_exact[nx,:]))
+            #println(Sxy[1,:])
+            #println(Fxy_exact[1,:])
+            #println(Sxy[nx,:])
+            #println(Fxy_exact[nx,:])
+        end
+        # assign values to arrays in compound coordinates
+        @. LLc = 0.0
         for ic in 1:nc
             ix = ixfunc(ic,nx)
             iy = iyfunc(ic,nx)
@@ -1057,10 +1112,37 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 #println("ic: ",ic," ix: ", ix," iy: ",iy," icp: ",icp," ixp: ", ixp," iyp: ",iyp)
                 #LLc[icp,ic] = LLxy[ixp,iyp,ix,iy]
                 #LLc[icp,ic] = D2x[ixp,ix]*kronecker_delta(iyp,iy) + (D2y[iyp,iy] + (1.0/y.grid[iyp])*Dy[iyp,iy])*kronecker_delta(ixp,ix)
-                LLc[icp,ic] = D2x[ixp,ix]*IIy[iyp,iy] + (D2y[iyp,iy] + (1.0/y.grid[iyp])*Dy[iyp,iy])*IIx[ixp,ix]
+                #LLc[icp,ic] = D2x[ixp,ix]*IIy[iyp,iy] + (D2y[iyp,iy] + (1.0/y.grid[iyp])*Dy[iyp,iy])*IIx[ixp,ix]
+                LLc[icp,ic] = D2x[ixp,ix]*IIy[iyp,iy] + LLy[iyp,iy]*IIx[ixp,ix]
             end
         end
-        
+        #set fixed bc in LLc directly
+        if dirichlet_fixed_value
+            ix = 1; ixp = 1
+            for iyp in 1:ny
+                for iy in 1:ny
+                    ic = icfunc(ix,iy,nx) 
+                    icp = icfunc(ixp,iyp,nx)
+                    LLc[icp,ic] = IIy[iyp,iy]                
+                end            
+            end
+            ix = nx; ixp = nx
+            for iyp in 1:ny
+                for iy in 1:ny
+                    ic = icfunc(ix,iy,nx) 
+                    icp = icfunc(ixp,iyp,nx)
+                    LLc[icp,ic] = IIy[iyp,iy]                
+                end            
+            end
+            iy = ny; iyp = ny
+            for ixp in 1:nx
+                for ix in 1:nx
+                    ic = icfunc(ix,iy,nx) 
+                    icp = icfunc(ixp,iyp,nx)
+                    LLc[icp,ic] = IIx[ixp,ix]                
+                end            
+            end
+        end
         println("Initialised 2D arrays")
         if nc < 30
             print_matrix(LLc,"LLc",nc,nc)
