@@ -954,26 +954,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         mul!(D2y,Dy,Dy)
         if dirichlet_zero
             D2y[end,end] = 2.0*D2y[end,end]
-        end 
-        #yDy = Array{Float64,2}(undef, y.n, y.n)
-        #for iy in 1:y.n
-        #    @. yDy[iy,:] = y.grid[iy]*Dy[iy,:]
-        #end
-        
-        #Dy_yDy[1,1] = 2.0*Dy_yDy[1,1]
-        #yD2y = Array{Float64,2}(undef, y.n, y.n)
-        #for iy in 1:y.n
-        #    @. yD2y[iy,:] = y.grid[iy]*D2y[iy,:]
-        #end
-        
-        #Dy_yDy = Array{Float64,2}(undef, y.n, y.n)
-        #mul!(Dy_yDy,Dy,yDy)
-        #Dy_yDy[1,1] = 2.0*Dy_yDy[1,1]
-        #Dy_yDy[end,end] = 2.0*Dy_yDy[end,end]
-        #@. Dy_yDy[1,:] = 2.0*yD2y[1,:] 
-        #@. Dy_yDy[end,:] = 0.0
-        #Dy_yDy[end,end] = 1.0 
-        
+        end         
         # y derivative operator 
         LLy = Array{Float64,2}(undef,y.n,y.n)
         for iy in 1:y.n 
@@ -992,9 +973,6 @@ if abspath(PROGRAM_FILE) == @__FILE__
             print_matrix(Dy,"Dy",y.n,y.n)
             print_matrix(D2y,"D2y",y.n,y.n)
             print_matrix(LLy,"LLy",y.n,y.n)
-            #print_matrix(yDy,"yDy",y.n,y.n)
-            #print_matrix(Dy_yDy,"Dy_yDy",y.n,y.n)
-            #print_matrix(yD2y+Dy,"yD2y+Dy",y.n,y.n)
             print_matrix(IIy,"IIy",y.n,y.n)
         end 
         println("Initialised 1D arrays")
@@ -1061,19 +1039,6 @@ if abspath(PROGRAM_FILE) == @__FILE__
                     # Rosenbluth dHdvpa test 
                     Sxy[ix,iy] = -(4.0/sqrt(pi))*(-2.0*x.grid[ix]*exp(-y.grid[iy]^2-x.grid[ix]^2))
                     Fxy_exact[ix,iy] = dH_Maxwellian_dvpa(x,y,ix,iy)
-                    
-                    #for iyp in 1:ny
-                    #    for ixp in 1:nx
-                    #        #LLxy[ixp,iyp,ix,iy] = D2x[ixp,ix] + yD2y[iyp,iy] + Dy[iyp,iy]
-                    #        if iy == iyp 
-                    #            LLxy[ixp,iyp,ix,iy] += D2x[ixp,ix] #+ Dy_yDy[iyp,iy]
-                    #        end  
-                    #        if ix == ixp 
-                    #            #LLxy[ixp,iyp,ix,iy] += yD2y[iyp,iy] + Dy[iyp,iy]
-                    #            LLxy[ixp,iyp,ix,iy] += D2y[iyp,iy] + (1.0/y.grid[iyp])*Dy[iyp,iy]
-                    #        end
-                    #    end
-                    #end
                 end
             end
         end
@@ -1092,6 +1057,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 Sxy[nx,iy] = dHdvpa_inf(x,y,nx,iy)  
             end
             #println(Sxy[:,ny])
+            println("Check boundary specification")
             println(abs.(Sxy[:,ny] .- Fxy_exact[:,ny]))
             println(abs.(Sxy[1,:] .- Fxy_exact[1,:]))
             println(abs.(Sxy[nx,:] .- Fxy_exact[nx,:]))
@@ -1110,9 +1076,6 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 ixp = ixfunc(icp,nx)
                 iyp = iyfunc(icp,nx)
                 #println("ic: ",ic," ix: ", ix," iy: ",iy," icp: ",icp," ixp: ", ixp," iyp: ",iyp)
-                #LLc[icp,ic] = LLxy[ixp,iyp,ix,iy]
-                #LLc[icp,ic] = D2x[ixp,ix]*kronecker_delta(iyp,iy) + (D2y[iyp,iy] + (1.0/y.grid[iyp])*Dy[iyp,iy])*kronecker_delta(ixp,ix)
-                #LLc[icp,ic] = D2x[ixp,ix]*IIy[iyp,iy] + (D2y[iyp,iy] + (1.0/y.grid[iyp])*Dy[iyp,iy])*IIx[ixp,ix]
                 LLc[icp,ic] = D2x[ixp,ix]*IIy[iyp,iy] + LLy[iyp,iy]*IIx[ixp,ix]
             end
         end
