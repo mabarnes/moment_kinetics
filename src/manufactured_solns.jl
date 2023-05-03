@@ -150,7 +150,7 @@ using IfElse
                            * sin(2.0*π*background_wavenumber*z/Lz
                                  + density_phase)))
                 T0 = (initial_temperature
-                      * (1.0 + temperature_amplitude * 4.0 / π
+                      * (1.0 + temperature_amplitude
                          * sin(2.0*π*background_wavenumber*z/Lz +
                                temperature_phase)
                         ))
@@ -207,7 +207,7 @@ using IfElse
                        * sin(2.0*π*background_wavenumber*z/Lz
                              + density_phase)))
             T0 = (initial_temperature
-                  * (1.0 + temperature_amplitude * 4.0 / π
+                  * (1.0 + temperature_amplitude
                      * sin(2.0*π*background_wavenumber*z/Lz +
                            temperature_phase)
                     ))
