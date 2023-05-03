@@ -212,7 +212,7 @@ using IfElse
                            temperature_phase)
                     ))
             dens = eta0^((T0/(1+T0)))
-            vth = sqrt(T0)
+            vth = sqrt(2.0*T0)
 
             # Note this is for a '1V' test
             dfni = dens/vth * exp(-(vpa/vth)^2)

@@ -432,7 +432,7 @@ function init_vth!(vth, z, r, spec, n_species)
                 end
             end
         end
-        @. vth = sqrt(vth)
+        @. vth = sqrt(2.0*vth)
     end
     return nothing
 end
