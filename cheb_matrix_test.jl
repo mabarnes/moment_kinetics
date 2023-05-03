@@ -14,7 +14,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
 	using moment_kinetics.chebyshev: setup_chebyshev_pseudospectral, chebyshev_radau_derivative_single_element!
 	using moment_kinetics.calculus: derivative!, integral
     #import LinearAlgebra
-    using IterativeSolvers: jacobi!, gauss_seidel!, idrs!
+    #using IterativeSolvers: jacobi!, gauss_seidel!, idrs!
     using LinearAlgebra: mul!, lu, cond, det
     using SparseArrays: sparse
     using SpecialFunctions: erf
@@ -387,6 +387,61 @@ if abspath(PROGRAM_FILE) == @__FILE__
             return lu_obj
         end
     end
+    
+    """
+    functions for Rosenbluth potential tests
+    """
+    function dH_Maxwellian_dvpa(vpa,vperp,ivpa,ivperp)
+        # speed variable
+        eta = sqrt(vpa.grid[ivpa]^2 + vperp.grid[ivperp]^2)
+        zero = 1.0e-10
+        if eta < zero
+            dHdvpa = -(4.0*vpa.grid[ivpa])/(3.0*sqrt(pi))
+        else 
+            dHdvpa = (vpa.grid[ivpa]/eta)*((2.0/sqrt(pi))*(exp(-eta^2)/eta)  - (erf(eta)/(eta^2)))
+        end
+        return dHdvpa
+    end
+    function d2H_Maxwellian_dvpa2(vpa,vperp,ivpa,ivperp)
+        # speed variable
+        eta = sqrt(vpa.grid[ivpa]^2 + vperp.grid[ivperp]^2)
+        zero = 1.0e-10
+        if eta < zero
+            dHdeta_over_eta = -4.0/(3.0*sqrt(pi)) 
+            d2Hdeta2 = -4.0/(3.0*sqrt(pi))
+        else 
+            dHdeta_over_eta = (2.0/sqrt(pi))*(exp(-eta^2)/eta^2)  - (erf(eta)/(eta^3))
+            d2Hdeta2 = 2.0*(erf(eta)/(eta^3)) - (4.0/sqrt(pi))*(1.0 + (1.0/eta^2))*exp(-eta^2)
+        end
+        d2Hdvpa2 = ((vperp.grid[ivperp]^2)/(eta^2))*dHdeta_over_eta + ((vpa.grid[ivpa]^2)/(eta^2))*d2Hdeta2
+        return d2Hdvpa2
+    end
+    function d2G_Maxwellian_dvpa2(vpa,vperp,ivpa,ivperp)
+        # speed variable
+        eta = sqrt(vpa.grid[ivpa]^2 + vperp.grid[ivperp]^2)
+        zero = 1.0e-10
+        if eta < zero
+            dGdeta_over_eta = 4.0/(3.0*sqrt(pi)) 
+            d2Gdeta2 = 4.0/(3.0*sqrt(pi))
+        else 
+            dGdeta_over_eta = (1.0/sqrt(pi))*(exp(-eta^2)/(eta^2)) + (1.0 - (0.5/eta^2))*erf(eta)/eta
+            d2Gdeta2 = (erf(eta)/(eta^3)) - (2.0/sqrt(pi))*exp(-eta^2)/eta^2
+        end
+        d2Gdvpa2 = ((vperp.grid[ivperp]^2)/(eta^2))*dGdeta_over_eta + ((vpa.grid[ivpa]^2)/(eta^2))*d2Gdeta2
+        return d2Gdvpa2
+    end
+    
+    function dHdvpa_inf(vpa,vperp,ivpa,ivperp)
+        eta = sqrt(vpa.grid[ivpa]^2 + vperp.grid[ivperp]^2)
+        dHdvpa_inf = -vpa.grid[ivpa]/eta^3
+        return dHdvpa_inf
+    end
+    function d2Gdvpa2_inf(vpa,vperp,ivpa,ivperp)
+        eta = sqrt(vpa.grid[ivpa]^2 + vperp.grid[ivperp]^2)
+        d2Gdvpa2_inf = ((vpa.grid[ivpa]^2)/eta^5) + ((vperp.grid[ivperp]^2)/eta^3)*( 1.0 - (0.5/eta^2))
+        return d2Gdvpa2_inf
+    end
+    
     
     #using LinearAlgebra.mul
     discretization = "chebyshev_pseudospectral"
@@ -831,16 +886,16 @@ if abspath(PROGRAM_FILE) == @__FILE__
         println("condition number: ", cond(LLx))
         LLx_lu_obj = lu(sparse(LLx)) 
         lu_solver = true#false
-        iterative_solver= false#true
+        #iterative_solver= false#true
         if lu_solver
             Fx = LLx_lu_obj\Sx
-        elseif iterative_solver
-            niter=1000
-            @. Fx[:] = 1.0/(x.grid[:]^8 + 1.0) # initial guess Fx_exact[:]
-            Fx[1] =0.0; Fx[end] =0.0
-            #gauss_seidel!(Fx,sparse(LLx),Sx,maxiter=niter)
-            #jacobi!(Fx,sparse(LLx),Sx,maxiter=niter)
-            idrs!(Fx,sparse(LLx),Sx;abstol=10^(-10))
+        #elseif iterative_solver
+        #    niter=1000
+        #    @. Fx[:] = 1.0/(x.grid[:]^8 + 1.0) # initial guess Fx_exact[:]
+        #    Fx[1] =0.0; Fx[end] =0.0
+        #    #gauss_seidel!(Fx,sparse(LLx),Sx,maxiter=niter)
+        #    #jacobi!(Fx,sparse(LLx),Sx,maxiter=niter)
+        #    #idrs!(Fx,sparse(LLx),Sx;abstol=10^(-10))
         else 
             println("no solution method prescribed")
         end
@@ -897,11 +952,11 @@ if abspath(PROGRAM_FILE) == @__FILE__
     if elliptic_2Dsolve_test
         println("elliptic 2D solve test")
         x_ngrid = 5
-        x_nelement_local = 16
-        x_L = 24
-        y_L = 12
+        x_nelement_local = 8
+        x_L = 12
+        y_L = 6
         y_ngrid = 5
-        y_nelement_local = 8
+        y_nelement_local = 4
         
         x_nelement_global = x_nelement_local
         y_nelement_global = y_nelement_local
@@ -910,10 +965,13 @@ if abspath(PROGRAM_FILE) == @__FILE__
         dirichlet_fixed_value = true#false
         # test option
         exponential_decay_test = false
+        dHdvpa_test = false 
+        d2Gdvpa2_test = true 
         
         input = grid_input("vpa", x_ngrid, x_nelement_global, x_nelement_local, 
 		nrank, irank, x_L, discretization, fd_option, "zero", adv_input, comm)
         x = define_coordinate(input)
+        x_spectral = setup_chebyshev_pseudospectral(x)
         
         Dx = Array{Float64,2}(undef, x.n, x.n)
         cheb_derivative_matrix_reversed!(Dx,x)
@@ -977,21 +1035,14 @@ if abspath(PROGRAM_FILE) == @__FILE__
         end 
         println("Initialised 1D arrays")
         ### now form 2D matrix to invert and corresponding sources 
-        function dH_Maxwellian_dvpa(vpa,vperp,ivpa,ivperp)
-            # speed variable
-            eta = sqrt(vpa.grid[ivpa]^2 + vperp.grid[ivperp]^2)
-            zero = 1.0e-10
-            if eta < zero
-                dHdvpa = -(4.0*vpa.grid[ivpa])/(3.0*sqrt(pi))
-            else 
-                dHdvpa = (vpa.grid[ivpa]/eta)*((2.0/sqrt(pi))*(exp(-eta^2)/eta)  - (erf(eta)/(eta^2)))
-            end
-            return dHdvpa
-        end
+        
         # Array in 2D form 
         nx = x.n   
         ny = y.n 
         Sxy = Array{Float64,2}(undef, nx, ny)
+        Sxy_check = Array{Float64,2}(undef, nx, ny)
+        Sxy_check_err = Array{Float64,2}(undef, nx, ny)
+        Txy = Array{Float64,2}(undef, nx, ny)
         Fxy = Array{Float64,2}(undef, nx, ny)
         Fxy_exact = Array{Float64,2}(undef, nx, ny)
         Fxy_err = Array{Float64,2}(undef, nx, ny)
@@ -1032,8 +1083,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
                     Fxy_exact[ix,iy] = exp(-x.grid[ix]^2 - y.grid[iy]^2) 
                 end
             end
-        else
-        #@. LLxy = 0.0
+        elseif dHdvpa_test
             for iy in 1:ny
                 for ix in 1:nx
                     # Rosenbluth dHdvpa test 
@@ -1041,23 +1091,52 @@ if abspath(PROGRAM_FILE) == @__FILE__
                     Fxy_exact[ix,iy] = dH_Maxwellian_dvpa(x,y,ix,iy)
                 end
             end
+        elseif d2Gdvpa2_test
+            for iy in 1:ny
+                for ix in 1:nx
+                    # Rosenbluth d2Gdvpa2 test 
+                    Sxy[ix,iy] = 2.0*d2H_Maxwellian_dvpa2(x,y,ix,iy)
+                    Fxy_exact[ix,iy] = d2G_Maxwellian_dvpa2(x,y,ix,iy)
+                    Txy[ix,iy] = 2.0*dH_Maxwellian_dvpa(x,y,ix,iy)
+                end
+                @views derivative!(Sxy_check[:,iy],Txy[:,iy],x,x_spectral)
+            end
+            @. Sxy_check_err = abs(Sxy - Sxy_check)
+            println("maximum(Sxy_check_err)",maximum(Sxy_check_err))
+            #@views heatmap(y.grid, x.grid, Sxy[:,:], xlabel=L"y", ylabel=L"x", c = :deep, interpolation = :cubic,
+            #    windowsize = (360,240), margin = 15pt)
+            #    outfile = string("Sxy_exact_2D_solve.pdf")
+            #    savefig(outfile)
+            #@views heatmap(y.grid, x.grid, Sxy_check[:,:], xlabel=L"y", ylabel=L"x", c = :deep, interpolation = :cubic,
+            #    windowsize = (360,240), margin = 15pt)
+            #    outfile = string("Sxy_num_2D_solve.pdf")
+            #    savefig(outfile)
+        else 
+            println("No Sxy or Fxy_exact specified")
         end
-        function dHdvpa_inf(vpa,vperp,ivpa,ivperp)
-            eta = sqrt(vpa.grid[ivpa]^2 + vperp.grid[ivperp]^2)
-            dHdvpa_inf = -vpa.grid[ivpa]/eta^3
-            return dHdvpa_inf
-        end
+        
         if dirichlet_fixed_value
             # set boundary values 
-            for ix in 1:nx
-                Sxy[ix,ny] = dHdvpa_inf(x,y,ix,ny)  
+            if dHdvpa_test
+                for ix in 1:nx
+                    Sxy[ix,ny] = dHdvpa_inf(x,y,ix,ny)  
+                end
+                for iy in 1:ny
+                    Sxy[1,iy] = dHdvpa_inf(x,y,1,iy)  
+                    Sxy[nx,iy] = dHdvpa_inf(x,y,nx,iy)  
+                end
+            elseif d2Gdvpa2_test
+                for ix in 1:nx
+                    Sxy[ix,ny] = d2Gdvpa2_inf(x,y,ix,ny)  
+                end
+                for iy in 1:ny
+                    Sxy[1,iy] = d2Gdvpa2_inf(x,y,1,iy)  
+                    Sxy[nx,iy] = d2Gdvpa2_inf(x,y,nx,iy)  
+                end            
             end
-            for iy in 1:ny
-                Sxy[1,iy] = dHdvpa_inf(x,y,1,iy)  
-                Sxy[nx,iy] = dHdvpa_inf(x,y,nx,iy)  
-            end
-            #println(Sxy[:,ny])
             println("Check boundary specification")
+            #println(Sxy[:,ny])
+            #println(Fxy_exact[:,ny])
             println(abs.(Sxy[:,ny] .- Fxy_exact[:,ny]))
             println(abs.(Sxy[1,:] .- Fxy_exact[1,:]))
             println(abs.(Sxy[nx,:] .- Fxy_exact[nx,:]))
