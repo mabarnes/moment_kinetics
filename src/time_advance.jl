@@ -281,9 +281,6 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
         vzeta.duniform_dgrid .= 1.0
     end
 
-    # create an array of structs containing scratch arrays for the pdf and low-order moments
-    # that may be evolved separately via fluid equations
-    scratch = setup_scratch_arrays(moments, pdf.charged.norm, pdf.neutral.norm, t_input.n_rk_stages)
     # setup dummy arrays & buffer arrays for z r MPI
     n_neutral_species_alloc = max(1,composition.n_neutral_species)
     scratch_dummy = setup_dummy_and_buffer_arrays(r.n,z.n,vpa.n,vperp.n,vz.n,vr.n,vzeta.n,
@@ -292,12 +289,6 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     # for the electrostatic potential phi and eventually the electromagnetic fields
     fields = setup_em_fields(z.n, r.n, drive_input.force_phi, drive_input.amplitude, drive_input.frequency, drive_input.force_Er_zero_at_wall)
     # initialize the electrostatic potential
-    begin_serial_region()
-    update_phi!(fields, scratch[1], z, r, composition, z_spectral, r_spectral, scratch_dummy)
-    @serial_region begin
-        # save the initial phi(z) for possible use later (e.g., if forcing phi)
-        fields.phi0 .= fields.phi
-    end
 
     ##
     # Charged particle advection only
@@ -425,6 +416,17 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
         manufactured_source_list = manufactured_sources(r,z,vperp,vpa,vzeta,vr,vz,composition,geometry,collisions,num_diss_params)
     else
         manufactured_source_list = false # dummy Bool to be passed as argument instead of list
+    end
+
+    # create an array of structs containing scratch arrays for the pdf and low-order moments
+    # that may be evolved separately via fluid equations
+    scratch = setup_scratch_arrays(moments, pdf.charged.norm, pdf.neutral.norm, t_input.n_rk_stages)
+
+    begin_serial_region()
+    update_phi!(fields, scratch[1], z, r, composition, z_spectral, r_spectral, scratch_dummy)
+    @serial_region begin
+        # save the initial phi(z) for possible use later (e.g., if forcing phi)
+        fields.phi0 .= fields.phi
     end
 
     # Ensure all processes are synchronized at the end of the setup
