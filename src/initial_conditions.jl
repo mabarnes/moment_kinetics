@@ -60,6 +60,8 @@ struct boundary_distributions_struct
     pdf_rboundary_charged::MPISharedArray{mk_float,5}
     # neutral particle r boundary values (vz,vr,vzeta,z,r,s)
     pdf_rboundary_neutral::MPISharedArray{mk_float,6}
+    # charged particle r boundary values (vpa,vperp,z,r,s)
+    pdf_vpaboundary_charged::MPISharedArray{mk_float,5}
 end
 """
 creates the normalised pdf and the velocity-space moments and populates them
@@ -346,13 +348,38 @@ function init_rboundary_pdfs(pdf::pdf_struct, vz, vr, vzeta, vpa, vperp, z, r, c
     return rboundary_charged, rboundary_neutral
 end
 
+function init_vboundary_pdfs(pdf::pdf_struct, vz, vr, vzeta, vpa, vperp, z, r, composition)
+    n_ion_species = composition.n_ion_species
+    n_neutral_species = composition.n_neutral_species
+    n_neutral_species_alloc = max(1, n_neutral_species)
+
+    vpaboundary_charged = allocate_shared_float(vperp.n, z.n, r.n, 2, n_ion_species)
+
+    begin_s_r_z_region()
+    @loop_s_r_z_vperp is ir iz ivperp begin
+        vpaboundary_charged[ivperp,iz,ir,1,is] = pdf.charged.unnorm[1,ivperp,iz,ir,is]
+        vpaboundary_charged[ivperp,iz,ir,2,is] = pdf.charged.unnorm[end,ivperp,iz,ir,is]
+    end
+    #if n_neutral_species > 0
+    #    begin_sn_r_z_region()
+    #    @loop_sn_z_r_vzeta_vz isn iz ivzeta ivr ivz begin
+    #        vzboundary_neutral[1,ivr,ivzeta,iz,ir,isn] = pdf.neutral.unnorm[1,ivr,ivzeta,iz,ir,isn]
+    #        vzboundary_neutral[end,ivr,ivzeta,iz,ir,isn] = pdf.neutral.unnorm[end,ivr,ivzeta,iz,ir,isn]
+    #    end
+    #end
+    return vpaboundary_charged
+end
+
 function create_and_init_boundary_distributions(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition)
     #initialise knudsen distribution for neutral wall bc
     knudsen_cosine = init_knudsen_cosine(vz, vr, vzeta, vpa, vperp, composition)
     #initialise fixed-in-time radial boundary condition based on initial condition values
     pdf_rboundary_charged, pdf_rboundary_neutral = init_rboundary_pdfs(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition)
+    #initialise fixed-in-time velocity boundary conditions based on initial condition values
+    pdf_vpaboundary_charged = init_vboundary_pdfs(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition)
     
-    return boundary_distributions_struct(knudsen_cosine, pdf_rboundary_charged, pdf_rboundary_neutral)
+    return boundary_distributions_struct(knudsen_cosine, pdf_rboundary_charged,
+                                         pdf_rboundary_neutral, pdf_vpaboundary_charged)
 end 
 
 """
@@ -662,16 +689,16 @@ end
 # Can we have an explicit loop or explain what it does?
 # Seems to make the fn a operator elementwise in the vector f
 # but loop is over a part of mysterious x_adv objects...
-function enforce_boundary_conditions!(f, f_r_bc,
+function enforce_boundary_conditions!(f, f_r_bc, f_vpa_bc,
           vpa_bc, z_bc, r_bc, vpa, vperp, z, r,
           vpa_adv::T1, z_adv::T2, r_adv::T3, composition,
           scratch_dummy::T4) where {T1, T2, T3, T4}
     
     begin_s_r_z_vperp_region()
-    @loop_s_r_z_vperp is ir iz ivperp begin
+    @loop_s is begin
         # enforce the vpa BC
-        # use that adv.speed independent of vpa 
-        @views enforce_vpa_boundary_condition_local!(f[:,ivperp,iz,ir,is], vpa_bc, vpa_adv[is].speed[:,ivperp,iz,ir])
+        @views enforce_vpa_boundary_condition!(f[:,:,:,:,is], f_vpa_bc[:,:,:,:,is],
+                                               vpa.bc, vpa_adv[is])
     end
     begin_s_r_vperp_vpa_region()
     @views enforce_z_boundary_condition!(f, z_bc, z_adv, vpa, vperp, z, r, composition,
@@ -806,14 +833,29 @@ end
 impose the prescribed vpa boundary condition on f
 at every z grid point
 """
-function enforce_vpa_boundary_condition!(f, bc, src::T) where T
+function enforce_vpa_boundary_condition!(f, f_vpa_bc, bc, src)
     nvperp = size(f,2)
     nz = size(f,3)
     nr = size(f,4)
-    for ir ∈ 1:nr
-        for iz ∈ 1:nz
-            for ivperp ∈ 1:nvperp
-                enforce_vpa_boundary_condition_local!(view(f,:,ivperp,iz,ir), bc, src.speed[:,ivperp,iz,ir])
+
+    speed = src.speed
+    zero = 1.0e-15
+
+    if bc == "Dirichlet"
+        @loop_r_z_vperp ir iz ivperp begin
+            if speed[1,ivperp,iz,ir] > zero
+                f[1,ivperp,iz,ir] = f_vpa_bc[ivperp,iz,ir,1]
+            end
+            if speed[end,ivperp,iz,ir] < -zero
+                f[end,ivperp,iz,ir] = f_vpa_bc[ivperp,iz,ir,2]
+            end
+        end
+    else
+        for ir ∈ 1:nr
+            for iz ∈ 1:nz
+                for ivperp ∈ 1:nvperp
+                    enforce_vpa_boundary_condition_local!(view(f,:,ivperp,iz,ir), bc, speed[:,ivperp,iz,ir])
+                end
             end
         end
     end

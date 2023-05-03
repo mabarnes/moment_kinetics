@@ -1028,6 +1028,8 @@ function check_input_vpa(vpa, io)
         println(io,">vpa.bc = 'both_zero'.  enforcing zero BC in vpa.")
     elseif vpa.bc == "periodic"
         println(io,">vpa.bc = 'periodic'.  enforcing periodicity in vpa.")
+    elseif vpa.bc == "Dirichlet"
+        println(io,">vpa.bc = 'Dirichlet'.  setting vpa boundary equal to initial value.")
     else
         input_option_error("vpa.bc", vpa.bc)
     end
