@@ -204,7 +204,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     advance_continuity = false
     advance_force_balance = false
     advance_energy = false
-    if collisions.nuii > 0.0
+    if collisions.nuii > 0.0 && vperp.n > 1
         explicit_fp_collisions = true
     else 
         explicit_fp_collisions = false    
