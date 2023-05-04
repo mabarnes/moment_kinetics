@@ -1,7 +1,7 @@
 n_ion_species = 1
 n_neutral_species = 0
 electron_physics = "boltzmann_electron_response"
-run_name = "2D-instability-fixedbg-Aeta0.01-nodiss-Bzed0.5"
+run_name = "2D-instability-fixedbg-Aeta0.01-nodiss-Bzed0.5-r_nelement16"
 evolve_moments_density = false
 evolve_moments_parallel_flow = false
 evolve_moments_parallel_pressure = false
@@ -43,7 +43,7 @@ z_bc = "periodic"
 z_discretization = "chebyshev_pseudospectral"
 r_ngrid = 17
 r_nelement = 16
-r_nelement = 4
+r_nelement_local = 4
 r_L = 1.0e-3
 r_bc = "periodic"
 r_discretization = "chebyshev_pseudospectral"
