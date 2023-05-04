@@ -132,19 +132,19 @@ using IfElse
     end
     
     # ion density symbolic function
-    function densi_sym(Lr,Lz,r_bc,z_bc,composition)
+    function densi_sym(Lr,Lz,r_bc,z_bc,composition,species)
         if z_bc == "periodic"
             if r_bc == "periodic"
                 #densi = 1.5 +  0.1*(sin(2.0*pi*r/Lr) + sin(2.0*pi*z/Lz))#*sin(2.0*pi*t)  
 
                 # Input for instability test
                 background_wavenumber = 1
-                initial_density = 1.0
-                initial_temperature = 1.0
-                density_amplitude = 0.01
-                temperature_amplitude = 0.1
-                density_phase = 0.0
-                temperature_phase = 0.0
+                initial_density = species.initial_density
+                initial_temperature = species.initial_temperature
+                density_amplitude = species.z_IC.density_amplitude
+                temperature_amplitude = species.z_IC.temperature_amplitude
+                density_phase = species.z_IC.density_phase
+                temperature_phase = species.z_IC.temperature_phase
                 eta0 = (initial_density
                         * (1.0 + density_amplitude
                            * sin(2.0*π*background_wavenumber*z/Lz
@@ -179,11 +179,11 @@ using IfElse
     end
     
     # ion distribution symbolic function
-    function dfni_sym(Lr,Lz,r_bc,z_bc,composition,geometry,nr)
-        densi = densi_sym(Lr,Lz,r_bc,z_bc,composition)
+    function dfni_sym(Lr,Lz,r_bc,z_bc,composition,species,geometry,nr)
+        densi = densi_sym(Lr,Lz,r_bc,z_bc,composition,species)
         
         # calculate the electric fields and the potential
-        Er, Ez, phi = electric_fields(Lr,Lz,r_bc,z_bc,composition,nr)
+        Er, Ez, phi = electric_fields(Lr,Lz,r_bc,z_bc,composition,species,nr)
         
         # get geometric/composition data
         Bzed = geometry.Bzed
@@ -196,12 +196,12 @@ using IfElse
 
             # Input for instability test
             background_wavenumber = 1
-            initial_density = 1.0
-            initial_temperature = 1.0
-            density_amplitude = 0.01
-            temperature_amplitude = 0.1
-            density_phase = 0.0
-            temperature_phase = 0.0
+            initial_density = species.initial_density
+            initial_temperature = species.initial_temperature
+            density_amplitude = species.z_IC.density_amplitude
+            temperature_amplitude = species.z_IC.temperature_amplitude
+            density_phase = species.z_IC.density_phase
+            temperature_phase = species.z_IC.temperature_phase
             eta0 = (initial_density
                     * (1.0 + density_amplitude
                        * sin(2.0*π*background_wavenumber*z/Lz
@@ -229,15 +229,15 @@ using IfElse
         end
         return dfni
     end
-    function cartesian_dfni_sym(Lr,Lz,r_bc,z_bc,composition)
-        densi = densi_sym(Lr,Lz,r_bc,z_bc,composition)
+    function cartesian_dfni_sym(Lr,Lz,r_bc,z_bc,composition,species)
+        densi = densi_sym(Lr,Lz,r_bc,z_bc,composition,species)
         #if (r_bc == "periodic" && z_bc == "periodic") || (r_bc == "Dirichlet" && z_bc == "periodic")
             dfni = densi * exp( - vz^2 - vr^2 - vzeta^2) 
         #end
         return dfni
     end
 
-    function electric_fields(Lr,Lz,r_bc,z_bc,composition,nr)
+    function electric_fields(Lr,Lz,r_bc,z_bc,composition,species,nr)
        
         # define derivative operators
         Dr = Differential(r) 
@@ -265,7 +265,7 @@ using IfElse
             rfac = 0.0
         end
         
-        densi = densi_sym(Lr,Lz,r_bc,z_bc,composition)
+        densi = densi_sym(Lr,Lz,r_bc,z_bc,composition,species)
         # calculate the electric fields
         dense = densi # get the electron density via quasineutrality with Zi = 1
         phi = composition.T_e*log(dense/N_e) # use the adiabatic response of electrons for me/mi -> 0
@@ -278,9 +278,9 @@ using IfElse
         return Er_expanded, Ez_expanded, phi
     end
 
-    function manufactured_solutions(Lr,Lz,r_bc,z_bc,geometry,composition,nr)
-        densi = densi_sym(Lr,Lz,r_bc,z_bc,composition)
-        dfni = dfni_sym(Lr,Lz,r_bc,z_bc,composition,geometry,nr)
+    function manufactured_solutions(Lr,Lz,r_bc,z_bc,geometry,composition,species,nr)
+        densi = densi_sym(Lr,Lz,r_bc,z_bc,composition,species)
+        dfni = dfni_sym(Lr,Lz,r_bc,z_bc,composition,species,geometry,nr)
         
         densn = densn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
         dfnn = dfnn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
@@ -303,10 +303,10 @@ using IfElse
         return manufactured_solns_list
     end 
     
-    function manufactured_electric_fields(Lr,Lz,r_bc,z_bc,composition,nr)
+    function manufactured_electric_fields(Lr,Lz,r_bc,z_bc,composition,species,nr)
         
         # calculate the electric fields and the potential
-        Er, Ez, phi = electric_fields(Lr,Lz,r_bc,z_bc,composition,nr)
+        Er, Ez, phi = electric_fields(Lr,Lz,r_bc,z_bc,composition,species,nr)
         
         Er_func = build_function(Er, z, r, t, expression=Val{false})
         Ez_func = build_function(Ez, z, r, t, expression=Val{false})
@@ -317,12 +317,12 @@ using IfElse
         return manufactured_E_fields
     end 
 
-    function manufactured_sources(r_coord,z_coord,vperp_coord,vpa_coord,vzeta_coord,vr_coord,vz_coord,composition,geometry,collisions,num_diss_params)
+    function manufactured_sources(r_coord,z_coord,vperp_coord,vpa_coord,vzeta_coord,vr_coord,vz_coord,composition,species,geometry,collisions,num_diss_params)
         
         # ion manufactured solutions
-        densi = densi_sym(r_coord.L,z_coord.L,r_coord.bc,z_coord.bc,composition)
-        dfni = dfni_sym(r_coord.L,z_coord.L,r_coord.bc,z_coord.bc,composition,geometry,r_coord.n)
-        vrvzvzeta_dfni = cartesian_dfni_sym(r_coord.L,z_coord.L,r_coord.bc,z_coord.bc,composition) #dfni in vr vz vzeta coordinates
+        densi = densi_sym(r_coord.L,z_coord.L,r_coord.bc,z_coord.bc,composition,species)
+        dfni = dfni_sym(r_coord.L,z_coord.L,r_coord.bc,z_coord.bc,composition,species,geometry,r_coord.n)
+        vrvzvzeta_dfni = cartesian_dfni_sym(r_coord.L,z_coord.L,r_coord.bc,z_coord.bc,composition,species) #dfni in vr vz vzeta coordinates
         
         # neutral manufactured solutions
         densn = densn_sym(r_coord.L,z_coord.L,r_coord.bc,z_coord.bc,geometry,composition)
@@ -357,7 +357,7 @@ using IfElse
         end
         
         # calculate the electric fields and the potential
-        Er, Ez, phi = electric_fields(r_coord.L,z_coord.L,r_coord.bc,z_coord.bc,composition,r_coord.n)
+        Er, Ez, phi = electric_fields(r_coord.L,z_coord.L,r_coord.bc,z_coord.bc,composition,species,r_coord.n)
         
         # the ion source to maintain the manufactured solution
         Si = ( Dt(dfni) + ( vpa * (Bzed/Bmag) - 0.5*rhostar*Er ) * Dz(dfni) + ( 0.5*rhostar*Ez*rfac ) * Dr(dfni) + ( 0.5*Ez*Bzed/Bmag ) * Dvpa(dfni)
