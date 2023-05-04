@@ -81,6 +81,30 @@ function moving_average(v::AbstractVector, n::mk_int)
 end
 
 """
+Call savefig, but catch the exception if there is an error
+"""
+function trysavefig(outfile)
+    try
+        savefig(outfile)
+    catch
+        println("Failed to make plot $outfile")
+    end
+    return nothing
+end
+
+"""
+Call gif, but catch the exception if there is an error
+"""
+function trygif(anim, outfile; kwargs...)
+    try
+        gif(anim, outfile; kwargs...)
+    catch
+        println("Failed to make animation $outfile")
+    end
+    return nothing
+end
+
+"""
 """
 function read_distributed_zr_data!(var::Array{mk_float,3}, var_name::String,
    run_name::String, file_key::String, nblocks::mk_int,
@@ -712,14 +736,14 @@ function analyze_and_plot_data(prefix...)
                   label=run_label)
         end
         outfile = string(prefix, "_Chodura_ratio_lower.pdf")
-        savefig(outfile)
+        trysavefig(outfile)
         plot(legend=legend)
         for (t, cr, run_label) ∈ zip(time_pdfs, Chodura_ratio_upper, run_names)
             plot!(t, cr[ir0,:], xlabel="time", ylabel="Chodura ratio at z=+L/2",
                   label=run_label)
         end
         outfile = string(prefix, "_Chodura_ratio_upper.pdf")
-        savefig(outfile)
+        trysavefig(outfile)
     end
 
     # For now, don't support multi-run comparison in remaining 2D and MMS diagnostics
@@ -1415,7 +1439,7 @@ function plot_fields(phi, delta_phi, time, itime_min, itime_max, nwrite_movie,
             @views plot!(t, p[iz0,:], label=run_label)
         end
         outfile = string(prefix, "_phi0_vs_t.pdf")
-        savefig(outfile)
+        trysavefig(outfile)
         plot(legend=legend)
         for (t, dp, fit, run_label) ∈ zip(time, delta_phi, fitted_delta_phi, run_names)
             # plot the time trace of phi(z=z0)-phi_fldline_avg
@@ -1426,7 +1450,7 @@ function plot_fields(phi, delta_phi, time, itime_min, itime_max, nwrite_movie,
             end
         end
         outfile = string(prefix, "_delta_phi0_vs_t.pdf")
-        savefig(outfile)
+        trysavefig(outfile)
     end
     if pp.plot_phi_vs_z_t
         # make a heatmap plot of ϕ(z,t)
@@ -1435,7 +1459,7 @@ function plot_fields(phi, delta_phi, time, itime_min, itime_max, nwrite_movie,
                     for (t, this_z, p, run_label) ∈ zip(time, z, phi, run_names))
         plot(subplots..., layout=(1,n_runs), size=(600*n_runs, 400))
         outfile = string(prefix, "_phi_vs_z_t.pdf")
-        savefig(outfile)
+        trysavefig(outfile)
     end
     if pp.animate_phi_vs_z
         # make a gif animation of ϕ(z) at different times
@@ -1447,21 +1471,21 @@ function plot_fields(phi, delta_phi, time, itime_min, itime_max, nwrite_movie,
             end
         end
         outfile = string(prefix, "_phi_vs_z.gif")
-        gif(anim, outfile, fps=5)
+        trygif(anim, outfile, fps=5)
     end
     # nz = length(z)
     # izmid = cld(nz,2)
     # plot(z[izmid:end], phi[izmid:end,end] .- phi[izmid,end], xlabel="z/Lz - 1/2", ylabel="eϕ/Te", label = "data", linewidth=2)
     # plot!(exp.(-(phi[cld(nz,2),end] .- phi[izmid:end,end])) .* erfi.(sqrt.(abs.(phi[cld(nz,2),end] .- phi[izmid:end,end])))/sqrt(pi)/0.688, phi[izmid:end,end] .- phi[izmid,end], label = "analytical", linewidth=2)
     # outfile = string(prefix, "_harrison_comparison.pdf")
-    # savefig(outfile)
+    # trysavefig(outfile)
     plot(legend=legend)
     for (t, this_z, p, run_label) ∈ zip(time, z, phi, run_names)
         plot!(this_z.grid, p[:,end], xlabel="z/Lz", ylabel="eϕ/Te", label=run_label,
               linewidth=2)
     end
     outfile = string(prefix, "_phi_final.pdf")
-    savefig(outfile)
+    trysavefig(outfile)
 
     println("done.")
 end
@@ -1500,7 +1524,7 @@ function plot_moments(density, delta_density, density_fldline_avg,
                      ylabel="∑ⱼn̅ⱼ(t)/∑ⱼn̅ⱼ(0)", linewidth=2, label=run_label)
     end
     outfile = string(prefix, "_$(label)_denstot_vs_t.pdf")
-    savefig(outfile)
+    trysavefig(outfile)
     for is ∈ 1:maximum(n_species)
         spec_string = string(is)
         dens_min = minimum(minimum(n[:,is,:]) for n ∈ density)
@@ -1512,14 +1536,14 @@ function plot_moments(density, delta_density, density_fldline_avg,
                 @views plot!(t, n[iz0,is,:], label=run_label)
             end
             outfile = string(prefix, "_$(label)_dens0_vs_t_spec", spec_string, ".pdf")
-            savefig(outfile)
+            trysavefig(outfile)
             # plot the time trace of n_s(z=z0)-density_fldline_avg
             plot(legend=legend)
             for (t, dn, run_label) ∈ zip(time, delta_density, run_names)
                 @views plot!(t, abs.(dn[iz0,is,:]), yaxis=:log, label=run_label)
             end
             outfile = string(prefix, "_$(label)_delta_dens0_vs_t_spec", spec_string, ".pdf")
-            savefig(outfile)
+            trysavefig(outfile)
             # plot the time trace of density_fldline_avg
             plot(legend=legend)
             for (t, n_avg, run_label) ∈ zip(time, density_fldline_avg, run_names)
@@ -1527,7 +1551,7 @@ function plot_moments(density, delta_density, density_fldline_avg,
                              ylims=(dens_min,dens_max), label=run_label)
             end
             outfile = string(prefix, "_$(label)_fldline_avg_dens_vs_t_spec", spec_string, ".pdf")
-            savefig(outfile)
+            trysavefig(outfile)
             # plot the deviation from conservation of density_fldline_avg
             plot(legend=legend)
             for (t, n_avg, run_label) ∈ zip(time, density_fldline_avg, run_names)
@@ -1535,7 +1559,7 @@ function plot_moments(density, delta_density, density_fldline_avg,
                              ylabel="<(ns-ns(0))/Nₑ>", label=run_label)
             end
             outfile = string(prefix, "_$(label)_conservation_dens_spec", spec_string, ".pdf")
-            savefig(outfile)
+            trysavefig(outfile)
         end
         upar_min = minimum(minimum(upar[:,is,:]) for upar ∈ parallel_flow)
         upar_max = maximum(maximum(upar[:,is,:]) for upar ∈ parallel_flow)
@@ -1546,14 +1570,14 @@ function plot_moments(density, delta_density, density_fldline_avg,
                 @views plot!(t, upar[iz0,is,:], label=run_label)
             end
             outfile = string(prefix, "_$(label)_upar0_vs_t_spec", spec_string, ".pdf")
-            savefig(outfile)
+            trysavefig(outfile)
             # plot the time trace of n_s(z=z0)-density_fldline_avg
             plot(legend=legend)
             for (t, dupar, run_label) ∈ zip(time, delta_upar, run_names)
                 @views plot!(t, abs.(du[iz0,is,:]), yaxis=:log, label=run_label)
             end
             outfile = string(prefix, "_$(label)_delta_upar0_vs_t_spec", spec_string, ".pdf")
-            savefig(outfile)
+            trysavefig(outfile)
             # plot the time trace of ppar_fldline_avg
             plot(legend=legend)
             for (t, upar_avg, run_label) ∈ zip(time, upar_fldline_avg, run_names)
@@ -1562,7 +1586,7 @@ function plot_moments(density, delta_density, density_fldline_avg,
                              label=run_label)
             end
             outfile = string(prefix, "_$(label)_fldline_avg_upar_vs_t_spec", spec_string, ".pdf")
-            savefig(outfile)
+            trysavefig(outfile)
         end
         ppar_min = minimum(minimum(ppar[:,is,:]) for ppar ∈ parallel_pressure)
         ppar_max = maximum(maximum(ppar[:,is,:]) for ppar ∈ parallel_pressure)
@@ -1573,14 +1597,14 @@ function plot_moments(density, delta_density, density_fldline_avg,
                 @views plot!(t, ppar[iz0,is,:], label=run_label)
             end
             outfile = string(prefix, "_$(label)_ppar0_vs_t_spec", spec_string, ".pdf")
-            savefig(outfile)
+            trysavefig(outfile)
             # plot the time trace of n_s(z=z0)-density_fldline_avg
             plot(legend=legend)
             for (t, dppar, run_label) ∈ zip(time, delta_ppar, run_names)
                 @views plot!(t, abs.(dppar[iz0,is,:]), yaxis=:log, label=run_label)
             end
             outfile = string(prefix, "_$(label)_delta_ppar0_vs_t_spec", spec_string, ".pdf")
-            savefig(outfile)
+            trysavefig(outfile)
             # plot the time trace of ppar_fldline_avg
             plot(legend=legend)
             for (t, ppar_avg, run_label) ∈ zip(time, ppar_fldline_avg, run_names)
@@ -1588,7 +1612,7 @@ function plot_moments(density, delta_density, density_fldline_avg,
                              ylims=(ppar_min,ppar_max), label=run_label)
             end
             outfile = string(prefix, "_$(label)_fldline_avg_ppar_vs_t_spec", spec_string, ".pdf")
-            savefig(outfile)
+            trysavefig(outfile)
         end
         vth_min = minimum(minimum(vth[:,is,:]) for vth ∈ thermal_speed)
         vth_max = maximum(maximum(vth[:,is,:]) for vth ∈ thermal_speed)
@@ -1599,14 +1623,14 @@ function plot_moments(density, delta_density, density_fldline_avg,
                 @views plot!(t, vth[iz0,is,:], label=run_label)
             end
             outfile = string(prefix, "_$(label)_vth0_vs_t_spec", spec_string, ".pdf")
-            savefig(outfile)
+            trysavefig(outfile)
             # plot the time trace of n_s(z=z0)-density_fldline_avg
             plot(legend=legend)
             for (t, dvth, run_label) ∈ zip(time, delta_vth, run_names)
                 @views plot!(t, abs.(dvth[iz0,is,:]), yaxis=:log, label=run_label)
             end
             outfile = string(prefix, "_$(label)_delta_vth0_vs_t_spec", spec_string, ".pdf")
-            savefig(outfile)
+            trysavefig(outfile)
             # plot the time trace of vth_fldline_avg
             plot(legend=legend)
             for (t, vth_avg, run_label) ∈ zip(time, vth_fldline_avg, run_names)
@@ -1614,7 +1638,7 @@ function plot_moments(density, delta_density, density_fldline_avg,
                              ylims=(vth_min,vth_max), label=run_label)
             end
             outfile = string(prefix, "_$(label)_fldline_avg_vth_vs_t_spec", spec_string, ".pdf")
-            savefig(outfile)
+            trysavefig(outfile)
         end
         qpar_min = minimum(minimum(qpar[:,is,:]) for qpar ∈ parallel_heat_flux)
         qpar_max = maximum(maximum(qpar[:,is,:]) for qpar ∈ parallel_heat_flux)
@@ -1625,14 +1649,14 @@ function plot_moments(density, delta_density, density_fldline_avg,
                 @views plot!(t, qpar[iz0,is,:], label=run_label)
             end
             outfile = string(prefix, "_$(label)_qpar0_vs_t_spec", spec_string, ".pdf")
-            savefig(outfile)
+            trysavefig(outfile)
             # plot the time trace of n_s(z=z0)-density_fldline_avg
             plot(legend=legend)
             for (t, dqpar, run_label) ∈ zip(time, delta_qpar, run_names)
                 @views plot!(t, abs.(dqpar[iz0,is,:]), yaxis=:log, label=run_label)
             end
             outfile = string(prefix, "_$(label)_delta_qpar0_vs_t_spec", spec_string, ".pdf")
-            savefig(outfile)
+            trysavefig(outfile)
             # plot the time trace of ppar_fldline_avg
             plot(legend=legend)
             for (t, qpar_avg, run_label) ∈ zip(time, qpar_fldline_avg, run_names)
@@ -1640,7 +1664,7 @@ function plot_moments(density, delta_density, density_fldline_avg,
                              ylims=(qpar_min,qpar_max), label=run_label)
             end
             outfile = string(prefix, "_$(label)_fldline_avg_qpar_vs_t_spec", spec_string, ".pdf")
-            savefig(outfile)
+            trysavefig(outfile)
         end
         if pp.plot_dens_vs_z_t
             # make a heatmap plot of n_s(z,t)
@@ -1649,7 +1673,7 @@ function plot_moments(density, delta_density, density_fldline_avg,
                         for (t, this_z, n, run_label) ∈ zip(time, z, density, run_names))
             plot(subplots..., layout=(1,n_runs), size=(600*n_runs, 400))
             outfile = string(prefix, "_$(label)_dens_vs_z_t_spec", spec_string, ".pdf")
-            savefig(outfile)
+            trysavefig(outfile)
         end
         if pp.plot_upar_vs_z_t
             # make a heatmap plot of upar_s(z,t)
@@ -1659,7 +1683,7 @@ function plot_moments(density, delta_density, density_fldline_avg,
                                                               run_names))
             plot(subplots..., layout=(1,n_runs), size=(600*n_runs, 400))
             outfile = string(prefix, "_$(label)_upar_vs_z_t_spec", spec_string, ".pdf")
-            savefig(outfile)
+            trysavefig(outfile)
         end
         if pp.plot_ppar_vs_z_t
             # make a heatmap plot of upar_s(z,t)
@@ -1669,7 +1693,7 @@ function plot_moments(density, delta_density, density_fldline_avg,
                             zip(time, z, parallel_pressure, run_names))
             plot(subplots..., layout=(1,n_runs), size=(600*n_runs, 400))
             outfile = string(prefix, "_$(label)_ppar_vs_z_t_spec", spec_string, ".pdf")
-            savefig(outfile)
+            trysavefig(outfile)
         end
         # Note factor of 2 here because currently temperatures are normalised by Tref,
         # while pressures are normalised by m*nref*c_ref^2=2*nref*Tref
@@ -1695,7 +1719,7 @@ function plot_moments(density, delta_density, density_fldline_avg,
                             zip(time, z, parallel_heat_flux, run_names))
             plot(subplots..., layout=(1,n_runs), size=(600*n_runs, 400))
             outfile = string(prefix, "_$(label)_qpar_vs_z_t_spec", spec_string, ".pdf")
-            savefig(outfile)
+            trysavefig(outfile)
         end
         if pp.animate_dens_vs_z
             # make a gif animation of ϕ(z) at different times
@@ -1707,7 +1731,7 @@ function plot_moments(density, delta_density, density_fldline_avg,
                 end
             end
             outfile = string(prefix, "_$(label)_dens_vs_z_spec", spec_string, ".gif")
-            gif(anim, outfile, fps=5)
+            trygif(anim, outfile, fps=5)
         end
         if pp.animate_upar_vs_z
             # make a gif animation of upar(z) at different times
@@ -1719,7 +1743,7 @@ function plot_moments(density, delta_density, density_fldline_avg,
                 end
             end
             outfile = string(prefix, "_$(label)_upar_vs_z_spec", spec_string, ".gif")
-            gif(anim, outfile, fps=5)
+            trygif(anim, outfile, fps=5)
         end
         if pp.animate_ppar_vs_z
             # make a gif animation of ppar(z) at different times
@@ -1731,7 +1755,7 @@ function plot_moments(density, delta_density, density_fldline_avg,
                 end
             end
             outfile = string(prefix, "_$(label)_ppar_vs_z_spec", spec_string, ".gif")
-            gif(anim, outfile, fps=5)
+            trygif(anim, outfile, fps=5)
         end
         if pp.animate_Tpar_vs_z
             # make a gif animation of Tpar(z) at different times
@@ -1756,7 +1780,7 @@ function plot_moments(density, delta_density, density_fldline_avg,
                 end
             end
             outfile = string(prefix, "_$(label)_vth_vs_z_spec", spec_string, ".gif")
-            gif(anim, outfile, fps=5)
+            trygif(anim, outfile, fps=5)
         end
         if pp.animate_qpar_vs_z
             # make a gif animation of ppar(z) at different times
@@ -1769,7 +1793,7 @@ function plot_moments(density, delta_density, density_fldline_avg,
                 end
             end
             outfile = string(prefix, "_$(label)_qpar_vs_z_spec", spec_string, ".gif")
-            gif(anim, outfile, fps=5)
+            trygif(anim, outfile, fps=5)
         end
     end
     println("done.")
@@ -1806,7 +1830,7 @@ function plot_dfns(density, parallel_flow, parallel_pressure, thermal_speed, ff,
             @views plot!(t, n[iz0,is,:] .- n_int[iz0,is,:], label=run_label)
         end
         outfile = string(prefix, "_$(label)_intf0_vs_t", spec_string, ".pdf")
-        savefig(outfile)
+        trysavefig(outfile)
         # if evolve_upar = true, plot ∫dwpa wpa * f, which should equal zero
         # otherwise, this plots ∫dvpa vpa * f, which is dens*upar
         plot(legend=legend)
@@ -1819,7 +1843,7 @@ function plot_dfns(density, parallel_flow, parallel_pressure, thermal_speed, ff,
             end
         end
         outfile = string(prefix, "_$(label)_intwf0_vs_t", spec_string, ".pdf")
-        savefig(outfile)
+        trysavefig(outfile)
         # plot difference between evolved parallel pressure and ∫dvpa vpa^2 f;
         # only possibly different if density and thermal speed removed from
         # normalised distribution function at run-time
@@ -1828,7 +1852,7 @@ function plot_dfns(density, parallel_flow, parallel_pressure, thermal_speed, ff,
             @views plot(t, ppar[iz0,is,:] .- ppar_int[iz0,is,:], label=run_label)
         end
         outfile = string(prefix, "_$(label)_intw2f0_vs_t", spec_string, ".pdf")
-        savefig(outfile)
+        trysavefig(outfile)
         #fmin = minimum(ff[:,:,is,:])
         #fmax = maximum(ff[:,:,is,:])
         if pp.animate_f_vs_vpa_z
@@ -1842,7 +1866,7 @@ function plot_dfns(density, parallel_flow, parallel_pressure, thermal_speed, ff,
                 plot(subplots..., layout=(1,n_runs), size=(600*n_runs, 400))
             end
             outfile = string(prefix, "_$(label)_logf_vs_vpa_z", spec_string, ".gif")
-            gif(anim, outfile, fps=5)
+            trygif(anim, outfile, fps=5)
             # make a gif animation of f(vpa,z,t)
             anim = @animate for i ∈ itime_min_pdfs:nwrite_movie_pdfs:itime_max_pdfs
                 #heatmap(z, vpa, log.(abs.(ff[:,:,i])), xlabel="z", ylabel="vpa", clims = (fmin,fmax), c = :deep)
@@ -1853,7 +1877,7 @@ function plot_dfns(density, parallel_flow, parallel_pressure, thermal_speed, ff,
                 plot(subplots..., layout=(1,n_runs), size=(600*n_runs, 400))
             end
             outfile = string(prefix, "_$(label)_f_vs_vpa_z", spec_string, ".gif")
-            gif(anim, outfile, fps=5)
+            trygif(anim, outfile, fps=5)
             # make pdf of f(vpa,z,t_final) for each species
             str = string("spec ", string(is), " pdf")
             subplots = (@views heatmap(this_z.grid, this_vpa.grid, f[:,:,is,end],
@@ -1862,7 +1886,7 @@ function plot_dfns(density, parallel_flow, parallel_pressure, thermal_speed, ff,
                         for (f, this_z, this_vpa, run_label) ∈ zip(ff, z, vpa, run_names))
             plot(subplots..., layout=(1,n_runs), size=(600*n_runs, 400))
             outfile = string(prefix, "_$(label)_f_vs_z_vpa_final", spec_string, ".pdf")
-            savefig(outfile)
+            trysavefig(outfile)
 
             anim = @animate for i ∈ itime_min_pdfs:nwrite_movie_pdfs:itime_max_pdfs
                 plot(legend=legend)
@@ -1872,7 +1896,7 @@ function plot_dfns(density, parallel_flow, parallel_pressure, thermal_speed, ff,
                 end
             end
             outfile = string(prefix, "_$(label)_f0_vs_vpa", spec_string, ".gif")
-            gif(anim, outfile, fps=5)
+            trygif(anim, outfile, fps=5)
 
             anim = @animate for i ∈ itime_min_pdfs:nwrite_movie_pdfs:itime_max_pdfs
                 plot(legend=legend)
@@ -1882,7 +1906,7 @@ function plot_dfns(density, parallel_flow, parallel_pressure, thermal_speed, ff,
                 end
             end
             outfile = string(prefix, "_$(label)_fL_vs_vpa", spec_string, ".gif")
-            gif(anim, outfile, fps=5)
+            trygif(anim, outfile, fps=5)
         end
         if pp.plot_f_unnormalized_vs_vpa_z
             PyPlot.clf()
@@ -1901,7 +1925,12 @@ function plot_dfns(density, parallel_flow, parallel_pressure, thermal_speed, ff,
                 plot_unnormalised_f2d(f_unnorm, z2d, dzdt2d; title=run_label,
                                       plot_log=false)
             end
-            PyPlot.savefig(string(prefix, "_f_unnorm_vs_vpa_z", spec_string, ".pdf"))
+            outfile = string(prefix, "_f_unnorm_vs_vpa_z", spec_string, ".pdf")
+            try
+                PyPlot.savefig(outfile)
+            catch
+                println("Failed to make plot $outfile")
+            end
             PyPlot.clf()
 
             plot(legend=legend)
@@ -1918,7 +1947,7 @@ function plot_dfns(density, parallel_flow, parallel_pressure, thermal_speed, ff,
                 @views plot!(dzdt, f_unnorm, xlabel="vpa", ylabel="f_unnorm(z=0)",
                              label=run_label)
             end
-            savefig(string(prefix, "_f0_unnorm_vs_vpa", spec_string, ".pdf"))
+            trysavefig(string(prefix, "_f0_unnorm_vs_vpa", spec_string, ".pdf"))
 
             plot(legend=legend)
             it = itime_max_pdfs
@@ -1934,7 +1963,7 @@ function plot_dfns(density, parallel_flow, parallel_pressure, thermal_speed, ff,
                 @views plot!(dzdt, f_unnorm, xlabel="vpa", ylabel="f_unnorm(z=L)",
                              label=run_label)
             end
-            savefig(string(prefix, "_fL_unnorm_vs_vpa", spec_string, ".pdf"))
+            trysavefig(string(prefix, "_fL_unnorm_vs_vpa", spec_string, ".pdf"))
         end
         if pp.animate_f_unnormalized
             ## The nice, commented out version will only work when plot_unnormalised can
@@ -1952,7 +1981,7 @@ function plot_dfns(density, parallel_flow, parallel_pressure, thermal_speed, ff,
             #    plot(subplots..., layout=(1,n_runs), size=(600*n_runs, 400))
             #end
             #outfile = string(prefix, "_$(label)_f_unnorm_vs_vpa_z", spec_string, ".gif")
-            #gif(anim, outfile, fps=5)
+            #trygif(anim, outfile, fps=5)
             ## make a gif animation of log(f_unnorm)(v_parallel_unnorm,z,t)
             #anim = @animate for i ∈ itime_min_pdfs:nwrite_movie_pdfs:itime_max_pdfs
             #    subplots = (@views plot_unnormalised(f[:,:,is,i], this_z.grid, this_vpa.grid, n[:,is,i],
@@ -1966,7 +1995,7 @@ function plot_dfns(density, parallel_flow, parallel_pressure, thermal_speed, ff,
             #    plot(subplots..., layout=(1,n_runs), size=(600*n_runs, 400))
             #end
             #outfile = string(prefix, "_$(label)_logf_unnorm_vs_vpa_z", spec_string, ".gif")
-            #gif(anim, outfile, fps=5)
+            #trygif(anim, outfile, fps=5)
 
             matplotlib = pyimport("matplotlib")
             matplotlib.use("agg")
@@ -1993,7 +2022,11 @@ function plot_dfns(density, parallel_flow, parallel_pressure, thermal_speed, ff,
             fig = PyPlot.figure(1, figsize=(6*n_runs,4))
             myanim = matplotlib_animation.FuncAnimation(fig, make_frame, frames=nframes)
             outfile = string(prefix, "_$(label)_f_unnorm_vs_vpa_z", spec_string, ".gif")
-            myanim.save(outfile, writer=matplotlib_animation.PillowWriter(fps=30))
+            try
+                myanim.save(outfile, writer=matplotlib_animation.PillowWriter(fps=30))
+            catch
+                println("Failed to make animation $outfile")
+            end
             PyPlot.clf()
 
             function make_frame_log(i)
@@ -2016,7 +2049,11 @@ function plot_dfns(density, parallel_flow, parallel_pressure, thermal_speed, ff,
             fig = PyPlot.figure(figsize=(6*n_runs,4))
             myanim = matplotlib_animation.FuncAnimation(fig, make_frame_log, frames=nframes)
             outfile = string(prefix, "_$(label)_logf_unnorm_vs_vpa_z", spec_string, ".gif")
-            myanim.save(outfile, writer=matplotlib_animation.PillowWriter(fps=30))
+            try
+                myanim.save(outfile, writer=matplotlib_animation.PillowWriter(fps=30))
+            catch
+                println("Failed to make animation $outfile")
+            end
 
             # Ensure PyPlot figure is cleared
             closeall()
@@ -2034,7 +2071,7 @@ function plot_dfns(density, parallel_flow, parallel_pressure, thermal_speed, ff,
                 end
             end
             outfile = string(prefix, "_$(label)_f0_unnorm_vs_vpa", spec_string, ".gif")
-            gif(anim, outfile, fps=5)
+            trygif(anim, outfile, fps=5)
 
             anim = @animate for i ∈ itime_min_pdfs:nwrite_movie_pdfs:itime_max_pdfs
                 plot(legend=legend)
@@ -2049,7 +2086,7 @@ function plot_dfns(density, parallel_flow, parallel_pressure, thermal_speed, ff,
                 end
             end
             outfile = string(prefix, "_$(label)_fL_unnorm_vs_vpa", spec_string, ".gif")
-            gif(anim, outfile, fps=5)
+            trygif(anim, outfile, fps=5)
         end
         if pp.animate_deltaf_vs_vpa_z
             # make a gif animation of δf(vpa,z,t)
@@ -2062,7 +2099,7 @@ function plot_dfns(density, parallel_flow, parallel_pressure, thermal_speed, ff,
                 plot(subplots..., layout=(1,n_runs), size=(600*n_runs, 400))
             end
             outfile = string(prefix, "_$(label)_deltaf_vs_vpa_z", spec_string, ".gif")
-            gif(anim, outfile, fps=5)
+            trygif(anim, outfile, fps=5)
         end
         if pp.animate_f_vs_vpa_z0
             fmin = minimum(minimum(f[ivpa0,:,is,:]) for f ∈ ff)
@@ -2076,7 +2113,7 @@ function plot_dfns(density, parallel_flow, parallel_pressure, thermal_speed, ff,
                 end
             end
             outfile = string(prefix, "_$(label)_f_vs_z", spec_string, ".gif")
-            gif(anim, outfile, fps=5)
+            trygif(anim, outfile, fps=5)
         end
         if pp.animate_deltaf_vs_vpa_z0
             fmin = minimum(minimum(df[ivpa0,:,is,:]) for df ∈ delta_f)
@@ -2090,7 +2127,7 @@ function plot_dfns(density, parallel_flow, parallel_pressure, thermal_speed, ff,
                 end
             end
             outfile = string(prefix, "_$(label)_deltaf_vs_z", spec_string, ".gif")
-            gif(anim, outfile, fps=5)
+            trygif(anim, outfile, fps=5)
         end
         if pp.animate_f_vs_vpa_z0
             fmin = minimum(minimum(f[:,iz0,is,:]) for f ∈ ff)
@@ -2106,7 +2143,7 @@ function plot_dfns(density, parallel_flow, parallel_pressure, thermal_speed, ff,
             #     plot(time, bohm_integral, xlabel="time", label="Bohm integral")
             #     plot!(time, density[1,1,:], label="nᵢ(zmin)")
             #     outfile = string(prefix, "_$(label)_Bohm_criterion.pdf")
-            #     savefig(outfile)
+            #     trysavefig(outfile)
             #     println()
             #     if bohm_integral[end] <= density[1,1,end]
             #         println("Bohm criterion: ", bohm_integral[end], " <= ", density[1,1,end], " is satisfied!")
@@ -2127,7 +2164,7 @@ function plot_dfns(density, parallel_flow, parallel_pressure, thermal_speed, ff,
                 end
             end
             outfile = string(prefix, "_$(label)_f_vs_vpa", spec_string, ".gif")
-            gif(anim, outfile, fps=5)
+            trygif(anim, outfile, fps=5)
         end
         if pp.animate_deltaf_vs_vpa_z0
             fmin = minimum(minimum(df[:,iz0,is,:]) for df ∈ delta_f)
@@ -2142,7 +2179,7 @@ function plot_dfns(density, parallel_flow, parallel_pressure, thermal_speed, ff,
                 end
             end
             outfile = string(prefix, "_$(label)_deltaf_vs_vpa", spec_string, ".gif")
-            gif(anim, outfile, fps=5)
+            trygif(anim, outfile, fps=5)
         end
     end
     return nothing
@@ -2470,7 +2507,7 @@ function compare_fields_symbolic_test(run_name,field,field_sym,z,r,time,nz,nr,nt
     fieldmax = maximum(field[:,ir0,end])
 	@views plot(z, [field[:,ir0,end], field_sym[:,ir0,end] ], xlabel=L"z/L_z", ylabel=field_label, label=["num" "sym"], ylims = (fieldmin,fieldmax))
     outfile = string(run_name, "_"*file_string*"(r0,z)_vs_z.pdf")
-    savefig(outfile)
+    trysavefig(outfile)
 
 	if nr > 1
 		# plot last timestep field vs r at z_wall
@@ -2478,7 +2515,7 @@ function compare_fields_symbolic_test(run_name,field,field_sym,z,r,time,nz,nr,nt
 		fieldmax = maximum(field[end,:,end])
 		@views plot(r, [field[end,:,end], field_sym[end,:,end]], xlabel=L"r/L_r", ylabel=field_label, label=["num" "sym"], ylims = (fieldmin,fieldmax))
 		outfile = string(run_name, "_"*file_string*"(r,z_wall)_vs_r.pdf")
-		savefig(outfile)
+		trysavefig(outfile)
 
         it = ntime
         fontsize = 20
@@ -2487,13 +2524,13 @@ function compare_fields_symbolic_test(run_name,field,field_sym,z,r,time,nz,nr,nt
          #xtickfontsize = ticksfontsize, xguidefontsize = fontsize, ytickfontsize = ticksfontsize, yguidefontsize = fontsize, titlefontsize = fontsize)
          windowsize = (360,240), margin = 15pt)
         outfile = string(run_name, "_"*file_string*"_vs_r_z.pdf")
-        savefig(outfile)
+        trysavefig(outfile)
 
         heatmap(r, z, field_sym[:,:,it], xlabel=L"r / L_r", ylabel=L"z / L_z", title=field_sym_label, c = :deep,
         #xtickfontsize = ticksfontsize, xguidefontsize = fontsize, ytickfontsize = ticksfontsize, yguidefontsize = fontsize, titlefontsize = fontsize)
         windowsize = (360,240), margin = 15pt)
         outfile = string(run_name, "_"*file_string*"_sym_vs_r_z.pdf")
-        savefig(outfile)
+        trysavefig(outfile)
     end	
 
     field_norm = zeros(mk_float,ntime)
@@ -2512,7 +2549,7 @@ function compare_fields_symbolic_test(run_name,field,field_sym,z,r,time,nz,nr,nt
     println("test: ",file_string,": ",field_norm)
     @views plot(time, field_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=norm_label) #, yaxis=:log)
     outfile = string(run_name, "_"*file_string*"_norm_vs_t.pdf")
-    savefig(outfile)
+    trysavefig(outfile)
 
     return field_norm
 
@@ -2531,7 +2568,7 @@ function compare_moments_symbolic_test(run_name,moment,moment_sym,spec_string,z,
     momentmax = maximum(moment[:,ir0,is,end])
 	@views plot(z, [moment[:,ir0,is,end], moment_sym[:,ir0,is,end] ], xlabel=L"z/L_z", ylabel=moment_label, label=["num" "sym"], ylims = (momentmin,momentmax))
     outfile = string(run_name, "_"*file_string*"(r0,z)_vs_z_", spec_string, ".pdf")
-    savefig(outfile)
+    trysavefig(outfile)
 
     if nr > 1
         it = ntime
@@ -2540,13 +2577,13 @@ function compare_moments_symbolic_test(run_name,moment,moment_sym,spec_string,z,
         #xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, titlefontsize = fontsize
         windowsize = (360,240), margin = 15pt)
         outfile = string(run_name, "_"*file_string*"_vs_r_z_", spec_string, ".pdf")
-        savefig(outfile)
+        trysavefig(outfile)
 
         heatmap(r, z, moment_sym[:,:,is,it], xlabel=L"r / L_r", ylabel=L"z / L_z", title=moment_sym_label, c = :deep,
         #xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, titlefontsize = fontsize
         windowsize = (360,240), margin = 15pt)
         outfile = string(run_name, "_"*file_string*"_sym_vs_r_z_", spec_string, ".pdf")
-        savefig(outfile)
+        trysavefig(outfile)
     end
 
     moment_norm = zeros(mk_float,ntime)
@@ -2565,7 +2602,7 @@ function compare_moments_symbolic_test(run_name,moment,moment_sym,spec_string,z,
     println("test: ",file_string,": ",spec_string," ",moment_norm)
     @views plot(time, moment_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=norm_label) #, yaxis=:log)
     outfile = string(run_name, "_"*file_string*"_norm_vs_t_", spec_string, ".pdf")
-    savefig(outfile)
+    trysavefig(outfile)
 
     return moment_norm
 
@@ -2613,7 +2650,7 @@ function compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,spec
     println("test: ",file_string,": ",spec_string," ",pdf_norm)
     @views plot(time, pdf_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=norm_label) #, yaxis=:log)
     outfile = string(run_name, "_"*file_string*"_norm_vs_t_", spec_string, ".pdf")
-    savefig(outfile)
+    trysavefig(outfile)
 
     # plot distribution at lower wall boundary
     # find the number of ranks
@@ -2645,7 +2682,7 @@ function compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,spec
             # plot f(vpa,ivperp0,iz_wall,ir0,is,itime) at the wall
             @views plot(vpa.grid, [pdf[:,ivperp0,iz0,ir0,is,ntime], pdf_sym_array], xlabel=L"v_{\|\|}/L_{v_{\|\|}}", ylabel=L"f_i", label=["num" "sym"])
             outfile = string(run_name, "_pdf(vpa,vperp0,iz_"*zlabel*",ir0)_sym_vs_vpa.pdf")
-            savefig(outfile)
+            trysavefig(outfile)
         end
         close(fid_pdfs)
     end
@@ -2695,7 +2732,7 @@ function compare_neutral_pdf_symbolic_test(run_name,manufactured_solns_list,spec
     println("test: ",file_string,": ",spec_string," ",pdf_norm)
     @views plot(time, pdf_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=norm_label) #, yaxis=:log)
     outfile = string(run_name, "_"*file_string*"_norm_vs_t_", spec_string, ".pdf")
-    savefig(outfile)
+    trysavefig(outfile)
 
     return pdf_norm
 end
@@ -2711,20 +2748,20 @@ function plot_fields_rt(phi, delta_phi, time, itime_min, itime_max, nwrite_movie
         #plot(time, log.(phi[i,:]), yscale = :log10)
         @views plot(time, phi[ir0,:])
         outfile = string(run_name, "_phi(r0,z0)_vs_t.pdf")
-        savefig(outfile)
+        trysavefig(outfile)
         # plot the time trace of phi(r=r0)-phi_fldline_avg
         @views plot(time, abs.(delta_phi[ir0,:]), xlabel="t*Lz/vti", ylabel="δϕ", yaxis=:log)
         if pp.calculate_frequencies
             plot!(time, abs.(fitted_delta_phi))
         end
         outfile = string(run_name, "_delta_phi(r0,z0)_vs_t.pdf")
-        savefig(outfile)
+        trysavefig(outfile)
     end
     if pp.plot_phi_vs_z_t
         # make a heatmap plot of ϕ(r,t)
         heatmap(time, r.grid, phi, xlabel="time", ylabel="r", title="ϕ", c = :deep)
         outfile = string(run_name, "_phi_vs_r_t.pdf")
-        savefig(outfile)
+        trysavefig(outfile)
     end
     if pp.animate_phi_vs_z
         # make a gif animation of ϕ(r) at different times
@@ -2732,17 +2769,17 @@ function plot_fields_rt(phi, delta_phi, time, itime_min, itime_max, nwrite_movie
             @views plot(r.grid, phi[:,i], xlabel="r", ylabel="ϕ", ylims = (phimin,phimax))
         end
         outfile = string(run_name, "_phi_vs_r.gif")
-        gif(anim, outfile, fps=5)
+        trygif(anim, outfile, fps=5)
     end
     # nz = length(z)
     # izmid = cld(nz,2)
     # plot(z[izmid:end], phi[izmid:end,end] .- phi[izmid,end], xlabel="z/Lz - 1/2", ylabel="eϕ/Te", label = "data", linewidth=2)
     # plot!(exp.(-(phi[cld(nz,2),end] .- phi[izmid:end,end])) .* erfi.(sqrt.(abs.(phi[cld(nz,2),end] .- phi[izmid:end,end])))/sqrt(pi)/0.688, phi[izmid:end,end] .- phi[izmid,end], label = "analytical", linewidth=2)
     # outfile = string(run_name, "_harrison_comparison.pdf")
-    # savefig(outfile)
+    # trysavefig(outfile)
     plot(r.grid, phi[:,end], xlabel="r/Lr", ylabel="eϕ/Te", label="", linewidth=2)
     outfile = string(run_name, "_phi(r)_final.pdf")
-    savefig(outfile)
+    trysavefig(outfile)
 
     println("done.")
 end
@@ -2779,11 +2816,11 @@ function plot_charged_pdf(pdf, vpa, vperp, z, r,
                 @views heatmap(z, vpa, pdf[:,ivperp0,:,ir0,is,i], xlabel="z", ylabel="vpa", c = :deep, interpolation = :cubic)
             end
             outfile = string(run_name, "_pdf_vs_vpa_z", ivperp0_string, ir0_string, spec_string, ".gif")
-            gif(anim, outfile, fps=5)
+            trygif(anim, outfile, fps=5)
 
             @views heatmap(z, vpa, pdf[:,ivperp0,:,ir0,is,itime_max_pdfs], xlabel="z", ylabel="vpa", c = :deep, interpolation = :cubic)
             outfile = string(run_name, "_pdf_vs_vpa_z", ivperp0_string, ir0_string, spec_string, ".pdf")
-            savefig(outfile)
+            trysavefig(outfile)
         end
         # make a gif animation of f(vpa,r,t) at a given (vperp,z) location
         if pp.animate_f_vs_vpa_r
@@ -2791,11 +2828,11 @@ function plot_charged_pdf(pdf, vpa, vperp, z, r,
                 @views heatmap(r, vpa, pdf[:,ivperp0,iz0,:,is,i], xlabel="r", ylabel="vpa", c = :deep, interpolation = :cubic)
             end
             outfile = string(run_name, "_pdf_vs_vpa_r", ivperp0_string, iz0_string, spec_string, ".gif")
-            gif(anim, outfile, fps=5)
+            trygif(anim, outfile, fps=5)
 
             @views heatmap(r, vpa, pdf[:,ivperp0,iz0,:,is,itime_max_pdfs], xlabel="r", ylabel="vpa", c = :deep, interpolation = :cubic)
             outfile = string(run_name, "_pdf_vs_vpa_r", ivperp0_string, iz0_string, spec_string, ".pdf")
-            savefig(outfile)
+            trysavefig(outfile)
         end
         # make a gif animation of f(vperp,z,t) at a given (vpa,r) location
         if pp.animate_f_vs_vperp_z
@@ -2803,7 +2840,7 @@ function plot_charged_pdf(pdf, vpa, vperp, z, r,
                 @views heatmap(z, vperp, pdf[ivpa0,:,:,ir0,is,i], xlabel="z", ylabel="vperp", c = :deep, interpolation = :cubic)
             end
             outfile = string(run_name, "_pdf_vs_vperp_z", ivpa0_string, ir0_string, spec_string, ".gif")
-            gif(anim, outfile, fps=5)
+            trygif(anim, outfile, fps=5)
         end
         # make a gif animation of f(vperp,r,t) at a given (vpa,z) location
         if pp.animate_f_vs_vperp_r
@@ -2811,7 +2848,7 @@ function plot_charged_pdf(pdf, vpa, vperp, z, r,
                 @views heatmap(r, vperp, pdf[ivpa0,:,iz0,:,is,i], xlabel="r", ylabel="vperp", c = :deep, interpolation = :cubic)
             end
             outfile = string(run_name, "_pdf_vs_vperp_r", ivperp0_string, iz0_string, spec_string, ".gif")
-            gif(anim, outfile, fps=5)
+            trygif(anim, outfile, fps=5)
         end
         # make a gif animation of f(vpa,vperp,t) at a given (z,r) location
         if pp.animate_f_vs_vperp_vpa
@@ -2819,7 +2856,7 @@ function plot_charged_pdf(pdf, vpa, vperp, z, r,
                 @views heatmap(vperp, vpa, pdf[:,:,iz0,ir0,is,i], xlabel="vperp", ylabel="vpa", c = :deep, interpolation = :cubic)
             end
             outfile = string(run_name, "_pdf_vs_vperp_vpa", iz0_string, ir0_string, spec_string, ".gif")
-            gif(anim, outfile, fps=5)
+            trygif(anim, outfile, fps=5)
         end
         # make a gif animation of f(z,r,t) at a given (vpa,vperp) location
         if pp.animate_f_vs_r_z
@@ -2827,11 +2864,11 @@ function plot_charged_pdf(pdf, vpa, vperp, z, r,
                 @views heatmap(r, z, pdf[ivpa0,ivperp0,:,:,is,i], xlabel="r", ylabel="z", c = :deep, interpolation = :cubic)
             end
             outfile = string(run_name, "_pdf_vs_r_z", ivpa0_string, ivperp0_string, spec_string, ".gif")
-            gif(anim, outfile, fps=5)
+            trygif(anim, outfile, fps=5)
 
             @views heatmap(r, z, pdf[ivpa0,ivperp0,:,:,is,itime_max_pdfs], xlabel="r", ylabel="z", c = :deep, interpolation = :cubic)
             outfile = string(run_name, "_pdf_vs_r_z", ivpa0_string, ivperp0_string, spec_string, ".pdf")
-            savefig(outfile)
+            trysavefig(outfile)
         end
     end
     println("done.")
@@ -2870,7 +2907,7 @@ function plot_neutral_pdf(pdf, vz, vr, vzeta, z, r,
                 @views heatmap(z, vz, pdf[:,ivr0,ivzeta0,:,ir0,is,i], xlabel="z", ylabel="vz", c = :deep, interpolation = :cubic)
             end
             outfile = string(run_name, "_pdf_vs_vz_z", ivr0_string, ivzeta0_string, ir0_string, spec_string, ".gif")
-            gif(anim, outfile, fps=5)
+            trygif(anim, outfile, fps=5)
         end
         # make a gif animation of f(vr,r,t) at a given (vz,vzeta,z) location
         if pp.animate_f_vs_vr_r
@@ -2878,7 +2915,7 @@ function plot_neutral_pdf(pdf, vz, vr, vzeta, z, r,
                 @views heatmap(r, vr, pdf[ivz0,:,ivzeta0,iz0,:,is,i], xlabel="r", ylabel="vr", c = :deep, interpolation = :cubic)
             end
             outfile = string(run_name, "_pdf_vs_vr_r", ivz0_string, ivzeta0_string, iz0_string, spec_string, ".gif")
-            gif(anim, outfile, fps=5)
+            trygif(anim, outfile, fps=5)
         end
         # make a gif animation of f(z,r,t) at a given (vz,vr,vzeta) location
         if pp.animate_f_vs_r_z
@@ -2886,7 +2923,7 @@ function plot_neutral_pdf(pdf, vz, vr, vzeta, z, r,
                 @views heatmap(r, z, pdf[ivz0,ivr0,ivzeta0,:,:,is,i], xlabel="r", ylabel="z", c = :deep, interpolation = :cubic)
             end
             outfile = string(run_name, "_pdf_vs_z_r", ivz0_string, ivr0_string, ivzeta0_string, spec_string, ".gif")
-            gif(anim, outfile, fps=5)
+            trygif(anim, outfile, fps=5)
         end
     end
     println("done.")
@@ -2901,7 +2938,7 @@ function plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
     if pp.plot_phi_vs_r0_z # plot last timestep phi[z,ir0]
         @views plot(z, phi[:,ir0,end], xlabel=L"z/L_z", ylabel=L"\phi")
         outfile = string(run_name, "_phi"*description*"(r0,z)_vs_z.pdf")
-        savefig(outfile)
+        trysavefig(outfile)
     end
     if pp.animate_phi_vs_r_z && nr > 1
         # make a gif animation of ϕ(z) at different times
@@ -2909,25 +2946,25 @@ function plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
             @views heatmap(r, z, phi[:,:,i], xlabel="r", ylabel="z", c = :deep, interpolation = :cubic)
         end
         outfile = string(run_name, "_phi"*description*"_vs_r_z.gif")
-        gif(anim, outfile, fps=5)
+        trygif(anim, outfile, fps=5)
     elseif pp.animate_phi_vs_r_z && nr == 1 # make a gif animation of ϕ(z) at different times
         anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
             @views plot(z, phi[:,1,i], xlabel="z", ylabel=L"\widetilde{\phi}", ylims = (phimin,phimax))
         end
         outfile = string(run_name, "_phi_vs_z.gif")
-        gif(anim, outfile, fps=5)
+        trygif(anim, outfile, fps=5)
     end
     Ezmin = minimum(Ez)
     Ezmax = maximum(Ez)
     if pp.plot_Ez_vs_r0_z # plot last timestep Ez[z,ir0]
         @views plot(z, Ez[:,ir0,end], xlabel=L"z/L_z", ylabel=L"E_z")
         outfile = string(run_name, "_Ez"*description*"(r0,z)_vs_z.pdf")
-        savefig(outfile)
+        trysavefig(outfile)
     end
     if pp.plot_wall_Ez_vs_r && nr > 1 # plot last timestep Ez[z_wall,r]
         @views plot(r, Ez[end,:,end], xlabel=L"r/L_r", ylabel=L"E_z")
         outfile = string(run_name, "_Ez"*description*"(r,z_wall)_vs_r.pdf")
-        savefig(outfile)
+        trysavefig(outfile)
     end
     if pp.animate_Ez_vs_r_z && nr > 1
         # make a gif animation of ϕ(z) at different times
@@ -2935,7 +2972,7 @@ function plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
             @views heatmap(r, z, Ez[:,:,i], xlabel="r", ylabel="z", c = :deep, interpolation = :cubic)
         end
         outfile = string(run_name, "_Ez"*description*"_vs_r_z.gif")
-        gif(anim, outfile, fps=5)
+        trygif(anim, outfile, fps=5)
     elseif pp.animate_Ez_vs_r_z && nr == 1
         Ezmin = minimum(Ez)
         Ezmax = maximum(Ez)
@@ -2943,19 +2980,19 @@ function plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
             @views plot(z, Ez[:,1,i], xlabel="z", ylabel=L"\widetilde{E}_z", ylims = (Ezmin,Ezmax))
         end
         outfile = string(run_name, "_Ez_vs_z.gif")
-        gif(anim, outfile, fps=5)
+        trygif(anim, outfile, fps=5)
     end
     Ermin = minimum(Er)
     Ermax = maximum(Er)
     if pp.plot_Er_vs_r0_z # plot last timestep Er[z,ir0]
         @views plot(z, Er[:,ir0,end], xlabel=L"z/L_z", ylabel=L"E_r")
         outfile = string(run_name, "_Er"*description*"(r0,z)_vs_z.pdf")
-        savefig(outfile)
+        trysavefig(outfile)
     end
     if pp.plot_wall_Er_vs_r && nr > 1 # plot last timestep Er[z_wall,r]
         @views plot(r, Er[end,:,end], xlabel=L"r/L_r", ylabel=L"E_r")
         outfile = string(run_name, "_Er"*description*"(r,z_wall)_vs_r.pdf")
-        savefig(outfile)
+        trysavefig(outfile)
     end
     if pp.animate_Er_vs_r_z && nr > 1
         # make a gif animation of ϕ(z) at different times
@@ -2963,7 +3000,7 @@ function plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
             @views heatmap(r, z, Er[:,:,i], xlabel="r", ylabel="z", c = :deep, interpolation = :cubic)
         end
         outfile = string(run_name, "_Er"*description*"_vs_r_z.gif")
-        gif(anim, outfile, fps=5)
+        trygif(anim, outfile, fps=5)
     end
     println("done.")
 end
@@ -2980,12 +3017,12 @@ function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time
 		if pp.plot_density_vs_r0_z # plot last timestep density[z,ir0]
 			@views plot(z, density[:,ir0,is,end], xlabel=L"z/L_z", ylabel=L"n_i")
 			outfile = string(run_name, "_density"*description*"(r0,z)_vs_z.pdf")
-			savefig(outfile)
+			trysavefig(outfile)
 		end
 		if pp.plot_wall_density_vs_r && nr > 1 # plot last timestep density[z_wall,r]
 			@views plot(r, density[end,:,is,end], xlabel=L"r/L_r", ylabel=L"n_i")
 			outfile = string(run_name, "_density"*description*"(r,z_wall)_vs_r.pdf")
-			savefig(outfile)
+			trysavefig(outfile)
 		end
 		if pp.animate_density_vs_r_z && nr > 1
 			# make a gif animation of ϕ(z) at different times
@@ -2993,13 +3030,13 @@ function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time
 				@views heatmap(r, z, density[:,:,is,i], xlabel="r", ylabel="z", c = :deep, interpolation = :cubic)
 			end
 			outfile = string(run_name, "_density"*description*"_vs_r_z.gif")
-			gif(anim, outfile, fps=5)
+			trygif(anim, outfile, fps=5)
 		end
 		if pp.plot_density_vs_r_z && nr > 1
 			@views heatmap(r, z, density[:,:,is,end], xlabel=L"r", ylabel=L"z", c = :deep, interpolation = :cubic,
 			windowsize = (360,240), margin = 15pt)
 			outfile = string(run_name, "_density"*description*"_vs_r_z.pdf")
-			savefig(outfile)
+			trysavefig(outfile)
 		end
 		
 		# the parallel flow
@@ -3008,12 +3045,12 @@ function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time
 		if pp.plot_parallel_flow_vs_r0_z # plot last timestep parallel_flow[z,ir0]
 			@views plot(z, parallel_flow[:,ir0,is,end], xlabel=L"z/L_z", ylabel=L"u_{i\|\|}")
 			outfile = string(run_name, "_parallel_flow"*description*"(r0,z)_vs_z.pdf")
-			savefig(outfile)
+			trysavefig(outfile)
 		end
 		if pp.plot_wall_parallel_flow_vs_r && nr > 1 # plot last timestep parallel_flow[z_wall,r]
 			@views plot(r, parallel_flow[end,:,is,end], xlabel=L"r/L_r", ylabel=L"u_{i\|\|}")
 			outfile = string(run_name, "_parallel_flow"*description*"(r,z_wall)_vs_r.pdf")
-			savefig(outfile)
+			trysavefig(outfile)
 		end
 		if pp.animate_parallel_flow_vs_r_z && nr > 1
 			# make a gif animation of ϕ(z) at different times
@@ -3021,13 +3058,13 @@ function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time
 				@views heatmap(r, z, parallel_flow[:,:,is,i], xlabel="r", ylabel="z", c = :deep, interpolation = :cubic)
 			end
 			outfile = string(run_name, "_parallel_flow"*description*"_vs_r_z.gif")
-			gif(anim, outfile, fps=5)
+			trygif(anim, outfile, fps=5)
 		end
 		if pp.plot_parallel_flow_vs_r_z && nr > 1
 			@views heatmap(r, z, parallel_flow[:,:,is,end], xlabel=L"r", ylabel=L"z", c = :deep, interpolation = :cubic,
 			windowsize = (360,240), margin = 15pt)
 			outfile = string(run_name, "_parallel_flow"*description*"_vs_r_z.pdf")
-			savefig(outfile)
+			trysavefig(outfile)
 		end
 		
 		# the parallel pressure
@@ -3036,12 +3073,12 @@ function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time
 		if pp.plot_parallel_pressure_vs_r0_z # plot last timestep parallel_pressure[z,ir0]
 			@views plot(z, parallel_pressure[:,ir0,is,end], xlabel=L"z/L_z", ylabel=L"p_{i\|\|}")
 			outfile = string(run_name, "_parallel_pressure"*description*"(r0,z)_vs_z.pdf")
-			savefig(outfile)
+			trysavefig(outfile)
 		end
 		if pp.plot_wall_parallel_pressure_vs_r && nr > 1 # plot last timestep parallel_pressure[z_wall,r]
 			@views plot(r, parallel_pressure[end,:,is,end], xlabel=L"r/L_r", ylabel=L"p_{i\|\|}")
 			outfile = string(run_name, "_parallel_pressure"*description*"(r,z_wall)_vs_r.pdf")
-			savefig(outfile)
+			trysavefig(outfile)
 		end
 		if pp.animate_parallel_pressure_vs_r_z && nr > 1
 			# make a gif animation of ϕ(z) at different times
@@ -3049,13 +3086,13 @@ function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time
 				@views heatmap(r, z, parallel_pressure[:,:,is,i], xlabel="r", ylabel="z", c = :deep, interpolation = :cubic)
 			end
 			outfile = string(run_name, "_parallel_pressure"*description*"_vs_r_z.gif")
-			gif(anim, outfile, fps=5)
+			trygif(anim, outfile, fps=5)
 		end
 		if pp.plot_parallel_pressure_vs_r_z && nr > 1
 			@views heatmap(r, z, parallel_pressure[:,:,is,end], xlabel=L"r", ylabel=L"z", c = :deep, interpolation = :cubic,
 			windowsize = (360,240), margin = 15pt)
 			outfile = string(run_name, "_parallel_pressure"*description*"_vs_r_z.pdf")
-			savefig(outfile)
+			trysavefig(outfile)
 		end
                 # the parallel temperature
                 # Note factor of 2 here because currently temperatures are normalised by
@@ -3064,12 +3101,12 @@ function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time
                 if pp.plot_parallel_temperature_vs_r0_z # plot last timestep parallel_temperature[z,ir0]
                     @views plot(z, temperature[:,ir0,is,end], xlabel=L"z/L_z", ylabel=L"T_i")
                     outfile = string(run_name, "_temperature"*description*"(r0,z)_vs_z.pdf")
-                    savefig(outfile)
+                    trysavefig(outfile)
                 end
                 if pp.plot_wall_parallel_temperature_vs_r && nr > 1 # plot last timestep parallel_temperature[z_wall,r]
                     @views plot(r, temperature[end,:,is,end], xlabel=L"r/L_r", ylabel=L"T_i")
                     outfile = string(run_name, "_temperature"*description*"(r,z_wall)_vs_r.pdf")
-                    savefig(outfile)
+                    trysavefig(outfile)
                 end
                 if pp.animate_parallel_temperature_vs_r_z && nr > 1
                     # make a gif animation of T_||(z) at different times
@@ -3077,13 +3114,13 @@ function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time
                         @views heatmap(r, z, temperature[:,:,is,i], xlabel="r", ylabel="z", c = :deep, interpolation = :cubic)
                     end
                     outfile = string(run_name, "_temperature"*description*"_vs_r_z.gif")
-                    gif(anim, outfile, fps=5)
+                    trygif(anim, outfile, fps=5)
                 end
                 if pp.plot_parallel_temperature_vs_r_z && nr > 1
                     @views heatmap(r, z, temperature[:,:,is,end], xlabel=L"r", ylabel=L"z", c = :deep, interpolation = :cubic,
                                   windowsize = (360,240), margin = 15pt)
                     outfile = string(run_name, "_temperature"*description*"_vs_r_z.pdf")
-                    savefig(outfile)
+                    trysavefig(outfile)
                 end
 	end
     println("done.")
@@ -3143,30 +3180,30 @@ function plot_charged_pdf_2D_at_wall(run_name)
                 # plot f(vpa,ivperp0,iz_wall,ir0,is,itime) at the wall
                 @views plot(vpa.grid, pdf[:,ivperp0,iz_wall,ir0,is,itime0], xlabel=L"v_{\|\|}/L_{v_{\|\|}}", ylabel=L"f_i")
                 outfile = string(run_name, "_pdf(vpa,vperp0,iz_"*zlabel*",ir0)"*description*"_vs_vpa.pdf")
-                savefig(outfile)
+                trysavefig(outfile)
 
                 # plot f(vpa,vperp,iz_wall,ir0,is,itime) at the wall
                 @views heatmap(vperp.grid, vpa.grid, pdf[:,:,iz_wall,ir0,is,itime0], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
                 windowsize = (360,240), margin = 15pt)
                 outfile = string(run_name, "_pdf(vpa,vperp,iz_"*zlabel*",ir0)"*description*"_vs_vperp_vpa.pdf")
-                savefig(outfile)
+                trysavefig(outfile)
 
                 # plot f(vpa,ivperp0,z,ir0,is,itime) near the wall
                 @views heatmap(z.grid, vpa.grid, pdf[:,ivperp0,:,ir0,is,itime0], xlabel=L"z", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
                 windowsize = (360,240), margin = 15pt)
                 outfile = string(run_name, "_pdf(vpa,ivperp0,z_"*zlabel*",ir0)"*description*"_vs_z_vpa.pdf")
-                savefig(outfile)
+                trysavefig(outfile)
 
                 # plot f(ivpa0,ivperp0,z,r,is,itime) near the wall
                 if r.n > 1
                     @views heatmap(r.grid, z.grid, pdf[ivpa0,ivperp0,:,:,is,itime0], xlabel=L"r", ylabel=L"z", c = :deep, interpolation = :cubic,
                     windowsize = (360,240), margin = 15pt)
                     outfile = string(run_name, "_pdf(ivpa0,ivperp0,z_"*zlabel*",r)"*description*"_vs_r_z.pdf")
-                    savefig(outfile)
+                    trysavefig(outfile)
                     @views heatmap(r_local, vpa.grid, pdf[:,ivperp0,iz_wall,:,is,itime0], xlabel=L"r", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
                     windowsize = (360,240), margin = 15pt)
                     outfile = string(run_name, "_pdf(vpa,ivperp0,z_"*zlabel*",r)"*description*"_vs_r_vpa.pdf")
-                    savefig(outfile)
+                    trysavefig(outfile)
                 end
             end
         end
