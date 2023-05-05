@@ -140,6 +140,119 @@ function read_distributed_zr_data!(var::Array{mk_float,4}, var_name::String,
     end
 end
 
+function load_distributed_pdf_slice(run_name, nblocks, n_time, n_species, r, z, vperp,
+                                    vpa; ivpa=nothing, ivperp=nothing, iz=nothing,
+                                    ir=nothing, is=nothing)
+    result_dims = mk_int[]
+    if ivpa === nothing
+        push!(result_dims, vpa.n_global)
+    end
+    if ivperp === nothing
+        push!(result_dims, vperp.n_global)
+    end
+    if iz === nothing
+        push!(result_dims, z.n_global)
+    else
+        push!(result_dims, 1)
+    end
+    if ir === nothing
+        push!(result_dims, r.n_global)
+    else
+        push!(result_dims, 1)
+    end
+    if is === nothing
+        push!(result_dims, n_species)
+    else
+        push!(result_dims, 1)
+    end
+    push!(result_dims, n_time)
+
+    f_global = allocate_float(result_dims...)
+
+    # dimension of pdf is [vpa,vperp,z,r,species,t]
+    for iblock in 0:nblocks-1
+        fid = open_readonly_output_file(run_name, "dfns", iblock=iblock, printout=false)
+
+        z_irank, r_irank = load_rank_data(fid)
+
+        # min index set to avoid double assignment of repeated points
+        # 1 if irank = 0, 2 otherwise
+        imin_r = min(1,r_irank) + 1
+        imin_z = min(1,z_irank) + 1
+        local_r_range = imin_r:r.n
+        local_z_range = imin_z:z.n
+        global_r_range = iglobal_func(imin_r, r_irank, r.n):iglobal_func(r.n, r_irank, r.n)
+        global_z_range = iglobal_func(imin_z, z_irank, z.n):iglobal_func(z.n, z_irank, z.n)
+
+        if ir !== nothing && !(ir ∈ global_r_range)
+            # No data for the slice on this rank
+            continue
+        end
+        if iz !== nothing && !(iz ∈ global_z_range)
+            # No data for the slice on this rank
+            continue
+        end
+
+        f_local_slice = load_pdf_data(fid)
+        f_global_slice = f_global
+
+        # Note: use selectdim() and get the dimension from thisdim because the actual
+        # number of dimensions in f_global_slice, f_local_slice is different depending
+        # on which combination of ivpa, ivperp, iz, ir, and is was passed.
+        thisdim = ndims(f_local_slice) - 5
+        if ivpa !== nothing
+            f_local_slice = selectdim(f_local_slice, thisdim, ivpa)
+        end
+
+        thisdim = ndims(f_local_slice) - 4
+        if ivperp !== nothing
+            f_local_slice = selectdim(f_local_slice, thisdim, ivperp)
+        end
+
+        thisdim = ndims(f_local_slice) - 3
+        if iz === nothing
+            f_global_slice = selectdim(f_global_slice, thisdim, global_z_range)
+            f_local_slice = selectdim(f_local_slice, thisdim, local_z_range)
+        else
+            f_global_slice = selectdim(f_global_slice, thisdim, 1)
+            f_local_slice = selectdim(f_local_slice, thisdim, iz)
+        end
+
+        thisdim = ndims(f_local_slice) - 2
+        if ir === nothing
+            f_global_slice = selectdim(f_global_slice, thisdim, global_r_range)
+            f_local_slice = selectdim(f_local_slice, thisdim, local_r_range)
+        else
+            f_global_slice = selectdim(f_global_slice, thisdim, 1)
+            f_local_slice = selectdim(f_local_slice, thisdim, ir)
+        end
+
+        thisdim = ndims(f_local_slice) - 1
+        if is !== nothing
+            f_global_slice = selectdim(f_global_slice, thisdim, 1)
+            f_local_slice = selectdim(f_local_slice, thisdim, is)
+        end
+
+        f_global_slice .= f_local_slice
+        close(fid)
+    end
+
+    if iz !== nothing
+        thisdim = ndims(f_global) - 3
+        f_global = selectdim(f_global, thisdim, 1)
+    end
+    if ir !== nothing
+        thisdim = ndims(f_global) - 2
+        f_global = selectdim(f_global, thisdim, 1)
+    end
+    if is !== nothing
+        thisdim = ndims(f_global) - 1
+        f_global = selectdim(f_global, thisdim, 1)
+    end
+
+    return f_global
+end
+
 function iglobal_func(ilocal,irank,nlocal)
     if irank == 0
         iglobal = ilocal
@@ -568,13 +681,13 @@ function analyze_and_plot_data(path)
     plot_fields_2D(phi, Ez, Er, time, z_global.grid, r_global.grid, iz0, ir0,
      itime_min, itime_max, nwrite_movie, run_name, pp, "")
     # make plots and animations of the ion pdf
+    spec_type = "ion"
+    plot_charged_pdf(run_name, vpa, vperp, z_global, r_global, z, r, ivpa0, ivperp0, iz0,
+                     ir0, spec_type, n_ion_species, ntime_pdfs, nblocks, itime_min,
+                     itime_max, nwrite_movie, pp)
+    # make plots and animations of the neutral pdf
     # only if ntime == ntime_pdfs & data on one shared memory process
     if ntime == ntime_pdfs && nr_global == r.n && nz_global == z.n
-        spec_type = "ion"
-        plot_charged_pdf(ff, vpa.grid, vperp.grid, z.grid, r.grid, ivpa0, ivperp0, iz0, ir0,
-            spec_type, n_ion_species,
-            itime_min, itime_max, nwrite_movie, run_name, pp)
-        # make plots and animations of the neutral pdf
         if n_neutral_species > 0
             spec_type = "neutral"
             plot_neutral_pdf(neutral_ff, vz.grid, vr.grid, vzeta.grid, z.grid, r.grid,
@@ -1761,10 +1874,9 @@ end
 """
 plots various slices of the ion pdf (1d and 2d, stills and animations)
 """
-function plot_charged_pdf(pdf, vpa, vperp, z, r,
-    ivpa0, ivperp0, iz0, ir0,
-    spec_type, n_species,
-    itime_min, itime_max, nwrite_movie, run_name, pp)
+function plot_charged_pdf(run_name, vpa, vperp, z, r, z_local, r_local, ivpa0, ivperp0,
+                          iz0, ir0, spec_type, n_species, n_time, nblocks, itime_min,
+                          itime_max, nwrite_movie, pp)
 
     print("Plotting ion distribution function data...")
 
@@ -1778,70 +1890,92 @@ function plot_charged_pdf(pdf, vpa, vperp, z, r,
     iz0_string = string("_iz0", string(iz0))
     ir0_string = string("_ir0", string(ir0))
     # create animations of the ion pdf
-    for is ∈ 1:n_species
-        if n_species > 1
-            spec_string = string("_", spec_type, "_spec", string(is))
-        else
-            spec_string = string("_", spec_type)
-        end
-        # make a gif animation of f(vpa,z,t) at a given (vperp,r) location
-        if pp.animate_f_vs_vpa_z
+    if n_species > 1
+        spec_string = [string("_", spec_type, "_spec", string(is)) for is ∈ 1:n_species]
+    else
+        spec_string = [string("_", spec_type)]
+    end
+    # make a gif animation of f(vpa,z,t) at a given (vperp,r) location
+    if pp.animate_f_vs_vpa_z
+        pdf = load_distributed_pdf_slice(run_name, nblocks, n_time, n_species, r_local,
+                                         z_local, vperp, vpa; ivperp=ivperp0, ir=ir0)
+        for is ∈ 1:n_species
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-                @views heatmap(z, vpa, pdf[:,ivperp0,:,ir0,is,i], xlabel="z", ylabel="vpa", c = :deep, interpolation = :cubic)
+                @views heatmap(z.grid, vpa.grid, pdf[:,:,is,i], xlabel="z", ylabel="vpa", c = :deep, interpolation = :cubic)
             end
-            outfile = string(run_name, "_pdf_vs_vpa_z", ivperp0_string, ir0_string, spec_string, ".gif")
+            outfile = string(run_name, "_pdf_vs_vpa_z", ivperp0_string, ir0_string, spec_string[is], ".gif")
             gif(anim, outfile, fps=5)
             
-            @views heatmap(z, vpa, pdf[:,ivperp0,:,ir0,is,itime_max], xlabel="z", ylabel="vpa", c = :deep, interpolation = :cubic)
-            outfile = string(run_name, "_pdf_vs_vpa_z", ivperp0_string, ir0_string, spec_string, ".pdf")
+            @views heatmap(z.grid, vpa.grid, pdf[:,:,is,itime_max], xlabel="z", ylabel="vpa", c = :deep, interpolation = :cubic)
+            outfile = string(run_name, "_pdf_vs_vpa_z", ivperp0_string, ir0_string, spec_string[is], ".pdf")
             trysavefig(outfile)
         end
-        # make a gif animation of f(vpa,r,t) at a given (vperp,z) location
-        if pp.animate_f_vs_vpa_r
+    end
+    # make a gif animation of f(vpa,r,t) at a given (vperp,z) location
+    if pp.animate_f_vs_vpa_r
+        pdf = load_distributed_pdf_slice(run_name, nblocks, n_time, n_species, r_local,
+                                         z_local, vperp, vpa; ivperp=ivperp0, iz=iz0)
+        for is ∈ 1:n_species
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-                @views heatmap(r, vpa, pdf[:,ivperp0,iz0,:,is,i], xlabel="r", ylabel="vpa", c = :deep, interpolation = :cubic)
+                @views heatmap(r.grid, vpa.grid, pdf[:,:,is,i], xlabel="r", ylabel="vpa", c = :deep, interpolation = :cubic)
             end
-            outfile = string(run_name, "_pdf_vs_vpa_r", ivperp0_string, iz0_string, spec_string, ".gif")
+            outfile = string(run_name, "_pdf_vs_vpa_r", ivperp0_string, iz0_string, spec_string[is], ".gif")
             gif(anim, outfile, fps=5)
             
-            @views heatmap(r, vpa, pdf[:,ivperp0,iz0,:,is,itime_max], xlabel="r", ylabel="vpa", c = :deep, interpolation = :cubic)
-            outfile = string(run_name, "_pdf_vs_vpa_r", ivperp0_string, iz0_string, spec_string, ".pdf")
+            @views heatmap(r.grid, vpa.grid, pdf[:,:,is,itime_max], xlabel="r", ylabel="vpa", c = :deep, interpolation = :cubic)
+            outfile = string(run_name, "_pdf_vs_vpa_r", ivperp0_string, iz0_string, spec_string[is], ".pdf")
             trysavefig(outfile)
         end
-        # make a gif animation of f(vperp,z,t) at a given (vpa,r) location
-        if pp.animate_f_vs_vperp_z
+    end
+    # make a gif animation of f(vperp,z,t) at a given (vpa,r) location
+    if pp.animate_f_vs_vperp_z
+        pdf = load_distributed_pdf_slice(run_name, nblocks, n_time, n_species, r_local,
+                                         z_local, vperp, vpa; ivpa=ivpa0, ir=ir0)
+        for is ∈ 1:n_species
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-                @views heatmap(z, vperp, pdf[ivpa0,:,:,ir0,is,i], xlabel="z", ylabel="vperp", c = :deep, interpolation = :cubic)
+                @views heatmap(z.grid, vperp.grid, pdf[:,:,is,i], xlabel="z", ylabel="vperp", c = :deep, interpolation = :cubic)
             end
-            outfile = string(run_name, "_pdf_vs_vperp_z", ivpa0_string, ir0_string, spec_string, ".gif")
+            outfile = string(run_name, "_pdf_vs_vperp_z", ivpa0_string, ir0_string, spec_string[is], ".gif")
             gif(anim, outfile, fps=5)
         end
-        # make a gif animation of f(vperp,r,t) at a given (vpa,z) location
-        if pp.animate_f_vs_vperp_r
+    end
+    # make a gif animation of f(vperp,r,t) at a given (vpa,z) location
+    if pp.animate_f_vs_vperp_r
+        pdf = load_distributed_pdf_slice(run_name, nblocks, n_time, n_species, r_local,
+                                         z_local, vperp, vpa; ivpa=ivpa0, iz=iz0)
+        for is ∈ 1:n_species
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-                @views heatmap(r, vperp, pdf[ivpa0,:,iz0,:,is,i], xlabel="r", ylabel="vperp", c = :deep, interpolation = :cubic)
+                @views heatmap(r.grid, vperp.grid, pdf[:,:,is,i], xlabel="r", ylabel="vperp", c = :deep, interpolation = :cubic)
             end
-            outfile = string(run_name, "_pdf_vs_vperp_r", ivperp0_string, iz0_string, spec_string, ".gif")
+            outfile = string(run_name, "_pdf_vs_vperp_r", ivperp0_string, iz0_string, spec_string[is], ".gif")
             gif(anim, outfile, fps=5)
         end
-        # make a gif animation of f(vpa,vperp,t) at a given (z,r) location
-        if pp.animate_f_vs_vperp_vpa
+    end
+    # make a gif animation of f(vpa,vperp,t) at a given (z,r) location
+    if pp.animate_f_vs_vperp_vpa
+        pdf = load_distributed_pdf_slice(run_name, nblocks, n_time, n_species, r_local,
+                                         z_local, vperp, vpa; iz=iz0, ir=ir0)
+        for is ∈ 1:n_species
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-                @views heatmap(vperp, vpa, pdf[:,:,iz0,ir0,is,i], xlabel="vperp", ylabel="vpa", c = :deep, interpolation = :cubic)
+                @views heatmap(vperp.grid, vpa.grid, pdf[:,:,is,i], xlabel="vperp", ylabel="vpa", c = :deep, interpolation = :cubic)
             end
-            outfile = string(run_name, "_pdf_vs_vperp_vpa", iz0_string, ir0_string, spec_string, ".gif")
+            outfile = string(run_name, "_pdf_vs_vperp_vpa", iz0_string, ir0_string, spec_string[is], ".gif")
             gif(anim, outfile, fps=5)
         end
-        # make a gif animation of f(z,r,t) at a given (vpa,vperp) location
-        if pp.animate_f_vs_r_z
+    end
+    # make a gif animation of f(z,r,t) at a given (vpa,vperp) location
+    if pp.animate_f_vs_r_z
+        pdf = load_distributed_pdf_slice(run_name, nblocks, n_time, n_species, r_local,
+                                         z_local, vperp, vpa; ivpa=ivpa0, ivperp=ivperp0)
+        for is ∈ 1:n_species
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-                @views heatmap(r, z, pdf[ivpa0,ivperp0,:,:,is,i], xlabel="r", ylabel="z", c = :deep, interpolation = :cubic)
+                @views heatmap(r.grid, z.grid, pdf[:,:,is,i], xlabel="r", ylabel="z", c = :deep, interpolation = :cubic)
             end
-            outfile = string(run_name, "_pdf_vs_r_z", ivpa0_string, ivperp0_string, spec_string, ".gif")
+            outfile = string(run_name, "_pdf_vs_r_z", ivpa0_string, ivperp0_string, spec_string[is], ".gif")
             gif(anim, outfile, fps=5)
             
-            @views heatmap(r, z, pdf[ivpa0,ivperp0,:,:,is,itime_max], xlabel="r", ylabel="z", c = :deep, interpolation = :cubic)
-            outfile = string(run_name, "_pdf_vs_r_z", ivpa0_string, ivperp0_string, spec_string, ".pdf")
+            @views heatmap(r.grid, z.grid, pdf[:,:,is,itime_max], xlabel="r", ylabel="z", c = :deep, interpolation = :cubic)
+            outfile = string(run_name, "_pdf_vs_r_z", ivpa0_string, ivperp0_string, spec_string[is], ".pdf")
             trysavefig(outfile)
         end
     end
