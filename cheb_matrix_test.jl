@@ -137,13 +137,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         D2_elementwise = Array{Float64,2}(undef,x.ngrid,x.ngrid)
         mul!(D2_elementwise,D_elementwise,D_elementwise)
         if x.ngrid < 8
-            println("\n D2_elementwise \n")
-            for i in 1:x.ngrid
-                for j in 1:x.ngrid
-                    @printf("%.1f ", D2_elementwise[i,j])
-                end
-                println("")
-            end
+            print_matrix(D2_elementwise,"D2_elementwise",x.ngrid,x.ngrid)
         end
         assign_cheb_derivative_matrix!(D,D2_elementwise,x)
     end
@@ -310,6 +304,26 @@ if abspath(PROGRAM_FILE) == @__FILE__
         end 
         assign_cheb_derivative_matrix!(D,D_lobotto_elementwise,D_radau_elementwise,x)
     end
+
+    function cheb_radau_second_derivative_matrix_reversed!(D::Array{Float64,2},x,x_spectral) 
+        D_lobotto_elementwise = Array{Float64,2}(undef,x.ngrid,x.ngrid)
+        cheb_derivative_matrix_elementwise_reversed!(D_lobotto_elementwise,x.ngrid,x.L,x.nelement_global)    
+        D2_lobotto_elementwise = Array{Float64,2}(undef,x.ngrid,x.ngrid)
+        mul!(D2_lobotto_elementwise,D_lobotto_elementwise,D_lobotto_elementwise)
+        
+        D_radau_elementwise = Array{Float64,2}(undef,x.ngrid,x.ngrid)
+        calculate_chebyshev_radau_D_matrix_via_FFT!(D_radau_elementwise,x,x_spectral)
+        D2_radau_elementwise = Array{Float64,2}(undef,x.ngrid,x.ngrid)
+        mul!(D2_radau_elementwise,D_radau_elementwise,D_radau_elementwise)
+        
+        if x.ngrid < 8
+            #print_matrix(D_lobotto_elementwise,"D_lobotto_elementwise",x.ngrid,x.ngrid)
+            print_matrix(D2_lobotto_elementwise,"D2_lobotto_elementwise",x.ngrid,x.ngrid)
+            #print_matrix(D_radau_elementwise,"D_radau_elementwise",x.ngrid,x.ngrid)
+            print_matrix(D2_radau_elementwise,"D2_radau_elementwise",x.ngrid,x.ngrid)
+        end
+        assign_cheb_derivative_matrix!(D,D2_lobotto_elementwise,D2_radau_elementwise,x)
+    end
     
     
     function assign_cheb_derivative_matrix!(D::Array{Float64,2},D_lobotto_elementwise::Array{Float64,2},D_radau_elementwise::Array{Float64,2},x) 
@@ -453,8 +467,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
 	###################
 	
 	# define inputs needed for the test
-	ngrid = 2 #number of points per element 
-	nelement_local = 10 # number of elements per rank
+	ngrid = 17 #number of points per element 
+	nelement_local = 20 # number of elements per rank
 	nelement_global = nelement_local # total number of elements 
 	L = 1.0 #physical box size in reference units 
 	bc = "" #not required to take a particular value, not used 
@@ -525,28 +539,9 @@ if abspath(PROGRAM_FILE) == @__FILE__
     Dxreverse2[end,end] = 2.0*Dxreverse2[end,end]
     #println("x.grid \n",x.grid)
     if x.n < 20
-        println("\n Dxreverse \n")
-        for i in 1:x.n
-            for j in 1:x.n
-                @printf("%.1f ", Dxreverse[i,j])
-            end
-            println("")
-        end
-        println("\n Dxreverse*Dxreverse \n")
-        for i in 1:x.n
-            for j in 1:x.n
-                @printf("%.1f ", Dxreverse2[i,j])
-            end
-            println("")
-        end
-        
-        println("\n D2xreverse \n")
-        for i in 1:x.n
-            for j in 1:x.n
-                @printf("%.1f ", D2xreverse[i,j])
-            end
-            println("")
-        end
+        print_matrix(Dxreverse,"\n Dxreverse \n",x.n,x.n)
+        print_matrix(Dxreverse2,"\n Dxreverse*Dxreverse \n",x.n,x.n)
+        print_matrix(D2xreverse,"\n D2xreverse \n",x.n,x.n)
         println("\n")
     end
 
@@ -951,22 +946,26 @@ if abspath(PROGRAM_FILE) == @__FILE__
     
     if elliptic_2Dsolve_test
         println("elliptic 2D solve test")
-        x_ngrid = 5
-        x_nelement_local = 8
+        x_ngrid = 17
+        x_nelement_local = 4
         x_L = 12
         y_L = 6
-        y_ngrid = 5
-        y_nelement_local = 4
+        y_ngrid = 17
+        y_nelement_local = 2
         
         x_nelement_global = x_nelement_local
         y_nelement_global = y_nelement_local
         # bc option
-        dirichlet_zero = false#true
-        dirichlet_fixed_value = true#false
+        dirichlet_zero = true#false#
+        dirichlet_fixed_value = false#true#
         # test option
-        exponential_decay_test = false
+        secular_decay_test = false#true
+        exponential_decay_test = true#false
         dHdvpa_test = false 
-        d2Gdvpa2_test = true 
+        d2Gdvpa2_test = false#true 
+        # second derivative option 
+        # default = false -> if true then use D2coord matrices based on D_elementwise^2
+        second_derivative_elementwise = false#true 
         
         input = grid_input("vpa", x_ngrid, x_nelement_global, x_nelement_local, 
 		nrank, irank, x_L, discretization, fd_option, "zero", adv_input, comm)
@@ -976,8 +975,11 @@ if abspath(PROGRAM_FILE) == @__FILE__
         Dx = Array{Float64,2}(undef, x.n, x.n)
         cheb_derivative_matrix_reversed!(Dx,x)
         D2x = Array{Float64,2}(undef, x.n, x.n)
-        mul!(D2x,Dx,Dx)
-        
+        if second_derivative_elementwise
+            cheb_second_derivative_matrix_reversed!(D2x,x)
+        else
+            mul!(D2x,Dx,Dx)
+        end
         # set x bc on D2x
         if dirichlet_zero
             D2x[1,1] = 2.0*D2x[1,1]
@@ -1009,7 +1011,11 @@ if abspath(PROGRAM_FILE) == @__FILE__
         cheb_radau_derivative_matrix_reversed!(Dy,y,y_spectral)
         
         D2y = Array{Float64,2}(undef, y.n, y.n)
-        mul!(D2y,Dy,Dy)
+        if second_derivative_elementwise
+            cheb_radau_second_derivative_matrix_reversed!(D2y,y,y_spectral)
+        else
+            mul!(D2y,Dy,Dy)
+        end
         if dirichlet_zero
             D2y[end,end] = 2.0*D2y[end,end]
         end         
@@ -1081,6 +1087,21 @@ if abspath(PROGRAM_FILE) == @__FILE__
                     # Exponential test inputs below 
                     Sxy[ix,iy] = ((4.0*x.grid[ix]^2 - 2.0) + (4.0*y.grid[iy]^2 - 4.0))*exp(-y.grid[iy]^2-x.grid[ix]^2)
                     Fxy_exact[ix,iy] = exp(-x.grid[ix]^2 - y.grid[iy]^2) 
+                end
+            end
+        elseif secular_decay_test
+            for iy in 1:ny
+                for ix in 1:nx
+                    # secular test inputs below
+                    eta2 = x.grid[ix]^2 + y.grid[iy]^2
+                    zero = 1.0e-10
+                    if eta2 < zero
+                        Sxy[ix,iy] = 0.0
+                        Fxy_exact[ix,iy] = 0.5
+                    else
+                        Sxy[ix,iy] = exp(-1.0/eta2)*(1.0/eta2^2 - 2.0/eta2^3)
+                        Fxy_exact[ix,iy] = 0.5 - 0.5*exp(-1.0/eta2)
+                    end
                 end
             end
         elseif dHdvpa_test
@@ -1201,7 +1222,13 @@ if abspath(PROGRAM_FILE) == @__FILE__
             iy = iyfunc(ic,nx)
             Fxy[ix,iy] = Fc[ic]
         end
-        
+        #if dHdvpa_test && dirichlet_zero
+        #    for iy in 1:ny
+        #        for ix in 1:nx
+        #            Fxy[ix,iy] += dHdvpa_inf(x,y,ix,iy)
+        #        end
+        #    end
+        #end
         println("Finished 2D solve")
         @. Fxy_err = abs(Fxy - Fxy_exact)
         
