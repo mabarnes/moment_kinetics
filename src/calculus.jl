@@ -186,7 +186,7 @@ function reconcile_element_boundaries_upwind!(df1d, df2d, coord, adv_fac::Abstra
             # adv_fac > 0 corresponds to negative advection speed, so
             # use derivative information from upwind element at larger coordinate value
             df1d[coord.n] = df2d[1,1]
-        elseif adv_fac[coord.ngrid] < 0.0
+        elseif adv_fac[coord.n] < 0.0
             # adv_fac < 0 corresponds to positive advection speed, so
             # use derivative information from upwind element at smaller coordinate value
             df1d[coord.n] = df2d[coord.ngrid,coord.nelement]
