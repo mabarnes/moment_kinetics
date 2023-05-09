@@ -148,12 +148,25 @@ function setup_time_advance!(pdf, vpa, z, r, z_spectral, composition, drive_inpu
         @loop_s_r_z is ir iz begin
             @views hard_force_moment_constraints!(pdf.norm[:,iz,ir,is], moments, vpa)
         end
+
+        # update moments in case they were affected by applying boundary conditions or
+        # constraints to the pdf
+        reset_moments_status!(moments, composition, z)
+        update_moments!(moments, pdf.norm, vpa, z, r, composition)
+
+        # update scratch arrays in case they were affected by applying boundary conditions
+        # or constraints to the pdf
+        begin_serial_region()
+        @serial_region begin
+            scratch[1].pdf .= pdf.norm
+            scratch[1].density .= moments.dens
+            scratch[1].upar .= moments.upar
+            scratch[1].ppar .= moments.ppar
+        end
     end
-    # update unnormalised pdf, moments and phi in case they were affected by applying
-    # boundary conditions or constraints to the pdf
+    # update unnormalised pdf and phi in case they were affected by applying boundary
+    # conditions or constraints to the pdf
     update_pdf_unnorm!(pdf, moments, scratch[1].temp_z_s, composition, vpa)
-    reset_moments_status!(moments, composition, z)
-    update_moments!(moments, pdf.norm, vpa, z, r, composition)
     update_phi!(fields, scratch[1], z, r, composition)
 
     # Ensure all processes are synchronized at the end of the setup
