@@ -398,12 +398,12 @@ function init_vth!(vth, z, r, spec, n_species)
                               * cos(2.0*π*spec[is].z_IC.wavenumber*z.grid/z.L +
                                     spec[is].z_IC.temperature_phase)))
             elseif spec[is].z_IC.initialization_option == "2D-instability-test"
-                background_wavenumber = 1
+                background_wavenumber = 1 + round(mk_int,
+                                                  spec[is].z_IC.temperature_phase)
                 @. vth[:,ir,is] =
                     (spec[is].initial_temperature
                      * (1.0 + spec[is].z_IC.temperature_amplitude
-                              * sin(2.0*π*background_wavenumber*z.grid/z.L +
-                                    spec[is].z_IC.temperature_phase)))
+                              * sin(2.0*π*background_wavenumber*z.grid/z.L)))
 
                 # initial perturbation with amplitude set by 'r' initial condition
                 # settings, but using the z_IC.wavenumber as the background is always
@@ -453,15 +453,15 @@ function init_density!(dens, z, r, spec, n_species)
                               * cos(2.0*π*spec[is].z_IC.wavenumber*z.grid/z.L
                                     + spec[is].z_IC.density_phase)))
             elseif spec[is].z_IC.initialization_option == "2D-instability-test"
-                background_wavenumber = 1
+                background_wavenumber = 1 + round(mk_int,
+                                                  spec[is].z_IC.temperature_phase)
                 eta0 = @. (spec[is].initial_density
                            * (1.0 + spec[is].z_IC.density_amplitude
                               * sin(2.0*π*background_wavenumber*z.grid/z.L
                                     + spec[is].z_IC.density_phase)))
                 T0 = @. (spec[is].initial_temperature
                          * (1.0 + spec[is].z_IC.temperature_amplitude
-                            * sin(2.0*π*background_wavenumber*z.grid/z.L +
-                                  spec[is].z_IC.temperature_phase)
+                            * sin(2.0*π*background_wavenumber*z.grid/z.L)
                            ))
                 @. dens[:,ir,is] = eta0^((T0/(1+T0)))
 
