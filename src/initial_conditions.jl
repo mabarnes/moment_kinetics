@@ -14,7 +14,7 @@ export enforce_neutral_z_boundary_condition!
 # package
 using SpecialFunctions: erfc
 # modules
-using ..type_definitions: mk_float
+using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_shared_float
 using ..bgk: init_bgk_pdf!
 using ..communication
@@ -453,17 +453,21 @@ function init_density!(dens, z, r, spec, n_species)
                               * cos(2.0*π*spec[is].z_IC.wavenumber*z.grid/z.L
                                     + spec[is].z_IC.density_phase)))
             elseif spec[is].z_IC.initialization_option == "2D-instability-test"
-                background_wavenumber = 1 + round(mk_int,
-                                                  spec[is].z_IC.temperature_phase)
-                eta0 = @. (spec[is].initial_density
-                           * (1.0 + spec[is].z_IC.density_amplitude
-                              * sin(2.0*π*background_wavenumber*z.grid/z.L
-                                    + spec[is].z_IC.density_phase)))
-                T0 = @. (spec[is].initial_temperature
-                         * (1.0 + spec[is].z_IC.temperature_amplitude
-                            * sin(2.0*π*background_wavenumber*z.grid/z.L)
-                           ))
-                @. dens[:,ir,is] = eta0^((T0/(1+T0)))
+                if spec[is].z_IC.density_amplitude == 0.0
+                    dens[:,ir,is] .= spec[is].initial_density
+                else
+                    background_wavenumber = 1 + round(mk_int,
+                                                      spec[is].z_IC.temperature_phase)
+                    eta0 = @. (spec[is].initial_density
+                               * (1.0 + spec[is].z_IC.density_amplitude
+                                  * sin(2.0*π*background_wavenumber*z.grid/z.L
+                                        + spec[is].z_IC.density_phase)))
+                    T0 = @. (spec[is].initial_temperature
+                             * (1.0 + spec[is].z_IC.temperature_amplitude
+                                * sin(2.0*π*background_wavenumber*z.grid/z.L)
+                               ))
+                    @. dens[:,ir,is] = eta0^((T0/(1+T0)))
+                end
 
                 # initial perturbation with amplitude set by 'r' initial condition
                 # settings, but using the z_IC.wavenumber as the background is always
