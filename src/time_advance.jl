@@ -765,19 +765,19 @@ function rk_update!(scratch, pdf, moments, fields, vz, vr, vzeta, vpa, vperp, z,
     end
     update_density!(new_scratch.density, pdf.charged.unnorm, vpa, vperp, z, r, composition)
 
-    update_upar!(new_scratch.upar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
-    # convert from particle particle flux to parallel flow
-    begin_s_r_z_region()
-    @loop_s_r_z is ir iz begin
-        new_scratch.upar[iz,ir,is] /= new_scratch.density[iz,ir,is]
-    end
+    update_upar!(new_scratch.upar, pdf.charged.unnorm, vpa, vperp, z, r, composition, new_scratch.density)
+    # convert from particle particle flux to parallel flow -> MRH now done inside upar function
+    #begin_s_r_z_region()
+    #@loop_s_r_z is ir iz begin
+    #    new_scratch.upar[iz,ir,is] /= new_scratch.density[iz,ir,is]
+    #end
 
-    update_ppar!(new_scratch.ppar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
+    update_ppar!(new_scratch.ppar, pdf.charged.unnorm, vpa, vperp, z, r, composition, new_scratch.upar)
     # update the thermal speed
     begin_s_r_z_region()
     try #below block causes DomainError if ppar < 0 or density, so exit cleanly if possible
 		@loop_s_r_z is ir iz begin
-			moments.charged.vth[iz,ir,is] = sqrt(2.0*new_scratch.ppar[iz,ir,is]/new_scratch.density[iz,ir,is])
+			moments.charged.vth[iz,ir,is] = sqrt(new_scratch.ppar[iz,ir,is]/new_scratch.density[iz,ir,is])
 		end
 	catch e
 		if global_size[] > 1

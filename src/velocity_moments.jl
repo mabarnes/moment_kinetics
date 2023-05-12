@@ -23,6 +23,12 @@ export update_neutral_pr!
 export update_neutral_pzeta!
 export update_neutral_qz!
 
+# for testing 
+export get_density
+export get_upar
+export get_ppar
+export get_pperp
+
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_shared_float, allocate_bool
 using ..calculus: integral
@@ -127,14 +133,14 @@ function update_moments!(moments, ff, vpa, nz, nr, composition)
             moments.dens_updated[is] = true
         end
         if moments.upar_updated[is] == false
-            @views update_upar_species!(moments.upar[:,:,is], ff[:,:,:,is], vpa, z, r)
+            @views update_upar_species!(moments.upar[:,:,is], ff[:,:,:,is], vpa, z, r, moments.dens[:,:,is])
             moments.upar_updated[is] = true
         end
         if moments.ppar_updated[is] == false
-            @views update_ppar_species!(moments.ppar[:,:,is], ff[:,:,:,is], vpa, z, r)
+            @views update_ppar_species!(moments.ppar[:,:,is], ff[:,:,:,is], vpa, z, r, moments.upar[:,:,is])
             moments.ppar_updated[is] = true
         end
-        @. moments.vth = sqrt(2*moments.ppar/moments.dens)
+        @. moments.vth = sqrt(moments.ppar/moments.dens)
         if moments.qpar_updated[is] == false
             @views update_qpar_species!(moments.qpar[:,is], ff[:,:,is], vpa, z, r, moments.vpa_norm_fac[:,:,is])
             moments.qpar_updated[is] = true
@@ -169,31 +175,36 @@ function update_density_species!(dens, ff, vpa, vperp, z, r)
     @boundscheck z.n == size(dens, 1) || throw(BoundsError(dens))
     @boundscheck r.n == size(dens, 2) || throw(BoundsError(dens))
     @loop_r_z ir iz begin
-        dens[iz,ir] = integrate_over_vspace(@view(ff[:,:,iz,ir]), 
-         vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
+        #dens[iz,ir] = integrate_over_vspace(@view(ff[:,:,iz,ir]), 
+        # vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
+        dens[iz,ir] = get_density(@view(ff[:,:,iz,ir]), vpa, vperp)
     end
     return nothing
+end
+
+function get_density(ff, vpa, vperp)
+    return integrate_over_vspace(@view(ff[:,:]), vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
 end
 
 """
 NB: if this function is called and if upar_updated is false, then
 the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
 """
-function update_upar!(upar, pdf, vpa, vperp, z, r, composition)
+function update_upar!(upar, pdf, vpa, vperp, z, r, composition, density)
     
     begin_s_r_z_region()
     
     n_species = size(pdf,5)
     @boundscheck n_species == size(upar,3) || throw(BoundsError(upar))
     @loop_s is begin
-        @views update_upar_species!(upar[:,:,is], pdf[:,:,:,:,is], vpa, vperp, z, r)
+        @views update_upar_species!(upar[:,:,is], pdf[:,:,:,:,is], vpa, vperp, z, r, density[:,:,is])
     end
 end
 
 """
 calculate the updated parallel flow (upar) for a given species
 """
-function update_upar_species!(upar, ff, vpa, vperp, z, r)
+function update_upar_species!(upar, ff, vpa, vperp, z, r, density)
     @boundscheck vpa.n == size(ff, 1) || throw(BoundsError(ff))
     @boundscheck vperp.n == size(ff, 2) || throw(BoundsError(ff))
     @boundscheck z.n == size(ff, 3) || throw(BoundsError(ff))
@@ -201,15 +212,22 @@ function update_upar_species!(upar, ff, vpa, vperp, z, r)
     @boundscheck z.n == size(upar, 1) || throw(BoundsError(upar))
     @boundscheck r.n == size(upar, 2) || throw(BoundsError(upar))
     @loop_r_z ir iz begin
-        upar[iz,ir] = integrate_over_vspace(@view(ff[:,:,iz,ir]), 
-         vpa.grid, 1, vpa.wgts, vperp.grid, 0, vperp.wgts)
+        #upar[iz,ir] = integrate_over_vspace(@view(ff[:,:,iz,ir]), 
+        # vpa.grid, 1, vpa.wgts, vperp.grid, 0, vperp.wgts)
+        upar[iz,ir] = get_upar(@view(ff[:,:,iz,ir]), vpa, vperp, density[iz,ir])
     end
     return nothing
 end
 
+function get_upar(ff, vpa, vperp, density)
+    upar = integrate_over_vspace(@view(ff[:,:]), vpa.grid, 1, vpa.wgts, vperp.grid, 0, vperp.wgts)
+    upar /= density
+    return upar
+end
+
 """
 """
-function update_ppar!(ppar, pdf, vpa, vperp, z, r, composition)
+function update_ppar!(ppar, pdf, vpa, vperp, z, r, composition, upar)
     @boundscheck composition.n_ion_species == size(ppar,3) || throw(BoundsError(ppar))
     @boundscheck r.n == size(ppar,2) || throw(BoundsError(ppar))
     @boundscheck z.n == size(ppar,1) || throw(BoundsError(ppar))
@@ -217,14 +235,14 @@ function update_ppar!(ppar, pdf, vpa, vperp, z, r, composition)
     begin_s_r_z_region()
     
     @loop_s is begin
-        @views update_ppar_species!(ppar[:,:,is], pdf[:,:,:,:,is], vpa, vperp, z, r)
+        @views update_ppar_species!(ppar[:,:,is], pdf[:,:,:,:,is], vpa, vperp, z, r, upar[:,:,is])
     end
 end
 
 """
 calculate the updated parallel pressure (ppar) for a given species
 """
-function update_ppar_species!(ppar, ff, vpa, vperp, z, r)
+function update_ppar_species!(ppar, ff, vpa, vperp, z, r, upar)
     @boundscheck vpa.n == size(ff, 1) || throw(BoundsError(ff))
     @boundscheck vperp.n == size(ff, 2) || throw(BoundsError(ff))
     @boundscheck z.n == size(ff, 3) || throw(BoundsError(ff))
@@ -232,10 +250,20 @@ function update_ppar_species!(ppar, ff, vpa, vperp, z, r)
     @boundscheck z.n == size(ppar, 1) || throw(BoundsError(ppar))
     @boundscheck r.n == size(ppar, 2) || throw(BoundsError(ppar))
     @loop_r_z ir iz begin
-        ppar[iz,ir] = integrate_over_vspace(@view(ff[:,:,iz,ir]), 
-         vpa.grid, 2, vpa.wgts, vperp.grid, 0, vperp.wgts)
+        #ppar[iz,ir] = integrate_over_vspace(@view(ff[:,:,iz,ir]), 
+        # vpa.grid, 2, vpa.wgts, vperp.grid, 0, vperp.wgts)
+        ppar[iz,ir] = get_ppar(@view(ff[:,:,iz,ir]), vpa, vperp, upar[iz,ir])
     end
     return nothing
+end
+
+function get_ppar(ff, vpa, vperp, upar)
+    @. vpa.scratch = vpa.grid - upar
+    return 2.0*integrate_over_vspace(@view(ff[:,:]), vpa.scratch, 2, vpa.wgts, vperp.grid, 0, vperp.wgts)
+end
+
+function get_pperp(ff, vpa, vperp)
+    return integrate_over_vspace(@view(ff[:,:]), vpa.grid, 0, vpa.wgts, vperp.grid, 2, vperp.wgts)
 end
 
 """

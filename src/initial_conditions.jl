@@ -206,16 +206,14 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
     end
     # update upar, ppar, qpar, vth consistent with manufactured solns
     update_density!(moments.charged.dens, pdf.charged.unnorm, vpa, vperp, z, r, composition)
-    update_qpar!(moments.charged.qpar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
-    update_ppar!(moments.charged.ppar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
-    # get particle flux
-    update_upar!(moments.charged.upar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
-    # convert from particle particle flux to parallel flow
+    update_upar!(moments.charged.upar, pdf.charged.unnorm, vpa, vperp, z, r, composition, moments.charged.dens)
+    update_qpar!(moments.charged.qpar, pdf.charged.unnorm, vpa, vperp, z, r, composition)    
+    update_ppar!(moments.charged.ppar, pdf.charged.unnorm, vpa, vperp, z, r, composition, moments.charged.upar)
     begin_s_r_z_region()
     @loop_s_r_z is ir iz begin
-        moments.charged.upar[iz,ir,is] /= moments.charged.dens[iz,ir,is]
+        #moments.charged.upar[iz,ir,is] /= moments.charged.dens[iz,ir,is]
     # update the thermal speed
-        moments.charged.vth[iz,ir,is] = sqrt(2.0*moments.charged.ppar[iz,ir,is]/moments.charged.dens[iz,ir,is])
+        moments.charged.vth[iz,ir,is] = sqrt(moments.charged.ppar[iz,ir,is]/moments.charged.dens[iz,ir,is])
     end
     
     if n_neutral_species > 0
