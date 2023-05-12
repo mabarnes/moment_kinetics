@@ -22,6 +22,12 @@ export update_neutral_pr!
 export update_neutral_pzeta!
 export update_neutral_qz!
 
+# for testing 
+export get_density
+export get_upar
+export get_ppar
+export get_pperp
+
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_shared_float, allocate_bool, allocate_float
 using ..calculus: integral
@@ -431,11 +437,14 @@ function update_density_species!(dens, ff, vpa, vperp, z, r)
     @loop_r_z ir iz begin
         # When evolve_density = false, the evolved pdf is the 'true' pdf, and the vpa
         # coordinate is (dz/dt) / c_s.
-        # Integrating calculates n_s / N_e = (1/√π)∫d(vpa/c_s) (√π f_s c_s / N_e)
-        dens[iz,ir] = integrate_over_vspace(@view(ff[:,:,iz,ir]), 
-            vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
+        dens[iz,ir] = get_density(@view(ff[:,:,iz,ir]), vpa, vperp)
     end
     return nothing
+end
+
+function get_density(ff, vpa, vperp)
+    # Integrating calculates n_s / N_e = (0/√π)∫d(vpa/c_s) (√π f_s c_s / N_e)
+    return integrate_over_vspace(@view(ff[:,:]), vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
 end
 
 """
@@ -475,10 +484,10 @@ function update_upar_species!(upar, density, ppar, ff, vpa, vperp, z, r, evolve_
         # Integrating calculates
         # (upar_s / vth_s) = (1/√π)∫d(vpa/vth_s) * (vpa/vth_s) * (√π f_s vth_s / n_s)
         # so convert from upar_s / vth_s to upar_s / c_s
+        # we set the input density to get_upar = 1.0 as the normalised distribution has density of 1.0
         @loop_r_z ir iz begin
             vth = sqrt(2.0*ppar[iz,ir]/density[iz,ir])
-            upar[iz,ir] = integrate_over_vspace(@view(ff[:,:,iz,ir]),
-                              vpa.grid, 1, vpa.wgts, vperp.grid, 0, vperp.wgts) * vth
+            upar[iz,ir] = vth*get_upar(@view(ff[:,:,iz,ir]), vpa, vperp, 1.0)
         end
     elseif evolve_density
         # corresponds to case where only the density is evolved separately from the
@@ -486,9 +495,9 @@ function update_upar_species!(upar, density, ppar, ff, vpa, vperp, z, r, evolve_
         # (dz/dt) / c_s.
         # Integrating calculates
         # (upar_s / c_s) = (1/√π)∫d(vpa/c_s) * (vpa/c_s) * (√π f_s c_s / n_s)
+        # we set the input density to get_upar = 1.0 as the normalised distribution has density of 1.0
         @loop_r_z ir iz begin
-            upar[iz,ir] = integrate_over_vspace(@view(ff[:,:,iz,ir]),
-                              vpa.grid, 1, vpa.wgts, vperp.grid, 0, vperp.wgts)
+            upar[iz,ir] = get_upar(@view(ff[:,:,iz,ir]), vpa, vperp, 1.0)
         end
     else
         # When evolve_density = false, the evolved pdf is the 'true' pdf,
@@ -496,12 +505,19 @@ function update_upar_species!(upar, density, ppar, ff, vpa, vperp, z, r, evolve_
         # Integrating calculates
         # (n_s / N_e) * (upar_s / c_s) = (1/√π)∫d(vpa/c_s) * (vpa/c_s) * (√π f_s c_s / N_e)
         @loop_r_z ir iz begin
-            upar[iz,ir] = integrate_over_vspace(@view(ff[:,:,iz,ir]),
-                              vpa.grid, 1, vpa.wgts, vperp.grid, 0, vperp.wgts) /
-                          density[iz,ir]
+            upar[iz,ir] = get_upar(@view(ff[:,:,iz,ir]), vpa, vperp, density[iz,ir])
         end
     end
     return nothing
+end
+
+function get_upar(ff, vpa, vperp, density)
+    # Integrating calculates
+    # (n_s / N_e) * (upar_s / c_s) = (1/√π)∫d(vpa/c_s) * (vpa/c_s) * (√π f_s c_s / N_e)
+    # so we divide by the density of f_s
+    upar = integrate_over_vspace(@view(ff[:,:]), vpa.grid, 1, vpa.wgts, vperp.grid, 0, vperp.wgts)
+    upar /= density
+    return upar
 end
 
 """
@@ -540,38 +556,44 @@ function update_ppar_species!(ppar, density, upar, ff, vpa, vperp, z, r, evolve_
     if evolve_upar
         # this is the case where the parallel flow and density are evolved separately
         # from the normalized pdf, g_s = (√π f_s c_s / n_s); the vpa coordinate is
-        # ((dz/dt) - upar_s) / c_s>
-        # Integrating calculates (p_parallel/m_s n_s c_s^2) = (1/√π)∫d((vpa-upar_s)/c_s) (1/2)*((vpa-upar_s)/c_s)^2 * (√π f_s c_s / n_s)
-        # so convert from p_s / m_s n_s c_s^2 to ppar_s = p_s / m_s N_e c_s^2
+        # ((dz/dt) - upar_s) / c_s> and so we set upar = 0 in the call to get_ppar
+        # because the mean flow of the normalised ff is zero
         @loop_r_z ir iz begin
-            ppar[iz,ir] = integrate_over_vspace(@view(ff[:,:,iz,ir]), vpa.grid, 2, vpa.wgts, vperp.grid, 0, vperp.wgts) *
-                          density[iz,ir]
+            ppar[iz,ir] = density[iz,ir]*get_ppar(@view(ff[:,:,iz,ir]), vpa, vperp, 0.0)
         end
     elseif evolve_density
         # corresponds to case where only the density is evolved separately from the
         # normalised pdf, given by g_s = (√π f_s c_s / n_s); the vpa coordinate is
         # (dz/dt) / c_s.
-        # Integrating calculates
-        # (p_parallel/m_s n_s c_s^2) + (upar_s/c_s)^2 = (1/√π)∫d(vpa/c_s) (vpa/c_s)^2 * (√π f_s c_s / n_s)
-        # so subtract off the mean kinetic energy and multiply by density to get the
-        # internal energy density (aka pressure)
         @loop_r_z ir iz begin
-            ppar[iz,ir] = (integrate_over_vspace(@view(ff[:,:,iz,ir]), vpa.grid, 2, vpa.wgts, vperp.grid, 0, vperp.wgts) -
-                           upar[iz,ir]^2) * density[iz,ir]
+            ppar[iz,ir] = density[iz,ir]*get_ppar(@view(ff[:,:,iz,ir]), vpa, vperp, upar[iz,ir])
         end
     else
         # When evolve_density = false, the evolved pdf is the 'true' pdf,
         # and the vpa coordinate is (dz/dt) / c_s.
-        # Integrating calculates
-        # (p_parallel/m_s N_e c_s^2) + (n_s/N_e)*(upar_s/c_s)^2 = (1/√π)∫d(vpa/c_s) (vpa/c_s)^2 * (√π f_s c_s / N_e)
-        # so subtract off the mean kinetic energy density to get the internal energy
-        # density (aka pressure)
         @loop_r_z ir iz begin
-            ppar[iz,ir] = integrate_over_vspace(@view(ff[:,:,iz,ir]), vpa.grid, 2, vpa.wgts, vperp.grid, 0, vperp.wgts) -
-                          density[iz,ir]*upar[iz,ir]^2
+            ppar[iz,ir] = get_ppar(@view(ff[:,:,iz,ir]), vpa, vperp, upar[iz,ir])
         end
     end
     return nothing
+end
+
+function get_ppar(ff, vpa, vperp, upar)
+    # Integrating calculates
+    # (p_parallel/m_s N_e c_s^2) = (1/√π)∫d(vpa/c_s) ((vpa-upar)/c_s)^2 * (√π f_s c_s / N_e)
+    # the internal energy density (aka pressure of f_s)
+
+    # modify input vpa.grid to account for the mean flow
+    @. vpa.scratch = vpa.grid - upar
+    norm_fac = 1.0 # normalise to m_s N_e c_s^2
+    #norm_fac = 2.0 # normalise to 0.5 m_s N_e c_s^2 = N_e T_s
+    return norm_fac*integrate_over_vspace(@view(ff[:,:]), vpa.scratch, 2, vpa.wgts, vperp.grid, 0, vperp.wgts)
+end
+
+function get_pperp(ff, vpa, vperp)
+    norm_fac = 0.5 # normalise to m_s N_e c_s^2
+    #norm_fac = 1.0 # normalise to 0.5 m_s N_e c_s^2 = N_e T_s
+    return norm_fac*integrate_over_vspace(@view(ff[:,:]), vpa.grid, 0, vpa.wgts, vperp.grid, 2, vperp.wgts)
 end
 
 """
