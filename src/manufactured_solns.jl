@@ -9,7 +9,7 @@ export manufactured_electric_fields
 using ..array_allocation: allocate_shared_float
 using ..input_structs
 using ..looping
-using ..type_definitions: mk_float
+using ..type_definitions: mk_float, mk_int
 
 using Symbolics
 using IfElse
@@ -138,7 +138,8 @@ using IfElse
                 #densi = 1.5 +  0.1*(sin(2.0*pi*r/Lr) + sin(2.0*pi*z/Lz))#*sin(2.0*pi*t)  
 
                 # Input for instability test
-                background_wavenumber = 1
+                background_wavenumber = 1 + round(mk_int,
+                                                  species.z_IC.temperature_phase)
                 initial_density = species.initial_density
                 initial_temperature = species.initial_temperature
                 density_amplitude = species.z_IC.density_amplitude
@@ -151,8 +152,7 @@ using IfElse
                                  + density_phase)))
                 T0 = (initial_temperature
                       * (1.0 + temperature_amplitude
-                         * sin(2.0*π*background_wavenumber*z/Lz +
-                               temperature_phase)
+                         * sin(2.0*π*background_wavenumber*z/Lz)
                         ))
                 densi = eta0^((T0/(1+T0)))
             elseif r_bc == "Dirichlet" 
@@ -195,7 +195,8 @@ using IfElse
             #dfni = densi * exp( - vpa^2 - vperp^2) 
 
             # Input for instability test
-            background_wavenumber = 1
+            background_wavenumber = 1 + round(mk_int,
+                                              species.z_IC.temperature_phase)
             initial_density = species.initial_density
             initial_temperature = species.initial_temperature
             density_amplitude = species.z_IC.density_amplitude
@@ -208,8 +209,7 @@ using IfElse
                              + density_phase)))
             T0 = (initial_temperature
                   * (1.0 + temperature_amplitude
-                     * sin(2.0*π*background_wavenumber*z/Lz +
-                           temperature_phase)
+                     * sin(2.0*π*background_wavenumber*z/Lz)
                     ))
             dens = eta0^((T0/(1+T0)))
             vth = sqrt(2.0*T0)
