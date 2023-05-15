@@ -314,6 +314,19 @@ function allocate_shared(T, dims)
     bs = block_size[]
     n = prod(dims)
 
+    if n == 0
+        # Special handling as some MPI implementations cause errors when allocating a
+        # size-zero array
+        array = Array{T}(undef, dims...)
+
+        @debug_shared_array begin
+            # If @debug_shared_array is active, create DebugMPISharedArray instead of Array
+            array = DebugMPISharedArray(array)
+        end
+
+        return array
+    end
+
     if br == 0
         # Allocate points on rank-0 for simplicity
         n_local = n
