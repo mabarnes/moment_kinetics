@@ -228,7 +228,9 @@ end
         is_read .= false
         is_written = Array{Bool}(undef, dims)
         is_written .= false
-        creation_stack_trace = string([string(s, "\n") for s in stacktrace()]...)
+        creation_stack_trace = @debug_track_array_allocate_location_ifelse(
+                                   string([string(s, "\n") for s in stacktrace()]...),
+                                   "")
         @debug_detect_redundant_block_synchronize begin
             # Initialize as `true` so that the first call to _block_synchronize() with
             # @debug_detect_redundant_block_synchronize activated does not register the
@@ -514,10 +516,17 @@ end
                     # shared-memory arrays, so would cause segfaults.
                     return false
                 else
-                    error("Shared memory array written at $i from multiple ranks "
-                          * "between calls to _block_synchronize(). Array was "
-                          * "created at:\n"
-                          * array.creation_stack_trace)
+                    if array.creation_stack_trace != ""
+                        error("Shared memory array written at $i from multiple ranks "
+                              * "between calls to _block_synchronize(). Array was "
+                              * "created at:\n"
+                              * array.creation_stack_trace)
+                    else
+                        error("Shared memory array written at $i from multiple ranks "
+                              * "between calls to _block_synchronize(). Enable "
+                              * "`debug_track_array_allocate_location` to track where "
+                              * "array was created.")
+                    end
                 end
             elseif n_writes == 1 && n_reads > 0
                 if global_is_written[i, block_rank[] + 1]
