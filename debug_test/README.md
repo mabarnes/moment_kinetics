@@ -1,3 +1,6 @@
+Shared memory debugging
+=======================
+
 This `debug_test` directory contains scripts for running a set of short runs, intended
 to be used with the `--debug` flag to check for bugs (e.g. race conditions).
 The output is not checked - the intention is just to catch errors raised by the
@@ -8,7 +11,11 @@ are very slow. The actual output is not important, so it does not matter that th
 are badly under-resolved.
 
 It may be necessary to use the `--compiled-modules=no` flag to Julia for changes
-to the `--debug` setting to be picked up correctly.
+to the `--debug` setting to be picked up correctly. This setting means that all
+precompilation is redone each time Julia is started, which can be slow. An
+alternative workaround is to hard-code the
+[`moment_kinetics.debugging._debug_level`](@ref) variable in `debugging.jl` to
+the desired value.
 
 To run the debug tests, call (from the top-level `moment_kinetics` directory)
 something like
@@ -39,12 +46,17 @@ errors happen.
 The `@debug_shared_array` macro (activated at `--debug 2` or
 higher) counts all reads and writes to shared arrays by each process, and
 checks at each `_block_synchronize()` call whether either pattern has occurred
-since the previous `_block_synchronize()`. If they have, then the array for
-which the error occured is identified by printing a stack-trace of the location
-where it was allocated, and the stack-trace for the exception shows the
-location of the `_block_synchronize()` call where the error occured.
+since the previous `_block_synchronize()`. If they have and in addition
+`@debug_track_array_allocate_location` is active (`--debug 3` or higher), then
+the array for which the error occured is identified by printing a stack-trace
+of the location where it was allocated, and the stack-trace for the exception
+shows the location of the `_block_synchronize()` call where the error occured.
 
-`@debug_detect_redundant_block_synchronize` (activated at `--debug 4`) aims to
+`@debug_block_synchronize` (activated at `--debug 4`)checks that all processes
+called `_block_synchronize()` from the same place - i.e. the same line in the
+code, checked by comparing stack traces.
+
+`@debug_detect_redundant_block_synchronize` (activated at `--debug 5`) aims to
 find any unnecessary calls to `_block_synchronize()`. These calls can be
 somewhat expensive (for large numbers of processes at least), so it is good to
 minimise the number. When this mode is active, at each `_block_synchronize()` a
@@ -63,12 +75,15 @@ Suggested debugging strategy for race conditions is:
 * Look at the loop types and ensure that there is an appropriate
   `begin_*_region()` call before each new loop type.
 * Run `debug_test/runtests.jl` with `@debug_shared_array` activated, but not
-  `@debug_detect_redundant_block_synchronize`. Usually this should indicate
-  where there is a missing `begin_*_region()` call. There may be places though
-  where synchronization is required even though the type of loop macros used
-  does not change (for example when `phi` is calculated contributions from all
-  charged species need to be summed, resulting in an unusual pattern of array
-  accesses); in this case `_block_synchronize()` can be called directly.
+  `@debug_detect_redundant_block_synchronize`. It will be faster to first run
+  without `@debug_track_array_allocate_location` to find failing tests, then
+  with `@debug_track_array_allocate_location` to help identify the cause of the
+  failure. Usually a failure should indicate where there is a missing
+  `begin_*_region()` call. There may be places though where synchronization is
+  required even though the type of loop macros used does not change (for
+  example when `phi` is calculated contributions from all charged species need
+  to be summed, resulting in an unusual pattern of array accesses); in this
+  case `_block_synchronize()` can be called directly.
     * The function `debug_check_shared_memory()` can be inserted between
       `begin_*_region()` calls when debugging to narrow down the location where
       the incorrect array access occured. It is defined when
@@ -81,7 +96,9 @@ Suggested debugging strategy for race conditions is:
       This allows the correctness checks to be run using only 2 processes,
       which would not be possible if all dimensions had to be split at the same
       time.
-* Run `debug_test/debug_redundant_synchronization/runtests.jl` with
+* [This final level of checking only looks for minor optimizations rather than
+  finding bugs, so it is much less important than the checks above.] Run
+  `debug_test/debug_redundant_synchronization/runtests.jl` with
   `@debug_detect_redundant_block_synchronize` activated. This should show if
   any call to `_block_synchronize()` (including the ones inside
   `begin_*_region()` calls) was 'unnecessary' - i.e. there would be no
