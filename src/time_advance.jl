@@ -397,7 +397,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     # enforce prescribed boundary condition in vperp on the distribution function f
     if vperp.n > 1
         begin_s_r_z_vpa_region()
-        @views enforce_vperp_boundary_condition!(f,vperp)
+        @views enforce_vperp_boundary_condition!(pdf.charged.norm[:,:,:,:,:],vperp)
     end
     
     ##
