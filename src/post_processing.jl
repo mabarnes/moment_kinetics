@@ -223,9 +223,10 @@ function allocate_global_zr_charged_moments(nz_global,nr_global,n_ion_species,nt
     density = allocate_float(nz_global,nr_global,n_ion_species,ntime)
     parallel_flow = allocate_float(nz_global,nr_global,n_ion_species,ntime)
     parallel_pressure = allocate_float(nz_global,nr_global,n_ion_species,ntime)
+    perpendicular_pressure = allocate_float(nz_global,nr_global,n_ion_species,ntime)
     parallel_heat_flux = allocate_float(nz_global,nr_global,n_ion_species,ntime)
     thermal_speed = allocate_float(nz_global,nr_global,n_ion_species,ntime)
-    return density, parallel_flow, parallel_pressure, parallel_heat_flux, thermal_speed
+    return density, parallel_flow, parallel_pressure, perpendicular_pressure, parallel_heat_flux, thermal_speed
 end
 
 function allocate_global_zr_charged_dfns(nvpa_global, nvperp_global, nz_global, nr_global,
@@ -488,7 +489,7 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
                                              Tuple(this_z.n_global for this_z ∈ z),
                                              Tuple(this_r.n_global for this_r ∈ r),
                                              ntime)
-    density, parallel_flow, parallel_pressure, parallel_heat_flux, thermal_speed =
+    density, parallel_flow, parallel_pressure, perpendicular_pressure, parallel_heat_flux, thermal_speed =
         get_tuple_of_return_values(allocate_global_zr_charged_moments,
                                    Tuple(this_z.n_global for this_z ∈ z),
                                    Tuple(this_r.n_global for this_r ∈ r),
@@ -529,6 +530,10 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
                                Tuple(this_r.n for this_r ∈ r), iskip)
     get_tuple_of_return_values(read_distributed_zr_data!, parallel_pressure,
                                "parallel_pressure", run_names, "moments", nblocks,
+                               Tuple(this_z.n for this_z ∈ z),
+                               Tuple(this_r.n for this_r ∈ r), iskip)
+    get_tuple_of_return_values(read_distributed_zr_data!, perpendicular_pressure,
+                               "perpendicular_pressure", run_names, "moments", nblocks,
                                Tuple(this_z.n for this_z ∈ z),
                                Tuple(this_r.n for this_r ∈ r), iskip)
     get_tuple_of_return_values(read_distributed_zr_data!, parallel_heat_flux,
@@ -1157,6 +1162,8 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
          L"\widetilde{u}_{\|\|i}",L"\widetilde{u}_{\|\|i}^{sym}",L"\varepsilon(\widetilde{u}_{\|\|i})","upar")
         compare_moments_symbolic_test(run_name_label,parallel_pressure,ppar_sym,"ion",z_global.grid,r_global.grid,time,z_global.n,r_global.n,ntime,
          L"\widetilde{p}_{\|\|i}",L"\widetilde{p}_{\|\|i}^{sym}",L"\varepsilon(\widetilde{p}_{\|\|i})","ppar")
+        compare_moments_symbolic_test(run_name,perpendicular_pressure,pperp_sym,"ion",z,r,time,nz_global,nr_global,ntime,
+         L"\widetilde{p}_{\perp i}",L"\widetilde{p}_{\perp i}^{sym}",L"\varepsilon(\widetilde{p}_{\perp i})","pperp")
 
         compare_charged_pdf_symbolic_test(run_name_label,manufactured_solns_list,"ion",
           L"\widetilde{f}_i",L"\widetilde{f}^{sym}_i",L"\varepsilon(\widetilde{f}_i)","pdf")

@@ -31,7 +31,7 @@ using ..velocity_moments: create_moments_charged, create_moments_neutral, update
 using ..velocity_moments: moments_charged_substruct, moments_neutral_substruct
 using ..velocity_moments: update_neutral_density!, update_neutral_pz!, update_neutral_pr!, update_neutral_pzeta!
 using ..velocity_moments: update_neutral_uz!, update_neutral_ur!, update_neutral_uzeta!, update_neutral_qz!
-using ..velocity_moments: update_ppar!, update_upar!, update_density!, reset_moments_status!
+using ..velocity_moments: update_ppar!, update_upar!, update_density!, update_pperp!, reset_moments_status!
 
 using ..manufactured_solns: manufactured_solutions
 
@@ -157,8 +157,9 @@ function init_pdf_and_moments!(pdf, moments, boundary_distributions, geometry,
             init_upar!(moments.charged.upar, z, r, species.charged, n_ion_species)
             # initialise the parallel thermal speed profile
             init_vth!(moments.charged.vth, z, r, species.charged, n_ion_species)
+            # initialise pressures assuming isotropic distribution
             @. moments.charged.ppar = 0.5 * moments.charged.dens * moments.charged.vth^2
-
+            @. moments.charged.pperp = moments.charged.ppar
             if n_neutral_species > 0
                 #neutral particles
                 init_density!(moments.neutral.dens, z, r, species.neutral, n_neutral_species)
@@ -924,6 +925,7 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
                  moments.charged.dens, moments.charged.upar, pdf.charged.norm,
                  vpa, vperp, z, r, composition, moments.evolve_density,
                  moments.evolve_upar)
+    update_pperp!(moments.charged.pperp, pdf.charged.norm, vpa, vperp, z, r, composition)
     update_qpar!(moments.charged.qpar, moments.charged.qpar_updated,
                  moments.charged.dens, moments.charged.upar,
                  moments.charged.vth, pdf.charged.norm, vpa, vperp, z, r,

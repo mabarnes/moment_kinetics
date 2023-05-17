@@ -14,9 +14,8 @@ using ..debugging
 using ..file_io: write_data_to_ascii, write_moments_data_to_binary, write_dfns_data_to_binary, debug_dump
 using ..looping
 using ..moment_kinetics_structs: scratch_pdf
-using ..moment_kinetics_structs: scratch_pdf
 using ..velocity_moments: update_moments!, update_moments_neutral!, reset_moments_status!
-using ..velocity_moments: update_density!, update_upar!, update_ppar!, update_qpar!
+using ..velocity_moments: update_density!, update_upar!, update_ppar!, update_pperp!, update_qpar!
 using ..velocity_moments: update_neutral_density!, update_neutral_qz!
 using ..velocity_moments: update_neutral_uzeta!, update_neutral_uz!, update_neutral_ur!
 using ..velocity_moments: update_neutral_pzeta!, update_neutral_pz!, update_neutral_pr!
@@ -656,6 +655,7 @@ function setup_scratch_arrays(moments, pdf_charged_in, pdf_neutral_in, n_rk_stag
         density_array = allocate_shared_float(moment_dims...)
         upar_array = allocate_shared_float(moment_dims...)
         ppar_array = allocate_shared_float(moment_dims...)
+        pperp_array = allocate_shared_float(moment_dims...)
         temp_z_s_array = allocate_shared_float(moment_dims...)
 
         pdf_neutral_array = allocate_shared_float(pdf_neutral_dims...)
@@ -665,7 +665,7 @@ function setup_scratch_arrays(moments, pdf_charged_in, pdf_neutral_in, n_rk_stag
 
 
         scratch[istage] = scratch_pdf(pdf_array, density_array, upar_array,
-                                      ppar_array, temp_z_s_array,
+                                      ppar_array, pperp_array, temp_z_s_array,
                                       pdf_neutral_array, density_neutral_array,
                                       uz_neutral_array, pz_neutral_array)
         @serial_region begin
@@ -673,6 +673,7 @@ function setup_scratch_arrays(moments, pdf_charged_in, pdf_neutral_in, n_rk_stag
             scratch[istage].density .= moments.charged.dens
             scratch[istage].upar .= moments.charged.upar
             scratch[istage].ppar .= moments.charged.ppar
+            scratch[istage].pperp .= moments.charged.pperp
 
             scratch[istage].pdf_neutral .= pdf_neutral_in
             scratch[istage].density_neutral .= moments.neutral.dens
@@ -1234,7 +1235,6 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
                                                   vpa)
         end
     end
-
     # update remaining velocity moments that are calculable from the evolved pdf
     update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composition)
     # update the thermal speed
@@ -1406,7 +1406,8 @@ function update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composi
         update_ppar!(new_scratch.ppar, moments.charged.ppar_updated, new_scratch.density,
                      new_scratch.upar, new_scratch.pdf, vpa, vperp, z, r, composition,
                      moments.evolve_density, moments.evolve_upar)
-    end
+    end 
+    update_pperp!(new_scratch.pperp, new_scratch.pdf, vpa, vperp, z, r, composition)
 end
 
 """
@@ -1501,6 +1502,7 @@ function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase,
         moments.charged.dens[iz,ir,is] = final_scratch.density[iz,ir,is]
         moments.charged.upar[iz,ir,is] = final_scratch.upar[iz,ir,is]
         moments.charged.ppar[iz,ir,is] = final_scratch.ppar[iz,ir,is]
+        moments.charged.pperp[iz,ir,is] = final_scratch.pperp[iz,ir,is]
     end
     if composition.n_neutral_species > 0
         # No need to synchronize here as we only change neutral quantities and previous

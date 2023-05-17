@@ -61,6 +61,8 @@ struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmomn}
     parallel_flow::Tmomi
     # handle for the charged species parallel pressure
     parallel_pressure::Tmomi
+    # handle for the charged species perpendicular pressure
+    perpendicular_pressure::Tmomi
     # handle for the charged species parallel heat flux
     parallel_heat_flux::Tmomi
     # handle for the charged species thermal speed
@@ -587,6 +589,13 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
                                            parallel_io=parallel_io,
                                            description="charged species parallel pressure",
                                            units="n_ref*T_ref")
+        
+        # io_pperp is the handle for the ion parallel pressure
+        io_pperp = create_dynamic_variable!(dynamic, "perpendicular_pressure", mk_float, z, r;
+                                           n_ion_species=n_ion_species,
+                                           parallel_io=parallel_io,
+                                           description="charged species perpendicular pressure",
+                                           units="n_ref*T_ref")
 
         # io_qpar is the handle for the ion parallel heat flux
         io_qpar = create_dynamic_variable!(dynamic, "parallel_heat_flux", mk_float, z, r;
@@ -638,7 +647,7 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
             units="c_ref")
 
         return io_moments_info(fid, io_time, io_phi, io_Er, io_Ez, io_density, io_upar,
-                               io_ppar, io_qpar, io_vth, io_density_neutral, io_uz_neutral,
+                               io_ppar, io_pperp, io_qpar, io_vth, io_density_neutral, io_uz_neutral,
                                io_pz_neutral, io_qz_neutral, io_thermal_speed_neutral,
                                parallel_io)
     end
@@ -777,6 +786,7 @@ function reopen_moments_io(file_info)
         return io_moments_info(fid, getvar("time"), getvar("phi"), getvar("Er"),
                                getvar("Ez"), getvar("density"), getvar("parallel_flow"),
                                getvar("parallel_pressure"), getvar("parallel_heat_flux"),
+                               getvar("perpendicular_pressure"),
                                getvar("thermal_speed"), getvar("density_neutral"),
                                getvar("uz_neutral"), getvar("pz_neutral"),
                                getvar("qz_neutral"), getvar("thermal_speed_neutral"),
@@ -861,6 +871,7 @@ function reopen_dfns_io(file_info)
         io_moments = io_moments_info(fid, getvar("time"), getvar("phi"), getvar("Er"),
                                      getvar("Ez"), getvar("density"),
                                      getvar("parallel_flow"), getvar("parallel_pressure"),
+                                     getvar("perpendicular_pressure"),
                                      getvar("parallel_heat_flux"),
                                      getvar("thermal_speed"), getvar("density_neutral"),
                                      getvar("uz_neutral"), getvar("pz_neutral"),
@@ -915,6 +926,8 @@ function write_moments_data_to_binary(moments, fields, t, n_ion_species,
         append_to_dynamic_var(io_moments.parallel_flow, moments.charged.upar, t_idx, z, r,
                               n_ion_species)
         append_to_dynamic_var(io_moments.parallel_pressure, moments.charged.ppar, t_idx,
+                              z, r, n_ion_species)
+        append_to_dynamic_var(io_moments.perpendicular_pressure, moments.charged.pperp, t_idx,
                               z, r, n_ion_species)
         append_to_dynamic_var(io_moments.parallel_heat_flux, moments.charged.qpar, t_idx,
                               z, r, n_ion_species)
@@ -1003,6 +1016,8 @@ end
             append_to_dynamic_var(io_moments.parallel_flow, moments.charged.upar.data,
                                   t_idx, z, r, n_ion_species)
             append_to_dynamic_var(io_moments.parallel_pressure, moments.charged.ppar.data,
+                                  t_idx, z, r, n_ion_species)
+            append_to_dynamic_var(io_moments.perpendicular_pressure.data, moments.charged.pperp,
                                   t_idx, z, r, n_ion_species)
             append_to_dynamic_var(io_moments.parallel_heat_flux,
                                   moments.charged.qpar.data, t_idx, z, r, n_ion_species)
@@ -1267,7 +1282,7 @@ all the arrays have the same length, with an entry for each call to `debug_dump(
 function debug_dump end
 function debug_dump(vz::coordinate, vr::coordinate, vzeta::coordinate, vpa::coordinate,
                     vperp::coordinate, z::coordinate, r::coordinate, t::mk_float;
-                    ff=nothing, dens=nothing, upar=nothing, ppar=nothing, qpar=nothing,
+                    ff=nothing, dens=nothing, upar=nothing, ppar=nothing, pperp=nothing, qpar=nothing,
                     vth=nothing,
                     ff_neutral=nothing, dens_neutral=nothing, uz_neutral=nothing,
                     #ur_neutral=nothing, uzeta_neutral=nothing,
@@ -1366,6 +1381,11 @@ function debug_dump(vz::coordinate, vr::coordinate, vzeta::coordinate, vpa::coor
         else
             debug_output_file.moments.parallel_pressure[:,:,:,debug_output_counter[]] = ppar
         end
+        if pperp === nothing
+            debug_output_file.moments.perpendicular_pressure[:,:,:,debug_output_counter[]] = 0.0
+        else
+            debug_output_file.moments.perpendicular_pressure[:,:,:,debug_output_counter[]] = pperp
+        end
         if qpar === nothing
             debug_output_file.moments.parallel_heat_flux[:,:,:,debug_output_counter[]] = 0.0
         else
@@ -1442,6 +1462,7 @@ function debug_dump(fvec::Union{scratch_pdf,Nothing},
         density = nothing
         upar = nothing
         ppar = nothing
+        pperp = nothing
         pdf_neutral = nothing
         density_neutral = nothing
     else
@@ -1449,6 +1470,7 @@ function debug_dump(fvec::Union{scratch_pdf,Nothing},
         density = fvec.density
         upar = fvec.upar
         ppar = fvec.ppar
+        pperp = fvec.pperp
         pdf_neutral = fvec.pdf_neutral
         density_neutral = fvec.density_neutral
     end
@@ -1462,7 +1484,7 @@ function debug_dump(fvec::Union{scratch_pdf,Nothing},
         Ez = fields.Ez
     end
     return debug_dump(vz, vr, vzeta, vpa, vperp, z, r, t; ff=pdf, dens=density, upar=upar,
-                      ppar=ppar, ff_neutral=pdf_neutral, dens_neutral=density_neutral,
+                      ppar=ppar, pperp=pperp, ff_neutral=pdf_neutral, dens_neutral=density_neutral,
                       phi=phi, Er=Er, Ez=Ez, t, istage=istage, label=label)
 end
 
