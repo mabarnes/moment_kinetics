@@ -467,13 +467,12 @@ function clenshaw_curtis_radau_weights(ngrid, nelement_local, n, imin, imax, sca
         # scale to account for modified domain (not [-1,1])
         wgts[1:ngrid] .= wgts_radau[1:ngrid]
         if nelement_local > 1
-            # account for double-counting of points at inner element boundaries
-            wgts[ngrid] += wgts_lobotto[1]
             for j ∈ 2:nelement_local
+                # account for double-counting of points at inner element boundaries
+                wgts[imin[j]-1] += wgts_lobotto[1]
+                # assign weights for interior of elements and one boundary point
                 wgts[imin[j]:imax[j]] .= wgts_lobotto[2:ngrid]
             end
-            # remove double-counting of outer element boundary for last element
-            wgts[n] *= 0.5
         end
     end
     return wgts
