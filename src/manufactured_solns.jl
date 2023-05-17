@@ -24,10 +24,12 @@ using IfElse
     if dfni_vpa_power_opt == "2"
        pvpa = 2
        nconst = 0.25
+       pconst = 3.0/4.0
        fluxconst = 0.5
     elseif dfni_vpa_power_opt == "4"
        pvpa = 4
-       nconst = (3.0/8.0)
+       nconst = 3.0/8.0
+       pconst = 15.0/8.0
        fluxconst = 1.0
     end
 
@@ -199,7 +201,48 @@ using IfElse
                   * "manufactured_solns:type=$(manufactured_solns_input.type)")
         end
     end
-
+ 
+    # ion mean parallel flow symbolic function 
+    function upari_sym(Lr,Lz,r_bc,z_bc,composition,geometry,nr,manufactured_solns_input,species)
+        if z_bc == "periodic"
+            upari = 0.0 #not supported
+        elseif z_bc == "wall"
+            densi = densi_sym(Lr,Lz,r_bc,z_bc,composition,manufactured_solns_input,species)
+            Er, Ez, phi = electric_fields(Lr,Lz,r_bc,z_bc,composition,nr,manufactured_solns_input,species)
+            rhostar = geometry.rhostar
+            bzed = geometry.bzed
+            epsilon = composition.epsilon_offset
+            alpha = composition.alpha_switch
+            upari =  ( (fluxconst/(sqrt(pi)*densi))*((z/Lz + 0.5)*nplus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha) 
+                     - (0.5 - z/Lz)*nminus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha)) 
+                     + alpha*(rhostar/(2.0*bzed))*Er )
+        end
+        return upari
+    end
+    
+    # ion parallel pressure symbolic function 
+    function ppari_sym(Lr,Lz,r_bc,z_bc,composition,manufactured_solns_input,species)
+        if z_bc == "periodic"
+            ppari = 0.0 # not supported
+        elseif z_bc == "wall"
+            densi = densi_sym(Lr,Lz,r_bc,z_bc,composition,manufactured_solns_input,species)
+            epsilon = composition.epsilon_offset
+            alpha = composition.alpha_switch
+            ppari = ( pconst*((0.5 - z/Lz)*nminus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha) 
+                      + (z/Lz + 0.5)*nplus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha)) 
+                      + (z/Lz + 0.5)*(0.5 - z/Lz)*nzero_sym(Lr,Lz,r_bc,z_bc,alpha)  
+                      - (2.0/(pi*densi))*((z/Lz + 0.5)*nplus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha) 
+                      - (0.5 - z/Lz)*nminus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha))^2 )
+        end
+        return ppari
+    end
+    
+    # ion perpendicular pressure symbolic function 
+    function pperpi_sym(Lr,Lz,r_bc,z_bc,composition,manufactured_solns_input,species)
+        densi = densi_sym(Lr,Lz,r_bc,z_bc,composition,manufactured_solns_input,species)
+        pperpi = densi # simple vperp^2 dependence of dfni
+        return pperpi
+    end
     function jpari_into_LHS_wall_sym(Lr,Lz,r_bc,z_bc,composition,
                                      manufactured_solns_input)
         if z_bc == "periodic"
@@ -318,6 +361,12 @@ using IfElse
 
         densi = densi_sym(Lr, Lz, r_bc, z_bc, composition, manufactured_solns_input,
                           charged_species)
+        upari = upari_sym(Lr, Lz, r_bc, z_bc, composition, geometry, nr, manufactured_solns_input,
+                          charged_species)
+        ppari = ppari_sym(Lr, Lz, r_bc, z_bc, composition, manufactured_solns_input,
+                          charged_species)
+        pperpi = pperpi_sym(Lr, Lz, r_bc, z_bc, composition, manufactured_solns_input,
+                          charged_species)
         dfni = dfni_sym(Lr, Lz, r_bc, z_bc, composition, geometry, nr,
                         manufactured_solns_input, charged_species)
 
@@ -329,6 +378,9 @@ using IfElse
         #build julia functions from these symbolic expressions
         # cf. https://docs.juliahub.com/Symbolics/eABRO/3.4.0/tutorials/symbolic_functions/
         densi_func = build_function(densi, z, r, t, expression=Val{false})
+        upari_func = build_function(upari, z, r, t, expression=Val{false})
+        ppari_func = build_function(ppari, z, r, t, expression=Val{false})
+        pperpi_func = build_function(pperpi, z, r, t, expression=Val{false})
         densn_func = build_function(densn, z, r, t, expression=Val{false})
         dfni_func = build_function(dfni, vpa, vperp, z, r, t, expression=Val{false})
         dfnn_func = build_function(dfnn, vz, vr, vzeta, z, r, t, expression=Val{false})
@@ -339,7 +391,10 @@ using IfElse
         # densn_func(zval, rval, tval) 
         # dfnn_func(vzval, vrval, vzetapval, zval, rval, tval) 
         
-        manufactured_solns_list = (densi_func = densi_func, densn_func = densn_func, dfni_func = dfni_func, dfnn_func = dfnn_func)
+        manufactured_solns_list = (densi_func = densi_func, densn_func = densn_func, 
+                                   dfni_func = dfni_func, dfnn_func = dfnn_func, 
+                                   upari_func = upari_func, ppari_func = ppari_func,
+                                   pperpi_func = pperpi_func)
         
         return manufactured_solns_list
     end 

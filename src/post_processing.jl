@@ -1099,6 +1099,9 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
                                                          composition, species, r_global.n)
         dfni_func = manufactured_solns_list.dfni_func
         densi_func = manufactured_solns_list.densi_func
+        upari_func = manufactured_solns_list.upari_func
+        ppari_func = manufactured_solns_list.ppari_func
+        pperpi_func = manufactured_solns_list.pperpi_func
         dfnn_func = manufactured_solns_list.dfnn_func
         densn_func = manufactured_solns_list.densn_func
         manufactured_E_fields =
@@ -1135,16 +1138,26 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
 
         # ion test
         density_sym = copy(density[:,:,:,:])
+        upar_sym = copy(density[:,:,:,:])
+        ppar_sym = copy(density[:,:,:,:])
+        pperp_sym = copy(density[:,:,:,:])
         is = 1
         for it in 1:ntime
             for ir in 1:r_global.n
                 for iz in 1:z_global.n
                     density_sym[iz,ir,is,it] = densi_func(z_global.grid[iz],r_global.grid[ir],time[it])
+                    upar_sym[iz,ir,is,it] = upari_func(z_global.grid[iz],r_global.grid[ir],time[it])
+                    ppar_sym[iz,ir,is,it] = ppari_func(z_global.grid[iz],r_global.grid[ir],time[it])
+                    pperp_sym[iz,ir,is,it] = pperpi_func(z_global.grid[iz],r_global.grid[ir],time[it])
                 end
             end
         end
         compare_moments_symbolic_test(run_name_label,density,density_sym,"ion",z_global.grid,r_global.grid,time,z_global.n,r_global.n,ntime,
          L"\widetilde{n}_i",L"\widetilde{n}_i^{sym}",L"\varepsilon(\widetilde{n}_i)","dens")
+        compare_moments_symbolic_test(run_name_label,parallel_flow,upar_sym,"ion",z_global.grid,r_global.grid,time,z_global.n,r_global.n,ntime,
+         L"\widetilde{u}_{\|\|i}",L"\widetilde{u}_{\|\|i}^{sym}",L"\varepsilon(\widetilde{u}_{\|\|i})","upar")
+        compare_moments_symbolic_test(run_name_label,parallel_pressure,ppar_sym,"ion",z_global.grid,r_global.grid,time,z_global.n,r_global.n,ntime,
+         L"\widetilde{p}_{\|\|i}",L"\widetilde{p}_{\|\|i}^{sym}",L"\varepsilon(\widetilde{p}_{\|\|i})","ppar")
 
         compare_charged_pdf_symbolic_test(run_name_label,manufactured_solns_list,"ion",
           L"\widetilde{f}_i",L"\widetilde{f}^{sym}_i",L"\varepsilon(\widetilde{f}_i)","pdf")
