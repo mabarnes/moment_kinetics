@@ -36,8 +36,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
 		nrank, irank, Lvperp, discretization, fd_option, bc, adv_input,comm)
 	# create the coordinate struct 'x'
 	println("made inputs")
-	println("vpa: ngrid: ",ngrid," nelement: ",nelement_local)
-	println("vperp: ngrid: ",ngrid," nelement: ",nelement_local)
+	println("vpa: ngrid: ",ngrid," nelement: ",nelement_local, " Lvpa: ",Lvpa)
+	println("vperp: ngrid: ",ngrid," nelement: ",nelement_local, " Lvperp: ",Lvperp)
 	vpa = define_coordinate(vpa_input)
 	vperp = define_coordinate(vperp_input)
     
