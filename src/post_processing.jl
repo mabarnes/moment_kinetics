@@ -191,9 +191,10 @@ function allocate_global_zr_charged_moments(nz_global,nr_global,n_ion_species,nt
     density = allocate_float(nz_global,nr_global,n_ion_species,ntime)
     parallel_flow = allocate_float(nz_global,nr_global,n_ion_species,ntime)
     parallel_pressure = allocate_float(nz_global,nr_global,n_ion_species,ntime)
+    perpendicular_pressure = allocate_float(nz_global,nr_global,n_ion_species,ntime)
     parallel_heat_flux = allocate_float(nz_global,nr_global,n_ion_species,ntime)
     thermal_speed = allocate_float(nz_global,nr_global,n_ion_species,ntime)
-    return density, parallel_flow, parallel_pressure, parallel_heat_flux, thermal_speed
+    return density, parallel_flow, parallel_pressure, perpendicular_pressure, parallel_heat_flux, thermal_speed
 end
 
 function allocate_global_zr_neutral_moments(nz_global,nr_global,n_neutral_species,ntime)
@@ -310,7 +311,7 @@ function analyze_and_plot_data(path)
     
     # allocate arrays to contain the global fields as a function of (z,r,t)
     phi, Ez, Er = allocate_global_zr_fields(nz_global,nr_global,ntime)
-    density, parallel_flow, parallel_pressure, parallel_heat_flux, thermal_speed =
+    density, parallel_flow, parallel_pressure, perpendicular_pressure, parallel_heat_flux, thermal_speed =
         allocate_global_zr_charged_moments(nz_global,nr_global,n_ion_species,ntime)
     if n_neutral_species > 0
         neutral_density, neutral_uz, neutral_pz, neutral_qz, neutral_thermal_speed =
@@ -331,6 +332,7 @@ function analyze_and_plot_data(path)
     read_distributed_zr_data!(density,"density",run_name,"moments",nblocks,nz_local,nr_local)
     read_distributed_zr_data!(parallel_flow,"parallel_flow",run_name,"moments",nblocks,nz_local,nr_local)
     read_distributed_zr_data!(parallel_pressure,"parallel_pressure",run_name,"moments",nblocks,nz_local,nr_local)
+    read_distributed_zr_data!(perpendicular_pressure,"perpendicular_pressure",run_name,"moments",nblocks,nz_local,nr_local)
     read_distributed_zr_data!(parallel_heat_flux,"parallel_heat_flux",run_name,"moments",nblocks,nz_local,nr_local)
     read_distributed_zr_data!(thermal_speed,"thermal_speed",run_name,"moments",nblocks,nz_local,nr_local)
     # neutral particle moments 
@@ -532,6 +534,8 @@ function analyze_and_plot_data(path)
          L"\widetilde{u}_{\|\|i}",L"\widetilde{u}_{\|\|i}^{sym}",L"\varepsilon(\widetilde{u}_{\|\|i})","upar")
         compare_moments_symbolic_test(run_name,parallel_pressure,ppar_sym,"ion",z,r,time,nz_global,nr_global,ntime,
          L"\widetilde{p}_{\|\|i}",L"\widetilde{p}_{\|\|i}^{sym}",L"\varepsilon(\widetilde{p}_{\|\|i})","ppar")
+        compare_moments_symbolic_test(run_name,perpendicular_pressure,pperp_sym,"ion",z,r,time,nz_global,nr_global,ntime,
+         L"\widetilde{p}_{\perp i}",L"\widetilde{p}_{\perp i}^{sym}",L"\varepsilon(\widetilde{p}_{\perp i})","pperp")
 
         compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,"ion",
           L"\widetilde{f}_i",L"\widetilde{f}^{sym}_i",L"\varepsilon(\widetilde{f}_i)","pdf")

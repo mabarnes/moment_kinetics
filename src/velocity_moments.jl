@@ -10,6 +10,7 @@ export update_moments!
 export update_density!
 export update_upar!
 export update_ppar!
+export update_pperp!
 export update_qpar!
 export reset_moments_status!
 export enforce_moment_constraints!
@@ -50,6 +51,8 @@ mutable struct moments_charged_substruct
     upar::MPISharedArray{mk_float,3}
     # this is the parallel pressure
     ppar::MPISharedArray{mk_float,3}
+    # this is the perpendicular pressure
+    pperp::MPISharedArray{mk_float,3}
     # this is the parallel heat flux
     qpar::MPISharedArray{mk_float,3}
     # this is the thermal speed based on the parallel temperature Tpar = ppar/dens: vth = sqrt(2*Tpar/m)
@@ -90,6 +93,8 @@ function create_moments_charged(nz, nr, n_species)
     parallel_flow = allocate_shared_float(nz, nr, n_species)
     # allocate array used for the parallel pressure
     parallel_pressure = allocate_shared_float(nz, nr, n_species)
+    # allocate array used for the perpendicular pressure
+    perpendicular_pressure = allocate_shared_float(nz, nr, n_species)
     # allocate array used for the parallel flow
     parallel_heat_flux = allocate_shared_float(nz, nr, n_species)
     # allocate array of Bools that indicate if the parallel flow is updated for each species
@@ -97,7 +102,7 @@ function create_moments_charged(nz, nr, n_species)
     thermal_speed = allocate_shared_float(nz, nr, n_species)
     
     # return struct containing arrays needed to update moments
-    return moments_charged_substruct(density, parallel_flow, parallel_pressure, parallel_heat_flux, thermal_speed)
+    return moments_charged_substruct(density, parallel_flow, parallel_pressure, perpendicular_pressure, parallel_heat_flux, thermal_speed)
 end
 
 # neutral particles have natural mean velocities 
@@ -260,6 +265,34 @@ end
 function get_ppar(ff, vpa, vperp, upar)
     @. vpa.scratch = vpa.grid - upar
     return 2.0*integrate_over_vspace(@view(ff[:,:]), vpa.scratch, 2, vpa.wgts, vperp.grid, 0, vperp.wgts)
+end
+
+function update_pperp!(pperp, pdf, vpa, vperp, z, r, composition)
+    @boundscheck composition.n_ion_species == size(pperp,3) || throw(BoundsError(pperp))
+    @boundscheck r.n == size(pperp,2) || throw(BoundsError(pperp))
+    @boundscheck z.n == size(pperp,1) || throw(BoundsError(pperp))
+    
+    begin_s_r_z_region()
+    
+    @loop_s is begin
+        @views update_pperp_species!(pperp[:,:,is], pdf[:,:,:,:,is], vpa, vperp, z, r)
+    end
+end
+
+"""
+calculate the updated perpendicular pressure (pperp) for a given species
+"""
+function update_pperp_species!(pperp, ff, vpa, vperp, z, r)
+    @boundscheck vpa.n == size(ff, 1) || throw(BoundsError(ff))
+    @boundscheck vperp.n == size(ff, 2) || throw(BoundsError(ff))
+    @boundscheck z.n == size(ff, 3) || throw(BoundsError(ff))
+    @boundscheck r.n == size(ff, 4) || throw(BoundsError(ff))
+    @boundscheck z.n == size(pperp, 1) || throw(BoundsError(pperp))
+    @boundscheck r.n == size(pperp, 2) || throw(BoundsError(pperp))
+    @loop_r_z ir iz begin
+        pperp[iz,ir] = get_pperp(@view(ff[:,:,iz,ir]), vpa, vperp)
+    end
+    return nothing
 end
 
 function get_pperp(ff, vpa, vperp)

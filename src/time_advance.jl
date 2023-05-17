@@ -17,7 +17,7 @@ using ..chebyshev: setup_chebyshev_pseudospectral
 using ..chebyshev: chebyshev_derivative!
 using ..velocity_moments: update_moments!, reset_moments_status!
 using ..velocity_moments: enforce_moment_constraints!
-using ..velocity_moments: update_density!, update_upar!, update_ppar!, update_qpar!
+using ..velocity_moments: update_density!, update_upar!, update_ppar!, update_qpar!, update_pperp!
 using ..velocity_moments: update_neutral_density!, update_neutral_qz!
 using ..velocity_moments: update_neutral_uzeta!, update_neutral_uz!, update_neutral_ur!
 using ..velocity_moments: update_neutral_pzeta!, update_neutral_pz!, update_neutral_pr!
@@ -567,6 +567,7 @@ function setup_scratch_arrays(moments, pdf_charged_in, pdf_neutral_in, n_rk_stag
         density_array = allocate_shared_float(moment_dims...)
         upar_array = allocate_shared_float(moment_dims...)
         ppar_array = allocate_shared_float(moment_dims...)
+        pperp_array = allocate_shared_float(moment_dims...)
         temp_z_s_array = allocate_shared_float(moment_dims...)
 
         pdf_neutral_array = allocate_shared_float(pdf_neutral_dims...)
@@ -574,13 +575,14 @@ function setup_scratch_arrays(moments, pdf_charged_in, pdf_neutral_in, n_rk_stag
 
 
         scratch[istage] = scratch_pdf(pdf_array, density_array, upar_array,
-                                      ppar_array, temp_z_s_array,
+                                      ppar_array, pperp_array, temp_z_s_array,
                                       pdf_neutral_array, density_neutral_array)
         @serial_region begin
             scratch[istage].pdf .= pdf_charged_in
             scratch[istage].density .= moments.charged.dens
             scratch[istage].upar .= moments.charged.upar
             scratch[istage].ppar .= moments.charged.ppar
+            scratch[istage].pperp .= moments.charged.pperp
 
             scratch[istage].pdf_neutral .= pdf_neutral_in
             scratch[istage].density_neutral .= moments.neutral.dens
@@ -764,15 +766,9 @@ function rk_update!(scratch, pdf, moments, fields, vz, vr, vzeta, vpa, vperp, z,
         pdf.charged.unnorm[ivpa,ivperp,iz,ir,is] = new_scratch.pdf[ivpa,ivperp,iz,ir,is]
     end
     update_density!(new_scratch.density, pdf.charged.unnorm, vpa, vperp, z, r, composition)
-
     update_upar!(new_scratch.upar, pdf.charged.unnorm, vpa, vperp, z, r, composition, new_scratch.density)
-    # convert from particle particle flux to parallel flow -> MRH now done inside upar function
-    #begin_s_r_z_region()
-    #@loop_s_r_z is ir iz begin
-    #    new_scratch.upar[iz,ir,is] /= new_scratch.density[iz,ir,is]
-    #end
-
     update_ppar!(new_scratch.ppar, pdf.charged.unnorm, vpa, vperp, z, r, composition, new_scratch.upar)
+    update_pperp!(new_scratch.pperp, pdf.charged.unnorm, vpa, vperp, z, r, composition)
     # update the thermal speed
     begin_s_r_z_region()
     try #below block causes DomainError if ppar < 0 or density, so exit cleanly if possible
@@ -878,6 +874,7 @@ function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase,
         moments.charged.dens[iz,ir,is] = final_scratch.density[iz,ir,is]
         moments.charged.upar[iz,ir,is] = final_scratch.upar[iz,ir,is]
         moments.charged.ppar[iz,ir,is] = final_scratch.ppar[iz,ir,is]
+        moments.charged.pperp[iz,ir,is] = final_scratch.pperp[iz,ir,is]
     end
     if composition.n_neutral_species > 0
         # No need to synchronize here as we only change neutral quantities and previous
