@@ -66,6 +66,7 @@ mutable struct advance_info
     r_diffusion::Bool #flag to control how r bc is imposed when r diffusion terms are present
     vpa_diffusion::Bool #flag to control how vpa bc is imposed when vpa diffusion terms are present
     explicit_fp_collisions::Bool
+    explicit_krook_collisions::Bool
 end
 
 """
@@ -298,6 +299,8 @@ mutable struct collisions_input
     constant_ionization_rate::Bool
     # ion-ion self collision frequency
     nuii::mk_float
+    # ion-ion Krook operator collision frequency
+    nuii_krook::mk_float
 end
 
 """
