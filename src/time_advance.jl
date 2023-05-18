@@ -17,7 +17,7 @@ using ..chebyshev: setup_chebyshev_pseudospectral
 using ..chebyshev: chebyshev_derivative!
 using ..velocity_moments: update_moments!, reset_moments_status!
 using ..velocity_moments: enforce_moment_constraints!
-using ..velocity_moments: update_density!, update_upar!, update_ppar!, update_qpar!, update_pperp!
+using ..velocity_moments: update_density!, update_upar!, update_ppar!, update_qpar!, update_pperp!, update_vth!
 using ..velocity_moments: update_neutral_density!, update_neutral_qz!
 using ..velocity_moments: update_neutral_uzeta!, update_neutral_uz!, update_neutral_ur!
 using ..velocity_moments: update_neutral_pzeta!, update_neutral_pz!, update_neutral_pr!
@@ -757,7 +757,9 @@ function rk_update!(scratch, pdf, moments, fields, vz, vr, vzeta, vpa, vperp, z,
     ##
     # update the charged particle distribution and moments
     ##
-
+    # MRH here we seem to have duplicate arrays for storing n, u||, p||, etc, but not for vth
+    # MRH 'scratch' is for the multiple stages of time advanced quantities, but 'moments' can be updated directly at each stage
+    # MRH in the standard drift-kinetic model. Consider taking moment quantities out of scratch for clarity.
     @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
         new_scratch.pdf[ivpa,ivperp,iz,ir,is] = rk_coefs[1]*pdf.charged.norm[ivpa,ivperp,iz,ir,is] + rk_coefs[2]*old_scratch.pdf[ivpa,ivperp,iz,ir,is] + rk_coefs[3]*new_scratch.pdf[ivpa,ivperp,iz,ir,is]
     end
@@ -772,9 +774,10 @@ function rk_update!(scratch, pdf, moments, fields, vz, vr, vzeta, vpa, vperp, z,
     # update the thermal speed
     begin_s_r_z_region()
     try #below block causes DomainError if ppar < 0 or density, so exit cleanly if possible
-		@loop_s_r_z is ir iz begin
-			moments.charged.vth[iz,ir,is] = sqrt(new_scratch.ppar[iz,ir,is]/new_scratch.density[iz,ir,is])
-		end
+		update_vth!(moments.charged.vth, new_scratch.ppar, new_scratch.pperp, new_scratch.density, vperp, z, r, composition)
+        #@loop_s_r_z is ir iz begin
+		#	moments.charged.vth[iz,ir,is] = sqrt(new_scratch.ppar[iz,ir,is]/new_scratch.density[iz,ir,is])
+		#end
 	catch e
 		if global_size[] > 1
 			println("ERROR: error at line 598 of time_advance.jl")
@@ -831,6 +834,7 @@ function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase,
         first_scratch.density[iz,ir,is] = moments.charged.dens[iz,ir,is]
         first_scratch.upar[iz,ir,is] = moments.charged.upar[iz,ir,is]
         first_scratch.ppar[iz,ir,is] = moments.charged.ppar[iz,ir,is]
+        first_scratch.pperp[iz,ir,is] = moments.charged.pperp[iz,ir,is]
     end
 
     if composition.n_neutral_species > 0

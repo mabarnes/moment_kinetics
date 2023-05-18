@@ -475,12 +475,13 @@ function analyze_and_plot_data(path)
         
         #geometry, composition = get_geometry_and_composition(scan_input,n_ion_species,n_neutral_species)
 
-        manufactured_solns_list = manufactured_solutions(Lr_in,Lz,r_bc,z_bc,geometry,composition,nr_local)
+        manufactured_solns_list = manufactured_solutions(Lr_in,Lz,r_bc,z_bc,geometry,composition,nr_local,nvperp)
         dfni_func = manufactured_solns_list.dfni_func
         densi_func = manufactured_solns_list.densi_func
         upari_func = manufactured_solns_list.upari_func
         ppari_func = manufactured_solns_list.ppari_func
         pperpi_func = manufactured_solns_list.pperpi_func
+        vthi_func = manufactured_solns_list.vthi_func
         dfnn_func = manufactured_solns_list.dfnn_func
         densn_func = manufactured_solns_list.densn_func
         manufactured_E_fields = manufactured_electric_fields(Lr_in,Lz,r_bc,z_bc,composition,nr_local)
@@ -517,6 +518,7 @@ function analyze_and_plot_data(path)
         upar_sym = copy(density[:,:,:,:])
         ppar_sym = copy(density[:,:,:,:])
         pperp_sym = copy(density[:,:,:,:])
+        vthi_sym = copy(density[:,:,:,:])
         is = 1
         for it in 1:ntime
             for ir in 1:nr_global
@@ -525,6 +527,7 @@ function analyze_and_plot_data(path)
                     upar_sym[iz,ir,is,it] = upari_func(z[iz],r[ir],time[it])
                     ppar_sym[iz,ir,is,it] = ppari_func(z[iz],r[ir],time[it])
                     pperp_sym[iz,ir,is,it] = pperpi_func(z[iz],r[ir],time[it])
+                    vthi_sym[iz,ir,is,it] = vthi_func(z[iz],r[ir],time[it])
                 end
             end
         end
@@ -536,6 +539,8 @@ function analyze_and_plot_data(path)
          L"\widetilde{p}_{\|\|i}",L"\widetilde{p}_{\|\|i}^{sym}",L"\varepsilon(\widetilde{p}_{\|\|i})","ppar")
         compare_moments_symbolic_test(run_name,perpendicular_pressure,pperp_sym,"ion",z,r,time,nz_global,nr_global,ntime,
          L"\widetilde{p}_{\perp i}",L"\widetilde{p}_{\perp i}^{sym}",L"\varepsilon(\widetilde{p}_{\perp i})","pperp")
+        compare_moments_symbolic_test(run_name,thermal_speed,vthi_sym,"ion",z,r,time,nz_global,nr_global,ntime,
+         L"\widetilde{v}_{th,i}",L"\widetilde{v}_{th,i}^{sym}",L"\varepsilon(\widetilde{v}_{th,i})","vthi")
 
         compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,"ion",
           L"\widetilde{f}_i",L"\widetilde{f}^{sym}_i",L"\varepsilon(\widetilde{f}_i)","pdf")

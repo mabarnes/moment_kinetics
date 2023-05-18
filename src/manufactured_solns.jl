@@ -189,10 +189,29 @@ using IfElse
     end
     
     # ion perpendicular pressure symbolic function 
-    function pperpi_sym(Lr,Lz,r_bc,z_bc,composition)
+    function pperpi_sym(Lr,Lz,r_bc,z_bc,composition,nvperp)
         densi = densi_sym(Lr,Lz,r_bc,z_bc,composition)
-        pperpi = densi # simple vperp^2 dependence of dfni
+        if nvperp > 1
+            pperpi = densi # simple vperp^2 dependence of dfni
+        else
+            pperpi = 0.0 # marginalised model has nvperp = 1, vperp[1] = 0
+        end
         return pperpi
+    end
+    
+    # ion thermal speed symbolic function 
+    function vthi_sym(Lr,Lz,r_bc,z_bc,composition,nvperp)
+        densi = densi_sym(Lr,Lz,r_bc,z_bc,composition)
+        ppari = ppari_sym(Lr,Lz,r_bc,z_bc,composition)
+        pperpi = pperpi_sym(Lr,Lz,r_bc,z_bc,composition,nvperp)
+        isotropic_pressure = (1.0/3.0)*(ppari + 2.0*pperpi)
+        
+        if nvperp > 1
+            vthi = sqrt(isotropic_pressure/densi) # thermal speed definition of 2V model
+        else
+            vthi = sqrt(ppari/densi) # thermal speed definition of 1V model
+        end
+        return vthi
     end
     
     function jpari_into_LHS_wall_sym(Lr,Lz,r_bc,z_bc,composition)
@@ -280,11 +299,12 @@ using IfElse
         return Er_expanded, Ez_expanded, phi
     end
 
-    function manufactured_solutions(Lr,Lz,r_bc,z_bc,geometry,composition,nr)
+    function manufactured_solutions(Lr,Lz,r_bc,z_bc,geometry,composition,nr,nvperp)
         densi = densi_sym(Lr,Lz,r_bc,z_bc,composition)
         upari = upari_sym(Lr,Lz,r_bc,z_bc,composition,geometry,nr)
         ppari = ppari_sym(Lr,Lz,r_bc,z_bc,composition)
-        pperpi = pperpi_sym(Lr,Lz,r_bc,z_bc,composition)
+        pperpi = pperpi_sym(Lr,Lz,r_bc,z_bc,composition,nvperp)
+        vthi = vthi_sym(Lr,Lz,r_bc,z_bc,composition,nvperp)
         dfni = dfni_sym(Lr,Lz,r_bc,z_bc,composition,geometry,nr)
         
         densn = densn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
@@ -296,6 +316,7 @@ using IfElse
         upari_func = build_function(upari, z, r, t, expression=Val{false})
         ppari_func = build_function(ppari, z, r, t, expression=Val{false})
         pperpi_func = build_function(pperpi, z, r, t, expression=Val{false})
+        vthi_func = build_function(vthi, z, r, t, expression=Val{false})
         densn_func = build_function(densn, z, r, t, expression=Val{false})
         dfni_func = build_function(dfni, vpa, vperp, z, r, t, expression=Val{false})
         dfnn_func = build_function(dfnn, vz, vr, vzeta, z, r, t, expression=Val{false})
@@ -309,7 +330,7 @@ using IfElse
         manufactured_solns_list = (densi_func = densi_func, densn_func = densn_func, 
                                    dfni_func = dfni_func, dfnn_func = dfnn_func, 
                                    upari_func = upari_func, ppari_func = ppari_func,
-                                   pperpi_func = pperpi_func)
+                                   pperpi_func = pperpi_func, vthi_func = vthi_func)
         
         return manufactured_solns_list
     end 

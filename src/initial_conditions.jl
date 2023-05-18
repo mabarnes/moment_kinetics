@@ -28,7 +28,7 @@ using ..velocity_moments: create_moments_charged, create_moments_neutral, update
 using ..velocity_moments: moments_charged_substruct, moments_neutral_substruct
 using ..velocity_moments: update_neutral_density!, update_neutral_pz!, update_neutral_pr!, update_neutral_pzeta!
 using ..velocity_moments: update_neutral_uz!, update_neutral_ur!, update_neutral_uzeta!, update_neutral_qz!
-using ..velocity_moments: update_ppar!, update_upar!, update_density!, update_pperp!
+using ..velocity_moments: update_ppar!, update_upar!, update_density!, update_pperp!, update_vth!
 
 using ..manufactured_solns: manufactured_solutions
 
@@ -192,7 +192,7 @@ function init_pdf!(pdf, moments, vz, vr, vzeta, vpa, vperp, z, r, n_ion_species,
 end
 
 function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_species, geometry,composition)
-    manufactured_solns_list = manufactured_solutions(r.L,z.L,r.bc,z.bc,geometry,composition,r.n) 
+    manufactured_solns_list = manufactured_solutions(r.L,z.L,r.bc,z.bc,geometry,composition,r.n,vperp.n) 
     dfni_func = manufactured_solns_list.dfni_func
     densi_func = manufactured_solns_list.densi_func
     dfnn_func = manufactured_solns_list.dfnn_func
@@ -212,12 +212,13 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
     update_qpar!(moments.charged.qpar, pdf.charged.unnorm, vpa, vperp, z, r, composition)    
     update_ppar!(moments.charged.ppar, pdf.charged.unnorm, vpa, vperp, z, r, composition, moments.charged.upar)
     update_pperp!(moments.charged.pperp, pdf.charged.unnorm, vpa, vperp, z, r, composition)
-    begin_s_r_z_region()
-    @loop_s_r_z is ir iz begin
+    update_vth!(moments.charged.vth, moments.charged.ppar, moments.charged.pperp, moments.charged.dens, vperp, z, r, composition)
+    #begin_s_r_z_region()
+    #@loop_s_r_z is ir iz begin
         #moments.charged.upar[iz,ir,is] /= moments.charged.dens[iz,ir,is]
     # update the thermal speed
-        moments.charged.vth[iz,ir,is] = sqrt(moments.charged.ppar[iz,ir,is]/moments.charged.dens[iz,ir,is])
-    end
+    #    moments.charged.vth[iz,ir,is] = sqrt(moments.charged.ppar[iz,ir,is]/moments.charged.dens[iz,ir,is])
+    #end
     
     if n_neutral_species > 0
         begin_sn_r_z_region()
