@@ -31,7 +31,7 @@ using ..velocity_moments: create_moments_charged, create_moments_neutral, update
 using ..velocity_moments: moments_charged_substruct, moments_neutral_substruct
 using ..velocity_moments: update_neutral_density!, update_neutral_pz!, update_neutral_pr!, update_neutral_pzeta!
 using ..velocity_moments: update_neutral_uz!, update_neutral_ur!, update_neutral_uzeta!, update_neutral_qz!
-using ..velocity_moments: update_ppar!, update_upar!, update_density!, update_pperp!, reset_moments_status!
+using ..velocity_moments: update_ppar!, update_upar!, update_density!, update_pperp!, update_vth!, reset_moments_status!
 
 using ..manufactured_solns: manufactured_solutions
 
@@ -899,7 +899,7 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
                                               manufactured_solns_input)
     manufactured_solns_list = manufactured_solutions(manufactured_solns_input, r.L, z.L,
                                                      r.bc, z.bc, geometry, composition,
-                                                     species, r.n)
+                                                     species, r.n, vperp.n)
     dfni_func = manufactured_solns_list.dfni_func
     densi_func = manufactured_solns_list.densi_func
     dfnn_func = manufactured_solns_list.dfnn_func
@@ -931,12 +931,7 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
                  moments.charged.vth, pdf.charged.norm, vpa, vperp, z, r,
                  composition, moments.evolve_density, moments.evolve_upar,
                  moments.evolve_ppar)
-    # convert from particle particle flux to parallel flow
-    begin_s_r_z_region()
-    @loop_s_r_z is ir iz begin
-        # update the thermal speed
-        moments.charged.vth[iz,ir,is] = sqrt(2.0*moments.charged.ppar[iz,ir,is]/moments.charged.dens[iz,ir,is])
-    end
+    update_vth!(moments.charged.vth, moments.charged.ppar, moments.charged.pperp, moments.charged.dens, vperp, z, r, composition)
 
     if n_neutral_species > 0
         begin_sn_r_z_region()

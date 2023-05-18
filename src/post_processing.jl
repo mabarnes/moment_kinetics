@@ -1017,6 +1017,7 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
     density = density[1]
     parallel_flow = parallel_flow[1]
     parallel_pressure = parallel_pressure[1]
+    perpendicular_pressure = perpendicular_pressure[1]
     parallel_heat_flux = parallel_heat_flux[1]
     thermal_speed = thermal_speed[1]
     time = time[1]
@@ -1100,12 +1101,13 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
         manufactured_solns_list = manufactured_solutions(manufactured_solns_input, Lr_in,
                                                          z_global.L, r_global.bc,
                                                          z_global.bc, geometry,
-                                                         composition, species, r_global.n)
+                                                         composition, species, r_global.n, vperp.n)
         dfni_func = manufactured_solns_list.dfni_func
         densi_func = manufactured_solns_list.densi_func
         upari_func = manufactured_solns_list.upari_func
         ppari_func = manufactured_solns_list.ppari_func
         pperpi_func = manufactured_solns_list.pperpi_func
+        vthi_func = manufactured_solns_list.vthi_func
         dfnn_func = manufactured_solns_list.dfnn_func
         densn_func = manufactured_solns_list.densn_func
         manufactured_E_fields =
@@ -1145,6 +1147,7 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
         upar_sym = copy(density[:,:,:,:])
         ppar_sym = copy(density[:,:,:,:])
         pperp_sym = copy(density[:,:,:,:])
+        vthi_sym = copy(density[:,:,:,:])
         is = 1
         for it in 1:ntime
             for ir in 1:r_global.n
@@ -1153,6 +1156,7 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
                     upar_sym[iz,ir,is,it] = upari_func(z_global.grid[iz],r_global.grid[ir],time[it])
                     ppar_sym[iz,ir,is,it] = ppari_func(z_global.grid[iz],r_global.grid[ir],time[it])
                     pperp_sym[iz,ir,is,it] = pperpi_func(z_global.grid[iz],r_global.grid[ir],time[it])
+                    vthi_sym[iz,ir,is,it] = vthi_func(z_global.grid[iz],r_global.grid[ir],time[it])
                 end
             end
         end
@@ -1162,8 +1166,10 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
          L"\widetilde{u}_{\|\|i}",L"\widetilde{u}_{\|\|i}^{sym}",L"\varepsilon(\widetilde{u}_{\|\|i})","upar")
         compare_moments_symbolic_test(run_name_label,parallel_pressure,ppar_sym,"ion",z_global.grid,r_global.grid,time,z_global.n,r_global.n,ntime,
          L"\widetilde{p}_{\|\|i}",L"\widetilde{p}_{\|\|i}^{sym}",L"\varepsilon(\widetilde{p}_{\|\|i})","ppar")
-        compare_moments_symbolic_test(run_name,perpendicular_pressure,pperp_sym,"ion",z,r,time,nz_global,nr_global,ntime,
+        compare_moments_symbolic_test(run_name,perpendicular_pressure,pperp_sym,"ion",z_global.grid,r_global.grid,time,z_global.n,r_global.n,ntime,
          L"\widetilde{p}_{\perp i}",L"\widetilde{p}_{\perp i}^{sym}",L"\varepsilon(\widetilde{p}_{\perp i})","pperp")
+        compare_moments_symbolic_test(run_name,thermal_speed,vthi_sym,"ion",z_global.grid,r_global.grid,time,z_global.n,r_global.n,ntime,
+         L"\widetilde{v}_{th,i}",L"\widetilde{v}_{th,i}^{sym}",L"\varepsilon(\widetilde{v}_{th,i})","vthi")
 
         compare_charged_pdf_symbolic_test(run_name_label,manufactured_solns_list,"ion",
           L"\widetilde{f}_i",L"\widetilde{f}^{sym}_i",L"\varepsilon(\widetilde{f}_i)","pdf")

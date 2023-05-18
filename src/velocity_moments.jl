@@ -12,6 +12,7 @@ export update_upar!
 export update_ppar!
 export update_pperp!
 export update_qpar!
+export update_vth!
 export reset_moments_status!
 export moments_chrg_substruct, moments_ntrl_substruct
 export update_neutral_density!
@@ -28,6 +29,7 @@ export get_density
 export get_upar
 export get_ppar
 export get_pperp
+export get_pressure
 
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_shared_float, allocate_bool, allocate_float
@@ -627,6 +629,34 @@ function get_pperp(ff, vpa, vperp)
     norm_fac = 0.5 # normalise to m_s N_e c_s^2
     #norm_fac = 1.0 # normalise to 0.5 m_s N_e c_s^2 = N_e T_s
     return norm_fac*integrate_over_vspace(@view(ff[:,:]), vpa.grid, 0, vpa.wgts, vperp.grid, 2, vperp.wgts)
+end
+
+function update_vth!(vth, ppar, pperp, dens, vperp, z, r, composition)
+    @boundscheck composition.n_ion_species == size(vth,3) || throw(BoundsError(vth))
+    @boundscheck r.n == size(vth,2) || throw(BoundsError(vth))
+    @boundscheck z.n == size(vth,1) || throw(BoundsError(vth))
+    
+    begin_s_r_z_region()
+    normfac = 2.0 # if ppar normalised to 2*nref Tref = mref cref^2
+    #normfac = 1.0 # if ppar normalised to nref Tref = 0.5 * mref cref^2
+    if vperp.n > 1 #2V definition
+        @loop_s_r_z is ir iz begin
+            piso = get_pressure(ppar[iz,ir,is],pperp[iz,ir,is])
+            vth[iz,ir,is] = sqrt(normfac*piso/dens[iz,ir,is])
+        end
+    else #1V definition 
+        @loop_s_r_z is ir iz begin
+            vth[iz,ir,is] = sqrt(normfac*ppar[iz,ir,is]/dens[iz,ir,is])
+        end
+    end
+end
+
+"""
+compute the isotropic pressure from the already computed ppar and pperp
+"""
+function get_pressure(ppar::mk_float,pperp::mk_float)
+    pres = (1.0/3.0)*(ppar + 2.0*pperp) 
+    return pres
 end
 
 """
