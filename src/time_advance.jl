@@ -58,7 +58,7 @@ using Dates
 using Plots
 using ..post_processing: draw_v_parallel_zero!
 
-mutable struct scratch_dummy_arrays
+struct scratch_dummy_arrays
     dummy_sr::Array{mk_float,2}
     dummy_vpavperp::Array{mk_float,2}
     dummy_zrs::MPISharedArray{mk_float,3}

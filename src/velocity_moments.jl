@@ -36,7 +36,7 @@ using ..looping
 
 """
 """
-mutable struct moments_charged_substruct
+struct moments_charged_substruct
     # this is the particle density
     dens::MPISharedArray{mk_float,3}
     # flag that keeps track of if the density needs updating before use
@@ -96,7 +96,7 @@ end
 
 """
 """
-mutable struct moments_neutral_substruct
+struct moments_neutral_substruct
     # this is the particle density
     dens::MPISharedArray{mk_float,3}
     # flag that keeps track of if the density needs updating before use
