@@ -357,9 +357,6 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
             scratch[1].pz_neutral[iz,ir,isn] = moments.neutral.pz[iz,ir,isn]
         end
     end
-    # update unnormalised pdf and phi in case they were affected by applying boundary
-    # conditions or constraints to the pdf
-    update_pdf_unnorm!(pdf, moments, scratch[1].temp_z_s, composition)
 
     update_phi!(fields, scratch[1], z, r, composition, z_spectral, r_spectral,
                 scratch_dummy)
@@ -1066,19 +1063,16 @@ function time_advance_no_splitting!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa
            composition, collisions, geometry, boundary_distributions,
            num_diss_params, advance, scratch_dummy, manufactured_source_list, istep)
 
-    #pdf_in = pdf.unnorm #get input pdf values in case we wish to impose a constant-in-time boundary condition in r
-    #use pdf.norm for this fn for now.
-
     if t_input.n_rk_stages > 1
         ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
             moments, fields, spectral_objects, advect_objects,
             composition, collisions, geometry, boundary_distributions, num_diss_params,
-            advance,  scratch_dummy, manufactured_source_list, istep)#pdf_in,
+            advance,  scratch_dummy, manufactured_source_list, istep)
     else
         euler_time_advance!(scratch, scratch, pdf, fields, moments,
             advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z, r, t,
             t_input, spectral_objects, composition,
-            collisions, geometry, boundary_distributions, scratch_dummy, manufactured_source_list, advance, 1)#pdf_in,
+            collisions, geometry, boundary_distributions, scratch_dummy, manufactured_source_list, advance, 1)
         # NB: this must be broken -- scratch is updated in euler_time_advance!,
         # but not the pdf or moments. need to add update to these quantities here. Also
         # need to apply boundary conditions, possibly other things that are taken care
@@ -1169,9 +1163,6 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
     calculate_moment_derivatives!(moments, new_scratch, scratch_dummy, z, z_spectral,
                                   num_diss_params)
 
-    # update the 'true', un-normalized pdf
-    update_unnormalized_pdf!(pdf.charged.unnorm, new_scratch, moments)
-
     ##
     # update the neutral particle distribution and moments
     ##
@@ -1232,9 +1223,6 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
 
         calculate_moment_derivatives_neutral!(moments, new_scratch, scratch_dummy, z,
                                               z_spectral, num_diss_params)
-
-        # update the 'true', un-normalized pdf
-        update_unnormalized_pdf_neutral!(pdf.neutral.unnorm, new_scratch, moments)
     end
 
     # update the electrostatic potential phi
@@ -1345,58 +1333,6 @@ function update_derived_moments_neutral!(new_scratch, moments, vz, vr, vzeta, z,
 end
 
 """
-update the 'true', un-normalized, charged pdf
-"""
-function update_unnormalized_pdf!(pdf_unnorm, new_scratch, moments)
-    # if no moments are evolved separately from the pdf, then the
-    # evolved pdf is the 'true', un-normalized pdf;
-    # initialize to this value and modify below if necessary
-    @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
-        pdf_unnorm[ivpa,ivperp,iz,ir,is] = new_scratch.pdf[ivpa,ivperp,iz,ir,is]
-    end
-    # if separately evolving the particle density, the evolved
-    # pdf is the 'true' pdf divided by the particle density
-    if moments.evolve_density
-        @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
-            pdf_unnorm[ivpa,ivperp,iz,ir,is] = new_scratch.pdf[ivpa,ivperp,iz,ir,is] * new_scratch.density[iz,ir,is]
-        end
-    end
-    # if separately evolving the parallel pressure, the evolved
-    # pdf is the 'true' pdf multiplied by the thermal speed
-    if moments.evolve_ppar
-        @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
-            pdf_unnorm[ivpa,ivperp,iz,ir,is] /= moments.charged.vth[iz,ir,is]
-        end
-    end
-end
-
-"""
-update the 'true', un-normalized, neutral pdf
-"""
-function update_unnormalized_pdf_neutral!(pdf_unnorm, new_scratch, moments)
-    # if no moments are evolved separately from the pdf, then the
-    # evolved pdf is the 'true', un-normalized pdf;
-    # initialize to this value and modify below if necessary
-    @loop_sn_r_z_vzeta_vr_vz is ir iz ivzeta ivr ivz begin
-        pdf_unnorm[ivz,ivr,ivzeta,iz,ir,is] = new_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,is]
-    end
-    # if separately evolving the particle density, the evolved
-    # pdf is the 'true' pdf divided by the particle density
-    if moments.evolve_density
-        @loop_sn_r_z_vzeta_vr_vz is ir iz ivzeta ivr ivz begin
-            pdf_unnorm[ivz,ivr,ivzeta,iz,ir,is] = new_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,is] * new_scratch.density_neutral[iz,ir,is]
-        end
-    end
-    # if separately evolving the parallel pressure, the evolved
-    # pdf is the 'true' pdf multiplied by the thermal speed
-    if moments.evolve_ppar
-        @loop_sn_r_z_vzeta_vr_vz is ir iz ivzeta ivr ivz begin
-            pdf_unnorm[ivz,ivr,ivzeta,iz,ir,is] /= moments.neutral.vth[iz,ir,is]
-        end
-    end
-end
-
-"""
 """
 function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
            moments, fields, spectral_objects, advect_objects,
@@ -1421,7 +1357,6 @@ function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase,
         begin_sn_r_z_region()
         @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
             first_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] = pdf.neutral.norm[ivz,ivr,ivzeta,iz,ir,isn]
-            # change norm -> unnorm if remove moment-based evolution?
         end
         @loop_sn_r_z isn ir iz begin
             first_scratch.density_neutral[iz,ir,isn] = moments.neutral.dens[iz,ir,isn]
@@ -1461,7 +1396,6 @@ function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase,
     final_scratch = scratch[istage]
     @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
         pdf.charged.norm[ivpa,ivperp,iz,ir,is] = final_scratch.pdf[ivpa,ivperp,iz,ir,is]
-        # change norm -> unnorm if remove moment-based evolution?
     end
     @loop_s_r_z is ir iz begin
         moments.charged.dens[iz,ir,is] = final_scratch.density[iz,ir,is]
@@ -1474,7 +1408,6 @@ function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase,
         begin_sn_r_z_region(no_synchronize=true)
         @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
             pdf.neutral.norm[ivz,ivr,ivzeta,iz,ir,isn] = final_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn]
-            # change norm -> unnorm if remove moment-based evolution?
         end
         @loop_sn_r_z isn ir iz begin
             moments.neutral.dens[iz,ir,isn] = final_scratch.density_neutral[iz,ir,isn]
@@ -1522,7 +1455,6 @@ function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase,
         end
     end
 
-    update_pdf_unnorm!(pdf, moments, scratch[istage].temp_z_s, composition)
     return nothing
 end
 
@@ -1727,24 +1659,6 @@ function update_solution_vector!(evolved, moments, istage, composition, vpa, vpe
         end
     end
     return nothing
-end
-
-"""
-if separately evolving the density via the continuity equation,
-the evolved pdf has been normalised by the particle density
-undo this normalisation to get the true particle distribution function
-"""
-function update_pdf_unnorm!(pdf, moments, scratch, composition)
-    begin_s_r_z_vperp_vpa_region()
-    @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
-        pdf.charged.unnorm[ivpa,ivperp,iz,ir,is] = pdf.charged.norm[ivpa,ivperp,iz,ir,is]
-    end
-    if composition.n_neutral_species > 0
-        begin_sn_r_z_vzeta_vr_vz_region()
-        @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
-            pdf.neutral.unnorm[ivz,ivr,ivzeta,iz,ir,isn] = pdf.neutral.norm[ivz,ivr,ivzeta,iz,ir,isn]
-        end
-    end
 end
 
 end
