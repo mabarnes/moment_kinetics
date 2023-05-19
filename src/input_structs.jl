@@ -241,10 +241,6 @@ mutable struct species_composition
     # if false -- wall bc uses true Knudsen cosine to specify neutral pdf leaving the wall
     # if true -- use a simpler pdf that is easier to integrate
     use_test_neutral_wall_pdf::Bool
-    # Species indices that represent ions
-    ion_species_range::UnitRange{mk_int}
-    # Species indices that represent neutrals
-    neutral_species_range::UnitRange{mk_int}
     # electron temperature used for Boltzmann response
     T_e::mk_float
     # wall temperature used if 'wall' BC selected for z coordinate; normalised by electron temperature
