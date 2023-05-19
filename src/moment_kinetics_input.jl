@@ -234,7 +234,7 @@ function mk_input(scan_input=Dict())
     vpa.fd_option = get(scan_input, "vpa_finite_difference_option", "third_order_upwind")
 
     num_diss_params = setup_numerical_dissipation(
-        get(scan_input, "numerical_dissipation", Dict{String,Any}()))
+        get(scan_input, "numerical_dissipation", Dict{String,Any}()), true)
 
     # overwrite some default parameters related to the vperp grid
     # ngrid is the number of grid points per element
@@ -313,8 +313,10 @@ function mk_input(scan_input=Dict())
         vzeta.discretization = get(scan_input, "vzeta_discretization", "chebyshev_pseudospectral")
     end
 
+    is_1V = (vperp.ngrid == vperp.nelement_global == 1 && vzeta.ngrid ==
+             vzeta.nelement_global == 1 && vr.ngrid == vr.nelement_global == 1)
     num_diss_params = setup_numerical_dissipation(
-        get(scan_input, "numerical_dissipation", Dict{String,Any}()))
+        get(scan_input, "numerical_dissipation", Dict{String,Any}()), is_1V)
     
     #########################################################################
     ########## end user inputs. do not modify following code! ###############

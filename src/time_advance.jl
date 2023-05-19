@@ -41,6 +41,8 @@ using ..ionization: ionization_collisions_1V!, ionization_collisions_3V!, consta
 using ..numerical_dissipation: vpa_boundary_buffer_decay!,
                                vpa_boundary_buffer_diffusion!, vpa_dissipation!,
                                z_dissipation!, r_dissipation!,
+                               vz_dissipation_neutral!, z_dissipation_neutral!,
+                               r_dissipation_neutral!,
                                vpa_boundary_force_decreasing!, force_minimum_pdf_value!,
                                force_minimum_pdf_value_neutral!
 using ..source_terms: source_terms!, source_terms_neutral!, source_terms_manufactured!
@@ -1623,6 +1625,12 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
                        num_diss_params, scratch_dummy)
         r_dissipation!(fvec_out.pdf, fvec_in.pdf, r, r_spectral, dt,
                        num_diss_params, scratch_dummy)
+        vz_dissipation_neutral!(fvec_out.pdf_neutral, fvec_in.pdf_neutral, vz,
+                                vz_spectral, dt, num_diss_params)
+        z_dissipation_neutral!(fvec_out.pdf_neutral, fvec_in.pdf_neutral, z, z_spectral,
+                               dt, num_diss_params, scratch_dummy)
+        r_dissipation_neutral!(fvec_out.pdf_neutral, fvec_in.pdf_neutral, r, r_spectral,
+                               dt, num_diss_params, scratch_dummy)
     end
     # End of advance for distribution function
 

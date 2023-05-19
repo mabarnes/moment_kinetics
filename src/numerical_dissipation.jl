@@ -17,13 +17,22 @@ Base.@kwdef struct numerical_dissipation_parameters
     vpa_boundary_buffer_damping_rate::mk_float = -1.0
     vpa_boundary_buffer_diffusion_coefficient::mk_float = -1.0
     vpa_dissipation_coefficient::mk_float = -1.0
+    vz_dissipation_coefficient::mk_float = -1.0
     z_dissipation_coefficient::mk_float = -1.0
     r_dissipation_coefficient::mk_float = -1.0
     moment_dissipation_coefficient::mk_float = -1.0
     force_minimum_pdf_value::Union{Nothing,mk_float} = nothing
 end
 
-function setup_numerical_dissipation(input_section::Dict)
+function setup_numerical_dissipation(input_section::Dict, is_1V)
+    if is_1V && "vpa_dissipation_coefficient" ∈ keys(input_section)
+        # Set default for vz_dissipation_coefficient the same as
+        # vpa_dissipation_coefficient for 1V case
+        input_section["vz_dissipation_coefficient"] =
+            get(input_section, "vz_dissipation_coefficient",
+                input_section["vpa_dissipation_coefficient"])
+    end
+
     input = Dict(Symbol(k)=>v for (k,v) in input_section)
 
     return numerical_dissipation_parameters(; input...)
@@ -231,12 +240,13 @@ vpa_dissipation_coefficient = 0.1
 """
 function vpa_dissipation!(f_out, f_in, vpa, spectral::T_spectral, dt,
         num_diss_params::numerical_dissipation_parameters) where T_spectral
-    begin_s_r_z_vperp_region()
 
     diffusion_coefficient = num_diss_params.vpa_dissipation_coefficient
     if diffusion_coefficient <= 0.0
         return nothing
     end
+
+    begin_s_r_z_vperp_region()
 
     # if T_spectral <: Bool
     #     # Scale diffusion coefficient like square of grid spacing, so convergence will
@@ -378,6 +388,137 @@ function r_dissipation!(f_out, f_in, r, r_spectral::T_spectral, dt,
     # advance f due to diffusion_coefficient * d / d r ( Q d f / d r )
     @loop_s_z_vperp_vpa is iz ivperp ivpa begin
         @views @. f_out[ivpa,ivperp,iz,:,is] += dt * diffusion_coefficient * scratch_dummy.buffer_vpavperpzrs_1[ivpa,ivperp,iz,:,is]
+    end
+
+    return nothing
+end
+
+"""
+Add diffusion in the vz direction to suppress oscillations for neutrals
+
+Disabled by default.
+
+The diffusion coefficient is set in the input TOML file by the parameter
+```
+[numerical_dissipation]
+vz_dissipation_coefficient = 0.1
+```
+"""
+function vz_dissipation_neutral!(f_out, f_in, vz, spectral::T_spectral, dt,
+        num_diss_params::numerical_dissipation_parameters) where T_spectral
+
+    diffusion_coefficient = num_diss_params.vz_dissipation_coefficient
+    if diffusion_coefficient <= 0.0
+        return nothing
+    end
+
+    begin_sn_r_z_vzeta_vr_region()
+
+    @loop_sn_r_z_vzeta_vr isn ir iz ivzeta ivr begin
+        vz.scratch2 .= 1.0 # placeholder for Q in d / d vpa ( Q d f / d vpa)
+        @views second_derivative!(vz.scratch, f_in[:,ivr,ivzeta,iz,ir,isn], vz.scratch2, vz, spectral)
+        @views @. f_out[:,ivr,ivzeta,iz,ir,isn] += dt * diffusion_coefficient * vz.scratch
+    end
+
+    return nothing
+end
+
+"""
+Add diffusion in the z direction to suppress oscillations for neutrals
+
+Disabled by default.
+
+The diffusion coefficient is set in the input TOML file by the parameter
+```
+[numerical_dissipation]
+z_dissipation_coefficient = 0.1
+```
+
+Note that the current distributed-memory compatible
+implementation does not impose a penalisation term
+on internal or external element boundaries
+
+"""
+function z_dissipation_neutral!(f_out, f_in, z, z_spectral::T_spectral, dt,
+        num_diss_params::numerical_dissipation_parameters, scratch_dummy) where T_spectral
+
+    diffusion_coefficient = num_diss_params.z_dissipation_coefficient
+    if diffusion_coefficient <= 0.0
+        return nothing
+    end
+
+    begin_sn_r_vzeta_vr_vz_region()
+
+    # calculate d / d z ( Q d f / d z ) using distributed memory compatible routines
+    # first compute d f / d z using centred reconciliation and place in dummy array #1
+    derivative_z!(scratch_dummy.buffer_vpavperpzrs_1, f_in,
+                  scratch_dummy.buffer_vpavperprs_1, scratch_dummy.buffer_vpavperprs_2,
+                  scratch_dummy.buffer_vpavperprs_3,scratch_dummy.buffer_vpavperprs_4,
+                  z_spectral,z)
+    # form Q d f / d r and place in dummy array #2
+    @loop_sn_r_vzeta_vr_vz isn ir ivzeta ivr ivz begin
+        Q = 1.0 # placeholder for geometrical or velocity space dependent metric coefficient
+        @. scratch_dummy.buffer_vpavperpzrs_2[ivz,ivr,ivzeta,:,ir,isn] =  Q * scratch_dummy.buffer_vpavperpzrs_1[ivz,ivr,ivzeta,:,ir,isn]
+    end
+    # compute d / d z ( Q d f / d z ) using centred reconciliation and place in dummy array #1
+    derivative_z!(scratch_dummy.buffer_vpavperpzrs_1, scratch_dummy.buffer_vpavperpzrs_2,
+                  scratch_dummy.buffer_vpavperprs_1, scratch_dummy.buffer_vpavperprs_2,
+                  scratch_dummy.buffer_vpavperprs_3,scratch_dummy.buffer_vpavperprs_4,
+                  z_spectral,z)
+    # advance f due to diffusion_coefficient * d / d z ( Q d f / d z )
+    @loop_sn_r_vzeta_vr_vz isn ir ivzeta ivr ivz begin
+        @views @. f_out[ivz,ivr,ivzeta,:,ir,isn] += dt * diffusion_coefficient * scratch_dummy.buffer_vpavperpzrs_1[ivz,ivr,ivzeta,:,ir,isn]
+    end
+
+    return nothing
+end
+
+"""
+Add diffusion in the r direction to suppress oscillations for neutrals
+
+Disabled by default.
+
+The diffusion coefficient is set in the input TOML file by the parameter
+```
+[numerical_dissipation]
+r_dissipation_coefficient = 0.1
+
+```
+
+Note that the current distributed-memory compatible
+implementation does not impose a penalisation term
+on internal or external element boundaries
+
+"""
+function r_dissipation_neutral!(f_out, f_in, r, r_spectral::T_spectral, dt,
+        num_diss_params::numerical_dissipation_parameters, scratch_dummy) where T_spectral
+
+    diffusion_coefficient = num_diss_params.r_dissipation_coefficient
+    if diffusion_coefficient <= 0.0
+        return nothing
+    end
+
+    begin_sn_z_vzeta_vr_nz_region()
+
+    # calculate d / d r ( Q d f / d r ) using distributed memory compatible routines
+    # first compute d f / d r using centred reconciliation and place in dummy array #1
+    derivative_r!(scratch_dummy.buffer_vpavperpzrs_1, f_in,
+                  scratch_dummy.buffer_vpavperpzs_1, scratch_dummy.buffer_vpavperpzs_2,
+                  scratch_dummy.buffer_vpavperpzs_3,scratch_dummy.buffer_vpavperpzs_4,
+                  r_spectral,r)
+    # form Q d f / d r and place in dummy array #2
+    @loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
+        Q = 1.0 # placeholder for geometrical or velocity space dependent metric coefficient
+        @. scratch_dummy.buffer_vpavperpzrs_2[ivz,ivr,ivzeta,iz,:,isn] =  Q * scratch_dummy.buffer_vpavperpzrs_1[ivz,ivr,ivzeta,iz,:,isn]
+    end
+    # compute d / d r ( Q d f / d r ) using centred reconciliation and place in dummy array #1
+    derivative_r!(scratch_dummy.buffer_vpavperpzrs_1, scratch_dummy.buffer_vpavperpzrs_2,
+                  scratch_dummy.buffer_vpavperpzs_1, scratch_dummy.buffer_vpavperpzs_2,
+                  scratch_dummy.buffer_vpavperpzs_3,scratch_dummy.buffer_vpavperpzs_4,
+                  r_spectral,r)
+    # advance f due to diffusion_coefficient * d / d r ( Q d f / d r )
+    @loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
+        @views @. f_out[ivz,ivr,ivzeta,iz,:,isn] += dt * diffusion_coefficient * scratch_dummy.buffer_vpavperpzrs_1[ivz,ivr,ivzeta,iz,:,isn]
     end
 
     return nothing
