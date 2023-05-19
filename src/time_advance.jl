@@ -328,7 +328,6 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
                 neutral_z_advect, nothing, nothing, neutral_vz_advect, r, z, vzeta, vr,
                 vz, composition, geometry, scratch_dummy)
             begin_sn_r_z_region()
-            #enforce_moment_constraints!(new_scratch, scratch[1], vpa, z, r, composition, moments, scratch_dummy_sr)
             @loop_sn_r_z isn ir iz begin
                 @views hard_force_moment_constraints_neutral!(
                     pdf.neutral.norm[:,:,:,iz,ir,isn], moments, vz)
@@ -1119,7 +1118,6 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
 
     if moments.evolve_density && moments.enforce_conservation
         begin_s_r_z_region()
-        #enforce_moment_constraints!(new_scratch, scratch[1], vpa, z, r, composition, moments, scratch_dummy_sr)
         @loop_s_r_z is ir iz begin
             @views hard_force_moment_constraints!(new_scratch.pdf[:,:,iz,ir,is], moments,
                                                   vpa)
@@ -1192,7 +1190,6 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
 
         if moments.evolve_density && moments.enforce_conservation
             begin_sn_r_z_region()
-            #enforce_moment_constraints!(new_scratch, scratch[1], vpa, z, r, composition, moments, scratch_dummy_sr)
             @loop_sn_r_z isn ir iz begin
                 @views hard_force_moment_constraints_neutral!(
                     new_scratch.pdf_neutral[:,:,:,iz,ir,isn], moments, vz)
