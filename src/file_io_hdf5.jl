@@ -49,6 +49,17 @@ function add_attribute!(var::HDF5.Dataset, name, value)
     attributes(var)[name] = value
 end
 
+function get_group(file_or_group::HDF5.H5DataStore, name::String)
+    # This overload deals with cases where fid is an HDF5 `File` or `Group` (`H5DataStore`
+    # is the abstract super-type for both
+    try
+        return file_or_group[name]
+    catch
+        println("An error occured while opening the $name group")
+        rethrow()
+    end
+end
+
 # HDF5.H5DataStore is the supertype for HDF5.File and HDF5.Group
 function write_single_value!(file_or_group::HDF5.H5DataStore, name,
                              data::Union{Number,AbstractArray{T,N}},
