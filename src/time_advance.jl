@@ -171,8 +171,8 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
     # indicate which parts of the equations are to be advanced concurrently.
     # if no splitting of operators, all terms advanced concurrently;
     # else, will advance one term at a time.
-    advance = setup_advance_flags(moments, composition, t_input, collisions, rk_coefs, r,
-                                  vperp, vpa, vzeta, vr, vz)
+    advance = setup_advance_flags(moments, composition, t_input, collisions,
+                                  num_diss_params, rk_coefs, r, vperp, vpa, vzeta, vr, vz)
 
 
     begin_serial_region()
@@ -308,7 +308,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
             pdf.charged.norm, boundary_distributions.pdf_rboundary_charged,
             moments.charged.dens, moments.charged.upar, moments.charged.ppar, moments,
             vpa.bc, z.bc, r.bc, vpa, vperp, z, r, vpa_advect, z_advect, r_advect,
-            composition, scratch_dummy, advance.r_diffusion)
+            composition, scratch_dummy, advance.r_diffusion, advance.vpa_diffusion)
         # Ensure normalised pdf exactly obeys integral constraints if evolving moments
         begin_s_r_z_region()
         @loop_s_r_z is ir iz begin
@@ -328,7 +328,8 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
                 moments.neutral.dens, moments.neutral.uz, moments.neutral.pz, moments,
                 moments.charged.dens, moments.charged.upar, fields.Er, neutral_r_advect,
                 neutral_z_advect, nothing, nothing, neutral_vz_advect, r, z, vzeta, vr,
-                vz, composition, geometry, scratch_dummy)
+                vz, composition, geometry, scratch_dummy, advance.r_diffusion,
+                advance.vz_diffusion)
             begin_sn_r_z_region()
             @loop_sn_r_z isn ir iz begin
                 @views hard_force_moment_constraints_neutral!(
@@ -379,8 +380,8 @@ indicate which parts of the equations are to be advanced concurrently.
 if no splitting of operators, all terms advanced concurrently;
 else, will advance one term at a time.
 """
-function setup_advance_flags(moments, composition, t_input, collisions, rk_coefs, r,
-                             vperp, vpa, vzeta, vr, vz)
+function setup_advance_flags(moments, composition, t_input, collisions, num_diss_params,
+                             rk_coefs, r, vperp, vpa, vzeta, vr, vz)
     # default is not to concurrently advance different operators
     advance_vpa_advection = false
     advance_z_advection = false
@@ -404,6 +405,7 @@ function setup_advance_flags(moments, composition, t_input, collisions, rk_coefs
     advance_neutral_energy = false
     r_diffusion = false
     vpa_diffusion = false
+    vz_diffusion = false
     # all advance flags remain false if using operator-splitting
     # otherwise, check to see if the flags need to be set to true
     if !t_input.split_operators
@@ -445,6 +447,12 @@ function setup_advance_flags(moments, composition, t_input, collisions, rk_coefs
                     advance_ionization_1V = true
                 elseif vperp.n > 1 && vr.n > 1 && vzeta.n > 1
                     advance_ionization = true
+                else
+                    error("If any perpendicular velocity has length>1 they all must. "
+                          * "If all perpendicular velocities have length=1, then vpa and "
+                          * "vz should be the same.\n"
+                          * "vperp.n=$(vperp.n), vr.n=$(vr.n), vzeta.n=$(vzeta.n), "
+                          * "vpa.n=$(vpa.n), vz.n=$(vz.n)")
                 end
             end
         end
@@ -486,6 +494,12 @@ function setup_advance_flags(moments, composition, t_input, collisions, rk_coefs
                 advance_neutral_energy = true
             end
         end
+
+        # flag to determine if a d^2/dr^2 operator is present
+        r_diffusion = (advance_numerical_dissipation && num_diss_params.r_dissipation_coefficient > 0.0)
+        # flag to determine if a d^2/dvpa^2 operator is present
+        vpa_diffusion = (advance_numerical_dissipation && num_diss_params.vpa_dissipation_coefficient > 0.0)
+        vz_diffusion = (advance_numerical_dissipation && num_diss_params.vz_dissipation_coefficient > 0.0)
     end
 
     manufactured_solns_test = t_input.use_manufactured_solns_for_advance
@@ -499,7 +513,7 @@ function setup_advance_flags(moments, composition, t_input, collisions, rk_coefs
                         advance_energy, advance_neutral_sources,
                         advance_neutral_continuity, advance_neutral_force_balance,
                         advance_neutral_energy, rk_coefs, manufactured_solns_test,
-                        r_diffusion, vpa_diffusion)
+                        r_diffusion, vpa_diffusion, vz_diffusion)
 end
 
 function setup_dummy_and_buffer_arrays(nr,nz,nvpa,nvperp,nvz,nvr,nvzeta,nspecies_ion,nspecies_neutral)
@@ -1082,7 +1096,8 @@ or update them by taking the appropriate velocity moment of the evolved pdf
 """
 function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, vr, vzeta,
                     vpa, vperp, z, r, advect_objects, rk_coefs, istage, composition,
-                    geometry, num_diss_params, z_spectral, r_spectral, scratch_dummy)
+                    geometry, num_diss_params, z_spectral, r_spectral, advance,
+                    scratch_dummy)
     begin_s_r_z_region()
 
     new_scratch = scratch[istage+1]
@@ -1116,7 +1131,7 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
     enforce_boundary_conditions!(new_scratch, moments,
         boundary_distributions.pdf_rboundary_charged, vpa.bc, z.bc, r.bc, vpa, vperp, z,
         r, vpa_advect, z_advect, r_advect, composition, scratch_dummy,
-        num_diss_params.r_dissipation_coefficient>0.0)
+        advance.r_diffusion, advance.vpa_diffusion)
 
     if moments.evolve_density && moments.enforce_conservation
         begin_s_r_z_region()
@@ -1188,7 +1203,8 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
             boundary_distributions, new_scratch.density_neutral, new_scratch.uz_neutral,
             new_scratch.pz_neutral, moments, new_scratch.density, new_scratch.upar,
             fields.Er, neutral_r_advect, neutral_z_advect, nothing, nothing,
-            neutral_vz_advect, r, z, vzeta, vr, vz, composition, geometry, scratch_dummy)
+            neutral_vz_advect, r, z, vzeta, vr, vz, composition, geometry, scratch_dummy,
+            advance.r_diffusion, advance.vz_diffusion)
 
         if moments.evolve_density && moments.enforce_conservation
             begin_sn_r_z_region()
@@ -1435,7 +1451,7 @@ function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase,
                           vzeta, vpa, vperp, z, r, advect_objects,
                           advance.rk_coefs[:,istage], istage, composition, geometry,
                           num_diss_params, spectral_objects.z_spectral,
-                          spectral_objects.r_spectral, scratch_dummy)
+                          spectral_objects.r_spectral, advance, scratch_dummy)
     end
 
     istage = n_rk_stages+1

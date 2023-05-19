@@ -937,14 +937,15 @@ also enforce boundary conditions in z on all separately evolved velocity space m
 """
 function enforce_boundary_conditions!(f, f_r_bc, density, upar, ppar, moments, vpa_bc,
         z_bc, r_bc, vpa, vperp, z, r, vpa_adv, z_adv, r_adv, composition, scratch_dummy,
-        r_diffusion)
+        r_diffusion, vpa_diffusion)
 
     begin_s_r_z_vperp_region()
     @loop_s_r_z_vperp is ir iz ivperp begin
         # enforce the vpa BC
         # use that adv.speed independent of vpa
         @views enforce_v_boundary_condition_local!(f[:,ivperp,iz,ir,is], vpa_bc,
-                                                   vpa_adv[is].speed[:,ivperp,iz,ir])
+                                                   vpa_adv[is].speed[:,ivperp,iz,ir],
+                                                   vpa_diffusion)
     end
     begin_s_r_vperp_vpa_region()
     # enforce the z BC on the evolved velocity space moments of the pdf
@@ -962,10 +963,10 @@ end
 
 function enforce_boundary_conditions!(fvec_out::scratch_pdf, moments, f_r_bc, vpa_bc,
         z_bc, r_bc, vpa, vperp, z, r, vpa_adv, z_adv, r_adv, composition, scratch_dummy,
-        r_diffusion)
+        r_diffusion, vpa_diffusion)
     enforce_boundary_conditions!(fvec_out.pdf, f_r_bc, fvec_out.density, fvec_out.upar,
         fvec_out.ppar, moments, vpa_bc, z_bc, r_bc, vpa, vperp, z, r, vpa_adv, z_adv,
-        r_adv, composition, scratch_dummy, r_diffusion)
+        r_adv, composition, scratch_dummy, r_diffusion, vpa_diffusion)
 end
 
 """
@@ -1007,11 +1008,11 @@ function enforce_r_boundary_condition!(f::AbstractArray{mk_float,5}, f_r_bc, bc:
         # impose bc on both sides of the domain to accomodate a diffusion operator d^2 / d r^2
         @loop_s_z_vperp_vpa is iz ivperp ivpa begin
             ir = 1 # r = -L/2 -- check that the point is on lowest rank
-            if (adv[is].speed[ir,ivpa,ivperp,iz] > zero || r_diffusion) && r.irank == 0
+            if r.irank == 0 && (r_diffusion || adv[is].speed[ir,ivpa,ivperp,iz] > zero)
                 f[ivpa,ivperp,iz,ir,is] = f_r_bc[ivpa,ivperp,iz,1,is]
             end
             ir = r.n # r = L/2 -- check that the point is on highest rank
-            if (adv[is].speed[ir,ivpa,ivperp,iz] < -zero || r_diffusion) && r.irank == r.nrank - 1
+            if r.irank == r.nrank - 1 && (r_diffusion || adv[is].speed[ir,ivpa,ivperp,iz] < -zero)
                 f[ivpa,ivperp,iz,ir,is] = f_r_bc[ivpa,ivperp,iz,end,is]
             end
         end
@@ -1081,7 +1082,7 @@ enforce boundary conditions on neutral particle distribution function
 function enforce_neutral_boundary_conditions!(f_neutral, f_charged,
         boundary_distributions, density_neutral, uz_neutral, pz_neutral, moments,
         density_ion, upar_ion, Er, r_adv, z_adv, vzeta_adv, vr_adv, vz_adv, r, z, vzeta,
-        vr, vz, composition, geometry, scratch_dummy)
+        vr, vz, composition, geometry, scratch_dummy, r_diffusion, vz_diffusion)
 
     if vzeta.n_global > 1 && vzeta.bc != "none"
         begin_sn_r_z_vr_vz_region()
@@ -1089,7 +1090,8 @@ function enforce_neutral_boundary_conditions!(f_neutral, f_charged,
             # enforce the vz BC
             @views enforce_v_boundary_condition_local!(f_neutral[ivz,ivr,:,iz,ir,isn],
                                                        vzeta.bc,
-                                                       vzeta_adv[isn].speed[ivz,ivr,:,iz,ir])
+                                                       vzeta_adv[isn].speed[ivz,ivr,:,iz,ir],
+                                                       false)
         end
     end
     if vr.n_global > 1 && vr.bc != "none"
@@ -1098,7 +1100,8 @@ function enforce_neutral_boundary_conditions!(f_neutral, f_charged,
             # enforce the vz BC
             @views enforce_v_boundary_condition_local!(f_neutral[ivz,:,ivzeta,iz,ir,isn],
                                                        vr.bc,
-                                                       vr_adv[isn].speed[ivz,:,ivzeta,iz,ir])
+                                                       vr_adv[isn].speed[ivz,:,ivzeta,iz,ir],
+                                                       false)
         end
     end
     if vz.n_global > 1 && vz.bc != "none"
@@ -1107,7 +1110,8 @@ function enforce_neutral_boundary_conditions!(f_neutral, f_charged,
             # enforce the vz BC
             @views enforce_v_boundary_condition_local!(f_neutral[:,ivr,ivzeta,iz,ir,isn],
                                                        vz.bc,
-                                                       vz_adv[isn].speed[:,ivr,ivzeta,iz,ir])
+                                                       vz_adv[isn].speed[:,ivr,ivzeta,iz,ir],
+                                                       vz_diffusion)
         end
     end
     # f_initial contains the initial condition for enforcing a fixed-boundary-value condition
@@ -1122,7 +1126,7 @@ function enforce_neutral_boundary_conditions!(f_neutral, f_charged,
                                     r_adv, vz, vr, vzeta, z, r, composition,
                                     scratch_dummy.buffer_vzvrvzetazsn_1, scratch_dummy.buffer_vzvrvzetazsn_2,
                                     scratch_dummy.buffer_vzvrvzetazsn_3, scratch_dummy.buffer_vzvrvzetazsn_4,
-                                    scratch_dummy.buffer_vzvrvzetazrsn_1)
+                                    scratch_dummy.buffer_vzvrvzetazrsn_1, r_diffusion)
     end
 end
 
@@ -1130,7 +1134,7 @@ function enforce_neutral_r_boundary_condition!(f::AbstractArray{mk_float,6},
         f_r_bc::AbstractArray{mk_float,6}, adv::T, vz, vr, vzeta, z, r, composition,
         end1::AbstractArray{mk_float,5}, end2::AbstractArray{mk_float,5},
         buffer1::AbstractArray{mk_float,5}, buffer2::AbstractArray{mk_float,5},
-        buffer_dfn::AbstractArray{mk_float,6}) where T #f_initial,
+        buffer_dfn::AbstractArray{mk_float,6}, r_diffusion) where T #f_initial,
 
     bc = r.bc
     nr = r.n
@@ -1162,12 +1166,12 @@ function enforce_neutral_r_boundary_condition!(f::AbstractArray{mk_float,6},
         @loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
             ir = 1 # r = -L/2
             # incoming particles and on lowest rank
-            if adv[isn].speed[ir,ivz,ivr,ivzeta,iz] > zero && r.irank == 0
+            if r.irank == 0 && (r_diffusion || adv[isn].speed[ir,ivz,ivr,ivzeta,iz] > zero)
                 f[ivz,ivr,ivzeta,iz,ir,isn] = f_r_bc[ivz,ivr,ivzeta,iz,1,isn]
             end
             ir = nr # r = L/2
             # incoming particles and on highest rank
-            if adv[isn].speed[ir,ivz,ivr,ivzeta,iz] < -zero && r.irank == r.nrank - 1
+            if r.irank == r.nrank - 1 && (r_diffusion || adv[isn].speed[ir,ivz,ivr,ivzeta,iz] < -zero)
                 f[ivz,ivr,ivzeta,iz,ir,isn] = f_r_bc[ivz,ivr,ivzeta,iz,end,isn]
             end
         end
@@ -1855,25 +1859,26 @@ end
 impose the prescribed vpa boundary condition on f
 at every z grid point
 """
-function enforce_vpa_boundary_condition!(f, bc, src)
+function enforce_vpa_boundary_condition!(f, bc, src, v_diffusion)
     nz = size(f,2)
     nr = size(f,3)
     for ir ∈ 1:nr
         for iz ∈ 1:nz
-            enforce_v_boundary_condition_local!(view(f,:,iz,ir), bc, src.speed[:,iz,ir])
+            enforce_v_boundary_condition_local!(view(f,:,iz,ir), bc, src.speed[:,iz,ir],
+                                                v_diffusion)
         end
     end
 end
 
 """
 """
-function enforce_v_boundary_condition_local!(f, bc, speed)
+function enforce_v_boundary_condition_local!(f, bc, speed, v_diffusion)
     if bc == "zero"
-        if speed[1] > 0.0
+        if v_diffusion || speed[1] > 0.0
             # 'upwind' boundary
             f[1] = 0.0
         end
-        if speed[end] < 0.0
+        if v_diffusion || speed[end] < 0.0
             # 'upwind' boundary
             f[end] = 0.0
         end
