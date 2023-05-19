@@ -39,7 +39,6 @@ using ..manufactured_solns: manufactured_solutions
 """
 struct pdf_substruct{n_distribution}
     norm::MPISharedArray{mk_float,n_distribution}
-    unnorm::MPISharedArray{mk_float,n_distribution}
     buffer::MPISharedArray{mk_float,n_distribution} # for collision operator terms when pdfs must be interpolated onto different velocity space grids
 end
 
@@ -123,14 +122,12 @@ Allocate arrays for pdfs
 function create_pdf(composition, r, z, vperp, vpa, vzeta, vr, vz)
     # allocate pdf arrays
     pdf_charged_norm = allocate_shared_float(vpa.n, vperp.n, z.n, r.n, composition.n_ion_species)
-    pdf_charged_unnorm = allocate_shared_float(vpa.n, vperp.n, z.n, r.n, composition.n_ion_species)
     pdf_charged_buffer = allocate_shared_float(vpa.n, vperp.n, z.n, r.n, composition.n_neutral_species) # n.b. n_species is n_neutral_species here
     pdf_neutral_norm = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, r.n, composition.n_neutral_species)
-    pdf_neutral_unnorm = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, r.n, composition.n_neutral_species)
     pdf_neutral_buffer = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, r.n, composition.n_ion_species)
 
-    return pdf_struct(pdf_substruct(pdf_charged_norm, pdf_charged_unnorm, pdf_charged_buffer),
-                    pdf_substruct(pdf_neutral_norm, pdf_neutral_unnorm, pdf_neutral_buffer))
+    return pdf_struct(pdf_substruct(pdf_charged_norm, pdf_charged_buffer),
+                      pdf_substruct(pdf_neutral_norm, pdf_neutral_buffer))
 
 end
 
@@ -177,7 +174,7 @@ function init_pdf_and_moments!(pdf, moments, boundary_distributions, composition
         # create and initialise the normalised particle distribution function (pdf)
         # such that ∫dwpa pdf.norm = 1, ∫dwpa wpa * pdf.norm = 0, and ∫dwpa wpa^2 * pdf.norm = 1/2
         # note that wpa = vpa - upar, unless moments.evolve_ppar = true, in which case wpa = (vpa - upar)/vth
-        # the definition of pdf.norm changes accordingly from pdf.unnorm / density to pdf.unnorm * vth / density
+        # the definition of pdf.norm changes accordingly from pdf_unnorm / density to pdf_unnorm * vth / density
         # when evolve_ppar = true.
         initialize_pdf!(pdf, moments, boundary_distributions, composition, r, z, vperp,
                         vpa, vzeta, vr, vz, vpa_spectral, vz_spectral, species)
@@ -191,17 +188,17 @@ function init_pdf_and_moments!(pdf, moments, boundary_distributions, composition
         if n_neutral_species > 0
             update_neutral_qz!(moments.neutral.qz, moments.neutral.qz_updated,
                                moments.neutral.dens, moments.neutral.uz,
-                               moments.neutral.vth, pdf.neutral.unnorm, vz, vr, vzeta, z,
+                               moments.neutral.vth, pdf.neutral.norm, vz, vr, vzeta, z,
                                r, composition, moments.evolve_density,
                                moments.evolve_upar, moments.evolve_ppar)
             update_neutral_pz!(moments.neutral.pz, moments.neutral.pz_updated,
                                moments.neutral.dens, moments.neutral.uz,
-                               pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition,
+                               pdf.neutral.norm, vz, vr, vzeta, z, r, composition,
                                moments.evolve_density, moments.evolve_upar)
             update_neutral_pr!(moments.neutral.pr, moments.neutral.pr_updated,
-                               pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
+                               pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
             update_neutral_pzeta!(moments.neutral.pzeta, moments.neutral.pzeta_updated,
-                                  pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
+                                  pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
         end
     end
 
@@ -241,13 +238,11 @@ function initialize_pdf!(pdf, moments, boundary_distributions, composition, r, z
             @views wall_flux_L[ir,is] = moments.charged.dens[end,ir,is] *
                                         moments.charged.upar[end,ir,is]
 
-            pdf.charged.unnorm[:,:,:,ir,is] .= pdf.charged.norm[:,:,:,ir,is]
             @loop_z iz begin
-                @. pdf.charged.unnorm[:,:,iz,ir,is] *= moments.charged.dens[iz,ir,is]
                 if moments.evolve_ppar
                     @. pdf.charged.norm[:,:,iz,ir,is] *= moments.charged.vth[iz,ir,is]
                 elseif moments.evolve_density == false
-                    @. pdf.charged.norm[:,:,iz,ir,is] = pdf.charged.unnorm[:,:,iz,ir,is]
+                    @. pdf.charged.norm[:,:,iz,ir,is] *= moments.charged.dens[iz,ir,is]
                 end
             end
         end
@@ -268,13 +263,11 @@ function initialize_pdf!(pdf, moments, boundary_distributions, composition, r, z
                 wall_flux_0[ir,min(isn,composition.n_ion_species)],
                 wall_flux_L[ir,min(isn,composition.n_ion_species)])
 
-            pdf.neutral.unnorm[:,:,:,:,ir,isn] .= pdf.neutral.norm[:,:,:,:,ir,isn]
             @loop_z iz begin
-                @. pdf.neutral.unnorm[:,:,:,iz,ir,isn] *= moments.neutral.dens[iz,ir,isn]
                 if moments.evolve_ppar
                     @. pdf.neutral.norm[:,:,:,iz,ir,isn] *= moments.neutral.vth[iz,ir,isn]
                 elseif moments.evolve_density == false
-                    @. pdf.neutral.norm[:,:,:,iz,ir,isn] = pdf.neutral.unnorm[:,:,:,iz,ir,isn]
+                    @. pdf.neutral.norm[:,:,:,iz,ir,isn] *= moments.neutral.dens[iz,ir,isn]
                 end
             end
         end
@@ -759,16 +752,15 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
     @loop_s_r_z is ir iz begin
         moments.charged.dens[iz,ir,is] = densi_func(z.grid[iz],r.grid[ir],0.0)
         @loop_vperp_vpa ivperp ivpa begin
-            pdf.charged.unnorm[ivpa,ivperp,iz,ir,is] = dfni_func(vpa.grid[ivpa],vperp.grid[ivperp],z.grid[iz],r.grid[ir],0.0)
-            pdf.charged.norm[ivpa,ivperp,iz,ir,is] = pdf.charged.unnorm[ivpa,ivperp,iz,ir,is]
+            pdf.charged.norm[ivpa,ivperp,iz,ir,is] = dfni_func(vpa.grid[ivpa],vperp.grid[ivperp],z.grid[iz],r.grid[ir],0.0)
         end
     end
     # update upar, ppar, qpar, vth consistent with manufactured solns
-    update_density!(moments.charged.dens, pdf.charged.unnorm, vpa, vperp, z, r, composition)
-    update_qpar!(moments.charged.qpar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
-    update_ppar!(moments.charged.ppar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
+    update_density!(moments.charged.dens, pdf.charged.norm, vpa, vperp, z, r, composition)
+    update_qpar!(moments.charged.qpar, pdf.charged.norm, vpa, vperp, z, r, composition)
+    update_ppar!(moments.charged.ppar, pdf.charged.norm, vpa, vperp, z, r, composition)
     # get particle flux
-    update_upar!(moments.charged.upar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
+    update_upar!(moments.charged.upar, pdf.charged.norm, vpa, vperp, z, r, composition)
     # convert from particle particle flux to parallel flow
     begin_s_r_z_region()
     @loop_s_r_z is ir iz begin
@@ -782,16 +774,15 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
         @loop_sn_r_z isn ir iz begin
             moments.neutral.dens[iz,ir,isn] = densn_func(z.grid[iz],r.grid[ir],0.0)
             @loop_vzeta_vr_vz ivzeta ivr ivz begin
-                pdf.neutral.unnorm[ivz,ivr,ivzeta,iz,ir,isn] = dfnn_func(vz.grid[ivz],vr.grid[ivr],vzeta.grid[ivzeta],z.grid[iz],r.grid[ir],0.0)
-                pdf.neutral.norm[ivz,ivr,ivzeta,iz,ir,isn] = pdf.neutral.unnorm[ivz,ivr,ivzeta,iz,ir,isn]
+                pdf.neutral.norm[ivz,ivr,ivzeta,iz,ir,isn] = dfnn_func(vz.grid[ivz],vr.grid[ivr],vzeta.grid[ivzeta],z.grid[iz],r.grid[ir],0.0)
             end
         end
         # get consistent moments with manufactured solutions
-        update_neutral_density!(moments.neutral.dens, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
-        update_neutral_qz!(moments.neutral.qz, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
-        update_neutral_pz!(moments.neutral.pz, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
-        update_neutral_pr!(moments.neutral.pr, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
-        update_neutral_pzeta!(moments.neutral.pzeta, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
+        update_neutral_density!(moments.neutral.dens, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
+        update_neutral_qz!(moments.neutral.qz, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
+        update_neutral_pz!(moments.neutral.pz, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
+        update_neutral_pr!(moments.neutral.pr, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
+        update_neutral_pzeta!(moments.neutral.pzeta, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
         #update ptot (isotropic pressure)
         if r.n > 1 #if 2D geometry
             begin_sn_r_z_region()
@@ -802,9 +793,9 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
             moments.neutral.ptot .= moments.neutral.pz
         end
         # nb bad naming convention uz -> n uz below
-        update_neutral_uz!(moments.neutral.uz, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
-        update_neutral_ur!(moments.neutral.ur, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
-        update_neutral_uzeta!(moments.neutral.uzeta, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
+        update_neutral_uz!(moments.neutral.uz, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
+        update_neutral_ur!(moments.neutral.ur, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
+        update_neutral_uzeta!(moments.neutral.uzeta, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
         # now convert from particle particle flux to parallel flow
         begin_sn_r_z_region()
         @loop_sn_r_z isn ir iz begin
@@ -890,14 +881,14 @@ function init_rboundary_pdfs!(rboundary_charged, rboundary_neutral, pdf::pdf_str
 
     begin_s_z_region() #do not parallelise r here
     @loop_s_z_vperp_vpa is iz ivperp ivpa begin
-        rboundary_charged[ivpa,ivperp,iz,1,is] = pdf.charged.unnorm[ivpa,ivperp,iz,1,is]
-        rboundary_charged[ivpa,ivperp,iz,end,is] = pdf.charged.unnorm[ivpa,ivperp,iz,end,is]
+        rboundary_charged[ivpa,ivperp,iz,1,is] = pdf.charged.norm[ivpa,ivperp,iz,1,is]
+        rboundary_charged[ivpa,ivperp,iz,end,is] = pdf.charged.norm[ivpa,ivperp,iz,end,is]
     end
     if n_neutral_species > 0
         begin_sn_z_region() #do not parallelise r here
         @loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
-            rboundary_neutral[ivz,ivr,ivzeta,iz,1,isn] = pdf.neutral.unnorm[ivz,ivr,ivzeta,iz,1,isn]
-            rboundary_neutral[ivz,ivr,ivzeta,iz,end,isn] = pdf.neutral.unnorm[ivz,ivr,ivzeta,iz,end,isn]
+            rboundary_neutral[ivz,ivr,ivzeta,iz,1,isn] = pdf.neutral.norm[ivz,ivr,ivzeta,iz,1,isn]
+            rboundary_neutral[ivz,ivr,ivzeta,iz,end,isn] = pdf.neutral.norm[ivz,ivr,ivzeta,iz,end,isn]
         end
     end
     return rboundary_charged, rboundary_neutral
