@@ -139,14 +139,14 @@ end
 
 # consider changing code structure so that
 # we can avoid arbitrary types below?
-struct spectral_object_struct
-    vz_spectral::T where T
-    vr_spectral::T where T
-    vzeta_spectral::T where T
-    vpa_spectral::T where T
-    vperp_spectral::T where T
-    z_spectral::T where T
-    r_spectral::T where T
+struct spectral_object_struct{Tvz,Tvr,Tvzeta,Tvpa,Tvperp,Tz,Tr}
+    vz_spectral::Tvz
+    vr_spectral::Tvr
+    vzeta_spectral::Tvzeta
+    vpa_spectral::Tvpa
+    vperp_spectral::Tvperp
+    z_spectral::Tz
+    r_spectral::Tr
 end
 
 """
