@@ -429,6 +429,18 @@ function analyze_and_plot_data(prefix...)
             get_tuple_of_return_values(allocate_global_zr_neutral_moments, nz_global,
                                        nr_global, n_neutral_species, ntime)
     end
+    phi_at_pdf_times, Ez_at_pdf_times, Er_at_pdf_times =
+        get_tuple_of_return_values(allocate_global_zr_fields, nz_global, nr_global, ntime)
+    density_at_pdf_times, parallel_flow_at_pdf_times, parallel_pressure_at_pdf_times,
+    parallel_heat_flux_at_pdf_times, thermal_speed_at_pdf_times =
+        get_tuple_of_return_values(allocate_global_zr_charged_moments, nz_global,
+                                   nr_global, n_ion_species, ntime)
+    if any(n_neutral_species .> 0)
+        neutral_density_at_pdf_times, neutral_uz_at_pdf_times, neutral_pz_at_pdf_times,
+        neutral_qz_at_pdf_times, neutral_thermal_speed_at_pdf_times =
+            get_tuple_of_return_values(allocate_global_zr_neutral_moments, nz_global,
+                                       nr_global, n_neutral_species, ntime)
+    end
     # read in the data from different block files
     # grids
     z, z_wgts, r, r_wgts =
@@ -468,6 +480,47 @@ function analyze_and_plot_data(prefix...)
                                    run_names, "moments", nblocks, nz_local, nr_local)
         get_tuple_of_return_values(read_distributed_zr_data!, neutral_thermal_speed,
                                    "thermal_speed_neutral", run_names, "moments", nblocks,
+                                   nz_local, nr_local)
+    end
+    # fields
+    get_tuple_of_return_values(read_distributed_zr_data!, phi_at_pdf_times, "phi",
+                               run_names, "dfns", nblocks, nz_local, nr_local)
+    get_tuple_of_return_values(read_distributed_zr_data!, Ez_at_pdf_times, "Ez",
+                               run_names, "dfns", nblocks, nz_local, nr_local)
+    get_tuple_of_return_values(read_distributed_zr_data!, Er_at_pdf_times, "Er",
+                               run_names, "dfns", nblocks, nz_local, nr_local)
+    # charged particle moments
+    get_tuple_of_return_values(read_distributed_zr_data!, density_at_pdf_times, "density",
+                               run_names, "dfns", nblocks, nz_local, nr_local)
+    get_tuple_of_return_values(read_distributed_zr_data!, parallel_flow_at_pdf_times,
+                               "parallel_flow", run_names, "dfns", nblocks, nz_local,
+                               nr_local)
+    get_tuple_of_return_values(read_distributed_zr_data!, parallel_pressure_at_pdf_times,
+                               "parallel_pressure", run_names, "dfns", nblocks,
+                               nz_local, nr_local)
+    get_tuple_of_return_values(read_distributed_zr_data!, parallel_heat_flux_at_pdf_times,
+                               "parallel_heat_flux", run_names, "dfns", nblocks,
+                               nz_local, nr_local)
+    get_tuple_of_return_values(read_distributed_zr_data!, thermal_speed_at_pdf_times,
+                               "thermal_speed", run_names, "dfns", nblocks, nz_local,
+                               nr_local)
+    # neutral particle moments
+    if any(n_neutral_species .> 0)
+        get_tuple_of_return_values(read_distributed_zr_data!,
+                                   neutral_density_at_pdf_times, "density_neutral",
+                                   run_names, "dfns", nblocks, nz_local, nr_local)
+        get_tuple_of_return_values(read_distributed_zr_data!, neutral_uz_at_pdf_times,
+                                   "uz_neutral", run_names, "dfns", nblocks, nz_local,
+                                   nr_local)
+        get_tuple_of_return_values(read_distributed_zr_data!, neutral_pz_at_pdf_times,
+                                   "pz_neutral", run_names, "dfns", nblocks, nz_local,
+                                   nr_local)
+        get_tuple_of_return_values(read_distributed_zr_data!, neutral_qz_at_pdf_times,
+                                   "qz_neutral", run_names, "dfns", nblocks, nz_local,
+                                   nr_local)
+        get_tuple_of_return_values(read_distributed_zr_data!,
+                                   neutral_thermal_speed_at_pdf_times,
+                                   "thermal_speed_neutral", run_names, "dfns", nblocks,
                                    nz_local, nr_local)
     end
     # load time data from `dfns' cdf
@@ -529,6 +582,12 @@ function analyze_and_plot_data(prefix...)
             Tuple(ppar[:,ir0,:,:] for ppar ∈ parallel_pressure),
             Tuple(qpar[:,ir0,:,:] for qpar ∈ parallel_heat_flux),
             Tuple(vth[:,ir0,:,:] for vth ∈ thermal_speed),
+            Tuple(p[:,ir0,:] for p ∈ phi_at_pdf_times),
+            Tuple(n[:,ir0,:,:] for n ∈ density_at_pdf_times),
+            Tuple(upar[:,ir0,:,:] for upar ∈ parallel_flow_at_pdf_times),
+            Tuple(ppar[:,ir0,:,:] for ppar ∈ parallel_pressure_at_pdf_times),
+            Tuple(qpar[:,ir0,:,:] for qpar ∈ parallel_heat_flux_at_pdf_times),
+            Tuple(vth[:,ir0,:,:] for vth ∈ thermal_speed_at_pdf_times),
             Tuple(f[:,ivperp0,:,ir0,:,:] for f ∈ ff),
             n_ion_species, n_neutral_species, evolve_density, evolve_upar, evolve_ppar,
             nvpa, vpa, vpa_wgts, nz_global, z, z_wgts, Lz, ntime, time, ntime_pdfs,
@@ -549,10 +608,6 @@ function analyze_and_plot_data(prefix...)
 
     diagnostics_chodura = false
     if diagnostics_chodura
-        density_at_pdf_times = get_tuple_of_return_values(moment_at_pdf_times, density,
-                                                          ntime, ntime_pdfs)
-        Er_at_pdf_tames = get_tuple_of_return_values(moment_at_pdf_times, Er, ntime,
-                                                     ntime_pdfs)
         Chodura_ratio_lower, Chodura_ratio_upper =
             get_tuple_of_return_values(check_Chodura_condition, run_name, vpa_local,
                                        vpa_local_wgts, vperp_local, vperp_local_wgts,
@@ -809,9 +864,12 @@ end
 """
 function plot_1D_1V_diagnostics(run_names, nwrite_movie, itime_min, itime_max,
         nwrite_movie_pdfs, itime_min_pdfs, itime_max_pdfs, ivpa0, iz0, ir0, r, phi,
-        density, parallel_flow, parallel_pressure, parallel_heat_flux, thermal_speed, ff,
-        n_ion_species, n_neutral_species, evolve_density, evolve_upar, evolve_ppar, nvpa,
-        vpa, vpa_wgts, nz, z, z_wgts, Lz, ntime, time, ntime_pdfs, time_pdfs)
+        density, parallel_flow, parallel_pressure, parallel_heat_flux, thermal_speed,
+        phi_at_pdf_times, density_at_pdf_times, parallel_flow_at_pdf_times,
+        parallel_pressure_at_pdf_times, parallel_heat_flux_at_pdf_times,
+        thermal_speed_at_pdf_times, ff, n_ion_species, n_neutral_species, evolve_density,
+        evolve_upar, evolve_ppar, nvpa, vpa, vpa_wgts, nz, z, z_wgts, Lz, ntime, time,
+        ntime_pdfs, time_pdfs)
 
     n_runs = length(run_names)
 
@@ -868,16 +926,14 @@ function plot_1D_1V_diagnostics(run_names, nwrite_movie, itime_min, itime_max,
         else
             spec_string = ""
         end
-        if ntime == ntime_pdfs
-            # plot difference between evolved density and ∫dvpa f; only possibly different if density removed from
-            # normalised distribution function at run-time
-            plot(legend=legend)
-            for (t, n, n_int, run_label) ∈ zip(time, density, dens_moment, run_names)
-                @views plot!(t, n[iz0,is,:] .- n_int[iz0,is,:], label=run_label)
-            end
-            outfile = string(prefix, "_intf0_vs_t", spec_string, ".pdf")
-            savefig(outfile)
+        # plot difference between evolved density and ∫dvpa f; only possibly different if density removed from
+        # normalised distribution function at run-time
+        plot(legend=legend)
+        for (t, n, n_int, run_label) ∈ zip(time_pdfs, density_at_pdf_times, dens_moment, run_names)
+            @views plot!(t, n[iz0,is,:] .- n_int[iz0,is,:], label=run_label)
         end
+        outfile = string(prefix, "_intf0_vs_t", spec_string, ".pdf")
+        savefig(outfile)
         # if evolve_upar = true, plot ∫dwpa wpa * f, which should equal zero
         # otherwise, this plots ∫dvpa vpa * f, which is dens*upar
         plot(legend=legend)
@@ -891,17 +947,15 @@ function plot_1D_1V_diagnostics(run_names, nwrite_movie, itime_min, itime_max,
         end
         outfile = string(prefix, "_intwf0_vs_t", spec_string, ".pdf")
         savefig(outfile)
-        if ntime == ntime_pdfs
-            # plot difference between evolved parallel pressure and ∫dvpa vpa^2 f;
-            # only possibly different if density and thermal speed removed from
-            # normalised distribution function at run-time
-            plot(legend=legend)
-            for (t, ppar, ppar_int, run_label) ∈ zip(time_pdfs, parallel_pressure, ppar_moment, run_names)
-                @views plot(t, ppar[iz0,is,:] .- ppar_int[iz0,is,:], label=run_label)
-            end
-            outfile = string(prefix, "_intw2f0_vs_t", spec_string, ".pdf")
-            savefig(outfile)
+        # plot difference between evolved parallel pressure and ∫dvpa vpa^2 f;
+        # only possibly different if density and thermal speed removed from
+        # normalised distribution function at run-time
+        plot(legend=legend)
+        for (t, ppar, ppar_int, run_label) ∈ zip(time_pdfs, parallel_pressure_at_pdf_times, ppar_moment, run_names)
+            @views plot(t, ppar[iz0,is,:] .- ppar_int[iz0,is,:], label=run_label)
         end
+        outfile = string(prefix, "_intw2f0_vs_t", spec_string, ".pdf")
+        savefig(outfile)
         #fmin = minimum(ff[:,:,is,:])
         #fmax = maximum(ff[:,:,is,:])
         if pp.animate_f_vs_vpa_z
@@ -963,9 +1017,10 @@ function plot_1D_1V_diagnostics(run_names, nwrite_movie, itime_min, itime_max,
             it = itime_max_pdfs
             # i counts from 0, Python-style
             for (run_ind, f, n, upar, vth, ev_n, ev_u, ev_p, this_z, this_vpa,
-                 run_label) ∈ zip(1:n_runs, ff, density, parallel_flow,
-                                  thermal_speed, evolve_density, evolve_upar,
-                                  evolve_ppar, z, vpa, run_names)
+                 run_label) ∈ zip(1:n_runs, ff, density_at_pdf_times,
+                                  parallel_flow_at_pdf_times, thermal_speed_at_pdf_times,
+                                  evolve_density, evolve_upar, evolve_ppar, z, vpa,
+                                  run_names)
 
                 PyPlot.subplot(1, n_runs, run_ind)
                 @views f_unnorm, z2d, dzdt2d = get_unnormalised_f_coords_2d(
@@ -981,9 +1036,10 @@ function plot_1D_1V_diagnostics(run_names, nwrite_movie, itime_min, itime_max,
             it = itime_max_pdfs
             # i counts from 0, Python-style
             for (run_ind, f, n, upar, vth, ev_n, ev_u, ev_p, this_z, this_vpa,
-                 run_label) ∈ zip(1:n_runs, ff, density, parallel_flow,
-                                  thermal_speed, evolve_density, evolve_upar,
-                                  evolve_ppar, z, vpa, run_names)
+                 run_label) ∈ zip(1:n_runs, ff, density_at_pdf_times,
+                                  parallel_flow_at_pdf_times, thermal_speed_at_pdf_times,
+                                  evolve_density, evolve_upar, evolve_ppar, z, vpa,
+                                  run_names)
 
                 @views f_unnorm, dzdt = get_unnormalised_f_dzdt_1d(
                     f[:,1,is,it], this_vpa, n[1,is,it], upar[1,is,it], vth[1,is,it],
@@ -997,9 +1053,10 @@ function plot_1D_1V_diagnostics(run_names, nwrite_movie, itime_min, itime_max,
             it = itime_max_pdfs
             # i counts from 0, Python-style
             for (run_ind, f, n, upar, vth, ev_n, ev_u, ev_p, this_z, this_vpa,
-                 run_label) ∈ zip(1:n_runs, ff, density, parallel_flow,
-                                  thermal_speed, evolve_density, evolve_upar,
-                                  evolve_ppar, z, vpa, run_names)
+                 run_label) ∈ zip(1:n_runs, ff, density_at_pdf_times,
+                                  parallel_flow_at_pdf_times, thermal_speed_at_pdf_times,
+                                  evolve_density, evolve_upar, evolve_ppar, z, vpa,
+                                  run_names)
 
                 @views f_unnorm, dzdt = get_unnormalised_f_dzdt_1d(
                     f[:,end,is,it], this_vpa, n[end,is,it], upar[end,is,it], vth[end,is,it],
@@ -1051,9 +1108,10 @@ function plot_1D_1V_diagnostics(run_names, nwrite_movie, itime_min, itime_max,
                 iframe = iframes[i+1]
                 # i counts from 0, Python-style
                 for (run_ind, f, n, upar, vth, ev_n, ev_u, ev_p, this_z, this_vpa,
-                     run_label) ∈ zip(1:n_runs, ff, density, parallel_flow,
-                                      thermal_speed, evolve_density, evolve_upar,
-                                      evolve_ppar, z, vpa, run_names)
+                     run_label) ∈ zip(1:n_runs, ff, density_at_pdf_times,
+                                      parallel_flow_at_pdf_times,
+                                      thermal_speed_at_pdf_times, evolve_density,
+                                      evolve_upar, evolve_ppar, z, vpa, run_names)
 
                     PyPlot.subplot(1, n_runs, run_ind)
                     @views f_unnorm, z2d, dzdt2d = get_unnormalised_f_coords_2d(
@@ -1074,9 +1132,10 @@ function plot_1D_1V_diagnostics(run_names, nwrite_movie, itime_min, itime_max,
                 iframe = iframes[i+1]
                 # i counts from 0, Python-style
                 for (run_ind, f, n, upar, vth, ev_n, ev_u, ev_p, this_z, this_vpa,
-                     run_label) ∈ zip(1:n_runs, ff, density, parallel_flow,
-                                      thermal_speed, evolve_density, evolve_upar,
-                                      evolve_ppar, z, vpa, run_names)
+                     run_label) ∈ zip(1:n_runs, ff, density_at_pdf_times,
+                                      parallel_flow_at_pdf_times,
+                                      thermal_speed_at_pdf_times, evolve_density,
+                                      evolve_upar, evolve_ppar, z, vpa, run_names)
 
                     PyPlot.subplot(1, n_runs, run_ind)
                     @views f_unnorm, z2d, dzdt2d = get_unnormalised_f_coords_2d(
@@ -1097,8 +1156,9 @@ function plot_1D_1V_diagnostics(run_names, nwrite_movie, itime_min, itime_max,
             anim = @animate for i ∈ itime_min_pdfs:nwrite_movie_pdfs:itime_max_pdfs
                 plot(legend=legend)
                 for (f, n, upar, vth, ev_n, ev_u, ev_p, this_vpa, run_label) ∈
-                    zip(ff, density, parallel_flow, thermal_speed, evolve_density,
-                        evolve_upar, evolve_ppar, vpa, run_names)
+                    zip(ff, density_at_pdf_times, parallel_flow_at_pdf_times,
+                        thermal_speed_at_pdf_times, evolve_density, evolve_upar,
+                        evolve_ppar, vpa, run_names)
                     @views f_unnorm, dzdt = get_unnormalised_f_dzdt_1d(
                         f[:,1,is,i], this_vpa, n[1,is,i], upar[1,is,i], vth[1,is,i],
                         ev_n, ev_u, ev_p)
@@ -1112,8 +1172,9 @@ function plot_1D_1V_diagnostics(run_names, nwrite_movie, itime_min, itime_max,
             anim = @animate for i ∈ itime_min_pdfs:nwrite_movie_pdfs:itime_max_pdfs
                 plot(legend=legend)
                 for (f, n, upar, vth, ev_n, ev_u, ev_p, this_vpa, run_label) ∈
-                    zip(ff, density, parallel_flow, thermal_speed, evolve_density,
-                        evolve_upar, evolve_ppar, vpa, run_names)
+                    zip(ff, density_at_pdf_times, parallel_flow_at_pdf_times,
+                        thermal_speed_at_pdf_times, evolve_density, evolve_upar,
+                        evolve_ppar, vpa, run_names)
                     @views f_unnorm, dzdt = get_unnormalised_f_dzdt_1d(
                         f[:,end,is,i], this_vpa, n[end,is,i], upar[end,is,i],
                         vth[end,is,i], ev_n, ev_u, ev_p)
@@ -1933,44 +1994,6 @@ function plot_unnormalised_f2d(f_unnorm, z2d, dzdt2d; plot_log=false, kwargs...)
     PyPlot.colorbar()
 
     return p
-end
-
-"""
-Get values of 'moment' variable at time points where distribution functions were saved
-"""
-function moment_at_pdf_times(moment, ntime, ntime_pdfs)
-    if ntime_pdfs == 1
-        # Distribution functions only written at initial time
-        step = ntime + 1
-    else
-        if (ntime-1) % (ntime_pdfs-1) != 0
-            #error("ntime is not a multiple of ntime_pdfs => nwrite_pdfs was not a multiple "
-            #      * "of nwrite so cannot get moment at time points where pdf was saved.")
-            ntime = ((ntime-1)÷(ntime_pdfs-1)) * (ntime_pdfs-1) + 1
-        end
-
-        step = (ntime-1) ÷ (ntime_pdfs-1)
-    end
-    n = ndims(moment)
-    if n == 1
-        return moment[begin:step:end]
-    elseif n == 2
-        return moment[:,begin:step:end]
-    elseif n == 3
-        return moment[:,:,begin:step:end]
-    elseif n == 4
-        return moment[:,:,:,begin:step:end]
-    elseif n == 5
-        return moment[:,:,:,:,begin:step:end]
-    elseif n == 6
-        return moment[:,:,:,:,:,begin:step:end]
-    elseif n == 7
-        return moment[:,:,:,:,:,:,begin:step:end]
-    elseif n == 8
-        return moment[:,:,:,:,:,:,:,begin:step:end]
-    else
-        error("ndims=$n is not supported yet")
-    end
 end
 
 """

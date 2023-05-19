@@ -889,8 +889,8 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
                                    Dates.format(now(), dateformat"H:MM:SS"))
                 end
             end
-            write_dfns_data_to_binary(pdf.charged.norm, pdf.neutral.norm, t,
-                                      composition.n_ion_species,
+            write_dfns_data_to_binary(pdf.charged.norm, pdf.neutral.norm, moments, fields,
+                                      t, composition.n_ion_species,
                                       composition.n_neutral_species, io_dfns, iwrite_dfns,
                                       r, z, vperp, vpa, vzeta, vr, vz)
             iwrite_dfns += 1

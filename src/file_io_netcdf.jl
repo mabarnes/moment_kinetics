@@ -30,6 +30,17 @@ function create_io_group(parent::NCDataset, name; description=nothing)
     return defGroup(parent, name, attrib=attributes)
 end
 
+function get_group(file_or_group::NCDataset, name::String)
+    # This overload deals with cases where fid is a NetCDF `Dataset` (which could be a
+    # file or a group).
+    try
+        return file_or_group.group[name]
+    catch
+        println("An error occured while opening the $name group")
+        rethrow()
+    end
+end
+
 function add_attribute!(file_or_group::NCDataset, name, value)
     file_or_group.attrib[name] = value
 end

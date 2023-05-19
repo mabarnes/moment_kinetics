@@ -74,11 +74,9 @@ struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmomn}
 structure containing the data/metadata needed for binary file i/o
 distribution function data only
 """
-struct io_dfns_info{Tfile, Ttime, Tfi, Tfn}
-     # file identifier for the binary file to which data is written
+struct io_dfns_info{Tfile, Tfi, Tfn, Tmoments}
+    # file identifier for the binary file to which data is written
     fid::Tfile
-    # handle for the time variable
-    time::Ttime
     # handle for the charged species distribution function variable
     f::Tfi
     # handle for the neutral species distribution function variable
@@ -86,6 +84,9 @@ struct io_dfns_info{Tfile, Ttime, Tfi, Tfn}
 
     # Use parallel I/O?
     parallel_io::Bool
+
+    # Handles for moment variables
+    io_moments::Tmoments
 end
 
 """
@@ -139,6 +140,11 @@ function setup_file_io(io_input, vz, vr, vzeta, vpa, vperp, z, r, composition, c
     # For other processes in the block, return (nothing, nothing, nothing)
     return nothing, nothing, nothing
 end
+
+"""
+Get a (sub-)group from a file or group
+"""
+function get_group() end
 
 """
     write_single_value!(file_or_group, name, value; description=nothing)
@@ -438,18 +444,11 @@ function define_dynamic_dfn_variables!(fid, r, z, vperp, vpa, vzeta, vr, vz,
                                        n_ion_species, n_neutral_species, parallel_io)
 
     @serial_region begin
-        if !haskey(fid, "dynamic_data")
-            dynamic = create_io_group(fid, "dynamic_data",
-                                      description="time evolving variables")
-        else
-            dynamic = fid["dynamic_data"]
-        end
+        io_moments = define_dynamic_moment_variables!(fid, n_ion_species,
+                                                      n_neutral_species, r, z,
+                                                      parallel_io)
 
-        if !haskey(dynamic, "time")
-            io_time = create_dynamic_variable!(dynamic, "time", mk_float;
-                                               parallel_io=parallel_io,
-                                               description="simulation time")
-        end
+        dynamic = get_group(fid, "dynamic_data")
 
         # io_f is the handle for the ion pdf
         io_f = create_dynamic_variable!(dynamic, "f", mk_float, vpa, vperp, z, r;
@@ -463,7 +462,7 @@ function define_dynamic_dfn_variables!(fid, r, z, vperp, vpa, vzeta, vr, vz,
                                                 parallel_io=parallel_io,
                                                 description="neutral species distribution function")
 
-        return io_dfns_info(fid, io_time, io_f, io_f_neutral, parallel_io)
+        return io_dfns_info(fid, io_f, io_f_neutral, parallel_io, io_moments)
     end
 
     # For processes other than the root process of each shared-memory group...
@@ -611,13 +610,16 @@ end
 """
 write time-dependent distribution function data to the binary output file
 """
-function write_dfns_data_to_binary(ff, ff_neutral, t, n_ion_species, n_neutral_species,
-                                   io_dfns, t_idx, r, z, vperp, vpa, vzeta, vr, vz)
+function write_dfns_data_to_binary(ff, ff_neutral, moments, fields, t, n_ion_species,
+                                   n_neutral_species, io_dfns, t_idx, r, z, vperp, vpa,
+                                   vzeta, vr, vz)
     @serial_region begin
         # Only read/write from first process in each 'block'
 
-        # add the time for this time slice to the hdf5 file
-        append_to_dynamic_var(io_dfns.time, t, t_idx)
+        # Write the moments for this time slice to the output file.
+        # This also updates the time.
+        write_moments_data_to_binary(moments, fields, t, n_ion_species, n_neutral_species,
+                                     io_dfns.io_moments, t_idx, r, z)
 
         # add the distribution function data at this time slice to the output file
         append_to_dynamic_var(io_dfns.f, ff, t_idx, vpa, vperp, z, r, n_ion_species)
@@ -725,13 +727,15 @@ end
     # Special versions when using DebugMPISharedArray to avoid implicit conversion to
     # Array, which is forbidden.
     function write_dfns_data_to_binary(ff::DebugMPISharedArray,
-            ff_neutral::DebugMPISharedArray, t, n_ion_species, n_neutral_species, io_dfns,
-            t_idx, r, z, vperp, vpa, vzeta, vr, vz)
+            ff_neutral::DebugMPISharedArray, moments, t, n_ion_species, n_neutral_species,
+            io_dfns, t_idx, r, z, vperp, vpa, vzeta, vr, vz)
         @serial_region begin
             # Only read/write from first process in each 'block'
 
-            # add the time for this time slice to the hdf5 file
-            append_to_dynamic_var(io_dfns.time, t, t_idx)
+            # Write the moments for this time slice to the output file
+            # This also updates the time.
+            write_moments_data_to_binary(moments, fields, t, n_ion_species, n_neutral_species,
+                                         io_dfns.io_moments, t_idx, r, z)
 
             # add the distribution function data at this time slice to the output file
             append_to_dynamic_var(io_dfns.f, ff.data, t_idx, vpa, vperp, z, r, n_ion_species)
