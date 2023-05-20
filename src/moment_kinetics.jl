@@ -62,7 +62,7 @@ include("time_advance.jl")
 using TimerOutputs
 using Dates
 
-using .file_io: setup_file_io, finish_file_io, reload_evolving_fields!
+using .file_io: setup_file_io, finish_file_io
 using .file_io: write_data_to_ascii
 using .file_io: write_moments_data_to_binary, write_dfns_data_to_binary
 using .command_line_options: get_options
@@ -72,11 +72,13 @@ using .coordinates: define_coordinate
 using .debugging
 using .initial_conditions: allocate_pdf_and_moments, init_pdf_and_moments!,
                            enforce_boundary_conditions!
+using .load_data: reload_evolving_fields!
 using .looping
 using .moment_constraints: hard_force_moment_constraints!
 using .looping: debug_setup_loop_ranges_split_one_combination!
 using .moment_kinetics_input: mk_input, read_input_file, run_type, performance_test
 using .time_advance: setup_time_advance!, time_advance!
+using .type_definitions: mk_int
 
 @debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
 
@@ -158,18 +160,67 @@ Append a number to the filename, to get a new, non-existing filename to backup t
 to.
 """
 function get_backup_filename(filename)
-    counter = 1
-    basename, extension = splitext(filename)
-    backup_name = ""
-    while true
-        backup_name = "$(basename)_$(counter)$(extension)"
-        if !isfile(backup_name)
-            break
-        end
-        counter += 1
+    if !isfile(filename)
+        error("Requested to restart from $filename, but this file does not exist")
     end
-    backup_name == "" && error("Failed to find a name for backup file.")
-    return backup_name
+    counter = 1
+    temp, extension = splitext(filename)
+    extension = extension[2:end]
+    temp, iblock_or_type = splitext(temp)
+    iblock_or_type = iblock_or_type[2:end]
+    iblock = nothing
+    basename = nothing
+    type = nothing
+    if iblock_or_type == "dfns"
+        iblock = nothing
+        type = iblock_or_type
+        basename = temp
+        parallel_io = true
+    else
+        # Filename had an iblock, so we are not using parallel I/O, but actually want to
+        # use the iblock for this block, not necessarily for the exact file that was
+        # passed.
+        iblock = iblock_index[]
+        basename, type = splitext(temp)
+        type = type[2:end]
+        parallel_io = false
+    end
+    if type != "dfns"
+        error("Must pass the '.dfns.h5' output file for restarting. Got $filename.")
+    end
+    backup_dfns_filename = ""
+    if parallel_io
+        # Using parallel I/O
+        while true
+            backup_dfns_filename = "$(basename)_$(counter).$(type).$(extension)"
+            if !isfile(backup_dfns_filename)
+                break
+            end
+            counter += 1
+        end
+        # Create dfns_filename here even though it is the filename passed in, as
+        # parallel_io=false branch needs to get the right `iblock` for this block.
+        dfns_filename = "$(basename).dfns.$(extension)"
+        moments_filename = "$(basename).moments.$(extension)"
+        backup_moments_filename = "$(basename)_$(counter).moments.$(extension)"
+    else
+        while true
+            backup_dfns_filename = "$(basename)_$(counter).$(type).$(iblock).$(extension)"
+            if !isfile(backup_dfns_filename)
+                break
+            end
+            counter += 1
+        end
+        # Create dfns_filename here even though it is almost the filename passed in, in
+        # order to get the right `iblock` for this block.
+        dfns_filename = "$(basename).dfns.$(iblock).$(extension)"
+        moments_filename = "$(basename).moments.$(iblock).$(extension)"
+        backup_moments_filename = "$(basename)_$(counter).moments.$(iblock).$(extension)"
+    end
+    backup_dfns_filename == "" && error("Failed to find a name for backup file.")
+    backup_prefix_iblock = ("$(basename)_$(counter)", iblock)
+    return dfns_filename, backup_dfns_filename, parallel_io, moments_filename,
+           backup_moments_filename, backup_prefix_iblock
 end
 
 """
@@ -178,7 +229,7 @@ input must be the same as for the original run.
 """
 function restart_moment_kinetics(restart_filename::String, input_filename::String,
                                  time_index::Int=-1)
-    restart_moment_kinetics(restart_filename, input_from_TOML(input_filename),
+    restart_moment_kinetics(restart_filename, read_input_file(input_filename),
                             time_index)
     return nothing
 end
@@ -203,25 +254,25 @@ function restart_moment_kinetics(restart_filename::String, input_dict::Dict,
     try
         # Move the output file being restarted from to make sure it doesn't get
         # overwritten.
-        backup_filename = get_backup_filename(restart_filename)
-        global_rank[] == 0 && mv(restart_filename, backup_filename)
+        dfns_filename, backup_dfns_filename, parallel_io, moments_filename,
+        backup_moments_filename, backup_prefix_iblock =
+            get_backup_filename(restart_filename)
+        if (parallel_io && global_rank[] == 0) || (!parallel_io && block_rank[] == 0)
+            mv(dfns_filename, backup_dfns_filename)
+            mv(moments_filename, backup_moments_filename)
+        end
 
         # Set up all the structs, etc. needed for a run.
-        pdf, scratch, code_time, t_input, vpa, z, r, vpa_spectral, z_spectral,
-        r_spectral, moments, fields, vpa_advect, z_advect, r_advect, composition,
-        collisions, num_diss_params, advance, scratch_dummy_sr, io, cdf =
-        setup_moment_kinetics(input_dict, backup_filename=backup_filename,
-                              restart_time_index=time_index)
+        mk_state = setup_moment_kinetics(input_dict,
+                                         restart_prefix_iblock=backup_prefix_iblock,
+                                         restart_time_index=time_index)
 
         try
-            time_advance!(pdf, scratch, code_time, t_input, vpa, z, r, vpa_spectral,
-                          z_spectral, r_spectral, moments, fields, vpa_advect, z_advect,
-                          r_advect, composition, collisions, num_diss_params, advance,
-                          scratch_dummy_sr, io, cdf)
+            time_advance!(mk_state...)
         finally
             # clean up i/o and communications
             # last 2 elements of mk_state are `io` and `cdf`
-            cleanup_moment_kinetics!(io, cdf)
+            cleanup_moment_kinetics!(mk_state[end-2:end]...)
         end
     catch e
         # Stop code from hanging when running on multiple processes if only one of them
@@ -247,7 +298,7 @@ reload data from time index given by `restart_time_index` for a restart.
 `debug_loop_type` and `debug_loop_parallel_dims` are used to force specific set ups for
 parallel loop ranges, and are only used by the tests in `debug_test/`.
 """
-function setup_moment_kinetics(input_dict::Dict; backup_filename=nothing,
+function setup_moment_kinetics(input_dict::Dict; restart_prefix_iblock=nothing,
         restart_time_index=-1,
         debug_loop_type::Union{Nothing,NTuple{N,Symbol} where N}=nothing,
         debug_loop_parallel_dims::Union{Nothing,NTuple{N,Symbol} where N}=nothing)
@@ -305,7 +356,7 @@ function setup_moment_kinetics(input_dict::Dict; backup_filename=nothing,
         allocate_pdf_and_moments(composition, r, z, vperp, vpa, vzeta, vr, vz,
                                  evolve_moments, collisions, num_diss_params)
 
-    if backup_filename === nothing
+    if restart_prefix_iblock === nothing
         restarting = false
         # initialize f(z,vpa) and the lowest three v-space moments (density(z), upar(z) and ppar(z)),
         # each of which may be evolved separately depending on input choices.
@@ -319,8 +370,8 @@ function setup_moment_kinetics(input_dict::Dict; backup_filename=nothing,
 
         # Reload pdf and moments from an existing output file
         code_time = reload_evolving_fields!(pdf, moments, boundary_distributions,
-                                            backup_filename, restart_time_index,
-                                            composition, r, z, vpa)
+                                            restart_prefix_iblock, restart_time_index,
+                                            composition, r, z, vpa, vperp, vzeta, vr, vz)
         _block_synchronize()
     end
     # create arrays and do other work needed to setup
@@ -333,9 +384,9 @@ function setup_moment_kinetics(input_dict::Dict; backup_filename=nothing,
             r_spectral, composition, drive_input, moments, t_input, collisions, species,
             geometry, boundary_distributions, num_diss_params, restarting)
     # setup i/o
-    ascii_io, io_moments, io_dfns = setup_file_io(io_input, vz, vr, vzeta, vpa, vperp, z,
-        r, composition, collisions, moments.evolve_density, moments.evolve_upar,
-        moments.evolve_ppar)
+    ascii_io, io_moments, io_dfns = setup_file_io(io_input, boundary_distributions, vz,
+        vr, vzeta, vpa, vperp, z, r, composition, collisions, moments.evolve_density,
+        moments.evolve_upar, moments.evolve_ppar)
     # write initial data to ascii files
     write_data_to_ascii(moments, fields, vpa, vperp, z, r, code_time, composition.n_ion_species, composition.n_neutral_species, ascii_io)
     # write initial data to binary files

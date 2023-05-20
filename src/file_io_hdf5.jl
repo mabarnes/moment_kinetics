@@ -63,16 +63,28 @@ end
 # HDF5.H5DataStore is the supertype for HDF5.File and HDF5.Group
 function write_single_value!(file_or_group::HDF5.H5DataStore, name,
                              data::Union{Number, AbstractString, AbstractArray{T,N}},
-                             coords::coordinate...; parallel_io, description=nothing) where {T,N}
+                             coords::Union{coordinate,mk_int}...; parallel_io,
+                             n_ion_species=nothing, n_neutral_species=nothing,
+                             description=nothing) where {T,N}
     if isa(data, Union{Number, AbstractString})
         file_or_group[name] = data
         return nothing
     end
 
+    if n_ion_species !== nothing && n_neutral_species != nothing
+        error("Cannot have both ion-species and neutral species dimensions." *
+              "Got n_ion_species=$n_ion_species, n_neutral_species=$n_neutral_species")
+    end
+
+    if n_ion_species !== nothing
+        coords = tuple(coords..., n_ion_species)
+    elseif n_neutral_species !== nothing
+        coords = tuple(coords..., n_neutral_species)
+    end
     dim_sizes, chunk_sizes = hdf5_get_fixed_dim_sizes(coords, parallel_io)
     io_var = create_dataset(file_or_group, name, T, dim_sizes, chunk=chunk_sizes)
-    local_ranges = Tuple(c.local_io_range for c ∈ coords)
-    global_ranges = Tuple(c.global_io_range for c ∈ coords)
+    local_ranges = Tuple(isa(c, coordinate) ? c.local_io_range : 1:c for c ∈ coords)
+    global_ranges = Tuple(isa(c, coordinate) ? c.global_io_range : 1:c for c ∈ coords)
 
     if N == 1
         io_var[global_ranges[1]] = @view data[local_ranges[1]]
