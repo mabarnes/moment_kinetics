@@ -201,6 +201,18 @@ end
 
 """
 """
+function load_mk_options(fid)
+    overview = get_group(fid, "overview")
+
+    evolve_density = load_variable(overview, "evolve_density")
+    evolve_upar = load_variable(overview, "evolve_upar")
+    evolve_ppar = load_variable(overview, "evolve_ppar")
+
+    return evolve_density, evolve_upar, evolve_ppar
+end
+
+"""
+"""
 function load_time_data(fid; printout=false)
     if printout
         print("Loading time data...")
@@ -301,14 +313,12 @@ function load_charged_particle_moments_data(fid; printout=false)
 
     # Read charged species thermal speed
     thermal_speed = load_variable(group, "thermal_speed")
-    
-    evolve_ppar = false
 
     if printout
         println("done.")
     end
 
-    return density, parallel_flow, parallel_pressure, parallel_heat_flux, thermal_speed, evolve_ppar
+    return density, parallel_flow, parallel_pressure, parallel_heat_flux, thermal_speed
 end
 
 function load_neutral_particle_moments_data(fid; printout=false)

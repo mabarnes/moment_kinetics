@@ -39,7 +39,8 @@ using ..load_data: load_fields_data, load_pdf_data
 using ..load_data: load_charged_particle_moments_data, load_neutral_particle_moments_data
 using ..load_data: load_neutral_pdf_data
 using ..load_data: load_variable
-using ..load_data: load_coordinate_data, load_block_data, load_rank_data, load_species_data
+using ..load_data: load_coordinate_data, load_block_data, load_rank_data,
+                   load_species_data, load_mk_options
 using ..analysis: analyze_fields_data, analyze_moments_data, analyze_pdf_data,
                   check_Chodura_condition
 using ..velocity_moments: integrate_over_vspace
@@ -411,6 +412,8 @@ function analyze_and_plot_data(prefix...)
     # load species data
     n_ion_species, n_neutral_species =
         get_tuple_of_return_values(load_species_data, moments_files0)
+    evolve_density, evolve_upar, evolve_ppar =
+        get_tuple_of_return_values(load_mk_options, moments_files0)
 
     for f in moments_files0
         close(f)
