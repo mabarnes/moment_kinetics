@@ -101,8 +101,8 @@ function io_has_parallel() end
 """
 open the necessary output files
 """
-function setup_file_io(io_input, vz, vr, vzeta, vpa, vperp, z, r, composition, collisions,
-                       evolve_density, evolve_upar, evolve_ppar)
+function setup_file_io(io_input, boundary_distributions, vz, vr, vzeta, vpa, vperp, z, r,
+                       composition, collisions, evolve_density, evolve_upar, evolve_ppar)
     begin_serial_region()
     @serial_region begin
         # Only read/write from first process in each 'block'
@@ -126,10 +126,10 @@ function setup_file_io(io_input, vz, vr, vzeta, vpa, vperp, z, r, composition, c
                                       composition, collisions, evolve_density,
                                       evolve_upar, evolve_ppar, io_input.parallel_io,
                                       comm_inter_block[])
-        io_dfns = setup_dfns_io(out_prefix, io_input.binary_format, r, z, vperp, vpa,
-                                vzeta, vr, vz, composition, collisions, evolve_density,
-                                evolve_upar, evolve_ppar, io_input.parallel_io,
-                                comm_inter_block[])
+        io_dfns = setup_dfns_io(out_prefix, io_input.binary_format,
+                                boundary_distributions, r, z, vperp, vpa, vzeta, vr, vz,
+                                composition, collisions, evolve_density, evolve_upar,
+                                evolve_ppar, io_input.parallel_io, comm_inter_block[])
 
         return ascii, io_moments, io_dfns
     end
@@ -183,7 +183,38 @@ function write_overview!(fid, composition, collisions, parallel_io, evolve_densi
         write_single_value!(overview, "evolve_ppar", evolve_ppar,
                             parallel_io=parallel_io,
                             description="is parallel pressure evolved separately from the distribution function?")
+        write_single_value!(overview, "parallel_io", parallel_io,
+                            parallel_io=parallel_io,
+                            description="is parallel I/O being used?")
     end
+end
+
+"""
+Write the distributions that may be used for boundary conditions to the output file
+"""
+function write_boundary_distributions!(fid, boundary_distributions, parallel_io,
+                                       composition, z, vperp, vpa, vzeta, vr, vz)
+    @serial_region begin
+        boundary_distributions_io = create_io_group(fid, "boundary_distributions")
+
+        write_single_value!(boundary_distributions_io, "pdf_rboundary_charged_left",
+            boundary_distributions.pdf_rboundary_charged[:,:,:,1,:], vpa, vperp, z,
+            parallel_io=parallel_io, n_ion_species=composition.n_ion_species,
+            description="Initial charged-particle pdf at left radial boundary")
+        write_single_value!(boundary_distributions_io, "pdf_rboundary_charged_right",
+            boundary_distributions.pdf_rboundary_charged[:,:,:,2,:], vpa, vperp, z,
+            parallel_io=parallel_io, n_ion_species=composition.n_ion_species,
+            description="Initial charged-particle pdf at right radial boundary")
+        write_single_value!(boundary_distributions_io, "pdf_rboundary_neutral_left",
+            boundary_distributions.pdf_rboundary_neutral[:,:,:,:,1,:], vz, vr, vzeta, z,
+            parallel_io=parallel_io, n_neutral_species=composition.n_neutral_species,
+            description="Initial neutral-particle pdf at left radial boundary")
+        write_single_value!(boundary_distributions_io, "pdf_rboundary_neutral_right",
+            boundary_distributions.pdf_rboundary_neutral[:,:,:,:,2,:], vz, vr, vzeta, z,
+            parallel_io=parallel_io, n_neutral_species=composition.n_neutral_species,
+            description="Initial neutral-particle pdf at right radial boundary")
+    end
+    return nothing
 end
 
 """
@@ -538,9 +569,9 @@ end
 """
 setup file i/o for distribution function variables
 """
-function setup_dfns_io(prefix, binary_format, r, z, vperp, vpa, vzeta, vr, vz, composition,
-                       collisions, evolve_density, evolve_upar, evolve_ppar, parallel_io,
-                       io_comm)
+function setup_dfns_io(prefix, binary_format, boundary_distributions, r, z, vperp, vpa,
+                       vzeta, vr, vz, composition, collisions, evolve_density,
+                       evolve_upar, evolve_ppar, parallel_io, io_comm)
 
     @serial_region begin
         dfns_prefix = string(prefix, ".dfns")
@@ -553,9 +584,14 @@ function setup_dfns_io(prefix, binary_format, r, z, vperp, vpa, vzeta, vr, vz, c
         add_attribute!(fid, "file_info",
                        "Output distribution function data from the moment_kinetics code")
 
-        # write some overview information to the hdf5 file
+        # write some overview information to the output file
         write_overview!(fid, composition, collisions, parallel_io, evolve_density,
                         evolve_upar, evolve_ppar)
+
+        # write the distributions that may be used for boundary conditions to the output
+        # file
+        write_boundary_distributions!(fid, boundary_distributions, parallel_io,
+                                      composition, z, vperp, vpa, vzeta, vr, vz)
 
         ### define coordinate dimensions ###
         coords_group = define_spatial_coordinates!(fid, z, r, parallel_io)
@@ -649,52 +685,6 @@ function write_dfns_data_to_binary(ff, ff_neutral, moments, fields, t, n_ion_spe
         end
     end
     return nothing
-end
-
-"""
-Reload pdf and moments from an existing output file.
-"""
-function reload_evolving_fields!(pdf, moments, restart_filename, time_index,
-                                 composition, r, z, vpa)
-    code_time = 0.0
-    begin_serial_region()
-    @serial_region begin
-        fid = NCDataset(restart_filename,"r")
-        try
-            if time_index < 0
-                time_index = fid.dim["ntime"]
-            end
-            restart_n_species = fid.dim["n_species"]
-            restart_nr = fid.dim["nr"]
-            restart_nz = fid.dim["nz"]
-            restart_nvpa = fid.dim["nvpa"]
-            if restart_n_species != composition.n_species || restart_nr != r.n ||
-                restart_nz != z.n || restart_nvpa != vpa.n
-
-                error("Dimensions of restart file and input do not match.\n" *
-                      "Restart file was n_species=$restart_n_species, nr=$restart_nr, " *
-                      "nz=$restart_nz, nvpa=$restart_nvpa.\n" *
-                      "Input file gave  n_species=$(composition.n_species), nr=$(r.n), " *
-                      "nz=$(z.n), nvpa=$(vpa.n).")
-            end
-
-            code_time = fid["time"].var[time_index]
-            pdf.norm .= fid["f"].var[:,:,:,:,time_index]
-            moments.dens .= fid["density"].var[:,:,:,time_index]
-            moments.dens_updated .= true
-            moments.upar .= fid["parallel_flow"].var[:,:,:,time_index]
-            moments.upar_updated .= true
-            moments.ppar .= fid["parallel_pressure"].var[:,:,:,time_index]
-            moments.ppar_updated .= true
-            moments.qpar .= fid["parallel_heat_flux"].var[:,:,:,time_index]
-            moments.qpar_updated .= true
-            moments.vth .= fid["thermal_speed"].var[:,:,:,time_index]
-        finally
-            close(fid)
-        end
-    end
-
-    return code_time
 end
 
 @debug_shared_array begin

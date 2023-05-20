@@ -60,11 +60,17 @@ end
 
 function write_single_value!(file_or_group::NCDataset, name,
                              value::Union{Number, AbstractString, AbstractArray{T,N}},
-                             coords::coordinate...; parallel_io, description=nothing) where {T,N}
+                             coords::coordinate...; parallel_io, n_ion_species=nothing,
+                             n_neutral_species=nothing, description=nothing) where {T,N}
     if description !== nothing
         attributes = Dict("description" => description)
     else
         attributes = ()
+    end
+
+    if n_ion_species !== nothing && n_neutral_species != nothing
+        error("Cannot have both ion-species and neutral species dimensions." *
+              "Got n_ion_species=$n_ion_species, n_neutral_species=$n_neutral_species")
     end
 
     if isa(value, Number) || isa(value, String)
@@ -77,6 +83,14 @@ function write_single_value!(file_or_group::NCDataset, name,
             maybe_create_netcdf_dim(file_or_group, c)
         end
         dims = Tuple(c.name for c in coords)
+
+        if n_ion_species !== nothing
+            maybe_create_netcdf_dim(file_or_group, "ion_species", n_ion_species)
+            dims = tuple(dims..., "ion_species")
+        elseif n_neutral_species !== nothing
+            maybe_create_netcdf_dim(file_or_group, "neutral_species", n_neutral_species)
+            dims = tuple(dims..., "neutral_species")
+        end
     end
     if isa(value, Bool)
         # As a hack, write bools to NetCDF as Char, as NetCDF does not support bools (?),
