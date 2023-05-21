@@ -142,7 +142,7 @@ function second_derivative!(d2f, f, Q, coord, spectral)
         d2f[1] -= C * coord.scratch2_2d[end,end]
         d2f[end] += C * coord.scratch2_2d[1,1]
     else
-        error("Unsupported bc '$coord.bc'")
+        error("Unsupported bc '$(coord.bc)'")
     end
     return nothing
 end
