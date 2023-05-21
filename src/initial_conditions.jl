@@ -35,6 +35,8 @@ using ..velocity_moments: update_ppar!, update_upar!, update_density!
 
 using ..manufactured_solns: manufactured_solutions
 
+using MPI
+
 """
 """
 struct pdf_substruct{n_distribution}
@@ -454,7 +456,16 @@ function init_charged_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
         else
             # First create distribution functions at the z-boundary points that obey the
             # boundary conditions.
-            for iz ∈ (1,z.n)
+            if z.irank == 0 && z.irank == z.nrank - 1
+                zrange = (1,z.n)
+            elseif z.irank == 0
+                zrange = (1,)
+            elseif z.irank == z.nrank - 1
+                zrange = (z.n,)
+            else
+                zrange = ()
+            end
+            for iz ∈ zrange
                 @loop_vperp ivperp begin
                     # Initialise as full-f distribution functions, then
                     # normalise/interpolate (if necessary). This makes it easier to
@@ -478,6 +489,18 @@ function init_charged_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
                     @. pdf[:,ivperp,iz] *= 1.0 - exp(-vpa.grid^2*inverse_width)
                 end
             end
+            # Can use non-shared memory here because `init_charged_pdf_over_density!()` is
+            # called inside a `@serial_region`
+            lower_z_pdf_buffer = allocate_float(vpa.n, vperp.n)
+            upper_z_pdf_buffer = allocate_float(vpa.n, vperp.n)
+            if z.irank == 0
+                lower_z_pdf_buffer .= pdf[:,:,1]
+            end
+            if z.irank == z.nrank - 1
+                upper_z_pdf_buffer .= pdf[:,:,end]
+            end
+            @views MPI.Bcast!(lower_z_pdf_buffer, 0, z.comm)
+            @views MPI.Bcast!(upper_z_pdf_buffer, z.nrank - 1, z.comm)
 
             zero = 1.e-14
             for ivpa ∈ 1:vpa.n
@@ -495,15 +518,15 @@ function init_charged_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
             @. z.scratch = 1.0 + 0.5 * (1.0 - (2.0 * z.grid / z.L)^2)
             for iz ∈ 1:z.n
                 # right_weight is 0 on left boundary and 1 on right boundary
-                right_weight = (z.grid[iz] - z.grid[1])/z.L
+                right_weight = z.grid[iz]/z.L + 0.5
                 #right_weight = min(max(0.5 + 0.5*(2.0*z.grid[iz]/z.L)^5, 0.0), 1.0)
                 #right_weight = min(max(0.5 +
                 #                       0.7*(2.0*z.grid[iz]/z.L) -
                 #                       0.2*(2.0*z.grid[iz]/z.L)^3, 0.0), 1.0)
                 # znorm is 1.0 at the boundary and 0.0 at the midplane
                 @views @. pdf[:,:,iz] = z.scratch[iz] * (
-                                            (1.0 - right_weight)*pdf[:,:,1] +
-                                            right_weight*pdf[:,:,end])
+                                            (1.0 - right_weight)*lower_z_pdf_buffer +
+                                            right_weight*upper_z_pdf_buffer)
             end
 
             # Get the unnormalised pdf and the moments of the constructed full-f
@@ -608,7 +631,16 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
         else
             # First create distribution functions at the z-boundary points that obey the
             # boundary conditions.
-            for iz ∈ (1,z.n)
+            if z.irank == 0 && z.irank == z.nrank - 1
+                zrange = (1,z.n)
+            elseif z.irank == 0
+                zrange = (1,)
+            elseif z.irank == z.nrank - 1
+                zrange = (z.n,)
+            else
+                zrange = ()
+            end
+            for iz ∈ zrange
                 @loop_vzeta_vr ivzeta ivr begin
                     # Initialise as full-f distribution functions, then
                     # normalise/interpolate (if necessary). This makes it easier to
@@ -633,6 +665,29 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
                     @. pdf[:,ivr,ivzeta,iz] *= 1.0 - exp(-vz.grid^2*inverse_width)
                 end
             end
+            # Can use non-shared memory here because `init_charged_pdf_over_density!()` is
+            # called inside a `@serial_region`
+            lower_z_pdf_buffer = allocate_float(vz.n, vr.n, vzeta.n)
+            upper_z_pdf_buffer = allocate_float(vz.n, vr.n, vzeta.n)
+            if z.irank == 0
+                lower_z_pdf_buffer .= pdf[:,:,:,1]
+            end
+            if z.irank == z.nrank - 1
+                upper_z_pdf_buffer .= pdf[:,:,:,end]
+            end
+
+            # Get the boundary pdfs from the processes that have the actual z-boundary
+            @views MPI.Bcast!(lower_z_pdf_buffer, 0, z.comm)
+            @views MPI.Bcast!(upper_z_pdf_buffer, z.nrank - 1, z.comm)
+
+            # Also need to get the (ion) wall fluxes from the processes that have the
+            # actual z-boundary
+            temp = Ref(wall_flux_0)
+            @views MPI.Bcast!(temp, 0, z.comm)
+            wall_flux_0 = temp[]
+            temp[] = wall_flux_L
+            @views MPI.Bcast!(temp, z.nrank - 1, z.comm)
+            wall_flux_L = temp[]
 
             knudsen_pdf = boundary_distributions.knudsen
 
@@ -641,28 +696,28 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
             # add this species' contribution to the combined ion/neutral particle flux
             # out of the domain at z=-Lz/2
             @views wall_flux_0 += integrate_over_negative_vz(
-                                      abs.(vz.grid) .* pdf[:,:,:,1], vz.grid, vz.wgts,
+                                      abs.(vz.grid) .* lower_z_pdf_buffer, vz.grid, vz.wgts,
                                       vz.scratch3, vr.grid, vr.wgts, vzeta.grid,
                                       vzeta.wgts)
             # for left boundary in zed (z = -Lz/2), want
             # f_n(z=-Lz/2, v_z > 0) = Γ_0 * f_KW(v_z) * pdf_norm_fac(-Lz/2)
             @loop_vz ivz begin
                 if vz.grid[ivz] > zero
-                    @. pdf[ivz,:,:,1] = wall_flux_0 * knudsen_pdf[ivz,:,:]
+                    @. lower_z_pdf_buffer[ivz,:,:] = wall_flux_0 * knudsen_pdf[ivz,:,:]
                 end
             end
 
             # add this species' contribution to the combined ion/neutral particle flux
             # out of the domain at z=-Lz/2
             @views wall_flux_L += integrate_over_positive_vz(
-                                      abs.(vz.grid) .* pdf[:,:,:,end], vz.grid, vz.wgts,
+                                      abs.(vz.grid) .* upper_z_pdf_buffer, vz.grid, vz.wgts,
                                       vz.scratch3, vr.grid, vr.wgts, vzeta.grid,
                                       vzeta.wgts)
             # for right boundary in zed (z = Lz/2), want
             # f_n(z=Lz/2, v_z < 0) = Γ_Lz * f_KW(v_z) * pdf_norm_fac(Lz/2)
             @loop_vz ivz begin
                 if vz.grid[ivz] < -zero
-                    @. pdf[ivz,:,:,end] = wall_flux_L * knudsen_pdf[ivz,:,:]
+                    @. upper_z_pdf_buffer[ivz,:,:] = wall_flux_L * knudsen_pdf[ivz,:,:]
                 end
             end
 
@@ -673,15 +728,15 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
 
             for iz ∈ 1:z.n
                 # right_weight is 0 on left boundary and 1 on right boundary
-                right_weight = (z.grid[iz] - z.grid[1])/z.L
+                right_weight = z.grid[iz]/z.L + 0.5
                 #right_weight = min(max(0.5 + 0.5*(2.0*z.grid[iz]/z.L)^5, 0.0), 1.0)
                 #right_weight = min(max(0.5 +
                 #                       0.7*(2.0*z.grid[iz]/z.L) -
                 #                       0.2*(2.0*z.grid[iz]/z.L)^3, 0.0), 1.0)
                 # znorm is 1.0 at the boundary and 0.0 at the midplane
                 @views @. pdf[:,:,:,iz] = z.scratch[iz] * (
-                                              (1.0 - right_weight)*pdf[:,:,:,1] +
-                                              right_weight*pdf[:,:,:,end])
+                                              (1.0 - right_weight)*lower_z_pdf_buffer +
+                                              right_weight*upper_z_pdf_buffer)
             end
 
             # Get the unnormalised pdf and the moments of the constructed full-f
