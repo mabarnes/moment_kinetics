@@ -27,9 +27,9 @@ using NCDatasets
 function open_readonly_output_file(run_name, ext; iblock=0, printout=false)
     possible_names = (
         string(run_name, ".", ext, ".h5"),
-        string(run_name, ".", iblock,".", ext, ".h5"),
+        string(run_name, ".", ext, ".", iblock, ".h5"),
         string(run_name, ".", ext, ".cdf"),
-        string(run_name, ".", iblock,".", ext, ".cdf"),
+        string(run_name, ".", ext, ".", iblock, ".cdf"),
     )
     existing_files = Tuple(f for f in possible_names if isfile(f))
     exists_count = length(existing_files)
