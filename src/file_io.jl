@@ -110,11 +110,7 @@ function setup_file_io(io_input, vz, vr, vzeta, vpa, vperp, z, r, composition, c
         # check to see if output_dir exists in the current directory
         # if not, create it
         isdir(io_input.output_dir) || mkdir(io_input.output_dir)
-        if io_input.parallel_io
-            out_prefix = string(io_input.output_dir, "/", io_input.run_name)
-        else
-            out_prefix = string(io_input.output_dir, "/", io_input.run_name, ".", iblock_index[])
-        end
+        out_prefix = string(io_input.output_dir, "/", io_input.run_name)
 
         if io_input.ascii_output
             #ff_io = open_ascii_output_file(out_prefix, "f_vs_t")
@@ -511,8 +507,11 @@ setup file i/o for moment variables
 function setup_moments_io(prefix, binary_format, r, z, composition, collisions,
                           evolve_density, evolve_upar, evolve_ppar, parallel_io, io_comm)
     @serial_region begin
-        fid = open_output_file(string(prefix, ".moments"), binary_format, parallel_io,
-                               io_comm)
+        moments_prefix = string(prefix, ".moments")
+        if !parallel_io
+            moments_prefix *= ".$(iblock_index[])"
+        end
+        fid = open_output_file(moments_prefix, binary_format, parallel_io, io_comm)
 
         # write a header to the output file
         add_attribute!(fid, "file_info", "Output moments data from the moment_kinetics code")
@@ -544,8 +543,11 @@ function setup_dfns_io(prefix, binary_format, r, z, vperp, vpa, vzeta, vr, vz, c
                        io_comm)
 
     @serial_region begin
-        fid = open_output_file(string(prefix, ".dfns"), binary_format, parallel_io,
-                               io_comm)
+        dfns_prefix = string(prefix, ".dfns")
+        if !parallel_io
+            dfns_prefix *= ".$(iblock_index[])"
+        end
+        fid = open_output_file(dfns_prefix, binary_format, parallel_io, io_comm)
 
         # write a header to the output file
         add_attribute!(fid, "file_info",
