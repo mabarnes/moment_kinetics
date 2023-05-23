@@ -325,9 +325,15 @@ function define_io_coordinate!(parent, coord, coord_name, description, parallel_
         write_single_value!(group, "n_global", coord.n_global; parallel_io=parallel_io,
                             description="total number of $coord_name grid points")
 
-        # write the rank in the coord-direction of this process
-        write_single_value!(group, "irank", coord.irank, parallel_io=parallel_io,
-                            description="rank of this block in the $(coord.name) grid communicator")
+        if parallel_io
+            # write the rank as if whole file was written by rank-0
+            write_single_value!(group, "irank", 0, parallel_io=parallel_io,
+                                description="rank of this block in the $(coord.name) grid communicator")
+        else
+            # write the rank in the coord-direction of this process
+            write_single_value!(group, "irank", coord.irank, parallel_io=parallel_io,
+                                description="rank of this block in the $(coord.name) grid communicator")
+        end
 
         # write the global length of this coordinate to variable "L"
         # within "coords/coord_name" group
