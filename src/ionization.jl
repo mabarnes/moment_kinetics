@@ -93,6 +93,8 @@ function ionization_collisions!(f_out, fvec_in, moments, n_ion_species,
     end
 end
 
+"""
+"""
 function ionization_collisions_single_species!(f_out, fvec_in, moments, vpa, vpa_spectral, ionization, dt, is, isp)
     @loop_r_z ir iz begin
         if moments.evolve_ppar
