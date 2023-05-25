@@ -183,6 +183,7 @@ function mk_input(scan_input=Dict())
     collisions.ionization = get(scan_input, "ionization_frequency", collisions.charge_exchange)
     collisions.constant_ionization_rate = get(scan_input, "constant_ionization_rate", false)
     collisions.nuii = get(scan_input, "nuii", 0.0)
+    collisions.nuii_pitch = get(scan_input, "nuii_pitch", 0.0)
     collisions.nuii_krook = get(scan_input, "nuii_krook", 0.0)
 
     # parameters related to the time stepping
@@ -862,8 +863,9 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     ionization = 0.0
     constant_ionization_rate = false
     nuii = 0.0
+    nuii_pitch = 0.0
     nuii_krook = 0.0
-    collisions = collisions_input(charge_exchange, ionization, constant_ionization_rate, nuii, nuii_krook)
+    collisions = collisions_input(charge_exchange, ionization, constant_ionization_rate, nuii, nuii_pitch, nuii_krook)
 
     Bzed = 1.0 # magnetic field component along z
     Bmag = 1.0 # magnetic field strength

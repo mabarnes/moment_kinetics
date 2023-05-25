@@ -41,7 +41,7 @@ using ..continuity: continuity_equation!
 using ..force_balance: force_balance!
 using ..energy_equation: energy_equation!
 using ..em_fields: setup_em_fields, update_phi!
-using ..fokker_planck: init_fokker_planck_collisions, explicit_fokker_planck_collisions!
+using ..fokker_planck: init_fokker_planck_collisions, explicit_fokker_planck_collisions!, explicit_fokker_planck_collisions_Maxwellian_coefficients!
 using ..collision_models: explicit_krook_collisions!
 #using ..semi_lagrange: setup_semi_lagrange
 using Dates
@@ -210,6 +210,11 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     else 
         explicit_fp_collisions = false    
     end
+    if collisions.nuii_pitch > 0.0 && vperp.n > 1
+        explicit_fp_F_FM_collisions = true
+    else 
+        explicit_fp_F_FM_collisions = false    
+    end
     if collisions.nuii_krook > 0.0
         explicit_krook_collisions = true  
     else
@@ -222,7 +227,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     advance = advance_info(advance_vpa_advection, advance_z_advection, advance_r_advection, advance_neutral_z_advection, advance_neutral_r_advection,
                            advance_cx, advance_cx_1V, advance_ionization, advance_ionization_1V, advance_ionization_source, advance_numerical_dissipation, 
                            advance_sources, advance_continuity, advance_force_balance, advance_energy, rk_coefs,
-                           manufactured_solns_test, r_diffusion, vpa_diffusion, explicit_fp_collisions, explicit_krook_collisions)
+                           manufactured_solns_test, r_diffusion, vpa_diffusion, explicit_fp_collisions, explicit_fp_F_FM_collisions, explicit_krook_collisions)
 
 
     if z.discretization == "chebyshev_pseudospectral"
@@ -1041,6 +1046,12 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     if advance.explicit_fp_collisions
         explicit_fokker_planck_collisions!(fvec_out.pdf, fvec_in.pdf,composition,collisions,dt,fp_arrays,
                                              scratch_dummy, r, z, vperp, vpa, vperp_spectral, vpa_spectral)
+    end
+    if advance.explicit_fp_F_FM_collisions
+        explicit_fokker_planck_collisions_Maxwellian_coefficients!(fvec_out.pdf, fvec_in.pdf, 
+                  fvec_in.density, fvec_in.upar, moments.charged.vth, 
+                  composition, collisions, dt, fp_arrays,
+                  scratch_dummy, r, z, vperp, vpa, vperp_spectral, vpa_spectral)
     end
     if advance.explicit_krook_collisions
         explicit_krook_collisions!(fvec_out.pdf, fvec_in.pdf, fvec_in.density, fvec_in.upar, moments.charged.vth, 
