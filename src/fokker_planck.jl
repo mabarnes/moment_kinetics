@@ -7,6 +7,8 @@ module fokker_planck
 export init_fokker_planck_collisions
 export explicit_fokker_planck_collisions!
 export calculate_Rosenbluth_potentials!
+export calculate_collisional_fluxes, calculate_Maxwellian_Rosenbluth_coefficients
+export Cflux_vpa_Maxwellian_inputs
 
 using SpecialFunctions: ellipk, ellipe, erf
 using ..type_definitions: mk_float, mk_int
@@ -24,14 +26,14 @@ struct fokkerplanck_arrays_struct
     elliptic_integral_E_factor::Array{mk_float,4}
     elliptic_integral_K_factor::Array{mk_float,4}
     Rosenbluth_G::Array{mk_float,2}
-    Rosenbluth_d2Gdvpa2::MPISharedArray{mk_float,2}
-    Rosenbluth_d2Gdvperpdvpa::MPISharedArray{mk_float,2}
-    Rosenbluth_d2Gdvperp2::MPISharedArray{mk_float,2}
+    #Rosenbluth_d2Gdvpa2::MPISharedArray{mk_float,2}
+    #Rosenbluth_d2Gdvperpdvpa::MPISharedArray{mk_float,2}
+    #Rosenbluth_d2Gdvperp2::MPISharedArray{mk_float,2}
     Rosenbluth_H::Array{mk_float,2}
-    Rosenbluth_dHdvpa::MPISharedArray{mk_float,2}
-    Rosenbluth_dHdvperp::MPISharedArray{mk_float,2}
-    Cflux_vpa::MPISharedArray{mk_float,2}
-    Cflux_vperp::MPISharedArray{mk_float,2}
+    #Rosenbluth_dHdvpa::MPISharedArray{mk_float,2}
+    #Rosenbluth_dHdvperp::MPISharedArray{mk_float,2}
+    #Cflux_vpa::MPISharedArray{mk_float,2}
+    #Cflux_vperp::MPISharedArray{mk_float,2}
     buffer_vpavperp_1::Array{mk_float,2}
     buffer_vpavperp_2::Array{mk_float,2}
     #Cssp_result_vpavperp::Array{mk_float,2}
@@ -48,22 +50,22 @@ function allocate_fokkerplanck_arrays(vperp,vpa)
     elliptic_integral_E_factor = allocate_float(nvpa,nvperp,nvpa,nvperp)
     elliptic_integral_K_factor = allocate_float(nvpa,nvperp,nvpa,nvperp)
     Rosenbluth_G = allocate_float(nvpa,nvperp)
-    Rosenbluth_d2Gdvpa2 = allocate_shared_float(nvpa,nvperp)
-    Rosenbluth_d2Gdvperpdvpa = allocate_shared_float(nvpa,nvperp)
-    Rosenbluth_d2Gdvperp2 = allocate_shared_float(nvpa,nvperp)
+    #Rosenbluth_d2Gdvpa2 = allocate_shared_float(nvpa,nvperp)
+    #Rosenbluth_d2Gdvperpdvpa = allocate_shared_float(nvpa,nvperp)
+    #Rosenbluth_d2Gdvperp2 = allocate_shared_float(nvpa,nvperp)
     Rosenbluth_H = allocate_float(nvpa,nvperp)
-    Rosenbluth_dHdvpa = allocate_shared_float(nvpa,nvperp)
-    Rosenbluth_dHdvperp = allocate_shared_float(nvpa,nvperp)
-    Cflux_vpa = allocate_shared_float(nvpa,nvperp)
-    Cflux_vperp = allocate_shared_float(nvpa,nvperp)
+    #Rosenbluth_dHdvpa = allocate_shared_float(nvpa,nvperp)
+    #Rosenbluth_dHdvperp = allocate_shared_float(nvpa,nvperp)
+    #Cflux_vpa = allocate_shared_float(nvpa,nvperp)
+    #Cflux_vperp = allocate_shared_float(nvpa,nvperp)
     buffer_vpavperp_1 = allocate_float(nvpa,nvperp)
     buffer_vpavperp_2 = allocate_float(nvpa,nvperp)
     #Cssp_result_vpavperp = allocate_float(nvpa,nvperp)
     
     return fokkerplanck_arrays_struct(elliptic_integral_E_factor,elliptic_integral_K_factor,
-                               Rosenbluth_G,Rosenbluth_d2Gdvpa2,Rosenbluth_d2Gdvperpdvpa,Rosenbluth_d2Gdvperp2,
-                               Rosenbluth_H,Rosenbluth_dHdvpa,Rosenbluth_dHdvperp,
-                               Cflux_vpa,Cflux_vperp,
+                               Rosenbluth_G,#Rosenbluth_d2Gdvpa2,Rosenbluth_d2Gdvperpdvpa,Rosenbluth_d2Gdvperp2,
+                               Rosenbluth_H,#Rosenbluth_dHdvpa,Rosenbluth_dHdvperp,
+                               #Cflux_vpa,Cflux_vperp,
                                buffer_vpavperp_1,buffer_vpavperp_2)
                                #Cssp_result_vpavperp)
 end
@@ -181,6 +183,8 @@ function calculate_collisional_fluxes(F,dFdvpa,dFdvperp,
                             ms,msp,vperp_val)
     # fill in value at (ivpa,ivperp)
     Cflux_vpa = dFdvpa*d2Gdvpa2 + dFdvperp*d2Gdvperpdvpa - 2.0*(ms/msp)*F*dHdvpa
+    #Cflux_vpa = dFdvpa*d2Gdvpa2 + dFdvperp*d2Gdvperpdvpa # - 2.0*(ms/msp)*F*dHdvpa
+    #Cflux_vpa =  - 2.0*(ms/msp)*F*dHdvpa
     Cflux_vperp = vperp_val* ( dFdvpa*d2Gdvperpdvpa + dFdvperp*d2Gdvperp2 - 2.0*(ms/msp)*F*dHdvperp )
     return Cflux_vpa, Cflux_vperp
 end
@@ -355,21 +359,24 @@ function explicit_fokker_planck_collisions_Maxwellian_coefficients!(pdf_out,pdf_
     @loop_s_r_z is ir iz begin
         @loop_vperp_vpa ivperp ivpa begin
             # first compute local (in z,r) Rosenbluth potential coefficients, summing over all s'
-           ( (fk.Rosenbluth_d2Gdvpa2[ivpa,ivperp], fk.Rosenbluth_d2Gdvperpdvpa[ivpa,ivperp], 
-            fk.Rosenbluth_d2Gdvperp2[ivpa,ivperp],fk.Rosenbluth_dHdvpa[ivpa,ivperp],
-            fk.Rosenbluth_dHdvperp[ivpa,ivperp]) = calculate_Maxwellian_Rosenbluth_coefficients(dens_in[iz,ir,:],
+            # ((fk.Rosenbluth_d2Gdvpa2[ivpa,ivperp], fk.Rosenbluth_d2Gdvperpdvpa[ivpa,ivperp], 
+            #fk.Rosenbluth_d2Gdvperp2[ivpa,ivperp],fk.Rosenbluth_dHdvpa[ivpa,ivperp],
+            #fk.Rosenbluth_dHdvperp[ivpa,ivperp])
+            ((Rosenbluth_d2Gdvpa2, Rosenbluth_d2Gdvperpdvpa, 
+            Rosenbluth_d2Gdvperp2,Rosenbluth_dHdvpa,
+            Rosenbluth_dHdvperp) = calculate_Maxwellian_Rosenbluth_coefficients(dens_in[iz,ir,:],
                  upar_in[iz,ir,:],vth_in[iz,ir,:],vpa,vperp,ivpa,ivperp,n_ion_species) )
                  
             # now form the collisional fluxes at this s,z,r
-            ( (fk.Cflux_vpa[ivpa,ivperp],fk.Cflux_vperp[ivpa,ivperp]) = calculate_collisional_fluxes(pdf_in[ivpa,ivperp,iz,ir,is],
+            ( (Cflux_vpa,Cflux_vperp) = calculate_collisional_fluxes(pdf_in[ivpa,ivperp,iz,ir,is],
                     pdf_buffer_1[ivpa,ivperp,iz,ir,is],pdf_buffer_2[ivpa,ivperp,iz,ir,is],
-                    fk.Rosenbluth_d2Gdvpa2[ivpa,ivperp],fk.Rosenbluth_d2Gdvperpdvpa[ivpa,ivperp],
-                    fk.Rosenbluth_d2Gdvperp2[ivpa,ivperp],fk.Rosenbluth_dHdvpa[ivpa,ivperp],fk.Rosenbluth_dHdvperp[ivpa,ivperp],
+                    Rosenbluth_d2Gdvpa2,Rosenbluth_d2Gdvperpdvpa,
+                    Rosenbluth_d2Gdvperp2,Rosenbluth_dHdvpa,Rosenbluth_dHdvperp,
                     mi,mip,vperp.grid[ivperp]) )
             
             # now overwrite the buffer arrays with the local values as we no longer need dFdvpa or dFdvperp at s,r,z
-            pdf_buffer_1[ivpa,ivperp,iz,ir,is] = fk.Cflux_vpa[ivpa,ivperp]
-            pdf_buffer_2[ivpa,ivperp,iz,ir,is] = fk.Cflux_vperp[ivpa,ivperp]
+            pdf_buffer_1[ivpa,ivperp,iz,ir,is] = Cflux_vpa
+            pdf_buffer_2[ivpa,ivperp,iz,ir,is] = Cflux_vperp
         end
         
     end
@@ -407,6 +414,12 @@ function dGdeta(eta::mk_float)
     # d \tilde{G} / d eta
     dGdeta_fac = (1.0/sqrt(pi))*exp(-eta^2)/eta + (1.0 - 0.5/(eta^2))*erf(eta)
     return dGdeta_fac
+end
+
+function d2Gdeta2(eta::mk_float)
+    # d \tilde{G} / d eta
+    d2Gdeta2_fac = erf(eta)/(eta^3) - (2.0/sqrt(pi))*exp(-eta^2)/(eta^2)
+    return d2Gdeta2_fac
 end
 
 function ddGddeta(eta::mk_float)
@@ -470,6 +483,18 @@ function dHdvpa(dens::mk_float,upar::mk_float,vth::mk_float,
     eta = eta_func(upar,vth,vpa,vperp,ivpa,ivperp)
     fac = dHdeta(eta)*(vpa.grid[ivpa]-upar)*dens/(eta*vth^3)
     return fac 
+end
+
+function Cflux_vpa_Maxwellian_inputs(ms::mk_float,denss::mk_float,upars::mk_float,vths::mk_float,
+                                     msp::mk_float,denssp::mk_float,uparsp::mk_float,vthsp::mk_float,
+                                     vpa,vperp,ivpa,ivperp)
+    etap = eta_func(uparsp,vthsp,vpa,vperp,ivpa,ivperp)
+    eta = eta_func(upars,vths,vpa,vperp,ivpa,ivperp)
+    fac = -2.0*denss*denssp*(vpa.grid[ivpa]-upars)*exp( -eta^2)/(vthsp*vths^5)
+    fac *= (d2Gdeta2(etap) + (ms/msp)*(vths/vthsp)*dHdeta(etap)/etap)
+    #fac *= (ms/msp)*(vths/vthsp)*dHdeta(etap)/etap
+    #fac *= d2Gdeta2(etap) 
+    return fac
 end
 
 end
