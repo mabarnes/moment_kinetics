@@ -36,10 +36,10 @@ function constant_ionization_source!(f_out, vpa, vperp, z, r, composition, colli
     # loop below relies on vperp[1] = 0 when vperp.n = 1
     @loop_s is begin
         @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
-            zfac = exp( - (z.grid[iz]/zwidth)^2)
+            zfac = ((z.grid[iz]/zwidth)^2)*exp( - (z.grid[iz]/zwidth)^2)
             rfac = exp( - (r.grid[ir]/rwidth)^2)
             vperpfac = exp( - (vperp.grid[ivperp]/vperpwidth)^2) 
-            vpafac = vpa.grid[ivpa]^2
+            vpafac = 1.0 #vpa.grid[ivpa]^2
             f_out[ivpa,ivperp,iz,ir,is] += dt*prefac*rfac*zfac*vperpfac*vpafac*collisions.ionization/width*exp(-(vpa.grid[ivpa]/width)^2)
         end
     end
