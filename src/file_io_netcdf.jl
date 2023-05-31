@@ -98,9 +98,21 @@ function write_single_value!(file_or_group::NCDataset, name,
         dims = Tuple(c.name for c in coords)
 
         if n_ion_species !== nothing
+            if n_ion_species < 0
+                error("n_ion_species must be non-negative, got $n_ion_species")
+            elseif n_ion_species == 0
+                # No data to write
+                return nothing
+            end
             maybe_create_netcdf_dim(file_or_group, "ion_species", n_ion_species)
             dims = tuple(dims..., "ion_species")
         elseif n_neutral_species !== nothing
+            if n_neutral_species < 0
+                error("n_neutral_species must be non-negative, got $n_neutral_species")
+            elseif n_neutral_species == 0
+                # No data to write
+                return nothing
+            end
             maybe_create_netcdf_dim(file_or_group, "neutral_species", n_neutral_species)
             dims = tuple(dims..., "neutral_species")
         end
@@ -120,25 +132,35 @@ end
 
 function create_dynamic_variable!(file_or_group::NCDataset, name, type,
                                   coords::coordinate...; parallel_io,
-                                  n_ion_species=0, n_neutral_species=0,
+                                  n_ion_species=nothing, n_neutral_species=nothing,
                                   description=nothing, units=nothing)
 
-    if n_ion_species != 0 && n_neutral_species != 0
+    if n_ion_species !== nothing && n_neutral_species !== nothing
         error("Variable should not contain both ion and neutral species dimensions. "
               * "Got n_ion_species=$n_ion_species and "
               * "n_neutral_species=$n_neutral_species")
     end
-    n_ion_species < 0 && error("n_ion_species must be non-negative, got $n_ion_species")
-    n_neutral_species < 0 && error("n_neutral_species must be non-negative, got $n_neutral_species")
 
     # Create time dimension if necessary
     maybe_create_netcdf_dim(file_or_group, "time", Inf)
 
     # Create species dimension if necessary
-    if n_ion_species > 0
+    if n_ion_species !== nothing
+        if n_ion_species < 0
+            error("n_ion_species must be non-negative, got $n_ion_species")
+        elseif n_ion_species == 0
+            # No data to write
+            return nothing
+        end
         maybe_create_netcdf_dim(file_or_group, "ion_species", n_ion_species)
     end
-    if n_neutral_species > 0
+    if n_neutral_species !== nothing
+        if n_neutral_species < 0
+            error("n_neutral_species must be non-negative, got $n_neutral_species")
+        elseif n_neutral_species == 0
+            # No data to write
+            return nothing
+        end
         maybe_create_netcdf_dim(file_or_group, "neutral_species", n_neutral_species)
     end
 
@@ -150,9 +172,9 @@ function create_dynamic_variable!(file_or_group::NCDataset, name, type,
     # create the variable so it can be expanded indefinitely (up to the largest unsigned
     # integer in size) in the time dimension
     coord_dims = Tuple(c.name for c ∈ coords)
-    if n_ion_species > 0
+    if n_ion_species !== nothing
         fixed_dims = tuple(coord_dims..., "ion_species")
-    elseif n_neutral_species > 0
+    elseif n_neutral_species !== nothing
         fixed_dims = tuple(coord_dims..., "neutral_species")
     else
         fixed_dims = coord_dims

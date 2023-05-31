@@ -89,8 +89,20 @@ function write_single_value!(file_or_group::HDF5.H5DataStore, name,
     end
 
     if n_ion_species !== nothing
+        if n_ion_species < 0
+            error("n_ion_species must be non-negative, got $n_ion_species")
+        elseif n_ion_species == 0
+            # No data to write
+            return nothing
+        end
         coords = tuple(coords..., n_ion_species)
     elseif n_neutral_species !== nothing
+        if n_neutral_species < 0
+            error("n_neutral_species must be non-negative, got $n_neutral_species")
+        elseif n_neutral_species == 0
+            # No data to write
+            return nothing
+        end
         coords = tuple(coords..., n_neutral_species)
     end
     dim_sizes, chunk_sizes = hdf5_get_fixed_dim_sizes(coords, parallel_io)
@@ -182,21 +194,31 @@ end
 
 function create_dynamic_variable!(file_or_group::HDF5.H5DataStore, name, type,
                                   coords::coordinate...; parallel_io,
-                                  n_ion_species=0, n_neutral_species=0,
+                                  n_ion_species=nothing, n_neutral_species=nothing,
                                   description=nothing, units=nothing)
 
-    if n_ion_species != 0 && n_neutral_species != 0
+    if n_ion_species !== nothing && n_neutral_species !== nothing
         error("Variable should not contain both ion and neutral species dimensions. "
               * "Got n_ion_species=$n_ion_species and "
               * "n_neutral_species=$n_neutral_species")
     end
-    n_ion_species < 0 && error("n_ion_species must be non-negative, got $n_ion_species")
-    n_neutral_species < 0 && error("n_neutral_species must be non-negative, got $n_neutral_species")
 
     # Add the number of species to the spatial/velocity-space coordinates
-    if n_ion_species > 0
+    if n_ion_species !== nothing
+        if n_ion_species < 0
+            error("n_ion_species must be non-negative, got $n_ion_species")
+        elseif n_ion_species == 0
+            # No data to write
+            return nothing
+        end
         fixed_coords = tuple(coords..., n_ion_species)
-    elseif n_neutral_species > 0
+    elseif n_neutral_species !== nothing
+        if n_neutral_species < 0
+            error("n_neutral_species must be non-negative, got $n_neutral_species")
+        elseif n_neutral_species == 0
+            # No data to write
+            return nothing
+        end
         fixed_coords = tuple(coords..., n_neutral_species)
     else
         fixed_coords = coords
@@ -208,9 +230,9 @@ function create_dynamic_variable!(file_or_group::HDF5.H5DataStore, name, type,
 
     # Add attribute listing the dimensions belonging to this variable
     dim_names = Tuple(c.name for c ∈ coords)
-    if n_ion_species > 0
+    if n_ion_species !== nothing
         dim_names = tuple(dim_names..., "ion_species")
-    elseif n_neutral_species > 0
+    elseif n_neutral_species !== nothing
         dim_names = tuple(dim_names..., "neutral_species")
     end
     add_attribute!(var, "dims", join(dim_names, ","))
