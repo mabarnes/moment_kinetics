@@ -8,7 +8,7 @@ export init_fokker_planck_collisions
 export explicit_fokker_planck_collisions!
 export calculate_Rosenbluth_potentials!
 export calculate_collisional_fluxes, calculate_Maxwellian_Rosenbluth_coefficients
-export Cflux_vpa_Maxwellian_inputs
+export Cflux_vpa_Maxwellian_inputs, Cflux_vperp_Maxwellian_inputs
 
 using SpecialFunctions: ellipk, ellipe, erf
 using ..type_definitions: mk_float, mk_int
@@ -490,11 +490,27 @@ function Cflux_vpa_Maxwellian_inputs(ms::mk_float,denss::mk_float,upars::mk_floa
                                      vpa,vperp,ivpa,ivperp)
     etap = eta_func(uparsp,vthsp,vpa,vperp,ivpa,ivperp)
     eta = eta_func(upars,vths,vpa,vperp,ivpa,ivperp)
-    fac = -2.0*denss*denssp*(vpa.grid[ivpa]-upars)*exp( -eta^2)/(vthsp*vths^5)
-    fac *= (d2Gdeta2(etap) + (ms/msp)*(vths/vthsp)*dHdeta(etap)/etap)
+    prefac = -2.0*denss*denssp*exp( -eta^2)/(vthsp*vths^5)
+    (fac = (vpa.grid[ivpa]-uparsp)*(d2Gdeta2(etap) + (ms/msp)*((vths/vthsp)^2)*dHdeta(etap)/etap)
+             + (uparsp - upars)*( dGdeta(etap) + ((vpa.grid[ivpa]-uparsp)^2/vthsp^2)*ddGddeta(etap) )/etap )
+    Cflux = prefac*fac
     #fac *= (ms/msp)*(vths/vthsp)*dHdeta(etap)/etap
     #fac *= d2Gdeta2(etap) 
-    return fac
+    return Cflux
+end
+
+function Cflux_vperp_Maxwellian_inputs(ms::mk_float,denss::mk_float,upars::mk_float,vths::mk_float,
+                                     msp::mk_float,denssp::mk_float,uparsp::mk_float,vthsp::mk_float,
+                                     vpa,vperp,ivpa,ivperp)
+    etap = eta_func(uparsp,vthsp,vpa,vperp,ivpa,ivperp)
+    eta = eta_func(upars,vths,vpa,vperp,ivpa,ivperp)
+    prefac = -2.0*(vperp.grid[ivperp]^2)*denss*denssp*exp( -eta^2)/(vthsp*vths^5)
+    (fac = (d2Gdeta2(etap) + (ms/msp)*((vths/vthsp)^2)*dHdeta(etap)/etap)
+             + ((uparsp - upars)*(vpa.grid[ivpa]-uparsp)/vthsp^2)*ddGddeta(etap)/etap )
+    Cflux = prefac*fac
+    #fac *= (ms/msp)*(vths/vthsp)*dHdeta(etap)/etap
+    #fac *= d2Gdeta2(etap) 
+    return Cflux
 end
 
 end

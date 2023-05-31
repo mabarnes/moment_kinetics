@@ -116,7 +116,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
 	#using moment_kinetics.fokker_planck: calculate_Rosenbluth_H_from_G!
 	using moment_kinetics.fokker_planck: init_fokker_planck_collisions
 	using moment_kinetics.fokker_planck: calculate_collisional_fluxes, calculate_Maxwellian_Rosenbluth_coefficients
-    using moment_kinetics.fokker_planck: Cflux_vpa_Maxwellian_inputs
+    using moment_kinetics.fokker_planck: Cflux_vpa_Maxwellian_inputs, Cflux_vperp_Maxwellian_inputs
     using moment_kinetics.type_definitions: mk_float, mk_int
     using moment_kinetics.calculus: derivative!
     using moment_kinetics.velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_pressure
@@ -128,12 +128,12 @@ if abspath(PROGRAM_FILE) == @__FILE__
 	
     # define inputs needed for the test
 	vpa_ngrid = 17 #number of points per element 
-	vpa_nelement_local = 20 # number of elements per rank
+	vpa_nelement_local = 8 # number of elements per rank
 	vpa_nelement_global = vpa_nelement_local # total number of elements 
 	vpa_L = 12.0 #physical box size in reference units 
 	bc = "zero" 
 	vperp_ngrid = 17 #number of points per element 
-	vperp_nelement_local = 20 # number of elements per rank
+	vperp_nelement_local = 8 # number of elements per rank
 	vperp_nelement_global = vperp_nelement_local # total number of elements 
     vperp_L = 6.0 #physical box size in reference units 
 	bc = "zero" 
@@ -202,7 +202,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 G_Maxwell[ivpa,ivperp] = G_Maxwellian(vpa,vperp,ivpa,ivperp)
                 H_Maxwell[ivpa,ivperp] = H_Maxwellian(vpa,vperp,ivpa,ivperp)
                 #Gam_vpa_Maxwell[ivpa,ivperp] = 0.0
-                Gam_vperp_Maxwell[ivpa,ivperp] = 0.0
+                #Gam_vperp_Maxwell[ivpa,ivperp] = 0.0
             end
         end
         
@@ -257,50 +257,84 @@ if abspath(PROGRAM_FILE) == @__FILE__
     Gam_vpa = Array{mk_float,2}(undef,nvpa,nvperp)
     Gam_vpa_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
     Gam_vperp = Array{mk_float,2}(undef,nvpa,nvperp)
-    dfn =  Array{mk_float,2}(undef,nvpa,nvperp)
+    dfns =  Array{mk_float,2}(undef,nvpa,nvperp)
+    dfnsp =  Array{mk_float,2}(undef,nvpa,nvperp)
     pdf_buffer_1 =  Array{mk_float,2}(undef,nvpa,nvperp)
     pdf_buffer_2 =  Array{mk_float,2}(undef,nvpa,nvperp)
     n_ion_species = 1
     dens_in = Array{mk_float,1}(undef,n_ion_species)
     upar_in = Array{mk_float,1}(undef,n_ion_species)
-    vth_in = Array{mk_float,1}(undef,n_ion_species)
+    vths_in = Array{mk_float,1}(undef,n_ion_species)
+    densp_in = Array{mk_float,1}(undef,n_ion_species)
+    uparp_in = Array{mk_float,1}(undef,n_ion_species)
+    vthsp_in = Array{mk_float,1}(undef,n_ion_species)
+    
+    function get_vth(pres,dens,mass)
+        return sqrt(pres/(dens*mass))
+    end
     
     # 2D isotropic Maxwellian test
     # assign a known isotropic Maxwellian distribution in normalised units
+    # first argument (derivatives)
     dens = 1.0#3.0/4.0
     upar = 2.0/3.0
     ppar = 2.0/3.0
     pperp = 2.0/3.0
     pres = get_pressure(ppar,pperp) 
-    mass = 1.0
-    vth = sqrt(pres/(dens*mass))
+    mi = 1.0
+    vths = get_vth(pres,dens,mi)
+    # second argument (potentials)
+    densp = 2.0#3.0/4.0
+    uparp = 1.0/3.0#3.0/4.0
+    pparp = 4.0/3.0
+    pperpp = 4.0/3.0
+    presp = get_pressure(pparp,pperpp) 
+    mip = 1.5
+    vthsp = get_vth(presp,densp,mip)
     for ivperp in 1:vperp.n
         for ivpa in 1:vpa.n
             vpa_val = vpa.grid[ivpa]
             vperp_val = vperp.grid[ivperp]
-            dfn[ivpa,ivperp] = (dens/vth^3)*exp( - ((vpa_val-upar)^2 + vperp_val^2)/vth^2 )
+            dfns[ivpa,ivperp] = (dens/vths^3)*exp( - ((vpa_val-upar)^2 + vperp_val^2)/vths^2 )
+            dfnsp[ivpa,ivperp] = (densp/vthsp^3)*exp( - ((vpa_val-uparp)^2 + vperp_val^2)/vthsp^2 )
         end
     end
-    pdf_in = dfn
-    dens_in[1] = get_density(dfn,vpa,vperp)
-    upar_in[1] = get_upar(dfn,vpa,vperp,dens_in[1])
-    ppar_in = get_ppar(dfn,vpa,vperp,upar_in[1])
-    pperp_in = get_pperp(dfn,vpa,vperp)
+    pdf_in = dfns
+    dens_in[1] = get_density(dfns,vpa,vperp)
+    upar_in[1] = get_upar(dfns,vpa,vperp,dens_in[1])
+    ppar_in = get_ppar(dfns,vpa,vperp,upar_in[1],mi)
+    pperp_in = get_pperp(dfns,vpa,vperp,mi)
     pres_in = pressure(ppar_in,pperp_in)
-    vth_in[1] = sqrt(pres_in/(dens_in[1]*mass))
-    mi = mass
-    mip = mi 
-
-    println("Isotropic 2D Maxwellian")
+    vths_in[1] = get_vth(pres_in,dens_in[1],mi)
+    
+    densp_in[1] = get_density(dfnsp,vpa,vperp)
+    uparp_in[1] = get_upar(dfnsp,vpa,vperp,densp_in[1])
+    pparp_in = get_ppar(dfnsp,vpa,vperp,uparp_in[1],mip)
+    pperpp_in = get_pperp(dfnsp,vpa,vperp,mip)
+    presp_in = pressure(pparp_in,pperpp_in)
+    vthsp_in[1] = get_vth(presp_in,densp_in[1],mip)
+    
+    println("Isotropic 2D Maxwellian: first argument (derivatives)")
     println("dens_test: ", dens_in[1], " dens: ", dens, " error: ", abs(dens_in[1]-dens))
     println("upar_test: ", upar_in[1], " upar: ", upar, " error: ", abs(upar_in[1]-upar))
-    println("vth_test: ", vth_in[1], " vth: ", vth, " error: ", abs(vth_in[1]-vth))
+    println("ppar_test: ", ppar_in, " ppar: ", ppar, " error: ", abs(ppar_in-ppar))
+    println("pperp_test: ", pperp_in, " pperp: ", pperp, " error: ", abs(pperp_in-pperp))
+    println("vth_test: ", vths_in[1], " vth: ", vths, " error: ", abs(vths_in[1]-vths))
+    println("Isotropic 2D Maxwellian: second argument (potentials)")
+    println("dens_test: ", densp_in[1], " dens: ", densp, " error: ", abs(densp_in[1]-densp))
+    println("upar_test: ", uparp_in[1], " upar: ", uparp, " error: ", abs(uparp_in[1]-uparp))
+    println("ppar_test: ", pparp_in, " ppar: ", pparp, " error: ", abs(pparp_in-pparp))
+    println("pperp_test: ", pperpp_in, " pperp: ", pperpp, " error: ", abs(pperpp_in-pperpp))
+    println("vth_test: ", vthsp_in[1], " vth: ", vthsp, " error: ", abs(vthsp_in[1]-vthsp))
     
 
     for ivperp in 1:nvperp
         for ivpa in 1:nvpa
-            Gam_vpa_Maxwell[ivpa,ivperp] = Cflux_vpa_Maxwellian_inputs(mi,dens_in[1],upar_in[1],vth_in[1],
-                                                                     mip,dens_in[1],upar_in[1],vth_in[1],
+            Gam_vpa_Maxwell[ivpa,ivperp] = Cflux_vpa_Maxwellian_inputs(mi,dens_in[1],upar_in[1],vths_in[1],
+                                                                     mip,densp_in[1],uparp_in[1],vthsp_in[1],
+                                                                     vpa,vperp,ivpa,ivperp)
+            Gam_vperp_Maxwell[ivpa,ivperp] = Cflux_vperp_Maxwellian_inputs(mi,dens_in[1],upar_in[1],vths_in[1],
+                                                                     mip,densp_in[1],uparp_in[1],vthsp_in[1],
                                                                      vpa,vperp,ivpa,ivperp)
         end
     end
@@ -321,8 +355,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
         ## evaluate the collision operator with analytically computed G & H from a shifted Maxwellian
         ((Rosenbluth_d2Gdvpa2, Rosenbluth_d2Gdvperpdvpa, 
                 Rosenbluth_d2Gdvperp2,Rosenbluth_dHdvpa,
-                Rosenbluth_dHdvperp) = calculate_Maxwellian_Rosenbluth_coefficients(dens_in[:],
-                     upar_in[:],vth_in[:],vpa,vperp,ivpa,ivperp,n_ion_species) )
+                Rosenbluth_dHdvperp) = calculate_Maxwellian_Rosenbluth_coefficients(densp_in[:],
+                     uparp_in[:],vthsp_in[:],vpa,vperp,ivpa,ivperp,n_ion_species) )
                    
         # now form the collisional fluxes at this s,z,r
         ( (Cflux_vpa,Cflux_vperp) = calculate_collisional_fluxes(pdf_in[ivpa,ivperp],
@@ -363,9 +397,13 @@ if abspath(PROGRAM_FILE) == @__FILE__
     @. Cssp = pdf_buffer_1 + pdf_buffer_2
     @. Cssp_err = abs(Cssp)
     max_Cssp_err = maximum(Cssp_err)
+    zero = 1.0e-6 
+    if ( abs(dens - densp) > zero || abs(upar - uparp) > zero || abs(vths - vthsp) > zero)
+        println("Cssp test not supported for F_Ms /= F_Ms', ignore result")
+    end
     println("max(Cssp_err): ",max_Cssp_err)
     
-    zero = 1.0e-6 
+
     #if max_Gam_vpa_err > zero
        @views heatmap(vperp.grid, vpa.grid, Cssp[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
              windowsize = (360,240), margin = 15pt)
@@ -388,6 +426,10 @@ if abspath(PROGRAM_FILE) == @__FILE__
        @views heatmap(vperp.grid, vpa.grid, Gam_vperp[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
              windowsize = (360,240), margin = 15pt)
              outfile = string("fkpl_Gam_vperp.pdf")
+             savefig(outfile)
+       @views heatmap(vperp.grid, vpa.grid, Gam_vperp_Maxwell[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+             windowsize = (360,240), margin = 15pt)
+             outfile = string("fkpl_Gam_vperp_Maxwell.pdf")
              savefig(outfile)
        @views heatmap(vperp.grid, vpa.grid, Gam_vperp_err[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
              windowsize = (360,240), margin = 15pt)
