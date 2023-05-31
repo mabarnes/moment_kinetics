@@ -15,7 +15,7 @@ export load_rank_data
 export load_species_data
 
 using ..coordinates: define_coordinate
-using ..file_io: get_group
+using ..file_io: get_group, get_subgroup_keys, get_variable_keys
 using ..input_structs: advection_input, grid_input
 using ..looping
 
@@ -134,6 +134,29 @@ function load_slice(file_or_group::NCDataset, name::String, slices_or_indices...
         println("An error occured while loading $name")
         rethrow()
     end
+end
+
+"""
+Load saved input settings
+"""
+function load_input(fid)
+    function read_dict(io, section_name)
+        # Function that can be called recursively to read nested Dicts from sub-groups in
+        # the output file
+        section_io = get_group(io, section_name)
+        section = Dict{String,Any}()
+
+        for key ∈ get_variable_keys(section_io)
+            section[key] = load_variable(section_io, key)
+        end
+        for key ∈ get_subgroup_keys(section_io)
+            section[key] = read_dict(section_io, key)
+        end
+
+        return section
+    end
+
+    return read_dict(fid, "input")
 end
 
 """

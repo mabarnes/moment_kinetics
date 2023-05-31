@@ -60,6 +60,18 @@ function get_group(file_or_group::HDF5.H5DataStore, name::String)
     end
 end
 
+function is_group(file_or_group::HDF5.H5DataStore, name::String)
+    return isa(file_or_group[name], HDF5.H5DataStore)
+end
+
+function get_subgroup_keys(file_or_group::HDF5.H5DataStore)
+    return collect(k for k ∈ keys(file_or_group) if is_group(file_or_group, k))
+end
+
+function get_variable_keys(file_or_group::HDF5.H5DataStore)
+    return collect(k for k ∈ keys(file_or_group) if !is_group(file_or_group, k))
+end
+
 # HDF5.H5DataStore is the supertype for HDF5.File and HDF5.Group
 function write_single_value!(file_or_group::HDF5.H5DataStore, name,
                              data::Union{Number, AbstractString, AbstractArray{T,N}},

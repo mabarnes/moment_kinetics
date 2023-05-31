@@ -35,7 +35,7 @@ using ..coordinates: define_coordinate
 using ..file_io: open_ascii_output_file
 using ..type_definitions: mk_float, mk_int
 using ..initial_conditions: vpagrid_to_dzdt
-using ..load_data: open_readonly_output_file, get_group, load_time_data
+using ..load_data: open_readonly_output_file, get_group, load_input, load_time_data
 using ..load_data: get_nranks
 using ..load_data: load_fields_data, load_pdf_data
 using ..load_data: load_charged_particle_moments_data, load_neutral_particle_moments_data
@@ -380,6 +380,9 @@ function analyze_and_plot_data(prefix...)
     # load block data on iblock=0
     nblocks, iblock = get_tuple_of_return_values(load_block_data, moments_files0)
 
+    # load input used for the run(s)
+    scan_input = get_tuple_of_return_values(load_input, moments_files0)
+
     # load global and local sizes of grids stored on each output file
     # z z_wgts r r_wgts may take different values on different blocks
     # we need to construct the global grid below
@@ -579,9 +582,9 @@ function analyze_and_plot_data(prefix...)
         close(f)
     end
 
-    #geometry, composition =
-    #    get_tuple_of_return_values(get_geometry_and_composition, scan_input,
-    #                               n_ion_species, n_neutral_species)
+    geometry, composition =
+        get_tuple_of_return_values(get_geometry_and_composition, scan_input,
+                                   n_ion_species, n_neutral_species)
 
     # initialise the post-processing input options
     nwrite_movie, itime_min, itime_max, nwrite_movie_pdfs, itime_min_pdfs, itime_max_pdfs,
@@ -691,6 +694,7 @@ function analyze_and_plot_data(prefix...)
     end
 
     # For now, don't support multi-run comparison in remaining 2D and MMS diagnostics
+    scan_input = scan_input[1]
     density = density[1]
     parallel_flow = parallel_flow[1]
     parallel_pressure = parallel_pressure[1]
@@ -756,8 +760,6 @@ function analyze_and_plot_data(prefix...)
         else
             Lr_in = 1.0
         end
-
-        #geometry, composition = get_geometry_and_composition(scan_input,n_ion_species,n_neutral_species)
 
         manufactured_solns_list = manufactured_solutions(Lr_in,z_global.L,r_bc,z_bc,geometry,composition,r_global.n)
         dfni_func = manufactured_solns_list.dfni_func
