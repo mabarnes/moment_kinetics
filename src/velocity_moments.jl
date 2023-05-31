@@ -256,17 +256,18 @@ function update_ppar_species!(ppar, ff, vpa, vperp, z, r, upar)
     @boundscheck r.n == size(ff, 4) || throw(BoundsError(ff))
     @boundscheck z.n == size(ppar, 1) || throw(BoundsError(ppar))
     @boundscheck r.n == size(ppar, 2) || throw(BoundsError(ppar))
+    mass = 1.0 # only reference mass currently supported for all species
     @loop_r_z ir iz begin
         #ppar[iz,ir] = integrate_over_vspace(@view(ff[:,:,iz,ir]), 
         # vpa.grid, 2, vpa.wgts, vperp.grid, 0, vperp.wgts)
-        ppar[iz,ir] = get_ppar(@view(ff[:,:,iz,ir]), vpa, vperp, upar[iz,ir])
+        ppar[iz,ir] = get_ppar(@view(ff[:,:,iz,ir]), vpa, vperp, upar[iz,ir], mass)
     end
     return nothing
 end
 
-function get_ppar(ff, vpa, vperp, upar)
+function get_ppar(ff, vpa, vperp, upar, mass)
     @. vpa.scratch = vpa.grid - upar
-    return 2.0*integrate_over_vspace(@view(ff[:,:]), vpa.scratch, 2, vpa.wgts, vperp.grid, 0, vperp.wgts)
+    return 2.0*mass*integrate_over_vspace(@view(ff[:,:]), vpa.scratch, 2, vpa.wgts, vperp.grid, 0, vperp.wgts)
 end
 
 function update_pperp!(pperp, pdf, vpa, vperp, z, r, composition)
@@ -291,31 +292,32 @@ function update_pperp_species!(pperp, ff, vpa, vperp, z, r)
     @boundscheck r.n == size(ff, 4) || throw(BoundsError(ff))
     @boundscheck z.n == size(pperp, 1) || throw(BoundsError(pperp))
     @boundscheck r.n == size(pperp, 2) || throw(BoundsError(pperp))
+    mass = 1.0 # only reference mass currently supported for all species
     @loop_r_z ir iz begin
-        pperp[iz,ir] = get_pperp(@view(ff[:,:,iz,ir]), vpa, vperp)
+        pperp[iz,ir] = get_pperp(@view(ff[:,:,iz,ir]), vpa, vperp, mass)
     end
     return nothing
 end
 
-function get_pperp(ff, vpa, vperp)
-    return integrate_over_vspace(@view(ff[:,:]), vpa.grid, 0, vpa.wgts, vperp.grid, 2, vperp.wgts)
+function get_pperp(ff, vpa, vperp, mass)
+    return mass*integrate_over_vspace(@view(ff[:,:]), vpa.grid, 0, vpa.wgts, vperp.grid, 2, vperp.wgts)
 end
 
 function update_vth!(vth, ppar, pperp, dens, vperp, z, r, composition)
     @boundscheck composition.n_ion_species == size(vth,3) || throw(BoundsError(vth))
     @boundscheck r.n == size(vth,2) || throw(BoundsError(vth))
     @boundscheck z.n == size(vth,1) || throw(BoundsError(vth))
-    
+    mass = 1.0 # only reference mass currently supported for all species
     begin_s_r_z_region()
     
     if vperp.n > 1 #2V definition
         @loop_s_r_z is ir iz begin
             piso = get_pressure(ppar[iz,ir,is],pperp[iz,ir,is])
-            vth[iz,ir,is] = sqrt(piso/dens[iz,ir,is])
+            vth[iz,ir,is] = sqrt(piso/(mass*dens[iz,ir,is]))
         end
     else #1V definition 
         @loop_s_r_z is ir iz begin
-            vth[iz,ir,is] = sqrt(ppar[iz,ir,is]/dens[iz,ir,is])
+            vth[iz,ir,is] = sqrt(ppar[iz,ir,is]/(mass*dens[iz,ir,is]))
         end
     end
 end
