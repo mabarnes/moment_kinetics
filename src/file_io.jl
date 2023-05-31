@@ -102,7 +102,8 @@ function io_has_parallel() end
 open the necessary output files
 """
 function setup_file_io(io_input, boundary_distributions, vz, vr, vzeta, vpa, vperp, z, r,
-                       composition, collisions, evolve_density, evolve_upar, evolve_ppar)
+                       composition, collisions, evolve_density, evolve_upar, evolve_ppar,
+                       input_dict)
     begin_serial_region()
     @serial_region begin
         # Only read/write from first process in each 'block'
@@ -124,12 +125,13 @@ function setup_file_io(io_input, boundary_distributions, vz, vr, vzeta, vpa, vpe
 
         io_moments = setup_moments_io(out_prefix, io_input.binary_format, r, z,
                                       composition, collisions, evolve_density,
-                                      evolve_upar, evolve_ppar, io_input.parallel_io,
-                                      comm_inter_block[])
+                                      evolve_upar, evolve_ppar, input_dict,
+                                      io_input.parallel_io, comm_inter_block[])
         io_dfns = setup_dfns_io(out_prefix, io_input.binary_format,
                                 boundary_distributions, r, z, vperp, vpa, vzeta, vr, vz,
                                 composition, collisions, evolve_density, evolve_upar,
-                                evolve_ppar, io_input.parallel_io, comm_inter_block[])
+                                evolve_ppar, input_dict, io_input.parallel_io,
+                                comm_inter_block[])
 
         return ascii, io_moments, io_dfns
     end
@@ -141,6 +143,21 @@ end
 Get a (sub-)group from a file or group
 """
 function get_group() end
+
+"""
+Test if a member of a (sub-)group is a group
+"""
+function is_group() end
+
+"""
+Get names of all subgroups
+"""
+function get_subgroup_keys() end
+
+"""
+Get names of all variables
+"""
+function get_variable_keys() end
 
 """
     write_single_value!(file_or_group, name, value; description=nothing)
@@ -186,6 +203,30 @@ function write_overview!(fid, composition, collisions, parallel_io, evolve_densi
         write_single_value!(overview, "parallel_io", parallel_io,
                             parallel_io=parallel_io,
                             description="is parallel I/O being used?")
+    end
+end
+
+"""
+Save info from the dict with input settings to the output file
+
+Note: assumes all keys in `input_dict` are strings.
+"""
+function write_input!(fid, input_dict, parallel_io)
+    function write_dict(io, section_dict, parallel_io)
+        # Function that can be called recursively to write nested Dicts into sub-groups in
+        # the output file
+        for (key, value) ∈ section_dict
+            if isa(value, Dict)
+                subsection_io = create_io_group(io, key)
+                write_dict(subsection_io, value, parallel_io)
+            else
+                write_single_value!(io, key, value, parallel_io=parallel_io)
+            end
+        end
+    end
+    @serial_region begin
+        input_io = create_io_group(fid, "input")
+        write_dict(input_io, input_dict, parallel_io)
     end
 end
 
@@ -542,7 +583,8 @@ end
 setup file i/o for moment variables
 """
 function setup_moments_io(prefix, binary_format, r, z, composition, collisions,
-                          evolve_density, evolve_upar, evolve_ppar, parallel_io, io_comm)
+                          evolve_density, evolve_upar, evolve_ppar, input_dict,
+                          parallel_io, io_comm)
     @serial_region begin
         moments_prefix = string(prefix, ".moments")
         if !parallel_io
@@ -556,6 +598,9 @@ function setup_moments_io(prefix, binary_format, r, z, composition, collisions,
         # write some overview information to the output file
         write_overview!(fid, composition, collisions, parallel_io, evolve_density,
                         evolve_upar, evolve_ppar)
+
+        # write the input settings
+        write_input!(fid, input_dict, parallel_io)
 
         ### define coordinate dimensions ###
         define_spatial_coordinates!(fid, z, r, parallel_io)
@@ -577,7 +622,7 @@ setup file i/o for distribution function variables
 """
 function setup_dfns_io(prefix, binary_format, boundary_distributions, r, z, vperp, vpa,
                        vzeta, vr, vz, composition, collisions, evolve_density,
-                       evolve_upar, evolve_ppar, parallel_io, io_comm)
+                       evolve_upar, evolve_ppar, input_dict, parallel_io, io_comm)
 
     @serial_region begin
         dfns_prefix = string(prefix, ".dfns")
@@ -593,6 +638,9 @@ function setup_dfns_io(prefix, binary_format, boundary_distributions, r, z, vper
         # write some overview information to the output file
         write_overview!(fid, composition, collisions, parallel_io, evolve_density,
                         evolve_upar, evolve_ppar)
+
+        # write the input settings
+        write_input!(fid, input_dict, parallel_io)
 
         # write the distributions that may be used for boundary conditions to the output
         # file

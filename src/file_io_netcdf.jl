@@ -41,6 +41,19 @@ function get_group(file_or_group::NCDataset, name::String)
     end
 end
 
+function is_group(file_or_group::NCDataset, name::String)
+    println("check groups ", NCDatasets.groupnames(file_or_group))
+    return name ∈ NCDatasets.groupnames(file_or_group)
+end
+
+function get_subgroup_keys(file_or_group::NCDataset)
+    return NCDatasets.groupnames(file_or_group)
+end
+
+function get_variable_keys(file_or_group::NCDataset)
+    return keys(file_or_group)
+end
+
 function add_attribute!(file_or_group::NCDataset, name, value)
     file_or_group.attrib[name] = value
 end
