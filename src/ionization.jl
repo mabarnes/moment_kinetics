@@ -24,12 +24,23 @@ function constant_ionization_source!(f_out, vpa, vperp, z, r, composition, colli
     # e.g., width=0.15. Possibly narrower widths would require more vpa
     # resolution, which then causes crashes due to overshoots giving
     # negative f??
-    width = 0.5
+    width = 1.0
+    zwidth = 0.25
     rwidth = 0.25
+    vperpwidth = 1.0
+    if vperp.n > 1
+        prefac = 1.0/vperpwidth^2
+    else
+        prefac = 1.0
+    end
+    # loop below relies on vperp[1] = 0 when vperp.n = 1
     @loop_s is begin
-        @loop_r_z_vpa ir iz ivpa begin
+        @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
+            zfac = exp( - (z.grid[iz]/zwidth)^2)
             rfac = exp( - (r.grid[ir]/rwidth)^2)
-            f_out[ivpa,1,iz,ir,is] += dt*rfac*collisions.ionization/width*exp(-(vpa.grid[ivpa]/width)^2)
+            vperpfac = exp( - (vperp.grid[ivperp]/vperpwidth)^2) 
+            vpafac = vpa.grid[ivpa]^2
+            f_out[ivpa,ivperp,iz,ir,is] += dt*prefac*rfac*zfac*vperpfac*vpafac*collisions.ionization/width*exp(-(vpa.grid[ivpa]/width)^2)
         end
     end
 

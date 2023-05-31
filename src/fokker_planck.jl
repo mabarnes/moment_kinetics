@@ -121,7 +121,7 @@ function that initialises the arrays needed for Fokker Planck collisions
 
 function init_fokker_planck_collisions(vperp,vpa)
     fokkerplanck_arrays = allocate_fokkerplanck_arrays(vperp,vpa)
-    if vperp.n > 1
+    if vperp.n > 1 && false
         @views init_elliptic_integral_factors!(fokkerplanck_arrays.elliptic_integral_E_factor,
                                         fokkerplanck_arrays.elliptic_integral_K_factor,
                                         vperp,vpa)
