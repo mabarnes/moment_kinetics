@@ -86,8 +86,15 @@ function write_single_value!(file_or_group::NCDataset, name,
               "Got n_ion_species=$n_ion_species, n_neutral_species=$n_neutral_species")
     end
 
-    if isa(value, Number) || isa(value, String)
+    if isa(value, Number) || isa(value, AbstractString)
         coords !== () && error("cannot pass coordinates with a scalar")
+
+        if isa(value, AbstractString)
+            # Trying to write a SubString{String} causes an error, so force anything
+            # string-like to be a String
+            value = String(value)
+        end
+
         type = typeof(value)
         dims = ()
     else
