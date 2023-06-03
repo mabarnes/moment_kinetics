@@ -831,6 +831,304 @@ function analyze_and_plot_data(prefix...)
 end
 
 """
+Find the maximum difference, as a function of time, between two or more outputs
+for each variable.
+"""
+function calculate_differences(prefix...)
+    # Create run_names from the paths to the run directory
+    run_names = Vector{String}(undef,0)
+    for p ∈ prefix
+        p = realpath(p)
+        if isdir(p)
+            push!(run_names, joinpath(p, basename(p)))
+        else
+            push!(run_names, p)
+        end
+    end
+    run_names = tuple(run_names...)
+
+    # open the output file and give it the handle 'fid'
+    moments_files0 = get_tuple_of_return_values(open_readonly_output_file, run_names,
+                                                "moments")
+    # load block data on iblock=0
+    nblocks, iblock = get_tuple_of_return_values(load_block_data, moments_files0)
+
+    # load input used for the run(s)
+    scan_input = get_tuple_of_return_values(load_input, moments_files0)
+
+    # load global and local sizes of grids stored on each output file
+    # z z_wgts r r_wgts may take different values on different blocks
+    # we need to construct the global grid below
+    z, z_spectral = get_tuple_of_return_values(load_coordinate_data, moments_files0, "z")
+    r, r_spectral = get_tuple_of_return_values(load_coordinate_data, moments_files0, "r")
+    # load time data
+    ntime, time = get_tuple_of_return_values(load_time_data, moments_files0)
+    # load species data
+    n_ion_species, n_neutral_species =
+        get_tuple_of_return_values(load_species_data, moments_files0)
+    evolve_density, evolve_upar, evolve_ppar =
+        get_tuple_of_return_values(load_mk_options, moments_files0)
+
+    for f in moments_files0
+        close(f)
+    end
+
+    # allocate arrays to contain the global fields as a function of (z,r,t)
+    phi, Ez, Er = get_tuple_of_return_values(allocate_global_zr_fields,
+                                             Tuple(this_z.n_global for this_z ∈ z),
+                                             Tuple(this_r.n_global for this_r ∈ r),
+                                             ntime)
+    density, parallel_flow, parallel_pressure, parallel_heat_flux, thermal_speed =
+        get_tuple_of_return_values(allocate_global_zr_charged_moments,
+                                   Tuple(this_z.n_global for this_z ∈ z),
+                                   Tuple(this_r.n_global for this_r ∈ r),
+                                   n_ion_species, ntime)
+    if any(n_neutral_species .> 0)
+        neutral_density, neutral_uz, neutral_pz, neutral_qz, neutral_thermal_speed =
+            get_tuple_of_return_values(allocate_global_zr_neutral_moments,
+                                       Tuple(this_z.n_global for this_z ∈ z),
+                                       Tuple(this_r.n_global for this_r ∈ r),
+                                       n_neutral_species, ntime)
+    end
+    # read in the data from different block files
+    # grids
+    r_global, r_global_spectral, z_global, z_global_spectral =
+        get_tuple_of_return_values(construct_global_zr_coords, r, z)
+
+    # fields
+    get_tuple_of_return_values(read_distributed_zr_data!, phi, "phi", run_names, "moments",
+                               nblocks,
+                               Tuple(this_z.n for this_z ∈ z),
+                               Tuple(this_r.n for this_r ∈ r))
+    get_tuple_of_return_values(read_distributed_zr_data!, Ez, "Ez", run_names, "moments",
+                               nblocks,
+                               Tuple(this_z.n for this_z ∈ z),
+                               Tuple(this_r.n for this_r ∈ r))
+    get_tuple_of_return_values(read_distributed_zr_data!, Er, "Er", run_names, "moments",
+                               nblocks,
+                               Tuple(this_z.n for this_z ∈ z),
+                               Tuple(this_r.n for this_r ∈ r))
+    # charged particle moments
+    get_tuple_of_return_values(read_distributed_zr_data!, density, "density", run_names,
+                               "moments", nblocks,
+                               Tuple(this_z.n for this_z ∈ z),
+                               Tuple(this_r.n for this_r ∈ r))
+    get_tuple_of_return_values(read_distributed_zr_data!, parallel_flow, "parallel_flow",
+                               run_names, "moments", nblocks,
+                               Tuple(this_z.n for this_z ∈ z),
+                               Tuple(this_r.n for this_r ∈ r))
+    get_tuple_of_return_values(read_distributed_zr_data!, parallel_pressure,
+                               "parallel_pressure", run_names, "moments", nblocks,
+                               Tuple(this_z.n for this_z ∈ z),
+                               Tuple(this_r.n for this_r ∈ r))
+    get_tuple_of_return_values(read_distributed_zr_data!, parallel_heat_flux,
+                               "parallel_heat_flux", run_names, "moments", nblocks,
+                               Tuple(this_z.n for this_z ∈ z),
+                               Tuple(this_r.n for this_r ∈ r))
+    get_tuple_of_return_values(read_distributed_zr_data!, thermal_speed, "thermal_speed",
+                               run_names, "moments", nblocks,
+                               Tuple(this_z.n for this_z ∈ z),
+                               Tuple(this_r.n for this_r ∈ r))
+    # neutral particle moments
+    if any(n_neutral_species .> 0)
+        get_tuple_of_return_values(read_distributed_zr_data!, neutral_density,
+                                   "density_neutral", run_names, "moments", nblocks,
+                                   Tuple(this_z.n for this_z ∈ z),
+                                   Tuple(this_r.n for this_r ∈ r))
+        get_tuple_of_return_values(read_distributed_zr_data!, neutral_uz, "uz_neutral",
+                                   run_names, "moments", nblocks,
+                                   Tuple(this_z.n for this_z ∈ z),
+                                   Tuple(this_r.n for this_r ∈ r))
+        get_tuple_of_return_values(read_distributed_zr_data!, neutral_pz, "pz_neutral",
+                                   run_names, "moments", nblocks,
+                                   Tuple(this_z.n for this_z ∈ z),
+                                   Tuple(this_r.n for this_r ∈ r))
+        get_tuple_of_return_values(read_distributed_zr_data!, neutral_qz, "qz_neutral",
+                                   run_names, "moments", nblocks,
+                                   Tuple(this_z.n for this_z ∈ z),
+                                   Tuple(this_r.n for this_r ∈ r))
+        get_tuple_of_return_values(read_distributed_zr_data!, neutral_thermal_speed,
+                                   "thermal_speed_neutral", run_names, "moments", nblocks,
+                                   Tuple(this_z.n for this_z ∈ z),
+                                   Tuple(this_r.n for this_r ∈ r))
+    end
+
+    # load time data from `dfns' cdf
+    dfns_files0 = get_tuple_of_return_values(open_readonly_output_file, run_names, "dfns")
+    # note that ntime may differ in these output files
+
+    ntime_pdfs, time_pdfs = get_tuple_of_return_values(load_time_data, dfns_files0)
+
+    # load local velocity coordinate data from `dfns' cdf
+    # these values are currently the same for all blocks
+    vpa, vpa_spectral = get_tuple_of_return_values(load_coordinate_data, dfns_files0, "vpa")
+    vperp, vperp_spectral = get_tuple_of_return_values(load_coordinate_data, dfns_files0, "vperp")
+    if any(n_neutral_species .> 0)
+        vzeta, vzeta_spectral = get_tuple_of_return_values(load_coordinate_data, dfns_files0, "vzeta")
+        vr, vr_spectral = get_tuple_of_return_values(load_coordinate_data, dfns_files0, "vr")
+        vz, vz_spectral = get_tuple_of_return_values(load_coordinate_data, dfns_files0, "vz")
+    else # define nvz nvr nvzeta to avoid errors below
+        vzeta = vzeta_spectral = nothing
+        vr = vr_spectral = nothing
+        vz = vz_spectral = nothing
+    end
+
+    for f in dfns_files0
+        close(f)
+    end
+
+    phi_at_pdf_times, Ez_at_pdf_times, Er_at_pdf_times =
+        get_tuple_of_return_values(allocate_global_zr_fields,
+                                   Tuple(this_z.n_global for this_z ∈ z),
+                                   Tuple(this_r.n_global for this_r ∈ r), ntime_pdfs)
+    density_at_pdf_times, parallel_flow_at_pdf_times, parallel_pressure_at_pdf_times,
+    parallel_heat_flux_at_pdf_times, thermal_speed_at_pdf_times =
+        get_tuple_of_return_values(allocate_global_zr_charged_moments,
+                                   Tuple(this_z.n_global for this_z ∈ z),
+                                   Tuple(this_r.n_global for this_r ∈ r), n_ion_species,
+                                   ntime_pdfs)
+    if any(n_neutral_species .> 0)
+        neutral_density_at_pdf_times, neutral_uz_at_pdf_times, neutral_pz_at_pdf_times,
+        neutral_qz_at_pdf_times, neutral_thermal_speed_at_pdf_times =
+            get_tuple_of_return_values(allocate_global_zr_neutral_moments,
+                                       Tuple(this_z.n_global for this_z ∈ z),
+                                       Tuple(this_r.n_global for this_r ∈ r),
+                                       n_neutral_species, ntime_pdfs)
+    end
+    # fields
+    get_tuple_of_return_values(read_distributed_zr_data!, phi_at_pdf_times, "phi",
+                               run_names, "dfns", nblocks,
+                               Tuple(this_z.n for this_z ∈ z),
+                               Tuple(this_r.n for this_r ∈ r))
+    get_tuple_of_return_values(read_distributed_zr_data!, Ez_at_pdf_times, "Ez",
+                               run_names, "dfns", nblocks,
+                               Tuple(this_z.n for this_z ∈ z),
+                               Tuple(this_r.n for this_r ∈ r))
+    get_tuple_of_return_values(read_distributed_zr_data!, Er_at_pdf_times, "Er",
+                               run_names, "dfns", nblocks,
+                               Tuple(this_z.n for this_z ∈ z),
+                               Tuple(this_r.n for this_r ∈ r))
+    # charged particle moments
+    get_tuple_of_return_values(read_distributed_zr_data!, density_at_pdf_times, "density",
+                               run_names, "dfns", nblocks,
+                               Tuple(this_z.n for this_z ∈ z),
+                               Tuple(this_r.n for this_r ∈ r))
+    get_tuple_of_return_values(read_distributed_zr_data!, parallel_flow_at_pdf_times,
+                               "parallel_flow", run_names, "dfns", nblocks,
+                               Tuple(this_z.n for this_z ∈ z),
+                               Tuple(this_r.n for this_r ∈ r))
+    get_tuple_of_return_values(read_distributed_zr_data!, parallel_pressure_at_pdf_times,
+                               "parallel_pressure", run_names, "dfns", nblocks,
+                               Tuple(this_z.n for this_z ∈ z),
+                               Tuple(this_r.n for this_r ∈ r))
+    get_tuple_of_return_values(read_distributed_zr_data!, parallel_heat_flux_at_pdf_times,
+                               "parallel_heat_flux", run_names, "dfns", nblocks,
+                               Tuple(this_z.n for this_z ∈ z),
+                               Tuple(this_r.n for this_r ∈ r))
+    get_tuple_of_return_values(read_distributed_zr_data!, thermal_speed_at_pdf_times,
+                               "thermal_speed", run_names, "dfns", nblocks,
+                               Tuple(this_z.n for this_z ∈ z),
+                               Tuple(this_r.n for this_r ∈ r))
+    # neutral particle moments
+    if any(n_neutral_species .> 0)
+        get_tuple_of_return_values(read_distributed_zr_data!,
+                                   neutral_density_at_pdf_times, "density_neutral",
+                                   run_names, "dfns", nblocks,
+                                   Tuple(this_z.n for this_z ∈ z),
+                                   Tuple(this_r.n for this_r ∈ r))
+        get_tuple_of_return_values(read_distributed_zr_data!, neutral_uz_at_pdf_times,
+                                   "uz_neutral", run_names, "dfns", nblocks,
+                                   Tuple(this_z.n for this_z ∈ z),
+                                   Tuple(this_r.n for this_r ∈ r))
+        get_tuple_of_return_values(read_distributed_zr_data!, neutral_pz_at_pdf_times,
+                                   "pz_neutral", run_names, "dfns", nblocks,
+                                   Tuple(this_z.n for this_z ∈ z),
+                                   Tuple(this_r.n for this_r ∈ r))
+        get_tuple_of_return_values(read_distributed_zr_data!, neutral_qz_at_pdf_times,
+                                   "qz_neutral", run_names, "dfns", nblocks,
+                                   Tuple(this_z.n for this_z ∈ z),
+                                   Tuple(this_r.n for this_r ∈ r))
+        get_tuple_of_return_values(read_distributed_zr_data!,
+                                   neutral_thermal_speed_at_pdf_times,
+                                   "thermal_speed_neutral", run_names, "dfns", nblocks,
+                                   Tuple(this_z.n for this_z ∈ z),
+                                   Tuple(this_r.n for this_r ∈ r))
+    end
+
+    # load full (vpa,z,r,species,t) particle distribution function (pdf) data
+    ff = get_tuple_of_return_values(allocate_global_zr_charged_dfns,
+                                    Tuple(this_vpa.n_global for this_vpa ∈ vpa),
+                                    Tuple(this_vperp.n_global for this_vperp ∈ vperp),
+                                    Tuple(this_z.n_global for this_z ∈ z),
+                                    Tuple(this_r.n_global for this_r ∈ r),
+                                    n_ion_species, ntime_pdfs)
+    get_tuple_of_return_values(read_distributed_zr_data!, ff, "f", run_names, "dfns",
+                               nblocks, Tuple(this_z.n for this_z ∈ z),
+                               Tuple(this_r.n for this_r ∈ r))
+    if maximum(n_neutral_species) > 0
+        neutral_ff = get_tuple_of_return_values(
+                         allocate_global_zr_neutral_dfns,
+                         Tuple(this_vz.n_global for this_vz ∈ vz),
+                         Tuple(this_vr.n_global for this_vr ∈ vr),
+                         Tuple(this_vzeta.n_global for this_vzeta ∈ vzeta),
+                         Tuple(this_z.n_global for this_z ∈ z),
+                         Tuple(this_r.n_global for this_r ∈ r),
+                         n_neutral_species, ntime_pdfs)
+        get_tuple_of_return_values(read_distributed_zr_data!, neutral_ff, "f_neutral",
+                                   run_names, "dfns", nblocks,
+                                   Tuple(this_z.n for this_z ∈ z),
+                                   Tuple(this_r.n for this_r ∈ r))
+    else
+        neutral_ff = nothing
+    end
+
+    function get_error_vs_run0(var, name)
+        var0 = var[1]
+        nd = ndims(var0)
+        for (i,v) in enumerate(var[2:end])
+            diff = abs.(v - var0)
+            # Leave maxdiff as a function of time
+            maxdiff = maximum(diff, dims=1:nd-1)
+
+            println("$i $name $maxdiff")
+        end
+        return nothing
+    end
+
+    get_error_vs_run0(phi, "phi")
+    get_error_vs_run0(Er, "Er")
+    get_error_vs_run0(Ez, "Ez")
+    get_error_vs_run0(density, "density")
+    get_error_vs_run0(parallel_flow, "parallel_flow")
+    get_error_vs_run0(parallel_pressure, "parallel_pressure")
+    get_error_vs_run0(parallel_heat_flux, "parallel_heat_flux")
+    get_error_vs_run0(thermal_speed, "thermal_speed")
+    get_error_vs_run0(phi_at_pdf_times, "phi_at_pdf_times")
+    get_error_vs_run0(Er_at_pdf_times, "Er_at_pdf_times")
+    get_error_vs_run0(Ez_at_pdf_times, "Ez_at_pdf_times")
+    get_error_vs_run0(density_at_pdf_times, "density_at_pdf_times")
+    get_error_vs_run0(parallel_flow_at_pdf_times, "parallel_flow_at_pdf_times")
+    get_error_vs_run0(parallel_pressure_at_pdf_times, "parallel_pressure_at_pdf_times")
+    get_error_vs_run0(parallel_heat_flux_at_pdf_times, "parallel_heat_flux_at_pdf_times")
+    get_error_vs_run0(thermal_speed_at_pdf_times, "thermal_speed_at_pdf_times")
+    get_error_vs_run0(ff, "ff")
+
+    if any(n_neutral_species .> 0)
+        get_error_vs_run0(neutral_density, "neutral_density")
+        get_error_vs_run0(neutral_uz, "neutral_uz")
+        get_error_vs_run0(neutral_pz, "neutral_pz")
+        get_error_vs_run0(neutral_qz, "neutral_qz")
+        get_error_vs_run0(neutral_thermal_speed, "neutral_thermal_speed")
+        get_error_vs_run0(neutral_density_at_pdf_times, "neutral_density_at_pdf_times")
+        get_error_vs_run0(neutral_uz_at_pdf_times, "neutral_uz_at_pdf_times")
+        get_error_vs_run0(neutral_pz_at_pdf_times, "neutral_pz_at_pdf_times")
+        get_error_vs_run0(neutral_qz_at_pdf_times, "neutral_qz_at_pdf_times")
+        get_error_vs_run0(neutral_thermal_speed_at_pdf_times, "neutral_thermal_speed_at_pdf_times")
+        get_error_vs_run0(neutral_ff, "neutral_ff")
+    end
+end
+
+"""
 """
 function init_postprocessing_options(pp, nvpa, nvperp, nz, nr, nvz, nvr, nvzeta, ntime,
                                      ntime_pdfs)
