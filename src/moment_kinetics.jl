@@ -360,9 +360,10 @@ function setup_moment_kinetics(input_dict::Dict; restart_prefix_iblock=nothing,
         restarting = false
         # initialize f(z,vpa) and the lowest three v-space moments (density(z), upar(z) and ppar(z)),
         # each of which may be evolved separately depending on input choices.
-        init_pdf_and_moments!(pdf, moments, boundary_distributions, composition, r, z,
-                              vperp, vpa, vzeta, vr, vz, vpa_spectral, vz_spectral,
-                              species, t_input.use_manufactured_solns_for_init)
+        init_pdf_and_moments!(pdf, moments, boundary_distributions, geometry,
+                              composition, r, z, vperp, vpa, vzeta, vr, vz,
+                              vpa_spectral, vz_spectral, species,
+                              t_input.use_manufactured_solns_for_init)
         # initialize time variable
         code_time = 0.
     else

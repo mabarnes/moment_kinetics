@@ -31,7 +31,7 @@ using ..velocity_moments: create_moments_charged, create_moments_neutral, update
 using ..velocity_moments: moments_charged_substruct, moments_neutral_substruct
 using ..velocity_moments: update_neutral_density!, update_neutral_pz!, update_neutral_pr!, update_neutral_pzeta!
 using ..velocity_moments: update_neutral_uz!, update_neutral_ur!, update_neutral_uzeta!, update_neutral_qz!
-using ..velocity_moments: update_ppar!, update_upar!, update_density!
+using ..velocity_moments: update_ppar!, update_upar!, update_density!, reset_moments_status!
 
 using ..manufactured_solns: manufactured_solutions
 
@@ -137,12 +137,14 @@ end
 creates the normalised pdf and the velocity-space moments and populates them
 with a self-consistent initial condition
 """
-function init_pdf_and_moments!(pdf, moments, boundary_distributions, composition, r, z,
-                               vperp, vpa, vzeta, vr, vz, vpa_spectral, vz_spectral,
-                               species, use_manufactured_solns)
+function init_pdf_and_moments!(pdf, moments, boundary_distributions, geometry,
+                               composition, r, z, vperp, vpa, vzeta, vr, vz,
+                               vpa_spectral, vz_spectral, species,
+                               use_manufactured_solns)
     if use_manufactured_solns
         init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z,
-                                             r, n_ion_species, n_neutral_species,
+                                             r, composition.n_ion_species,
+                                             composition.n_neutral_species,
                                              geometry, composition)
     else
         n_ion_species = composition.n_ion_species
@@ -791,16 +793,30 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
         end
     end
     # update upar, ppar, qpar, vth consistent with manufactured solns
-    update_density!(moments.charged.dens, pdf.charged.norm, vpa, vperp, z, r, composition)
-    update_qpar!(moments.charged.qpar, pdf.charged.norm, vpa, vperp, z, r, composition)
-    update_ppar!(moments.charged.ppar, pdf.charged.norm, vpa, vperp, z, r, composition)
+    reset_moments_status!(moments)
+    update_density!(moments.charged.dens, moments.charged.dens_updated,
+                    pdf.charged.norm, vpa, vperp, z, r, composition)
     # get particle flux
-    update_upar!(moments.charged.upar, pdf.charged.norm, vpa, vperp, z, r, composition)
+    update_upar!(moments.charged.upar, moments.charged.upar_updated,
+                 moments.charged.dens, moments.charged.ppar, pdf.charged.norm,
+                 vpa, vperp, z, r, composition, moments.evolve_density,
+                 moments.evolve_ppar)
+    @loop_s_r_z is ir iz begin
+        moments.charged.upar[iz,ir,is] /= moments.charged.dens[iz,ir,is]
+    end
+    update_ppar!(moments.charged.ppar, moments.charged.ppar_updated,
+                 moments.charged.dens, moments.charged.upar, pdf.charged.norm,
+                 vpa, vperp, z, r, composition, moments.evolve_density,
+                 moments.evolve_upar)
+    update_qpar!(moments.charged.qpar, moments.charged.qpar_updated,
+                 moments.charged.dens, moments.charged.upar,
+                 moments.charged.vth, pdf.charged.norm, vpa, vperp, z, r,
+                 composition, moments.evolve_density, moments.evolve_upar,
+                 moments.evolve_ppar)
     # convert from particle particle flux to parallel flow
     begin_s_r_z_region()
     @loop_s_r_z is ir iz begin
-        moments.charged.upar[iz,ir,is] /= moments.charged.dens[iz,ir,is]
-    # update the thermal speed
+        # update the thermal speed
         moments.charged.vth[iz,ir,is] = sqrt(2.0*moments.charged.ppar[iz,ir,is]/moments.charged.dens[iz,ir,is])
     end
 
@@ -813,13 +829,42 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
             end
         end
         # get consistent moments with manufactured solutions
-        update_neutral_density!(moments.neutral.dens, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
-        update_neutral_qz!(moments.neutral.qz, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
-        update_neutral_pz!(moments.neutral.pz, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
-        update_neutral_pr!(moments.neutral.pr, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
-        update_neutral_pzeta!(moments.neutral.pzeta, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
+        update_neutral_density!(moments.neutral.dens,
+                                moments.neutral.dens_updated, pdf.neutral.norm,
+                                vz, vr, vzeta, z, r, composition)
+        # nb bad naming convention uz -> n uz below
+        update_neutral_uz!(moments.neutral.uz, moments.neutral.uz_updated,
+                           moments.neutral.dens, moments.neutral.pz,
+                           pdf.neutral.norm, vz, vr, vzeta, z, r, composition,
+                           moments.evolve_density, moments.evolve_ppar)
+        update_neutral_ur!(moments.neutral.ur, moments.neutral.ur_updated,
+                           moments.neutral.dens, pdf.neutral.norm, vz, vr,
+                           vzeta, z, r, composition)
+        update_neutral_uzeta!(moments.neutral.uzeta,
+                              moments.neutral.uzeta_updated,
+                              moments.neutral.dens, pdf.neutral.norm, vz, vr,
+                              vzeta, z, r, composition)
+        @loop_sn_r_z isn ir iz begin
+            moments.neutral.uz[iz,ir,isn] /= moments.neutral.dens[iz,ir,isn]
+            moments.neutral.ur[iz,ir,isn] /= moments.neutral.dens[iz,ir,isn]
+            moments.neutral.uzeta[iz,ir,isn] /= moments.neutral.dens[iz,ir,isn]
+        end
+        update_neutral_pz!(moments.neutral.pz, moments.neutral.pz_updated,
+                           moments.neutral.dens, moments.neutral.uz,
+                           pdf.neutral.norm, vz, vr, vzeta, z, r, composition,
+                           moments.evolve_density, moments.evolve_upar)
+        update_neutral_pr!(moments.neutral.pr, moments.neutral.pr_updated,
+                           pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
+        update_neutral_pzeta!(moments.neutral.pzeta,
+                              moments.neutral.pzeta_updated, pdf.neutral.norm,
+                              vz, vr, vzeta, z, r, composition)
+        update_neutral_qz!(moments.neutral.qz, moments.neutral.qz_updated,
+                           moments.neutral.dens, moments.neutral.uz,
+                           moments.neutral.vth, pdf.neutral.norm, vz, vr,
+                           vzeta, z, r, composition, moments.evolve_density,
+                           moments.evolve_upar, moments.evolve_ppar)
         #update ptot (isotropic pressure)
-        if r.n > 1 #if 2D geometry
+        if vzeta.n > 1 || vr.n > 1 #if not using marginalised distribution function
             begin_sn_r_z_region()
             @loop_sn_r_z isn ir iz begin
                 moments.neutral.ptot[iz,ir,isn] = (moments.neutral.pz[iz,ir,isn] + moments.neutral.pr[iz,ir,isn] + moments.neutral.pzeta[iz,ir,isn])/3.0
@@ -827,16 +872,9 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
         else #1D model
             moments.neutral.ptot .= moments.neutral.pz
         end
-        # nb bad naming convention uz -> n uz below
-        update_neutral_uz!(moments.neutral.uz, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
-        update_neutral_ur!(moments.neutral.ur, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
-        update_neutral_uzeta!(moments.neutral.uzeta, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
         # now convert from particle particle flux to parallel flow
         begin_sn_r_z_region()
         @loop_sn_r_z isn ir iz begin
-            moments.neutral.uz[iz,ir,isn] /= moments.neutral.dens[iz,ir,isn]
-            moments.neutral.ur[iz,ir,isn] /= moments.neutral.dens[iz,ir,isn]
-            moments.neutral.uzeta[iz,ir,isn] /= moments.neutral.dens[iz,ir,isn]
             # get vth for neutrals
             moments.charged.vth[iz,ir,isn] = sqrt(2.0*moments.neutral.ptot[iz,ir,isn]/moments.neutral.dens[iz,ir,isn])
         end
@@ -1110,7 +1148,7 @@ function enforce_neutral_boundary_conditions!(f_neutral, f_charged,
         density_ion, upar_ion, Er, r_adv, z_adv, vzeta_adv, vr_adv, vz_adv, r, z, vzeta,
         vr, vz, composition, geometry, scratch_dummy, r_diffusion, vz_diffusion)
 
-    if vzeta.n_global > 1 && vzeta.bc != "none"
+    if vzeta_adv !== nothing && vzeta.n_global > 1 && vzeta.bc != "none"
         begin_sn_r_z_vr_vz_region()
         @loop_sn_r_z_vr_vz isn ir iz ivr ivz begin
             # enforce the vz BC
@@ -1120,7 +1158,7 @@ function enforce_neutral_boundary_conditions!(f_neutral, f_charged,
                                                        false)
         end
     end
-    if vr.n_global > 1 && vr.bc != "none"
+    if vr_adv !== nothing && vr.n_global > 1 && vr.bc != "none"
         begin_sn_r_z_vzeta_vz_region()
         @loop_sn_r_z_vzeta_vz isn ir iz ivzeta ivz begin
             # enforce the vz BC
@@ -1130,7 +1168,7 @@ function enforce_neutral_boundary_conditions!(f_neutral, f_charged,
                                                        false)
         end
     end
-    if vz.n_global > 1 && vz.bc != "none"
+    if vz_adv !== nothing && vz.n_global > 1 && vz.bc != "none"
         begin_sn_r_z_vzeta_vr_region()
         @loop_sn_r_z_vzeta_vr isn ir iz ivzeta ivr begin
             # enforce the vz BC
