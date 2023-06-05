@@ -882,7 +882,7 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
     return nothing
 end
 
-function init_knudsen_cosine!(knudsen_cosine, vz, vr, vzeta, vpa, vperp, composition)
+function init_knudsen_cosine!(knudsen_cosine, vz, vr, vzeta, vpa, vperp, composition, zero)
 
     begin_serial_region()
     @serial_region begin
@@ -911,7 +911,7 @@ function init_knudsen_cosine!(knudsen_cosine, vz, vr, vzeta, vpa, vperp, composi
                             v_transverse = sqrt(vzeta.grid[ivzeta]^2 + vr.grid[ivr]^2)
                             v_normal = abs(vz.grid[ivz])
                             v_tot = sqrt(v_normal^2 + v_transverse^2)
-                            if  v_tot > 0.0
+                            if  v_normal > zero
                                 prefac = v_normal/v_tot
                             else
                                 prefac = 0.0
@@ -973,11 +973,13 @@ various boundaries. Also initialise the Knudsen cosine distribution here so it c
 when initialising the neutral pdf.
 """
 function create_boundary_distributions(vz, vr, vzeta, vpa, vperp, z, composition)
+    zero = 1.0e-14
+
     #initialise knudsen distribution for neutral wall bc
     knudsen_cosine = allocate_shared_float(vz.n, vr.n, vzeta.n)
     #initialise knudsen distribution for neutral wall bc - can be done here as this only
     #depends on T_wall, which has already been set
-    init_knudsen_cosine!(knudsen_cosine, vz, vr, vzeta, vpa, vperp, composition)
+    init_knudsen_cosine!(knudsen_cosine, vz, vr, vzeta, vpa, vperp, composition, zero)
     #initialise fixed-in-time radial boundary condition based on initial condition values
     pdf_rboundary_charged = allocate_shared_float(vpa.n, vperp.n, z.n, 2,
                                                   composition.n_ion_species)
