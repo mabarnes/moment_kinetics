@@ -1133,7 +1133,7 @@ function enforce_z_boundary_condition!(pdf, density, upar, ppar, moments, bc::St
             else
                 @loop_r ir begin
                     @views enforce_zero_incoming_bc!(pdf[:,:,:,ir,is],
-                                                     adv[is].speed[:,:,:,ir], vpa, zero)
+                                                     adv[is].speed[:,:,:,ir], z, zero)
                 end
             end
         end
