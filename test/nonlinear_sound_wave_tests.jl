@@ -305,12 +305,13 @@ function run_test(test_input, rtol; args...)
         # create the 'input' struct containing input info needed to create a coordinate
         # adv_input not actually used in this test so given values unimportant
         adv_input = advection_input("default", 1.0, 0.0, 0.0)
+        cheb_option = "FFT"
         nrank_per_block = 0 # dummy value
 		irank = 0 # dummy value
 		comm = MPI.COMM_NULL # dummy value 
 		input = grid_input("coord", test_input["z_ngrid"], test_input["z_nelement"], 
                            test_input["z_nelement"], nrank_per_block, irank,
-						   z_L, test_input["z_discretization"], "",
+						   z_L, test_input["z_discretization"], "", cheb_option,
                            "periodic", #test_input["z_bc"],
                            adv_input,comm)
         z = define_coordinate(input)
@@ -321,7 +322,7 @@ function run_test(test_input, rtol; args...)
         end
         input = grid_input("coord", test_input["vpa_ngrid"], test_input["vpa_nelement"],
                            test_input["vpa_nelement"], nrank_per_block, irank,
-						   vpa_L, test_input["vpa_discretization"], "",
+						   vpa_L, test_input["vpa_discretization"], "", cheb_option,
                            test_input["vpa_bc"], adv_input, comm)
         vpa = define_coordinate(input)
         if test_input["vpa_discretization"] == "chebyshev_pseudospectral"
@@ -402,7 +403,7 @@ function run_test(test_input, rtol; args...)
                 newgrid_upar_charged = interpolate_to_grid_z(expected.z, upar_charged[:, :, tind], z, z_spectral)
                 @test isapprox(expected.upar_charged[:, tind], newgrid_upar_charged[:,1], rtol=rtol)
 
-                newgrid_ppar_charged = interpolate_to_grid_z(expected.z, ppar_charged[:, :, tind], z, z_spectral)
+                newgrid_ppar_charged = 0.5*interpolate_to_grid_z(expected.z, ppar_charged[:, :, tind], z, z_spectral)
                 @test isapprox(expected.ppar_charged[:, tind], newgrid_ppar_charged[:,1], rtol=rtol)
 
                 newgrid_f_charged = interpolate_to_grid_z(expected.z, f_charged[:, :, :, tind], z, z_spectral)

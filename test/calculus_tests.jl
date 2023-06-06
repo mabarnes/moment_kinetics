@@ -11,7 +11,7 @@ using MPI
 using Random
 
 fd_fake_setup(x) = return false
-
+cheb_option_global = "matrix" # "FFT"
 function runtests()
     @testset "calculus" verbose=use_verbose begin
         println("calculus tests")
@@ -37,6 +37,7 @@ function runtests()
                 # fd_option and adv_input not actually used so given values unimportant
                 fd_option = ""
                 adv_input = advection_input("default", 1.0, 0.0, 0.0)
+                cheb_option = cheb_option_global #"FFT"
                 # create the 'input' struct containing input info needed to create a
                 # coordinate
                 nelement_local = nelement
@@ -45,7 +46,7 @@ function runtests()
 				comm = MPI.COMM_NULL # dummy value 
 				input = grid_input("coord", ngrid, nelement,
                     nelement_local, nrank_per_block, irank, L,
-                    discretization, fd_option, bc, adv_input, comm)
+                    discretization, fd_option, cheb_option, bc, adv_input, comm)
                 # create the coordinate struct 'x'
                 x = define_coordinate(input)
                 # create arrays needed for Chebyshev pseudospectral treatment in x
@@ -88,6 +89,7 @@ function runtests()
                 # fd_option and adv_input not actually used so given values unimportant
                 fd_option = ""
                 adv_input = advection_input("default", 1.0, 0.0, 0.0)
+                cheb_option = ""
                 # create the 'input' struct containing input info needed to create a
                 # coordinate
                 nelement_local = nelement
@@ -96,7 +98,7 @@ function runtests()
 				comm = MPI.COMM_NULL # dummy value 
 				input = grid_input("coord", ngrid, nelement,
                     nelement_local, nrank_per_block, irank, L,
-                    "finite_difference", fd_option, bc, adv_input, comm)
+                    "finite_difference", fd_option, cheb_option, bc, adv_input, comm)
                 # create the coordinate struct 'x'
                 x = define_coordinate(input)
 
@@ -135,6 +137,7 @@ function runtests()
                 # fd_option and adv_input not actually used so given values unimportant
                 fd_option = "fourth_order_centered"
                 adv_input = advection_input("default", 1.0, 0.0, 0.0)
+                cheb_option = ""
                 # create the 'input' struct containing input info needed to create a
                 # coordinate
                 nelement_local = nelement
@@ -143,7 +146,7 @@ function runtests()
 				comm = MPI.COMM_NULL # dummy value 
 				input = grid_input("coord", ngrid, nelement,
                     nelement_local, nrank_per_block, irank, L,
-                    "finite_difference", fd_option, bc, adv_input, comm)
+                    "finite_difference", fd_option, cheb_option, bc, adv_input, comm)
                 # create the coordinate struct 'x'
                 x = define_coordinate(input)
 
@@ -178,6 +181,7 @@ function runtests()
                 # fd_option and adv_input not actually used so given values unimportant
                 fd_option = ""
                 adv_input = advection_input("default", 1.0, 0.0, 0.0)
+                cheb_option = ""
                 # create the 'input' struct containing input info needed to create a
                 # coordinate
                 nelement_local = nelement
@@ -186,7 +190,7 @@ function runtests()
 				comm = MPI.COMM_NULL # dummy value 
 				input = grid_input("coord", ngrid, nelement,
                     nelement_local, nrank_per_block, irank, L,
-                    "finite_difference", fd_option, bc, adv_input, comm)
+                    "finite_difference", fd_option, cheb_option, bc, adv_input, comm)
                 # create the coordinate struct 'x'
                 x = define_coordinate(input)
 
@@ -229,6 +233,7 @@ function runtests()
                 L = 6.0
                 # fd_option and adv_input not actually used so given values unimportant
                 adv_input = advection_input("default", 1.0, 0.0, 0.0)
+                cheb_option = ""
                 # create the 'input' struct containing input info needed to create a
                 # coordinate
                 nelement_local = nelement
@@ -237,7 +242,7 @@ function runtests()
 				comm = MPI.COMM_NULL # dummy value 
 				input = grid_input("coord", ngrid, nelement,
                     nelement_local, nrank_per_block, irank, L,
-                    "finite_difference", fd_option, bc, adv_input, comm)
+                    "finite_difference", fd_option, cheb_option, bc, adv_input, comm)
                # create the coordinate struct 'x'
                 x = define_coordinate(input)
 
@@ -437,6 +442,7 @@ function runtests()
                 # fd_option and adv_input not actually used so given values unimportant
                 fd_option = ""
                 adv_input = advection_input("default", 1.0, 0.0, 0.0)
+                cheb_option = cheb_option_global #"FFT"
                 # create the 'input' struct containing input info needed to create a
                 # coordinate
                 nelement_local = nelement
@@ -445,7 +451,7 @@ function runtests()
 				comm = MPI.COMM_NULL # dummy value 
 				input = grid_input("coord", ngrid, nelement,
                     nelement_local, nrank_per_block, irank, L,
-                    "chebyshev_pseudospectral", fd_option, bc, adv_input, comm)
+                    "chebyshev_pseudospectral", fd_option, cheb_option, bc, adv_input, comm)
                 # create the coordinate struct 'x'
                 x = define_coordinate(input)
                 # create arrays needed for Chebyshev pseudospectral treatment in x
@@ -635,6 +641,7 @@ function runtests()
                 # fd_option and adv_input not actually used so given values unimportant
                 fd_option = ""
                 adv_input = advection_input("default", 1.0, 0.0, 0.0)
+                cheb_option = cheb_option_global #"FFT"
                 # create the 'input' struct containing input info needed to create a
                 # coordinate
                 nelement_local = nelement
@@ -643,7 +650,7 @@ function runtests()
 				comm = MPI.COMM_NULL # dummy value 
 				input = grid_input("coord", ngrid, nelement,
                     nelement_local, nrank_per_block, irank, L,
-                    "chebyshev_pseudospectral", fd_option, bc, adv_input, comm)
+                    "chebyshev_pseudospectral", fd_option, cheb_option, bc, adv_input, comm)
                 # create the coordinate struct 'x'
                 x = define_coordinate(input)
                 # create arrays needed for Chebyshev pseudospectral treatment in x
@@ -681,6 +688,7 @@ function runtests()
                 # fd_option and adv_input not actually used so given values unimportant
                 fd_option = ""
                 adv_input = advection_input("default", 1.0, 0.0, 0.0)
+                cheb_option = cheb_option_global #"FFT"
                 # create the 'input' struct containing input info needed to create a
                 # coordinate
                 nelement_local = nelement
@@ -689,7 +697,7 @@ function runtests()
 				comm = MPI.COMM_NULL # dummy value 
 				input = grid_input("coord", ngrid, nelement,
                     nelement_local, nrank_per_block, irank, L,
-                    "chebyshev_pseudospectral", fd_option, bc, adv_input, comm)
+                    "chebyshev_pseudospectral", fd_option, cheb_option, bc, adv_input, comm)
                 # create the coordinate struct 'x'
                 x = define_coordinate(input)
                 # create arrays needed for Chebyshev pseudospectral treatment in x
@@ -735,6 +743,7 @@ function runtests()
                 # fd_option and adv_input not actually used so given values unimportant
                 fd_option = ""
                 adv_input = advection_input("default", 1.0, 0.0, 0.0)
+                cheb_option = cheb_option_global #"FFT"
                 # create the 'input' struct containing input info needed to create a
                 # coordinate
                 nelement_local = nelement
@@ -743,7 +752,7 @@ function runtests()
 				comm = MPI.COMM_NULL # dummy value 
 				input = grid_input("coord", ngrid, nelement,
                     nelement_local, nrank_per_block, irank, L,
-                    "chebyshev_pseudospectral", fd_option, bc, adv_input, comm)
+                    "chebyshev_pseudospectral", fd_option, cheb_option, bc, adv_input, comm)
                 # create the coordinate struct 'x'
                 x = define_coordinate(input)
                 # create arrays needed for Chebyshev pseudospectral treatment in x
@@ -952,6 +961,7 @@ function runtests()
                 # fd_option and adv_input not actually used so given values unimportant
                 fd_option = ""
                 adv_input = advection_input("default", 1.0, 0.0, 0.0)
+                cheb_option = cheb_option_global #"FFT"
                 # create the 'input' struct containing input info needed to create a
                 # coordinate
                 nelement_local = nelement
@@ -960,7 +970,7 @@ function runtests()
 				comm = MPI.COMM_NULL # dummy value
 				input = grid_input("coord", ngrid, nelement,
                     nelement_local, nrank_per_block, irank, L,
-                    "chebyshev_pseudospectral", fd_option, bc, adv_input, comm)
+                    "chebyshev_pseudospectral", fd_option, cheb_option, bc, adv_input, comm)
                 # create the coordinate struct 'x'
                 x = define_coordinate(input)
                 # create arrays needed for Chebyshev pseudospectral treatment in x

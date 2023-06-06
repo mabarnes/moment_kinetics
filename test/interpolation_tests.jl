@@ -40,9 +40,10 @@ function runtests()
 			nrank_per_block = 0 # dummy value
 			irank = 0 # dummy value
 			comm = MPI.COMM_NULL # dummy value 
+            cheb_option = "FFT"
 			input = grid_input("coord", ngrid, nelement,
 				nelement_local, nrank_per_block, irank, L,
-				discretization, fd_option, bc, adv_input, comm)
+				discretization, fd_option, cheb_option, bc, adv_input, comm)
             # create the coordinate struct 'z'
             z = define_coordinate(input)
             # For Chebyshev method, create arrays needed for Chebyshev pseudospectral

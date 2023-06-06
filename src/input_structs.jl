@@ -118,6 +118,8 @@ mutable struct grid_input_mutable
     discretization::String
     # finite difference option (only used if discretization is "finite_difference")
     fd_option::String
+    # cheb option (only used if discretization is "chebyshev_pseudospectral")
+    cheb_option::String
     # boundary option
     bc::String
     # mutable struct containing advection speed options
@@ -145,6 +147,8 @@ struct grid_input
     discretization::String
     # finite difference option (only used if discretization is "finite_difference")
     fd_option::String
+    # cheb option (only used if discretization is "chebyshev_pseudospectral")
+    cheb_option::String
     # boundary option
     bc::String
     # struct containing advection speed options

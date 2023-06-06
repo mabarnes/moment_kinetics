@@ -352,37 +352,37 @@ function mk_input(scan_input=Dict())
 	z_advection_immutable = advection_input(z.advection.option, z.advection.constant_speed,
         z.advection.frequency, z.advection.oscillation_amplitude)
     z_immutable = grid_input("z", z.ngrid, z.nelement_global, z.nelement_local, nrank_z, irank_z, z.L, 
-        z.discretization, z.fd_option, z.bc, z_advection_immutable, comm_sub_z)
+        z.discretization, z.fd_option, z.cheb_option, z.bc, z_advection_immutable, comm_sub_z)
     r_advection_immutable = advection_input(r.advection.option, r.advection.constant_speed,
         r.advection.frequency, r.advection.oscillation_amplitude)
     r_immutable = grid_input("r", r.ngrid, r.nelement_global, r.nelement_local, nrank_r, irank_r, r.L,
-        r.discretization, r.fd_option, r.bc, r_advection_immutable, comm_sub_r)
+        r.discretization, r.fd_option, r.cheb_option, r.bc, r_advection_immutable, comm_sub_r)
 	# for dimensions below which do not currently use distributed-memory MPI
 	# assign dummy values to nrank, irank and comm of coord struct
     vpa_advection_immutable = advection_input(vpa.advection.option, vpa.advection.constant_speed,
         vpa.advection.frequency, vpa.advection.oscillation_amplitude)
     vpa_immutable = grid_input("vpa", vpa.ngrid, vpa.nelement_global, vpa.nelement_local, 1, 0, vpa.L,
-        vpa.discretization, vpa.fd_option, vpa.bc, vpa_advection_immutable, MPI.COMM_NULL)
+        vpa.discretization, vpa.fd_option, vpa.cheb_option, vpa.bc, vpa_advection_immutable, MPI.COMM_NULL)
     vperp_advection_immutable = advection_input(vperp.advection.option, vperp.advection.constant_speed,
         vperp.advection.frequency, vperp.advection.oscillation_amplitude)
     vperp_immutable = grid_input("vperp", vperp.ngrid, vperp.nelement_global, vperp.nelement_local, 1, 0, vperp.L,
-        vperp.discretization, vperp.fd_option, vperp.bc, vperp_advection_immutable, MPI.COMM_NULL)
+        vperp.discretization, vperp.fd_option, vperp.cheb_option, vperp.bc, vperp_advection_immutable, MPI.COMM_NULL)
     gyrophase_advection_immutable = advection_input(gyrophase.advection.option, gyrophase.advection.constant_speed,
         gyrophase.advection.frequency, gyrophase.advection.oscillation_amplitude)
     gyrophase_immutable = grid_input("gyrophase", gyrophase.ngrid, gyrophase.nelement_global, gyrophase.nelement_local, 1, 0, gyrophase.L,
-        gyrophase.discretization, gyrophase.fd_option, gyrophase.bc, gyrophase_advection_immutable, MPI.COMM_NULL)
+        gyrophase.discretization, gyrophase.fd_option, gyrophase.cheb_option, gyrophase.bc, gyrophase_advection_immutable, MPI.COMM_NULL)
     vz_advection_immutable = advection_input(vz.advection.option, vz.advection.constant_speed,
         vz.advection.frequency, vz.advection.oscillation_amplitude)
     vz_immutable = grid_input("vz", vz.ngrid, vz.nelement_global, vz.nelement_local, 1, 0, vz.L,
-        vz.discretization, vz.fd_option, vz.bc, vz_advection_immutable, MPI.COMM_NULL)
+        vz.discretization, vz.fd_option, vz.cheb_option, vz.bc, vz_advection_immutable, MPI.COMM_NULL)
     vr_advection_immutable = advection_input(vr.advection.option, vr.advection.constant_speed,
         vr.advection.frequency, vr.advection.oscillation_amplitude)
     vr_immutable = grid_input("vr", vr.ngrid, vr.nelement_global, vr.nelement_local, 1, 0, vr.L,
-        vr.discretization, vr.fd_option, vr.bc, vr_advection_immutable, MPI.COMM_NULL)
+        vr.discretization, vr.fd_option, vr.cheb_option, vr.bc, vr_advection_immutable, MPI.COMM_NULL)
     vzeta_advection_immutable = advection_input(vzeta.advection.option, vzeta.advection.constant_speed,
         vzeta.advection.frequency, vzeta.advection.oscillation_amplitude)
     vzeta_immutable = grid_input("vzeta", vzeta.ngrid, vzeta.nelement_global, vzeta.nelement_local, 1, 0, vzeta.L,
-        vzeta.discretization, vzeta.fd_option, vzeta.bc, vzeta_advection_immutable, MPI.COMM_NULL)
+        vzeta.discretization, vzeta.fd_option, vzeta.cheb_option, vzeta.bc, vzeta_advection_immutable, MPI.COMM_NULL)
     
     species_charged_immutable = Array{species_parameters,1}(undef,n_ion_species)
     species_neutral_immutable = Array{species_parameters,1}(undef,n_neutral_species)
@@ -474,6 +474,8 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     conservation = true
     #advective_form = false
     evolve_moments = evolve_moments_options(evolve_density, evolve_parallel_flow, evolve_parallel_pressure, conservation)#advective_form)
+    # cheb option switch 
+    cheb_option = "FFT" # "matrix" # 
     #################### parameters related to the z grid ######################
     # ngrid_z is number of grid points per element
     ngrid_z = 100
@@ -497,6 +499,8 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     #finite_difference_option_z = "first_order_upwind"
     #finite_difference_option_z = "second_order_upwind"
     finite_difference_option_z = "third_order_upwind"
+    #cheb_option_z = "FFT" # "matrix"
+    cheb_option_z = cheb_option
     # determine the option used for the advection speed in z
     # supported options are "constant" and "oscillating",
     # in addition to the "default" option which uses dz/dt = vpa as the advection speed
@@ -512,7 +516,7 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
         frequency_z, oscillation_amplitude_z)
     # create a mutable structure containing the input info related to the z grid
     z = grid_input_mutable("z", ngrid_z, nelement_global_z, nelement_local_z, L_z,
-        discretization_option_z, finite_difference_option_z, boundary_option_z,
+        discretization_option_z, finite_difference_option_z, cheb_option_z, boundary_option_z,
         advection_z)
     #################### parameters related to the r grid ######################
     # ngrid_r is number of grid points per element
@@ -537,6 +541,8 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     #finite_difference_option_r = "first_order_upwind"
     #finite_difference_option_r = "second_order_upwind"
     finite_difference_option_r = "third_order_upwind"
+    #cheb_option_r = "FFT" #"matrix"
+    cheb_option_r = cheb_option
     # determine the option used for the advection speed in r
     # supported options are "constant" and "oscillating",
     # in addition to the "default" option which uses dr/dt = vpa as the advection speed
@@ -552,7 +558,7 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
         frequency_r, oscillation_amplitude_r)
     # create a mutable structure containing the input info related to the r grid
     r = grid_input_mutable("r", ngrid_r, nelement_global_r, nelement_local_r, L_r,
-        discretization_option_r, finite_difference_option_r, boundary_option_r,
+        discretization_option_r, finite_difference_option_r, cheb_option_r, boundary_option_r,
         advection_r)
     ############################################################################
     ################### parameters related to the vpa grid #####################
@@ -575,6 +581,8 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     # supported options are "third_order_upwind", "second_order_upwind" and "first_order_upwind"
     #finite_difference_option_vpa = "second_order_upwind"
     finite_difference_option_vpa = "third_order_upwind"
+    #cheb_option_vpa = "FFT" # "matrix"
+    cheb_option_vpa = cheb_option
     # determine the option used for the advection speed in vpa
     # supported options are "constant" and "oscillating",
     # in addition to the "default" option which uses dvpa/dt = q*Ez/m as the advection speed
@@ -590,7 +598,7 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
         frequency_vpa, oscillation_amplitude_vpa)
     # create a mutable structure containing the input info related to the vpa grid
     vpa = grid_input_mutable("vpa", ngrid_vpa, nelement_vpa, nelement_vpa, L_vpa,
-        discretization_option_vpa, finite_difference_option_vpa, boundary_option_vpa,
+        discretization_option_vpa, finite_difference_option_vpa, cheb_option_vpa, boundary_option_vpa,
         advection_vpa)
     ############################################################################
     ################### parameters related to the vperp grid #####################
@@ -613,6 +621,8 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     # supported options are "third_order_upwind", "second_order_upwind" and "first_order_upwind"
     #finite_difference_option_vperp = "second_order_upwind"
     finite_difference_option_vperp = "third_order_upwind"
+    #cheb_option_vperp = "FFT" # "matrix"
+    cheb_option_vperp = cheb_option
     # determine the option used for the advection speed in vperp
     # supported options are "constant" and "oscillating",
     advection_option_vperp = "default"
@@ -627,7 +637,7 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
         frequency_vperp, oscillation_amplitude_vperp)
     # create a mutable structure containing the input info related to the vperp grid
     vperp = grid_input_mutable("vperp", ngrid_vperp, nelement_vperp, nelement_vperp, L_vperp,
-        discretization_option_vperp, finite_difference_option_vperp, boundary_option_vperp,
+        discretization_option_vperp, finite_difference_option_vperp, cheb_option_vperp, boundary_option_vperp,
         advection_vperp)
     ############################################################################
     ################### parameters related to the gyrophase grid #####################
@@ -642,6 +652,8 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     boundary_option_gyrophase = "periodic"
     discretization_option_gyrophase = "finite_difference"
     finite_difference_option_gyrophase = "third_order_upwind"
+    #cheb_option_gyrophase = "FFT" #"matrix"
+    cheb_option_gyrophase = cheb_option
     advection_option_gyrophase = "default"
     advection_speed_gyrophase = 0.0
     frequency_gyrophase = 1.0
@@ -650,7 +662,7 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
         frequency_gyrophase, oscillation_amplitude_gyrophase)
     # create a mutable structure containing the input info related to the gyrophase grid
     gyrophase = grid_input_mutable("gyrophase", ngrid_gyrophase, nelement_gyrophase, nelement_gyrophase, L_gyrophase,
-        discretization_option_gyrophase, finite_difference_option_gyrophase, boundary_option_gyrophase,
+        discretization_option_gyrophase, finite_difference_option_gyrophase, cheb_option_gyrophase, boundary_option_gyrophase,
         advection_gyrophase)
     ############################################################################
     ################### parameters related to the vr grid #####################
@@ -671,6 +683,8 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     # supported options are "third_order_upwind", "second_order_upwind" and "first_order_upwind"
     #finite_difference_option_vr = "second_order_upwind"
     finite_difference_option_vr = "third_order_upwind"
+    #cheb_option_vr = "FFT" # "matrix"
+    cheb_option_vr = cheb_option
     # determine the option used for the advection speed in vr
     # supported options are "constant" and "oscillating",
     advection_option_vr = "default"
@@ -685,7 +699,7 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
         frequency_vr, oscillation_amplitude_vr)
     # create a mutable structure containing the input info related to the vr grid
     vr = grid_input_mutable("vr", ngrid_vr, nelement_vr, nelement_vr, L_vr,
-        discretization_option_vr, finite_difference_option_vr, boundary_option_vr,
+        discretization_option_vr, finite_difference_option_vr, cheb_option_vr, boundary_option_vr,
         advection_vr)
     ############################################################################
     ################### parameters related to the vz grid #####################
@@ -706,6 +720,8 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     # supported options are "third_order_upwind", "second_order_upwind" and "first_order_upwind"
     #finite_difference_option_vz = "second_order_upwind"
     finite_difference_option_vz = "third_order_upwind"
+    #cheb_option_vz = "FFT" # "matrix"
+    cheb_option_vz = cheb_option
     # determine the option used for the advection speed in vz
     # supported options are "constant" and "oscillating",
     advection_option_vz = "default"
@@ -720,7 +736,7 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
         frequency_vz, oscillation_amplitude_vz)
     # create a mutable structure containing the input info related to the vz grid
     vz = grid_input_mutable("vz", ngrid_vz, nelement_vz, nelement_vz, L_vz,
-        discretization_option_vz, finite_difference_option_vz, boundary_option_vz,
+        discretization_option_vz, finite_difference_option_vz, cheb_option_vz, boundary_option_vz,
         advection_vz)
     ############################################################################
     ################### parameters related to the vzeta grid #####################
@@ -741,6 +757,8 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     # supported options are "third_order_upwind", "second_order_upwind" and "first_order_upwind"
     #finite_difference_option_vzeta = "second_order_upwind"
     finite_difference_option_vzeta = "third_order_upwind"
+    #cheb_option_vzeta = "FFT" # "matrix"
+    cheb_option_vzeta = cheb_option
     # determine the option used for the advection speed in vzeta
     # supported options are "constant" and "oscillating",
     advection_option_vzeta = "default"
@@ -755,7 +773,7 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
         frequency_vzeta, oscillation_amplitude_vzeta)
     # create a mutable structure containing the input info related to the vzeta grid
     vzeta = grid_input_mutable("vzeta", ngrid_vzeta, nelement_vzeta, nelement_vzeta, L_vzeta,
-        discretization_option_vzeta, finite_difference_option_vzeta, boundary_option_vzeta,
+        discretization_option_vzeta, finite_difference_option_vzeta, cheb_option_vzeta, boundary_option_vzeta,
         advection_vzeta)
     #############################################################################
     # define default values and create corresponding mutable structs holding

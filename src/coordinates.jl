@@ -51,6 +51,8 @@ struct coordinate
     discretization::String
     # if the discretization is finite differences, fd_option provides the precise scheme
     fd_option::String
+    # if the discretization is chebyshev_pseudospectral, cheb_option chooses whether to use FFT or differentiation matrices for d / d coord
+    cheb_option::String
     # bc is the boundary condition option for this coordinate
     bc::String
     # wgts contains the integration weights associated with each grid point
@@ -145,7 +147,7 @@ function define_coordinate(input, parallel_io::Bool=false)
     end
     return coordinate(input.name, n_global, n_local, input.ngrid,
         input.nelement_global, input.nelement_local, input.nrank, input.irank, input.L, grid,
-        cell_width, igrid, ielement, imin, imax, input.discretization, input.fd_option,
+        cell_width, igrid, ielement, imin, imax, input.discretization, input.fd_option, input.cheb_option,
         input.bc, wgts, uniform_grid, duniform_dgrid, scratch, copy(scratch), copy(scratch),
         scratch_2d, copy(scratch_2d), advection, send_buffer, receive_buffer, input.comm,
         local_io_range, global_io_range)

@@ -12,6 +12,7 @@ export chebyshev_spectral_derivative!
 export chebyshev_info
 export chebyshev_base_info
 
+using LinearAlgebra: mul!
 using FFTW
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_complex
@@ -33,8 +34,10 @@ struct chebyshev_base_info{TForward <: FFTW.cFFTWPlan, TBackward <: AbstractFFTs
     # plan for the complex-to-complex, in-place, forward Fourier transform on Chebyshev-Gauss-Lobatto/Radau grid
     forward::TForward
     # plan for the complex-to-complex, in-place, backward Fourier transform on Chebyshev-Gauss-Lobatto/Radau grid
-    #backward_transform::FFTW.cFFTWPlan
+    # backward_transform::FFTW.cFFTWPlan
     backward::TBackward
+    # elementwise differentiation matrix (ngrid*ngrid)
+    Dmat::Array{mk_float,2}
 end
 
 struct chebyshev_info{TForward <: FFTW.cFFTWPlan, TBackward <: AbstractFFTs.ScaledPlan}
@@ -65,9 +68,12 @@ function setup_chebyshev_pseudospectral_lobatto(coord)
     # setup the plans for the forward and backward Fourier transforms
     forward_transform = plan_fft!(fext, flags=FFTW.MEASURE)
     backward_transform = plan_ifft!(fext, flags=FFTW.MEASURE)
+    # create array for differentiation matrix 
+    Dmat = allocate_float(coord.ngrid, coord.ngrid)
+    cheb_derivative_matrix_elementwise!(Dmat,coord.ngrid,coord.L,coord.nelement_global) 
     # return a structure containing the information needed to carry out
     # a 1D Chebyshev transform
-    return chebyshev_base_info(fext, fcheby, dcheby, forward_transform, backward_transform)
+    return chebyshev_base_info(fext, fcheby, dcheby, forward_transform, backward_transform, Dmat)
 end
 
 function setup_chebyshev_pseudospectral_radau(coord)
@@ -83,9 +89,12 @@ function setup_chebyshev_pseudospectral_radau(coord)
         # setup the plans for the forward and backward Fourier transforms
         forward_transform = plan_fft!(fext, flags=FFTW.MEASURE)
         backward_transform = plan_ifft!(fext, flags=FFTW.MEASURE)
+        # create array for differentiation matrix 
+        Dmat = allocate_float(coord.ngrid, coord.ngrid)
+        cheb_derivative_matrix_elementwise_FFT!(Dmat, coord, fcheby, dcheby, fext, forward_transform)
         # return a structure containing the information needed to carry out
         # a 1D Chebyshev transform
-        return chebyshev_base_info(fext, fcheby, dcheby, forward_transform, backward_transform)
+        return chebyshev_base_info(fext, fcheby, dcheby, forward_transform, backward_transform, Dmat)
 end
 
 """
@@ -188,57 +197,89 @@ function chebyshev_derivative!(df, ff, chebyshev, coord)
     @boundscheck nelement == size(chebyshev.lobatto.f,2) || throw(BoundsError(chebyshev.lobatto.f))
     @boundscheck nelement == size(chebyshev.radau.f,2) || throw(BoundsError(chebyshev.radau.f))
     @boundscheck nelement == size(df,2) && coord.ngrid == size(df,1) || throw(BoundsError(df))
-    # note that one must multiply by 2*nelement/L to get derivative
-    # in scaled coordinate
-    scale_factor = 2.0*float(coord.nelement_global)/coord.L
-	# scale factor is (length of a single element/2)^{-1}
-	
-    # variable k will be used to avoid double counting of overlapping point
-    # at element boundaries (see below for further explanation)
-    k = 0
-    j = 1 # the first element
-    if coord.name == "vperp" && coord.irank == 0 # differentiate this element with the Radau scheme
+    
+    if coord.cheb_option == "matrix"
+        # variable k will be used to avoid double counting of overlapping point
+        # at element boundaries (see below for further explanation)
+        k = 0
+        j = 1 # the first element
         imin = coord.imin[j]-k
         # imax is the maximum index on the full grid for this (jth) element
-        imax = coord.imax[j]
-        @views chebyshev_radau_derivative_single_element!(df[:,j], ff[imin:imax],
-            chebyshev.radau.f[:,j], chebyshev.radau.df, chebyshev.radau.fext, chebyshev.radau.forward, coord)
-        # and multiply by scaling factor needed to go
-        # from Chebyshev z coordinate to actual z
-        for i ∈ 1:coord.ngrid
-            df[i,j] *= scale_factor
+        imax = coord.imax[j]        
+        if coord.name == "vperp" && coord.irank == 0 # differentiate this element with the Radau scheme
+            @views mul!(df[:,j],chebyshev.radau.Dmat[:,:],ff[imin:imax])
+        else #differentiate using the Lobatto scheme
+            @views mul!(df[:,j],chebyshev.lobatto.Dmat[:,:],ff[imin:imax])
         end
-    else #differentiate using the Lobatto scheme
-        imin = coord.imin[j]-k
-        # imax is the maximum index on the full grid for this (jth) element
-        imax = coord.imax[j]
-        @views chebyshev_derivative_single_element!(df[:,j], ff[imin:imax],
-            chebyshev.lobatto.f[:,j], chebyshev.lobatto.df, chebyshev.lobatto.fext, chebyshev.lobatto.forward, coord)
-        # and multiply by scaling factor needed to go
-        # from Chebyshev z coordinate to actual z
-        for i ∈ 1:coord.ngrid
-            df[i,j] *= scale_factor
+        # calculate the Chebyshev derivative on each element
+        @inbounds for j ∈ 2:nelement
+            # imin is the minimum index on the full grid for this (jth) element
+            # the 'k' below accounts for the fact that the first element includes
+            # both boundary points, while each additional element shares a boundary
+            # point with neighboring elements.  the choice was made when defining
+            # coord.imin to exclude the lower boundary point in each element other
+            # than the first so that no point is double-counted
+            k = 1 
+            imin = coord.imin[j]-k
+            # imax is the maximum index on the full grid for this (jth) element
+            imax = coord.imax[j]
+            @views mul!(df[:,j],chebyshev.lobatto.Dmat[:,:],ff[imin:imax])
         end
-    end
-    # calculate the Chebyshev derivative on each element
-    @inbounds for j ∈ 2:nelement
-        # imin is the minimum index on the full grid for this (jth) element
-        # the 'k' below accounts for the fact that the first element includes
-        # both boundary points, while each additional element shares a boundary
-        # point with neighboring elements.  the choice was made when defining
-        # coord.imin to exclude the lower boundary point in each element other
-        # than the first so that no point is double-counted
-        k = 1 
-        imin = coord.imin[j]-k
-        # imax is the maximum index on the full grid for this (jth) element
-        imax = coord.imax[j]
-        @views chebyshev_derivative_single_element!(df[:,j], ff[imin:imax],
-            chebyshev.lobatto.f[:,j], chebyshev.lobatto.df, chebyshev.lobatto.fext, chebyshev.lobatto.forward, coord)
-        # and multiply by scaling factor needed to go
-        # from Chebyshev z coordinate to actual z
-        for i ∈ 1:coord.ngrid
-            df[i,j] *= scale_factor
-        end        
+    elseif coord.cheb_option == "FFT"   
+        # note that one must multiply by 2*nelement/L to get derivative
+        # in scaled coordinate
+        scale_factor = 2.0*float(coord.nelement_global)/coord.L
+        # scale factor is (length of a single element/2)^{-1}
+        
+        # variable k will be used to avoid double counting of overlapping point
+        # at element boundaries (see below for further explanation)
+        k = 0
+        j = 1 # the first element
+        if coord.name == "vperp" && coord.irank == 0 # differentiate this element with the Radau scheme
+            imin = coord.imin[j]-k
+            # imax is the maximum index on the full grid for this (jth) element
+            imax = coord.imax[j]
+            @views chebyshev_radau_derivative_single_element!(df[:,j], ff[imin:imax],
+                chebyshev.radau.f[:,j], chebyshev.radau.df, chebyshev.radau.fext, chebyshev.radau.forward, coord)
+            # and multiply by scaling factor needed to go
+            # from Chebyshev z coordinate to actual z
+            for i ∈ 1:coord.ngrid
+                df[i,j] *= scale_factor
+            end
+        else #differentiate using the Lobatto scheme
+            imin = coord.imin[j]-k
+            # imax is the maximum index on the full grid for this (jth) element
+            imax = coord.imax[j]
+            @views chebyshev_derivative_single_element!(df[:,j], ff[imin:imax],
+                chebyshev.lobatto.f[:,j], chebyshev.lobatto.df, chebyshev.lobatto.fext, chebyshev.lobatto.forward, coord)
+            # and multiply by scaling factor needed to go
+            # from Chebyshev z coordinate to actual z
+            for i ∈ 1:coord.ngrid
+                df[i,j] *= scale_factor
+            end
+        end
+        # calculate the Chebyshev derivative on each element
+        @inbounds for j ∈ 2:nelement
+            # imin is the minimum index on the full grid for this (jth) element
+            # the 'k' below accounts for the fact that the first element includes
+            # both boundary points, while each additional element shares a boundary
+            # point with neighboring elements.  the choice was made when defining
+            # coord.imin to exclude the lower boundary point in each element other
+            # than the first so that no point is double-counted
+            k = 1 
+            imin = coord.imin[j]-k
+            # imax is the maximum index on the full grid for this (jth) element
+            imax = coord.imax[j]
+            @views chebyshev_derivative_single_element!(df[:,j], ff[imin:imax],
+                chebyshev.lobatto.f[:,j], chebyshev.lobatto.df, chebyshev.lobatto.fext, chebyshev.lobatto.forward, coord)
+            # and multiply by scaling factor needed to go
+            # from Chebyshev z coordinate to actual z
+            for i ∈ 1:coord.ngrid
+                df[i,j] *= scale_factor
+            end        
+        end
+    else
+        println("ERROR: ", coord.cheb_option, " NOT SUPPORTED")
     end
     return nothing
 end
@@ -254,6 +295,7 @@ function chebyshev_derivative_single_element!(df, ff, cheby_f, cheby_df, cheby_f
     # inverse Chebyshev transform to get df/dcoord
     chebyshev_backward_transform!(df, cheby_fext, cheby_df, forward, coord.ngrid)
 end
+
 
 
 """
@@ -706,6 +748,118 @@ function chebyshev_radau_forward_transform!(chebyf, fext, ff, transform, n)
         chebyshev_spectral_derivative!(cheby_df, cheby_f)
         # inverse Chebyshev transform to get df/dcoord
         chebyshev_radau_backward_transform!(df, cheby_fext, cheby_df, forward, coord.ngrid)
+    end
+
+
+"""
+derivative matrix for Gauss-Lobatto points using the analytical specification from 
+Chapter 8.2 from Trefethen 1994 
+https://people.maths.ox.ac.uk/trefethen/8all.pdf
+full list of Chapters may be obtained here 
+https://people.maths.ox.ac.uk/trefethen/pdetext.html
+"""
+    function cheb_derivative_matrix_elementwise!(D::Array{Float64,2},n::Int64,L::Float64,nelement::Int64) 
+        
+        # define Gauss-Lobatto Chebyshev points in reversed order x_j = { -1, ... , 1}
+        # consistent with use in elements of the grid
+        x = Array{Float64,1}(undef,n)
+        for j in 1:n
+            x[j] = cospi((n-j)/(n-1))
+        end
+        
+        # zero matrix before allocating values
+        D[:,:] .= 0.0
+        
+        # top row 
+        j = 1
+        c_j = 2.0 
+        c_k = 1.0
+        for k in 2:n-1
+            D[j,k] = Djk(x,j,k,c_j,c_k)
+        end
+        k = n 
+        c_k = 2.0
+        D[j,k] = Djk(x,j,k,c_j,c_k)
+        
+        # bottom row 
+        j = n
+        c_j = 2.0 
+        c_k = 1.0
+        for k in 2:n-1
+            D[j,k] = Djk(x,j,k,c_j,c_k)
+        end
+        k = 1
+        c_k = 2.0
+        D[j,k] = Djk(x,j,k,c_j,c_k)
+        
+        #left column
+        k = 1
+        c_j = 1.0 
+        c_k = 2.0
+        for j in 2:n-1
+            D[j,k] = Djk(x,j,k,c_j,c_k)
+        end
+        
+        #right column
+        k = n
+        c_j = 1.0 
+        c_k = 2.0
+        for j in 2:n-1
+            D[j,k] = Djk(x,j,k,c_j,c_k)
+        end
+        
+        
+        # top left, bottom right
+        #D[n,n] = (2.0*(n - 1.0)^2 + 1.0)/6.0
+        #D[1,1] = -(2.0*(n - 1.0)^2 + 1.0)/6.0        
+        # interior rows and columns
+        for j in 2:n-1
+            #D[j,j] = Djj(x,j)
+            for k in 2:n-1
+                if j == k 
+                    continue
+                end
+                c_k = 1.0
+                c_j = 1.0
+                D[j,k] = Djk(x,j,k,c_j,c_k)
+            end
+        end
+        
+        # calculate diagonal entries to guarantee that
+        # D * (1, 1, ..., 1, 1) = (0, 0, ..., 0, 0)
+        for j in 1:n
+            D[j,j] = -sum(D[j,:])
+        end
+        
+        #multiply by scale factor for element length
+        D .= (2.0*float(nelement)/L).*D
+    end
+    function Djk(x::Array{Float64,1},j::Int64,k::Int64,c_j::Float64,c_k::Float64)
+        return  (c_j/c_k)*((-1)^(k+j))/(x[j] - x[k])
+    end
+ """
+ derivative matrix for Chebyshev grid using the FFT
+ """
+    function cheb_derivative_matrix_elementwise_FFT!(D::Array{Float64,2}, coord, f, df, fext, forward)
+        ff_buffer = Array{Float64,1}(undef,coord.ngrid)
+        df_buffer = Array{Float64,1}(undef,coord.ngrid)
+        # use response matrix approach to calculate derivative matrix D 
+        for j in 1:coord.ngrid 
+            ff_buffer .= 0.0 
+            ff_buffer[j] = 1.0
+            @views chebyshev_radau_derivative_single_element!(df_buffer[:], ff_buffer[:],
+                f[:,1], df, fext, forward, coord)
+            @. D[:,j] = df_buffer[:] # assign appropriate column of derivative matrix 
+        end
+        # correct diagonal elements to gurantee numerical stability
+        # gives D*[1.0, 1.0, ... 1.0] = [0.0, 0.0, ... 0.0]
+        for j in 1:coord.ngrid
+            D[j,j] = 0.0
+            D[j,j] = -sum(D[j,:])
+        end
+        
+        #multiply by scale factor for element length
+        D .= (2.0*float(coord.nelement_global)/coord.L).*D
     end
 
 end
