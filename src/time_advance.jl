@@ -443,6 +443,31 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     update_neutral_pzeta!(moments.neutral.pzeta, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
     update_neutral_qz!(moments.neutral.qz, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
 
+    begin_serial_region()
+    # Update pdf.*.unnorm since boundary conditions were applied to pdf.*.norm
+    @serial_region begin
+        pdf.charged.unnorm .= pdf.charged.norm
+        if n_neutral_species > 0
+            pdf.neutral.unnorm .= pdf.neutral.norm
+        end
+    end
+
+    # Udpate initial scratch arrays as these are needed to update phi, Er, Ez
+    begin_s_r_z_region()
+    @loop_s_r_z is ir iz begin
+        scratch[1].pdf[:,:,iz,ir,is] .= pdf.charged.norm[:,:,iz,ir,is]
+        scratch[1].density[iz,ir,is] = moments.charged.dens[iz,ir,is]
+        scratch[1].upar[iz,ir,is] = moments.charged.upar[iz,ir,is]
+        scratch[1].ppar[iz,ir,is] = moments.charged.ppar[iz,ir,is]
+    end
+
+    begin_sn_r_z_region(no_synchronize=true)
+    @loop_sn_r_z isn ir iz begin
+        scratch[1].pdf_neutral[:,:,:,iz,ir,isn] .= pdf.neutral.norm[:,:,:,iz,ir,isn]
+        scratch[1].density_neutral[iz,ir,isn] = moments.neutral.dens[iz,ir,isn]
+    end
+
+    update_phi!(fields, scratch[1], z, r, composition, z_spectral, r_spectral, scratch_dummy)
     ##
     # construct named list of advect & spectral objects to compactify arguments
     ##
