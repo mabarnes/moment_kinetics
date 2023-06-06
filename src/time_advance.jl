@@ -332,7 +332,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
             @views update_speed_r!(r_advect[is], fields, vpa, vperp, z, r, geometry)
         end
         # enforce prescribed boundary condition in r on the distribution function f
-        @views enforce_r_boundary_condition!(pdf.charged.unnorm, boundary_distributions.pdf_rboundary_charged,
+        @views enforce_r_boundary_condition!(pdf.charged.norm, boundary_distributions.pdf_rboundary_charged,
                                             r.bc, r_advect, vpa, vperp, z, r, composition,
                                             scratch_dummy.buffer_vpavperpzs_1, scratch_dummy.buffer_vpavperpzs_2,
                                             scratch_dummy.buffer_vpavperpzs_3, scratch_dummy.buffer_vpavperpzs_4,
@@ -350,7 +350,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
         @views update_speed_z!(z_advect[is], fields, vpa, vperp, z, r, 0.0, geometry)
     end
     # enforce prescribed boundary condition in z on the distribution function f
-    @views enforce_z_boundary_condition!(pdf.charged.unnorm, z.bc, z_advect, vpa, vperp, z, r, composition,
+    @views enforce_z_boundary_condition!(pdf.charged.norm, z.bc, z_advect, vpa, vperp, z, r, composition,
             scratch_dummy.buffer_vpavperprs_1, scratch_dummy.buffer_vpavperprs_2,
             scratch_dummy.buffer_vpavperprs_3, scratch_dummy.buffer_vpavperprs_4,
             scratch_dummy.buffer_vpavperpzrs_1)
@@ -404,7 +404,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
             @views update_speed_neutral_r!(neutral_r_advect[isn], r, z, vzeta, vr, vz)
         end
         # enforce prescribed boundary condition in r on the neutral distribution function f
-        @views enforce_neutral_r_boundary_condition!(pdf.neutral.unnorm,
+        @views enforce_neutral_r_boundary_condition!(pdf.neutral.norm,
             boundary_distributions.pdf_rboundary_neutral, neutral_r_advect, vz, vr, vzeta, z, r, composition,
             scratch_dummy.buffer_vzvrvzetazsn_1, scratch_dummy.buffer_vzvrvzetazsn_2,
             scratch_dummy.buffer_vzvrvzetazsn_3, scratch_dummy.buffer_vzvrvzetazsn_4,
@@ -421,7 +421,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
             @views update_speed_neutral_z!(neutral_z_advect[isn], r, z, vzeta, vr, vz)
         end
         # enforce prescribed boundary condition in z on the neutral distribution function f
-        @views enforce_neutral_z_boundary_condition!(pdf.neutral.unnorm, pdf.charged.unnorm, boundary_distributions,
+        @views enforce_neutral_z_boundary_condition!(pdf.neutral.norm, pdf.charged.norm, boundary_distributions,
             neutral_z_advect, z_advect, vz, vr, vzeta, vpa, vperp, z, r, composition,
             scratch_dummy.buffer_vzvrvzetarsn_1, scratch_dummy.buffer_vzvrvzetarsn_2,
             scratch_dummy.buffer_vzvrvzetarsn_3, scratch_dummy.buffer_vzvrvzetarsn_4,
@@ -430,18 +430,18 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
 
     # Update moments to be consistent with distribution functions after boundary
     # conditions applied
-    update_density!(moments.charged.dens, pdf.charged.unnorm, vpa, vperp, z, r, composition)
-    update_upar!(moments.charged.upar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
-    update_ppar!(moments.charged.ppar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
-    update_qpar!(moments.charged.qpar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
-    update_neutral_density!(moments.neutral.dens, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
-    update_neutral_uz!(moments.neutral.uz, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
-    update_neutral_ur!(moments.neutral.ur, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
-    update_neutral_uzeta!(moments.neutral.uzeta, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
-    update_neutral_pz!(moments.neutral.pz, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
-    update_neutral_pr!(moments.neutral.pr, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
-    update_neutral_pzeta!(moments.neutral.pzeta, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
-    update_neutral_qz!(moments.neutral.qz, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
+    update_density!(moments.charged.dens, pdf.charged.norm, vpa, vperp, z, r, composition)
+    update_upar!(moments.charged.upar, pdf.charged.norm, vpa, vperp, z, r, composition)
+    update_ppar!(moments.charged.ppar, pdf.charged.norm, vpa, vperp, z, r, composition)
+    update_qpar!(moments.charged.qpar, pdf.charged.norm, vpa, vperp, z, r, composition)
+    update_neutral_density!(moments.neutral.dens, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
+    update_neutral_uz!(moments.neutral.uz, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
+    update_neutral_ur!(moments.neutral.ur, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
+    update_neutral_uzeta!(moments.neutral.uzeta, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
+    update_neutral_pz!(moments.neutral.pz, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
+    update_neutral_pr!(moments.neutral.pr, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
+    update_neutral_pzeta!(moments.neutral.pzeta, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
+    update_neutral_qz!(moments.neutral.qz, pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
 
     ##
     # construct named list of advect & spectral objects to compactify arguments
