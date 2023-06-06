@@ -38,7 +38,7 @@ struct chebyshev_base_info{TForward <: FFTW.cFFTWPlan, TBackward <: AbstractFFTs
 end
 
 struct chebyshev_info{TForward <: FFTW.cFFTWPlan, TBackward <: AbstractFFTs.ScaledPlan}
-    lobotto::chebyshev_base_info{TForward, TBackward}
+    lobatto::chebyshev_base_info{TForward, TBackward}
     radau::chebyshev_base_info{TForward, TBackward}
 end
 
@@ -47,12 +47,12 @@ create arrays needed for explicit Chebyshev pseudospectral treatment
 and create the plans for the forward and backward fast Fourier transforms
 """
 function setup_chebyshev_pseudospectral(coord)
-    lobotto = setup_chebyshev_pseudospectral_lobotto(coord)
+    lobatto = setup_chebyshev_pseudospectral_lobatto(coord)
     radau = setup_chebyshev_pseudospectral_radau(coord)
-    return chebyshev_info(lobotto,radau)
+    return chebyshev_info(lobatto,radau)
 end
 
-function setup_chebyshev_pseudospectral_lobotto(coord)
+function setup_chebyshev_pseudospectral_lobatto(coord)
     # ngrid_fft is the number of grid points in the extended domain
     # in z = cos(theta).  this is necessary to turn a cosine transform on [0,π]
     # into a complex transform on [0,2π], which is more efficient in FFTW
@@ -185,7 +185,7 @@ function chebyshev_derivative!(df, ff, chebyshev, coord)
     # define local variable nelement for convenience
     nelement = coord.nelement_local
     # check array bounds
-    @boundscheck nelement == size(chebyshev.lobotto.f,2) || throw(BoundsError(chebyshev.lobotto.f))
+    @boundscheck nelement == size(chebyshev.lobatto.f,2) || throw(BoundsError(chebyshev.lobatto.f))
     @boundscheck nelement == size(chebyshev.radau.f,2) || throw(BoundsError(chebyshev.radau.f))
     @boundscheck nelement == size(df,2) && coord.ngrid == size(df,1) || throw(BoundsError(df))
     # note that one must multiply by 2*nelement/L to get derivative
@@ -208,12 +208,12 @@ function chebyshev_derivative!(df, ff, chebyshev, coord)
         for i ∈ 1:coord.ngrid
             df[i,j] *= scale_factor
         end
-    else #differentiate using the Lobotto scheme
+    else #differentiate using the Lobatto scheme
         imin = coord.imin[j]-k
         # imax is the maximum index on the full grid for this (jth) element
         imax = coord.imax[j]
         @views chebyshev_derivative_single_element!(df[:,j], ff[imin:imax],
-            chebyshev.lobotto.f[:,j], chebyshev.lobotto.df, chebyshev.lobotto.fext, chebyshev.lobotto.forward, coord)
+            chebyshev.lobatto.f[:,j], chebyshev.lobatto.df, chebyshev.lobatto.fext, chebyshev.lobatto.forward, coord)
         # and multiply by scaling factor needed to go
         # from Chebyshev z coordinate to actual z
         for i ∈ 1:coord.ngrid
@@ -233,7 +233,7 @@ function chebyshev_derivative!(df, ff, chebyshev, coord)
         # imax is the maximum index on the full grid for this (jth) element
         imax = coord.imax[j]
         @views chebyshev_derivative_single_element!(df[:,j], ff[imin:imax],
-            chebyshev.lobotto.f[:,j], chebyshev.lobotto.df, chebyshev.lobotto.fext, chebyshev.lobotto.forward, coord)
+            chebyshev.lobatto.f[:,j], chebyshev.lobatto.df, chebyshev.lobatto.fext, chebyshev.lobatto.forward, coord)
         # and multiply by scaling factor needed to go
         # from Chebyshev z coordinate to actual z
         for i ∈ 1:coord.ngrid
@@ -412,7 +412,7 @@ function chebyshev_interpolate_single_element(newgrid, f, j, coord, chebyshev)
     scale = 2.0 / (coord.grid[imax] - coord.grid[imin])
 
     # Get Chebyshev coefficients
-    chebyshev_forward_transform!(cheby_f, chebyshev.lobotto.fext, f, chebyshev.lobotto.forward, coord.ngrid)
+    chebyshev_forward_transform!(cheby_f, chebyshev.lobatto.fext, f, chebyshev.lobatto.forward, coord.ngrid)
 
     for (i, x) ∈ enumerate(newgrid)
         z = scale * (x - shift)
@@ -460,7 +460,7 @@ function clenshaw_curtis_radau_weights(ngrid, nelement_local, n, imin, imax, sca
     wgts = zeros(mk_float, n)
     # calculate the modified Chebshev moments of the first kind
     μ = chebyshevmoments(ngrid)
-    wgts_lobotto = clenshawcurtisweights(μ)*scale_factor
+    wgts_lobatto = clenshawcurtisweights(μ)*scale_factor
     wgts_radau = chebyshev_radau_weights(μ, ngrid)*scale_factor 
     @inbounds begin
         # calculate the weights within a single element and
@@ -469,9 +469,9 @@ function clenshaw_curtis_radau_weights(ngrid, nelement_local, n, imin, imax, sca
         if nelement_local > 1
             for j ∈ 2:nelement_local
                 # account for double-counting of points at inner element boundaries
-                wgts[imin[j]-1] += wgts_lobotto[1]
+                wgts[imin[j]-1] += wgts_lobatto[1]
                 # assign weights for interior of elements and one boundary point
-                wgts[imin[j]:imax[j]] .= wgts_lobotto[2:ngrid]
+                wgts[imin[j]:imax[j]] .= wgts_lobatto[2:ngrid]
             end
         end
     end
