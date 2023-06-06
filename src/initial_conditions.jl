@@ -778,7 +778,7 @@ function enforce_neutral_z_boundary_condition!(f_neutral::AbstractArray{mk_float
     bc = z.bc
     nz = z.n
     # define a zero that accounts for finite precision
-    zero = 1.0e-10
+    zero = 1.0e-14
     
     if z.nelement_global > z.nelement_local
         # reconcile internal element boundaries across processes
@@ -850,11 +850,11 @@ function enforce_neutral_z_boundary_condition!(f_neutral::AbstractArray{mk_float
                             for ivz ∈ 1:vz.n
                                 # no parallel BC should be enforced for vz = 0
                                 iz = 1 # z = -L/2, ensure data is on lowest rank
-                                if vz.grid[ivz] > zero && z.irank == 0
+                                if vz.grid[ivz] >= -zero && z.irank == 0
                                     f_neutral[ivz,ivr,ivzeta,iz,ir,isn] = wall_flux_0 * knudsen_cosine[ivz,ivr,ivzeta]
                                 end
                                 iz = nz # z = L/2, ensure data is on highest rank
-                                if vz.grid[ivz] < -zero && z.irank == z.nrank - 1
+                                if vz.grid[ivz] <= zero && z.irank == z.nrank - 1
                                     f_neutral[ivz,ivr,ivzeta,iz,ir,isn] = wall_flux_L * knudsen_cosine[ivz,ivr,ivzeta]
                                 end
                             end
