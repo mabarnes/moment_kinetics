@@ -767,7 +767,7 @@ function time_advance_no_splitting!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa
         euler_time_advance!(scratch, scratch, pdf, fields, moments,
             advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z, r, t,
             t_input, spectral_objects, composition,
-            collisions, geometry, boundary_distributions, scratch_dummy, manufactured_source_list, advance, 1)#pdf_in,
+            collisions, geometry, scratch_dummy, manufactured_source_list, advance, 1)#pdf_in,
         # NB: this must be broken -- scratch is updated in euler_time_advance!,
         # but not the pdf or moments.  need to add update to these quantities here
     end
@@ -776,7 +776,7 @@ end
 
 """
 """
-function rk_update!(scratch, pdf, moments, fields, vz, vr, vzeta, vpa, vperp, z, r, rk_coefs, istage, composition, z_spectral, r_spectral, scratch_dummy)
+function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, vr, vzeta, vpa, vperp, z, r, advect_objects, rk_coefs, istage, composition, z_spectral, r_spectral, advance, scratch_dummy)
     begin_s_r_z_vperp_region()
     #nvpa = vpa.n
     new_scratch = scratch[istage+1]
@@ -793,6 +793,13 @@ function rk_update!(scratch, pdf, moments, fields, vz, vr, vzeta, vpa, vperp, z,
     @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
         pdf.charged.unnorm[ivpa,ivperp,iz,ir,is] = new_scratch.pdf[ivpa,ivperp,iz,ir,is]
     end
+
+    # enforce boundary conditions in r, z and vpa on the charged particle distribution function
+    enforce_boundary_conditions!(new_scratch.pdf, boundary_distributions.pdf_rboundary_charged,
+      vpa.bc, z.bc, r.bc, vpa, vperp, z, r, advect_objects.vpa_advect,
+      advect_objects.z_advect, advect_objects.r_advect, composition, scratch_dummy,
+      advance)
+
     update_density!(new_scratch.density, pdf.charged.unnorm, vpa, vperp, z, r, composition)
 
     update_upar!(new_scratch.upar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
@@ -836,6 +843,12 @@ function rk_update!(scratch, pdf, moments, fields, vz, vr, vzeta, vpa, vperp, z,
         @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
             pdf.neutral.unnorm[ivz,ivr,ivzeta,iz,ir,isn] = new_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn]
         end
+
+        # enforce boundary conditions in r and z on the neutral particle distribution function
+        enforce_neutral_boundary_conditions!(new_scratch.pdf_neutral, new_scratch.pdf, boundary_distributions,
+         advect_objects.neutral_r_advect, advect_objects.neutral_z_advect, advect_objects.z_advect, vz, vr, vzeta, vpa, vperp, z, r, composition,
+         scratch_dummy)
+
         update_neutral_density!(new_scratch.density_neutral, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
         # other neutral moments here if needed for individual Runga-Kutta steps
     end
@@ -888,11 +901,11 @@ function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase,
             pdf, fields, moments,
             advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z, r, t,
             t_input, spectral_objects, composition,
-            collisions, geometry, boundary_distributions,
+            collisions, geometry,
             scratch_dummy, manufactured_source_list, 
             num_diss_params, advance, istage) #pdf_in,
-        @views rk_update!(scratch, pdf, moments, fields, vz, vr, vzeta, vpa, vperp, z, r, advance.rk_coefs[:,istage], 
-         istage, composition, spectral_objects.z_spectral, spectral_objects.r_spectral, scratch_dummy)
+        @views rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, vr, vzeta, vpa, vperp, z, r, advect_objects, advance.rk_coefs[:,istage], 
+         istage, composition, spectral_objects.z_spectral, spectral_objects.r_spectral, advance, scratch_dummy)
     end
 
     istage = n_rk_stages+1
@@ -973,7 +986,7 @@ with fvec_in an input and fvec_out the output
 """
 function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z, r, t, t_input,
-    spectral_objects, composition, collisions, geometry, boundary_distributions,
+    spectral_objects, composition, collisions, geometry,
     scratch_dummy, manufactured_source_list, num_diss_params, advance, istage) #pdf_in,
     # define some abbreviated variables for tidiness
     n_ion_species = composition.n_ion_species
@@ -1061,16 +1074,6 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
                        num_diss_params, scratch_dummy)
     end
 
-    # enforce boundary conditions in r, z and vpa on the charged particle distribution function
-    enforce_boundary_conditions!(fvec_out.pdf, boundary_distributions.pdf_rboundary_charged,
-      vpa.bc, z.bc, r.bc, vpa, vperp, z, r, vpa_advect, z_advect, r_advect, composition,
-      scratch_dummy, advance)
-    # enforce boundary conditions in r and z on the neutral particle distribution function
-    if n_neutral_species > 0
-        enforce_neutral_boundary_conditions!(fvec_out.pdf_neutral, fvec_out.pdf, boundary_distributions,
-         neutral_r_advect, neutral_z_advect, z_advect, vz, vr, vzeta, vpa, vperp, z, r, composition,
-         scratch_dummy)
-    end
     # End of advance for distribution function
 
     # reset "xx.updated" flags to false since ff has been updated
