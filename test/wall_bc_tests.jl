@@ -6,14 +6,16 @@ module WallBC
 include("setup.jl")
 
 using Base.Filesystem: tempname
+using MPI
 using TimerOutputs
 
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.interpolation: interpolate_to_grid_z
-using moment_kinetics.load_data: open_netcdf_file
-using moment_kinetics.load_data: load_coordinate_data, load_fields_data,
-                                 load_pdf_data
+using moment_kinetics.load_data: open_readonly_output_file
+using moment_kinetics.load_data: load_fields_data,
+                                 load_pdf_data, load_time_data,
+                                 load_species_data, load_coordinate_data
 
 # Create a temporary directory for test output
 test_output_directory = tempname()
@@ -84,7 +86,12 @@ test_input_finite_difference = Dict("n_ion_species" => 1,
                                     "vpa_nelement" => 1,
                                     "vpa_L" => 8.0,
                                     "vpa_bc" => "periodic",
-                                    "vpa_discretization" => "finite_difference")
+                                    "vpa_discretization" => "finite_difference",
+                                    "vz_ngrid" => 400,
+                                    "vz_nelement" => 1,
+                                    "vz_L" => 8.0,
+                                    "vz_bc" => "periodic",
+                                    "vz_discretization" => "finite_difference")
 
 test_input_chebyshev = merge(test_input_finite_difference,
                              Dict("run_name" => "chebyshev_pseudospectral",
@@ -93,7 +100,10 @@ test_input_chebyshev = merge(test_input_finite_difference,
                                   "z_nelement" => 2,
                                   "vpa_discretization" => "chebyshev_pseudospectral",
                                   "vpa_ngrid" => 17,
-                                  "vpa_nelement" => 10))
+                                  "vpa_nelement" => 10,
+                                  "vz_discretization" => "chebyshev_pseudospectral",
+                                  "vz_ngrid" => 17,
+                                  "vz_nelement" => 10))
 
 # Reference output interpolated onto a common set of points for comparing
 # different discretizations, taken from a Chebyshev run with z_grid=9,
@@ -149,13 +159,17 @@ function run_test(test_input, expected_phi, tolerance; args...)
             path = joinpath(realpath(input["base_directory"]), name, name)
 
             # open the netcdf file and give it the handle 'fid'
-            fid = open_netcdf_file(path)
+            fid = open_readonly_output_file(path,"moments")
 
             # load space-time coordinate data
-            nvpa, vpa, vpa_wgts, nz, z, z_wgts, Lz, nr, r, r_wgts, Lr, ntime, time = load_coordinate_data(fid)
-
+            nz, nz_global, z, z_wgts, Lz = load_coordinate_data(fid, "z")
+            nr, nr_global, r, r_wgts, Lr = load_coordinate_data(fid, "r")
+            n_ion_species, n_neutral_species = load_species_data(fid)
+            ntime, time = load_time_data(fid)
+            n_ion_species, n_neutral_species = load_species_data(fid)
+            
             # load fields data
-            phi_zrt = load_fields_data(fid)
+            phi_zrt, Er_zrt, Ez_zrt = load_fields_data(fid)
 
             close(fid)
             
@@ -177,9 +191,13 @@ function run_test(test_input, expected_phi, tolerance; args...)
         # create the 'input' struct containing input info needed to create a coordinate
         # adv_input not actually used in this test so given values unimportant
         adv_input = advection_input("default", 1.0, 0.0, 0.0)
-        input = grid_input("coord", test_input["z_ngrid"], test_input["z_nelement"], 1.0,
+		nrank_per_block = 0 # dummy value
+		irank = 0 # dummy value
+		comm = MPI.COMM_NULL # dummy value 
+        input = grid_input("coord", test_input["z_ngrid"], test_input["z_nelement"], 
+						   test_input["z_nelement"], nrank_per_block, irank, 1.0,
                            test_input["z_discretization"], "", test_input["z_bc"],
-                           adv_input)
+                           adv_input, comm)
         z, z_spectral = define_coordinate(input)
 
         # Cross comparison of all discretizations to same benchmark

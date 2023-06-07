@@ -10,8 +10,15 @@ using ..type_definitions: mk_int
 using Combinatorics
 using Primes
 
-const all_dimensions = (:s, :r, :z, :vpa)
-const dimension_combinations = Tuple(Tuple(c) for c in combinations(all_dimensions))
+# The ion dimensions and neutral dimensions are separated in order to restrict the
+# supported parallel loop types to correct combinations. This also reduces the number
+# of combinations - for some of the debugging features this helps.
+const ion_dimensions = (:s, :r, :z, :vperp, :vpa)
+const neutral_dimensions = (:sn, :r, :z, :vzeta, :vr, :vz)
+const all_dimensions = unique((ion_dimensions..., neutral_dimensions...))
+const dimension_combinations = Tuple(Tuple(c) for c in
+                                     unique((combinations(ion_dimensions)...,
+                                             combinations(neutral_dimensions)...)))
 
 """
 Construct a string composed of the dimension names given in the Tuple `dims`,
@@ -188,6 +195,29 @@ end
 """
 function get_best_ranges_from_sizes(block_rank, block_size, dim_sizes_list)
     splits = get_splits(block_size, length(dim_sizes_list))
+    @debug_detect_redundant_block_synchronize begin
+        if any(dim_sizes_list .== 1)
+            println("dim sizes ", dim_sizes_list)
+            error("Some dimension has size 1. Does not make sense to use "
+                  * "@debug_detect_redundant_block_synchronize as not all dimensions "
+                  * "can be split over more than one process.")
+        end
+        # This debug mode requires all dimensions to be split
+        filtered_splits = Vector{Vector{mk_int}}(undef, 0)
+        for s in splits
+            if !any(s .== 1)
+                # Every dimension is split, so detection of redundant
+                # _block_synchronize() calls can be done.
+                push!(filtered_splits, s)
+            end
+        end
+        if isempty(filtered_splits)
+            error("No combinations of factors of `block_size` resulted in all "
+                  * "dimensions being split. Probably need to use a number of "
+                  * "processes with more prime factors.")
+        end
+        splits = filtered_splits
+    end
     load_balance = Inf
     best_split = splits[1]
     for split in splits
@@ -240,6 +270,10 @@ eval(quote
          `n` is an integer giving the size of the dimension.
          """
          function setup_loop_ranges!(block_rank, block_size; dim_sizes...)
+
+             block_rank >= block_size && error("block_rank ($block_rank) is >= "
+                                               * "block_size ($block_size).")
+
              rank0 = (block_rank == 0)
 
              # Use empty tuple for serial region
@@ -264,6 +298,78 @@ eval(quote
              return nothing
          end
      end)
+
+ """
+ For debugging the shared-memory parallelism, create ranges where only the loops for a
+ single combinations of variables (given by `combination_to_split`) are parallelised,
+ and which dimensions are parallelised can be set with the `dims_to_split...` arguments.
+
+ Arguments
+ ---------
+ Keyword arguments `dim=n` are required for each dim in `all_dimensions` where `n` is
+ an integer giving the size of the dimension.
+ """
+ function debug_setup_loop_ranges_split_one_combination!(
+         block_rank, block_size, combination_to_split::NTuple{N,Symbol} where N,
+         dims_to_split::Symbol...;
+         dim_sizes...)
+
+     block_rank >= block_size && error("block_rank ($block_rank) is >= block_size "
+                                       * "($block_size).")
+
+     rank0 = (block_rank == 0)
+
+     # Use empty tuple for serial region
+     if rank0
+         serial_ranges = Dict(d=>1:n for (d,n) in dim_sizes)
+         loop_ranges_store[()] = LoopRanges(;
+             parallel_dims=(), rank0=rank0,
+             serial_ranges...)
+     else
+         serial_ranges = Dict(d=>1:0 for (d,_) in dim_sizes)
+         loop_ranges_store[()] = LoopRanges(;
+             parallel_dims=(), rank0=rank0,
+             serial_ranges...)
+     end
+
+     for dims ∈ dimension_combinations
+         if dims == combination_to_split
+             factors = factor(Vector, block_size)
+             if length(factors) < length(dims_to_split)
+                 error("Not enough factors ($factors) to split all of $dims_to_split")
+             end
+             ranges = Dict(d=>1:n for (d,n) in dim_sizes)
+             remaining_block_size = block_size
+             sub_rank = block_rank
+             for (i,dim) ∈ enumerate(dims_to_split[1:end-1])
+                 sub_block_size = factors[i]
+                 remaining_block_size = remaining_block_size ÷ sub_block_size
+                 sub_block_rank = sub_rank ÷ remaining_block_size
+                 sub_rank = sub_rank % remaining_block_size
+                 ranges[dim] = get_local_range(sub_block_rank, sub_block_size, dim_sizes[dim])
+             end
+             # For the 'last' dim, use the product of any remaining factors, in case
+             # there were more factors than dims in dims_to_split
+             dim = dims_to_split[end]
+             sub_block_size = prod(factors[length(dims_to_split):end])
+             remaining_block_size = remaining_block_size ÷ sub_block_size
+             sub_block_rank = sub_rank ÷ remaining_block_size
+             ranges[dim] = get_local_range(sub_block_rank,
+                                           sub_block_size,
+                                           dim_sizes[dim])
+             loop_ranges_store[dims] = LoopRanges(;
+                 parallel_dims=dims, rank0 = rank0, ranges...)
+         else
+             # Use the same ranges as serial loops
+             loop_ranges_store[dims] = LoopRanges(;
+                 parallel_dims=dims, rank0 = rank0, serial_ranges...)
+         end
+     end
+
+     loop_ranges[] = loop_ranges_store[()]
+
+     return nothing
+ end
 
 export setup_loop_ranges!
 

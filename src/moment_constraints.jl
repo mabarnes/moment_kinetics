@@ -10,7 +10,8 @@ using ..initial_conditions: enforce_zero_incoming_bc!
 using ..looping
 using ..velocity_moments: integrate_over_vspace, update_qpar!
 
-export enforce_moment_constraints!, hard_force_moment_constraints!
+export enforce_moment_constraints!, hard_force_moment_constraints!,
+       hard_force_moment_constraints_neutral!
 
 """
     enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, r, composition, moments, dummy_sr)
@@ -127,8 +128,8 @@ function enforce_moment_constraints!(fvec_new, fvec_old, vpa, z, r, composition,
         end
     end
     # the pdf, density and thermal speed have been changed so the corresponding parallel heat flux must be updated
-    moments.qpar_updated .= false
-    update_qpar!(moments.qpar, moments.qpar_updated, fvec_new.density, fvec_new.upar,
+    moments.charged.qpar_updated .= false
+    update_qpar!(moments.qpar, moments.charged.qpar_updated, fvec_new.density, fvec_new.upar,
                  moments.vth, fvec_new.pdf, vpa, z, r, composition,
                  moments.evolve_density, moments.evolve_upar, moments.evolve_ppar)
 end
@@ -192,6 +193,50 @@ function hard_force_moment_constraints!(f, moments, vpa)
     elseif moments.evolve_density
         I0 = integrate_over_vspace(f, vpa.wgts)
         @. f = f / I0
+    end
+
+    return nothing
+end
+
+"""
+    hard_force_moment_constraints_neutral!(f, moments, vz)
+
+Force the moment constraints needed for the system being evolved to be applied to `f`.
+Not guaranteed to be a small correction, if `f` does not approximately obey the
+constraints to start with, but can be useful at initialisation to ensure a consistent
+initial state, and when applying boundary conditions.
+
+Notes:
+* this function assumes the input is given at a single spatial position.
+* currently only works with '1V' runs, where vz is the only velocity-space dimension
+"""
+function hard_force_moment_constraints_neutral!(f, moments, vz)
+    f1d = @view f[:,1,1]
+    if moments.evolve_ppar
+        I0 = integrate_over_vspace(f1d, vz.wgts)
+        I1 = integrate_over_vspace(f1d, vz.grid, vz.wgts)
+        I2 = integrate_over_vspace(f1d, vz.grid, 2, vz.wgts)
+        I3 = integrate_over_vspace(f1d, vz.grid, 3, vz.wgts)
+        I4 = integrate_over_vspace(f1d, vz.grid, 4, vz.wgts)
+
+        A = (I3^2 - I2*I4 + 0.5*(I2^2 - I1*I3)) /
+            (I0*(I3^2 - I2*I4) + I1*I1*I4 - 2.0*I1*I2*I3 + I2^3)
+        B = (0.5*I3 + A*(I1*I4 - I2*I3)) / (I3^2 - I2*I4)
+        C = (0.5 - A*I2 -B*I3) / I4
+
+        @. f1d = A*f1d + B*vz.grid*f1d + C*vz.grid*vz.grid*f1d
+    elseif moments.evolve_upar
+        I0 = integrate_over_vspace(f1d, vz.wgts)
+        I1 = integrate_over_vspace(f1d, vz.grid, vz.wgts)
+        I2 = integrate_over_vspace(f1d, vz.grid, 2, vz.wgts)
+
+        A = 1.0 / (I0 - I1^2/I2)
+        B = -A*I1/I2
+
+        @. f1d = A*f1d + B*vz.grid*f1d
+    elseif moments.evolve_density
+        I0 = integrate_over_vspace(f1d, vz.wgts)
+        @. f1d = f1d / I0
     end
 
     return nothing

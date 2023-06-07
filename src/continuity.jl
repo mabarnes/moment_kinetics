@@ -8,67 +8,67 @@ using ..calculus: derivative!
 using ..looping
 
 """
-use the continuity equation dn/dt + d(n*upar)/dz to update the density n for all species
+use the continuity equation dn/dt + d(n*upar)/dz to update the density n for all charged
+species
 """
-function continuity_equation!(dens_out, fvec_in, moments, composition, vpa, z, r, dt,
-                              spectral, ionization, num_diss_params)
-    # use the continuity equation dn/dt + d(n*upar)/dz to update the density n
-    # for each species
+function continuity_equation!(dens_out, fvec_in, moments, composition, dt, spectral,
+                              ionization, num_diss_params)
+    begin_s_r_z_region()
 
-    begin_s_r_region()
-
-    @loop_s is begin
-        @loop_r ir begin #MRH NOT SURE ABOUT THIS!
-            @views continuity_equation_single_species!(dens_out[:,ir,is],
-                fvec_in.density[:,ir,:], fvec_in.upar[:,ir,is], z, dt, spectral, ionization, composition, is, num_diss_params)
-        end
+    @loop_s_r_z is ir iz begin
+        # Use ddens_dz is upwinded using upar
+        dens_out[iz,ir,is] -=
+            dt*(fvec_in.upar[iz,ir,is]*moments.charged.ddens_dz_upwind[iz,ir,is] +
+                fvec_in.density[iz,ir,is]*moments.charged.dupar_dz[iz,ir,is])
     end
-end
-
-"""
-use the continuity equation dn/dt + d(n*upar)/dz to update the density n
-"""
-function continuity_equation_single_species!(dens_out, dens_in, upar, z, dt, spectral,
-                                             ionization, composition, is,
-                                             num_diss_params)
-    ## calculate the particle flux nu
-    #@. z.scratch = dens_in[:,is]*upar
-    ## Use as 'adv_fac' for upwinding
-    #@. z.scratch3 = -upar
-    ## calculate d(nu)/dz, averaging the derivative values at element boundaries
-    #derivative!(z.scratch, z.scratch, z, z.scratch3, spectral)
-    ##derivative!(z.scratch, z.scratch, z, -upar, spectral)
-    ## update the density to account for the divergence of the particle flux
-    #@. dens_out -= dt*z.scratch
-
-    # Use as 'adv_fac' for upwinding
-    @. z.scratch3 = -upar
-    @views derivative!(z.scratch, dens_in[:,is], z, z.scratch3, spectral)
-    derivative!(z.scratch2, upar, z, spectral)
-    @. dens_out -= dt*(upar*z.scratch + dens_in[:,is]*z.scratch2)
 
     # update the density to account for ionization collisions;
     # ionization collisions increase the density for ions and decrease the density for neutrals
-    if is ∈ composition.ion_species_range
-        # NB: could improve efficiency here by calculating total neutral density
-        for isn ∈ composition.neutral_species_range
-            @. dens_out += dt*ionization*dens_in[:,is]*dens_in[:,isn]
-        end
-    elseif is ∈ composition.neutral_species_range
-        # NB: could improve efficiency here by calculating total ion density
-        for isi ∈ composition.ion_species_range
-            @. dens_out -= dt*ionization*dens_in[:,is]*dens_in[:,isi]
+    if composition.n_neutral_species > 0 && ionization > 0.0
+        @loop_s_r_z is ir iz begin
+            dens_out[iz,ir,is] += dt*ionization*fvec_in.density[iz,ir,is]*fvec_in.density_neutral[iz,ir,is]
         end
     end
 
     # Ad-hoc diffusion to stabilise numerics...
     diffusion_coefficient = num_diss_params.moment_dissipation_coefficient
     if diffusion_coefficient > 0.0
-        derivative!(z.scratch, dens_in[:,is], z, spectral, Val(2))
-        @. dens_out += dt*diffusion_coefficient*z.scratch
+        @loop_s_r_z is ir iz begin
+            dens_out[iz,ir,is] += dt*diffusion_coefficient*moments.charged.d2dens_dz[iz,ir,is]
+        end
+    end
+end
+
+"""
+use the continuity equation dn/dt + d(n*upar)/dz to update the density n for all neutral
+species
+"""
+function neutral_continuity_equation!(dens_out, fvec_in, moments, composition, dt,
+                                      spectral, ionization, num_diss_params)
+    begin_sn_r_z_region()
+
+    @loop_sn_r_z isn ir iz begin
+        # Use ddens_dz is upwinded using uz
+        dens_out[iz,ir,isn] -=
+            dt*(fvec_in.uz_neutral[iz,ir,isn]*moments.neutral.ddens_dz_upwind[iz,ir,isn] +
+                fvec_in.density_neutral[iz,ir,isn]*moments.neutral.duz_dz[iz,ir,isn])
     end
 
-    return nothing
+    # update the density to account for ionization collisions;
+    # ionization collisions increase the density for ions and decrease the density for neutrals
+    if composition.n_neutral_species > 0 && ionization > 0.0
+        @loop_sn_r_z isn ir iz begin
+            dens_out[iz,ir,isn] -= dt*ionization*fvec_in.density[iz,ir,isn]*fvec_in.density_neutral[iz,ir,isn]
+        end
+    end
+
+    # Ad-hoc diffusion to stabilise numerics...
+    diffusion_coefficient = num_diss_params.moment_dissipation_coefficient
+    if diffusion_coefficient > 0.0
+        @loop_sn_r_z isn ir iz begin
+            dens_out[iz,ir,isn] += dt*diffusion_coefficient*moments.neutral.d2dens_dz[iz,ir,isn]
+        end
+    end
 end
 
 end

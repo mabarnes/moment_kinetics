@@ -6,6 +6,8 @@ export setup_advection
 export update_advection_factor!
 export calculate_explicit_advection!
 export advance_f_local!
+export advance_f_df_precomputed!
+export advection_info
 
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_shared_float, allocate_shared_int
@@ -56,7 +58,7 @@ function setup_advection_per_species(coords...)
     # create array for storing ∂f/∂(coordinate)
     # NB: need to store on nelement x ngrid_per_element array, as must keep info
     # about multi-valued derivative at overlapping point at element boundaries
-    df = allocate_shared_float(coords[1].ngrid, coords[1].nelement,
+    df = allocate_shared_float(coords[1].ngrid, coords[1].nelement_local,
                                [coord.n for coord in coords[2:end]]...)
     # create array for storing the advection coefficient
     adv_fac = allocate_shared_float([coord.n for coord in coords]...)
@@ -93,40 +95,79 @@ end
 """
 update the righthand side of the equation to account for 1d advection in this coordinate
 """
-function update_rhs!(advection, i_outer, j_outer, f_current, coord, dt, spectral)
+function update_rhs!(advection, i_outer, j_outer, k_outer, f_current, coord, dt, spectral)
     # calculate the factor appearing in front of df/dcoord in the advection
     # term at time level n in the frame moving with the approximate
     # characteristic
-    @views update_advection_factor!(advection.adv_fac[:,i_outer,j_outer],
-                                    advection.speed[:,i_outer,j_outer], coord.n, dt)
+    @views update_advection_factor!(advection.adv_fac[:,i_outer,j_outer,k_outer],
+        advection.speed[:,i_outer,j_outer,k_outer], coord.n, dt)
+
     # calculate df/dcoord
-    @views derivative!(coord.scratch, f_current, coord, advection.adv_fac[:,i_outer,j_outer], spectral)
+    @views derivative!(coord.scratch, f_current, coord, advection.adv_fac[:,i_outer,j_outer,k_outer], spectral)
+    #@views derivative!(coord.scratch, f_current, coord, spectral)
+    
     #derivative!(coord.scratch, f_current, coord, spectral)
     # calculate the explicit advection terms on the rhs of the equation;
     # i.e., -Δt⋅δv⋅f'
-    @views calculate_explicit_advection!(advection.rhs[:,i_outer,j_outer], coord.scratch,
-        advection.adv_fac[:,i_outer,j_outer], coord.n)
+    @views calculate_explicit_advection!(advection.rhs[:,i_outer,j_outer,k_outer], coord.scratch, advection.adv_fac[:,i_outer,j_outer,k_outer], coord.n)
+end
+
+function update_rhs!(advection, i_outer, j_outer, k_outer, l_outer, f_current, coord, dt, spectral)
+    # calculate the factor appearing in front of df/dcoord in the advection
+    # term at time level n in the frame moving with the approximate
+    # characteristic
+    
+    @views update_advection_factor!(advection.adv_fac[:,i_outer,j_outer,k_outer,l_outer],
+        advection.speed[:,i_outer,j_outer,k_outer,l_outer], coord.n, dt)
+    
+    # calculate df/dcoord
+    @views derivative!(coord.scratch, f_current, coord, advection.adv_fac[:,i_outer,j_outer,k_outer,l_outer], spectral)
+    #@views derivative!(coord.scratch, f_current, coord, spectral)
+    
+    #derivative!(coord.scratch, f_current, coord, spectral)
+    # calculate the explicit advection terms on the rhs of the equation;
+    # i.e., -Δt⋅δv⋅f'
+    @views calculate_explicit_advection!(advection.rhs[:,i_outer,j_outer,k_outer,l_outer], coord.scratch, advection.adv_fac[:,i_outer,j_outer,k_outer,l_outer], coord.n)
+    
 end
 
 """
 do all the work needed to update f(coord) at a single value of other coords
 """
-function advance_f_local!(f_new, f_current, f_old, advection, i_outer, j_outer, coord, dt, spectral)
+function advance_f_local!(f_new, f_current, advection, i_outer, j_outer, k_outer, coord, dt, spectral)
     # update the rhs of the equation accounting for 1d advection in coord
-    update_rhs!(advection, i_outer, j_outer, f_current, coord, dt, spectral)
-    # update ff at time level n+1 using an explicit Runge-Kutta method
-    # along approximate characteristics
-    @views update_f!(f_new, advection.rhs[:,i_outer,j_outer], coord.n)
+    update_rhs!(advection, i_outer, j_outer, k_outer, f_current, coord, dt, spectral)
+    # update f to take into account the explicit advection
+    @views update_f!(f_new, advection.rhs[:,i_outer,j_outer,k_outer], coord.n)
+end
+
+function advance_f_local!(f_new, f_current, advection, i_outer, j_outer, k_outer, l_outer, coord, dt, spectral)
+    # update the rhs of the equation accounting for 1d advection in coord
+    update_rhs!(advection, i_outer, j_outer, k_outer, l_outer, f_current, coord, dt, spectral)
+    # update f to take into account the explicit advection
+    @views update_f!(f_new, advection.rhs[:,i_outer,j_outer,k_outer,l_outer], coord.n)
+end
+
+function advance_f_df_precomputed!(f_new, df_current, advection, i_outer, j_outer, k_outer, coord, dt)
+    # update the rhs of the equation accounting for 1d advection in coord
+    @views calculate_explicit_advection!(advection.rhs[:,i_outer,j_outer,k_outer], df_current, advection.adv_fac[:,i_outer,j_outer,k_outer], coord.n)
+	# update f to take into account the explicit advection
+    @views update_f!(f_new, advection.rhs[:,i_outer,j_outer,k_outer], coord.n)
+end
+
+function advance_f_df_precomputed!(f_new, df_current, advection, i_outer, j_outer, k_outer, l_outer, coord, dt)
+    # update the rhs of the equation accounting for 1d advection in coord
+    @views calculate_explicit_advection!(advection.rhs[:,i_outer,j_outer,k_outer,l_outer], df_current, advection.adv_fac[:,i_outer,j_outer,k_outer,l_outer], coord.n)
+	# update f to take into account the explicit advection
+    @views update_f!(f_new, advection.rhs[:,i_outer,j_outer,k_outer,l_outer], coord.n)
 end
 
 """
-update ff at time level n+1 using an explicit Runge-Kutta method
-along approximate characteristics
 """
 function update_f!(f_new, rhs, n)
     @boundscheck n == length(f_new) || throw(BoundsError(f_new))
     @boundscheck n == length(rhs) || throw(BoundsError(rhs))
-
+    
     for i ∈ 1:n
         f_new[i] += rhs[i]
     end

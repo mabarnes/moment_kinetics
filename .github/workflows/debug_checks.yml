@@ -4,18 +4,60 @@ name: Debug checks for correctness
 on: [push, pull_request]
 
 jobs:
-  debug-checks:
+  # The commented out job would run all debug checks, but they are slow so it
+  # is better to run each type in a separate job so that the separate jobs can
+  # run at the same time
+  #debug-checks:
+  #  runs-on: ${{ matrix.os }}
+  #  strategy:
+  #    matrix:
+  #      # Only run on linux to save CI server cpu-hours
+  #      os: [ubuntu-latest]
+  #    fail-fast: false
+  #  timeout-minutes: 240
+
+  #  steps:
+  #    - uses: actions/checkout@v2
+  #    - uses: mpi4py/setup-mpi@v1
+  #      with:
+  #        mpi: 'openmpi'
+  #    - uses: actions/setup-python@v2
+  #    - uses: julia-actions/setup-julia@v1
+  #      with:
+  #        version: '1.8'
+  #        arch: x64
+  #    - uses: julia-actions/julia-buildpkg@v1
+  #      env:
+  #        # Use the system Python for PyCall - avoids library linking error on macOS
+  #        PYTHON: "${{ env.pythonLocation }}/bin/python"
+  #      name: Debug test
+  #      run: |
+  #        # Hard code the debug level so that we can run without using the
+  #        # `--compiled-modules=no` flag, which breaks Symbolics.jl at the
+  #        # moment.
+  #        sed -i -e "s/_debug_level = get_options.*/_debug_level = 3/" src/debugging.jl
+
+  #        pip3 install --user matplotlib
+  #        julia --project -e 'using MPIPreferences; MPIPreferences.use_system_binary()'
+  #        julia --project -e 'using Pkg; Pkg.build("MPI"; verbose=true)'
+
+  #        # Need to use openmpi so that the following arguments work:
+  #        # * `--mca rmaps_base_oversubscribe 1` allows oversubscription (more processes
+  #        #   than physical cores).
+  #        # * `--mca mpi_yield_when_idle 1` changes a setting to prevent excessively
+  #        #   terrible performance when oversubscribing.
+  #        ## Don't use --compiled-modules=no for now, as it currently breaks Symbolics.jl
+  #        #mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes --compiled-modules=no debug_test/runtests.jl --debug 3
+  #        mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes debug_test/runtests.jl --debug 3
+
+  debug-checks-sound-wave:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, macOS-latest]
-        include:
-          - julia_version: '1.8'
-          # Use  julia-1.7 for macOS because otherwise the job hangs
-          - julia_version: '1.7'
-            os: macOS-latest
+        # Only run on linux to save CI server cpu-hours
+        os: [ubuntu-latest]
       fail-fast: false
-    timeout-minutes: 60
+    timeout-minutes: 240
 
     steps:
       - uses: actions/checkout@v2
@@ -25,25 +67,157 @@ jobs:
       - uses: actions/setup-python@v2
       - uses: julia-actions/setup-julia@v1
         with:
-          version: ${{ matrix.julia_version }}
+          version: '1.8'
           arch: x64
-      # Install a specific Plots.jl version, because the job hangs on macOS with
-      # Plots.jl@1.38.8
-      - name: Pin dependency versions
-        if: matrix.os == 'macOS-latest'
-        run: julia --project -e 'using Pkg; Pkg.add([PackageSpec(name="Plots", version="1.24.3")])'
       - uses: julia-actions/julia-buildpkg@v1
         env:
           # Use the system Python for PyCall - avoids library linking error on macOS
           PYTHON: "${{ env.pythonLocation }}/bin/python"
-      - name: Test examples
+      - name: Debug test sound-wave
         run: |
+          # Hard code the debug level so that we can run without using the
+          # `--compiled-modules=no` flag, which breaks Symbolics.jl at the
+          # moment.
+          sed -i -e "s/_debug_level = get_options.*/_debug_level = 3/" src/debugging.jl
+
           pip3 install --user matplotlib
           julia --project -e 'using MPIPreferences; MPIPreferences.use_system_binary()'
           julia --project -e 'using Pkg; Pkg.build("MPI"; verbose=true)'
+
           # Need to use openmpi so that the following arguments work:
           # * `--mca rmaps_base_oversubscribe 1` allows oversubscription (more processes
           #   than physical cores).
           # * `--mca mpi_yield_when_idle 1` changes a setting to prevent excessively
           #   terrible performance when oversubscribing.
-          mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes --compiled-modules=no debug_test/runtests.jl --debug 99
+          ## Don't use --compiled-modules=no for now, as it currently breaks Symbolics.jl
+          #mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes --compiled-modules=no debug_test/sound_wave_tests.jl --debug 3
+          mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes debug_test/sound_wave_tests.jl --debug 3
+
+  debug-checks-wall-bc:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        # Only run on linux to save CI server cpu-hours
+        os: [ubuntu-latest]
+      fail-fast: false
+    timeout-minutes: 240
+
+    steps:
+      - uses: actions/checkout@v2
+      - uses: mpi4py/setup-mpi@v1
+        with:
+          mpi: 'openmpi'
+      - uses: actions/setup-python@v2
+      - uses: julia-actions/setup-julia@v1
+        with:
+          version: '1.8'
+          arch: x64
+      - uses: julia-actions/julia-buildpkg@v1
+        env:
+          # Use the system Python for PyCall - avoids library linking error on macOS
+          PYTHON: "${{ env.pythonLocation }}/bin/python"
+      - name: Debug test wall-bc
+        run: |
+          # Hard code the debug level so that we can run without using the
+          # `--compiled-modules=no` flag, which breaks Symbolics.jl at the
+          # moment.
+          sed -i -e "s/_debug_level = get_options.*/_debug_level = 3/" src/debugging.jl
+
+          pip3 install --user matplotlib
+          julia --project -e 'using MPIPreferences; MPIPreferences.use_system_binary()'
+          julia --project -e 'using Pkg; Pkg.build("MPI"; verbose=true)'
+
+          # Need to use openmpi so that the following arguments work:
+          # * `--mca rmaps_base_oversubscribe 1` allows oversubscription (more processes
+          #   than physical cores).
+          # * `--mca mpi_yield_when_idle 1` changes a setting to prevent excessively
+          #   terrible performance when oversubscribing.
+          ## Don't use --compiled-modules=no for now, as it currently breaks Symbolics.jl
+          #mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes --compiled-modules=no debug_test/wall_bc_tests.jl --debug 3
+          mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes debug_test/wall_bc_tests.jl --debug 3
+
+  debug-checks-harrisonthompson:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        # Only run on linux to save CI server cpu-hours
+        os: [ubuntu-latest]
+      fail-fast: false
+    timeout-minutes: 240
+
+    steps:
+      - uses: actions/checkout@v2
+      - uses: mpi4py/setup-mpi@v1
+        with:
+          mpi: 'openmpi'
+      - uses: actions/setup-python@v2
+      - uses: julia-actions/setup-julia@v1
+        with:
+          version: '1.8'
+          arch: x64
+      - uses: julia-actions/julia-buildpkg@v1
+        env:
+          # Use the system Python for PyCall - avoids library linking error on macOS
+          PYTHON: "${{ env.pythonLocation }}/bin/python"
+      - name: Debug test Harrison-Thompson
+        run: |
+          # Hard code the debug level so that we can run without using the
+          # `--compiled-modules=no` flag, which breaks Symbolics.jl at the
+          # moment.
+          sed -i -e "s/_debug_level = get_options.*/_debug_level = 3/" src/debugging.jl
+
+          pip3 install --user matplotlib
+          julia --project -e 'using MPIPreferences; MPIPreferences.use_system_binary()'
+          julia --project -e 'using Pkg; Pkg.build("MPI"; verbose=true)'
+
+          # Need to use openmpi so that the following arguments work:
+          # * `--mca rmaps_base_oversubscribe 1` allows oversubscription (more processes
+          #   than physical cores).
+          # * `--mca mpi_yield_when_idle 1` changes a setting to prevent excessively
+          #   terrible performance when oversubscribing.
+          ## Don't use --compiled-modules=no for now, as it currently breaks Symbolics.jl
+          #mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes --compiled-modules=no debug_test/harrisonthompson.jl --debug 3
+          mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes debug_test/harrisonthompson.jl --debug 3
+
+  debug-checks-mms:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        # Only run on linux to save CI server cpu-hours
+        os: [ubuntu-latest]
+      fail-fast: false
+    timeout-minutes: 240
+
+    steps:
+      - uses: actions/checkout@v2
+      - uses: mpi4py/setup-mpi@v1
+        with:
+          mpi: 'openmpi'
+      - uses: actions/setup-python@v2
+      - uses: julia-actions/setup-julia@v1
+        with:
+          version: '1.8'
+          arch: x64
+      - uses: julia-actions/julia-buildpkg@v1
+        env:
+          # Use the system Python for PyCall - avoids library linking error on macOS
+          PYTHON: "${{ env.pythonLocation }}/bin/python"
+      - name: Debug test MMS
+        run: |
+          # Hard code the debug level so that we can run without using the
+          # `--compiled-modules=no` flag, which breaks Symbolics.jl at the
+          # moment.
+          sed -i -e "s/_debug_level = get_options.*/_debug_level = 3/" src/debugging.jl
+
+          pip3 install --user matplotlib
+          julia --project -e 'using MPIPreferences; MPIPreferences.use_system_binary()'
+          julia --project -e 'using Pkg; Pkg.build("MPI"; verbose=true)'
+
+          # Need to use openmpi so that the following arguments work:
+          # * `--mca rmaps_base_oversubscribe 1` allows oversubscription (more processes
+          #   than physical cores).
+          # * `--mca mpi_yield_when_idle 1` changes a setting to prevent excessively
+          #   terrible performance when oversubscribing.
+          ## Don't use --compiled-modules=no for now, as it currently breaks Symbolics.jl
+          #mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes --compiled-modules=no debug_test/mms_tests.jl --debug 3
+          mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes debug_test/mms_tests.jl --debug 3

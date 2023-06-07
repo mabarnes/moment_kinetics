@@ -5,45 +5,54 @@ module r_advection
 export r_advection!
 export update_speed_r!
 
-using ..advection: advance_f_local!
+using ..advection: advance_f_df_precomputed!
 using ..chebyshev: chebyshev_info
 using ..looping
+using ..derivatives: derivative_r!
 
 """
 do a single stage time advance (potentially as part of a multi-stage RK scheme)
 """
-function r_advection!(f_out, fvec_in, ff, moments, advect, r, z, vpa, dt, t, spectral,
-                      composition)
+function r_advection!(f_out, fvec_in, moments, fields, advect, r, z, vperp, vpa, dt,
+                      r_spectral, composition, geometry, scratch_dummy)
+
+    begin_s_z_vperp_vpa_region()
+
     @loop_s is begin
         # get the updated speed along the r direction using the current f
-        @views update_speed_r!(advect[is], fvec_in.upar[:,:,is], moments.vth[:,:,is],
-                               moments.evolve_upar, moments.evolve_ppar, vpa, z, r, t)
-        # # advance z-advection equation
-        # if moments.evolve_density
-        #     for ivpa ∈ 1:vpa.n
-        #         @views @. advect[is].speed[:,ivpa] /= fvec_in.density[:,is]
-        #         @views advance_f_local!(f_out[:,ivpa,is], fvec_in.density[:,is] .* fvec_in.pdf[:,ivpa,is],
-        #             ff[:,ivpa,is], advect[is], ivpa, z, dt, spectral)
-        #     end
-        # else
-        #     for ivpa ∈ 1:vpa.n
-        #         @views advance_f_local!(f_out[:,ivpa,is], fvec_in.pdf[:,ivpa,is],
-        #             ff[:,ivpa,is], advect[is], ivpa, z, dt, spectral)
-        #     end
-        # end
+        @views update_speed_r!(advect[is], fvec_in.upar[:,:,is],
+                               moments.charged.vth[:,:,is], fields, moments.evolve_upar,
+                               moments.evolve_ppar, vpa, vperp, z, r, geometry)
         # advance r-advection equation
         @loop_z_vpa iz ivpa begin
-            @views adjust_advection_speed!(advect[is].speed[:,ivpa,iz],
-                                           fvec_in.density[iz,:,is], moments.vth[iz,:,is],
+        end
+        # update adv_fac
+        @loop_z_vperp_vpa iz ivperp ivpa begin
+            @views adjust_advection_speed!(advect[is].speed[:,ivpa,ivperp,iz],
+                                           fvec_in.density[iz,:,is],
+                                           moments.charged.vth[iz,:,is],
                                            moments.evolve_density, moments.evolve_ppar)
             # take the normalized pdf contained in fvec_in.pdf and remove the normalization,
             # returning the true (un-normalized) particle distribution function in r.scratch
-
-            @views unnormalize_pdf!(r.scratch, fvec_in.pdf[ivpa,iz,:,is], fvec_in.density[iz,:,is], moments.vth[iz,:,is],
-                                    moments.evolve_density, moments.evolve_ppar)
-            @views advance_f_local!(f_out[ivpa,iz,:,is], r.scratch, ff[ivpa,iz,:,is], advect[is], ivpa,
-                                    r, dt, spectral)
+            @views unnormalize_pdf!(
+                       scratch_dummy.buffer_vpavperpzrs_2[ivpa,ivperp,iz,:,is],
+                       fvec_in.pdf[ivpa,ivperp,iz,:,is], fvec_in.density[iz,:,is],
+                       moments.charged.vth[iz,:,is], moments.evolve_density,
+                       moments.evolve_ppar)
+            advect[is].adv_fac[:,ivpa,ivperp,iz] .= -dt.*advect[is].speed[:,ivpa,ivperp,iz]
         end
+    end
+    # calculate the upwind derivative along r
+    derivative_r!(scratch_dummy.buffer_vpavperpzrs_1, scratch_dummy.buffer_vpavperpzrs_2,
+        advect, scratch_dummy.buffer_vpavperpzs_1, scratch_dummy.buffer_vpavperpzs_2,
+        scratch_dummy.buffer_vpavperpzs_3,scratch_dummy.buffer_vpavperpzs_4,
+        scratch_dummy.buffer_vpavperpzs_5,scratch_dummy.buffer_vpavperpzs_6, r_spectral,r)
+
+    # advance r-advection equation
+    @loop_s_z_vperp_vpa is iz ivperp ivpa begin
+        @. r.scratch = scratch_dummy.buffer_vpavperpzrs_1[ivpa,ivperp,iz,:,is]
+        @views advance_f_df_precomputed!(f_out[ivpa,ivperp,iz,:,is],
+          r.scratch, advect[is], ivpa, ivperp, iz, r, dt)
     end
 end
 
@@ -74,14 +83,31 @@ end
 """
 calculate the advection speed in the r-direction at each grid point
 """
-function update_speed_r!(advect, upar, vth, evolve_upar, evolve_ppar, vpa, z, r, t)
-    @boundscheck z.n == size(advect.speed,3) || throw(BoundsError(advect))
+function update_speed_r!(advect, upar, vth, fields, evolve_upar, evolve_ppar, vpa, vperp,
+                         z, r, geometry)
+    @boundscheck z.n == size(advect.speed,4) || throw(BoundsError(advect))
+    @boundscheck vperp.n == size(advect.speed,3) || throw(BoundsError(advect))
     @boundscheck vpa.n == size(advect.speed,2) || throw(BoundsError(advect))
     @boundscheck r.n == size(advect.speed,1) || throw(BoundsError(speed))
-    if r.advection.option == "default" || r.advection.option == "constant"
+    if evolve_upar || evolve_ppar
+        error("r_advection is not compatible with evolve_upar or evolve_ppar")
+    end
+    if r.advection.option == "default" && r.n > 1
+        ExBfac = 0.5*geometry.rhostar
         @inbounds begin
-            @loop_z_vpa iz ivpa begin
-                @views advect.speed[:,ivpa,iz] .= r.advection.constant_speed
+            @loop_z_vperp_vpa iz ivperp ivpa begin
+                @views advect.speed[:,ivpa,ivperp,iz] .= ExBfac*fields.Ez[iz,:]
+            end
+        end
+    elseif r.advection.option == "default" && r.n == 1
+        # no advection if no length in r
+        @loop_z_vperp_vpa iz ivperp ivpa begin
+            advect.speed[:,ivpa,ivperp,iz] .= 0.
+        end
+    elseif r.advection.option == "constant"
+        @inbounds begin
+            @loop_z_vperp_vpa iz ivperp ivpa begin
+                @views advect.speed[:,ivpa,ivperp,iz] .= r.advection.constant_speed
             end
         end
     end
