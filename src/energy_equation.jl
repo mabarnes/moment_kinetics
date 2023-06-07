@@ -17,15 +17,15 @@ function energy_equation!(ppar, fvec, moments, collisions, dt, spectral, composi
     begin_s_r_z_region()
 
     @loop_s_r_z is ir iz begin
-        ppar[iz,ir,is] += dt*(-fvec.upar[iz,ir,is]*moments.charged.dppar_dz_upwind[iz,ir,is]
-                              - moments.charged.dqpar_dz[iz,ir,is]
-                              - 3.0*fvec.ppar[iz,ir,is]*moments.charged.dupar_dz[iz,ir,is])
+        ppar[iz,ir,is] += dt*(-fvec.upar[iz,ir,is]*moments.ion.dppar_dz_upwind[iz,ir,is]
+                              - moments.ion.dqpar_dz[iz,ir,is]
+                              - 3.0*fvec.ppar[iz,ir,is]*moments.ion.dupar_dz[iz,ir,is])
     end
 
     diffusion_coefficient = num_diss_params.moment_dissipation_coefficient
     if diffusion_coefficient > 0.0
         @loop_s_r_z is ir iz begin
-            ppar[iz,ir,is] += dt*diffusion_coefficient*moments.charged.d2ppar_dz2[iz,ir,is]
+            ppar[iz,ir,is] += dt*diffusion_coefficient*moments.ion.d2ppar_dz2[iz,ir,is]
         end
     end
 

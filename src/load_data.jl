@@ -4,7 +4,7 @@ module load_data
 
 export open_readonly_output_file
 export load_fields_data
-export load_charged_particle_moments_data
+export load_ion_particle_moments_data
 export load_neutral_particle_moments_data
 export load_pdf_data
 export load_neutral_pdf_data
@@ -315,26 +315,26 @@ end
 
 """
 """
-function load_charged_particle_moments_data(fid; printout=false)
+function load_ion_particle_moments_data(fid; printout=false)
     if printout
-        print("Loading charged particle velocity moments data...")
+        print("Loading ion particle velocity moments data...")
     end
 
     group = get_group(fid, "dynamic_data")
 
-    # Read charged species density
+    # Read ion species density
     density = load_variable(group, "density")
 
-    # Read charged species parallel flow
+    # Read ion species parallel flow
     parallel_flow = load_variable(group, "parallel_flow")
 
-    # Read charged species parallel pressure
+    # Read ion species parallel pressure
     parallel_pressure = load_variable(group, "parallel_pressure")
 
-    # Read charged_species parallel heat flux
+    # Read ion_species parallel heat flux
     parallel_heat_flux = load_variable(group, "parallel_heat_flux")
 
-    # Read charged species thermal speed
+    # Read ion species thermal speed
     thermal_speed = load_variable(group, "thermal_speed")
 
     if printout
@@ -377,12 +377,12 @@ end
 """
 function load_pdf_data(fid; printout=false)
     if printout
-        print("Loading charged particle distribution function data...")
+        print("Loading ion particle distribution function data...")
     end
 
     group = get_group(fid, "dynamic_data")
 
-    # Read charged distribution function
+    # Read ion distribution function
     pdf = load_variable(group, "f")
 
     if printout
@@ -475,29 +475,29 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                 vr_range = get_range(vr)
                 vz_range = get_range(vz)
 
-                pdf.charged.norm .= load_slice(dynamic, "f", vpa_range, vperp_range,
+                pdf.ion.norm .= load_slice(dynamic, "f", vpa_range, vperp_range,
                                                z_range, r_range, :, time_index)
-                moments.charged.dens .= load_slice(dynamic, "density", z_range, r_range,
+                moments.ion.dens .= load_slice(dynamic, "density", z_range, r_range,
                                                    :, time_index)
-                moments.charged.dens_updated .= true
-                moments.charged.upar .= load_slice(dynamic, "parallel_flow", z_range,
+                moments.ion.dens_updated .= true
+                moments.ion.upar .= load_slice(dynamic, "parallel_flow", z_range,
                                                    r_range, :, time_index)
-                moments.charged.upar_updated .= true
-                moments.charged.ppar .= load_slice(dynamic, "parallel_pressure", z_range,
+                moments.ion.upar_updated .= true
+                moments.ion.ppar .= load_slice(dynamic, "parallel_pressure", z_range,
                                                    r_range, :, time_index)
-                moments.charged.ppar_updated .= true
-                moments.charged.qpar .= load_slice(dynamic, "parallel_heat_flux", z_range,
+                moments.ion.ppar_updated .= true
+                moments.ion.qpar .= load_slice(dynamic, "parallel_heat_flux", z_range,
                                                    r_range, :, time_index)
-                moments.charged.qpar_updated .= true
-                moments.charged.vth .= load_slice(dynamic, "thermal_speed", z_range,
+                moments.ion.qpar_updated .= true
+                moments.ion.vth .= load_slice(dynamic, "thermal_speed", z_range,
                                                   r_range, :, time_index)
 
                 boundary_distributions_io = get_group(fid, "boundary_distributions")
-                boundary_distributions.pdf_rboundary_charged[:,:,:,1,:] .=
-                load_slice(boundary_distributions_io, "pdf_rboundary_charged_left",
+                boundary_distributions.pdf_rboundary_ion[:,:,:,1,:] .=
+                load_slice(boundary_distributions_io, "pdf_rboundary_ion_left",
                            vpa_range, vperp_range, z_range, :)
-                boundary_distributions.pdf_rboundary_charged[:,:,:,2,:] .=
-                load_slice(boundary_distributions_io, "pdf_rboundary_charged_right",
+                boundary_distributions.pdf_rboundary_ion[:,:,:,2,:] .=
+                load_slice(boundary_distributions_io, "pdf_rboundary_ion_right",
                            vpa_range, vperp_range, z_range, :)
 
                 if composition.n_neutral_species > 0
@@ -554,27 +554,27 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
 
                 code_time = load_slice(dynamic, "time", time_index)
 
-                pdf.charged.norm .= load_slice(dynamic, "f", :, :, :, :, :, time_index)
-                moments.charged.dens .= load_slice(dynamic, "density", :, :, :,
+                pdf.ion.norm .= load_slice(dynamic, "f", :, :, :, :, :, time_index)
+                moments.ion.dens .= load_slice(dynamic, "density", :, :, :,
                                                    time_index)
-                moments.charged.dens_updated .= true
-                moments.charged.upar .= load_slice(dynamic, "parallel_flow", :, :, :,
+                moments.ion.dens_updated .= true
+                moments.ion.upar .= load_slice(dynamic, "parallel_flow", :, :, :,
                                                    time_index)
-                moments.charged.upar_updated .= true
-                moments.charged.ppar .= load_slice(dynamic, "parallel_pressure", :, :, :,
+                moments.ion.upar_updated .= true
+                moments.ion.ppar .= load_slice(dynamic, "parallel_pressure", :, :, :,
                                                    time_index)
-                moments.charged.ppar_updated .= true
-                moments.charged.qpar .= load_slice(dynamic, "parallel_heat_flux", :, :, :,
+                moments.ion.ppar_updated .= true
+                moments.ion.qpar .= load_slice(dynamic, "parallel_heat_flux", :, :, :,
                                                    time_index)
-                moments.charged.qpar_updated .= true
-                moments.charged.vth .= load_slice(dynamic, "thermal_speed", :, :, :,
+                moments.ion.qpar_updated .= true
+                moments.ion.vth .= load_slice(dynamic, "thermal_speed", :, :, :,
                                                   time_index)
 
                 boundary_distributions_io = get_group(fid, "boundary_distributions")
-                boundary_distributions.pdf_rboundary_charged[:,:,:,1,:] .=
-                load_variable(boundary_distributions_io, "pdf_rboundary_charged_left")
-                boundary_distributions.pdf_rboundary_charged[:,:,:,2,:] .=
-                load_variable(boundary_distributions_io, "pdf_rboundary_charged_right")
+                boundary_distributions.pdf_rboundary_ion[:,:,:,1,:] .=
+                load_variable(boundary_distributions_io, "pdf_rboundary_ion_left")
+                boundary_distributions.pdf_rboundary_ion[:,:,:,2,:] .=
+                load_variable(boundary_distributions_io, "pdf_rboundary_ion_right")
 
                 if composition.n_neutral_species > 0
                     pdf.neutral.norm .= load_slice(dynamic, "f_neutral", :, :, :, :, :, :,

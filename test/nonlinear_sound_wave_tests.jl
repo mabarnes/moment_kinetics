@@ -9,7 +9,7 @@ using TimerOutputs
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.load_data: open_readonly_output_file, load_coordinate_data, load_species_data,
-                                 load_fields_data, load_charged_particle_moments_data, load_pdf_data,
+                                 load_fields_data, load_ion_particle_moments_data, load_pdf_data,
                                  load_neutral_particle_moments_data, load_neutral_pdf_data, load_time_data,
                                  load_species_data
 using moment_kinetics.interpolation: interpolate_to_grid_z, interpolate_to_grid_vpa
@@ -31,13 +31,13 @@ struct expected_data
     z::Array{mk_float, 1}
     vpa::Array{mk_float, 1}
     phi::Array{mk_float, 2}
-    n_charged::Array{mk_float, 2}
+    n_ion::Array{mk_float, 2}
     n_neutral::Array{mk_float, 2}
-    upar_charged::Array{mk_float, 2}
+    upar_ion::Array{mk_float, 2}
     upar_neutral::Array{mk_float, 2}
-    ppar_charged::Array{mk_float, 2}
+    ppar_ion::Array{mk_float, 2}
     ppar_neutral::Array{mk_float, 2}
-    f_charged::Array{mk_float, 3}
+    f_ion::Array{mk_float, 3}
     f_neutral::Array{mk_float, 3}
 end
 
@@ -57,7 +57,7 @@ const expected =
     -0.35341444947230544 -0.37562068472777577; -0.5495322983936355 -0.5902920278548919;
     -0.8609384185348539 -0.8726873701297669; -1.2115106026686981 -1.130685855316896;
     -1.3862820803244256 -1.2383045504753758],
-   # Expected n_charged:
+   # Expected n_ion:
    [0.2500030702177184 0.2898752704335188; 0.2977471383217195 0.3227988953227183;
     0.42274614626845974 0.417842206578383; 0.5772539714051019 0.5541536351162784;
     0.702254450621661 0.686868306132489; 0.7499999999999392 0.7467716863438243;
@@ -71,7 +71,7 @@ const expected =
     0.2977471383217197 0.30537567265010435; 0.4227461462684595 0.4096819689829924;
     0.5772539714051017 0.5583199869826102; 0.7022544506216611 0.7056147469533546;
     0.7499999999999394 0.7737996616909211],
-   # Expected upar_charged:
+   # Expected upar_ion:
    [1.1971912119126474e-17 -2.0968470015869656e-16;
     -5.818706134342973e-17 -0.18232119131671534;
     9.895531571141618e-17 -0.1967239995126128;
@@ -93,7 +93,7 @@ const expected =
     2.2213638810498713e-17 0.009226347310827925;
     -2.7413075842225616e-17 0.036181844730955835;
     -3.143783114880993e-17 -2.810175715538666e-17],
-   # Expected ppar_charged:
+   # Expected ppar_ion:
    [0.18749999999999997 0.23278940073547755; 0.20909100943488423 0.21912527958959363;
     0.24403280042122125 0.20817795270356831; 0.2440328004212212 0.21516422119834766;
     0.20909100943488412 0.2208129180125869; 0.18750000000000003 0.2213757117801786;
@@ -107,7 +107,7 @@ const expected =
     0.2090910094348842 0.19265693636741688; 0.24403280042122116 0.20584407392704462;
     0.2440328004212211 0.228696297221881; 0.2090910094348841 0.2438447730062432;
     0.18750000000000003 0.24825654204434672],
-   # Expected f_charged:
+   # Expected f_ion:
    [0.03704623609948259 0.04056128509273146 0.04289169811317835 0.030368915327672292 0.01235362235033934 0.0063385294703834204 0.012353622350339327 0.030368915327672247 0.04289169811317828 0.04056128509273145 0.0370462360994826;
     0.20411991941198782 0.251156132910555 0.3935556226209418 0.6276758497903185 0.9100827333021343 1.06066017177965 0.9100827333021342 0.6276758497903192 0.3935556226209421 0.25115613291055494 0.2041199194119877;
     0.03704623609948259 0.04056128509273146 0.04289169811317835 0.030368915327672292 0.01235362235033934 0.0063385294703834204 0.012353622350339327 0.030368915327672247 0.04289169811317828 0.04056128509273145 0.0370462360994826;;;
@@ -260,10 +260,10 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
 
     # Suppress console output while running
     phi = undef
-    n_charged = undef
-    upar_charged = undef
-    ppar_charged = undef
-    f_charged = undef
+    n_ion = undef
+    upar_ion = undef
+    ppar_ion = undef
+    f_ion = undef
     n_neutral = undef
     upar_neutral = undef
     ppar_neutral = undef
@@ -293,7 +293,7 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
             phi_zrt, Er_zrt, Ez_zrt = load_fields_data(fid)
 
             # load velocity moments data
-            n_charged_zrst, upar_charged_zrst, ppar_charged_zrst, qpar_charged_zrst, v_t_charged_zrst = load_charged_particle_moments_data(fid)
+            n_ion_zrst, upar_ion_zrst, ppar_ion_zrst, qpar_ion_zrst, v_t_ion_zrst = load_ion_particle_moments_data(fid)
             n_neutral_zrst, upar_neutral_zrst, ppar_neutral_zrst, qpar_neutral_zrst, v_t_neutral_zrst = load_neutral_particle_moments_data(fid)
             z, z_spectral = load_coordinate_data(fid, "z")
 
@@ -303,18 +303,18 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
             fid = open_readonly_output_file(path, "dfns")
             
             # load particle distribution function (pdf) data
-            f_charged_vpavperpzrst = load_pdf_data(fid)
+            f_ion_vpavperpzrst = load_pdf_data(fid)
             f_neutral_vzvrvzetazrst = load_neutral_pdf_data(fid)
 
             close(fid)
             
             phi = phi_zrt[:,1,:]
-            n_charged = n_charged_zrst[:,1,:,:]
-            upar_charged = upar_charged_zrst[:,1,:,:]
-            ppar_charged = ppar_charged_zrst[:,1,:,:]
-            qpar_charged = qpar_charged_zrst[:,1,:,:]
-            v_t_charged = v_t_charged_zrst[:,1,:,:]
-            f_charged = f_charged_vpavperpzrst[:,1,:,1,:,:]
+            n_ion = n_ion_zrst[:,1,:,:]
+            upar_ion = upar_ion_zrst[:,1,:,:]
+            ppar_ion = ppar_ion_zrst[:,1,:,:]
+            qpar_ion = qpar_ion_zrst[:,1,:,:]
+            v_t_ion = v_t_ion_zrst[:,1,:,:]
+            f_ion = f_ion_vpavperpzrst[:,1,:,1,:,:]
             n_neutral = n_neutral_zrst[:,1,:,:]
             upar_neutral = upar_neutral_zrst[:,1,:,:]
             ppar_neutral = ppar_neutral_zrst[:,1,:,:]
@@ -325,7 +325,7 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
             # Unnormalize f
             if input["evolve_moments_density"]
                 for it ∈ 1:length(time), is ∈ 1:n_ion_species, iz ∈ 1:z.n
-                    f_charged[:,iz,is,it] .*= n_charged[iz,is,it]
+                    f_ion[:,iz,is,it] .*= n_ion[iz,is,it]
                 end
                 for it ∈ 1:length(time), isn ∈ 1:n_neutral_species, iz ∈ 1:z.n
                     f_neutral[:,iz,isn,it] .*= n_neutral[iz,isn,it]
@@ -333,7 +333,7 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
             end
             if input["evolve_moments_parallel_pressure"]
                 for it ∈ 1:length(time), is ∈ 1:n_ion_species, iz ∈ 1:z.n
-                    f_charged[:,iz,is,it] ./= v_t_charged[iz,is,it]
+                    f_ion[:,iz,is,it] ./= v_t_ion[iz,is,it]
                 end
                 for it ∈ 1:length(time), isn ∈ 1:n_neutral_species, iz ∈ 1:z.n
                     f_neutral[:,iz,isn,it] ./= v_t_neutral[iz,isn,it]
@@ -371,11 +371,11 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
         #println("phi ", size(newgrid_phi))
         #println(newgrid_phi)
         #println()
-        #newgrid_n_charged = cat(interpolate_to_grid_z(expected.z, n_charged[:, :, 1], z, z_spectral)[:,1],
-        #                        interpolate_to_grid_z(expected.z, n_charged[:, :, 2], z, z_spectral)[:,1];
+        #newgrid_n_ion = cat(interpolate_to_grid_z(expected.z, n_ion[:, :, 1], z, z_spectral)[:,1],
+        #                        interpolate_to_grid_z(expected.z, n_ion[:, :, 2], z, z_spectral)[:,1];
         #                        dims=2)
-        #println("n_charged ", size(newgrid_n_charged))
-        #println(newgrid_n_charged)
+        #println("n_ion ", size(newgrid_n_ion))
+        #println(newgrid_n_ion)
         #println()
         #newgrid_n_neutral = cat(interpolate_to_grid_z(expected.z, n_neutral[:, :, 1], z, z_spectral)[:,1],
         #                        interpolate_to_grid_z(expected.z, n_neutral[:, :, 2], z, z_spectral)[:,1];
@@ -383,11 +383,11 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
         #println("n_neutral ", size(newgrid_n_neutral))
         #println(newgrid_n_neutral)
         #println()
-        #newgrid_upar_charged = cat(interpolate_to_grid_z(expected.z, upar_charged[:, :, 1], z, z_spectral)[:,1],
-        #                           interpolate_to_grid_z(expected.z, upar_charged[:, :, 2], z, z_spectral)[:,1];
+        #newgrid_upar_ion = cat(interpolate_to_grid_z(expected.z, upar_ion[:, :, 1], z, z_spectral)[:,1],
+        #                           interpolate_to_grid_z(expected.z, upar_ion[:, :, 2], z, z_spectral)[:,1];
         #                           dims=2)
-        #println("upar_charged ", size(newgrid_upar_charged))
-        #println(newgrid_upar_charged)
+        #println("upar_ion ", size(newgrid_upar_ion))
+        #println(newgrid_upar_ion)
         #println()
         #newgrid_upar_neutral = cat(interpolate_to_grid_z(expected.z, upar_neutral[:, :, 1], z, z_spectral)[:,1],
         #                           interpolate_to_grid_z(expected.z, upar_neutral[:, :, 2], z, z_spectral)[:,1];
@@ -395,11 +395,11 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
         #println("upar_neutral ", size(newgrid_upar_neutral))
         #println(newgrid_upar_neutral)
         #println()
-        #newgrid_ppar_charged = cat(interpolate_to_grid_z(expected.z, ppar_charged[:, :, 1], z, z_spectral)[:,1],
-        #                           interpolate_to_grid_z(expected.z, ppar_charged[:, :, 2], z, z_spectral)[:,1];
+        #newgrid_ppar_ion = cat(interpolate_to_grid_z(expected.z, ppar_ion[:, :, 1], z, z_spectral)[:,1],
+        #                           interpolate_to_grid_z(expected.z, ppar_ion[:, :, 2], z, z_spectral)[:,1];
         #                           dims=2)
-        #println("ppar_charged ", size(newgrid_ppar_charged))
-        #println(newgrid_ppar_charged)
+        #println("ppar_ion ", size(newgrid_ppar_ion))
+        #println(newgrid_ppar_ion)
         #println()
         #newgrid_ppar_neutral = cat(interpolate_to_grid_z(expected.z, ppar_neutral[:, :, 1], z, z_spectral)[:,1],
         #                           interpolate_to_grid_z(expected.z, ppar_neutral[:, :, 2], z, z_spectral)[:,1];
@@ -407,11 +407,11 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
         #println("ppar_neutral ", size(newgrid_ppar_neutral))
         #println(newgrid_ppar_neutral)
         #println()
-        #newgrid_f_charged = cat(interpolate_to_grid_vpa(expected.vpa, interpolate_to_grid_z(expected.z, f_charged[:, :, :, 1], z, z_spectral), vpa, vpa_spectral)[:,:,1],
-        #                        interpolate_to_grid_vpa(expected.vpa, interpolate_to_grid_z(expected.z, f_charged[:, :, :, 2], z, z_spectral), vpa, vpa_spectral)[:,:,1];
+        #newgrid_f_ion = cat(interpolate_to_grid_vpa(expected.vpa, interpolate_to_grid_z(expected.z, f_ion[:, :, :, 1], z, z_spectral), vpa, vpa_spectral)[:,:,1],
+        #                        interpolate_to_grid_vpa(expected.vpa, interpolate_to_grid_z(expected.z, f_ion[:, :, :, 2], z, z_spectral), vpa, vpa_spectral)[:,:,1];
         #                        dims=4)
-        #println("f_charged ", size(newgrid_f_charged))
-        #println(newgrid_f_charged)
+        #println("f_ion ", size(newgrid_f_ion))
+        #println(newgrid_f_ion)
         #println()
         #newgrid_f_neutral = cat(interpolate_to_grid_vpa(expected.vpa, interpolate_to_grid_z(expected.z, f_neutral[:, :, :, 1], z, z_spectral), vpa, vpa_spectral)[:,:,1],
         #                        interpolate_to_grid_vpa(expected.vpa, interpolate_to_grid_z(expected.z, f_neutral[:, :, :, 2], z, z_spectral), vpa, vpa_spectral)[:,:,1];
@@ -424,21 +424,21 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
                 newgrid_phi = interpolate_to_grid_z(expected.z, phi[:, tind], z, z_spectral)
                 @test isapprox(expected.phi[:, tind], newgrid_phi, rtol=rtol)
 
-                # Check charged particle moments and f
+                # Check ion particle moments and f
                 ######################################
 
-                newgrid_n_charged = interpolate_to_grid_z(expected.z, n_charged[:, :, tind], z, z_spectral)
-                @test isapprox(expected.n_charged[:, tind], newgrid_n_charged[:,1], rtol=rtol)
+                newgrid_n_ion = interpolate_to_grid_z(expected.z, n_ion[:, :, tind], z, z_spectral)
+                @test isapprox(expected.n_ion[:, tind], newgrid_n_ion[:,1], rtol=rtol)
 
-                newgrid_upar_charged = interpolate_to_grid_z(expected.z, upar_charged[:, :, tind], z, z_spectral)
-                @test isapprox(expected.upar_charged[:, tind], newgrid_upar_charged[:,1], rtol=upar_rtol, atol=atol)
+                newgrid_upar_ion = interpolate_to_grid_z(expected.z, upar_ion[:, :, tind], z, z_spectral)
+                @test isapprox(expected.upar_ion[:, tind], newgrid_upar_ion[:,1], rtol=upar_rtol, atol=atol)
 
-                newgrid_ppar_charged = interpolate_to_grid_z(expected.z, ppar_charged[:, :, tind], z, z_spectral)
-                @test isapprox(expected.ppar_charged[:, tind], newgrid_ppar_charged[:,1], rtol=rtol)
+                newgrid_ppar_ion = interpolate_to_grid_z(expected.z, ppar_ion[:, :, tind], z, z_spectral)
+                @test isapprox(expected.ppar_ion[:, tind], newgrid_ppar_ion[:,1], rtol=rtol)
 
-                newgrid_f_charged = interpolate_to_grid_z(expected.z, f_charged[:, :, :, tind], z, z_spectral)
-                newgrid_f_charged = interpolate_to_grid_vpa(expected.vpa, newgrid_f_charged, vpa, vpa_spectral)
-                @test isapprox(expected.f_charged[:, :, tind], newgrid_f_charged[:,:,1], rtol=rtol)
+                newgrid_f_ion = interpolate_to_grid_z(expected.z, f_ion[:, :, :, tind], z, z_spectral)
+                newgrid_f_ion = interpolate_to_grid_vpa(expected.vpa, newgrid_f_ion, vpa, vpa_spectral)
+                @test isapprox(expected.f_ion[:, :, tind], newgrid_f_ion[:,:,1], rtol=rtol)
 
                 # Check neutral particle moments and f
                 ######################################

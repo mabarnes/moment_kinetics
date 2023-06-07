@@ -87,7 +87,7 @@ function ionization_collisions_1V!(f_out, f_neutral_out, fvec_in, vz, vpa, vperp
             if moments.evolve_ppar
                 # will need the ratio of thermal speeds both to interpolate between vpa grids
                 # for different species and to account for different normalizations of each species' pdf
-                vth_ratio = moments.charged.vth[iz,ir,is]/moments.neutral.vth[iz,ir,isn]
+                vth_ratio = moments.ion.vth[iz,ir,is]/moments.neutral.vth[iz,ir,isn]
             else
                 vth_ratio = 1.0
             end
@@ -121,7 +121,7 @@ function ionization_collisions_1V!(f_out, f_neutral_out, fvec_in, vz, vpa, vperp
                     # to get f_{s'}(wpahat_s), need to obtain wpahat_s grid locations
                     # in terms of the wpahat_{s'} coordinate:
                     # (wpahat_{s'})_j = ((wpahat_{s})_j * vth_{s} + upar_{s} - upar_{s'}) / vth_{s'}
-                    @. vpa.scratch = (vpa.grid * moments.charged.vth[iz,ir,is] + fvec_in.upar[iz,ir,is] - fvec_in.uz_neutral[iz,ir,isn]) / moments.neutral.vth[iz,ir,isn]
+                    @. vpa.scratch = (vpa.grid * moments.ion.vth[iz,ir,is] + fvec_in.upar[iz,ir,is] - fvec_in.uz_neutral[iz,ir,isn]) / moments.neutral.vth[iz,ir,isn]
                 end
                 # interpolate to the new grid (passed in as vpa.scratch)
                 # and return interpolated values in vpa.scratch2

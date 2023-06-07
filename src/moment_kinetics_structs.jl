@@ -10,9 +10,9 @@ using ..type_definitions: mk_float
 
 """
 """
-struct scratch_pdf{n_distribution_charged, n_moment, n_distribution_neutral,n_moment_neutral}
-    # charged particles
-    pdf::MPISharedArray{mk_float, n_distribution_charged}
+struct scratch_pdf{n_distribution_ion, n_moment, n_distribution_neutral,n_moment_neutral}
+    # ion particles
+    pdf::MPISharedArray{mk_float, n_distribution_ion}
     density::MPISharedArray{mk_float, n_moment}
     upar::MPISharedArray{mk_float, n_moment}
     ppar::MPISharedArray{mk_float, n_moment}

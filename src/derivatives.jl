@@ -19,7 +19,7 @@ using ..looping
 Centered derivatives
 df/dr group of rountines for
 fields & moments -> [z,r]
-dfns (charged) -> [vpa,vperp,z,r,s]
+dfns (ion) -> [vpa,vperp,z,r,s]
 dfns (neutrals) -> [vz,vr,vzeta,z,r,sn]
 """
 
@@ -49,7 +49,7 @@ function derivative_r!(dfdr::AbstractArray{mk_float,2}, f::AbstractArray{mk_floa
 end
 
 #df/dr
-#5D version for f[vpa,vperp,z,r,s] -> charged particle dfn (species indexing taken outside this loop)
+#5D version for f[vpa,vperp,z,r,s] -> ion particle dfn (species indexing taken outside this loop)
 function derivative_r!(dfdr::AbstractArray{mk_float,5}, f::AbstractArray{mk_float,5},
         dfdr_lower_endpoints::AbstractArray{mk_float,4},
         dfdr_upper_endpoints::AbstractArray{mk_float,4},
@@ -101,7 +101,7 @@ end
 Centered derivatives
 df/dz group of rountines for
 fields & moments -> [z,r]
-dfns (charged) -> [vpa,vperp,z,r,s]
+dfns (ion) -> [vpa,vperp,z,r,s]
 dfns (neutrals) -> [vz,vr,vzeta,z,r,sn]
 """
 
@@ -130,7 +130,7 @@ function derivative_z!(dfdz::AbstractArray{mk_float,2}, f::AbstractArray{mk_floa
 	
 end
 
-#5D version for f[vpa,vperp,z,r,s] -> dfn charged particles
+#5D version for f[vpa,vperp,z,r,s] -> dfn ion particles
 function derivative_z!(dfdz::AbstractArray{mk_float,5}, f::AbstractArray{mk_float,5},
         dfdz_lower_endpoints::AbstractArray{mk_float,4},
         dfdz_upper_endpoints::AbstractArray{mk_float,4},
@@ -182,7 +182,7 @@ end
 Upwind derivatives
 df/dr group of rountines for
 fields & moments -> [z,r]
-dfns (charged) -> [vpa,vperp,z,r,s]
+dfns (ion) -> [vpa,vperp,z,r,s]
 dfns (neutrals) -> [vz,vr,vzeta,z,r,sn]
 """
 
@@ -215,7 +215,7 @@ function derivative_r!(dfdr::AbstractArray{mk_float,2}, f::AbstractArray{mk_floa
 end
 
 #df/dr
-#5D version for f[vpa,vperp,z,r,s] -> charged particle dfn (species indexing taken outside this loop)
+#5D version for f[vpa,vperp,z,r,s] -> ion particle dfn (species indexing taken outside this loop)
 function derivative_r!(dfdr::AbstractArray{mk_float,5}, f::AbstractArray{mk_float,5},
         advect, adv_fac_lower_buffer::AbstractArray{mk_float,4},
         adv_fac_upper_buffer::AbstractArray{mk_float,4},
@@ -278,7 +278,7 @@ end
 Upwind derivatives
 df/dz group of rountines for
 fields & moments -> [z,r]
-dfns (charged) -> [vpa,vperp,z,r,s]
+dfns (ion) -> [vpa,vperp,z,r,s]
 dfns (neutrals) -> [vz,vr,vzeta,z,r,sn]
 """
 
@@ -309,7 +309,7 @@ function derivative_z!(dfdz::AbstractArray{mk_float,2}, f::AbstractArray{mk_floa
     end
 end
 
-#5D version for f[vpa,vperp,z,r,s] -> dfn charged particles
+#5D version for f[vpa,vperp,z,r,s] -> dfn ion particles
 function derivative_z!(dfdz::AbstractArray{mk_float,5}, f::AbstractArray{mk_float,5},
         advect, adv_fac_lower_buffer::AbstractArray{mk_float,4},
         adv_fac_upper_buffer::AbstractArray{mk_float,4},

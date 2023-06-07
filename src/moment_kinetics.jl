@@ -393,7 +393,7 @@ function setup_moment_kinetics(input_dict::Dict; restart_prefix_iblock=nothing,
 
     write_moments_data_to_binary(moments, fields, code_time, composition.n_ion_species,
         composition.n_neutral_species, io_moments, 1, r, z)
-    write_dfns_data_to_binary(pdf.charged.norm, pdf.neutral.norm, moments, fields,
+    write_dfns_data_to_binary(pdf.ion.norm, pdf.neutral.norm, moments, fields,
          code_time, composition.n_ion_species, composition.n_neutral_species, io_dfns, 1,
          r, z, vperp, vpa, vzeta, vr, vz)
 

@@ -21,8 +21,8 @@ function source_terms!(pdf_out, fvec_in, moments, vpa, z, r, dt, spectral, compo
         @loop_s is begin
             @views source_terms_evolve_ppar_no_collisions!(
                 pdf_out[:,:,:,:,is], fvec_in.pdf[:,:,:,:,is], fvec_in.density[:,:,is],
-                fvec_in.upar[:,:,is], fvec_in.ppar[:,:,is], moments.charged.vth[:,:,is],
-                moments.charged.qpar[:,:,is], z, r, dt, spectral)
+                fvec_in.upar[:,:,is], fvec_in.ppar[:,:,is], moments.ion.vth[:,:,is],
+                moments.ion.qpar[:,:,is], z, r, dt, spectral)
             if composition.n_neutral_species > 0
                 if abs(collisions.charge_exchange) > 0.0 || abs(collisions.ionization) > 0.0
                     @views source_terms_evolve_ppar_collisions!(
@@ -217,7 +217,7 @@ end
 """
 advance the dfn with an arbitrary source function 
 """
-function source_terms_manufactured!(pdf_charged_out, pdf_neutral_out, vz, vr, vzeta, vpa, vperp, z, r, t, dt, composition, manufactured_source_list)
+function source_terms_manufactured!(pdf_ion_out, pdf_neutral_out, vz, vr, vzeta, vpa, vperp, z, r, t, dt, composition, manufactured_source_list)
     if manufactured_source_list.time_independent_sources
         # the (time-independent) manufactured source arrays
         Source_i = manufactured_source_list.Source_i_array
@@ -227,7 +227,7 @@ function source_terms_manufactured!(pdf_charged_out, pdf_neutral_out, vz, vr, vz
 
         @loop_s is begin
             @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
-                pdf_charged_out[ivpa,ivperp,iz,ir,is] += dt*Source_i[ivpa,ivperp,iz,ir]
+                pdf_ion_out[ivpa,ivperp,iz,ir,is] += dt*Source_i[ivpa,ivperp,iz,ir]
             end
         end
 
@@ -248,7 +248,7 @@ function source_terms_manufactured!(pdf_charged_out, pdf_neutral_out, vz, vr, vz
 
         @loop_s is begin
             @loop_r_z_vperp_vpa ir iz ivperp ivpa begin
-                pdf_charged_out[ivpa,ivperp,iz,ir,is] += dt*Source_i_func(vpa.grid[ivpa],vperp.grid[ivperp],z.grid[iz],r.grid[ir],t)
+                pdf_ion_out[ivpa,ivperp,iz,ir,is] += dt*Source_i_func(vpa.grid[ivpa],vperp.grid[ivperp],z.grid[iz],r.grid[ir],t)
             end
         end
 

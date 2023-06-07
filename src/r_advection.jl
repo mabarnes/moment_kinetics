@@ -21,7 +21,7 @@ function r_advection!(f_out, fvec_in, moments, fields, advect, r, z, vperp, vpa,
     @loop_s is begin
         # get the updated speed along the r direction using the current f
         @views update_speed_r!(advect[is], fvec_in.upar[:,:,is],
-                               moments.charged.vth[:,:,is], fields, moments.evolve_upar,
+                               moments.ion.vth[:,:,is], fields, moments.evolve_upar,
                                moments.evolve_ppar, vpa, vperp, z, r, geometry)
         # advance r-advection equation
         @loop_z_vpa iz ivpa begin
@@ -30,14 +30,14 @@ function r_advection!(f_out, fvec_in, moments, fields, advect, r, z, vperp, vpa,
         @loop_z_vperp_vpa iz ivperp ivpa begin
             @views adjust_advection_speed!(advect[is].speed[:,ivpa,ivperp,iz],
                                            fvec_in.density[iz,:,is],
-                                           moments.charged.vth[iz,:,is],
+                                           moments.ion.vth[iz,:,is],
                                            moments.evolve_density, moments.evolve_ppar)
             # take the normalized pdf contained in fvec_in.pdf and remove the normalization,
             # returning the true (un-normalized) particle distribution function in r.scratch
             @views unnormalize_pdf!(
                        scratch_dummy.buffer_vpavperpzrs_2[ivpa,ivperp,iz,:,is],
                        fvec_in.pdf[ivpa,ivperp,iz,:,is], fvec_in.density[iz,:,is],
-                       moments.charged.vth[iz,:,is], moments.evolve_density,
+                       moments.ion.vth[iz,:,is], moments.evolve_density,
                        moments.evolve_ppar)
             advect[is].adv_fac[:,ivpa,ivperp,iz] .= -dt.*advect[is].speed[:,ivpa,ivperp,iz]
         end

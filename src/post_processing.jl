@@ -3,12 +3,12 @@
 module post_processing
 
 export analyze_and_plot_data
-export compare_charged_pdf_symbolic_test
+export compare_ion_pdf_symbolic_test
 export compare_moments_symbolic_test
 export compare_neutral_pdf_symbolic_test
 export compare_fields_symbolic_test
 export construct_global_zr_coords
-export allocate_global_zr_charged_moments
+export allocate_global_zr_ion_moments
 export allocate_global_zr_neutral_moments
 export allocate_global_zr_fields
 export get_coords_nelement
@@ -38,7 +38,7 @@ using ..initial_conditions: vpagrid_to_dzdt
 using ..load_data: open_readonly_output_file, get_group, load_input, load_time_data
 using ..load_data: get_nranks
 using ..load_data: load_fields_data, load_pdf_data
-using ..load_data: load_charged_particle_moments_data, load_neutral_particle_moments_data
+using ..load_data: load_ion_particle_moments_data, load_neutral_particle_moments_data
 using ..load_data: load_neutral_pdf_data
 using ..load_data: load_variable
 using ..load_data: load_coordinate_data, load_block_data, load_rank_data,
@@ -220,7 +220,7 @@ function allocate_global_zr_fields(nz_global,nr_global,ntime)
     return phi, Ez, Er
 end
 
-function allocate_global_zr_charged_moments(nz_global,nr_global,n_ion_species,ntime)
+function allocate_global_zr_ion_moments(nz_global,nr_global,n_ion_species,ntime)
     density = allocate_float(nz_global,nr_global,n_ion_species,ntime)
     parallel_flow = allocate_float(nz_global,nr_global,n_ion_species,ntime)
     parallel_pressure = allocate_float(nz_global,nr_global,n_ion_species,ntime)
@@ -229,7 +229,7 @@ function allocate_global_zr_charged_moments(nz_global,nr_global,n_ion_species,nt
     return density, parallel_flow, parallel_pressure, parallel_heat_flux, thermal_speed
 end
 
-function allocate_global_zr_charged_dfns(nvpa_global, nvperp_global, nz_global, nr_global,
+function allocate_global_zr_ion_dfns(nvpa_global, nvperp_global, nz_global, nr_global,
                                          n_ion_species, ntime)
     f = allocate_float(nvpa_global, nvperp_global, nz_global, nr_global, n_ion_species,
                        ntime)
@@ -406,7 +406,7 @@ function analyze_and_plot_data(prefix...)
                                              Tuple(this_r.n_global for this_r ∈ r),
                                              ntime)
     density, parallel_flow, parallel_pressure, parallel_heat_flux, thermal_speed =
-        get_tuple_of_return_values(allocate_global_zr_charged_moments,
+        get_tuple_of_return_values(allocate_global_zr_ion_moments,
                                    Tuple(this_z.n_global for this_z ∈ z),
                                    Tuple(this_r.n_global for this_r ∈ r),
                                    n_ion_species, ntime)
@@ -435,7 +435,7 @@ function analyze_and_plot_data(prefix...)
                                nblocks,
                                Tuple(this_z.n for this_z ∈ z),
                                Tuple(this_r.n for this_r ∈ r))
-    # charged particle moments
+    # ion particle moments
     get_tuple_of_return_values(read_distributed_zr_data!, density, "density", run_names,
                                "moments", nblocks,
                                Tuple(this_z.n for this_z ∈ z),
@@ -506,7 +506,7 @@ function analyze_and_plot_data(prefix...)
                                    Tuple(this_r.n_global for this_r ∈ r), ntime_pdfs)
     density_at_pdf_times, parallel_flow_at_pdf_times, parallel_pressure_at_pdf_times,
     parallel_heat_flux_at_pdf_times, thermal_speed_at_pdf_times =
-        get_tuple_of_return_values(allocate_global_zr_charged_moments,
+        get_tuple_of_return_values(allocate_global_zr_ion_moments,
                                    Tuple(this_z.n_global for this_z ∈ z),
                                    Tuple(this_r.n_global for this_r ∈ r), n_ion_species,
                                    ntime_pdfs)
@@ -531,7 +531,7 @@ function analyze_and_plot_data(prefix...)
                                run_names, "dfns", nblocks,
                                Tuple(this_z.n for this_z ∈ z),
                                Tuple(this_r.n for this_r ∈ r))
-    # charged particle moments
+    # ion particle moments
     get_tuple_of_return_values(read_distributed_zr_data!, density_at_pdf_times, "density",
                                run_names, "dfns", nblocks,
                                Tuple(this_z.n for this_z ∈ z),
@@ -601,7 +601,7 @@ function analyze_and_plot_data(prefix...)
     diagnostics_1d = true
     if diagnostics_1d
         # load full (vpa,z,r,species,t) particle distribution function (pdf) data
-        ff = get_tuple_of_return_values(allocate_global_zr_charged_dfns,
+        ff = get_tuple_of_return_values(allocate_global_zr_ion_dfns,
                                         Tuple(this_vpa.n_global for this_vpa ∈ vpa),
                                         Tuple(this_vperp.n_global for this_vperp ∈ vperp),
                                         Tuple(this_z.n_global for this_z ∈ z),
@@ -715,7 +715,7 @@ function analyze_and_plot_data(prefix...)
     composition = composition[1]
 
     # make plots and animations of the phi, Ez and Er
-    plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time,
+    plot_ion_moments_2D(density, parallel_flow, parallel_pressure, time,
                             z_global.grid, r_global.grid, iz0, ir0, n_ion_species,
                             itime_min, itime_max, nwrite_movie, run_name, pp)
     # make plots and animations of the phi, Ez and Er
@@ -725,12 +725,12 @@ function analyze_and_plot_data(prefix...)
     # only if ntime == ntime_pdfs & data on one shared memory process
     if ntime == ntime_pdfs && r.n_global == r.n && z.n_global == z.n
         # load full (vpa,z,r,species,t) particle distribution function (pdf) data
-        ff = allocate_global_zr_charged_dfns(vpa.n_global, vperp.n_global, z.n_global,
+        ff = allocate_global_zr_ion_dfns(vpa.n_global, vperp.n_global, z.n_global,
                                              r.n_global, n_ion_species, ntime)
         read_distributed_zr_data!(ff, "f", run_names, "dfns", nblocks, z.n, r.n)
 
         spec_type = "ion"
-        plot_charged_pdf(ff, vpa_local, vperp_local, z_global.grid, r_global.grid, ivpa0,
+        plot_ion_pdf(ff, vpa_local, vperp_local, z_global.grid, r_global.grid, ivpa0,
                          ivperp0, iz0, ir0, spec_type, n_ion_species, itime_min_pdfs,
                          itime_max_pdfs, nwrite_movie_pdfs, run_name, pp)
         # make plots and animations of the neutral pdf
@@ -744,7 +744,7 @@ function analyze_and_plot_data(prefix...)
     end
     # plot ion pdf data near the wall boundary
     if pp.plot_wall_pdf
-        plot_charged_pdf_2D_at_wall(run_name)
+        plot_ion_pdf_2D_at_wall(run_name)
     end
     # MRH need to get some run-time data here without copy-paste from mk_input
 
@@ -808,7 +808,7 @@ function analyze_and_plot_data(prefix...)
         compare_moments_symbolic_test(run_name,density,density_sym,"ion",z_global.grid,r_global.grid,time,z_global.n,r_global.n,ntime,
          L"\widetilde{n}_i",L"\widetilde{n}_i^{sym}",L"\varepsilon(\widetilde{n}_i)","dens")
 
-        compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,"ion",
+        compare_ion_pdf_symbolic_test(run_name,manufactured_solns_list,"ion",
           L"\widetilde{f}_i",L"\widetilde{f}^{sym}_i",L"\varepsilon(\widetilde{f}_i)","pdf")
         if n_neutral_species > 0
             # neutral test
@@ -2210,7 +2210,7 @@ function compare_moments_symbolic_test(run_name,moment,moment_sym,spec_string,z,
 
 end
 
-function compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,spec_string,
+function compare_ion_pdf_symbolic_test(run_name,manufactured_solns_list,spec_string,
     pdf_label,pdf_sym_label,norm_label,file_string)
     fid = open_readonly_output_file(run_name,"dfns", printout=false)
     # load block data on iblock=0
@@ -2224,7 +2224,7 @@ function compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,spec
     # load time data (unique to pdf, may differ to moment values depending on user nwrite_dfns value)
     ntime, time = load_time_data(fid, printout=false)
     close(fid)
-    # get the charged particle pdf
+    # get the ion particle pdf
     dfni_func = manufactured_solns_list.dfni_func
     is = 1 # only one species supported currently
 
@@ -2306,7 +2306,7 @@ function compare_neutral_pdf_symbolic_test(run_name,manufactured_solns_list,spec
     # load time data (unique to pdf, may differ to moment values depending on user nwrite_dfns value)
     ntime, time = load_time_data(fid, printout=false)
     close(fid)
-    # get the charged particle pdf
+    # get the ion particle pdf
     dfnn_func = manufactured_solns_list.dfnn_func
     is = 1 # only one species supported currently
 
@@ -2389,7 +2389,7 @@ end
 """
 plots various slices of the ion pdf (1d and 2d, stills and animations)
 """
-function plot_charged_pdf(pdf, vpa, vperp, z, r,
+function plot_ion_pdf(pdf, vpa, vperp, z, r,
     ivpa0, ivperp0, iz0, ir0,
     spec_type, n_species,
     itime_min_pdfs, itime_max_pdfs, nwrite_movie_pdfs, run_name, pp)
@@ -2607,10 +2607,10 @@ function plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
     println("done.")
 end
 
-function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time, z, r, iz0, ir0, n_ion_species,
+function plot_ion_moments_2D(density, parallel_flow, parallel_pressure, time, z, r, iz0, ir0, n_ion_species,
     itime_min, itime_max, nwrite_movie, run_name, pp)
     nr = size(r,1)
-    print("Plotting charged moments data...")
+    print("Plotting ion moments data...")
     for is in 1:n_ion_species
 		description = "_ion_spec"*string(is)*"_"
 		# the density
@@ -2700,8 +2700,8 @@ function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time
     println("done.")
 end
 
-function plot_charged_pdf_2D_at_wall(run_name)
-    print("Plotting charged pdf data at wall boundaries...")
+function plot_ion_pdf_2D_at_wall(run_name)
+    print("Plotting ion pdf data at wall boundaries...")
     # open a dfn file
     fid = open_readonly_output_file(run_name,"dfns", printout=false)
     # load block data on iblock=0

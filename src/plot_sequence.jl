@@ -12,7 +12,7 @@ using SpecialFunctions: erfi
 using LaTeXStrings
 # modules
 using ..post_processing: read_distributed_zr_data!, construct_global_zr_coords
-using ..post_processing: allocate_global_zr_neutral_moments, allocate_global_zr_charged_moments
+using ..post_processing: allocate_global_zr_neutral_moments, allocate_global_zr_ion_moments
 using ..post_processing: allocate_global_zr_fields#, get_coords_nelement
 using ..array_allocation: allocate_float
 using ..type_definitions: mk_float, mk_int

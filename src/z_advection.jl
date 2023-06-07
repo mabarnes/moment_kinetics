@@ -21,13 +21,13 @@ function z_advection!(f_out, fvec_in, moments, fields, advect, z, vpa, vperp, r,
     @loop_s is begin
         # get the updated speed along the z direction using the current f
         @views update_speed_z!(advect[is], fvec_in.upar[:,:,is],
-                               moments.charged.vth[:,:,is], moments.evolve_upar,
+                               moments.ion.vth[:,:,is], moments.evolve_upar,
                                moments.evolve_ppar, fields, vpa, vperp, z, r, t, geometry)
         # update adv_fac
         @loop_r_vperp_vpa ir ivperp ivpa begin
             @views adjust_advection_speed!(advect[is].speed[:,ivpa,ivperp,ir],
                                            fvec_in.density[:,ir,is],
-                                           moments.charged.vth[:,ir,is],
+                                           moments.ion.vth[:,ir,is],
                                            moments.evolve_density, moments.evolve_ppar)
             @views @. advect[is].adv_fac[:,ivpa,ivperp,ir] = -dt*advect[is].speed[:,ivpa,ivperp,ir]
             # take the normalized pdf contained in fvec_in.pdf and remove the normalization,
@@ -35,7 +35,7 @@ function z_advection!(f_out, fvec_in, moments, fields, advect, z, vpa, vperp, r,
             @views unnormalize_pdf!(
                 scratch_dummy.buffer_vpavperpzrs_2[ivpa,ivperp,:,ir,is],
                 fvec_in.pdf[ivpa,ivperp,:,ir,is], fvec_in.density[:,ir,is],
-                moments.charged.vth[:,ir,is], moments.evolve_density, moments.evolve_ppar)
+                moments.ion.vth[:,ir,is], moments.evolve_density, moments.evolve_ppar)
         end
     end
     #calculate the upwind derivative
