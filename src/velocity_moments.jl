@@ -5,14 +5,14 @@ module velocity_moments
 export integrate_over_vspace
 export integrate_over_positive_vpa, integrate_over_negative_vpa
 export integrate_over_positive_vz, integrate_over_negative_vz
-export create_moments_chrg, create_moments_ntrl
+export create_moments_ion, create_moments_electron, create_moments_neutral
 export update_moments!
 export update_density!
 export update_upar!
 export update_ppar!
 export update_qpar!
 export reset_moments_status!
-export moments_ion_substruct, moments_neutral_substruct
+export moments_ion_substruct, moments_electron_substruct, moments_neutral_substruct
 export update_neutral_density!
 export update_neutral_uz!
 export update_neutral_ur!
@@ -92,6 +92,55 @@ struct moments_ion_substruct
     dqpar_dz::Union{MPISharedArray{mk_float,3},Nothing}
     # this is the z-derivative of the thermal speed based on the parallel temperature Tpar = ppar/dens: vth = sqrt(2*Tpar/m)
     dvth_dz::Union{MPISharedArray{mk_float,3},Nothing}
+end
+
+"""
+moments_electron_substruct is a struct that contains moment information for electrons
+"""
+mutable struct moments_electron_substruct
+    # this is the particle density
+    dens::MPISharedArray{mk_float,2}
+    # flag that keeps track of if the density needs updating before use
+    dens_updated::Bool
+    # this is the parallel flow
+    upar::MPISharedArray{mk_float,2}
+    # flag that keeps track of whether or not upar needs updating before use
+    upar_updated::Bool
+    # this is the parallel pressure
+    ppar::MPISharedArray{mk_float,2}
+    # flag that keeps track of whether or not ppar needs updating before use
+    ppar_updated::Bool
+    # this is the parallel heat flux
+    qpar::MPISharedArray{mk_float,2}
+    # flag that keeps track of whether or not qpar needs updating before use
+    qpar_updated::Bool
+    # this is the thermal speed based on the parallel temperature Tpar = ppar/dens: vth = sqrt(2*Tpar/m)
+    vth::MPISharedArray{mk_float,2}
+    # if evolve_ppar = true, then the velocity variable is (vpa - upa)/vth, which introduces
+    # a factor of vth for each power of wpa in velocity space integrals.
+    # v_norm_fac accounts for this: it is vth if using the above definition for the parallel velocity,
+    # and it is one otherwise
+    v_norm_fac::Union{MPISharedArray{mk_float,2},Nothing}
+    # this is the upwinded z-derivative of the particle density
+    ddens_dz_upwind::Union{MPISharedArray{mk_float,2},Nothing}
+    # this is the second-z-derivative of the particle density
+    d2dens_dz2::Union{MPISharedArray{mk_float,2},Nothing}
+    # this is the z-derivative of the parallel flow
+    dupar_dz::Union{MPISharedArray{mk_float,2},Nothing}
+    # this is the upwinded z-derivative of the parallel flow
+    dupar_dz_upwind::Union{MPISharedArray{mk_float,2},Nothing}
+    # this is the second-z-derivative of the parallel flow
+    d2upar_dz2::Union{MPISharedArray{mk_float,2},Nothing}
+    # this is the z-derivative of the parallel pressure
+    dppar_dz::Union{MPISharedArray{mk_float,2},Nothing}
+    # this is the upwinded z-derivative of the parallel pressure
+    dppar_dz_upwind::Union{MPISharedArray{mk_float,2},Nothing}
+    # this is the second-z-derivative of the parallel pressure
+    d2ppar_dz2::Union{MPISharedArray{mk_float,2},Nothing}
+    # this is the z-derivative of the parallel heat flux
+    dqpar_dz::Union{MPISharedArray{mk_float,2},Nothing}
+    # this is the z-derivative of the thermal speed based on the parallel temperature Tpar = ppar/dens: vth = sqrt(2*Tpar/m)
+    dvth_dz::Union{MPISharedArray{mk_float,2},Nothing}
 end
 
 """
@@ -247,6 +296,92 @@ function create_moments_ion(nz, nr, n_species, evolve_density, evolve_upar,
     
     # return struct containing arrays needed to update moments
     return moments_ion_substruct(density, density_updated, parallel_flow,
+        parallel_flow_updated, parallel_pressure, parallel_pressure_updated,
+        parallel_heat_flux, parallel_heat_flux_updated, thermal_speed, v_norm_fac,
+        ddens_dz_upwind, d2dens_dz2, dupar_dz, dupar_dz_upwind, d2upar_dz2, dppar_dz,
+        dppar_dz_upwind, d2ppar_dz2, dqpar_dz, dvth_dz)
+end
+
+"""
+create a moment struct containing information about the electron moments
+"""
+function create_moments_electron(nz, nr, evolve_density, evolve_upar,
+                                evolve_ppar, numerical_dissipation)
+    # allocate array used for the particle density
+    density = allocate_shared_float(nz, nr)
+    # initialise Bool variable that indicates if the density is updated for each species
+    density_updated = false
+    # allocate array used for the parallel flow
+    parallel_flow = allocate_shared_float(nz, nr)
+    # allocate Bool variable that indicates if the parallel flow is updated for each species
+    parallel_flow_updated = false
+    # allocate array used for the parallel pressure
+    parallel_pressure = allocate_shared_float(nz, nr)
+    # allocate Bool variable that indicates if the parallel pressure is updated for each species
+    parallel_pressure_updated = false
+    # allocate array used for the parallel flow
+    parallel_heat_flux = allocate_shared_float(nz, nr)
+    # allocate Bool variables that indicates if the parallel flow is updated for each species
+    parallel_heat_flux_updated = false
+    # allocate array used for the thermal speed
+    thermal_speed = allocate_shared_float(nz, nr)
+    if evolve_ppar
+        v_norm_fac = thermal_speed
+    else
+        v_norm_fac = allocate_shared_float(nz, nr)
+        @serial_region begin
+            v_norm_fac .= 1.0
+        end
+    end
+
+    if evolve_density
+        ddens_dz_upwind = allocate_shared_float(nz, nr)
+    else
+        ddens_dz_upwind = nothing
+    end
+    if evolve_density &&
+            numerical_dissipation.moment_dissipation_coefficient > 0.0
+
+        d2dens_dz2 = allocate_shared_float(nz, nr)
+    else
+        d2dens_dz2 = nothing
+    end
+    if evolve_density || evolve_upar || evolve_ppar
+        dupar_dz = allocate_shared_float(nz, nr)
+    else
+        dupar_dz = nothing
+    end
+    if evolve_upar
+        dupar_dz_upwind = allocate_shared_float(nz, nr)
+    else
+        dupar_dz_upwind = nothing
+    end
+    if evolve_upar &&
+            numerical_dissipation.moment_dissipation_coefficient > 0.0
+
+        d2upar_dz2 = allocate_shared_float(nz, nr)
+    else
+        d2upar_dz2 = nothing
+    end
+    if evolve_upar
+        dppar_dz = allocate_shared_float(nz, nr)
+    else
+        dppar_dz = nothing
+    end
+    if evolve_ppar
+        dppar_dz_upwind = allocate_shared_float(nz, nr)
+        d2ppar_dz2 = allocate_shared_float(nz, nr)
+        dqpar_dz = allocate_shared_float(nz, nr)
+        dvth_dz = allocate_shared_float(nz, nr)
+    else
+        dppar_dz_upwind = nothing
+        d2ppar_dz2 = nothing
+        dqpar_dz = nothing
+        dvth_dz = nothing
+    end
+    
+    # return struct containing arrays needed to update moments
+    return moments_electron_substruct(density, density_updated, parallel_flow,
         parallel_flow_updated, parallel_pressure, parallel_pressure_updated,
         parallel_heat_flux, parallel_heat_flux_updated, thermal_speed, v_norm_fac,
         ddens_dz_upwind, d2dens_dz2, dupar_dz, dupar_dz_upwind, d2upar_dz2, dppar_dz,

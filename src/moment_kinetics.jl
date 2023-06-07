@@ -29,6 +29,7 @@ include("coordinates.jl")
 include("file_io.jl")
 include("velocity_moments.jl")
 include("velocity_grid_transforms.jl")
+include("charge_conservation.jl")
 include("em_fields.jl")
 include("bgk.jl")
 include("manufactured_solns.jl") # MRH Here?
@@ -79,6 +80,7 @@ using .looping: debug_setup_loop_ranges_split_one_combination!
 using .moment_kinetics_input: mk_input, read_input_file, run_type, performance_test
 using .time_advance: setup_time_advance!, time_advance!
 using .type_definitions: mk_int
+using .em_fields: setup_em_fields
 
 @debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
 
@@ -356,6 +358,11 @@ function setup_moment_kinetics(input_dict::Dict; restart_prefix_iblock=nothing,
         allocate_pdf_and_moments(composition, r, z, vperp, vpa, vzeta, vr, vz,
                                  evolve_moments, collisions, num_diss_params)
 
+    # create the "fields" structure that contains arrays
+    # for the electrostatic potential phi (and eventually the electromagnetic fields)
+    fields = setup_em_fields(z.n, r.n, drive_input.force_phi, drive_input.amplitude, 
+                             drive_input.frequency, drive_input.force_Er_zero_at_wall)
+
     if restart_prefix_iblock === nothing
         restarting = false
         # initialize f(z,vpa) and the lowest three v-space moments (density(z), upar(z) and ppar(z)),
@@ -377,11 +384,11 @@ function setup_moment_kinetics(input_dict::Dict; restart_prefix_iblock=nothing,
     # create arrays and do other work needed to setup
     # the main time advance loop -- including normalisation of f by density if requested
 
-    moments, fields, spectral_objects, advect_objects,
+    moments, spectral_objects, advect_objects,
     scratch, advance, scratch_dummy, manufactured_source_list =
         setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
             vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral, z_spectral,
-            r_spectral, composition, drive_input, moments, t_input, collisions, species,
+            r_spectral, composition, drive_input, moments, fields, t_input, collisions, species,
             geometry, boundary_distributions, num_diss_params, restarting)
     # setup i/o
     ascii_io, io_moments, io_dfns = setup_file_io(io_input, boundary_distributions, vz,

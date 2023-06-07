@@ -27,11 +27,13 @@ using ..moment_kinetics_structs: scratch_pdf
 using ..velocity_moments: integrate_over_vspace, integrate_over_neutral_vspace
 using ..velocity_moments: integrate_over_positive_vpa, integrate_over_negative_vpa
 using ..velocity_moments: integrate_over_positive_vz, integrate_over_negative_vz
-using ..velocity_moments: create_moments_ion, create_moments_neutral, update_qpar!
-using ..velocity_moments: moments_ion_substruct, moments_neutral_substruct
+using ..velocity_moments: create_moments_ion, create_moments_electron, create_moments_neutral
+using ..velocity_moments: update_qpar!
+using ..velocity_moments: moments_ion_substruct, moments_electron_substruct, moments_neutral_substruct
 using ..velocity_moments: update_neutral_density!, update_neutral_pz!, update_neutral_pr!, update_neutral_pzeta!
 using ..velocity_moments: update_neutral_uz!, update_neutral_ur!, update_neutral_uzeta!, update_neutral_qz!
 using ..velocity_moments: update_ppar!, update_upar!, update_density!
+using ..charge_conservation: calculate_electron_upar_from_charge_conservation!
 
 using ..manufactured_solns: manufactured_solutions
 
@@ -48,12 +50,15 @@ end
 struct pdf_struct
     #ion particles: s + r + z + vperp + vpa
     ion::pdf_substruct{5}
+    # electron particles: 1 + r + z + vperp + vpa
+    electron::pdf_substruct{5}
     #neutral particles: s + r + z + vzeta + vr + vz
     neutral::pdf_substruct{6}
 end
 
 struct moments_struct
     ion::moments_ion_substruct
+    electron::moments_electron_substruct
     neutral::moments_neutral_substruct
     # flag that indicates if the density should be evolved via continuity equation
     evolve_density::Bool
@@ -88,9 +93,12 @@ function allocate_pdf_and_moments(composition, r, z, vperp, vpa, vzeta, vr, vz,
     # create the 'moments' struct that contains various v-space moments and other
     # information related to these moments.
     # the time-dependent entries are not initialised.
-    # moments arrays have same r and z grids for both ion and neutral species
+    # moments arrays have same r and z grids for ion, electron and neutral species
     # and so are included in the same struct
     ion = create_moments_ion(z.n, r.n, composition.n_ion_species,
+        evolve_moments.density, evolve_moments.parallel_flow,
+        evolve_moments.parallel_pressure, numerical_dissipation)
+    electron = create_moments_electron(z.n, r.n,
         evolve_moments.density, evolve_moments.parallel_flow,
         evolve_moments.parallel_pressure, numerical_dissipation)
     neutral = create_moments_neutral(z.n, r.n, composition.n_neutral_species,
@@ -106,7 +114,7 @@ function allocate_pdf_and_moments(composition, r, z, vperp, vpa, vzeta, vr, vz,
         particle_number_conserved = true
     end
 
-    moments = moments_struct(ion, neutral, evolve_moments.density,
+    moments = moments_struct(ion, electron, neutral, evolve_moments.density,
                              particle_number_conserved,
                              evolve_moments.conservation,
                              evolve_moments.parallel_flow,
@@ -127,8 +135,13 @@ function create_pdf(composition, r, z, vperp, vpa, vzeta, vr, vz)
     pdf_ion_buffer = allocate_shared_float(vpa.n, vperp.n, z.n, r.n, composition.n_neutral_species) # n.b. n_species is n_neutral_species here
     pdf_neutral_norm = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, r.n, composition.n_neutral_species)
     pdf_neutral_buffer = allocate_shared_float(vz.n, vr.n, vzeta.n, z.n, r.n, composition.n_ion_species)
+    pdf_electron_norm = allocate_shared_float(vpa.n, vperp.n, z.n, r.n, 1)
+    # MB: not sure if pdf_electron_buffer will ever be needed, but create for now
+    # to emulate ion and neutral behaviour
+    pdf_electron_buffer = allocate_shared_float(vpa.n, vperp.n, z.n, r.n, 1)
 
     return pdf_struct(pdf_substruct(pdf_ion_norm, pdf_ion_buffer),
+                      pdf_substruct(pdf_electron_norm, pdf_electron_buffer),
                       pdf_substruct(pdf_neutral_norm, pdf_neutral_buffer))
 
 end
@@ -166,10 +179,23 @@ function init_pdf_and_moments!(pdf, moments, boundary_distributions, composition
                 @. moments.neutral.pz = 0.5 * moments.neutral.dens * moments.neutral.vth^2
                 @. moments.neutral.ptot = 1.5 * moments.neutral.dens * moments.neutral.vth^2
             end
+
+            # initialise the electron density profile
+            init_electron_density!(moments.electron.dens, moments.ion.dens, n_ion_species)
+            # initialise the electron parallel flow profile
+            init_electron_upar!(moments.electron.upar, moments.electron.dens, moments.ion.upar, 
+                moments.ion.upar, n_ion_species, r.n, composition.electron_physics)
+            # initialise the electron thermal speed profile
+            init_electron_vth!(moments.electron.vth)
+            # calculate the electron parallel pressure from the density and thermal speed
+            @. moments.electron.ppar = 0.5 * moments.electron.dens * moments.electron.vth^2
         end
         moments.ion.dens_updated .= true
         moments.ion.upar_updated .= true
         moments.ion.ppar_updated .= true
+        moments.electron.dens_updated = true
+        moments.electron.upar_updated = true
+        moments.electron.ppar_updated = true
         moments.neutral.dens_updated .= true
         moments.neutral.uz_updated .= true
         moments.neutral.pz_updated .= true
@@ -391,6 +417,59 @@ function init_uzeta!(uzeta, z, r, spec, n_species)
         end
     end
     return nothing
+end
+
+"""
+initialise the electron density
+"""
+function init_electron_density!(electron_density, ion_density, n_ion_species)
+    # use quasineutrality to obtain the electron density from the initial
+    # densities of the various ion species
+    for is ∈ 1:n_ion_species
+        @loop_r_z ir iz begin
+             electron_density[iz,ir] += ion_density[iz,ir,is]
+        end
+    end
+    return nothing
+end
+
+"""
+initialise the electron parallel flow density
+"""
+function init_electron_upar!(electron_upar, electron_density, ion_upar, ion_density, n_ion_species, nr, electron_model)
+    # initialise the electron parallel flow density
+    electron_upar .= 0.0
+    # if using a simple logical sheath model, then the electron parallel current at the boundaries in zed
+    # is equal and opposite to the ion parallel current
+    if electron_model == "boltzmann_electron_response_with_simple_sheath"
+        # loop over ion species, adding each species contribution to the
+        # ion parallel particle flux at the boundaries in zed
+        for is ∈ 1:n_ion_species
+            for ir ∈ 1:nr
+                # electron_upar at this intermediate stage is actually
+                # the electron particle flux
+                electron_upar[1,ir] += ion_dens[1,ir,is] * ion_upar[1,ir,is]
+                electron_upar[end,ir] += ion_dens[end,ir,is] * ion_upar[end,ir,is]
+            end
+        end
+        # convert from electron particle flux to electron parallel flow density
+        electron_upar[1,ir] /= electron_dens[1,ir]
+        electron_upar[end,ir] /= electron_dens[end,ir]
+        # use charge conservation to solve for the electron upar for the rest of the zed domain
+        calculate_electron_upar_from_charge_conservation!(electron_upar, electron_dens, ion_upar, ion_dens)
+    end
+    return nothing
+end
+
+"""
+initialise the electron thermal speed profile.
+for now the only initialisation option for the temperature is constant in z.
+returns vth0 = sqrt(Ts/Te) = 1.0
+"""
+function init_electron_vth!(vth)
+    @loop_s_r_z is ir iz begin
+        vth[iz,ir,is] = 1.0
+    end
 end
 
 """

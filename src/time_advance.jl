@@ -159,7 +159,7 @@ EM fields, and advection terms
 function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
                              vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral,
                              z_spectral, r_spectral, composition, drive_input, moments,
-                             t_input, collisions, species, geometry,
+                             fields, t_input, collisions, species, geometry,
                              boundary_distributions, num_diss_params, restarting)
     # define some local variables for convenience/tidiness
     n_species = composition.n_species
@@ -184,9 +184,6 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
     n_neutral_species_alloc = max(1,composition.n_neutral_species)
     scratch_dummy = setup_dummy_and_buffer_arrays(r.n,z.n,vpa.n,vperp.n,vz.n,vr.n,vzeta.n,
                                    composition.n_ion_species,n_neutral_species_alloc)
-    # create the "fields" structure that contains arrays
-    # for the electrostatic potential phi and eventually the electromagnetic fields
-    fields = setup_em_fields(z.n, r.n, drive_input.force_phi, drive_input.amplitude, drive_input.frequency, drive_input.force_Er_zero_at_wall)
     # initialize the electrostatic potential
     begin_serial_region()
     update_phi!(fields, scratch[1], z, r, composition, z_spectral, r_spectral, scratch_dummy)
@@ -367,8 +364,8 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
     # Ensure all processes are synchronized at the end of the setup
     _block_synchronize()
 
-    return moments, fields, spectral_objects, advect_objects,
-    scratch, advance, scratch_dummy, manufactured_source_list
+    return moments, spectral_objects, advect_objects, scratch, advance, 
+        scratch_dummy, manufactured_source_list
 end
 
 """

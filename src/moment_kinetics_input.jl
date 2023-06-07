@@ -414,7 +414,21 @@ function mk_input(scan_input=Dict())
                 species.neutral[is].initial_density, z_IC, vpa_IC)
         end
     end 
-    species_immutable = (ion = species_ion_immutable, neutral = species_neutral_immutable)
+    z_IC = initial_condition_input(species.electron.z_IC.initialization_option,
+        species.electron.z_IC.width, species.electron.z_IC.wavenumber,
+        species.electron.z_IC.density_amplitude, species.electron.z_IC.density_phase,
+        species.electron.z_IC.upar_amplitude, species.electron.z_IC.upar_phase,
+        species.electron.z_IC.temperature_amplitude, species.electron.z_IC.temperature_phase,
+        species.electron.z_IC.monomial_degree)
+    vpa_IC = initial_condition_input(species.electron.vpa_IC.initialization_option,
+        species.electron.vpa_IC.width, species.electron.vpa_IC.wavenumber,
+        species.electron.vpa_IC.density_amplitude, species.electron.vpa_IC.density_phase,
+        species.electron.vpa_IC.upar_amplitude, species.electron.vpa_IC.upar_phase,
+        species.electron.vpa_IC.temperature_amplitude,
+        species.electron.vpa_IC.temperature_phase, species.electron.vpa_IC.monomial_degree)
+    species_electron_immutable = species_parameters("electron", species.electron.initial_temperature,
+        species.electron.initial_density, z_IC, vpa_IC)
+    species_immutable = (ion = species_ion_immutable, electron = species_electron_immutable, neutral = species_neutral_immutable)
     
     force_Er_zero = get(scan_input, "force_Er_zero_at_wall", false)
     drive_immutable = drive_input(drive.force_phi, drive.amplitude, drive.frequency, force_Er_zero)
@@ -840,7 +854,9 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
                 initial_density, deepcopy(z_initial_conditions), deepcopy(vpa_initial_conditions))
         end
     end
-    species = (ion = species_ion, neutral = species_neutral)
+    species_electron = species_parameters_mutable("electron", T_e, 1.0, deepcopy(z_initial_conditions),
+        deepcopy(vpa_initial_conditions))
+    species = (ion = species_ion, electron = species_electron, neutral = species_neutral)
     
     # if drive_phi = true, include external electrostatic potential of form
     # phi(z,t=0)*drive_amplitude*sinpi(time*drive_frequency)

@@ -5,6 +5,7 @@ module file_io
 export input_option_error
 export open_output_file, open_ascii_output_file
 export setup_file_io, finish_file_io
+export write_moments_data_to_binary
 export write_data_to_ascii
 export write_data_to_netcdf, write_data_to_hdf5
 
@@ -58,6 +59,15 @@ struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmomn}
     parallel_heat_flux::Tmomi
     # handle for the ion species thermal speed
     thermal_speed::Tmomi
+
+    # handle for the electron species density
+    electron_density::Tphi
+    # handle for the electron species parallel flow
+    electron_parallel_flow::Tphi
+    # handle for the electron species parallel pressure
+    electron_parallel_pressure::Tphi
+    # handle for the electron species thermal speed
+    electron_thermal_speed::Tphi
 
     # handle for the neutral species density
     density_neutral::Tmomn
@@ -116,6 +126,7 @@ function setup_file_io(io_input, boundary_distributions, vz, vr, vzeta, vpa, vpe
         if io_input.ascii_output
             #ff_io = open_ascii_output_file(out_prefix, "f_vs_t")
             mom_ion_io = open_ascii_output_file(out_prefix, "moments_ion_vs_t")
+            mom_eon_io = open_ascii_output_file(out_prefix, "moments_electron_vs_t")
             mom_ntrl_io = open_ascii_output_file(out_prefix, "moments_neutral_vs_t")
             fields_io = open_ascii_output_file(out_prefix, "fields_vs_t")
             ascii = ascii_ios(mom_ion_io, mom_ntrl_io, fields_io)
@@ -483,6 +494,30 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
                                           description="ion species thermal speed",
                                           units="c_ref")
 
+        # io_density is the handle for the ion particle density
+        io_electron_density = create_dynamic_variable!(dynamic, "electron_density", mk_float, z, r;
+                                              parallel_io=parallel_io,
+                                              description="electron species density",
+                                              units="n_ref")
+
+        # io_electron_upar is the handle for the electron parallel flow density
+        io_electron_upar = create_dynamic_variable!(dynamic, "electron_parallel_flow", mk_float, z, r;
+                                           parallel_io=parallel_io,
+                                           description="electron species parallel flow",
+                                           units="c_ref = sqrt(2*T_ref/mi)")
+
+        # io_electron_ppar is the handle for the electron parallel pressure
+        io_electron_ppar = create_dynamic_variable!(dynamic, "electron_parallel_pressure", mk_float, z, r;
+                                           parallel_io=parallel_io,
+                                           description="electron species parallel pressure",
+                                           units="n_ref*T_ref")
+
+        # io_electron_vth is the handle for the electron thermal speed
+        io_electron_vth = create_dynamic_variable!(dynamic, "electron_thermal_speed", mk_float, z, r;
+                                          parallel_io=parallel_io,
+                                          description="electron species thermal speed",
+                                          units="c_ref")
+
         # io_density_neutral is the handle for the neutral particle density
         io_density_neutral = create_dynamic_variable!(dynamic, "density_neutral", mk_float, z, r;
                                                       n_neutral_species=n_neutral_species,
@@ -518,9 +553,10 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
             parallel_io=parallel_io, description="neutral species thermal speed",
             units="c_ref")
 
-        return io_moments_info(fid, io_time, io_phi, io_Er, io_Ez, io_density, io_upar,
-                               io_ppar, io_qpar, io_vth, io_density_neutral, io_uz_neutral,
-                               io_pz_neutral, io_qz_neutral, io_thermal_speed_neutral,
+        return io_moments_info(fid, io_time, io_phi, io_Er, io_Ez, 
+                               io_density, io_upar, io_ppar, io_qpar, io_vth, 
+                               io_electron_density, io_electron_upar, io_electron_ppar, io_electron_vth,
+                               io_density_neutral, io_uz_neutral, io_pz_neutral, io_qz_neutral, io_thermal_speed_neutral,
                                parallel_io)
     end
 
@@ -701,6 +737,12 @@ function write_moments_data_to_binary(moments, fields, t, n_ion_species,
                               z, r, n_ion_species)
         append_to_dynamic_var(io_moments.thermal_speed, moments.ion.vth, t_idx, z, r,
                               n_ion_species)
+        # add the electron velocity-moments data at this time slice to the output file
+        append_to_dynamic_var(io_moments.electron_density, moments.electron.dens, t_idx, z, r)
+        append_to_dynamic_var(io_moments.electron_parallel_flow, moments.electron.upar, t_idx, z, r)
+        append_to_dynamic_var(io_moments.electron_parallel_pressure, moments.electron.ppar, t_idx, z, r)
+        append_to_dynamic_var(io_moments.electron_thermal_speed, moments.electron.vth, t_idx, z, r)
+        # add the neutral velocity-moments data at this time slice to the output file
         if n_neutral_species > 0
             append_to_dynamic_var(io_moments.density_neutral, moments.neutral.dens, t_idx,
                                   z, r, n_neutral_species)
