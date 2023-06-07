@@ -790,15 +790,15 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
         new_scratch.pdf[ivpa,ivperp,iz,ir,is] = rk_coefs[1]*pdf.charged.norm[ivpa,ivperp,iz,ir,is] + rk_coefs[2]*old_scratch.pdf[ivpa,ivperp,iz,ir,is] + rk_coefs[3]*new_scratch.pdf[ivpa,ivperp,iz,ir,is]
     end
 
-    @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
-        pdf.charged.unnorm[ivpa,ivperp,iz,ir,is] = new_scratch.pdf[ivpa,ivperp,iz,ir,is]
-    end
-
     # enforce boundary conditions in r, z and vpa on the charged particle distribution function
     enforce_boundary_conditions!(new_scratch.pdf, boundary_distributions.pdf_rboundary_charged,
       vpa.bc, z.bc, r.bc, vpa, vperp, z, r, advect_objects.vpa_advect,
       advect_objects.z_advect, advect_objects.r_advect, composition, scratch_dummy,
       advance)
+
+    @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+        pdf.charged.unnorm[ivpa,ivperp,iz,ir,is] = new_scratch.pdf[ivpa,ivperp,iz,ir,is]
+    end
 
     update_density!(new_scratch.density, pdf.charged.unnorm, vpa, vperp, z, r, composition)
 
@@ -840,14 +840,15 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
             new_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] = ( rk_coefs[1]*pdf.neutral.norm[ivz,ivr,ivzeta,iz,ir,isn]
              + rk_coefs[2]*old_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] + rk_coefs[3]*new_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn])
         end
-        @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
-            pdf.neutral.unnorm[ivz,ivr,ivzeta,iz,ir,isn] = new_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn]
-        end
 
         # enforce boundary conditions in r and z on the neutral particle distribution function
         enforce_neutral_boundary_conditions!(new_scratch.pdf_neutral, new_scratch.pdf, boundary_distributions,
          advect_objects.neutral_r_advect, advect_objects.neutral_z_advect, advect_objects.z_advect, vz, vr, vzeta, vpa, vperp, z, r, composition,
          scratch_dummy)
+
+        @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
+            pdf.neutral.unnorm[ivz,ivr,ivzeta,iz,ir,isn] = new_scratch.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn]
+        end
 
         update_neutral_density!(new_scratch.density_neutral, pdf.neutral.unnorm, vz, vr, vzeta, z, r, composition)
         # other neutral moments here if needed for individual Runga-Kutta steps
