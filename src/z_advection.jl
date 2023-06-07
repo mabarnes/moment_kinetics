@@ -40,10 +40,10 @@ function z_advection!(f_out, fvec_in, ff, moments, advect, z, vpa, r, dt, t, spe
                                            fvec_in.density[:,ir,is], moments.vth[:,ir,is],
                                            moments.evolve_density, moments.evolve_ppar)
             # take the normalized pdf contained in fvec_in.pdf and remove the normalization,
-            # returning the true (un-normalized) particle distribution function in z.scratch
-            @views unnormalize_pdf!(z.scratch, fvec_in.pdf[ivpa,:,ir,is], fvec_in.density[:,ir,is], moments.vth[:,ir,is],
+            # returning the true (un-normalized) particle distribution function in z.scratch2
+            @views unnormalize_pdf!(z.scratch2, fvec_in.pdf[ivpa,:,ir,is], fvec_in.density[:,ir,is], moments.vth[:,ir,is],
                                     moments.evolve_density, moments.evolve_ppar)
-            @views advance_f_local!(f_out[ivpa,:,ir,is], z.scratch, ff[ivpa,:,ir,is], advect[is], ivpa, ir,
+            @views advance_f_local!(f_out[ivpa,:,ir,is], z.scratch2, ff[ivpa,:,ir,is], advect[is], ivpa, ir,
                                     z, dt, spectral)
         end
     end

@@ -480,7 +480,7 @@ function enforce_z_boundary_condition!(pdf, density, upar, ppar, moments, bc::St
                         if is ∈ composition.ion_species_range
                             if moments.evolve_upar
                                 # Flux to sheath boundary given by the moments
-                                ion_flux_0 += density[1,ir,is] * upar[1,ir,is]
+                                ion_flux_0 -= density[1,ir,is] * upar[1,ir,is]
                                 ion_flux_L += density[end,ir,is] * upar[end,ir,is]
                             else
                                 ## treat the boundary at z = -Lz/2 ##
@@ -765,7 +765,7 @@ function enforce_neutral_wall_bc!(pdf, vpa, ppar, upar, density, wall_flux_0,
 
         # First apply boundary condition that total neutral outflux is equat to ion
         # influx to upar
-        upar[1] = - wall_flux_0 / density[1]
+        upar[1] = wall_flux_0 / density[1]
         #would setting density work better??
         #density[1] = - wall_flux_0 / upar[1]
 
@@ -1047,6 +1047,7 @@ function enforce_z_boundary_condition_moments!(density, moments, bc::String)
     #    end
     #end
 end
+
 """
 impose the prescribed vpa boundary condition on f
 at every z grid point
