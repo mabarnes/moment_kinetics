@@ -13,7 +13,6 @@ using ..debugging
 using ..file_io: write_data_to_ascii, write_moments_data_to_binary, write_dfns_data_to_binary, debug_dump
 using ..looping
 using ..moment_kinetics_structs: scratch_pdf
-using ..moment_kinetics_structs: scratch_pdf
 using ..velocity_moments: update_moments!, update_moments_neutral!, reset_moments_status!
 using ..velocity_moments: update_density!, update_upar!, update_ppar!, update_qpar!
 using ..velocity_moments: update_neutral_density!, update_neutral_qz!
@@ -52,6 +51,9 @@ using ..energy_equation: energy_equation!, neutral_energy_equation!
 using ..em_fields: setup_em_fields, update_phi!
 using ..manufactured_solns: manufactured_sources
 using ..advection: advection_info
+using ..electron_fluid_equations: calculate_electron_density!
+using ..electron_fluid_equations: calculate_electron_upar_from_charge_conservation!
+using ..electron_fluid_equations: calculate_electron_qpar!
 @debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
 
 using Dates
@@ -346,6 +348,21 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
             scratch[1].ppar[iz,ir,is] = moments.ion.ppar[iz,ir,is]
         end
 
+        # update the electron, parallel flow density and parallel pressure
+        # in case the corresponding ion quantities have been changed by applying
+        # constraints to the ion pdf
+        calculate_electron_density!(moments.electron.dens, moments.ion.dens)
+        calculate_electron_upar_from_charge_conservation!(moments.electron.upar, moments.electron.dens,
+                                                          moments.ion.upar, moments.ion.dens, composition.electron_physics)
+        @. moments.electron.ppar = 0.5 * moments.electron.dens * moments.electron.vth^2
+        # update the electron moment entries in the scratch array
+        begin_r_z_region()
+        @loop_r_z ir iz begin
+            scratch[1].electron_density[iz,ir] = moments.electron.dens[iz,ir]
+            scratch[1].electron_upar[iz,ir] = moments.electron.upar[iz,ir]
+            scratch[1].electron_ppar[iz,ir] = moments.electron.ppar[iz,ir]
+        end
+
         begin_sn_r_z_region(no_synchronize=true)
         @loop_sn_r_z isn ir iz begin
             scratch[1].pdf_neutral[:,:,:,iz,ir,isn] .= pdf.neutral.norm[:,:,:,iz,ir,isn]
@@ -619,9 +636,10 @@ that may be evolved separately via fluid equations
 function setup_scratch_arrays(moments, pdf_ion_in, pdf_neutral_in, n_rk_stages)
     # create n_rk_stages+1 structs, each of which will contain one pdf,
     # one density, and one parallel flow array
-    scratch = Vector{scratch_pdf{5,3,6,3}}(undef, n_rk_stages+1)
+    scratch = Vector{scratch_pdf{5,3,2,6,3}}(undef, n_rk_stages+1)
     pdf_dims = size(pdf_ion_in)
-    moment_dims = size(moments.ion.dens)
+    moment_ion_dims = size(moments.ion.dens)
+    moment_electron_dims = size(moments.electron.dens)
     pdf_neutral_dims = size(pdf_neutral_in)
     moment_neutral_dims = size(moments.neutral.dens)
     # populate each of the structs
@@ -629,10 +647,14 @@ function setup_scratch_arrays(moments, pdf_ion_in, pdf_neutral_in, n_rk_stages)
         # Allocate arrays in temporary variables so that we can identify them
         # by source line when using @debug_shared_array
         pdf_array = allocate_shared_float(pdf_dims...)
-        density_array = allocate_shared_float(moment_dims...)
-        upar_array = allocate_shared_float(moment_dims...)
-        ppar_array = allocate_shared_float(moment_dims...)
-        temp_z_s_array = allocate_shared_float(moment_dims...)
+        density_array = allocate_shared_float(moment_ion_dims...)
+        upar_array = allocate_shared_float(moment_ion_dims...)
+        ppar_array = allocate_shared_float(moment_ion_dims...)
+        temp_z_s_array = allocate_shared_float(moment_ion_dims...)
+
+        electron_density_array = allocate_shared_float(moment_electron_dims...)
+        electron_upar_array = allocate_shared_float(moment_electron_dims...)
+        electron_ppar_array = allocate_shared_float(moment_electron_dims...)
 
         pdf_neutral_array = allocate_shared_float(pdf_neutral_dims...)
         density_neutral_array = allocate_shared_float(moment_neutral_dims...)
@@ -642,6 +664,8 @@ function setup_scratch_arrays(moments, pdf_ion_in, pdf_neutral_in, n_rk_stages)
 
         scratch[istage] = scratch_pdf(pdf_array, density_array, upar_array,
                                       ppar_array, temp_z_s_array,
+                                      electron_density_array, electron_upar_array,
+                                      electron_ppar_array,
                                       pdf_neutral_array, density_neutral_array,
                                       uz_neutral_array, pz_neutral_array)
         @serial_region begin
@@ -649,6 +673,10 @@ function setup_scratch_arrays(moments, pdf_ion_in, pdf_neutral_in, n_rk_stages)
             scratch[istage].density .= moments.ion.dens
             scratch[istage].upar .= moments.ion.upar
             scratch[istage].ppar .= moments.ion.ppar
+
+            scratch[istage].electron_density .= moments.electron.dens
+            scratch[istage].electron_upar .= moments.electron.upar
+            scratch[istage].electron_ppar .= moments.electron.ppar
 
             scratch[istage].pdf_neutral .= pdf_neutral_in
             scratch[istage].density_neutral .= moments.neutral.dens
@@ -1160,6 +1188,13 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
     calculate_moment_derivatives!(moments, new_scratch, scratch_dummy, z, z_spectral,
                                   num_diss_params)
 
+    # update the electron moments
+    calculate_electron_density!(new_scratch.electron_density, new_scratch.density)
+    calculate_electron_upar_from_charge_conservation!(new_scratch.electron_upar, new_scratch.electron_density,
+        new_scratch.density, new_scratch.upar, composition.electron_physics)
+    @. new_scratch.electron_ppar = 0.5 * new_scratch.electron_density * moments.electron.vth^2
+    calculate_electron_qpar!(moments.electron.qpar, composition.electron_physics)
+
     ##
     # update the neutral particle distribution and moments
     ##
@@ -1350,6 +1385,13 @@ function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase,
         first_scratch.ppar[iz,ir,is] = moments.ion.ppar[iz,ir,is]
     end
 
+    begin_r_z_region()
+    @loop_r_z ir iz begin
+        first_scratch.electron_density[iz,ir] = moments.electron.dens[iz,ir]
+        first_scratch.electron_upar[iz,ir] = moments.electron.upar[iz,ir]
+        first_scratch.electron_ppar[iz,ir] = moments.electron.ppar[iz,ir]
+    end
+
     if composition.n_neutral_species > 0
         begin_sn_r_z_region()
         @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
@@ -1398,6 +1440,14 @@ function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase,
         moments.ion.dens[iz,ir,is] = final_scratch.density[iz,ir,is]
         moments.ion.upar[iz,ir,is] = final_scratch.upar[iz,ir,is]
         moments.ion.ppar[iz,ir,is] = final_scratch.ppar[iz,ir,is]
+    end
+    # No need to synchronize here as we only change electron quantities and previous
+    # region only changed ion quantities.
+    begin_r_z_region(no_synchronize=true)
+    @loop_r_z ir iz begin
+        moments.electron.dens[iz,ir] = final_scratch.electron_density[iz,ir]
+        moments.electron.upar[iz,ir] = final_scratch.electron_upar[iz,ir]
+        moments.electron.ppar[iz,ir] = final_scratch.electron_ppar[iz,ir]
     end
     if composition.n_neutral_species > 0
         # No need to synchronize here as we only change neutral quantities and previous
@@ -1643,6 +1693,12 @@ function update_solution_vector!(evolved, moments, istage, composition, vpa, vpe
         new_evolved.density[iz,ir,is] = old_evolved.density[iz,ir,is]
         new_evolved.upar[iz,ir,is] = old_evolved.upar[iz,ir,is]
         new_evolved.ppar[iz,ir,is] = old_evolved.ppar[iz,ir,is]
+    end
+    begin_r_z_region()
+    @loop_r_z ir iz begin
+        new_evolved.electron_density[iz,ir] = old_evolved.electron_density[iz,ir]
+        new_evolved.electron_upar[iz,ir] = old_evolved.electron_upar[iz,ir]
+        new_evolved.electron_ppar[iz,ir] = old_evolved.electron_ppar[iz,ir]
     end
     if composition.n_neutral_species > 0
         begin_sn_r_z_region()

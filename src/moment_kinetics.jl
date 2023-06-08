@@ -29,7 +29,7 @@ include("coordinates.jl")
 include("file_io.jl")
 include("velocity_moments.jl")
 include("velocity_grid_transforms.jl")
-include("charge_conservation.jl")
+include("electron_fluid_equations.jl")
 include("em_fields.jl")
 include("bgk.jl")
 include("manufactured_solns.jl") # MRH Here?
@@ -381,6 +381,8 @@ function setup_moment_kinetics(input_dict::Dict; restart_prefix_iblock=nothing,
                                             composition, r, z, vpa, vperp, vzeta, vr, vz)
         _block_synchronize()
     end
+    println("dens0_ion: ", moments.ion.dens[1,1,1], " dens0_electron: ", moments.electron.dens[1,1,1])
+
     # create arrays and do other work needed to setup
     # the main time advance loop -- including normalisation of f by density if requested
 

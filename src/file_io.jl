@@ -28,6 +28,7 @@ struct ascii_ios{T <: Union{IOStream,Nothing}}
     # corresponds to the ascii file to which velocity space moments of the
     # distribution function such as density and pressure are written
     moments_ion::T
+    moments_electron::T
     moments_neutral::T
     # corresponds to the ascii file to which electromagnetic fields
     # such as the electrostatic potential are written
@@ -66,6 +67,8 @@ struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmomn}
     electron_parallel_flow::Tphi
     # handle for the electron species parallel pressure
     electron_parallel_pressure::Tphi
+    # handle for the electron species parallel heat flux
+    electron_parallel_heat_flux::Tphi
     # handle for the electron species thermal speed
     electron_thermal_speed::Tphi
 
@@ -129,9 +132,9 @@ function setup_file_io(io_input, boundary_distributions, vz, vr, vzeta, vpa, vpe
             mom_eon_io = open_ascii_output_file(out_prefix, "moments_electron_vs_t")
             mom_ntrl_io = open_ascii_output_file(out_prefix, "moments_neutral_vs_t")
             fields_io = open_ascii_output_file(out_prefix, "fields_vs_t")
-            ascii = ascii_ios(mom_ion_io, mom_ntrl_io, fields_io)
+            ascii = ascii_ios(mom_ion_io, mom_eon_io, mom_ntrl_io, fields_io)
         else
-            ascii = ascii_ios(nothing, nothing, nothing)
+            ascii = ascii_ios(nothing, nothing, nothing, nothing)
         end
 
         io_moments = setup_moments_io(out_prefix, io_input.binary_format, r, z,
@@ -512,6 +515,12 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
                                            description="electron species parallel pressure",
                                            units="n_ref*T_ref")
 
+        # io_electron_qpar is the handle for the electron parallel heat flux
+        io_electron_qpar = create_dynamic_variable!(dynamic, "electron_parallel_heat_flux", mk_float, z, r;
+                                           parallel_io=parallel_io,
+                                           description="electron species parallel heat flux",
+                                           units="n_ref*T_ref*c_ref")
+
         # io_electron_vth is the handle for the electron thermal speed
         io_electron_vth = create_dynamic_variable!(dynamic, "electron_thermal_speed", mk_float, z, r;
                                           parallel_io=parallel_io,
@@ -555,7 +564,7 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
 
         return io_moments_info(fid, io_time, io_phi, io_Er, io_Ez, 
                                io_density, io_upar, io_ppar, io_qpar, io_vth, 
-                               io_electron_density, io_electron_upar, io_electron_ppar, io_electron_vth,
+                               io_electron_density, io_electron_upar, io_electron_ppar, io_electron_qpar, io_electron_vth,
                                io_density_neutral, io_uz_neutral, io_pz_neutral, io_qz_neutral, io_thermal_speed_neutral,
                                parallel_io)
     end
@@ -741,6 +750,7 @@ function write_moments_data_to_binary(moments, fields, t, n_ion_species,
         append_to_dynamic_var(io_moments.electron_density, moments.electron.dens, t_idx, z, r)
         append_to_dynamic_var(io_moments.electron_parallel_flow, moments.electron.upar, t_idx, z, r)
         append_to_dynamic_var(io_moments.electron_parallel_pressure, moments.electron.ppar, t_idx, z, r)
+        append_to_dynamic_var(io_moments.electron_parallel_heat_flux, moments.electron.qpar, t_idx, z, r)
         append_to_dynamic_var(io_moments.electron_thermal_speed, moments.electron.vth, t_idx, z, r)
         # add the neutral velocity-moments data at this time slice to the output file
         if n_neutral_species > 0
@@ -810,6 +820,12 @@ end
                                   moments.ion.qpar.data, t_idx, z, r, n_ion_species)
             append_to_dynamic_var(io_moments.thermal_speed, moments.ion.vth.data,
                                   t_idx, z, r, n_ion_species)
+            # add the electron velocity-moments data at this time slice to the output file
+            append_to_dynamic_var(io_moments.electron_density, moments.electron.dens.data, t_idx, z, r)
+            append_to_dynamic_var(io_moments.electron_parallel_flow, moments.electron.upar.data, t_idx, z, r)
+            append_to_dynamic_var(io_moments.electron_parallel_pressure, moments.electron.ppar.data, t_idx, z, r)
+            append_to_dynamic_var(io_moments.electron_parallel_heat_flux, moments.electron.qpar.data, t_idx, z, r)
+            append_to_dynamic_var(io_moments.electron_thermal_speed, moments.electron.vth.data, t_idx, z, r)
             if n_neutral_species > 0
                 append_to_dynamic_var(io_moments.density_neutral,
                                       moments.neutral.dens.data, t_idx, z, r,
@@ -901,6 +917,7 @@ function write_data_to_ascii(moments, fields, vpa, vperp, z, r, t, n_ion_species
 
         #write_f_ascii(ff, z, vpa, t, ascii_io.ff)
         write_moments_ion_ascii(moments.ion, z, r, t, n_ion_species, ascii_io.moments_ion)
+        write_moments_electron_ascii(moments.electron, z, r, t, ascii_io.moments_electron)
         if n_neutral_species > 0
             write_moments_neutral_ascii(moments.neutral, z, r, t, n_neutral_species, ascii_io.moments_neutral)
         end
@@ -949,6 +966,27 @@ function write_moments_ion_ascii(mom, z, r, t, n_species, ascii_io)
                             "  dens: ", mom.dens[iz,ir,is], "   upar: ", mom.upar[iz,ir,is],
                             "   ppar: ", mom.ppar[iz,ir,is], "   qpar: ", mom.qpar[iz,ir,is])
                     end
+                end
+            end
+        end
+        println(ascii_io,"")
+    end
+    return nothing
+end
+
+"""
+write moments of the ion species distribution function f at this time slice
+"""
+function write_moments_electron_ascii(mom, z, r, t, ascii_io)
+    @serial_region begin
+        # Only read/write from first process in each 'block'
+    
+        @inbounds begin
+            for ir ∈ 1:r.n
+                for iz ∈ 1:z.n
+                    println(ascii_io,"t: ", t, "   r: ", r.grid[ir], "   z: ", z.grid[iz],
+                            "  dens: ", mom.dens[iz,ir], "   upar: ", mom.upar[iz,ir],
+                            "   ppar: ", mom.ppar[iz,ir], "   qpar: ", mom.qpar[iz,ir])
                 end
             end
         end
