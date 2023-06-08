@@ -451,19 +451,19 @@ function z_dissipation_neutral!(f_out, f_in, z, z_spectral::T_spectral, dt,
 
     # calculate d / d z ( Q d f / d z ) using distributed memory compatible routines
     # first compute d f / d z using centred reconciliation and place in dummy array #1
-    derivative_z!(scratch_dummy.buffer_vpavperpzrs_1, f_in,
-                  scratch_dummy.buffer_vpavperprs_1, scratch_dummy.buffer_vpavperprs_2,
-                  scratch_dummy.buffer_vpavperprs_3,scratch_dummy.buffer_vpavperprs_4,
+    derivative_z!(scratch_dummy.buffer_vzvrvzetazrsn_1, f_in,
+                  scratch_dummy.buffer_vzvrvzetarsn_1, scratch_dummy.buffer_vzvrvzetarsn_2,
+                  scratch_dummy.buffer_vzvrvzetarsn_3,scratch_dummy.buffer_vzvrvzetarsn_4,
                   z_spectral,z)
     # form Q d f / d r and place in dummy array #2
     @loop_sn_r_vzeta_vr_vz isn ir ivzeta ivr ivz begin
         Q = 1.0 # placeholder for geometrical or velocity space dependent metric coefficient
-        @. scratch_dummy.buffer_vpavperpzrs_2[ivz,ivr,ivzeta,:,ir,isn] =  Q * scratch_dummy.buffer_vpavperpzrs_1[ivz,ivr,ivzeta,:,ir,isn]
+        @. scratch_dummy.buffer_vzvrvzetazrsn_2[ivz,ivr,ivzeta,:,ir,isn] =  Q * scratch_dummy.buffer_vzvrvzetazrsn_1[ivz,ivr,ivzeta,:,ir,isn]
     end
     # compute d / d z ( Q d f / d z ) using centred reconciliation and place in dummy array #1
-    derivative_z!(scratch_dummy.buffer_vpavperpzrs_1, scratch_dummy.buffer_vpavperpzrs_2,
-                  scratch_dummy.buffer_vpavperprs_1, scratch_dummy.buffer_vpavperprs_2,
-                  scratch_dummy.buffer_vpavperprs_3,scratch_dummy.buffer_vpavperprs_4,
+    derivative_z!(scratch_dummy.buffer_vzvrvzetazrsn_1, scratch_dummy.buffer_vzvrvzetazrsn_2,
+                  scratch_dummy.buffer_vzvrvzetarsn_1, scratch_dummy.buffer_vzvrvzetarsn_2,
+                  scratch_dummy.buffer_vzvrvzetarsn_3,scratch_dummy.buffer_vzvrvzetarsn_4,
                   z_spectral,z)
     # advance f due to diffusion_coefficient * d / d z ( Q d f / d z )
     @loop_sn_r_vzeta_vr_vz isn ir ivzeta ivr ivz begin
@@ -498,23 +498,23 @@ function r_dissipation_neutral!(f_out, f_in, r, r_spectral::T_spectral, dt,
         return nothing
     end
 
-    begin_sn_z_vzeta_vr_nz_region()
+    begin_sn_z_vzeta_vr_vz_region()
 
     # calculate d / d r ( Q d f / d r ) using distributed memory compatible routines
     # first compute d f / d r using centred reconciliation and place in dummy array #1
-    derivative_r!(scratch_dummy.buffer_vpavperpzrs_1, f_in,
-                  scratch_dummy.buffer_vpavperpzs_1, scratch_dummy.buffer_vpavperpzs_2,
-                  scratch_dummy.buffer_vpavperpzs_3,scratch_dummy.buffer_vpavperpzs_4,
+    derivative_r!(scratch_dummy.buffer_vzvrvzetazrsn_1, f_in,
+                  scratch_dummy.buffer_vzvrvzetazsn_1, scratch_dummy.buffer_vzvrvzetazsn_2,
+                  scratch_dummy.buffer_vzvrvzetazsn_3,scratch_dummy.buffer_vzvrvzetazsn_4,
                   r_spectral,r)
     # form Q d f / d r and place in dummy array #2
     @loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
         Q = 1.0 # placeholder for geometrical or velocity space dependent metric coefficient
-        @. scratch_dummy.buffer_vpavperpzrs_2[ivz,ivr,ivzeta,iz,:,isn] =  Q * scratch_dummy.buffer_vpavperpzrs_1[ivz,ivr,ivzeta,iz,:,isn]
+        @. scratch_dummy.buffer_vzvrvzetazrsn_2[ivz,ivr,ivzeta,iz,:,isn] =  Q * scratch_dummy.buffer_vzvrvzetazrsn_1[ivz,ivr,ivzeta,iz,:,isn]
     end
     # compute d / d r ( Q d f / d r ) using centred reconciliation and place in dummy array #1
-    derivative_r!(scratch_dummy.buffer_vpavperpzrs_1, scratch_dummy.buffer_vpavperpzrs_2,
-                  scratch_dummy.buffer_vpavperpzs_1, scratch_dummy.buffer_vpavperpzs_2,
-                  scratch_dummy.buffer_vpavperpzs_3,scratch_dummy.buffer_vpavperpzs_4,
+    derivative_r!(scratch_dummy.buffer_vzvrvzetazrsn_1, scratch_dummy.buffer_vzvrvzetazrsn_2,
+                  scratch_dummy.buffer_vzvrvzetazsn_1, scratch_dummy.buffer_vzvrvzetazsn_2,
+                  scratch_dummy.buffer_vzvrvzetazsn_3,scratch_dummy.buffer_vzvrvzetazsn_4,
                   r_spectral,r)
     # advance f due to diffusion_coefficient * d / d r ( Q d f / d r )
     @loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
