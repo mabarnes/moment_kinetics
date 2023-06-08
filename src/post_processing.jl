@@ -1462,7 +1462,7 @@ function plot_moments(density, delta_density, density_fldline_avg,
     denstot_max = maximum(maximum(dtot) for dtot in denstot) + 0.1
     plot(legend=legend)
     for (t, dtot, run_label) ∈ zip(time, denstot, run_names)
-        @views plot!(t, dtot[1,:], ylims=(denstot_min,denstot_max), xlabel="time",
+        @views plot!(t, dtot, ylims=(denstot_min,denstot_max), xlabel="time",
                      ylabel="∑ⱼn̅ⱼ(t)/∑ⱼn̅ⱼ(0)", linewidth=2, label=run_label)
     end
     outfile = string(prefix, "_$(label)_denstot_vs_t.pdf")
