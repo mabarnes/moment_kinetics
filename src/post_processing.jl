@@ -252,6 +252,18 @@ function allocate_global_zr_neutral_moments(nz_global,nr_global,n_neutral_specie
     return neutral_density, neutral_uz, neutral_pz, neutral_qz, neutral_thermal_speed
 end
 
+function get_coords_nelement(scan_input)
+    # use 1 as default because these values should be set in input .toml
+    z_nelement = get(scan_input, "z_nelement", 1)
+    r_nelement = get(scan_input, "r_nelement", 1)
+    vpa_nelement = get(scan_input, "vpa_nelement", 1)
+    vperp_nelement = get(scan_input, "vperp_nelement", 1)
+    vz_nelement = get(scan_input, "vz_nelement", 1)
+    vr_nelement = get(scan_input, "vr_nelement", 1)
+    vzeta_nelement = get(scan_input, "vzeta_nelement", 1)
+    return z_nelement, r_nelement, vpa_nelement, vperp_nelement, vz_nelement, vr_nelement, vzeta_nelement
+end
+
 function get_geometry_and_composition(scan_input,n_ion_species,n_neutral_species)
     # set geometry_input
     # MRH need to get this in way that does not duplicate code
@@ -2562,7 +2574,7 @@ function compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,spec
             pdf = load_pdf_data(fid_pdfs, printout=false)
             # local local grid data on iblock=0
             z_local, _ = load_coordinate_data(fid_pdfs, "z")
-            r_local = load_coordinate_data(fid_pdfs, "r")
+            r_local, _ = load_coordinate_data(fid_pdfs, "r")
             pdf_sym_array = copy(vpa.grid)
             # plot a thermal vperp on line plots
             ivperp0 = max(floor(mk_int,vperp.n/3),1)
