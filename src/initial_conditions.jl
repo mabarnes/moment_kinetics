@@ -140,12 +140,13 @@ with a self-consistent initial condition
 function init_pdf_and_moments!(pdf, moments, boundary_distributions, geometry,
                                composition, r, z, vperp, vpa, vzeta, vr, vz,
                                vpa_spectral, vz_spectral, species,
-                               use_manufactured_solns)
-    if use_manufactured_solns
+                               manufactured_solns_input)
+    if manufactured_solns_input.use_for_init
         init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z,
                                              r, composition.n_ion_species,
                                              composition.n_neutral_species,
-                                             geometry, composition)
+                                             geometry, composition,
+                                             manufactured_solns_input)
     else
         n_ion_species = composition.n_ion_species
         n_neutral_species = composition.n_neutral_species
@@ -891,8 +892,13 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
     return nothing
 end
 
-function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_species, geometry,composition)
-    manufactured_solns_list = manufactured_solutions(r.L,z.L,r.bc,z.bc,geometry,composition,r.n)
+function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z,
+                                              r, n_ion_species, n_neutral_species,
+                                              geometry, composition,
+                                              manufactured_solns_input)
+    manufactured_solns_list = manufactured_solutions(manufactured_solns_input, r.L, z.L,
+                                                     r.bc, z.bc, geometry, composition,
+                                                     r.n)
     dfni_func = manufactured_solns_list.dfni_func
     densi_func = manufactured_solns_list.densi_func
     dfnn_func = manufactured_solns_list.dfnn_func

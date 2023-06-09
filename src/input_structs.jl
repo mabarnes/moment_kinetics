@@ -40,7 +40,6 @@ struct time_input
     split_operators::Bool
     runtime_plots::Bool
     use_manufactured_solns_for_advance::Bool
-    use_manufactured_solns_for_init::Bool
 end
 
 """

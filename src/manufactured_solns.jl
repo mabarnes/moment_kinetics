@@ -76,7 +76,8 @@ using IfElse
     end
 
     # neutral density symbolic function
-    function densn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
+    function densn_sym(Lr, Lz, r_bc, z_bc, geometry, composition,
+                       manufactured_solns_input)
         if z_bc == "periodic" 
             if r_bc == "periodic" 
                 densn = 1.5 +  0.1*(cos(2.0*pi*r/Lr) + cos(2.0*pi*z/Lz)) #*sin(2.0*pi*t)  
@@ -87,8 +88,8 @@ using IfElse
             T_wall = composition.T_wall
             Bzed = geometry.Bzed
             Bmag = geometry.Bmag
-            epsilon = composition.epsilon_offset
-            alpha = composition.alpha_switch
+            epsilon = manufactured_solns_input.epsilon_offset
+            alpha = manufactured_solns_input.alpha_switch
             Gamma_minus = fluxconst*(Bzed/Bmag)*nminus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha)/sqrt(pi)
             Gamma_plus = fluxconst*(Bzed/Bmag)*nplus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha)/sqrt(pi)
             # exact integral of corresponding dfnn below
@@ -107,8 +108,9 @@ using IfElse
     end
 
     # neutral distribution symbolic function
-    function dfnn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
-        densn = densn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
+    function dfnn_sym(Lr, Lz, r_bc, z_bc, geometry, composition, manufactured_solns_input)
+        densn = densn_sym(Lr, Lz, r_bc, z_bc, geometry, composition,
+                          manufactured_solns_input)
         if z_bc == "periodic"
             dfnn = densn * exp( - vz^2 - vr^2 - vzeta^2)
         elseif z_bc == "wall"
@@ -117,8 +119,8 @@ using IfElse
             FKw = knudsen_cosine(composition)
             Bzed = geometry.Bzed
             Bmag = geometry.Bmag
-            epsilon = composition.epsilon_offset
-            alpha = composition.alpha_switch
+            epsilon = manufactured_solns_input.epsilon_offset
+            alpha = manufactured_solns_input.alpha_switch
             Gamma_minus = fluxconst*(Bzed/Bmag)*nminus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha)/sqrt(pi)
             Gamma_plus = fluxconst*(Bzed/Bmag)*nplus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha)/sqrt(pi)
             dfnn = Hplus *( Gamma_minus*( 0.5 - z/Lz)^2 + 1.0 )*FKw + Hminus*( Gamma_plus*( 0.5 + z/Lz)^2 + 1.0 )*FKw 
@@ -134,7 +136,7 @@ using IfElse
     end
     
     # ion density symbolic function
-    function densi_sym(Lr,Lz,r_bc,z_bc,composition)
+    function densi_sym(Lr, Lz, r_bc, z_bc, composition, manufactured_solns_input)
         if z_bc == "periodic"
             if r_bc == "periodic"
                 densi = 1.5 +  0.1*(sin(2.0*pi*r/Lr) + sin(2.0*pi*z/Lz))#*sin(2.0*pi*t)  
@@ -144,38 +146,41 @@ using IfElse
                 densi = 1.0 +  0.5*(r/Lr)*sin(2.0*pi*z/Lz)
             end
         elseif z_bc == "wall"
-            epsilon = composition.epsilon_offset
-            alpha = composition.alpha_switch
+            epsilon = manufactured_solns_input.epsilon_offset
+            alpha = manufactured_solns_input.alpha_switch
              densi = nconst*(0.5 - z/Lz)*nminus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha) + nconst*(z/Lz + 0.5)*nplus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha) + (z/Lz + 0.5)*(0.5 - z/Lz)*nzero_sym(Lr,Lz,r_bc,z_bc,alpha)  #+  0.5*(r/Lr + 0.5) + 0.5*(z/Lz + 0.5)
         end
         return densi
     end
 
-    function jpari_into_LHS_wall_sym(Lr,Lz,r_bc,z_bc,composition)
+    function jpari_into_LHS_wall_sym(Lr, Lz, r_bc, z_bc, composition,
+                                     manufactured_solns_input)
         if z_bc == "periodic"
             jpari_into_LHS_wall_sym = 0.0
         elseif z_bc == "wall"
             #appropriate for wall bc test when Er = 0 (nr == 1)
-            epsilon = composition.epsilon_offset
-            alpha = composition.alpha_switch
+            epsilon = manufactured_solns_input.epsilon_offset
+            alpha = manufactured_solns_input.alpha_switch
             jpari_into_LHS_wall_sym = -fluxconst*nminus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha)/sqrt(pi)
         end
         return jpari_into_LHS_wall_sym
     end
     
     # ion distribution symbolic function
-    function dfni_sym(Lr,Lz,r_bc,z_bc,composition,geometry,nr)
-        densi = densi_sym(Lr,Lz,r_bc,z_bc,composition)
+    function dfni_sym(Lr, Lz, r_bc, z_bc, composition, geometry, nr,
+                      manufactured_solns_input)
+        densi = densi_sym(Lr, Lz, r_bc, z_bc, composition, manufactured_solns_input)
         
         # calculate the electric fields and the potential
-        Er, Ez, phi = electric_fields(Lr,Lz,r_bc,z_bc,composition,nr)
+        Er, Ez, phi = electric_fields(Lr, Lz, r_bc, z_bc, composition, nr,
+                                      manufactured_solns_input)
         
         # get geometric/composition data
         Bzed = geometry.Bzed
         Bmag = geometry.Bmag
         rhostar = geometry.rhostar
-        epsilon = composition.epsilon_offset
-        alpha = composition.alpha_switch
+        epsilon = manufactured_solns_input.epsilon_offset
+        alpha = manufactured_solns_input.alpha_switch
         if z_bc == "periodic"
             dfni = densi * exp( - vpa^2 - vperp^2) 
         elseif z_bc == "wall"
@@ -187,15 +192,16 @@ using IfElse
         end
         return dfni
     end
-    function cartesian_dfni_sym(Lr,Lz,r_bc,z_bc,composition)
-        densi = densi_sym(Lr,Lz,r_bc,z_bc,composition)
+    function cartesian_dfni_sym(Lr, Lz, r_bc, z_bc, composition, manufactured_solns_input)
+        densi = densi_sym(Lr, Lz, r_bc, z_bc, composition, manufactured_solns_input)
         #if (r_bc == "periodic" && z_bc == "periodic") || (r_bc == "Dirichlet" && z_bc == "periodic")
             dfni = densi * exp( - vz^2 - vr^2 - vzeta^2) 
         #end
         return dfni
     end
 
-    function electric_fields(Lr,Lz,r_bc,z_bc,composition,nr)
+    function electric_fields(Lr, Lz, r_bc, z_bc, composition, nr,
+                             manufactured_solns_input)
        
         # define derivative operators
         Dr = Differential(r) 
@@ -204,7 +210,8 @@ using IfElse
         # get N_e factor for boltzmann response
         if composition.electron_physics == boltzmann_electron_response_with_simple_sheath && nr == 1 
             # so 1D MMS test with 3V neutrals where ion current can be calculated prior to knowing Er
-            jpari_into_LHS_wall = jpari_into_LHS_wall_sym(Lr,Lz,r_bc,z_bc,composition)
+            jpari_into_LHS_wall = jpari_into_LHS_wall_sym(Lr, Lz, r_bc, z_bc, composition,
+                                                          manufactured_solns_input)
             N_e = -2.0*sqrt(pi*composition.me_over_mi)*exp(-composition.phi_wall/composition.T_e)*jpari_into_LHS_wall
         elseif composition.electron_physics == boltzmann_electron_response_with_simple_sheath && nr > 1 
             println("ERROR: simple sheath MMS test not supported for nr > 1")
@@ -223,7 +230,7 @@ using IfElse
             rfac = 0.0
         end
         
-        densi = densi_sym(Lr,Lz,r_bc,z_bc,composition)
+        densi = densi_sym(Lr, Lz, r_bc, z_bc, composition, manufactured_solns_input)
         # calculate the electric fields
         dense = densi # get the electron density via quasineutrality with Zi = 1
         phi = composition.T_e*log(dense/N_e) # use the adiabatic response of electrons for me/mi -> 0
@@ -236,12 +243,16 @@ using IfElse
         return Er_expanded, Ez_expanded, phi
     end
 
-    function manufactured_solutions(Lr,Lz,r_bc,z_bc,geometry,composition,nr)
-        densi = densi_sym(Lr,Lz,r_bc,z_bc,composition)
-        dfni = dfni_sym(Lr,Lz,r_bc,z_bc,composition,geometry,nr)
+    function manufactured_solutions(manufactured_solns_input, Lr, Lz, r_bc, z_bc,
+                                    geometry, composition, nr)
+        densi = densi_sym(Lr, Lz, r_bc, z_bc, composition, manufactured_solns_input)
+        dfni = dfni_sym(Lr, Lz, r_bc, z_bc, composition, geometry, nr,
+                        manufactured_solns_input)
         
-        densn = densn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
-        dfnn = dfnn_sym(Lr,Lz,r_bc,z_bc,geometry,composition)
+        densn = densn_sym(Lr, Lz, r_bc, z_bc, geometry, composition,
+                          manufactured_solns_input)
+        dfnn = dfnn_sym(Lr, Lz, r_bc, z_bc, geometry, composition,
+                        manufactured_solns_input)
         
         #build julia functions from these symbolic expressions
         # cf. https://docs.juliahub.com/Symbolics/eABRO/3.4.0/tutorials/symbolic_functions/
@@ -261,10 +272,12 @@ using IfElse
         return manufactured_solns_list
     end 
     
-    function manufactured_electric_fields(Lr,Lz,r_bc,z_bc,composition,nr)
+    function manufactured_electric_fields(Lr, Lz, r_bc, z_bc, composition, nr,
+                                          manufactured_solns_input)
         
         # calculate the electric fields and the potential
-        Er, Ez, phi = electric_fields(Lr,Lz,r_bc,z_bc,composition,nr)
+        Er, Ez, phi = electric_fields(Lr, Lz, r_bc, z_bc, composition, nr,
+                                      manufactured_solns_input)
         
         Er_func = build_function(Er, z, r, t, expression=Val{false})
         Ez_func = build_function(Ez, z, r, t, expression=Val{false})
@@ -275,17 +288,27 @@ using IfElse
         return manufactured_E_fields
     end 
 
-    function manufactured_sources(r_coord,z_coord,vperp_coord,vpa_coord,vzeta_coord,vr_coord,vz_coord,composition,geometry,collisions,num_diss_params)
+    function manufactured_sources(manufactured_solns_input, r_coord, z_coord, vperp_coord,
+            vpa_coord, vzeta_coord, vr_coord, vz_coord, composition, geometry, collisions,
+            num_diss_params)
         
         # ion manufactured solutions
-        densi = densi_sym(r_coord.L,z_coord.L,r_coord.bc,z_coord.bc,composition)
-        dfni = dfni_sym(r_coord.L,z_coord.L,r_coord.bc,z_coord.bc,composition,geometry,r_coord.n)
-        vrvzvzeta_dfni = cartesian_dfni_sym(r_coord.L,z_coord.L,r_coord.bc,z_coord.bc,composition) #dfni in vr vz vzeta coordinates
+        densi = densi_sym(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc, composition,
+                          manufactured_solns_input)
+        dfni = dfni_sym(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc, composition,
+                        geometry, r_coord.n, manufactured_solns_input)
+        #dfni in vr vz vzeta coordinates
+        vrvzvzeta_dfni = cartesian_dfni_sym(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc,
+                                            composition, manufactured_solns_input)
         
         # neutral manufactured solutions
-        densn = densn_sym(r_coord.L,z_coord.L,r_coord.bc,z_coord.bc,geometry,composition)
-        dfnn = dfnn_sym(r_coord.L,z_coord.L,r_coord.bc,z_coord.bc,geometry,composition)
-        gav_dfnn = gyroaveraged_dfnn_sym(r_coord.L,z_coord.L,r_coord.bc,z_coord.bc,geometry,composition) # gyroaverage < dfnn > in vpa vperp coordinates
+        densn = densn_sym(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc, geometry,
+                          composition, manufactured_solns_input)
+        dfnn = dfnn_sym(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc, geometry,
+                        composition, manufactured_solns_input)
+        # gyroaverage < dfnn > in vpa vperp coordinates
+        gav_dfnn = gyroaveraged_dfnn_sym(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc,
+                                         geometry, composition, manufactured_solns_input)
         
         dense = densi # get the electron density via quasineutrality with Zi = 1
         
@@ -315,7 +338,8 @@ using IfElse
         end
         
         # calculate the electric fields and the potential
-        Er, Ez, phi = electric_fields(r_coord.L,z_coord.L,r_coord.bc,z_coord.bc,composition,r_coord.n)
+        Er, Ez, phi = electric_fields(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc,
+                                      composition, r_coord.n, manufactured_solns_input)
         
         # the ion source to maintain the manufactured solution
         Si = ( Dt(dfni) + ( vpa * (Bzed/Bmag) - 0.5*rhostar*Er ) * Dz(dfni) + ( 0.5*rhostar*Ez*rfac ) * Dr(dfni) + ( 0.5*Ez*Bzed/Bmag ) * Dvpa(dfni)

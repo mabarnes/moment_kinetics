@@ -998,7 +998,10 @@ function analyze_and_plot_data(prefix...)
         end
     end
 
-    manufactured_solns_test = use_manufactured_solns_for_advance = get(scan_input, "use_manufactured_solns_for_advance", false)
+    manufactured_solns_section = get(scan_input, "manufactured_solns", Dict{String,Any}())
+    use_manufactured_solns_for_advance = get(manufactured_solns_section, "use_for_advance", false)
+    use_manufactured_solns_for_init = get(manufactured_solns_section, "use_for_init", false)
+    manufactured_solns_test = use_manufactured_solns_for_advance && use_manufactured_solns_for_init
     # Plots compare density and density_symbolic at last timestep
     #if(manufactured_solns_test && nr > 1)
     if(manufactured_solns_test)

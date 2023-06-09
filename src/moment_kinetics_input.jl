@@ -151,16 +151,6 @@ function mk_input(scan_input=Dict())
     composition.use_test_neutral_wall_pdf = get(scan_input, "use_test_neutral_wall_pdf", false)
     # constant to be used to test nonzero Er in wall boundary condition
     composition.Er_constant = get(scan_input, "Er_constant", 0.0)
-    # constant to be used to control Ez divergence in MMS tests
-    composition.epsilon_offset = get(scan_input, "epsilon_offset", 0.001)
-    # bool to control if dfni is a function of vpa or vpabar in MMS test 
-    composition.use_vpabar_in_mms_dfni = get(scan_input, "use_vpabar_in_mms_dfni", true)
-    if composition.use_vpabar_in_mms_dfni
-        alpha_switch = 1.0
-    else
-        alpha_switch = 0.0
-    end
-    composition.alpha_switch = alpha_switch
     
     ## set geometry_input
     geometry.Bzed = get(scan_input, "Bzed", 1.0)
@@ -246,13 +236,30 @@ function mk_input(scan_input=Dict())
     n_rk_stages = get(scan_input, "n_rk_stages", 4)
     split_operators = get(scan_input, "split_operators", false)
     runtime_plots = get(scan_input, "runtime_plots", false)
-    use_manufactured_solns_for_advance = get(scan_input, "use_manufactured_solns_for_advance", false)
-    use_manufactured_solns_for_init = get(scan_input, "use_manufactured_solns_for_init", false)
-    if use_manufactured_solns_for_advance && !use_manufactured_solns_for_init
-        # if not (use_manufactured_solns_for_init == true) force use_manufactured_solns_for_init == true
-        use_manufactured_solns_for_init = true
+
+    use_for_init_is_default = !(("manufactured_solns" ∈ keys(scan_input)) &&
+                                ("use_for_init" ∈ keys(scan_input["manufactured_solns"])))
+    manufactured_solns_section = set_defaults_and_check_section!(
+        scan_input, "manufactured_solns";
+        use_for_advance=false,
+        use_for_init=false,
+        # constant to be used to control Ez divergence in MMS tests
+        epsilon_offset=0.001,
+        # bool to control if dfni is a function of vpa or vpabar in MMS test
+        use_vpabar_in_mms_dfni=true,
+        alpha_switch=1.0,
+       )
+    if use_for_init_is_default && manufactured_solns_section["use_for_advance"]
+        # if manufactured_solns_section["use_for_init"] was set by default, set
+        # manufactured_solns_section["use_for_init"] == true
+        manufactured_solns_section["use_for_init"] = true
     end
-    #println("Info: The flag use_manufactured_solns is ",use_manufactured_solns)
+    if manufactured_solns_section["use_vpabar_in_mms_dfni"]
+        manufactured_solns_section["alpha_switch"] = 1.0
+    else
+        manufactured_solns_section["alpha_switch"] = 0.0
+    end
+    manufactured_solns_input = Dict_to_NamedTuple(manufactured_solns_section)
     
     # overwrite some default parameters related to the r grid
     # ngrid is number of grid points per element
@@ -407,8 +414,7 @@ function mk_input(scan_input=Dict())
 
     t_input = time_input(nstep, dt, nwrite_moments, nwrite_dfns, n_rk_stages,
                          split_operators, runtime_plots,
-                         use_manufactured_solns_for_advance,
-                         use_manufactured_solns_for_init)
+                         manufactured_solns_input.use_for_advance)
     # replace mutable structures with immutable ones to optimize performance
     # and avoid possible misunderstandings	
 	z_advection_immutable = advection_input(z.advection.option, z.advection.constant_speed,
@@ -530,7 +536,8 @@ function mk_input(scan_input=Dict())
     # return immutable structs for z, vpa, species and composition
     all_inputs = (io_immutable, evolve_moments, t_input,
                   z_immutable, r_immutable, vpa_immutable, vperp_immutable, gyrophase_immutable, vz_immutable, vr_immutable, vzeta_immutable,
-                  composition, species_immutable, collisions, geometry, drive_immutable, num_diss_params)
+                  composition, species_immutable, collisions, geometry, drive_immutable,
+                  num_diss_params, manufactured_solns_input)
     println(io, "\nAll inputs returned from mk_input():")
     println(io, all_inputs)
     close(io)

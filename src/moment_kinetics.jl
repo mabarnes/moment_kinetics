@@ -314,7 +314,7 @@ function setup_moment_kinetics(input_dict::Dict; restart_prefix_iblock=nothing,
         vpa_input, vperp_input, gyrophase_input,
         vz_input, vr_input, vzeta_input,
         composition, species, collisions,
-        geometry, drive_input, num_diss_params = input
+        geometry, drive_input, num_diss_params, manufactured_solns_input = input
     # initialize z grid and write grid point locations to file
     z, z_spectral = define_coordinate(z_input, io_input.parallel_io)
     # initialize r grid and write grid point locations to file
@@ -363,7 +363,7 @@ function setup_moment_kinetics(input_dict::Dict; restart_prefix_iblock=nothing,
         init_pdf_and_moments!(pdf, moments, boundary_distributions, geometry,
                               composition, r, z, vperp, vpa, vzeta, vr, vz,
                               vpa_spectral, vz_spectral, species,
-                              t_input.use_manufactured_solns_for_init)
+                              manufactured_solns_input)
         # initialize time variable
         code_time = 0.
     else
@@ -383,7 +383,8 @@ function setup_moment_kinetics(input_dict::Dict; restart_prefix_iblock=nothing,
         setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
             vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral, z_spectral,
             r_spectral, composition, drive_input, moments, t_input, collisions, species,
-            geometry, boundary_distributions, num_diss_params, restarting)
+            geometry, boundary_distributions, num_diss_params, manufactured_solns_input,
+            restarting)
     # setup i/o
     ascii_io, io_moments, io_dfns = setup_file_io(io_input, boundary_distributions, vz,
         vr, vzeta, vpa, vperp, z, r, composition, collisions, moments.evolve_density,

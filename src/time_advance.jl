@@ -160,7 +160,8 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
                              vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral,
                              z_spectral, r_spectral, composition, drive_input, moments,
                              t_input, collisions, species, geometry,
-                             boundary_distributions, num_diss_params, restarting)
+                             boundary_distributions, num_diss_params,
+                             manufactured_solns_input, restarting)
     # define some local variables for convenience/tidiness
     n_species = composition.n_species
     n_ion_species = composition.n_ion_species
@@ -172,8 +173,8 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
     # if no splitting of operators, all terms advanced concurrently;
     # else, will advance one term at a time.
     advance = setup_advance_flags(moments, composition, t_input, collisions,
-                                  num_diss_params, rk_coefs, r, vperp, vpa, vzeta, vr, vz)
-
+                                  num_diss_params, manufactured_solns_input, rk_coefs, r,
+                                  vperp, vpa, vzeta, vr, vz)
 
     begin_serial_region()
 
@@ -292,7 +293,10 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
     # vpa_spectral = vpa_spectral, vperp_spectral = vperp_spectral, z_spectral = z_spectral, r_spectral = r_spectral)
     spectral_objects = spectral_object_struct(vz_spectral, vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral, z_spectral, r_spectral)
     if(advance.manufactured_solns_test)
-        manufactured_source_list = manufactured_sources(r,z,vperp,vpa,vzeta,vr,vz,composition,geometry,collisions,num_diss_params)
+        manufactured_source_list = manufactured_sources(manufactured_solns_input, r, z,
+                                                        vperp, vpa, vzeta, vr, vz,
+                                                        composition, geometry, collisions,
+                                                        num_diss_params)
     else
         manufactured_source_list = false # dummy Bool to be passed as argument instead of list
     end
@@ -378,7 +382,8 @@ if no splitting of operators, all terms advanced concurrently;
 else, will advance one term at a time.
 """
 function setup_advance_flags(moments, composition, t_input, collisions, num_diss_params,
-                             rk_coefs, r, vperp, vpa, vzeta, vr, vz)
+                             manufactured_solns_input, rk_coefs, r, vperp, vpa, vzeta, vr,
+                             vz)
     # default is not to concurrently advance different operators
     advance_vpa_advection = false
     advance_z_advection = false
@@ -499,7 +504,7 @@ function setup_advance_flags(moments, composition, t_input, collisions, num_diss
         vz_diffusion = (advance_numerical_dissipation && num_diss_params.vz_dissipation_coefficient > 0.0)
     end
 
-    manufactured_solns_test = t_input.use_manufactured_solns_for_advance
+    manufactured_solns_test = manufactured_solns_input.use_for_advance
 
     return advance_info(advance_vpa_advection, advance_z_advection, advance_r_advection,
                         advance_neutral_z_advection, advance_neutral_r_advection,
