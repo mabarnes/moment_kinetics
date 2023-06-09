@@ -55,6 +55,58 @@ function get(d::Dict, key, default::Enum)
 end
 
 """
+Set the defaults for options in a section, and check that there are not any unexpected
+options (i.e. options that have no default).
+
+Modifies the options[section_name]::Dict by adding defaults for any values that are not
+already present.
+"""
+function set_defaults_and_check_section!(options::Dict, section_name;
+                                         kwargs...)
+    if !(section_name ∈ keys(options))
+        # If section is not present, create it
+        options[section_name] = Dict{String,Any}()
+    end
+
+    if !isa(options[section_name], Dict)
+        error("Expected '$section_name' to be a section in the input file, but it has a "
+              * "value '$(options[section_name])'")
+    end
+
+    section = options[section_name]
+
+    # Check for any unexpected values in the section - all options that are set should be
+    # present in the kwargs of this function call
+    section_keys_symbols = keys(kwargs)
+    section_keys = (String(k) for k ∈ section_keys_symbols)
+    for (key, value) in section
+        if !(key ∈ section_keys)
+            error("Unexpected option '$key=$value' in section '$section_name'")
+        end
+    end
+
+    # Set default values if a key was not set explicitly
+    explicit_keys = keys(section)
+    for (key_sym, value) ∈ kwargs
+        key = String(key_sym)
+        if !(key ∈ explicit_keys)
+            section[key] = value
+        end
+    end
+
+    return section
+end
+
+"""
+Convert a Dict whose keys are String or Symbol to a NamedTuple
+
+Useful as NamedTuple is immutable, so option values cannot be accidentally changed.
+"""
+function Dict_to_NamedTuple(d)
+    return NamedTuple(Symbol(k)=>v for (k,v) ∈ d)
+end
+
+"""
 """
 function mk_input(scan_input=Dict())
 
