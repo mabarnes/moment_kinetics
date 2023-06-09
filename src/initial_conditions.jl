@@ -333,15 +333,12 @@ function init_density!(dens, z, r, spec, n_species)
                                     + spec[is].z_IC.density_phase)))
             elseif spec[is].z_IC.initialization_option == "smoothedsquare"
                 # initial condition is first 3 Fourier harmonics of a square wave
+                argument = 2.0*π*(spec[is].z_IC.wavenumber*z.grid/z.L +
+                                  spec[is].z_IC.density_phase)
                 @. dens[:,ir,is] =
                     (spec[is].initial_density
-                     * (1.0 + spec[is].z_IC.density_amplitude * 4.0 / π
-                              * (cos(2.0*π*spec[is].z_IC.wavenumber*z.grid/z.L
-                                     + spec[is].z_IC.density_phase)
-                                 + cos(3.0*(2.0*π*spec[is].z_IC.wavenumber*z.grid/z.L
-                                            + spec[is].z_IC.density_phase)) / 3.0
-                                 + cos(5.0*(2.0*π*spec[is].z_IC.wavenumber*z.grid/z.L
-                                            + spec[is].z_IC.density_phase)) / 5.0)))
+                     * (1.0 + spec[is].z_IC.density_amplitude
+                              * cos(argument - sin(2.0*argument)) ))
             elseif spec[is].z_IC.initialization_option == "monomial"
                 # linear variation in z, with offset so that
                 # function passes through zero at upwind boundary
@@ -361,15 +358,11 @@ function init_density!(dens, z, r, spec, n_species)
                                + spec[is].r_IC.density_phase))
                 elseif spec[is].z_IC.initialization_option == "smoothedsquare"
                     # initial condition is first 3 Fourier harmonics of a square wave
+                    argument = 2.0*π*(spec[is].r_IC.wavenumber*r.grid/r.L +
+                                      spec[is].r_IC.density_phase)
                     @. dens[iz,:,is] +=
-                        (spec[is].initial_density
-                         * spec[is].r_IC.density_amplitude * 4.0 / π
-                           * (cos(2.0*π*spec[is].r_IC.wavenumber*r.grid/r.L
-                                  + spec[is].r_IC.density_phase)
-                              + cos(3.0*(2.0*π*spec[is].r_IC.wavenumber*r.grid/r.L
-                                         + spec[is].r_IC.density_phase)) / 3.0
-                              + cos(5.0*(2.0*π*spec[is].r_IC.wavenumber*r.grid/r.L
-                                         + spec[is].r_IC.density_phase)) / 5.0))
+                        spec[is].initial_density * spec[is].r_IC.density_amplitude *
+                        cos(argument - sin(2.0*argument))
                 elseif spec[is].r_IC.initialization_option == "monomial"
                     # linear variation in r, with offset so that
                     # function passes through zero at upwind boundary

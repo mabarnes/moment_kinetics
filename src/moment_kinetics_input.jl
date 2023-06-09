@@ -1027,7 +1027,7 @@ function check_input_initialization(composition, species, io)
             println(io,"  setting Fz(z) = initial_density + z_amplitude*sinpi(z_wavenumber*z/L_z).")
         elseif species[is].z_IC.initialization_option == "smoothedsquare"
             print(io,">z_initialization_option = 'smoothedsquare'.")
-            println(io,"  setting Fz(z) = initial_density + z_amplitude*4/π*(sinpi(z_wavenumber*z/L_z)+sinpi(3*z_wavenumber*z/L_z)/3+sinpi(5*z_wavenumber*z/L_z)/5).")
+            println(io,"  setting Fz(z) = initial_density + z_amplitude*(cospi(z_wavenumber*z/L_z - sinpi(2*z_wavenumber*z/Lz))).")
         elseif species[is].z_IC.initialization_option == "bgk"
             print(io,">z_initialization_option = 'bgk'.")
             println(io,"  setting Fz(z,vpa) = F(vpa^2 + phi), with phi_max = 0.")
@@ -1045,7 +1045,7 @@ function check_input_initialization(composition, species, io)
             println(io,"  setting Fr(r) = initial_density + r_amplitude*sinpi(r_wavenumber*r/L_r).")
         elseif species[is].r_IC.initialization_option == "smoothedsquare"
             print(io,">r_initialization_option = 'smoothedsquare'.")
-            println(io,"  setting Fr(r) = initial_density + r_amplitude*4/π*(sinpi(r_wavenumber*r/L_r)+sinpi(3*r_wavenumber*r/L_r)/3+sinpi(5*r_wavenumber*r/L_r)/5).")
+            println(io,"  setting Fr(r) = initial_density + r_amplitude*(cospi(r_wavenumber*r/L_r - sinpi(2*r_wavenumber*r/Lr))).")
         else
             input_option_error("r_initialization_option", species[is].r_IC.initialization_option)
         end
