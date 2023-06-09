@@ -9,6 +9,7 @@ export compare_neutral_pdf_symbolic_test
 export compare_fields_symbolic_test
 export construct_global_zr_coords
 export allocate_global_zr_ion_moments
+export allocate_global_zr_electron_moments
 export allocate_global_zr_neutral_moments
 export allocate_global_zr_fields
 export get_coords_nelement
@@ -236,6 +237,15 @@ function allocate_global_zr_ion_dfns(nvpa_global, nvperp_global, nz_global, nr_g
     return f
 end
 
+function allocate_global_zr_electron_moments(nz_global,nr_global,ntime)
+    density = allocate_float(nz_global,nr_global,ntime)
+    parallel_flow = allocate_float(nz_global,nr_global,ntime)
+    parallel_pressure = allocate_float(nz_global,nr_global,ntime)
+    parallel_heat_flux = allocate_float(nz_global,nr_global,ntime)
+    thermal_speed = allocate_float(nz_global,nr_global,ntime)
+    return density, parallel_flow, parallel_pressure, parallel_heat_flux, thermal_speed
+end
+
 function allocate_global_zr_neutral_dfns(nvz_global, nvr_global, nvzeta_global, nz_global, nr_global,
                                          n_ion_species, ntime)
     f = allocate_float(nvz_global, nvr_global, nvzeta_global, nz_global, nr_global,
@@ -410,6 +420,12 @@ function analyze_and_plot_data(prefix...)
                                    Tuple(this_z.n_global for this_z ∈ z),
                                    Tuple(this_r.n_global for this_r ∈ r),
                                    n_ion_species, ntime)
+    electron_density, electron_parallel_flow, electron_parallel_pressure, 
+        electron_parallel_heat_flux, electron_thermal_speed =
+        get_tuple_of_return_values(allocate_global_zr_electron_moments,
+                                   Tuple(this_z.n_global for this_z ∈ z),
+                                   Tuple(this_r.n_global for this_r ∈ r),
+                                   ntime)
     if any(n_neutral_species .> 0)
         neutral_density, neutral_uz, neutral_pz, neutral_qz, neutral_thermal_speed =
             get_tuple_of_return_values(allocate_global_zr_neutral_moments,
@@ -453,6 +469,27 @@ function analyze_and_plot_data(prefix...)
                                Tuple(this_z.n for this_z ∈ z),
                                Tuple(this_r.n for this_r ∈ r))
     get_tuple_of_return_values(read_distributed_zr_data!, thermal_speed, "thermal_speed",
+                               run_names, "moments", nblocks,
+                               Tuple(this_z.n for this_z ∈ z),
+                               Tuple(this_r.n for this_r ∈ r))
+    # electron particle moments
+    get_tuple_of_return_values(read_distributed_zr_data!, electron_density, "electron_density", run_names,
+                               "moments", nblocks,
+                               Tuple(this_z.n for this_z ∈ z),
+                               Tuple(this_r.n for this_r ∈ r))
+    get_tuple_of_return_values(read_distributed_zr_data!, electron_parallel_flow, "electron_parallel_flow",
+                               run_names, "moments", nblocks,
+                               Tuple(this_z.n for this_z ∈ z),
+                               Tuple(this_r.n for this_r ∈ r))
+    get_tuple_of_return_values(read_distributed_zr_data!, electron_parallel_pressure,
+                               "electron_parallel_pressure", run_names, "moments", nblocks,
+                               Tuple(this_z.n for this_z ∈ z),
+                               Tuple(this_r.n for this_r ∈ r))
+    get_tuple_of_return_values(read_distributed_zr_data!, electron_parallel_heat_flux,
+                               "electron_parallel_heat_flux", run_names, "moments", nblocks,
+                               Tuple(this_z.n for this_z ∈ z),
+                               Tuple(this_r.n for this_r ∈ r))
+    get_tuple_of_return_values(read_distributed_zr_data!, electron_thermal_speed, "electron_thermal_speed",
                                run_names, "moments", nblocks,
                                Tuple(this_z.n for this_z ∈ z),
                                Tuple(this_r.n for this_r ∈ r))
@@ -644,6 +681,11 @@ function analyze_and_plot_data(prefix...)
             Tuple(qpar[:,ir0,:,:] for qpar ∈ parallel_heat_flux_at_pdf_times),
             Tuple(vth[:,ir0,:,:] for vth ∈ thermal_speed_at_pdf_times),
             Tuple(f[:,ivperp0,:,ir0,:,:] for f ∈ ff),
+            Tuple(n[:,ir0,:,:] for n ∈ electron_density),
+            Tuple(upar[:,ir0,:,:] for upar ∈ electron_parallel_flow),
+            Tuple(ppar[:,ir0,:,:] for ppar ∈ electron_parallel_pressure),
+            Tuple(qpar[:,ir0,:,:] for qpar ∈ electron_parallel_heat_flux),
+            Tuple(vth[:,ir0,:,:] for vth ∈ electron_thermal_speed),
             Tuple(neutral_n[:,ir0,:,:] for neutral_n ∈ neutral_density),
             Tuple(uz[:,ir0,:,:] for uz ∈ neutral_uz),
             Tuple(pz[:,ir0,:,:] for pz ∈ neutral_pz),
@@ -926,7 +968,10 @@ function plot_1D_1V_diagnostics(run_names, nwrite_movie, itime_min, itime_max,
         density, parallel_flow, parallel_pressure, parallel_heat_flux, thermal_speed,
         phi_at_pdf_times, density_at_pdf_times, parallel_flow_at_pdf_times,
         parallel_pressure_at_pdf_times, parallel_heat_flux_at_pdf_times,
-        thermal_speed_at_pdf_times, ff, neutral_density, neutral_uz, neutral_pz,
+        thermal_speed_at_pdf_times, ff, 
+        electron_density, electron_parallel_flow, electron_parallel_pressure, 
+        electron_parallel_heat_flux, electron_thermal_speed,
+        neutral_density, neutral_uz, neutral_pz,
         neutral_qz, neutral_thermal_speed, neutral_density_at_pdf_times,
         neutral_uz_at_pdf_times, neutral_pz_at_pdf_times, neutral_qz_at_pdf_times,
         neutral_thermal_speed_at_pdf_times, neutral_ff, n_ion_species, n_neutral_species,
@@ -964,6 +1009,12 @@ function plot_1D_1V_diagnostics(run_names, nwrite_movie, itime_min, itime_max,
         parallel_heat_flux, delta_qpar, qpar_fldline_avg,
         pp, run_names, time, itime_min, itime_max, nwrite_movie, z, iz0, n_ion_species,
         "ion")
+
+    # create the requested plots of the electron moments
+    plot_electron_moments(electron_density, electron_parallel_flow, electron_parallel_pressure,
+        electron_parallel_heat_flux, electron_thermal_speed, pp, run_names, time, itime_min,
+        itime_max, nwrite_movie, z, iz0)
+
     if maximum(n_neutral_species) > 0
         # analyze the velocity neutral moments data
         neutral_density_fldline_avg, neutral_uz_fldline_avg, neutral_pz_fldline_avg,
@@ -1134,6 +1185,78 @@ function plot_fields(phi, delta_phi, time, itime_min, itime_max, nwrite_movie,
     println("done.")
 end
 
+function plot_electron_moments(density, parallel_flow, parallel_pressure,
+    parallel_heat_flux, thermal_speed, pp, run_names, time, itime_min,
+    itime_max, nwrite_movie, z, iz0)
+
+    println("Plotting electron moments data...")
+
+    # determine what to use for the legend depending on how many runs are being plotted
+    n_runs = length(run_names)
+    if n_runs == 1
+        prefix = run_names[1]
+        legend = false
+    else
+        prefix = default_compare_prefix
+        legend = true
+    end
+
+    moment_string = "electron_density"
+    if pp.plot_dens0_vs_t
+        plot_single_moment_z0(density, time, iz0, prefix, legend, run_names, moment_string)
+    end
+    # if pp.plot_dens_vs_z_t
+    #     plot_single_moment_vs_z_t(density, time, z, run_names, prefix, moment_string)
+    # end
+    moment_string = "electron_upar"
+    if pp.plot_upar0_vs_t
+        plot_single_moment_z0(parallel_flow, time, iz0, prefix, legend, run_names, moment_string)
+    end
+    # if pp.plot_upar_vs_z_t
+    #     plot_single_moment_vs_z_t(parallel_flow, time, z, run_names, prefix, moment_string)
+    # end
+    moment_string = "electron_ppar"
+    if pp.plot_ppar0_vs_t
+        plot_single_moment_z0(parallel_pressure, time, iz0, prefix, legend, run_names, moment_string)
+    end
+    # if pp.plot_ppar_vs_z_t
+    #     plot_single_moment_vs_z_t(parallel_pressure, time, z, run_names, prefix, moment_string)
+    # end
+    moment_string = "electron_vth"
+    if pp.plot_vth0_vs_t
+        plot_single_moment_z0(thermal_speed, time, iz0, prefix, legend, run_names, moment_string)
+    end
+    moment_string = "electron_qpar"
+    if pp.plot_qpar0_vs_t
+        plot_single_moment_z0(parallel_heat_flux, time, iz0, prefix, legend, run_names, moment_string)
+    end
+    # if pp.plot_qpar_vs_z_t
+    #     plot_single_moment_vs_z_t(parallel_heat_flux, time, z, run_names, prefix, moment_string)
+    # end
+end
+
+function plot_single_moment_z0(mom, time, iz0, prefix, legend, run_names, mom_string)
+    # plot the time trace of the moment at z=z0
+    #plot(time, log.(phi[i,:]), yscale = :log10)
+    plot(legend=legend)
+    for (t, p, run_label) ∈ zip(time, mom, run_names)
+        @views plot!(t, p[iz0,:], label=run_label)
+    end
+    outfile = string(prefix, "_", mom_string, "0_vs_t.pdf")
+    savefig(outfile)
+end
+
+function plot_single_moment_vs_z_t(mom, time, z, run_names, prefix, mom_string)
+    # make a heatmap plot of moment(z,t)
+    n_runs = length(run_names)
+    subplots = (heatmap(t, this_z.grid, p, xlabel="time", ylabel="z", title=run_label,
+                       c = :deep)
+               for (t, this_z, p, run_label) ∈ zip(time, z, mom, run_names))
+    plot(subplots..., layout=(1,n_runs), size=(600*n_runs, 400))
+    outfile = string(prefix, "_", mom_string, "_vs_z_t.pdf")
+    savefig(outfile)
+end
+
 """
 """
 function plot_moments(density, delta_density, density_fldline_avg,
@@ -1169,6 +1292,7 @@ function plot_moments(density, delta_density, density_fldline_avg,
     end
     outfile = string(prefix, "_$(label)_denstot_vs_t.pdf")
     savefig(outfile)
+    
     for is ∈ 1:maximum(n_species)
         spec_string = string(is)
         dens_min = minimum(minimum(n[:,is,:]) for n ∈ density)

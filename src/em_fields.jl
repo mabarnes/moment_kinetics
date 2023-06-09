@@ -64,15 +64,8 @@ function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral, sc
         
     # TODO: parallelise this...
     @serial_region begin
-        ne = @view scratch_dummy.dummy_zrs[:,:,1]
         jpar_i = @view scratch_dummy.buffer_rs_1[:,:,1]
         N_e = @view scratch_dummy.buffer_rs_2[:,:,1]
-        ne .= 0.0
-        for is in 1:n_ion_species
-            @loop_r_z ir iz begin
-                 ne[iz,ir] += fvec.density[iz,ir,is]
-            end
-        end
         if composition.electron_physics == boltzmann_electron_response
             N_e .= 1.0
         elseif composition.electron_physics == boltzmann_electron_response_with_simple_sheath
@@ -89,7 +82,7 @@ function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral, sc
             # where positive sign above (and negative sign below)
             # is due to the fact that electrons reaching the wall flow towards more negative z.
             # Using J_||e + J_||i = 0, and rearranging for N_e, we have
-            #N_e = - 2.0 * sqrt( pi * composition.me_over_mi) * jpar_i * exp( - composition.phi_wall / composition.T_e)
+            # N_e = - 2.0 * sqrt( pi * composition.me_over_mi) * jpar_i * exp( - composition.phi_wall / composition.T_e)
             @loop_r ir begin
                  N_e[ir] = - 2.0 * sqrt( pi * composition.me_over_mi) * jpar_i[ir] * exp( - composition.phi_wall / composition.T_e)
                  # N_e must be positive, so force this in case a numerical error or something
@@ -100,7 +93,7 @@ function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral, sc
         end
         if composition.electron_physics ∈ (boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath)
             @loop_r_z ir iz begin
-                 fields.phi[iz,ir] = composition.T_e * log(ne[iz,ir] / N_e[ir])
+                fields.phi[iz,ir] = composition.T_e * log(fvec.electron_density[iz,ir] / N_e[ir])
             end
         end
     end
