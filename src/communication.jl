@@ -12,8 +12,10 @@ loop ranges), as at the moment we only run with 1 ion species and 1 neutral spec
 """
 module communication
 
-export allocate_shared, block_rank, block_size, comm_block, comm_world, finalize_comms!,
-       initialize_comms!, global_rank, global_size, MPISharedArray
+export allocate_shared, block_rank, block_size, comm_block, comm_inter_block,
+       iblock_index, comm_world, finalize_comms!, initialize_comms!, global_rank,
+       MPISharedArray, global_size
+export setup_distributed_memory_MPI
 
 using MPI
 using SHA
@@ -22,12 +24,30 @@ using ..debugging
 using ..type_definitions: mk_float, mk_int
 
 """
+Can use a const `MPI.Comm` for `comm_world` and just copy the pointer from
+`MPI.COMM_WORLD` because `MPI.COMM_WORLD` is never deleted, so pointer stays valid.
 """
 const comm_world = MPI.Comm()
 
 """
+Communicator connecting a shared-memory region
+
+Must use a `Ref{MPI.Comm}` to allow a non-const `MPI.Comm` to be stored. Need to actually
+assign to this and not just copy a pointer into the `.val` member because otherwise the
+`MPI.Comm` object created by `MPI.Comm_split()` would be deleted, which probably makes
+MPI.jl delete the communicator.
 """
-const comm_block = MPI.Comm()
+const comm_block = Ref(MPI.Comm())
+
+"""
+Communicator connecting the root processes of each shared memory block
+
+Must use a `Ref{MPI.Comm}` to allow a non-const `MPI.Comm` to be stored. Need to actually
+assign to this and not just copy a pointer into the `.val` member because otherwise the
+`MPI.Comm` object created by `MPI.Comm_split()` would be deleted, which probably makes
+MPI.jl delete the communicator.
+"""
+const comm_inter_block = Ref(MPI.Comm())
 
 # Use Ref for these variables so that they can be made `const` (so have a definite
 # type), but contain a value assigned at run-time.
@@ -38,6 +58,10 @@ const global_rank = Ref{mk_int}()
 """
 """
 const global_size = Ref{mk_int}()
+
+"""
+"""
+const iblock_index = Ref{mk_int}()
 
 """
 """
@@ -58,15 +82,125 @@ function __init__()
 
     comm_world.val = MPI.COMM_WORLD.val
 
-    # For now, just use comm_world. In future should probably somehow figure out which
-    # processors are in a 'NUMA region'... OpenMPI has a special communicator for this,
-    # but MPICH doesn't seem to. Might be simplest to rely on user input??
-    comm_block.val = comm_world.val
-
     global_rank[] = MPI.Comm_rank(comm_world)
     global_size[] = MPI.Comm_size(comm_world)
-    block_rank[] = MPI.Comm_rank(comm_block)
-    block_size[] = MPI.Comm_size(comm_block)
+    #block_rank[] = MPI.Comm_rank(comm_block)
+    #block_size[] = MPI.Comm_size(comm_block)
+end
+
+"""
+Function to take information from user about r z grids and 
+number of processes allocated to set up communicators
+notation definitions:
+    - block: group of processes that share data with shared memory
+    - z group: group of processes that need to communicate data for z derivatives
+    - r group: group of processes that need to communicate data for r derivatives
+"""
+function setup_distributed_memory_MPI(z_nelement_global,z_nelement_local,r_nelement_global,r_nelement_local; printout=false)
+    # setup some local constants and dummy variables
+    irank_global = global_rank[] # rank index within global processes
+    nrank_global = global_size[] # number of processes 
+    
+    # get information about how the grid is divided up
+    # number of sections `chunks' of the x grid
+    r_nchunks = floor(mk_int,r_nelement_global/r_nelement_local)
+    # number of sections `chunks' of the z grid
+	z_nchunks = floor(mk_int,z_nelement_global/z_nelement_local) # number of sections of the z grid
+	# get the number of shared-memorz blocks in the z r decomposition
+    nblocks = r_nchunks*z_nchunks
+    # get the number of ranks per block
+    nrank_per_zr_block = floor(mk_int,nrank_global/nblocks)
+    
+    if printout
+        println("debug info:")
+        println("nrank_global: ",nrank_global)
+        println("r_nchunks: ",r_nchunks)
+        println("z_nchunks: ",z_nchunks)
+        println("nblocks: ",nblocks)
+        println("nrank_per_zr_block: ",nrank_per_zr_block)
+    end
+	# throw an error if user specified information is inconsistent
+    if (nrank_per_zr_block*nblocks < nrank_global)
+        if irank_global ==0 
+            println("ERROR: You must choose global number of processes to be an integer multiple of the number of \n 
+                     nblocks = (r_nelement_global/r_nelement_local)*(z_nelement_global/z_nelement_local)")
+            flush(stdout)
+        end
+        MPI.Abort(comm_world,1)
+    end
+    
+    # assign information regarding shared-memory blocks
+    # block index -- which block is this process in 
+    iblock = floor(mk_int,irank_global/nrank_per_zr_block)
+    # rank index within a block
+    irank_block = mod(irank_global,nrank_per_zr_block)
+
+    if printout
+        println("iblock: ",iblock)
+        println("irank_block: ",irank_block)
+    end
+    # assign the block rank to the global variables
+    iblock_index[] = iblock
+    block_rank[] = irank_block
+    block_size[] = nrank_per_zr_block
+    # construct a communicator for intra-block communication
+    comm_block[] = MPI.Comm_split(comm_world,iblock,irank_block)
+    # MPI.Comm_split(comm,color,key)
+	# comm -> communicator to be split
+	# color -> label of group of processes
+	# key -> label of process in group
+    
+    # now create the communicators for the r z derivatives across blocks 
+    z_ngroup = r_nchunks
+    z_nrank_per_group = z_nchunks
+	z_igroup = floor(mk_int,iblock/z_nchunks) # iblock(irank) - > z_igroup 
+	z_irank =  mod(iblock,z_nchunks) # iblock(irank) -> z_irank
+	# iblock = z_igroup * z_nchunks + z_irank_sub 
+
+    if printout
+        # useful information for debugging
+        println("z_ngroup: ",z_ngroup)
+        println("z_nrank_per_group: ",z_nrank_per_group)
+        println("z_igroup: ",z_igroup)
+        println("z_irank_sub: ",z_irank)
+        println("iblock: ",iblock, " ", z_igroup * z_nchunks + z_irank)
+        println("")
+    end
+
+    r_ngroup = z_nchunks
+	r_nrank_per_group = r_nchunks
+	r_igroup = z_irank # block(irank) - > r_igroup 
+	r_irank = z_igroup # block(irank) -> r_irank
+    # irank = r_igroup + z_nrank_per_group * r_irank
+
+    if printout
+        # useful information for debugging
+        println("r_ngroup: ",r_ngroup)
+        println("r_nrank_per_group: ",r_nrank_per_group)
+        println("r_igroup: ",r_igroup)
+        println("r_irank: ",r_irank)
+        println("iblock: ",iblock, " ", r_irank * r_ngroup + r_igroup)
+        println("")
+    end
+
+	# construct communicators for inter-block communication
+	# only communicate between lead processes on a block
+    if block_rank[] == 0
+        comm_inter_block[] = MPI.Comm_split(comm_world, 0, iblock)
+        r_comm = MPI.Comm_split(comm_world,r_igroup,r_irank)
+        z_comm = MPI.Comm_split(comm_world,z_igroup,z_irank)
+    else # assign a dummy value 
+        comm_inter_block[] = MPI.Comm_split(comm_world, nothing, iblock)
+        r_comm = MPI.Comm_split(comm_world,nothing,r_irank)
+        z_comm = MPI.Comm_split(comm_world,nothing,z_irank)
+    end
+    # MPI.Comm_split(comm,color,key)
+	# comm -> communicator to be split
+	# color -> label of group of processes
+	# key -> label of process in group
+    # if color == nothing then this process is excluded from the communicator
+    
+    return z_irank, z_nrank_per_group, z_comm, r_irank, r_nrank_per_group, r_comm
 end
 
 @debug_shared_array begin
@@ -94,7 +228,9 @@ end
         is_read .= false
         is_written = Array{Bool}(undef, dims)
         is_written .= false
-        creation_stack_trace = string([string(s, "\n") for s in stacktrace()]...)
+        creation_stack_trace = @debug_track_array_allocate_location_ifelse(
+                                   string([string(s, "\n") for s in stacktrace()]...),
+                                   "")
         @debug_detect_redundant_block_synchronize begin
             # Initialize as `true` so that the first call to _block_synchronize() with
             # @debug_detect_redundant_block_synchronize activated does not register the
@@ -139,6 +275,11 @@ end
               * "silently disable the debug checks")
     end
 
+    import MPI: Buffer
+    function Buffer(A::DebugMPISharedArray)
+        return Buffer(A.data)
+    end
+
     # Keep a global Vector of references to all created DebugMPISharedArray
     # instances, so their is_read and is_written members can be checked and
     # reset by _block_synchronize()
@@ -175,6 +316,19 @@ function allocate_shared(T, dims)
     bs = block_size[]
     n = prod(dims)
 
+    if n == 0
+        # Special handling as some MPI implementations cause errors when allocating a
+        # size-zero array
+        array = Array{T}(undef, dims...)
+
+        @debug_shared_array begin
+            # If @debug_shared_array is active, create DebugMPISharedArray instead of Array
+            array = DebugMPISharedArray(array)
+        end
+
+        return array
+    end
+
     if br == 0
         # Allocate points on rank-0 for simplicity
         n_local = n
@@ -194,7 +348,7 @@ function allocate_shared(T, dims)
         signaturestring = string([string(s.file, s.line) for s ∈ st]...)
 
         hash = sha256(signaturestring)
-        all_hashes = MPI.Allgather(hash, comm_block)
+        all_hashes = MPI.Allgather(hash, comm_block[])
         l = length(hash)
         for i ∈ 1:length(all_hashes)÷l
             if all_hashes[(i - 1) * l + 1: i * l] != hash
@@ -205,7 +359,7 @@ function allocate_shared(T, dims)
         end
     end
 
-    win, ptr = MPI.Win_allocate_shared(T, n_local, comm_block)
+    win, ptr = MPI.Win_allocate_shared(T, n_local, comm_block[])
 
     # Array is allocated contiguously, but `ptr` points to the 'locally owned' part.
     # We want to use as a shared array, so want to wrap the entire shared array.
@@ -347,9 +501,9 @@ end
         end
 
         @debug_error_stop_all _gather_errors()
-        global_is_read = reshape(MPI.Allgather(is_read, comm_block),
+        global_is_read = reshape(MPI.Allgather(is_read, comm_block[]),
                                  global_dims...)
-        global_is_written = reshape(MPI.Allgather(is_written, comm_block),
+        global_is_written = reshape(MPI.Allgather(is_written, comm_block[]),
                                     global_dims...)
         for i ∈ CartesianIndices(array)
             n_reads = sum(global_is_read[i, :])
@@ -362,10 +516,17 @@ end
                     # shared-memory arrays, so would cause segfaults.
                     return false
                 else
-                    error("Shared memory array written at $i from multiple ranks "
-                          * "between calls to _block_synchronize(). Array was "
-                          * "created at:\n"
-                          * array.creation_stack_trace)
+                    if array.creation_stack_trace != ""
+                        error("Shared memory array written at $i from multiple ranks "
+                              * "between calls to _block_synchronize(). Array was "
+                              * "created at:\n"
+                              * array.creation_stack_trace)
+                    else
+                        error("Shared memory array written at $i from multiple ranks "
+                              * "between calls to _block_synchronize(). Enable "
+                              * "`debug_track_array_allocate_location` to track where "
+                              * "array was created.")
+                    end
                 end
             elseif n_writes == 1 && n_reads > 0
                 if global_is_written[i, block_rank[] + 1]
@@ -429,7 +590,7 @@ the debugging routines need to be updated.
 """
 function _block_synchronize()
     @debug_error_stop_all _gather_errors()
-    MPI.Barrier(comm_block)
+    MPI.Barrier(comm_block[])
 
     @debug_block_synchronize begin
         st = stacktrace()
@@ -442,7 +603,7 @@ function _block_synchronize()
         signaturestring = string([string(s.file, s.line) for s ∈ st]...)
 
         hash = sha256(signaturestring)
-        all_hashes = reshape(MPI.Allgather(hash, comm_block), length(hash),
+        all_hashes = reshape(MPI.Allgather(hash, comm_block[]), length(hash),
                              block_size[])
         for i ∈ 1:block_size[]
             h = all_hashes[:, i]
@@ -533,7 +694,7 @@ function _block_synchronize()
         end
 
         @debug_error_stop_all _gather_errors()
-        MPI.Barrier(comm_block)
+        MPI.Barrier(comm_block[])
     end
 end
 

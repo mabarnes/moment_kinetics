@@ -7,6 +7,8 @@ using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.interpolation:
     interpolate_to_grid_1d, interpolate_to_grid_z, interpolate_to_grid_vpa
 
+using MPI
+
 # periodic test function
 # returns an array whose shape is the outer product of the 2nd, 3rd, ... arguments
 test_function(L, coords...) =
@@ -30,8 +32,13 @@ function runtests()
                     ntest ∈ (3, 14), nelement ∈ (2, 8), zlim ∈ (L/2.0, L/5.0)
 
             # create the 'input' struct containing input info needed to create a coordinate
-            input = grid_input("coord", ngrid, nelement, L,
-                discretization, fd_option, bc, adv_input)
+			nelement_local = nelement
+			nrank_per_block = 0 # dummy value
+			irank = 0 # dummy value
+			comm = MPI.COMM_NULL # dummy value 
+			input = grid_input("coord", ngrid, nelement,
+				nelement_local, nrank_per_block, irank, L,
+				discretization, fd_option, bc, adv_input, comm)
             # create the coordinate struct 'z'
             z, spectral = define_coordinate(input)
 

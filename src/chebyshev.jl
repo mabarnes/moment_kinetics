@@ -29,7 +29,7 @@ function setup_chebyshev_pseudospectral(coord)
     # create array for f on extended [0,2π] domain in theta = ArcCos[z]
     fext = allocate_complex(ngrid_fft)
     # create arrays for storing Chebyshev spectral coefficients of f and f'
-    fcheby = allocate_float(coord.ngrid, coord.nelement)
+    fcheby = allocate_float(coord.ngrid, coord.nelement_local)
     dcheby = allocate_float(coord.ngrid)
     # setup the plans for the forward and backward Fourier transforms
     forward_transform = plan_fft!(fext, flags=FFTW.MEASURE)
@@ -42,7 +42,8 @@ end
 """
 initialize chebyshev grid scaled to interval [-box_length/2, box_length/2]
 """
-function scaled_chebyshev_grid(ngrid, nelement, n, box_length, imin, imax)
+function scaled_chebyshev_grid(ngrid, nelement_global, nelement_local, n,
+			irank, box_length, imin, imax)
     # initialize chebyshev grid defined on [1,-1]
     # with n grid points chosen to facilitate
     # the fast Chebyshev transform (aka the discrete cosine transform)
@@ -54,15 +55,16 @@ function scaled_chebyshev_grid(ngrid, nelement, n, box_length, imin, imax)
     # setup the scale factor by which the Chebyshev grid on [-1,1]
     # is to be multiplied to account for the full domain [-L/2,L/2]
     # and the splitting into nelement elements with ngrid grid points
-    scale_factor = 0.5*box_length/nelement
+    scale_factor = 0.5*box_length/float(nelement_global)
     # account for the fact that the minimum index needed for the chebyshev_grid
     # within each element changes from 1 to 2 in going from the first element
     # to the remaining elements
     k = 1
-    @inbounds for j ∈ 1:nelement
+    @inbounds for j ∈ 1:nelement_local
         #wgts[imin[j]:imax[j]] .= sqrt.(1.0 .- reverse(chebyshev_grid)[k:ngrid].^2) * scale_factor
         # amount by which to shift the centre of this element from zero
-        shift = box_length*((j-0.5)/nelement - 0.5)
+        iel_global = j + irank*nelement_local
+        shift = box_length*((float(iel_global)-0.5)/float(nelement_global) - 0.5)
         # reverse the order of the original chebyshev_grid (ran from [1,-1])
         # and apply the scale factor and shift
         grid[imin[j]:imax[j]] .= (reverse(chebyshev_grid)[k:ngrid] * scale_factor) .+ shift
@@ -70,7 +72,7 @@ function scaled_chebyshev_grid(ngrid, nelement, n, box_length, imin, imax)
         # to avoid double-counting boundary element
         k = 2
     end
-    wgts = clenshaw_curtis_weights(ngrid, nelement, n, imin, imax, scale_factor)
+    wgts = clenshaw_curtis_weights(ngrid, nelement_local, n, imin, imax, scale_factor)
     return grid, wgts
 end
 
@@ -79,16 +81,18 @@ end
 
 Chebyshev transform f to get Chebyshev spectral coefficients and use them to calculate f'.
 """
-function elementwise_derivative!(coord, ff, chebyshev::chebyshev_info, order=Val(1))
+function elementwise_derivative!(coord, ff, chebyshev::chebyshev_info)
     df = coord.scratch_2d
     # define local variable nelement for convenience
-    nelement = coord.nelement
+    nelement = coord.nelement_local
     # check array bounds
     @boundscheck nelement == size(chebyshev.f,2) || throw(BoundsError(chebyshev.f))
     @boundscheck nelement == size(df,2) && coord.ngrid == size(df,1) || throw(BoundsError(df))
     # note that one must multiply by 2*nelement/L to get derivative
     # in scaled coordinate
-    scale_factor = 2*nelement/coord.L
+    scale_factor = 2.0*float(coord.nelement_global)/coord.L
+	# scale factor is (length of a single element/2)^{-1}
+	
     # variable k will be used to avoid double counting of overlapping point
     # at element boundaries (see below for further explanation)
     k = 0
@@ -104,8 +108,7 @@ function elementwise_derivative!(coord, ff, chebyshev::chebyshev_info, order=Val
         # imax is the maximum index on the full grid for this (jth) element
         imax = coord.imax[j]
         @views chebyshev_derivative_single_element!(df[:,j], ff[imin:imax],
-            chebyshev.f[:,j], chebyshev.df, chebyshev.fext, chebyshev.forward, coord,
-            order)
+            chebyshev.f[:,j], chebyshev.df, chebyshev.fext, chebyshev.forward, coord)
         # and multiply by scaling factor needed to go
         # from Chebyshev z coordinate to actual z
         for i ∈ 1:coord.ngrid
@@ -115,6 +118,7 @@ function elementwise_derivative!(coord, ff, chebyshev::chebyshev_info, order=Val
     end
     return nothing
 end
+
 """
     elementwise_derivative!(coord, ff, adv_fac, spectral::chebyshev_info)
 
@@ -122,19 +126,19 @@ Chebyshev transform f to get Chebyshev spectral coefficients and use them to cal
 
 Note: Chebyshev derivative does not make use of upwinding information within each element.
 """
-function elementwise_derivative!(coord, ff, adv_fac, spectral::chebyshev_info, order=Val(1))
-    return elementwise_derivative!(coord, ff, spectral, order)
+function elementwise_derivative!(coord, ff, adv_fac, spectral::chebyshev_info)
+    return elementwise_derivative!(coord, ff, spectral)
 end
 
 """
 """
 function chebyshev_derivative_single_element!(df, ff, cheby_f, cheby_df, cheby_fext,
-        forward, coord, order=Val(1))
+        forward, coord)
     # calculate the Chebyshev coefficients of the real-space function ff and return
     # as cheby_f
     chebyshev_forward_transform!(cheby_f, cheby_fext, ff, forward, coord.ngrid)
     # calculate the Chebyshev coefficients of the derivative of ff with respect to coord.grid
-    chebyshev_spectral_derivative!(cheby_df, cheby_f, order)
+    chebyshev_spectral_derivative!(cheby_df, cheby_f)
     # inverse Chebyshev transform to get df/dcoord
     chebyshev_backward_transform!(df, cheby_fext, cheby_df, forward, coord.ngrid)
 end
@@ -166,7 +170,7 @@ end
 """
 compute the Chebyshev spectral coefficients of the spatial derivative of f
 """
-function update_df_chebyshev!(df, chebyshev, coord, order=Val(1))
+function update_df_chebyshev!(df, chebyshev, coord)
     ngrid = coord.ngrid
     nelement = coord.nelement
     L = coord.L
@@ -178,7 +182,7 @@ function update_df_chebyshev!(df, chebyshev, coord, order=Val(1))
     scale_factor = 2*nelement/L
     # scan over elements
     @inbounds for j ∈ 1:nelement
-        chebyshev_spectral_derivative!(chebyshev.df,view(chebyshev.f,:,j), order)
+        chebyshev_spectral_derivative!(chebyshev.df,view(chebyshev.f,:,j))
         # inverse Chebyshev transform to get df/dz
         # and multiply by scaling factor needed to go
         # from Chebyshev z coordinate to actual z
@@ -193,7 +197,7 @@ end
 """
 use Chebyshev basis to compute the first derivative of f
 """
-function chebyshev_spectral_derivative!(df,f,::Val{1})
+function chebyshev_spectral_derivative!(df,f)
     m = length(f)
     @boundscheck m == length(df) || throw(BoundsError(df))
     @inbounds begin
@@ -206,40 +210,6 @@ function chebyshev_spectral_derivative!(df,f,::Val{1})
         df[1] = f[2] + 0.5*df[3]
     end
 end
-
-# Following function would calculate a second derivative within an element, but should
-# not be used because it would lead to numerical instability at element boundaries.
-# Because the derivative of f is not required to be continuous when calculating like
-# this, it is possible to get 'wrong' results, e.g. if the point at an element boundary
-# is a maximum, the second derivative within the elements on either side could still be
-# positive up to the boundary, because neither knows about the 'discontinuous' first
-# derivative. So a better way to calculate the second derivative is to calculate the
-# first derivative, fix the element boundaries to make the result continuous, and then
-# take the derivative again (i.e. apply the full first-derivative function twice, which
-# is now done in `calculus.jl`.
-#"""
-#use Chebyshev basis to compute the second derivative of f
-#"""
-#function chebyshev_spectral_derivative!(d2f,f,::Val{2})
-#    # Coefficients are just applying the first derivative twice, written out by hand
-#    # here to avoid a double loop
-#    m = length(f)
-#    @boundscheck m == length(d2f) || throw(BoundsError(d2f))
-#    @inbounds begin
-#        df_i_plus_3 = 0.0
-#        df_i_plus_2 = 2*(m-1)*f[m]
-#        d2f[m] = 0.0
-#        d2f[m-1] = 0.0
-#        d2f[m-2] = 2*(m-2)*df_i_plus_2
-#        for i ∈ m-3:-1:2
-#            df_i_plus_1 = (2*(i+1)*f[i+2]) + df_i_plus_3
-#            d2f[i] = 2*i*df_i_plus_1 + d2f[i+2]
-#            df_i_plus_3, df_i_plus_2 = df_i_plus_2, df_i_plus_1
-#        end
-#        df_i_plus_1 = 4*f[3] + df_i_plus_3
-#        d2f[1] = df_i_plus_1 + 0.5*d2f[3]
-#    end
-#end
 
 """
 Interpolation from a regular grid to a 1d grid with arbitrary spacing
@@ -259,7 +229,7 @@ chebyshev : chebyshev_info
 """
 function interpolate_to_grid_1d!(result, newgrid, f, coord, chebyshev::chebyshev_info)
     # define local variable nelement for convenience
-    nelement = coord.nelement
+    nelement = coord.nelement_local
     # check array bounds
     @boundscheck nelement == size(chebyshev.f,2) || throw(BoundsError(chebyshev.f))
 
@@ -353,19 +323,19 @@ end
 returns wgts array containing the integration weights associated
 with all grid points for Clenshaw-Curtis quadrature
 """
-function clenshaw_curtis_weights(ngrid, nelement, n, imin, imax, scale_factor)
+function clenshaw_curtis_weights(ngrid, nelement_local, n, imin, imax, scale_factor)
     # create array containing the integration weights
-    wgts = zeros(n)
+    wgts = zeros(mk_float, n)
     # calculate the modified Chebshev moments of the first kind
     μ = chebyshevmoments(ngrid)
     @inbounds begin
         # calculate the weights within a single element and
         # scale to account for modified domain (not [-1,1])
         wgts[1:ngrid] = clenshawcurtisweights(μ)*scale_factor
-        if nelement > 1
+        if nelement_local > 1
             # account for double-counting of points at inner element boundaries
             wgts[ngrid] *= 2
-            for j ∈ 2:nelement
+            for j ∈ 2:nelement_local
                 wgts[imin[j]:imax[j]] .= wgts[2:ngrid]
             end
             # remove double-counting of outer element boundary for last element

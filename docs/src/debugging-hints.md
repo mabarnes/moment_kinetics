@@ -3,7 +3,7 @@
 
 ## Shared-memory parallelism
 
-For information on race conditions and debugging, see `debug_test/README.md`.
+For information on race conditions and debugging, see [Shared memory debugging](@ref).
 
 
 ## Dumping state of physics variables

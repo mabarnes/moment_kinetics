@@ -3,6 +3,7 @@
 module energy_equation
 
 export energy_equation!
+export neutral_energy_equation!
 
 using ..calculus: derivative!
 using ..looping
@@ -10,118 +11,85 @@ using ..looping
 """
 evolve the parallel pressure by solving the energy equation
 """
-function energy_equation!(ppar, fvec, moments, collisions, z, r, dt, spectral,
-                          composition, num_diss_params)
+function energy_equation!(ppar, fvec, moments, collisions, dt, spectral, composition,
+                          num_diss_params)
 
-    begin_s_r_region()
+    begin_s_r_z_region()
 
-    @loop_s is begin
-        @loop_r ir begin
-            @views energy_equation_no_collisions!(ppar[:,ir,is], fvec.upar[:,ir,is], fvec.ppar[:,ir,is],
-                                                  moments.qpar[:,ir,is], dt, z, spectral, num_diss_params)
+    @loop_s_r_z is ir iz begin
+        ppar[iz,ir,is] += dt*(-fvec.upar[iz,ir,is]*moments.charged.dppar_dz_upwind[iz,ir,is]
+                              - moments.charged.dqpar_dz[iz,ir,is]
+                              - 3.0*fvec.ppar[iz,ir,is]*moments.charged.dupar_dz[iz,ir,is])
+    end
+
+    diffusion_coefficient = num_diss_params.moment_dissipation_coefficient
+    if diffusion_coefficient > 0.0
+        @loop_s_r_z is ir iz begin
+            ppar[iz,ir,is] += dt*diffusion_coefficient*moments.charged.d2ppar_dz2[iz,ir,is]
         end
     end
+
     # add in contributions due to charge exchange/ionization collisions
     if composition.n_neutral_species > 0
         if abs(collisions.charge_exchange) > 0.0
-            @views energy_equation_CX!(ppar, fvec.density, fvec.upar, fvec.ppar, z,
-                                       composition, collisions.charge_exchange, dt)
+            @loop_s_r_z is ir iz begin
+                ppar[iz,ir,is] -=
+                    dt*collisions.charge_exchange*(
+                        fvec.density_neutral[iz,ir,is]*fvec.ppar[iz,ir,is] -
+                        fvec.density[iz,ir,is]*fvec.pz_neutral[iz,ir,is] -
+                        fvec.density[iz,ir,is]*fvec.density_neutral[iz,ir,is] *
+                            (fvec.upar[iz,ir,is] - fvec.uz_neutral[iz,ir,is])^2)
+            end
         end
         if abs(collisions.ionization) > 0.0
-            @views energy_equation_ionization!(ppar, fvec.density, fvec.upar, fvec.ppar,
-                                               z, composition, collisions.ionization,
-                                               dt)
+            @loop_s_r_z is ir iz begin
+                ppar[iz,ir,is] +=
+                    dt*collisions.ionization*fvec.density[iz,ir,is] * (
+                        fvec.pz_neutral[iz,ir,is] +
+                        fvec.density_neutral[iz,ir,is] *
+                            (fvec.upar[iz,ir,is]-fvec.uz_neutral[iz,ir,is])^2)
+            end
         end
     end
-
 end
 
 """
-include all contributions to the energy equation aside from collisions
+evolve the neutral parallel pressure by solving the energy equation
 """
-function energy_equation_no_collisions!(ppar_out, upar, ppar, qpar, dt, z, spectral,
-                                        num_diss_params)
-    # calculate dppar/dz and store in z.scratch
-    # Use as 'adv_fac' for upwinding
-    @. z.scratch3 = -upar
-    derivative!(z.scratch, ppar, z, z.scratch3, spectral)
-    # update ppar to account for contribution from parallel pressure gradient
-    @. ppar_out -= dt*upar*z.scratch
-    # calculate dqpar/dz and store in z.scratch
-    derivative!(z.scratch, qpar, z, spectral)
-    # update ppar to account for contribution from parallel heat flux gradient
-    @. ppar_out -= dt*z.scratch
-    # calculate dupar/dz and store in z.scratch
-    derivative!(z.scratch, upar, z, spectral)
-    # update ppar to account for contribution from parallel flow gradient
-    @. ppar_out -= 3.0*dt*ppar*z.scratch
+function neutral_energy_equation!(pz, fvec, moments, collisions, dt, spectral,
+                                  composition, num_diss_params)
 
-    # Ad-hoc diffusion to stabilise numerics...
+    begin_sn_r_z_region()
+
+    @loop_sn_r_z is ir iz begin
+        pz[iz,ir,is] += dt*(-fvec.uz_neutral[iz,ir,is]*moments.neutral.dpz_dz_upwind[iz,ir,is]
+                            - moments.neutral.dqz_dz[iz,ir,is]
+                            - 3.0*fvec.pz_neutral[iz,ir,is]*moments.neutral.duz_dz[iz,ir,is])
+    end
+
     diffusion_coefficient = num_diss_params.moment_dissipation_coefficient
     if diffusion_coefficient > 0.0
-        derivative!(z.scratch, ppar, z, spectral, Val(2))
-        @. ppar_out += dt*diffusion_coefficient*z.scratch
-    end
-
-    return nothing
-end
-
-"""
-include the contribution to the energy equation from charge exchange collisions
-"""
-function energy_equation_CX!(ppar_out, dens, upar, ppar, z, composition, CX_frequency, dt)
-    @loop_s is begin
-        @loop_r ir begin
-            if is ∈ composition.ion_species_range
-                for isp ∈ composition.neutral_species_range
-                    @loop_z iz begin
-                        ppar_out[iz,ir,is] -=
-                            dt*CX_frequency*(dens[iz,ir,isp]*ppar[iz,ir,is] -
-                                             dens[iz,ir,is]*ppar[iz,ir,isp] -
-                                             dens[iz,ir,is]*dens[iz,ir,isp] *
-                                             (upar[iz,ir,is] - upar[iz,ir,isp])^2)
-                    end
-                end
-            end
-            if is ∈ composition.neutral_species_range
-                for isp ∈ composition.ion_species_range
-                    @loop_z iz begin
-                        ppar_out[iz,ir,is] -=
-                            dt*CX_frequency*(dens[iz,ir,isp]*ppar[iz,ir,is] -
-                                             dens[iz,ir,is]*ppar[iz,ir,isp] -
-                                             dens[iz,ir,is]*dens[iz,ir,isp] *
-                                             (upar[iz,ir,is] - upar[iz,ir,isp])^2)
-                    end
-                end
-            end
+        @loop_sn_r_z is ir iz begin
+            pz[iz,ir,is] += dt*diffusion_coefficient*moments.neutral.d2pz_dz2[iz,ir,is]
         end
     end
-end
 
-"""
-include the contribution to the energy equation from ionization collisions
-"""
-function energy_equation_ionization!(ppar_out, dens, upar, ppar, z, composition,
-                                     ionization_frequency, dt)
-    @loop_s is begin
-        @loop_r ir begin
-            if is ∈ composition.ion_species_range
-                for isp ∈ composition.neutral_species_range
-                    @loop_z iz begin
-                        ppar_out[iz,ir,is] +=
-                            dt*ionization_frequency*dens[iz,ir,is] *
-                                (ppar[iz,ir,isp] +
-                                 dens[iz,ir,isp] * (upar[iz,ir,is] - upar[iz,ir,isp])^2)
-                    end
-                end
+    # add in contributions due to charge exchange/ionization collisions
+    if composition.n_neutral_species > 0
+        if abs(collisions.charge_exchange) > 0.0
+            @loop_sn_r_z is ir iz begin
+                pz[iz,ir,is] -=
+                    dt*collisions.charge_exchange*(
+                        fvec.density[iz,ir,is]*fvec.pz_neutral[iz,ir,is] -
+                        fvec.density_neutral[iz,ir,is]*fvec.ppar[iz,ir,is] -
+                        fvec.density_neutral[iz,ir,is]*fvec.density[iz,ir,is] *
+                            (fvec.uz_neutral[iz,ir,is] - fvec.upar[iz,ir,is])^2)
             end
-            if is ∈ composition.neutral_species_range
-                for isp ∈ composition.ion_species_range
-                    @loop_z iz begin
-                        ppar_out[iz,ir,is] -=
-                            dt*ionization_frequency*dens[iz,ir,isp]*ppar[iz,ir,is]
-                    end
-                end
+        end
+        if abs(collisions.ionization) > 0.0
+            @loop_sn_r_z is ir iz begin
+                pz[iz,ir,is] -=
+                    dt*collisions.ionization*fvec.density[iz,ir,is]*fvec.pz_neutral[iz,ir,is]
             end
         end
     end

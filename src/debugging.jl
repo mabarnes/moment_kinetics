@@ -23,21 +23,26 @@ macronames = [
     ("debug_error_stop_all", 1,
     "Use MPI.Allgather to stop all processes following an error on any process."),
 
-    ("debug_block_synchronize", 2,
-     "Check _block_synchronize() was called from the same place on every process."),
-
     ("debug_shared_array", 2,
      "Check for incorrect reads/writes to shared-memory arrays"),
 
-    ("debug_shared_array_allocate", 3,
+    ("debug_track_array_allocate_location", 3,
+     "Record where every array was allocated."),
+
+    ("debug_shared_array_allocate", 4,
      "Check that allocate_shared() was called from the same place on every process."),
 
-    ("debug_detect_redundant_block_synchronize", 4,
+    ("debug_block_synchronize", 4,
+     "Check _block_synchronize() was called from the same place on every process."),
+
+    ("debug_detect_redundant_block_synchronize", 5,
      "Check if any _block_synchronize() call could have been skipped without resulting "
      * "in an error.")
 ]
 
 using ..command_line_options: get_options
+
+const active_debug_macros = Vector{String}(undef, 0)
 
 """
 """
@@ -55,6 +60,7 @@ for (macroname, minlevel, macro_docstring) ∈ macronames
 
     if _debug_level >= minlevel
         println("$export_string activated")
+        push!(active_debug_macros, string(export_string))
         macro_docstring *= "\n Currently active (`_debug_level = $_debug_level`)."
         ifelse_docstring *= "\n $macroname is active (`_debug_level = $_debug_level " *
                             ">= $minlevel`)."
@@ -106,6 +112,12 @@ for (macroname, minlevel, macro_docstring) ∈ macronames
     end
 
     eval(macro_block)
+end
+
+function __init__()
+    for name in active_debug_macros
+        println("$name is active")
+    end
 end
 
 end # debugging

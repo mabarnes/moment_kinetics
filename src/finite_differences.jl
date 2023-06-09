@@ -3,7 +3,7 @@
 module finite_differences
 
 using ..type_definitions: mk_float
-import ..calculus: elementwise_derivative!
+import ..calculus: elementwise_derivative!, elementwise_second_derivative!
 
 """
 """
@@ -31,7 +31,7 @@ end
 Calculate the derivative of f using finite differences, with particular scheme
 specified by coord.fd_option; result stored in coord.scratch_2d.
 """
-function elementwise_derivative!(coord, f, adv_fac, not_spectral::Bool, ::Val{1})
+function elementwise_derivative!(coord, f, adv_fac, not_spectral::Bool)
     return derivative_finite_difference!(coord.scratch_2d, f, coord.cell_width, adv_fac,
         coord.bc, coord.fd_option, coord.igrid, coord.ielement)
 end
@@ -42,18 +42,18 @@ end
 Calculate the derivative of f using 4th order centered finite differences; result stored
 in coord.scratch_2d.
 """
-function elementwise_derivative!(coord, f, not_spectral::Bool, ::Val{1})
+function elementwise_derivative!(coord, f, not_spectral::Bool)
     return derivative_finite_difference!(coord.scratch_2d, f, coord.cell_width,
         coord.bc, "fourth_order_centered", coord.igrid, coord.ielement)
 end
 
 """
-    elementwise_derivative!(coord, f, not_spectral::Bool, Val(2))
+    elementwise_second_derivative!(coord, f, not_spectral::Bool)
 
 Calculate the second derivative of f using 2nd order centered finite differences; result
 stored in coord.scratch_2d.
 """
-function elementwise_derivative!(coord, f, not_spectral::Bool, ::Val{2})
+function elementwise_second_derivative!(coord, f, not_spectral::Bool)
     return second_derivative_finite_difference!(coord.scratch_2d, f, coord.cell_width,
         coord.bc, coord.igrid, coord.ielement)
 end
@@ -268,7 +268,7 @@ function upwind_third_order!(df, f, del, adv_fac, bc, igrid, ielement)
             end
         end
 		i = 2
-		if adv_fac[i] >= 0 || bc ∈ ("zero", "both_zero", "wall")
+		if adv_fac[i] >= 0 || bc ∈ ("zero", "both_zero", "wall", "none")
                         # For boundary conditions that set the values of fields at the
                         # boundary, use the unbalanced difference away from the
                         # boundary.
@@ -278,6 +278,8 @@ function upwind_third_order!(df, f, del, adv_fac, bc, igrid, ielement)
 				tmp1 = f[n-1]
 			elseif bc == "constant"
 				tmp1 = f[1]
+                        else
+                            error("unexpected bc '$bc'")
 			end
 			df[igrid[i],ielement[i]] = (2.0*f[i+1]+3.0*f[i]-6.0*f[i-1]+tmp1)/(6.0*del[i])
 		end
@@ -289,7 +291,7 @@ function upwind_third_order!(df, f, del, adv_fac, bc, igrid, ielement)
 			tmp2 = f[1]
 			tmp1 = tmp2
 		end
-		if adv_fac[i] >= 0 || bc ∈ ("zero", "both_zero", "wall")
+		if adv_fac[i] >= 0 || bc ∈ ("zero", "both_zero", "wall", "none")
                     if bc == "periodic"
 			df[igrid[i],ielement[i]] = (-f[i+2]+6.0*f[i+1]-3.0*f[i]-2.0*tmp1)/(6.0*del[i+1])
                     else
@@ -301,7 +303,7 @@ function upwind_third_order!(df, f, del, adv_fac, bc, igrid, ielement)
 			df[igrid[i],ielement[i]] = (2.0*f[i+1]+3.0*f[i]-6.0*tmp1+tmp2)/(6.0*del[i])
 		end
                 i = n-1
-		if adv_fac[i] <= 0 || bc ∈ ("zero", "both_zero", "wall")
+		if adv_fac[i] <= 0 || bc ∈ ("zero", "both_zero", "wall", "none")
                         # For boundary conditions that set the values of fields at the
                         # boundary, use the unbalanced difference away from the
                         # boundary.
@@ -311,6 +313,8 @@ function upwind_third_order!(df, f, del, adv_fac, bc, igrid, ielement)
 				tmp1 = f[2]
 			elseif bc == "constant"
 				tmp1 = f[n]
+                        else
+                            error("unexpected bc '$bc'")
 			end
 			df[igrid[i],ielement[i]] = (-tmp1+6.0*f[i+1]-3.0*f[i]-2.0*f[i-1])/(6.0*del[1])
 		end
@@ -322,7 +326,7 @@ function upwind_third_order!(df, f, del, adv_fac, bc, igrid, ielement)
 			tmp1 = tmp2
 		end
                 i = n
-		if adv_fac[i] <= 0 || bc ∈ ("zero", "both_zero", "wall")
+		if adv_fac[i] <= 0 || bc ∈ ("zero", "both_zero", "wall", "none")
                     if bc == "periodic"
 			df[igrid[i],ielement[i]] =  (2.0*tmp1+3.0*f[i]-6.0*f[i-1]+f[i-2])/(6.0*del[i-1])
                     else

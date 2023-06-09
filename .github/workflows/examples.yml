@@ -10,7 +10,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macOS-latest]
       fail-fast: false
-    timeout-minutes: 45
+    timeout-minutes: 25
 
     steps:
       - uses: actions/checkout@v2
@@ -27,4 +27,4 @@ jobs:
         run: |
           pip3 install --user matplotlib
           # Reduce nstep for each example to 10 to avoid the CI job taking too long
-          julia --project -O3 -e 'using moment_kinetics; for (root, dirs, files) in walkdir("examples") for file in files if endswith(file, ".toml") filename = joinpath(root, file); println(filename); input = moment_kinetics.moment_kinetics_input.input_from_TOML(filename); input["nstep"] = 10; run_moment_kinetics(input) end end end'
+          julia --project -O3 -e 'using moment_kinetics; for (root, dirs, files) in walkdir("examples") for file in files if endswith(file, ".toml") filename = joinpath(root, file); println(filename); input = moment_kinetics.moment_kinetics_input.read_input_file(filename); input["nstep"] = 10; run_moment_kinetics(input) end end end'
