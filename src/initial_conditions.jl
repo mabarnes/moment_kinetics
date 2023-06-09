@@ -286,18 +286,32 @@ returns vth0 = sqrt(2Ts/ms) / sqrt(2Te/ms) = sqrt(Ts/Te)
 """
 function init_vth!(vth, z, r, spec, n_species)
     for is ∈ 1:n_species
+        # Initialise as temperature first, then square root.
         for ir ∈ 1:r.n
             if spec[is].z_IC.initialization_option == "sinusoid"
                 # initial condition is sinusoid in z
                 @. vth[:,ir,is] =
-                    sqrt(spec[is].initial_temperature
-                         * (1.0 + spec[is].z_IC.temperature_amplitude
-                                  * cos(2.0*π*spec[is].z_IC.wavenumber*z.grid/z.L +
-                                        spec[is].z_IC.temperature_phase)))
+                    (spec[is].initial_temperature
+                     * (1.0 + spec[is].z_IC.temperature_amplitude
+                              * cos(2.0*π*spec[is].z_IC.wavenumber*z.grid/z.L +
+                                    spec[is].z_IC.temperature_phase)))
             else
-                @. vth[:,ir,is] =  sqrt(spec[is].initial_temperature)
+                @. vth[:,ir,is] =  spec[is].initial_temperature
             end
         end
+        if r.n > 1
+            for iz ∈ 1:z.n
+                if spec[is].r_IC.initialization_option == "sinusoid"
+                    # initial condition is sinusoid in z
+                    @. vth[iz,:,is] +=
+                    (spec[is].initial_temperature
+                     * spec[is].r_IC.temperature_amplitude
+                     * cos(2.0*π*spec[is].r_IC.wavenumber*r.grid/r.L +
+                           spec[is].r_IC.temperature_phase))
+                end
+            end
+        end
+        @. vth = sqrt(vth)
     end
     return nothing
 end
@@ -317,10 +331,28 @@ function init_density!(dens, z, r, spec, n_species)
                      * (1.0 + spec[is].z_IC.density_amplitude
                               * cos(2.0*π*spec[is].z_IC.wavenumber*z.grid/z.L
                                     + spec[is].z_IC.density_phase)))
-            elseif spec[is].z_IC.inititalization_option == "monomial"
+            elseif spec[is].z_IC.initialization_option == "monomial"
                 # linear variation in z, with offset so that
                 # function passes through zero at upwind boundary
                 @. dens[:,ir,is] = (z.grid + 0.5*z.L)^spec[is].z_IC.monomial_degree
+            end
+        end
+        if r.n > 1
+            for iz ∈ 1:z.n
+                if spec[is].r_IC.initialization_option == "gaussian"
+                    # initial condition is an unshifted Gaussian
+                    @. dens[iz,:,is] += exp(-(r.grid/spec[is].r_IC.width)^2)
+                elseif spec[is].r_IC.initialization_option == "sinusoid"
+                    # initial condition is sinusoid in r
+                    @. dens[iz,:,is] +=
+                        (spec[is].r_IC.density_amplitude
+                         * cos(2.0*π*spec[is].r_IC.wavenumber*r.grid/r.L
+                               + spec[is].r_IC.density_phase))
+                elseif spec[is].r_IC.initialization_option == "monomial"
+                    # linear variation in r, with offset so that
+                    # function passes through zero at upwind boundary
+                    @. dens[iz,:,is] += (r.grid + 0.5*r.L)^spec[is].r_IC.monomial_degree
+                end
             end
         end
     end
@@ -346,6 +378,25 @@ function init_upar!(upar, z, r, spec, n_species)
                 @. upar[:,ir,is] = spec[is].z_IC.upar_amplitude * 2.0 * z.grid / z.L
             else
                 @. upar[:,ir,is] = 0.0
+            end
+        end
+        if r.n > 1
+            for iz ∈ 1:z.n
+                if spec[is].r_IC.initialization_option == "sinusoid"
+                    # initial condition is sinusoid in r
+                    @. upar[iz,:,is] +=
+                        (spec[is].r_IC.upar_amplitude
+                         * cos(2.0*π*spec[is].r_IC.wavenumber*r.grid/r.L
+                               + spec[is].r_IC.upar_phase))
+                elseif spec[is].r_IC.initialization_option == "gaussian" # "linear"
+                    # initial condition is linear in r
+                    # this is designed to give a nonzero J_{||i} at endpoints in r
+                    # necessary for an electron sheath condition involving J_{||i}
+                    # option "gaussian" to be consistent with usual init option for now
+                    @. upar[iz,:,is] +=
+                        (spec[is].r_IC.upar_amplitude * 2.0 *
+                         (r.grid[:] - r.grid[floor(Int,r.n/2)])/r.L)
+                end
             end
         end
     end
