@@ -248,6 +248,7 @@ function mk_input(scan_input=Dict())
         # bool to control if dfni is a function of vpa or vpabar in MMS test
         use_vpabar_in_mms_dfni=true,
         alpha_switch=1.0,
+        type="default",
        )
     if use_for_init_is_default && manufactured_solns_section["use_for_advance"]
         # if manufactured_solns_section["use_for_init"] was set by default, set

@@ -145,7 +145,7 @@ function init_pdf_and_moments!(pdf, moments, boundary_distributions, geometry,
         init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z,
                                              r, composition.n_ion_species,
                                              composition.n_neutral_species,
-                                             geometry, composition,
+                                             geometry, composition, species,
                                              manufactured_solns_input)
     else
         n_ion_species = composition.n_ion_species
@@ -894,11 +894,11 @@ end
 
 function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z,
                                               r, n_ion_species, n_neutral_species,
-                                              geometry, composition,
+                                              geometry, composition, species,
                                               manufactured_solns_input)
     manufactured_solns_list = manufactured_solutions(manufactured_solns_input, r.L, z.L,
                                                      r.bc, z.bc, geometry, composition,
-                                                     r.n)
+                                                     species, r.n)
     dfni_func = manufactured_solns_list.dfni_func
     densi_func = manufactured_solns_list.densi_func
     dfnn_func = manufactured_solns_list.dfnn_func
