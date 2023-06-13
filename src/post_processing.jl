@@ -848,8 +848,11 @@ function analyze_and_plot_data(prefix...)
             vzeta === nothing ? 0 : minimum(this_vzeta.n_global for this_vzeta ∈ vzeta),
             minimum(ntime), minimum(ntime_pdfs))
 
-    diagnostics_1d = true
-    if diagnostics_1d
+    is_1D1V = all([(this_r.n == 1 for this_r ∈ r_global)...,
+                   (this_vperp.n == 1 for this_vperp ∈ vperp)...,
+                   (vzeta === nothing ? true : (this_vzeta.n == 1 for this_vzeta ∈ vzeta))...,
+                   (vr === nothing ? true : (this_vr.n == 1 for this_vr ∈ vr))...])
+    if is_1D1V
         # load full (vpa,z,r,species,t) particle distribution function (pdf) data
         ff = get_tuple_of_return_values(load_distributed_charged_pdf_slice, run_names,
                                         nblocks, itime_min_pdfs:iskip_pdfs:itime_max_pdfs,
@@ -896,8 +899,7 @@ function analyze_and_plot_data(prefix...)
             vz, vpa, z_global, ntime, time, ntime_pdfs, time_pdfs)
     end
 
-    diagnostics_2d = false
-    if diagnostics_2d
+    if !is_1D1V
         # analyze the fields data
         phi_iz0 = Tuple(p[iz0,:,:] for p ∈ phi)
         phi_fldline_avg, delta_phi =
@@ -969,32 +971,33 @@ function analyze_and_plot_data(prefix...)
         vzeta = vzeta[1]
     end
 
-    # make plots and animations of the phi, Ez and Er
-    plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time,
-                            z_global.grid, r_global.grid, iz0, ir0, n_ion_species,
-                            itime_min, itime_max, nwrite_movie, run_name, pp)
-    # make plots and animations of the phi, Ez and Er
-    plot_fields_2D(phi, Ez, Er, time, z_global.grid, r_global.grid, iz0, ir0, itime_min,
-                   itime_max, nwrite_movie, run_name, pp, "")
+    if !is_1D1V
+        # make plots and animations of the phi, Ez and Er
+        plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time,
+                                z_global.grid, r_global.grid, iz0, ir0, n_ion_species,
+                                itime_min, itime_max, nwrite_movie, run_name, pp)
+        # make plots and animations of the phi, Ez and Er
+        plot_fields_2D(phi, Ez, Er, time, z_global.grid, r_global.grid, iz0, ir0, itime_min,
+                       itime_max, nwrite_movie, run_name, pp, "")
 
-    # load full (vpa,z,r,species,t) particle distribution function (pdf) data
-    spec_type = "ion"
-    plot_charged_pdf(run_name, vpa, vperp, z_global, r_global, z, r, ivpa0, ivperp0, iz0,
-                     ir0, spec_type, n_ion_species, ntime_pdfs, nblocks, itime_min_pdfs,
-                     itime_max_pdfs, iskip_pdfs, nwrite_movie_pdfs, pp)
-    # make plots and animations of the neutral pdf
-    if n_neutral_species > 0
-        spec_type = "neutral"
-        plot_neutral_pdf(run_name, vz, vr, vzeta, z_global, r_global, z, r, ivz0, ivr0,
-                         ivzeta0, iz0, ir0, spec_type, n_neutral_species, ntime_pdfs,
-                         nblocks, itime_min_pdfs, iskip_pdfs, itime_max_pdfs,
-                         nwrite_movie_pdfs, pp)
+        # load full (vpa,z,r,species,t) particle distribution function (pdf) data
+        spec_type = "ion"
+        plot_charged_pdf(run_name, vpa, vperp, z_global, r_global, z, r, ivpa0, ivperp0, iz0,
+                         ir0, spec_type, n_ion_species, ntime_pdfs, nblocks, itime_min_pdfs,
+                         itime_max_pdfs, iskip_pdfs, nwrite_movie_pdfs, pp)
+        # make plots and animations of the neutral pdf
+        if n_neutral_species > 0
+            spec_type = "neutral"
+            plot_neutral_pdf(run_name, vz, vr, vzeta, z_global, r_global, z, r, ivz0, ivr0,
+                             ivzeta0, iz0, ir0, spec_type, n_neutral_species, ntime_pdfs,
+                             nblocks, itime_min_pdfs, iskip_pdfs, itime_max_pdfs,
+                             nwrite_movie_pdfs, pp)
+        end
+        # plot ion pdf data near the wall boundary
+        if pp.plot_wall_pdf
+            plot_charged_pdf_2D_at_wall(run_name)
+        end
     end
-    # plot ion pdf data near the wall boundary
-    if pp.plot_wall_pdf
-        plot_charged_pdf_2D_at_wall(run_name)
-    end
-    # MRH need to get some run-time data here without copy-paste from mk_input
 
     manufactured_solns_test = use_manufactured_solns_for_advance = get(scan_input, "use_manufactured_solns_for_advance", false)
     # Plots compare density and density_symbolic at last timestep
