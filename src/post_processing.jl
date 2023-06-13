@@ -909,8 +909,7 @@ function analyze_and_plot_data(prefix...)
                                    pp)
     end
 
-    diagnostics_chodura = false
-    if diagnostics_chodura
+    if pp.diagnostics_chodura
         n_runs = length(run_names)
         if n_runs == 1
             prefix = run_names[1]
