@@ -410,9 +410,7 @@ end
 """
 Clean up after a run
 """
-function cleanup_moment_kinetics!(ascii_io::Union{file_io.ascii_ios,Nothing},
-                                  io_moments::Union{file_io.io_moments_info,Nothing},
-                                  io_dfns::Union{file_io.io_dfns_info,Nothing})
+function cleanup_moment_kinetics!(ascii_io, io_moments, io_dfns)
     @debug_detect_redundant_block_synchronize begin
         # Disable check for redundant _block_synchronize() during finalization, as this
         # only runs once so any failure is not important.
