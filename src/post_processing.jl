@@ -605,9 +605,9 @@ function analyze_and_plot_data(prefix...)
             minimum(this_vperp.n_global for this_vperp ∈ vperp),
             minimum(this_z.n_global for this_z ∈ z),
             minimum(this_r.n_global for this_r ∈ r),
-            minimum(this_vz.n_global for this_vz ∈ vz),
-            minimum(this_vr.n_global for this_vr ∈ vr),
-            minimum(this_vzeta.n_global for this_vzeta ∈ vzeta),
+            vz === nothing ? 0 : minimum(this_vz.n_global for this_vz ∈ vz),
+            vr === nothing ? 0 : minimum(this_vr.n_global for this_vr ∈ vr),
+            vzeta === nothing ? 0 : minimum(this_vzeta.n_global for this_vzeta ∈ vzeta),
             minimum(ntime), minimum(ntime_pdfs))
 
     diagnostics_1d = true
@@ -678,30 +678,38 @@ function analyze_and_plot_data(prefix...)
         phi_fldline_avg, delta_phi =
             get_tuple_of_return_values(analyze_fields_data, phi_iz0, ntime, r_global)
         get_tuple_of_return_values(plot_fields_rt, phi_iz0, delta_phi, time, itime_min,
-                                   itime_max, nwrite_movie, r_global, ir0, run_name, delta_phi,
+                                   itime_max, nwrite_movie, r_global, ir0, run_names, delta_phi,
                                    pp)
     end
 
     diagnostics_chodura = false
     if diagnostics_chodura
+        n_runs = length(run_names)
+        if n_runs == 1
+            prefix = run_names[1]
+            legend = false
+        else
+            prefix = default_compare_prefix
+            legend = true
+        end
         Chodura_ratio_lower, Chodura_ratio_upper =
-            get_tuple_of_return_values(check_Chodura_condition, run_name, vpa, vperp,
+            get_tuple_of_return_values(check_Chodura_condition, run_names, vpa, vperp,
                                        density_at_pdf_times, composition.T_e,
                                        Er_at_pdf_times, geometry, "wall", nblocks)
 
-        plot(legend=true)
+        plot(legend=legend)
         for (t, cr, run_label) ∈ zip(time_pdfs, Chodura_ratio_lower, run_names)
             plot!(t, cr[ir0,:], xlabel="time", ylabel="Chodura ratio at z=-L/2",
                   label=run_label)
         end
-        outfile = string(run_name, "_Chodura_ratio_lower.pdf")
+        outfile = string(prefix, "_Chodura_ratio_lower.pdf")
         savefig(outfile)
-        plot(legend=true)
+        plot(legend=legend)
         for (t, cr, run_label) ∈ zip(time_pdfs, Chodura_ratio_upper, run_names)
             plot!(t, cr[ir0,:], xlabel="time", ylabel="Chodura ratio at z=+L/2",
                   label=run_label)
         end
-        outfile = string(run_name, "_Chodura_ratio_upper.pdf")
+        outfile = string(prefix, "_Chodura_ratio_upper.pdf")
         savefig(outfile)
     end
 
@@ -710,7 +718,6 @@ function analyze_and_plot_data(prefix...)
     density = density[1]
     parallel_flow = parallel_flow[1]
     parallel_pressure = parallel_pressure[1]
-    neutral_density = neutral_density[1]
     time = time[1]
     z = z[1]
     r = r[1]
@@ -725,6 +732,12 @@ function analyze_and_plot_data(prefix...)
     vperp = vperp[1]
     geometry = geometry[1]
     composition = composition[1]
+    if n_neutral_species > 0
+        neutral_density = neutral_density[1]
+        vz = vz[1]
+        vr = vr[1]
+        vzeta = vzeta[1]
+    end
 
     # make plots and animations of the phi, Ez and Er
     plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time,
@@ -2671,14 +2684,14 @@ function plot_fields_rt(phi, delta_phi, time, itime_min, itime_max, nwrite_movie
     end
     if pp.plot_phi_vs_z_t
         # make a heatmap plot of ϕ(r,t)
-        heatmap(time, r, phi, xlabel="time", ylabel="r", title="ϕ", c = :deep)
+        heatmap(time, r.grid, phi, xlabel="time", ylabel="r", title="ϕ", c = :deep)
         outfile = string(run_name, "_phi_vs_r_t.pdf")
         savefig(outfile)
     end
     if pp.animate_phi_vs_z
         # make a gif animation of ϕ(r) at different times
         anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-            @views plot(r, phi[:,i], xlabel="r", ylabel="ϕ", ylims = (phimin,phimax))
+            @views plot(r.grid, phi[:,i], xlabel="r", ylabel="ϕ", ylims = (phimin,phimax))
         end
         outfile = string(run_name, "_phi_vs_r.gif")
         gif(anim, outfile, fps=5)
@@ -2689,7 +2702,7 @@ function plot_fields_rt(phi, delta_phi, time, itime_min, itime_max, nwrite_movie
     # plot!(exp.(-(phi[cld(nz,2),end] .- phi[izmid:end,end])) .* erfi.(sqrt.(abs.(phi[cld(nz,2),end] .- phi[izmid:end,end])))/sqrt(pi)/0.688, phi[izmid:end,end] .- phi[izmid,end], label = "analytical", linewidth=2)
     # outfile = string(run_name, "_harrison_comparison.pdf")
     # savefig(outfile)
-    plot(r, phi[:,end], xlabel="r/Lr", ylabel="eϕ/Te", label="", linewidth=2)
+    plot(r.grid, phi[:,end], xlabel="r/Lr", ylabel="eϕ/Te", label="", linewidth=2)
     outfile = string(run_name, "_phi(r)_final.pdf")
     savefig(outfile)
 
