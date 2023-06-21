@@ -300,11 +300,10 @@ function analyze_2D_instability(phi, density, thermal_speed, r, z, r_spectral, z
     # NB normalisation removes the factor of 1/2
     temperature = thermal_speed.^2
 
-    # Get background as r-average of initial condition, as the initial perturbation varies
-    # sinusoidally in r
-    background_phi = @views mean(phi[:,:,1], dims=2)
-    background_density = @views mean(density[:,:,1], dims=2)
-    background_temperature = @views mean(temperature[:,:,1], dims=2)
+    # Get background as r-average of the variable, as the background is constant in r
+    background_phi = mean(phi, dims=2)
+    background_density = mean(density, dims=2)
+    background_temperature = mean(temperature, dims=2)
 
     phi_perturbation = phi .- background_phi
     density_perturbation = density .- background_density
