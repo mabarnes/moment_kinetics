@@ -10,14 +10,30 @@ using TOML
 # Default settings for the arguments to machine_setup_moment_kinetics(), set like this
 # so that they can be passed to the bash script `machine_setup.sh`
 default_settings = Dict{String,Dict{String,String}}()
-default_settings["base"] = Dict{String,String}()
-default_settings["archer"] = default_settings["base"]
-default_settings["marconi"] = default_settings["base"]
+default_settings["base"] = Dict("default_run_time"=>"24:00:00",
+                                "default_nodes"=>"1",
+                                "default_postproc_time"=>"1:00:00",
+                                "default_postproc_memory"=>"64G",
+                                "default_partition"=>"",
+                                "default_qos"=>"")
+default_settings["archer"] = merge(default_settings["base"],
+                                   Dict("default_partition"=>"standard",
+                                        "default_qos"=>"standard"))
+default_settings["marconi"] = merge(default_settings["base"],
+                                    Dict("default_partition"=>"skl_fua_prod",
+                                         "default_qos"=>"normal"))
+
 
 """
     machine_setup_moment_kinetics(machine::String,
                                   account::String,
-                                  julia_directory::String;
+                                  julia_directory::String,
+                                  default_run_time::String,
+                                  default_nodes::String,
+                                  default_postproc_time::String,
+                                  default_postproc_memory::String,
+                                  default_partition::String;
+                                  default_qos::String;
                                   no_force_exit::Bool=false,
                                   interactive::Bool=true)
 
@@ -56,19 +72,47 @@ reason this is not desired (e.g. when debugging), pass `no_force_exit=true`.
 The `interactive` argument exists so that when this function is called from another
 script, terminal output with instructions for the next step can be disabled.
 
+The remaining arguments can be used to change the default settings for jobs submitted
+using the provided `submit-run.sh` script. These settings are read by the scripts from
+`LocalPreferences.toml` and the values can safely be edited in that file without
+re-running this function (if you want to). The arguments are:
+* `default_run_time` is the maximum run time for the simulation, in the format expected
+  by `sbatch --time`, e.g. `"24:00:00"` for 24 hours, 0 minutes, 0 seconds.
+* `default_nodes` is the default number of nodes to use for a simulation run. Note that
+  post-processing always runs in serial (using a serial or debug queue if available).
+* `default_postproc_time` is the maximum run time for the post-processing job, in the
+  format expected by `sbatch --time`, e.g. `"1:00:00"` for 1 hours, 0 minutes, 0
+  seconds.
+* `default_postproc_memory` is the memory requested for the post-processing job, in the
+  format expected by `sbatch --mem`, e.g. `"64G"` for 64GB.
+* `default_partition` is the default 'partition' passed to `sbatch --partition`. See your
+  cluster's documentation for possible values. The default will be the standard queue,
+  which charges towards the budget of your allocation. You might sometimes want, for
+  example, to change this to a debug queue if one is available.
+* `default_qos` is the default 'quality of service' passed to `sbatch --qos`. See your
+  cluster's documentation for possible values. The default will be the standard queue,
+  which charges towards the budget of your allocation. You might want, for example, to
+  change this to a free, low-priority queue if one is available.
+
 Currently supported machines:
 * `"archer"` - the UK supercomputer [ARCHER2](https://www.archer2.ac.uk/)
 * `"marconi"` - the EUROfusion supercomputer
     [Marconi](https://wiki.u-gov.it/confluence/display/SCAIUS/UG3.1%3A+MARCONI+UserGuide)
 
-Notes:
-* The settings created by this function are saved in LocalPreferences.toml (using the
-  `Preferences.jl` package). It might sometimes be useful to edit these by hand (e.g.
-  the `account` setting if this needs to be changed.): it is fine to do this.
+!!! note
+    The settings created by this function are saved in LocalPreferences.toml (using the
+    `Preferences.jl` package). It might sometimes be useful to edit these by hand (e.g.
+    the `account` setting if this needs to be changed.): it is fine to do this.
 """
 function machine_setup_moment_kinetics(machine::String,
                                        account::String,
-                                       julia_directory::String;
+                                       julia_directory::String,
+                                       default_run_time::String,
+                                       default_nodes::String,
+                                       default_postproc_time::String,
+                                       default_postproc_memory::String,
+                                       default_partition::String,
+                                       default_qos::String;
                                        no_force_exit::Bool=false,
                                        interactive::Bool=true)
 
@@ -115,6 +159,12 @@ function machine_setup_moment_kinetics(machine::String,
     # Always overwrite any existing preferences, to get a fresh setup
     mk_preferences = local_preferences["moment_kinetics"] = Dict{String,Any}()
     mk_preferences["machine"] = machine
+    mk_preferences["default_run_time"] = default_run_time
+    mk_preferences["default_nodes"] = default_nodes
+    mk_preferences["default_postproc_time"] = default_postproc_time
+    mk_preferences["default_postproc_memory"] = default_postproc_memory
+    mk_preferences["default_partition"] = default_partition
+    mk_preferences["default_qos"] = default_qos
     mk_preferences["account"] = account
     open(local_preferences_filename, "w") do io
         TOML.print(io, local_preferences, sorted=true)
@@ -249,7 +299,9 @@ if abspath(PROGRAM_FILE) == @__FILE__
         end
 
         d = machine_setup.default_settings[machine]
-        println()
+        println("\"", d["default_run_time"], "\" \"",d["default_nodes"], "\" \"",
+                d["default_postproc_time"], "\" \"", d["default_postproc_memory"],
+                "\" \"", d["default_partition"], "\" \"", d["default_qos"], "\"")
         exit(0)
     end
 

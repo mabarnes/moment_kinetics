@@ -18,7 +18,8 @@ If you omit the `<path-to-Julia-executable>` argument, you will be prompted to
 enter it, with a default taken from your `$PATH`.
 
 The script will prompt you for several settings, with sensible defaults (where
-possible).
+possible). Note that some settings are needed on all machines - if a setting is
+not needed it will be ignored.
 
 You will be prompted to enter a location for your `.julia` directory. If you
 are installing on a cluster which allows access to your home directory from
