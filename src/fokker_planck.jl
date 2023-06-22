@@ -9,6 +9,7 @@ export explicit_fokker_planck_collisions!
 export calculate_Rosenbluth_potentials!
 export calculate_collisional_fluxes, calculate_Maxwellian_Rosenbluth_coefficients
 export Cflux_vpa_Maxwellian_inputs, Cflux_vperp_Maxwellian_inputs
+export calculate_Rosenbluth_H_from_G!
 
 using SpecialFunctions: ellipk, ellipe, erf
 using ..type_definitions: mk_float, mk_int
@@ -119,9 +120,9 @@ end
 function that initialises the arrays needed for Fokker Planck collisions
 """
 
-function init_fokker_planck_collisions(vperp,vpa)
+function init_fokker_planck_collisions(vperp,vpa;init_integral_factors=false)
     fokkerplanck_arrays = allocate_fokkerplanck_arrays(vperp,vpa)
-    if vperp.n > 1 && false
+    if vperp.n > 1 && init_integral_factors
         @views init_elliptic_integral_factors!(fokkerplanck_arrays.elliptic_integral_E_factor,
                                         fokkerplanck_arrays.elliptic_integral_K_factor,
                                         vperp,vpa)
@@ -150,6 +151,25 @@ function calculate_Rosenbluth_potentials!(Rosenbluth_G,Rosenbluth_H,fsp_in,
         end
     end
 
+end
+
+"""
+Computes the Laplacian of G in vpa vperp coordinates to obtain H
+""" 
+function calculate_Rosenbluth_H_from_G!(Rosenbluth_H,Rosenbluth_G,vpa,vpa_spectral,vperp,vperp_spectral,buffer_vpavperp_1,buffer_vpavperp_2)
+    Rosenbluth_H .= 0.0
+    for ivperp in 1:vperp.n
+        @views derivative!(vpa.scratch, Rosenbluth_G[:,ivperp], vpa, vpa_spectral)
+        @views derivative!(vpa.scratch2, vpa.scratch, vpa, vpa_spectral)
+        @views @. buffer_vpavperp_1[:,ivperp] = vpa.scratch2
+    end 
+    for ivpa in 1:vpa.n
+        @views derivative!(vperp.scratch, Rosenbluth_G[ivpa,:], vperp, vperp_spectral)
+        @. vperp.scratch = vperp.grid*vperp.scratch
+        @views derivative!(vperp.scratch2, vperp.scratch, vperp, vperp_spectral)
+        @views @. buffer_vpavperp_2[ivpa,:] = vperp.scratch2/vperp.grid
+    end
+    @views @. Rosenbluth_H = 0.5*(buffer_vpavperp_1 + buffer_vpavperp_2)
 end
  
 
