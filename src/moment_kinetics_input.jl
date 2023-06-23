@@ -165,8 +165,12 @@ function mk_input(scan_input=Dict())
     #################### end specification of species inputs #####################
 
     collisions.charge_exchange = get(scan_input, "charge_exchange_frequency", 2.0*sqrt(species.ion[1].initial_temperature))
+    collisions.charge_exchange_electron = get(scan_input, "electron_charge_exchange_frequency", 0.0)
     collisions.ionization = get(scan_input, "ionization_frequency", collisions.charge_exchange)
+    collisions.ionization_electron = get(scan_input, "electron_ionization_frequency", collisions.ionization)
+    collisions.ionization_energy = get(scan_input, "ionization_energy", 0.0)
     collisions.constant_ionization_rate = get(scan_input, "constant_ionization_rate", false)
+    collisions.nu_ei = get(scan_input, "nu_ei", 0.0)
 
     # parameters related to the time stepping
     nstep = get(scan_input, "nstep", 5)
@@ -764,7 +768,8 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     #############################################################################
     # define default values and create corresponding mutable structs holding
     # information about the composition of the species and their initial conditions
-    if electron_physics ∈ (boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath)
+    if electron_physics ∈ (boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath, 
+                           braginskii_fluid)
         n_species = n_ion_species + n_neutral_species
     else
         n_species = n_ion_speces + n_neutral_species + 1
@@ -864,12 +869,22 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     drive_amplitude = 1.0
     drive_frequency = 1.0
     drive = drive_input_mutable(drive_phi, drive_amplitude, drive_frequency)
-    # charge exchange collision frequency
+    # ion-neutral charge exchange collision frequency
     charge_exchange = 0.0
+    # electron-neutral charge exchange collision frequency
+    charge_exchange_electron = 0.0
     # ionization collision frequency
     ionization = 0.0
+    # ionization collision frequency for electrons
+    ionization_electron = ionization
+    # ionization energy cost
+    ionization_energy = 0.0
     constant_ionization_rate = false
-    collisions = collisions_input(charge_exchange, ionization, constant_ionization_rate)
+    # electron-ion collision frequency
+    nu_ei = 0.0
+    # set up the collisions struct, containing info on collision frequencies
+    collisions = collisions_input(charge_exchange, charge_exchange_electron, ionization, 
+                                  ionization_electron, ionization_energy, constant_ionization_rate, nu_ei)
 
     Bzed = 1.0 # magnetic field component along z
     Bmag = 1.0 # magnetic field strength

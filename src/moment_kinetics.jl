@@ -368,8 +368,8 @@ function setup_moment_kinetics(input_dict::Dict; restart_prefix_iblock=nothing,
         # initialize f(z,vpa) and the lowest three v-space moments (density(z), upar(z) and ppar(z)),
         # each of which may be evolved separately depending on input choices.
         init_pdf_and_moments!(pdf, moments, boundary_distributions, composition, r, z,
-                              vperp, vpa, vzeta, vr, vz, vpa_spectral, vz_spectral,
-                              species, t_input.use_manufactured_solns_for_init)
+                              vperp, vpa, vzeta, vr, vz, z_spectral, vpa_spectral, vz_spectral,
+                              species, collisions, t_input.use_manufactured_solns_for_init)
         # initialize time variable
         code_time = 0.
     else
@@ -381,7 +381,6 @@ function setup_moment_kinetics(input_dict::Dict; restart_prefix_iblock=nothing,
                                             composition, r, z, vpa, vperp, vzeta, vr, vz)
         _block_synchronize()
     end
-    println("dens0_ion: ", moments.ion.dens[1,1,1], " dens0_electron: ", moments.electron.dens[1,1,1])
 
     # create arrays and do other work needed to setup
     # the main time advance loop -- including normalisation of f by density if requested
@@ -390,7 +389,7 @@ function setup_moment_kinetics(input_dict::Dict; restart_prefix_iblock=nothing,
     scratch, advance, scratch_dummy, manufactured_source_list =
         setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
             vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral, z_spectral,
-            r_spectral, composition, drive_input, moments, fields, t_input, collisions, species,
+            r_spectral, composition, moments, fields, t_input, collisions,
             geometry, boundary_distributions, num_diss_params, restarting)
     # setup i/o
     ascii_io, io_moments, io_dfns = setup_file_io(io_input, boundary_distributions, vz,

@@ -1028,7 +1028,8 @@ function write_fields_ascii(flds, z, r, t, ascii_io)
         @inbounds begin
             for ir ∈ 1:r.n
                 for iz ∈ 1:z.n
-                    println(ascii_io,"t: ", t, "   r: ", r.grid[ir],"   z: ", z.grid[iz], "  phi: ", flds.phi[iz,ir])
+                    println(ascii_io,"t: ", t, "   r: ", r.grid[ir],"   z: ", z.grid[iz], "  phi: ", flds.phi[iz,ir],
+                            " Ez: ", flds.Ez[iz,ir])
                 end
             end
         end

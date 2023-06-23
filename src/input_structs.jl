@@ -62,6 +62,7 @@ mutable struct advance_info
     continuity::Bool
     force_balance::Bool
     energy::Bool
+    electron_energy::Bool
     neutral_source_terms::Bool
     neutral_continuity::Bool
     neutral_force_balance::Bool
@@ -101,8 +102,15 @@ end
 
 """
 """
-@enum electron_physics_type boltzmann_electron_response boltzmann_electron_response_with_simple_sheath
-export electron_physics_type, boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath
+@enum electron_physics_type begin
+    boltzmann_electron_response 
+    boltzmann_electron_response_with_simple_sheath 
+    braginskii_fluid
+end
+export electron_physics_type
+export boltzmann_electron_response
+export boltzmann_electron_response_with_simple_sheath
+export braginskii_fluid
 
 """
 """
@@ -291,12 +299,20 @@ end
 """
 """
 mutable struct collisions_input
-    # charge exchange collision frequency
+    # ion-neutral charge exchange collision frequency
     charge_exchange::mk_float
+    # electron-neutral charge exchange collision frequency
+    charge_exchange_electron::mk_float
     # ionization collision frequency
     ionization::mk_float
+    # ionization collision frequency for electrons (probably should be same as for ions)
+    ionization_electron::mk_float
+    # ionization energy cost
+    ionization_energy::mk_float
     # if constant_ionization_rate = true, use an ionization term that is constant in z
     constant_ionization_rate::Bool
+    # electron-ion collision frequency
+    nu_ei::mk_float
 end
 
 """

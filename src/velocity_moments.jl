@@ -28,6 +28,7 @@ using ..calculus: integral
 using ..communication
 using ..derivatives: derivative_z!
 using ..looping
+using ..input_structs: braginskii_fluid
 
 #global tmpsum1 = 0.0
 #global tmpsum2 = 0.0
@@ -110,27 +111,29 @@ mutable struct moments_electron_substruct
     ppar::MPISharedArray{mk_float,2}
     # flag that keeps track of whether or not ppar needs updating before use
     ppar_updated::Bool
+    # this is the temperature
+    temp::MPISharedArray{mk_float,2}
+    # flag that keeps track of whether or not temp needs updating before use
+    temp_updated::Bool
     # this is the parallel heat flux
     qpar::MPISharedArray{mk_float,2}
     # flag that keeps track of whether or not qpar needs updating before use
     qpar_updated::Bool
     # this is the thermal speed based on the parallel temperature Tpar = ppar/dens: vth = sqrt(2*Tpar/m)
     vth::MPISharedArray{mk_float,2}
+    # this is the parallel friction force between ions and electrons
+    parallel_friction::MPISharedArray{mk_float,2}
+    # this is the electron heat source
+    heat_source::MPISharedArray{mk_float,2}
     # if evolve_ppar = true, then the velocity variable is (vpa - upa)/vth, which introduces
     # a factor of vth for each power of wpa in velocity space integrals.
     # v_norm_fac accounts for this: it is vth if using the above definition for the parallel velocity,
     # and it is one otherwise
     v_norm_fac::Union{MPISharedArray{mk_float,2},Nothing}
-    # this is the upwinded z-derivative of the particle density
-    ddens_dz_upwind::Union{MPISharedArray{mk_float,2},Nothing}
-    # this is the second-z-derivative of the particle density
-    d2dens_dz2::Union{MPISharedArray{mk_float,2},Nothing}
+    # this is the z-derivative of the particle density
+    ddens_dz::Union{MPISharedArray{mk_float,2},Nothing}
     # this is the z-derivative of the parallel flow
     dupar_dz::Union{MPISharedArray{mk_float,2},Nothing}
-    # this is the upwinded z-derivative of the parallel flow
-    dupar_dz_upwind::Union{MPISharedArray{mk_float,2},Nothing}
-    # this is the second-z-derivative of the parallel flow
-    d2upar_dz2::Union{MPISharedArray{mk_float,2},Nothing}
     # this is the z-derivative of the parallel pressure
     dppar_dz::Union{MPISharedArray{mk_float,2},Nothing}
     # this is the upwinded z-derivative of the parallel pressure
@@ -139,8 +142,10 @@ mutable struct moments_electron_substruct
     d2ppar_dz2::Union{MPISharedArray{mk_float,2},Nothing}
     # this is the z-derivative of the parallel heat flux
     dqpar_dz::Union{MPISharedArray{mk_float,2},Nothing}
-    # this is the z-derivative of the thermal speed based on the parallel temperature Tpar = ppar/dens: vth = sqrt(2*Tpar/m)
-    dvth_dz::Union{MPISharedArray{mk_float,2},Nothing}
+    # this is the z-derivative of the parallel temperature Tpar = ppar/dens
+    dT_dz::Union{MPISharedArray{mk_float,2},Nothing}
+    # this is the upwinded z-derivative of the temperature Tpar = ppar/dens
+    dT_dz_upwind::Union{MPISharedArray{mk_float,2},Nothing}
 end
 
 """
@@ -305,8 +310,7 @@ end
 """
 create a moment struct containing information about the electron moments
 """
-function create_moments_electron(nz, nr, evolve_density, evolve_upar,
-                                evolve_ppar, numerical_dissipation)
+function create_moments_electron(nz, nr, electron_model, numerical_dissipation)
     # allocate array used for the particle density
     density = allocate_shared_float(nz, nr)
     # initialise Bool variable that indicates if the density is updated for each species
@@ -319,73 +323,50 @@ function create_moments_electron(nz, nr, evolve_density, evolve_upar,
     parallel_pressure = allocate_shared_float(nz, nr)
     # allocate Bool variable that indicates if the parallel pressure is updated for each species
     parallel_pressure_updated = false
+    # allocate array used for the temperature
+    temperature = allocate_shared_float(nz, nr)
+    # allocate Bool variable that indicates if the temperature is updated for each species
+    temperature_updated = false
     # allocate array used for the parallel flow
     parallel_heat_flux = allocate_shared_float(nz, nr)
     # allocate Bool variables that indicates if the parallel flow is updated for each species
     parallel_heat_flux_updated = false
+    # allocate array used for the election-ion parallel friction force
+    parallel_friction_force = allocate_shared_float(nz, nr)
+    # allocate array used for electron heat source
+    heat_source = allocate_shared_float(nz, nr)
     # allocate array used for the thermal speed
     thermal_speed = allocate_shared_float(nz, nr)
-    if evolve_ppar
-        v_norm_fac = thermal_speed
-    else
-        v_norm_fac = allocate_shared_float(nz, nr)
-        @serial_region begin
-            v_norm_fac .= 1.0
-        end
-    end
-
-    if evolve_density
-        ddens_dz_upwind = allocate_shared_float(nz, nr)
-    else
-        ddens_dz_upwind = nothing
-    end
-    if evolve_density &&
-            numerical_dissipation.moment_dissipation_coefficient > 0.0
-
-        d2dens_dz2 = allocate_shared_float(nz, nr)
-    else
-        d2dens_dz2 = nothing
-    end
-    if evolve_density || evolve_upar || evolve_ppar
-        dupar_dz = allocate_shared_float(nz, nr)
-    else
-        dupar_dz = nothing
-    end
-    if evolve_upar
-        dupar_dz_upwind = allocate_shared_float(nz, nr)
-    else
-        dupar_dz_upwind = nothing
-    end
-    if evolve_upar &&
-            numerical_dissipation.moment_dissipation_coefficient > 0.0
-
-        d2upar_dz2 = allocate_shared_float(nz, nr)
-    else
-        d2upar_dz2 = nothing
-    end
-    if evolve_upar
-        dppar_dz = allocate_shared_float(nz, nr)
-    else
-        dppar_dz = nothing
-    end
-    if evolve_ppar
+    # if evolving the electron pdf, it will be a function of the vth-normalised peculiar velocity
+    v_norm_fac = thermal_speed
+    # dn/dz is needed to obtain dT/dz (appearing in, e.g., Braginskii qpar) from dppar/dz
+    ddens_dz = allocate_shared_float(nz, nr)
+    # need dupar/dz to obtain, e.g., the updated electron temperature
+    dupar_dz = allocate_shared_float(nz, nr)
+    dppar_dz = allocate_shared_float(nz, nr)
+    if electron_model == braginskii_fluid
         dppar_dz_upwind = allocate_shared_float(nz, nr)
-        d2ppar_dz2 = allocate_shared_float(nz, nr)
-        dqpar_dz = allocate_shared_float(nz, nr)
-        dvth_dz = allocate_shared_float(nz, nr)
+        dT_dz_upwind = allocate_shared_float(nz, nr)
     else
         dppar_dz_upwind = nothing
-        d2ppar_dz2 = nothing
-        dqpar_dz = nothing
-        dvth_dz = nothing
+        dT_dz_upwind = nothing
     end
+    if numerical_dissipation.moment_dissipation_coefficient > 0.0
+        d2ppar_dz2 = allocate_shared_float(nz, nr)
+    else
+        d2ppar_dz2 = nothing
+    end
+    dqpar_dz = allocate_shared_float(nz, nr)
+    dT_dz = allocate_shared_float(nz, nr)
     
     # return struct containing arrays needed to update moments
     return moments_electron_substruct(density, density_updated, parallel_flow,
         parallel_flow_updated, parallel_pressure, parallel_pressure_updated,
-        parallel_heat_flux, parallel_heat_flux_updated, thermal_speed, v_norm_fac,
-        ddens_dz_upwind, d2dens_dz2, dupar_dz, dupar_dz_upwind, d2upar_dz2, dppar_dz,
-        dppar_dz_upwind, d2ppar_dz2, dqpar_dz, dvth_dz)
+        temperature, temperature_updated, 
+        parallel_heat_flux, parallel_heat_flux_updated, thermal_speed, 
+        parallel_friction_force, heat_source, v_norm_fac,
+        ddens_dz, dupar_dz, dppar_dz, dppar_dz_upwind, d2ppar_dz2, dqpar_dz, 
+        dT_dz, dT_dz_upwind)
 end
 
 # neutral particles have natural mean velocities 
@@ -855,6 +836,61 @@ function calculate_moment_derivatives!(moments, scratch, scratch_dummy, z, z_spe
                                  buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
         end
     end
+end
+
+"""
+Pre-calculate spatial derivatives of the electron moments that will be needed for the time advance
+"""
+function calculate_electron_moment_derivatives!(moments, scratch, scratch_dummy, z, z_spectral,
+                                                numerical_dissipation, electron_model)
+    begin_r_region()
+
+    dens = scratch.electron_density
+    upar = scratch.electron_upar
+    ppar = scratch.electron_ppar
+    qpar = moments.electron.qpar
+    dummy_zr = @view scratch_dummy.dummy_zrs[:,:,1]
+    buffer_r_1 = @view scratch_dummy.buffer_rs_1[:,1]
+    buffer_r_2 = @view scratch_dummy.buffer_rs_2[:,1]
+    buffer_r_3 = @view scratch_dummy.buffer_rs_3[:,1]
+    buffer_r_4 = @view scratch_dummy.buffer_rs_4[:,1]
+    buffer_r_5 = @view scratch_dummy.buffer_rs_5[:,1]
+    buffer_r_6 = @view scratch_dummy.buffer_rs_6[:,1]
+       
+    @views derivative_z!(moments.electron.dupar_dz, upar, buffer_r_1,
+                         buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
+
+    # Upwinded using upar as advection velocity, to be used in energy equation
+    @loop_r_z ir iz begin
+        dummy_zr[iz,ir] = -upar[iz,ir]
+    end
+    if electron_model == braginskii_fluid
+        @views derivative_z!(moments.electron.dppar_dz_upwind, ppar, dummy_zr,
+                             buffer_r_1, buffer_r_2, buffer_r_3, buffer_r_4,
+                             buffer_r_5, buffer_r_6, z_spectral, z)
+    end
+
+    # centred second derivative for dissipation
+    if numerical_dissipation.moment_dissipation_coefficient > 0.0
+        @views derivative_z!(dummy_zr, ppar, buffer_r_1, buffer_r_2, buffer_r_3,
+                             buffer_r_4, z_spectral, z)
+        @views derivative_z!(moments.electron.d2ppar_dz2, dummy_zr, buffer_r_1,
+                             buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
+    end
+
+    @views derivative_z!(moments.electron.ddens_dz, dens, buffer_r_1,
+                            buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
+    @views derivative_z!(moments.electron.dppar_dz, ppar, buffer_r_1,
+                            buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
+    @views derivative_z!(moments.electron.dqpar_dz, qpar, buffer_r_1,
+                            buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
+    # calculate the zed derivative of the electron temperature
+    @loop_r_z ir iz begin
+        # store the temperature in dummy_zr
+        dummy_zr[iz,ir] = 2*ppar[iz,ir]/dens[iz,ir]
+    end
+    @views derivative_z!(moments.electron.dT_dz, dummy_zr, buffer_r_1,
+                            buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
 end
 
 """
@@ -1610,6 +1646,10 @@ function reset_moments_status!(moments)
     moments.neutral.pzeta_updated .= false
     moments.neutral.pr_updated .= false
     moments.neutral.qz_updated .= false
+    moments.electron.dens_updated = false
+    moments.electron.upar_updated = false
+    moments.electron.ppar_updated = false
+    moments.electron.qpar_updated = false
 end
 
 end

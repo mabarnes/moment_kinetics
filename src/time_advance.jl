@@ -19,6 +19,7 @@ using ..velocity_moments: update_neutral_density!, update_neutral_qz!
 using ..velocity_moments: update_neutral_uzeta!, update_neutral_uz!, update_neutral_ur!
 using ..velocity_moments: update_neutral_pzeta!, update_neutral_pz!, update_neutral_pr!
 using ..velocity_moments: calculate_moment_derivatives!, calculate_moment_derivatives_neutral!
+using ..velocity_moments: calculate_electron_moment_derivatives!
 using ..velocity_grid_transforms: vzvrvzeta_to_vpavperp!, vpavperp_to_vzvrvzeta!
 using ..initial_conditions: enforce_z_boundary_condition!, enforce_boundary_conditions!
 using ..initial_conditions: enforce_vpa_boundary_condition!, enforce_r_boundary_condition!
@@ -54,6 +55,10 @@ using ..advection: advection_info
 using ..electron_fluid_equations: calculate_electron_density!
 using ..electron_fluid_equations: calculate_electron_upar_from_charge_conservation!
 using ..electron_fluid_equations: calculate_electron_qpar!
+using ..electron_fluid_equations: calculate_electron_parallel_friction_force!
+using ..electron_fluid_equations: electron_energy_equation!
+using ..input_structs: braginskii_fluid
+using ..derivatives: derivative_z!
 @debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
 
 using Dates
@@ -160,11 +165,10 @@ EM fields, and advection terms
 """
 function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
                              vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral,
-                             z_spectral, r_spectral, composition, drive_input, moments,
-                             fields, t_input, collisions, species, geometry,
+                             z_spectral, r_spectral, composition, moments,
+                             fields, t_input, collisions, geometry,
                              boundary_distributions, num_diss_params, restarting)
     # define some local variables for convenience/tidiness
-    n_species = composition.n_species
     n_ion_species = composition.n_ion_species
     n_neutral_species = composition.n_neutral_species
     # create array containing coefficients needed for the Runge Kutta time advance
@@ -176,7 +180,6 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
     advance = setup_advance_flags(moments, composition, t_input, collisions,
                                   num_diss_params, rk_coefs, r, vperp, vpa, vzeta, vr, vz)
 
-
     begin_serial_region()
 
     # create an array of structs containing scratch arrays for the pdf and low-order moments
@@ -186,9 +189,14 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
     n_neutral_species_alloc = max(1,composition.n_neutral_species)
     scratch_dummy = setup_dummy_and_buffer_arrays(r.n,z.n,vpa.n,vperp.n,vz.n,vr.n,vzeta.n,
                                    composition.n_ion_species,n_neutral_species_alloc)
-    # initialize the electrostatic potential
+   
     begin_serial_region()
-    update_phi!(fields, scratch[1], z, r, composition, z_spectral, r_spectral, scratch_dummy)
+    # update the derivatives of the electron moments as these may be needed when
+    # computing the electrostatic potential (and components of the electric field)
+    calculate_electron_moment_derivatives!(moments, scratch[1], scratch_dummy, z, 
+                                           z_spectral, num_diss_params, composition.electron_physics)
+    # initialize the electrostatic potential
+    update_phi!(fields, scratch[1], z, r, composition, collisions, moments, z_spectral, r_spectral, scratch_dummy)
     @serial_region begin
         # save the initial phi(z) for possible use later (e.g., if forcing phi)
         fields.phi0 .= fields.phi
@@ -348,19 +356,43 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
             scratch[1].ppar[iz,ir,is] = moments.ion.ppar[iz,ir,is]
         end
 
-        # update the electron, parallel flow density and parallel pressure
+        # update the electron density, parallel flow and parallel pressure (and temperature)
         # in case the corresponding ion quantities have been changed by applying
         # constraints to the ion pdf
-        calculate_electron_density!(moments.electron.dens, moments.ion.dens)
-        calculate_electron_upar_from_charge_conservation!(moments.electron.upar, moments.electron.dens,
-                                                          moments.ion.upar, moments.ion.dens, composition.electron_physics)
-        @. moments.electron.ppar = 0.5 * moments.electron.dens * moments.electron.vth^2
+        calculate_electron_density!(moments.electron.dens, moments.electron.dens_updated, moments.ion.dens)
+        calculate_electron_upar_from_charge_conservation!(moments.electron.upar, moments.electron.upar_updated,
+                                                          moments.electron.dens, moments.ion.upar, moments.ion.dens,
+                                                          composition.electron_physics)
+        # compute the updated electron temperature
+        # NB: not currently necessary, as initial vth is not directly dependent on ion quantities
+        @. moments.electron.temp = moments.electron.vth^2
+        # as the electron temperature has now been updated, set the appropriate flag
+        moments.electron.temp_updated = true
+        # compute the updated electron parallel pressure
+        @. moments.electron.ppar = 0.5 * moments.electron.dens * moments.electron.temp
+        # as the electron ppar has now been updated, set the appropriate flag
+        moments.electron.ppar_updated = true
+        # calculate the zed derivative of the initial electron temperature, potentially
+        # needed in the following calculation of the electron parallel friction force and
+        # parallel heat flux
+        @views derivative_z!(moments.electron.dT_dz, moments.electron.temp, 
+            scratch_dummy.buffer_rs_1[:,1], scratch_dummy.buffer_rs_2[:,1], scratch_dummy.buffer_rs_3[:,1],
+            scratch_dummy.buffer_rs_4[:,1], z_spectral, z)
+        # calculate the electron parallel heat flux
+        calculate_electron_qpar!(moments.electron.qpar, moments.electron.qpar_updated, moments.electron.ppar,
+            moments.electron.upar, moments.electron.dT_dz, moments.ion.upar, 
+            collisions.nu_ei, composition.me_over_mi, composition.electron_physics)
+        # calculate the electron-ion parallel friction force
+        calculate_electron_parallel_friction_force!(moments.electron.parallel_friction, moments.electron.dens,
+            moments.electron.upar, moments.ion.upar, moments.electron.dT_dz,
+            composition.me_over_mi, collisions.nu_ei, composition.electron_physics)
         # update the electron moment entries in the scratch array
         begin_r_z_region()
         @loop_r_z ir iz begin
             scratch[1].electron_density[iz,ir] = moments.electron.dens[iz,ir]
             scratch[1].electron_upar[iz,ir] = moments.electron.upar[iz,ir]
             scratch[1].electron_ppar[iz,ir] = moments.electron.ppar[iz,ir]
+            scratch[1].electron_temp[iz,ir] = moments.electron.temp[iz,ir]
         end
 
         begin_sn_r_z_region(no_synchronize=true)
@@ -372,11 +404,15 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
         end
     end
 
-    update_phi!(fields, scratch[1], z, r, composition, z_spectral, r_spectral,
-                scratch_dummy)
     calculate_moment_derivatives!(moments, scratch[1], scratch_dummy, z, z_spectral, num_diss_params)
+    calculate_electron_moment_derivatives!(moments, scratch[1], scratch_dummy, z, 
+                                           z_spectral, num_diss_params, composition.electron_physics)
     calculate_moment_derivatives_neutral!(moments, scratch[1], scratch_dummy, z,
                                           z_spectral, num_diss_params)
+    # update the electrostatic potential and components of the electric field, as pdfs and moments
+    # may have changed due to enforcing boundary/moment constraints                                      
+    update_phi!(fields, scratch[1], z, r, composition, collisions, moments, z_spectral, r_spectral,
+                scratch_dummy)
 
     # Ensure all processes are synchronized at the end of the setup
     _block_synchronize()
@@ -407,6 +443,7 @@ function setup_advance_flags(moments, composition, t_input, collisions, num_diss
     advance_continuity = false
     advance_force_balance = false
     advance_energy = false
+    advance_electron_energy = false
     advance_neutral_z_advection = false
     advance_neutral_r_advection = false
     advance_neutral_vz_advection = false
@@ -505,7 +542,11 @@ function setup_advance_flags(moments, composition, t_input, collisions, num_diss
                 advance_neutral_energy = true
             end
         end
-
+        # if treating the electrons as a fluid with Braginskii closure, 
+        # then advance the electron energy equation
+        if composition.electron_physics == braginskii_fluid
+            advance_electron_energy = true
+        end
         # flag to determine if a d^2/dr^2 operator is present
         r_diffusion = (advance_numerical_dissipation && num_diss_params.r_dissipation_coefficient > 0.0)
         # flag to determine if a d^2/dvpa^2 operator is present
@@ -521,7 +562,7 @@ function setup_advance_flags(moments, composition, t_input, collisions, num_diss
                         advance_ionization, advance_ionization_1V,
                         advance_ionization_source, advance_numerical_dissipation,
                         advance_sources, advance_continuity, advance_force_balance,
-                        advance_energy, advance_neutral_sources,
+                        advance_energy, advance_electron_energy, advance_neutral_sources,
                         advance_neutral_continuity, advance_neutral_force_balance,
                         advance_neutral_energy, rk_coefs, manufactured_solns_test,
                         r_diffusion, vpa_diffusion, vz_diffusion)
@@ -655,6 +696,7 @@ function setup_scratch_arrays(moments, pdf_ion_in, pdf_neutral_in, n_rk_stages)
         electron_density_array = allocate_shared_float(moment_electron_dims...)
         electron_upar_array = allocate_shared_float(moment_electron_dims...)
         electron_ppar_array = allocate_shared_float(moment_electron_dims...)
+        electron_temp_array = allocate_shared_float(moment_electron_dims...)
 
         pdf_neutral_array = allocate_shared_float(pdf_neutral_dims...)
         density_neutral_array = allocate_shared_float(moment_neutral_dims...)
@@ -665,19 +707,21 @@ function setup_scratch_arrays(moments, pdf_ion_in, pdf_neutral_in, n_rk_stages)
         scratch[istage] = scratch_pdf(pdf_array, density_array, upar_array,
                                       ppar_array, temp_z_s_array,
                                       electron_density_array, electron_upar_array,
-                                      electron_ppar_array,
+                                      electron_ppar_array, electron_temp_array,
                                       pdf_neutral_array, density_neutral_array,
                                       uz_neutral_array, pz_neutral_array)
         @serial_region begin
+            # initialise the scratch arrays for the ion pdf and velocity moments
             scratch[istage].pdf .= pdf_ion_in
             scratch[istage].density .= moments.ion.dens
             scratch[istage].upar .= moments.ion.upar
             scratch[istage].ppar .= moments.ion.ppar
-
+            # initialise the scratch arrays for the electron velocity moments
             scratch[istage].electron_density .= moments.electron.dens
             scratch[istage].electron_upar .= moments.electron.upar
             scratch[istage].electron_ppar .= moments.electron.ppar
-
+            scratch[istage].electron_temp .= moments.electron.temp
+            # initialise the scratch arrays for the neutral velocity moments and pdf
             scratch[istage].pdf_neutral .= pdf_neutral_in
             scratch[istage].density_neutral .= moments.neutral.dens
             scratch[istage].uz_neutral .= moments.neutral.uz
@@ -1115,7 +1159,7 @@ or update them by taking the appropriate velocity moment of the evolved pdf
 """
 function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, vr, vzeta,
                     vpa, vperp, z, r, advect_objects, rk_coefs, istage, composition,
-                    geometry, num_diss_params, z_spectral, r_spectral, advance,
+                    collisions, geometry, num_diss_params, z_spectral, r_spectral, advance,
                     scratch_dummy)
     begin_s_r_z_region()
 
@@ -1188,12 +1232,35 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
     calculate_moment_derivatives!(moments, new_scratch, scratch_dummy, z, z_spectral,
                                   num_diss_params)
 
-    # update the electron moments
-    calculate_electron_density!(new_scratch.electron_density, new_scratch.density)
-    calculate_electron_upar_from_charge_conservation!(new_scratch.electron_upar, new_scratch.electron_density,
-        new_scratch.density, new_scratch.upar, composition.electron_physics)
-    @. new_scratch.electron_ppar = 0.5 * new_scratch.electron_density * moments.electron.vth^2
-    calculate_electron_qpar!(moments.electron.qpar, composition.electron_physics)
+    # update the lowest three electron moments (density, upar and ppar)
+    calculate_electron_density!(new_scratch.electron_density, moments.electron.dens_updated, new_scratch.density)
+    calculate_electron_upar_from_charge_conservation!(new_scratch.electron_upar, moments.electron.upar_updated,
+        new_scratch.electron_density, new_scratch.upar, new_scratch.density, composition.electron_physics)
+    # if electron model is braginskii_fluid, then ppar is evolved via the energy equation
+    # and is already updated;
+    # otherwise update assuming electron temperature is fixed in time
+    if composition.electron_physics == braginskii_fluid
+        @loop_r_z ir iz begin
+            new_scratch.electron_ppar[iz,ir] = (rk_coefs[1]*moments.electron.ppar[iz,ir] 
+                + rk_coefs[2]*old_scratch.electron_ppar[iz,ir] + rk_coefs[3]*new_scratch.electron_ppar[iz,ir])
+        end
+    else
+        @. new_scratch.electron_ppar = 0.5 * new_scratch.electron_density * moments.electron.vth^2
+    end
+    @. moments.electron.vth = sqrt(2 * new_scratch.electron_ppar / new_scratch.electron_density)
+    # regardless of electron model, electron ppar is now updated
+    moments.electron.ppar_updated = true
+    # calculate the corresponding zed derivatives of the moments
+    calculate_electron_moment_derivatives!(moments, new_scratch, scratch_dummy, z, z_spectral,
+                                           num_diss_params, composition.electron_physics)
+    # update the electron parallel heat flux
+    calculate_electron_qpar!(moments.electron.qpar, moments.electron.qpar_updated, new_scratch.electron_ppar,
+        new_scratch.electron_upar, moments.electron.dT_dz, moments.ion.upar, collisions.nu_ei,
+        composition.me_over_mi, composition.electron_physics)
+    # update the electron parallel friction force
+    calculate_electron_parallel_friction_force!(moments.electron.parallel_friction, new_scratch.electron_density,
+        new_scratch.electron_upar, new_scratch.upar, moments.electron.dT_dz, composition.me_over_mi,
+        collisions.nu_ei, composition.electron_physics)
 
     ##
     # update the neutral particle distribution and moments
@@ -1258,7 +1325,9 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
     end
 
     # update the electrostatic potential phi
-    update_phi!(fields, scratch[istage+1], z, r, composition, z_spectral, r_spectral, scratch_dummy)
+    update_phi!(fields, scratch[istage+1], z, r, composition, collisions, moments, 
+    z_spectral, r_spectral, scratch_dummy)
+    
     if !(( moments.evolve_upar || moments.evolve_ppar) &&
               istage == length(scratch)-1)
         # _block_synchronize() here because phi needs to be read on different ranks than
@@ -1390,6 +1459,7 @@ function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase,
         first_scratch.electron_density[iz,ir] = moments.electron.dens[iz,ir]
         first_scratch.electron_upar[iz,ir] = moments.electron.upar[iz,ir]
         first_scratch.electron_ppar[iz,ir] = moments.electron.ppar[iz,ir]
+        first_scratch.electron_temp[iz,ir] = moments.electron.temp[iz,ir]
     end
 
     if composition.n_neutral_species > 0
@@ -1423,8 +1493,8 @@ function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase,
             num_diss_params, advance, istage)
         @views rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, vr,
                           vzeta, vpa, vperp, z, r, advect_objects,
-                          advance.rk_coefs[:,istage], istage, composition, geometry,
-                          num_diss_params, spectral_objects.z_spectral,
+                          advance.rk_coefs[:,istage], istage, composition, collisions, 
+                          geometry, num_diss_params, spectral_objects.z_spectral,
                           spectral_objects.r_spectral, advance, scratch_dummy)
     end
 
@@ -1448,6 +1518,7 @@ function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase,
         moments.electron.dens[iz,ir] = final_scratch.electron_density[iz,ir]
         moments.electron.upar[iz,ir] = final_scratch.electron_upar[iz,ir]
         moments.electron.ppar[iz,ir] = final_scratch.electron_ppar[iz,ir]
+        moments.electron.temp[iz,ir] = final_scratch.electron_temp[iz,ir]
     end
     if composition.n_neutral_species > 0
         # No need to synchronize here as we only change neutral quantities and previous
@@ -1672,6 +1743,10 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
         neutral_energy_equation!(fvec_out.pz_neutral, fvec_in, moments, collisions, dt,
                                  z_spectral, composition, num_diss_params)
     end
+    if advance.electron_energy
+        electron_energy_equation!(fvec_out.electron_ppar, fvec_in, moments, collisions, dt,
+                                  z_spectral, composition, num_diss_params, fvec_out.density)
+    end
     # reset "xx.updated" flags to false since ff has been updated
     # and the corresponding moments have not
     reset_moments_status!(moments)
@@ -1699,6 +1774,7 @@ function update_solution_vector!(evolved, moments, istage, composition, vpa, vpe
         new_evolved.electron_density[iz,ir] = old_evolved.electron_density[iz,ir]
         new_evolved.electron_upar[iz,ir] = old_evolved.electron_upar[iz,ir]
         new_evolved.electron_ppar[iz,ir] = old_evolved.electron_ppar[iz,ir]
+        new_evolved.electron_temp[iz,ir] = old_evolved.electron_temp[iz,ir]
     end
     if composition.n_neutral_species > 0
         begin_sn_r_z_region()

@@ -14,6 +14,7 @@ using ..moment_kinetics_structs: em_fields_struct
 using ..velocity_moments: update_density!
 #using ..calculus: derivative!
 using ..derivatives: derivative_r!, derivative_z!
+using ..electron_fluid_equations: calculate_Epar_from_electron_force_balance!
 
 """
 """
@@ -28,8 +29,11 @@ end
 """
 update_phi updates the electrostatic potential, phi
 """
-function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral, scratch_dummy)
+function update_phi!(fields, fvec, z, r, composition, collisions, moments, 
+    z_spectral, r_spectral, scratch_dummy)
+    # define a new variable for the number of ion species for brevity of following code
     n_ion_species = composition.n_ion_species
+    # check bounds of fields and fvec arrays
     @boundscheck size(fields.phi,1) == z.n || throw(BoundsError(fields.phi))
     @boundscheck size(fields.phi,2) == r.n || throw(BoundsError(fields.phi))
     @boundscheck size(fields.phi0,1) == z.n || throw(BoundsError(fields.phi0))
@@ -47,6 +51,8 @@ function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral, sc
     # when there is only one species.
     
     begin_serial_region()#(no_synchronize=true)
+
+    dens_e = fvec.electron_density
     # in serial as both s, r and z required locally
     if (composition.n_ion_species > 1 || true ||
         composition.electron_physics == boltzmann_electron_response_with_simple_sheath)
@@ -93,8 +99,14 @@ function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral, sc
         end
         if composition.electron_physics ∈ (boltzmann_electron_response, boltzmann_electron_response_with_simple_sheath)
             @loop_r_z ir iz begin
-                fields.phi[iz,ir] = composition.T_e * log(fvec.electron_density[iz,ir] / N_e[ir])
+                fields.phi[iz,ir] = composition.T_e * log(dens_e[iz,ir] / N_e[ir])
             end
+        elseif composition.electron_physics == braginskii_fluid
+            calculate_Epar_from_electron_force_balance!(fields.Ez, dens_e, moments.electron.dppar_dz,
+                collisions.nu_ei, moments.electron.parallel_friction,
+                composition.n_neutral_species, collisions.charge_exchange_electron, composition.me_over_mi,
+                fvec.density_neutral, fvec.uz_neutral, fvec.electron_upar)
+            calculate_phi_from_Epar!(fields.phi, fields.Ez, z.cell_width)
         end
     end
     ## can calculate phi at z = L and hence phi_wall(z=L) using jpar_i at z =L if needed
@@ -119,12 +131,26 @@ function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral, sc
             # Er_constant defaults to 0.0 in moment_kinetics_input.jl
         end
     end
-    #Ez = - d phi / dz
-    @views derivative_z!(fields.Ez,-fields.phi,
-                scratch_dummy.buffer_rs_1[:,1], scratch_dummy.buffer_rs_2[:,1],
-                scratch_dummy.buffer_rs_3[:,1], scratch_dummy.buffer_rs_4[:,1],
-                z_spectral,z)
+    # if advancing electron fluid equations, solve for Ez directly from force balance
+    if composition.electron_physics != braginskii_fluid
+        # Ez = - d phi / dz
+        @views derivative_z!(fields.Ez,-fields.phi,
+                    scratch_dummy.buffer_rs_1[:,1], scratch_dummy.buffer_rs_2[:,1],
+                    scratch_dummy.buffer_rs_3[:,1], scratch_dummy.buffer_rs_4[:,1],
+                    z_spectral,z)
+    end
+    return nothing
+end
 
+function calculate_phi_from_Epar!(phi, Epar, dz)
+    # simple calculation of phi from Epar for now, with zero phi assumed at boundary
+    phi[1,:] .= 0.0
+    @loop_r_z ir iz begin
+        if iz > 1
+            phi[iz,ir] = phi[iz-1,ir] - dz[iz-1]*Epar[iz,ir]
+        end
+    end
+    return nothing
 end
 
 end

@@ -36,7 +36,9 @@ using ..velocity_moments: update_ppar!, update_upar!, update_density!
 using ..electron_fluid_equations: calculate_electron_density!
 using ..electron_fluid_equations: calculate_electron_upar_from_charge_conservation!
 using ..electron_fluid_equations: calculate_electron_qpar!
+using ..electron_fluid_equations: calculate_electron_parallel_friction_force!
 using ..input_structs: boltzmann_electron_response_with_simple_sheath
+using ..derivatives: derivative_z!
 
 using ..manufactured_solns: manufactured_solutions
 
@@ -102,8 +104,7 @@ function allocate_pdf_and_moments(composition, r, z, vperp, vpa, vzeta, vr, vz,
         evolve_moments.density, evolve_moments.parallel_flow,
         evolve_moments.parallel_pressure, numerical_dissipation)
     electron = create_moments_electron(z.n, r.n,
-        evolve_moments.density, evolve_moments.parallel_flow,
-        evolve_moments.parallel_pressure, numerical_dissipation)
+        composition.electron_physics, numerical_dissipation)
     neutral = create_moments_neutral(z.n, r.n, composition.n_neutral_species,
         evolve_moments.density, evolve_moments.parallel_flow,
         evolve_moments.parallel_pressure, numerical_dissipation)
@@ -154,8 +155,8 @@ creates the normalised pdf and the velocity-space moments and populates them
 with a self-consistent initial condition
 """
 function init_pdf_and_moments!(pdf, moments, boundary_distributions, composition, r, z,
-                               vperp, vpa, vzeta, vr, vz, vpa_spectral, vz_spectral,
-                               species, use_manufactured_solns)
+                               vperp, vpa, vzeta, vr, vz, z_spectral, vpa_spectral, vz_spectral,
+                               species, collisions, use_manufactured_solns)
     if use_manufactured_solns
         init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z,
                                              r, n_ion_species, n_neutral_species,
@@ -212,14 +213,12 @@ function init_pdf_and_moments!(pdf, moments, boundary_distributions, composition
         initialize_pdf!(pdf, moments, boundary_distributions, composition, r, z, vperp,
                         vpa, vzeta, vr, vz, vpa_spectral, vz_spectral, species)
 
-        println("post_init_pdf_ni: ", moments.ion.dens[1,1,1])
         begin_s_r_z_region()
         # calculate the initial parallel heat flux from the initial un-normalised pdf
         update_qpar!(moments.ion.qpar, moments.ion.qpar_updated,
                      moments.ion.dens, moments.ion.upar, moments.ion.vth,
                      pdf.ion.norm, vpa, vperp, z, r, composition,
                      moments.evolve_density, moments.evolve_upar, moments.evolve_ppar)
-        # calculate_electron_qpar!(moments.electron.qpar, composition.electron_physics)
 
         if n_neutral_species > 0
             update_neutral_qz!(moments.neutral.qz, moments.neutral.qz_updated,
@@ -243,24 +242,38 @@ function init_pdf_and_moments!(pdf, moments, boundary_distributions, composition
 
     @serial_region begin 
         # initialise the electron density profile
-        init_electron_density!(moments.electron.dens, moments.ion.dens, n_ion_species)
+        init_electron_density!(moments.electron.dens, moments.electron.dens_updated, moments.ion.dens)
         # initialise the electron parallel flow profile
-        init_electron_upar!(moments.electron.upar, moments.electron.dens, moments.ion.upar, 
-            moments.ion.dens, composition.electron_physics)
+        init_electron_upar!(moments.electron.upar, moments.electron.upar_updated, moments.electron.dens, 
+            moments.ion.upar, moments.ion.dens, composition.electron_physics)
         # initialise the electron thermal speed profile
         init_electron_vth!(moments.electron.vth, composition.T_e)
-        # calculate the electron parallel pressure from the density and thermal speed
-        @. moments.electron.ppar = 0.5 * moments.electron.dens * moments.electron.vth^2
-        # calculate the electron parallel heat flux
-        calculate_electron_qpar!(moments.electron.qpar, composition.electron_physics)
-        # the electron moments have now been updated
-        moments.electron.dens_updated = true
-        moments.electron.upar_updated = true
+        # calculate the electron temperature from the thermal speed
+#        @. moments.electron.temp = 0.5 * moments.electron.vth^2
+        @. moments.electron.temp = moments.electron.vth^2
+        # the electron temperature has now been updated
+        moments.electron.temp_updated = true
+        # calculate the electron parallel pressure from the density and temperature
+#        @. moments.electron.ppar = moments.electron.dens * moments.electron.temp
+        @. moments.electron.ppar = 0.5 * moments.electron.dens * moments.electron.temp
+        # the electron parallel pressure now been updated
         moments.electron.ppar_updated = true
+        # calculate the zed derivative of the initial electron temperature
+        # NB: ddens_dz, dupar_dz, dppar_dz and dqpar_dz are used as dummy arrays in this function
+        # NB: call, as they have yet to be calculated
+        @views derivative_z!(moments.electron.dT_dz, moments.electron.temp, 
+            moments.electron.ddens_dz[:,1], moments.electron.dupar_dz[:,1], moments.electron.dppar_dz[:,1],
+            moments.electron.dqpar_dz[:,1], z_spectral, z)
+        # calculate the electron parallel heat flux
+        calculate_electron_qpar!(moments.electron.qpar, moments.electron.qpar_updated, moments.electron.ppar,
+            moments.electron.upar, moments.electron.dT_dz, moments.ion.upar, 
+            collisions.nu_ei, composition.me_over_mi, composition.electron_physics)
+        # calculate the electron-ion parallel friction force
+        calculate_electron_parallel_friction_force!(moments.electron.parallel_friction, moments.electron.dens,
+            moments.electron.upar, moments.ion.upar, moments.electron.dT_dz,
+            composition.me_over_mi, collisions.nu_ei, composition.electron_physics)
     end
     
-    println("upar_i: ", moments.ion.upar[1,1,1], " upar_e: ", moments.electron.upar[1,1])
-
     return nothing
 end
 
@@ -450,49 +463,25 @@ end
 """
 initialise the electron density
 """
-function init_electron_density!(electron_density, ion_density, n_ion_species)
+function init_electron_density!(electron_density, updated, ion_density)
     # use quasineutrality to obtain the electron density from the initial
     # densities of the various ion species
-    calculate_electron_density!(electron_density, ion_density)
+    calculate_electron_density!(electron_density, updated, ion_density)
     return nothing
 end
 
 """
 initialise the electron parallel flow density
 """
-function init_electron_upar!(upar_e, dens_e, upar_i, dens_i, electron_model)
-    calculate_electron_upar_from_charge_conservation!(upar_e, dens_e, upar_i, dens_i, electron_model)
-    # # initialise the electron parallel flow density
-    # electron_upar .= 0.0
-    # println("electron_model: ", electron_model)
-    # # if using a simple logical sheath model, then the electron parallel current at the boundaries in zed
-    # # is equal and opposite to the ion parallel current
-    # if electron_model == boltzmann_electron_response_with_simple_sheath
-    #     # loop over ion species, adding each species contribution to the
-    #     # ion parallel particle flux at the boundaries in zed
-    #     for is ∈ 1:n_ion_species
-    #         for ir ∈ 1:nr
-    #             # electron_upar at this intermediate stage is actually
-    #             # the electron particle flux
-    #             electron_upar[1,ir] += ion_density[1,ir,is] * ion_upar[1,ir,is]
-    #             electron_upar[end,ir] += ion_density[end,ir,is] * ion_upar[end,ir,is]
-    #         end
-    #     end
-    #     # convert from electron particle flux to electron parallel flow density
-    #     for ir in 1:nr
-    #         electron_upar[1,ir] /= electron_density[1,ir]
-    #         electron_upar[end,ir] /= electron_density[end,ir]
-    #     end
-    #     # use charge conservation to solve for the electron upar for the rest of the zed domain
-    #     calculate_electron_upar_from_charge_conservation!(electron_upar, electron_density, ion_upar, ion_density)
-    # end
-    # return nothing
+function init_electron_upar!(upar_e, updated, dens_e, upar_i, dens_i, electron_model)
+    calculate_electron_upar_from_charge_conservation!(upar_e, updated, dens_e, upar_i, dens_i, electron_model)
+    return nothing
 end
 
 """
 initialise the electron thermal speed profile.
 for now the only initialisation option for the temperature is constant in z.
-returns vth0 = sqrt(Ts/Te) = 1.0
+returns vth0 = sqrt(2*Ts/Te)
 """
 function init_electron_vth!(vth, T_e)
     @loop_r_z ir iz begin
