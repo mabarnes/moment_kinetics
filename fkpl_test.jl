@@ -45,6 +45,12 @@ function get_vth(pres,dens,mass)
         return sqrt(pres/(dens*mass))
 end
 
+function expected_nelement_scaling!(expected,nelement_list,ngrid,nscan)
+    for iscan in 1:nscan
+        expected[iscan] = (1.0/nelement_list[iscan])^(ngrid - 1)
+    end
+end
+
     #function Gamma_vpa_Maxwellian(Bmag,vpa,mu,ivpa,imu)
     #    #Gamma = 0.0
     #    #return Gamma
@@ -211,8 +217,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
     
     test_Rosenbluth_integrals = true
     test_collision_operator_fluxes = true 
-    ngrid = 9
-    nelement = 8 
+    #ngrid = 9
+    #nelement = 8 
     
     function test_Rosenbluth_potentials(nelement,ngrid;numerical_G = false)
         vpa, vperp, vpa_spectral, vperp_spectral =  init_grids(nelement,ngrid)
@@ -563,7 +569,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         println("max(Cssp_err): ",max_Cssp_err)
         
 
-        #if max_Gam_vpa_err > zero
+        if max_Gam_vpa_err > zero && false
            @views heatmap(vperp.grid, vpa.grid, Cssp[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
                  windowsize = (360,240), margin = 15pt)
                  outfile = string("fkpl_Cssp.pdf")
@@ -580,8 +586,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
                  windowsize = (360,240), margin = 15pt)
                  outfile = string("fkpl_Gam_vpa_err.pdf")
                  savefig(outfile)
-        #end
-        #if max_Gam_vperp_err > zero
+        end
+        if max_Gam_vperp_err > zero && false
            @views heatmap(vperp.grid, vpa.grid, Gam_vperp[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
                  windowsize = (360,240), margin = 15pt)
                  outfile = string("fkpl_Gam_vperp.pdf")
@@ -594,19 +600,111 @@ if abspath(PROGRAM_FILE) == @__FILE__
                  windowsize = (360,240), margin = 15pt)
                  outfile = string("fkpl_Gam_vperp_err.pdf")
                  savefig(outfile)
-        #end
+        end
         return max_Gam_vpa_err, max_Gam_vperp_err, max_Cssp_err
     end
     
     if test_Rosenbluth_integrals
-        ((max_G_err, max_H_err, max_H_check_err, max_dHdvpa_err,
-        max_dHdvperp_err, max_d2Gdvperp2_err, max_d2Gdvpa2_err,
-        max_d2Gdvperpdvpa_err) = test_Rosenbluth_potentials(nelement,ngrid))
+        ngrid = 8
+        nscan = 5
+        nelement_list = Int[2, 4, 8, 16, 32]
+        max_G_err = Array{mk_float,1}(undef,nscan)
+        max_H_err = Array{mk_float,1}(undef,nscan)
+        max_H_check_err = Array{mk_float,1}(undef,nscan)
+        max_dHdvpa_err = Array{mk_float,1}(undef,nscan)
+        max_dHdvperp_err = Array{mk_float,1}(undef,nscan)
+        max_d2Gdvperp2_err = Array{mk_float,1}(undef,nscan)
+        max_d2Gdvpa2_err = Array{mk_float,1}(undef,nscan)
+        max_d2Gdvperpdvpa_err = Array{mk_float,1}(undef,nscan)
+        expected = Array{mk_float,1}(undef,nscan)
+        expected_nelement_scaling!(expected,nelement_list,ngrid,nscan)
+        expected_label = L"(1/N_{el})^{n_g - 1}"
+        
+        
+        for iscan in 1:nscan
+            nelement = nelement_list[iscan]
+            ((max_G_err[iscan], max_H_err[iscan], 
+            max_H_check_err[iscan], max_dHdvpa_err[iscan],
+            max_dHdvperp_err[iscan], max_d2Gdvperp2_err[iscan],
+            max_d2Gdvpa2_err[iscan], max_d2Gdvperpdvpa_err[iscan])
+            = test_Rosenbluth_potentials(nelement,ngrid))
+        end
+        fontsize = 8
+        ytick_sequence = Array([1.0e-13,1.0e-12,1.0e-11,1.0e-10,1.0e-9,1.0e-8,1.0e-7,1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0,1.0e1])
+        xlabel = L"N_{element}"
+        Glabel = L"\epsilon(G)"
+        Hlabel = L"\epsilon(H)"
+        dHdvpalabel = L"\epsilon(dH/d v_{\|\|})"
+        dHdvperplabel = L"\epsilon(dH/d v_{\perp})"
+        d2Gdvperp2label = L"\epsilon(d^2G/d v_{\perp}^2)"
+        d2Gdvpa2label = L"\epsilon(d^2G/d v_{\|\|}^2)"
+        d2Gdvperpdvpalabel = L"\epsilon(d^2G/d v_{\perp} d v_{\|\|})"
+        plot(nelement_list, [max_G_err,max_H_check_err,max_dHdvpa_err,max_dHdvperp_err,max_d2Gdvperp2_err,max_d2Gdvpa2_err,max_d2Gdvperpdvpa_err, expected],
+        xlabel=xlabel, label=[Glabel Hlabel dHdvpalabel dHdvperplabel d2Gdvperp2label d2Gdvpa2label d2Gdvperpdvpalabel expected_label], ylabel="",
+         shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_list, nelement_list), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2, 
+          xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize,
+          foreground_color_legend = nothing, background_color_legend = nothing, legend=:bottomleft)
+        outfile = "fkpl_coeffs_analytical_test.pdf"
+        savefig(outfile)
+        println(outfile)
+        
+        for iscan in 1:nscan
+            nelement = nelement_list[iscan]
+            ((max_G_err[iscan], max_H_err[iscan], 
+            max_H_check_err[iscan], max_dHdvpa_err[iscan],
+            max_dHdvperp_err[iscan], max_d2Gdvperp2_err[iscan],
+            max_d2Gdvpa2_err[iscan], max_d2Gdvperpdvpa_err[iscan])
+            = test_Rosenbluth_potentials(nelement,ngrid,numerical_G = true))
+        end
+        fontsize = 8
+        ytick_sequence = Array([1.0e-13,1.0e-12,1.0e-11,1.0e-10,1.0e-9,1.0e-8,1.0e-7,1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0,1.0e1])
+        xlabel = L"N_{element}"
+        Glabel = L"\epsilon(G)"
+        Hlabel = L"\epsilon(H)"
+        dHdvpalabel = L"\epsilon(dH/d v_{\|\|})"
+        dHdvperplabel = L"\epsilon(dH/d v_{\perp})"
+        d2Gdvperp2label = L"\epsilon(d^2G/d v_{\perp}^2)"
+        d2Gdvpa2label = L"\epsilon(d^2G/d v_{\|\|}^2)"
+        d2Gdvperpdvpalabel = L"\epsilon(d^2G/d v_{\perp} d v_{\|\|})"
+        plot(nelement_list, [max_G_err,max_H_check_err,max_dHdvpa_err,max_dHdvperp_err,max_d2Gdvperp2_err,max_d2Gdvpa2_err,max_d2Gdvperpdvpa_err, expected],
+        xlabel=xlabel, label=[Glabel Hlabel dHdvpalabel dHdvperplabel d2Gdvperp2label d2Gdvpa2label d2Gdvperpdvpalabel expected_label], ylabel="",
+         shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_list, nelement_list), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2, 
+          xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize,
+          foreground_color_legend = nothing, background_color_legend = nothing, legend=:bottomleft)
+        outfile = "fkpl_coeffs_numerical_test.pdf"
+        savefig(outfile)
+        println(outfile)
     end
     
     if test_collision_operator_fluxes
-         ((max_Gam_vpa_err, max_Gam_vperp_err, max_Cssp_err)
-           = test_collision_operator(nelement,ngrid))
+        ngrid = 8
+        nscan = 5
+        nelement_list = Int[2, 4, 8, 16, 32]
+        max_Gam_vpa_err = Array{mk_float,1}(undef,nscan)
+        max_Gam_vperp_err = Array{mk_float,1}(undef,nscan)
+        max_Cssp_err = Array{mk_float,1}(undef,nscan)
+        expected = Array{mk_float,1}(undef,nscan)
+        expected_nelement_scaling!(expected,nelement_list,ngrid,nscan)
+        
+        for iscan in 1:nscan
+         ((max_Gam_vpa_err[iscan], max_Gam_vperp_err[iscan], max_Cssp_err[iscan])
+           = test_collision_operator(nelement_list[iscan],ngrid))
+        end
+        fontsize = 10
+        ytick_sequence = Array([1.0e-13,1.0e-12,1.0e-11,1.0e-10,1.0e-9,1.0e-8,1.0e-7,1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0,1.0e1])
+        xlabel = L"N_{element}"
+        Gam_vpa_label = L"\epsilon(\Gamma_{\|\|})"
+        Gam_vperp_label = L"\epsilon(\Gamma_{\perp})"
+        Cssp_err_label = L"\epsilon(C)"
+        expected_label = L"(1/N_{el})^{n_g - 1}"
+        plot(nelement_list, [max_Gam_vpa_err,max_Gam_vperp_err, expected],
+        xlabel=xlabel, label=[Gam_vpa_label Gam_vperp_label expected_label], ylabel="",
+         shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_list, nelement_list), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2, 
+          xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize,
+          foreground_color_legend = nothing, background_color_legend = nothing, legend=:bottomleft)
+        outfile = "fkpl_fluxes_test.pdf"
+        savefig(outfile)
+        println(outfile)
     end
     ## evaluate the collision operator with numerically computed G & H 
     #println("TEST: Css'[F_M,F_M] with numerical G[F_M] & H[F_M]")
