@@ -107,6 +107,13 @@ $JULIA machines/shared/machine_setup.jl "$MACHINE" "$ACCOUNT" "$JULIA_DIRECTORY"
 
 source julia.env
 
+if [ -f machines/shared/compile_dependencies.sh ]; then
+  # Need to compile some dependencies
+  echo
+  echo "Compliing dependencies"
+  machines/shared/compile_dependencies.sh
+fi
+
 if [ -f machines/shared/machine_setup_stage_two.jl ]; then
   # A second setup stage exists, so run it
   echo

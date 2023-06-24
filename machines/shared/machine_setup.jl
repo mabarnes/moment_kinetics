@@ -12,6 +12,7 @@ using TOML
 default_settings = Dict{String,Dict{String,String}}()
 default_settings["base"] = Dict{String,String}()
 default_settings["archer"] = default_settings["base"]
+default_settings["marconi"] = default_settings["base"]
 
 """
     machine_setup_moment_kinetics(machine::String,
@@ -57,6 +58,8 @@ script, terminal output with instructions for the next step can be disabled.
 
 Currently supported machines:
 * `"archer"` - the UK supercomputer [ARCHER2](https://www.archer2.ac.uk/)
+* `"marconi"` - the EUROfusion supercomputer
+    [Marconi](https://wiki.u-gov.it/confluence/display/SCAIUS/UG3.1%3A+MARCONI+UserGuide)
 
 Notes:
 * The settings created by this function are saved in LocalPreferences.toml (using the
@@ -117,6 +120,14 @@ function machine_setup_moment_kinetics(machine::String,
         TOML.print(io, local_preferences, sorted=true)
     end
 
+    # If it is necessary to run a shell script to compile dependencies, set
+    # this flag to true.
+    compile_dependencies_relative_path = joinpath("machines", "shared",
+                                                  "compile_dependencies.sh")
+    compile_dependencies_path = joinpath(repo_dir,
+                                         compile_dependencies_relative_path)
+    needs_compile_dependencies = false
+
     # A second stage of setup may be needed after restarting Julia on some machines.
     # If it is, set `needs_second_stage = true` in the machine-specific case below.
     second_stage_relative_path = joinpath("machines", "shared",
@@ -124,11 +135,12 @@ function machine_setup_moment_kinetics(machine::String,
     second_stage_path = joinpath(repo_dir, second_stage_relative_path)
     needs_second_stage = false
 
+    # Set this flag to true in the machine-specific branch below to require a
+    # non-empty `account` setting
+    needs_account = false
+
     if machine == "archer"
-        if account == ""
-            error("For machine=\"archer\" it is required to pass a value for the "
-                  * "`account` argument.")
-        end
+        needs_account = true
         if julia_directory == ""
             error("On ARCHER2, the `julia_directory` setting is required, because the "
                   * "default location for the `.julia` directory is in your home "
@@ -140,8 +152,40 @@ function machine_setup_moment_kinetics(machine::String,
         # filesystem (where it can be used on compute nodes, unlike /home) before
         # setting up MPI and HDF5, so a second stage is required for archer.
         needs_second_stage = true
+    elseif machine == "marconi"
+        needs_account = true
+
+        # For marconi, need to run a script to compile HDF5
+        needs_compile_dependencies = true
+
+        # Second stage is required for marconi to set up HDF5 and MPI
+        needs_second_stage = true
     else
         error("Unsupported machine '$machine'")
+    end
+
+    if needs_account && account == ""
+        error("For machine=\"$machine\" it is required to pass a value for the "
+              * "`account` argument.")
+    end
+
+    if needs_compile_dependencies
+        # Remove link if it exists already
+        islink(compile_dependencies_path) && rm(compile_dependencies_path)
+
+        symlink(joinpath("..", machine, "compile_dependencies.sh"), compile_dependencies_path)
+
+        # Create directory to download/compile dependencies in
+        artifact_path = joinpath("machines", "artifacts")
+        mkpath(artifact_path)
+
+        if interactive
+            println()
+            println("***********************************************************************")
+            println("To compile dependencies run:")
+            println("    \$ machines/shared/compile_dependencies.sh")
+            println("***********************************************************************")
+        end
     end
 
     if needs_second_stage
