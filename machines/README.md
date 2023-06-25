@@ -15,7 +15,10 @@ From the top-level of the `moment_kinetics` repo, run
 $ machines/machine_setup.sh [<path-to-Julia-executable>]
 ```
 If you omit the `<path-to-Julia-executable>` argument, you will be prompted to
-enter it, with a default taken from your `$PATH`.
+enter it, with a default taken from your `$PATH`. If there is no `julia` in
+your `$PATH` you will be asked if you want the script to download Julia for
+you, or you can force the download by passing the `-d` flag (and do not pass a
+`<path-to-Julia-executable>`).
 
 The script will prompt you for several settings, with sensible defaults (where
 possible). Note that some settings are needed on all machines - if a setting is

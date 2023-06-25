@@ -5,14 +5,21 @@ set -e
 # Parse command line options
 # [See e.g. https://www.stackchief.com/tutorials/Bash%20Tutorial%3A%20getopts
 # for examples of how to use Bash's getopts]
-while getopts "h" opt; do
+FORCE_DOWNLOAD=1
+while getopts "hd" opt; do
   case $opt in
     h)
       echo "Setup moment_kinetics to run on a known machine"
-      echo "Usage: machine_setup.sh [/path/to/julia]"
+      echo "Usage: machine_setup.sh [-d] [/path/to/julia]"
       echo
       echo "If the path to julia is not given, you will be prompted for it."
+      echo "  -d  Force Julia to be downloaded even if julia executable is"
+      echo "      present in \$PATH. Ignored if </path/to/julia> is passed"
+      echo "      explicitly."
       exit 1
+      ;;
+    d)
+      FORCE_DOWNLOAD=0
       ;;
   esac
 done
@@ -29,11 +36,75 @@ if [ -z "$JULIA" ]; then
   if [ $(command -v julia) ]; then
     JULIA=$(command -v julia)
   fi
-  echo "Please enter the path to the Julia executable to be used ['$JULIA']:"
-  # Use '-e' option to get path auto-completion
-  read -e -p "> " input
-  if [ ! -z "$input" ]; then
-    JULIA=$input
+  # REQUEST_INPUT will be set to 1 if the path to Julia is not needed because
+  # Julia was downloaded. If it stays at zero, request a path to Julia after
+  # looking for a good default value in this block.
+  REQUEST_INPUT=0
+  if [[ -z "$JULIA" || $FORCE_DOWNLOAD -eq 0 ]]; then
+    if [[ $FORCE_DOWNLOAD -eq 0 ]]; then
+      # '-d' flag was passed, so carry on and download Julia without prompting
+      input="y"
+    else
+      echo "No 'julia' found in \$PATH. Would you like to download Julia? [y]/n"
+      read -p "> " input
+      echo
+    fi
+    while [[ ! -z $input && !( $input == "y" || $input == "n" ) ]]; do
+      # $input must be empty, 'y' or 'n'. It is none of these, so ask for input
+      # again until we get a valid response.
+      echo
+      echo "$input is not a valid response: [y]/n"
+      read -p "> "  input
+      echo
+    done
+
+    if [[ -z $input || $input == "y" ]]; then
+      # Need machine name to get the right get-julia.sh script.
+      # Not ideal to get input here as in the 'proper' place below we can check
+      # for a valid input for $MACHINE and list the allowed values (although
+      # there will be an error here if the input is not valid as
+      # 'machines/$MACHINE/get-julia.sh would not exist). However the checking
+      # requires Julia, so cannot do it here as we need the value in order to
+      # download Julia (need to know the machine so that we download the right
+      # set of binaries for the OS, architecture, etc.
+      while [ -z $MACHINE ]; do
+        echo "Enter name of the machine to set up:"
+        read -p "> "  MACHINE
+        echo
+      done
+
+      # Download a version of Julia that is correct for this machine.
+      # Here the user can specify which version of Julia they want to use in
+      # case the latest stable versionis not wanted.
+      echo "Enter the version of Julia to download [latest]:"
+      read -p "> "  version
+
+      # The get-julia.sh script for $MACHINE should download and extract Julia
+      # (into machines/artifacts/). It prints the path to the 'julia'
+      # executable, which we store in $JULIA.
+      JULIA=$(machines/$MACHINE/get-julia.sh $version)
+
+      # Make sure $JULIA is actually an executable
+      # Note 'command -v foo' returns success if foo is an executable and failure
+      # otherwise, except that if no argument is passed 'command -v' returns success,
+      # so we also need to check that $JULIA is not empty.
+      if [[ -z "$JULIA" || ! $(command -v $JULIA) ]]; then
+        echo "Failed to download Julia. '$JULIA' is not an executable"
+        exit 1
+      fi
+      REQUEST_INPUT=1
+    fi
+  fi
+  if [ $REQUEST_INPUT -eq 0 ]; then
+    # Have not downloaded Julia, so need to get the path to a 'julia'
+    # executable from the user. If 'julia' was found in $PATH, its location is
+    # stored in $JULIA at the moment, so use this as the default value.
+    echo "Please enter the path to the Julia executable to be used ['$JULIA']:"
+    # Use '-e' option to get path auto-completion
+    read -e -p "> " input
+    if [ ! -z "$input" ]; then
+      JULIA=$input
+    fi
   fi
 fi
 
@@ -59,17 +130,26 @@ echo
 echo "Using Julia at $JULIA"
 echo
 
-while true; do
+# If Julia was downloaded by this script, $MACHINE is already set. Otherwise,
+# need to get and check its value here.
+if [ -z "$MACHINE" ]; then
+  # Make first attempt at getting the name of the machine to setup
   echo "Enter name of the machine to set up:"
   read -p "> "  MACHINE
   echo
-
+fi
+while true; do
   # Get default values for this machine from the machine_setup.jl script
   # Note: the brackets() around the command execution turn the result into an
   # 'array' that we can get the separate elements from below.
   # This command will fail (and print a helpful error message) if $MACHINE is
   # not a known value, so `break` only when it succeeds.
   DEFAULTS=($($JULIA machines/shared/machine_setup.jl --defaults $MACHINE)) && break
+
+  # If we did not get a good value for $MACHINE yet, prompt for a new one.
+  echo "Enter name of the machine to set up:"
+  read -p "> "  MACHINE
+  echo
 done
 
 echo "Setting up for '$MACHINE'"
