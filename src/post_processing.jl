@@ -55,6 +55,17 @@ import Base: get
 
 const default_compare_prefix = "comparison_plots/compare"
 
+function __init__()
+    # plot_unnormalised() requires PyPlot, so ensure it is used for all plots for
+    # consistency.
+    #
+    # On some systems it is necessary to ensure `pyplot()` is called early, so
+    # call in the `__init__()` function. Not sure why this helps, maybe if it
+    # is called before the functions below that call plotting functions are
+    # called (or even compiled?) this somehow helps?
+    pyplot()
+end
+
 """
 Calculate a moving average
 
@@ -1244,10 +1255,6 @@ function plot_1D_1V_diagnostics(run_names, nwrite_movie, itime_min, itime_max,
         time_pdfs)
 
     n_runs = length(run_names)
-
-    # plot_unnormalised() requires PyPlot, so ensure it is used for all plots for
-    # consistency
-    pyplot()
 
     # analyze the fields data
     phi_fldline_avg, delta_phi = get_tuple_of_return_values(analyze_fields_data, phi,
