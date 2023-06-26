@@ -29,6 +29,7 @@ using Measures
 using MPI
 # modules
 using ..post_processing_input: pp
+using ..communication
 using ..quadrature: composite_simpson_weights
 using ..array_allocation: allocate_float
 using ..coordinates: define_coordinate
@@ -63,7 +64,11 @@ function __init__()
     # call in the `__init__()` function. Not sure why this helps, maybe if it
     # is called before the functions below that call plotting functions are
     # called (or even compiled?) this somehow helps?
-    pyplot()
+    #
+    # Plotting mostly needed for post-processing (apart from `runtime_plots`, but for
+    # those the formatting doesn't matter as much), and this can cause increased memory
+    # usage, so only call when we are running in serial (and so might be post-processing).
+    global_size[] == 0 && pyplot()
 end
 
 """
