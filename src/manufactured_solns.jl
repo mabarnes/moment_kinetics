@@ -168,13 +168,10 @@ using IfElse
             initial_density = species.initial_density
             density_amplitude = species.z_IC.density_amplitude
             density_phase = species.z_IC.density_phase
-            T0 = Ti_sym(Lr, Lz, r_bc, z_bc, composition, manufactured_solns_input,
-                        species)
-            eta0 = (initial_density
-                    * (1.0 + density_amplitude
-                       * sin(2.0*π*background_wavenumber*z/Lz
-                             + density_phase)))
-            densi = eta0^((T0/(1+T0)))
+            densi = (initial_density
+                     * (1.0 + density_amplitude
+                        * sin(2.0*π*background_wavenumber*z/Lz
+                              + density_phase)))
         else
             error("Unrecognized option "
                   * "manufactured_solns:type=$(manufactured_solns_input.type)")

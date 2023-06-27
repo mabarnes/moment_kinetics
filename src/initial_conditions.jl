@@ -360,21 +360,12 @@ function init_density!(dens, z, r, spec, n_species)
                      * (1.0 + spec[is].z_IC.density_amplitude
                               * cos(argument - sin(2.0*argument)) ))
             elseif spec[is].z_IC.initialization_option == "2D-instability-test"
-                if spec[is].z_IC.density_amplitude == 0.0
-                    dens[:,ir,is] .= spec[is].initial_density
-                else
-                    background_wavenumber = 1 + round(mk_int,
-                                                      spec[is].z_IC.temperature_phase)
-                    eta0 = @. (spec[is].initial_density
-                               * (1.0 + spec[is].z_IC.density_amplitude
-                                  * sin(2.0*π*background_wavenumber*z.grid/z.L
-                                        + spec[is].z_IC.density_phase)))
-                    T0 = @. (spec[is].initial_temperature
-                             * (1.0 + spec[is].z_IC.temperature_amplitude
-                                * sin(2.0*π*background_wavenumber*z.grid/z.L)
-                               ))
-                    @. dens[:,ir,is] = eta0^((T0/(1+T0)))
-                end
+                background_wavenumber = 1 + round(mk_int,
+                                                  spec[is].z_IC.temperature_phase)
+                @. dens[:,ir,is] = (spec[is].initial_density
+                                    * (1.0 + spec[is].z_IC.density_amplitude
+                                       * sin(2.0*π*background_wavenumber*z.grid/z.L
+                                             + spec[is].z_IC.density_phase)))
 
                 # initial perturbation with amplitude set by 'r' initial condition
                 # settings, but using the z_IC.wavenumber as the background is always
