@@ -396,7 +396,7 @@ function setup_moment_kinetics(input_dict::Dict; restart_prefix_iblock=nothing,
         vr, vzeta, vpa, vperp, z, r, composition, collisions, moments.evolve_density,
         moments.evolve_upar, moments.evolve_ppar, input_dict)
     # write initial data to ascii files
-    write_data_to_ascii(moments, fields, vpa, vperp, z, r, code_time, composition.n_ion_species, composition.n_neutral_species, ascii_io)
+    write_data_to_ascii(moments, fields, z, r, code_time, composition.n_ion_species, composition.n_neutral_species, ascii_io)
     # write initial data to binary files
 
     write_moments_data_to_binary(moments, fields, code_time, composition.n_ion_species,

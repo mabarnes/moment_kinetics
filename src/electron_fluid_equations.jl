@@ -97,8 +97,8 @@ an explicit time advance.
 NB: so far, this is only set up for 1D problem, where we can assume
 an isotropic distribution in f_e so that p_e = n_e T_e = ppar_e
 """
-function electron_energy_equation!(ppar, fvec, moments, collisions, dt, spectral, composition,
-                                   num_diss_params, dens)
+function electron_energy_equation!(ppar, dens_i, fvec, moments, collisions, dt, composition,
+                                   num_diss_params)
     begin_r_z_region()
     # define some abbreviated variables for convenient use in rest of function
     me_over_mi = composition.me_over_mi
@@ -121,10 +121,10 @@ function electron_energy_equation!(ppar, fvec, moments, collisions, dt, spectral
     # compute the contribution to the rhs of the energy equation
     # arising from electron-ion collisions
     if nu_ei > 0.0
-        @loop_r_z ir iz begin
-            ppar[iz,ir] += dt*(2 * me_over_mi * nu_ei * (fvec.ppar[iz,ir]*fvec.electron_density[iz,ir]/fvec.density[iz,ir]
-                                                     - fvec.electron_ppar[iz,ir])
-                        + (2/3) * moments.electron.parallel_friction[iz,ir] * (fvec.upar[iz,ir]-fvec.electron_upar[iz,ir]))
+        @loop_s_r_z is ir iz begin
+            ppar[iz,ir] += dt * (2 * me_over_mi * nu_ei * (fvec.ppar[iz,ir,is] - fvec.electron_ppar[iz,ir]))
+            ppar[iz,ir] += dt * ((2/3) * moments.electron.parallel_friction[iz,ir]
+                                * (fvec.upar[iz,ir,is]-fvec.electron_upar[iz,ir]))
         end
     end
     # add in contributions due to charge exchange/ionization collisions
@@ -141,22 +141,24 @@ function electron_energy_equation!(ppar, fvec, moments, collisions, dt, spectral
         end
         if abs(collisions.ionization_electron) > 0.0
             @loop_s_r_z is ir iz begin
-                ppar[iz,ir] -=
+                ppar[iz,ir] +=
                     dt * collisions.ionization_electron * fvec.density_neutral[iz,ir,is] * (
-                    fvec.electron_ppar[iz,ir] +
+                    fvec.electron_ppar[iz,ir] -
                     (2/3)*fvec.electron_density[iz,ir] * collisions.ionization_energy)
             end
         end
     end
     # calculate the external electron heat source, if any
     calculate_electron_heat_source!(moments.electron.heat_source, fvec.electron_ppar, moments.electron.dupar_dz,
-                                    fvec.density_neutral, collisions.ionization,
-                                    fvec.electron_upar, moments.electron.dppar_dz_upwind, fvec.electron_density,
-                                    dens, dt)
+                                    fvec.density_neutral, collisions.ionization, collisions.ionization_energy,
+                                    fvec.electron_density, fvec.ppar, collisions.nu_ei, composition.me_over_mi,
+                                    composition.T_wall)
     # add the contribution from the electron heat source                                
     @loop_r_z ir iz begin
         ppar[iz,ir] += dt * moments.electron.heat_source[iz,ir]
     end
+    # enforce the parallel boundary condtion on the electron parallel pressure
+    enforce_parallel_BC_on_electron_pressure!(ppar, dens_i, composition.T_wall, fvec.ppar)
     return nothing
 end
 
@@ -193,8 +195,8 @@ function calculate_Epar_from_electron_force_balance!(Epar, dens_e, dppar_dz, nu_
     end
     # if there are neutral species evolved and accounting for charge exchange collisions with neutrals
     if n_neutral_species > 0 && charge_exchange > 0
-        @loop_r_z ir iz begin
-            Epar[iz,ir] += 2 * me_over_mi * dens_n[iz,ir] * charge_exchange * (upar_n[iz,ir] - upar_e[iz,ir]) 
+        @loop_s_r_z is ir iz begin
+            Epar[iz,ir] += 2 * me_over_mi * dens_n[iz,ir] * charge_exchange * (upar_n[iz,ir,is] - upar_e[iz,ir]) 
         end
     end
     return nothing
@@ -206,10 +208,10 @@ function calculate_electron_parallel_friction_force!(friction, dens_e, upar_e, u
                                                      me_over_mi, nu_ei, electron_model)
     if electron_model == braginskii_fluid
         @loop_r_z ir iz begin
-            friction[iz,ir] = -0.71 * dens_e[iz,ir] * dTe_dz[iz,ir]
+            friction[iz,ir] = -(1/2) * 0.71 * dens_e[iz,ir] * dTe_dz[iz,ir]
         end
-        @loop_r_z ir iz begin
-            friction[iz,ir] += 0.51 * dens_e[iz,ir] * me_over_mi * nu_ei * (upar_i[iz,ir] - upar_e[iz,ir])
+        @loop_s_r_z is ir iz begin
+            friction[iz,ir] += 0.51 * dens_e[iz,ir] * me_over_mi * nu_ei * (upar_i[iz,ir,is] - upar_e[iz,ir])
         end
     else
         @. friction = 0.0
@@ -239,21 +241,17 @@ output:
 function calculate_electron_qpar!(qpar_e, qpar_updated, ppar_e, upar_e, dTe_dz, upar_i, nu_ei, me_over_mi, electron_model)
     # only calculate qpar_e if needs updating
     if qpar_updated == false
+        @. qpar_e = 0.0
         if electron_model == braginskii_fluid
             # use the classical Braginskii expression for the electron heat flux
-            @loop_r_z ir iz begin
-                qpar_e[iz,ir] = - 0.71 * ppar_e[iz,ir] * (upar_i[iz,ir] - upar_e[iz,ir])
+            @loop_s_r_z is ir iz begin
+                qpar_e[iz,ir] -= 0.71 * ppar_e[iz,ir] * (upar_i[iz,ir,is] - upar_e[iz,ir])
             end
             if nu_ei > 0.0
                 @loop_r_z ir iz begin
-                    qpar_e[iz,ir] -= 3.16 * ppar_e[iz,ir] / (me_over_mi * nu_ei) * dTe_dz[iz,ir] 
+                    qpar_e[iz,ir] -= (1/2) * 3.16 * ppar_e[iz,ir] / (me_over_mi * nu_ei) * dTe_dz[iz,ir] 
                 end
             end
-        else
-            # if not using Braginskii fluid model, then assume for now
-            # that we are in the collisionless limit, for which d/dz(qpar_e) = 0.
-            # take qpar_e = 0
-            @. qpar_e = 0.0
         end
     end
     # qpar has been updated
@@ -261,16 +259,38 @@ function calculate_electron_qpar!(qpar_e, qpar_updated, ppar_e, upar_e, dTe_dz, 
     return nothing
 end
 
-function calculate_electron_heat_source!(heat_source, ppar_e, dupar_dz, dens_n, ionization,
-                                         upar_e, dppar_dz_upwind, dens_e, dens_new, dt)
-    @loop_r_z ir iz begin
-        heat_source[iz,ir] = (2/3) * ppar_e[iz,ir] * dupar_dz[iz,ir]
-    end
-    n_neutral_species = size(dens_n, 3)
-    if n_neutral_species > 0 && ionization > 0.0
-       @loop_s_r_z is ir iz begin
-           heat_source[iz,ir] += ppar_e[iz,ir] * dens_n[iz,ir,is] * ionization
-       end
+function calculate_electron_heat_source!(heat_source, ppar_e, dupar_dz, dens_n, ionization, ionization_energy,
+                                         dens_e, ppar_i, nu_ei, me_over_mi, T_wall)
+    # heat_source currently only used for testing                                         
+    # @loop_r_z ir iz begin
+    #     heat_source[iz,ir] = (2/3) * ppar_e[iz,ir] * dupar_dz[iz,ir]
+    # end
+    # if nu_ei > 0.0
+    #     @loop_s_r_z is ir iz begin
+    #         heat_source[iz,ir] -= 2 * me_over_mi * nu_ei * (ppar_i[iz,ir,is] - ppar_e[iz,ir])
+    #     end
+    # end
+    # n_neutral_species = size(dens_n, 3)
+    # if n_neutral_species > 0 && ionization > 0.0
+    #    @loop_s_r_z is ir iz begin
+    #        heat_source[iz,ir] += (2/3) * dens_n[iz,ir,is] * dens_e[iz,ir] * ionization * ionization_energy
+    #    end
+    # end
+    # @loop_r ir begin
+    #     heat_source[1,ir] += 20 * 0.5 * (T_wall * dens_e[1,ir] - ppar_e[1,ir])
+    #     heat_source[end,ir] += 20 * (0.5 * T_wall * dens_e[end,ir] - ppar_e[end,ir])
+    # end
+    @. heat_source = 0.0
+    return nothing
+end
+
+function enforce_parallel_BC_on_electron_pressure!(ppar, dens, T_wall, ppar_i)
+    # assume T_e = T_i at boundaries in z
+    @loop_r ir begin
+        #ppar[1,ir] = 0.5 * dens[1,ir] * T_wall
+        #ppar[end,ir] = 0.5 * dens[end,ir] * T_wall
+        ppar[1,ir] = ppar_i[1,ir,1]
+        ppar[end,ir] = ppar_i[end,ir,1]
     end
 end
 

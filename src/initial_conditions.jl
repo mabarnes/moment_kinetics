@@ -183,18 +183,6 @@ function init_pdf_and_moments!(pdf, moments, boundary_distributions, composition
                 @. moments.neutral.pz = 0.5 * moments.neutral.dens * moments.neutral.vth^2
                 @. moments.neutral.ptot = 1.5 * moments.neutral.dens * moments.neutral.vth^2
             end
-
-            # # initialise the electron density profile
-            # init_electron_density!(moments.electron.dens, moments.ion.dens, n_ion_species)
-
-            # println("ni: ", moments.ion.dens[1,1,1], " ne: ", moments.electron.dens[1,1])
-            # # initialise the electron parallel flow profile
-            # init_electron_upar!(moments.electron.upar, moments.electron.dens, moments.ion.upar, 
-            #     moments.ion.upar, n_ion_species, r.n, composition.electron_physics)
-            # # initialise the electron thermal speed profile
-            # init_electron_vth!(moments.electron.vth)
-            # # calculate the electron parallel pressure from the density and thermal speed
-            # @. moments.electron.ppar = 0.5 * moments.electron.dens * moments.electron.vth^2
         end
         moments.ion.dens_updated .= true
         moments.ion.upar_updated .= true
@@ -247,14 +235,12 @@ function init_pdf_and_moments!(pdf, moments, boundary_distributions, composition
         init_electron_upar!(moments.electron.upar, moments.electron.upar_updated, moments.electron.dens, 
             moments.ion.upar, moments.ion.dens, composition.electron_physics)
         # initialise the electron thermal speed profile
-        init_electron_vth!(moments.electron.vth, composition.T_e)
+        init_electron_vth!(moments.electron.vth, moments.ion.vth, composition.T_e)
         # calculate the electron temperature from the thermal speed
-#        @. moments.electron.temp = 0.5 * moments.electron.vth^2
         @. moments.electron.temp = moments.electron.vth^2
         # the electron temperature has now been updated
         moments.electron.temp_updated = true
         # calculate the electron parallel pressure from the density and temperature
-#        @. moments.electron.ppar = moments.electron.dens * moments.electron.temp
         @. moments.electron.ppar = 0.5 * moments.electron.dens * moments.electron.temp
         # the electron parallel pressure now been updated
         moments.electron.ppar_updated = true
@@ -483,9 +469,12 @@ initialise the electron thermal speed profile.
 for now the only initialisation option for the temperature is constant in z.
 returns vth0 = sqrt(2*Ts/Te)
 """
-function init_electron_vth!(vth, T_e)
+function init_electron_vth!(vth_e, vth_i, T_e)
+    # @loop_r_z ir iz begin
+    #     vth_e[iz,ir] = sqrt(T_e)
+    # end
     @loop_r_z ir iz begin
-        vth[iz,ir] = sqrt(T_e)
+        vth_e[iz,ir] = vth_i[iz,ir,1]
     end
 end
 

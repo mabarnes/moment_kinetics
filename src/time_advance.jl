@@ -823,7 +823,7 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
                              Dates.format(now(), dateformat"H:MM:SS"))
                 end
             end
-            write_data_to_ascii(moments, fields, vpa, vperp, z, r, t,
+            write_data_to_ascii(moments, fields, z, r, t,
                                 composition.n_ion_species, composition.n_neutral_species,
                                 ascii_io)
             write_moments_data_to_binary(moments, fields, t, composition.n_ion_species,
@@ -1247,7 +1247,9 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
     else
         @. new_scratch.electron_ppar = 0.5 * new_scratch.electron_density * moments.electron.vth^2
     end
-    @. moments.electron.vth = sqrt(2 * new_scratch.electron_ppar / new_scratch.electron_density)
+    @. moments.electron.temp = 2 * new_scratch.electron_ppar / new_scratch.electron_density
+    moments.electron.temp_updated = true
+    @. moments.electron.vth = sqrt(moments.electron.temp)
     # regardless of electron model, electron ppar is now updated
     moments.electron.ppar_updated = true
     # calculate the corresponding zed derivatives of the moments
@@ -1255,7 +1257,7 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
                                            num_diss_params, composition.electron_physics)
     # update the electron parallel heat flux
     calculate_electron_qpar!(moments.electron.qpar, moments.electron.qpar_updated, new_scratch.electron_ppar,
-        new_scratch.electron_upar, moments.electron.dT_dz, moments.ion.upar, collisions.nu_ei,
+        new_scratch.electron_upar, moments.electron.dT_dz, new_scratch.upar, collisions.nu_ei,
         composition.me_over_mi, composition.electron_physics)
     # update the electron parallel friction force
     calculate_electron_parallel_friction_force!(moments.electron.parallel_friction, new_scratch.electron_density,
@@ -1744,8 +1746,8 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
                                  z_spectral, composition, num_diss_params)
     end
     if advance.electron_energy
-        electron_energy_equation!(fvec_out.electron_ppar, fvec_in, moments, collisions, dt,
-                                  z_spectral, composition, num_diss_params, fvec_out.density)
+        electron_energy_equation!(fvec_out.electron_ppar, fvec_out.density, fvec_in, moments, collisions, dt,
+                                  composition, num_diss_params)
     end
     # reset "xx.updated" flags to false since ff has been updated
     # and the corresponding moments have not

@@ -127,14 +127,14 @@ function setup_file_io(io_input, boundary_distributions, vz, vr, vzeta, vpa, vpe
         out_prefix = string(io_input.output_dir, "/", io_input.run_name)
 
         if io_input.ascii_output
-            #ff_io = open_ascii_output_file(out_prefix, "f_vs_t")
+            ff_io = open_ascii_output_file(out_prefix, "f_vs_t")
             mom_ion_io = open_ascii_output_file(out_prefix, "moments_ion_vs_t")
             mom_eon_io = open_ascii_output_file(out_prefix, "moments_electron_vs_t")
             mom_ntrl_io = open_ascii_output_file(out_prefix, "moments_neutral_vs_t")
             fields_io = open_ascii_output_file(out_prefix, "fields_vs_t")
-            ascii = ascii_ios(mom_ion_io, mom_eon_io, mom_ntrl_io, fields_io)
+            ascii = ascii_ios(ff_io, mom_ion_io, mom_eon_io, mom_ntrl_io, fields_io)
         else
-            ascii = ascii_ios(nothing, nothing, nothing, nothing)
+            ascii = ascii_ios(nothing, nothing, nothing, nothing, nothing)
         end
 
         io_moments = setup_moments_io(out_prefix, io_input.binary_format, r, z,
@@ -905,7 +905,8 @@ include("file_io_hdf5.jl")
 
 """
 """
-function write_data_to_ascii(moments, fields, vpa, vperp, z, r, t, n_ion_species,
+#function write_data_to_ascii(pdf, moments, fields, vpa, vperp, z, r, t, n_ion_species,
+function write_data_to_ascii(moments, fields, z, r, t, n_ion_species,
                              n_neutral_species, ascii_io::Union{ascii_ios,Nothing})
     if ascii_io === nothing || ascii_io.moments_ion === nothing
         # ascii I/O is disabled
@@ -915,7 +916,7 @@ function write_data_to_ascii(moments, fields, vpa, vperp, z, r, t, n_ion_species
     @serial_region begin
         # Only read/write from first process in each 'block'
 
-        #write_f_ascii(ff, z, vpa, t, ascii_io.ff)
+        #write_f_ascii(pdf, z, vpa, t, ascii_io.ff)
         write_moments_ion_ascii(moments.ion, z, r, t, n_ion_species, ascii_io.moments_ion)
         write_moments_electron_ascii(moments.electron, z, r, t, ascii_io.moments_electron)
         if n_neutral_species > 0
@@ -934,18 +935,19 @@ function write_f_ascii(f, z, vpa, t, ascii_io)
         # Only read/write from first process in each 'block'
 
         @inbounds begin
-            n_species = size(f,3)
-            for is ∈ 1:n_species
+            #n_species = size(f,3)
+            #for is ∈ 1:n_species
                 for j ∈ 1:vpa.n
                     for i ∈ 1:z.n
-                        println(ascii_io,"t: ", t, "   spec: ", is, ",   z: ", z.grid[i],
-                            ",  vpa: ", vpa.grid[j], ",   f: ", f[i,j,is])
+                        println(ascii_io,"t: ", t, "   z: ", z.grid[i],
+                            "  vpa: ", vpa.grid[j], "   fion: ", f.ion.norm[i,j,1], 
+                            "   fneutral: ", f.neutral.norm[i,j,1])
                     end
                     println(ascii_io)
                 end
                 println(ascii_io)
-            end
-            println(ascii_io)
+            #end
+            #println(ascii_io)
         end
     end
     return nothing
@@ -1008,7 +1010,8 @@ function write_moments_neutral_ascii(mom, z, r, t, n_species, ascii_io)
                     for iz ∈ 1:z.n
                         println(ascii_io,"t: ", t, "   species: ", is, "   r: ", r.grid[ir], "   z: ", z.grid[iz],
                             "  dens: ", mom.dens[iz,ir,is], "   uz: ", mom.uz[iz,ir,is],
-                            "   ur: ", mom.ur[iz,ir,is], "   uzeta: ", mom.uzeta[iz,ir,is])
+                            "   ur: ", mom.ur[iz,ir,is], "   uzeta: ", mom.uzeta[iz,ir,is],
+                            "   pz: ", mom.pz[iz,ir,is])
                     end
                 end
             end
