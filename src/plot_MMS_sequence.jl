@@ -18,7 +18,8 @@ using ..post_processing: compare_charged_pdf_symbolic_test, compare_fields_symbo
 using ..post_processing: compare_moments_symbolic_test, compare_neutral_pdf_symbolic_test
 using ..post_processing: read_distributed_zr_data!, construct_global_zr_grids
 using ..post_processing: allocate_global_zr_neutral_moments, allocate_global_zr_charged_moments
-using ..post_processing: allocate_global_zr_fields, get_geometry_and_composition, get_coords_nelement
+using ..post_processing: allocate_global_zr_fields, get_geometry_and_composition
+using ..post_processing: get_coords_nelement, get_coords_ngrid
 using ..array_allocation: allocate_float
 using ..type_definitions: mk_float, mk_int
 using ..load_data: open_readonly_output_file
@@ -31,6 +32,12 @@ using ..manufactured_solns: manufactured_solutions, manufactured_electric_fields
 using ..moment_kinetics_input: mk_input, read_input_file
 
 import Base: get
+
+function expected_nelement_scaling!(expected,nelement_list,ngrid,nscan)
+    for iscan in 1:nscan
+        expected[iscan] = (1.0/nelement_list[iscan])^(ngrid - 1)
+    end
+end
 
 # assume in function below that we have a list of simulations 
 # where only a single nelement parameter is varied
@@ -46,7 +53,7 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
     neutral_density_error_sequence = zeros(mk_float,nsimulation)
     neutral_pdf_error_sequence = zeros(mk_float,nsimulation)
     nelement_sequence = zeros(mk_int,nsimulation)
-    
+    expected_scaling = zeros(mk_float,nsimulation)
     # declare local variables that are needed outside "nsimulation" loop below
     local n_neutral_species
     
@@ -65,6 +72,8 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         #    composition, species, collisions, geometry, drive_input = mk_input(scan_input)
         z_nelement, r_nelement, vpa_nelement, vperp_nelement, 
           vz_nelement, vr_nelement, vzeta_nelement = get_coords_nelement(scan_input)
+        z_ngrid, r_ngrid, vpa_ngrid, vperp_ngrid, 
+          vz_ngrid, vr_ngrid, vzeta_ngrid = get_coords_ngrid(scan_input)
         if scan_type == "vpa_nelement"
             # get the number of elements for plot
             nelement_sequence[isim] = vpa_nelement
@@ -112,6 +121,13 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
             else 
                 println("ERROR: scan_type = ",scan_type," requires vpa_nelement = z_nelement/4")
             end
+        elseif scan_type == "vpavperpz_nelement"
+            nelement = z_nelement
+            if nelement == vpa_nelement && nelement == vperp_nelement
+                nelement_sequence[isim] = nelement
+            else 
+                println("ERROR: scan_type = ",scan_type," requires vpa_nelement = vperp_nelement = z_nelement")
+            end
         elseif scan_type == "vpaz_nelement"
             nelement = z_nelement
             if nelement == vpa_nelement
@@ -129,7 +145,8 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         else 
             println("ERROR: scan_type = ",scan_type," is unsupported")
         end
-
+        expected_nelement_scaling!(expected_scaling,nelement_sequence,z_ngrid,nsimulation)
+        
         # open the netcdf file and give it the handle 'fid'
         fid = open_readonly_output_file(run_name,"moments")
         # load block data on iblock=0
@@ -209,7 +226,7 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         end
         geometry, composition = get_geometry_and_composition(scan_input,n_ion_species,n_neutral_species)
         
-        manufactured_solns_list = manufactured_solutions(Lr_in,Lz,r_bc,z_bc,geometry,composition,nr_local) 
+        manufactured_solns_list = manufactured_solutions(Lr_in,Lz,r_bc,z_bc,geometry,composition,nr_local,nvperp) 
         dfni_func = manufactured_solns_list.dfni_func
         densi_func = manufactured_solns_list.densi_func
         dfnn_func = manufactured_solns_list.dfnn_func
@@ -292,6 +309,8 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
     ylabel_phi = L"\varepsilon(\widetilde{\phi})"
     ylabel_Er = L"\varepsilon(\widetilde{E}_r)"
     ylabel_Ez = L"\varepsilon(\widetilde{E}_z)"
+    ylabel_Ez = L"\varepsilon(\widetilde{E}_z)"
+    expected_label = L"(1/N_{el})^{n_g - 1}"
 	if scan_type == "vpa_nelement"
         xlabel = L"v_{||}"*" "*L"N_{element}"
     elseif scan_type == "vperp_nelement"
@@ -308,6 +327,8 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         xlabel = L"z"*" "*L"N_{element}"
     elseif scan_type == "zr_nelement"
         xlabel = L"z "*" & "*L"r "*" "*L"N_{element}"
+    elseif scan_type == "vpavperpz_nelement"
+        xlabel = L"N_{element}(z) = N_{element}(v_\perp) = N_{element}(v_{||})"
     elseif scan_type == "vpazr_nelement0.25"
         xlabel = L"N_{element}(z) = N_{element}(r) = N_{element}(v_{||})/4"
     elseif scan_type == "vpaz_nelement0.25"
@@ -336,7 +357,7 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         ytick_sequence = Array([1.0e-3,1.0e-2,1.0e-1,1.0e-0,1.0e1])
     elseif scan_name == "2D-sound-wave_cheb_cxiz" 
         ytick_sequence = Array([1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0,1.0e1])
-    elseif scan_name == "1D-1V-wall_cheb"
+    elseif scan_name == "1D-1V-wall_cheb" || scan_name == "1D-2V-wall_cheb_krook"
         ytick_sequence = Array([1.0e-13,1.0e-12,1.0e-11,1.0e-10,1.0e-9,1.0e-8,1.0e-7,1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0,1.0e1])
     elseif scan_name == "1D-3V-wall_cheb-updated" || scan_name == "1D-3V-wall_cheb-new-dfni-Er" || scan_name == "1D-3V-wall_cheb-new-dfni" || scan_name == "2D-sound-wave_cheb"
         ytick_sequence = Array([1.0e-10,1.0e-9,1.0e-8,1.0e-7,1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0,1.0e1])
@@ -370,8 +391,8 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
     savefig(outfile)
     println(outfile)
     
-    plot(nelement_sequence, [ion_density_error_sequence,phi_error_sequence,Ez_error_sequence,ion_pdf_error_sequence], xlabel=xlabel,
-	label=[ylabel_ion_density ylabel_phi ylabel_Ez ylabel_ion_pdf], ylabel="",
+    plot(nelement_sequence, [ion_density_error_sequence,phi_error_sequence,Ez_error_sequence,ion_pdf_error_sequence,expected_scaling], xlabel=xlabel,
+	label=[ylabel_ion_density ylabel_phi ylabel_Ez ylabel_ion_pdf expected_label], ylabel="",
      shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_sequence, nelement_sequence), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2, 
       xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize)
     outfile = outprefix*"_fields_and_ion_pdf_no_Er.pdf"

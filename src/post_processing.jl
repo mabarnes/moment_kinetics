@@ -13,6 +13,7 @@ export allocate_global_zr_charged_moments
 export allocate_global_zr_neutral_moments
 export allocate_global_zr_fields
 export get_coords_nelement
+export get_coords_ngrid
 
 # packages
 using Plots
@@ -222,6 +223,18 @@ function get_coords_nelement(scan_input)
     vr_nelement = get(scan_input, "vr_nelement", 1)
     vzeta_nelement = get(scan_input, "vzeta_nelement", 1)
     return z_nelement, r_nelement, vpa_nelement, vperp_nelement, vz_nelement, vr_nelement, vzeta_nelement
+end
+
+function get_coords_ngrid(scan_input)
+    # use 1 as default because these values should be set in input .toml
+    z_ngrid = get(scan_input, "z_ngrid", 1)
+    r_ngrid = get(scan_input, "r_ngrid", 1)
+    vpa_ngrid = get(scan_input, "vpa_ngrid", 1)
+    vperp_ngrid = get(scan_input, "vperp_ngrid", 1)
+    vz_ngrid = get(scan_input, "vz_ngrid", 1)
+    vr_ngrid = get(scan_input, "vr_ngrid", 1)
+    vzeta_ngrid = get(scan_input, "vzeta_ngrid", 1)
+    return z_ngrid, r_ngrid, vpa_ngrid, vperp_ngrid, vz_ngrid, vr_ngrid, vzeta_ngrid
 end
 
 function get_geometry_and_composition(scan_input,n_ion_species,n_neutral_species)

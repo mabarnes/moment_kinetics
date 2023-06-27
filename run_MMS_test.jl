@@ -14,7 +14,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
    #test_option = "collisionless_wall-1D-1V-constant-Er"
    #test_option = "collisionless_wall-1D-1V-constant-Er-zngrid-5"
    #test_option = "collisionless_wall-1D-1V-constant-Er-ngrid-5"
-   test_option = "collisionless_wall-1D-1V-constant-Er-ngrid-5-opt"
+   #test_option = "collisionless_wall-1D-1V-constant-Er-ngrid-5-opt"
+   test_option = "krook_wall-1D-2V"
    #test_option = "collisionless_wall-1D-3V"
    #test_option = "collisionless_wall-2D-3V"
    #test_option = "collisionless_wall-2D-3V-Er-zero-at-plate"
@@ -171,6 +172,12 @@ if abspath(PROGRAM_FILE) == @__FILE__
                     ]
         scan_type = "vpaz_nelement"
         scan_name = "1D-1V-wall_cheb"
+    elseif test_option == "krook_wall-1D-2V"
+        # Krook wall test, no sheath for electrons, no radial coordinate
+        path_list = ["runs/1D-wall_MMS_nel_r_1_z_2_vpa_2_vperp_2_krook","runs/1D-wall_MMS_nel_r_1_z_4_vpa_4_vperp_4_krook",
+                        "runs/1D-wall_MMS_nel_r_1_z_8_vpa_8_vperp_8_krook"        ]
+        scan_type = "vpavperpz_nelement"
+        scan_name = "1D-2V-wall_cheb_krook"
     end
     mk.plot_MMS_sequence.get_MMS_error_data(path_list,scan_type,scan_name)
 end
