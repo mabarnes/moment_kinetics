@@ -215,7 +215,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         return vpa, vperp, vpa_spectral, vperp_spectral
     end
     
-    test_Rosenbluth_integrals = true
+    test_Rosenbluth_integrals = false#true
     test_collision_operator_fluxes = true 
     #ngrid = 9
     #nelement = 8 
@@ -449,12 +449,12 @@ if abspath(PROGRAM_FILE) == @__FILE__
         mi = 1.0
         vths = get_vth(pres,dens,mi)
         # second argument (potentials)
-        densp = 2.0#3.0/4.0
-        uparp = 1.0/3.0#3.0/4.0
-        pparp = 4.0/3.0
-        pperpp = 4.0/3.0
+        densp = 1.0 #2.0#3.0/4.0
+        uparp = 2.0/3.0#1.0/3.0#3.0/4.0
+        pparp = 2.0/3.0#4.0/3.0
+        pperpp = 2.0/3.0#4.0/3.0
         presp = get_pressure(pparp,pperpp) 
-        mip = 1.5
+        mip = 1.0#1.5
         vthsp = get_vth(presp,densp,mip)
         for ivperp in 1:vperp.n
             for ivpa in 1:vpa.n
@@ -528,7 +528,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
                     pdf_buffer_1[ivpa,ivperp],pdf_buffer_2[ivpa,ivperp],
                     Rosenbluth_d2Gdvpa2,Rosenbluth_d2Gdvperpdvpa,
                     Rosenbluth_d2Gdvperp2,Rosenbluth_dHdvpa,Rosenbluth_dHdvperp,
-                    mi,mip,vperp.grid[ivperp]) )
+                    mi,mip) )
                     
                     
             d2Gdvpa2[ivpa,ivperp] = Rosenbluth_d2Gdvpa2
@@ -548,14 +548,15 @@ if abspath(PROGRAM_FILE) == @__FILE__
         println("max(Gam_vpa_err): ",max_Gam_vpa_err)
         println("max(Gam_vperp_err): ",max_Gam_vperp_err)
         
-        # d F / d vpa
+        # d Gam_|| / d vpa
         for ivperp in 1:nvperp
             @views derivative!(vpa.scratch, Gam_vpa[:,ivperp], vpa, vpa_spectral)
             @. pdf_buffer_1[:,ivperp] = vpa.scratch
         end
-        # d F / d vperp
+        # (1/vperp) d vperp Gam_perp / d vperp
         for ivpa in 1:nvpa
-            @views derivative!(vperp.scratch, Gam_vperp[ivpa,:], vperp, vperp_spectral)
+            @views @. vperp.scratch2 = vperp.grid*Gam_vperp[ivpa,:]
+            @views derivative!(vperp.scratch, vperp.scratch2, vperp, vperp_spectral)
             @. pdf_buffer_2[ivpa,:] = vperp.scratch/vperp.grid
         end
         

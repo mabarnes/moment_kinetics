@@ -200,12 +200,12 @@ calculates the collisional fluxes given input F_s and G_sp, H_sp
 """
 function calculate_collisional_fluxes(F,dFdvpa,dFdvperp,
                             d2Gdvpa2,d2Gdvperpdvpa,d2Gdvperp2,dHdvpa,dHdvperp,
-                            ms,msp,vperp_val)
+                            ms,msp)
     # fill in value at (ivpa,ivperp)
     Cflux_vpa = dFdvpa*d2Gdvpa2 + dFdvperp*d2Gdvperpdvpa - 2.0*(ms/msp)*F*dHdvpa
     #Cflux_vpa = dFdvpa*d2Gdvpa2 + dFdvperp*d2Gdvperpdvpa # - 2.0*(ms/msp)*F*dHdvpa
     #Cflux_vpa =  - 2.0*(ms/msp)*F*dHdvpa
-    Cflux_vperp = vperp_val* ( dFdvpa*d2Gdvperpdvpa + dFdvperp*d2Gdvperp2 - 2.0*(ms/msp)*F*dHdvperp )
+    Cflux_vperp = dFdvpa*d2Gdvperpdvpa + dFdvperp*d2Gdvperp2 - 2.0*(ms/msp)*F*dHdvperp
     return Cflux_vpa, Cflux_vperp
 end
 
@@ -392,7 +392,7 @@ function explicit_fokker_planck_collisions_Maxwellian_coefficients!(pdf_out,pdf_
                     pdf_buffer_1[ivpa,ivperp,iz,ir,is],pdf_buffer_2[ivpa,ivperp,iz,ir,is],
                     Rosenbluth_d2Gdvpa2,Rosenbluth_d2Gdvperpdvpa,
                     Rosenbluth_d2Gdvperp2,Rosenbluth_dHdvpa,Rosenbluth_dHdvperp,
-                    mi,mip,vperp.grid[ivperp]) )
+                    mi,mip) )
             
             # now overwrite the buffer arrays with the local values as we no longer need dFdvpa or dFdvperp at s,r,z
             pdf_buffer_1[ivpa,ivperp,iz,ir,is] = Cflux_vpa
@@ -412,7 +412,8 @@ function explicit_fokker_planck_collisions_Maxwellian_coefficients!(pdf_out,pdf_
     # (1/vperp) d Cflux_vperp / d vperp
     begin_s_r_z_vpa_region()
     @loop_s_r_z_vpa is ir iz ivpa begin
-        @views derivative!(vperp.scratch, pdf_buffer_2[ivpa,:,iz,ir,is], vperp, vperp_spectral)
+        @views @. vperp.scratch2 = vperp.grid*pdf_buffer_2[ivpa,:,iz,ir,is]
+        @views derivative!(vperp.scratch, vperp.scratch2, vperp, vperp_spectral)
         @. pdf_buffer_2[ivpa,:,iz,ir,is] = vperp.scratch[:]/vperp.grid[:]
     end
     
@@ -524,7 +525,7 @@ function Cflux_vperp_Maxwellian_inputs(ms::mk_float,denss::mk_float,upars::mk_fl
                                      vpa,vperp,ivpa,ivperp)
     etap = eta_func(uparsp,vthsp,vpa,vperp,ivpa,ivperp)
     eta = eta_func(upars,vths,vpa,vperp,ivpa,ivperp)
-    prefac = -2.0*(vperp.grid[ivperp]^2)*denss*denssp*exp( -eta^2)/(vthsp*vths^5)
+    prefac = -2.0*(vperp.grid[ivperp])*denss*denssp*exp( -eta^2)/(vthsp*vths^5)
     (fac = (d2Gdeta2(etap) + (ms/msp)*((vths/vthsp)^2)*dHdeta(etap)/etap)
              + ((uparsp - upars)*(vpa.grid[ivpa]-uparsp)/vthsp^2)*ddGddeta(etap)/etap )
     Cflux = prefac*fac
