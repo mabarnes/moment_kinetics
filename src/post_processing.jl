@@ -1045,11 +1045,18 @@ function analyze_and_plot_data(prefix...)
             end
 
             # Linear fit to log(amplitude) after startind
-            linear_model(x, param) = @. param[1]*x+param[2]
-            fit = @views curve_fit(linear_model, time[startind:end],
-                                   log.(amplitude[startind:end]), [0.0, 0.0])
-            growth_rate = fit.param[1]
-            initial_fit_amplitude = exp(fit.param[2])
+            growth_rate = 0.0
+            initial_fit_amplitude = 1.0
+            startind = 1
+            try
+                linear_model(x, param) = @. param[1]*x+param[2]
+                fit = @views curve_fit(linear_model, time[startind:end],
+                                       log.(amplitude[startind:end]), [0.0, 0.0])
+                growth_rate = fit.param[1]
+                initial_fit_amplitude = exp(fit.param[2])
+            catch e
+                println("Warning: error $e when fitting growth rate")
+            end
 
             return growth_rate, initial_fit_amplitude, startind
         end
