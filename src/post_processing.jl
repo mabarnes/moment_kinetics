@@ -3647,7 +3647,7 @@ function plot_charged_pdf_2D_at_wall(run_name)
                     windowsize = (360,240), margin = 15pt)
                     outfile = string(run_name, "_pdf(ivpa0,ivperp0,z_"*zlabel*",r)"*description*"_vs_r_z.pdf")
                     trysavefig(outfile)
-                    @views heatmap(r_local, vpa.grid, pdf[:,ivperp0,iz_wall,:,is,itime0], xlabel=L"r", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                    @views heatmap(r.grid, vpa.grid, pdf[:,ivperp0,iz_wall,:,is,itime0], xlabel=L"r", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
                     windowsize = (360,240), margin = 15pt)
                     outfile = string(run_name, "_pdf(vpa,ivperp0,z_"*zlabel*",r)"*description*"_vs_r_vpa.pdf")
                     trysavefig(outfile)
