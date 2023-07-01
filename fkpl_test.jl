@@ -3,7 +3,8 @@ using Plots
 using LaTeXStrings
 using Measures
 using MPI
-using SpecialFunctions: erf
+using SpecialFunctions: erf, ellipe
+using FastGaussQuadrature
 
 function eta_speed(upar,vth,vpa,vperp,ivpa,ivperp)
     eta = sqrt((vpa.grid[ivpa]-upar)^2 + vperp.grid[ivperp]^2)/vth
@@ -216,7 +217,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
     end
     
     test_Rosenbluth_integrals = false#true
-    test_collision_operator_fluxes = true 
+    test_collision_operator_fluxes = false#true 
+    test_Lagrange_integral = true
     #ngrid = 9
     #nelement = 8 
     
@@ -388,6 +390,170 @@ if abspath(PROGRAM_FILE) == @__FILE__
     #    #end
     #    end
         return max_G_err, max_H_err, max_H_check_err, max_dHdvpa_err, max_dHdvperp_err, max_d2Gdvperp2_err, max_d2Gdvpa2_err, max_d2Gdvperpdvpa_err
+    end
+    
+    function test_Lagrange_Rosenbluth_potentials(ngrid,nelement)
+        # set up grids for input Maxwellian
+        vpa, vperp, vpa_spectral, vperp_spectral =  init_grids(nelement,ngrid)
+        # set up necessary inputs for collision operator functions 
+        nvperp = vperp.n
+        nvpa = vpa.n
+        
+        fs_in = Array{mk_float,2}(undef,nvpa,nvperp)
+        G_weights = Array{mk_float,4}(undef,nvpa,nvperp,nvpa,nvperp)
+        Gs = Array{mk_float,2}(undef,nvpa,nvperp)
+        G_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
+        G_err = Array{mk_float,2}(undef,nvpa,nvperp)
+        
+        # set up test Maxwellian
+        dens = 1.0 #3.0/4.0
+        upar = 0.0 #2.0/3.0
+        ppar = 1.0 #2.0/3.0
+        pperp = 1.0# 2.0/3.0
+        pres = get_pressure(ppar,pperp) 
+        mi = 1.0
+        vths = get_vth(pres,dens,mi)
+        
+        for ivperp in 1:nvperp
+            for ivpa in 1:nvpa
+                fs_in[ivpa,ivperp] = (dens/vths^3)*exp( - ((vpa.grid[ivpa]-upar)^2 + vperp.grid[ivperp]^2)/vths^2 ) 
+                G_Maxwell[ivpa,ivperp] = G_Maxwellian(dens,upar,vths,vpa,vperp,ivpa,ivperp)
+            end
+        end
+        
+        function get_imin_imax(coord,iel)
+            j = iel
+            if j > 1
+                k = 1
+            else
+                k = 0
+            end
+            imin = coord.imin[j] - k
+            imax = coord.imax[j]
+            return imin, imax
+        end
+        
+        function get_nodes(coord,iel)
+            # get imin and imax of this element on full grid
+            (imin, imax) = get_imin_imax(coord,iel)
+            nodes = coord.grid[imin:imax]
+            return nodes
+        end
+        """
+        Lagrange polynomial
+        args: 
+        j - index of l_j from list of nodes
+        x_nodes - array of x node values
+        x - point where interpolated value is returned
+        """
+        function lagrange_poly(j,x_nodes,x)
+            # get number of nodes
+            n = size(x_nodes,1)
+            # location where l(x0) = 1
+            x0 = x_nodes[j]
+            # evaluate polynomial
+            poly = 1.0
+            for i in 1:j-1
+                    poly *= (x - x_nodes[i])/(x0 - x_nodes[i])
+            end
+            for i in j+1:n
+                    poly *= (x - x_nodes[i])/(x0 - x_nodes[i])
+            end
+            return poly
+        end
+        
+        function get_scaled_x_w!(x_scaled, w_scaled, x, w, node_min, node_max)
+            shift = 0.5*(node_min + node_max)
+            scale = 0.5*(node_max - node_min)
+            @. x_scaled = scale*x + shift
+            @. w_scaled = scale*w
+            return nothing
+        end
+        
+        # get Gauss-Legendre points and weights on (-1,1)
+        nquad = 2*ngrid
+        x, w = gausslegendre(nquad)
+        x_vpa, w_vpa = Array{mk_float,1}(undef,nquad), Array{mk_float,1}(undef,nquad)
+        x_vperp, w_vperp = Array{mk_float,1}(undef,nquad), Array{mk_float,1}(undef,nquad)
+        
+        # precalculated weights, integrating over Lagrange polynomials
+        for ivperp in 1:nvperp
+            for ivpa in 1:nvpa 
+                vperp_val = vperp.grid[ivperp]
+                vpa_val = vpa.grid[ivpa]
+                @. G_weights[ivpa,ivperp,:,:] = 0.0  
+                # loop over elements and grid points within elements on primed coordinate
+                for ielement_vperp in 1:vperp.nelement_local
+                    
+                    vperp_nodes = get_nodes(vperp,ielement_vperp)
+                    vperp_max = vperp_nodes[end]
+                    if ielement_vperp > 1 # Gauss-Lobatto
+                        vperp_min = vperp_nodes[1] 
+                    else # adjust for the Gauss-Radau element
+                        vperp_min = 0.0
+                    end
+                    get_scaled_x_w!(x_vperp, w_vperp, x, w, vperp_min, vperp_max)
+                    
+                    for ielement_vpa in 1:vpa.nelement_local
+                        
+                        vpa_nodes = get_nodes(vpa,ielement_vpa)
+                        # assumme Gauss-Lobatto elements
+                        vpa_min, vpa_max = vpa_nodes[1], vpa_nodes[end]
+                        get_scaled_x_w!(x_vpa, w_vpa, x, w, vpa_min, vpa_max)
+                        
+                        for igrid_vperp in 1:vperp.ngrid
+                            for igrid_vpa in 1:vpa.ngrid
+                                # get grid index for point on full grid  
+                                ivpap = vpa.igrid_full[igrid_vpa,ielement_vpa]   
+                                ivperpp = vperp.igrid_full[igrid_vperp,ielement_vperp]   
+                                # carry out integration over Lagrange polynomial at this node, on this element
+                                for kvperp in 1:nquad 
+                                    for kvpa in 1:nquad 
+                                        denom = (vpa_val - x_vpa[kvpa])^2 + (vperp_val + x_vperp[kvperp])^2 
+                                        mm = 4.0*vperp_val*x_vperp[kvperp]/denom
+                                        prefac = sqrt(denom)
+                                        elliptic_integral_factor = 2.0*ellipe(mm)*prefac/pi
+                                        
+                                        (G_weights[ivpa,ivperp,ivpap,ivperpp] += 
+                                           lagrange_poly(igrid_vpa,vpa_nodes,x_vpa[kvpa])*lagrange_poly(igrid_vperp,vperp_nodes,x_vperp[kvperp])*
+                                            elliptic_integral_factor*x_vperp[kvperp]*w_vperp[kvperp]*w_vpa[kvpa]*2.0/sqrt(pi))
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        
+        # use precalculated weights to calculate Gs using nodal values of fs
+        for ivperp in 1:nvperp
+            for ivpa in 1:nvpa 
+                Gs[ivpa,ivperp] = 0.0
+                for ivperpp in 1:nvperp
+                    for ivpap in 1:nvpa
+                        Gs[ivpa,ivperp] += G_weights[ivpa,ivperp,ivpap,ivperpp]*fs_in[ivpap,ivperpp]
+                    end
+                end
+            end
+        end
+        
+        @. G_err = abs(Gs - G_Maxwell)
+        max_G_err = maximum(G_err)
+        println("max_G_err: ",max_G_err)
+        @views heatmap(vperp.grid, vpa.grid, Gs[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+             windowsize = (360,240), margin = 15pt)
+             outfile = string("fkpl_G_lagrange.pdf")
+             savefig(outfile)
+        @views heatmap(vperp.grid, vpa.grid, G_Maxwell[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+             windowsize = (360,240), margin = 15pt)
+             outfile = string("fkpl_G_Maxwell.pdf")
+             savefig(outfile)
+         @views heatmap(vperp.grid, vpa.grid, G_err[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+             windowsize = (360,240), margin = 15pt)
+             outfile = string("fkpl_G_err.pdf")
+             savefig(outfile)
+        return nothing
     end
     
     function test_collision_operator(nelement,ngrid)
@@ -706,6 +872,12 @@ if abspath(PROGRAM_FILE) == @__FILE__
         outfile = "fkpl_fluxes_test.pdf"
         savefig(outfile)
         println(outfile)
+    end
+    
+    if test_Lagrange_integral
+        ngrid = 9
+        nelement = 6
+        test_Lagrange_Rosenbluth_potentials(ngrid,nelement)
     end
     ## evaluate the collision operator with numerically computed G & H 
     #println("TEST: Css'[F_M,F_M] with numerical G[F_M] & H[F_M]")
