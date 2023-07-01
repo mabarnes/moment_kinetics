@@ -47,6 +47,8 @@ struct coordinate
     imin::Array{mk_int,1}
     # imax[j] contains the maximum index on the full grid for element j
     imax::Array{mk_int,1}
+    # igrid_full[i,j] contains the index of the full grid for the elemental grid point i, on element j
+    igrid_full::Array{mk_int,2}
     # discretization option for the grid
     discretization::String
     # if the discretization is finite differences, fd_option provides the precise scheme
@@ -105,7 +107,7 @@ function define_coordinate(input, parallel_io::Bool=false)
         input.nelement_local, n_local)
     # obtain (local) index mapping from the grid within each element
     # to the full grid
-    imin, imax = elemental_to_full_grid_map(input.ngrid, input.nelement_local)
+    imin, imax, igrid_full = elemental_to_full_grid_map(input.ngrid, input.nelement_local)
     # initialize the grid and the integration weights associated with the grid
     # also obtain the Chebyshev theta grid and spacing if chosen as discretization option
     grid, wgts, uniform_grid = init_grid(input.ngrid, input.nelement_global,
@@ -147,7 +149,7 @@ function define_coordinate(input, parallel_io::Bool=false)
     end
     return coordinate(input.name, n_global, n_local, input.ngrid,
         input.nelement_global, input.nelement_local, input.nrank, input.irank, input.L, grid,
-        cell_width, igrid, ielement, imin, imax, input.discretization, input.fd_option, input.cheb_option,
+        cell_width, igrid, ielement, imin, imax, igrid_full, input.discretization, input.fd_option, input.cheb_option,
         input.bc, wgts, uniform_grid, duniform_dgrid, scratch, copy(scratch), copy(scratch),
         scratch_2d, copy(scratch_2d), advection, send_buffer, receive_buffer, input.comm,
         local_io_range, global_io_range)
@@ -293,6 +295,7 @@ indices on the full grid for each element
 function elemental_to_full_grid_map(ngrid, nelement)
     imin = allocate_int(nelement)
     imax = allocate_int(nelement)
+    igrid_full = allocate_int(ngrid, nelement)
     @inbounds begin
         # the first element contains ngrid entries
         imin[1] = 1
@@ -305,8 +308,14 @@ function elemental_to_full_grid_map(ngrid, nelement)
                 imax[i] = imin[i] + ngrid - 2
             end
         end
+        
+        for j in 1:nelement
+            for i in 1:ngrid
+                igrid_full[i,j] = i + (j - 1)*(ngrid - 1)
+            end
+        end
     end
-    return imin, imax
+    return imin, imax, igrid_full
 end
 
 end
