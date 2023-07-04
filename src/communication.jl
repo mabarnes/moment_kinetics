@@ -16,6 +16,7 @@ export allocate_shared, block_rank, block_size, comm_block, comm_inter_block,
        iblock_index, comm_world, finalize_comms!, initialize_comms!, global_rank,
        MPISharedArray, global_size
 export setup_distributed_memory_MPI
+export _block_synchronize
 
 using MPI
 using SHA

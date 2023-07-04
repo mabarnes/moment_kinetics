@@ -5,6 +5,25 @@ using Measures
 using MPI
 using SpecialFunctions: erf, ellipe
 using FastGaussQuadrature
+using Dates
+
+import moment_kinetics
+using moment_kinetics.input_structs: grid_input, advection_input
+using moment_kinetics.coordinates: define_coordinate
+using moment_kinetics.chebyshev: setup_chebyshev_pseudospectral
+using moment_kinetics.fokker_planck: evaluate_RMJ_collision_operator!
+using moment_kinetics.fokker_planck: calculate_Rosenbluth_potentials!
+#using moment_kinetics.fokker_planck: calculate_Rosenbluth_H_from_G!
+using moment_kinetics.fokker_planck: init_fokker_planck_collisions
+using moment_kinetics.fokker_planck: calculate_collisional_fluxes, calculate_Maxwellian_Rosenbluth_coefficients
+using moment_kinetics.fokker_planck: Cflux_vpa_Maxwellian_inputs, Cflux_vperp_Maxwellian_inputs
+using moment_kinetics.fokker_planck: calculate_Rosenbluth_H_from_G!
+using moment_kinetics.type_definitions: mk_float, mk_int
+using moment_kinetics.calculus: derivative!
+using moment_kinetics.velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_pressure
+using moment_kinetics.communication
+using moment_kinetics.looping
+using moment_kinetics.array_allocation: allocate_shared_float
 
 function eta_speed(upar,vth,vpa,vperp,ivpa,ivperp)
     eta = sqrt((vpa.grid[ivpa]-upar)^2 + vperp.grid[ivperp]^2)/vth
@@ -118,21 +137,6 @@ if abspath(PROGRAM_FILE) == @__FILE__
     using Pkg
     Pkg.activate(".")
 
-    import moment_kinetics
-	using moment_kinetics.input_structs: grid_input, advection_input
-	using moment_kinetics.coordinates: define_coordinate
-	using moment_kinetics.chebyshev: setup_chebyshev_pseudospectral
-	using moment_kinetics.fokker_planck: evaluate_RMJ_collision_operator!
-	using moment_kinetics.fokker_planck: calculate_Rosenbluth_potentials!
-	#using moment_kinetics.fokker_planck: calculate_Rosenbluth_H_from_G!
-	using moment_kinetics.fokker_planck: init_fokker_planck_collisions
-	using moment_kinetics.fokker_planck: calculate_collisional_fluxes, calculate_Maxwellian_Rosenbluth_coefficients
-    using moment_kinetics.fokker_planck: Cflux_vpa_Maxwellian_inputs, Cflux_vperp_Maxwellian_inputs
-    using moment_kinetics.fokker_planck: calculate_Rosenbluth_H_from_G!
-    using moment_kinetics.type_definitions: mk_float, mk_int
-    using moment_kinetics.calculus: derivative!
-    using moment_kinetics.velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_pressure
-    
     function calculate_d2Gdvpa2!(d2Gdvpa2,G,vpa,vpa_spectral,vperp,vperp_spectral)
         for ivperp in 1:vperp.n
             @views derivative!(vpa.scratch, G[:,ivperp], vpa, vpa_spectral)
@@ -205,7 +209,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
             nrank, irank, vperp_L, discretization, fd_option, cheb_option, bc, adv_input,comm)
         
         # create the coordinate structs
-        println("made inputs")
+        #println("made inputs")
         vpa = define_coordinate(vpa_input)
         vperp = define_coordinate(vperp_input)
         #println(vperp.grid)
@@ -399,9 +403,23 @@ if abspath(PROGRAM_FILE) == @__FILE__
         nvperp = vperp.n
         nvpa = vpa.n
         
+        # Set up MPI
+        initialize_comms!()
+        setup_distributed_memory_MPI(1,1,1,1)
+        looping.setup_loop_ranges!(block_rank[], block_size[];
+                                       s=1, sn=1,
+                                       r=1, z=1, vperp=vperp.n, vpa=vpa.n,
+                                       vzeta=1, vr=1, vz=1)
+        
+        @serial_region begin
+            println("beginning integration   ", Dates.format(now(), dateformat"H:MM:SS"))
+        end
+        
         fs_in = Array{mk_float,2}(undef,nvpa,nvperp)
-        G_weights = Array{mk_float,4}(undef,nvpa,nvperp,nvpa,nvperp)
-        Gs = Array{mk_float,2}(undef,nvpa,nvperp)
+        #G_weights = Array{mk_float,4}(undef,nvpa,nvperp,nvpa,nvperp)
+        G_weights = allocate_shared_float(nvpa,nvperp,nvpa,nvperp)
+        Gs = allocate_shared_float(nvpa,nvperp)
+        #Gs = Array{mk_float,2}(undef,nvpa,nvperp)
         G_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
         G_err = Array{mk_float,2}(undef,nvpa,nvperp)
         
@@ -477,8 +495,10 @@ if abspath(PROGRAM_FILE) == @__FILE__
         x_vperp, w_vperp = Array{mk_float,1}(undef,nquad), Array{mk_float,1}(undef,nquad)
         
         # precalculated weights, integrating over Lagrange polynomials
-        for ivperp in 1:nvperp
-            for ivpa in 1:nvpa 
+        begin_vperp_vpa_region()
+        @loop_vperp_vpa ivperp ivpa begin
+        #for ivperp in 1:nvperp
+        #    for ivpa in 1:nvpa 
                 vperp_val = vperp.grid[ivperp]
                 vpa_val = vpa.grid[ivpa]
                 @. G_weights[ivpa,ivperp,:,:] = 0.0  
@@ -523,36 +543,45 @@ if abspath(PROGRAM_FILE) == @__FILE__
                         end
                     end
                 end
-            end
+            #end
         end
         
+        _block_synchronize()
+        
         # use precalculated weights to calculate Gs using nodal values of fs
-        for ivperp in 1:nvperp
-            for ivpa in 1:nvpa 
+        @loop_vperp_vpa ivperp ivpa begin
+        #for ivperp in 1:nvperp
+            #for ivpa in 1:nvpa 
                 Gs[ivpa,ivperp] = 0.0
                 for ivperpp in 1:nvperp
                     for ivpap in 1:nvpa
                         Gs[ivpa,ivperp] += G_weights[ivpa,ivperp,ivpap,ivperpp]*fs_in[ivpap,ivperpp]
                     end
                 end
-            end
+            #end
         end
         
-        @. G_err = abs(Gs - G_Maxwell)
-        max_G_err = maximum(G_err)
-        println("max_G_err: ",max_G_err)
-        @views heatmap(vperp.grid, vpa.grid, Gs[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
-             windowsize = (360,240), margin = 15pt)
-             outfile = string("fkpl_G_lagrange.pdf")
-             savefig(outfile)
-        @views heatmap(vperp.grid, vpa.grid, G_Maxwell[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
-             windowsize = (360,240), margin = 15pt)
-             outfile = string("fkpl_G_Maxwell.pdf")
-             savefig(outfile)
-         @views heatmap(vperp.grid, vpa.grid, G_err[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
-             windowsize = (360,240), margin = 15pt)
-             outfile = string("fkpl_G_err.pdf")
-             savefig(outfile)
+        @serial_region begin
+            println("finished integration   ", Dates.format(now(), dateformat"H:MM:SS"))
+        end
+        begin_serial_region()
+        @serial_region begin
+            @. G_err = abs(Gs - G_Maxwell)
+            max_G_err = maximum(G_err)
+            println("max_G_err: ",max_G_err)
+            @views heatmap(vperp.grid, vpa.grid, Gs[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                 windowsize = (360,240), margin = 15pt)
+                 outfile = string("fkpl_G_lagrange.pdf")
+                 savefig(outfile)
+            @views heatmap(vperp.grid, vpa.grid, G_Maxwell[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                 windowsize = (360,240), margin = 15pt)
+                 outfile = string("fkpl_G_Maxwell.pdf")
+                 savefig(outfile)
+             @views heatmap(vperp.grid, vpa.grid, G_err[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                 windowsize = (360,240), margin = 15pt)
+                 outfile = string("fkpl_G_err.pdf")
+                 savefig(outfile)
+        end
         return nothing
     end
     
@@ -875,8 +904,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
     end
     
     if test_Lagrange_integral
-        ngrid = 9
-        nelement = 6
+        ngrid = 5
+        nelement = 4
         test_Lagrange_Rosenbluth_potentials(ngrid,nelement)
     end
     ## evaluate the collision operator with numerically computed G & H 
