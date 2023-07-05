@@ -243,7 +243,7 @@ using IfElse
             # Input for instability test
             T0 = Ti_sym(Lr, Lz, r_bc, z_bc, composition, manufactured_solns_input,
                         species)
-            vth = sqrt(2.0*T0)
+            vth = sqrt(T0)
 
             # Note this is for a '1V' test
             dfni = densi/vth * exp(-(vpa/vth)^2)
