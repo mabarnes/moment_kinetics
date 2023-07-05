@@ -18,6 +18,7 @@ using moment_kinetics.fokker_planck: init_fokker_planck_collisions
 using moment_kinetics.fokker_planck: calculate_collisional_fluxes, calculate_Maxwellian_Rosenbluth_coefficients
 using moment_kinetics.fokker_planck: Cflux_vpa_Maxwellian_inputs, Cflux_vperp_Maxwellian_inputs
 using moment_kinetics.fokker_planck: calculate_Rosenbluth_H_from_G!
+using moment_kinetics.fokker_planck: d2Gdvpa2, dGdvperp
 using moment_kinetics.type_definitions: mk_float, mk_int
 using moment_kinetics.calculus: derivative!
 using moment_kinetics.velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_pressure
@@ -416,12 +417,21 @@ if abspath(PROGRAM_FILE) == @__FILE__
         end
         
         fs_in = Array{mk_float,2}(undef,nvpa,nvperp)
+        d2fsdvpa2 = Array{mk_float,2}(undef,nvpa,nvperp)
+        dfsdvperp = Array{mk_float,2}(undef,nvpa,nvperp)
         #G_weights = Array{mk_float,4}(undef,nvpa,nvperp,nvpa,nvperp)
         G_weights = allocate_shared_float(nvpa,nvperp,nvpa,nvperp)
+        G1_weights = allocate_shared_float(nvpa,nvperp,nvpa,nvperp)
         Gs = allocate_shared_float(nvpa,nvperp)
+        d2Gsdvpa2 = allocate_shared_float(nvpa,nvperp)
+        dGsdvperp = allocate_shared_float(nvpa,nvperp)
         #Gs = Array{mk_float,2}(undef,nvpa,nvperp)
         G_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
         G_err = Array{mk_float,2}(undef,nvpa,nvperp)
+        d2Gdvpa2_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
+        d2Gdvpa2_err = Array{mk_float,2}(undef,nvpa,nvperp)
+        dGdvperp_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
+        dGdvperp_err = Array{mk_float,2}(undef,nvpa,nvperp)
         
         H_weights = allocate_shared_float(nvpa,nvperp,nvpa,nvperp)
         Hs = allocate_shared_float(nvpa,nvperp)
@@ -443,7 +453,18 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 fs_in[ivpa,ivperp] = (dens/vths^3)*exp( - ((vpa.grid[ivpa]-upar)^2 + vperp.grid[ivperp]^2)/vths^2 ) 
                 G_Maxwell[ivpa,ivperp] = G_Maxwellian(dens,upar,vths,vpa,vperp,ivpa,ivperp)
                 H_Maxwell[ivpa,ivperp] = H_Maxwellian(dens,upar,vths,vpa,vperp,ivpa,ivperp)
+                d2Gdvpa2_Maxwell[ivpa,ivperp] = d2Gdvpa2(dens,upar,vths,vpa,vperp,ivpa,ivperp)
+                dGdvperp_Maxwell[ivpa,ivperp] = dGdvperp(dens,upar,vths,vpa,vperp,ivpa,ivperp)
             end
+        end
+        for ivperp in 1:nvperp
+            @views derivative!(vpa.scratch, fs_in[:,ivperp], vpa, vpa_spectral)
+            @views derivative!(vpa.scratch2, vpa.scratch, vpa, vpa_spectral)
+            @. d2fsdvpa2[:,ivperp] = vpa.scratch2
+        end
+        for ivpa in 1:vpa.n
+            @views derivative!(vperp.scratch, fs_in[ivpa,:], vperp, vperp_spectral)
+            @. dfsdvperp[ivpa,:] = vperp.scratch
         end
         
         function get_imin_imax(coord,iel)
@@ -509,6 +530,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 vperp_val = vperp.grid[ivperp]
                 vpa_val = vpa.grid[ivpa]
                 @. G_weights[ivpa,ivperp,:,:] = 0.0  
+                @. G1_weights[ivpa,ivperp,:,:] = 0.0  
                 @. H_weights[ivpa,ivperp,:,:] = 0.0  
                 # loop over elements and grid points within elements on primed coordinate
                 for ielement_vperp in 1:vperp.nelement_local
@@ -541,11 +563,16 @@ if abspath(PROGRAM_FILE) == @__FILE__
                                         mm = 4.0*vperp_val*x_vperp[kvperp]/denom
                                         prefac = sqrt(denom)
                                         G_elliptic_integral_factor = 2.0*ellipe(mm)*prefac/pi
+                                        G1_elliptic_integral_factor = -(2.0*prefac/pi)*( (2.0 - mm)*ellipe(mm) - 2.0*(1.0 - mm)*ellipk(mm) )/(3.0*mm)
                                         H_elliptic_integral_factor = 2.0*ellipk(mm)/(pi*prefac)
                                         
                                         (G_weights[ivpa,ivperp,ivpap,ivperpp] += 
                                            lagrange_poly(igrid_vpa,vpa_nodes,x_vpa[kvpa])*lagrange_poly(igrid_vperp,vperp_nodes,x_vperp[kvperp])*
                                             G_elliptic_integral_factor*x_vperp[kvperp]*w_vperp[kvperp]*w_vpa[kvpa]*2.0/sqrt(pi))
+                                        
+                                        (G1_weights[ivpa,ivperp,ivpap,ivperpp] += 
+                                           lagrange_poly(igrid_vpa,vpa_nodes,x_vpa[kvpa])*lagrange_poly(igrid_vperp,vperp_nodes,x_vperp[kvperp])*
+                                            G1_elliptic_integral_factor*x_vperp[kvperp]*w_vperp[kvperp]*w_vpa[kvpa]*2.0/sqrt(pi))
                                         
                                         (H_weights[ivpa,ivperp,ivpap,ivperpp] += 
                                            lagrange_poly(igrid_vpa,vpa_nodes,x_vpa[kvpa])*lagrange_poly(igrid_vperp,vperp_nodes,x_vperp[kvperp])*
@@ -565,10 +592,14 @@ if abspath(PROGRAM_FILE) == @__FILE__
         @loop_vperp_vpa ivperp ivpa begin
         #for ivperp in 1:nvperp
             #for ivpa in 1:nvpa 
+                d2Gsdvpa2[ivpa,ivperp] = 0.0
+                dGsdvperp[ivpa,ivperp] = 0.0
                 Gs[ivpa,ivperp] = 0.0
                 Hs[ivpa,ivperp] = 0.0
                 for ivperpp in 1:nvperp
                     for ivpap in 1:nvpa
+                        d2Gsdvpa2[ivpa,ivperp] += G_weights[ivpa,ivperp,ivpap,ivperpp]*d2fsdvpa2[ivpap,ivperpp]
+                        dGsdvperp[ivpa,ivperp] += G1_weights[ivpa,ivperp,ivpap,ivperpp]*dfsdvperp[ivpap,ivperpp]
                         Gs[ivpa,ivperp] += G_weights[ivpa,ivperp,ivpap,ivperpp]*fs_in[ivpap,ivperpp]
                         Hs[ivpa,ivperp] += H_weights[ivpa,ivperp,ivpap,ivperpp]*fs_in[ivpap,ivperpp]
                     end
@@ -576,42 +607,77 @@ if abspath(PROGRAM_FILE) == @__FILE__
             #end
         end
         
-        @serial_region begin
-            println("finished integration   ", Dates.format(now(), dateformat"H:MM:SS"))
-        end
         begin_serial_region()
         @serial_region begin
+            println("finished integration   ", Dates.format(now(), dateformat"H:MM:SS"))
             @. H_err = abs(Hs - H_Maxwell)
             max_H_err = maximum(H_err)
             println("max_H_err: ",max_H_err)
-            @views heatmap(vperp.grid, vpa.grid, Hs[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
-                 windowsize = (360,240), margin = 15pt)
-                 outfile = string("fkpl_H_lagrange.pdf")
-                 savefig(outfile)
-            @views heatmap(vperp.grid, vpa.grid, H_Maxwell[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
-                 windowsize = (360,240), margin = 15pt)
-                 outfile = string("fkpl_H_Maxwell.pdf")
-                 savefig(outfile)
-             @views heatmap(vperp.grid, vpa.grid, H_err[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
-                 windowsize = (360,240), margin = 15pt)
-                 outfile = string("fkpl_H_err.pdf")
-                 savefig(outfile)
-                 
+            if false
+                @views heatmap(vperp.grid, vpa.grid, Hs[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                     windowsize = (360,240), margin = 15pt)
+                     outfile = string("fkpl_H_lagrange.pdf")
+                     savefig(outfile)
+                @views heatmap(vperp.grid, vpa.grid, H_Maxwell[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                     windowsize = (360,240), margin = 15pt)
+                     outfile = string("fkpl_H_Maxwell.pdf")
+                     savefig(outfile)
+                 @views heatmap(vperp.grid, vpa.grid, H_err[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                     windowsize = (360,240), margin = 15pt)
+                     outfile = string("fkpl_H_err.pdf")
+                     savefig(outfile)
+            end
+            @. dGdvperp_err = abs(dGsdvperp - dGdvperp_Maxwell)
+            max_dGdvperp_err = maximum(dGdvperp_err)
+            println("max_dGdvperp_err: ",max_dGdvperp_err)
+            if true
+                @views heatmap(vperp.grid, vpa.grid, dGsdvperp[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                     windowsize = (360,240), margin = 15pt)
+                     outfile = string("fkpl_dGdvperp_lagrange.pdf")
+                     savefig(outfile)
+                @views heatmap(vperp.grid, vpa.grid, dGdvperp_Maxwell[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                     windowsize = (360,240), margin = 15pt)
+                     outfile = string("fkpl_dGdvperp_Maxwell.pdf")
+                     savefig(outfile)
+                 @views heatmap(vperp.grid, vpa.grid, dGdvperp_err[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                     windowsize = (360,240), margin = 15pt)
+                     outfile = string("fkpl_dGdvperp_err.pdf")
+                     savefig(outfile)
+            end
+            @. d2Gdvpa2_err = abs(d2Gsdvpa2 - d2Gdvpa2_Maxwell)
+            max_d2Gdvpa2_err = maximum(d2Gdvpa2_err)
+            println("max_d2Gdvpa2_err: ",max_d2Gdvpa2_err)
+            if true
+                @views heatmap(vperp.grid, vpa.grid, d2Gsdvpa2[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                     windowsize = (360,240), margin = 15pt)
+                     outfile = string("fkpl_d2Gdvpa2_lagrange.pdf")
+                     savefig(outfile)
+                @views heatmap(vperp.grid, vpa.grid, d2Gdvpa2_Maxwell[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                     windowsize = (360,240), margin = 15pt)
+                     outfile = string("fkpl_d2Gdvpa2_Maxwell.pdf")
+                     savefig(outfile)
+                 @views heatmap(vperp.grid, vpa.grid, d2Gdvpa2_err[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                     windowsize = (360,240), margin = 15pt)
+                     outfile = string("fkpl_d2Gdvpa2_err.pdf")
+                     savefig(outfile)
+            end
             @. G_err = abs(Gs - G_Maxwell)
             max_G_err = maximum(G_err)
             println("max_G_err: ",max_G_err)
-            @views heatmap(vperp.grid, vpa.grid, Gs[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
-                 windowsize = (360,240), margin = 15pt)
-                 outfile = string("fkpl_G_lagrange.pdf")
-                 savefig(outfile)
-            @views heatmap(vperp.grid, vpa.grid, G_Maxwell[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
-                 windowsize = (360,240), margin = 15pt)
-                 outfile = string("fkpl_G_Maxwell.pdf")
-                 savefig(outfile)
-             @views heatmap(vperp.grid, vpa.grid, G_err[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
-                 windowsize = (360,240), margin = 15pt)
-                 outfile = string("fkpl_G_err.pdf")
-                 savefig(outfile)
+            if false
+                @views heatmap(vperp.grid, vpa.grid, Gs[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                     windowsize = (360,240), margin = 15pt)
+                     outfile = string("fkpl_G_lagrange.pdf")
+                     savefig(outfile)
+                @views heatmap(vperp.grid, vpa.grid, G_Maxwell[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                     windowsize = (360,240), margin = 15pt)
+                     outfile = string("fkpl_G_Maxwell.pdf")
+                     savefig(outfile)
+                 @views heatmap(vperp.grid, vpa.grid, G_err[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                     windowsize = (360,240), margin = 15pt)
+                     outfile = string("fkpl_G_err.pdf")
+                     savefig(outfile)
+            end
         end
         return nothing
     end
@@ -849,7 +915,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         
         
         for iscan in 1:nscan
-            nelement = nelement_list[iscan]
+            local nelement = nelement_list[iscan]
             ((max_G_err[iscan], max_H_err[iscan], 
             max_H_check_err[iscan], max_dHdvpa_err[iscan],
             max_dHdvperp_err[iscan], max_d2Gdvperp2_err[iscan],
@@ -876,7 +942,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         println(outfile)
         
         for iscan in 1:nscan
-            nelement = nelement_list[iscan]
+            local nelement = nelement_list[iscan]
             ((max_G_err[iscan], max_H_err[iscan], 
             max_H_check_err[iscan], max_dHdvpa_err[iscan],
             max_dHdvperp_err[iscan], max_d2Gdvperp2_err[iscan],
@@ -935,8 +1001,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
     end
     
     if test_Lagrange_integral
-        ngrid = 5
-        nelement = 4
+        ngrid = 9
+        nelement = 8
         test_Lagrange_Rosenbluth_potentials(ngrid,nelement)
     end
     ## evaluate the collision operator with numerically computed G & H 
