@@ -3,7 +3,7 @@ using Plots
 using LaTeXStrings
 using Measures
 using MPI
-using SpecialFunctions: erf, ellipe
+using SpecialFunctions: erf, ellipe, ellipk
 using FastGaussQuadrature
 using Dates
 
@@ -423,6 +423,12 @@ if abspath(PROGRAM_FILE) == @__FILE__
         G_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
         G_err = Array{mk_float,2}(undef,nvpa,nvperp)
         
+        H_weights = allocate_shared_float(nvpa,nvperp,nvpa,nvperp)
+        Hs = allocate_shared_float(nvpa,nvperp)
+        #Gs = Array{mk_float,2}(undef,nvpa,nvperp)
+        H_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
+        H_err = Array{mk_float,2}(undef,nvpa,nvperp)
+        
         # set up test Maxwellian
         dens = 1.0 #3.0/4.0
         upar = 0.0 #2.0/3.0
@@ -436,6 +442,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
             for ivpa in 1:nvpa
                 fs_in[ivpa,ivperp] = (dens/vths^3)*exp( - ((vpa.grid[ivpa]-upar)^2 + vperp.grid[ivperp]^2)/vths^2 ) 
                 G_Maxwell[ivpa,ivperp] = G_Maxwellian(dens,upar,vths,vpa,vperp,ivpa,ivperp)
+                H_Maxwell[ivpa,ivperp] = H_Maxwellian(dens,upar,vths,vpa,vperp,ivpa,ivperp)
             end
         end
         
@@ -502,6 +509,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 vperp_val = vperp.grid[ivperp]
                 vpa_val = vpa.grid[ivpa]
                 @. G_weights[ivpa,ivperp,:,:] = 0.0  
+                @. H_weights[ivpa,ivperp,:,:] = 0.0  
                 # loop over elements and grid points within elements on primed coordinate
                 for ielement_vperp in 1:vperp.nelement_local
                     
@@ -532,11 +540,16 @@ if abspath(PROGRAM_FILE) == @__FILE__
                                         denom = (vpa_val - x_vpa[kvpa])^2 + (vperp_val + x_vperp[kvperp])^2 
                                         mm = 4.0*vperp_val*x_vperp[kvperp]/denom
                                         prefac = sqrt(denom)
-                                        elliptic_integral_factor = 2.0*ellipe(mm)*prefac/pi
+                                        G_elliptic_integral_factor = 2.0*ellipe(mm)*prefac/pi
+                                        H_elliptic_integral_factor = 2.0*ellipk(mm)/(pi*prefac)
                                         
                                         (G_weights[ivpa,ivperp,ivpap,ivperpp] += 
                                            lagrange_poly(igrid_vpa,vpa_nodes,x_vpa[kvpa])*lagrange_poly(igrid_vperp,vperp_nodes,x_vperp[kvperp])*
-                                            elliptic_integral_factor*x_vperp[kvperp]*w_vperp[kvperp]*w_vpa[kvpa]*2.0/sqrt(pi))
+                                            G_elliptic_integral_factor*x_vperp[kvperp]*w_vperp[kvperp]*w_vpa[kvpa]*2.0/sqrt(pi))
+                                        
+                                        (H_weights[ivpa,ivperp,ivpap,ivperpp] += 
+                                           lagrange_poly(igrid_vpa,vpa_nodes,x_vpa[kvpa])*lagrange_poly(igrid_vperp,vperp_nodes,x_vperp[kvperp])*
+                                            H_elliptic_integral_factor*x_vperp[kvperp]*w_vperp[kvperp]*w_vpa[kvpa]*2.0/sqrt(pi))
                                     end
                                 end
                             end
@@ -553,9 +566,11 @@ if abspath(PROGRAM_FILE) == @__FILE__
         #for ivperp in 1:nvperp
             #for ivpa in 1:nvpa 
                 Gs[ivpa,ivperp] = 0.0
+                Hs[ivpa,ivperp] = 0.0
                 for ivperpp in 1:nvperp
                     for ivpap in 1:nvpa
                         Gs[ivpa,ivperp] += G_weights[ivpa,ivperp,ivpap,ivperpp]*fs_in[ivpap,ivperpp]
+                        Hs[ivpa,ivperp] += H_weights[ivpa,ivperp,ivpap,ivperpp]*fs_in[ivpap,ivperpp]
                     end
                 end
             #end
@@ -566,6 +581,22 @@ if abspath(PROGRAM_FILE) == @__FILE__
         end
         begin_serial_region()
         @serial_region begin
+            @. H_err = abs(Hs - H_Maxwell)
+            max_H_err = maximum(H_err)
+            println("max_H_err: ",max_H_err)
+            @views heatmap(vperp.grid, vpa.grid, Hs[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                 windowsize = (360,240), margin = 15pt)
+                 outfile = string("fkpl_H_lagrange.pdf")
+                 savefig(outfile)
+            @views heatmap(vperp.grid, vpa.grid, H_Maxwell[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                 windowsize = (360,240), margin = 15pt)
+                 outfile = string("fkpl_H_Maxwell.pdf")
+                 savefig(outfile)
+             @views heatmap(vperp.grid, vpa.grid, H_err[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                 windowsize = (360,240), margin = 15pt)
+                 outfile = string("fkpl_H_err.pdf")
+                 savefig(outfile)
+                 
             @. G_err = abs(Gs - G_Maxwell)
             max_G_err = maximum(G_err)
             println("max_G_err: ",max_G_err)
