@@ -11,6 +11,8 @@ export calculate_collisional_fluxes, calculate_Maxwellian_Rosenbluth_coefficient
 export Cflux_vpa_Maxwellian_inputs, Cflux_vperp_Maxwellian_inputs
 export calculate_Rosenbluth_H_from_G!
 
+export d2Gdvpa2, dGdvperp, d2Gdvperpdvpa, d2Gdvperp2
+
 using SpecialFunctions: ellipk, ellipe, erf
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_shared_float
