@@ -12,6 +12,7 @@ export Cflux_vpa_Maxwellian_inputs, Cflux_vperp_Maxwellian_inputs
 export calculate_Rosenbluth_H_from_G!
 
 export d2Gdvpa2, dGdvperp, d2Gdvperpdvpa, d2Gdvperp2
+export dHdvpa, dHdvperp
 
 using SpecialFunctions: ellipk, ellipe, erf
 using ..type_definitions: mk_float, mk_int

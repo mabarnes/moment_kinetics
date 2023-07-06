@@ -19,6 +19,7 @@ using moment_kinetics.fokker_planck: calculate_collisional_fluxes, calculate_Max
 using moment_kinetics.fokker_planck: Cflux_vpa_Maxwellian_inputs, Cflux_vperp_Maxwellian_inputs
 using moment_kinetics.fokker_planck: calculate_Rosenbluth_H_from_G!
 using moment_kinetics.fokker_planck: d2Gdvpa2, dGdvperp, d2Gdvperpdvpa, d2Gdvperp2
+using moment_kinetics.fokker_planck: dHdvpa, dHdvperp
 using moment_kinetics.type_definitions: mk_float, mk_int
 using moment_kinetics.calculus: derivative!
 using moment_kinetics.velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_pressure
@@ -413,7 +414,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
                                        vzeta=1, vr=1, vz=1)
         
         @serial_region begin
-            println("beginning integration   ", Dates.format(now(), dateformat"H:MM:SS"))
+            println("beginning allocation   ", Dates.format(now(), dateformat"H:MM:SS"))
         end
         
         fs_in = Array{mk_float,2}(undef,nvpa,nvperp)
@@ -446,15 +447,26 @@ if abspath(PROGRAM_FILE) == @__FILE__
         H_weights = allocate_shared_float(nvpa,nvperp,nvpa,nvperp)
         Hs = allocate_shared_float(nvpa,nvperp)
         Hs_from_Gs = allocate_shared_float(nvpa,nvperp)
+        dHsdvpa = allocate_shared_float(nvpa,nvperp)
+        dHsdvperp = allocate_shared_float(nvpa,nvperp)
         #Gs = Array{mk_float,2}(undef,nvpa,nvperp)
         H_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
         H_err = Array{mk_float,2}(undef,nvpa,nvperp)
+        dHdvpa_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
+        dHdvpa_err = Array{mk_float,2}(undef,nvpa,nvperp)
+        dHdvperp_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
+        dHdvperp_err = Array{mk_float,2}(undef,nvpa,nvperp)
+        
+        
+        @serial_region begin
+            println("setting up input arrays   ", Dates.format(now(), dateformat"H:MM:SS"))
+        end
         
         # set up test Maxwellian
         dens = 1.0 #3.0/4.0
-        upar = 2.0/3.0
-        ppar = 2.0/3.0
-        pperp = 2.0/3.0
+        upar = 0.5 #2.0/3.0
+        ppar = 1.0 #2.0/3.0
+        pperp = 1.0 #2.0/3.0
         pres = get_pressure(ppar,pperp) 
         mi = 1.0
         vths = get_vth(pres,dens,mi)
@@ -468,6 +480,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 dGdvperp_Maxwell[ivpa,ivperp] = dGdvperp(dens,upar,vths,vpa,vperp,ivpa,ivperp)
                 d2Gdvperpdvpa_Maxwell[ivpa,ivperp] = d2Gdvperpdvpa(dens,upar,vths,vpa,vperp,ivpa,ivperp)
                 d2Gdvperp2_Maxwell[ivpa,ivperp] = d2Gdvperp2(dens,upar,vths,vpa,vperp,ivpa,ivperp)
+                dHdvperp_Maxwell[ivpa,ivperp] = dHdvperp(dens,upar,vths,vpa,vperp,ivpa,ivperp)
+                dHdvpa_Maxwell[ivpa,ivperp] = dHdvpa(dens,upar,vths,vpa,vperp,ivpa,ivperp)
             end
         end
         for ivperp in 1:nvperp
@@ -535,11 +549,21 @@ if abspath(PROGRAM_FILE) == @__FILE__
             return nothing
         end
         
+        
+        @serial_region begin
+            println("setting up GL quadrature   ", Dates.format(now(), dateformat"H:MM:SS"))
+        end
+        
         # get Gauss-Legendre points and weights on (-1,1)
         nquad = 2*ngrid
         x, w = gausslegendre(nquad)
         x_vpa, w_vpa = Array{mk_float,1}(undef,nquad), Array{mk_float,1}(undef,nquad)
         x_vperp, w_vperp = Array{mk_float,1}(undef,nquad), Array{mk_float,1}(undef,nquad)
+        
+        
+        @serial_region begin
+            println("beginning weights calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+        end
         
         # precalculated weights, integrating over Lagrange polynomials
         begin_vperp_vpa_region()
@@ -617,7 +641,13 @@ if abspath(PROGRAM_FILE) == @__FILE__
             #end
         end
         
-        _block_synchronize()
+        #_block_synchronize()
+        begin_serial_region()
+        @serial_region begin
+            println("beginning integration   ", Dates.format(now(), dateformat"H:MM:SS"))
+        end
+        
+        begin_vperp_vpa_region()
         
         # use precalculated weights to calculate Gs using nodal values of fs
         @loop_vperp_vpa ivperp ivpa begin
@@ -646,12 +676,25 @@ if abspath(PROGRAM_FILE) == @__FILE__
                             (1.0/vperp.grid[ivperp])*dGsdvperp[ivpa,ivperp]))
         end
         
-        plot_H = true
-        plot_d2Gdvperp2 = true
-        plot_d2Gdvperpdvpa = true
-        plot_dGdvperp = true
-        plot_d2Gdvpa2 = true
-        plot_G = true
+        begin_vperp_region()
+        @loop_vperp ivperp begin
+            @views derivative!(vpa.scratch, Hs_from_Gs[:,ivperp], vpa, vpa_spectral)
+            @. dHsdvpa[:,ivperp] = vpa.scratch
+        end
+        begin_vpa_region()
+        @loop_vpa ivpa begin
+            @views derivative!(vperp.scratch, Hs_from_Gs[ivpa,:], vperp, vperp_spectral)
+            @. dHsdvperp[ivpa,:] = vperp.scratch
+        end
+        
+        plot_H = false #true
+        plot_dHdvpa = false #true
+        plot_dHdvperp = false #true
+        plot_d2Gdvperp2 = false #true
+        plot_d2Gdvperpdvpa = false #true
+        plot_dGdvperp = false #true
+        plot_d2Gdvpa2 = false #true
+        plot_G = false #true
         
         begin_serial_region()
         @serial_region begin
@@ -662,6 +705,12 @@ if abspath(PROGRAM_FILE) == @__FILE__
             @. H_err = abs(Hs_from_Gs - H_Maxwell)
             max_H_err = maximum(H_err)
             println("max_H_from_G_err: ",max_H_err)
+            @. dHdvperp_err = abs(dHsdvperp - dHdvperp_Maxwell)
+            max_dHdvperp_err = maximum(dHdvperp_err)
+            println("max_dHdvperp_err: ",max_dHdvperp_err)
+            @. dHdvpa_err = abs(dHsdvpa - dHdvpa_Maxwell)
+            max_dHdvpa_err = maximum(dHdvpa_err)
+            println("max_dHdvpa_err: ",max_dHdvpa_err)
             if plot_H
                 @views heatmap(vperp.grid, vpa.grid, Hs[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
                      windowsize = (360,240), margin = 15pt)
@@ -678,6 +727,34 @@ if abspath(PROGRAM_FILE) == @__FILE__
                  @views heatmap(vperp.grid, vpa.grid, H_err[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
                      windowsize = (360,240), margin = 15pt)
                      outfile = string("fkpl_H_err.pdf")
+                     savefig(outfile)
+            end
+            if plot_dHdvpa
+                @views heatmap(vperp.grid, vpa.grid, dHsdvpa[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                     windowsize = (360,240), margin = 15pt)
+                     outfile = string("fkpl_dHdvpa_lagrange.pdf")
+                     savefig(outfile)
+                @views heatmap(vperp.grid, vpa.grid, dHdvpa_Maxwell[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                     windowsize = (360,240), margin = 15pt)
+                     outfile = string("fkpl_dHdvpa_Maxwell.pdf")
+                     savefig(outfile)
+                 @views heatmap(vperp.grid, vpa.grid, dHdvpa_err[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                     windowsize = (360,240), margin = 15pt)
+                     outfile = string("fkpl_dHdvpa_err.pdf")
+                     savefig(outfile)
+            end
+            if plot_dHdvperp
+                @views heatmap(vperp.grid, vpa.grid, dHsdvperp[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                     windowsize = (360,240), margin = 15pt)
+                     outfile = string("fkpl_dHdvperp_lagrange.pdf")
+                     savefig(outfile)
+                @views heatmap(vperp.grid, vpa.grid, dHdvperp_Maxwell[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                     windowsize = (360,240), margin = 15pt)
+                     outfile = string("fkpl_dHdvperp_Maxwell.pdf")
+                     savefig(outfile)
+                 @views heatmap(vperp.grid, vpa.grid, dHdvperp_err[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                     windowsize = (360,240), margin = 15pt)
+                     outfile = string("fkpl_dHdvperp_err.pdf")
                      savefig(outfile)
             end
             @. d2Gdvperp2_err = abs(d2Gsdvperp2 - d2Gdvperp2_Maxwell)
