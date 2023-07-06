@@ -607,30 +607,34 @@ if abspath(PROGRAM_FILE) == @__FILE__
                                         denom = (vpa_val - x_vpa[kvpa])^2 + (vperp_val + x_vperp[kvperp])^2 
                                         mm = 4.0*vperp_val*x_vperp[kvperp]/denom
                                         prefac = sqrt(denom)
-                                        G_elliptic_integral_factor = 2.0*ellipe(mm)*prefac/pi
-                                        G1_elliptic_integral_factor = -(2.0*prefac/pi)*( (2.0 - mm)*ellipe(mm) - 2.0*(1.0 - mm)*ellipk(mm) )/(3.0*mm)
-                                        G2_elliptic_integral_factor = (2.0*prefac/pi)*( (7.0*mm^2 + 8.0*mm - 8.0)*ellipe(mm) + 4.0*(2.0 - mm)*(1.0 - mm)*ellipk(mm) )/(15.0*mm^2)
-                                        G3_elliptic_integral_factor = (2.0*prefac/pi)*( 8.0*(mm^2 - mm + 1.0)*ellipe(mm) - 4.0*(2.0 - mm)*(1.0 - mm)*ellipk(mm) )/(15.0*mm^2)
-                                        H_elliptic_integral_factor = 2.0*ellipk(mm)/(pi*prefac)
+                                        ellipe_mm = ellipe(mm) 
+                                        ellipk_mm = ellipk(mm) 
+                                        G_elliptic_integral_factor = 2.0*ellipe_mm*prefac/pi
+                                        G1_elliptic_integral_factor = -(2.0*prefac/pi)*( (2.0 - mm)*ellipe_mm - 2.0*(1.0 - mm)*ellipk_mm )/(3.0*mm)
+                                        G2_elliptic_integral_factor = (2.0*prefac/pi)*( (7.0*mm^2 + 8.0*mm - 8.0)*ellipe_mm + 4.0*(2.0 - mm)*(1.0 - mm)*ellipk_mm )/(15.0*mm^2)
+                                        G3_elliptic_integral_factor = (2.0*prefac/pi)*( 8.0*(mm^2 - mm + 1.0)*ellipe_mm - 4.0*(2.0 - mm)*(1.0 - mm)*ellipk_mm )/(15.0*mm^2)
+                                        H_elliptic_integral_factor = 2.0*ellipk_mm/(pi*prefac)
+                                        lagrange_poly_vpa = lagrange_poly(igrid_vpa,vpa_nodes,x_vpa[kvpa])
+                                        lagrange_poly_vperp = lagrange_poly(igrid_vperp,vperp_nodes,x_vperp[kvperp])
                                         
                                         (G_weights[ivpa,ivperp,ivpap,ivperpp] += 
-                                           lagrange_poly(igrid_vpa,vpa_nodes,x_vpa[kvpa])*lagrange_poly(igrid_vperp,vperp_nodes,x_vperp[kvperp])*
+                                            lagrange_poly_vpa*lagrange_poly_vperp*
                                             G_elliptic_integral_factor*x_vperp[kvperp]*w_vperp[kvperp]*w_vpa[kvpa]*2.0/sqrt(pi))
                                         
                                         (G1_weights[ivpa,ivperp,ivpap,ivperpp] += 
-                                           lagrange_poly(igrid_vpa,vpa_nodes,x_vpa[kvpa])*lagrange_poly(igrid_vperp,vperp_nodes,x_vperp[kvperp])*
+                                            lagrange_poly_vpa*lagrange_poly_vperp*
                                             G1_elliptic_integral_factor*x_vperp[kvperp]*w_vperp[kvperp]*w_vpa[kvpa]*2.0/sqrt(pi))
                                         
                                         (G2_weights[ivpa,ivperp,ivpap,ivperpp] += 
-                                           lagrange_poly(igrid_vpa,vpa_nodes,x_vpa[kvpa])*lagrange_poly(igrid_vperp,vperp_nodes,x_vperp[kvperp])*
+                                            lagrange_poly_vpa*lagrange_poly_vperp*
                                             G2_elliptic_integral_factor*x_vperp[kvperp]*w_vperp[kvperp]*w_vpa[kvpa]*2.0/sqrt(pi))
                                         
                                         (G3_weights[ivpa,ivperp,ivpap,ivperpp] += 
-                                           lagrange_poly(igrid_vpa,vpa_nodes,x_vpa[kvpa])*lagrange_poly(igrid_vperp,vperp_nodes,x_vperp[kvperp])*
+                                            lagrange_poly_vpa*lagrange_poly_vperp*
                                             G3_elliptic_integral_factor*w_vperp[kvperp]*w_vpa[kvpa]*2.0/sqrt(pi))
                                         
                                         (H_weights[ivpa,ivperp,ivpap,ivperpp] += 
-                                           lagrange_poly(igrid_vpa,vpa_nodes,x_vpa[kvpa])*lagrange_poly(igrid_vperp,vperp_nodes,x_vperp[kvperp])*
+                                            lagrange_poly_vpa*lagrange_poly_vperp*
                                             H_elliptic_integral_factor*x_vperp[kvperp]*w_vperp[kvperp]*w_vpa[kvpa]*2.0/sqrt(pi))
                                     end
                                 end
