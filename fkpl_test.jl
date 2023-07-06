@@ -224,7 +224,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
     
     test_Rosenbluth_integrals = false#true
     test_collision_operator_fluxes = false#true 
-    test_Lagrange_integral = true
+    test_Lagrange_integral = false #true
+    test_Lagrange_integral_scan = true
     #ngrid = 9
     #nelement = 8 
     
@@ -398,7 +399,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         return max_G_err, max_H_err, max_H_check_err, max_dHdvpa_err, max_dHdvperp_err, max_d2Gdvperp2_err, max_d2Gdvpa2_err, max_d2Gdvperpdvpa_err
     end
     
-    function test_Lagrange_Rosenbluth_potentials(ngrid,nelement)
+    function test_Lagrange_Rosenbluth_potentials(ngrid,nelement; standalone=true)
         # set up grids for input Maxwellian
         vpa, vperp, vpa_spectral, vperp_spectral =  init_grids(nelement,ngrid)
         # set up necessary inputs for collision operator functions 
@@ -406,7 +407,9 @@ if abspath(PROGRAM_FILE) == @__FILE__
         nvpa = vpa.n
         
         # Set up MPI
-        initialize_comms!()
+        if standalone
+            initialize_comms!()
+        end
         setup_distributed_memory_MPI(1,1,1,1)
         looping.setup_loop_ranges!(block_rank[], block_size[];
                                        s=1, sn=1,
@@ -434,15 +437,15 @@ if abspath(PROGRAM_FILE) == @__FILE__
         d2Gsdvperp2 = allocate_shared_float(nvpa,nvperp)
         #Gs = Array{mk_float,2}(undef,nvpa,nvperp)
         G_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
-        G_err = Array{mk_float,2}(undef,nvpa,nvperp)
+        G_err = allocate_shared_float(nvpa,nvperp)
         d2Gdvpa2_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
-        d2Gdvpa2_err = Array{mk_float,2}(undef,nvpa,nvperp)
+        d2Gdvpa2_err = allocate_shared_float(nvpa,nvperp)
         dGdvperp_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
-        dGdvperp_err = Array{mk_float,2}(undef,nvpa,nvperp)
+        dGdvperp_err = allocate_shared_float(nvpa,nvperp)
         d2Gdvperpdvpa_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
-        d2Gdvperpdvpa_err = Array{mk_float,2}(undef,nvpa,nvperp)
+        d2Gdvperpdvpa_err = allocate_shared_float(nvpa,nvperp)
         d2Gdvperp2_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
-        d2Gdvperp2_err = Array{mk_float,2}(undef,nvpa,nvperp)
+        d2Gdvperp2_err = allocate_shared_float(nvpa,nvperp)
         
         H_weights = allocate_shared_float(nvpa,nvperp,nvpa,nvperp)
         Hs = allocate_shared_float(nvpa,nvperp)
@@ -451,11 +454,11 @@ if abspath(PROGRAM_FILE) == @__FILE__
         dHsdvperp = allocate_shared_float(nvpa,nvperp)
         #Gs = Array{mk_float,2}(undef,nvpa,nvperp)
         H_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
-        H_err = Array{mk_float,2}(undef,nvpa,nvperp)
+        H_err = allocate_shared_float(nvpa,nvperp)
         dHdvpa_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
-        dHdvpa_err = Array{mk_float,2}(undef,nvpa,nvperp)
+        dHdvpa_err = allocate_shared_float(nvpa,nvperp)
         dHdvperp_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
-        dHdvperp_err = Array{mk_float,2}(undef,nvpa,nvperp)
+        dHdvperp_err = allocate_shared_float(nvpa,nvperp)
         
         
         @serial_region begin
@@ -851,7 +854,13 @@ if abspath(PROGRAM_FILE) == @__FILE__
                      savefig(outfile)
             end
         end
-        return nothing
+        _block_synchronize()
+        if standalone 
+            finalize_comms!()
+        end
+        println(maximum(G_err), maximum(H_err), maximum(dHdvpa_err), maximum(dHdvperp_err), maximum(d2Gdvperp2_err), maximum(d2Gdvpa2_err), maximum(d2Gdvperpdvpa_err), maximum(dGdvperp_err))
+        
+        return maximum(G_err), maximum(H_err), maximum(dHdvpa_err), maximum(dHdvperp_err), maximum(d2Gdvperp2_err), maximum(d2Gdvpa2_err), maximum(d2Gdvperpdvpa_err), maximum(dGdvperp_err)
     end
     
     function test_collision_operator(nelement,ngrid)
@@ -1175,7 +1184,56 @@ if abspath(PROGRAM_FILE) == @__FILE__
     if test_Lagrange_integral
         ngrid = 9
         nelement = 4
-        test_Lagrange_Rosenbluth_potentials(ngrid,nelement)
+        test_Lagrange_Rosenbluth_potentials(ngrid,nelement,standalone=true)
+    end
+    if test_Lagrange_integral_scan
+        initialize_comms!()
+        ngrid = 9
+        nscan = 3
+        #nelement_list = Int[2, 4, 8, 16, 32]
+        nelement_list = Int[2, 4, 8]
+        max_G_err = Array{mk_float,1}(undef,nscan)
+        max_H_err = Array{mk_float,1}(undef,nscan)
+        max_dHdvpa_err = Array{mk_float,1}(undef,nscan)
+        max_dHdvperp_err = Array{mk_float,1}(undef,nscan)
+        max_d2Gdvperp2_err = Array{mk_float,1}(undef,nscan)
+        max_d2Gdvpa2_err = Array{mk_float,1}(undef,nscan)
+        max_d2Gdvperpdvpa_err = Array{mk_float,1}(undef,nscan)
+        max_dGdvperp_err = Array{mk_float,1}(undef,nscan)
+        expected = Array{mk_float,1}(undef,nscan)
+        expected_nelement_scaling!(expected,nelement_list,ngrid,nscan)
+        expected_label = L"(1/N_{el})^{n_g - 1}"
+        
+        for iscan in 1:nscan
+            local nelement = nelement_list[iscan]
+            ((max_G_err[iscan], max_H_err[iscan], 
+            max_dHdvpa_err[iscan],
+            max_dHdvperp_err[iscan], max_d2Gdvperp2_err[iscan],
+            max_d2Gdvpa2_err[iscan], max_d2Gdvperpdvpa_err[iscan],
+            max_dGdvperp_err[iscan])
+            = test_Lagrange_Rosenbluth_potentials(ngrid,nelement,standalone=false))
+        end
+        fontsize = 8
+        ytick_sequence = Array([1.0e-13,1.0e-12,1.0e-11,1.0e-10,1.0e-9,1.0e-8,1.0e-7,1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0,1.0e1])
+        xlabel = L"N_{element}"
+        Glabel = L"\epsilon(G)"
+        Hlabel = L"\epsilon(H)"
+        dHdvpalabel = L"\epsilon(dH/d v_{\|\|})"
+        dHdvperplabel = L"\epsilon(dH/d v_{\perp})"
+        d2Gdvperp2label = L"\epsilon(d^2G/d v_{\perp}^2)"
+        d2Gdvpa2label = L"\epsilon(d^2G/d v_{\|\|}^2)"
+        d2Gdvperpdvpalabel = L"\epsilon(d^2G/d v_{\perp} d v_{\|\|})"
+        dGdvperplabel = L"\epsilon(dG/d v_{\perp})"
+        println(max_G_err,max_H_err,max_dHdvpa_err,max_dHdvperp_err,max_d2Gdvperp2_err,max_d2Gdvpa2_err,max_d2Gdvperpdvpa_err,max_dGdvperp_err, expected)
+        plot(nelement_list, [max_G_err,max_H_err,max_dHdvpa_err,max_dHdvperp_err,max_d2Gdvperp2_err,max_d2Gdvpa2_err,max_d2Gdvperpdvpa_err,max_dGdvperp_err, expected],
+        xlabel=xlabel, label=[Glabel Hlabel dHdvpalabel dHdvperplabel d2Gdvperp2label d2Gdvpa2label d2Gdvperpdvpalabel dGdvperplabel expected_label], ylabel="",
+         shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_list, nelement_list), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2, 
+          xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize,
+          foreground_color_legend = nothing, background_color_legend = nothing, legend=:bottomleft)
+        outfile = "fkpl_coeffs_numerical_lagrange_integration_test.pdf"
+        savefig(outfile)
+        println(outfile)
+        finalize_comms!()
     end
     ## evaluate the collision operator with numerically computed G & H 
     #println("TEST: Css'[F_M,F_M] with numerical G[F_M] & H[F_M]")
