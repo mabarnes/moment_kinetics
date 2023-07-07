@@ -1,0 +1,67 @@
+n_ion_species = 1
+n_neutral_species = 0
+electron_physics = "boltzmann_electron_response"
+evolve_moments_density = false
+evolve_moments_parallel_flow = false
+evolve_moments_parallel_pressure = false
+evolve_moments_conservation = false
+T_e = 1.0
+Bzed = 0.5
+Bmag = 1.0
+initial_density1 = 1.0
+initial_temperature1 = 1.0
+z_IC_option1 = "2D-instability-test"
+z_IC_wavenumber1 = 20
+z_IC_density_amplitude1 = 0.03
+z_IC_density_phase1 = 0.0
+z_IC_upar_amplitude1 = 0.0
+z_IC_upar_phase1 = 0.0
+z_IC_temperature_amplitude1 = 0.2
+z_IC_temperature_phase1 = 4.0
+r_IC_option1 = "2D-instability-test"
+r_IC_density_amplitude1 = 1.0e-7
+r_IC_density_phase1 = 0.0
+r_IC_upar_amplitude1 = 0.0
+r_IC_upar_phase1 = 0.0
+r_IC_temperature_amplitude1 = 1.0e-7
+r_IC_temperature_phase1 = 0.0
+charge_exchange_frequency = 0.0
+ionization_frequency = 0.0
+nstep = 400000
+dt = 1.0e-4
+nwrite = 200
+nwrite_dfns = 2000
+use_semi_lagrange = false
+n_rk_stages = 4
+split_operators = false
+z_ngrid = 17
+z_nelement = 32
+z_nelement_local = 4
+z_bc = "periodic"
+z_discretization = "chebyshev_pseudospectral"
+r_ngrid = 17
+r_nelement = 2
+r_L = 1.0e-3
+r_bc = "periodic"
+r_discretization = "chebyshev_pseudospectral"
+vpa_ngrid = 17
+vpa_nelement = 8
+vpa_L = 12.0
+vpa_bc = "both_zero"
+vpa_discretization = "chebyshev_pseudospectral"
+
+vperp_ngrid = 1
+vperp_nelement = 1
+vperp_L = 6.0
+vperp_bc = "periodic"
+vperp_discretization = "chebyshev_pseudospectral"
+
+[manufactured_solns]
+use_for_advance = true # Use manufactured sources to maintain constant background
+use_for_init = false
+type = "2D-instability"
+
+[numerical_dissipation]
+#r_dissipation_coefficient = 6.0e-10
+#z_dissipation_coefficient = 1.0e-3
+vpa_dissipation_coefficient = 1.5e-2
