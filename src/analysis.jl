@@ -10,6 +10,7 @@ using ..array_allocation: allocate_float
 using ..calculus: integral
 using ..interpolation: interpolate_to_grid_1d
 using ..load_data: open_readonly_output_file, get_nranks, load_pdf_data, load_rank_data
+using ..load_data: load_distributed_charged_pdf_slice
 using ..velocity_moments: integrate_over_vspace
 
 using FFTW
@@ -88,7 +89,7 @@ TeN / (2 neN sqrt(pi)) * ∫dvpaN fN / vpaN^2 ≤ 1
 
 Note that `integrate_over_vspace()` includes the 1/sqrt(pi) factor already.
 """
-function check_Chodura_condition(run_name, vpa_grid, vpa_wgts, vperp_grid, vperp_wgts,
+function check_Chodura_condition(run_name, vperp_global, vpa_global, r, z, vperp, vpa,
                                  dens, T_e, Er, geometry, z_bc, nblocks)
 
     if z_bc != "wall"
@@ -103,28 +104,12 @@ function check_Chodura_condition(run_name, vpa_grid, vpa_wgts, vperp_grid, vperp
     f_lower = nothing
     f_upper = nothing
     z_nrank, r_nrank = get_nranks(run_name, nblocks, "dfns")
-    for iblock in 0:nblocks-1
-        fid_pdfs = open_readonly_output_file(run_name,"dfns",iblock=iblock)
-        z_irank, r_irank = load_rank_data(fid_pdfs)
-        if z_irank == 0
-            if f_lower === nothing
-                f_lower = load_pdf_data(fid_pdfs)
-            else
-                # Concatenate along r-dimension
-                f_lower = cat(f_lower, load_pdf_data(fid_pdfs); dims=4)
-            end
-        end
-        if z_irank == z_nrank - 1
-            if f_upper === nothing
-                f_upper = load_pdf_data(fid_pdfs)
-            else
-                # Concatenate along r-dimension
-                f_upper = cat(f_upper, load_pdf_data(fid_pdfs); dims=4)
-            end
-        end
-    end
+    f_lower = load_distributed_charged_pdf_slice(run_name, nblocks, :, n_ion_species, r,
+                                                 z, vperp, vpa; z=1)
+    f_upper = load_distributed_charged_pdf_slice(run_name, nblocks, :, n_ion_species, r,
+                                                 z, vperp, vpa; z=z.n_global)
     for it ∈ 1:ntime, ir ∈ 1:nr
-        vpabar = @. vpa_grid - 0.5 * geometry.rhostar * Er[1,ir,it] / geometry.bzed
+        vpabar = @. vpa_global.grid - 0.5 * geometry.rhostar * Er[1,ir,it] / geometry.bzed
 
         # Get rid of a zero if it is there to avoid a blow up - f should be zero at that
         # point anyway
@@ -135,8 +120,8 @@ function check_Chodura_condition(run_name, vpa_grid, vpa_wgts, vperp_grid, vperp
         end
 
         @views lower_result[ir,it] =
-            integrate_over_vspace(f_lower[:,:,1,ir,is,it], vpabar, -2, vpa_wgts,
-                                  vperp_grid, 0, vperp_wgts)
+            integrate_over_vspace(f_lower[:,:,1,ir,is,it], vpabar, -2, vpa_global.wgts,
+                                  vperp_global.grid, 0, vperp_global.wgts)
         if it == ntime
             println("check vpabar lower", vpabar)
             println("result lower ", lower_result[ir,it])
@@ -144,7 +129,7 @@ function check_Chodura_condition(run_name, vpa_grid, vpa_wgts, vperp_grid, vperp
 
         lower_result[ir,it] *= 0.5 * T_e / dens[1,ir,is,it]
 
-        vpabar = @. vpa_grid - 0.5 * geometry.rhostar * Er[end,ir,it] / geometry.bzed
+        vpabar = @. vpa_global.grid - 0.5 * geometry.rhostar * Er[end,ir,it] / geometry.bzed
 
         # Get rid of a zero if it is there to avoid a blow up - f should be zero at that
         # point anyway
@@ -155,8 +140,8 @@ function check_Chodura_condition(run_name, vpa_grid, vpa_wgts, vperp_grid, vperp
         end
 
         @views upper_result[ir,it] =
-            integrate_over_vspace(f_upper[:,:,end,ir,is,it], vpabar, -2, vpa_wgts,
-                                  vperp_grid, 0, vperp_wgts)
+            integrate_over_vspace(f_upper[:,:,end,ir,is,it], vpabar, -2, vpa_global.wgts,
+                                  vperp_global.grid, 0, vperp_global.wgts)
         if it == ntime
             println("check vpabar upper ", vpabar)
             println("result upper ", upper_result[ir,it])
