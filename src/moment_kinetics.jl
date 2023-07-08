@@ -257,10 +257,15 @@ function restart_moment_kinetics(restart_filename::String, input_dict::Dict,
         dfns_filename, backup_dfns_filename, parallel_io, moments_filename,
         backup_moments_filename, backup_prefix_iblock =
             get_backup_filename(restart_filename)
+        # Ensure every process got the filenames and checked files exist before moving
+        # files
+        MPI.Barrier(comm_world)
         if (parallel_io && global_rank[] == 0) || (!parallel_io && block_rank[] == 0)
             mv(dfns_filename, backup_dfns_filename)
             mv(moments_filename, backup_moments_filename)
         end
+        # Ensure files have been moved before any process tries to read from them
+        MPI.Barrier(comm_world)
 
         # Set up all the structs, etc. needed for a run.
         mk_state = setup_moment_kinetics(input_dict,
