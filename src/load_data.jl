@@ -252,7 +252,9 @@ function load_time_data(fid; printout=false)
     time = load_variable(group, "time")
     for f ∈ fid[2:end]
         group = get_group(f, "dynamic_data")
-        time = vcat(time, load_variable(group, "time"))
+        # Skip first point as this is a duplicate of the last point of the previous
+        # restart.
+        time = vcat(time[2:end], load_variable(group, "time"))
     end
     ntime = length(time)
 
@@ -690,9 +692,17 @@ function load_distributed_charged_pdf_slice(run_names::Tuple, nblocks::Tuple, t_
 
             f_local_slice = load_pdf_data(fid)
 
-            ntime_local = size(f_local_slice, ndims(f_local_slice))
+            if local_tind_start > 1
+                # The run being loaded is a restart (as local_tind_start=1 for the first
+                # run), so skip the first point, as this is a duplicate of the last point
+                # of the previous restart
+                skip_first = 1
+            else
+                skip_first = 0
+            end
+            ntime_local = size(f_local_slice, ndims(f_local_slice)) - skip_first
             local_tind_end = local_tind_start + ntime_local - 1
-            local_t_range = collect(it - local_tind_start + 1
+            local_t_range = collect(it - local_tind_start + 1 + skip_first
                                     for it ∈ t_range
                                     if local_tind_start <= it <= local_tind_end)
             global_tind_end = global_tind_start + length(local_t_range) - 1
@@ -841,9 +851,17 @@ function load_distributed_neutral_pdf_slice(run_names::Tuple, nblocks::Tuple, t_
 
             f_local_slice = load_neutral_pdf_data(fid)
 
-            ntime_local = size(f_local_slice, ndims(f_local_slice))
+            if local_tind_start > 1
+                # The run being loaded is a restart (as local_tind_start=1 for the first
+                # run), so skip the first point, as this is a duplicate of the last point
+                # of the previous restart
+                skip_first = 1
+            else
+                skip_first = 0
+            end
+            ntime_local = size(f_local_slice, ndims(f_local_slice)) - skip_first
             local_tind_end = local_tind_start + ntime_local - 1
-            local_t_range = collect(it - local_tind_start + 1
+            local_t_range = collect(it - local_tind_start + 1 + skip_first
                                     for it ∈ t_range
                                     if local_tind_start <= it <= local_tind_end)
             global_tind_end = global_tind_start + length(local_t_range) - 1

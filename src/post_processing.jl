@@ -141,6 +141,12 @@ function read_distributed_zr_data!(var::Array{mk_float,N}, var_name::String,
                 # returned 0
                 offset = iskip
             end
+            if local_tind_start > 1
+                # The run being loaded is a restart (as local_tind_start=1 for the first
+                # run), so skip the first point, as this is a duplicate of the last point
+                # of the previous restart
+                offset += 1
+            end
 
             local_tind_end = local_tind_start + ntime_local - 1
             global_tind_end = global_tind_start + length(offset:iskip:ntime_local) - 1
