@@ -250,11 +250,14 @@ function load_time_data(fid; printout=false)
 
     group = get_group(first(fid), "dynamic_data")
     time = load_variable(group, "time")
+    restarts_nt = [length(time)]
     for f ∈ fid[2:end]
         group = get_group(f, "dynamic_data")
         # Skip first point as this is a duplicate of the last point of the previous
         # restart.
-        time = vcat(time, load_variable(group, "time")[2:end])
+        this_time = load_variable(group, "time")
+        push!(restarts_nt, length(this_time))
+        time = vcat(time, this_time[2:end])
     end
     ntime = length(time)
 
@@ -262,7 +265,7 @@ function load_time_data(fid; printout=false)
         println("done.")
     end
 
-    return ntime, time
+    return ntime, time, restarts_nt
 end
 
 """
@@ -438,7 +441,7 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
             dynamic = get_group(fid, "dynamic_data")
             parallel_io = load_variable(overview, "parallel_io")
             if time_index < 0
-                time_index, _ = load_time_data(fid)
+                time_index, _, _ = load_time_data(fid)
             end
 
             if parallel_io
