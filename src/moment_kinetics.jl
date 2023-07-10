@@ -57,6 +57,7 @@ include("post_processing_input.jl")
 include("post_processing.jl")
 include("plot_MMS_sequence.jl")
 include("plot_sequence.jl")
+include("makie_post_processing.jl")
 include("time_advance.jl")
 
 using TimerOutputs
