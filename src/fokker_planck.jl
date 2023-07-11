@@ -12,7 +12,8 @@ export Cflux_vpa_Maxwellian_inputs, Cflux_vperp_Maxwellian_inputs
 export calculate_Rosenbluth_H_from_G!
 
 export d2Gdvpa2, dGdvperp, d2Gdvperpdvpa, d2Gdvperp2
-export dHdvpa, dHdvperp
+export dHdvpa, dHdvperp, Cssp_Maxwellian_inputs
+export F_Maxwellian
 
 using SpecialFunctions: ellipk, ellipe, erf
 using ..type_definitions: mk_float, mk_int
@@ -507,6 +508,79 @@ function dHdvpa(dens::mk_float,upar::mk_float,vth::mk_float,
     eta = eta_func(upar,vth,vpa,vperp,ivpa,ivperp)
     fac = dHdeta(eta)*(vpa.grid[ivpa]-upar)*dens/(eta*vth^3)
     return fac 
+end
+
+function F_Maxwellian(dens::mk_float,upar::mk_float,vth::mk_float,
+                        vpa,vperp,ivpa,ivperp)
+    eta = eta_func(upar,vth,vpa,vperp,ivpa,ivperp)
+    fac = (dens/(vth^3))*exp(-eta^2)
+    return fac
+end
+
+function dFdvpa_Maxwellian(dens::mk_float,upar::mk_float,vth::mk_float,
+                        vpa,vperp,ivpa,ivperp)
+    eta = eta_func(upar,vth,vpa,vperp,ivpa,ivperp)
+    fac = -2.0*(dens/(vth^4))*((vpa.grid[ivpa] - upar)/vth)*exp(-eta^2)
+    return fac
+end
+
+function dFdvperp_Maxwellian(dens::mk_float,upar::mk_float,vth::mk_float,
+                        vpa,vperp,ivpa,ivperp)
+    eta = eta_func(upar,vth,vpa,vperp,ivpa,ivperp)
+    fac = -2.0*(dens/(vth^4))*(vperp.grid[ivperp]/vth)*exp(-eta^2)
+    return fac
+end
+
+function d2Fdvperpdvpa_Maxwellian(dens::mk_float,upar::mk_float,vth::mk_float,
+                        vpa,vperp,ivpa,ivperp)
+    eta = eta_func(upar,vth,vpa,vperp,ivpa,ivperp)
+    fac = 4.0*(dens/(vth^5))*(vperp.grid[ivperp]/vth)*((vpa.grid[ivpa] - upar)/vth)*exp(-eta^2)
+    return fac
+end
+
+function d2Fdvpa2_Maxwellian(dens::mk_float,upar::mk_float,vth::mk_float,
+                        vpa,vperp,ivpa,ivperp)
+    eta = eta_func(upar,vth,vpa,vperp,ivpa,ivperp)
+    fac = 4.0*(dens/(vth^5))*( ((vpa.grid[ivpa] - upar)/vth)^2 - 0.5 )*exp(-eta^2)
+    return fac
+end
+
+function d2Fdvperp2_Maxwellian(dens::mk_float,upar::mk_float,vth::mk_float,
+                        vpa,vperp,ivpa,ivperp)
+    eta = eta_func(upar,vth,vpa,vperp,ivpa,ivperp)
+    fac = 4.0*(dens/(vth^5))*((vperp.grid[ivperp]/vth)^2 - 0.5)*exp(-eta^2)
+    return fac
+end
+
+function Cssp_Maxwellian_inputs(denss::mk_float,upars::mk_float,vths::mk_float,ms::mk_float,
+                                denssp::mk_float,uparsp::mk_float,vthsp::mk_float,msp::mk_float,
+                                nussp::mk_float,vpa,vperp,ivpa,ivperp)
+    
+    d2Fsdvpa2 = d2Fdvpa2_Maxwellian(denss,upars,vths,vpa,vperp,ivpa,ivperp)
+    d2Fsdvperp2 = d2Fdvperp2_Maxwellian(denss,upars,vths,vpa,vperp,ivpa,ivperp)
+    d2Fsdvperpdvpa = d2Fdvperpdvpa_Maxwellian(denss,upars,vths,vpa,vperp,ivpa,ivperp)
+    dFsdvperp = dFdvperp_Maxwellian(denss,upars,vths,vpa,vperp,ivpa,ivperp)
+    dFsdvpa = dFdvpa_Maxwellian(denss,upars,vths,vpa,vperp,ivpa,ivperp)
+    Fs = F_Maxwellian(denss,upars,vths,vpa,vperp,ivpa,ivperp)
+    
+    d2Gspdvpa2 = d2Gdvpa2(denssp,uparsp,vthsp,vpa,vperp,ivpa,ivperp)
+    d2Gspdvperp2 = d2Gdvperp2(denssp,uparsp,vthsp,vpa,vperp,ivpa,ivperp)
+    d2Gspdvperpdvpa = d2Gdvperpdvpa(denssp,uparsp,vthsp,vpa,vperp,ivpa,ivperp)
+    dGspdvperp = dGdvperp(denssp,uparsp,vthsp,vpa,vperp,ivpa,ivperp)
+    dHspdvperp = dHdvperp(denssp,uparsp,vthsp,vpa,vperp,ivpa,ivperp)
+    dHspdvpa = dHdvpa(denssp,uparsp,vthsp,vpa,vperp,ivpa,ivperp)
+    Fsp = F_Maxwellian(denssp,uparsp,vthsp,vpa,vperp,ivpa,ivperp)
+    
+    ( Cssp_Maxwellian = 
+        d2Fsdvpa2*d2Gspdvpa2 + 
+        d2Fsdvperp2*d2Gspdvperp2 + 
+        2.0*d2Fsdvperpdvpa*d2Gspdvperpdvpa + 
+        (1.0/(vperp.grid[ivperp]^2))*dFsdvperp*dGspdvperp +
+        2.0*(1.0 - (ms/msp))*(dFsdvpa*dHspdvpa + dFsdvperp*dHspdvperp) +
+        (8.0/sqrt(pi))*(ms/msp)*Fs*Fsp ) 
+        
+    Cssp_Maxwellian *= nussp
+    return Cssp_Maxwellian
 end
 
 function Cflux_vpa_Maxwellian_inputs(ms::mk_float,denss::mk_float,upars::mk_float,vths::mk_float,
