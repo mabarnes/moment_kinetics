@@ -9,10 +9,14 @@ export GaussLegendreLobatto_mass_matrix!
 export GaussLegendreLobatto_inverse_mass_matrix!
 export GaussLegendreLobatto_K_matrix!
 export GaussLegendreLobatto_S_matrix!
+export scaled_gauss_legendre_lobatto_grid
+export scaled_gauss_legendre_radau_grid
 
 using FastGaussQuadrature
 using LegendrePolynomials: Pl
 using LinearAlgebra: mul!
+using ..type_definitions: mk_float, mk_int
+using ..array_allocation: allocate_float
 
 """
 Formula for differentiation matrix taken from p196 of Chpt `The Spectral Elemtent Method' of 
@@ -175,6 +179,92 @@ function GaussLegendreLobatto_K_matrix!(KK,ngrid,DD,wgts,L)
         end
     end
     return nothing
+end
+
+"""
+function for setting up the full Gauss-Legendre-Lobatto
+grid and collocation point weights
+"""
+function scaled_gauss_legendre_lobatto_grid(ngrid, nelement_global, nelement_local,
+ n, irank, box_length, imin, imax)
+    # get Gauss-Legendre-Lobatto points and weights on [-1,1]
+    x, w = gausslobatto(ngrid)
+    # factor with maps [-1,1] -> [-L/2, L/2]
+    scale_factor = 0.5*box_length/float(nelement_global)
+    # grid and weights arrays
+    grid = allocate_float(n)
+    wgts = allocate_float(n)
+    wgts .= 0.0
+    #integer to deal with the overlap of element boundaries
+    k = 1
+    @inbounds for j in 1:nelement_local
+        # calculate the grid avoiding overlap
+        iel_global = j + irank*nelement_local
+        shift = box_length*((float(iel_global)-0.5)/float(nelement_global) - 0.5)
+        @. grid[imin[j]:imax[j]] = scale_factor*x[k:ngrid] + shift
+        
+        # calculate the weights
+        # remembering on boundary points to include weights
+        # from both left and right elements
+        #println(imin[j]," ",imax[j])
+        @. wgts[imin[j] - k + 1:imax[j]] += scale_factor*w[1:ngrid] 
+        
+        k = 2        
+    end
+    return grid, wgts
+end
+
+"""
+function for setting up the full Gauss-Legendre-Radau
+grid and collocation point weights
+see comments of Gauss-Legendre-Lobatto routine above
+"""
+function scaled_gauss_legendre_radau_grid(ngrid, nelement_global, nelement_local,
+ n, irank, box_length, imin, imax)
+    # get Gauss-Legendre-Lobatto points and weights on [-1,1]
+    x_lob, w_lob = gausslobatto(ngrid)
+    # get Gauss-Legendre-Radau points and weights on [-1,1)
+    x_rad, w_rad = gaussradau(ngrid)
+    # transform to a Gauss-Legendre-Radau grid on (-1,1]
+    x_rad, w_rad = -reverse(x_rad), reverse(w_rad)#
+    
+    # factor with maps [-1,1] -> [-L/2, L/2]
+    scale_factor = 0.5*box_length/float(nelement_global)
+    # grid and weights arrays
+    grid = allocate_float(n)
+    wgts = allocate_float(n)
+    wgts .= 0.0
+    if irank == 0
+        # for 1st element, fill in with Gauss-Legendre-Radau points
+        j = 1
+        iel_global = j + irank*nelement_local
+        shift = box_length*((float(iel_global)-0.5)/float(nelement_global) - 0.5)
+        @. grid[imin[j]:imax[j]] = scale_factor*x_rad[1:ngrid] + shift
+        @. wgts[imin[j]:imax[j]] += scale_factor*w_rad[1:ngrid]         
+        
+        #integer to deal with the overlap of element boundaries
+        k = 2
+        @inbounds for j in 2:nelement_local
+            # calculate the grid avoiding overlap
+            iel_global = j + irank*nelement_local
+            shift = box_length*((float(iel_global)-0.5)/float(nelement_global) - 0.5)
+            @. grid[imin[j]:imax[j]] = scale_factor*x_lob[k:ngrid] + shift
+            @. wgts[imin[j] - k + 1:imax[j]] += scale_factor*w_lob[1:ngrid]         
+        end
+    else # all elements are Gauss-Legendre-Lobatto
+        #integer to deal with the overlap of element boundaries
+        k = 1
+        @inbounds for j in 1:nelement_local
+            # calculate the grid avoiding overlap
+            iel_global = j + irank*nelement_local
+            shift = box_length*((float(iel_global)-0.5)/float(nelement_global) - 0.5)
+            @. grid[imin[j]:imax[j]] = scale_factor*x_lob[k:ngrid] + shift
+            @. wgts[imin[j] - k + 1:imax[j]] += scale_factor*w_lob[1:ngrid]
+            
+            k = 2 
+        end
+    end
+    return grid, wgts
 end
 
 end

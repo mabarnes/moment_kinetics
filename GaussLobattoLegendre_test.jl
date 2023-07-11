@@ -9,6 +9,8 @@ using Measures
 
 import moment_kinetics
 using moment_kinetics.gausslegendre
+using moment_kinetics.input_structs: grid_input, advection_input
+using moment_kinetics.coordinates: define_coordinate
 
 if abspath(PROGRAM_FILE) == @__FILE__
     using Pkg
@@ -168,4 +170,58 @@ if abspath(PROGRAM_FILE) == @__FILE__
     #println(df_exact)
     max_df_err = maximum(df_err)
     println("max df_err: ",max_df_err)
+    
+    # elemental grid tests 
+    ngrid = 33
+    nelement = 3
+    y_ngrid = ngrid #number of points per element 
+    y_nelement_local = nelement # number of elements per rank
+    y_nelement_global = y_nelement_local # total number of elements 
+    y_L = 12.0 #physical box size in reference units 
+    bc = "zero" 
+    discretization = "gausslegendre_pseudospectral"
+    # fd_option and adv_input not actually used so given values unimportant
+    fd_option = "fourth_order_centered"
+    cheb_option = "matrix"
+    adv_input = advection_input("default", 1.0, 0.0, 0.0)
+    nrank = 1
+    irank = 0
+    comm = MPI.COMM_NULL
+    # create the 'input' struct containing input info needed to create a
+    # coordinate
+    y_input = grid_input("y", y_ngrid, y_nelement_global, y_nelement_local, 
+        nrank, irank, y_L, discretization, fd_option, cheb_option, bc, adv_input,comm)
+    
+    # create the coordinate structs
+    y = define_coordinate(y_input)
+    println("y.grid: ",y.grid)
+    println("y.wgts: ",y.wgts)
+    x, w = gausslobatto(y.ngrid)
+    println("Gauss Lobatto Legendre")
+    println("x: ",x)
+    println("w: ",w)
+    
+    f_exact = Array{Float64,1}(undef,y.n)
+    df_exact = Array{Float64,1}(undef,y.n)
+    df_num = Array{Float64,1}(undef,y.n)
+    df_err = Array{Float64,1}(undef,y.n)
+    
+    for iy in 1:y.n
+        f_exact[iy] = exp(-y.grid[iy]^2)
+        df_exact[iy] = -2.0*y.grid[iy]*exp(-y.grid[iy]^2)
+        
+        #f_exact[iy] = -2.0*y.grid[iy]*exp(-y.grid[iy]^2)
+        #df_exact[iy] = (4.0*y.grid[iy]^2 - 2.0)*exp(-y.grid[iy]^2)
+    end
+    F_exact = sqrt(pi)
+    # do a test integration
+    println(f_exact)
+    F_num = sum(y.wgts.*f_exact)
+    F_err = abs(F_num - F_exact)
+    #for ix in 1:ngrid
+    #    F_num += w[ix]*df_exact[ix]
+    #end
+    println("F_err: ", F_err,  " F_exact: ",F_exact, " F_num: ", F_num)
+    
+    
 end

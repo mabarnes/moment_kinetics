@@ -8,6 +8,7 @@ export equally_spaced_grid
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_int
 using ..chebyshev: scaled_chebyshev_grid, scaled_chebyshev_radau_grid
+using ..gausslegendre: scaled_gauss_legendre_lobatto_grid, scaled_gauss_legendre_radau_grid
 using ..quadrature: composite_simpson_weights
 using ..input_structs: advection_input
 
@@ -187,6 +188,15 @@ function init_grid(ngrid, nelement_global, nelement_local, n_global, n_local, ir
             # 'wgts' are the integration weights attached to each grid points
             # that are those associated with Clenshaw-Curtis quadrature
             grid, wgts = scaled_chebyshev_grid(ngrid, nelement_global, nelement_local, n_local, irank, L, imin, imax)
+        end
+    elseif discretization == "gausslegendre_pseudospectral"
+        if name == "vperp"
+            grid, wgts = scaled_gauss_legendre_radau_grid(ngrid, nelement_global, nelement_local, n_local, irank, L, imin, imax)
+            grid .= grid .+ L/2.0      # shift to [0,L] appropriate to vperp variable
+            wgts = 2.0 .* wgts .* grid # to include 2 vperp in jacobian of integral
+                                       # see note above on normalisation
+        else
+            grid, wgts = scaled_gauss_legendre_lobatto_grid(ngrid, nelement_global, nelement_local, n_local, irank, L, imin, imax)
         end
     elseif discretization == "finite_difference"
         if name == "vperp"
