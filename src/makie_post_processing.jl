@@ -5,6 +5,7 @@ module makie_post_processing
 
 export makie_post_process
 
+using ..analysis: get_r_perturbation, get_Fourier_modes_2D, get_Fourier_modes_1D
 using ..array_allocation: allocate_float
 using ..coordinates: define_coordinate
 using ..input_structs: grid_input, advection_input
@@ -174,6 +175,20 @@ function makie_post_process(run_dir::Union{String,Tuple},
         for variable_name ∈ all_dfn_variables
             #plots_for_dfn_variable(run_info_dfns, variable_name, plot_prefix=plot_prefix,
             #                       is_1D=is_1D, is_1V=is_1V)
+        end
+    end
+
+    instability_input = input_dict["instability2D"]
+    if any((instability_input["plot_1d"], instability_input["plot_2d"],
+            instability_input["animate_perturbations"]))
+        # There is an [instability2D] section, so make the instability plots
+
+        # Get zind from the first variable in the loop (phi), and use the same one for
+        # all subseqeunt variables.
+        zind = nothing
+        for variable_name ∈ ("phi", "density", "temperature")
+            instability2D_plots(run_info_moments, variable_name, run_label=run_label,
+                                plot_prefix=plot_prefix, zind=zind)
         end
     end
 
@@ -388,6 +403,13 @@ function setup_makie_post_processing_input!(new_input_dict::AbstractDict{String,
                         if !isa(v, AbstractDict) && !(k ∈ only_global_options))...)
     end
 
+    set_defaults_and_check_section!(
+        input_dict, "instability2D";
+        plot_1d=false,
+        plot_2d=false,
+        animate_perturbations=false,
+        colormap=input_dict["colormap"],
+       )
 
     return nothing
 end
@@ -1477,6 +1499,230 @@ function grid_points_to_faces(coord::AbstractVector)
     faces[n+1] = coord[n]
 
     return faces
+end
+
+"""
+Make plots for analysis of 2D instability
+
+If `zind` is not passed, it is calculated as the z-index where the mode seems to have
+the maximum growth rate for this variable.
+Returns `zind`.
+"""
+function instability2D_plots(run_info::Tuple, variable_name; run_label, plot_prefix, zind)
+    println("Making instability plots for $variable_name")
+    flush(stdout)
+    if length(run_info) > 1
+        error("For now, don't support comparison plots in `instability2D_plots`")
+    end
+    return instability2D_plots(run_info[1], variable_name, run_label=run_label[1],
+                               plot_prefix=plot_prefix, zind=zind)
+end
+function instability2D_plots(run_info, variable_name; run_label, plot_prefix,
+                             zind=nothing, axes=nothing)
+    instability2D_options = Dict_to_NamedTuple(input_dict["instability2D"])
+
+    tinds = input_dict["itime_min"]:input_dict["itime_skip"]:input_dict["itime_max"]
+    time = run_info.time
+
+    if variable_name == "temperature"
+        variable = postproc_load_variable(run_info, "thermal_speed"; it=tinds).^2
+    else
+        variable = postproc_load_variable(run_info, variable_name; it=tinds)
+    end
+
+    if ndims(variable) == 4
+        # Only support single species runs in this routine, so pick is=1
+        variable = @view variable[:,:,1,:]
+    elseif ndims(variable) > 4
+        error("Variables with velocity space dimensions not supported in "
+              * "instability2D_plots.")
+    end
+
+    if instability2D_options.plot_1d
+        function unravel_phase!(phase::AbstractVector)
+            # Remove jumps in phase where it crosses from -π to π
+            for i ∈ 2:length(phase)
+                if phase[i] - phase[i-1] > π
+                    @views phase[i:end] .-= 2.0*π
+                elseif phase[i] - phase[i-1] < -π
+                    @views phase[i:end] .+= 2.0*π
+                end
+            end
+        end
+        function get_phase_velocity(phase, time, amplitude)
+            # Assume that once the amplitude reaches 2x initial amplitude that the mode is
+            # well established, so will be able to measure phase velocity
+            startind = findfirst(x -> x>amplitude[1], amplitude)
+            if startind === nothing
+                startind = 1
+            end
+
+            # Linear fit to phase after startind
+            linear_model(x, param) = @. param[1]*x+param[2]
+            fit = @views curve_fit(linear_model, time[startind:end], phase[startind:end],
+                                   [0.0, 0.0])
+            phase_velocity = fit.param[1]
+            phase_offset = fit.param[2]
+
+            return phase_velocity, phase_offset, startind
+        end
+        function get_growth_rate(amplitude, time)
+            # Assume that once the amplitude reaches 2x initial amplitude that the mode is
+            # well established, so will be able to measure phase velocity
+            startind = findfirst(x -> x>amplitude[1], amplitude)
+            if startind === nothing
+                startind = 1
+            end
+
+            # Linear fit to log(amplitude) after startind
+            growth_rate = 0.0
+            initial_fit_amplitude = 1.0
+            startind = 1
+            try
+                linear_model(x, param) = @. param[1]*x+param[2]
+                fit = @views curve_fit(linear_model, time[startind:end],
+                                       log.(amplitude[startind:end]), [0.0, 0.0])
+                growth_rate = fit.param[1]
+                initial_fit_amplitude = exp(fit.param[2])
+            catch e
+                println("Warning: error $e when fitting growth rate")
+            end
+
+            return growth_rate, initial_fit_amplitude, startind
+        end
+
+        function plot_Fourier_1D(var, symbol, name)
+            # File to save growth rate and frequency to
+            mode_stats_file = open(string(plot_prefix, "mode_$name.txt"), "w")
+
+            amplitude = abs.(var)
+
+            @views growth_rate, initial_fit_amplitude, startind =
+                get_growth_rate(amplitude[2,:], time)
+
+            # ikr=2 is the n_r=1 mode, so...
+            kr_2 = 2.0*π/run_info.r.L
+            println("for $symbol, kr=$kr_2, growth rate is $growth_rate")
+            println(mode_stats_file, "kr = $kr_2")
+            println(mode_stats_file, "growth_rate = $growth_rate")
+
+            fig = Figure(title="$symbol Fourier components")
+            ax = Axis(fig[1,1], xlabel="time", ylabel="amplitude", yscale=log10)
+
+            n_kr, nt = size(amplitude)
+
+            # Drop constant mode (ikr=1) and aliased (?) modes >n_kr/2
+            for ikr ∈ 2:n_kr÷2
+                data = amplitude[ikr,:]
+                data[data.==0.0] .= NaN
+                plot_1d(time, data, ax=ax)
+                text!(ax, position=(time[end], data[end]), "ikr=$ikr", fontsize=6,
+                      justification=:right)
+            end
+
+            plot_1d(time, initial_fit_amplitude.*exp.(growth_rate.*time), ax=ax)
+            vlines!(ax, [time[startind]], linestyle=:dot)
+
+            outfile = string(plot_prefix, "$(name)_1D_Fourier_components.pdf")
+            save(outfile, fig)
+
+            # Plot phase of n_r=1 mode
+            phase = angle.(var[2,:])
+            unravel_phase!(phase)
+
+            phase_velocity, phase_offset, startind =
+                get_phase_velocity(phase, time, @view amplitude[2,:])
+
+            # ikr=2 is the n_r=1 mode, so...
+            omega_2 = phase_velocity*kr_2
+
+            println("for $symbol, kr=$kr_2, phase velocity is $phase_velocity, omega=$omega_2")
+            println(mode_stats_file, "omega = $omega_2")
+
+            fig = Figure(title="phase of n_r=1 mode")
+            ax = Axis(fig[1,1], xlabel="time", ylabel="phase")
+            plot_1d(time, phase, ax=ax, label="phase")
+            plot_1d(time, phase_offset.+phase_velocity.*time, ax=ax, label="fit")
+            vlines!(ax, [time[startind]], linestyle=:dot)
+            put_legend_right(fig, ax)
+
+            outfile = string(plot_prefix, "$(name)_1D_phase.pdf")
+            save(outfile, fig)
+
+            close(mode_stats_file)
+        end
+        variable_Fourier_1D, zind = get_Fourier_modes_1D(variable, run_info.r,
+                                                         run_info.r_spectral, run_info.z,
+                                                         zind=zind)
+        plot_Fourier_1D(variable_Fourier_1D, get_variable_symbol(variable_name),
+                        variable_name)
+
+        # Do this to allow memory to be garbage-collected.
+        variable_Fourier_1D = nothing
+    end
+
+    if instability2D_options.plot_2d
+        error("need to convert this to Makie, and remove tuple-handling")
+
+        #cmlog(cmlin::ColorGradient) = RGB[cmlin[x] for x=LinRange(0,1,30)]
+        #logdeep = cgrad(:deep, scale=:log) |> cmlog
+        #function plot_Fourier_2D(var, symbol, name)
+        #    subplots = []
+        #    for (t, v, run_label) ∈ zip(time, var, run_name_labels)
+        #        n_kz, n_kr, nt = size(v)
+        #        p = plot(title=(n_runs == 1 ? nothing : run_label),
+        #                 xlabel="time", ylabel="amplitude", legend=false,
+        #                 yscale=:log)
+        #        for ikr ∈ 1:n_kr, ikz ∈ 1:n_kz
+        #            ikr!=2 && continue
+        #            data = abs.(v[ikz,ikr,:])
+        #            data[data.==0.0] .= NaN
+        #            plot!(time, data, annotations=(t[end], data[end], "ikr=$ikr, ikz=$ikz"),
+        #                  annotationhalign=:right, annotationfontsize=6)
+        #        end
+
+        #        push!(subplots, p)
+        #    end
+        #    plot(subplots..., layout=(1,n_runs), size=(600*n_runs, 400),
+        #        title="$symbol Fourier components")
+        #    outfile = string(plot_prefix, "_$(name)_Fourier_components.pdf")
+        #    trysavefig(outfile)
+
+        #    # make a gif animation of Fourier components
+        #    anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+        #        subplots = (@views heatmap(log.(abs.(v[:,:,i])), xlabel="kr", ylabel="kz",
+        #                                   fillcolor = logdeep,
+        #                                   title=(n_runs == 1 ? nothing : run_label))
+        #                    for (v, run_label) ∈ zip(var, run_name_labels))
+        #        plot(subplots..., layout=(1,n_runs), size=(600*n_runs, 400), title=symbol)
+        #    end
+        #    outfile = string(plot_prefix, "_$(name)_Fourier.gif")
+        #    trygif(anim, outfile, fps=5)
+        #end
+        #variable_Fourier = get_Fourier_modes_2D(variable, run_info.r,
+        #                                        run_info.r_spectral, run_info.z,
+        #                                        run_info.z_spectral)
+        #plot_Fourier_2D(variable_Fourier, get_variable_symbol(variable_name),
+        #                variable_name)
+        #
+        ## Do this to allow memory to be garbage-collected.
+        #variable_Fourier = nothing
+    end
+
+    if instability2D_options.animate_perturbations
+        perturbation = get_r_perturbation(variable)
+        # make a gif animation of perturbation
+        animate_2d(run_info.z.grid, run_info.r.grid, perturbation, xlabel="z", ylabel="r",
+                   title="$(get_variable_symbol(variable_name)) perturbation",
+                   colormap=instability2D_options.colormap,
+                   outfile=plot_prefix*variable_name*"_perturbation.gif")
+
+        # Do this to allow memory to be garbage-collected (although this is redundant
+        # here as this is the last thing in the function).
+        perturbation = nothing
+    end
+
+    return zind
 end
 
 """
