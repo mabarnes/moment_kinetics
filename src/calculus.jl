@@ -8,12 +8,32 @@ export integral
 
 
 using ..chebyshev: chebyshev_info, chebyshev_derivative!
+using ..gausslegendre: gausslegendre_info, gausslegendre_derivative!
 using ..finite_differences: derivative_finite_difference!
 using ..type_definitions: mk_float, mk_int
 using MPI 
 using ..communication: block_rank
 using ..communication: _block_synchronize
 using ..looping
+
+"""
+Use Gauss-Legendre differentiation matrices to take the first derivative 
+"""
+function derivative!(df, f, coord, adv_fac, spectral::gausslegendre_info)
+    # get the derivative at each grid point within each element and store in df
+    gausslegendre_derivative!(coord.scratch_2d, f, spectral, coord)
+    # map the derivative from the elemental grid to the full grid;
+    # at element boundaries, use the derivative from the upwind element.
+    derivative_elements_to_full_grid!(df, coord.scratch_2d, coord, adv_fac)
+end
+
+function derivative!(df, f, coord, spectral::gausslegendre_info)
+    # get the derivative at each grid point within each element and store in df
+    gausslegendre_derivative!(coord.scratch_2d, f, spectral, coord)
+    # map the derivative from the elemental grid to the full grid;
+    # at element boundaries, use the average of the derivatives from neighboring elements.
+    derivative_elements_to_full_grid!(df, coord.scratch_2d, coord)
+end
 """
 Chebyshev transform f to get Chebyshev spectral coefficients and use them to calculate f'
 """

@@ -11,6 +11,7 @@ import moment_kinetics
 using moment_kinetics.gausslegendre
 using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.coordinates: define_coordinate
+using moment_kinetics.calculus: derivative!
 
 if abspath(PROGRAM_FILE) == @__FILE__
     using Pkg
@@ -134,8 +135,12 @@ if abspath(PROGRAM_FILE) == @__FILE__
     
     # gauss radau test 
     ngrid = 9
-    x, w = gaussradau(ngrid)
+    xradau, wradau = gaussradau(ngrid)
     println("Gauss Radau Legendre")
+    println("xradau: ",xradau)
+    println("wradau: ",wradau)
+    x = -reverse(xradau)
+    w = reverse(wradau)
     println("x: ",x)
     println("w: ",w)
     
@@ -161,7 +166,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     println("F_err: ", F_err,  " F_exact: ",F_exact, " F_num: ", F_num)
     
     Dmat = Array{Float64,2}(undef,ngrid,ngrid)
-    gaussradaulegendre_differentiation_matrix!(Dmat,x,ngrid,2.0,1)
+    gaussradaulegendre_differentiation_matrix!(Dmat,xradau,ngrid,2.0,1)
     print_matrix(Dmat,"Dmat",ngrid,ngrid)
     
     mul!(df_num,Dmat,f_exact)
@@ -189,11 +194,12 @@ if abspath(PROGRAM_FILE) == @__FILE__
     comm = MPI.COMM_NULL
     # create the 'input' struct containing input info needed to create a
     # coordinate
-    y_input = grid_input("y", y_ngrid, y_nelement_global, y_nelement_local, 
+    y_input = grid_input("vperp", y_ngrid, y_nelement_global, y_nelement_local, 
         nrank, irank, y_L, discretization, fd_option, cheb_option, bc, adv_input,comm)
     
     # create the coordinate structs
     y = define_coordinate(y_input)
+    y_spectral = setup_gausslegendre_pseudospectral(y)
     println("y.grid: ",y.grid)
     println("y.wgts: ",y.wgts)
     x, w = gausslobatto(y.ngrid)
@@ -213,7 +219,11 @@ if abspath(PROGRAM_FILE) == @__FILE__
         #f_exact[iy] = -2.0*y.grid[iy]*exp(-y.grid[iy]^2)
         #df_exact[iy] = (4.0*y.grid[iy]^2 - 2.0)*exp(-y.grid[iy]^2)
     end
-    F_exact = sqrt(pi)
+    if y.name == "y" 
+        F_exact = sqrt(pi)
+    elseif y.name == "vperp"
+        F_exact = 1.0
+    end
     # do a test integration
     println(f_exact)
     F_num = sum(y.wgts.*f_exact)
@@ -223,5 +233,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
     #end
     println("F_err: ", F_err,  " F_exact: ",F_exact, " F_num: ", F_num)
     
+    derivative!(df_num, f_exact, y, y_spectral)
+    @. df_err = df_num - df_exact
+    println("max(df_err): ",maximum(df_err))
     
 end

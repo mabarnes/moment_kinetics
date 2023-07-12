@@ -11,12 +11,80 @@ export GaussLegendreLobatto_K_matrix!
 export GaussLegendreLobatto_S_matrix!
 export scaled_gauss_legendre_lobatto_grid
 export scaled_gauss_legendre_radau_grid
+export gausslegendre_derivative!
+export setup_gausslegendre_pseudospectral
 
 using FastGaussQuadrature
 using LegendrePolynomials: Pl
 using LinearAlgebra: mul!
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float
+
+
+"""
+structs for passing around matrices for taking
+the derivatives on Gauss-Legendre points in 1D
+"""
+struct gausslegendre_base_info{}
+    # elementwise differentiation matrix (ngrid*ngrid)
+    Dmat::Array{mk_float,2}
+end
+
+struct gausslegendre_info{}
+    lobatto::gausslegendre_base_info
+    radau::gausslegendre_base_info
+end
+
+function setup_gausslegendre_pseudospectral(coord)
+    lobatto = setup_gausslegendre_pseudospectral_lobatto(coord)
+    radau = setup_gausslegendre_pseudospectral_radau(coord)
+    return gausslegendre_info(lobatto,radau)
+end
+
+function setup_gausslegendre_pseudospectral_lobatto(coord)
+    x, w = gausslobatto(coord.ngrid)
+    Dmat = allocate_float(coord.ngrid, coord.ngrid)
+    gausslobattolegendre_differentiation_matrix!(Dmat,x,coord.ngrid,coord.L,coord.nelement_global)
+    return gausslegendre_base_info(Dmat)
+end
+
+function setup_gausslegendre_pseudospectral_radau(coord)
+    x, w = gaussradau(coord.ngrid)
+    Dmat = allocate_float(coord.ngrid, coord.ngrid)
+    gaussradaulegendre_differentiation_matrix!(Dmat,x,coord.ngrid,coord.L,coord.nelement_global)
+    return gausslegendre_base_info(Dmat)
+end 
+"""
+function for taking the first derivative on Gauss-Legendre points
+"""
+function gausslegendre_derivative!(df, ff, gausslegendre, coord)
+    # define local variable nelement for convenience
+    nelement = coord.nelement_local
+    # check array bounds
+    @boundscheck nelement == size(df,2) && coord.ngrid == size(df,1) || throw(BoundsError(df))
+    
+    # variable k will be used to avoid double counting of overlapping point
+    k = 0
+    j = 1 # the first element
+    imin = coord.imin[j]-k
+    # imax is the maximum index on the full grid for this (jth) element
+    imax = coord.imax[j]        
+    if coord.name == "vperp" && coord.irank == 0 # differentiate this element with the Radau scheme
+        @views mul!(df[:,j],gausslegendre.radau.Dmat[:,:],ff[imin:imax])
+    else #differentiate using the Lobatto scheme
+        @views mul!(df[:,j],gausslegendre.lobatto.Dmat[:,:],ff[imin:imax])
+    end
+    # calculate the derivative on each element
+    @inbounds for j ∈ 2:nelement
+        k = 1 
+        imin = coord.imin[j]-k
+        # imax is the maximum index on the full grid for this (jth) element
+        imax = coord.imax[j]
+        @views mul!(df[:,j],gausslegendre.lobatto.Dmat[:,:],ff[imin:imax])
+    end
+
+    return nothing
+end
 
 """
 Formula for differentiation matrix taken from p196 of Chpt `The Spectral Elemtent Method' of 
@@ -82,6 +150,15 @@ function gaussradaulegendre_differentiation_matrix!(D::Array{Float64,2},x::Array
     end
     #multiply by scale factor for element length
     D .= (2.0*float(nelement)/L).*D
+    
+    # get into correct order for a grid on (-1,1]
+    Dreverse = copy(D)
+    for ix in 1:ngrid
+        for ixp in 1:ngrid
+            Dreverse[ngrid-ix+1,ngrid-ixp+1] = -D[ix,ixp]
+        end
+    end
+    D .= Dreverse
     return nothing
 end
 
