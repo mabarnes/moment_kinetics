@@ -12,11 +12,14 @@ export GaussLegendreLobatto_S_matrix!
 export scaled_gauss_legendre_lobatto_grid
 export scaled_gauss_legendre_radau_grid
 export gausslegendre_derivative!
+export gausslegendre_apply_Kmat!
+export gausslegendre_mass_matrix_solve!
 export setup_gausslegendre_pseudospectral
 
 using FastGaussQuadrature
 using LegendrePolynomials: Pl
-using LinearAlgebra: mul!
+using LinearAlgebra: mul!, lu, LU
+using SparseArrays: sparse
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float
 
@@ -28,31 +31,51 @@ the derivatives on Gauss-Legendre points in 1D
 struct gausslegendre_base_info{}
     # elementwise differentiation matrix (ngrid*ngrid)
     Dmat::Array{mk_float,2}
+    # local mass matrix 
+    Mmat::Array{mk_float,2}
+    # local K matrix (for second derivatives)
+    Kmat::Array{mk_float,2}
 end
 
 struct gausslegendre_info{}
     lobatto::gausslegendre_base_info
     radau::gausslegendre_base_info
+    # global (1D) mass matrix
+    mass_matrix::Array{mk_float,2}
+    # global (1D) LU object
+    mass_matrix_lu::T where T
 end
 
 function setup_gausslegendre_pseudospectral(coord)
     lobatto = setup_gausslegendre_pseudospectral_lobatto(coord)
     radau = setup_gausslegendre_pseudospectral_radau(coord)
-    return gausslegendre_info(lobatto,radau)
+    mass_matrix = allocate_float(coord.n,coord.n)
+    setup_global_mass_matrix!(mass_matrix, lobatto, radau, coord)
+    mass_matrix_lu = lu(sparse(mass_matrix))
+    return gausslegendre_info(lobatto,radau,mass_matrix,mass_matrix_lu)
 end
 
 function setup_gausslegendre_pseudospectral_lobatto(coord)
     x, w = gausslobatto(coord.ngrid)
     Dmat = allocate_float(coord.ngrid, coord.ngrid)
     gausslobattolegendre_differentiation_matrix!(Dmat,x,coord.ngrid,coord.L,coord.nelement_global)
-    return gausslegendre_base_info(Dmat)
+    Mmat = allocate_float(coord.ngrid, coord.ngrid)
+    GaussLegendreLobatto_mass_matrix!(Mmat,coord.ngrid,x,w,coord.L,coord.nelement_global)
+    Kmat = allocate_float(coord.ngrid, coord.ngrid)
+    GaussLegendreLobatto_K_matrix!(Kmat,coord.ngrid,Dmat,w,coord.L,coord.nelement_global)
+    return gausslegendre_base_info(Dmat,Mmat,Kmat)
 end
 
 function setup_gausslegendre_pseudospectral_radau(coord)
+    # elemental differentiation matrix
     x, w = gaussradau(coord.ngrid)
     Dmat = allocate_float(coord.ngrid, coord.ngrid)
     gaussradaulegendre_differentiation_matrix!(Dmat,x,coord.ngrid,coord.L,coord.nelement_global)
-    return gausslegendre_base_info(Dmat)
+    # elemental mass matrix
+    Mmat = allocate_float(coord.ngrid, coord.ngrid)
+    GaussLegendreLobatto_mass_matrix!(Mmat,coord.ngrid,x,w,coord.L,coord.nelement_global)
+    Kmat = allocate_float(coord.ngrid, coord.ngrid)
+    return gausslegendre_base_info(Dmat,Mmat,Kmat)
 end 
 """
 function for taking the first derivative on Gauss-Legendre points
@@ -83,6 +106,44 @@ function gausslegendre_derivative!(df, ff, gausslegendre, coord)
         @views mul!(df[:,j],gausslegendre.lobatto.Dmat[:,:],ff[imin:imax])
     end
 
+    return nothing
+end
+
+"""
+function for taking the weak-form second derivative on Gauss-Legendre points
+"""
+function gausslegendre_apply_Kmat!(df, ff, gausslegendre, coord)
+    # define local variable nelement for convenience
+    nelement = coord.nelement_local
+    # check array bounds
+    @boundscheck nelement == size(df,2) && coord.ngrid == size(df,1) || throw(BoundsError(df))
+    
+    # variable k will be used to avoid double counting of overlapping point
+    k = 0
+    j = 1 # the first element
+    imin = coord.imin[j]-k
+    # imax is the maximum index on the full grid for this (jth) element
+    imax = coord.imax[j]        
+    if coord.name == "vperp" && coord.irank == 0 # differentiate this element with the Radau scheme
+        @views mul!(df[:,j],gausslegendre.radau.Kmat[:,:],ff[imin:imax])
+    else #differentiate using the Lobatto scheme
+        @views mul!(df[:,j],gausslegendre.lobatto.Kmat[:,:],ff[imin:imax])
+    end
+    # calculate the derivative on each element
+    @inbounds for j ∈ 2:nelement
+        k = 1 
+        imin = coord.imin[j]-k
+        # imax is the maximum index on the full grid for this (jth) element
+        imax = coord.imax[j]
+        @views mul!(df[:,j],gausslegendre.lobatto.Kmat[:,:],ff[imin:imax])
+    end
+
+    return nothing
+end
+
+function gausslegendre_mass_matrix_solve!(d2f,b,spectral)
+    y = spectral.mass_matrix_lu \ b
+    @. d2f = y
     return nothing
 end
 
@@ -190,7 +251,7 @@ end
 """
 assign Gauss-Legendre-Lobatto mass matrix on a 1D line with Jacobian = 1
 """
-function GaussLegendreLobatto_mass_matrix!(MM,ngrid,x,wgts,L)
+function GaussLegendreLobatto_mass_matrix!(MM,ngrid,x,wgts,L,nelement_global)
     N = ngrid - 1
     alpha = alpha_n(N)
     MM .= 0.0
@@ -204,7 +265,7 @@ function GaussLegendreLobatto_mass_matrix!(MM,ngrid,x,wgts,L)
     for i in 1:ngrid 
         MM[i,i] += wgts[i]
     end
-    @. MM *= (L/2.0)
+    @. MM *= (0.5*L/nelement_global)
     return nothing
 end
 """
@@ -245,13 +306,13 @@ end
 Gauss-Legendre-Lobatto K matrix Kjk = -< l'j | l'k > 
 Use that Djk = l'k(xj)
 """
-function GaussLegendreLobatto_K_matrix!(KK,ngrid,DD,wgts,L)
+function GaussLegendreLobatto_K_matrix!(KK,ngrid,DD,wgts,L,nelement_global)
     N = ngrid - 1
     KK .= 0.0
     for j in 1:ngrid 
         for i in 1:ngrid 
             for m in 1:ngrid
-                KK[i,j] -= (L/2.0)*wgts[m]*DD[m,i]*DD[m,j]
+                KK[i,j] -= (0.5*L/nelement_global)*wgts[m]*DD[m,i]*DD[m,j]
             end
         end
     end
@@ -342,6 +403,69 @@ function scaled_gauss_legendre_radau_grid(ngrid, nelement_global, nelement_local
         end
     end
     return grid, wgts
+end
+
+"""
+function that assigns the local mass matrices to 
+a global array for later solving weak form of required
+1D equation
+"""
+function setup_global_mass_matrix!(mass_matrix::Array{mk_float,2},
+                               lobatto::gausslegendre_base_info,
+                               radau::gausslegendre_base_info, 
+                               coord)
+    ngrid = coord.ngrid
+    imin = coord.imin
+    imax = coord.imax
+    @. mass_matrix = 0.0
+    if coord.name == "vperp"
+        # use the Radau mass matrix for the 1st element
+        Mmat_fel = radau.Mmat
+    else
+        # use the Lobatto mass matrix 
+        Mmat_fel = lobatto.Mmat
+    end
+    zero_bc_upper_boundary = coord.bc == "zero" || coord.bc == "zero_upper"
+    zero_bc_lower_boundary = coord.bc == "zero" || coord.bc == "zero_lower"
+    
+    # fill in first element 
+    j = 1
+    if zero_bc_lower_boundary #x.bc == "zero"
+        mass_matrix[imin[j],imin[j]:imax[j]] .+= Mmat_fel[1,:]./2.0 #contributions from this element/2
+        mass_matrix[imin[j],imin[j]] += Mmat_fel[ngrid,ngrid]/2.0 #contribution from missing `zero' element/2
+    else 
+        mass_matrix[imin[j],imin[j]:imax[j]] .+= Mmat_fel[1,:]
+    end
+    for k in 2:imax[j]-imin[j] 
+        mass_matrix[k,imin[j]:imax[j]] .+= Mmat_fel[k,:]
+    end
+    if zero_bc_upper_boundary && coord.nelement_local == 1
+        mass_matrix[imax[j],imin[j]:imax[j]] .+= Mmat_fel[ngrid,:]./2.0 #contributions from this element/2
+        mass_matrix[imax[j],imax[j]] += lobatto.Mmat[1,1]/2.0              #contribution from missing `zero' element/2
+    elseif coord.nelement_local > 1 #x.bc == "zero"
+        mass_matrix[imax[j],imin[j]:imax[j]] .+= Mmat_fel[ngrid,:]./2.0
+    else
+        mass_matrix[imax[j],imin[j]:imax[j]] .+= Mmat_fel[ngrid,:]
+    end 
+    # remaining elements recalling definitions of imax and imin
+    for j in 2:coord.nelement_local
+        #lower boundary condition on element
+        mass_matrix[imin[j]-1,imin[j]-1:imax[j]] .+= lobatto.Mmat[1,:]./2.0
+        for k in 2:imax[j]-imin[j]+1 
+            mass_matrix[k+imin[j]-2,imin[j]-1:imax[j]] .+= lobatto.Mmat[k,:]
+        end
+        # upper boundary condition on element 
+        if j == coord.nelement_local && !(zero_bc_upper_boundary)
+            mass_matrix[imax[j],imin[j]-1:imax[j]] .+= lobatto.Mmat[ngrid,:]
+        elseif j == coord.nelement_local && zero_bc_upper_boundary
+            mass_matrix[imax[j],imin[j]-1:imax[j]] .+= lobatto.Mmat[ngrid,:]./2.0 #contributions from this element/2
+            mass_matrix[imax[j],imax[j]] += lobatto.Mmat[1,1]/2.0 #contribution from missing `zero' element/2
+        else 
+            mass_matrix[imax[j],imin[j]-1:imax[j]] .+= lobatto.Mmat[ngrid,:]./2.0
+        end
+    end
+        
+    return nothing
 end
 
 end

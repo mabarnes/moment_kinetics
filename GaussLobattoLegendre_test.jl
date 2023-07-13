@@ -11,7 +11,7 @@ import moment_kinetics
 using moment_kinetics.gausslegendre
 using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.coordinates: define_coordinate
-using moment_kinetics.calculus: derivative!
+using moment_kinetics.calculus: derivative!, second_derivative!
 
 if abspath(PROGRAM_FILE) == @__FILE__
     using Pkg
@@ -39,6 +39,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
 
     # gauss lobatto test 
     ngrid = 5
+    nelement = 1
     x, w = gausslobatto(ngrid)
     println("Gauss Lobatto Legendre")
     println("x: ",x)
@@ -85,7 +86,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     #print_matrix(Dmat,"Dmat",ngrid,ngrid)
     
     Mmat = Array{Float64,2}(undef,ngrid,ngrid)
-    GaussLegendreLobatto_mass_matrix!(Mmat,ngrid,x,w,Lx)
+    GaussLegendreLobatto_mass_matrix!(Mmat,ngrid,x,w,Lx,nelement)
     #print_matrix(Mmat,"Mmat",ngrid,ngrid)
     
     IMmat = Array{Float64,2}(undef,ngrid,ngrid)
@@ -105,7 +106,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     #print_matrix(Dmat_test,"Dmat_test",ngrid,ngrid)
     
     Kmat = Array{Float64,2}(undef,ngrid,ngrid)
-    GaussLegendreLobatto_K_matrix!(Kmat,ngrid,Dmat,w,Lx)
+    GaussLegendreLobatto_K_matrix!(Kmat,ngrid,Dmat,w,Lx,nelement)
     #print_matrix(Kmat,"Kmat",ngrid,ngrid)
     mul!(D2mat,IMmat,Kmat)
     #print_matrix(D2mat,"D2mat",ngrid,ngrid)
@@ -177,8 +178,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
     println("max df_err: ",max_df_err)
     
     # elemental grid tests 
-    ngrid = 33
-    nelement = 3
+    ngrid = 2
+    nelement = 1000
     y_ngrid = ngrid #number of points per element 
     y_nelement_local = nelement # number of elements per rank
     y_nelement_global = y_nelement_local # total number of elements 
@@ -194,30 +195,35 @@ if abspath(PROGRAM_FILE) == @__FILE__
     comm = MPI.COMM_NULL
     # create the 'input' struct containing input info needed to create a
     # coordinate
-    y_input = grid_input("vperp", y_ngrid, y_nelement_global, y_nelement_local, 
+    y_input = grid_input("y", y_ngrid, y_nelement_global, y_nelement_local, 
         nrank, irank, y_L, discretization, fd_option, cheb_option, bc, adv_input,comm)
     
     # create the coordinate structs
     y = define_coordinate(y_input)
     y_spectral = setup_gausslegendre_pseudospectral(y)
-    println("y.grid: ",y.grid)
-    println("y.wgts: ",y.wgts)
+    #print_matrix(y_spectral.mass_matrix,"global mass matrix",y.n,y.n)
+    #print_matrix(y_spectral.lobatto.Mmat,"local lobatto mass matrix",y.ngrid,y.ngrid)
+    #print_matrix(y_spectral.radau.Mmat,"local radau mass matrix",y.ngrid,y.ngrid)
+    #println("y.grid: ",y.grid)
+    #println("y.wgts: ",y.wgts)
     x, w = gausslobatto(y.ngrid)
     println("Gauss Lobatto Legendre")
-    println("x: ",x)
-    println("w: ",w)
+    #println("x: ",x)
+    #println("w: ",w)
     
     f_exact = Array{Float64,1}(undef,y.n)
     df_exact = Array{Float64,1}(undef,y.n)
     df_num = Array{Float64,1}(undef,y.n)
     df_err = Array{Float64,1}(undef,y.n)
+    d2f_exact = Array{Float64,1}(undef,y.n)
+    d2f_num = Array{Float64,1}(undef,y.n)
+    d2f_err = Array{Float64,1}(undef,y.n)
     
     for iy in 1:y.n
         f_exact[iy] = exp(-y.grid[iy]^2)
         df_exact[iy] = -2.0*y.grid[iy]*exp(-y.grid[iy]^2)
-        
         #f_exact[iy] = -2.0*y.grid[iy]*exp(-y.grid[iy]^2)
-        #df_exact[iy] = (4.0*y.grid[iy]^2 - 2.0)*exp(-y.grid[iy]^2)
+        d2f_exact[iy] = (4.0*y.grid[iy]^2 - 2.0)*exp(-y.grid[iy]^2)
     end
     if y.name == "y" 
         F_exact = sqrt(pi)
@@ -225,7 +231,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         F_exact = 1.0
     end
     # do a test integration
-    println(f_exact)
+    #println(f_exact)
     F_num = sum(y.wgts.*f_exact)
     F_err = abs(F_num - F_exact)
     #for ix in 1:ngrid
@@ -236,5 +242,13 @@ if abspath(PROGRAM_FILE) == @__FILE__
     derivative!(df_num, f_exact, y, y_spectral)
     @. df_err = df_num - df_exact
     println("max(df_err): ",maximum(df_err))
-    
+    second_derivative!(d2f_num, f_exact, y, y_spectral)
+    @. d2f_err = d2f_num - d2f_exact
+    #println(d2f_num)
+    #println(d2f_exact)
+    println("max(d2f_err) (weak form): ",maximum(d2f_err))
+    derivative!(d2f_num, df_num, y, y_spectral)
+    @. d2f_err = d2f_num - d2f_exact
+    println("max(d2f_err) (double first derivative): ",maximum(d2f_err))
+   
 end
