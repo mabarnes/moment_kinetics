@@ -8,7 +8,7 @@ export equally_spaced_grid
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_int
 using ..chebyshev: scaled_chebyshev_grid, scaled_chebyshev_radau_grid
-using ..gausslegendre: scaled_gauss_legendre_lobatto_grid, scaled_gauss_legendre_radau_grid
+using ..gauss_legendre: scaled_gauss_legendre_lobatto_grid, scaled_gauss_legendre_radau_grid
 using ..quadrature: composite_simpson_weights
 using ..input_structs: advection_input
 

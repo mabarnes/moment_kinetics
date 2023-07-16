@@ -8,8 +8,8 @@ export integral
 
 
 using ..chebyshev: chebyshev_info, chebyshev_derivative!
-using ..gausslegendre: gausslegendre_info, gausslegendre_derivative!
-using ..gausslegendre: gausslegendre_apply_Kmat!, gausslegendre_mass_matrix_solve!
+using ..gauss_legendre: gausslegendre_info, gausslegendre_derivative!
+using ..gauss_legendre: gausslegendre_apply_Kmat!, gausslegendre_mass_matrix_solve!
 using ..finite_differences: derivative_finite_difference!
 using ..type_definitions: mk_float, mk_int
 using MPI 

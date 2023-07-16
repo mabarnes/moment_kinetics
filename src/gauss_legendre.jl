@@ -1,25 +1,28 @@
 """
 module for Gauss-Legendre-Lobatto and Gauss-Legendre-Radau spectral element grids
 """
-module gausslegendre
+module gauss_legendre
 
 export gausslobattolegendre_differentiation_matrix!
 export gaussradaulegendre_differentiation_matrix!
 export GaussLegendreLobatto_mass_matrix!
+export GaussLegendre_mass_matrix_1!
 export GaussLegendreLobatto_inverse_mass_matrix!
 export GaussLegendreLobatto_K_matrix!
 export GaussLegendreLobatto_S_matrix!
+export GaussLegendre_S_matrix_1!
 export scaled_gauss_legendre_lobatto_grid
 export scaled_gauss_legendre_radau_grid
 export gausslegendre_derivative!
 export gausslegendre_apply_Kmat!
 export gausslegendre_mass_matrix_solve!
 export setup_gausslegendre_pseudospectral
+export GaussLegendre_weak_product_matrix!
 
 using FastGaussQuadrature
-using LegendrePolynomials: Pl
+using LegendrePolynomials: Pl, dnPl
 using LinearAlgebra: mul!, lu, LU
-using SparseArrays: sparse
+using SparseArrays: sparse, AbstractSparseArray
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float
 
@@ -35,6 +38,14 @@ struct gausslegendre_base_info{}
     Mmat::Array{mk_float,2}
     # local K matrix (for second derivatives)
     Kmat::Array{mk_float,2}
+    # local mass matrix type 0
+    M0::Array{mk_float,2}
+    # local mass matrix type 1
+    M1::Array{mk_float,2}
+    # local S (weak derivative) matrix type 0
+    S0::Array{mk_float,2}
+    # local S (weak derivative) matrix type 1
+    S1::Array{mk_float,2}
 end
 
 struct gausslegendre_info{}
@@ -42,6 +53,9 @@ struct gausslegendre_info{}
     radau::gausslegendre_base_info
     # global (1D) mass matrix
     mass_matrix::Array{mk_float,2}
+    # global (1D) weak derivative matrix
+    #S_matrix::Array{mk_float,2}
+    S_matrix::AbstractSparseArray{mk_float,Ti,2} where Ti
     # global (1D) LU object
     mass_matrix_lu::T where T
 end
@@ -50,9 +64,14 @@ function setup_gausslegendre_pseudospectral(coord)
     lobatto = setup_gausslegendre_pseudospectral_lobatto(coord)
     radau = setup_gausslegendre_pseudospectral_radau(coord)
     mass_matrix = allocate_float(coord.n,coord.n)
+    S_matrix = allocate_float(coord.n,coord.n)
     setup_global_mass_matrix!(mass_matrix, lobatto, radau, coord)
+    
+    setup_global_weak_form_matrix!(mass_matrix, lobatto, radau, coord, "M")
+    setup_global_weak_form_matrix!(S_matrix, lobatto, radau, coord, "S")
     mass_matrix_lu = lu(sparse(mass_matrix))
-    return gausslegendre_info(lobatto,radau,mass_matrix,mass_matrix_lu)
+    
+    return gausslegendre_info(lobatto,radau,mass_matrix,sparse(S_matrix),mass_matrix_lu)
 end
 
 function setup_gausslegendre_pseudospectral_lobatto(coord)
@@ -63,19 +82,40 @@ function setup_gausslegendre_pseudospectral_lobatto(coord)
     GaussLegendreLobatto_mass_matrix!(Mmat,coord.ngrid,x,w,coord.L,coord.nelement_global)
     Kmat = allocate_float(coord.ngrid, coord.ngrid)
     GaussLegendreLobatto_K_matrix!(Kmat,coord.ngrid,Dmat,w,coord.L,coord.nelement_global)
-    return gausslegendre_base_info(Dmat,Mmat,Kmat)
+    
+    M0 = allocate_float(coord.ngrid, coord.ngrid)
+    GaussLegendre_weak_product_matrix!(M0,coord.ngrid,x,w,coord.L,coord.nelement_global,"M0")
+    M1 = allocate_float(coord.ngrid, coord.ngrid)
+    GaussLegendre_weak_product_matrix!(M1,coord.ngrid,x,w,coord.L,coord.nelement_global,"M1")
+    S0 = allocate_float(coord.ngrid, coord.ngrid)
+    GaussLegendre_weak_product_matrix!(S0,coord.ngrid,x,w,coord.L,coord.nelement_global,"S0")
+    S1 = allocate_float(coord.ngrid, coord.ngrid)
+    GaussLegendre_weak_product_matrix!(S1,coord.ngrid,x,w,coord.L,coord.nelement_global,"S1")
+    return gausslegendre_base_info(Dmat,Mmat,Kmat,M0,M1,S0,S1)
 end
 
 function setup_gausslegendre_pseudospectral_radau(coord)
-    # elemental differentiation matrix
+    # Gauss-Radau points on [-1,1)
     x, w = gaussradau(coord.ngrid)
+    # Gauss-Radau points on (-1,1] 
+    xreverse, wreverse = -reverse(x), reverse(w)
+    # elemental differentiation matrix
     Dmat = allocate_float(coord.ngrid, coord.ngrid)
     gaussradaulegendre_differentiation_matrix!(Dmat,x,coord.ngrid,coord.L,coord.nelement_global)
     # elemental mass matrix
     Mmat = allocate_float(coord.ngrid, coord.ngrid)
     GaussLegendreLobatto_mass_matrix!(Mmat,coord.ngrid,x,w,coord.L,coord.nelement_global)
     Kmat = allocate_float(coord.ngrid, coord.ngrid)
-    return gausslegendre_base_info(Dmat,Mmat,Kmat)
+    
+    M0 = allocate_float(coord.ngrid, coord.ngrid)
+    GaussLegendre_weak_product_matrix!(M0,coord.ngrid,xreverse,wreverse,coord.L,coord.nelement_global,"M0",radau=true)
+    M1 = allocate_float(coord.ngrid, coord.ngrid)
+    GaussLegendre_weak_product_matrix!(M1,coord.ngrid,xreverse,wreverse,coord.L,coord.nelement_global,"M1",radau=true)
+    S0 = allocate_float(coord.ngrid, coord.ngrid)
+    GaussLegendre_weak_product_matrix!(S0,coord.ngrid,xreverse,wreverse,coord.L,coord.nelement_global,"S0",radau=true)
+    S1 = allocate_float(coord.ngrid, coord.ngrid)
+    GaussLegendre_weak_product_matrix!(S1,coord.ngrid,xreverse,wreverse,coord.L,coord.nelement_global,"S1",radau=true)
+    return gausslegendre_base_info(Dmat,Mmat,Kmat,M0,M1,S0,S1)
 end 
 """
 function for taking the first derivative on Gauss-Legendre points
@@ -141,9 +181,9 @@ function gausslegendre_apply_Kmat!(df, ff, gausslegendre, coord)
     return nothing
 end
 
-function gausslegendre_mass_matrix_solve!(d2f,b,spectral)
+function gausslegendre_mass_matrix_solve!(f,b,spectral)
     y = spectral.mass_matrix_lu \ b
-    @. d2f = y
+    @. f = y
     return nothing
 end
 
@@ -320,6 +360,173 @@ function GaussLegendreLobatto_K_matrix!(KK,ngrid,DD,wgts,L,nelement_global)
 end
 
 """
+assign abitrary weak inner product matrix Q on a 1D line with Jacobian = 1
+"""
+function GaussLegendre_weak_product_matrix!(QQ,ngrid,x,wgts,L,nelement_global,option;radau=false)
+    # coefficient in expansion of 
+    # lagrange polys in terms of Legendre polys
+    gamma = allocate_float(ngrid)
+    for i in 1:ngrid-1
+        gamma[i] = Legendre_h_n(i-1)
+    end
+    if radau
+        gamma[ngrid] = Legendre_h_n(ngrid-1)
+    else
+        gamma[ngrid] = 2.0/(ngrid - 1)
+    end
+    # appropriate inner product of Legendre polys
+    # definition depends on required matrix 
+    # for M0: AA = < P_i P_j >
+    # for M1: AA = < P_i P_j x >
+    # for S0: AA = -< P'_i P_j >
+    # for S1: AA = -< P'_i P_j x >
+    AA = allocate_float(ngrid,ngrid)
+    nquad = 2*ngrid
+    zz, wz = gausslegendre(nquad)
+    @. AA = 0.0
+    if option == "M0"
+        for j in 1:ngrid
+            for i in 1:ngrid
+                for k in 1:nquad
+                    AA[i,j] += wz[k]*Pl(zz[k],i-1)*Pl(zz[k],j-1)
+                end
+            end
+        end
+    elseif option == "M1"
+        for j in 1:ngrid
+            for i in 1:ngrid
+                for k in 1:nquad
+                    AA[i,j] += zz[k]*wz[k]*Pl(zz[k],i-1)*Pl(zz[k],j-1)
+                end
+            end
+        end
+    elseif option == "S0"
+        for j in 1:ngrid
+            for i in 1:ngrid
+                for k in 1:nquad
+                    AA[i,j] -= wz[k]*dnPl(zz[k],i-1,1)*Pl(zz[k],j-1)
+                end
+            end
+        end
+    elseif option == "S1"
+        for j in 1:ngrid
+            for i in 1:ngrid
+                for k in 1:nquad
+                    AA[i,j] -= zz[k]*wz[k]*dnPl(zz[k],i-1,1)*Pl(zz[k],j-1)
+                end
+            end
+        end
+    end
+    #for i in 1:ngrid
+    #    for j in 1:ngrid
+    #        print(" ", AA[i,j])
+    #    end
+    #    println("")
+    #end
+    QQ .= 0.0
+    for j in 1:ngrid
+        for i in 1:ngrid
+            for l in 1:ngrid
+                for k in 1:ngrid
+                    QQ[i,j] += wgts[i]*wgts[j]*Pl(x[i],k-1)*Pl(x[j],l-1)*AA[k,l]/(gamma[k]*gamma[l])
+                end
+            end
+        end
+    end
+    # return normalised Q (no scale factors)
+    #@. QQ *= (0.5*L/nelement_global)
+    return nothing
+end
+
+"""
+assign mass matrix M1mn = < lm|x|ln > on a 1D line with Jacobian = 1
+"""
+function GaussLegendre_mass_matrix_1!(MM,ngrid,x,wgts,L,nelement_global)
+    # coefficient in expansion of 
+    # lagrange polys in terms of Legendre polys
+    gamma = allocate_float(ngrid)
+    for i in 1:ngrid-1
+        gamma[i] = Legendre_h_n(i-1)
+    end
+    gamma[ngrid] = 2.0/(ngrid - 1)
+    # appropriate inner product of Legendre polys
+    # < P_i P_j x >
+    AA = allocate_float(ngrid,ngrid)
+    nquad = 2*ngrid
+    zz, wz = gausslegendre(nquad)
+    @. AA = 0.0
+    for j in 1:ngrid
+        for i in 1:ngrid
+            for k in 1:nquad
+                AA[i,j] += zz[k]*wz[k]*Pl(zz[k],i-1)*Pl(zz[k],j-1)
+            end
+        end
+    end
+    
+    MM .= 0.0
+    for i in 1:ngrid
+        for j in 1:ngrid
+            for k in 1:ngrid
+                for l in 1:ngrid
+                    MM[i,j] += wgts[i]*wgts[j]*Pl(x[i],k-1)*Pl(x[j],l-1)*AA[k,l]/(gamma[k]*gamma[l])
+                end
+            end
+        end
+    end
+    @. MM *= (0.5*L/nelement_global)
+    return nothing
+end
+
+"""
+assign derivative matrix S1mn = < l'm|x|ln > on a 1D line with Jacobian = 1
+"""
+function GaussLegendre_S_matrix_1!(SS,ngrid,x,wgts,L,nelement_global)
+    # coefficient in expansion of 
+    # lagrange polys in terms of Legendre polys
+    gamma = allocate_float(ngrid)
+    for i in 1:ngrid-1
+        gamma[i] = Legendre_h_n(i-1)
+    end
+    gamma[ngrid] = 2.0/(ngrid - 1)
+    # appropriate inner product of Legendre polys
+    # < P'_i P_j x >
+    AA = allocate_float(ngrid,ngrid)
+    nquad = 2*ngrid
+    zz, wz = gausslegendre(nquad)
+    @. AA = 0.0
+    for j in 1:ngrid
+        for i in 1:ngrid
+            for k in 1:nquad
+                AA[i,j] += zz[k]*wz[k]*dnPl(zz[k],i-1,1)*Pl(zz[k],j-1)
+            end
+        end
+    end
+    
+    SS .= 0.0
+    for i in 1:ngrid
+        for j in 1:ngrid
+            for k in 1:ngrid
+                for l in 1:ngrid
+                    SS[i,j] -= wgts[i]*wgts[j]*Pl(x[i],k-1)*Pl(x[j],l-1)*AA[k,l]/(gamma[k]*gamma[l])
+                end
+            end
+        end
+    end
+    @. SS *= (0.5*L/nelement_global)
+    return nothing
+end
+
+function scale_factor_func(L,nelement_global)
+    return 0.5*L/float(nelement_global)
+end
+
+function shift_factor_func(L,nelement_global,nelement_local,irank,ielement_local)
+    ielement_global = ielement_local + irank*nelement_local
+    shift = L*((float(ielement_global)-0.5)/float(nelement_global) - 0.5)
+    return shift
+end
+
+"""
 function for setting up the full Gauss-Legendre-Lobatto
 grid and collocation point weights
 """
@@ -328,7 +535,7 @@ function scaled_gauss_legendre_lobatto_grid(ngrid, nelement_global, nelement_loc
     # get Gauss-Legendre-Lobatto points and weights on [-1,1]
     x, w = gausslobatto(ngrid)
     # factor with maps [-1,1] -> [-L/2, L/2]
-    scale_factor = 0.5*box_length/float(nelement_global)
+    scale_factor = scale_factor_func(box_length,nelement_global) #0.5*box_length/float(nelement_global)
     # grid and weights arrays
     grid = allocate_float(n)
     wgts = allocate_float(n)
@@ -337,8 +544,9 @@ function scaled_gauss_legendre_lobatto_grid(ngrid, nelement_global, nelement_loc
     k = 1
     @inbounds for j in 1:nelement_local
         # calculate the grid avoiding overlap
-        iel_global = j + irank*nelement_local
-        shift = box_length*((float(iel_global)-0.5)/float(nelement_global) - 0.5)
+        #iel_global = j + irank*nelement_local
+        #shift = box_length*((float(iel_global)-0.5)/float(nelement_global) - 0.5)
+        shift = shift_factor_func(box_length,nelement_global,nelement_local,irank,j)
         @. grid[imin[j]:imax[j]] = scale_factor*x[k:ngrid] + shift
         
         # calculate the weights
@@ -367,7 +575,8 @@ function scaled_gauss_legendre_radau_grid(ngrid, nelement_global, nelement_local
     x_rad, w_rad = -reverse(x_rad), reverse(w_rad)#
     
     # factor with maps [-1,1] -> [-L/2, L/2]
-    scale_factor = 0.5*box_length/float(nelement_global)
+    scale_factor = scale_factor_func(box_length,nelement_global)
+    #scale_factor = 0.5*box_length/float(nelement_global)
     # grid and weights arrays
     grid = allocate_float(n)
     wgts = allocate_float(n)
@@ -375,8 +584,9 @@ function scaled_gauss_legendre_radau_grid(ngrid, nelement_global, nelement_local
     if irank == 0
         # for 1st element, fill in with Gauss-Legendre-Radau points
         j = 1
-        iel_global = j + irank*nelement_local
-        shift = box_length*((float(iel_global)-0.5)/float(nelement_global) - 0.5)
+        #iel_global = j + irank*nelement_local
+        #shift = box_length*((float(iel_global)-0.5)/float(nelement_global) - 0.5)
+        shift = shift_factor_func(box_length,nelement_global,nelement_local,irank,j)
         @. grid[imin[j]:imax[j]] = scale_factor*x_rad[1:ngrid] + shift
         @. wgts[imin[j]:imax[j]] += scale_factor*w_rad[1:ngrid]         
         
@@ -384,8 +594,9 @@ function scaled_gauss_legendre_radau_grid(ngrid, nelement_global, nelement_local
         k = 2
         @inbounds for j in 2:nelement_local
             # calculate the grid avoiding overlap
-            iel_global = j + irank*nelement_local
-            shift = box_length*((float(iel_global)-0.5)/float(nelement_global) - 0.5)
+            #iel_global = j + irank*nelement_local
+            #shift = box_length*((float(iel_global)-0.5)/float(nelement_global) - 0.5)
+            shift = shift_factor_func(box_length,nelement_global,nelement_local,irank,j)
             @. grid[imin[j]:imax[j]] = scale_factor*x_lob[k:ngrid] + shift
             @. wgts[imin[j] - k + 1:imax[j]] += scale_factor*w_lob[1:ngrid]         
         end
@@ -394,8 +605,9 @@ function scaled_gauss_legendre_radau_grid(ngrid, nelement_global, nelement_local
         k = 1
         @inbounds for j in 1:nelement_local
             # calculate the grid avoiding overlap
-            iel_global = j + irank*nelement_local
-            shift = box_length*((float(iel_global)-0.5)/float(nelement_global) - 0.5)
+            #iel_global = j + irank*nelement_local
+            #shift = box_length*((float(iel_global)-0.5)/float(nelement_global) - 0.5)
+            shift = shift_factor_func(box_length,nelement_global,nelement_local,irank,j)
             @. grid[imin[j]:imax[j]] = scale_factor*x_lob[k:ngrid] + shift
             @. wgts[imin[j] - k + 1:imax[j]] += scale_factor*w_lob[1:ngrid]
             
@@ -466,6 +678,135 @@ function setup_global_mass_matrix!(mass_matrix::Array{mk_float,2},
     end
         
     return nothing
+end
+
+"""
+function that assigns the local weak-form matrices to 
+a global array QQ_global for later solving weak form of required
+1D equation
+
+option choosing type of matrix to be constructed -- "M" (mass matrix), "S" (derivative matrix)
+"""
+function setup_global_weak_form_matrix!(QQ_global::Array{mk_float,2},
+                               lobatto::gausslegendre_base_info,
+                               radau::gausslegendre_base_info, 
+                               coord,option)
+    QQ_j = allocate_float(coord.ngrid,coord.ngrid)
+    QQ_jp1 = allocate_float(coord.ngrid,coord.ngrid)
+    
+    ngrid = coord.ngrid
+    imin = coord.imin
+    imax = coord.imax
+    @. QQ_global = 0.0
+    
+    if coord.name == "vperp"
+        zero_bc_upper_boundary = true
+        zero_bc_lower_boundary = false
+    else 
+        zero_bc_upper_boundary = coord.bc == "zero" || coord.bc == "zero_upper"
+        zero_bc_lower_boundary = coord.bc == "zero" || coord.bc == "zero_lower"
+    end
+    # fill in first element 
+    j = 1
+    # N.B. QQ varies with ielement for vperp, but not vpa
+    get_QQ_local!(QQ_j,j,lobatto,radau,coord,option)
+    get_QQ_local!(QQ_jp1,j+1,lobatto,radau,coord,option)
+    
+    if zero_bc_lower_boundary #x.bc == "zero"
+        QQ_global[imin[j],imin[j]:imax[j]] .+= QQ_j[1,:]./2.0 #contributions from this element/2
+        QQ_global[imin[j],imin[j]] += QQ_j[ngrid,ngrid]/2.0 #contribution from missing `zero' element/2
+    else 
+        QQ_global[imin[j],imin[j]:imax[j]] .+= QQ_j[1,:]
+    end
+    for k in 2:imax[j]-imin[j] 
+        QQ_global[k,imin[j]:imax[j]] .+= QQ_j[k,:]
+    end
+    if zero_bc_upper_boundary && coord.nelement_local == 1
+        QQ_global[imax[j],imin[j]:imax[j]] .+= QQ_j[ngrid,:]./2.0 #contributions from this element/2
+        QQ_global[imax[j],imax[j]] += QQ_jp1[1,1]/2.0              #contribution from missing `zero' element/2
+    elseif coord.nelement_local > 1 #x.bc == "zero"
+        QQ_global[imax[j],imin[j]:imax[j]] .+= QQ_j[ngrid,:]./2.0
+    else
+        QQ_global[imax[j],imin[j]:imax[j]] .+= QQ_j[ngrid,:]
+    end 
+    # remaining elements recalling definitions of imax and imin
+    for j in 2:coord.nelement_local
+        get_QQ_local!(QQ_j,j,lobatto,radau,coord,option)
+        get_QQ_local!(QQ_jp1,j+1,lobatto,radau,coord,option)
+    
+        #lower boundary condition on element
+        QQ_global[imin[j]-1,imin[j]-1:imax[j]] .+= QQ_j[1,:]./2.0
+        for k in 2:imax[j]-imin[j]+1 
+            QQ_global[k+imin[j]-2,imin[j]-1:imax[j]] .+= QQ_j[k,:]
+        end
+        # upper boundary condition on element 
+        if j == coord.nelement_local && !(zero_bc_upper_boundary)
+            QQ_global[imax[j],imin[j]-1:imax[j]] .+= QQ_j[ngrid,:]
+        elseif j == coord.nelement_local && zero_bc_upper_boundary
+            QQ_global[imax[j],imin[j]-1:imax[j]] .+= QQ_j[ngrid,:]./2.0 #contributions from this element/2
+            QQ_global[imax[j],imax[j]] += QQ_jp1[1,1]/2.0 #contribution from missing `zero' element/2
+        else 
+            QQ_global[imax[j],imin[j]-1:imax[j]] .+= QQ_j[ngrid,:]./2.0
+        end
+    end
+        
+    return nothing
+end
+
+function get_QQ_local!(QQ,ielement,
+        lobatto::gausslegendre_base_info,
+        radau::gausslegendre_base_info, 
+        coord,option)
+  
+        if option == "M"
+            get_MM_local!(QQ,ielement,lobatto,radau,coord)
+        elseif option == "S"
+            get_SS_local!(QQ,ielement,lobatto,radau,coord)
+        end
+        return nothing
+end
+
+function get_MM_local!(QQ,ielement,
+        lobatto::gausslegendre_base_info,
+        radau::gausslegendre_base_info, 
+        coord)
+        
+        scale_factor = scale_factor_func(coord.L,coord.nelement_global)
+        shift_factor = shift_factor_func(coord.L,coord.nelement_global,coord.nelement_local,coord.irank,ielement) + 0.5*coord.L
+        if coord.name == "vperp" # assume integrals of form int^infty_0 (.) vperp d vperp
+            # extra scale and shift factors required because of vperp in integral
+            if ielement > 1 # lobatto points
+                @. QQ =  shift_factor*lobatto.M0 + scale_factor*lobatto.M1
+            else # radau points 
+                @. QQ =  shift_factor*radau.M0 + scale_factor*radau.M1
+            end
+        else # assume integrals of form int^infty_-infty (.) d vpa
+            @. QQ = lobatto.M0
+        end
+        @. QQ *= scale_factor 
+        return nothing
+end
+
+function get_SS_local!(QQ,ielement,
+        lobatto::gausslegendre_base_info,
+        radau::gausslegendre_base_info, 
+        coord)
+        
+        scale_factor = scale_factor_func(coord.L,coord.nelement_global)
+        shift_factor = shift_factor_func(coord.L,coord.nelement_global,coord.nelement_local,coord.irank,ielement) + 0.5*coord.L
+        if coord.name == "vperp" # assume integrals of form int^infty_0 (.) vperp d vperp
+            # extra scale and shift factors required because of vperp in integral
+            if ielement > 1 # lobatto points
+                @. QQ =  shift_factor*lobatto.S0 + scale_factor*lobatto.S1
+            else # radau points 
+                @. QQ =  shift_factor*radau.S0 + scale_factor*radau.S1
+            end
+        else # assume integrals of form int^infty_-infty (.) d vpa
+            @. QQ = lobatto.S0
+        end
+        # no scaling factor here because d /d x * dx is invariant under length scale transforms
+        #@. QQ *= scale_factor 
+        return nothing
 end
 
 end
