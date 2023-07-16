@@ -11,6 +11,7 @@ import moment_kinetics
 using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.chebyshev: setup_chebyshev_pseudospectral
+using moment_kinetics.gauss_legendre: setup_gausslegendre_pseudospectral
 using moment_kinetics.fokker_planck: evaluate_RMJ_collision_operator!
 using moment_kinetics.fokker_planck: calculate_Rosenbluth_potentials!
 #using moment_kinetics.fokker_planck: calculate_Rosenbluth_H_from_G!
@@ -181,7 +182,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
     end
     
     function init_grids(nelement,ngrid)
-        discretization = "chebyshev_pseudospectral"
+        discretization = "gausslegendre_pseudospectral"
+        #discretization = "chebyshev_pseudospectral"
         #discretization = "finite_difference"
         
         # define inputs needed for the test
@@ -216,9 +218,15 @@ if abspath(PROGRAM_FILE) == @__FILE__
         vperp = define_coordinate(vperp_input)
         #println(vperp.grid)
         #println(vperp.wgts)
-        vpa_spectral = setup_chebyshev_pseudospectral(vpa)
-        vperp_spectral = setup_chebyshev_pseudospectral(vperp)
-        
+        if discretization == "chebyshev_pseudospectral" 
+            vpa_spectral = setup_chebyshev_pseudospectral(vpa)
+            vperp_spectral = setup_chebyshev_pseudospectral(vperp)
+            #println("using chebyshev_pseudospectral")
+        elseif discretization == "gausslegendre_pseudospectral"
+            vpa_spectral = setup_gausslegendre_pseudospectral(vpa)
+            vperp_spectral = setup_gausslegendre_pseudospectral(vperp)
+            #println("using gausslegendre_pseudospectral")
+        end
         return vpa, vperp, vpa_spectral, vperp_spectral
     end
     
@@ -1341,7 +1349,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
              shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_list, nelement_list), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2, 
               xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize,
               foreground_color_legend = nothing, background_color_legend = nothing, legend=:bottomleft)
-            outfile = "fkpl_coeffs_numerical_lagrange_integration_test_ngrid_"*string(ngrid)*".pdf"
+            #outfile = "fkpl_coeffs_numerical_lagrange_integration_test_ngrid_"*string(ngrid)*".pdf"
+            outfile = "fkpl_coeffs_numerical_lagrange_integration_test_ngrid_"*string(ngrid)*"_GLL.pdf"
             savefig(outfile)
             println(outfile)
         end
