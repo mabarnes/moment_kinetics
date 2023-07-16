@@ -6,12 +6,13 @@ using MPI
 using SpecialFunctions: erf, ellipe, ellipk
 using FastGaussQuadrature
 using Dates
+using LinearAlgebra: mul!
 
 import moment_kinetics
 using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.chebyshev: setup_chebyshev_pseudospectral
-using moment_kinetics.gauss_legendre: setup_gausslegendre_pseudospectral
+using moment_kinetics.gauss_legendre: setup_gausslegendre_pseudospectral, gausslegendre_mass_matrix_solve!
 using moment_kinetics.fokker_planck: evaluate_RMJ_collision_operator!
 using moment_kinetics.fokker_planck: calculate_Rosenbluth_potentials!
 #using moment_kinetics.fokker_planck: calculate_Rosenbluth_H_from_G!
@@ -478,6 +479,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
         
         Cssp_numerical = allocate_shared_float(nvpa,nvperp)
         Cssp_err = allocate_shared_float(nvpa,nvperp)
+        Cssp_div_numerical = allocate_shared_float(nvpa,nvperp)
+        Cssp_div_err = allocate_shared_float(nvpa,nvperp)
         Cssp_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
         Cflux_vpa = allocate_shared_float(nvpa,nvperp)
         Cflux_vpa_err = allocate_shared_float(nvpa,nvperp)
@@ -777,7 +780,22 @@ if abspath(PROGRAM_FILE) == @__FILE__
                     d2Gspdvperp2[ivpa,ivperp],dHspdvpa[ivpa,ivperp],dHspdvperp[ivpa,ivperp],
                     ms,msp) )
         end
-    
+        if vpa.discretization == "gausslegendre_pseudospectral" && vperp.discretization == "gausslegendre_pseudospectral"
+            @. Cssp_div_numerical = 0.0
+            begin_vperp_region()
+            @loop_vperp ivperp begin 
+                @views mul!(vpa.scratch,vpa_spectral.S_matrix,Cflux_vpa[:,ivperp])
+                gausslegendre_mass_matrix_solve!(vpa.scratch2,vpa.scratch,vpa_spectral)
+                Cssp_div_numerical[:,ivperp] += vpa.scratch2
+            end
+            begin_vpa_region()
+            @loop_vpa ivpa begin 
+                @views mul!(vperp.scratch,vperp_spectral.S_matrix,Cflux_vperp[ivpa,:])
+                gausslegendre_mass_matrix_solve!(vperp.scratch2,vperp.scratch,vperp_spectral)
+                Cssp_div_numerical[ivpa,:] += vperp.scratch2
+            end
+            @. Cssp_div_numerical *= nussp
+        end
         
         plot_H = false #true
         plot_dHdvpa = false #true
@@ -799,6 +817,11 @@ if abspath(PROGRAM_FILE) == @__FILE__
             println("max_C_err: ",max_C_err)
             println("max_C_Maxwell_val: ",max_C_Maxwell_val)
             println("max_C_numerical_val: ",max_C_numerical_val)
+            if vpa.discretization == "gausslegendre_pseudospectral" && vperp.discretization == "gausslegendre_pseudospectral" 
+                @. Cssp_div_err = abs(Cssp_div_numerical - Cssp_Maxwell)
+                max_C_div_err = maximum(Cssp_div_err)
+                println("max_C_div_err: ",max_C_div_err)
+            end 
             @. Cflux_vpa_err = abs(Cflux_vpa - Cflux_vpa_Maxwell)
             max_Cflux_vpa_err = maximum(Cflux_vpa_err)
             println("max_Cflux_vpa_err: ",max_Cflux_vpa_err)
@@ -1298,10 +1321,10 @@ if abspath(PROGRAM_FILE) == @__FILE__
     if test_Lagrange_integral_scan
         initialize_comms!()
         ngrid = 5
-        nscan = 5
-        nelement_list = Int[2, 4, 8, 16, 32]
+        nscan = 2
+        #nelement_list = Int[2, 4, 8, 16, 32]
         #nelement_list = Int[2, 4, 8, 16]
-        #nelement_list = Int[2, 4]
+        nelement_list = Int[2, 4]
         #nelement_list = Int[2]
         max_C_err = Array{mk_float,1}(undef,nscan)
         max_Gvpa_err = Array{mk_float,1}(undef,nscan)
