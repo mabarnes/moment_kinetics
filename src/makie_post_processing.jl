@@ -303,6 +303,7 @@ function setup_makie_post_processing_input!(run_info,
        # memory
        itime_skip_dfns=1,
        plot_vs_z_t=true,
+       animate_vs_z=true,
       )
 
     for variable_name ∈ all_variables
@@ -779,6 +780,53 @@ function postproc_load_variable(run_info, variable_name; dfns=false,
     return result
 end
 
+function plots_for_variable(run_info, variable_name; plot_prefix, is_1D=false,
+                            is_1V=false)
+    println("Making plots for $variable_name")
+    flush(stdout)
+
+    input = Dict_to_NamedTuple(input_dict[variable_name])
+    # Use the global settings for "itime_*" to be consistent with the `time` in
+    # `run_info`.
+    tinds = input_dict["itime_min"]:input_dict["itime_skip"]:input_dict["itime_max"]
+
+    # test if any plot is needed
+    if any(v for (k,v) in pairs(input) if
+           startswith(String(k), "plot") || startswith(String(k), "animate"))
+        variable = Tuple(postproc_load_variable(ri, variable_name; it=tinds)
+                         for ri ∈ run_info)
+        if variable_name ∈ em_variables
+            species_indices = (nothing,)
+        elseif variable_name ∈ neutral_moment_variables ||
+               variable_name ∈ neutral_dfn_variables
+            species_indices = 1:maximum(ri.n_neutral_species for ri ∈ run_info)
+        else
+            species_indices = 1:maximum(ri.n_ion_species for ri ∈ run_info)
+        end
+        for is ∈ species_indices
+            if is !== nothing
+                variable_prefix = plot_prefix * variable_name * "_spec$(is)_"
+            else
+                variable_prefix = plot_prefix * variable_name * "_"
+            end
+            if variable_name == "Er" && is_1D
+                # Skip if there is no r-dimension
+                continue
+            end
+            if input.plot_vs_z_t
+                plot_vs_z_t(run_info, variable_name, is=is, data=variable, input=input,
+                            outfile=variable_prefix * "vs_z_t.pdf")
+            end
+            if input.animate_vs_z
+                animate_vs_z(run_info, variable_name, is=is, data=variable,
+                             outfile=variable_prefix * "vs_z.gif")
+            end
+        end
+    end
+
+    return nothing
+end
+
 function plot_vs_z_t(run_info::Tuple, var_name; is=1, data=nothing, input=nothing,
                      outfile=nothing)
 
@@ -831,6 +879,39 @@ function plot_vs_z_t(run_info, var_name; is=1, data=nothing, input=nothing,
     return nothing
 end
 
+function animate_vs_z(run_info::Tuple, var_name; is=1, data=nothing, input=nothing,
+                      outfile=nothing)
+
+    try
+        if data === nothing
+            data = Tuple(nothing for _ in run_info)
+        end
+        # Load data if necessary
+        data = Tuple(d === nothing ? postproc_load_variable(ri, var_name) : d
+                     for (d,ri) ∈ zip(data, run_info))
+        # Select needed dims
+        data = Tuple(select_z_t(d, input, is=is) for d ∈ data)
+
+        zcoord = Tuple(ri.z for ri ∈ run_info)
+
+        title = Tuple(ri.run_name for ri ∈ run_info)
+
+        fig = animate_1d(zcoord, data, xlabel="z", ylabel=get_variable_symbol(var_name),
+                         title=title)
+
+        return fig
+    catch e
+        println("$var_name, is=$is failed to animate. Error was $e")
+        return nothing
+    end
+end
+
+function animate_vs_z(run_info, var_name; is=1, data=nothing, input=nothing,
+                      outfile=nothing)
+    return animate_vs_z((run_info,), var_name; is=is, data=data, input=input,
+                        outfile=outfile)
+end
+
 function get_1d_ax(n=nothing; title=nothing)
     if n == nothing
         fig = Figure(title=title)
@@ -847,10 +928,10 @@ function get_1d_ax(n=nothing; title=nothing)
     return fig, ax
 end
 
-function get_2d_ax(n=nothing; title=nothing)
+function get_2d_ax(n=nothing; title=nothing, xlabel=nothing, ylabel=nothing)
     if n == nothing
         fig = Figure(title=title)
-        ax = Axis(fig[1,1])
+        ax = Axis(fig[1,1], xlabel=xlabel, ylabel=ylabel)
         colorbar_places = fig[1,2]
     else
         fig = Figure(resolution=(600*n, 400))
@@ -858,7 +939,7 @@ function get_2d_ax(n=nothing; title=nothing)
         Label(title_layout[1,1:2], title)
 
         plot_layout = fig[2,1] = GridLayout()
-        ax = [Axis(plot_layout[1,2*i-1]) for i in 1:n]
+        ax = [Axis(plot_layout[1,2*i-1], xlabel=xlabel, ylabel=ylabel) for i in 1:n]
         colorbar_places = [plot_layout[1,2*i] for i in 1:n]
     end
 
@@ -924,6 +1005,50 @@ function plot_2d(xcoord, ycoord, data; ax=nothing, colorbar_place=nothing, xlabe
     end
 end
 
+function animate_1d(args...; kwargs...)
+    error("unfinished")
+end
+
+function animate_2d(xcoord::Tuple, ycoord::Tuple, data::Tuple; xlabel=nothing,
+                    ylabel=nothing, title=nothing, sub_titles=nothing, colormap=nothing,
+                    outfile=nothing)
+    n_runs = length(data)
+
+    if sub_titles === nothing
+        sub_titles = Tuple(nothing for _ ∈ 1:n_runs)
+    end
+    if outfile === nothing
+        error("outfile is required for animate_2d()")
+    end
+    colormap = parse_colormap(colormap)
+
+    fig, ax, colorbar_place = get_2d_ax(n_runs, title=title, xlabel=xlabel, ylabel=ylabel)
+    hm = []
+    for (i, (x, y, d, t, a, cp)) ∈ enumerate(zip(xcoord, ycoord, data, sub_titles, ax,
+                                                 colorbar_place))
+        println("setting up with $xlabel, $ylabel")
+        this_hm = heatmap!(a, x, y, d[:,:,1], title=t, colormap=colormap)
+        Colorbar(cp, this_hm)
+
+        push!(hm, this_hm)
+    end
+
+    nt = minimum(size(d, 3) for d ∈ data)
+
+    record(fig, outfile, 1:nt, framerate=5) do it
+        for (h, d) ∈ zip(hm, data)
+            h[3] = @view d[:,:,it]
+        end
+    end
+end
+
+function animate_2d(xcoord, ycoord, data; xlabel=nothing, ylabel=nothing, title=nothing,
+                    sub_titles=nothing, colormap=nothing, outfile=nothing)
+    return animate_2d((xcoord,), (ycoord,), (data,), xlabel=xlabel, ylabel=ylabel,
+                      title=title, sub_titles=sub_titles, colormap=colormap,
+                      outfile=outfile)
+end
+
 function select_z_t(variable::AbstractArray{T,2}, input=nothing; is=nothing) where T
     # Array is not a standard shape, so assume it is already sliced to (z,t)
     return variable
@@ -972,48 +1097,6 @@ function grid_points_to_faces(coord::AbstractVector)
     return faces
 end
 
-function plots_for_variable(run_info, variable_name; plot_prefix)
-    println("Making plots for $variable_name")
-    flush(stdout)
-
-    input = Dict_to_NamedTuple(input_dict[variable_name])
-    # Use the global settings for "itime_*" to be consistent with the `time` in
-    # `run_info`.
-    tinds = input_dict["itime_min"]:input_dict["itime_skip"]:input_dict["itime_max"]
-
-    # test if any plot is needed
-    if any(v for (k,v) in pairs(input) if
-           startswith(String(k), "plot") || startswith(String(k), "animate"))
-        variable = Tuple(postproc_load_variable(ri, variable_name; it=tinds)
-                         for ri ∈ run_info)
-        if variable_name ∈ em_variables
-            species_indices = (nothing,)
-        elseif variable_name ∈ neutral_moment_variables ||
-               variable_name ∈ neutral_dfn_variables
-            species_indices = 1:maximum(ri.n_neutral_species for ri ∈ run_info)
-        else
-            species_indices = 1:maximum(ri.n_ion_species for ri ∈ run_info)
-        end
-        for is ∈ species_indices
-            if is !== nothing
-                variable_prefix = plot_prefix * variable_name * "_spec$(is)_"
-            else
-                variable_prefix = plot_prefix * variable_name * "_"
-            end
-            if variable_name == "Er" && !any(ri.r.n > 1 for ri ∈ run_info)
-                # Skip if there is no r-dimension
-                continue
-            end
-            if input.plot_vs_z_t
-                plot_vs_z_t(run_info, variable_name, is=is, data=variable, input=input,
-                            outfile=variable_prefix * "vs_z_t.pdf")
-            end
-        end
-    end
-
-    return nothing
-end
-
 """
 Get a symbol corresponding to a variable name
 
@@ -1040,7 +1123,9 @@ Parse colormap option
 Allows us to have a string option and still use Reverse, etc. conveniently
 """
 function parse_colormap(colormap)
-    if startswith(colormap, "reverse_")
+    if colormap === nothing
+        return colormap
+    elseif startswith(colormap, "reverse_")
         # Use split to remove the "reverse_" prefix
         return Reverse(String(split(colormap, "reverse_", keepempty=false)[1]))
     else
