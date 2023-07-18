@@ -830,6 +830,22 @@ function plot_vs_z_t(run_info, var_name; is=1, data=nothing, input=nothing,
     return nothing
 end
 
+function get_1d_ax(n=nothing; title=nothing)
+    if n == nothing
+        fig = Figure(title=title)
+        ax = Axis(fig[1,1])
+    else
+        fig = Figure(resolution=(600*n, 400), title=title)
+        title_layout = fig[1,1] = GridLayout()
+        Label(title_layout[1,1:2], title)
+
+        plot_layout = fig[2,1] = GridLayout()
+        ax = [Axis(plot_layout[1,i]) for i in 1:n]
+    end
+
+    return fig, ax
+end
+
 function get_2d_ax(n=nothing; title=nothing)
     if n == nothing
         fig = Figure(title=title)
@@ -846,6 +862,31 @@ function get_2d_ax(n=nothing; title=nothing)
     end
 
     return fig, ax, colorbar_places
+end
+
+function plot_1d(xcoord, data; ax=nothing, xlabel=nothing,
+                 ylabel=nothing, title=nothing, kwargs...)
+    if ax === nothing
+        fig, ax, _ = get_1d_ax()
+    end
+
+    if xlabel !== nothing
+        ax.xlabel = xlabel
+    end
+    if ylabel !== nothing
+        ax.ylabel = ylabel
+    end
+    if title !== nothing
+        ax.title = title
+    end
+
+    l = lines!(ax, xcoord, data, kwargs...)
+
+    if ax === nothing
+        return fig
+    else
+        return nothing
+    end
 end
 
 function plot_2d(xcoord, ycoord, data; ax=nothing, colorbar_place=nothing, xlabel=nothing,
