@@ -79,6 +79,15 @@ You can also change the default values used to select from the other dimensions
 ```julia
 julia> plot_vs_z(run_info, "phi"; outfile="phi_vs_z.pdf", it=42, ir=7)
 ```
+You can make animations in a similar way
+```julia
+julia> fig1 = animate_vs_z(run_info, "phi"; outfile="phi_vs_z.gif", it=8:12, ir=1)
+julia> fig2 = animate_vs_z_r(run_info, "density"; outfile="density_vs_z_r.mp4")
+```
+using [`moment_kinetics.makie_post_processing.animate_vs_r`](@ref), etc. for 1d
+and [`moment_kinetics.makie_post_processing.animate_vs_z_r`](@ref), etc.  for
+2d animations.
+Note that `outfile` is required for animations.
 
 API
 ---
