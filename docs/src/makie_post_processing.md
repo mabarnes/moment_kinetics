@@ -34,6 +34,11 @@ If there is output from several restarts of the same run in a directory, by
 default they will all be read and plotted. A single restart can be started by
 passing the `restart_id` argument to `makie_post_process()`.
 
+To see all the options that can be set,
+[`moment_kinetics.makie_post_processing.generate_example_input_file`](@ref) can
+be used to create an example file containing all the options with their default
+values. The options are all commented out when the file is created.
+
 Interactive use
 ---------------
 
