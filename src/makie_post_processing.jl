@@ -167,11 +167,8 @@ function setup_makie_post_processing_input!(
 end
 
 function setup_makie_post_processing_input!(run_info, new_input_dict::Dict{String,Any})
-    # This is one way to clear all entries from a dict, by using a filter which is false
-    # for every entry
-    if !isempty(input_dict)
-        filter!(x->false, input_dict)
-    end
+    # Remove all existing entries from the global `input_dict`
+    clear_Dict!(input_dict)
 
     # Put entries from new_input_dict into input_dict
     merge!(input_dict, new_input_dict)
@@ -939,6 +936,24 @@ function parse_colormap(colormap)
     else
         return colormap
     end
+end
+
+# Utility functions
+###################
+#
+# These are more-or-less generic, but only used in this module for now, so keep them here.
+
+"""
+Remove all entries from a Dict, leaving it empty
+"""
+function clear_Dict!(d::AbstractDict)
+    # This is one way to clear all entries from a dict, by using a filter which is false
+    # for every entry
+    if !isempty(d)
+        filter!(x->false, d)
+    end
+
+    return d
 end
 
 end
