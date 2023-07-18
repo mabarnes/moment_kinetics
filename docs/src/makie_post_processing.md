@@ -66,6 +66,20 @@ defaults for various options - they are not required, and usually you will
 probably only pass one (`run_info_dfns` if you loaded distribution function
 output, and `run_info_moments` otherwise).
 
+Then you can make 1d or 2d plots, e.g.
+```julia
+julia> fig1 = plot_vs_z(run_info, "phi")
+julia> fig2 = plot_vs_r_t(run_info, "density"; outfile="density_vs_r_t.pdf")
+```
+using [`moment_kinetics.makie_post_processing.plot_vs_t`](@ref), etc. for 1d
+and [`moment_kinetics.makie_post_processing.plot_vs_r_t`](@ref), etc. for 2d
+plots.
+The `outfile` argument can be used to save the plot.
+You can also change the default values used to select from the other dimensions
+```julia
+julia> plot_vs_z(run_info, "phi"; outfile="phi_vs_z.pdf", it=42, ir=7)
+```
+
 API
 ---
 

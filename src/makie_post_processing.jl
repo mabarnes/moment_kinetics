@@ -16,6 +16,7 @@ export makie_post_process, generate_example_input_file,
 using ..array_allocation: allocate_float
 using ..coordinates: define_coordinate
 using ..input_structs: grid_input, advection_input
+using ..looping: all_dimensions, ion_dimensions, neutral_dimensions
 using ..moment_kinetics_input: mk_input, set_defaults_and_check_top_level!,
                                set_defaults_and_check_section!, Dict_to_NamedTuple
 using ..load_data: open_readonly_output_file, get_group, load_block_data,
@@ -26,6 +27,7 @@ using ..post_processing: construct_global_zr_coords, get_geometry_and_compositio
                          read_distributed_zr_data!
 using ..type_definitions: mk_float, mk_int
 
+using Combinatorics
 using Glob
 using LsqFit
 using MPI
@@ -69,6 +71,16 @@ const all_dfn_variables = tuple(ion_dfn_variables..., neutral_dfn_variables...)
 const ion_variables = tuple(ion_moment_variables..., ion_dfn_variables)
 const neutral_variables = tuple(neutral_moment_variables..., neutral_dfn_variables)
 const all_variables = tuple(all_moment_variables..., all_dfn_variables...)
+
+const one_dimension_combinations_no_t = setdiff(all_dimensions, (:s, :sn))
+const one_dimension_combinations = (:t, one_dimension_combinations_no_t...)
+const two_dimension_combinations_no_t = Tuple(
+          Tuple(c) for c in unique((combinations(setdiff(ion_dimensions, (:s,)), 2)...,
+                                    combinations(setdiff(neutral_dimensions, (:sn,)), 2)...)))
+const two_dimension_combinations = Tuple(
+         Tuple(c) for c in
+         unique((combinations((:t, setdiff(ion_dimensions, (:s,))...), 2)...,
+                 combinations((:t, setdiff(neutral_dimensions, (:sn,))...), 2)...)))
 
 """
     makie_post_process(run_dir...;
@@ -198,7 +210,8 @@ function makie_post_process(run_dir::Union{String,Tuple},
     end
 
     for variable_name ∈ moment_variable_list
-        plots_for_variable(run_info, variable_name; plot_prefix=plot_prefix)
+        plots_for_variable(run_info, variable_name; plot_prefix=plot_prefix, is_1D=is_1D,
+                           is_1V=is_1V)
     end
 
     # Plots from distribution function variables
@@ -445,6 +458,7 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
        # Load every `time_skip` time points for distribution function variables, to save
        # memory
        itime_skip_dfns=1,
+       plot_vs_r_t=true,
        plot_vs_z_t=true,
       )
 
@@ -987,11 +1001,487 @@ function plots_for_variable(run_info, variable_name; plot_prefix)
                 # Skip if there is no r-dimension
                 continue
             end
+            if !is_1D && input.plot_vs_r_t
+                plot_vs_r_t(run_info, variable_name, is=is, data=variable, input=input,
+                            outfile=variable_prefix * "vs_r_t.pdf")
+            end
+            if input.plot_vs_z_t
+                plot_vs_z_t(run_info, variable_name, is=is, data=variable, input=input,
+                            outfile=variable_prefix * "vs_z_t.pdf")
+            end
         end
     end
 
     return nothing
 end
+
+# Generate 1d plot functions for each dimension
+for dim ∈ one_dimension_combinations
+    function_name_str = "plot_vs_$dim"
+    function_name = Symbol(function_name_str)
+    spaces = " " ^ length(function_name_str)
+    dim_str = String(dim)
+    if dim == :t
+        dim_grid = :( run_info.time )
+    else
+        dim_grid = :( run_info.$dim.grid )
+    end
+    idim = Symbol(:i, dim)
+    eval(quote
+             export $function_name
+
+             """
+             function $($function_name_str)(run_info::Tuple, var_name; is=1, data=nothing,
+                      $($spaces)input=nothing, outfile=nothing, it=nothing,
+                      $($spaces)ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
+                      $($spaces)ivzeta=nothing, ivr=nothing, ivz=nothing, kwargs...)
+             function $($function_name_str)(run_info, var_name; is=1, data=nothing,
+                      $($spaces)input=nothing, ax=nothing, label=nothing,
+                      $($spaces)outfile=nothing, it=nothing,
+                      $($spaces)ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
+                      $($spaces)ivzeta=nothing, ivr=nothing, ivz=nothing, kwargs...)
+
+             Plot `var_name` from the run(s) represented by `run_info` (as returned by
+             [`get_run_info`](@ref)) vs $($dim_str).
+
+             If a Tuple of `run_info` is passed, the plots from each run are overlayed on
+             the same axis, and a legend is added.
+
+             `it`, `is`, `ir`, `iz`, `ivperp`, `ivpa`, `ivzeta`, `ivr`, and `ivz` can be
+             used to select different indices (for non-plotted dimensions) or range (for
+             the plotted dimension) to use.
+
+             If `outfile` is given, the plot will be saved to a file with that name. The
+             suffix determines the file type.
+
+             Extra `kwargs` are passed to Makie's `lines!() function`.
+
+             When a single `run_info` is passed, `label` can be used to set the label for
+             the line created by this plot, which would be used if it is added to a
+             `Legend`.
+
+             When a single `run_info` is passed, an `Axis` can be passed to `ax`. If it
+             is, the plot will be added to `ax`.
+
+             By default the data for the variable is loaded from the output represented by
+             `run_info`. The data can optionally be passed to `data` if you have already
+             loaded it.
+
+             Returns the `Figure`, unless `ax` was passed in which case the object
+             returned by Makie's `lines!()` function is returned.
+
+             By default relevant settings are read from the `var_name` section of
+             [`input_dict_dfns`](@ref) (if output that has distribution functions is being
+             read) or [`input_dict`](@ref) (otherwise). The settings can also be passed as
+             an `AbstractDict` or `NamedTuple` via the `input` argument.  Sometimes
+             needed, for example if `var_name` is not present in `input_dict` (in which
+             case you would have had to create the array to be plotted and pass it to
+             `data`).
+             """
+             function $function_name end
+
+             function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
+                                     input=nothing, outfile=nothing, kwargs...)
+
+                 try
+                     if data === nothing
+                         data = Tuple(nothing for _ in run_info)
+                     end
+
+                     n_runs = length(run_info)
+
+                     fig, ax = get_1d_ax(xlabel="$($dim_str)",
+                                         ylabel=get_variable_symbol(var_name))
+                     for (d, ri) ∈ zip(data, run_info)
+                         $function_name(ri, var_name, is=is, data=d, input=input, ax=ax,
+                                        label=ri.run_name, kwargs...)
+                     end
+
+                     if n_runs > 1
+                         put_legend_above(fig, ax)
+                     end
+
+                     if outfile !== nothing
+                         save(outfile, fig)
+                     end
+                     return fig
+                 catch e
+                     println("$($function_name_str) failed for $var_name, is=$is. Error was $e")
+                     return nothing
+                 end
+             end
+
+             function $function_name(run_info, var_name; is=1, data=nothing,
+                                     input=nothing, ax=nothing, label=nothing,
+                                     outfile=nothing, it=nothing,
+                                     ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
+                                     ivzeta=nothing, ivr=nothing, ivz=nothing, kwargs...)
+                 if input === nothing
+                     if run_info.dfns
+                         input = input_dict_dfns[var_name]
+                     else
+                         input = input_dict[var_name]
+                     end
+                 end
+                 if isa(input, AbstractDict)
+                     input = Dict_to_NamedTuple(input)
+                 end
+                 if data === nothing
+                     dim_slices = get_dimension_slice_indices($(QuoteNode(dim));
+                                                              input=input, it=it, is=is,
+                                                              ir=ir, iz=iz, ivperp=ivperp,
+                                                              ivpa=ivpa, ivzeta=ivzeta,
+                                                              ivr=ivr, ivz=ivz)
+                     data = postproc_load_variable(run_info, var_name; dim_slices...)
+                 else
+                     data = select_slice(data, $(QuoteNode(dim)); input=input, it=it,
+                                         is=is, ir=ir, iz=iz, ivperp=ivperp, ivpa=ivpa,
+                                         ivzeta=ivzeta, ivr=ivr, ivz=ivz)
+                 end
+
+                 x = $dim_grid
+                 if $idim !== nothing
+                     x = x[$idim]
+                 end
+                 fig = plot_1d(x, data; xlabel="$($dim_str)",
+                               ylabel=get_variable_symbol(var_name), label=label, ax=ax,
+                               kwargs...)
+
+                 if outfile !== nothing
+                     if fig === nothing
+                         error("When `outfile` is passed to save the plot, must either pass both "
+                               * "`fig` and `ax` or neither. Only `ax` was passed.")
+                     end
+                     save(outfile, fig)
+                 end
+
+                 return fig
+             end
+         end)
+end
+
+# Generate 2d plot functions for all combinations of dimensions
+for (dim1, dim2) ∈ two_dimension_combinations
+    function_name_str = "plot_vs_$(dim2)_$(dim1)"
+    function_name = Symbol(function_name_str)
+    spaces = " " ^ length(function_name_str)
+    dim1_str = String(dim1)
+    dim2_str = String(dim2)
+    if dim1 == :t
+        dim1_grid = :( run_info.time )
+    else
+        dim1_grid = :( run_info.$dim1.grid )
+    end
+    dim2_grid = :( run_info.$dim2.grid )
+    idim1 = Symbol(:i, dim1)
+    idim2 = Symbol(:i, dim2)
+    eval(quote
+             export $function_name
+
+             """
+             function $($function_name_str)(run_info::Tuple, var_name; is=1, data=nothing,
+                      $($spaces)input=nothing, outfile=nothing, it=nothing,
+                      $($spaces)ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
+                      $($spaces)ivzeta=nothing, ivr=nothing, ivz=nothing, kwargs...)
+             function $($function_name_str)(run_info, var_name; is=1, data=nothing,
+                      $($spaces)input=nothing, ax=nothing,
+                      $($spaces)colorbar_place=nothing, title=nothing,
+                      $($spaces)outfile=nothing, it=nothing,
+                      $($spaces)ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
+                      $($spaces)ivzeta=nothing, ivr=nothing, ivz=nothing, kwargs...)
+
+             Plot `var_name` from the run(s) represented by `run_info` (as returned by
+             [`get_run_info`](@ref))vs $($dim1_str) and $($dim2_str).
+
+             If a Tuple of `run_info` is passed, the plots from each run are displayed in
+             a horizontal row, and the subtitle for each subplot is the 'run name'.
+
+             `it`, `is`, `ir`, `iz`, `ivperp`, `ivpa`, `ivzeta`, `ivr`, and `ivz` can be
+             used to select different indices (for non-plotted dimensions) or range (for
+             the plotted dimension) to use.
+
+             If `outfile` is given, the plot will be saved to a file with that name. The
+             suffix determines the file type.
+
+             Extra `kwargs` are passed to Makie's `heatmap!() function`.
+
+             When a single `run_info` is passed, `title` can be used to set the title for
+             the (sub-)plot.
+
+             When a single `run_info` is passed, an `Axis` can be passed to `ax`. If it
+             is, the plot will be added to `ax`. A colorbar will be created in
+             `colorbar_place` if it is given a `GridPosition`.
+
+             By default the data for the variable is loaded from the output represented by
+             `run_info`. The data can optionally be passed to `data` if you have already
+             loaded it.
+
+             Returns the `Figure`, unless `ax` was passed in which case the object
+             returned by Makie's `heatmap!()` function is returned.
+
+             By default relevant settings are read from the `var_name` section of
+             [`input_dict_dfns`](@ref) (if output that has distribution functions is being
+             read) or [`input_dict`](@ref) (otherwise). The settings can also be passed as
+             an `AbstractDict` or `NamedTuple` via the `input` argument.  Sometimes
+             needed, for example if `var_name` is not present in `input_dict` (in which
+             case you would have had to create the array to be plotted and pass it to
+             `data`).
+             """
+             function $function_name end
+
+             function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
+                                     input=nothing, outfile=nothing, kwargs...)
+
+                 try
+                     if data === nothing
+                         data = Tuple(nothing for _ in run_info)
+                     end
+                     fig, ax, colorbar_places = get_2d_ax(length(run_info),
+                                                          title=get_variable_symbol(var_name))
+                     for (d, ri, a, cp) ∈ zip(data, run_info, ax, colorbar_places)
+                         $function_name(ri, var_name; is=is, data=d, input=input, ax=a,
+                                        colorbar_place=cp, title=ri.run_name, kwargs...)
+                     end
+
+                     if outfile !== nothing
+                         save(outfile, fig)
+                     end
+                     return fig
+                 catch e
+                     println("$($function_name_str) failed for $var_name, is=$is. Error was $e")
+                     return nothing
+                 end
+             end
+
+             function $function_name(run_info, var_name; is=1, data=nothing,
+                                     input=nothing, ax=nothing,
+                                     colorbar_place=nothing, title=nothing,
+                                     outfile=nothing, transform=identity, it=nothing,
+                                     ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
+                                     ivzeta=nothing, ivr=nothing, ivz=nothing, kwargs...)
+                 if input === nothing
+                     if run_info.dfns
+                         input = input_dict_dfns[var_name]
+                     else
+                         input = input_dict[var_name]
+                     end
+                 end
+                 if isa(input, AbstractDict)
+                     input = Dict_to_NamedTuple(input)
+                 end
+                 if data === nothing
+                     dim_slices = get_dimension_slice_indices($(QuoteNode(dim1)),
+                                                              $(QuoteNode(dim2));
+                                                              input=input, it=it, is=is,
+                                                              ir=ir, iz=iz, ivperp=ivperp,
+                                                              ivpa=ivpa, ivzeta=ivzeta,
+                                                              ivr=ivr, ivz=ivz)
+                     data = postproc_load_variable(run_info, var_name; dim_slices...)
+                 else
+                     data = select_slice(data, $(QuoteNode(dim2)), $(QuoteNode(dim1));
+                                         input=input, it=it, is=is, ir=ir, iz=iz,
+                                         ivperp=ivperp, ivpa=ivpa, ivzeta=ivzeta, ivr=ivr,
+                                         ivz=ivz)
+                 end
+                 if input === nothing
+                     colormap = "reverse_deep"
+                 else
+                     colormap = input.colormap
+                 end
+                 if title === nothing
+                     title = get_variable_symbol(var_name)
+                 end
+
+
+                 x = $dim2_grid
+                 if $idim2 !== nothing
+                     x = x[$idim2]
+                 end
+                 y = $dim1_grid
+                 if $idim1 !== nothing
+                     y = y[$idim1]
+                 end
+                 fig = plot_2d(x, y, data; xlabel="$($dim2_str)", ylabel="$($dim1_str)",
+                               title=title, ax=ax, colorbar_place=colorbar_place,
+                               colormap=colormap, kwargs...)
+
+                 if outfile !== nothing
+                     if fig === nothing
+                         error("When `outfile` is passed to save the plot, must either pass both "
+                               * "`fig` and `ax` or neither. Only `ax` was passed.")
+                     end
+                     save(outfile, fig)
+                 end
+
+                 return fig
+             end
+         end)
+end
+
+"""
+    get_1d_ax(n=nothing; title=nothing)
+
+Create a new `Figure` `fig` and `Axis` `ax` intended for 1d plots.
+
+`title` gives an overall title to the `Figure`.
+
+By default creates a single `Axis`, and returns `(fig, ax)`.
+If a number of axes `n` is passed, then `ax` is a `Vector{Axis}` of length `n` (even if
+`n` is 1). The axes are created in a horizontal row, and the width of the figure is
+increased in proportion to `n`.
+"""
+function get_1d_ax(n=nothing; title=nothing)
+    if n == nothing
+        fig = Figure(title=title)
+        ax = Axis(fig[1,1])
+    else
+        fig = Figure(resolution=(600*n, 400), title=title)
+        title_layout = fig[1,1] = GridLayout()
+        Label(title_layout[1,1:2], title)
+
+        plot_layout = fig[2,1] = GridLayout()
+        ax = [Axis(plot_layout[1,i]) for i in 1:n]
+    end
+
+    return fig, ax
+end
+
+"""
+    get_2d_ax(n=nothing; title=nothing)
+
+Create a new `Figure` `fig` and `Axis` `ax` intended for 2d plots.
+
+`title` gives an overall title to the `Figure`.
+
+By default creates a single `Axis`, and returns `(fig, ax, colorbar_place)`, where
+`colorbar_place` is a location in the grid layout that can be passed to `Colorbar()`
+located immediately to the right of `ax`.
+If a number of axes `n` is passed, then `ax` is a `Vector{Axis}` and `colorbar_place` is a
+`Vector{GridPosition}` of length `n` (even if `n` is 1). The axes are created in a
+horizontal row, and the width of the figure is increased in proportion to `n`.
+"""
+function get_2d_ax(n=nothing; title=nothing)
+    if n == nothing
+        fig = Figure(title=title)
+        ax = Axis(fig[1,1])
+        colorbar_place = fig[1,2]
+    else
+        fig = Figure(resolution=(600*n, 400))
+        title_layout = fig[1,1] = GridLayout()
+        Label(title_layout[1,1:2], title)
+
+        plot_layout = fig[2,1] = GridLayout()
+        ax = [Axis(plot_layout[1,2*i-1]) for i in 1:n]
+        colorbar_place = [plot_layout[1,2*i] for i in 1:n]
+    end
+
+    return fig, ax, colorbar_place
+end
+
+"""
+    plot_1d(xcoord, data; ax=nothing, xlabel=nothing,
+            ylabel=nothing, title=nothing, kwargs...)
+
+Make a 1d plot of `data` vs `xcoord`.
+
+`xlabel`, `ylabel` and `title` can be passed to set axis labels and title for the
+(sub-)plot.
+
+If `ax` is passed, the plot will be added to that existing `Axis`, otherwise a new
+`Figure` and `Axis` will be created.
+
+Other `kwargs` are passed to Makie's `lines!()` function.
+
+If `ax` is not passed, returns the `Figure`, otherwise returns the object returned by
+`lines!()`.
+"""
+function plot_1d(xcoord, data; ax=nothing, xlabel=nothing,
+                 ylabel=nothing, title=nothing, kwargs...)
+    if ax === nothing
+        fig, ax = get_1d_ax()
+    else
+        fig = nothing
+    end
+
+    if xlabel !== nothing
+        ax.xlabel = xlabel
+    end
+    if ylabel !== nothing
+        ax.ylabel = ylabel
+    end
+    if title !== nothing
+        ax.title = title
+    end
+
+    l = lines!(ax, xcoord, data; kwargs...)
+
+    if fig === nothing
+        return l
+    else
+        return fig
+    end
+end
+
+"""
+    plot_2d(xcoord, ycoord, data; ax=nothing, colorbar_place=nothing, xlabel=nothing,
+            ylabel=nothing, title=nothing, colormap="reverse_deep", kwargs...)
+
+Make a 2d plot of `data` vs `xcoord` and `ycoord`.
+
+`xlabel`, `ylabel` and `title` can be passed to set axis labels and title for the
+(sub-)plot.
+
+If `ax` is passed, the plot will be added to that existing `Axis`, otherwise a new
+`Figure` and `Axis` will be created.
+
+`colormap` is included explicitly because we do some special handling so that extra Makie
+functionality can be specified by a prefix to the `colormap` string, rather than the
+standard Makie mechanism of creating a struct that modifies the colormap. For example
+`Reverse("deep")` can be passed as `"reverse_deep"`. This is useful so that these extra
+colormaps can be specified in an input file, but is not needed for interactive use.
+
+Other `kwargs` are passed to Makie's `heatmap!()` function.
+
+If `ax` is not passed, returns the `Figure`, otherwise returns the object returned by
+`heatmap!()`.
+"""
+function plot_2d(xcoord, ycoord, data; ax=nothing, colorbar_place=nothing, xlabel=nothing,
+                 ylabel=nothing, title=nothing, colormap="reverse_deep", kwargs...)
+    if ax === nothing
+        fig, ax, colorbar_place = get_2d_ax()
+    else
+        fig = nothing
+    end
+
+    if xlabel !== nothing
+        ax.xlabel = xlabel
+    end
+    if ylabel !== nothing
+        ax.ylabel = ylabel
+    end
+    if title !== nothing
+        ax.title = title
+    end
+    colormap = parse_colormap(colormap)
+
+    # Convert grid point values to 'cell face' values for heatmap
+    xcoord = grid_points_to_faces(xcoord)
+    ycoord = grid_points_to_faces(ycoord)
+
+    hm = heatmap!(ax, xcoord, ycoord, data; kwargs...)
+    if colorbar_place === nothing
+        println("Warning: colorbar_place argument is required to make a color bar")
+    else
+        Colorbar(colorbar_place, hm)
+    end
+
+    if fig === nothing
+        return hm
+    else
+        return fig
+    end
+end
+
 
 """
    put_legend_above(fig, ax; kwargs...)
@@ -1343,6 +1833,27 @@ function get_dimension_slice_indices(keep_dims...; input, it=nothing, is=nothing
 end
 
 """
+    grid_points_to_faces(coord::AbstractVector)
+
+Turn grid points in `coord` into 'cell faces'.
+
+Returns `faces`, which has a length one greater than `coord`. The first and last values of
+`faces` are the first and last values of `coord`. The intermediate values are the mid
+points between grid points.
+"""
+function grid_points_to_faces(coord::AbstractVector)
+    n = length(coord)
+    faces = allocate_float(n+1)
+    faces[1] = coord[1]
+    for i ∈ 2:n
+        faces[i] = 0.5*(coord[i-1] + coord[i])
+    end
+    faces[n+1] = coord[n]
+
+    return faces
+end
+
+"""
     get_variable_symbol(variable_name)
 
 Get a symbol corresponding to a `variable_name`
@@ -1364,6 +1875,23 @@ function get_variable_symbol(variable_name)
                                  "temperature_neutral"=>"Tn")
 
     return get(symbols_for_variables, variable_name, variable_name)
+end
+
+"""
+    parse_colormap(colormap)
+
+Parse a `colormap` option
+
+Allows us to have a string option which can be set in the input file and still use
+Reverse, etc. conveniently.
+"""
+function parse_colormap(colormap)
+    if startswith(colormap, "reverse_")
+        # Use split to remove the "reverse_" prefix
+        return Reverse(String(split(colormap, "reverse_", keepempty=false)[1]))
+    else
+        return colormap
+    end
 end
 
 # Utility functions
