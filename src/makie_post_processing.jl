@@ -136,7 +136,8 @@ function makie_post_process(run_dir::Union{String,Tuple},
     end
 
     for variable_name ∈ variable_list
-        plots_for_variable(run_info, variable_name, plot_prefix=plot_prefix)
+        plots_for_variable(run_info, variable_name, plot_prefix=plot_prefix, is_1D=is_1D,
+                           is_1V=is_1V)
     end
 
     return nothing
@@ -880,12 +881,12 @@ function plot_1d(xcoord, data; ax=nothing, xlabel=nothing,
         ax.title = title
     end
 
-    l = lines!(ax, xcoord, data, kwargs...)
+    l = lines!(ax, xcoord, data; kwargs...)
 
     if ax === nothing
         return fig
     else
-        return nothing
+        return l
     end
 end
 
