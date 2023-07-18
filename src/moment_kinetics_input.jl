@@ -63,7 +63,7 @@ already present.
 
 Ignores any sections, as these will be checked separately.
 """
-function set_defaults_and_check_top_level!(options::Dict; kwargs...)
+function set_defaults_and_check_top_level!(options::AbstractDict; kwargs...)
     # Check for any unexpected values in the options - all options that are set should be
     # present in the kwargs of this function call
     options_keys_symbols = keys(kwargs)
@@ -94,7 +94,7 @@ options (i.e. options that have no default).
 Modifies the options[section_name]::Dict by adding defaults for any values that are not
 already present.
 """
-function set_defaults_and_check_section!(options::Dict, section_name;
+function set_defaults_and_check_section!(options::AbstractDict, section_name;
                                          kwargs...)
     if !(section_name ∈ keys(options))
         # If section is not present, create it

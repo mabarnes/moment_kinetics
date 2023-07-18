@@ -19,6 +19,7 @@ using ..type_definitions: mk_float, mk_int
 using Glob
 using LsqFit
 using MPI
+using OrderedCollections
 using TOML
 
 using CairoMakie
@@ -28,8 +29,11 @@ const default_input_file_name = "post_processing_input.toml"
 """
 Global dict containing settings for makie_post_processing. Can be re-loaded at any time
 to change settings.
+
+Is an OrderedDict so the order of sections is nicer if `input_dict` is written out as a
+TOML file.
 """
-const input_dict = Dict{String,Any}()
+const input_dict = OrderedDict{String,Any}()
 
 const em_variables = ("phi", "Er", "Ez")
 const ion_moment_variables = ("density", "parallel_flow", "parallel_pressure",
@@ -80,7 +84,7 @@ index). A tuple with the same length as `run_dir` can also be passed to give a d
 `restart_index` for each run.
 """
 function makie_post_process(run_dir::Union{String,Tuple},
-                            new_input_dict::Dict{String,Any};
+                            new_input_dict::AbstractDict{String,Any};
                             restart_index::Union{Nothing,mk_int,Tuple}=nothing)
     if isa(run_dir, String)
         # Make run_dir a one-element tuple if it is not a tuple
@@ -139,12 +143,75 @@ function makie_post_process(run_dir::Union{String,Tuple},
 end
 
 """
+    generate_example_input_file(filename::String=$default_input_file_name;
+                                overwrite::Bool=false)
+
+Create an example makie-post-processing input file.
+
+Every option is commented out, but filled with the default value.
+
+Pass `filename` to choose the name of the example file (defaults to the default input file
+name used by `makie_post_process()`).
+
+Pass `overwrite=true` to overwrite any existing file at `filename`.
+"""
+function generate_example_input_file(filename::String=default_input_file_name;
+                                     overwrite::Bool=false)
+
+    if ispath(filename) && !overwrite
+        error("$filename already exists. If you want to overwrite it, pass "
+              * "`overwrite=true` to `generate_example_input_file()`.")
+    end
+
+    original_input = deepcopy(input_dict)
+
+    # Make a fake run_info NamedTuple to provide default values used by
+    # setup_makie_post_processing!()
+    fake_run_info = (nt_unskipped=1, nt_dfns_unskipped=1, nt=1, nt_dfns=1, r=(n=1,),
+                     z=(n=1,), vperp=(n=1,), vpa=(n=1,), vzeta=(n=1,), vr=(n=1,),
+                     vz=(n=1,))
+
+    # Set up input_dict with all-default parameters
+    setup_makie_post_processing_input!(fake_run_info, Dict{String,Any}())
+
+    # Convert input_dict to a String formatted as the contents of a TOML file
+    buffer = IOBuffer()
+    TOML.print(buffer, input_dict)
+    file_contents = String(take!(buffer))
+
+    # Separate file_contents into individual lines
+    file_contents = split(file_contents, "\n")
+
+    # Add comment character to all values (i.e. skipping section headings)
+    for (i, line) ∈ enumerate(file_contents)
+        if !startswith(line, "[") && !(line == "")
+            # Not a section heading, so add comment character
+            file_contents[i] = "#" * line
+        end
+    end
+
+    # Join back into single string
+    file_contents = join(file_contents, "\n")
+
+    # Write to output file
+    open(filename, write=true, truncate=overwrite, append=false) do io
+        print(io, file_contents)
+    end
+
+    # Restore original state of input_dict
+    clear_Dict!(input_dict)
+    merge!(input_dict, original_input)
+
+    return nothing
+end
+
+"""
     setup_makie_post_processing_input!(
         run_info, input_file::String=default_input_file_name;
         ignore_missing_file::Bool=false)
-    setup_makie_post_processing_input!(run_info, new_input::Dict{String,Any})
+    setup_makie_post_processing_input!(run_info, new_input::AbstractDict{String,Any})
 
-Set up input, storing the Dict in the global `input_dict`
+Set up input, storing in the global `input_dict`
 """
 function setup_makie_post_processing_input! end
 
@@ -166,7 +233,8 @@ function setup_makie_post_processing_input!(
     return nothing
 end
 
-function setup_makie_post_processing_input!(run_info, new_input_dict::Dict{String,Any})
+function setup_makie_post_processing_input!(run_info,
+                                            new_input_dict::AbstractDict{String,Any})
     # Remove all existing entries from the global `input_dict`
     clear_Dict!(input_dict)
 
@@ -239,8 +307,8 @@ function setup_makie_post_processing_input!(run_info, new_input_dict::Dict{Strin
     for variable_name ∈ all_variables
         set_defaults_and_check_section!(
             input_dict, variable_name;
-            Dict(Symbol(k)=>v for (k,v) ∈ input_dict
-                 if !isa(v, Dict) && !(k ∈ only_global_options))...)
+            OrderedDict(Symbol(k)=>v for (k,v) ∈ input_dict
+                        if !isa(v, AbstractDict) && !(k ∈ only_global_options))...)
     end
 
 
