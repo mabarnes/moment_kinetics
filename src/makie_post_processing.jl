@@ -24,6 +24,7 @@ using Combinatorics
 using Glob
 using LsqFit
 using MPI
+using NaNMath
 using OrderedCollections
 using TOML
 
@@ -426,6 +427,8 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
        itime_skip_dfns=1,
        plot_vs_r_t=true,
        plot_vs_z_t=true,
+       animate_vs_z=true,
+       animate_vs_r=true,
       )
 
     for variable_name ∈ all_variables
@@ -903,7 +906,8 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
     return result
 end
 
-function plots_for_variable(run_info, variable_name; plot_prefix)
+function plots_for_variable(run_info, variable_name; plot_prefix, is_1D=false,
+                            is_1V=false)
     input = Dict_to_NamedTuple(input_dict[variable_name])
     # Use the global settings for "itime_*" to be consistent with the `time` in
     # `run_info`.
@@ -928,7 +932,7 @@ function plots_for_variable(run_info, variable_name; plot_prefix)
             else
                 variable_prefix = plot_prefix * variable_name * "_"
             end
-            if variable_name == "Er" && !any(ri.r.n > 1 for ri ∈ run_info)
+            if variable_name == "Er" && is_1D
                 # Skip if there is no r-dimension
                 continue
             end
@@ -939,6 +943,14 @@ function plots_for_variable(run_info, variable_name; plot_prefix)
             if input.plot_vs_z_t
                 plot_vs_z_t(run_info, variable_name, is=is, data=variable, input=input,
                             outfile=variable_prefix * "vs_z_t.pdf")
+            end
+            if input.animate_vs_z
+                animate_vs_z(run_info, variable_name, is=is, data=variable, input=input,
+                             outfile=variable_prefix * "vs_z.gif")
+            end
+            if !is_1D && input.animate_vs_r
+                animate_vs_r(run_info, variable_name, is=is, data=variable, input=input,
+                             outfile=variable_prefix * "vs_r.gif")
             end
         end
     end
@@ -1138,34 +1150,142 @@ for (dim1, dim2) ∈ two_dimension_combinations
          end)
 end
 
-function get_1d_ax(n=nothing; title=nothing)
+# Generate 1d animation functions for each dimension
+for dim ∈ one_dimension_combinations_no_t
+    function_name_str = "animate_vs_$dim"
+    function_name = Symbol(function_name_str)
+    dim_str = String(dim)
+    dim_grid = :( run_info.$dim.grid )
+    idim = Symbol(:i, dim)
+    eval(quote
+             export $function_name
+
+             function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
+                                     input=nothing, outfile=nothing, ylims=nothing, kwargs...)
+
+                 try
+                     if data === nothing
+                         data = Tuple(nothing for _ in run_info)
+                     end
+                     if outfile === nothing
+                         error("`outfile` is required for $($function_name_str)")
+                     end
+
+                     n_runs = length(run_info)
+
+                     fig, ax = get_1d_ax(xlabel="$($dim_str)", ylabel=get_variable_symbol(var_name))
+                     frame_index = Observable(1)
+
+                     for (d, ri) ∈ zip(data, run_info)
+                         $function_name(ri, var_name; is=is, data=d, input=input,
+                                        frame_index=frame_index, ax=ax, ylims=ylims, kwargs...)
+                     end
+                     if n_runs > 1
+                         put_legend_above(fig, ax)
+                     end
+
+                     nt = minimum(ri.nt for ri ∈ run_info)
+                     save_animation(fig, frame_index, nt, outfile)
+
+                     return fig
+                 catch e
+                     println("$($function_name_str)() failed for $var_name, is=$is. Error was $e")
+                     return nothing
+                 end
+             end
+
+             function $function_name(run_info, var_name; is=1, data=nothing,
+                                     input=nothing, frame_index=nothing, ax=nothing,
+                                     outfile=nothing,
+                                     ylims=nothing, it=nothing, ir=nothing, iz=nothing,
+                                     ivperp=nothing, ivpa=nothing, ivzeta=nothing,
+                                     ivr=nothing, ivz=nothing, kwargs...)
+                 if input === nothing
+                     input = input_dict[var_name]
+                 end
+                 if isa(input, AbstractDict)
+                     input = Dict_to_NamedTuple(input)
+                 end
+                 if data === nothing
+                     dim_slices = get_dimension_slice_indices(:t, $(QuoteNode(dim));
+                                                              input=input, it=it, is=is,
+                                                              ir=ir, iz=iz, ivperp=ivperp,
+                                                              ivpa=ivpa, ivzeta=ivzeta,
+                                                              ivr=ivr, ivz=ivz)
+                     data = postproc_load_variable(run_info, var_name; dim_slices...)
+                 else
+                     data = select_slice(data, $(QuoteNode(dim)), :t; input=input, it=it,
+                                         is=is, ir=ir, iz=iz, ivperp=ivperp, ivpa=ivpa,
+                                         ivzeta=ivzeta, ivr=ivr, ivz=ivz)
+                 end
+                 if frame_index === nothing
+                     ind = Observable(1)
+                 else
+                     ind = frame_index
+                 end
+                 if ax === nothing
+                     fig, ax = get_1d_ax(xlabel="$($dim_str)", ylabel=get_variable_symbol(var_name))
+                 else
+                     fig = nothing
+                 end
+
+                 nt = size(data, 2)
+
+                 x = $dim_grid
+                 if $idim !== nothing
+                     x = x[$idim]
+                 end
+                 animate_1d(x, data; ax=ax, ylims=ylims, frame_index=ind,
+                            label=run_info.run_name, kwargs...)
+
+                 if frame_index === nothing
+                     save_animation(fig, ind, nt, outfile)
+                 end
+
+                 return fig
+             end
+         end)
+end
+
+function get_1d_ax(n=nothing; title=nothing, kwargs...)
     if n == nothing
         fig = Figure(title=title)
-        ax = Axis(fig[1,1])
+        ax = Axis(fig[1,1]; kwargs...)
     else
         fig = Figure(resolution=(600*n, 400), title=title)
-        title_layout = fig[1,1] = GridLayout()
-        Label(title_layout[1,1:2], title)
 
-        plot_layout = fig[2,1] = GridLayout()
-        ax = [Axis(plot_layout[1,i]) for i in 1:n]
+        if title !== nothing
+            title_layout = fig[1,1] = GridLayout()
+            Label(title_layout[1,1:2], title)
+
+            plot_layout = fig[2,1] = GridLayout()
+        else
+            plot_layout = fig[1,1] = GridLayout()
+        end
+
+        ax = [Axis(plot_layout[1,i]; kwargs...) for i in 1:n]
     end
 
     return fig, ax
 end
 
-function get_2d_ax(n=nothing; title=nothing)
+function get_2d_ax(n=nothing; title=nothing, kwargs...)
     if n == nothing
         fig = Figure(title=title)
-        ax = Axis(fig[1,1])
+        ax = Axis(fig[1,1]; kwargs...)
         colorbar_places = fig[1,2]
     else
         fig = Figure(resolution=(600*n, 400))
-        title_layout = fig[1,1] = GridLayout()
-        Label(title_layout[1,1:2], title)
 
-        plot_layout = fig[2,1] = GridLayout()
-        ax = [Axis(plot_layout[1,2*i-1]) for i in 1:n]
+        if title !== nothing
+            title_layout = fig[1,1] = GridLayout()
+            Label(title_layout[1,1:2], title)
+
+            plot_layout = fig[2,1] = GridLayout()
+        else
+            plot_layout = fig[1,1] = GridLayout()
+        end
+        ax = [Axis(plot_layout[1,2*i-1]; kwargs...) for i in 1:n]
         colorbar_places = [plot_layout[1,2*i] for i in 1:n]
     end
 
@@ -1234,6 +1354,58 @@ function plot_2d(xcoord, ycoord, data; ax=nothing, colorbar_place=nothing, xlabe
     else
         return fig
     end
+end
+
+function animate_1d(xcoord, data; frame_index=nothing, ax=nothing, fig=nothing,
+                    xlabel=nothing, ylabel=nothing, title=nothing, outfile=nothing,
+                    ylims=nothing, kwargs...)
+
+    if frame_index === nothing
+        ind = Observable(1)
+    else
+        ind = frame_index
+    end
+
+    if ax === nothing
+        fig, ax = get_1d_ax(title=title, xlabel=xlabel, ylabel=ylabel)
+    end
+
+    if ylims === nothing
+        datamin, datamax = NaNMath.extrema(data)
+        if ax.limits.val[2] === nothing
+            # No limits set yet, need to use minimum and maximum of data over all time,
+            # otherwise the automatic axis scaling would use the minimum and maximum of
+            # the data at the initial time point.
+            ylims!(ax, datamin, datamax)
+        else
+            # Expand currently set limits to ensure they include the minimum and maxiumum
+            # of the data.
+            current_ymin, current_ymax = ax.limits.val[2]
+            ylims!(ax, min(datamin, current_ymin), max(datamax, current_ymax))
+        end
+    else
+        # User passed ylims explicitly, so set those.
+        ylims!(ax, ylims)
+    end
+
+    line_data = @lift(@view data[:,$ind])
+    lines!(ax, xcoord, line_data; kwargs...)
+
+    if outfile !== nothing
+        if fig === nothing
+            error("When `outfile` is passed to save the animation, must either pass both "
+                  * "`fig` and `ax` or neither. Only `ax` was passed.")
+        end
+        nt = size(data, 2)
+        save_animation(fig, ind, nt, outfile)
+    end
+end
+
+function save_animation(fig, frame_index, nt, outfile)
+    record(fig, outfile, 1:nt, framerate=5) do it
+        frame_index[] = it
+    end
+    return nothing
 end
 
 function put_legend_above(fig, ax; kwargs...)
@@ -1567,7 +1739,9 @@ Parse colormap option
 Allows us to have a string option and still use Reverse, etc. conveniently
 """
 function parse_colormap(colormap)
-    if startswith(colormap, "reverse_")
+    if colormap === nothing
+        return colormap
+    elseif startswith(colormap, "reverse_")
         # Use split to remove the "reverse_" prefix
         return Reverse(String(split(colormap, "reverse_", keepempty=false)[1]))
     else
