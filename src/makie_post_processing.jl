@@ -21,6 +21,7 @@ using ..type_definitions: mk_float, mk_int
 using Glob
 using LsqFit
 using MPI
+using OrderedCollections
 using TOML
 
 using CairoMakie
@@ -30,8 +31,11 @@ const default_input_file_name = "post_processing_input.toml"
 """
 Global dict containing settings for makie_post_processing. Can be re-loaded at any time
 to change settings.
+
+Is an OrderedDict so the order of sections is nicer if `input_dict` is written out as a
+TOML file.
 """
-const input_dict = Dict{String,Any}()
+const input_dict = OrderedDict{String,Any}()
 const input_dict_dfns = OrderedDict{String,Any}()
 
 const em_variables = ("phi", "Er", "Ez")
@@ -83,7 +87,7 @@ index). A tuple with the same length as `run_dir` can also be passed to give a d
 `restart_index` for each run.
 """
 function makie_post_process(run_dir::Union{String,Tuple},
-                            new_input_dict::Dict{String,Any};
+                            new_input_dict::AbstractDict{String,Any};
                             restart_index::Union{Nothing,mk_int,Tuple}=nothing)
     if isa(run_dir, String)
         # Make run_dir a one-element tuple if it is not a tuple
@@ -176,6 +180,79 @@ function makie_post_process(run_dir::Union{String,Tuple},
     end
 
     return nothing
+end
+
+"""
+    generate_example_input_file(filename::String=$default_input_file_name;
+                                overwrite::Bool=false)
+
+Create an example makie-post-processing input file.
+
+Every option is commented out, but filled with the default value.
+
+Pass `filename` to choose the name of the example file (defaults to the default input file
+name used by `makie_post_process()`).
+
+Pass `overwrite=true` to overwrite any existing file at `filename`.
+"""
+function generate_example_input_file(filename::String=default_input_file_name;
+                                     overwrite::Bool=false)
+
+    if ispath(filename) && !overwrite
+        error("$filename already exists. If you want to overwrite it, pass "
+              * "`overwrite=true` to `generate_example_input_file()`.")
+    end
+
+    # Get example input, then convert to a String formatted as the contents of a TOML
+    # file
+    input_dict = generate_example_input_Dict()
+    buffer = IOBuffer()
+    TOML.print(buffer, input_dict)
+    file_contents = String(take!(buffer))
+
+    # Separate file_contents into individual lines
+    file_contents = split(file_contents, "\n")
+
+    # Add comment character to all values (i.e. skipping section headings)
+    for (i, line) ∈ enumerate(file_contents)
+        if !startswith(line, "[") && !(line == "")
+            # Not a section heading, so add comment character
+            file_contents[i] = "#" * line
+        end
+    end
+
+    # Join back into single string
+    file_contents = join(file_contents, "\n")
+
+    # Write to output file
+    open(filename, write=true, truncate=overwrite, append=false) do io
+        print(io, file_contents)
+    end
+
+    return nothing
+end
+
+"""
+Create a Dict containing all the makie-post-processing options with default values
+"""
+function generate_example_input_Dict()
+    original_input = deepcopy(input_dict)
+    original_input_dfns = deepcopy(input_dict_dfns)
+
+    # Set up input_dict and input_dict_dfns with all-default parameters
+    setup_makie_post_processing_input!(Dict{String,Any}())
+
+    # Merge input_dict and input_dict_dfns, then convert to a String formatted as the
+    # contents of a TOML file
+    combined_input_dict = merge(input_dict_dfns, input_dict)
+
+    # Restore original state of input_dict and input_dict_dfns
+    clear_Dict!(input_dict)
+    clear_Dict!(input_dict_dfns)
+    merge!(input_dict, original_input)
+    merge!(input_dict_dfns, original_input_dfns)
+
+    return combined_input_dict
 end
 
 """
@@ -335,8 +412,8 @@ function _setup_single_input!(this_input_dict::AbstractDict{String,Any},
     for variable_name ∈ all_variables
         set_defaults_and_check_section!(
             this_input_dict, variable_name;
-            Dict(Symbol(k)=>v for (k,v) ∈ this_input_dict
-                 if !isa(v, Dict) && !(k ∈ only_global_options))...)
+            OrderedDict(Symbol(k)=>v for (k,v) ∈ this_input_dict
+                        if !isa(v, AbstractDict) && !(k ∈ only_global_options))...)
     end
 
 
