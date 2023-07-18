@@ -167,7 +167,8 @@ function makie_post_process(run_dir::Union{String,Tuple},
     end
 
     for variable_name ∈ moment_variable_list
-        plots_for_variable(run_info, variable_name, plot_prefix=plot_prefix)
+        plots_for_variable(run_info, variable_name, plot_prefix=plot_prefix, is_1D=is_1D,
+                           is_1V=is_1V)
     end
 
     # Plots from distribution function variables
@@ -918,6 +919,137 @@ function plots_for_variable(run_info, variable_name; plot_prefix)
     end
 
     return nothing
+end
+
+# Generate 1d plot functions for each dimension
+for dim ∈ (:t, setdiff(all_dimensions, (:s, :sn))...)
+    function_name_str = "plot_vs_$dim"
+    function_name = Symbol(function_name_str)
+    dim_str = String(dim)
+    if dim == :t
+        dim_grid = :( run_info.time )
+    else
+        dim_grid = :( run_info.$dim.grid )
+    end
+    idim = Symbol(:i, dim)
+    eval(quote
+             function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
+                                     input=nothing, outfile=nothing, kwargs...)
+
+                 try
+                     if data === nothing
+                         data = Tuple(nothing for _ in run_info)
+                     end
+
+                     n_runs = length(run_info)
+
+                     fig, ax = get_1d_ax(xlabel="$($dim_str)",
+                                         ylabel=get_variable_symbol(var_name))
+                     for (d, ri) ∈ zip(data, run_info)
+                         $function_name(ri, var_name, is=is, data=d, input=input, ax=ax,
+                                        label=ri.run_name, kwargs...)
+                     end
+
+                     if n_runs > 1
+                         put_legend_above(fig, ax)
+                     end
+
+                     if outfile !== nothing
+                         save(outfile, fig)
+                     end
+                     return fig
+                 catch e
+                     println("$($function_name_str) failed for $var_name, is=$is. Error was $e")
+                     return nothing
+                 end
+             end
+
+             function $function_name(run_info, var_name; is=1, data=nothing,
+                                     input=nothing, ax=nothing, label=nothing,
+                                     outfile=nothing, it=nothing,
+                                     ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
+                                     ivzeta=nothing, ivr=nothing, ivz=nothing, kwargs...)
+                 if input === nothing
+                     input = input_dict[var_name]
+                 end
+                 if isa(input, AbstractDict)
+                     input = Dict_to_NamedTuple(input)
+                 end
+                 if data === nothing
+                     dim_slices = get_dimension_slice_indices($(QuoteNode(dim));
+                                                              input=input, it=it, is=is,
+                                                              ir=ir, iz=iz, ivperp=ivperp,
+                                                              ivpa=ivpa, ivzeta=ivzeta,
+                                                              ivr=ivr, ivz=ivz)
+                     data = postproc_load_variable(run_info, var_name; dim_slices...)
+                 else
+                     data = select_slice(data, $(QuoteNode(dim)); input=input, it=it,
+                                         is=is, ir=ir, iz=iz, ivperp=ivperp, ivpa=ivpa,
+                                         ivzeta=ivzeta, ivr=ivr, ivz=ivz)
+                 end
+
+                 x = $dim_grid
+                 if $idim !== nothing
+                     x = x[$idim]
+                 end
+                 fig = plot_1d(x, data, xlabel="$($dim_str)",
+                               ylabel=get_variable_symbol(var_name), label=label, ax=ax,
+                               kwargs...)
+
+                 if outfile !== nothing
+                     if fig === nothing
+                         error("When `outfile` is passed to save the plot, must either pass both "
+                               * "`fig` and `ax` or neither. Only `ax` was passed.")
+                     end
+                     save(outfile, fig)
+                 end
+
+                 return nothing
+             end
+         end)
+end
+
+function get_1d_ax(n=nothing; title=nothing)
+    if n == nothing
+        fig = Figure(title=title)
+        ax = Axis(fig[1,1])
+    else
+        fig = Figure(resolution=(600*n, 400), title=title)
+        title_layout = fig[1,1] = GridLayout()
+        Label(title_layout[1,1:2], title)
+
+        plot_layout = fig[2,1] = GridLayout()
+        ax = [Axis(plot_layout[1,i]) for i in 1:n]
+    end
+
+    return fig, ax
+end
+
+function plot_1d(xcoord, data; ax=nothing, xlabel=nothing,
+                 ylabel=nothing, title=nothing, kwargs...)
+    if ax === nothing
+        fig, ax = get_1d_ax()
+    else
+        fig = nothing
+    end
+
+    if xlabel !== nothing
+        ax.xlabel = xlabel
+    end
+    if ylabel !== nothing
+        ax.ylabel = ylabel
+    end
+    if title !== nothing
+        ax.title = title
+    end
+
+    l = lines!(ax, xcoord, data; kwargs...)
+
+    if fig === nothing
+        return l
+    else
+        return fig
+    end
 end
 
 function put_legend_above(fig, ax; kwargs...)
