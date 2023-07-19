@@ -484,68 +484,73 @@ function get_run_info(run_dir, restart_index; itime_min=1, itime_max=-1, itime_s
     else
         parallel_io = false
     end
+
+    nt_unskipped, time, restarts_nt = load_time_data(files)
+    if itime_max > 0
+        time = time[itime_min:itime_skip:itime_max]
+    else
+        time = time[itime_min:itime_skip:end]
+    end
+    nt = length(time)
+
+    # Get input and coordinates from the final restart
+    file_final_restart = fids0[end]
+
+    input = load_input(file_final_restart)
+
+    n_ion_species, n_neutral_species = load_species_data(file_final_restart)
+    evolve_density, evolve_upar, evolve_ppar =
+    load_mk_options(file_final_restart)
+
+    z_local, z_local_spectral = load_coordinate_data(file_final_restart, "z")
+    r_local, r_local_spectral = load_coordinate_data(file_final_restart, "r")
+    r, r_spectral, z, z_spectral = construct_global_zr_coords(r_local, z_local)
+
+    if dfns
+        vperp, vperp_spectral = load_coordinate_data(file_final_restart, "vperp")
+        vpa, vpa_spectral = load_coordinate_data(file_final_restart, "vpa")
+
+        if n_neutral_species > 0
+            vzeta, vzeta_spectral = load_coordinate_data(file_final_restart, "vzeta")
+            vr, vr_spectral = load_coordinate_data(file_final_restart, "vr")
+            vz, vz_spectral = load_coordinate_data(file_final_restart, "vz")
+        else
+            dummy_adv_input = advection_input("default", 1.0, 0.0, 0.0)
+            dummy_comm = MPI.COMM_NULL
+            dummy_input = grid_input("dummy", 1, 1, 1, 1, 0, 1.0,
+                                     "chebyshev_pseudospectral", "", "periodic",
+                                     dummy_adv_input, dummy_comm)
+            vzeta, vzeta_spectral = define_coordinate(dummy_input)
+            vr, vr_spectral = define_coordinate(dummy_input)
+            vz, vz_spectral = define_coordinate(dummy_input)
+        end
+    end
+
     if parallel_io
         files = fids0
-        nt_unskipped, time = load_time_data(files)
-        if itime_max > 0
-            time = time[itime_min:itime_skip:itime_max]
-        else
-            time = time[itime_min:itime_skip:end]
-        end
-        nt = length(time)
-
-        # Get input and coordinates from the final restart
-        file_final_restart = files[end]
-
-        input = load_input(file_final_restart)
-
-        n_ion_species, n_neutral_species = load_species_data(file_final_restart)
-        evolve_density, evolve_upar, evolve_ppar =
-            load_mk_options(file_final_restart)
-
-        z_local, z_local_spectral = load_coordinate_data(file_final_restart, "z")
-        r_local, r_local_spectral = load_coordinate_data(file_final_restart, "r")
-        r, r_spectral, z, z_spectral = construct_global_zr_coords(r_local, z_local)
-
-        if dfns
-            vperp, vperp_spectral = load_coordinate_data(file_final_restart, "vperp")
-            vpa, vpa_spectral = load_coordinate_data(file_final_restart, "vpa")
-
-            if n_neutral_species > 0
-                vzeta, vzeta_spectral = load_coordinate_data(file_final_restart, "vzeta")
-                vr, vr_spectral = load_coordinate_data(file_final_restart, "vr")
-                vz, vz_spectral = load_coordinate_data(file_final_restart, "vz")
-            else
-                dummy_adv_input = advection_input("default", 1.0, 0.0, 0.0)
-                dummy_comm = MPI.COMM_NULL
-                dummy_input = grid_input("dummy", 1, 1, 1, 1, 0, 1.0,
-                                         "chebyshev_pseudospectral", "", "periodic",
-                                         dummy_adv_input, dummy_comm)
-                vzeta, vzeta_spectral = define_coordinate(dummy_input)
-                vr, vr_spectral = define_coordinate(dummy_input)
-                vz, vz_spectral = define_coordinate(dummy_input)
-            end
-        end
     else
-        error("parallel_io=false not implemented yet")
+        # Don't keep open files as read_distributed_zr_data!(), etc. open the files
+        # themselves
         files = run_prefixes
     end
 
     if dfns
-        return (run_name=run_name, parallel_io=parallel_io, nblocks=nblocks, files=files,
-                input=input, n_ion_species=n_ion_species,
+        return (run_name=run_name, parallel_io=parallel_io, ext=ext, nblocks=nblocks,
+                files=files, input=input, n_ion_species=n_ion_species,
                 n_neutral_species=n_neutral_species, nt=nt, nt_unskipped=nt_unskipped,
-                time=time, r=r, z=z, vperp=vperp, vpa=vpa, vzeta=vzeta, vr=vr, vz=vz,
-                r_local=r_local, z_local=z_local, r_spectral=r_spectral,
-                z_spectral=z_spectral, vperp_spectral=vperp_spectral,
-                vpa_spectral=vpa_spectral, vzeta_spectral=vzeta_spectral,
-                vr_spectral=vr_spectral, vz_spectral=vz_spectral)
+                restarts_nt=restarts_nt, itime_skip=itime_skip, time=time, r=r, z=z,
+                vperp=vperp, vpa=vpa, vzeta=vzeta, vr=vr, vz=vz, r_local=r_local,
+                z_local=z_local, r_spectral=r_spectral, z_spectral=z_spectral,
+                vperp_spectral=vperp_spectral, vpa_spectral=vpa_spectral,
+                vzeta_spectral=vzeta_spectral, vr_spectral=vr_spectral,
+                vz_spectral=vz_spectral)
     else
-        return (run_name=run_name, parallel_io=parallel_io, nblocks=nblocks, files=files,
-                input=input, n_ion_species=n_ion_species,
+        return (run_name=run_name, parallel_io=parallel_io, ext=ext, nblocks=nblocks,
+                files=files, input=input, n_ion_species=n_ion_species,
                 n_neutral_species=n_neutral_species, nt=nt, nt_unskipped=nt_unskipped,
-                time=time, r=r, z=z, r_local=r_local, z_local=z_local,
-                r_spectral=r_spectral, z_spectral=z_spectral)
+                restarts_nt=restarts_nt, itime_skip=itime_skip, time=time, r=r, z=z,
+                r_local=r_local, z_local=z_local, r_spectral=r_spectral,
+                z_spectral=z_spectral)
     end
 end
 
@@ -590,19 +595,19 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
         ivz = :
     end
 
+    if isa(it, mk_int)
+        nt = 1
+    elseif it === :
+        it = 1:nt
+    else
+        nt = length(it)
+    end
+
     if run_info.parallel_io
         # Get HDF5/NetCDF variables directly and load slices
         variable = Tuple(get_group(f, "dynamic_data")[variable_name]
                          for f ∈ run_info.files)
         nd = ndims(variable[1])
-
-        if isa(it, mk_int)
-            nt = 1
-        elseif it === :
-            it = 1:nt
-        else
-            nt = length(it)
-        end
 
         # [JTO: Put brackets around the `:` in the if any(...) calls below because
         #  otherwise my editor's bracket/block matching gets confused. I don't think they
@@ -714,7 +719,89 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
         end
     else
         # Use existing distributed I/O loading functions
-        error("parallel_io=false not supported yet")
+        if variable_name ∈ em_variables
+            nd = 3
+        elseif variable_name ∈ ion_dfn_variables
+            nd = 6
+        elseif variable_name ∈ neutral_dfn_variables
+            nd = 7
+        else
+            # Ion or neutral moment variable
+            nd = 4
+        end
+
+        if run_info.itime_skip != 1 && length(run_info.files) > 1
+            error("Setting itime_skip!=1 and combining multiple restarts of a single run "
+                  * "not currently supported when parallel_io=false")
+        end
+        if nd == 3
+            result = allocate_float(run_info.z.n, run_info.r.n, run_info.nt)
+            local_start = 1
+            for (f, this_nt) ∈ zip(run_info.files, run_info.restarts_nt)
+                read_distributed_zr_data!(
+                    @view(result[:,:,local_start:local_start+this_nt-1]), variable_name, f,
+                    run_info.ext, run_info.nblocks, run_info.z_local.n,
+                    run_info.r_local.n, run_info.itime_skip)
+                local_start += this_nt - 1
+            end
+            result = result[iz,ir,:]
+        elseif nd == 3
+            result = allocate_float(run_info.z.n, run_info.r.n, run_info.nt)
+            local_start = 1
+            for (f, this_nt) ∈ zip(run_info.files, run_info.restarts_nt)
+                read_distributed_zr_data!(
+                    @view(result[:,:,local_start:local_start+this_nt-1]), variable_name, f,
+                    run_info.ext, run_info.nblocks, run_info.z_local.n,
+                    run_info.r_local.n, run_info.itime_skip)
+                local_start += this_nt - 1
+            end
+            result = result[iz,ir,is,:]
+        elseif nd === 6
+            parts = Vector{Array{mk_float,6}}()
+            local_it_start = 1
+            for (f, this_nt) ∈ zip(run_info.files, run_info.restarts_nt)
+                local_it_end = local_it_start+this_nt-1
+
+                tinds = collect(i - local_it_start + 1 + offset for i ∈ it
+                                if local_it_start <= i <= local_it_end)
+                push!(parts, load_distributed_charged_pdf_slice(
+                                 f, run_info.nblocks, tinds, run_info.n_ion_species,
+                                 run_info.r, run_info.z, run_info.vperp, run_info.vpa;
+                                 is=(is === (:) ? nothing : is),
+                                 ir=(ir === (:) ? nothing : ir),
+                                 iz=(iz === (:) ? nothing : iz),
+                                 ivperp=(ivperp === (:) ? nothing : ivperp),
+                                 ivpa=(ivpa === (:) ? nothing : ivpa)))
+                local_it_start = local_it_end + 1
+            end
+            result = cat(parts...; dims=6)
+        elseif nd === 7
+            parts = Vector{Array{mk_float,7}}()
+            local_it_start = 1
+            for (f, this_nt) ∈ zip(run_info.files, run_info.restarts_nt)
+                local_it_end = local_it_start+this_nt-1
+
+                tinds = collect(i - local_it_start + 1 + offset for i ∈ it
+                                if local_it_start <= i <= local_it_end)
+                push!(parts, load_distributed_neutral_pdf_slice(
+                                 f, run_info.nblocks, tinds, run_info.n_ion_species,
+                                 run_info.r, run_info.z, run_info.vperp, run_info.vpa;
+                                 is=(is === (:) ? nothing : is),
+                                 ir=(ir === (:) ? nothing : ir),
+                                 iz=(iz === (:) ? nothing : iz),
+                                 ivzeta=(ivzeta === (:) ? nothing : ivzeta),
+                                 ivr=(ivr === (:) ? nothing : ivr),
+                                 ivz=(ivz === (:) ? nothing : ivz)))
+                local_it_start = local_it_end + 1
+            end
+            if length(run_info.files) == 1
+                # Special case to avoid an extra allocation/copy of a potentially large
+                # array when we don't actually need to `cat()`
+                result = parts[1]
+            else
+                result = cat(parts...; dims=7)
+            end
+        end
     end
 
     return result

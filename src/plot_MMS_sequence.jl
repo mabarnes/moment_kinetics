@@ -145,7 +145,7 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         z, z_spectral = load_coordinate_data(fid, "z")
         r, r_spectral = load_coordinate_data(fid, "r")
         # load time data 
-        ntime, time = load_time_data(fid)
+        ntime, time, _ = load_time_data(fid)
         # load species data 
         n_ion_species, n_neutral_species = load_species_data(fid)
         close(fid)
