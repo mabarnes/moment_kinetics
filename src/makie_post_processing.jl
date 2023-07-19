@@ -920,6 +920,22 @@ function plots_for_variable(run_info, variable_name; plot_prefix)
     return nothing
 end
 
+function put_legend_above(fig, ax; kwargs...)
+    return Legend(fig[0,1], ax; tellheight=true, tellwidth=false, kwargs...)
+end
+
+function put_legend_below(fig, ax; kwargs...)
+    return Legend(fig[end+1,1], ax; tellheight=true, tellwidth=false, kwargs...)
+end
+
+function put_legend_left(fig, ax; kwargs...)
+    return Legend(fig[end,0], ax; kwargs...)
+end
+
+function put_legend_right(fig, ax; kwargs...)
+    return Legend(fig[end,end+1], ax; kwargs...)
+end
+
 function select_slice(variable::AbstractArray{T,1}, dims::Symbol...; input=nothing,
                       is=nothing, kwargs...) where T
     if length(dims) > 1
