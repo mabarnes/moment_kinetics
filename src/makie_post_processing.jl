@@ -1102,6 +1102,22 @@ function animate_2d(xcoord, ycoord, data; xlabel=nothing, ylabel=nothing, title=
                       outfile=outfile)
 end
 
+function put_legend_above(fig, ax; kwargs...)
+    return Legend(fig[0,1], ax; tellheight=true, tellwidth=false, kwargs...)
+end
+
+function put_legend_below(fig, ax; kwargs...)
+    return Legend(fig[end+1,1], ax; tellheight=true, tellwidth=false, kwargs...)
+end
+
+function put_legend_left(fig, ax; kwargs...)
+    return Legend(fig[end,0], ax; kwargs...)
+end
+
+function put_legend_right(fig, ax; kwargs...)
+    return Legend(fig[end,end+1], ax; kwargs...)
+end
+
 function select_z_t(variable::AbstractArray{T,2}, input=nothing; is=nothing) where T
     # Array is not a standard shape, so assume it is already sliced to (z,t)
     return variable
