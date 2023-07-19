@@ -376,6 +376,7 @@ function setup_makie_post_processing_input!(new_input_dict::AbstractDict{String,
        # Load every `time_skip` time points for distribution function variables, to save
        # memory
        itime_skip_dfns=1,
+       plot_vs_r_t=true,
        plot_vs_z_t=true,
        animate_vs_z=true,
       )
@@ -866,6 +867,10 @@ function plots_for_variable(run_info, variable_name; plot_prefix, is_1D=false,
                 # Skip if there is no r-dimension
                 continue
             end
+            if !is_1D && input.plot_vs_r_t
+                plot_vs_r_t(run_info, variable_name, is=is, data=variable, input=input,
+                            outfile=variable_prefix * "vs_r_t.pdf")
+            end
             if input.plot_vs_z_t
                 plot_vs_z_t(run_info, variable_name, is=is, data=variable, input=input,
                             outfile=variable_prefix * "vs_z_t.pdf")
@@ -875,6 +880,58 @@ function plots_for_variable(run_info, variable_name; plot_prefix, is_1D=false,
                              outfile=variable_prefix * "vs_z.gif")
             end
         end
+    end
+
+    return nothing
+end
+
+function plot_vs_r_t(run_info::Tuple, var_name; is=1, data=nothing, input=nothing,
+                     outfile=nothing)
+
+    try
+        if data === nothing
+            data = Tuple(nothing for _ in run_info)
+        end
+        fig, ax, colorbar_places = get_2d_ax(length(run_info),
+                                             title=get_variable_symbol(var_name))
+        for (d, ri, a, cp) ∈ zip(data, run_info, ax, colorbar_places)
+            plot_vs_r_t(ri, var_name, is=is, data=d, input=input, ax=a, colorbar_place=cp,
+                        title=ri.run_name)
+        end
+
+        if outfile !== nothing
+            save(outfile, fig)
+        end
+        return fig
+    catch e
+        println("plot_vs_r_t failed for $var_name, is=$is. Error was $e")
+        return nothing
+    end
+end
+
+function plot_vs_r_t(run_info, var_name; is=1, data=nothing, input=nothing,
+                     ax=nothing, colorbar_place=colorbar_place, title=nothing,
+                     outfile=nothing)
+    if data === nothing
+        data = postproc_load_variable(run_info, var_name)
+    end
+    if input === nothing
+        colormap = "reverse_deep"
+    else
+        colormap = input.colormap
+    end
+    if title === nothing
+        title = get_variable_symbol(var_name)
+    end
+
+    data = select_slice(data, :r, :t; input=input, is=is)
+
+    fig = plot_2d(run_info.r.grid, run_info.time, data, xlabel="r", ylabel="time",
+                  title=title, ax=ax, colorbar_place=colorbar_place,
+                  colormap=parse_colormap(colormap))
+
+    if outfile !== nothing && fig !== nothing
+        save(outfile, fig)
     end
 
     return nothing
