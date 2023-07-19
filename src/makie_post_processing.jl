@@ -110,23 +110,57 @@ function makie_post_process(run_dir::Union{String,Tuple},
     itime_min_dfns = get(new_input_dict, "itime_min_dfns", 1)
     itime_max_dfns = get(new_input_dict, "itime_max_dfns", -1)
     itime_skip_dfns = get(new_input_dict, "itime_skip_dfns", 1)
-    run_info = Tuple(get_run_info(p, i, itime_min=itime_min, itime_max=itime_max,
-                                  itime_skip=itime_skip, itime_min_dfns=itime_min_dfns,
-                                  itime_max_dfns=itime_max_dfns,
-                                  itime_skip_dfns=itime_skip_dfns)
-                     for (p,i) in zip(run_dir, restart_index))
+    run_info_moments = Tuple(get_run_info(p, i, itime_min=itime_min, itime_max=itime_max,
+                                          itime_skip=itime_skip,
+                                          itime_min_dfns=itime_min_dfns,
+                                          itime_max_dfns=itime_max_dfns,
+                                          itime_skip_dfns=itime_skip_dfns)
+                             for (p,i) in zip(run_dir, restart_index))
+    run_info_dfns = Tuple(get_run_info(p, i, itime_min=itime_min, itime_max=itime_max,
+                                       itime_skip=itime_skip,
+                                       itime_min_dfns=itime_min_dfns,
+                                       itime_max_dfns=itime_max_dfns,
+                                       itime_skip_dfns=itime_skip_dfns, dfns=true)
+                          for (p,i) in zip(run_dir, restart_index))
 
-    setup_makie_post_processing_input!(run_info, new_input_dict)
+    if all(ri === nothing for ri in (run_info_moments..., run_info_dfns...))
+        error("No output files found for either moments or dfns in $run_dir")
+    elseif all(ri !== nothing for ri in run_info_dfns) ||
+            all(ri === nothing for ri in run_info_moments)
+        # If all runs have 'dfns' files, best to use them to set defaults as we can use
+        # velocity coordinate sizes, etc. Otherwise default to 'moments' files, but if
+        # there are no 'moments' files, then we must be trying to plot 'dfns' files, and
+        # it just happens that one or more are missing - in that case try setting options
+        # from 'dfns' files in case we can still make some useful plots.
+        setup_makie_post_processing_input!(run_info_dfns, new_input_dict)
+
+        is_1D = all(ri.r.n == 1 for ri ∈ run_info_dfns)
+    else
+        setup_makie_post_processing_input!(run_info_moments, new_input_dict)
+
+        is_1D = all(ri.r.n == 1 for ri ∈ run_info_moments)
+    end
 
     # Only plot neutral stuff if all runs have neutrals
     has_neutrals = all(r.n_neutral_species > 0 for r in run_info)
 
-    is_1D = all(ri.r.n == 1 for ri ∈ run_info)
-    is_1V = all(ri.vperp.n == 1 && ri.vzeta.n == 1 && ri.vr.n == 1 for ri ∈ run_info)
+    is_1V = all(ri !== nothing && ri.vperp.n == 1 && ri.vzeta.n == 1 && ri.vr.n == 1
+                for ri ∈ run_info)
 
-    variable_list = tuple(em_variables..., ion_moment_variables...)
+    # Plots from moment variables
+    #############################
+
+    moment_variable_list = tuple(em_variables..., ion_moment_variables...)
     if has_neutrals
-        variable_list = tuple(variable_list..., neutral_moment_variables...)
+        moment_variable_list = tuple(moment_variable_list..., neutral_moment_variables...)
+    end
+
+    if any(ri !== nothing for ri ∈ run_info_moments)
+        # Default to plotting moments from 'moments' files
+        run_info = run_info_moments
+    else
+        # Fall back to trying to plot from 'dfns' files if those are all we have
+        run_info = run_info_dfns
     end
 
     if length(run_info) == 1
@@ -135,9 +169,18 @@ function makie_post_process(run_dir::Union{String,Tuple},
         plot_prefix = "comparison_plots/compare_"
     end
 
-    for variable_name ∈ variable_list
+    for variable_name ∈ moment_variable_list
         plots_for_variable(run_info, variable_name, plot_prefix=plot_prefix, is_1D=is_1D,
                            is_1V=is_1V)
+    end
+
+    # Plots from distribution function variables
+    ############################################
+    if any(ri !== nothing for ri in run_info_dfns)
+        for variable_name ∈ all_dfn_variables
+            #plots_for_dfn_variable(run_info_dfns, variable_name, plot_prefix=plot_prefix,
+            #                       is_1D=is_1D, is_1V=is_1V)
+        end
     end
 
     return nothing
@@ -319,9 +362,12 @@ end
 
 """
 Get file handles and other info for a single run
+
+By default load data from moments files, pass `dfns=true` to load from distribution
+functions files.
 """
 function get_run_info(run_dir, restart_index; itime_min=1, itime_max=-1, itime_skip=1,
-                      itime_min_dfns=1, itime_max_dfns=-1, itime_skip_dfns=1)
+                      itime_min_dfns=1, itime_max_dfns=-1, itime_skip_dfns=1, dfns=false)
     if !isdir(run_dir)
         error("$run_dir is not a directory")
     end
@@ -360,9 +406,21 @@ function get_run_info(run_dir, restart_index; itime_min=1, itime_max=-1, itime_s
         error("Invalid restart_index=$restart_index")
     end
 
-    moments_fids0 = Tuple(open_readonly_output_file(r, "moments", printout=false)
+    if dfns
+        ext = "dfns"
+    else
+        ext = "moments"
+    end
+
+    has_data = all(length(glob(p * ".$ext*.h5")) > 0 for p ∈ run_prefixes)
+    if !has_data
+        println("No $ext data found for $run_prefixes, skipping $ext")
+        return nothing
+    end
+
+    fids0 = Tuple(open_readonly_output_file(r, ext, printout=false)
                          for r ∈ run_prefixes)
-    nblocks = Tuple(load_block_data(f)[1] for f ∈ moments_fids0)
+    nblocks = Tuple(load_block_data(f)[1] for f ∈ fids0)
     if all(n == 1 for n ∈ nblocks)
         # Did not use distributed memory, or used parallel_io
         parallel_io = true
@@ -370,8 +428,8 @@ function get_run_info(run_dir, restart_index; itime_min=1, itime_max=-1, itime_s
         parallel_io = false
     end
     if parallel_io
-        moments_files = moments_fids0
-        nt_unskipped, time = load_time_data(moments_files)
+        files = fids0
+        nt_unskipped, time = load_time_data(files)
         if itime_max > 0
             time = time[itime_min:itime_skip:itime_max]
         else
@@ -380,60 +438,26 @@ function get_run_info(run_dir, restart_index; itime_min=1, itime_max=-1, itime_s
         nt = length(time)
 
         # Get input and coordinates from the final restart
-        moments_file_final_restart = moments_files[end]
+        file_final_restart = files[end]
 
-        input = load_input(moments_file_final_restart)
+        input = load_input(file_final_restart)
 
-        n_ion_species, n_neutral_species = load_species_data(moments_file_final_restart)
+        n_ion_species, n_neutral_species = load_species_data(file_final_restart)
         evolve_density, evolve_upar, evolve_ppar =
-            load_mk_options(moments_file_final_restart)
+            load_mk_options(file_final_restart)
 
-        z_local, z_local_spectral = load_coordinate_data(moments_file_final_restart,
-                                                         "z")
-        r_local, r_local_spectral = load_coordinate_data(moments_file_final_restart,
-                                                         "r")
+        z_local, z_local_spectral = load_coordinate_data(file_final_restart, "z")
+        r_local, r_local_spectral = load_coordinate_data(file_final_restart, "r")
         r, r_spectral, z, z_spectral = construct_global_zr_coords(r_local, z_local)
 
-        has_dfns_data = all(length(glob(p * ".dfns*.h5")) > 0 for p ∈ run_prefixes)
-        if !has_dfns_data
-            println("Warning: distribution function output files not found for "
-                    * "$run_prefixes. Distribution function plots not available.")
-            dfns_files = nothing
-            time_dfns = nothing
-            nt_dfns_unskipped = 0
-            nt_dfns = 0
-            dummy_adv_input = advection_input("default", 1.0, 0.0, 0.0)
-            dummy_comm = MPI.COMM_NULL
-            dummy_input = grid_input("dummy", 1, 1, 1, 1, 0, 1.0,
-                                     "chebyshev_pseudospectral", "", "periodic",
-                                     dummy_adv_input, dummy_comm)
-            vperp, vperp_spectral = define_coordinate(dummy_input)
-            vpa, vpa_spectral = define_coordinate(dummy_input)
-            vzeta, vzeta_spectral = define_coordinate(dummy_input)
-            vr, vr_spectral = define_coordinate(dummy_input)
-            vz, vz_spectral = define_coordinate(dummy_input)
-        else
-            dfns_files = Tuple(open_readonly_output_file(r, "dfns", printout=false)
-                               for r ∈ run_prefixes)
-            nt_dfns_unskipped, time_dfns = load_time_data(dfns_files)
-            if itime_max_dfns >= 0
-                time_dfns = time_dfns[itime_min_dfns:itime_skip_dfns:itime_max_dfns]
-            else
-                time_dfns = time_dfns[itime_min_dfns:itime_skip_dfns:end]
-            end
-            nt_dfns = length(time_dfns)
-
-            # Get input and coordinates from the final restart
-            dfns_file_final_restart = dfns_files[end]
-
-            vperp, vperp_spectral = load_coordinate_data(dfns_file_final_restart, "vperp")
-            vpa, vpa_spectral = load_coordinate_data(dfns_file_final_restart, "vpa")
+        if dfns
+            vperp, vperp_spectral = load_coordinate_data(file_final_restart, "vperp")
+            vpa, vpa_spectral = load_coordinate_data(file_final_restart, "vpa")
 
             if n_neutral_species > 0
-                vzeta, vzeta_spectral = load_coordinate_data(dfns_file_final_restart,
-                                                             "vzeta")
-                vr, vr_spectral = load_coordinate_data(dfns_file_final_restart, "vr")
-                vz, vz_spectral = load_coordinate_data(dfns_file_final_restart, "vz")
+                vzeta, vzeta_spectral = load_coordinate_data(file_final_restart, "vzeta")
+                vr, vr_spectral = load_coordinate_data(file_final_restart, "vr")
+                vz, vz_spectral = load_coordinate_data(file_final_restart, "vz")
             else
                 dummy_adv_input = advection_input("default", 1.0, 0.0, 0.0)
                 dummy_comm = MPI.COMM_NULL
@@ -447,20 +471,25 @@ function get_run_info(run_dir, restart_index; itime_min=1, itime_max=-1, itime_s
         end
     else
         error("parallel_io=false not implemented yet")
-        moments_files = run_prefixes
-        dfns_files = run_prefixes
+        files = run_prefixes
     end
 
-    return (run_name=run_name, parallel_io=parallel_io, nblocks=nblocks,
-            moments_files=moments_files, dfns_files=dfns_files, input=input,
-            n_ion_species=n_ion_species, n_neutral_species=n_neutral_species, nt=nt,
-            nt_unskipped=nt_unskipped, time=time, nt_dfns=nt_dfns,
-            nt_dfns_unskipped=nt_dfns_unskipped, time_dfns=time_dfns, r=r, z=z,
-            vperp=vperp, vpa=vpa, vzeta=vzeta, vr=vr, vz=vz, r_local=r_local,
-            z_local=z_local, r_spectral=r_spectral, z_spectral=z_spectral,
-            vperp_spectral=vperp_spectral, vpa_spectral=vpa_spectral,
-            vzeta_spectral=vzeta_spectral, vr_spectral=vr_spectral,
-            vz_spectral=vz_spectral)
+    if dfns
+        return (run_name=run_name, parallel_io=parallel_io, nblocks=nblocks, files=files,
+                input=input, n_ion_species=n_ion_species,
+                n_neutral_species=n_neutral_species, nt=nt, nt_unskipped=nt_unskipped,
+                time=time, r=r, z=z, vperp=vperp, vpa=vpa, vzeta=vzeta, vr=vr, vz=vz,
+                r_local=r_local, z_local=z_local, r_spectral=r_spectral,
+                z_spectral=z_spectral, vperp_spectral=vperp_spectral,
+                vpa_spectral=vpa_spectral, vzeta_spectral=vzeta_spectral,
+                vr_spectral=vr_spectral, vz_spectral=vz_spectral)
+    else
+        return (run_name=run_name, parallel_io=parallel_io, nblocks=nblocks, files=files,
+                input=input, n_ion_species=n_ion_species,
+                n_neutral_species=n_neutral_species, nt=nt, nt_unskipped=nt_unskipped,
+                time=time, r=r, z=z, r_local=r_local, z_local=z_local,
+                r_spectral=r_spectral, z_spectral=z_spectral)
+    end
 end
 
 """
