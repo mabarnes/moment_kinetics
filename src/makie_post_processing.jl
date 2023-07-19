@@ -994,6 +994,54 @@ function plots_for_variable(run_info, variable_name; plot_prefix)
 end
 
 """
+   put_legend_above(fig, ax; kwargs...)
+
+Add a legend corresponding to the plot in `ax` to `fig` on the left of a new row at the
+top of the figure layout.
+
+Additional `kwargs` are passed to the `Legend()` constructor.
+"""
+function put_legend_above(fig, ax; kwargs...)
+    return Legend(fig[0,1], ax; tellheight=true, tellwidth=false, kwargs...)
+end
+
+"""
+   put_legend_below(fig, ax; kwargs...)
+
+Add a legend corresponding to the plot in `ax` to `fig` on the left of a new row at the
+bottom of the figure layout.
+
+Additional `kwargs` are passed to the `Legend()` constructor.
+"""
+function put_legend_below(fig, ax; kwargs...)
+    return Legend(fig[end+1,1], ax; tellheight=true, tellwidth=false, kwargs...)
+end
+
+"""
+   put_legend_left(fig, ax; kwargs...)
+
+Add a legend corresponding to the plot in `ax` to `fig` on the bottom of a new column at
+the left of the figure layout.
+
+Additional `kwargs` are passed to the `Legend()` constructor.
+"""
+function put_legend_left(fig, ax; kwargs...)
+    return Legend(fig[end,0], ax; kwargs...)
+end
+
+"""
+   put_legend_right(fig, ax; kwargs...)
+
+Add a legend corresponding to the plot in `ax` to `fig` on the bottom of a new column at
+the right of the figure layout.
+
+Additional `kwargs` are passed to the `Legend()` constructor.
+"""
+function put_legend_right(fig, ax; kwargs...)
+    return Legend(fig[end,end+1], ax; kwargs...)
+end
+
+"""
     select_slice(variable::AbstractArray, dims::Symbol...; input=nothing, it=nothing,
                  is=1, ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
                  ivzeta=nothing, ivr=nothing, ivz=nothing)
