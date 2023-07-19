@@ -1158,33 +1158,249 @@ function put_legend_right(fig, ax; kwargs...)
     return Legend(fig[end,end+1], ax; kwargs...)
 end
 
-function select_z_t(variable::AbstractArray{T,2}, input=nothing; is=nothing) where T
-    # Array is not a standard shape, so assume it is already sliced to (z,t)
-    return variable
+function select_slice(variable::AbstractArray{T,1}, dims::Symbol...; input=nothing, is=nothing) where T
+    if length(dims) > 1
+        error("Tried to get a slice of 1d variable with dimensions $dims")
+    elseif length(dims) < 1
+        error("1d variable must have already been sliced, so don't know what the dimensions are")
+    else
+        # Array is not a standard shape, so assume it is already sliced to the right 2
+        # dimensions
+        return variable
+    end
 end
 
-function select_z_t(variable::AbstractArray{T,3}, input=nothing; is=nothing) where T
+function select_slice(variable::AbstractArray{T,2}, dims::Symbol...; input=nothing, is=nothing) where T
+    if length(dims) > 2
+        error("Tried to get a slice of 2d variable with dimensions $dims")
+    elseif length(dims) < 2
+        error("2d variable must have already been sliced, so don't know what the dimensions are")
+    else
+        # Array is not a standard shape, so assume it is already sliced to the right 2
+        # dimensions
+        return variable
+    end
+end
+
+function select_slice(variable::AbstractArray{T,3}, dims::Symbol...; input=nothing, is=nothing) where T
     # Array is (z,r,t)
 
-    if input === nothing
-        ir0 = 1
-    else
-        ir0 = input.ir0
+    if length(dims) > 3
+        error("Tried to get a slice of 3d variable with dimensions $dims")
     end
 
-    return @view variable[:,ir0,:]
+    if input === nothing
+        it0 = size(variable, 3)
+        ir0 = max(size(variable, 2) ÷ 3, 1)
+        iz0 = max(size(variable, 1) ÷ 3, 1)
+    else
+        ir0 = input.ir0
+        iz0 = input.iz0
+    end
+
+    slice = variable
+    if :t ∉ dims
+        slice = selectdim(slice, 3, it0)
+    end
+    if :r ∉ dims
+        slice = selectdim(slice, 2, ir0)
+    end
+    if :z ∉ dims
+        slice = selectdim(slice, 1, iz0)
+    end
+
+    return slice
 end
 
-function select_z_t(variable::AbstractArray{T,4}, input=nothing; is=1) where T
+function select_slice(variable::AbstractArray{T,4}, dims::Symbol...; input=nothing, is=1) where T
     # Array is (z,r,species,t)
 
     if input === nothing
-        ir0 = 1
+        it0 = size(variable, 4)
+        ir0 = max(size(variable, 2) ÷ 3, 1)
+        iz0 = max(size(variable, 1) ÷ 3, 1)
     else
         ir0 = input.ir0
+        iz0 = input.iz0
     end
 
-    return @view variable[:,ir0,is,:]
+    slice = variable
+    if :t ∉ dims
+        slice = selectdim(slice, 4, it0)
+    end
+    slice = selectdim(slice, 3, is)
+    if :r ∉ dims
+        slice = selectdim(slice, 2, ir0)
+    end
+    if :z ∉ dims
+        slice = selectdim(slice, 1, iz0)
+    end
+
+    return slice
+end
+
+function select_slice_dfns(variable::AbstractArray{T,1}, dims::Symbol...; input=nothing, is=nothing) where T
+    if length(dims) > 1
+        error("Tried to get a slice of 1d variable with dimensions $dims")
+    elseif length(dims) < 1
+        error("1d variable must have already been sliced, so don't know what the dimensions are")
+    else
+        # Array is not a standard shape, so assume it is already sliced to the right 2
+        # dimensions
+        return variable
+    end
+end
+
+function select_slice_dfns(variable::AbstractArray{T,2}, dims::Symbol...; input=nothing, is=nothing) where T
+    if length(dims) > 2
+        error("Tried to get a slice of 2d variable with dimensions $dims")
+    elseif length(dims) < 2
+        error("2d variable must have already been sliced, so don't know what the dimensions are")
+    else
+        # Array is not a standard shape, so assume it is already sliced to the right 2
+        # dimensions
+        return variable
+    end
+end
+
+function select_slice_dfns(variable::AbstractArray{T,3}, dims::Symbol...; input=nothing, is=nothing) where T
+    # Array is (z,r,t)
+
+    if length(dims) > 3
+        error("Tried to get a slice of 3d variable with dimensions $dims")
+    end
+
+    if input === nothing
+        it0 = size(variable, 3)
+        ir0 = max(size(variable, 2) ÷ 3, 1)
+        iz0 = max(size(variable, 1) ÷ 3, 1)
+    else
+        it0 = input.it0_dfns
+        ir0 = input.ir0
+        iz0 = input.iz0
+    end
+
+    slice = variable
+    if :t ∉ dims
+        slice = selectdim(slice, 3, it0)
+    end
+    if :r ∉ dims
+        slice = selectdim(slice, r, ir0)
+    end
+    if :z ∉ dims
+        slice = selectdim(slice, z, iz0)
+    end
+
+    return slice
+end
+
+function select_slice_dfns(variable::AbstractArray{T,4}, dims::Symbol...; input=nothing, is=1) where T
+    # Array is (z,r,species,t)
+
+    if input === nothing
+        it0 = size(variable, 4)
+        ir0 = max(size(variable, 1) ÷ 3, 2)
+        iz0 = max(size(variable, 1) ÷ 3, 1)
+    else
+        it0 = input.it0_dfns
+        ir0 = input.ir0
+        iz0 = input.iz0
+    end
+
+    slice = variable
+    if :t ∉ dims
+        slice = selectdim(slice, 4, it0)
+    end
+    slice = selectdim(slice, 3, is)
+    if :r ∉ dims
+        slice = selectdim(slice, 2, ir0)
+    end
+    if :z ∉ dims
+        slice = selectdim(slice, 1, iz0)
+    end
+
+    return slice
+end
+
+function select_slice_dfns(variable::AbstractArray{T,6}, dims::Symbol...; input=nothing, is=1) where T
+    # Array is (z,r,species,t)
+
+    if input === nothing
+        it0 = size(variable, 6)
+        ir0 = max(size(variable, 4) ÷ 3, 1)
+        iz0 = max(size(variable, 3) ÷ 3, 1)
+        ivpa0 = max(size(variable, 2) ÷ 3, 1)
+        ivperp0 = max(size(variable, 1) ÷ 3, 1)
+    else
+        it0 = input.it0_dfns
+        ir0 = input.ir0
+        iz0 = input.iz0
+        ivpa0 = input.ivpa0
+        ivperp0 = input.ivperp0
+    end
+
+    slice = variable
+    if :t ∉ dims
+        slice = selectdim(slice, 6, it0)
+    end
+    slice = selectdim(slice, 5, is)
+    if :r ∉ dims
+        slice = selectdim(slice, 4, ir0)
+    end
+    if :z ∉ dims
+        slice = selectdim(slice, 3, iz0)
+    end
+    if :vperp \nin∉ dims
+        slice = selectdim(slice, 2, ivperp0)
+    end
+    if :vpa \nin  ∉ dims
+        slice = selectdim(slice, 1, ivpa0)
+    end
+
+    return slice
+end
+
+function select_slice_dfns(variable::AbstractArray{T,7}, dims::Symbol...; input=nothing, is=1) where T
+    # Array is (z,r,species,t)
+
+    if input === nothing
+        it0 = size(variable, 7)
+        ir0 = max(size(variable, 5) ÷ 3, 1)
+        iz0 = max(size(variable, 4) ÷ 3, 1)
+        ivzeta0 = max(size(variable, 3) ÷ 3, 1)
+        ivr0 = max(size(variable, 2) ÷ 3, 1)
+        ivz0 = max(size(variable, 1) ÷ 3, 1)
+    else
+        it0 = input.it0_dfns
+        ir0 = input.ir0
+        iz0 = input.iz0
+        ivzeta0 = input.ivzeta0
+        ivr0 = input.ivr0
+        ivz0 = input.ivz0
+    end
+
+    slice = variable
+    if :t ∉ dims
+        slice = selectdim(slice, 7, it0)
+    end
+    slice = selectdim(slice, 6, is)
+    if :r ∉ dims
+        slice = selectdim(slice, 5, ir0)
+    end
+    if :z ∉ dims
+        slice = selectdim(slice, 4, iz0)
+    end
+    if :vzeta ∉ dims
+        slice = selectdim(slice, 3, ivzeta0)
+    end
+    if :vr ∉ dims
+        slice = selectdim(slice, 2, ivr0)
+    end
+    if :vz ∉ dims
+        slice = selectdim(slice, 1, ivz0)
+    end
+
+    return slice
 end
 
 """
