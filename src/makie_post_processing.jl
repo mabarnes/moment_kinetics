@@ -1051,11 +1051,11 @@ function animate_2d(xcoord::Tuple, ycoord::Tuple, data::Tuple; xlabel=nothing,
     end
     colormap = parse_colormap(colormap)
 
-    fig, ax, colorbar_place = get_2d_ax(n_runs, title=title, xlabel=xlabel, ylabel=ylabel)
+    fig, ax, colorbar_places = get_2d_ax(n_runs, title=title, xlabel=xlabel,
+                                         ylabel=ylabel)
     hm = []
     for (i, (x, y, d, t, a, cp)) ∈ enumerate(zip(xcoord, ycoord, data, sub_titles, ax,
-                                                 colorbar_place))
-        println("setting up with $xlabel, $ylabel")
+                                                 colorbar_places))
         this_hm = heatmap!(a, x, y, d[:,:,1], title=t, colormap=colormap)
         Colorbar(cp, this_hm)
 
@@ -1074,7 +1074,7 @@ end
 function animate_2d(xcoord, ycoord, data; xlabel=nothing, ylabel=nothing, title=nothing,
                     sub_titles=nothing, colormap=nothing, outfile=nothing)
     return animate_2d((xcoord,), (ycoord,), (data,), xlabel=xlabel, ylabel=ylabel,
-                      title=title, sub_titles=sub_titles, colormap=colormap,
+                      title=title, sub_titles=(sub_titles,), colormap=colormap,
                       outfile=outfile)
 end
 
