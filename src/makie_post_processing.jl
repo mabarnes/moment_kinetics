@@ -1054,7 +1054,7 @@ function animate_vs_z(run_info::Tuple, var_name; is=1, data=nothing, input=nothi
 
         return fig
     catch e
-        println("$var_name, is=$is failed to animate. Error was $e")
+        println("animate_vs_z failed for $var_name, is=$is. Error was $e")
         return nothing
     end
 end
