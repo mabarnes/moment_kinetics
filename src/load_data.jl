@@ -254,7 +254,7 @@ function load_time_data(fid; printout=false)
         group = get_group(f, "dynamic_data")
         # Skip first point as this is a duplicate of the last point of the previous
         # restart.
-        time = vcat(time[2:end], load_variable(group, "time"))
+        time = vcat(time, load_variable(group, "time")[2:end])
     end
     ntime = length(time)
 
