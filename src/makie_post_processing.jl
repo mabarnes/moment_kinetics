@@ -965,34 +965,45 @@ function animate_vs_z(run_info, var_name; is=1, data=nothing, input=nothing,
                         outfile=outfile)
 end
 
-function get_1d_ax(n=nothing; title=nothing)
+function get_1d_ax(n=nothing; title=nothing, kwargs...)
     if n == nothing
         fig = Figure(title=title)
-        ax = Axis(fig[1,1])
+        ax = Axis(fig[1,1]; kwargs...)
     else
         fig = Figure(resolution=(600*n, 400), title=title)
-        title_layout = fig[1,1] = GridLayout()
-        Label(title_layout[1,1:2], title)
 
-        plot_layout = fig[2,1] = GridLayout()
-        ax = [Axis(plot_layout[1,i]) for i in 1:n]
+        if title !== nothing
+            title_layout = fig[1,1] = GridLayout()
+            Label(title_layout[1,1:2], title)
+
+            plot_layout = fig[2,1] = GridLayout()
+        else
+            plot_layout = fig[1,1] = GridLayout()
+        end
+
+        ax = [Axis(plot_layout[1,i]; kwargs...) for i in 1:n]
     end
 
     return fig, ax
 end
 
-function get_2d_ax(n=nothing; title=nothing, xlabel=nothing, ylabel=nothing)
+function get_2d_ax(n=nothing; title=nothing, kwargs...)
     if n == nothing
         fig = Figure(title=title)
-        ax = Axis(fig[1,1], xlabel=xlabel, ylabel=ylabel)
+        ax = Axis(fig[1,1]; kwargs...)
         colorbar_places = fig[1,2]
     else
         fig = Figure(resolution=(600*n, 400))
-        title_layout = fig[1,1] = GridLayout()
-        Label(title_layout[1,1:2], title)
 
-        plot_layout = fig[2,1] = GridLayout()
-        ax = [Axis(plot_layout[1,2*i-1], xlabel=xlabel, ylabel=ylabel) for i in 1:n]
+        if title !== nothing
+            title_layout = fig[1,1] = GridLayout()
+            Label(title_layout[1,1:2], title)
+
+            plot_layout = fig[2,1] = GridLayout()
+        else
+            plot_layout = fig[1,1] = GridLayout()
+        end
+        ax = [Axis(plot_layout[1,2*i-1]; kwargs...) for i in 1:n]
         colorbar_places = [plot_layout[1,2*i] for i in 1:n]
     end
 
@@ -1058,8 +1069,37 @@ function plot_2d(xcoord, ycoord, data; ax=nothing, colorbar_place=nothing, xlabe
     end
 end
 
-function animate_1d(args...; kwargs...)
-    error("unfinished")
+function animate_1d(xcoord::Tuple, data::Tuple; xlabel=nothing, ylabel=nothing,
+                    title=nothing, labels=nothing, outfile=nothing)
+    n_runs = length(data)
+
+    if labels === nothing
+        labels = Tuple(nothing for _ ∈ 1:n_runs)
+    end
+    if outfile === nothing
+        error("outfile is required for animate_1d()")
+    end
+
+    index = Observable(1)
+
+    fig, ax = get_1d_ax(title=title, xlabel=xlabel, ylabel=ylabel)
+    line_data = (@lift(@view d[:,$index]) for d ∈ data)
+    for (i, (x, d, l)) ∈ enumerate(zip(xcoord, line_data, labels))
+        lines!(ax, x, d, label=l)
+    end
+    put_legend_above(fig, ax)
+
+    nt = minimum(size(d, 2) for d ∈ data)
+
+    record(fig, outfile, 1:nt, framerate=5) do it
+        index[] = it
+    end
+end
+
+function animate_1d(xcoord, data; xlabel=nothing, ylabel=nothing, title=nothing,
+                    labels=nothing, outfile=nothing)
+    return animate_1d((xcoord,), (data,), xlabel=xlabel, ylabel=ylabel, title=title,
+                      labels=(labels,), outfile=outfile)
 end
 
 function animate_2d(xcoord::Tuple, ycoord::Tuple, data::Tuple; xlabel=nothing,
