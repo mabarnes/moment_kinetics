@@ -919,7 +919,7 @@ function plot_vs_z_t(run_info, var_name; is=1, data=nothing, input=nothing,
         title = get_variable_symbol(var_name)
     end
 
-    data = select_z_t(data, input, is=is)
+    data = select_slice(data, :z, :t; input=input, is=is)
 
     fig = plot_2d(run_info.z.grid, run_info.time, data, xlabel="z", ylabel="time",
                   title=title, ax=ax, colorbar_place=colorbar_place,
