@@ -396,6 +396,7 @@ function setup_makie_post_processing_input!(new_input_dict::AbstractDict{String,
        plot_vs_z_t=true,
        animate_vs_z=true,
        animate_vs_r=true,
+       animate_vs_z_r=true,
       )
 
     for variable_name ∈ all_variables
@@ -917,6 +918,10 @@ function plots_for_variable(run_info, variable_name; plot_prefix, is_1D=false,
                 animate_vs_r(run_info, variable_name, is=is, data=variable, input=input,
                              outfile=variable_prefix * "vs_r.gif")
             end
+            if !is_1D && input.animate_vs_z_r
+                animate_vs_z_r(run_info, variable_name, is=is, data=variable, input=input,
+                               outfile=variable_prefix * "vs_r.gif")
+            end
         end
     end
 
@@ -1093,6 +1098,46 @@ function animate_vs_r(run_info, var_name; is=1, data=nothing, input=nothing,
                         outfile=outfile)
 end
 
+function animate_vs_z_r(run_info::Tuple, var_name; is=1, data=nothing, input=nothing,
+                        outfile=nothing)
+
+    try
+        if data === nothing
+            data = Tuple(nothing for _ in run_info)
+        end
+        # Load data if necessary
+        data = Tuple(d === nothing ? postproc_load_variable(ri, var_name) : d
+                     for (d,ri) ∈ zip(data, run_info))
+        # Select needed dims
+        data = Tuple(select_slice(d, :z, :r, :t; input=input, is=is) for d ∈ data)
+
+        rcoord = Tuple(ri.r.grid for ri ∈ run_info)
+        zcoord = Tuple(ri.z.grid for ri ∈ run_info)
+
+        labels = Tuple(ri.run_name for ri ∈ run_info)
+
+        if length(run_info) == 1
+            sub_titles = (get_variable_symbol(var_name),)
+        else
+            sub_titles = Tuple(ri.run_name for ri ∈ run_info)
+        end
+
+        fig = animate_2d(zcoord, rcoord, data, xlabel="z", ylabel="r",
+                         sub_titles=sub_titles, outfile=outfile, colormap=input.colormap)
+
+        return fig
+    catch e
+        println("animate_vs_z_r failed for $var_name, is=$is. Error was $e")
+        return nothing
+    end
+end
+
+function animate_vs_z_r(run_info, var_name; is=1, data=nothing, input=nothing,
+                        outfile=nothing)
+    return animate_vs_r((run_info,), var_name; is=is, data=data, input=input,
+                        outfile=outfile)
+end
+
 function get_1d_ax(n=nothing; title=nothing, kwargs...)
     if n == nothing
         fig = Figure(title=title)
@@ -1248,6 +1293,8 @@ function animate_2d(xcoord::Tuple, ycoord::Tuple, data::Tuple; xlabel=nothing,
     hm = []
     for (i, (x, y, d, t, a, cp)) ∈ enumerate(zip(xcoord, ycoord, data, sub_titles, ax,
                                                  colorbar_places))
+        x = grid_points_to_faces(x)
+        y = grid_points_to_faces(y)
         this_hm = heatmap!(a, x, y, d[:,:,1], title=t, colormap=colormap)
         Colorbar(cp, this_hm)
 
