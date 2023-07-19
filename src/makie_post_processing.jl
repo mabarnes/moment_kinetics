@@ -125,21 +125,11 @@ function makie_post_process(run_dir::Union{String,Tuple},
 
     if all(ri === nothing for ri in (run_info_moments..., run_info_dfns...))
         error("No output files found for either moments or dfns in $run_dir")
-    elseif all(ri !== nothing for ri in run_info_dfns) ||
-            all(ri === nothing for ri in run_info_moments)
-        # If all runs have 'dfns' files, best to use them to set defaults as we can use
-        # velocity coordinate sizes, etc. Otherwise default to 'moments' files, but if
-        # there are no 'moments' files, then we must be trying to plot 'dfns' files, and
-        # it just happens that one or more are missing - in that case try setting options
-        # from 'dfns' files in case we can still make some useful plots.
-        setup_makie_post_processing_input!(run_info_dfns, new_input_dict)
-
-        is_1D = all(ri.r.n == 1 for ri ∈ run_info_dfns)
-    else
-        setup_makie_post_processing_input!(run_info_moments, new_input_dict)
-
-        is_1D = all(ri.r.n == 1 for ri ∈ run_info_moments)
     end
+    setup_makie_post_processing_input!(new_input_dict, run_info_moments=run_info_moments,
+                                       run_info_dfns=run_info_dfns)
+
+    is_1D = all(ri !== nothing && ri.r.n == 1 for ri ∈ run_info_moments)
 
     # Only plot neutral stuff if all runs have neutrals
     has_neutrals = all(r.n_neutral_species > 0 for r in run_info)
@@ -209,14 +199,8 @@ function generate_example_input_file(filename::String=default_input_file_name;
 
     original_input = deepcopy(input_dict)
 
-    # Make a fake run_info NamedTuple to provide default values used by
-    # setup_makie_post_processing!()
-    fake_run_info = (nt_unskipped=1, nt_dfns_unskipped=1, nt=1, nt_dfns=1, r=(n=1,),
-                     z=(n=1,), vperp=(n=1,), vpa=(n=1,), vzeta=(n=1,), vr=(n=1,),
-                     vz=(n=1,))
-
     # Set up input_dict with all-default parameters
-    setup_makie_post_processing_input!(fake_run_info, Dict{String,Any}())
+    setup_makie_post_processing_input!(Dict{String,Any}())
 
     # Convert input_dict to a String formatted as the contents of a TOML file
     buffer = IOBuffer()
@@ -251,17 +235,19 @@ end
 
 """
     setup_makie_post_processing_input!(
-        run_info, input_file::String=default_input_file_name;
-        ignore_missing_file::Bool=false)
-    setup_makie_post_processing_input!(run_info, new_input::AbstractDict{String,Any})
+        input_file::String=default_input_file_name; run_info_moment=nothing,
+        run_info_dfns=nothing, ignore_missing_file::Bool=false)
+    setup_makie_post_processing_input!(new_input_dict::AbstractDict{String,Any};
+                                       run_info_moments=run_info_moments,
+                                       run_info_dfns=run_info_dfns)
 
 Set up input, storing in the global `input_dict`
 """
 function setup_makie_post_processing_input! end
 
 function setup_makie_post_processing_input!(
-        run_info, input_file::String=default_input_file_name;
-        ignore_missing_file::Bool=false)
+        input_file::String=default_input_file_name; run_info_moment=nothing,
+        run_info_dfns=nothing, ignore_missing_file::Bool=false)
 
     if isfile(input_file)
         new_input_dict = TOML.parsefile(input_file)
@@ -272,34 +258,75 @@ function setup_makie_post_processing_input!(
             error("$input_file does not exist")
         end
     end
-    setup_makie_post_processing_input!(run_info, new_input_dict)
+    setup_makie_post_processing_input!(new_input_dict, run_info_moments=run_info_moments,
+                                       run_info_dfns=run_info_dfns)
 
     return nothing
 end
 
-function setup_makie_post_processing_input!(run_info,
-                                            new_input_dict::AbstractDict{String,Any})
+function setup_makie_post_processing_input!(new_input_dict::AbstractDict{String,Any};
+                                            run_info_moments=run_info_moments,
+                                            run_info_dfns=run_info_dfns)
     # Remove all existing entries from the global `input_dict`
     clear_Dict!(input_dict)
 
     # Put entries from new_input_dict into input_dict
     merge!(input_dict, new_input_dict)
 
-    if !isa(run_info, Tuple)
+    if !isa(run_info_moments, Tuple)
         # Make sure run_info is a Tuple
-        run_info = (run_info,)
+        run_info_moments = (run_info_moments,)
     end
-    nt_unskipped_min = minimum(ri.nt_unskipped for ri in run_info)
-    nt_unskipped_dfns_min = minimum(ri.nt_dfns_unskipped for ri in run_info)
-    nt_min = minimum(ri.nt for ri in run_info)
-    nt_dfns_min = minimum(ri.nt_dfns for ri in run_info)
-    nr_min = minimum(ri.r.n for ri in run_info)
-    nz_min = minimum(ri.z.n for ri in run_info)
-    nvperp_min = minimum(ri.vperp.n for ri in run_info)
-    nvpa_min = minimum(ri.vpa.n for ri in run_info)
-    nvzeta_min = minimum(ri.vzeta.n for ri in run_info)
-    nvr_min = minimum(ri.vr.n for ri in run_info)
-    nvz_min = minimum(ri.vz.n for ri in run_info)
+    if !isa(run_info_dfns, Tuple)
+        # Make sure run_info is a Tuple
+        run_info_dfns = (run_info_dfns,)
+    end
+
+    has_moments = any(ri !== nothing for ri ∈ run_info_moments)
+    has_dfns = any(ri !== nothing for ri ∈ run_info_dfns)
+
+    if !has_moments && !has_dfns
+        println("Neither `run_info_moments` nor `run_info_dfns` passed. Setting "
+                * "defaults without using grid sizes")
+    elseif !has_moments
+        println("No run_info_moments, using run_info_dfns to set defaults")
+        run_info_moments = run_info_dfns
+        has_moments = true
+    elseif !has_dfns
+        println("No run_info_dfns, defaults for distribution function coordinate sizes "
+                * "will be set to 1.")
+    end
+
+    if has_moments
+        nt_unskipped_min = minimum(ri.nt_unskipped for ri in run_info_moments
+                                                   if ri !== nothing)
+        nt_min = minimum(ri.nt for ri in run_info_moments if ri !== nothing)
+        nr_min = minimum(ri.r.n for ri in run_info_moments if ri !== nothing)
+        nz_min = minimum(ri.z.n for ri in run_info_moments if ri !== nothing)
+    else
+        nt_unskipped_min = 1
+        nt_min = 1
+        nr_min = 1
+        nz_min = 1
+    end
+    if has_dfns
+        nt_unskipped_dfns_min = minimum(ri.nt_dfns_unskipped for ri in run_info_dfns
+                                                             if ri !== nothing)
+        nt_dfns_min = minimum(ri.nt_dfns for ri in run_info_dfns if ri !== nothing)
+        nvperp_min = minimum(ri.vperp.n for ri in run_info_dfns if ri !== nothing)
+        nvpa_min = minimum(ri.vpa.n for ri in run_info_dfns if ri !== nothing)
+        nvzeta_min = minimum(ri.vzeta.n for ri in run_info_dfns if ri !== nothing)
+        nvr_min = minimum(ri.vr.n for ri in run_info_dfns if ri !== nothing)
+        nvz_min = minimum(ri.vz.n for ri in run_info_dfns if ri !== nothing)
+    else
+        nt_unskipped_dfns_min = 1
+        nt_dfns_min = 1
+        nvperp_min = 1
+        nvpa_min = 1
+        nvzeta_min = 1
+        nvr_min = 1
+        nvz_min = 1
+    end
 
     # Whitelist of options that only apply at the global level, and should not be used
     # as defaults for per-variable options.
