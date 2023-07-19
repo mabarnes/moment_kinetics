@@ -943,7 +943,7 @@ function animate_vs_z(run_info::Tuple, var_name; is=1, data=nothing, input=nothi
         data = Tuple(d === nothing ? postproc_load_variable(ri, var_name) : d
                      for (d,ri) ∈ zip(data, run_info))
         # Select needed dims
-        data = Tuple(select_z_t(d, input, is=is) for d ∈ data)
+        data = Tuple(select_slice(d, :z, :t; input=input, is=is) for d ∈ data)
 
         zcoord = Tuple(ri.z.grid for ri ∈ run_info)
 
