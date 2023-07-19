@@ -394,6 +394,7 @@ function setup_makie_post_processing_input!(new_input_dict::AbstractDict{String,
        plot_vs_r_t=true,
        plot_vs_z_t=true,
        animate_vs_z=true,
+       animate_vs_r=true,
       )
 
     for variable_name ∈ all_variables
@@ -901,6 +902,10 @@ function plots_for_variable(run_info, variable_name; plot_prefix, is_1D=false,
                 animate_vs_z(run_info, variable_name, is=is, data=variable, input=input,
                              outfile=variable_prefix * "vs_z.gif")
             end
+            if !is_1D && input.animate_vs_r
+                animate_vs_r(run_info, variable_name, is=is, data=variable, input=input,
+                             outfile=variable_prefix * "vs_r.gif")
+            end
         end
     end
 
@@ -1041,6 +1046,39 @@ end
 function animate_vs_z(run_info, var_name; is=1, data=nothing, input=nothing,
                       outfile=nothing)
     return animate_vs_z((run_info,), var_name; is=is, data=data, input=input,
+                        outfile=outfile)
+end
+
+function animate_vs_r(run_info::Tuple, var_name; is=1, data=nothing, input=nothing,
+                      outfile=nothing)
+
+    try
+        if data === nothing
+            data = Tuple(nothing for _ in run_info)
+        end
+        # Load data if necessary
+        data = Tuple(d === nothing ? postproc_load_variable(ri, var_name) : d
+                     for (d,ri) ∈ zip(data, run_info))
+        # Select needed dims
+        data = Tuple(select_slice(d, :r, :t; input=input, is=is) for d ∈ data)
+
+        rcoord = Tuple(ri.r.grid for ri ∈ run_info)
+
+        labels = Tuple(ri.run_name for ri ∈ run_info)
+
+        fig = animate_1d(rcoord, data, xlabel="r", ylabel=get_variable_symbol(var_name),
+                         labels=labels, outfile=outfile)
+
+        return fig
+    catch e
+        println("$var_name, is=$is failed to animate. Error was $e")
+        return nothing
+    end
+end
+
+function animate_vs_r(run_info, var_name; is=1, data=nothing, input=nothing,
+                      outfile=nothing)
+    return animate_vs_r((run_info,), var_name; is=is, data=data, input=input,
                         outfile=outfile)
 end
 
