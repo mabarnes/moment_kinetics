@@ -132,10 +132,14 @@ function makie_post_process(run_dir::Union{String,Tuple},
     is_1D = all(ri !== nothing && ri.r.n == 1 for ri ∈ run_info_moments)
 
     # Only plot neutral stuff if all runs have neutrals
-    has_neutrals = all(r.n_neutral_species > 0 for r in run_info)
+    if any(ri !== nothing for ri ∈ run_info_moments)
+        has_neutrals = all(r.n_neutral_species > 0 for r in run_info_moments)
+    else
+        has_neutrals = all(r.n_neutral_species > 0 for r in run_info_dfns)
+    end
 
     is_1V = all(ri !== nothing && ri.vperp.n == 1 && ri.vzeta.n == 1 && ri.vr.n == 1
-                for ri ∈ run_info)
+                for ri ∈ run_info_dfns)
 
     # Plots from moment variables
     #############################
@@ -310,9 +314,9 @@ function setup_makie_post_processing_input!(new_input_dict::AbstractDict{String,
         nz_min = 1
     end
     if has_dfns
-        nt_unskipped_dfns_min = minimum(ri.nt_dfns_unskipped for ri in run_info_dfns
+        nt_unskipped_dfns_min = minimum(ri.nt_unskipped for ri in run_info_dfns
                                                              if ri !== nothing)
-        nt_dfns_min = minimum(ri.nt_dfns for ri in run_info_dfns if ri !== nothing)
+        nt_dfns_min = minimum(ri.nt for ri in run_info_dfns if ri !== nothing)
         nvperp_min = minimum(ri.vperp.n for ri in run_info_dfns if ri !== nothing)
         nvpa_min = minimum(ri.vpa.n for ri in run_info_dfns if ri !== nothing)
         nvzeta_min = minimum(ri.vzeta.n for ri in run_info_dfns if ri !== nothing)
@@ -525,22 +529,15 @@ Load a variable
 The result always has a time dimension, even if the slice `it` is `mk_int` (in which case
 the time dimension will have size 1).
 """
-function postproc_load_variable(run_info, variable_name; dfns=false,
-                                it=nothing, is=nothing, ir=nothing, iz=nothing,
-                                ivperp=nothing, ivpa=nothing, ivzeta=nothing, ivr=nothing,
-                                ivz=nothing)
-    if dfns
-        files = run_info.dfns_files
-        nt = run_info.nt_dfns
-    else
-        files = run_info.moments_files
-        nt = run_info.nt
-    end
+function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
+                                ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
+                                ivzeta=nothing, ivr=nothing, ivz=nothing)
+    nt = run_info.nt
 
     if run_info.parallel_io
         # Get HDF5/NetCDF variables directly and load slices
         variable = Tuple(get_group(f, "dynamic_data")[variable_name]
-                         for f ∈ files)
+                         for f ∈ run_info.files)
         nd = ndims(variable[1])
 
         if isa(it, mk_int)
