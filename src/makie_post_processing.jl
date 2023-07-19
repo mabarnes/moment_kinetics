@@ -44,9 +44,10 @@ const input_dict_dfns = OrderedDict{String,Any}()
 
 const em_variables = ("phi", "Er", "Ez")
 const ion_moment_variables = ("density", "parallel_flow", "parallel_pressure",
-                              "thermal_speed", "parallel_heat_flux", )
+                              "thermal_speed", "temperature", "parallel_heat_flux")
 const neutral_moment_variables = ("density_neutral", "uz_neutral", "pz_neutral",
-                                  "thermal_speed_neutral", "qz_neutral")
+                                  "thermal_speed_neutral", "temperature_neutral",
+                                  "qz_neutral")
 const all_moment_variables = tuple(em_variables..., ion_moment_variables...,
                                    neutral_moment_variables...)
 
@@ -910,15 +911,22 @@ end
 function plots_for_variable(run_info, variable_name; plot_prefix, is_1D=false,
                             is_1V=false)
     input = Dict_to_NamedTuple(input_dict[variable_name])
-    # Use the global settings for "itime_*" to be consistent with the `time` in
-    # `run_info`.
-    tinds = input_dict["itime_min"]:input_dict["itime_skip"]:input_dict["itime_max"]
 
     # test if any plot is needed
     if any(v for (k,v) in pairs(input) if
            startswith(String(k), "plot") || startswith(String(k), "animate"))
-        variable = Tuple(postproc_load_variable(ri, variable_name; it=tinds)
-                         for ri ∈ run_info)
+        if variable_name == "temperature"
+            vth = Tuple(postproc_load_variable(ri, "thermal_speed")
+                        for ri ∈ run_info)
+            variable = Tuple(v.^2 for v ∈ vth)
+        elseif variable_name == "temperature_neutral"
+            vth = Tuple(postproc_load_variable(ri, "thermal_speed_neutral")
+                        for ri ∈ run_info)
+            variable = Tuple(v.^2 for v ∈ vth)
+        else
+            variable = Tuple(postproc_load_variable(ri, variable_name)
+                             for ri ∈ run_info)
+        end
         if variable_name ∈ em_variables
             species_indices = (nothing,)
         elseif variable_name ∈ neutral_moment_variables ||
