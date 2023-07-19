@@ -560,6 +560,36 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
                                 ivzeta=nothing, ivr=nothing, ivz=nothing)
     nt = run_info.nt
 
+    # Use Colon operator `:` when slice argument is `nothing` as when we pass that as an
+    # 'index', it selects the whole dimension.
+    if it === nothing
+        it = :
+    end
+    if is === nothing
+        is = :
+    end
+    if ir === nothing
+        ir = :
+    end
+    if iz === nothing
+        iz = :
+    end
+    if ivperp === nothing
+        ivperp = :
+    end
+    if ivpa === nothing
+        ivpa = :
+    end
+    if ivzeta === nothing
+        ivzeta = :
+    end
+    if ivr === nothing
+        ivr = :
+    end
+    if ivz === nothing
+        ivz = :
+    end
+
     if run_info.parallel_io
         # Get HDF5/NetCDF variables directly and load slices
         variable = Tuple(get_group(f, "dynamic_data")[variable_name]
@@ -568,30 +598,33 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
 
         if isa(it, mk_int)
             nt = 1
-        elseif it === nothing
+        elseif it === :
             it = 1:nt
         else
             nt = length(it)
         end
 
+        # [JTO: Put brackets around the `:` in the if any(...) calls below because
+        #  otherwise my editor's bracket/block matching gets confused. I don't think they
+        #  should be necessary, but they also shouldn't do anything.]
         if nd == 3
             # EM variable with dimensions (z,r,t)
             not_allowed_slices = (ivperp=ivperp, ivpa=ivpa, ivzeta=ivzeta, ivr=ivr,
                                   ivz=ivz)
-            if any(i !== nothing for i ∈ values(not_allowed_slices))
+            if any(i !== (:) for i ∈ values(not_allowed_slices))
                 error("Got slice for non-existing dimension of 2d variable. "
                       * "All of $not_allowed_slices should be `nothing`.")
             end
             dims = Vector{mk_int}()
-            iz === nothing && push!(dims, run_info.z.n)
-            ir === nothing && push!(dims, run_info.r.n)
+            iz === : && push!(dims, run_info.z.n)
+            ir === : && push!(dims, run_info.r.n)
             push!(dims, nt)
             result = allocate_float(dims...)
         elseif nd == 4
             # moment variable with dimensions (z,r,s,t)
             not_allowed_slices = (ivperp=ivperp, ivpa=ivpa, ivzeta=ivzeta, ivr=ivr,
                                   ivz=ivz)
-            if any(i !== nothing for i ∈ values(not_allowed_slices))
+            if any(i !== (:) for i ∈ values(not_allowed_slices))
                 error("Got slice for non-existing dimension of 2d variable. "
                       * "All of $not_allowed_slices should be `nothing`.")
             end
@@ -599,40 +632,40 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
             # either ion or neutral
             nspecies = size(variable[1], 3)
             dims = Vector{mk_int}()
-            iz === nothing && push!(dims, run_info.z.n)
-            ir === nothing && push!(dims, run_info.r.n)
-            is === nothing && push!(dims, nspecies)
+            iz === : && push!(dims, run_info.z.n)
+            ir === : && push!(dims, run_info.r.n)
+            is === : && push!(dims, nspecies)
             push!(dims, nt)
             result = allocate_float(dims...)
         elseif nd == 6
             # ion distribution function variable with dimensions (vpa,vperp,z,r,s,t)
             not_allowed_slices = (ivzeta=ivzeta, ivr=ivr, ivz=ivz)
-            if any(i !== nothing for i ∈ values(not_allowed_slices))
+            if any(i !== (:) for i ∈ values(not_allowed_slices))
                 error("Got slice for non-existing dimension of 4d variable. "
                       * "All of $not_allowed_slices should be `nothing`.")
             end
             dims = Vector{mk_int}()
-            ivpa === nothing && push!(dims, run_info.vpa.n)
-            ivperp === nothing && push!(dims, run_info.vperp.n)
-            iz === nothing && push!(dims, run_info.z.n)
-            ir === nothing && push!(dims, run_info.r.n)
-            is === nothing && push!(dims, nspecies)
+            ivpa === : && push!(dims, run_info.vpa.n)
+            ivperp === : && push!(dims, run_info.vperp.n)
+            iz === : && push!(dims, run_info.z.n)
+            ir === : && push!(dims, run_info.r.n)
+            is === : && push!(dims, nspecies)
             push!(dims, nt)
             result = allocate_float(dims...)
         elseif nd == 7
             # neutral distribution function variable with dimensions (vz,vr,vzeta,z,r,s,t)
             not_allowed_slices = (ivperp=ivperp, ivpa=ivpa)
-            if any(i !== nothing for i ∈ values(not_allowed_slices))
+            if any(i !== (:) for i ∈ values(not_allowed_slices))
                 error("Got slice for non-existing dimension of 5d variable. "
                       * "All of $not_allowed_slices should be `nothing`.")
             end
             dims = Vector{mk_int}()
-            ivpz === nothing && push!(dims, run_info.vpz.n)
-            ivr === nothing && push!(dims, run_info.vr.n)
-            ivzeta === nothing && push!(dims, run_info.vzeta.n)
-            iz === nothing && push!(dims, run_info.z.n)
-            ir === nothing && push!(dims, run_info.r.n)
-            is === nothing && push!(dims, nspecies)
+            ivz === : && push!(dims, run_info.vpz.n)
+            ivr === : && push!(dims, run_info.vr.n)
+            ivzeta === : && push!(dims, run_info.vzeta.n)
+            iz === : && push!(dims, run_info.z.n)
+            ir === : && push!(dims, run_info.r.n)
+            is === : && push!(dims, nspecies)
             push!(dims, nt)
             result = allocate_float(dims...)
         else
@@ -663,186 +696,14 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
             global_it_end = global_it_start + length(tinds) - 1
 
             # Is there a nicer way to cover all the possible combinations of slices here?
-            if nd == 3 && ir === nothing && iz === nothing
-                result[:,:,global_it_start:global_it_end] = v[:,:,tinds]
-            elseif nd == 3 && iz === nothing
-                result[:,global_it_start:global_it_end] = v[:,ir,tinds]
-            elseif nd == 3 && ir === nothing
-                result[:,global_it_start:global_it_end] = v[iz,:,tinds]
-            elseif nd == 3
-                result[global_it_start:global_it_end] = v[iz,ir,tinds]
-            elseif nd == 4 && is === nothing && ir === nothing && iz === nothing
-                result[:,:,:,global_it_start:global_it_end] = v[:,:,:,tinds]
-            elseif nd == 4 && is === nothing && iz === nothing
-                result[:,:,global_it_start:global_it_end] = v[:,ir,:,tinds]
-            elseif nd == 4 && is === nothing && ir === nothing
-                result[:,:,global_it_start:global_it_end] = v[iz,:,:,tinds]
-            elseif nd == 4 && is === nothing
-                result[:,global_it_start:global_it_end] = v[iz,ir,:,tinds]
-            elseif nd == 4 && ir === nothing && iz === nothing
-                result[:,:,global_it_start:global_it_end] = v[:,:,is,tinds]
-            elseif nd == 4 && iz === nothing
-                result[:,global_it_start:global_it_end] = v[:,ir,is,tinds]
-            elseif nd == 4 && ir === nothing
-                result[:,global_it_start:global_it_end] = v[iz,:,is,tinds]
+            if nd == 3
+                selectdim(result, length(result), global_it_start:global_it_end) = v[iz,ir,tinds]
             elseif nd == 4
-                result[:,global_it_start:global_it_end] = v[iz,ir,is,tinds]
-            elseif nd == 6 && is === nothing && ir === nothing && iz === nothing && ivperp === nothing && ivpa === nothing
-                result[:,:,:,:,:,global_it_start:global_it_end] = v[:,:,:,:,:,tinds]
-            elseif nd == 6 && is === nothing && iz === nothing && ivperp === nothing && ivpa === nothing
-                result[:,:,:,:,global_it_start:global_it_end] = v[:,:,:,ir,:,tinds]
-            elseif nd == 6 && is === nothing && ir === nothing && ivperp === nothing && ivpa === nothing
-                result[:,:,:,:,global_it_start:global_it_end] = v[:,:,iz,:,:,tinds]
-            elseif nd == 6 && is === nothing && ir === nothing && iz === nothing && ivpa === nothing
-                result[:,:,:,:,global_it_start:global_it_end] = v[:,ivperp,:,:,:,tinds]
-            elseif nd == 6 && is === nothing && ir === nothing && iz === nothing && iverp === nothing
-                result[:,:,:,:,global_it_start:global_it_end] = v[ivpa,:,:,:,:,tinds]
-            elseif nd == 6 && is === nothing && ivperp === nothing && ivpa === nothing
-                result[:,:,:,global_it_start:global_it_end] = v[:,:,iz,ir,:,tinds]
-            elseif nd == 6 && is === nothing && iz === nothing && ivpa === nothing
-                result[:,:,:,global_it_start:global_it_end] = v[:,ivperp,:,ir,:,tinds]
-            elseif nd == 6 && is === nothing && iz === nothing && ivperp === nothing
-                result[:,:,:,global_it_start:global_it_end] = v[ivpa,:,:,ir,:,tinds]
-            elseif nd == 6 && is === nothing && ir === nothing && ivpa === nothing
-                result[:,:,:,global_it_start:global_it_end] = v[:,ivperp,iz,:,:,tinds]
-            elseif nd == 6 && is === nothing && ir === nothing && ivperp === nothing
-                result[:,:,:,global_it_start:global_it_end] = v[ivpa,:,iz,:,:,tinds]
-            elseif nd == 6 && is === nothing && ir === nothing && iz === nothing
-                result[:,:,:,global_it_start:global_it_end] = v[ivpa,ivperp,:,:,:,tinds]
-            elseif nd == 6 && is === nothing && ivpa === nothing
-                result[:,:,global_it_start:global_it_end] = v[:,ivperp,iz,ir,:,tinds]
-            elseif nd == 6 && is === nothing && ivperp === nothing
-                result[:,:,global_it_start:global_it_end] = v[ivpa,:,iz,ir,:,tinds]
-            elseif nd == 6 && is === nothing && iz === nothing
-                result[:,:,global_it_start:global_it_end] = v[ivpa,ivperp,:,ir,:,tinds]
-            elseif nd == 6 && is === nothing && ir === nothing
-                result[:,:,global_it_start:global_it_end] = v[ivpa,ivperp,iz,:,:,tinds]
-            elseif nd == 6 && is === nothing
-                result[:,global_it_start:global_it_end] = v[ivpa,ivperp,ir,iz,:,tinds]
-            elseif nd == 6 && ir === nothing && iz === nothing && ivperp === nothing && ivpa === nothing
-                result[:,:,:,:,global_it_start:global_it_end] = v[:,:,:,:,is,tinds]
-            elseif nd == 6 && iz === nothing && ivperp === nothing && ivpa === nothing
-                result[:,:,:,global_it_start:global_it_end] = v[:,:,:,ir,is,tinds]
-            elseif nd == 6 && ir === nothing && ivperp === nothing && ivpa === nothing
-                result[:,:,:,global_it_start:global_it_end] = v[:,:,iz,:,is,tinds]
-            elseif nd == 6 && ir === nothing && iz === nothing && ivpa === nothing
-                result[:,:,:,global_it_start:global_it_end] = v[:,ivperp,:,:,is,tinds]
-            elseif nd == 6 && ir === nothing && iz === nothing && iverp === nothing
-                result[:,:,:,global_it_start:global_it_end] = v[ivpa,:,:,:,is,tinds]
-            elseif nd == 6 && ivperp === nothing && ivpa === nothing
-                result[:,:,global_it_start:global_it_end] = v[:,:,iz,ir,is,tinds]
-            elseif nd == 6 && iz === nothing && ivpa === nothing
-                result[:,:,global_it_start:global_it_end] = v[:,ivperp,:,ir,is,tinds]
-            elseif nd == 6 && iz === nothing && ivperp === nothing
-                result[:,:,global_it_start:global_it_end] = v[ivpa,:,:,ir,is,tinds]
-            elseif nd == 6 && ir === nothing && ivpa === nothing
-                result[:,:,global_it_start:global_it_end] = v[:,ivperp,iz,:,is,tinds]
-            elseif nd == 6 && ir === nothing && ivperp === nothing
-                result[:,:,global_it_start:global_it_end] = v[ivpa,:,iz,:,is,tinds]
-            elseif nd == 6 && ir === nothing && iz === nothing
-                result[:,:,global_it_start:global_it_end] = v[ivpa,ivperp,:,:,is,tinds]
-            elseif nd == 6 && ivpa === nothing
-                result[:,global_it_start:global_it_end] = v[:,ivperp,iz,ir,is,tinds]
-            elseif nd == 6 && ivperp === nothing
-                result[:,global_it_start:global_it_end] = v[ivpa,:,iz,ir,is,tinds]
-            elseif nd == 6 && iz === nothing
-                result[:,global_it_start:global_it_end] = v[ivpa,ivperp,:,ir,is,tinds]
-            elseif nd == 6 && ir === nothing
-                result[:,global_it_start:global_it_end] = v[ivpa,ivperp,iz,:,is,tinds]
+                selectdim(result, length(result), global_it_start:global_it_end) = v[iz,ir,is,tinds]
             elseif nd == 6
-                result[global_it_start:global_it_end] = v[ivpa,ivperp,ir,iz,is,tinds]
-            elseif nd == 7 && is === nothing && ir === nothing && iz === nothing && ivzeta === nothing && ivr === nothing && ivz === nothing
-                result[:,:,:,:,:,:,global_it_start:global_it_end] = v[:,:,:,:,:,:,tinds]
-            elseif nd == 7 && is === nothing && iz === nothing && ivzeta === nothing && ivr === nothing && ivz === nothing
-                result[:,:,:,:,:,global_it_start:global_it_end] = v[:,:,:,:,ir,:,tinds]
-            elseif nd == 7 && is === nothing && ir === nothing && ivzeta === nothing && ivr === nothing && ivz === nothing
-                result[:,:,:,:,:,global_it_start:global_it_end] = v[:,:,:,iz,:,:,tinds]
-            elseif nd == 7 && is === nothing && ir === nothing && iz === nothing && ivr === nothing && ivz === nothing
-                result[:,:,:,:,:,global_it_start:global_it_end] = v[:,:,:,iz,:,:,tinds]
-            elseif nd == 7 && is === nothing && ivzeta === nothing && ivr === nothing && ivz === nothing
-                result[:,:,:,:,global_it_start:global_it_end] = v[:,:,ivzeta,:,ir,:,tinds]
-            elseif nd == 7 && is === nothing && ivzeta === nothing && ivzeta === nothing && ivz === nothing
-                result[:,:,:,:,global_it_start:global_it_end] = v[:,ivr,:,:,ir,:,tinds]
-            elseif nd == 7 && is === nothing && ivzeta === nothing && ivzeta === nothing && ivr === nothing
-                result[:,:,:,:,global_it_start:global_it_end] = v[ivz,:,:,:,ir,:,tinds]
-            elseif nd == 7 && is === nothing && ivr === nothing && ivz === nothing
-                result[:,:,:,global_it_start:global_it_end] = v[:,:,ivzeta,iz,ir,:,tinds]
-            elseif nd == 7 && is === nothing && ivzeta === nothing && ivz === nothing
-                result[:,:,:,global_it_start:global_it_end] = v[:,ivr,:,iz,ir,:,tinds]
-            elseif nd == 7 && is === nothing && ivzeta === nothing && ivr === nothing
-                result[:,:,:,global_it_start:global_it_end] = v[ivz,:,:,iz,ir,:,tinds]
-            elseif nd == 7 && is === nothing && iz === nothing && ivz === nothing
-                result[:,:,:,global_it_start:global_it_end] = v[:,ivr,ivzeta,:,ir,:,tinds]
-            elseif nd == 7 && is === nothing && iz === nothing && ivr === nothing
-                result[:,:,:,global_it_start:global_it_end] = v[ivz,:,ivzeta,:,ir,:,tinds]
-            elseif nd == 7 && is === nothing && iz === nothing && ivzeta === nothing
-                result[:,:,:,global_it_start:global_it_end] = v[ivz,ivr,:,:,ir,:,tinds]
-            elseif nd == 7 && is === nothing && ir === nothing && ivz === nothing
-                result[:,:,:,global_it_start:global_it_end] = v[:,ivr,ivzeta,iz,:,:,tinds]
-            elseif nd == 7 && is === nothing && ir === nothing && ivr === nothing
-                result[:,:,:,global_it_start:global_it_end] = v[ivz,:,ivzeta,iz,:,:,tinds]
-            elseif nd == 7 && is === nothing && ir === nothing && ivzeta === nothing
-                result[:,:,:,global_it_start:global_it_end] = v[ivz,ivr,:,iz,:,:,tinds]
-            elseif nd == 7 && is === nothing && ir === nothing && iz === nothing
-                result[:,:,:,global_it_start:global_it_end] = v[ivz,ivr,ivzeta,:,:,:,tinds]
-            elseif nd == 7 && is === nothing && ivz === nothing
-                result[:,:,global_it_start:global_it_end] = v[:,ivr,ivzeta,iz,ir,:,tinds]
-            elseif nd == 7 && is === nothing && ivr === nothing
-                result[:,:,global_it_start:global_it_end] = v[ivz,:,ivzeta,iz,ir,:,tinds]
-            elseif nd == 7 && is === nothing && ivzeta === nothing
-                result[:,:,global_it_start:global_it_end] = v[ivz,ivr,:,iz,ir,:,tinds]
-            elseif nd == 7 && is === nothing && iz === nothing
-                result[:,:,global_it_start:global_it_end] = v[ivz,ivr,ivzeta,:,ir,:,tinds]
-            elseif nd == 7 && is === nothing && ir === nothing
-                result[:,:,global_it_start:global_it_end] = v[ivz,ivr,ivzeta,iz,:,:,tinds]
-            elseif nd == 7 && is === nothing
-                result[:,global_it_start:global_it_end] = v[ivz,ivr,ivzeta,iz,ir,:,tinds]
-            elseif nd == 7 && ir === nothing && iz === nothing && ivzeta === nothing && ivr === nothing && ivz === nothing
-                result[:,:,:,:,:,global_it_start:global_it_end] = v[:,:,:,:,:,is,tinds]
-            elseif nd == 7 && iz === nothing && ivzeta === nothing && ivr === nothing && ivz === nothing
-                result[:,:,:,:,global_it_start:global_it_end] = v[:,:,:,:,ir,is,tinds]
-            elseif nd == 7 && ir === nothing && ivzeta === nothing && ivr === nothing && ivz === nothing
-                result[:,:,:,:,global_it_start:global_it_end] = v[:,:,:,iz,:,is,tinds]
-            elseif nd == 7 && ir === nothing && iz === nothing && ivr === nothing && ivz === nothing
-                result[:,:,:,:,global_it_start:global_it_end] = v[:,:,:,iz,:,is,tinds]
-            elseif nd == 7 && ivzeta === nothing && ivr === nothing && ivz === nothing
-                result[:,:,:,global_it_start:global_it_end] = v[:,:,ivzeta,:,ir,is,tinds]
-            elseif nd == 7 && ivzeta === nothing && ivzeta === nothing && ivz === nothing
-                result[:,:,:,global_it_start:global_it_end] = v[:,ivr,:,:,ir,is,tinds]
-            elseif nd == 7 && ivzeta === nothing && ivzeta === nothing && ivr === nothing
-                result[:,:,:,global_it_start:global_it_end] = v[ivz,:,:,:,ir,is,tinds]
-            elseif nd == 7 && ivr === nothing && ivz === nothing
-                result[:,:,global_it_start:global_it_end] = v[:,:,ivzeta,iz,ir,is,tinds]
-            elseif nd == 7 && ivzeta === nothing && ivz === nothing
-                result[:,:,global_it_start:global_it_end] = v[:,ivr,:,iz,ir,is,tinds]
-            elseif nd == 7 && ivzeta === nothing && ivr === nothing
-                result[:,:,global_it_start:global_it_end] = v[ivz,:,:,iz,ir,is,tinds]
-            elseif nd == 7 && iz === nothing && ivz === nothing
-                result[:,:,global_it_start:global_it_end] = v[:,ivr,ivzeta,:,ir,is,tinds]
-            elseif nd == 7 && iz === nothing && ivr === nothing
-                result[:,:,global_it_start:global_it_end] = v[ivz,:,ivzeta,:,ir,is,tinds]
-            elseif nd == 7 && iz === nothing && ivzeta === nothing
-                result[:,:,global_it_start:global_it_end] = v[ivz,ivr,:,:,ir,is,tinds]
-            elseif nd == 7 && ir === nothing && ivz === nothing
-                result[:,:,global_it_start:global_it_end] = v[:,ivr,ivzeta,iz,:,is,tinds]
-            elseif nd == 7 && ir === nothing && ivr === nothing
-                result[:,:,global_it_start:global_it_end] = v[ivz,:,ivzeta,iz,:,is,tinds]
-            elseif nd == 7 && ir === nothing && ivzeta === nothing
-                result[:,:,global_it_start:global_it_end] = v[ivz,ivr,:,iz,:,is,tinds]
-            elseif nd == 7 && ir === nothing && iz === nothing
-                result[:,:,global_it_start:global_it_end] = v[ivz,ivr,ivzeta,:,:,is,tinds]
-            elseif nd == 7 && ivz === nothing
-                result[:,global_it_start:global_it_end] = v[:,ivr,ivzeta,iz,ir,is,tinds]
-            elseif nd == 7 && ivr === nothing
-                result[:,global_it_start:global_it_end] = v[ivz,:,ivzeta,iz,ir,is,tinds]
-            elseif nd == 7 && ivzeta === nothing
-                result[:,global_it_start:global_it_end] = v[ivz,ivr,:,iz,ir,is,tinds]
-            elseif nd == 7 && iz === nothing
-                result[:,global_it_start:global_it_end] = v[ivz,ivr,ivzeta,:,ir,is,tinds]
-            elseif nd == 7 && ir === nothing
-                result[:,global_it_start:global_it_end] = v[ivz,ivr,ivzeta,iz,:,is,tinds]
+                selectdim(result, length(result), global_it_start:global_it_end) = v[ivpa,ivperp,ir,iz,is,tinds]
             elseif nd == 7
-                result[global_it_start:global_it_end] = v[ivz,ivr,ivzeta,iz,ir,is,tinds]
+                selectdim(result, length(result), global_it_start:global_it_end) = v[ivz,ivr,ivzeta,iz,ir,is,tinds]
             else
                 error("Unsupported combination nd=$nd, ir=$ir, iz=$iz, ivperp=$ivperp "
                       * "ivpa=$ivpa, ivzeta=$ivzeta, ivr=$ivr, ivz=$ivz.")
