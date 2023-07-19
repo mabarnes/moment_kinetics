@@ -871,7 +871,7 @@ function plots_for_variable(run_info, variable_name; plot_prefix, is_1D=false,
                             outfile=variable_prefix * "vs_z_t.pdf")
             end
             if input.animate_vs_z
-                animate_vs_z(run_info, variable_name, is=is, data=variable,
+                animate_vs_z(run_info, variable_name, is=is, data=variable, input=input,
                              outfile=variable_prefix * "vs_z.gif")
             end
         end
@@ -945,12 +945,12 @@ function animate_vs_z(run_info::Tuple, var_name; is=1, data=nothing, input=nothi
         # Select needed dims
         data = Tuple(select_z_t(d, input, is=is) for d ∈ data)
 
-        zcoord = Tuple(ri.z for ri ∈ run_info)
+        zcoord = Tuple(ri.z.grid for ri ∈ run_info)
 
-        title = Tuple(ri.run_name for ri ∈ run_info)
+        labels = Tuple(ri.run_name for ri ∈ run_info)
 
         fig = animate_1d(zcoord, data, xlabel="z", ylabel=get_variable_symbol(var_name),
-                         title=title)
+                         labels=labels, outfile=outfile)
 
         return fig
     catch e
