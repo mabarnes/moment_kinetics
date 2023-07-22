@@ -23,7 +23,7 @@ using moment_kinetics.fokker_planck: calculate_Rosenbluth_H_from_G!
 using moment_kinetics.fokker_planck: d2Gdvpa2, dGdvperp, d2Gdvperpdvpa, d2Gdvperp2
 using moment_kinetics.fokker_planck: dHdvpa, dHdvperp, Cssp_Maxwellian_inputs, F_Maxwellian
 using moment_kinetics.type_definitions: mk_float, mk_int
-using moment_kinetics.calculus: derivative!
+using moment_kinetics.calculus: derivative!, second_derivative!
 using moment_kinetics.velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_pressure
 using moment_kinetics.communication
 using moment_kinetics.looping
@@ -545,6 +545,15 @@ if abspath(PROGRAM_FILE) == @__FILE__
             @views derivative!(vpa.scratch, fsp_in[:,ivperp], vpa, vpa_spectral)
             @views derivative!(vpa.scratch2, vpa.scratch, vpa, vpa_spectral)
             @. d2fspdvpa2[:,ivperp] = vpa.scratch2
+        end
+        if vpa.discretization == "gausslegendre_pseudospectral"
+            println("use weak-form second derivative for vpa")
+            for ivperp in 1:nvperp
+               @views second_derivative!(vpa.scratch2, fs_in[:,ivperp], vpa, vpa_spectral)
+               @. d2fsdvpa2[:,ivperp] = vpa.scratch2 
+               @views second_derivative!(vpa.scratch2, fsp_in[:,ivperp], vpa, vpa_spectral)
+               @. d2fspdvpa2[:,ivperp] = vpa.scratch2 
+            end
         end
         for ivpa in 1:vpa.n
             # s
@@ -1321,10 +1330,10 @@ if abspath(PROGRAM_FILE) == @__FILE__
     if test_Lagrange_integral_scan
         initialize_comms!()
         ngrid = 5
-        nscan = 2
-        #nelement_list = Int[2, 4, 8, 16, 32]
+        nscan = 5
+        nelement_list = Int[2, 4, 8, 16, 32]
         #nelement_list = Int[2, 4, 8, 16]
-        nelement_list = Int[2, 4]
+        #nelement_list = Int[2, 4]
         #nelement_list = Int[2]
         max_C_err = Array{mk_float,1}(undef,nscan)
         max_Gvpa_err = Array{mk_float,1}(undef,nscan)
