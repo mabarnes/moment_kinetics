@@ -32,27 +32,51 @@ using IfElse
     end
 
     #standard functions for building densities
-    function nplus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha)
+    function nplus_sym(Lr,Lz,r_bc,z_bc,manufactured_solns_input)
         if r_bc == "periodic"
-            nplus = exp(sqrt(epsilon + 0.5 - z/Lz)) * exp(1.0 + 0.05*sin(2.0*pi*r/Lr)*((1.0 - alpha)*cos(pi*z/Lz) + alpha))
+            if manufactured_solns_input.type == "default"
+                nplus = exp(sqrt(manufactured_solns_input.epsilon_offset + 0.5 - z/Lz)) * exp(1.0 + 0.05*sin(2.0*pi*r/Lr)*((1.0 - manufactured_solns_input.alpha_switch)*cos(pi*z/Lz) + manufactured_solns_input.alpha_switch))
+            elseif manufactured_solns_input.type == "no-exp"
+                nplus = exp(sqrt(manufactured_solns_input.epsilon_offset + 0.5 - z/Lz)) * (1.0 + 0.05*sin(2.0*pi*r/Lr)*((1.0 - manufactured_solns_input.alpha_switch)*cos(pi*z/Lz) + manufactured_solns_input.alpha_switch))
+            elseif manufactured_solns_input.type == "no-exp-sqrt" || manufactured_solns_input.type == "no-exp-sqrt-nzero0"
+                nplus = (1.0 + 0.05*sin(2.0*pi*r/Lr)*((1.0 - manufactured_solns_input.alpha_switch)*cos(pi*z/Lz) + manufactured_solns_input.alpha_switch))
+            else
+                error("unrecognised type '$manufactured_solns_input.type'")
+            end
         elseif r_bc == "Dirichlet"
             nplus = exp(1.0 - 0.2*r/Lr) 
         end
         return nplus
     end
     
-    function nminus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha)
+    function nminus_sym(Lr,Lz,r_bc,z_bc,manufactured_solns_input)
         if r_bc == "periodic"
-            nminus = exp(sqrt(epsilon + 0.5 + z/Lz)) * exp(1.0 + 0.05*sin(2.0*pi*r/Lr)*((1.0 - alpha)*cos(pi*z/Lz) + alpha))
+            if manufactured_solns_input.type == "default"
+                nminus = exp(sqrt(manufactured_solns_input.epsilon_offset + 0.5 + z/Lz)) * exp(1.0 + 0.05*sin(2.0*pi*r/Lr)*((1.0 - manufactured_solns_input.alpha_switch)*cos(pi*z/Lz) + manufactured_solns_input.alpha_switch))
+            elseif manufactured_solns_input.type == "no-exp"
+                nminus = exp(sqrt(manufactured_solns_input.epsilon_offset + 0.5 + z/Lz)) * (1.0 + 0.05*sin(2.0*pi*r/Lr)*((1.0 - manufactured_solns_input.alpha_switch)*cos(pi*z/Lz) + manufactured_solns_input.alpha_switch))
+            elseif manufactured_solns_input.type == "no-exp-sqrt" || manufactured_solns_input.type == "no-exp-sqrt-nzero0"
+                nminus = (1.0 + 0.05*sin(2.0*pi*r/Lr)*((1.0 - manufactured_solns_input.alpha_switch)*cos(pi*z/Lz) + manufactured_solns_input.alpha_switch))
+            else
+                error("unrecognised type '$manufactured_solns_input.type'")
+            end
         elseif r_bc == "Dirichlet"
             nminus = exp(1.0 - 0.2*r/Lr)
         end
         return nminus
     end
     
-    function nzero_sym(Lr,Lz,r_bc,z_bc,alpha)
+    function nzero_sym(Lr,Lz,r_bc,z_bc,manufactured_solns_input)
         if r_bc == "periodic"
-            nzero = exp(1.0 + 0.05*sin(2.0*pi*r/Lr)*((1.0 - alpha)*cos(pi*z/Lz) + alpha))
+            if manufactured_solns_input.type == "default"
+                nzero = exp(1.0 + 0.05*sin(2.0*pi*r/Lr)*((1.0 - manufactured_solns_input.alpha_switch)*cos(pi*z/Lz) + manufactured_solns_input.alpha_switch))
+            elseif manufactured_solns_input.type == "no-exp" || manufactured_solns_input.type == "no-exp-sqrt"
+                nzero = (1.0 + 0.05*sin(2.0*pi*r/Lr)*((1.0 - manufactured_solns_input.alpha_switch)*cos(pi*z/Lz) + manufactured_solns_input.alpha_switch))
+            elseif manufactured_solns_input.type == "no-exp-sqrt-nzero0"
+                nzero = 0.0
+            else
+                error("unrecognised type '$manufactured_solns_input.type'")
+            end
         elseif r_bc == "Dirichlet" 
             nzero = exp(1.0 - 0.2*r/Lr)
         end
@@ -78,7 +102,7 @@ using IfElse
     # neutral density symbolic function
     function densn_sym(Lr, Lz, r_bc, z_bc, geometry, composition,
                        manufactured_solns_input, species)
-        if manufactured_solns_input.type == "default"
+        if manufactured_solns_input.type ∈ ("default", "no-exp", "no-exp-sqrt", "no-exp-sqrt-nzero0")
             if z_bc == "periodic"
                 if r_bc == "periodic"
                     densn = 1.5 +  0.1*(cos(2.0*pi*r/Lr) + cos(2.0*pi*z/Lz)) #*sin(2.0*pi*t)
@@ -89,10 +113,8 @@ using IfElse
                 T_wall = composition.T_wall
                 Bzed = geometry.Bzed
                 Bmag = geometry.Bmag
-                epsilon = manufactured_solns_input.epsilon_offset
-                alpha = manufactured_solns_input.alpha_switch
-                Gamma_minus = fluxconst*(Bzed/Bmag)*nminus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha)/sqrt(pi)
-                Gamma_plus = fluxconst*(Bzed/Bmag)*nplus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha)/sqrt(pi)
+                Gamma_minus = fluxconst*(Bzed/Bmag)*nminus_sym(Lr,Lz,r_bc,z_bc,manufactured_solns_input)/sqrt(pi)
+                Gamma_plus = fluxconst*(Bzed/Bmag)*nplus_sym(Lr,Lz,r_bc,z_bc,manufactured_solns_input)/sqrt(pi)
                 # exact integral of corresponding dfnn below
                 if composition.use_test_neutral_wall_pdf
                     #test
@@ -127,10 +149,8 @@ using IfElse
             FKw = knudsen_cosine(composition)
             Bzed = geometry.Bzed
             Bmag = geometry.Bmag
-            epsilon = manufactured_solns_input.epsilon_offset
-            alpha = manufactured_solns_input.alpha_switch
-            Gamma_minus = fluxconst*(Bzed/Bmag)*nminus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha)/sqrt(pi)
-            Gamma_plus = fluxconst*(Bzed/Bmag)*nplus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha)/sqrt(pi)
+            Gamma_minus = fluxconst*(Bzed/Bmag)*nminus_sym(Lr,Lz,r_bc,z_bc,manufactured_solns_input)/sqrt(pi)
+            Gamma_plus = fluxconst*(Bzed/Bmag)*nplus_sym(Lr,Lz,r_bc,z_bc,manufactured_solns_input)/sqrt(pi)
             dfnn = Hplus *( Gamma_minus*( 0.5 - z/Lz)^2 + 1.0 )*FKw + Hminus*( Gamma_plus*( 0.5 + z/Lz)^2 + 1.0 )*FKw 
         end
         return dfnn
@@ -147,7 +167,7 @@ using IfElse
     
     # ion density symbolic function
     function densi_sym(Lr, Lz, r_bc, z_bc, composition, manufactured_solns_input, species)
-        if manufactured_solns_input.type == "default"
+        if manufactured_solns_input.type ∈ ("default", "no-exp", "no-exp-sqrt", "no-exp-sqrt-nzero0")
             if z_bc == "periodic"
                 if r_bc == "periodic"
                     densi = 1.5 +  0.1*(sin(2.0*pi*r/Lr) + sin(2.0*pi*z/Lz))#*sin(2.0*pi*t)
@@ -157,9 +177,7 @@ using IfElse
                     densi = 1.0 +  0.5*(r/Lr)*sin(2.0*pi*z/Lz)
                 end
             elseif z_bc == "wall"
-                epsilon = manufactured_solns_input.epsilon_offset
-                alpha = manufactured_solns_input.alpha_switch
-                densi = nconst*(0.5 - z/Lz)*nminus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha) + nconst*(z/Lz + 0.5)*nplus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha) + (z/Lz + 0.5)*(0.5 - z/Lz)*nzero_sym(Lr,Lz,r_bc,z_bc,alpha)  #+  0.5*(r/Lr + 0.5) + 0.5*(z/Lz + 0.5)
+                densi = nconst*(0.5 - z/Lz)*nminus_sym(Lr,Lz,r_bc,z_bc,manufactured_solns_input) + nconst*(z/Lz + 0.5)*nplus_sym(Lr,Lz,r_bc,z_bc,manufactured_solns_input) + (z/Lz + 0.5)*(0.5 - z/Lz)*nzero_sym(Lr,Lz,r_bc,z_bc,manufactured_solns_input)  #+  0.5*(r/Lr + 0.5) + 0.5*(z/Lz + 0.5)
             end
         elseif manufactured_solns_input.type == "2D-instability"
             # Input for instability test
@@ -180,7 +198,7 @@ using IfElse
     end
 
     function Ti_sym(Lr, Lz, r_bc, z_bc, composition, manufactured_solns_input, species)
-        if manufactured_solns_input.type == "default"
+        if manufactured_solns_input.type ∈ ("default", "no-exp", "no-exp-sqrt", "no-exp-sqrt-nzero0")
             error("Ti_sym() is not used for the default case")
         elseif manufactured_solns_input.type == "2D-instability"
             background_wavenumber = 1 + round(mk_int,
@@ -203,9 +221,7 @@ using IfElse
             jpari_into_LHS_wall_sym = 0.0
         elseif z_bc == "wall"
             #appropriate for wall bc test when Er = 0 (nr == 1)
-            epsilon = manufactured_solns_input.epsilon_offset
-            alpha = manufactured_solns_input.alpha_switch
-            jpari_into_LHS_wall_sym = -fluxconst*nminus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha)/sqrt(pi)
+            jpari_into_LHS_wall_sym = -fluxconst*nminus_sym(Lr,Lz,r_bc,z_bc,manufactured_solns_input)/sqrt(pi)
         end
         return jpari_into_LHS_wall_sym
     end
@@ -216,7 +232,7 @@ using IfElse
         densi = densi_sym(Lr, Lz, r_bc, z_bc, composition, manufactured_solns_input,
                           species)
 
-        if manufactured_solns_input.type == "default"
+        if manufactured_solns_input.type ∈ ("default", "no-exp", "no-exp-sqrt", "no-exp-sqrt-nzero0")
             # calculate the electric fields and the potential
             Er, Ez, phi = electric_fields(Lr, Lz, r_bc, z_bc, composition, nr,
                                           manufactured_solns_input, species)
@@ -225,7 +241,6 @@ using IfElse
             Bzed = geometry.Bzed
             Bmag = geometry.Bmag
             rhostar = geometry.rhostar
-            epsilon = manufactured_solns_input.epsilon_offset
             alpha = manufactured_solns_input.alpha_switch
             if z_bc == "periodic"
                 dfni = densi * exp( - vpa^2 - vperp^2)
@@ -234,7 +249,7 @@ using IfElse
                 Hplus = 0.5*(sign(vpabar) + 1.0)
                 Hminus = 0.5*(sign(-vpabar) + 1.0)
                 ffa =  exp(- vperp^2)
-                dfni = ffa * ( nminus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha)* (0.5 - z/Lz) * Hminus * vpabar^pvpa + nplus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha)*(z/Lz + 0.5) * Hplus * vpabar^pvpa + nzero_sym(Lr,Lz,r_bc,z_bc,alpha)*(z/Lz + 0.5)*(0.5 - z/Lz) ) * exp( - vpabar^2 )
+                dfni = ffa * ( nminus_sym(Lr,Lz,r_bc,z_bc,manufactured_solns_input)* (0.5 - z/Lz) * Hminus * vpabar^pvpa + nplus_sym(Lr,Lz,r_bc,z_bc,manufactured_solns_input)*(z/Lz + 0.5) * Hplus * vpabar^pvpa + nzero_sym(Lr,Lz,r_bc,z_bc,manufactured_solns_input)*(z/Lz + 0.5)*(0.5 - z/Lz) ) * exp( - vpabar^2 )
             end
         elseif manufactured_solns_input.type == "2D-instability"
             # Input for instability test
