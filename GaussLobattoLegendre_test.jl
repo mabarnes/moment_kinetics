@@ -203,8 +203,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
     println("max df_err: ",max_df_err)
     
     # elemental grid tests 
-    ngrid = 17
-    nelement = 100
+    ngrid = 5
+    nelement = 32
     y_ngrid = ngrid #number of points per element 
     y_nelement_local = nelement # number of elements per rank
     y_nelement_global = y_nelement_local # total number of elements 
@@ -216,7 +216,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     cheb_option = "matrix"
     adv_input = advection_input("default", 1.0, 0.0, 0.0)
     nrank = 1
-    irank = 0
+    irank = 0#1
     comm = MPI.COMM_NULL
     # create the 'input' struct containing input info needed to create a
     # coordinate
@@ -230,16 +230,26 @@ if abspath(PROGRAM_FILE) == @__FILE__
     y_spectral = setup_gausslegendre_pseudospectral(y)
     Mmat = Array{Float64,2}(undef,y.ngrid,y.ngrid)
     x, w = gausslobatto(y.ngrid)
+    #print_vector(y.grid,"y.grid",y.n)
+    #print_vector(y.wgts,"y.wgts",y.n)
     GaussLegendreLobatto_mass_matrix!(Mmat,y.ngrid,x,w,y.L,y.nelement_global)
     #print_matrix(Mmat,"Mmat",y.ngrid,y.ngrid)
-    #print_matrix(y_spectral.radau.M0,"local radau mass matrix M0",y.ngrid,y.ngrid)
-    #print_matrix(y_spectral.radau.M1,"local radau mass matrix M1",y.ngrid,y.ngrid)
-    #print_matrix(y_spectral.lobatto.M0,"local mass matrix M0",y.ngrid,y.ngrid)
-    #print_matrix(y_spectral.lobatto.M1,"local mass matrix M1",y.ngrid,y.ngrid)
+    print_matrix(y_spectral.radau.M0,"local radau mass matrix M0",y.ngrid,y.ngrid)
+    print_matrix(y_spectral.radau.M1,"local radau mass matrix M1",y.ngrid,y.ngrid)
+    print_matrix(y_spectral.lobatto.M0,"local mass matrix M0",y.ngrid,y.ngrid)
+    print_matrix(y_spectral.lobatto.M1,"local mass matrix M1",y.ngrid,y.ngrid)
     #print_matrix(y_spectral.mass_matrix,"global mass matrix",y.n,y.n)
     #print_matrix(y_spectral.lobatto.S0,"local S0 matrix",y.ngrid,y.ngrid)
     #print_matrix(y_spectral.lobatto.S1,"local S1 matrix",y.ngrid,y.ngrid)
     #print_matrix(y_spectral.S_matrix,"global S matrix",y.n,y.n)
+    print_matrix(y_spectral.radau.K0,"local radau K matrix K0",y.ngrid,y.ngrid)
+    print_matrix(y_spectral.radau.K1,"local radau K matrix K1",y.ngrid,y.ngrid)
+    print_matrix(y_spectral.lobatto.K0,"local K matrix K0",y.ngrid,y.ngrid)
+    print_matrix(y_spectral.lobatto.K1,"local K matrix K1",y.ngrid,y.ngrid)
+    #print_matrix(y_spectral.K_matrix,"global K matrix",y.n,y.n)
+    #@views y_spectral.K_matrix[1,:] *= (4.0/3.0)
+    #print_matrix(y_spectral.K_matrix,"global K matrix (hacked) ",y.n,y.n)
+    
     Dmat = Array{Float64,2}(undef,y.ngrid,y.ngrid)
     Dmat_test = Array{Float64,2}(undef,y.ngrid,y.ngrid)
     Dmat_err = Array{Float64,2}(undef,y.ngrid,y.ngrid)
@@ -272,20 +282,31 @@ if abspath(PROGRAM_FILE) == @__FILE__
     df_num = Array{Float64,1}(undef,y.n)
     df_err = Array{Float64,1}(undef,y.n)
     g_exact = Array{Float64,1}(undef,y.n)
+    h_exact = Array{Float64,1}(undef,y.n)
     divg_exact = Array{Float64,1}(undef,y.n)
     divg_num = Array{Float64,1}(undef,y.n)
     divg_err = Array{Float64,1}(undef,y.n)
+    laph_exact = Array{Float64,1}(undef,y.n)
+    laph_num = Array{Float64,1}(undef,y.n)
+    laph_err = Array{Float64,1}(undef,y.n)
     d2f_exact = Array{Float64,1}(undef,y.n)
     d2f_num = Array{Float64,1}(undef,y.n)
     d2f_err = Array{Float64,1}(undef,y.n)
-    
+    b = Array{Float64,1}(undef,y.n)
     for iy in 1:y.n
         f_exact[iy] = exp(-y.grid[iy]^2)
         df_exact[iy] = -2.0*y.grid[iy]*exp(-y.grid[iy]^2)
+        d2f_exact[iy] = (4.0*y.grid[iy]^2 - 2.0)*exp(-y.grid[iy]^2)
         g_exact[iy] = y.grid[iy]*exp(-y.grid[iy]^2)
         divg_exact[iy] = 2.0*(1.0-y.grid[iy]^2)*exp(-y.grid[iy]^2)
+        h_exact[iy] = exp(-y.grid[iy]^2)
+        laph_exact[iy] = 4.0*(y.grid[iy]^2 - 1.0)*exp(-y.grid[iy]^2)
+        #h_exact[iy] = exp(-2.0*y.grid[iy]^2)
+        #laph_exact[iy] = 8.0*(2.0*y.grid[iy]^2 - 1.0)*exp(-2.0*y.grid[iy]^2)
+        #h_exact[iy] = exp(-y.grid[iy]^3)
+        #laph_exact[iy] = 9.0*y.grid[iy]*(y.grid[iy]^3 - 1.0)*exp(-y.grid[iy]^3)
         #f_exact[iy] = -2.0*y.grid[iy]*exp(-y.grid[iy]^2)
-        d2f_exact[iy] = (4.0*y.grid[iy]^2 - 2.0)*exp(-y.grid[iy]^2)
+        
     end
     if y.name == "y" 
         F_exact = sqrt(pi)
@@ -308,19 +329,23 @@ if abspath(PROGRAM_FILE) == @__FILE__
     @. d2f_err = d2f_num - d2f_exact
     println("max(d2f_err) (double first derivative by interpolation): ",maximum(d2f_err))  
     if y.name == "y"
-        b = Array{Float64,1}(undef,y.n)
         mul!(b,y_spectral.S_matrix,f_exact)
         gausslegendre_mass_matrix_solve!(df_num,b,y_spectral)
         @. df_err = df_num - df_exact
         #println("df_num (weak form): ",df_num)
         #println("df_exact (weak form): ",df_exact)
         println("max(df_err) (weak form): ",maximum(df_err))
-        
         second_derivative!(d2f_num, f_exact, y, y_spectral)
-        @. d2f_err = d2f_num - d2f_exact
+        #mul!(b,y_spectral.K_matrix,f_exact)
+        #gausslegendre_mass_matrix_solve!(d2f_num,b,y_spectral)
+        @. d2f_err = abs(d2f_num - d2f_exact) #(0.5*y.L/y.nelement_global)*
         #println(d2f_num)
         #println(d2f_exact)
         println("max(d2f_err) (weak form): ",maximum(d2f_err))
+        plot([y.grid, y.grid], [d2f_num, d2f_exact], xlabel="vpa", label=["num" "exact"], ylabel="")
+        outfile = "vpa_test.pdf"
+        savefig(outfile)
+        
     elseif y.name == "vperp"
         #println("condition: ",cond(y_spectral.mass_matrix)) 
         b = Array{Float64,1}(undef,y.n)
@@ -330,6 +355,28 @@ if abspath(PROGRAM_FILE) == @__FILE__
         #println("divg_num (weak form): ",divg_num)
         #println("divg_exact (weak form): ",divg_exact)
         println("max(divg_err) (weak form): ",maximum(divg_err))
+        
+        second_derivative!(d2f_num, f_exact, y, y_spectral)
+        #mul!(b,y_spectral.K_matrix,f_exact)
+        #gausslegendre_mass_matrix_solve!(d2f_num,b,y_spectral)
+        @. d2f_err = abs(d2f_num - d2f_exact) #(0.5*y.L/y.nelement_global)*
+        #println(d2f_num[1:10])
+        #println(d2f_exact[1:10])
+        println("max(d2f_err) (weak form): ",maximum(d2f_err))
+        plot([y.grid, y.grid], [d2f_num, d2f_exact], xlabel="vpa", label=["num" "exact"], ylabel="")
+        outfile = "vperp_second_derivative_test.pdf"
+        savefig(outfile)
+         
+        mul!(b,y_spectral.L_matrix,h_exact)
+        gausslegendre_mass_matrix_solve!(laph_num,b,y_spectral)
+        @. laph_err = abs(laph_num - laph_exact) #(0.5*y.L/y.nelement_global)*
+        #println(b[1:10])
+        #println(laph_num[1:10])
+        #println(laph_exact[1:10])
+        println("max(laph_err) (weak form): ",maximum(laph_err))
+        plot([y.grid, y.grid], [laph_num, laph_exact], xlabel="vperp", label=["num" "exact"], ylabel="")
+        outfile = "vperp_laplacian_test.pdf"
+        savefig(outfile)
         
         @. y.scratch = y.grid*g_exact
         derivative!(y.scratch2, y.scratch, y, y_spectral)

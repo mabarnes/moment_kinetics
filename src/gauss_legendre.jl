@@ -46,6 +46,12 @@ struct gausslegendre_base_info{}
     S0::Array{mk_float,2}
     # local S (weak derivative) matrix type 1
     S1::Array{mk_float,2}
+    # local K (weak second derivative) matrix type 0
+    K0::Array{mk_float,2}
+    # local K (weak second derivative) matrix type 1
+    K1::Array{mk_float,2}
+    # local P (weak derivative) matrix type 0
+    P0::Array{mk_float,2}
 end
 
 struct gausslegendre_info{}
@@ -56,8 +62,14 @@ struct gausslegendre_info{}
     # global (1D) weak derivative matrix
     #S_matrix::Array{mk_float,2}
     S_matrix::AbstractSparseArray{mk_float,Ti,2} where Ti
+    # global (1D) weak second derivative matrix
+    K_matrix::Array{mk_float,2}
+    # global (1D) weak Laplacian derivative matrix
+    L_matrix::Array{mk_float,2}
     # global (1D) LU object
     mass_matrix_lu::T where T
+    # dummy matrix for local operators
+    Qmat::Array{mk_float,2}
 end
 
 function setup_gausslegendre_pseudospectral(coord)
@@ -65,13 +77,17 @@ function setup_gausslegendre_pseudospectral(coord)
     radau = setup_gausslegendre_pseudospectral_radau(coord)
     mass_matrix = allocate_float(coord.n,coord.n)
     S_matrix = allocate_float(coord.n,coord.n)
+    K_matrix = allocate_float(coord.n,coord.n)
+    L_matrix = allocate_float(coord.n,coord.n)
     setup_global_mass_matrix!(mass_matrix, lobatto, radau, coord)
     
     setup_global_weak_form_matrix!(mass_matrix, lobatto, radau, coord, "M")
     setup_global_weak_form_matrix!(S_matrix, lobatto, radau, coord, "S")
+    setup_global_weak_form_matrix!(K_matrix, lobatto, radau, coord, "K")
+    setup_global_weak_form_matrix!(L_matrix, lobatto, radau, coord, "L")
     mass_matrix_lu = lu(sparse(mass_matrix))
-    
-    return gausslegendre_info(lobatto,radau,mass_matrix,sparse(S_matrix),mass_matrix_lu)
+    Qmat = allocate_float(coord.ngrid,coord.ngrid)
+    return gausslegendre_info(lobatto,radau,mass_matrix,sparse(S_matrix),K_matrix,L_matrix,mass_matrix_lu,Qmat)
 end
 
 function setup_gausslegendre_pseudospectral_lobatto(coord)
@@ -91,7 +107,13 @@ function setup_gausslegendre_pseudospectral_lobatto(coord)
     GaussLegendre_weak_product_matrix!(S0,coord.ngrid,x,w,coord.L,coord.nelement_global,"S0")
     S1 = allocate_float(coord.ngrid, coord.ngrid)
     GaussLegendre_weak_product_matrix!(S1,coord.ngrid,x,w,coord.L,coord.nelement_global,"S1")
-    return gausslegendre_base_info(Dmat,Mmat,Kmat,M0,M1,S0,S1)
+    K0 = allocate_float(coord.ngrid, coord.ngrid)
+    GaussLegendre_weak_product_matrix!(K0,coord.ngrid,x,w,coord.L,coord.nelement_global,"K0")
+    K1 = allocate_float(coord.ngrid, coord.ngrid)
+    GaussLegendre_weak_product_matrix!(K1,coord.ngrid,x,w,coord.L,coord.nelement_global,"K1")
+    P0 = allocate_float(coord.ngrid, coord.ngrid)
+    GaussLegendre_weak_product_matrix!(P0,coord.ngrid,x,w,coord.L,coord.nelement_global,"P0")
+    return gausslegendre_base_info(Dmat,Mmat,Kmat,M0,M1,S0,S1,K0,K1,P0)
 end
 
 function setup_gausslegendre_pseudospectral_radau(coord)
@@ -115,7 +137,13 @@ function setup_gausslegendre_pseudospectral_radau(coord)
     GaussLegendre_weak_product_matrix!(S0,coord.ngrid,xreverse,wreverse,coord.L,coord.nelement_global,"S0",radau=true)
     S1 = allocate_float(coord.ngrid, coord.ngrid)
     GaussLegendre_weak_product_matrix!(S1,coord.ngrid,xreverse,wreverse,coord.L,coord.nelement_global,"S1",radau=true)
-    return gausslegendre_base_info(Dmat,Mmat,Kmat,M0,M1,S0,S1)
+    K0 = allocate_float(coord.ngrid, coord.ngrid)
+    GaussLegendre_weak_product_matrix!(K0,coord.ngrid,xreverse,wreverse,coord.L,coord.nelement_global,"K0",radau=true)
+    K1 = allocate_float(coord.ngrid, coord.ngrid)
+    GaussLegendre_weak_product_matrix!(K1,coord.ngrid,xreverse,wreverse,coord.L,coord.nelement_global,"K1",radau=true)
+    P0 = allocate_float(coord.ngrid, coord.ngrid)
+    GaussLegendre_weak_product_matrix!(P0,coord.ngrid,xreverse,wreverse,coord.L,coord.nelement_global,"P0",radau=true)
+    return gausslegendre_base_info(Dmat,Mmat,Kmat,M0,M1,S0,S1,K0,K1,P0)
 end 
 """
 function for taking the first derivative on Gauss-Legendre points
@@ -164,20 +192,28 @@ function gausslegendre_apply_Kmat!(df, ff, gausslegendre, coord)
     imin = coord.imin[j]-k
     # imax is the maximum index on the full grid for this (jth) element
     imax = coord.imax[j]        
-    if coord.name == "vperp" && coord.irank == 0 # differentiate this element with the Radau scheme
-        @views mul!(df[:,j],gausslegendre.radau.Kmat[:,:],ff[imin:imax])
-    else #differentiate using the Lobatto scheme
-        @views mul!(df[:,j],gausslegendre.lobatto.Kmat[:,:],ff[imin:imax])
-    end
+    get_KK_local!(gausslegendre.Qmat,j,gausslegendre.lobatto,gausslegendre.radau,coord)
+    #println(gausslegendre.Qmat)
+    @views mul!(df[:,j],gausslegendre.Qmat[:,:],ff[imin:imax])
+    #if coord.name == "vperp" && coord.irank == 0 # differentiate this element with the Radau scheme
+    #    @views mul!(df[:,j],gausslegendre.radau.Kmat[:,:],ff[imin:imax])
+    #else #differentiate using the Lobatto scheme
+    #@views mul!(df[:,j],gausslegendre.lobatto.Kmat[:,:],ff[imin:imax])
+    #end
     # calculate the derivative on each element
     @inbounds for j ∈ 2:nelement
         k = 1 
         imin = coord.imin[j]-k
         # imax is the maximum index on the full grid for this (jth) element
         imax = coord.imax[j]
-        @views mul!(df[:,j],gausslegendre.lobatto.Kmat[:,:],ff[imin:imax])
+        #@views mul!(df[:,j],gausslegendre.lobatto.Kmat[:,:],ff[imin:imax])
+        get_KK_local!(gausslegendre.Qmat,j,gausslegendre.lobatto,gausslegendre.radau,coord)
+        #println(gausslegendre.Qmat)
+        @views mul!(df[:,j],gausslegendre.Qmat[:,:],ff[imin:imax])
     end
-
+    #for j in 1:nelement
+    #    println(df[:,j])
+    #end
     return nothing
 end
 
@@ -380,6 +416,9 @@ function GaussLegendre_weak_product_matrix!(QQ,ngrid,x,wgts,L,nelement_global,op
     # for M1: AA = < P_i P_j x >
     # for S0: AA = -< P'_i P_j >
     # for S1: AA = -< P'_i P_j x >
+    # for K0: AA = -< P'_i P'_j >
+    # for K1: AA = -< P'_i P'_j x >
+    # for P0: AA = < P_i P'_j >
     AA = allocate_float(ngrid,ngrid)
     nquad = 2*ngrid
     zz, wz = gausslegendre(nquad)
@@ -416,13 +455,32 @@ function GaussLegendre_weak_product_matrix!(QQ,ngrid,x,wgts,L,nelement_global,op
                 end
             end
         end
+    elseif option == "K0"
+        for j in 1:ngrid
+            for i in 1:ngrid
+                for k in 1:nquad
+                    AA[i,j] -= wz[k]*dnPl(zz[k],i-1,1)*dnPl(zz[k],j-1,1)
+                end
+            end
+        end
+    elseif option == "K1"
+        for j in 1:ngrid
+            for i in 1:ngrid
+                for k in 1:nquad
+                    AA[i,j] -= zz[k]*wz[k]*dnPl(zz[k],i-1,1)*dnPl(zz[k],j-1,1)
+                end
+            end
+        end
+    elseif option == "P0"
+        for j in 1:ngrid
+            for i in 1:ngrid
+                for k in 1:nquad
+                    AA[i,j] += wz[k]*Pl(zz[k],i-1)*dnPl(zz[k],j-1,1)
+                end
+            end
+        end
     end
-    #for i in 1:ngrid
-    #    for j in 1:ngrid
-    #        print(" ", AA[i,j])
-    #    end
-    #    println("")
-    #end
+    
     QQ .= 0.0
     for j in 1:ngrid
         for i in 1:ngrid
@@ -521,7 +579,8 @@ function scale_factor_func(L,nelement_global)
 end
 
 function shift_factor_func(L,nelement_global,nelement_local,irank,ielement_local)
-    ielement_global = ielement_local + irank*nelement_local
+    #ielement_global = ielement_local # for testing + irank*nelement_local
+    ielement_global = ielement_local + irank*nelement_local # proper line for future distributed memory MPI use
     shift = L*((float(ielement_global)-0.5)/float(nelement_global) - 0.5)
     return shift
 end
@@ -762,6 +821,10 @@ function get_QQ_local!(QQ,ielement,
             get_MM_local!(QQ,ielement,lobatto,radau,coord)
         elseif option == "S"
             get_SS_local!(QQ,ielement,lobatto,radau,coord)
+        elseif option == "K"
+            get_KK_local!(QQ,ielement,lobatto,radau,coord)
+        elseif option == "L"
+            get_LL_local!(QQ,ielement,lobatto,radau,coord)
         end
         return nothing
 end
@@ -775,15 +838,14 @@ function get_MM_local!(QQ,ielement,
         shift_factor = shift_factor_func(coord.L,coord.nelement_global,coord.nelement_local,coord.irank,ielement) + 0.5*coord.L
         if coord.name == "vperp" # assume integrals of form int^infty_0 (.) vperp d vperp
             # extra scale and shift factors required because of vperp in integral
-            if ielement > 1 # lobatto points
-                @. QQ =  shift_factor*lobatto.M0 + scale_factor*lobatto.M1
+            if ielement > 1 || coord.irank > 0 # lobatto points
+                @. QQ =  (shift_factor*lobatto.M0 + scale_factor*lobatto.M1)*scale_factor
             else # radau points 
-                @. QQ =  shift_factor*radau.M0 + scale_factor*radau.M1
+                @. QQ =  (shift_factor*radau.M0 + scale_factor*radau.M1)*scale_factor
             end
         else # assume integrals of form int^infty_-infty (.) d vpa
-            @. QQ = lobatto.M0
-        end
-        @. QQ *= scale_factor 
+            @. QQ = lobatto.M0*scale_factor
+        end 
         return nothing
 end
 
@@ -796,7 +858,7 @@ function get_SS_local!(QQ,ielement,
         shift_factor = shift_factor_func(coord.L,coord.nelement_global,coord.nelement_local,coord.irank,ielement) + 0.5*coord.L
         if coord.name == "vperp" # assume integrals of form int^infty_0 (.) vperp d vperp
             # extra scale and shift factors required because of vperp in integral
-            if ielement > 1 # lobatto points
+            if ielement > 1 || coord.irank > 0 # lobatto points
                 @. QQ =  shift_factor*lobatto.S0 + scale_factor*lobatto.S1
             else # radau points 
                 @. QQ =  shift_factor*radau.S0 + scale_factor*radau.S1
@@ -804,8 +866,48 @@ function get_SS_local!(QQ,ielement,
         else # assume integrals of form int^infty_-infty (.) d vpa
             @. QQ = lobatto.S0
         end
-        # no scaling factor here because d /d x * dx is invariant under length scale transforms
-        #@. QQ *= scale_factor 
+        return nothing
+end
+
+function get_KK_local!(QQ,ielement,
+        lobatto::gausslegendre_base_info,
+        radau::gausslegendre_base_info, 
+        coord)
+        
+        scale_factor = scale_factor_func(coord.L,coord.nelement_global)
+        shift_factor = shift_factor_func(coord.L,coord.nelement_global,coord.nelement_local,coord.irank,ielement) + 0.5*coord.L
+        if coord.name == "vperp" # assume integrals of form int^infty_0 (.) vperp d vperp
+            # extra scale and shift factors required because of vperp in integral
+            # P0 factors make this a d^2 / dvperp^2 rather than (1/vperp) d ( vperp d (.) / d vperp)
+            if ielement > 1 || coord.irank > 0 # lobatto points
+                @. QQ =  (shift_factor/scale_factor)*lobatto.K0 + lobatto.K1 - lobatto.P0
+            else # radau points 
+                @. QQ =  (shift_factor/scale_factor)*radau.K0 + radau.K1 - radau.P0
+            end
+        else # assume integrals of form int^infty_-infty (.) d vpa
+            @. QQ = lobatto.K0/scale_factor
+        end
+        return nothing
+end
+
+function get_LL_local!(QQ,ielement,
+        lobatto::gausslegendre_base_info,
+        radau::gausslegendre_base_info, 
+        coord)
+        
+        scale_factor = scale_factor_func(coord.L,coord.nelement_global)
+        shift_factor = shift_factor_func(coord.L,coord.nelement_global,coord.nelement_local,coord.irank,ielement) + 0.5*coord.L
+        if coord.name == "vperp" # assume integrals of form int^infty_0 (.) vperp d vperp
+            # extra scale and shift factors required because of vperp in integral
+            #  (1/vperp) d ( vperp d (.) / d vperp)
+            if ielement > 1 || coord.irank > 0 # lobatto points
+                @. QQ =  (shift_factor/scale_factor)*lobatto.K0 + lobatto.K1
+            else # radau points 
+                @. QQ =  (shift_factor/scale_factor)*radau.K0 + radau.K1
+            end
+        else # d^2 (.) d vpa^2 -- assume integrals of form int^infty_-infty (.) d vpa
+            @. QQ = lobatto.K0/scale_factor
+        end
         return nothing
 end
 
