@@ -2360,7 +2360,7 @@ function instability2D_plots(run_info, variable_name; run_label, plot_prefix,
         function get_growth_rate(amplitude, time)
             # Assume that once the amplitude reaches 2x initial amplitude that the mode is
             # well established, so will be able to measure phase velocity
-            startind = findfirst(x -> x>amplitude[1], amplitude)
+            startind = findfirst(x -> x>2*amplitude[1], amplitude)
             if startind === nothing
                 startind = 1
             end
@@ -2368,7 +2368,6 @@ function instability2D_plots(run_info, variable_name; run_label, plot_prefix,
             # Linear fit to log(amplitude) after startind
             growth_rate = 0.0
             initial_fit_amplitude = 1.0
-            startind = 1
             try
                 linear_model(x, param) = @. param[1]*x+param[2]
                 fit = @views curve_fit(linear_model, time[startind:end],

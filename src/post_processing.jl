@@ -811,7 +811,6 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
             # Linear fit to log(amplitude) after startind
             growth_rate = 0.0
             initial_fit_amplitude = 1.0
-            startind = 1
             try
                 linear_model(x, param) = @. param[1]*x+param[2]
                 fit = @views curve_fit(linear_model, time[startind:end],
