@@ -208,7 +208,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     y_ngrid = ngrid #number of points per element 
     y_nelement_local = nelement # number of elements per rank
     y_nelement_global = y_nelement_local # total number of elements 
-    y_L = 12.0 #physical box size in reference units 
+    y_L = 6.0 #physical box size in reference units 
     bc = "zero" 
     discretization = "gausslegendre_pseudospectral"
     # fd_option and adv_input not actually used so given values unimportant
@@ -383,6 +383,13 @@ if abspath(PROGRAM_FILE) == @__FILE__
         @. divg_num = y.scratch2/y.grid
         @. divg_err = abs(divg_num - divg_exact)
         println("max(divg_err) (interpolation): ",maximum(divg_err))
+        
+        derivative!(y.scratch, h_exact, y, y_spectral)
+        @. y.scratch2 = y.grid*y.scratch
+        derivative!(y.scratch, y.scratch2, y, y_spectral)
+        @. laph_num = y.scratch/y.grid
+        @. laph_err = abs(laph_num - laph_exact)
+        println("max(laph_err) (interpolation): ",maximum(laph_err))
         
     end
     
