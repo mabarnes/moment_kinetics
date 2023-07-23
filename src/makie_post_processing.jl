@@ -1067,6 +1067,98 @@ for dim ∈ all_dimensions
                  animate_1d(run_info.$dim.grid, data; ax=ax, frame_index=ind, label=run_info.run_name)
 
                  if frame_index === nothing
+                     if outfile === nothing
+                         error("`outfile` is required for $($function_name_str)")
+                     end
+                     if fig === nothing
+                         error("When `outfile` is passed to save the plot, must either pass both "
+                               * "`fig` and `ax` or neither. Only `ax` was passed.")
+                     end
+                     save_animation(fig, ind, nt, outfile)
+                 end
+
+                 return fig
+             end
+         end)
+end
+
+# Generate 2d animation functions for all combinations of dimensions
+const dimension_combinations_2d_no_t = Tuple(
+          Tuple(c) for c in unique((combinations(ion_dimensions, 2)...,
+                                    combinations(neutral_dimensions, 2)...)))
+for (dim1, dim2) ∈ dimension_combinations_2d_no_t
+    function_name_str = "animate_vs_$(dim2)_$(dim1)"
+    function_name = Symbol(function_name_str)
+    dim1_str = String(dim1)
+    dim2_str = String(dim2)
+    dim1_grid = :( run_info.$dim1.grid )
+    dim2_grid = :( run_info.$dim2.grid )
+    eval(quote
+             function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
+                                     input=nothing, outfile=nothing)
+
+                 try
+                     if data === nothing
+                         data = Tuple(nothing for _ in run_info)
+                     end
+                     if outfile === nothing
+                         error("`outfile` is required for $($function_name_str)")
+                     end
+
+                     fig, ax, colorbar_places = get_2d_ax(length(run_info),
+                                                          title=get_variable_symbol(var_name))
+                     frame_index = Obsevable[1]
+
+                     for (d, ri, a, cp) ∈ zip(data, run_info, ax, colorbar_places)
+                         $function_name(ri, var_name, is=is, data=d, input=input,
+                                        frame_index=frame_index, ax=a, colorbar_place=cp,
+                                        title=ri.run_name)
+                     end
+
+                     nt = minimum(ri.nt for ri ∈ run_info)
+                     save_animation(fig, frame_index, nt, outfile)
+
+                     return fig
+                 catch e
+                     println("$($function_name_str) failed for $var_name, is=$is. Error was $e")
+                     return nothing
+                 end
+             end
+
+             function $function_name(run_info, var_name; is=1, data=nothing,
+                                     input=nothing, frame_index=nothing, ax=nothing,
+                                     colorbar_place=colorbar_place, title=nothing,
+                                     outfile=nothing)
+                 if data === nothing
+                     data = postproc_load_variable(run_info, var_name)
+                 end
+                 if input === nothing
+                     colormap = "reverse_deep"
+                 else
+                     colormap = input.colormap
+                 end
+                 if title === nothing
+                     title = get_variable_symbol(var_name)
+                 end
+
+                 data = select_slice(data, $(QuoteNode(dim2)), $(QuoteNode(dim1)), :t;
+                                     input=input, is=is)
+
+                 fig = animate_2d($dim2_grid, $dim1_grid, data, xlabel="$($dim2_str)",
+                                  ylabel="$($dim1_str)", title=title,
+                                  frame_index=frame_index, ax=ax,
+                                  colorbar_place=colorbar_place,
+                                  colormap=parse_colormap(colormap))
+
+                 if frame_index === nothing
+                     if outfile === nothing
+                         error("`outfile` is required for $($function_name_str)")
+                     end
+                     if fig === nothing
+                         error("When `outfile` is passed to save the plot, must either pass both "
+                               * "`fig` and `ax` or neither. Only `ax` was passed.")
+                     end
+                     nt = size(data, 3)
                      save_animation(fig, ind, nt, outfile)
                  end
 
@@ -1234,6 +1326,8 @@ function animate_2d(xcoord, ycoord, data; frame_index=nothing, ax=nothing, fig=n
         nt = size(data, 3)
         save_animation(fig, ind, nt, outfile)
     end
+
+    return fig
 end
 
 function save_animation(fig, frame_index, nt, outfile)
