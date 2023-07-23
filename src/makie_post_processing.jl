@@ -1186,6 +1186,35 @@ function select_slice(variable::AbstractArray{T,7}, dims::Symbol...; input=nothi
 end
 
 """
+get_dimension_slice_indices(keep_dims...; input, it=nothing, is=nothing,
+                            ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
+                            ivzeta=nothing, ivr=nothing, ivz=nothing)
+
+Get indices for dimensions to slice
+
+The indices are taken from `input`, unless they are passed as keyword arguments
+
+The dimensions in `keep_dims` are not given a slice (those are the dimensions we want in
+the variable after slicing).
+"""
+function get_dimension_slice_indices(keep_dims...; input, it=nothing, is=nothing,
+                                     ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
+                                     ivzeta=nothing, ivr=nothing, ivz=nothing)
+    if isa(input, AbstractDict)
+        input = Dict_to_NamedTuple(input)
+    end
+    return (:it=>(it === nothing ? (:t ∈ keep_dims ? nothing : input.it0) : it),
+            :is=>(is === nothing ? (:s ∈ keep_dims ? nothing : input.is0) : is),
+            :ir=>(ir === nothing ? (:r ∈ keep_dims ? nothing : input.ir0) : ir),
+            :iz=>(iz === nothing ? (:z ∈ keep_dims ? nothing : input.iz0) : iz),
+            :ivperp=>(ivperp === nothing ? (:vperp ∈ keep_dims ? nothing : input.ivperp0) : ivperp),
+            :ivpa=>(ivpa === nothing ? (:vpa ∈ keep_dims ? nothing : input.ivpa0) : ivpa),
+            :ivzeta=>(ivzeta === nothing ? (:vzeta ∈ keep_dims ? nothing : input.ivzeta0) : ivzeta),
+            :ivr=>(ivr === nothing ? (:vr ∈ keep_dims ? nothing : input.ivr0) : ivr),
+            :ivz=>(ivz === nothing ? (:vz ∈ keep_dims ? nothing : input.ivz0) : ivz))
+end
+
+"""
     get_variable_symbol(variable_name)
 
 Get a symbol corresponding to a `variable_name`
