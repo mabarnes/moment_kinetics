@@ -909,10 +909,11 @@ for dim ∈ (:t, all_dimensions...)
                                      input=nothing, ax=nothing, label=nothing,
                                      outfile=nothing)
                  if data === nothing
-                     data = postproc_load_variable(run_info, var_name)
+                     dim_slices = get_dimension_slice_indices($(QuoteNode(dim)); input=input, is=is)
+                     data = postproc_load_variable(run_info, var_name; dim_slices...)
+                 else
+                     data = select_slice(data, $(QuoteNode(dim)); input=input, is=is)
                  end
-
-                 data = select_slice(data, $(QuoteNode(dim)); input=input, is=is)
 
                  fig = plot_1d(run_info.$dim.grid, data, xlabel="$dim_str",
                                ylabel=get_variable_symbol(var_name), label=label, ax=ax)
