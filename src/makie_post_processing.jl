@@ -566,38 +566,40 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
     nt = run_info.nt
 
     # Use Colon operator `:` when slice argument is `nothing` as when we pass that as an
-    # 'index', it selects the whole dimension.
+    # 'index', it selects the whole dimension. Brackets are needed around the `:` when
+    # assigning it to variables, etc. to avoid an error "LoadError: syntax: newline not
+    # allowed after ":" used for quoting".
     if it === nothing
-        it = :
+        it = (:)
     end
     if is === nothing
-        is = :
+        is = (:)
     end
     if ir === nothing
-        ir = :
+        ir = (:)
     end
     if iz === nothing
-        iz = :
+        iz = (:)
     end
     if ivperp === nothing
-        ivperp = :
+        ivperp = (:)
     end
     if ivpa === nothing
-        ivpa = :
+        ivpa = (:)
     end
     if ivzeta === nothing
-        ivzeta = :
+        ivzeta = (:)
     end
     if ivr === nothing
-        ivr = :
+        ivr = (:)
     end
     if ivz === nothing
-        ivz = :
+        ivz = (:)
     end
 
     if isa(it, mk_int)
         nt = 1
-    elseif it === :
+    elseif it === (:)
         it = 1:nt
     else
         nt = length(it)
@@ -609,9 +611,6 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
                          for f ∈ run_info.files)
         nd = ndims(variable[1])
 
-        # [JTO: Put brackets around the `:` in the if any(...) calls below because
-        #  otherwise my editor's bracket/block matching gets confused. I don't think they
-        #  should be necessary, but they also shouldn't do anything.]
         if nd == 3
             # EM variable with dimensions (z,r,t)
             not_allowed_slices = (ivperp=ivperp, ivpa=ivpa, ivzeta=ivzeta, ivr=ivr,
@@ -621,8 +620,8 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
                       * "All of $not_allowed_slices should be `nothing`.")
             end
             dims = Vector{mk_int}()
-            iz === : && push!(dims, run_info.z.n)
-            ir === : && push!(dims, run_info.r.n)
+            iz === (:) && push!(dims, run_info.z.n)
+            ir === (:) && push!(dims, run_info.r.n)
             push!(dims, nt)
             result = allocate_float(dims...)
         elseif nd == 4
@@ -637,9 +636,9 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
             # either ion or neutral
             nspecies = size(variable[1], 3)
             dims = Vector{mk_int}()
-            iz === : && push!(dims, run_info.z.n)
-            ir === : && push!(dims, run_info.r.n)
-            is === : && push!(dims, nspecies)
+            iz === (:) && push!(dims, run_info.z.n)
+            ir === (:) && push!(dims, run_info.r.n)
+            is === (:) && push!(dims, nspecies)
             push!(dims, nt)
             result = allocate_float(dims...)
         elseif nd == 6
@@ -650,11 +649,11 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
                       * "All of $not_allowed_slices should be `nothing`.")
             end
             dims = Vector{mk_int}()
-            ivpa === : && push!(dims, run_info.vpa.n)
-            ivperp === : && push!(dims, run_info.vperp.n)
-            iz === : && push!(dims, run_info.z.n)
-            ir === : && push!(dims, run_info.r.n)
-            is === : && push!(dims, nspecies)
+            ivpa === (:) && push!(dims, run_info.vpa.n)
+            ivperp === (:) && push!(dims, run_info.vperp.n)
+            iz === (:) && push!(dims, run_info.z.n)
+            ir === (:) && push!(dims, run_info.r.n)
+            is === (:) && push!(dims, nspecies)
             push!(dims, nt)
             result = allocate_float(dims...)
         elseif nd == 7
@@ -665,12 +664,12 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
                       * "All of $not_allowed_slices should be `nothing`.")
             end
             dims = Vector{mk_int}()
-            ivz === : && push!(dims, run_info.vpz.n)
-            ivr === : && push!(dims, run_info.vr.n)
-            ivzeta === : && push!(dims, run_info.vzeta.n)
-            iz === : && push!(dims, run_info.z.n)
-            ir === : && push!(dims, run_info.r.n)
-            is === : && push!(dims, nspecies)
+            ivz === (:) && push!(dims, run_info.vpz.n)
+            ivr === (:) && push!(dims, run_info.vr.n)
+            ivzeta === (:) && push!(dims, run_info.vzeta.n)
+            iz === (:) && push!(dims, run_info.z.n)
+            ir === (:) && push!(dims, run_info.r.n)
+            is === (:) && push!(dims, nspecies)
             push!(dims, nt)
             result = allocate_float(dims...)
         else
@@ -700,15 +699,14 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
             tinds = tinds[begin]:tstep:tinds[end]
             global_it_end = global_it_start + length(tinds) - 1
 
-            # Is there a nicer way to cover all the possible combinations of slices here?
             if nd == 3
-                selectdim(result, length(result), global_it_start:global_it_end) = v[iz,ir,tinds]
+                selectdim(result, ndims(result), global_it_start:global_it_end) .= v[iz,ir,tinds]
             elseif nd == 4
-                selectdim(result, length(result), global_it_start:global_it_end) = v[iz,ir,is,tinds]
+                selectdim(result, ndims(result), global_it_start:global_it_end) .= v[iz,ir,is,tinds]
             elseif nd == 6
-                selectdim(result, length(result), global_it_start:global_it_end) = v[ivpa,ivperp,ir,iz,is,tinds]
+                selectdim(result, ndims(result), global_it_start:global_it_end) .= v[ivpa,ivperp,ir,iz,is,tinds]
             elseif nd == 7
-                selectdim(result, length(result), global_it_start:global_it_end) = v[ivz,ivr,ivzeta,iz,ir,is,tinds]
+                selectdim(result, ndims(result), global_it_start:global_it_end) .= v[ivz,ivr,ivzeta,iz,ir,is,tinds]
             else
                 error("Unsupported combination nd=$nd, ir=$ir, iz=$iz, ivperp=$ivperp "
                       * "ivpa=$ivpa, ivzeta=$ivzeta, ivr=$ivr, ivz=$ivz.")
