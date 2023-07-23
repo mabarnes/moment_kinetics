@@ -949,7 +949,7 @@ for (dim1, dim2) ∈ dimension_combinations_2d
     dim2_grid = :( run_info.$dim2.grid )
     eval(quote
              function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
-                                     input=nothing, outfile=nothing)
+                                     input=nothing, outfile=nothing, kwargs...)
 
                  try
                      if data === nothing
@@ -959,7 +959,7 @@ for (dim1, dim2) ∈ dimension_combinations_2d
                                                           title=get_variable_symbol(var_name))
                      for (d, ri, a, cp) ∈ zip(data, run_info, ax, colorbar_places)
                          $function_name(ri, var_name, is=is, data=d, input=input, ax=a,
-                                        colorbar_place=cp, title=ri.run_name)
+                                        colorbar_place=cp, title=ri.run_name, kwargs...)
                      end
 
                      if outfile !== nothing
@@ -975,7 +975,7 @@ for (dim1, dim2) ∈ dimension_combinations_2d
              function $function_name(run_info, var_name; is=1, data=nothing,
                                      input=nothing, ax=nothing,
                                      colorbar_place=colorbar_place, title=nothing,
-                                     outfile=nothing)
+                                     outfile=nothing, kwargs...)
                  if data === nothing
                      dim_slices = get_dimension_slice_indices($(QuoteNode(dim1)),
                                                               $(QuoteNode(dim2));
@@ -997,7 +997,7 @@ for (dim1, dim2) ∈ dimension_combinations_2d
                  fig = plot_2d($dim2_grid, $dim1_grid, data, xlabel="$($dim2_str)",
                                ylabel="$($dim1_str)", title=title, ax=ax,
                                colorbar_place=colorbar_place,
-                               colormap=parse_colormap(colormap))
+                               colormap=parse_colormap(colormap), kwargs...)
 
                  if outfile !== nothing
                      if fig === nothing
