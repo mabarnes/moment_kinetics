@@ -1842,6 +1842,19 @@ function instability2D_plots(run_info, variable_name; run_label, plot_prefix,
 end
 
 """
+Get indices for dimensions to slice
+
+The indices are taken from `input`, unless they are passed as keyword arguments
+
+The dimensions in `keep_dims` are not given a slice (those are the dimensions we want in
+the variable after slicing).
+"""
+function get_dimension_slice_indices(keep_dims...; input, slice_indices...)
+    slice_names = (:it, :is, :isn, :ir, :iz, :ivpa, :ivperp, :ivzeta, :ivr, :ivz)
+    return Tuple(sn=>get(slice_indices, sn, input[Symbol(sn, :0)]) for sn ∈ slice_names if sn ∉ keep_dims)
+end
+
+"""
 Get a symbol corresponding to a variable name
 
 If the symbol has not been defined, just return the variable name
