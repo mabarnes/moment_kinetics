@@ -1135,7 +1135,10 @@ for (dim1, dim2) ∈ dimension_combinations_2d_no_t
                                      colorbar_place=colorbar_place, title=nothing,
                                      outfile=nothing)
                  if data === nothing
-                     data = postproc_load_variable(run_info, var_name)
+                     dim_slices = get_dimension_slice_indices(:t, $(QuoteNode(dim1)),
+                                                              $(QuoteNode(dim2));
+                                                              input=input, is=is)
+                     data = postproc_load_variable(run_info, var_name; dim_slices...)
                  end
                  if input === nothing
                      colormap = "reverse_deep"
