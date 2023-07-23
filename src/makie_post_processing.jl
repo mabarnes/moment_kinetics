@@ -883,7 +883,7 @@ for dim ∈ (:t, all_dimensions...)
     dim_str = String(dim)
     eval(quote
              function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
-                                     input=nothing, outfile=nothing)
+                                     input=nothing, outfile=nothing, kwargs...)
 
                  try
                      if data === nothing
@@ -892,7 +892,7 @@ for dim ∈ (:t, all_dimensions...)
                      fig, ax = get_1d_ax(xlabel="$dim_str", ylabel=get_variable_symbol(var_name))
                      for (d, ri, a) ∈ zip(data, run_info, ax)
                          $function_name(ri, var_name, is=is, data=d, input=input, ax=a,
-                                        label=ri.run_name)
+                                        label=ri.run_name, kwargs...)
                      end
 
                      if outfile !== nothing
@@ -907,7 +907,7 @@ for dim ∈ (:t, all_dimensions...)
 
              function $function_name(run_info, var_name; is=1, data=nothing,
                                      input=nothing, ax=nothing, label=nothing,
-                                     outfile=nothing)
+                                     outfile=nothing, kwargs...)
                  if data === nothing
                      dim_slices = get_dimension_slice_indices($(QuoteNode(dim)); input=input, is=is)
                      data = postproc_load_variable(run_info, var_name; dim_slices...)
@@ -916,7 +916,8 @@ for dim ∈ (:t, all_dimensions...)
                  end
 
                  fig = plot_1d(run_info.$dim.grid, data, xlabel="$dim_str",
-                               ylabel=get_variable_symbol(var_name), label=label, ax=ax)
+                               ylabel=get_variable_symbol(var_name), label=label, ax=ax,
+                               kwargs...)
 
                  if outfile !== nothing
                      if fig === nothing
