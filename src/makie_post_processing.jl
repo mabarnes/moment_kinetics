@@ -917,7 +917,11 @@ for dim ∈ (:t, all_dimensions...)
                  fig = plot_1d(run_info.$dim.grid, data, xlabel="$dim_str",
                                ylabel=get_variable_symbol(var_name), label=label, ax=ax)
 
-                 if outfile !== nothing && fig !== nothing
+                 if outfile !== nothing
+                     if fig === nothing
+                         error("When `outfile` is passed to save the plot, must either pass both "
+                               * "`fig` and `ax` or neither. Only `ax` was passed.")
+                     end
                      save(outfile, fig)
                  end
 
