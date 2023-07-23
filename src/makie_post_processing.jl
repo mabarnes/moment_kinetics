@@ -1102,7 +1102,7 @@ for (dim1, dim2) ∈ dimension_combinations_2d_no_t
     dim2_grid = :( run_info.$dim2.grid )
     eval(quote
              function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
-                                     input=nothing, outfile=nothing)
+                                     input=nothing, outfile=nothing, kwargs...)
 
                  try
                      if data === nothing
@@ -1119,7 +1119,7 @@ for (dim1, dim2) ∈ dimension_combinations_2d_no_t
                      for (d, ri, a, cp) ∈ zip(data, run_info, ax, colorbar_places)
                          $function_name(ri, var_name, is=is, data=d, input=input,
                                         frame_index=frame_index, ax=a, colorbar_place=cp,
-                                        title=ri.run_name)
+                                        title=ri.run_name, kwargs...)
                      end
 
                      nt = minimum(ri.nt for ri ∈ run_info)
@@ -1135,7 +1135,7 @@ for (dim1, dim2) ∈ dimension_combinations_2d_no_t
              function $function_name(run_info, var_name; is=1, data=nothing,
                                      input=nothing, frame_index=nothing, ax=nothing,
                                      colorbar_place=colorbar_place, title=nothing,
-                                     outfile=nothing)
+                                     outfile=nothing, kwargs...)
                  if data === nothing
                      dim_slices = get_dimension_slice_indices(:t, $(QuoteNode(dim1)),
                                                               $(QuoteNode(dim2));
@@ -1158,7 +1158,7 @@ for (dim1, dim2) ∈ dimension_combinations_2d_no_t
                                   ylabel="$($dim1_str)", title=title,
                                   frame_index=frame_index, ax=ax,
                                   colorbar_place=colorbar_place,
-                                  colormap=parse_colormap(colormap))
+                                  colormap=parse_colormap(colormap), kwargs...)
 
                  if frame_index === nothing
                      if outfile === nothing
