@@ -995,7 +995,11 @@ for (dim1, dim2) ∈ dimension_combinations_2d
                                colorbar_place=colorbar_place,
                                colormap=parse_colormap(colormap))
 
-                 if outfile !== nothing && fig !== nothing
+                 if outfile !== nothing
+                     if fig === nothing
+                         error("When `outfile` is passed to save the plot, must either pass both "
+                               * "`fig` and `ax` or neither. Only `ax` was passed.")
+                     end
                      save(outfile, fig)
                  end
 
