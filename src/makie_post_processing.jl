@@ -9,7 +9,7 @@ using ..analysis: get_r_perturbation, get_Fourier_modes_2D, get_Fourier_modes_1D
 using ..array_allocation: allocate_float
 using ..coordinates: define_coordinate
 using ..input_structs: grid_input, advection_input
-using ..looping: all_dimensions
+using ..looping: all_dimensions, ion_dimensions, neutral_dimensions
 using ..moment_kinetics_input: set_defaults_and_check_top_level!,
                                set_defaults_and_check_section!, Dict_to_NamedTuple
 using ..load_data: open_readonly_output_file, get_group, load_block_data,
@@ -18,6 +18,7 @@ using ..load_data: open_readonly_output_file, get_group, load_block_data,
 using ..post_processing: construct_global_zr_coords
 using ..type_definitions: mk_float, mk_int
 
+using Combinatorics
 using Glob
 using LsqFit
 using MPI
@@ -925,108 +926,78 @@ for dim ∈ (:t, all_dimensions...)
          end)
 end
 
-function plot_vs_r_t(run_info::Tuple, var_name; is=1, data=nothing, input=nothing,
-                     outfile=nothing)
-
-    try
-        if data === nothing
-            data = Tuple(nothing for _ in run_info)
-        end
-        fig, ax, colorbar_places = get_2d_ax(length(run_info),
-                                             title=get_variable_symbol(var_name))
-        for (d, ri, a, cp) ∈ zip(data, run_info, ax, colorbar_places)
-            plot_vs_r_t(ri, var_name, is=is, data=d, input=input, ax=a, colorbar_place=cp,
-                        title=ri.run_name)
-        end
-
-        if outfile !== nothing
-            save(outfile, fig)
-        end
-        return fig
-    catch e
-        println("plot_vs_r_t failed for $var_name, is=$is. Error was $e")
-        return nothing
-    end
-end
-
-function plot_vs_r_t(run_info, var_name; is=1, data=nothing, input=nothing,
-                     ax=nothing, colorbar_place=colorbar_place, title=nothing,
-                     outfile=nothing)
-    if data === nothing
-        data = postproc_load_variable(run_info, var_name)
-    end
-    if input === nothing
-        colormap = "reverse_deep"
+# Generate 2d plot functions for all combinations of dimensions
+const dimension_combinations_2d = Tuple(
+         Tuple(c) for c in
+         unique((combinations((:t, ion_dimensions...), 2)...,
+                 combinations((:t, neutral_dimensions...), 2)...)))
+for (dim1, dim2) ∈ dimension_combinations_2d
+    function_name_str = "plot_vs_$(dim2)_$(dim1)"
+    function_name = Symbol(function_name_str)
+    dim1_str = String(dim1)
+    dim2_str = String(dim2)
+    if dim1 == :t
+        dim1_grid = :( run_info.time )
     else
-        colormap = input.colormap
+        dim1_grid = :( run_info.$dim1.grid )
     end
-    if title === nothing
-        title = get_variable_symbol(var_name)
-    end
+    dim2_grid = :( run_info.$dim2.grid )
+    eval(quote
+             function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
+                                     input=nothing, outfile=nothing)
 
-    data = select_slice(data, :r, :t; input=input, is=is)
+                 try
+                     if data === nothing
+                         data = Tuple(nothing for _ in run_info)
+                     end
+                     fig, ax, colorbar_places = get_2d_ax(length(run_info),
+                                                          title=get_variable_symbol(var_name))
+                     for (d, ri, a, cp) ∈ zip(data, run_info, ax, colorbar_places)
+                         $function_name(ri, var_name, is=is, data=d, input=input, ax=a,
+                                        colorbar_place=cp, title=ri.run_name)
+                     end
 
-    fig = plot_2d(run_info.r.grid, run_info.time, data, xlabel="r", ylabel="time",
-                  title=title, ax=ax, colorbar_place=colorbar_place,
-                  colormap=parse_colormap(colormap))
+                     if outfile !== nothing
+                         save(outfile, fig)
+                     end
+                     return fig
+                 catch e
+                     println("$($function_name_str) failed for $var_name, is=$is. Error was $e")
+                     return nothing
+                 end
+             end
 
-    if outfile !== nothing && fig !== nothing
-        save(outfile, fig)
-    end
+             function $function_name(run_info, var_name; is=1, data=nothing,
+                                     input=nothing, ax=nothing,
+                                     colorbar_place=colorbar_place, title=nothing,
+                                     outfile=nothing)
+                 if data === nothing
+                     data = postproc_load_variable(run_info, var_name)
+                 end
+                 if input === nothing
+                     colormap = "reverse_deep"
+                 else
+                     colormap = input.colormap
+                 end
+                 if title === nothing
+                     title = get_variable_symbol(var_name)
+                 end
 
-    return nothing
-end
+                 data = select_slice(data, $(QuoteNode(dim2)), $(QuoteNode(dim1));
+                                     input=input, is=is)
 
-function plot_vs_z_t(run_info::Tuple, var_name; is=1, data=nothing, input=nothing,
-                     outfile=nothing)
+                 fig = plot_2d($dim2_grid, $dim1_grid, data, xlabel="$($dim2_str)",
+                               ylabel="$($dim1_str)", title=title, ax=ax,
+                               colorbar_place=colorbar_place,
+                               colormap=parse_colormap(colormap))
 
-    try
-        if data === nothing
-            data = Tuple(nothing for _ in run_info)
-        end
-        fig, ax, colorbar_places = get_2d_ax(length(run_info),
-                                             title=get_variable_symbol(var_name))
-        for (d, ri, a, cp) ∈ zip(data, run_info, ax, colorbar_places)
-            plot_vs_z_t(ri, var_name, is=is, data=d, input=input, ax=a, colorbar_place=cp,
-                        title=ri.run_name)
-        end
+                 if outfile !== nothing && fig !== nothing
+                     save(outfile, fig)
+                 end
 
-        if outfile !== nothing
-            save(outfile, fig)
-        end
-        return fig
-    catch e
-        println("plot_vs_z_t failed for $var_name, is=$is. Error was $e")
-        return nothing
-    end
-end
-
-function plot_vs_z_t(run_info, var_name; is=1, data=nothing, input=nothing,
-                     ax=nothing, colorbar_place=colorbar_place, title=nothing,
-                     outfile=nothing)
-    if data === nothing
-        data = postproc_load_variable(run_info, var_name)
-    end
-    if input === nothing
-        colormap = "reverse_deep"
-    else
-        colormap = input.colormap
-    end
-    if title === nothing
-        title = get_variable_symbol(var_name)
-    end
-
-    data = select_slice(data, :z, :t; input=input, is=is)
-
-    fig = plot_2d(run_info.z.grid, run_info.time, data, xlabel="z", ylabel="time",
-                  title=title, ax=ax, colorbar_place=colorbar_place,
-                  colormap=parse_colormap(colormap))
-
-    if outfile !== nothing && fig !== nothing
-        save(outfile, fig)
-    end
-
-    return nothing
+                 return nothing
+             end
+         end)
 end
 
 # Generate 1d animation functions for each dimension
