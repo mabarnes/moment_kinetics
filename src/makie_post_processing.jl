@@ -1132,7 +1132,7 @@ end
 function plot_1d(xcoord, data; ax=nothing, xlabel=nothing,
                  ylabel=nothing, title=nothing, kwargs...)
     if ax === nothing
-        fig, ax, _ = get_1d_ax()
+        fig, ax = get_1d_ax()
     end
 
     if xlabel !== nothing
