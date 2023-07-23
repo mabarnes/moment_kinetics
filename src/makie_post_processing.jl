@@ -485,7 +485,7 @@ function get_run_info(run_dir, restart_index; itime_min=1, itime_max=-1, itime_s
         parallel_io = false
     end
 
-    nt_unskipped, time, restarts_nt = load_time_data(files)
+    nt_unskipped, time, restarts_nt = load_time_data(fids0)
     if itime_max > 0
         time = time[itime_min:itime_skip:itime_max]
     else
