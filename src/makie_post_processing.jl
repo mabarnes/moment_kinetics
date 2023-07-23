@@ -1169,8 +1169,8 @@ function plot_2d(xcoord, ycoord, data; ax=nothing, colorbar_place=nothing, xlabe
 end
 
 function animate_1d(xcoord, data; frame_index=nothing, ax=nothing, fig=nothing,
-                    xlabel=nothing, ylabel=nothing, title=nothing, label=nothing,
-                    outfile=nothing)
+                    xlabel=nothing, ylabel=nothing, title=nothing, outfile=nothing,
+                    kwargs...)
 
     if frame_index === nothing
         ind = Observable(1)
@@ -1183,7 +1183,7 @@ function animate_1d(xcoord, data; frame_index=nothing, ax=nothing, fig=nothing,
     end
 
     line_data = @lift(@view data[:,$ind])
-    lines!(ax, xcoord, line_data, label=label)
+    lines!(ax, xcoord, line_data; kwargs...)
 
     if outfile !== nothing
         if fig === nothing
@@ -1192,9 +1192,6 @@ function animate_1d(xcoord, data; frame_index=nothing, ax=nothing, fig=nothing,
         end
         nt = size(data, 2)
         save_animation(fig, ind, nt, outfile)
-        record(fig, outfile, 1:nt, framerate=5) do it
-            ind[] = it
-        end
     end
 end
 
