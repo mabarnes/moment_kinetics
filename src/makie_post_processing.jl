@@ -1195,46 +1195,34 @@ function animate_1d(xcoord, data; frame_index=nothing, ax=nothing, fig=nothing,
     end
 end
 
-function animate_2d(xcoord::Tuple, ycoord::Tuple, data::Tuple; xlabel=nothing,
-                    ylabel=nothing, title=nothing, sub_titles=nothing, colormap=nothing,
-                    outfile=nothing)
-    n_runs = length(data)
-
-    if sub_titles === nothing
-        sub_titles = Tuple(nothing for _ ∈ 1:n_runs)
-    end
-    if outfile === nothing
-        error("outfile is required for animate_2d()")
-    end
+function animate_2d(xcoord, ycoord, data; frame_index=nothing, ax=nothing, fig=nothing,
+                    colorbar_place=nothing, xlabel=nothing, ylabel=nothing,
+                    outfile=nothing, kwargs...)
     colormap = parse_colormap(colormap)
 
-    fig, ax, colorbar_places = get_2d_ax(n_runs, title=title, xlabel=xlabel,
-                                         ylabel=ylabel)
-    hm = []
-    for (i, (x, y, d, t, a, cp)) ∈ enumerate(zip(xcoord, ycoord, data, sub_titles, ax,
-                                                 colorbar_places))
-        x = grid_points_to_faces(x)
-        y = grid_points_to_faces(y)
-        this_hm = heatmap!(a, x, y, d[:,:,1], title=t, colormap=colormap)
-        Colorbar(cp, this_hm)
-
-        push!(hm, this_hm)
+    if ax === nothing
+        fig, ax, colorbar_place = get_2d_ax(title=title, xlabel=xlabel, ylabel=ylabel)
+    end
+    if frame_index === nothing
+        ind = Observable(1)
+    else
+        ind = frame_index
     end
 
-    nt = minimum(size(d, 3) for d ∈ data)
+    xcoord = grid_points_to_faces(xcoord)
+    ycoord = grid_points_to_faces(ycoord)
+    heatmap_data = @lift(@view data[:,:,ind])
+    hm = heatmap!(ax, xcoord, ycoord, heatmap_data; kwargs...)
+    Colorbar(colorbar_place, hm)
 
-    record(fig, outfile, 1:nt, framerate=5) do it
-        for (h, d) ∈ zip(hm, data)
-            h[3] = @view d[:,:,it]
+    if outfile !== nothing
+        if fig === nothing
+            error("When `outfile` is passed to save the animation, must either pass both "
+                  * "`fig` and `ax` or neither. Only `ax` was passed.")
         end
+        nt = size(data, 3)
+        save_animation(fig, ind, nt, outfile)
     end
-end
-
-function animate_2d(xcoord, ycoord, data; xlabel=nothing, ylabel=nothing, title=nothing,
-                    sub_titles=nothing, colormap=nothing, outfile=nothing)
-    return animate_2d((xcoord,), (ycoord,), (data,), xlabel=xlabel, ylabel=ylabel,
-                      title=title, sub_titles=(sub_titles,), colormap=colormap,
-                      outfile=outfile)
 end
 
 function save_animation(fig, frame_index, nt, outfile)
