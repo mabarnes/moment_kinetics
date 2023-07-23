@@ -978,39 +978,6 @@ function plot_vs_z_t(run_info, var_name; is=1, data=nothing, input=nothing,
     return nothing
 end
 
-function animate_vs_z(run_info::Tuple, var_name; is=1, data=nothing, input=nothing,
-                      outfile=nothing)
-
-    try
-        if data === nothing
-            data = Tuple(nothing for _ in run_info)
-        end
-        # Load data if necessary
-        data = Tuple(d === nothing ? postproc_load_variable(ri, var_name) : d
-                     for (d,ri) ∈ zip(data, run_info))
-        # Select needed dims
-        data = Tuple(select_slice(d, :z, :t; input=input, is=is) for d ∈ data)
-
-        zcoord = Tuple(ri.z.grid for ri ∈ run_info)
-
-        labels = Tuple(ri.run_name for ri ∈ run_info)
-
-        fig = animate_1d(zcoord, data, xlabel="z", ylabel=get_variable_symbol(var_name),
-                         labels=labels, outfile=outfile)
-
-        return fig
-    catch e
-        println("animate_vs_z failed for $var_name, is=$is. Error was $e")
-        return nothing
-    end
-end
-
-function animate_vs_z(run_info, var_name; is=1, data=nothing, input=nothing,
-                      outfile=nothing)
-    return animate_vs_z((run_info,), var_name; is=is, data=data, input=input,
-                        outfile=outfile)
-end
-
 function animate_vs_r(run_info::Tuple, var_name; is=1, data=nothing, input=nothing,
                       outfile=nothing)
 
@@ -1018,18 +985,18 @@ function animate_vs_r(run_info::Tuple, var_name; is=1, data=nothing, input=nothi
         if data === nothing
             data = Tuple(nothing for _ in run_info)
         end
-        # Load data if necessary
-        data = Tuple(d === nothing ? postproc_load_variable(ri, var_name) : d
-                     for (d,ri) ∈ zip(data, run_info))
-        # Select needed dims
-        data = Tuple(select_slice(d, :r, :t; input=input, is=is) for d ∈ data)
 
-        rcoord = Tuple(ri.r.grid for ri ∈ run_info)
+        fig, ax = get_1d_ax(xlabel="r", ylabel=get_variable_symbol(var_name))
+        frame_index = Observable(1)
 
-        labels = Tuple(ri.run_name for ri ∈ run_info)
+        for (d, ri) ∈ zip(data, run_info)
+            animate_vs_r(ri, var_name; is=is, data=d, input=input,
+                         frame_index=frame_index, ax=ax)
+        end
+        put_legend_above(fig, ax)
 
-        fig = animate_1d(rcoord, data, xlabel="r", ylabel=get_variable_symbol(var_name),
-                         labels=labels, outfile=outfile)
+        nt = minimum(ri.nt for ri ∈ run_info)
+        save_animation(fig, frame_index, nt, outfile)
 
         return fig
     catch e
@@ -1039,9 +1006,86 @@ function animate_vs_r(run_info::Tuple, var_name; is=1, data=nothing, input=nothi
 end
 
 function animate_vs_r(run_info, var_name; is=1, data=nothing, input=nothing,
+                      frame_index=nothing, ax=nothing, outfile=nothing)
+    if data === nothing
+        data = postproc_load_variable(run_info, var_name)
+    end
+    if frame_index === nothing
+        ind = Observable(1)
+    else
+        ind = frame_index
+    end
+    if ax === nothing
+        fig, ax = get_1d_ax(xlabel="r", ylabel=get_variable_symbol(var_name))
+    else
+        fig = nothing
+    end
+
+    data = select_slice(data, :r, :t; input=input, is=is)
+    nt = size(data, 2)
+
+    animate_1d(run_info.r.grid, data; ax=ax, frame_index=ind, label=run_info.run_name)
+
+    if frame_index === nothing
+        save_animation(fig, ind, nt, outfile)
+    end
+
+    return fig
+end
+
+function animate_vs_z(run_info::Tuple, var_name; is=1, data=nothing, input=nothing,
                       outfile=nothing)
-    return animate_vs_r((run_info,), var_name; is=is, data=data, input=input,
-                        outfile=outfile)
+
+    try
+        if data === nothing
+            data = Tuple(nothing for _ in run_info)
+        end
+
+        fig, ax = get_1d_ax(xlabel="z", ylabel=get_variable_symbol(var_name))
+        frame_index = Observable(1)
+
+        for (d, ri) ∈ zip(data, run_info)
+            animate_vs_z(ri, var_name; is=is, data=d, input=input,
+                         frame_index=frame_index, ax=ax)
+        end
+        put_legend_above(fig, ax)
+
+        nt = minimum(ri.nt for ri ∈ run_info)
+        save_animation(fig, frame_index, nt, outfile)
+
+        return fig
+    catch e
+        println("animate_vs_z failed for $var_name, is=$is. Error was $e")
+        return nothing
+    end
+end
+
+function animate_vs_z(run_info, var_name; is=1, data=nothing, input=nothing,
+                      frame_index=nothing, ax=nothing, outfile=nothing)
+    if data === nothing
+        data = postproc_load_variable(run_info, var_name)
+    end
+    if frame_index === nothing
+        ind = Observable(1)
+    else
+        ind = frame_index
+    end
+    if ax === nothing
+        fig, ax = get_1d_ax(xlabel="z", ylabel=get_variable_symbol(var_name))
+    else
+        fig = nothing
+    end
+
+    data = select_slice(data, :z, :t; input=input, is=is)
+    nt = size(data, 2)
+
+    animate_1d(run_info.z.grid, data; frame_index=ind, ax=ax, label=run_info.run_name)
+
+    if frame_index === nothing
+        save_animation(fig, ind, nt, outfile)
+    end
+
+    return fig
 end
 
 function animate_vs_z_r(run_info::Tuple, var_name; is=1, data=nothing, input=nothing,
@@ -1188,37 +1232,34 @@ function plot_2d(xcoord, ycoord, data; ax=nothing, colorbar_place=nothing, xlabe
     end
 end
 
-function animate_1d(xcoord::Tuple, data::Tuple; xlabel=nothing, ylabel=nothing,
-                    title=nothing, labels=nothing, outfile=nothing)
-    n_runs = length(data)
+function animate_1d(xcoord, data; frame_index=nothing, ax=nothing, fig=nothing,
+                    xlabel=nothing, ylabel=nothing, title=nothing, label=nothing,
+                    outfile=nothing)
 
-    if labels === nothing
-        labels = Tuple(nothing for _ ∈ 1:n_runs)
+    if frame_index === nothing
+        ind = Observable(1)
+    else
+        ind = frame_index
     end
-    if outfile === nothing
-        error("outfile is required for animate_1d()")
+
+    if ax === nothing
+        fig, ax = get_1d_ax(title=title, xlabel=xlabel, ylabel=ylabel)
     end
 
-    index = Observable(1)
+    line_data = @lift(@view data[:,$ind])
+    lines!(ax, xcoord, line_data, label=label)
 
-    fig, ax = get_1d_ax(title=title, xlabel=xlabel, ylabel=ylabel)
-    line_data = (@lift(@view d[:,$index]) for d ∈ data)
-    for (i, (x, d, l)) ∈ enumerate(zip(xcoord, line_data, labels))
-        lines!(ax, x, d, label=l)
+    if outfile !== nothing
+        if fig === nothing
+            error("When `outfile` is passed to save the animation, must either pass both "
+                  * "`fig` and `ax` or neither. Only `ax` was passed.")
+        end
+        nt = size(data, 2)
+        save_animation(fig, ind, nt, outfile)
+        record(fig, outfile, 1:nt, framerate=5) do it
+            ind[] = it
+        end
     end
-    put_legend_above(fig, ax)
-
-    nt = minimum(size(d, 2) for d ∈ data)
-
-    record(fig, outfile, 1:nt, framerate=5) do it
-        index[] = it
-    end
-end
-
-function animate_1d(xcoord, data; xlabel=nothing, ylabel=nothing, title=nothing,
-                    labels=nothing, outfile=nothing)
-    return animate_1d((xcoord,), (data,), xlabel=xlabel, ylabel=ylabel, title=title,
-                      labels=(labels,), outfile=outfile)
 end
 
 function animate_2d(xcoord::Tuple, ycoord::Tuple, data::Tuple; xlabel=nothing,
@@ -1261,6 +1302,13 @@ function animate_2d(xcoord, ycoord, data; xlabel=nothing, ylabel=nothing, title=
     return animate_2d((xcoord,), (ycoord,), (data,), xlabel=xlabel, ylabel=ylabel,
                       title=title, sub_titles=(sub_titles,), colormap=colormap,
                       outfile=outfile)
+end
+
+function save_animation(fig, frame_index, nt, outfile)
+    record(fig, outfile, 1:nt, framerate=5) do it
+        frame_index[] = it
+    end
+    return nothing
 end
 
 function put_legend_above(fig, ax; kwargs...)
