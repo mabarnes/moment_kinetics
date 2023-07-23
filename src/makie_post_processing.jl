@@ -1052,7 +1052,8 @@ for dim ∈ all_dimensions
                                      input=nothing, frame_index=nothing, ax=nothing,
                                      outfile=nothing)
                  if data === nothing
-                     data = postproc_load_variable(run_info, var_name)
+                     dim_slices = get_dimension_slice_indices(:t, $(QuoteNode(dim)); input=input, is=is)
+                     data = postproc_load_variable(run_info, var_name; dim_slices...)
                  end
                  if frame_index === nothing
                      ind = Observable(1)
