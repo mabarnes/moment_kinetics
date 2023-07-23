@@ -1322,7 +1322,7 @@ function animate_2d(xcoord, ycoord, data; frame_index=nothing, ax=nothing, fig=n
 
     xcoord = grid_points_to_faces(xcoord)
     ycoord = grid_points_to_faces(ycoord)
-    heatmap_data = @lift(@view data[:,:,ind])
+    heatmap_data = @lift(@view data[:,:,$ind])
     hm = heatmap!(ax, xcoord, ycoord, heatmap_data; kwargs...)
     Colorbar(colorbar_place, hm)
 
