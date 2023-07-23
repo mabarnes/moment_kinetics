@@ -1020,7 +1020,7 @@ for dim ∈ all_dimensions
     dim_str = String(dim)
     eval(quote
              function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
-                                     input=nothing, outfile=nothing)
+                                     input=nothing, outfile=nothing, kwargs...)
 
                  try
                      if data === nothing
@@ -1035,7 +1035,7 @@ for dim ∈ all_dimensions
 
                      for (d, ri) ∈ zip(data, run_info)
                          $function_name(ri, var_name; is=is, data=d, input=input,
-                                        frame_index=frame_index, ax=ax)
+                                        frame_index=frame_index, ax=ax, kwargs...)
                      end
                      put_legend_above(fig, ax)
 
@@ -1051,7 +1051,7 @@ for dim ∈ all_dimensions
 
              function $function_name(run_info, var_name; is=1, data=nothing,
                                      input=nothing, frame_index=nothing, ax=nothing,
-                                     outfile=nothing)
+                                     outfile=nothing, kwargs...)
                  if data === nothing
                      dim_slices = get_dimension_slice_indices(:t, $(QuoteNode(dim)); input=input, is=is)
                      data = postproc_load_variable(run_info, var_name; dim_slices...)
@@ -1070,7 +1070,8 @@ for dim ∈ all_dimensions
                  data = select_slice(data, $(QuoteNode(dim)), :t; input=input, is=is)
                  nt = size(data, 2)
 
-                 animate_1d(run_info.$dim.grid, data; ax=ax, frame_index=ind, label=run_info.run_name)
+                 animate_1d(run_info.$dim.grid, data; ax=ax, frame_index=ind,
+                            label=run_info.run_name, kwargs...)
 
                  if frame_index === nothing
                      if outfile === nothing
