@@ -1021,6 +1021,9 @@ for dim ∈ all_dimensions
                      if data === nothing
                          data = Tuple(nothing for _ in run_info)
                      end
+                     if outfile === nothing
+                         error("`outfile` is required for $($function_name_str)")
+                     end
 
                      fig, ax = get_1d_ax(xlabel="$($dim_str)", ylabel=get_variable_symbol(var_name))
                      frame_index = Observable(1)
