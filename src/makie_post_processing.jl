@@ -875,6 +875,56 @@ function plots_for_variable(run_info, variable_name; plot_prefix, is_1D=false,
     return nothing
 end
 
+# Generate 1d plot functions for each dimension
+for dim ∈ (:t, all_dimensions...)
+    function_name_str = "plot_vs_$dim"
+    function_name = Symbol(function_name_str)
+    dim_str = String(dim)
+    eval(quote
+             function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
+                                     input=nothing, outfile=nothing)
+
+                 try
+                     if data === nothing
+                         data = Tuple(nothing for _ in run_info)
+                     end
+                     fig, ax = get_1d_ax(xlabel="$dim_str", ylabel=get_variable_symbol(var_name))
+                     for (d, ri, a) ∈ zip(data, run_info, ax)
+                         $function_name(ri, var_name, is=is, data=d, input=input, ax=a,
+                                        label=ri.run_name)
+                     end
+
+                     if outfile !== nothing
+                         save(outfile, fig)
+                     end
+                     return fig
+                 catch e
+                     println("$function_name_str() failed for $var_name, is=$is. Error was $e")
+                     return nothing
+                 end
+             end
+
+             function $function_name(run_info, var_name; is=1, data=nothing,
+                                     input=nothing, ax=nothing, label=nothing,
+                                     outfile=nothing)
+                 if data === nothing
+                     data = postproc_load_variable(run_info, var_name)
+                 end
+
+                 data = select_slice(data, $(QuoteNode(dim)); input=input, is=is)
+
+                 fig = plot_1d(run_info.$dim.grid, data, xlabel="$dim_str",
+                               ylabel=get_variable_symbol(var_name), label=label, ax=ax)
+
+                 if outfile !== nothing && fig !== nothing
+                     save(outfile, fig)
+                 end
+
+                 return nothing
+             end
+         end)
+end
+
 function plot_vs_r_t(run_info::Tuple, var_name; is=1, data=nothing, input=nothing,
                      outfile=nothing)
 
