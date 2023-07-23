@@ -203,8 +203,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
     println("max df_err: ",max_df_err)
     
     # elemental grid tests 
-    ngrid = 5
-    nelement = 32
+    ngrid = 3
+    nelement = 100
     y_ngrid = ngrid #number of points per element 
     y_nelement_local = nelement # number of elements per rank
     y_nelement_global = y_nelement_local # total number of elements 
@@ -239,14 +239,17 @@ if abspath(PROGRAM_FILE) == @__FILE__
     print_matrix(y_spectral.lobatto.M0,"local mass matrix M0",y.ngrid,y.ngrid)
     print_matrix(y_spectral.lobatto.M1,"local mass matrix M1",y.ngrid,y.ngrid)
     #print_matrix(y_spectral.mass_matrix,"global mass matrix",y.n,y.n)
-    #print_matrix(y_spectral.lobatto.S0,"local S0 matrix",y.ngrid,y.ngrid)
-    #print_matrix(y_spectral.lobatto.S1,"local S1 matrix",y.ngrid,y.ngrid)
+    print_matrix(y_spectral.lobatto.S0,"local S0 matrix",y.ngrid,y.ngrid)
+    print_matrix(y_spectral.lobatto.S1,"local S1 matrix",y.ngrid,y.ngrid)
     #print_matrix(y_spectral.S_matrix,"global S matrix",y.n,y.n)
     print_matrix(y_spectral.radau.K0,"local radau K matrix K0",y.ngrid,y.ngrid)
     print_matrix(y_spectral.radau.K1,"local radau K matrix K1",y.ngrid,y.ngrid)
     print_matrix(y_spectral.lobatto.K0,"local K matrix K0",y.ngrid,y.ngrid)
     print_matrix(y_spectral.lobatto.K1,"local K matrix K1",y.ngrid,y.ngrid)
+    print_matrix(y_spectral.radau.P0,"local radau P matrix P0",y.ngrid,y.ngrid)
+    print_matrix(y_spectral.lobatto.P0,"local P matrix P0",y.ngrid,y.ngrid)
     #print_matrix(y_spectral.K_matrix,"global K matrix",y.n,y.n)
+    #print_matrix(y_spectral.L_matrix,"global L matrix",y.n,y.n)
     #@views y_spectral.K_matrix[1,:] *= (4.0/3.0)
     #print_matrix(y_spectral.K_matrix,"global K matrix (hacked) ",y.n,y.n)
     
@@ -360,8 +363,9 @@ if abspath(PROGRAM_FILE) == @__FILE__
         #mul!(b,y_spectral.K_matrix,f_exact)
         #gausslegendre_mass_matrix_solve!(d2f_num,b,y_spectral)
         @. d2f_err = abs(d2f_num - d2f_exact) #(0.5*y.L/y.nelement_global)*
-        #println(d2f_num[1:10])
-        #println(d2f_exact[1:10])
+        println(d2f_num[1:10])
+        println(d2f_exact[1:10])
+        println(d2f_err[1:10])
         println("max(d2f_err) (weak form): ",maximum(d2f_err))
         plot([y.grid, y.grid], [d2f_num, d2f_exact], xlabel="vpa", label=["num" "exact"], ylabel="")
         outfile = "vperp_second_derivative_test.pdf"
@@ -371,8 +375,9 @@ if abspath(PROGRAM_FILE) == @__FILE__
         gausslegendre_mass_matrix_solve!(laph_num,b,y_spectral)
         @. laph_err = abs(laph_num - laph_exact) #(0.5*y.L/y.nelement_global)*
         #println(b[1:10])
-        #println(laph_num[1:10])
-        #println(laph_exact[1:10])
+        println(laph_num[1:10])
+        println(laph_exact[1:10])
+        println(laph_err[1:10])
         println("max(laph_err) (weak form): ",maximum(laph_err))
         plot([y.grid, y.grid], [laph_num, laph_exact], xlabel="vperp", label=["num" "exact"], ylabel="")
         outfile = "vperp_laplacian_test.pdf"

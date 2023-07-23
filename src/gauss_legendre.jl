@@ -52,6 +52,8 @@ struct gausslegendre_base_info{}
     K1::Array{mk_float,2}
     # local P (weak derivative) matrix type 0
     P0::Array{mk_float,2}
+    # boundary condition differentiation matrix (for vperp grid using radau points)
+    D0::Array{mk_float,1}
 end
 
 struct gausslegendre_info{}
@@ -113,7 +115,10 @@ function setup_gausslegendre_pseudospectral_lobatto(coord)
     GaussLegendre_weak_product_matrix!(K1,coord.ngrid,x,w,coord.L,coord.nelement_global,"K1")
     P0 = allocate_float(coord.ngrid, coord.ngrid)
     GaussLegendre_weak_product_matrix!(P0,coord.ngrid,x,w,coord.L,coord.nelement_global,"P0")
-    return gausslegendre_base_info(Dmat,Mmat,Kmat,M0,M1,S0,S1,K0,K1,P0)
+    D0 = allocate_float(coord.ngrid)
+    #@. D0 = Dmat[1,:] # values at lower extreme of element
+    GaussLegendre_derivative_vector!(D0,1,coord.ngrid,x,w,coord.L,coord.nelement_global)
+    return gausslegendre_base_info(Dmat,Mmat,Kmat,M0,M1,S0,S1,K0,K1,P0,D0)
 end
 
 function setup_gausslegendre_pseudospectral_radau(coord)
@@ -143,7 +148,9 @@ function setup_gausslegendre_pseudospectral_radau(coord)
     GaussLegendre_weak_product_matrix!(K1,coord.ngrid,xreverse,wreverse,coord.L,coord.nelement_global,"K1",radau=true)
     P0 = allocate_float(coord.ngrid, coord.ngrid)
     GaussLegendre_weak_product_matrix!(P0,coord.ngrid,xreverse,wreverse,coord.L,coord.nelement_global,"P0",radau=true)
-    return gausslegendre_base_info(Dmat,Mmat,Kmat,M0,M1,S0,S1,K0,K1,P0)
+    D0 = allocate_float(coord.ngrid)
+    GaussLegendre_derivative_vector!(D0,1,coord.ngrid,xreverse,wreverse,coord.L,coord.nelement_global,radau=true)
+    return gausslegendre_base_info(Dmat,Mmat,Kmat,M0,M1,S0,S1,K0,K1,P0,D0)
 end 
 """
 function for taking the first derivative on Gauss-Legendre points
@@ -195,11 +202,11 @@ function gausslegendre_apply_Kmat!(df, ff, gausslegendre, coord)
     get_KK_local!(gausslegendre.Qmat,j,gausslegendre.lobatto,gausslegendre.radau,coord)
     #println(gausslegendre.Qmat)
     @views mul!(df[:,j],gausslegendre.Qmat[:,:],ff[imin:imax])
-    #if coord.name == "vperp" && coord.irank == 0 # differentiate this element with the Radau scheme
-    #    @views mul!(df[:,j],gausslegendre.radau.Kmat[:,:],ff[imin:imax])
-    #else #differentiate using the Lobatto scheme
-    #@views mul!(df[:,j],gausslegendre.lobatto.Kmat[:,:],ff[imin:imax])
-    #end
+    if coord.name == "vperp"
+       # set the 1st point of the RHS vector to zero 
+       # consistent with use with the mass matrix with D f = 0 boundary conditions
+       df[1,j] = 0.0
+    end
     # calculate the derivative on each element
     @inbounds for j ∈ 2:nelement
         k = 1 
@@ -297,6 +304,39 @@ function gaussradaulegendre_differentiation_matrix!(D::Array{Float64,2},x::Array
     end
     D .= Dreverse
     return nothing
+end
+
+"""
+Gauss-Legendre derivative at arbitrary x values, for boundary condition on radau points
+D0 -- the vector
+j -- the index of x where the derivative is evaluated 
+ngrid -- number of points in x
+x -- the grid from -1, 1
+L -- size of physical domain
+"""
+function GaussLegendre_derivative_vector!(D0,j,ngrid,x,wgts,L,nelement_global;radau=false)
+    # coefficient in expansion of 
+    # lagrange polys in terms of Legendre polys
+    gamma = allocate_float(ngrid)
+    for i in 1:ngrid-1
+        gamma[i] = Legendre_h_n(i-1)
+    end
+    if radau
+        gamma[ngrid] = Legendre_h_n(ngrid-1)
+    else
+        gamma[ngrid] = 2.0/(ngrid - 1)
+    end
+    
+    @. D0 = 0.0
+    for i in 1:ngrid
+        for k in 1:ngrid
+            D0[i] += wgts[i]*Pl(x[i],k-1)*dnPl(x[j],k-1,1)/gamma[k]
+        end
+    end
+    # set `diagonal' value
+    D0[j] = 0.0
+    D0[j] = -sum(D0[:])
+    @. D0 *= 2.0*float(nelement_global)/L
 end
 
 """
@@ -761,9 +801,11 @@ function setup_global_weak_form_matrix!(QQ_global::Array{mk_float,2},
     if coord.name == "vperp"
         zero_bc_upper_boundary = true
         zero_bc_lower_boundary = false
+        zero_gradient_bc_lower_boundary = true
     else 
         zero_bc_upper_boundary = coord.bc == "zero" || coord.bc == "zero_upper"
         zero_bc_lower_boundary = coord.bc == "zero" || coord.bc == "zero_lower"
+        zero_gradient_bc_lower_boundary = false
     end
     # fill in first element 
     j = 1
@@ -774,6 +816,13 @@ function setup_global_weak_form_matrix!(QQ_global::Array{mk_float,2},
     if zero_bc_lower_boundary #x.bc == "zero"
         QQ_global[imin[j],imin[j]:imax[j]] .+= QQ_j[1,:]./2.0 #contributions from this element/2
         QQ_global[imin[j],imin[j]] += QQ_j[ngrid,ngrid]/2.0 #contribution from missing `zero' element/2
+    elseif zero_gradient_bc_lower_boundary
+        if option == "M" && coord.name == "vperp"
+            #QQ_global[imin[j],imin[j]:imax[j]] .= lobatto.D0[:]
+            QQ_global[imin[j],imin[j]:imax[j]] .= radau.D0[:]
+        else 
+            QQ_global[imin[j],imin[j]:imax[j]] .= 0.0
+        end
     else 
         QQ_global[imin[j],imin[j]:imax[j]] .+= QQ_j[1,:]
     end
