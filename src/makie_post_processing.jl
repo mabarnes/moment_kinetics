@@ -1333,8 +1333,8 @@ for (dim1, dim2) ∈ dimension_combinations_2d_no_t
                  fig = animate_2d($dim2_grid, $dim1_grid, data; xlabel="$($dim2_str)",
                                   ylabel="$($dim1_str)", title=title,
                                   frame_index=frame_index, ax=ax,
-                                  colorbar_place=colorbar_place,
-                                  colormap=parse_colormap(colormap), kwargs...)
+                                  colorbar_place=colorbar_place, colormap=colormap,
+                                  kwargs...)
 
                  if frame_index === nothing
                      if outfile === nothing
@@ -1424,7 +1424,7 @@ function plot_1d(xcoord, data; ax=nothing, xlabel=nothing,
 end
 
 function plot_2d(xcoord, ycoord, data; ax=nothing, colorbar_place=nothing, xlabel=nothing,
-                 ylabel=nothing, title=nothing, kwargs...)
+                 ylabel=nothing, title=nothing, colormap="reverse_deep", kwargs...)
     if ax === nothing
         fig, ax, colorbar_place = get_2d_ax()
     end
@@ -1438,6 +1438,7 @@ function plot_2d(xcoord, ycoord, data; ax=nothing, colorbar_place=nothing, xlabe
     if title !== nothing
         ax.title = title
     end
+    colormap = parse_colormap(colormap)
 
     # Convert grid point values to 'cell face' values for heatmap
     xcoord = grid_points_to_faces(xcoord)
@@ -1485,23 +1486,32 @@ function animate_1d(xcoord, data; frame_index=nothing, ax=nothing, fig=nothing,
 end
 
 function animate_2d(xcoord, ycoord, data; frame_index=nothing, ax=nothing, fig=nothing,
-                    colorbar_place=nothing, xlabel=nothing, ylabel=nothing,
-                    outfile=nothing, kwargs...)
+                    colorbar_place=nothing, xlabel=nothing, ylabel=nothing, title=nothing,
+                    outfile=nothing, colormap="reverse_deep", kwargs...)
     colormap = parse_colormap(colormap)
 
     if ax === nothing
-        fig, ax, colorbar_place = get_2d_ax(title=title, xlabel=xlabel, ylabel=ylabel)
+        fig, ax, colorbar_place = get_2d_ax()
     end
     if frame_index === nothing
         ind = Observable(1)
     else
         ind = frame_index
     end
+    if xlabel !== nothing
+        ax.xlabel = xlabel
+    end
+    if ylabel !== nothing
+        ax.ylabel = ylabel
+    end
+    if title !== nothing
+        ax.title = title
+    end
 
     xcoord = grid_points_to_faces(xcoord)
     ycoord = grid_points_to_faces(ycoord)
     heatmap_data = @lift(@view data[:,:,$ind])
-    hm = heatmap!(ax, xcoord, ycoord, heatmap_data; kwargs...)
+    hm = heatmap!(ax, xcoord, ycoord, heatmap_data; colormap=colormap, kwargs...)
     Colorbar(colorbar_place, hm)
 
     if outfile !== nothing
