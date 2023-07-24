@@ -999,6 +999,14 @@ function plots_for_variable(run_info, variable_name; plot_prefix, is_1D=false,
                 plot_vs_z_t(run_info, variable_name, is=is, data=variable, input=input,
                             outfile=variable_prefix * "vs_z_t.pdf")
             end
+            if !is_1D && input.plot_vs_r
+                plot_vs_r(run_info, variable_name, is=is, data=variable, input=input,
+                          outfile=variable_prefix * "vs_r.pdf")
+            end
+            if input.plot_vs_z
+                plot_vs_z(run_info, variable_name, is=is, data=variable, input=input,
+                          outfile=variable_prefix * "vs_z.pdf")
+            end
             if input.animate_vs_z
                 animate_vs_z(run_info, variable_name, is=is, data=variable, input=input,
                              outfile=variable_prefix * "vs_z.gif")
