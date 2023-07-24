@@ -615,25 +615,13 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
 
         if nd == 3
             # EM variable with dimensions (z,r,t)
-            not_allowed_slices = (ivperp=ivperp, ivpa=ivpa, ivzeta=ivzeta, ivr=ivr,
-                                  ivz=ivz)
-            if any(i !== (:) for i ∈ values(not_allowed_slices))
-                error("Got slice for non-existing dimension of 2d variable. "
-                      * "All of $not_allowed_slices should be `nothing`.")
-            end
             dims = Vector{mk_int}()
             iz === (:) && push!(dims, run_info.z.n)
             ir === (:) && push!(dims, run_info.r.n)
-            push!(dims, nt)
+            !isa(it, mk_int) && push!(dims, nt)
             result = allocate_float(dims...)
         elseif nd == 4
             # moment variable with dimensions (z,r,s,t)
-            not_allowed_slices = (ivperp=ivperp, ivpa=ivpa, ivzeta=ivzeta, ivr=ivr,
-                                  ivz=ivz)
-            if any(i !== (:) for i ∈ values(not_allowed_slices))
-                error("Got slice for non-existing dimension of 2d variable. "
-                      * "All of $not_allowed_slices should be `nothing`.")
-            end
             # Get nspecies from the variable, not from run_info, because it might be
             # either ion or neutral
             nspecies = size(variable[1], 3)
@@ -641,38 +629,28 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
             iz === (:) && push!(dims, run_info.z.n)
             ir === (:) && push!(dims, run_info.r.n)
             is === (:) && push!(dims, nspecies)
-            push!(dims, nt)
+            !isa(it, mk_int) && push!(dims, nt)
             result = allocate_float(dims...)
         elseif nd == 6
             # ion distribution function variable with dimensions (vpa,vperp,z,r,s,t)
-            not_allowed_slices = (ivzeta=ivzeta, ivr=ivr, ivz=ivz)
-            if any(i !== (:) for i ∈ values(not_allowed_slices))
-                error("Got slice for non-existing dimension of 4d variable. "
-                      * "All of $not_allowed_slices should be `nothing`.")
-            end
             dims = Vector{mk_int}()
             ivpa === (:) && push!(dims, run_info.vpa.n)
             ivperp === (:) && push!(dims, run_info.vperp.n)
             iz === (:) && push!(dims, run_info.z.n)
             ir === (:) && push!(dims, run_info.r.n)
             is === (:) && push!(dims, nspecies)
-            push!(dims, nt)
+            !isa(it, mk_int) && push!(dims, nt)
             result = allocate_float(dims...)
         elseif nd == 7
             # neutral distribution function variable with dimensions (vz,vr,vzeta,z,r,s,t)
-            not_allowed_slices = (ivperp=ivperp, ivpa=ivpa)
-            if any(i !== (:) for i ∈ values(not_allowed_slices))
-                error("Got slice for non-existing dimension of 5d variable. "
-                      * "All of $not_allowed_slices should be `nothing`.")
-            end
             dims = Vector{mk_int}()
-            ivz === (:) && push!(dims, run_info.vpz.n)
+            ivz === (:) && push!(dims, run_info.vz.n)
             ivr === (:) && push!(dims, run_info.vr.n)
             ivzeta === (:) && push!(dims, run_info.vzeta.n)
             iz === (:) && push!(dims, run_info.z.n)
             ir === (:) && push!(dims, run_info.r.n)
             is === (:) && push!(dims, nspecies)
-            push!(dims, nt)
+            !isa(it, mk_int) && push!(dims, nt)
             result = allocate_float(dims...)
         else
             error("Unsupported number of dimensions ($nd) for '$variable_name'.")
