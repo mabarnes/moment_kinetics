@@ -2055,8 +2055,8 @@ The dimensions in `keep_dims` are not given a slice (those are the dimensions we
 the variable after slicing).
 """
 function get_dimension_slice_indices(keep_dims...; input, slice_indices...)
-    slice_names = (:it, :is, :isn, :ir, :iz, :ivpa, :ivperp, :ivzeta, :ivr, :ivz)
-    return Tuple(sn=>get(slice_indices, sn, input[Symbol(sn, :0)]) for sn ∈ slice_names if sn ∉ keep_dims)
+    slice_names = (:t, :s, :r, :z, :vpa, :vperp, :vzeta, :vr, :vz)
+    return Tuple(Symbol(:i, sn)=>get(slice_indices, sn, input[Symbol(:i, sn, :0)]) for sn ∈ slice_names if sn ∉ keep_dims)
 end
 
 """
