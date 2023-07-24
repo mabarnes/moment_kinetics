@@ -37,6 +37,7 @@ Is an OrderedDict so the order of sections is nicer if `input_dict` is written o
 TOML file.
 """
 const input_dict = OrderedDict{String,Any}()
+const input_dict_dfns = OrderedDict{String,Any}()
 
 const em_variables = ("phi", "Er", "Ez")
 const ion_moment_variables = ("density", "parallel_flow", "parallel_pressure",
@@ -175,9 +176,13 @@ function makie_post_process(run_dir::Union{String,Tuple},
     # Plots from distribution function variables
     ############################################
     if any(ri !== nothing for ri in run_info_dfns)
-        for variable_name ∈ all_dfn_variables
-            #plots_for_dfn_variable(run_info_dfns, variable_name, plot_prefix=plot_prefix,
-            #                       is_1D=is_1D, is_1V=is_1V)
+        dfn_variable_list = ion_dfn_variables
+        if has_neutrals
+            dfn_variable_list = tuple(dfn_variable_list..., neutral_dfn_variables...)
+        end
+        for variable_name ∈ dfn_variable_list
+            plots_for_dfn_variable(run_info_dfns, variable_name, plot_prefix=plot_prefix,
+                                   is_1D=is_1D, is_1V=is_1V)
         end
     end
 
@@ -220,13 +225,16 @@ function generate_example_input_file(filename::String=default_input_file_name;
     end
 
     original_input = deepcopy(input_dict)
+    original_input_dfns = deepcopy(input_dict_dfns)
 
-    # Set up input_dict with all-default parameters
+    # Set up input_dict and input_dict_dfns with all-default parameters
     setup_makie_post_processing_input!(Dict{String,Any}())
 
-    # Convert input_dict to a String formatted as the contents of a TOML file
+    # Merge input_dict and input_dict_dfns, then convert to a String formatted as the
+    # contents of a TOML file
+    combined_dict = merge(input_dict_dfns, input_dict)
     buffer = IOBuffer()
-    TOML.print(buffer, input_dict)
+    TOML.print(buffer, combined_input_dict)
     file_contents = String(take!(buffer))
 
     # Separate file_contents into individual lines
@@ -248,9 +256,11 @@ function generate_example_input_file(filename::String=default_input_file_name;
         print(io, file_contents)
     end
 
-    # Restore original state of input_dict
+    # Restore original state of input_dict and input_dict_dfns
     clear_Dict!(input_dict)
+    clear_Dict!(input_dict_dfns)
     merge!(input_dict, original_input)
+    merge!(input_dict_dfns, original_input_dfns)
 
     return nothing
 end
@@ -289,23 +299,16 @@ end
 function setup_makie_post_processing_input!(new_input_dict::AbstractDict{String,Any};
                                             run_info_moments=run_info_moments,
                                             run_info_dfns=run_info_dfns)
-    # Remove all existing entries from the global `input_dict`
-    clear_Dict!(input_dict)
-
-    # Put entries from new_input_dict into input_dict
-    merge!(input_dict, new_input_dict)
-
-    if !isa(run_info_moments, Tuple)
-        # Make sure run_info is a Tuple
-        run_info_moments = (run_info_moments,)
+    if isa(run_info_moments, Tuple)
+        has_moments = any(ri !== nothing for ri ∈ run_info_moments)
+    else
+        has_moments = run_info_moments !== nothing
     end
-    if !isa(run_info_dfns, Tuple)
-        # Make sure run_info is a Tuple
-        run_info_dfns = (run_info_dfns,)
+    if isa(run_info_dfns, Tuple)
+        has_dfns = any(ri !== nothing for ri ∈ run_info_dfns)
+    else
+        has_dfns = run_info_dfns !== nothing
     end
-
-    has_moments = any(ri !== nothing for ri ∈ run_info_moments)
-    has_dfns = any(ri !== nothing for ri ∈ run_info_dfns)
 
     if !has_moments && !has_dfns
         println("Neither `run_info_moments` nor `run_info_dfns` passed. Setting "
@@ -320,29 +323,50 @@ function setup_makie_post_processing_input!(new_input_dict::AbstractDict{String,
     end
 
     if has_moments
-        nt_unskipped_min = minimum(ri.nt_unskipped for ri in run_info_moments
+        _setup_single_input!(input_dict, new_input_dict, run_info_moments, false)
+    end
+
+    if has_dfns
+        _setup_single_input!(input_dict_dfns, new_input_dict, run_info_dfns, true)
+    end
+
+    return nothing
+end
+
+function _setup_single_input!(this_input_dict::AbstractDict{String,Any},
+                              new_input_dict::AbstractDict{String,Any}, run_info,
+                              dfns::Bool)
+    # Remove all existing entries from this_input_dict
+    clear_Dict!(this_input_dict)
+
+    # Put entries from new_input_dict into this_input_dict
+    merge!(this_input_dict, new_input_dict)
+
+    if !isa(run_info, Tuple)
+        # Make sure run_info is a Tuple
+        run_info= (run_info,)
+    end
+    has_run_info = any(ri !== nothing for ri ∈ run_info)
+
+    if has_run_info
+        nt_unskipped_min = minimum(ri.nt_unskipped for ri in run_info
                                                    if ri !== nothing)
-        nt_min = minimum(ri.nt for ri in run_info_moments if ri !== nothing)
-        nr_min = minimum(ri.r.n for ri in run_info_moments if ri !== nothing)
-        nz_min = minimum(ri.z.n for ri in run_info_moments if ri !== nothing)
+        nt_min = minimum(ri.nt for ri in run_info if ri !== nothing)
+        nr_min = minimum(ri.r.n for ri in run_info if ri !== nothing)
+        nz_min = minimum(ri.z.n for ri in run_info if ri !== nothing)
     else
         nt_unskipped_min = 1
         nt_min = 1
         nr_min = 1
         nz_min = 1
     end
-    if has_dfns
-        nt_unskipped_dfns_min = minimum(ri.nt_unskipped for ri in run_info_dfns
-                                                             if ri !== nothing)
-        nt_dfns_min = minimum(ri.nt for ri in run_info_dfns if ri !== nothing)
-        nvperp_min = minimum(ri.vperp.n for ri in run_info_dfns if ri !== nothing)
-        nvpa_min = minimum(ri.vpa.n for ri in run_info_dfns if ri !== nothing)
-        nvzeta_min = minimum(ri.vzeta.n for ri in run_info_dfns if ri !== nothing)
-        nvr_min = minimum(ri.vr.n for ri in run_info_dfns if ri !== nothing)
-        nvz_min = minimum(ri.vz.n for ri in run_info_dfns if ri !== nothing)
+    if dfns && has_run_info
+        nvperp_min = minimum(ri.vperp.n for ri in run_info if ri !== nothing)
+        nvpa_min = minimum(ri.vpa.n for ri in run_info if ri !== nothing)
+        nvzeta_min = minimum(ri.vzeta.n for ri in run_info if ri !== nothing)
+        nvr_min = minimum(ri.vr.n for ri in run_info if ri !== nothing)
+        nvz_min = minimum(ri.vz.n for ri in run_info if ri !== nothing)
     else
-        nt_unskipped_dfns_min = 1
-        nt_dfns_min = 1
         nvperp_min = 1
         nvpa_min = 1
         nvzeta_min = 1
@@ -356,9 +380,10 @@ function setup_makie_post_processing_input!(new_input_dict::AbstractDict{String,
     # - Don't allow setting "itime_*" and "itime_*_dfns" per-variable because we
     #   load time and time_dfns in run_info and these must use the same
     #   "itime_*"/"itime_*_dfns" setting as each variable.
-    only_global_options = ("itime_min", "itime_max", "itime_skip", "itime_skip_dfns")
+    time_index_options = ("it0", "it0_dfns", "itime_min", "itime_max", "itime_skip",
+                          "itime_min_dfns", "itime_max_dfns", "itime_skip_dfns")
 
-    set_defaults_and_check_top_level!(input_dict;
+    set_defaults_and_check_top_level!(this_input_dict;
        # Options that only apply at the global level (not per-variable)
        ################################################################
        # Options that provide the defaults for per-variable settings
@@ -366,7 +391,9 @@ function setup_makie_post_processing_input!(new_input_dict::AbstractDict{String,
        colormap="reverse_deep",
        # Slice t to this value when making time-independent plots
        it0=nt_min,
-       it0_dfns=nt_dfns_min,
+       it0_dfns=nt_min,
+       # Choose this species index when not otherwise specified
+       is0 = 1,
        # Slice r to this value when making reduced dimensionality plots
        ir0=max(nr_min÷3, 1),
        # Slice z to this value when making reduced dimensionality plots
@@ -390,30 +417,65 @@ function setup_makie_post_processing_input!(new_input_dict::AbstractDict{String,
        # Time index to start from for distribution functions
        itime_min_dfns=1,
        # Time index to end at for distribution functions
-       itime_max_dfns=nt_unskipped_dfns_min,
+       itime_max_dfns=nt_unskipped_min,
        # Load every `time_skip` time points for distribution function variables, to save
        # memory
        itime_skip_dfns=1,
+       plot_vs_r=true,
+       plot_vs_z=true,
        plot_vs_r_t=true,
        plot_vs_z_t=true,
-       animate_vs_z=true,
-       animate_vs_r=true,
-       animate_vs_z_r=true,
+       animate_vs_z=false,
+       animate_vs_r=false,
+       animate_vs_z_r=false,
       )
 
-    for variable_name ∈ all_variables
+    for variable_name ∈ all_moment_variables
+        section_defaults = OrderedDict(k=>v for (k,v) ∈ this_input_dict
+                                       if !isa(v, AbstractDict) &&
+                                          !(k ∈ time_index_options))
+        if dfns
+            section_defaults["it0"] = this_input_dict["it0_dfns"]
+        else
+            section_defaults["it0"] = this_input_dict["it0"]
+        end
         set_defaults_and_check_section!(
-            input_dict, variable_name;
-            OrderedDict(Symbol(k)=>v for (k,v) ∈ input_dict
-                        if !isa(v, AbstractDict) && !(k ∈ only_global_options))...)
+            this_input_dict, variable_name;
+            OrderedDict(Symbol(k)=>v for (k,v) ∈ section_defaults)...)
+    end
+
+    if dfns
+        for variable_name ∈ all_dfn_variables
+            section_defaults = OrderedDict(k=>v for (k,v) ∈ this_input_dict
+                                           if !isa(v, AbstractDict) &&
+                                              !(k ∈ time_index_options))
+            section_defaults["it0"] = this_input_dict["it0_dfns"]
+            set_defaults_and_check_section!(
+                this_input_dict, variable_name;
+                check_moments=false,
+                plot_log_vs_r=true,
+                plot_log_vs_z=true,
+                plot_log_vs_r_t=true,
+                plot_log_vs_z_t=true,
+                animate_log_vs_z=false,
+                animate_vs_vpa=false,
+                animate_log_vs_vpa=false,
+                animate_vs_vpa_z=false,
+                animate_log_vs_vpa_z=false,
+                animate_vs_vz=false,
+                animate_log_vs_vz=false,
+                animate_vs_vz_z=false,
+                animate_log_vs_vz_z=false,
+                OrderedDict(Symbol(k)=>v for (k,v) ∈ section_defaults)...)
+        end
     end
 
     set_defaults_and_check_section!(
-        input_dict, "instability2D";
+        this_input_dict, "instability2D";
         plot_1d=false,
         plot_2d=false,
         animate_perturbations=false,
-        colormap=input_dict["colormap"],
+        colormap=this_input_dict["colormap"],
        )
 
     return nothing
@@ -873,6 +935,96 @@ function plots_for_variable(run_info, variable_name; plot_prefix, is_1D=false,
             if !is_1D && input.animate_vs_z_r
                 animate_vs_z_r(run_info, variable_name, is=is, data=variable, input=input,
                                outfile=variable_prefix * "vs_r.gif")
+            end
+        end
+    end
+
+    return nothing
+end
+
+function plots_for_dfn_variable(run_info, variable_name; plot_prefix, is_1D=false,
+                                is_1V=false)
+    println("Making plots for $variable_name")
+    flush(stdout)
+
+    input = Dict_to_NamedTuple(input_dict_dfns[variable_name])
+    # Use the global settings for "itime_*" to be consistent with the `time` in
+    # `run_info`.
+    tinds = input_dict_dfns["itime_min_dfns"]:input_dict_dfns["itime_skip_dfns"]:input_dict_dfns["itime_max_dfns"]
+
+    # test if any plot is needed
+    if any(v for (k,v) in pairs(input) if
+           startswith(String(k), "plot") || startswith(String(k), "animate"))
+        if variable_name ∈ em_variables
+            species_indices = (nothing,)
+        elseif variable_name ∈ neutral_moment_variables ||
+               variable_name ∈ neutral_dfn_variables
+            species_indices = 1:maximum(ri.n_neutral_species for ri ∈ run_info)
+        else
+            species_indices = 1:maximum(ri.n_ion_species for ri ∈ run_info)
+        end
+        for is ∈ species_indices
+            if is !== nothing
+                variable_prefix = plot_prefix * variable_name * "_spec$(is)_"
+                log_variable_prefix = plot_prefix * "log" * variable_name * "_spec$(is)_"
+            else
+                variable_prefix = plot_prefix * variable_name * "_"
+                log_variable_prefix = plot_prefix * "log" * variable_name * "_"
+            end
+            if variable_name == "Er" && is_1D
+                # Skip if there is no r-dimension
+                continue
+            end
+            if !is_1D && input.plot_vs_r_t
+                plot_vs_r_t(run_info, variable_name, is=is, input=input,
+                            outfile=variable_prefix * "vs_r_t.pdf")
+            end
+            if input.plot_vs_z_t
+                plot_vs_z_t(run_info, variable_name, is=is, input=input,
+                            outfile=variable_prefix * "vs_z_t.pdf")
+            end
+            if input.animate_vs_z
+                animate_vs_z(run_info, variable_name, is=is, input=input,
+                             outfile=variable_prefix * "vs_z.gif")
+            end
+            if !is_1D && input.animate_vs_r
+                animate_vs_r(run_info, variable_name, is=is, input=input,
+                             outfile=variable_prefix * "vs_r.gif")
+            end
+            if !is_1D && input.animate_vs_z_r
+                animate_vs_z_r(run_info, variable_name, is=is, input=input,
+                               outfile=variable_prefix * "vs_r.gif")
+            end
+
+            if variable_name ∈ all_dfn_variables
+                if input.check_moments
+                    error("checking moments using analyze_pdf_data() not implemented yet")
+                end
+
+                if input.animate_vs_z
+                    animate_vs_z(run_info, variable_name, is=is, input=input,
+                                 outfile=variable_prefix * "vs_z.gif")
+                end
+            end
+            if variable_name ∈ ion_dfn_variables
+                if input.animate_vs_vpa
+                    animate_vs_vpa(run_info, variable_name, is=is, input=input,
+                                   outfile=variable_prefix * "vs_vpa.gif")
+                end
+                if input.animate_vs_vpa_z
+                    animate_vs_vpa_z(run_info, variable_name, is=is, input=input,
+                                     outfile=variable_prefix * "vs_vpa_z.gif")
+                end
+            end
+            if variable_name ∈ neutral_dfn_variables
+                if input.animate_vs_vz
+                    animate_vs_vz(run_info, variable_name, is=is, input=input,
+                                  outfile=variable_prefix * "vs_vz.gif")
+                end
+                if input.animate_vs_vz_z
+                    animate_vs_vz_z(run_info, variable_name, is=is, input=input,
+                                    outfile=variable_prefix * "vs_vz_z.gif")
+                end
             end
         end
     end
@@ -1448,90 +1600,7 @@ function select_slice(variable::AbstractArray{T,4}, dims::Symbol...; input=nothi
     return slice
 end
 
-function select_slice_dfns(variable::AbstractArray{T,1}, dims::Symbol...; input=nothing, is=nothing) where T
-    if length(dims) > 1
-        error("Tried to get a slice of 1d variable with dimensions $dims")
-    elseif length(dims) < 1
-        error("1d variable must have already been sliced, so don't know what the dimensions are")
-    else
-        # Array is not a standard shape, so assume it is already sliced to the right 2
-        # dimensions
-        return variable
-    end
-end
-
-function select_slice_dfns(variable::AbstractArray{T,2}, dims::Symbol...; input=nothing, is=nothing) where T
-    if length(dims) > 2
-        error("Tried to get a slice of 2d variable with dimensions $dims")
-    elseif length(dims) < 2
-        error("2d variable must have already been sliced, so don't know what the dimensions are")
-    else
-        # Array is not a standard shape, so assume it is already sliced to the right 2
-        # dimensions
-        return variable
-    end
-end
-
-function select_slice_dfns(variable::AbstractArray{T,3}, dims::Symbol...; input=nothing, is=nothing) where T
-    # Array is (z,r,t)
-
-    if length(dims) > 3
-        error("Tried to get a slice of 3d variable with dimensions $dims")
-    end
-
-    if input === nothing
-        it0 = size(variable, 3)
-        ir0 = max(size(variable, 2) ÷ 3, 1)
-        iz0 = max(size(variable, 1) ÷ 3, 1)
-    else
-        it0 = input.it0_dfns
-        ir0 = input.ir0
-        iz0 = input.iz0
-    end
-
-    slice = variable
-    if :t ∉ dims
-        slice = selectdim(slice, 3, it0)
-    end
-    if :r ∉ dims
-        slice = selectdim(slice, r, ir0)
-    end
-    if :z ∉ dims
-        slice = selectdim(slice, z, iz0)
-    end
-
-    return slice
-end
-
-function select_slice_dfns(variable::AbstractArray{T,4}, dims::Symbol...; input=nothing, is=1) where T
-    # Array is (z,r,species,t)
-
-    if input === nothing
-        it0 = size(variable, 4)
-        ir0 = max(size(variable, 1) ÷ 3, 2)
-        iz0 = max(size(variable, 1) ÷ 3, 1)
-    else
-        it0 = input.it0_dfns
-        ir0 = input.ir0
-        iz0 = input.iz0
-    end
-
-    slice = variable
-    if :t ∉ dims
-        slice = selectdim(slice, 4, it0)
-    end
-    slice = selectdim(slice, 3, is)
-    if :r ∉ dims
-        slice = selectdim(slice, 2, ir0)
-    end
-    if :z ∉ dims
-        slice = selectdim(slice, 1, iz0)
-    end
-
-    return slice
-end
-
-function select_slice_dfns(variable::AbstractArray{T,6}, dims::Symbol...; input=nothing, is=1) where T
+function select_slice(variable::AbstractArray{T,6}, dims::Symbol...; input=nothing, is=1) where T
     # Array is (z,r,species,t)
 
     if input === nothing
@@ -1541,7 +1610,7 @@ function select_slice_dfns(variable::AbstractArray{T,6}, dims::Symbol...; input=
         ivpa0 = max(size(variable, 2) ÷ 3, 1)
         ivperp0 = max(size(variable, 1) ÷ 3, 1)
     else
-        it0 = input.it0_dfns
+        it0 = input.it0
         ir0 = input.ir0
         iz0 = input.iz0
         ivpa0 = input.ivpa0
@@ -1569,7 +1638,7 @@ function select_slice_dfns(variable::AbstractArray{T,6}, dims::Symbol...; input=
     return slice
 end
 
-function select_slice_dfns(variable::AbstractArray{T,7}, dims::Symbol...; input=nothing, is=1) where T
+function select_slice(variable::AbstractArray{T,7}, dims::Symbol...; input=nothing, is=1) where T
     # Array is (z,r,species,t)
 
     if input === nothing
@@ -1580,7 +1649,7 @@ function select_slice_dfns(variable::AbstractArray{T,7}, dims::Symbol...; input=
         ivr0 = max(size(variable, 2) ÷ 3, 1)
         ivz0 = max(size(variable, 1) ÷ 3, 1)
     else
-        it0 = input.it0_dfns
+        it0 = input.it0
         ir0 = input.ir0
         iz0 = input.iz0
         ivzeta0 = input.ivzeta0
