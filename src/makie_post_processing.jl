@@ -909,8 +909,10 @@ function plots_for_variable(run_info, variable_name; plot_prefix, is_1D=false,
         for is ∈ species_indices
             if is !== nothing
                 variable_prefix = plot_prefix * variable_name * "_spec$(is)_"
+                log_variable_prefix = plot_prefix * "log" * variable_name * "_spec$(is)_"
             else
                 variable_prefix = plot_prefix * variable_name * "_"
+                log_variable_prefix = plot_prefix * "log" * variable_name * "_"
             end
             if variable_name == "Er" && is_1D
                 # Skip if there is no r-dimension
@@ -987,17 +989,37 @@ function plots_for_dfn_variable(run_info, variable_name; plot_prefix, is_1D=fals
                 plot_vs_r_t(run_info, variable_name, is=is, input=input,
                             outfile=variable_prefix * "vs_r_t.pdf")
             end
+            if !is_1D && input.plot_log_vs_r_t
+                plot_vs_r_t(run_info, variable_name, is=is, input=input,
+                            outfile=log_variable_prefix * "vs_r_t.pdf",
+                            colorscale=log10, transform=positive_or_nan)
+            end
             if input.plot_vs_z_t
                 plot_vs_z_t(run_info, variable_name, is=is, input=input,
                             outfile=variable_prefix * "vs_z_t.pdf")
+            end
+            if input.plot_log_vs_z_t
+                plot_vs_z_t(run_info, variable_name, is=is, input=input,
+                            outfile=log_variable_prefix * "vs_z_t.pdf",
+                            colorscale=log10, transform=positive_or_nan)
             end
             if !is_1D && input.plot_vs_r
                 plot_vs_r(run_info, variable_name, is=is, input=input,
                           outfile=variable_prefix * "vs_r.pdf")
             end
+            if !is_1D && input.plot_log_vs_r
+                plot_vs_r(run_info, variable_name, is=is, input=input,
+                          outfile=log_variable_prefix * "vs_r.pdf", yscale=log10,
+                          transform=positive_or_nan)
+            end
             if input.plot_vs_z
                 plot_vs_z(run_info, variable_name, is=is, input=input,
                           outfile=variable_prefix * "vs_z.pdf")
+            end
+            if input.plot_log_vs_z
+                plot_vs_z(run_info, variable_name, is=is, input=input,
+                          outfile=log_variable_prefix * "vs_z.pdf", yscale=log10,
+                          transform=positive_or_nan)
             end
             if input.animate_vs_z
                 animate_vs_z(run_info, variable_name, is=is, input=input,
@@ -1021,15 +1043,39 @@ function plots_for_dfn_variable(run_info, variable_name; plot_prefix, is_1D=fals
                     animate_vs_z(run_info, variable_name, is=is, input=input,
                                  outfile=variable_prefix * "vs_z.gif")
                 end
+                if input.animate_log_vs_z
+                    # Note that we use `yscale=log10` and `transform=positive_or_nan`
+                    # rather than defining a custom scaling function (which would return
+                    # NaN for negative values) because it messes up the automatic minimum
+                    # value for the colorscale: The transform removes any zero or negative
+                    # values from the data, so the minimum value for the colorscale is set
+                    # by the smallest positive value; with only the custom colorscale, the
+                    # minimum would be negative and the corresponding color would be the
+                    # color for NaN, which does not go on the Colorbar and so causes an
+                    # error.
+                    animate_vs_z(run_info, variable_name, is=is, input=input,
+                                 outfile=log_variable_prefix * "vs_z.gif",
+                                 yscale=log10, transform=positive_or_nan)
+                end
             end
             if variable_name ∈ ion_dfn_variables
                 if input.animate_vs_vpa
                     animate_vs_vpa(run_info, variable_name, is=is, input=input,
                                    outfile=variable_prefix * "vs_vpa.gif")
                 end
+                if input.animate_log_vs_vpa
+                    animate_vs_vpa(run_info, variable_name, is=is, input=input,
+                                   outfile=log_variable_prefix * "vs_vpa.gif",
+                                   yscale=log10, transform=positive_or_nan)
+                end
                 if input.animate_vs_vpa_z
                     animate_vs_vpa_z(run_info, variable_name, is=is, input=input,
                                      outfile=variable_prefix * "vs_vpa_z.gif")
+                end
+                if input.animate_log_vs_vpa_z
+                    animate_vs_vpa_z(run_info, variable_name, is=is, input=input,
+                                     outfile=log_variable_prefix * "vs_vpa_z.gif",
+                                     colorscale=log10, transform=positive_or_nan)
                 end
             end
             if variable_name ∈ neutral_dfn_variables
@@ -1037,9 +1083,19 @@ function plots_for_dfn_variable(run_info, variable_name; plot_prefix, is_1D=fals
                     animate_vs_vz(run_info, variable_name, is=is, input=input,
                                   outfile=variable_prefix * "vs_vz.gif")
                 end
+                if input.animate_log_vs_vz
+                    animate_vs_vz(run_info, variable_name, is=is, input=input,
+                                  outfile=log_variable_prefix * "vs_vz.gif",
+                                  yscale=log10, transform=positive_or_nan)
+                end
                 if input.animate_vs_vz_z
                     animate_vs_vz_z(run_info, variable_name, is=is, input=input,
                                     outfile=variable_prefix * "vs_vz_z.gif")
+                end
+                if input.animate_log_vs_vz_z
+                    animate_vs_vz_z(run_info, variable_name, is=is, input=input,
+                                    outfile=log_variable_prefix * "vs_vz_z.gif",
+                                    colorscale=log10, transform=positive_or_nan)
                 end
             end
         end
@@ -1055,17 +1111,19 @@ for dim ∈ (:t, all_dimensions...)
     dim_str = String(dim)
     eval(quote
              function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
-                                     input=nothing, outfile=nothing, kwargs...)
+                                     input=nothing, outfile=nothing, yscale=nothing,
+                                     transform=identity, kwargs...)
 
                  try
                      if data === nothing
                          data = Tuple(nothing for _ in run_info)
                      end
                      fig, ax = get_1d_ax(xlabel="$($dim_str)",
-                                         ylabel=get_variable_symbol(var_name))
+                                         ylabel=get_variable_symbol(var_name),
+                                         yscale=yscale)
                      for (d, ri) ∈ zip(data, run_info)
                          $function_name(ri, var_name, is=is, data=d, input=input, ax=ax,
-                                        label=ri.run_name, kwargs...)
+                                        transform=transform, label=ri.run_name, kwargs...)
                      end
 
                      if outfile !== nothing
@@ -1080,13 +1138,16 @@ for dim ∈ (:t, all_dimensions...)
 
              function $function_name(run_info, var_name; is=1, data=nothing,
                                      input=nothing, ax=nothing, label=nothing,
-                                     outfile=nothing, kwargs...)
+                                     outfile=nothing, transform=identity, kwargs...)
                  if data === nothing
                      dim_slices = get_dimension_slice_indices($(QuoteNode(dim)); input=input, is=is)
                      data = postproc_load_variable(run_info, var_name; dim_slices...)
                  else
                      data = select_slice(data, $(QuoteNode(dim)); input=input, is=is)
                  end
+
+                 # Use transform to allow user to do something like data = abs.(data)
+                 data = transform.(data)
 
                  fig = plot_1d(run_info.$dim.grid, data, xlabel="$($dim_str)",
                                ylabel=get_variable_symbol(var_name), label=label, ax=ax,
@@ -1123,7 +1184,8 @@ for (dim1, dim2) ∈ dimension_combinations_2d
     dim2_grid = :( run_info.$dim2.grid )
     eval(quote
              function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
-                                     input=nothing, outfile=nothing, kwargs...)
+                                     input=nothing, outfile=nothing, transform=identity,
+                                     kwargs...)
 
                  try
                      if data === nothing
@@ -1133,7 +1195,8 @@ for (dim1, dim2) ∈ dimension_combinations_2d
                                                           title=get_variable_symbol(var_name))
                      for (d, ri, a, cp) ∈ zip(data, run_info, ax, colorbar_places)
                          $function_name(ri, var_name; is=is, data=d, input=input, ax=a,
-                                        colorbar_place=cp, title=ri.run_name, kwargs...)
+                                        transform=transform, colorbar_place=cp,
+                                        title=ri.run_name, kwargs...)
                      end
 
                      if outfile !== nothing
@@ -1168,11 +1231,13 @@ for (dim1, dim2) ∈ dimension_combinations_2d
                      title = get_variable_symbol(var_name)
                  end
 
+                 # Use transform to allow user to do something like data = abs.(data)
+                 data = transform.(data)
 
                  fig = plot_2d($dim2_grid, $dim1_grid, data; xlabel="$($dim2_str)",
                                ylabel="$($dim1_str)", title=title, ax=ax,
-                               colorbar_place=colorbar_place,
-                               colormap=parse_colormap(colormap), kwargs...)
+                               colorbar_place=colorbar_place, colormap=colormap,
+                               kwargs...)
 
                  if outfile !== nothing
                      if fig === nothing
@@ -1194,7 +1259,8 @@ for dim ∈ all_dimensions
     dim_str = String(dim)
     eval(quote
              function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
-                                     input=nothing, outfile=nothing, kwargs...)
+                                     input=nothing, outfile=nothing, yscale=nothing,
+                                     transform=identity, kwargs...)
 
                  try
                      if data === nothing
@@ -1204,12 +1270,15 @@ for dim ∈ all_dimensions
                          error("`outfile` is required for $($function_name_str)")
                      end
 
-                     fig, ax = get_1d_ax(xlabel="$($dim_str)", ylabel=get_variable_symbol(var_name))
+                     fig, ax = get_1d_ax(xlabel="$($dim_str)",
+                                         ylabel=get_variable_symbol(var_name),
+                                         yscale=yscale)
                      frame_index = Observable(1)
 
                      for (d, ri) ∈ zip(data, run_info)
                          $function_name(ri, var_name; is=is, data=d, input=input,
-                                        frame_index=frame_index, ax=ax, kwargs...)
+                                        transform=transform, frame_index=frame_index,
+                                        ax=ax, kwargs...)
                      end
                      put_legend_above(fig, ax)
 
@@ -1225,7 +1294,8 @@ for dim ∈ all_dimensions
 
              function $function_name(run_info, var_name; is=1, data=nothing,
                                      input=nothing, frame_index=nothing, ax=nothing,
-                                     outfile=nothing, kwargs...)
+                                     transform=identity, outfile=nothing, yscale=nothing,
+                                     kwargs...)
                  if data === nothing
                      dim_slices = get_dimension_slice_indices(:t, $(QuoteNode(dim)); input=input, is=is)
                      data = postproc_load_variable(run_info, var_name; dim_slices...)
@@ -1238,10 +1308,15 @@ for dim ∈ all_dimensions
                      ind = frame_index
                  end
                  if ax === nothing
-                     fig, ax = get_1d_ax(xlabel="$($dim_str)", ylabel=get_variable_symbol(var_name))
+                     fig, ax = get_1d_ax(xlabel="$($dim_str)",
+                                         ylabel=get_variable_symbol(var_name),
+                                         yscale=yscale)
                  else
                      fig = nothing
                  end
+
+                 # Use transform to allow user to do something like data = abs.(data)
+                 data = transform.(data)
 
                  nt = size(data, 2)
 
@@ -1277,7 +1352,8 @@ for (dim1, dim2) ∈ dimension_combinations_2d_no_t
     dim2_grid = :( run_info.$dim2.grid )
     eval(quote
              function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
-                                     input=nothing, outfile=nothing, kwargs...)
+                                     input=nothing, outfile=nothing, transform=identity,
+                                     kwargs...)
 
                  try
                      if data === nothing
@@ -1293,8 +1369,9 @@ for (dim1, dim2) ∈ dimension_combinations_2d_no_t
 
                      for (d, ri, a, cp) ∈ zip(data, run_info, ax, colorbar_places)
                          $function_name(ri, var_name; is=is, data=d, input=input,
-                                        frame_index=frame_index, ax=a, colorbar_place=cp,
-                                        title=ri.run_name, kwargs...)
+                                        transform=transform, frame_index=frame_index,
+                                        ax=a, colorbar_place=cp, title=ri.run_name,
+                                        kwargs...)
                      end
 
                      nt = minimum(ri.nt for ri ∈ run_info)
@@ -1309,8 +1386,8 @@ for (dim1, dim2) ∈ dimension_combinations_2d_no_t
 
              function $function_name(run_info, var_name; is=1, data=nothing,
                                      input=nothing, frame_index=nothing, ax=nothing,
-                                     colorbar_place=colorbar_place, title=nothing,
-                                     outfile=nothing, kwargs...)
+                                     transform=identity, colorbar_place=colorbar_place,
+                                     title=nothing, outfile=nothing, kwargs...)
                  if data === nothing
                      dim_slices = get_dimension_slice_indices(:t, $(QuoteNode(dim1)),
                                                               $(QuoteNode(dim2));
@@ -1329,6 +1406,8 @@ for (dim1, dim2) ∈ dimension_combinations_2d_no_t
                      title = get_variable_symbol(var_name)
                  end
 
+                 # Use transform to allow user to do something like data = abs.(data)
+                 data = transform.(data)
 
                  fig = animate_2d($dim2_grid, $dim1_grid, data; xlabel="$($dim2_str)",
                                   ylabel="$($dim1_str)", title=title,
@@ -1353,7 +1432,10 @@ for (dim1, dim2) ∈ dimension_combinations_2d_no_t
          end)
 end
 
-function get_1d_ax(n=nothing; title=nothing, kwargs...)
+function get_1d_ax(n=nothing; title=nothing, yscale=nothing, kwargs...)
+    if yscale !== nothing
+        kwargs = tuple(kwargs..., :yscale=>yscale)
+    end
     if n == nothing
         fig = Figure(title=title)
         ax = Axis(fig[1,1]; kwargs...)
@@ -1370,6 +1452,11 @@ function get_1d_ax(n=nothing; title=nothing, kwargs...)
         end
 
         ax = [Axis(plot_layout[1,i]; kwargs...) for i in 1:n]
+        if yscale !== nothing
+            for a ∈ ax
+                a.yscale = yscale
+            end
+        end
     end
 
     return fig, ax
@@ -1399,7 +1486,7 @@ function get_2d_ax(n=nothing; title=nothing, kwargs...)
 end
 
 function plot_1d(xcoord, data; ax=nothing, xlabel=nothing,
-                 ylabel=nothing, title=nothing, kwargs...)
+                 ylabel=nothing, title=nothing, yscale=nothing, kwargs...)
     if ax === nothing
         fig, ax = get_1d_ax()
     end
@@ -1412,6 +1499,9 @@ function plot_1d(xcoord, data; ax=nothing, xlabel=nothing,
     end
     if title !== nothing
         ax.title = title
+    end
+    if yscale !== nothing
+        ax.yscale = yscale
     end
 
     l = lines!(ax, xcoord, data; kwargs...)
@@ -1459,8 +1549,8 @@ function plot_2d(xcoord, ycoord, data; ax=nothing, colorbar_place=nothing, xlabe
 end
 
 function animate_1d(xcoord, data; frame_index=nothing, ax=nothing, fig=nothing,
-                    xlabel=nothing, ylabel=nothing, title=nothing, outfile=nothing,
-                    kwargs...)
+                    xlabel=nothing, ylabel=nothing, title=nothing, yscale=nothing,
+                    outfile=nothing, kwargs...)
 
     if frame_index === nothing
         ind = Observable(1)
@@ -1469,7 +1559,7 @@ function animate_1d(xcoord, data; frame_index=nothing, ax=nothing, fig=nothing,
     end
 
     if ax === nothing
-        fig, ax = get_1d_ax(title=title, xlabel=xlabel, ylabel=ylabel)
+        fig, ax = get_1d_ax(title=title, xlabel=xlabel, ylabel=ylabel, yscale=yscale)
     end
 
     line_data = @lift(@view data[:,$ind])
@@ -2021,6 +2111,13 @@ function clear_Dict!(d::AbstractDict)
     end
 
     return d
+end
+
+"""
+If the argument is zero or negative, replace it with NaN
+"""
+function positive_or_nan(x)
+    return x > 0 ? x : NaN
 end
 
 end
