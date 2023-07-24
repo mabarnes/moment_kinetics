@@ -984,8 +984,10 @@ function plots_for_variable(run_info, variable_name; plot_prefix, is_1D=false,
         for is ∈ species_indices
             if is !== nothing
                 variable_prefix = plot_prefix * variable_name * "_spec$(is)_"
+                log_variable_prefix = plot_prefix * "log" * variable_name * "_spec$(is)_"
             else
                 variable_prefix = plot_prefix * variable_name * "_"
+                log_variable_prefix = plot_prefix * "log" * variable_name * "_"
             end
             if variable_name == "Er" && is_1D
                 # Skip if there is no r-dimension
@@ -1062,17 +1064,37 @@ function plots_for_dfn_variable(run_info, variable_name; plot_prefix, is_1D=fals
                 plot_vs_r_t(run_info, variable_name, is=is, input=input,
                             outfile=variable_prefix * "vs_r_t.pdf")
             end
+            if !is_1D && input.plot_log_vs_r_t
+                plot_vs_r_t(run_info, variable_name, is=is, input=input,
+                            outfile=log_variable_prefix * "vs_r_t.pdf",
+                            colorscale=log10, transform=positive_or_nan)
+            end
             if input.plot_vs_z_t
                 plot_vs_z_t(run_info, variable_name, is=is, input=input,
                             outfile=variable_prefix * "vs_z_t.pdf")
+            end
+            if input.plot_log_vs_z_t
+                plot_vs_z_t(run_info, variable_name, is=is, input=input,
+                            outfile=log_variable_prefix * "vs_z_t.pdf",
+                            colorscale=log10, transform=positive_or_nan)
             end
             if !is_1D && input.plot_vs_r
                 plot_vs_r(run_info, variable_name, is=is, input=input,
                           outfile=variable_prefix * "vs_r.pdf")
             end
+            if !is_1D && input.plot_log_vs_r
+                plot_vs_r(run_info, variable_name, is=is, input=input,
+                          outfile=log_variable_prefix * "vs_r.pdf", yscale=log10,
+                          transform=positive_or_nan)
+            end
             if input.plot_vs_z
                 plot_vs_z(run_info, variable_name, is=is, input=input,
                           outfile=variable_prefix * "vs_z.pdf")
+            end
+            if input.plot_log_vs_z
+                plot_vs_z(run_info, variable_name, is=is, input=input,
+                          outfile=log_variable_prefix * "vs_z.pdf", yscale=log10,
+                          transform=positive_or_nan)
             end
             if input.animate_vs_z
                 animate_vs_z(run_info, variable_name, is=is, input=input,
@@ -1096,15 +1118,39 @@ function plots_for_dfn_variable(run_info, variable_name; plot_prefix, is_1D=fals
                     animate_vs_z(run_info, variable_name, is=is, input=input,
                                  outfile=variable_prefix * "vs_z.gif")
                 end
+                if input.animate_log_vs_z
+                    # Note that we use `yscale=log10` and `transform=positive_or_nan`
+                    # rather than defining a custom scaling function (which would return
+                    # NaN for negative values) because it messes up the automatic minimum
+                    # value for the colorscale: The transform removes any zero or negative
+                    # values from the data, so the minimum value for the colorscale is set
+                    # by the smallest positive value; with only the custom colorscale, the
+                    # minimum would be negative and the corresponding color would be the
+                    # color for NaN, which does not go on the Colorbar and so causes an
+                    # error.
+                    animate_vs_z(run_info, variable_name, is=is, input=input,
+                                 outfile=log_variable_prefix * "vs_z.gif",
+                                 yscale=log10, transform=positive_or_nan)
+                end
             end
             if variable_name ∈ ion_dfn_variables
                 if input.animate_vs_vpa
                     animate_vs_vpa(run_info, variable_name, is=is, input=input,
                                    outfile=variable_prefix * "vs_vpa.gif")
                 end
+                if input.animate_log_vs_vpa
+                    animate_vs_vpa(run_info, variable_name, is=is, input=input,
+                                   outfile=log_variable_prefix * "vs_vpa.gif",
+                                   yscale=log10, transform=positive_or_nan)
+                end
                 if input.animate_vs_vpa_z
                     animate_vs_vpa_z(run_info, variable_name, is=is, input=input,
                                      outfile=variable_prefix * "vs_vpa_z.gif")
+                end
+                if input.animate_log_vs_vpa_z
+                    animate_vs_vpa_z(run_info, variable_name, is=is, input=input,
+                                     outfile=log_variable_prefix * "vs_vpa_z.gif",
+                                     colorscale=log10, transform=positive_or_nan)
                 end
             end
             if variable_name ∈ neutral_dfn_variables
@@ -1112,9 +1158,19 @@ function plots_for_dfn_variable(run_info, variable_name; plot_prefix, is_1D=fals
                     animate_vs_vz(run_info, variable_name, is=is, input=input,
                                   outfile=variable_prefix * "vs_vz.gif")
                 end
+                if input.animate_log_vs_vz
+                    animate_vs_vz(run_info, variable_name, is=is, input=input,
+                                  outfile=log_variable_prefix * "vs_vz.gif",
+                                  yscale=log10, transform=positive_or_nan)
+                end
                 if input.animate_vs_vz_z
                     animate_vs_vz_z(run_info, variable_name, is=is, input=input,
                                     outfile=variable_prefix * "vs_vz_z.gif")
+                end
+                if input.animate_log_vs_vz_z
+                    animate_vs_vz_z(run_info, variable_name, is=is, input=input,
+                                    outfile=log_variable_prefix * "vs_vz_z.gif",
+                                    colorscale=log10, transform=positive_or_nan)
                 end
             end
         end
@@ -1334,7 +1390,7 @@ for dim ∈ setdiff(all_dimensions, (:s, :sn))
     eval(quote
              function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
                                      input=nothing, outfile=nothing, yscale=nothing,
-                                     ylims=nothing, transform=identity, kwargs...)
+                                     transform=identity, ylims=nothing, kwargs...)
 
                  try
                      if data === nothing
@@ -1353,7 +1409,7 @@ for dim ∈ setdiff(all_dimensions, (:s, :sn))
 
                      for (d, ri) ∈ zip(data, run_info)
                          $function_name(ri, var_name; is=is, data=d, input=input,
-                                        ylims=ylims, transform=transform,
+                                        transform=transform, ylims=ylims,
                                         frame_index=frame_index, ax=ax, kwargs...)
                      end
                      if n_runs > 1
