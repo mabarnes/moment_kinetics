@@ -1149,12 +1149,15 @@ for (dim1, dim2) ∈ dimension_combinations_2d
              function $function_name(run_info, var_name; is=1, data=nothing,
                                      input=nothing, ax=nothing,
                                      colorbar_place=colorbar_place, title=nothing,
-                                     outfile=nothing, kwargs...)
+                                     outfile=nothing, transform=identity, kwargs...)
                  if data === nothing
                      dim_slices = get_dimension_slice_indices($(QuoteNode(dim1)),
                                                               $(QuoteNode(dim2));
                                                               input=input, is=is)
                      data = postproc_load_variable(run_info, var_name; dim_slices...)
+                 else
+                     data = select_slice(data, $(QuoteNode(dim2)), $(QuoteNode(dim1));
+                                         input=input, is=is)
                  end
                  if input === nothing
                      colormap = "reverse_deep"
@@ -1165,10 +1168,8 @@ for (dim1, dim2) ∈ dimension_combinations_2d
                      title = get_variable_symbol(var_name)
                  end
 
-                 data = select_slice(data, $(QuoteNode(dim2)), $(QuoteNode(dim1));
-                                     input=input, is=is)
 
-                 fig = plot_2d($dim2_grid, $dim1_grid, data, xlabel="$($dim2_str)",
+                 fig = plot_2d($dim2_grid, $dim1_grid, data; xlabel="$($dim2_str)",
                                ylabel="$($dim1_str)", title=title, ax=ax,
                                colorbar_place=colorbar_place,
                                colormap=parse_colormap(colormap), kwargs...)
@@ -1228,6 +1229,8 @@ for dim ∈ all_dimensions
                  if data === nothing
                      dim_slices = get_dimension_slice_indices(:t, $(QuoteNode(dim)); input=input, is=is)
                      data = postproc_load_variable(run_info, var_name; dim_slices...)
+                 else
+                     data = select_slice(data, $(QuoteNode(dim)), :t; input=input, is=is)
                  end
                  if frame_index === nothing
                      ind = Observable(1)
@@ -1240,7 +1243,6 @@ for dim ∈ all_dimensions
                      fig = nothing
                  end
 
-                 data = select_slice(data, $(QuoteNode(dim)), :t; input=input, is=is)
                  nt = size(data, 2)
 
                  animate_1d(run_info.$dim.grid, data; ax=ax, frame_index=ind,
