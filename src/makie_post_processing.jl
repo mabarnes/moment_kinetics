@@ -1289,10 +1289,10 @@ for (dim1, dim2) ∈ dimension_combinations_2d_no_t
 
                      fig, ax, colorbar_places = get_2d_ax(length(run_info),
                                                           title=get_variable_symbol(var_name))
-                     frame_index = Obsevable[1]
+                     frame_index = Observable(1)
 
                      for (d, ri, a, cp) ∈ zip(data, run_info, ax, colorbar_places)
-                         $function_name(ri, var_name, is=is, data=d, input=input,
+                         $function_name(ri, var_name; is=is, data=d, input=input,
                                         frame_index=frame_index, ax=a, colorbar_place=cp,
                                         title=ri.run_name, kwargs...)
                      end
@@ -1316,6 +1316,9 @@ for (dim1, dim2) ∈ dimension_combinations_2d_no_t
                                                               $(QuoteNode(dim2));
                                                               input=input, is=is)
                      data = postproc_load_variable(run_info, var_name; dim_slices...)
+                 else
+                     data = select_slice(data, $(QuoteNode(dim2)), $(QuoteNode(dim1)), :t;
+                                         input=input, is=is)
                  end
                  if input === nothing
                      colormap = "reverse_deep"
@@ -1326,10 +1329,8 @@ for (dim1, dim2) ∈ dimension_combinations_2d_no_t
                      title = get_variable_symbol(var_name)
                  end
 
-                 data = select_slice(data, $(QuoteNode(dim2)), $(QuoteNode(dim1)), :t;
-                                     input=input, is=is)
 
-                 fig = animate_2d($dim2_grid, $dim1_grid, data, xlabel="$($dim2_str)",
+                 fig = animate_2d($dim2_grid, $dim1_grid, data; xlabel="$($dim2_str)",
                                   ylabel="$($dim1_str)", title=title,
                                   frame_index=frame_index, ax=ax,
                                   colorbar_place=colorbar_place,
