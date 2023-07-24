@@ -1585,6 +1585,7 @@ function select_slice(variable::AbstractArray{T,3}, dims::Symbol...; input=nothi
         ir0 = max(size(variable, 2) ÷ 3, 1)
         iz0 = max(size(variable, 1) ÷ 3, 1)
     else
+        it0 = input.it0
         ir0 = input.ir0
         iz0 = input.iz0
     end
@@ -1611,6 +1612,7 @@ function select_slice(variable::AbstractArray{T,4}, dims::Symbol...; input=nothi
         ir0 = max(size(variable, 2) ÷ 3, 1)
         iz0 = max(size(variable, 1) ÷ 3, 1)
     else
+        it0 = input.it0
         ir0 = input.ir0
         iz0 = input.iz0
     end
