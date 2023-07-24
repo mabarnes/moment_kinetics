@@ -924,6 +924,14 @@ function plots_for_variable(run_info, variable_name; plot_prefix, is_1D=false,
                 plot_vs_z_t(run_info, variable_name, is=is, data=variable, input=input,
                             outfile=variable_prefix * "vs_z_t.pdf")
             end
+            if !is_1D && input.plot_vs_r
+                plot_vs_r(run_info, variable_name, is=is, data=variable, input=input,
+                          outfile=variable_prefix * "vs_r.pdf")
+            end
+            if input.plot_vs_z
+                plot_vs_z(run_info, variable_name, is=is, data=variable, input=input,
+                          outfile=variable_prefix * "vs_z.pdf")
+            end
             if input.animate_vs_z
                 animate_vs_z(run_info, variable_name, is=is, data=variable, input=input,
                              outfile=variable_prefix * "vs_z.gif")
@@ -1056,7 +1064,7 @@ for dim ∈ (:t, all_dimensions...)
                      end
                      return fig
                  catch e
-                     println("$function_name_str() failed for $var_name, is=$is. Error was $e")
+                     println("$($function_name_str) failed for $var_name, is=$is. Error was $e")
                      return nothing
                  end
              end
@@ -1071,7 +1079,7 @@ for dim ∈ (:t, all_dimensions...)
                      data = select_slice(data, $(QuoteNode(dim)); input=input, is=is)
                  end
 
-                 fig = plot_1d(run_info.$dim.grid, data, xlabel="$dim_str",
+                 fig = plot_1d(run_info.$dim.grid, data, xlabel="$($dim_str)",
                                ylabel=get_variable_symbol(var_name), label=label, ax=ax,
                                kwargs...)
 
@@ -1115,7 +1123,7 @@ for (dim1, dim2) ∈ dimension_combinations_2d
                      fig, ax, colorbar_places = get_2d_ax(length(run_info),
                                                           title=get_variable_symbol(var_name))
                      for (d, ri, a, cp) ∈ zip(data, run_info, ax, colorbar_places)
-                         $function_name(ri, var_name, is=is, data=d, input=input, ax=a,
+                         $function_name(ri, var_name; is=is, data=d, input=input, ax=a,
                                         colorbar_place=cp, title=ri.run_name, kwargs...)
                      end
 
