@@ -11,7 +11,8 @@ julia --project run_makie_post_processing.jl dir1 [dir2 [dir3 ...]]
 module makie_post_processing
 
 export makie_post_process, generate_example_input_file,
-       setup_makie_post_processing_input!, get_run_info, postproc_load_variable
+       setup_makie_post_processing_input!, get_run_info, postproc_load_variable,
+       positive_or_nan
 
 using ..array_allocation: allocate_float
 using ..coordinates: define_coordinate
@@ -1017,6 +1018,14 @@ function plots_for_variable(run_info, variable_name; plot_prefix, is_1D=false,
                 plot_vs_z_t(run_info, variable_name, is=is, data=variable, input=input,
                             outfile=variable_prefix * "vs_z_t.pdf")
             end
+            if !is_1D && input.plot_vs_r
+                plot_vs_r(run_info, variable_name, is=is, data=variable, input=input,
+                          outfile=variable_prefix * "vs_r.pdf")
+            end
+            if input.plot_vs_z
+                plot_vs_z(run_info, variable_name, is=is, data=variable, input=input,
+                          outfile=variable_prefix * "vs_z.pdf")
+            end
             if input.animate_vs_z
                 animate_vs_z(run_info, variable_name, is=is, data=variable, input=input,
                              outfile=variable_prefix * "vs_z.gif")
@@ -1052,14 +1061,16 @@ for dim ∈ one_dimension_combinations
 
              """
              function $($function_name_str)(run_info::Tuple, var_name; is=1, data=nothing,
-                      $($spaces)input=nothing, outfile=nothing, it=nothing,
-                      $($spaces)ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
-                      $($spaces)ivzeta=nothing, ivr=nothing, ivz=nothing, kwargs...)
+                      $($spaces)input=nothing, outfile=nothing, yscale=nothing,
+                      $($spaces)transform=identity, it=nothing, ir=nothing, iz=nothing,
+                      $($spaces)ivperp=nothing, ivpa=nothing, ivzeta=nothing, ivr=nothing,
+                      $($spaces)ivz=nothing, kwargs...)
              function $($function_name_str)(run_info, var_name; is=1, data=nothing,
                       $($spaces)input=nothing, ax=nothing, label=nothing,
-                      $($spaces)outfile=nothing, it=nothing,
-                      $($spaces)ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
-                      $($spaces)ivzeta=nothing, ivr=nothing, ivz=nothing, kwargs...)
+                      $($spaces)outfile=nothing, yscale=nothing, transform=identity,
+                      $($spaces)it=nothing, ir=nothing, iz=nothing, ivperp=nothing,
+                      $($spaces)ivpa=nothing, ivzeta=nothing, ivr=nothing, ivz=nothing,
+                      $($spaces)kwargs...)
 
              Plot `var_name` from the run(s) represented by `run_info` (as returned by
              [`get_run_info`](@ref)) vs $($dim_str).
@@ -1073,6 +1084,14 @@ for dim ∈ one_dimension_combinations
 
              If `outfile` is given, the plot will be saved to a file with that name. The
              suffix determines the file type.
+
+             `yscale` can be used to set the scaling function for the y-axis. Options are
+             `identity`, `log`, `log2`, `log10`, `sqrt`, `Makie.logit`,
+             `Makie.pseudolog10` and `Makie.Symlog10`. `transform` is a function that is
+             applied element-by-element to the data before it is plotted. For example when
+             using a log scale on data that may contain some negative values it might be
+             useful to pass `transform=abs` (to plot the absolute value) or
+             `transform=positive_or_nan` (to ignore any negative or zero values).
 
              Extra `kwargs` are passed to Makie's `lines!() function`.
 
@@ -1101,7 +1120,8 @@ for dim ∈ one_dimension_combinations
              function $function_name end
 
              function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
-                                     input=nothing, outfile=nothing, kwargs...)
+                                     input=nothing, outfile=nothing, yscale=nothing,
+                                     transform=identity, kwargs...)
 
                  try
                      if data === nothing
@@ -1111,10 +1131,11 @@ for dim ∈ one_dimension_combinations
                      n_runs = length(run_info)
 
                      fig, ax = get_1d_ax(xlabel="$($dim_str)",
-                                         ylabel=get_variable_symbol(var_name))
+                                         ylabel=get_variable_symbol(var_name),
+                                         yscale=yscale)
                      for (d, ri) ∈ zip(data, run_info)
                          $function_name(ri, var_name, is=is, data=d, input=input, ax=ax,
-                                        label=ri.run_name, kwargs...)
+                                        transform=transform, label=ri.run_name, kwargs...)
                      end
 
                      if n_runs > 1
@@ -1133,9 +1154,9 @@ for dim ∈ one_dimension_combinations
 
              function $function_name(run_info, var_name; is=1, data=nothing,
                                      input=nothing, ax=nothing, label=nothing,
-                                     outfile=nothing, it=nothing,
-                                     ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
-                                     ivzeta=nothing, ivr=nothing, ivz=nothing, kwargs...)
+                                     outfile=nothing, it=nothing, ir=nothing, iz=nothing,
+                                     ivperp=nothing, ivpa=nothing, ivzeta=nothing,
+                                     ivr=nothing, ivz=nothing, kwargs...)
                  if input === nothing
                      if run_info.dfns
                          input = input_dict_dfns[var_name]
@@ -1200,15 +1221,17 @@ for (dim1, dim2) ∈ two_dimension_combinations
 
              """
              function $($function_name_str)(run_info::Tuple, var_name; is=1, data=nothing,
-                      $($spaces)input=nothing, outfile=nothing, it=nothing,
-                      $($spaces)ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
-                      $($spaces)ivzeta=nothing, ivr=nothing, ivz=nothing, kwargs...)
+                      $($spaces)input=nothing, outfile=nothing, colorscale=identity,
+                      $($spaces)transform=identity, it=nothing, ir=nothing, iz=nothing,
+                      $($spaces)ivperp=nothing, ivpa=nothing, ivzeta=nothing, ivr=nothing,
+                      $($spaces)ivz=nothing, kwargs...)
              function $($function_name_str)(run_info, var_name; is=1, data=nothing,
                       $($spaces)input=nothing, ax=nothing,
                       $($spaces)colorbar_place=nothing, title=nothing,
-                      $($spaces)outfile=nothing, it=nothing,
-                      $($spaces)ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
-                      $($spaces)ivzeta=nothing, ivr=nothing, ivz=nothing, kwargs...)
+                      $($spaces)outfile=nothing, colorscale=identity, transform=identity,
+                      $($spaces)it=nothing, ir=nothing, iz=nothing, ivperp=nothing,
+                      $($spaces)ivpa=nothing, ivzeta=nothing, ivr=nothing, ivz=nothing,
+                      $($spaces)kwargs...)
 
              Plot `var_name` from the run(s) represented by `run_info` (as returned by
              [`get_run_info`](@ref))vs $($dim1_str) and $($dim2_str).
@@ -1222,6 +1245,14 @@ for (dim1, dim2) ∈ two_dimension_combinations
 
              If `outfile` is given, the plot will be saved to a file with that name. The
              suffix determines the file type.
+
+             `colorscale` can be used to set the scaling function for the colors. Options
+             are `identity`, `log`, `log2`, `log10`, `sqrt`, `Makie.logit`,
+             `Makie.pseudolog10` and `Makie.Symlog10`. `transform` is a function that is
+             applied element-by-element to the data before it is plotted. For example when
+             using a log scale on data that may contain some negative values it might be
+             useful to pass `transform=abs` (to plot the absolute value) or
+             `transform=positive_or_nan` (to ignore any negative or zero values).
 
              Extra `kwargs` are passed to Makie's `heatmap!() function`.
 
@@ -1250,7 +1281,8 @@ for (dim1, dim2) ∈ two_dimension_combinations
              function $function_name end
 
              function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
-                                     input=nothing, outfile=nothing, kwargs...)
+                                     input=nothing, outfile=nothing, transform=identity,
+                                     kwargs...)
 
                  try
                      if data === nothing
@@ -1260,7 +1292,8 @@ for (dim1, dim2) ∈ two_dimension_combinations
                                                           title=get_variable_symbol(var_name))
                      for (d, ri, a, cp) ∈ zip(data, run_info, ax, colorbar_places)
                          $function_name(ri, var_name; is=is, data=d, input=input, ax=a,
-                                        colorbar_place=cp, title=ri.run_name, kwargs...)
+                                        transform=transform, colorbar_place=cp,
+                                        title=ri.run_name, kwargs...)
                      end
 
                      if outfile !== nothing
@@ -1276,9 +1309,9 @@ for (dim1, dim2) ∈ two_dimension_combinations
              function $function_name(run_info, var_name; is=1, data=nothing,
                                      input=nothing, ax=nothing,
                                      colorbar_place=nothing, title=nothing,
-                                     outfile=nothing, transform=identity, it=nothing,
-                                     ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
-                                     ivzeta=nothing, ivr=nothing, ivz=nothing, kwargs...)
+                                     outfile=nothing, it=nothing, ir=nothing, iz=nothing,
+                                     ivperp=nothing, ivpa=nothing, ivzeta=nothing,
+                                     ivr=nothing, ivz=nothing, kwargs...)
                  if input === nothing
                      if run_info.dfns
                          input = input_dict_dfns[var_name]
@@ -1311,7 +1344,6 @@ for (dim1, dim2) ∈ two_dimension_combinations
                  if title === nothing
                      title = get_variable_symbol(var_name)
                  end
-
 
                  x = $dim2_grid
                  if $idim2 !== nothing
@@ -1351,14 +1383,16 @@ for dim ∈ one_dimension_combinations_no_t
 
              """
              function $($function_name_str)(run_info::Tuple, var_name; is=1, data=nothing,
-                      $($spaces)input=nothing, outfile=nothing, ylims=nothing, it=nothing,
-                      $($spaces)ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
-                      $($spaces)ivzeta=nothing, ivr=nothing, ivz=nothing, kwargs...)
+                      $($spaces)input=nothing, outfile=nothing, yscale=nothing,
+                      $($spaces)transform=identity, ylims=nothing, it=nothing, ir=nothing,
+                      $($spaces)iz=nothing, ivperp=nothing, ivpa=nothing, ivzeta=nothing,
+                      $($spaces)ivr=nothing, ivz=nothing, kwargs...)
              function $($function_name_str)(run_info, var_name; is=1, data=nothing,
                       $($spaces)input=nothing, frame_index=nothing, ax=nothing,
-                      $($spaces)fig=nothing, outfile=nothing, ylims=nothing, it=nothing,
-                      $($spaces)ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
-                      $($spaces)ivzeta=nothing, ivr=nothing, ivz=nothing, kwargs...)
+                      $($spaces)fig=nothing, outfile=nothing, yscale=nothing,
+                      $($spaces)transform=identity, ylims=nothing, it=nothing, ir=nothing,
+                      $($spaces)iz=nothing, ivperp=nothing, ivpa=nothing, ivzeta=nothing,
+                      $($spaces)ivr=nothing, ivz=nothing, kwargs...)
 
              Animate `var_name` from the run(s) represented by `run_info` (as returned by
              [`get_run_info`](@ref))vs $($dim_str).
@@ -1373,6 +1407,14 @@ for dim ∈ one_dimension_combinations_no_t
              `ylims` can be passed a Tuple (ymin, ymax) to set the y-axis limits. By
              default the minimum and maximum of the data (over all time points) will be
              used.
+
+             `yscale` can be used to set the scaling function for the y-axis. Options are
+             `identity`, `log`, `log2`, `log10`, `sqrt`, `Makie.logit`,
+             `Makie.pseudolog10` and `Makie.Symlog10`. `transform` is a function that is
+             applied element-by-element to the data before it is plotted. For example when
+             using a log scale on data that may contain some negative values it might be
+             useful to pass `transform=abs` (to plot the absolute value) or
+             `transform=positive_or_nan` (to ignore any negative or zero values).
 
              Extra `kwargs` are passed to Makie's `lines!() function`.
 
@@ -1401,7 +1443,8 @@ for dim ∈ one_dimension_combinations_no_t
              function $function_name end
 
              function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
-                                     input=nothing, outfile=nothing, ylims=nothing, kwargs...)
+                                     input=nothing, outfile=nothing, yscale=nothing,
+                                     ylims=nothing, kwargs...)
 
                  try
                      if data === nothing
@@ -1413,12 +1456,15 @@ for dim ∈ one_dimension_combinations_no_t
 
                      n_runs = length(run_info)
 
-                     fig, ax = get_1d_ax(xlabel="$($dim_str)", ylabel=get_variable_symbol(var_name))
+                     fig, ax = get_1d_ax(xlabel="$($dim_str)",
+                                         ylabel=get_variable_symbol(var_name),
+                                         yscale=yscale)
                      frame_index = Observable(1)
 
                      for (d, ri) ∈ zip(data, run_info)
                          $function_name(ri, var_name; is=is, data=d, input=input,
-                                        frame_index=frame_index, ax=ax, ylims=ylims, kwargs...)
+                                        ylims=ylims, frame_index=frame_index, ax=ax,
+                                        kwargs...)
                      end
                      if n_runs > 1
                          put_legend_above(fig, ax)
@@ -1436,7 +1482,7 @@ for dim ∈ one_dimension_combinations_no_t
 
              function $function_name(run_info, var_name; is=1, data=nothing,
                                      input=nothing, frame_index=nothing, ax=nothing,
-                                     fig=nothing, outfile=nothing,
+                                     fig=nothing, outfile=nothing, yscale=nothing,
                                      ylims=nothing, it=nothing, ir=nothing, iz=nothing,
                                      ivperp=nothing, ivpa=nothing, ivzeta=nothing,
                                      ivr=nothing, ivz=nothing, kwargs...)
@@ -1468,7 +1514,9 @@ for dim ∈ one_dimension_combinations_no_t
                      ind = frame_index
                  end
                  if ax === nothing
-                     fig, ax = get_1d_ax(xlabel="$($dim_str)", ylabel=get_variable_symbol(var_name))
+                     fig, ax = get_1d_ax(xlabel="$($dim_str)",
+                                         ylabel=get_variable_symbol(var_name),
+                                         yscale=yscale)
                  else
                      fig = nothing
                  end
@@ -1514,15 +1562,17 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
 
              """
              function $($function_name_str)(run_info::Tuple, var_name; is=1, data=nothing,
-                      $($spaces)input=nothing, outfile=nothing, it=nothing,
-                      $($spaces)ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
-                      $($spaces)ivzeta=nothing, ivr=nothing, ivz=nothing, kwargs...)
+                      $($spaces)input=nothing, outfile=nothing, colorscale=identity,
+                      $($spaces)transform=identity, it=nothing, ir=nothing, iz=nothing,
+                      $($spaces)ivperp=nothing, ivpa=nothing, ivzeta=nothing, ivr=nothing,
+                      $($spaces)ivz=nothing, kwargs...)
              function $($function_name_str)(run_info, var_name; is=1, data=nothing,
                       $($spaces)input=nothing, frame_index=nothing, ax=nothing,
                       $($spaces)fig=nothing, colorbar_place=colorbar_place,
-                      $($spaces)title=nothing, outfile=nothing, it=nothing,
-                      $($spaces)ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
-                      $($spaces)ivzeta=nothing, ivr=nothing, ivz=nothing, kwargs...)
+                      $($spaces)title=nothing, outfile=nothing, colorscale=identity,
+                      $($spaces)transform=identity, it=nothing, ir=nothing, iz=nothing,
+                      $($spaces)ivperp=nothing, ivpa=nothing, ivzeta=nothing, ivr=nothing,
+                      $($spaces)ivz=nothing, kwargs...)
 
              Animate `var_name` from the run(s) represented by `run_info` (as returned by
              [`get_run_info`](@ref))vs $($dim1_str) and $($dim2_str).
@@ -1534,6 +1584,14 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
              `it`, `is`, `ir`, `iz`, `ivperp`, `ivpa`, `ivzeta`, `ivr`, and `ivz` can be
              used to select different indices (for non-plotted dimensions) or range (for
              the plotted dimension) to use.
+
+             `colorscale` can be used to set the scaling function for the colors. Options
+             are `identity`, `log`, `log2`, `log10`, `sqrt`, `Makie.logit`,
+             `Makie.pseudolog10` and `Makie.Symlog10`. `transform` is a function that is
+             applied element-by-element to the data before it is plotted. For example when
+             using a log scale on data that may contain some negative values it might be
+             useful to pass `transform=abs` (to plot the absolute value) or
+             `transform=positive_or_nan` (to ignore any negative or zero values).
 
              Extra `kwargs` are passed to Makie's `heatmap!() function`.
 
@@ -1567,7 +1625,8 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
              function $function_name end
 
              function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
-                                     input=nothing, outfile=nothing, kwargs...)
+                                     input=nothing, outfile=nothing, transform=identity,
+                                     kwargs...)
 
                  try
                      if data === nothing
@@ -1583,8 +1642,9 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
 
                      for (d, ri, a, cp) ∈ zip(data, run_info, ax, colorbar_places)
                          $function_name(ri, var_name; is=is, data=d, input=input,
-                                        frame_index=frame_index, ax=a, colorbar_place=cp,
-                                        title=ri.run_name, kwargs...)
+                                        transform=transform, frame_index=frame_index,
+                                        ax=a, colorbar_place=cp, title=ri.run_name,
+                                        kwargs...)
                      end
 
                      nt = minimum(ri.nt for ri ∈ run_info)
@@ -1636,7 +1696,6 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
                      title = get_variable_symbol(var_name)
                  end
 
-
                  x = $dim2_grid
                  if $idim2 !== nothing
                      x = x[$idim2]
@@ -1669,11 +1728,14 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
 end
 
 """
-    get_1d_ax(n=nothing; title=nothing, kwargs...)
+    get_1d_ax(n=nothing; title=nothing, yscale=nothing, kwargs...)
 
 Create a new `Figure` `fig` and `Axis` `ax` intended for 1d plots.
 
 `title` gives an overall title to the `Figure`.
+
+`yscale` can be used to set the scaling function for the y-axis. Options are `identity`,
+`log`, `log2`, `log10`, `sqrt`, `Makie.logit`, `Makie.pseudolog10` and `Makie.Symlog10`.
 
 By default creates a single `Axis`, and returns `(fig, ax)`.
 If a number of axes `n` is passed, then `ax` is a `Vector{Axis}` of length `n` (even if
@@ -1682,7 +1744,10 @@ increased in proportion to `n`.
 
 Extra `kwargs` are passed to the `Axis()` constructor.
 """
-function get_1d_ax(n=nothing; title=nothing, kwargs...)
+function get_1d_ax(n=nothing; title=nothing, yscale=nothing, kwargs...)
+    if yscale !== nothing
+        kwargs = tuple(kwargs..., :yscale=>yscale)
+    end
     if n == nothing
         fig = Figure(title=title)
         ax = Axis(fig[1,1]; kwargs...)
@@ -1744,13 +1809,20 @@ function get_2d_ax(n=nothing; title=nothing, kwargs...)
 end
 
 """
-    plot_1d(xcoord, data; ax=nothing, xlabel=nothing,
-            ylabel=nothing, title=nothing, kwargs...)
+    plot_1d(xcoord, data; ax=nothing, xlabel=nothing, ylabel=nothing, title=nothing,
+            yscale=nothing, transform=identity, kwargs...)
 
 Make a 1d plot of `data` vs `xcoord`.
 
 `xlabel`, `ylabel` and `title` can be passed to set axis labels and title for the
 (sub-)plot.
+
+`yscale` can be used to set the scaling function for the y-axis. Options are `identity`,
+`log`, `log2`, `log10`, `sqrt`, `Makie.logit`, `Makie.pseudolog10` and `Makie.Symlog10`.
+`transform` is a function that is applied element-by-element to the data before it is
+plotted. For example when using a log scale on data that may contain some negative values
+it might be useful to pass `transform=abs` (to plot the absolute value) or
+`transform=positive_or_nan` (to ignore any negative or zero values).
 
 If `ax` is passed, the plot will be added to that existing `Axis`, otherwise a new
 `Figure` and `Axis` will be created.
@@ -1760,8 +1832,8 @@ Other `kwargs` are passed to Makie's `lines!()` function.
 If `ax` is not passed, returns the `Figure`, otherwise returns the object returned by
 `lines!()`.
 """
-function plot_1d(xcoord, data; ax=nothing, xlabel=nothing,
-                 ylabel=nothing, title=nothing, kwargs...)
+function plot_1d(xcoord, data; ax=nothing, xlabel=nothing, ylabel=nothing, title=nothing,
+                 yscale=nothing, transform=identity, kwargs...)
     if ax === nothing
         fig, ax = get_1d_ax()
     else
@@ -1777,6 +1849,12 @@ function plot_1d(xcoord, data; ax=nothing, xlabel=nothing,
     if title !== nothing
         ax.title = title
     end
+    if yscale !== nothing
+        ax.yscale = yscale
+    end
+
+    # Use transform to allow user to do something like data = abs.(data)
+    data = transform.(data)
 
     l = lines!(ax, xcoord, data; kwargs...)
 
@@ -1789,12 +1867,20 @@ end
 
 """
     plot_2d(xcoord, ycoord, data; ax=nothing, colorbar_place=nothing, xlabel=nothing,
-            ylabel=nothing, title=nothing, colormap="reverse_deep", kwargs...)
+            ylabel=nothing, title=nothing, colormap="reverse_deep",
+            colorscale=nothing, transform=identity, kwargs...)
 
 Make a 2d plot of `data` vs `xcoord` and `ycoord`.
 
 `xlabel`, `ylabel` and `title` can be passed to set axis labels and title for the
 (sub-)plot.
+
+`colorscale` can be used to set the scaling function for the colors. Options are
+`identity`, `log`, `log2`, `log10`, `sqrt`, `Makie.logit`, `Makie.pseudolog10` and
+`Makie.Symlog10`. `transform` is a function that is applied element-by-element to the data
+before it is plotted. For example when using a log scale on data that may contain some
+negative values it might be useful to pass `transform=abs` (to plot the absolute value) or
+`transform=positive_or_nan` (to ignore any negative or zero values).
 
 If `ax` is passed, the plot will be added to that existing `Axis`, otherwise a new
 `Figure` and `Axis` will be created.
@@ -1811,7 +1897,8 @@ If `ax` is not passed, returns the `Figure`, otherwise returns the object return
 `heatmap!()`.
 """
 function plot_2d(xcoord, ycoord, data; ax=nothing, colorbar_place=nothing, xlabel=nothing,
-                 ylabel=nothing, title=nothing, colormap="reverse_deep", kwargs...)
+                 ylabel=nothing, title=nothing, colormap="reverse_deep",
+                 colorscale=nothing, transform=identity, kwargs...)
     if ax === nothing
         fig, ax, colorbar_place = get_2d_ax()
     else
@@ -1828,6 +1915,12 @@ function plot_2d(xcoord, ycoord, data; ax=nothing, colorbar_place=nothing, xlabe
         ax.title = title
     end
     colormap = parse_colormap(colormap)
+    if colorscale !== nothing
+        kwargs = tuple(kwargs..., :colorscale=>colorscale)
+    end
+
+    # Use transform to allow user to do something like data = abs.(data)
+    data = transform.(data)
 
     # Convert grid point values to 'cell face' values for heatmap
     xcoord = grid_points_to_faces(xcoord)
@@ -1849,8 +1942,8 @@ end
 
 """
     animate_1d(xcoord, data; frame_index=nothing, ax=nothing, fig=nothing,
-               xlabel=nothing, ylabel=nothing, title=nothing, outfile=nothing,
-               ylims=nothing, kwargs...)
+               xlabel=nothing, ylabel=nothing, title=nothing, yscale=nothing,
+               transform=identity, outfile=nothing, ylims=nothing, kwargs...)
 
 Make a 1d animation of `data` vs `xcoord`.
 
@@ -1859,6 +1952,13 @@ Make a 1d animation of `data` vs `xcoord`.
 
 `ylims` can be passed a Tuple (ymin, ymax) to set the y-axis limits. By default the
 minimum and maximum of the data (over all time points) will be used.
+
+`yscale` can be used to set the scaling function for the y-axis. Options are `identity`,
+`log`, `log2`, `log10`, `sqrt`, `Makie.logit`, `Makie.pseudolog10` and `Makie.Symlog10`.
+`transform` is a function that is applied element-by-element to the data before it is
+plotted. For example when using a log scale on data that may contain some negative values
+it might be useful to pass `transform=abs` (to plot the absolute value) or
+`transform=positive_or_nan` (to ignore any negative or zero values).
 
 If `ax` is passed, the animation will be added to that existing `Axis`, otherwise a new
 `Figure` and `Axis` will be created. If `ax` is passed, you should also pass an
@@ -1876,8 +1976,8 @@ If `ax` is not passed, returns the `Figure`, otherwise returns the object return
 `lines!()`.
 """
 function animate_1d(xcoord, data; frame_index=nothing, ax=nothing, fig=nothing,
-                    xlabel=nothing, ylabel=nothing, title=nothing, outfile=nothing,
-                    ylims=nothing, kwargs...)
+                    xlabel=nothing, ylabel=nothing, title=nothing, yscale=nothing,
+                    transform=identity, ylims=nothing, outfile=nothing, kwargs...)
 
     if frame_index === nothing
         ind = Observable(1)
@@ -1886,8 +1986,11 @@ function animate_1d(xcoord, data; frame_index=nothing, ax=nothing, fig=nothing,
     end
 
     if ax === nothing
-        fig, ax = get_1d_ax(title=title, xlabel=xlabel, ylabel=ylabel)
+        fig, ax = get_1d_ax(title=title, xlabel=xlabel, ylabel=ylabel, yscale=yscale)
     end
+
+    # Use transform to allow user to do something like data = abs.(data)
+    data = transform.(data)
 
     if ylims === nothing
         datamin, datamax = NaNMath.extrema(data)
@@ -1923,12 +2026,20 @@ end
 """
     animate_2d(xcoord, ycoord, data; frame_index=nothing, ax=nothing, fig=nothing,
                colorbar_place=nothing, xlabel=nothing, ylabel=nothing, title=nothing,
-               outfile=nothing, colormap="reverse_deep", kwargs...)
+               outfile=nothing, colormap="reverse_deep", colorscale=nothing,
+               transform=identity, kwargs...)
 
 Make a 2d animation of `data` vs `xcoord` and `ycoord`.
 
 `xlabel`, `ylabel` and `title` can be passed to set axis labels and title for the
 (sub-)plot.
+
+`colorscale` can be used to set the scaling function for the colors. Options are
+`identity`, `log`, `log2`, `log10`, `sqrt`, `Makie.logit`, `Makie.pseudolog10` and
+`Makie.Symlog10`. `transform` is a function that is applied element-by-element to the data
+before it is plotted. For example when using a log scale on data that may contain some
+negative values it might be useful to pass `transform=abs` (to plot the absolute value) or
+`transform=positive_or_nan` (to ignore any negative or zero values).
 
 If `ax` is passed, the animation will be added to that existing `Axis`, otherwise a new
 `Figure` and `Axis` will be created. If `ax` is passed, you should also pass an
@@ -1953,7 +2064,8 @@ If `ax` is not passed, returns the `Figure`, otherwise returns the object return
 """
 function animate_2d(xcoord, ycoord, data; frame_index=nothing, ax=nothing, fig=nothing,
                     colorbar_place=nothing, xlabel=nothing, ylabel=nothing, title=nothing,
-                    outfile=nothing, colormap="reverse_deep", kwargs...)
+                    outfile=nothing, colormap="reverse_deep", colorscale=nothing,
+                    transform=identity, kwargs...)
     colormap = parse_colormap(colormap)
 
     if ax === nothing
@@ -1973,6 +2085,12 @@ function animate_2d(xcoord, ycoord, data; frame_index=nothing, ax=nothing, fig=n
     if title !== nothing
         ax.title = title
     end
+    if colorscale !== nothing
+        kwargs = tuple(kwargs..., :colorscale=>colorscale)
+    end
+
+    # Use transform to allow user to do something like data = abs.(data)
+    data = transform.(data)
 
     xcoord = grid_points_to_faces(xcoord)
     ycoord = grid_points_to_faces(ycoord)
@@ -2456,6 +2574,19 @@ function convert_to_OrderedDicts!(d::AbstractDict)
         end
     end
     return OrderedDict(d)
+end
+
+"""
+    positive_or_nan(x; epsilon=0)
+
+If the argument `x` is zero or negative, replace it with NaN, otherwise return `x`.
+
+`epsilon` can be passed if the number should be forced to be above some value (typically
+we would assume epsilon is small and positive, but nothing about this function forces it
+to be).
+"""
+function positive_or_nan(x; epsilon=0)
+    return x > epsilon ? x : NaN
 end
 
 end
