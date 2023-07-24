@@ -219,9 +219,13 @@ function makie_post_process(run_dir::Union{String,Tuple},
     # Plots from distribution function variables
     ############################################
     if any(ri !== nothing for ri in run_info_dfns)
-        for variable_name ∈ all_dfn_variables
-            #plots_for_dfn_variable(run_info_dfns, variable_name; plot_prefix=plot_prefix,
-            #                       is_1D=is_1D, is_1V=is_1V)
+        dfn_variable_list = ion_dfn_variables
+        if has_neutrals
+            dfn_variable_list = tuple(dfn_variable_list..., neutral_dfn_variables...)
+        end
+        for variable_name ∈ dfn_variable_list
+            plots_for_dfn_variable(run_info_dfns, variable_name; plot_prefix=plot_prefix,
+                                   is_1D=is_1D, is_1V=is_1V)
         end
     end
 
@@ -434,8 +438,8 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
     # - Don't allow setting "itime_*" and "itime_*_dfns" per-variable because we
     #   load time and time_dfns in run_info and these must use the same
     #   "itime_*"/"itime_*_dfns" setting as each variable.
-    time_index_options = ("it0", "it0_dfns", "itime_min", "itime_max", "itime_skip",
-                          "itime_min_dfns", "itime_max_dfns", "itime_skip_dfns")
+    time_index_options = ("itime_min", "itime_max", "itime_skip", "itime_min_dfns",
+                          "itime_max_dfns", "itime_skip_dfns")
 
     set_defaults_and_check_top_level!(this_input_dict;
        # Options that only apply at the global level (not per-variable)
@@ -475,18 +479,44 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
        # Load every `time_skip` time points for distribution function variables, to save
        # memory
        itime_skip_dfns=1,
+       plot_vs_r=true,
+       plot_vs_z=true,
        plot_vs_r_t=true,
        plot_vs_z_t=true,
-       animate_vs_z=true,
-       animate_vs_r=true,
-       animate_vs_z_r=true,
+       animate_vs_z=false,
+       animate_vs_r=false,
+       animate_vs_z_r=false,
       )
 
-    for variable_name ∈ all_variables
+    section_defaults = OrderedDict(k=>v for (k,v) ∈ this_input_dict
+                                   if !isa(v, AbstractDict) &&
+                                      !(k ∈ time_index_options))
+    for variable_name ∈ all_moment_variables
         set_defaults_and_check_section!(
             this_input_dict, variable_name;
-            OrderedDict(Symbol(k)=>v for (k,v) ∈ this_input_dict
-                        if !isa(v, AbstractDict) && !(k ∈ only_global_options))...)
+            OrderedDict(Symbol(k)=>v for (k,v) ∈ section_defaults)...)
+    end
+
+    if dfns
+        for variable_name ∈ all_dfn_variables
+            set_defaults_and_check_section!(
+                this_input_dict, variable_name;
+                check_moments=false,
+                plot_log_vs_r=true,
+                plot_log_vs_z=true,
+                plot_log_vs_r_t=true,
+                plot_log_vs_z_t=true,
+                animate_log_vs_z=false,
+                animate_vs_vpa=false,
+                animate_log_vs_vpa=false,
+                animate_vs_vpa_z=false,
+                animate_log_vs_vpa_z=false,
+                animate_vs_vz=false,
+                animate_log_vs_vz=false,
+                animate_vs_vz_z=false,
+                animate_log_vs_vz_z=false,
+                OrderedDict(Symbol(k)=>v for (k,v) ∈ section_defaults)...)
+        end
     end
 
     set_defaults_and_check_section!(
@@ -1032,8 +1062,10 @@ function plots_for_variable(run_info, variable_name; plot_prefix, is_1D=false,
         for is ∈ species_indices
             if is !== nothing
                 variable_prefix = plot_prefix * variable_name * "_spec$(is)_"
+                log_variable_prefix = plot_prefix * "log" * variable_name * "_spec$(is)_"
             else
                 variable_prefix = plot_prefix * variable_name * "_"
+                log_variable_prefix = plot_prefix * "log" * variable_name * "_"
             end
             if variable_name == "Er" && is_1D
                 # Skip if there is no r-dimension
@@ -1066,6 +1098,175 @@ function plots_for_variable(run_info, variable_name; plot_prefix, is_1D=false,
             if !is_1D && input.animate_vs_z_r
                 animate_vs_z_r(run_info, variable_name, is=is, data=variable, input=input,
                                outfile=variable_prefix * "vs_r.gif")
+            end
+        end
+    end
+
+    return nothing
+end
+
+"""
+    plots_for_dfn_variable(run_info, variable_name; plot_prefix, is_1D=false,
+                           is_1V=false)
+
+Make plots for the distribution function variable `variable_name`.
+
+Which plots to make are determined by the settings in the section of the input whose
+heading is the variable name.
+
+`run_info` is the information returned by [`get_run_info()`](@ref). The `dfns=true` keyword
+argument must have been passed to [`get_run_info()`](@ref) so that output files containing
+the distribution functions are being read.
+
+`plot_prefix` is required and gives the path and prefix for plots to be saved to. They
+will be saved with the format `plot_prefix<some_identifying_string>.pdf` for plots and
+`plot_prefix<some_identifying_string>.gif`, etc. for animations.
+
+`is_1D` and/or `is_1V` can be passed to allow the function to skip some plots that do not
+make sense for 1D or 1V simulations (regardless of the settings).
+"""
+function plots_for_dfn_variable(run_info, variable_name; plot_prefix, is_1D=false,
+                                is_1V=false)
+    input = Dict_to_NamedTuple(input_dict_dfns[variable_name])
+
+    # test if any plot is needed
+    if any(v for (k,v) in pairs(input) if
+           startswith(String(k), "plot") || startswith(String(k), "animate"))
+        println("Making plots for $variable_name")
+        flush(stdout)
+
+        if variable_name ∈ em_variables
+            species_indices = (nothing,)
+        elseif variable_name ∈ neutral_moment_variables ||
+               variable_name ∈ neutral_dfn_variables
+            species_indices = 1:maximum(ri.n_neutral_species for ri ∈ run_info)
+        else
+            species_indices = 1:maximum(ri.n_ion_species for ri ∈ run_info)
+        end
+        for is ∈ species_indices
+            if is !== nothing
+                variable_prefix = plot_prefix * variable_name * "_spec$(is)_"
+                log_variable_prefix = plot_prefix * "log" * variable_name * "_spec$(is)_"
+            else
+                variable_prefix = plot_prefix * variable_name * "_"
+                log_variable_prefix = plot_prefix * "log" * variable_name * "_"
+            end
+            if variable_name == "Er" && is_1D
+                # Skip if there is no r-dimension
+                continue
+            end
+            if !is_1D && input.plot_vs_r_t
+                plot_vs_r_t(run_info, variable_name, is=is, input=input,
+                            outfile=variable_prefix * "vs_r_t.pdf")
+            end
+            if !is_1D && input.plot_log_vs_r_t
+                plot_vs_r_t(run_info, variable_name, is=is, input=input,
+                            outfile=log_variable_prefix * "vs_r_t.pdf",
+                            colorscale=log10, transform=positive_or_nan)
+            end
+            if input.plot_vs_z_t
+                plot_vs_z_t(run_info, variable_name, is=is, input=input,
+                            outfile=variable_prefix * "vs_z_t.pdf")
+            end
+            if input.plot_log_vs_z_t
+                plot_vs_z_t(run_info, variable_name, is=is, input=input,
+                            outfile=log_variable_prefix * "vs_z_t.pdf",
+                            colorscale=log10, transform=positive_or_nan)
+            end
+            if !is_1D && input.plot_vs_r
+                plot_vs_r(run_info, variable_name, is=is, input=input,
+                          outfile=variable_prefix * "vs_r.pdf")
+            end
+            if !is_1D && input.plot_log_vs_r
+                plot_vs_r(run_info, variable_name, is=is, input=input,
+                          outfile=log_variable_prefix * "vs_r.pdf", yscale=log10,
+                          transform=positive_or_nan)
+            end
+            if input.plot_vs_z
+                plot_vs_z(run_info, variable_name, is=is, input=input,
+                          outfile=variable_prefix * "vs_z.pdf")
+            end
+            if input.plot_log_vs_z
+                plot_vs_z(run_info, variable_name, is=is, input=input,
+                          outfile=log_variable_prefix * "vs_z.pdf", yscale=log10,
+                          transform=positive_or_nan)
+            end
+            if input.animate_vs_z
+                animate_vs_z(run_info, variable_name, is=is, input=input,
+                             outfile=variable_prefix * "vs_z.gif")
+            end
+            if !is_1D && input.animate_vs_r
+                animate_vs_r(run_info, variable_name, is=is, input=input,
+                             outfile=variable_prefix * "vs_r.gif")
+            end
+            if !is_1D && input.animate_vs_z_r
+                animate_vs_z_r(run_info, variable_name, is=is, input=input,
+                               outfile=variable_prefix * "vs_r.gif")
+            end
+
+            if variable_name ∈ all_dfn_variables
+                if input.check_moments
+                    error("checking moments using analyze_pdf_data() not implemented yet")
+                end
+
+                if input.animate_vs_z
+                    animate_vs_z(run_info, variable_name, is=is, input=input,
+                                 outfile=variable_prefix * "vs_z.gif")
+                end
+                if input.animate_log_vs_z
+                    # Note that we use `yscale=log10` and `transform=positive_or_nan`
+                    # rather than defining a custom scaling function (which would return
+                    # NaN for negative values) because it messes up the automatic minimum
+                    # value for the colorscale: The transform removes any zero or negative
+                    # values from the data, so the minimum value for the colorscale is set
+                    # by the smallest positive value; with only the custom colorscale, the
+                    # minimum would be negative and the corresponding color would be the
+                    # color for NaN, which does not go on the Colorbar and so causes an
+                    # error.
+                    animate_vs_z(run_info, variable_name, is=is, input=input,
+                                 outfile=log_variable_prefix * "vs_z.gif",
+                                 yscale=log10, transform=positive_or_nan)
+                end
+            end
+            if variable_name ∈ ion_dfn_variables
+                if input.animate_vs_vpa
+                    animate_vs_vpa(run_info, variable_name, is=is, input=input,
+                                   outfile=variable_prefix * "vs_vpa.gif")
+                end
+                if input.animate_log_vs_vpa
+                    animate_vs_vpa(run_info, variable_name, is=is, input=input,
+                                   outfile=log_variable_prefix * "vs_vpa.gif",
+                                   yscale=log10, transform=positive_or_nan)
+                end
+                if input.animate_vs_vpa_z
+                    animate_vs_vpa_z(run_info, variable_name, is=is, input=input,
+                                     outfile=variable_prefix * "vs_vpa_z.gif")
+                end
+                if input.animate_log_vs_vpa_z
+                    animate_vs_vpa_z(run_info, variable_name, is=is, input=input,
+                                     outfile=log_variable_prefix * "vs_vpa_z.gif",
+                                     colorscale=log10, transform=positive_or_nan)
+                end
+            end
+            if variable_name ∈ neutral_dfn_variables
+                if input.animate_vs_vz
+                    animate_vs_vz(run_info, variable_name, is=is, input=input,
+                                  outfile=variable_prefix * "vs_vz.gif")
+                end
+                if input.animate_log_vs_vz
+                    animate_vs_vz(run_info, variable_name, is=is, input=input,
+                                  outfile=log_variable_prefix * "vs_vz.gif",
+                                  yscale=log10, transform=positive_or_nan)
+                end
+                if input.animate_vs_vz_z
+                    animate_vs_vz_z(run_info, variable_name, is=is, input=input,
+                                    outfile=variable_prefix * "vs_vz_z.gif")
+                end
+                if input.animate_log_vs_vz_z
+                    animate_vs_vz_z(run_info, variable_name, is=is, input=input,
+                                    outfile=log_variable_prefix * "vs_vz_z.gif",
+                                    colorscale=log10, transform=positive_or_nan)
+                end
             end
         end
     end
