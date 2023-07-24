@@ -1061,9 +1061,10 @@ for dim ∈ (:t, all_dimensions...)
                      if data === nothing
                          data = Tuple(nothing for _ in run_info)
                      end
-                     fig, ax = get_1d_ax(xlabel="$dim_str", ylabel=get_variable_symbol(var_name))
-                     for (d, ri, a) ∈ zip(data, run_info, ax)
-                         $function_name(ri, var_name, is=is, data=d, input=input, ax=a,
+                     fig, ax = get_1d_ax(xlabel="$($dim_str)",
+                                         ylabel=get_variable_symbol(var_name))
+                     for (d, ri) ∈ zip(data, run_info)
+                         $function_name(ri, var_name, is=is, data=d, input=input, ax=ax,
                                         label=ri.run_name, kwargs...)
                      end
 
