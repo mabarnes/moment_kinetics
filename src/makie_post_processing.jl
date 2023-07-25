@@ -22,6 +22,7 @@ using Combinatorics
 using Glob
 using LsqFit
 using MPI
+using NaNMath
 using OrderedCollections
 using TOML
 
@@ -1255,7 +1256,7 @@ for dim ∈ all_dimensions
     eval(quote
              function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
                                      input=nothing, outfile=nothing, yscale=nothing,
-                                     transform=identity, kwargs...)
+                                     transform=identity, ylims=nothing, kwargs...)
 
                  try
                      if data === nothing
@@ -1272,8 +1273,8 @@ for dim ∈ all_dimensions
 
                      for (d, ri) ∈ zip(data, run_info)
                          $function_name(ri, var_name; is=is, data=d, input=input,
-                                        transform=transform, frame_index=frame_index,
-                                        ax=ax, kwargs...)
+                                        transform=transform, ylims=ylims,
+                                        frame_index=frame_index, ax=ax, kwargs...)
                      end
                      put_legend_above(fig, ax)
 
@@ -1290,7 +1291,7 @@ for dim ∈ all_dimensions
              function $function_name(run_info, var_name; is=1, data=nothing,
                                      input=nothing, frame_index=nothing, ax=nothing,
                                      transform=identity, outfile=nothing, yscale=nothing,
-                                     kwargs...)
+                                     ylims=nothing, kwargs...)
                  if data === nothing
                      dim_slices = get_dimension_slice_indices(:t, $(QuoteNode(dim)); input=input, is=is)
                      data = postproc_load_variable(run_info, var_name; dim_slices...)
@@ -1315,7 +1316,7 @@ for dim ∈ all_dimensions
 
                  nt = size(data, 2)
 
-                 animate_1d(run_info.$dim.grid, data; ax=ax, frame_index=ind,
+                 animate_1d(run_info.$dim.grid, data; ax=ax, ylims=ylims, frame_index=ind,
                             label=run_info.run_name, kwargs...)
 
                  if frame_index === nothing
@@ -1545,7 +1546,7 @@ end
 
 function animate_1d(xcoord, data; frame_index=nothing, ax=nothing, fig=nothing,
                     xlabel=nothing, ylabel=nothing, title=nothing, yscale=nothing,
-                    outfile=nothing, kwargs...)
+                    ylims=nothing, outfile=nothing, kwargs...)
 
     if frame_index === nothing
         ind = Observable(1)
@@ -1555,6 +1556,24 @@ function animate_1d(xcoord, data; frame_index=nothing, ax=nothing, fig=nothing,
 
     if ax === nothing
         fig, ax = get_1d_ax(title=title, xlabel=xlabel, ylabel=ylabel, yscale=yscale)
+    end
+
+    if ylims === nothing
+        datamin, datamax = NaNMath.extrema(data)
+        if ax.limits.val[2] === nothing
+            # No limits set yet, need to use minimum and maximum of data over all time,
+            # otherwise the automatic axis scaling would use the minimum and maximum of
+            # the data at the initial time point.
+            ylims!(ax, datamin, datamax)
+        else
+            # Expand currently set limits to ensure they include the minimum and maxiumum
+            # of the data.
+            current_ymin, current_ymax = ax.limits.val[2]
+            ylims!(ax, min(datamin, current_ymin), max(datamax, current_ymax))
+        end
+    else
+        # User passed ylims explicitly, so set those.
+        ylims!(ax, ylims)
     end
 
     line_data = @lift(@view data[:,$ind])
