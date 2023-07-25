@@ -14,10 +14,12 @@ export load_block_data
 export load_rank_data
 export load_species_data
 
-using ..coordinates: define_coordinate
+using ..array_allocation: allocate_float
+using ..coordinates: coordinate, define_coordinate
 using ..file_io: get_group, get_subgroup_keys, get_variable_keys
 using ..input_structs: advection_input, grid_input
 using ..looping
+using ..type_definitions: mk_int
 
 using HDF5
 using MPI
@@ -235,21 +237,32 @@ function load_mk_options(fid)
 end
 
 """
+If a tuple is given for `fid`, concatenate the "time" output from each file in the tuple
 """
 function load_time_data(fid; printout=false)
     if printout
         print("Loading time data...")
     end
 
-    group = get_group(fid, "dynamic_data")
+    if !isa(fid, Tuple)
+        fid = (fid,)
+    end
+
+    group = get_group(first(fid), "dynamic_data")
     time = load_variable(group, "time")
+    for f ∈ fid[2:end]
+        group = get_group(f, "dynamic_data")
+        # Skip first point as this is a duplicate of the last point of the previous
+        # restart.
+        time = vcat(time[2:end], load_variable(group, "time"))
+    end
     ntime = length(time)
 
     if printout
         println("done.")
     end
 
-    return  ntime, time
+    return ntime, time
 end
 
 """
@@ -606,6 +619,340 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
     end
 
     return code_time
+end
+
+"""
+Read a slice of an ion distribution function
+
+run_names is a tuple. If it has more than one entry, this means that there are multiple
+restarts (which are sequential in time), so concatenate the data from each entry together.
+
+The slice to take is specified by the keyword arguments.
+"""
+function load_distributed_charged_pdf_slice(run_names::Tuple, nblocks::Tuple, t_range,
+                                            n_species::mk_int, r::coordinate,
+                                            z::coordinate, vperp::coordinate,
+                                            vpa::coordinate; is=nothing, ir=nothing,
+                                            iz=nothing, ivperp=nothing, ivpa=nothing)
+    # dimension of pdf is [vpa,vperp,z,r,species,t]
+
+    result_dims = mk_int[]
+    if ivpa === nothing
+        push!(result_dims, vpa.n_global)
+    end
+    if ivperp === nothing
+        push!(result_dims, vperp.n_global)
+    end
+    if iz === nothing
+        push!(result_dims, z.n_global)
+    else
+        push!(result_dims, 1)
+    end
+    if ir === nothing
+        push!(result_dims, r.n_global)
+    else
+        push!(result_dims, 1)
+    end
+    if is === nothing
+        push!(result_dims, n_species)
+    else
+        push!(result_dims, 1)
+    end
+    push!(result_dims, length(t_range))
+
+    f_global = allocate_float(result_dims...)
+
+    local_tind_start = 1
+    local_tind_end = -1
+    global_tind_start = 1
+    global_tind_end = -1
+    for (run_name, nb) in zip(run_names, nblocks)
+        for iblock in 0:nb-1
+            fid = open_readonly_output_file(run_name, "dfns", iblock=iblock, printout=false)
+
+            z_irank, r_irank = load_rank_data(fid)
+
+            # min index set to avoid double assignment of repeated points
+            # 1 if irank = 0, 2 otherwise
+            imin_r = min(1,r_irank) + 1
+            imin_z = min(1,z_irank) + 1
+            local_r_range = imin_r:r.n
+            local_z_range = imin_z:z.n
+            global_r_range = iglobal_func(imin_r, r_irank, r.n):iglobal_func(r.n, r_irank, r.n)
+            global_z_range = iglobal_func(imin_z, z_irank, z.n):iglobal_func(z.n, z_irank, z.n)
+
+            if ir !== nothing && !(ir ∈ global_r_range)
+                # No data for the slice on this rank
+                continue
+            end
+            if iz !== nothing && !(iz ∈ global_z_range)
+                # No data for the slice on this rank
+                continue
+            end
+
+            f_local_slice = load_pdf_data(fid)
+
+            if local_tind_start > 1
+                # The run being loaded is a restart (as local_tind_start=1 for the first
+                # run), so skip the first point, as this is a duplicate of the last point
+                # of the previous restart
+                skip_first = 1
+            else
+                skip_first = 0
+            end
+            ntime_local = size(f_local_slice, ndims(f_local_slice)) - skip_first
+            local_tind_end = local_tind_start + ntime_local - 1
+            local_t_range = collect(it - local_tind_start + 1 + skip_first
+                                    for it ∈ t_range
+                                    if local_tind_start <= it <= local_tind_end)
+            global_tind_end = global_tind_start + length(local_t_range) - 1
+
+            f_global_slice = selectdim(f_global, ndims(f_global),
+                                       global_tind_start:global_tind_end)
+
+            # Note: use selectdim() and get the dimension from thisdim because the actual
+            # number of dimensions in f_global_slice, f_local_slice is different depending
+            # on which combination of ivpa, ivperp, iz, ir, and is was passed.
+            thisdim = ndims(f_local_slice) - 5
+            if ivpa !== nothing
+                f_local_slice = selectdim(f_local_slice, thisdim, ivpa)
+            end
+
+            thisdim = ndims(f_local_slice) - 4
+            if ivperp !== nothing
+                f_local_slice = selectdim(f_local_slice, thisdim, ivperp)
+            end
+
+            thisdim = ndims(f_local_slice) - 3
+            if iz === nothing
+                f_global_slice = selectdim(f_global_slice, thisdim, global_z_range)
+                f_local_slice = selectdim(f_local_slice, thisdim, local_z_range)
+            else
+                f_global_slice = selectdim(f_global_slice, thisdim, 1)
+                f_local_slice = selectdim(f_local_slice, thisdim,
+                                          ilocal_func(iz, z_irank, z.n))
+            end
+
+            thisdim = ndims(f_local_slice) - 2
+            if ir === nothing
+                f_global_slice = selectdim(f_global_slice, thisdim, global_r_range)
+                f_local_slice = selectdim(f_local_slice, thisdim, local_r_range)
+            else
+                f_global_slice = selectdim(f_global_slice, thisdim, 1)
+                f_local_slice = selectdim(f_local_slice, thisdim,
+                                          ilocal_func(ir, r_irank, r.n))
+            end
+
+            thisdim = ndims(f_local_slice) - 1
+            if is !== nothing
+                f_global_slice = selectdim(f_global_slice, thisdim, 1)
+                f_local_slice = selectdim(f_local_slice, thisdim, is)
+            end
+
+            # Select time slice
+            thisdim = ndims(f_local_slice)
+            f_local_slice = selectdim(f_local_slice, thisdim, local_t_range)
+
+            f_global_slice .= f_local_slice
+            close(fid)
+        end
+        local_tind_start = local_tind_end + 1
+        global_tind_start = global_tind_end + 1
+    end
+
+    if iz !== nothing
+        thisdim = ndims(f_global) - 3
+        f_global = selectdim(f_global, thisdim, 1)
+    end
+    if ir !== nothing
+        thisdim = ndims(f_global) - 2
+        f_global = selectdim(f_global, thisdim, 1)
+    end
+    if is !== nothing
+        thisdim = ndims(f_global) - 1
+        f_global = selectdim(f_global, thisdim, 1)
+    end
+
+    return f_global
+end
+
+"""
+Read a slice of a neutral distribution function
+
+run_names is a tuple. If it has more than one entry, this means that there are multiple
+restarts (which are sequential in time), so concatenate the data from each entry together.
+
+The slice to take is specified by the keyword arguments.
+"""
+function load_distributed_neutral_pdf_slice(run_names::Tuple, nblocks::Tuple, t_range,
+                                            n_species::mk_int, r::coordinate,
+                                            z::coordinate, vzeta::coordinate,
+                                            vr::coordinate, vz::coordinate; isn=nothing,
+                                            ir=nothing, iz=nothing, ivzeta=nothing,
+                                            ivr=nothing, ivz=nothing)
+    # dimension of pdf is [vpa,vperp,z,r,species,t]
+
+    result_dims = mk_int[]
+    if ivz === nothing
+        push!(result_dims, vz.n_global)
+    end
+    if ivr === nothing
+        push!(result_dims, vr.n_global)
+    end
+    if ivzeta === nothing
+        push!(result_dims, vzeta.n_global)
+    end
+    if iz === nothing
+        push!(result_dims, z.n_global)
+    else
+        push!(result_dims, 1)
+    end
+    if ir === nothing
+        push!(result_dims, r.n_global)
+    else
+        push!(result_dims, 1)
+    end
+    if isn === nothing
+        push!(result_dims, n_species)
+    else
+        push!(result_dims, 1)
+    end
+    push!(result_dims, length(t_range))
+
+    f_global = allocate_float(result_dims...)
+
+    local_tind_start = 1
+    local_tind_end = -1
+    global_tind_start = 1
+    global_tind_end = -1
+    for (run_name, nb) in zip(run_names, nblocks)
+        for iblock in 0:nb-1
+            fid = open_readonly_output_file(run_name, "dfns", iblock=iblock, printout=false)
+
+            z_irank, r_irank = load_rank_data(fid)
+
+            # min index set to avoid double assignment of repeated points
+            # 1 if irank = 0, 2 otherwise
+            imin_r = min(1,r_irank) + 1
+            imin_z = min(1,z_irank) + 1
+            local_r_range = imin_r:r.n
+            local_z_range = imin_z:z.n
+            global_r_range = iglobal_func(imin_r, r_irank, r.n):iglobal_func(r.n, r_irank, r.n)
+            global_z_range = iglobal_func(imin_z, z_irank, z.n):iglobal_func(z.n, z_irank, z.n)
+
+            if ir !== nothing && !(ir ∈ global_r_range)
+                # No data for the slice on this rank
+                continue
+            end
+            if iz !== nothing && !(iz ∈ global_z_range)
+                # No data for the slice on this rank
+                continue
+            end
+
+            f_local_slice = load_neutral_pdf_data(fid)
+
+            if local_tind_start > 1
+                # The run being loaded is a restart (as local_tind_start=1 for the first
+                # run), so skip the first point, as this is a duplicate of the last point
+                # of the previous restart
+                skip_first = 1
+            else
+                skip_first = 0
+            end
+            ntime_local = size(f_local_slice, ndims(f_local_slice)) - skip_first
+            local_tind_end = local_tind_start + ntime_local - 1
+            local_t_range = collect(it - local_tind_start + 1 + skip_first
+                                    for it ∈ t_range
+                                    if local_tind_start <= it <= local_tind_end)
+            global_tind_end = global_tind_start + length(local_t_range) - 1
+
+            f_global_slice = selectdim(f_global, ndims(f_global),
+                                       global_tind_start:global_tind_end)
+
+            # Note: use selectdim() and get the dimension from thisdim because the actual
+            # number of dimensions in f_global_slice, f_local_slice is different depending
+            # on which combination of ivpa, ivperp, iz, ir, and is was passed.
+            thisdim = ndims(f_local_slice) - 6
+            if ivz !== nothing
+                f_local_slice = selectdim(f_local_slice, thisdim, ivz)
+            end
+
+            thisdim = ndims(f_local_slice) - 5
+            if ivr !== nothing
+                f_local_slice = selectdim(f_local_slice, thisdim, ivr)
+            end
+
+            thisdim = ndims(f_local_slice) - 4
+            if ivzeta !== nothing
+                f_local_slice = selectdim(f_local_slice, thisdim, ivzeta)
+            end
+
+            thisdim = ndims(f_local_slice) - 3
+            if iz === nothing
+                f_global_slice = selectdim(f_global_slice, thisdim, global_z_range)
+                f_local_slice = selectdim(f_local_slice, thisdim, local_z_range)
+            else
+                f_global_slice = selectdim(f_global_slice, thisdim, 1)
+                f_local_slice = selectdim(f_local_slice, thisdim,
+                                          ilocal_func(iz, z_irank, z.n))
+            end
+
+            thisdim = ndims(f_local_slice) - 2
+            if ir === nothing
+                f_global_slice = selectdim(f_global_slice, thisdim, global_r_range)
+                f_local_slice = selectdim(f_local_slice, thisdim, local_r_range)
+            else
+                f_global_slice = selectdim(f_global_slice, thisdim, 1)
+                f_local_slice = selectdim(f_local_slice, thisdim,
+                                          ilocal_func(ir, r_irank, r.n))
+            end
+
+            thisdim = ndims(f_local_slice) - 1
+            if isn !== nothing
+                f_global_slice = selectdim(f_global_slice, thisdim, 1)
+                f_local_slice = selectdim(f_local_slice, thisdim, isn)
+            end
+
+            # Select time slice
+            thisdim = ndims(f_local_slice)
+            f_local_slice = selectdim(f_local_slice, thisdim, local_t_range)
+
+            f_global_slice .= f_local_slice
+            close(fid)
+        end
+        local_tind_start = local_tind_end + 1
+        global_tind_start = global_tind_end + 1
+    end
+
+    if iz !== nothing
+        thisdim = ndims(f_global) - 3
+        f_global = selectdim(f_global, thisdim, 1)
+    end
+    if ir !== nothing
+        thisdim = ndims(f_global) - 2
+        f_global = selectdim(f_global, thisdim, 1)
+    end
+    if isn !== nothing
+        thisdim = ndims(f_global) - 1
+        f_global = selectdim(f_global, thisdim, 1)
+    end
+
+    return f_global
+end
+
+function iglobal_func(ilocal,irank,nlocal)
+    if irank == 0
+        iglobal = ilocal
+    elseif irank > 0 && ilocal > 1
+        iglobal = ilocal + irank*(nlocal - 1)
+    else
+        println("ERROR: Invalid call to iglobal_func")
+    end
+    return iglobal
+end
+
+function ilocal_func(iglobal,irank,nlocal)
+    return iglobal - irank*(nlocal - 1)
 end
 
 end

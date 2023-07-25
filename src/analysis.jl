@@ -8,8 +8,14 @@ export analyze_pdf_data
 
 using ..array_allocation: allocate_float
 using ..calculus: integral
+using ..interpolation: interpolate_to_grid_1d
 using ..load_data: open_readonly_output_file, get_nranks, load_pdf_data, load_rank_data
+using ..load_data: load_distributed_charged_pdf_slice
 using ..velocity_moments: integrate_over_vspace
+
+using FFTW
+using Statistics
+using StatsBase
 
 """
 """
@@ -83,7 +89,7 @@ TeN / (2 neN sqrt(pi)) * ∫dvpaN fN / vpaN^2 ≤ 1
 
 Note that `integrate_over_vspace()` includes the 1/sqrt(pi) factor already.
 """
-function check_Chodura_condition(run_name, vpa_grid, vpa_wgts, vperp_grid, vperp_wgts,
+function check_Chodura_condition(run_name, vperp_global, vpa_global, r, z, vperp, vpa,
                                  dens, T_e, Er, geometry, z_bc, nblocks)
 
     if z_bc != "wall"
@@ -98,28 +104,12 @@ function check_Chodura_condition(run_name, vpa_grid, vpa_wgts, vperp_grid, vperp
     f_lower = nothing
     f_upper = nothing
     z_nrank, r_nrank = get_nranks(run_name, nblocks, "dfns")
-    for iblock in 0:nblocks-1
-        fid_pdfs = open_readonly_output_file(run_name,"dfns",iblock=iblock)
-        z_irank, r_irank = load_rank_data(fid_pdfs)
-        if z_irank == 0
-            if f_lower === nothing
-                f_lower = load_pdf_data(fid_pdfs)
-            else
-                # Concatenate along r-dimension
-                f_lower = cat(f_lower, load_pdf_data(fid_pdfs); dims=4)
-            end
-        end
-        if z_irank == z_nrank - 1
-            if f_upper === nothing
-                f_upper = load_pdf_data(fid_pdfs)
-            else
-                # Concatenate along r-dimension
-                f_upper = cat(f_upper, load_pdf_data(fid_pdfs); dims=4)
-            end
-        end
-    end
+    f_lower = load_distributed_charged_pdf_slice(run_name, nblocks, :, n_ion_species, r,
+                                                 z, vperp, vpa; z=1)
+    f_upper = load_distributed_charged_pdf_slice(run_name, nblocks, :, n_ion_species, r,
+                                                 z, vperp, vpa; z=z.n_global)
     for it ∈ 1:ntime, ir ∈ 1:nr
-        vpabar = @. vpa_grid - 0.5 * geometry.rhostar * Er[1,ir,it] / geometry.bzed
+        vpabar = @. vpa_global.grid - 0.5 * geometry.rhostar * Er[1,ir,it] / geometry.bzed
 
         # Get rid of a zero if it is there to avoid a blow up - f should be zero at that
         # point anyway
@@ -130,8 +120,8 @@ function check_Chodura_condition(run_name, vpa_grid, vpa_wgts, vperp_grid, vperp
         end
 
         @views lower_result[ir,it] =
-            integrate_over_vspace(f_lower[:,:,1,ir,is,it], vpabar, -2, vpa_wgts,
-                                  vperp_grid, 0, vperp_wgts)
+            integrate_over_vspace(f_lower[:,:,1,ir,is,it], vpabar, -2, vpa_global.wgts,
+                                  vperp_global.grid, 0, vperp_global.wgts)
         if it == ntime
             println("check vpabar lower", vpabar)
             println("result lower ", lower_result[ir,it])
@@ -139,7 +129,7 @@ function check_Chodura_condition(run_name, vpa_grid, vpa_wgts, vperp_grid, vperp
 
         lower_result[ir,it] *= 0.5 * T_e / dens[1,ir,is,it]
 
-        vpabar = @. vpa_grid - 0.5 * geometry.rhostar * Er[end,ir,it] / geometry.bzed
+        vpabar = @. vpa_global.grid - 0.5 * geometry.rhostar * Er[end,ir,it] / geometry.bzed
 
         # Get rid of a zero if it is there to avoid a blow up - f should be zero at that
         # point anyway
@@ -150,8 +140,8 @@ function check_Chodura_condition(run_name, vpa_grid, vpa_wgts, vperp_grid, vperp
         end
 
         @views upper_result[ir,it] =
-            integrate_over_vspace(f_upper[:,:,end,ir,is,it], vpabar, -2, vpa_wgts,
-                                  vperp_grid, 0, vperp_wgts)
+            integrate_over_vspace(f_upper[:,:,end,ir,is,it], vpabar, -2, vpa_global.wgts,
+                                  vperp_global.grid, 0, vperp_global.wgts)
         if it == ntime
             println("check vpabar upper ", vpabar)
             println("result upper ", upper_result[ir,it])
@@ -283,6 +273,128 @@ end
 """
 function field_line_average(fld, wgts, L)
     return integral(fld, wgts)/L
+end
+
+"""
+"""
+function analyze_2D_instability(phi, density, thermal_speed, r, z, r_spectral, z_spectral)
+    # Assume there is only one species for this test
+    density = density[:,:,1,:]
+    thermal_speed = thermal_speed[:,:,1,:]
+
+    # NB normalisation removes the factor of 1/2
+    temperature = thermal_speed.^2
+
+    # Get background as r-average of the variable, as the background is constant in r
+    background_phi = mean(phi, dims=2)
+    background_density = mean(density, dims=2)
+    background_temperature = mean(temperature, dims=2)
+
+    phi_perturbation = phi .- background_phi
+    density_perturbation = density .- background_density
+    temperature_perturbation = temperature .- background_temperature
+
+    nt = size(phi, 3)
+
+    function get_Fourier_modes_2D(non_uniform_data, r, r_spectral, z, z_spectral)
+
+        uniform_points_per_element_r = r.ngrid ÷ 4
+        n_uniform_r = r.nelement_global * uniform_points_per_element_r
+        uniform_spacing_r = r.L / n_uniform_r
+        uniform_grid_r = collect(1:n_uniform_r).*uniform_spacing_r .+ 0.5.*uniform_spacing_r .- 0.5.*r.L
+
+        uniform_points_per_element_z = z.ngrid ÷ 4
+        n_uniform_z = z.nelement_global * uniform_points_per_element_z
+        uniform_spacing_z = z.L / n_uniform_z
+        uniform_grid_z = collect(1:n_uniform_z).*uniform_spacing_z .+ 0.5.*uniform_spacing_z .- 0.5.*z.L
+
+        intermediate = allocate_float(n_uniform_z, r.n, nt)
+        for it ∈ 1:nt, ir ∈ 1:r.n
+            @views intermediate[:,ir,it] =
+                interpolate_to_grid_1d(uniform_grid_z, non_uniform_data[:,ir,it], z,
+                                       z_spectral)
+        end
+
+        uniform_data = allocate_float(n_uniform_z, n_uniform_r, nt)
+        for it ∈ 1:nt, iz ∈ 1:n_uniform_z
+            @views uniform_data[iz,:,it] =
+                interpolate_to_grid_1d(uniform_grid_r, non_uniform_data[iz,:,it], r,
+                                       r_spectral)
+        end
+
+        fourier_data = fft(uniform_data, (1,2))
+
+        return fourier_data
+    end
+
+    phi_Fourier_2D = get_Fourier_modes_2D(phi, r, r_spectral, z, z_spectral)
+    density_Fourier_2D = get_Fourier_modes_2D(density, r, r_spectral, z, z_spectral)
+    temperature_Fourier_2D = get_Fourier_modes_2D(temperature, r, r_spectral, z, z_spectral)
+
+    # Find a z-location where the mode seems to be growing most strongly to analyse
+    ###############################################################################
+
+    # Get difference between max and min over the r dimension as a measure of the mode
+    # amplitude
+    Delta_phi = maximum(phi; dims=2)[:,1,:] - minimum(phi; dims=2)[:,1,:]
+    max_Delta_phi = maximum(Delta_phi; dims=1)[1,:]
+
+    # Start searching for mode position once amplitude has grown to twice initial
+    # perturbation
+    startind = findfirst(x -> x>max_Delta_phi[1], max_Delta_phi)
+    if startind === nothing
+        startind = 1
+    end
+
+    # Find the z-index of the maximum of Delta_phi
+    # Need the iterator thing to convert CartesianIndex structs returned by argmax into
+    # Ints that we can do arithmetic with.
+    zind_maximum = [i[1] for i ∈ argmax(Delta_phi; dims=1)]
+    zind_maximum = zind_maximum[startind:end]
+
+    # Want the 'most common' value in zind_maximum, but maybe that is noisy?
+    # First find the most common bin for some reasonable number of bins. The background is
+    # a mode with one wave-period in the box, so 16 bins seems like plenty.
+    nbins = 16
+    bin_size = (z.n - 1) ÷ 16
+    binned_zind_maximum = @. (zind_maximum-1) ÷ bin_size
+    most_common_bin = mode(binned_zind_maximum)
+    bin_min = most_common_bin * bin_size + 1
+    bin_max = (most_common_bin+1) * bin_size
+    zinds_in_bin = [zind for zind in zind_maximum if bin_min ≤ zind ≤ bin_max]
+
+    # Find the most common zind in the bin, which might have some noise but will be in
+    # about the right region regardless as it is in the bin
+    zind = mode(zinds_in_bin)
+    println("Estimating average maximum mode amplitude at zind=$zind, z=", z.grid[zind])
+
+    # Now analyse the Fourier modes at this zind
+    function get_Fourier_modes_1D(non_uniform_data, r, r_spectral)
+
+        uniform_points_per_element_r = r.ngrid ÷ 4
+        n_uniform_r = r.nelement_global * uniform_points_per_element_r
+        uniform_spacing_r = r.L / n_uniform_r
+        uniform_grid_r = collect(0:(n_uniform_r-1)).*uniform_spacing_r .+ 0.5.*uniform_spacing_r .- 0.5.*r.L
+
+        uniform_data = allocate_float(n_uniform_r, nt)
+        for it ∈ 1:nt
+            @views uniform_data[:,it] =
+                interpolate_to_grid_1d(uniform_grid_r, non_uniform_data[:,it], r,
+                                       r_spectral)
+        end
+
+        fourier_data = fft(uniform_data, 1)
+
+        return fourier_data
+    end
+
+    @views phi_Fourier_1D = get_Fourier_modes_1D(phi[zind,:,:], r, r_spectral)
+    @views density_Fourier_1D = get_Fourier_modes_1D(density[zind,:,:], r, r_spectral)
+    @views temperature_Fourier_1D = get_Fourier_modes_1D(temperature[zind,:,:], r, r_spectral)
+
+    return phi_perturbation, density_perturbation, temperature_perturbation,
+           phi_Fourier_2D, density_Fourier_2D, temperature_Fourier_2D,
+           phi_Fourier_1D, density_Fourier_1D, temperature_Fourier_1D
 end
 
 end

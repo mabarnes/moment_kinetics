@@ -40,7 +40,6 @@ struct time_input
     split_operators::Bool
     runtime_plots::Bool
     use_manufactured_solns_for_advance::Bool
-    use_manufactured_solns_for_init::Bool
 end
 
 """
@@ -362,6 +361,8 @@ struct pp_input
     plot_upar_vs_z_t::Bool
     # if plot_ppar_vs_z_t = true, create plot of species parallel pressure vs z and time
     plot_ppar_vs_z_t::Bool
+    # if plot_Tpar_vs_z_t = true, create plot of species parallel temperature vs z and time
+    plot_Tpar_vs_z_t::Bool
     # if plot_qpar_vs_z_t = true, create plot of species parallel heat flux vs z and time
     plot_qpar_vs_z_t::Bool
     # if animate_dens_vs_z = true, create animation of species density vs z at different time slices
@@ -370,6 +371,8 @@ struct pp_input
     animate_upar_vs_z::Bool
     # if animate_ppar_vs_z = true, create animation of species parallel pressure vs z at different time slices
     animate_ppar_vs_z::Bool
+    # if animate_Tpar_vs_z = true, create animation of species parallel temperature vs z at different time slices
+    animate_Tpar_vs_z::Bool
     # if animate_vth_vs_z = true, create animation of species thermal speed vs z at different time slices
     animate_vth_vs_z::Bool
     # if animate_qpar_vs_z = true, create animation of species parallel heat flux vs z at different time slices
@@ -446,8 +449,18 @@ struct pp_input
 	plot_parallel_pressure_vs_r_z::Bool
     # if animate_parallel_pressure_vs_r_z = true animate parallel_pressure vs r z
 	animate_parallel_pressure_vs_r_z::Bool
+    # if plot_parallel_temperature_vs_r0_z = true  plot last timestep parallel_temperature[z,ir0]
+    plot_parallel_temperature_vs_r0_z::Bool
+    # if plot_wall_parallel_temperature_vs_r = true  plot last timestep parallel_temperature[z_wall,r]
+    plot_wall_parallel_temperature_vs_r::Bool
+    # if plot_parallel_temperature_vs_r_z = true plot parallel_temperature vs r z at last timestep
+    plot_parallel_temperature_vs_r_z::Bool
+    # if animate_parallel_temperature_vs_r_z = true animate parallel_temperature vs r z
+    animate_parallel_temperature_vs_r_z::Bool
     # if plot_wall_pdf = true then plot the ion distribution (vpa,vperp,z,r) in the element nearest the wall at the last timestep 
     plot_wall_pdf::Bool
+    # run analysis for a 2D (in R-Z) linear mode?
+    instability2D::Bool
     # animations of moments will use one in every nwrite_movie data slices
     nwrite_movie::mk_int
     # itime_min is the minimum time index at which to start animations of the moments
@@ -455,6 +468,8 @@ struct pp_input
     # itime_max is the final time index at which to end animations of the moments
     # if itime_max < 0, the value used will be the total number of time slices
     itime_max::mk_int
+    # Only load every itime_skip'th time-point when loading data, to save memory
+    itime_skip::mk_int
     # animations of pdfs will use one in every nwrite_movie data slices
     nwrite_movie_pdfs::mk_int
     # itime_min_pdfs is the minimum time index at which to start animations of the pdfs
@@ -462,6 +477,8 @@ struct pp_input
     # itime_max_pdfs is the final time index at which to end animations of the pdfs
     # if itime_max < 0, the value used will be the total number of time slices
     itime_max_pdfs::mk_int
+    # Only load every itime_skip_pdfs'th time-point when loading pdf data, to save memory
+    itime_skip_pdfs::mk_int
     # ivpa0 is the ivpa index used when plotting data at a single vpa location
     ivpa0::mk_int
     # ivperp0 is the ivperp index used when plotting data at a single vperp location
@@ -476,6 +493,8 @@ struct pp_input
     ivr0::mk_int
     # ivzeta0 is the ivzeta index used when plotting data at a single vzeta location
     ivzeta0::mk_int
+    # Calculate and plot the 'Chodura criterion' at the wall boundaries
+    diagnostics_chodura::Bool
 end
 
 end

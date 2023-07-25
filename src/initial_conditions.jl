@@ -15,7 +15,7 @@ export enforce_neutral_z_boundary_condition!
 # package
 using SpecialFunctions: erfc
 # modules
-using ..type_definitions: mk_float
+using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_shared_float
 using ..bgk: init_bgk_pdf!
 using ..communication
@@ -140,12 +140,13 @@ with a self-consistent initial condition
 function init_pdf_and_moments!(pdf, moments, boundary_distributions, geometry,
                                composition, r, z, vperp, vpa, vzeta, vr, vz,
                                vpa_spectral, vz_spectral, species,
-                               use_manufactured_solns)
-    if use_manufactured_solns
+                               manufactured_solns_input)
+    if manufactured_solns_input.use_for_init
         init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z,
                                              r, composition.n_ion_species,
                                              composition.n_neutral_species,
-                                             geometry, composition)
+                                             geometry, composition, species,
+                                             manufactured_solns_input)
     else
         n_ion_species = composition.n_ion_species
         n_neutral_species = composition.n_neutral_species
@@ -295,6 +296,23 @@ function init_vth!(vth, z, r, spec, n_species)
                      * (1.0 + spec[is].z_IC.temperature_amplitude
                               * cos(2.0*π*spec[is].z_IC.wavenumber*z.grid/z.L +
                                     spec[is].z_IC.temperature_phase)))
+            elseif spec[is].z_IC.initialization_option == "2D-instability-test"
+                background_wavenumber = 1 + round(mk_int,
+                                                  spec[is].z_IC.temperature_phase)
+                @. vth[:,ir,is] =
+                    (spec[is].initial_temperature
+                     * (1.0 + spec[is].z_IC.temperature_amplitude
+                              * sin(2.0*π*background_wavenumber*z.grid/z.L)))
+
+                # initial perturbation with amplitude set by 'r' initial condition
+                # settings, but using the z_IC.wavenumber as the background is always
+                # 'wavenumber=1'.
+                @. vth[:,ir,is] +=
+                (spec[is].initial_temperature
+                 * spec[is].r_IC.temperature_amplitude
+                 * cos(2.0*π*(spec[is].z_IC.wavenumber*z.grid/z.L +
+                              spec[is].r_IC.wavenumber*r.grid[ir]/r.L) +
+                       spec[is].r_IC.temperature_phase))
             else
                 @. vth[:,ir,is] =  spec[is].initial_temperature
             end
@@ -302,12 +320,14 @@ function init_vth!(vth, z, r, spec, n_species)
         if r.n > 1
             for iz ∈ 1:z.n
                 if spec[is].r_IC.initialization_option == "sinusoid"
-                    # initial condition is sinusoid in z
+                    # initial condition is sinusoid in r
                     @. vth[iz,:,is] +=
                     (spec[is].initial_temperature
                      * spec[is].r_IC.temperature_amplitude
                      * cos(2.0*π*spec[is].r_IC.wavenumber*r.grid/r.L +
                            spec[is].r_IC.temperature_phase))
+                elseif spec[is].r_IC.initialization_option == "2D-instability-test"
+                    # do nothing here
                 end
             end
         end
@@ -331,6 +351,40 @@ function init_density!(dens, z, r, spec, n_species)
                      * (1.0 + spec[is].z_IC.density_amplitude
                               * cos(2.0*π*spec[is].z_IC.wavenumber*z.grid/z.L
                                     + spec[is].z_IC.density_phase)))
+            elseif spec[is].z_IC.initialization_option == "smoothedsquare"
+                # initial condition is first 3 Fourier harmonics of a square wave
+                argument = 2.0*π*(spec[is].z_IC.wavenumber*z.grid/z.L +
+                                  spec[is].z_IC.density_phase)
+                @. dens[:,ir,is] =
+                    (spec[is].initial_density
+                     * (1.0 + spec[is].z_IC.density_amplitude
+                              * cos(argument - sin(2.0*argument)) ))
+            elseif spec[is].z_IC.initialization_option == "2D-instability-test"
+                if spec[is].z_IC.density_amplitude == 0.0
+                    dens[:,ir,is] .= spec[is].initial_density
+                else
+                    background_wavenumber = 1 + round(mk_int,
+                                                      spec[is].z_IC.temperature_phase)
+                    eta0 = @. (spec[is].initial_density
+                               * (1.0 + spec[is].z_IC.density_amplitude
+                                  * sin(2.0*π*background_wavenumber*z.grid/z.L
+                                        + spec[is].z_IC.density_phase)))
+                    T0 = @. (spec[is].initial_temperature
+                             * (1.0 + spec[is].z_IC.temperature_amplitude
+                                * sin(2.0*π*background_wavenumber*z.grid/z.L)
+                               ))
+                    @. dens[:,ir,is] = eta0^((T0/(1+T0)))
+                end
+
+                # initial perturbation with amplitude set by 'r' initial condition
+                # settings, but using the z_IC.wavenumber as the background is always
+                # 'wavenumber=1'.
+                @. dens[:,ir,is] +=
+                (spec[is].initial_density
+                 * spec[is].r_IC.density_amplitude
+                 * cos(2.0*π*(spec[is].z_IC.wavenumber*z.grid/z.L +
+                              spec[is].r_IC.wavenumber*r.grid[ir]/r.L) +
+                       spec[is].r_IC.density_phase))
             elseif spec[is].z_IC.initialization_option == "monomial"
                 # linear variation in z, with offset so that
                 # function passes through zero at upwind boundary
@@ -348,6 +402,15 @@ function init_density!(dens, z, r, spec, n_species)
                         (spec[is].r_IC.density_amplitude
                          * cos(2.0*π*spec[is].r_IC.wavenumber*r.grid/r.L
                                + spec[is].r_IC.density_phase))
+                elseif spec[is].z_IC.initialization_option == "smoothedsquare"
+                    # initial condition is first 3 Fourier harmonics of a square wave
+                    argument = 2.0*π*(spec[is].r_IC.wavenumber*r.grid/r.L +
+                                      spec[is].r_IC.density_phase)
+                    @. dens[iz,:,is] +=
+                        spec[is].initial_density * spec[is].r_IC.density_amplitude *
+                        cos(argument - sin(2.0*argument))
+                elseif spec[is].r_IC.initialization_option == "2D-instability-test"
+                    # do nothing here
                 elseif spec[is].r_IC.initialization_option == "monomial"
                     # linear variation in r, with offset so that
                     # function passes through zero at upwind boundary
@@ -829,8 +892,13 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
     return nothing
 end
 
-function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_species, geometry,composition)
-    manufactured_solns_list = manufactured_solutions(r.L,z.L,r.bc,z.bc,geometry,composition,r.n)
+function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z,
+                                              r, n_ion_species, n_neutral_species,
+                                              geometry, composition, species,
+                                              manufactured_solns_input)
+    manufactured_solns_list = manufactured_solutions(manufactured_solns_input, r.L, z.L,
+                                                     r.bc, z.bc, geometry, composition,
+                                                     species, r.n)
     dfni_func = manufactured_solns_list.dfni_func
     densi_func = manufactured_solns_list.densi_func
     dfnn_func = manufactured_solns_list.dfnn_func

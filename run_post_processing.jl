@@ -4,5 +4,5 @@ if abspath(PROGRAM_FILE) == @__FILE__
 
     import moment_kinetics as mk
 
-    mk.post_processing.analyze_and_plot_data(ARGS[1])
+    mk.post_processing.analyze_and_plot_data(ARGS...)
 end

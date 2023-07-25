@@ -55,6 +55,58 @@ function get(d::Dict, key, default::Enum)
 end
 
 """
+Set the defaults for options in a section, and check that there are not any unexpected
+options (i.e. options that have no default).
+
+Modifies the options[section_name]::Dict by adding defaults for any values that are not
+already present.
+"""
+function set_defaults_and_check_section!(options::Dict, section_name;
+                                         kwargs...)
+    if !(section_name ∈ keys(options))
+        # If section is not present, create it
+        options[section_name] = Dict{String,Any}()
+    end
+
+    if !isa(options[section_name], Dict)
+        error("Expected '$section_name' to be a section in the input file, but it has a "
+              * "value '$(options[section_name])'")
+    end
+
+    section = options[section_name]
+
+    # Check for any unexpected values in the section - all options that are set should be
+    # present in the kwargs of this function call
+    section_keys_symbols = keys(kwargs)
+    section_keys = (String(k) for k ∈ section_keys_symbols)
+    for (key, value) in section
+        if !(key ∈ section_keys)
+            error("Unexpected option '$key=$value' in section '$section_name'")
+        end
+    end
+
+    # Set default values if a key was not set explicitly
+    explicit_keys = keys(section)
+    for (key_sym, value) ∈ kwargs
+        key = String(key_sym)
+        if !(key ∈ explicit_keys)
+            section[key] = value
+        end
+    end
+
+    return section
+end
+
+"""
+Convert a Dict whose keys are String or Symbol to a NamedTuple
+
+Useful as NamedTuple is immutable, so option values cannot be accidentally changed.
+"""
+function Dict_to_NamedTuple(d)
+    return NamedTuple(Symbol(k)=>v for (k,v) ∈ d)
+end
+
+"""
 """
 function mk_input(scan_input=Dict())
 
@@ -99,16 +151,21 @@ function mk_input(scan_input=Dict())
     composition.use_test_neutral_wall_pdf = get(scan_input, "use_test_neutral_wall_pdf", false)
     # constant to be used to test nonzero Er in wall boundary condition
     composition.Er_constant = get(scan_input, "Er_constant", 0.0)
-    # constant to be used to control Ez divergence in MMS tests
-    composition.epsilon_offset = get(scan_input, "epsilon_offset", 0.001)
-    # bool to control if dfni is a function of vpa or vpabar in MMS test 
-    composition.use_vpabar_in_mms_dfni = get(scan_input, "use_vpabar_in_mms_dfni", true)
-    if composition.use_vpabar_in_mms_dfni
-        alpha_switch = 1.0
-    else
-        alpha_switch = 0.0
-    end
-    composition.alpha_switch = alpha_switch
+
+    # Get reference parameters for normalizations
+    reference_parameter_section = set_defaults_and_check_section!(
+        scan_input, "reference_params";
+        Bref=1.0,
+        Lref=10.0,
+        Nref=1.0e19,
+        Tref=100.0,
+       )
+    reference_parameters = Dict_to_NamedTuple(reference_parameter_section)
+
+    elementary_charge = 1.602176634e-19 # C
+    mi = 3.3435837724e-27 # kg
+    cref = sqrt(2.0 * elementary_charge*reference_parameters.Tref / mi) # m/s
+    Omegaref = elementary_charge * reference_parameters.Bref / mi
     
     ## set geometry_input
     geometry.Bzed = get(scan_input, "Bzed", 1.0)
@@ -116,7 +173,7 @@ function mk_input(scan_input=Dict())
     geometry.bzed = geometry.Bzed/geometry.Bmag
     geometry.bzeta = sqrt(1.0 - geometry.bzed^2.0)
     geometry.Bzeta = geometry.Bmag*geometry.bzeta
-    geometry.rhostar = get(scan_input, "rhostar", 0.0)
+    geometry.rhostar = get(scan_input, "rhostar", cref/reference_parameters.Lref/Omegaref)
     #println("Info: Bzed is ",geometry.Bzed)
     #println("Info: Bmag is ",geometry.Bmag)
     #println("Info: rhostar is ",geometry.rhostar)
@@ -126,6 +183,7 @@ function mk_input(scan_input=Dict())
     species.charged[1].initial_density = get(scan_input, "initial_density$ispecies", 1.0)
     species.charged[1].initial_temperature = get(scan_input, "initial_temperature$ispecies", 1.0)
     species.charged[1].z_IC.width = get(scan_input, "z_IC_width$ispecies", 0.125)
+    species.charged[1].z_IC.wavenumber = get(scan_input, "z_IC_wavenumber$ispecies", 1)
     species.charged[1].z_IC.density_amplitude = get(scan_input, "z_IC_density_amplitude$ispecies", 0.001)
     species.charged[1].z_IC.density_phase = get(scan_input, "z_IC_density_phase$ispecies", 0.0)
     species.charged[1].z_IC.upar_amplitude = get(scan_input, "z_IC_upar_amplitude$ispecies", 0.0)
@@ -133,6 +191,7 @@ function mk_input(scan_input=Dict())
     species.charged[1].z_IC.temperature_amplitude = get(scan_input, "z_IC_temperature_amplitude$ispecies", 0.0)
     species.charged[1].z_IC.temperature_phase = get(scan_input, "z_IC_temperature_phase$ispecies", 0.0)
     species.charged[1].r_IC.initialization_option = get(scan_input, "r_IC_option$ispecies", "gaussian")
+    species.charged[1].r_IC.wavenumber = get(scan_input, "r_IC_wavenumber$ispecies", 1)
     species.charged[1].r_IC.density_amplitude = get(scan_input, "r_IC_density_amplitude$ispecies", 0.0)
     species.charged[1].r_IC.density_phase = get(scan_input, "r_IC_density_phase$ispecies", 0.0)
     species.charged[1].r_IC.upar_amplitude = get(scan_input, "r_IC_upar_amplitude$ispecies", 0.0)
@@ -192,13 +251,31 @@ function mk_input(scan_input=Dict())
     n_rk_stages = get(scan_input, "n_rk_stages", 4)
     split_operators = get(scan_input, "split_operators", false)
     runtime_plots = get(scan_input, "runtime_plots", false)
-    use_manufactured_solns_for_advance = get(scan_input, "use_manufactured_solns_for_advance", false)
-    use_manufactured_solns_for_init = get(scan_input, "use_manufactured_solns_for_init", false)
-    if use_manufactured_solns_for_advance && !use_manufactured_solns_for_init
-        # if not (use_manufactured_solns_for_init == true) force use_manufactured_solns_for_init == true
-        use_manufactured_solns_for_init = true
+
+    use_for_init_is_default = !(("manufactured_solns" ∈ keys(scan_input)) &&
+                                ("use_for_init" ∈ keys(scan_input["manufactured_solns"])))
+    manufactured_solns_section = set_defaults_and_check_section!(
+        scan_input, "manufactured_solns";
+        use_for_advance=false,
+        use_for_init=false,
+        # constant to be used to control Ez divergence in MMS tests
+        epsilon_offset=0.001,
+        # bool to control if dfni is a function of vpa or vpabar in MMS test
+        use_vpabar_in_mms_dfni=true,
+        alpha_switch=1.0,
+        type="default",
+       )
+    if use_for_init_is_default && manufactured_solns_section["use_for_advance"]
+        # if manufactured_solns_section["use_for_init"] was set by default, set
+        # manufactured_solns_section["use_for_init"] == true
+        manufactured_solns_section["use_for_init"] = true
     end
-    #println("Info: The flag use_manufactured_solns is ",use_manufactured_solns)
+    if manufactured_solns_section["use_vpabar_in_mms_dfni"]
+        manufactured_solns_section["alpha_switch"] = 1.0
+    else
+        manufactured_solns_section["alpha_switch"] = 0.0
+    end
+    manufactured_solns_input = Dict_to_NamedTuple(manufactured_solns_section)
     
     # overwrite some default parameters related to the r grid
     # ngrid is number of grid points per element
@@ -353,8 +430,7 @@ function mk_input(scan_input=Dict())
 
     t_input = time_input(nstep, dt, nwrite_moments, nwrite_dfns, n_rk_stages,
                          split_operators, runtime_plots,
-                         use_manufactured_solns_for_advance,
-                         use_manufactured_solns_for_init)
+                         manufactured_solns_input.use_for_advance)
     # replace mutable structures with immutable ones to optimize performance
     # and avoid possible misunderstandings	
 	z_advection_immutable = advection_input(z.advection.option, z.advection.constant_speed,
@@ -476,7 +552,8 @@ function mk_input(scan_input=Dict())
     # return immutable structs for z, vpa, species and composition
     all_inputs = (io_immutable, evolve_moments, t_input,
                   z_immutable, r_immutable, vpa_immutable, vperp_immutable, gyrophase_immutable, vz_immutable, vr_immutable, vzeta_immutable,
-                  composition, species_immutable, collisions, geometry, drive_immutable, num_diss_params)
+                  composition, species_immutable, collisions, geometry, drive_immutable,
+                  num_diss_params, manufactured_solns_input)
     println(io, "\nAll inputs returned from mk_input():")
     println(io, all_inputs)
     close(io)
@@ -1023,6 +1100,12 @@ function check_input_initialization(composition, species, io)
         elseif species[is].z_IC.initialization_option == "sinusoid"
             print(io,">z_initialization_option = 'sinusoid'.")
             println(io,"  setting Fz(z) = initial_density + z_amplitude*sinpi(z_wavenumber*z/L_z).")
+        elseif species[is].z_IC.initialization_option == "smoothedsquare"
+            print(io,">z_initialization_option = 'smoothedsquare'.")
+            println(io,"  setting Fz(z) = initial_density + z_amplitude*(cospi(z_wavenumber*z/L_z - sinpi(2*z_wavenumber*z/Lz))).")
+        elseif species[is].z_IC.initialization_option == "2D-instability-test"
+            print(io,">z_initialization_option = '2D-instability-test'.")
+            println(io,"  setting Fz(z) for 2D instability test.")
         elseif species[is].z_IC.initialization_option == "bgk"
             print(io,">z_initialization_option = 'bgk'.")
             println(io,"  setting Fz(z,vpa) = F(vpa^2 + phi), with phi_max = 0.")
@@ -1038,6 +1121,9 @@ function check_input_initialization(composition, species, io)
         elseif species[is].r_IC.initialization_option == "sinusoid"
             print(io,">r_initialization_option = 'sinusoid'.")
             println(io,"  setting Fr(r) = initial_density + r_amplitude*sinpi(r_wavenumber*r/L_r).")
+        elseif species[is].r_IC.initialization_option == "smoothedsquare"
+            print(io,">r_initialization_option = 'smoothedsquare'.")
+            println(io,"  setting Fr(r) = initial_density + r_amplitude*(cospi(r_wavenumber*r/L_r - sinpi(2*r_wavenumber*r/Lr))).")
         else
             input_option_error("r_initialization_option", species[is].r_IC.initialization_option)
         end
