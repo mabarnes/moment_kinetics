@@ -18,6 +18,7 @@ export gausslegendre_apply_Kmat!
 export gausslegendre_mass_matrix_solve!
 export setup_gausslegendre_pseudospectral
 export GaussLegendre_weak_product_matrix!
+export ielement_global_func
 
 using FastGaussQuadrature
 using LegendrePolynomials: Pl, dnPl
@@ -634,6 +635,9 @@ function shift_factor_func(L,nelement_global,nelement_local,irank,ielement_local
     return shift
 end
 
+function ielement_global_func(nelement_local,irank,ielement_local)
+    return ielement_global = ielement_local + irank*nelement_local
+end
 
 """
 function for setting up the full Gauss-Legendre-Lobatto
