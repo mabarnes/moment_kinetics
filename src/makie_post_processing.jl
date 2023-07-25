@@ -385,6 +385,7 @@ function _setup_single_input!(this_input_dict::AbstractDict{String,Any},
        # Options that provide the defaults for per-variable settings
        #############################################################
        colormap="reverse_deep",
+       animation_ext="gif",
        # Slice t to this value when making time-independent plots
        it0=nt_min,
        it0_dfns=nt_min,
@@ -932,15 +933,15 @@ function plots_for_variable(run_info, variable_name; plot_prefix, is_1D=false,
             end
             if input.animate_vs_z
                 animate_vs_z(run_info, variable_name, is=is, data=variable, input=input,
-                             outfile=variable_prefix * "vs_z.gif")
+                             outfile=variable_prefix * "vs_z." * input.animation_ext)
             end
             if !is_1D && input.animate_vs_r
                 animate_vs_r(run_info, variable_name, is=is, data=variable, input=input,
-                             outfile=variable_prefix * "vs_r.gif")
+                             outfile=variable_prefix * "vs_r." * input.animation_ext)
             end
             if !is_1D && input.animate_vs_z_r
                 animate_vs_z_r(run_info, variable_name, is=is, data=variable, input=input,
-                               outfile=variable_prefix * "vs_r.gif")
+                               outfile=variable_prefix * "vs_r." * input.animation_ext)
             end
         end
     end
@@ -1019,15 +1020,15 @@ function plots_for_dfn_variable(run_info, variable_name; plot_prefix, is_1D=fals
             end
             if input.animate_vs_z
                 animate_vs_z(run_info, variable_name, is=is, input=input,
-                             outfile=variable_prefix * "vs_z.gif")
+                             outfile=variable_prefix * "vs_z." * input.animation_ext)
             end
             if !is_1D && input.animate_vs_r
                 animate_vs_r(run_info, variable_name, is=is, input=input,
-                             outfile=variable_prefix * "vs_r.gif")
+                             outfile=variable_prefix * "vs_r." * input.animation_ext)
             end
             if !is_1D && input.animate_vs_z_r
                 animate_vs_z_r(run_info, variable_name, is=is, input=input,
-                               outfile=variable_prefix * "vs_r.gif")
+                               outfile=variable_prefix * "vs_r." * input.animation_ext)
             end
 
             if variable_name ∈ all_dfn_variables
@@ -1037,7 +1038,7 @@ function plots_for_dfn_variable(run_info, variable_name; plot_prefix, is_1D=fals
 
                 if input.animate_vs_z
                     animate_vs_z(run_info, variable_name, is=is, input=input,
-                                 outfile=variable_prefix * "vs_z.gif")
+                                 outfile=variable_prefix * "vs_z." * input.animation_ext)
                 end
                 if input.animate_log_vs_z
                     # Note that we use `yscale=log10` and `transform=positive_or_nan`
@@ -1050,47 +1051,47 @@ function plots_for_dfn_variable(run_info, variable_name; plot_prefix, is_1D=fals
                     # color for NaN, which does not go on the Colorbar and so causes an
                     # error.
                     animate_vs_z(run_info, variable_name, is=is, input=input,
-                                 outfile=log_variable_prefix * "vs_z.gif",
+                                 outfile=log_variable_prefix * "vs_z." * input.animation_ext,
                                  yscale=log10, transform=positive_or_nan)
                 end
             end
             if variable_name ∈ ion_dfn_variables
                 if input.animate_vs_vpa
                     animate_vs_vpa(run_info, variable_name, is=is, input=input,
-                                   outfile=variable_prefix * "vs_vpa.gif")
+                                   outfile=variable_prefix * "vs_vpa." * input.animation_ext)
                 end
                 if input.animate_log_vs_vpa
                     animate_vs_vpa(run_info, variable_name, is=is, input=input,
-                                   outfile=log_variable_prefix * "vs_vpa.gif",
+                                   outfile=log_variable_prefix * "vs_vpa." * input.animation_ext,
                                    yscale=log10, transform=positive_or_nan)
                 end
                 if input.animate_vs_vpa_z
                     animate_vs_vpa_z(run_info, variable_name, is=is, input=input,
-                                     outfile=variable_prefix * "vs_vpa_z.gif")
+                                     outfile=variable_prefix * "vs_vpa_z." * input.animation_ext)
                 end
                 if input.animate_log_vs_vpa_z
                     animate_vs_vpa_z(run_info, variable_name, is=is, input=input,
-                                     outfile=log_variable_prefix * "vs_vpa_z.gif",
+                                     outfile=log_variable_prefix * "vs_vpa_z." * input.animation_ext,
                                      colorscale=log10, transform=positive_or_nan)
                 end
             end
             if variable_name ∈ neutral_dfn_variables
                 if input.animate_vs_vz
                     animate_vs_vz(run_info, variable_name, is=is, input=input,
-                                  outfile=variable_prefix * "vs_vz.gif")
+                                  outfile=variable_prefix * "vs_vz." * input.animation_ext)
                 end
                 if input.animate_log_vs_vz
                     animate_vs_vz(run_info, variable_name, is=is, input=input,
-                                  outfile=log_variable_prefix * "vs_vz.gif",
+                                  outfile=log_variable_prefix * "vs_vz." * input.animation_ext,
                                   yscale=log10, transform=positive_or_nan)
                 end
                 if input.animate_vs_vz_z
                     animate_vs_vz_z(run_info, variable_name, is=is, input=input,
-                                    outfile=variable_prefix * "vs_vz_z.gif")
+                                    outfile=variable_prefix * "vs_vz_z." * input.animation_ext)
                 end
                 if input.animate_log_vs_vz_z
                     animate_vs_vz_z(run_info, variable_name, is=is, input=input,
-                                    outfile=log_variable_prefix * "vs_vz_z.gif",
+                                    outfile=log_variable_prefix * "vs_vz_z." * input.animation_ext,
                                     colorscale=log10, transform=positive_or_nan)
                 end
             end
@@ -2046,11 +2047,11 @@ function instability2D_plots(run_info, variable_name; run_label, plot_prefix,
 
     if instability2D_options.animate_perturbations
         perturbation = get_r_perturbation(variable)
-        # make a gif animation of perturbation
+        # make animation of perturbation
         animate_2d(run_info.z.grid, run_info.r.grid, perturbation, xlabel="z", ylabel="r",
                    title="$(get_variable_symbol(variable_name)) perturbation",
                    colormap=instability2D_options.colormap,
-                   outfile=plot_prefix*variable_name*"_perturbation.gif")
+                   outfile=plot_prefix*variable_name*"_perturbation." * instability2D_options.animation_ext)
 
         # Do this to allow memory to be garbage-collected (although this is redundant
         # here as this is the last thing in the function).
