@@ -278,7 +278,7 @@ Set up input, storing in the global `input_dict`
 function setup_makie_post_processing_input! end
 
 function setup_makie_post_processing_input!(
-        input_file::String=default_input_file_name; run_info_moment=nothing,
+        input_file::String=default_input_file_name; run_info_moments=nothing,
         run_info_dfns=nothing, ignore_missing_file::Bool=false)
 
     if isfile(input_file)
@@ -297,8 +297,8 @@ function setup_makie_post_processing_input!(
 end
 
 function setup_makie_post_processing_input!(new_input_dict::AbstractDict{String,Any};
-                                            run_info_moments=run_info_moments,
-                                            run_info_dfns=run_info_dfns)
+                                            run_info_moments=nothing,
+                                            run_info_dfns=nothing)
     if isa(run_info_moments, Tuple)
         has_moments = any(ri !== nothing for ri ∈ run_info_moments)
     else
@@ -322,13 +322,8 @@ function setup_makie_post_processing_input!(new_input_dict::AbstractDict{String,
                 * "will be set to 1.")
     end
 
-    if has_moments
-        _setup_single_input!(input_dict, new_input_dict, run_info_moments, false)
-    end
-
-    if has_dfns
-        _setup_single_input!(input_dict_dfns, new_input_dict, run_info_dfns, true)
-    end
+    _setup_single_input!(input_dict, new_input_dict, run_info_moments, false)
+    _setup_single_input!(input_dict_dfns, new_input_dict, run_info_dfns, true)
 
     return nothing
 end
