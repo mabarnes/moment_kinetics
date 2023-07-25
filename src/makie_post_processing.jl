@@ -232,7 +232,7 @@ function generate_example_input_file(filename::String=default_input_file_name;
 
     # Merge input_dict and input_dict_dfns, then convert to a String formatted as the
     # contents of a TOML file
-    combined_dict = merge(input_dict_dfns, input_dict)
+    combined_input_dict = merge(input_dict_dfns, input_dict)
     buffer = IOBuffer()
     TOML.print(buffer, combined_input_dict)
     file_contents = String(take!(buffer))
