@@ -202,7 +202,8 @@ function gausslegendre_apply_Kmat!(df, ff, gausslegendre, coord)
     get_KK_local!(gausslegendre.Qmat,j,gausslegendre.lobatto,gausslegendre.radau,coord)
     #println(gausslegendre.Qmat)
     @views mul!(df[:,j],gausslegendre.Qmat[:,:],ff[imin:imax])
-    if coord.name == "vperp"
+    zero_gradient_bc_lower_boundary = false#true
+    if coord.name == "vperp" && zero_gradient_bc_lower_boundary
        # set the 1st point of the RHS vector to zero 
        # consistent with use with the mass matrix with D f = 0 boundary conditions
        df[1,j] = 0.0
@@ -531,6 +532,14 @@ function GaussLegendre_weak_product_matrix!(QQ,ngrid,x,wgts,L,nelement_global,op
             end
         end
     end
+    #if option == "K0" || option == "K1" || option == "S0" || option == "P0"
+        # compute diagonal from off-diagonal values 
+        # to ensure numerical stability 
+    #    for i in 1:ngrid
+    #        QQ[i,i] = 0.0
+    #        QQ[i,i] = -sum(QQ[i,:])
+    #    end
+    #end
     # return normalised Q (no scale factors)
     #@. QQ *= (0.5*L/nelement_global)
     return nothing
@@ -624,6 +633,7 @@ function shift_factor_func(L,nelement_global,nelement_local,irank,ielement_local
     shift = L*((float(ielement_global)-0.5)/float(nelement_global) - 0.5)
     return shift
 end
+
 
 """
 function for setting up the full Gauss-Legendre-Lobatto
@@ -801,7 +811,7 @@ function setup_global_weak_form_matrix!(QQ_global::Array{mk_float,2},
     if coord.name == "vperp"
         zero_bc_upper_boundary = true
         zero_bc_lower_boundary = false
-        zero_gradient_bc_lower_boundary = true
+        zero_gradient_bc_lower_boundary = false#true
     else 
         zero_bc_upper_boundary = coord.bc == "zero" || coord.bc == "zero_upper"
         zero_bc_lower_boundary = coord.bc == "zero" || coord.bc == "zero_lower"
