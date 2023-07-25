@@ -22,18 +22,21 @@ QOS=${JOBINFO[7]}
 # [See e.g. https://www.stackchief.com/tutorials/Bash%20Tutorial%3A%20getopts
 # for examples of how to use Bash's getopts]
 POSTPROC=0
-while getopts "ht:n:u:m:p:q:a" opt; do
+FOLLOWFROM=""
+while getopts "ht:n:u:m:p:q:af:" opt; do
   case $opt in
     h)
       echo "Submit jobs for a simulation (using INPUT_FILE for input) and post-processing to the queue
 Usage: submit-run.sh [option] INPUT_FILE
--t     The run time, e.g. 24:00:00
--n     The number of nodes to use for the simulation
--u     The run time for the post-processing, e.g. 1:00:00
--m     The requested memory for post-processing
--p     The 'partition' (passed to 'sbatch --partition')
--q     The 'quality of service' (passed to 'sbatch --qos')
--a     Do not submit post-processing job after the run"
+-h             Print help and exit
+-t TIME        The run time, e.g. 24:00:00
+-n NODES       The number of nodes to use for the simulation
+-u TIME        The run time for the post-processing, e.g. 1:00:00
+-m MEM         The requested memory for post-processing
+-p PARTITION   The 'partition' (passed to 'sbatch --partition')
+-q QOS         The 'quality of service' (passed to 'sbatch --qos')
+-a             Do not submit post-processing job after the run
+-f JOBID       Make this job start after JOBID finishes successfully"
       exit 1
       ;;
     t)
@@ -56,6 +59,9 @@ Usage: submit-run.sh [option] INPUT_FILE
       ;;
     a)
       POSTPROC=1
+      ;;
+    f)
+      FOLLOWFROM="-d afterok:$OPTARG"
       ;;
   esac
 done
@@ -83,7 +89,7 @@ mkdir -p $RUNDIR
 RUNJOBSCRIPT=${RUNDIR}$RUNNAME.job
 sed -e "s|NODES|$NODES|" -e "s|RUNTIME|$RUNTIME|" -e "s|ACCOUNT|$ACCOUNT|" -e "s|PARTITION|$PARTITION|" -e "s|QOS|$QOS|" -e "s|RUNDIR|$RUNDIR|" -e "s|INPUTFILE|$INPUTFILE|" machines/$MACHINE/jobscript-run.template > $RUNJOBSCRIPT
 
-JOBID=$(sbatch --parsable $RUNJOBSCRIPT)
+JOBID=$(sbatch $FOLLOWFROM --parsable $RUNJOBSCRIPT)
 echo "Run: $JOBID"
 echo "In the queue" > ${RUNDIR}slurm-$JOBID.out
 
