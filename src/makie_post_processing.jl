@@ -808,13 +808,18 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
                 local_start += this_nt - 1
             end
             result = result[iz,ir,:]
-        elseif nd == 3
-            result = allocate_float(run_info.z.n, run_info.r.n, run_info.nt)
+        elseif nd == 4
+            # If we ever have neutrals included but n_neutral_species != n_ion_species,
+            # then this will fail - in that case would need some way to specify that we
+            # need to read a neutral moment variable rather than an ion moment variable
+            # here.
+            result = allocate_float(run_info.z.n, run_info.r.n, run_info.n_ion_species,
+                                    run_info.nt)
             local_start = 1
             for (f, this_nt) ∈ zip(run_info.files, run_info.restarts_nt)
                 read_distributed_zr_data!(
-                    @view(result[:,:,local_start:local_start+this_nt-1]), variable_name, f,
-                    run_info.ext, run_info.nblocks, run_info.z_local.n,
+                    @view(result[:,:,:,local_start:local_start+this_nt-1]), variable_name,
+                    f, run_info.ext, run_info.nblocks, run_info.z_local.n,
                     run_info.r_local.n, run_info.itime_skip)
                 local_start += this_nt - 1
             end
