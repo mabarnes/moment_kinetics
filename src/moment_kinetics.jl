@@ -441,4 +441,6 @@ function cleanup_moment_kinetics!(ascii_io, io_moments, io_dfns)
     return nothing
 end
 
+include("precompilation.jl")
+
 end
