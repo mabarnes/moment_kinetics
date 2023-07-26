@@ -422,6 +422,7 @@ function _setup_single_input!(this_input_dict::AbstractDict{String,Any},
        plot_vs_z=true,
        plot_vs_r_t=true,
        plot_vs_z_t=true,
+       plot_vs_z_r=true,
        animate_vs_z=false,
        animate_vs_r=false,
        animate_vs_z_r=false,
@@ -450,19 +451,100 @@ function _setup_single_input!(this_input_dict::AbstractDict{String,Any},
             set_defaults_and_check_section!(
                 this_input_dict, variable_name;
                 check_moments=false,
-                plot_log_vs_r=true,
-                plot_log_vs_z=true,
-                plot_log_vs_r_t=true,
-                plot_log_vs_z_t=true,
+                plot_log_vs_r=false,
+                plot_log_vs_z=false,
+                plot_vs_vperp=false,
+                plot_log_vs_vperp=false,
+                plot_vs_vpa=false,
+                plot_log_vs_vpa=false,
+                plot_vs_vzeta=false,
+                plot_log_vs_vzeta=false,
+                plot_vs_vr=false,
+                plot_log_vs_vr=false,
+                plot_vs_vz=false,
+                plot_log_vs_vz=false,
+                plot_log_vs_r_t=false,
+                plot_log_vs_z_t=false,
+                plot_vs_vperp_t=false,
+                plot_log_vs_vperp_t=false,
+                plot_vs_vpa_t=false,
+                plot_log_vs_vpa_t=false,
+                plot_vs_vzeta_t=false,
+                plot_log_vs_vzeta_t=false,
+                plot_vs_vr_t=false,
+                plot_log_vs_vr_t=false,
+                plot_vs_vz_t=false,
+                plot_log_vs_vz_t=false,
+                plot_log_vs_z_r=false,
+                plot_vs_vperp_r=false,
+                plot_log_vs_vperp_r=false,
+                plot_vs_vpa_r=false,
+                plot_log_vs_vpa_r=false,
+                plot_vs_vperp_z=false,
+                plot_log_vs_vperp_z=false,
+                plot_vs_vpa_z=false,
+                plot_log_vs_vpa_z=false,
+                plot_vs_vpa_vperp=false,
+                plot_log_vs_vpa_vperp=false,
+                plot_vs_vzeta_r=false,
+                plot_log_vs_vzeta_r=false,
+                plot_vs_vr_r=false,
+                plot_log_vs_vr_r=false,
+                plot_vs_vz_r=false,
+                plot_log_vs_vz_r=false,
+                plot_vs_vzeta_z=false,
+                plot_log_vs_vzeta_z=false,
+                plot_vs_vr_z=false,
+                plot_log_vs_vr_z=false,
+                plot_vs_vz_z=false,
+                plot_log_vs_vz_z=false,
+                plot_vs_vr_vzeta=false,
+                plot_log_vs_vr_vzeta=false,
+                plot_vs_vz_vzeta=false,
+                plot_log_vs_vz_vzeta=false,
+                plot_vs_vz_vr=false,
+                plot_log_vs_vz_vr=false,
+                animate_log_vs_r=false,
                 animate_log_vs_z=false,
+                animate_log_vs_z_r=false,
+                animate_vs_vperp=false,
+                animate_log_vs_vperp=false,
+                animate_vs_vperp_r=false,
+                animate_log_vs_vperp_r=false,
+                animate_vs_vperp_z=false,
+                animate_log_vs_vperp_z=false,
                 animate_vs_vpa=false,
                 animate_log_vs_vpa=false,
+                animate_vs_vpa_r=false,
+                animate_log_vs_vpa_r=false,
                 animate_vs_vpa_z=false,
                 animate_log_vs_vpa_z=false,
+                animate_vs_vpa_vperp=false,
+                animate_log_vs_vpa_vperp=false,
+                animate_vs_vzeta=false,
+                animate_log_vs_vzeta=false,
+                animate_vs_vzeta_r=false,
+                animate_log_vs_vzeta_r=false,
+                animate_vs_vzeta_z=false,
+                animate_log_vs_vzeta_z=false,
+                animate_vs_vr=false,
+                animate_log_vs_vr=false,
+                animate_vs_vr_r=false,
+                animate_log_vs_vr_r=false,
+                animate_vs_vr_z=false,
+                animate_log_vs_vr_z=false,
                 animate_vs_vz=false,
                 animate_log_vs_vz=false,
+                animate_vs_vz_r=false,
+                animate_log_vs_vz_r=false,
                 animate_vs_vz_z=false,
                 animate_log_vs_vz_z=false,
+                animate_vs_vr_vzeta=false,
+                animate_log_vs_vr_vzeta=false,
+                animate_vs_vz_vzeta=false,
+                animate_log_vs_vz_vzeta=false,
+                animate_vs_vz_vr=false,
+                animate_log_vs_vz_vr=false,
                 OrderedDict(Symbol(k)=>v for (k,v) ∈ section_defaults)...)
         end
     end
@@ -936,6 +1018,10 @@ function plots_for_variable(run_info, variable_name; plot_prefix, is_1D=false,
                 plot_vs_z(run_info, variable_name, is=is, data=variable, input=input,
                           outfile=variable_prefix * "vs_z.pdf")
             end
+            if input.plot_vs_z_r
+                plot_vs_z_r(run_info, variable_name, is=is, data=variable, input=input,
+                            outfile=variable_prefix * "vs_z_r.pdf")
+            end
             if input.animate_vs_z
                 animate_vs_z(run_info, variable_name, is=is, data=variable, input=input,
                              outfile=variable_prefix * "vs_z." * input.animation_ext)
@@ -991,37 +1077,21 @@ function plots_for_dfn_variable(run_info, variable_name; plot_prefix, is_1D=fals
                 plot_vs_r_t(run_info, variable_name, is=is, input=input,
                             outfile=variable_prefix * "vs_r_t.pdf")
             end
-            if !is_1D && input.plot_log_vs_r_t
-                plot_vs_r_t(run_info, variable_name, is=is, input=input,
-                            outfile=log_variable_prefix * "vs_r_t.pdf",
-                            colorscale=log10, transform=positive_or_nan)
-            end
             if input.plot_vs_z_t
                 plot_vs_z_t(run_info, variable_name, is=is, input=input,
                             outfile=variable_prefix * "vs_z_t.pdf")
-            end
-            if input.plot_log_vs_z_t
-                plot_vs_z_t(run_info, variable_name, is=is, input=input,
-                            outfile=log_variable_prefix * "vs_z_t.pdf",
-                            colorscale=log10, transform=positive_or_nan)
             end
             if !is_1D && input.plot_vs_r
                 plot_vs_r(run_info, variable_name, is=is, input=input,
                           outfile=variable_prefix * "vs_r.pdf")
             end
-            if !is_1D && input.plot_log_vs_r
-                plot_vs_r(run_info, variable_name, is=is, input=input,
-                          outfile=log_variable_prefix * "vs_r.pdf", yscale=log10,
-                          transform=positive_or_nan)
-            end
             if input.plot_vs_z
                 plot_vs_z(run_info, variable_name, is=is, input=input,
                           outfile=variable_prefix * "vs_z.pdf")
             end
-            if input.plot_log_vs_z
-                plot_vs_z(run_info, variable_name, is=is, input=input,
-                          outfile=log_variable_prefix * "vs_z.pdf", yscale=log10,
-                          transform=positive_or_nan)
+            if input.plot_vs_z_r
+                plot_vs_z_r(run_info, variable_name, is=is, input=input,
+                            outfile=variable_prefix * "vs_z_r.pdf")
             end
             if input.animate_vs_z
                 animate_vs_z(run_info, variable_name, is=is, input=input,
@@ -1041,10 +1111,32 @@ function plots_for_dfn_variable(run_info, variable_name; plot_prefix, is_1D=fals
                     error("checking moments using analyze_pdf_data() not implemented yet")
                 end
 
-                if input.animate_vs_z
-                    animate_vs_z(run_info, variable_name, is=is, input=input,
-                                 outfile=variable_prefix * "vs_z." * input.animation_ext)
+                if !is_1D && input.plot_log_vs_r
+                    plot_vs_r(run_info, variable_name, is=is, input=input,
+                              outfile=log_variable_prefix * "vs_r.pdf", yscale=log10,
+                              transform=positive_or_nan)
                 end
+                if input.plot_log_vs_z
+                    plot_vs_z(run_info, variable_name, is=is, input=input,
+                              outfile=log_variable_prefix * "vs_z.pdf", yscale=log10,
+                              transform=positive_or_nan)
+                end
+                if !is_1D && input.plot_log_vs_r_t
+                    plot_vs_r_t(run_info, variable_name, is=is, input=input,
+                                outfile=log_variable_prefix * "vs_r_t.pdf",
+                                colorscale=log10, transform=positive_or_nan)
+                end
+                if input.plot_log_vs_z_t
+                    plot_vs_z_t(run_info, variable_name, is=is, input=input,
+                                outfile=log_variable_prefix * "vs_z_t.pdf",
+                                colorscale=log10, transform=positive_or_nan)
+                end
+                if input.plot_log_vs_z_r
+                    plot_vs_z_r(run_info, variable_name, is=is, input=input,
+                                outfile=log_variable_prefix * "vs_z_r.pdf",
+                                colorscale=log10, transform=positive_or_nan)
+                end
+
                 if input.animate_log_vs_z
                     # Note that we use `yscale=log10` and `transform=positive_or_nan`
                     # rather than defining a custom scaling function (which would return
@@ -1059,8 +1151,134 @@ function plots_for_dfn_variable(run_info, variable_name; plot_prefix, is_1D=fals
                                  outfile=log_variable_prefix * "vs_z." * input.animation_ext,
                                  yscale=log10, transform=positive_or_nan)
                 end
+                if !is_1D && input.animate_log_vs_r
+                    animate_vs_z(run_info, variable_name, is=is, input=input,
+                                 outfile=log_variable_prefix * "vs_z." * input.animation_ext,
+                                 yscale=log10, transform=positive_or_nan)
+                end
+                if !is_1D && input.animate_log_vs_z_r
+                    animate_vs_z_r(run_info, variable_name, is=is, input=input,
+                                   outfile=log_variable_prefix * "vs_z." *
+                                   input.animation_ext, colorscale=log10,
+                                   transform=positive_or_nan)
+                end
             end
             if variable_name ∈ ion_dfn_variables
+                if !is_1V && input.plot_vs_vperp
+                    plot_vs_vperp(run_info, variable_name, is=is, input=input,
+                                  outfile=variable_prefix * "vs_vperp.pdf")
+                end
+                if !is_1V && input.plot_log_vs_vperp
+                    plot_vs_vperp(run_info, variable_name, is=is, input=input,
+                                  outfile=log_variable_prefix * "vs_vperp.pdf",
+                                  yscale=log10, transform=positive_or_nan)
+                end
+                if input.plot_vs_vpa
+                    plot_vs_vpa(run_info, variable_name, is=is, input=input,
+                                outfile=variable_prefix * "vs_vpa.pdf")
+                end
+                if input.plot_log_vs_vpa
+                    plot_vs_vpa(run_info, variable_name, is=is, input=input,
+                                outfile=log_variable_prefix * "vs_vpa.pdf", yscale=log10,
+                                transform=positive_or_nan)
+                end
+                if !is_1V && input.plot_vs_vperp_t
+                    plot_vs_vperp_t(run_info, variable_name, is=is, input=input,
+                                    outfile=variable_prefix * "vs_vperp_t.pdf")
+                end
+                if !is_1V && input.plot_log_vs_vperp_t
+                    plot_vs_vperp_t(run_info, variable_name, is=is, input=input,
+                                    outfile=log_variable_prefix * "vs_vperp_t.pdf",
+                                    colorscale=log10, transform=positive_or_nan)
+                end
+                if input.plot_vs_vpa_t
+                    plot_vs_vpa_t(run_info, variable_name, is=is, input=input,
+                                  outfile=variable_prefix * "vs_vpa_t.pdf")
+                end
+                if input.plot_log_vs_vpa_t
+                    plot_vs_vpa_t(run_info, variable_name, is=is, input=input,
+                                  outfile=log_variable_prefix * "vs_vpa_t.pdf",
+                                  colorscale=log10, transform=positive_or_nan)
+                end
+                if !is_1D && !is_1V && input.plot_vs_vperp_r
+                    plot_vs_vperp_r(run_info, variable_name, is=is, input=input,
+                                    outfile=variable_prefix * "vs_vperp_r.pdf")
+                end
+                if !is_1D && !is_1V && input.plot_log_vs_vperp_r
+                    plot_vs_vperp_r(run_info, variable_name, is=is, input=input,
+                                    outfile=log_variable_prefix * "vs_vperp_r.pdf",
+                                    colorscale=log10, transform=positive_or_nan)
+                end
+                if !is_1D && input.plot_vs_vpa_r
+                    plot_vs_vpa_r(run_info, variable_name, is=is, input=input,
+                                  outfile=variable_prefix * "vs_vpa_r.pdf")
+                end
+                if !is_1D && input.plot_log_vs_vpa_r
+                    plot_vs_vpa_r(run_info, variable_name, is=is, input=input,
+                                  outfile=log_variable_prefix * "vs_vpa_r.pdf",
+                                  colorscale=log10, transform=positive_or_nan)
+                end
+                if !is_1V && input.plot_vs_vperp_z
+                    plot_vs_vperp_z(run_info, variable_name, is=is, input=input,
+                                    outfile=variable_prefix * "vs_vperp_z.pdf")
+                end
+                if !is_1V && input.plot_log_vs_vperp_z
+                    plot_vs_vperp_z(run_info, variable_name, is=is, input=input,
+                                    outfile=log_variable_prefix * "vs_vperp_z.pdf",
+                                    colorscale=log10, transform=positive_or_nan)
+                end
+                if input.plot_vs_vpa_z
+                    plot_vs_vpa_z(run_info, variable_name, is=is, input=input,
+                                  outfile=variable_prefix * "vs_vpa_z.pdf")
+                end
+                if input.plot_log_vs_vpa_z
+                    plot_vs_vpa_z(run_info, variable_name, is=is, input=input,
+                                  outfile=log_variable_prefix * "vs_vpa_z.pdf",
+                                  colorscale=log10, transform=positive_or_nan)
+                end
+                if !is_1V && input.plot_vs_vpa_vperp
+                    plot_vs_vpa_vperp(run_info, variable_name, is=is, input=input,
+                                      outfile=variable_prefix * "vs_vpa_vperp.pdf")
+                end
+                if !is_1V && input.plot_log_vs_vpa_vperp
+                    plot_vs_vpa_vperp(run_info, variable_name, is=is, input=input,
+                                      outfile=log_variable_prefix * "vs_vpa_vperp.pdf",
+                                      colorscale=log10, transform=positive_or_nan)
+                end
+
+                if !is_1V && input.animate_vs_vperp
+                    animate_vs_vperp(run_info, variable_name, is=is, input=input,
+                                     outfile=variable_prefix * "vs_vperp." *
+                                     input.animation_ext)
+                end
+                if !is_1V && input.animate_log_vs_vperp
+                    animate_vs_vperp(run_info, variable_name, is=is, input=input,
+                                     outfile=log_variable_prefix * "vs_vperp." *
+                                     input.animation_ext, yscale=log10,
+                                     transform=positive_or_nan)
+                end
+                if !is_1D && !is_1V && input.animate_vs_vperp_z
+                    animate_vs_vperp_r(run_info, variable_name, is=is, input=input,
+                                       outfile=variable_prefix * "vs_vperp_r." *
+                                       input.animation_ext)
+                end
+                if !is_1D && !is_1V && input.animate_log_vs_vperp_z
+                    animate_vs_vperp_r(run_info, variable_name, is=is, input=input,
+                                       outfile=log_variable_prefix * "vs_vperp_r." *
+                                       input.animation_ext, colorscale=log10,
+                                       transform=positive_or_nan)
+                end
+                if !is_1V && input.animate_vs_vperp_z
+                    animate_vs_vperp_z(run_info, variable_name, is=is, input=input,
+                                       outfile=variable_prefix * "vs_vperp_z." *
+                                       input.animation_ext)
+                end
+                if !is_1V && input.animate_log_vs_vperp_z
+                    animate_vs_vperp_z(run_info, variable_name, is=is, input=input,
+                                       outfile=log_variable_prefix * "vs_vperp_z." *
+                                       input.animation_ext, colorscale=log10,
+                                       transform=positive_or_nan)
+                end
                 if input.animate_vs_vpa
                     animate_vs_vpa(run_info, variable_name, is=is, input=input,
                                    outfile=variable_prefix * "vs_vpa." * input.animation_ext)
@@ -1069,6 +1287,15 @@ function plots_for_dfn_variable(run_info, variable_name; plot_prefix, is_1D=fals
                     animate_vs_vpa(run_info, variable_name, is=is, input=input,
                                    outfile=log_variable_prefix * "vs_vpa." * input.animation_ext,
                                    yscale=log10, transform=positive_or_nan)
+                end
+                if !is_1D && input.animate_vs_vpa_r
+                    animate_vs_vpa_r(run_info, variable_name, is=is, input=input,
+                                     outfile=variable_prefix * "vs_vpa_r." * input.animation_ext)
+                end
+                if !is_1D && input.animate_log_vs_vpa_r
+                    animate_vs_vpa_r(run_info, variable_name, is=is, input=input,
+                                     outfile=log_variable_prefix * "vs_vpa_r." * input.animation_ext,
+                                     colorscale=log10, transform=positive_or_nan)
                 end
                 if input.animate_vs_vpa_z
                     animate_vs_vpa_z(run_info, variable_name, is=is, input=input,
@@ -1079,8 +1306,188 @@ function plots_for_dfn_variable(run_info, variable_name; plot_prefix, is_1D=fals
                                      outfile=log_variable_prefix * "vs_vpa_z." * input.animation_ext,
                                      colorscale=log10, transform=positive_or_nan)
                 end
+                if !is_1V && input.animate_vs_vpa_vperp
+                    animate_vs_vpa_vperp(run_info, variable_name, is=is, input=input,
+                                         outfile=variable_prefix * "vs_vpa_vperp." *
+                                         input.animation_ext)
+                end
+                if !is_1V && input.animate_log_vs_vpa_vperp
+                    animate_vs_vpa_vperp(run_info, variable_name, is=is, input=input,
+                                         outfile=log_variable_prefix * "vs_vpa_vperp." *
+                                         input.animation_ext, colorscale=log10,
+                                         transform=positive_or_nan)
+                end
             end
             if variable_name ∈ neutral_dfn_variables
+                if !is_1V && input.plot_vs_vzeta_t
+                    plot_vs_vzeta_t(run_info, variable_name, is=is, input=input,
+                                  outfile=variable_prefix * "vs_vzeta_t.pdf")
+                end
+                if !is_1V && input.plot_log_vs_vzeta_t
+                    plot_vs_vzeta_t(run_info, variable_name, is=is, input=input,
+                                  outfile=log_variable_prefix * "vs_vzeta_t.pdf",
+                                  colorscale=log10, transform=positive_or_nan)
+                end
+                if !is_1V && input.plot_vs_vr_t
+                    plot_vs_vr_t(run_info, variable_name, is=is, input=input,
+                                  outfile=variable_prefix * "vs_vr_t.pdf")
+                end
+                if !is_1V && input.plot_log_vs_vr_t
+                    plot_vs_vr_t(run_info, variable_name, is=is, input=input,
+                                  outfile=log_variable_prefix * "vs_vr_t.pdf",
+                                  colorscale=log10, transform=positive_or_nan)
+                end
+                if input.plot_vs_vz_t
+                    plot_vs_vz_t(run_info, variable_name, is=is, input=input,
+                                  outfile=variable_prefix * "vs_vz_t.pdf")
+                end
+                if input.plot_log_vs_vz_t
+                    plot_vs_vz_t(run_info, variable_name, is=is, input=input,
+                                  outfile=log_variable_prefix * "vs_vz_t.pdf",
+                                  colorscale=log10, transform=positive_or_nan)
+                end
+                if !is_1D && !is_1V && input.plot_vs_vzeta_r
+                    plot_vs_vzeta_r(run_info, variable_name, is=is, input=input,
+                                  outfile=variable_prefix * "vs_vzeta_r.pdf")
+                end
+                if !is_1D && !is_1V && input.plot_log_vs_vzeta_r
+                    plot_vs_vzeta_r(run_info, variable_name, is=is, input=input,
+                                  outfile=log_variable_prefix * "vs_vzeta_r.pdf",
+                                  colorscale=log10, transform=positive_or_nan)
+                end
+                if !is_1D && !is_1V && input.plot_vs_vr_r
+                    plot_vs_vr_r(run_info, variable_name, is=is, input=input,
+                                  outfile=variable_prefix * "vs_vr_r.pdf")
+                end
+                if !is_1D && !is_1V && input.plot_log_vs_vr_r
+                    plot_vs_vr_r(run_info, variable_name, is=is, input=input,
+                                  outfile=log_variable_prefix * "vs_vr_r.pdf",
+                                  colorscale=log10, transform=positive_or_nan)
+                end
+                if !is_1D && input.plot_vs_vz_r
+                    plot_vs_vz_r(run_info, variable_name, is=is, input=input,
+                                  outfile=variable_prefix * "vs_vz_r.pdf")
+                end
+                if !is_1D && input.plot_log_vs_vz_r
+                    plot_vs_vz_r(run_info, variable_name, is=is, input=input,
+                                  outfile=log_variable_prefix * "vs_vz_r.pdf",
+                                  colorscale=log10, transform=positive_or_nan)
+                end
+                if !is_1V && input.plot_vs_vzeta_z
+                    plot_vs_vzeta_z(run_info, variable_name, is=is, input=input,
+                                  outfile=variable_prefix * "vs_vzeta_z.pdf")
+                end
+                if !is_1V && input.plot_log_vs_vzeta_z
+                    plot_vs_vzeta_z(run_info, variable_name, is=is, input=input,
+                                  outfile=log_variable_prefix * "vs_vzeta_z.pdf",
+                                  colorscale=log10, transform=positive_or_nan)
+                end
+                if !is_1V && input.plot_vs_vr_z
+                    plot_vs_vr_z(run_info, variable_name, is=is, input=input,
+                                  outfile=variable_prefix * "vs_vr_z.pdf")
+                end
+                if !is_1V && input.plot_log_vs_vr_z
+                    plot_vs_vr_z(run_info, variable_name, is=is, input=input,
+                                  outfile=log_variable_prefix * "vs_vr_z.pdf",
+                                  colorscale=log10, transform=positive_or_nan)
+                end
+                if input.plot_vs_vz_z
+                    plot_vs_vz_z(run_info, variable_name, is=is, input=input,
+                                  outfile=variable_prefix * "vs_vz_z.pdf")
+                end
+                if input.plot_log_vs_vz_z
+                    plot_vs_vz_z(run_info, variable_name, is=is, input=input,
+                                  outfile=log_variable_prefix * "vs_vz_z.pdf",
+                                  colorscale=log10, transform=positive_or_nan)
+                end
+                if !is_1V && input.plot_vs_vr_vzeta
+                    plot_vs_vr_vzeta(run_info, variable_name, is=is, input=input,
+                                  outfile=variable_prefix * "vs_vr_vzeta.pdf")
+                end
+                if !is_1V && input.plot_log_vs_vr_vzeta
+                    plot_vs_vr_vzeta(run_info, variable_name, is=is, input=input,
+                                  outfile=log_variable_prefix * "vs_vr_vzeta.pdf",
+                                  colorscale=log10, transform=positive_or_nan)
+                end
+                if !is_1V && input.plot_vs_vz_vzeta
+                    plot_vs_vz_vzeta(run_info, variable_name, is=is, input=input,
+                                  outfile=variable_prefix * "vs_vz_vzeta.pdf")
+                end
+                if !is_1V && input.plot_log_vs_vz_vzeta
+                    plot_vs_vz_vzeta(run_info, variable_name, is=is, input=input,
+                                  outfile=log_variable_prefix * "vs_vz_vzeta.pdf",
+                                  colorscale=log10, transform=positive_or_nan)
+                end
+                if !is_1V && input.plot_vs_vz_vr
+                    plot_vs_vz_vr(run_info, variable_name, is=is, input=input,
+                                  outfile=variable_prefix * "vs_vz_vr.pdf")
+                end
+                if !is_1V && input.plot_log_vs_vz_vr
+                    plot_vs_vz_vr(run_info, variable_name, is=is, input=input,
+                                  outfile=log_variable_prefix * "vs_vz_vr.pdf",
+                                  colorscale=log10, transform=positive_or_nan)
+                end
+
+                if !is_1V && input.animate_vs_vzeta
+                    animate_vs_vzeta(run_info, variable_name, is=is, input=input,
+                                     outfile=variable_prefix * "vs_vzeta." *
+                                     input.animation_ext)
+                end
+                if !is_1V && input.animate_log_vs_vzeta
+                    animate_vs_vzeta(run_info, variable_name, is=is, input=input,
+                                     outfile=log_variable_prefix * "vs_vzeta." *
+                                     input.animation_ext, yscale=log10,
+                                     transform=positive_or_nan)
+                end
+                if !is_1V && !is_1D && input.animate_vs_vzeta_r
+                    animate_vs_vzeta_r(run_info, variable_name, is=is, input=input,
+                                       outfile=variable_prefix * "vs_vzeta_r." *
+                                       input.animation_ext)
+                end
+                if !is_1V && !is_1D && input.animate_log_vs_vzeta_r
+                    animate_vs_vzeta_r(run_info, variable_name, is=is, input=input,
+                                       outfile=log_variable_prefix * "vs_vzeta_r." *
+                                       input.animation_ext, colorscale=log10,
+                                       transform=positive_or_nan)
+                end
+                if !is_1V && input.animate_vs_vzeta_z
+                    animate_vs_vzeta_z(run_info, variable_name, is=is, input=input,
+                                       outfile=variable_prefix * "vs_vzeta_z." *
+                                       input.animation_ext)
+                end
+                if !is_1V && input.animate_log_vs_vzeta_z
+                    animate_vs_vzeta_z(run_info, variable_name, is=is, input=input,
+                                       outfile=log_variable_prefix * "vs_vzeta_z." *
+                                       input.animation_ext, colorscale=log10,
+                                       transform=positive_or_nan)
+                end
+                if !is_1V && input.animate_vs_vr
+                    animate_vs_vr(run_info, variable_name, is=is, input=input,
+                                  outfile=variable_prefix * "vs_vr." * input.animation_ext)
+                end
+                if !is_1V && input.animate_log_vs_vr
+                    animate_vs_vr(run_info, variable_name, is=is, input=input,
+                                  outfile=log_variable_prefix * "vs_vr." * input.animation_ext,
+                                  yscale=log10, transform=positive_or_nan)
+                end
+                if !is_1V && !is_1D && input.animate_vs_vr_r
+                    animate_vs_vr_r(run_info, variable_name, is=is, input=input,
+                                    outfile=variable_prefix * "vs_vr_r." * input.animation_ext)
+                end
+                if !is_1V && !is_1D && input.animate_log_vs_vr_r
+                    animate_vs_vr_r(run_info, variable_name, is=is, input=input,
+                                    outfile=log_variable_prefix * "vs_vr_r." * input.animation_ext,
+                                    colorscale=log10, transform=positive_or_nan)
+                end
+                if !is_1V && input.animate_vs_vr_z
+                    animate_vs_vr_z(run_info, variable_name, is=is, input=input,
+                                    outfile=variable_prefix * "vs_vr_z." * input.animation_ext)
+                end
+                if !is_1V && input.animate_log_vs_vr_z
+                    animate_vs_vr_z(run_info, variable_name, is=is, input=input,
+                                    outfile=log_variable_prefix * "vs_vr_z." * input.animation_ext,
+                                    colorscale=log10, transform=positive_or_nan)
+                end
                 if input.animate_vs_vz
                     animate_vs_vz(run_info, variable_name, is=is, input=input,
                                   outfile=variable_prefix * "vs_vz." * input.animation_ext)
@@ -1090,6 +1497,15 @@ function plots_for_dfn_variable(run_info, variable_name; plot_prefix, is_1D=fals
                                   outfile=log_variable_prefix * "vs_vz." * input.animation_ext,
                                   yscale=log10, transform=positive_or_nan)
                 end
+                if !is_1D && input.animate_vs_vz_r
+                    animate_vs_vz_r(run_info, variable_name, is=is, input=input,
+                                    outfile=variable_prefix * "vs_vz_r." * input.animation_ext)
+                end
+                if !is_1D && input.animate_log_vs_vz_r
+                    animate_vs_vz_r(run_info, variable_name, is=is, input=input,
+                                    outfile=log_variable_prefix * "vs_vz_r." * input.animation_ext,
+                                    colorscale=log10, transform=positive_or_nan)
+                end
                 if input.animate_vs_vz_z
                     animate_vs_vz_z(run_info, variable_name, is=is, input=input,
                                     outfile=variable_prefix * "vs_vz_z." * input.animation_ext)
@@ -1098,6 +1514,39 @@ function plots_for_dfn_variable(run_info, variable_name; plot_prefix, is_1D=fals
                     animate_vs_vz_z(run_info, variable_name, is=is, input=input,
                                     outfile=log_variable_prefix * "vs_vz_z." * input.animation_ext,
                                     colorscale=log10, transform=positive_or_nan)
+                end
+                if !is_1V && input.animate_vs_vr_vzeta
+                    animate_vs_vr_vzeta(run_info, variable_name, is=is, input=input,
+                                        outfile=variable_prefix * "vs_vr_vzeta." *
+                                        input.animation_ext)
+                end
+                if !is_1V && input.animate_log_vs_vr_vzeta
+                    animate_vs_vr_vzeta(run_info, variable_name, is=is, input=input,
+                                        outfile=log_variable_prefix * "vs_vr_vzeta." *
+                                        input.animation_ext, colorscale=log10,
+                                        transform=positive_or_nan)
+                end
+                if !is_1V && input.animate_vs_vz_vzeta
+                    animate_vs_vz_vzeta(run_info, variable_name, is=is, input=input,
+                                        outfile=variable_prefix * "vs_vz_vzeta." *
+                                        input.animation_ext)
+                end
+                if !is_1V && input.animate_log_vs_vz_vzeta
+                    animate_vs_vz_vzeta(run_info, variable_name, is=is, input=input,
+                                        outfile=log_variable_prefix * "vs_vz_vzeta." *
+                                        input.animation_ext, colorscale=log10,
+                                        transform=positive_or_nan)
+                end
+                if !is_1V && input.animate_vs_vz_vr
+                    animate_vs_vz_vr(run_info, variable_name, is=is, input=input,
+                                     outfile=variable_prefix * "vs_vz_vr." *
+                                     input.animation_ext)
+                end
+                if !is_1V && input.animate_log_vs_vz_vr
+                    animate_vs_vz_vr(run_info, variable_name, is=is, input=input,
+                                     outfile=log_variable_prefix * "vs_vz_vr." *
+                                     input.animation_ext, colorscale=log10,
+                                     transform=positive_or_nan)
                 end
             end
         end
