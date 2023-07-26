@@ -612,7 +612,8 @@ function get_run_info(run_dir, restart_index; itime_min=1, itime_max=-1, itime_s
         ext = "moments"
     end
 
-    has_data = all(length(glob(p * ".$ext*.h5")) > 0 for p ∈ run_prefixes)
+    has_data = all(length(glob(basename(p) * ".$ext*.h5", dirname(p))) > 0
+                   for p ∈ run_prefixes)
     if !has_data
         println("No $ext data found for $run_prefixes, skipping $ext")
         return nothing
