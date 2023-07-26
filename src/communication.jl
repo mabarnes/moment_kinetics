@@ -103,11 +103,11 @@ function setup_distributed_memory_MPI(z_nelement_global,z_nelement_local,r_nelem
     nrank_global = global_size[] # number of processes 
     
     # get information about how the grid is divided up
-    # number of sections `chunks' of the x grid
+    # number of sections `chunks' of the r grid
     r_nchunks = floor(mk_int,r_nelement_global/r_nelement_local)
     # number of sections `chunks' of the z grid
 	z_nchunks = floor(mk_int,z_nelement_global/z_nelement_local) # number of sections of the z grid
-	# get the number of shared-memorz blocks in the z r decomposition
+	# get the number of shared-memory blocks in the z r decomposition
     nblocks = r_nchunks*z_nchunks
     # get the number of ranks per block
     nrank_per_zr_block = floor(mk_int,nrank_global/nblocks)
