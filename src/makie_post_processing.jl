@@ -446,6 +446,7 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
        plot_vs_z=true,
        plot_vs_r_t=true,
        plot_vs_z_t=true,
+       plot_vs_z_r=true,
        animate_vs_z=false,
        animate_vs_r=false,
        animate_vs_z_r=false,
@@ -460,25 +461,30 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
             OrderedDict(Symbol(k)=>v for (k,v) ∈ section_defaults)...)
     end
 
+    plot_options_1d = Tuple(Symbol(:plot_vs_, d) for d ∈ one_dimension_combinations)
+    plot_log_options_1d = Tuple(Symbol(:plot_log_vs_, d) for d ∈ one_dimension_combinations)
+    plot_options_2d = Tuple(Symbol(:plot_vs_, d2, :_, d1) for (d1, d2) ∈ two_dimension_combinations)
+    plot_log_options_2d = Tuple(Symbol(:plot_log_vs_, d2, :_, d1) for (d1, d2) ∈ two_dimension_combinations)
+    animate_options_1d = Tuple(Symbol(:animate_vs_, d) for d ∈ one_dimension_combinations_no_t)
+    animate_log_options_1d = Tuple(Symbol(:animate_log_vs_, d) for d ∈ one_dimension_combinations_no_t)
+    animate_options_2d = Tuple(Symbol(:animate_vs_, d2, :_, d1) for (d1, d2) ∈ two_dimension_combinations_no_t)
+    animate_log_options_2d = Tuple(Symbol(:animate_log_vs_, d2, :_, d1) for (d1, d2) ∈ two_dimension_combinations_no_t)
     if dfns
         for variable_name ∈ all_dfn_variables
             set_defaults_and_check_section!(
                 this_input_dict, variable_name;
                 check_moments=false,
-                plot_log_vs_r=true,
-                plot_log_vs_z=true,
-                plot_log_vs_r_t=true,
-                plot_log_vs_z_t=true,
-                animate_log_vs_z=false,
-                animate_vs_vpa=false,
-                animate_log_vs_vpa=false,
-                animate_vs_vpa_z=false,
-                animate_log_vs_vpa_z=false,
-                animate_vs_vz=false,
-                animate_log_vs_vz=false,
-                animate_vs_vz_z=false,
-                animate_log_vs_vz_z=false,
+                (o=>false for o ∈ plot_options_1d if String(o) ∉ keys(section_defaults))...,
+                (o=>false for o ∈ plot_log_options_1d if String(o) ∉ keys(section_defaults))...,
+                (o=>false for o ∈ plot_options_2d if String(o) ∉ keys(section_defaults))...,
+                (o=>false for o ∈ plot_log_options_2d if String(o) ∉ keys(section_defaults))...,
+                (o=>false for o ∈ animate_options_1d if String(o) ∉ keys(section_defaults))...,
+                (o=>false for o ∈ animate_log_options_1d if String(o) ∉ keys(section_defaults))...,
+                (o=>false for o ∈ animate_options_2d if String(o) ∉ keys(section_defaults))...,
+                (o=>false for o ∈ animate_log_options_2d if String(o) ∉ keys(section_defaults))...,
                 OrderedDict(Symbol(k)=>v for (k,v) ∈ section_defaults)...)
+            # Sort keys to make dict easier to read
+            sort!(this_input_dict[variable_name])
         end
     end
 
@@ -1019,6 +1025,10 @@ function plots_for_variable(run_info, variable_name; plot_prefix, is_1D=false,
                 plot_vs_z(run_info, variable_name, is=is, data=variable, input=input,
                           outfile=variable_prefix * "vs_z.pdf")
             end
+            if input.plot_vs_z_r
+                plot_vs_z_r(run_info, variable_name, is=is, data=variable, input=input,
+                            outfile=variable_prefix * "vs_z_r.pdf")
+            end
             if input.animate_vs_z
                 animate_vs_z(run_info, variable_name, is=is, data=variable, input=input,
                              outfile=variable_prefix * "vs_z." * input.animation_ext)
@@ -1041,140 +1051,82 @@ function plots_for_dfn_variable(run_info, variable_name; plot_prefix, is_1D=fals
                                 is_1V=false)
     input = Dict_to_NamedTuple(input_dict_dfns[variable_name])
 
-    # test if any plot is needed
-    if any(v for (k,v) in pairs(input) if
-           startswith(String(k), "plot") || startswith(String(k), "animate"))
-        if variable_name ∈ em_variables
-            species_indices = (nothing,)
-        elseif variable_name ∈ neutral_moment_variables ||
-               variable_name ∈ neutral_dfn_variables
-            species_indices = 1:maximum(ri.n_neutral_species for ri ∈ run_info)
-        else
-            species_indices = 1:maximum(ri.n_ion_species for ri ∈ run_info)
+    is_neutral = variable_name ∈ neutral_dfn_variables
+
+    if is_neutral
+        animate_dims = setdiff(neutral_dimensions, (:sn,))
+        if is_1V
+            animate_dims = setdiff(plot_dims_1d, (:vzeta, :vr))
         end
-        for is ∈ species_indices
-            if is !== nothing
-                variable_prefix = plot_prefix * variable_name * "_spec$(is)_"
-                log_variable_prefix = plot_prefix * "log" * variable_name * "_spec$(is)_"
-            else
-                variable_prefix = plot_prefix * variable_name * "_"
-                log_variable_prefix = plot_prefix * "log" * variable_name * "_"
-            end
-            if variable_name == "Er" && is_1D
-                # Skip if there is no r-dimension
-                continue
-            end
-            if !is_1D && input.plot_vs_r_t
-                plot_vs_r_t(run_info, variable_name, is=is, input=input,
-                            outfile=variable_prefix * "vs_r_t.pdf")
-            end
-            if !is_1D && input.plot_log_vs_r_t
-                plot_vs_r_t(run_info, variable_name, is=is, input=input,
-                            outfile=log_variable_prefix * "vs_r_t.pdf",
-                            colorscale=log10, transform=positive_or_nan)
-            end
-            if input.plot_vs_z_t
-                plot_vs_z_t(run_info, variable_name, is=is, input=input,
-                            outfile=variable_prefix * "vs_z_t.pdf")
-            end
-            if input.plot_log_vs_z_t
-                plot_vs_z_t(run_info, variable_name, is=is, input=input,
-                            outfile=log_variable_prefix * "vs_z_t.pdf",
-                            colorscale=log10, transform=positive_or_nan)
-            end
-            if !is_1D && input.plot_vs_r
-                plot_vs_r(run_info, variable_name, is=is, input=input,
-                          outfile=variable_prefix * "vs_r.pdf")
-            end
-            if !is_1D && input.plot_log_vs_r
-                plot_vs_r(run_info, variable_name, is=is, input=input,
-                          outfile=log_variable_prefix * "vs_r.pdf", yscale=log10,
-                          transform=positive_or_nan)
-            end
-            if input.plot_vs_z
-                plot_vs_z(run_info, variable_name, is=is, input=input,
-                          outfile=variable_prefix * "vs_z.pdf")
-            end
-            if input.plot_log_vs_z
-                plot_vs_z(run_info, variable_name, is=is, input=input,
-                          outfile=log_variable_prefix * "vs_z.pdf", yscale=log10,
-                          transform=positive_or_nan)
-            end
-            if input.animate_vs_z
-                animate_vs_z(run_info, variable_name, is=is, input=input,
-                             outfile=variable_prefix * "vs_z." * input.animation_ext)
-            end
-            if !is_1D && input.animate_vs_r
-                animate_vs_r(run_info, variable_name, is=is, input=input,
-                             outfile=variable_prefix * "vs_r." * input.animation_ext)
-            end
-            if !is_1D && input.animate_vs_z_r
-                animate_vs_z_r(run_info, variable_name, is=is, input=input,
-                               outfile=variable_prefix * "vs_r." * input.animation_ext)
-            end
+    else
+        animate_dims = setdiff(ion_dimensions, (:s,))
+        if is_1V
+            animate_dims = setdiff(plot_dims_1d, (:vperp,))
+        end
+    end
+    if is_1D
+        animate_dims = setdiff(animate_dims_1d, (:r,))
+    end
+    plot_dims = tuple(:t, animate_dims...)
 
-            if variable_name ∈ all_dfn_variables
-                if input.check_moments
-                    error("checking moments using analyze_pdf_data() not implemented yet")
-                end
+    # test if any plot is needed
+    if !any(v for (k,v) in pairs(input) if
+            startswith(String(k), "plot") || startswith(String(k), "animate"))
+        return nothing
+    end
 
-                if input.animate_vs_z
-                    animate_vs_z(run_info, variable_name, is=is, input=input,
-                                 outfile=variable_prefix * "vs_z." * input.animation_ext)
-                end
-                if input.animate_log_vs_z
-                    # Note that we use `yscale=log10` and `transform=positive_or_nan`
-                    # rather than defining a custom scaling function (which would return
-                    # NaN for negative values) because it messes up the automatic minimum
-                    # value for the colorscale: The transform removes any zero or negative
-                    # values from the data, so the minimum value for the colorscale is set
-                    # by the smallest positive value; with only the custom colorscale, the
-                    # minimum would be negative and the corresponding color would be the
-                    # color for NaN, which does not go on the Colorbar and so causes an
-                    # error.
-                    animate_vs_z(run_info, variable_name, is=is, input=input,
-                                 outfile=log_variable_prefix * "vs_z." * input.animation_ext,
-                                 yscale=log10, transform=positive_or_nan)
-                end
-            end
-            if variable_name ∈ ion_dfn_variables
-                if input.animate_vs_vpa
-                    animate_vs_vpa(run_info, variable_name, is=is, input=input,
-                                   outfile=variable_prefix * "vs_vpa." * input.animation_ext)
-                end
-                if input.animate_log_vs_vpa
-                    animate_vs_vpa(run_info, variable_name, is=is, input=input,
-                                   outfile=log_variable_prefix * "vs_vpa." * input.animation_ext,
-                                   yscale=log10, transform=positive_or_nan)
-                end
-                if input.animate_vs_vpa_z
-                    animate_vs_vpa_z(run_info, variable_name, is=is, input=input,
-                                     outfile=variable_prefix * "vs_vpa_z." * input.animation_ext)
-                end
-                if input.animate_log_vs_vpa_z
-                    animate_vs_vpa_z(run_info, variable_name, is=is, input=input,
-                                     outfile=log_variable_prefix * "vs_vpa_z." * input.animation_ext,
-                                     colorscale=log10, transform=positive_or_nan)
+    if is_neutral
+        species_indices = 1:maximum(ri.n_neutral_species for ri ∈ run_info)
+    else
+        species_indices = 1:maximum(ri.n_ion_species for ri ∈ run_info)
+    end
+    for is ∈ species_indices
+        variable_prefix = plot_prefix * variable_name * "_"
+        log_variable_prefix = plot_prefix * "log" * variable_name * "_"
+
+        # Note that we use `yscale=log10` and `transform=positive_or_nan` rather than
+        # defining a custom scaling function (which would return NaN for negative
+        # values) because it messes up the automatic minimum value for the colorscale:
+        # The transform removes any zero or negative values from the data, so the
+        # minimum value for the colorscale is set by the smallest positive value; with
+        # only the custom colorscale, the minimum would be negative and the
+        # corresponding color would be the color for NaN, which does not go on the
+        # Colorbar and so causes an error.
+        for (log, yscale, transform, var_prefix) ∈
+                ((:"", nothing, identity, variable_prefix),
+                 (:_log, log10, positive_or_nan, log_variable_prefix))
+            for dim ∈ plot_dims
+                if input[Symbol(:plot, log, :_vs_, dim)]
+                    func = getfield(makie_post_processing, Symbol(:plot_vs_, dim))
+                    outfile = var_prefix * "vs_$dim.pdf"
+                    func(run_info, variable_name, is=is, input=input, outfile=outfile,
+                         yscale=yscale, transform=transform)
                 end
             end
-            if variable_name ∈ neutral_dfn_variables
-                if input.animate_vs_vz
-                    animate_vs_vz(run_info, variable_name, is=is, input=input,
-                                  outfile=variable_prefix * "vs_vz." * input.animation_ext)
+            for (dim1, dim2) ∈ combinations(plot_dims, 2)
+                if input[Symbol(:plot, log, :_vs_, dim2, :_, dim1)]
+                    func = getfield(makie_post_processing,
+                                    Symbol(:plot_vs_, dim2, :_, dim1))
+                    outfile = var_prefix * "vs_$(dim2)_$(dim1).pdf"
+                    func(run_info, variable_name, is=is, input=input, outfile=outfile,
+                         colorscale=yscale, transform=transform)
                 end
-                if input.animate_log_vs_vz
-                    animate_vs_vz(run_info, variable_name, is=is, input=input,
-                                  outfile=log_variable_prefix * "vs_vz." * input.animation_ext,
-                                  yscale=log10, transform=positive_or_nan)
+            end
+            for dim ∈ animate_dims
+                if input[Symbol(:animate, log, :_vs_, dim)]
+                    func = getfield(makie_post_processing, Symbol(:animate_vs_, dim))
+                    outfile = var_prefix * "vs_$dim." * input.animation_ext
+                    func(run_info, variable_name, is=is, input=input, outfile=outfile,
+                         yscale=yscale, transform=transform)
                 end
-                if input.animate_vs_vz_z
-                    animate_vs_vz_z(run_info, variable_name, is=is, input=input,
-                                    outfile=variable_prefix * "vs_vz_z." * input.animation_ext)
-                end
-                if input.animate_log_vs_vz_z
-                    animate_vs_vz_z(run_info, variable_name, is=is, input=input,
-                                    outfile=log_variable_prefix * "vs_vz_z." * input.animation_ext,
-                                    colorscale=log10, transform=positive_or_nan)
+            end
+            for (dim1, dim2) ∈ combinations(animate_dims, 2)
+                if input[Symbol(:animate, log, :_vs_, dim2, :_, dim1)]
+                    func = getfield(makie_post_processing,
+                                    Symbol(:animate_vs_, dim2, :_, dim1))
+                    outfile = var_prefix * "vs_$(dim2)_$(dim1)." * input.animation_ext
+                    func(run_info, variable_name, is=is, input=input, outfile=outfile,
+                         colorscale=yscale, transform=transform)
                 end
             end
         end
