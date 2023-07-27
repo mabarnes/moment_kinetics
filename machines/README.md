@@ -50,6 +50,39 @@ and wait for the resulting job to complete.
 This step is required if you use the `sumbit-run.sh` or `submit-restart.sh`
 scripts, as these both use the `moment_kinetics.so` system image.
 
+## Running and restarting simulations
+
+Convenience scripts are provided to submit jobs running and post-processing a
+simulation run or restart.
+```shell
+$ ./submit-run.sh <path to input file>.toml
+```
+will submit a job to run a simulation using that input file and (by default) a
+linked job that will run the post-processing routines (in the serial queue)
+when the run finishes.
+
+Similarly
+```shell
+$ ./submit-restart.sh <path to input file>.toml
+```
+will submit a job to run and post-process a restart using input file. The
+simulation will restart from the last time point of the previous run
+(`restart_moment_kinetics.jl` supports more flexibility, but for now you would
+need to write your own submission script to pass the options needed for that).
+
+Default parameters for the runs (number of nodes, time limit, etc.) were set up
+by `machines/machine_setup.sh` are stored in `LocalPreferences.toml` (which can
+be edited to change them). The parameters can be altered for a particular job
+(and you can disable the post-processing job) using command line flags
+described by the help text
+```shell
+$ ./submit-run.sh -h
+```
+or
+```shell
+$ ./submit-restart.sh -h
+```
+
 Advanced usage
 --------------
 
