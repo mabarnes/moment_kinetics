@@ -35,6 +35,21 @@ reproducibility or for debugging some dependency conflicts), you might want to
 put `.julia` within the `moment_kinetics` directory (e.g. enter `.` at the
 prompt).
 
+## After editing source code
+
+If you use the precompiled `moment_kinetics.so` system image, you need to
+recompile it after editing source code (otherwise simulations will continue to
+use the old source code).
+
+To do this, run
+```shell
+$ ./precompile-submit.sh
+```
+and wait for the resulting job to complete.
+
+This step is required if you use the `sumbit-run.sh` or `submit-restart.sh`
+scripts, as these both use the `moment_kinetics.so` system image.
+
 Advanced usage
 --------------
 
