@@ -6,6 +6,8 @@ on some known clusters.
 
 Currently supported:
 * "archer" ([ARCHER2](https://www.archer2.ac.uk/))
+* "marconi" (the EUROfusion supercomputer
+    [Marconi](https://wiki.u-gov.it/confluence/display/SCAIUS/UG3.1%3A+MARCONI+UserGuide))
 
 Quickstart
 ----------
