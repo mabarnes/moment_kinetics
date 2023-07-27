@@ -2,7 +2,7 @@
 """
 module calculus
 
-export derivative!, second_derivative!
+export derivative!, second_derivative!, laplacian_derivative!
 export reconcile_element_boundaries_MPI!
 export integral
 
@@ -10,6 +10,7 @@ export integral
 using ..chebyshev: chebyshev_info, chebyshev_derivative!
 using ..gauss_legendre: gausslegendre_info, gausslegendre_derivative!
 using ..gauss_legendre: gausslegendre_apply_Kmat!, gausslegendre_mass_matrix_solve!
+using ..gauss_legendre: gausslegendre_apply_Lmat!
 using ..finite_differences: derivative_finite_difference!
 using ..type_definitions: mk_float, mk_int
 using MPI 
@@ -39,6 +40,16 @@ end
 function second_derivative!(d2f, f, coord, spectral::gausslegendre_info)
     # get the derivative at each grid point within each element and store in df
     gausslegendre_apply_Kmat!(coord.scratch_2d, f, spectral, coord)
+    # map the derivative from the elemental grid to the full grid;
+    # at element boundaries, use the average of the derivatives from neighboring elements.
+    derivative_elements_to_full_grid!(coord.scratch, coord.scratch_2d, coord)
+    # solve weak form problem M * d2f = K * f
+    gausslegendre_mass_matrix_solve!(d2f,coord.scratch,spectral)
+end
+
+function laplacian_derivative!(d2f, f, coord, spectral::gausslegendre_info)
+    # get the derivative at each grid point within each element and store in df
+    gausslegendre_apply_Lmat!(coord.scratch_2d, f, spectral, coord)
     # map the derivative from the elemental grid to the full grid;
     # at element boundaries, use the average of the derivatives from neighboring elements.
     derivative_elements_to_full_grid!(coord.scratch, coord.scratch_2d, coord)

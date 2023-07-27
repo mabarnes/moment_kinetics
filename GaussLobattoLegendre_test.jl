@@ -11,7 +11,7 @@ import moment_kinetics
 using moment_kinetics.gauss_legendre
 using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.coordinates: define_coordinate
-using moment_kinetics.calculus: derivative!, second_derivative!
+using moment_kinetics.calculus: derivative!, second_derivative!, laplacian_derivative!
 
 if abspath(PROGRAM_FILE) == @__FILE__
     using Pkg
@@ -203,8 +203,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
     println("max df_err: ",max_df_err)
     
     # elemental grid tests 
-    ngrid = 3
-    nelement = 100
+    ngrid = 17
+    nelement = 10
     y_ngrid = ngrid #number of points per element 
     y_nelement_local = nelement # number of elements per rank
     y_nelement_global = y_nelement_local # total number of elements 
@@ -355,6 +355,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         mul!(b,y_spectral.S_matrix,g_exact)
         gausslegendre_mass_matrix_solve!(divg_num,b,y_spectral)
         @. divg_err = abs(divg_num - divg_exact)
+        #println("divg_b (weak form): ",b)
         #println("divg_num (weak form): ",divg_num)
         #println("divg_exact (weak form): ",divg_exact)
         println("max(divg_err) (weak form): ",maximum(divg_err))
@@ -371,8 +372,9 @@ if abspath(PROGRAM_FILE) == @__FILE__
         outfile = "vperp_second_derivative_test.pdf"
         savefig(outfile)
          
-        mul!(b,y_spectral.L_matrix,h_exact)
-        gausslegendre_mass_matrix_solve!(laph_num,b,y_spectral)
+        #mul!(b,y_spectral.L_matrix,h_exact)
+        laplacian_derivative!(laph_num, h_exact, y, y_spectral)
+        #gausslegendre_mass_matrix_solve!(laph_num,b,y_spectral)
         @. laph_err = abs(laph_num - laph_exact) #(0.5*y.L/y.nelement_global)*
         #println(b[1:10])
         println(laph_num[1:10])

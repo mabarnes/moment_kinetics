@@ -88,6 +88,8 @@ struct coordinate
     local_io_range::UnitRange{Int64}
     # global range to write into in output file
     global_io_range::UnitRange{Int64}
+    # jacobian function (grid points)
+    jacobian::Array{mk_float,1}
 end
 
 """
@@ -130,7 +132,12 @@ function define_coordinate(input, parallel_io::Bool=false)
     # endpoints, so only two pieces of information must be shared
     send_buffer = allocate_float(1)
     receive_buffer = allocate_float(1)
-
+    jacobian = allocate_float(n_local)
+    if input.name == "vperp" 
+        @. jacobian = grid
+    else
+        @. jacobian = 1.0
+    end
     # Add some ranges to support parallel file io
     if !parallel_io
         # No parallel io, just write everything
@@ -153,7 +160,7 @@ function define_coordinate(input, parallel_io::Bool=false)
         cell_width, igrid, ielement, imin, imax, igrid_full, input.discretization, input.fd_option, input.cheb_option,
         input.bc, wgts, uniform_grid, duniform_dgrid, scratch, copy(scratch), copy(scratch),
         scratch_2d, copy(scratch_2d), advection, send_buffer, receive_buffer, input.comm,
-        local_io_range, global_io_range)
+        local_io_range, global_io_range,jacobian)
 end
 
 """

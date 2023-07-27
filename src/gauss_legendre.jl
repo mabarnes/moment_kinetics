@@ -15,6 +15,7 @@ export scaled_gauss_legendre_lobatto_grid
 export scaled_gauss_legendre_radau_grid
 export gausslegendre_derivative!
 export gausslegendre_apply_Kmat!
+export gausslegendre_apply_Lmat!
 export gausslegendre_mass_matrix_solve!
 export setup_gausslegendre_pseudospectral
 export GaussLegendre_weak_product_matrix!
@@ -219,6 +220,67 @@ function gausslegendre_apply_Kmat!(df, ff, gausslegendre, coord)
         get_KK_local!(gausslegendre.Qmat,j,gausslegendre.lobatto,gausslegendre.radau,coord)
         #println(gausslegendre.Qmat)
         @views mul!(df[:,j],gausslegendre.Qmat[:,:],ff[imin:imax])
+    end
+    #for j in 1:nelement
+    #    println(df[:,j])
+    #end
+    return nothing
+end
+
+"""
+function for taking the weak-form Laplacian derivative on Gauss-Legendre points
+"""
+function gausslegendre_apply_Lmat!(df, ff, gausslegendre, coord)
+    # define local variable nelement for convenience
+    nelement = coord.nelement_local
+    # check array bounds
+    @boundscheck nelement == size(df,2) && coord.ngrid == size(df,1) || throw(BoundsError(df))
+    
+    # variable k will be used to avoid double counting of overlapping point
+    k = 0
+    j = 1 # the first element
+    imin = coord.imin[j]-k
+    # imax is the maximum index on the full grid for this (jth) element
+    imax = coord.imax[j]        
+    get_LL_local!(gausslegendre.Qmat,j,gausslegendre.lobatto,gausslegendre.radau,coord)
+    #println(gausslegendre.Qmat)
+    @views mul!(df[:,j],gausslegendre.Qmat[:,:],ff[imin:imax])
+    zero_gradient_bc_lower_boundary = false#true
+    boundary_flux_terms = true#false
+    if coord.name == "vperp" && zero_gradient_bc_lower_boundary
+       # set the 1st point of the RHS vector to zero 
+       # consistent with use with the mass matrix with D f = 0 boundary conditions
+       df[1,j] = 0.0
+    end
+    # boundary flux terms
+    if boundary_flux_terms
+        if coord.name=="vperp" # only include a flux term from the upper boundary
+            @. coord.scratch[imin:imax] = gausslegendre.radau.Dmat[coord.ngrid,:]*ff[imin:imax]
+            df[coord.ngrid,j] += coord.jacobian[imax]*sum(coord.scratch[imin:imax])
+        else
+            @. coord.scratch[imin:imax] = gausslegendre.lobatto.Dmat[1,:]*ff[imin:imax]
+            df[1,j] -= coord.jacobian[imin]*sum(coord.scratch[imin:imax])
+            @. coord.scratch[imin:imax] = gausslegendre.lobatto.Dmat[coord.ngrid,:]*ff[imin:imax]
+            df[coord.ngrid,j] += coord.jacobian[imax]*sum(coord.scratch[imin:imax])
+        end
+    end
+    # calculate the derivative on each element
+    @inbounds for j ∈ 2:nelement
+        k = 1 
+        imin = coord.imin[j]-k
+        # imax is the maximum index on the full grid for this (jth) element
+        imax = coord.imax[j]
+        #@views mul!(df[:,j],gausslegendre.lobatto.Kmat[:,:],ff[imin:imax])
+        get_LL_local!(gausslegendre.Qmat,j,gausslegendre.lobatto,gausslegendre.radau,coord)
+        #println(gausslegendre.Qmat)
+        @views mul!(df[:,j],gausslegendre.Qmat[:,:],ff[imin:imax])
+        # boundary flux terms 
+        if boundary_flux_terms
+            @. coord.scratch[imin:imax] = gausslegendre.lobatto.Dmat[1,:]*ff[imin:imax]
+            df[1,j] -= coord.jacobian[imin]*sum(coord.scratch[imin:imax])
+            @. coord.scratch[imin:imax] = gausslegendre.lobatto.Dmat[coord.ngrid,:]*ff[imin:imax]
+            df[coord.ngrid,j] += coord.jacobian[imax]*sum(coord.scratch[imin:imax])
+        end
     end
     #for j in 1:nelement
     #    println(df[:,j])
