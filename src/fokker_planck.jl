@@ -13,7 +13,8 @@ export calculate_Rosenbluth_H_from_G!
 
 export d2Gdvpa2, dGdvperp, d2Gdvperpdvpa, d2Gdvperp2
 export dHdvpa, dHdvperp, Cssp_Maxwellian_inputs
-export F_Maxwellian
+export F_Maxwellian, dFdvpa_Maxwellian, dFdvperp_Maxwellian
+export d2Fdvpa2_Maxwellian, d2Fdvperpdvpa_Maxwellian, d2Fdvperp2_Maxwellian
 
 using SpecialFunctions: ellipk, ellipe, erf
 using ..type_definitions: mk_float, mk_int

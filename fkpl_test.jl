@@ -21,7 +21,9 @@ using moment_kinetics.fokker_planck: calculate_collisional_fluxes, calculate_Max
 using moment_kinetics.fokker_planck: Cflux_vpa_Maxwellian_inputs, Cflux_vperp_Maxwellian_inputs
 using moment_kinetics.fokker_planck: calculate_Rosenbluth_H_from_G!
 using moment_kinetics.fokker_planck: d2Gdvpa2, dGdvperp, d2Gdvperpdvpa, d2Gdvperp2
-using moment_kinetics.fokker_planck: dHdvpa, dHdvperp, Cssp_Maxwellian_inputs, F_Maxwellian
+using moment_kinetics.fokker_planck: dHdvpa, dHdvperp, Cssp_Maxwellian_inputs
+using moment_kinetics.fokker_planck: F_Maxwellian, dFdvpa_Maxwellian, dFdvperp_Maxwellian
+using moment_kinetics.fokker_planck: d2Fdvpa2_Maxwellian, d2Fdvperpdvpa_Maxwellian, d2Fdvperp2_Maxwellian
 using moment_kinetics.type_definitions: mk_float, mk_int
 using moment_kinetics.calculus: derivative!, second_derivative!
 using moment_kinetics.velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_pressure
@@ -435,12 +437,30 @@ if abspath(PROGRAM_FILE) == @__FILE__
         dfsdvperp = Array{mk_float,2}(undef,nvpa,nvperp)
         d2fsdvperpdvpa = Array{mk_float,2}(undef,nvpa,nvperp)
         d2fsdvperp2 = Array{mk_float,2}(undef,nvpa,nvperp)
+        dfsdvpa_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
+        d2fsdvpa2_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
+        dfsdvperp_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
+        d2fsdvperpdvpa_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
+        d2fsdvperp2_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
+        dfsdvpa_err = Array{mk_float,2}(undef,nvpa,nvperp)
+        d2fsdvpa2_err = Array{mk_float,2}(undef,nvpa,nvperp)
+        dfsdvperp_err = Array{mk_float,2}(undef,nvpa,nvperp)
+        d2fsdvperpdvpa_err = Array{mk_float,2}(undef,nvpa,nvperp)
+        d2fsdvperp2_err = Array{mk_float,2}(undef,nvpa,nvperp)
         
         fsp_in = Array{mk_float,2}(undef,nvpa,nvperp)
         d2fspdvpa2 = Array{mk_float,2}(undef,nvpa,nvperp)
         dfspdvperp = Array{mk_float,2}(undef,nvpa,nvperp)
         d2fspdvperpdvpa = Array{mk_float,2}(undef,nvpa,nvperp)
         d2fspdvperp2 = Array{mk_float,2}(undef,nvpa,nvperp)
+        d2fspdvpa2_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
+        dfspdvperp_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
+        d2fspdvperpdvpa_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
+        d2fspdvperp2_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
+        d2fspdvpa2_err = Array{mk_float,2}(undef,nvpa,nvperp)
+        dfspdvperp_err = Array{mk_float,2}(undef,nvpa,nvperp)
+        d2fspdvperpdvpa_err = Array{mk_float,2}(undef,nvpa,nvperp)
+        d2fspdvperp2_err = Array{mk_float,2}(undef,nvpa,nvperp)
         
         #G_weights = Array{mk_float,4}(undef,nvpa,nvperp,nvpa,nvperp)
         G_weights = allocate_shared_float(nvpa,nvperp,nvpa,nvperp)
@@ -515,7 +535,18 @@ if abspath(PROGRAM_FILE) == @__FILE__
         for ivperp in 1:nvperp
             for ivpa in 1:nvpa
                 fs_in[ivpa,ivperp] = F_Maxwellian(denss,upars,vths,vpa,vperp,ivpa,ivperp) #(denss/vths^3)*exp( - ((vpa.grid[ivpa]-upar)^2 + vperp.grid[ivperp]^2)/vths^2 ) 
+                dfsdvpa_Maxwell[ivpa,ivperp] = dFdvpa_Maxwellian(denss,upars,vths,vpa,vperp,ivpa,ivperp)
+                d2fsdvpa2_Maxwell[ivpa,ivperp] = d2Fdvpa2_Maxwellian(denss,upars,vths,vpa,vperp,ivpa,ivperp)
+                dfsdvperp_Maxwell[ivpa,ivperp] = dFdvperp_Maxwellian(denss,upars,vths,vpa,vperp,ivpa,ivperp)
+                d2fsdvperpdvpa_Maxwell[ivpa,ivperp] = d2Fdvperpdvpa_Maxwellian(denss,upars,vths,vpa,vperp,ivpa,ivperp)
+                d2fsdvperp2_Maxwell[ivpa,ivperp] = d2Fdvperp2_Maxwellian(denss,upars,vths,vpa,vperp,ivpa,ivperp)
+                
                 fsp_in[ivpa,ivperp] = F_Maxwellian(denssp,uparsp,vthsp,vpa,vperp,ivpa,ivperp) #(denss/vths^3)*exp( - ((vpa.grid[ivpa]-upar)^2 + vperp.grid[ivperp]^2)/vths^2 ) 
+                d2fspdvpa2_Maxwell[ivpa,ivperp] = d2Fdvpa2_Maxwellian(denssp,uparsp,vthsp,vpa,vperp,ivpa,ivperp)
+                dfspdvperp_Maxwell[ivpa,ivperp] = dFdvperp_Maxwellian(denssp,uparsp,vthsp,vpa,vperp,ivpa,ivperp)
+                d2fspdvperpdvpa_Maxwell[ivpa,ivperp] = d2Fdvperpdvpa_Maxwellian(denssp,uparsp,vthsp,vpa,vperp,ivpa,ivperp)
+                d2fspdvperp2_Maxwell[ivpa,ivperp] = d2Fdvperp2_Maxwellian(denssp,uparsp,vthsp,vpa,vperp,ivpa,ivperp)
+                
                 G_Maxwell[ivpa,ivperp] = G_Maxwellian(denssp,uparsp,vthsp,vpa,vperp,ivpa,ivperp)
                 H_Maxwell[ivpa,ivperp] = H_Maxwellian(denssp,uparsp,vthsp,vpa,vperp,ivpa,ivperp)
                 d2Gdvpa2_Maxwell[ivpa,ivperp] = d2Gdvpa2(denssp,uparsp,vthsp,vpa,vperp,ivpa,ivperp)
@@ -524,6 +555,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 d2Gdvperp2_Maxwell[ivpa,ivperp] = d2Gdvperp2(denssp,uparsp,vthsp,vpa,vperp,ivpa,ivperp)
                 dHdvperp_Maxwell[ivpa,ivperp] = dHdvperp(denssp,uparsp,vthsp,vpa,vperp,ivpa,ivperp)
                 dHdvpa_Maxwell[ivpa,ivperp] = dHdvpa(denssp,uparsp,vthsp,vpa,vperp,ivpa,ivperp)
+                
                 Cssp_Maxwell[ivpa,ivperp] = Cssp_Maxwellian_inputs(denss,upars,vths,ms,
                                                                   denssp,uparsp,vthsp,msp,
                                                                   nussp,vpa,vperp,ivpa,ivperp)
@@ -547,7 +579,9 @@ if abspath(PROGRAM_FILE) == @__FILE__
             @. d2fspdvpa2[:,ivperp] = vpa.scratch2
         end
         if vpa.discretization == "gausslegendre_pseudospectral"
-            println("use weak-form second derivative for vpa")
+            @serial_region begin
+                println("use weak-form second derivative for vpa")
+            end
             for ivperp in 1:nvperp
                @views second_derivative!(vpa.scratch2, fs_in[:,ivperp], vpa, vpa_spectral)
                @. d2fsdvpa2[:,ivperp] = vpa.scratch2 
@@ -576,6 +610,37 @@ if abspath(PROGRAM_FILE) == @__FILE__
             @. d2fspdvperpdvpa[:,ivperp] = vpa.scratch
         end
         
+        # error analysis of distribution function
+        @serial_region begin
+            @. dfsdvpa_err = abs(dfsdvpa - dfsdvpa_Maxwell)
+            max_dfsdvpa_err = maximum(dfsdvpa_err)
+            println("max_dfsdvpa_err: ",max_dfsdvpa_err)
+            @. d2fsdvpa2_err = abs(d2fsdvpa2 - d2fsdvpa2_Maxwell)
+            max_d2fsdvpa2_err = maximum(d2fsdvpa2_err)
+            println("max_d2fsdvpa2_err: ",max_d2fsdvpa2_err)
+            @. dfsdvperp_err = abs(dfsdvperp - dfsdvperp_Maxwell)
+            max_dfsdvperp_err = maximum(dfsdvperp_err)
+            println("max_dfsdvperp_err: ",max_dfsdvperp_err)
+            @. d2fsdvperpdvpa_err = abs(d2fsdvperpdvpa - d2fsdvperpdvpa_Maxwell)
+            max_d2fsdvperpdvpa_err = maximum(d2fsdvperpdvpa_err)
+            println("max_d2fsdvperpdvpa_err: ",max_d2fsdvperpdvpa_err)
+            @. d2fsdvperp2_err = abs(d2fsdvperp2 - d2fsdvperp2_Maxwell)
+            max_d2fsdvperp2_err = maximum(d2fsdvperp2_err)
+            println("max_d2fsdvperp2_err: ",max_d2fsdvperp2_err)
+            
+            @. d2fspdvpa2_err = abs(d2fspdvpa2 - d2fspdvpa2_Maxwell)
+            max_d2fspdvpa2_err = maximum(d2fspdvpa2_err)
+            println("max_d2fspdvpa2_err: ",max_d2fspdvpa2_err)
+            @. dfspdvperp_err = abs(dfspdvperp - dfspdvperp_Maxwell)
+            max_dfspdvperp_err = maximum(dfspdvperp_err)
+            println("max_dfspdvperp_err: ",max_dfspdvperp_err)
+            @. d2fspdvperpdvpa_err = abs(d2fspdvperpdvpa - d2fspdvperpdvpa_Maxwell)
+            max_d2fspdvperpdvpa_err = maximum(d2fspdvperpdvpa_err)
+            println("max_d2fspdvperpdvpa_err: ",max_d2fspdvperpdvpa_err)
+            @. d2fspdvperp2_err = abs(d2fspdvperp2 - d2fspdvperp2_Maxwell)
+            max_d2fspdvperp2_err = maximum(d2fspdvperp2_err)
+            println("max_d2fspdvperp2_err: ",max_d2fspdvperp2_err)
+        end
         function get_imin_imax(coord,iel)
             j = iel
             if j > 1
@@ -1000,7 +1065,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
             finalize_comms!()
         end
         #println(maximum(G_err), maximum(H_err), maximum(dHdvpa_err), maximum(dHdvperp_err), maximum(d2Gdvperp2_err), maximum(d2Gdvpa2_err), maximum(d2Gdvperpdvpa_err), maximum(dGdvperp_err))
-        results = maximum(Cssp_err), maximum(Cflux_vpa_err), maximum(Cflux_vperp_err), maximum(G_err), maximum(H_err), maximum(dHdvpa_err), maximum(dHdvperp_err), maximum(d2Gdvperp2_err), maximum(d2Gdvpa2_err), maximum(d2Gdvperpdvpa_err), maximum(dGdvperp_err)
+        results = maximum(Cssp_err), maximum(Cflux_vpa_err), maximum(Cflux_vperp_err), maximum(G_err), maximum(H_err), maximum(dHdvpa_err), maximum(dHdvperp_err), maximum(d2Gdvperp2_err), maximum(d2Gdvpa2_err), maximum(d2Gdvperpdvpa_err), maximum(dGdvperp_err), maximum(dfsdvpa_err), maximum(dfsdvperp_err), maximum(d2fsdvpa2_err), maximum(d2fsdvperpdvpa_err), maximum(d2fsdvperp2_err), maximum(dfspdvperp_err), maximum(d2fspdvpa2_err), maximum(d2fspdvperpdvpa_err), maximum(d2fspdvperp2_err)
         return results 
     end
     
@@ -1346,6 +1411,15 @@ if abspath(PROGRAM_FILE) == @__FILE__
         max_d2Gdvpa2_err = Array{mk_float,1}(undef,nscan)
         max_d2Gdvperpdvpa_err = Array{mk_float,1}(undef,nscan)
         max_dGdvperp_err = Array{mk_float,1}(undef,nscan)
+        max_dfsdvpa_err = Array{mk_float,1}(undef,nscan)
+        max_dfsdvperp_err = Array{mk_float,1}(undef,nscan)
+        max_d2fsdvpa2_err = Array{mk_float,1}(undef,nscan)
+        max_d2fsdvperpdvpa_err = Array{mk_float,1}(undef,nscan)
+        max_d2fsdvperp2_err = Array{mk_float,1}(undef,nscan)
+        max_dfspdvperp_err = Array{mk_float,1}(undef,nscan)
+        max_d2fspdvpa2_err = Array{mk_float,1}(undef,nscan)
+        max_d2fspdvperpdvpa_err = Array{mk_float,1}(undef,nscan)
+        max_d2fspdvperp2_err = Array{mk_float,1}(undef,nscan)
         expected = Array{mk_float,1}(undef,nscan)
         expected_nelement_scaling!(expected,nelement_list,ngrid,nscan)
         expected_label = L"(1/N_{el})^{n_g - 1}"
@@ -1357,7 +1431,11 @@ if abspath(PROGRAM_FILE) == @__FILE__
             max_dHdvpa_err[iscan],
             max_dHdvperp_err[iscan], max_d2Gdvperp2_err[iscan],
             max_d2Gdvpa2_err[iscan], max_d2Gdvperpdvpa_err[iscan],
-            max_dGdvperp_err[iscan])
+            max_dGdvperp_err[iscan], max_dfsdvpa_err[iscan],
+            max_dfsdvperp_err[iscan], max_d2fsdvpa2_err[iscan],
+            max_d2fsdvperpdvpa_err[iscan], max_d2fsdvperp2_err[iscan],
+            max_dfspdvperp_err[iscan], max_d2fspdvpa2_err[iscan],
+            max_d2fspdvperpdvpa_err[iscan], max_d2fspdvperp2_err[iscan])
             = test_Lagrange_Rosenbluth_potentials(ngrid,nelement,standalone=false))
         end
         if global_rank[]==0
@@ -1383,6 +1461,35 @@ if abspath(PROGRAM_FILE) == @__FILE__
               foreground_color_legend = nothing, background_color_legend = nothing, legend=:bottomleft)
             #outfile = "fkpl_coeffs_numerical_lagrange_integration_test_ngrid_"*string(ngrid)*".pdf"
             outfile = "fkpl_coeffs_numerical_lagrange_integration_test_ngrid_"*string(ngrid)*"_GLL.pdf"
+            savefig(outfile)
+            println(outfile)
+            
+            dfsdvpa_label = L"\epsilon(d F_s / d v_{\|\|})"
+            dfsdvperp_label = L"\epsilon(d F_s /d v_{\perp})"
+            d2fsdvpa2_label = L"\epsilon(d^2 F_s /d v_{\|\|}^2)"
+            d2fsdvperpdvpa_label = L"\epsilon(d^2 F_s /d v_{\perp}d v_{\|\|})"
+            d2fsdvperp2_label = L"\epsilon(d^2 F_s/ d v_{\perp}^2)"
+            plot(nelement_list, [max_dfsdvpa_err,max_dfsdvperp_err,max_d2fsdvpa2_err,max_d2fsdvperpdvpa_err,max_d2fsdvperp2_err,expected],
+            xlabel=xlabel, label=[dfsdvpa_label dfsdvperp_label d2fsdvpa2_label d2fsdvperpdvpa_label d2fsdvperp2_label expected_label], ylabel="",
+             shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_list, nelement_list), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2, 
+              xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize,
+              foreground_color_legend = nothing, background_color_legend = nothing, legend=:bottomleft)
+            #outfile = "fkpl_coeffs_numerical_lagrange_integration_test_ngrid_"*string(ngrid)*".pdf"
+            outfile = "fkpl_fs_numerical_test_ngrid_"*string(ngrid)*"_GLL.pdf"
+            savefig(outfile)
+            println(outfile)
+            
+            dfspdvperp_label = L"\epsilon(d F_{s^\prime} /d v_{\perp})"
+            d2fspdvpa2_label = L"\epsilon(d^2 F_{s^\prime} /d v_{\|\|}^2)"
+            d2fspdvperpdvpa_label = L"\epsilon(d^2 F_{s^\prime} /d v_{\perp}d v_{\|\|})"
+            d2fspdvperp2_label = L"\epsilon(d^2 F_{s^\prime}/ d v_{\perp}^2)"
+            plot(nelement_list, [max_dfspdvperp_err,max_d2fspdvpa2_err,max_d2fspdvperpdvpa_err,max_d2fspdvperp2_err,expected],
+            xlabel=xlabel, label=[dfspdvperp_label d2fspdvpa2_label d2fspdvperpdvpa_label d2fspdvperp2_label expected_label], ylabel="",
+             shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_list, nelement_list), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2, 
+              xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize,
+              foreground_color_legend = nothing, background_color_legend = nothing, legend=:bottomleft)
+            #outfile = "fkpl_coeffs_numerical_lagrange_integration_test_ngrid_"*string(ngrid)*".pdf"
+            outfile = "fkpl_fsp_numerical_test_ngrid_"*string(ngrid)*"_GLL.pdf"
             savefig(outfile)
             println(outfile)
         end
