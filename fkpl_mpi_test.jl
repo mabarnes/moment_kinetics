@@ -220,6 +220,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     Gsp_global = Array{mk_float,2}(undef,nvpa_global,nvperp_global)
     G_Maxwell_global = Array{mk_float,2}(undef,nvpa_global,nvperp_global)
     G_err_global = Array{mk_float,2}(undef,nvpa_global,nvperp_global)
+    G_weights_global = Array{mk_float,4}(undef,nvpa_global,nvperp_global,nvpa_global,nvperp_global)
     
     if global_rank[] == 0
         @serial_region begin
@@ -374,6 +375,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     end
     
     @. Gsp_global = 0.0
+    @. G_weights_global = 0.0
     # allreduce operations
     # get local data into global array before allreduce
     begin_serial_region()
@@ -404,17 +406,21 @@ if abspath(PROGRAM_FILE) == @__FILE__
          ivperp_local_max = vperp_MPI.n
          
          @. Gsp_global[ivpa_global_min:ivpa_global_max,ivperp_global_min:ivperp_global_max] += Gsp[ivpa_local_min:ivpa_local_max,ivperp_local_min:ivperp_local_max]
+         @. G_weights_global[ivpa_global_min:ivpa_global_max,ivperp_global_min:ivperp_global_max,:,:] += G_weights[ivpa_local_min:ivpa_local_max,ivperp_local_min:ivperp_local_max,:,:]
          
          # first reduce along vperp dimension, then along vpa
          MPI.Allreduce!(Gsp_global,+,vperp_MPI.comm)
          MPI.Allreduce!(Gsp_global,+,vpa_MPI.comm)
+         MPI.Allreduce!(G_weights_global,+,vperp_MPI.comm)
+         MPI.Allreduce!(G_weights_global,+,vpa_MPI.comm)
          # then broadcast to all cores, noting that some may
          # not be included in the communicators used in the calculation
          MPI.Bcast!(Gsp_global,comm_world,root=0)
+         MPI.Bcast!(G_weights_global,comm_world,root=0)
     end 
     
     # global plotting
-    plot_G = true
+    plot_G = false #true
     
     begin_serial_region()
     if global_rank[] == 0
@@ -436,7 +442,33 @@ if abspath(PROGRAM_FILE) == @__FILE__
                      outfile = string("fkpl_G_err.pdf")
                      savefig(outfile)
             end
+        end 
+    end
+    
+    # check that the weights have been calculated properly by recalculating G
+    # using the looping and MPI arrangement of the main code 
+    z_irank, z_nrank_per_group, z_comm, r_irank, r_nrank_per_group, r_comm = setup_distributed_memory_MPI(1,1,1,1)
+    # coord.n is the local number of points in each shared memory block
+    looping.setup_loop_ranges!(block_rank[], block_size[];
+                                       s=1, sn=1,
+                                       r=1, z=1, vperp=nvperp_global, vpa=nvpa_global,
+                                       vzeta=1, vr=1, vz=1)
+    Gsp_global_shared = allocate_shared_float(nvpa_global,nvperp_global)
+    # use precalculated weights to calculate Gsp using nodal values of fs
+    begin_vperp_vpa_region()
+    @loop_vperp_vpa ivperp ivpa begin
+        Gsp_global_shared[ivpa,ivperp] = 0.0
+        for ivperpp in 1:nvperp_global
+            for ivpap in 1:nvpa_global
+                Gsp_global_shared[ivpa,ivperp] += G_weights_global[ivpa,ivperp,ivpap,ivperpp]*fsp_in[ivpap,ivperpp]
+            end
         end
+    end
+    begin_serial_region()
+    @serial_region begin
+        @. G_err_global = abs(Gsp_global_shared - G_Maxwell_global)
+        max_G_err = maximum(G_err_global)
+        println("max_G_err (global from redistributed weights): ",max_G_err)
     end
     # clean up MPI objects
     finalize_comms!()
