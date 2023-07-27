@@ -30,7 +30,7 @@ using moment_kinetics.communication
 using moment_kinetics.looping
 using moment_kinetics.array_allocation: allocate_shared_float
 
-function init_grids(nelement,ngrid)
+function init_grids(nelement,nelement_local,ngrid,max_cores_per_shm_block)
     discretization = "gausslegendre_pseudospectral"
     #discretization = "chebyshev_pseudospectral"
     #discretization = "finite_difference"
@@ -78,15 +78,23 @@ function init_grids(nelement,ngrid)
     
     # define distribution memory MPI versions of these coordinates
     vpa_MPI_ngrid = ngrid #number of points per element 
-    vpa_MPI_nelement_local = 2# nelement # number of elements per rank
+    vpa_MPI_nelement_local = nelement_local # nelement # number of elements per rank
     vpa_MPI_nelement_global = nelement # total number of elements 
     #vpa_MPI_L = 12.0 #physical box size in reference units 
     vperp_MPI_ngrid = ngrid #number of points per element 
-    vperp_MPI_nelement_local = 2# nelement # number of elements per rank
+    vperp_MPI_nelement_local = nelement_local# nelement # number of elements per rank
     vperp_MPI_nelement_global = nelement # total number of elements 
     #vperp_MPI_L = 6.0 #physical box size in reference units 
-    irank_vpa, nrank_vpa, comm_sub_vpa, irank_vperp, nrank_vperp, comm_sub_vperp = setup_distributed_memory_MPI(vpa_MPI_nelement_global,vpa_MPI_nelement_local,
-                                                                                                                   vperp_MPI_nelement_global,vperp_MPI_nelement_local)
+    
+    # using standard MPI routine with assumption of exactly the right number of cores
+    #irank_vpa, nrank_vpa, comm_sub_vpa, irank_vperp, nrank_vperp, comm_sub_vperp = setup_distributed_memory_MPI(vpa_MPI_nelement_global,vpa_MPI_nelement_local,
+    #                                                                                                               vperp_MPI_nelement_global,vperp_MPI_nelement_local)
+    # novel MPI routine that tries to use only a subset of the cores available
+    # need to specify max number of cores in a shared-memory region (depends on hardware)
+    
+    ( (irank_vpa, nrank_vpa, comm_sub_vpa, irank_vperp, nrank_vperp, comm_sub_vperp) =
+     setup_distributed_memory_MPI_for_weights_precomputation(vpa_MPI_nelement_global,vpa_MPI_nelement_local,
+                      vperp_MPI_nelement_global,vperp_MPI_nelement_local,max_cores_per_shm_block,printout=false))
     vpa_MPI_input = grid_input("vpa", vpa_ngrid, vpa_MPI_nelement_global, vpa_MPI_nelement_local, 
         nrank_vpa, irank_vpa, vpa_L, discretization, fd_option, cheb_option, bc, adv_input, comm_sub_vpa)
     vperp_MPI_input = grid_input("vperp", vperp_MPI_ngrid, vperp_MPI_nelement_global, vperp_MPI_nelement_local, 
@@ -181,10 +189,12 @@ if abspath(PROGRAM_FILE) == @__FILE__
     # Set up MPI
     initialize_comms!()
     
-    nelement = 4
-    ngrid = 5
+    nelement_global = 4 # global number of elements in vpa (vperp)
+    nelement_local = 1 # local number of elements in each distributed memory `chunk' of the vpa (vperp) grid
+    ngrid = 5 # number of points per element
+    max_cores_per_shm_block = 4 # maximum number of cores in a shared-memory block 
     
-    vpa, vperp, vpa_spectral, vperp_spectral, vpa_MPI, vperp_MPI = init_grids(nelement,ngrid)
+    vpa, vperp, vpa_spectral, vperp_spectral, vpa_MPI, vperp_MPI = init_grids(nelement_global,nelement_local,ngrid,max_cores_per_shm_block)
     
     nvpa_local = vpa_MPI.n
     nvpa_global = vpa_MPI.n_global     
@@ -340,14 +350,14 @@ if abspath(PROGRAM_FILE) == @__FILE__
     end
     
     # local plotting
-    plot_G = false#true
+    plot_local_G = false#true
     
     begin_serial_region()
     @serial_region begin
-        @. G_err = abs(Gsp - G_Maxwell)
-        max_G_err = maximum(G_err)
-        println("max_G_err: ",max_G_err)
-        if plot_G
+        if plot_local_G
+            @. G_err = abs(Gsp - G_Maxwell)
+            max_G_err = maximum(G_err)
+            println("max_G_err: ",max_G_err)
             @views heatmap(vperp_MPI.grid, vpa_MPI.grid, Gsp[:,:], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
                  windowsize = (360,240), margin = 15pt)
                  outfile = string("fkpl_G_lagrange"*string(vpa_MPI.irank)*"."*string(vperp_MPI.irank)*".pdf")
@@ -398,6 +408,9 @@ if abspath(PROGRAM_FILE) == @__FILE__
          # first reduce along vperp dimension, then along vpa
          MPI.Allreduce!(Gsp_global,+,vperp_MPI.comm)
          MPI.Allreduce!(Gsp_global,+,vpa_MPI.comm)
+         # then broadcast to all cores, noting that some may
+         # not be included in the communicators used in the calculation
+         MPI.Bcast!(Gsp_global,comm_world,root=0)
     end 
     
     # global plotting

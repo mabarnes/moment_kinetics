@@ -16,6 +16,7 @@ export allocate_shared, block_rank, block_size, comm_block, comm_inter_block,
        iblock_index, comm_world, finalize_comms!, initialize_comms!, global_rank,
        MPISharedArray, global_size
 export setup_distributed_memory_MPI
+export setup_distributed_memory_MPI_for_weights_precomputation
 export _block_synchronize
 
 using MPI
@@ -96,6 +97,13 @@ notation definitions:
     - block: group of processes that share data with shared memory
     - z group: group of processes that need to communicate data for z derivatives
     - r group: group of processes that need to communicate data for r derivatives
+This routine assumes that the number of processes is selected by the user
+to match exactly the number the ratio 
+
+  nblocks = (r_nelement_global/r_nelement_local)*(z_nelement_global/z_nelement_local)
+  
+This guarantees perfect load balancing. Shared memory is used to parallelise the other
+dimensions within each distributed-memory parallelised rz block.   
 """
 function setup_distributed_memory_MPI(z_nelement_global,z_nelement_local,r_nelement_global,r_nelement_local; printout=false)
     # setup some local constants and dummy variables
@@ -202,6 +210,139 @@ function setup_distributed_memory_MPI(z_nelement_global,z_nelement_local,r_nelem
     # if color == nothing then this process is excluded from the communicator
     
     return z_irank, z_nrank_per_group, z_comm, r_irank, r_nrank_per_group, r_comm
+end
+
+"""
+Function to take information from user about vpa vperp grids and 
+number of processes allocated to set up communicators for 
+precomputation of the Rosenbluth potential integration weights
+notation definitions:
+    - block: group of processes that share data with shared memory
+    - vpa group: group of processes that need to communicate data for vpa derivatives/integrals
+    - vperp group: group of processes that need to communicate data for vperp derivatives/integrals
+This routine assumes that the number of processes is selected by the user
+to match or be larger than the ratio 
+
+  nblocks = (vpa_nelement_global/vpa_nelement_local)*(vperp_nelement_global/vperp_nelement_local)
+  
+We also need to know (from user input) the maximum number of cores per shared memory region.
+A fraction of the cores will not contribute to the calculation, as we cannot guarantee that 
+the same number of cores is required for the rz parallelisation as the vpa vperp parallelisation 
+"""
+function setup_distributed_memory_MPI_for_weights_precomputation(vpa_nelement_global,vpa_nelement_local,
+               vperp_nelement_global,vperp_nelement_local, max_cores_per_block; printout=false)
+    # setup some local constants and dummy variables
+    irank_global = global_rank[] # rank index within global processes
+    nrank_global = global_size[] # number of processes 
+    
+    # get information about how the grid is divided up
+    # number of sections `chunks' of the vperp grid
+    vperp_nchunks = floor(mk_int,vperp_nelement_global/vperp_nelement_local)
+    # number of sections `chunks' of the vpa grid
+	vpa_nchunks = floor(mk_int,vpa_nelement_global/vpa_nelement_local)
+	# get the number of shared-memory blocks in the vpa vperp decomposition
+    nblocks = vperp_nchunks*vpa_nchunks
+    # get the number of ranks per block
+    nrank_per_vpavperp_block = min(floor(mk_int,nrank_global/nblocks), max_cores_per_block)
+    # get the total number of useful cores 
+    nrank_vpavperp = nrank_per_vpavperp_block*nblocks
+    # N.B. the user should pick the largest possible value for nblocks that is consistent 
+    # with the total number of cores available and complete shared-memory regions. This 
+    # should be done by choosing 
+    #  (vperp_nelement_global/vperp_nelement_local)*(vpa_nelement_global/vpa_nelement_local)
+    # in the input file. For example, if there are 26 cores available, and 8 global elements in 
+    # each dimension, we should choose 4 local elements, making nblocks = 16 and nrank_per_vpavperp_block = 1.
+    if printout
+        println("debug info:")
+        println("nrank_global: ",nrank_global)
+        println("vperp_nchunks: ",vperp_nchunks)
+        println("vpa_nchunks: ",vpa_nchunks)
+        println("nblocks: ",nblocks)
+        println("nrank_per_vpavperp_block: ",nrank_per_vpavperp_block)
+        println("max_cores_per_block: ",max_cores_per_block)
+    end
+	 
+    # Create a communicator which includes enough cores for the calculation
+    # and includes irank_global = 0. Excess cores have a copy of the communicator
+    # with a different color. After the calculation is completed a MPI broadcast
+    # on the world communicator should be carried out to get the data to the 
+    # excess cores.
+    irank_vpavperp = mod(irank_global,nrank_vpavperp)
+    igroup_vpavperp = floor(mk_int,irank_global/nrank_vpavperp)
+    comm_vpavperp = MPI.Comm_split(comm_world,igroup_vpavperp,irank_vpavperp)
+    # MPI.Comm_split(comm,color,key)
+	# comm -> communicator to be split
+	# color -> label of group of processes
+	# key -> label of process in group
+    # if color == nothing then this process is excluded from the communicator
+    
+    # assign information regarding shared-memory blocks
+    # block index -- which block is this process in 
+    iblock = floor(mk_int,irank_vpavperp/nrank_per_vpavperp_block)
+    # rank index within a block
+    irank_block = mod(irank_vpavperp,nrank_per_vpavperp_block)
+
+    if printout
+        println("iblock: ",iblock)
+        println("irank_block: ",irank_block)
+    end
+    # assign the block rank to the global variables
+    iblock_index[] = iblock
+    block_rank[] = irank_block
+    block_size[] = nrank_per_vpavperp_block
+    # construct a communicator for intra-block communication
+    comm_block[] = MPI.Comm_split(comm_vpavperp,iblock,irank_block)
+    
+    vpa_ngroup = vpa_nchunks
+    vpa_nrank_per_group = vpa_nchunks
+	vpa_igroup = floor(mk_int,iblock/vpa_nchunks) # iblock(irank) - > vpa_igroup 
+	vpa_irank =  mod(iblock,vpa_nchunks) # iblock(irank) -> vpa_irank
+	# iblock = vpa_igroup * vpa_nchunks + vpa_irank_sub 
+
+    if printout
+        # useful information for debugging
+        println("vpa_ngroup: ",vpa_ngroup)
+        println("vpa_nrank_per_group: ",vpa_nrank_per_group)
+        println("vpa_igroup: ",vpa_igroup)
+        println("vpa_irank_sub: ",vpa_irank)
+        println("iblock: ",iblock, " ", vpa_igroup * vpa_nchunks + vpa_irank)
+        println("")
+    end
+
+    vperp_ngroup = vpa_nchunks
+	vperp_nrank_per_group = vperp_nchunks
+	vperp_igroup = vpa_irank # block(irank) - > vperp_igroup 
+	vperp_irank = vpa_igroup # block(irank) -> vperp_irank
+    # irank = vperp_igroup + vpa_nrank_per_group * vperp_irank
+
+    if printout
+        # useful information for debugging
+        println("vperp_ngroup: ",vperp_ngroup)
+        println("vperp_nrank_per_group: ",vperp_nrank_per_group)
+        println("vperp_igroup: ",vperp_igroup)
+        println("vperp_irank: ",vperp_irank)
+        println("iblock: ",iblock, " ", vperp_irank * vperp_ngroup + vperp_igroup)
+        println("")
+    end
+
+	# construct communicators for inter-block communication
+	# only communicate between lead processes on a block
+    if block_rank[] == 0 #&& utilised_core
+        comm_inter_block[] = MPI.Comm_split(comm_vpavperp, 0, iblock)
+        vperp_comm = MPI.Comm_split(comm_vpavperp,vperp_igroup,vperp_irank)
+        vpa_comm = MPI.Comm_split(comm_vpavperp,vpa_igroup,vpa_irank)
+    else # assign a dummy value 
+        comm_inter_block[] = MPI.Comm_split(comm_vpavperp, nothing, iblock)
+        vperp_comm = MPI.Comm_split(comm_vpavperp,nothing,vperp_irank)
+        vpa_comm = MPI.Comm_split(comm_vpavperp,nothing,vpa_irank)
+    end
+    # MPI.Comm_split(comm,color,key)
+	# comm -> communicator to be split
+	# color -> label of group of processes
+	# key -> label of process in group
+    # if color == nothing then this process is excluded from the communicator
+    
+    return vpa_irank, vpa_nrank_per_group, vpa_comm, vperp_irank, vperp_nrank_per_group, vperp_comm
 end
 
 @debug_shared_array begin
