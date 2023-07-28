@@ -2,8 +2,6 @@
 
 ARTIFACT_DIR=machines/artifacts/
 
-mkdir -p $ARTIFACT_DIR
-
 # Download Julia binary distribution
 if [ -z "$1" ]; then
   # No version argument passed

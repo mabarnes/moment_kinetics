@@ -266,6 +266,16 @@ JULIA_DEPOT_PATH=$JULIA_DIRECTORY $JULIA machines/shared/machine_setup.jl "$MACH
 # Set up modules, JULIA_DEPOT_PATH, etc. to use for the rest of this script
 source julia.env
 
+# Create a Python venv, ensure it contains matplotlib, and append its
+# activation command to julia.env.
+# Use the `--system-site-packages` option to let the venv include any packages
+# already installed by the system.
+PYTHON_VENV_PATH=$PWD/machines/artifacts/mk_venv
+python -m venv --system-site-packages $PYTHON_VENV_PATH
+source $PYTHON_VENV_PATH/bin/activate
+pip install matplotlib
+echo "source $PYTHON_VENV_PATH/bin/activate" >> julia.env
+
 # [ -f <path> ] tests if <path> exists and is a file
 if [ -f machines/shared/compile_dependencies.sh ]; then
   # Need to compile some dependencies

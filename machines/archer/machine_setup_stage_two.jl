@@ -1,12 +1,5 @@
 using Pkg
 
-# Ensure matplotlib is installed in the system Python
-#####################################################
-
-println("\n** Installing matplotlib into the system Python\n")
-run(`pip install matplotlib`)
-
-
 # Instantiate packages so we can use MPIPreferences below
 #########################################################
 

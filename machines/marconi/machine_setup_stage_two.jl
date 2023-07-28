@@ -1,10 +1,3 @@
-# Ensure matplotlib is installed in the system Python
-#####################################################
-
-println("\n** Installing matplotlib into the system Python\n")
-run(`pip3 install --user matplotlib`)
-
-
 # Instantiate packages so we can use MPIPreferences below
 #########################################################
 
