@@ -107,6 +107,9 @@ if [ -z "$JULIA" ]; then
     fi
   fi
 fi
+# Ensure we have the resolved path for $JULIA, to avoid potentially creating a
+# self-referencing symlink at bin/julia
+JULIA=$(realpath $JULIA)
 
 # Make sure $JULIA is actually an executable. If not, prompt the user to try
 # again.
