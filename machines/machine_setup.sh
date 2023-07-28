@@ -28,6 +28,17 @@ done
 # [See https://stackoverflow.com/a/13400237]
 JULIA=${@:$OPTIND:1}
 
+# Apply heuristics to try and get a default value for MACHINE.
+# Note these are machine-specific guesses, and the tests may well be broken by
+# changes to machine configuration, etc.
+if ls /marconi > /dev/null 2>&1; then
+  DEFAULT_MACHINE=marconi
+elif module avail 2>&1 | grep -q epcc; then
+  DEFAULT_MACHINE=archer
+else
+  DEFAULT_MACHINE=
+fi
+
 # Make sure $JULIA is set
 # Note [ -z "$VAR" ] tests if $VAR is empty. Need the quotes to ensure that the
 # contents of $VAR are not evaluated if it is not empty.
@@ -68,9 +79,12 @@ if [ -z "$JULIA" ]; then
       # download Julia (need to know the machine so that we download the right
       # set of binaries for the OS, architecture, etc.
       while [ -z $MACHINE ]; do
-        echo "Enter name of the machine to set up:"
+        echo "Enter name of the machine to set up [$DEFAULT_MACHINE]:"
         read -p "> "  MACHINE
         echo
+        if [ -z $MACHINE ]; then
+          MACHINE=$DEFAULT_MACHINE
+        fi
       done
 
       # Download a version of Julia that is correct for this machine.
@@ -137,9 +151,12 @@ echo
 # need to get and check its value here.
 if [ -z "$MACHINE" ]; then
   # Make first attempt at getting the name of the machine to setup
-  echo "Enter name of the machine to set up:"
+  echo "Enter name of the machine to set up [$DEFAULT_MACHINE]:"
   read -p "> "  MACHINE
   echo
+  if [ -z $MACHINE ]; then
+    MACHINE=$DEFAULT_MACHINE
+  fi
 fi
 while true; do
   # Get default values for this machine from the machine_setup.jl script
