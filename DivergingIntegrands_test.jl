@@ -26,7 +26,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     end 
 
     # gauss lobatto test 
-    ngrid = 100
+    ngrid = 32
     nelement = 1
     x, w = gausslaguerre(ngrid)
     print_vector(x,"Gauss Laguerre x",ngrid)
@@ -36,18 +36,25 @@ if abspath(PROGRAM_FILE) == @__FILE__
     # use the Gauss-Laguerre quadrature to
     # convert the diverging to a converging integrand
     integrand = Array{Float64,1}(undef,ngrid)
+    integrand_sqrty = Array{Float64,1}(undef,ngrid)
     for i in 1:ngrid
         # change of variables
         y = exp(-x[i])
         # function to integrate in terms of y
-        integrand[i] = sqrt(1.0/y)
+        integrand[i] = sqrt(1.0/y)*w[i]
+        integrand_sqrty[i] = sqrt(y)*w[i]
     end
-    @. integrand *= w
+    #@. integrand *= w
     
     print_vector(integrand,"Gauss Laguerre integrand",ngrid)
     
     primitive = sum(integrand)
     primitive_exact = 2.0
+    primitive_err = abs(primitive - primitive_exact)
+    println("Primitive: ",primitive," should be: ",primitive_exact," error: ",primitive_err)
+    
+    primitive = sum(integrand_sqrty)
+    primitive_exact = 2.0/3.0
     primitive_err = abs(primitive - primitive_exact)
     println("Primitive: ",primitive," should be: ",primitive_exact," error: ",primitive_err)
     
