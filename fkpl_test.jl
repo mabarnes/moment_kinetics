@@ -682,11 +682,40 @@ if abspath(PROGRAM_FILE) == @__FILE__
             return poly
         end
         
-        function get_scaled_x_w!(x_scaled, w_scaled, x, w, node_min, node_max)
-            shift = 0.5*(node_min + node_max)
-            scale = 0.5*(node_max - node_min)
-            @. x_scaled = scale*x + shift
-            @. w_scaled = scale*w
+        function get_scaled_x_w!(x_scaled, w_scaled, x_legendre, w_legendre, x_laguerre, w_laguerre, xhalf_laguerre, whalf_laguerre, node_min, node_max, coord_val)
+            zero = 1.0e-6 
+            #println("coord: ",coord_val," node_max: ",node_max," node_min: ",node_min) 
+            if abs(coord_val - node_max) < zero # divergence at upper endpoint 
+                @. x_scaled = node_max + (node_min - node_max)*exp(-x_laguerre)
+                @. w_scaled = (node_max - node_min)*w_laguerre
+                #println("upper divergence")
+            elseif abs(coord_val - node_min) < zero # divergence at lower endpoint
+                @. x_scaled = node_min + (node_max - node_min)*exp(-x_laguerre)
+                @. w_scaled = (node_max - node_min)*w_laguerre
+                #println("lower divergence")
+            elseif (coord_val - node_min)*(coord_val - node_max) < - zero # interior divergence
+                n = size(x_scaled,1)
+                nhalf = floor(mk_int,n/2)
+                # lower half of domain  
+                for j in 1:nhalf  
+                    x_scaled[j] = coord_val + (node_min - coord_val)*exp(-xhalf_laguerre[j])
+                    w_scaled[j] = (coord_val - node_min)*whalf_laguerre[j]
+                end  
+                # upper half of domain
+                for j in 1:nhalf
+                    x_scaled[n+1-j] = coord_val + (node_max - coord_val)*exp(-xhalf_laguerre[j])
+                    w_scaled[n+1-j] = (node_max - coord_val)*whalf_laguerre[j]
+                end
+                #println("intermediate divergence")
+            else # no divergences
+                shift = 0.5*(node_min + node_max)
+                scale = 0.5*(node_max - node_min)
+                @. x_scaled = scale*x_legendre + shift
+                @. w_scaled = scale*w_legendre
+                #println("no divergence")
+            end
+            #println("x_scaled",x_scaled)
+            #println("w_scaled",w_scaled)
             return nothing
         end
         
@@ -696,8 +725,11 @@ if abspath(PROGRAM_FILE) == @__FILE__
         end
         
         # get Gauss-Legendre points and weights on (-1,1)
-        nquad = 2*ngrid
-        x, w = gausslegendre(nquad)
+        nquad = 4*ngrid
+        halfnquad = floor(mk_int,nquad/2)
+        x_legendre, w_legendre = gausslegendre(nquad)
+        x_laguerre, w_laguerre = gausslaguerre(nquad)
+        x_hlaguerre, w_hlaguerre = gausslaguerre(halfnquad)
         x_vpa, w_vpa = Array{mk_float,1}(undef,nquad), Array{mk_float,1}(undef,nquad)
         x_vperp, w_vperp = Array{mk_float,1}(undef,nquad), Array{mk_float,1}(undef,nquad)
         
@@ -728,14 +760,14 @@ if abspath(PROGRAM_FILE) == @__FILE__
                     else # adjust for the Gauss-Radau element
                         vperp_min = 0.0
                     end
-                    get_scaled_x_w!(x_vperp, w_vperp, x, w, vperp_min, vperp_max)
+                    get_scaled_x_w!(x_vperp, w_vperp, x_legendre, w_legendre, x_laguerre, w_laguerre, x_hlaguerre, w_hlaguerre, vperp_min, vperp_max, vperp_val)
                     
                     for ielement_vpa in 1:vpa.nelement_local
                         
                         vpa_nodes = get_nodes(vpa,ielement_vpa)
                         # assumme Gauss-Lobatto elements
                         vpa_min, vpa_max = vpa_nodes[1], vpa_nodes[end]
-                        get_scaled_x_w!(x_vpa, w_vpa, x, w, vpa_min, vpa_max)
+                        get_scaled_x_w!(x_vpa, w_vpa, x_legendre, w_legendre, x_laguerre, w_laguerre, x_hlaguerre, w_hlaguerre, vpa_min, vpa_max, vpa_val)
                         
                         for igrid_vperp in 1:vperp.ngrid
                             for igrid_vpa in 1:vpa.ngrid
@@ -750,10 +782,11 @@ if abspath(PROGRAM_FILE) == @__FILE__
                                         w_kvperp = w_vperp[kvperp]
                                         w_kvpa = w_vpa[kvpa]
                                         denom = (vpa_val - x_kvpa)^2 + (vperp_val + x_kvperp)^2 
-                                        mm = 4.0*vperp_val*x_kvperp/denom
+                                        mm = min(4.0*vperp_val*x_kvperp/denom,1.0 - 1.0e-15)
                                         prefac = sqrt(denom)
                                         ellipe_mm = ellipe(mm) 
                                         ellipk_mm = ellipk(mm) 
+                                        #println("mm: ",mm," ellipe: ",ellipe_mm," ellipk: ",ellipk_mm)
                                         G_elliptic_integral_factor = 2.0*ellipe_mm*prefac/pi
                                         G1_elliptic_integral_factor = -(2.0*prefac/pi)*( (2.0 - mm)*ellipe_mm - 2.0*(1.0 - mm)*ellipk_mm )/(3.0*mm)
                                         G2_elliptic_integral_factor = (2.0*prefac/pi)*( (7.0*mm^2 + 8.0*mm - 8.0)*ellipe_mm + 4.0*(2.0 - mm)*(1.0 - mm)*ellipk_mm )/(15.0*mm^2)
