@@ -490,6 +490,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         H_weights = allocate_shared_float(nvpa,nvperp,nvpa,nvperp)
         H1_weights = allocate_shared_float(nvpa,nvperp,nvpa,nvperp)
         H2_weights = allocate_shared_float(nvpa,nvperp,nvpa,nvperp)
+        H3_weights = allocate_shared_float(nvpa,nvperp,nvpa,nvperp)
         Hsp = allocate_shared_float(nvpa,nvperp)
         Hsp_from_Gsp = allocate_shared_float(nvpa,nvperp)
         dHspdvpa_from_Gsp = allocate_shared_float(nvpa,nvperp)
@@ -772,6 +773,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 @. H_weights[ivpa,ivperp,:,:] = 0.0  
                 @. H1_weights[ivpa,ivperp,:,:] = 0.0  
                 @. H2_weights[ivpa,ivperp,:,:] = 0.0  
+                @. H3_weights[ivpa,ivperp,:,:] = 0.0  
                 # loop over elements and grid points within elements on primed coordinate
                 for ielement_vperp in 1:vperp.nelement_local
                     
@@ -847,6 +849,10 @@ if abspath(PROGRAM_FILE) == @__FILE__
                                             lagrange_poly_vpa*lagrange_poly_vperp*
                                             (H1_elliptic_integral_factor*vperp_val - H2_elliptic_integral_factor*x_kvperp)*
                                             x_kvperp*w_kvperp*w_kvpa*2.0/sqrt(pi))
+                                        (H3_weights[ivpa,ivperp,ivpap,ivperpp] += 
+                                            lagrange_poly_vpa*lagrange_poly_vperp*
+                                            H_elliptic_integral_factor*(vpa_val - x_kvpa)*
+                                            x_kvperp*w_kvperp*w_kvpa*2.0/sqrt(pi))
                                     end
                                 end
                             end
@@ -878,7 +884,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 dHspdvperp[ivpa,ivperp] = 0.0
                 for ivperpp in 1:nvperp
                     for ivpap in 1:nvpa
-                        d2Gspdvpa2[ivpa,ivperp] += G_weights[ivpa,ivperp,ivpap,ivperpp]*d2fspdvpa2[ivpap,ivperpp]
+                        #d2Gspdvpa2[ivpa,ivperp] += G_weights[ivpa,ivperp,ivpap,ivperpp]*d2fspdvpa2[ivpap,ivperpp]
+                        d2Gspdvpa2[ivpa,ivperp] += H3_weights[ivpa,ivperp,ivpap,ivperpp]*dfspdvpa[ivpap,ivperpp]
                         dGspdvperp[ivpa,ivperp] += G1_weights[ivpa,ivperp,ivpap,ivperpp]*dfspdvperp[ivpap,ivperpp]
                         d2Gspdvperpdvpa[ivpa,ivperp] += G1_weights[ivpa,ivperp,ivpap,ivperpp]*d2fspdvperpdvpa[ivpap,ivperpp]
                         #d2Gspdvperp2[ivpa,ivperp] += G2_weights[ivpa,ivperp,ivpap,ivperpp]*d2fspdvperp2[ivpap,ivperpp] + G3_weights[ivpa,ivperp,ivpap,ivperpp]*dfspdvperp[ivpap,ivperpp]
@@ -1472,11 +1479,11 @@ if abspath(PROGRAM_FILE) == @__FILE__
     if test_Lagrange_integral_scan
         initialize_comms!()
         ngrid = 5
-        nscan = 1
+        nscan = 4
         #nelement_list = Int[2, 4, 8, 16, 32]
-        #nelement_list = Int[2, 4, 8, 16]
+        nelement_list = Int[2, 4, 8, 16]
         #nelement_list = Int[2, 4]
-        nelement_list = Int[2]
+        #nelement_list = Int[2]
         max_C_err = Array{mk_float,1}(undef,nscan)
         max_Gvpa_err = Array{mk_float,1}(undef,nscan)
         max_Gvperp_err = Array{mk_float,1}(undef,nscan)
