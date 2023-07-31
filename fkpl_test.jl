@@ -451,13 +451,16 @@ if abspath(PROGRAM_FILE) == @__FILE__
         fsp_in = Array{mk_float,2}(undef,nvpa,nvperp)
         d2fspdvpa2 = Array{mk_float,2}(undef,nvpa,nvperp)
         dfspdvperp = Array{mk_float,2}(undef,nvpa,nvperp)
+        dfspdvpa = Array{mk_float,2}(undef,nvpa,nvperp)
         d2fspdvperpdvpa = Array{mk_float,2}(undef,nvpa,nvperp)
         d2fspdvperp2 = Array{mk_float,2}(undef,nvpa,nvperp)
         d2fspdvpa2_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
         dfspdvperp_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
+        dfspdvpa_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
         d2fspdvperpdvpa_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
         d2fspdvperp2_Maxwell = Array{mk_float,2}(undef,nvpa,nvperp)
         d2fspdvpa2_err = Array{mk_float,2}(undef,nvpa,nvperp)
+        dfspdvpa_err = Array{mk_float,2}(undef,nvpa,nvperp)
         dfspdvperp_err = Array{mk_float,2}(undef,nvpa,nvperp)
         d2fspdvperpdvpa_err = Array{mk_float,2}(undef,nvpa,nvperp)
         d2fspdvperp2_err = Array{mk_float,2}(undef,nvpa,nvperp)
@@ -485,8 +488,12 @@ if abspath(PROGRAM_FILE) == @__FILE__
         d2Gdvperp2_err = allocate_shared_float(nvpa,nvperp)
         
         H_weights = allocate_shared_float(nvpa,nvperp,nvpa,nvperp)
+        H1_weights = allocate_shared_float(nvpa,nvperp,nvpa,nvperp)
+        H2_weights = allocate_shared_float(nvpa,nvperp,nvpa,nvperp)
         Hsp = allocate_shared_float(nvpa,nvperp)
         Hsp_from_Gsp = allocate_shared_float(nvpa,nvperp)
+        dHspdvpa_from_Gsp = allocate_shared_float(nvpa,nvperp)
+        dHspdvperp_from_Gsp = allocate_shared_float(nvpa,nvperp)
         dHspdvpa = allocate_shared_float(nvpa,nvperp)
         dHspdvperp = allocate_shared_float(nvpa,nvperp)
         #Gsp = Array{mk_float,2}(undef,nvpa,nvperp)
@@ -542,6 +549,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 d2fsdvperp2_Maxwell[ivpa,ivperp] = d2Fdvperp2_Maxwellian(denss,upars,vths,vpa,vperp,ivpa,ivperp)
                 
                 fsp_in[ivpa,ivperp] = F_Maxwellian(denssp,uparsp,vthsp,vpa,vperp,ivpa,ivperp) #(denss/vths^3)*exp( - ((vpa.grid[ivpa]-upar)^2 + vperp.grid[ivperp]^2)/vths^2 ) 
+                dfspdvpa_Maxwell[ivpa,ivperp] = dFdvpa_Maxwellian(denssp,uparsp,vthsp,vpa,vperp,ivpa,ivperp)
                 d2fspdvpa2_Maxwell[ivpa,ivperp] = d2Fdvpa2_Maxwellian(denssp,uparsp,vthsp,vpa,vperp,ivpa,ivperp)
                 dfspdvperp_Maxwell[ivpa,ivperp] = dFdvperp_Maxwellian(denssp,uparsp,vthsp,vpa,vperp,ivpa,ivperp)
                 d2fspdvperpdvpa_Maxwell[ivpa,ivperp] = d2Fdvperpdvpa_Maxwellian(denssp,uparsp,vthsp,vpa,vperp,ivpa,ivperp)
@@ -575,6 +583,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
             @. d2fsdvpa2[:,ivperp] = vpa.scratch2
             # sp
             @views derivative!(vpa.scratch, fsp_in[:,ivperp], vpa, vpa_spectral)
+            @. dfspdvpa[:,ivperp] = vpa.scratch
             @views derivative!(vpa.scratch2, vpa.scratch, vpa, vpa_spectral)
             @. d2fspdvpa2[:,ivperp] = vpa.scratch2
         end
@@ -628,6 +637,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
             max_d2fsdvperp2_err = maximum(d2fsdvperp2_err)
             println("max_d2fsdvperp2_err: ",max_d2fsdvperp2_err)
             
+            @. dfspdvpa_err = abs(dfspdvpa - dfspdvpa_Maxwell)
+            max_dfspdvpa_err = maximum(dfspdvpa_err)
             @. d2fspdvpa2_err = abs(d2fspdvpa2 - d2fspdvpa2_Maxwell)
             max_d2fspdvpa2_err = maximum(d2fspdvpa2_err)
             println("max_d2fspdvpa2_err: ",max_d2fspdvpa2_err)
@@ -682,41 +693,50 @@ if abspath(PROGRAM_FILE) == @__FILE__
             return poly
         end
         
-        function get_scaled_x_w!(x_scaled, w_scaled, x_legendre, w_legendre, x_laguerre, w_laguerre, xhalf_laguerre, whalf_laguerre, node_min, node_max, coord_val)
+        function get_scaled_x_w!(x_scaled, w_scaled, x_legendre, w_legendre, x_laguerre, w_laguerre, node_min, node_max, coord_val)
             zero = 1.0e-6 
+            nquad = size(x_legendre,1)
+            @. x_scaled = 0.0
+            @. w_scaled = 0.0
+            # assume x_scaled, w_scaled are arrays of length 2*nquad
+            # use only nquad points for most elements, but use 2*nquad for
+            # elements with interior divergences
             #println("coord: ",coord_val," node_max: ",node_max," node_min: ",node_min) 
             if abs(coord_val - node_max) < zero # divergence at upper endpoint 
-                @. x_scaled = node_max + (node_min - node_max)*exp(-x_laguerre)
-                @. w_scaled = (node_max - node_min)*w_laguerre
+                @. x_scaled[1:nquad] = node_max + (node_min - node_max)*exp(-x_laguerre)
+                @. w_scaled[1:nquad] = (node_max - node_min)*w_laguerre
+                nquad_coord = nquad
                 #println("upper divergence")
             elseif abs(coord_val - node_min) < zero # divergence at lower endpoint
-                @. x_scaled = node_min + (node_max - node_min)*exp(-x_laguerre)
-                @. w_scaled = (node_max - node_min)*w_laguerre
+                @. x_scaled[1:nquad] = node_min + (node_max - node_min)*exp(-x_laguerre)
+                @. w_scaled[1:nquad] = (node_max - node_min)*w_laguerre
+                nquad_coord = nquad
                 #println("lower divergence")
             elseif (coord_val - node_min)*(coord_val - node_max) < - zero # interior divergence
                 n = size(x_scaled,1)
-                nhalf = floor(mk_int,n/2)
                 # lower half of domain  
-                for j in 1:nhalf  
-                    x_scaled[j] = coord_val + (node_min - coord_val)*exp(-xhalf_laguerre[j])
-                    w_scaled[j] = (coord_val - node_min)*whalf_laguerre[j]
+                for j in 1:nquad  
+                    x_scaled[j] = coord_val + (node_min - coord_val)*exp(-x_laguerre[j])
+                    w_scaled[j] = (coord_val - node_min)*w_laguerre[j]
                 end  
                 # upper half of domain
-                for j in 1:nhalf
-                    x_scaled[n+1-j] = coord_val + (node_max - coord_val)*exp(-xhalf_laguerre[j])
-                    w_scaled[n+1-j] = (node_max - coord_val)*whalf_laguerre[j]
+                for j in 1:nquad
+                    x_scaled[n+1-j] = coord_val + (node_max - coord_val)*exp(-x_laguerre[j])
+                    w_scaled[n+1-j] = (node_max - coord_val)*w_laguerre[j]
                 end
+                nquad_coord = 2*nquad
                 #println("intermediate divergence")
             else # no divergences
                 shift = 0.5*(node_min + node_max)
                 scale = 0.5*(node_max - node_min)
-                @. x_scaled = scale*x_legendre + shift
-                @. w_scaled = scale*w_legendre
+                @. x_scaled[1:nquad] = scale*x_legendre + shift
+                @. w_scaled[1:nquad] = scale*w_legendre
                 #println("no divergence")
+                nquad_coord = nquad
             end
             #println("x_scaled",x_scaled)
             #println("w_scaled",w_scaled)
-            return nothing
+            return nquad_coord
         end
         
         
@@ -725,13 +745,13 @@ if abspath(PROGRAM_FILE) == @__FILE__
         end
         
         # get Gauss-Legendre points and weights on (-1,1)
-        nquad = 4*ngrid
+        nquad = 2*ngrid
         halfnquad = floor(mk_int,nquad/2)
         x_legendre, w_legendre = gausslegendre(nquad)
         x_laguerre, w_laguerre = gausslaguerre(nquad)
-        x_hlaguerre, w_hlaguerre = gausslaguerre(halfnquad)
-        x_vpa, w_vpa = Array{mk_float,1}(undef,nquad), Array{mk_float,1}(undef,nquad)
-        x_vperp, w_vperp = Array{mk_float,1}(undef,nquad), Array{mk_float,1}(undef,nquad)
+        #x_hlaguerre, w_hlaguerre = gausslaguerre(halfnquad)
+        x_vpa, w_vpa = Array{mk_float,1}(undef,2*nquad), Array{mk_float,1}(undef,2*nquad)
+        x_vperp, w_vperp = Array{mk_float,1}(undef,2*nquad), Array{mk_float,1}(undef,2*nquad)
         
         
         @serial_region begin
@@ -750,6 +770,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 @. G2_weights[ivpa,ivperp,:,:] = 0.0  
                 @. G3_weights[ivpa,ivperp,:,:] = 0.0  
                 @. H_weights[ivpa,ivperp,:,:] = 0.0  
+                @. H1_weights[ivpa,ivperp,:,:] = 0.0  
+                @. H2_weights[ivpa,ivperp,:,:] = 0.0  
                 # loop over elements and grid points within elements on primed coordinate
                 for ielement_vperp in 1:vperp.nelement_local
                     
@@ -760,14 +782,14 @@ if abspath(PROGRAM_FILE) == @__FILE__
                     else # adjust for the Gauss-Radau element
                         vperp_min = 0.0
                     end
-                    get_scaled_x_w!(x_vperp, w_vperp, x_legendre, w_legendre, x_laguerre, w_laguerre, x_hlaguerre, w_hlaguerre, vperp_min, vperp_max, vperp_val)
+                    nquad_vperp = get_scaled_x_w!(x_vperp, w_vperp, x_legendre, w_legendre, x_laguerre, w_laguerre, vperp_min, vperp_max, vperp_val)
                     
                     for ielement_vpa in 1:vpa.nelement_local
                         
                         vpa_nodes = get_nodes(vpa,ielement_vpa)
                         # assumme Gauss-Lobatto elements
                         vpa_min, vpa_max = vpa_nodes[1], vpa_nodes[end]
-                        get_scaled_x_w!(x_vpa, w_vpa, x_legendre, w_legendre, x_laguerre, w_laguerre, x_hlaguerre, w_hlaguerre, vpa_min, vpa_max, vpa_val)
+                        nquad_vpa = get_scaled_x_w!(x_vpa, w_vpa, x_legendre, w_legendre, x_laguerre, w_laguerre, vpa_min, vpa_max, vpa_val)
                         
                         for igrid_vperp in 1:vperp.ngrid
                             for igrid_vpa in 1:vpa.ngrid
@@ -775,8 +797,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
                                 ivpap = vpa.igrid_full[igrid_vpa,ielement_vpa]   
                                 ivperpp = vperp.igrid_full[igrid_vperp,ielement_vperp]   
                                 # carry out integration over Lagrange polynomial at this node, on this element
-                                for kvperp in 1:nquad 
-                                    for kvpa in 1:nquad 
+                                for kvperp in 1:nquad_vperp
+                                    for kvpa in 1:nquad_vpa 
                                         x_kvpa = x_vpa[kvpa]
                                         x_kvperp = x_vperp[kvperp]
                                         w_kvperp = w_vperp[kvperp]
@@ -792,6 +814,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
                                         G2_elliptic_integral_factor = (2.0*prefac/pi)*( (7.0*mm^2 + 8.0*mm - 8.0)*ellipe_mm + 4.0*(2.0 - mm)*(1.0 - mm)*ellipk_mm )/(15.0*mm^2)
                                         G3_elliptic_integral_factor = (2.0*prefac/pi)*( 8.0*(mm^2 - mm + 1.0)*ellipe_mm - 4.0*(2.0 - mm)*(1.0 - mm)*ellipk_mm )/(15.0*mm^2)
                                         H_elliptic_integral_factor = 2.0*ellipk_mm/(pi*prefac)
+                                        H1_elliptic_integral_factor = -(2.0/(pi*prefac))*( (mm-2.0)*(ellipk_mm/mm) + (2.0*ellipe_mm/mm) )
+                                        H2_elliptic_integral_factor = (2.0/(pi*prefac))*( (3.0*mm^2 - 8.0*mm + 8.0)*(ellipk_mm/mm^2) - (4.0*(mm - 8.0)*ellipe_mm/(3.0*mm^2)) )
                                         lagrange_poly_vpa = lagrange_poly(igrid_vpa,vpa_nodes,x_kvpa)
                                         lagrange_poly_vperp = lagrange_poly(igrid_vperp,vperp_nodes,x_kvperp)
                                         
@@ -814,6 +838,15 @@ if abspath(PROGRAM_FILE) == @__FILE__
                                         (H_weights[ivpa,ivperp,ivpap,ivperpp] += 
                                             lagrange_poly_vpa*lagrange_poly_vperp*
                                             H_elliptic_integral_factor*x_kvperp*w_kvperp*w_kvpa*2.0/sqrt(pi))
+                                            
+                                        (H1_weights[ivpa,ivperp,ivpap,ivperpp] += 
+                                            lagrange_poly_vpa*lagrange_poly_vperp*
+                                            H1_elliptic_integral_factor*x_kvperp*w_kvperp*w_kvpa*2.0/sqrt(pi))
+                                            
+                                        (H2_weights[ivpa,ivperp,ivpap,ivperpp] += 
+                                            lagrange_poly_vpa*lagrange_poly_vperp*
+                                            (H1_elliptic_integral_factor*vperp_val - H2_elliptic_integral_factor*x_kvperp)*
+                                            x_kvperp*w_kvperp*w_kvpa*2.0/sqrt(pi))
                                     end
                                 end
                             end
@@ -841,14 +874,19 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 d2Gspdvperp2[ivpa,ivperp] = 0.0
                 Gsp[ivpa,ivperp] = 0.0
                 Hsp[ivpa,ivperp] = 0.0
+                dHspdvpa[ivpa,ivperp] = 0.0
+                dHspdvperp[ivpa,ivperp] = 0.0
                 for ivperpp in 1:nvperp
                     for ivpap in 1:nvpa
                         d2Gspdvpa2[ivpa,ivperp] += G_weights[ivpa,ivperp,ivpap,ivperpp]*d2fspdvpa2[ivpap,ivperpp]
                         dGspdvperp[ivpa,ivperp] += G1_weights[ivpa,ivperp,ivpap,ivperpp]*dfspdvperp[ivpap,ivperpp]
                         d2Gspdvperpdvpa[ivpa,ivperp] += G1_weights[ivpa,ivperp,ivpap,ivperpp]*d2fspdvperpdvpa[ivpap,ivperpp]
                         d2Gspdvperp2[ivpa,ivperp] += G2_weights[ivpa,ivperp,ivpap,ivperpp]*d2fspdvperp2[ivpap,ivperpp] + G3_weights[ivpa,ivperp,ivpap,ivperpp]*dfspdvperp[ivpap,ivperpp]
+                        #d2Gspdvperp2[ivpa,ivperp] += H2_weights[ivpa,ivperp,ivpap,ivperpp]*dfspdvperp[ivpap,ivperpp]
                         Gsp[ivpa,ivperp] += G_weights[ivpa,ivperp,ivpap,ivperpp]*fsp_in[ivpap,ivperpp]
                         Hsp[ivpa,ivperp] += H_weights[ivpa,ivperp,ivpap,ivperpp]*fsp_in[ivpap,ivperpp]
+                        dHspdvpa[ivpa,ivperp] += H_weights[ivpa,ivperp,ivpap,ivperpp]*dfspdvpa[ivpap,ivperpp]
+                        dHspdvperp[ivpa,ivperp] += H1_weights[ivpa,ivperp,ivpap,ivperpp]*dfspdvperp[ivpap,ivperpp]
                     end
                 end
             #end
@@ -861,12 +899,12 @@ if abspath(PROGRAM_FILE) == @__FILE__
         begin_vperp_region()
         @loop_vperp ivperp begin
             @views derivative!(vpa.scratch, Hsp_from_Gsp[:,ivperp], vpa, vpa_spectral)
-            @. dHspdvpa[:,ivperp] = vpa.scratch
+            @. dHspdvpa_from_Gsp[:,ivperp] = vpa.scratch
         end
         begin_vpa_region()
         @loop_vpa ivpa begin
             @views derivative!(vperp.scratch, Hsp_from_Gsp[ivpa,:], vperp, vperp_spectral)
-            @. dHspdvperp[ivpa,:] = vperp.scratch
+            @. dHspdvperp_from_Gsp[ivpa,:] = vperp.scratch
         end
         
         # evaluate collsion operator
@@ -935,12 +973,18 @@ if abspath(PROGRAM_FILE) == @__FILE__
             @. Cflux_vperp_err = abs(Cflux_vperp - Cflux_vperp_Maxwell)
             max_Cflux_vperp_err = maximum(Cflux_vperp_err)
             println("max_Cflux_vperp_err: ",max_Cflux_vperp_err)
-            @. H_err = abs(Hsp - H_Maxwell)
-            max_H_err = maximum(H_err)
-            println("max_H_err: ",max_H_err)
             @. H_err = abs(Hsp_from_Gsp - H_Maxwell)
             max_H_err = maximum(H_err)
             println("max_H_from_G_err: ",max_H_err)
+            @. dHdvperp_err = abs(dHspdvperp_from_Gsp - dHdvperp_Maxwell)
+            max_dHdvperp_err = maximum(dHdvperp_err)
+            println("max_dHdvperp_err (from G): ",max_dHdvperp_err)
+            @. dHdvpa_err = abs(dHspdvpa_from_Gsp - dHdvpa_Maxwell)
+            max_dHdvpa_err = maximum(dHdvpa_err)
+            println("max_dHdvpa_err  (from G): ",max_dHdvpa_err)
+            @. H_err = abs(Hsp - H_Maxwell)
+            max_H_err = maximum(H_err)
+            println("max_H_err: ",max_H_err)
             @. dHdvperp_err = abs(dHspdvperp - dHdvperp_Maxwell)
             max_dHdvperp_err = maximum(dHdvperp_err)
             println("max_dHdvperp_err: ",max_dHdvperp_err)
@@ -1428,11 +1472,11 @@ if abspath(PROGRAM_FILE) == @__FILE__
     if test_Lagrange_integral_scan
         initialize_comms!()
         ngrid = 5
-        nscan = 5
-        nelement_list = Int[2, 4, 8, 16, 32]
+        nscan = 1
+        #nelement_list = Int[2, 4, 8, 16, 32]
         #nelement_list = Int[2, 4, 8, 16]
         #nelement_list = Int[2, 4]
-        #nelement_list = Int[2]
+        nelement_list = Int[2]
         max_C_err = Array{mk_float,1}(undef,nscan)
         max_Gvpa_err = Array{mk_float,1}(undef,nscan)
         max_Gvperp_err = Array{mk_float,1}(undef,nscan)
