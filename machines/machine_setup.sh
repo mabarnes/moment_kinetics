@@ -198,8 +198,13 @@ echo
 # from compute nodes.
 # Use $JULIA_DEPOT_PATH as the default if it has already been set
 JULIA_DIRECTORY=$JULIA_DEPOT_PATH
-echo "Enter location that should be used for the .julia directory (this can be empty"
-echo "if the default location is OK) [$JULIA_DIRECTORY]:"
+echo "It can be useful or necessary to set a non-default location for the "
+echo ".julia directory. Leave this empty if the default location is OK."
+echo "Enter the current directory '.' to isolate the julia used for this "
+echo "instance of moment_kinetics - this might be useful to ensure a 'clean'"
+echo "install or to check whether some error is related to conflicting or "
+echo "corrupted dependencies or cached precompilation files, etc."
+echo "Enter location that should be used for the .julia directory [$JULIA_DIRECTORY]:"
 # Use '-e' option to get path auto-completion
 read -e -p "> "  input
 if [ ! -z "$input" ]; then
