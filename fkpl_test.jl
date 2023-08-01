@@ -972,75 +972,33 @@ if abspath(PROGRAM_FILE) == @__FILE__
         # precalculated weights, integrating over Lagrange polynomials
         begin_vperp_vpa_region()
         @loop_vperp_vpa ivperp ivpa begin
-        #for ivperp in 1:nvperp
-        #    for ivpa in 1:nvpa 
-                igrid_vpa, ielement_vpa = vpa.igrid[ivpa], vpa.ielement[ivpa]
-                #limits where checks required to determine which divergence-safe grid is needed
-                ielement_vpa_low = ielement_vpa - ng_low(igrid_vpa,ngrid_vpa)*nel_low(ielement_vpa,nelement_vpa)
-                ielement_vpa_hi = ielement_vpa + ng_hi(igrid_vpa,ngrid_vpa)*nel_hi(ielement_vpa,nelement_vpa)
-                #println(igrid_vpa," ",ielement_vpa," ",ielement_vpa_low," ",ielement_vpa_hi)
-                igrid_vperp, ielement_vperp = vperp.igrid[ivperp], vperp.ielement[ivperp]
-                ielement_vperp_low = ielement_vperp - ng_low(igrid_vperp,ngrid_vperp)*nel_low(ielement_vperp,nelement_vperp)
-                ielement_vperp_hi = ielement_vperp + ng_hi(igrid_vperp,ngrid_vperp)*nel_hi(ielement_vperp,nelement_vperp)
-                println(igrid_vperp," ",ielement_vperp," ",ielement_vperp_low," ",ielement_vperp_hi)
-                
-                vperp_val = vperp.grid[ivperp]
-                vpa_val = vpa.grid[ivpa]
-                @. G_weights[ivpa,ivperp,:,:] = 0.0  
-                @. G1_weights[ivpa,ivperp,:,:] = 0.0  
-                @. G2_weights[ivpa,ivperp,:,:] = 0.0  
-                @. G3_weights[ivpa,ivperp,:,:] = 0.0  
-                @. H_weights[ivpa,ivperp,:,:] = 0.0  
-                @. H1_weights[ivpa,ivperp,:,:] = 0.0  
-                @. H2_weights[ivpa,ivperp,:,:] = 0.0  
-                @. H3_weights[ivpa,ivperp,:,:] = 0.0  
-                # loop over elements and grid points within elements on primed coordinate
-                loop_over_vperp_vpa_elements!(G_weights,G1_weights,G2_weights,G3_weights,
-                        H_weights,H1_weights,H2_weights,H3_weights,
-                        vpa,ielement_vpa_low,ielement_vpa_hi, # info about primed vpa grids
-                        vperp,ielement_vperp_low,ielement_vperp_hi, # info about primed vperp grids
-                        x_vpa, w_vpa, x_vperp, w_vperp, # arrays to store points and weights for primed (source) grids
-                        vpa_val, vperp_val, ivpa, ivperp)
-    #    #    #    #for ielement_vperpp in 1:ielement_vperp_low-1
-    #    #    #    #    #
-    #    #    #    #    #vperp_nodes = get_nodes(vperp,ielement_vperpp)
-    #    #    #    #    #vperp_max = vperp_nodes[end]
-    #    #    #    #    #vperp_min = vperp_nodes[1]*nel_low(ielement_vperpp,nelement_vperp) 
-    #    #    #    #    #nquad_vperp = get_scaled_x_w_no_divergences!(x_vperp, w_vperp, x_legendre, w_legendre, vperp_min, vperp_max)
-    #    #    #    #    #loop_over_vpa_elements!(G_weights,G1_weights,G2_weights,G3_weights,
-    #    #    #    #    #    #    #H_weights,H1_weights,H2_weights,H3_weights,
-    #    #    #    #    #    #    #vpa,ielement_vpa_low,ielement_vpa_hi, # info about primed vpa grids
-    #    #    #    #    #    #    #nquad_vperp,ielement_vperpp,vperp_nodes, # info about primed vperp grids
-    #    #    #    #    #    #    #x_vpa, w_vpa, x_vperp, w_vperp, # arrays to store points and weights for primed (source) grids
-    #    #    #    #    #    #    #vpa_val, vperp_val, ivpa, ivperp)
-    #    #    #    #end
-    #    #    #    #for ielement_vperpp in ielement_vperp_low:ielement_vperp_hi
-    #    #    #    #    #
-    #    #    #    #    #vperp_nodes = get_nodes(vperp,ielement_vperpp)
-    #    #    #    #    #vperp_max = vperp_nodes[end]
-    #    #    #    #    #vperp_min = vperp_nodes[1]*nel_low(ielement_vperpp,nelement_vperp) 
-    #    #    #    #    #nquad_vperp = get_scaled_x_w!(x_vperp, w_vperp, x_legendre, w_legendre, x_laguerre, w_laguerre, vperp_min, vperp_max, vperp_val)
-    #    #    #    #    #loop_over_vpa_elements!(G_weights,G1_weights,G2_weights,G3_weights,
-    #    #    #    #    #    #    #H_weights,H1_weights,H2_weights,H3_weights,
-    #    #    #    #    #    #    #vpa,ielement_vpa_low,ielement_vpa_hi, # info about primed vpa grids
-    #    #    #    #    #    #    #nquad_vperp,ielement_vperpp,vperp_nodes, # info about primed vperp grids
-    #    #    #    #    #    #    #x_vpa, w_vpa, x_vperp, w_vperp, # arrays to store points and weights for primed (source) grids
-    #    #    #    #    #    #    #vpa_val, vperp_val, ivpa, ivperp)
-    #    #    #    #end
-    #    #    #    #for ielement_vperpp in ielement_vperp_hi+1:vperp.nelement_local
-    #    #    #    #    #
-    #    #    #    #    #vperp_nodes = get_nodes(vperp,ielement_vperpp)
-    #    #    #    #    #vperp_max = vperp_nodes[end]
-    #    #    #    #    #vperp_min = vperp_nodes[1]*nel_low(ielement_vperpp,nelement_vperp) 
-    #    #    #    #    #nquad_vperp = get_scaled_x_w_no_divergences!(x_vperp, w_vperp, x_legendre, w_legendre, vperp_min, vperp_max)
-    #    #    #    #    #loop_over_vpa_elements!(G_weights,G1_weights,G2_weights,G3_weights,
-    #    #    #    #    #    #    #H_weights,H1_weights,H2_weights,H3_weights,
-    #    #    #    #    #    #    #vpa,ielement_vpa_low,ielement_vpa_hi, # info about primed vpa grids
-    #    #    #    #    #    #    #nquad_vperp,ielement_vperpp,vperp_nodes, # info about primed vperp grids
-    #    #    #    #    #    #    #x_vpa, w_vpa, x_vperp, w_vperp, # arrays to store points and weights for primed (source) grids
-    #    #    #    #    #    #    #vpa_val, vperp_val, ivpa, ivperp)
-    #    #    #    #end
-            #end
+            #limits where checks required to determine which divergence-safe grid is needed
+            igrid_vpa, ielement_vpa = vpa.igrid[ivpa], vpa.ielement[ivpa]
+            ielement_vpa_low = ielement_vpa - ng_low(igrid_vpa,ngrid_vpa)*nel_low(ielement_vpa,nelement_vpa)
+            ielement_vpa_hi = ielement_vpa + ng_hi(igrid_vpa,ngrid_vpa)*nel_hi(ielement_vpa,nelement_vpa)
+            #println(igrid_vpa," ",ielement_vpa," ",ielement_vpa_low," ",ielement_vpa_hi)
+            igrid_vperp, ielement_vperp = vperp.igrid[ivperp], vperp.ielement[ivperp]
+            ielement_vperp_low = ielement_vperp - ng_low(igrid_vperp,ngrid_vperp)*nel_low(ielement_vperp,nelement_vperp)
+            ielement_vperp_hi = ielement_vperp + ng_hi(igrid_vperp,ngrid_vperp)*nel_hi(ielement_vperp,nelement_vperp)
+            #println(igrid_vperp," ",ielement_vperp," ",ielement_vperp_low," ",ielement_vperp_hi)
+            
+            vperp_val = vperp.grid[ivperp]
+            vpa_val = vpa.grid[ivpa]
+            @. G_weights[ivpa,ivperp,:,:] = 0.0  
+            @. G1_weights[ivpa,ivperp,:,:] = 0.0  
+            @. G2_weights[ivpa,ivperp,:,:] = 0.0  
+            @. G3_weights[ivpa,ivperp,:,:] = 0.0  
+            @. H_weights[ivpa,ivperp,:,:] = 0.0  
+            @. H1_weights[ivpa,ivperp,:,:] = 0.0  
+            @. H2_weights[ivpa,ivperp,:,:] = 0.0  
+            @. H3_weights[ivpa,ivperp,:,:] = 0.0  
+            # loop over elements and grid points within elements on primed coordinate
+            loop_over_vperp_vpa_elements!(G_weights,G1_weights,G2_weights,G3_weights,
+                    H_weights,H1_weights,H2_weights,H3_weights,
+                    vpa,ielement_vpa_low,ielement_vpa_hi, # info about primed vpa grids
+                    vperp,ielement_vperp_low,ielement_vperp_hi, # info about primed vperp grids
+                    x_vpa, w_vpa, x_vperp, w_vperp, # arrays to store points and weights for primed (source) grids
+                    vpa_val, vperp_val, ivpa, ivperp)
         end
         
         #_block_synchronize()
