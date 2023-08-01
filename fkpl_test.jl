@@ -950,11 +950,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
                     
                     vperp_nodes = get_nodes(vperp,ielement_vperpp)
                     vperp_max = vperp_nodes[end]
-                    #if ielement_vperpp > 1 # Gauss-Lobatto
-                        vperp_min = vperp_nodes[1]*nel_low(ielement_vperpp,nelement_vperp) 
-                    #else # adjust for the Gauss-Radau element
-                    #    vperp_min = 0.0
-                    #end
+                    vperp_min = vperp_nodes[1]*nel_low(ielement_vperpp,nelement_vperp) 
                     nquad_vperp = get_scaled_x_w!(x_vperp, w_vperp, x_legendre, w_legendre, x_laguerre, w_laguerre, vperp_min, vperp_max, vperp_val)
                     
                     loop_over_vpa_elements!(G_weights,G1_weights,G2_weights,G3_weights,
