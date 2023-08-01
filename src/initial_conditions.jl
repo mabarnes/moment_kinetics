@@ -911,9 +911,6 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
                  moments.charged.dens, moments.charged.ppar, pdf.charged.norm,
                  vpa, vperp, z, r, composition, moments.evolve_density,
                  moments.evolve_ppar)
-    @loop_s_r_z is ir iz begin
-        moments.charged.upar[iz,ir,is] /= moments.charged.dens[iz,ir,is]
-    end
     update_ppar!(moments.charged.ppar, moments.charged.ppar_updated,
                  moments.charged.dens, moments.charged.upar, pdf.charged.norm,
                  vpa, vperp, z, r, composition, moments.evolve_density,
