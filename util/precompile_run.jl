@@ -61,7 +61,8 @@ for input ∈ [base_input, cheb_input, wall_bc_input, wall_bc_cheb_input]
     push!(inputs_list, input)
     x = merge(input, Dict("evolve_moments_density" => true, "ionization_frequency" => 0.0,
                           "r_ngrid" => 1, "r_nelement" => 1, "vperp_ngrid" => 1,
-                          "vperp_nelement" => 1))
+                          "vperp_nelement" => 1, "vzeta_ngrid" => 1,
+                          "vzeta_nelement" => 1, "vr_ngrid" => 1, "vr_nelement" => 1))
     push!(inputs_list, x)
     x = merge(x, Dict("evolve_moments_parallel_flow" => true))
     push!(inputs_list, x)
