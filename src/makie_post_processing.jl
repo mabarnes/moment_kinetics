@@ -2442,18 +2442,22 @@ function instability2D_plots(run_info, variable_name; run_label, plot_prefix,
 
             close(mode_stats_file)
         end
-        variable_Fourier_1D, zind = get_Fourier_modes_1D(variable, run_info.r,
-                                                         run_info.r_spectral, run_info.z,
-                                                         zind=zind)
-        plot_Fourier_1D(variable_Fourier_1D, get_variable_symbol(variable_name),
-                        variable_name)
+        try
+            variable_Fourier_1D, zind = get_Fourier_modes_1D(variable, run_info.r,
+                                                             run_info.r_spectral, run_info.z,
+                                                             zind=zind)
+            plot_Fourier_1D(variable_Fourier_1D, get_variable_symbol(variable_name),
+                            variable_name)
+        catch e
+            println("Warning: error in 1D Fourier analysis for $variable_name. Error was $e")
+        end
 
         # Do this to allow memory to be garbage-collected.
         variable_Fourier_1D = nothing
     end
 
     if instability2D_options.plot_2d
-        error("need to convert this to Makie, and remove tuple-handling")
+        println("need to convert this to Makie, and remove tuple-handling")
 
         #cmlog(cmlin::ColorGradient) = RGB[cmlin[x] for x=LinRange(0,1,30)]
         #logdeep = cgrad(:deep, scale=:log) |> cmlog
@@ -2501,12 +2505,18 @@ function instability2D_plots(run_info, variable_name; run_label, plot_prefix,
     end
 
     if instability2D_options.animate_perturbations
-        perturbation = get_r_perturbation(variable)
-        # make animation of perturbation
-        animate_2d(run_info.z.grid, run_info.r.grid, perturbation, xlabel="z", ylabel="r",
-                   title="$(get_variable_symbol(variable_name)) perturbation",
-                   colormap=instability2D_options.colormap,
-                   outfile=plot_prefix*variable_name*"_perturbation." * instability2D_options.animation_ext)
+        try
+            perturbation = get_r_perturbation(variable)
+            # make animation of perturbation
+            println("making perturbation movie $variable_name")
+            flush(stdout)
+            animate_2d(run_info.z.grid, run_info.r.grid, perturbation, xlabel="z", ylabel="r",
+                       title="$(get_variable_symbol(variable_name)) perturbation",
+                       colormap=instability2D_options.colormap,
+                       outfile=plot_prefix*variable_name*"_perturbation." * instability2D_options.animation_ext)
+        catch e
+            println("Warning: error in perturbation animation for $variable_name. Error was $e")
+        end
 
         # Do this to allow memory to be garbage-collected (although this is redundant
         # here as this is the last thing in the function).
