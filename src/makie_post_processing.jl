@@ -555,6 +555,7 @@ function _setup_single_input!(this_input_dict::AbstractDict{String,Any},
         plot_2d=false,
         animate_perturbations=false,
         colormap=this_input_dict["colormap"],
+        animation_ext=this_input_dict["animation_ext"],
        )
 
     return nothing
