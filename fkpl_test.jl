@@ -963,45 +963,6 @@ if abspath(PROGRAM_FILE) == @__FILE__
                             nquad_vperp,ielement_vperpp,vperp_nodes, # info about primed vperp grids
                             x_vpa, w_vpa, x_vperp, w_vperp, # arrays to store points and weights for primed (source) grids
                             vpa_val, vperp_val, ivpa, ivperp)
-                    
-                    #for ielement_vpap in 1:ielement_vpa_low-1 
-                    #    # do integration over part of the domain with no divergences
-                    #    vpa_nodes = get_nodes(vpa,ielement_vpap)
-                    #    vpa_min, vpa_max = vpa_nodes[1], vpa_nodes[end]
-                    #    nquad_vpa = get_scaled_x_w_no_divergences!(x_vpa, w_vpa, x_legendre, w_legendre, vpa_min, vpa_max)
-                    #    local_element_integration!(G_weights,G1_weights,G2_weights,G3_weights,
-                    #                H_weights,H1_weights,H2_weights,H3_weights,
-                    #                nquad_vpa,ielement_vpap,vpa_nodes,
-                    #                nquad_vperp,ielement_vperpp,vperp_nodes,
-                    #                x_vpa, w_vpa, x_vperp, w_vperp, 
-                    #                vpa_val, vperp_val, ivpa, ivperp)
-                    #end
-                    #for ielement_vpap in ielement_vpa_low:ielement_vpa_hi
-                    #for ielement_vpap in 1:vpa.nelement_local
-                        # use general grid function that checks divergences
-                    #    vpa_nodes = get_nodes(vpa,ielement_vpap)
-                    #    vpa_min, vpa_max = vpa_nodes[1], vpa_nodes[end]
-                    #    nquad_vpa = get_scaled_x_w!(x_vpa, w_vpa, x_legendre, w_legendre, x_laguerre, w_laguerre, vpa_min, vpa_max, vpa_val)
-                    #    local_element_integration!(G_weights,G1_weights,G2_weights,G3_weights,
-                    #                H_weights,H1_weights,H2_weights,H3_weights,
-                    #                nquad_vpa,ielement_vpap,vpa_nodes,
-                    #                nquad_vperp,ielement_vperpp,vperp_nodes,
-                    #                x_vpa, w_vpa, x_vperp, w_vperp, 
-                    #                vpa_val, vperp_val, ivpa, ivperp)
-                    #end
-                    #for ielement_vpap in ielement_vpa_hi+1:vpa.nelement_local
-                        # do integration over part of the domain with no divergences
-                    #    vpa_nodes = get_nodes(vpa,ielement_vpap)
-                    #    vpa_min, vpa_max = vpa_nodes[1], vpa_nodes[end]
-                    #    nquad_vpa = get_scaled_x_w_no_divergences!(x_vpa, w_vpa, x_legendre, w_legendre, vpa_min, vpa_max)
-                    #    local_element_integration!(G_weights,G1_weights,G2_weights,G3_weights,
-                    #                H_weights,H1_weights,H2_weights,H3_weights,
-                    #                nquad_vpa,ielement_vpap,vpa_nodes,
-                    #                nquad_vperp,ielement_vperpp,vperp_nodes,
-                    #                x_vpa, w_vpa, x_vperp, w_vperp, 
-                    #                vpa_val, vperp_val, ivpa, ivperp)
-                                    
-                    #end
                 end
             #end
         end
