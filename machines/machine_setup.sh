@@ -209,7 +209,9 @@ fi
 # '-m' to avoid erroring if the directory does not exist already.
 # '-s' to skip resolving symlinks (if we did resolve symlinks, it might make
 #      the path look different than expected).
-JULIA_DIRECTORY=$(realpath -m -s $JULIA_DIRECTORY)
+if [ ! -z "$JULIA_DIRECTORY" ]; then
+  JULIA_DIRECTORY=$(realpath -m -s $JULIA_DIRECTORY)
+fi
 echo
 echo "Using julia_directory=$JULIA_DIRECTORY"
 echo
