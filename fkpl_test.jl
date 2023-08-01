@@ -743,6 +743,38 @@ if abspath(PROGRAM_FILE) == @__FILE__
             return nquad_coord
         end
         
+        function get_scaled_x_w_no_divergences!(x_scaled, w_scaled, x_legendre, w_legendre, node_min, node_max)
+            zero = 1.0e-6 
+            @. x_scaled = 0.0
+            @. w_scaled = 0.0
+            #println("coord: ",coord_val," node_max: ",node_max," node_min: ",node_min) 
+            nquad = size(x_legendre,1) 
+            shift = 0.5*(node_min + node_max)
+            scale = 0.5*(node_max - node_min)
+            @. x_scaled[1:nquad] = scale*x_legendre + shift
+            @. w_scaled[1:nquad] = scale*w_legendre
+            #println("x_scaled",x_scaled)
+            #println("w_scaled",w_scaled)
+            return nquad
+        end
+        
+        # function returns 1 if igrid = 1 or 0 if 1 < igrid <= ngrid
+        function ng_low(igrid,ngrid)
+            return floor(mk_int, (ngrid - igrid)/(ngrid - 1))
+        end
+        # function returns 1 if igrid = ngrid or 0 if 1 =< igrid < ngrid
+        function ng_hi(igrid,ngrid)
+            return floor(mk_int, igrid/ngrid)
+        end
+        # function returns 1 for nelement >= ielement > 1, 0 for ielement =1 
+        function nel_low(ielement,nelement)
+            return floor(mk_int, (ielement - 2 + nelement)/nelement)
+        end
+        # function returns 1 for nelement > ielement >= 1, 0 for ielement =nelement 
+        function nel_hi(ielement,nelement)
+            return 1- floor(mk_int, ielement/nelement)
+        end
+        
         function local_element_integration!(G_weights,G1_weights,G2_weights,G3_weights,
                                     H_weights,H1_weights,H2_weights,H3_weights,
                                     nquad_vpa,ielement_vpa,vpa_nodes, # info about primed vperp grids
@@ -840,11 +872,22 @@ if abspath(PROGRAM_FILE) == @__FILE__
             println("beginning weights calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
         end
         
+        nelement_vpa, ngrid_vpa = vpa.nelement_local, vpa.ngrid
+        nelement_vperp, ngrid_vperp = vperp.nelement_local, vperp.ngrid
         # precalculated weights, integrating over Lagrange polynomials
         begin_vperp_vpa_region()
         @loop_vperp_vpa ivperp ivpa begin
         #for ivperp in 1:nvperp
         #    for ivpa in 1:nvpa 
+                igrid_vpa, ielement_vpa = vpa.igrid[ivpa], vpa.ielement[ivpa]
+                #limits where checks required to determine which divergence-safe grid is needed
+                ielement_vpa_low = ielement_vpa - ng_low(igrid_vpa,ngrid_vpa)*nel_low(ielement_vpa,nelement_vpa)
+                ielement_vpa_hi = ielement_vpa + ng_hi(igrid_vpa,ngrid_vpa)*nel_hi(ielement_vpa,nelement_vpa)
+                #println(igrid_vpa," ",ielement_vpa," ",ielement_vpa_low," ",ielement_vpa_hi)
+                igrid_vperp, ielement_vperp = vperp.igrid[ivperp], vperp.ielement[ivperp]
+                ielement_vperp_low = ielement_vperp - ng_low(igrid_vperp,ngrid_vperp)*nel_low(ielement_vperp,nelement_vperp)
+                ielement_vperp_hi = ielement_vperp + ng_hi(igrid_vperp,ngrid_vperp)*nel_hi(ielement_vperp,nelement_vperp)
+                
                 vperp_val = vperp.grid[ivperp]
                 vpa_val = vpa.grid[ivpa]
                 @. G_weights[ivpa,ivperp,:,:] = 0.0  
@@ -856,30 +899,54 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 @. H2_weights[ivpa,ivperp,:,:] = 0.0  
                 @. H3_weights[ivpa,ivperp,:,:] = 0.0  
                 # loop over elements and grid points within elements on primed coordinate
-                for ielement_vperp in 1:vperp.nelement_local
+                for ielement_vperpp in 1:vperp.nelement_local
                     
-                    vperp_nodes = get_nodes(vperp,ielement_vperp)
+                    vperp_nodes = get_nodes(vperp,ielement_vperpp)
                     vperp_max = vperp_nodes[end]
-                    if ielement_vperp > 1 # Gauss-Lobatto
-                        vperp_min = vperp_nodes[1] 
-                    else # adjust for the Gauss-Radau element
-                        vperp_min = 0.0
-                    end
+                    #if ielement_vperpp > 1 # Gauss-Lobatto
+                        vperp_min = vperp_nodes[1]*nel_low(ielement_vperpp,nelement_vperp) 
+                    #else # adjust for the Gauss-Radau element
+                    #    vperp_min = 0.0
+                    #end
                     nquad_vperp = get_scaled_x_w!(x_vperp, w_vperp, x_legendre, w_legendre, x_laguerre, w_laguerre, vperp_min, vperp_max, vperp_val)
                     
-                    for ielement_vpa in 1:vpa.nelement_local
-                        
-                        vpa_nodes = get_nodes(vpa,ielement_vpa)
-                        # assumme Gauss-Lobatto elements
+                    for ielement_vpap in 1:ielement_vpa_low-1 
+                        # do integration over part of the domain with no divergences
+                        vpa_nodes = get_nodes(vpa,ielement_vpap)
                         vpa_min, vpa_max = vpa_nodes[1], vpa_nodes[end]
-                        nquad_vpa = get_scaled_x_w!(x_vpa, w_vpa, x_legendre, w_legendre, x_laguerre, w_laguerre, vpa_min, vpa_max, vpa_val)
-                        
+                        nquad_vpa = get_scaled_x_w_no_divergences!(x_vpa, w_vpa, x_legendre, w_legendre, vpa_min, vpa_max)
                         local_element_integration!(G_weights,G1_weights,G2_weights,G3_weights,
                                     H_weights,H1_weights,H2_weights,H3_weights,
-                                    nquad_vpa,ielement_vpa,vpa_nodes,
-                                    nquad_vperp,ielement_vperp,vperp_nodes,
+                                    nquad_vpa,ielement_vpap,vpa_nodes,
+                                    nquad_vperp,ielement_vperpp,vperp_nodes,
                                     x_vpa, w_vpa, x_vperp, w_vperp, 
                                     vpa_val, vperp_val, ivpa, ivperp)
+                    end
+                    for ielement_vpap in ielement_vpa_low:ielement_vpa_hi
+                    #for ielement_vpap in 1:vpa.nelement_local
+                        # use general grid function that checks divergences
+                        vpa_nodes = get_nodes(vpa,ielement_vpap)
+                        vpa_min, vpa_max = vpa_nodes[1], vpa_nodes[end]
+                        nquad_vpa = get_scaled_x_w!(x_vpa, w_vpa, x_legendre, w_legendre, x_laguerre, w_laguerre, vpa_min, vpa_max, vpa_val)
+                        local_element_integration!(G_weights,G1_weights,G2_weights,G3_weights,
+                                    H_weights,H1_weights,H2_weights,H3_weights,
+                                    nquad_vpa,ielement_vpap,vpa_nodes,
+                                    nquad_vperp,ielement_vperpp,vperp_nodes,
+                                    x_vpa, w_vpa, x_vperp, w_vperp, 
+                                    vpa_val, vperp_val, ivpa, ivperp)
+                    end
+                    for ielement_vpap in ielement_vpa_hi+1:vpa.nelement_local
+                        # do integration over part of the domain with no divergences
+                        vpa_nodes = get_nodes(vpa,ielement_vpap)
+                        vpa_min, vpa_max = vpa_nodes[1], vpa_nodes[end]
+                        nquad_vpa = get_scaled_x_w_no_divergences!(x_vpa, w_vpa, x_legendre, w_legendre, vpa_min, vpa_max)
+                        local_element_integration!(G_weights,G1_weights,G2_weights,G3_weights,
+                                    H_weights,H1_weights,H2_weights,H3_weights,
+                                    nquad_vpa,ielement_vpap,vpa_nodes,
+                                    nquad_vperp,ielement_vperpp,vperp_nodes,
+                                    x_vpa, w_vpa, x_vperp, w_vperp, 
+                                    vpa_val, vperp_val, ivpa, ivperp)
+                                    
                     end
                 end
             #end
@@ -1502,11 +1569,11 @@ if abspath(PROGRAM_FILE) == @__FILE__
     if test_Lagrange_integral_scan
         initialize_comms!()
         ngrid = 5
-        nscan = 3
+        nscan = 1
         #nelement_list = Int[2, 4, 8, 16, 32]
         #nelement_list = Int[2, 4, 8, 16]
-        nelement_list = Int[2, 4, 8]
-        #nelement_list = Int[2]
+        #nelement_list = Int[2, 4, 8]
+        nelement_list = Int[2]
         max_C_err = Array{mk_float,1}(undef,nscan)
         max_Gvpa_err = Array{mk_float,1}(undef,nscan)
         max_Gvperp_err = Array{mk_float,1}(undef,nscan)
