@@ -1886,10 +1886,17 @@ function get_1d_ax(n=nothing; title=nothing, yscale=nothing, kwargs...)
         kwargs = tuple(kwargs..., :yscale=>yscale)
     end
     if n == nothing
-        fig = Figure(title=title)
-        ax = Axis(fig[1,1]; kwargs...)
+        fig = Figure(resolution=(600, 400))
+        if title !== nothing
+            title_layout = fig[1,1] = GridLayout()
+            Label(title_layout[1,1:2], title)
+
+            ax = Axis(fig[2,1]; kwargs...)
+        else
+            ax = Axis(fig[1,1]; kwargs...)
+        end
     else
-        fig = Figure(resolution=(600*n, 400), title=title)
+        fig = Figure(resolution=(600*n, 400))
 
         if title !== nothing
             title_layout = fig[1,1] = GridLayout()
@@ -1913,9 +1920,16 @@ end
 
 function get_2d_ax(n=nothing; title=nothing, kwargs...)
     if n == nothing
-        fig = Figure(title=title)
-        ax = Axis(fig[1,1]; kwargs...)
-        colorbar_places = fig[1,2]
+        fig = Figure(resolution=(600, 400))
+        if title !== nothing
+            title_layout = fig[1,1] = GridLayout()
+            Label(title_layout[1,1:2], title)
+            irow = 2
+        else
+            irow = 1
+        end
+        ax = Axis(fig[irow,1]; kwargs...)
+        colorbar_places = fig[irow,2]
     else
         fig = Figure(resolution=(600*n, 400))
 
