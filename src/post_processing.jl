@@ -744,10 +744,10 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
 
     if pp.diagnostics_chodura
         Chodura_ratio_lower, Chodura_ratio_upper =
-            get_tuple_of_return_values(check_Chodura_condition, run_names, vperp_global,
-                                       vpa_global, r, z, vperp, vpa, density_at_pdf_times,
-                                       composition.T_e, Er_at_pdf_times, geometry, "wall",
-                                       nblocks)
+            get_tuple_of_return_values(check_Chodura_condition, r, z, vperp, vpa,
+                                       density_at_pdf_times, composition.T_e,
+                                       Er_at_pdf_times, geometry, "wall", nblocks,
+                                       run_names)
 
         plot(legend=legend)
         for (t, cr, run_label) ∈ zip(time_pdfs, Chodura_ratio_lower, run_names)
