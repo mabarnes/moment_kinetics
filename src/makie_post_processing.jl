@@ -5,7 +5,8 @@ module makie_post_processing
 
 export makie_post_process
 
-using ..analysis: get_r_perturbation, get_Fourier_modes_2D, get_Fourier_modes_1D
+using ..analysis: check_Chodura_condition, get_r_perturbation, get_Fourier_modes_2D,
+                  get_Fourier_modes_1D
 using ..array_allocation: allocate_float
 using ..coordinates: define_coordinate
 using ..input_structs: grid_input, advection_input
@@ -156,11 +157,20 @@ function makie_post_process(run_dir::Union{String,Tuple},
     end
 
     if any(ri !== nothing for ri ∈ run_info_moments)
+        has_moments = true
+
         # Default to plotting moments from 'moments' files
         run_info = run_info_moments
     else
+        has_moments = false
         # Fall back to trying to plot from 'dfns' files if those are all we have
         run_info = run_info_dfns
+    end
+
+    if any(ri !== nothing for ri ∈ run_info_dfns)
+        has_dfns = true
+    else
+        has_dfns = false
     end
 
     if length(run_info) == 1
@@ -198,6 +208,8 @@ function makie_post_process(run_dir::Union{String,Tuple},
                                        plot_prefix=plot_prefix, zind=zind)
         end
     end
+
+    Chodura_condition_plots(run_info_dfns, plot_prefix=plot_prefix)
 
     return nothing
 end
@@ -557,6 +569,13 @@ function _setup_single_input!(this_input_dict::AbstractDict{String,Any},
                 OrderedDict(Symbol(k)=>v for (k,v) ∈ section_defaults)...)
         end
     end
+
+    set_defaults_and_check_section!(
+        this_input_dict, "Chodura_condition";
+        plot_vs_t=false,
+        plot_vs_r_t=false,
+        ir0=input_dict["ir0"],
+       )
 
     set_defaults_and_check_section!(
         this_input_dict, "instability2D";
@@ -2624,6 +2643,205 @@ function parse_colormap(colormap)
     else
         return colormap
     end
+end
+
+"""
+Plot the criterion from the Chodura condition at the sheath boundaries
+"""
+function Chodura_condition_plots(run_info::Tuple; plot_prefix, ax_lower=nothing,
+                                 ax_upper=nothing)
+    input = Dict_to_NamedTuple(input_dict_dfns["Chodura_condition"])
+
+    println("Making Chodura condition plots")
+
+    if !any(v for (k,v) ∈ pairs(input) if startswith(String(k), "plot"))
+        # No plots to make here
+        return nothing
+    end
+    if !any(ri !== nothing for ri ∈ run_info)
+        println("Warning: no distribution function output, skipping Chodura "
+                * "condition plots")
+        return nothing
+    end
+
+    if n_runs == 1
+        Chodura_condition_plots(run_info[1], plot_prefix=plot_prefix)
+        return nothing
+    end
+
+    n_runs = length(run_info)
+
+    figs = []
+    axes = ([] for _ ∈ run_info)
+    if input.plot_vs_t
+        fig, ax = get_1d_ax(title="Chodura ratio at z=-L/2", xlabel="time",
+                            ylabel="ratio")
+        push!(figs, fig)
+        for a ∈ axes
+            push!(a, ax)
+        end
+
+        fig, ax = get_1d_ax(title="Chodura ratio at z=+L/2", xlabel="time",
+                            ylabel="ratio")
+        push!(figs, fig)
+        for a ∈ axes
+            push!(a, ax)
+        end
+    else
+        push!(figs, nothing)
+        for a ∈ axes
+            push!(a, nothing)
+        end
+        push!(figs, nothing)
+        for a ∈ axes
+            push!(a, nothing)
+        end
+    end
+    if input.plot_vs_r_t
+        fig, ax, colorbar_place = get_2d_ax(n_runs; title="Chodura ratio at z=-L/2",
+                                            xlabel="r", ylabel="time")
+        push!(figs, fig)
+        for (a, b, cbp) ∈ zip(axes, ax, colorbar_place)
+            push!(a, (b, cbp))
+        end
+
+        fig, ax, colorbar_place = get_2d_ax(n_runs; title="Chodura ratio at z=+L/2",
+                                            xlabel="r", ylabel="time")
+        push!(figs, fig)
+        for (a, b, cbp) ∈ zip(axes, ax, colorbar_place)
+            push!(a, (b, cbp))
+        end
+    else
+        push!(figs, nothing)
+        for a ∈ axes
+            push!(a, nothing)
+        end
+        push!(figs, nothing)
+        for a ∈ axes
+            push!(a, nothing)
+        end
+    end
+
+    for (ri, ax) ∈ zip(run_info, axes)
+        Chodura_condition_plots(ri; axes=ax)
+    end
+
+    if input.plot_vs_t
+        fig = figs[1]
+        ax = axes[1][1]
+        put_legend_right(fig, ax)
+        outfile = string(plot_prefix, "_Chodura_ratio_lower_vs_t.pdf")
+        save(outfile, fig)
+
+        fig = figs[2]
+        ax = axes[2][1]
+        put_legend_right(fig, ax)
+        outfile = string(plot_prefix, "_Chodura_ratio_upper_vs_t.pdf")
+        save(outfile, fig)
+    end
+    if input.plot_vs_r_t
+        fig = figs[3]
+        outfile = string(plot_prefix, "_Chodura_ratio_lower_vs_r_t.pdf")
+        save(outfile, fig)
+
+        fig = figs[4]
+        outfile = string(plot_prefix, "_Chodura_ratio_upper_vs_r_t.pdf")
+        save(outfile, fig)
+    end
+
+    return nothing
+end
+function Chodura_condition_plots(run_info; plot_prefix=nothing, axes=nothing)
+
+    if run_info === nothing
+        println("In Chodura_condition_plots(), run_info===nothing so skipping")
+        return nothing
+    end
+    if run_info.z.bc != "wall"
+        println("In Chodura_condition_plots(), z.bc!=\"wall\" - there is no wall - so "
+                * "skipping")
+        return nothing
+    end
+
+    input = Dict_to_NamedTuple(input_dict_dfns["Chodura_condition"])
+
+    tinds = input_dict_dfns["itime_min"]:input_dict_dfns["itime_skip"]:input_dict_dfns["itime_max"]
+
+    time = run_info.time
+    density = postproc_load_variable(run_info, "density"; it=tinds)
+    Er = postproc_load_variable(run_info, "Er"; it=tinds)
+    f_lower = postproc_load_variable(run_info, "f"; it=tinds, iz=1)
+    f_upper = postproc_load_variable(run_info, "f"; it=tinds, iz=run_info.z.n_global)
+
+    Chodura_ratio_lower, Chodura_ratio_upper =
+        check_Chodura_condition(run_info.r_local, run_info.z_local, run_info.vperp,
+                                run_info.vpa, density, run_info.composition.T_e, Er,
+                                run_info.geometry, run_info.z.bc, nothing;
+                                f_lower=f_lower, f_upper=f_upper)
+
+    if input.plot_vs_t
+        if axes === nothing
+            fig, ax = get_1d_ax(title="Chodura ratio at z=-L/2", xlabel="time",
+                                ylabel="ratio")
+        else
+            fig = nothing
+            ax = axes[1]
+        end
+        plot_1d(time, Chodura_ratio_lower[input.ir0,:], ax=ax, label=run_info.run_name)
+        if plot_prefix !== nothing
+            outfile = string(plot_prefix, "_Chodura_ratio_lower_vs_t.pdf")
+            save(outfile, fig)
+        end
+
+        if axes === nothing
+            fig, ax = get_1d_ax(title="Chodura ratio at z=+L/2", xlabel="time",
+                                ylabel="ratio")
+        else
+            fig = nothing
+            ax = axes[2]
+        end
+        plot_1d(time, Chodura_ratio_upper[input.ir0,:], ax=ax, label=run_info.run_name)
+        if plot_prefix !== nothing
+            outfile = string(plot_prefix, "_Chodura_ratio_upper_vs_t.pdf")
+            save(outfile, fig)
+        end
+    end
+
+    if input.plot_vs_r_t
+        if axes === nothing
+            fig, ax, colorbar_place = get_2d_ax(title="Chodura ratio at z=-L/2",
+                                                xlabel="r", ylabel="time")
+            title = nothing
+        else
+            fig = nothing
+            ax, colorbar_place = axes[3]
+            title = run_info.run_name
+        end
+        plot_2d(run_info.r.grid, time, Chodura_ratio_lower, ax=ax,
+                colorbar_place=colorbar_place, title=title)
+        if plot_prefix !== nothing
+            outfile = string(plot_prefix, "_Chodura_ratio_lower_vs_r_t.pdf")
+            save(outfile, fig)
+        end
+
+        if axes === nothing
+            fig, ax, colorbar_place = get_2d_ax(title="Chodura ratio at z=+L/2",
+                                                xlabel="r", ylabel="time")
+            title = nothing
+        else
+            fig = nothing
+            ax, colorbar_place = axes[4]
+            title = run_info.run_name
+        end
+        plot_2d(run_info.r.grid, time, Chodura_ratio_upper, ax=ax,
+                colorbar_place=colorbar_place, title=title)
+        if plot_prefix !== nothing
+            outfile = string(plot_prefix, "_Chodura_ratio_upper_vs_r_t.pdf")
+            save(outfile, fig)
+        end
+    end
+
+    return nothing
 end
 
 """
