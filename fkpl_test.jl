@@ -1617,12 +1617,12 @@ if abspath(PROGRAM_FILE) == @__FILE__
     end
     if test_Lagrange_integral_scan
         initialize_comms!()
-        ngrid = 5
-        nscan = 1
+        ngrid = 9
+        nscan = 4
         #nelement_list = Int[2, 4, 8, 16, 32]
-        #nelement_list = Int[2, 4, 8, 16]
+        nelement_list = Int[2, 4, 8, 16]
         #nelement_list = Int[2, 4, 8]
-        nelement_list = Int[2]
+        #nelement_list = Int[2]
         max_C_err = Array{mk_float,1}(undef,nscan)
         max_Gvpa_err = Array{mk_float,1}(undef,nscan)
         max_Gvperp_err = Array{mk_float,1}(undef,nscan)
@@ -1684,6 +1684,25 @@ if abspath(PROGRAM_FILE) == @__FILE__
               foreground_color_legend = nothing, background_color_legend = nothing, legend=:bottomleft)
             #outfile = "fkpl_coeffs_numerical_lagrange_integration_test_ngrid_"*string(ngrid)*".pdf"
             outfile = "fkpl_coeffs_numerical_lagrange_integration_test_ngrid_"*string(ngrid)*"_GLL.pdf"
+            savefig(outfile)
+            println(outfile)
+            plot(nelement_list, [max_C_err,max_Gvpa_err,max_Gvperp_err,max_G_err,max_H_err, expected],
+            xlabel=xlabel, label=[Clabel Gvpalabel Gvperplabel Glabel Hlabel expected_label], ylabel="",
+             shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_list, nelement_list), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2, 
+              xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize,
+              foreground_color_legend = nothing, background_color_legend = nothing, legend=:bottomleft)
+            #outfile = "fkpl_coeffs_numerical_lagrange_integration_test_ngrid_"*string(ngrid)*".pdf"
+            outfile = "fkpl_potentials_numerical_lagrange_integration_test_ngrid_"*string(ngrid)*"_GLL.pdf"
+            savefig(outfile)
+            println(outfile)
+            #println(max_G_err,max_H_err,max_dHdvpa_err,max_dHdvperp_err,max_d2Gdvperp2_err,max_d2Gdvpa2_err,max_d2Gdvperpdvpa_err,max_dGdvperp_err, expected)
+            plot(nelement_list, [max_dHdvpa_err,max_dHdvperp_err,max_d2Gdvperp2_err,max_d2Gdvpa2_err,max_d2Gdvperpdvpa_err,max_dGdvperp_err, expected],
+            xlabel=xlabel, label=[dHdvpalabel dHdvperplabel d2Gdvperp2label d2Gdvpa2label d2Gdvperpdvpalabel dGdvperplabel expected_label], ylabel="",
+             shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_list, nelement_list), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2, 
+              xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize,
+              foreground_color_legend = nothing, background_color_legend = nothing, legend=:bottomleft)
+            #outfile = "fkpl_coeffs_numerical_lagrange_integration_test_ngrid_"*string(ngrid)*".pdf"
+            outfile = "fkpl_essential_coeffs_numerical_lagrange_integration_test_ngrid_"*string(ngrid)*"_GLL.pdf"
             savefig(outfile)
             println(outfile)
             
