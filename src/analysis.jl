@@ -93,10 +93,11 @@ Note that `integrate_over_vspace()` includes the 1/sqrt(pi) factor already.
 
 If `ir0` is passed, only load the data for as single r-point (to save memory).
 """
-function check_Chodura_condition(run_name, r, z, vperp, vpa, dens, composition, Er,
-                                 geometry, z_bc, nblocks,
+function check_Chodura_condition(r, z, vperp, vpa, dens, composition, Er, geometry, z_bc,
+                                 nblocks, run_name=nothing,
                                  it0::Union{Nothing, mk_int}=nothing,
-                                 ir0::Union{Nothing, mk_int}=nothing)
+                                 ir0::Union{Nothing, mk_int}=nothing;
+                                 f_lower=nothing, f_upper=nothing)
 
     if z_bc != "wall"
         return nothing, nothing
@@ -120,14 +121,26 @@ function check_Chodura_condition(run_name, r, z, vperp, vpa, dens, composition, 
     end
     lower_result = zeros(nr, ntime)
     upper_result = zeros(nr, ntime)
-    f_lower = nothing
-    f_upper = nothing
-    f_lower = load_distributed_charged_pdf_slice(run_name, nblocks, t_range,
-                                                 composition.n_ion_species, r, z, vperp,
-                                                 vpa; iz=1, ir=ir0)
-    f_upper = load_distributed_charged_pdf_slice(run_name, nblocks, t_range,
-                                                 composition.n_ion_species, r, z, vperp,
-                                                 vpa; iz=z.n_global, ir=ir0)
+    if f_lower !== nothing || f_upper !== nothing
+        if it0 !== nothing
+            error("Using `it0` not compatible with passing `f_lower` or `f_upper` as "
+                  * "arguments")
+        end
+        if ir0 !== nothing
+            error("Using `ir0` not compatible with passing `f_lower` or `f_upper` as "
+                  * "arguments")
+        end
+    end
+    if f_lower === nothing
+        f_lower = load_distributed_charged_pdf_slice(run_name, nblocks, t_range,
+                                                     composition.n_ion_species, r, z,
+                                                     vperp, vpa; iz=1, ir=ir0)
+    end
+    if f_upper === nothing
+        f_upper = load_distributed_charged_pdf_slice(run_name, nblocks, t_range,
+                                                     composition.n_ion_species, r, z,
+                                                     vperp, vpa; iz=z.n_global, ir=ir0)
+    end
     if ir0 !== nothing
         f_lower = reshape(f_lower,
                           (size(f_lower, 1), size(f_lower, 2), 1, size(f_lower, 3),
