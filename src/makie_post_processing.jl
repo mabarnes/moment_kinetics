@@ -2457,51 +2457,42 @@ function instability2D_plots(run_info, variable_name; run_label, plot_prefix,
     end
 
     if instability2D_options.plot_2d
-        println("need to convert this to Makie, and remove tuple-handling")
+        function plot_Fourier_2D(var, symbol, name)
+            fig, ax = get_1d_ax(title="$symbol Fourier components", xlabel="time",
+                                ylabel="amplitude", yscale=log10)
+            n_kz, n_kr, nt = size(var)
+            for ikr ∈ 1:n_kr, ikz ∈ 1:n_kz
+                ikr!=2 && continue
+                data = abs.(var[ikz,ikr,:])
+                data[data.==0.0] .= NaN
+                plot_1d(time, data, ax=ax)
+                text!(ax, position=(time[end], data[end]), "ikr=$ikr, ikz=$ikz", fontsize=6,
+                      justification=:right)
+            end
 
-        #cmlog(cmlin::ColorGradient) = RGB[cmlin[x] for x=LinRange(0,1,30)]
-        #logdeep = cgrad(:deep, scale=:log) |> cmlog
-        #function plot_Fourier_2D(var, symbol, name)
-        #    subplots = []
-        #    for (t, v, run_label) ∈ zip(time, var, run_name_labels)
-        #        n_kz, n_kr, nt = size(v)
-        #        p = plot(title=(n_runs == 1 ? nothing : run_label),
-        #                 xlabel="time", ylabel="amplitude", legend=false,
-        #                 yscale=:log)
-        #        for ikr ∈ 1:n_kr, ikz ∈ 1:n_kz
-        #            ikr!=2 && continue
-        #            data = abs.(v[ikz,ikr,:])
-        #            data[data.==0.0] .= NaN
-        #            plot!(time, data, annotations=(t[end], data[end], "ikr=$ikr, ikz=$ikz"),
-        #                  annotationhalign=:right, annotationfontsize=6)
-        #        end
+            outfile = string(plot_prefix, "$(name)_Fourier_components.pdf")
+            save(outfile, fig)
 
-        #        push!(subplots, p)
-        #    end
-        #    plot(subplots..., layout=(1,n_runs), size=(600*n_runs, 400),
-        #        title="$symbol Fourier components")
-        #    outfile = string(plot_prefix, "_$(name)_Fourier_components.pdf")
-        #    trysavefig(outfile)
+            # make a gif animation of Fourier components
+            kr = collect(0:n_kr-1) * 2 * π / run_info.r.L
+            kz = collect(0:n_kz-1) * 2 * π / run_info.z.L
+            animate_2d(kz, kr, abs.(var), xlabel="kz", ylabel="kr",
+                       title="$symbol Fourier components",
+                       colormap=instability2D_options.colormap, colorscale=log10,
+                       outfile=string(plot_prefix, "$(name)_Fourier.gif"))
+        end
+        println("Doing 2D Fourier analysis for $variable_name")
+        variable_Fourier = get_Fourier_modes_2D(variable, run_info.r, run_info.r_spectral,
+                                                run_info.z, run_info.z_spectral)
+        try
+            plot_Fourier_2D(variable_Fourier, get_variable_symbol(variable_name),
+                            variable_name)
+        catch e
+            println("Warning: error in 2D Fourier analysis for $variable_name. Error was $e")
+        end
 
-        #    # make a gif animation of Fourier components
-        #    anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-        #        subplots = (@views heatmap(log.(abs.(v[:,:,i])), xlabel="kr", ylabel="kz",
-        #                                   fillcolor = logdeep,
-        #                                   title=(n_runs == 1 ? nothing : run_label))
-        #                    for (v, run_label) ∈ zip(var, run_name_labels))
-        #        plot(subplots..., layout=(1,n_runs), size=(600*n_runs, 400), title=symbol)
-        #    end
-        #    outfile = string(plot_prefix, "_$(name)_Fourier.gif")
-        #    trygif(anim, outfile, fps=5)
-        #end
-        #variable_Fourier = get_Fourier_modes_2D(variable, run_info.r,
-        #                                        run_info.r_spectral, run_info.z,
-        #                                        run_info.z_spectral)
-        #plot_Fourier_2D(variable_Fourier, get_variable_symbol(variable_name),
-        #                variable_name)
-        #
-        ## Do this to allow memory to be garbage-collected.
-        #variable_Fourier = nothing
+        # Do this to allow memory to be garbage-collected.
+        variable_Fourier = nothing
     end
 
     if instability2D_options.animate_perturbations
