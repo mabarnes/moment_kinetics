@@ -105,8 +105,6 @@ function makie_post_process(run_dir::Union{String,Tuple},
         restart_index = Tuple(restart_index for _ ∈ run_dir)
     end
 
-    run_label = Tuple(basename(r) for r ∈ run_dir)
-
     # Special handling for itime_* and itime_*_dfns because they are needed in order to
     # set up `time` and `time_dfns` in run_info, but run_info is needed to set several
     # other default values in setup_makie_post_processing_input!().
@@ -190,14 +188,12 @@ function makie_post_process(run_dir::Union{String,Tuple},
     instability_input = input_dict["instability2D"]
     if any((instability_input["plot_1d"], instability_input["plot_2d"],
             instability_input["animate_perturbations"]))
-        # There is an [instability2D] section, so make the instability plots
-
         # Get zind from the first variable in the loop (phi), and use the same one for
         # all subseqeunt variables.
-        zind = nothing
+        zind = Union{mk_int,Nothing}[nothing for _ ∈ run_info_moments]
         for variable_name ∈ ("phi", "density", "temperature")
-            instability2D_plots(run_info_moments, variable_name, run_label=run_label,
-                                plot_prefix=plot_prefix, zind=zind)
+            zind = instability2D_plots(run_info_moments, variable_name,
+                                       plot_prefix=plot_prefix, zind=zind)
         end
     end
 
@@ -2300,17 +2296,134 @@ If `zind` is not passed, it is calculated as the z-index where the mode seems to
 the maximum growth rate for this variable.
 Returns `zind`.
 """
-function instability2D_plots(run_info::Tuple, variable_name; run_label, plot_prefix, zind)
+function instability2D_plots(run_info::Tuple, variable_name; plot_prefix, zind)
     println("Making instability plots for $variable_name")
     flush(stdout)
-    if length(run_info) > 1
-        error("For now, don't support comparison plots in `instability2D_plots`")
+
+    n_runs = length(run_info)
+    var_symbol = get_variable_symbol(variable_name)
+    instability2D_options = Dict_to_NamedTuple(input_dict["instability2D"])
+
+    if n_runs == 1
+        # Don't need to set up for comparison plots, or include run_name in subplot titles
+        zi = instability2D_plots(run_info[1], variable_name, plot_prefix=plot_prefix,
+                                 zind=zind[1])
+        return Union{mk_int,Nothing}[zi]
     end
-    return instability2D_plots(run_info[1], variable_name, run_label=run_label[1],
-                               plot_prefix=plot_prefix, zind=zind)
+
+    figs = []
+    axes_and_observables = Tuple([] for _ ∈ 1:n_runs)
+    if instability2D_options.plot_1d
+        fig, ax = get_1d_ax(n_runs; title="$var_symbol 1D Fourier components", yscale=log10)
+        push!(figs, fig)
+        for (i, a) ∈ enumerate(ax)
+            push!(axes_and_observables[i], a)
+        end
+        fig, ax = get_1d_ax(n_runs; title="phase of n_r=1 mode for $var_symbol")
+        push!(figs, fig)
+        for (i, a) ∈ enumerate(ax)
+            push!(axes_and_observables[i], a)
+        end
+    else
+        push!(figs, nothing)
+        for i ∈ 1:n_runs
+            push!(axes_and_observables[i], nothing)
+        end
+        push!(figs, nothing)
+        for i ∈ 1:n_runs
+            push!(axes_and_observables[i], nothing)
+        end
+    end
+    if instability2D_options.plot_2d
+        fig, ax = get_1d_ax(n_runs; title="$var_symbol Fourier components", yscale=log10)
+        push!(figs, fig)
+        for (i, a) ∈ enumerate(ax)
+            push!(axes_and_observables[i], a)
+        end
+        frame_index = Observable(1)
+        fig, ax, colorbar_places = get_2d_ax(n_runs; title="$var_symbol Fourier components")
+        push!(figs, fig)
+        for (i, (a, cb)) ∈ enumerate(zip(ax, colorbar_places))
+            push!(axes_and_observables[i], (a, cb, frame_index))
+        end
+
+        # Delete any existing mode stats file so we can append to an empty file
+        mode_stats_file_name = string(plot_prefix, "mode_$variable_name.txt")
+        if isfile(mode_stats_file_name)
+            rm(mode_stats_file_name)
+        end
+    else
+        push!(figs, nothing)
+        for i ∈ 1:n_runs
+            push!(axes_and_observables[i], nothing)
+        end
+        push!(figs, nothing)
+        for i ∈ 1:n_runs
+            push!(axes_and_observables[i], nothing)
+        end
+    end
+    if instability2D_options.animate_perturbations
+        frame_index = Observable(1)
+        fig, ax, colorbar_places = get_2d_ax(n_runs; title="$var_symbol perturbation")
+        push!(figs, fig)
+        for (i, (a, cb)) ∈ enumerate(zip(ax, colorbar_places))
+            push!(axes_and_observables[i], (a, cb, frame_index))
+        end
+    else
+        push!(figs, nothing)
+        for i ∈ 1:n_runs
+            push!(axes_and_observables[i], nothing)
+        end
+    end
+
+    for (i, (ri, ax_ob, zi)) ∈ enumerate(zip(run_info, axes_and_observables, zind))
+        zi = instability2D_plots(ri, variable_name, plot_prefix=plot_prefix, zind=zi,
+                                 axes_and_observables=ax_ob)
+        zind[i] = zi
+    end
+
+    fig = figs[1]
+    if fig !== nothing
+        outfile = string(plot_prefix, "$(variable_name)_1D_Fourier_components.pdf")
+        save(outfile, fig)
+    end
+
+    fig = figs[2]
+    if fig !== nothing
+        outfile = string(plot_prefix, "$(variable_name)_1D_phase.pdf")
+        save(outfile, fig)
+    end
+
+    fig = figs[3]
+    if fig !== nothing
+        outfile = string(plot_prefix, "$(variable_name)_Fourier_components.pdf")
+        save(outfile, fig)
+    end
+
+    fig = figs[4]
+    if fig !== nothing
+        println("Saving 2D Fourier components movie for $variable_name")
+        frame_index = axes_and_observables[1][4][3]
+        nt = minimum(ri.nt for ri ∈ run_info)
+        outfile = plot_prefix * variable_name * "_Fourier." *
+                  instability2D_options.animation_ext
+        save_animation(fig, frame_index, nt, outfile)
+    end
+
+    fig = figs[5]
+    if fig !== nothing
+        println("Saving 2D perturbation movie for $variable_name")
+        frame_index = axes_and_observables[1][5][3]
+        nt = minimum(ri.nt for ri ∈ run_info)
+        outfile = plot_prefix * variable_name * "_perturbation." *
+                  instability2D_options.animation_ext
+        save_animation(fig, frame_index, nt, outfile)
+    end
+
+    return zind
 end
-function instability2D_plots(run_info, variable_name; run_label, plot_prefix,
-                             zind=nothing, axes=nothing)
+function instability2D_plots(run_info, variable_name; plot_prefix, zind=nothing,
+                             axes_and_observables=nothing)
     instability2D_options = Dict_to_NamedTuple(input_dict["instability2D"])
 
     tinds = input_dict["itime_min"]:input_dict["itime_skip"]:input_dict["itime_max"]
@@ -2384,7 +2497,15 @@ function instability2D_plots(run_info, variable_name; run_label, plot_prefix,
 
         function plot_Fourier_1D(var, symbol, name)
             # File to save growth rate and frequency to
-            mode_stats_file = open(string(plot_prefix, "mode_$name.txt"), "w")
+            if axes_and_observables === nothing
+                mode_stats_file = open(string(plot_prefix, "mode_$name.txt"), "w")
+            else
+                # Processing multiple runs, so any existing mode_stats_file should have
+                # already been deleted so that we can append in this function.
+                mode_stats_file = open(string(plot_prefix, "mode_$name.txt"), "a")
+                println(mode_stats_file, run_info.run_name)
+                println(mode_stats_file, "-" ^ length(run_info.run_name))
+            end
 
             amplitude = abs.(var)
 
@@ -2397,8 +2518,14 @@ function instability2D_plots(run_info, variable_name; run_label, plot_prefix,
             println(mode_stats_file, "kr = $kr_2")
             println(mode_stats_file, "growth_rate = $growth_rate")
 
-            fig = Figure(title="$symbol Fourier components")
-            ax = Axis(fig[1,1], xlabel="time", ylabel="amplitude", yscale=log10)
+            if axes_and_observables === nothing
+                fig, ax = get_1d_ax(title="$symbol 1D Fourier components", xlabel="time",
+                                    ylabel="amplitude", yscale=log10)
+            else
+                fig = nothing
+                ax = axes_and_observables[1]
+                ax.title = run_info.run_name
+            end
 
             n_kr, nt = size(amplitude)
 
@@ -2414,8 +2541,10 @@ function instability2D_plots(run_info, variable_name; run_label, plot_prefix,
             plot_1d(time, initial_fit_amplitude.*exp.(growth_rate.*time), ax=ax)
             vlines!(ax, [time[startind]], linestyle=:dot)
 
-            outfile = string(plot_prefix, "$(name)_1D_Fourier_components.pdf")
-            save(outfile, fig)
+            if axes_and_observables === nothing
+                outfile = string(plot_prefix, "$(name)_1D_Fourier_components.pdf")
+                save(outfile, fig)
+            end
 
             # Plot phase of n_r=1 mode
             phase = angle.(var[2,:])
@@ -2430,16 +2559,28 @@ function instability2D_plots(run_info, variable_name; run_label, plot_prefix,
             println("for $symbol, kr=$kr_2, phase velocity is $phase_velocity, omega=$omega_2")
             println(mode_stats_file, "omega = $omega_2")
 
-            fig = Figure(title="phase of n_r=1 mode")
-            ax = Axis(fig[1,1], xlabel="time", ylabel="phase")
+            if axes_and_observables === nothing
+                fig, ax = get_1d_ax(title="phase of n_r=1 mode", xlabel="time",
+                                    ylabel="phase")
+            else
+                fig = nothing
+                ax = axes_and_observables[2]
+                ax.title = run_info.run_name
+            end
+
             plot_1d(time, phase, ax=ax, label="phase")
             plot_1d(time, phase_offset.+phase_velocity.*time, ax=ax, label="fit")
             vlines!(ax, [time[startind]], linestyle=:dot)
-            put_legend_right(fig, ax)
+            axislegend(ax)
 
-            outfile = string(plot_prefix, "$(name)_1D_phase.pdf")
-            save(outfile, fig)
+            if axes_and_observables === nothing
+                outfile = string(plot_prefix, "$(name)_1D_phase.pdf")
+                save(outfile, fig)
+            end
 
+            if axes_and_observables === nothing
+                println(mode_stats_file, "")
+            end
             close(mode_stats_file)
         end
         try
@@ -2458,8 +2599,15 @@ function instability2D_plots(run_info, variable_name; run_label, plot_prefix,
 
     if instability2D_options.plot_2d
         function plot_Fourier_2D(var, symbol, name)
-            fig, ax = get_1d_ax(title="$symbol Fourier components", xlabel="time",
-                                ylabel="amplitude", yscale=log10)
+            if axes_and_observables === nothing
+                fig, ax = get_1d_ax(title="$symbol Fourier components", xlabel="time",
+                                    ylabel="amplitude", yscale=log10)
+            else
+                fig = nothing
+                ax = axes_and_observables[3]
+                ax.title = run_info.run_name
+            end
+
             n_kz, n_kr, nt = size(var)
             for ikr ∈ 1:n_kr, ikz ∈ 1:n_kz
                 ikr!=2 && continue
@@ -2470,16 +2618,30 @@ function instability2D_plots(run_info, variable_name; run_label, plot_prefix,
                       justification=:right)
             end
 
-            outfile = string(plot_prefix, "$(name)_Fourier_components.pdf")
-            save(outfile, fig)
+            if axes_and_observables === nothing
+                outfile = string(plot_prefix, "$(name)_Fourier_components.pdf")
+                save(outfile, fig)
+            end
 
             # make a gif animation of Fourier components
+            if axes_and_observables === nothing
+                ax = nothing
+                colorbar_place = nothing
+                frame_index = nothing
+                outfile = plot_prefix * name * "_Fourier." * instability2D_options.animation_ext
+                title = "$symbol Fourier components"
+            else
+                ax, colorbar_place, frame_index = axes_and_observables[4]
+                outfile = nothing
+                title = run_info.run_name
+            end
             kr = collect(0:n_kr-1) * 2 * π / run_info.r.L
             kz = collect(0:n_kz-1) * 2 * π / run_info.z.L
             animate_2d(kz, kr, abs.(var), xlabel="kz", ylabel="kr",
-                       title="$symbol Fourier components",
-                       colormap=instability2D_options.colormap, colorscale=log10,
-                       outfile=string(plot_prefix, "$(name)_Fourier.gif"))
+                       title=title,
+                       colormap=instability2D_options.colormap, colorscale=log10, ax=ax,
+                       colorbar_place=colorbar_place, frame_index=frame_index,
+                       outfile=outfile)
         end
         println("Doing 2D Fourier analysis for $variable_name")
         variable_Fourier = get_Fourier_modes_2D(variable, run_info.r, run_info.r_spectral,
@@ -2501,10 +2663,22 @@ function instability2D_plots(run_info, variable_name; run_label, plot_prefix,
             # make animation of perturbation
             println("making perturbation movie $variable_name")
             flush(stdout)
+            if axes_and_observables === nothing
+                ax = nothing
+                colorbar_place = nothing
+                frame_index = nothing
+                outfile = plot_prefix*variable_name*"_perturbation." * instability2D_options.animation_ext
+                title = "$(get_variable_symbol(variable_name)) perturbation"
+            else
+                ax, colorbar_place, frame_index = axes_and_observables[5]
+                outfile = nothing
+                title = run_info.run_name
+            end
             animate_2d(run_info.z.grid, run_info.r.grid, perturbation, xlabel="z", ylabel="r",
-                       title="$(get_variable_symbol(variable_name)) perturbation",
-                       colormap=instability2D_options.colormap,
-                       outfile=plot_prefix*variable_name*"_perturbation." * instability2D_options.animation_ext)
+                       title=title,
+                       colormap=instability2D_options.colormap, ax=ax,
+                       colorbar_place=colorbar_place, frame_index=frame_index,
+                       outfile=outfile)
         catch e
             println("Warning: error in perturbation animation for $variable_name. Error was $e")
         end
