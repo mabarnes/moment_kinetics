@@ -695,7 +695,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         end
         
         function get_scaled_x_w!(x_scaled, w_scaled, x_legendre, w_legendre, x_laguerre, w_laguerre, node_min, node_max, coord_val)
-            zero = 1.0e-6 
+            zero = 1.0e-10 
             @. x_scaled = 0.0
             @. w_scaled = 0.0
             # assume x_scaled, w_scaled are arrays of length 2*nquad
@@ -714,7 +714,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 @. w_scaled[1:nquad] = (node_max - node_min)*w_laguerre
                 nquad_coord = nquad
                 #println("lower divergence")
-            elseif (coord_val - node_min)*(coord_val - node_max) < - zero # interior divergence
+            else #if (coord_val - node_min)*(coord_val - node_max) < - zero # interior divergence
                 nquad = size(x_laguerre,1)
                 n = 2*nquad
                 # lower half of domain  
@@ -729,14 +729,14 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 end
                 nquad_coord = n
                 #println("intermediate divergence")
-            else # no divergences
-                nquad = size(x_legendre,1) 
-                shift = 0.5*(node_min + node_max)
-                scale = 0.5*(node_max - node_min)
-                @. x_scaled[1:nquad] = scale*x_legendre + shift
-                @. w_scaled[1:nquad] = scale*w_legendre
-                #println("no divergence")
-                nquad_coord = nquad
+            #else # no divergences
+            #    nquad = size(x_legendre,1) 
+            #    shift = 0.5*(node_min + node_max)
+            #    scale = 0.5*(node_max - node_min)
+            #    @. x_scaled[1:nquad] = scale*x_legendre + shift
+            #    @. w_scaled[1:nquad] = scale*w_legendre
+            #    #println("no divergence")
+            #    nquad_coord = nquad
             end
             #println("x_scaled",x_scaled)
             #println("w_scaled",w_scaled)
@@ -1618,10 +1618,10 @@ if abspath(PROGRAM_FILE) == @__FILE__
     if test_Lagrange_integral_scan
         initialize_comms!()
         ngrid = 9
-        nscan = 4
-        #nelement_list = Int[2, 4, 8, 16, 32]
-        nelement_list = Int[2, 4, 8, 16]
-        #nelement_list = Int[2, 4, 8]
+        nscan = 3
+        nelement_list = Int[2, 4, 8, 16, 32]
+        #nelement_list = Int[2, 4, 8, 16]
+        nelement_list = Int[2, 4, 8]
         #nelement_list = Int[2]
         max_C_err = Array{mk_float,1}(undef,nscan)
         max_Gvpa_err = Array{mk_float,1}(undef,nscan)
