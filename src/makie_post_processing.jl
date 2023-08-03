@@ -1643,7 +1643,7 @@ function plots_for_dfn_variable(run_info, variable_name; plot_prefix, is_1D=fals
 end
 
 # Generate 1d plot functions for each dimension
-for dim ∈ (:t, all_dimensions...)
+for dim ∈ (:t, setdiff(all_dimensions, (:s, :sn))...)
     function_name_str = "plot_vs_$dim"
     function_name = Symbol(function_name_str)
     dim_str = String(dim)
@@ -1718,8 +1718,8 @@ end
 # Generate 2d plot functions for all combinations of dimensions
 const dimension_combinations_2d = Tuple(
          Tuple(c) for c in
-         unique((combinations((:t, ion_dimensions...), 2)...,
-                 combinations((:t, neutral_dimensions...), 2)...)))
+         unique((combinations((:t, setdiff(ion_dimensions, (:s,))...), 2)...,
+                 combinations((:t, setdiff(neutral_dimensions, (:sn,))...), 2)...)))
 for (dim1, dim2) ∈ dimension_combinations_2d
     function_name_str = "plot_vs_$(dim2)_$(dim1)"
     function_name = Symbol(function_name_str)
@@ -1820,7 +1820,7 @@ for (dim1, dim2) ∈ dimension_combinations_2d
 end
 
 # Generate 1d animation functions for each dimension
-for dim ∈ all_dimensions
+for dim ∈ setdiff(all_dimensions, (:s, :sn))
     function_name_str = "animate_vs_$dim"
     function_name = Symbol(function_name_str)
     dim_str = String(dim)
@@ -1920,8 +1920,8 @@ end
 
 # Generate 2d animation functions for all combinations of dimensions
 const dimension_combinations_2d_no_t = Tuple(
-          Tuple(c) for c in unique((combinations(ion_dimensions, 2)...,
-                                    combinations(neutral_dimensions, 2)...)))
+          Tuple(c) for c in unique((combinations(setdiff(ion_dimensions, (:s,)), 2)...,
+                                    combinations(setdiff(neutral_dimensions, (:sn,)), 2)...)))
 for (dim1, dim2) ∈ dimension_combinations_2d_no_t
     function_name_str = "animate_vs_$(dim2)_$(dim1)"
     function_name = Symbol(function_name_str)
