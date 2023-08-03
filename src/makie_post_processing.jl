@@ -1688,6 +1688,9 @@ for dim ∈ (:t, setdiff(all_dimensions, (:s, :sn))...)
                                      input=nothing, ax=nothing, label=nothing,
                                      outfile=nothing, transform=identity,
                                      $range_name=nothing, kwargs...)
+                 if isa(input, AbstractDict)
+                     input = Dict_to_NamedTuple(input)
+                 end
                  if data === nothing
                      dim_slices = get_dimension_slice_indices($(QuoteNode(dim));
                                                               input=input, is=is)
@@ -1777,6 +1780,9 @@ for (dim1, dim2) ∈ dimension_combinations_2d
                                      outfile=nothing, transform=identity,
                                      $range_name1=nothing, $range_name2=nothing,
                                      kwargs...)
+                 if isa(input, AbstractDict)
+                     input = Dict_to_NamedTuple(input)
+                 end
                  if data === nothing
                      dim_slices = get_dimension_slice_indices($(QuoteNode(dim1)),
                                                               $(QuoteNode(dim2));
@@ -1879,6 +1885,9 @@ for dim ∈ setdiff(all_dimensions, (:s, :sn))
                                      transform=identity, $range_name=nothing,
                                      outfile=nothing, yscale=nothing, ylims=nothing,
                                      kwargs...)
+                 if isa(input, AbstractDict)
+                     input = Dict_to_NamedTuple(input)
+                 end
                  if data === nothing
                      dim_slices = get_dimension_slice_indices(:t, $(QuoteNode(dim));
                                                               input=input, is=is)
@@ -1985,6 +1994,9 @@ for (dim1, dim2) ∈ dimension_combinations_2d_no_t
                                      transform=identity, $range_name1=nothing,
                                      $range_name2=nothing, colorbar_place=colorbar_place,
                                      title=nothing, outfile=nothing, kwargs...)
+                 if isa(input, AbstractDict)
+                     input = Dict_to_NamedTuple(input)
+                 end
                  if data === nothing
                      dim_slices = get_dimension_slice_indices(:t, $(QuoteNode(dim1)),
                                                               $(QuoteNode(dim2));
@@ -3149,6 +3161,9 @@ The dimensions in `keep_dims` are not given a slice (those are the dimensions we
 the variable after slicing).
 """
 function get_dimension_slice_indices(keep_dims...; input, slice_indices...)
+    if isa(input, AbstractDict)
+        input = Dict_to_NamedTuple(input)
+    end
     slice_names = (:t, :s, :r, :z, :vpa, :vperp, :vzeta, :vr, :vz)
     return Tuple(Symbol(:i, sn)=>get(slice_indices, sn, input[Symbol(:i, sn, :0)]) for sn ∈ slice_names if sn ∉ keep_dims)
 end
