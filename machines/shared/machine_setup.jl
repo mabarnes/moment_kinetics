@@ -219,10 +219,6 @@ function machine_setup_moment_kinetics(machine::String,
               * "`account` argument.")
     end
 
-    # Create directory to set up Python venv and download/compile dependencies in
-    artifact_path = joinpath("machines", "artifacts")
-    mkpath(artifact_path)
-
     if needs_compile_dependencies
         # Remove link if it exists already
         islink(compile_dependencies_path) && rm(compile_dependencies_path)

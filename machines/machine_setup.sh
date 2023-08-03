@@ -39,6 +39,9 @@ else
   DEFAULT_MACHINE=
 fi
 
+# Create directory to set up Python venv and download/compile dependencies in
+mkdir -p machines/artifacts
+
 # Make sure $JULIA is set
 # Note [ -z "$VAR" ] tests if $VAR is empty. Need the quotes to ensure that the
 # contents of $VAR are not evaluated if it is not empty.
