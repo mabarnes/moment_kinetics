@@ -794,6 +794,7 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
             result = allocate_float(dims...)
         elseif nd == 6
             # ion distribution function variable with dimensions (vpa,vperp,z,r,s,t)
+            nspecies = size(variable[1], 5)
             dims = Vector{mk_int}()
             ivpa === (:) && push!(dims, run_info.vpa.n)
             ivperp === (:) && push!(dims, run_info.vperp.n)
@@ -804,6 +805,7 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
             result = allocate_float(dims...)
         elseif nd == 7
             # neutral distribution function variable with dimensions (vz,vr,vzeta,z,r,s,t)
+            nspecies = size(variable[1], 6)
             dims = Vector{mk_int}()
             ivz === (:) && push!(dims, run_info.vz.n)
             ivr === (:) && push!(dims, run_info.vr.n)
