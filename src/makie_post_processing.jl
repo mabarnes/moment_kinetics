@@ -239,6 +239,8 @@ function makie_post_process(run_dir::Union{String,Tuple},
         end
     end
 
+    plot_charged_pdf_2D_at_wall(run_info_dfns; plot_prefix=plot_prefix)
+
     if !is_1D
         # Plots for 2D instability do not make sense for 1D simulations
         instability_input = input_dict["instability2D"]
@@ -537,6 +539,14 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
             sort!(this_input_dict[variable_name])
         end
     end
+
+    set_defaults_and_check_section!(
+        this_input_dict, "wall_pdf";
+        plot=false,
+        animate=false,
+        colormap=this_input_dict["colormap"],
+        animation_ext=this_input_dict["animation_ext"],
+       )
 
     set_defaults_and_check_section!(
         this_input_dict, "Chodura_condition";
@@ -2757,6 +2767,98 @@ function parse_colormap(colormap)
     else
         return colormap
     end
+end
+
+"""
+    plot_charged_pdf_2D_at_wall(run_info; plot_prefix)
+
+Make plots/animations of the charged particle distribution function at wall boundaries.
+
+The information for the runs to plot is passed in `run_info` (as returned by
+[`get_run_info`](@ref)). If `run_info` is a Tuple, comparison plots are made where line
+plots/animations from the different runs are overlayed on the same axis, and heatmap
+plots/animations are displayed in a horizontal row.
+
+`plot_prefix` is required and gives the path and prefix for plots to be saved to. They
+will be saved with the format `plot_prefix<some_identifying_string>.pdf`. When `run_info`
+is not a Tuple, `plot_prefix` is optional - plots/animations will be saved only if it is
+passed.
+"""
+function plot_charged_pdf_2D_at_wall(run_info; plot_prefix)
+    input = Dict_to_NamedTuple(input_dict_dfns["wall_pdf"])
+    if !(input.plot || input.animate)
+        # nothing to do
+        return nothing
+    end
+    if !any(ri !== nothing for ri ∈ run_info)
+        println("Warning: no distribution function output, skipping wall_pdf plots")
+        return nothing
+    end
+
+    z_lower = 1
+    z_upper = run_info[1].z.n
+    if !all(ri.z.n == z_upper for ri ∈ run_info)
+        println("Cannot run plot_charged_pdf_2D_at_wall() for runs with different "
+                * "z-grid sizes. Got $(Tuple(ri.z.n for ri ∈ run_info))")
+        return nothing
+    end
+
+    println("Making plots of ion distribution function at walls")
+    flush(stdout)
+
+    is_1D = all(ri !== nothing && ri.r.n == 1 for ri ∈ run_info)
+    is_1V = all(ri !== nothing && ri.vperp.n == 1 && ri.vzeta.n == 1 && ri.vr.n == 1
+                for ri ∈ run_info)
+
+    for (z, z_range, label) ∈ ((z_lower, z_lower:z_lower+8, "wall-"),
+                               (z_upper, z_upper-8:z_upper, "wall+"))
+        f_input = copy(input_dict_dfns["f"])
+        f_input["iz0"] = z
+
+        if input.plot
+            plot_vs_vpa(run_info, "f"; is=1, input=f_input,
+                        outfile=plot_prefix * "pdf_$(label)_vs_vpa.pdf")
+
+            if !is_1V
+                plot_vs_vpa_vperp(run_info, "f"; is=1, input=f_input,
+                                  outfile=plot_prefix * "pdf_$(label)_vs_vpa_vperp.pdf")
+            end
+
+            plot_vs_vpa_z(run_info, "f"; is=1, input=f_input, iz=z_range,
+                          outfile=plot_prefix * "pdf_$(label)_vs_vpa_z.pdf")
+
+            if !is_1D
+                plot_vs_z_r(run_info, "f"; is=1, input=f_input, iz=z_range,
+                            outfile=plot_prefix * "pdf_$(label)_vs_z_r.pdf")
+
+                plot_vs_vpa_r(run_info, "f"; is=1, input=f_input,
+                              outfile=plot_prefix * "pdf_$(label)_vs_vpa_r.pdf")
+            end
+        end
+
+        if input.animate
+            animate_vs_vpa(run_info, "f"; is=1, input=f_input,
+                           outfile=plot_prefix * "pdf_$(label)_vs_vpa." * input.animation_ext)
+
+            if !is_1V
+                animate_vs_vpa_vperp(run_info, "f"; is=1, input=f_input,
+                                     outfile=plot_prefix * "pdf_$(label)_vs_vpa_vperp." * input.animation_ext)
+            end
+
+            animate_vs_vpa_z(run_info, "f"; is=1, input=f_input, iz=z_range,
+                             outfile=plot_prefix * "pdf_$(label)_vs_vpa_z." * input.animation_ext)
+
+            if !is_1D
+                animate_vs_z_r(run_info, "f"; is=1, input=f_input, iz=z_range,
+                               outfile=plot_prefix * "pdf_$(label)_vs_z_r." * input.animation_ext)
+
+                animate_vs_vpa_r(run_info, "f"; is=1, input=f_input,
+                                 outfile=plot_prefix * "pdf_$(label)_vs_vpa_r." * input.animation_ext)
+            end
+        end
+    end
+
+    return nothing
 end
 
 """
