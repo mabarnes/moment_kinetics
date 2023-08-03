@@ -1637,10 +1637,12 @@ for dim ∈ (:t, all_dimensions...)
     function_name_str = "plot_vs_$dim"
     function_name = Symbol(function_name_str)
     dim_str = String(dim)
+    idim = Symbol(:i, dim)
+    range_name = Symbol(dim, :_range)
     eval(quote
              function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
                                      input=nothing, outfile=nothing, yscale=nothing,
-                                     transform=identity, kwargs...)
+                                     transform=identity, $range_name=nothing, kwargs...)
 
                  try
                      if data === nothing
@@ -1651,7 +1653,8 @@ for dim ∈ (:t, all_dimensions...)
                                          yscale=yscale)
                      for (d, ri) ∈ zip(data, run_info)
                          $function_name(ri, var_name, is=is, data=d, input=input, ax=ax,
-                                        transform=transform, label=ri.run_name, kwargs...)
+                                        transform=transform, $range_name=$range_name,
+                                        label=ri.run_name, kwargs...)
                      end
 
                      if outfile !== nothing
@@ -1666,18 +1669,26 @@ for dim ∈ (:t, all_dimensions...)
 
              function $function_name(run_info, var_name; is=1, data=nothing,
                                      input=nothing, ax=nothing, label=nothing,
-                                     outfile=nothing, transform=identity, kwargs...)
+                                     outfile=nothing, transform=identity,
+                                     $range_name=nothing, kwargs...)
                  if data === nothing
-                     dim_slices = get_dimension_slice_indices($(QuoteNode(dim)); input=input, is=is)
-                     data = postproc_load_variable(run_info, var_name; dim_slices...)
+                     dim_slices = get_dimension_slice_indices($(QuoteNode(dim));
+                                                              input=input, is=is)
+                     data = postproc_load_variable(run_info, var_name; $idim=$range_name,
+                                                   dim_slices...)
                  else
-                     data = select_slice(data, $(QuoteNode(dim)); input=input, is=is)
+                     data = select_slice(data, $(QuoteNode(dim)); input=input, is=is,
+                                         $idim=$range_name)
                  end
 
                  # Use transform to allow user to do something like data = abs.(data)
                  data = transform.(data)
 
-                 fig = plot_1d(run_info.$dim.grid, data, xlabel="$($dim_str)",
+                 x = run_info.$dim.grid
+                 if $range_name !== nothing
+                     x = x[$range_name]
+                 end
+                 fig = plot_1d(x, data, xlabel="$($dim_str)",
                                ylabel=get_variable_symbol(var_name), label=label, ax=ax,
                                kwargs...)
 
@@ -1710,9 +1721,14 @@ for (dim1, dim2) ∈ dimension_combinations_2d
         dim1_grid = :( run_info.$dim1.grid )
     end
     dim2_grid = :( run_info.$dim2.grid )
+    idim1 = Symbol(:i, dim1)
+    idim2 = Symbol(:i, dim2)
+    range_name1 = Symbol(dim1, :_range)
+    range_name2 = Symbol(dim2, :_range)
     eval(quote
              function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
                                      input=nothing, outfile=nothing, transform=identity,
+                                     $range_name1=nothing, $range_name2=nothing,
                                      kwargs...)
 
                  try
@@ -1723,7 +1739,8 @@ for (dim1, dim2) ∈ dimension_combinations_2d
                                                           title=get_variable_symbol(var_name))
                      for (d, ri, a, cp) ∈ zip(data, run_info, ax, colorbar_places)
                          $function_name(ri, var_name; is=is, data=d, input=input, ax=a,
-                                        transform=transform, colorbar_place=cp,
+                                        transform=transform, $range_name1=$range_name1,
+                                        $range_name2=$range_name2, colorbar_place=cp,
                                         title=ri.run_name, kwargs...)
                      end
 
@@ -1740,15 +1757,20 @@ for (dim1, dim2) ∈ dimension_combinations_2d
              function $function_name(run_info, var_name; is=1, data=nothing,
                                      input=nothing, ax=nothing,
                                      colorbar_place=colorbar_place, title=nothing,
-                                     outfile=nothing, transform=identity, kwargs...)
+                                     outfile=nothing, transform=identity,
+                                     $range_name1=nothing, $range_name2=nothing,
+                                     kwargs...)
                  if data === nothing
                      dim_slices = get_dimension_slice_indices($(QuoteNode(dim1)),
                                                               $(QuoteNode(dim2));
                                                               input=input, is=is)
-                     data = postproc_load_variable(run_info, var_name; dim_slices...)
+                     data = postproc_load_variable(run_info, var_name;
+                                                   $idim1=$range_name1,
+                                                   $idim2=$range_name2, dim_slices...)
                  else
                      data = select_slice(data, $(QuoteNode(dim2)), $(QuoteNode(dim1));
-                                         input=input, is=is)
+                                         input=input, is=is, $idim1=$range_name1,
+                                         $idim2=$range_name2)
                  end
                  if input === nothing
                      colormap = "reverse_deep"
@@ -1762,10 +1784,17 @@ for (dim1, dim2) ∈ dimension_combinations_2d
                  # Use transform to allow user to do something like data = abs.(data)
                  data = transform.(data)
 
-                 fig = plot_2d($dim2_grid, $dim1_grid, data; xlabel="$($dim2_str)",
-                               ylabel="$($dim1_str)", title=title, ax=ax,
-                               colorbar_place=colorbar_place, colormap=colormap,
-                               kwargs...)
+                 x = $dim2_grid
+                 if $range_name2 !== nothing
+                     x = x[$range_name2]
+                 end
+                 y = $dim1_grid
+                 if $range_name1 !== nothing
+                     y = y[$range_name1]
+                 end
+                 fig = plot_2d(x, y, data; xlabel="$($dim2_str)", ylabel="$($dim1_str)",
+                               title=title, ax=ax, colorbar_place=colorbar_place,
+                               colormap=colormap, kwargs...)
 
                  if outfile !== nothing
                      if fig === nothing
@@ -1785,10 +1814,13 @@ for dim ∈ all_dimensions
     function_name_str = "animate_vs_$dim"
     function_name = Symbol(function_name_str)
     dim_str = String(dim)
+    idim = Symbol(:i, dim)
+    range_name = Symbol(dim, :_range)
     eval(quote
              function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
                                      input=nothing, outfile=nothing, yscale=nothing,
-                                     transform=identity, ylims=nothing, kwargs...)
+                                     transform=identity, $range_name=nothing,
+                                     ylims=nothing, kwargs...)
 
                  try
                      if data === nothing
@@ -1805,8 +1837,9 @@ for dim ∈ all_dimensions
 
                      for (d, ri) ∈ zip(data, run_info)
                          $function_name(ri, var_name; is=is, data=d, input=input,
-                                        transform=transform, ylims=ylims,
-                                        frame_index=frame_index, ax=ax, kwargs...)
+                                        transform=transform, $range_name=$range_name,
+                                        ylims=ylims, frame_index=frame_index, ax=ax,
+                                        kwargs...)
                      end
                      put_legend_above(fig, ax)
 
@@ -1822,13 +1855,17 @@ for dim ∈ all_dimensions
 
              function $function_name(run_info, var_name; is=1, data=nothing,
                                      input=nothing, frame_index=nothing, ax=nothing,
-                                     transform=identity, outfile=nothing, yscale=nothing,
-                                     ylims=nothing, kwargs...)
+                                     transform=identity, $range_name=nothing,
+                                     outfile=nothing, yscale=nothing, ylims=nothing,
+                                     kwargs...)
                  if data === nothing
-                     dim_slices = get_dimension_slice_indices(:t, $(QuoteNode(dim)); input=input, is=is)
-                     data = postproc_load_variable(run_info, var_name; dim_slices...)
+                     dim_slices = get_dimension_slice_indices(:t, $(QuoteNode(dim));
+                                                              input=input, is=is)
+                     data = postproc_load_variable(run_info, var_name; $idim=$range_name,
+                                                   dim_slices...)
                  else
-                     data = select_slice(data, $(QuoteNode(dim)), :t; input=input, is=is)
+                     data = select_slice(data, $(QuoteNode(dim)), :t; input=input, is=is,
+                                         $idim=$range_name)
                  end
                  if frame_index === nothing
                      ind = Observable(1)
@@ -1848,7 +1885,11 @@ for dim ∈ all_dimensions
 
                  nt = size(data, 2)
 
-                 animate_1d(run_info.$dim.grid, data; ax=ax, ylims=ylims, frame_index=ind,
+                 x = run_info.$dim.grid
+                 if $range_name !== nothing
+                     x = x[$range_name]
+                 end
+                 animate_1d(x, data; ax=ax, ylims=ylims, frame_index=ind,
                             label=run_info.run_name, kwargs...)
 
                  if frame_index === nothing
@@ -1878,9 +1919,14 @@ for (dim1, dim2) ∈ dimension_combinations_2d_no_t
     dim2_str = String(dim2)
     dim1_grid = :( run_info.$dim1.grid )
     dim2_grid = :( run_info.$dim2.grid )
+    idim1 = Symbol(:i, dim1)
+    idim2 = Symbol(:i, dim2)
+    range_name1 = Symbol(dim1, :_range)
+    range_name2 = Symbol(dim2, :_range)
     eval(quote
              function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
                                      input=nothing, outfile=nothing, transform=identity,
+                                     $range_name1=nothing, $range_name2=nothing,
                                      kwargs...)
 
                  try
@@ -1897,9 +1943,10 @@ for (dim1, dim2) ∈ dimension_combinations_2d_no_t
 
                      for (d, ri, a, cp) ∈ zip(data, run_info, ax, colorbar_places)
                          $function_name(ri, var_name; is=is, data=d, input=input,
-                                        transform=transform, frame_index=frame_index,
-                                        ax=a, colorbar_place=cp, title=ri.run_name,
-                                        kwargs...)
+                                        transform=transform, $range_name1=$range_name1,
+                                        $range_name2=$range_name2,
+                                        frame_index=frame_index, ax=a, colorbar_place=cp,
+                                        title=ri.run_name, kwargs...)
                      end
 
                      nt = minimum(ri.nt for ri ∈ run_info)
@@ -1914,16 +1961,20 @@ for (dim1, dim2) ∈ dimension_combinations_2d_no_t
 
              function $function_name(run_info, var_name; is=1, data=nothing,
                                      input=nothing, frame_index=nothing, ax=nothing,
-                                     transform=identity, colorbar_place=colorbar_place,
+                                     transform=identity, $range_name1=nothing,
+                                     $range_name2=nothing, colorbar_place=colorbar_place,
                                      title=nothing, outfile=nothing, kwargs...)
                  if data === nothing
                      dim_slices = get_dimension_slice_indices(:t, $(QuoteNode(dim1)),
                                                               $(QuoteNode(dim2));
                                                               input=input, is=is)
-                     data = postproc_load_variable(run_info, var_name; dim_slices...)
+                     data = postproc_load_variable(run_info, var_name;
+                                                   $idim1=$range_name1,
+                                                   $idim2=$range_name2, dim_slices...)
                  else
                      data = select_slice(data, $(QuoteNode(dim2)), $(QuoteNode(dim1)), :t;
-                                         input=input, is=is)
+                                         input=input, is=is, $idim1=$range_name1,
+                                         $idim2=$range_name2)
                  end
                  if input === nothing
                      colormap = "reverse_deep"
@@ -1937,7 +1988,15 @@ for (dim1, dim2) ∈ dimension_combinations_2d_no_t
                  # Use transform to allow user to do something like data = abs.(data)
                  data = transform.(data)
 
-                 fig = animate_2d($dim2_grid, $dim1_grid, data; xlabel="$($dim2_str)",
+                 x = $dim2_grid
+                 if $range_name2 !== nothing
+                     x = x[$range_name2]
+                 end
+                 y = $dim1_grid
+                 if $range_name1 !== nothing
+                     y = y[$range_name1]
+                 end
+                 fig = animate_2d(x, y, data; xlabel="$($dim2_str)",
                                   ylabel="$($dim1_str)", title=title,
                                   frame_index=frame_index, ax=ax,
                                   colorbar_place=colorbar_place, colormap=colormap,
