@@ -1658,6 +1658,9 @@ for dim ∈ (:t, setdiff(all_dimensions, (:s, :sn))...)
                      if data === nothing
                          data = Tuple(nothing for _ in run_info)
                      end
+
+                     n_runs = length(run_info)
+
                      fig, ax = get_1d_ax(xlabel="$($dim_str)",
                                          ylabel=get_variable_symbol(var_name),
                                          yscale=yscale)
@@ -1665,6 +1668,10 @@ for dim ∈ (:t, setdiff(all_dimensions, (:s, :sn))...)
                          $function_name(ri, var_name, is=is, data=d, input=input, ax=ax,
                                         transform=transform, $range_name=$range_name,
                                         label=ri.run_name, kwargs...)
+                     end
+
+                     if n_runs > 1
+                         put_legend_above(fig, ax)
                      end
 
                      if outfile !== nothing
@@ -1840,6 +1847,8 @@ for dim ∈ setdiff(all_dimensions, (:s, :sn))
                          error("`outfile` is required for $($function_name_str)")
                      end
 
+                     n_runs = length(run_info)
+
                      fig, ax = get_1d_ax(xlabel="$($dim_str)",
                                          ylabel=get_variable_symbol(var_name),
                                          yscale=yscale)
@@ -1851,7 +1860,9 @@ for dim ∈ setdiff(all_dimensions, (:s, :sn))
                                         ylims=ylims, frame_index=frame_index, ax=ax,
                                         kwargs...)
                      end
-                     put_legend_above(fig, ax)
+                     if n_runs > 1
+                         put_legend_above(fig, ax)
+                     end
 
                      nt = minimum(ri.nt for ri ∈ run_info)
                      save_animation(fig, frame_index, nt, outfile)
