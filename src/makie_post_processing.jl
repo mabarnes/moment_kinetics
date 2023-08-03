@@ -728,36 +728,81 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
                                 ivzeta=nothing, ivr=nothing, ivz=nothing)
     nt = run_info.nt
 
-    # Use Colon operator `:` when slice argument is `nothing` as when we pass that as an
-    # 'index', it selects the whole dimension. Brackets are needed around the `:` when
-    # assigning it to variables, etc. to avoid an error "LoadError: syntax: newline not
-    # allowed after ":" used for quoting".
     if it === nothing
-        it = (:)
+        it = 1:nt
+    elseif isa(it, mk_int)
+        nt = 1
+    else
+        nt = length(it)
     end
     if is === nothing
+        # Can't use 'n_species' in a similar way to the way we treat other dims, because
+        # we don't know here if the variable is for ions or neutrals.
+        # Use Colon operator `:` when slice argument is `nothing` as when we pass that as
+        # an 'index', it selects the whole dimension. Brackets are needed around the `:`
+        # when assigning it to variables, etc. to avoid an error "LoadError: syntax:
+        # newline not allowed after ":" used for quoting".
         is = (:)
+    elseif isa(it, mk_int)
+        nspecies = 1
+    else
+        nspecies = length(is)
     end
     if ir === nothing
-        ir = (:)
+        nr = run_info.r.n
+        ir = 1:nr
+    elseif isa(ir, mk_int)
+        nr = 1
+    else
+        nr = length(ir)
     end
     if iz === nothing
-        iz = (:)
+        nz = run_info.z.n
+        iz = 1:nz
+    elseif isa(iz, mk_int)
+        nz = 1
+    else
+        nz = length(iz)
     end
     if ivperp === nothing
-        ivperp = (:)
+        nvperp = run_info.vperp.n
+        ivperp = 1:nvperp
+    elseif isa(ivperp, mk_int)
+        nvperp = 1
+    else
+        nvperp = length(ivperp)
     end
     if ivpa === nothing
-        ivpa = (:)
+        nvpa = run_info.vpa.n
+        ivpa = 1:nvpa
+    elseif isa(ivpa, mk_int)
+        nvpa = 1
+    else
+        nvpa = length(ivpa)
     end
     if ivzeta === nothing
-        ivzeta = (:)
+        nvzeta = run_info.vzeta.n
+        ivzeta = 1:nvzeta
+    elseif isa(ivzeta, mk_int)
+        nvzeta = 1
+    else
+        nvzeta = length(ivzeta)
     end
     if ivr === nothing
-        ivr = (:)
+        nvr = run_info.vr.n
+        ivr = 1:nvr
+    elseif isa(ivr, mk_int)
+        nvr = 1
+    else
+        nvr = length(ivr)
     end
     if ivz === nothing
-        ivz = (:)
+        nvz = run_info.vz.n
+        ivz = 1:nvz
+    elseif isa(ivz, mk_int)
+        nvz = 1
+    else
+        nvz = length(ivz)
     end
 
     if isa(it, mk_int)
@@ -777,42 +822,56 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
         if nd == 3
             # EM variable with dimensions (z,r,t)
             dims = Vector{mk_int}()
-            iz === (:) && push!(dims, run_info.z.n)
-            ir === (:) && push!(dims, run_info.r.n)
+            !isa(iz, mk_int) && push!(dims, nz)
+            !isa(ir, mk_int) && push!(dims, nr)
             !isa(it, mk_int) && push!(dims, nt)
             result = allocate_float(dims...)
         elseif nd == 4
             # moment variable with dimensions (z,r,s,t)
             # Get nspecies from the variable, not from run_info, because it might be
             # either ion or neutral
-            nspecies = size(variable[1], 3)
             dims = Vector{mk_int}()
-            iz === (:) && push!(dims, run_info.z.n)
-            ir === (:) && push!(dims, run_info.r.n)
-            is === (:) && push!(dims, nspecies)
+            !isa(iz, mk_int) && push!(dims, nz)
+            !isa(ir, mk_int) && push!(dims, nr)
+            if is === (:)
+                nspecies = size(variable[1], 3)
+                push!(dims, nspecies)
+            elseif !isa(is, mk_int)
+                push!(dims, nspecies)
+            end
             !isa(it, mk_int) && push!(dims, nt)
             result = allocate_float(dims...)
         elseif nd == 6
             # ion distribution function variable with dimensions (vpa,vperp,z,r,s,t)
             nspecies = size(variable[1], 5)
             dims = Vector{mk_int}()
-            ivpa === (:) && push!(dims, run_info.vpa.n)
-            ivperp === (:) && push!(dims, run_info.vperp.n)
-            iz === (:) && push!(dims, run_info.z.n)
-            ir === (:) && push!(dims, run_info.r.n)
-            is === (:) && push!(dims, nspecies)
+            !isa(ivpa, mk_int) && push!(dims, nvpa)
+            !isa(ivperp, mk_int) && push!(dims, nvperp)
+            !isa(iz, mk_int) && push!(dims, nz)
+            !isa(ir, mk_int) && push!(dims, nr)
+            if is === (:)
+                nspecies = size(variable[1], 3)
+                push!(dims, nspecies)
+            elseif !isa(is, mk_int)
+                push!(dims, nspecies)
+            end
             !isa(it, mk_int) && push!(dims, nt)
             result = allocate_float(dims...)
         elseif nd == 7
             # neutral distribution function variable with dimensions (vz,vr,vzeta,z,r,s,t)
             nspecies = size(variable[1], 6)
             dims = Vector{mk_int}()
-            ivz === (:) && push!(dims, run_info.vz.n)
-            ivr === (:) && push!(dims, run_info.vr.n)
-            ivzeta === (:) && push!(dims, run_info.vzeta.n)
-            iz === (:) && push!(dims, run_info.z.n)
-            ir === (:) && push!(dims, run_info.r.n)
-            is === (:) && push!(dims, nspecies)
+            !isa(ivz, mk_int) && push!(dims, nvz)
+            !isa(ivr, mk_int) && push!(dims, nvr)
+            !isa(ivzeta, mk_int) && push!(dims, nvzeta)
+            !isa(iz, mk_int) && push!(dims, nz)
+            !isa(ir, mk_int) && push!(dims, nr)
+            if is === (:)
+                nspecies = size(variable[1], 3)
+                push!(dims, nspecies)
+            elseif !isa(is, mk_int)
+                push!(dims, nspecies)
+            end
             !isa(it, mk_int) && push!(dims, nt)
             result = allocate_float(dims...)
         else
@@ -939,11 +998,7 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
                 push!(parts, load_distributed_charged_pdf_slice(
                                  f, run_info.nblocks, tinds, run_info.n_ion_species,
                                  run_info.r, run_info.z, run_info.vperp, run_info.vpa;
-                                 is=(is === (:) ? nothing : is),
-                                 ir=(ir === (:) ? nothing : ir),
-                                 iz=(iz === (:) ? nothing : iz),
-                                 ivperp=(ivperp === (:) ? nothing : ivperp),
-                                 ivpa=(ivpa === (:) ? nothing : ivpa)))
+                                 is=is, ir=ir, iz=iz, ivperp=ivperp, ivpa=ivpa))
                 local_it_start = local_it_end + 1
             end
             result = cat(parts...; dims=6)

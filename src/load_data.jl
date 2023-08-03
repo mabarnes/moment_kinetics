@@ -641,23 +641,38 @@ function load_distributed_charged_pdf_slice(run_names::Tuple, nblocks::Tuple, t_
 
     result_dims = mk_int[]
     if ivpa === nothing
+        ivpa = 1:vpa.n_global
         push!(result_dims, vpa.n_global)
+    elseif !isa(ivpa, mk_int)
+        push!(result_dims, length(ivpa))
     end
     if ivperp === nothing
+        ivperp = 1:vperp.n_global
         push!(result_dims, vperp.n_global)
+    elseif !isa(ivperp, mk_int)
+        push!(result_dims, length(ivperp))
     end
     if iz === nothing
+        iz = 1:z.n_global
         push!(result_dims, z.n_global)
+    elseif !isa(iz, mk_int)
+        push!(result_dims, length(iz))
     else
         push!(result_dims, 1)
     end
     if ir === nothing
+        ir = 1:r.n_global
         push!(result_dims, r.n_global)
+    elseif !isa(ir, mk_int)
+        push!(result_dims, length(ir))
     else
         push!(result_dims, 1)
     end
     if is === nothing
+        is = 1:n_species
         push!(result_dims, n_species)
+    elseif !isa(is, mk_int)
+        push!(result_dims, length(is))
     else
         push!(result_dims, 1)
     end
@@ -717,40 +732,34 @@ function load_distributed_charged_pdf_slice(run_names::Tuple, nblocks::Tuple, t_
             # number of dimensions in f_global_slice, f_local_slice is different depending
             # on which combination of ivpa, ivperp, iz, ir, and is was passed.
             thisdim = ndims(f_local_slice) - 5
-            if ivpa !== nothing
-                f_local_slice = selectdim(f_local_slice, thisdim, ivpa)
-            end
+            f_local_slice = selectdim(f_local_slice, thisdim, ivpa)
 
             thisdim = ndims(f_local_slice) - 4
-            if ivperp !== nothing
-                f_local_slice = selectdim(f_local_slice, thisdim, ivperp)
-            end
+            f_local_slice = selectdim(f_local_slice, thisdim, ivperp)
 
             thisdim = ndims(f_local_slice) - 3
-            if iz === nothing
-                f_global_slice = selectdim(f_global_slice, thisdim, global_z_range)
-                f_local_slice = selectdim(f_local_slice, thisdim, local_z_range)
-            else
+            if isa(iz, mk_int)
                 f_global_slice = selectdim(f_global_slice, thisdim, 1)
                 f_local_slice = selectdim(f_local_slice, thisdim,
                                           ilocal_func(iz, z_irank, z.n))
+            else
+                f_global_slice = selectdim(f_global_slice, thisdim, global_z_range)
+                f_local_slice = selectdim(f_local_slice, thisdim, local_z_range)
             end
 
             thisdim = ndims(f_local_slice) - 2
-            if ir === nothing
-                f_global_slice = selectdim(f_global_slice, thisdim, global_r_range)
-                f_local_slice = selectdim(f_local_slice, thisdim, local_r_range)
-            else
+            if isa(ir, mk_int)
                 f_global_slice = selectdim(f_global_slice, thisdim, 1)
                 f_local_slice = selectdim(f_local_slice, thisdim,
                                           ilocal_func(ir, r_irank, r.n))
+            else
+                f_global_slice = selectdim(f_global_slice, thisdim, global_r_range)
+                f_local_slice = selectdim(f_local_slice, thisdim, local_r_range)
             end
 
             thisdim = ndims(f_local_slice) - 1
-            if is !== nothing
-                f_global_slice = selectdim(f_global_slice, thisdim, 1)
-                f_local_slice = selectdim(f_local_slice, thisdim, is)
-            end
+            f_global_slice = selectdim(f_global_slice, thisdim, 1)
+            f_local_slice = selectdim(f_local_slice, thisdim, is)
 
             # Select time slice
             thisdim = ndims(f_local_slice)
@@ -763,15 +772,15 @@ function load_distributed_charged_pdf_slice(run_names::Tuple, nblocks::Tuple, t_
         global_tind_start = global_tind_end + 1
     end
 
-    if iz !== nothing
+    if isa(iz, mk_int)
         thisdim = ndims(f_global) - 3
         f_global = selectdim(f_global, thisdim, 1)
     end
-    if ir !== nothing
+    if isa(ir, mk_int)
         thisdim = ndims(f_global) - 2
         f_global = selectdim(f_global, thisdim, 1)
     end
-    if is !== nothing
+    if isa(is, mk_int)
         thisdim = ndims(f_global) - 1
         f_global = selectdim(f_global, thisdim, 1)
     end
@@ -797,28 +806,40 @@ function load_distributed_neutral_pdf_slice(run_names::Tuple, nblocks::Tuple, t_
 
     result_dims = mk_int[]
     if ivz === nothing
+        ivz = 1:vz.n_global
         push!(result_dims, vz.n_global)
+    elseif !isa(ivz, mk_int)
+        push!(result_dims, length(ivz))
     end
     if ivr === nothing
+        ivr = 1:vr.n_global
         push!(result_dims, vr.n_global)
+    elseif !isa(ivr, mk_int)
+        push!(result_dims, length(ivr))
     end
     if ivzeta === nothing
+        ivzeta = 1:vzeta.n_global
         push!(result_dims, vzeta.n_global)
+    elseif !isa(ivzeta, mk_int)
+        push!(result_dims, length(ivzeta))
     end
     if iz === nothing
+        iz = 1:z.n_global
         push!(result_dims, z.n_global)
-    else
-        push!(result_dims, 1)
+    elseif !isa(iz, mk_int)
+        push!(result_dims, length(iz))
     end
     if ir === nothing
+        ir = 1:r.n_global
         push!(result_dims, r.n_global)
-    else
-        push!(result_dims, 1)
+    elseif !isa(ir, mk_int)
+        push!(result_dims, length(ir))
     end
     if isn === nothing
+        isn = 1:n_species
         push!(result_dims, n_species)
-    else
-        push!(result_dims, 1)
+    elseif !isa(isn, mk_int)
+        push!(result_dims, length(isn))
     end
     push!(result_dims, length(t_range))
 
@@ -876,45 +897,37 @@ function load_distributed_neutral_pdf_slice(run_names::Tuple, nblocks::Tuple, t_
             # number of dimensions in f_global_slice, f_local_slice is different depending
             # on which combination of ivpa, ivperp, iz, ir, and is was passed.
             thisdim = ndims(f_local_slice) - 6
-            if ivz !== nothing
-                f_local_slice = selectdim(f_local_slice, thisdim, ivz)
-            end
+            f_local_slice = selectdim(f_local_slice, thisdim, ivz)
 
             thisdim = ndims(f_local_slice) - 5
-            if ivr !== nothing
-                f_local_slice = selectdim(f_local_slice, thisdim, ivr)
-            end
+            f_local_slice = selectdim(f_local_slice, thisdim, ivr)
 
             thisdim = ndims(f_local_slice) - 4
-            if ivzeta !== nothing
-                f_local_slice = selectdim(f_local_slice, thisdim, ivzeta)
-            end
+            f_local_slice = selectdim(f_local_slice, thisdim, ivzeta)
 
             thisdim = ndims(f_local_slice) - 3
-            if iz === nothing
-                f_global_slice = selectdim(f_global_slice, thisdim, global_z_range)
-                f_local_slice = selectdim(f_local_slice, thisdim, local_z_range)
-            else
+            if isa(iz, mk_int)
                 f_global_slice = selectdim(f_global_slice, thisdim, 1)
                 f_local_slice = selectdim(f_local_slice, thisdim,
                                           ilocal_func(iz, z_irank, z.n))
+            else
+                f_global_slice = selectdim(f_global_slice, thisdim, global_z_range)
+                f_local_slice = selectdim(f_local_slice, thisdim, local_z_range)
             end
 
             thisdim = ndims(f_local_slice) - 2
-            if ir === nothing
-                f_global_slice = selectdim(f_global_slice, thisdim, global_r_range)
-                f_local_slice = selectdim(f_local_slice, thisdim, local_r_range)
-            else
+            if isa(ir, mk_int)
                 f_global_slice = selectdim(f_global_slice, thisdim, 1)
                 f_local_slice = selectdim(f_local_slice, thisdim,
                                           ilocal_func(ir, r_irank, r.n))
+            else
+                f_global_slice = selectdim(f_global_slice, thisdim, global_r_range)
+                f_local_slice = selectdim(f_local_slice, thisdim, local_r_range)
             end
 
             thisdim = ndims(f_local_slice) - 1
-            if isn !== nothing
-                f_global_slice = selectdim(f_global_slice, thisdim, 1)
-                f_local_slice = selectdim(f_local_slice, thisdim, isn)
-            end
+            f_global_slice = selectdim(f_global_slice, thisdim, 1)
+            f_local_slice = selectdim(f_local_slice, thisdim, isn)
 
             # Select time slice
             thisdim = ndims(f_local_slice)
@@ -927,15 +940,15 @@ function load_distributed_neutral_pdf_slice(run_names::Tuple, nblocks::Tuple, t_
         global_tind_start = global_tind_end + 1
     end
 
-    if iz !== nothing
+    if isa(iz, mk_int)
         thisdim = ndims(f_global) - 3
         f_global = selectdim(f_global, thisdim, 1)
     end
-    if ir !== nothing
+    if isa(ir, mk_int)
         thisdim = ndims(f_global) - 2
         f_global = selectdim(f_global, thisdim, 1)
     end
-    if isn !== nothing
+    if isa(isn, mk_int)
         thisdim = ndims(f_global) - 1
         f_global = selectdim(f_global, thisdim, 1)
     end
