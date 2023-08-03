@@ -27,7 +27,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     end 
 
     # gauss laguerre test 
-    ngrid = 12
+    ngrid = 24
     nelement = 1
     x, w = gausslaguerre(ngrid)
     print_vector(x,"Gauss Laguerre x",ngrid)
@@ -42,6 +42,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
     value_Kz = Array{Float64,1}(undef,ngrid)
     integrand_Kz_sqrt = Array{Float64,1}(undef,ngrid)
     value_Kz_sqrt = Array{Float64,1}(undef,ngrid)
+    integrand_Kz_sqrt_diff = Array{Float64,1}(undef,ngrid)
+    value_Kz_sqrt_diff = Array{Float64,1}(undef,ngrid)
     value_y = Array{Float64,1}(undef,ngrid)
     value_z = Array{Float64,1}(undef,ngrid)
     L = 1.0
@@ -51,8 +53,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
         # function to integrate in terms of y
         integrand[i] = sqrt(1.0/y)*w[i]
         integrand_sqrty[i] = sqrt(y)*w[i]
-        z = (1.0 - y)
-        #z = (1.0 - y)/(1.0 + 10^-15)
+        #z = (1.0 - y)
+        z = (1.0 - y)/(1.0 + 10^-15)
         ellipk_z = ellipk(z)
         #if isnan(ellipk_z) || isinf(ellipk_z)
         #    ellipk_z = 0.0
@@ -65,6 +67,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
         value_Kz[i] = ellipk_z
         integrand_Kz_sqrt[i] = ellipk_z*w[i]/sqrt_1_z
         value_Kz_sqrt[i] = ellipk_z/sqrt_1_z
+        value_Kz_sqrt_diff[i] = (ellipk_z - log(4.0) + log(sqrt_1_z))/sqrt_1_z
+        integrand_Kz_sqrt_diff[i] = value_Kz_sqrt_diff[i]*w[i]
         value_z[i] = z
     end
     #@. integrand *= w
@@ -95,7 +99,15 @@ if abspath(PROGRAM_FILE) == @__FILE__
     primitive = sum(integrand_Kz_sqrt)
     primitive_exact = pi^2/2.0
     primitive_err = abs(primitive - primitive_exact)
-    println("K(z): Primitive: ",primitive," should be: ",primitive_exact," error: ",primitive_err)
+    println("K(z)/sqrt(1-z): Primitive: ",primitive," should be: ",primitive_exact," error: ",primitive_err)
+   
+    print_vector(integrand_Kz_sqrt_diff,"(Kz - log 4/sqrt(1-z))/sqrt(1-z) integrand",ngrid)
+    print_vector(value_Kz_sqrt_diff,"(Kz - log 4/sqrt(1-z))/sqrt(1-z)",ngrid)
+    print_vector(value_z,"z",ngrid)
+    primitive = sum(integrand_Kz_sqrt_diff)
+    primitive_exact = (pi^2/2.0) - 2.0*(2.0*log(2.0) + 1.0)
+    primitive_err = abs(primitive - primitive_exact)
+    println("(K(z) - log(4/sqrt(1-z)))/sqrt(1-z): Primitive: ",primitive," should be: ",primitive_exact," error: ",primitive_err)
    
     if false   
         # gauss lobatto test 
