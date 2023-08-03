@@ -24,7 +24,7 @@ while getopts "hd" opt; do
   esac
 done
 
-# Get the positional argument as INPUTFILE
+# Get the positional argument as JULIA
 # [See https://stackoverflow.com/a/13400237]
 JULIA=${@:$OPTIND:1}
 
