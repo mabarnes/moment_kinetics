@@ -300,7 +300,10 @@ source julia.env
 PYTHON_VENV_PATH=$PWD/machines/artifacts/mk_venv
 python -m venv --system-site-packages $PYTHON_VENV_PATH
 source $PYTHON_VENV_PATH/bin/activate
-pip install matplotlib
+# Use 'PYTHONNOUSERSITE=1' so that pip ignores any packages in ~/.local (which
+# may not be accessible from compute nodes on some clusters) and therefore
+# definitely installs matplotlib and its dependencies into mk_venv.
+PYTHONNOUSERSITE=1 pip install matplotlib
 echo "source $PYTHON_VENV_PATH/bin/activate" >> julia.env
 
 # [ -f <path> ] tests if <path> exists and is a file
