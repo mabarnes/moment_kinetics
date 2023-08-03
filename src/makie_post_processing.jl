@@ -400,7 +400,7 @@ function _setup_single_input!(this_input_dict::AbstractDict{String,Any},
        it0=nt_min,
        it0_dfns=nt_min,
        # Choose this species index when not otherwise specified
-       is0 = 1,
+       is0=1,
        # Slice r to this value when making reduced dimensionality plots
        ir0=max(nr_min÷3, 1),
        # Slice z to this value when making reduced dimensionality plots
