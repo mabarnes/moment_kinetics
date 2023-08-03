@@ -3483,39 +3483,47 @@ function plot_charged_pdf_2D_at_wall(run_name, run_name_label, r_global, z_globa
     ir0 = 1
 
     # pdf at lower wall
-    pdf_lower = load_distributed_charged_pdf_slice(run_name, nblocks, :, n_ion_species, r,
-                                                 z, vperp, vpa; z=1)
+    pdf_lower = load_distributed_charged_pdf_slice(run_name, nblocks, 1:ntime, n_ion_species, r,
+                                                   z, vperp, vpa; iz=1)
     # pdf at upper wall
-    pdf_upper = load_distributed_charged_pdf_slice(run_name, nblocks, :, n_ion_species, r,
-                                                 z, vperp, vpa; z=z.n_global)
-    for (pdf, zlabel) ∈ zip((pdf_lower, pdf_upper), ("wall-", "wall+"))
+    pdf_upper = load_distributed_charged_pdf_slice(run_name, nblocks, 1:ntime, n_ion_species, r,
+                                                   z, vperp, vpa; iz=z.n_global)
+    for (pdf, zlabel) ∈ ((pdf_lower, "wall-"), (pdf_upper, "wall+"))
         for is in 1:n_ion_species
             description = "_ion_spec"*string(is)*"_"
 
             # plot f(vpa,ivperp0,iz_wall,ir0,is,itime) at the wall
-            @views plot(vpa.grid, pdf[:,ivperp0,iz_wall,ir0,is,itime0], xlabel=L"v_{\|\|}/L_{v_{\|\|}}", ylabel=L"f_i")
+            @views plot(vpa.grid, pdf[:,ivperp0,ir0,is,itime0], xlabel=L"v_{\|\|}/L_{v_{\|\|}}", ylabel=L"f_i")
             outfile = string(run_name_label, "_pdf(vpa,vperp0,iz_"*zlabel*",ir0)"*description*"vs_vpa.pdf")
             trysavefig(outfile)
 
             # plot f(vpa,vperp,iz_wall,ir0,is,itime) at the wall
-            @views heatmap(vperp.grid, vpa.grid, pdf[:,:,iz_wall,ir0,is,itime0], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+            @views heatmap(vperp.grid, vpa.grid, pdf[:,:,ir0,is,itime0], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
                            windowsize = (360,240), margin = 15pt)
             outfile = string(run_name_label, "_pdf(vpa,vperp,iz_"*zlabel*",ir0)"*description*"vs_vperp_vpa.pdf")
             trysavefig(outfile)
 
-            # plot f(vpa,ivperp0,z,ir0,is,itime) near the wall
-            @views heatmap(z_global.grid, vpa.grid, pdf[:,ivperp0,:,ir0,is,itime0], xlabel=L"z", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
-                           windowsize = (360,240), margin = 15pt)
-            outfile = string(run_name_label, "_pdf(vpa,ivperp0,z_"*zlabel*",ir0)"*description*"vs_z_vpa.pdf")
-            trysavefig(outfile)
+            # Skip this because load_distributed_charged_pdf_slice() currently only
+            # handles selecting a single value like `iz=1`, not a sub-slice like
+            # `iz=1:n_local`, so we only have data for one point in z here, so we can't
+            # plot vs z.
+            ## plot f(vpa,ivperp0,z,ir0,is,itime) near the wall
+            #@views heatmap(z_global.grid, vpa.grid, pdf[:,ivperp0,:,ir0,is,itime0], xlabel=L"z", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+            #               windowsize = (360,240), margin = 15pt)
+            #outfile = string(run_name_label, "_pdf(vpa,ivperp0,z_"*zlabel*",ir0)"*description*"vs_z_vpa.pdf")
+            #trysavefig(outfile)
 
             # plot f(ivpa0,ivperp0,z,r,is,itime) near the wall
             if r.n > 1
-                @views heatmap(r_global.grid, z_global.grid, pdf[ivpa0,ivperp0,:,:,is,itime0], xlabel=L"r", ylabel=L"z", c = :deep, interpolation = :cubic,
-                               windowsize = (360,240), margin = 15pt)
-                outfile = string(run_name_label, "_pdf(ivpa0,ivperp0,z_"*zlabel*",r)"*description*"vs_r_z.pdf")
-                trysavefig(outfile)
-                @views heatmap(r_global.grid, vpa.grid, pdf[:,ivperp0,iz_wall,:,is,itime0], xlabel=L"r", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                # Skip this because load_distributed_charged_pdf_slice() currently only
+                # handles selecting a single value like `iz=1`, not a sub-slice like
+                # `iz=1:n_local`, so we only have data for one point in z here, so we
+                # can't plot vs z.
+                #@views heatmap(r_global.grid, z_global.grid, pdf[ivpa0,ivperp0,:,:,is,itime0], xlabel=L"r", ylabel=L"z", c = :deep, interpolation = :cubic,
+                #               windowsize = (360,240), margin = 15pt)
+                #outfile = string(run_name_label, "_pdf(ivpa0,ivperp0,z_"*zlabel*",r)"*description*"vs_r_z.pdf")
+                #trysavefig(outfile)
+                @views heatmap(r_global.grid, vpa.grid, pdf[:,ivperp0,:,is,itime0], xlabel=L"r", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
                                windowsize = (360,240), margin = 15pt)
                 outfile = string(run_name_label, "_pdf(vpa,ivperp0,z_"*zlabel*",r)"*description*"vs_r_vpa.pdf")
                 trysavefig(outfile)
