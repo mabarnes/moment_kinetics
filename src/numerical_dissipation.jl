@@ -363,7 +363,7 @@ function r_dissipation!(f_out, f_in, r, r_spectral::T_spectral, dt,
         num_diss_params::numerical_dissipation_parameters, scratch_dummy) where T_spectral
 
     diffusion_coefficient = num_diss_params.r_dissipation_coefficient
-    if diffusion_coefficient <= 0.0
+    if diffusion_coefficient <= 0.0 || r.n == 1
         return nothing
     end
 
@@ -494,7 +494,7 @@ function r_dissipation_neutral!(f_out, f_in, r, r_spectral::T_spectral, dt,
         num_diss_params::numerical_dissipation_parameters, scratch_dummy) where T_spectral
 
     diffusion_coefficient = num_diss_params.r_dissipation_coefficient
-    if diffusion_coefficient <= 0.0
+    if diffusion_coefficient <= 0.0 || r.n == 1
         return nothing
     end
 
