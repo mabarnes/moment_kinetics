@@ -1021,6 +1021,16 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
         vzeta = vzeta[1]
     end
 
+    input = mk_input(scan_input)
+    # obtain input options from moment_kinetics_input.jl
+    # and check input to catch errors
+    io_input, evolve_moments,
+        t_input, z_input, r_input,
+        vpa_input, vperp_input, gyrophase_input,
+        vz_input, vr_input, vzeta_input,
+        composition, species, collisions,
+        geometry, drive_input, num_diss_params, manufactured_solns_input = input
+
     if !is_1D1V
         # make plots and animations of the phi, Ez and Er
         plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time,
@@ -1052,15 +1062,10 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
         end
     end
 
-    manufactured_solns_section = get(scan_input, "manufactured_solns", Dict{String,Any}())
-    use_manufactured_solns_for_advance = get(manufactured_solns_section, "use_for_advance", false)
-    use_manufactured_solns_for_init = get(manufactured_solns_section, "use_for_init", false)
-    manufactured_solns_test = use_manufactured_solns_for_advance && use_manufactured_solns_for_init
+    manufactured_solns_test = manufactured_solns_input.use_for_advance && manufactured_solns_input.use_for_init
     # Plots compare density and density_symbolic at last timestep
     #if(manufactured_solns_test && nr > 1)
     if(manufactured_solns_test)
-        r_bc = get(scan_input, "r_bc", "periodic")
-        z_bc = get(scan_input, "z_bc", "periodic")
         # avoid passing Lr = 0 into manufactured_solns functions
         if r_global.n > 1
             Lr_in = r_global.L
@@ -1068,12 +1073,18 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
             Lr_in = 1.0
         end
 
-        manufactured_solns_list = manufactured_solutions(Lr_in,z_global.L,r_bc,z_bc,geometry,composition,r_global.n)
+        manufactured_solns_list = manufactured_solutions(manufactured_solns_input, Lr_in,
+                                                         z_global.L, r_global.bc,
+                                                         z_global.bc, geometry,
+                                                         composition, species, r_global.n)
         dfni_func = manufactured_solns_list.dfni_func
         densi_func = manufactured_solns_list.densi_func
         dfnn_func = manufactured_solns_list.dfnn_func
         densn_func = manufactured_solns_list.densn_func
-        manufactured_E_fields = manufactured_electric_fields(Lr_in,z_global.L,r_bc,z_bc,composition,r_global.n)
+        manufactured_E_fields =
+            manufactured_electric_fields(Lr_in, z_global.L, r_global.bc, z_global.bc,
+                                         composition, r_global.n,
+                                         manufactured_solns_input, species)
         Er_func = manufactured_E_fields.Er_func
         Ez_func = manufactured_E_fields.Ez_func
         phi_func = manufactured_E_fields.phi_func
