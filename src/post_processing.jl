@@ -472,6 +472,8 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
     evolve_density, evolve_upar, evolve_ppar =
         get_tuple_of_return_values(load_mk_options, moments_files0_first_restart)
 
+    has_neutrals = any(n_neutral_species .> 0)
+
     for files in moments_files0
         for f in files
             close(f)
@@ -492,7 +494,7 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
                                    Tuple(this_z.n_global for this_z ∈ z),
                                    Tuple(this_r.n_global for this_r ∈ r),
                                    n_ion_species, ntime)
-    if any(n_neutral_species .> 0)
+    if has_neutrals
         neutral_density, neutral_uz, neutral_pz, neutral_qz, neutral_thermal_speed =
             get_tuple_of_return_values(allocate_global_zr_neutral_moments,
                                        Tuple(this_z.n_global for this_z ∈ z),
@@ -539,7 +541,7 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
                                Tuple(this_z.n for this_z ∈ z),
                                Tuple(this_r.n for this_r ∈ r), iskip)
     # neutral particle moments
-    if any(n_neutral_species .> 0)
+    if has_neutrals
         get_tuple_of_return_values(read_distributed_zr_data!, neutral_density,
                                    "density_neutral", run_names, "moments", nblocks,
                                    Tuple(this_z.n for this_z ∈ z),
@@ -578,7 +580,7 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
     # these values are currently the same for all blocks
     vpa, vpa_spectral = get_tuple_of_return_values(load_coordinate_data, dfns_files0_first_restart, "vpa")
     vperp, vperp_spectral = get_tuple_of_return_values(load_coordinate_data, dfns_files0_first_restart, "vperp")
-    if any(n_neutral_species .> 0)
+    if has_neutrals
         vzeta, vzeta_spectral = get_tuple_of_return_values(load_coordinate_data, dfns_files0_first_restart, "vzeta")
         vr, vr_spectral = get_tuple_of_return_values(load_coordinate_data, dfns_files0_first_restart, "vr")
         vz, vz_spectral = get_tuple_of_return_values(load_coordinate_data, dfns_files0_first_restart, "vz")
@@ -598,7 +600,7 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
                                    Tuple(this_z.n_global for this_z ∈ z),
                                    Tuple(this_r.n_global for this_r ∈ r), n_ion_species,
                                    ntime_pdfs)
-    if any(n_neutral_species .> 0)
+    if has_neutrals
         neutral_density_at_pdf_times, neutral_uz_at_pdf_times, neutral_pz_at_pdf_times,
         neutral_qz_at_pdf_times, neutral_thermal_speed_at_pdf_times =
             get_tuple_of_return_values(allocate_global_zr_neutral_moments,
@@ -641,7 +643,7 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
                                Tuple(this_z.n for this_z ∈ z),
                                Tuple(this_r.n for this_r ∈ r), iskip_pdfs)
     # neutral particle moments
-    if any(n_neutral_species .> 0)
+    if has_neutrals
         get_tuple_of_return_values(read_distributed_zr_data!,
                                    neutral_density_at_pdf_times, "density_neutral",
                                    run_names, "dfns", nblocks,
@@ -697,7 +699,7 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
         ff = get_tuple_of_return_values(load_distributed_charged_pdf_slice, run_names,
                                         nblocks, itime_min_pdfs:iskip_pdfs:itime_max_pdfs,
                                         n_ion_species, r, z, vperp, vpa)
-        if maximum(n_neutral_species) > 0
+        if has_neutrals
             neutral_ff = get_tuple_of_return_values(load_distributed_neutral_pdf_slice,
                                                     run_names, nblocks,
                                                     itime_min_pdfs:iskip_pdfs:itime_max_pdfs,
@@ -724,17 +726,17 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
             Tuple(qpar[:,ir0,:,:] for qpar ∈ parallel_heat_flux_at_pdf_times),
             Tuple(vth[:,ir0,:,:] for vth ∈ thermal_speed_at_pdf_times),
             Tuple(f[:,ivperp0,:,ir0,:,:] for f ∈ ff),
-            Tuple(neutral_n[:,ir0,:,:] for neutral_n ∈ neutral_density),
-            Tuple(uz[:,ir0,:,:] for uz ∈ neutral_uz),
-            Tuple(pz[:,ir0,:,:] for pz ∈ neutral_pz),
-            Tuple(qz[:,ir0,:,:] for qz ∈ neutral_qz),
-            Tuple(neutral_vth[:,ir0,:,:] for neutral_vth ∈ neutral_thermal_speed),
-            Tuple(neutral_n[:,ir0,:,:] for neutral_n ∈ neutral_density_at_pdf_times),
-            Tuple(uz[:,ir0,:,:] for uz ∈ neutral_uz_at_pdf_times),
-            Tuple(pz[:,ir0,:,:] for pz ∈ neutral_pz_at_pdf_times),
-            Tuple(qz[:,ir0,:,:] for qz ∈ neutral_qz_at_pdf_times),
-            Tuple(neutral_vth[:,ir0,:,:] for neutral_vth ∈ neutral_thermal_speed_at_pdf_times),
-            Tuple(neutral_f[:,ivr0,ivzeta0,:,ir0,:,:] for neutral_f ∈ neutral_ff),
+            has_neutrals ? Tuple(neutral_n[:,ir0,:,:] for neutral_n ∈ neutral_density) : nothing,
+            has_neutrals ? Tuple(uz[:,ir0,:,:] for uz ∈ neutral_uz) : nothing,
+            has_neutrals ? Tuple(pz[:,ir0,:,:] for pz ∈ neutral_pz) : nothing,
+            has_neutrals ? Tuple(qz[:,ir0,:,:] for qz ∈ neutral_qz) : nothing,
+            has_neutrals ? Tuple(neutral_vth[:,ir0,:,:] for neutral_vth ∈ neutral_thermal_speed) : nothing,
+            has_neutrals ? Tuple(neutral_n[:,ir0,:,:] for neutral_n ∈ neutral_density_at_pdf_times) : nothing,
+            has_neutrals ? Tuple(uz[:,ir0,:,:] for uz ∈ neutral_uz_at_pdf_times) : nothing,
+            has_neutrals ? Tuple(pz[:,ir0,:,:] for pz ∈ neutral_pz_at_pdf_times) : nothing,
+            has_neutrals ? Tuple(qz[:,ir0,:,:] for qz ∈ neutral_qz_at_pdf_times) : nothing,
+            has_neutrals ? Tuple(neutral_vth[:,ir0,:,:] for neutral_vth ∈ neutral_thermal_speed_at_pdf_times) : nothing,
+            has_neutrals ? Tuple(neutral_f[:,ivr0,ivzeta0,:,ir0,:,:] for neutral_f ∈ neutral_ff) : nothing,
             n_ion_species, n_neutral_species, evolve_density, evolve_upar, evolve_ppar,
             vz, vpa, z_global, ntime, time, ntime_pdfs, time_pdfs)
     end
