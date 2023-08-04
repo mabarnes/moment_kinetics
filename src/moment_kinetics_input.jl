@@ -141,7 +141,7 @@ end
 
 """
 """
-function mk_input(scan_input=Dict())
+function mk_input(scan_input=Dict(); save_inputs_to_txt=false)
 
     # n_ion_species is the number of evolved ion species
     # currently only n_ion_species = 1 is supported
@@ -568,10 +568,10 @@ function mk_input(scan_input=Dict())
     io_immutable = io_input(; output_dir=output_dir, run_name=run_name,
                               Dict(Symbol(k)=>v for (k,v) in io_settings)...)
 
-    # Make file to log some information about inputs into.
-    # check to see if output_dir exists in the current directory
-    # if not, create it
-    if global_rank[] == 0
+    if global_rank[] == 0 && save_inputs_to_txt
+        # Make file to log some information about inputs into.
+        # check to see if output_dir exists in the current directory
+        # if not, create it
         isdir(output_dir) || mkdir(output_dir)
         io = open_ascii_output_file(string(output_dir,"/",run_name), "input")
     else

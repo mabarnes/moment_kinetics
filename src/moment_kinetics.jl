@@ -312,7 +312,7 @@ function setup_moment_kinetics(input_dict::Dict; restart_prefix_iblock=nothing,
     # Set up MPI
     initialize_comms!()
 
-    input = mk_input(input_dict)
+    input = mk_input(input_dict; save_inputs_to_txt=true)
     # obtain input options from moment_kinetics_input.jl
     # and check input to catch errors
     io_input, evolve_moments,
