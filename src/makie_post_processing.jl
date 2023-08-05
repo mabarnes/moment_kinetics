@@ -2352,13 +2352,19 @@ function select_slice(variable::AbstractArray{T,3}, dims::Symbol...; input=nothi
         error("Tried to get a slice of 3d variable with dimensions $dims")
     end
 
-    if input === nothing
+    if input === nothing || :it0 ∉ input
         it0 = size(variable, 3)
-        ir0 = max(size(variable, 2) ÷ 3, 1)
-        iz0 = max(size(variable, 1) ÷ 3, 1)
     else
         it0 = input.it0
+    end
+    if input === nothing || :ir0 ∉ input
+        ir0 = max(size(variable, 2) ÷ 3, 1)
+    else
         ir0 = input.ir0
+    end
+    if input === nothing || :iz0 ∉ input
+        iz0 = max(size(variable, 1) ÷ 3, 1)
+    else
         iz0 = input.iz0
     end
 
@@ -2379,13 +2385,19 @@ end
 function select_slice(variable::AbstractArray{T,4}, dims::Symbol...; input=nothing, is=1) where T
     # Array is (z,r,species,t)
 
-    if input === nothing
+    if input === nothing || :it0 ∉ input
         it0 = size(variable, 4)
-        ir0 = max(size(variable, 2) ÷ 3, 1)
-        iz0 = max(size(variable, 1) ÷ 3, 1)
     else
         it0 = input.it0
+    end
+    if input === nothing || :ir0 ∉ input
+        ir0 = max(size(variable, 2) ÷ 3, 1)
+    else
         ir0 = input.ir0
+    end
+    if input === nothing || :iz0 ∉ input
+        iz0 = max(size(variable, 1) ÷ 3, 1)
+    else
         iz0 = input.iz0
     end
 
@@ -2407,17 +2419,29 @@ end
 function select_slice(variable::AbstractArray{T,6}, dims::Symbol...; input=nothing, is=1) where T
     # Array is (z,r,species,t)
 
-    if input === nothing
+    if input === nothing || :it0 ∉ input
         it0 = size(variable, 6)
-        ir0 = max(size(variable, 4) ÷ 3, 1)
-        iz0 = max(size(variable, 3) ÷ 3, 1)
-        ivpa0 = max(size(variable, 2) ÷ 3, 1)
-        ivperp0 = max(size(variable, 1) ÷ 3, 1)
     else
         it0 = input.it0
+    end
+    if input === nothing || :ir0 ∉ input
+        ir0 = max(size(variable, 4) ÷ 3, 1)
+    else
         ir0 = input.ir0
+    end
+    if input === nothing || :iz0 ∉ input
+        iz0 = max(size(variable, 3) ÷ 3, 1)
+    else
         iz0 = input.iz0
+    end
+    if input === nothing || :ivpa0 ∉ input
+        ivpa0 = max(size(variable, 2) ÷ 3, 1)
+    else
         ivpa0 = input.ivpa0
+    end
+    if input === nothing || :ivperp0 ∉ input
+        ivperp0 = max(size(variable, 1) ÷ 3, 1)
+    else
         ivperp0 = input.ivperp0
     end
 
@@ -2445,19 +2469,34 @@ end
 function select_slice(variable::AbstractArray{T,7}, dims::Symbol...; input=nothing, is=1) where T
     # Array is (z,r,species,t)
 
-    if input === nothing
+    if input === nothing || :it0 ∉ input
         it0 = size(variable, 7)
-        ir0 = max(size(variable, 5) ÷ 3, 1)
-        iz0 = max(size(variable, 4) ÷ 3, 1)
-        ivzeta0 = max(size(variable, 3) ÷ 3, 1)
-        ivr0 = max(size(variable, 2) ÷ 3, 1)
-        ivz0 = max(size(variable, 1) ÷ 3, 1)
     else
         it0 = input.it0
+    end
+    if input === nothing || :ir0 ∉ input
+        ir0 = max(size(variable, 5) ÷ 3, 1)
+    else
         ir0 = input.ir0
+    end
+    if input === nothing || :iz0 ∉ input
+        iz0 = max(size(variable, 4) ÷ 3, 1)
+    else
         iz0 = input.iz0
+    end
+    if input === nothing || :ivzeta0 ∉ input
+        ivzeta0 = max(size(variable, 3) ÷ 3, 1)
+    else
         ivzeta0 = input.ivzeta0
+    end
+    if input === nothing || :ivr0 ∉ input
+        ivr0 = max(size(variable, 2) ÷ 3, 1)
+    else
         ivr0 = input.ivr0
+    end
+    if input === nothing || :ivz0 ∉ input
+        ivz0 = max(size(variable, 1) ÷ 3, 1)
+    else
         ivz0 = input.ivz0
     end
 
