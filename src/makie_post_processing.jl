@@ -1832,7 +1832,7 @@ for (dim1, dim2) ∈ dimension_combinations_2d
 
              function $function_name(run_info, var_name; is=1, data=nothing,
                                      input=nothing, ax=nothing,
-                                     colorbar_place=colorbar_place, title=nothing,
+                                     colorbar_place=nothing, title=nothing,
                                      outfile=nothing, transform=identity, it=nothing,
                                      ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
                                      ivzeta=nothing, ivr=nothing, ivz=nothing, kwargs...)
