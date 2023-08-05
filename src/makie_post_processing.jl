@@ -12,6 +12,7 @@ using ..array_allocation: allocate_float
 using ..coordinates: define_coordinate
 using ..input_structs: grid_input, advection_input
 using ..looping: all_dimensions, ion_dimensions, neutral_dimensions
+using ..manufactured_solns: manufactured_solutions, manufactured_electric_fields
 using ..moment_kinetics_input: mk_input, set_defaults_and_check_top_level!,
                                set_defaults_and_check_section!, Dict_to_NamedTuple
 using ..load_data: open_readonly_output_file, get_group, load_block_data,
@@ -227,6 +228,9 @@ function makie_post_process(run_dir::Union{String,Tuple},
     Chodura_condition_plots(run_info_dfns, plot_prefix=plot_prefix)
 
     sound_wave_plots(run_info; plot_prefix=plot_prefix)
+
+    manufactured_solutions_analysis(run_info; plot_prefix=plot_prefix)
+    manufactured_solutions_analysis_dfns(run_info_dfns; plot_prefix=plot_prefix)
 
     return nothing
 end
@@ -2980,6 +2984,428 @@ function instability2D_plots(run_info, variable_name; plot_prefix, zind=nothing,
     end
 
     return zind
+end
+
+# Manufactured solutions analysis
+#################################
+
+function manufactured_solutions_get_field_and_field_sym(run_info, variable_name;
+        it=nothing, ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing, ivzeta=nothing,
+        ivr=nothing, ivz=nothing)
+
+    variable_name = Symbol(variable_name)
+
+    func_name_lookup = (phi=:phi_func, Er=:Er_func, Ez=:Ez_func, density=:densi_func,
+                        density_neutral=:densn_func, f=:dfni_func, f_neutral=:dfnn_func)
+
+    nt = run_info.nt
+    nr = run_info.r.n
+    nz = run_info.z.n
+    if it === nothing
+        it = 1:nt
+    end
+    if ir === nothing
+        ir = 1:nr
+    end
+    if iz === nothing
+        iz = 1:nz
+    end
+    tinds = run_info.itime_min:run_info.itime_skip:run_info.itime_max
+    tinds = tinds[it]
+
+    if nr > 1
+        Lr_in = run_info.r.L
+    else
+        Lr_in = 1.0
+    end
+
+    if variable_name ∈ (:phi, :Er, :Ez)
+        manufactured_funcs =
+            manufactured_electric_fields(Lr_in, run_info.z.L, run_info.r.bc,
+                                         run_info.z.bc, run_info.composition,
+                                         run_info.r.n, run_info.manufactured_solns_input,
+                                         run_info.species)
+    elseif variable_name ∈ (:density, :density_neutral, :f, :f_neutral)
+        manufactured_funcs =
+            manufactured_solutions(run_info.manufactured_solns_input, Lr_in, run_info.z.L,
+                                   run_info.r.bc, run_info.z.bc, run_info.geometry,
+                                   run_info.composition, run_info.species, run_info.r.n)
+    end
+
+    variable_func = manufactured_funcs[func_name_lookup[variable_name]]
+
+    variable = postproc_load_variable(run_info, String(variable_name); it=tinds, is=1,
+                                      ir=ir, iz=iz, ivperp=ivperp, ivpa=ivpa,
+                                      ivzeta=ivzeta, ivr=ivr, ivz=ivz)
+    variable_sym = similar(variable)
+
+    time = run_info.time
+    r_grid = run_info.r.grid
+    z_grid = run_info.z.grid
+
+    if variable_name == :f
+        vperp_grid = run_info.vperp.grid
+        vpa_grid = run_info.vpa.grid
+        nvperp = run_info.vperp.n
+        nvpa = run_info.vpa.n
+        if ivperp === nothing
+            ivperp = 1:nvperp
+        end
+        if ivpa === nothing
+            ivpa = 1:nvpa
+        end
+        counter = 1
+        for iit ∈ it, iir ∈ ir, iiz ∈ iz, iivperp ∈ ivperp, iivpa ∈ ivpa
+            variable_sym[counter] =
+                variable_func(vpa_grid[iivpa], vperp_grid[iivperp], z_grid[iiz],
+                              r_grid[iir], time[iit])
+            counter += 1
+        end
+    elseif variable_name == :f_neutral
+        vzeta_grid = run_info.vzeta.grid
+        vr_grid = run_info.vr.grid
+        vz_grid = run_info.vz.grid
+        nvzeta = run_info.vzeta.n
+        nvr = run_info.vr.n
+        nvz = run_info.vz.n
+        if ivzeta === nothing
+            ivzeta = 1:nvzeta
+        end
+        if ivr === nothing
+            ivr = 1:nvr
+        end
+        if ivz === nothing
+            ivz = 1:nvz
+        end
+        counter = 1
+        for iit ∈ it, iir ∈ ir, iiz ∈ iz, iivzeta ∈ ivzeta, iivr ∈ ivr, iivz ∈ ivz
+            variable_sym[counter] =
+            variable_func(vz_grid[iivz], vr_grid[iivr], vzeta_grid[iivzeta], z_grid[iiz],
+                          r_grid[iir], time[iit])
+            counter += 1
+        end
+    else
+        counter = 1
+        for iit ∈ it, iir ∈ ir, iiz ∈ iz
+            variable_sym[counter] = variable_func(z_grid[iiz], r_grid[iir], time[iit])
+            counter += 1
+        end
+    end
+
+    return variable, variable_sym
+end
+
+function compare_moment_symbolic_test(run_info, plot_prefix, field_label, field_sym_label,
+                                      norm_label, variable_name; io=nothing)
+
+    input = Dict_to_NamedTuple(input_dict[variable_name])
+
+    field, field_sym =
+        manufactured_solutions_get_field_and_field_sym(run_info, variable_name)
+
+    nt = run_info.nt
+    r = run_info.r
+    z = run_info.z
+
+    # plot last timestep field vs z at r0
+    plot_vs_z(run_info, field_label, input=input_dict[variable_name], data=field, is=1,
+              it=nt, ir=input.ir0, outfile=plot_prefix*variable_name*"(t_final,r0,z)_vs_z.pdf")
+
+    if r.n > 1
+        # plot last timestep field vs r at z_wall
+        plot_vs_r(run_info, field_label, input=input_dict[variable_name], data=field,
+                  is=1, it=nt, iz=z.n,
+                  outfile=plot_prefix*variable_name*"(t_final,r,z_wall)_vs_r.pdf")
+
+        plot_vs_z_r(run_info, variable_name, data=field, is=1, it=nt, title=field_label,
+                    outfile=plot_prefix*variable_name*"(t_final)_vs_z_r.pdf")
+
+        plot_vs_z_r(run_info, variable_name, data=field_sym, is=1, it=nt,
+                    title=field_sym_label,
+                    outfile=plot_prefix*variable_name*"_sym(t_final)_vs_z_r.pdf")
+    end	
+
+    field_norm = zeros(mk_float,nt)
+    for it in 1:nt
+        dummy = 0.0
+        #dummy_N = 0.0
+        for ir in 1:r.n
+            for iz in 1:z.n
+                dummy += (field[iz,ir,it] - field_sym[iz,ir,it])^2
+                #dummy_N +=  (field_sym[iz,ir,it])^2
+            end
+        end
+        #field_norm[it] = dummy/dummy_N
+        field_norm[it] = sqrt(dummy/(r.n*z.n))
+    end
+    println_to_stdout_and_file(io, join(field_norm, " "), " # ", variable_name)
+    plot_vs_t(run_info, norm_label, input=input_dict[variable_name], data=field_norm,
+              outfile=plot_prefix*variable_name*"_norm_vs_t.pdf")
+
+    return field_norm
+end
+
+function compare_charged_pdf_symbolic_test(run_info, plot_prefix; io=nothing)
+
+    field_label = L"\tilde{f}_i"
+    field_sym_label = L"\tilde{f}_i^{sym}"
+    norm_label = L"\varepsilon(\tilde{f}_i)"
+    variable_name = "f"
+
+    input = Dict_to_NamedTuple(input_dict_dfns[variable_name])
+
+    nt = run_info.nt
+    time = run_info.time
+    r = run_info.r
+    z = run_info.z
+    vperp = run_info.vperp
+    vpa = run_info.vpa
+
+    # Load data in chunks, with the same size as the chunks that were saved during the
+    # run, to avoid running out of memory
+    r_chunks = UnitRange{mk_int}[]
+    chunk = run_info.r_chunk_size
+    nchunks = (r.n ÷ chunk)
+    if nchunks == 1
+        r_chunks = [1:r.n]
+    else
+        for i ∈ 1:nchunks
+            if i == nchunks
+                push!(r_chunks, (i-1)*chunk+1:i*chunk+1)
+            else
+                push!(r_chunks, (i-1)*chunk+1:i*chunk)
+            end
+        end
+    end
+    z_chunks = UnitRange{mk_int}[]
+    chunk = run_info.z_chunk_size
+    nchunks = (z.n ÷ chunk)
+    if nchunks == 1
+        z_chunks = [1:z.n]
+    else
+        for i ∈ 1:nchunks
+            if i == nchunks
+                push!(z_chunks, (i-1)*chunk+1:i*chunk+1)
+            else
+                push!(z_chunks, (i-1)*chunk+1:i*chunk)
+            end
+        end
+    end
+    field_norm = zeros(mk_float,nt)
+    for it in 1:nt
+        dummy = 0.0
+        #dummy_N = 0.0
+        for r_chunk ∈ r_chunks, z_chunk ∈ z_chunks
+            f, f_sym =
+                manufactured_solutions_get_field_and_field_sym(
+                    run_info, variable_name, it=it, ir=r_chunk, iz=z_chunk)
+            dummy += sum(@. (f - f_sym)^2)
+            #dummy_N += sum(f_sym.^2)
+        end
+
+        #field_norm[it] = dummy/dummy_N
+        field_norm[it] = sqrt(dummy/(r.n*z.n*vperp.n*vpa.n))
+    end
+    println_to_stdout_and_file(join(field_norm, " "), " # ", variable_name)
+    plot_vs_t(run_info, norm_label, input=input, data=field_norm,
+              outfile=plot_prefix*"f_norm_vs_t.pdf")
+
+    for (iz, z_label) ∈ ((1, "wall-"), (z.n, "wall+"))
+        f, f_sym =
+            manufactured_solutions_get_field_and_field_sym(
+                run_info, variable_name, it=nt, ir=input.ir0, iz=iz, ivperp=input.ivperp0)
+
+        fig, ax = get_1d_ax(xlabel=L"v_{\parallel}/L_{v_{\parallel}}", ylabel=field_label)
+        plot_1d(vpa.grid, f, ax=ax, label="num")
+        plot_1d(vpa.grid, f_sym, ax=ax, label="sym")
+        put_legend_right(fig, ax)
+
+        outfile = plot_prefix * variable_name * "(vpa,ivperp0,iz_" * z_label * ",ir0)_sym_vs_vpa.pdf"
+        save(outfile, fig)
+    end
+
+    return field_norm
+end
+
+function compare_neutral_pdf_symbolic_test(run_info, plot_prefix; io=nothing)
+
+    field_label = L"\tilde{f}_n"
+    field_sym_label = L"\tilde{f}_n^{sym}"
+    norm_label = L"\varepsilon(\tilde{f}_n)"
+    variable_name = "f_neutral"
+
+    input = Dict_to_NamedTuple(input_dict_dfns[variable_name])
+
+    nt = run_info.nt
+    time = run_info.time
+    r = run_info.r
+    z = run_info.z
+    vzeta = run_info.vzeta
+    vr = run_info.vr
+    vz = run_info.vz
+
+    # Load data in chunks, with the same size as the chunks that were saved during the
+    # run, to avoid running out of memory
+    r_chunks = UnitRange{mk_int}[]
+    chunk = run_info.r_chunk_size
+    nchunks = (r.n ÷ chunk)
+    if nchunks == 1
+        r_chunks = [1:r.n]
+    else
+        for i ∈ 1:nchunks
+            if i == nchunks
+                push!(r_chunks, (i-1)*chunk+1:i*chunk+1)
+            else
+                push!(r_chunks, (i-1)*chunk+1:i*chunk)
+            end
+        end
+    end
+    z_chunks = UnitRange{mk_int}[]
+    chunk = run_info.z_chunk_size
+    nchunks = (z.n ÷ chunk)
+    if nchunks == 1
+        z_chunks = [1:z.n]
+    else
+        for i ∈ 1:nchunks
+            if i == nchunks
+                push!(z_chunks, (i-1)*chunk+1:i*chunk+1)
+            else
+                push!(z_chunks, (i-1)*chunk+1:i*chunk)
+            end
+        end
+    end
+    field_norm = zeros(mk_float,nt)
+    for it in 1:nt
+        dummy = 0.0
+        #dummy_N = 0.0
+        for r_chunk ∈ r_chunks, z_chunk ∈ z_chunks
+            f, f_sym =
+                manufactured_solutions_get_field_and_field_sym(
+                    run_info, variable_name, it=it, ir=r_chunk, iz=z_chunk)
+            dummy += sum(@. (f - f_sym)^2)
+            #dummy_N += sum(f_sym.^2)
+        end
+
+        #field_norm[it] = dummy/dummy_N
+        field_norm[it] = sqrt(dummy/(r.n*z.n*vzeta.n*vr.n*vz.n))
+    end
+    println_to_stdout_and_file(join(field_norm, " "), " # ", variable_name)
+    plot_vs_t(run_info, norm_label, input=input, data=field_norm,
+              outfile=plot_prefix*variable_name*"_norm_vs_t.pdf")
+
+    for (iz, z_label) ∈ ((1, "wall-"), (z.n, "wall+"))
+        f, f_sym =
+            manufactured_solutions_get_field_and_field_sym(
+                run_info, variable_name, it=nt, ir=input.ir0, iz=iz, ivzeta=input.ivzeta0,
+                ivr=input.ivr0)
+
+        fig, ax = get_1d_ax(xlabel=L"v_{\parallel}/L_{v_{\parallel}}", ylabel=field_label)
+        plot_1d(vz.grid, f, ax=ax, label="num")
+        plot_1d(vz.grid, f_sym, ax=ax, label="sym")
+        put_legend_right(fig, ax)
+
+        outfile = plot_prefix * variable_name * "(vpa,ivperp0,iz_" * z_label * ",ir0)_sym_vs_vpa.pdf"
+        save(outfile, fig)
+    end
+
+    return field_norm
+end
+
+function manufactured_solutions_analysis(run_info::Tuple; plot_prefix)
+    if !any(ri !== nothing && ri.manufactured_solns_input.use_for_advance &&
+            ri.manufactured_solns_input.use_for_init for ri ∈ run_info)
+        # No manufactured solutions tests
+        return nothing
+    end
+
+    input = Dict_to_NamedTuple(input_dict["manufactured_solns"])
+    if !any(v for v ∈ values(input) if isa(v, Bool))
+        # Skip as there is nothing to do
+        return nothing
+    end
+
+    if length(run_info) > 1
+        println("Analysing more than one run at once not supported for"
+                * "manufactured_solutions_analysis()")
+        return nothing
+    end
+    try
+        return manufactured_solutions_analysis(run_info[1]; plot_prefix=plot_prefix)
+    catch e
+        println("Error in manufactured_solutions_analysis(). Error was ", e)
+    end
+end
+function manufactured_solutions_analysis(run_info; plot_prefix)
+    manufactured_solns_input = run_info.manufactured_solns_input
+    if !(manufactured_solns_input.use_for_advance && manufactured_solns_input.use_for_init)
+        return nothing
+    end
+
+    open(run_info.run_prefix * "MMS_errors.txt", "w") do io
+        println_to_stdout_and_file("# ", run_info.run_name)
+        println_to_stdout_and_file(io, join(run_info.time, " "), " # time / (Lref/cref): ")
+
+        for (variable_name, field_label, field_sym_label, norm_label) ∈
+                (("phi", L"\tilde{\phi}", L"\tilde{\phi}^{sym}", L"\varepsilon(\tilde{\phi})"),
+                 ("Er", L"\tilde{E}_r", L"\tilde{E}_r^{sym}", L"\varepsilon(\tilde{E}_r)"),
+                 ("Ez", L"\tilde{E}_z", L"\tilde{E}_z^{sym}", L"\varepsilon(\tilde{E}_z)"),
+                 ("density", L"\tilde{n}_i", L"\tilde{n}_i^{sym}", L"\varepsilon(\tilde{n}_i)"),
+                 ("density_neutral", L"\tilde{n}_n", L"\tilde{n}_n^{sym}", L"\varepsilon(\tilde{n}_n)"))
+
+            if contains(variable_name, "neutral") && run_info.n_neutral_species == 0
+                continue
+            end
+
+            compare_moment_symbolic_test(run_info, plot_prefix, field_label, field_sym_label,
+                                         norm_label, variable_name; io=io)
+        end
+    end
+
+    return nothing
+end
+
+function manufactured_solutions_analysis_dfns(run_info::Tuple; plot_prefix)
+    if !any(ri !== nothing && ri.manufactured_solns_input.use_for_advance &&
+            ri.manufactured_solns_input.use_for_init for ri ∈ run_info)
+        # No manufactured solutions tests
+        return nothing
+    end
+
+    input = Dict_to_NamedTuple(input_dict_dfns["manufactured_solns"])
+    if !any(v for v ∈ values(input) if isa(v, Bool))
+        # Skip as there is nothing to do
+        return nothing
+    end
+
+    if length(run_info) > 1
+        println("Analysing more than one run at once not supported for"
+                * "manufactured_solutions_analysis_dfns()")
+        return nothing
+    end
+    try
+        return manufactured_solutions_analysis_dfns(run_info[1]; plot_prefix=plot_prefix)
+    catch e
+        println("Error in manufactured_solutions_analysis_dfns(). Error was ", e)
+    end
+end
+function manufactured_solutions_analysis_dfns(run_info; plot_prefix)
+    manufactured_solns_input = run_info.manufactured_solns_input
+    if !(manufactured_solns_input.use_for_advance && manufactured_solns_input.use_for_init)
+        return nothing
+    end
+
+    open(run_info.run_prefix * "MMS_dfns_errors.txt", "w") do io
+        println_to_stdout_and_file("# ", run_info.run_name)
+        println_to_stdout_and_file(io, join(run_info.time, " "), " # time / (Lref/cref): ")
+
+        compare_charged_pdf_symbolic_test(run_info, plot_prefix, io=io)
+
+        if run_info.n_neutral_species > 0
+            compare_neutral_pdf_symbolic_test(run_info, plot_prefix, io=io)
+        end
+    end
+
+    return nothing
 end
 
 # Utility functions
