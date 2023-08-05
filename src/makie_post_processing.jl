@@ -11,6 +11,7 @@ using ..array_allocation: allocate_float
 using ..coordinates: define_coordinate
 using ..input_structs: grid_input, advection_input
 using ..looping: all_dimensions, ion_dimensions, neutral_dimensions
+using ..manufactured_solns: manufactured_solutions, manufactured_electric_fields
 using ..moment_kinetics_input: mk_input, set_defaults_and_check_top_level!,
                                set_defaults_and_check_section!, Dict_to_NamedTuple
 using ..load_data: open_readonly_output_file, get_group, load_block_data,
@@ -3416,61 +3417,168 @@ end
 # Manufactured solutions analysis
 #################################
 
-function compare_fields_symbolic_test(run_info, field, field_sym, plot_prefix,
+function compare_moment_symbolic_test(run_info, field, field_sym, plot_prefix,
                                       field_label, field_sym_label, norm_label,
                                       variable_name)
+    nt = run_info.nt
+    r = run_info.r
+    z = run_info.z
 
     # plot last timestep field vs z at r0
-    ir0 = max(div(nr,2), 1)
-    fieldmin = minimum(field[:,ir0,end])
-    fieldmax = maximum(field[:,ir0,end])
-    plot_vs_z(run_info, variable_name, is=1, it0=run_info.nt, ir0=ir0,
-              outfile=plot_prefix*variable_name*"(r0,z)_vs_z.pdf")
+    ir0 = max(div(run_info.r.n,2), 1)
+    plot_vs_z(run_info, field_label, input=input_dict[variable_name], data=field, is=1,
+              it=nt, ir=ir0, outfile=plot_prefix*variable_name*"(t_final,r0,z)_vs_z.pdf")
 
-    if nr > 1
+    if r.n > 1
         # plot last timestep field vs r at z_wall
-        fieldmin = minimum(field[end,:,end])
-        fieldmax = maximum(field[end,:,end])
-        @views plot(r, [field[end,:,end], field_sym[end,:,end]], xlabel=L"r/L_r", ylabel=field_label, label=["num" "sym"], ylims = (fieldmin,fieldmax))
-        outfile = string(run_name, "_"*file_string*"(r,z_wall)_vs_r.pdf")
-        trysavefig(outfile)
+        plot_vs_r(run_info, field_label, input=input_dict[variable_name], data=field,
+                  is=1, it=nt, iz=z.n,
+                  outfile=plot_prefix*variable_name*"(t_final,r,z_wall)_vs_r.pdf")
 
-        it = ntime
-        fontsize = 20
-        ticksfontsize = 10
-        heatmap(r, z, field[:,:,it], xlabel=L"r / L_r", ylabel=L"z / L_z", title=field_label, c = :deep,
-                #xtickfontsize = ticksfontsize, xguidefontsize = fontsize, ytickfontsize = ticksfontsize, yguidefontsize = fontsize, titlefontsize = fontsize)
-                windowsize = (360,240), margin = 15pt)
-        outfile = string(run_name, "_"*file_string*"_vs_r_z.pdf")
-        trysavefig(outfile)
+        plot_vs_z_r(run_info, variable_name, data=field, is=1, it=nt, title=field_label,
+                    outfile=plot_prefix*variable_name*"(t_final)_vs_z_r.pdf")
 
-        heatmap(r, z, field_sym[:,:,it], xlabel=L"r / L_r", ylabel=L"z / L_z", title=field_sym_label, c = :deep,
-                #xtickfontsize = ticksfontsize, xguidefontsize = fontsize, ytickfontsize = ticksfontsize, yguidefontsize = fontsize, titlefontsize = fontsize)
-                windowsize = (360,240), margin = 15pt)
-        outfile = string(run_name, "_"*file_string*"_sym_vs_r_z.pdf")
-        trysavefig(outfile)
+        plot_vs_z_r(run_info, variable_name, data=field_sym, is=1, it=nt,
+                    title=field_sym_label,
+                    outfile=plot_prefix*variable_name*"_sym(t_final)_vs_z_r.pdf")
     end	
 
-    field_norm = zeros(mk_float,ntime)
-    for it in 1:ntime
+    field_norm = zeros(mk_float,nt)
+    for it in 1:nt
         dummy = 0.0
-        dummy_N = 0.0
-        for ir in 1:nr
-            for iz in 1:nz
+        #dummy_N = 0.0
+        for ir in 1:r.n
+            for iz in 1:z.n
                 dummy += (field[iz,ir,it] - field_sym[iz,ir,it])^2
-                dummy_N +=  (field_sym[iz,ir,it])^2
+                #dummy_N +=  (field_sym[iz,ir,it])^2
             end
         end
         #field_norm[it] = dummy/dummy_N
-        field_norm[it] = sqrt(dummy/(nr*nz))
+        field_norm[it] = sqrt(dummy/(r.n*z.n))
     end
-    println("test: ",file_string,": ",field_norm)
-    @views plot(time, field_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=norm_label) #, yaxis=:log)
-    outfile = string(run_name, "_"*file_string*"_norm_vs_t.pdf")
-    trysavefig(outfile)
+    println("test: ", variable_name, ": ", field_norm)
+    println("check norm label ", norm_label, typeof(norm_label))
+    plot_vs_t(run_info, norm_label, input=input_dict[variable_name], data=field_norm,
+              outfile=plot_prefix*variable_name*"_norm_vs_t.pdf")
 
     return field_norm
+end
 
+function compare_charged_pdf_symbolic_test(run_info, field, field_sym, plot_prefix,
+                                           field_label, field_sym_label, norm_label,
+                                           variable_name)
+    nt = run_info.nt
+    r = run_info.r
+    z = run_info.z
+    vperp = run_info.vperp
+    vpa = run_info.vpa
+
+    error("probably need to be cunning with this to not run out of memory")
+    # plot last timestep field vs z at r0
+    ir0 = max(div(run_info.r.n,2), 1)
+
+    if r.n > 1
+        # plot last timestep field vs r at z_wall
+        plot_vs_r(run_info, field_label, input=input_dict[variable_name], data=field,
+                  is=1, it=nt, iz=z.n,
+                  outfile=plot_prefix*variable_name*"(t_final,r,z_wall)_vs_r.pdf")
+
+        plot_vs_z_r(run_info, variable_name, data=field, is=1, it=nt, title=field_label,
+                    outfile=plot_prefix*variable_name*"(t_final)_vs_z_r.pdf")
+
+        plot_vs_z_r(run_info, variable_name, data=field_sym, is=1, it=nt,
+                    title=field_sym_label,
+                    outfile=plot_prefix*variable_name*"_sym(t_final)_vs_z_r.pdf")
+    end
+
+    field_norm = zeros(mk_float,nt)
+    for it in 1:nt
+        dummy = 0.0
+        #dummy_N = 0.0
+        for ir in 1:r.n
+            for iz in 1:z.n
+                dummy += (field[iz,ir,it] - field_sym[iz,ir,it])^2
+                #dummy_N +=  (field_sym[iz,ir,it])^2
+            end
+        end
+        #field_norm[it] = dummy/dummy_N
+        field_norm[it] = sqrt(dummy/(r.n*z.n))
+    end
+    println("test: ", variable_name, ": ", field_norm)
+    println("check norm label ", norm_label, typeof(norm_label))
+    plot_vs_t(run_info, norm_label, input=input_dict[variable_name], data=field_norm,
+              outfile=plot_prefix*variable_name*"_norm_vs_t.pdf")
+
+    return field_norm
+end
+
+function manufactured_solutions_get_field_and_field_sym(run_info, variable_name)
+    variable_name = Symbol(variable_name)
+
+    func_name_lookup = (phi=:phi, Er=:Er, Ez=:Ez, density=:densi, density_neutral=:densn,
+                        f=:dfni, f_neutral=:dfnn)
+
+    nt = run_info.nt
+    nr = run_info.r.n
+    nz = run_info.z.n
+
+    if nr > 1
+        Lr_in = run_info.r.L
+    else
+        Lr_in = 1.0
+    end
+
+    if variable_name ∈ (:phi, :Er, :Ez)
+        manufactured_funcs =
+            manufactured_electric_fields(Lr_in, run_info.z.L, run_info.r.bc,
+                                         run_info.z.bc, run_info.composition,
+                                         run_info.r.n, run_info.manufactured_solns_input,
+                                         run_info.species)
+    elseif variable_name ∈ (:density, :density_neutral, :f, :f_neutral)
+        manufactured_funcs =
+            manufactured_solutions(run_info.manufactured_solns_input, Lr_in, run_info.z.L,
+                                   run_info.r.bc, run_info.z.bc, run_info.geometry,
+                                   run_info.composition, run_info.species, run_info.r.n)
+    end
+
+    func = manufactured_funcs[func_name_lookup[variable_name]]
+
+    variable = postproc_load_variable(run_info, String(variable_name); it=tinds, is=1)
+    variable_sym = similar(variable)
+
+    time = run_info.time
+    r_grid = run_info.r.grid
+    z_grid = run_info.z.grid
+
+    if variable_name == :f
+        vperp_grid = run_info.vperp.grid
+        vpa_grid = run_info.vpa.grid
+        nvperp = run_info.vperp.n
+        nvpa = run_info.vpa.n
+        for it ∈ 1:nt, ir ∈ 1:nr, iz ∈ 1:nz, ivperp ∈ 1:nvperp, ivpa ∈ 1:nvpa
+            variable_sym[ivpa,ivperp,iz,ir,it] =
+                variable_func(vpa_grid[ivpa], vperp_grid[ivperp], z_grid[iz], r_grid[ir],
+                              time[it])
+        end
+    elseif variable_name == :f_neutral
+        vzeta_grid = run_info.vzeta.grid
+        vr_grid = run_info.vr.grid
+        vz_grid = run_info.vz.grid
+        nvzeta = run_info.vpzeta.n
+        nvr = run_info.vpr.n
+        nvz = run_info.vpz.n
+        for it ∈ 1:nt, ir ∈ 1:nr, iz ∈ 1:nz, ivzeta ∈ 1:nvzeta, ivr ∈ 1:nvr, ivz ∈ 1:nvz
+            variable_sym[ivz,ivr,ivzeta,iz,ir,it] =
+            variable_func(vz_grid[ivz], vr_grid[ivr], vzeta_grid[ivzeta], z_grid[iz],
+                          r_grid[ir], time[it])
+        end
+    else
+        for it ∈ 1:run_info.nt, ir ∈ 1:run_info.r.n, iz ∈ 1:run_info.z.n
+            variable_sym[iz,ir,it] = variable_func(z.grid[iz], r.grid[ir], time[it])
+        end
+    end
+
+    return variable, variable_sym
 end
 
 function manufactured_solutions_analysis(run_info::Tuple; plot_prefix)
@@ -3498,72 +3606,27 @@ function manufactured_solutions_analysis(run_info; plot_prefix)
         return nothing
     end
 
-    if run_info.r.n > 1
-        Lr_in = run_info.r.L
-    else
-        Lr_in = 1.0
-    end
+    println("time / (Lref/cref): ", run_info.time)
 
-    manufactured_solns_list = manufactured_solutions(run_info.manufactured_solns_input, Lr_in,
-                                                     run_info.z.L, run_info.r.bc,
-                                                     run_info.z.bc, run_info.geometry,
-                                                     run_info.composition,
-                                                     run_info.species, run_info.r.n)
+    for (variable_name, field_label, field_sym_label, norm_label) ∈
+            (("phi", L"\tilde{\phi}", L"\tilde{\phi}^{sym}", L"\varepsilon(\tilde{\phi})"),
+             ("Er", L"\tilde{E}_r", L"\tilde{E}_r^{sym}", L"\varepsilon(\tilde{E}_r)"),
+             ("Ez", L"\tilde{E}_z", L"\tilde{E}_z^{sym}", L"\varepsilon(\tilde{E}_z)"),
+             ("density", L"\tilde{n}_i", L"\tilde{n}_i^{sym}", L"\varepsilon(\tilde{n}_i)"),
+             ("density_neutral", L"\tilde{n}_n", L"\tilde{n}_n^{sym}", L"\varepsilon(\tilde{n}_n)"))
 
-    densi_func = manufactured_solns_list.densi_func
-    densn_func = manufactured_solns_list.densn_func
-    manufactured_E_fields =
-        manufactured_electric_fields(Lr_in, run_info.z.L, run_info.r.bc, run_info.z.bc,
-                                     run_info.composition, run_info.r.n,
-                                     run_info.manufactured_solns_input, run_info.species)
-    Er_func = manufactured_E_fields.Er_func
-    Ez_func = manufactured_E_fields.Ez_func
-    phi_func = manufactured_E_fields.phi_func
-
-    tinds = input_dict["itime_min"]:input_dict["itime_skip"]:input_dict["itime_max"]
-
-    println("time/ (Lref/cref): ", run_info.time)
-
-    # phi, Er, Ez test
-    phi = postproc_load_variable(run_info, "phi"; it=tinds)
-    phi_sym = similar(phi)
-    for it in 1:run_info.nt
-        for ir in 1:run_info.r.n
-            for iz in 1:run_info.z.n
-                phi_sym[iz,ir,it] = phi_func(z_global.grid[iz],r_global.grid[ir],time[it])
-            end
+        if contains(variable_name, "neutral") && run_info.n_neutral_species == 0
+            continue
         end
-    end
-    compare_fields_symbolic_test(run_info, phi, phi_sym, plot_prefix, L"\widetilde{\phi}",
-                                 L"\widetilde{\phi}^{sym}",
-                                 L"\varepsilon(\widetilde{\phi})", "phi")
-    # Set to nothing to allow the arrays to be garbage collected to free up memory
-    phi = nothing
-    phi_sym = nothing
 
-    Er = postproc_load_variable(run_info, "Er"; it=tinds)
-    Er_sym = similar(Er)
-    for it in 1:run_info.nt
-        for ir in 1:run_info.r.n
-            for iz in 1:run_info.z.n
-                Er_sym[iz,ir,it] = Er_func(z_global.grid[iz],r_global.grid[ir],time[it])
-            end
-        end
+        variable, variable_sym =
+            manufactured_solutions_get_field_and_field_sym(run_info, variable_name)
+        compare_moment_symbolic_test(run_info, variable, variable_sym, plot_prefix,
+                                     field_label, field_sym_label, norm_label,
+                                     variable_name)
     end
-    Er = nothing
-    Er_sym = nothing
 
-    Ez = postproc_load_variable(run_info, "Ez"; it=tinds)
-    Ez_sym = similar(Ez)
-    for it in 1:run_info.nt
-        for ir in 1:run_info.r.n
-            for iz in 1:run_info.z.n
-                Ez_sym[iz,ir,it] = Ez_func(z_global.grid[iz],r_global.grid[ir],time[it])
-            end
-        end
-    end
-    Ez = nothing
-    Ez_sym = nothing
+    return nothing
 end
 
 function manufactured_solutions_analysis_dfns(run_info::Tuple; plot_prefix)
@@ -3590,20 +3653,22 @@ function manufactured_solutions_analysis_dfns(run_info; plot_prefix)
         return nothing
     end
 
-    if run_info.r_global.n > 1
-        Lr_in = run_info.r_global.L
-    else
-        Lr_in = 1.0
+    println("pdfs time / (Lref/cref): ", run_info.time)
+
+    (("f", ),
+        ("f_neutral", L"\tilde{f}_n", L"\tilde{f}_n^{sym}", L"\varepsilon(\tilde{f}_n)"))
+    f, f_sym = manufactured_solutions_get_field_and_field_sym(run_info, "f")
+    compare_charged_pdf_symbolic_test(run_info, f, f_sym, plot_prefix, L"\tilde{f}_i",
+                                      L"\tilde{f}_i^{sym}", L"\varepsilon(\tilde{f}_i)",
+                                      "f")
+
+    if run_info.n_neutral_species > 0
+        fn, fn_sym = manufactured_solutions_get_field_and_field_sym(run_info, "f_neutral")
+        compare_neutral_pdf_symbolic_test(run_info, fn, fn_sym, plot_prefix, L"\tilde{f}_n",
+                                          L"\tilde{f}_n^{sym}", L"\varepsilon(\tilde{f}_n)",
+                                          "f_neutral")
     end
 
-    manufactured_solns_list = manufactured_solutions(run_info.manufactured_solns_input, Lr_in,
-                                                     run_info.z.L, run_info.r.bc,
-                                                     run_info.z.bc, run_info.geometry,
-                                                     run_info.composition,
-                                                     run_info.species, run_info.r.n)
-
-    dfni_func = manufactured_solns_list.dfni_func
-    dfnn_func = manufactured_solns_list.dfnn_func
 end
 
 """
