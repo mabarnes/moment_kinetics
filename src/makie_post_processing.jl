@@ -1736,10 +1736,9 @@ for dim ∈ (:t, setdiff(all_dimensions, (:s, :sn))...)
 
              function $function_name(run_info, var_name; is=1, data=nothing,
                                      input=nothing, ax=nothing, label=nothing,
-                                     outfile=nothing, transform=identity, it0=nothing,
-                                     ir0=nothing, iz0=nothing, ivperp0=nothing,
-                                     ivpa0=nothing, ivzeta0=nothing, ivr0=nothing,
-                                     ivz0=nothing, kwargs...)
+                                     outfile=nothing, transform=identity, it=nothing,
+                                     ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
+                                     ivzeta=nothing, ivr=nothing, ivz=nothing, kwargs...)
                  if input === nothing
                      input = input_dict[var_name]
                  end
@@ -1748,18 +1747,15 @@ for dim ∈ (:t, setdiff(all_dimensions, (:s, :sn))...)
                  end
                  if data === nothing
                      dim_slices = get_dimension_slice_indices($(QuoteNode(dim));
-                                                              input=input, it0=it0,
-                                                              is0=is, ir0=ir0, iz0=iz0,
-                                                              ivperp0=ivperp0,
-                                                              ivpa0=ivpa0,
-                                                              ivzeta0=ivzeta0, ivr0=ivr0,
-                                                              ivz0=ivz0)
+                                                              input=input, it=it, is=is,
+                                                              ir=ir, iz=iz, ivperp=ivperp,
+                                                              ivpa=ivpa, ivzeta=ivzeta,
+                                                              ivr=ivr, ivz=ivz)
                      data = postproc_load_variable(run_info, var_name; dim_slices...)
                  else
-                     data = select_slice(data, $(QuoteNode(dim)); input=input, it0=it0,
-                                         is0=is, ir0=ir0, iz0=iz0, ivperp0=ivperp0,
-                                         ivpa0=ivpa0, ivzeta0=ivzeta0, ivr0=ivr0,
-                                         ivz0=ivz0)
+                     data = select_slice(data, $(QuoteNode(dim)); input=input, it=it,
+                                         is=is, ir=ir, iz=iz, ivperp=ivperp, ivpa=ivpa,
+                                         ivzeta=ivzeta, ivr=ivr, ivz=ivz)
                  end
 
                  # Use transform to allow user to do something like data = abs.(data)
@@ -1834,10 +1830,9 @@ for (dim1, dim2) ∈ dimension_combinations_2d
              function $function_name(run_info, var_name; is=1, data=nothing,
                                      input=nothing, ax=nothing,
                                      colorbar_place=colorbar_place, title=nothing,
-                                     outfile=nothing, transform=identity, it0=nothing,
-                                     ir0=nothing, iz0=nothing, ivperp0=nothing,
-                                     ivpa0=nothing, ivzeta0=nothing, ivr0=nothing,
-                                     ivz0=nothing, kwargs...)
+                                     outfile=nothing, transform=identity, it=nothing,
+                                     ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
+                                     ivzeta=nothing, ivr=nothing, ivz=nothing, kwargs...)
                  if input === nothing
                      input = input_dict[var_name]
                  end
@@ -1847,18 +1842,16 @@ for (dim1, dim2) ∈ dimension_combinations_2d
                  if data === nothing
                      dim_slices = get_dimension_slice_indices($(QuoteNode(dim1)),
                                                               $(QuoteNode(dim2));
-                                                              input=input, it0=it0,
-                                                              is0=is, ir0=ir0, iz0=iz0,
-                                                              ivperp0=ivperp0,
-                                                              ivpa0=ivpa0,
-                                                              ivzeta0=ivzeta0, ivr0=ivr0,
-                                                              ivz0=ivz0)
+                                                              input=input, it=it, is=is,
+                                                              ir=ir, iz=iz, ivperp=ivperp,
+                                                              ivpa=ivpa, ivzeta=ivzeta,
+                                                              ivr=ivr, ivz=ivz)
                      data = postproc_load_variable(run_info, var_name; dim_slices...)
                  else
                      data = select_slice(data, $(QuoteNode(dim2)), $(QuoteNode(dim1));
-                                         input=input, it0=it0, is0=is, ir0=ir0, iz0=iz0,
-                                         ivperp0=ivperp0, ivpa0=ivpa0, ivzeta0=ivzeta0,
-                                         ivr0=ivr0, ivz0=ivz0)
+                                         input=input, it=it, is=is, ir=ir, iz=iz,
+                                         ivperp=ivperp, ivpa=ivpa, ivzeta=ivzeta, ivr=ivr,
+                                         ivz=ivz)
                  end
                  if input === nothing
                      colormap = "reverse_deep"
@@ -1945,9 +1938,9 @@ for dim ∈ setdiff(all_dimensions, (:s, :sn))
              function $function_name(run_info, var_name; is=1, data=nothing,
                                      input=nothing, frame_index=nothing, ax=nothing,
                                      transform=identity, outfile=nothing, yscale=nothing,
-                                     ylims=nothing, it0=nothing, ir0=nothing, iz0=nothing,
-                                     ivperp0=nothing, ivpa0=nothing, ivzeta0=nothing,
-                                     ivr0=nothing, ivz0=nothing, kwargs...)
+                                     ylims=nothing, it=nothing, ir=nothing, iz=nothing,
+                                     ivperp=nothing, ivpa=nothing, ivzeta=nothing,
+                                     ivr=nothing, ivz=nothing, kwargs...)
                  if input === nothing
                      input = input_dict[var_name]
                  end
@@ -1956,18 +1949,15 @@ for dim ∈ setdiff(all_dimensions, (:s, :sn))
                  end
                  if data === nothing
                      dim_slices = get_dimension_slice_indices(:t, $(QuoteNode(dim));
-                                                              input=input, it0=it0,
-                                                              is0=is, ir0=ir0, iz0=iz0,
-                                                              ivperp0=ivperp0,
-                                                              ivpa0=ivpa0,
-                                                              ivzeta0=ivzeta0, ivr0=ivr0,
-                                                              ivz0=ivz0)
+                                                              input=input, it=it, is=is,
+                                                              ir=ir, iz=iz, ivperp=ivperp,
+                                                              ivpa=ivpa, ivzeta=ivzeta,
+                                                              ivr=ivr, ivz=ivz)
                      data = postproc_load_variable(run_info, var_name; dim_slices...)
                  else
-                     data = select_slice(data, $(QuoteNode(dim)), :t; input=input,
-                                         it0=it0, is0=is, ir0=ir0, iz0=iz0,
-                                         ivperp0=ivperp0, ivpa0=ivpa0, ivzeta0=ivzeta0,
-                                         ivr0=ivr0, ivz0=ivz0)
+                     data = select_slice(data, $(QuoteNode(dim)), :t; input=input, it=it,
+                                         is=is, ir=ir, iz=iz, ivperp=ivperp, ivpa=ivpa,
+                                         ivzeta=ivzeta, ivr=ivr, ivz=ivz)
                  end
                  if frame_index === nothing
                      ind = Observable(1)
@@ -2060,10 +2050,9 @@ for (dim1, dim2) ∈ dimension_combinations_2d_no_t
              function $function_name(run_info, var_name; is=1, data=nothing,
                                      input=nothing, frame_index=nothing, ax=nothing,
                                      transform=identity, colorbar_place=colorbar_place,
-                                     title=nothing, outfile=nothing, it0=nothing,
-                                     ir0=nothing, iz0=nothing, ivperp0=nothing,
-                                     ivpa0=nothing, ivzeta0=nothing, ivr0=nothing,
-                                     ivz0=nothing, kwargs...)
+                                     title=nothing, outfile=nothing, it=nothing,
+                                     ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
+                                     ivzeta=nothing, ivr=nothing, ivz=nothing, kwargs...)
                  if input === nothing
                      input = input_dict[var_name]
                  end
@@ -2073,18 +2062,16 @@ for (dim1, dim2) ∈ dimension_combinations_2d_no_t
                  if data === nothing
                      dim_slices = get_dimension_slice_indices(:t, $(QuoteNode(dim1)),
                                                               $(QuoteNode(dim2));
-                                                              input=input, it0=it0,
-                                                              is0=is, ir0=ir0, iz0=iz0,
-                                                              ivperp0=ivperp0,
-                                                              ivpa0=ivpa0,
-                                                              ivzeta0=ivzeta0, ivr0=ivr0,
-                                                              ivz0=ivz0)
+                                                              input=input, it=it, is=is,
+                                                              ir=ir, iz=iz, ivperp=ivperp,
+                                                              ivpa=ivpa, ivzeta=ivzeta,
+                                                              ivr=ivr, ivz=ivz)
                      data = postproc_load_variable(run_info, var_name; dim_slices...)
                  else
                      data = select_slice(data, $(QuoteNode(dim2)), $(QuoteNode(dim1)), :t;
-                                         input=input, it0=it0, is0=is, ir0=ir0, iz0=iz0,
-                                         ivperp0=ivperp0, ivpa0=ivpa0, ivzeta0=ivzeta0,
-                                         ivr0=ivr0, ivz0=ivz0)
+                                         input=input, it=it, is=is, ir=ir, iz=iz,
+                                         ivperp=ivperp, ivpa=ivpa, ivzeta=ivzeta, ivr=ivr,
+                                         ivz=ivz)
                  end
                  if input === nothing
                      colormap = "reverse_deep"
@@ -2674,11 +2661,11 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix)
                                   outfile=plot_prefix * "pdf_$(label)_vs_vpa_vperp.pdf")
             end
 
-            plot_vs_vpa_z(run_info, "f"; is=1, input=f_input, z_range=z_range,
+            plot_vs_vpa_z(run_info, "f"; is=1, input=f_input, iz=z_range,
                           outfile=plot_prefix * "pdf_$(label)_vs_vpa_z.pdf")
 
             if !is_1D
-                plot_vs_z_r(run_info, "f"; is=1, input=f_input, z_range=z_range,
+                plot_vs_z_r(run_info, "f"; is=1, input=f_input, iz=z_range,
                             outfile=plot_prefix * "pdf_$(label)_vs_z_r.pdf")
 
                 plot_vs_vpa_r(run_info, "f"; is=1, input=f_input,
@@ -2695,11 +2682,11 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix)
                                      outfile=plot_prefix * "pdf_$(label)_vs_vpa_vperp." * input.animation_ext)
             end
 
-            animate_vs_vpa_z(run_info, "f"; is=1, input=f_input, z_range=z_range,
+            animate_vs_vpa_z(run_info, "f"; is=1, input=f_input, iz=z_range,
                              outfile=plot_prefix * "pdf_$(label)_vs_vpa_z." * input.animation_ext)
 
             if !is_1D
-                animate_vs_z_r(run_info, "f"; is=1, input=f_input, z_range=z_range,
+                animate_vs_z_r(run_info, "f"; is=1, input=f_input, iz=z_range,
                                outfile=plot_prefix * "pdf_$(label)_vs_z_r." * input.animation_ext)
 
                 animate_vs_vpa_r(run_info, "f"; is=1, input=f_input,
@@ -3421,24 +3408,21 @@ The indices are taken from `input`, unless they are passed as keyword arguments
 The dimensions in `keep_dims` are not given a slice (those are the dimensions we want in
 the variable after slicing).
 """
-function get_dimension_slice_indices(keep_dims...; input, it0=nothing, is0=nothing,
-                                     ir0=nothing, iz0=nothing, ivperp0=nothing, ivpa0=nothing,
-                                     ivzeta0=nothing, ivr0=nothing, ivz0=nothing)
+function get_dimension_slice_indices(keep_dims...; input, it=nothing, is=nothing,
+                                     ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
+                                     ivzeta=nothing, ivr=nothing, ivz=nothing)
     if isa(input, AbstractDict)
         input = Dict_to_NamedTuple(input)
     end
-    return (it0=>(it0 === nothing ? input.it0 : it0),
-            is0=>(is0 === nothing ? input.is0 : is0),
-            ir0=>(ir0 === nothing ? input.ir0 : ir0),
-            iz0=>(iz0 === nothing ? input.iz0 : iz0),
-            ivperp0=>(ivperp0 === nothing ? input.ivperp0 : ivperp0),
-            ivpa0=>(ivpa0 === nothing ? input.ivpa0 : ivpa0),
-            ivzeta0=>(ivzeta0 === nothing ? input.ivzeta0 : ivzeta0),
-            ivr0=>(ivr0 === nothing ? input.ivr0 : ivr0),
-            ivz0=>(ivz0 === nothing ? input.ivz0 : ivz0))
-
-    slice_names = union((:t,), setdiff(all_dimensions, (:sn,)))
-    return Tuple(Symbol(:i, sn)=>get(slice_indices, sn, input[Symbol(:i, sn, :0)]) for sn ∈ slice_names if sn ∉ keep_dims)
+    return (:it=>(it === nothing ? (:t ∈ keep_dims ? nothing : input.it0) : it),
+            :is=>(is === nothing ? (:s ∈ keep_dims ? nothing : input.is0) : is),
+            :ir=>(ir === nothing ? (:r ∈ keep_dims ? nothing : input.ir0) : ir),
+            :iz=>(iz === nothing ? (:z ∈ keep_dims ? nothing : input.iz0) : iz),
+            :ivperp=>(ivperp === nothing ? (:vperp ∈ keep_dims ? nothing : input.ivperp0) : ivperp),
+            :ivpa=>(ivpa === nothing ? (:vpa ∈ keep_dims ? nothing : input.ivpa0) : ivpa),
+            :ivzeta=>(ivzeta === nothing ? (:vzeta ∈ keep_dims ? nothing : input.ivzeta0) : ivzeta),
+            :ivr=>(ivr === nothing ? (:vr ∈ keep_dims ? nothing : input.ivr0) : ivr),
+            :ivz=>(ivz === nothing ? (:vz ∈ keep_dims ? nothing : input.ivz0) : ivz))
 end
 
 """
