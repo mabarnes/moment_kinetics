@@ -1,4 +1,3 @@
-use_manufactured_solns_for_advance = true 
 n_ion_species = 1
 n_neutral_species = 1
 #boltzmann_electron_response = true
@@ -65,3 +64,6 @@ vz_nelement = 10
 vz_L = 8.0
 vz_bc = "periodic"
 vz_discretization = "chebyshev_pseudospectral"
+
+[manufactured_solns]
+use_for_advance = true
