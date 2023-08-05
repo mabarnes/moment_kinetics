@@ -6,8 +6,8 @@ module makie_post_processing
 export makie_post_process, generate_example_input_file,
        setup_makie_post_processing_input!, get_run_info, postproc_load_variable
 
-using ..analysis: check_Chodura_condition, get_r_perturbation, get_Fourier_modes_2D,
-                  get_Fourier_modes_1D
+using ..analysis: analyze_fields_data, check_Chodura_condition, get_r_perturbation,
+                  get_Fourier_modes_2D, get_Fourier_modes_1D
 using ..array_allocation: allocate_float
 using ..coordinates: define_coordinate
 using ..input_structs: grid_input, advection_input
@@ -18,8 +18,8 @@ using ..load_data: open_readonly_output_file, get_group, load_block_data,
                    load_coordinate_data, load_distributed_charged_pdf_slice,
                    load_distributed_neutral_pdf_slice, load_input, load_mk_options,
                    load_species_data, load_time_data
-using ..post_processing: construct_global_zr_coords, get_geometry_and_composition,
-                         read_distributed_zr_data!
+using ..post_processing: calculate_and_write_frequencies, construct_global_zr_coords,
+                         get_geometry_and_composition, read_distributed_zr_data!
 using ..type_definitions: mk_float, mk_int
 
 using Combinatorics
@@ -225,6 +225,8 @@ function makie_post_process(run_dir::Union{String,Tuple},
     end
 
     Chodura_condition_plots(run_info_dfns, plot_prefix=plot_prefix)
+
+    sound_wave_plots(run_info; plot_prefix=plot_prefix)
 
     return nothing
 end
@@ -524,6 +526,14 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
         animate_perturbations=false,
         colormap=this_input_dict["colormap"],
         animation_ext=this_input_dict["animation_ext"],
+       )
+
+    set_defaults_and_check_section!(
+        this_input_dict, "sound_wave_fit";
+        calculate_frequency=false,
+        plot=false,
+        ir0=input_dict["ir0"],
+        iz0=input_dict["iz0"],
        )
 
     return nothing
@@ -2435,6 +2445,104 @@ function Chodura_condition_plots(run_info; plot_prefix=nothing, axes=nothing)
     end
 
     return nothing
+end
+
+function sound_wave_plots(run_info::Tuple; plot_prefix)
+    input = Dict_to_NamedTuple(input_dict["sound_wave_fit"])
+
+    if !input.calculate_frequency && !input.plot
+        return nothing
+    end
+
+    try
+        outfile = plot_prefix * "delta_phi0_vs_t.pdf"
+
+        if length(run_info) == 1
+            return sound_wave_plots(run_info[1]; outfile=outfile)
+        end
+
+        if input.plot
+            fig, ax = get_1d_ax(xlabel="time", ylabel="δϕ", yscale=log10)
+        else
+            ax = nothing
+        end
+
+        for ri ∈ run_info
+            sound_wave_plots(ri; ax=ax)
+        end
+
+        if input.plot
+            put_legend_right(fig, ax)
+
+            save(outfile, fig)
+
+            return fig
+        end
+    catch e
+        println("Error in sound_wave_plots(). Error was ", e)
+    end
+
+    return nothing
+end
+function sound_wave_plots(run_info; outfile=nothing, ax=nothing, phi=nothing)
+    input = Dict_to_NamedTuple(input_dict["sound_wave_fit"])
+
+    if !input.calculate_frequency && !input.plot
+        return nothing
+    end
+
+    if ax === nothing && input.plot
+        fig, ax = get_1d_ax(xlabel="time", ylabel="δϕ", yscale=log10)
+    else
+        fig = nothing
+    end
+
+    time = run_info.time
+
+    # This analysis is only designed for 1D cases, so only use phi[:,ir0,:]
+    if phi === nothing
+        phi = postproc_load_variable(run_info, "phi"; ir=input.ir0)
+    else
+        select_slice(phi, :t, :z; input=input)
+    end
+
+    phi_fldline_avg, delta_phi = analyze_fields_data(phi, run_info.nt, run_info.z)
+
+    if input.calculate_frequency
+        frequency, growth_rate, shifted_time, fitted_delta_phi =
+            calculate_and_write_frequencies(run_info.run_prefix, run_info.nt, time,
+                                            run_info.z.grid, 1, run_info.nt, input.iz0,
+                                            delta_phi, (calculate_frequencies=true,))
+    end
+
+    if input.plot
+        if outfile === nothing
+            # May be plotting multipe runs
+            delta_phi_label = run_info.run_name * " δϕ"
+            fit_label = run_info.run_name * " fit"
+        else
+            # Only plotting this run
+            delta_phi_label = "δϕ"
+            fit_label = "fit"
+        end
+
+        @views lines!(ax, time, abs.(delta_phi[input.iz0,:]), label=delta_phi_label)
+
+        if input.calculate_frequency
+            @views lines!(ax, time, abs.(fitted_delta_phi), label=fit_label)
+        end
+
+        if outfile !== nothing
+            if fig === nothing
+                error("Cannot save figure from this function when `ax` was passed. Please "
+                      * "save the figure that contains `ax`")
+            end
+            put_legend_right(fig, ax)
+            save(outfile, fig)
+        end
+    end
+
+    return fig
 end
 
 """
