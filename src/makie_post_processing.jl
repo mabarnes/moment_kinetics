@@ -402,19 +402,19 @@ function _setup_single_input!(this_input_dict::AbstractDict{String,Any},
        # Choose this species index when not otherwise specified
        is0=1,
        # Slice r to this value when making reduced dimensionality plots
-       ir0=max(nr_min÷3, 1),
+       ir0=max(cld(nr_min, 3), 1),
        # Slice z to this value when making reduced dimensionality plots
-       iz0=max(nz_min÷3, 1),
+       iz0=max(cld(nz_min, 3), 1),
        # Slice vperp to this value when making reduced dimensionality plots
-       ivperp0=max(nvperp_min ÷ 3, 1),
+       ivperp0=max(cld(nvperp_min, 3), 1),
        # Slice vpa to this value when making reduced dimensionality plots
-       ivpa0=max(nvpa_min ÷ 3, 1),
+       ivpa0=max(cld(nvpa_min, 3), 1),
        # Slice vzeta to this value when making reduced dimensionality plots
-       ivzeta0=max(nvzeta_min ÷ 3, 1),
+       ivzeta0=max(cld(nvzeta_min, 3), 1),
        # Slice vr to this value when making reduced dimensionality plots
-       ivr0=max(nvr_min ÷ 3, 1),
+       ivr0=max(cld(nvr_min, 3), 1),
        # Slice vz to this value when making reduced dimensionality plots
-       ivz0=max(nvz_min ÷ 3, 1),
+       ivz0=max(cld(nvz_min, 3), 1),
        # Time index to start from
        itime_min=1,
        # Time index to end at
