@@ -11,7 +11,7 @@ using ..array_allocation: allocate_float
 using ..coordinates: define_coordinate
 using ..input_structs: grid_input, advection_input
 using ..looping: all_dimensions, ion_dimensions, neutral_dimensions
-using ..moment_kinetics_input: set_defaults_and_check_top_level!,
+using ..moment_kinetics_input: mk_input, set_defaults_and_check_top_level!,
                                set_defaults_and_check_section!, Dict_to_NamedTuple
 using ..load_data: open_readonly_output_file, get_group, load_block_data,
                    load_coordinate_data, load_input, load_mk_options, load_species_data,
@@ -679,10 +679,15 @@ function get_run_info(run_dir, restart_index; itime_min=1, itime_max=-1, itime_s
 
     input = load_input(file_final_restart)
 
+    # obtain input options from moment_kinetics_input.jl
+    # and check input to catch errors
+    io_input, evolve_moments, t_input, z_input, r_input, vpa_input, vperp_input,
+        gyrophase_input, vz_input, vr_input, vzeta_input, composition, species,
+        collisions, geometry, drive_input, num_diss_params, manufactured_solns_input =
+        mk_input(input)
+
     n_ion_species, n_neutral_species = load_species_data(file_final_restart)
     evolve_density, evolve_upar, evolve_ppar = load_mk_options(file_final_restart)
-    geometry, composition = get_geometry_and_composition(input, n_ion_species,
-                                                         n_neutral_species)
 
     z_local, z_local_spectral = load_coordinate_data(file_final_restart, "z")
     r_local, r_local_spectral = load_coordinate_data(file_final_restart, "r")
@@ -720,7 +725,10 @@ function get_run_info(run_dir, restart_index; itime_min=1, itime_max=-1, itime_s
         return (run_name=run_name, run_prefix=base_prefix, parallel_io=parallel_io,
                 ext=ext, nblocks=nblocks, files=files, input=input,
                 n_ion_species=n_ion_species, n_neutral_species=n_neutral_species,
-                geometry=geometry, composition=composition, nt=nt,
+                evolve_moments=evolve_moments, composition=composition, species=species,
+                collisions=collisions, geometry=geometry, drive_input=drive_input,
+                num_diss_params=num_diss_params,
+                manufactured_solns_input=manufactured_solns_input, nt=nt,
                 nt_unskipped=nt_unskipped, restarts_nt=restarts_nt, itime_skip=itime_skip,
                 time=time, r=r, z=z, vperp=vperp, vpa=vpa, vzeta=vzeta, vr=vr, vz=vz,
                 r_local=r_local, z_local=z_local, r_spectral=r_spectral,
@@ -731,7 +739,10 @@ function get_run_info(run_dir, restart_index; itime_min=1, itime_max=-1, itime_s
         return (run_name=run_name, run_prefix=base_prefix, parallel_io=parallel_io,
                 ext=ext, nblocks=nblocks, files=files, input=input,
                 n_ion_species=n_ion_species, n_neutral_species=n_neutral_species,
-                geometry=geometry, composition=composition, nt=nt,
+                evolve_moments=evolve_moments, composition=composition, species=species,
+                collisions=collisions, geometry=geometry, drive_input=drive_input,
+                num_diss_params=num_diss_params,
+                manufactured_solns_input=manufactured_solns_input, nt=nt,
                 nt_unskipped=nt_unskipped, restarts_nt=restarts_nt, itime_skip=itime_skip,
                 time=time, r=r, z=z, r_local=r_local, z_local=z_local,
                 r_spectral=r_spectral, z_spectral=z_spectral)
