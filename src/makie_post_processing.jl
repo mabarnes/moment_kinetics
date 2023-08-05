@@ -2640,6 +2640,8 @@ function Chodura_condition_plots(run_info::Tuple; plot_prefix, ax_lower=nothing,
                                  ax_upper=nothing)
     input = Dict_to_NamedTuple(input_dict_dfns["Chodura_condition"])
 
+    println("Making Chodura condition plots")
+
     if !any(v for (k,v) ∈ pairs(input) if startswith(String(k), "plot"))
         # No plots to make here
         return nothing
