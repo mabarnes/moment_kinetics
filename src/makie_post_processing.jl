@@ -2190,6 +2190,8 @@ function plot_1d(xcoord, data; ax=nothing, xlabel=nothing,
                  ylabel=nothing, title=nothing, yscale=nothing, kwargs...)
     if ax === nothing
         fig, ax = get_1d_ax()
+    else
+        fig = nothing
     end
 
     if xlabel !== nothing
@@ -2207,10 +2209,10 @@ function plot_1d(xcoord, data; ax=nothing, xlabel=nothing,
 
     l = lines!(ax, xcoord, data; kwargs...)
 
-    if ax === nothing
-        return fig
-    else
+    if fig === nothing
         return l
+    else
+        return fig
     end
 end
 
@@ -2218,6 +2220,8 @@ function plot_2d(xcoord, ycoord, data; ax=nothing, colorbar_place=nothing, xlabe
                  ylabel=nothing, title=nothing, colormap="reverse_deep", kwargs...)
     if ax === nothing
         fig, ax, colorbar_place = get_2d_ax()
+    else
+        fig = nothing
     end
 
     if xlabel !== nothing
@@ -2242,10 +2246,10 @@ function plot_2d(xcoord, ycoord, data; ax=nothing, colorbar_place=nothing, xlabe
         Colorbar(colorbar_place, hm)
     end
 
-    if ax === nothing
-        return fig
+    if fig === nothing
+        return hm
     else
-        return nothing
+        return fig
     end
 end
 
