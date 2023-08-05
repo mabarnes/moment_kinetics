@@ -1700,11 +1700,10 @@ for dim ∈ (:t, setdiff(all_dimensions, (:s, :sn))...)
     function_name = Symbol(function_name_str)
     dim_str = String(dim)
     idim = Symbol(:i, dim)
-    range_name = Symbol(dim, :_range)
     eval(quote
              function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
                                      input=nothing, outfile=nothing, yscale=nothing,
-                                     transform=identity, $range_name=nothing, kwargs...)
+                                     transform=identity, kwargs...)
 
                  try
                      if data === nothing
@@ -1718,8 +1717,7 @@ for dim ∈ (:t, setdiff(all_dimensions, (:s, :sn))...)
                                          yscale=yscale)
                      for (d, ri) ∈ zip(data, run_info)
                          $function_name(ri, var_name, is=is, data=d, input=input, ax=ax,
-                                        transform=transform, $range_name=$range_name,
-                                        label=ri.run_name, kwargs...)
+                                        transform=transform, label=ri.run_name, kwargs...)
                      end
 
                      if n_runs > 1
@@ -1738,27 +1736,38 @@ for dim ∈ (:t, setdiff(all_dimensions, (:s, :sn))...)
 
              function $function_name(run_info, var_name; is=1, data=nothing,
                                      input=nothing, ax=nothing, label=nothing,
-                                     outfile=nothing, transform=identity,
-                                     $range_name=nothing, kwargs...)
+                                     outfile=nothing, transform=identity, it0=nothing,
+                                     ir0=nothing, iz0=nothing, ivperp0=nothing,
+                                     ivpa0=nothing, ivzeta0=nothing, ivr0=nothing,
+                                     ivz0=nothing, kwargs...)
+                 if input === nothing
+                     input = input_dict[var_name]
+                 end
                  if isa(input, AbstractDict)
                      input = Dict_to_NamedTuple(input)
                  end
                  if data === nothing
                      dim_slices = get_dimension_slice_indices($(QuoteNode(dim));
-                                                              input=input, is=is)
-                     data = postproc_load_variable(run_info, var_name; $idim=$range_name,
-                                                   dim_slices...)
+                                                              input=input, it0=it0,
+                                                              is0=is, ir0=ir0, iz0=iz0,
+                                                              ivperp0=ivperp0,
+                                                              ivpa0=ivpa0,
+                                                              ivzeta0=ivzeta0, ivr0=ivr0,
+                                                              ivz0=ivz0)
+                     data = postproc_load_variable(run_info, var_name; dim_slices...)
                  else
-                     data = select_slice(data, $(QuoteNode(dim)); input=input, is=is,
-                                         $idim=$range_name)
+                     data = select_slice(data, $(QuoteNode(dim)); input=input, it0=it0,
+                                         is0=is, ir0=ir0, iz0=iz0, ivperp0=ivperp0,
+                                         ivpa0=ivpa0, ivzeta0=ivzeta0, ivr0=ivr0,
+                                         ivz0=ivz0)
                  end
 
                  # Use transform to allow user to do something like data = abs.(data)
                  data = transform.(data)
 
                  x = run_info.$dim.grid
-                 if $range_name !== nothing
-                     x = x[$range_name]
+                 if $idim !== nothing
+                     x = x[$idim]
                  end
                  fig = plot_1d(x, data, xlabel="$($dim_str)",
                                ylabel=get_variable_symbol(var_name), label=label, ax=ax,
@@ -1795,12 +1804,9 @@ for (dim1, dim2) ∈ dimension_combinations_2d
     dim2_grid = :( run_info.$dim2.grid )
     idim1 = Symbol(:i, dim1)
     idim2 = Symbol(:i, dim2)
-    range_name1 = Symbol(dim1, :_range)
-    range_name2 = Symbol(dim2, :_range)
     eval(quote
              function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
                                      input=nothing, outfile=nothing, transform=identity,
-                                     $range_name1=nothing, $range_name2=nothing,
                                      kwargs...)
 
                  try
@@ -1811,8 +1817,7 @@ for (dim1, dim2) ∈ dimension_combinations_2d
                                                           title=get_variable_symbol(var_name))
                      for (d, ri, a, cp) ∈ zip(data, run_info, ax, colorbar_places)
                          $function_name(ri, var_name; is=is, data=d, input=input, ax=a,
-                                        transform=transform, $range_name1=$range_name1,
-                                        $range_name2=$range_name2, colorbar_place=cp,
+                                        transform=transform, colorbar_place=cp,
                                         title=ri.run_name, kwargs...)
                      end
 
@@ -1829,23 +1834,31 @@ for (dim1, dim2) ∈ dimension_combinations_2d
              function $function_name(run_info, var_name; is=1, data=nothing,
                                      input=nothing, ax=nothing,
                                      colorbar_place=colorbar_place, title=nothing,
-                                     outfile=nothing, transform=identity,
-                                     $range_name1=nothing, $range_name2=nothing,
-                                     kwargs...)
+                                     outfile=nothing, transform=identity, it0=nothing,
+                                     ir0=nothing, iz0=nothing, ivperp0=nothing,
+                                     ivpa0=nothing, ivzeta0=nothing, ivr0=nothing,
+                                     ivz0=nothing, kwargs...)
+                 if input === nothing
+                     input = input_dict[var_name]
+                 end
                  if isa(input, AbstractDict)
                      input = Dict_to_NamedTuple(input)
                  end
                  if data === nothing
                      dim_slices = get_dimension_slice_indices($(QuoteNode(dim1)),
                                                               $(QuoteNode(dim2));
-                                                              input=input, is=is)
-                     data = postproc_load_variable(run_info, var_name;
-                                                   $idim1=$range_name1,
-                                                   $idim2=$range_name2, dim_slices...)
+                                                              input=input, it0=it0,
+                                                              is0=is, ir0=ir0, iz0=iz0,
+                                                              ivperp0=ivperp0,
+                                                              ivpa0=ivpa0,
+                                                              ivzeta0=ivzeta0, ivr0=ivr0,
+                                                              ivz0=ivz0)
+                     data = postproc_load_variable(run_info, var_name; dim_slices...)
                  else
                      data = select_slice(data, $(QuoteNode(dim2)), $(QuoteNode(dim1));
-                                         input=input, is=is, $idim1=$range_name1,
-                                         $idim2=$range_name2)
+                                         input=input, it0=it0, is0=is, ir0=ir0, iz0=iz0,
+                                         ivperp0=ivperp0, ivpa0=ivpa0, ivzeta0=ivzeta0,
+                                         ivr0=ivr0, ivz0=ivz0)
                  end
                  if input === nothing
                      colormap = "reverse_deep"
@@ -1860,12 +1873,12 @@ for (dim1, dim2) ∈ dimension_combinations_2d
                  data = transform.(data)
 
                  x = $dim2_grid
-                 if $range_name2 !== nothing
-                     x = x[$range_name2]
+                 if $idim2 !== nothing
+                     x = x[$idim2]
                  end
                  y = $dim1_grid
-                 if $range_name1 !== nothing
-                     y = y[$range_name1]
+                 if $idim1 !== nothing
+                     y = y[$idim1]
                  end
                  fig = plot_2d(x, y, data; xlabel="$($dim2_str)", ylabel="$($dim1_str)",
                                title=title, ax=ax, colorbar_place=colorbar_place,
@@ -1890,12 +1903,10 @@ for dim ∈ setdiff(all_dimensions, (:s, :sn))
     function_name = Symbol(function_name_str)
     dim_str = String(dim)
     idim = Symbol(:i, dim)
-    range_name = Symbol(dim, :_range)
     eval(quote
              function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
                                      input=nothing, outfile=nothing, yscale=nothing,
-                                     transform=identity, $range_name=nothing,
-                                     ylims=nothing, kwargs...)
+                                     transform=identity, ylims=nothing, kwargs...)
 
                  try
                      if data === nothing
@@ -1914,9 +1925,8 @@ for dim ∈ setdiff(all_dimensions, (:s, :sn))
 
                      for (d, ri) ∈ zip(data, run_info)
                          $function_name(ri, var_name; is=is, data=d, input=input,
-                                        transform=transform, $range_name=$range_name,
-                                        ylims=ylims, frame_index=frame_index, ax=ax,
-                                        kwargs...)
+                                        transform=transform, ylims=ylims,
+                                        frame_index=frame_index, ax=ax, kwargs...)
                      end
                      if n_runs > 1
                          put_legend_above(fig, ax)
@@ -1934,20 +1944,30 @@ for dim ∈ setdiff(all_dimensions, (:s, :sn))
 
              function $function_name(run_info, var_name; is=1, data=nothing,
                                      input=nothing, frame_index=nothing, ax=nothing,
-                                     transform=identity, $range_name=nothing,
-                                     outfile=nothing, yscale=nothing, ylims=nothing,
-                                     kwargs...)
+                                     transform=identity, outfile=nothing, yscale=nothing,
+                                     ylims=nothing, it0=nothing, ir0=nothing, iz0=nothing,
+                                     ivperp0=nothing, ivpa0=nothing, ivzeta0=nothing,
+                                     ivr0=nothing, ivz0=nothing, kwargs...)
+                 if input === nothing
+                     input = input_dict[var_name]
+                 end
                  if isa(input, AbstractDict)
                      input = Dict_to_NamedTuple(input)
                  end
                  if data === nothing
                      dim_slices = get_dimension_slice_indices(:t, $(QuoteNode(dim));
-                                                              input=input, is=is)
-                     data = postproc_load_variable(run_info, var_name; $idim=$range_name,
-                                                   dim_slices...)
+                                                              input=input, it0=it0,
+                                                              is0=is, ir0=ir0, iz0=iz0,
+                                                              ivperp0=ivperp0,
+                                                              ivpa0=ivpa0,
+                                                              ivzeta0=ivzeta0, ivr0=ivr0,
+                                                              ivz0=ivz0)
+                     data = postproc_load_variable(run_info, var_name; dim_slices...)
                  else
-                     data = select_slice(data, $(QuoteNode(dim)), :t; input=input, is=is,
-                                         $idim=$range_name)
+                     data = select_slice(data, $(QuoteNode(dim)), :t; input=input,
+                                         it0=it0, is0=is, ir0=ir0, iz0=iz0,
+                                         ivperp0=ivperp0, ivpa0=ivpa0, ivzeta0=ivzeta0,
+                                         ivr0=ivr0, ivz0=ivz0)
                  end
                  if frame_index === nothing
                      ind = Observable(1)
@@ -1968,8 +1988,8 @@ for dim ∈ setdiff(all_dimensions, (:s, :sn))
                  nt = size(data, 2)
 
                  x = run_info.$dim.grid
-                 if $range_name !== nothing
-                     x = x[$range_name]
+                 if $idim !== nothing
+                     x = x[$idim]
                  end
                  animate_1d(x, data; ax=ax, ylims=ylims, frame_index=ind,
                             label=run_info.run_name, kwargs...)
@@ -2003,12 +2023,9 @@ for (dim1, dim2) ∈ dimension_combinations_2d_no_t
     dim2_grid = :( run_info.$dim2.grid )
     idim1 = Symbol(:i, dim1)
     idim2 = Symbol(:i, dim2)
-    range_name1 = Symbol(dim1, :_range)
-    range_name2 = Symbol(dim2, :_range)
     eval(quote
              function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
                                      input=nothing, outfile=nothing, transform=identity,
-                                     $range_name1=nothing, $range_name2=nothing,
                                      kwargs...)
 
                  try
@@ -2025,10 +2042,9 @@ for (dim1, dim2) ∈ dimension_combinations_2d_no_t
 
                      for (d, ri, a, cp) ∈ zip(data, run_info, ax, colorbar_places)
                          $function_name(ri, var_name; is=is, data=d, input=input,
-                                        transform=transform, $range_name1=$range_name1,
-                                        $range_name2=$range_name2,
-                                        frame_index=frame_index, ax=a, colorbar_place=cp,
-                                        title=ri.run_name, kwargs...)
+                                        transform=transform, frame_index=frame_index,
+                                        ax=a, colorbar_place=cp, title=ri.run_name,
+                                        kwargs...)
                      end
 
                      nt = minimum(ri.nt for ri ∈ run_info)
@@ -2043,23 +2059,32 @@ for (dim1, dim2) ∈ dimension_combinations_2d_no_t
 
              function $function_name(run_info, var_name; is=1, data=nothing,
                                      input=nothing, frame_index=nothing, ax=nothing,
-                                     transform=identity, $range_name1=nothing,
-                                     $range_name2=nothing, colorbar_place=colorbar_place,
-                                     title=nothing, outfile=nothing, kwargs...)
+                                     transform=identity, colorbar_place=colorbar_place,
+                                     title=nothing, outfile=nothing, it0=nothing,
+                                     ir0=nothing, iz0=nothing, ivperp0=nothing,
+                                     ivpa0=nothing, ivzeta0=nothing, ivr0=nothing,
+                                     ivz0=nothing, kwargs...)
+                 if input === nothing
+                     input = input_dict[var_name]
+                 end
                  if isa(input, AbstractDict)
                      input = Dict_to_NamedTuple(input)
                  end
                  if data === nothing
                      dim_slices = get_dimension_slice_indices(:t, $(QuoteNode(dim1)),
                                                               $(QuoteNode(dim2));
-                                                              input=input, is=is)
-                     data = postproc_load_variable(run_info, var_name;
-                                                   $idim1=$range_name1,
-                                                   $idim2=$range_name2, dim_slices...)
+                                                              input=input, it0=it0,
+                                                              is0=is, ir0=ir0, iz0=iz0,
+                                                              ivperp0=ivperp0,
+                                                              ivpa0=ivpa0,
+                                                              ivzeta0=ivzeta0, ivr0=ivr0,
+                                                              ivz0=ivz0)
+                     data = postproc_load_variable(run_info, var_name; dim_slices...)
                  else
                      data = select_slice(data, $(QuoteNode(dim2)), $(QuoteNode(dim1)), :t;
-                                         input=input, is=is, $idim1=$range_name1,
-                                         $idim2=$range_name2)
+                                         input=input, it0=it0, is0=is, ir0=ir0, iz0=iz0,
+                                         ivperp0=ivperp0, ivpa0=ivpa0, ivzeta0=ivzeta0,
+                                         ivr0=ivr0, ivz0=ivz0)
                  end
                  if input === nothing
                      colormap = "reverse_deep"
@@ -2074,12 +2099,12 @@ for (dim1, dim2) ∈ dimension_combinations_2d_no_t
                  data = transform.(data)
 
                  x = $dim2_grid
-                 if $range_name2 !== nothing
-                     x = x[$range_name2]
+                 if $idim2 !== nothing
+                     x = x[$idim2]
                  end
                  y = $dim1_grid
-                 if $range_name1 !== nothing
-                     y = y[$range_name1]
+                 if $idim1 !== nothing
+                     y = y[$idim1]
                  end
                  fig = animate_2d(x, y, data; xlabel="$($dim2_str)",
                                   ylabel="$($dim1_str)", title=title,
@@ -2343,7 +2368,8 @@ function put_legend_right(fig, ax; kwargs...)
     return Legend(fig[end,end+1], ax; kwargs...)
 end
 
-function select_slice(variable::AbstractArray{T,1}, dims::Symbol...; input=nothing, is=nothing) where T
+function select_slice(variable::AbstractArray{T,1}, dims::Symbol...; input=nothing,
+                      is=nothing, kwargs...) where T
     if length(dims) > 1
         error("Tried to get a slice of 1d variable with dimensions $dims")
     elseif length(dims) < 1
@@ -2355,7 +2381,8 @@ function select_slice(variable::AbstractArray{T,1}, dims::Symbol...; input=nothi
     end
 end
 
-function select_slice(variable::AbstractArray{T,2}, dims::Symbol...; input=nothing, is=nothing) where T
+function select_slice(variable::AbstractArray{T,2}, dims::Symbol...; input=nothing,
+                      is=nothing, kwargs...) where T
     if length(dims) > 2
         error("Tried to get a slice of 2d variable with dimensions $dims")
     elseif length(dims) < 2
@@ -2367,179 +2394,219 @@ function select_slice(variable::AbstractArray{T,2}, dims::Symbol...; input=nothi
     end
 end
 
-function select_slice(variable::AbstractArray{T,3}, dims::Symbol...; input=nothing, is=nothing) where T
+function select_slice(variable::AbstractArray{T,3}, dims::Symbol...; input=nothing,
+                      it=nothing, is=nothing, ir=nothing, iz=nothing, kwargs...) where T
     # Array is (z,r,t)
 
     if length(dims) > 3
         error("Tried to get a slice of 3d variable with dimensions $dims")
     end
 
-    if input === nothing || :it0 ∉ input
+    if it !== nothing
+        it0 = it
+    elseif input === nothing || :it0 ∉ input
         it0 = size(variable, 3)
     else
         it0 = input.it0
     end
-    if input === nothing || :ir0 ∉ input
+    if ir !== nothing
+        ir0 = ir
+    elseif input === nothing || :ir0 ∉ input
         ir0 = max(size(variable, 2) ÷ 3, 1)
     else
         ir0 = input.ir0
     end
-    if input === nothing || :iz0 ∉ input
+    if iz !== nothing
+        iz0 = iz
+    elseif input === nothing || :iz0 ∉ input
         iz0 = max(size(variable, 1) ÷ 3, 1)
     else
         iz0 = input.iz0
     end
 
     slice = variable
-    if :t ∉ dims
+    if :t ∉ dims || it !== nothing
         slice = selectdim(slice, 3, it0)
     end
-    if :r ∉ dims
+    if :r ∉ dims || ir !== nothing
         slice = selectdim(slice, 2, ir0)
     end
-    if :z ∉ dims
+    if :z ∉ dims || iz !== nothing
         slice = selectdim(slice, 1, iz0)
     end
 
     return slice
 end
 
-function select_slice(variable::AbstractArray{T,4}, dims::Symbol...; input=nothing, is=1) where T
+function select_slice(variable::AbstractArray{T,4}, dims::Symbol...; input=nothing,
+                      it=nothing, is=1, ir=nothing, iz=nothing, kwargs...) where T
     # Array is (z,r,species,t)
 
-    if input === nothing || :it0 ∉ input
+    if it !== nothing
+        it0 = it
+    elseif input === nothing || :it0 ∉ input
         it0 = size(variable, 4)
     else
         it0 = input.it0
     end
-    if input === nothing || :ir0 ∉ input
+    if ir !== nothing
+        ir0 = ir
+    elseif input === nothing || :ir0 ∉ input
         ir0 = max(size(variable, 2) ÷ 3, 1)
     else
         ir0 = input.ir0
     end
-    if input === nothing || :iz0 ∉ input
+    if iz !== nothing
+        iz0 = iz
+    elseif input === nothing || :iz0 ∉ input
         iz0 = max(size(variable, 1) ÷ 3, 1)
     else
         iz0 = input.iz0
     end
 
     slice = variable
-    if :t ∉ dims
+    if :t ∉ dims || it !== nothing
         slice = selectdim(slice, 4, it0)
     end
     slice = selectdim(slice, 3, is)
-    if :r ∉ dims
+    if :r ∉ dims || ir !== nothing
         slice = selectdim(slice, 2, ir0)
     end
-    if :z ∉ dims
+    if :z ∉ dims || iz !== nothing
         slice = selectdim(slice, 1, iz0)
     end
 
     return slice
 end
 
-function select_slice(variable::AbstractArray{T,6}, dims::Symbol...; input=nothing, is=1) where T
+function select_slice(variable::AbstractArray{T,6}, dims::Symbol...; input=nothing,
+                      it=nothing, is=1, ir=nothing, iz=nothing, ivperp=nothing,
+                      ivpa=nothing, kwargs...) where T
     # Array is (z,r,species,t)
 
-    if input === nothing || :it0 ∉ input
+    if it !== nothing
+        it0 = it
+    elseif input === nothing || :it0 ∉ input
         it0 = size(variable, 6)
     else
         it0 = input.it0
     end
-    if input === nothing || :ir0 ∉ input
+    if ir !== nothing
+        ir0 = ir
+    elseif input === nothing || :ir0 ∉ input
         ir0 = max(size(variable, 4) ÷ 3, 1)
     else
         ir0 = input.ir0
     end
-    if input === nothing || :iz0 ∉ input
+    if iz !== nothing
+        iz0 = iz
+    elseif input === nothing || :iz0 ∉ input
         iz0 = max(size(variable, 3) ÷ 3, 1)
     else
         iz0 = input.iz0
     end
-    if input === nothing || :ivpa0 ∉ input
+    if ivpa !== nothing
+        ivpa0 = ivpa
+    elseif input === nothing || :ivpa0 ∉ input
         ivpa0 = max(size(variable, 2) ÷ 3, 1)
     else
         ivpa0 = input.ivpa0
     end
-    if input === nothing || :ivperp0 ∉ input
+    if ivperp !== nothing
+        ivperp0 = ivperp
+    elseif input === nothing || :ivperp0 ∉ input
         ivperp0 = max(size(variable, 1) ÷ 3, 1)
     else
         ivperp0 = input.ivperp0
     end
 
     slice = variable
-    if :t ∉ dims
+    if :t ∉ dims || it !== nothing
         slice = selectdim(slice, 6, it0)
     end
     slice = selectdim(slice, 5, is)
-    if :r ∉ dims
+    if :r ∉ dims || ir !== nothing
         slice = selectdim(slice, 4, ir0)
     end
-    if :z ∉ dims
+    if :z ∉ dims || iz !== nothing
         slice = selectdim(slice, 3, iz0)
     end
-    if :vperp \nin∉ dims
+    if :vperp ∉ dims || ivperp !== nothing
         slice = selectdim(slice, 2, ivperp0)
     end
-    if :vpa \nin  ∉ dims
+    if :vpa ∉ dims || ivpa !== nothing
         slice = selectdim(slice, 1, ivpa0)
     end
 
     return slice
 end
 
-function select_slice(variable::AbstractArray{T,7}, dims::Symbol...; input=nothing, is=1) where T
+function select_slice(variable::AbstractArray{T,7}, dims::Symbol...; input=nothing,
+                      it=nothing, is=1, ir=nothing, iz=nothing, ivzeta=nothing,
+                      ivr=nothing, ivz=nothing, kwargs...) where T
     # Array is (z,r,species,t)
 
-    if input === nothing || :it0 ∉ input
+    if it !== nothing
+        it0 = it
+    elseif input === nothing || :it0 ∉ input
         it0 = size(variable, 7)
     else
         it0 = input.it0
     end
-    if input === nothing || :ir0 ∉ input
+    if ir !== nothing
+        ir0 = ir
+    elseif input === nothing || :ir0 ∉ input
         ir0 = max(size(variable, 5) ÷ 3, 1)
     else
         ir0 = input.ir0
     end
-    if input === nothing || :iz0 ∉ input
+    if iz !== nothing
+        iz0 = iz
+    elseif input === nothing || :iz0 ∉ input
         iz0 = max(size(variable, 4) ÷ 3, 1)
     else
         iz0 = input.iz0
     end
-    if input === nothing || :ivzeta0 ∉ input
+    if ivzeta !== nothing
+        ivzeta0 = ivzeta
+    elseif input === nothing || :ivzeta0 ∉ input
         ivzeta0 = max(size(variable, 3) ÷ 3, 1)
     else
         ivzeta0 = input.ivzeta0
     end
-    if input === nothing || :ivr0 ∉ input
+    if ivr !== nothing
+        ivr0 = ivr
+    elseif input === nothing || :ivr0 ∉ input
         ivr0 = max(size(variable, 2) ÷ 3, 1)
     else
         ivr0 = input.ivr0
     end
-    if input === nothing || :ivz0 ∉ input
+    if ivz !== nothing
+        ivz0 = ivz
+    elseif input === nothing || :ivz0 ∉ input
         ivz0 = max(size(variable, 1) ÷ 3, 1)
     else
         ivz0 = input.ivz0
     end
 
     slice = variable
-    if :t ∉ dims
+    if :t ∉ dims || it !== nothing
         slice = selectdim(slice, 7, it0)
     end
     slice = selectdim(slice, 6, is)
-    if :r ∉ dims
+    if :r ∉ dims || ir !== nothing
         slice = selectdim(slice, 5, ir0)
     end
-    if :z ∉ dims
+    if :z ∉ dims || iz !== nothing
         slice = selectdim(slice, 4, iz0)
     end
-    if :vzeta ∉ dims
+    if :vzeta ∉ dims || ivzeta !== nothing
         slice = selectdim(slice, 3, ivzeta0)
     end
-    if :vr ∉ dims
+    if :vr ∉ dims || ivr !== nothing
         slice = selectdim(slice, 2, ivr0)
     end
-    if :vz ∉ dims
+    if :vz ∉ dims || ivz !== nothing
         slice = selectdim(slice, 1, ivz0)
     end
 
@@ -3354,10 +3421,22 @@ The indices are taken from `input`, unless they are passed as keyword arguments
 The dimensions in `keep_dims` are not given a slice (those are the dimensions we want in
 the variable after slicing).
 """
-function get_dimension_slice_indices(keep_dims...; input, slice_indices...)
+function get_dimension_slice_indices(keep_dims...; input, it0=nothing, is0=nothing,
+                                     ir0=nothing, iz0=nothing, ivperp0=nothing, ivpa0=nothing,
+                                     ivzeta0=nothing, ivr0=nothing, ivz0=nothing)
     if isa(input, AbstractDict)
         input = Dict_to_NamedTuple(input)
     end
+    return (it0=>(it0 === nothing ? input.it0 : it0),
+            is0=>(is0 === nothing ? input.is0 : is0),
+            ir0=>(ir0 === nothing ? input.ir0 : ir0),
+            iz0=>(iz0 === nothing ? input.iz0 : iz0),
+            ivperp0=>(ivperp0 === nothing ? input.ivperp0 : ivperp0),
+            ivpa0=>(ivpa0 === nothing ? input.ivpa0 : ivpa0),
+            ivzeta0=>(ivzeta0 === nothing ? input.ivzeta0 : ivzeta0),
+            ivr0=>(ivr0 === nothing ? input.ivr0 : ivr0),
+            ivz0=>(ivz0 === nothing ? input.ivz0 : ivz0))
+
     slice_names = union((:t,), setdiff(all_dimensions, (:sn,)))
     return Tuple(Symbol(:i, sn)=>get(slice_indices, sn, input[Symbol(:i, sn, :0)]) for sn ∈ slice_names if sn ∉ keep_dims)
 end
