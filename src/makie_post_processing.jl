@@ -706,24 +706,24 @@ function get_run_info(run_dir, restart_index; itime_min=1, itime_max=-1, itime_s
     end
 
     if dfns
-        return (run_name=run_name, parallel_io=parallel_io, ext=ext, nblocks=nblocks,
-                files=files, input=input, n_ion_species=n_ion_species,
-                n_neutral_species=n_neutral_species, geometry=geometry,
-                composition=composition, nt=nt, nt_unskipped=nt_unskipped,
-                restarts_nt=restarts_nt, itime_skip=itime_skip, time=time, r=r, z=z,
-                vperp=vperp, vpa=vpa, vzeta=vzeta, vr=vr, vz=vz, r_local=r_local,
-                z_local=z_local, r_spectral=r_spectral, z_spectral=z_spectral,
-                vperp_spectral=vperp_spectral, vpa_spectral=vpa_spectral,
-                vzeta_spectral=vzeta_spectral, vr_spectral=vr_spectral,
-                vz_spectral=vz_spectral)
-    else
-        return (run_name=run_name, parallel_io=parallel_io, ext=ext, nblocks=nblocks,
-                files=files, input=input, n_ion_species=n_ion_species,
-                n_neutral_species=n_neutral_species, geometry=geometry,
-                composition=composition, nt=nt, nt_unskipped=nt_unskipped,
-                restarts_nt=restarts_nt, itime_skip=itime_skip, time=time, r=r, z=z,
+        return (run_name=run_name, run_prefix=base_prefix, parallel_io=parallel_io,
+                ext=ext, nblocks=nblocks, files=files, input=input,
+                n_ion_species=n_ion_species, n_neutral_species=n_neutral_species,
+                geometry=geometry, composition=composition, nt=nt,
+                nt_unskipped=nt_unskipped, restarts_nt=restarts_nt, itime_skip=itime_skip,
+                time=time, r=r, z=z, vperp=vperp, vpa=vpa, vzeta=vzeta, vr=vr, vz=vz,
                 r_local=r_local, z_local=z_local, r_spectral=r_spectral,
-                z_spectral=z_spectral)
+                z_spectral=z_spectral, vperp_spectral=vperp_spectral,
+                vpa_spectral=vpa_spectral, vzeta_spectral=vzeta_spectral,
+                vr_spectral=vr_spectral, vz_spectral=vz_spectral)
+    else
+        return (run_name=run_name, run_prefix=base_prefix, parallel_io=parallel_io,
+                ext=ext, nblocks=nblocks, files=files, input=input,
+                n_ion_species=n_ion_species, n_neutral_species=n_neutral_species,
+                geometry=geometry, composition=composition, nt=nt,
+                nt_unskipped=nt_unskipped, restarts_nt=restarts_nt, itime_skip=itime_skip,
+                time=time, r=r, z=z, r_local=r_local, z_local=z_local,
+                r_spectral=r_spectral, z_spectral=z_spectral)
     end
 end
 
