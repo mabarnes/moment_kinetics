@@ -214,6 +214,9 @@ function makie_post_process(run_dir::Union{String,Tuple},
 
     sound_wave_plots(run_info; plot_prefix=plot_prefix)
 
+    manufactured_solutions_analysis(run_info; plot_prefix=plot_prefix)
+    manufactured_solutions_analysis_dfns(run_info_dfns; plot_prefix=plot_prefix)
+
     return nothing
 end
 
@@ -3398,6 +3401,199 @@ function instability2D_plots(run_info, variable_name; plot_prefix, zind=nothing,
     end
 
     return zind
+end
+
+# Manufactured solutions analysis
+#################################
+
+function compare_fields_symbolic_test(run_info, field, field_sym, plot_prefix,
+                                      field_label, field_sym_label, norm_label,
+                                      variable_name)
+
+    # plot last timestep field vs z at r0
+    ir0 = max(div(nr,2), 1)
+    fieldmin = minimum(field[:,ir0,end])
+    fieldmax = maximum(field[:,ir0,end])
+    plot_vs_z(run_info, variable_name, is=1, it0=run_info.nt, ir0=ir0,
+              outfile=plot_prefix*variable_name*"(r0,z)_vs_z.pdf")
+
+    if nr > 1
+        # plot last timestep field vs r at z_wall
+        fieldmin = minimum(field[end,:,end])
+        fieldmax = maximum(field[end,:,end])
+        @views plot(r, [field[end,:,end], field_sym[end,:,end]], xlabel=L"r/L_r", ylabel=field_label, label=["num" "sym"], ylims = (fieldmin,fieldmax))
+        outfile = string(run_name, "_"*file_string*"(r,z_wall)_vs_r.pdf")
+        trysavefig(outfile)
+
+        it = ntime
+        fontsize = 20
+        ticksfontsize = 10
+        heatmap(r, z, field[:,:,it], xlabel=L"r / L_r", ylabel=L"z / L_z", title=field_label, c = :deep,
+                #xtickfontsize = ticksfontsize, xguidefontsize = fontsize, ytickfontsize = ticksfontsize, yguidefontsize = fontsize, titlefontsize = fontsize)
+                windowsize = (360,240), margin = 15pt)
+        outfile = string(run_name, "_"*file_string*"_vs_r_z.pdf")
+        trysavefig(outfile)
+
+        heatmap(r, z, field_sym[:,:,it], xlabel=L"r / L_r", ylabel=L"z / L_z", title=field_sym_label, c = :deep,
+                #xtickfontsize = ticksfontsize, xguidefontsize = fontsize, ytickfontsize = ticksfontsize, yguidefontsize = fontsize, titlefontsize = fontsize)
+                windowsize = (360,240), margin = 15pt)
+        outfile = string(run_name, "_"*file_string*"_sym_vs_r_z.pdf")
+        trysavefig(outfile)
+    end	
+
+    field_norm = zeros(mk_float,ntime)
+    for it in 1:ntime
+        dummy = 0.0
+        dummy_N = 0.0
+        for ir in 1:nr
+            for iz in 1:nz
+                dummy += (field[iz,ir,it] - field_sym[iz,ir,it])^2
+                dummy_N +=  (field_sym[iz,ir,it])^2
+            end
+        end
+        #field_norm[it] = dummy/dummy_N
+        field_norm[it] = sqrt(dummy/(nr*nz))
+    end
+    println("test: ",file_string,": ",field_norm)
+    @views plot(time, field_norm[:], xlabel=L"t L_z/v_{ti}", ylabel=norm_label) #, yaxis=:log)
+    outfile = string(run_name, "_"*file_string*"_norm_vs_t.pdf")
+    trysavefig(outfile)
+
+    return field_norm
+
+end
+
+function manufactured_solutions_analysis(run_info::Tuple; plot_prefix)
+    println("Making MMS plots")
+
+    if !any(ri !== nothing && ri.manufactured_solns_input.use_for_advance &&
+            ri.manufactured_solns_input.use_for_init for ri ∈ run_info)
+        # No manufactured solutions tests
+        return nothing
+    end
+    if length(run_info) > 1
+        println("Analysing more than one run at once not supported for"
+                * "manufactured_solutions_analysis()")
+        return nothing
+    end
+    try
+        return manufactured_soltions_analysis(run_info[1]; plot_prefix=plot_prefix)
+    catch e
+        println("Error in manufactured_solutions_analysis_dfns(). Error was ", e)
+    end
+end
+function manufactured_solutions_analysis(run_info; plot_prefix)
+    manufactured_solns_input = run_info.manufactured_solns_input
+    if !(manufactured_solns_input.use_for_advance && manufactured_solns_input.use_for_init)
+        return nothing
+    end
+
+    if run_info.r.n > 1
+        Lr_in = run_info.r.L
+    else
+        Lr_in = 1.0
+    end
+
+    manufactured_solns_list = manufactured_solutions(run_info.manufactured_solns_input, Lr_in,
+                                                     run_info.z.L, run_info.r.bc,
+                                                     run_info.z.bc, run_info.geometry,
+                                                     run_info.composition,
+                                                     run_info.species, run_info.r.n)
+
+    densi_func = manufactured_solns_list.densi_func
+    densn_func = manufactured_solns_list.densn_func
+    manufactured_E_fields =
+        manufactured_electric_fields(Lr_in, run_info.z.L, run_info.r.bc, run_info.z.bc,
+                                     run_info.composition, run_info.r.n,
+                                     run_info.manufactured_solns_input, run_info.species)
+    Er_func = manufactured_E_fields.Er_func
+    Ez_func = manufactured_E_fields.Ez_func
+    phi_func = manufactured_E_fields.phi_func
+
+    tinds = input_dict["itime_min"]:input_dict["itime_skip"]:input_dict["itime_max"]
+
+    println("time/ (Lref/cref): ", run_info.time)
+
+    # phi, Er, Ez test
+    phi = postproc_load_variable(run_info, "phi"; it=tinds)
+    phi_sym = similar(phi)
+    for it in 1:run_info.nt
+        for ir in 1:run_info.r.n
+            for iz in 1:run_info.z.n
+                phi_sym[iz,ir,it] = phi_func(z_global.grid[iz],r_global.grid[ir],time[it])
+            end
+        end
+    end
+    compare_fields_symbolic_test(run_info, phi, phi_sym, plot_prefix, L"\widetilde{\phi}",
+                                 L"\widetilde{\phi}^{sym}",
+                                 L"\varepsilon(\widetilde{\phi})", "phi")
+    # Set to nothing to allow the arrays to be garbage collected to free up memory
+    phi = nothing
+    phi_sym = nothing
+
+    Er = postproc_load_variable(run_info, "Er"; it=tinds)
+    Er_sym = similar(Er)
+    for it in 1:run_info.nt
+        for ir in 1:run_info.r.n
+            for iz in 1:run_info.z.n
+                Er_sym[iz,ir,it] = Er_func(z_global.grid[iz],r_global.grid[ir],time[it])
+            end
+        end
+    end
+    Er = nothing
+    Er_sym = nothing
+
+    Ez = postproc_load_variable(run_info, "Ez"; it=tinds)
+    Ez_sym = similar(Ez)
+    for it in 1:run_info.nt
+        for ir in 1:run_info.r.n
+            for iz in 1:run_info.z.n
+                Ez_sym[iz,ir,it] = Ez_func(z_global.grid[iz],r_global.grid[ir],time[it])
+            end
+        end
+    end
+    Ez = nothing
+    Ez_sym = nothing
+end
+
+function manufactured_solutions_analysis_dfns(run_info::Tuple; plot_prefix)
+    println("Making MMS plots for distribution functions")
+    if !any(ri !== nothing && ri.manufactured_solns_input.use_for_advance &&
+            ri.manufactured_solns_input.use_for_init for ri ∈ run_info)
+        # No manufactured solutions tests
+        return nothing
+    end
+    if length(run_info) > 1
+        println("Analysing more than one run at once not supported for"
+                * "manufactured_solutions_analysis_dfns()")
+        return nothing
+    end
+    try
+        return manufactured_soltions_analysis_dfns(run_info[1]; plot_prefix=plot_prefix)
+    catch e
+        println("Error in manufactured_solutions_analysis_dfns(). Error was ", e)
+    end
+end
+function manufactured_solutions_analysis_dfns(run_info; plot_prefix)
+    manufactured_solns_input = run_info.manufactured_solns_input
+    if !(manufactured_solns_input.use_for_advance && manufactured_solns_input.use_for_init)
+        return nothing
+    end
+
+    if run_info.r_global.n > 1
+        Lr_in = run_info.r_global.L
+    else
+        Lr_in = 1.0
+    end
+
+    manufactured_solns_list = manufactured_solutions(run_info.manufactured_solns_input, Lr_in,
+                                                     run_info.z.L, run_info.r.bc,
+                                                     run_info.z.bc, run_info.geometry,
+                                                     run_info.composition,
+                                                     run_info.species, run_info.r.n)
+
+    dfni_func = manufactured_solns_list.dfni_func
+    dfnn_func = manufactured_solns_list.dfnn_func
 end
 
 """
