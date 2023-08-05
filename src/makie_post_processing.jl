@@ -775,40 +775,70 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
         nz = length(iz)
     end
     if ivperp === nothing
-        nvperp = run_info.vperp.n
-        ivperp = 1:nvperp
+        if :vperp ∈ keys(run_info)
+            # v-space coordinates only present if run_info contains distribution functions
+            nvperp = run_info.vperp.n
+            ivperp = 1:nvperp
+        else
+            nvperp = nothing
+            ivperp = nothing
+        end
     elseif isa(ivperp, mk_int)
         nvperp = 1
     else
         nvperp = length(ivperp)
     end
     if ivpa === nothing
-        nvpa = run_info.vpa.n
-        ivpa = 1:nvpa
+        if :vpa ∈ keys(run_info)
+            # v-space coordinates only present if run_info contains distribution functions
+            nvpa = run_info.vpa.n
+            ivpa = 1:nvpa
+        else
+            nvpa = nothing
+            ivpa = nothing
+        end
     elseif isa(ivpa, mk_int)
         nvpa = 1
     else
         nvpa = length(ivpa)
     end
     if ivzeta === nothing
-        nvzeta = run_info.vzeta.n
-        ivzeta = 1:nvzeta
+        if :vzeta ∈ keys(run_info)
+            # v-space coordinates only present if run_info contains distribution functions
+            nvzeta = run_info.vzeta.n
+            ivzeta = 1:nvzeta
+        else
+            nvzeta = nothing
+            ivzeta = nothing
+        end
     elseif isa(ivzeta, mk_int)
         nvzeta = 1
     else
         nvzeta = length(ivzeta)
     end
     if ivr === nothing
-        nvr = run_info.vr.n
-        ivr = 1:nvr
+        if :vr ∈ keys(run_info)
+            # v-space coordinates only present if run_info contains distribution functions
+            nvr = run_info.vr.n
+            ivr = 1:nvr
+        else
+            nvr = nothing
+            ivr = nothing
+        end
     elseif isa(ivr, mk_int)
         nvr = 1
     else
         nvr = length(ivr)
     end
     if ivz === nothing
-        nvz = run_info.vz.n
-        ivz = 1:nvz
+        if :vz ∈ keys(run_info)
+            # v-space coordinates only present if run_info contains distribution functions
+            nvz = run_info.vz.n
+            ivz = 1:nvz
+        else
+            nvz = nothing
+            ivz = nothing
+        end
     elseif isa(ivz, mk_int)
         nvz = 1
     else
