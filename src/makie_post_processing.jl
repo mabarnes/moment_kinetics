@@ -1702,6 +1702,11 @@ for dim ∈ (:t, setdiff(all_dimensions, (:s, :sn))...)
     function_name_str = "plot_vs_$dim"
     function_name = Symbol(function_name_str)
     dim_str = String(dim)
+    if dim == :t
+        dim_grid = :( run_info.time )
+    else
+        dim_grid = :( run_info.$dim.grid )
+    end
     idim = Symbol(:i, dim)
     eval(quote
              function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
@@ -1764,7 +1769,7 @@ for dim ∈ (:t, setdiff(all_dimensions, (:s, :sn))...)
                  # Use transform to allow user to do something like data = abs.(data)
                  data = transform.(data)
 
-                 x = run_info.$dim.grid
+                 x = $dim_grid
                  if $idim !== nothing
                      x = x[$idim]
                  end
@@ -1898,6 +1903,7 @@ for dim ∈ setdiff(all_dimensions, (:s, :sn))
     function_name_str = "animate_vs_$dim"
     function_name = Symbol(function_name_str)
     dim_str = String(dim)
+    dim_grid = :( run_info.$dim.grid )
     idim = Symbol(:i, dim)
     eval(quote
              function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
@@ -1980,7 +1986,7 @@ for dim ∈ setdiff(all_dimensions, (:s, :sn))
 
                  nt = size(data, 2)
 
-                 x = run_info.$dim.grid
+                 x = $dim_grid
                  if $idim !== nothing
                      x = x[$idim]
                  end
