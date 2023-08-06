@@ -178,14 +178,7 @@ function load_coordinate_data(fid, name; printout=false)
     wgts = load_variable(coord_group, "wgts")
     irank = load_variable(coord_group, "irank")
     nrank = load_variable(coord_group, "nrank")
-    if "chunk_size" ∈ coord_group
-        chunk_size = load_variable(coord_group, "chunk_size")
-    else
-        # For backward compatibility with old output files before chunk_size was added in
-        # PR #104.
-        # Might cause some inefficiency with older files using parallel I/O.
-        chunk_size = n_local - 1
-    end
+    chunk_size = load_variable(coord_group, "chunk_size")
     # L = global box length
     L = load_variable(coord_group, "L")
     discretization = load_variable(coord_group, "discretization")
