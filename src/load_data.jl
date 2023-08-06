@@ -704,8 +704,8 @@ function load_distributed_charged_pdf_slice(run_names::Tuple, nblocks::Tuple, t_
             imax_z = (z_irank == z.nrank - 1 ? z.n : z.n - 1)
             local_r_range = 1:imax_r
             local_z_range = 1:imax_z
-            global_r_range = iglobal_func(1, r_irank, imax_r):iglobal_func(r.n, r_irank, imax_r)
-            global_z_range = iglobal_func(1, z_irank, imax_z):iglobal_func(z.n, z_irank, imax_z)
+            global_r_range = iglobal_func(1, r_irank, r.n):iglobal_func(imax_r, r_irank, r.n)
+            global_z_range = iglobal_func(1, z_irank, z.n):iglobal_func(imax_z, z_irank, z.n)
 
             if ir !== nothing && !any(i ∈ global_r_range for i in ir)
                 # No data for the slice on this rank
@@ -869,8 +869,8 @@ function load_distributed_neutral_pdf_slice(run_names::Tuple, nblocks::Tuple, t_
             imax_z = (z_irank == z.nrank - 1 ? z.n : z.n - 1)
             local_r_range = 1:imax_r
             local_z_range = 1:imax_z
-            global_r_range = iglobal_func(1, r_irank, imax_r):iglobal_func(r.n, r_irank, imax_r)
-            global_z_range = iglobal_func(1, z_irank, imax_z):iglobal_func(z.n, z_irank, imax_z)
+            global_r_range = iglobal_func(1, r_irank, r.n):iglobal_func(imax_r, r_irank, r.n)
+            global_z_range = iglobal_func(1, z_irank, z.n):iglobal_func(imax_z, z_irank, z.n)
 
             if ir !== nothing && !any(i ∈ global_r_range for i in ir)
                 # No data for the slice on this rank
@@ -967,10 +967,11 @@ end
 function iglobal_func(ilocal,irank,nlocal)
     if irank == 0
         iglobal = ilocal
-    elseif irank > 0 && ilocal > 1
+    elseif irank > 0 && ilocal >= 1 && ilocal <= nlocal
         iglobal = ilocal + irank*(nlocal - 1)
     else
-        println("ERROR: Invalid call to iglobal_func")
+        error("ERROR: Invalid call to iglobal_func. ilocal=$ilocal, irank=$irank, "
+              * "nlocal=$nlocal")
     end
     return iglobal
 end
