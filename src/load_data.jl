@@ -656,18 +656,18 @@ function load_distributed_charged_pdf_slice(run_names::Tuple, nblocks::Tuple, t_
     if iz === nothing
         iz = 1:z.n_global
         push!(result_dims, z.n_global)
-    elseif !isa(iz, mk_int)
-        push!(result_dims, length(iz))
-    else
+    elseif isa(iz, mk_int)
         push!(result_dims, 1)
+    else
+        push!(result_dims, length(iz))
     end
     if ir === nothing
         ir = 1:r.n_global
         push!(result_dims, r.n_global)
-    elseif !isa(ir, mk_int)
-        push!(result_dims, length(ir))
-    else
+    elseif isa(ir, mk_int)
         push!(result_dims, 1)
+    else
+        push!(result_dims, length(ir))
     end
     if is === nothing
         is = 1:n_species
@@ -703,10 +703,50 @@ function load_distributed_charged_pdf_slice(run_names::Tuple, nblocks::Tuple, t_
             if ir !== nothing && !any(i ∈ global_r_range for i in ir)
                 # No data for the slice on this rank
                 continue
+            elseif isa(ir, StepRange)
+                # Note that `findfirst(test, array)` returns the index `i` of the first
+                # element of `array` for which `test(array[i])` is `true`.
+                # `findlast()` similarly finds the index of the last element...
+                start_ind = findfirst(i -> i>=ir.start, global_r_range)
+                start = global_r_range[start_ind]
+                stop_ind = findlast(i -> i<=ir.stop, global_r_range)
+                stop = global_r_range[stop_ind]
+                local_r_range = (local_r_range.start + start - global_r_range.start):ir.step:(local_r_range.stop + stop - global_r_range.stop)
+                global_r_range = findfirst(i->i ∈ global_r_range, ir):findlast(i->i ∈ global_r_range, ir)
+            elseif isa(ir, UnitRange)
+                start_ind = findfirst(i -> i>=ir.start, global_r_range)
+                start = global_r_range[start_ind]
+                stop_ind = findlast(i -> i<=ir.stop, global_r_range)
+                stop = global_r_range[stop_ind]
+                local_r_range = (local_r_range.start + start - global_r_range.start):(local_r_range.stop + stop - global_r_range.stop)
+                global_r_range = findfirst(i->i ∈ global_r_range, ir):findlast(i->i ∈ global_r_range, ir)
+            elseif isa(ir, mk_int)
+                local_r_range = ir - (global_r_range.start - 1)
+                global_r_range = ir
             end
             if iz !== nothing && !any(i ∈ global_z_range for i in iz)
                 # No data for the slice on this rank
                 continue
+            elseif isa(iz, StepRange)
+                # Note that `findfirst(test, array)` returns the index `i` of the first
+                # element of `array` for which `test(array[i])` is `true`.
+                # `findlast()` similarly finds the index of the last element...
+                start_ind = findfirst(i -> i>=iz.start, global_z_range)
+                start = global_z_range[start_ind]
+                stop_ind = findlast(i -> i<=iz.stop, global_z_range)
+                stop = global_z_range[stop_ind]
+                local_z_range = (local_z_range.start + start - global_z_range.start):iz.step:(local_z_range.stop + stop - global_z_range.stop)
+                global_z_range = findfirst(i->i ∈ global_z_range, iz):findlast(i->i ∈ global_z_range, iz)
+            elseif isa(iz, UnitRange)
+                start_ind = findfirst(i -> i>=iz.start, global_z_range)
+                start = global_z_range[start_ind]
+                stop_ind = findlast(i -> i<=iz.stop, global_z_range)
+                stop = global_z_range[stop_ind]
+                local_z_range = (local_z_range.start + start - global_z_range.start):(local_z_range.stop + stop - global_z_range.stop)
+                global_z_range = findfirst(i->i ∈ global_z_range, iz):findlast(i->i ∈ global_z_range, iz)
+            elseif isa(iz, mk_int)
+                local_z_range = iz - (global_z_range.start - 1)
+                global_z_range = iz
             end
 
             f_local_slice = load_pdf_data(fid)
@@ -831,13 +871,17 @@ function load_distributed_neutral_pdf_slice(run_names::Tuple, nblocks::Tuple, t_
     if iz === nothing
         iz = 1:z.n_global
         push!(result_dims, z.n_global)
-    elseif !isa(iz, mk_int)
+    elseif isa(iz, mk_int)
+        push!(result_dims, 1)
+    else
         push!(result_dims, length(iz))
     end
     if ir === nothing
         ir = 1:r.n_global
         push!(result_dims, r.n_global)
-    elseif !isa(ir, mk_int)
+    elseif isa(ir, mk_int)
+        push!(result_dims, 1)
+    else
         push!(result_dims, length(ir))
     end
     if isn === nothing
@@ -845,6 +889,8 @@ function load_distributed_neutral_pdf_slice(run_names::Tuple, nblocks::Tuple, t_
         push!(result_dims, n_species)
     elseif !isa(isn, mk_int)
         push!(result_dims, length(isn))
+    else
+        push!(result_dims, 1)
     end
     push!(result_dims, length(t_range))
 
@@ -872,10 +918,50 @@ function load_distributed_neutral_pdf_slice(run_names::Tuple, nblocks::Tuple, t_
             if ir !== nothing && !any(i ∈ global_r_range for i in ir)
                 # No data for the slice on this rank
                 continue
+            elseif isa(ir, StepRange)
+                # Note that `findfirst(test, array)` returns the index `i` of the first
+                # element of `array` for which `test(array[i])` is `true`.
+                # `findlast()` similarly finds the index of the last element...
+                start_ind = findfirst(i -> i>=ir.start, global_r_range)
+                start = global_r_range[start_ind]
+                stop_ind = findlast(i -> i<=ir.stop, global_r_range)
+                stop = global_r_range[stop_ind]
+                local_r_range = (local_r_range.start + start - global_r_range.start):ir.step:(local_r_range.stop + stop - global_r_range.stop)
+                global_r_range = findfirst(i->i ∈ global_r_range, ir):findlast(i->i ∈ global_r_range, ir)
+            elseif isa(ir, UnitRange)
+                start_ind = findfirst(i -> i>=ir.start, global_r_range)
+                start = global_r_range[start_ind]
+                stop_ind = findlast(i -> i<=ir.stop, global_r_range)
+                stop = global_r_range[stop_ind]
+                local_r_range = (local_r_range.start + start - global_r_range.start):(local_r_range.stop + stop - global_r_range.stop)
+                global_r_range = findfirst(i->i ∈ global_r_range, ir):findlast(i->i ∈ global_r_range, ir)
+            elseif isa(ir, mk_int)
+                local_r_range = ir - (global_r_range.start - 1)
+                global_r_range = ir
             end
             if iz !== nothing && !any(i ∈ global_z_range for i in iz)
                 # No data for the slice on this rank
                 continue
+            elseif isa(iz, StepRange)
+                # Note that `findfirst(test, array)` returns the index `i` of the first
+                # element of `array` for which `test(array[i])` is `true`.
+                # `findlast()` similarly finds the index of the last element...
+                start_ind = findfirst(i -> i>=iz.start, global_z_range)
+                start = global_z_range[start_ind]
+                stop_ind = findlast(i -> i<=iz.stop, global_z_range)
+                stop = global_z_range[stop_ind]
+                local_z_range = (local_z_range.start + start - global_z_range.start):iz.step:(local_z_range.stop + stop - global_z_range.stop)
+                global_z_range = findfirst(i->i ∈ global_z_range, iz):findlast(i->i ∈ global_z_range, iz)
+            elseif isa(iz, UnitRange)
+                start_ind = findfirst(i -> i>=iz.start, global_z_range)
+                start = global_z_range[start_ind]
+                stop_ind = findlast(i -> i<=iz.stop, global_z_range)
+                stop = global_z_range[stop_ind]
+                local_z_range = (local_z_range.start + start - global_z_range.start):(local_z_range.stop + stop - global_z_range.stop)
+                global_z_range = findfirst(i->i ∈ global_z_range, iz):findlast(i->i ∈ global_z_range, iz)
+            elseif isa(iz, mk_int)
+                local_z_range = iz - (global_z_range.start - 1)
+                global_z_range = iz
             end
 
             f_local_slice = load_neutral_pdf_data(fid)
