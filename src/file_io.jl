@@ -376,6 +376,15 @@ function define_io_coordinate!(parent, coord, coord_name, description, parallel_
             write_single_value!(group, "irank", coord.irank, parallel_io=parallel_io,
                                 description="rank of this block in the $(coord.name) grid communicator")
         end
+        # Record the local size of the coordinate, as this will be the chunk size used by
+        # parallel I/O (see hdf5_get_fixed_dim_sizes() in file_io_hdf5.jl).
+        if coord.nrank == 1
+            write_single_value!(group, "chunk_size", coord.n, parallel_io=parallel_io,
+                                description="chunk size of blocks in the $(coord.name) grid communicator")
+        else
+            write_single_value!(group, "chunk_size", coord.n - 1, parallel_io=parallel_io,
+                                description="chunk size of blocks in the $(coord.name) grid communicator")
+        end
 
         # write the global length of this coordinate to variable "L"
         # within "coords/coord_name" group

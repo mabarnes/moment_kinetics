@@ -693,18 +693,25 @@ function get_run_info(run_dir, restart_index; itime_min=1, itime_max=-1, itime_s
     n_ion_species, n_neutral_species = load_species_data(file_final_restart)
     evolve_density, evolve_upar, evolve_ppar = load_mk_options(file_final_restart)
 
-    z_local, z_local_spectral = load_coordinate_data(file_final_restart, "z")
-    r_local, r_local_spectral = load_coordinate_data(file_final_restart, "r")
+    z_local, z_local_spectral, z_chunk_size =
+        load_coordinate_data(file_final_restart, "z")
+    r_local, r_local_spectral, r_chunk_size =
+        load_coordinate_data(file_final_restart, "r")
     r, r_spectral, z, z_spectral = construct_global_zr_coords(r_local, z_local)
 
     if dfns
-        vperp, vperp_spectral = load_coordinate_data(file_final_restart, "vperp")
-        vpa, vpa_spectral = load_coordinate_data(file_final_restart, "vpa")
+        vperp, vperp_spectral, vperp_chunk_size =
+            load_coordinate_data(file_final_restart, "vperp")
+        vpa, vpa_spectral, vpa_chunk_size =
+            load_coordinate_data(file_final_restart, "vpa")
 
         if n_neutral_species > 0
-            vzeta, vzeta_spectral = load_coordinate_data(file_final_restart, "vzeta")
-            vr, vr_spectral = load_coordinate_data(file_final_restart, "vr")
-            vz, vz_spectral = load_coordinate_data(file_final_restart, "vz")
+            vzeta, vzeta_spectral, vzeta_chunk_size =
+                load_coordinate_data(file_final_restart, "vzeta")
+            vr, vr_spectral, vr_chunk_size =
+                load_coordinate_data(file_final_restart, "vr")
+            vz, vz_spectral, vz_chunk_size =
+                load_coordinate_data(file_final_restart, "vz")
         else
             dummy_adv_input = advection_input("default", 1.0, 0.0, 0.0)
             dummy_comm = MPI.COMM_NULL
@@ -712,8 +719,11 @@ function get_run_info(run_dir, restart_index; itime_min=1, itime_max=-1, itime_s
                                      "chebyshev_pseudospectral", "", "periodic",
                                      dummy_adv_input, dummy_comm)
             vzeta, vzeta_spectral = define_coordinate(dummy_input)
+            vzeta_chunk_size = 1
             vr, vr_spectral = define_coordinate(dummy_input)
+            vr_chunk_size = 1
             vz, vz_spectral = define_coordinate(dummy_input)
+            vz_chunk_size = 1
         end
     end
 
@@ -738,7 +748,11 @@ function get_run_info(run_dir, restart_index; itime_min=1, itime_max=-1, itime_s
                 r_local=r_local, z_local=z_local, r_spectral=r_spectral,
                 z_spectral=z_spectral, vperp_spectral=vperp_spectral,
                 vpa_spectral=vpa_spectral, vzeta_spectral=vzeta_spectral,
-                vr_spectral=vr_spectral, vz_spectral=vz_spectral)
+                vr_spectral=vr_spectral, vz_spectral=vz_spectral,
+                r_chunk_size=r_chunk_size, z_chunk_size=z_chunk_size,
+                vperp_chunk_size=vperp_chunk_size, vpa_chunk_size=vpa_chunk_size,
+                vzeta_chunk_size=vzeta_chunk_size, vr_chunk_size=vr_chunk_size,
+                vz_chunk_size=vz_chunk_size)
     else
         return (run_name=run_name, run_prefix=base_prefix, parallel_io=parallel_io,
                 ext=ext, nblocks=nblocks, files=files, input=input,
@@ -749,7 +763,8 @@ function get_run_info(run_dir, restart_index; itime_min=1, itime_max=-1, itime_s
                 manufactured_solns_input=manufactured_solns_input, nt=nt,
                 nt_unskipped=nt_unskipped, restarts_nt=restarts_nt, itime_skip=itime_skip,
                 time=time, r=r, z=z, r_local=r_local, z_local=z_local,
-                r_spectral=r_spectral, z_spectral=z_spectral)
+                r_spectral=r_spectral, z_spectral=z_spectral, r_chunk_size=r_chunk_size,
+                z_chunk_size=z_chunk_size)
     end
 end
 
