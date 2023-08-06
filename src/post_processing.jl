@@ -1135,8 +1135,8 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
             neutral_density_sym = copy(density[:,:,:,:])
             is = 1
             for it in 1:ntime
-                for ir in 1:nr_global
-                    for iz in 1:nz_global
+                for ir in 1:r_global.n
+                    for iz in 1:z_global.n
                         neutral_density_sym[iz,ir,is,it] = densn_func(z_global.grid[iz],r_global.grid[ir],time[it])
                     end
                 end
