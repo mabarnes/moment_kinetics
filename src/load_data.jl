@@ -792,6 +792,10 @@ function load_distributed_charged_pdf_slice(run_names::Tuple, nblocks::Tuple, t_
         thisdim = ndims(f_global) - 1
         f_global = selectdim(f_global, thisdim, 1)
     end
+    if isa(t_range, mk_int)
+        thisdim = ndims(f_global)
+        f_global = selectdim(f_global, thisdim, 1)
+    end
 
     return f_global
 end
@@ -958,6 +962,10 @@ function load_distributed_neutral_pdf_slice(run_names::Tuple, nblocks::Tuple, t_
     end
     if isa(isn, mk_int)
         thisdim = ndims(f_global) - 1
+        f_global = selectdim(f_global, thisdim, 1)
+    end
+    if isa(t_range, mk_int)
+        thisdim = ndims(f_global)
         f_global = selectdim(f_global, thisdim, 1)
     end
 
