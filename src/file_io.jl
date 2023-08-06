@@ -371,10 +371,14 @@ function define_io_coordinate!(parent, coord, coord_name, description, parallel_
             # write the rank as if whole file was written by rank-0
             write_single_value!(group, "irank", 0, parallel_io=parallel_io,
                                 description="rank of this block in the $(coord.name) grid communicator")
+            write_single_value!(group, "nrank", 1, parallel_io=parallel_io,
+                                description="number of ranks in the $(coord.name) grid communicator")
         else
             # write the rank in the coord-direction of this process
             write_single_value!(group, "irank", coord.irank, parallel_io=parallel_io,
                                 description="rank of this block in the $(coord.name) grid communicator")
+            write_single_value!(group, "nrank", coord.nrank, parallel_io=parallel_io,
+                                description="number of ranks in the $(coord.name) grid communicator")
         end
         # Record the local size of the coordinate, as this will be the chunk size used by
         # parallel I/O (see hdf5_get_fixed_dim_sizes() in file_io_hdf5.jl).

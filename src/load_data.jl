@@ -177,6 +177,7 @@ function load_coordinate_data(fid, name; printout=false)
     grid = load_variable(coord_group, "grid")
     wgts = load_variable(coord_group, "wgts")
     irank = load_variable(coord_group, "irank")
+    nrank = load_variable(coord_group, "nrank")
     if "chunk_size" ∈ coord_group
         chunk_size = load_variable(coord_group, "chunk_size")
     else
@@ -204,8 +205,7 @@ function load_coordinate_data(fid, name; printout=false)
     end
 
     # Define input to create coordinate struct
-    # Some dummy inputs, at least for now: nrank=0
-    input = grid_input(name, ngrid, nelement_global, nelement_local, 0, irank, L,
+    input = grid_input(name, ngrid, nelement_global, nelement_local, nrank, irank, L,
                        discretization, fd_option, bc, advection_input("", 0.0, 0.0, 0.0),
                        MPI.COMM_NULL)
 
