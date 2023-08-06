@@ -54,8 +54,8 @@ function plot_sequence_fields_data(path_list)
         # load local sizes of grids stored on each netCDF file 
         # z z_wgts r r_wgts may take different values on different blocks
         # we need to construct the global grid below
-        z_local, z_local_spectral = load_coordinate_data(fid, "z")
-        r_local, r_local_spectral = load_coordinate_data(fid, "r")
+        z_local, z_local_spectral, _ = load_coordinate_data(fid, "z")
+        r_local, r_local_spectral, _ = load_coordinate_data(fid, "r")
         # load time data 
         ntime, time, _ = load_time_data(fid)
         # load species data 
