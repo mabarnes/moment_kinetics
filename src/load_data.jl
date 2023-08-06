@@ -690,14 +690,14 @@ function load_distributed_charged_pdf_slice(run_names::Tuple, nblocks::Tuple, t_
 
             z_irank, r_irank = load_rank_data(fid)
 
-            # min index set to avoid double assignment of repeated points
-            # 1 if irank = 0, 2 otherwise
-            imin_r = min(1,r_irank) + 1
-            imin_z = min(1,z_irank) + 1
-            local_r_range = imin_r:r.n
-            local_z_range = imin_z:z.n
-            global_r_range = iglobal_func(imin_r, r_irank, r.n):iglobal_func(r.n, r_irank, r.n)
-            global_z_range = iglobal_func(imin_z, z_irank, z.n):iglobal_func(z.n, z_irank, z.n)
+            # max index set to avoid double assignment of repeated points
+            # nr/nz if irank = nrank-1, (nr-1)/(nz-1) otherwise
+            imax_r = (r_irank == r.nrank - 1 ? r.n : r.n - 1)
+            imax_z = (z_irank == z.nrank - 1 ? z.n : z.n - 1)
+            local_r_range = 1:imax_r
+            local_z_range = 1:imax_z
+            global_r_range = iglobal_func(1, r_irank, r.n):iglobal_func(imax_r, r_irank, r.n)
+            global_z_range = iglobal_func(1, z_irank, z.n):iglobal_func(imax_z, z_irank, z.n)
 
             if ir !== nothing && !any(i ∈ global_r_range for i in ir)
                 # No data for the slice on this rank
@@ -905,14 +905,14 @@ function load_distributed_neutral_pdf_slice(run_names::Tuple, nblocks::Tuple, t_
 
             z_irank, r_irank = load_rank_data(fid)
 
-            # min index set to avoid double assignment of repeated points
-            # 1 if irank = 0, 2 otherwise
-            imin_r = min(1,r_irank) + 1
-            imin_z = min(1,z_irank) + 1
-            local_r_range = imin_r:r.n
-            local_z_range = imin_z:z.n
-            global_r_range = iglobal_func(imin_r, r_irank, r.n):iglobal_func(r.n, r_irank, r.n)
-            global_z_range = iglobal_func(imin_z, z_irank, z.n):iglobal_func(z.n, z_irank, z.n)
+            # max index set to avoid double assignment of repeated points
+            # nr/nz if irank = nrank-1, (nr-1)/(nz-1) otherwise
+            imax_r = (r_irank == r.nrank - 1 ? r.n : r.n - 1)
+            imax_z = (z_irank == z.nrank - 1 ? z.n : z.n - 1)
+            local_r_range = 1:imax_r
+            local_z_range = 1:imax_z
+            global_r_range = iglobal_func(1, r_irank, r.n):iglobal_func(imax_r, r_irank, r.n)
+            global_z_range = iglobal_func(1, z_irank, z.n):iglobal_func(imax_z, z_irank, z.n)
 
             if ir !== nothing && !any(i ∈ global_r_range for i in ir)
                 # No data for the slice on this rank
@@ -1053,10 +1053,11 @@ end
 function iglobal_func(ilocal,irank,nlocal)
     if irank == 0
         iglobal = ilocal
-    elseif irank > 0 && ilocal > 1
+    elseif irank > 0 && ilocal >= 1 && ilocal <= nlocal
         iglobal = ilocal + irank*(nlocal - 1)
     else
-        println("ERROR: Invalid call to iglobal_func")
+        error("ERROR: Invalid call to iglobal_func. ilocal=$ilocal, irank=$irank, "
+              * "nlocal=$nlocal")
     end
     return iglobal
 end
