@@ -2899,7 +2899,7 @@ function sound_wave_plots(run_info::Tuple; plot_prefix)
         return nothing
     end
 
-    #try
+    try
         outfile = plot_prefix * "delta_phi0_vs_t.pdf"
 
         if length(run_info) == 1
@@ -2923,9 +2923,9 @@ function sound_wave_plots(run_info::Tuple; plot_prefix)
 
             return fig
         end
-    #catch e
-    #    println("Error in sound_wave_plots(). Error was ", e)
-    #end
+    catch e
+        println("Error in sound_wave_plots(). Error was ", e)
+    end
 
     return nothing
 end
