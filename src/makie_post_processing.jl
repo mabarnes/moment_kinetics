@@ -1064,7 +1064,8 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
                 push!(parts, load_distributed_charged_pdf_slice(
                                  f, run_info.nblocks, tinds, run_info.n_ion_species,
                                  run_info.r, run_info.z, run_info.vperp, run_info.vpa;
-                                 is=is, ir=ir, iz=iz, ivperp=ivperp, ivpa=ivpa))
+                                 is=(is === (:) ? nothing : is), ir=ir, iz=iz,
+                                 ivperp=ivperp, ivpa=ivpa))
                 local_it_start = local_it_end + 1
             end
             result = cat(parts...; dims=6)
@@ -1079,12 +1080,8 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
                 push!(parts, load_distributed_neutral_pdf_slice(
                                  f, run_info.nblocks, tinds, run_info.n_ion_species,
                                  run_info.r, run_info.z, run_info.vperp, run_info.vpa;
-                                 is=(is === (:) ? nothing : is),
-                                 ir=(ir === (:) ? nothing : ir),
-                                 iz=(iz === (:) ? nothing : iz),
-                                 ivzeta=(ivzeta === (:) ? nothing : ivzeta),
-                                 ivr=(ivr === (:) ? nothing : ivr),
-                                 ivz=(ivz === (:) ? nothing : ivz)))
+                                 is=(is === (:) ? nothing : is), ir=ir, iz=iz,
+                                 ivzeta=ivzeta, ivr=ivr, ivz=ivz))
                 local_it_start = local_it_end + 1
             end
             if length(run_info.files) == 1
