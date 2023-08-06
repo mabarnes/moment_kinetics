@@ -177,6 +177,27 @@ function load_coordinate_data(fid, name; printout=false)
     grid = load_variable(coord_group, "grid")
     wgts = load_variable(coord_group, "wgts")
     irank = load_variable(coord_group, "irank")
+    if "nrank" in keys(coord_group)
+        nrank = load_variable(coord_group, "nrank")
+    else
+        # Workaround for older output files that did not save nrank
+        if name ∈ ("r", "z")
+            nrank = max(n_global - 1, 1) ÷ max(n_local - 1, 1)
+        else
+            nrank = 1
+        end
+    end
+    if "chunk_size" ∈ coord_group
+        chunk_size = load_variable(coord_group, "chunk_size")
+    else
+        # Workaround for older output files that did not save chunk_size.
+        # Sub-optimal for runs that used parallel I/O.
+        if nrank == 1
+            chunk_size = n_global
+        else
+            chunk_size = n_local - 1
+        end
+    end
     # L = global box length
     L = load_variable(coord_group, "L")
     discretization = load_variable(coord_group, "discretization")
@@ -196,14 +217,13 @@ function load_coordinate_data(fid, name; printout=false)
     end
 
     # Define input to create coordinate struct
-    # Some dummy inputs, at least for now: nrank=0
-    input = grid_input(name, ngrid, nelement_global, nelement_local, 0, irank, L,
+    input = grid_input(name, ngrid, nelement_global, nelement_local, nrank, irank, L,
                        discretization, fd_option, bc, advection_input("", 0.0, 0.0, 0.0),
                        MPI.COMM_NULL)
 
     coord, spectral = define_coordinate(input)
 
-    return coord, spectral
+    return coord, spectral, chunk_size
 end
 
 """
@@ -446,13 +466,13 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
 
             if parallel_io
                 restart_n_ion_species, restart_n_neutral_species = load_species_data(fid)
-                restart_z, _ = load_coordinate_data(fid, "z")
-                restart_r, _ = load_coordinate_data(fid, "r")
-                restart_vperp, _ = load_coordinate_data(fid, "vperp")
-                restart_vpa, _ = load_coordinate_data(fid, "vpa")
-                restart_vzeta, _ = load_coordinate_data(fid, "vzeta")
-                restart_vr, _ = load_coordinate_data(fid, "vr")
-                restart_vz, _ = load_coordinate_data(fid, "vz")
+                restart_z, _, _ = load_coordinate_data(fid, "z")
+                restart_r, _, _ = load_coordinate_data(fid, "r")
+                restart_vperp, _, _ = load_coordinate_data(fid, "vperp")
+                restart_vpa, _, _ = load_coordinate_data(fid, "vpa")
+                restart_vzeta, _, _ = load_coordinate_data(fid, "vzeta")
+                restart_vr, _, _ = load_coordinate_data(fid, "vr")
+                restart_vz, _, _ = load_coordinate_data(fid, "vz")
                 if (restart_n_ion_species != composition.n_ion_species ||
                     restart_n_neutral_species != composition.n_neutral_species ||
                     restart_z.n != z.n_global || restart_r.n != r.n_global ||
@@ -544,13 +564,13 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                 end
             else
                 restart_n_ion_species, restart_n_neutral_species = load_species_data(fid)
-                restart_z, _ = load_coordinate_data(fid, "z")
-                restart_r, _ = load_coordinate_data(fid, "r")
-                restart_vperp, _ = load_coordinate_data(fid, "vperp")
-                restart_vpa, _ = load_coordinate_data(fid, "vpa")
-                restart_vzeta, _ = load_coordinate_data(fid, "vzeta")
-                restart_vr, _ = load_coordinate_data(fid, "vr")
-                restart_vz, _ = load_coordinate_data(fid, "vz")
+                restart_z, _, _ = load_coordinate_data(fid, "z")
+                restart_r, _, _ = load_coordinate_data(fid, "r")
+                restart_vperp, _, _ = load_coordinate_data(fid, "vperp")
+                restart_vpa, _, _ = load_coordinate_data(fid, "vpa")
+                restart_vzeta, _, _ = load_coordinate_data(fid, "vzeta")
+                restart_vr, _, _ = load_coordinate_data(fid, "vr")
+                restart_vz, _, _ = load_coordinate_data(fid, "vz")
                 if (restart_n_ion_species != composition.n_ion_species ||
                     restart_n_neutral_species != composition.n_neutral_species ||
                     restart_z.n != z.n || restart_r.n != r.n || restart_vperp.n != vperp.n ||
