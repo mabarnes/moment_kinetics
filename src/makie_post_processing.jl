@@ -3608,9 +3608,8 @@ function compare_charged_pdf_symbolic_test(run_info, plot_prefix)
         #dummy_N = 0.0
         for r_chunk ∈ r_chunks, z_chunk ∈ z_chunks
             f, f_sym =
-                manufactured_solutions_get_field_and_field_sym(run_info, variable_name,
-                                                               it=it, ir=r_chunk,
-                                                               iz=z_chunk)
+                manufactured_solutions_get_field_and_field_sym(
+                    run_info, variable_name, it=it, ir=r_chunk, iz=z_chunk)
             dummy += sum(@. (f - f_sym)^2)
             #dummy_N += sum(f_sym.^2)
         end
@@ -3692,8 +3691,8 @@ function compare_neutral_pdf_symbolic_test(run_info, plot_prefix)
         #dummy_N = 0.0
         for r_chunk ∈ r_chunks, z_chunk ∈ z_chunks
             f, f_sym =
-                manufactured_solutions_get_field_and_field_sym(run_info, "f", it=it,
-                                                               ir=r_chunk, iz=z_chunk)
+                manufactured_solutions_get_field_and_field_sym(
+                    run_info, variable_name, it=it, ir=r_chunk, iz=z_chunk)
             dummy += sum(@. (f - f_sym)^2)
             #dummy_N += sum(f_sym.^2)
         end
