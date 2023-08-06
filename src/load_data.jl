@@ -699,11 +699,11 @@ function load_distributed_charged_pdf_slice(run_names::Tuple, nblocks::Tuple, t_
             global_r_range = iglobal_func(imin_r, r_irank, r.n):iglobal_func(r.n, r_irank, r.n)
             global_z_range = iglobal_func(imin_z, z_irank, z.n):iglobal_func(z.n, z_irank, z.n)
 
-            if ir !== nothing && !(ir ∈ global_r_range)
+            if ir !== nothing && !any(i ∈ global_r_range for i in ir)
                 # No data for the slice on this rank
                 continue
             end
-            if iz !== nothing && !(iz ∈ global_z_range)
+            if iz !== nothing && !any(i ∈ global_z_range for i in iz)
                 # No data for the slice on this rank
                 continue
             end
@@ -864,11 +864,11 @@ function load_distributed_neutral_pdf_slice(run_names::Tuple, nblocks::Tuple, t_
             global_r_range = iglobal_func(imin_r, r_irank, r.n):iglobal_func(r.n, r_irank, r.n)
             global_z_range = iglobal_func(imin_z, z_irank, z.n):iglobal_func(z.n, z_irank, z.n)
 
-            if ir !== nothing && !(ir ∈ global_r_range)
+            if ir !== nothing && !any(i ∈ global_r_range for i in ir)
                 # No data for the slice on this rank
                 continue
             end
-            if iz !== nothing && !(iz ∈ global_z_range)
+            if iz !== nothing && !any(i ∈ global_z_range for i in iz)
                 # No data for the slice on this rank
                 continue
             end
