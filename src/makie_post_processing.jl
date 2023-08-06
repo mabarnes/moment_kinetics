@@ -15,10 +15,11 @@ using ..manufactured_solns: manufactured_solutions, manufactured_electric_fields
 using ..moment_kinetics_input: mk_input, set_defaults_and_check_top_level!,
                                set_defaults_and_check_section!, Dict_to_NamedTuple
 using ..load_data: open_readonly_output_file, get_group, load_block_data,
-                   load_coordinate_data, load_input, load_mk_options, load_species_data,
-                   load_time_data
+                   load_coordinate_data, load_distributed_charged_pdf_slice,
+                   load_distributed_neutral_pdf_slice, load_input, load_mk_options,
+                   load_species_data, load_time_data
 using ..post_processing: calculate_and_write_frequencies, construct_global_zr_coords,
-                         get_geometry_and_composition
+                         get_geometry_and_composition, read_distributed_zr_data!
 using ..type_definitions: mk_float, mk_int
 
 using Combinatorics
@@ -1037,20 +1038,11 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
             nd = 4
         end
 
-        if run_info.itime_skip != 1 && length(run_info.files) > 1
-            error("Setting itime_skip!=1 and combining multiple restarts of a single run "
-                  * "not currently supported when parallel_io=false")
-        end
         if nd == 3
             result = allocate_float(run_info.z.n, run_info.r.n, run_info.nt)
-            local_start = 1
-            for (f, this_nt) ∈ zip(run_info.files, run_info.restarts_nt)
-                read_distributed_zr_data!(
-                    @view(result[:,:,local_start:local_start+this_nt-1]), variable_name, f,
-                    run_info.ext, run_info.nblocks, run_info.z_local.n,
-                    run_info.r_local.n, run_info.itime_skip)
-                local_start += this_nt - 1
-            end
+            read_distributed_zr_data!( result, variable_name, run_info.files,
+                                      run_info.ext, run_info.nblocks, run_info.z_local.n,
+                                      run_info.r_local.n, run_info.itime_skip)
             result = result[iz,ir,:]
         elseif nd == 4
             # If we ever have neutrals included but n_neutral_species != n_ion_species,
@@ -1059,53 +1051,28 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
             # here.
             result = allocate_float(run_info.z.n, run_info.r.n, run_info.n_ion_species,
                                     run_info.nt)
-            local_start = 1
-            for (f, this_nt) ∈ zip(run_info.files, run_info.restarts_nt)
-                read_distributed_zr_data!(
-                    @view(result[:,:,:,local_start:local_start+this_nt-1]), variable_name,
-                    f, run_info.ext, run_info.nblocks, run_info.z_local.n,
-                    run_info.r_local.n, run_info.itime_skip)
-                local_start += this_nt - 1
-            end
+            read_distributed_zr_data!( result, variable_name, run_info.files,
+                                      run_info.ext, run_info.nblocks, run_info.z_local.n,
+                                      run_info.r_local.n, run_info.itime_skip)
             result = result[iz,ir,is,:]
         elseif nd === 6
-            parts = Vector{Array{mk_float,6}}()
-            local_it_start = 1
-            for (f, this_nt) ∈ zip(run_info.files, run_info.restarts_nt)
-                local_it_end = local_it_start+this_nt-1
-
-                tinds = collect(i - local_it_start + 1 + offset for i ∈ it
-                                if local_it_start <= i <= local_it_end)
-                push!(parts, load_distributed_charged_pdf_slice(
-                                 f, run_info.nblocks, tinds, run_info.n_ion_species,
-                                 run_info.r, run_info.z, run_info.vperp, run_info.vpa;
-                                 is=(is === (:) ? nothing : is), ir=ir, iz=iz,
-                                 ivperp=ivperp, ivpa=ivpa))
-                local_it_start = local_it_end + 1
-            end
-            result = cat(parts...; dims=6)
+            result = load_distributed_charged_pdf_slice(run_info.files, run_info.nblocks,
+                                                        it, run_info.n_ion_species,
+                                                        run_info.r_local,
+                                                        run_info.z_local, run_info.vperp,
+                                                        run_info.vpa;
+                                                        is=(is === (:) ? nothing : is),
+                                                        ir=ir, iz=iz, ivperp=ivperp,
+                                                        ivpa=ivpa)
         elseif nd === 7
-            parts = Vector{Array{mk_float,7}}()
-            local_it_start = 1
-            for (f, this_nt) ∈ zip(run_info.files, run_info.restarts_nt)
-                local_it_end = local_it_start+this_nt-1
-
-                tinds = collect(i - local_it_start + 1 + offset for i ∈ it
-                                if local_it_start <= i <= local_it_end)
-                push!(parts, load_distributed_neutral_pdf_slice(
-                                 f, run_info.nblocks, tinds, run_info.n_ion_species,
-                                 run_info.r, run_info.z, run_info.vperp, run_info.vpa;
-                                 is=(is === (:) ? nothing : is), ir=ir, iz=iz,
-                                 ivzeta=ivzeta, ivr=ivr, ivz=ivz))
-                local_it_start = local_it_end + 1
-            end
-            if length(run_info.files) == 1
-                # Special case to avoid an extra allocation/copy of a potentially large
-                # array when we don't actually need to `cat()`
-                result = parts[1]
-            else
-                result = cat(parts...; dims=7)
-            end
+            result = load_distributed_neutral_pdf_slice(run_info.files, run_info.nblocks,
+                                                        it, run_info.n_ion_species,
+                                                        run_info.r_local,
+                                                        run_info.z_local, run_info.vzeta,
+                                                        run_info.vr, run_info.vz;
+                                                        isn=(is === (:) ? nothing : is),
+                                                        ir=ir, iz=iz, ivzeta=ivzeta,
+                                                        ivr=ivr, ivz=ivz)
         end
     end
 
