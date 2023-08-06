@@ -2,7 +2,6 @@ n_ion_species = 1
 n_neutral_species = 1
 electron_physics = "boltzmann_electron_response"
 #electron_physics = "boltzmann_electron_response_with_simple_sheath"
-run_name = "2D-wall_cheb-with-neutrals_nel_r_1_z_2_vpa_4_vperp_4"
 evolve_moments_density = false
 evolve_moments_parallel_flow = false
 evolve_moments_parallel_pressure = false

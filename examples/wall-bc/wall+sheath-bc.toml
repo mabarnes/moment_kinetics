@@ -2,7 +2,6 @@ n_ion_species = 1
 n_neutral_species = 1
 #boltzmann_electron_response = false
 electron_physics = "boltzmann_electron_response_with_simple_sheath"
-run_name = "sheath-bc_cheb"
 evolve_moments_density = false
 evolve_moments_parallel_flow = false
 evolve_moments_parallel_pressure = false

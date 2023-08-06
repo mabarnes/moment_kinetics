@@ -1,7 +1,6 @@
 n_ion_species = 1
 n_neutral_species = 0
 electron_physics = "boltzmann_electron_response"
-run_name = "2D-sound-wave_cheb_ion_only_nel_r_2_z_2_vpa_2_vperp_2"
 evolve_moments_density = false
 evolve_moments_parallel_flow = false
 evolve_moments_parallel_pressure = false

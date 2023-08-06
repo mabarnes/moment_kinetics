@@ -1,7 +1,6 @@
 n_ion_species = 1
 n_neutral_species = 1
 boltzmann_electron_response = true
-run_name = "wall-bc_cheb_split3"
 #runtime_plots = true
 evolve_moments_density = true
 evolve_moments_parallel_flow = true
