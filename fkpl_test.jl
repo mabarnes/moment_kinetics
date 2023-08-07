@@ -541,7 +541,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         # set up test Maxwellian
         # species s 
         denss = 1.0 #3.0/4.0
-        upars = 0.5 #2.0/3.0
+        upars = 0.0 #2.0/3.0
         ppars = 1.0 #2.0/3.0
         pperps = 1.0 #2.0/3.0
         press = get_pressure(ppars,pperps) 
@@ -549,7 +549,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         vths = get_vth(press,denss,ms)
         # species sp 
         denssp = 1.0 #3.0/4.0
-        uparsp = 0.5 #2.0/3.0
+        uparsp = 0.0 #2.0/3.0
         pparsp = 1.0 #2.0/3.0
         pperpsp = 1.0 #2.0/3.0
         pressp = get_pressure(pparsp,pperpsp) 
@@ -894,6 +894,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 # use general grid function that checks divergences
                 vpa_nodes = get_nodes(vpa,ielement_vpap)
                 vpa_min, vpa_max = vpa_nodes[1], vpa_nodes[end]
+                #nquad_vpa = get_scaled_x_w_no_divergences!(x_vpa, w_vpa, x_legendre, w_legendre, vpa_min, vpa_max)
                 nquad_vpa = get_scaled_x_w!(x_vpa, w_vpa, x_legendre, w_legendre, x_laguerre, w_laguerre, vpa_min, vpa_max, vpa_val)
                 local_element_integration!(G_weights,G1_weights,G2_weights,G3_weights,
                             H_weights,H1_weights,H2_weights,H3_weights,
@@ -942,6 +943,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 vperp_nodes = get_nodes(vperp,ielement_vperpp)
                 vperp_max = vperp_nodes[end]
                 vperp_min = vperp_nodes[1]*nel_low(ielement_vperpp,nelement_vperp) 
+                #nquad_vperp = get_scaled_x_w_no_divergences!(x_vperp, w_vperp, x_legendre, w_legendre, vperp_min, vperp_max)
                 nquad_vperp = get_scaled_x_w!(x_vperp, w_vperp, x_legendre, w_legendre, x_laguerre, w_laguerre, vperp_min, vperp_max, vperp_val)
                 loop_over_vpa_elements!(G_weights,G1_weights,G2_weights,G3_weights,
                         H_weights,H1_weights,H2_weights,H3_weights,
