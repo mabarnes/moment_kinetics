@@ -796,8 +796,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
         
         function local_element_integration!(G_weights,G1_weights,G2_weights,G3_weights,
                                     H_weights,H1_weights,H2_weights,H3_weights,
-                                    nquad_vpa,ielement_vpa,vpa_nodes, # info about primed vperp grids
-                                    nquad_vperp,ielement_vperp,vperp_nodes, # info about primed vperp grids
+                                    nquad_vpa,ielement_vpa,vpa_nodes,vpa, # info about primed vperp grids
+                                    nquad_vperp,ielement_vperp,vperp_nodes,vperp, # info about primed vperp grids
                                     x_vpa, w_vpa, x_vperp, w_vperp, # points and weights for primed (source) grids
                                     vpa_val, vperp_val, ivpa, ivperp) # values and indices for unprimed (field) grids
             for igrid_vperp in 1:vperp.ngrid
@@ -874,7 +874,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         function loop_over_vpa_elements!(G_weights,G1_weights,G2_weights,G3_weights,
                                     H_weights,H1_weights,H2_weights,H3_weights,
                                     vpa,ielement_vpa_low,ielement_vpa_hi, # info about primed vperp grids
-                                    nquad_vperp,ielement_vperpp,vperp_nodes, # info about primed vperp grids
+                                    nquad_vperp,ielement_vperpp,vperp_nodes,vperp, # info about primed vperp grids
                                     x_vpa, w_vpa, x_vperp, w_vperp, # arrays to store points and weights for primed (source) grids
                                     vpa_val, vperp_val, ivpa, ivperp)
             for ielement_vpap in 1:ielement_vpa_low-1 
@@ -884,8 +884,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 nquad_vpa = get_scaled_x_w_no_divergences!(x_vpa, w_vpa, x_legendre, w_legendre, vpa_min, vpa_max)
                 local_element_integration!(G_weights,G1_weights,G2_weights,G3_weights,
                             H_weights,H1_weights,H2_weights,H3_weights,
-                            nquad_vpa,ielement_vpap,vpa_nodes,
-                            nquad_vperp,ielement_vperpp,vperp_nodes,
+                            nquad_vpa,ielement_vpap,vpa_nodes,vpa,
+                            nquad_vperp,ielement_vperpp,vperp_nodes,vperp,
                             x_vpa, w_vpa, x_vperp, w_vperp, 
                             vpa_val, vperp_val, ivpa, ivperp)
             end
@@ -898,8 +898,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 nquad_vpa = get_scaled_x_w!(x_vpa, w_vpa, x_legendre, w_legendre, x_laguerre, w_laguerre, vpa_min, vpa_max, vpa_val)
                 local_element_integration!(G_weights,G1_weights,G2_weights,G3_weights,
                             H_weights,H1_weights,H2_weights,H3_weights,
-                            nquad_vpa,ielement_vpap,vpa_nodes,
-                            nquad_vperp,ielement_vperpp,vperp_nodes,
+                            nquad_vpa,ielement_vpap,vpa_nodes,vpa,
+                            nquad_vperp,ielement_vperpp,vperp_nodes,vperp,
                             x_vpa, w_vpa, x_vperp, w_vperp, 
                             vpa_val, vperp_val, ivpa, ivperp)
             end
@@ -910,8 +910,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 nquad_vpa = get_scaled_x_w_no_divergences!(x_vpa, w_vpa, x_legendre, w_legendre, vpa_min, vpa_max)
                 local_element_integration!(G_weights,G1_weights,G2_weights,G3_weights,
                             H_weights,H1_weights,H2_weights,H3_weights,
-                            nquad_vpa,ielement_vpap,vpa_nodes,
-                            nquad_vperp,ielement_vperpp,vperp_nodes,
+                            nquad_vpa,ielement_vpap,vpa_nodes,vpa,
+                            nquad_vperp,ielement_vperpp,vperp_nodes,vperp,
                             x_vpa, w_vpa, x_vperp, w_vperp, 
                             vpa_val, vperp_val, ivpa, ivperp)
                             
@@ -934,7 +934,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 loop_over_vpa_elements!(G_weights,G1_weights,G2_weights,G3_weights,
                         H_weights,H1_weights,H2_weights,H3_weights,
                         vpa,ielement_vpa_low,ielement_vpa_hi, # info about primed vpa grids
-                        nquad_vperp,ielement_vperpp,vperp_nodes, # info about primed vperp grids
+                        nquad_vperp,ielement_vperpp,vperp_nodes,vperp, # info about primed vperp grids
                         x_vpa, w_vpa, x_vperp, w_vperp, # arrays to store points and weights for primed (source) grids
                         vpa_val, vperp_val, ivpa, ivperp)
             end
@@ -948,7 +948,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 loop_over_vpa_elements!(G_weights,G1_weights,G2_weights,G3_weights,
                         H_weights,H1_weights,H2_weights,H3_weights,
                         vpa,ielement_vpa_low,ielement_vpa_hi, # info about primed vpa grids
-                        nquad_vperp,ielement_vperpp,vperp_nodes, # info about primed vperp grids
+                        nquad_vperp,ielement_vperpp,vperp_nodes,vperp, # info about primed vperp grids
                         x_vpa, w_vpa, x_vperp, w_vperp, # arrays to store points and weights for primed (source) grids
                         vpa_val, vperp_val, ivpa, ivperp)
             end
@@ -961,7 +961,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 loop_over_vpa_elements!(G_weights,G1_weights,G2_weights,G3_weights,
                         H_weights,H1_weights,H2_weights,H3_weights,
                         vpa,ielement_vpa_low,ielement_vpa_hi, # info about primed vpa grids
-                        nquad_vperp,ielement_vperpp,vperp_nodes, # info about primed vperp grids
+                        nquad_vperp,ielement_vperpp,vperp_nodes,vperp, # info about primed vperp grids
                         x_vpa, w_vpa, x_vperp, w_vperp, # arrays to store points and weights for primed (source) grids
                         vpa_val, vperp_val, ivpa, ivperp)
             end
@@ -997,11 +997,11 @@ if abspath(PROGRAM_FILE) == @__FILE__
             igrid_vpa, ielement_vpa = vpa.igrid[ivpa], vpa.ielement[ivpa]
             ielement_vpa_low = ielement_vpa - ng_low(igrid_vpa,ngrid_vpa)*nel_low(ielement_vpa,nelement_vpa)
             ielement_vpa_hi = ielement_vpa + ng_hi(igrid_vpa,ngrid_vpa)*nel_hi(ielement_vpa,nelement_vpa)
-            #println(igrid_vpa," ",ielement_vpa," ",ielement_vpa_low," ",ielement_vpa_hi)
+            #println("igrid_vpa: ielement_vpa: ielement_vpa_low: ielement_vpa_hi:", igrid_vpa," ",ielement_vpa," ",ielement_vpa_low," ",ielement_vpa_hi)
             igrid_vperp, ielement_vperp = vperp.igrid[ivperp], vperp.ielement[ivperp]
             ielement_vperp_low = ielement_vperp - ng_low(igrid_vperp,ngrid_vperp)*nel_low(ielement_vperp,nelement_vperp)
             ielement_vperp_hi = ielement_vperp + ng_hi(igrid_vperp,ngrid_vperp)*nel_hi(ielement_vperp,nelement_vperp)
-            #println(igrid_vperp," ",ielement_vperp," ",ielement_vperp_low," ",ielement_vperp_hi)
+            #println("igrid_vperp: ielement_vperp: ielement_vperp_low: ielement_vperp_hi:", igrid_vperp," ",ielement_vperp," ",ielement_vperp_low," ",ielement_vperp_hi)
             
             vperp_val = vperp.grid[ivperp]
             vpa_val = vpa.grid[ivpa]
@@ -1664,11 +1664,11 @@ if abspath(PROGRAM_FILE) == @__FILE__
     if test_Lagrange_integral_scan
         initialize_comms!()
         ngrid = 5
-        nscan = 3
+        nscan = 1
         #nelement_list = Int[2, 4, 8, 16, 32]
         #nelement_list = Int[2, 4, 8, 16]
-        nelement_list = Int[2, 4, 8]
-        #nelement_list = Int[2]
+        #nelement_list = Int[2, 4, 8]
+        nelement_list = Int[8]
         max_C_err = Array{mk_float,1}(undef,nscan)
         max_Gvpa_err = Array{mk_float,1}(undef,nscan)
         max_Gvperp_err = Array{mk_float,1}(undef,nscan)
