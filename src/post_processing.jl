@@ -1012,7 +1012,8 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
         vpa_input, vperp_input, gyrophase_input,
         vz_input, vr_input, vzeta_input,
         composition, species, collisions,
-        geometry, drive_input, num_diss_params, manufactured_solns_input = input
+        geometry, drive_input, num_diss_params, manufactured_solns_input,
+        reference_parameters = input
 
     if !is_1D1V
         # make plots and animations of the phi, Ez and Er

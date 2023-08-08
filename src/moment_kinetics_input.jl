@@ -598,7 +598,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     all_inputs = (io_immutable, evolve_moments, t_input,
                   z_immutable, r_immutable, vpa_immutable, vperp_immutable, gyrophase_immutable, vz_immutable, vr_immutable, vzeta_immutable,
                   composition, species_immutable, collisions, geometry, drive_immutable,
-                  num_diss_params, manufactured_solns_input)
+                  num_diss_params, manufactured_solns_input, reference_parameters)
     println(io, "\nAll inputs returned from mk_input():")
     println(io, all_inputs)
     close(io)

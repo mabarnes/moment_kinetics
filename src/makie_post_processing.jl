@@ -688,8 +688,8 @@ function get_run_info(run_dir, restart_index; itime_min=1, itime_max=-1, itime_s
     # and check input to catch errors
     io_input, evolve_moments, t_input, z_input, r_input, vpa_input, vperp_input,
         gyrophase_input, vz_input, vr_input, vzeta_input, composition, species,
-        collisions, geometry, drive_input, num_diss_params, manufactured_solns_input =
-        mk_input(input)
+        collisions, geometry, drive_input, num_diss_params, manufactured_solns_input,
+        reference_parameters = mk_input(input)
 
     n_ion_species, n_neutral_species = load_species_data(file_final_restart)
     evolve_density, evolve_upar, evolve_ppar = load_mk_options(file_final_restart)

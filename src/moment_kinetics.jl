@@ -320,7 +320,8 @@ function setup_moment_kinetics(input_dict::Dict; restart_prefix_iblock=nothing,
         vpa_input, vperp_input, gyrophase_input,
         vz_input, vr_input, vzeta_input,
         composition, species, collisions,
-        geometry, drive_input, num_diss_params, manufactured_solns_input = input
+        geometry, drive_input, num_diss_params, manufactured_solns_input,
+        reference_parameters = input
     # initialize z grid and write grid point locations to file
     z, z_spectral = define_coordinate(z_input, io_input.parallel_io)
     # initialize r grid and write grid point locations to file
