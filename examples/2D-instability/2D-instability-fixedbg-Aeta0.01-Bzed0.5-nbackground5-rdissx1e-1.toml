@@ -62,5 +62,5 @@ use_for_init = false
 type = "2D-instability"
 
 [numerical_dissipation]
-r_dissipation_coefficient = 6.0e-11
+r_dissipation_coefficient = 3.0e-11
 vpa_dissipation_coefficient = 1.5e-2
