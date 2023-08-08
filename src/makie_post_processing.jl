@@ -243,17 +243,11 @@ function generate_example_input_file(filename::String=default_input_file_name;
               * "`overwrite=true` to `generate_example_input_file()`.")
     end
 
-    original_input = deepcopy(input_dict)
-    original_input_dfns = deepcopy(input_dict_dfns)
-
-    # Set up input_dict and input_dict_dfns with all-default parameters
-    setup_makie_post_processing_input!(Dict{String,Any}())
-
-    # Merge input_dict and input_dict_dfns, then convert to a String formatted as the
-    # contents of a TOML file
-    combined_input_dict = merge(input_dict_dfns, input_dict)
+    # Get example input, then convert to a String formatted as the contents of a TOML
+    # file
+    input_dict = generate_example_input_Dict()
     buffer = IOBuffer()
-    TOML.print(buffer, combined_input_dict)
+    TOML.print(buffer, input_dict)
     file_contents = String(take!(buffer))
 
     # Separate file_contents into individual lines
@@ -275,13 +269,30 @@ function generate_example_input_file(filename::String=default_input_file_name;
         print(io, file_contents)
     end
 
+    return nothing
+end
+
+"""
+Create a Dict containing all the makie-post-processing options with default values
+"""
+function generate_example_input_Dict()
+    original_input = deepcopy(input_dict)
+    original_input_dfns = deepcopy(input_dict_dfns)
+
+    # Set up input_dict and input_dict_dfns with all-default parameters
+    setup_makie_post_processing_input!(Dict{String,Any}())
+
+    # Merge input_dict and input_dict_dfns, then convert to a String formatted as the
+    # contents of a TOML file
+    combined_input_dict = merge(input_dict_dfns, input_dict)
+
     # Restore original state of input_dict and input_dict_dfns
     clear_Dict!(input_dict)
     clear_Dict!(input_dict_dfns)
     merge!(input_dict, original_input)
     merge!(input_dict_dfns, original_input_dfns)
 
-    return nothing
+    return combined_input_dict
 end
 
 """
