@@ -107,8 +107,15 @@ function Dict_to_NamedTuple(d)
 end
 
 """
+Process user-supplied inputs
+
+`save_inputs_to_txt` should be true when actually running a simulation, but defaults to
+false for other situations (e.g. when post-processing).
+
+`ignore_MPI` should be false when actually running a simulation, but defaults to true for
+other situations (e.g. when post-processing).
 """
-function mk_input(scan_input=Dict(); save_inputs_to_txt=false)
+function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
 
     # n_ion_species is the number of evolved ion species
     # currently only n_ion_species = 1 is supported
@@ -420,7 +427,12 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false)
     # set up distributed-memory MPI information for z and r coords
     # need grid and MPI information to determine these values 
     # MRH just put dummy values now 
-    irank_z, nrank_z, comm_sub_z, irank_r, nrank_r, comm_sub_r = setup_distributed_memory_MPI(z.nelement_global,z.nelement_local,r.nelement_global,r.nelement_local)
+    if ignore_MPI
+        irank_z = nrank_z = irank_r = nrank_r = -1
+        comm_sub_z = comm_sub_r = MPI.COMM_NULL
+    else
+        irank_z, nrank_z, comm_sub_z, irank_r, nrank_r, comm_sub_r = setup_distributed_memory_MPI(z.nelement_global,z.nelement_local,r.nelement_global,r.nelement_local)
+    end
     #comm_sub_r = false
     #irank_r = 0
     #nrank_r = 0
