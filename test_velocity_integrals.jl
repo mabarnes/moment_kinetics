@@ -16,14 +16,16 @@ if abspath(PROGRAM_FILE) == @__FILE__
     
     # define inputs needed for the test
 	ngrid = 17 #number of points per element 
-	nelement_local = 20 # number of elements per rank
+	nelement_local = 8 # number of elements per rank
 	nelement_global = nelement_local # total number of elements 
 	Lvpa = 12.0 #physical box size in reference units 
 	Lvperp = 6.0 #physical box size in reference units 
 	bc = "" #not required to take a particular value, not used 
 	# fd_option and adv_input not actually used so given values unimportant
-	discretization = "chebyshev_pseudospectral"
+	#discretization = "chebyshev_pseudospectral"
+	discretization = "gausslegendre_pseudospectral"
     fd_option = "fourth_order_centered"
+    cheb_option = "matrix"
 	adv_input = advection_input("default", 1.0, 0.0, 0.0)
 	nrank = 1
     irank = 0
@@ -31,13 +33,13 @@ if abspath(PROGRAM_FILE) == @__FILE__
 	# create the 'input' struct containing input info needed to create a
 	# coordinate
     vr_input = grid_input("vperp", 1, 1, 1, 
-		nrank, irank, 1.0, discretization, fd_option, bc, adv_input,comm)
+		nrank, irank, 1.0, discretization, fd_option, cheb_option, bc, adv_input,comm)
 	vz_input = grid_input("vpa", ngrid, nelement_global, nelement_local, 
-		nrank, irank, Lvpa, discretization, fd_option, bc, adv_input,comm)
+		nrank, irank, Lvpa, discretization, fd_option, cheb_option, bc, adv_input,comm)
 	vpa_input = grid_input("vpa", ngrid, nelement_global, nelement_local, 
-		nrank, irank, Lvpa, discretization, fd_option, bc, adv_input,comm)
+		nrank, irank, Lvpa, discretization, fd_option, cheb_option, bc, adv_input,comm)
 	vperp_input = grid_input("vperp", ngrid, nelement_global, nelement_local, 
-		nrank, irank, Lvperp, discretization, fd_option, bc, adv_input,comm)
+		nrank, irank, Lvperp, discretization, fd_option, cheb_option, bc, adv_input,comm)
 	# create the coordinate struct 'x'
 	println("made inputs")
 	println("vpa: ngrid: ",ngrid," nelement: ",nelement_local, " Lvpa: ",Lvpa)
@@ -75,8 +77,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
     
     dens_test = get_density(dfn,vpa,vperp)
     upar_test = get_upar(dfn,vpa,vperp,dens_test)
-    ppar_test = get_ppar(dfn,vpa,vperp,upar_test)
-    pperp_test = get_pperp(dfn,vpa,vperp)
+    ppar_test = get_ppar(dfn,vpa,vperp,upar_test,mass)
+    pperp_test = get_pperp(dfn,vpa,vperp,mass)
     pres_test = pressure(ppar_test,pperp_test)
     # output test results 
     println("")
@@ -102,7 +104,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     end
     dens_test = get_density(dfn1D,vz,vr)
     upar_test = get_upar(dfn1D,vz,vr,dens_test)
-    ppar_test = get_ppar(dfn1D,vz,vr,upar_test)
+    ppar_test = get_ppar(dfn1D,vz,vr,upar_test,mass)
     # output test results 
     println("")
     println("1D Maxwellian")
@@ -134,8 +136,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
     
     dens_test = get_density(dfn,vpa,vperp)
     upar_test = get_upar(dfn,vpa,vperp,dens_test)
-    ppar_test = get_ppar(dfn,vpa,vperp,upar_test)
-    pperp_test = get_pperp(dfn,vpa,vperp)
+    ppar_test = get_ppar(dfn,vpa,vperp,upar_test,mass)
+    pperp_test = get_pperp(dfn,vpa,vperp,mass)
     # output test results 
     
     println("")
