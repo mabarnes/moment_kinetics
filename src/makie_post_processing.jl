@@ -986,7 +986,8 @@ for dim ∈ one_dimension_combinations
              export $function_name
 
              function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
-                                     input=nothing, outfile=nothing, kwargs...)
+                                     input=nothing, outfile=nothing, yscale=nothing,
+                                     transform=identity, kwargs...)
 
                  try
                      if data === nothing
@@ -996,10 +997,11 @@ for dim ∈ one_dimension_combinations
                      n_runs = length(run_info)
 
                      fig, ax = get_1d_ax(xlabel="$($dim_str)",
-                                         ylabel=get_variable_symbol(var_name))
+                                         ylabel=get_variable_symbol(var_name),
+                                         yscale=yscale)
                      for (d, ri) ∈ zip(data, run_info)
                          $function_name(ri, var_name, is=is, data=d, input=input, ax=ax,
-                                        label=ri.run_name, kwargs...)
+                                        transform=transform, label=ri.run_name, kwargs...)
                      end
 
                      if n_runs > 1
@@ -1018,9 +1020,9 @@ for dim ∈ one_dimension_combinations
 
              function $function_name(run_info, var_name; is=1, data=nothing,
                                      input=nothing, ax=nothing, label=nothing,
-                                     outfile=nothing, it=nothing,
-                                     ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
-                                     ivzeta=nothing, ivr=nothing, ivz=nothing, kwargs...)
+                                     outfile=nothing, it=nothing, ir=nothing, iz=nothing,
+                                     ivperp=nothing, ivpa=nothing, ivzeta=nothing,
+                                     ivr=nothing, ivz=nothing, kwargs...)
                  if input === nothing
                      input = input_dict[var_name]
                  end
@@ -1079,7 +1081,8 @@ for (dim1, dim2) ∈ two_dimension_combinations
              export $function_name
 
              function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
-                                     input=nothing, outfile=nothing, kwargs...)
+                                     input=nothing, outfile=nothing, transform=identity,
+                                     kwargs...)
 
                  try
                      if data === nothing
@@ -1089,7 +1092,8 @@ for (dim1, dim2) ∈ two_dimension_combinations
                                                           title=get_variable_symbol(var_name))
                      for (d, ri, a, cp) ∈ zip(data, run_info, ax, colorbar_places)
                          $function_name(ri, var_name; is=is, data=d, input=input, ax=a,
-                                        colorbar_place=cp, title=ri.run_name, kwargs...)
+                                        transform=transform, colorbar_place=cp,
+                                        title=ri.run_name, kwargs...)
                      end
 
                      if outfile !== nothing
@@ -1105,9 +1109,9 @@ for (dim1, dim2) ∈ two_dimension_combinations
              function $function_name(run_info, var_name; is=1, data=nothing,
                                      input=nothing, ax=nothing,
                                      colorbar_place=nothing, title=nothing,
-                                     outfile=nothing, transform=identity, it=nothing,
-                                     ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
-                                     ivzeta=nothing, ivr=nothing, ivz=nothing, kwargs...)
+                                     outfile=nothing, it=nothing, ir=nothing, iz=nothing,
+                                     ivperp=nothing, ivpa=nothing, ivzeta=nothing,
+                                     ivr=nothing, ivz=nothing, kwargs...)
                  if input === nothing
                      input = input_dict[var_name]
                  end
@@ -1136,7 +1140,6 @@ for (dim1, dim2) ∈ two_dimension_combinations
                  if title === nothing
                      title = get_variable_symbol(var_name)
                  end
-
 
                  x = $dim2_grid
                  if $idim2 !== nothing
@@ -1174,7 +1177,8 @@ for dim ∈ one_dimension_combinations_no_t
              export $function_name
 
              function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
-                                     input=nothing, outfile=nothing, ylims=nothing, kwargs...)
+                                     input=nothing, outfile=nothing, yscale=nothing,
+                                     ylims=nothing, kwargs...)
 
                  try
                      if data === nothing
@@ -1186,12 +1190,15 @@ for dim ∈ one_dimension_combinations_no_t
 
                      n_runs = length(run_info)
 
-                     fig, ax = get_1d_ax(xlabel="$($dim_str)", ylabel=get_variable_symbol(var_name))
+                     fig, ax = get_1d_ax(xlabel="$($dim_str)",
+                                         ylabel=get_variable_symbol(var_name),
+                                         yscale=yscale)
                      frame_index = Observable(1)
 
                      for (d, ri) ∈ zip(data, run_info)
                          $function_name(ri, var_name; is=is, data=d, input=input,
-                                        frame_index=frame_index, ax=ax, ylims=ylims, kwargs...)
+                                        ylims=ylims, frame_index=frame_index, ax=ax,
+                                        kwargs...)
                      end
                      if n_runs > 1
                          put_legend_above(fig, ax)
@@ -1209,10 +1216,10 @@ for dim ∈ one_dimension_combinations_no_t
 
              function $function_name(run_info, var_name; is=1, data=nothing,
                                      input=nothing, frame_index=nothing, ax=nothing,
-                                     outfile=nothing,
-                                     ylims=nothing, it=nothing, ir=nothing, iz=nothing,
-                                     ivperp=nothing, ivpa=nothing, ivzeta=nothing,
-                                     ivr=nothing, ivz=nothing, kwargs...)
+                                     outfile=nothing, yscale=nothing, ylims=nothing,
+                                     it=nothing, ir=nothing, iz=nothing, ivperp=nothing,
+                                     ivpa=nothing, ivzeta=nothing, ivr=nothing,
+                                     ivz=nothing, kwargs...)
                  if input === nothing
                      input = input_dict[var_name]
                  end
@@ -1237,7 +1244,9 @@ for dim ∈ one_dimension_combinations_no_t
                      ind = frame_index
                  end
                  if ax === nothing
-                     fig, ax = get_1d_ax(xlabel="$($dim_str)", ylabel=get_variable_symbol(var_name))
+                     fig, ax = get_1d_ax(xlabel="$($dim_str)",
+                                         ylabel=get_variable_symbol(var_name),
+                                         yscale=yscale)
                  else
                      fig = nothing
                  end
@@ -1281,7 +1290,8 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
              export $function_name
 
              function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
-                                     input=nothing, outfile=nothing, kwargs...)
+                                     input=nothing, outfile=nothing, transform=identity,
+                                     kwargs...)
 
                  try
                      if data === nothing
@@ -1297,8 +1307,9 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
 
                      for (d, ri, a, cp) ∈ zip(data, run_info, ax, colorbar_places)
                          $function_name(ri, var_name; is=is, data=d, input=input,
-                                        frame_index=frame_index, ax=a, colorbar_place=cp,
-                                        title=ri.run_name, kwargs...)
+                                        transform=transform, frame_index=frame_index,
+                                        ax=a, colorbar_place=cp, title=ri.run_name,
+                                        kwargs...)
                      end
 
                      nt = minimum(ri.nt for ri ∈ run_info)
@@ -1314,9 +1325,9 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
              function $function_name(run_info, var_name; is=1, data=nothing,
                                      input=nothing, frame_index=nothing, ax=nothing,
                                      colorbar_place=colorbar_place, title=nothing,
-                                     outfile=nothing, it=nothing,
-                                     ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
-                                     ivzeta=nothing, ivr=nothing, ivz=nothing, kwargs...)
+                                     outfile=nothing, it=nothing, ir=nothing, iz=nothing,
+                                     ivperp=nothing, ivpa=nothing, ivzeta=nothing,
+                                     ivr=nothing, ivz=nothing, kwargs...)
                  if input === nothing
                      input = input_dict[var_name]
                  end
@@ -1345,7 +1356,6 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
                  if title === nothing
                      title = get_variable_symbol(var_name)
                  end
-
 
                  x = $dim2_grid
                  if $idim2 !== nothing
@@ -1378,7 +1388,10 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
          end)
 end
 
-function get_1d_ax(n=nothing; title=nothing, kwargs...)
+function get_1d_ax(n=nothing; title=nothing, yscale=nothing, kwargs...)
+    if yscale !== nothing
+        kwargs = tuple(kwargs..., :yscale=>yscale)
+    end
     if n == nothing
         fig = Figure(title=title)
         ax = Axis(fig[1,1]; kwargs...)
@@ -1424,7 +1437,8 @@ function get_2d_ax(n=nothing; title=nothing, kwargs...)
 end
 
 function plot_1d(xcoord, data; ax=nothing, xlabel=nothing,
-                 ylabel=nothing, title=nothing, kwargs...)
+                 ylabel=nothing, title=nothing, yscale=nothing, transform=identity,
+                 kwargs...)
     if ax === nothing
         fig, ax = get_1d_ax()
     else
@@ -1440,6 +1454,12 @@ function plot_1d(xcoord, data; ax=nothing, xlabel=nothing,
     if title !== nothing
         ax.title = title
     end
+    if yscale !== nothing
+        ax.yscale = yscale
+    end
+
+    # Use transform to allow user to do something like data = abs.(data)
+    data = transform.(data)
 
     l = lines!(ax, xcoord, data; kwargs...)
 
@@ -1451,7 +1471,8 @@ function plot_1d(xcoord, data; ax=nothing, xlabel=nothing,
 end
 
 function plot_2d(xcoord, ycoord, data; ax=nothing, colorbar_place=nothing, xlabel=nothing,
-                 ylabel=nothing, title=nothing, colormap="reverse_deep", kwargs...)
+                 ylabel=nothing, title=nothing, colormap="reverse_deep",
+                 colorscale=nothing, transform=identity, kwargs...)
     if ax === nothing
         fig, ax, colorbar_place = get_2d_ax()
     else
@@ -1468,6 +1489,12 @@ function plot_2d(xcoord, ycoord, data; ax=nothing, colorbar_place=nothing, xlabe
         ax.title = title
     end
     colormap = parse_colormap(colormap)
+    if colorscale !== nothing
+        kwargs = tuple(kwargs..., :colorscale=>colorscale)
+    end
+
+    # Use transform to allow user to do something like data = abs.(data)
+    data = transform.(data)
 
     # Convert grid point values to 'cell face' values for heatmap
     xcoord = grid_points_to_faces(xcoord)
@@ -1488,8 +1515,8 @@ function plot_2d(xcoord, ycoord, data; ax=nothing, colorbar_place=nothing, xlabe
 end
 
 function animate_1d(xcoord, data; frame_index=nothing, ax=nothing, fig=nothing,
-                    xlabel=nothing, ylabel=nothing, title=nothing, outfile=nothing,
-                    ylims=nothing, kwargs...)
+                    xlabel=nothing, ylabel=nothing, title=nothing, yscale=nothing,
+                    transform=identity, ylims=nothing, outfile=nothing, kwargs...)
 
     if frame_index === nothing
         ind = Observable(1)
@@ -1498,8 +1525,11 @@ function animate_1d(xcoord, data; frame_index=nothing, ax=nothing, fig=nothing,
     end
 
     if ax === nothing
-        fig, ax = get_1d_ax(title=title, xlabel=xlabel, ylabel=ylabel)
+        fig, ax = get_1d_ax(title=title, xlabel=xlabel, ylabel=ylabel, yscale=yscale)
     end
+
+    # Use transform to allow user to do something like data = abs.(data)
+    data = transform.(data)
 
     if ylims === nothing
         datamin, datamax = NaNMath.extrema(data)
@@ -1534,7 +1564,8 @@ end
 
 function animate_2d(xcoord, ycoord, data; frame_index=nothing, ax=nothing, fig=nothing,
                     colorbar_place=nothing, xlabel=nothing, ylabel=nothing, title=nothing,
-                    outfile=nothing, colormap="reverse_deep", kwargs...)
+                    outfile=nothing, colormap="reverse_deep", colorscale=nothing,
+                    transform=identity, kwargs...)
     colormap = parse_colormap(colormap)
 
     if ax === nothing
@@ -1554,6 +1585,12 @@ function animate_2d(xcoord, ycoord, data; frame_index=nothing, ax=nothing, fig=n
     if title !== nothing
         ax.title = title
     end
+    if colorscale !== nothing
+        kwargs = tuple(kwargs..., :colorscale=>colorscale)
+    end
+
+    # Use transform to allow user to do something like data = abs.(data)
+    data = transform.(data)
 
     xcoord = grid_points_to_faces(xcoord)
     ycoord = grid_points_to_faces(ycoord)
@@ -1951,6 +1988,17 @@ function convert_to_OrderedDicts!(d)
         end
     end
     return OrderedDict(d)
+end
+
+"""
+If the argument is zero or negative, replace it with NaN
+
+`epsilon` can be passed if the number should be forced to be above some value (typically
+we would assume epsilon is small and positive, but nothing about this function forces it
+to be).
+"""
+function positive_or_nan(x; epsilon=0)
+    return x > epsilon ? x : NaN
 end
 
 end
