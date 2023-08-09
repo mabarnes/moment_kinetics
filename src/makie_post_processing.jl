@@ -8,6 +8,7 @@ export makie_post_process
 using ..array_allocation: allocate_float
 using ..coordinates: define_coordinate
 using ..input_structs: grid_input, advection_input
+using ..looping: all_dimensions, ion_dimensions, neutral_dimensions
 using ..moment_kinetics_input: mk_input, set_defaults_and_check_top_level!,
                                set_defaults_and_check_section!, Dict_to_NamedTuple
 using ..load_data: open_readonly_output_file, get_group, load_block_data,
@@ -18,6 +19,7 @@ using ..post_processing: construct_global_zr_coords, get_geometry_and_compositio
                          read_distributed_zr_data!
 using ..type_definitions: mk_float, mk_int
 
+using Combinatorics
 using Glob
 using LsqFit
 using MPI
@@ -407,6 +409,7 @@ function _setup_single_input!(this_input_dict::AbstractDict{String,Any},
        # Load every `time_skip` time points for distribution function variables, to save
        # memory
        itime_skip_dfns=1,
+       plot_vs_r_t=true,
        plot_vs_z_t=true,
       )
 
@@ -915,6 +918,14 @@ function plots_for_variable(run_info, variable_name; plot_prefix)
                 # Skip if there is no r-dimension
                 continue
             end
+            if !is_1D && input.plot_vs_r_t
+                plot_vs_r_t(run_info, variable_name, is=is, data=variable, input=input,
+                            outfile=variable_prefix * "vs_r_t.pdf")
+            end
+            if input.plot_vs_z_t
+                plot_vs_z_t(run_info, variable_name, is=is, data=variable, input=input,
+                            outfile=variable_prefix * "vs_z_t.pdf")
+            end
         end
     end
 
@@ -1009,6 +1020,110 @@ for dim ∈ (:t, setdiff(all_dimensions, (:s, :sn))...)
          end)
 end
 
+# Generate 2d plot functions for all combinations of dimensions
+const dimension_combinations_2d = Tuple(
+         Tuple(c) for c in
+         unique((combinations((:t, setdiff(ion_dimensions, (:s,))...), 2)...,
+                 combinations((:t, setdiff(neutral_dimensions, (:sn,))...), 2)...)))
+for (dim1, dim2) ∈ dimension_combinations_2d
+    function_name_str = "plot_vs_$(dim2)_$(dim1)"
+    function_name = Symbol(function_name_str)
+    dim1_str = String(dim1)
+    dim2_str = String(dim2)
+    if dim1 == :t
+        dim1_grid = :( run_info.time )
+    else
+        dim1_grid = :( run_info.$dim1.grid )
+    end
+    dim2_grid = :( run_info.$dim2.grid )
+    idim1 = Symbol(:i, dim1)
+    idim2 = Symbol(:i, dim2)
+    eval(quote
+             function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
+                                     input=nothing, outfile=nothing, kwargs...)
+
+                 try
+                     if data === nothing
+                         data = Tuple(nothing for _ in run_info)
+                     end
+                     fig, ax, colorbar_places = get_2d_ax(length(run_info),
+                                                          title=get_variable_symbol(var_name))
+                     for (d, ri, a, cp) ∈ zip(data, run_info, ax, colorbar_places)
+                         $function_name(ri, var_name; is=is, data=d, input=input, ax=a,
+                                        colorbar_place=cp, title=ri.run_name, kwargs...)
+                     end
+
+                     if outfile !== nothing
+                         save(outfile, fig)
+                     end
+                     return fig
+                 catch e
+                     println("$($function_name_str) failed for $var_name, is=$is. Error was $e")
+                     return nothing
+                 end
+             end
+
+             function $function_name(run_info, var_name; is=1, data=nothing,
+                                     input=nothing, ax=nothing,
+                                     colorbar_place=nothing, title=nothing,
+                                     outfile=nothing, transform=identity, it=nothing,
+                                     ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
+                                     ivzeta=nothing, ivr=nothing, ivz=nothing, kwargs...)
+                 if input === nothing
+                     input = input_dict[var_name]
+                 end
+                 if isa(input, AbstractDict)
+                     input = Dict_to_NamedTuple(input)
+                 end
+                 if data === nothing
+                     dim_slices = get_dimension_slice_indices($(QuoteNode(dim1)),
+                                                              $(QuoteNode(dim2));
+                                                              input=input, it=it, is=is,
+                                                              ir=ir, iz=iz, ivperp=ivperp,
+                                                              ivpa=ivpa, ivzeta=ivzeta,
+                                                              ivr=ivr, ivz=ivz)
+                     data = postproc_load_variable(run_info, var_name; dim_slices...)
+                 else
+                     data = select_slice(data, $(QuoteNode(dim2)), $(QuoteNode(dim1));
+                                         input=input, it=it, is=is, ir=ir, iz=iz,
+                                         ivperp=ivperp, ivpa=ivpa, ivzeta=ivzeta, ivr=ivr,
+                                         ivz=ivz)
+                 end
+                 if input === nothing
+                     colormap = "reverse_deep"
+                 else
+                     colormap = input.colormap
+                 end
+                 if title === nothing
+                     title = get_variable_symbol(var_name)
+                 end
+
+
+                 x = $dim2_grid
+                 if $idim2 !== nothing
+                     x = x[$idim2]
+                 end
+                 y = $dim1_grid
+                 if $idim1 !== nothing
+                     y = y[$idim1]
+                 end
+                 fig = plot_2d(x, y, data; xlabel="$($dim2_str)", ylabel="$($dim1_str)",
+                               title=title, ax=ax, colorbar_place=colorbar_place,
+                               colormap=colormap, kwargs...)
+
+                 if outfile !== nothing
+                     if fig === nothing
+                         error("When `outfile` is passed to save the plot, must either pass both "
+                               * "`fig` and `ax` or neither. Only `ax` was passed.")
+                     end
+                     save(outfile, fig)
+                 end
+
+                 return nothing
+             end
+         end)
+end
+
 function get_1d_ax(n=nothing; title=nothing)
     if n == nothing
         fig = Figure(title=title)
@@ -1023,6 +1138,24 @@ function get_1d_ax(n=nothing; title=nothing)
     end
 
     return fig, ax
+end
+
+function get_2d_ax(n=nothing; title=nothing)
+    if n == nothing
+        fig = Figure(title=title)
+        ax = Axis(fig[1,1])
+        colorbar_places = fig[1,2]
+    else
+        fig = Figure(resolution=(600*n, 400))
+        title_layout = fig[1,1] = GridLayout()
+        Label(title_layout[1,1:2], title)
+
+        plot_layout = fig[2,1] = GridLayout()
+        ax = [Axis(plot_layout[1,2*i-1]) for i in 1:n]
+        colorbar_places = [plot_layout[1,2*i] for i in 1:n]
+    end
+
+    return fig, ax, colorbar_places
 end
 
 function plot_1d(xcoord, data; ax=nothing, xlabel=nothing,
@@ -1047,6 +1180,43 @@ function plot_1d(xcoord, data; ax=nothing, xlabel=nothing,
 
     if fig === nothing
         return l
+    else
+        return fig
+    end
+end
+
+function plot_2d(xcoord, ycoord, data; ax=nothing, colorbar_place=nothing, xlabel=nothing,
+                 ylabel=nothing, title=nothing, colormap="reverse_deep", kwargs...)
+    if ax === nothing
+        fig, ax, colorbar_place = get_2d_ax()
+    else
+        fig = nothing
+    end
+
+    if xlabel !== nothing
+        ax.xlabel = xlabel
+    end
+    if ylabel !== nothing
+        ax.ylabel = ylabel
+    end
+    if title !== nothing
+        ax.title = title
+    end
+    colormap = parse_colormap(colormap)
+
+    # Convert grid point values to 'cell face' values for heatmap
+    xcoord = grid_points_to_faces(xcoord)
+    ycoord = grid_points_to_faces(ycoord)
+
+    hm = heatmap!(ax, xcoord, ycoord, data; kwargs...)
+    if colorbar_place === nothing
+        println("Warning: colorbar_place argument is required to make a color bar")
+    else
+        Colorbar(colorbar_place, hm)
+    end
+
+    if fig === nothing
+        return hm
     else
         return fig
     end
@@ -1339,6 +1509,25 @@ function get_dimension_slice_indices(keep_dims...; input, it=nothing, is=nothing
 end
 
 """
+Turn grid points into 'cell faces'
+
+Returns `faces`, which has a length one greater than `coord`. The first and last values of
+`faces` are the first and last values of `coord`. The intermediate values are the mid
+points between grid points.
+"""
+function grid_points_to_faces(coord::AbstractVector)
+    n = length(coord)
+    faces = allocate_float(n+1)
+    faces[1] = coord[1]
+    for i ∈ 2:n
+        faces[i] = 0.5*(coord[i-1] + coord[i])
+    end
+    faces[n+1] = coord[n]
+
+    return faces
+end
+
+"""
 Get a symbol corresponding to a variable name
 
 If the symbol has not been defined, just return the variable name
@@ -1356,6 +1545,20 @@ function get_variable_symbol(variable_name)
                                  "temperature_neutral"=>"Tn")
 
     return get(symbols_for_variables, variable_name, variable_name)
+end
+
+"""
+Parse colormap option
+
+Allows us to have a string option and still use Reverse, etc. conveniently
+"""
+function parse_colormap(colormap)
+    if startswith(colormap, "reverse_")
+        # Use split to remove the "reverse_" prefix
+        return Reverse(String(split(colormap, "reverse_", keepempty=false)[1]))
+    else
+        return colormap
+    end
 end
 
 # Utility functions
