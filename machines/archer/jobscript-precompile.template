@@ -1,6 +1,8 @@
 #!/bin/bash
 
-#SBATCH --mem=16G
+#SBATCH --mem=32G
+#SBATCH --ntasks=2
+#SBATCH --cpus-per-task=1
 #SBATCH --time=1:00:00
 #SBATCH --account=ACCOUNT
 #SBATCH --partition=serial
@@ -19,11 +21,9 @@ source julia.env
 export SRUN_CPUS_PER_TASK=$SLURM_CPUS_PER_TASK
 
 echo "precompiling $(date)"
-bin/julia --project -O3 --check-bounds=no precompile.jl
-echo "done precompiling"
-echo ""
+bin/julia --project -O3 --check-bounds=no precompile.jl &
+bin/julia --project precompile-makie-post-processing.jl &
 
-echo "precompiling post-processing routines $(date)"
-bin/julia --project precompile-makie-post-processing.jl
+wait
 
 echo "finished!"
