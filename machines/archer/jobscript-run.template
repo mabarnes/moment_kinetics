@@ -1,0 +1,27 @@
+#!/bin/bash
+
+#SBATCH --nodes=NODES
+#SBATCH --cpus-per-task=1
+#SBATCH --ntasks-per-node=128
+#SBATCH --time=RUNTIME
+#SBATCH --account=ACCOUNT
+#SBATCH --partition=PARTITION
+#SBATCH --qos=QOS
+#SBATCH --output=RUNDIRslurm-%j.out
+
+set -e
+
+cd $SLURM_SUBMIT_DIR
+
+# Get setup for Julia
+source julia.env
+
+# Workaround as cpus-per-task no longer inherited by srun from sbatch.
+# See https://docs.archer2.ac.uk/faq/upgrade-2023/
+export SRUN_CPUS_PER_TASK=$SLURM_CPUS_PER_TASK
+
+echo "running INPUTFILE $(date)"
+
+srun --distribution=block:block --hint=nomultithread --ntasks=$SLURM_NTASKS bin/julia -Jmoment_kinetics.so --project -O3 --check-bounds=no run_moment_kinetics.jl INPUTFILE
+
+echo "finished INPUTFILE $(date)"

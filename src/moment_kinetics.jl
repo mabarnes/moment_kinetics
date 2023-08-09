@@ -9,6 +9,7 @@ using MPI
 # Include submodules from other source files
 # Note that order of includes matters - things used in one module must already
 # be defined
+include("../machines/shared/machine_setup.jl") # Included so Documenter.jl can find its docs
 include("command_line_options.jl")
 include("debugging.jl")
 include("type_definitions.jl")
@@ -311,7 +312,7 @@ function setup_moment_kinetics(input_dict::Dict; restart_prefix_iblock=nothing,
     # Set up MPI
     initialize_comms!()
 
-    input = mk_input(input_dict)
+    input = mk_input(input_dict; save_inputs_to_txt=true)
     # obtain input options from moment_kinetics_input.jl
     # and check input to catch errors
     io_input, evolve_moments,

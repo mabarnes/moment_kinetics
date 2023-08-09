@@ -6,6 +6,7 @@ Documentation for moment_kinetics.jl
 
 ```@contents
 Pages = ["getting_started.md",
+         "machine_setup.md",
          "input_options.md",
          "moment_kinetic_equations.md",
          "moment_constraints_notes.md",

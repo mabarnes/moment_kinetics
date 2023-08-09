@@ -1,8 +1,6 @@
-use_manufactured_solns_for_advance = true
 n_ion_species = 1
 n_neutral_species = 1
 boltzmann_electron_response = true
-run_name = "2D-sound-wave_cheb-with-neutrals-manf"
 evolve_moments_density = false
 evolve_moments_parallel_flow = false
 evolve_moments_parallel_pressure = false
@@ -79,3 +77,6 @@ vzeta_nelement = 8
 vzeta_L = 8.0
 vzeta_bc = "periodic"
 vzeta_discretization = "chebyshev_pseudospectral"
+
+[manufactured_solns]
+use_for_advance = true

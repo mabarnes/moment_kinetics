@@ -1,3 +1,11 @@
 *.mem
 performance-tests/config.toml
 Manifest.toml
+LocalPreferences.toml
+/julia.env
+bin
+machines/shared/compile_dependencies.sh
+machines/shared/machine_setup_stage_two.jl
+machines/artifacts
+moment_kinetics.so
+precompile-temp

@@ -1,7 +1,6 @@
 n_ion_species = 1
 n_neutral_species = 1
 boltzmann_electron_response = true
-run_name = "nonlinear-sound-wave_fd_split2"
 evolve_moments_density = true
 evolve_moments_parallel_flow = true
 evolve_moments_parallel_pressure = false

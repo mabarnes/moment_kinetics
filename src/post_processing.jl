@@ -30,6 +30,7 @@ using Measures
 using MPI
 # modules
 using ..post_processing_input: pp
+using ..communication
 using ..quadrature: composite_simpson_weights
 using ..array_allocation: allocate_float
 using ..coordinates: define_coordinate
@@ -56,6 +57,21 @@ using TOML
 import Base: get
 
 const default_compare_prefix = "comparison_plots/compare"
+
+function __init__()
+    # plot_unnormalised() requires PyPlot, so ensure it is used for all plots for
+    # consistency.
+    #
+    # On some systems it is necessary to ensure `pyplot()` is called early, so
+    # call in the `__init__()` function. Not sure why this helps, maybe if it
+    # is called before the functions below that call plotting functions are
+    # called (or even compiled?) this somehow helps?
+    #
+    # Plotting mostly needed for post-processing (apart from `runtime_plots`, but for
+    # those the formatting doesn't matter as much), and this can cause increased memory
+    # usage, so only call when we are running in serial (and so might be post-processing).
+    global_size[] == 0 && pyplot()
+end
 
 """
 Calculate a moving average
@@ -456,6 +472,8 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
     evolve_density, evolve_upar, evolve_ppar =
         get_tuple_of_return_values(load_mk_options, moments_files0_first_restart)
 
+    has_neutrals = any(n_neutral_species .> 0)
+
     for files in moments_files0
         for f in files
             close(f)
@@ -476,7 +494,7 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
                                    Tuple(this_z.n_global for this_z ∈ z),
                                    Tuple(this_r.n_global for this_r ∈ r),
                                    n_ion_species, ntime)
-    if any(n_neutral_species .> 0)
+    if has_neutrals
         neutral_density, neutral_uz, neutral_pz, neutral_qz, neutral_thermal_speed =
             get_tuple_of_return_values(allocate_global_zr_neutral_moments,
                                        Tuple(this_z.n_global for this_z ∈ z),
@@ -523,7 +541,7 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
                                Tuple(this_z.n for this_z ∈ z),
                                Tuple(this_r.n for this_r ∈ r), iskip)
     # neutral particle moments
-    if any(n_neutral_species .> 0)
+    if has_neutrals
         get_tuple_of_return_values(read_distributed_zr_data!, neutral_density,
                                    "density_neutral", run_names, "moments", nblocks,
                                    Tuple(this_z.n for this_z ∈ z),
@@ -562,7 +580,7 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
     # these values are currently the same for all blocks
     vpa, vpa_spectral = get_tuple_of_return_values(load_coordinate_data, dfns_files0_first_restart, "vpa")
     vperp, vperp_spectral = get_tuple_of_return_values(load_coordinate_data, dfns_files0_first_restart, "vperp")
-    if any(n_neutral_species .> 0)
+    if has_neutrals
         vzeta, vzeta_spectral = get_tuple_of_return_values(load_coordinate_data, dfns_files0_first_restart, "vzeta")
         vr, vr_spectral = get_tuple_of_return_values(load_coordinate_data, dfns_files0_first_restart, "vr")
         vz, vz_spectral = get_tuple_of_return_values(load_coordinate_data, dfns_files0_first_restart, "vz")
@@ -582,7 +600,7 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
                                    Tuple(this_z.n_global for this_z ∈ z),
                                    Tuple(this_r.n_global for this_r ∈ r), n_ion_species,
                                    ntime_pdfs)
-    if any(n_neutral_species .> 0)
+    if has_neutrals
         neutral_density_at_pdf_times, neutral_uz_at_pdf_times, neutral_pz_at_pdf_times,
         neutral_qz_at_pdf_times, neutral_thermal_speed_at_pdf_times =
             get_tuple_of_return_values(allocate_global_zr_neutral_moments,
@@ -625,7 +643,7 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
                                Tuple(this_z.n for this_z ∈ z),
                                Tuple(this_r.n for this_r ∈ r), iskip_pdfs)
     # neutral particle moments
-    if any(n_neutral_species .> 0)
+    if has_neutrals
         get_tuple_of_return_values(read_distributed_zr_data!,
                                    neutral_density_at_pdf_times, "density_neutral",
                                    run_names, "dfns", nblocks,
@@ -681,7 +699,7 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
         ff = get_tuple_of_return_values(load_distributed_charged_pdf_slice, run_names,
                                         nblocks, itime_min_pdfs:iskip_pdfs:itime_max_pdfs,
                                         n_ion_species, r, z, vperp, vpa)
-        if maximum(n_neutral_species) > 0
+        if has_neutrals
             neutral_ff = get_tuple_of_return_values(load_distributed_neutral_pdf_slice,
                                                     run_names, nblocks,
                                                     itime_min_pdfs:iskip_pdfs:itime_max_pdfs,
@@ -708,17 +726,17 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
             Tuple(qpar[:,ir0,:,:] for qpar ∈ parallel_heat_flux_at_pdf_times),
             Tuple(vth[:,ir0,:,:] for vth ∈ thermal_speed_at_pdf_times),
             Tuple(f[:,ivperp0,:,ir0,:,:] for f ∈ ff),
-            Tuple(neutral_n[:,ir0,:,:] for neutral_n ∈ neutral_density),
-            Tuple(uz[:,ir0,:,:] for uz ∈ neutral_uz),
-            Tuple(pz[:,ir0,:,:] for pz ∈ neutral_pz),
-            Tuple(qz[:,ir0,:,:] for qz ∈ neutral_qz),
-            Tuple(neutral_vth[:,ir0,:,:] for neutral_vth ∈ neutral_thermal_speed),
-            Tuple(neutral_n[:,ir0,:,:] for neutral_n ∈ neutral_density_at_pdf_times),
-            Tuple(uz[:,ir0,:,:] for uz ∈ neutral_uz_at_pdf_times),
-            Tuple(pz[:,ir0,:,:] for pz ∈ neutral_pz_at_pdf_times),
-            Tuple(qz[:,ir0,:,:] for qz ∈ neutral_qz_at_pdf_times),
-            Tuple(neutral_vth[:,ir0,:,:] for neutral_vth ∈ neutral_thermal_speed_at_pdf_times),
-            Tuple(neutral_f[:,ivr0,ivzeta0,:,ir0,:,:] for neutral_f ∈ neutral_ff),
+            has_neutrals ? Tuple(neutral_n[:,ir0,:,:] for neutral_n ∈ neutral_density) : nothing,
+            has_neutrals ? Tuple(uz[:,ir0,:,:] for uz ∈ neutral_uz) : nothing,
+            has_neutrals ? Tuple(pz[:,ir0,:,:] for pz ∈ neutral_pz) : nothing,
+            has_neutrals ? Tuple(qz[:,ir0,:,:] for qz ∈ neutral_qz) : nothing,
+            has_neutrals ? Tuple(neutral_vth[:,ir0,:,:] for neutral_vth ∈ neutral_thermal_speed) : nothing,
+            has_neutrals ? Tuple(neutral_n[:,ir0,:,:] for neutral_n ∈ neutral_density_at_pdf_times) : nothing,
+            has_neutrals ? Tuple(uz[:,ir0,:,:] for uz ∈ neutral_uz_at_pdf_times) : nothing,
+            has_neutrals ? Tuple(pz[:,ir0,:,:] for pz ∈ neutral_pz_at_pdf_times) : nothing,
+            has_neutrals ? Tuple(qz[:,ir0,:,:] for qz ∈ neutral_qz_at_pdf_times) : nothing,
+            has_neutrals ? Tuple(neutral_vth[:,ir0,:,:] for neutral_vth ∈ neutral_thermal_speed_at_pdf_times) : nothing,
+            has_neutrals ? Tuple(neutral_f[:,ivr0,ivzeta0,:,ir0,:,:] for neutral_f ∈ neutral_ff) : nothing,
             n_ion_species, n_neutral_species, evolve_density, evolve_upar, evolve_ppar,
             vz, vpa, z_global, ntime, time, ntime_pdfs, time_pdfs)
     end
@@ -1005,6 +1023,16 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
         vzeta = vzeta[1]
     end
 
+    input = mk_input(scan_input)
+    # obtain input options from moment_kinetics_input.jl
+    # and check input to catch errors
+    io_input, evolve_moments,
+        t_input, z_input, r_input,
+        vpa_input, vperp_input, gyrophase_input,
+        vz_input, vr_input, vzeta_input,
+        composition, species, collisions,
+        geometry, drive_input, num_diss_params, manufactured_solns_input = input
+
     if !is_1D1V
         # make plots and animations of the phi, Ez and Er
         plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time,
@@ -1036,15 +1064,10 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
         end
     end
 
-    manufactured_solns_section = get(scan_input, "manufactured_solns", Dict{String,Any}())
-    use_manufactured_solns_for_advance = get(manufactured_solns_section, "use_for_advance", false)
-    use_manufactured_solns_for_init = get(manufactured_solns_section, "use_for_init", false)
-    manufactured_solns_test = use_manufactured_solns_for_advance && use_manufactured_solns_for_init
+    manufactured_solns_test = manufactured_solns_input.use_for_advance && manufactured_solns_input.use_for_init
     # Plots compare density and density_symbolic at last timestep
     #if(manufactured_solns_test && nr > 1)
     if(manufactured_solns_test)
-        r_bc = get(scan_input, "r_bc", "periodic")
-        z_bc = get(scan_input, "z_bc", "periodic")
         # avoid passing Lr = 0 into manufactured_solns functions
         if r_global.n > 1
             Lr_in = r_global.L
@@ -1052,12 +1075,18 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
             Lr_in = 1.0
         end
 
-        manufactured_solns_list = manufactured_solutions(Lr_in,z_global.L,r_bc,z_bc,geometry,composition,r_global.n)
+        manufactured_solns_list = manufactured_solutions(manufactured_solns_input, Lr_in,
+                                                         z_global.L, r_global.bc,
+                                                         z_global.bc, geometry,
+                                                         composition, species, r_global.n)
         dfni_func = manufactured_solns_list.dfni_func
         densi_func = manufactured_solns_list.densi_func
         dfnn_func = manufactured_solns_list.dfnn_func
         densn_func = manufactured_solns_list.densn_func
-        manufactured_E_fields = manufactured_electric_fields(Lr_in,z_global.L,r_bc,z_bc,composition,r_global.n)
+        manufactured_E_fields =
+            manufactured_electric_fields(Lr_in, z_global.L, r_global.bc, z_global.bc,
+                                         composition, r_global.n,
+                                         manufactured_solns_input, species)
         Er_func = manufactured_E_fields.Er_func
         Ez_func = manufactured_E_fields.Ez_func
         phi_func = manufactured_E_fields.phi_func
@@ -1106,8 +1135,8 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
             neutral_density_sym = copy(density[:,:,:,:])
             is = 1
             for it in 1:ntime
-                for ir in 1:nr_global
-                    for iz in 1:nz_global
+                for ir in 1:r_global.n
+                    for iz in 1:z_global.n
                         neutral_density_sym[iz,ir,is,it] = densn_func(z_global.grid[iz],r_global.grid[ir],time[it])
                     end
                 end
@@ -1567,10 +1596,6 @@ function plot_1D_1V_diagnostics(run_name_labels, nwrite_movie, itime_min, itime_
         time_pdfs)
 
     n_runs = length(run_name_labels)
-
-    # plot_unnormalised() requires PyPlot, so ensure it is used for all plots for
-    # consistency
-    pyplot()
 
     # analyze the fields data
     phi_fldline_avg, delta_phi = get_tuple_of_return_values(analyze_fields_data, phi,
@@ -3471,39 +3496,47 @@ function plot_charged_pdf_2D_at_wall(run_name, run_name_label, r_global, z_globa
     ir0 = 1
 
     # pdf at lower wall
-    pdf_lower = load_distributed_charged_pdf_slice(run_name, nblocks, :, n_ion_species, r,
-                                                 z, vperp, vpa; z=1)
+    pdf_lower = load_distributed_charged_pdf_slice(run_name, nblocks, 1:ntime, n_ion_species, r,
+                                                   z, vperp, vpa; iz=1)
     # pdf at upper wall
-    pdf_upper = load_distributed_charged_pdf_slice(run_name, nblocks, :, n_ion_species, r,
-                                                 z, vperp, vpa; z=z.n_global)
-    for (pdf, zlabel) ∈ zip((pdf_lower, pdf_upper), ("wall-", "wall+"))
+    pdf_upper = load_distributed_charged_pdf_slice(run_name, nblocks, 1:ntime, n_ion_species, r,
+                                                   z, vperp, vpa; iz=z.n_global)
+    for (pdf, zlabel) ∈ ((pdf_lower, "wall-"), (pdf_upper, "wall+"))
         for is in 1:n_ion_species
             description = "_ion_spec"*string(is)*"_"
 
             # plot f(vpa,ivperp0,iz_wall,ir0,is,itime) at the wall
-            @views plot(vpa.grid, pdf[:,ivperp0,iz_wall,ir0,is,itime0], xlabel=L"v_{\|\|}/L_{v_{\|\|}}", ylabel=L"f_i")
+            @views plot(vpa.grid, pdf[:,ivperp0,ir0,is,itime0], xlabel=L"v_{\|\|}/L_{v_{\|\|}}", ylabel=L"f_i")
             outfile = string(run_name_label, "_pdf(vpa,vperp0,iz_"*zlabel*",ir0)"*description*"vs_vpa.pdf")
             trysavefig(outfile)
 
             # plot f(vpa,vperp,iz_wall,ir0,is,itime) at the wall
-            @views heatmap(vperp.grid, vpa.grid, pdf[:,:,iz_wall,ir0,is,itime0], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+            @views heatmap(vperp.grid, vpa.grid, pdf[:,:,ir0,is,itime0], xlabel=L"v_{\perp}", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
                            windowsize = (360,240), margin = 15pt)
             outfile = string(run_name_label, "_pdf(vpa,vperp,iz_"*zlabel*",ir0)"*description*"vs_vperp_vpa.pdf")
             trysavefig(outfile)
 
-            # plot f(vpa,ivperp0,z,ir0,is,itime) near the wall
-            @views heatmap(z_global.grid, vpa.grid, pdf[:,ivperp0,:,ir0,is,itime0], xlabel=L"z", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
-                           windowsize = (360,240), margin = 15pt)
-            outfile = string(run_name_label, "_pdf(vpa,ivperp0,z_"*zlabel*",ir0)"*description*"vs_z_vpa.pdf")
-            trysavefig(outfile)
+            # Skip this because load_distributed_charged_pdf_slice() currently only
+            # handles selecting a single value like `iz=1`, not a sub-slice like
+            # `iz=1:n_local`, so we only have data for one point in z here, so we can't
+            # plot vs z.
+            ## plot f(vpa,ivperp0,z,ir0,is,itime) near the wall
+            #@views heatmap(z_global.grid, vpa.grid, pdf[:,ivperp0,:,ir0,is,itime0], xlabel=L"z", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+            #               windowsize = (360,240), margin = 15pt)
+            #outfile = string(run_name_label, "_pdf(vpa,ivperp0,z_"*zlabel*",ir0)"*description*"vs_z_vpa.pdf")
+            #trysavefig(outfile)
 
             # plot f(ivpa0,ivperp0,z,r,is,itime) near the wall
             if r.n > 1
-                @views heatmap(r_global.grid, z_global.grid, pdf[ivpa0,ivperp0,:,:,is,itime0], xlabel=L"r", ylabel=L"z", c = :deep, interpolation = :cubic,
-                               windowsize = (360,240), margin = 15pt)
-                outfile = string(run_name_label, "_pdf(ivpa0,ivperp0,z_"*zlabel*",r)"*description*"vs_r_z.pdf")
-                trysavefig(outfile)
-                @views heatmap(r_global.grid, vpa.grid, pdf[:,ivperp0,iz_wall,:,is,itime0], xlabel=L"r", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
+                # Skip this because load_distributed_charged_pdf_slice() currently only
+                # handles selecting a single value like `iz=1`, not a sub-slice like
+                # `iz=1:n_local`, so we only have data for one point in z here, so we
+                # can't plot vs z.
+                #@views heatmap(r_global.grid, z_global.grid, pdf[ivpa0,ivperp0,:,:,is,itime0], xlabel=L"r", ylabel=L"z", c = :deep, interpolation = :cubic,
+                #               windowsize = (360,240), margin = 15pt)
+                #outfile = string(run_name_label, "_pdf(ivpa0,ivperp0,z_"*zlabel*",r)"*description*"vs_r_z.pdf")
+                #trysavefig(outfile)
+                @views heatmap(r_global.grid, vpa.grid, pdf[:,ivperp0,:,is,itime0], xlabel=L"r", ylabel=L"v_{||}", c = :deep, interpolation = :cubic,
                                windowsize = (360,240), margin = 15pt)
                 outfile = string(run_name_label, "_pdf(vpa,ivperp0,z_"*zlabel*",r)"*description*"vs_r_vpa.pdf")
                 trysavefig(outfile)

@@ -1,9 +1,7 @@
-use_manufactured_solns_for_advance = true
 n_ion_species = 1
 n_neutral_species = 0
 #boltzmann_electron_response = true
 electron_physics = "boltzmann_electron_response"
-run_name = "2D-wall-bc_cheb"
 evolve_moments_density = false
 evolve_moments_parallel_flow = false
 evolve_moments_parallel_pressure = false
@@ -69,3 +67,6 @@ vperp_nelement = 8
 vperp_L = 8.0
 vperp_bc = "periodic"
 vperp_discretization = "chebyshev_pseudospectral"
+
+[manufactured_solns]
+use_for_advance = true

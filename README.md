@@ -8,7 +8,11 @@ The full documentation is online at [https://mabarnes.github.io/moment_kinetics]
     $ julia --version
     ```
     at command line.
-1) Dependencies need to be installed to the project environment. Start Julia with
+1) If you are working on a supported machine, use the
+    `machines/machine_setup.sh` script, see [Setup for `moment_kinetics` on
+    known clusters](@ref).
+2) Dependencies need to be installed to the project
+    environment. Start Julia with
     ```
     $ julia --project
     ```
@@ -17,7 +21,7 @@ The full documentation is online at [https://mabarnes.github.io/moment_kinetics]
     (moment_kinetics) pkg> instantiate
     ```
     this should download and install all the dependencies.
-2) For julia>=1.6, pre-compiling dependencies manually is not necessary any more due to improvements to the native pre-compilation, so this step can be skipped (although precompiling the whole `moment_kinetics` code may still be useful sometimes). To pre-compile a static image (`dependencies.so`) that includes most of the external packages required for running and post-processing, run
+3) For julia>=1.6, pre-compiling dependencies manually is not necessary any more due to improvements to the native pre-compilation, so this step can be skipped (although precompiling the whole `moment_kinetics` code may still be useful sometimes). To pre-compile a static image (`dependencies.so`) that includes most of the external packages required for running and post-processing, run
     ```
     $ julia -O3 precompile_dependencies.jl
     ```
@@ -27,7 +31,7 @@ The full documentation is online at [https://mabarnes.github.io/moment_kinetics]
     $ julia -O3 precompile.jl
     ```
    this significantly decreases the load time but prevents code changes from taking effect when `moment_kinetics.so` is used without repeating the precompilation (to use this option, add an option `-Jmoment_kinetics.so` when starting julia).
-3) To run julia with optimization, type
+4) To run julia with optimization, type
     ```
     $ julia -O3 --project run_moment_kinetics.jl
     ```
@@ -46,27 +50,27 @@ The full documentation is online at [https://mabarnes.github.io/moment_kinetics]
         ```
         julia> run_moment_kinetics("input.toml")
         ```
-4) To make plots and calculate frequencies/growth rates, run
+5) To make plots and calculate frequencies/growth rates, run
     ```
     $ julia --project run_post_processing.jl runs/<directory to process>
     ```
     passing the directory to process as a command line argument. Input options for post-processing can be specified in post_processing_input.jl.
 
-5) Parameter scans (see [Running parameter scans](#running-parameter-scans)) or performance tests can be performed by running
+6) Parameter scans (see [Running parameter scans](#running-parameter-scans)) or performance tests can be performed by running
     ```
     $ julia -O3 --project driver.jl
     ```
     If running a scan, it can be parallelised by passing the number of processors as an argument. Scan options are set in `scan_inputs.jl`.
 
-6) Post processing can be done for several directories at once using
+7) Post processing can be done for several directories at once using
     ```
     $ julia --project post_processing_driver.jl runs/<directory1> runs/<directory2> ...
     ```
     passing the directories to process as command line arguments. Optionally pass a number as the first argument to parallelise post processing of different directories. Input options for post-processing can be specified in `post_processing_input.jl`.
 
-7) In the course of development, it is sometimes helpful to upgrade the Julia veriosn. Upgrading the version of Julia or upgrading packages may require a fresh installation of `moment_kinetics`. To make a fresh install with the latest package versions it is necessary to remove (or rename) the `Manifest.jl` file in the main directory, and generate a new `Manifest.jl` with step 1) above. It can sometimes be necessary to remove or rename the `.julia/` folder in your root directory for this step to be successful.
+8) In the course of development, it is sometimes helpful to upgrade the Julia veriosn. Upgrading the version of Julia or upgrading packages may require a fresh installation of `moment_kinetics`. To make a fresh install with the latest package versions it is necessary to remove (or rename) the `Manifest.jl` file in the main directory, and generate a new `Manifest.jl` with step 1) above. It can sometimes be necessary to remove or rename the `.julia/` folder in your root directory for this step to be successful.
 
-8) One may have to set an environment variable to avoid error messages from the Qt library. If you execute the command 
+9) One may have to set an environment variable to avoid error messages from the Qt library. If you execute the command
 
     ```
     $ julia --project run_post_processing.jl runs/your_run_dir/
