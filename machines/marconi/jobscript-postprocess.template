@@ -14,6 +14,7 @@ cd $SLURM_SUBMIT_DIR
 source julia.env
 
 echo "post-processing RUNDIR $(date)"
-bin/julia -Jmoment_kinetics.so --project -O3 --check-bounds=no run_post_processing.jl RUNDIR
+#bin/julia -Jmoment_kinetics.so --project -O3 --check-bounds=no run_post_processing.jl RUNDIR
+bin/julia -Jmakie_postproc.so --project run_post_processing.jl RUNDIR
 
 echo "finished post-processing RUNDIR $(date)"
