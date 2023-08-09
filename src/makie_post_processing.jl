@@ -3579,7 +3579,7 @@ function manufactured_solutions_get_field_and_field_sym(run_info, variable_name;
 end
 
 function compare_moment_symbolic_test(run_info, plot_prefix, field_label, field_sym_label,
-                                      norm_label, variable_name)
+                                      norm_label, variable_name; io=nothing)
 
     input = Dict_to_NamedTuple(input_dict[variable_name])
 
@@ -3621,14 +3621,14 @@ function compare_moment_symbolic_test(run_info, plot_prefix, field_label, field_
         #field_norm[it] = dummy/dummy_N
         field_norm[it] = sqrt(dummy/(r.n*z.n))
     end
-    println("test: ", variable_name, ": ", field_norm)
+    print_to_stdout_and_file(io, join(field_norm, " "), " # ", variable_name)
     plot_vs_t(run_info, norm_label, input=input_dict[variable_name], data=field_norm,
               outfile=plot_prefix*variable_name*"_norm_vs_t.pdf")
 
     return field_norm
 end
 
-function compare_charged_pdf_symbolic_test(run_info, plot_prefix)
+function compare_charged_pdf_symbolic_test(run_info, plot_prefix; io=nothing)
 
     field_label = L"\tilde{f}_i"
     field_sym_label = L"\tilde{f}_i^{sym}"
@@ -3689,7 +3689,7 @@ function compare_charged_pdf_symbolic_test(run_info, plot_prefix)
         #field_norm[it] = dummy/dummy_N
         field_norm[it] = sqrt(dummy/(r.n*z.n*vperp.n*vpa.n))
     end
-    println("test: ", variable_name, ": ", field_norm)
+    print_to_stdout_and_file(join(field_norm, " "), " # ", variable_name)
     plot_vs_t(run_info, norm_label, input=input, data=field_norm,
               outfile=plot_prefix*"f_norm_vs_t.pdf")
 
@@ -3710,7 +3710,7 @@ function compare_charged_pdf_symbolic_test(run_info, plot_prefix)
     return field_norm
 end
 
-function compare_neutral_pdf_symbolic_test(run_info, plot_prefix)
+function compare_neutral_pdf_symbolic_test(run_info, plot_prefix; io=nothing)
 
     field_label = L"\tilde{f}_n"
     field_sym_label = L"\tilde{f}_n^{sym}"
@@ -3772,7 +3772,7 @@ function compare_neutral_pdf_symbolic_test(run_info, plot_prefix)
         #field_norm[it] = dummy/dummy_N
         field_norm[it] = sqrt(dummy/(r.n*z.n*vzeta.n*vr.n*vz.n))
     end
-    println("test: ", variable_name, ": ", field_norm)
+    print_to_stdout_and_file(join(field_norm, " "), " # ", variable_name)
     plot_vs_t(run_info, norm_label, input=input, data=field_norm,
               outfile=plot_prefix*variable_name*"_norm_vs_t.pdf")
 
@@ -3819,21 +3819,24 @@ function manufactured_solutions_analysis(run_info; plot_prefix)
         return nothing
     end
 
-    println("time / (Lref/cref): ", run_info.time)
+    open(run_info.run_prefix * "MMS_errors.txt", "w") do io
+        println_to_stdout_and_file("# ", run_info.run_name)
+        print_to_stdout_and_file(io, join(run_info.time, " "), " # time / (Lref/cref): ")
 
-    for (variable_name, field_label, field_sym_label, norm_label) ∈
-            (("phi", L"\tilde{\phi}", L"\tilde{\phi}^{sym}", L"\varepsilon(\tilde{\phi})"),
-             ("Er", L"\tilde{E}_r", L"\tilde{E}_r^{sym}", L"\varepsilon(\tilde{E}_r)"),
-             ("Ez", L"\tilde{E}_z", L"\tilde{E}_z^{sym}", L"\varepsilon(\tilde{E}_z)"),
-             ("density", L"\tilde{n}_i", L"\tilde{n}_i^{sym}", L"\varepsilon(\tilde{n}_i)"),
-             ("density_neutral", L"\tilde{n}_n", L"\tilde{n}_n^{sym}", L"\varepsilon(\tilde{n}_n)"))
+        for (variable_name, field_label, field_sym_label, norm_label) ∈
+                (("phi", L"\tilde{\phi}", L"\tilde{\phi}^{sym}", L"\varepsilon(\tilde{\phi})"),
+                 ("Er", L"\tilde{E}_r", L"\tilde{E}_r^{sym}", L"\varepsilon(\tilde{E}_r)"),
+                 ("Ez", L"\tilde{E}_z", L"\tilde{E}_z^{sym}", L"\varepsilon(\tilde{E}_z)"),
+                 ("density", L"\tilde{n}_i", L"\tilde{n}_i^{sym}", L"\varepsilon(\tilde{n}_i)"),
+                 ("density_neutral", L"\tilde{n}_n", L"\tilde{n}_n^{sym}", L"\varepsilon(\tilde{n}_n)"))
 
-        if contains(variable_name, "neutral") && run_info.n_neutral_species == 0
-            continue
+            if contains(variable_name, "neutral") && run_info.n_neutral_species == 0
+                continue
+            end
+
+            compare_moment_symbolic_test(run_info, plot_prefix, field_label, field_sym_label,
+                                         norm_label, variable_name; io=io)
         end
-
-        compare_moment_symbolic_test(run_info, plot_prefix, field_label, field_sym_label,
-                                     norm_label, variable_name)
     end
 
     return nothing
@@ -3863,14 +3866,18 @@ function manufactured_solutions_analysis_dfns(run_info; plot_prefix)
         return nothing
     end
 
-    println("pdfs time / (Lref/cref): ", run_info.time)
+    open(run_info.run_prefix * "MMS_dfns_errors.txt", "w") do io
+        println_to_stdout_and_file("# ", run_info.run_name)
+        print_to_stdout_and_file(io, join(run_info.time, " "), " # time / (Lref/cref): ")
 
-    compare_charged_pdf_symbolic_test(run_info, plot_prefix)
+        compare_charged_pdf_symbolic_test(run_info, plot_prefix, io=io)
 
-    if run_info.n_neutral_species > 0
-        compare_neutral_pdf_symbolic_test(run_info, plot_prefix)
+        if run_info.n_neutral_species > 0
+            compare_neutral_pdf_symbolic_test(run_info, plot_prefix, io=io)
+        end
     end
 
+    return nothing
 end
 
 # Utility functions
