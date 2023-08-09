@@ -843,6 +843,251 @@ function plots_for_variable(run_info, variable_name; plot_prefix)
     return nothing
 end
 
+function select_slice(variable::AbstractArray{T,1}, dims::Symbol...; input=nothing,
+                      is=nothing, kwargs...) where T
+    if length(dims) > 1
+        error("Tried to get a slice of 1d variable with dimensions $dims")
+    elseif length(dims) < 1
+        error("1d variable must have already been sliced, so don't know what the dimensions are")
+    else
+        # Array is not a standard shape, so assume it is already sliced to the right 2
+        # dimensions
+        return variable
+    end
+end
+
+function select_slice(variable::AbstractArray{T,2}, dims::Symbol...; input=nothing,
+                      is=nothing, kwargs...) where T
+    if length(dims) > 2
+        error("Tried to get a slice of 2d variable with dimensions $dims")
+    elseif length(dims) < 2
+        error("2d variable must have already been sliced, so don't know what the dimensions are")
+    else
+        # Array is not a standard shape, so assume it is already sliced to the right 2
+        # dimensions
+        return variable
+    end
+end
+
+function select_slice(variable::AbstractArray{T,3}, dims::Symbol...; input=nothing,
+                      it=nothing, is=nothing, ir=nothing, iz=nothing, kwargs...) where T
+    # Array is (z,r,t)
+
+    if length(dims) > 3
+        error("Tried to get a slice of 3d variable with dimensions $dims")
+    end
+
+    if it !== nothing
+        it0 = it
+    elseif input === nothing || :it0 ∉ input
+        it0 = size(variable, 3)
+    else
+        it0 = input.it0
+    end
+    if ir !== nothing
+        ir0 = ir
+    elseif input === nothing || :ir0 ∉ input
+        ir0 = max(size(variable, 2) ÷ 3, 1)
+    else
+        ir0 = input.ir0
+    end
+    if iz !== nothing
+        iz0 = iz
+    elseif input === nothing || :iz0 ∉ input
+        iz0 = max(size(variable, 1) ÷ 3, 1)
+    else
+        iz0 = input.iz0
+    end
+
+    slice = variable
+    if :t ∉ dims || it !== nothing
+        slice = selectdim(slice, 3, it0)
+    end
+    if :r ∉ dims || ir !== nothing
+        slice = selectdim(slice, 2, ir0)
+    end
+    if :z ∉ dims || iz !== nothing
+        slice = selectdim(slice, 1, iz0)
+    end
+
+    return slice
+end
+
+function select_slice(variable::AbstractArray{T,4}, dims::Symbol...; input=nothing,
+                      it=nothing, is=1, ir=nothing, iz=nothing, kwargs...) where T
+    # Array is (z,r,species,t)
+
+    if it !== nothing
+        it0 = it
+    elseif input === nothing || :it0 ∉ input
+        it0 = size(variable, 4)
+    else
+        it0 = input.it0
+    end
+    if ir !== nothing
+        ir0 = ir
+    elseif input === nothing || :ir0 ∉ input
+        ir0 = max(size(variable, 2) ÷ 3, 1)
+    else
+        ir0 = input.ir0
+    end
+    if iz !== nothing
+        iz0 = iz
+    elseif input === nothing || :iz0 ∉ input
+        iz0 = max(size(variable, 1) ÷ 3, 1)
+    else
+        iz0 = input.iz0
+    end
+
+    slice = variable
+    if :t ∉ dims || it !== nothing
+        slice = selectdim(slice, 4, it0)
+    end
+    slice = selectdim(slice, 3, is)
+    if :r ∉ dims || ir !== nothing
+        slice = selectdim(slice, 2, ir0)
+    end
+    if :z ∉ dims || iz !== nothing
+        slice = selectdim(slice, 1, iz0)
+    end
+
+    return slice
+end
+
+function select_slice(variable::AbstractArray{T,6}, dims::Symbol...; input=nothing,
+                      it=nothing, is=1, ir=nothing, iz=nothing, ivperp=nothing,
+                      ivpa=nothing, kwargs...) where T
+    # Array is (z,r,species,t)
+
+    if it !== nothing
+        it0 = it
+    elseif input === nothing || :it0 ∉ input
+        it0 = size(variable, 6)
+    else
+        it0 = input.it0
+    end
+    if ir !== nothing
+        ir0 = ir
+    elseif input === nothing || :ir0 ∉ input
+        ir0 = max(size(variable, 4) ÷ 3, 1)
+    else
+        ir0 = input.ir0
+    end
+    if iz !== nothing
+        iz0 = iz
+    elseif input === nothing || :iz0 ∉ input
+        iz0 = max(size(variable, 3) ÷ 3, 1)
+    else
+        iz0 = input.iz0
+    end
+    if ivpa !== nothing
+        ivpa0 = ivpa
+    elseif input === nothing || :ivpa0 ∉ input
+        ivpa0 = max(size(variable, 2) ÷ 3, 1)
+    else
+        ivpa0 = input.ivpa0
+    end
+    if ivperp !== nothing
+        ivperp0 = ivperp
+    elseif input === nothing || :ivperp0 ∉ input
+        ivperp0 = max(size(variable, 1) ÷ 3, 1)
+    else
+        ivperp0 = input.ivperp0
+    end
+
+    slice = variable
+    if :t ∉ dims || it !== nothing
+        slice = selectdim(slice, 6, it0)
+    end
+    slice = selectdim(slice, 5, is)
+    if :r ∉ dims || ir !== nothing
+        slice = selectdim(slice, 4, ir0)
+    end
+    if :z ∉ dims || iz !== nothing
+        slice = selectdim(slice, 3, iz0)
+    end
+    if :vperp ∉ dims || ivperp !== nothing
+        slice = selectdim(slice, 2, ivperp0)
+    end
+    if :vpa ∉ dims || ivpa !== nothing
+        slice = selectdim(slice, 1, ivpa0)
+    end
+
+    return slice
+end
+
+function select_slice(variable::AbstractArray{T,7}, dims::Symbol...; input=nothing,
+                      it=nothing, is=1, ir=nothing, iz=nothing, ivzeta=nothing,
+                      ivr=nothing, ivz=nothing, kwargs...) where T
+    # Array is (z,r,species,t)
+
+    if it !== nothing
+        it0 = it
+    elseif input === nothing || :it0 ∉ input
+        it0 = size(variable, 7)
+    else
+        it0 = input.it0
+    end
+    if ir !== nothing
+        ir0 = ir
+    elseif input === nothing || :ir0 ∉ input
+        ir0 = max(size(variable, 5) ÷ 3, 1)
+    else
+        ir0 = input.ir0
+    end
+    if iz !== nothing
+        iz0 = iz
+    elseif input === nothing || :iz0 ∉ input
+        iz0 = max(size(variable, 4) ÷ 3, 1)
+    else
+        iz0 = input.iz0
+    end
+    if ivzeta !== nothing
+        ivzeta0 = ivzeta
+    elseif input === nothing || :ivzeta0 ∉ input
+        ivzeta0 = max(size(variable, 3) ÷ 3, 1)
+    else
+        ivzeta0 = input.ivzeta0
+    end
+    if ivr !== nothing
+        ivr0 = ivr
+    elseif input === nothing || :ivr0 ∉ input
+        ivr0 = max(size(variable, 2) ÷ 3, 1)
+    else
+        ivr0 = input.ivr0
+    end
+    if ivz !== nothing
+        ivz0 = ivz
+    elseif input === nothing || :ivz0 ∉ input
+        ivz0 = max(size(variable, 1) ÷ 3, 1)
+    else
+        ivz0 = input.ivz0
+    end
+
+    slice = variable
+    if :t ∉ dims || it !== nothing
+        slice = selectdim(slice, 7, it0)
+    end
+    slice = selectdim(slice, 6, is)
+    if :r ∉ dims || ir !== nothing
+        slice = selectdim(slice, 5, ir0)
+    end
+    if :z ∉ dims || iz !== nothing
+        slice = selectdim(slice, 4, iz0)
+    end
+    if :vzeta ∉ dims || ivzeta !== nothing
+        slice = selectdim(slice, 3, ivzeta0)
+    end
+    if :vr ∉ dims || ivr !== nothing
+        slice = selectdim(slice, 2, ivr0)
+    end
+    if :vz ∉ dims || ivz !== nothing
+        slice = selectdim(slice, 1, ivz0)
+    end
+
+    return slice
+end
+
 """
 Get a symbol corresponding to a variable name
 
