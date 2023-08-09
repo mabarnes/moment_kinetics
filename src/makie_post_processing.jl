@@ -3578,8 +3578,9 @@ function manufactured_solutions_get_field_and_field_sym(run_info, variable_name;
     return variable, variable_sym
 end
 
-function compare_moment_symbolic_test(run_info, plot_prefix, field_label, field_sym_label,
-                                      norm_label, variable_name; io=nothing)
+function compare_moment_symbolic_test(run_info, field_label, field_sym_label, norm_label,
+                                      variable_name; io=nothing, axes=nothing, i_run=1,
+                                      out_prefix=nothing)
 
     input = Dict_to_NamedTuple(input_dict[variable_name])
 
@@ -3591,21 +3592,49 @@ function compare_moment_symbolic_test(run_info, plot_prefix, field_label, field_
     z = run_info.z
 
     # plot last timestep field vs z at r0
+    if axes !== nothing
+        fig, ax = axes[1]
+    else
+        ax = nothing
+    end
+    outfile = out_prefix === nothing ? nothing : out_prefix * variable_name * "_(t_final,r0,z)_vs_z.pdf"
     plot_vs_z(run_info, field_label, input=input_dict[variable_name], data=field, is=1,
-              it=nt, ir=input.ir0, outfile=plot_prefix*variable_name*"(t_final,r0,z)_vs_z.pdf")
+              it=nt, ir=input.ir0, label=run_info.run_name, ax=ax, outfile=outfile)
 
     if r.n > 1
         # plot last timestep field vs r at z_wall
+        if axes !== nothing
+            fig, ax = axes[2]
+        else
+            ax = nothing
+        end
+        outfile = out_prefix === nothing ? nothing : out_prefix * variable_name * "_(t_final,r,z_wall)_vs_r.pdf"
         plot_vs_r(run_info, field_label, input=input_dict[variable_name], data=field,
-                  is=1, it=nt, iz=z.n,
-                  outfile=plot_prefix*variable_name*"(t_final,r,z_wall)_vs_r.pdf")
+                  is=1, it=nt, iz=z.n, label=run_info.run_name, ax=ax, outfile=outfile)
 
+        if axes !== nothing
+            fig, ax, colorbar_place = axes[3]
+            ax = ax[i_run]
+            colorbar_place = colorbar_place[i_run]
+        else
+            ax = colorbar_place = nothing
+        end
+        outfile = out_prefix === nothing ? nothing : out_prefix * variable_name * "_(_t_final)_vs_z_r.pdf"
         plot_vs_z_r(run_info, variable_name, data=field, is=1, it=nt, title=field_label,
-                    outfile=plot_prefix*variable_name*"(t_final)_vs_z_r.pdf")
+                    label=run_info.run_name, ax=ax, colorbar_place=colorbar_place,
+                    outfile=outfile)
 
+        if axes !== nothing
+            fig, ax, colorbar_place = axes[4]
+            ax = ax[i_run]
+            colorbar_place = colorbar_place[i_run]
+        else
+            ax = colorbar_place = nothing
+        end
+        outfile = out_prefix === nothing ? nothing : out_prefix * variable_name * "_sym(t_final)_vs_z_r.pdf"
         plot_vs_z_r(run_info, variable_name, data=field_sym, is=1, it=nt,
-                    title=field_sym_label,
-                    outfile=plot_prefix*variable_name*"_sym(t_final)_vs_z_r.pdf")
+                    title=field_sym_label, label=run_info.run_name, ax=ax,
+                    colorbar_place=colorbar_place, outfile=outfile)
     end	
 
     field_norm = zeros(mk_float,nt)
@@ -3622,8 +3651,14 @@ function compare_moment_symbolic_test(run_info, plot_prefix, field_label, field_
         field_norm[it] = sqrt(dummy/(r.n*z.n))
     end
     print_to_stdout_and_file(io, join(field_norm, " "), " # ", variable_name)
+    if axes !== nothing
+        fig, ax = axes[5]
+    else
+        ax = nothing
+    end
+    outfile = out_prefix === nothing ? nothing : out_prefix * variable_name * "_norm_vs_t.pdf"
     plot_vs_t(run_info, norm_label, input=input_dict[variable_name], data=field_norm,
-              outfile=plot_prefix*variable_name*"_norm_vs_t.pdf")
+              label=run_info.run_name, ax=ax, outfile=outfile)
 
     return field_norm
 end
@@ -3802,18 +3837,47 @@ function manufactured_solutions_analysis(run_info::Tuple; plot_prefix)
         # No manufactured solutions tests
         return nothing
     end
-    if length(run_info) > 1
-        println("Analysing more than one run at once not supported for"
-                * "manufactured_solutions_analysis()")
-        return nothing
-    end
     try
-        return manufactured_solutions_analysis(run_info[1]; plot_prefix=plot_prefix)
+        axes_dict = Dict{String,Any}("phi"=>nothing, "Er"=>nothing, "Ez"=>nothing,
+                                     "density"=>nothing, "density_neutral"=>nothing)
+        for ri ∈ run_info
+            manufactured_solutions_analysis(run_info[1]; plot_prefix=plot_prefix,
+                                            axes_dict=axes_dict)
+        end
+
+        for (variable_name, axes) ∈ axes_dict
+            fig, ax = axes[1]
+            put_legend_above(fig, ax)
+            save(fig, plot_prefix * variable_name * "_(t_final,r0,z)_vs_z.pdf")
+
+            if axes[2] !== nothing
+                fig, ax = axes[2]
+                put_legend_above(fig, ax)
+                save(fig, plot_prefix * variable_name * "_(t_final,r,z_wall)_vs_r.pdf")
+            end
+
+            if axes[3] !== nothing
+                fig, _, _ = axes[2]
+                save(fig, plot_prefix * variable_name * "_(_t_final)_vs_z_r.pdf")
+            end
+
+            if axes[4] !== nothing
+                fig, _, _ = axes[2]
+                save(fig, plot_prefix * variable_name * "_sym(t_final)_vs_z_r.pdf")
+            end
+
+            fig, ax = axes[5]
+            put_legend_above(fig, ax)
+            save(fig, plot_prefix * variable_name * "_norm_vs_t.pdf")
+        end
     catch e
         println("Error in manufactured_solutions_analysis(). Error was ", e)
     end
+
+    return nothing
 end
-function manufactured_solutions_analysis(run_info; plot_prefix)
+function manufactured_solutions_analysis(run_info; plot_prefix, axes_dict=nothing,
+                                         i_run=1, n_runs=1)
     manufactured_solns_input = run_info.manufactured_solns_input
     if !(manufactured_solns_input.use_for_advance && manufactured_solns_input.use_for_init)
         return nothing
@@ -3823,7 +3887,7 @@ function manufactured_solutions_analysis(run_info; plot_prefix)
         println_to_stdout_and_file("# ", run_info.run_name)
         print_to_stdout_and_file(io, join(run_info.time, " "), " # time / (Lref/cref): ")
 
-        for (variable_name, field_label, field_sym_label, norm_label) ∈
+        for (variable_name, field_label, field_sym_label, norm_label, ax) ∈
                 (("phi", L"\tilde{\phi}", L"\tilde{\phi}^{sym}", L"\varepsilon(\tilde{\phi})"),
                  ("Er", L"\tilde{E}_r", L"\tilde{E}_r^{sym}", L"\varepsilon(\tilde{E}_r)"),
                  ("Ez", L"\tilde{E}_z", L"\tilde{E}_z^{sym}", L"\varepsilon(\tilde{E}_z)"),
@@ -3834,8 +3898,24 @@ function manufactured_solutions_analysis(run_info; plot_prefix)
                 continue
             end
 
+            if axes_dict !== nothing
+                if axes_dict[variable_name] === nothing
+                    axes_dict[variable_name] = (
+                        get_1d_ax(),
+                        run_info.r.n > 1 ? get_1d_ax() : nothing,
+                        run_info.r.n > 1 ? get_2d_ax(n_runs) : nothing,
+                        run_info.r.n > 1 ? get_2d_ax(n_runs) : nothing,
+                        get_1d_ax(),
+                       )
+                end
+                axes = axes_dict[variable_name]
+            else
+                axes = nothing
+            end
+
             compare_moment_symbolic_test(run_info, plot_prefix, field_label, field_sym_label,
-                                         norm_label, variable_name; io=io)
+                                         norm_label, variable_name; io=io, axes=axes,
+                                         i_run=i_run)
         end
     end
 
