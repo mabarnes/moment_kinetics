@@ -3739,6 +3739,18 @@ function convert_to_OrderedDicts!(d::AbstractDict)
 end
 
 """
+    println_to_stdout_and_file(io, stuff...)
+
+Print `stuff` both to stdout and to a file `io`.
+"""
+function println_to_stdout_and_file(io, stuff...)
+    println(stuff...)
+    if io !== nothing
+        println(io, stuff...)
+    end
+end
+
+"""
     positive_or_nan(x; epsilon=0)
 
 If the argument `x` is zero or negative, replace it with NaN, otherwise return `x`.
