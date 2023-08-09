@@ -429,6 +429,7 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
        plot_vs_z_t=true,
        animate_vs_z=true,
        animate_vs_r=true,
+       animate_vs_z_r=true,
       )
 
     for variable_name ∈ all_variables
@@ -952,6 +953,10 @@ function plots_for_variable(run_info, variable_name; plot_prefix, is_1D=false,
                 animate_vs_r(run_info, variable_name, is=is, data=variable, input=input,
                              outfile=variable_prefix * "vs_r.gif")
             end
+            if !is_1D && input.animate_vs_z_r
+                animate_vs_z_r(run_info, variable_name, is=is, data=variable, input=input,
+                               outfile=variable_prefix * "vs_r.gif")
+            end
         end
     end
 
@@ -1239,6 +1244,124 @@ for dim ∈ one_dimension_combinations_no_t
                             label=run_info.run_name, kwargs...)
 
                  if frame_index === nothing
+                     if outfile === nothing
+                         error("`outfile` is required for $($function_name_str)")
+                     end
+                     if fig === nothing
+                         error("When `outfile` is passed to save the plot, must either pass both "
+                               * "`fig` and `ax` or neither. Only `ax` was passed.")
+                     end
+                     save_animation(fig, ind, nt, outfile)
+                 end
+
+                 return fig
+             end
+         end)
+end
+
+# Generate 2d animation functions for all combinations of dimensions
+for (dim1, dim2) ∈ two_dimension_combinations_no_t
+    function_name_str = "animate_vs_$(dim2)_$(dim1)"
+    function_name = Symbol(function_name_str)
+    dim1_str = String(dim1)
+    dim2_str = String(dim2)
+    dim1_grid = :( run_info.$dim1.grid )
+    dim2_grid = :( run_info.$dim2.grid )
+    idim1 = Symbol(:i, dim1)
+    idim2 = Symbol(:i, dim2)
+    eval(quote
+             export $function_name
+
+             function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
+                                     input=nothing, outfile=nothing, kwargs...)
+
+                 try
+                     if data === nothing
+                         data = Tuple(nothing for _ in run_info)
+                     end
+                     if outfile === nothing
+                         error("`outfile` is required for $($function_name_str)")
+                     end
+
+                     fig, ax, colorbar_places = get_2d_ax(length(run_info),
+                                                          title=get_variable_symbol(var_name))
+                     frame_index = Observable(1)
+
+                     for (d, ri, a, cp) ∈ zip(data, run_info, ax, colorbar_places)
+                         $function_name(ri, var_name; is=is, data=d, input=input,
+                                        frame_index=frame_index, ax=a, colorbar_place=cp,
+                                        title=ri.run_name, kwargs...)
+                     end
+
+                     nt = minimum(ri.nt for ri ∈ run_info)
+                     save_animation(fig, frame_index, nt, outfile)
+
+                     return fig
+                 catch e
+                     println("$($function_name_str) failed for $var_name, is=$is. Error was $e")
+                     return nothing
+                 end
+             end
+
+             function $function_name(run_info, var_name; is=1, data=nothing,
+                                     input=nothing, frame_index=nothing, ax=nothing,
+                                     colorbar_place=colorbar_place, title=nothing,
+                                     outfile=nothing, it=nothing,
+                                     ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
+                                     ivzeta=nothing, ivr=nothing, ivz=nothing, kwargs...)
+                 if input === nothing
+                     input = input_dict[var_name]
+                 end
+                 if isa(input, AbstractDict)
+                     input = Dict_to_NamedTuple(input)
+                 end
+                 if data === nothing
+                     dim_slices = get_dimension_slice_indices(:t, $(QuoteNode(dim1)),
+                                                              $(QuoteNode(dim2));
+                                                              input=input, it=it, is=is,
+                                                              ir=ir, iz=iz, ivperp=ivperp,
+                                                              ivpa=ivpa, ivzeta=ivzeta,
+                                                              ivr=ivr, ivz=ivz)
+                     data = postproc_load_variable(run_info, var_name; dim_slices...)
+                 else
+                     data = select_slice(data, $(QuoteNode(dim2)), $(QuoteNode(dim1)), :t;
+                                         input=input, it=it, is=is, ir=ir, iz=iz,
+                                         ivperp=ivperp, ivpa=ivpa, ivzeta=ivzeta, ivr=ivr,
+                                         ivz=ivz)
+                 end
+                 if input === nothing
+                     colormap = "reverse_deep"
+                 else
+                     colormap = input.colormap
+                 end
+                 if title === nothing
+                     title = get_variable_symbol(var_name)
+                 end
+
+
+                 x = $dim2_grid
+                 if $idim2 !== nothing
+                     x = x[$idim2]
+                 end
+                 y = $dim1_grid
+                 if $idim1 !== nothing
+                     y = y[$idim1]
+                 end
+                 fig = animate_2d(x, y, data; xlabel="$($dim2_str)",
+                                  ylabel="$($dim1_str)", title=title,
+                                  frame_index=frame_index, ax=ax,
+                                  colorbar_place=colorbar_place, colormap=colormap,
+                                  kwargs...)
+
+                 if frame_index === nothing
+                     if outfile === nothing
+                         error("`outfile` is required for $($function_name_str)")
+                     end
+                     if fig === nothing
+                         error("When `outfile` is passed to save the plot, must either pass both "
+                               * "`fig` and `ax` or neither. Only `ax` was passed.")
+                     end
+                     nt = size(data, 3)
                      save_animation(fig, ind, nt, outfile)
                  end
 
@@ -1399,6 +1522,47 @@ function animate_1d(xcoord, data; frame_index=nothing, ax=nothing, fig=nothing,
         nt = size(data, 2)
         save_animation(fig, ind, nt, outfile)
     end
+end
+
+function animate_2d(xcoord, ycoord, data; frame_index=nothing, ax=nothing, fig=nothing,
+                    colorbar_place=nothing, xlabel=nothing, ylabel=nothing, title=nothing,
+                    outfile=nothing, colormap="reverse_deep", kwargs...)
+    colormap = parse_colormap(colormap)
+
+    if ax === nothing
+        fig, ax, colorbar_place = get_2d_ax()
+    end
+    if frame_index === nothing
+        ind = Observable(1)
+    else
+        ind = frame_index
+    end
+    if xlabel !== nothing
+        ax.xlabel = xlabel
+    end
+    if ylabel !== nothing
+        ax.ylabel = ylabel
+    end
+    if title !== nothing
+        ax.title = title
+    end
+
+    xcoord = grid_points_to_faces(xcoord)
+    ycoord = grid_points_to_faces(ycoord)
+    heatmap_data = @lift(@view data[:,:,$ind])
+    hm = heatmap!(ax, xcoord, ycoord, heatmap_data; colormap=colormap, kwargs...)
+    Colorbar(colorbar_place, hm)
+
+    if outfile !== nothing
+        if fig === nothing
+            error("When `outfile` is passed to save the animation, must either pass both "
+                  * "`fig` and `ax` or neither. Only `ax` was passed.")
+        end
+        nt = size(data, 3)
+        save_animation(fig, ind, nt, outfile)
+    end
+
+    return fig
 end
 
 function save_animation(fig, frame_index, nt, outfile)
