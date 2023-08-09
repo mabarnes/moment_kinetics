@@ -962,7 +962,8 @@ for dim ∈ (:t, setdiff(all_dimensions, (:s, :sn))...)
     idim = Symbol(:i, dim)
     eval(quote
              function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
-                                     input=nothing, outfile=nothing, kwargs...)
+                                     input=nothing, outfile=nothing, yscale=nothing,
+                                     transform=identity, kwargs...)
 
                  try
                      if data === nothing
@@ -972,10 +973,11 @@ for dim ∈ (:t, setdiff(all_dimensions, (:s, :sn))...)
                      n_runs = length(run_info)
 
                      fig, ax = get_1d_ax(xlabel="$($dim_str)",
-                                         ylabel=get_variable_symbol(var_name))
+                                         ylabel=get_variable_symbol(var_name),
+                                         yscale=yscale)
                      for (d, ri) ∈ zip(data, run_info)
                          $function_name(ri, var_name, is=is, data=d, input=input, ax=ax,
-                                        label=ri.run_name, kwargs...)
+                                        transform=transform, label=ri.run_name, kwargs...)
                      end
 
                      if n_runs > 1
@@ -994,7 +996,7 @@ for dim ∈ (:t, setdiff(all_dimensions, (:s, :sn))...)
 
              function $function_name(run_info, var_name; is=1, data=nothing,
                                      input=nothing, ax=nothing, label=nothing,
-                                     outfile=nothing, it=nothing,
+                                     outfile=nothing, transform=identity, it=nothing,
                                      ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
                                      ivzeta=nothing, ivr=nothing, ivz=nothing, kwargs...)
                  if input === nothing
@@ -1015,6 +1017,9 @@ for dim ∈ (:t, setdiff(all_dimensions, (:s, :sn))...)
                                          is=is, ir=ir, iz=iz, ivperp=ivperp, ivpa=ivpa,
                                          ivzeta=ivzeta, ivr=ivr, ivz=ivz)
                  end
+
+                 # Use transform to allow user to do something like data = abs.(data)
+                 data = transform.(data)
 
                  x = $dim_grid
                  if $idim !== nothing
@@ -1057,7 +1062,8 @@ for (dim1, dim2) ∈ dimension_combinations_2d
     idim2 = Symbol(:i, dim2)
     eval(quote
              function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
-                                     input=nothing, outfile=nothing, kwargs...)
+                                     input=nothing, outfile=nothing, transform=identity,
+                                     kwargs...)
 
                  try
                      if data === nothing
@@ -1067,7 +1073,8 @@ for (dim1, dim2) ∈ dimension_combinations_2d
                                                           title=get_variable_symbol(var_name))
                      for (d, ri, a, cp) ∈ zip(data, run_info, ax, colorbar_places)
                          $function_name(ri, var_name; is=is, data=d, input=input, ax=a,
-                                        colorbar_place=cp, title=ri.run_name, kwargs...)
+                                        transform=transform, colorbar_place=cp,
+                                        title=ri.run_name, kwargs...)
                      end
 
                      if outfile !== nothing
@@ -1115,6 +1122,8 @@ for (dim1, dim2) ∈ dimension_combinations_2d
                      title = get_variable_symbol(var_name)
                  end
 
+                 # Use transform to allow user to do something like data = abs.(data)
+                 data = transform.(data)
 
                  x = $dim2_grid
                  if $idim2 !== nothing
@@ -1150,7 +1159,8 @@ for dim ∈ setdiff(all_dimensions, (:s, :sn))
     idim = Symbol(:i, dim)
     eval(quote
              function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
-                                     input=nothing, outfile=nothing, ylims=nothing, kwargs...)
+                                     input=nothing, outfile=nothing, yscale=nothing,
+                                     ylims=nothing, transform=identity, kwargs...)
 
                  try
                      if data === nothing
@@ -1162,12 +1172,15 @@ for dim ∈ setdiff(all_dimensions, (:s, :sn))
 
                      n_runs = length(run_info)
 
-                     fig, ax = get_1d_ax(xlabel="$($dim_str)", ylabel=get_variable_symbol(var_name))
+                     fig, ax = get_1d_ax(xlabel="$($dim_str)",
+                                         ylabel=get_variable_symbol(var_name),
+                                         yscale=yscale)
                      frame_index = Observable(1)
 
                      for (d, ri) ∈ zip(data, run_info)
                          $function_name(ri, var_name; is=is, data=d, input=input,
-                                        frame_index=frame_index, ax=ax, ylims=ylims, kwargs...)
+                                        ylims=ylims, transform=transform,
+                                        frame_index=frame_index, ax=ax, kwargs...)
                      end
                      if n_runs > 1
                          put_legend_above(fig, ax)
@@ -1185,7 +1198,7 @@ for dim ∈ setdiff(all_dimensions, (:s, :sn))
 
              function $function_name(run_info, var_name; is=1, data=nothing,
                                      input=nothing, frame_index=nothing, ax=nothing,
-                                     outfile=nothing,
+                                     transform=identity, outfile=nothing, yscale=nothing,
                                      ylims=nothing, it=nothing, ir=nothing, iz=nothing,
                                      ivperp=nothing, ivpa=nothing, ivzeta=nothing,
                                      ivr=nothing, ivz=nothing, kwargs...)
@@ -1213,10 +1226,15 @@ for dim ∈ setdiff(all_dimensions, (:s, :sn))
                      ind = frame_index
                  end
                  if ax === nothing
-                     fig, ax = get_1d_ax(xlabel="$($dim_str)", ylabel=get_variable_symbol(var_name))
+                     fig, ax = get_1d_ax(xlabel="$($dim_str)",
+                                         ylabel=get_variable_symbol(var_name),
+                                         yscale=yscale)
                  else
                      fig = nothing
                  end
+
+                 # Use transform to allow user to do something like data = abs.(data)
+                 data = transform.(data)
 
                  nt = size(data, 2)
 
@@ -1258,7 +1276,8 @@ for (dim1, dim2) ∈ dimension_combinations_2d_no_t
     idim2 = Symbol(:i, dim2)
     eval(quote
              function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
-                                     input=nothing, outfile=nothing, kwargs...)
+                                     input=nothing, outfile=nothing, transform=identity,
+                                     kwargs...)
 
                  try
                      if data === nothing
@@ -1274,8 +1293,9 @@ for (dim1, dim2) ∈ dimension_combinations_2d_no_t
 
                      for (d, ri, a, cp) ∈ zip(data, run_info, ax, colorbar_places)
                          $function_name(ri, var_name; is=is, data=d, input=input,
-                                        frame_index=frame_index, ax=a, colorbar_place=cp,
-                                        title=ri.run_name, kwargs...)
+                                        transform=transform, frame_index=frame_index,
+                                        ax=a, colorbar_place=cp, title=ri.run_name,
+                                        kwargs...)
                      end
 
                      nt = minimum(ri.nt for ri ∈ run_info)
@@ -1290,8 +1310,8 @@ for (dim1, dim2) ∈ dimension_combinations_2d_no_t
 
              function $function_name(run_info, var_name; is=1, data=nothing,
                                      input=nothing, frame_index=nothing, ax=nothing,
-                                     colorbar_place=colorbar_place, title=nothing,
-                                     outfile=nothing, it=nothing,
+                                     transform=identity, colorbar_place=colorbar_place,
+                                     title=nothing, outfile=nothing, it=nothing,
                                      ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
                                      ivzeta=nothing, ivr=nothing, ivz=nothing, kwargs...)
                  if input === nothing
@@ -1323,6 +1343,8 @@ for (dim1, dim2) ∈ dimension_combinations_2d_no_t
                      title = get_variable_symbol(var_name)
                  end
 
+                 # Use transform to allow user to do something like data = abs.(data)
+                 data = transform.(data)
 
                  x = $dim2_grid
                  if $idim2 !== nothing
@@ -1355,7 +1377,10 @@ for (dim1, dim2) ∈ dimension_combinations_2d_no_t
          end)
 end
 
-function get_1d_ax(n=nothing; title=nothing, kwargs...)
+function get_1d_ax(n=nothing; title=nothing, yscale=nothing, kwargs...)
+    if yscale !== nothing
+        kwargs = tuple(kwargs..., :yscale=>yscale)
+    end
     if n == nothing
         fig = Figure(title=title)
         ax = Axis(fig[1,1]; kwargs...)
@@ -1372,6 +1397,11 @@ function get_1d_ax(n=nothing; title=nothing, kwargs...)
         end
 
         ax = [Axis(plot_layout[1,i]; kwargs...) for i in 1:n]
+        if yscale !== nothing
+            for a ∈ ax
+                a.yscale = yscale
+            end
+        end
     end
 
     return fig, ax
@@ -1401,7 +1431,7 @@ function get_2d_ax(n=nothing; title=nothing, kwargs...)
 end
 
 function plot_1d(xcoord, data; ax=nothing, xlabel=nothing,
-                 ylabel=nothing, title=nothing, kwargs...)
+                 ylabel=nothing, title=nothing, yscale=nothing, kwargs...)
     if ax === nothing
         fig, ax = get_1d_ax()
     else
@@ -1416,6 +1446,9 @@ function plot_1d(xcoord, data; ax=nothing, xlabel=nothing,
     end
     if title !== nothing
         ax.title = title
+    end
+    if yscale !== nothing
+        ax.yscale = yscale
     end
 
     l = lines!(ax, xcoord, data; kwargs...)
@@ -1465,8 +1498,8 @@ function plot_2d(xcoord, ycoord, data; ax=nothing, colorbar_place=nothing, xlabe
 end
 
 function animate_1d(xcoord, data; frame_index=nothing, ax=nothing, fig=nothing,
-                    xlabel=nothing, ylabel=nothing, title=nothing, outfile=nothing,
-                    ylims=nothing, kwargs...)
+                    xlabel=nothing, ylabel=nothing, title=nothing, yscale=nothing,
+                    ylims=nothing, outfile=nothing, kwargs...)
 
     if frame_index === nothing
         ind = Observable(1)
@@ -1475,7 +1508,7 @@ function animate_1d(xcoord, data; frame_index=nothing, ax=nothing, fig=nothing,
     end
 
     if ax === nothing
-        fig, ax = get_1d_ax(title=title, xlabel=xlabel, ylabel=ylabel)
+        fig, ax = get_1d_ax(title=title, xlabel=xlabel, ylabel=ylabel, yscale=yscale)
     end
 
     if ylims === nothing
@@ -1914,6 +1947,13 @@ function clear_Dict!(d::AbstractDict)
     end
 
     return d
+end
+
+"""
+If the argument is zero or negative, replace it with NaN
+"""
+function positive_or_nan(x)
+    return x > 0 ? x : NaN
 end
 
 end
