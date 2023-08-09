@@ -2975,6 +2975,18 @@ function convert_to_OrderedDicts!(d)
 end
 
 """
+Print stuff both to stdout and to a file
+
+`io` is the file-handle that the stuff be written to.
+"""
+function println_to_stdout_and_file(io, stuff...)
+    println(stuff...)
+    if io !== nothing
+        println(io, stuff...)
+    end
+end
+
+"""
 If the argument is zero or negative, replace it with NaN
 
 `epsilon` can be passed if the number should be forced to be above some value (typically
