@@ -3663,7 +3663,9 @@ function compare_moment_symbolic_test(run_info, field_label, field_sym_label, no
     return field_norm
 end
 
-function compare_charged_pdf_symbolic_test(run_info, plot_prefix; io=nothing)
+function compare_charged_pdf_symbolic_test(run_info, plot_prefix; io=nothing,
+                                           axes=nothing, i_run=nothing,
+                                           out_prefix=nothing)
 
     field_label = L"\tilde{f}_i"
     field_sym_label = L"\tilde{f}_i^{sym}"
@@ -3725,21 +3727,39 @@ function compare_charged_pdf_symbolic_test(run_info, plot_prefix; io=nothing)
         field_norm[it] = sqrt(dummy/(r.n*z.n*vperp.n*vpa.n))
     end
     print_to_stdout_and_file(join(field_norm, " "), " # ", variable_name)
-    plot_vs_t(run_info, norm_label, input=input, data=field_norm,
-              outfile=plot_prefix*"f_norm_vs_t.pdf")
+    if axes === nothing
+        ax = nothing
+    else
+        _, ax = axes[1]
+    end
+    outfile = out_prefix === nothing ? nothing : out_prefix * variable_name * "_norm_vs_t.pdf"
+    plot_vs_t(run_info, norm_label, input=input, data=field_norm, ax=ax, outfile=outfile)
 
-    for (iz, z_label) ∈ ((1, "wall-"), (z.n, "wall+"))
+    for (i_ax, iz, z_label) ∈ ((2, 1, "wall-"), (3, z.n, "wall+"))
         f, f_sym =
             manufactured_solutions_get_field_and_field_sym(
                 run_info, variable_name, it=nt, ir=input.ir0, iz=iz, ivperp=input.ivperp0)
 
-        fig, ax = get_1d_ax(xlabel=L"v_{\parallel}/L_{v_{\parallel}}", ylabel=field_label)
+        if axes === nothing
+            fig, ax = get_1d_ax(xlabel=L"v_{\parallel}/L_{v_{\parallel}}", ylabel=field_label)
+        else
+            fig = nothing
+            _, ax = axes[i_ax]
+            ax = ax[i_run]
+            ax.xlabel = L"v_{\parallel}/L_{v_{\parallel}}"
+            ax.ylabel = field_label
+        end
         plot_1d(vpa.grid, f, ax=ax, label="num")
         plot_1d(vpa.grid, f_sym, ax=ax, label="sym")
         put_legend_right(fig, ax)
 
-        outfile = plot_prefix * variable_name * "(vpa,ivperp0,iz_" * z_label * ",ir0)_sym_vs_vpa.pdf"
-        save(outfile, fig)
+        outfile = out_prefix === nothing ? nothing : out_prefix * variable_name * "_(vpa,ivperp0,iz_" * z_label * ",ir0)_sym_vs_vpa.pdf"
+        if outfile !== nothing
+            if fig === nothing
+                error("Cannot pass `out_prefix` when `ax` is passed")
+            end
+            save(outfile, fig)
+        end
     end
 
     return field_norm
@@ -3808,8 +3828,13 @@ function compare_neutral_pdf_symbolic_test(run_info, plot_prefix; io=nothing)
         field_norm[it] = sqrt(dummy/(r.n*z.n*vzeta.n*vr.n*vz.n))
     end
     print_to_stdout_and_file(join(field_norm, " "), " # ", variable_name)
-    plot_vs_t(run_info, norm_label, input=input, data=field_norm,
-              outfile=plot_prefix*variable_name*"_norm_vs_t.pdf")
+    if axes === nothing
+        ax = nothing
+    else
+        _, ax = axes[1]
+    end
+    outfile = out_prefix === nothing ? nothing : out_prefix * variable_name * "_norm_vs_t.pdf"
+    plot_vs_t(run_info, norm_label, input=input, data=field_norm, ax=ax, outfile=outfile)
 
     for (iz, z_label) ∈ ((1, "wall-"), (z.n, "wall+"))
         f, f_sym =
@@ -3817,13 +3842,26 @@ function compare_neutral_pdf_symbolic_test(run_info, plot_prefix; io=nothing)
                 run_info, variable_name, it=nt, ir=input.ir0, iz=iz, ivzeta=input.ivzeta0,
                 ivr=input.ivr0)
 
-        fig, ax = get_1d_ax(xlabel=L"v_{\parallel}/L_{v_{\parallel}}", ylabel=field_label)
+        if axes === nothing
+            fig, ax = get_1d_ax(xlabel=L"v_{z}/L_{v_{z}}", ylabel=field_label)
+        else
+            fig = nothing
+            _, ax = axes[i_ax]
+            ax = ax[i_run]
+            ax.xlabel = L"v_{z}/L_{v_{z}}"
+            ax.ylabel = field_label
+        end
         plot_1d(vz.grid, f, ax=ax, label="num")
         plot_1d(vz.grid, f_sym, ax=ax, label="sym")
         put_legend_right(fig, ax)
 
-        outfile = plot_prefix * variable_name * "(vpa,ivperp0,iz_" * z_label * ",ir0)_sym_vs_vpa.pdf"
-        save(outfile, fig)
+        outfile = out_prefix === nothing ? nothing : out_prefix * variable_name * "_(vpa,ivperp0,iz_" * z_label * ",ir0)_sym_vs_vpa.pdf"
+        if outfile !== nothing
+            if fig === nothing
+                error("Cannot pass `out_prefix` when `ax` is passed")
+            end
+            save(outfile, fig)
+        end
     end
 
     return field_norm
@@ -3840,35 +3878,36 @@ function manufactured_solutions_analysis(run_info::Tuple; plot_prefix)
     try
         axes_dict = Dict{String,Any}("phi"=>nothing, "Er"=>nothing, "Ez"=>nothing,
                                      "density"=>nothing, "density_neutral"=>nothing)
-        for ri ∈ run_info
+        for (i, ri) ∈ enumerate(run_info)
             manufactured_solutions_analysis(run_info[1]; plot_prefix=plot_prefix,
-                                            axes_dict=axes_dict)
+                                            axes_dict=axes_dict, i_run=i,
+                                            n_runs=length(run_info))
         end
 
         for (variable_name, axes) ∈ axes_dict
             fig, ax = axes[1]
             put_legend_above(fig, ax)
-            save(fig, plot_prefix * variable_name * "_(t_final,r0,z)_vs_z.pdf")
+            save(plot_prefix * variable_name * "_(t_final,r0,z)_vs_z.pdf", fig)
 
             if axes[2] !== nothing
                 fig, ax = axes[2]
                 put_legend_above(fig, ax)
-                save(fig, plot_prefix * variable_name * "_(t_final,r,z_wall)_vs_r.pdf")
+                save(plot_prefix * variable_name * "_(t_final,r,z_wall)_vs_r.pdf", fig)
             end
 
             if axes[3] !== nothing
                 fig, _, _ = axes[2]
-                save(fig, plot_prefix * variable_name * "_(_t_final)_vs_z_r.pdf")
+                save(plot_prefix * variable_name * "_(_t_final)_vs_z_r.pdf", fig)
             end
 
             if axes[4] !== nothing
                 fig, _, _ = axes[2]
-                save(fig, plot_prefix * variable_name * "_sym(t_final)_vs_z_r.pdf")
+                save(plot_prefix * variable_name * "_sym(t_final)_vs_z_r.pdf", fig)
             end
 
             fig, ax = axes[5]
             put_legend_above(fig, ax)
-            save(fig, plot_prefix * variable_name * "_norm_vs_t.pdf")
+            save(plot_prefix * variable_name * "_norm_vs_t.pdf", fig)
         end
     catch e
         println("Error in manufactured_solutions_analysis(). Error was ", e)
@@ -3929,18 +3968,46 @@ function manufactured_solutions_analysis_dfns(run_info::Tuple; plot_prefix)
         # No manufactured solutions tests
         return nothing
     end
-    if length(run_info) > 1
-        println("Analysing more than one run at once not supported for"
-                * "manufactured_solutions_analysis_dfns()")
-        return nothing
-    end
     try
-        return manufactured_solutions_analysis_dfns(run_info[1]; plot_prefix=plot_prefix)
+        n_runs = length(run_info)
+        has_neutrals = any(ri.n_neutral_species > 0 for ri in run_info_dfns)
+        ion_axes = (get_1d_axes(), get_1d_axes(n_runs))
+        if has_neutrals
+            neutral_axes = (get_1d_axes(), get_1d_axes(n_runs))
+        else
+            neutral_axes = nothing
+        end
+        for (i, ri) ∈ enumerate(run_info)
+            manufactured_solutions_analysis_dfns(run_info[1]; plot_prefix=plot_prefix,
+                                                 ion_axes=ion_axes,
+                                                 neutral_axes=neutral_axes, i_run=i)
+        end
+
+        fig, _ = ion_axes[1]
+        outfile = plot_prefix * "f_norm_vs_t.pdf"
+        save(outfile, fig)
+
+        fig, _ = ion_axes[2]
+        outfile = plot_prefix * "f_(vpa,ivperp0,iz_" * z_label * ",ir0)_sym_vs_vpa.pdf"
+        save(outfile, fig)
+
+        if has_neutrals
+            fig, _ = neutral_axes[1]
+            outfile = plot_prefix * "f_neutral_norm_vs_t.pdf"
+            save(outfile, fig)
+
+            fig, _ = neutral_axes[2]
+            outfile = plot_prefix * "f_neutral_(vpa,ivperp0,iz_" * z_label * ",ir0)_sym_vs_vpa.pdf"
+            save(outfile, fig)
+        end
     catch e
         println("Error in manufactured_solutions_analysis_dfns(). Error was ", e)
     end
+
+    return nothing
 end
-function manufactured_solutions_analysis_dfns(run_info; plot_prefix)
+function manufactured_solutions_analysis_dfns(run_info; plot_prefix, ion_axes=nothing,
+                                              neutral_axes=nothing, i_run=1)
     manufactured_solns_input = run_info.manufactured_solns_input
     if !(manufactured_solns_input.use_for_advance && manufactured_solns_input.use_for_init)
         return nothing
@@ -3950,10 +4017,12 @@ function manufactured_solutions_analysis_dfns(run_info; plot_prefix)
         println_to_stdout_and_file("# ", run_info.run_name)
         print_to_stdout_and_file(io, join(run_info.time, " "), " # time / (Lref/cref): ")
 
-        compare_charged_pdf_symbolic_test(run_info, plot_prefix, io=io)
+        compare_charged_pdf_symbolic_test(run_info, plot_prefix, io=io, axes=ion_axes,
+                                          i_run=i_run)
 
         if run_info.n_neutral_species > 0
-            compare_neutral_pdf_symbolic_test(run_info, plot_prefix, io=io)
+            compare_neutral_pdf_symbolic_test(run_info, plot_prefix, io=io,
+                                              axes=neutral_axes, i_run=i_run)
         end
     end
 
