@@ -6,10 +6,11 @@ using moment_kinetics
 
 # Create a temporary directory for test output
 test_output_directory = tempname()
+run_name = "precompilation"
 mkpath(test_output_directory)
 
 input_dict = Dict("nstep"=>1,
-                  "run_name"=>"precompilation",
+                  "run_name"=>run_name,
                   "base_directory" => test_output_directory,
                   "dt" => 0.0,
                   "r_ngrid" => 5,
@@ -58,5 +59,5 @@ for (k,v) ∈ precompile_postproc_options
     end
 end
 
-moment_kinetics.makie_post_processing.makie_post_process(test_output_directory,
-                                                         precompile_postproc_options)
+moment_kinetics.makie_post_processing.makie_post_process(
+    joinpath(test_output_directory, run_name), precompile_postproc_options)
