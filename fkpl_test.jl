@@ -77,6 +77,12 @@ function expected_nelement_scaling!(expected,nelement_list,ngrid,nscan)
         expected[iscan] = (1.0/nelement_list[iscan])^(ngrid - 1)
     end
 end
+
+function expected_nelement_integral_scaling!(expected,nelement_list,ngrid,nscan)
+    for iscan in 1:nscan
+        expected[iscan] = (1.0/nelement_list[iscan])^(ngrid+1)
+    end
+end
 """
 L2norm assuming the input is the 
 absolution error ff_err = ff - ff_exact
@@ -959,7 +965,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 
                 vperp_nodes = get_nodes(vperp,ielement_vperpp)
                 vperp_max = vperp_nodes[end]
-                vperp_min = vperp_nodes[1]*nel_low(ielement_vperpp,nelement_vperp) 
+                vperp_min = vperp_nodes[1]*nel_low(ielement_vperpp,vperp.nelement_local) 
                 nquad_vperp = get_scaled_x_w_no_divergences!(x_vperp, w_vperp, x_legendre, w_legendre, vperp_min, vperp_max)
                 loop_over_vpa_elements_no_divergences!(G_weights,G1_weights,G2_weights,G3_weights,
                         H_weights,H1_weights,H2_weights,H3_weights,n_weights,
@@ -972,7 +978,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 
                 vperp_nodes = get_nodes(vperp,ielement_vperpp)
                 vperp_max = vperp_nodes[end]
-                vperp_min = vperp_nodes[1]*nel_low(ielement_vperpp,nelement_vperp) 
+                vperp_min = vperp_nodes[1]*nel_low(ielement_vperpp,vperp.nelement_local) 
                 #nquad_vperp = get_scaled_x_w_no_divergences!(x_vperp, w_vperp, x_legendre, w_legendre, vperp_min, vperp_max)
                 nquad_vperp = get_scaled_x_w!(x_vperp, w_vperp, x_legendre, w_legendre, x_laguerre, w_laguerre, vperp_min, vperp_max, vperp_val)
                 loop_over_vpa_elements!(G_weights,G1_weights,G2_weights,G3_weights,
@@ -986,7 +992,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 
                 vperp_nodes = get_nodes(vperp,ielement_vperpp)
                 vperp_max = vperp_nodes[end]
-                vperp_min = vperp_nodes[1]*nel_low(ielement_vperpp,nelement_vperp) 
+                vperp_min = vperp_nodes[1]*nel_low(ielement_vperpp,vperp.nelement_local) 
                 nquad_vperp = get_scaled_x_w_no_divergences!(x_vperp, w_vperp, x_legendre, w_legendre, vperp_min, vperp_max)
                 loop_over_vpa_elements_no_divergences!(G_weights,G1_weights,G2_weights,G3_weights,
                         H_weights,H1_weights,H2_weights,H3_weights,n_weights,
@@ -1066,8 +1072,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
             @. H3_weights[ivpa,ivperp,:,:] = 0.0  
             @. n_weights[ivpa,ivperp,:,:] = 0.0  
             # loop over elements and grid points within elements on primed coordinate
-            #loop_over_vperp_vpa_elements!(G_weights,G1_weights,G2_weights,G3_weights,
-            loop_over_vperp_vpa_elements_no_divergences!(G_weights,G1_weights,G2_weights,G3_weights,
+            loop_over_vperp_vpa_elements!(G_weights,G1_weights,G2_weights,G3_weights,
+            #loop_over_vperp_vpa_elements_no_divergences!(G_weights,G1_weights,G2_weights,G3_weights,
                     H_weights,H1_weights,H2_weights,H3_weights,n_weights,
                     vpa,ielement_vpa_low,ielement_vpa_hi, # info about primed vpa grids
                     vperp,ielement_vperp_low,ielement_vperp_hi, # info about primed vperp grids
@@ -1164,24 +1170,24 @@ if abspath(PROGRAM_FILE) == @__FILE__
             @. Cssp_div_numerical *= nussp
         end
         
-        plot_H = false #true
-        plot_dHdvpa = false #true
-        plot_dHdvperp = false #true
-        plot_d2Gdvperp2 = false #true
-        plot_d2Gdvperpdvpa = false #true
-        plot_dGdvperp = false #true
-        plot_d2Gdvpa2 = false #true
-        plot_G = false #true
+        plot_H = true
+        plot_dHdvpa = true
+        plot_dHdvperp = true
+        plot_d2Gdvperp2 = true
+        plot_d2Gdvperpdvpa = true
+        plot_dGdvperp = true
+        plot_d2Gdvpa2 = true
+        plot_G = true
         plot_C = false #true
         plot_n = false #true
         
         begin_serial_region()
         @serial_region begin
             println("finished integration   ", Dates.format(now(), dateformat"H:MM:SS"))
-            @. n_err = nsp - denssp
+            @. n_err = abs(nsp - denssp)
             max_n_err = maximum(n_err)
             println("max_n_err: ",max_n_err)
-            println("spot check n_err: ",n_err[end,end])
+            println("spot check n_err: ",n_err[end,end], " nsp: ",nsp[end,end])
             L2_n_err = L2norm_vspace(n_err,vpa,vperp)
             println("L2_n_err: ",L2_n_err)
             @. Cssp_err = abs(Cssp_numerical - Cssp_Maxwell)
@@ -1216,16 +1222,19 @@ if abspath(PROGRAM_FILE) == @__FILE__
             @. H_err = abs(Hsp - H_Maxwell)
             max_H_err = maximum(H_err)
             println("max_H_err: ",max_H_err)
+            println("spot check H_err: ",H_err[end,end], " H: ",Hsp[end,end])
             L2_H_err = L2norm_vspace(H_err,vpa,vperp)
             println("L2_H_err: ",L2_H_err)
             @. dHdvperp_err = abs(dHspdvperp - dHdvperp_Maxwell)
             max_dHdvperp_err = maximum(dHdvperp_err)
             println("max_dHdvperp_err: ",max_dHdvperp_err)
+            println("spot check dHdvperp_err: ",dHdvperp_err[end,end], " dHdvperp: ",dHspdvperp[end,end])
             L2_dHdvperp_err = L2norm_vspace(dHdvperp_err,vpa,vperp)
             println("L2_dHdvperp_err: ",L2_dHdvperp_err)
             @. dHdvpa_err = abs(dHspdvpa - dHdvpa_Maxwell)
             max_dHdvpa_err = maximum(dHdvpa_err)
             println("max_dHdvpa_err: ",max_dHdvpa_err)
+            println("spot check dHdvpa_err: ",dHdvpa_err[end,end], " dHdvpa: ",dHspdvpa[end,end])
             L2_dHdvpa_err = L2norm_vspace(dHdvpa_err,vpa,vperp)
             println("L2_dHdvpa_err: ",L2_dHdvpa_err)
             
@@ -1302,6 +1311,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
             @. d2Gdvperp2_err = abs(d2Gspdvperp2 - d2Gdvperp2_Maxwell)
             max_d2Gdvperp2_err = maximum(d2Gdvperp2_err)
             println("max_d2Gdvperp2_err: ",max_d2Gdvperp2_err)
+            println("spot check d2Gdvperp2_err: ",d2Gdvperp2_err[end,end], " d2Gdvperp2: ",d2Gspdvperp2[end,end])
             L2_d2Gdvperp2_err = L2norm_vspace(d2Gdvperp2_err,vpa,vperp)
             println("L2_d2Gdvperp2_err: ",L2_d2Gdvperp2_err)
             if plot_d2Gdvperp2
@@ -1321,6 +1331,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
             @. d2Gdvperpdvpa_err = abs(d2Gspdvperpdvpa - d2Gdvperpdvpa_Maxwell)
             max_d2Gdvperpdvpa_err = maximum(d2Gdvperpdvpa_err)
             println("max_d2Gdvperpdvpa_err: ",max_d2Gdvperpdvpa_err)
+            println("spot check d2Gdvperpdpva_err: ",d2Gdvperpdvpa_err[end,end], " d2Gdvperpdvpa: ",d2Gspdvperpdvpa[end,end])
             L2_d2Gdvperpdvpa_err = L2norm_vspace(d2Gdvperpdvpa_err,vpa,vperp)
             println("L2_d2Gdvperpdvpa_err: ",L2_d2Gdvperpdvpa_err)
             if plot_d2Gdvperpdvpa
@@ -1340,6 +1351,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
             @. dGdvperp_err = abs(dGspdvperp - dGdvperp_Maxwell)
             max_dGdvperp_err = maximum(dGdvperp_err)
             println("max_dGdvperp_err: ",max_dGdvperp_err)
+            println("spot check dGdvperp_err: ",dGdvperp_err[end,end], " dGdvperp: ",dGspdvperp[end,end])
             L2_dGdvperp_err = L2norm_vspace(dGdvperp_err,vpa,vperp)
             println("L2_dGdvperp_err: ",L2_dGdvperp_err)
             if plot_dGdvperp
@@ -1359,6 +1371,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
             @. d2Gdvpa2_err = abs(d2Gspdvpa2 - d2Gdvpa2_Maxwell)
             max_d2Gdvpa2_err = maximum(d2Gdvpa2_err)
             println("max_d2Gdvpa2_err: ",max_d2Gdvpa2_err)
+            println("spot check d2Gdvpa2_err: ",d2Gdvpa2_err[end,end], " d2Gdvpa2: ",d2Gspdvpa2[end,end])
             L2_d2Gdvpa2_err = L2norm_vspace(d2Gdvpa2_err,vpa,vperp)
             println("L2_d2Gdvpa2_err: ",L2_d2Gdvpa2_err)
             if plot_d2Gdvpa2
@@ -1378,6 +1391,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
             @. G_err = abs(Gsp - G_Maxwell)
             max_G_err = maximum(G_err)
             println("max_G_err: ",max_G_err)
+            println("spot check G_err: ",G_err[end,end], " G: ",Gsp[end,end])
             L2_G_err = L2norm_vspace(G_err,vpa,vperp)
             println("L2_G_err: ",L2_G_err)
             if plot_G
@@ -1736,12 +1750,12 @@ if abspath(PROGRAM_FILE) == @__FILE__
     end
     if test_Lagrange_integral_scan
         initialize_comms!()
-        ngrid = 17
-        nscan = 3
+        ngrid = 9
+        nscan = 1
         #nelement_list = Int[2, 4, 8, 16, 32]
         #nelement_list = Int[2, 4, 8, 16]
-        nelement_list = Int[2, 4, 8]
-        #nelement_list = Int[2]
+        #nelement_list = Int[2, 4, 8]
+        nelement_list = Int[8]
         max_C_err = Array{mk_float,1}(undef,nscan)
         max_Gvpa_err = Array{mk_float,1}(undef,nscan)
         max_Gvperp_err = Array{mk_float,1}(undef,nscan)
@@ -1776,7 +1790,11 @@ if abspath(PROGRAM_FILE) == @__FILE__
         
         expected = Array{mk_float,1}(undef,nscan)
         expected_nelement_scaling!(expected,nelement_list,ngrid,nscan)
+        expected_integral = Array{mk_float,1}(undef,nscan)
+        expected_nelement_integral_scaling!(expected_integral,nelement_list,ngrid,nscan)
+        
         expected_label = L"(1/N_{el})^{n_g - 1}"
+        expected_integral_label = L"(1/N_{el})^{n_g +1}"
         
         for iscan in 1:nscan
             local nelement = nelement_list[iscan]
@@ -1813,8 +1831,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
             d2Gdvperpdvpalabel = L"\epsilon(d^2G/d v_{\perp} d v_{\|\|})"
             dGdvperplabel = L"\epsilon(dG/d v_{\perp})"
             #println(max_G_err,max_H_err,max_dHdvpa_err,max_dHdvperp_err,max_d2Gdvperp2_err,max_d2Gdvpa2_err,max_d2Gdvperpdvpa_err,max_dGdvperp_err, expected)
-            plot(nelement_list, [max_C_err,max_Gvpa_err,max_Gvperp_err,max_G_err,max_H_err,max_dHdvpa_err,max_dHdvperp_err,max_d2Gdvperp2_err,max_d2Gdvpa2_err,max_d2Gdvperpdvpa_err,max_dGdvperp_err, expected],
-            xlabel=xlabel, label=[Clabel Gvpalabel Gvperplabel Glabel Hlabel dHdvpalabel dHdvperplabel d2Gdvperp2label d2Gdvpa2label d2Gdvperpdvpalabel dGdvperplabel expected_label], ylabel="",
+            plot(nelement_list, [max_C_err,max_Gvpa_err,max_Gvperp_err,max_G_err,max_H_err,max_dHdvpa_err,max_dHdvperp_err,max_d2Gdvperp2_err,max_d2Gdvpa2_err,max_d2Gdvperpdvpa_err,max_dGdvperp_err, expected, expected_integral],
+            xlabel=xlabel, label=[Clabel Gvpalabel Gvperplabel Glabel Hlabel dHdvpalabel dHdvperplabel d2Gdvperp2label d2Gdvpa2label d2Gdvperpdvpalabel dGdvperplabel expected_label expected_integral_label], ylabel="",
              shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_list, nelement_list), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2, 
               xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize,
               foreground_color_legend = nothing, background_color_legend = nothing, legend=:bottomleft)
@@ -1822,8 +1840,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
             outfile = "fkpl_coeffs_numerical_lagrange_integration_test_ngrid_"*string(ngrid)*"_GLL.pdf"
             savefig(outfile)
             println(outfile)
-            plot(nelement_list, [L2_C_err,L2_G_err,L2_H_err,L2_dHdvpa_err,L2_dHdvperp_err,L2_d2Gdvperp2_err,L2_d2Gdvpa2_err,L2_d2Gdvperpdvpa_err,L2_dGdvperp_err,L2_n_err,expected],
-            xlabel=xlabel, label=[Clabel Glabel Hlabel dHdvpalabel dHdvperplabel d2Gdvperp2label d2Gdvpa2label d2Gdvperpdvpalabel dGdvperplabel nlabel expected_label], ylabel="",
+            plot(nelement_list, [L2_C_err,L2_G_err,L2_H_err,L2_dHdvpa_err,L2_dHdvperp_err,L2_d2Gdvperp2_err,L2_d2Gdvpa2_err,L2_d2Gdvperpdvpa_err,L2_dGdvperp_err,L2_n_err,expected,expected_integral],
+            xlabel=xlabel, label=[Clabel Glabel Hlabel dHdvpalabel dHdvperplabel d2Gdvperp2label d2Gdvpa2label d2Gdvperpdvpalabel dGdvperplabel nlabel expected_label expected_integral_label], ylabel="",
              shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_list, nelement_list), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2, 
               xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize,
               foreground_color_legend = nothing, background_color_legend = nothing, legend=:bottomleft)
@@ -1831,8 +1849,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
             outfile = "fkpl_coeffs_L2_error_lagrange_integration_test_ngrid_"*string(ngrid)*"_GLL.pdf"
             savefig(outfile)
             println(outfile)
-            plot(nelement_list, [max_C_err,max_Gvpa_err,max_Gvperp_err,max_G_err,max_H_err,max_n_err,expected],
-            xlabel=xlabel, label=[Clabel Gvpalabel Gvperplabel Glabel Hlabel nlabel expected_label], ylabel="",
+            plot(nelement_list, [max_C_err,max_Gvpa_err,max_Gvperp_err,max_G_err,max_H_err,max_n_err,expected,expected_integral],
+            xlabel=xlabel, label=[Clabel Gvpalabel Gvperplabel Glabel Hlabel nlabel expected_label expected_integral_label], ylabel="",
              shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_list, nelement_list), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2, 
               xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize,
               foreground_color_legend = nothing, background_color_legend = nothing, legend=:bottomleft)
@@ -1841,8 +1859,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
             savefig(outfile)
             println(outfile)
             #println(max_G_err,max_H_err,max_dHdvpa_err,max_dHdvperp_err,max_d2Gdvperp2_err,max_d2Gdvpa2_err,max_d2Gdvperpdvpa_err,max_dGdvperp_err, expected)
-            plot(nelement_list, [max_dHdvpa_err,max_dHdvperp_err,max_d2Gdvperp2_err,max_d2Gdvpa2_err,max_d2Gdvperpdvpa_err,max_dGdvperp_err, expected],
-            xlabel=xlabel, label=[dHdvpalabel dHdvperplabel d2Gdvperp2label d2Gdvpa2label d2Gdvperpdvpalabel dGdvperplabel expected_label], ylabel="",
+            plot(nelement_list, [max_dHdvpa_err,max_dHdvperp_err,max_d2Gdvperp2_err,max_d2Gdvpa2_err,max_d2Gdvperpdvpa_err,max_dGdvperp_err, expected, expected_integral],
+            xlabel=xlabel, label=[dHdvpalabel dHdvperplabel d2Gdvperp2label d2Gdvpa2label d2Gdvperpdvpalabel dGdvperplabel expected_label expected_integral_label], ylabel="",
              shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_list, nelement_list), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2, 
               xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize,
               foreground_color_legend = nothing, background_color_legend = nothing, legend=:bottomleft)
