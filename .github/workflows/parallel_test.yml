@@ -11,9 +11,6 @@ jobs:
         os: [ubuntu-latest, macOS-latest]
         include:
           - julia_version: '1.8'
-          # Use  julia-1.7 for macOS because otherwise the job hangs
-          - julia_version: '1.7'
-            os: macOS-latest
       fail-fast: false
     timeout-minutes: 90
 
