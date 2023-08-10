@@ -1967,7 +1967,8 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
 end
 
 """
-    get_1d_ax(n=nothing; title=nothing, yscale=nothing, kwargs...)
+    get_1d_ax(n=nothing; title=nothing, yscale=nothing, get_legend_place=nothing,
+              kwargs...)
 
 Create a new `Figure` `fig` and `Axis` `ax` intended for 1d plots.
 
@@ -1981,38 +1982,69 @@ If a number of axes `n` is passed, then `ax` is a `Vector{Axis}` of length `n` (
 `n` is 1). The axes are created in a horizontal row, and the width of the figure is
 increased in proportion to `n`.
 
+`get_legend_place` can be set to one of (:left, :right, :above, :below) to create a
+`GridPosition` for a legend in the corresponding place relative to each `Axis`. If
+`get_legend_place` is set, `(fig, ax, legend_place)` is returned where `legend_place` is a
+`GridPosition` (if `n=nothing`) or a Tuple of `n` `GridPosition`s.
+
 Extra `kwargs` are passed to the `Axis()` constructor.
 """
-function get_1d_ax(n=nothing; title=nothing, yscale=nothing, kwargs...)
+function get_1d_ax(n=nothing; title=nothing, yscale=nothing, get_legend_place=nothing,
+                   kwargs...)
+    valid_legend_places = (nothing, :left, :right, :above, :below)
+    if get_legend_place ∉ valid_legend_places
+        error("get_legend_place=$get_legend_place is not one of $valid_legend_places")
+    end
     if yscale !== nothing
         kwargs = tuple(kwargs..., :yscale=>yscale)
     end
     if n == nothing
         fig = Figure(resolution=(600, 400))
+        ax = Axis(fig[1,1]; kwargs...)
+        if get_legend_place === :left
+            legend_place = fig[1,0]
+        elseif get_legend_place === :right
+            legend_place = fig[1,2]
+        elseif get_legend_place === :above
+            legend_place = fig[0,1]
+        elseif get_legend_place === :below
+            legend_place = fig[2,1]
+        end
         if title !== nothing
-            title_layout = fig[1,1] = GridLayout()
+            title_layout = fig[0,1] = GridLayout()
             Label(title_layout[1,1:2], title)
-
-            ax = Axis(fig[2,1]; kwargs...)
-        else
-            ax = Axis(fig[1,1]; kwargs...)
         end
     else
         fig = Figure(resolution=(600*n, 400))
+        plot_layout = fig[1,1] = GridLayout()
 
         if title !== nothing
-            title_layout = fig[1,1] = GridLayout()
+            title_layout = fig[0,1] = GridLayout()
             Label(title_layout[1,1:2], title)
-
-            plot_layout = fig[2,1] = GridLayout()
-        else
-            plot_layout = fig[1,1] = GridLayout()
         end
 
-        ax = [Axis(plot_layout[1,i]; kwargs...) for i in 1:n]
+        if get_legend_place === :left
+            ax = [Axis(plot_layout[1,2*i]; kwargs...) for i in 1:n]
+            legend_place = [plot_layout[1,2*i-1] for i in 1:n]
+        elseif get_legend_place === :right
+            ax = [Axis(plot_layout[1,2*i-1]; kwargs...) for i in 1:n]
+            legend_place = [plot_layout[1,2*i] for i in 1:n]
+        elseif get_legend_place === :above
+            ax = [Axis(plot_layout[2,i]; kwargs...) for i in 1:n]
+            legend_place = [plot_layout[1,i] for i in 1:n]
+        elseif get_legend_place === :below
+            ax = [Axis(plot_layout[1,i]; kwargs...) for i in 1:n]
+            legend_place = [plot_layout[2,i] for i in 1:n]
+        else
+            ax = [Axis(plot_layout[1,i]; kwargs...) for i in 1:n]
+        end
     end
 
-    return fig, ax
+    if get_legend_place === nothing
+        return fig, ax
+    else
+        return fig, ax, legend_place
+    end
 end
 
 """
