@@ -194,44 +194,58 @@ function makie_post_process(run_dir::Union{String,Tuple},
         plot_prefix = "comparison_plots/compare_"
     end
 
-    for variable_name ∈ moment_variable_list
-        plots_for_variable(run_info, variable_name; plot_prefix=plot_prefix, is_1D=is_1D,
-                           is_1V=is_1V)
-    end
-
-    # Plots from distribution function variables
-    ############################################
-    if any(ri !== nothing for ri in run_info_dfns)
-        dfn_variable_list = ion_dfn_variables
-        if has_neutrals
-            dfn_variable_list = tuple(dfn_variable_list..., neutral_dfn_variables...)
-        end
-        for variable_name ∈ dfn_variable_list
-            plots_for_dfn_variable(run_info_dfns, variable_name; plot_prefix=plot_prefix,
+    # @sync block ensures that all tasks spawned in this block are completed before
+    # makie_post_process() returns
+    @sync begin
+        for variable_name ∈ moment_variable_list
+            Threads.@spawn begin
+                plots_for_variable(run_info, variable_name; plot_prefix=plot_prefix,
                                    is_1D=is_1D, is_1V=is_1V)
+            end
         end
-    end
 
-    plot_charged_pdf_2D_at_wall(run_info_dfns; plot_prefix=plot_prefix)
-
-    instability_input = input_dict["instability2D"]
-    if any((instability_input["plot_1d"], instability_input["plot_2d"],
-            instability_input["animate_perturbations"]))
-        # Get zind from the first variable in the loop (phi), and use the same one for
-        # all subseqeunt variables.
-        zind = Union{mk_int,Nothing}[nothing for _ ∈ run_info_moments]
-        for variable_name ∈ ("phi", "density", "temperature")
-            zind = instability2D_plots(run_info_moments, variable_name,
-                                       plot_prefix=plot_prefix, zind=zind)
+        # Plots from distribution function variables
+        ############################################
+        if any(ri !== nothing for ri in run_info_dfns)
+            dfn_variable_list = ion_dfn_variables
+            if has_neutrals
+                dfn_variable_list = tuple(dfn_variable_list..., neutral_dfn_variables...)
+            end
+            for variable_name ∈ dfn_variable_list
+                plots_for_dfn_variable(run_info_dfns, variable_name; plot_prefix=plot_prefix,
+                                       is_1D=is_1D, is_1V=is_1V)
+            end
         end
+
+        plot_charged_pdf_2D_at_wall(run_info_dfns; plot_prefix=plot_prefix)
+
+        instability_input = input_dict["instability2D"]
+        if any((instability_input["plot_1d"], instability_input["plot_2d"],
+                instability_input["animate_perturbations"]))
+            # Do instability analysis on only one thread to avoid problems with FFTW (FFTW
+            # setup should only be done on a single thread).
+            Threads.@spawn begin
+                # Get zind from the first variable (phi), and use the same one for
+                # all subseqeunt variables.
+                zind = instability2D_plots(run_info_moments, "phi", plot_prefix=plot_prefix)
+                for variable_name ∈ ("density", "temperature")
+                    instability2D_plots(run_info_moments, variable_name,
+                                        plot_prefix=plot_prefix, zind=zind)
+                end
+            end
+        end
+
+        Threads.@spawn begin
+            Chodura_condition_plots(run_info_dfns, plot_prefix=plot_prefix)
+        end
+
+        Threads.@spawn begin
+            sound_wave_plots(run_info; plot_prefix=plot_prefix)
+        end
+
+        manufactured_solutions_analysis(run_info; plot_prefix=plot_prefix)
+        manufactured_solutions_analysis_dfns(run_info_dfns; plot_prefix=plot_prefix)
     end
-
-    Chodura_condition_plots(run_info_dfns, plot_prefix=plot_prefix)
-
-    sound_wave_plots(run_info; plot_prefix=plot_prefix)
-
-    manufactured_solutions_analysis(run_info; plot_prefix=plot_prefix)
-    manufactured_solutions_analysis_dfns(run_info_dfns; plot_prefix=plot_prefix)
 
     return nothing
 end
@@ -1243,36 +1257,44 @@ function plots_for_dfn_variable(run_info, variable_name; plot_prefix, is_1D=fals
                  (:_log, log10, positive_or_nan, log_variable_prefix))
             for dim ∈ plot_dims
                 if input[Symbol(:plot, log, :_vs_, dim)]
-                    func = getfield(makie_post_processing, Symbol(:plot_vs_, dim))
-                    outfile = var_prefix * "vs_$dim.pdf"
-                    func(run_info, variable_name, is=is, input=input, outfile=outfile,
-                         yscale=yscale, transform=transform)
+                    Threads.@spawn begin
+                        func = getfield(makie_post_processing, Symbol(:plot_vs_, dim))
+                        outfile = var_prefix * "vs_$dim.pdf"
+                        func(run_info, variable_name, is=is, input=input, outfile=outfile,
+                             yscale=yscale, transform=transform)
+                    end
                 end
             end
             for (dim1, dim2) ∈ combinations(plot_dims, 2)
                 if input[Symbol(:plot, log, :_vs_, dim2, :_, dim1)]
-                    func = getfield(makie_post_processing,
-                                    Symbol(:plot_vs_, dim2, :_, dim1))
-                    outfile = var_prefix * "vs_$(dim2)_$(dim1).pdf"
-                    func(run_info, variable_name, is=is, input=input, outfile=outfile,
-                         colorscale=yscale, transform=transform)
+                    Threads.@spawn begin
+                        func = getfield(makie_post_processing,
+                                        Symbol(:plot_vs_, dim2, :_, dim1))
+                        outfile = var_prefix * "vs_$(dim2)_$(dim1).pdf"
+                        func(run_info, variable_name, is=is, input=input, outfile=outfile,
+                             colorscale=yscale, transform=transform)
+                    end
                 end
             end
             for dim ∈ animate_dims
                 if input[Symbol(:animate, log, :_vs_, dim)]
-                    func = getfield(makie_post_processing, Symbol(:animate_vs_, dim))
-                    outfile = var_prefix * "vs_$dim." * input.animation_ext
-                    func(run_info, variable_name, is=is, input=input, outfile=outfile,
-                         yscale=yscale, transform=transform)
+                    Threads.@spawn begin
+                        func = getfield(makie_post_processing, Symbol(:animate_vs_, dim))
+                        outfile = var_prefix * "vs_$dim." * input.animation_ext
+                        func(run_info, variable_name, is=is, input=input, outfile=outfile,
+                             yscale=yscale, transform=transform)
+                    end
                 end
             end
             for (dim1, dim2) ∈ combinations(animate_dims, 2)
                 if input[Symbol(:animate, log, :_vs_, dim2, :_, dim1)]
-                    func = getfield(makie_post_processing,
-                                    Symbol(:animate_vs_, dim2, :_, dim1))
-                    outfile = var_prefix * "vs_$(dim2)_$(dim1)." * input.animation_ext
-                    func(run_info, variable_name, is=is, input=input, outfile=outfile,
-                         colorscale=yscale, transform=transform)
+                    Threads.@spawn begin
+                        func = getfield(makie_post_processing,
+                                        Symbol(:animate_vs_, dim2, :_, dim1))
+                        outfile = var_prefix * "vs_$(dim2)_$(dim1)." * input.animation_ext
+                        func(run_info, variable_name, is=is, input=input, outfile=outfile,
+                             colorscale=yscale, transform=transform)
+                    end
                 end
             end
         end
@@ -2366,44 +2388,64 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix)
         f_input["iz0"] = z
 
         if input.plot
-            plot_vs_vpa(run_info, "f"; is=1, input=f_input,
-                        outfile=plot_prefix * "pdf_$(label)_vs_vpa.pdf")
-
-            if !is_1V
-                plot_vs_vpa_vperp(run_info, "f"; is=1, input=f_input,
-                                  outfile=plot_prefix * "pdf_$(label)_vs_vpa_vperp.pdf")
+            Threads.@spawn begin
+                plot_vs_vpa(run_info, "f"; is=1, input=f_input,
+                            outfile=plot_prefix * "pdf_$(label)_vs_vpa.pdf")
             end
 
-            plot_vs_vpa_z(run_info, "f"; is=1, input=f_input, iz=z_range,
-                          outfile=plot_prefix * "pdf_$(label)_vs_vpa_z.pdf")
+            if !is_1V
+                Threads.@spawn begin
+                    plot_vs_vpa_vperp(run_info, "f"; is=1, input=f_input,
+                                      outfile=plot_prefix * "pdf_$(label)_vs_vpa_vperp.pdf")
+                end
+            end
+
+            Threads.@spawn begin
+                plot_vs_vpa_z(run_info, "f"; is=1, input=f_input, iz=z_range,
+                              outfile=plot_prefix * "pdf_$(label)_vs_vpa_z.pdf")
+            end
 
             if !is_1D
-                plot_vs_z_r(run_info, "f"; is=1, input=f_input, iz=z_range,
-                            outfile=plot_prefix * "pdf_$(label)_vs_z_r.pdf")
+                Threads.@spawn begin
+                    plot_vs_z_r(run_info, "f"; is=1, input=f_input, iz=z_range,
+                                outfile=plot_prefix * "pdf_$(label)_vs_z_r.pdf")
+                end
 
-                plot_vs_vpa_r(run_info, "f"; is=1, input=f_input,
-                              outfile=plot_prefix * "pdf_$(label)_vs_vpa_r.pdf")
+                Threads.@spawn begin
+                    plot_vs_vpa_r(run_info, "f"; is=1, input=f_input,
+                                  outfile=plot_prefix * "pdf_$(label)_vs_vpa_r.pdf")
+                end
             end
         end
 
         if input.animate
-            animate_vs_vpa(run_info, "f"; is=1, input=f_input,
-                           outfile=plot_prefix * "pdf_$(label)_vs_vpa." * input.animation_ext)
-
-            if !is_1V
-                animate_vs_vpa_vperp(run_info, "f"; is=1, input=f_input,
-                                     outfile=plot_prefix * "pdf_$(label)_vs_vpa_vperp." * input.animation_ext)
+            Threads.@spawn begin
+                animate_vs_vpa(run_info, "f"; is=1, input=f_input,
+                               outfile=plot_prefix * "pdf_$(label)_vs_vpa." * input.animation_ext)
             end
 
-            animate_vs_vpa_z(run_info, "f"; is=1, input=f_input, iz=z_range,
-                             outfile=plot_prefix * "pdf_$(label)_vs_vpa_z." * input.animation_ext)
+            if !is_1V
+                Threads.@spawn begin
+                    animate_vs_vpa_vperp(run_info, "f"; is=1, input=f_input,
+                                         outfile=plot_prefix * "pdf_$(label)_vs_vpa_vperp." * input.animation_ext)
+                end
+            end
+
+            Threads.@spawn begin
+                animate_vs_vpa_z(run_info, "f"; is=1, input=f_input, iz=z_range,
+                                 outfile=plot_prefix * "pdf_$(label)_vs_vpa_z." * input.animation_ext)
+            end
 
             if !is_1D
-                animate_vs_z_r(run_info, "f"; is=1, input=f_input, iz=z_range,
-                               outfile=plot_prefix * "pdf_$(label)_vs_z_r." * input.animation_ext)
+                Threads.@spawn begin
+                    animate_vs_z_r(run_info, "f"; is=1, input=f_input, iz=z_range,
+                                   outfile=plot_prefix * "pdf_$(label)_vs_z_r." * input.animation_ext)
+                end
 
-                animate_vs_vpa_r(run_info, "f"; is=1, input=f_input,
-                                 outfile=plot_prefix * "pdf_$(label)_vs_vpa_r." * input.animation_ext)
+                Threads.@spawn begin
+                    animate_vs_vpa_r(run_info, "f"; is=1, input=f_input,
+                                     outfile=plot_prefix * "pdf_$(label)_vs_vpa_r." * input.animation_ext)
+                end
             end
         end
     end
@@ -3252,152 +3294,178 @@ function compare_moment_symbolic_test(run_info, plot_prefix, field_label, field_
     if !is_1D && input.wall_plots
         # plot last (by default) timestep field vs r at z_wall
 
-        fig, ax, legend_place = get_1d_ax(2; get_legend_place=:below)
-        plot_1d(r.grid, select_slice(field, :r; input=input, iz=1), xlabel=L"r",
-                ylabel=field_label, label=field_label, ax=ax[1])
-        plot_1d(r.grid, select_slice(field_sym, :r; input=input, iz=1),
-                label=field_sym_label, ax=ax[1])
-        Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
-               orientation=:horizontal)
-        plot_1d(r.grid, select_slice(error, :r; input=input, iz=1), xlabel=L"r",
-                ylabel=norm_label, ax=ax[2])
-        outfile = plot_prefix * "MMS_" * variable_name * "(z_wall-)_vs_r.pdf"
-        save(outfile, fig)
+        Threads.@spawn begin
+            fig, ax, legend_place = get_1d_ax(2; get_legend_place=:below)
+            plot_1d(r.grid, select_slice(field, :r; input=input, iz=1), xlabel=L"r",
+                    ylabel=field_label, label=field_label, ax=ax[1])
+            plot_1d(r.grid, select_slice(field_sym, :r; input=input, iz=1),
+                    label=field_sym_label, ax=ax[1])
+            Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
+                   orientation=:horizontal)
+            plot_1d(r.grid, select_slice(error, :r; input=input, iz=1), xlabel=L"r",
+                    ylabel=norm_label, ax=ax[2])
+            outfile = plot_prefix * "MMS_" * variable_name * "(z_wall-)_vs_r.pdf"
+            save(outfile, fig)
+        end
 
-        fig, ax, legend_place = get_1d_ax(2; get_legend_place=:below)
-        plot_1d(r.grid, select_slice(field, :r; input=input, iz=z.n), xlabel=L"r",
-                ylabel=field_label, label=field_label, ax=ax[1])
-        plot_1d(r.grid, select_slice(field_sym, :r; input=input, iz=z.n),
-                label=field_sym_label, ax=ax[1])
-        Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
-               orientation=:horizontal)
-        plot_1d(r.grid, select_slice(error, :r; input=input, iz=z.n), xlabel=L"r",
-                ylabel=norm_label, ax=ax[2])
-        outfile = plot_prefix * "MMS_" * variable_name * "(z_wall+)_vs_r.pdf"
-        save(outfile, fig)
+        Threads.@spawn begin
+            fig, ax, legend_place = get_1d_ax(2; get_legend_place=:below)
+            plot_1d(r.grid, select_slice(field, :r; input=input, iz=z.n), xlabel=L"r",
+                    ylabel=field_label, label=field_label, ax=ax[1])
+            plot_1d(r.grid, select_slice(field_sym, :r; input=input, iz=z.n),
+                    label=field_sym_label, ax=ax[1])
+            Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
+                   orientation=:horizontal)
+            plot_1d(r.grid, select_slice(error, :r; input=input, iz=z.n), xlabel=L"r",
+                    ylabel=norm_label, ax=ax[2])
+            outfile = plot_prefix * "MMS_" * variable_name * "(z_wall+)_vs_r.pdf"
+            save(outfile, fig)
+        end
     end
 
     if input.plot_vs_t
-        fig, ax, legend_place = get_1d_ax(2; get_legend_place=:below)
-        plot_1d(time, select_slice(field, :t; input=input), xlabel=L"t",
-                ylabel=field_label, label=field_label, ax=ax[1])
-        plot_1d(time, select_slice(field_sym, :t; input=input), label=field_sym_label,
-                ax=ax[1])
-        Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
-               orientation=:horizontal)
-        plot_1d(time, select_slice(error, :t; input=input), xlabel=L"t",
-                ylabel=norm_label, ax=ax[2])
-        outfile = plot_prefix * "MMS_" * variable_name * "_vs_t.pdf"
-        save(outfile, fig)
+        Threads.@spawn begin
+            fig, ax, legend_place = get_1d_ax(2; get_legend_place=:below)
+            plot_1d(time, select_slice(field, :t; input=input), xlabel=L"t",
+                    ylabel=field_label, label=field_label, ax=ax[1])
+            plot_1d(time, select_slice(field_sym, :t; input=input), label=field_sym_label,
+                    ax=ax[1])
+            Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
+                   orientation=:horizontal)
+            plot_1d(time, select_slice(error, :t; input=input), xlabel=L"t",
+                    ylabel=norm_label, ax=ax[2])
+            outfile = plot_prefix * "MMS_" * variable_name * "_vs_t.pdf"
+            save(outfile, fig)
+        end
     end
     if !is_1D && input.plot_vs_r
-        fig, ax, legend_place = get_1d_ax(2; get_legend_place=:below)
-        plot_1d(r.grid, select_slice(field, :r; input=input), xlabel=L"r",
-                ylabel=field_label, label=field_label, ax=ax[1])
-        plot_1d(r.grid, select_slice(field_sym, :r; input=input), label=field_sym_label,
-                ax=ax[1])
-        Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
-               orientation=:horizontal)
-        plot_1d(r.grid, select_slice(error, :r; input=input), xlabel=L"r",
-                ylabel=norm_label, ax=ax[2])
-        outfile = plot_prefix * "MMS_" * variable_name * "_vs_r.pdf"
-        save(outfile, fig)
+        Threads.@spawn begin
+            fig, ax, legend_place = get_1d_ax(2; get_legend_place=:below)
+            plot_1d(r.grid, select_slice(field, :r; input=input), xlabel=L"r",
+                    ylabel=field_label, label=field_label, ax=ax[1])
+            plot_1d(r.grid, select_slice(field_sym, :r; input=input),
+                    label=field_sym_label, ax=ax[1])
+            Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
+                   orientation=:horizontal)
+            plot_1d(r.grid, select_slice(error, :r; input=input), xlabel=L"r",
+                    ylabel=norm_label, ax=ax[2])
+            outfile = plot_prefix * "MMS_" * variable_name * "_vs_r.pdf"
+            save(outfile, fig)
+        end
     end
     if input.plot_vs_z
-        fig, ax, legend_place = get_1d_ax(2; get_legend_place=:below)
-        plot_1d(z.grid, select_slice(field, :z; input=input), xlabel=L"z",
-                ylabel=field_label, label=field_label, ax=ax[1])
-        plot_1d(z.grid, select_slice(field_sym, :z; input=input), label=field_sym_label,
-                ax=ax[1])
-        Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
-               orientation=:horizontal)
-        plot_1d(z.grid, select_slice(error, :z; input=input), xlabel=L"z",
-                ylabel=norm_label, ax=ax[2])
-        outfile = plot_prefix * "MMS_" * variable_name * "_vs_z.pdf"
-        save(outfile, fig)
+        Threads.@spawn begin
+            fig, ax, legend_place = get_1d_ax(2; get_legend_place=:below)
+            plot_1d(z.grid, select_slice(field, :z; input=input), xlabel=L"z",
+                    ylabel=field_label, label=field_label, ax=ax[1])
+            plot_1d(z.grid, select_slice(field_sym, :z; input=input),
+                    label=field_sym_label, ax=ax[1])
+            Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
+                   orientation=:horizontal)
+            plot_1d(z.grid, select_slice(error, :z; input=input), xlabel=L"z",
+                    ylabel=norm_label, ax=ax[2])
+            outfile = plot_prefix * "MMS_" * variable_name * "_vs_z.pdf"
+            save(outfile, fig)
+        end
     end
     if !is_1D && input.plot_vs_r_t
-        fig, ax, colorbar_place = get_2d_ax(3)
-        plot_2d(r.grid, time, select_slice(field, :t, :r; input=input), title=field_label,
-                xlabel=L"r", ylabel=L"t", ax=ax[1], colorbar_place=colorbar_place[1])
-        plot_2d(r.grid, time, select_slice(field_sym, :t, :r; input=input),
-                title=field_sym_label, xlabel=L"r", ylabel=L"t", ax=ax[2],
-                colorbar_place=colorbar_place[2])
-        plot_2d(r.grid, time, select_slice(error, :t, :r; input=input), title=norm_label,
-                xlabel=L"r", ylabel=L"t", ax=ax[3], colorbar_place=colorbar_place[3])
-        outfile = plot_prefix * "MMS_" * variable_name * "_vs_r_t.pdf"
-        save(outfile, fig)
+        Threads.@spawn begin
+            fig, ax, colorbar_place = get_2d_ax(3)
+            plot_2d(r.grid, time, select_slice(field, :t, :r; input=input),
+                    title=field_label, xlabel=L"r", ylabel=L"t", ax=ax[1],
+                    colorbar_place=colorbar_place[1])
+            plot_2d(r.grid, time, select_slice(field_sym, :t, :r; input=input),
+                    title=field_sym_label, xlabel=L"r", ylabel=L"t", ax=ax[2],
+                    colorbar_place=colorbar_place[2])
+            plot_2d(r.grid, time, select_slice(error, :t, :r; input=input),
+                    title=norm_label, xlabel=L"r", ylabel=L"t", ax=ax[3],
+                    colorbar_place=colorbar_place[3])
+            outfile = plot_prefix * "MMS_" * variable_name * "_vs_r_t.pdf"
+            save(outfile, fig)
+        end
     end
     if input.plot_vs_z_t
-        fig, ax, colorbar_place = get_2d_ax(3)
-        plot_2d(z.grid, time, select_slice(field, :t, :z; input=input), title=field_label,
-                xlabel=L"z", ylabel=L"t", ax=ax[1], colorbar_place=colorbar_place[1])
-        plot_2d(z.grid, time, select_slice(field_sym, :t, :z; input=input),
-                title=field_sym_label, xlabel=L"z", ylabel=L"t", ax=ax[2],
-                colorbar_place=colorbar_place[2])
-        plot_2d(z.grid, time, select_slice(error, :t, :z; input=input), title=norm_label,
-                xlabel=L"z", ylabel=L"t", ax=ax[3], colorbar_place=colorbar_place[3])
-        outfile = plot_prefix * "MMS_" * variable_name * "_vs_z_t.pdf"
-        save(outfile, fig)
+        Threads.@spawn begin
+            fig, ax, colorbar_place = get_2d_ax(3)
+            plot_2d(z.grid, time, select_slice(field, :t, :z; input=input),
+                    title=field_label, xlabel=L"z", ylabel=L"t", ax=ax[1],
+                    colorbar_place=colorbar_place[1])
+            plot_2d(z.grid, time, select_slice(field_sym, :t, :z; input=input),
+                    title=field_sym_label, xlabel=L"z", ylabel=L"t", ax=ax[2],
+                    colorbar_place=colorbar_place[2])
+            plot_2d(z.grid, time, select_slice(error, :t, :z; input=input),
+                    title=norm_label, xlabel=L"z", ylabel=L"t", ax=ax[3],
+                    colorbar_place=colorbar_place[3])
+            outfile = plot_prefix * "MMS_" * variable_name * "_vs_z_t.pdf"
+            save(outfile, fig)
+        end
     end
     if !is_1D && input.plot_vs_z_r
-        fig, ax, colorbar_place = get_2d_ax(3)
-        plot_2d(z.grid, r.grid, select_slice(field, :r, :z; input=input),
-                title=field_label, xlabel=L"z", ylabel=L"r", ax=ax[1],
-                colorbar_place=colorbar_place[1])
-        plot_2d(z.grid, r.grid, select_slice(field_sym, :r, :z; input=input),
-                title=field_sym_label, xlabel=L"z", ylabel=L"r", ax=ax[2],
-                colorbar_place=colorbar_place[2])
-        plot_2d(z.grid, r.grid, select_slice(error, :r, :z; input=input),
-                title=norm_label, xlabel=L"z", ylabel=L"r", ax=ax[3],
-                colorbar_place=colorbar_place[3])
-        outfile = plot_prefix * "MMS_" * variable_name * "_vs_z_r.pdf"
-        save(outfile, fig)
+        Threads.@spawn begin
+            fig, ax, colorbar_place = get_2d_ax(3)
+            plot_2d(z.grid, r.grid, select_slice(field, :r, :z; input=input),
+                    title=field_label, xlabel=L"z", ylabel=L"r", ax=ax[1],
+                    colorbar_place=colorbar_place[1])
+            plot_2d(z.grid, r.grid, select_slice(field_sym, :r, :z; input=input),
+                    title=field_sym_label, xlabel=L"z", ylabel=L"r", ax=ax[2],
+                    colorbar_place=colorbar_place[2])
+            plot_2d(z.grid, r.grid, select_slice(error, :r, :z; input=input),
+                    title=norm_label, xlabel=L"z", ylabel=L"r", ax=ax[3],
+                    colorbar_place=colorbar_place[3])
+            outfile = plot_prefix * "MMS_" * variable_name * "_vs_z_r.pdf"
+            save(outfile, fig)
+        end
     end
     if !is_1D && input.animate_vs_r
-        fig, ax, legend_place = get_1d_ax(2; get_legend_place=:below)
-        frame_index = Observable(1)
-        animate_1d(r.grid, select_slice(field, :t, :r; input=input),
-                   frame_index=frame_index, xlabel="r", ylabel=field_label,
-                   label=field_label, ax=ax[1])
-        animate_1d(r.grid, select_slice(field_sym, :t, :r; input=input),
-                   frame_index=frame_index, label=field_sym_label, ax=ax[1])
-        Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
-               orientation=:horizontal)
-        animate_1d(r.grid, select_slice(error, :t, :r; input=input),
-                   frame_index=frame_index, xlabel="r", ylabel=norm_label, ax=ax[2])
-        outfile = plot_prefix * "MMS_" * variable_name * "_vs_r." * input.animation_ext
-        save_animation(fig, frame_index, nt, outfile)
+        Threads.@spawn begin
+            fig, ax, legend_place = get_1d_ax(2; get_legend_place=:below)
+            frame_index = Observable(1)
+            animate_1d(r.grid, select_slice(field, :t, :r; input=input),
+                       frame_index=frame_index, xlabel="r", ylabel=field_label,
+                       label=field_label, ax=ax[1])
+            animate_1d(r.grid, select_slice(field_sym, :t, :r; input=input),
+                       frame_index=frame_index, label=field_sym_label, ax=ax[1])
+            Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
+                   orientation=:horizontal)
+            animate_1d(r.grid, select_slice(error, :t, :r; input=input),
+                       frame_index=frame_index, xlabel="r", ylabel=norm_label, ax=ax[2])
+            outfile = plot_prefix * "MMS_" * variable_name * "_vs_r." * input.animation_ext
+            save_animation(fig, frame_index, nt, outfile)
+        end
     end
     if input.animate_vs_z
-        fig, ax, legend_place = get_1d_ax(2; get_legend_place=:below)
-        frame_index = Observable(1)
-        animate_1d(z.grid, select_slice(field, :t, :z; input=input),
-                   frame_index=frame_index, xlabel="z", ylabel=field_label,
-                   label=field_label, ax=ax[1])
-        animate_1d(z.grid, select_slice(field_sym, :t, :z; input=input),
-                   frame_index=frame_index, label=field_sym_label, ax=ax[1])
-        Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
-               orientation=:horizontal)
-        animate_1d(z.grid, select_slice(error, :t, :z; input=input),
-                   frame_index=frame_index, xlabel="z", ylabel=norm_label, ax=ax[2])
-        outfile = plot_prefix * "MMS_" * variable_name * "_vs_z." * input.animation_ext
-        save_animation(fig, frame_index, nt, outfile)
+        Threads.@spawn begin
+            fig, ax, legend_place = get_1d_ax(2; get_legend_place=:below)
+            frame_index = Observable(1)
+            animate_1d(z.grid, select_slice(field, :t, :z; input=input),
+                       frame_index=frame_index, xlabel="z", ylabel=field_label,
+                       label=field_label, ax=ax[1])
+            animate_1d(z.grid, select_slice(field_sym, :t, :z; input=input),
+                       frame_index=frame_index, label=field_sym_label, ax=ax[1])
+            Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
+                   orientation=:horizontal)
+            animate_1d(z.grid, select_slice(error, :t, :z; input=input),
+                       frame_index=frame_index, xlabel="z", ylabel=norm_label, ax=ax[2])
+            outfile = plot_prefix * "MMS_" * variable_name * "_vs_z." * input.animation_ext
+            save_animation(fig, frame_index, nt, outfile)
+        end
     end
     if !is_1D && input.animate_vs_z_r
-        fig, ax, colorbar_place = get_2d_ax(3)
-        frame_index = Observable(1)
-        animate_2d(z.grid, r.grid, select_slice(field, :t, :r, :z; input=input),
-                   frame_index=frame_index, title=field_label, xlabel=L"z", ylabel=L"y",
-                   ax=ax[1], colorbar_place=colorbar_place[1])
-        animate_2d(z.grid, r.grid, select_slice(field_sym, :t, :r, :z; input=input),
-                   frame_index=frame_index, title=field_sym_label, xlabel=L"z",
-                   ylabel=L"y", ax=ax[2], colorbar_place=colorbar_place[2])
-        animate_2d(z.grid, r.grid, select_slice(error, :t, :r, :z; input=input),
-                   frame_index=frame_index, title=norm_label, xlabel=L"z", ylabel=L"y",
-                   ax=ax[3], colorbar_place=colorbar_place[3])
-        outfile = plot_prefix * "MMS_" * variable_name * "_vs_z_r." * input.animation_ext
-        save_animation(fig, frame_index, nt, outfile)
+        Threads.@spawn begin
+            fig, ax, colorbar_place = get_2d_ax(3)
+            frame_index = Observable(1)
+            animate_2d(z.grid, r.grid, select_slice(field, :t, :r, :z; input=input),
+                       frame_index=frame_index, title=field_label, xlabel=L"z",
+                       ylabel=L"y", ax=ax[1], colorbar_place=colorbar_place[1])
+            animate_2d(z.grid, r.grid, select_slice(field_sym, :t, :r, :z; input=input),
+                       frame_index=frame_index, title=field_sym_label, xlabel=L"z",
+                       ylabel=L"y", ax=ax[2], colorbar_place=colorbar_place[2])
+            animate_2d(z.grid, r.grid, select_slice(error, :t, :r, :z; input=input),
+                       frame_index=frame_index, title=norm_label, xlabel=L"z",
+                       ylabel=L"y", ax=ax[3], colorbar_place=colorbar_place[3])
+            outfile = plot_prefix * "MMS_" * variable_name * "_vs_z_r." * input.animation_ext
+            save_animation(fig, frame_index, nt, outfile)
+        end
     end
 
     return field_norm
@@ -3419,107 +3487,116 @@ function _MMS_pdf_plots(run_info, input, variable_name, plot_prefix, field_label
              (:_log, log10, x->positive_or_nan(x; epsilon=1.e-30), x->positive_or_nan.(abs.(x); epsilon=1.e-30)))
         for dim ∈ plot_dims
             if input[Symbol(:plot, log, :_vs_, dim)]
-                coord = dim === :t ? time : run_info[dim].grid
+                Threads.@spawn begin
+                    coord = dim === :t ? time : run_info[dim].grid
 
-                slices = (k=>v for (k, v) ∈ all_plot_slices if k != Symbol(:i, dim))
-                f, f_sym =
-                    manufactured_solutions_get_field_and_field_sym(
-                        run_info, variable_name; slices...)
-                error = f .- f_sym
+                    slices = (k=>v for (k, v) ∈ all_plot_slices if k != Symbol(:i, dim))
+                    f, f_sym =
+                        manufactured_solutions_get_field_and_field_sym(
+                            run_info, variable_name; slices...)
+                    error = f .- f_sym
 
-                fig, ax, legend_place = get_1d_ax(2; yscale=yscale, get_legend_place=:below)
-                plot_1d(coord, f, xlabel=L"%$dim", ylabel=field_label, label=field_label,
-                        ax=ax[1], transform=transform)
-                plot_1d(coord, f_sym, label=field_sym_label, ax=ax[1],
-                        transform=transform)
-                Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
-                       orientation=:horizontal)
-                plot_1d(coord, error, xlabel=L"%$dim", ylabel=norm_label, ax=ax[2],
-                        transform=error_transform)
-                outfile = plot_prefix * "MMS" * String(log) * "_" * variable_name * "_vs_$dim.pdf"
-                save(outfile, fig)
+                    fig, ax, legend_place = get_1d_ax(2; yscale=yscale, get_legend_place=:below)
+                    plot_1d(coord, f, xlabel=L"%$dim", ylabel=field_label, label=field_label,
+                            ax=ax[1], transform=transform)
+                    plot_1d(coord, f_sym, label=field_sym_label, ax=ax[1],
+                            transform=transform)
+                    Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
+                           orientation=:horizontal)
+                    plot_1d(coord, error, xlabel=L"%$dim", ylabel=norm_label, ax=ax[2],
+                            transform=error_transform)
+                    outfile = plot_prefix * "MMS" * String(log) * "_" * variable_name * "_vs_$dim.pdf"
+                    save(outfile, fig)
+                end
             end
         end
         for (dim1, dim2) ∈ combinations(plot_dims, 2)
             if input[Symbol(:plot, log, :_vs_, dim2, :_, dim1)]
-                coord1 = dim1 === :t ? time : run_info[dim1].grid
-                coord2 = dim2 === :t ? time : run_info[dim2].grid
+                Threads.@spawn begin
+                    coord1 = dim1 === :t ? time : run_info[dim1].grid
+                    coord2 = dim2 === :t ? time : run_info[dim2].grid
 
-                slices = (k=>v for (k, v) ∈ all_plot_slices
-                          if k ∉ (Symbol(:i, dim1), Symbol(:i, dim2)))
-                f, f_sym =
-                manufactured_solutions_get_field_and_field_sym(
-                    run_info, variable_name; slices...)
-                error = f .- f_sym
+                    slices = (k=>v for (k, v) ∈ all_plot_slices
+                              if k ∉ (Symbol(:i, dim1), Symbol(:i, dim2)))
+                    f, f_sym =
+                    manufactured_solutions_get_field_and_field_sym(
+                                                                   run_info, variable_name; slices...)
+                    error = f .- f_sym
 
-                fig, ax, colorbar_place = get_2d_ax(3)
-                plot_2d(coord2, coord1, f, title=field_label, xlabel=L"%$dim2",
-                        ylabel=L"%$dim1", ax=ax[1], colorbar_place=colorbar_place[1],
-                        colorscale=yscale, transform=transform)
-                plot_2d(coord2, coord1, f_sym, title=field_sym_label, xlabel=L"%$dim2",
-                        ylabel=L"%$dim1", ax=ax[2], colorbar_place=colorbar_place[2],
-                        colorscale=yscale, transform=transform)
-                plot_2d(coord2, coord1, error, title=norm_label, xlabel=L"%$dim2",
-                        ylabel=L"%$dim1", ax=ax[3], colorbar_place=colorbar_place[3],
-                        colorscale=yscale, transform=error_transform)
-                outfile = plot_prefix * "MMS" * String(log) * "_" * variable_name * "_vs_$(dim2)_$(dim1).pdf"
-                save(outfile, fig)
+                    fig, ax, colorbar_place = get_2d_ax(3)
+                    plot_2d(coord2, coord1, f, title=field_label, xlabel=L"%$dim2",
+                            ylabel=L"%$dim1", ax=ax[1], colorbar_place=colorbar_place[1],
+                            colorscale=yscale, transform=transform)
+                    plot_2d(coord2, coord1, f_sym, title=field_sym_label,
+                            xlabel=L"%$dim2", ylabel=L"%$dim1", ax=ax[2],
+                            colorbar_place=colorbar_place[2], colorscale=yscale,
+                            transform=transform)
+                    plot_2d(coord2, coord1, error, title=norm_label, xlabel=L"%$dim2",
+                            ylabel=L"%$dim1", ax=ax[3], colorbar_place=colorbar_place[3],
+                            colorscale=yscale, transform=error_transform)
+                    outfile = plot_prefix * "MMS" * String(log) * "_" * variable_name * "_vs_$(dim2)_$(dim1).pdf"
+                    save(outfile, fig)
+                end
             end
         end
         for dim ∈ animate_dims
             if input[Symbol(:animate, log, :_vs_, dim)]
-                coord = dim === :t ? time : run_info[dim].grid
+                Threads.@spawn begin
+                    coord = dim === :t ? time : run_info[dim].grid
 
-                slices = (k=>v for (k, v) ∈ all_animate_slices if k != Symbol(:i, dim))
-                f, f_sym =
-                    manufactured_solutions_get_field_and_field_sym(
-                        run_info, variable_name; slices...)
-                error = f .- f_sym
+                    slices = (k=>v for (k, v) ∈ all_animate_slices if k != Symbol(:i, dim))
+                    f, f_sym =
+                        manufactured_solutions_get_field_and_field_sym(
+                            run_info, variable_name; slices...)
+                    error = f .- f_sym
 
-                fig, ax, legend_place = get_1d_ax(2; yscale=yscale, get_legend_place=:below)
-                frame_index = Observable(1)
-                animate_1d(coord, f, frame_index=frame_index, xlabel=L"%$dim",
-                           ylabel=field_label, label=field_label, ax=ax[1],
-                           transform=transform)
-                animate_1d(coord, f_sym, frame_index=frame_index, label=field_sym_label,
-                           ax=ax[1], transform=transform)
-                Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
-                       orientation=:horizontal)
-                animate_1d(coord, error, frame_index=frame_index, xlabel=L"%$dim",
-                           ylabel=norm_label, label=field_label, ax=ax[2],
-                           transform=error_transform)
-                outfile = plot_prefix * "MMS" * String(log) * "_" * variable_name * "_vs_$dim." * input.animation_ext
-                save_animation(fig, frame_index, nt, outfile)
+                    fig, ax, legend_place = get_1d_ax(2; yscale=yscale, get_legend_place=:below)
+                    frame_index = Observable(1)
+                    animate_1d(coord, f, frame_index=frame_index, xlabel=L"%$dim",
+                               ylabel=field_label, label=field_label, ax=ax[1],
+                               transform=transform)
+                    animate_1d(coord, f_sym, frame_index=frame_index,
+                               label=field_sym_label, ax=ax[1], transform=transform)
+                    Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
+                           orientation=:horizontal)
+                    animate_1d(coord, error, frame_index=frame_index, xlabel=L"%$dim",
+                               ylabel=norm_label, label=field_label, ax=ax[2],
+                               transform=error_transform)
+                    outfile = plot_prefix * "MMS" * String(log) * "_" * variable_name * "_vs_$dim." * input.animation_ext
+                    save_animation(fig, frame_index, nt, outfile)
+                end
             end
         end
         for (dim1, dim2) ∈ combinations(animate_dims, 2)
             if input[Symbol(:animate, log, :_vs_, dim2, :_, dim1)]
-                coord1 = dim1 === :t ? time : run_info[dim1].grid
-                coord2 = dim2 === :t ? time : run_info[dim2].grid
+                Threads.@spawn begin
+                    coord1 = dim1 === :t ? time : run_info[dim1].grid
+                    coord2 = dim2 === :t ? time : run_info[dim2].grid
 
-                slices = (k=>v for (k, v) ∈ all_animate_slices
-                          if k ∉ (Symbol(:i, dim1), Symbol(:i, dim2)))
-                f, f_sym =
-                manufactured_solutions_get_field_and_field_sym(
-                    run_info, variable_name; slices...)
-                error = f .- f_sym
+                    slices = (k=>v for (k, v) ∈ all_animate_slices
+                              if k ∉ (Symbol(:i, dim1), Symbol(:i, dim2)))
+                    f, f_sym =
+                    manufactured_solutions_get_field_and_field_sym(
+                        run_info, variable_name; slices...)
+                    error = f .- f_sym
 
-                fig, ax, colorbar_place = get_2d_ax(3)
-                frame_index = Observable(1)
-                animate_2d(coord2, coord1, f, frame_index=frame_index, xlabel=L"%$dim2",
-                           ylabel=L"%$dim1", title=field_label, ax=ax[1],
-                           colorbar_place=colorbar_place[1], colorscale=yscale,
-                           transform=transform)
-                animate_2d(coord2, coord1, f_sym, frame_index=frame_index,
-                           xlabel=L"%$dim2", ylabel=L"%$dim1", title=field_sym_label,
-                           ax=ax[2], colorbar_place=colorbar_place[2], colorscale=yscale,
-                           transform=transform)
-                animate_2d(coord2, coord1, error, frame_index=frame_index,
-                           xlabel=L"%$dim2", ylabel=L"%$dim1", title=norm_label,
-                           ax=ax[3], colorbar_place=colorbar_place[3], colorscale=yscale,
-                           transform=error_transform)
-                outfile = plot_prefix * "MMS" * String(log) * "_" * variable_name * "_vs_$(dim2)_$(dim1)." * input.animation_ext
-                save_animation(fig, frame_index, nt, outfile)
+                    fig, ax, colorbar_place = get_2d_ax(3)
+                    frame_index = Observable(1)
+                    animate_2d(coord2, coord1, f, frame_index=frame_index,
+                               xlabel=L"%$dim2", ylabel=L"%$dim1", title=field_label,
+                               ax=ax[1], colorbar_place=colorbar_place[1],
+                               colorscale=yscale, transform=transform)
+                    animate_2d(coord2, coord1, f_sym, frame_index=frame_index,
+                               xlabel=L"%$dim2", ylabel=L"%$dim1", title=field_sym_label,
+                               ax=ax[2], colorbar_place=colorbar_place[2],
+                               colorscale=yscale, transform=transform)
+                    animate_2d(coord2, coord1, error, frame_index=frame_index,
+                               xlabel=L"%$dim2", ylabel=L"%$dim1", title=norm_label,
+                               ax=ax[3], colorbar_place=colorbar_place[3],
+                               colorscale=yscale, transform=error_transform)
+                    outfile = plot_prefix * "MMS" * String(log) * "_" * variable_name * "_vs_$(dim2)_$(dim1)." * input.animation_ext
+                    save_animation(fig, frame_index, nt, outfile)
+                end
             end
         end
     end
@@ -3601,68 +3678,75 @@ function compare_charged_pdf_symbolic_test(run_info, plot_prefix; io=nothing,
 
     if input.wall_plots
         for (iz, z_label) ∈ ((1, "wall-"), (z.n, "wall+"))
-            f, f_sym =
-                manufactured_solutions_get_field_and_field_sym(
-                    run_info, variable_name, it=input.it0, ir=input.ir0, iz=iz,
-                    ivperp=input.ivperp0)
-            error = f .- f_sym
-
-            fig, ax, legend_place = get_1d_ax(2; get_legend_place=:below)
-            plot_1d(vpa.grid, f, ax=ax[1], label="num",
-                    xlabel=L"v_{\parallel}/L_{v_{\parallel}}", ylabel=field_label)
-            plot_1d(vpa.grid, f_sym, ax=ax[1], label="sym")
-            Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
-                   orientation=:horizontal)
-
-            plot_1d(vpa.grid, error, ax=ax[2], xlabel=L"v_{\parallel}/L_{v_{\parallel}}",
-                    ylabel=norm_label)
-
-            outfile = plot_prefix * variable_name * "(" * z_label * ")_vs_vpa.pdf"
-            save(outfile, fig)
-
-            if !is_1D
+            Threads.@spawn begin
                 f, f_sym =
-                manufactured_solutions_get_field_and_field_sym(
-                    run_info, variable_name, it=input.it0, iz=iz, ivperp=input.ivperp0)
+                    manufactured_solutions_get_field_and_field_sym(
+                        run_info, variable_name, it=input.it0, ir=input.ir0, iz=iz,
+                        ivperp=input.ivperp0)
                 error = f .- f_sym
 
-                fig, ax, colorbar_place = get_2d_ax(3)
-                plot_2d(vpa.grid, r.grid, f, ax=ax[1], colorbar_place=colorbar_place[1],
-                        title=field_label, xlabel=L"v_{\parallel}/L_{v_{\parallel}}",
-                        ylabel=L"r")
-                plot_2d(vpa.grid, r.grid, f_sym, ax=ax[2],
-                        colorbar_place=colorbar_place[2], title=field_sym_label,
-                        xlabel=L"v_{\parallel}/L_{v_{\parallel}}", ylabel=L"r")
-                plot_2d(vpa.grid, r.grid, error, ax=ax[3],
-                        colorbar_place=colorbar_place[3], title=norm_label,
-                        xlabel=L"v_{\parallel}/L_{v_{\parallel}}", ylabel=L"r")
+                fig, ax, legend_place = get_1d_ax(2; get_legend_place=:below)
+                plot_1d(vpa.grid, f, ax=ax[1], label="num",
+                        xlabel=L"v_{\parallel}/L_{v_{\parallel}}", ylabel=field_label)
+                plot_1d(vpa.grid, f_sym, ax=ax[1], label="sym")
+                Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
+                       orientation=:horizontal)
 
-                outfile = plot_prefix * variable_name * "(" * z_label * ")_vs_vpa_r.pdf"
+                plot_1d(vpa.grid, error, ax=ax[2],
+                        xlabel=L"v_{\parallel}/L_{v_{\parallel}}", ylabel=norm_label)
+
+                outfile = plot_prefix * variable_name * "(" * z_label * ")_vs_vpa.pdf"
                 save(outfile, fig)
             end
 
+            if !is_1D
+                Threads.@spawn begin
+                    f, f_sym =
+                    manufactured_solutions_get_field_and_field_sym(
+                        run_info, variable_name, it=input.it0, iz=iz,
+                        ivperp=input.ivperp0)
+                    error = f .- f_sym
+
+                    fig, ax, colorbar_place = get_2d_ax(3)
+                    plot_2d(vpa.grid, r.grid, f, ax=ax[1],
+                            colorbar_place=colorbar_place[1], title=field_label,
+                            xlabel=L"v_{\parallel}/L_{v_{\parallel}}", ylabel=L"r")
+                    plot_2d(vpa.grid, r.grid, f_sym, ax=ax[2],
+                            colorbar_place=colorbar_place[2], title=field_sym_label,
+                            xlabel=L"v_{\parallel}/L_{v_{\parallel}}", ylabel=L"r")
+                    plot_2d(vpa.grid, r.grid, error, ax=ax[3],
+                            colorbar_place=colorbar_place[3], title=norm_label,
+                            xlabel=L"v_{\parallel}/L_{v_{\parallel}}", ylabel=L"r")
+
+                    outfile = plot_prefix * variable_name * "(" * z_label * ")_vs_vpa_r.pdf"
+                    save(outfile, fig)
+                end
+            end
+
             if !is_1V
-                f, f_sym =
-                manufactured_solutions_get_field_and_field_sym(
-                    run_info, variable_name, it=input.it0, iz=iz, ir=input.ir0)
-                error = f .- f_sym
+                Threads.@spawn begin
+                    f, f_sym =
+                    manufactured_solutions_get_field_and_field_sym(
+                        run_info, variable_name, it=input.it0, iz=iz, ir=input.ir0)
+                    error = f .- f_sym
 
-                fig, ax, colorbar_place = get_2d_ax(3)
-                plot_2d(vpa.grid, vperp.grid, f, ax=ax[1],
-                        colorbar_place=colorbar_place[1], title=field_label,
-                        xlabel=L"v_{\parallel}/L_{v_{\parallel}}",
-                        ylabel=L"v_{\perp}/L_{v_{\perp}}")
-                plot_2d(vpa.grid, vperp.grid, f_sym, ax=ax[2],
-                        colorbar_place=colorbar_place[2], title=field_sym_label,
-                        xlabel=L"v_{\parallel}/L_{v_{\parallel}}",
-                        ylabel=L"v_{\perp}/L_{v_{\perp}}")
-                plot_2d(vpa.grid, vperp.grid, error, ax=ax[3],
-                        colorbar_place=colorbar_place[3], title=norm_label,
-                        xlabel=L"v_{\parallel}/L_{v_{\parallel}}",
-                        ylabel=L"v_{\perp}/L_{v_{\perp}}")
+                    fig, ax, colorbar_place = get_2d_ax(3)
+                    plot_2d(vpa.grid, vperp.grid, f, ax=ax[1],
+                            colorbar_place=colorbar_place[1], title=field_label,
+                            xlabel=L"v_{\parallel}/L_{v_{\parallel}}",
+                            ylabel=L"v_{\perp}/L_{v_{\perp}}")
+                    plot_2d(vpa.grid, vperp.grid, f_sym, ax=ax[2],
+                            colorbar_place=colorbar_place[2], title=field_sym_label,
+                            xlabel=L"v_{\parallel}/L_{v_{\parallel}}",
+                            ylabel=L"v_{\perp}/L_{v_{\perp}}")
+                    plot_2d(vpa.grid, vperp.grid, error, ax=ax[3],
+                            colorbar_place=colorbar_place[3], title=norm_label,
+                            xlabel=L"v_{\parallel}/L_{v_{\parallel}}",
+                            ylabel=L"v_{\perp}/L_{v_{\perp}}")
 
-                outfile = plot_prefix * variable_name * "(" * z_label * ")_vs_vpa_vperp.pdf"
-                save(outfile, fig)
+                    outfile = plot_prefix * variable_name * "(" * z_label * ")_vs_vpa_vperp.pdf"
+                    save(outfile, fig)
+                end
             end
         end
     end
@@ -3758,93 +3842,95 @@ function compare_neutral_pdf_symbolic_test(run_info, plot_prefix; io=nothing,
 
     if input.wall_plots
         for (iz, z_label) ∈ ((1, "wall-"), (z.n, "wall+"))
-            f, f_sym =
-                manufactured_solutions_get_field_and_field_sym(
-                    run_info, variable_name, it=input.it0, ir=input.ir0, iz=iz,
-                    ivzeta=input.ivzeta0, ivr=input.ivr0)
-            error = f .- f_sym
-
-            fig, ax, legend_place = get_1d_ax(2; get_legend_place=:below)
-            plot_1d(vz.grid, f, ax=ax[1], label="num",
-                    xlabel=L"v_{z}/L_{v_{z}}", ylabel=field_label)
-            plot_1d(vz.grid, f_sym, ax=ax[1], label="sym")
-            Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
-                   orientation=:horizontal)
-
-            plot_1d(vz.grid, error, ax=ax[2], xlabel=L"v_{z}/L_{v_{z}}",
-                    ylabel=norm_label)
-
-            outfile = plot_prefix * variable_name * "(" * z_label * ")_vs_vz.pdf"
-            save(outfile, fig)
-
-            if !is_1D
+            Threads.@spawn begin
                 f, f_sym =
-                manufactured_solutions_get_field_and_field_sym(
-                    run_info, variable_name, it=input.it0, iz=iz, ivzeta=input.ivzeta0,
-                    ivr=input.ivr0)
+                    manufactured_solutions_get_field_and_field_sym(
+                        run_info, variable_name, it=input.it0, ir=input.ir0, iz=iz,
+                        ivzeta=input.ivzeta0, ivr=input.ivr0)
                 error = f .- f_sym
 
-                fig, ax, colorbar_place = get_2d_ax(3)
-                plot_2d(vz.grid, r.grid, f, ax=ax[1], colorbar_place=colorbar_place[1],
-                        title=field_label, xlabel=L"v_{z}/L_{v_{z}}",
-                        ylabel=L"r")
-                plot_2d(vz.grid, r.grid, f_sym, ax=ax[2],
-                        colorbar_place=colorbar_place[2], title=field_sym_label,
-                        xlabel=L"v_{z}/L_{v_{z}}", ylabel=L"r")
-                plot_2d(vz.grid, r.grid, error, ax=ax[3],
-                        colorbar_place=colorbar_place[3], title=norm_label,
-                        xlabel=L"v_{z}/L_{v_{z}}", ylabel=L"r")
+                fig, ax, legend_place = get_1d_ax(2; get_legend_place=:below)
+                plot_1d(vz.grid, f, ax=ax[1], label="num", xlabel=L"v_{z}/L_{v_{z}}",
+                        ylabel=field_label)
+                plot_1d(vz.grid, f_sym, ax=ax[1], label="sym")
+                Legend(legend_place[1], ax[1]; tellheight=true, tellwidth=false,
+                       orientation=:horizontal)
 
-                outfile = plot_prefix * variable_name * "(" * z_label * ")_vs_vz_r.pdf"
+                plot_1d(vz.grid, error, ax=ax[2], xlabel=L"v_{z}/L_{v_{z}}",
+                        ylabel=norm_label)
+
+                outfile = plot_prefix * variable_name * "(" * z_label * ")_vs_vz.pdf"
                 save(outfile, fig)
             end
 
+            if !is_1D
+                Threads.@spawn begin
+                    f, f_sym =
+                    manufactured_solutions_get_field_and_field_sym(
+                        run_info, variable_name, it=input.it0, iz=iz,
+                        ivzeta=input.ivzeta0, ivr=input.ivr0)
+                    error = f .- f_sym
+
+                    fig, ax, colorbar_place = get_2d_ax(3)
+                    plot_2d(vz.grid, r.grid, f, ax=ax[1],
+                            colorbar_place=colorbar_place[1], title=field_label,
+                            xlabel=L"v_{z}/L_{v_{z}}", ylabel=L"r")
+                    plot_2d(vz.grid, r.grid, f_sym, ax=ax[2],
+                            colorbar_place=colorbar_place[2], title=field_sym_label,
+                            xlabel=L"v_{z}/L_{v_{z}}", ylabel=L"r")
+                    plot_2d(vz.grid, r.grid, error, ax=ax[3],
+                            colorbar_place=colorbar_place[3], title=norm_label,
+                            xlabel=L"v_{z}/L_{v_{z}}", ylabel=L"r")
+
+                    outfile = plot_prefix * variable_name * "(" * z_label * ")_vs_vz_r.pdf"
+                    save(outfile, fig)
+                end
+            end
+
             if !is_1V
-                f, f_sym =
-                manufactured_solutions_get_field_and_field_sym(
-                    run_info, variable_name, it=input.it0, iz=iz, ir=input.ir0,
-                    ivzeta=input.ivzeta0)
-                error = f .- f_sym
+                Threads.@spawn begin
+                    f, f_sym =
+                    manufactured_solutions_get_field_and_field_sym(
+                        run_info, variable_name, it=input.it0, iz=iz, ir=input.ir0,
+                        ivzeta=input.ivzeta0)
+                    error = f .- f_sym
 
-                fig, ax, colorbar_place = get_2d_ax(3)
-                plot_2d(vz.grid, vr.grid, f, ax=ax[1],
-                        colorbar_place=colorbar_place[1], title=field_label,
-                        xlabel=L"v_{z}/L_{v_{z}}",
-                        ylabel=L"v_{r}/L_{v_{r}}")
-                plot_2d(vz.grid, vr.grid, f_sym, ax=ax[2],
-                        colorbar_place=colorbar_place[2], title=field_sym_label,
-                        xlabel=L"v_{z}/L_{v_{z}}",
-                        ylabel=L"v_{r}/L_{v_{r}}")
-                plot_2d(vz.grid, vr.grid, error, ax=ax[3],
-                        colorbar_place=colorbar_place[3], title=norm_label,
-                        xlabel=L"v_{z}/L_{v_{z}}",
-                        ylabel=L"v_{r}/L_{v_{r}}")
+                    fig, ax, colorbar_place = get_2d_ax(3)
+                    plot_2d(vz.grid, vr.grid, f, ax=ax[1],
+                            colorbar_place=colorbar_place[1], title=field_label,
+                            xlabel=L"v_{z}/L_{v_{z}}", ylabel=L"v_{r}/L_{v_{r}}")
+                    plot_2d(vz.grid, vr.grid, f_sym, ax=ax[2],
+                            colorbar_place=colorbar_place[2], title=field_sym_label,
+                            xlabel=L"v_{z}/L_{v_{z}}", ylabel=L"v_{r}/L_{v_{r}}")
+                    plot_2d(vz.grid, vr.grid, error, ax=ax[3],
+                            colorbar_place=colorbar_place[3], title=norm_label,
+                            xlabel=L"v_{z}/L_{v_{z}}", ylabel=L"v_{r}/L_{v_{r}}")
 
-                outfile = plot_prefix * variable_name * "(" * z_label * ")_vs_vz_vr.pdf"
-                save(outfile, fig)
+                    outfile = plot_prefix * variable_name * "(" * z_label * ")_vs_vz_vr.pdf"
+                    save(outfile, fig)
+                end
 
-                f, f_sym =
-                manufactured_solutions_get_field_and_field_sym(
-                    run_info, variable_name, it=input.it0, iz=iz, ir=input.ir0,
-                    ivr=input.ivr0)
-                error = f .- f_sym
+                Threads.@spawn begin
+                    f, f_sym =
+                    manufactured_solutions_get_field_and_field_sym(
+                        run_info, variable_name, it=input.it0, iz=iz, ir=input.ir0,
+                        ivr=input.ivr0)
+                    error = f .- f_sym
 
-                fig, ax, colorbar_place = get_2d_ax(3)
-                plot_2d(vz.grid, vzeta.grid, f, ax=ax[1],
-                        colorbar_place=colorbar_place[1], title=field_label,
-                        xlabel=L"v_{z}/L_{v_{z}}",
-                        ylabel=L"v_{\zeta}/L_{v_{\zeta}}")
-                plot_2d(vz.grid, vzeta.grid, f_sym, ax=ax[2],
-                        colorbar_place=colorbar_place[2], title=field_sym_label,
-                        xlabel=L"v_{z}/L_{v_{z}}",
-                        ylabel=L"v_{\zeta}/L_{v_{\zeta}}")
-                plot_2d(vz.grid, vzeta.grid, error, ax=ax[3],
-                        colorbar_place=colorbar_place[3], title=norm_label,
-                        xlabel=L"v_{z}/L_{v_{z}}",
-                        ylabel=L"v_{\zeta}/L_{v_{\zeta}}")
+                    fig, ax, colorbar_place = get_2d_ax(3)
+                    plot_2d(vz.grid, vzeta.grid, f, ax=ax[1],
+                            colorbar_place=colorbar_place[1], title=field_label,
+                            xlabel=L"v_{z}/L_{v_{z}}", ylabel=L"v_{\zeta}/L_{v_{\zeta}}")
+                    plot_2d(vz.grid, vzeta.grid, f_sym, ax=ax[2],
+                            colorbar_place=colorbar_place[2], title=field_sym_label,
+                            xlabel=L"v_{z}/L_{v_{z}}", ylabel=L"v_{\zeta}/L_{v_{\zeta}}")
+                    plot_2d(vz.grid, vzeta.grid, error, ax=ax[3],
+                            colorbar_place=colorbar_place[3], title=norm_label,
+                            xlabel=L"v_{z}/L_{v_{z}}", ylabel=L"v_{\zeta}/L_{v_{\zeta}}")
 
-                outfile = plot_prefix * variable_name * "(" * z_label * ")_vs_vz_vzeta.pdf"
-                save(outfile, fig)
+                    outfile = plot_prefix * variable_name * "(" * z_label * ")_vs_vz_vzeta.pdf"
+                    save(outfile, fig)
+                end
             end
         end
     end
