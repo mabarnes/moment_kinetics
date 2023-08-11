@@ -73,6 +73,9 @@ const two_dimension_combinations = Tuple(
          unique((combinations((:t, setdiff(ion_dimensions, (:s,))...), 2)...,
                  combinations((:t, setdiff(neutral_dimensions, (:sn,))...), 2)...)))
 
+using Distributed
+const spawned_calls = Vector{Distributed.Future}()
+
 """
 Run post processing with input read from a TOML file
 
@@ -194,57 +197,66 @@ function makie_post_process(run_dir::Union{String,Tuple},
         plot_prefix = "comparison_plots/compare_"
     end
 
-    # @sync block ensures that all tasks spawned in this block are completed before
-    # makie_post_process() returns
-    @sync begin
-        for variable_name ∈ moment_variable_list
-            Threads.@spawn begin
-                plots_for_variable(run_info, variable_name; plot_prefix=plot_prefix,
+    input_for_plots_for_variable = input_dict
+    for variable_name ∈ moment_variable_list
+        job = Distributed.@spawnat :any begin
+            plots_for_variable(run_info, variable_name; plot_prefix=plot_prefix,
+                               is_1D=is_1D, is_1V=is_1V,
+                               this_input_dict=input_for_plots_for_variable)
+        end
+        push!(spawned_calls, job)
+    end
+
+    # Plots from distribution function variables
+    ############################################
+    if any(ri !== nothing for ri in run_info_dfns)
+        dfn_variable_list = ion_dfn_variables
+        if has_neutrals
+            dfn_variable_list = tuple(dfn_variable_list..., neutral_dfn_variables...)
+        end
+        for variable_name ∈ dfn_variable_list
+            plots_for_dfn_variable(run_info_dfns, variable_name; plot_prefix=plot_prefix,
                                    is_1D=is_1D, is_1V=is_1V)
-            end
         end
+    end
 
-        # Plots from distribution function variables
-        ############################################
-        if any(ri !== nothing for ri in run_info_dfns)
-            dfn_variable_list = ion_dfn_variables
-            if has_neutrals
-                dfn_variable_list = tuple(dfn_variable_list..., neutral_dfn_variables...)
-            end
-            for variable_name ∈ dfn_variable_list
-                plots_for_dfn_variable(run_info_dfns, variable_name; plot_prefix=plot_prefix,
-                                       is_1D=is_1D, is_1V=is_1V)
-            end
+    plot_charged_pdf_2D_at_wall(run_info_dfns; plot_prefix=plot_prefix)
+
+    instability_input = input_dict["instability2D"]
+    if any((instability_input["plot_1d"], instability_input["plot_2d"],
+            instability_input["animate_perturbations"]))
+        # Do instability analysis on only one process to avoid problems with FFTW (can't
+        # copy the FFTW objects onto a worker process).
+
+        # Get zind from the first variable (phi), and use the same one for
+        # all subseqeunt variables.
+        zind = instability2D_plots(run_info_moments, "phi", plot_prefix=plot_prefix)
+        for variable_name ∈ ("density", "temperature")
+            instability2D_plots(run_info_moments, variable_name, plot_prefix=plot_prefix,
+                                zind=zind)
         end
+    end
 
-        plot_charged_pdf_2D_at_wall(run_info_dfns; plot_prefix=plot_prefix)
+    input_for_Chodura = input_dict_dfns
+    job = Distributed.@spawnat :any begin
+        Chodura_condition_plots(run_info_dfns; plot_prefix=plot_prefix,
+                                this_input_dict=input_for_Chodura)
+    end
+    push!(spawned_calls, job)
 
-        instability_input = input_dict["instability2D"]
-        if any((instability_input["plot_1d"], instability_input["plot_2d"],
-                instability_input["animate_perturbations"]))
-            # Do instability analysis on only one thread to avoid problems with FFTW (FFTW
-            # setup should only be done on a single thread).
-            Threads.@spawn begin
-                # Get zind from the first variable (phi), and use the same one for
-                # all subseqeunt variables.
-                zind = instability2D_plots(run_info_moments, "phi", plot_prefix=plot_prefix)
-                for variable_name ∈ ("density", "temperature")
-                    instability2D_plots(run_info_moments, variable_name,
-                                        plot_prefix=plot_prefix, zind=zind)
-                end
-            end
-        end
+    input_for_sound_wave = input_dict
+    job = Distributed.@spawnat :any begin
+        sound_wave_plots(run_info; plot_prefix=plot_prefix,
+                         this_input_dict=input_for_sound_wave)
+    end
+    push!(spawned_calls, job)
 
-        Threads.@spawn begin
-            Chodura_condition_plots(run_info_dfns, plot_prefix=plot_prefix)
-        end
+    manufactured_solutions_analysis(run_info; plot_prefix=plot_prefix)
+    manufactured_solutions_analysis_dfns(run_info_dfns; plot_prefix=plot_prefix)
 
-        Threads.@spawn begin
-            sound_wave_plots(run_info; plot_prefix=plot_prefix)
-        end
-
-        manufactured_solutions_analysis(run_info; plot_prefix=plot_prefix)
-        manufactured_solutions_analysis_dfns(run_info_dfns; plot_prefix=plot_prefix)
+    # Wait for all spawned jobs
+    while length(spawned_calls) > 0
+        fetch(pop!(spawned_calls))
     end
 
     return nothing
@@ -1136,8 +1148,11 @@ function NaNMath.extrema(variable_cache::VariableCache)
 end
 
 function plots_for_variable(run_info, variable_name; plot_prefix, is_1D=false,
-                            is_1V=false)
-    input = Dict_to_NamedTuple(input_dict[variable_name])
+                            is_1V=false, this_input_dict=nothing)
+    if this_input_dict === nothing
+        this_input_dict = input_dict
+    end
+    input = Dict_to_NamedTuple(this_input_dict[variable_name])
 
     # test if any plot is needed
     if any(v for (k,v) in pairs(input) if
@@ -1262,44 +1277,48 @@ function plots_for_dfn_variable(run_info, variable_name; plot_prefix, is_1D=fals
                  (:_log, log10, positive_or_nan, log_variable_prefix))
             for dim ∈ plot_dims
                 if input[Symbol(:plot, log, :_vs_, dim)]
-                    Threads.@spawn begin
+                    job = Distributed.@spawnat :any begin
                         func = getfield(makie_post_processing, Symbol(:plot_vs_, dim))
                         outfile = var_prefix * "vs_$dim.pdf"
                         func(run_info, variable_name, is=is, input=input, outfile=outfile,
                              yscale=yscale, transform=transform)
                     end
+                    push!(spawned_calls, job)
                 end
             end
             for (dim1, dim2) ∈ combinations(plot_dims, 2)
                 if input[Symbol(:plot, log, :_vs_, dim2, :_, dim1)]
-                    Threads.@spawn begin
+                    job = Distributed.@spawnat :any begin
                         func = getfield(makie_post_processing,
                                         Symbol(:plot_vs_, dim2, :_, dim1))
                         outfile = var_prefix * "vs_$(dim2)_$(dim1).pdf"
                         func(run_info, variable_name, is=is, input=input, outfile=outfile,
                              colorscale=yscale, transform=transform)
                     end
+                    push!(spawned_calls, job)
                 end
             end
             for dim ∈ animate_dims
                 if input[Symbol(:animate, log, :_vs_, dim)]
-                    Threads.@spawn begin
+                    job = Distributed.@spawnat :any begin
                         func = getfield(makie_post_processing, Symbol(:animate_vs_, dim))
                         outfile = var_prefix * "vs_$dim." * input.animation_ext
                         func(run_info, variable_name, is=is, input=input, outfile=outfile,
                              yscale=yscale, transform=transform)
                     end
+                    push!(spawned_calls, job)
                 end
             end
             for (dim1, dim2) ∈ combinations(animate_dims, 2)
                 if input[Symbol(:animate, log, :_vs_, dim2, :_, dim1)]
-                    Threads.@spawn begin
+                    job = Distributed.@spawnat :any begin
                         func = getfield(makie_post_processing,
                                         Symbol(:animate_vs_, dim2, :_, dim1))
                         outfile = var_prefix * "vs_$(dim2)_$(dim1)." * input.animation_ext
                         func(run_info, variable_name, is=is, input=input, outfile=outfile,
                              colorscale=yscale, transform=transform)
                     end
+                    push!(spawned_calls, job)
                 end
             end
         end
@@ -2393,64 +2412,74 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix)
         f_input["iz0"] = z
 
         if input.plot
-            Threads.@spawn begin
+            job = Distributed.@spawnat :any begin
                 plot_vs_vpa(run_info, "f"; is=1, input=f_input,
                             outfile=plot_prefix * "pdf_$(label)_vs_vpa.pdf")
             end
+            push!(spawned_calls, job)
 
             if !is_1V
-                Threads.@spawn begin
+                job = Distributed.@spawnat :any begin
                     plot_vs_vpa_vperp(run_info, "f"; is=1, input=f_input,
                                       outfile=plot_prefix * "pdf_$(label)_vs_vpa_vperp.pdf")
                 end
+                push!(spawned_calls, job)
             end
 
-            Threads.@spawn begin
+            job = Distributed.@spawnat :any begin
                 plot_vs_vpa_z(run_info, "f"; is=1, input=f_input, iz=z_range,
                               outfile=plot_prefix * "pdf_$(label)_vs_vpa_z.pdf")
             end
+            push!(spawned_calls, job)
 
             if !is_1D
-                Threads.@spawn begin
+                job = Distributed.@spawnat :any begin
                     plot_vs_z_r(run_info, "f"; is=1, input=f_input, iz=z_range,
                                 outfile=plot_prefix * "pdf_$(label)_vs_z_r.pdf")
                 end
+                push!(spawned_calls, job)
 
-                Threads.@spawn begin
+                job = Distributed.@spawnat :any begin
                     plot_vs_vpa_r(run_info, "f"; is=1, input=f_input,
                                   outfile=plot_prefix * "pdf_$(label)_vs_vpa_r.pdf")
                 end
+                push!(spawned_calls, job)
             end
         end
 
         if input.animate
-            Threads.@spawn begin
+            job = Distributed.@spawnat :any begin
                 animate_vs_vpa(run_info, "f"; is=1, input=f_input,
                                outfile=plot_prefix * "pdf_$(label)_vs_vpa." * input.animation_ext)
             end
+            push!(spawned_calls, job)
 
             if !is_1V
-                Threads.@spawn begin
+                job = Distributed.@spawnat :any begin
                     animate_vs_vpa_vperp(run_info, "f"; is=1, input=f_input,
                                          outfile=plot_prefix * "pdf_$(label)_vs_vpa_vperp." * input.animation_ext)
                 end
+                push!(spawned_calls, job)
             end
 
-            Threads.@spawn begin
+            job = Distributed.@spawnat :any begin
                 animate_vs_vpa_z(run_info, "f"; is=1, input=f_input, iz=z_range,
                                  outfile=plot_prefix * "pdf_$(label)_vs_vpa_z." * input.animation_ext)
             end
+            push!(spawned_calls, job)
 
             if !is_1D
-                Threads.@spawn begin
+                job = Distributed.@spawnat :any begin
                     animate_vs_z_r(run_info, "f"; is=1, input=f_input, iz=z_range,
                                    outfile=plot_prefix * "pdf_$(label)_vs_z_r." * input.animation_ext)
                 end
+                push!(spawned_calls, job)
 
-                Threads.@spawn begin
+                job = Distributed.@spawnat :any begin
                     animate_vs_vpa_r(run_info, "f"; is=1, input=f_input,
                                      outfile=plot_prefix * "pdf_$(label)_vs_vpa_r." * input.animation_ext)
                 end
+                push!(spawned_calls, job)
             end
         end
     end
@@ -2462,8 +2491,11 @@ end
 Plot the criterion from the Chodura condition at the sheath boundaries
 """
 function Chodura_condition_plots(run_info::Tuple; plot_prefix, ax_lower=nothing,
-                                 ax_upper=nothing)
-    input = Dict_to_NamedTuple(input_dict_dfns["Chodura_condition"])
+                                 ax_upper=nothing, this_input_dict=nothing)
+    if this_input_dict === nothing
+        this_input_dict = input_dict_dfns
+    end
+    input = Dict_to_NamedTuple(this_input_dict["Chodura_condition"])
 
     if !any(v for (k,v) ∈ pairs(input) if startswith(String(k), "plot"))
         # No plots to make here
@@ -2478,7 +2510,8 @@ function Chodura_condition_plots(run_info::Tuple; plot_prefix, ax_lower=nothing,
     n_runs = length(run_info)
 
     if n_runs == 1
-        Chodura_condition_plots(run_info[1], plot_prefix=plot_prefix)
+        Chodura_condition_plots(run_info[1]; plot_prefix=plot_prefix,
+                                this_input_dict=this_input_dict)
         return nothing
     end
 
@@ -2534,7 +2567,7 @@ function Chodura_condition_plots(run_info::Tuple; plot_prefix, ax_lower=nothing,
     end
 
     for (ri, ax) ∈ zip(run_info, axes)
-        Chodura_condition_plots(ri; axes=ax)
+        Chodura_condition_plots(ri; axes=ax, this_input_dict=this_input_dict)
     end
 
     if input.plot_vs_t
@@ -2562,8 +2595,12 @@ function Chodura_condition_plots(run_info::Tuple; plot_prefix, ax_lower=nothing,
 
     return nothing
 end
-function Chodura_condition_plots(run_info; plot_prefix=nothing, axes=nothing)
+function Chodura_condition_plots(run_info; plot_prefix=nothing, axes=nothing,
+                                 this_input_dict=nothing)
 
+    if this_input_dict === nothing
+        this_input_dict = input_dict_dfns
+    end
     if run_info === nothing
         println("In Chodura_condition_plots(), run_info===nothing so skipping")
         return nothing
@@ -2574,7 +2611,7 @@ function Chodura_condition_plots(run_info; plot_prefix=nothing, axes=nothing)
         return nothing
     end
 
-    input = Dict_to_NamedTuple(input_dict_dfns["Chodura_condition"])
+    input = Dict_to_NamedTuple(this_input_dict["Chodura_condition"])
 
     time = run_info.time
     density = postproc_load_variable(run_info, "density")
@@ -2653,8 +2690,11 @@ function Chodura_condition_plots(run_info; plot_prefix=nothing, axes=nothing)
     return nothing
 end
 
-function sound_wave_plots(run_info::Tuple; plot_prefix)
-    input = Dict_to_NamedTuple(input_dict["sound_wave_fit"])
+function sound_wave_plots(run_info::Tuple; plot_prefix, this_input_dict=nothing)
+    if this_input_dict === nothing
+        this_input_dict = input_dict
+    end
+    input = Dict_to_NamedTuple(this_input_dict["sound_wave_fit"])
 
     if !input.calculate_frequency && !input.plot
         return nothing
@@ -2664,7 +2704,8 @@ function sound_wave_plots(run_info::Tuple; plot_prefix)
         outfile = plot_prefix * "delta_phi0_vs_t.pdf"
 
         if length(run_info) == 1
-            return sound_wave_plots(run_info[1]; outfile=outfile)
+            return sound_wave_plots(run_info[1]; outfile=outfile,
+                                    this_input_dict=this_input_dict)
         end
 
         if input.plot
@@ -2674,7 +2715,7 @@ function sound_wave_plots(run_info::Tuple; plot_prefix)
         end
 
         for ri ∈ run_info
-            sound_wave_plots(ri; ax=ax)
+            sound_wave_plots(ri; ax=ax, this_input_dict=this_input_dict)
         end
 
         if input.plot
@@ -2690,8 +2731,12 @@ function sound_wave_plots(run_info::Tuple; plot_prefix)
 
     return nothing
 end
-function sound_wave_plots(run_info; outfile=nothing, ax=nothing, phi=nothing)
-    input = Dict_to_NamedTuple(input_dict["sound_wave_fit"])
+function sound_wave_plots(run_info; outfile=nothing, ax=nothing, phi=nothing,
+                          this_input_dict=nothing)
+    if this_input_dict === nothing
+        this_input_dict = input_dict
+    end
+    input = Dict_to_NamedTuple(this_input_dict["sound_wave_fit"])
 
     if !input.calculate_frequency && !input.plot
         return nothing
@@ -2769,7 +2814,7 @@ function instability2D_plots(run_info::Tuple, variable_name; plot_prefix, zind=n
 
     if n_runs == 1
         # Don't need to set up for comparison plots, or include run_name in subplot titles
-        zi = instability2D_plots(run_info[1], variable_name, plot_prefix=plot_prefix,
+        zi = instability2D_plots(run_info[1], variable_name; plot_prefix=plot_prefix,
                                  zind=zind[1])
         return Union{mk_int,Nothing}[zi]
     end
@@ -2840,7 +2885,7 @@ function instability2D_plots(run_info::Tuple, variable_name; plot_prefix, zind=n
     end
 
     for (i, (ri, ax_ob, zi)) ∈ enumerate(zip(run_info, axes_and_observables, zind))
-        zi = instability2D_plots(ri, variable_name, plot_prefix=plot_prefix, zind=zi,
+        zi = instability2D_plots(ri, variable_name; plot_prefix=plot_prefix, zind=zi,
                                  axes_and_observables=ax_ob)
         zind[i] = zi
     end
@@ -3299,7 +3344,7 @@ function compare_moment_symbolic_test(run_info, plot_prefix, field_label, field_
     if !is_1D && input.wall_plots
         # plot last (by default) timestep field vs r at z_wall
 
-        Threads.@spawn begin
+        job = Distributed.@spawnat :any begin
             fig, ax, legend_place = get_1d_ax(2; get_legend_place=:below)
             plot_1d(r.grid, select_slice(field, :r; input=input, iz=1), xlabel=L"r",
                     ylabel=field_label, label=field_label, ax=ax[1])
@@ -3312,8 +3357,9 @@ function compare_moment_symbolic_test(run_info, plot_prefix, field_label, field_
             outfile = plot_prefix * "MMS_" * variable_name * "(z_wall-)_vs_r.pdf"
             save(outfile, fig)
         end
+        push!(spawned_calls, job)
 
-        Threads.@spawn begin
+        job = Distributed.@spawnat :any begin
             fig, ax, legend_place = get_1d_ax(2; get_legend_place=:below)
             plot_1d(r.grid, select_slice(field, :r; input=input, iz=z.n), xlabel=L"r",
                     ylabel=field_label, label=field_label, ax=ax[1])
@@ -3326,10 +3372,11 @@ function compare_moment_symbolic_test(run_info, plot_prefix, field_label, field_
             outfile = plot_prefix * "MMS_" * variable_name * "(z_wall+)_vs_r.pdf"
             save(outfile, fig)
         end
+        push!(spawned_calls, job)
     end
 
     if input.plot_vs_t
-        Threads.@spawn begin
+        job = Distributed.@spawnat :any begin
             fig, ax, legend_place = get_1d_ax(2; get_legend_place=:below)
             plot_1d(time, select_slice(field, :t; input=input), xlabel=L"t",
                     ylabel=field_label, label=field_label, ax=ax[1])
@@ -3342,9 +3389,10 @@ function compare_moment_symbolic_test(run_info, plot_prefix, field_label, field_
             outfile = plot_prefix * "MMS_" * variable_name * "_vs_t.pdf"
             save(outfile, fig)
         end
+        push!(spawned_calls, job)
     end
     if !is_1D && input.plot_vs_r
-        Threads.@spawn begin
+        job = Distributed.@spawnat :any begin
             fig, ax, legend_place = get_1d_ax(2; get_legend_place=:below)
             plot_1d(r.grid, select_slice(field, :r; input=input), xlabel=L"r",
                     ylabel=field_label, label=field_label, ax=ax[1])
@@ -3357,9 +3405,10 @@ function compare_moment_symbolic_test(run_info, plot_prefix, field_label, field_
             outfile = plot_prefix * "MMS_" * variable_name * "_vs_r.pdf"
             save(outfile, fig)
         end
+        push!(spawned_calls, job)
     end
     if input.plot_vs_z
-        Threads.@spawn begin
+        job = Distributed.@spawnat :any begin
             fig, ax, legend_place = get_1d_ax(2; get_legend_place=:below)
             plot_1d(z.grid, select_slice(field, :z; input=input), xlabel=L"z",
                     ylabel=field_label, label=field_label, ax=ax[1])
@@ -3372,9 +3421,10 @@ function compare_moment_symbolic_test(run_info, plot_prefix, field_label, field_
             outfile = plot_prefix * "MMS_" * variable_name * "_vs_z.pdf"
             save(outfile, fig)
         end
+        push!(spawned_calls, job)
     end
     if !is_1D && input.plot_vs_r_t
-        Threads.@spawn begin
+        job = Distributed.@spawnat :any begin
             fig, ax, colorbar_place = get_2d_ax(3)
             plot_2d(r.grid, time, select_slice(field, :t, :r; input=input),
                     title=field_label, xlabel=L"r", ylabel=L"t", ax=ax[1],
@@ -3388,9 +3438,10 @@ function compare_moment_symbolic_test(run_info, plot_prefix, field_label, field_
             outfile = plot_prefix * "MMS_" * variable_name * "_vs_r_t.pdf"
             save(outfile, fig)
         end
+        push!(spawned_calls, job)
     end
     if input.plot_vs_z_t
-        Threads.@spawn begin
+        job = Distributed.@spawnat :any begin
             fig, ax, colorbar_place = get_2d_ax(3)
             plot_2d(z.grid, time, select_slice(field, :t, :z; input=input),
                     title=field_label, xlabel=L"z", ylabel=L"t", ax=ax[1],
@@ -3404,9 +3455,10 @@ function compare_moment_symbolic_test(run_info, plot_prefix, field_label, field_
             outfile = plot_prefix * "MMS_" * variable_name * "_vs_z_t.pdf"
             save(outfile, fig)
         end
+        push!(spawned_calls, job)
     end
     if !is_1D && input.plot_vs_z_r
-        Threads.@spawn begin
+        job = Distributed.@spawnat :any begin
             fig, ax, colorbar_place = get_2d_ax(3)
             plot_2d(z.grid, r.grid, select_slice(field, :r, :z; input=input),
                     title=field_label, xlabel=L"z", ylabel=L"r", ax=ax[1],
@@ -3420,9 +3472,10 @@ function compare_moment_symbolic_test(run_info, plot_prefix, field_label, field_
             outfile = plot_prefix * "MMS_" * variable_name * "_vs_z_r.pdf"
             save(outfile, fig)
         end
+        push!(spawned_calls, job)
     end
     if !is_1D && input.animate_vs_r
-        Threads.@spawn begin
+        job = Distributed.@spawnat :any begin
             fig, ax, legend_place = get_1d_ax(2; get_legend_place=:below)
             frame_index = Observable(1)
             animate_1d(r.grid, select_slice(field, :t, :r; input=input),
@@ -3437,9 +3490,10 @@ function compare_moment_symbolic_test(run_info, plot_prefix, field_label, field_
             outfile = plot_prefix * "MMS_" * variable_name * "_vs_r." * input.animation_ext
             save_animation(fig, frame_index, nt, outfile)
         end
+        push!(spawned_calls, job)
     end
     if input.animate_vs_z
-        Threads.@spawn begin
+        job = Distributed.@spawnat :any begin
             fig, ax, legend_place = get_1d_ax(2; get_legend_place=:below)
             frame_index = Observable(1)
             animate_1d(z.grid, select_slice(field, :t, :z; input=input),
@@ -3454,9 +3508,10 @@ function compare_moment_symbolic_test(run_info, plot_prefix, field_label, field_
             outfile = plot_prefix * "MMS_" * variable_name * "_vs_z." * input.animation_ext
             save_animation(fig, frame_index, nt, outfile)
         end
+        push!(spawned_calls, job)
     end
     if !is_1D && input.animate_vs_z_r
-        Threads.@spawn begin
+        job = Distributed.@spawnat :any begin
             fig, ax, colorbar_place = get_2d_ax(3)
             frame_index = Observable(1)
             animate_2d(z.grid, r.grid, select_slice(field, :t, :r, :z; input=input),
@@ -3471,6 +3526,7 @@ function compare_moment_symbolic_test(run_info, plot_prefix, field_label, field_
             outfile = plot_prefix * "MMS_" * variable_name * "_vs_z_r." * input.animation_ext
             save_animation(fig, frame_index, nt, outfile)
         end
+        push!(spawned_calls, job)
     end
 
     return field_norm
@@ -3492,7 +3548,7 @@ function _MMS_pdf_plots(run_info, input, variable_name, plot_prefix, field_label
              (:_log, log10, x->positive_or_nan(x; epsilon=1.e-30), x->positive_or_nan.(abs.(x); epsilon=1.e-30)))
         for dim ∈ plot_dims
             if input[Symbol(:plot, log, :_vs_, dim)]
-                Threads.@spawn begin
+                job = Distributed.@spawnat :any begin
                     coord = dim === :t ? time : run_info[dim].grid
 
                     slices = (k=>v for (k, v) ∈ all_plot_slices if k != Symbol(:i, dim))
@@ -3513,11 +3569,12 @@ function _MMS_pdf_plots(run_info, input, variable_name, plot_prefix, field_label
                     outfile = plot_prefix * "MMS" * String(log) * "_" * variable_name * "_vs_$dim.pdf"
                     save(outfile, fig)
                 end
+                push!(spawned_calls, job)
             end
         end
         for (dim1, dim2) ∈ combinations(plot_dims, 2)
             if input[Symbol(:plot, log, :_vs_, dim2, :_, dim1)]
-                Threads.@spawn begin
+                job = Distributed.@spawnat :any begin
                     coord1 = dim1 === :t ? time : run_info[dim1].grid
                     coord2 = dim2 === :t ? time : run_info[dim2].grid
 
@@ -3542,11 +3599,12 @@ function _MMS_pdf_plots(run_info, input, variable_name, plot_prefix, field_label
                     outfile = plot_prefix * "MMS" * String(log) * "_" * variable_name * "_vs_$(dim2)_$(dim1).pdf"
                     save(outfile, fig)
                 end
+                push!(spawned_calls, job)
             end
         end
         for dim ∈ animate_dims
             if input[Symbol(:animate, log, :_vs_, dim)]
-                Threads.@spawn begin
+                job = Distributed.@spawnat :any begin
                     coord = dim === :t ? time : run_info[dim].grid
 
                     slices = (k=>v for (k, v) ∈ all_animate_slices if k != Symbol(:i, dim))
@@ -3570,11 +3628,12 @@ function _MMS_pdf_plots(run_info, input, variable_name, plot_prefix, field_label
                     outfile = plot_prefix * "MMS" * String(log) * "_" * variable_name * "_vs_$dim." * input.animation_ext
                     save_animation(fig, frame_index, nt, outfile)
                 end
+                push!(spawned_calls, job)
             end
         end
         for (dim1, dim2) ∈ combinations(animate_dims, 2)
             if input[Symbol(:animate, log, :_vs_, dim2, :_, dim1)]
-                Threads.@spawn begin
+                job = Distributed.@spawnat :any begin
                     coord1 = dim1 === :t ? time : run_info[dim1].grid
                     coord2 = dim2 === :t ? time : run_info[dim2].grid
 
@@ -3602,6 +3661,7 @@ function _MMS_pdf_plots(run_info, input, variable_name, plot_prefix, field_label
                     outfile = plot_prefix * "MMS" * String(log) * "_" * variable_name * "_vs_$(dim2)_$(dim1)." * input.animation_ext
                     save_animation(fig, frame_index, nt, outfile)
                 end
+                push!(spawned_calls, job)
             end
         end
     end
@@ -3683,7 +3743,7 @@ function compare_charged_pdf_symbolic_test(run_info, plot_prefix; io=nothing,
 
     if input.wall_plots
         for (iz, z_label) ∈ ((1, "wall-"), (z.n, "wall+"))
-            Threads.@spawn begin
+            job = Distributed.@spawnat :any begin
                 f, f_sym =
                     manufactured_solutions_get_field_and_field_sym(
                         run_info, variable_name, it=input.it0, ir=input.ir0, iz=iz,
@@ -3703,9 +3763,10 @@ function compare_charged_pdf_symbolic_test(run_info, plot_prefix; io=nothing,
                 outfile = plot_prefix * variable_name * "(" * z_label * ")_vs_vpa.pdf"
                 save(outfile, fig)
             end
+            push!(spawned_calls, job)
 
             if !is_1D
-                Threads.@spawn begin
+                job = Distributed.@spawnat :any begin
                     f, f_sym =
                     manufactured_solutions_get_field_and_field_sym(
                         run_info, variable_name, it=input.it0, iz=iz,
@@ -3726,10 +3787,11 @@ function compare_charged_pdf_symbolic_test(run_info, plot_prefix; io=nothing,
                     outfile = plot_prefix * variable_name * "(" * z_label * ")_vs_vpa_r.pdf"
                     save(outfile, fig)
                 end
+                push!(spawned_calls, job)
             end
 
             if !is_1V
-                Threads.@spawn begin
+                job = Distributed.@spawnat :any begin
                     f, f_sym =
                     manufactured_solutions_get_field_and_field_sym(
                         run_info, variable_name, it=input.it0, iz=iz, ir=input.ir0)
@@ -3752,6 +3814,7 @@ function compare_charged_pdf_symbolic_test(run_info, plot_prefix; io=nothing,
                     outfile = plot_prefix * variable_name * "(" * z_label * ")_vs_vpa_vperp.pdf"
                     save(outfile, fig)
                 end
+                push!(spawned_calls, job)
             end
         end
     end
@@ -3847,7 +3910,7 @@ function compare_neutral_pdf_symbolic_test(run_info, plot_prefix; io=nothing,
 
     if input.wall_plots
         for (iz, z_label) ∈ ((1, "wall-"), (z.n, "wall+"))
-            Threads.@spawn begin
+            job = Distributed.@spawnat :any begin
                 f, f_sym =
                     manufactured_solutions_get_field_and_field_sym(
                         run_info, variable_name, it=input.it0, ir=input.ir0, iz=iz,
@@ -3867,9 +3930,10 @@ function compare_neutral_pdf_symbolic_test(run_info, plot_prefix; io=nothing,
                 outfile = plot_prefix * variable_name * "(" * z_label * ")_vs_vz.pdf"
                 save(outfile, fig)
             end
+            push!(spawned_calls, job)
 
             if !is_1D
-                Threads.@spawn begin
+                job = Distributed.@spawnat :any begin
                     f, f_sym =
                     manufactured_solutions_get_field_and_field_sym(
                         run_info, variable_name, it=input.it0, iz=iz,
@@ -3890,10 +3954,11 @@ function compare_neutral_pdf_symbolic_test(run_info, plot_prefix; io=nothing,
                     outfile = plot_prefix * variable_name * "(" * z_label * ")_vs_vz_r.pdf"
                     save(outfile, fig)
                 end
+                push!(spawned_calls, job)
             end
 
             if !is_1V
-                Threads.@spawn begin
+                job = Distributed.@spawnat :any begin
                     f, f_sym =
                     manufactured_solutions_get_field_and_field_sym(
                         run_info, variable_name, it=input.it0, iz=iz, ir=input.ir0,
@@ -3914,8 +3979,9 @@ function compare_neutral_pdf_symbolic_test(run_info, plot_prefix; io=nothing,
                     outfile = plot_prefix * variable_name * "(" * z_label * ")_vs_vz_vr.pdf"
                     save(outfile, fig)
                 end
+                push!(spawned_calls, job)
 
-                Threads.@spawn begin
+                job = Distributed.@spawnat :any begin
                     f, f_sym =
                     manufactured_solutions_get_field_and_field_sym(
                         run_info, variable_name, it=input.it0, iz=iz, ir=input.ir0,
@@ -3936,6 +4002,7 @@ function compare_neutral_pdf_symbolic_test(run_info, plot_prefix; io=nothing,
                     outfile = plot_prefix * variable_name * "(" * z_label * ")_vs_vz_vzeta.pdf"
                     save(outfile, fig)
                 end
+                push!(spawned_calls, job)
             end
         end
     end
