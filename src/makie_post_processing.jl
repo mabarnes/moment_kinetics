@@ -708,13 +708,12 @@ function get_run_info(run_dir, restart_index=nothing; itime_min=1, itime_max=-1,
         end
     end
 
-    if parallel_io
-        files = fids0
-    else
-        # Don't keep open files as read_distributed_zr_data!(), etc. open the files
-        # themselves
-        files = run_prefixes
+    for f in fids0
+        close(f)
     end
+    # Don't keep open files as postproc_load_variable(), read_distributed_zr_data!(), etc.
+    # open the files themselves
+    files = run_prefixes
 
     if dfns
         return (run_name=run_name, run_prefix=base_prefix, parallel_io=parallel_io,
@@ -878,8 +877,10 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
 
     if run_info.parallel_io
         # Get HDF5/NetCDF variables directly and load slices
+        files = Tuple(open_readonly_output_file(f, run_info.ext, printout=false)
+                      for f ∈ run_info.files)
         variable = Tuple(get_group(f, "dynamic_data")[variable_name]
-                         for f ∈ run_info.files)
+                         for f ∈ files)
         nd = ndims(variable[1])
 
         if nd == 3
@@ -1005,6 +1006,10 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
             end
 
             local_it_start = local_it_end + 1
+        end
+
+        for f in files
+            close(f)
         end
     else
         # Use existing distributed I/O loading functions
