@@ -393,8 +393,13 @@ function analyze_2D_instability(phi, density, thermal_speed, r, z, r_spectral, z
     # Want the 'most common' value in zind_maximum, but maybe that is noisy?
     # First find the most common bin for some reasonable number of bins. The background is
     # a mode with one wave-period in the box, so 16 bins seems like plenty.
-    nbins = 16
-    bin_size = (z.n - 1) ÷ 16
+    if z.n > 16
+        nbins = 16
+        bin_size = (z.n - 1) ÷ 16
+    else
+        nbins = 1
+        bin_size = z.n
+    end
     binned_zind_maximum = @. (zind_maximum-1) ÷ bin_size
     most_common_bin = mode(binned_zind_maximum)
     bin_min = most_common_bin * bin_size + 1
