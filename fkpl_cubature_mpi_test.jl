@@ -7,6 +7,7 @@ using SpecialFunctions: erf, ellipe, ellipk
 using FastGaussQuadrature
 using Dates
 using LinearAlgebra: mul!
+using Cubature: hcubature
 
 import moment_kinetics
 using moment_kinetics.input_structs: grid_input, advection_input
@@ -265,10 +266,41 @@ if abspath(PROGRAM_FILE) == @__FILE__
             println("beginning weights calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
         end
     end
-    
+
     # function returns 1 for nelement >= ielement > 1, 0 for ielement =1 
     function nel_low(ielement,nelement)
         return floor(mk_int, (ielement - 2 + nelement)/nelement)
+    end
+
+    function G_weights_integrand(v::Vector{mk_float},vpa_val,vperp_val,
+                                   igrid_vpap,ielement_vpap,
+                                   igrid_vperpp,ielement_vperpp,
+                                   vpap_struct,vperpp_struct)
+    #function G_weights_integrand(v::Vector{mk_float},vpa_val=0.0,vperp_val=0.0,
+    #                               igrid_vpap=1,ielement_vpap=1,
+    #                               igrid_vperpp=1,ielement_vperpp=1,
+    #                               vpap_struct=vpa,vperpp_struct=vperp)
+        
+        vpa_nodes = get_nodes(vpap_struct,ielement_vpap)
+        ivpap = vpap_struct.igrid_full[igrid_vpap,ielement_vpap]
+        
+        vperp_nodes = get_nodes(vperpp_struct,ielement_vperpp)
+        ivperpp = vperpp_struct.igrid_full[igrid_vperpp,ielement_vperpp]
+
+        vpap_val = v[1]
+        vperpp_val = v[2]
+        denom = (vpa_val - vpap_val)^2 + (vperp_val + vperpp_val)^2 
+        mm = 4.0*vperp_val*vperpp_val/denom
+        prefac = sqrt(denom)
+        ellipe_mm = ellipe(mm) 
+        ellipk_mm = ellipk(mm) 
+        G_elliptic_integral_factor = 2.0*ellipe_mm*prefac/pi
+        lagrange_poly_vpa = lagrange_poly(igrid_vpap,vpa_nodes,vpap_val)
+        lagrange_poly_vperp = lagrange_poly(igrid_vperpp,vperp_nodes,vperpp_val)
+        
+        (G_weight = lagrange_poly_vpa*lagrange_poly_vperp*
+        G_elliptic_integral_factor*vperpp_val*2.0/sqrt(pi))
+        return G_weight
     end
     
     # precalculated weights, integrating over Lagrange polynomials
@@ -299,27 +331,38 @@ if abspath(PROGRAM_FILE) == @__FILE__
                             ivpap = vpa.igrid_full[igrid_vpa,ielement_vpa]   
                             ivperpp = vperp.igrid_full[igrid_vperp,ielement_vperp]   
                             # carry out integration over Lagrange polynomial at this node, on this element
-                            for kvperp in 1:nquad 
-                                for kvpa in 1:nquad 
-                                    x_kvpa = x_vpa[kvpa]
-                                    x_kvperp = x_vperp[kvperp]
-                                    w_kvperp = w_vperp[kvperp]
-                                    w_kvpa = w_vpa[kvpa]
-                                    denom = (vpa_val - x_kvpa)^2 + (vperp_val + x_kvperp)^2 
-                                    mm = 4.0*vperp_val*x_kvperp/denom
-                                    prefac = sqrt(denom)
-                                    ellipe_mm = ellipe(mm) 
-                                    ellipk_mm = ellipk(mm) 
-                                    G_elliptic_integral_factor = 2.0*ellipe_mm*prefac/pi
-                                    lagrange_poly_vpa = lagrange_poly(igrid_vpa,vpa_nodes,x_kvpa)
-                                    lagrange_poly_vperp = lagrange_poly(igrid_vperp,vperp_nodes,x_kvperp)
+                            #for kvperp in 1:nquad 
+                            #    for kvpa in 1:nquad 
+                            #        x_kvpa = x_vpa[kvpa]
+                            #        x_kvperp = x_vperp[kvperp]
+                            #        w_kvperp = w_vperp[kvperp]
+                            #        w_kvpa = w_vpa[kvpa]
+                            #        denom = (vpa_val - x_kvpa)^2 + (vperp_val + x_kvperp)^2 
+                            #        mm = 4.0*vperp_val*x_kvperp/denom
+                            #        prefac = sqrt(denom)
+                            #        ellipe_mm = ellipe(mm) 
+                            #        ellipk_mm = ellipk(mm) 
+                            #        G_elliptic_integral_factor = 2.0*ellipe_mm*prefac/pi
+                            #        lagrange_poly_vpa = lagrange_poly(igrid_vpa,vpa_nodes,x_kvpa)
+                            #        lagrange_poly_vperp = lagrange_poly(igrid_vperp,vperp_nodes,x_kvperp)
                                     
-                                    (G_weights[ivpa,ivperp,ivpap,ivperpp] += 
-                                        lagrange_poly_vpa*lagrange_poly_vperp*
-                                        G_elliptic_integral_factor*x_kvperp*w_kvperp*w_kvpa*2.0/sqrt(pi))
-                                    
-                                end
-                            end
+                            #        (G_weights[ivpa,ivperp,ivpap,ivperpp] += 
+                            #            lagrange_poly_vpa*lagrange_poly_vperp*
+                            #            G_elliptic_integral_factor*x_kvperp*w_kvperp*w_kvpa*2.0/sqrt(pi))
+                            G_weights_int(v) = G_weights_integrand(v,vpa_val,vperp_val,
+                                                                       igrid_vpa,ielement_vpa,
+                                                                       igrid_vperp,ielement_vperp,
+                                                                       vpa,vperp)
+                            #G_weights_int(v) = G_weights_integrand(v,vpa_val=vpa_val,vperp_val=vperp_val,
+                            #                                           igrid_vpap=igrid_vpa,ielement_vpap=ielement_vpa,
+                            #                                           igrid_vperpp=igrid_vperp,ielement_vperpp=ielement_vperp,
+                            #                                           vpap_struct=vpa,vperpp_struct=vperp)
+                            #(val,err) = hcubature(G_weights_int, [vpa_min,vperp_min], [vpa_max, vperp_max]; reltol=1e-8, abstol=0, maxevals=0)    
+                            (val,err) = hcubature(G_weights_int, [vpa_min,vperp_min], [vpa_max, vperp_max]; abstol=1e-8)    
+                            #println("integrated successfully")
+                            G_weights[ivpa,ivperp,ivpap,ivperpp] += val
+                            #    end
+                            #end
                         end
                     end
                 end
@@ -353,7 +396,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     end
     
     # local plotting
-    plot_local_G = false#true
+    plot_local_G = false #true
     print_local_G = true
     
     begin_serial_region()
@@ -378,8 +421,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
                  savefig(outfile)
         end
     end
-    
-    mpi_test = false
+
+    mpi_test = false #true
     if mpi_test
         # allreduce operations
         # get local data into global array before allreduce
