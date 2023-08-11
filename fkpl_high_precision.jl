@@ -544,8 +544,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
             @. w_scaled = 0.0
             #println("coord: ",coord_val," node_max: ",node_max," node_min: ",node_min) 
             nquad = size(x_legendre,1) 
-            shift = 0.5*(node_min + node_max)
-            scale = 0.5*(node_max - node_min)
+            shift = ArbFloat(0.5)*(node_min + node_max)
+            scale = ArbFloat(0.5)*(node_max - node_min)
             @. x_scaled[1:nquad] = scale*x_legendre + shift
             @. w_scaled[1:nquad] = scale*w_legendre
             #println("x_scaled",x_scaled)
@@ -589,12 +589,14 @@ if abspath(PROGRAM_FILE) == @__FILE__
                             w_kvperp = w_vperp[kvperp]
                             w_kvpa = w_vpa[kvpa]
                             denom = (vpa_val - x_kvpa)^2 + (vperp_val + x_kvperp)^2 
-                            mm = min(4.0*vperp_val*x_kvperp/denom,1.0 - 1.0e-15)
+                            #mm = min(4.0*vperp_val*x_kvperp/denom,1.0 - 1.0e-15)
                             #mm = 4.0*vperp_val*x_kvperp/denom/(1.0 + 10^-15)
-                            #mm = 4.0*vperp_val*x_kvperp/denom
+                            mm = ArbFloat(4.0)*vperp_val*x_kvperp/denom
                             prefac = sqrt(denom)
-                            ellipe_mm = ellipe(mm) 
-                            ellipk_mm = ellipk(mm) 
+                            ellipe_mm = elliptic_e(mm) 
+                            ellipk_mm = elliptic_k(mm) 
+                            #ellipe_mm = ellipe(mm) 
+                            #ellipk_mm = ellipk(mm) 
                             #if mm_test > 1.0
                             #    println("mm: ",mm_test," ellipe: ",ellipe_mm," ellipk: ",ellipk_mm)
                             #end
@@ -660,7 +662,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
             for ielement_vpap in 1:ielement_vpa_low-1 
                 # do integration over part of the domain with no divergences
                 vpa_nodes = get_nodes(vpa,ielement_vpap)
-                vpa_min, vpa_max = vpa_nodes[1], vpa_nodes[end]
+                vpa_min, vpa_max = ArbFloat(vpa_nodes[1]), ArbFloat(vpa_nodes[end])
                 nquad_vpa = get_scaled_x_w_no_divergences!(x_vpa, w_vpa, x_legendre, w_legendre, vpa_min, vpa_max)
                 local_element_integration!(G_weights,G1_weights,G2_weights,G3_weights,
                             H_weights,H1_weights,H2_weights,H3_weights,n_weights,
@@ -673,7 +675,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
             #for ielement_vpap in 1:vpa.nelement_local
                 # use general grid function that checks divergences
                 vpa_nodes = get_nodes(vpa,ielement_vpap)
-                vpa_min, vpa_max = vpa_nodes[1], vpa_nodes[end]
+                vpa_min, vpa_max = ArbFloat(vpa_nodes[1]), ArbFloat(vpa_nodes[end])
                 #nquad_vpa = get_scaled_x_w_no_divergences!(x_vpa, w_vpa, x_legendre, w_legendre, vpa_min, vpa_max)
                 nquad_vpa = get_scaled_x_w!(x_vpa, w_vpa, x_legendre, w_legendre, x_laguerre, w_laguerre, vpa_min, vpa_max, vpa_val)
                 local_element_integration!(G_weights,G1_weights,G2_weights,G3_weights,
@@ -686,7 +688,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
             for ielement_vpap in ielement_vpa_hi+1:vpa.nelement_local
                 # do integration over part of the domain with no divergences
                 vpa_nodes = get_nodes(vpa,ielement_vpap)
-                vpa_min, vpa_max = vpa_nodes[1], vpa_nodes[end]
+                vpa_min, vpa_max = ArbFloat(vpa_nodes[1]), ArbFloat(vpa_nodes[end])
                 nquad_vpa = get_scaled_x_w_no_divergences!(x_vpa, w_vpa, x_legendre, w_legendre, vpa_min, vpa_max)
                 local_element_integration!(G_weights,G1_weights,G2_weights,G3_weights,
                             H_weights,H1_weights,H2_weights,H3_weights,n_weights,
@@ -708,7 +710,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
             for ielement_vpap in 1:vpa.nelement_local
                 # do integration over part of the domain with no divergences
                 vpa_nodes = get_nodes(vpa,ielement_vpap)
-                vpa_min, vpa_max = vpa_nodes[1], vpa_nodes[end]
+                vpa_min, vpa_max = ArbFloat(vpa_nodes[1]), ArbFloat(vpa_nodes[end])
                 nquad_vpa = get_scaled_x_w_no_divergences!(x_vpa, w_vpa, x_legendre, w_legendre, vpa_min, vpa_max)
                 local_element_integration!(G_weights,G1_weights,G2_weights,G3_weights,
                             H_weights,H1_weights,H2_weights,H3_weights,n_weights,
@@ -730,8 +732,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
             for ielement_vperpp in 1:ielement_vperp_low-1
                 
                 vperp_nodes = get_nodes(vperp,ielement_vperpp)
-                vperp_max = vperp_nodes[end]
-                vperp_min = vperp_nodes[1]*nel_low(ielement_vperpp,vperp.nelement_local) 
+                vperp_max = ArbFloat(vperp_nodes[end])
+                vperp_min = ArbFloat(vperp_nodes[1]*nel_low(ielement_vperpp,vperp.nelement_local))
                 nquad_vperp = get_scaled_x_w_no_divergences!(x_vperp, w_vperp, x_legendre, w_legendre, vperp_min, vperp_max)
                 loop_over_vpa_elements_no_divergences!(G_weights,G1_weights,G2_weights,G3_weights,
                         H_weights,H1_weights,H2_weights,H3_weights,n_weights,
@@ -743,8 +745,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
             for ielement_vperpp in ielement_vperp_low:ielement_vperp_hi
                 
                 vperp_nodes = get_nodes(vperp,ielement_vperpp)
-                vperp_max = vperp_nodes[end]
-                vperp_min = vperp_nodes[1]*nel_low(ielement_vperpp,vperp.nelement_local) 
+                vperp_max = ArbFloat(vperp_nodes[end])
+                vperp_min = ArbFloat(vperp_nodes[1]*nel_low(ielement_vperpp,vperp.nelement_local))
                 #nquad_vperp = get_scaled_x_w_no_divergences!(x_vperp, w_vperp, x_legendre, w_legendre, vperp_min, vperp_max)
                 nquad_vperp = get_scaled_x_w!(x_vperp, w_vperp, x_legendre, w_legendre, x_laguerre, w_laguerre, vperp_min, vperp_max, vperp_val)
                 loop_over_vpa_elements!(G_weights,G1_weights,G2_weights,G3_weights,
@@ -757,8 +759,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
             for ielement_vperpp in ielement_vperp_hi+1:vperp.nelement_local
                 
                 vperp_nodes = get_nodes(vperp,ielement_vperpp)
-                vperp_max = vperp_nodes[end]
-                vperp_min = vperp_nodes[1]*nel_low(ielement_vperpp,vperp.nelement_local) 
+                vperp_max = ArbFloat(vperp_nodes[end])
+                vperp_min = ArbFloat(vperp_nodes[1]*nel_low(ielement_vperpp,vperp.nelement_local))
                 nquad_vperp = get_scaled_x_w_no_divergences!(x_vperp, w_vperp, x_legendre, w_legendre, vperp_min, vperp_max)
                 loop_over_vpa_elements_no_divergences!(G_weights,G1_weights,G2_weights,G3_weights,
                         H_weights,H1_weights,H2_weights,H3_weights,n_weights,
@@ -778,8 +780,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
                         vpa_val, vperp_val, ivpa, ivperp)
             for ielement_vperpp in 1:vperp.nelement_local
                 vperp_nodes = get_nodes(vperp,ielement_vperpp)
-                vperp_max = vperp_nodes[end]
-                vperp_min = vperp_nodes[1]*nel_low(ielement_vperpp,nelement_vperp) 
+                vperp_max = ArbFloat(vperp_nodes[end])
+                vperp_min = ArbFloat(vperp_nodes[1]*nel_low(ielement_vperpp,nelement_vperp))
                 nquad_vperp = get_scaled_x_w_no_divergences!(x_vperp, w_vperp, x_legendre, w_legendre, vperp_min, vperp_max)
                 loop_over_vpa_elements_no_divergences!(G_weights,G1_weights,G2_weights,G3_weights,
                         H_weights,H1_weights,H2_weights,H3_weights,n_weights,
@@ -797,14 +799,20 @@ if abspath(PROGRAM_FILE) == @__FILE__
         
         # get Gauss-Legendre points and weights on (-1,1)
         nquad = 2*ngrid
-        x_legendre, w_legendre = gausslegendre(nquad)
+        xx_legendre, ww_legendre = gausslegendre(nquad)
         #nlaguerre = min(9,nquad) # to prevent points to close to the boundaries
         nlaguerre = nquad
-        x_laguerre, w_laguerre = gausslaguerre(nlaguerre)
+        xx_laguerre, ww_laguerre = gausslaguerre(nlaguerre)
         
+        x_legendre, w_legendre = Array{ArbFloat,1}(undef,nquad), Array{ArbFloat,1}(undef,nquad)
+        @. x_legendre = ArbFloat(xx_legendre)
+        @. w_legendre = ArbFloat(ww_legendre)
+        x_laguerre, w_laguerre = Array{ArbFloat,1}(undef,nlaguerre), Array{ArbFloat,1}(undef,nlaguerre)
+        @. x_laguerre = ArbFloat(xx_laguerre)
+        @. w_laguerre = ArbFloat(ww_laguerre)
         #x_hlaguerre, w_hlaguerre = gausslaguerre(halfnquad)
-        x_vpa, w_vpa = Array{mk_float,1}(undef,2*nquad), Array{mk_float,1}(undef,2*nquad)
-        x_vperp, w_vperp = Array{mk_float,1}(undef,2*nquad), Array{mk_float,1}(undef,2*nquad)
+        x_vpa, w_vpa = Array{ArbFloat,1}(undef,2*nquad), Array{ArbFloat,1}(undef,2*nquad)
+        x_vperp, w_vperp = Array{ArbFloat,1}(undef,2*nquad), Array{ArbFloat,1}(undef,2*nquad)
         
         
         @serial_region begin
@@ -826,8 +834,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
             ielement_vperp_hi = ielement_vperp + ng_hi(igrid_vperp,ngrid_vperp)*nel_hi(ielement_vperp,nelement_vperp)
             #println("igrid_vperp: ielement_vperp: ielement_vperp_low: ielement_vperp_hi:", igrid_vperp," ",ielement_vperp," ",ielement_vperp_low," ",ielement_vperp_hi)
             
-            vperp_val = vperp.grid[ivperp]
-            vpa_val = vpa.grid[ivpa]
+            vperp_val = ArbFloat(vperp.grid[ivperp])
+            vpa_val = ArbFloat(vpa.grid[ivpa])
             @. G_weights[ivpa,ivperp,:,:] = 0.0  
             @. G1_weights[ivpa,ivperp,:,:] = 0.0  
             @. G2_weights[ivpa,ivperp,:,:] = 0.0  
