@@ -1097,6 +1097,76 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
     return result
 end
 
+const chunk_size_1d = 10000
+const chunk_size_2d = 100
+struct VariableCache{T1,T2,N}
+    run_info::T1
+    variable_name::String
+    t_chunk_size::mk_int
+    n_tinds::mk_int
+    tinds_range_global::Union{UnitRange{mk_int},StepRange{mk_int}}
+    tinds_chunk::Union{Base.RefValue{UnitRange{mk_int}},Base.RefValue{StepRange{mk_int}}}
+    data_chunk::Array{mk_float,N}
+    dim_slices::T2
+end
+
+function VariableCache(run_info, variable_name::String, t_chunk_size::mk_int;
+                       it::Union{Nothing,AbstractRange}, is, iz, ir, ivperp, ivpa, ivzeta,
+                       ivr, ivz)
+    if it === nothing
+        tinds_range_global = run_info.itime_min:run_info.itime_skip:run_info.itime_max
+    else
+        tinds_range_global = it
+    end
+    n_tinds = length(tinds_range_global)
+
+    t_chunk_size = min(t_chunk_size, n_tinds)
+    tinds_chunk = 1:t_chunk_size
+    dim_slices = (is=is, iz=iz, ir=ir, ivperp=ivperp, ivpa=ivpa, ivzeta=ivzeta, ivr=ivr,
+                  ivz=ivz)
+    data_chunk = postproc_load_variable(run_info, variable_name;
+                                        it=tinds_range_global[tinds_chunk], dim_slices...)
+
+    return VariableCache(run_info, variable_name, t_chunk_size,
+                         n_tinds, tinds_range_global, Ref(tinds_chunk),
+                         data_chunk, dim_slices)
+end
+
+function get_cache_slice(variable_cache::VariableCache, tind::mk_int)
+    tinds_chunk = variable_cache.tinds_chunk[]
+    local_tind = findfirst(i->i==tind, tinds_chunk)
+
+    if local_tind === nothing
+        # tind is not in the cache, so get a new chunk
+        chunk_size = variable_cache.t_chunk_size
+        new_chunk_start = ((tind-1) ÷ chunk_size) * chunk_size + 1
+        new_chunk = new_chunk_start:(new_chunk_start + chunk_size - 1)
+        variable_cache.tinds_chunk[] = new_chunk
+        variable_cache.data_chunk .=
+            postproc_load_variable(variable_cache.run_info, variable_cache.variable_name;
+                                   it=variable_cache.tinds_range_global[new_chunk],
+                                   variable_cache.dim_slices...)
+        local_tind = findfirst(i->i==tind, new_chunk)
+    end
+
+    return selectdim(variable_cache.data_chunk, ndims(variable_cache.data_chunk),
+                      local_tind)
+end
+
+function variable_cache_extrema(variable_cache::VariableCache; transform=identity)
+    # Bit of a hack to iterate through all chunks that can be in the cache
+    chunk_size = variable_cache.t_chunk_size
+    data_min = data_max = NaN
+    for it ∈ ((i - 1) * chunk_size + 1 for i ∈ 1:(variable_cache.n_tinds ÷ chunk_size))
+        get_cache_slice(variable_cache, it)
+        this_min, this_max = NaNMath.extrema(transform.(variable_cache.data_chunk))
+        data_min = NaNMath.min(data_min, this_min)
+        data_max = NaNMath.max(data_max, this_max)
+    end
+
+    return data_min, data_max
+end
+
 """
     plots_for_variable(run_info, variable_name; plot_prefix)
 
@@ -1705,7 +1775,7 @@ for dim ∈ one_dimension_combinations_no_t
 
              function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
                                      input=nothing, outfile=nothing, yscale=nothing,
-                                     ylims=nothing, kwargs...)
+                                     ylims=nothing, it=nothing, kwargs...)
 
                  try
                      if data === nothing
@@ -1725,13 +1795,17 @@ for dim ∈ one_dimension_combinations_no_t
                      for (d, ri) ∈ zip(data, run_info)
                          $function_name(ri, var_name; is=is, data=d, input=input,
                                         ylims=ylims, frame_index=frame_index, ax=ax,
-                                        kwargs...)
+                                        it=it, kwargs...)
                      end
                      if n_runs > 1
                          put_legend_above(fig, ax)
                      end
 
-                     nt = minimum(ri.nt for ri ∈ run_info)
+                     if it === nothing
+                         nt = minimum(ri.nt for ri ∈ run_info)
+                     else
+                         nt = length(it)
+                     end
                      save_animation(fig, frame_index, nt, outfile)
 
                      return fig
@@ -1763,7 +1837,8 @@ for dim ∈ one_dimension_combinations_no_t
                                                               ir=ir, iz=iz, ivperp=ivperp,
                                                               ivpa=ivpa, ivzeta=ivzeta,
                                                               ivr=ivr, ivz=ivz)
-                     data = postproc_load_variable(run_info, var_name; dim_slices...)
+                     data = VariableCache(run_info, var_name, chunk_size_1d;
+                                          dim_slices...)
                  else
                      data = select_slice(data, $(QuoteNode(dim)), :t; input=input, it=it,
                                          is=is, ir=ir, iz=iz, ivperp=ivperp, ivpa=ivpa,
@@ -1782,8 +1857,6 @@ for dim ∈ one_dimension_combinations_no_t
                      fig = nothing
                  end
 
-                 nt = size(data, 2)
-
                  x = $dim_grid
                  if $idim !== nothing
                      x = x[$idim]
@@ -1799,6 +1872,13 @@ for dim ∈ one_dimension_combinations_no_t
                          error("When `outfile` is passed to save the plot, must either pass both "
                                * "`fig` and `ax` or neither. Only `ax` was passed.")
                      end
+
+                     if isa(data, VariableCache)
+                         nt = data.n_tinds
+                     else
+                         nt = size(data, 2)
+                     end
+
                      save_animation(fig, ind, nt, outfile)
                  end
 
@@ -1887,7 +1967,7 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
 
              function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
                                      input=nothing, outfile=nothing, transform=identity,
-                                     kwargs...)
+                                     it=nothing, kwargs...)
 
                  try
                      if data === nothing
@@ -1905,10 +1985,14 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
                          $function_name(ri, var_name; is=is, data=d, input=input,
                                         transform=transform, frame_index=frame_index,
                                         ax=a, colorbar_place=cp, title=ri.run_name,
-                                        kwargs...)
+                                        it=it, kwargs...)
                      end
 
-                     nt = minimum(ri.nt for ri ∈ run_info)
+                     if it === nothing
+                         nt = minimum(ri.nt for ri ∈ run_info)
+                     else
+                         nt = length(it)
+                     end
                      save_animation(fig, frame_index, nt, outfile)
 
                      return fig
@@ -1941,7 +2025,8 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
                                                               ir=ir, iz=iz, ivperp=ivperp,
                                                               ivpa=ivpa, ivzeta=ivzeta,
                                                               ivr=ivr, ivz=ivz)
-                     data = postproc_load_variable(run_info, var_name; dim_slices...)
+                     data = VariableCache(run_info, var_name, chunk_size_2d;
+                                          dim_slices...)
                  else
                      data = select_slice(data, $(QuoteNode(dim2)), $(QuoteNode(dim1)), :t;
                                          input=input, it=it, is=is, ir=ir, iz=iz,
@@ -1979,7 +2064,11 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
                          error("When `outfile` is passed to save the plot, must either pass both "
                                * "`fig` and `ax` or neither. Only `ax` was passed.")
                      end
-                     nt = size(data, 3)
+                     if isa(data, VariableCache)
+                         nt = data.n_tinds
+                     else
+                         nt = size(data, 2)
+                     end
                      save_animation(fig, ind, nt, outfile)
                  end
 
@@ -2296,11 +2385,17 @@ function animate_1d(xcoord, data; frame_index=nothing, ax=nothing, fig=nothing,
         fig, ax = get_1d_ax(title=title, xlabel=xlabel, ylabel=ylabel, yscale=yscale)
     end
 
-    # Use transform to allow user to do something like data = abs.(data)
-    data = transform.(data)
+    if !isa(data, VariableCache)
+        # Apply transform before calculating extrema
+        data = transform.(data)
+    end
 
     if ylims === nothing
-        datamin, datamax = NaNMath.extrema(data)
+        if isa(data, VariableCache)
+            datamin, datamax = variable_cache_extrema(data; transform=transform)
+        else
+            datamin, datamax = NaNMath.extrema(data)
+        end
         if ax.limits.val[2] === nothing
             # No limits set yet, need to use minimum and maximum of data over all time,
             # otherwise the automatic axis scaling would use the minimum and maximum of
@@ -2317,7 +2412,12 @@ function animate_1d(xcoord, data; frame_index=nothing, ax=nothing, fig=nothing,
         ylims!(ax, ylims)
     end
 
-    line_data = @lift(@view data[:,$ind])
+    # Use transform to allow user to do something like data = abs.(data)
+    if isa(data, VariableCache)
+        line_data = @lift(transform.(get_cache_slice(data, $ind)))
+    else
+        line_data = @lift(@view data[:,$ind])
+    end
     lines!(ax, xcoord, line_data; kwargs...)
 
     if outfile !== nothing
@@ -2396,12 +2496,16 @@ function animate_2d(xcoord, ycoord, data; frame_index=nothing, ax=nothing, fig=n
         kwargs = tuple(kwargs..., :colorscale=>colorscale)
     end
 
-    # Use transform to allow user to do something like data = abs.(data)
-    data = transform.(data)
-
     xcoord = grid_points_to_faces(xcoord)
     ycoord = grid_points_to_faces(ycoord)
-    heatmap_data = @lift(@view data[:,:,$ind])
+
+    # Use transform to allow user to do something like data = abs.(data)
+    if isa(data, VariableCache)
+        heatmap_data = @lift(transform.(get_cache_slice(data, $ind)))
+    else
+        data = transform.(data)
+        heatmap_data = @lift(@view data[:,:,$ind])
+    end
     hm = heatmap!(ax, xcoord, ycoord, heatmap_data; colormap=colormap, kwargs...)
     Colorbar(colorbar_place, hm)
 
