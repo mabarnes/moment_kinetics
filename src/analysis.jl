@@ -89,8 +89,8 @@ TeN / (2 neN sqrt(pi)) * ∫dvpaN fN / vpaN^2 ≤ 1
 
 Note that `integrate_over_vspace()` includes the 1/sqrt(pi) factor already.
 """
-function check_Chodura_condition(run_name, vperp_global, vpa_global, r, z, vperp, vpa,
-                                 dens, T_e, Er, geometry, z_bc, nblocks)
+function check_Chodura_condition(run_name, r, z, vperp, vpa, dens, composition, Er,
+                                 geometry, z_bc, nblocks)
 
     if z_bc != "wall"
         return nothing, nothing
@@ -103,13 +103,14 @@ function check_Chodura_condition(run_name, vperp_global, vpa_global, r, z, vperp
     upper_result = zeros(nr, ntime)
     f_lower = nothing
     f_upper = nothing
-    z_nrank, r_nrank = get_nranks(run_name, nblocks, "dfns")
-    f_lower = load_distributed_charged_pdf_slice(run_name, nblocks, :, n_ion_species, r,
-                                                 z, vperp, vpa; z=1)
-    f_upper = load_distributed_charged_pdf_slice(run_name, nblocks, :, n_ion_species, r,
-                                                 z, vperp, vpa; z=z.n_global)
+    f_lower = load_distributed_charged_pdf_slice(run_name, nblocks, 1:ntime,
+                                                 composition.n_ion_species, r, z, vperp,
+                                                 vpa; iz=1)
+    f_upper = load_distributed_charged_pdf_slice(run_name, nblocks, 1:ntime,
+                                                 composition.n_ion_species, r, z, vperp,
+                                                 vpa; iz=z.n_global)
     for it ∈ 1:ntime, ir ∈ 1:nr
-        vpabar = @. vpa_global.grid - 0.5 * geometry.rhostar * Er[1,ir,it] / geometry.bzed
+        vpabar = @. vpa.grid - 0.5 * geometry.rhostar * Er[1,ir,it] / geometry.bzed
 
         # Get rid of a zero if it is there to avoid a blow up - f should be zero at that
         # point anyway
@@ -120,16 +121,16 @@ function check_Chodura_condition(run_name, vperp_global, vpa_global, r, z, vperp
         end
 
         @views lower_result[ir,it] =
-            integrate_over_vspace(f_lower[:,:,1,ir,is,it], vpabar, -2, vpa_global.wgts,
-                                  vperp_global.grid, 0, vperp_global.wgts)
+            integrate_over_vspace(f_lower[:,:,ir,is,it], vpabar, -2, vpa.wgts, vperp.grid,
+                                  0, vperp.wgts)
         if it == ntime
             println("check vpabar lower", vpabar)
             println("result lower ", lower_result[ir,it])
         end
 
-        lower_result[ir,it] *= 0.5 * T_e / dens[1,ir,is,it]
+        lower_result[ir,it] *= 0.5 * composition.T_e / dens[1,ir,is,it]
 
-        vpabar = @. vpa_global.grid - 0.5 * geometry.rhostar * Er[end,ir,it] / geometry.bzed
+        vpabar = @. vpa.grid - 0.5 * geometry.rhostar * Er[end,ir,it] / geometry.bzed
 
         # Get rid of a zero if it is there to avoid a blow up - f should be zero at that
         # point anyway
@@ -140,14 +141,14 @@ function check_Chodura_condition(run_name, vperp_global, vpa_global, r, z, vperp
         end
 
         @views upper_result[ir,it] =
-            integrate_over_vspace(f_upper[:,:,end,ir,is,it], vpabar, -2, vpa_global.wgts,
-                                  vperp_global.grid, 0, vperp_global.wgts)
+            integrate_over_vspace(f_upper[:,:,ir,is,it], vpabar, -2, vpa.wgts, vperp.grid,
+                                  0, vperp.wgts)
         if it == ntime
             println("check vpabar upper ", vpabar)
             println("result upper ", upper_result[ir,it])
         end
 
-        upper_result[ir,it] *= 0.5 * T_e / dens[end,ir,is,it]
+        upper_result[ir,it] *= 0.5 * composition.T_e / dens[end,ir,is,it]
     end
 
     println("final Chodura results result ", lower_result[1,end], " ", upper_result[1,end])
