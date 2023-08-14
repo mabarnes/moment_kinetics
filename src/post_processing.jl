@@ -760,25 +760,49 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
         legend = true
     end
 
-    if pp.diagnostics_chodura
+    if pp.diagnostics_chodura_t
         Chodura_ratio_lower, Chodura_ratio_upper =
             get_tuple_of_return_values(check_Chodura_condition, run_names, r, z, vperp,
                                        vpa, density_at_pdf_times, composition,
-                                       Er_at_pdf_times, geometry, "wall", nblocks, ir0)
+                                       Er_at_pdf_times, geometry, "wall", nblocks,
+                                       nothing, ir0)
 
         plot(legend=legend)
         for (t, cr, run_label) ∈ zip(time_pdfs, Chodura_ratio_lower, run_names)
             plot!(t, cr, xlabel="time", ylabel="Chodura ratio at z=-L/2",
                   label=run_label)
         end
-        outfile = string(plot_prefix, "_Chodura_ratio_lower.pdf")
+        outfile = string(plot_prefix, "_Chodura_ratio_lower_vs_t.pdf")
         trysavefig(outfile)
         plot(legend=legend)
         for (t, cr, run_label) ∈ zip(time_pdfs, Chodura_ratio_upper, run_names)
             plot!(t, cr, xlabel="time", ylabel="Chodura ratio at z=+L/2",
                   label=run_label)
         end
-        outfile = string(plot_prefix, "_Chodura_ratio_upper.pdf")
+        outfile = string(plot_prefix, "_Chodura_ratio_upper_vs_t.pdf")
+        trysavefig(outfile)
+    end
+
+    if pp.diagnostics_chodura_r
+        Chodura_ratio_lower, Chodura_ratio_upper =
+            get_tuple_of_return_values(check_Chodura_condition, run_names, r, z, vperp,
+                                       vpa, density_at_pdf_times, composition,
+                                       Er_at_pdf_times, geometry, "wall", nblocks,
+                                       ntime_pdfs, nothing)
+
+        plot(legend=legend)
+        for (this_r, cr, run_label) ∈ zip(r, Chodura_ratio_lower, run_names)
+            plot!(this_r.grid, cr, xlabel="r", ylabel="Chodura ratio at z=-L/2",
+                  label=run_label)
+        end
+        outfile = string(plot_prefix, "_Chodura_ratio_lower_vs_r.pdf")
+        trysavefig(outfile)
+        plot(legend=legend)
+        for (this_r, cr, run_label) ∈ zip(r, Chodura_ratio_upper, run_names)
+            plot!(this_r.grid, cr, xlabel="r", ylabel="Chodura ratio at z=+L/2",
+                  label=run_label)
+        end
+        outfile = string(plot_prefix, "_Chodura_ratio_upper_vs_r.pdf")
         trysavefig(outfile)
     end
 

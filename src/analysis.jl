@@ -94,13 +94,23 @@ If `ir0` is passed, only load the data for as single r-point (to save memory).
 """
 function check_Chodura_condition(run_name, r, z, vperp, vpa, dens, composition, Er,
                                  geometry, z_bc, nblocks,
+                                 it0::Union{Nothing, mk_int}=nothing,
                                  ir0::Union{Nothing, mk_int}=nothing)
 
     if z_bc != "wall"
         return nothing, nothing
     end
 
-    ntime = size(Er, 3)
+    if it0 === nothing
+        ntime = size(Er, 3)
+        t_range = 1:ntime
+    else
+        it_max = size(Er,3)
+        dens = selectdim(dens, 4, it_max:it_max)
+        Er = selectdim(Er, 3, it_max:it_max)
+        ntime = 1
+        t_range = it0:it0
+    end
     is = 1
     if ir0 === nothing
         nr = size(Er, 2)
@@ -111,10 +121,10 @@ function check_Chodura_condition(run_name, r, z, vperp, vpa, dens, composition, 
     upper_result = zeros(nr, ntime)
     f_lower = nothing
     f_upper = nothing
-    f_lower = load_distributed_charged_pdf_slice(run_name, nblocks, 1:ntime,
+    f_lower = load_distributed_charged_pdf_slice(run_name, nblocks, t_range,
                                                  composition.n_ion_species, r, z, vperp,
                                                  vpa; iz=1, ir=ir0)
-    f_upper = load_distributed_charged_pdf_slice(run_name, nblocks, 1:ntime,
+    f_upper = load_distributed_charged_pdf_slice(run_name, nblocks, t_range,
                                                  composition.n_ion_species, r, z, vperp,
                                                  vpa; iz=z.n_global, ir=ir0)
     if ir0 !== nothing
@@ -169,7 +179,13 @@ function check_Chodura_condition(run_name, r, z, vperp, vpa, dens, composition, 
 
     println("final Chodura results result ", lower_result[1,end], " ", upper_result[1,end])
 
-    if ir0 !== nothing
+    if it0 !== nothing && ir0 !== nothing
+        lower_result = lower_result[1,1]
+        upper_result = upper_result[1,1]
+    elseif it0 !== nothing
+        lower_result = @view lower_result[:,1]
+        upper_result = @view upper_result[:,1]
+    elseif ir0 !== nothing
         lower_result = @view lower_result[1,:]
         upper_result = @view upper_result[1,:]
     end

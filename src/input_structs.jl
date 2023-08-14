@@ -493,8 +493,10 @@ struct pp_input
     ivr0::mk_int
     # ivzeta0 is the ivzeta index used when plotting data at a single vzeta location
     ivzeta0::mk_int
-    # Calculate and plot the 'Chodura criterion' at the wall boundaries
-    diagnostics_chodura::Bool
+    # Calculate and plot the 'Chodura criterion' at the wall boundaries vs t at fixed r
+    diagnostics_chodura_t::Bool
+    # Calculate and plot the 'Chodura criterion' at the wall boundaries vs r at fixed t
+    diagnostics_chodura_r::Bool
 end
 
 end
