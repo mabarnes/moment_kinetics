@@ -764,18 +764,18 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
         Chodura_ratio_lower, Chodura_ratio_upper =
             get_tuple_of_return_values(check_Chodura_condition, run_names, r, z, vperp,
                                        vpa, density_at_pdf_times, composition,
-                                       Er_at_pdf_times, geometry, "wall", nblocks)
+                                       Er_at_pdf_times, geometry, "wall", nblocks, ir0)
 
         plot(legend=legend)
         for (t, cr, run_label) ∈ zip(time_pdfs, Chodura_ratio_lower, run_names)
-            plot!(t, cr[ir0,:], xlabel="time", ylabel="Chodura ratio at z=-L/2",
+            plot!(t, cr, xlabel="time", ylabel="Chodura ratio at z=-L/2",
                   label=run_label)
         end
         outfile = string(plot_prefix, "_Chodura_ratio_lower.pdf")
         trysavefig(outfile)
         plot(legend=legend)
         for (t, cr, run_label) ∈ zip(time_pdfs, Chodura_ratio_upper, run_names)
-            plot!(t, cr[ir0,:], xlabel="time", ylabel="Chodura ratio at z=+L/2",
+            plot!(t, cr, xlabel="time", ylabel="Chodura ratio at z=+L/2",
                   label=run_label)
         end
         outfile = string(plot_prefix, "_Chodura_ratio_upper.pdf")
