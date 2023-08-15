@@ -148,8 +148,10 @@ const ivr0 = -1
 # ivzeta0 is the ivzeta index used when plotting data at a single vzeta location
 # by default, it will be set to cld(nvzeta,3) unless a non-negative value provided here
 const ivzeta0 = -1
-# Calculate and plot the 'Chodura criterion' at the wall boundaries
-const diagnostics_chodura = false
+# Calculate and plot the 'Chodura criterion' at the wall boundaries vs t at fixed r
+const diagnostics_chodura_t = false
+# Calculate and plot the 'Chodura criterion' at the wall boundaries vs r at fixed t
+const diagnostics_chodura_r = false
 
 pp = pp_input(calculate_frequencies, plot_phi0_vs_t, plot_phi_vs_z_t, animate_phi_vs_z,
     plot_dens0_vs_t, plot_upar0_vs_t, plot_ppar0_vs_t, plot_vth0_vs_t, plot_qpar0_vs_t,
@@ -171,6 +173,6 @@ pp = pp_input(calculate_frequencies, plot_phi0_vs_t, plot_phi_vs_z_t, animate_ph
     plot_parallel_temperature_vs_r_z, animate_parallel_temperature_vs_r_z, plot_wall_pdf,
     instability2D, nwrite_movie, itime_min, itime_max, itime_skip, nwrite_movie_pdfs,
     itime_min_pdfs, itime_max_pdfs, itime_skip_pdfs, ivpa0, ivperp0, iz0, ir0, ivz0, ivr0,
-    ivzeta0, diagnostics_chodura)
+    ivzeta0, diagnostics_chodura_t, diagnostics_chodura_r)
 
 end
