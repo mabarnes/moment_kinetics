@@ -7,7 +7,7 @@ using SpecialFunctions: erf, ellipe, ellipk
 using FastGaussQuadrature
 using Dates
 using LinearAlgebra: mul!
-using ArbNumerics: ArbFloat, sqrt
+
 import moment_kinetics
 using moment_kinetics.input_structs: grid_input, advection_input
 using moment_kinetics.coordinates: define_coordinate
@@ -203,8 +203,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
         # set up necessary inputs for collision operator functions 
         nvperp = vperp.n
         nvpa = vpa.n
-        ivpa_field = floor(mk_int,nvpa/2 + 3*nvpa/32 - 1)
-        ivperp_field = floor(mk_int,nvperp/8 -1)
+        ivpa_field = floor(mk_int,nvpa/2 + nvpa/8 - 1)
+        ivperp_field = floor(mk_int,nvperp/10)
         println("Investigating vpa = ",vpa.grid[ivpa_field], " vperp = ",vperp.grid[ivperp_field])
         
         # Set up MPI
@@ -609,13 +609,13 @@ if abspath(PROGRAM_FILE) == @__FILE__
                             x_kvperp = x_vperp[kvperp]
                             w_kvperp = w_vperp[kvperp]
                             w_kvpa = w_vpa[kvpa]
-                            denom = (ArbFloat(vpa_val) - x_kvpa)^2 + (ArbFloat(vperp_val) + x_kvperp)^2 
-                            prefac = mk_float(sqrt(denom))
-                            mm = min(ArbFloat(4.0)*ArbFloat(vperp_val)*x_kvperp/denom,1.0 - 1.0e-15)
+                            denom = (vpa_val - x_kvpa)^2 + (vperp_val + x_kvperp)^2 
+                            mm = min(4.0*vperp_val*x_kvperp/denom,1.0 - 1.0e-15)
                             #mm = 4.0*vperp_val*x_kvperp/denom/(1.0 + 10^-15)
                             #mm = 4.0*vperp_val*x_kvperp/denom
-                            ellipe_mm = ellipe(mk_float(mm)) 
-                            ellipk_mm = ellipk(mk_float(mm)) 
+                            prefac = sqrt(denom)
+                            ellipe_mm = ellipe(mm) 
+                            ellipk_mm = ellipk(mm) 
                             #if mm_test > 1.0
                             #    println("mm: ",mm_test," ellipe: ",ellipe_mm," ellipk: ",ellipk_mm)
                             #end
@@ -675,9 +675,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
         function loop_over_vpa_elements!(G_weights,G1_weights,G2_weights,G3_weights,
                                     H_weights,H1_weights,H2_weights,H3_weights,n_weights,
                                     vpa,ielement_vpa_low,ielement_vpa_hi, # info about primed vperp grids
-                                    nquad_vperp_xx,nquad_vperp_x,ielement_vperpp,vperp_nodes,vperp, # info about primed vperp grids
+                                    nquad_vperp,ielement_vperpp,vperp_nodes,vperp, # info about primed vperp grids
                                     x_vpa, w_vpa, x_vperp, w_vperp, # arrays to store points and weights for primed (source) grids
-                                    xx_vpa, ww_vpa, xx_vperp, ww_vperp, # arrays to store points and weights for primed (source) grids
                                     igrid_vpa, vpa_val, vperp_val, ivpa, ivperp)
             for ielement_vpap in 1:ielement_vpa_low-1 
                 # do integration over part of the domain with no divergences
@@ -687,23 +686,22 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 local_element_integration!(G_weights,G1_weights,G2_weights,G3_weights,
                             H_weights,H1_weights,H2_weights,H3_weights,n_weights,
                             nquad_vpa,ielement_vpap,vpa_nodes,vpa,
-                            nquad_vperp_x,ielement_vperpp,vperp_nodes,vperp,
+                            nquad_vperp,ielement_vperpp,vperp_nodes,vperp,
                             x_vpa, w_vpa, x_vperp, w_vperp, 
                             vpa_val, vperp_val, ivpa, ivperp)
             end
             for ielement_vpap in ielement_vpa_low:ielement_vpa_hi
             #for ielement_vpap in 1:vpa.nelement_local
                 # use general grid function that checks divergences
-                vpa_nodes = ArbFloat.(get_nodes(vpa,ielement_vpap))
+                vpa_nodes = get_nodes(vpa,ielement_vpap)
                 vpa_min, vpa_max = vpa_nodes[1], vpa_nodes[end]
                 #nquad_vpa = get_scaled_x_w_no_divergences!(x_vpa, w_vpa, x_legendre, w_legendre, vpa_min, vpa_max)
-                #nquad_vpa = get_scaled_x_w!(x_vpa, w_vpa, x_legendre, w_legendre, x_laguerre, w_laguerre, vpa_min, vpa_max, vpa_nodes, igrid_vpa, vpa_val)
-                nquad_vpa = get_scaled_x_w!(xx_vpa, ww_vpa, xx_legendre, ww_legendre, xx_laguerre, ww_laguerre, vpa_min, vpa_max, vpa_nodes, igrid_vpa, ArbFloat(vpa_val))
+                nquad_vpa = get_scaled_x_w!(x_vpa, w_vpa, x_legendre, w_legendre, x_laguerre, w_laguerre, vpa_min, vpa_max, vpa_nodes, igrid_vpa, vpa_val)
                 local_element_integration!(G_weights,G1_weights,G2_weights,G3_weights,
                             H_weights,H1_weights,H2_weights,H3_weights,n_weights,
                             nquad_vpa,ielement_vpap,vpa_nodes,vpa,
-                            nquad_vperp_xx,ielement_vperpp,vperp_nodes,vperp,
-                            xx_vpa, ww_vpa, xx_vperp, ww_vperp, 
+                            nquad_vperp,ielement_vperpp,vperp_nodes,vperp,
+                            x_vpa, w_vpa, x_vperp, w_vperp, 
                             vpa_val, vperp_val, ivpa, ivperp)
             end
             for ielement_vpap in ielement_vpa_hi+1:vpa.nelement_local
@@ -714,7 +712,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 local_element_integration!(G_weights,G1_weights,G2_weights,G3_weights,
                             H_weights,H1_weights,H2_weights,H3_weights,n_weights,
                             nquad_vpa,ielement_vpap,vpa_nodes,vpa,
-                            nquad_vperp_x,ielement_vperpp,vperp_nodes,vperp,
+                            nquad_vperp,ielement_vperpp,vperp_nodes,vperp,
                             x_vpa, w_vpa, x_vperp, w_vperp, 
                             vpa_val, vperp_val, ivpa, ivperp)
                             
@@ -749,7 +747,6 @@ if abspath(PROGRAM_FILE) == @__FILE__
                         vpa,ielement_vpa_low,ielement_vpa_hi, # info about primed vpa grids
                         vperp,ielement_vperp_low,ielement_vperp_hi, # info about primed vperp grids
                         x_vpa, w_vpa, x_vperp, w_vperp, # arrays to store points and weights for primed (source) grids
-                        xx_vpa, ww_vpa, xx_vperp, ww_vperp, # arrays to store points and weights for primed (source) grids
                         igrid_vpa, igrid_vperp, vpa_val, vperp_val, ivpa, ivperp)
             for ielement_vperpp in 1:ielement_vperp_low-1
                 
@@ -766,18 +763,16 @@ if abspath(PROGRAM_FILE) == @__FILE__
             end
             for ielement_vperpp in ielement_vperp_low:ielement_vperp_hi
                 
-                vperp_nodes = ArbFloat.(get_nodes(vperp,ielement_vperpp))
+                vperp_nodes = get_nodes(vperp,ielement_vperpp)
                 vperp_max = vperp_nodes[end]
                 vperp_min = vperp_nodes[1]*nel_low(ielement_vperpp,vperp.nelement_local) 
-                nquad_vperp_x = get_scaled_x_w_no_divergences!(x_vperp, w_vperp, x_legendre, w_legendre, vperp_min, vperp_max)
-                #nquad_vperp = get_scaled_x_w!(x_vperp, w_vperp, x_legendre, w_legendre, x_laguerre, w_laguerre, vperp_min, vperp_max, vperp_nodes, igrid_vperp, vperp_val)
-                nquad_vperp_xx = get_scaled_x_w!(xx_vperp, ww_vperp, xx_legendre, ww_legendre, xx_laguerre, ww_laguerre, vperp_min, vperp_max, vperp_nodes, igrid_vperp, ArbFloat(vperp_val))
+                #nquad_vperp = get_scaled_x_w_no_divergences!(x_vperp, w_vperp, x_legendre, w_legendre, vperp_min, vperp_max)
+                nquad_vperp = get_scaled_x_w!(x_vperp, w_vperp, x_legendre, w_legendre, x_laguerre, w_laguerre, vperp_min, vperp_max, vperp_nodes, igrid_vperp, vperp_val)
                 loop_over_vpa_elements!(G_weights,G1_weights,G2_weights,G3_weights,
                         H_weights,H1_weights,H2_weights,H3_weights,n_weights,
                         vpa,ielement_vpa_low,ielement_vpa_hi, # info about primed vpa grids
-                        nquad_vperp_xx,nquad_vperp_x,ielement_vperpp,vperp_nodes,vperp, # info about primed vperp grids
+                        nquad_vperp,ielement_vperpp,vperp_nodes,vperp, # info about primed vperp grids
                         x_vpa, w_vpa, x_vperp, w_vperp, # arrays to store points and weights for primed (source) grids
-                        xx_vpa, ww_vpa, xx_vperp, ww_vperp, # arrays to store points and weights for primed (source) grids
                         igrid_vpa, vpa_val, vperp_val, ivpa, ivperp)
             end
             for ielement_vperpp in ielement_vperp_hi+1:vperp.nelement_local
@@ -828,18 +823,9 @@ if abspath(PROGRAM_FILE) == @__FILE__
         nlaguerre = nquad
         x_laguerre, w_laguerre = gausslaguerre(nlaguerre)
         
-        xx_legendre, ww_legendre = Array{ArbFloat,1}(undef,nquad), Array{ArbFloat,1}(undef,nquad)
-        @. xx_legendre = ArbFloat(x_legendre)
-        @. ww_legendre = ArbFloat(w_legendre)
-        xx_laguerre, ww_laguerre = Array{ArbFloat,1}(undef,nlaguerre), Array{ArbFloat,1}(undef,nlaguerre)
-        @. xx_laguerre = ArbFloat(x_laguerre)
-        @. ww_laguerre = ArbFloat(w_laguerre)
-
         #x_hlaguerre, w_hlaguerre = gausslaguerre(halfnquad)
         x_vpa, w_vpa = Array{mk_float,1}(undef,4*nquad), Array{mk_float,1}(undef,4*nquad)
         x_vperp, w_vperp = Array{mk_float,1}(undef,4*nquad), Array{mk_float,1}(undef,4*nquad)
-        xx_vpa, ww_vpa = Array{ArbFloat,1}(undef,4*nquad), Array{ArbFloat,1}(undef,4*nquad)
-        xx_vperp, ww_vperp = Array{ArbFloat,1}(undef,4*nquad), Array{ArbFloat,1}(undef,4*nquad)
         
         
         @serial_region begin
@@ -881,7 +867,6 @@ if abspath(PROGRAM_FILE) == @__FILE__
                     vpa,ielement_vpa_low,ielement_vpa_hi, # info about primed vpa grids
                     vperp,ielement_vperp_low,ielement_vperp_hi, # info about primed vperp grids
                     x_vpa, w_vpa, x_vperp, w_vperp, # arrays to store points and weights for primed (source) grids
-                    xx_vpa, ww_vpa, xx_vperp, ww_vperp, # arrays to store points and weights for primed (source) grids
                     igrid_vpa, igrid_vperp, vpa_val, vperp_val, ivpa, ivperp)
         #end
         
@@ -1128,13 +1113,13 @@ if abspath(PROGRAM_FILE) == @__FILE__
     end
     if test_Lagrange_integral_scan
         initialize_comms!()
-        ngrid = 9
+        ngrid = 17
         nscan = 1
         #nelement_list = Int[2, 4, 8, 16, 32, 64, 128]
         #nelement_list = Int[2, 4, 8, 16, 32]
         #nelement_list = Int[2, 4, 8, 16]
         #nelement_list = Int[2, 4, 8]
-        nelement_list = Int[4]
+        nelement_list = Int[8]
         max_G_err = Array{mk_float,1}(undef,nscan)
         max_H_err = Array{mk_float,1}(undef,nscan)
         max_dHdvpa_err = Array{mk_float,1}(undef,nscan)
