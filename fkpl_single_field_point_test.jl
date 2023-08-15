@@ -203,8 +203,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
         # set up necessary inputs for collision operator functions 
         nvperp = vperp.n
         nvpa = vpa.n
-        ivpa_field = floor(mk_int,nvpa/2)
-        ivperp_field = 1 #floor(mk_int,nvperp/6)
+        ivpa_field = floor(mk_int,nvpa/2 + nvpa/8 - 1)
+        ivperp_field = floor(mk_int,nvperp/10)
         println("Investigating vpa = ",vpa.grid[ivpa_field], " vperp = ",vperp.grid[ivperp_field])
         
         # Set up MPI
@@ -468,42 +468,82 @@ if abspath(PROGRAM_FILE) == @__FILE__
             return poly
         end
         
-        function get_scaled_x_w!(x_scaled, w_scaled, x_legendre, w_legendre, x_laguerre, w_laguerre, node_min, node_max, coord_val)
+        function get_scaled_x_w!(x_scaled, w_scaled, x_legendre, w_legendre, x_laguerre, w_laguerre, node_min, node_max, nodes, igrid_coord, coord_val)
+            #println("nodes ",nodes)
             zero = 1.0e-10 
             @. x_scaled = 0.0
             @. w_scaled = 0.0
+            nnodes = size(nodes,1)
+            nquad_legendre = size(x_legendre,1)
+            nquad_laguerre = size(x_laguerre,1)
             # assume x_scaled, w_scaled are arrays of length 2*nquad
             # use only nquad points for most elements, but use 2*nquad for
             # elements with interior divergences
             #println("coord: ",coord_val," node_max: ",node_max," node_min: ",node_min) 
             if abs(coord_val - node_max) < zero # divergence at upper endpoint 
-                nquad = size(x_laguerre,1)
-                @. x_scaled[1:nquad] = node_max + (node_min - node_max)*exp(-x_laguerre)
-                @. w_scaled[1:nquad] = (node_max - node_min)*w_laguerre
-                nquad_coord = nquad
+                node_cut = nodes[nnodes-1]
+                
+                n = nquad_laguerre + nquad_legendre
+                shift = 0.5*(node_min + node_cut)
+                scale = 0.5*(node_cut - node_min)
+                @. x_scaled[1:nquad_legendre] = scale*x_legendre + shift
+                @. w_scaled[1:nquad_legendre] = scale*w_legendre
+
+                @. x_scaled[1+nquad_legendre:n] = node_max + (node_cut - node_max)*exp(-x_laguerre)
+                @. w_scaled[1+nquad_legendre:n] = (node_max - node_cut)*w_laguerre
+                
+                nquad_coord = n
                 #println("upper divergence")
             elseif abs(coord_val - node_min) < zero # divergence at lower endpoint
+                n = nquad_laguerre + nquad_legendre
                 nquad = size(x_laguerre,1)
-                for j in 1:nquad
-                    x_scaled[nquad+1-j] = node_min + (node_max - node_min)*exp(-x_laguerre[j])
-                    w_scaled[nquad+1-j] = (node_max - node_min)*w_laguerre[j]
+                node_cut = nodes[2]
+                for j in 1:nquad_laguerre
+                    x_scaled[nquad_laguerre+1-j] = node_min + (node_cut - node_min)*exp(-x_laguerre[j])
+                    w_scaled[nquad_laguerre+1-j] = (node_cut - node_min)*w_laguerre[j]
                 end
-                nquad_coord = nquad
+                shift = 0.5*(node_max + node_cut)
+                scale = 0.5*(node_max - node_cut)
+                @. x_scaled[1+nquad_laguerre:n] = scale*x_legendre + shift
+                @. w_scaled[1+nquad_laguerre:n] = scale*w_legendre
+
+                nquad_coord = n
                 #println("lower divergence")
             else #if (coord_val - node_min)*(coord_val - node_max) < - zero # interior divergence
-                nquad = size(x_laguerre,1)
-                n = 2*nquad
+                #println(nodes[igrid_coord]," ", coord_val)
+                n = 2*nquad_laguerre
+                node_cut_high = nodes[igrid_coord+1]
+                if igrid_coord == 1
+                    # exception for vperp coordinate near orgin
+                    k = 0
+                    node_cut_low = node_min
+                    nquad_coord = nquad_legendre + 2*nquad_laguerre
+                else
+                    # fill in lower Gauss-Legendre points
+                    node_cut_low = nodes[igrid_coord-1]
+                    shift = 0.5*(node_cut_low + node_min)
+                    scale = 0.5*(node_cut_low - node_min)
+                    @. x_scaled[1:nquad_legendre] = scale*x_legendre + shift
+                    @. w_scaled[1:nquad_legendre] = scale*w_legendre
+                    k = nquad_legendre
+                    nquad_coord = 2*(nquad_laguerre + nquad_legendre)
+                end
                 # lower half of domain  
-                for j in 1:nquad  
-                    x_scaled[j] = coord_val + (node_min - coord_val)*exp(-x_laguerre[j])
-                    w_scaled[j] = (coord_val - node_min)*w_laguerre[j]
+                for j in 1:nquad_laguerre  
+                    x_scaled[k+j] = coord_val + (node_cut_low - coord_val)*exp(-x_laguerre[j])
+                    w_scaled[k+j] = (coord_val - node_cut_low)*w_laguerre[j]
                 end  
                 # upper half of domain
-                for j in 1:nquad
-                    x_scaled[n+1-j] = coord_val + (node_max - coord_val)*exp(-x_laguerre[j])
-                    w_scaled[n+1-j] = (node_max - coord_val)*w_laguerre[j]
+                for j in 1:nquad_laguerre
+                    x_scaled[k+n+1-j] = coord_val + (node_cut_high - coord_val)*exp(-x_laguerre[j])
+                    w_scaled[k+n+1-j] = (node_cut_high - coord_val)*w_laguerre[j]
                 end
-                nquad_coord = n
+                # fill in upper Gauss-Legendre points
+                shift = 0.5*(node_cut_high + node_max)
+                scale = 0.5*(node_max - node_cut_high)
+                @. x_scaled[k+n+1:nquad_coord] = scale*x_legendre + shift
+                @. w_scaled[k+n+1:nquad_coord] = scale*w_legendre
+                
                 #println("intermediate divergence")
             #else # no divergences
             #    nquad = size(x_legendre,1) 
@@ -637,7 +677,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
                                     vpa,ielement_vpa_low,ielement_vpa_hi, # info about primed vperp grids
                                     nquad_vperp,ielement_vperpp,vperp_nodes,vperp, # info about primed vperp grids
                                     x_vpa, w_vpa, x_vperp, w_vperp, # arrays to store points and weights for primed (source) grids
-                                    vpa_val, vperp_val, ivpa, ivperp)
+                                    igrid_vpa, vpa_val, vperp_val, ivpa, ivperp)
             for ielement_vpap in 1:ielement_vpa_low-1 
                 # do integration over part of the domain with no divergences
                 vpa_nodes = get_nodes(vpa,ielement_vpap)
@@ -656,7 +696,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 vpa_nodes = get_nodes(vpa,ielement_vpap)
                 vpa_min, vpa_max = vpa_nodes[1], vpa_nodes[end]
                 #nquad_vpa = get_scaled_x_w_no_divergences!(x_vpa, w_vpa, x_legendre, w_legendre, vpa_min, vpa_max)
-                nquad_vpa = get_scaled_x_w!(x_vpa, w_vpa, x_legendre, w_legendre, x_laguerre, w_laguerre, vpa_min, vpa_max, vpa_val)
+                nquad_vpa = get_scaled_x_w!(x_vpa, w_vpa, x_legendre, w_legendre, x_laguerre, w_laguerre, vpa_min, vpa_max, vpa_nodes, igrid_vpa, vpa_val)
                 local_element_integration!(G_weights,G1_weights,G2_weights,G3_weights,
                             H_weights,H1_weights,H2_weights,H3_weights,n_weights,
                             nquad_vpa,ielement_vpap,vpa_nodes,vpa,
@@ -707,7 +747,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
                         vpa,ielement_vpa_low,ielement_vpa_hi, # info about primed vpa grids
                         vperp,ielement_vperp_low,ielement_vperp_hi, # info about primed vperp grids
                         x_vpa, w_vpa, x_vperp, w_vperp, # arrays to store points and weights for primed (source) grids
-                        vpa_val, vperp_val, ivpa, ivperp)
+                        igrid_vpa, igrid_vperp, vpa_val, vperp_val, ivpa, ivperp)
             for ielement_vperpp in 1:ielement_vperp_low-1
                 
                 vperp_nodes = get_nodes(vperp,ielement_vperpp)
@@ -727,13 +767,13 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 vperp_max = vperp_nodes[end]
                 vperp_min = vperp_nodes[1]*nel_low(ielement_vperpp,vperp.nelement_local) 
                 #nquad_vperp = get_scaled_x_w_no_divergences!(x_vperp, w_vperp, x_legendre, w_legendre, vperp_min, vperp_max)
-                nquad_vperp = get_scaled_x_w!(x_vperp, w_vperp, x_legendre, w_legendre, x_laguerre, w_laguerre, vperp_min, vperp_max, vperp_val)
+                nquad_vperp = get_scaled_x_w!(x_vperp, w_vperp, x_legendre, w_legendre, x_laguerre, w_laguerre, vperp_min, vperp_max, vperp_nodes, igrid_vperp, vperp_val)
                 loop_over_vpa_elements!(G_weights,G1_weights,G2_weights,G3_weights,
                         H_weights,H1_weights,H2_weights,H3_weights,n_weights,
                         vpa,ielement_vpa_low,ielement_vpa_hi, # info about primed vpa grids
                         nquad_vperp,ielement_vperpp,vperp_nodes,vperp, # info about primed vperp grids
                         x_vpa, w_vpa, x_vperp, w_vperp, # arrays to store points and weights for primed (source) grids
-                        vpa_val, vperp_val, ivpa, ivperp)
+                        igrid_vpa, vpa_val, vperp_val, ivpa, ivperp)
             end
             for ielement_vperpp in ielement_vperp_hi+1:vperp.nelement_local
                 
@@ -756,7 +796,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
                         vpa,ielement_vpa_low,ielement_vpa_hi, # info about primed vpa grids
                         vperp,ielement_vperp_low,ielement_vperp_hi, # info about primed vperp grids
                         x_vpa, w_vpa, x_vperp, w_vperp, # arrays to store points and weights for primed (source) grids
-                        vpa_val, vperp_val, ivpa, ivperp)
+                        igrid_vpa, igrid_vperp, vpa_val, vperp_val, ivpa, ivperp)
             for ielement_vperpp in 1:vperp.nelement_local
                 vperp_nodes = get_nodes(vperp,ielement_vperpp)
                 vperp_max = vperp_nodes[end]
@@ -784,8 +824,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
         x_laguerre, w_laguerre = gausslaguerre(nlaguerre)
         
         #x_hlaguerre, w_hlaguerre = gausslaguerre(halfnquad)
-        x_vpa, w_vpa = Array{mk_float,1}(undef,2*nquad), Array{mk_float,1}(undef,2*nquad)
-        x_vperp, w_vperp = Array{mk_float,1}(undef,2*nquad), Array{mk_float,1}(undef,2*nquad)
+        x_vpa, w_vpa = Array{mk_float,1}(undef,4*nquad), Array{mk_float,1}(undef,4*nquad)
+        x_vperp, w_vperp = Array{mk_float,1}(undef,4*nquad), Array{mk_float,1}(undef,4*nquad)
         
         
         @serial_region begin
@@ -821,13 +861,13 @@ if abspath(PROGRAM_FILE) == @__FILE__
             @. H3_weights[1,1,:,:] = 0.0  
             @. n_weights[1,1,:,:] = 0.0  
             # loop over elements and grid points within elements on primed coordinate
-            #loop_over_vperp_vpa_elements!(G_weights,G1_weights,G2_weights,G3_weights,
-            loop_over_vperp_vpa_elements_no_divergences!(G_weights,G1_weights,G2_weights,G3_weights,
+            loop_over_vperp_vpa_elements!(G_weights,G1_weights,G2_weights,G3_weights,
+            #loop_over_vperp_vpa_elements_no_divergences!(G_weights,G1_weights,G2_weights,G3_weights,
                     H_weights,H1_weights,H2_weights,H3_weights,n_weights,
                     vpa,ielement_vpa_low,ielement_vpa_hi, # info about primed vpa grids
                     vperp,ielement_vperp_low,ielement_vperp_hi, # info about primed vperp grids
                     x_vpa, w_vpa, x_vperp, w_vperp, # arrays to store points and weights for primed (source) grids
-                    vpa_val, vperp_val, ivpa, ivperp)
+                    igrid_vpa, igrid_vperp, vpa_val, vperp_val, ivpa, ivperp)
         #end
         
         #_block_synchronize()
@@ -1073,13 +1113,13 @@ if abspath(PROGRAM_FILE) == @__FILE__
     end
     if test_Lagrange_integral_scan
         initialize_comms!()
-        ngrid = 9
-        nscan = 7
-        nelement_list = Int[2, 4, 8, 16, 32, 64, 128]
+        ngrid = 17
+        nscan = 1
+        #nelement_list = Int[2, 4, 8, 16, 32, 64, 128]
         #nelement_list = Int[2, 4, 8, 16, 32]
         #nelement_list = Int[2, 4, 8, 16]
         #nelement_list = Int[2, 4, 8]
-        #nelement_list = Int[8]
+        nelement_list = Int[8]
         max_G_err = Array{mk_float,1}(undef,nscan)
         max_H_err = Array{mk_float,1}(undef,nscan)
         max_dHdvpa_err = Array{mk_float,1}(undef,nscan)
