@@ -2961,6 +2961,8 @@ The information for the runs to plot is passed in `run_info` (as returned by
 plots/animations from the different runs are overlayed on the same axis, and heatmap
 plots/animations are displayed in a horizontal row.
 
+Settings are read from the `[wall_pdf]` section of the input.
+
 `plot_prefix` is required and gives the path and prefix for plots to be saved to. They
 will be saved with the format `plot_prefix<some_identifying_string>.pdf`. When `run_info`
 is not a Tuple, `plot_prefix` is optional - plots/animations will be saved only if it is
