@@ -765,7 +765,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
             else #if (coord_val - node_min)*(coord_val - node_max) < - zero # interior divergence
                 #println(nodes[igrid_coord]," ", coord_val)
                 n = 2*nquad_laguerre
-                node_cut_high = nodes[igrid_coord+1]
+                node_cut_high = (nodes[igrid_coord+1] + nodes[igrid_coord])/2.0
                 if igrid_coord == 1
                     # exception for vperp coordinate near orgin
                     k = 0
@@ -773,7 +773,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
                     nquad_coord = nquad_legendre + 2*nquad_laguerre
                 else
                     # fill in lower Gauss-Legendre points
-                    node_cut_low = nodes[igrid_coord-1]
+                    node_cut_low = (nodes[igrid_coord-1]+nodes[igrid_coord])/2.0
                     shift = 0.5*(node_cut_low + node_min)
                     scale = 0.5*(node_cut_low - node_min)
                     @. x_scaled[1:nquad_legendre] = scale*x_legendre + shift
