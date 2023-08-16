@@ -734,7 +734,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
             # elements with interior divergences
             #println("coord: ",coord_val," node_max: ",node_max," node_min: ",node_min) 
             if abs(coord_val - node_max) < zero # divergence at upper endpoint 
-                node_cut = nodes[nnodes-1]
+                node_cut = (nodes[nnodes-1] + nodes[nnodes])/2.0
                 
                 n = nquad_laguerre + nquad_legendre
                 shift = 0.5*(node_min + node_cut)
@@ -750,7 +750,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
             elseif abs(coord_val - node_min) < zero # divergence at lower endpoint
                 n = nquad_laguerre + nquad_legendre
                 nquad = size(x_laguerre,1)
-                node_cut = nodes[2]
+                node_cut = (nodes[1] + nodes[2])/2.0
                 for j in 1:nquad_laguerre
                     x_scaled[nquad_laguerre+1-j] = node_min + (node_cut - node_min)*exp(-x_laguerre[j])
                     w_scaled[nquad_laguerre+1-j] = (node_cut - node_min)*w_laguerre[j]
@@ -1796,12 +1796,12 @@ if abspath(PROGRAM_FILE) == @__FILE__
     end
     if test_Lagrange_integral_scan
         initialize_comms!()
-        ngrid = 9
-        nscan = 1
+        ngrid = 2
+        nscan = 3
         #nelement_list = Int[2, 4, 8, 16, 32]
         #nelement_list = Int[2, 4, 8, 16]
-        #nelement_list = Int[2, 4, 8]
-        nelement_list = Int[8]
+        nelement_list = Int[50, 100, 200]
+        #nelement_list = Int[8]
         max_C_err = Array{mk_float,1}(undef,nscan)
         max_Gvpa_err = Array{mk_float,1}(undef,nscan)
         max_Gvperp_err = Array{mk_float,1}(undef,nscan)

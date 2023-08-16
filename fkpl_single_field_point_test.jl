@@ -209,8 +209,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
         ivperp_field = floor(mk_int,nvperp/8 -1)
         #ivpa_field = floor(mk_int,nvpa/2)
         #ivperp_field = floor(mk_int,1)
-        #ivpa_field = 37
-        #ivperp_field = 15
+        ivpa_field = 37
+        ivperp_field = 8
         println("Investigating vpa = ",vpa.grid[ivpa_field], " vperp = ",vperp.grid[ivperp_field])
         
         # Set up MPI
@@ -487,7 +487,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
             # elements with interior divergences
             #println("coord: ",coord_val," node_max: ",node_max," node_min: ",node_min) 
             if abs(coord_val - node_max) < zero # divergence at upper endpoint 
-                node_cut = nodes[nnodes-1]
+                node_cut = (nodes[nnodes-1] + nodes[nnodes])/2.0
                 
                 n = nquad_laguerre + nquad_legendre
                 shift = 0.5*(node_min + node_cut)
@@ -503,7 +503,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
             elseif abs(coord_val - node_min) < zero # divergence at lower endpoint
                 n = nquad_laguerre + nquad_legendre
                 nquad = size(x_laguerre,1)
-                node_cut = nodes[2]
+                node_cut = (nodes[1] + nodes[2])/2.0
                 for j in 1:nquad_laguerre
                     x_scaled[nquad_laguerre+1-j] = node_min + (node_cut - node_min)*exp(-x_laguerre[j])
                     w_scaled[nquad_laguerre+1-j] = (node_cut - node_min)*w_laguerre[j]
@@ -1133,6 +1133,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         #nelement_list = Int[2, 4, 8, 16, 32]
         #nelement_list = Int[2, 4, 8, 16]
         #nelement_list = Int[2, 4, 8]
+        #nelement_list = Int[100]
         nelement_list = Int[8]
         max_G_err = Array{mk_float,1}(undef,nscan)
         max_H_err = Array{mk_float,1}(undef,nscan)
