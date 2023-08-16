@@ -203,8 +203,12 @@ if abspath(PROGRAM_FILE) == @__FILE__
         # set up necessary inputs for collision operator functions 
         nvperp = vperp.n
         nvpa = vpa.n
-        ivpa_field = floor(mk_int,nvpa/2 + nvpa/8 - 1)
-        ivperp_field = floor(mk_int,nvperp/10)
+        #ivpa_field = floor(mk_int,nvpa/2 + nvpa/8 - 1)
+        #ivperp_field = floor(mk_int,nvperp/10)
+        ivpa_field = floor(mk_int,nvpa/2 + nvpa/16)
+        ivperp_field = floor(mk_int,nvperp/8 -1)
+        #ivpa_field = floor(mk_int,nvpa/2)
+        #ivperp_field = floor(mk_int,1)
         println("Investigating vpa = ",vpa.grid[ivpa_field], " vperp = ",vperp.grid[ivperp_field])
         
         # Set up MPI
@@ -675,9 +679,15 @@ if abspath(PROGRAM_FILE) == @__FILE__
         function loop_over_vpa_elements!(G_weights,G1_weights,G2_weights,G3_weights,
                                     H_weights,H1_weights,H2_weights,H3_weights,n_weights,
                                     vpa,ielement_vpa_low,ielement_vpa_hi, # info about primed vperp grids
-                                    nquad_vperp,ielement_vperpp,vperp_nodes,vperp, # info about primed vperp grids
+                                    vperp,ielement_vperpp,
+                                    #nquad_vperp,ielement_vperpp,vperp_nodes,vperp, # info about primed vperp grids
                                     x_vpa, w_vpa, x_vperp, w_vperp, # arrays to store points and weights for primed (source) grids
-                                    igrid_vpa, vpa_val, vperp_val, ivpa, ivperp)
+                                    igrid_vpa, igrid_vperp, vpa_val, vperp_val, ivpa, ivperp)
+            
+            vperp_nodes = get_nodes(vperp,ielement_vperpp)
+            vperp_max = vperp_nodes[end]
+            vperp_min = vperp_nodes[1]*nel_low(ielement_vperpp,vperp.nelement_local) 
+            nquad_vperp = get_scaled_x_w_no_divergences!(x_vperp, w_vperp, x_legendre, w_legendre, vperp_min, vperp_max)
             for ielement_vpap in 1:ielement_vpa_low-1 
                 # do integration over part of the domain with no divergences
                 vpa_nodes = get_nodes(vpa,ielement_vpap)
@@ -690,8 +700,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
                             x_vpa, w_vpa, x_vperp, w_vperp, 
                             vpa_val, vperp_val, ivpa, ivperp)
             end
+            nquad_vperp = get_scaled_x_w!(x_vperp, w_vperp, x_legendre, w_legendre, x_laguerre, w_laguerre, vperp_min, vperp_max, vperp_nodes, igrid_vperp, vperp_val)
             for ielement_vpap in ielement_vpa_low:ielement_vpa_hi
-            #for ielement_vpap in 1:vpa.nelement_local
                 # use general grid function that checks divergences
                 vpa_nodes = get_nodes(vpa,ielement_vpap)
                 vpa_min, vpa_max = vpa_nodes[1], vpa_nodes[end]
@@ -704,6 +714,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
                             x_vpa, w_vpa, x_vperp, w_vperp, 
                             vpa_val, vperp_val, ivpa, ivperp)
             end
+            nquad_vperp = get_scaled_x_w_no_divergences!(x_vperp, w_vperp, x_legendre, w_legendre, vperp_min, vperp_max)
             for ielement_vpap in ielement_vpa_hi+1:vpa.nelement_local
                 # do integration over part of the domain with no divergences
                 vpa_nodes = get_nodes(vpa,ielement_vpap)
@@ -771,9 +782,10 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 loop_over_vpa_elements!(G_weights,G1_weights,G2_weights,G3_weights,
                         H_weights,H1_weights,H2_weights,H3_weights,n_weights,
                         vpa,ielement_vpa_low,ielement_vpa_hi, # info about primed vpa grids
-                        nquad_vperp,ielement_vperpp,vperp_nodes,vperp, # info about primed vperp grids
+                        vperp,ielement_vperpp,
+                        #nquad_vperp,ielement_vperpp,vperp_nodes,vperp, # info about primed vperp grids
                         x_vpa, w_vpa, x_vperp, w_vperp, # arrays to store points and weights for primed (source) grids
-                        igrid_vpa, vpa_val, vperp_val, ivpa, ivperp)
+                        igrid_vpa, igrid_vperp, vpa_val, vperp_val, ivpa, ivperp)
             end
             for ielement_vperpp in ielement_vperp_hi+1:vperp.nelement_local
                 
