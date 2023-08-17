@@ -8,14 +8,17 @@ export analyze_pdf_data
 
 using ..array_allocation: allocate_float
 using ..calculus: integral
+using ..communication
 using ..coordinates: coordinate
 using ..interpolation: interpolate_to_grid_1d
 using ..load_data: open_readonly_output_file, get_nranks, load_pdf_data, load_rank_data
 using ..load_data: load_distributed_charged_pdf_slice
+using ..looping
 using ..type_definitions: mk_int
 using ..velocity_moments: integrate_over_vspace
 
 using FFTW
+using MPI
 using Statistics
 using StatsBase
 
@@ -498,6 +501,118 @@ function analyze_2D_instability(phi, density, thermal_speed, r, z, r_spectral, z
     return phi_perturbation, density_perturbation, temperature_perturbation,
            phi_Fourier_2D, density_Fourier_2D, temperature_Fourier_2D,
            phi_Fourier_1D, density_Fourier_1D, temperature_Fourier_1D
+end
+
+const default_epsilon = 1.0e-4
+
+"""
+    steady_state_RMS_residual(variable, variable_at_previous_time, dt;
+                              epsilon=$default_epsilon, use_mpi=false)
+
+Calculate how close a variable is to steady state. Returns the root-mean-square of a
+residual ``r(t)``
+
+``r(t) = \\left( \\frac{a(t,x) - a(t - \\delta t,x)}{\\delta t \\left| a(t,x) + \\epsilon \\max_x(a(t,x)) \\right|} \\right)``
+
+where ``x`` stands for any spatial and velocity coordinates, and the offset ``\\epsilon
+\\max_x(a(t,x))`` is used to avoid points where ``a(t,x)`` happens to be very close to
+zero from dominating the result, with ``max_x`` being the maximum over the ``x``
+coordinate(s).
+
+`variable` gives the value of ``a(t,x)`` at the current time, `variable_at_previous_time`
+the value ``a(t - \\delta t, x)`` at a previous time and `dt` gives the difference in
+times ``\\delta t``. All three can be arrays with a time dimension of the same length, or
+have no time dimension.
+
+By default runs in serial, but if `use_mpi=true` is passed, assume MPI has been
+initialised, and that `variable` has r and z dimensions but no species dimension, and use
+`@loop_*` macros. In this case the result is returned only on global rank 0. When using
+distributed-memory MPI, this routine will double-count the points on block boundaries.
+"""
+function steady_state_RMS_residual(variable, variable_at_previous_time, dt;
+                                   epsilon=default_epsilon, use_mpi=false)
+    square_residual_norms =
+        steady_state_mean_square_residual(variable, variable_at_previous_time, dt;
+                                          epsilon=epsilon, use_mpi=use_mpi)
+    if global_rank[] == 0
+        return sqrt.(square_residual_norms)
+    else
+        return nothing
+    end
+end
+
+"""
+    steady_state_mean_square_residual(variable, variable_at_previous_time, dt;
+                                      variable_max=nothing, epsilon=1.0e-4,
+                                      use_mpi=false)
+
+Used to calculate the mean square residual for [`steady_state_RMS_residual`](@ref).
+
+Useful to define this separately as it can be called on (equally-sized) chunks of the
+variable and then combined (by taking the RMS of all the results). If this is done, the
+global maximum of `abs.(variable)` should be passed to `variable_max`.
+
+See [`steady_state_RMS_residual`](@ref) for documenation of the other arguments.
+"""
+function steady_state_mean_square_residual(variable, variable_at_previous_time, dt;
+                                           variable_max=nothing, epsilon=default_epsilon,
+                                           use_mpi=false)
+    if ndims(dt) == 0
+        t_dim = ndims(variable) + 1
+    else
+        t_dim = ndims(variable)
+    end
+    if use_mpi
+        begin_r_z_region()
+        if variable_max === nothing
+            local_max = 0.0
+            @loop_r_z ir iz begin
+                this_slice = selectdim(selectdim(variable, t_dim - 1, ir), t_dim - 2, iz)
+                local_max = max(local_max, maximum(abs.(this_slice)))
+            end
+            variable_max = MPI.Allreduce(local_max, max, comm_world)
+        end
+        if isa(dt, Vector)
+            reshaped_dt = reshape(dt, tuple((1 for _ ∈ 1:t_dim-1)..., size(dt)...))
+        else
+            reshaped_dt = dt
+        end
+        local_total_square = zeros(size(dt))
+        @loop_r_z ir iz begin
+            this_slice = selectdim(selectdim(variable, t_dim - 1, ir), t_dim - 2, iz)
+            this_slice_previous_time = selectdim(selectdim(variable_at_previous_time,
+                                                           t_dim - 1, ir), t_dim - 2, iz)
+
+            # Need to wrap the sum(...) in a call to vec(...) so that we return a Vector,
+            # not an N-dimensional array where the first (N-1) dimensions all have size 1.
+            local_total_square .+= vec(sum(@. ((this_slice - this_slice_previous_time) /
+                                               (reshaped_dt *
+                                                (abs(variable) + epsilon*variable_max)))^2,
+                                          dim=tuple((1:t_dim-1)...)))
+        end
+        total_square = MPI.Reduce(local_total_square, +, 0, comm_block[])
+
+        if block_rank[] == 0
+            local_mean_square = total_square / (prod(size(variable)) / prod(size(dt)))
+            mean_square = MPI.Reduce(local_mean_square, mean, 0, comm_inter_block[])
+        end
+        if global_rank[] == 0
+            return mean_square
+        else
+            return nothing
+        end
+    else
+        if variable_max === nothing
+            variable_max = maximum(variable)
+        end
+        reshaped_dt = reshape(dt, tuple((1 for _ ∈ 1:t_dim-1)..., size(dt)...))
+
+        # Need to wrap the mean(...) in a call to vec(...) so that we return a Vector, not
+        # an N-dimensional array where the first (N-1) dimensions all have size 1.
+        return vec(mean(@. ((variable - variable_at_previous_time) /
+                        (reshaped_dt * (abs(variable) + epsilon*variable_max)))^2;
+                        dims=tuple((1:t_dim-1)...)))
+    end
 end
 
 end

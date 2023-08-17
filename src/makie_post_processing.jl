@@ -15,7 +15,7 @@ export makie_post_process, generate_example_input_file,
        positive_or_nan
 
 using ..analysis: analyze_fields_data, check_Chodura_condition, get_r_perturbation,
-                  get_Fourier_modes_2D, get_Fourier_modes_1D
+                  get_Fourier_modes_2D, get_Fourier_modes_1D, steady_state_RMS_residual
 using ..array_allocation: allocate_float
 using ..coordinates: define_coordinate
 using ..input_structs: grid_input, advection_input
@@ -222,9 +222,42 @@ function makie_post_process(run_dir::Union{String,Tuple},
         plot_prefix = "comparison_plots/compare_"
     end
 
+    do_steady_state_residuals = any(input_dict[v]["steady_state_residual"]
+                                    for v ∈ moment_variable_list)
+    if do_steady_state_residuals
+        textoutput_files = Tuple(ri.run_prefix * "_residuals.txt"
+                                 for ri in run_info if ri !== nothing)
+        for (f, ri) in zip(textoutput_files, run_info)
+            # Write the time into the output file. Also overwrites any existing file so we
+            # can append for each variable below
+            open(f, "w") do io
+                # Use lpad to get fixed-width strings to print, so we get nice columns of
+                # output. 24 characters should be enough to represent any float with at
+                # least a couple of spaces in front to separate columns (e.g.  "
+                # -3.141592653589793e100"
+                line = string((lpad(string(x), 24) for x ∈ ri.time[2:end])...)
+                line *= "  # time"
+                println(io, line)
+            end
+        end
+        steady_state_residual_fig_axes = get_1d_ax(length(run_info), yscale=log10,
+                                                   get_legend_place=:right)
+    else
+        steady_state_residual_fig_axes = nothing
+    end
+
     for variable_name ∈ moment_variable_list
         plots_for_variable(run_info, variable_name; plot_prefix=plot_prefix, is_1D=is_1D,
-                           is_1V=is_1V)
+                           is_1V=is_1V,
+                           steady_state_residual_fig_axes=steady_state_residual_fig_axes)
+    end
+
+    if do_steady_state_residuals
+        for (ax, lp) ∈ zip(steady_state_residual_fig_axes[2],
+                           steady_state_residual_fig_axes[3])
+            Legend(lp, ax)
+        end
+        save(plot_prefix * "residuals.pdf", steady_state_residual_fig_axes[1])
     end
 
     # Plots from distribution function variables
@@ -508,6 +541,7 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
        animate_vs_z=false,
        animate_vs_r=false,
        animate_vs_z_r=false,
+       steady_state_residual=false,
       )
 
     section_defaults = OrderedDict(k=>v for (k,v) ∈ this_input_dict
@@ -1168,7 +1202,8 @@ function variable_cache_extrema(variable_cache::VariableCache; transform=identit
 end
 
 """
-    plots_for_variable(run_info, variable_name; plot_prefix)
+    plots_for_variable(run_info, variable_name; plot_prefix, is_1D=false,
+                       is_1V=false, steady_state_residual_fig_axes=nothing)
 
 Make plots for the EM field or moment variable `variable_name`.
 
@@ -1183,14 +1218,19 @@ will be saved with the format `plot_prefix<some_identifying_string>.pdf` for plo
 
 `is_1D` and/or `is_1V` can be passed to allow the function to skip some plots that do not
 make sense for 1D or 1V simulations (regardless of the settings).
+
+`steady_state_residual_fig_axes` contains the figure, axes and legend places for steady
+state residual plots.
 """
 function plots_for_variable(run_info, variable_name; plot_prefix, is_1D=false,
-                            is_1V=false)
+                            is_1V=false, steady_state_residual_fig_axes=nothing)
     input = Dict_to_NamedTuple(input_dict[variable_name])
 
     # test if any plot is needed
     if any(v for (k,v) in pairs(input) if
-           startswith(String(k), "plot") || startswith(String(k), "animate"))
+           startswith(String(k), "plot") || startswith(String(k), "animate") ||
+           k == :steady_state_residual)
+
         println("Making plots for $variable_name")
         flush(stdout)
 
@@ -1257,6 +1297,10 @@ function plots_for_variable(run_info, variable_name; plot_prefix, is_1D=false,
             if !is_1D && input.animate_vs_z_r
                 animate_vs_z_r(run_info, variable_name, is=is, data=variable, input=input,
                                outfile=variable_prefix * "vs_r." * input.animation_ext)
+            end
+            if input.steady_state_residual
+                calculate_steady_state_residual(run_info, variable_name; is=is, data=variable,
+                                           fig_axes=steady_state_residual_fig_axes)
             end
         end
     end
@@ -2949,6 +2993,100 @@ function parse_colormap(colormap)
     else
         return colormap
     end
+end
+
+"""
+calculate_steady_state_residual(run_info, variable_name; is=1, data=nothing,
+                                outfile=nothing, fig_axes=nothing)
+
+Calculate and plot the 'residuals' for `variable_name`.
+
+The information for the runs to plot is passed in `run_info` (as returned by
+[`get_run_info`](@ref)). If `run_info` is a Tuple, comparison plots are made where plots
+from the different runs are displayed in a horizontal row.
+
+If the variable has a species dimension, `is` selects which species to analyse.
+
+By default the variable will be loaded from file. If the data has already been loaded, it
+can be passed to `data` instead.
+
+If `outfile` is passed the animation will be saved to a file with that name. The suffix
+determines the file type.
+
+`fig_axes` can be passed a Tuple containing the Figure `fig` and Axis or Tuple{Axis} `ax`
+to add the plot to. If `run_info` is a Tuple, `ax` must be a Tuple of the same length.
+"""
+function calculate_steady_state_residual end
+
+function calculate_steady_state_residual(run_info::Tuple, variable_name; is=1,
+                                         data=nothing, outfile=nothing, fig_axes=nothing)
+    n_runs = length(run_info)
+    if data === nothing
+        data = Tuple(nothing for _ ∈ 1:n_runs)
+    end
+    if fig_axes === nothing
+        fig_axes = get_1d_ax(n_runs)
+    end
+
+    for (ri, d, ax) ∈ zip(run_info, data, fig_axes[2])
+        calculate_steady_state_residual(ri, variable_name; is=is, data=d,
+                                   fig_axes=(fig_axes[1], ax))
+    end
+
+    if outfile !== nothing
+        save(outfile, fig_axes[1])
+    end
+
+    return fig_axes[1]
+end
+
+function calculate_steady_state_residual(run_info, variable_name; is=1, data=nothing,
+                                         outfile=nothing, fig_axes=nothing)
+
+    if data === nothing
+        data = postproc_load_variable(run_info, variable_name; is=is)
+    end
+
+    t_dim = ndims(data)
+    nt = size(data, t_dim)
+    variable = selectdim(data, t_dim, 2:nt)
+    variable_at_previous_time = selectdim(data, t_dim, 1:nt-1)
+    dt = @views @. run_info.time[2:nt] - run_info.time[1:nt-1]
+    residual = steady_state_RMS_residual(variable, variable_at_previous_time, dt)
+
+    textoutput_file = run_info.run_prefix * "_residuals.txt"
+    open(textoutput_file, "a") do io
+        # Use lpad to get fixed-width strings to print, so we get nice columns of
+        # output. 24 characters should be enough to represent any float with at
+        # least a couple of spaces in front to separate columns (e.g.  "
+        # -3.141592653589793e100"
+        line = string((lpad(string(x), 24) for x ∈ residual)...)
+
+        # Print to stdout as well for convenience
+        println("residual ", line)
+
+        line *= "  # " * variable_name
+        if is !== nothing
+            line *= string(is)
+        end
+        println(io, line)
+    end
+
+    if fig_axes === nothing
+        fig, ax = get_1d_ax(xlabel="time", ylabel="residual", yscale=log10)
+    else
+        fig, ax = fig_axes[1:2]
+    end
+
+    with_theme(Theme(Lines=(cycle=[:color, :linestyle],))) do
+        @views plot_1d(run_info.time[2:end], residual; label=variable_name, ax=ax)
+    end
+
+    if outfile !== nothing
+        save(outfile, fig)
+    end
+
+    return fig
 end
 
 """
