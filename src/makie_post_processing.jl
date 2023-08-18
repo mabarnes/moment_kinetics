@@ -15,7 +15,7 @@ export makie_post_process, generate_example_input_file,
        positive_or_nan
 
 using ..analysis: analyze_fields_data, check_Chodura_condition, get_r_perturbation,
-                  get_Fourier_modes_2D, get_Fourier_modes_1D, steady_state_RMS_residual
+                  get_Fourier_modes_2D, get_Fourier_modes_1D, steady_state_residuals
 using ..array_allocation: allocate_float
 using ..coordinates: define_coordinate
 using ..input_structs: grid_input, advection_input
@@ -240,8 +240,8 @@ function makie_post_process(run_dir::Union{String,Tuple},
                 println(io, line)
             end
         end
-        steady_state_residual_fig_axes = get_1d_ax(length(run_info), yscale=log10,
-                                                   get_legend_place=:right)
+        steady_state_residual_fig_axes =
+            _get_steady_state_residual_fig_axes(length(run_info))
     else
         steady_state_residual_fig_axes = nothing
     end
@@ -253,11 +253,7 @@ function makie_post_process(run_dir::Union{String,Tuple},
     end
 
     if do_steady_state_residuals
-        for (ax, lp) ∈ zip(steady_state_residual_fig_axes[2],
-                           steady_state_residual_fig_axes[3])
-            Legend(lp, ax)
-        end
-        save(plot_prefix * "residuals.pdf", steady_state_residual_fig_axes[1])
+        _save_residual_plots(steady_state_residual_fig_axes, plot_prefix)
     end
 
     # Plots from distribution function variables
@@ -1300,7 +1296,7 @@ function plots_for_variable(run_info, variable_name; plot_prefix, is_1D=false,
             end
             if input.steady_state_residual
                 calculate_steady_state_residual(run_info, variable_name; is=is, data=variable,
-                                           fig_axes=steady_state_residual_fig_axes)
+                                                fig_axes=steady_state_residual_fig_axes)
             end
         end
     end
@@ -2996,8 +2992,43 @@ function parse_colormap(colormap)
 end
 
 """
+     _get_steady_state_residual_fig_axes(n_runs)
+
+Utility method to avoid code duplication when creating the fig_axes OrderedDict for
+calculate_steady_state_residual.
+
+`n_runs` sets the number of axes to create in each entry.
+"""
+function _get_steady_state_residual_fig_axes(n_runs)
+    return OrderedDict(
+                "RMS absolute residual"=>get_1d_ax(n_runs, xlabel="time",
+                                                   ylabel="RMS absolute residual",
+                                                   yscale=log10, get_legend_place=:right),
+                "max absolute residual"=>get_1d_ax(n_runs, xlabel="time",
+                                                   ylabel="max absolute residual",
+                                                   yscale=log10, get_legend_place=:right),
+                "RMS relative residual"=>get_1d_ax(n_runs, xlabel="time",
+                                                   ylabel="RMS relative residual",
+                                                   yscale=log10, get_legend_place=:right),
+                "max relative residual"=>get_1d_ax(n_runs, xlabel="time",
+                                                   ylabel="max relative residual",
+                                                   yscale=log10, get_legend_place=:right))
+end
+
+# Utility method to avoid code duplication when saving the calculate_steady_state_residual
+# plots
+function _save_residual_plots(fig_axes, plot_prefix)
+    for (key, fa) ∈ fig_axes
+        for (ax, lp) ∈ zip(fa[2], fa[3])
+            Legend(lp, ax)
+        end
+        save(plot_prefix * replace(key, " "=>"_") * ".pdf", fa[1])
+    end
+end
+
+"""
 calculate_steady_state_residual(run_info, variable_name; is=1, data=nothing,
-                                outfile=nothing, fig_axes=nothing)
+                                plot_prefix=nothing, fig_axes=nothing, i_run=1)
 
 Calculate and plot the 'residuals' for `variable_name`.
 
@@ -3008,40 +3039,45 @@ from the different runs are displayed in a horizontal row.
 If the variable has a species dimension, `is` selects which species to analyse.
 
 By default the variable will be loaded from file. If the data has already been loaded, it
-can be passed to `data` instead.
+can be passed to `data` instead. `data` should be a Tuple of the same length as `run_info`
+if `run_info` is a Tuple.
 
-If `outfile` is passed the animation will be saved to a file with that name. The suffix
-determines the file type.
+If `plot_prefix` is passed, it gives the path and prefix for plots to be saved to. They
+will be saved with the format `plot_prefix<some_identifying_string>.pdf`.
 
-`fig_axes` can be passed a Tuple containing the Figure `fig` and Axis or Tuple{Axis} `ax`
-to add the plot to. If `run_info` is a Tuple, `ax` must be a Tuple of the same length.
+`fig_axes` can be passed an OrderedDict of Tuples as returned by
+[`_get_steady_state_residual_fig_axes`](@ref) - each tuple contains the Figure `fig` and
+Axis or Tuple{Axis} `ax` to which to add the plot corresponding to its key. If `run_info`
+is a Tuple, `ax` for each entry must be a Tuple of the same length.
 """
 function calculate_steady_state_residual end
 
 function calculate_steady_state_residual(run_info::Tuple, variable_name; is=1,
-                                         data=nothing, outfile=nothing, fig_axes=nothing)
+                                         data=nothing, plot_prefix=nothing,
+                                         fig_axes=nothing)
     n_runs = length(run_info)
     if data === nothing
         data = Tuple(nothing for _ ∈ 1:n_runs)
     end
     if fig_axes === nothing
-        fig_axes = get_1d_ax(n_runs)
+        fig_axes = _get_steady_state_residual_fig_axes(length(run_info))
     end
 
-    for (ri, d, ax) ∈ zip(run_info, data, fig_axes[2])
+    for (i, (ri, d)) ∈ enumerate(zip(run_info, data))
         calculate_steady_state_residual(ri, variable_name; is=is, data=d,
-                                   fig_axes=(fig_axes[1], ax))
+                                        fig_axes=fig_axes, i_run=i)
     end
 
-    if outfile !== nothing
-        save(outfile, fig_axes[1])
+    if plot_prefix !== nothing
+        _save_residual_plots(fig_axes, plot_prefix)
     end
 
-    return fig_axes[1]
+    return fig_axes
 end
 
 function calculate_steady_state_residual(run_info, variable_name; is=1, data=nothing,
-                                         outfile=nothing, fig_axes=nothing)
+                                         plot_prefix=nothing, fig_axes=nothing,
+                                         i_run=1)
 
     if data === nothing
         data = postproc_load_variable(run_info, variable_name; is=is)
@@ -3052,41 +3088,45 @@ function calculate_steady_state_residual(run_info, variable_name; is=1, data=not
     variable = selectdim(data, t_dim, 2:nt)
     variable_at_previous_time = selectdim(data, t_dim, 1:nt-1)
     dt = @views @. run_info.time[2:nt] - run_info.time[1:nt-1]
-    residual = steady_state_RMS_residual(variable, variable_at_previous_time, dt)
+    residual_norms = steady_state_residuals(variable, variable_at_previous_time, dt)
 
     textoutput_file = run_info.run_prefix * "_residuals.txt"
     open(textoutput_file, "a") do io
-        # Use lpad to get fixed-width strings to print, so we get nice columns of
-        # output. 24 characters should be enough to represent any float with at
-        # least a couple of spaces in front to separate columns (e.g.  "
-        # -3.141592653589793e100"
-        line = string((lpad(string(x), 24) for x ∈ residual)...)
+        for (key, residual) ∈ residual_norms
+            # Use lpad to get fixed-width strings to print, so we get nice columns of
+            # output. 24 characters should be enough to represent any float with at
+            # least a couple of spaces in front to separate columns (e.g.  "
+            # -3.141592653589793e100"
+            line = string((lpad(string(x), 24) for x ∈ residual)...)
 
-        # Print to stdout as well for convenience
-        println("residual ", line)
+            # Print to stdout as well for convenience
+            println(key, ": ", line)
 
-        line *= "  # " * variable_name
-        if is !== nothing
-            line *= string(is)
+            line *= "  # " * variable_name
+            if is !== nothing
+                line *= string(is)
+            end
+            line *= " " * key
+            println(io, line)
         end
-        println(io, line)
     end
 
     if fig_axes === nothing
-        fig, ax = get_1d_ax(xlabel="time", ylabel="residual", yscale=log10)
-    else
-        fig, ax = fig_axes[1:2]
+        fig_axes = _get_steady_state_residual_fig_axes(1)
     end
 
+    t = @view run_info.time[2:end]
     with_theme(Theme(Lines=(cycle=[:color, :linestyle],))) do
-        @views plot_1d(run_info.time[2:end], residual; label=variable_name, ax=ax)
+        for (key, norm) ∈ residual_norms
+            @views plot_1d(t, norm; label="$variable_name", ax=fig_axes[key][2][i_run])
+        end
     end
 
-    if outfile !== nothing
-        save(outfile, fig)
+    if plot_prefix !== nothing
+        _save_residual_plots(fig_axes, plot_prefix)
     end
 
-    return fig
+    return fig_axes
 end
 
 """
