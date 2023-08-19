@@ -732,6 +732,7 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
     # main time advance loop
     iwrite_moments = 2
     iwrite_dfns = 2
+    finish_now = false
     for i ∈ 1:t_input.nstep
         if t_input.split_operators
             # MRH NOT SUPPORTED
@@ -746,8 +747,14 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
         end
         # update the time
         t += t_input.dt
+
+        if i == t_input.nstep
+            # Ensure all output is written at the final step
+            finish_now = true
+        end
+
         # write moments data to file every nwrite_moments time steps
-        if mod(i,t_input.nwrite_moments) == 0
+        if mod(i,t_input.nwrite_moments) == 0 || finish_now
             @debug_detect_redundant_block_synchronize begin
                 # Skip check for redundant _block_synchronize() during file I/O because
                 # it only runs infrequently
@@ -924,7 +931,7 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
                 debug_detect_redundant_is_active[] = true
             end
         end
-        if mod(i,t_input.nwrite_dfns) == 0
+        if mod(i,t_input.nwrite_dfns) == 0 || finish_now
             @debug_detect_redundant_block_synchronize begin
                 # Skip check for redundant _block_synchronize() during file I/O because
                 # it only runs infrequently
@@ -947,6 +954,10 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
                 # Reactivate check for redundant _block_synchronize()
                 debug_detect_redundant_is_active[] = true
             end
+        end
+
+        if finish_now
+            break
         end
     end
     return nothing
