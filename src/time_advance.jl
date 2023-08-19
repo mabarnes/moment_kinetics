@@ -772,27 +772,30 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
                 begin_r_z_region()
                 result_string = ""
                 @loop_s is begin
-                    @views residuals_ni =
+                    @views residual_ni =
                         steady_state_residuals(scratch[end].density[:,:,is],
                                                scratch[1].density[:,:,is], t_input.dt;
-                                               use_mpi=true)
+                                               use_mpi=true, only_max_abs=true)
                     if global_rank[] == 0
-                        for r ∈ values(residuals_ni)
+                        result_string *= "  density "
+                        for r ∈ values(residual_ni)
                             #result_string *= lpad(string(r[1]), 24)
-                            result_string *= lpad(string(round(r[1]; sigdigits=4)), 11)
+                            result_string *= rpad(string(round(r[1]; sigdigits=4)), 11)
                         end
                     end
                 end
                 if composition.n_neutral_species > 0
                     @loop_sn isn begin
-                        residuals_nn =
+                        residual_nn =
                             steady_state_residuals(scratch[end].density_neutral[:,:,isn],
                                                    scratch[1].density[:,:,isn],
-                                                   t_input.dt; use_mpi=true)
+                                                   t_input.dt; use_mpi=true,
+                                                   only_max_abs=true)
                         if global_rank[] == 0
-                            for r ∈ values(residuals_nn)
+                            result_string *= " density_neutral "
+                            for r ∈ values(residual_nn)
                                 #result_string *= lpad(string(r[1]), 24)
-                                result_string *= lpad(string(round(r[1]; sigdigits=4)), 11)
+                                result_string *= rpad(string(round(r[1]; sigdigits=4)), 11)
                             end
                         end
                     end
