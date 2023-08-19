@@ -465,7 +465,7 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
     r, r_spectral = get_tuple_of_return_values(load_coordinate_data,
                                                moments_files0_first_restart, "r")
     # load time data
-    ntime, time = get_tuple_of_return_values(load_time_data, moments_files0)
+    ntime, time, _ = get_tuple_of_return_values(load_time_data, moments_files0)
     # load species data
     n_ion_species, n_neutral_species =
         get_tuple_of_return_values(load_species_data, moments_files0_first_restart)
@@ -572,7 +572,7 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
     dfns_files0_first_restart = Tuple(first(f) for f ∈ dfns_files0)
 
     iskip_pdfs = pp.itime_skip_pdfs
-    ntime_pdfs, time_pdfs = get_tuple_of_return_values(load_time_data, dfns_files0)
+    ntime_pdfs, time_pdfs, _ = get_tuple_of_return_values(load_time_data, dfns_files0)
     ntime_pdfs = Tuple((nt + iskip_pdfs - 1) ÷ iskip_pdfs for nt ∈ ntime_pdfs)
     time_pdfs = Tuple(t[begin:iskip_pdfs:end] for t ∈ time_pdfs)
 
@@ -762,10 +762,9 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
 
     if pp.diagnostics_chodura_t
         Chodura_ratio_lower, Chodura_ratio_upper =
-            get_tuple_of_return_values(check_Chodura_condition, run_names, r, z, vperp,
-                                       vpa, density_at_pdf_times, composition,
-                                       Er_at_pdf_times, geometry, "wall", nblocks,
-                                       nothing, ir0)
+            get_tuple_of_return_values(check_Chodura_condition, r, z, vperp, vpa,
+                                       density_at_pdf_times, composition, Er_at_pdf_times,
+                                       geometry, "wall", nblocks, run_names, nothing, ir0)
 
         plot(legend=legend)
         for (t, cr, run_label) ∈ zip(time_pdfs, Chodura_ratio_lower, run_names)
@@ -785,10 +784,10 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
 
     if pp.diagnostics_chodura_r
         Chodura_ratio_lower, Chodura_ratio_upper =
-            get_tuple_of_return_values(check_Chodura_condition, run_names, r, z, vperp,
-                                       vpa, density_at_pdf_times, composition,
-                                       Er_at_pdf_times, geometry, "wall", nblocks,
-                                       ntime_pdfs, nothing)
+            get_tuple_of_return_values(check_Chodura_condition, r, z, vperp, vpa,
+                                       density_at_pdf_times, composition, Er_at_pdf_times,
+                                       geometry, "wall", nblocks, run_names, ntime_pdfs,
+                                       nothing)
 
         plot(legend=legend)
         for (this_r, cr, run_label) ∈ zip(r, Chodura_ratio_lower, run_names)
@@ -852,7 +851,6 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
             # Linear fit to log(amplitude) after startind
             growth_rate = 0.0
             initial_fit_amplitude = 1.0
-            startind = 1
             try
                 linear_model(x, param) = @. param[1]*x+param[2]
                 fit = @views curve_fit(linear_model, time[startind:end],
@@ -1229,7 +1227,7 @@ function calculate_differences(prefix...)
     z, z_spectral = get_tuple_of_return_values(load_coordinate_data, moments_files0, "z")
     r, r_spectral = get_tuple_of_return_values(load_coordinate_data, moments_files0, "r")
     # load time data
-    ntime, time = get_tuple_of_return_values(load_time_data, moments_files0)
+    ntime, time, _ = get_tuple_of_return_values(load_time_data, moments_files0)
     # load species data
     n_ion_species, n_neutral_species =
         get_tuple_of_return_values(load_species_data, moments_files0)
@@ -1324,7 +1322,7 @@ function calculate_differences(prefix...)
     dfns_files0 = get_tuple_of_return_values(open_readonly_output_file, run_names, "dfns")
     # note that ntime may differ in these output files
 
-    ntime_pdfs, time_pdfs = get_tuple_of_return_values(load_time_data, dfns_files0)
+    ntime_pdfs, time_pdfs, _ = get_tuple_of_return_values(load_time_data, dfns_files0)
 
     # load local velocity coordinate data from `dfns' cdf
     # these values are currently the same for all blocks
@@ -2947,7 +2945,7 @@ function compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,spec
     vpa, _ = load_coordinate_data(fid, "vpa", printout=false)
     vperp, _ = load_coordinate_data(fid, "vperp", printout=false)
     # load time data (unique to pdf, may differ to moment values depending on user nwrite_dfns value)
-    ntime, time = load_time_data(fid, printout=false)
+    ntime, time, _ = load_time_data(fid, printout=false)
     close(fid)
     # get the charged particle pdf
     dfni_func = manufactured_solns_list.dfni_func
@@ -3029,7 +3027,7 @@ function compare_neutral_pdf_symbolic_test(run_name,manufactured_solns_list,spec
     vr, _ = load_coordinate_data(fid, "vr", printout=false)
     vzeta, _ = load_coordinate_data(fid, "vzeta", printout=false)
     # load time data (unique to pdf, may differ to moment values depending on user nwrite_dfns value)
-    ntime, time = load_time_data(fid, printout=false)
+    ntime, time, _ = load_time_data(fid, printout=false)
     close(fid)
     # get the charged particle pdf
     dfnn_func = manufactured_solns_list.dfnn_func

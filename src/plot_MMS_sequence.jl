@@ -142,10 +142,10 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         # load local sizes of grids stored on each netCDF file 
         # z z_wgts r r_wgts may take different values on different blocks
         # we need to construct the global grid below
-        z, z_spectral = load_coordinate_data(fid, "z")
-        r, r_spectral = load_coordinate_data(fid, "r")
+        z, z_spectral, _ = load_coordinate_data(fid, "z")
+        r, r_spectral, _ = load_coordinate_data(fid, "r")
         # load time data 
-        ntime, time = load_time_data(fid)
+        ntime, time, _ = load_time_data(fid)
         # load species data 
         n_ion_species, n_neutral_species = load_species_data(fid)
         close(fid)
@@ -153,11 +153,11 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         # load local velocity coordinate data from `moments' cdf
         # these values are currently the same for all blocks 
         fid = open_readonly_output_file(run_name,"dfns")
-        vpa = load_coordinate_data(fid, "vpa")
-        vperp = load_coordinate_data(fid, "vperp")
-        #vz = load_coordinate_data(fid, "vz")
-        #vr = load_coordinate_data(fid, "vr")
-        #vzeta = load_coordinate_data(fid, "vzeta")
+        vpa, _, _ = load_coordinate_data(fid, "vpa")
+        vperp, _, _ = load_coordinate_data(fid, "vperp")
+        #vz, _, _ = load_coordinate_data(fid, "vz")
+        #vr, _, _ = load_coordinate_data(fid, "vr")
+        #vzeta, _, _ = load_coordinate_data(fid, "vzeta")
         close(fid)
         
         

@@ -55,20 +55,57 @@ function get(d::Dict, key, default::Enum)
 end
 
 """
+Set the defaults for options in the top level of the input, and check that there are not
+any unexpected options (i.e. options that have no default).
+
+Modifies the options[section_name]::Dict by adding defaults for any values that are not
+already present.
+
+Ignores any sections, as these will be checked separately.
+"""
+function set_defaults_and_check_top_level!(options::AbstractDict; kwargs...)
+    DictType = typeof(options)
+
+    # Check for any unexpected values in the options - all options that are set should be
+    # present in the kwargs of this function call
+    options_keys_symbols = keys(kwargs)
+    options_keys = (String(k) for k ∈ options_keys_symbols)
+    for (key, value) in options
+        # Ignore any ssections when checking
+        if !(isa(value, AbstractDict) || key ∈ options_keys)
+            error("Unexpected option '$key=$value' in top-level options")
+        end
+    end
+
+    # Set default values if a key was not set explicitly
+    explicit_keys = keys(options)
+    for (key_sym, value) ∈ kwargs
+        key = String(key_sym)
+        if !(key ∈ explicit_keys)
+            options[key] = value
+        end
+    end
+
+    return options
+end
+
+"""
 Set the defaults for options in a section, and check that there are not any unexpected
 options (i.e. options that have no default).
 
 Modifies the options[section_name]::Dict by adding defaults for any values that are not
 already present.
 """
-function set_defaults_and_check_section!(options::Dict, section_name;
+function set_defaults_and_check_section!(options::AbstractDict, section_name;
                                          kwargs...)
+    DictType = typeof(options)
+
     if !(section_name ∈ keys(options))
         # If section is not present, create it
-        options[section_name] = Dict{String,Any}()
+        options[section_name] = DictType()
     end
 
-    if !isa(options[section_name], Dict)
+    if !isa(options[section_name], AbstractDict)
         error("Expected '$section_name' to be a section in the input file, but it has a "
               * "value '$(options[section_name])'")
     end
