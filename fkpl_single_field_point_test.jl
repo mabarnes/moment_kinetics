@@ -209,8 +209,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
         ivperp_field = floor(mk_int,nvperp/8 -1)
         #ivpa_field = floor(mk_int,nvpa/2)
         #ivperp_field = floor(mk_int,1)
-        ivpa_field = 37
-        ivperp_field = 8
+        ivpa_field = floor(mk_int,nvpa/2) + 5# + 4
+        ivperp_field = 9
         println("Investigating vpa = ",vpa.grid[ivpa_field], " vperp = ",vperp.grid[ivperp_field])
         
         # Set up MPI
@@ -475,7 +475,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         end
         
         function get_scaled_x_w!(x_scaled, w_scaled, x_legendre, w_legendre, x_laguerre, w_laguerre, node_min, node_max, nodes, igrid_coord, coord_val)
-            #println("nodes ",nodes)
+            println("nodes ",nodes)
             zero = 1.0e-10 
             @. x_scaled = 0.0
             @. w_scaled = 0.0
@@ -485,7 +485,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
             # assume x_scaled, w_scaled are arrays of length 2*nquad
             # use only nquad points for most elements, but use 2*nquad for
             # elements with interior divergences
-            #println("coord: ",coord_val," node_max: ",node_max," node_min: ",node_min) 
+            println("coord: ",coord_val," node_max: ",node_max," node_min: ",node_min) 
             if abs(coord_val - node_max) < zero # divergence at upper endpoint 
                 node_cut = (nodes[nnodes-1] + nodes[nnodes])/2.0
                 
@@ -499,7 +499,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 @. w_scaled[1+nquad_legendre:n] = (node_max - node_cut)*w_laguerre
                 
                 nquad_coord = n
-                #println("upper divergence")
+                println("upper divergence")
             elseif abs(coord_val - node_min) < zero # divergence at lower endpoint
                 n = nquad_laguerre + nquad_legendre
                 nquad = size(x_laguerre,1)
@@ -514,11 +514,19 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 @. w_scaled[1+nquad_laguerre:n] = scale*w_legendre
 
                 nquad_coord = n
-                #println("lower divergence")
+                println("lower divergence")
             else #if (coord_val - node_min)*(coord_val - node_max) < - zero # interior divergence
-                #println("igrid_coord ", igrid_coord, " ", nodes[igrid_coord]," ", coord_val)
+                println("igrid_coord ", igrid_coord, " ", nodes[igrid_coord]," ", coord_val)
+                if nnodes > 3
+                    delta_nodes = nodes[2:end] - nodes[1:nnodes-1]
+                    min_spacing = minimum(delta_nodes)
+                else # use that for ngrid = 2, 3 nodes are equally spaced
+                    min_spacing = nodes[2] - nodes[1]
+                end
+                println("min spacing",min_spacing)
                 n = 2*nquad_laguerre
-                node_cut_high = (nodes[igrid_coord+1] + nodes[igrid_coord])/2.0
+                #node_cut_high = (nodes[igrid_coord+1] + nodes[igrid_coord])/2.0
+                node_cut_high = 0.5*min_spacing + nodes[igrid_coord]
                 if igrid_coord == 1
                     # exception for vperp coordinate near orgin
                     k = 0
@@ -526,7 +534,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
                     nquad_coord = nquad_legendre + 2*nquad_laguerre
                 else
                     # fill in lower Gauss-Legendre points
-                    node_cut_low = (nodes[igrid_coord-1] + nodes[igrid_coord])/2.0
+                    #node_cut_low = (nodes[igrid_coord-1] + nodes[igrid_coord])/2.0
+                    node_cut_low = nodes[igrid_coord] - 0.5*min_spacing
                     shift = 0.5*(node_cut_low + node_min)
                     scale = 0.5*(node_cut_low - node_min)
                     @. x_scaled[1:nquad_legendre] = scale*x_legendre + shift
@@ -550,7 +559,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 @. x_scaled[k+n+1:nquad_coord] = scale*x_legendre + shift
                 @. w_scaled[k+n+1:nquad_coord] = scale*w_legendre
                 
-                #println("intermediate divergence")
+                println("intermediate divergence")
             #else # no divergences
             #    nquad = size(x_legendre,1) 
             #    shift = 0.5*(node_min + node_max)
@@ -560,8 +569,9 @@ if abspath(PROGRAM_FILE) == @__FILE__
             #    #println("no divergence")
             #    nquad_coord = nquad
             end
-            #println("x_scaled",x_scaled)
-            #println("w_scaled",w_scaled)
+            println("x_scaled",x_scaled)
+            println("w_scaled",w_scaled)
+            println("nquad_coord ",nquad_coord)
             return nquad_coord
         end
         
@@ -1127,14 +1137,15 @@ if abspath(PROGRAM_FILE) == @__FILE__
     end
     if test_Lagrange_integral_scan
         initialize_comms!()
-        ngrid = 9
+        ngrid = 5
         nscan = 1
+        plot_scan = false
         #nelement_list = Int[2, 4, 8, 16, 32, 64, 128]
         #nelement_list = Int[2, 4, 8, 16, 32]
         #nelement_list = Int[2, 4, 8, 16]
         #nelement_list = Int[2, 4, 8]
         #nelement_list = Int[100]
-        nelement_list = Int[8]
+        nelement_list = Int[32]
         max_G_err = Array{mk_float,1}(undef,nscan)
         max_H_err = Array{mk_float,1}(undef,nscan)
         max_dHdvpa_err = Array{mk_float,1}(undef,nscan)
@@ -1176,7 +1187,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
             max_n_err[iscan])
             = test_Lagrange_Rosenbluth_potentials(ngrid,nelement,standalone=false))
         end
-        if global_rank[]==0
+        if global_rank[]==0 && plot_scan
             fontsize = 8
             ytick_sequence = Array([1.0e-13,1.0e-12,1.0e-11,1.0e-10,1.0e-9,1.0e-8,1.0e-7,1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0,1.0e1])
             xlabel = L"N_{element}"
