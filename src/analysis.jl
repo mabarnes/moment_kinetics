@@ -541,14 +541,26 @@ By default runs in serial, but if `use_mpi=true` is passed, assume MPI has been
 initialised, and that `variable` has r and z dimensions but no species dimension, and use
 `@loop_*` macros. In this case the result is returned only on global rank 0. When using
 distributed-memory MPI, this routine will double-count the points on block boundaries.
+
+If `only_max_abs=true` is passed, then only calculate the 'maxium absolute residual'. In
+this case the OrderedDict returned will have only one entry, for `"max absolute
+residual"`.
 """
 function steady_state_residuals(variable, variable_at_previous_time, dt;
-                                epsilon=default_epsilon, use_mpi=false)
+                                epsilon=default_epsilon, use_mpi=false,
+                                only_max_abs=false)
     square_residual_norms =
         steady_state_square_residuals(variable, variable_at_previous_time, dt;
-                                      epsilon=epsilon, use_mpi=use_mpi)
+                                      epsilon=epsilon, use_mpi=use_mpi,
+                                      only_max_abs=only_max_abs)
     if global_rank[] == 0
-        return OrderedDict(k=>sqrt.(v) for (k,v) ∈ square_residual_norms)
+        if only_max_abs
+            # In this case as an optimisation the residual was not squared, so do not need
+            # to square-root here
+            return square_residual_norms
+        else
+            return OrderedDict(k=>sqrt.(v) for (k,v) ∈ square_residual_norms)
+        end
     else
         return nothing
     end
@@ -557,7 +569,7 @@ end
 """
     steady_state_square_residuals(variable, variable_at_previous_time, dt;
                                   variable_max=nothing, epsilon=1.0e-4,
-                                  use_mpi=false)
+                                  use_mpi=false, only_max_abs=false)
 
 Used to calculate the mean square residual for [`steady_state_residuals`](@ref).
 
@@ -571,7 +583,7 @@ this function.
 """
 function steady_state_square_residuals(variable, variable_at_previous_time, dt;
                                        variable_max=nothing, epsilon=default_epsilon,
-                                       use_mpi=false)
+                                       use_mpi=false, only_max_abs=false)
     if ndims(dt) == 0
         t_dim = ndims(variable) + 1
     else
@@ -579,7 +591,7 @@ function steady_state_square_residuals(variable, variable_at_previous_time, dt;
     end
     if use_mpi
         begin_r_z_region()
-        if variable_max === nothing
+        if !only_max_abs && variable_max === nothing
             local_max = 0.0
             @loop_r_z ir iz begin
                 this_slice = selectdim(selectdim(variable, t_dim - 1, ir), t_dim - 2, iz)
@@ -592,36 +604,56 @@ function steady_state_square_residuals(variable, variable_at_previous_time, dt;
         else
             reshaped_dt = dt
         end
-        local_total_absolute_square = zeros(size(dt))
-        local_max_absolute_square = zeros(size(dt))
-        local_total_relative_square = zeros(size(dt))
-        local_max_relative_square = zeros(size(dt))
+        if only_max_abs
+            local_max_absolute = zeros(size(dt))
+        else
+            local_total_absolute_square = zeros(size(dt))
+            local_max_absolute_square = zeros(size(dt))
+            local_total_relative_square = zeros(size(dt))
+            local_max_relative_square = zeros(size(dt))
+        end
         @loop_r_z ir iz begin
             this_slice = selectdim(selectdim(variable, t_dim - 1, ir), t_dim - 2, iz)
             this_slice_previous_time = selectdim(selectdim(variable_at_previous_time,
                                                            t_dim - 1, ir), t_dim - 2, iz)
 
-            absolute_square_residual, relative_square_residual =
-                _steady_state_square_residual(variable, variable_at_previous_time,
-                                              reshaped_dt, epsilon, variable_max)
-            # Need to wrap the sum(...) or maximum(...) in a call to vec(...) so that we
-            # return a Vector, not an N-dimensional array where the first (N-1) dimensions
-            # all have size 1.
-            local_total_absolute_square .+= vec(sum(absolute_square_residual,
-                                                    dims=tuple((1:t_dim-1)...)))
-            local_max_absolute_square = max.(local_max_absolute_square,
-                                             vec(maximum(absolute_square_residual,
-                                                         dims=tuple((1:t_dim-1)...))))
-            local_total_relative_square .+= vec(sum(relative_square_residual,
-                                                    dims=tuple((1:t_dim-1)...)))
-            local_max_relative_square = max.(local_max_relative_square,
-                                             vec(maximum(relative_square_residual,
-                                                         dims=tuple((1:t_dim-1)...))))
+            if only_max_abs
+                absolute_residual =
+                    _steady_state_absolute_residual(variable, variable_at_previous_time,
+                                                    reshaped_dt)
+                # Need to wrap the maximum(...) in a call to vec(...) so that we return a
+                # Vector, not an N-dimensional array where the first (N-1) dimensions all
+                # have size 1.
+                local_max_absolute = max.(local_max_absolute,
+                                          vec(maximum(absolute_residual,
+                                                      dims=tuple((1:t_dim-1)...))))
+            else
+                absolute_square_residual, relative_square_residual =
+                    _steady_state_square_residual(variable, variable_at_previous_time,
+                                                  reshaped_dt, epsilon, variable_max)
+                # Need to wrap the sum(...) or maximum(...) in a call to vec(...) so that
+                # we return a Vector, not an N-dimensional array where the first (N-1)
+                # dimensions all have size 1.
+                local_total_absolute_square .+= vec(sum(absolute_square_residual,
+                                                        dims=tuple((1:t_dim-1)...)))
+                local_max_absolute_square = max.(local_max_absolute_square,
+                                                 vec(maximum(absolute_square_residual,
+                                                             dims=tuple((1:t_dim-1)...))))
+                local_total_relative_square .+= vec(sum(relative_square_residual,
+                                                        dims=tuple((1:t_dim-1)...)))
+                local_max_relative_square = max.(local_max_relative_square,
+                                                 vec(maximum(relative_square_residual,
+                                                             dims=tuple((1:t_dim-1)...))))
+            end
         end
 
         # Pack results together so we only need one communication
-        packed_results = hcat(local_total_absolute_square, local_max_absolute_square,
-                              local_total_relative_square, local_max_relative_square)
+        if only_max_abs
+            packed_results = local_max_absolute
+        else
+            packed_results = hcat(local_total_absolute_square, local_max_absolute_square,
+                                  local_total_relative_square, local_max_relative_square)
+        end
         gathered_results = MPI.Gather(packed_results, 0, comm_block[])
 
         if block_rank[] == 0
@@ -631,18 +663,24 @@ function steady_state_square_residuals(variable, variable_at_previous_time, dt;
 
             # Finish calculating block-local mean/max
             packed_block_results = similar(packed_results)
-            @boundscheck ndims(packed_results) == 2
-            @boundscheck ndims(gathered_results) == 3
-            packed_block_results[:,1] = sum(@view(gathered_results[:,1,:]), dims=2)
-            packed_block_results[:,2] = maximum(@view(gathered_results[:,2,:]), dims=2)
-            packed_block_results[:,3] = sum(@view(gathered_results[:,3,:]), dims=2)
-            packed_block_results[:,4] = maximum(@view(gathered_results[:,4,:]), dims=2)
+            if only_max_abs
+                @boundscheck ndims(packed_results) == 1
+                @boundscheck ndims(gathered_results) == 2
+                packed_block_results .= maximum(gathered_results, dims=2)
+            else
+                @boundscheck ndims(packed_results) == 2
+                @boundscheck ndims(gathered_results) == 3
+                packed_block_results[:,1] = sum(@view(gathered_results[:,1,:]), dims=2)
+                packed_block_results[:,2] = maximum(@view(gathered_results[:,2,:]), dims=2)
+                packed_block_results[:,3] = sum(@view(gathered_results[:,3,:]), dims=2)
+                packed_block_results[:,4] = maximum(@view(gathered_results[:,4,:]), dims=2)
 
-            #block_mean_square = block_total_square / (prod(size(variable)) / prod(size(dt)))
-            @boundscheck prod(size(variable)) % prod(size(dt)) == 0
-            block_npoints = prod(size(variable)) ÷ prod(size(dt))
-            packed_block_results[:,1] /= block_npoints
-            packed_block_results[:,3] /= block_npoints
+                #block_mean_square = block_total_square / (prod(size(variable)) / prod(size(dt)))
+                @boundscheck prod(size(variable)) % prod(size(dt)) == 0
+                block_npoints = prod(size(variable)) ÷ prod(size(dt))
+                packed_block_results[:,1] /= block_npoints
+                packed_block_results[:,3] /= block_npoints
+            end
 
             gathered_block_results = MPI.Gather(packed_block_results, 0, comm_inter_block[])
         end
@@ -651,35 +689,51 @@ function steady_state_square_residuals(variable, variable_at_previous_time, dt;
             gathered_block_results = reshape(gathered_block_results,
                                              (size(packed_results)..., n_blocks[]))
 
-            return OrderedDict(
-                       "RMS absolute residual"=>mean(@view(gathered_block_results[:,1,:]), dims=2),
-                       "max absolute residual"=>maximum(@view(gathered_block_results[:,2,:]), dims=2),
-                       "RMS relative residual"=>mean(@view(gathered_block_results[:,3,:]), dims=2),
-                       "max relative residual"=>maximum(@view(gathered_block_results[:,4,:]), dims=2))
+            if only_max_abs
+                return OrderedDict(
+                           "max absolute residual"=>maximum(gathered_block_results, dims=2))
+            else
+                return OrderedDict(
+                           "RMS absolute residual"=>mean(@view(gathered_block_results[:,1,:]), dims=2),
+                           "max absolute residual"=>maximum(@view(gathered_block_results[:,2,:]), dims=2),
+                           "RMS relative residual"=>mean(@view(gathered_block_results[:,3,:]), dims=2),
+                           "max relative residual"=>maximum(@view(gathered_block_results[:,4,:]), dims=2))
+            end
         else
             return nothing
         end
     else
-        if variable_max === nothing
+        if !only_max_abs && variable_max === nothing
             variable_max = maximum(variable)
         end
         reshaped_dt = reshape(dt, tuple((1 for _ ∈ 1:t_dim-1)..., size(dt)...))
 
-        absolute_square_residual, relative_square_residual =
-            _steady_state_square_residual(variable, variable_at_previous_time,
-                                          reshaped_dt, epsilon, variable_max)
-        # Need to wrap the mean(...) or maximum(...) in a call to vec(...) so that we
-        # return a Vector, not an N-dimensional array where the first (N-1) dimensions all
-        # have size 1.
-        return OrderedDict(
-                   "RMS absolute residual"=>vec(mean(absolute_square_residual;
-                                                     dims=tuple((1:t_dim-1)...))),
-                   "max absolute residual"=>vec(maximum(absolute_square_residual;
-                                                        dims=tuple((1:t_dim-1)...))),
-                   "RMS relative residual"=>vec(mean(relative_square_residual;
-                                                     dims=tuple((1:t_dim-1)...))),
-                   "max relative residual"=>vec(maximum(relative_square_residual;
-                                                        dims=tuple((1:t_dim-1)...))))
+        if only_max_abs
+            absolute_residual =
+                _steady_state_residual(variable, variable_at_previous_time, reshaped_dt)
+            # Need to wrap the maximum(...) in a call to vec(...) so that we return a
+            # Vector, not an N-dimensional array where the first (N-1) dimensions all have
+            # size 1.
+            return OrderedDict(
+                       "max absolute residual"=>vec(maximum(absolute_residual;
+                                                            dims=tuple((1:t_dim-1)...))))
+        else
+            absolute_square_residual, relative_square_residual =
+                _steady_state_square_residual(variable, variable_at_previous_time,
+                                              reshaped_dt, epsilon, variable_max)
+            # Need to wrap the mean(...) or maximum(...) in a call to vec(...) so that we
+            # return a Vector, not an N-dimensional array where the first (N-1) dimensions all
+            # have size 1.
+            return OrderedDict(
+                       "RMS absolute residual"=>vec(mean(absolute_square_residual;
+                                                         dims=tuple((1:t_dim-1)...))),
+                       "max absolute residual"=>vec(maximum(absolute_square_residual;
+                                                            dims=tuple((1:t_dim-1)...))),
+                       "RMS relative residual"=>vec(mean(relative_square_residual;
+                                                         dims=tuple((1:t_dim-1)...))),
+                       "max relative residual"=>vec(maximum(relative_square_residual;
+                                                            dims=tuple((1:t_dim-1)...))))
+        end
     end
 end
 
@@ -691,6 +745,13 @@ function _steady_state_square_residual(variable, variable_at_previous_time, resh
     relative_square_residual = @. absolute_square_residual /
                                   ((abs(variable) + epsilon*variable_max))^2
     return absolute_square_residual, relative_square_residual
+end
+
+# Utility function for the steady-state absolute residual to avoid code duplication in
+# steady_state_mean_square_residual(), used only when only_max_abs=true
+function _steady_state_absolute_residual(variable, variable_at_previous_time, reshaped_dt)
+    absolute_residual = @. abs((variable - variable_at_previous_time) / reshaped_dt)
+    return absolute_residual
 end
 
 end
