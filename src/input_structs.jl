@@ -39,6 +39,7 @@ struct time_input
     n_rk_stages::mk_int
     split_operators::Bool
     runtime_plots::Bool
+    steady_state_residual::Bool
     use_manufactured_solns_for_advance::Bool
 end
 

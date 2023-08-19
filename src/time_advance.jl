@@ -56,6 +56,7 @@ using ..advection: advection_info
 
 using Dates
 using Plots
+using ..analysis: steady_state_residuals
 using ..post_processing: draw_v_parallel_zero!
 
 struct scratch_dummy_arrays
@@ -755,8 +756,8 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
             begin_serial_region()
             @serial_region begin
                 if global_rank[] == 0
-                     println("finished time step ", i,"    ",
-                             Dates.format(now(), dateformat"H:MM:SS"))
+                    print("finished time step ", rpad(string(i), 7),"  ",
+                          Dates.format(now(), dateformat"H:MM:SS"))
                 end
             end
             write_data_to_ascii(moments, fields, vpa, vperp, z, r, t,
@@ -765,6 +766,45 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
             write_moments_data_to_binary(moments, fields, t, composition.n_ion_species,
                                          composition.n_neutral_species, io_moments,
                                          iwrite_moments, r, z)
+
+            if t_input.steady_state_residual
+                # Calculate some residuals to see how close simulation is to steady state
+                begin_r_z_region()
+                result_string = ""
+                @loop_s is begin
+                    @views residuals_ni =
+                        steady_state_residuals(scratch[end].density[:,:,is],
+                                               scratch[1].density[:,:,is], t_input.dt;
+                                               use_mpi=true)
+                    if global_rank[] == 0
+                        for r ∈ values(residuals_ni)
+                            #result_string *= lpad(string(r[1]), 24)
+                            result_string *= lpad(string(round(r[1]; sigdigits=4)), 11)
+                        end
+                    end
+                end
+                if composition.n_neutral_species > 0
+                    @loop_sn isn begin
+                        residuals_nn =
+                            steady_state_residuals(scratch[end].density_neutral[:,:,isn],
+                                                   scratch[1].density[:,:,isn],
+                                                   t_input.dt; use_mpi=true)
+                        if global_rank[] == 0
+                            for r ∈ values(residuals_nn)
+                                #result_string *= lpad(string(r[1]), 24)
+                                result_string *= lpad(string(round(r[1]; sigdigits=4)), 11)
+                            end
+                        end
+                    end
+                end
+                if global_rank[] == 0
+                    println("    residuals:", result_string)
+                end
+            else
+                if global_rank[] == 0
+                    println()
+                end
+            end
 
             # Hack to save *.pdf of current pdf
             if t_input.runtime_plots
