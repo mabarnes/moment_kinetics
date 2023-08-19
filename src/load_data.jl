@@ -552,7 +552,7 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                     moments.neutral.qz .= load_slice(dynamic, "qz_neutral", z_range,
                                                      r_range, :, time_index)
                     moments.neutral.qz_updated .= true
-                    moments.neutral.vth .= load_slice(dynamic, "thermal_speed", z_range,
+                    moments.neutral.vth .= load_slice(dynamic, "thermal_speed_neutral", z_range,
                                                       r_range, :, time_index)
 
                     boundary_distributions.pdf_rboundary_neutral[:,:,:,:,1,:] .=
