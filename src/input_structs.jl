@@ -40,6 +40,7 @@ struct time_input
     split_operators::Bool
     runtime_plots::Bool
     steady_state_residual::Bool
+    converged_residual_value::mk_float
     use_manufactured_solns_for_advance::Bool
 end
 

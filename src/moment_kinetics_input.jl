@@ -296,6 +296,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     split_operators = get(scan_input, "split_operators", false)
     runtime_plots = get(scan_input, "runtime_plots", false)
     steady_state_residual = get(scan_input, "steady_state_residual", false)
+    converged_residual_value = get(scan_input, "converged_residual_value", -1.0)
 
     use_for_init_is_default = !(("manufactured_solns" ∈ keys(scan_input)) &&
                                 ("use_for_init" ∈ keys(scan_input["manufactured_solns"])))
@@ -480,6 +481,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
 
     t_input = time_input(nstep, dt, nwrite_moments, nwrite_dfns, n_rk_stages,
                          split_operators, runtime_plots, steady_state_residual,
+                         converged_residual_value,
                          manufactured_solns_input.use_for_advance)
     # replace mutable structures with immutable ones to optimize performance
     # and avoid possible misunderstandings	
