@@ -80,6 +80,9 @@ function write_single_value!(file_or_group::HDF5.H5DataStore, name,
                              description=nothing) where {T,N}
     if isa(data, Union{Number, AbstractString})
         file_or_group[name] = data
+        if description !== nothing
+            add_attribute!(file_or_group[name], "description", description)
+        end
         return nothing
     end
 
