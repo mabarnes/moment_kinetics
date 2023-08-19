@@ -139,26 +139,36 @@ function load_slice(file_or_group::NCDataset, name::String, slices_or_indices...
 end
 
 """
+    read_Dict_from_section(file_or_group, section_name; ignore_subsections=false)
+
+Read information from `section_name` in `file_or_group`, returning a Dict.
+
+By default, any subsections are included as nested Dicts. If `ignore_subsections=true`
+they are ignored.
+"""
+function read_Dict_from_section(file_or_group, section_name; ignore_subsections=false)
+    # Function that can be called recursively to read nested Dicts from sub-groups in
+    # the output file
+    section_io = get_group(file_or_group, section_name)
+    section = Dict{String,Any}()
+
+    for key ∈ get_variable_keys(section_io)
+        section[key] = load_variable(section_io, key)
+    end
+    if !ignore_subsections
+        for key ∈ get_subgroup_keys(section_io)
+            section[key] = read_Dict_from_section(section_io, key)
+        end
+    end
+
+    return section
+end
+
+"""
 Load saved input settings
 """
 function load_input(fid)
-    function read_dict(io, section_name)
-        # Function that can be called recursively to read nested Dicts from sub-groups in
-        # the output file
-        section_io = get_group(io, section_name)
-        section = Dict{String,Any}()
-
-        for key ∈ get_variable_keys(section_io)
-            section[key] = load_variable(section_io, key)
-        end
-        for key ∈ get_subgroup_keys(section_io)
-            section[key] = read_dict(section_io, key)
-        end
-
-        return section
-    end
-
-    return read_dict(fid, "input")
+    return read_Dict_from_section(fid, "input")
 end
 
 """
@@ -224,6 +234,25 @@ function load_coordinate_data(fid, name; printout=false)
     coord, spectral = define_coordinate(input)
 
     return coord, spectral, chunk_size
+end
+
+function load_run_info_history(fid)
+    provenance_tracking = get_group(fid, "provenance_tracking")
+
+    last_run_info = read_Dict_from_section(fid, "provenance_tracking";
+                                           ignore_subsections=true)
+
+    counter = 0
+    pt_keys = keys(provenance_tracking)
+    while "previous_run_$(counter+1)" ∈ pt_keys
+        counter += 1
+    end
+    previous_runs_info =
+        tuple((read_Dict_from_section(provenance_tracking, "previous_run_$i")
+               for i ∈ 1:counter)...,
+              last_run_info)
+
+    return previous_runs_info
 end
 
 """
@@ -452,6 +481,7 @@ Reload pdf and moments from an existing output file.
 function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_prefix_iblock,
                                  time_index, composition, r, z, vpa, vperp, vzeta, vr, vz)
     code_time = 0.0
+    previous_runs_info = nothing
     begin_serial_region()
     @serial_region begin
         fid = open_readonly_output_file(restart_prefix_iblock[1], "dfns";
@@ -463,6 +493,8 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
             if time_index < 0
                 time_index, _, _ = load_time_data(fid)
             end
+
+            previous_runs_info = load_run_info_history(fid)
 
             if parallel_io
                 restart_n_ion_species, restart_n_neutral_species = load_species_data(fid)
@@ -641,7 +673,7 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
         end
     end
 
-    return code_time
+    return code_time, previous_runs_info, time_index
 end
 
 """

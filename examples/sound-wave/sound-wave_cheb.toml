@@ -48,3 +48,6 @@ vz_nelement = 8
 vz_L = 8.0
 vz_bc = "periodic"
 vz_discretization = "chebyshev_pseudospectral"
+
+[output]
+binary_format = "netcdf"

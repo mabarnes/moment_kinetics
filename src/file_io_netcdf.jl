@@ -67,13 +67,13 @@ function maybe_create_netcdf_dim(file_or_group::NCDataset, name, size)
     end
     return nothing
 end
-function maybe_create_netcdf_dim(file_or_group::NCDataset, coord::coordinate)
+function maybe_create_netcdf_dim(file_or_group::NCDataset, coord)
     return maybe_create_netcdf_dim(file_or_group, coord.name, coord.n)
 end
 
 function write_single_value!(file_or_group::NCDataset, name,
                              value::Union{Number, AbstractString, AbstractArray{T,N}},
-                             coords::coordinate...; parallel_io, n_ion_species=nothing,
+                             coords...; parallel_io, n_ion_species=nothing,
                              n_neutral_species=nothing, description=nothing) where {T,N}
     if description !== nothing
         attributes = Dict("description" => description)

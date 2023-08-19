@@ -17,6 +17,12 @@ using ..looping
 using ..moment_kinetics_structs: scratch_pdf, em_fields_struct
 using ..type_definitions: mk_float, mk_int
 
+using LibGit2
+using MPI
+using Pkg
+using UUIDs
+using TOML
+
 @debug_shared_array using ..communication: DebugMPISharedArray
 
 """
@@ -104,7 +110,7 @@ open the necessary output files
 """
 function setup_file_io(io_input, boundary_distributions, vz, vr, vzeta, vpa, vperp, z, r,
                        composition, collisions, evolve_density, evolve_upar, evolve_ppar,
-                       input_dict)
+                       input_dict, restart_time_index, previous_runs_info)
     begin_serial_region()
     @serial_region begin
         # Only read/write from first process in each 'block'
@@ -124,15 +130,19 @@ function setup_file_io(io_input, boundary_distributions, vz, vr, vzeta, vpa, vpe
             ascii = ascii_ios(nothing, nothing, nothing)
         end
 
+        run_id = string(uuid4())
+
         io_moments = setup_moments_io(out_prefix, io_input.binary_format, r, z,
                                       composition, collisions, evolve_density,
                                       evolve_upar, evolve_ppar, input_dict,
-                                      io_input.parallel_io, comm_inter_block[])
+                                      io_input.parallel_io, comm_inter_block[], run_id,
+                                      restart_time_index, previous_runs_info)
         io_dfns = setup_dfns_io(out_prefix, io_input.binary_format,
                                 boundary_distributions, r, z, vperp, vpa, vzeta, vr, vz,
                                 composition, collisions, evolve_density, evolve_upar,
                                 evolve_ppar, input_dict, io_input.parallel_io,
-                                comm_inter_block[])
+                                comm_inter_block[], run_id, restart_time_index,
+                                previous_runs_info)
 
         return ascii, io_moments, io_dfns
     end
@@ -205,6 +215,113 @@ function write_overview!(fid, composition, collisions, parallel_io, evolve_densi
                             parallel_io=parallel_io,
                             description="is parallel I/O being used?")
     end
+    return nothing
+end
+
+"""
+Write provenance tracking information, to allow runs to be reproduced.
+"""
+function write_provenance_tracking_info!(fid, parallel_io, run_id, restart_time_index,
+                                         input_dict, previous_runs_info)
+
+    if !parallel_io
+        # Communicate run_id to all blocks
+        # Need to convert run_id to a Vector{Char} for MPI
+        run_id_chars = [run_id...]
+        MPI.Bcast!(run_id_chars, 0, comm_inter_block[])
+        run_id = string(run_id_chars...)
+    end
+
+    @serial_region begin
+        provenance_tracking = create_io_group(fid, "provenance_tracking")
+
+        write_single_value!(provenance_tracking, "run_id", run_id,
+                            parallel_io=parallel_io,
+                            description="Unique identifier for the run")
+
+        write_single_value!(provenance_tracking, "restart_time_index", restart_time_index,
+                            parallel_io=parallel_io,
+                            description="Index of the previous run from which this run " *
+                                        "was restarted (if this value is negative, the " *
+                                        "run is not a restart)")
+
+        # Convert input_dict into a TOML-formatted string so that we can store it in a
+        # single variable.
+        io_buffer = IOBuffer()
+        TOML.print(io_buffer, input_dict)
+        input_string = String(take!(io_buffer))
+        write_single_value!(provenance_tracking, "input", input_string,
+                            parallel_io=parallel_io,
+                            description="Input for the run, in TOML format")
+
+        # Record the total number of MPI ranks, as this is required in addition to the
+        # input to determine how many processes were in each shared-memory 'block'.
+        write_single_value!(provenance_tracking, "n_mpi_ranks", global_size[],
+                            parallel_io=parallel_io,
+                            description="Total number of MPI ranks used for the run")
+
+        # Get current git hash for code
+        project_dir = dirname(dirname(@__FILE__))
+        repo = GitRepo(project_dir)
+        git_commit_hash = string(LibGit2.GitHash(LibGit2.peel(LibGit2.GitCommit, LibGit2.head(repo))))
+        if LibGit2.isdirty(repo)
+            # Use a shell command to get the 'git diff' because it seems to be complicated
+            # (if not impossible) to get this using LibGit2.
+            # Use `setenv()` to run the command in `project_dir` without changing the
+            # current working firectory.
+            # Use `read()` rather than `run()` so that the command returns the terminal
+            # output.
+            # Finally need to convert the output to String as `read()` returns a
+            # Vector{UInt8}.
+            git_diff = String(read(setenv(`git diff`; dir=project_dir)))
+        else
+            git_diff = ""
+        end
+        write_single_value!(provenance_tracking, "git_commit_hash", git_commit_hash,
+                            parallel_io=parallel_io,
+                            description="git commit hash of moment_kinetics when this run was performed")
+        write_single_value!(provenance_tracking, "git_diff", git_diff,
+                            parallel_io=parallel_io,
+                            description="`git diff` of moment_kinetics when this run was performed")
+
+        # Get information on all installed packages
+        dependencies = string(Pkg.dependencies())
+        write_single_value!(provenance_tracking, "dependencies", dependencies,
+                            parallel_io=parallel_io,
+                            description="Information about all dependency packages (output of `Pkg.dependencies()`)")
+
+        if previous_runs_info !== nothing
+            for (i, info) ∈ enumerate(previous_runs_info)
+                section = create_io_group(provenance_tracking, "previous_run_$i")
+                write_Dict_to_section(section, info, parallel_io)
+            end
+            previous_run_ids = [""]
+            n_previous_runs = 1
+        end
+    end
+    return nothing
+end
+
+"""
+    write_Dict_to_section(section_io, section_dict, parallel_io)
+
+Write the contents of `section_dict` into the I/O group `section_io`.
+
+Any nested Dicts in `section_dict` are written to subsections.
+
+All the keys in `section_dict` (and any nested Dicts) should be Strings.
+
+`parallel_io` is a Bool indicating whether parallel I/O is being used.
+"""
+function write_Dict_to_section(section_io, section_dict, parallel_io)
+    for (key, value) ∈ section_dict
+        if isa(value, AbstractDict)
+            subsection_io = create_io_group(section_io, key)
+            write_Dict_to_section(subsection_io, value, parallel_io)
+        else
+            write_single_value!(section_io, key, value, parallel_io=parallel_io)
+        end
+    end
 end
 
 """
@@ -213,21 +330,9 @@ Save info from the dict with input settings to the output file
 Note: assumes all keys in `input_dict` are strings.
 """
 function write_input!(fid, input_dict, parallel_io)
-    function write_dict(io, section_dict, parallel_io)
-        # Function that can be called recursively to write nested Dicts into sub-groups in
-        # the output file
-        for (key, value) ∈ section_dict
-            if isa(value, Dict)
-                subsection_io = create_io_group(io, key)
-                write_dict(subsection_io, value, parallel_io)
-            else
-                write_single_value!(io, key, value, parallel_io=parallel_io)
-            end
-        end
-    end
     @serial_region begin
         input_io = create_io_group(fid, "input")
-        write_dict(input_io, input_dict, parallel_io)
+        write_Dict_to_section(input_io, input_dict, parallel_io)
     end
 end
 
@@ -612,7 +717,8 @@ setup file i/o for moment variables
 """
 function setup_moments_io(prefix, binary_format, r, z, composition, collisions,
                           evolve_density, evolve_upar, evolve_ppar, input_dict,
-                          parallel_io, io_comm)
+                          parallel_io, io_comm, run_id, restart_time_index,
+                          previous_runs_info)
     @serial_region begin
         moments_prefix = string(prefix, ".moments")
         if !parallel_io
@@ -626,6 +732,10 @@ function setup_moments_io(prefix, binary_format, r, z, composition, collisions,
         # write some overview information to the output file
         write_overview!(fid, composition, collisions, parallel_io, evolve_density,
                         evolve_upar, evolve_ppar)
+
+        # write provenance tracking information to the output file
+        write_provenance_tracking_info!(fid, parallel_io, run_id, restart_time_index,
+                                        input_dict, previous_runs_info)
 
         # write the input settings
         write_input!(fid, input_dict, parallel_io)
@@ -682,7 +792,8 @@ setup file i/o for distribution function variables
 """
 function setup_dfns_io(prefix, binary_format, boundary_distributions, r, z, vperp, vpa,
                        vzeta, vr, vz, composition, collisions, evolve_density,
-                       evolve_upar, evolve_ppar, input_dict, parallel_io, io_comm)
+                       evolve_upar, evolve_ppar, input_dict, parallel_io, io_comm, run_id,
+                       restart_time_index, previous_runs_info)
 
     @serial_region begin
         dfns_prefix = string(prefix, ".dfns")
@@ -698,6 +809,10 @@ function setup_dfns_io(prefix, binary_format, boundary_distributions, r, z, vper
         # write some overview information to the output file
         write_overview!(fid, composition, collisions, parallel_io, evolve_density,
                         evolve_upar, evolve_ppar)
+
+        # write provenance tracking information to the output file
+        write_provenance_tracking_info!(fid, parallel_io, run_id, restart_time_index,
+                                        input_dict, previous_runs_info)
 
         # write the input settings
         write_input!(fid, input_dict, parallel_io)
