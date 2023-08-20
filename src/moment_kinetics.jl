@@ -305,7 +305,7 @@ reload data from time index given by `restart_time_index` for a restart.
 `debug_loop_type` and `debug_loop_parallel_dims` are used to force specific set ups for
 parallel loop ranges, and are only used by the tests in `debug_test/`.
 """
-function setup_moment_kinetics(input_dict::Dict; restart_prefix_iblock=nothing,
+function setup_moment_kinetics(input_dict::AbstractDict; restart_prefix_iblock=nothing,
         restart_time_index=-1,
         debug_loop_type::Union{Nothing,NTuple{N,Symbol} where N}=nothing,
         debug_loop_parallel_dims::Union{Nothing,NTuple{N,Symbol} where N}=nothing)
