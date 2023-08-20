@@ -22,9 +22,6 @@ using ..reference_parameters
 using MPI
 using TOML
 
-@enum RunType single performance_test scan
-const run_type = single
-
 """
 Read input from a TOML file
 """
