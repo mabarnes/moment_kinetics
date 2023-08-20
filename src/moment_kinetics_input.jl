@@ -520,7 +520,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
         # Make file to log some information about inputs into.
         # check to see if output_dir exists in the current directory
         # if not, create it
-        isdir(output_dir) || mkdir(output_dir)
+        isdir(output_dir) || mkpath(output_dir)
         io = open_ascii_output_file(string(output_dir,"/",run_name), "input")
     else
         io = devnull
