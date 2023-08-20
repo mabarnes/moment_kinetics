@@ -3507,8 +3507,6 @@ function plot_charged_pdf_2D_at_wall(run_name, run_name_label, r_global, z_globa
                                      nblocks, n_ion_species, r, z, vperp, vpa, ntime)
     print("Plotting charged pdf data at wall boundaries...")
 
-    # plot only data at last timestep
-    itime0 = ntime
     # plot a thermal vpa on line plots
     ivpa0 = floor(mk_int,vpa.n/3)
     # plot a thermal vperp on line plots
@@ -3516,11 +3514,13 @@ function plot_charged_pdf_2D_at_wall(run_name, run_name_label, r_global, z_globa
     # plot a typical r on line plots
     ir0 = 1
 
+    # Note only need final time point, so only load the one time point
+    itime0 = 1
     # pdf at lower wall
-    pdf_lower = load_distributed_charged_pdf_slice(run_name, nblocks, 1:ntime, n_ion_species, r,
+    pdf_lower = load_distributed_charged_pdf_slice(run_name, nblocks, ntime:ntime, n_ion_species, r,
                                                    z, vperp, vpa; iz=1)
     # pdf at upper wall
-    pdf_upper = load_distributed_charged_pdf_slice(run_name, nblocks, 1:ntime, n_ion_species, r,
+    pdf_upper = load_distributed_charged_pdf_slice(run_name, nblocks, ntime:ntime, n_ion_species, r,
                                                    z, vperp, vpa; iz=z.n_global)
     for (pdf, zlabel) ∈ ((pdf_lower, "wall-"), (pdf_upper, "wall+"))
         for is in 1:n_ion_species
