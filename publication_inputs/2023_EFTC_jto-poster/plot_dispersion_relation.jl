@@ -1,8 +1,11 @@
 #using moment_kinetics.makie_post_processing
 
+using CairoMakie
+using LaTeXStrings
 using Optim
-#using Roots
 using SpecialFunctions
+
+using PlasmaDispersionFunctions
 
 """
 Equation (4.13) from Parra et al. "1D drift kinetic models with periodic
@@ -10,7 +13,8 @@ boundary conditions" (TN-01)
 """
 function plasmaZ(zeta)
     #return exp(-zeta^2)*sqrt(π)*(im - erfi(zeta))
-    return (sqrt(π)*exp(-zeta^2)*im - 2*dawson(zeta))
+    #return (sqrt(π)*exp(-zeta^2)*im - 2*dawson(zeta))
+    return plasma_dispersion_function(zeta)
 end
 
 # Only use one Lpar
@@ -18,8 +22,11 @@ const Lpar = 1.0
 
 """
 The solution of (4.7) for a complex frequency
+
+Extra `kwargs...` are passed to `optimize()`.
 """
-function solve_dispersion_relation(ni, nn, Th, Te, Rin; initial_guesses=nothing, n_solutions=1)
+function solve_dispersion_relation(ni, nn, Th, Te, Rin; initial_guesses=nothing,
+                                   n_solutions=1, kwargs...)
     kpar = 2*π/Lpar
     vth = sqrt(Th) # in moment_kinetics normalised units
 
@@ -54,7 +61,7 @@ function solve_dispersion_relation(ni, nn, Th, Te, Rin; initial_guesses=nothing,
     omega = 0.0 + 0.0im
     for i ∈ 1:n_solutions # find at most n_solutions solutions
         if initial_guesses !== nothing && i <= length(initial_guesses)
-            initial_guess = [real(initial_guesses[i]), imag(real(initial_guesses[i]))]
+            initial_guess = [real(initial_guesses[i]), imag(initial_guesses[i])]
         else
             initial_guess = [0.0, 0.0]
         end
@@ -71,7 +78,7 @@ function solve_dispersion_relation(ni, nn, Th, Te, Rin; initial_guesses=nothing,
             end
             return real(d * conj(d))
         end
-        result = optimize(target, initial_guess; g_tol=1.0e-40)
+        result = optimize(target, initial_guess; g_tol=1.0e-40, kwargs...)
         minimizer = result.minimizer
         omega = minimizer[1] + im*minimizer[2]
         if abs(detA(omega)) < 1.e-10
@@ -102,44 +109,181 @@ parameters `ni`, `nn`, `Th`, `Te`.
 
 `starting_omega` gives the solution to start from (e.g. zero-frequency or
 positive-frequency).
+
+Extra `kwargs...` are passed to `solve_dispersion_relation`
 """
-function get_sequence_vs_Ri(ni, nn, Th, Te; starting_omega)
+function get_sequence_vs_Ri(ni, nn, Th, Te; starting_omega, kwargs...)
     # Get a starting point with Ri=1
     function get_param_sequence(value, default)
         sign = value > default ? -1 : 1
         sequence = reverse(collect(value:sign*0.01:default))
         return sequence
     end
+
+    if abs(real(starting_omega)) < 1.0e-10 && ni == 0.0
+        # The ni=0 case has funny behaviour with a transition at about Rin=4.
+        # Want to start following the solution from R>4.
+        Ri = 8.0
+    else
+        Ri = 1.0
+    end
+
     omega_initial = starting_omega
-    for (this_ni, this_nn, this_Th, this_Te) ∈
+    for (this_ni, this_nn, this_Th, this_Te, this_Ri) ∈
         zip(get_param_sequence(ni, default_parameters.ni),
             get_param_sequence(nn, default_parameters.nn),
             get_param_sequence(Th, default_parameters.Th),
-            get_param_sequence(Te, default_parameters.Te))
-        omega_initial = solve_dispersion_relation(this_ni, this_nn, this_Th, this_Te, 1.0;
-                                                  initial_guesses=[omega_initial])
+            get_param_sequence(Te, default_parameters.Te),
+            get_param_sequence(Ri, default_parameters.Ri))
+        omega_initial = solve_dispersion_relation(this_ni, this_nn, this_Th, this_Te,
+                                                  this_Ri;
+                                                  initial_guesses=[omega_initial],
+                                                  kwargs...)[1]
     end
-    Ri = collect(0.0:0.001:2.0)
-    omega_result = similar(Ri)
-    startind = findfirst(x->abs(x-1.0)<1.e-8, Ri)
+    Ri_result = collect(0.0:0.005:2.0*2*π)
+    omega_result = similar(Ri_result, ComplexF64)
+    omega_result .= NaN
+    startind = findfirst(x->abs(x-Ri)<1.e-8, Ri_result)
 
     # Go down from omega_initial
     omega = omega_initial
     for i ∈ startind:-1:1
-        omega = solve_dispersion_relation(ni, nn, Th, Te, Ri[i]; initial_guesses=[omega])
+        omega = solve_dispersion_relation(ni, nn, Th, Te, Ri_result[i]; initial_guesses=[omega],
+                                          kwargs...)
+        if (length(omega) == 0 # Failed to find solution
+            || (i < startind && (imag(omega[1])-imag(omega_result[i+1])) * (imag(omega_result[startind-1])-imag(omega_result[startind])) < 0.0) # Expect growth rate to be monotonic. Stop if it is not
+           )
+            break
+        else
+            omega = omega[1]
+        end
+        #println("continuing omega down ", i, " ", real(omega))
         omega_result[i] = omega
     end
 
     # Go up from omega_initial
     omega = omega_initial
-    for i ∈ startind+1:length(Ri)
-        omega = solve_dispersion_relation(ni, nn, Th, Te, Ri[i]; initial_guesses=[omega])
+    for i ∈ startind+1:length(Ri_result)
+        omega = solve_dispersion_relation(ni, nn, Th, Te, Ri_result[i]; initial_guesses=[omega],
+                                          kwargs...)
+        if length(omega) == 0
+            # Failed to find solution
+            break
+        else
+            omega = omega[1]
+        end
+        #println("continuing omega up ", i, " ", omega)
         omega_result[i] = omega
     end
 
-    return Ri, real.(omega), imag.(omega)
+    return Ri_result, real.(omega_result), imag.(omega_result)
 end
 
-function plot_zero_frequency!(ax, ni, nn, Th, Te)
-    Ri, omega, gamma = get_sequence_vs_Ri(ni, nn, Th, Te; starting_omega=default_zero_frequency)
+function plot_zero_frequency!(ax, ni, nn, Th, Te; kwargs...)
+    println("plotting zero frequency for ni=$ni, nn=$nn, Th=$Th, Te=$Te")
+    Ri, omega, gamma = get_sequence_vs_Ri(ni, nn, Th, Te;
+                                          starting_omega=default_zero_frequency)
+    # Hopefully there were only a few entries that jumped to the wrong root. Delete them.
+    wrong_root_indices = findall(x->abs(x)>1.0e-10, omega)
+    deleteat!(Ri, wrong_root_indices)
+    deleteat!(omega, wrong_root_indices)
+    deleteat!(gamma, wrong_root_indices)
+    #if any(@. abs(omega) > 1.e-10)
+    #    error("expected zero-frequency mode, got $omega")
+    #end
+
+    # There is the odd point with gamma=0 that doesn't look right, so skip those too
+    wrong_root_indices = findall(x->abs(x)<1.0e-10, gamma)
+    deleteat!(Ri, wrong_root_indices)
+    deleteat!(omega, wrong_root_indices)
+    deleteat!(gamma, wrong_root_indices)
+
+    return lines!(ax, Ri, gamma, linestyle=:dash; kwargs...)
+end
+
+function plot_positive_frequency!(ax_omega, ax_gamma, ni, nn, Th, Te; kwargs...)
+    println("plotting positive frequency for ni=$ni, nn=$nn, Th=$Th, Te=$Te")
+    Ri, omega, gamma = get_sequence_vs_Ri(ni, nn, Th, Te; starting_omega=default_positive_frequency)
+    #if any(@. omega < 1.e-5)
+    #    error("expected positive-frequency mode, got $omega")
+    #end
+
+    Ri_gamma = copy(Ri)
+    # Points with omega=0 overlap with zero-frequency mode on gamma-plot and look weird,
+    # so chop them out here
+    wrong_root_indices = findall(x->abs(x)<1.0e-10, omega)
+    deleteat!(Ri_gamma, wrong_root_indices)
+    deleteat!(gamma, wrong_root_indices)
+
+    return lines!(ax_omega, Ri, omega; kwargs...), lines!(ax_gamma, Ri_gamma, gamma; kwargs...)
+end
+
+function plot_n_scan()
+
+    Th = 1.0
+    Te = 1.0
+
+    fig_omega = Figure()
+    ax_omega = Axis(fig_omega[1,1], xlabel=L"R_{in}", ylabel=L"\omega")
+
+    fig_gamma = Figure()
+    ax_gamma = Axis(fig_gamma[1,1], xlabel=L"R_{in}", ylabel=L"\gamma")
+
+    for (ni, nn, label) ∈ ((2.0, 0.0, "1"),
+                           (1.5, 0.5, "3/4"),
+                           (1.0, 1.0, "1/2"),
+                           (0.5, 1.5, "1/4"),
+                           (0.0, 2.0, "0"),
+                          )
+        p_omega, p_gamma = plot_positive_frequency!(ax_omega, ax_gamma, ni, nn, Th, Te; label=label)
+        plot_zero_frequency!(ax_gamma, ni, nn, Th, Te; label=label, color=p_gamma.color)
+    end
+
+    Legend(fig_omega[1,2], ax_omega)
+    Legend(fig_gamma[1,2], ax_gamma)
+
+    save("n_scan_omega.pdf", fig_omega)
+    save("n_scan_gamma.pdf", fig_gamma)
+
+    return nothing
+end
+
+function plot_T_scan()
+
+    ni = 1.0
+    nn = 1.0
+    Te = 1.0
+
+    fig_omega = Figure()
+    ax_omega = Axis(fig_omega[1,1], xlabel=L"R_{in}", ylabel=L"\omega")
+
+    fig_gamma = Figure()
+    ax_gamma = Axis(fig_gamma[1,1], xlabel=L"R_{in}", ylabel=L"\gamma")
+
+    for (Th, label) ∈ ((0.25, "1/4"),
+                       (0.5, "1/2"),
+                       (1.0, "1"),
+                       (2.0, "2"),
+                       (4.0, "4"),
+                      )
+        p_omega, p_gamma = plot_positive_frequency!(ax_omega, ax_gamma, ni, nn, Th, Te; label=label)
+        plot_zero_frequency!(ax_gamma, ni, nn, Th, Te; label=label, color=p_gamma.color)
+    end
+
+    Legend(fig_omega[1,2], ax_omega)
+    Legend(fig_gamma[1,2], ax_gamma)
+
+    save("T_scan_omega.pdf", fig_omega)
+    save("T_scan_gamma.pdf", fig_gamma)
+
+    return nothing
+end
+
+function make_plots()
+    plot_n_scan()
+    plot_T_scan()
+end
+
+if abspath(PROGRAM_FILE) == @__FILE__
+    make_plots()
 end
