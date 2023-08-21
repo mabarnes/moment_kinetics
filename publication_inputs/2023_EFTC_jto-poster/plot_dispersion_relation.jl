@@ -150,14 +150,14 @@ function get_sequence_vs_Ri(ni, nn, Th, Te; starting_omega, kwargs...)
     for i ∈ startind:-1:1
         omega = solve_dispersion_relation(ni, nn, Th, Te, Ri_result[i]; initial_guesses=[omega],
                                           kwargs...)
-        if (length(omega) == 0 # Failed to find solution
-            || (i < startind && (imag(omega[1])-imag(omega_result[i+1])) * (imag(omega_result[startind-1])-imag(omega_result[startind])) < 0.0) # Expect growth rate to be monotonic. Stop if it is not
-           )
+        if length(omega) == 0
+            # Failed to find solution
             break
-        else
-            omega = omega[1]
+        elseif (i < startind - 1 && abs(real(starting_omega)) < 1.e-10 && (imag(omega[1])-imag(omega_result[i+1])) * (imag(omega_result[startind-1])-imag(omega_result[startind])) < 0.0)
+            # Expect growth rate to be monotonic for zero frequency mode. Stop if it is not
+            break
         end
-        #println("continuing omega down ", i, " ", real(omega))
+        omega = omega[1]
         omega_result[i] = omega
     end
 
@@ -267,7 +267,7 @@ function plot_T_scan()
                        (4.0, "4"),
                       )
         p_omega, p_gamma = plot_positive_frequency!(ax_omega, ax_gamma, ni, nn, Th, Te; label=label)
-        plot_zero_frequency!(ax_gamma, ni, nn, Th, Te; label=label, color=p_gamma.color)
+        plot_zero_frequency!(ax_gamma, ni, nn, Th, Te; color=p_gamma.color)
     end
 
     Legend(fig_omega[1,2], ax_omega)
