@@ -7,6 +7,8 @@ using SpecialFunctions
 
 using PlasmaDispersionFunctions
 
+using moment_kinetics.parameter_scans
+
 """
 Equation (4.13) from Parra et al. "1D drift kinetic models with periodic
 boundary conditions" (TN-01)
@@ -19,6 +21,7 @@ end
 
 # Only use one Lpar
 const Lpar = 1.0
+const kpar = 2*π/Lpar
 
 """
 The solution of (4.7) for a complex frequency
@@ -27,7 +30,6 @@ Extra `kwargs...` are passed to `optimize()`.
 """
 function solve_dispersion_relation(ni, nn, Th, Te, Rin; initial_guesses=nothing,
                                    n_solutions=1, kwargs...)
-    kpar = 2*π/Lpar
     vth = sqrt(Th) # in moment_kinetics normalised units
 
     function zeta(omega)
@@ -123,7 +125,7 @@ function get_sequence_vs_Ri(ni, nn, Th, Te; starting_omega, kwargs...)
     if abs(real(starting_omega)) < 1.0e-10 && ni == 0.0
         # The ni=0 case has funny behaviour with a transition at about Rin=4.
         # Want to start following the solution from R>4.
-        Ri = 8.0
+        Ri = 5.0
     else
         Ri = 1.0
     end
@@ -140,7 +142,10 @@ function get_sequence_vs_Ri(ni, nn, Th, Te; starting_omega, kwargs...)
                                                   initial_guesses=[omega_initial],
                                                   kwargs...)[1]
     end
-    Ri_result = collect(0.0:0.005:2.0*2*π)
+    vth = sqrt(Th)
+    #Ri_result = collect(0.0:0.001:2.0*π*vth)
+    # temporarily make this coarser to speed things up
+    Ri_result = collect(0.0:0.1:2.0*π*vth); println("WARNING! Using coarse grid of Ri to speed up prototyping")
     omega_result = similar(Ri_result, ComplexF64)
     omega_result .= NaN
     startind = findfirst(x->abs(x-Ri)<1.e-8, Ri_result)
@@ -198,7 +203,8 @@ function plot_zero_frequency!(ax, ni, nn, Th, Te; kwargs...)
     deleteat!(omega, wrong_root_indices)
     deleteat!(gamma, wrong_root_indices)
 
-    return lines!(ax, Ri, gamma, linestyle=:dash; kwargs...)
+    vth = sqrt(Th)
+    return lines!(ax, (ni+nn).*Ri./(kpar*vth), gamma./(kpar.*vth), linestyle=:dash; kwargs...)
 end
 
 function plot_positive_frequency!(ax_omega, ax_gamma, ni, nn, Th, Te; kwargs...)
@@ -215,7 +221,51 @@ function plot_positive_frequency!(ax_omega, ax_gamma, ni, nn, Th, Te; kwargs...)
     deleteat!(Ri_gamma, wrong_root_indices)
     deleteat!(gamma, wrong_root_indices)
 
-    return lines!(ax_omega, Ri, omega; kwargs...), lines!(ax_gamma, Ri_gamma, gamma; kwargs...)
+    vth = sqrt(Th)
+    return lines!(ax_omega, (ni+nn).*Ri./(kpar*vth), omega./(kpar*vth); kwargs...),
+           lines!(ax_gamma, (ni+nn).*Ri_gamma./(kpar*vth), gamma./(kpar*vth); kwargs...)
+end
+
+function get_sim_omega_gamma(sim)
+    try
+        println("path is ", joinpath("..", "..", sim["base_directory"], sim["run_name"], basename(sim["run_name"]) * ".frequency_fit.txt"))
+        s = nothing
+        open(joinpath("..", "..", sim["base_directory"], sim["run_name"], basename(sim["run_name"]) * ".frequency_fit.txt"),
+             "r") do io
+            s = split(readline(io))
+        end
+        gamma = parse(Float64, s[2])
+        omega = parse(Float64, s[4])
+        fit_errors = parse.(Float64, s[6:8])
+
+        return omega, gamma
+    catch e
+        println("Error for ", sim["run_name"], " ", e)
+        return NaN, NaN
+    end
+end
+
+function plot_sim_output!(ax_omega, ax_gamma, sims, ni, nn, Th, Te; kwargs...)
+    vth = sqrt(Th)
+
+    Ri = zeros(length(sims))
+    omega = zeros(length(sims))
+    gamma = zeros(length(sims))
+    for (i, s) ∈ enumerate(sims)
+        Ri[i] = s["charge_exchange_frequency"]
+        omega[i], gamma[i] = get_sim_omega_gamma(s)
+    end
+
+    println("for sims ")
+    println(Ri)
+    println(omega)
+    println(gamma)
+
+    return scatter!(ax_omega, (ni+nn).*Ri./(kpar*vth), omega./(kpar*vth); kwargs...),
+           scatter!(ax_gamma, (ni+nn).*Ri./(kpar*vth), gamma./(kpar*vth); kwargs...)
+    # *2 is a fudge!
+    #return scatter!(ax_omega, (ni+nn).*Ri./(kpar*vth*2), omega./(kpar*vth); kwargs...),
+    #       scatter!(ax_gamma, (ni+nn).*Ri./(kpar*vth*2), gamma./(kpar*vth); kwargs...)
 end
 
 function plot_n_scan()
@@ -224,23 +274,49 @@ function plot_n_scan()
     Te = 1.0
 
     fig_omega = Figure()
-    ax_omega = Axis(fig_omega[1,1], xlabel=L"R_{in}", ylabel=L"\omega")
+    ax_omega = Axis(fig_omega[1,1],
+                    xlabel=L"(n_i + n_n)R_{in}/|k_\parallel|v_\mathrm{th}",
+                    ylabel=L"\omega/|k_\parallel|v_\mathrm{th}")
 
     fig_gamma = Figure()
-    ax_gamma = Axis(fig_gamma[1,1], xlabel=L"R_{in}", ylabel=L"\gamma")
+    ax_gamma = Axis(fig_gamma[1,1],
+                    xlabel=L"(n_i + n_n)R_{in}/|k_\parallel|v_\mathrm{th}",
+                    ylabel=L"\gamma/|k_\parallel|v_\mathrm{th}")
 
-    for (ni, nn, label) ∈ ((2.0, 0.0, "1"),
-                           (1.5, 0.5, "3/4"),
-                           (1.0, 1.0, "1/2"),
-                           (0.5, 1.5, "1/4"),
-                           (0.0, 2.0, "0"),
+    orig_stdout = stdout
+    redirect_stdout(open("/dev/null", "w"))
+    #sim_inputs = make_scan_inputs("scan_sound-wave_nratio.toml")
+    sim_inputs = make_scan_inputs("scan_sound-wave_lowres.toml")
+    redirect_stdout(orig_stdout)
+
+    legend_data_list = []
+    legend_label_list = []
+    #for (ni, nn, label) ∈ ((2.0, 0.0, "1"),
+    #                       (1.5, 0.5, "3/4"),
+    #                       (1.0, 1.0, "1/2"),
+    #                       (0.5, 1.5, "1/4"),
+    #                       (0.0, 2.0, "0"),
+    #                      )
+    for (ni, nn, label) ∈ ((1.0, 0.0, "1"),
+                           (0.75, 0.25, "3/4"),
+                           (0.5, 0.5, "1/2"),
+                           (0.25, 0.75, "1/4"),
+                           (0.0, 1.0, "0"),
                           )
+        sims = Tuple(i for i ∈ sim_inputs if isapprox(i["initial_density1"], ni, atol=2.0e-5))
+
         p_omega, p_gamma = plot_positive_frequency!(ax_omega, ax_gamma, ni, nn, Th, Te; label=label)
-        plot_zero_frequency!(ax_gamma, ni, nn, Th, Te; label=label, color=p_gamma.color)
+        plot_zero_frequency!(ax_gamma, ni, nn, Th, Te; color=p_gamma.color)
+        s_omega, s_gamma = plot_sim_output!(ax_omega, ax_gamma, sims, ni, nn, Th, Te; color=p_gamma.color)
+
+        push!(legend_data_list, [p_omega, s_omega])
+        push!(legend_label_list, label)
     end
 
-    Legend(fig_omega[1,2], ax_omega)
-    Legend(fig_gamma[1,2], ax_gamma)
+    Legend(fig_omega[1,2], legend_data_list, legend_label_list)
+    Legend(fig_gamma[1,2], legend_data_list, legend_label_list)
+    #Legend(fig_omega[1,2], ax_omega)
+    #Legend(fig_gamma[1,2], ax_gamma)
 
     save("n_scan_omega.pdf", fig_omega)
     save("n_scan_gamma.pdf", fig_gamma)
@@ -255,10 +331,14 @@ function plot_T_scan()
     Te = 1.0
 
     fig_omega = Figure()
-    ax_omega = Axis(fig_omega[1,1], xlabel=L"R_{in}", ylabel=L"\omega")
+    ax_omega = Axis(fig_omega[1,1],
+                    xlabel=L"(n_i + n_n)R_{in}/|k_\parallel|v_\mathrm{th}",
+                    ylabel=L"\omega/|k_\parallel|v_\mathrm{th}")
 
     fig_gamma = Figure()
-    ax_gamma = Axis(fig_gamma[1,1], xlabel=L"R_{in}", ylabel=L"\gamma")
+    ax_gamma = Axis(fig_gamma[1,1],
+                    xlabel=L"(n_i + n_n)R_{in}/|k_\parallel|v_\mathrm{th}",
+                    ylabel=L"\gamma/|k_\parallel|v_\mathrm{th}")
 
     for (Th, label) ∈ ((0.25, "1/4"),
                        (0.5, "1/2"),
