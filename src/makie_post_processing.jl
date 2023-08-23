@@ -2004,7 +2004,7 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
 
              function $function_name(run_info, var_name; is=1, data=nothing,
                                      input=nothing, frame_index=nothing, ax=nothing,
-                                     fig=nothing, colorbar_place=colorbar_place,
+                                     fig=nothing, colorbar_place=nothing,
                                      title=nothing, outfile=nothing, it=nothing,
                                      ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
                                      ivzeta=nothing, ivr=nothing, ivz=nothing, kwargs...)
@@ -2017,6 +2017,11 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
                  end
                  if isa(input, AbstractDict)
                      input = Dict_to_NamedTuple(input)
+                 end
+                 if frame_index === nothing
+                     ind = Observable(1)
+                 else
+                     ind = frame_index
                  end
                  if data === nothing
                      dim_slices = get_dimension_slice_indices(:t, $(QuoteNode(dim1)),
@@ -2052,7 +2057,7 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
                  end
                  fig = animate_2d(x, y, data; xlabel="$($dim2_str)",
                                   ylabel="$($dim1_str)", title=title,
-                                  frame_index=frame_index, ax=ax,
+                                  frame_index=ind, ax=ax,
                                   colorbar_place=colorbar_place, colormap=colormap,
                                   kwargs...)
 
@@ -2067,7 +2072,7 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
                      if isa(data, VariableCache)
                          nt = data.n_tinds
                      else
-                         nt = size(data, 2)
+                         nt = size(data, 3)
                      end
                      save_animation(fig, ind, nt, outfile)
                  end
