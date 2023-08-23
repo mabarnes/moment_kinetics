@@ -117,9 +117,7 @@ Extra `kwargs...` are passed to `solve_dispersion_relation`
 function get_sequence_vs_Ri(ni, nn, Th, Te; starting_omega, kwargs...)
     # Get a starting point with Ri=1
     function get_param_sequence(value, default)
-        sign = value > default ? -1 : 1
-        sequence = reverse(collect(value:sign*0.01:default))
-        return sequence
+        return collect(range(default, stop=value, length=100))
     end
 
     if abs(real(starting_omega)) < 1.0e-10 && ni == 0.0
@@ -228,15 +226,21 @@ end
 
 function get_sim_omega_gamma(sim)
     try
-        println("path is ", joinpath("..", "..", sim["base_directory"], sim["run_name"], basename(sim["run_name"]) * ".frequency_fit.txt"))
         s = nothing
         open(joinpath("..", "..", sim["base_directory"], sim["run_name"], basename(sim["run_name"]) * ".frequency_fit.txt"),
              "r") do io
             s = split(readline(io))
         end
         gamma = parse(Float64, s[2])
-        omega = parse(Float64, s[4])
+        # No real difference between positive and negative omega, so take abs() in case
+        # simulation fit picked up negative value
+        omega = abs(parse(Float64, s[4]))
         fit_errors = parse.(Float64, s[6:8])
+
+        if fit_errors[1] > 0.1
+            # Fit was bad, so don't plot
+            return NaN, NaN
+        end
 
         return omega, gamma
     catch e
@@ -256,10 +260,10 @@ function plot_sim_output!(ax_omega, ax_gamma, sims, ni, nn, Th, Te; kwargs...)
         omega[i], gamma[i] = get_sim_omega_gamma(s)
     end
 
-    println("for sims ")
-    println(Ri)
-    println(omega)
-    println(gamma)
+    #println("for sims ")
+    #println(Ri)
+    #println(omega)
+    #println(gamma)
 
     return scatter!(ax_omega, (ni+nn).*Ri./(kpar*vth), omega./(kpar*vth); kwargs...),
            scatter!(ax_gamma, (ni+nn).*Ri./(kpar*vth), gamma./(kpar*vth); kwargs...)
@@ -285,24 +289,24 @@ function plot_n_scan()
 
     orig_stdout = stdout
     redirect_stdout(open("/dev/null", "w"))
-    #sim_inputs = make_scan_inputs("scan_sound-wave_nratio.toml")
-    sim_inputs = make_scan_inputs("scan_sound-wave_lowres.toml")
+    sim_inputs = get_scan_inputs("scan_sound-wave_nratio.toml")
+    #sim_inputs = get_scan_inputs("scan_sound-wave_lowres.toml")
     redirect_stdout(orig_stdout)
 
     legend_data_list = []
     legend_label_list = []
-    #for (ni, nn, label) ∈ ((2.0, 0.0, "1"),
-    #                       (1.5, 0.5, "3/4"),
-    #                       (1.0, 1.0, "1/2"),
-    #                       (0.5, 1.5, "1/4"),
-    #                       (0.0, 2.0, "0"),
-    #                      )
-    for (ni, nn, label) ∈ ((1.0, 0.0, "1"),
-                           (0.75, 0.25, "3/4"),
-                           (0.5, 0.5, "1/2"),
-                           (0.25, 0.75, "1/4"),
-                           (0.0, 1.0, "0"),
+    for (ni, nn, label) ∈ ((2.0, 0.0, "1"),
+                           (1.5, 0.5, "3/4"),
+                           (1.0, 1.0, "1/2"),
+                           (0.5, 1.5, "1/4"),
+                           (0.0, 2.0, "0"),
                           )
+    #for (ni, nn, label) ∈ ((1.0, 0.0, "1"),
+    #                       (0.75, 0.25, "3/4"),
+    #                       (0.5, 0.5, "1/2"),
+    #                       (0.25, 0.75, "1/4"),
+    #                       (0.0, 1.0, "0"),
+    #                      )
         sims = Tuple(i for i ∈ sim_inputs if isapprox(i["initial_density1"], ni, atol=2.0e-5))
 
         p_omega, p_gamma = plot_positive_frequency!(ax_omega, ax_gamma, ni, nn, Th, Te; label=label)
@@ -333,25 +337,48 @@ function plot_T_scan()
     fig_omega = Figure()
     ax_omega = Axis(fig_omega[1,1],
                     xlabel=L"(n_i + n_n)R_{in}/|k_\parallel|v_\mathrm{th}",
-                    ylabel=L"\omega/|k_\parallel|v_\mathrm{th}")
+                    ylabel=L"\omega/|k_\parallel|v_\mathrm{th}",
+                    limits=(-.2, 2.2, 0.0, 2.2))
 
     fig_gamma = Figure()
     ax_gamma = Axis(fig_gamma[1,1],
                     xlabel=L"(n_i + n_n)R_{in}/|k_\parallel|v_\mathrm{th}",
-                    ylabel=L"\gamma/|k_\parallel|v_\mathrm{th}")
+                    ylabel=L"\gamma/|k_\parallel|v_\mathrm{th}",
+                    limits=(-.2, 2.2, -2.5, 0.0))
 
-    for (Th, label) ∈ ((0.25, "1/4"),
-                       (0.5, "1/2"),
-                       (1.0, "1"),
-                       (2.0, "2"),
-                       (4.0, "4"),
-                      )
+    orig_stdout = stdout
+    redirect_stdout(open("/dev/null", "w"))
+    sim_inputs025 = get_scan_inputs("scan_sound-wave_T0.25.toml")
+    sim_inputs05 = get_scan_inputs("scan_sound-wave_T0.5.toml")
+    sim_inputs1 = get_scan_inputs("scan_sound-wave_T1.toml")
+    sim_inputs2 = get_scan_inputs("scan_sound-wave_T2.toml")
+    sim_inputs4 = get_scan_inputs("scan_sound-wave_T4.toml")
+    redirect_stdout(orig_stdout)
+
+    legend_data_list = []
+    legend_label_list = []
+    for (Th, label, sims) ∈ ((0.25, "1/4", sim_inputs025),
+                             (0.5, "1/2", sim_inputs05),
+                             (1.0, "1", sim_inputs1),
+                             (2.0, "2", sim_inputs2),
+                             (4.0, "4", sim_inputs4),
+                            )
+
         p_omega, p_gamma = plot_positive_frequency!(ax_omega, ax_gamma, ni, nn, Th, Te; label=label)
         plot_zero_frequency!(ax_gamma, ni, nn, Th, Te; color=p_gamma.color)
+        s_omega, s_gamma = plot_sim_output!(ax_omega, ax_gamma, sims, ni, nn, Th, Te; color=p_gamma.color)
+
+        push!(legend_data_list, [p_omega, s_omega])
+        push!(legend_label_list, label)
     end
 
-    Legend(fig_omega[1,2], ax_omega)
-    Legend(fig_gamma[1,2], ax_gamma)
+    #limits!(ax_omega, (-.2, 2.2, 0.0, 2.2))
+    #limits!(ax_gamma, (-.2, 2.2, -2.5, 0.0))
+
+    Legend(fig_omega[1,2], legend_data_list, legend_label_list)
+    Legend(fig_gamma[1,2], legend_data_list, legend_label_list)
+    #Legend(fig_omega[1,2], ax_omega)
+    #Legend(fig_gamma[1,2], ax_gamma)
 
     save("T_scan_omega.pdf", fig_omega)
     save("T_scan_gamma.pdf", fig_gamma)
