@@ -1,0 +1,218 @@
+using Distributed
+
+@everywhere using moment_kinetics.makie_post_processing
+
+@everywhere const soundwave_postproc_input = Dict{String,Any}(
+    "plot_vs_r" => false,
+    "plot_vs_z" => false,
+    "plot_vs_r_t" => false,
+    "plot_vs_z_t" => false,
+    "plot_vs_z_r" => false,
+    "sound_wave_fit" => Dict{String,Any}("calculate_frequency"=>true, "plot"=>true),
+    "itime_min" => 50,
+   )
+
+# get the run_names from the command-line
+function post_process_parameter_scan(scan_dir)
+    run_directories = Tuple(d for d ∈ readdir(scan_dir, join=true) if isdir(d))
+    @sync @distributed for d ∈ run_directories
+        println("post-processing ", d)
+        try
+            this_input = copy(soundwave_postproc_input)
+            if occursin("T0.25", d) || occursin("ini_0.25", d)
+                this_input["itime_min"] = 20
+            elseif occursin("T0.5", d) || occursin("ini_0.5", d)
+                this_input["itime_min"] = 20
+                this_input["itime_max"] = 76
+            elseif occursin("T2", d) || occursin("ini_2.0", d)
+                this_input["itime_min"] = 5
+                this_input["itime_max"] = 81
+                if occursin("cha_0.0", d)
+                    this_input["itime_min"] = 30
+                    this_input["itime_max"] = 70
+                elseif occursin("cha_0.3", d)
+                    this_input["itime_min"] = 30
+                    this_input["itime_max"] = 70
+                elseif occursin("cha_0.6", d)
+                    this_input["itime_min"] = 30
+                    this_input["itime_max"] = 70
+                elseif occursin("cha_0.9", d)
+                    this_input["itime_min"] = 30
+                    this_input["itime_max"] = 70
+                elseif occursin("cha_1.2", d)
+                    this_input["itime_min"] = 40
+                    this_input["itime_max"] = 70
+                elseif occursin("cha_1.5", d)
+                    # Can't really get a good fit here. The decay rates of the two modes
+                    # are too close, so just get beating for the whole length of the
+                    # simulation.
+                elseif occursin("cha_1.8", d)
+                    # Can't really get a good fit here. The decay rates of the two modes
+                    # are too close, so just get beating for the whole length of the
+                    # simulation.
+                elseif occursin("cha_2.1", d)
+                    # Can't really get a good fit here. The decay rates of the two modes
+                    # are too close, so just get beating for the whole length of the
+                    # simulation.
+                elseif occursin("cha_2.4", d)
+                    # Can't really get a good fit here. The decay rates of the two modes
+                    # are too close, so just get beating for the whole length of the
+                    # simulation.
+                elseif occursin("cha_2.7", d)
+                    # Can't really get a good fit here. The decay rates of the two modes
+                    # are too close, so just get beating for the whole length of the
+                    # simulation.
+                elseif occursin("cha_3.0", d)
+                    this_input["itime_min"] = 60
+                elseif occursin("cha_3.3", d)
+                    this_input["itime_min"] = 40
+                elseif occursin("cha_3.6", d)
+                    this_input["itime_min"] = 40
+                elseif occursin("cha_3.9", d)
+                    this_input["itime_min"] = 40
+                elseif occursin("cha_4.2", d)
+                    this_input["itime_min"] = 40
+                elseif occursin("cha_4.5", d)
+                    this_input["itime_min"] = 40
+                elseif occursin("cha_4.5", d)
+                    this_input["itime_min"] = 40
+                elseif occursin("cha_4.5", d)
+                    this_input["itime_min"] = 40
+                elseif occursin("cha_4.8", d)
+                    this_input["itime_min"] = 40
+                elseif occursin("cha_5.1", d)
+                    this_input["itime_min"] = 40
+                elseif occursin("cha_5.4", d)
+                    this_input["itime_min"] = 40
+                elseif occursin("cha_5.7", d)
+                    this_input["itime_min"] = 40
+                elseif occursin("cha_5.7", d)
+                    this_input["itime_min"] = 40
+                elseif occursin("cha_5.7", d)
+                    this_input["itime_min"] = 40
+                elseif occursin("cha_6.0", d)
+                    this_input["itime_min"] = 40
+                elseif occursin("cha_6.3", d)
+                    this_input["itime_min"] = 40
+                elseif occursin("cha_6.6", d)
+                    this_input["itime_min"] = 40
+                elseif occursin("cha_6.9", d)
+                    this_input["itime_min"] = 40
+                elseif occursin("cha_7.2", d)
+                    this_input["itime_min"] = 40
+                elseif occursin("cha_7.5", d)
+                    this_input["itime_min"] = 40
+                elseif occursin("cha_7.8", d)
+                    this_input["itime_min"] = 40
+                elseif occursin("cha_8.1", d)
+                    this_input["itime_min"] = 40
+                elseif occursin("cha_8.4", d)
+                    this_input["itime_min"] = 40
+                elseif occursin("cha_8.7", d)
+                    this_input["itime_min"] = 40
+                end
+            elseif occursin("T4", d) || occursin("ini_4.0", d)
+                this_input["itime_min"] = 10
+                this_input["itime_max"] = 65
+                if occursin("cha_2.4", d)
+                    this_input["itime_min"] = 40
+                    this_input["itime_max"] = 65
+                elseif occursin("cha_2.8", d)
+                    this_input["itime_min"] = 40
+                    this_input["itime_max"] = 65
+                elseif occursin("cha_3.2", d)
+                    this_input["itime_min"] = 40
+                    this_input["itime_max"] = 65
+                elseif occursin("cha_3.6", d)
+                    this_input["itime_min"] = 40
+                    this_input["itime_max"] = 70
+                elseif occursin("cha_4.0", d)
+                    this_input["itime_min"] = 40
+                    this_input["itime_max"] = 70
+                elseif occursin("cha_4.4", d)
+                    this_input["itime_min"] = 40
+                    this_input["itime_max"] = 80
+                elseif occursin("cha_4.8", d)
+                    this_input["itime_min"] = 40
+                    this_input["itime_max"] = 80
+                elseif occursin("cha_5.2", d)
+                    this_input["itime_min"] = 40
+                    this_input["itime_max"] = 80
+                elseif occursin("cha_5.6", d)
+                    this_input["itime_min"] = 40
+                    this_input["itime_max"] = 85
+                elseif occursin("cha_6.0", d)
+                    this_input["itime_min"] = 40
+                    this_input["itime_max"] = 85
+                elseif occursin("cha_6.4", d)
+                    this_input["itime_min"] = 40
+                    this_input["itime_max"] = 90
+                elseif occursin("cha_6.8", d)
+                    this_input["itime_min"] = 40
+                    this_input["itime_max"] = 90
+                elseif occursin("cha_7.2", d)
+                    this_input["itime_min"] = 40
+                    this_input["itime_max"] = 90
+                elseif occursin("cha_7.6", d)
+                    this_input["itime_min"] = 40
+                    this_input["itime_max"] = 90
+                elseif occursin("cha_8.0", d)
+                    this_input["itime_min"] = 40
+                    this_input["itime_max"] = 90
+                elseif occursin("cha_8.4", d)
+                    this_input["itime_min"] = 40
+                    this_input["itime_max"] = 90
+                elseif occursin("cha_8.8", d)
+                    this_input["itime_min"] = 40
+                    this_input["itime_max"] = 90
+                elseif occursin("cha_9.2", d)
+                    this_input["itime_min"] = 40
+                    this_input["itime_max"] = 90
+                elseif occursin("cha_9.6", d)
+                    this_input["itime_min"] = 40
+                    this_input["itime_max"] = 90
+                elseif occursin("cha_10.0", d)
+                    this_input["itime_min"] = 40
+                    this_input["itime_max"] = 90
+                elseif occursin("cha_10.4", d)
+                    this_input["itime_min"] = 40
+                    this_input["itime_max"] = 90
+                elseif occursin("cha_10.8", d)
+                    this_input["itime_min"] = 40
+                    this_input["itime_max"] = 90
+                elseif occursin("cha_11.2", d)
+                    this_input["itime_min"] = 40
+                    this_input["itime_max"] = 90
+                elseif occursin("cha_11.6", d)
+                    this_input["itime_min"] = 40
+                    this_input["itime_max"] = 90
+                elseif occursin("cha_12.0", d)
+                    this_input["itime_min"] = 40
+                    this_input["itime_max"] = 90
+                elseif occursin("cha_12.4", d)
+                    this_input["itime_min"] = 40
+                    this_input["itime_max"] = 90
+                end
+            end
+            makie_post_process(d, this_input)
+        catch e
+            println(d, " failed with ", e)
+        end
+    end
+end
+
+function post_process_all_scans()
+    post_process_parameter_scan("../../runs/scan_sound-wave_nratio/")
+    post_process_parameter_scan("../../runs/scan_sound-wave_T0.25/")
+    post_process_parameter_scan("../../runs/scan_sound-wave_T0.5/")
+    post_process_parameter_scan("../../runs/scan_sound-wave_T1/")
+    post_process_parameter_scan("../../runs/scan_sound-wave_T2/")
+    post_process_parameter_scan("../../runs/scan_sound-wave_T4/")
+
+    #post_process_parameter_scan("../../runs/scan_sound-wave_lowres/")
+    #post_process_parameter_scan("../../runs/scan_sound-wave_T/")
+end
+
+if abspath(PROGRAM_FILE) == @__FILE__
+    post_process_all_scans()
+end
