@@ -5435,10 +5435,10 @@ function sound_wave_plots(run_info; outfile=nothing, ax=nothing, phi=nothing)
             fit_label = "fit"
         end
 
-        @views lines!(ax, time, abs.(delta_phi[input.iz0,:]), label=delta_phi_label)
+        @views lines!(ax, time, positive_or_nan.(abs.(delta_phi[input.iz0,:]), epsilon=1.e-20), label=delta_phi_label)
 
         if input.calculate_frequency
-            @views lines!(ax, time, abs.(fitted_delta_phi), label=fit_label)
+            @views lines!(ax, time, positive_or_nan.(abs.(fitted_delta_phi), epsilon=1.e-20), label=fit_label)
         end
 
         if outfile !== nothing
