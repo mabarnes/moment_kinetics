@@ -69,7 +69,9 @@ function get_scan_inputs(scan_inputs::AbstractDict)
         for (k,v) ∈ scan_inputs
             if v isa Vector
                 result[i][k] = v[i]
-                run_name *= "_$(k)_$(v[i])"
+                # Truncate `key` - seems that if file names are too long, HDF5 has a
+                # buffer overflow
+                run_name *= "_$(k[1:min(3, length(k))])_$(v[i])"
             else
                 result[i][k] = v
             end
@@ -100,7 +102,10 @@ function get_scan_inputs(scan_inputs::AbstractDict)
                 count = count + 1
                 new_dict = copy(partial_dict)
                 new_dict[key] = vals[j]
-                new_dict["run_name"] = new_dict["run_name"] * "_$(key)_$(vals[j])"
+                # Truncate `key` - seems that if file names are too long, HDF5 has a
+                # buffer overflow
+                new_dict["run_name"] = new_dict["run_name"] *
+                                       "_$(key[1:min(3, length(key))])_$(vals[j])"
                 new_scan_inputs[count] = new_dict
             end
         end
