@@ -159,9 +159,7 @@ function get_sequence_vs_Ri(ni, nn, Th, Te; starting_omega, kwargs...)
                                                   kwargs...)[1]
     end
     vth = sqrt(Th)
-    #Ri_result = collect(0.0:0.001:2.0*π*vth)
-    # temporarily make this coarser to speed things up
-    Ri_result = collect(0.0:0.1:2.0*π*vth); println("WARNING! Using coarse grid of Ri to speed up prototyping")
+    Ri_result = collect(0.0:0.001:2.0*π*vth)
     omega_result = similar(Ri_result, ComplexF64)
     omega_result .= NaN
     startind = findfirst(x->abs(x-Ri)<1.e-8, Ri_result)
