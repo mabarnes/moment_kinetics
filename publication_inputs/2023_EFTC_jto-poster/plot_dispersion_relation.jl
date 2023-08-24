@@ -1,6 +1,7 @@
 #using moment_kinetics.makie_post_processing
 
 using CairoMakie
+using DelimitedFiles
 using LaTeXStrings
 using Optim
 using SpecialFunctions
@@ -115,6 +116,23 @@ positive-frequency).
 Extra `kwargs...` are passed to `solve_dispersion_relation`
 """
 function get_sequence_vs_Ri(ni, nn, Th, Te; starting_omega, kwargs...)
+    # Get cached results if they exist
+    cachedir = "omega_caches"
+    mkpath(cachedir)
+    is_zero = (abs(real(starting_omega)) < 1.e-10)
+    if is_zero
+        cachefile = joinpath(cachedir, "omega_zero_ni$(ni)_nn$(nn)_Th$(Th)_Te$(Te).cache")
+    else
+        cachefile = joinpath(cachedir, "omega_positive_ni$(ni)_nn$(nn)_Th$(Th)_Te$(Te).cache")
+    end
+    if isfile(cachefile)
+        results = readdlm(cachefile)
+        Ri_result = results[:,1]
+        omega_real = results[:,2]
+        gamma = results[:,3]
+        return Ri_result, omega_real, gamma
+    end
+
     # Get a starting point with Ri=1
     function get_param_sequence(value, default)
         return collect(range(default, stop=value, length=100))
@@ -179,7 +197,13 @@ function get_sequence_vs_Ri(ni, nn, Th, Te; starting_omega, kwargs...)
         omega_result[i] = omega
     end
 
-    return Ri_result, real.(omega_result), imag.(omega_result)
+    # Cache the results
+    omega_real = real.(omega_result)
+    gamma = imag.(omega_result)
+    open(cachefile, "w") do io
+        writedlm(io, [Ri_result omega_real gamma])
+    end
+    return Ri_result, omega_real, gamma
 end
 
 function plot_zero_frequency!(ax, ni, nn, Th, Te; kwargs...)
