@@ -224,7 +224,8 @@ function plot_zero_frequency!(ax, ni, nn, Th, Te; kwargs...)
     deleteat!(gamma, wrong_root_indices)
 
     vth = sqrt(Th)
-    return lines!(ax, (ni+nn).*Ri./(kpar*vth), gamma./(kpar.*vth), linestyle=:dash; kwargs...)
+    return lines!(ax, (ni+nn).*Ri./(kpar*vth), gamma./(kpar*vth), linestyle=:dash; kwargs...),
+           Ri, gamma
 end
 
 function plot_positive_frequency!(ax_omega, ax_gamma, ni, nn, Th, Te; kwargs...)
@@ -243,7 +244,41 @@ function plot_positive_frequency!(ax_omega, ax_gamma, ni, nn, Th, Te; kwargs...)
 
     vth = sqrt(Th)
     return lines!(ax_omega, (ni+nn).*Ri./(kpar*vth), omega./(kpar*vth); kwargs...),
-           lines!(ax_gamma, (ni+nn).*Ri_gamma./(kpar*vth), gamma./(kpar*vth); kwargs...)
+           lines!(ax_gamma, (ni+nn).*Ri_gamma./(kpar*vth), gamma./(kpar*vth); kwargs...),
+           Ri_gamma, gamma
+end
+
+function find_crossing_xvalue(x1, y1, x2, y2)
+    @boundscheck length(x1) == length(y1) || throw(DimensionMismatch("x1 and y1 have different lengths"))
+    @boundscheck length(x2) == length(y2) || throw(DimensionMismatch("x2 and y2 have different lengths"))
+    for i1 ∈ 1:length(x1)-1
+        i2 = findfirst(x->(x >= x1[i1]), x2)
+        if i2 === nothing || i2 == length(x2)
+            # No entries left in x2/y2
+            break
+        end
+        if (y2[i2] - y1[i1]) * (y2[i2+1] - y1[i1+1]) <= 0.0
+            # Found a crossing. Return its x-value
+            xl1 = x1[i1]
+            yl1 = y1[i1]
+            xu1 = x1[i1+1]
+            yu1 = y1[i1+1]
+            xl2 = x2[i2]
+            yl2 = y2[i2]
+            xu2 = x2[i2+1]
+            yu2 = y2[i2+1]
+            # Line 1 goes between (xl1,yl1) and (xu1, yu1) => y = yl1 + (yu1-yl1)*(x-xl1)/(xu1-xl1)
+            # Line 2 goes between (xl2,yl2) and (xu2, yu2) => y = yl2 + (yu2-yl2)*(x-xl2)/(xu2-xl2)
+            # Intersection when:
+            # yl1 + (yu1-yl1)*(x-xl1)/(xu1-xl1) = yl2 + (yu2-yl2)*(x-xl2)/(xu2-xl2)
+            # (yl1-yl2)*(xu1-xl1)*(xu2-xl2) + (yu1-yl1)*(x-xl1)*(xu2-xl2) = (yu2-yl2)*(x-xl2)*(xu1-xl1)
+            # (yl1-yl2)*(xu1-xl1)*(xu2-xl2) + (yu2-yl2)*xl2*(xu1-xl1) - (yu1-yl1)*xl1*(xu2-xl2) = (yu2-yl2)*x*(xu1-xl1) - (yu1-yl1)*x*(xu2-xl2)
+            # (yl1-yl2)*(xu1-xl1)*(xu2-xl2) + (yu2-yl2)*xl2*(xu1-xl1) - (yu1-yl1)*xl1*(xu2-xl2) = (yu2-yl2)*x*(xu1-xl1) - (yu1-yl1)*x*(xu2-xl2)
+            # x = [(yl1-yl2)*(xu1-xl1)*(xu2-xl2) + (yu2-yl2)*xl2*(xu1-xl1) - (yu1-yl1)*xl1*(xu2-xl2)] / [(yu2-yl2)*(xu1-xl1) - (yu1-yl1)*(xu2-xl2)]
+            return ((yl1-yl2)*(xu1-xl1)*(xu2-xl2) + (yu2-yl2)*xl2*(xu1-xl1) - (yu1-yl1)*xl1*(xu2-xl2)) / ((yu2-yl2)*(xu1-xl1) - (yu1-yl1)*(xu2-xl2))
+        end
+    end
+    return nothing
 end
 
 function get_sim_omega_gamma(sim)
@@ -331,9 +366,17 @@ function plot_n_scan()
     #                      )
         sims = Tuple(i for i ∈ sim_inputs if isapprox(i["initial_density1"], ni, atol=2.0e-5))
 
-        p_omega, p_gamma = plot_positive_frequency!(ax_omega, ax_gamma, ni, nn, Th, Te; label=label)
-        plot_zero_frequency!(ax_gamma, ni, nn, Th, Te; color=p_gamma.color)
+        p_omega, p_gamma, Ri_positive, gamma_positive =
+            plot_positive_frequency!(ax_omega, ax_gamma, ni, nn, Th, Te; label=label)
+        p_gamma_z, Ri_zero, gamma_zero = plot_zero_frequency!(ax_gamma, ni, nn, Th, Te; color=p_gamma.color)
         s_omega, s_gamma = plot_sim_output!(ax_omega, ax_gamma, sims, ni, nn, Th, Te; color=p_gamma.color)
+
+        vth = sqrt(Th)
+        crossing_x = find_crossing_xvalue(Ri_positive, gamma_positive, Ri_zero, gamma_zero)
+        if crossing_x !== nothing
+            vlines!(ax_omega, (ni + nn) * crossing_x / (kpar*vth), linestyle=:dot, color=p_gamma.color)
+            #vlines!(ax_gamma, (ni + nn) * crossing_x / (kpar*vth), linestyle=:dot, color=p_gamma.color)
+        end
 
         push!(legend_data_list, [p_omega, s_omega])
         push!(legend_label_list, label)
@@ -386,9 +429,17 @@ function plot_T_scan()
                              (4.0, "4", sim_inputs4),
                             )
 
-        p_omega, p_gamma = plot_positive_frequency!(ax_omega, ax_gamma, ni, nn, Th, Te; label=label)
-        plot_zero_frequency!(ax_gamma, ni, nn, Th, Te; color=p_gamma.color)
+        p_omega, p_gamma, Ri_positive, gamma_positive =
+            plot_positive_frequency!(ax_omega, ax_gamma, ni, nn, Th, Te; label=label)
+        p_gamma_z, Ri_zero, gamma_zero = plot_zero_frequency!(ax_gamma, ni, nn, Th, Te; color=p_gamma.color)
         s_omega, s_gamma = plot_sim_output!(ax_omega, ax_gamma, sims, ni, nn, Th, Te; color=p_gamma.color)
+
+        vth = sqrt(Th)
+        crossing_x = find_crossing_xvalue(Ri_positive, gamma_positive, Ri_zero, gamma_zero)
+        if crossing_x !== nothing
+            vlines!(ax_omega, (ni + nn) * crossing_x / (kpar * vth), linestyle=:dot, color=p_gamma.color)
+            #vlines!(ax_gamma, (ni + nn) * crossing_x / (kpar * vth), linestyle=:dot, color=p_gamma.color)
+        end
 
         push!(legend_data_list, [p_omega, s_omega])
         push!(legend_label_list, label)
