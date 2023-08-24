@@ -210,8 +210,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
         #ivpa_field = floor(mk_int,nvpa/2)
         #ivperp_field = floor(mk_int,1)
         ivpa_field = floor(mk_int,nvpa/2) + 5# + 4
-        ivperp_field = 8
-        println("Investigating vpa = ",vpa.grid[ivpa_field], " vperp = ",vperp.grid[ivperp_field], " ivpa = ",ivpa_field, " ivperp = ",ivperp_field)
+        ivperp_field = 9
+        println("Investigating vpa = ",vpa.grid[ivpa_field], " vperp = ",vperp.grid[ivperp_field])
         
         # Set up MPI
         if standalone
@@ -575,45 +575,6 @@ if abspath(PROGRAM_FILE) == @__FILE__
             return nquad_coord
         end
         
-        function get_scaled_x_w_off_divergence!(x_scaled, w_scaled, x_legendre, w_legendre, node_min, node_max, coord_val)
-            zero = 1.0e-10
-            @. x_scaled = 0.0
-            @. w_scaled = 0.0
-            nquad_legendre = size(x_legendre,1)
-            # assume x_scaled, w_scaled are arrays of length 2*nquad
-            # use only nquad points for most elements, but use 2*nquad for
-            # elements with interior divergences
-            println("coord: ",coord_val," node_max: ",node_max," node_min: ",node_min) 
-            if abs(coord_val - node_max) < zero || abs(coord_val - node_min) < zero # divergence at lower endpoint or divergence at upper endpoint 
-                shift = 0.5*(node_min + node_max)
-                scale = 0.5*(node_max - node_min)
-                @. x_scaled[1:nquad_legendre] = scale*x_legendre + shift
-                @. w_scaled[1:nquad_legendre] = scale*w_legendre
-                nquad_coord = nquad_legendre
-                println("off upper or lower divergence")
-            else #if (coord_val - node_min)*(coord_val - node_max) < - zero # interior divergence
-                
-                # fill in lower Gauss-Legendre points
-                shift = 0.5*(coord_val + node_min)
-                scale = 0.5*(coord_val - node_min)
-                @. x_scaled[1:nquad_legendre] = scale*x_legendre + shift
-                @. w_scaled[1:nquad_legendre] = scale*w_legendre
-                nquad_coord = 2*nquad_legendre
-                    
-                # fill in upper Gauss-Legendre points
-                shift = 0.5*(coord_val + node_max)
-                scale = 0.5*(node_max - coord_val)
-                @. x_scaled[1+nquad_legendre:nquad_coord] = scale*x_legendre + shift
-                @. w_scaled[1+nquad_legendre:nquad_coord] = scale*w_legendre
-                
-                println("off intermediate divergence")
-            end
-            println("x_scaled",x_scaled)
-            println("w_scaled",w_scaled)
-            println("nquad_coord ",nquad_coord)
-            return nquad_coord
-        end
-        
         function get_scaled_x_w_no_divergences!(x_scaled, w_scaled, x_legendre, w_legendre, node_min, node_max)
             zero = 1.0e-6 
             @. x_scaled = 0.0
@@ -665,102 +626,12 @@ if abspath(PROGRAM_FILE) == @__FILE__
                             w_kvperp = w_vperp[kvperp]
                             w_kvpa = w_vpa[kvpa]
                             denom = (vpa_val - x_kvpa)^2 + (vperp_val + x_kvperp)^2 
-                            mm_arg = min(4.0*vperp_val*x_kvperp/denom,1.0 - 1.0e-15)
+                            mm = min(4.0*vperp_val*x_kvperp/denom,1.0 - 1.0e-15)
                             #mm = 4.0*vperp_val*x_kvperp/denom/(1.0 + 10^-15)
-                            mm = 4.0*vperp_val*x_kvperp/denom
+                            #mm = 4.0*vperp_val*x_kvperp/denom
                             prefac = sqrt(denom)
-                            ellipe_mm = ellipe(mm_arg) 
-                            ellipk_mm = ellipk(mm_arg) 
-                            #if mm_test > 1.0
-                            #    println("mm: ",mm_test," ellipe: ",ellipe_mm," ellipk: ",ellipk_mm)
-                            #end
-                            G_elliptic_integral_factor = 2.0*ellipe_mm*prefac/pi
-                            G1_elliptic_integral_factor = -(2.0*prefac/pi)*( (2.0 - mm)*ellipe_mm - 2.0*(1.0 - mm)*ellipk_mm )/(3.0*mm)
-                            G2_elliptic_integral_factor = (2.0*prefac/pi)*( (7.0*mm^2 + 8.0*mm - 8.0)*ellipe_mm + 4.0*(2.0 - mm)*(1.0 - mm)*ellipk_mm )/(15.0*mm^2)
-                            G3_elliptic_integral_factor = (2.0*prefac/pi)*( 8.0*(mm^2 - mm + 1.0)*ellipe_mm - 4.0*(2.0 - mm)*(1.0 - mm)*ellipk_mm )/(15.0*mm^2)
-                            H_elliptic_integral_factor = 2.0*ellipk_mm/(pi*prefac)
-                            H1_elliptic_integral_factor = -(2.0/(pi*prefac))*( (mm-2.0)*(ellipk_mm/mm) + (2.0*ellipe_mm/mm) )
-                            H2_elliptic_integral_factor = (2.0/(pi*prefac))*( (3.0*mm^2 - 8.0*mm + 8.0)*(ellipk_mm/(3.0*mm^2)) + (4.0*mm - 8.0)*ellipe_mm/(3.0*mm^2) )
-                            lagrange_poly_vpa = lagrange_poly(igrid_vpa,vpa_nodes,x_kvpa)
-                            lagrange_poly_vperp = lagrange_poly(igrid_vperp,vperp_nodes,x_kvperp)
-                            
-                            (G_weights[1,1,ivpap,ivperpp] += 
-                                lagrange_poly_vpa*lagrange_poly_vperp*
-                                G_elliptic_integral_factor*x_kvperp*w_kvperp*w_kvpa*2.0/sqrt(pi))
-                            
-                            (G1_weights[1,1,ivpap,ivperpp] += 
-                                lagrange_poly_vpa*lagrange_poly_vperp*
-                                G1_elliptic_integral_factor*x_kvperp*w_kvperp*w_kvpa*2.0/sqrt(pi))
-                            
-                            (G2_weights[1,1,ivpap,ivperpp] += 
-                                lagrange_poly_vpa*lagrange_poly_vperp*
-                                G2_elliptic_integral_factor*x_kvperp*w_kvperp*w_kvpa*2.0/sqrt(pi))
-                            
-                            (G3_weights[1,1,ivpap,ivperpp] += 
-                                lagrange_poly_vpa*lagrange_poly_vperp*
-                                G3_elliptic_integral_factor*w_kvperp*w_kvpa*2.0/sqrt(pi))
-                            
-                            (H_weights[1,1,ivpap,ivperpp] += 
-                                lagrange_poly_vpa*lagrange_poly_vperp*
-                                H_elliptic_integral_factor*x_kvperp*w_kvperp*w_kvpa*2.0/sqrt(pi))
-                                
-                            (H1_weights[1,1,ivpap,ivperpp] += 
-                                lagrange_poly_vpa*lagrange_poly_vperp*
-                                H1_elliptic_integral_factor*x_kvperp*w_kvperp*w_kvpa*2.0/sqrt(pi))
-                                
-                            (H2_weights[1,1,ivpap,ivperpp] += 
-                                lagrange_poly_vpa*lagrange_poly_vperp*
-                                (H1_elliptic_integral_factor*vperp_val - H2_elliptic_integral_factor*x_kvperp)*
-                                x_kvperp*w_kvperp*w_kvpa*2.0/sqrt(pi))
-                            (H3_weights[1,1,ivpap,ivperpp] += 
-                                lagrange_poly_vpa*lagrange_poly_vperp*
-                                H_elliptic_integral_factor*(vpa_val - x_kvpa)*
-                                x_kvperp*w_kvperp*w_kvpa*2.0/sqrt(pi))
-                            
-                            (n_weights[1,1,ivpap,ivperpp] += 
-                                lagrange_poly_vpa*lagrange_poly_vperp*
-                                x_kvperp*w_kvperp*w_kvpa*2.0/sqrt(pi))
-                        end
-                    end
-                end
-            end
-            return nothing
-        end
-        
-        function local_element_integration!(G_weights,G1_weights,G2_weights,G3_weights,
-                                    H_weights,H1_weights,H2_weights,H3_weights,n_weights,
-                                    ielement_vpa,vpa_nodes,vpa, # info about primed vperp grids
-                                    ielement_vperp,vperp_nodes,vperp, # info about primed vperp grids
-                                    xx_vpa, wx_vpa, nquad_vpa_x, xx_vperp, wx_vperp, nquad_vperp_x, # points and weights for primed (source) grids
-                                    yy_vpa, wy_vpa, nquad_vpa_y, y_vperp, wy_vperp, nquad_vperp_y, # points and weights for primed (source) grids
-                                    vpa_val, vperp_val, ivpa, ivperp) # values and indices for unprimed (field) grids
-            for igrid_vperp in 1:vperp.ngrid
-                for igrid_vpa in 1:vpa.ngrid
-                    # get grid index for point on full grid  
-                    ivpap = vpa.igrid_full[igrid_vpa,ielement_vpa]   
-                    ivperpp = vperp.igrid_full[igrid_vperp,ielement_vperp]   
-                    if ivpa == ivpap && ivperp == ivperpp
-                        println("divergence grid")
-                        x_vpa, w_vpa, nquad_vpa = xx_vpa, wx_vpa, nquad_vpa_x
-                        x_vperp, w_vperp, nquad_vperp = xx_vperp, wx_vperp, nquad_vperp_x
-                    else
-                        x_vpa, w_vpa, nquad_vpa = yy_vpa, wy_vpa, nquad_vpa_y
-                        x_vperp, w_vperp, nquad_vperp = yy_vperp, wy_vperp, nquad_vperp_y
-                    end
-                    # carry out integration over Lagrange polynomial at this node, on this element
-                    for kvperp in 1:nquad_vperp
-                        for kvpa in 1:nquad_vpa 
-                            x_kvpa = x_vpa[kvpa]
-                            x_kvperp = x_vperp[kvperp]
-                            w_kvperp = w_vperp[kvperp]
-                            w_kvpa = w_vpa[kvpa]
-                            denom = (vpa_val - x_kvpa)^2 + (vperp_val + x_kvperp)^2 
-                            mm_arg = min(4.0*vperp_val*x_kvperp/denom,1.0 - 1.0e-15)
-                            #mm = 4.0*vperp_val*x_kvperp/denom/(1.0 + 10^-15)
-                            mm = 4.0*vperp_val*x_kvperp/denom
-                            prefac = sqrt(denom)
-                            ellipe_mm = ellipe(mm_arg) 
-                            ellipk_mm = ellipk(mm_arg) 
+                            ellipe_mm = ellipe(mm) 
+                            ellipk_mm = ellipk(mm) 
                             #if mm_test > 1.0
                             #    println("mm: ",mm_test," ellipe: ",ellipe_mm," ellipk: ",ellipk_mm)
                             #end
@@ -823,7 +694,6 @@ if abspath(PROGRAM_FILE) == @__FILE__
                                     vperp,ielement_vperpp,
                                     #nquad_vperp,ielement_vperpp,vperp_nodes,vperp, # info about primed vperp grids
                                     x_vpa, w_vpa, x_vperp, w_vperp, # arrays to store points and weights for primed (source) grids
-                                    yy_vpa, wy_vpa, yy_vperp, wy_vperp, # arrays to store points and weights for primed (source) grids
                                     igrid_vpa, igrid_vperp, vpa_val, vperp_val, ivpa, ivperp)
             
             vperp_nodes = get_nodes(vperp,ielement_vperpp)
@@ -842,21 +712,18 @@ if abspath(PROGRAM_FILE) == @__FILE__
                             x_vpa, w_vpa, x_vperp, w_vperp, 
                             vpa_val, vperp_val, ivpa, ivperp)
             end
-            nquad_vperp_x = get_scaled_x_w!(x_vperp, w_vperp, x_legendre, w_legendre, x_laguerre, w_laguerre, vperp_min, vperp_max, vperp_nodes, igrid_vperp, vperp_val)
-            nquad_vperp_y = get_scaled_x_w_off_divergence!(yy_vperp, wy_vperp, x_legendre, w_legendre, vperp_min, vperp_max, vperp_val)
+            nquad_vperp = get_scaled_x_w!(x_vperp, w_vperp, x_legendre, w_legendre, x_laguerre, w_laguerre, vperp_min, vperp_max, vperp_nodes, igrid_vperp, vperp_val)
             for ielement_vpap in ielement_vpa_low:ielement_vpa_hi
                 # use general grid function that checks divergences
                 vpa_nodes = get_nodes(vpa,ielement_vpap)
                 vpa_min, vpa_max = vpa_nodes[1], vpa_nodes[end]
                 #nquad_vpa = get_scaled_x_w_no_divergences!(x_vpa, w_vpa, x_legendre, w_legendre, vpa_min, vpa_max)
-                nquad_vpa_x = get_scaled_x_w!(x_vpa, w_vpa, x_legendre, w_legendre, x_laguerre, w_laguerre, vpa_min, vpa_max, vpa_nodes, igrid_vpa, vpa_val)
-                nquad_vpa_y = get_scaled_x_w_off_divergence!(yy_vpa, wy_vpa, x_legendre, w_legendre, vpa_min, vpa_max, vpa_val)
+                nquad_vpa = get_scaled_x_w!(x_vpa, w_vpa, x_legendre, w_legendre, x_laguerre, w_laguerre, vpa_min, vpa_max, vpa_nodes, igrid_vpa, vpa_val)
                 local_element_integration!(G_weights,G1_weights,G2_weights,G3_weights,
                             H_weights,H1_weights,H2_weights,H3_weights,n_weights,
-                            ielement_vpap,vpa_nodes,vpa,
-                            ielement_vperpp,vperp_nodes,vperp,
-                            x_vpa, w_vpa, nquad_vpa_x, x_vperp, w_vperp, nquad_vperp_x,
-                            yy_vpa, wy_vpa, nquad_vpa_y, yy_vperp, wy_vperp, nquad_vperp_y,
+                            nquad_vpa,ielement_vpap,vpa_nodes,vpa,
+                            nquad_vperp,ielement_vperpp,vperp_nodes,vperp,
+                            x_vpa, w_vpa, x_vperp, w_vperp, 
                             vpa_val, vperp_val, ivpa, ivperp)
             end
             nquad_vperp = get_scaled_x_w_no_divergences!(x_vperp, w_vperp, x_legendre, w_legendre, vperp_min, vperp_max)
@@ -903,7 +770,6 @@ if abspath(PROGRAM_FILE) == @__FILE__
                         vpa,ielement_vpa_low,ielement_vpa_hi, # info about primed vpa grids
                         vperp,ielement_vperp_low,ielement_vperp_hi, # info about primed vperp grids
                         x_vpa, w_vpa, x_vperp, w_vperp, # arrays to store points and weights for primed (source) grids
-                        yy_vpa, wy_vpa, yy_vperp, wy_vperp, # arrays to store points and weights for primed (source) grids
                         igrid_vpa, igrid_vperp, vpa_val, vperp_val, ivpa, ivperp)
             for ielement_vperpp in 1:ielement_vperp_low-1
                 
@@ -931,7 +797,6 @@ if abspath(PROGRAM_FILE) == @__FILE__
                         vperp,ielement_vperpp,
                         #nquad_vperp,ielement_vperpp,vperp_nodes,vperp, # info about primed vperp grids
                         x_vpa, w_vpa, x_vperp, w_vperp, # arrays to store points and weights for primed (source) grids
-                        yy_vpa, wy_vpa, yy_vperp, wy_vperp, # arrays to store points and weights for primed (source) grids
                         igrid_vpa, igrid_vperp, vpa_val, vperp_val, ivpa, ivperp)
             end
             for ielement_vperpp in ielement_vperp_hi+1:vperp.nelement_local
@@ -985,8 +850,6 @@ if abspath(PROGRAM_FILE) == @__FILE__
         #x_hlaguerre, w_hlaguerre = gausslaguerre(halfnquad)
         x_vpa, w_vpa = Array{mk_float,1}(undef,4*nquad), Array{mk_float,1}(undef,4*nquad)
         x_vperp, w_vperp = Array{mk_float,1}(undef,4*nquad), Array{mk_float,1}(undef,4*nquad)
-        yy_vpa, wy_vpa = Array{mk_float,1}(undef,4*nquad), Array{mk_float,1}(undef,4*nquad)
-        yy_vperp, wy_vperp = Array{mk_float,1}(undef,4*nquad), Array{mk_float,1}(undef,4*nquad)
         
         
         @serial_region begin
@@ -1028,7 +891,6 @@ if abspath(PROGRAM_FILE) == @__FILE__
                     vpa,ielement_vpa_low,ielement_vpa_hi, # info about primed vpa grids
                     vperp,ielement_vperp_low,ielement_vperp_hi, # info about primed vperp grids
                     x_vpa, w_vpa, x_vperp, w_vperp, # arrays to store points and weights for primed (source) grids
-                    yy_vpa, wy_vpa, yy_vperp, wy_vperp, # arrays to store points and weights for primed (source) grids
                     igrid_vpa, igrid_vperp, vpa_val, vperp_val, ivpa, ivperp)
         #end
         
@@ -1275,7 +1137,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     end
     if test_Lagrange_integral_scan
         initialize_comms!()
-        ngrid = 9
+        ngrid = 5
         nscan = 1
         plot_scan = false
         #nelement_list = Int[2, 4, 8, 16, 32, 64, 128]
@@ -1283,7 +1145,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         #nelement_list = Int[2, 4, 8, 16]
         #nelement_list = Int[2, 4, 8]
         #nelement_list = Int[100]
-        nelement_list = Int[8]
+        nelement_list = Int[32]
         max_G_err = Array{mk_float,1}(undef,nscan)
         max_H_err = Array{mk_float,1}(undef,nscan)
         max_dHdvpa_err = Array{mk_float,1}(undef,nscan)
