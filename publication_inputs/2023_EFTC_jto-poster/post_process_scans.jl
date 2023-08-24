@@ -254,6 +254,9 @@ function post_process_parameter_scan(scan_dir)
                     elseif occursin("cha_3.8", d)
                         this_input["itime_min"] = 25
                         this_input["itime_max"] = 65
+                    elseif occursin("cha_4.0", d)
+                        this_input["itime_min"] = 25
+                        this_input["itime_max"] = 70
                     elseif occursin("cha_4.2", d)
                         this_input["itime_min"] = 25
                         this_input["itime_max"] = 70
