@@ -329,6 +329,19 @@ function plot_sim_output!(ax_omega, ax_gamma, sims, ni, nn, Th, Te; kwargs...)
     #       scatter!(ax_gamma, (ni+nn).*Ri./(kpar*vth*2), gamma./(kpar*vth); kwargs...)
 end
 
+const marker1 = BezierPath([MoveTo(-0.5, 0.05), LineTo(0.5, 0.05), LineTo(0.5, -0.05),
+                            LineTo(-0.5, -0.05), ClosePath()])
+const marker2 = BezierPath([MoveTo((-0.5+0.05)/sqrt(2), (-0.5-0.05)/sqrt(2)),
+                            LineTo((0.5+0.05)/sqrt(2), (0.5-0.05)/sqrt(2)),
+                            LineTo((0.5-0.05)/sqrt(2), (0.5+0.05)/sqrt(2)),
+                            LineTo((-0.5-0.05)/sqrt(2), (-0.5+0.05)/sqrt(2)), ClosePath()])
+const marker3 = BezierPath([MoveTo(0.05, -0.5), LineTo(0.05, 0.5), LineTo(-0.05, 0.5),
+                            LineTo(-0.05, -0.5), ClosePath()])
+const marker4 = BezierPath([MoveTo((0.5+0.05)/sqrt(2), (-0.5+0.05)/sqrt(2)),
+                            LineTo((-0.5+0.05)/sqrt(2), (0.5+0.05)/sqrt(2)),
+                            LineTo((-0.5-0.05)/sqrt(2), (0.5-0.05)/sqrt(2)),
+                            LineTo((0.5-0.05)/sqrt(2), (-0.5-0.05)/sqrt(2)), ClosePath()])
+
 function plot_n_scan()
 
     Th = 1.0
@@ -347,6 +360,9 @@ function plot_n_scan()
     orig_stdout = stdout
     redirect_stdout(open("/dev/null", "w"))
     sim_inputs = get_scan_inputs("scan_sound-wave_nratio.toml")
+    sim_inputs_split1 = get_scan_inputs("scan_sound-wave_nratio_split1.toml")
+    sim_inputs_split2 = get_scan_inputs("scan_sound-wave_nratio_split2.toml")
+    sim_inputs_split3 = get_scan_inputs("scan_sound-wave_nratio_split3.toml")
     redirect_stdout(orig_stdout)
 
     legend_data_list = []
@@ -358,11 +374,17 @@ function plot_n_scan()
                            (0.0, 2.0, "0"),
                           )
         sims = Tuple(i for i ∈ sim_inputs if isapprox(i["initial_density1"], ni, atol=2.0e-5))
+        sims_split1 = Tuple(i for i ∈ sim_inputs_split1 if isapprox(i["initial_density1"], ni, atol=2.0e-5))
+        sims_split2 = Tuple(i for i ∈ sim_inputs_split2 if isapprox(i["initial_density1"], ni, atol=2.0e-5))
+        sims_split3 = Tuple(i for i ∈ sim_inputs_split3 if isapprox(i["initial_density1"], ni, atol=2.0e-5))
 
         p_omega, p_gamma, Ri_positive, gamma_positive =
             plot_positive_frequency!(ax_omega, ax_gamma, ni, nn, Th, Te; label=label)
         p_gamma_z, Ri_zero, gamma_zero = plot_zero_frequency!(ax_gamma, ni, nn, Th, Te; color=p_gamma.color)
-        s_omega, s_gamma = plot_sim_output!(ax_omega, ax_gamma, sims, ni, nn, Th, Te; color=p_gamma.color)
+        s_omega, s_gamma = plot_sim_output!(ax_omega, ax_gamma, sims, ni, nn, Th, Te; color=p_gamma.color, marker=marker1)
+        s_omega1, s_gamma1 = plot_sim_output!(ax_omega, ax_gamma, sims_split1, ni, nn, Th, Te; color=p_gamma.color, marker=marker2)
+        s_omega2, s_gamma2 = plot_sim_output!(ax_omega, ax_gamma, sims_split2, ni, nn, Th, Te; color=p_gamma.color, marker=marker3)
+        s_omega3, s_gamma3 = plot_sim_output!(ax_omega, ax_gamma, sims_split3, ni, nn, Th, Te; color=p_gamma.color, marker=marker4)
 
         vth = sqrt(Th)
         crossing_x = find_crossing_xvalue(Ri_positive, gamma_positive, Ri_zero, gamma_zero)
@@ -371,9 +393,19 @@ function plot_n_scan()
             #vlines!(ax_gamma, (ni + nn) * crossing_x / (kpar*vth), linestyle=:dot, color=p_gamma.color)
         end
 
-        push!(legend_data_list, [p_omega, s_omega])
+        push!(legend_data_list, [p_omega, s_omega, s_omega1, s_omega2, s_omega3])
         push!(legend_label_list, label)
     end
+
+    # Add marker types to the legend
+    push!(legend_data_list, MarkerElement(marker=marker1, color=:black))
+    push!(legend_label_list, "full-f")
+    push!(legend_data_list, MarkerElement(marker=marker2, color=:black))
+    push!(legend_label_list, L"evolving $n$")
+    push!(legend_data_list, MarkerElement(marker=marker3, color=:black))
+    push!(legend_label_list, L"evolving $n,\,u_\parallel$")
+    push!(legend_data_list, MarkerElement(marker=marker4, color=:black))
+    push!(legend_label_list, L"evolving $n,\,u_\parallel,\,p_\parallel$")
 
     Legend(fig_omega[1,2], legend_data_list, legend_label_list)
     Legend(fig_gamma[1,2], legend_data_list, legend_label_list)
@@ -404,11 +436,26 @@ function plot_T_scan()
 
     orig_stdout = stdout
     redirect_stdout(open("/dev/null", "w"))
-    sim_inputs025 = get_scan_inputs("scan_sound-wave_T0.25.toml")
-    sim_inputs05 = get_scan_inputs("scan_sound-wave_T0.5.toml")
-    sim_inputs1 = get_scan_inputs("scan_sound-wave_T1.toml")
-    sim_inputs2 = get_scan_inputs("scan_sound-wave_T2.toml")
-    sim_inputs4 = get_scan_inputs("scan_sound-wave_T4.toml")
+    sim_inputs025 = (get_scan_inputs("scan_sound-wave_T0.25.toml"),
+                     get_scan_inputs("scan_sound-wave_T0.25_split1.toml"),
+                     get_scan_inputs("scan_sound-wave_T0.25_split2.toml"),
+                     get_scan_inputs("scan_sound-wave_T0.25_split3.toml"))
+    sim_inputs05 = (get_scan_inputs("scan_sound-wave_T0.5.toml"),
+                    get_scan_inputs("scan_sound-wave_T0.5_split1.toml"),
+                    get_scan_inputs("scan_sound-wave_T0.5_split2.toml"),
+                    get_scan_inputs("scan_sound-wave_T0.5_split3.toml"))
+    sim_inputs1 = (get_scan_inputs("scan_sound-wave_T1.toml"),
+                   get_scan_inputs("scan_sound-wave_T1_split1.toml"),
+                   get_scan_inputs("scan_sound-wave_T1_split2.toml"),
+                   get_scan_inputs("scan_sound-wave_T1_split3.toml"))
+    sim_inputs2 = (get_scan_inputs("scan_sound-wave_T2.toml"),
+                   get_scan_inputs("scan_sound-wave_T2_split1.toml"),
+                   get_scan_inputs("scan_sound-wave_T2_split2.toml"),
+                   get_scan_inputs("scan_sound-wave_T2_split3.toml"))
+    sim_inputs4 = (get_scan_inputs("scan_sound-wave_T4.toml"),
+                   get_scan_inputs("scan_sound-wave_T4_split1.toml"),
+                   get_scan_inputs("scan_sound-wave_T4_split2.toml"),
+                   get_scan_inputs("scan_sound-wave_T4_split3.toml"))
     redirect_stdout(orig_stdout)
 
     legend_data_list = []
@@ -423,7 +470,10 @@ function plot_T_scan()
         p_omega, p_gamma, Ri_positive, gamma_positive =
             plot_positive_frequency!(ax_omega, ax_gamma, ni, nn, Th, Te; label=label)
         p_gamma_z, Ri_zero, gamma_zero = plot_zero_frequency!(ax_gamma, ni, nn, Th, Te; color=p_gamma.color)
-        s_omega, s_gamma = plot_sim_output!(ax_omega, ax_gamma, sims, ni, nn, Th, Te; color=p_gamma.color)
+        s_omega, s_gamma = plot_sim_output!(ax_omega, ax_gamma, sims[1], ni, nn, Th, Te; color=p_gamma.color, marker=marker1)
+        s_omega1, s_gamma1 = plot_sim_output!(ax_omega, ax_gamma, sims[2], ni, nn, Th, Te; color=p_gamma.color, marker=marker2)
+        s_omega2, s_gamma2 = plot_sim_output!(ax_omega, ax_gamma, sims[3], ni, nn, Th, Te; color=p_gamma.color, marker=marker3)
+        s_omega3, s_gamma3 = plot_sim_output!(ax_omega, ax_gamma, sims[4], ni, nn, Th, Te; color=p_gamma.color, marker=marker4)
 
         vth = sqrt(Th)
         crossing_x = find_crossing_xvalue(Ri_positive, gamma_positive, Ri_zero, gamma_zero)
@@ -432,17 +482,22 @@ function plot_T_scan()
             #vlines!(ax_gamma, (ni + nn) * crossing_x / (kpar * vth), linestyle=:dot, color=p_gamma.color)
         end
 
-        push!(legend_data_list, [p_omega, s_omega])
+        push!(legend_data_list, [p_omega, s_omega, s_omega1, s_omega2, s_omega3])
         push!(legend_label_list, label)
     end
 
-    #limits!(ax_omega, (-.2, 2.2, 0.0, 2.2))
-    #limits!(ax_gamma, (-.2, 2.2, -2.5, 0.0))
+    # Add marker types to the legend
+    push!(legend_data_list, MarkerElement(marker=marker1, color=:black))
+    push!(legend_label_list, "full-f")
+    push!(legend_data_list, MarkerElement(marker=marker2, color=:black))
+    push!(legend_label_list, L"evolving $n$")
+    push!(legend_data_list, MarkerElement(marker=marker3, color=:black))
+    push!(legend_label_list, L"evolving $n,\,u_\parallel$")
+    push!(legend_data_list, MarkerElement(marker=marker4, color=:black))
+    push!(legend_label_list, L"evolving $n,\,u_\parallel,\,p_\parallel$")
 
     Legend(fig_omega[1,2], legend_data_list, legend_label_list)
     Legend(fig_gamma[1,2], legend_data_list, legend_label_list)
-    #Legend(fig_omega[1,2], ax_omega)
-    #Legend(fig_gamma[1,2], ax_gamma)
 
     save("T_scan_omega.pdf", fig_omega)
     save("T_scan_gamma.pdf", fig_gamma)
