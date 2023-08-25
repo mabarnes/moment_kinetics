@@ -347,7 +347,6 @@ function plot_n_scan()
     orig_stdout = stdout
     redirect_stdout(open("/dev/null", "w"))
     sim_inputs = get_scan_inputs("scan_sound-wave_nratio.toml")
-    #sim_inputs = get_scan_inputs("scan_sound-wave_lowres.toml")
     redirect_stdout(orig_stdout)
 
     legend_data_list = []
@@ -358,12 +357,6 @@ function plot_n_scan()
                            (0.5, 1.5, "1/4"),
                            (0.0, 2.0, "0"),
                           )
-    #for (ni, nn, label) ∈ ((1.0, 0.0, "1"),
-    #                       (0.75, 0.25, "3/4"),
-    #                       (0.5, 0.5, "1/2"),
-    #                       (0.25, 0.75, "1/4"),
-    #                       (0.0, 1.0, "0"),
-    #                      )
         sims = Tuple(i for i ∈ sim_inputs if isapprox(i["initial_density1"], ni, atol=2.0e-5))
 
         p_omega, p_gamma, Ri_positive, gamma_positive =
@@ -384,8 +377,6 @@ function plot_n_scan()
 
     Legend(fig_omega[1,2], legend_data_list, legend_label_list)
     Legend(fig_gamma[1,2], legend_data_list, legend_label_list)
-    #Legend(fig_omega[1,2], ax_omega)
-    #Legend(fig_gamma[1,2], ax_gamma)
 
     save("n_scan_omega.pdf", fig_omega)
     save("n_scan_gamma.pdf", fig_gamma)
