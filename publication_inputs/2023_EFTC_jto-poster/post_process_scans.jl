@@ -19,7 +19,7 @@ function post_process_parameter_scan(scan_dir)
         println("post-processing ", d)
         try
             this_input = copy(soundwave_postproc_input)
-            if occursin("nratio_ini_1.0_ini_1.0", d) || occursin("T1", d)
+            if (occursin("nratio", d) && occursin("ini_1.0_ini_1.0", d)) || occursin("T1", d)
                 this_input["itime_min"] = 20
                 this_input["itime_max"] = 85
                 if occursin("cha_1.0", d)
@@ -31,6 +31,18 @@ function post_process_parameter_scan(scan_dir)
                 elseif occursin("cha_1.4", d)
                     this_input["itime_min"] = 50
                     this_input["itime_max"] = 80
+                elseif occursin("cha_1.6", d)
+                    continue
+                elseif occursin("cha_1.8", d)
+                    continue
+                elseif occursin("cha_2.0", d)
+                    continue
+                elseif occursin("cha_2.2", d)
+                    continue
+                elseif occursin("cha_2.4", d)
+                    continue
+                elseif occursin("cha_2.6", d)
+                    continue
                 elseif occursin("cha_2.8", d)
                     this_input["itime_min"] = 70
                     this_input["itime_max"] = 85
@@ -68,7 +80,7 @@ function post_process_parameter_scan(scan_dir)
                     this_input["itime_min"] = 50
                     this_input["itime_max"] = 90
                 elseif occursin("cha_5.2", d)
-                    this_input["itime_min"] = 50
+                    this_input["itime_min"] = 60
                     this_input["itime_max"] = 90
                 elseif occursin("cha_5.4", d)
                     this_input["itime_min"] = 50
@@ -90,7 +102,23 @@ function post_process_parameter_scan(scan_dir)
                 this_input["itime_min"] = 20
                 this_input["itime_max"] = 85
                 if occursin("ini_1.5_ini_0.5", d)
-                    if occursin("cha_3.8", d)
+                    if occursin("cha_2.2", d)
+                        continue
+                    elseif occursin("cha_2.4", d)
+                        continue
+                    elseif occursin("cha_2.6", d)
+                        continue
+                    elseif occursin("cha_2.8", d)
+                        continue
+                    elseif occursin("cha_3.0", d)
+                        continue
+                    elseif occursin("cha_3.2", d)
+                        continue
+                    elseif occursin("cha_3.4", d)
+                        continue
+                    elseif occursin("cha_3.6", d)
+                        continue
+                    elseif occursin("cha_3.8", d)
                         this_input["itime_min"] = 65
                         this_input["itime_max"] = 85
                     elseif occursin("cha_4.0", d)
@@ -160,9 +188,18 @@ function post_process_parameter_scan(scan_dir)
                     elseif occursin("cha_1.6", d)
                         this_input["itime_min"] = 40
                         this_input["itime_max"] = 55
+                    elseif occursin("cha_1.8", d)
+                        continue
+                    elseif occursin("cha_2.0", d)
+                        continue
+                    elseif occursin("cha_2.2", d)
+                        continue
+                    elseif occursin("cha_2.4", d)
+                        continue
                     elseif occursin("cha_2.6", d)
-                        this_input["itime_min"] = 1
-                        this_input["itime_max"] = 120
+                        continue
+                        #this_input["itime_min"] = 1
+                        #this_input["itime_max"] = 120
                     elseif occursin("cha_2.8", d)
                         this_input["itime_min"] = 55
                         this_input["itime_max"] = 65
@@ -276,9 +313,40 @@ function post_process_parameter_scan(scan_dir)
                 end
             elseif occursin("T0.25", d) || occursin("ini_0.25", d)
                 this_input["itime_min"] = 20
+                if occursin("cha_2.8", d)
+                    continue
+                elseif occursin("cha_3.0", d)
+                    continue
+                end
             elseif occursin("T0.5", d) || occursin("ini_0.5", d)
                 this_input["itime_min"] = 20
                 this_input["itime_max"] = 76
+                if occursin("cha_2.2", d)
+                    this_input["itime_min"] = 30
+                    this_input["itime_max"] = 70
+                elseif occursin("cha_2.4", d)
+                    continue
+                elseif occursin("cha_2.6", d)
+                    continue
+                elseif occursin("cha_2.8", d)
+                    continue
+                elseif occursin("cha_3.0", d)
+                    continue
+                elseif occursin("cha_3.2", d)
+                    continue
+                elseif occursin("cha_3.4", d)
+                    continue
+                elseif occursin("cha_3.6", d)
+                    continue
+                elseif occursin("cha_3.8", d)
+                    continue
+                elseif occursin("cha_4.0", d)
+                    continue
+                elseif occursin("cha_4.2", d)
+                    continue
+                elseif occursin("cha_4.4", d)
+                    continue
+                end
             elseif occursin("T2", d) || occursin("ini_2.0", d)
                 this_input["itime_min"] = 5
                 this_input["itime_max"] = 81
@@ -301,22 +369,27 @@ function post_process_parameter_scan(scan_dir)
                     # Can't really get a good fit here. The decay rates of the two modes
                     # are too close, so just get beating for the whole length of the
                     # simulation.
+                    continue
                 elseif occursin("cha_1.8", d)
                     # Can't really get a good fit here. The decay rates of the two modes
                     # are too close, so just get beating for the whole length of the
                     # simulation.
+                    continue
                 elseif occursin("cha_2.1", d)
                     # Can't really get a good fit here. The decay rates of the two modes
                     # are too close, so just get beating for the whole length of the
                     # simulation.
+                    continue
                 elseif occursin("cha_2.4", d)
                     # Can't really get a good fit here. The decay rates of the two modes
                     # are too close, so just get beating for the whole length of the
                     # simulation.
+                    continue
                 elseif occursin("cha_2.7", d)
                     # Can't really get a good fit here. The decay rates of the two modes
                     # are too close, so just get beating for the whole length of the
                     # simulation.
+                    continue
                 elseif occursin("cha_3.0", d)
                     this_input["itime_min"] = 60
                 elseif occursin("cha_3.3", d)
@@ -369,7 +442,13 @@ function post_process_parameter_scan(scan_dir)
             elseif occursin("T4", d) || occursin("ini_4.0", d)
                 this_input["itime_min"] = 10
                 this_input["itime_max"] = 65
-                if occursin("cha_2.4", d)
+                if occursin("cha_1.6", d)
+                    continue
+                elseif occursin("cha_1.8", d)
+                    continue
+                elseif occursin("cha_2.0", d)
+                    continue
+                elseif occursin("cha_2.4", d)
                     this_input["itime_min"] = 40
                     this_input["itime_max"] = 65
                 elseif occursin("cha_2.8", d)
@@ -463,6 +542,14 @@ function post_process_all_scans()
     post_process_parameter_scan("../../runs/scan_sound-wave_T1/")
     post_process_parameter_scan("../../runs/scan_sound-wave_T2/")
     post_process_parameter_scan("../../runs/scan_sound-wave_T4/")
+    for i ∈ 1:3
+        post_process_parameter_scan("../../runs/scan_sound-wave_nratio_split$i/")
+        post_process_parameter_scan("../../runs/scan_sound-wave_T0.25_split$i/")
+        post_process_parameter_scan("../../runs/scan_sound-wave_T0.5_split$i/")
+        post_process_parameter_scan("../../runs/scan_sound-wave_T1_split$i/")
+        post_process_parameter_scan("../../runs/scan_sound-wave_T2_split$i/")
+        post_process_parameter_scan("../../runs/scan_sound-wave_T4_split$i/")
+    end
 
     #post_process_parameter_scan("../../runs/scan_sound-wave_lowres/")
     #post_process_parameter_scan("../../runs/scan_sound-wave_T/")
