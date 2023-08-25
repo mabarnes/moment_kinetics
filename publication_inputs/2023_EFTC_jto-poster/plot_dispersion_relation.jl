@@ -367,11 +367,11 @@ function plot_n_scan()
 
     legend_data_list = []
     legend_label_list = []
-    for (ni, nn, label) ∈ ((2.0, 0.0, "1"),
-                           (1.5, 0.5, "3/4"),
-                           (1.0, 1.0, "1/2"),
-                           (0.5, 1.5, "1/4"),
-                           (0.0, 2.0, "0"),
+    for (ni, nn, label) ∈ ((2.0, 0.0, L"1"),
+                           (1.5, 0.5, L"3/4"),
+                           (1.0, 1.0, L"1/2"),
+                           (0.5, 1.5, L"1/4"),
+                           (0.0, 2.0, L"0"),
                           )
         sims = Tuple(i for i ∈ sim_inputs if isapprox(i["initial_density1"], ni, atol=2.0e-5))
         sims_split1 = Tuple(i for i ∈ sim_inputs_split1 if isapprox(i["initial_density1"], ni, atol=2.0e-5))
@@ -399,7 +399,7 @@ function plot_n_scan()
 
     # Add marker types to the legend
     push!(legend_data_list, MarkerElement(marker=marker1, color=:black))
-    push!(legend_label_list, "full-f")
+    push!(legend_label_list, L"$$full-f")
     push!(legend_data_list, MarkerElement(marker=marker2, color=:black))
     push!(legend_label_list, L"evolving $n$")
     push!(legend_data_list, MarkerElement(marker=marker3, color=:black))
@@ -460,11 +460,11 @@ function plot_T_scan()
 
     legend_data_list = []
     legend_label_list = []
-    for (Th, label, sims) ∈ ((0.25, "1/4", sim_inputs025),
-                             (0.5, "1/2", sim_inputs05),
-                             (1.0, "1", sim_inputs1),
-                             (2.0, "2", sim_inputs2),
-                             (4.0, "4", sim_inputs4),
+    for (Th, label, sims) ∈ ((0.25, L"1/4", sim_inputs025),
+                             (0.5, L"1/2", sim_inputs05),
+                             (1.0, L"1", sim_inputs1),
+                             (2.0, L"2", sim_inputs2),
+                             (4.0, L"4", sim_inputs4),
                             )
 
         p_omega, p_gamma, Ri_positive, gamma_positive =
@@ -488,7 +488,7 @@ function plot_T_scan()
 
     # Add marker types to the legend
     push!(legend_data_list, MarkerElement(marker=marker1, color=:black))
-    push!(legend_label_list, "full-f")
+    push!(legend_label_list, L"$$full-f")
     push!(legend_data_list, MarkerElement(marker=marker2, color=:black))
     push!(legend_label_list, L"evolving $n$")
     push!(legend_data_list, MarkerElement(marker=marker3, color=:black))
