@@ -1278,7 +1278,7 @@ function plots_for_variable(run_info, variable_name; plot_prefix, is_1D=false,
                 plot_vs_z(run_info, variable_name, is=is, data=variable, input=input,
                           outfile=variable_prefix * "vs_z.pdf")
             end
-            if input.plot_vs_z_r
+            if !is_1D && input.plot_vs_z_r
                 plot_vs_z_r(run_info, variable_name, is=is, data=variable, input=input,
                             outfile=variable_prefix * "vs_z_r.pdf")
             end
