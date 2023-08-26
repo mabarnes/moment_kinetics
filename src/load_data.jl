@@ -620,6 +620,15 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
             moments.charged.qpar_updated .= true
             moments.charged.vth .= load_moment("thermal_speed")
 
+            if "external_source_controller_integral" ∈ get_variable_keys(dynamic) &&
+                    length(moments.charged.external_source_controller_integral) == 1
+                moments.charged.external_source_controller_integral .=
+                    load_slice(dynamic, "external_source_controller_integral", time_index)
+            elseif length(moments.charged.external_source_controller_integral) > 1
+                moments.charged.external_source_controller_integral .=
+                    load_moment("external_source_controller_integral")
+            end
+
             function load_charged_pdf()
                 this_pdf = load_slice(dynamic, "f", vpa_range, vperp_range, z_range,
                                       r_range, :, time_index)
@@ -1142,6 +1151,17 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                 moments.neutral.qz .= load_moment("qz_neutral")
                 moments.neutral.qz_updated .= true
                 moments.neutral.vth .= load_moment("thermal_speed_neutral")
+
+                if "external_source_neutral_controller_integral" ∈ get_variable_keys(dynamic) &&
+                        length(moments.neutral.external_source_controller_integral) == 1
+                    moments.neutral.external_source_controller_integral .=
+                        load_slice(dynamic,
+                                   "external_source_neutral_controller_integral",
+                                   time_index)
+                elseif length(moments.neutral.external_source_controller_integral) > 1
+                    moments.neutral.external_source_controller_integral .=
+                        load_moment("external_source_neutral_controller_integral")
+                end
 
                 function load_neutral_pdf()
                     this_pdf = load_slice(dynamic, "f_neutral", vz_range, vr_range,
@@ -1713,7 +1733,6 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                     load_neutral_boundary_pdf("pdf_rboundary_neutral_left")
                 boundary_distributions.pdf_rboundary_neutral[:,:,:,:,2,:] .=
                     load_neutral_boundary_pdf("pdf_rboundary_neutral_right")
-                end
             end
         finally
             close(fid)

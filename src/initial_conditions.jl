@@ -21,6 +21,7 @@ using ..bgk: init_bgk_pdf!
 using ..communication
 using ..calculus: reconcile_element_boundaries_MPI!
 using ..coordinates: coordinate
+using ..external_sources
 using ..interpolation: interpolate_to_grid_1d!
 using ..looping
 using ..moment_kinetics_structs: scratch_pdf
@@ -82,7 +83,8 @@ end
 Creates the structs for the pdf and the velocity-space moments
 """
 function allocate_pdf_and_moments(composition, r, z, vperp, vpa, vzeta, vr, vz,
-                                  evolve_moments, collisions, numerical_dissipation)
+                                  evolve_moments, collisions, external_source_settings,
+                                  numerical_dissipation)
     pdf = create_pdf(composition, r, z, vperp, vpa, vzeta, vr, vz)
 
     # create the 'moments' struct that contains various v-space moments and other
@@ -92,10 +94,12 @@ function allocate_pdf_and_moments(composition, r, z, vperp, vpa, vzeta, vr, vz,
     # and so are included in the same struct
     charged = create_moments_charged(z.n, r.n, composition.n_ion_species,
         evolve_moments.density, evolve_moments.parallel_flow,
-        evolve_moments.parallel_pressure, numerical_dissipation)
+        evolve_moments.parallel_pressure, external_source_settings.ion,
+        numerical_dissipation)
     neutral = create_moments_neutral(z.n, r.n, composition.n_neutral_species,
         evolve_moments.density, evolve_moments.parallel_flow,
-        evolve_moments.parallel_pressure, numerical_dissipation)
+        evolve_moments.parallel_pressure, external_source_settings.neutral,
+        numerical_dissipation)
 
     if abs(collisions.ionization) > 0.0 || z.bc == "wall"
         # if ionization collisions are included or wall BCs are enforced, then particle
@@ -140,7 +144,7 @@ with a self-consistent initial condition
 function init_pdf_and_moments!(pdf, moments, boundary_distributions, geometry,
                                composition, r, z, vperp, vpa, vzeta, vr, vz,
                                vpa_spectral, vz_spectral, species,
-                               manufactured_solns_input)
+                               external_source_settings, manufactured_solns_input)
     if manufactured_solns_input.use_for_init
         init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z,
                                              r, composition.n_ion_species,
@@ -189,6 +193,11 @@ function init_pdf_and_moments!(pdf, moments, boundary_distributions, geometry,
                      moments.charged.dens, moments.charged.upar, moments.charged.vth,
                      pdf.charged.norm, vpa, vperp, z, r, composition,
                      moments.evolve_density, moments.evolve_upar, moments.evolve_ppar)
+
+        initialize_external_source_amplitude!(moments, external_source_settings, vperp,
+                                              vzeta, vr, n_neutral_species)
+        initialize_external_source_controller_integral!(moments, external_source_settings,
+                                                        n_neutral_species)
 
         if n_neutral_species > 0
             update_neutral_qz!(moments.neutral.qz, moments.neutral.qz_updated,

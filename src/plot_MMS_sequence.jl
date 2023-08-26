@@ -66,8 +66,8 @@ function get_MMS_error_data(path_list,scan_type,scan_name)
         #io_input, evolve_moments, t_input, z, z_spectral, r, r_spectral, vpa, vpa_spectral,
         #    vperp, vperp_spectral, gyrophase, gyrophase_spectral, vz, vz_spectral, vr,
         #    vr_spectral, vzeta, vzeta_spectral, composition, species, collisions, geometry,
-        #    drive_input, num_diss_params, manufactured_solns_input,
-        #    reference_parameters = mk_input(scan_input)
+        #    drive_input, external_source_settings, num_diss_params,
+        #    manufactured_solns_input, reference_parameters = mk_input(scan_input)
         z_nelement, r_nelement, vpa_nelement, vperp_nelement, 
           vz_nelement, vr_nelement, vzeta_nelement = get_coords_nelement(scan_input)
         if scan_type == "vpa_nelement"

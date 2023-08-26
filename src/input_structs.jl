@@ -62,11 +62,13 @@ mutable struct advance_info
     ionization_collisions_1V::Bool
     ionization_source::Bool
     krook_collisions::Bool
+    external_source::Bool
     numerical_dissipation::Bool
     source_terms::Bool
     continuity::Bool
     force_balance::Bool
     energy::Bool
+    neutral_external_source::Bool
     neutral_source_terms::Bool
     neutral_continuity::Bool
     neutral_force_balance::Bool
