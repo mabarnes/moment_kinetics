@@ -90,6 +90,12 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     composition.use_test_neutral_wall_pdf = get(scan_input, "use_test_neutral_wall_pdf", false)
     # constant to be used to test nonzero Er in wall boundary condition
     composition.Er_constant = get(scan_input, "Er_constant", 0.0)
+    # The ion flux reaching the wall that is recycled as neutrals is reduced by
+    # `recycling_fraction` to account for ions absorbed by the wall.
+    composition.recycling_fraction = get(scan_input, "recycling_fraction", 1.0)
+    if !(0.0 <= composition.recycling_fraction <= 1.0)
+        error("recycling_fraction must be between 0 and 1. Got $recycling_fraction.")
+    end
 
     # Reference parameters that define the conversion between physical quantities and
     # normalised values used in the code.
@@ -860,9 +866,12 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     mn_over_mi = 1.0
     # ratio of the electron particle mass to the ion particle mass
     me_over_mi = 1.0/1836.0
+    # The ion flux reaching the wall that is recycled as neutrals is reduced by
+    # `recycling_fraction` to account for ions absorbed by the wall.
+    recycling_fraction = 1.0
     composition = species_composition(n_species, n_ion_species, n_neutral_species,
         electron_physics, use_test_neutral_wall_pdf, T_e, T_wall, phi_wall, Er_constant,
-        mn_over_mi, me_over_mi, allocate_float(n_species))
+        mn_over_mi, me_over_mi, recycling_fraction, allocate_float(n_species))
     
     species_charged = Array{species_parameters_mutable,1}(undef,n_ion_species)
     species_neutral = Array{species_parameters_mutable,1}(undef,n_neutral_species)
