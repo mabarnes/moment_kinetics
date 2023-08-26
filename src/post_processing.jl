@@ -1053,8 +1053,8 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
     # obtain input options from moment_kinetics_input.jl
     # and check input to catch errors
     io_input, evolve_moments, t_input, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _,
-        composition, species, collisions, geometry, drive_input, num_diss_params,
-        manufactured_solns_input = input
+        composition, species, collisions, geometry, drive_input, external_source_settings,
+        num_diss_params, manufactured_solns_input = input
 
     if !is_1D1V
         # make plots and animations of the phi, Ez and Er

@@ -37,7 +37,7 @@ assign to this and not just copy a pointer into the `.val` member because otherw
 `MPI.Comm` object created by `MPI.Comm_split()` would be deleted, which probably makes
 MPI.jl delete the communicator.
 """
-const comm_block = Ref(MPI.Comm())
+const comm_block = Ref(MPI.COMM_NULL)
 
 """
 Communicator connecting the root processes of each shared memory block
@@ -47,7 +47,7 @@ assign to this and not just copy a pointer into the `.val` member because otherw
 `MPI.Comm` object created by `MPI.Comm_split()` would be deleted, which probably makes
 MPI.jl delete the communicator.
 """
-const comm_inter_block = Ref(MPI.Comm())
+const comm_inter_block = Ref(MPI.COMM_NULL)
 
 # Use Ref for these variables so that they can be made `const` (so have a definite
 # type), but contain a value assigned at run-time.

@@ -12,7 +12,8 @@ using ..looping
 calculate the source terms due to redefinition of the pdf to split off density,
 flow and/or pressure, and use them to update the pdf
 """
-function source_terms!(pdf_out, fvec_in, moments, vpa, z, r, dt, spectral, composition, collisions)
+function source_terms!(pdf_out, fvec_in, moments, vpa, z, r, dt, spectral, composition,
+                       collisions, ion_source_settings)
 
     begin_s_r_z_vperp_vpa_region()
 
@@ -22,7 +23,8 @@ function source_terms!(pdf_out, fvec_in, moments, vpa, z, r, dt, spectral, compo
             @views source_terms_evolve_ppar_no_collisions!(
                 pdf_out[:,:,:,:,is], fvec_in.pdf[:,:,:,:,is], fvec_in.density[:,:,is],
                 fvec_in.upar[:,:,is], fvec_in.ppar[:,:,is], moments.charged.vth[:,:,is],
-                moments.charged.qpar[:,:,is], z, r, dt, spectral)
+                moments.charged.qpar[:,:,is], moments, z, r, dt, spectral,
+                ion_source_settings)
             if composition.n_neutral_species > 0
                 if abs(collisions.charge_exchange) > 0.0 || abs(collisions.ionization) > 0.0
                     @views source_terms_evolve_ppar_collisions!(
@@ -38,7 +40,7 @@ function source_terms!(pdf_out, fvec_in, moments, vpa, z, r, dt, spectral, compo
         @loop_s is begin
             @views source_terms_evolve_density!(
                 pdf_out[:,:,:,:,is], fvec_in.pdf[:,:,:,:,is], fvec_in.density[:,:,is],
-                fvec_in.upar[:,:,is], z, r, dt, spectral)
+                fvec_in.upar[:,:,is], moments, z, r, dt, spectral, ion_source_settings)
         end
     end
     return nothing
@@ -46,7 +48,8 @@ end
 
 """
 """
-function source_terms_evolve_density!(pdf_out, pdf_in, dens, upar, z, r, dt, spectral)
+function source_terms_evolve_density!(pdf_out, pdf_in, dens, upar, moments, z, r, dt,
+                                      spectral, ion_source_settings)
     # update the density
     nvpa = size(pdf_out, 1)
     @loop_r ir begin
@@ -59,6 +62,17 @@ function source_terms_evolve_density!(pdf_out, pdf_in, dens, upar, z, r, dt, spe
             pdf_out[ivpa,ivperp,iz,ir] += pdf_in[ivpa,ivperp,iz,ir]*z.scratch[iz]
         end
     end
+
+    if ion_source_settings.active
+        source_amplitude = moments.charged.external_source_amplitude
+        @loop_r_z ir iz begin
+            term = dt * source_amplitude[iz,ir] / dens[iz,ir]
+            @loop_vperp_vpa ivperp ivpa begin
+                pdf_out[ivpa,ivperp,iz,ir] -= term * pdf_in[ivpa,ivperp,iz,ir]
+            end
+        end
+    end
+
     return nothing
 end
 
@@ -66,7 +80,9 @@ end
 update the evolved pdf to account for the collisionless source terms in the kinetic equation
 arising due to the re-normalization of the pdf as g = f * vth / n
 """
-function source_terms_evolve_ppar_no_collisions!(pdf_out, pdf_in, dens, upar, ppar, vth, qpar, z, r, dt, spectral)
+function source_terms_evolve_ppar_no_collisions!(pdf_out, pdf_in, dens, upar, ppar, vth,
+                                                 qpar, moments, z, r, dt, spectral,
+                                                 ion_source_settings)
     nvpa = size(pdf_out, 1)
     @loop_r ir begin
         # calculate dn/dz
@@ -86,6 +102,19 @@ function source_terms_evolve_ppar_no_collisions!(pdf_out, pdf_in, dens, upar, pp
             pdf_out[ivpa,ivperp,iz,ir] += dt*pdf_in[ivpa,ivperp,iz,ir]*z.scratch[iz]
         end
     end
+
+    if ion_source_settings.active
+        source_amplitude = moments.charged.external_source_amplitude
+        source_T = ion_source_settings.source_T
+        @loop_r_z ir iz begin
+            term = dt * source_amplitude[iz,ir] *
+                   (1.5/dens[iz,ir] - (0.25 * source_T + 0.5 * upar[iz,ir]^2) / ppar[iz,ir])
+            @loop_vperp_vpa ivperp ivpa begin
+                pdf_out[ivpa,ivperp,iz,ir] -= term * pdf_in[ivpa,ivperp,iz,ir]
+            end
+        end
+    end
+
     return nothing
 end
 
@@ -116,7 +145,8 @@ end
 calculate the source terms due to redefinition of the pdf to split off density,
 flow and/or pressure, and use them to update the pdf
 """
-function source_terms_neutral!(pdf_out, fvec_in, moments, vpa, z, r, dt, spectral, composition, collisions)
+function source_terms_neutral!(pdf_out, fvec_in, moments, vpa, z, r, dt, spectral,
+                               composition, collisions, neutral_source_settings)
 
     begin_sn_r_z_vzeta_vr_vz_region()
 
@@ -127,7 +157,8 @@ function source_terms_neutral!(pdf_out, fvec_in, moments, vpa, z, r, dt, spectra
                 pdf_out[:,:,:,:,:,isn], fvec_in.pdf_neutral[:,:,:,:,:,isn],
                 fvec_in.density_neutral[:,:,isn], fvec_in.uz_neutral[:,:,isn],
                 fvec_in.pz_neutral[:,:,isn], moments.neutral.vth[:,:,isn],
-                moments.neutral.qz[:,:,isn], z, r, dt, spectral)
+                moments.neutral.qz[:,:,isn], moments, z, r, dt, spectral,
+                neutral_source_settings)
             if abs(collisions.charge_exchange) > 0.0 || abs(collisions.ionization) > 0.0
                 @views source_terms_evolve_ppar_collisions_neutral!(
                     pdf_out[:,:,:,:,:,isn], fvec_in.pdf_neutral[:,:,:,:,:,isn],
@@ -141,8 +172,8 @@ function source_terms_neutral!(pdf_out, fvec_in, moments, vpa, z, r, dt, spectra
         @loop_sn isn begin
             @views source_terms_evolve_density_neutral!(
                 pdf_out[:,:,:,:,:,isn], fvec_in.pdf_neutral[:,:,:,:,:,isn],
-                fvec_in.density_neutral[:,:,isn], fvec_in.uz_neutral[:,:,isn], z, r, dt,
-                spectral)
+                fvec_in.density_neutral[:,:,isn], fvec_in.uz_neutral[:,:,isn], moments, z,
+                r, dt, spectral, neutral_source_settings)
         end
     end
     return nothing
@@ -150,8 +181,8 @@ end
 
 """
 """
-function source_terms_evolve_density_neutral!(pdf_out, pdf_in, dens, upar, z, r, dt,
-                                              spectral)
+function source_terms_evolve_density_neutral!(pdf_out, pdf_in, dens, upar, moments, z, r,
+                                              dt, spectral, neutral_source_settings)
     # update the density
     nvpa = size(pdf_out, 1)
     @loop_r ir begin
@@ -164,6 +195,17 @@ function source_terms_evolve_density_neutral!(pdf_out, pdf_in, dens, upar, z, r,
             pdf_out[ivz,ivr,ivzeta,iz,ir] += pdf_in[ivz,ivr,ivzeta,iz,ir]*z.scratch[iz]
         end
     end
+
+    if neutral_source_settings.active
+        source_amplitude = moments.neutral.external_source_amplitude
+        @loop_r_z ir iz begin
+            term = dt * source_amplitude[iz,ir] / dens[iz,ir]
+            @loop_vzeta_vr_vz ivzeta ivr ivz begin
+                pdf_out[ivz,ivr,ivzeta,iz,ir] -= term * pdf_in[ivz,ivr,ivzeta,iz,ir]
+            end
+        end
+    end
+
     return nothing
 end
 
@@ -172,8 +214,9 @@ update the evolved pdf to account for the collisionless source terms in the kine
 arising due to the re-normalization of the pdf as g = f * vth / n
 """
 function source_terms_evolve_ppar_no_collisions_neutral!(pdf_out, pdf_in, dens, upar,
-                                                         ppar, vth, qpar, z, r, dt,
-                                                         spectral)
+                                                         ppar, vth, qpar, moments, z, r,
+                                                         dt, spectral,
+                                                         neutral_source_settings)
     nvpa = size(pdf_out, 1)
     @loop_r ir begin
         # calculate dn/dz
@@ -193,6 +236,19 @@ function source_terms_evolve_ppar_no_collisions_neutral!(pdf_out, pdf_in, dens, 
             pdf_out[ivz,ivr,ivzeta,iz,ir] += dt*pdf_in[ivz,ivr,ivzeta,iz,ir]*z.scratch[iz]
         end
     end
+
+    if neutral_source_settings.active
+        source_amplitude = moments.neutral.external_source_amplitude
+        source_T = neutral_source_settings.source_T
+        @loop_r_z ir iz begin
+            term = dt * source_amplitude[iz,ir] *
+                   (1.5/dens[iz,ir] - (0.25 * source_T + 0.5 * upar[iz,ir]^2) / ppar[iz,ir])
+            @loop_vzeta_vr_vz ivzeta ivr ivz begin
+                pdf_out[ivz,ivr,ivzeta,iz,ir] -= term * pdf_in[ivz,ivr,ivzeta,iz,ir]
+            end
+        end
+    end
+
     return nothing
 end
 
