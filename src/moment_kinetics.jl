@@ -63,6 +63,7 @@ include("time_advance.jl")
 
 using TimerOutputs
 using Dates
+using Glob
 
 using .file_io: setup_file_io, finish_file_io
 using .file_io: write_data_to_ascii
@@ -72,6 +73,7 @@ using .communication
 using .communication: _block_synchronize
 using .coordinates: define_coordinate
 using .debugging
+using .input_structs
 using .initial_conditions: allocate_pdf_and_moments, init_pdf_and_moments!,
                            enforce_boundary_conditions!
 using .load_data: reload_evolving_fields!
@@ -226,12 +228,26 @@ function get_backup_filename(filename)
 end
 
 """
+    restart_moment_kinetics(input_filename::String,
+                            restart_filename::Union{String,Nothing}=nothing,
+                            time_index::Int=-1)
+
 Restart moment kinetics from an existing run. Space/velocity-space resolution in the
 input must be the same as for the original run.
+
+`input_filename` is the input file to use.
+
+`restart_filename` can be used to pick a particular distribution-functions-output file to
+restart from. By default will use the most recent one (the one without the numerical
+suffix) in the run directory.
+
+`time_index` can be passed to select the time index from `restart_filename` to restart
+from. By default the latest time point is used.
 """
-function restart_moment_kinetics(restart_filename::String, input_filename::String,
+function restart_moment_kinetics(input_filename::String,
+                                 restart_filename::Union{String,Nothing}=nothing,
                                  time_index::Int=-1)
-    restart_moment_kinetics(restart_filename, read_input_file(input_filename),
+    restart_moment_kinetics(read_input_file(input_filename), restart_filename,
                             time_index)
     return nothing
 end
@@ -247,12 +263,30 @@ function restart_moment_kinetics()
     end
     time_index = options["restart-time-index"]
 
-    restart_moment_kinetics(restartfile, inputfile, time_index)
+    restart_moment_kinetics(inputfile, restartfile, time_index)
 
     return nothing
 end
-function restart_moment_kinetics(restart_filename::String, input_dict::Dict,
+function restart_moment_kinetics(input_dict::Dict,
+                                 restart_filename::Union{String,Nothing}=nothing,
                                  time_index::Int=-1)
+
+    if restart_filename === nothing
+        run_name = input_dict["run_name"]
+        base_directory = get(input_dict, "base_directory", "runs")
+        output_dir = joinpath(base_directory, run_name)
+        io_settings = get(input_dict, "output", Dict{String,Any}())
+        binary_format = get(io_settings, "binary_format", hdf5)
+        if binary_format === hdf5
+            ext = "h5"
+        elseif binary_format === netcdf
+            ext = "cdf"
+        else
+            error("Unrecognized binary_format '$binary_format'")
+        end
+        restart_filename = glob(joinpath(output_dir, run_name * ".dfns*." * ext))[1]
+    end
+
     try
         # Move the output file being restarted from to make sure it doesn't get
         # overwritten.

@@ -174,7 +174,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     run_name = get(scan_input, "run_name", "wallBC")
     # this is the directory where the simulation data will be stored
     base_directory = get(scan_input, "base_directory", "runs")
-    output_dir = string(base_directory, "/", run_name)
+    output_dir = joinpath(base_directory, run_name)
     # if evolve_moments.density = true, evolve density via continuity eqn
     # and g = f/n via modified drift kinetic equation
     evolve_moments.density = get(scan_input, "evolve_moments_density", false)

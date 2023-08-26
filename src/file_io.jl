@@ -118,7 +118,7 @@ function setup_file_io(io_input, boundary_distributions, vz, vr, vzeta, vpa, vpe
         # check to see if output_dir exists in the current directory
         # if not, create it
         isdir(io_input.output_dir) || mkdir(io_input.output_dir)
-        out_prefix = string(io_input.output_dir, "/", io_input.run_name)
+        out_prefix = joinpath(io_input.output_dir, io_input.run_name)
 
         if io_input.ascii_output
             #ff_io = open_ascii_output_file(out_prefix, "f_vs_t")
