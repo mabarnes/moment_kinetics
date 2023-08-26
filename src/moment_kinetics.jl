@@ -51,6 +51,7 @@ include("continuity.jl")
 include("energy_equation.jl")
 include("force_balance.jl")
 include("source_terms.jl")
+include("external_sources.jl")
 include("numerical_dissipation.jl")
 include("load_data.jl")
 include("moment_kinetics_input.jl")
@@ -355,7 +356,7 @@ function setup_moment_kinetics(input_dict::Dict; restart_prefix_iblock=nothing,
     io_input, evolve_moments, t_input, z, z_spectral, r, r_spectral, vpa, vpa_spectral,
         vperp, vperp_spectral, gyrophase, gyrophase_spectral, vz, vz_spectral, vr,
         vr_spectral, vzeta, vzeta_spectral, composition, species, collisions, geometry,
-        drive_input, num_diss_params, manufactured_solns_input,
+        drive_input, external_source_settings, num_diss_params, manufactured_solns_input,
         reference_parameters = input
 
     # Create loop range variables for shared-memory-parallel loops
@@ -412,8 +413,8 @@ function setup_moment_kinetics(input_dict::Dict; restart_prefix_iblock=nothing,
         setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
             vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral, z_spectral,
             r_spectral, composition, drive_input, moments, t_input, collisions, species,
-            geometry, boundary_distributions, num_diss_params, manufactured_solns_input,
-            restarting)
+            geometry, boundary_distributions, external_source_settings, num_diss_params,
+            manufactured_solns_input, restarting)
     # setup i/o
     ascii_io, io_moments, io_dfns = setup_file_io(io_input, boundary_distributions, vz,
         vr, vzeta, vpa, vperp, z, r, composition, collisions, moments.evolve_density,
@@ -435,8 +436,8 @@ function setup_moment_kinetics(input_dict::Dict; restart_prefix_iblock=nothing,
     return pdf, scratch, code_time, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
            moments, fields, spectral_objects, advect_objects,
            composition, collisions, geometry, boundary_distributions,
-           num_diss_params, advance, scratch_dummy, manufactured_source_list,
-           ascii_io, io_moments, io_dfns
+           external_source_settings, num_diss_params, advance, scratch_dummy,
+           manufactured_source_list, ascii_io, io_moments, io_dfns
 end
 
 """

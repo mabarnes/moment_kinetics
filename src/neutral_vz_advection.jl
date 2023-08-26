@@ -12,7 +12,7 @@ using ..looping
 """
 """
 function neutral_advection_vz!(f_out, fvec_in, fields, moments, advect, vz, vr, vzeta, z,
-        r, dt, vz_spectral, composition, collisions)
+        r, dt, vz_spectral, composition, collisions, neutral_source_settings)
 
     # only have a parallel acceleration term for neutrals if using the peculiar velocity
     # wpar = vpar - upar as a variable; i.e., d(wpar)/dt /=0 for neutrals even though d(vpar)/dt = 0.
@@ -23,7 +23,8 @@ function neutral_advection_vz!(f_out, fvec_in, fields, moments, advect, vz, vr, 
     begin_sn_r_z_vzeta_vr_region()
 
     # calculate the advection speed corresponding to current f
-    update_speed_neutral_vz!(advect, fields, fvec_in, moments, vz, vr, vzeta, z, r, composition, collisions)
+    update_speed_neutral_vz!(advect, fields, fvec_in, moments, vz, vr, vzeta, z, r,
+                             composition, collisions, neutral_source_settings)
     @loop_sn isn begin
         @loop_r_z_vzeta_vr ir iz ivzeta ivr begin
             @views advance_f_local!(f_out[:,ivr,ivzeta,iz,ir,isn], fvec_in.pdf_neutral[:,ivr,ivzeta,iz,ir,isn],
@@ -36,7 +37,7 @@ end
 calculate the advection speed in the vz-direction at each grid point
 """
 function update_speed_neutral_vz!(advect, fields, fvec, moments, vz, vr, vzeta, z, r,
-                                  composition, collisions)
+                                  composition, collisions, neutral_source_settings)
     @boundscheck r.n == size(advect[1].speed,5) || throw(BoundsError(advect[1].speed))
     @boundscheck z.n == size(advect[1].speed,4) || throw(BoundsError(advect[1].speed))
     @boundscheck vzeta.n == size(advect[1].speed,3) || throw(BoundsError(advect[1].speed))
@@ -45,7 +46,8 @@ function update_speed_neutral_vz!(advect, fields, fvec, moments, vz, vr, vzeta, 
     @boundscheck vz.n == size(advect[1].speed,1) || throw(BoundsError(advect[1].speed))
     if vz.advection.option == "default"
         # dvpa/dt = Ze/m ⋅ E_parallel
-        update_speed_default_neutral!(advect, fields, fvec, moments, vz, z, r, composition, collisions)
+        update_speed_default_neutral!(advect, fields, fvec, moments, vz, z, r,
+                                      composition, collisions, neutral_source_settings)
     elseif vz.advection.option == "constant"
         begin_serial_region()
         @serial_region begin
@@ -70,13 +72,19 @@ end
 
 """
 """
-function update_speed_default_neutral!(advect, fields, fvec, moments, vz, z, r, composition, collisions)
+function update_speed_default_neutral!(advect, fields, fvec, moments, vz, z, r,
+                                       composition, collisions, neutral_source_settings)
     if moments.evolve_ppar && moments.evolve_upar
-        update_speed_n_u_p_evolution_neutral!(advect, fvec, moments, vz, z, r, composition, collisions)
+        update_speed_n_u_p_evolution_neutral!(advect, fvec, moments, vz, z, r,
+                                              composition, collisions,
+                                              neutral_source_settings)
     elseif moments.evolve_ppar
-        update_speed_n_p_evolution_neutral!(advect, fields, fvec, moments, vz, z, r, composition, collisions)
+        update_speed_n_p_evolution_neutral!(advect, fields, fvec, moments, vz, z, r,
+                                            composition, collisions,
+                                            neutral_source_settings)
     elseif moments.evolve_upar
-        update_speed_n_u_evolution_neutral!(advect, fvec, moments, vz, z, r, composition, collisions)
+        update_speed_n_u_evolution_neutral!(advect, fvec, moments, vz, z, r, composition,
+                                            collisions, neutral_source_settings)
     end
 end
 
@@ -86,7 +94,9 @@ coordinate for the case where density, flow and pressure are evolved independent
 the pdf; in this case, the parallel velocity coordinate is the normalized peculiar
 velocity wpahat = (vpa - upar)/vth
 """
-function update_speed_n_u_p_evolution_neutral!(advect, fvec, moments, vz, z, r, composition, collisions)
+function update_speed_n_u_p_evolution_neutral!(advect, fvec, moments, vz, z, r,
+                                               composition, collisions,
+                                               neutral_source_settings)
     @loop_sn isn begin
         @loop_r ir begin
             # update parallel acceleration to account for:
@@ -116,6 +126,26 @@ function update_speed_n_u_p_evolution_neutral!(advect, fvec, moments, vz, z, r, 
             end
         end
     end
+    if neutral_source_settings.active
+        source_strength = neutral_source_settings.source_strength
+        source_T = neutral_source_settings.source_T
+        r_amplitude = neutral_source_settings.r_amplitude
+        z_amplitude = neutral_source_settings.z_amplitude
+        density = fvec.density_neutral
+        uz = fvec.uz_neutral
+        pz = fvec.pz_neutral
+        vth = moments.neutral.vth
+        @loop_s_r_z is ir iz begin
+            prefactor = dt * source_strength * r_amplitude[ir] * z_amplitude[iz]
+            term1 = prefactor * uz[iz,ir,is]/(density[iz,ir,is]*vth[iz,ir,is])
+            term2_over_vpa =
+                0.5 * prefactor * (-(0.5*source_T + uz[iz,ir,is]^2) / pz[iz,ir,is]
+                                   + 1.0/density[iz,ir,is])
+            @loop_vzeta_vr_vz ivzeta ivr ivz begin
+                advect[is].speed[ivz,ivr,ivzeta,iz,ir] += term1 + vz_grid[ivz] * term2
+            end
+        end
+    end
 end
 
 """
@@ -124,7 +154,9 @@ where density and pressure are evolved independently from the pdf;
 in this case, the parallel velocity coordinate is the normalized velocity
 vpahat = vpa/vth
 """
-function update_speed_n_p_evolution_neutral!(advect, fields, fvec, moments, vz, z, r, composition, collisions)
+function update_speed_n_p_evolution_neutral!(advect, fields, fvec, moments, vz, z, r,
+                                             composition, collisions,
+                                             neutral_source_settings)
     @loop_sn isn begin
         # include contributions common to both ion and neutral species
         @loop_r ir begin
@@ -150,6 +182,9 @@ function update_speed_n_p_evolution_neutral!(advect, fields, fvec, moments, vz, 
             end
         end
     end
+    if ion_source_settings.active
+        error("External source not implemented for evolving n and ppar case")
+    end
 end
 
 """
@@ -158,7 +193,8 @@ where density and flow are evolved independently from the pdf;
 in this case, the parallel velocity coordinate is the peculiar velocity
 wpa = vpa-upar
 """
-function update_speed_n_u_evolution_neutral!(advect, fvec, moments, vz, z, r, composition, collisions)
+function update_speed_n_u_evolution_neutral!(advect, fvec, moments, vz, z, r, composition,
+                                             collisions, neutral_source_settings)
     @loop_sn isn begin
         @loop_r ir begin
             # update parallel acceleration to account for:
@@ -178,6 +214,22 @@ function update_speed_n_u_evolution_neutral!(advect, fvec, moments, vz, z, r, co
             # include contribution to neutral acceleration due to collisional friction with ions
             @loop_r_z_vzeta_vr ir iz ivzeta ivr begin
                 @views @. advect[isn].speed[:,ivr,ivzeta,iz,ir] -= collisions.charge_exchange*fvec.density[iz,ir,isn]*(fvec.upar[iz,ir,isn]-fvec.uz_neutral[iz,ir,isn])
+            end
+        end
+    end
+    if neutral_source_settings.active
+        source_strength = neutral_source_settings.source_strength
+        source_T = neutral_source_settings.source_T
+        r_amplitude = neutral_source_settings.r_amplitude
+        z_amplitude = neutral_source_settings.z_amplitude
+        density = fvec.density_neutral
+        uz = fvec.uz_neutral
+        vth = moments.neutral.vth
+        @loop_s_r_z is ir iz begin
+            term = dt * source_strength * r_amplitude[ir] * z_amplitude[iz] *
+                   uz[iz,ir,is]/(density[iz,ir,is]*vth[iz,ir,is]^2)
+            @loop_vperp_vpa ivperp ivpa begin
+                advect[is].speed[ivpa,ivperp,iz,ir] += term
             end
         end
     end

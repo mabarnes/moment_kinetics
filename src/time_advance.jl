@@ -40,6 +40,7 @@ using ..vpa_advection: update_speed_vpa!, vpa_advection!
 using ..charge_exchange: charge_exchange_collisions_1V!, charge_exchange_collisions_3V!
 using ..ionization: ionization_collisions_1V!, ionization_collisions_3V!, constant_ionization_source!
 using ..coulomb_collisions: coulomb_collisions!
+using ..external_sources
 using ..numerical_dissipation: vpa_boundary_buffer_decay!,
                                vpa_boundary_buffer_diffusion!, vpa_dissipation!,
                                z_dissipation!, r_dissipation!,
@@ -163,8 +164,8 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
                              vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral,
                              z_spectral, r_spectral, composition, drive_input, moments,
                              t_input, collisions, species, geometry,
-                             boundary_distributions, num_diss_params,
-                             manufactured_solns_input, restarting)
+                             boundary_distributions, external_source_settings,
+                             num_diss_params, manufactured_solns_input, restarting)
     # define some local variables for convenience/tidiness
     n_species = composition.n_species
     n_ion_species = composition.n_ion_species
@@ -176,8 +177,9 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
     # if no splitting of operators, all terms advanced concurrently;
     # else, will advance one term at a time.
     advance = setup_advance_flags(moments, composition, t_input, collisions,
-                                  num_diss_params, manufactured_solns_input, rk_coefs, r,
-                                  vperp, vpa, vzeta, vr, vz)
+                                  external_source_settings, num_diss_params,
+                                  manufactured_solns_input, rk_coefs, r, vperp, vpa,
+                                  vzeta, vr, vz)
 
     begin_serial_region()
 
@@ -230,7 +232,8 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
     # initialise the vpa advection speed
     begin_s_r_z_vperp_region()
     update_speed_vpa!(vpa_advect, fields, scratch[1], moments, vpa, vperp, z, r,
-                      composition, collisions, 0.0, geometry)
+                      composition, collisions, external_source_settings.ion, 0.0,
+                      geometry)
 
     # create structure vperp_advect whose members are the arrays needed to compute
     # the advection term(s) appearing in the split part of the GK equation dealing
@@ -282,7 +285,8 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
         # initialise the z advection speed
         begin_sn_r_z_vzeta_vr_region()
         @views update_speed_neutral_vz!(neutral_vz_advect, fields, scratch[1], moments,
-                                        vz, vr, vzeta, z, r, composition, collisions)
+                                        vz, vr, vzeta, z, r, composition, collisions,
+                                        external_source_settings.neutral)
     end
 
     ##
@@ -384,7 +388,8 @@ indicate which parts of the equations are to be advanced concurrently.
 if no splitting of operators, all terms advanced concurrently;
 else, will advance one term at a time.
 """
-function setup_advance_flags(moments, composition, t_input, collisions, num_diss_params,
+function setup_advance_flags(moments, composition, t_input, collisions,
+                             external_source_settings, num_diss_params,
                              manufactured_solns_input, rk_coefs, r, vperp, vpa, vzeta, vr,
                              vz)
     # default is not to concurrently advance different operators
@@ -397,6 +402,7 @@ function setup_advance_flags(moments, composition, t_input, collisions, num_diss
     advance_ionization_1V = false
     advance_ionization_source = false
     advance_coulomb_collisions = false
+    advance_external_source = false
     advance_numerical_dissipation = false
     advance_sources = false
     advance_continuity = false
@@ -405,6 +411,7 @@ function setup_advance_flags(moments, composition, t_input, collisions, num_diss
     advance_neutral_z_advection = false
     advance_neutral_r_advection = false
     advance_neutral_vz_advection = false
+    advance_neutral_external_source = false
     advance_neutral_sources = false
     advance_neutral_continuity = false
     advance_neutral_force_balance = false
@@ -469,6 +476,8 @@ function setup_advance_flags(moments, composition, t_input, collisions, num_diss
         if collisions.coulomb_collision_frequency_prefactor > 0.0
             advance_coulomb_collisions = true
         end
+        advance_external_source = external_source_settings.ion.active
+        advance_neutral_external_source = external_source_settings.neutral.active
         advance_numerical_dissipation = true
         # if evolving the density, must advance the continuity equation,
         # in addition to including sources arising from the use of a modified distribution
@@ -518,8 +527,9 @@ function setup_advance_flags(moments, composition, t_input, collisions, num_diss
                         advance_neutral_vz_advection, advance_cx, advance_cx_1V,
                         advance_ionization, advance_ionization_1V,
                         advance_ionization_source, advance_coulomb_collisions,
-                        advance_numerical_dissipation, advance_sources,
-                        advance_continuity, advance_force_balance, advance_energy,
+                        advance_external_source, advance_numerical_dissipation,
+                        advance_sources, advance_continuity, advance_force_balance,
+                        advance_energy, advance_neutral_external_source,
                         advance_neutral_sources, advance_neutral_continuity,
                         advance_neutral_force_balance, advance_neutral_energy, rk_coefs,
                         manufactured_solns_test, r_diffusion, vpa_diffusion, vz_diffusion)
@@ -720,7 +730,7 @@ time integrator can be used without severe CFL condition
 function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
            moments, fields, spectral_objects, advect_objects,
            composition, collisions, geometry, boundary_distributions,
-           num_diss_params, advance, scratch_dummy,
+           external_source_settings, num_diss_params, advance, scratch_dummy,
            manufactured_source_list, ascii_io, io_moments, io_dfns)
 
     @debug_detect_redundant_block_synchronize begin
@@ -754,12 +764,14 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
             # MRH NOT SUPPORTED
             time_advance_split_operators!(pdf, scratch, t, t_input, vpa, z,
                 vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
-                composition, collisions, num_diss_params, advance, i)
+                composition, collisions, external_source_settings, num_diss_params,
+                advance, i)
         else
             time_advance_no_splitting!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
                 moments, fields, spectral_objects, advect_objects,
                 composition, collisions, geometry, boundary_distributions,
-                num_diss_params, advance,  scratch_dummy, manufactured_source_list, i)
+                external_source_settings, num_diss_params, advance, scratch_dummy,
+                manufactured_source_list, i)
         end
         # update the time
         t += t_input.dt
@@ -981,7 +993,7 @@ end
 """
 function time_advance_split_operators!(pdf, scratch, t, t_input, vpa, z,
     vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
-    composition, collisions, num_diss_params, advance, istep)
+    composition, collisions, external_source_settings, num_diss_params, advance, istep)
 
     # define some abbreviated variables for tidiness
     n_ion_species = composition.n_ion_species
@@ -997,14 +1009,16 @@ function time_advance_split_operators!(pdf, scratch, t, t_input, vpa, z,
         advance.vpa_advection = true
         time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
             vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
-            composition, collisions, num_diss_params, advance, istep)
+            composition, collisions, external_source_settings, num_diss_params, advance,
+            istep)
         advance.vpa_advection = false
         # z_advection! advances the operator-split 1D advection equation in z
         # apply z-advection operation to all species (charged and neutral)
         advance.z_advection = true
         time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
             vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
-            composition, collisions, num_diss_params, advance, istep)
+            composition, collisions, external_source_settings, num_diss_params, advance,
+            istep)
         advance.z_advection = false
         # account for charge exchange collisions between ions and neutrals
         if composition.n_neutral_species > 0
@@ -1012,16 +1026,16 @@ function time_advance_split_operators!(pdf, scratch, t, t_input, vpa, z,
                 advance.cx_collisions = true
                 time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
                     vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
-                    composition, collisions, num_diss_params, advance,
-                    istep)
+                    composition, collisions, external_source_settings, num_diss_params,
+                    advance, istep)
                 advance.cx_collisions = false
             end
             if collisions.ionization > 0.0
                 advance.ionization_collisions = true
                 time_advance_no_splitting!(pdf, scratch, t, t_input, z, vpa,
                     z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
-                    composition, collisions, num_diss_params, advance,
-                    istep)
+                    composition, collisions, external_source_settings, num_diss_params,
+                    advance, istep)
                 advance.ionization_collisions = false
             end
         end
@@ -1039,7 +1053,8 @@ function time_advance_split_operators!(pdf, scratch, t, t_input, vpa, z,
             advance.source_terms = true
             time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
                 vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
-                composition, collisions, num_diss_params, advance, istep)
+                composition, collisions, external_source_settings, num_diss_params,
+                advance, istep)
             advance.source_terms = false
         end
         # use the continuity equation to update the density
@@ -1047,7 +1062,8 @@ function time_advance_split_operators!(pdf, scratch, t, t_input, vpa, z,
             advance.continuity = true
             time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
                 vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
-                composition, collisions, num_diss_params, advance, istep)
+                composition, collisions, external_source_settings, num_diss_params,
+                advance, istep)
             advance.continuity = false
         end
         # use force balance to update the parallel flow
@@ -1055,7 +1071,8 @@ function time_advance_split_operators!(pdf, scratch, t, t_input, vpa, z,
             advance.force_balance = true
             time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
                 vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
-                composition, collisions, num_diss_params, advance, istep)
+                composition, collisions, external_source_settings, num_diss_params,
+                advance, istep)
             advance.force_balance = false
         end
         # use the energy equation to update the parallel pressure
@@ -1063,7 +1080,8 @@ function time_advance_split_operators!(pdf, scratch, t, t_input, vpa, z,
             advance.energy = true
             time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
                 vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
-                composition, collisions, num_diss_params, advance, istep)
+                composition, collisions, external_source_settings, num_diss_params,
+                advance, istep)
             advance.energy = false
         end
     else
@@ -1072,7 +1090,8 @@ function time_advance_split_operators!(pdf, scratch, t, t_input, vpa, z,
             advance.energy = true
             time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
                 vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
-                composition, collisions, num_diss_params, advance, istep)
+                composition, collisions, external_source_settings, num_diss_params,
+                advance, istep)
             advance.energy = false
         end
         # use force balance to update the parallel flow
@@ -1080,7 +1099,8 @@ function time_advance_split_operators!(pdf, scratch, t, t_input, vpa, z,
             advance.force_balance = true
             time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
                 vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
-                composition, collisions, num_diss_params, advance, istep)
+                composition, collisions, external_source_settings, num_diss_params,
+                advance, istep)
             advance.force_balance = false
         end
         # use the continuity equation to update the density
@@ -1088,7 +1108,8 @@ function time_advance_split_operators!(pdf, scratch, t, t_input, vpa, z,
             advance.continuity = true
             time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
                 vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
-                composition, collisions, num_diss_params, advance, istep)
+                composition, collisions, external_source_settings, num_diss_params,
+                advance, istep)
             advance.continuity = false
         end
         # and add the source terms associated with redefining g = pdf/density or pdf*vth/density
@@ -1097,7 +1118,8 @@ function time_advance_split_operators!(pdf, scratch, t, t_input, vpa, z,
             advance.source_terms = true
             time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
                 vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
-                composition, collisions, num_diss_params, advance, istep)
+                composition, collisions, external_source_settings, num_diss_params,
+                advance, istep)
             advance.source_terms = false
         end
         # account for charge exchange collisions between ions and neutrals
@@ -1106,16 +1128,16 @@ function time_advance_split_operators!(pdf, scratch, t, t_input, vpa, z,
                 advance.ionization = true
                 time_advance_no_splitting!(pdf, scratch, t, t_input, z, vpa,
                     z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
-                    composition, collisions, num_diss_params, advance,
-                    istep)
+                    composition, collisions, external_source_settings, num_diss_params,
+                    advance, istep)
                 advance.ionization = false
             end
             if collisions.charge_exchange > 0.0
                 advance.cx_collisions = true
                 time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
                     vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
-                    composition, collisions, num_diss_params, advance,
-                    istep)
+                    composition, collisions, external_source_settings, num_diss_params,
+                    advance, istep)
                 advance.cx_collisions = false
             end
         end
@@ -1124,14 +1146,16 @@ function time_advance_split_operators!(pdf, scratch, t, t_input, vpa, z,
         advance.z_advection = true
         time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
             vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
-            composition, collisions, num_diss_params, advance, istep)
+            composition, collisions, external_source_settings, num_diss_params, advance,
+            istep)
         advance.z_advection = false
         # advance the operator-split 1D advection equation in vpa
         # vpa-advection only applies for charged species
         advance.vpa_advection = true
         time_advance_no_splitting!(pdf, scratch, t, t_input, vpa, z,
             vpa_spectral, z_spectral, moments, fields, vpa_advect, z_advect,
-            composition, collisions, num_diss_params, advance, istep)
+            composition, collisions, external_source_settings, num_diss_params, advance,
+            istep)
         advance.vpa_advection = false
     end
     return nothing
@@ -1142,13 +1166,14 @@ end
 function time_advance_no_splitting!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
            moments, fields, spectral_objects, advect_objects,
            composition, collisions, geometry, boundary_distributions,
-           num_diss_params, advance, scratch_dummy, manufactured_source_list, istep)
+           external_source_settings, num_diss_params, advance, scratch_dummy,
+           manufactured_source_list, istep)
 
     if t_input.n_rk_stages > 1
         ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
-            moments, fields, spectral_objects, advect_objects,
-            composition, collisions, geometry, boundary_distributions, num_diss_params,
-            advance,  scratch_dummy, manufactured_source_list, istep)
+            moments, fields, spectral_objects, advect_objects, composition, collisions,
+            geometry, boundary_distributions, external_source_settings, num_diss_params,
+            advance, scratch_dummy, manufactured_source_list, istep)
     else
         euler_time_advance!(scratch, scratch, pdf, fields, moments,
             advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z, r, t,
@@ -1416,8 +1441,8 @@ end
 """
 """
 function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
-           moments, fields, spectral_objects, advect_objects,
-           composition, collisions, geometry, boundary_distributions, num_diss_params,
+           moments, fields, spectral_objects, advect_objects, composition, collisions,
+           geometry, boundary_distributions, external_source_settings, num_diss_params,
            advance, scratch_dummy, manufactured_source_list, istep)
 
     begin_s_r_z_region()
@@ -1461,8 +1486,8 @@ function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase,
             pdf, fields, moments,
             advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z, r, t,
             t_input, spectral_objects, composition,
-            collisions, geometry, scratch_dummy, manufactured_source_list, 
-            num_diss_params, advance, istage)
+            collisions, geometry, scratch_dummy, manufactured_source_list,
+            external_source_settings, num_diss_params, advance, istage)
         @views rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, vr,
                           vzeta, vpa, vperp, z, r, advect_objects,
                           advance.rk_coefs[:,istage], istage, composition, geometry,
@@ -1548,7 +1573,8 @@ with fvec_in an input and fvec_out the output
 function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z, r, t, t_input,
     spectral_objects, composition, collisions, geometry, scratch_dummy,
-    manufactured_source_list, num_diss_params, advance, istage)
+    manufactured_source_list, external_source_settings, num_diss_params, advance, istage)
+
     # define some abbreviated variables for tidiness
     n_ion_species = composition.n_ion_species
     n_neutral_species = composition.n_neutral_species
@@ -1564,7 +1590,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
 
     if advance.vpa_advection
         vpa_advection!(fvec_out.pdf, fvec_in, fields, moments, vpa_advect, vpa, vperp, z, r, dt, t,
-            vpa_spectral, composition, collisions, geometry)
+            vpa_spectral, composition, collisions, external_source_settings.ion, geometry)
     end
 
     # z_advection! advances 1D advection equation in z
@@ -1587,7 +1613,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
 
     if advance.source_terms
         source_terms!(fvec_out.pdf, fvec_in, moments, vpa, z, r, dt, z_spectral,
-                      composition, collisions)
+                      composition, collisions, external_source_settings.ion)
     end
 
     if advance.neutral_z_advection
@@ -1603,12 +1629,12 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     if advance.neutral_vz_advection
         neutral_advection_vz!(fvec_out.pdf_neutral, fvec_in, fields, moments,
                               neutral_vz_advect, vz, vr, vzeta, z, r, dt, vz_spectral,
-                              composition, collisions)
+                              composition, collisions, external_source_settings.neutral)
     end
 
     if advance.neutral_source_terms
         source_terms_neutral!(fvec_out.pdf_neutral, fvec_in, moments, vpa, z, r, dt, z_spectral,
-                      composition, collisions)
+                      composition, collisions, external_source_settings.neutral)
     end
 
     if advance.manufactured_solns_test
@@ -1645,11 +1671,20 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
         constant_ionization_source!(fvec_out.pdf, vpa, vperp, z, r, moments, composition,
                                     collisions, dt)
     end
-    
+
     # account for coulomb collisions between ions
     if advance.coulomb_collisions
         coulomb_collisions!(fvec_out.pdf, fvec_in, moments, composition, collisions,
                             vperp, vpa, dt)
+    end
+
+    if advance.external_source
+        external_ion_source(fvec_out.pdf, fvec_in, moments, external_source_settings.ion,
+                            vperp, vpa, dt)
+    end
+    if advance.neutral_external_source
+        external_neutral_source(fvec_out.pdf, fvec_in, moments,
+                                external_source_settings.neutral, vzeta, vr, vz, dt)
     end
 
     # add numerical dissipation
@@ -1679,7 +1714,8 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     end
     if advance.continuity
         continuity_equation!(fvec_out.density, fvec_in, moments, composition, dt,
-                             z_spectral, collisions.ionization, num_diss_params)
+                             z_spectral, collisions.ionization,
+                             external_source_settings.ion, num_diss_params)
     end
     if advance.force_balance
         # fvec_out.upar is over-written in force_balance! and contains the particle flux
@@ -1688,7 +1724,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     end
     if advance.energy
         energy_equation!(fvec_out.ppar, fvec_in, moments, collisions, dt, z_spectral,
-                         composition, num_diss_params)
+                         composition, external_source_settings.ion, num_diss_params)
     end
     if moments.evolve_density || moments.evolve_upar || moments.evolve_ppar
         # Only need to change region type if moment evolution equations will be used.
@@ -1700,7 +1736,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     if advance.neutral_continuity
         neutral_continuity_equation!(fvec_out.density_neutral, fvec_in, moments,
                                      composition, dt, z_spectral, collisions.ionization,
-                                     num_diss_params)
+                                     external_source_settings.neutral, num_diss_params)
     end
     if advance.neutral_force_balance
         # fvec_out.upar is over-written in force_balance! and contains the particle flux
@@ -1710,7 +1746,8 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     end
     if advance.neutral_energy
         neutral_energy_equation!(fvec_out.pz_neutral, fvec_in, moments, collisions, dt,
-                                 z_spectral, composition, num_diss_params)
+                                 z_spectral, composition,
+                                 external_source_settings.neutral, num_diss_params)
     end
     # reset "xx.updated" flags to false since ff has been updated
     # and the corresponding moments have not

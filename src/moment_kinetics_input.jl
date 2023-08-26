@@ -11,6 +11,7 @@ using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float
 using ..communication
 using ..coordinates: define_coordinate
+using ..external_sources
 using ..file_io: io_has_parallel, input_option_error, open_ascii_output_file
 using ..constants
 using ..coulomb_collisions: setup_coulomb_collisions
@@ -511,6 +512,8 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     # initialize vr grid and write grid point locations to file
     vzeta, vzeta_spectral = define_coordinate(vzeta_immutable, io_immutable.parallel_io)
 
+    external_source_settings = setup_external_sources!(scan_input, r, z)
+
     if global_rank[] == 0 && save_inputs_to_txt
         # Make file to log some information about inputs into.
         # check to see if output_dir exists in the current directory
@@ -531,7 +534,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
                   vpa, vpa_spectral, vperp, vperp_spectral, gyrophase, gyrophase_spectral,
                   vz, vz_spectral, vr, vr_spectral, vzeta, vzeta_spectral, composition,
                   species_immutable, collisions, geometry, drive_immutable,
-                  num_diss_params, manufactured_solns_input,
+                  external_source_settings, num_diss_params, manufactured_solns_input,
                   reference_parameters)
     println(io, "\nAll inputs returned from mk_input():")
     println(io, all_inputs)

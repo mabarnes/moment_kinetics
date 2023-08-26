@@ -12,7 +12,7 @@ using ..looping
 evolve the parallel pressure by solving the energy equation
 """
 function energy_equation!(ppar, fvec, moments, collisions, dt, spectral, composition,
-                          num_diss_params)
+                          ion_source_settings, num_diss_params)
 
     begin_s_r_z_region()
 
@@ -20,6 +20,17 @@ function energy_equation!(ppar, fvec, moments, collisions, dt, spectral, composi
         ppar[iz,ir,is] += dt*(-fvec.upar[iz,ir,is]*moments.charged.dppar_dz_upwind[iz,ir,is]
                               - moments.charged.dqpar_dz[iz,ir,is]
                               - 3.0*fvec.ppar[iz,ir,is]*moments.charged.dupar_dz[iz,ir,is])
+    end
+
+    if ion_source_settings.active
+        source_strength = ion_source_settings.source_strength
+        source_T = ion_source_settings.source_T
+        r_amplitude = ion_source_settings.r_amplitude
+        z_amplitude = ion_source_settings.z_amplitude
+        @loop_s_r_z is ir iz begin
+            ppar[iz,ir,is] += dt * source_strength * r_amplitude[ir] * z_amplitude[iz] *
+                              (0.5*source_T + fvec.upar[iz,ir,is]^2)
+        end
     end
 
     diffusion_coefficient = num_diss_params.moment_dissipation_coefficient
@@ -57,7 +68,7 @@ end
 evolve the neutral parallel pressure by solving the energy equation
 """
 function neutral_energy_equation!(pz, fvec, moments, collisions, dt, spectral,
-                                  composition, num_diss_params)
+                                  composition, neutral_source_settings, num_diss_params)
 
     begin_sn_r_z_region()
 
@@ -65,6 +76,17 @@ function neutral_energy_equation!(pz, fvec, moments, collisions, dt, spectral,
         pz[iz,ir,is] += dt*(-fvec.uz_neutral[iz,ir,is]*moments.neutral.dpz_dz_upwind[iz,ir,is]
                             - moments.neutral.dqz_dz[iz,ir,is]
                             - 3.0*fvec.pz_neutral[iz,ir,is]*moments.neutral.duz_dz[iz,ir,is])
+    end
+
+    if neutral_source_settings.active
+        source_strength = neutral_source_settings.source_strength
+        source_T = neutral_source_settings.source_T
+        r_amplitude = neutral_source_settings.r_amplitude
+        z_amplitude = neutral_source_settings.z_amplitude
+        @loop_s_r_z is ir iz begin
+            pz[iz,ir,is] += dt * source_strength * r_amplitude[ir] * z_amplitude[iz] *
+                            (0.5*source_T + fvec.uz_neutral[iz,ir,is]^2)
+        end
     end
 
     diffusion_coefficient = num_diss_params.moment_dissipation_coefficient

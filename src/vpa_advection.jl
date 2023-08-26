@@ -12,7 +12,7 @@ using ..looping
 """
 """
 function vpa_advection!(f_out, fvec_in, fields, moments, advect, vpa, vperp, z, r, dt, t,
-                        vpa_spectral, composition, collisions, geometry)
+                        vpa_spectral, composition, collisions, ion_source_settings, geometry)
 
     begin_s_r_z_vperp_region()
 
@@ -20,7 +20,8 @@ function vpa_advection!(f_out, fvec_in, fields, moments, advect, vpa, vperp, z, 
     # wpar = vpar - upar as a variable; i.e., d(wpar)/dt /=0 for neutrals even though d(vpar)/dt = 0.
 
     # calculate the advection speed corresponding to current f
-    update_speed_vpa!(advect, fields, fvec_in, moments, vpa, vperp, z, r, composition, collisions, t, geometry)
+    update_speed_vpa!(advect, fields, fvec_in, moments, vpa, vperp, z, r, composition,
+                      collisions, ion_source_settings, t, geometry)
     @loop_s is begin
         @loop_r_z_vperp ir iz ivperp begin
             @views advance_f_local!(f_out[:,ivperp,iz,ir,is], fvec_in.pdf[:,ivperp,iz,ir,is],
@@ -32,7 +33,8 @@ end
 """
 calculate the advection speed in the vpa-direction at each grid point
 """
-function update_speed_vpa!(advect, fields, fvec, moments, vpa, vperp, z, r, composition, collisions, t, geometry)
+function update_speed_vpa!(advect, fields, fvec, moments, vpa, vperp, z, r, composition,
+                           collisions, ion_source_settings, t, geometry)
     @boundscheck r.n == size(advect[1].speed,4) || throw(BoundsError(advect))
     @boundscheck z.n == size(advect[1].speed,3) || throw(BoundsError(advect))
     @boundscheck vperp.n == size(advect[1].speed,2) || throw(BoundsError(advect))
@@ -41,7 +43,8 @@ function update_speed_vpa!(advect, fields, fvec, moments, vpa, vperp, z, r, comp
     @boundscheck vpa.n == size(advect[1].speed,1) || throw(BoundsError(speed))
     if vpa.advection.option == "default"
         # dvpa/dt = Ze/m ⋅ E_parallel
-        update_speed_default!(advect, fields, fvec, moments, vpa, z, r, composition, collisions, t, geometry)
+        update_speed_default!(advect, fields, fvec, moments, vpa, z, r, composition,
+                              collisions, ion_source_settings, t, geometry)
     elseif vpa.advection.option == "constant"
         begin_serial_region()
         @serial_region begin
@@ -66,13 +69,17 @@ end
 
 """
 """
-function update_speed_default!(advect, fields, fvec, moments, vpa, z, r, composition, collisions, t, geometry)
+function update_speed_default!(advect, fields, fvec, moments, vpa, z, r, composition,
+                               collisions, ion_source_settings, t, geometry)
     if moments.evolve_ppar && moments.evolve_upar
-        update_speed_n_u_p_evolution!(advect, fvec, moments, vpa, z, r, composition, collisions)
+        update_speed_n_u_p_evolution!(advect, fvec, moments, vpa, z, r, composition,
+                                      collisions, ion_source_settings)
     elseif moments.evolve_ppar
-        update_speed_n_p_evolution!(advect, fields, fvec, moments, vpa, z, r, composition, collisions)
+        update_speed_n_p_evolution!(advect, fields, fvec, moments, vpa, z, r, composition,
+                                    collisions, ion_source_settings)
     elseif moments.evolve_upar
-        update_speed_n_u_evolution!(advect, fvec, moments, vpa, z, r, composition, collisions)
+        update_speed_n_u_evolution!(advect, fvec, moments, vpa, z, r, composition,
+                                    collisions, ion_source_settings)
     else
         bzed = geometry.bzed
         @inbounds @fastmath begin
@@ -90,7 +97,8 @@ where density, flow and pressure are evolved independently from the pdf;
 in this case, the parallel velocity coordinate is the normalized peculiar velocity
 wpahat = (vpa - upar)/vth
 """
-function update_speed_n_u_p_evolution!(advect, fvec, moments, vpa, z, r, composition, collisions)
+function update_speed_n_u_p_evolution!(advect, fvec, moments, vpa, z, r, composition,
+                                       collisions, ion_source_settings)
     @loop_s is begin
         @loop_r ir begin
             # update parallel acceleration to account for:
@@ -135,6 +143,27 @@ function update_speed_n_u_p_evolution!(advect, fvec, moments, vpa, z, r, composi
             end
         end
     end
+    if ion_source_settings.active
+        source_strength = ion_source_settings.source_strength
+        source_T = ion_source_settings.source_T
+        r_amplitude = ion_source_settings.r_amplitude
+        z_amplitude = ion_source_settings.z_amplitude
+        density = fvec.density
+        upar = fvec.upar
+        ppar = fvec.ppar
+        vth = moments.charged.vth
+        vpa_grid = vpa.grid
+        @loop_s_r_z is ir iz begin
+            prefactor = source_strength * r_amplitude[ir] * z_amplitude[iz]
+            term1 = prefactor * upar[iz,ir,is]/(density[iz,ir,is]*vth[iz,ir,is])
+            term2_over_vpa =
+                0.5 * prefactor * (-(0.5*source_T + upar[iz,ir,is]^2) / ppar[iz,ir,is]
+                                   + 1.0/density[iz,ir,is])
+            @loop_vperp_vpa ivperp ivpa begin
+                advect[is].speed[ivpa,ivperp,iz,ir] += term1 + vpa_grid[ivpa] * term2_over_vpa
+            end
+        end
+    end
 end
 
 """
@@ -143,7 +172,8 @@ where density and pressure are evolved independently from the pdf;
 in this case, the parallel velocity coordinate is the normalized velocity
 vpahat = vpa/vth
 """
-function update_speed_n_p_evolution!(advect, fields, fvec, moments, vpa, z, r, composition, collisions)
+function update_speed_n_p_evolution!(advect, fields, fvec, moments, vpa, z, r,
+                                     composition, collisions, ion_source_settings)
     @loop_s is begin
         # include contributions common to both ion and neutral species
         @loop_r ir begin
@@ -174,6 +204,9 @@ function update_speed_n_p_evolution!(advect, fields, fvec, moments, vpa, z, r, c
             end
         end
     end
+    if ion_source_settings.active
+        error("External source not implemented for evolving n and ppar case")
+    end
 end
 
 """
@@ -182,7 +215,8 @@ where density and flow are evolved independently from the pdf;
 in this case, the parallel velocity coordinate is the peculiar velocity
 wpa = vpa-upar
 """
-function update_speed_n_u_evolution!(advect, fvec, moments, vpa, z, r, composition, collisions)
+function update_speed_n_u_evolution!(advect, fvec, moments, vpa, z, r, composition,
+                                     collisions, ion_source_settings)
     @loop_s is begin
         @loop_r ir begin
             # update parallel acceleration to account for:
@@ -211,6 +245,22 @@ function update_speed_n_u_evolution!(advect, fvec, moments, vpa, z, r, compositi
                 @loop_r_z_vperp ir iz ivperp begin
                     @views @. advect[is].speed[:,ivperp,iz,ir] -= collisions.ionization*fvec.density_neutral[iz,ir,is]*(fvec.uz_neutral[iz,ir,is]-fvec.upar[iz,ir,is])
                 end
+            end
+        end
+    end
+    if ion_source_settings.active
+        source_strength = ion_source_settings.source_strength
+        source_T = ion_source_settings.source_T
+        r_amplitude = ion_source_settings.r_amplitude
+        z_amplitude = ion_source_settings.z_amplitude
+        density = fvec.density
+        upar = fvec.upar
+        vth = moments.charged.vth
+        @loop_s_r_z is ir iz begin
+            term = source_strength * r_amplitude[ir] * z_amplitude[iz] *
+                   upar[iz,ir,is]/(density[iz,ir,is]*vth[iz,ir,is]^2)
+            @loop_vperp_vpa ivperp ivpa begin
+                advect[is].speed[ivpa,ivperp,iz,ir] += term
             end
         end
     end
