@@ -18,11 +18,11 @@ using ..analysis: analyze_fields_data, check_Chodura_condition, get_r_perturbati
                   get_Fourier_modes_2D, get_Fourier_modes_1D, steady_state_residuals
 using ..array_allocation: allocate_float
 using ..coordinates: define_coordinate
-using ..input_structs: grid_input, advection_input
+using ..input_structs: grid_input, advection_input, set_defaults_and_check_top_level!,
+                       set_defaults_and_check_section!, Dict_to_NamedTuple
 using ..looping: all_dimensions, ion_dimensions, neutral_dimensions
 using ..manufactured_solns: manufactured_solutions, manufactured_electric_fields
-using ..moment_kinetics_input: mk_input, set_defaults_and_check_top_level!,
-                               set_defaults_and_check_section!, Dict_to_NamedTuple
+using ..moment_kinetics_input: mk_input
 using ..load_data: open_readonly_output_file, get_group, load_block_data,
                    load_coordinate_data, load_distributed_charged_pdf_slice,
                    load_distributed_neutral_pdf_slice, load_input, load_mk_options,
