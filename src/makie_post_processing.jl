@@ -1167,12 +1167,17 @@ function get_cache_slice(variable_cache::VariableCache, tind::mk_int)
     local_tind = findfirst(i->i==tind, tinds_chunk)
 
     if local_tind === nothing
+        if tind > variable_cache.n_tinds
+            error("tind=$tind is bigger than the number of time indices "
+                  * "($(variable_cache.n_tinds))")
+        end
         # tind is not in the cache, so get a new chunk
         chunk_size = variable_cache.t_chunk_size
         new_chunk_start = ((tind-1) ÷ chunk_size) * chunk_size + 1
-        new_chunk = new_chunk_start:(new_chunk_start + chunk_size - 1)
+        new_chunk = new_chunk_start:min(new_chunk_start + chunk_size - 1, variable_cache.n_tinds)
         variable_cache.tinds_chunk[] = new_chunk
-        variable_cache.data_chunk .=
+        selectdim(variable_cache.data_chunk,
+                  ndims(variable_cache.data_chunk), 1:length(new_chunk)) .=
             postproc_load_variable(variable_cache.run_info, variable_cache.variable_name;
                                    it=variable_cache.tinds_range_global[new_chunk],
                                    variable_cache.dim_slices...)
