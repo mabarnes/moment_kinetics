@@ -34,6 +34,7 @@ include("velocity_grid_transforms.jl")
 include("em_fields.jl")
 include("bgk.jl")
 include("manufactured_solns.jl") # MRH Here?
+include("external_sources.jl")
 include("initial_conditions.jl")
 include("moment_constraints.jl")
 include("advection.jl")
@@ -75,6 +76,7 @@ using .command_line_options: get_options
 using .communication
 using .communication: _block_synchronize
 using .debugging
+using .external_sources
 using .input_structs
 using .initial_conditions: allocate_pdf_and_moments, init_pdf_and_moments!,
                            enforce_boundary_conditions!
@@ -376,7 +378,7 @@ function setup_moment_kinetics(input_dict::Dict; restart_prefix_iblock=nothing,
     io_input, evolve_moments, t_input, z, z_spectral, r, r_spectral, vpa, vpa_spectral,
         vperp, vperp_spectral, gyrophase, gyrophase_spectral, vz, vz_spectral, vr,
         vr_spectral, vzeta, vzeta_spectral, composition, species, collisions, geometry,
-        drive_input, num_diss_params, manufactured_solns_input,
+        drive_input, external_source_settings, num_diss_params, manufactured_solns_input,
         reference_parameters = input
 
     # Create loop range variables for shared-memory-parallel loops
@@ -402,7 +404,8 @@ function setup_moment_kinetics(input_dict::Dict; restart_prefix_iblock=nothing,
     # Allocate arrays and create the pdf and moments structs
     pdf, moments, boundary_distributions =
         allocate_pdf_and_moments(composition, r, z, vperp, vpa, vzeta, vr, vz,
-                                 evolve_moments, collisions, num_diss_params)
+                                 evolve_moments, collisions, external_source_settings,
+                                 num_diss_params)
 
     if restart_prefix_iblock === nothing
         restarting = false
@@ -411,7 +414,7 @@ function setup_moment_kinetics(input_dict::Dict; restart_prefix_iblock=nothing,
         init_pdf_and_moments!(pdf, moments, boundary_distributions, geometry,
                               composition, r, z, vperp, vpa, vzeta, vr, vz,
                               vpa_spectral, vz_spectral, species,
-                              manufactured_solns_input)
+                              external_source_settings, manufactured_solns_input)
         # initialize time variable
         code_time = 0.
         previous_runs_info = nothing
@@ -423,6 +426,12 @@ function setup_moment_kinetics(input_dict::Dict; restart_prefix_iblock=nothing,
             reload_evolving_fields!(pdf, moments, boundary_distributions,
                                     restart_prefix_iblock, restart_time_index,
                                     composition, r, z, vpa, vperp, vzeta, vr, vz)
+
+        # Re-initialize the source amplitude here instead of loading it from the restart
+        # file so that we can change the settings between restarts.
+        initialize_external_source_amplitude!(moments, external_source_settings, vperp,
+                                              vzeta, vr, composition.n_neutral_species)
+
         _block_synchronize()
     end
     # create arrays and do other work needed to setup
@@ -433,13 +442,13 @@ function setup_moment_kinetics(input_dict::Dict; restart_prefix_iblock=nothing,
         setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
             vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral, z_spectral,
             r_spectral, composition, drive_input, moments, t_input, collisions, species,
-            geometry, boundary_distributions, num_diss_params, manufactured_solns_input,
-            restarting)
+            geometry, boundary_distributions, external_source_settings, num_diss_params,
+            manufactured_solns_input, restarting)
     # setup i/o
     ascii_io, io_moments, io_dfns = setup_file_io(io_input, boundary_distributions, vz,
         vr, vzeta, vpa, vperp, z, r, composition, collisions, moments.evolve_density,
-        moments.evolve_upar, moments.evolve_ppar, input_dict, restart_time_index,
-        previous_runs_info)
+        moments.evolve_upar, moments.evolve_ppar, external_source_settings, input_dict,
+        restart_time_index, previous_runs_info)
     # write initial data to ascii files
     write_data_to_ascii(moments, fields, vpa, vperp, z, r, code_time,
         composition.n_ion_species, composition.n_neutral_species, ascii_io)
@@ -456,8 +465,8 @@ function setup_moment_kinetics(input_dict::Dict; restart_prefix_iblock=nothing,
     return pdf, scratch, code_time, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
            moments, fields, spectral_objects, advect_objects,
            composition, collisions, geometry, boundary_distributions,
-           num_diss_params, advance, scratch_dummy, manufactured_source_list,
-           ascii_io, io_moments, io_dfns
+           external_source_settings, num_diss_params, advance, scratch_dummy,
+           manufactured_source_list, ascii_io, io_moments, io_dfns
 end
 
 """
