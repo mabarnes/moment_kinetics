@@ -71,7 +71,6 @@ using .file_io: write_moments_data_to_binary, write_dfns_data_to_binary
 using .command_line_options: get_options
 using .communication
 using .communication: _block_synchronize
-using .coordinates: define_coordinate
 using .debugging
 using .input_structs
 using .initial_conditions: allocate_pdf_and_moments, init_pdf_and_moments!,
@@ -350,28 +349,11 @@ function setup_moment_kinetics(input_dict::Dict; restart_prefix_iblock=nothing,
     input = mk_input(input_dict; save_inputs_to_txt=true, ignore_MPI=false)
     # obtain input options from moment_kinetics_input.jl
     # and check input to catch errors
-    io_input, evolve_moments,
-        t_input, z_input, r_input,
-        vpa_input, vperp_input, gyrophase_input,
-        vz_input, vr_input, vzeta_input,
-        composition, species, collisions,
-        geometry, drive_input, num_diss_params, manufactured_solns_input = input
-    # initialize z grid and write grid point locations to file
-    z, z_spectral = define_coordinate(z_input, io_input.parallel_io)
-    # initialize r grid and write grid point locations to file
-    r, r_spectral = define_coordinate(r_input, io_input.parallel_io)
-    # initialize vpa grid and write grid point locations to file
-    vpa, vpa_spectral = define_coordinate(vpa_input, io_input.parallel_io)
-    # initialize vperp grid and write grid point locations to file
-    vperp, vperp_spectral = define_coordinate(vperp_input, io_input.parallel_io)
-    # initialize gyrophase grid and write grid point locations to file
-    gyrophase, gyrophase_spectral = define_coordinate(gyrophase_input, io_input.parallel_io)
-    # initialize vz grid and write grid point locations to file
-    vz, vz_spectral = define_coordinate(vz_input, io_input.parallel_io)
-    # initialize vr grid and write grid point locations to file
-    vr, vr_spectral = define_coordinate(vr_input, io_input.parallel_io)
-    # initialize vr grid and write grid point locations to file
-    vzeta, vzeta_spectral = define_coordinate(vzeta_input, io_input.parallel_io)
+    io_input, evolve_moments, t_input, z, z_spectral, r, r_spectral, vpa, vpa_spectral,
+        vperp, vperp_spectral, gyrophase, gyrophase_spectral, vz, vz_spectral, vr,
+        vr_spectral, vzeta, vzeta_spectral, composition, species, collisions, geometry,
+        drive_input, num_diss_params, manufactured_solns_input = input
+
     # Create loop range variables for shared-memory-parallel loops
     if debug_loop_type === nothing
         # Non-debug case used for all simulations

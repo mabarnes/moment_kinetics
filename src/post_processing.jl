@@ -1047,12 +1047,9 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
     input = mk_input(scan_input)
     # obtain input options from moment_kinetics_input.jl
     # and check input to catch errors
-    io_input, evolve_moments,
-        t_input, z_input, r_input,
-        vpa_input, vperp_input, gyrophase_input,
-        vz_input, vr_input, vzeta_input,
-        composition, species, collisions,
-        geometry, drive_input, num_diss_params, manufactured_solns_input = input
+    io_input, evolve_moments, t_input, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _,
+        composition, species, collisions, geometry, drive_input, num_diss_params,
+        manufactured_solns_input = input
 
     if !is_1D1V
         # make plots and animations of the phi, Ez and Er
