@@ -684,6 +684,11 @@ function init_neutral_pdf_over_density!(pdf, boundary_distributions, spec, compo
         vz, vr, vzeta, z, vz_spectral, density, uz, pz, vth, v_norm_fac, evolve_density,
         evolve_upar, evolve_ppar, wall_flux_0, wall_flux_L)
 
+    # Reduce the ion flux by `recycling_fraction` to account for ions absorbed by the
+    # wall.
+    wall_flux_0 *= composition.recycling_fraction
+    wall_flux_L *= composition.recycling_fraction
+
     #if spec.vz_IC.initialization_option == "gaussian"
     # For now, continue to use 'vpa' initialization options for neutral species
     if spec.vpa_IC.initialization_option == "gaussian"
@@ -1428,8 +1433,8 @@ function enforce_neutral_z_boundary_condition!(pdf, density, uz, pz, moments, de
                 @views enforce_neutral_wall_bc!(
                     pdf[:,:,:,:,ir,isn], z, vzeta, vr, vz, pz[:,ir,isn], uz[:,ir,isn],
                     density[:,ir,isn], ion_flux_0, ion_flux_L, boundary_distributions,
-                    vtfac, moments.evolve_ppar, moments.evolve_upar,
-                    moments.evolve_density, zero)
+                    vtfac, composition.recycling_fraction, moments.evolve_ppar,
+                    moments.evolve_upar, moments.evolve_density, zero)
             end
         end
     end
@@ -1602,8 +1607,15 @@ enforce the wall boundary condition on neutrals;
 i.e., the incoming flux of neutrals equals the sum of the ion/neutral outgoing fluxes
 """
 function enforce_neutral_wall_bc!(pdf, z, vzeta, vr, vz, pz, uz, density, wall_flux_0,
-                                  wall_flux_L, boundary_distributions, vtfac, evolve_ppar,
-                                  evolve_upar, evolve_density, zero)
+                                  wall_flux_L, boundary_distributions, vtfac,
+                                  recycling_fraction, evolve_ppar, evolve_upar,
+                                  evolve_density, zero)
+
+    # Reduce the ion flux by `recycling_fraction` to account for ions absorbed by the
+    # wall.
+    wall_flux_0 *= recycling_fraction
+    wall_flux_L *= recycling_fraction
+
     if !evolve_density && !evolve_upar
         knudsen_cosine = boundary_distributions.knudsen
 
