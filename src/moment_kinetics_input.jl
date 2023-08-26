@@ -10,6 +10,7 @@ export read_input_file
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float
 using ..communication
+using ..coordinates: define_coordinate
 using ..file_io: io_has_parallel, input_option_error, open_ascii_output_file
 using ..finite_differences: fd_check_option
 using ..input_structs
@@ -480,6 +481,23 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     io_immutable = io_input(; output_dir=output_dir, run_name=run_name,
                               Dict(Symbol(k)=>v for (k,v) in io_settings)...)
 
+    # initialize z grid and write grid point locations to file
+    z, z_spectral = define_coordinate(z_immutable, io_immutable.parallel_io)
+    # initialize r grid and write grid point locations to file
+    r, r_spectral = define_coordinate(r_immutable, io_immutable.parallel_io)
+    # initialize vpa grid and write grid point locations to file
+    vpa, vpa_spectral = define_coordinate(vpa_immutable, io_immutable.parallel_io)
+    # initialize vperp grid and write grid point locations to file
+    vperp, vperp_spectral = define_coordinate(vperp_immutable, io_immutable.parallel_io)
+    # initialize gyrophase grid and write grid point locations to file
+    gyrophase, gyrophase_spectral = define_coordinate(gyrophase_immutable, io_immutable.parallel_io)
+    # initialize vz grid and write grid point locations to file
+    vz, vz_spectral = define_coordinate(vz_immutable, io_immutable.parallel_io)
+    # initialize vr grid and write grid point locations to file
+    vr, vr_spectral = define_coordinate(vr_immutable, io_immutable.parallel_io)
+    # initialize vr grid and write grid point locations to file
+    vzeta, vzeta_spectral = define_coordinate(vzeta_immutable, io_immutable.parallel_io)
+
     if global_rank[] == 0 && save_inputs_to_txt
         # Make file to log some information about inputs into.
         # check to see if output_dir exists in the current directory
@@ -495,9 +513,10 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
                 composition, species_immutable, evolve_moments, num_diss_params)
 
     # return immutable structs for z, vpa, species and composition
-    all_inputs = (io_immutable, evolve_moments, t_input,
-                  z_immutable, r_immutable, vpa_immutable, vperp_immutable, gyrophase_immutable, vz_immutable, vr_immutable, vzeta_immutable,
-                  composition, species_immutable, collisions, geometry, drive_immutable,
+    all_inputs = (io_immutable, evolve_moments, t_input, z, z_spectral, r, r_spectral,
+                  vpa, vpa_spectral, vperp, vperp_spectral, gyrophase, gyrophase_spectral,
+                  vz, vz_spectral, vr, vr_spectral, vzeta, vzeta_spectral, composition,
+                  species_immutable, collisions, geometry, drive_immutable,
                   num_diss_params, manufactured_solns_input)
     println(io, "\nAll inputs returned from mk_input():")
     println(io, all_inputs)
