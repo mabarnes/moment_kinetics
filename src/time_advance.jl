@@ -795,7 +795,7 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
                     @loop_sn isn begin
                         residual_nn =
                             steady_state_residuals(scratch[end].density_neutral[:,:,isn],
-                                                   scratch[1].density[:,:,isn],
+                                                   scratch[1].density_neutral[:,:,isn],
                                                    t_input.dt; use_mpi=true,
                                                    only_max_abs=true)
                         if global_rank[] == 0
