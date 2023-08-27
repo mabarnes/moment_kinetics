@@ -56,6 +56,7 @@ using ..advection: advection_info
 
 using Dates
 using Plots
+using ..analysis: steady_state_residuals
 using ..post_processing: draw_v_parallel_zero!
 
 struct scratch_dummy_arrays
@@ -731,6 +732,7 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
     # main time advance loop
     iwrite_moments = 2
     iwrite_dfns = 2
+    finish_now = false
     for i ∈ 1:t_input.nstep
         if t_input.split_operators
             # MRH NOT SUPPORTED
@@ -745,8 +747,14 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
         end
         # update the time
         t += t_input.dt
+
+        if i == t_input.nstep
+            # Ensure all output is written at the final step
+            finish_now = true
+        end
+
         # write moments data to file every nwrite_moments time steps
-        if mod(i,t_input.nwrite_moments) == 0
+        if mod(i,t_input.nwrite_moments) == 0 || finish_now
             @debug_detect_redundant_block_synchronize begin
                 # Skip check for redundant _block_synchronize() during file I/O because
                 # it only runs infrequently
@@ -755,8 +763,8 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
             begin_serial_region()
             @serial_region begin
                 if global_rank[] == 0
-                     println("finished time step ", i,"    ",
-                             Dates.format(now(), dateformat"H:MM:SS"))
+                    print("finished time step ", rpad(string(i), 7),"  ",
+                          Dates.format(now(), dateformat"H:MM:SS"))
                 end
             end
             write_data_to_ascii(moments, fields, vpa, vperp, z, r, t,
@@ -765,6 +773,57 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
             write_moments_data_to_binary(moments, fields, t, composition.n_ion_species,
                                          composition.n_neutral_species, io_moments,
                                          iwrite_moments, r, z)
+
+            if t_input.steady_state_residual
+                # Calculate some residuals to see how close simulation is to steady state
+                begin_r_z_region()
+                result_string = ""
+                all_residuals = Vector{mk_float}()
+                @loop_s is begin
+                    @views residual_ni =
+                        steady_state_residuals(scratch[end].density[:,:,is],
+                                               scratch[1].density[:,:,is], t_input.dt;
+                                               use_mpi=true, only_max_abs=true)
+                    if global_rank[] == 0
+                        residual_ni = first(values(residual_ni))[1]
+                        push!(all_residuals, residual_ni)
+                        result_string *= "  density "
+                        result_string *= rpad(string(round(residual_ni; sigdigits=4)), 11)
+                    end
+                end
+                if composition.n_neutral_species > 0
+                    @loop_sn isn begin
+                        residual_nn =
+                            steady_state_residuals(scratch[end].density_neutral[:,:,isn],
+                                                   scratch[1].density_neutral[:,:,isn],
+                                                   t_input.dt; use_mpi=true,
+                                                   only_max_abs=true)
+                        if global_rank[] == 0
+                            residual_nn = first(values(residual_nn))[1]
+                            push!(all_residuals, residual_nn)
+                            result_string *= " density_neutral "
+                            result_string *= rpad(string(round(residual_nn; sigdigits=4)), 11)
+                        end
+                    end
+                end
+                if global_rank[] == 0
+                    println("    residuals:", result_string)
+                end
+                if t_input.converged_residual_value > 0.0
+                    if global_rank[] == 0
+                        if all(r < t_input.converged_residual_value for r ∈ all_residuals)
+                            println("Run converged! All tested residuals less than ",
+                                    t_input.converged_residual_value)
+                            finish_now = true
+                        end
+                    end
+                    finish_now = MPI.Bcast(finish_now, 0, comm_world)
+                end
+            else
+                if global_rank[] == 0
+                    println()
+                end
+            end
 
             # Hack to save *.pdf of current pdf
             if t_input.runtime_plots
@@ -881,7 +940,7 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
                 debug_detect_redundant_is_active[] = true
             end
         end
-        if mod(i,t_input.nwrite_dfns) == 0
+        if mod(i,t_input.nwrite_dfns) == 0 || finish_now
             @debug_detect_redundant_block_synchronize begin
                 # Skip check for redundant _block_synchronize() during file I/O because
                 # it only runs infrequently
@@ -904,6 +963,10 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
                 # Reactivate check for redundant _block_synchronize()
                 debug_detect_redundant_is_active[] = true
             end
+        end
+
+        if finish_now
+            break
         end
     end
     return nothing

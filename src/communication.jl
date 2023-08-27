@@ -12,7 +12,7 @@ loop ranges), as at the moment we only run with 1 ion species and 1 neutral spec
 """
 module communication
 
-export allocate_shared, block_rank, block_size, comm_block, comm_inter_block,
+export allocate_shared, block_rank, block_size, n_blocks, comm_block, comm_inter_block,
        iblock_index, comm_world, finalize_comms!, initialize_comms!, global_rank,
        MPISharedArray, global_size
 export setup_distributed_memory_MPI
@@ -70,6 +70,10 @@ const block_rank = Ref{mk_int}()
 """
 """
 const block_size = Ref{mk_int}()
+
+"""
+"""
+const n_blocks = Ref{mk_int}()
 
 """
 """
@@ -143,6 +147,7 @@ function setup_distributed_memory_MPI(z_nelement_global,z_nelement_local,r_nelem
     iblock_index[] = iblock
     block_rank[] = irank_block
     block_size[] = nrank_per_zr_block
+    n_blocks[] = nblocks
     # construct a communicator for intra-block communication
     comm_block[] = MPI.Comm_split(comm_world,iblock,irank_block)
     # MPI.Comm_split(comm,color,key)
