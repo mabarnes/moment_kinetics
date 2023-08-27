@@ -26,6 +26,7 @@ using ..initial_conditions: enforce_vpa_boundary_condition!, enforce_r_boundary_
 using ..initial_conditions: enforce_neutral_boundary_conditions!
 using ..initial_conditions: enforce_neutral_z_boundary_condition!, enforce_neutral_r_boundary_condition!
 using ..input_structs: advance_info, time_input
+using ..makie_post_processing: plot_1d, plot_2d, positive_or_nan
 using ..moment_constraints: hard_force_moment_constraints!,
                             hard_force_moment_constraints_neutral!
 using ..advection: setup_advection
@@ -55,9 +56,9 @@ using ..advection: advection_info
 @debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
 
 using Dates
-using Plots
+using CairoMakie
 using ..analysis: steady_state_residuals
-using ..post_processing: draw_v_parallel_zero!
+#using ..post_processing: draw_v_parallel_zero!
 
 struct scratch_dummy_arrays
     dummy_sr::Array{mk_float,2}
@@ -857,109 +858,87 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
             # Hack to save *.pdf of current pdf
             if t_input.runtime_plots
                 @serial_region begin
-                    #pyplot()
-                    cmlog(cmlin::ColorGradient) = RGB[cmlin[x] for x=LinRange(0,1,30)]
-                    logdeep = cgrad(:deep, scale=:log) |> cmlog
-                    f_plots = [
-                        heatmap(z.grid, vpa.grid, pdf.charged.norm[:,1,:,1,is],
-                                xlim=(z.grid[1] - z.L / 100.0, z.grid[end] + z.L / 100.0),
-                                ylim=(vpa.grid[1] - vpa.L / 100.0, vpa.grid[end] + vpa.L / 100.0),
-                                xlabel="z", ylabel="vpa", c=:deep, colorbar=false)
-                        for is ∈ 1:composition.n_ion_species]
-                    for (is, p) in enumerate(f_plots)
-                        @views draw_v_parallel_zero!(p, z.grid, moments.charged.upar[:,1,is],
-                                                     moments.charged.vth[:,1,is],
-                                                     moments.evolve_upar,
-                                                     moments.evolve_ppar)
+                    fig = Figure()
+
+                    irow = 1
+                    title_layout = fig[irow,1] = GridLayout()
+                    Label(title_layout[1,1:2], string(t))
+
+                    ax_width = 400
+                    ax_height = 400
+
+                    irow += 1
+                    layout = fig[irow,1] = GridLayout()
+                    ax = Axis(layout[1,1], xlabel="vpa", ylabel="z", title="f", width=ax_width, height=ax_height)
+                    plot_2d(vpa.grid, z.grid, pdf.charged.norm[:,1,:,1,1]; ax=ax, colorbar_place=layout[1,2])
+                    if composition.n_neutral_species > 0
+                        ax = Axis(layout[1,3], xlabel="vz", ylabel="z", title="f_neutral", width=ax_width, height=ax_height)
+                        plot_2d(vz.grid, z.grid, pdf.neutral.norm[:,1,1,:,1,1]; ax=ax, colorbar_place=layout[1,4])
                     end
-                    f_neutral_plots = [
-                        heatmap(z.grid, vz.grid, pdf.neutral.norm[:,1,1,:,1,isn],
-                                xlim=(z.grid[1] - z.L / 100.0, z.grid[end] + z.L / 100.0),
-                                ylim=(vz.grid[1] - vz.L / 100.0, vz.grid[end] + vz.L / 100.0),
-                                xlabel="z", ylabel="vz", c=:deep, colorbar=false)
-                        for isn ∈ 1:composition.n_neutral_species]
-                    for (isn, p) in enumerate(f_neutral_plots)
-                        @views draw_v_parallel_zero!(p, z.grid, moments.neutral.uz[:,1,isn],
-                                                     moments.neutral.vth[:,1,isn],
-                                                     moments.evolve_upar,
-                                                     moments.evolve_ppar)
+
+                    irow += 1
+                    layout = fig[irow,1] = GridLayout()
+                    ax = Axis(layout[1,1], xlabel="vpa", ylabel="z", title="f", width=ax_width, height=ax_height)
+                    plot_2d(vpa.grid, z.grid, pdf.charged.norm[:,1,:,1,1]; ax=ax,
+                            colorbar_place=layout[1,2], colorscale=log10,
+                            transform=x->positive_or_nan(x, epsilon=1.e-20))
+                    if composition.n_neutral_species > 0
+                        ax = Axis(layout[1,3], xlabel="vz", ylabel="z", title="f_neutral", width=ax_width, height=ax_height)
+                        plot_2d(vz.grid, z.grid, pdf.neutral.norm[:,1,1,:,1,1]; ax=ax,
+                                colorbar_place=layout[1,4], colorscale=log10,
+                                transform=x->positive_or_nan(x, epsilon=1.e-20))
                     end
-                    logf_plots = [
-                        heatmap(z.grid, vpa.grid, log.(abs.(pdf.charged.norm[:,1,:,1,is])),
-                                xlim=(z.grid[1] - z.L / 100.0, z.grid[end] + z.L / 100.0),
-                                ylim=(vpa.grid[1] - vpa.L / 100.0, vpa.grid[end] + vpa.L / 100.0),
-                                xlabel="z", ylabel="vpa", fillcolor=logdeep, colorbar=false)
-                        for is ∈ 1:composition.n_neutral_species]
-                    for (is, p) in enumerate(logf_plots)
-                        @views draw_v_parallel_zero!(p, z.grid, moments.charged.upar[:,1,is],
-                                                     moments.charged.vth[:,1,is],
-                                                     moments.evolve_upar,
-                                                     moments.evolve_ppar)
+
+                    irow += 1
+                    layout = fig[irow,1] = GridLayout()
+                    ax = Axis(layout[1,1], xlabel="vpa", ylabel="f0", width=ax_width, height=ax_height)
+                    plot_1d(vpa.grid, pdf.charged.norm[:,1,1,1,1]; ax=ax)
+                    if composition.n_neutral_species > 0
+                        ax = Axis(layout[1,2], xlabel="vz", ylabel="f0_neutral", width=ax_width, height=ax_height)
+                        plot_1d(vz.grid, pdf.neutral.norm[:,1,1,1,1,1]; ax=ax)
                     end
-                    logf_neutral_plots = [
-                        heatmap(z.grid, vz.grid, log.(abs.(pdf.neutral.norm[:,1,1,:,1,isn])),
-                                xlim=(z.grid[1] - z.L / 100.0, z.grid[end] + z.L / 100.0),
-                                ylim=(vz.grid[1] - vz.L / 100.0, vz.grid[end] + vz.L / 100.0),
-                                xlabel="z", ylabel="vz", fillcolor=logdeep, colorbar=false)
-                        for isn ∈ 1:composition.n_neutral_species]
-                    for (isn, p) in enumerate(logf_neutral_plots)
-                        @views draw_v_parallel_zero!(p, z.grid, moments.neutral.uz[:,1,isn],
-                                                     moments.neutral.vth[:,1,isn],
-                                                     moments.evolve_upar,
-                                                     moments.evolve_ppar)
+
+                    irow += 1
+                    layout = fig[irow,1] = GridLayout()
+                    ax = Axis(layout[1,1], xlabel="vpa", ylabel="fL", width=ax_width, height=ax_height)
+                    plot_1d(vpa.grid, pdf.charged.norm[:,1,end,1,1]; ax=ax)
+                    if composition.n_neutral_species > 0
+                        ax = Axis(layout[1,2], xlabel="vz", ylabel="fL_neutral", width=ax_width, height=ax_height)
+                        plot_1d(vz.grid, pdf.neutral.norm[:,1,1,end,1,1]; ax=ax)
                     end
-                    f0_plots = [
-                        plot(vpa.grid, pdf.charged.norm[:,1,1,1,is], xlabel="vpa", ylabel="f0", legend=false)
-                        for is ∈ 1:composition.n_ion_species]
-                    f0_neutral_plots = [
-                        plot(vz.grid, pdf.neutral.norm[:,1,1,1,1,isn], xlabel="vz", ylabel="f0_neutral", legend=false)
-                        for isn ∈ 1:composition.n_neutral_species]
-                    fL_plots = [
-                        plot(vpa.grid, pdf.charged.norm[:,1,end,1,is], xlabel="vpa", ylabel="fL", legend=false)
-                        for is ∈ 1:composition.n_ion_species]
-                    fL_neutral_plots = [
-                        plot(vz.grid, pdf.neutral.norm[:,1,1,end,1,isn], xlabel="vz", ylabel="fL_neutral", legend=false)
-                        for isn ∈ 1:composition.n_neutral_species]
-                    density_plots = [
-                        plot(z.grid, moments.charged.dens[:,1,is], xlabel="z", ylabel="density", legend=false)
-                        for is ∈ 1:composition.n_ion_species]
-                    density_neutral_plots = [
-                        plot(z.grid, moments.neutral.dens[:,1,isn], xlabel="z", ylabel="density_neutral", legend=false)
-                        for isn ∈ 1:composition.n_neutral_species]
-                    upar_plots = [
-                        plot(z.grid, moments.charged.upar[:,1,is], xlabel="z", ylabel="upar", legend=false)
-                        for is ∈ 1:composition.n_ion_species]
-                    upar_neutral_plots = [
-                        plot(z.grid, moments.neutral.uz[:,1,isn], xlabel="z", ylabel="uz_neutral", legend=false)
-                        for isn ∈ 1:composition.n_neutral_species]
-                    ppar_plots = [
-                        plot(z.grid, moments.charged.ppar[:,1,is], xlabel="z", ylabel="ppar", legend=false)
-                        for is ∈ 1:composition.n_ion_species]
-                    ppar_neutral_plots = [
-                        plot(z.grid, moments.neutral.pz[:,1,isn], xlabel="z", ylabel="pz_neutral", legend=false)
-                        for isn ∈ 1:composition.n_neutral_species]
-                    vth_plots = [
-                        plot(z.grid, moments.charged.vth[:,1,is], xlabel="z", ylabel="vth", legend=false)
-                        for is ∈ 1:composition.n_ion_species]
-                    vth_neutral_plots = [
-                        plot(z.grid, moments.neutral.vth[:,1,isn], xlabel="z", ylabel="vth_neutral", legend=false)
-                        for isn ∈ 1:composition.n_neutral_species]
-                    qpar_plots = [
-                        plot(z.grid, moments.charged.qpar[:,1,is], xlabel="z", ylabel="qpar", legend=false)
-                        for is ∈ 1:composition.n_ion_species]
-                    qpar_neutral_plots = [
-                        plot(z.grid, moments.neutral.qz[:,1,isn], xlabel="z", ylabel="qz_neutral", legend=false)
-                        for isn ∈ 1:composition.n_neutral_species]
-                    # Put all plots into subplots of a single figure
-                    plot(f_plots..., f_neutral_plots..., logf_plots...,
-                         logf_neutral_plots..., f0_plots..., f0_neutral_plots...,
-                         fL_plots..., fL_neutral_plots..., density_plots...,
-                         density_neutral_plots..., upar_plots..., upar_neutral_plots...,
-                         ppar_plots..., ppar_neutral_plots..., vth_plots...,
-                         vth_neutral_plots..., qpar_plots..., qpar_neutral_plots...,
-                         layout=(9,composition.n_ion_species+composition.n_neutral_species),
-                         size=(800,3600), plot_title="$t")
-                    savefig("latest_plots.png")
+
+                    irow += 1
+                    layout = fig[irow,1] = GridLayout()
+                    ax = Axis(layout[1,1], xlabel="z", ylabel="density", width=ax_width, height=ax_height)
+                    plot_1d(z.grid, moments.charged.dens[:,1,1]; ax=ax, label="ion")
+                    plot_1d(z.grid, moments.neutral.dens[:,1,1]; ax=ax, label="neutral")
+                    #axislegend(ax)
+                    ax = Axis(layout[1,2], xlabel="z", ylabel="upar", width=ax_width, height=ax_height)
+                    plot_1d(z.grid, moments.charged.upar[:,1,1]; ax=ax, label="ion")
+                    plot_1d(z.grid, moments.neutral.uz[:,1,1]; ax=ax, label="neutral")
+                    #axislegend(ax)
+
+                    irow += 1
+                    layout = fig[irow,1] = GridLayout()
+                    ax = Axis(layout[1,1], xlabel="z", ylabel="ppar", width=ax_width, height=ax_height)
+                    plot_1d(z.grid, moments.charged.ppar[:,1,1]; ax=ax, label="ion")
+                    plot_1d(z.grid, moments.neutral.pz[:,1,1]; ax=ax, label="neutral")
+                    #axislegend(ax)
+                    ax = Axis(layout[1,2], xlabel="z", ylabel="vth", width=ax_width, height=ax_height)
+                    plot_1d(z.grid, moments.charged.vth[:,1,1]; ax=ax, label="ion")
+                    plot_1d(z.grid, moments.neutral.vth[:,1,1]; ax=ax, label="neutral")
+                    #axislegend(ax)
+
+                    irow += 1
+                    layout = fig[irow,1] = GridLayout()
+                    ax = Axis(layout[1,1], xlabel="z", ylabel="qpar", width=ax_width, height=ax_height)
+                    plot_1d(z.grid, moments.charged.qpar[:,1,1]; ax=ax, label="ion")
+                    plot_1d(z.grid, moments.neutral.qz[:,1,1]; ax=ax, label="neutral")
+                    #axislegend(ax)
+
+                    resize_to_layout!(fig)
+
+                    save("latest_plots.png", fig)
                 end
             end
             iwrite_moments += 1
