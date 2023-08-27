@@ -1044,31 +1044,31 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
                 tinds = collect(i - local_it_start + 1 + offset for i ∈ it
                                 if local_it_start <= i <= local_it_end)
                 # Convert tinds to slice, as we know the spacing is constant
-                if length(tinds) == 0
-                    # Nothing to do in this file
-                    continue
-                elseif length(tinds) > 1
-                    tstep = tinds[2] - tinds[begin]
-                else
-                    tstep = 1
-                end
-                tinds = tinds[begin]:tstep:tinds[end]
-                global_it_end = global_it_start + length(tinds) - 1
+                if length(tinds) != 0
+                    # There is some data in this file
+                    if length(tinds) > 1
+                        tstep = tinds[2] - tinds[begin]
+                    else
+                        tstep = 1
+                    end
+                    tinds = tinds[begin]:tstep:tinds[end]
+                    global_it_end = global_it_start + length(tinds) - 1
 
-                if nd == 3
-                    selectdim(result, ndims(result), global_it_start:global_it_end) .= v[iz,ir,tinds]
-                elseif nd == 4
-                    selectdim(result, ndims(result), global_it_start:global_it_end) .= v[iz,ir,is,tinds]
-                elseif nd == 6
-                    selectdim(result, ndims(result), global_it_start:global_it_end) .= v[ivpa,ivperp,iz,ir,is,tinds]
-                elseif nd == 7
-                    selectdim(result, ndims(result), global_it_start:global_it_end) .= v[ivz,ivr,ivzeta,iz,ir,is,tinds]
-                else
-                    error("Unsupported combination nd=$nd, ir=$ir, iz=$iz, ivperp=$ivperp "
-                          * "ivpa=$ivpa, ivzeta=$ivzeta, ivr=$ivr, ivz=$ivz.")
-                end
+                    if nd == 3
+                        selectdim(result, ndims(result), global_it_start:global_it_end) .= v[iz,ir,tinds]
+                    elseif nd == 4
+                        selectdim(result, ndims(result), global_it_start:global_it_end) .= v[iz,ir,is,tinds]
+                    elseif nd == 6
+                        selectdim(result, ndims(result), global_it_start:global_it_end) .= v[ivpa,ivperp,iz,ir,is,tinds]
+                    elseif nd == 7
+                        selectdim(result, ndims(result), global_it_start:global_it_end) .= v[ivz,ivr,ivzeta,iz,ir,is,tinds]
+                    else
+                        error("Unsupported combination nd=$nd, ir=$ir, iz=$iz, ivperp=$ivperp "
+                              * "ivpa=$ivpa, ivzeta=$ivzeta, ivr=$ivr, ivz=$ivz.")
+                    end
 
-                global_it_start = global_it_end + 1
+                    global_it_start = global_it_end + 1
+                end
             end
 
             local_it_start = local_it_end + 1
