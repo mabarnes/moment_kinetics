@@ -90,6 +90,24 @@ export QT_QPA_PLATFORM=offscreen
 ```
 in your `.bashrc` or `.bash_profile` files. 
 
+### Stopping a run
+
+When running in the REPL (especially with MPI) interrupting a run using Ctrl-C
+can mess things up, and require you to restart Julia. There is also a chance
+that you might interrupt while writing the output files and corrupt them. To
+avoid these problems, you can stop the run cleanly (including writing the
+distribution functions at the last time point, so that it is possible to
+restart the run from where you stopped it), by creating an empty file called
+`stop` in the run directory. For example, if the name of your run is
+'my\_example'
+```shell
+$ touch runs/my_example/stop
+```
+`moment_kinetics` checks for this file when it is going to write output, and if
+it is present writes all output and then returns cleanly. The 'stop file' is
+deleted when a run is (re-)started, if present, so you do not have to manually
+delete it before (re-)starting the run again.
+
 ## Parallel I/O
 
 Note that to enable parallel I/O, you need to get HDF5.jl to use the system
