@@ -723,6 +723,16 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
         debug_detect_redundant_is_active[] = true
     end
 
+    if isfile(t_input.stopfile)
+        if filesize(t_input.stopfile) > 0
+            error("Found a 'stop file' at $(t_input.stopfile), but it contains some data "
+                  * "(file size is greater than zero), so will not delete.")
+        end
+        if global_rank[] == 0
+            rm(t_input.stopfile)
+        end
+    end
+
     @serial_region begin
         if global_rank[] == 0
              println("beginning time advance   ", Dates.format(now(), dateformat"H:MM:SS"))
@@ -753,6 +763,17 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
             finish_now = true
         end
 
+        if mod(i,t_input.nwrite_moments) == 0 || mod(i,t_input.nwrite_dfns) == 0 || finish_now
+            # Always synchronise here, regardless of if we changed region or not
+            begin_serial_region(no_synchronize=true)
+            _block_synchronize()
+
+            if isfile(t_input.stopfile)
+                # Stop cleanly if a file called 'stop' was created
+                println("Found 'stop' file $(t_input.stopfile), aborting run")
+                finish_now = true
+            end
+        end
         # write moments data to file every nwrite_moments time steps
         if mod(i,t_input.nwrite_moments) == 0 || finish_now
             @debug_detect_redundant_block_synchronize begin

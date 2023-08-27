@@ -42,6 +42,7 @@ struct time_input
     steady_state_residual::Bool
     converged_residual_value::mk_float
     use_manufactured_solns_for_advance::Bool
+    stopfile::String
 end
 
 """
