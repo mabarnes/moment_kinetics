@@ -12,6 +12,7 @@ using ..array_allocation: allocate_float
 using ..communication
 using ..coordinates: define_coordinate
 using ..file_io: io_has_parallel, input_option_error, open_ascii_output_file
+using ..constants
 using ..finite_differences: fd_check_option
 using ..input_structs
 using ..numerical_dissipation: setup_numerical_dissipation
@@ -90,27 +91,26 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     composition.Er_constant = get(scan_input, "Er_constant", 0.0)
 
     # Get reference parameters for normalizations
-    reference_parameter_section = set_defaults_and_check_section!(
+    reference_parameter_section = copy(set_defaults_and_check_section!(
         scan_input, "reference_params";
         Bref=1.0,
         Lref=10.0,
         Nref=1.0e19,
         Tref=100.0,
-       )
+        mref=deuteron_mass,
+       ))
+    reference_parameter_section["cref"] = sqrt(2.0 * proton_charge * reference_parameter_section["Tref"] / (reference_parameter_section["mref"]))
+    reference_parameter_section["timeref"] = reference_parameter_section["Lref"] / reference_parameter_section["cref"]
+    reference_parameter_section["Omegaref"] = proton_charge * reference_parameter_section["Bref"] / reference_parameter_section["mref"]
     reference_parameters = Dict_to_NamedTuple(reference_parameter_section)
 
-    elementary_charge = 1.602176634e-19 # C
-    mi = 3.3435837724e-27 # kg
-    cref = sqrt(2.0 * elementary_charge*reference_parameters.Tref / mi) # m/s
-    Omegaref = elementary_charge * reference_parameters.Bref / mi
-    
     ## set geometry_input
     geometry.Bzed = get(scan_input, "Bzed", 1.0)
     geometry.Bmag = get(scan_input, "Bmag", 1.0)
     geometry.bzed = geometry.Bzed/geometry.Bmag
     geometry.bzeta = sqrt(1.0 - geometry.bzed^2.0)
     geometry.Bzeta = geometry.Bmag*geometry.bzeta
-    geometry.rhostar = get(scan_input, "rhostar", cref/reference_parameters.Lref/Omegaref)
+    geometry.rhostar = get(scan_input, "rhostar", reference_parameters.cref/reference_parameters.Lref/reference_parameters.Omegaref)
     #println("Info: Bzed is ",geometry.Bzed)
     #println("Info: Bmag is ",geometry.Bmag)
     #println("Info: rhostar is ",geometry.rhostar)
@@ -517,7 +517,8 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
                   vpa, vpa_spectral, vperp, vperp_spectral, gyrophase, gyrophase_spectral,
                   vz, vz_spectral, vr, vr_spectral, vzeta, vzeta_spectral, composition,
                   species_immutable, collisions, geometry, drive_immutable,
-                  num_diss_params, manufactured_solns_input)
+                  num_diss_params, manufactured_solns_input,
+                  reference_parameters)
     println(io, "\nAll inputs returned from mk_input():")
     println(io, all_inputs)
     close(io)

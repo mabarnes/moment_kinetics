@@ -11,6 +11,7 @@ using MPI
 # be defined
 include("../machines/shared/machine_setup.jl") # Included so Documenter.jl can find its docs
 include("command_line_options.jl")
+include("constants.jl")
 include("debugging.jl")
 include("type_definitions.jl")
 include("communication.jl")
@@ -352,7 +353,8 @@ function setup_moment_kinetics(input_dict::Dict; restart_prefix_iblock=nothing,
     io_input, evolve_moments, t_input, z, z_spectral, r, r_spectral, vpa, vpa_spectral,
         vperp, vperp_spectral, gyrophase, gyrophase_spectral, vz, vz_spectral, vr,
         vr_spectral, vzeta, vzeta_spectral, composition, species, collisions, geometry,
-        drive_input, num_diss_params, manufactured_solns_input = input
+        drive_input, num_diss_params, manufactured_solns_input,
+        reference_parameters = input
 
     # Create loop range variables for shared-memory-parallel loops
     if debug_loop_type === nothing
