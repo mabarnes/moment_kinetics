@@ -373,13 +373,15 @@ function setup_moment_kinetics(input_dict::Dict; restart_prefix_iblock=nothing,
                               manufactured_solns_input)
         # initialize time variable
         code_time = 0.
+        previous_runs_info = nothing
     else
         restarting = true
 
         # Reload pdf and moments from an existing output file
-        code_time = reload_evolving_fields!(pdf, moments, boundary_distributions,
-                                            restart_prefix_iblock, restart_time_index,
-                                            composition, r, z, vpa, vperp, vzeta, vr, vz)
+        code_time, previous_runs_info, restart_time_index =
+            reload_evolving_fields!(pdf, moments, boundary_distributions,
+                                    restart_prefix_iblock, restart_time_index,
+                                    composition, r, z, vpa, vperp, vzeta, vr, vz)
         _block_synchronize()
     end
     # create arrays and do other work needed to setup
@@ -395,9 +397,11 @@ function setup_moment_kinetics(input_dict::Dict; restart_prefix_iblock=nothing,
     # setup i/o
     ascii_io, io_moments, io_dfns = setup_file_io(io_input, boundary_distributions, vz,
         vr, vzeta, vpa, vperp, z, r, composition, collisions, moments.evolve_density,
-        moments.evolve_upar, moments.evolve_ppar, input_dict)
+        moments.evolve_upar, moments.evolve_ppar, input_dict, restart_time_index,
+        previous_runs_info)
     # write initial data to ascii files
-    write_data_to_ascii(moments, fields, vpa, vperp, z, r, code_time, composition.n_ion_species, composition.n_neutral_species, ascii_io)
+    write_data_to_ascii(moments, fields, vpa, vperp, z, r, code_time,
+        composition.n_ion_species, composition.n_neutral_species, ascii_io)
     # write initial data to binary files
 
     write_moments_data_to_binary(moments, fields, code_time, composition.n_ion_species,

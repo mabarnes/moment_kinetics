@@ -75,11 +75,13 @@ end
 # HDF5.H5DataStore is the supertype for HDF5.File and HDF5.Group
 function write_single_value!(file_or_group::HDF5.H5DataStore, name,
                              data::Union{Number, AbstractString, AbstractArray{T,N}},
-                             coords::Union{coordinate,mk_int}...; parallel_io,
-                             n_ion_species=nothing, n_neutral_species=nothing,
-                             description=nothing) where {T,N}
+                             coords...; parallel_io, n_ion_species=nothing,
+                             n_neutral_species=nothing, description=nothing) where {T,N}
     if isa(data, Union{Number, AbstractString})
         file_or_group[name] = data
+        if description !== nothing
+            add_attribute!(file_or_group[name], "description", description)
+        end
         return nothing
     end
 
@@ -107,8 +109,8 @@ function write_single_value!(file_or_group::HDF5.H5DataStore, name,
     end
     dim_sizes, chunk_sizes = hdf5_get_fixed_dim_sizes(coords, parallel_io)
     io_var = create_dataset(file_or_group, name, T, dim_sizes, chunk=chunk_sizes)
-    local_ranges = Tuple(isa(c, coordinate) ? c.local_io_range : 1:c for c ∈ coords)
-    global_ranges = Tuple(isa(c, coordinate) ? c.global_io_range : 1:c for c ∈ coords)
+    local_ranges = Tuple(isa(c, mk_int) ? (1:c) : c.local_io_range for c ∈ coords)
+    global_ranges = Tuple(isa(c, mk_int) ? (1:c) : c.global_io_range for c ∈ coords)
 
     if N == 1
         io_var[global_ranges[1]] = @view data[local_ranges[1]]
@@ -160,12 +162,12 @@ of species).
 """
 function hdf5_get_fixed_dim_sizes(coords, parallel_io)
     if parallel_io
-        dim_sizes = Tuple(isa(c, coordinate) ? c.n_global : c for c in coords)
+        dim_sizes = Tuple(isa(c, mk_int) ? c : c.n_global for c in coords)
     else
-        dim_sizes = Tuple(isa(c, coordinate) ? c.n : c for c in coords)
+        dim_sizes = Tuple(isa(c, mk_int) ? c : c.n for c in coords)
     end
     if parallel_io
-        chunk_sizes = Tuple(isa(c, coordinate) ? max(c.n-1,1) : c for c in coords)
+        chunk_sizes = Tuple(isa(c, mk_int) ? c : max(c.n-1,1) for c in coords)
     else
         chunk_sizes = dim_sizes
     end
