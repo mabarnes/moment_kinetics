@@ -85,9 +85,9 @@ and see the error message
     
     
 this can be suppressed by setting 
-    ```
-    export QT_QPA_PLATFORM=offscreen
-    ```
+```
+export QT_QPA_PLATFORM=offscreen
+```
 in your `.bashrc` or `.bash_profile` files. 
 
 ## Parallel I/O
