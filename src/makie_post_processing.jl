@@ -1044,31 +1044,31 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
                 tinds = collect(i - local_it_start + 1 + offset for i ∈ it
                                 if local_it_start <= i <= local_it_end)
                 # Convert tinds to slice, as we know the spacing is constant
-                if length(tinds) == 0
-                    # Nothing to do in this file
-                    continue
-                elseif length(tinds) > 1
-                    tstep = tinds[2] - tinds[begin]
-                else
-                    tstep = 1
-                end
-                tinds = tinds[begin]:tstep:tinds[end]
-                global_it_end = global_it_start + length(tinds) - 1
+                if length(tinds) != 0
+                    # There is some data in this file
+                    if length(tinds) > 1
+                        tstep = tinds[2] - tinds[begin]
+                    else
+                        tstep = 1
+                    end
+                    tinds = tinds[begin]:tstep:tinds[end]
+                    global_it_end = global_it_start + length(tinds) - 1
 
-                if nd == 3
-                    selectdim(result, ndims(result), global_it_start:global_it_end) .= v[iz,ir,tinds]
-                elseif nd == 4
-                    selectdim(result, ndims(result), global_it_start:global_it_end) .= v[iz,ir,is,tinds]
-                elseif nd == 6
-                    selectdim(result, ndims(result), global_it_start:global_it_end) .= v[ivpa,ivperp,iz,ir,is,tinds]
-                elseif nd == 7
-                    selectdim(result, ndims(result), global_it_start:global_it_end) .= v[ivz,ivr,ivzeta,iz,ir,is,tinds]
-                else
-                    error("Unsupported combination nd=$nd, ir=$ir, iz=$iz, ivperp=$ivperp "
-                          * "ivpa=$ivpa, ivzeta=$ivzeta, ivr=$ivr, ivz=$ivz.")
-                end
+                    if nd == 3
+                        selectdim(result, ndims(result), global_it_start:global_it_end) .= v[iz,ir,tinds]
+                    elseif nd == 4
+                        selectdim(result, ndims(result), global_it_start:global_it_end) .= v[iz,ir,is,tinds]
+                    elseif nd == 6
+                        selectdim(result, ndims(result), global_it_start:global_it_end) .= v[ivpa,ivperp,iz,ir,is,tinds]
+                    elseif nd == 7
+                        selectdim(result, ndims(result), global_it_start:global_it_end) .= v[ivz,ivr,ivzeta,iz,ir,is,tinds]
+                    else
+                        error("Unsupported combination nd=$nd, ir=$ir, iz=$iz, ivperp=$ivperp "
+                              * "ivpa=$ivpa, ivzeta=$ivzeta, ivr=$ivr, ivz=$ivz.")
+                    end
 
-                global_it_start = global_it_end + 1
+                    global_it_start = global_it_end + 1
+                end
             end
 
             local_it_start = local_it_end + 1
@@ -1167,12 +1167,17 @@ function get_cache_slice(variable_cache::VariableCache, tind::mk_int)
     local_tind = findfirst(i->i==tind, tinds_chunk)
 
     if local_tind === nothing
+        if tind > variable_cache.n_tinds
+            error("tind=$tind is bigger than the number of time indices "
+                  * "($(variable_cache.n_tinds))")
+        end
         # tind is not in the cache, so get a new chunk
         chunk_size = variable_cache.t_chunk_size
         new_chunk_start = ((tind-1) ÷ chunk_size) * chunk_size + 1
-        new_chunk = new_chunk_start:(new_chunk_start + chunk_size - 1)
+        new_chunk = new_chunk_start:min(new_chunk_start + chunk_size - 1, variable_cache.n_tinds)
         variable_cache.tinds_chunk[] = new_chunk
-        variable_cache.data_chunk .=
+        selectdim(variable_cache.data_chunk,
+                  ndims(variable_cache.data_chunk), 1:length(new_chunk)) .=
             postproc_load_variable(variable_cache.run_info, variable_cache.variable_name;
                                    it=variable_cache.tinds_range_global[new_chunk],
                                    variable_cache.dim_slices...)
@@ -1278,7 +1283,7 @@ function plots_for_variable(run_info, variable_name; plot_prefix, is_1D=false,
                 plot_vs_z(run_info, variable_name, is=is, data=variable, input=input,
                           outfile=variable_prefix * "vs_z.pdf")
             end
-            if input.plot_vs_z_r
+            if !is_1D && input.plot_vs_z_r
                 plot_vs_z_r(run_info, variable_name, is=is, data=variable, input=input,
                             outfile=variable_prefix * "vs_z_r.pdf")
             end
