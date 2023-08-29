@@ -270,6 +270,9 @@ function makie_post_process(run_dir::Union{String,Tuple},
     end
 
     plot_charged_pdf_2D_at_wall(run_info_dfns; plot_prefix=plot_prefix)
+    if has_neutrals
+        plot_neutral_pdf_2D_at_wall(run_info_dfns; plot_prefix=plot_prefix)
+    end
 
     if !is_1D
         # Plots for 2D instability do not make sense for 1D simulations
@@ -578,6 +581,14 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
 
     set_defaults_and_check_section!(
         this_input_dict, "wall_pdf";
+        plot=false,
+        animate=false,
+        colormap=this_input_dict["colormap"],
+        animation_ext=this_input_dict["animation_ext"],
+       )
+
+    set_defaults_and_check_section!(
+        this_input_dict, "wall_pdf_neutral";
         plot=false,
         animate=false,
         colormap=this_input_dict["colormap"],
@@ -3174,8 +3185,7 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix)
     flush(stdout)
 
     is_1D = all(ri !== nothing && ri.r.n == 1 for ri ∈ run_info)
-    is_1V = all(ri !== nothing && ri.vperp.n == 1 && ri.vzeta.n == 1 && ri.vr.n == 1
-                for ri ∈ run_info)
+    is_1V = all(ri !== nothing && ri.vperp.n == 1 for ri ∈ run_info)
 
     for (z, z_range, label) ∈ ((z_lower, z_lower:z_lower+8, "wall-"),
                                (z_upper, z_upper-8:z_upper, "wall+"))
@@ -3221,6 +3231,134 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix)
 
                 animate_vs_vpa_r(run_info, "f"; is=1, input=f_input,
                                  outfile=plot_prefix * "pdf_$(label)_vs_vpa_r." * input.animation_ext)
+            end
+        end
+    end
+
+    return nothing
+end
+
+"""
+    plot_neutral_pdf_2D_at_wall(run_info; plot_prefix)
+
+Make plots/animations of the neutral particle distribution function at wall boundaries.
+
+The information for the runs to plot is passed in `run_info` (as returned by
+[`get_run_info`](@ref)). If `run_info` is a Tuple, comparison plots are made where line
+plots/animations from the different runs are overlayed on the same axis, and heatmap
+plots/animations are displayed in a horizontal row.
+
+Settings are read from the `[wall_pdf_neutral]` section of the input.
+
+`plot_prefix` is required and gives the path and prefix for plots to be saved to. They
+will be saved with the format `plot_prefix<some_identifying_string>.pdf`. When `run_info`
+is not a Tuple, `plot_prefix` is optional - plots/animations will be saved only if it is
+passed.
+"""
+function plot_neutral_pdf_2D_at_wall(run_info; plot_prefix)
+    input = Dict_to_NamedTuple(input_dict_dfns["wall_pdf_neutral"])
+    if !(input.plot || input.animate)
+        # nothing to do
+        return nothing
+    end
+    if !any(ri !== nothing for ri ∈ run_info)
+        println("Warning: no distribution function output, skipping wall_pdf plots")
+        return nothing
+    end
+
+    z_lower = 1
+    z_upper = run_info[1].z.n
+    if !all(ri.z.n == z_upper for ri ∈ run_info)
+        println("Cannot run plot_neutral_pdf_2D_at_wall() for runs with different "
+                * "z-grid sizes. Got $(Tuple(ri.z.n for ri ∈ run_info))")
+        return nothing
+    end
+
+    println("Making plots of neutral distribution function at walls")
+    flush(stdout)
+
+    is_1D = all(ri !== nothing && ri.r.n == 1 for ri ∈ run_info)
+    is_1V = all(ri !== nothing && ri.vzeta.n == 1 && ri.vr.n == 1 for ri ∈ run_info)
+
+    for (z, z_range, label) ∈ ((z_lower, z_lower:z_lower+8, "wall-"),
+                               (z_upper, z_upper-8:z_upper, "wall+"))
+        f_neutral_input = copy(input_dict_dfns["f_neutral"])
+        f_neutral_input["iz0"] = z
+
+        if input.plot
+            plot_vs_vz(run_info, "f_neutral"; is=1, input=f_neutral_input,
+                       outfile=plot_prefix * "pdf_neutral_$(label)_vs_vz.pdf")
+
+            if !is_1V
+                plot_vs_vzeta_vr(run_info, "f_neutral"; is=1, input=f_neutral_input,
+                                 outfile=plot_prefix * "pdf_neutral_$(label)_vs_vr_vzeta.pdf")
+                plot_vs_vzeta_vz(run_info, "f_neutral"; is=1, input=f_neutral_input,
+                                 outfile=plot_prefix * "pdf_neutral_$(label)_vs_vz_vzeta.pdf")
+                plot_vs_vr_vz(run_info, "f_neutral"; is=1, input=f_neutral_input,
+                              outfile=plot_prefix * "pdf_neutral_$(label)_vs_vz_vr.pdf")
+            end
+
+            plot_vs_vz_z(run_info, "f_neutral"; is=1, input=f_neutral_input, iz=z_range,
+                         outfile=plot_prefix * "pdf_neutral_$(label)_vs_vz_z.pdf")
+
+            if !is_1V
+                plot_vs_vzeta_z(run_info, "f_neutral"; is=1, input=f_neutral_input, iz=z_range,
+                                outfile=plot_prefix * "pdf_neutral_$(label)_vs_vzeta_z.pdf")
+                plot_vs_vr_z(run_info, "f_neutral"; is=1, input=f_neutral_input, iz=z_range,
+                             outfile=plot_prefix * "pdf_neutral_$(label)_vs_vr_z.pdf")
+            end
+
+            if !is_1D
+                plot_vs_z_r(run_info, "f_neutral"; is=1, input=f_neutral_input, iz=z_range,
+                            outfile=plot_prefix * "pdf_neutral_$(label)_vs_z_r.pdf")
+
+                plot_vs_vz_r(run_info, "f_neutral"; is=1, input=f_neutral_input,
+                             outfile=plot_prefix * "pdf_neutral_$(label)_vs_vz_r.pdf")
+                if !is_1V
+                    plot_vs_vzeta_r(run_info, "f_neutral"; is=1, input=f_neutral_input,
+                                    outfile=plot_prefix * "pdf_neutral_$(label)_vs_vzeta_r.pdf")
+
+                    plot_vs_vr_r(run_info, "f_neutral"; is=1, input=f_neutral_input,
+                                 outfile=plot_prefix * "pdf_neutral_$(label)_vs_vr_r.pdf")
+                end
+            end
+        end
+
+        if input.animate
+            animate_vs_vz(run_info, "f_neutral"; is=1, input=f_neutral_input,
+                          outfile=plot_prefix * "pdf_neutral_$(label)_vs_vz." * input.animation_ext)
+
+            if !is_1V
+                animate_vs_vzeta_vr(run_info, "f_neutral"; is=1, input=f_neutral_input,
+                                    outfile=plot_prefix * "pdf_neutral_$(label)_vs_vr_vzeta." * input.animation_ext)
+                animate_vs_vzeta_vz(run_info, "f_neutral"; is=1, input=f_neutral_input,
+                                    outfile=plot_prefix * "pdf_neutral_$(label)_vs_vz_vzeta." * input.animation_ext)
+                animate_vs_vr_vz(run_info, "f_neutral"; is=1, input=f_neutral_input,
+                                 outfile=plot_prefix * "pdf_neutral_$(label)_vs_vz_vr." * input.animation_ext)
+            end
+
+            animate_vs_vz_z(run_info, "f_neutral"; is=1, input=f_neutral_input, iz=z_range,
+                            outfile=plot_prefix * "pdf_neutral_$(label)_vs_vz_z." * input.animation_ext)
+
+            if !is_1V
+                animate_vs_vzeta_z(run_info, "f_neutral"; is=1, input=f_neutral_input, iz=z_range,
+                                   outfile=plot_prefix * "pdf_neutral_$(label)_vs_vzeta_z." * input.animation_ext)
+                animate_vs_vr_z(run_info, "f_neutral"; is=1, input=f_neutral_input, iz=z_range,
+                                outfile=plot_prefix * "pdf_neutral_$(label)_vs_vr_z." * input.animation_ext)
+            end
+
+            if !is_1D
+                animate_vs_z_r(run_info, "f_neutral"; is=1, input=f_neutral_input, iz=z_range,
+                               outfile=plot_prefix * "pdf_neutral_$(label)_vs_z_r." * input.animation_ext)
+
+                animate_vs_vz_r(run_info, "f_neutral"; is=1, input=f_neutral_input,
+                                outfile=plot_prefix * "pdf_neutral_$(label)_vs_vz_r." * input.animation_ext)
+                if !is_1V
+                    animate_vs_vzeta_r(run_info, "f_neutral"; is=1, input=f_neutral_input,
+                                       outfile=plot_prefix * "pdf_neutral_$(label)_vs_vzeta_r." * input.animation_ext)
+                    animate_vs_vr_r(run_info, "f_neutral"; is=1, input=f_neutral_input,
+                                    outfile=plot_prefix * "pdf_neutral_$(label)_vs_vr_r." * input.animation_ext)
+                end
             end
         end
     end
