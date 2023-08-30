@@ -2377,8 +2377,13 @@ function plot_1d(xcoord, data; ax=nothing, xlabel=nothing, ylabel=nothing, title
         ax.yscale = yscale
     end
 
-    # Use transform to allow user to do something like data = abs.(data)
-    data = transform.(data)
+    if transform !== identity
+        # Use transform to allow user to do something like data = abs.(data)
+        # Don't actually apply identity transform in case this function is called with
+        # `data` being a Makie Observable (in which case transform.(data) would be an
+        # error).
+        data = transform.(data)
+    end
 
     l = lines!(ax, xcoord, data; kwargs...)
 
@@ -2447,8 +2452,13 @@ function plot_2d(xcoord, ycoord, data; ax=nothing, colorbar_place=nothing, xlabe
         kwargs = tuple(kwargs..., :colorscale=>colorscale)
     end
 
-    # Use transform to allow user to do something like data = abs.(data)
-    data = transform.(data)
+    if transform !== identity
+        # Use transform to allow user to do something like data = abs.(data)
+        # Don't actually apply identity transform in case this function is called with
+        # `data` being a Makie Observable (in which case transform.(data) would be an
+        # error).
+        data = transform.(data)
+    end
 
     # Convert grid point values to 'cell face' values for heatmap
     xcoord = grid_points_to_faces(xcoord)
