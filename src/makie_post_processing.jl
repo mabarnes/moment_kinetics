@@ -577,6 +577,22 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
                 (o=>false for o ∈ animate_log_options_1d if String(o) ∉ keys(section_defaults))...,
                 (o=>false for o ∈ animate_options_2d if String(o) ∉ keys(section_defaults))...,
                 (o=>false for o ∈ animate_log_options_2d if String(o) ∉ keys(section_defaults))...,
+                plot_unnorm_vs_vpa=false,
+                plot_unnorm_vs_vz=false,
+                plot_unnorm_vs_vpa_z=false,
+                plot_unnorm_vs_vz_z=false,
+                plot_log_unnorm_vs_vpa=false,
+                plot_log_unnorm_vs_vz=false,
+                plot_log_unnorm_vs_vpa_z=false,
+                plot_log_unnorm_vs_vz_z=false,
+                animate_unnorm_vs_vpa=false,
+                animate_unnorm_vs_vz=false,
+                animate_unnorm_vs_vpa_z=false,
+                animate_unnorm_vs_vz_z=false,
+                animate_log_unnorm_vs_vpa=false,
+                animate_log_unnorm_vs_vz=false,
+                animate_log_unnorm_vs_vpa_z=false,
+                animate_log_unnorm_vs_vz_z=false,
                 OrderedDict(Symbol(k)=>v for (k,v) ∈ section_defaults)...)
             # Sort keys to make dict easier to read
             sort!(this_input_dict[variable_name])
@@ -1367,6 +1383,10 @@ function plots_for_dfn_variable(run_info, variable_name; plot_prefix, is_1D=fals
     end
     plot_dims = tuple(:t, animate_dims...)
 
+    moment_kinetic = any(ri !== nothing
+                         && (ri.evolve_density || ri.evolve_upar || ri.evolve_ppar)
+                         for ri ∈ run_info)
+
     # test if any plot is needed
     if !any(v for (k,v) in pairs(input) if
             startswith(String(k), "plot") || startswith(String(k), "animate"))
@@ -1428,6 +1448,53 @@ function plots_for_dfn_variable(run_info, variable_name; plot_prefix, is_1D=fals
                     outfile = var_prefix * "vs_$(dim2)_$(dim1)." * input.animation_ext
                     func(run_info, variable_name, is=is, input=input, outfile=outfile,
                          colorscale=yscale, transform=transform)
+                end
+            end
+
+            if is_neutral
+                if moment_kinetic && input[Symbol(:plot, log, :_unnorm_vs_vz)]
+                    outfile = var_prefix * "unnorm_vs_vz.pdf"
+                    plot_f_unnorm_vs_vpa(run_info; input=input, neutral=true, is=is,
+                                         outfile=outfile, yscale=yscale, transform=transform)
+                end
+                if moment_kinetic && input[Symbol(:plot, log, :_unnorm_vs_vz_z)]
+                    outfile = var_prefix * "unnorm_vs_vz_z.pdf"
+                    plot_f_unnorm_vs_vpa_z(run_info; input=input, neutral=true, is=is,
+                                           outfile=outfile, yscale=yscale,
+                                           transform=transform)
+                end
+                if moment_kinetic && input[Symbol(:animate, log, :_unnorm_vs_vz)]
+                    outfile = var_prefix * "unnorm_vs_vz." * input.animation_ext
+                    animate_f_unnorm_vs_vpa(run_info; input=input, neutral=true, is=is,
+                                            outfile=outfile, yscale=yscale,
+                                            transform=transform)
+                end
+                if moment_kinetic && input[Symbol(:animate, log, :_unnorm_vs_vz_z)]
+                    outfile = var_prefix * "unnorm_vs_vz_z." * input.animation_ext
+                    animate_f_unnorm_vs_vpa_z(run_info; input=input, neutral=true, is=is,
+                                              outfile=outfile, colorscale=yscale,
+                                              transform=transform)
+                end
+            else
+                if moment_kinetic && input[Symbol(:plot, log, :_unnorm_vs_vpa)]
+                    outfile = var_prefix * "unnorm_vs_vpa.pdf"
+                    plot_f_unnorm_vs_vpa(run_info; input=input, is=is, outfile=outfile,
+                                         yscale=yscale, transform=transform)
+                end
+                if moment_kinetic && input[Symbol(:plot, log, :_unnorm_vs_vpa_z)]
+                    outfile = var_prefix * "unnorm_vs_vpa_z.pdf"
+                    plot_f_unnorm_vs_vpa_z(run_info; input=input, is=is, outfile=outfile,
+                                           yscale=yscale, transform=transform)
+                end
+                if moment_kinetic && input[Symbol(:animate, log, :_unnorm_vs_vpa)]
+                    outfile = var_prefix * "unnorm_vs_vpa." * input.animation_ext
+                    animate_f_unnorm_vs_vpa(run_info; input=input, is=is, outfile=outfile,
+                                            yscale=yscale, transform=transform)
+                end
+                if moment_kinetic && input[Symbol(:animate, log, :_unnorm_vs_vpa_z)]
+                    outfile = var_prefix * "unnorm_vs_vpa_z." * input.animation_ext
+                    animate_f_unnorm_vs_vpa_z(run_info; input=input, is=is, outfile=outfile,
+                                              colorscale=yscale, transform=transform)
                 end
             end
         end
@@ -4029,6 +4096,9 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix)
 
     is_1D = all(ri !== nothing && ri.r.n == 1 for ri ∈ run_info)
     is_1V = all(ri !== nothing && ri.vperp.n == 1 for ri ∈ run_info)
+    moment_kinetic = any(ri !== nothing
+                         && (ri.evolve_density || ri.evolve_upar || ri.evolve_ppar)
+                         for ri ∈ run_info)
 
     for (z, z_range, label) ∈ ((z_lower, z_lower:z_lower+8, "wall-"),
                                (z_upper, z_upper-8:z_upper, "wall+"))
@@ -4038,6 +4108,11 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix)
         if input.plot
             plot_vs_vpa(run_info, "f"; is=1, input=f_input,
                         outfile=plot_prefix * "pdf_$(label)_vs_vpa.pdf")
+
+            if moment_kinetic
+                plot_f_unnorm_vs_vpa(run_info; input=f_input, is=1,
+                                     outfile=plot_prefix * "pdf_unnorm_$(label)_vs_vpa.pdf")
+            end
 
             if !is_1V
                 plot_vs_vpa_vperp(run_info, "f"; is=1, input=f_input,
@@ -4059,6 +4134,11 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix)
         if input.animate
             animate_vs_vpa(run_info, "f"; is=1, input=f_input,
                            outfile=plot_prefix * "pdf_$(label)_vs_vpa." * input.animation_ext)
+
+            if moment_kinetic
+                animate_f_unnorm_vs_vpa(run_info; input=f_input, is=1,
+                                        outfile=plot_prefix * "pdf_unnorm_$(label)_vs_vpa." * input.animation_ext)
+            end
 
             if !is_1V
                 animate_vs_vpa_vperp(run_info, "f"; is=1, input=f_input,
@@ -4122,6 +4202,9 @@ function plot_neutral_pdf_2D_at_wall(run_info; plot_prefix)
 
     is_1D = all(ri !== nothing && ri.r.n == 1 for ri ∈ run_info)
     is_1V = all(ri !== nothing && ri.vzeta.n == 1 && ri.vr.n == 1 for ri ∈ run_info)
+    moment_kinetic = any(ri !== nothing
+                         && (ri.evolve_density || ri.evolve_upar || ri.evolve_ppar)
+                         for ri ∈ run_info)
 
     for (z, z_range, label) ∈ ((z_lower, z_lower:z_lower+8, "wall-"),
                                (z_upper, z_upper-8:z_upper, "wall+"))
@@ -4131,6 +4214,11 @@ function plot_neutral_pdf_2D_at_wall(run_info; plot_prefix)
         if input.plot
             plot_vs_vz(run_info, "f_neutral"; is=1, input=f_neutral_input,
                        outfile=plot_prefix * "pdf_neutral_$(label)_vs_vz.pdf")
+
+            if moment_kinetic
+                plot_f_unnorm_vs_vpa(run_info; input=f_neutral_input, neutral=true, is=1,
+                                     outfile=plot_prefix * "pdf_neutral_unnorm_$(label)_vs_vpa.pdf")
+            end
 
             if !is_1V
                 plot_vs_vzeta_vr(run_info, "f_neutral"; is=1, input=f_neutral_input,
@@ -4170,6 +4258,11 @@ function plot_neutral_pdf_2D_at_wall(run_info; plot_prefix)
         if input.animate
             animate_vs_vz(run_info, "f_neutral"; is=1, input=f_neutral_input,
                           outfile=plot_prefix * "pdf_neutral_$(label)_vs_vz." * input.animation_ext)
+
+            if moment_kinetic
+                animate_f_unnorm_vs_vpa(run_info; input=f_neutral_input, neutral=true, is=1,
+                                        outfile=plot_prefix * "pdf_neutral_unnorm_$(label)_vs_vz." * input.animation_ext)
+            end
 
             if !is_1V
                 animate_vs_vzeta_vr(run_info, "f_neutral"; is=1, input=f_neutral_input,
