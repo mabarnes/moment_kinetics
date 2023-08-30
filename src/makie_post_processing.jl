@@ -27,8 +27,12 @@ using ..load_data: open_readonly_output_file, get_group, load_block_data,
                    load_coordinate_data, load_distributed_charged_pdf_slice,
                    load_distributed_neutral_pdf_slice, load_input, load_mk_options,
                    load_species_data, load_time_data
+using ..initial_conditions: vpagrid_to_dzdt
 using ..post_processing: calculate_and_write_frequencies, construct_global_zr_coords,
-                         get_geometry_and_composition, read_distributed_zr_data!
+                         get_geometry_and_composition, get_unnormalised_f_dzdt_1d,
+                         get_unnormalised_f_coords_2d, get_unnormalised_f_1d,
+                         vpagrid_to_dzdt_2d, get_unnormalised_f_2d,
+                         read_distributed_zr_data!
 using ..type_definitions: mk_float, mk_int
 
 using Combinatorics
@@ -3376,6 +3380,613 @@ function calculate_steady_state_residual(run_info, variable_name; is=1, data=not
     end
 
     return fig_axes
+end
+
+"""
+    plot_f_unnorm_vs_vpa(run_info; input=nothing, neutral=false, it=nothing, is=1,
+                         iz=nothing, fig=nothing, ax=nothing, outfile=nothing,
+                         yscale=identity, transform=identity, kwargs...)
+
+Plot an unnormalized distribution function against \$v_\\parallel\$ at a fixed z.
+
+This function is only needed for moment-kinetic runs. These are currently only supported
+for the 1D1V case.
+
+The information for the runs to plot is passed in `run_info` (as returned by
+[`get_run_info`](@ref)). If `run_info` is a Tuple, comparison plots are made where plots
+from the different runs are overlayed on the same axis.
+
+By default plots the ion distribution function. If `neutrals=true` is passed, plots the
+neutral distribution function instead.
+
+`is` selects which species to analyse.
+
+`it` and `iz` specify the indices of the time- and z-points to choose. By default they are
+taken from `input`.
+
+If `input` is not passed, it is taken from `input_dict_dfns["f"]`.
+
+The data needed will be loaded from file.
+
+If `outfile` is given, the plot will be saved to a file with that name. The suffix
+determines the file type.
+
+When `run_info` is not a Tuple, an Axis can be passed to `ax` to have the plot added to
+`ax`. When `ax` is passed, if `outfile` is passed to save the plot, then the Figure
+containing `ax` must be passed to `fig`.
+
+`yscale` can be used to set the scaling function for the y-axis. Options are `identity`,
+`log`, `log2`, `log10`, `sqrt`, `Makie.logit`, `Makie.pseudolog10` and `Makie.Symlog10`.
+`transform` is a function that is applied element-by-element to the data before it is
+plotted. For example when using a log scale on data that may contain some negative values
+it might be useful to pass `transform=abs` (to plot the absolute value) or
+`transform=positive_or_nan` (to ignore any negative or zero values).
+
+Any extra `kwargs` are passed to [`plot_1d`](@ref).
+"""
+function plot_f_unnorm_vs_vpa end
+
+function plot_f_unnorm_vs_vpa(run_info::Tuple; neutral=false, outfile=nothing, kwargs...)
+    try
+        n_runs = length(run_info)
+
+        ylabel = neutral ? L"f_{n,\mathrm{unnormalized}}" : L"f_{i,\mathrm{unnormalized}}"
+        fig, ax = get_1d_ax(xlabel=L"v_\parallel", ylabel=ylabel)
+
+        for ri ∈ run_info
+            plot_f_unnorm_vs_vpa(ri; neutral=neutral, ax=ax, kwargs...)
+        end
+
+        if n_runs > 1
+            put_legend_above(fig, ax)
+        end
+
+        if outfile !== nothing
+            save(outfile, fig)
+        end
+
+        return fig
+    catch e
+        println("Error in plot_f_unnorm_vs_vpa(). Error was ", e)
+    end
+end
+
+function plot_f_unnorm_vs_vpa(run_info; input=nothing, neutral=false, it=nothing, is=1,
+                              iz=nothing, fig=nothing, ax=nothing, outfile=nothing,
+                              transform=identity, kwargs...)
+    if input === nothing
+        if neutral
+            input = Dict_to_NamedTuple(input_dict_dfns["f_neutral"])
+        else
+            input = Dict_to_NamedTuple(input_dict_dfns["f"])
+        end
+    elseif input isa AbstractDict
+        input = Dict_to_NamedTuple(input)
+    end
+
+    if it == nothing
+        it = input.it0
+    end
+    if iz == nothing
+        iz = input.iz0
+    end
+
+    if ax === nothing
+        ylabel = neutral ? L"f_{n,\mathrm{unnormalized}}" : L"f_{i,\mathrm{unnormalized}}"
+        fig, ax = get_1d_ax(xlabel=L"v_\parallel", ylabel=ylabel)
+    end
+
+    if neutral
+        f = postproc_load_variable(run_info, "f_neutral"; it=it, is=is, ir=input.ir0,
+                                   iz=iz, ivzeta=input.ivzeta0, ivr=input.ivr0)
+        density = postproc_load_variable(run_info, "density_neutral"; it=it, is=is,
+                                         ir=input.ir0, iz=iz)
+        upar = postproc_load_variable(run_info, "uz_neutral"; it=it, is=is, ir=input.ir0,
+                                      iz=iz)
+        vth = postproc_load_variable(run_info, "thermal_speed_neutral"; it=it, is=is,
+                                     ir=input.ir0, iz=iz)
+    else
+        f = postproc_load_variable(run_info, "f"; it=it, is=is, ir=input.ir0, iz=iz,
+                                   ivperp=input.ivperp0)
+        density = postproc_load_variable(run_info, "density"; it=it, is=is, ir=input.ir0,
+                                         iz=iz)
+        upar = postproc_load_variable(run_info, "parallel_flow"; it=it, is=is, ir=input.ir0, iz=iz)
+        vth = postproc_load_variable(run_info, "thermal_speed"; it=it, is=is,
+                                     ir=input.ir0, iz=iz)
+    end
+
+    f_unnorm, dzdt = get_unnormalised_f_dzdt_1d(f, run_info.vpa.grid, density, upar, vth,
+                                                run_info.evolve_density,
+                                                run_info.evolve_upar,
+                                                run_info.evolve_ppar)
+
+    f_unnorm = transform.(f_unnorm)
+
+    l = plot_1d(dzdt, f_unnorm; ax=ax, label=run_info.run_name, kwargs...)
+
+    if outfile !== nothing
+        if fig === nothing
+            error("When ax is passed, fig must also be passed to save the plot using "
+                  * "outfile")
+        end
+        save(outfile, fig)
+    end
+
+    if fig !== nothing
+        return fig
+    else
+        return l
+    end
+end
+
+"""
+    plot_f_unnorm_vs_vpa_z(run_info; input=nothing, neutral=false, it=nothing, is=1,
+                           fig=nothing, ax=nothing, outfile=nothing, yscale=identity,
+                           transform=identity, kwargs...)
+
+Plot unnormalized distribution function against \$v_\\parallel\$ and z.
+
+This function is only needed for moment-kinetic runs. These are currently only supported
+for the 1D1V case.
+
+The information for the runs to plot is passed in `run_info` (as returned by
+[`get_run_info`](@ref)). If `run_info` is a Tuple, comparison plots are made where plots
+from the different runs are displayed in a horizontal row.
+
+By default plots the ion distribution function. If `neutrals=true` is passed, plots the
+neutral distribution function instead.
+
+`is` selects which species to analyse.
+
+`it` specifies the time-index to choose. By default it is taken from `input`.
+
+If `input` is not passed, it is taken from `input_dict_dfns["f"]`.
+
+The data needed will be loaded from file.
+
+If `outfile` is given, the plot will be saved to a file with that name. The suffix
+determines the file type.
+
+When `run_info` is not a Tuple, an Axis can be passed to `ax` to have the plot created in
+`ax`. When `ax` is passed, if `outfile` is passed to save the plot, then the Figure
+containing `ax` must be passed to `fig`.
+
+`yscale` can be used to set the scaling function for the y-axis. Options are `identity`,
+`log`, `log2`, `log10`, `sqrt`, `Makie.logit`, `Makie.pseudolog10` and `Makie.Symlog10`.
+`transform` is a function that is applied element-by-element to the data before it is
+plotted. For example when using a log scale on data that may contain some negative values
+it might be useful to pass `transform=abs` (to plot the absolute value) or
+`transform=positive_or_nan` (to ignore any negative or zero values).
+
+Any extra `kwargs` are passed to [`plot_2d`](@ref).
+"""
+function plot_f_unnorm_vs_vpa_z end
+
+function plot_f_unnorm_vs_vpa_z(run_info::Tuple; neutral=false, outfile=nothing,
+                                kwargs...)
+    try
+        n_runs = length(run_info)
+        title = neutral ? L"f_{n,\mathrm{unnormalized}}" : L"f_{i,\mathrm{unnormalized}}"
+        fig, axes, colorbar_places =
+            get_2d_ax(n_runs; title=title, xlabel=L"v_\parallel", ylabel=L"z")
+
+        for (ri, ax, colorbar_place) ∈ zip(run_info, axes, colorbar_places)
+            plot_f_unnorm_vs_vpa_z(ri; neutral=neutral, ax=ax, colorbar_place=colorbar_place,
+                                   kwargs...)
+        end
+
+        if outfile !== nothing
+            save(outfile, fig)
+        end
+
+        return fig
+    catch e
+        println("Error in plot_f_unnorm_vs_vpa_z(). Error was ", e)
+    end
+end
+
+function plot_f_unnorm_vs_vpa_z(run_info; input=nothing, neutral=false, it=nothing, is=1,
+                                fig=nothing, ax=nothing, colorbar_place=nothing,
+                                outfile=nothing, transform=identity, kwargs...)
+    if input === nothing
+        if neutral
+            input = Dict_to_NamedTuple(input_dict_dfns["f_neutral"])
+        else
+            input = Dict_to_NamedTuple(input_dict_dfns["f"])
+        end
+    elseif input isa AbstractDict
+        input = Dict_to_NamedTuple(input)
+    end
+
+    if it == nothing
+        it = input.it0
+    end
+
+    if ax === nothing
+        title = neutral ? L"f_{n,\mathrm{unnormalized}}" : L"f_{i,\mathrm{unnormalized}}"
+        fig, ax, colorbar_place = get_2d_ax(title=title, xlabel=L"v_\parallel", ylabel=L"z")
+    else
+        ax.title = run_info.run_name
+    end
+
+    if neutral
+        f = postproc_load_variable(run_info, "f_neutral"; it=it, is=is, ir=input.ir0,
+                                   ivzeta=input.ivzeta0, ivr=input.ivr0)
+        density = postproc_load_variable(run_info, "density_neutral"; it=it, is=is,
+                                         ir=input.ir0)
+        upar = postproc_load_variable(run_info, "uz_neutral"; it=it, is=is, ir=input.ir0)
+        vth = postproc_load_variable(run_info, "thermal_speed_neutral"; it=it, is=is,
+                                     ir=input.ir0)
+        vpa_grid = run_info.vz.grid
+    else
+        f = postproc_load_variable(run_info, "f"; it=it, is=is, ir=input.ir0,
+                                   ivperp=input.ivperp0)
+        density = postproc_load_variable(run_info, "density"; it=it, is=is, ir=input.ir0)
+        upar = postproc_load_variable(run_info, "parallel_flow"; it=it, is=is, ir=input.ir0)
+        vth = postproc_load_variable(run_info, "thermal_speed"; it=it, is=is,
+                                     ir=input.ir0)
+        vpa_grid = run_info.vpa.grid
+    end
+
+    f_unnorm, z, dzdt = get_unnormalised_f_coords_2d(f, run_info.z.grid,
+                                                     vpa_grid, density, upar,
+                                                     vth, run_info.evolve_density,
+                                                     run_info.evolve_upar,
+                                                     run_info.evolve_ppar)
+
+    f_unnorm = transform.(f_unnorm)
+
+    hm = plot_2d(dzdt, z, f_unnorm; ax=ax, colorbar_place=colorbar_place, kwargs...)
+
+    if outfile !== nothing
+        if fig === nothing
+            error("When ax is passed, fig must also be passed to save the plot using "
+                  * "outfile")
+        end
+        save(outfile, fig)
+    end
+
+    if fig !== nothing
+        return fig
+    else
+        return hm
+    end
+end
+
+"""
+    animate_f_unnorm_vs_vpa(run_info; input=nothing, neutral=false, is=1, iz=nothing,
+                            fig=nothing, ax=nothing, frame_index=nothing,
+                            outfile=nothing, yscale=identity, transform=identity,
+                            kwargs...)
+
+Plot an unnormalized distribution function against \$v_\\parallel\$ at a fixed z.
+
+This function is only needed for moment-kinetic runs. These are currently only supported
+for the 1D1V case.
+
+The information for the runs to animate is passed in `run_info` (as returned by
+[`get_run_info`](@ref)). If `run_info` is a Tuple, comparison plots are made where plots
+from the different runs are overlayed on the same axis.
+
+By default animates the ion distribution function. If `neutrals=true` is passed, animates
+the neutral distribution function instead.
+
+`is` selects which species to analyse.
+
+`it` and `iz` specify the indices of the time- and z-points to choose. By default they are
+taken from `input`.
+
+If `input` is not passed, it is taken from `input_dict_dfns["f"]`.
+
+The data needed will be loaded from file.
+
+`outfile` is required for animations unless `ax` is passed. The animation will be saved to
+a file named `outfile`.  The suffix determines the file type. If both `outfile` and `ax`
+are passed, then the `Figure` containing `ax` must be passed to `fig` to allow the
+animation to be saved.
+
+When `run_info` is not a Tuple, an Axis can be passed to `ax` to have the plot added to
+`ax`. When `ax` is passed, if `outfile` is passed to save the plot, then the Figure
+containing `ax` must be passed to `fig`.
+
+`yscale` can be used to set the scaling function for the y-axis. Options are `identity`,
+`log`, `log2`, `log10`, `sqrt`, `Makie.logit`, `Makie.pseudolog10` and `Makie.Symlog10`.
+`transform` is a function that is applied element-by-element to the data before it is
+plotted. For example when using a log scale on data that may contain some negative values
+it might be useful to pass `transform=abs` (to plot the absolute value) or
+`transform=positive_or_nan` (to ignore any negative or zero values).
+
+Any extra `kwargs` are passed to [`plot_1d`](@ref) (which is used to create the plot, as
+we have to handle time-varying coordinates so cannot use [`animate_1d`](@ref)).
+"""
+function animate_f_unnorm_vs_vpa end
+
+function animate_f_unnorm_vs_vpa(run_info::Tuple; neutral=false, outfile=nothing, kwargs...)
+    try
+        n_runs = length(run_info)
+
+        ylabel = neutral ? L"f_{n,\mathrm{unnormalized}}" : L"f_{i,\mathrm{unnormalized}}"
+        fig, ax = get_1d_ax(xlabel=L"v_\parallel", ylabel=ylabel)
+
+        frame_index = Observable(1)
+
+        for ri ∈ run_info
+            animate_f_unnorm_vs_vpa(ri; neutral=neutral, ax=ax, frame_index=frame_index,
+                                    kwargs...)
+        end
+
+        if n_runs > 1
+            put_legend_above(fig, ax)
+        end
+
+        if outfile !== nothing
+            nt = minimum(ri.nt for ri ∈ run_info)
+            save_animation(fig, frame_index, nt, outfile)
+        end
+
+        return fig
+    catch e
+        println("Error in animate_f_unnorm_vs_vpa(). Error was ", e)
+    end
+end
+
+function animate_f_unnorm_vs_vpa(run_info; input=nothing, neutral=false, is=1, iz=nothing,
+                                 fig=nothing, ax=nothing, frame_index=nothing,
+                                 outfile=nothing, transform=identity, kwargs...)
+    if input === nothing
+        if neutral
+            input = Dict_to_NamedTuple(input_dict_dfns["f_neutral"])
+        else
+            input = Dict_to_NamedTuple(input_dict_dfns["f"])
+        end
+    elseif input isa AbstractDict
+        input = Dict_to_NamedTuple(input)
+    end
+
+    if iz == nothing
+        iz = input.iz0
+    end
+
+    if ax === nothing
+        ylabel = neutral ? L"f_{n,\mathrm{unnormalized}}" : L"f_{i,\mathrm{unnormalized}}"
+        fig, ax = get_1d_ax(xlabel=L"v_\parallel", ylabel=ylabel)
+        frame_index = Observable(1)
+    end
+    if frame_index === nothing
+        error("Must pass an Observable to `frame_index` when passing `ax`.")
+    end
+
+    if neutral
+        f = VariableCache(run_info, "f_neutral", chunk_size_1d; it=nothing, is=is,
+                          ir=input.ir0, iz=iz, ivperp=nothing, ivpa=nothing,
+                          ivzeta=input.ivzeta0, ivr=input.ivr0, ivz=nothing)
+        density = postproc_load_variable(run_info, "density_neutral"; is=is, ir=input.ir0,
+                                         iz=iz)
+        upar = postproc_load_variable(run_info, "uz_neutral"; is=is, ir=input.ir0, iz=iz)
+        vth = postproc_load_variable(run_info, "thermal_speed_neutral"; is=is,
+                                     ir=input.ir0, iz=iz)
+    else
+        f = VariableCache(run_info, "f", chunk_size_2d; it=nothing, is=is, ir=input.ir0, iz=iz,
+                          ivperp=input.ivperp0, ivpa=nothing, ivzeta=nothing, ivr=nothing,
+                          ivz=nothing)
+        density = postproc_load_variable(run_info, "density"; is=is, ir=input.ir0, iz=iz)
+        upar = postproc_load_variable(run_info, "parallel_flow"; is=is, ir=input.ir0, iz=iz)
+        vth = postproc_load_variable(run_info, "thermal_speed"; is=is, ir=input.ir0, iz=iz)
+    end
+
+    # Get extrema of dzdt
+    dzdtmin = Inf
+    dzdtmax = -Inf
+    fmin = Inf
+    fmax = -Inf
+    for it ∈ 1:run_info.nt
+        this_dzdt = vpagrid_to_dzdt(run_info.vpa.grid, vth[it], upar[it],
+                                    run_info.evolve_ppar, run_info.evolve_upar)
+        this_dzdtmin, this_dzdtmax = extrema(this_dzdt)
+        dzdtmin = min(dzdtmin, this_dzdtmin)
+        dzdtmax = max(dzdtmax, this_dzdtmax)
+
+        this_f_unnorm = get_unnormalised_f_1d(get_cache_slice(f, it), density[it],
+                                              vth[it], run_info.evolve_density,
+                                              run_info.evolve_ppar)
+        this_fmin, this_fmax = NaNMath.extrema(transform(this_f_unnorm))
+        fmin = min(fmin, this_fmin)
+        fmax = max(fmax, this_fmax)
+    end
+    yheight = fmax - fmin
+    xwidth = dzdtmax - dzdtmin
+    limits!(ax, dzdtmin - 0.01*xwidth, dzdtmax + 0.01*xwidth,
+            fmin - 0.01*yheight, fmax + 0.01*yheight)
+
+    dzdt = @lift vpagrid_to_dzdt(run_info.vpa.grid, vth[$frame_index], upar[$frame_index],
+                                 run_info.evolve_ppar, run_info.evolve_upar)
+    f_unnorm = @lift transform.(get_unnormalised_f_1d(
+                                    get_cache_slice(f, $frame_index),
+                                    density[$frame_index], vth[$frame_index],
+                                    run_info.evolve_density, run_info.evolve_ppar))
+
+    l = plot_1d(dzdt, f_unnorm; ax=ax, label=run_info.run_name, kwargs...)
+
+    if outfile !== nothing
+        if fig === nothing
+            error("When ax is passed, fig must also be passed to save the plot using "
+                  * "outfile")
+        end
+        save_animation(fig, frame_index, run_info.nt, outfile)
+    end
+
+    if fig !== nothing
+        return fig
+    else
+        return l
+    end
+end
+
+"""
+    animate_f_unnorm_vs_vpa_z(run_info; input=nothing, neutral=false, is=1,
+                              fig=nothing, ax=nothing, frame_index=nothing,
+                              outfile=nothing, yscale=identity, transform=identity,
+                              kwargs...)
+
+Animate an unnormalized distribution function against \$v_\\parallel\$ and z.
+
+This function is only needed for moment-kinetic runs. These are currently only supported
+for the 1D1V case.
+
+The information for the runs to plot is passed in `run_info` (as returned by
+[`get_run_info`](@ref)). If `run_info` is a Tuple, comparison plots are made where plots
+from the different runs are displayed in a horizontal row.
+
+By default animates the ion distribution function. If `neutrals=true` is passed, animates
+the neutral distribution function instead.
+
+`is` selects which species to analyse.
+
+If `input` is not passed, it is taken from `input_dict_dfns["f"]`.
+
+The data needed will be loaded from file.
+
+`outfile` is required for animations unless `ax` is passed. The animation will be saved to
+a file named `outfile`.  The suffix determines the file type. If both `outfile` and `ax`
+are passed, then the `Figure` containing `ax` must be passed to `fig` to allow the
+animation to be saved.
+
+When `run_info` is not a Tuple, an Axis can be passed to `ax` to have the animation
+created in `ax`. When `ax` is passed, if `outfile` is passed to save the animation, then
+the Figure containing `ax` must be passed to `fig`.
+
+`yscale` can be used to set the scaling function for the y-axis. Options are `identity`,
+`log`, `log2`, `log10`, `sqrt`, `Makie.logit`, `Makie.pseudolog10` and `Makie.Symlog10`.
+`transform` is a function that is applied element-by-element to the data before it is
+plotted. For example when using a log scale on data that may contain some negative values
+it might be useful to pass `transform=abs` (to plot the absolute value) or
+`transform=positive_or_nan` (to ignore any negative or zero values).
+
+Any extra `kwargs` are passed to [`plot_2d`](@ref) (which is used to create the plot, as
+we have to handle time-varying coordinates so cannot use [`animate_2d`](@ref)).
+"""
+function animate_f_unnorm_vs_vpa_z end
+
+function animate_f_unnorm_vs_vpa_z(run_info::Tuple; neutral=false, outfile=nothing,
+                                   kwargs...)
+    try
+        n_runs = length(run_info)
+        title = neutral ? L"f_{n,\mathrm{unnormalized}}" : L"f_{i,\mathrm{unnormalized}}"
+        fig, axes, colorbar_places = get_2d_ax(n_runs; title=title, xlabel=L"v_\parallel", ylabel=L"z")
+
+        frame_index = Observable(1)
+
+        for (ri, ax, colorbar_place) ∈ zip(run_info, axes, colorbar_places)
+            animate_f_unnorm_vs_vpa_z(ri; neutral=neutral, ax=ax,
+                                      colorbar_place=colorbar_place, frame_index=frame_index,
+                                      kwargs...)
+        end
+
+        if outfile !== nothing
+            nt = minimum(ri.nt for ri ∈ run_info)
+            save_animation(fig, frame_index, nt, outfile)
+        end
+
+        return fig
+    catch e
+        println("Error in animate_f_unnorm_vs_vpa_z(). Error was ", e)
+    end
+end
+
+function animate_f_unnorm_vs_vpa_z(run_info; input=nothing, neutral=false, is=1,
+                                   fig=nothing, ax=nothing, colorbar_place=nothing,
+                                   frame_index=nothing, outfile=nothing,
+                                   transform=identity, kwargs...)
+    if input === nothing
+        if neutral
+            input = Dict_to_NamedTuple(input_dict_dfns["f_neutral"])
+        else
+            input = Dict_to_NamedTuple(input_dict_dfns["f"])
+        end
+    elseif input isa AbstractDict
+        input = Dict_to_NamedTuple(input)
+    end
+
+    if ax === nothing
+        title = neutral ? L"f_{n,\mathrm{unnormalized}}" : L"f_{i,\mathrm{unnormalized}}"
+        fig, ax, colorbar_place = get_2d_ax(title=title, xlabel=L"v_\parallel", ylabel=L"z")
+        frame_index = Observable(1)
+    else
+        ax.title = run_info.run_name
+    end
+    if frame_index === nothing
+        error("Must pass an Observable to `frame_index` when passing `ax`.")
+    end
+
+    if neutral
+        f = VariableCache(run_info, "f_neutral", chunk_size_2d; it=nothing, is=is,
+                          ir=input.ir0, iz=nothing, ivperp=nothing, ivpa=nothing,
+                          ivzeta=input.ivzeta0, ivr=input.ivr0, ivz=nothing)
+        density = VariableCache(run_info, "density_neutral", chunk_size_1d; it=nothing,
+                                is=is, ir=input.ir0, iz=nothing, ivperp=nothing,
+                                ivpa=nothing, ivzeta=nothing, ivr=nothing, ivz=nothing)
+        upar = VariableCache(run_info, "uz_neutral", chunk_size_1d; it=nothing, is=is,
+                             ir=input.ir0, iz=nothing, ivperp=nothing, ivpa=nothing,
+                             ivzeta=nothing, ivr=nothing, ivz=nothing)
+        vth = VariableCache(run_info, "thermal_speed_neutral", chunk_size_1d; it=nothing,
+                            is=is, ir=input.ir0, iz=nothing, ivperp=nothing, ivpa=nothing,
+                            ivzeta=nothing, ivr=nothing, ivz=nothing)
+        vpa_grid = run_info.vz.grid
+    else
+        f = VariableCache(run_info, "f", chunk_size_2d; it=nothing, is=is, ir=input.ir0,
+                          iz=nothing, ivperp=input.ivperp0, ivpa=nothing, ivzeta=nothing,
+                          ivr=nothing, ivz=nothing)
+        density = VariableCache(run_info, "density", chunk_size_1d; it=nothing, is=is,
+                                ir=input.ir0, iz=nothing, ivperp=nothing, ivpa=nothing,
+                                ivzeta=nothing, ivr=nothing, ivz=nothing)
+        upar = VariableCache(run_info, "parallel_flow", chunk_size_1d; it=nothing, is=is,
+                             ir=input.ir0, iz=nothing, ivperp=nothing, ivpa=nothing,
+                             ivzeta=nothing, ivr=nothing, ivz=nothing)
+        vth = VariableCache(run_info, "thermal_speed", chunk_size_1d; it=nothing, is=is,
+                            ir=input.ir0, iz=nothing, ivperp=nothing, ivpa=nothing,
+                            ivzeta=nothing, ivr=nothing, ivz=nothing)
+        vpa_grid = run_info.vpa.grid
+    end
+
+    # Get extrema of dzdt
+    dzdtmin = Inf
+    dzdtmax = -Inf
+    for it ∈ 1:run_info.nt
+        this_dzdt = vpagrid_to_dzdt_2d(vpa_grid, get_cache_slice(vth, it),
+                                       get_cache_slice(upar, it), run_info.evolve_ppar,
+                                       run_info.evolve_upar)
+        this_dzdtmin, this_dzdtmax = extrema(this_dzdt)
+        dzdtmin = min(dzdtmin, this_dzdtmin)
+        dzdtmax = max(dzdtmax, this_dzdtmax)
+    end
+    # Set x-limits of ax so that plot always fits within axis
+    xlims!(ax, dzdtmin, dzdtmax)
+
+    dzdt = @lift vpagrid_to_dzdt_2d(vpa_grid, get_cache_slice(vth, $frame_index),
+                                    get_cache_slice(upar, $frame_index),
+                                    run_info.evolve_ppar, run_info.evolve_upar)
+    f_unnorm = @lift transform.(get_unnormalised_f_2d(
+                                    get_cache_slice(f, $frame_index),
+                                    get_cache_slice(density, $frame_index),
+                                    get_cache_slice(vth, $frame_index),
+                                    run_info.evolve_density, run_info.evolve_ppar))
+
+    hm = plot_2d(dzdt, run_info.z.grid, f_unnorm; ax=ax, colorbar_place=colorbar_place,
+                 kwargs...)
+
+    if outfile !== nothing
+        if fig === nothing
+            error("When ax is passed, fig must also be passed to save the plot using "
+                  * "outfile")
+        end
+        save_animation(fig, frame_index, run_info.nt, outfile)
+    end
+
+    if fig !== nothing
+        return fig
+    else
+        return hm
+    end
 end
 
 """
