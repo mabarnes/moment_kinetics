@@ -4,6 +4,7 @@ module time_advance
 
 export setup_time_advance!
 export time_advance!
+export setup_dummy_and_buffer_arrays
 
 using MPI
 using ..type_definitions: mk_float
@@ -84,6 +85,9 @@ mutable struct scratch_dummy_arrays
     # needs to be shared memory
 	buffer_vpavperpzrs_1::MPISharedArray{mk_float,5}
 	buffer_vpavperpzrs_2::MPISharedArray{mk_float,5}
+	buffer_vpavperpzrs_3::MPISharedArray{mk_float,5}
+	buffer_vpavperpzrs_4::MPISharedArray{mk_float,5}
+	buffer_vpavperpzrs_5::MPISharedArray{mk_float,5}
 	
 	buffer_vzvrvzetazsn_1::MPISharedArray{mk_float,5}
 	buffer_vzvrvzetazsn_2::MPISharedArray{mk_float,5}
@@ -505,6 +509,9 @@ function setup_dummy_and_buffer_arrays(nr,nz,nvpa,nvperp,nvz,nvr,nvzeta,nspecies
 	
 	buffer_vpavperpzrs_1 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
 	buffer_vpavperpzrs_2 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
+	buffer_vpavperpzrs_3 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
+	buffer_vpavperpzrs_4 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
+	buffer_vpavperpzrs_5 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
 	
 	buffer_vzvrvzetazsn_1 = allocate_shared_float(nvz,nvr,nvzeta,nz,nspecies_neutral)
 	buffer_vzvrvzetazsn_2 = allocate_shared_float(nvz,nvr,nvzeta,nz,nspecies_neutral)
@@ -527,7 +534,7 @@ function setup_dummy_and_buffer_arrays(nr,nz,nvpa,nvperp,nvz,nvr,nvzeta,nspecies
 		buffer_r_1,buffer_r_2,buffer_r_3,buffer_r_4,
 		buffer_vpavperpzs_1,buffer_vpavperpzs_2,buffer_vpavperpzs_3,buffer_vpavperpzs_4,buffer_vpavperpzs_5,buffer_vpavperpzs_6,
 		buffer_vpavperprs_1,buffer_vpavperprs_2,buffer_vpavperprs_3,buffer_vpavperprs_4,buffer_vpavperprs_5,buffer_vpavperprs_6,
-		buffer_vpavperpzrs_1,buffer_vpavperpzrs_2,
+		buffer_vpavperpzrs_1,buffer_vpavperpzrs_2,buffer_vpavperpzrs_3,buffer_vpavperpzrs_4,buffer_vpavperpzrs_5,
 		buffer_vzvrvzetazsn_1,buffer_vzvrvzetazsn_2,buffer_vzvrvzetazsn_3,buffer_vzvrvzetazsn_4,buffer_vzvrvzetazsn_5,buffer_vzvrvzetazsn_6,
 		buffer_vzvrvzetarsn_1,buffer_vzvrvzetarsn_2,buffer_vzvrvzetarsn_3,buffer_vzvrvzetarsn_4,buffer_vzvrvzetarsn_5,buffer_vzvrvzetarsn_6,
 		buffer_vzvrvzetazrsn)

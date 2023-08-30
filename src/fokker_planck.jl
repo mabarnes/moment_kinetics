@@ -39,17 +39,23 @@ struct fokkerplanck_arrays_struct
     H2_weights::MPISharedArray{mk_float,4}
     H3_weights::MPISharedArray{mk_float,4}
     #Rosenbluth_G::Array{mk_float,2}
-    Rosenbluth_d2Gdvpa2::MPISharedArray{mk_float,2}
-    Rosenbluth_d2Gdvperpdvpa::MPISharedArray{mk_float,2}
-    Rosenbluth_d2Gdvperp2::MPISharedArray{mk_float,2}
+    d2Gdvpa2::MPISharedArray{mk_float,2}
+    d2Gdvperpdvpa::MPISharedArray{mk_float,2}
+    d2Gdvperp2::MPISharedArray{mk_float,2}
+    dGdvperp::MPISharedArray{mk_float,2}
     #Rosenbluth_H::Array{mk_float,2}
-    Rosenbluth_dHdvpa::MPISharedArray{mk_float,2}
-    Rosenbluth_dHdvperp::MPISharedArray{mk_float,2}
+    dHdvpa::MPISharedArray{mk_float,2}
+    dHdvperp::MPISharedArray{mk_float,2}
     #Cflux_vpa::MPISharedArray{mk_float,2}
     #Cflux_vperp::MPISharedArray{mk_float,2}
     buffer_vpavperp_1::Array{mk_float,2}
     buffer_vpavperp_2::Array{mk_float,2}
-    #Cssp_result_vpavperp::Array{mk_float,2}
+    Cssp_result_vpavperp::MPISharedArray{mk_float,2}
+    dfdvpa::MPISharedArray{mk_float,2}
+    d2fdvpa2::MPISharedArray{mk_float,2}
+    d2fdvperpdvpa::MPISharedArray{mk_float,2}
+    dfdvperp::MPISharedArray{mk_float,2}
+    d2fdvperp2::MPISharedArray{mk_float,2}
 end
 
 """
@@ -66,22 +72,29 @@ function allocate_fokkerplanck_arrays(vperp,vpa)
     H2_weights = allocate_float(nvpa,nvperp,nvpa,nvperp)
     H3_weights = allocate_float(nvpa,nvperp,nvpa,nvperp)
     #Rosenbluth_G = allocate_float(nvpa,nvperp)
-    Rosenbluth_d2Gdvpa2 = allocate_shared_float(nvpa,nvperp)
-    Rosenbluth_d2Gdvperpdvpa = allocate_shared_float(nvpa,nvperp)
-    Rosenbluth_d2Gdvperp2 = allocate_shared_float(nvpa,nvperp)
+    d2Gdvpa2 = allocate_shared_float(nvpa,nvperp)
+    d2Gdvperpdvpa = allocate_shared_float(nvpa,nvperp)
+    d2Gdvperp2 = allocate_shared_float(nvpa,nvperp)
+    dGdvperp = allocate_shared_float(nvpa,nvperp)
     #Rosenbluth_H = allocate_float(nvpa,nvperp)
-    Rosenbluth_dHdvpa = allocate_shared_float(nvpa,nvperp)
-    Rosenbluth_dHdvperp = allocate_shared_float(nvpa,nvperp)
+    dHdvpa = allocate_shared_float(nvpa,nvperp)
+    dHdvperp = allocate_shared_float(nvpa,nvperp)
     #Cflux_vpa = allocate_shared_float(nvpa,nvperp)
     #Cflux_vperp = allocate_shared_float(nvpa,nvperp)
     buffer_vpavperp_1 = allocate_float(nvpa,nvperp)
     buffer_vpavperp_2 = allocate_float(nvpa,nvperp)
-    #Cssp_result_vpavperp = allocate_float(nvpa,nvperp)
+    Cssp_result_vpavperp = allocate_shared_float(nvpa,nvperp)
+    dfdvpa = allocate_shared_float(nvpa,nvperp)
+    d2fdvpa2 = allocate_shared_float(nvpa,nvperp)
+    d2fdvperpdvpa = allocate_shared_float(nvpa,nvperp)
+    dfdvperp = allocate_shared_float(nvpa,nvperp)
+    d2fdvperp2 = allocate_shared_float(nvpa,nvperp)
     
     return fokkerplanck_arrays_struct(G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
-                               Rosenbluth_d2Gdvpa2,Rosenbluth_d2Gdvperpdvpa,Rosenbluth_d2Gdvperp2,
-                               Rosenbluth_dHdvpa,Rosenbluth_dHdvperp,
-                               buffer_vpavperp_1,buffer_vpavperp_2)
+                               d2Gdvpa2,d2Gdvperpdvpa,d2Gdvperp2,dGdvperp,
+                               dHdvpa,dHdvperp,buffer_vpavperp_1,buffer_vpavperp_2,
+                               Cssp_result_vpavperp, dfdvpa, d2fdvpa2,
+                               d2fdvperpdvpa, dfdvperp, d2fdvperp2)
 end
 
 
@@ -206,6 +219,10 @@ function init_Rosenbluth_potential_integration_weights!(G1_weights,H0_weights,H1
                 igrid_vpa, igrid_vperp, vpa_val, vperp_val, ivpa, ivperp)
     end
     
+    
+    @serial_region begin
+        println("finished weights calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+    end
     return nothing
 end
 
@@ -772,7 +789,7 @@ function evaluate_RMJ_collision_operator!(Cssp_out,fs_in,fsp_in,ms,msp,cfreqssp,
     @views @. Cssp_out = cfreqssp*Cssp_out
 end 
 
-function explicit_fokker_planck_collisions!(pdf_out,pdf_in,composition,collisions,dt,fokkerplanck_arrays::fokkerplanck_arrays_struct,
+function explicit_fokker_planck_collisions_old!(pdf_out,pdf_in,composition,collisions,dt,fokkerplanck_arrays::fokkerplanck_arrays_struct,
                                              scratch_dummy, r, z, vperp, vpa, vperp_spectral, vpa_spectral)
     n_ion_species = composition.n_ion_species
     @boundscheck vpa.n == size(pdf_out,1) || throw(BoundsError(pdf_out))
@@ -855,6 +872,103 @@ function Cssp_fully_expanded_form(nussp,ms,msp,
               2.0*(1.0 - (ms/msp))*(dfsdvpa*dHspdvpa + dfsdvperp*dHspdvperp) +                
               (8.0/sqrt(pi))*(ms/msp)*fs*fsp) )
     return Cssp
+end
+
+"""
+Evaluate the Fokker Planck collision Operator
+using dummy arrays to store the 5 required derivatives.
+For a single species, ir, and iz, this routine leaves 
+in place the fokkerplanck_arrays struct with testable 
+distributions function derivatives, Rosenbluth potentials,
+and collision operator in place.
+"""
+
+function explicit_fokker_planck_collisions!(pdf_out,pdf_in,composition,collisions,dt,fokkerplanck_arrays::fokkerplanck_arrays_struct,
+                                             scratch_dummy, r, z, vperp, vpa, vperp_spectral, vpa_spectral)
+
+    n_ion_species = composition.n_ion_species
+    @boundscheck vpa.n == size(pdf_out,1) || throw(BoundsError(pdf_out))
+    @boundscheck vperp.n == size(pdf_out,2) || throw(BoundsError(pdf_out))
+    @boundscheck z.n == size(pdf_out,3) || throw(BoundsError(pdf_out))
+    @boundscheck r.n == size(pdf_out,4) || throw(BoundsError(pdf_out))
+    @boundscheck n_ion_species == size(pdf_out,5) || throw(BoundsError(pdf_out))
+    @boundscheck vpa.n == size(pdf_in,1) || throw(BoundsError(pdf_in))
+    @boundscheck vperp.n == size(pdf_in,2) || throw(BoundsError(pdf_in))
+    @boundscheck z.n == size(pdf_in,3) || throw(BoundsError(pdf_in))
+    @boundscheck r.n == size(pdf_in,4) || throw(BoundsError(pdf_in))
+    @boundscheck n_ion_species == size(pdf_in,5) || throw(BoundsError(pdf_in))
+    
+    # setup species information
+    mass = Array{mk_float,1}(undef,n_ion_species)
+    mass[1] = 1.0 # generalise!
+    nussp = Array{mk_float,2}(undef,n_ion_species,n_ion_species)
+    nussp[1,1] = collisions.nuii # generalise!
+
+    # first, compute the require derivatives and store in the buffer arrays
+    dfdvpa = scratch_dummy.buffer_vpavperpzrs_1
+    d2fdvpa2 = scratch_dummy.buffer_vpavperpzrs_2
+    d2fdvperpdvpa = scratch_dummy.buffer_vpavperpzrs_3
+    dfdvperp = scratch_dummy.buffer_vpavperpzrs_4
+    d2fdvperp2 = scratch_dummy.buffer_vpavperpzrs_5
+
+    begin_s_r_z_vperp_region()
+    @loop_s_r_z_vperp is ir iz ivperp begin
+        @views derivative!(vpa.scratch, pdf_in[:,ivperp,iz,ir,is], vpa, vpa_spectral)
+        @. dfdvpa[:,ivperp,iz,ir,is] = vpa.scratch
+        @views derivative!(vpa.scratch2, vpa.scratch, vpa, vpa_spectral)
+        @. d2fdvpa2[:,ivperp,iz,ir,is] = vpa.scratch2
+    end
+    if vpa.discretization == "gausslegendre_pseudospectral"
+        @loop_s_r_z_vperp is ir iz ivperp begin
+           @views second_derivative!(vpa.scratch2, pdf_in[:,ivperp,iz,ir,is], vpa, vpa_spectral)
+           @. d2fdvpa2[:,ivperp,iz,ir,is] = vpa.scratch2 
+        end
+    end
+
+    begin_s_r_z_vpa_region()
+
+    @loop_s_r_z_vpa is ir iz ivpa begin
+        @views derivative!(vperp.scratch, pdf_in[ivpa,:,iz,ir,is], vperp, vperp_spectral)
+        @. dfdvperp[ivpa,:,iz,ir,is] = vperp.scratch
+        @views derivative!(vperp.scratch2, vperp.scratch, vperp, vperp_spectral)
+        @. d2fdvperp2[ivpa,:,iz,ir,is] = vperp.scratch2
+        @views derivative!(vperp.scratch, dfdvpa[ivpa,:,iz,ir,is], vperp, vperp_spectral)
+        @. d2fdvperpdvpa[ivpa,:,iz,ir,is] = vperp.scratch
+    end
+
+    # now parallelise over all dimensions and calculate the 
+    # collision operator coefficients and the collision operator
+    # in one loop, noting that we only require data local to 
+    # each ivpa,ivperp,iz,ir,is now that the derivatives are precomputed
+    fka = fokkerplanck_arrays
+    begin_s_r_z_vperp_vpa_region()
+    @loop_s_r_z is ir iz begin
+        @loop_vperp_vpa ivperp ivpa begin
+            for isp in 1:n_ion_species # make sure to sum over all ion species
+                # get the local (in ivpa, ivperp) values of the coeffs
+                @views get_local_Cssp_coefficients!(fka.d2Gdvpa2,fka.dGdvperp,fka.d2Gdvperpdvpa,
+                                            fka.d2Gdvperp2,fka.dHdvpa,fka.dHdvperp,
+                                            dfdvpa[:,:,iz,ir,isp],dfdvperp[:,:,iz,ir,isp],d2fdvperpdvpa[:,:,iz,ir,isp],
+                                            fka.G1_weights,fka.H0_weights,fka.H1_weights,fka.H2_weights,fka.H3_weights,
+                                            ivpa,ivperp,vpa.n,vperp.n)
+                
+                (Cssp = Cssp_fully_expanded_form(nussp[is,isp],mass[is],mass[isp],
+                                                d2fdvpa2[ivpa,ivperp,iz,ir,is],d2fdvperp2[ivpa,ivperp,iz,ir,is],d2fdvperpdvpa[ivpa,ivperp,iz,ir,is],dfdvpa[ivpa,ivperp,iz,ir,is],dfdvperp[ivpa,ivperp,iz,ir,is],pdf_in[ivpa,ivperp,iz,ir,is],
+                                                fka.d2Gdvpa2[ivpa,ivperp],fka.d2Gdvperp2[ivpa,ivperp],fka.d2Gdvperpdvpa[ivpa,ivperp],fka.dGdvperp[ivpa,ivperp],
+                                                fka.dHdvpa[ivpa,ivperp],fka.dHdvperp[ivpa,ivperp],pdf_in[ivpa,ivperp,iz,ir,isp],vperp.grid[ivperp]) )
+                pdf_out[ivpa,ivperp,iz,ir,is] += dt*Cssp
+                # for testing
+                fka.Cssp_result_vpavperp[ivpa,ivperp] = Cssp
+                fka.dfdvpa[ivpa,ivperp] = dfdvpa[ivpa,ivperp,iz,ir,is]
+                fka.d2fdvpa2[ivpa,ivperp] = d2fdvpa2[ivpa,ivperp,iz,ir,is]
+                fka.d2fdvperpdvpa[ivpa,ivperp] = d2fdvperpdvpa[ivpa,ivperp,iz,ir,is]
+                fka.dfdvperp[ivpa,ivperp] = dfdvperp[ivpa,ivperp,iz,ir,is]
+                fka.d2fdvperp2[ivpa,ivperp] = d2fdvperp2[ivpa,ivperp,iz,ir,is]
+            end
+       end
+    end
+
+    return nothing 
 end
 
 function explicit_fokker_planck_collisions_Maxwellian_coefficients!(pdf_out,pdf_in,dens_in,upar_in,vth_in,
