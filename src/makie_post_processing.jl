@@ -2342,6 +2342,10 @@ standard Makie mechanism of creating a struct that modifies the colormap. For ex
 `Reverse("deep")` can be passed as `"reverse_deep"`. This is useful so that these extra
 colormaps can be specified in an input file, but is not needed for interactive use.
 
+When `xcoord` and `ycoord` are both one-dimensional, uses Makie's `heatmap!()` function
+for the plot. If either or both of `xcoord` and `ycoord` are two-dimensional, instead uses
+[`irregular_heatmap!`](@ref).
+
 Other `kwargs` are passed to Makie's `heatmap!()` function.
 
 If `ax` is not passed, returns the `Figure`, otherwise returns the object returned by
@@ -2377,7 +2381,12 @@ function plot_2d(xcoord, ycoord, data; ax=nothing, colorbar_place=nothing, xlabe
     xcoord = grid_points_to_faces(xcoord)
     ycoord = grid_points_to_faces(ycoord)
 
-    hm = heatmap!(ax, xcoord, ycoord, data; kwargs...)
+    if ndims(xcoord) == 1 && ndims(ycoord) == 1
+        hm = heatmap!(ax, xcoord, ycoord, data; kwargs...)
+    else
+        hm = irregular_heatmap!(ax, xcoord, ycoord, data; kwargs...)
+    end
+
     if colorbar_place === nothing
         println("Warning: colorbar_place argument is required to make a color bar")
     else
@@ -2519,6 +2528,10 @@ standard Makie mechanism of creating a struct that modifies the colormap. For ex
 `Reverse("deep")` can be passed as `"reverse_deep"`. This is useful so that these extra
 colormaps can be specified in an input file, but is not needed for interactive use.
 
+When `xcoord` and `ycoord` are both one-dimensional, uses Makie's `heatmap!()` function
+for the plot. If either or both of `xcoord` and `ycoord` are two-dimensional, instead uses
+[`irregular_heatmap!`](@ref).
+
 Other `kwargs` are passed to Makie's `heatmap!()` function.
 
 If `ax` is not passed, returns the `Figure`, otherwise returns the object returned by
@@ -2561,7 +2574,11 @@ function animate_2d(xcoord, ycoord, data; frame_index=nothing, ax=nothing, fig=n
         data = transform.(data)
         heatmap_data = @lift(@view data[:,:,$ind])
     end
-    hm = heatmap!(ax, xcoord, ycoord, heatmap_data; colormap=colormap, kwargs...)
+    if ndims(xcoord) == 1 && ndims(ycoord) == 1
+        hm = heatmap!(ax, xcoord, ycoord, heatmap_data; colormap=colormap, kwargs...)
+    else
+        hm = irregular_heatmap!(ax, xcoord, ycoord, heatmap_data; colormap=colormap, kwargs...)
+    end
     Colorbar(colorbar_place, hm)
 
     if outfile !== nothing
@@ -3079,6 +3096,39 @@ function grid_points_to_faces(coord::AbstractVector)
         faces[i] = 0.5*(coord[i-1] + coord[i])
     end
     faces[n+1] = coord[n]
+
+    return faces
+end
+
+"""
+    grid_points_to_faces(coord::AbstractMatrix)
+
+Turn grid points in `coord` into 'cell faces'.
+
+Returns `faces`, which has a length one greater than `coord` in each dimension. The first
+and last values of `faces` are the first and last values of `coord`. The intermediate
+values are the mid points between grid points.
+"""
+function grid_points_to_faces(coord::AbstractMatrix)
+    ni, nj = size(coord)
+    faces = allocate_float(ni+1, nj+1)
+    faces[1,1] = coord[1,1]
+    for j ∈ 2:nj
+        faces[1,j] = 0.5*(coord[1,j-1] + coord[1,j])
+    end
+    faces[1,nj+1] = coord[1,nj]
+    for i ∈ 2:ni
+        faces[i,1] = 0.5*(coord[i-1,1] + coord[i,1])
+        for j ∈ 2:nj
+            faces[i,j] = 0.25*(coord[i-1,j-1] + coord[i-1,j] + coord[i,j-1] + coord[i,j])
+        end
+        faces[i,nj] = 0.5*(coord[i-1,nj] + coord[i,nj])
+    end
+    faces[ni,1] = coord[ni,1]
+    for j ∈ 2:nj
+        faces[ni,j] = 0.5*(coord[ni,j-1] + coord[ni,j])
+    end
+    faces[ni,nj+1] = coord[ni,nj]
 
     return faces
 end
