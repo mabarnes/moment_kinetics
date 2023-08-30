@@ -2770,45 +2770,102 @@ is the case for heatmap/image.
 
 Code from: https://github.com/MakieOrg/Makie.jl/issues/742#issuecomment-1415809653
 """
-function curvilinear_grid_mesh(xs, ys, zs, colors = zs)
+function curvilinear_grid_mesh(xs, ys, zs, colors)
     if zs isa Observable
         nx, ny = size(zs.val)
     else
         nx, ny = size(zs)
     end
     if colors isa Observable
-        colors_val = colors.val
+        ni, nj = size(colors.val)
+        eltype_colors = eltype(colors.val)
     else
-        colors_val = colors
+        ni, nj = size(colors)
+        eltype_colors = eltype(colors)
     end
-    ni, nj = size(colors_val)
     @assert (nx == ni+1) & (ny == nj+1) "Expected nx, ny = ni+1, nj+1; got nx=$nx, ny=$ny, ni=$ni, nj=$nj.  nx/y are size(zs), ni/j are size(colors)."
-    input_points_vec = Makie.matrix_grid(identity, xs, ys, zs)
-    input_points = reshape(input_points_vec, size(colors_val) .+ 1)
+    if xs isa Observable && ys isa Observable && zs isa Observable
+        input_points_vec = lift((x, y, z)->Makie.matrix_grid(identity, x, y, z), xs, ys, zs)
+    elseif xs isa Observable && ys isa Observable
+        input_points_vec = lift((x, y)->Makie.matrix_grid(identity, x, y, zs), xs, ys)
+    elseif ys isa Observable && zs isa Observable
+        input_points_vec = lift((y, z)->Makie.matrix_grid(identity, xs, y, z), ys, zs)
+    elseif xs isa Observable && zs isa Observable
+        input_points_vec = lift((x, z)->Makie.matrix_grid(identity, x, ys, z), xs, zs)
+    elseif xs isa Observable
+        input_points_vec = lift(x->Makie.matrix_grid(identity, x, ys, zs), xs)
+    elseif ys isa Observable
+        input_points_vec = lift(y->Makie.matrix_grid(identity, xs, y, zs), ys)
+    elseif zs isa Observable
+        input_points_vec = lift(z->Makie.matrix_grid(identity, xs, ys, z), zs)
+    else
+        input_points_vec = Makie.matrix_grid(identity, xs, ys, zs)
+    end
+    if input_points_vec isa Observable
+        input_points = lift(x->reshape(x, (ni, nj) .+ 1), input_points_vec)
+    else
+        input_points = reshape(input_points_vec, (ni, nj) .+ 1)
+    end
 
+    n_input_points = (ni + 1) * (nj + 1)
+
+    function get_triangle_points(input_points)
+        triangle_points = Vector{Point3f}()
+        sizehint!(triangle_points, n_input_points * 2 * 3)
+        @inbounds for i in 1:ni
+            for j in 1:nj
+                # push two triangles to make a square
+                # first triangle
+                push!(triangle_points, input_points[i, j])
+                push!(triangle_points, input_points[i+1, j])
+                push!(triangle_points, input_points[i+1, j+1])
+                # second triangle
+                push!(triangle_points, input_points[i+1, j+1])
+                push!(triangle_points, input_points[i, j+1])
+                push!(triangle_points, input_points[i, j])
+            end
+        end
+        return triangle_points
+    end
+    if input_points isa Observable
+        triangle_points = lift(get_triangle_points, input_points)
+    else
+        triangle_points = get_triangle_points(input_points)
+    end
+
+    function get_triangle_colors(colors)
+        triangle_colors = Vector{eltype_colors}()
+        sizehint!(triangle_colors, n_input_points * 2 * 3)
+        @inbounds for i in 1:ni
+            for j in 1:nj
+                # push two triangles to make a square
+                # first triangle
+                push!(triangle_colors, colors[i, j]); push!(triangle_colors, colors[i, j]); push!(triangle_colors, colors[i, j])
+                # second triangle
+                push!(triangle_colors, colors[i, j]); push!(triangle_colors, colors[i, j]); push!(triangle_colors, colors[i, j])
+            end
+        end
+        return triangle_colors
+    end
+    if colors isa Observable
+        triangle_colors = lift(get_triangle_colors, colors)
+    else
+        triangle_colors = get_triangle_colors(colors)
+    end
+
+    # Triangle faces is a constant vector of indices. Note this depends on the loop
+    # structure here being the same as that in get_triangle_points() and
+    # get_triangle_colors()
     triangle_faces = Vector{CairoMakie.Makie.GeometryBasics.TriangleFace{UInt32}}()
-    triangle_points = Vector{Point3f}()
-    triangle_colors = Vector{eltype(colors_val)}()
-    sizehint!(triangle_faces, size(input_points, 1) * size(input_points, 2) * 2)
-    sizehint!(triangle_points, size(input_points, 1) * size(input_points, 2) * 2 * 3)
-    sizehint!(triangle_colors, size(input_points, 1) * size(input_points, 2) * 3)
-
+    sizehint!(triangle_faces, n_input_points * 2)
     point_ind = 1
-    @inbounds for i in 1:(size(colors_val, 1))
-        for j in 1:(size(colors_val, 2))
+    @inbounds for i in 1:ni
+        for j in 1:nj
             # push two triangles to make a square
             # first triangle
-            push!(triangle_points, input_points[i, j])
-            push!(triangle_points, input_points[i+1, j])
-            push!(triangle_points, input_points[i+1, j+1])
-            push!(triangle_colors, colors_val[i, j]); push!(triangle_colors, colors_val[i, j]); push!(triangle_colors, colors_val[i, j])
             push!(triangle_faces, CairoMakie.Makie.GeometryBasics.TriangleFace{UInt32}((point_ind, point_ind+1, point_ind+2)))
             point_ind += 3
             # second triangle
-            push!(triangle_points, input_points[i+1, j+1])
-            push!(triangle_points, input_points[i, j+1])
-            push!(triangle_points, input_points[i, j])
-            push!(triangle_colors, colors_val[i, j]); push!(triangle_colors, colors_val[i, j]); push!(triangle_colors, colors_val[i, j])
             push!(triangle_faces, CairoMakie.Makie.GeometryBasics.TriangleFace{UInt32}((point_ind, point_ind+1, point_ind+2)))
             point_ind += 3
         end
@@ -2861,12 +2918,14 @@ Code adapted from: https://github.com/MakieOrg/Makie.jl/issues/742#issuecomment-
 """
 function irregular_heatmap!(ax, xs, ys, zs; kwargs...)
     if xs isa Observable
-        if ndims(xs) == 1
+        ndims_x = ndims(xs.val)
+        if ndims_x == 1
             nx = length(xs.val)
         else
             nx = size(xs.val, 1)
         end
     else
+        ndims_x = ndims(xs)
         if ndims(xs) == 1
             nx = length(xs)
         else
@@ -2874,13 +2933,15 @@ function irregular_heatmap!(ax, xs, ys, zs; kwargs...)
         end
     end
     if ys isa Observable
-        if ndims(ys.val) == 1
+        ndims_y = ndims(ys.val)
+        if ndims_y == 1
             ny = length(ys.val)
         else
             ny = size(ys.val, 2)
         end
     else
-        if ndims(ys) == 1
+        ndims_y = ndims(ys)
+        if ndims_y == 1
             ny = length(ys)
         else
             ny = size(ys, 2)
@@ -2894,13 +2955,21 @@ function irregular_heatmap!(ax, xs, ys, zs; kwargs...)
     end
     @assert (nx == ni+1) & (ny == nj+1) "Expected nx, ny = ni+1, nj+1; got nx=$nx, ny=$ny, ni=$ni, nj=$nj.  nx/y are size(xs)/size(ys), ni/j are size(zs)."
 
-    if ndims(xs) == 1
+    if ndims_x == 1
         # Copy to an array of size (nx,ny)
-        xs = repeat(xs, 1, ny)
+        if xs isa Observable
+            xs = lift(x->repeat(x, 1, ny), x)
+        else
+            xs = repeat(xs, 1, ny)
+        end
     end
-    if ndims(ys) == 1
+    if ndims_y == 1
         # Copy to an array of size (nx,ny)
-        ys = repeat(ys', nx, 1)
+        if ys isa Observable
+            ys = lift(x->repeat(x', nx, 1), ys)
+        else
+            ys = repeat(ys', nx, 1)
+        end
     end
 
     vertices, faces, colors = curvilinear_grid_mesh(xs, ys, zeros(nx, ny), zs)
