@@ -47,7 +47,7 @@ function vpa_dissipation!(f_out, f_in, vpa, spectral::T_spectral, dt,
     begin_s_r_z_vperp_region()
 
     diffusion_coefficient = num_diss_params.vpa_dissipation_coefficient
-    if diffusion_coefficient <= 0.0
+    if diffusion_coefficient <= 0.0  && !(vpa.n > 1)
         return nothing
     end
     # if T_spectral <: Bool
@@ -115,7 +115,7 @@ function z_dissipation!(f_out, f_in, z, z_spectral::T_spectral, dt,
         num_diss_params::numerical_dissipation_parameters, scratch_dummy) where T_spectral
 
     diffusion_coefficient = num_diss_params.z_dissipation_coefficient
-    if diffusion_coefficient <= 0.0
+    if diffusion_coefficient <= 0.0  && !(z.n > 1)
         return nothing
     end
 
@@ -149,7 +149,7 @@ function r_dissipation!(f_out, f_in, r, r_spectral::T_spectral, dt,
         num_diss_params::numerical_dissipation_parameters, scratch_dummy) where T_spectral
 
     diffusion_coefficient = num_diss_params.r_dissipation_coefficient
-    if diffusion_coefficient <= 0.0
+    if diffusion_coefficient <= 0.0 && !(r.n > 1)
         return nothing
     end
 

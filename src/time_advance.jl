@@ -201,9 +201,9 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
         advance_ionization_source = false 
     end
     
-    advance_vpa_advection = true
-    advance_z_advection = true
-    advance_r_advection = true
+    advance_vpa_advection = true && vpa.n > 1 && z.n > 1
+    advance_z_advection = true && z.n > 1
+    advance_r_advection = true && r.n > 1
     advance_numerical_dissipation = true
     advance_sources = false
     advance_continuity = false
@@ -234,7 +234,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
                            manufactured_solns_test, r_diffusion, vpa_diffusion, explicit_fp_collisions, explicit_fp_F_FM_collisions, explicit_krook_collisions)
 
 
-    if z.discretization == "chebyshev_pseudospectral"
+    if z.discretization == "chebyshev_pseudospectral" && z.n > 1
         # create arrays needed for explicit Chebyshev pseudospectral treatment in vpa
         # and create the plans for the forward and backward fast Chebyshev transforms
         z_spectral = setup_chebyshev_pseudospectral(z)
@@ -258,7 +258,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
         #r.duniform_dgrid .= 1.0
     end
 
-    if vpa.discretization == "chebyshev_pseudospectral"
+    if vpa.discretization == "chebyshev_pseudospectral" && vpa.n > 1
         # create arrays needed for explicit Chebyshev pseudospectral treatment in vpa
         # and create the plans for the forward and backward fast Chebyshev transforms
         vpa_spectral = setup_chebyshev_pseudospectral(vpa)
