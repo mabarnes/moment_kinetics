@@ -36,7 +36,7 @@ using ..vperp_advection: update_speed_vperp!, vperp_advection!
 using ..vpa_advection: update_speed_vpa!, vpa_advection!
 using ..charge_exchange: charge_exchange_collisions_1V!, charge_exchange_collisions_3V!
 using ..ionization: ionization_collisions_1V!, ionization_collisions_3V!, constant_ionization_source!
-using ..numerical_dissipation: vpa_dissipation!, z_dissipation!, r_dissipation!
+using ..numerical_dissipation: vpa_dissipation!, vperp_dissipation!, z_dissipation!, r_dissipation!
 using ..source_terms: source_terms!, source_terms_manufactured!
 using ..continuity: continuity_equation!
 using ..force_balance: force_balance!
@@ -1043,6 +1043,8 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     # add numerical dissipation
     if advance.numerical_dissipation
         vpa_dissipation!(fvec_out.pdf, fvec_in.pdf, vpa, vpa_spectral, dt,
+                         num_diss_params)
+        vperp_dissipation!(fvec_out.pdf, fvec_in.pdf, vperp, vperp_spectral, dt,
                          num_diss_params)
         z_dissipation!(fvec_out.pdf, fvec_in.pdf, z, z_spectral, dt,
                        num_diss_params, scratch_dummy)

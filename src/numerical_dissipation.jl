@@ -6,6 +6,7 @@ export setup_numerical_dissipation
        #vpa_boundary_buffer_decay!,
        #vpa_boundary_buffer_diffusion!, , z_dissipation!
 export vpa_dissipation!
+export vperp_dissipation!
 export r_dissipation!
 export z_dissipation!
 
@@ -20,6 +21,7 @@ Base.@kwdef struct numerical_dissipation_parameters
     vpa_boundary_buffer_damping_rate::mk_float = -1.0
     vpa_boundary_buffer_diffusion_coefficient::mk_float = -1.0
     vpa_dissipation_coefficient::mk_float = -1.0
+    vperp_dissipation_coefficient::mk_float = -1.0
     z_dissipation_coefficient::mk_float = -1.0
     r_dissipation_coefficient::mk_float = -1.0
 end
@@ -89,6 +91,36 @@ function vpa_dissipation!(f_out, f_in, vpa, spectral::T_spectral, dt,
         vpa.scratch2 .= 1.0 # placeholder for Q in d / d vpa ( Q d f / d vpa)
         @views second_derivative!(vpa.scratch, f_in[:,ivperp,iz,ir,is], vpa.scratch2, vpa, spectral)
         @views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch
+    end
+
+    return nothing
+end
+
+"""
+Add diffusion in the vperp direction to suppress oscillations
+
+Disabled by default.
+
+The diffusion coefficient is set in the input TOML file by the parameter
+```
+[numerical_dissipation]
+vperp_dissipation_coefficient = 0.1
+```
+"""
+function vperp_dissipation!(f_out, f_in, vperp, spectral::T_spectral, dt,
+        num_diss_params::numerical_dissipation_parameters) where T_spectral
+    
+    begin_s_r_z_vpa_region()
+
+    diffusion_coefficient = num_diss_params.vperp_dissipation_coefficient
+    if diffusion_coefficient <= 0.0  && !(vperp.n > 1)
+        return nothing
+    end
+    
+    @loop_s_r_z_vpa is ir iz ivpa begin
+        @views derivative!(vperp.scratch, f_in[ivpa,:,iz,ir,is], vperp, spectral)
+        @views derivative!(vperp.scratch2, vperp.scratch, vperp, spectral)
+        @views @. f_out[ivpa,:,iz,ir,is] += dt * diffusion_coefficient * vperp.scratch2
     end
 
     return nothing
