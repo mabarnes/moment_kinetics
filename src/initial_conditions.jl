@@ -578,21 +578,25 @@ function enforce_boundary_conditions!(f, f_r_bc,
           vpa_adv::T1, z_adv::T2, r_adv::T3, composition,
           scratch_dummy::T4, advance::T5) where {T1, T2, T3, T4, T5}
     
-    begin_s_r_z_vperp_region()
-    @loop_s_r_z_vperp is ir iz ivperp begin
-        # enforce the vpa BC
-        # use that adv.speed independent of vpa 
-        @views enforce_vpa_boundary_condition_local!(f[:,ivperp,iz,ir,is], vpa_bc, vpa_adv[is].speed[:,ivperp,iz,ir], advance.vpa_diffusion)
+    if vpa.n > 1
+        begin_s_r_z_vperp_region()
+        @loop_s_r_z_vperp is ir iz ivperp begin
+            # enforce the vpa BC
+            # use that adv.speed independent of vpa 
+            @views enforce_vpa_boundary_condition_local!(f[:,ivperp,iz,ir,is], vpa_bc, vpa_adv[is].speed[:,ivperp,iz,ir], advance.vpa_diffusion)
+        end
     end
     if vperp.n > 1
         begin_s_r_z_vpa_region()
         @views enforce_vperp_boundary_condition!(f,vperp)
     end
-    begin_s_r_vperp_vpa_region()
-    @views enforce_z_boundary_condition!(f, z_bc, z_adv, vpa, vperp, z, r, composition,
-            scratch_dummy.buffer_vpavperprs_1, scratch_dummy.buffer_vpavperprs_2,
-            scratch_dummy.buffer_vpavperprs_3, scratch_dummy.buffer_vpavperprs_4,
-            scratch_dummy.buffer_vpavperpzrs_1)
+    if z.n > 1
+        begin_s_r_vperp_vpa_region()
+        @views enforce_z_boundary_condition!(f, z_bc, z_adv, vpa, vperp, z, r, composition,
+                scratch_dummy.buffer_vpavperprs_1, scratch_dummy.buffer_vpavperprs_2,
+                scratch_dummy.buffer_vpavperprs_3, scratch_dummy.buffer_vpavperprs_4,
+                scratch_dummy.buffer_vpavperpzrs_1)
+    end
     if r.n > 1
         begin_s_z_vperp_vpa_region()
         @views enforce_r_boundary_condition!(f, f_r_bc, r_bc, r_adv, vpa, vperp, z, r, composition,
