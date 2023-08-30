@@ -2737,15 +2737,19 @@ function get_unnormalised_f_dzdt_1d(f, vpa_grid, density, upar, vth, evolve_dens
 
     dzdt = vpagrid_to_dzdt(vpa_grid, vth, upar, evolve_ppar, evolve_upar)
 
+    f_unnorm = get_unnormalised_f_1d(f, density, vth, evolve_density, evolve_ppar)
+
+    return f_unnorm, dzdt
+end
+function get_unnormalised_f_1d(f, density, vth, evolve_density, evolve_ppar)
     if evolve_ppar
         f_unnorm = @. f * density / vth
     elseif evolve_density
         f_unnorm = @. f * density
     else
-        f_unnorm = copy(f)
+        f_unnorm = f
     end
-
-    return f_unnorm, dzdt
+    return f_unnorm
 end
 
 """
@@ -2758,17 +2762,32 @@ function get_unnormalised_f_coords_2d(f, z_grid, vpa_grid, density, upar, vth,
 
     nvpa, nz = size(f)
     z2d = zeros(nvpa, nz)
-    dzdt2d = zeros(nvpa, nz)
-    f_unnorm = similar(f)
     for iz ∈ 1:nz
-        @views z2d[:,iz] .= z_grid[iz]
-        f_unnorm[:,iz], dzdt2d[:,iz] =
-            get_unnormalised_f_dzdt_1d(f[:,iz], vpa_grid, density[iz], upar[iz],
-                                       vth[iz], evolve_density, evolve_upar,
-                                       evolve_ppar)
+        z2d[:,iz] .= z_grid[iz]
     end
+    dzdt2d = vpagrid_to_dzdt_2d(vpa_grid, vth, upar, evolve_ppar, evolve_upar)
+    f_unnorm = get_unnormalised_f_2d(f, density, vth, evolve_density, evolve_ppar)
 
     return f_unnorm, z2d, dzdt2d
+end
+function vpagrid_to_dzdt_2d(vpa_grid, vth, upar, evolve_ppar, evolve_upar)
+    nvpa = length(vpa_grid)
+    nz = length(vth)
+    dzdt2d = zeros(nvpa, nz)
+    for iz ∈ 1:nz
+        @views dzdt2d[:,iz] .= vpagrid_to_dzdt(vpa_grid, vth[iz], upar[iz], evolve_ppar,
+                                               evolve_upar)
+    end
+    return dzdt2d
+end
+function get_unnormalised_f_2d(f, density, vth, evolve_density, evolve_ppar)
+    f_unnorm = similar(f)
+    nz = size(f, 2)
+    for iz ∈ 1:nz
+        @views f_unnorm[:,iz] .= get_unnormalised_f_1d(f[:,iz], density[iz], vth[iz],
+                                                       evolve_density, evolve_ppar)
+    end
+    return f_unnorm
 end
 
 """
