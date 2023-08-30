@@ -2673,35 +2673,44 @@ is the case for heatmap/image.
 Code from: https://github.com/MakieOrg/Makie.jl/issues/742#issuecomment-1415809653
 """
 function curvilinear_grid_mesh(xs, ys, zs, colors = zs)
-    nx, ny = size(zs)
-    ni, nj = size(colors)
+    if zs isa Observable
+        nx, ny = size(zs.val)
+    else
+        nx, ny = size(zs)
+    end
+    if colors isa Observable
+        colors_val = colors.val
+    else
+        colors_val = colors
+    end
+    ni, nj = size(colors_val)
     @assert (nx == ni+1) & (ny == nj+1) "Expected nx, ny = ni+1, nj+1; got nx=$nx, ny=$ny, ni=$ni, nj=$nj.  nx/y are size(zs), ni/j are size(colors)."
     input_points_vec = Makie.matrix_grid(identity, xs, ys, zs)
-    input_points = reshape(input_points_vec, size(colors) .+ 1)
+    input_points = reshape(input_points_vec, size(colors_val) .+ 1)
 
     triangle_faces = Vector{CairoMakie.Makie.GeometryBasics.TriangleFace{UInt32}}()
     triangle_points = Vector{Point3f}()
-    triangle_colors = Vector{eltype(colors)}()
+    triangle_colors = Vector{eltype(colors_val)}()
     sizehint!(triangle_faces, size(input_points, 1) * size(input_points, 2) * 2)
     sizehint!(triangle_points, size(input_points, 1) * size(input_points, 2) * 2 * 3)
     sizehint!(triangle_colors, size(input_points, 1) * size(input_points, 2) * 3)
 
     point_ind = 1
-    @inbounds for i in 1:(size(colors, 1))
-        for j in 1:(size(colors, 2))
+    @inbounds for i in 1:(size(colors_val, 1))
+        for j in 1:(size(colors_val, 2))
             # push two triangles to make a square
             # first triangle
             push!(triangle_points, input_points[i, j])
             push!(triangle_points, input_points[i+1, j])
             push!(triangle_points, input_points[i+1, j+1])
-            push!(triangle_colors, colors[i, j]); push!(triangle_colors, colors[i, j]); push!(triangle_colors, colors[i, j])
+            push!(triangle_colors, colors_val[i, j]); push!(triangle_colors, colors_val[i, j]); push!(triangle_colors, colors_val[i, j])
             push!(triangle_faces, CairoMakie.Makie.GeometryBasics.TriangleFace{UInt32}((point_ind, point_ind+1, point_ind+2)))
             point_ind += 3
             # second triangle
             push!(triangle_points, input_points[i+1, j+1])
             push!(triangle_points, input_points[i, j+1])
             push!(triangle_points, input_points[i, j])
-            push!(triangle_colors, colors[i, j]); push!(triangle_colors, colors[i, j]); push!(triangle_colors, colors[i, j])
+            push!(triangle_colors, colors_val[i, j]); push!(triangle_colors, colors_val[i, j]); push!(triangle_colors, colors_val[i, j])
             push!(triangle_faces, CairoMakie.Makie.GeometryBasics.TriangleFace{UInt32}((point_ind, point_ind+1, point_ind+2)))
             point_ind += 3
         end
@@ -2753,18 +2762,38 @@ is the case for heatmap/image.
 Code adapted from: https://github.com/MakieOrg/Makie.jl/issues/742#issuecomment-1415809653
 """
 function irregular_heatmap!(ax, xs, ys, zs; kwargs...)
-    if ndims(xs) == 1
-        nx = length(xs)
+    if xs isa Observable
+        if ndims(xs) == 1
+            nx = length(xs.val)
+        else
+            nx = size(xs.val, 1)
+        end
     else
-        nx = size(xs, 1)
+        if ndims(xs) == 1
+            nx = length(xs)
+        else
+            nx = size(xs, 1)
+        end
     end
-    if ndims(ys) == 1
-        ny = length(ys)
+    if ys isa Observable
+        if ndims(ys.val) == 1
+            ny = length(ys.val)
+        else
+            ny = size(ys.val, 2)
+        end
     else
-        ny = size(ys, 2)
+        if ndims(ys) == 1
+            ny = length(ys)
+        else
+            ny = size(ys, 2)
+        end
     end
 
-    ni, nj = size(zs)
+    if zs isa Observable
+        ni, nj = size(zs.val)
+    else
+        ni, nj = size(zs)
+    end
     @assert (nx == ni+1) & (ny == nj+1) "Expected nx, ny = ni+1, nj+1; got nx=$nx, ny=$ny, ni=$ni, nj=$nj.  nx/y are size(xs)/size(ys), ni/j are size(zs)."
 
     if ndims(xs) == 1
@@ -2776,7 +2805,7 @@ function irregular_heatmap!(ax, xs, ys, zs; kwargs...)
         ys = repeat(ys', nx, 1)
     end
 
-    vertices, faces, colors = curvilinear_grid_mesh(xs, ys, zeros(size(xs)), zs)
+    vertices, faces, colors = curvilinear_grid_mesh(xs, ys, zeros(nx, ny), zs)
 
     return mesh!(ax, vertices, faces; color = colors, shading = false, kwargs...)
 end
@@ -3084,6 +3113,9 @@ end
 
 """
     grid_points_to_faces(coord::AbstractVector)
+    grid_points_to_faces(coord::Observable{T} where T <: AbstractVector)
+    grid_points_to_faces(coord::AbstractMatrix)
+    grid_points_to_faces(coord::Observable{T} where T <: AbstractMatrix)
 
 Turn grid points in `coord` into 'cell faces'.
 
@@ -3091,6 +3123,8 @@ Returns `faces`, which has a length one greater than `coord`. The first and last
 `faces` are the first and last values of `coord`. The intermediate values are the mid
 points between grid points.
 """
+function grid_points_to_faces end
+
 function grid_points_to_faces(coord::AbstractVector)
     n = length(coord)
     faces = allocate_float(n+1)
@@ -3103,15 +3137,18 @@ function grid_points_to_faces(coord::AbstractVector)
     return faces
 end
 
-"""
-    grid_points_to_faces(coord::AbstractMatrix)
+function grid_points_to_faces(coord::Observable{T} where T <: AbstractVector)
+    n = length(coord.val)
+    faces = allocate_float(n+1)
+    faces[1] = coord.val[1]
+    for i ∈ 2:n
+        faces[i] = 0.5*(coord.val[i-1] + coord.val[i])
+    end
+    faces[n+1] = coord.val[n]
 
-Turn grid points in `coord` into 'cell faces'.
+    return faces
+end
 
-Returns `faces`, which has a length one greater than `coord` in each dimension. The first
-and last values of `faces` are the first and last values of `coord`. The intermediate
-values are the mid points between grid points.
-"""
 function grid_points_to_faces(coord::AbstractMatrix)
     ni, nj = size(coord)
     faces = allocate_float(ni+1, nj+1)
@@ -3125,13 +3162,37 @@ function grid_points_to_faces(coord::AbstractMatrix)
         for j ∈ 2:nj
             faces[i,j] = 0.25*(coord[i-1,j-1] + coord[i-1,j] + coord[i,j-1] + coord[i,j])
         end
-        faces[i,nj] = 0.5*(coord[i-1,nj] + coord[i,nj])
+        faces[i,nj+1] = 0.5*(coord[i-1,nj] + coord[i,nj])
     end
-    faces[ni,1] = coord[ni,1]
+    faces[ni+1,1] = coord[ni,1]
     for j ∈ 2:nj
-        faces[ni,j] = 0.5*(coord[ni,j-1] + coord[ni,j])
+        faces[ni+1,j] = 0.5*(coord[ni,j-1] + coord[ni,j])
     end
-    faces[ni,nj+1] = coord[ni,nj]
+    faces[ni+1,nj+1] = coord[ni,nj]
+
+    return faces
+end
+
+function grid_points_to_faces(coord::Observable{T} where T <: AbstractMatrix)
+    ni, nj = size(coord.val)
+    faces = allocate_float(ni+1, nj+1)
+    faces[1,1] = coord.val[1,1]
+    for j ∈ 2:nj
+        faces[1,j] = 0.5*(coord.val[1,j-1] + coord.val[1,j])
+    end
+    faces[1,nj+1] = coord.val[1,nj]
+    for i ∈ 2:ni
+        faces[i,1] = 0.5*(coord.val[i-1,1] + coord.val[i,1])
+        for j ∈ 2:nj
+            faces[i,j] = 0.25*(coord.val[i-1,j-1] + coord.val[i-1,j] + coord.val[i,j-1] + coord.val[i,j])
+        end
+        faces[i,nj+1] = 0.5*(coord.val[i-1,nj] + coord.val[i,nj])
+    end
+    faces[ni+1,1] = coord.val[ni,1]
+    for j ∈ 2:nj
+        faces[ni+1,j] = 0.5*(coord.val[ni,j-1] + coord.val[ni,j])
+    end
+    faces[ni+1,nj+1] = coord.val[ni,nj]
 
     return faces
 end
