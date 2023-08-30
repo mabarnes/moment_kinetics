@@ -24,6 +24,7 @@ using moment_kinetics.fokker_planck: d2Gdvpa2, dGdvperp, d2Gdvperpdvpa, d2Gdvper
 using moment_kinetics.fokker_planck: dHdvpa, dHdvperp, Cssp_Maxwellian_inputs
 using moment_kinetics.fokker_planck: F_Maxwellian, dFdvpa_Maxwellian, dFdvperp_Maxwellian
 using moment_kinetics.fokker_planck: d2Fdvpa2_Maxwellian, d2Fdvperpdvpa_Maxwellian, d2Fdvperp2_Maxwellian
+using moment_kinetics.fokker_planck: Cssp_fully_expanded_form, get_local_Cssp_coefficients!, init_fokker_planck_collisions
 using moment_kinetics.type_definitions: mk_float, mk_int
 using moment_kinetics.calculus: derivative!, second_derivative!
 using moment_kinetics.velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_pressure
@@ -1127,6 +1128,13 @@ if abspath(PROGRAM_FILE) == @__FILE__
                     igrid_vpa, igrid_vperp, vpa_val, vperp_val, ivpa, ivperp)
         end
         
+        fkarrays = init_fokker_planck_collisions(vperp,vpa,precompute_weights=true)
+        G1_weights = fkarrays.G1_weights
+        H_weights = fkarrays.H0_weights
+        H1_weights = fkarrays.H1_weights
+        H2_weights = fkarrays.H2_weights
+        H3_weights = fkarrays.H3_weights
+        
         #_block_synchronize()
         begin_serial_region()
         @serial_region begin
@@ -1139,30 +1147,35 @@ if abspath(PROGRAM_FILE) == @__FILE__
         @loop_vperp_vpa ivperp ivpa begin
         #for ivperp in 1:nvperp
             #for ivpa in 1:nvpa 
-                d2Gspdvpa2[ivpa,ivperp] = 0.0
-                dGspdvperp[ivpa,ivperp] = 0.0
-                d2Gspdvperpdvpa[ivpa,ivperp] = 0.0
-                d2Gspdvperp2[ivpa,ivperp] = 0.0
+                #d2Gspdvpa2[ivpa,ivperp] = 0.0
+                #dGspdvperp[ivpa,ivperp] = 0.0
+                #d2Gspdvperpdvpa[ivpa,ivperp] = 0.0
+                #d2Gspdvperp2[ivpa,ivperp] = 0.0
                 Gsp[ivpa,ivperp] = 0.0
                 Hsp[ivpa,ivperp] = 0.0
-                dHspdvpa[ivpa,ivperp] = 0.0
-                dHspdvperp[ivpa,ivperp] = 0.0
+                #dHspdvpa[ivpa,ivperp] = 0.0
+                #dHspdvperp[ivpa,ivperp] = 0.0
                 nsp[ivpa,ivperp] = 0.0
                 for ivperpp in 1:nvperp
                     for ivpap in 1:nvpa
-                        #d2Gspdvpa2[ivpa,ivperp] += G_weights[ivpa,ivperp,ivpap,ivperpp]*d2fspdvpa2[ivpap,ivperpp]
-                        d2Gspdvpa2[ivpa,ivperp] += H3_weights[ivpa,ivperp,ivpap,ivperpp]*dfspdvpa[ivpap,ivperpp]
-                        dGspdvperp[ivpa,ivperp] += G1_weights[ivpa,ivperp,ivpap,ivperpp]*dfspdvperp[ivpap,ivperpp]
-                        d2Gspdvperpdvpa[ivpa,ivperp] += G1_weights[ivpa,ivperp,ivpap,ivperpp]*d2fspdvperpdvpa[ivpap,ivperpp]
-                        #d2Gspdvperp2[ivpa,ivperp] += G2_weights[ivpa,ivperp,ivpap,ivperpp]*d2fspdvperp2[ivpap,ivperpp] + G3_weights[ivpa,ivperp,ivpap,ivperpp]*dfspdvperp[ivpap,ivperpp]
-                        d2Gspdvperp2[ivpa,ivperp] += H2_weights[ivpa,ivperp,ivpap,ivperpp]*dfspdvperp[ivpap,ivperpp]
+                        ##d2Gspdvpa2[ivpa,ivperp] += G_weights[ivpa,ivperp,ivpap,ivperpp]*d2fspdvpa2[ivpap,ivperpp]
+                        #d2Gspdvpa2[ivpa,ivperp] += H3_weights[ivpa,ivperp,ivpap,ivperpp]*dfspdvpa[ivpap,ivperpp]
+                        #dGspdvperp[ivpa,ivperp] += G1_weights[ivpa,ivperp,ivpap,ivperpp]*dfspdvperp[ivpap,ivperpp]
+                        #d2Gspdvperpdvpa[ivpa,ivperp] += G1_weights[ivpa,ivperp,ivpap,ivperpp]*d2fspdvperpdvpa[ivpap,ivperpp]
+                        ##d2Gspdvperp2[ivpa,ivperp] += G2_weights[ivpa,ivperp,ivpap,ivperpp]*d2fspdvperp2[ivpap,ivperpp] + G3_weights[ivpa,ivperp,ivpap,ivperpp]*dfspdvperp[ivpap,ivperpp]
+                        #d2Gspdvperp2[ivpa,ivperp] += H2_weights[ivpa,ivperp,ivpap,ivperpp]*dfspdvperp[ivpap,ivperpp]
                         Gsp[ivpa,ivperp] += G_weights[ivpa,ivperp,ivpap,ivperpp]*fsp_in[ivpap,ivperpp]
                         Hsp[ivpa,ivperp] += H_weights[ivpa,ivperp,ivpap,ivperpp]*fsp_in[ivpap,ivperpp]
-                        dHspdvpa[ivpa,ivperp] += H_weights[ivpa,ivperp,ivpap,ivperpp]*dfspdvpa[ivpap,ivperpp]
-                        dHspdvperp[ivpa,ivperp] += H1_weights[ivpa,ivperp,ivpap,ivperpp]*dfspdvperp[ivpap,ivperpp]
+                        #dHspdvpa[ivpa,ivperp] += H_weights[ivpa,ivperp,ivpap,ivperpp]*dfspdvpa[ivpap,ivperpp]
+                        #dHspdvperp[ivpa,ivperp] += H1_weights[ivpa,ivperp,ivpap,ivperpp]*dfspdvperp[ivpap,ivperpp]
                         nsp[ivpa,ivperp] += n_weights[ivpa,ivperp,ivpap,ivperpp]*fsp_in[ivpap,ivperpp]
                     end
                 end
+                get_local_Cssp_coefficients!(d2Gspdvpa2,dGspdvperp,d2Gspdvperpdvpa,
+                                            d2Gspdvperp2,dHspdvpa,dHspdvperp,
+                                            dfspdvpa,dfspdvperp,d2fspdvperpdvpa,
+                                            G1_weights,H_weights,H1_weights,H2_weights,H3_weights,
+                                            ivpa,ivperp,nvpa,nvperp)
             #end
             
             (Hsp_from_Gsp[ivpa,ivperp] = 0.5*( d2Gspdvpa2[ivpa,ivperp] +
@@ -1185,12 +1198,16 @@ if abspath(PROGRAM_FILE) == @__FILE__
         begin_vperp_vpa_region()
         @loop_vperp_vpa ivperp ivpa begin
             # fully expanded form
-            (Cssp_numerical[ivpa,ivperp] =  nussp*( d2fsdvpa2[ivpa,ivperp]*d2Gspdvpa2[ivpa,ivperp] +
-                              d2fsdvperp2[ivpa,ivperp]*d2Gspdvperp2[ivpa,ivperp] +
-                              2.0*d2fsdvperpdvpa[ivpa,ivperp]*d2Gspdvperpdvpa[ivpa,ivperp] +                
-                              (1.0/(vperp.grid[ivperp]^2))*dfsdvperp[ivpa,ivperp]*dGspdvperp[ivpa,ivperp] +                
-                              2.0*(1.0 - (ms/msp))*(dfsdvpa[ivpa,ivperp]*dHspdvpa[ivpa,ivperp] + dfsdvperp[ivpa,ivperp]*dHspdvperp[ivpa,ivperp]) +                
-                              (8.0/sqrt(pi))*(ms/msp)*fs_in[ivpa,ivperp]*fsp_in[ivpa,ivperp]) )
+            #(Cssp_numerical[ivpa,ivperp] =  nussp*( d2fsdvpa2[ivpa,ivperp]*d2Gspdvpa2[ivpa,ivperp] +
+            #                  d2fsdvperp2[ivpa,ivperp]*d2Gspdvperp2[ivpa,ivperp] +
+            #                  2.0*d2fsdvperpdvpa[ivpa,ivperp]*d2Gspdvperpdvpa[ivpa,ivperp] +                
+            #                  (1.0/(vperp.grid[ivperp]^2))*dfsdvperp[ivpa,ivperp]*dGspdvperp[ivpa,ivperp] +                
+            #                  2.0*(1.0 - (ms/msp))*(dfsdvpa[ivpa,ivperp]*dHspdvpa[ivpa,ivperp] + dfsdvperp[ivpa,ivperp]*dHspdvperp[ivpa,ivperp]) +                
+            #                  (8.0/sqrt(pi))*(ms/msp)*fs_in[ivpa,ivperp]*fsp_in[ivpa,ivperp]) )
+            (Cssp_numerical[ivpa,ivperp] = Cssp_fully_expanded_form(nussp,ms,msp,
+                d2fsdvpa2[ivpa,ivperp],d2fsdvperp2[ivpa,ivperp],d2fsdvperpdvpa[ivpa,ivperp],dfsdvpa[ivpa,ivperp],dfsdvperp[ivpa,ivperp],fs_in[ivpa,ivperp],
+                d2Gspdvpa2[ivpa,ivperp],d2Gspdvperp2[ivpa,ivperp],d2Gspdvperpdvpa[ivpa,ivperp],dGspdvperp[ivpa,ivperp],
+                dHspdvpa[ivpa,ivperp],dHspdvperp[ivpa,ivperp],fsp_in[ivpa,ivperp],vperp.grid[ivperp]) )
             # collisional fluxes 
             ((Cflux_vpa[ivpa,ivperp],Cflux_vperp[ivpa,ivperp]) =
               calculate_collisional_fluxes(fs_in[ivpa,ivperp],
@@ -1216,14 +1233,14 @@ if abspath(PROGRAM_FILE) == @__FILE__
             @. Cssp_div_numerical *= nussp
         end
         
-        plot_H = true
-        plot_dHdvpa = true
-        plot_dHdvperp = true
-        plot_d2Gdvperp2 = true
-        plot_d2Gdvperpdvpa = true
-        plot_dGdvperp = true
-        plot_d2Gdvpa2 = true
-        plot_G = true
+        plot_H = false #true
+        plot_dHdvpa = false #true
+        plot_dHdvperp = false #true
+        plot_d2Gdvperp2 = false #true
+        plot_d2Gdvperpdvpa = false #true
+        plot_dGdvperp = false #true
+        plot_d2Gdvpa2 = false #true
+        plot_G = false #true
         plot_C = false #true
         plot_n = false #true
         
@@ -1796,12 +1813,12 @@ if abspath(PROGRAM_FILE) == @__FILE__
     end
     if test_Lagrange_integral_scan
         initialize_comms!()
-        ngrid = 2
-        nscan = 3
+        ngrid = 9
         #nelement_list = Int[2, 4, 8, 16, 32]
         #nelement_list = Int[2, 4, 8, 16]
-        nelement_list = Int[50, 100, 200]
-        #nelement_list = Int[8]
+        #nelement_list = Int[50, 100, 200]
+        nelement_list = Int[4]
+        nscan = size(nelement_list,1)
         max_C_err = Array{mk_float,1}(undef,nscan)
         max_Gvpa_err = Array{mk_float,1}(undef,nscan)
         max_Gvperp_err = Array{mk_float,1}(undef,nscan)
