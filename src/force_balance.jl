@@ -77,7 +77,7 @@ function neutral_force_balance!(pflx, density_out, fvec, moments, fields, collis
     diffusion_coefficient = num_diss_params.moment_dissipation_coefficient
     if diffusion_coefficient > 0.0
         @loop_sn_r_z isn ir iz begin
-            pflx[iz,ir,isn] += dt*diffusion_coefficient*moments.neutral.d2uz_dz2[iz,ir,is]*density[iz,ir,is]
+            pflx[iz,ir,isn] += dt*diffusion_coefficient*moments.neutral.d2uz_dz2[iz,ir,isn]*density[iz,ir,isn]
         end
     end
 
