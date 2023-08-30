@@ -1982,15 +1982,15 @@ function convert_full_f_neutral_to_normalised!(f, density, uz, pz, vth, vzeta, v
 
     @loop_z iz begin
         # Calculate moments
-        @views density[iz] = integrate_over_vspace(f[:,:,:,iz], vz.grid, 0, vz.wgts,
-                                                   vr.grid, 0, vr.wgts, vzeta.grid, 0,
-                                                   vzeta.wgts)
-        @views uz[iz] = integrate_over_vspace(f[:,:,:,iz], vz.grid, 1, vz.wgts, vr.grid,
-                                              0, vr.wgts, vzeta.grid, 0, vzeta.wgts) /
-                             density[iz]
-        @views pz[iz] = integrate_over_vspace(f[:,:,:,iz], vz.grid, 2, vz.wgts, vr.grid,
-                                              0, vr.wgts, vzeta.grid, 0, vzeta.wgts) -
-                             density[iz]*uz[iz]^2
+        @views density[iz] = integrate_over_neutral_vspace(f[:,:,:,iz], vz.grid, 0,
+                                                           vz.wgts, vr.grid, 0, vr.wgts,
+                                                           vzeta.grid, 0, vzeta.wgts)
+        @views uz[iz] = integrate_over_neutral_vspace(f[:,:,:,iz], vz.grid, 1, vz.wgts,
+                                                      vr.grid, 0, vr.wgts, vzeta.grid, 0,
+                                                      vzeta.wgts) / density[iz]
+        @views pz[iz] = integrate_over_neutral_vspace(f[:,:,:,iz], vz.grid, 2, vz.wgts,
+                                                      vr.grid, 0, vr.wgts, vzeta.grid, 0,
+                                                      vzeta.wgts) - density[iz]*uz[iz]^2
         vth[iz] = sqrt(2.0*pz[iz]/density[iz])
 
         # Normalise f
