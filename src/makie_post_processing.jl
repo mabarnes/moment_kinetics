@@ -2461,10 +2461,28 @@ function plot_2d(xcoord, ycoord, data; ax=nothing, colorbar_place=nothing, xlabe
     end
 
     # Convert grid point values to 'cell face' values for heatmap
-    xcoord = grid_points_to_faces(xcoord)
-    ycoord = grid_points_to_faces(ycoord)
+    if xcoord isa Observable
+        xcoord = lift(grid_points_to_faces, xcoord)
+    else
+        xcoord = grid_points_to_faces(xcoord)
+    end
+    if ycoord isa Observable
+        ycoord = lift(grid_points_to_faces, ycoord)
+    else
+        ycoord = grid_points_to_faces(ycoord)
+    end
 
-    if ndims(xcoord) == 1 && ndims(ycoord) == 1
+    if xcoord isa Observable
+        ndims_x = ndims(xcoord.val)
+    else
+        ndims_x = ndims(xcoord)
+    end
+    if ycoord isa Observable
+        ndims_y = ndims(ycoord.val)
+    else
+        ndims_y = ndims(ycoord)
+    end
+    if ndims_x == 1 && ndims_y == 1
         hm = heatmap!(ax, xcoord, ycoord, data; colormap=colormap, kwargs...)
     else
         hm = irregular_heatmap!(ax, xcoord, ycoord, data; colormap=colormap, kwargs...)
