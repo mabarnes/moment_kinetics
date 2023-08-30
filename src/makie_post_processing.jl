@@ -2466,9 +2466,9 @@ function plot_2d(xcoord, ycoord, data; ax=nothing, colorbar_place=nothing, xlabe
     ycoord = grid_points_to_faces(ycoord)
 
     if ndims(xcoord) == 1 && ndims(ycoord) == 1
-        hm = heatmap!(ax, xcoord, ycoord, data; kwargs...)
+        hm = heatmap!(ax, xcoord, ycoord, data; colormap=colormap, kwargs...)
     else
-        hm = irregular_heatmap!(ax, xcoord, ycoord, data; kwargs...)
+        hm = irregular_heatmap!(ax, xcoord, ycoord, data; colormap=colormap, kwargs...)
     end
 
     if colorbar_place === nothing
