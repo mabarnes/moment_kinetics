@@ -3718,7 +3718,9 @@ function plot_f_unnorm_vs_vpa_z(run_info; input=nothing, neutral=false, it=nothi
 
     f_unnorm = transform.(f_unnorm)
 
-    hm = plot_2d(dzdt, z, f_unnorm; ax=ax, colorbar_place=colorbar_place, kwargs...)
+    # Rasterize the plot, otherwise the output files are very large
+    hm = plot_2d(dzdt, z, f_unnorm; ax=ax, colorbar_place=colorbar_place, rasterize=true,
+                 kwargs...)
 
     if outfile !== nothing
         if fig === nothing
