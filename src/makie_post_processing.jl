@@ -11,8 +11,8 @@ julia --project run_makie_post_processing.jl dir1 [dir2 [dir3 ...]]
 module makie_post_processing
 
 export makie_post_process, generate_example_input_file,
-       setup_makie_post_processing_input!, get_run_info, postproc_load_variable,
-       positive_or_nan
+       setup_makie_post_processing_input!, get_run_info, irregular_heatmap,
+       irregular_heatmap!, postproc_load_variable, positive_or_nan
 
 using ..analysis: analyze_fields_data, check_Chodura_condition, get_r_perturbation,
                   get_Fourier_modes_2D, get_Fourier_modes_1D, steady_state_residuals
@@ -2640,6 +2640,126 @@ Additional `kwargs` are passed to the `Legend()` constructor.
 """
 function put_legend_right(fig, ax; kwargs...)
     return Legend(fig[end,end+1], ax; kwargs...)
+end
+
+"""
+    curvilinear_grid_mesh(xs, ys, zs, colors)
+
+Tesselates the grid defined by `xs` and `ys` in order to form a mesh with per-face coloring
+given by `colors`.
+
+The grid defined by `xs` and `ys` must have dimensions `(nx, ny) == size(colors) .+ 1`, as
+is the case for heatmap/image.
+
+Code from: https://github.com/MakieOrg/Makie.jl/issues/742#issuecomment-1415809653
+"""
+function curvilinear_grid_mesh(xs, ys, zs, colors = zs)
+    nx, ny = size(zs)
+    ni, nj = size(colors)
+    @assert (nx == ni+1) & (ny == nj+1) "Expected nx, ny = ni+1, nj+1; got nx=$nx, ny=$ny, ni=$ni, nj=$nj.  nx/y are size(zs), ni/j are size(colors)."
+    input_points_vec = Makie.matrix_grid(identity, xs, ys, zs)
+    input_points = reshape(input_points_vec, size(colors) .+ 1)
+
+    triangle_faces = Vector{CairoMakie.Makie.GeometryBasics.TriangleFace{UInt32}}()
+    triangle_points = Vector{Point3f}()
+    triangle_colors = Vector{eltype(colors)}()
+    sizehint!(triangle_faces, size(input_points, 1) * size(input_points, 2) * 2)
+    sizehint!(triangle_points, size(input_points, 1) * size(input_points, 2) * 2 * 3)
+    sizehint!(triangle_colors, size(input_points, 1) * size(input_points, 2) * 3)
+
+    point_ind = 1
+    @inbounds for i in 1:(size(colors, 1))
+        for j in 1:(size(colors, 2))
+            # push two triangles to make a square
+            # first triangle
+            push!(triangle_points, input_points[i, j])
+            push!(triangle_points, input_points[i+1, j])
+            push!(triangle_points, input_points[i+1, j+1])
+            push!(triangle_colors, colors[i, j]); push!(triangle_colors, colors[i, j]); push!(triangle_colors, colors[i, j])
+            push!(triangle_faces, CairoMakie.Makie.GeometryBasics.TriangleFace{UInt32}((point_ind, point_ind+1, point_ind+2)))
+            point_ind += 3
+            # second triangle
+            push!(triangle_points, input_points[i+1, j+1])
+            push!(triangle_points, input_points[i, j+1])
+            push!(triangle_points, input_points[i, j])
+            push!(triangle_colors, colors[i, j]); push!(triangle_colors, colors[i, j]); push!(triangle_colors, colors[i, j])
+            push!(triangle_faces, CairoMakie.Makie.GeometryBasics.TriangleFace{UInt32}((point_ind, point_ind+1, point_ind+2)))
+            point_ind += 3
+        end
+    end
+
+    return triangle_points, triangle_faces, triangle_colors
+end
+
+"""
+    irregular_heatmap(xs, ys, zs; kwargs...)
+
+Plot a heatmap where `xs` and `ys` are allowed to define irregularly spaced, 2d grids.
+`zs` gives the value in each cell of the grid.
+
+The grid defined by `xs` and `ys` must have dimensions `(nx, ny) == size(zs) .+ 1`, as
+is the case for heatmap/image.
+
+`xs` be an array of size (nx,ny) or a vector of size (nx).
+
+`ys` be an array of size (nx,ny) or a vector of size (ny).
+
+`kwargs` are passed to Makie's `mesh()` function.
+
+Code adapted from: https://github.com/MakieOrg/Makie.jl/issues/742#issuecomment-1415809653
+"""
+function irregular_heatmap(xs, ys, zs; kwargs...)
+    fig = Figure()
+    ax = Axis(fig[1,1])
+    hm = irregular_heatmap!(ax, xs, ys, zs; kwargs...)
+
+    return fig, ax, hm
+end
+
+"""
+    irregular_heatmap!(ax, xs, ys, zs; kwargs...)
+
+Plot a heatmap onto the Axis `ax` where `xs` and `ys` are allowed to define irregularly
+spaced, 2d grids.  `zs` gives the value in each cell of the grid.
+
+The grid defined by `xs` and `ys` must have dimensions `(nx, ny) == size(zs) .+ 1`, as
+is the case for heatmap/image.
+
+`xs` be an array of size (nx,ny) or a vector of size (nx).
+
+`ys` be an array of size (nx,ny) or a vector of size (ny).
+
+`kwargs` are passed to Makie's `mesh()` function.
+
+Code adapted from: https://github.com/MakieOrg/Makie.jl/issues/742#issuecomment-1415809653
+"""
+function irregular_heatmap!(ax, xs, ys, zs; kwargs...)
+    if ndims(xs) == 1
+        nx = length(xs)
+    else
+        nx = size(xs, 1)
+    end
+    if ndims(ys) == 1
+        ny = length(ys)
+    else
+        ny = size(ys, 2)
+    end
+
+    ni, nj = size(zs)
+    @assert (nx == ni+1) & (ny == nj+1) "Expected nx, ny = ni+1, nj+1; got nx=$nx, ny=$ny, ni=$ni, nj=$nj.  nx/y are size(xs)/size(ys), ni/j are size(zs)."
+
+    if ndims(xs) == 1
+        # Copy to an array of size (nx,ny)
+        xs = repeat(xs, 1, ny)
+    end
+    if ndims(ys) == 1
+        # Copy to an array of size (nx,ny)
+        ys = repeat(ys', nx, 1)
+    end
+
+    vertices, faces, colors = curvilinear_grid_mesh(xs, ys, zeros(size(xs)), zs)
+
+    return mesh!(ax, vertices, faces; color = colors, shading = false, kwargs...)
 end
 
 """
