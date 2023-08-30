@@ -1677,6 +1677,10 @@ function plot_charged_pdf(pdf, vpa, vperp, z, r,
             end
             outfile = string(run_name, "_pdf_vs_vperp_vpa", iz0_string, ir0_string, spec_string, ".gif")
             gif(anim, outfile, fps=5)
+
+            @views heatmap(vperp, vpa, pdf[:,:,iz0,ir0,is,itime_max], xlabel="r", ylabel="vpa", c = :deep, interpolation = :cubic)
+            outfile = string(run_name, "_pdf_vs_vpa_vperp", ir0_string, iz0_string, spec_string, ".pdf")
+            savefig(outfile)
         end
         # make a gif animation of f(z,r,t) at a given (vpa,vperp) location
         if pp.animate_f_vs_r_z
