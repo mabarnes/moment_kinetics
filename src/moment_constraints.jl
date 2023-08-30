@@ -46,31 +46,32 @@ function hard_force_moment_constraints!(f, moments, vpa)
     #    @. f = f / I0
     #end
 
+    f1d = @view f[:,1]
     if moments.evolve_ppar
-        I0 = integrate_over_vspace(f, vpa.wgts)
-        I1 = integrate_over_vspace(f, vpa.grid, vpa.wgts)
-        I2 = integrate_over_vspace(f, vpa.grid, 2, vpa.wgts)
-        I3 = integrate_over_vspace(f, vpa.grid, 3, vpa.wgts)
-        I4 = integrate_over_vspace(f, vpa.grid, 4, vpa.wgts)
+        I0 = integrate_over_vspace(f1d, vpa.wgts)
+        I1 = integrate_over_vspace(f1d, vpa.grid, vpa.wgts)
+        I2 = integrate_over_vspace(f1d, vpa.grid, 2, vpa.wgts)
+        I3 = integrate_over_vspace(f1d, vpa.grid, 3, vpa.wgts)
+        I4 = integrate_over_vspace(f1d, vpa.grid, 4, vpa.wgts)
 
         A = (I3^2 - I2*I4 + 0.5*(I2^2 - I1*I3)) /
             (I0*(I3^2 - I2*I4) + I1*I1*I4 - 2.0*I1*I2*I3 + I2^3)
         B = (0.5*I3 + A*(I1*I4 - I2*I3)) / (I3^2 - I2*I4)
         C = (0.5 - A*I2 -B*I3) / I4
 
-        @. f = A*f + B*vpa.grid*f + C*vpa.grid*vpa.grid*f
+        @. f1d = A*f1d + B*vpa.grid*f1d + C*vpa.grid*vpa.grid*f1d
     elseif moments.evolve_upar
-        I0 = integrate_over_vspace(f, vpa.wgts)
-        I1 = integrate_over_vspace(f, vpa.grid, vpa.wgts)
-        I2 = integrate_over_vspace(f, vpa.grid, 2, vpa.wgts)
+        I0 = integrate_over_vspace(f1d, vpa.wgts)
+        I1 = integrate_over_vspace(f1d, vpa.grid, vpa.wgts)
+        I2 = integrate_over_vspace(f1d, vpa.grid, 2, vpa.wgts)
 
         A = 1.0 / (I0 - I1^2/I2)
         B = -A*I1/I2
 
-        @. f = A*f + B*vpa.grid*f
+        @. f1d = A*f1d + B*vpa.grid*f1d
     elseif moments.evolve_density
-        I0 = integrate_over_vspace(f, vpa.wgts)
-        @. f = f / I0
+        I0 = integrate_over_vspace(f1d, vpa.wgts)
+        @. f1d = f1d / I0
     end
 
     return nothing
