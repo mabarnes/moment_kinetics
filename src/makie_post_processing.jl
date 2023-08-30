@@ -1175,7 +1175,7 @@ function VariableCache(run_info, variable_name::String, t_chunk_size::mk_int;
                          data_chunk, dim_slices)
 end
 
-function get_cache_slice(variable_cache::VariableCache, tind::mk_int)
+function get_cache_slice(variable_cache::VariableCache, tind)
     tinds_chunk = variable_cache.tinds_chunk[]
     local_tind = findfirst(i->i==tind, tinds_chunk)
 
@@ -1198,7 +1198,7 @@ function get_cache_slice(variable_cache::VariableCache, tind::mk_int)
     end
 
     return selectdim(variable_cache.data_chunk, ndims(variable_cache.data_chunk),
-                      local_tind)
+                     local_tind)
 end
 
 function variable_cache_extrema(variable_cache::VariableCache; transform=identity)
