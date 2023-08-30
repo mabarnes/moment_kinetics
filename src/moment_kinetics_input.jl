@@ -977,6 +977,9 @@ function check_input_vpa(vpa, io, vpa_dissipation_coefficient)
     if vpa.discretization == "chebyshev_pseudospectral"
         print(io,">vpa.discretization = 'chebyshev_pseudospectral'.  ")
         println(io,"using a Chebyshev pseudospectral method in vpa.")
+    elseif vpa.discretization == "gausslegendre_pseudospectral"
+        print(io,">vpa.discretization = 'gausslegendre_pseudospectral'.  ")
+        println(io,"using a Gauss-Legendre-Lobatto pseudospectral method in vpa.")
     elseif vpa.discretization == "finite_difference"
         println(io,">vpa.discretization = 'finite_difference', and ",
             "vpa.fd_option = ", vpa.fd_option,

@@ -62,8 +62,13 @@ function vpa_dissipation!(f_out, f_in, vpa, spectral::T_spectral, dt,
     #     # expected convergence of Chebyshev pseudospectral scheme
     #     diffusion_coefficient *= (vpa.L/vpa.nelement)^(vpa.ngrid-1)
     # end
-
-    @loop_s_r_z_vperp is ir iz ivperp begin
+    if vpa.discretization == "gausslegendre_pseudospectral"
+        @loop_s_r_z_vperp is ir iz ivperp begin
+           @views second_derivative!(vpa.scratch2, f_in[:,ivperp,iz,ir,is], vpa, spectral)
+           @views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch2 
+        end
+    else
+        @loop_s_r_z_vperp is ir iz ivperp begin
         # # Don't want to dissipate the fluid moments, so divide out the Maxwellian, then
         # # diffuse the result, i.e.
         # # df/dt += diffusion_coefficient * f_M d2(f/f_M)/dvpa2
@@ -88,11 +93,11 @@ function vpa_dissipation!(f_out, f_in, vpa, spectral::T_spectral, dt,
         # derivative!(vpa.scratch3, vpa.scratch2, vpa, spectral, Val(2))
         # @views @. f_out[:,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch *
         #                                vpa.scratch3
-        vpa.scratch2 .= 1.0 # placeholder for Q in d / d vpa ( Q d f / d vpa)
-        @views second_derivative!(vpa.scratch, f_in[:,ivperp,iz,ir,is], vpa.scratch2, vpa, spectral)
-        @views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch
+            vpa.scratch2 .= 1.0 # placeholder for Q in d / d vpa ( Q d f / d vpa)
+            @views second_derivative!(vpa.scratch, f_in[:,ivperp,iz,ir,is], vpa.scratch2, vpa, spectral)
+            @views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch
+        end
     end
-
     return nothing
 end
 

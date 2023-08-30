@@ -16,6 +16,7 @@ using ..looping
 using ..moment_kinetics_structs: scratch_pdf
 using ..chebyshev: setup_chebyshev_pseudospectral
 using ..chebyshev: chebyshev_derivative!
+using ..gauss_legendre: setup_gausslegendre_pseudospectral
 using ..velocity_moments: update_moments!, reset_moments_status!
 using ..velocity_moments: enforce_moment_constraints!
 using ..velocity_moments: update_density!, update_upar!, update_ppar!, update_qpar!, update_pperp!, update_vth!
@@ -264,6 +265,8 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
         vpa_spectral = setup_chebyshev_pseudospectral(vpa)
         # obtain the local derivatives of the uniform vpa-grid with respect to the used vpa-grid
         #chebyshev_derivative!(vpa.duniform_dgrid, vpa.uniform_grid, vpa_spectral, vpa)
+    elseif vpa.discretization == "gausslegendre_pseudospectral" && vpa.n > 1
+        vpa_spectral = setup_gausslegendre_pseudospectral(vpa)
     else
         # create dummy Bool variable to return in place of the above struct
         vpa_spectral = false
@@ -276,6 +279,8 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
         vperp_spectral = setup_chebyshev_pseudospectral(vperp)
         # obtain the local derivatives of the uniform vperp-grid with respect to the used vperp-grid
         #chebyshev_derivative!(vperp.duniform_dgrid, vperp.uniform_grid, vperp_spectral, vperp)
+    elseif vperp.discretization == "gausslegendre_pseudospectral" && vperp.n > 1
+        vperp_spectral = setup_gausslegendre_pseudospectral(vperp)
     else
         # create dummy Bool variable to return in place of the above struct
         vperp_spectral = false
