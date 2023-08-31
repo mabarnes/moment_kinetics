@@ -131,9 +131,9 @@ function init_elliptic_integral_factors!(elliptic_integral_E_factor, elliptic_in
                         prefac = sqrt(denom)
                     #end
                     #println(mm," ",prefac," ",denom," ",ivperpp," ",ivpap," ",ivperp," ",ivpa)
-                    elliptic_integral_E_factor[ivpa,ivperp,ivpap,ivperpp] = 2.0*ellipe(mm)*prefac/pi
-                    elliptic_integral_K_factor[ivpa,ivperp,ivpap,ivperpp] = 2.0*ellipk(mm)/(pi*prefac)
-                    #println(elliptic_integral_K_factor[ivpa,ivperp,ivpap,ivperpp]," ",mm," ",prefac," ",denom," ",ivperpp," ",ivpap," ",ivperp," ",ivpa)
+                    elliptic_integral_E_factor[ivpap,ivperpp,ivpa,ivperp] = 2.0*ellipe(mm)*prefac/pi
+                    elliptic_integral_K_factor[ivpap,ivperpp,ivpa,ivperp] = 2.0*ellipk(mm)/(pi*prefac)
+                    #println(elliptic_integral_K_factor[ivpap,ivperpp,ivpa,ivperp]," ",mm," ",prefac," ",denom," ",ivperpp," ",ivpap," ",ivperp," ",ivpa)
                     
                 end
             end
@@ -199,15 +199,15 @@ function init_Rosenbluth_potential_integration_weights!(G1_weights,H0_weights,H1
         vpa_val = vpa.grid[ivpa]
         for ivperpp in 1:vperp.n
             for ivpap in 1:vpa.n
-                # G_weights[ivpa,ivperp,ivpap,ivperpp] = 0.0  
-                G1_weights[ivpa,ivperp,ivpap,ivperpp] = 0.0  
-                # G2_weights[ivpa,ivperp,ivpap,ivperpp] = 0.0  
-                # G3_weights[ivpa,ivperp,ivpap,ivperpp] = 0.0  
-                H0_weights[ivpa,ivperp,ivpap,ivperpp] = 0.0  
-                H1_weights[ivpa,ivperp,ivpap,ivperpp] = 0.0  
-                H2_weights[ivpa,ivperp,ivpap,ivperpp] = 0.0  
-                H3_weights[ivpa,ivperp,ivpap,ivperpp] = 0.0  
-                #@. n_weights[ivpa,ivperp,ivpap,ivperpp] = 0.0  
+                # G_weights[ivpap,ivperpp,ivpa,ivperp] = 0.0  
+                G1_weights[ivpap,ivperpp,ivpa,ivperp] = 0.0  
+                # G2_weights[ivpap,ivperpp,ivpa,ivperp] = 0.0  
+                # G3_weights[ivpap,ivperpp,ivpa,ivperp] = 0.0  
+                H0_weights[ivpap,ivperpp,ivpa,ivperp] = 0.0  
+                H1_weights[ivpap,ivperpp,ivpa,ivperp] = 0.0  
+                H2_weights[ivpap,ivperpp,ivpa,ivperp] = 0.0  
+                H3_weights[ivpap,ivperpp,ivpa,ivperp] = 0.0  
+                #@. n_weights[ivpap,ivperpp,ivpa,ivperp] = 0.0  
             end
         end
         # loop over elements and grid points within elements on primed coordinate
@@ -427,40 +427,40 @@ function local_element_integration!(G1_weights,H0_weights,H1_weights,H2_weights,
                     lagrange_poly_vpa = lagrange_poly(igrid_vpa,vpa_nodes,x_kvpa)
                     lagrange_poly_vperp = lagrange_poly(igrid_vperp,vperp_nodes,x_kvperp)
                     
-                    #(G_weights[ivpa,ivperp,ivpap,ivperpp] += 
+                    #(G_weights[ivpap,ivperpp,ivpa,ivperp] += 
                     #    lagrange_poly_vpa*lagrange_poly_vperp*
                     #    G_elliptic_integral_factor*x_kvperp*w_kvperp*w_kvpa*2.0/sqrt(pi))
                     
-                    (G1_weights[ivpa,ivperp,ivpap,ivperpp] += 
+                    (G1_weights[ivpap,ivperpp,ivpa,ivperp] += 
                         lagrange_poly_vpa*lagrange_poly_vperp*
                         G1_elliptic_integral_factor*x_kvperp*w_kvperp*w_kvpa*2.0/sqrt(pi))
                     
-                    #(G2_weights[ivpa,ivperp,ivpap,ivperpp] += 
+                    #(G2_weights[ivpap,ivperpp,ivpa,ivperp] += 
                     #    lagrange_poly_vpa*lagrange_poly_vperp*
                     #    G2_elliptic_integral_factor*x_kvperp*w_kvperp*w_kvpa*2.0/sqrt(pi))
                     
-                    #(G3_weights[ivpa,ivperp,ivpap,ivperpp] += 
+                    #(G3_weights[ivpap,ivperpp,ivpa,ivperp] += 
                     #    lagrange_poly_vpa*lagrange_poly_vperp*
                     #    G3_elliptic_integral_factor*w_kvperp*w_kvpa*2.0/sqrt(pi))
                     
-                    (H0_weights[ivpa,ivperp,ivpap,ivperpp] += 
+                    (H0_weights[ivpap,ivperpp,ivpa,ivperp] += 
                         lagrange_poly_vpa*lagrange_poly_vperp*
                         H_elliptic_integral_factor*x_kvperp*w_kvperp*w_kvpa*2.0/sqrt(pi))
                         
-                    (H1_weights[ivpa,ivperp,ivpap,ivperpp] += 
+                    (H1_weights[ivpap,ivperpp,ivpa,ivperp] += 
                         lagrange_poly_vpa*lagrange_poly_vperp*
                         H1_elliptic_integral_factor*x_kvperp*w_kvperp*w_kvpa*2.0/sqrt(pi))
                         
-                    (H2_weights[ivpa,ivperp,ivpap,ivperpp] += 
+                    (H2_weights[ivpap,ivperpp,ivpa,ivperp] += 
                         lagrange_poly_vpa*lagrange_poly_vperp*
                         (H1_elliptic_integral_factor*vperp_val - H2_elliptic_integral_factor*x_kvperp)*
                         x_kvperp*w_kvperp*w_kvpa*2.0/sqrt(pi))
-                    (H3_weights[ivpa,ivperp,ivpap,ivperpp] += 
+                    (H3_weights[ivpap,ivperpp,ivpa,ivperp] += 
                         lagrange_poly_vpa*lagrange_poly_vperp*
                         H_elliptic_integral_factor*(vpa_val - x_kvpa)*
                         x_kvperp*w_kvperp*w_kvpa*2.0/sqrt(pi))
                     
-                    #(n_weights[ivpa,ivperp,ivpap,ivperpp] += 
+                    #(n_weights[ivpap,ivperpp,ivpa,ivperp] += 
                     #    lagrange_poly_vpa*lagrange_poly_vperp*
                     #    x_kvperp*w_kvperp*w_kvpa*2.0/sqrt(pi))
                 end
@@ -842,14 +842,14 @@ function get_local_Cssp_coefficients!(d2Gspdvpa2,dGspdvperp,d2Gspdvperpdvpa,
     dHspdvperp[ivpa,ivperp] = 0.0
     for ivperpp in 1:nvperp
         for ivpap in 1:nvpa
-            #d2Gspdvpa2[ivpa,ivperp] += G_weights[ivpa,ivperp,ivpap,ivperpp]*d2fspdvpa2[ivpap,ivperpp]
-            d2Gspdvpa2[ivpa,ivperp] += H3_weights[ivpa,ivperp,ivpap,ivperpp]*dfspdvpa[ivpap,ivperpp]
-            dGspdvperp[ivpa,ivperp] += G1_weights[ivpa,ivperp,ivpap,ivperpp]*dfspdvperp[ivpap,ivperpp]
-            d2Gspdvperpdvpa[ivpa,ivperp] += G1_weights[ivpa,ivperp,ivpap,ivperpp]*d2fspdvperpdvpa[ivpap,ivperpp]
-            #d2Gspdvperp2[ivpa,ivperp] += G2_weights[ivpa,ivperp,ivpap,ivperpp]*d2fspdvperp2[ivpap,ivperpp] + G3_weights[ivpa,ivperp,ivpap,ivperpp]*dfspdvperp[ivpap,ivperpp]
-            d2Gspdvperp2[ivpa,ivperp] += H2_weights[ivpa,ivperp,ivpap,ivperpp]*dfspdvperp[ivpap,ivperpp]
-            dHspdvpa[ivpa,ivperp] += H0_weights[ivpa,ivperp,ivpap,ivperpp]*dfspdvpa[ivpap,ivperpp]
-            dHspdvperp[ivpa,ivperp] += H1_weights[ivpa,ivperp,ivpap,ivperpp]*dfspdvperp[ivpap,ivperpp]
+            #d2Gspdvpa2[ivpa,ivperp] += G_weights[ivpap,ivperpp,ivpa,ivperp]*d2fspdvpa2[ivpap,ivperpp]
+            d2Gspdvpa2[ivpa,ivperp] += H3_weights[ivpap,ivperpp,ivpa,ivperp]*dfspdvpa[ivpap,ivperpp]
+            dGspdvperp[ivpa,ivperp] += G1_weights[ivpap,ivperpp,ivpa,ivperp]*dfspdvperp[ivpap,ivperpp]
+            d2Gspdvperpdvpa[ivpa,ivperp] += G1_weights[ivpap,ivperpp,ivpa,ivperp]*d2fspdvperpdvpa[ivpap,ivperpp]
+            #d2Gspdvperp2[ivpa,ivperp] += G2_weights[ivpap,ivperpp,ivpa,ivperp]*d2fspdvperp2[ivpap,ivperpp] + G3_weights[ivpap,ivperpp,ivpa,ivperp]*dfspdvperp[ivpap,ivperpp]
+            d2Gspdvperp2[ivpa,ivperp] += H2_weights[ivpap,ivperpp,ivpa,ivperp]*dfspdvperp[ivpap,ivperpp]
+            dHspdvpa[ivpa,ivperp] += H0_weights[ivpap,ivperpp,ivpa,ivperp]*dfspdvpa[ivpap,ivperpp]
+            dHspdvperp[ivpa,ivperp] += H1_weights[ivpap,ivperpp,ivpa,ivperp]*dfspdvperp[ivpap,ivperpp]
         end
     end
     return nothing
