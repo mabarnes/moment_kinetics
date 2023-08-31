@@ -119,7 +119,7 @@ function setup_gausslegendre_pseudospectral_lobatto(coord)
     GaussLegendre_weak_product_matrix!(P0,coord.ngrid,x,w,coord.L,coord.nelement_global,"P0")
     D0 = allocate_float(coord.ngrid)
     #@. D0 = Dmat[1,:] # values at lower extreme of element
-    GaussLegendre_derivative_vector!(D0,1,coord.ngrid,x,w,coord.L,coord.nelement_global)
+    GaussLegendre_derivative_vector!(D0,-1.0,coord.ngrid,x,w,coord.L,coord.nelement_global)
     return gausslegendre_base_info(Dmat,Mmat,Kmat,M0,M1,S0,S1,K0,K1,P0,D0)
 end
 
@@ -151,7 +151,7 @@ function setup_gausslegendre_pseudospectral_radau(coord)
     P0 = allocate_float(coord.ngrid, coord.ngrid)
     GaussLegendre_weak_product_matrix!(P0,coord.ngrid,xreverse,wreverse,coord.L,coord.nelement_global,"P0",radau=true)
     D0 = allocate_float(coord.ngrid)
-    GaussLegendre_derivative_vector!(D0,1,coord.ngrid,xreverse,wreverse,coord.L,coord.nelement_global,radau=true)
+    GaussLegendre_derivative_vector!(D0,-1.0,coord.ngrid,xreverse,wreverse,coord.L,coord.nelement_global,radau=true)
     return gausslegendre_base_info(Dmat,Mmat,Kmat,M0,M1,S0,S1,K0,K1,P0,D0)
 end 
 """
@@ -373,12 +373,12 @@ end
 """
 Gauss-Legendre derivative at arbitrary x values, for boundary condition on radau points
 D0 -- the vector
-j -- the index of x where the derivative is evaluated 
+xj -- the x location where the derivative is evaluated 
 ngrid -- number of points in x
 x -- the grid from -1, 1
 L -- size of physical domain
 """
-function GaussLegendre_derivative_vector!(D0,j,ngrid,x,wgts,L,nelement_global;radau=false)
+function GaussLegendre_derivative_vector!(D0,xj,ngrid,x,wgts,L,nelement_global;radau=false)
     # coefficient in expansion of 
     # lagrange polys in terms of Legendre polys
     gamma = allocate_float(ngrid)
@@ -394,12 +394,12 @@ function GaussLegendre_derivative_vector!(D0,j,ngrid,x,wgts,L,nelement_global;ra
     @. D0 = 0.0
     for i in 1:ngrid
         for k in 1:ngrid
-            D0[i] += wgts[i]*Pl(x[i],k-1)*dnPl(x[j],k-1,1)/gamma[k]
+            D0[i] += wgts[i]*Pl(x[i],k-1)*dnPl(xj,k-1,1)/gamma[k]
         end
     end
     # set `diagonal' value
-    D0[j] = 0.0
-    D0[j] = -sum(D0[:])
+    D0[1] = 0.0
+    D0[1] = -sum(D0[:])
     @. D0 *= 2.0*float(nelement_global)/L
 end
 

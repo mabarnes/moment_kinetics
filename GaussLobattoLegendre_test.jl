@@ -204,7 +204,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     
     # elemental grid tests 
     ngrid = 17
-    nelement = 10
+    nelement = 2
     y_ngrid = ngrid #number of points per element 
     y_nelement_local = nelement # number of elements per rank
     y_nelement_global = y_nelement_local # total number of elements 
@@ -252,6 +252,10 @@ if abspath(PROGRAM_FILE) == @__FILE__
     #print_matrix(y_spectral.L_matrix,"global L matrix",y.n,y.n)
     #@views y_spectral.K_matrix[1,:] *= (4.0/3.0)
     #print_matrix(y_spectral.K_matrix,"global K matrix (hacked) ",y.n,y.n)
+    print_matrix(y_spectral.radau.Dmat,"local radau D matrix Dmat",y.ngrid,y.ngrid)
+    print_vector(y_spectral.radau.D0,"local radau D matrix D0",y.ngrid)
+    print_matrix(y_spectral.lobatto.Dmat,"local lobatto D matrix Dmat",y.ngrid,y.ngrid)
+    print_vector(y_spectral.lobatto.D0,"local lobatto D matrix D0",y.ngrid)
     
     Dmat = Array{Float64,2}(undef,y.ngrid,y.ngrid)
     Dmat_test = Array{Float64,2}(undef,y.ngrid,y.ngrid)
