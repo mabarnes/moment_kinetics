@@ -2812,8 +2812,8 @@ function curvilinear_grid_mesh(xs, ys, zs, colors)
     function get_triangle_points(input_points)
         triangle_points = Vector{Point3f}()
         sizehint!(triangle_points, n_input_points * 2 * 3)
-        @inbounds for i in 1:ni
-            for j in 1:nj
+        @inbounds for j in 1:nj
+            for i in 1:ni
                 # push two triangles to make a square
                 # first triangle
                 push!(triangle_points, input_points[i, j])
@@ -2836,8 +2836,8 @@ function curvilinear_grid_mesh(xs, ys, zs, colors)
     function get_triangle_colors(colors)
         triangle_colors = Vector{eltype_colors}()
         sizehint!(triangle_colors, n_input_points * 2 * 3)
-        @inbounds for i in 1:ni
-            for j in 1:nj
+        @inbounds for j in 1:nj
+            for i in 1:ni
                 # push two triangles to make a square
                 # first triangle
                 push!(triangle_colors, colors[i, j]); push!(triangle_colors, colors[i, j]); push!(triangle_colors, colors[i, j])
@@ -2859,8 +2859,8 @@ function curvilinear_grid_mesh(xs, ys, zs, colors)
     triangle_faces = Vector{CairoMakie.Makie.GeometryBasics.TriangleFace{UInt32}}()
     sizehint!(triangle_faces, n_input_points * 2)
     point_ind = 1
-    @inbounds for i in 1:ni
-        for j in 1:nj
+    @inbounds for j in 1:nj
+        for i in 1:ni
             # push two triangles to make a square
             # first triangle
             push!(triangle_faces, CairoMakie.Makie.GeometryBasics.TriangleFace{UInt32}((point_ind, point_ind+1, point_ind+2)))
