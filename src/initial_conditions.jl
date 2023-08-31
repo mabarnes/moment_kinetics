@@ -609,7 +609,7 @@ function init_charged_pdf_over_density!(pdf, spec, composition, vpa, vperp, z,
                     #
                     # Implemented by multiplying by a smooth 'notch' function
                     # notch(v,u0,width) = 1 - exp(-(v-u0)^2/width)
-                    width = 0.1
+                    width = 0.1 * vth[iz]
                     inverse_width = 1.0 / width
 
                     @. pdf[:,ivperp,iz] *= 1.0 - exp(-vpa.grid^2*inverse_width)
