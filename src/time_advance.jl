@@ -8,7 +8,8 @@ export time_advance!
 using MPI
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_float, allocate_shared_float
-using ..communication: _block_synchronize, global_size, comm_world, MPISharedArray, global_rank
+using ..communication: _block_synchronize, global_size, comm_world, MPISharedArray,
+                       global_rank, global_catch_error
 using ..debugging
 using ..file_io: write_data_to_ascii, write_moments_data_to_binary, write_dfns_data_to_binary, debug_dump
 using ..looping
@@ -1435,16 +1436,11 @@ function post_timestep!(fvec, moments, fields, boundary_distributions, vz, vr, v
                                                  fvec.density[iz,ir,is])
         end
     catch e
-        if global_size[] > 1
-            println("ERROR: error calculating vth in time_advance.jl")
-            println(e)
-            display(stacktrace(catch_backtrace()))
-            flush(stdout)
-            flush(stderr)
-            MPI.Abort(comm_world, 1)
-        end
-        rethrow(e)
+        global_catch_error(e)
+    else
+        global_catch_error()
     end
+
     # update the parallel heat flux
     update_qpar!(moments.charged.qpar, moments.charged.qpar_updated, fvec.density,
                  fvec.upar, moments.charged.vth, fvec.pdf, vpa, vperp, z, r, composition,
@@ -1489,9 +1485,14 @@ function post_timestep!(fvec, moments, fields, boundary_distributions, vz, vr, v
         update_derived_moments_neutral!(fvec, moments, vz, vr, vzeta, z, r, composition)
         # update the thermal speed
         begin_sn_r_z_region()
-        @loop_sn_r_z isn ir iz begin
-            moments.neutral.vth[iz,ir,isn] = sqrt(2.0 * fvec.pz_neutral[iz,ir,isn] /
-                                                  fvec.density_neutral[iz,ir,isn])
+        try
+            @loop_sn_r_z isn ir iz begin
+                moments.neutral.vth[iz,ir,isn] = sqrt(2.0 * fvec.pz_neutral[iz,ir,isn] /
+                                                      fvec.density_neutral[iz,ir,isn])
+        catch e
+            global_catch_error(e)
+        else
+            global_catch_error()
         end
 
         # update the parallel heat flux

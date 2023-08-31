@@ -14,7 +14,7 @@ module communication
 
 export allocate_shared, block_rank, block_size, n_blocks, comm_block, comm_inter_block,
        iblock_index, comm_world, finalize_comms!, initialize_comms!, global_rank,
-       MPISharedArray, global_size
+       MPISharedArray, global_size, global_catch_error, GloballyCaughtException
 export setup_distributed_memory_MPI
 
 using MPI
@@ -749,6 +749,26 @@ function free_shared_arrays()
     resize!(global_Win_store, 0)
 
     return nothing
+end
+
+struct GloballyCaughtException <: Exception
+    message::String
+end
+
+function global_catch_error(e=nothing)
+    if e === nothing
+        status = 0
+    else
+        status = 1
+    end
+    status = MPI.Allreduce(status, +, comm_world)
+    if status != 0
+        if e === nothing
+            throw(GloballyCaughtException("There were errors on $status other processes"))
+        else
+            throw(GloballyCaughtException(string(e)))
+        end
+    end
 end
 
 end # communication
