@@ -775,12 +775,14 @@ function enforce_neutral_boundary_conditions!(f_neutral, f_charged, boundary_dis
     
     # f_initial contains the initial condition for enforcing a fixed-boundary-value condition 
     # no bc on vz vr vzeta required as no advection in these coordinates
-    begin_sn_r_vzeta_vr_vz_region()
-    @views enforce_neutral_z_boundary_condition!(f_neutral, f_charged, boundary_distributions,
-            z_adv_neutral, z_adv_charged, vz, vr, vzeta, vpa, vperp, z, r, composition,
-            scratch_dummy.buffer_vzvrvzetarsn_1, scratch_dummy.buffer_vzvrvzetarsn_2,
-            scratch_dummy.buffer_vzvrvzetarsn_3, scratch_dummy.buffer_vzvrvzetarsn_4,
-            scratch_dummy.buffer_vzvrvzetazrsn)
+    if z.n > 1
+        begin_sn_r_vzeta_vr_vz_region()
+        @views enforce_neutral_z_boundary_condition!(f_neutral, f_charged, boundary_distributions,
+                z_adv_neutral, z_adv_charged, vz, vr, vzeta, vpa, vperp, z, r, composition,
+                scratch_dummy.buffer_vzvrvzetarsn_1, scratch_dummy.buffer_vzvrvzetarsn_2,
+                scratch_dummy.buffer_vzvrvzetarsn_3, scratch_dummy.buffer_vzvrvzetarsn_4,
+                scratch_dummy.buffer_vzvrvzetazrsn)
+    end
     if r.n > 1
         begin_sn_z_vzeta_vr_vz_region()
         @views enforce_neutral_r_boundary_condition!(f_neutral, boundary_distributions.pdf_rboundary_neutral,

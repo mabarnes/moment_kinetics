@@ -153,8 +153,8 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     manufactured_solns_test = t_input.use_manufactured_solns_for_advance
 
     if composition.n_neutral_species > 0
-        advance_neutral_z_advection = true
-        advance_neutral_r_advection = true
+        advance_neutral_z_advection = true && z.n > 1
+        advance_neutral_r_advection = true && r.n > 1
         if collisions.charge_exchange > 0.0
             if vz.n == vpa.n && vperp.n == 1 && vr.n == 1 && vzeta.n == 1
                 advance_cx_1V = true
@@ -371,17 +371,18 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     # with advection in z
     begin_serial_region()
     z_advect = setup_advection(n_ion_species, z, vpa, vperp, r)
-    # initialise the z advection speed
-    begin_s_r_vperp_vpa_region()
-    @loop_s is begin
-        @views update_speed_z!(z_advect[is], fields, vpa, vperp, z, r, 0.0, geometry)
+    if z.n > 1
+        # initialise the z advection speed
+        begin_s_r_vperp_vpa_region()
+        @loop_s is begin
+            @views update_speed_z!(z_advect[is], fields, vpa, vperp, z, r, 0.0, geometry)
+        end
+        # enforce prescribed boundary condition in z on the distribution function f
+        @views enforce_z_boundary_condition!(pdf.charged.unnorm, z.bc, z_advect, vpa, vperp, z, r, composition,
+                scratch_dummy.buffer_vpavperprs_1, scratch_dummy.buffer_vpavperprs_2,
+                scratch_dummy.buffer_vpavperprs_3, scratch_dummy.buffer_vpavperprs_4,
+                scratch_dummy.buffer_vpavperpzrs_1)
     end
-    # enforce prescribed boundary condition in z on the distribution function f
-    @views enforce_z_boundary_condition!(pdf.charged.unnorm, z.bc, z_advect, vpa, vperp, z, r, composition,
-            scratch_dummy.buffer_vpavperprs_1, scratch_dummy.buffer_vpavperprs_2,
-            scratch_dummy.buffer_vpavperprs_3, scratch_dummy.buffer_vpavperprs_4,
-            scratch_dummy.buffer_vpavperpzrs_1)
-
     begin_serial_region()
 
 
@@ -407,15 +408,15 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     begin_serial_region()
     vperp_advect = setup_advection(n_ion_species, vperp, vpa, z, r)
     # initialise the vperp advection speed
-    begin_serial_region()
-    @serial_region begin
-        for is ∈ 1:n_ion_species
-            @views update_speed_vperp!(vperp_advect[is], vpa, vperp, z, r)
-            
-        end
-    end
-    # enforce prescribed boundary condition in vperp on the distribution function f
     if vperp.n > 1
+        begin_serial_region()
+        @serial_region begin
+            for is ∈ 1:n_ion_species
+                @views update_speed_vperp!(vperp_advect[is], vpa, vperp, z, r)
+                
+            end
+        end
+        # enforce prescribed boundary condition in vperp on the distribution function f
         begin_s_r_z_vpa_region()
         @views enforce_vperp_boundary_condition!(pdf.charged.norm[:,:,:,:,:],vperp)
     end
@@ -444,7 +445,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     # create structure neutral_z_advect for neutral particle advection
     begin_serial_region()
     neutral_z_advect = setup_advection(n_neutral_species_alloc, z, vz, vr, vzeta, r)
-    if n_neutral_species > 0
+    if n_neutral_species > 0 && z.n > 1
         # initialise the z advection speed
         begin_sn_vzeta_vr_vz_region()
         @loop_sn isn begin
