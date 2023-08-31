@@ -117,22 +117,24 @@ function run_moment_kinetics(to::TimerOutput, input_dict=Dict())
             println()
         end
     catch e
-        # Stop code from hanging when running on multiple processes if only one of them
-        # throws an error
-        if global_size[] > 1
+        if e isa GloballyCaughtException || global_size[] == 1
+            # Error almost certainly occured before cleanup. If running in serial we can
+            # still finalise file I/O.
+            # If the error is a GloballyCaughtException, it should have been thrown on all
+            # processes, so we don't have to call MPI.Abort().
+            cleanup_moment_kinetics!(mk_state[end-2:end]...)
+
+            rethrow(e)
+        else
+            # Stop code from hanging when running on multiple processes if only one of them
+            # throws an error
             println("$(typeof(e)) on process $(global_rank[]):")
             showerror(stdout, e)
             display(stacktrace(catch_backtrace()))
             flush(stdout)
             flush(stderr)
             MPI.Abort(comm_world, 1)
-        else
-            # Error almost certainly occured before cleanup. If running in serial we can
-            # still finalise file I/O
-            cleanup_moment_kinetics!(mk_state[end-2:end]...)
         end
-
-        rethrow(e)
     end
 
     return nothing
@@ -335,22 +337,24 @@ function restart_moment_kinetics(input_dict::Dict,
         # last 2 elements of mk_state are `io` and `cdf`
         cleanup_moment_kinetics!(mk_state[end-2:end]...)
     catch e
-        # Stop code from hanging when running on multiple processes if only one of them
-        # throws an error
-        if global_size[] > 1
+        if e isa GloballyCaughtException || global_size[] == 1
+            # Error almost certainly occured before cleanup. If running in serial we can
+            # still finalise file I/O.
+            # If the error is a GloballyCaughtException, it should have been thrown on all
+            # processes, so we don't have to call MPI.Abort().
+            cleanup_moment_kinetics!(mk_state[end-2:end]...)
+
+            rethrow(e)
+        else
+            # Stop code from hanging when running on multiple processes if only one of them
+            # throws an error
             println("$(typeof(e)) on process $(global_rank[]):")
             showerror(stdout, e)
             display(stacktrace(catch_backtrace()))
             flush(stdout)
             flush(stderr)
             MPI.Abort(comm_world, 1)
-        else
-            # Error almost certainly occured before cleanup. If running in serial we can
-            # still finalise file I/O
-            cleanup_moment_kinetics!(mk_state[end-2:end]...)
         end
-
-        rethrow(e)
     end
 
     return nothing

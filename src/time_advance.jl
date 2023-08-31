@@ -1274,16 +1274,11 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
             moments.charged.vth[iz,ir,is] = sqrt(2.0*new_scratch.ppar[iz,ir,is]/new_scratch.density[iz,ir,is])
         end
     catch e
-        if global_size[] > 1
-            println("ERROR: error calculating vth in time_advance.jl")
-            println(e)
-            display(stacktrace(catch_backtrace()))
-            flush(stdout)
-            flush(stderr)
-            MPI.Abort(comm_world, 1)
-        end
-        rethrow(e)
+        global_catch_error(e)
+    else
+        global_catch_error()
     end
+
     # update the parallel heat flux
     update_qpar!(moments.charged.qpar, moments.charged.qpar_updated, new_scratch.density,
                  new_scratch.upar, moments.charged.vth, new_scratch.pdf, vpa, vperp, z, r,
@@ -1340,8 +1335,15 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
                                         composition)
         # update the thermal speed
         begin_sn_r_z_region()
-        @loop_sn_r_z isn ir iz begin
-            moments.neutral.vth[iz,ir,isn] = sqrt(2.0*new_scratch.pz_neutral[iz,ir,isn]/new_scratch.density_neutral[iz,ir,isn])
+        try
+            @loop_sn_r_z isn ir iz begin
+                moments.neutral.vth[iz,ir,isn] = sqrt(2.0 * new_scratch.pz_neutral[iz,ir,isn] /
+                                                      new_scratch.density_neutral[iz,ir,isn])
+            end
+        catch e
+            global_catch_error(e)
+        else
+            global_catch_error()
         end
 
         # update the parallel heat flux
