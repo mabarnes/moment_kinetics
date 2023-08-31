@@ -1389,7 +1389,7 @@ function plots_for_dfn_variable(run_info, variable_name; plot_prefix, is_1D=fals
         # Colorbar and so causes an error.
         for (log, yscale, transform, var_prefix) ∈
                 ((:"", nothing, identity, variable_prefix),
-                 (:_log, log10, positive_or_nan, log_variable_prefix))
+                 (:_log, log10, x->positive_or_nan(x; epsilon=1.e-20), log_variable_prefix))
             for dim ∈ plot_dims
                 if input[Symbol(:plot, log, :_vs_, dim)]
                     func = getfield(makie_post_processing, Symbol(:plot_vs_, dim))
