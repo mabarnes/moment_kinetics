@@ -576,7 +576,7 @@ end
 function enforce_boundary_conditions!(f, f_r_bc,
           vpa_bc, z_bc, r_bc, vpa, vperp, z, r,
           vpa_adv::T1, z_adv::T2, r_adv::T3, composition,
-          scratch_dummy::T4, advance::T5) where {T1, T2, T3, T4, T5}
+          scratch_dummy::T4, advance::T5, vperp_spectral::T6) where {T1, T2, T3, T4, T5, T6}
     
     if vpa.n > 1
         begin_s_r_z_vperp_region()
@@ -588,7 +588,7 @@ function enforce_boundary_conditions!(f, f_r_bc,
     end
     if vperp.n > 1
         begin_s_r_z_vpa_region()
-        @views enforce_vperp_boundary_condition!(f,vperp)
+        @views enforce_vperp_boundary_condition!(f,vperp,vperp_spectral)
     end
     if z.n > 1
         begin_s_r_vperp_vpa_region()
@@ -762,10 +762,22 @@ end
 """
 enforce zero boundary condition at vperp -> infinity
 """
-function enforce_vperp_boundary_condition!(f,vperp)
+function enforce_vperp_boundary_condition!(f,vperp,vperp_spectral)
     nvperp = vperp.n
+    ngrid = vperp.ngrid
+    # set zero boundary condition
     @loop_s_r_z_vpa is ir iz ivpa begin
         f[ivpa,nvperp,iz,ir,is] = 0.0
+    end
+    # set regularity condition d F / d vperp = 0 at vperp = 0
+    if vperp.discretization == "gausslegendre_pseudospectral"
+        D0 = vperp_spectral.radau.D0
+        @loop_s_r_z_vpa is ir iz ivpa begin
+            # adjust F(vperp = 0) so that d F / d vperp = 0 at vperp = 0
+            f[ivpa,1,iz,ir,is] = -sum(D0[2:ngrid].*f[ivpa,2:ngrid,iz,ir,is])/D0[1]
+        end
+    else
+        println("vperp bc not supported")
     end
 end
 

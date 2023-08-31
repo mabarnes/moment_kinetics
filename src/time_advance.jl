@@ -331,7 +331,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     scratch_dummy = setup_dummy_and_buffer_arrays(r.n,z.n,vpa.n,vperp.n,vz.n,vr.n,vzeta.n,
                                    composition.n_ion_species,n_neutral_species_alloc)
     # create arrays for Fokker-Planck collisions 
-    fp_arrays = init_fokker_planck_collisions(vperp,vpa)
+    fp_arrays = init_fokker_planck_collisions(vperp,vpa; precompute_weights=explicit_fp_collisions)
     # create the "fields" structure that contains arrays
     # for the electrostatic potential phi and eventually the electromagnetic fields
     fields = setup_em_fields(z.n, r.n, drive_input.force_phi, drive_input.amplitude, drive_input.frequency, drive_input.force_Er_zero_at_wall)
@@ -418,7 +418,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
         end
         # enforce prescribed boundary condition in vperp on the distribution function f
         begin_s_r_z_vpa_region()
-        @views enforce_vperp_boundary_condition!(pdf.charged.norm[:,:,:,:,:],vperp)
+        @views enforce_vperp_boundary_condition!(pdf.charged.norm[:,:,:,:,:],vperp,vperp_spectral)
     end
     
     ##
@@ -1077,7 +1077,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     # enforce boundary conditions in r, z and vpa on the charged particle distribution function
     enforce_boundary_conditions!(fvec_out.pdf, boundary_distributions.pdf_rboundary_charged,
       vpa.bc, z.bc, r.bc, vpa, vperp, z, r, vpa_advect, z_advect, r_advect, composition,
-      scratch_dummy, advance)
+      scratch_dummy, advance, vperp_spectral)
     # enforce boundary conditions in r and z on the neutral particle distribution function
     if n_neutral_species > 0
         enforce_neutral_boundary_conditions!(fvec_out.pdf_neutral, fvec_out.pdf, boundary_distributions,
