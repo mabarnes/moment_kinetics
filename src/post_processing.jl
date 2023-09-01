@@ -446,7 +446,7 @@ function analyze_and_plot_data(path)
     end 
     
     # make plots and animations of the phi, Ez and Er 
-    plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time, z, r, iz0, ir0, n_ion_species,
+    plot_charged_moments_2D(density, parallel_flow, parallel_pressure, perpendicular_pressure, time, z, r, iz0, ir0, n_ion_species,
      itime_min, itime_max, nwrite_movie, run_name, pp)
     # make plots and animations of the phi, Ez and Er 
     plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
@@ -1829,7 +1829,7 @@ function plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
     println("done.")
 end
 
-function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time, z, r, iz0, ir0, n_ion_species,
+function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, perpendicular_pressure, time, z, r, iz0, ir0, n_ion_species,
     itime_min, itime_max, nwrite_movie, run_name, pp)
     nr = size(r,1)
     print("Plotting charged moments data...")
@@ -1862,7 +1862,14 @@ function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time
 			outfile = string(run_name, "_density"*description*"_vs_r_z.pdf")
 			savefig(outfile)
 		end
-		
+		if pp.plot_dens0_vs_t
+            @views plot(time, density[iz0,ir0,is,:], xlabel=L"t/c_{ref}", ylabel=L"n_i", label = "")
+			outfile = string(run_name, "_density"*description*"(iz0,ir0)_vs_t.pdf")
+			savefig(outfile)
+            @views plot(time, density[iz0,ir0,is,:] .- density[iz0,ir0,is,1], xlabel=L"t/c_{ref}", ylabel=L"n_i(t) - n_i(0)", label = "")
+			outfile = string(run_name, "_delta_density"*description*"(iz0,ir0)_vs_t.pdf")
+			savefig(outfile)
+        end
 		# the parallel flow
 		parallel_flowmin = minimum(parallel_flow[:,:,is,:])
 		parallel_flowmax = maximum(parallel_flow)
@@ -1890,7 +1897,14 @@ function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time
 			outfile = string(run_name, "_parallel_flow"*description*"_vs_r_z.pdf")
 			savefig(outfile)
 		end
-		
+		if pp.plot_upar0_vs_t
+            @views plot(time, parallel_flow[iz0,ir0,is,:], xlabel=L"t/c_{ref}", ylabel=L"u_{i\|\|}(t)", label = "")
+			outfile = string(run_name, "_parallel_flow"*description*"(iz0,ir0)_vs_t.pdf")
+			savefig(outfile)
+            @views plot(time, parallel_flow[iz0,ir0,is,:] .- parallel_flow[iz0,ir0,is,1], xlabel=L"t/c_{ref}", ylabel=L"u_{i\|\|}(t) - u_{i\|\|}(0)", label = "")
+			outfile = string(run_name, "_delta_parallel_flow"*description*"(iz0,ir0)_vs_t.pdf")
+			savefig(outfile)
+        end
 		# the parallel pressure
 		parallel_pressuremin = minimum(parallel_pressure[:,:,is,:])
 		parallel_pressuremax = maximum(parallel_pressure)
@@ -1918,6 +1932,49 @@ function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time
 			outfile = string(run_name, "_parallel_pressure"*description*"_vs_r_z.pdf")
 			savefig(outfile)
 		end
+        if pp.plot_ppar0_vs_t
+            @views plot(time, parallel_pressure[iz0,ir0,is,:], xlabel=L"t/c_{ref}", ylabel=L"p_{i\|\|}(t)", label = "")
+			outfile = string(run_name, "_parallel_pressure"*description*"(iz0,ir0)_vs_t.pdf")
+			savefig(outfile)
+            @views plot(time, parallel_pressure[iz0,ir0,is,:] .- parallel_pressure[iz0,ir0,is,1], xlabel=L"t/c_{ref}", ylabel=L"p_{i\|\|}(t) - p_{i\|\|}(0)", label = "")
+			outfile = string(run_name, "_delta_parallel_pressure"*description*"(iz0,ir0)_vs_t.pdf")
+			savefig(outfile)
+        end
+        # the perpendicular pressure
+        if pp.plot_pperp0_vs_t
+            @views plot(time, perpendicular_pressure[iz0,ir0,is,:], xlabel=L"t/c_{ref}", ylabel=L"p_{i\perp}(t)", label = "")
+			outfile = string(run_name, "_perpendicular_pressure"*description*"(iz0,ir0)_vs_t.pdf")
+			savefig(outfile)
+            @views plot(time, perpendicular_pressure[iz0,ir0,is,:] .- perpendicular_pressure[iz0,ir0,is,1], xlabel=L"t/c_{ref}", ylabel=L"p_{i\perp}(t) - p_{i\perp}(0)", label = "")
+			outfile = string(run_name, "_delta_perpendicular_pressure"*description*"(iz0,ir0)_vs_t.pdf")
+			savefig(outfile)
+        end
+        if pp.plot_ppar0_vs_t && pp.plot_pperp0_vs_t
+            @views plot([time, time, time] , 
+            [parallel_pressure[iz0,ir0,is,:], perpendicular_pressure[iz0,ir0,is,:], 
+            (2.0/3.0).*perpendicular_pressure[iz0,ir0,is,:] .+ (1.0/3.0).*parallel_pressure[iz0,ir0,is,:]],
+            xlabel=L"t/c_{ref}", ylabel="", label = [L"p_{i\|\|}(t)" L"p_{i\perp}(t)" L"p_{i}(t)"])
+			outfile = string(run_name, "_pressures"*description*"(iz0,ir0)_vs_t.pdf")
+			savefig(outfile)
+            @views plot([time, time, time] , 
+            [parallel_pressure[iz0,ir0,is,:] .- parallel_pressure[iz0,ir0,is,1], perpendicular_pressure[iz0,ir0,is,:] .- perpendicular_pressure[iz0,ir0,is,1], 
+            (2.0/3.0).*(perpendicular_pressure[iz0,ir0,is,:] .- perpendicular_pressure[iz0,ir0,is,1]).+
+            (1.0/3.0).*(parallel_pressure[iz0,ir0,is,:] .- parallel_pressure[iz0,ir0,is,1])],
+            xlabel=L"t/c_{ref}", ylabel="", label = [L"p_{i\|\|}(t) - p_{i\|\|}(0)" L"p_{i\perp}(t) - p_{i\perp}(0)" L"p_{i}(t) - p_{i}(0)"])
+			outfile = string(run_name, "_delta_pressures"*description*"(iz0,ir0)_vs_t.pdf")
+			savefig(outfile)
+            @views plot([time] , 
+            [(2.0/3.0).*perpendicular_pressure[iz0,ir0,is,:] .+ (1.0/3.0).*parallel_pressure[iz0,ir0,is,:]],
+            xlabel=L"t/c_{ref}", ylabel=L"p_{i}(t)", label = "")
+			outfile = string(run_name, "_pressure"*description*"(iz0,ir0)_vs_t.pdf")
+			savefig(outfile)
+            @views plot([time] , 
+            [(2.0/3.0).*(perpendicular_pressure[iz0,ir0,is,:] .- perpendicular_pressure[iz0,ir0,is,1]).+
+            (1.0/3.0).*(parallel_pressure[iz0,ir0,is,:] .- parallel_pressure[iz0,ir0,is,1])],
+            xlabel=L"t/c_{ref}", ylabel=L"p_{i}(t) - p_{i}(0)", label = "")
+			outfile = string(run_name, "_delta_pressure"*description*"(iz0,ir0)_vs_t.pdf")
+			savefig(outfile)
+        end
 	end
     println("done.")
 end

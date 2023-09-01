@@ -359,6 +359,8 @@ struct pp_input
     plot_upar0_vs_t::Bool
     # if plot_ppar0_vs_t = true, create plots of species ppar(z0) vs time
     plot_ppar0_vs_t::Bool
+    # if plot_pperp0_vs_t = true, create plots of species pperp(z0) vs time
+    plot_pperp0_vs_t::Bool
     # if plot_qpar0_vs_t = true, create plots of species qpar(z0) vs time
     plot_qpar0_vs_t::Bool
     # if plot_dens_vs_z_t = true, create plot of species density vs z and time
