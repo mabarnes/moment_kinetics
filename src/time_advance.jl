@@ -1288,6 +1288,22 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
     # corrections in the sheath boundary conditions.
     force_minimum_pdf_value!(new_scratch.pdf, num_diss_params)
 
+    if moments.evolve_density && moments.evolve_ppar
+        # Can calculate this from evolved moments, so do not need to wait until after
+        # applying boundary conditions to distribution function. Useful to do it before to
+        # catch errors due to negative ppar or density before calling
+        # enforce_boundary_conditions!()
+        begin_s_r_z_region()
+        try #below block causes DomainError if ppar < 0 or density, so exit cleanly if possible
+            @loop_s_r_z is ir iz begin
+                moments.charged.vth[iz,ir,is] = sqrt(2.0*new_scratch.ppar[iz,ir,is]/new_scratch.density[iz,ir,is])
+            end
+        catch e
+            global_catch_error(e)
+        else
+            global_catch_error()
+        end
+    end
     # Enforce boundary conditions in z and vpa on the distribution function.
     # Must be done after Runge Kutta update so that the boundary condition applied to
     # the updated pdf is consistent with the updated moments - otherwise different upar
@@ -1311,14 +1327,19 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
     update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composition)
     # update the diagnostic chodura condition
     # update_chodura!(moments,new_scratch.pdf,vpa,vperp,z,r,r_spectral,composition,geometry,scratch_dummy,z_advect)
-    # update the thermal speed
-    begin_s_r_z_region()
-    try #below block causes DomainError if ppar < 0 or density, so exit cleanly if possible
-        update_vth!(moments.charged.vth, new_scratch.ppar, new_scratch.pperp, new_scratch.density, vperp, z, r, composition)
-    catch e
-        global_catch_error(e)
-    else
-        global_catch_error()
+    if !(moments.evolve_density && moments.evolve_ppar)
+        # update the thermal speed
+        begin_s_r_z_region()
+        try #below block causes DomainError if ppar < 0 or density, so exit cleanly if possible
+            @loop_s_r_z is ir iz begin
+                moments.charged.vth[iz,ir,is] = sqrt(2.0 * new_scratch.ppar[iz,ir,is] /
+                                                     new_scratch.density[iz,ir,is])
+            end
+        catch e
+            global_catch_error(e)
+        else
+            global_catch_error()
+        end
     end
 
     # update the parallel heat flux
@@ -1348,6 +1369,24 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
         # corrections in the sheath boundary conditions.
         force_minimum_pdf_value_neutral!(new_scratch.pdf_neutral, num_diss_params)
 
+        if moments.evolve_density && moments.evolve_ppar
+            # Can calculate this from evolved moments, so do not need to wait until after
+            # applying boundary conditions to distribution function. Useful to do it before to
+            # catch errors due to negative ppar or density before calling
+            # enforce_neutral_boundary_conditions!()
+            # update the thermal speed
+            begin_sn_r_z_region()
+            try
+                @loop_sn_r_z isn ir iz begin
+                    moments.neutral.vth[iz,ir,isn] = sqrt(2.0*new_scratch.pz_neutral[iz,ir,isn]/new_scratch.density_neutral[iz,ir,isn])
+                end
+            catch e
+                global_catch_error(e)
+            else
+                global_catch_error()
+            end
+        end
+
         # Enforce boundary conditions in z and vpa on the distribution function.
         # Must be done after Runge Kutta update so that the boundary condition applied to
         # the updated pdf is consistent with the updated moments - otherwise different upar
@@ -1375,17 +1414,19 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
         # update remaining velocity moments that are calculable from the evolved pdf
         update_derived_moments_neutral!(new_scratch, moments, vz, vr, vzeta, z, r,
                                         composition)
-        # update the thermal speed
-        begin_sn_r_z_region()
-        try
-            @loop_sn_r_z isn ir iz begin
-                moments.neutral.vth[iz,ir,isn] = sqrt(2.0 * new_scratch.pz_neutral[iz,ir,isn] /
-                                                      new_scratch.density_neutral[iz,ir,isn])
+        if !(moments.evolve_density && moments.evolve_ppar)
+            # update the thermal speed
+            begin_sn_r_z_region()
+            try
+                @loop_sn_r_z isn ir iz begin
+                    moments.neutral.vth[iz,ir,isn] = sqrt(2.0 * new_scratch.pz_neutral[iz,ir,isn] /
+                                                          new_scratch.density_neutral[iz,ir,isn])
             end
-        catch e
-            global_catch_error(e)
-        else
-            global_catch_error()
+            catch e
+                global_catch_error(e)
+            else
+                global_catch_error()
+            end
         end
 
         # update the parallel heat flux
