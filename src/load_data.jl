@@ -568,6 +568,22 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                 load_slice(boundary_distributions_io, "pdf_rboundary_charged_right",
                            vpa_range, vperp_range, z_range, :)
 
+                if "external_source_amplitude" ∈ get_variable_keys(dynamic)
+                    moments.charged.external_source_amplitude .=
+                        load_slice(dynamic, "external_source_amplitude", z_range, r_range,
+                                   time_index)
+                end
+                if "external_source_controller_integral" ∈ get_variable_keys(dynamic) &&
+                        length(moments.charged.external_source_controller_integral) == 1
+                    moments.charged.external_source_controller_integral .=
+                        load_slice(dynamic, "external_source_controller_integral",
+                                   time_index)
+                elseif length(moments.charged.external_source_controller_integral) > 1
+                    moments.charged.external_source_controller_integral .=
+                        load_slice(dynamic, "external_source_controller_integral",
+                                   z_range, r_range, time_index)
+                end
+
                 if composition.n_neutral_species > 0
                     pdf.neutral.norm .= load_slice(dynamic, "f_neutral", vz_range,
                                                    vr_range, vzeta_range, z_range,
@@ -593,6 +609,24 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                     boundary_distributions.pdf_rboundary_neutral[:,:,:,:,2,:] .=
                     load_slice(boundary_distributions_io, "pdf_rboundary_neutral_right",
                                vz_range, vr_range, vzeta_range, z_range, :)
+
+                    if "external_source_neutral_amplitude" ∈ get_variable_keys(dynamic)
+                        moments.neutral.external_source_amplitude .=
+                            load_slice(dynamic, "external_source_neutral_amplitude",
+                                       z_range, r_range, time_index)
+                    end
+                    if "external_source_neutral_controller_integral" ∈ get_variable_keys(dynamic) &&
+                            length(moments.neutral.external_source_controller_integral) == 1
+                        moments.neutral.external_source_controller_integral .=
+                            load_slice(dynamic,
+                                       "external_source_neutral_controller_integral",
+                                       time_index)
+                    elseif length(moments.neutral.external_source_controller_integral) > 1
+                        moments.neutral.external_source_controller_integral .=
+                            load_slice(dynamic,
+                                       "external_source_neutral_controller_integral",
+                                       z_range, r_range, time_index)
+                    end
                 end
             else
                 restart_n_ion_species, restart_n_neutral_species = load_species_data(fid)
@@ -644,6 +678,20 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                 boundary_distributions.pdf_rboundary_charged[:,:,:,2,:] .=
                 load_variable(boundary_distributions_io, "pdf_rboundary_charged_right")
 
+                if length(moments.charged.external_source_amplitude) > 0
+                    moments.charged.external_source_amplitude .=
+                        load_slice(dynamic, "external_source_amplitude", :, :, time_index)
+                end
+                if length(moments.charged.external_source_controller_integral) == 1
+                    moments.charged.external_source_controller_integral .=
+                        load_slice(dynamic, "external_source_controller_integral",
+                                   time_index)
+                elseif length(moments.charged.external_source_controller_integral) > 1
+                    moments.charged.external_source_controller_integral .=
+                        load_slice(dynamic, "external_source_controller_integral", :, :,
+                                   time_index)
+                end
+
                 if composition.n_neutral_species > 0
                     pdf.neutral.norm .= load_slice(dynamic, "f_neutral", :, :, :, :, :, :,
                                                    time_index)
@@ -666,6 +714,23 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                     load_variable(boundary_distributions_io, "pdf_rboundary_neutral_left")
                     boundary_distributions.pdf_rboundary_neutral[:,:,:,:,2,:] .=
                     load_variable(boundary_distributions_io, "pdf_rboundary_neutral_right")
+
+                    if length(moments.neutral.external_source_amplitude) > 0
+                        moments.neutral.external_source_amplitude .=
+                            load_slice(dynamic, "external_source_neutral_amplitude", :, :,
+                                       time_index)
+                    end
+                    if length(moments.neutral.external_source_controller_integral) == 1
+                        moments.neutral.external_source_controller_integral .=
+                            load_slice(dynamic,
+                                       "external_source_neutral_controller_integral",
+                                       time_index)
+                    elseif length(moments.neutral.external_source_controller_integral) > 1
+                        moments.neutral.external_source_controller_integral .=
+                            load_slice(dynamic,
+                                       "external_source_neutral_controller_integral",
+                                       :, :, time_index)
+                    end
                 end
             end
         finally

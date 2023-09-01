@@ -127,16 +127,14 @@ function update_speed_n_u_p_evolution_neutral!(advect, fvec, moments, vz, z, r,
         end
     end
     if neutral_source_settings.active
-        source_strength = neutral_source_settings.source_strength
+        source_amplitude = moments.neutral.external_source_amplitude
         source_T = neutral_source_settings.source_T
-        r_amplitude = neutral_source_settings.r_amplitude
-        z_amplitude = neutral_source_settings.z_amplitude
         density = fvec.density_neutral
         uz = fvec.uz_neutral
         pz = fvec.pz_neutral
         vth = moments.neutral.vth
         @loop_s_r_z is ir iz begin
-            prefactor = dt * source_strength * r_amplitude[ir] * z_amplitude[iz]
+            prefactor = dt * source_amplitude[iz,ir]
             term1 = prefactor * uz[iz,ir,is]/(density[iz,ir,is]*vth[iz,ir,is])
             term2_over_vpa =
                 0.5 * prefactor * (-(0.5*source_T + uz[iz,ir,is]^2) / pz[iz,ir,is]
@@ -218,15 +216,13 @@ function update_speed_n_u_evolution_neutral!(advect, fvec, moments, vz, z, r, co
         end
     end
     if neutral_source_settings.active
-        source_strength = neutral_source_settings.source_strength
+        source_amplitude = moments.neutral.external_source_amplitude
         source_T = neutral_source_settings.source_T
-        r_amplitude = neutral_source_settings.r_amplitude
-        z_amplitude = neutral_source_settings.z_amplitude
         density = fvec.density_neutral
         uz = fvec.uz_neutral
         vth = moments.neutral.vth
         @loop_s_r_z is ir iz begin
-            term = dt * source_strength * r_amplitude[ir] * z_amplitude[iz] *
+            term = dt * source_amplitude[iz,ir] *
                    uz[iz,ir,is]/(density[iz,ir,is]*vth[iz,ir,is]^2)
             @loop_vperp_vpa ivperp ivpa begin
                 advect[is].speed[ivpa,ivperp,iz,ir] += term

@@ -1588,6 +1588,13 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     vpa_advect, r_advect, z_advect = advect_objects.vpa_advect, advect_objects.r_advect, advect_objects.z_advect
     neutral_z_advect, neutral_r_advect, neutral_vz_advect = advect_objects.neutral_z_advect, advect_objects.neutral_r_advect, advect_objects.neutral_vz_advect
 
+    external_ion_source_controller!(fvec_in, moments.charged,
+                                    external_source_settings.ion, dt)
+    if composition.n_neutral_species > 0
+        external_neutral_source_controller!(fvec_in, moments.neutral,
+                                            external_source_settings.neutral, dt)
+    end
+
     if advance.vpa_advection
         vpa_advection!(fvec_out.pdf, fvec_in, fields, moments, vpa_advect, vpa, vperp, z, r, dt, t,
             vpa_spectral, composition, collisions, external_source_settings.ion, geometry)

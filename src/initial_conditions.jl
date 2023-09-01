@@ -82,7 +82,8 @@ end
 Creates the structs for the pdf and the velocity-space moments
 """
 function allocate_pdf_and_moments(composition, r, z, vperp, vpa, vzeta, vr, vz,
-                                  evolve_moments, collisions, numerical_dissipation)
+                                  evolve_moments, collisions, external_source_settings,
+                                  numerical_dissipation)
     pdf = create_pdf(composition, r, z, vperp, vpa, vzeta, vr, vz)
 
     # create the 'moments' struct that contains various v-space moments and other
@@ -92,10 +93,12 @@ function allocate_pdf_and_moments(composition, r, z, vperp, vpa, vzeta, vr, vz,
     # and so are included in the same struct
     charged = create_moments_charged(z.n, r.n, composition.n_ion_species,
         evolve_moments.density, evolve_moments.parallel_flow,
-        evolve_moments.parallel_pressure, numerical_dissipation)
+        evolve_moments.parallel_pressure, external_source_settings.ion,
+        numerical_dissipation)
     neutral = create_moments_neutral(z.n, r.n, composition.n_neutral_species,
         evolve_moments.density, evolve_moments.parallel_flow,
-        evolve_moments.parallel_pressure, numerical_dissipation)
+        evolve_moments.parallel_pressure, external_source_settings.neutral,
+        numerical_dissipation)
 
     if abs(collisions.ionization) > 0.0 || z.bc == "wall"
         # if ionization collisions are included or wall BCs are enforced, then particle
@@ -140,7 +143,7 @@ with a self-consistent initial condition
 function init_pdf_and_moments!(pdf, moments, boundary_distributions, geometry,
                                composition, r, z, vperp, vpa, vzeta, vr, vz,
                                vpa_spectral, vz_spectral, species,
-                               manufactured_solns_input)
+                               external_source_settings, manufactured_solns_input)
     if manufactured_solns_input.use_for_init
         init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z,
                                              r, composition.n_ion_species,
@@ -190,6 +193,27 @@ function init_pdf_and_moments!(pdf, moments, boundary_distributions, geometry,
                      pdf.charged.norm, vpa, vperp, z, r, composition,
                      moments.evolve_density, moments.evolve_upar, moments.evolve_ppar)
 
+        ion_source_settings = external_source_settings.ion
+        if ion_source_settings.active
+            if vperp.n == 1
+                # 1V case
+                prefactor = ion_source_settings.source_strength /
+                            sqrt(ion_source_settings.source_T)
+            else
+                prefactor = ion_source_settings.source_strength /
+                            ion_source_settings.source_T^1.5
+            end
+            @loop_r_z ir iz begin
+                moments.charged.external_source_amplitude[iz,ir] =
+                    prefactor * ion_source_settings.r_amplitude[ir] *
+                    ion_source_settings.z_amplitude[iz]
+            end
+            if ion_source_settings.PI_density_controller_I != 0.0 &&
+                    ion_source_settings.PI_density_controller_type != ""
+                moments.charged.external_source_controller_integral .= 0.0
+            end
+        end
+
         if n_neutral_species > 0
             update_neutral_qz!(moments.neutral.qz, moments.neutral.qz_updated,
                                moments.neutral.dens, moments.neutral.uz,
@@ -204,6 +228,27 @@ function init_pdf_and_moments!(pdf, moments, boundary_distributions, geometry,
                                pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
             update_neutral_pzeta!(moments.neutral.pzeta, moments.neutral.pzeta_updated,
                                   pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
+
+            neutral_source_settings = external_source_settings.neutral
+            if neutral_source_settings.active
+                if vzeta.n == 1 && vr.n == 1
+                    # 1V case
+                    prefactor = neutral_source_settings.source_strength /
+                                sqrt(neutral_source_settings.source_T)
+                else
+                    prefactor = neutral_source_settings.source_strength /
+                                neutral_source_settings.source_T^1.5
+                end
+                @loop_r_z ir iz begin
+                    moments.neutral.external_source_amplitude[iz,ir] =
+                        prefactor * neutral_source_settings.r_amplitude[ir] *
+                        neutral_source_settings.z_amplitude[iz]
+                end
+                if neutral_source_settings.PI_density_controller_I != 0.0 &&
+                        neutral_source_settings.PI_density_controller_type != ""
+                    moments.neutral.external_source_controller_integral .= 0.0
+                end
+            end
         end
     end
 

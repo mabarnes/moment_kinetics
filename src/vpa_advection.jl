@@ -144,17 +144,15 @@ function update_speed_n_u_p_evolution!(advect, fvec, moments, vpa, z, r, composi
         end
     end
     if ion_source_settings.active
-        source_strength = ion_source_settings.source_strength
+        source_amplitude = moments.charged.external_source_amplitude
         source_T = ion_source_settings.source_T
-        r_amplitude = ion_source_settings.r_amplitude
-        z_amplitude = ion_source_settings.z_amplitude
         density = fvec.density
         upar = fvec.upar
         ppar = fvec.ppar
         vth = moments.charged.vth
         vpa_grid = vpa.grid
         @loop_s_r_z is ir iz begin
-            prefactor = source_strength * r_amplitude[ir] * z_amplitude[iz]
+            prefactor = source_amplitude[iz,ir]
             term1 = prefactor * upar[iz,ir,is]/(density[iz,ir,is]*vth[iz,ir,is])
             term2_over_vpa =
                 0.5 * prefactor * (-(0.5*source_T + upar[iz,ir,is]^2) / ppar[iz,ir,is]
@@ -249,6 +247,7 @@ function update_speed_n_u_evolution!(advect, fvec, moments, vpa, z, r, compositi
         end
     end
     if ion_source_settings.active
+        source_amplitude = moments.charged.external_source_amplitude
         source_strength = ion_source_settings.source_strength
         source_T = ion_source_settings.source_T
         r_amplitude = ion_source_settings.r_amplitude
@@ -257,8 +256,8 @@ function update_speed_n_u_evolution!(advect, fvec, moments, vpa, z, r, compositi
         upar = fvec.upar
         vth = moments.charged.vth
         @loop_s_r_z is ir iz begin
-            term = source_strength * r_amplitude[ir] * z_amplitude[iz] *
-                   upar[iz,ir,is]/(density[iz,ir,is]*vth[iz,ir,is]^2)
+            term = source_amplitude[iz,ir] * upar[iz,ir,is] /
+                   (density[iz,ir,is] * vth[iz,ir,is]^2)
             @loop_vperp_vpa ivperp ivpa begin
                 advect[is].speed[ivpa,ivperp,iz,ir] += term
             end

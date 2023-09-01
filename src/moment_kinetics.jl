@@ -382,7 +382,8 @@ function setup_moment_kinetics(input_dict::Dict; restart_prefix_iblock=nothing,
     # Allocate arrays and create the pdf and moments structs
     pdf, moments, boundary_distributions =
         allocate_pdf_and_moments(composition, r, z, vperp, vpa, vzeta, vr, vz,
-                                 evolve_moments, collisions, num_diss_params)
+                                 evolve_moments, collisions, external_source_settings,
+                                 num_diss_params)
 
     if restart_prefix_iblock === nothing
         restarting = false
@@ -391,7 +392,7 @@ function setup_moment_kinetics(input_dict::Dict; restart_prefix_iblock=nothing,
         init_pdf_and_moments!(pdf, moments, boundary_distributions, geometry,
                               composition, r, z, vperp, vpa, vzeta, vr, vz,
                               vpa_spectral, vz_spectral, species,
-                              manufactured_solns_input)
+                              external_source_settings, manufactured_solns_input)
         # initialize time variable
         code_time = 0.
         previous_runs_info = nothing
@@ -418,8 +419,8 @@ function setup_moment_kinetics(input_dict::Dict; restart_prefix_iblock=nothing,
     # setup i/o
     ascii_io, io_moments, io_dfns = setup_file_io(io_input, boundary_distributions, vz,
         vr, vzeta, vpa, vperp, z, r, composition, collisions, moments.evolve_density,
-        moments.evolve_upar, moments.evolve_ppar, input_dict, restart_time_index,
-        previous_runs_info)
+        moments.evolve_upar, moments.evolve_ppar, external_source_settings, input_dict,
+        restart_time_index, previous_runs_info)
     # write initial data to ascii files
     write_data_to_ascii(moments, fields, vpa, vperp, z, r, code_time,
         composition.n_ion_species, composition.n_neutral_species, ascii_io)

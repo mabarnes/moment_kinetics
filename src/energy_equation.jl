@@ -23,12 +23,10 @@ function energy_equation!(ppar, fvec, moments, collisions, dt, spectral, composi
     end
 
     if ion_source_settings.active
-        source_strength = ion_source_settings.source_strength
+        source_amplitude = moments.charged.external_source_amplitude
         source_T = ion_source_settings.source_T
-        r_amplitude = ion_source_settings.r_amplitude
-        z_amplitude = ion_source_settings.z_amplitude
         @loop_s_r_z is ir iz begin
-            ppar[iz,ir,is] += dt * source_strength * r_amplitude[ir] * z_amplitude[iz] *
+            ppar[iz,ir,is] += dt * source_amplitude[iz,ir] *
                               (0.5*source_T + fvec.upar[iz,ir,is]^2)
         end
     end
@@ -79,12 +77,10 @@ function neutral_energy_equation!(pz, fvec, moments, collisions, dt, spectral,
     end
 
     if neutral_source_settings.active
-        source_strength = neutral_source_settings.source_strength
+        source_amplitude = moments.neutral.external_source_amplitude
         source_T = neutral_source_settings.source_T
-        r_amplitude = neutral_source_settings.r_amplitude
-        z_amplitude = neutral_source_settings.z_amplitude
         @loop_s_r_z is ir iz begin
-            pz[iz,ir,is] += dt * source_strength * r_amplitude[ir] * z_amplitude[iz] *
+            pz[iz,ir,is] += dt * source_amplitude[iz,ir]
                             (0.5*source_T + fvec.uz_neutral[iz,ir,is]^2)
         end
     end
