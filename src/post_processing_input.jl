@@ -25,6 +25,8 @@ const plot_upar0_vs_t = true
 const plot_ppar0_vs_t = true
 # if plot_pperp0_vs_t = true, create plots of species pperp(z0,r0) vs time
 const plot_pperp0_vs_t = true
+# if plot_vth0_vs_t = true, create plots of species vth(z0,r0) vs time
+const plot_vth0_vs_t = true
 # if plot_qpar0_vs_t = true, create plots of species qpar(z0) vs time
 const plot_qpar0_vs_t = false
 # if plot_dens_vs_z_t = true, create heatmap of species density vs z and time
@@ -119,7 +121,7 @@ const ivr0 = -1
 const ivzeta0 = -1
 
 pp = pp_input(calculate_frequencies, plot_phi0_vs_t, plot_phi_vs_z_t,
-    animate_phi_vs_z, plot_dens0_vs_t, plot_upar0_vs_t, plot_ppar0_vs_t, plot_pperp0_vs_t, plot_qpar0_vs_t,
+    animate_phi_vs_z, plot_dens0_vs_t, plot_upar0_vs_t, plot_ppar0_vs_t, plot_pperp0_vs_t, plot_vth0_vs_t, plot_qpar0_vs_t,
     plot_dens_vs_z_t, plot_upar_vs_z_t, plot_ppar_vs_z_t, plot_qpar_vs_z_t,
     animate_dens_vs_z, animate_upar_vs_z,
     animate_f_vs_vpa_z, animate_f_vs_vpa_z0, animate_f_vs_z0_vpa,

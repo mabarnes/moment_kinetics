@@ -446,7 +446,7 @@ function analyze_and_plot_data(path)
     end 
     
     # make plots and animations of the phi, Ez and Er 
-    plot_charged_moments_2D(density, parallel_flow, parallel_pressure, perpendicular_pressure, time, z, r, iz0, ir0, n_ion_species,
+    plot_charged_moments_2D(density, parallel_flow, parallel_pressure, perpendicular_pressure, thermal_speed, time, z, r, iz0, ir0, n_ion_species,
      itime_min, itime_max, nwrite_movie, run_name, pp)
     # make plots and animations of the phi, Ez and Er 
     plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
@@ -458,6 +458,14 @@ function analyze_and_plot_data(path)
         plot_charged_pdf(ff, vpa_local, vperp_local, z_local, r_local, ivpa0, ivperp0, iz0, ir0,
             spec_type, n_ion_species,
             itime_min, itime_max, nwrite_movie, run_name, pp)
+        Maxwellian_diagnostic = true
+        if Maxwellian_diagnostic
+            pressure = copy(parallel_pressure)
+            @. pressure = (2.0*perpendicular_pressure + parallel_pressure)/3.0
+            plot_Maxwellian_diagnostic(ff[:,:,iz0,ir0,:,:], density[iz0,ir0,:,:],
+             parallel_flow[iz0,ir0,:,:], thermal_speed[iz0,ir0,:,:], vpa_local, vpa_local_wgts, 
+             vperp_local, vperp_local_wgts, time, iz0, ir0, run_name, n_ion_species)
+        end
         # make plots and animations of the neutral pdf
         if n_neutral_species > 0
             spec_type = "neutral"
@@ -1829,7 +1837,7 @@ function plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
     println("done.")
 end
 
-function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, perpendicular_pressure, time, z, r, iz0, ir0, n_ion_species,
+function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, perpendicular_pressure, thermal_speed, time, z, r, iz0, ir0, n_ion_species,
     itime_min, itime_max, nwrite_movie, run_name, pp)
     nr = size(r,1)
     print("Plotting charged moments data...")
@@ -1949,6 +1957,7 @@ function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, perp
 			outfile = string(run_name, "_delta_perpendicular_pressure"*description*"(iz0,ir0)_vs_t.pdf")
 			savefig(outfile)
         end
+        # the total pressure
         if pp.plot_ppar0_vs_t && pp.plot_pperp0_vs_t
             @views plot([time, time, time] , 
             [parallel_pressure[iz0,ir0,is,:], perpendicular_pressure[iz0,ir0,is,:], 
@@ -1975,10 +1984,59 @@ function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, perp
 			outfile = string(run_name, "_delta_pressure"*description*"(iz0,ir0)_vs_t.pdf")
 			savefig(outfile)
         end
+        # the thermal speed
+        if pp.plot_vth0_vs_t
+            @views plot(time, thermal_speed[iz0,ir0,is,:], xlabel=L"t/c_{ref}", ylabel=L"v_{i,th}(t)", label = "")
+			outfile = string(run_name, "_thermal_speed"*description*"(iz0,ir0)_vs_t.pdf")
+			savefig(outfile)
+            @views plot(time, thermal_speed[iz0,ir0,is,:] .- thermal_speed[iz0,ir0,is,1], xlabel=L"t/c_{ref}", ylabel=L"v_{i,th}(t) - v_{i,th}(0)", label = "")
+			outfile = string(run_name, "_delta_thermal_speed"*description*"(iz0,ir0)_vs_t.pdf")
+			savefig(outfile)
+        end
 	end
     println("done.")
 end
 
+function plot_Maxwellian_diagnostic(ff, density, parallel_flow, thermal_speed, vpa_local, vpa_local_wgts, 
+            vperp_local, vperp_local_wgts, time, iz0, ir0, run_name, n_ion_species)
+    ff_Maxwellian = copy(ff)
+    ff_ones = copy(ff)
+    nvpa = size(vpa_local,1)
+    nvperp = size(vperp_local,1)
+    ntime = size(time,1)
+    if nvperp > 1
+        pvth = 3
+    else
+        pvth = 1
+    end
+    for it in 1:ntime
+        for is in 1:n_ion_species
+            for ivperp in 1:nvperp
+                for ivpa in 1:nvpa
+                   ff_Maxwellian[ivpa,ivperp,is,it] = (density[is,it]/thermal_speed[is,it]^pvth)*
+                                                    exp(- (((vpa_local[ivpa] - parallel_flow[is,it])^2) +
+                                                     (vperp_local[ivperp]^2) )/(thermal_speed[is,it]^2) ) 
+                   ff_ones[ivpa,ivperp,is,it] = 1.0  
+                end
+            end
+        end
+    end
+    # form the L2 norm
+    ff_norm = copy(time)
+    for is in 1:n_ion_species
+        for it in 1:ntime
+            @views ff_norm[it] = integrate_over_vspace( (ff[:,:,is,it] .- ff_Maxwellian[:,:,is,it]).^2 , vpa_local, 0, vpa_local_wgts, vperp_local, 0, vperp_local_wgts)
+            @views ff_norm[it] /= integrate_over_vspace(ff_ones[:,:,is,it], vpa_local, 0, vpa_local_wgts, vperp_local, 0, vperp_local_wgts)
+        end
+        iz0_string = string("_iz0", string(iz0))
+        ir0_string = string("_ir0", string(ir0))
+        description = "_ion_spec"*string(is)*"_"*iz0_string*ir0_string
+        @views plot(time, ff_norm, xlabel=L"t/c_{ref}", ylabel=L"L^2(f - f_M)(t)", label = "")
+			outfile = string(run_name, "_L2_Maxwellian_norm"*description*"_vs_t.pdf")
+			savefig(outfile)
+    end
+    return nothing
+end
 function plot_charged_pdf_2D_at_wall(run_name)
     print("Plotting charged pdf data at wall boundaries...")
     # open a dfn file
