@@ -8,7 +8,8 @@ export time_advance!
 using MPI
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_float, allocate_shared_float
-using ..communication: _block_synchronize, global_size, comm_world, MPISharedArray, global_rank
+using ..communication: _block_synchronize, block_rank, global_size, iblock_index,
+                       comm_world, MPISharedArray, global_rank
 using ..debugging
 using ..file_io: write_data_to_ascii, write_moments_data_to_binary, write_dfns_data_to_binary, debug_dump
 using ..looping
@@ -857,7 +858,7 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
 
             # Hack to save *.pdf of current pdf
             if t_input.runtime_plots
-                if global_rank[] == 0
+                if block_rank[] == 0
                     fig = Figure()
 
                     irow = 1
@@ -938,7 +939,7 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
 
                     resize_to_layout!(fig)
 
-                    save("latest_plots.png", fig)
+                    save("latest_plots$(iblock_index[]).png", fig)
                 end
             end
             iwrite_moments += 1
