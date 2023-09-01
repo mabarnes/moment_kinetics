@@ -849,7 +849,7 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
 
             # Hack to save *.pdf of current pdf
             if t_input.runtime_plots
-                @serial_region begin
+                if global_rank[] == 0
                     fig = Figure()
 
                     irow = 1
