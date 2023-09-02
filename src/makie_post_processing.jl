@@ -1260,81 +1260,86 @@ function plots_for_variable(run_info, variable_name; plot_prefix, is_1D=false,
     input = Dict_to_NamedTuple(input_dict[variable_name])
 
     # test if any plot is needed
-    if any(v for (k,v) in pairs(input) if
+    if !(any(v for (k,v) in pairs(input) if
            startswith(String(k), "plot") || startswith(String(k), "animate") ||
-           k == :steady_state_residual)
+           k == :steady_state_residual))
+        return nothing
+    end
 
-        println("Making plots for $variable_name")
-        flush(stdout)
+    if is_1D && variable_name == "Er"
+        return nothing
+    end
 
-        if variable_name == "temperature"
-            vth = Tuple(postproc_load_variable(ri, "thermal_speed")
-                        for ri ∈ run_info)
-            variable = Tuple(v.^2 for v ∈ vth)
-        elseif variable_name == "temperature_neutral"
-            vth = Tuple(postproc_load_variable(ri, "thermal_speed_neutral")
-                        for ri ∈ run_info)
-            variable = Tuple(v.^2 for v ∈ vth)
+    println("Making plots for $variable_name")
+    flush(stdout)
+
+    if variable_name == "temperature"
+        vth = Tuple(postproc_load_variable(ri, "thermal_speed")
+                    for ri ∈ run_info)
+        variable = Tuple(v.^2 for v ∈ vth)
+    elseif variable_name == "temperature_neutral"
+        vth = Tuple(postproc_load_variable(ri, "thermal_speed_neutral")
+                    for ri ∈ run_info)
+        variable = Tuple(v.^2 for v ∈ vth)
+    else
+        variable = Tuple(postproc_load_variable(ri, variable_name)
+                         for ri ∈ run_info)
+    end
+    if variable_name ∈ em_variables
+        species_indices = (nothing,)
+    elseif variable_name ∈ neutral_moment_variables ||
+           variable_name ∈ neutral_dfn_variables
+        species_indices = 1:maximum(ri.n_neutral_species for ri ∈ run_info)
+    else
+        species_indices = 1:maximum(ri.n_ion_species for ri ∈ run_info)
+    end
+    for is ∈ species_indices
+        if is !== nothing
+            variable_prefix = plot_prefix * variable_name * "_spec$(is)_"
+            log_variable_prefix = plot_prefix * "log" * variable_name * "_spec$(is)_"
         else
-            variable = Tuple(postproc_load_variable(ri, variable_name)
-                             for ri ∈ run_info)
+            variable_prefix = plot_prefix * variable_name * "_"
+            log_variable_prefix = plot_prefix * "log" * variable_name * "_"
         end
-        if variable_name ∈ em_variables
-            species_indices = (nothing,)
-        elseif variable_name ∈ neutral_moment_variables ||
-               variable_name ∈ neutral_dfn_variables
-            species_indices = 1:maximum(ri.n_neutral_species for ri ∈ run_info)
-        else
-            species_indices = 1:maximum(ri.n_ion_species for ri ∈ run_info)
+        if variable_name == "Er" && is_1D
+            # Skip if there is no r-dimension
+            continue
         end
-        for is ∈ species_indices
-            if is !== nothing
-                variable_prefix = plot_prefix * variable_name * "_spec$(is)_"
-                log_variable_prefix = plot_prefix * "log" * variable_name * "_spec$(is)_"
-            else
-                variable_prefix = plot_prefix * variable_name * "_"
-                log_variable_prefix = plot_prefix * "log" * variable_name * "_"
-            end
-            if variable_name == "Er" && is_1D
-                # Skip if there is no r-dimension
-                continue
-            end
-            if !is_1D && input.plot_vs_r_t
-                plot_vs_r_t(run_info, variable_name, is=is, data=variable, input=input,
-                            outfile=variable_prefix * "vs_r_t.pdf")
-            end
-            if input.plot_vs_z_t
-                plot_vs_z_t(run_info, variable_name, is=is, data=variable, input=input,
-                            outfile=variable_prefix * "vs_z_t.pdf")
-            end
-            if !is_1D && input.plot_vs_r
-                plot_vs_r(run_info, variable_name, is=is, data=variable, input=input,
-                          outfile=variable_prefix * "vs_r.pdf")
-            end
-            if input.plot_vs_z
-                plot_vs_z(run_info, variable_name, is=is, data=variable, input=input,
-                          outfile=variable_prefix * "vs_z.pdf")
-            end
-            if !is_1D && input.plot_vs_z_r
-                plot_vs_z_r(run_info, variable_name, is=is, data=variable, input=input,
-                            outfile=variable_prefix * "vs_z_r.pdf")
-            end
-            if input.animate_vs_z
-                animate_vs_z(run_info, variable_name, is=is, data=variable, input=input,
-                             outfile=variable_prefix * "vs_z." * input.animation_ext)
-            end
-            if !is_1D && input.animate_vs_r
-                animate_vs_r(run_info, variable_name, is=is, data=variable, input=input,
-                             outfile=variable_prefix * "vs_r." * input.animation_ext)
-            end
-            if !is_1D && input.animate_vs_z_r
-                animate_vs_z_r(run_info, variable_name, is=is, data=variable, input=input,
-                               outfile=variable_prefix * "vs_r." * input.animation_ext)
-            end
-            if input.steady_state_residual
-                calculate_steady_state_residual(run_info, variable_name; is=is, data=variable,
-                                                fig_axes=steady_state_residual_fig_axes)
-            end
+        if !is_1D && input.plot_vs_r_t
+            plot_vs_r_t(run_info, variable_name, is=is, data=variable, input=input,
+                        outfile=variable_prefix * "vs_r_t.pdf")
+        end
+        if input.plot_vs_z_t
+            plot_vs_z_t(run_info, variable_name, is=is, data=variable, input=input,
+                        outfile=variable_prefix * "vs_z_t.pdf")
+        end
+        if !is_1D && input.plot_vs_r
+            plot_vs_r(run_info, variable_name, is=is, data=variable, input=input,
+                      outfile=variable_prefix * "vs_r.pdf")
+        end
+        if input.plot_vs_z
+            plot_vs_z(run_info, variable_name, is=is, data=variable, input=input,
+                      outfile=variable_prefix * "vs_z.pdf")
+        end
+        if !is_1D && input.plot_vs_z_r
+            plot_vs_z_r(run_info, variable_name, is=is, data=variable, input=input,
+                        outfile=variable_prefix * "vs_z_r.pdf")
+        end
+        if input.animate_vs_z
+            animate_vs_z(run_info, variable_name, is=is, data=variable, input=input,
+                         outfile=variable_prefix * "vs_z." * input.animation_ext)
+        end
+        if !is_1D && input.animate_vs_r
+            animate_vs_r(run_info, variable_name, is=is, data=variable, input=input,
+                         outfile=variable_prefix * "vs_r." * input.animation_ext)
+        end
+        if !is_1D && input.animate_vs_z_r
+            animate_vs_z_r(run_info, variable_name, is=is, data=variable, input=input,
+                           outfile=variable_prefix * "vs_r." * input.animation_ext)
+        end
+        if input.steady_state_residual
+            calculate_steady_state_residual(run_info, variable_name; is=is, data=variable,
+                                            fig_axes=steady_state_residual_fig_axes)
         end
     end
 
