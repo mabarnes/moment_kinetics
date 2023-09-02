@@ -1921,10 +1921,18 @@ for dim ∈ one_dimension_combinations_no_t
 
                      n_runs = length(run_info)
 
+                     frame_index = Observable(1)
+                     if length(run_info) == 1 || all(all(isapprox.(ri.time, run_info[1].time)) for ri ∈ run_info[2:end])
+                         # All times are the same
+                         title = lift(i->string("t = ", run_info[1].time[i]), frame_index)
+                     else
+                         title = lift(i->join((string("t", irun, " = ", ri.time[i])
+                                               for (irun,t) ∈ enumerate(run_info)), "; "),
+                                      frame_index)
+                     end
                      fig, ax = get_1d_ax(xlabel="$($dim_str)",
                                          ylabel=get_variable_symbol(var_name),
-                                         yscale=yscale)
-                     frame_index = Observable(1)
+                                         title=title, yscale=yscale)
 
                      for (d, ri) ∈ zip(data, run_info)
                          $function_name(ri, var_name; is=is, data=d, input=input,
@@ -1984,9 +1992,10 @@ for dim ∈ one_dimension_combinations_no_t
                      ind = frame_index
                  end
                  if ax === nothing
+                     title = lift(i->string("t = ", run_info.time[i]), ind)
                      fig, ax = get_1d_ax(xlabel="$($dim_str)",
                                          ylabel=get_variable_symbol(var_name),
-                                         yscale=yscale)
+                                         yscale=yscale, title=title)
                  else
                      fig = nothing
                  end
@@ -2111,15 +2120,27 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
                          error("`outfile` is required for $($function_name_str)")
                      end
 
-                     fig, ax, colorbar_places = get_2d_ax(length(run_info),
-                                                          title=get_variable_symbol(var_name))
                      frame_index = Observable(1)
+
+                     if length(run_info) > 1
+                         title = get_variable_symbol(var_name)
+                         subtitles = (lift(i->string(ri.run_name, "\nt = ", ri.time[i]),
+                                           frame_index)
+                                      for ri ∈ run_info)
+                     else
+                         title = lift(i->string(get_variable_symbol(var_name), "\nt = ",
+                                                run_info[1].time[i]),
+                                      frame_index)
+                         subtitles = nothing
+                     end
+                     fig, ax, colorbar_places = get_2d_ax(length(run_info),
+                                                          title=title,
+                                                          subtitles=subtitles)
 
                      for (d, ri, a, cp) ∈ zip(data, run_info, ax, colorbar_places)
                          $function_name(ri, var_name; is=is, data=d, input=input,
                                         transform=transform, frame_index=frame_index,
-                                        ax=a, colorbar_place=cp, title=ri.run_name,
-                                        it=it, kwargs...)
+                                        ax=a, colorbar_place=cp, it=it, kwargs...)
                      end
 
                      if it === nothing
@@ -2172,8 +2193,10 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
                  else
                      colormap = input.colormap
                  end
-                 if title === nothing
-                     title = get_variable_symbol(var_name)
+                 if title === nothing && ax == nothing
+                     title = lift(i->string(get_variable_symbol(var_name), "\nt = ",
+                                            run_info.time[i]),
+                                  frame_index)
                  end
 
                  x = $dim2_grid
@@ -2687,7 +2710,7 @@ function animate_2d(xcoord, ycoord, data; frame_index=nothing, ax=nothing, fig=n
     colormap = parse_colormap(colormap)
 
     if ax === nothing
-        fig, ax, colorbar_place = get_2d_ax()
+        fig, ax, colorbar_place = get_2d_ax(title=title)
     end
     if frame_index === nothing
         ind = Observable(1)
@@ -2699,9 +2722,6 @@ function animate_2d(xcoord, ycoord, data; frame_index=nothing, ax=nothing, fig=n
     end
     if ylabel !== nothing
         ax.ylabel = ylabel
-    end
-    if title !== nothing
-        ax.title = title
     end
     if colorscale !== nothing
         kwargs = tuple(kwargs..., :colorscale=>colorscale)
