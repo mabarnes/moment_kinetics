@@ -21,8 +21,12 @@ source julia.env
 export SRUN_CPUS_PER_TASK=$SLURM_CPUS_PER_TASK
 
 echo "precompiling $(date)"
-bin/julia --project -O3 --check-bounds=no precompile.jl &
-bin/julia --project precompile-makie-post-processing.jl &
+#bin/julia --project -O3 --check-bounds=no precompile.jl &
+#bin/julia --project precompile-makie-post-processing.jl &
+#
+#wait
+bin/julia --project -O3 --check-bounds=no precompile.jl
+bin/julia --project precompile-makie-post-processing.jl
 
 wait
 
