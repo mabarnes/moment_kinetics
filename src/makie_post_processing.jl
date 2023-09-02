@@ -37,6 +37,7 @@ using ..type_definitions: mk_float, mk_int
 
 using Combinatorics
 using Glob
+using LaTeXStrings
 using LsqFit
 using MPI
 using NaNMath
@@ -1922,12 +1923,15 @@ for dim ∈ one_dimension_combinations_no_t
                      n_runs = length(run_info)
 
                      frame_index = Observable(1)
-                     if length(run_info) == 1 || all(all(isapprox.(ri.time, run_info[1].time)) for ri ∈ run_info[2:end])
+                     if length(run_info) == 1 ||
+                         all(ri.nt == run_info[1].nt &&
+                             wall(isapprox.(ri.time, run_info[1].time))
+                             for ri ∈ run_info[2:end])
                          # All times are the same
                          title = lift(i->string("t = ", run_info[1].time[i]), frame_index)
                      else
                          title = lift(i->join((string("t", irun, " = ", ri.time[i])
-                                               for (irun,t) ∈ enumerate(run_info)), "; "),
+                                               for (irun,ri) ∈ enumerate(run_info)), "; "),
                                       frame_index)
                      end
                      fig, ax = get_1d_ax(xlabel="$($dim_str)",
@@ -3932,10 +3936,18 @@ function animate_f_unnorm_vs_vpa(run_info::Tuple; neutral=false, outfile=nothing
     try
         n_runs = length(run_info)
 
-        ylabel = neutral ? L"f_{n,\mathrm{unnormalized}}" : L"f_{i,\mathrm{unnormalized}}"
-        fig, ax = get_1d_ax(xlabel=L"v_\parallel", ylabel=ylabel)
-
         frame_index = Observable(1)
+
+        ylabel = neutral ? L"f_{n,\mathrm{unnormalized}}" : L"f_{i,\mathrm{unnormalized}}"
+        if length(run_info) == 1 || all(all(isapprox.(ri.time, run_info[1].time)) for ri ∈ run_info[2:end])
+            # All times are the same
+            title = lift(i->LaTeXString(string("t = ", run_info[1].time[i])), frame_index)
+        else
+            title = lift(i->LaTeXString(join((string("t", irun, " = ", ri.time[i])
+                                              for (irun,t) ∈ enumerate(run_info)), "; ")),
+                         frame_index)
+        end
+        fig, ax = get_1d_ax(xlabel=L"v_\parallel", ylabel=ylabel, title=title)
 
         for ri ∈ run_info
             animate_f_unnorm_vs_vpa(ri; neutral=neutral, ax=ax, frame_index=frame_index,
@@ -3975,9 +3987,10 @@ function animate_f_unnorm_vs_vpa(run_info; input=nothing, neutral=false, is=1, i
     end
 
     if ax === nothing
-        ylabel = neutral ? L"f_{n,\mathrm{unnormalized}}" : L"f_{i,\mathrm{unnormalized}}"
-        fig, ax = get_1d_ax(xlabel=L"v_\parallel", ylabel=ylabel)
         frame_index = Observable(1)
+        title = lift(i->LaTeXString(string("t = ", run_info.time[i])), frame_index)
+        ylabel = neutral ? L"f_{n,\mathrm{unnormalized}}" : L"f_{i,\mathrm{unnormalized}}"
+        fig, ax = get_1d_ax(xlabel=L"v_\parallel", ylabel=ylabel, title=title)
     end
     if frame_index === nothing
         error("Must pass an Observable to `frame_index` when passing `ax`.")
@@ -4098,10 +4111,23 @@ function animate_f_unnorm_vs_vpa_z(run_info::Tuple; neutral=false, outfile=nothi
                                    kwargs...)
     try
         n_runs = length(run_info)
-        title = neutral ? L"f_{n,\mathrm{unnormalized}}" : L"f_{i,\mathrm{unnormalized}}"
-        fig, axes, colorbar_places = get_2d_ax(n_runs; title=title, xlabel=L"v_\parallel", ylabel=L"z")
 
         frame_index = Observable(1)
+
+        var_name = neutral ? L"f_{n,\mathrm{unnormalized}}" : L"f_{i,\mathrm{unnormalized}}"
+        if length(run_info) > 1
+            title = var_name
+            subtitles = (lift(i->LaTeXString(string(ri.run_name, "\nt = ", ri.time[i])),
+                              frame_index)
+                         for ri ∈ run_info)
+        else
+            title = lift(i->LaTeXString(string(var_name, L",\;t = ",
+                                               run_info[1].time[i])),
+                         frame_index)
+            subtitles = nothing
+        end
+        fig, axes, colorbar_places = get_2d_ax(n_runs; title=title, subtitles=subtitles,
+                                               xlabel=L"v_\parallel", ylabel=L"z")
 
         for (ri, ax, colorbar_place) ∈ zip(run_info, axes, colorbar_places)
             animate_f_unnorm_vs_vpa_z(ri; neutral=neutral, ax=ax,
@@ -4135,11 +4161,11 @@ function animate_f_unnorm_vs_vpa_z(run_info; input=nothing, neutral=false, is=1,
     end
 
     if ax === nothing
-        title = neutral ? L"f_{n,\mathrm{unnormalized}}" : L"f_{i,\mathrm{unnormalized}}"
-        fig, ax, colorbar_place = get_2d_ax(title=title, xlabel=L"v_\parallel", ylabel=L"z")
         frame_index = Observable(1)
-    else
-        ax.title = run_info.run_name
+        var_name = neutral ? L"f_{n,\mathrm{unnormalized}}" : L"f_{i,\mathrm{unnormalized}}"
+        title = lift(i->LaTeXString(string(var_name, "\nt = ", run_info.time[i])),
+                     frame_index)
+        fig, ax, colorbar_place = get_2d_ax(title=title, xlabel=L"v_\parallel", ylabel=L"z")
     end
     if frame_index === nothing
         error("Must pass an Observable to `frame_index` when passing `ax`.")
