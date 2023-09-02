@@ -2211,8 +2211,8 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
 end
 
 """
-    get_1d_ax(n=nothing; title=nothing, yscale=nothing, get_legend_place=nothing,
-              kwargs...)
+    get_1d_ax(n=nothing; title=nothing, subtitles=nothing, yscale=nothing,
+              get_legend_place=nothing, kwargs...)
 
 Create a new `Figure` `fig` and `Axis` `ax` intended for 1d plots.
 
@@ -2231,10 +2231,13 @@ increased in proportion to `n`.
 `get_legend_place` is set, `(fig, ax, legend_place)` is returned where `legend_place` is a
 `GridPosition` (if `n=nothing`) or a Tuple of `n` `GridPosition`s.
 
+When `n` is passed, `subtitles` can be passed a Tuple of length `n` which will be used to
+set a subtitle for each `Axis` in `ax`.
+
 Extra `kwargs` are passed to the `Axis()` constructor.
 """
-function get_1d_ax(n=nothing; title=nothing, yscale=nothing, get_legend_place=nothing,
-                   kwargs...)
+function get_1d_ax(n=nothing; title=nothing, subtitles=nothing, yscale=nothing,
+                   get_legend_place=nothing, kwargs...)
     valid_legend_places = (nothing, :left, :right, :above, :below)
     if get_legend_place ∉ valid_legend_places
         error("get_legend_place=$get_legend_place is not one of $valid_legend_places")
@@ -2268,19 +2271,44 @@ function get_1d_ax(n=nothing; title=nothing, yscale=nothing, get_legend_place=no
         end
 
         if get_legend_place === :left
-            ax = [Axis(plot_layout[1,2*i]; kwargs...) for i in 1:n]
+            if subtitles === nothing
+                ax = [Axis(plot_layout[1,2*i]; kwargs...) for i in 1:n]
+            else
+                ax = [Axis(plot_layout[1,2*i]; title=st, kwargs...)
+                      for (i,st) in zip(1:n, subtitles)]
+            end
             legend_place = [plot_layout[1,2*i-1] for i in 1:n]
         elseif get_legend_place === :right
-            ax = [Axis(plot_layout[1,2*i-1]; kwargs...) for i in 1:n]
+            if subtitles === nothing
+                ax = [Axis(plot_layout[1,2*i-1]; kwargs...) for i in 1:n]
+            else
+                ax = [Axis(plot_layout[1,2*i-1]; title=st, kwargs...)
+                      for (i,st) in zip(1:n, subtitles)]
+            end
             legend_place = [plot_layout[1,2*i] for i in 1:n]
         elseif get_legend_place === :above
-            ax = [Axis(plot_layout[2,i]; kwargs...) for i in 1:n]
+            if subtitles === nothing
+                ax = [Axis(plot_layout[2,i]; kwargs...) for i in 1:n]
+            else
+                ax = [Axis(plot_layout[2,i]; title=st, kwargs...)
+                      for (i,st) in zip(1:n, subtitles)]
+            end
             legend_place = [plot_layout[1,i] for i in 1:n]
         elseif get_legend_place === :below
-            ax = [Axis(plot_layout[1,i]; kwargs...) for i in 1:n]
+            if subtitles === nothing
+                ax = [Axis(plot_layout[1,i]; kwargs...) for i in 1:n]
+            else
+                ax = [Axis(plot_layout[1,i]; title=st, kwargs...)
+                      for (i,st) in zip(1:n, subtitles)]
+            end
             legend_place = [plot_layout[2,i] for i in 1:n]
         else
-            ax = [Axis(plot_layout[1,i]; kwargs...) for i in 1:n]
+            if subtitles === nothing
+                ax = [Axis(plot_layout[1,i]; kwargs...) for i in 1:n]
+            else
+                ax = [Axis(plot_layout[1,i]; title=st, kwargs...)
+                      for (i,st) in zip(1:n, subtitles)]
+            end
         end
     end
 
@@ -2292,7 +2320,7 @@ function get_1d_ax(n=nothing; title=nothing, yscale=nothing, get_legend_place=no
 end
 
 """
-    get_2d_ax(n=nothing; title=nothing, kwargs...)
+    get_2d_ax(n=nothing; title=nothing, subtitles=nothing, kwargs...)
 
 Create a new `Figure` `fig` and `Axis` `ax` intended for 2d plots.
 
@@ -2305,9 +2333,12 @@ If a number of axes `n` is passed, then `ax` is a `Vector{Axis}` and `colorbar_p
 `Vector{GridPosition}` of length `n` (even if `n` is 1). The axes are created in a
 horizontal row, and the width of the figure is increased in proportion to `n`.
 
+When `n` is passed, `subtitles` can be passed a Tuple of length `n` which will be used to
+set a subtitle for each `Axis` in `ax`.
+
 Extra `kwargs` are passed to the `Axis()` constructor.
 """
-function get_2d_ax(n=nothing; title=nothing, kwargs...)
+function get_2d_ax(n=nothing; title=nothing, subtitles=nothing, kwargs...)
     if n == nothing
         fig = Figure(resolution=(600, 400))
         if title !== nothing
@@ -2330,7 +2361,12 @@ function get_2d_ax(n=nothing; title=nothing, kwargs...)
         else
             plot_layout = fig[1,1] = GridLayout()
         end
-        ax = [Axis(plot_layout[1,2*i-1]; kwargs...) for i in 1:n]
+        if subtitles === nothing
+            ax = [Axis(plot_layout[1,2*i-1]; kwargs...) for i in 1:n]
+        else
+            ax = [Axis(plot_layout[1,2*i-1]; title=st, kwargs...)
+                  for (i,st) in zip(1:n, subtitles)]
+        end
         colorbar_place = [plot_layout[1,2*i] for i in 1:n]
     end
 
