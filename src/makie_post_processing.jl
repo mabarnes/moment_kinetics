@@ -545,6 +545,7 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
        animate_vs_z=false,
        animate_vs_r=false,
        animate_vs_z_r=false,
+       show_element_boundaries=false,
        steady_state_residual=false,
       )
 
@@ -1593,6 +1594,10 @@ for dim ∈ one_dimension_combinations
                          data = Tuple(nothing for _ in run_info)
                      end
 
+                     if input isa AbstractDict
+                         input = Dict_to_NamedTuple(input)
+                     end
+
                      n_runs = length(run_info)
 
                      fig, ax = get_1d_ax(xlabel="$($dim_str)",
@@ -1601,6 +1606,14 @@ for dim ∈ one_dimension_combinations
                      for (d, ri) ∈ zip(data, run_info)
                          $function_name(ri, var_name, is=is, data=d, input=input, ax=ax,
                                         transform=transform, label=ri.run_name, kwargs...)
+                     end
+
+                     if input.show_element_boundaries && Symbol($dim_str) != :t
+                         # Just plot element boundaries from first run, assuming that all
+                         # runs being compared use the same grid.
+                         ri = run_info[1]
+                         element_boundary_positions = ri.$dim.grid[begin:ri.$dim.ngrid-1:end]
+                         vlines!(ax, element_boundary_positions, color=:black, alpha=0.3)
                      end
 
                      if n_runs > 1
@@ -1645,13 +1658,24 @@ for dim ∈ one_dimension_combinations
                                          ivzeta=ivzeta, ivr=ivr, ivz=ivz)
                  end
 
+                 if ax === nothing
+                     fig, ax = get_1d_ax(; xlabel="$($dim_str)",
+                                         ylabel=get_variable_symbol(var_name))
+                     ax_was_nothing = true
+                 else
+                     ax_was_nothing = false
+                 end
+
                  x = $dim_grid
                  if $idim !== nothing
                      x = x[$idim]
                  end
-                 fig = plot_1d(x, data; xlabel="$($dim_str)",
-                               ylabel=get_variable_symbol(var_name), label=label, ax=ax,
-                               kwargs...)
+                 fig = plot_1d(x, data; label=label, ax=ax, kwargs...)
+
+                 if input.show_element_boundaries && Symbol($dim_str) != :t && ax_was_nothing
+                     element_boundary_positions = run_info.$dim.grid[begin:run_info.$dim.ngrid-1:end]
+                     vlines!(ax, element_boundary_positions, color=:black, alpha=0.3)
+                 end
 
                  if outfile !== nothing
                      if fig === nothing
@@ -1810,6 +1834,13 @@ for (dim1, dim2) ∈ two_dimension_combinations
                      title = get_variable_symbol(var_name)
                  end
 
+                 if ax === nothing
+                     fig, ax = get_2d_ax(; title=title)
+                     ax_was_nothing = true
+                 else
+                     ax_was_nothing = false
+                 end
+
                  x = $dim2_grid
                  if $idim2 !== nothing
                      x = x[$idim2]
@@ -1818,9 +1849,18 @@ for (dim1, dim2) ∈ two_dimension_combinations
                  if $idim1 !== nothing
                      y = y[$idim1]
                  end
-                 fig = plot_2d(x, y, data; xlabel="$($dim2_str)", ylabel="$($dim1_str)",
-                               title=title, ax=ax, colorbar_place=colorbar_place,
+                 fig = plot_2d(x, y, data; ax=ax, xlabel="$($dim2_str)",
+                               ylabel="$($dim1_str)",colorbar_place=colorbar_place,
                                colormap=colormap, kwargs...)
+
+                 if input.show_element_boundaries && Symbol($dim2_str) != :t
+                     element_boundary_positions = run_info.$dim2.grid[begin:run_info.$dim2.ngrid-1:end]
+                     vlines!(ax, element_boundary_positions, color=:white, alpha=0.5)
+                 end
+                 if input.show_element_boundaries && Symbol($dim1_str) != :t
+                     element_boundary_positions = run_info.$dim1.grid[begin:run_info.$dim1.ngrid-1:end]
+                     hlines!(ax, element_boundary_positions, color=:white, alpha=0.5)
+                 end
 
                  if outfile !== nothing
                      if fig === nothing
@@ -1919,6 +1959,10 @@ for dim ∈ one_dimension_combinations_no_t
                          error("`outfile` is required for $($function_name_str)")
                      end
 
+                     if input isa AbstractDict
+                         input = Dict_to_NamedTuple(input)
+                     end
+
                      n_runs = length(run_info)
 
                      frame_index = Observable(1)
@@ -1939,6 +1983,15 @@ for dim ∈ one_dimension_combinations_no_t
                                         ylims=ylims, frame_index=frame_index, ax=ax,
                                         it=it, kwargs...)
                      end
+
+                     if input.show_element_boundaries
+                         # Just plot element boundaries from first run, assuming that all
+                         # runs being compared use the same grid.
+                         ri = run_info[1]
+                         element_boundary_positions = ri.$dim.grid[begin:ri.$dim.ngrid-1:end]
+                         vlines!(ax, element_boundary_positions, color=:black, alpha=0.3)
+                     end
+
                      if n_runs > 1
                          put_legend_above(fig, ax)
                      end
@@ -2006,6 +2059,11 @@ for dim ∈ one_dimension_combinations_no_t
                  end
                  animate_1d(x, data; ax=ax, ylims=ylims, frame_index=ind,
                             label=run_info.run_name, kwargs...)
+
+                 if input.show_element_boundaries && fig !== nothing
+                     element_boundary_positions = run_info.$dim.grid[begin:run_info.$dim.ngrid-1:end]
+                     vlines!(ax, element_boundary_positions, color=:black, alpha=0.3)
+                 end
 
                  if frame_index === nothing
                      if outfile === nothing
@@ -2199,6 +2257,13 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
                                   frame_index)
                  end
 
+                 if ax === nothing
+                     fig, ax = get_2d_ax(; title=title)
+                     ax_was_nothing = true
+                 else
+                     ax_was_nothing = false
+                 end
+
                  x = $dim2_grid
                  if $idim2 !== nothing
                      x = x[$idim2]
@@ -2208,10 +2273,18 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
                      y = y[$idim1]
                  end
                  fig = animate_2d(x, y, data; xlabel="$($dim2_str)",
-                                  ylabel="$($dim1_str)", title=title,
-                                  frame_index=frame_index, ax=ax,
+                                  ylabel="$($dim1_str)", frame_index=frame_index, ax=ax,
                                   colorbar_place=colorbar_place, colormap=colormap,
                                   kwargs...)
+
+                 if input.show_element_boundaries
+                     element_boundary_positions = run_info.$dim2.grid[begin:run_info.$dim2.ngrid-1:end]
+                     vlines!(ax, element_boundary_positions, color=:white, alpha=0.5)
+                 end
+                 if input.show_element_boundaries
+                     element_boundary_positions = run_info.$dim1.grid[begin:run_info.$dim1.ngrid-1:end]
+                     hlines!(ax, element_boundary_positions, color=:white, alpha=0.5)
+                 end
 
                  if frame_index === nothing
                      if outfile === nothing
