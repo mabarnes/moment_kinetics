@@ -49,11 +49,11 @@ charge_exchange_frequency = 0.75
 ionization_frequency = 0.5
 constant_ionization_rate = false
 #nstep = 50000
-nstep = 200000
+nstep = 100000
 #dt = 1.0e-4
-dt = 1.0e-5
-nwrite = 1000 #5000
-nwrite_dfns = 1000 #5000
+dt = 3.0e-5
+nwrite = 10000
+nwrite_dfns = 10000
 use_semi_lagrange = false
 n_rk_stages = 4
 split_operators = false
@@ -80,7 +80,7 @@ active = true
 z_profile = "parabolic"
 #z_width = 0.125
 z_relative_minimum = 0.5
-source_strength = 4.0
+source_strength = 1.0
 source_T = 2.0
 
 [numerical_dissipation]
