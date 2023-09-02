@@ -1,4 +1,3 @@
-run_name = "wall-bc_recyclefraction0.5_split3_v2"
 steady_state_residual = true
 converged_residual_value = 1.0e-3
 #runtime_plots = true
