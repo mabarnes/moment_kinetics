@@ -1298,6 +1298,11 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
             @loop_s_r_z is ir iz begin
                 moments.charged.vth[iz,ir,is] = sqrt(2.0*new_scratch.ppar[iz,ir,is]/new_scratch.density[iz,ir,is])
             end
+            @serial_region begin
+                if any(new_scratch.density .=== NaN)
+                    error("Found NaN in density")
+                end
+            end
         catch e
             global_catch_error(e)
         else
@@ -1334,6 +1339,12 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
             @loop_s_r_z is ir iz begin
                 moments.charged.vth[iz,ir,is] = sqrt(2.0 * new_scratch.ppar[iz,ir,is] /
                                                      new_scratch.density[iz,ir,is])
+            end
+            @serial_region begin
+                if any(@. new_scratch.density === NaN || new_scratch.density === Inf ||
+                       new_scratch.density === -Inf)
+                    error("Found NaN in density")
+                end
             end
         catch e
             global_catch_error(e)
