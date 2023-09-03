@@ -367,7 +367,8 @@ function setup_moment_kinetics(input_dict::Dict;
         code_time, previous_runs_info, restart_time_index =
             reload_evolving_fields!(pdf, moments, boundary_distributions,
                                     backup_prefix_iblock, restart_time_index,
-                                    composition, r, z, vpa, vperp, vzeta, vr, vz)
+                                    composition, geometry, r, z, vpa, vperp, vzeta, vr,
+                                    vz)
         _block_synchronize()
     end
     # create arrays and do other work needed to setup
