@@ -1994,7 +1994,7 @@ function calculate_ddt!(dfvec_dt, fvec_in, pdf, fields, moments, advect_objects,
     post_timestep!(fvec_in, moments, fields, boundary_distributions, vz, vr, vzeta, vpa,
                    vperp, z, r, advect_objects, composition, geometry, num_diss_params,
                    spectral_objects.z_spectral, spectral_objects.r_spectral, advance,
-                   scratch_dummy)
+                   scratch_dummy, false)
 
     # Zero the evolving fields, so we can add to them in euler_time_advance!()
     function zero_evolving_fields()
