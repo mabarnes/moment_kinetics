@@ -15,6 +15,6 @@ source julia.env
 
 echo "precompiling $(date)"
 
-bin/julia --project -O3 --check-bounds=no precompile.jl
+bin/julia --project precompile-makie-post-processing.jl
 
 echo "finished!"
