@@ -12,7 +12,9 @@ the source contributes to several terms.
 module external_sources
 
 export setup_external_sources!, external_ion_source, external_neutral_source,
-       external_ion_source_controller!, external_neutral_source_controller!
+       external_ion_source_controller!, external_neutral_source_controller!,
+       initialize_external_source_amplitude!,
+       initialize_external_source_controller_integral!
 
 using ..array_allocation: allocate_shared_float
 using ..communication
@@ -160,6 +162,86 @@ function get_source_profile(profile_type, width, relative_minimum, coord)
     else
         error("Unrecognised source profile type '$profile_type'.")
     end
+end
+
+"""
+    initialize_external_source_amplitude!(moments, external_source_settings, vperp,
+                                          vzeta, vr, n_neutral_species)
+
+Initialize the arrays `moments.charged.external_source_amplitude` and
+`moments.neutral.external_source_amplitude`, using the settings in
+`external_source_settings`
+"""
+function initialize_external_source_amplitude!(moments, external_source_settings, vperp,
+                                               vzeta, vr, n_neutral_species)
+    ion_source_settings = external_source_settings.ion
+    if ion_source_settings.active
+        if vperp.n == 1
+            # 1V case
+            prefactor = ion_source_settings.source_strength /
+            sqrt(ion_source_settings.source_T)
+        else
+            prefactor = ion_source_settings.source_strength /
+            ion_source_settings.source_T^1.5
+        end
+        @loop_r_z ir iz begin
+            moments.charged.external_source_amplitude[iz,ir] =
+            prefactor * ion_source_settings.r_amplitude[ir] *
+            ion_source_settings.z_amplitude[iz]
+        end
+    end
+
+    if n_neutral_species > 0
+        neutral_source_settings = external_source_settings.neutral
+        if neutral_source_settings.active
+            if vzeta.n == 1 && vr.n == 1
+                # 1V case
+                prefactor = neutral_source_settings.source_strength /
+                sqrt(neutral_source_settings.source_T)
+            else
+                prefactor = neutral_source_settings.source_strength /
+                neutral_source_settings.source_T^1.5
+            end
+            @loop_r_z ir iz begin
+                moments.neutral.external_source_amplitude[iz,ir] =
+                prefactor * neutral_source_settings.r_amplitude[ir] *
+                neutral_source_settings.z_amplitude[iz]
+            end
+        end
+    end
+
+    return nothing
+end
+
+"""
+    initialize_external_source_controller_integral!(moments,
+                                                    external_source_settings)
+
+Initialize the arrays `moments.charged.external_source_controller_integral` and
+`moments.neutral.external_source_controller_integral`, using the settings in
+`external_source_settings`
+"""
+function initialize_external_source_controller_integral!(moments,
+                                                         external_source_settings)
+    ion_source_settings = external_source_settings.ion
+    if ion_source_settings.active
+        if ion_source_settings.PI_density_controller_I != 0.0 &&
+            ion_source_settings.PI_density_controller_type != ""
+            moments.charged.external_source_controller_integral .= 0.0
+        end
+    end
+
+    if n_neutral_species > 0
+        neutral_source_settings = external_source_settings.neutral
+        if neutral_source_settings.active
+            if neutral_source_settings.PI_density_controller_I != 0.0 &&
+                neutral_source_settings.PI_density_controller_type != ""
+                moments.neutral.external_source_controller_integral .= 0.0
+            end
+        end
+    end
+
+    return nothing
 end
 
 """

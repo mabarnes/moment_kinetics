@@ -568,11 +568,6 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                 load_slice(boundary_distributions_io, "pdf_rboundary_charged_right",
                            vpa_range, vperp_range, z_range, :)
 
-                if "external_source_amplitude" ∈ get_variable_keys(dynamic)
-                    moments.charged.external_source_amplitude .=
-                        load_slice(dynamic, "external_source_amplitude", z_range, r_range,
-                                   time_index)
-                end
                 if "external_source_controller_integral" ∈ get_variable_keys(dynamic) &&
                         length(moments.charged.external_source_controller_integral) == 1
                     moments.charged.external_source_controller_integral .=
@@ -715,11 +710,6 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                     boundary_distributions.pdf_rboundary_neutral[:,:,:,:,2,:] .=
                     load_variable(boundary_distributions_io, "pdf_rboundary_neutral_right")
 
-                    if length(moments.neutral.external_source_amplitude) > 0
-                        moments.neutral.external_source_amplitude .=
-                            load_slice(dynamic, "external_source_neutral_amplitude", :, :,
-                                       time_index)
-                    end
                     if length(moments.neutral.external_source_controller_integral) == 1
                         moments.neutral.external_source_controller_integral .=
                             load_slice(dynamic,

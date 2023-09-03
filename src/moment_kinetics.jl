@@ -34,6 +34,7 @@ include("velocity_grid_transforms.jl")
 include("em_fields.jl")
 include("bgk.jl")
 include("manufactured_solns.jl") # MRH Here?
+include("external_sources.jl")
 include("initial_conditions.jl")
 include("moment_constraints.jl")
 include("advection.jl")
@@ -51,7 +52,6 @@ include("continuity.jl")
 include("energy_equation.jl")
 include("force_balance.jl")
 include("source_terms.jl")
-include("external_sources.jl")
 include("numerical_dissipation.jl")
 include("load_data.jl")
 include("moment_kinetics_input.jl")
@@ -76,6 +76,7 @@ using .command_line_options: get_options
 using .communication
 using .communication: _block_synchronize
 using .debugging
+using .external_sources
 using .input_structs
 using .initial_conditions: allocate_pdf_and_moments, init_pdf_and_moments!,
                            enforce_boundary_conditions!
@@ -404,6 +405,12 @@ function setup_moment_kinetics(input_dict::Dict; restart_prefix_iblock=nothing,
             reload_evolving_fields!(pdf, moments, boundary_distributions,
                                     restart_prefix_iblock, restart_time_index,
                                     composition, r, z, vpa, vperp, vzeta, vr, vz)
+
+        # Re-initialize the source amplitude here instead of loading it from the restart
+        # file so that we can change the settings between restarts.
+        initialize_external_source_amplitude!(moments, external_source_settings, vperp,
+                                              vzeta, vr, composition.n_neutral_species)
+
         _block_synchronize()
     end
     # create arrays and do other work needed to setup

@@ -21,6 +21,7 @@ using ..bgk: init_bgk_pdf!
 using ..communication
 using ..calculus: reconcile_element_boundaries_MPI!
 using ..coordinates: coordinate
+using ..external_sources
 using ..interpolation: interpolate_to_grid_1d!
 using ..looping
 using ..moment_kinetics_structs: scratch_pdf
@@ -193,26 +194,9 @@ function init_pdf_and_moments!(pdf, moments, boundary_distributions, geometry,
                      pdf.charged.norm, vpa, vperp, z, r, composition,
                      moments.evolve_density, moments.evolve_upar, moments.evolve_ppar)
 
-        ion_source_settings = external_source_settings.ion
-        if ion_source_settings.active
-            if vperp.n == 1
-                # 1V case
-                prefactor = ion_source_settings.source_strength /
-                            sqrt(ion_source_settings.source_T)
-            else
-                prefactor = ion_source_settings.source_strength /
-                            ion_source_settings.source_T^1.5
-            end
-            @loop_r_z ir iz begin
-                moments.charged.external_source_amplitude[iz,ir] =
-                    prefactor * ion_source_settings.r_amplitude[ir] *
-                    ion_source_settings.z_amplitude[iz]
-            end
-            if ion_source_settings.PI_density_controller_I != 0.0 &&
-                    ion_source_settings.PI_density_controller_type != ""
-                moments.charged.external_source_controller_integral .= 0.0
-            end
-        end
+        initialize_external_source_amplitude!(moments, external_source_settings, vperp,
+                                              vzeta, vr, n_neutral_species)
+        initialize_external_source_controller_integral!(moments, external_source_settings)
 
         if n_neutral_species > 0
             update_neutral_qz!(moments.neutral.qz, moments.neutral.qz_updated,
@@ -228,27 +212,6 @@ function init_pdf_and_moments!(pdf, moments, boundary_distributions, geometry,
                                pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
             update_neutral_pzeta!(moments.neutral.pzeta, moments.neutral.pzeta_updated,
                                   pdf.neutral.norm, vz, vr, vzeta, z, r, composition)
-
-            neutral_source_settings = external_source_settings.neutral
-            if neutral_source_settings.active
-                if vzeta.n == 1 && vr.n == 1
-                    # 1V case
-                    prefactor = neutral_source_settings.source_strength /
-                                sqrt(neutral_source_settings.source_T)
-                else
-                    prefactor = neutral_source_settings.source_strength /
-                                neutral_source_settings.source_T^1.5
-                end
-                @loop_r_z ir iz begin
-                    moments.neutral.external_source_amplitude[iz,ir] =
-                        prefactor * neutral_source_settings.r_amplitude[ir] *
-                        neutral_source_settings.z_amplitude[iz]
-                end
-                if neutral_source_settings.PI_density_controller_I != 0.0 &&
-                        neutral_source_settings.PI_density_controller_type != ""
-                    moments.neutral.external_source_controller_integral .= 0.0
-                end
-            end
         end
     end
 
