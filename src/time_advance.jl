@@ -1888,7 +1888,7 @@ function update_solution_vector!(evolved, moments, istage, composition, vpa, vpe
 end
 
 """
-    calculate_ddt!(dfvec_dt, fvec_in, pdf, fields, moments, advect_objects, vz, vr,
+    calculate_ddt!(dfvec_dt, fvec, pdf, fields, moments, advect_objects, vz, vr,
                    vzeta, vpa, vperp, gyrophase, z, r, t, t_input, spectral_objects,
                    composition, collisions, geometry, scratch_dummy,
                    manufactured_source_list, external_source_settings,
@@ -1896,7 +1896,7 @@ end
 
 Calculate the time derivative of the time-evolving variables.
 """
-function calculate_ddt!(dfvec_dt, fvec_in, pdf, fields, moments, advect_objects, vz, vr,
+function calculate_ddt!(dfvec_dt, fvec, pdf, fields, moments, advect_objects, vz, vr,
                         vzeta, vpa, vperp, gyrophase, z, r, t, t_input, spectral_objects,
                         composition, collisions, geometry, scratch_dummy,
                         manufactured_source_list, external_source_settings,
