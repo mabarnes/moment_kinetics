@@ -172,9 +172,21 @@ function load_input(fid)
 end
 
 """
-Load data for a coordinate
+    load_coordinate_data(fid, name; printout=false, irank=nothing, nrank=nothing)
+
+Load data for the coordinate `name` from a file-handle `fid`.
+
+Returns (`coord`, `spectral`, `chunk_size`). `coord` is a `coordinate` object. `spectral`
+is the object used to implement the discretization in this coordinate. `chunk_size` is the
+size of chunks in this coordinate that was used when writing to the output file.
+
+If `printout` is set to `true` a message will be printed when this function is called.
+
+If `irank` and `nrank` are passed, then the `coord` and `spectral` objects returned will
+be set up for the parallelisation specified by `irank` and `nrank`, rather than the one
+implied by the output file.
 """
-function load_coordinate_data(fid, name; printout=false)
+function load_coordinate_data(fid, name; printout=false, irank=nothing, nrank=nothing)
     if printout
         println("Loading $name coordinate data...")
     end
@@ -186,16 +198,46 @@ function load_coordinate_data(fid, name; printout=false)
     n_global = load_variable(coord_group, "n_global")
     grid = load_variable(coord_group, "grid")
     wgts = load_variable(coord_group, "wgts")
-    irank = load_variable(coord_group, "irank")
-    if "nrank" in keys(coord_group)
-        nrank = load_variable(coord_group, "nrank")
+
+    if n_global == 1 && ngrid == 1
+        nelement_global = 1
     else
-        # Workaround for older output files that did not save nrank
-        if name ∈ ("r", "z")
-            nrank = max(n_global - 1, 1) ÷ max(n_local - 1, 1)
+        nelement_global = (n_global-1) ÷ (ngrid-1)
+    end
+
+    if irank === nothing && nrank === nothing
+        irank = load_variable(coord_group, "irank")
+        if "nrank" in keys(coord_group)
+            nrank = load_variable(coord_group, "nrank")
         else
-            nrank = 1
+            # Workaround for older output files that did not save nrank
+            if name ∈ ("r", "z")
+                nrank = max(n_global - 1, 1) ÷ max(n_local - 1, 1)
+            else
+                nrank = 1
+            end
         end
+
+        if n_local == 1 && ngrid == 1
+            nelement_local = 1
+        else
+            nelement_local = (n_local-1) ÷ (ngrid-1)
+        end
+    else
+        # Want to create coordinate with a specific `nrank` and `irank`. Need to
+        # calculate `nelement_local` consistent with `nrank`, which might be different now
+        # than in the original simulation.
+        # Note `n_local` is only (possibly) used to calculate the `chunk_size`. It
+        # probably makes most sense for that to be the same as the original simulation, so
+        # do not recalculate `n_local` here.
+        irank === nothing && error("When `nrank` is passed, `irank` must also be passed")
+        nrank === nothing && error("When `irank` is passed, `nrank` must also be passed")
+
+        if nelement_global % nrank != 0
+            error("Can only load coordinate with new `nrank` that divides "
+                  * "nelement_global=$nelement_global exactly.")
+        end
+        nelement_local = nelement_global ÷ nrank
     end
     if "chunk_size" ∈ coord_group
         chunk_size = load_variable(coord_group, "chunk_size")
@@ -213,18 +255,6 @@ function load_coordinate_data(fid, name; printout=false)
     discretization = load_variable(coord_group, "discretization")
     fd_option = load_variable(coord_group, "fd_option")
     bc = load_variable(coord_group, "bc")
-
-    nelement_local = nothing
-    if n_local == 1 && ngrid == 1
-        nelement_local = 1
-    else
-        nelement_local = (n_local-1) ÷ (ngrid-1)
-    end
-    if n_global == 1 && ngrid == 1
-        nelement_global = 1
-    else
-        nelement_global = (n_global-1) ÷ (ngrid-1)
-    end
 
     # Define input to create coordinate struct
     input = grid_input(name, ngrid, nelement_global, nelement_local, nrank, irank, L,
