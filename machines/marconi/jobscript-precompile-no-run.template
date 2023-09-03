@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --ntasks=2
+#SBATCH --ntasks=1
 #SBATCH --time=1:00:00
 #SBATCH --account=ACCOUNT
 #SBATCH --partition=skl_fua_dbg
@@ -14,9 +14,7 @@ cd $SLURM_SUBMIT_DIR
 source julia.env
 
 echo "precompiling $(date)"
-bin/julia --project -O3 --check-bounds=no precompile-no-run.jl
-bin/julia --project precompile-makie-post-processing.jl
 
-wait
+bin/julia --project -O3 --check-bounds=no precompile-no-run.jl
 
 echo "finished!"
