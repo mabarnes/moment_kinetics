@@ -828,202 +828,14 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
         end
         # write moments data to file every nwrite_moments time steps
         if mod(i,t_input.nwrite_moments) == 0 || finish_now
-            @debug_detect_redundant_block_synchronize begin
-                # Skip check for redundant _block_synchronize() during file I/O because
-                # it only runs infrequently
-                debug_detect_redundant_is_active[] = false
-            end
-            begin_serial_region()
-            @serial_region begin
-                if global_rank[] == 0
-                    print("finished time step ", rpad(string(i), 7),"  ",
-                          Dates.format(now(), dateformat"H:MM:SS"))
-                end
-            end
-            write_data_to_ascii(moments, fields, vpa, vperp, z, r, t,
-                                composition.n_ion_species, composition.n_neutral_species,
-                                ascii_io)
-            write_moments_data_to_binary(moments, fields, t, composition.n_ion_species,
-                                         composition.n_neutral_species, io_moments,
-                                         iwrite_moments, time_for_run, r, z)
-
-            if t_input.steady_state_residual
-                # Calculate some residuals to see how close simulation is to steady state
-                begin_r_z_region()
-                result_string = ""
-                all_residuals = Vector{mk_float}()
-                @loop_s is begin
-                    @views residual_ni =
-                        steady_state_residuals(scratch[end].density[:,:,is],
-                                               scratch[1].density[:,:,is], t_input.dt;
-                                               use_mpi=true, only_max_abs=true)
-                    if global_rank[] == 0
-                        residual_ni = first(values(residual_ni))[1]
-                        push!(all_residuals, residual_ni)
-                        result_string *= "  density "
-                        result_string *= rpad(string(round(residual_ni; sigdigits=4)), 11)
-                    end
-                end
-                if composition.n_neutral_species > 0
-                    @loop_sn isn begin
-                        residual_nn =
-                            steady_state_residuals(scratch[end].density_neutral[:,:,isn],
-                                                   scratch[1].density_neutral[:,:,isn],
-                                                   t_input.dt; use_mpi=true,
-                                                   only_max_abs=true)
-                        if global_rank[] == 0
-                            residual_nn = first(values(residual_nn))[1]
-                            push!(all_residuals, residual_nn)
-                            result_string *= " density_neutral "
-                            result_string *= rpad(string(round(residual_nn; sigdigits=4)), 11)
-                        end
-                    end
-                end
-                if global_rank[] == 0
-                    println("    residuals:", result_string)
-                end
-                if t_input.converged_residual_value > 0.0
-                    if global_rank[] == 0
-                        if all(r < t_input.converged_residual_value for r ∈ all_residuals)
-                            println("Run converged! All tested residuals less than ",
-                                    t_input.converged_residual_value)
-                            finish_now = true
-                        end
-                    end
-                    finish_now = MPI.Bcast(finish_now, 0, comm_world)
-                end
-            else
-                if global_rank[] == 0
-                    println()
-                end
-            end
-
-            # Hack to save *.pdf of current pdf
-            if t_input.runtime_plots
-                if block_rank[] == 0
-                    fig = Figure()
-
-                    irow = 1
-                    title_layout = fig[irow,1] = GridLayout()
-                    Label(title_layout[1,1:2], string(t))
-
-                    ax_width = 400
-                    ax_height = 400
-
-                    irow += 1
-                    layout = fig[irow,1] = GridLayout()
-                    ax = Axis(layout[1,1], xlabel="vpa", ylabel="z", title="f", width=ax_width, height=ax_height)
-                    plot_2d(vpa.grid, z.grid, pdf.charged.norm[:,1,:,1,1]; ax=ax, colorbar_place=layout[1,2])
-                    if composition.n_neutral_species > 0
-                        ax = Axis(layout[1,3], xlabel="vz", ylabel="z", title="f_neutral", width=ax_width, height=ax_height)
-                        plot_2d(vz.grid, z.grid, pdf.neutral.norm[:,1,1,:,1,1]; ax=ax, colorbar_place=layout[1,4])
-                    end
-
-                    irow += 1
-                    layout = fig[irow,1] = GridLayout()
-                    ax = Axis(layout[1,1], xlabel="vpa", ylabel="z", title="f", width=ax_width, height=ax_height)
-                    plot_2d(vpa.grid, z.grid, pdf.charged.norm[:,1,:,1,1]; ax=ax,
-                            colorbar_place=layout[1,2], colorscale=log10,
-                            transform=x->positive_or_nan(x, epsilon=1.e-20))
-                    if composition.n_neutral_species > 0
-                        ax = Axis(layout[1,3], xlabel="vz", ylabel="z", title="f_neutral", width=ax_width, height=ax_height)
-                        plot_2d(vz.grid, z.grid, pdf.neutral.norm[:,1,1,:,1,1]; ax=ax,
-                                colorbar_place=layout[1,4], colorscale=log10,
-                                transform=x->positive_or_nan(x, epsilon=1.e-20))
-                    end
-
-                    irow += 1
-                    layout = fig[irow,1] = GridLayout()
-                    ax = Axis(layout[1,1], xlabel="vpa", ylabel="f0", width=ax_width, height=ax_height)
-                    plot_1d(vpa.grid, pdf.charged.norm[:,1,1,1,1]; ax=ax)
-                    if composition.n_neutral_species > 0
-                        ax = Axis(layout[1,2], xlabel="vz", ylabel="f0_neutral", width=ax_width, height=ax_height)
-                        plot_1d(vz.grid, pdf.neutral.norm[:,1,1,1,1,1]; ax=ax)
-                    end
-
-                    irow += 1
-                    layout = fig[irow,1] = GridLayout()
-                    ax = Axis(layout[1,1], xlabel="vpa", ylabel="fL", width=ax_width, height=ax_height)
-                    plot_1d(vpa.grid, pdf.charged.norm[:,1,end,1,1]; ax=ax)
-                    if composition.n_neutral_species > 0
-                        ax = Axis(layout[1,2], xlabel="vz", ylabel="fL_neutral", width=ax_width, height=ax_height)
-                        plot_1d(vz.grid, pdf.neutral.norm[:,1,1,end,1,1]; ax=ax)
-                    end
-
-                    irow += 1
-                    layout = fig[irow,1] = GridLayout()
-                    ax = Axis(layout[1,1], xlabel="z", ylabel="density", width=ax_width, height=ax_height)
-                    plot_1d(z.grid, moments.charged.dens[:,1,1]; ax=ax, label="ion")
-                    if composition.n_neutral_species > 0
-                        plot_1d(z.grid, moments.neutral.dens[:,1,1]; ax=ax, label="neutral")
-                    end
-                    #axislegend(ax)
-                    ax = Axis(layout[1,2], xlabel="z", ylabel="upar", width=ax_width, height=ax_height)
-                    plot_1d(z.grid, moments.charged.upar[:,1,1]; ax=ax, label="ion")
-                    if composition.n_neutral_species > 0
-                        plot_1d(z.grid, moments.neutral.uz[:,1,1]; ax=ax, label="neutral")
-                    end
-                    #axislegend(ax)
-
-                    irow += 1
-                    layout = fig[irow,1] = GridLayout()
-                    ax = Axis(layout[1,1], xlabel="z", ylabel="ppar", width=ax_width, height=ax_height)
-                    plot_1d(z.grid, moments.charged.ppar[:,1,1]; ax=ax, label="ion")
-                    if composition.n_neutral_species > 0
-                        plot_1d(z.grid, moments.neutral.pz[:,1,1]; ax=ax, label="neutral")
-                    end
-                    #axislegend(ax)
-                    ax = Axis(layout[1,2], xlabel="z", ylabel="vth", width=ax_width, height=ax_height)
-                    plot_1d(z.grid, moments.charged.vth[:,1,1]; ax=ax, label="ion")
-                    if composition.n_neutral_species > 0
-                        plot_1d(z.grid, moments.neutral.vth[:,1,1]; ax=ax, label="neutral")
-                    end
-                    #axislegend(ax)
-
-                    irow += 1
-                    layout = fig[irow,1] = GridLayout()
-                    ax = Axis(layout[1,1], xlabel="z", ylabel="qpar", width=ax_width, height=ax_height)
-                    plot_1d(z.grid, moments.charged.qpar[:,1,1]; ax=ax, label="ion")
-                    if composition.n_neutral_species > 0
-                        plot_1d(z.grid, moments.neutral.qz[:,1,1]; ax=ax, label="neutral")
-                    end
-                    #axislegend(ax)
-
-                    resize_to_layout!(fig)
-
-                    save("latest_plots$(iblock_index[]).png", fig)
-                end
-            end
-            iwrite_moments += 1
-            begin_s_r_z_vperp_region()
-            @debug_detect_redundant_block_synchronize begin
-                # Reactivate check for redundant _block_synchronize()
-                debug_detect_redundant_is_active[] = true
-            end
+            finish_now = do_moments_output!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa,
+                                            vperp, gyrophase, z, r, moments, fields,
+                                            composition, i, time_for_run, finish_now)
         end
         if mod(i,t_input.nwrite_dfns) == 0 || finish_now
-            @debug_detect_redundant_block_synchronize begin
-                # Skip check for redundant _block_synchronize() during file I/O because
-                # it only runs infrequently
-                debug_detect_redundant_is_active[] = false
-            end
-            begin_serial_region()
-            @serial_region begin
-                if global_rank[] == 0
-                    println("writing distribution functions at step ", i,"  ",
-                                   Dates.format(now(), dateformat"H:MM:SS"))
-                end
-            end
-            write_dfns_data_to_binary(pdf.charged.norm, pdf.neutral.norm, moments, fields,
-                                      t, composition.n_ion_species,
-                                      composition.n_neutral_species, io_dfns, iwrite_dfns,
-                                      time_for_run, r, z, vperp, vpa, vzeta, vr, vz)
-            iwrite_dfns += 1
-            begin_s_r_z_vperp_region()
-            @debug_detect_redundant_block_synchronize begin
-                # Reactivate check for redundant _block_synchronize()
-                debug_detect_redundant_is_active[] = true
-            end
+            finish_now = do_dfns_output!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa,
+                                         vperp, gyrophase, z, r, moments, fields,
+                                         composition, i, time_for_run, finish_now)
         end
 
         if finish_now
@@ -1229,6 +1041,227 @@ function time_advance_no_splitting!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa
         # of in rk_update!() for the ssp_rk!() method.
     end
     return nothing
+end
+
+"""
+    do_moments_output!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp,
+                       gyrophase, z, r, moments, fields, composition, i,
+                       time_for_run, finish_now)
+
+Write output for moments.
+"""
+function do_moments_output!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp,
+                            gyrophase, z, r, moments, fields, composition, i,
+                            time_for_run, finish_now)
+
+    @debug_detect_redundant_block_synchronize begin
+        # Skip check for redundant _block_synchronize() during file I/O because
+        # it only runs infrequently
+        debug_detect_redundant_is_active[] = false
+    end
+    begin_serial_region()
+    @serial_region begin
+        if global_rank[] == 0
+            print("finished time step ", rpad(string(i), 7),"  ",
+                  Dates.format(now(), dateformat"H:MM:SS"))
+        end
+    end
+    write_data_to_ascii(moments, fields, vpa, vperp, z, r, t,
+                        composition.n_ion_species, composition.n_neutral_species,
+                        ascii_io)
+    write_moments_data_to_binary(moments, fields, t, composition.n_ion_species,
+                                 composition.n_neutral_species, io_moments,
+                                 iwrite_moments, time_for_run, r, z)
+
+    if t_input.steady_state_residual && scratch !== nothing
+        # Calculate some residuals to see how close simulation is to steady state
+        begin_r_z_region()
+        result_string = ""
+        all_residuals = Vector{mk_float}()
+        @loop_s is begin
+            @views residual_ni =
+                steady_state_residuals(scratch[end].density[:,:,is],
+                                       scratch[1].density[:,:,is], t_input.dt;
+                                       use_mpi=true, only_max_abs=true)
+            if global_rank[] == 0
+                residual_ni = first(values(residual_ni))[1]
+                push!(all_residuals, residual_ni)
+                result_string *= "  density "
+                result_string *= rpad(string(round(residual_ni; sigdigits=4)), 11)
+            end
+        end
+        if composition.n_neutral_species > 0
+            @loop_sn isn begin
+                residual_nn =
+                    steady_state_residuals(scratch[end].density_neutral[:,:,isn],
+                                           scratch[1].density_neutral[:,:,isn],
+                                           t_input.dt; use_mpi=true,
+                                           only_max_abs=true)
+                if global_rank[] == 0
+                    residual_nn = first(values(residual_nn))[1]
+                    push!(all_residuals, residual_nn)
+                    result_string *= " density_neutral "
+                    result_string *= rpad(string(round(residual_nn; sigdigits=4)), 11)
+                end
+            end
+        end
+        if global_rank[] == 0
+            println("    residuals:", result_string)
+        end
+        if t_input.converged_residual_value > 0.0
+            if global_rank[] == 0
+                if all(r < t_input.converged_residual_value for r ∈ all_residuals)
+                    println("Run converged! All tested residuals less than ",
+                            t_input.converged_residual_value)
+                    finish_now = true
+                end
+            end
+            finish_now = MPI.Bcast(finish_now, 0, comm_world)
+        end
+    else
+        if global_rank[] == 0
+            println()
+        end
+    end
+
+    # Hack to save *.pdf of current pdf
+    if t_input.runtime_plots
+        if block_rank[] == 0
+            fig = Figure()
+
+            irow = 1
+            title_layout = fig[irow,1] = GridLayout()
+            Label(title_layout[1,1:2], string(t))
+
+            ax_width = 400
+            ax_height = 400
+
+            irow += 1
+            layout = fig[irow,1] = GridLayout()
+            ax = Axis(layout[1,1], xlabel="vpa", ylabel="z", title="f", width=ax_width, height=ax_height)
+            plot_2d(vpa.grid, z.grid, pdf.charged.norm[:,1,:,1,1]; ax=ax, colorbar_place=layout[1,2])
+            if composition.n_neutral_species > 0
+                ax = Axis(layout[1,3], xlabel="vz", ylabel="z", title="f_neutral", width=ax_width, height=ax_height)
+                plot_2d(vz.grid, z.grid, pdf.neutral.norm[:,1,1,:,1,1]; ax=ax, colorbar_place=layout[1,4])
+            end
+
+            irow += 1
+            layout = fig[irow,1] = GridLayout()
+            ax = Axis(layout[1,1], xlabel="vpa", ylabel="z", title="f", width=ax_width, height=ax_height)
+            plot_2d(vpa.grid, z.grid, pdf.charged.norm[:,1,:,1,1]; ax=ax,
+                    colorbar_place=layout[1,2], colorscale=log10,
+                    transform=x->positive_or_nan(x, epsilon=1.e-20))
+            if composition.n_neutral_species > 0
+                ax = Axis(layout[1,3], xlabel="vz", ylabel="z", title="f_neutral", width=ax_width, height=ax_height)
+                plot_2d(vz.grid, z.grid, pdf.neutral.norm[:,1,1,:,1,1]; ax=ax,
+                        colorbar_place=layout[1,4], colorscale=log10,
+                        transform=x->positive_or_nan(x, epsilon=1.e-20))
+            end
+
+            irow += 1
+            layout = fig[irow,1] = GridLayout()
+            ax = Axis(layout[1,1], xlabel="vpa", ylabel="f0", width=ax_width, height=ax_height)
+            plot_1d(vpa.grid, pdf.charged.norm[:,1,1,1,1]; ax=ax)
+            if composition.n_neutral_species > 0
+                ax = Axis(layout[1,2], xlabel="vz", ylabel="f0_neutral", width=ax_width, height=ax_height)
+                plot_1d(vz.grid, pdf.neutral.norm[:,1,1,1,1,1]; ax=ax)
+            end
+
+            irow += 1
+            layout = fig[irow,1] = GridLayout()
+            ax = Axis(layout[1,1], xlabel="vpa", ylabel="fL", width=ax_width, height=ax_height)
+            plot_1d(vpa.grid, pdf.charged.norm[:,1,end,1,1]; ax=ax)
+            if composition.n_neutral_species > 0
+                ax = Axis(layout[1,2], xlabel="vz", ylabel="fL_neutral", width=ax_width, height=ax_height)
+                plot_1d(vz.grid, pdf.neutral.norm[:,1,1,end,1,1]; ax=ax)
+            end
+
+            irow += 1
+            layout = fig[irow,1] = GridLayout()
+            ax = Axis(layout[1,1], xlabel="z", ylabel="density", width=ax_width, height=ax_height)
+            plot_1d(z.grid, moments.charged.dens[:,1,1]; ax=ax, label="ion")
+            if composition.n_neutral_species > 0
+                plot_1d(z.grid, moments.neutral.dens[:,1,1]; ax=ax, label="neutral")
+            end
+            #axislegend(ax)
+            ax = Axis(layout[1,2], xlabel="z", ylabel="upar", width=ax_width, height=ax_height)
+            plot_1d(z.grid, moments.charged.upar[:,1,1]; ax=ax, label="ion")
+            if composition.n_neutral_species > 0
+                plot_1d(z.grid, moments.neutral.uz[:,1,1]; ax=ax, label="neutral")
+            end
+            #axislegend(ax)
+
+            irow += 1
+            layout = fig[irow,1] = GridLayout()
+            ax = Axis(layout[1,1], xlabel="z", ylabel="ppar", width=ax_width, height=ax_height)
+            plot_1d(z.grid, moments.charged.ppar[:,1,1]; ax=ax, label="ion")
+            if composition.n_neutral_species > 0
+                plot_1d(z.grid, moments.neutral.pz[:,1,1]; ax=ax, label="neutral")
+            end
+            #axislegend(ax)
+            ax = Axis(layout[1,2], xlabel="z", ylabel="vth", width=ax_width, height=ax_height)
+            plot_1d(z.grid, moments.charged.vth[:,1,1]; ax=ax, label="ion")
+            if composition.n_neutral_species > 0
+                plot_1d(z.grid, moments.neutral.vth[:,1,1]; ax=ax, label="neutral")
+            end
+            #axislegend(ax)
+
+            irow += 1
+            layout = fig[irow,1] = GridLayout()
+            ax = Axis(layout[1,1], xlabel="z", ylabel="qpar", width=ax_width, height=ax_height)
+            plot_1d(z.grid, moments.charged.qpar[:,1,1]; ax=ax, label="ion")
+            if composition.n_neutral_species > 0
+                plot_1d(z.grid, moments.neutral.qz[:,1,1]; ax=ax, label="neutral")
+            end
+            #axislegend(ax)
+
+            resize_to_layout!(fig)
+
+            save("latest_plots$(iblock_index[]).png", fig)
+        end
+    end
+    iwrite_moments += 1
+    begin_s_r_z_vperp_region()
+    @debug_detect_redundant_block_synchronize begin
+        # Reactivate check for redundant _block_synchronize()
+        debug_detect_redundant_is_active[] = true
+    end
+
+    return finish_now
+end
+
+"""
+    do_dfns_output(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z,
+                   r, moments, fields, composition, i, time_for_run, finish_now)
+
+Write output for distribution functions.
+"""
+function do_dfns_output(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z,
+                        r, moments, fields, composition, i, time_for_run, finish_now)
+    @debug_detect_redundant_block_synchronize begin
+        # Skip check for redundant _block_synchronize() during file I/O because
+        # it only runs infrequently
+        debug_detect_redundant_is_active[] = false
+    end
+    begin_serial_region()
+    @serial_region begin
+        if global_rank[] == 0
+            println("writing distribution functions at step ", i,"  ",
+                           Dates.format(now(), dateformat"H:MM:SS"))
+        end
+    end
+    write_dfns_data_to_binary(pdf.charged.norm, pdf.neutral.norm, moments, fields,
+                              t, composition.n_ion_species,
+                              composition.n_neutral_species, io_dfns, iwrite_dfns,
+                              time_for_run, r, z, vperp, vpa, vzeta, vr, vz)
+    iwrite_dfns += 1
+    begin_s_r_z_vperp_region()
+    @debug_detect_redundant_block_synchronize begin
+        # Reactivate check for redundant _block_synchronize()
+        debug_detect_redundant_is_active[] = true
+    end
+
+    return finish_now
 end
 
 """
