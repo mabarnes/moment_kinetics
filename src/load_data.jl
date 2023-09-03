@@ -526,35 +526,40 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
 
             previous_runs_info = load_run_info_history(fid)
 
+            restart_n_ion_species, restart_n_neutral_species = load_species_data(fid)
+            restart_z, _, _ = load_coordinate_data(fid, "z"; irank=z.irank, nrank=z.nrank)
+            restart_r, _, _ = load_coordinate_data(fid, "r"; irank=r.irank, nrank=r.nrank)
+            restart_vperp, _, _ = load_coordinate_data(fid, "vperp"; irank=vperp.irank,
+                                                       nrank=vperp.nrank)
+            restart_vpa, _, _ = load_coordinate_data(fid, "vpa"; irank=vpa.irank,
+                                                     nrank=vpa.nrank)
+            restart_vzeta, _, _ = load_coordinate_data(fid, "vzeta"; irank=vzeta.irank,
+                                                       nrank=vzeta.nrank)
+            restart_vr, _, _ = load_coordinate_data(fid, "vr"; irank=vr.irank,
+                                                    nrank=vr.nrank)
+            restart_vz, _, _ = load_coordinate_data(fid, "vz"; irank=vz.irank,
+                                                    nrank=vz.nrank)
+            if (restart_n_ion_species != composition.n_ion_species ||
+                restart_n_neutral_species != composition.n_neutral_species ||
+                restart_z.n != z.n_global || restart_r.n != r.n_global ||
+                restart_vperp.n_global != vperp.n_global ||
+                restart_vpa.n != vpa.n_global || restart_vzeta.n != vzeta.n_global ||
+                restart_vr.n != vr.n_global || restart_vz.n != vz.n_global)
+
+                error("Dimensions of restart file and input do not match.\n" *
+                      "Restart file was n_ion_species=$restart_n_ion_species, " *
+                      "n_neutral_species=$restart_n_neutral_species, nr=$(restart_r.n), " *
+                      "nz=$(restart_z.n), nvperp=$(restart_vperp.n), nvpa=$(restart_vpa.n).\n" *
+                      "nvzeta=$(restart_vzeta.n), nvr=$(restart_vr.n), nvz=$(restart_vz.n)." *
+                      "Input file gave n_ion_species=$(composition.n_ion_species), " *
+                      "n_neutral_species=$(composition.n_neutral_species), nr=$(r.n), " *
+                      "nz=$(z.n), nvperp=$(vperp.n), nvpa=$(vpa.n), nvzeta=$(vzeta.n), " *
+                      "nvr=$(vr.n), nvz=$(vz.n).")
+            end
+
+            code_time = load_slice(dynamic, "time", time_index)
+
             if parallel_io
-                restart_n_ion_species, restart_n_neutral_species = load_species_data(fid)
-                restart_z, _, _ = load_coordinate_data(fid, "z")
-                restart_r, _, _ = load_coordinate_data(fid, "r")
-                restart_vperp, _, _ = load_coordinate_data(fid, "vperp")
-                restart_vpa, _, _ = load_coordinate_data(fid, "vpa")
-                restart_vzeta, _, _ = load_coordinate_data(fid, "vzeta")
-                restart_vr, _, _ = load_coordinate_data(fid, "vr")
-                restart_vz, _, _ = load_coordinate_data(fid, "vz")
-                if (restart_n_ion_species != composition.n_ion_species ||
-                    restart_n_neutral_species != composition.n_neutral_species ||
-                    restart_z.n != z.n_global || restart_r.n != r.n_global ||
-                    restart_vperp.n_global != vperp.n_global ||
-                    restart_vpa.n != vpa.n_global || restart_vzeta.n != vzeta.n_global ||
-                    restart_vr.n != vr.n_global || restart_vz.n != vz.n_global)
-
-                    error("Dimensions of restart file and input do not match.\n" *
-                          "Restart file was n_ion_species=$restart_n_ion_species, " *
-                          "n_neutral_species=$restart_n_neutral_species, nr=$(restart_r.n), " *
-                          "nz=$(restart_z.n), nvperp=$(restart_vperp.n), nvpa=$(restart_vpa.n).\n" *
-                          "nvzeta=$(restart_vzeta.n), nvr=$(restart_vr.n), nvz=$(restart_vz.n)." *
-                          "Input file gave n_ion_species=$(composition.n_ion_species), " *
-                          "n_neutral_species=$(composition.n_neutral_species), nr=$(r.n), " *
-                          "nz=$(z.n), nvperp=$(vperp.n), nvpa=$(vpa.n), nvzeta=$(vzeta.n), " *
-                          "nvr=$(vr.n), nvz=$(vz.n).")
-                end
-
-                code_time = load_slice(dynamic, "time", time_index)
-
                 function get_range(coord)
                     if coord.irank == coord.nrank - 1
                         return coord.global_io_range
@@ -572,131 +577,66 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                 vzeta_range = get_range(vzeta)
                 vr_range = get_range(vr)
                 vz_range = get_range(vz)
+            else
+                r_range = (:)
+                z_range = (:)
+                vperp_range = (:)
+                vpa_range = (:)
+                vzeta_range = (:)
+                vr_range = (:)
+                vz_range = (:)
+            end
 
-                pdf.charged.norm .= load_slice(dynamic, "f", vpa_range, vperp_range,
-                                               z_range, r_range, :, time_index)
-                moments.charged.dens .= load_slice(dynamic, "density", z_range, r_range,
-                                                   :, time_index)
-                moments.charged.dens_updated .= true
-                moments.charged.upar .= load_slice(dynamic, "parallel_flow", z_range,
-                                                   r_range, :, time_index)
-                moments.charged.upar_updated .= true
-                moments.charged.ppar .= load_slice(dynamic, "parallel_pressure", z_range,
-                                                   r_range, :, time_index)
-                moments.charged.ppar_updated .= true
-                moments.charged.qpar .= load_slice(dynamic, "parallel_heat_flux", z_range,
-                                                   r_range, :, time_index)
-                moments.charged.qpar_updated .= true
-                moments.charged.vth .= load_slice(dynamic, "thermal_speed", z_range,
+            pdf.charged.norm .= load_slice(dynamic, "f", vpa_range, vperp_range,
+                                           z_range, r_range, :, time_index)
+            moments.charged.dens .= load_slice(dynamic, "density", z_range, r_range,
+                                               :, time_index)
+            moments.charged.dens_updated .= true
+            moments.charged.upar .= load_slice(dynamic, "parallel_flow", z_range,
+                                               r_range, :, time_index)
+            moments.charged.upar_updated .= true
+            moments.charged.ppar .= load_slice(dynamic, "parallel_pressure", z_range,
+                                               r_range, :, time_index)
+            moments.charged.ppar_updated .= true
+            moments.charged.qpar .= load_slice(dynamic, "parallel_heat_flux", z_range,
+                                               r_range, :, time_index)
+            moments.charged.qpar_updated .= true
+            moments.charged.vth .= load_slice(dynamic, "thermal_speed", z_range,
+                                              r_range, :, time_index)
+
+            boundary_distributions_io = get_group(fid, "boundary_distributions")
+            boundary_distributions.pdf_rboundary_charged[:,:,:,1,:] .=
+            load_slice(boundary_distributions_io, "pdf_rboundary_charged_left",
+                       vpa_range, vperp_range, z_range, :)
+            boundary_distributions.pdf_rboundary_charged[:,:,:,2,:] .=
+            load_slice(boundary_distributions_io, "pdf_rboundary_charged_right",
+                       vpa_range, vperp_range, z_range, :)
+
+            if composition.n_neutral_species > 0
+                pdf.neutral.norm .= load_slice(dynamic, "f_neutral", vz_range,
+                                               vr_range, vzeta_range, z_range,
+                                               r_range, :, time_index)
+                moments.neutral.dens .= load_slice(dynamic, "density_neutral",
+                                                   z_range, r_range, :, time_index)
+                moments.neutral.dens_updated .= true
+                moments.neutral.uz .= load_slice(dynamic, "uz_neutral", z_range,
+                                                 r_range, :, time_index)
+                moments.neutral.uz_updated .= true
+                moments.neutral.pz .= load_slice(dynamic, "pz_neutral", z_range,
+                                                 r_range, :, time_index)
+                moments.neutral.pz_updated .= true
+                moments.neutral.qz .= load_slice(dynamic, "qz_neutral", z_range,
+                                                 r_range, :, time_index)
+                moments.neutral.qz_updated .= true
+                moments.neutral.vth .= load_slice(dynamic, "thermal_speed_neutral", z_range,
                                                   r_range, :, time_index)
 
-                boundary_distributions_io = get_group(fid, "boundary_distributions")
-                boundary_distributions.pdf_rboundary_charged[:,:,:,1,:] .=
-                load_slice(boundary_distributions_io, "pdf_rboundary_charged_left",
-                           vpa_range, vperp_range, z_range, :)
-                boundary_distributions.pdf_rboundary_charged[:,:,:,2,:] .=
-                load_slice(boundary_distributions_io, "pdf_rboundary_charged_right",
-                           vpa_range, vperp_range, z_range, :)
-
-                if composition.n_neutral_species > 0
-                    pdf.neutral.norm .= load_slice(dynamic, "f_neutral", vz_range,
-                                                   vr_range, vzeta_range, z_range,
-                                                   r_range, :, time_index)
-                    moments.neutral.dens .= load_slice(dynamic, "density_neutral",
-                                                       z_range, r_range, :, time_index)
-                    moments.neutral.dens_updated .= true
-                    moments.neutral.uz .= load_slice(dynamic, "uz_neutral", z_range,
-                                                     r_range, :, time_index)
-                    moments.neutral.uz_updated .= true
-                    moments.neutral.pz .= load_slice(dynamic, "pz_neutral", z_range,
-                                                     r_range, :, time_index)
-                    moments.neutral.pz_updated .= true
-                    moments.neutral.qz .= load_slice(dynamic, "qz_neutral", z_range,
-                                                     r_range, :, time_index)
-                    moments.neutral.qz_updated .= true
-                    moments.neutral.vth .= load_slice(dynamic, "thermal_speed_neutral", z_range,
-                                                      r_range, :, time_index)
-
-                    boundary_distributions.pdf_rboundary_neutral[:,:,:,:,1,:] .=
-                    load_slice(boundary_distributions_io, "pdf_rboundary_neutral_left",
-                               vz_range, vr_range, vzeta_range, z_range, :)
-                    boundary_distributions.pdf_rboundary_neutral[:,:,:,:,2,:] .=
-                    load_slice(boundary_distributions_io, "pdf_rboundary_neutral_right",
-                               vz_range, vr_range, vzeta_range, z_range, :)
-                end
-            else
-                restart_n_ion_species, restart_n_neutral_species = load_species_data(fid)
-                restart_z, _, _ = load_coordinate_data(fid, "z")
-                restart_r, _, _ = load_coordinate_data(fid, "r")
-                restart_vperp, _, _ = load_coordinate_data(fid, "vperp")
-                restart_vpa, _, _ = load_coordinate_data(fid, "vpa")
-                restart_vzeta, _, _ = load_coordinate_data(fid, "vzeta")
-                restart_vr, _, _ = load_coordinate_data(fid, "vr")
-                restart_vz, _, _ = load_coordinate_data(fid, "vz")
-                if (restart_n_ion_species != composition.n_ion_species ||
-                    restart_n_neutral_species != composition.n_neutral_species ||
-                    restart_z.n != z.n || restart_r.n != r.n || restart_vperp.n != vperp.n ||
-                    restart_vpa.n != vpa.n || restart_vzeta.n != vzeta.n ||
-                    restart_vr.n != vr.n || restart_vz.n != vz.n)
-
-                    error("Dimensions of restart file and input do not match.\n" *
-                          "Restart file was n_ion_species=$restart_n_ion_species, " *
-                          "n_neutral_species=$restart_n_neutral_species, nr=$(restart_r.n), " *
-                          "nz=$(restart_z.n), nvperp=$(restart_vperp.n), nvpa=$(restart_vpa.n).\n" *
-                          "nvzeta=$(restart_vzeta.n), nvr=$(restart_vr.n), nvz=$(restart_vz.n)." *
-                          "Input file gave n_ion_species=$(composition.n_ion_species), " *
-                          "n_neutral_species=$(composition.n_neutral_species), nr=$(r.n), " *
-                          "nz=$(z.n), nvperp=$(vperp.n), nvpa=$(vpa.n), nvzeta=$(vzeta.n), " *
-                          "nvr=$(vr.n), nvz=$(vz.n).")
-                end
-
-                code_time = load_slice(dynamic, "time", time_index)
-
-                pdf.charged.norm .= load_slice(dynamic, "f", :, :, :, :, :, time_index)
-                moments.charged.dens .= load_slice(dynamic, "density", :, :, :,
-                                                   time_index)
-                moments.charged.dens_updated .= true
-                moments.charged.upar .= load_slice(dynamic, "parallel_flow", :, :, :,
-                                                   time_index)
-                moments.charged.upar_updated .= true
-                moments.charged.ppar .= load_slice(dynamic, "parallel_pressure", :, :, :,
-                                                   time_index)
-                moments.charged.ppar_updated .= true
-                moments.charged.qpar .= load_slice(dynamic, "parallel_heat_flux", :, :, :,
-                                                   time_index)
-                moments.charged.qpar_updated .= true
-                moments.charged.vth .= load_slice(dynamic, "thermal_speed", :, :, :,
-                                                  time_index)
-
-                boundary_distributions_io = get_group(fid, "boundary_distributions")
-                boundary_distributions.pdf_rboundary_charged[:,:,:,1,:] .=
-                load_variable(boundary_distributions_io, "pdf_rboundary_charged_left")
-                boundary_distributions.pdf_rboundary_charged[:,:,:,2,:] .=
-                load_variable(boundary_distributions_io, "pdf_rboundary_charged_right")
-
-                if composition.n_neutral_species > 0
-                    pdf.neutral.norm .= load_slice(dynamic, "f_neutral", :, :, :, :, :, :,
-                                                   time_index)
-                    moments.neutral.dens .= load_slice(dynamic, "density_neutral", :, :,
-                                                       :, time_index)
-                    moments.neutral.dens_updated .= true
-                    moments.neutral.uz .= load_slice(dynamic, "uz_neutral", :, :, :,
-                                                     time_index)
-                    moments.neutral.uz_updated .= true
-                    moments.neutral.pz .= load_slice(dynamic, "pz_neutral", :, :, :,
-                                                     time_index)
-                    moments.neutral.pz_updated .= true
-                    moments.neutral.qz .= load_slice(dynamic, "qz_neutral", :, :, :,
-                                                     time_index)
-                    moments.neutral.qz_updated .= true
-                    moments.neutral.vth .= load_slice(dynamic, "thermal_speed", :, :, :,
-                                                      time_index)
-
-                    boundary_distributions.pdf_rboundary_neutral[:,:,:,:,1,:] .=
-                    load_variable(boundary_distributions_io, "pdf_rboundary_neutral_left")
-                    boundary_distributions.pdf_rboundary_neutral[:,:,:,:,2,:] .=
-                    load_variable(boundary_distributions_io, "pdf_rboundary_neutral_right")
-                end
+                boundary_distributions.pdf_rboundary_neutral[:,:,:,:,1,:] .=
+                load_slice(boundary_distributions_io, "pdf_rboundary_neutral_left",
+                           vz_range, vr_range, vzeta_range, z_range, :)
+                boundary_distributions.pdf_rboundary_neutral[:,:,:,:,2,:] .=
+                load_slice(boundary_distributions_io, "pdf_rboundary_neutral_right",
+                           vz_range, vr_range, vzeta_range, z_range, :)
             end
         finally
             close(fid)
