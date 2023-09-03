@@ -1327,7 +1327,8 @@ apply constraints and boundary conditions, calculate derived moments, etc.
 """
 function post_timestep!(fvec, moments, fields, boundary_distributions, vz, vr, vzeta, vpa,
                         vperp, z, r, advect_objects, composition, geometry,
-                        num_diss_params, z_spectral, r_spectral, advance, scratch_dummy)
+                        num_diss_params, z_spectral, r_spectral, advance, scratch_dummy,
+                        final_stage)
     begin_s_r_z_region()
 
     vpa_advect, r_advect, z_advect = advect_objects.vpa_advect, advect_objects.r_advect, advect_objects.z_advect
@@ -1438,10 +1439,8 @@ function post_timestep!(fvec, moments, fields, boundary_distributions, vz, vr, v
     end
 
     # update the electrostatic potential phi
-    update_phi!(fields, scratch[istage+1], z, r, composition, z_spectral, r_spectral,
-                scratch_dummy)
-    if !(( moments.evolve_upar || moments.evolve_ppar) &&
-              istage == length(scratch)-1)
+    update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral, scratch_dummy)
+    if !(( moments.evolve_upar || moments.evolve_ppar) && final_stage)
         # _block_synchronize() here because phi needs to be read on different ranks than
         # it was written on, even though the loop-type does not change here. However,
         # after the final RK stage can skip if:
@@ -1552,7 +1551,8 @@ function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase,
         post_timestep!(scratch[istage+1], moments, fields, boundary_distributions, vz, vr,
                        vzeta, vpa, vperp, z, r, advect_objects, composition, geometry,
                        num_diss_params, spectral_objects.z_spectral,
-                       spectral_objects.r_spectral, advance, scratch_dummy)
+                       spectral_objects.r_spectral, advance, scratch_dummy,
+                       istage == length(scratch)-1)
     end
 
     istage = n_rk_stages+1
