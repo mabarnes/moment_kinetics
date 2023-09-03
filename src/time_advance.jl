@@ -30,9 +30,11 @@ using ..makie_post_processing: plot_1d, plot_2d, positive_or_nan
 using ..moment_constraints: hard_force_moment_constraints!,
                             hard_force_moment_constraints_neutral!
 using ..advection: setup_advection
+using ..z_advection
 using ..z_advection: update_speed_z!, z_advection!
 using ..r_advection: update_speed_r!, r_advection!
 using ..neutral_r_advection: update_speed_neutral_r!, neutral_advection_r!
+using ..neutral_z_advection
 using ..neutral_z_advection: update_speed_neutral_z!, neutral_advection_z!
 using ..neutral_vz_advection: update_speed_neutral_vz!, neutral_advection_vz!
 using ..vperp_advection: update_speed_vperp!, vperp_advection!
@@ -1849,6 +1851,416 @@ function update_solution_vector!(evolved, moments, istage, composition, vpa, vpe
             new_evolved.pz_neutral[iz,ir,isn] = old_evolved.pz_neutral[iz,ir,isn]
         end
     end
+    return nothing
+end
+
+"""
+    calculate_ddt!(dfvec_dt, fvec_in, pdf, fields, moments, advect_objects, vz, vr,
+                   vzeta, vpa, vperp, gyrophase, z, r, t, t_input, spectral_objects,
+                   composition, collisions, geometry, scratch_dummy,
+                   manufactured_source_list, external_source_settings,
+                   num_diss_params, advance)
+
+Calculate the time derivative of the time-evolving variables.
+"""
+function calculate_ddt!(dfvec_dt, fvec_in, pdf, fields, moments, advect_objects, vz, vr,
+                        vzeta, vpa, vperp, gyrophase, z, r, t, t_input, spectral_objects,
+                        composition, collisions, geometry, scratch_dummy,
+                        manufactured_source_list, external_source_settings,
+                        num_diss_params, advance)
+
+    vpa_advect, r_advect, z_advect = advect_objects.vpa_advect, advect_objects.r_advect, advect_objects.z_advect
+    neutral_z_advect, neutral_r_advect, neutral_vz_advect = advect_objects.neutral_z_advect, advect_objects.neutral_r_advect, advect_objects.neutral_vz_advect
+
+    # Need 'speed' in advect objects to be set for boundary conditions. This is work will
+    # be done again inside euler_time_advance!() so this is a bit inefficient, but leave
+    # optimizing for later...
+    function get_r_advection_speed!()
+        # Put this in a local function to make stepping through calculate_ddt!() with
+        # Debugger less annoying
+        begin_s_z_vperp_vpa_region()
+        @loop_s is begin
+            @views update_speed_r!(
+                r_advect[is], fvec.upar[:,:,is], moments.charged.vth[:,:,is], fields,
+                moments.evolve_upar, moments.evolve_ppar, vpa, vperp, z, r, geometry)
+            @loop_z_vperp_vpa iz ivperp ivpa begin
+                @views adjust_advection_speed!(
+                    r_advect[is].speed[:,ivpa,ivperp,iz], fvec.density[iz,:,is],
+                    moments.charged.vth[iz,:,is], moments.evolve_density,
+                    moments.evolve_ppar)
+            end
+        end
+        return nothing
+    end
+    if r.n_global > 1
+        get_r_advection_speed!()
+    end
+
+    function get_z_advection_speed!()
+        begin_s_r_vperp_vpa_region()
+        @loop_s is begin
+            @views update_speed_z!(z_advect[is], fvec.upar[:,:,is],
+                                   moments.charged.vth[:,:,is], moments.evolve_upar,
+                                   moments.evolve_ppar, fields, vpa, vperp, z, r, t,
+                                   geometry)
+            @loop_r_vperp_vpa ir ivperp ivpa begin
+                @views z_advection.adjust_advection_speed!(
+                    z_advect[is].speed[:,ivpa,ivperp,ir], fvec.density[:,ir,is],
+                    moments.charged.vth[:,ir,is], moments.evolve_density,
+                    moments.evolve_ppar)
+            end
+        end
+        return nothing
+    end
+    get_z_advection_speed!()
+
+    function get_vperp_advection_speed!()
+        begin_s_r_z_vperp_region()
+        @loop_s is begin
+            @views update_speed_vperp!(vperp_advect[is], vpa, vperp, z, r)
+        end
+        return nothing
+    end
+    if vperp.n_global > 1
+        get_vperp_advection_speed!()
+    end
+
+    function get_vpa_advection_speed!()
+        begin_s_r_z_vperp_region()
+        update_speed_vpa!(vpa_advect, fields, fvec, moments, vpa, vperp, z, r,
+            composition, collisions, ion_source_settings, t, geometry)
+        return nothing
+    end
+    get_vpa_advection_speed!()
+
+    if composition.n_neutral_species > 0.0
+        function get_neutral_r_advection_speed!()
+            begin_sn_z_vzeta_vr_vz_region()
+            @loop_sn isn begin
+                @views update_speed_neutral_r!(neutral_r_advect[isn], r, z, vzeta, vr, vz)
+            end
+            return nothing
+        end
+        if r.n_global > 1
+            get_neutral_r_advection_speed!()
+        end
+
+        function get_neutral_z_advection_speed!()
+            begin_sn_r_vzeta_vr_vz_region()
+            @loop_sn isn begin
+                @views update_speed_neutral_z!(
+                    neutral_z_advect[isn], fvec_in.uz_neutral[:,:,isn],
+                    moments.neutral.vth[:,:,isn], moments.evolve_upar,
+                    moments.evolve_ppar, vz, vr, vzeta, z, r, t)
+                @loop_r_vzeta_vr_vz ir ivzeta ivr ivz begin
+                    @views neutral_z_advection.adjust_advection_speed!(
+                        advect[isn].speed[:,ivz,ivr,ivzeta,ir],
+                        fvec_in.density_neutral[:,ir,isn], moments.neutral.vth[:,ir,isn],
+                        moments.evolve_density, moments.evolve_ppar)
+                end
+            end
+            return nothing
+        end
+        get_neutral_z_advection_speed!()
+
+        #function get_neutral_vzeta_advection_speed!()
+        #end
+        #if vzeta.n_global > 1
+        #    get_neutral_vzeta_advection_speed!()
+        #end
+
+        #function get_neutral_vr_advection_speed!()
+        #end
+        #if vr.n_global > 1
+        #    get_neutral_vr_advection_speed!()
+        #end
+
+        function get_neutral_vz_advection_speed!()
+            if !moments.evolve_upar
+                return nothing
+            end
+            begin_sn_r_z_vzeta_vr_region()
+            update_speed_neutral_vz!(neutral_vz_advect, fields, fvec_in, moments, vz, vr,
+                                     vzeta, z, r, composition, collisions,
+                                     neutral_source_settings)
+            return nothing
+        end
+        get_neutral_vz_advection_speed!()
+    end
+
+    # Here assume we got `fvec_in` from some external time-stepper, so we need to apply
+    # the 'post-step' functions, e.g. boundary conditions, constraints, derived moments,
+    # before taking the actual timestep.
+    post_timestep!(fvec_in, moments, fields, boundary_distributions, vz, vr, vzeta, vpa,
+                   vperp, z, r, advect_objects, composition, geometry, num_diss_params,
+                   spectral_objects.z_spectral, spectral_objects.r_spectral, advance,
+                   scratch_dummy)
+
+    # Zero the evolving fields, so we can add to them in euler_time_advance!()
+    function zero_evolving_fields()
+        # Put this in a local function to make stepping through calculate_ddt!() with
+        # Debugger less annoying
+        begin_s_r_z_region()
+        @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+            dfvec_dt.pdf[ivpa,ivperp,iz,ir,is] = 0.0
+        end
+        @loop_s_r_z is ir iz begin
+            dfvec_dt.density[iz,ir,is] = 0.0
+            dfvec_dt.upar[iz,ir,is] = 0.0
+            dfvec_dt.ppar[iz,ir,is] = 0.0
+        end
+
+        if composition.n_neutral_species > 0
+            begin_sn_r_z_region()
+            @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
+                dfvec_dt.pdf[ivz,ivr,ivzeta,iz,ir,isn] = 0.0
+            end
+            @loop_sn_r_z isn ir iz begin
+                dfvec_dt.density_neutral[iz,ir,isn] = 0.0
+                dfvec_dt.uz_neutral[iz,ir,isn] = 0.0
+                dfvec_dt.pz_neutral[iz,ir,isn] = 0.0
+            end
+        end
+    end
+    zero_evolving_fields()
+
+    if t_input.dt != 1.0
+        t_input = time_input(t_input.nstep, 1.0, t_input.nwrite_moments,
+                             t_input.nwrite_dfns, t_input.n_rk_stages,
+                             t_input.split_operators, t_input.runtime_plots,
+                             t_input.steady_state_residual,
+                             t_input.converged_residual_value,
+                             t_input.use_manufactured_solns_for_advance, t_input.stopfile)
+    end
+
+    euler_time_advance!(dfvec_dt, fvec_in, pdf, fields, moments, advect_objects, vz, vr,
+                        vzeta, vpa, vperp, gyrophase, z, r, t, t_input, spectral_objects,
+                        composition, collisions, geometry, scratch_dummy,
+                        manufactured_source_list, external_source_settings,
+                        num_diss_params, advance, 1)
+
+    # Zero out any parts of dfvec_dt where f is set by the boundary conditions, to avoid
+    # (potentially) confusing a time-solver.
+
+    function pdf_bc()
+        # Ignoring periodic bc's here, although I'm not sure that's right [JTO]
+
+        if r.bc == "Dirichlet"
+            begin_s_z_vperp_vpa_region()
+            zero = 1.0e-10
+            @loop_s_z_vperp_vpa is iz ivperp ivpa begin
+                ir = 1 # r = -L/2 -- check that the point is on lowest rank
+                if r.irank == 0 &&
+                        (advance.r_diffusion ||
+                         r_advect[is].speed[ir,ivpa,ivperp,iz] > zero)
+                    dfvec_dt.pdf[ivpa,ivperp,iz,ir,is] = 0.0
+                end
+                ir = r.n # r = L/2 -- check that the point is on highest rank
+                if r.irank == r.nrank - 1 &&
+                        (advance.r_diffusion ||
+                         r_advect[is].speed[ir,ivpa,ivperp,iz] < -zero)
+                    dfvec_dt.pdf[ivpa,ivperp,iz,ir,is] = 0.0
+                end
+            end
+        end
+
+        begin_s_r_vperp_region()
+        if z.bc == "wall"
+            if z.irank == 0
+                if !moments.evolve_upar
+                    @loop_s_r is ir begin
+                        @loop_vperp ivperp begin
+                            ind = findfirst(x->x>=0.0, vpa.grid)
+                            dfvec_dt.pdf[ind:end,ivperp,1,ir,is] .= 0.0
+                        end
+                    end
+                elseif !moments.evolve_ppar
+                    @loop_s_r is ir begin
+                        w_parallel_zero = -fvec.upar[1,ir,is]
+                        @loop_vperp ivperp begin
+                            ind = findfirst(x->x>=w_parallel_zero, vpa.grid)
+                            dfvec_dt.pdf[ind:end,ivperp,1,ir,is] .= 0.0
+                        end
+                    end
+                else
+                    @loop_s_r is ir begin
+                        w_parallel_zero = -fvec.upar[1,ir,is] /
+                                           moments.charged.vth[1,ir,is]
+                        @loop_vperp ivperp begin
+                            ind = findfirst(x->x>=w_parallel_zero, vpa.grid)
+                            dfvec_dt.pdf[ind:end,ivperp,1,ir,is] .= 0.0
+                        end
+                    end
+                end
+            end
+            if z.irank == z.nrank - 1
+                if !moments.evolve_upar
+                    @loop_s_r is ir begin
+                        @loop_vperp ivperp begin
+                            ind = findlast(x->x<=0.0, vpa.grid)
+                            dfvec_dt.pdf[1:ind,ivperp,1,ir,is] .= 0.0
+                        end
+                    end
+                elseif !moments.evolve_ppar
+                    @loop_s_r is ir begin
+                        w_parallel_zero = -fvec.upar[end,ir,is]
+                        @loop_vperp ivperp begin
+                            ind = findlast(x->x<=w_parallel_zero, vpa.grid)
+                            dfvec_dt.pdf[1:ind,ivperp,1,ir,is] .= 0.0
+                        end
+                    end
+                else
+                    @loop_s_r is ir begin
+                        w_parallel_zero = -fvec.upar[end,ir,is] /
+                                           moments.charged.vth[end,ir,is]
+                        @loop_vperp ivperp begin
+                            ind = findlast(x->x<=w_parallel_zero, vpa.grid)
+                            dfvec_dt.pdf[1:ind,ivperp,1,ir,is] .= 0.0
+                        end
+                    end
+                end
+            end
+        end
+
+        # No vperp boundary conditions at the moment
+
+        begin_s_r_z_vperp_region()
+        @loop_s_r_z_vperp is ir iz ivperp begin
+            # enforce the vpa BC - this BC just sets f to 0, so we can do the same thing
+            # to df/dt.
+            @views enforce_v_boundary_condition_local!(
+                dfvec_dt.pdf[:,ivperp,iz,ir,is], vpa_bc,
+                vpa_advect[is].speed[:,ivperp,iz,ir], advance.vpa_diffusion)
+        end
+    end
+    pdf_bc()
+
+    #function moment_bc()
+    #end
+    #moment_bc()
+
+    if composition.n_neutral_species > 0
+        function neutral_pdf_bc()
+            # Ignoring periodic bc's here, although I'm not sure that's right [JTO]
+
+            if r.bc == "Dirichlet"
+                begin_sn_z_vzeta_vr_region()
+                zero = 1.0e-10
+                @loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
+                    ir = 1 # r = -L/2
+                    # incoming particles and on lowest rank
+                    if r.irank == 0 && (r_diffusion || neutral_r_advect[isn].speed[ir,ivz,ivr,ivzeta,iz] > zero)
+                        dfvec_dt.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] = 0.0
+                    end
+                    ir = nr # r = L/2
+                    # incoming particles and on highest rank
+                    if r.irank == r.nrank - 1 && (r_diffusion || adv[isn].speed[ir,ivz,ivr,ivzeta,iz] < -zero)
+                        dfvec_dt.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] = 0.0
+                    end
+                end
+            end
+
+            begin_sn_r_vzeta_vr_region()
+            if z.bc == "wall"
+                if z.irank == 0
+                    if !moments.evolve_upar
+                        @loop_sn_r isn ir begin
+                            @loop_vzeta_vr ivzeta ivr begin
+                                ind = findfirst(x->x>=0.0, vz.grid)
+                                dfvec_dt.pdf_neutral[ind:end,ivr,ivzeta,1,ir,isn] .= 0.0
+                            end
+                        end
+                    elseif !moments.evolve_ppar
+                        @loop_sn_r isn ir begin
+                            w_parallel_zero = -fvec.uz_neutral[1,ir,isn]
+                            @loop_vzeta_vr ivzeta ivr begin
+                                ind = findfirst(x->x>=w_parallel_zero, vz.grid)
+                                dfvec_dt.pdf_neutral[ind:end,ivr,ivzeta,1,ir,isn] .= 0.0
+                            end
+                        end
+                    else
+                        @loop_sn_r isn ir begin
+                            w_parallel_zero = -fvec.uz_neutral[1,ir,isn] /
+                            moments.neutral.vth[1,ir,isn]
+                            @loop_vzeta_vr ivzeta ivr begin
+                                ind = findfirst(x->x>=w_parallel_zero, vz.grid)
+                                dfvec_dt.pdf_neutral[ind:end,ivr,ivzeta,1,ir,isn] .= 0.0
+                            end
+                        end
+                    end
+                end
+                if z.irank == z.nrank - 1
+                    if !moments.evolve_upar
+                        @loop_sn_r isn ir begin
+                            @loop_vzeta_vr ivzeta ivr begin
+                                ind = findlast(x->x<=0.0, vz.grid)
+                                dfvec_dt.pdf_neutral[1:ind,ivr,ivzeta,1,ir,isn] .= 0.0
+                            end
+                        end
+                    elseif !moments.evolve_ppar
+                        @loop_sn_r isn ir begin
+                            w_parallel_zero = -fvec.uz_neutral[end,ir,isn]
+                            @loop_vzeta_vr ivzeta ivr begin
+                                ind = findlast(x->x<=w_parallel_zero, vz.grid)
+                                dfvec_dt.pdf_neutral[1:ind,ivr,ivzeta,1,ir,isn] .= 0.0
+                            end
+                        end
+                    else
+                        @loop_sn_r isn ir begin
+                            w_parallel_zero = -fvec.uz_neutral[end,ir,isn] /
+                            moments.neutral.vth[end,ir,isn]
+                            @loop_vzeta_vr ivzeta ivr begin
+                                ind = findlast(x->x<=w_parallel_zero, vz.grid)
+                                dfvec_dt.pdf_neutral[1:ind,ivr,ivzeta,1,ir,isn] .= 0.0
+                            end
+                        end
+                    end
+                end
+            end
+            if vzeta_advect !== nothing && vzeta.n_global > 1 && vzeta.bc != "none"
+                begin_sn_r_z_vr_vz_region()
+                @loop_sn_r_z_vr_vz isn ir iz ivr ivz begin
+                    @views enforce_v_boundary_condition_local!(
+                        dfvec_dt.pdf_neutral[ivz,ivr,:,iz,ir,isn], vzeta.bc,
+                        vzeta_advect[isn].speed[ivz,ivr,:,iz,ir], false)
+                end
+            end
+            if vr_advect !== nothing && vr.n_global > 1 && vr.bc != "none"
+                begin_sn_r_z_vzeta_vz_region()
+                @loop_sn_r_z_vzeta_vz isn ir iz ivzeta ivz begin
+                    @views enforce_v_boundary_condition_local!(
+                        dfvec_dt.pdf_neutral[ivz,:,ivzeta,iz,ir,isn], vr.bc,
+                        vr_advect[isn].speed[ivz,:,ivzeta,iz,ir], false)
+                end
+            end
+            if vz_advect !== nothing && vz.n_global > 1 && vz.bc != "none"
+                begin_sn_r_z_vzeta_vr_region()
+                @loop_sn_r_z_vzeta_vr isn ir iz ivzeta ivr begin
+                    @views enforce_v_boundary_condition_local!(
+                        dfvec_dt.pdf_neutral[:,ivr,ivzeta,iz,ir,isn], vz.bc,
+                        vz_advect[isn].speed[:,ivr,ivzeta,iz,ir], vz_diffusion)
+                end
+            end
+        end
+        neutral_pdf_bc()
+
+        function neutral_moment_bc()
+            begin_serial_region()
+            @serial_region begin
+                if moments.evolve_upar && z.bc == "wall"
+                    if z.irank == 0
+                        dfvec_dt.uz_neutral[1,:,:] .= 0.0
+                    end
+                    if z.irank == z.nrank - 1
+                        dfvec_dt.uz_neutral[end,:,:] .= 0.0
+                    end
+                end
+            end
+            return nothing
+        end
+        neutral_moment_bc()
+    end
+
     return nothing
 end
 
