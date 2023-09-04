@@ -330,8 +330,11 @@ function restart_moment_kinetics(input_dict::Dict,
         # Stop code from hanging when running on multiple processes if only one of them
         # throws an error
         if global_size[] > 1
-            println("Abort called on rank $(block_rank[]) due to error. Error message "
-                    * "was:\n", e)
+            println("$(typeof(e)) on process $(global_rank[]):")
+            showerror(stdout, e)
+            display(stacktrace(catch_backtrace()))
+            flush(stdout)
+            flush(stderr)
             MPI.Abort(comm_world, 1)
         end
 
