@@ -23,6 +23,7 @@ using ..velocity_moments: calculate_moment_derivatives!, calculate_moment_deriva
 using ..velocity_grid_transforms: vzvrvzeta_to_vpavperp!, vpavperp_to_vzvrvzeta!
 using ..initial_conditions: enforce_z_boundary_condition!, enforce_boundary_conditions!
 using ..initial_conditions: enforce_vpa_boundary_condition!, enforce_r_boundary_condition!
+using ..initial_conditions: enforce_v_boundary_condition_local!
 using ..initial_conditions: enforce_neutral_boundary_conditions!
 using ..initial_conditions: enforce_neutral_z_boundary_condition!, enforce_neutral_r_boundary_condition!
 using ..input_structs: advance_info, time_input
@@ -1900,13 +1901,15 @@ end
 
 Calculate the time derivative of the time-evolving variables.
 """
-function calculate_ddt!(dfvec_dt, fvec, pdf, fields, moments, advect_objects, vz, vr,
-                        vzeta, vpa, vperp, gyrophase, z, r, t, t_input, spectral_objects,
-                        composition, collisions, geometry, scratch_dummy,
-                        manufactured_source_list, external_source_settings,
+function calculate_ddt!(dfvec_dt, fvec, pdf, fields, moments, boundary_distributions,
+                        advect_objects, vz, vr, vzeta, vpa, vperp, gyrophase, z, r, t,
+                        t_input, spectral_objects, composition, collisions, geometry,
+                        scratch_dummy, manufactured_source_list, external_source_settings,
                         num_diss_params, advance)
 
     vpa_advect, r_advect, z_advect = advect_objects.vpa_advect, advect_objects.r_advect, advect_objects.z_advect
+    neutral_vzeta_advect = nothing
+    neutral_vr_advect = nothing
     neutral_z_advect, neutral_r_advect, neutral_vz_advect = advect_objects.neutral_z_advect, advect_objects.neutral_r_advect, advect_objects.neutral_vz_advect
 
     # Need 'speed' in advect objects to be set for boundary conditions. This is work will
@@ -1965,7 +1968,7 @@ function calculate_ddt!(dfvec_dt, fvec, pdf, fields, moments, advect_objects, vz
     function get_vpa_advection_speed!()
         begin_s_r_z_vperp_region()
         update_speed_vpa!(vpa_advect, fields, fvec, moments, vpa, vperp, z, r,
-            composition, collisions, ion_source_settings, t, geometry)
+            composition, collisions, external_source_settings.ion, t, geometry)
         return nothing
     end
     get_vpa_advection_speed!()
@@ -1986,13 +1989,13 @@ function calculate_ddt!(dfvec_dt, fvec, pdf, fields, moments, advect_objects, vz
             begin_sn_r_vzeta_vr_vz_region()
             @loop_sn isn begin
                 @views update_speed_neutral_z!(
-                    neutral_z_advect[isn], fvec_in.uz_neutral[:,:,isn],
+                    neutral_z_advect[isn], fvec.uz_neutral[:,:,isn],
                     moments.neutral.vth[:,:,isn], moments.evolve_upar,
                     moments.evolve_ppar, vz, vr, vzeta, z, r, t)
                 @loop_r_vzeta_vr_vz ir ivzeta ivr ivz begin
                     @views neutral_z_advection.adjust_advection_speed!(
-                        advect[isn].speed[:,ivz,ivr,ivzeta,ir],
-                        fvec_in.density_neutral[:,ir,isn], moments.neutral.vth[:,ir,isn],
+                        neutral_z_advect[isn].speed[:,ivz,ivr,ivzeta,ir],
+                        fvec.density_neutral[:,ir,isn], moments.neutral.vth[:,ir,isn],
                         moments.evolve_density, moments.evolve_ppar)
                 end
             end
@@ -2017,18 +2020,18 @@ function calculate_ddt!(dfvec_dt, fvec, pdf, fields, moments, advect_objects, vz
                 return nothing
             end
             begin_sn_r_z_vzeta_vr_region()
-            update_speed_neutral_vz!(neutral_vz_advect, fields, fvec_in, moments, vz, vr,
+            update_speed_neutral_vz!(neutral_vz_advect, fields, fvec, moments, vz, vr,
                                      vzeta, z, r, composition, collisions,
-                                     neutral_source_settings)
+                                     external_source_settings.neutral)
             return nothing
         end
         get_neutral_vz_advection_speed!()
     end
 
-    # Here assume we got `fvec_in` from some external time-stepper, so we need to apply
+    # Here assume we got `fvec` from some external time-stepper, so we need to apply
     # the 'post-step' functions, e.g. boundary conditions, constraints, derived moments,
     # before taking the actual timestep.
-    post_timestep!(fvec_in, moments, fields, boundary_distributions, vz, vr, vzeta, vpa,
+    post_timestep!(fvec, moments, fields, boundary_distributions, vz, vr, vzeta, vpa,
                    vperp, z, r, advect_objects, composition, geometry, num_diss_params,
                    spectral_objects.z_spectral, spectral_objects.r_spectral, advance,
                    scratch_dummy, false)
@@ -2050,7 +2053,7 @@ function calculate_ddt!(dfvec_dt, fvec, pdf, fields, moments, advect_objects, vz
         if composition.n_neutral_species > 0
             begin_sn_r_z_region()
             @loop_sn_r_z_vzeta_vr_vz isn ir iz ivzeta ivr ivz begin
-                dfvec_dt.pdf[ivz,ivr,ivzeta,iz,ir,isn] = 0.0
+                dfvec_dt.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] = 0.0
             end
             @loop_sn_r_z isn ir iz begin
                 dfvec_dt.density_neutral[iz,ir,isn] = 0.0
@@ -2070,7 +2073,7 @@ function calculate_ddt!(dfvec_dt, fvec, pdf, fields, moments, advect_objects, vz
                              t_input.use_manufactured_solns_for_advance, t_input.stopfile)
     end
 
-    euler_time_advance!(dfvec_dt, fvec_in, pdf, fields, moments, advect_objects, vz, vr,
+    euler_time_advance!(dfvec_dt, fvec, pdf, fields, moments, advect_objects, vz, vr,
                         vzeta, vpa, vperp, gyrophase, z, r, t, t_input, spectral_objects,
                         composition, collisions, geometry, scratch_dummy,
                         manufactured_source_list, external_source_settings,
@@ -2166,7 +2169,7 @@ function calculate_ddt!(dfvec_dt, fvec, pdf, fields, moments, advect_objects, vz
             # enforce the vpa BC - this BC just sets f to 0, so we can do the same thing
             # to df/dt.
             @views enforce_v_boundary_condition_local!(
-                dfvec_dt.pdf[:,ivperp,iz,ir,is], vpa_bc,
+                dfvec_dt.pdf[:,ivperp,iz,ir,is], vpa.bc,
                 vpa_advect[is].speed[:,ivperp,iz,ir], advance.vpa_diffusion)
         end
     end
@@ -2254,28 +2257,30 @@ function calculate_ddt!(dfvec_dt, fvec, pdf, fields, moments, advect_objects, vz
                     end
                 end
             end
-            if vzeta_advect !== nothing && vzeta.n_global > 1 && vzeta.bc != "none"
+            if neutral_vzeta_advect !== nothing && vzeta.n_global > 1 &&
+                    vzeta.bc != "none"
                 begin_sn_r_z_vr_vz_region()
                 @loop_sn_r_z_vr_vz isn ir iz ivr ivz begin
                     @views enforce_v_boundary_condition_local!(
                         dfvec_dt.pdf_neutral[ivz,ivr,:,iz,ir,isn], vzeta.bc,
-                        vzeta_advect[isn].speed[ivz,ivr,:,iz,ir], false)
+                        neutral_vzeta_advect[isn].speed[ivz,ivr,:,iz,ir], false)
                 end
             end
-            if vr_advect !== nothing && vr.n_global > 1 && vr.bc != "none"
+            if neutral_vr_advect !== nothing && vr.n_global > 1 && vr.bc != "none"
                 begin_sn_r_z_vzeta_vz_region()
                 @loop_sn_r_z_vzeta_vz isn ir iz ivzeta ivz begin
                     @views enforce_v_boundary_condition_local!(
                         dfvec_dt.pdf_neutral[ivz,:,ivzeta,iz,ir,isn], vr.bc,
-                        vr_advect[isn].speed[ivz,:,ivzeta,iz,ir], false)
+                        neutral_vr_advect[isn].speed[ivz,:,ivzeta,iz,ir], false)
                 end
             end
-            if vz_advect !== nothing && vz.n_global > 1 && vz.bc != "none"
+            if neutral_vz_advect !== nothing && vz.n_global > 1 && vz.bc != "none"
                 begin_sn_r_z_vzeta_vr_region()
                 @loop_sn_r_z_vzeta_vr isn ir iz ivzeta ivr begin
                     @views enforce_v_boundary_condition_local!(
                         dfvec_dt.pdf_neutral[:,ivr,ivzeta,iz,ir,isn], vz.bc,
-                        vz_advect[isn].speed[:,ivr,ivzeta,iz,ir], vz_diffusion)
+                        neutral_vz_advect[isn].speed[:,ivr,ivzeta,iz,ir],
+                        advance.vz_diffusion)
                 end
             end
         end
