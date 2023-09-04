@@ -139,7 +139,7 @@ function time_solve_with_cvode(mk_ddt_state...; ascii_io, io_moments, io_dfns,
         function cvode_output_callback(p, simtime, y_nvector)
             println("t=", simtime, ", ", rhs_counter, " rhs evaluations, ", Dates.format(now(), dateformat"H:MM:SS"))
             flush(stdout)
-            global rhs_counter = 0
+            rhs_counter = 0
 
             finish_now = false
 
