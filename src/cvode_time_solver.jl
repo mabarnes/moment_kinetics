@@ -27,12 +27,13 @@ function cvode_solve!(f::Function,
     y0nv = NVector(y0)
 
     function getcfun(userfun::T) where {T}
-        @cfunction(cvodefun, Cint, (realtype, N_Vector, N_Vector, Ref{T}))
+        @cfunction(Sundials.cvodefun, Cint, (Sundials.realtype, Sundials.N_Vector,
+                                             Sundials.N_Vector, Ref{T}))
     end
-    flag = @checkflag CVodeInit(mem, getcfun(userfun), t[1], convert(NVector, y0nv)) true
+    flag = Sundials.@checkflag CVodeInit(mem, getcfun(userfun), t[1], convert(NVector, y0nv)) true
 
-    flag = @checkflag CVodeSetUserData(mem, userfun) true
-    flag = @checkflag CVodeSStolerances(mem, reltol, abstol) true
+    flag = Sundials.@checkflag CVodeSetUserData(mem, userfun) true
+    flag = Sundials.@checkflag CVodeSStolerances(mem, reltol, abstol) true
     A = Sundials.SUNDenseMatrix(length(y0), length(y0))
     LS = Sundials.SUNLinSol_Dense(y0nv, A)
     flag = Sundials.@checkflag Sundials.CVDlsSetLinearSolver(mem, LS, A) true
@@ -40,7 +41,7 @@ function cvode_solve!(f::Function,
     ynv = NVector(copy(y0))
     tout = [0.0]
     for k in 2:length(t)
-        flag = @checkflag CVode(mem, t[k], ynv, tout, CV_NORMAL) true
+        flag = Sundials.@checkflag CVode(mem, t[k], ynv, tout, CV_NORMAL) true
         if !callback(mem, t[k], ynv)
             break
         end
@@ -53,7 +54,7 @@ function cvode_solve!(f::Function,
     return c
 end
 
-function time_solve_with_cvode(mk_ddt_state...)
+function time_solve_with_cvode(mk_ddt_state...; reltol=1e-3, abstol=1e-6)
     if n_blocks[] != 1
         error("SUNDIALS.jl does not support MPI yet, so cannot use distributed memory.")
     end
@@ -100,6 +101,8 @@ function time_solve_with_cvode(mk_ddt_state...)
 
         # p is something we don't need (maybe a pointer to the CVODE 'context'?)
         # y_nvector is the state vector, as an NVector
+        iwrite_moments = 2
+        iwrite_dfns = 2
         function cvode_output_callback(p, simtime, y_nvector)
             println("t=", simtime, " ", Dates.format(now(), dateformat"H:MM:SS"))
             flush(stdout)
@@ -123,18 +126,22 @@ function time_solve_with_cvode(mk_ddt_state...)
                 finish_now = do_moments_output!(ascii_io, io_moments, pdf, nothing, t,
                                                 t_input, vz, vr, vzeta, vpa, vperp,
                                                 gyrophase, z, r, moments, fields,
-                                                composition, i, finish_now)
+                                                composition, iwrite_moments,
+                                                iwrite_moments, finish_now)
+                iwrite_moments += 1
             end
             if any(isapprox.(simtime, dfns_times)) || finish_now
                 finish_now = do_dfns_output!(io_dfns, pdf, nothing, t, t_input, vz, vr,
                                              vzeta, vpa, vperp, gyrophase, z, r, moments,
-                                             fields, composition, i, finish_now)
+                                             fields, composition, iwrite_dfns,
+                                             iwrite_dfns, finish_now)
+                iwrite_dfns += 1
             end
 
             return Int64(finish_now)
         end
 
-        cvode_solve!(cvode_rhs_call!, y0, all_time_points; reltol=1.e-6, abstol=1.e-12,
+        cvode_solve!(cvode_rhs_call!, y0, all_time_points; reltol=reltol, abstol=abstol,
                      callback=cvode_output_callback)
 
         # Tell other processes to stop
