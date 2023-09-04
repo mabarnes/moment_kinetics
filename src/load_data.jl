@@ -857,23 +857,23 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                 if moments.evolve_density && !restart_evolve_density
                     # Need to normalise by density
                     for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
-                        this_pdf[:,:,iz,ir,is] .*= moments.charged.dens[iz,ir,is]
+                        this_pdf[:,:,iz,ir,is] ./= moments.charged.dens[iz,ir,is]
                     end
                 elseif !moments.evolve_density && restart_evolve_density
                     # Need to unnormalise by density
                     for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
-                        this_pdf[:,:,iz,ir,is] ./= moments.charged.dens[iz,ir,is]
+                        this_pdf[:,:,iz,ir,is] .*= moments.charged.dens[iz,ir,is]
                     end
                 end
                 if moments.evolve_ppar && !restart_evolve_ppar
                     # Need to normalise by vth
                     for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
-                        this_pdf[:,:,iz,ir,is] ./= moments.charged.vth[iz,ir,is]
+                        this_pdf[:,:,iz,ir,is] .*= moments.charged.vth[iz,ir,is]
                     end
                 elseif !moments.evolve_ppar && restart_evolve_ppar
                     # Need to unnormalise by vth
                     for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
-                        this_pdf[:,:,iz,ir,is] .*= moments.charged.vth[iz,ir,is]
+                        this_pdf[:,:,iz,ir,is] ./= moments.charged.vth[iz,ir,is]
                     end
                 end
 
@@ -1101,23 +1101,23 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                 if moments.evolve_density && !restart_evolve_density
                     # Need to normalise by density
                     for is ∈ nspecies, iz ∈ 1:z.n
-                        this_pdf[:,:,iz,is] .*= moments.charged.dens[iz,is]
+                        this_pdf[:,:,iz,is] ./= moments.charged.dens[iz,is]
                     end
                 elseif !moments.evolve_density && restart_evolve_density
                     # Need to unnormalise by density
                     for is ∈ nspecies, iz ∈ 1:z.n
-                        this_pdf[:,:,iz,is] ./= moments.charged.dens[iz,is]
+                        this_pdf[:,:,iz,is] .*= moments.charged.dens[iz,is]
                     end
                 end
                 if moments.evolve_ppar && !restart_evolve_ppar
                     # Need to normalise by vth
                     for is ∈ nspecies, iz ∈ 1:z.n
-                        this_pdf[:,:,iz,is] ./= moments.charged.vth[iz,is]
+                        this_pdf[:,:,iz,is] .*= moments.charged.vth[iz,is]
                     end
                 elseif !moments.evolve_ppar && restart_evolve_ppar
                     # Need to unnormalise by vth
                     for is ∈ nspecies, iz ∈ 1:z.n
-                        this_pdf[:,:,iz,is] .*= moments.charged.vth[iz,is]
+                        this_pdf[:,:,iz,is] ./= moments.charged.vth[iz,is]
                     end
                 end
 
@@ -1420,23 +1420,23 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                     if moments.evolve_density && !restart_evolve_density
                         # Need to normalise by density
                         for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
-                            this_pdf[:,:,:,iz,ir,is] .*= moments.neutral.dens[iz,ir,is]
+                            this_pdf[:,:,:,iz,ir,is] ./= moments.neutral.dens[iz,ir,is]
                         end
                     elseif !moments.evolve_density && restart_evolve_density
                         # Need to unnormalise by density
                         for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
-                            this_pdf[:,:,:,iz,ir,is] ./= moments.neutral.dens[iz,ir,is]
+                            this_pdf[:,:,:,iz,ir,is] .*= moments.neutral.dens[iz,ir,is]
                         end
                     end
                     if moments.evolve_ppar && !restart_evolve_ppar
                         # Need to normalise by vth
                         for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
-                            this_pdf[:,:,:,iz,ir,is] ./= moments.neutral.vth[iz,ir,is]
+                            this_pdf[:,:,:,iz,ir,is] .*= moments.neutral.vth[iz,ir,is]
                         end
                     elseif !moments.evolve_ppar && restart_evolve_ppar
                         # Need to unnormalise by vth
                         for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n
-                            this_pdf[:,:,:,iz,ir,is] .*= moments.neutral.vth[iz,ir,is]
+                            this_pdf[:,:,:,iz,ir,is] ./= moments.neutral.vth[iz,ir,is]
                         end
                     end
 
@@ -1692,23 +1692,23 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                     if moments.evolve_density && !restart_evolve_density
                         # Need to normalise by density
                         for is ∈ nspecies, iz ∈ 1:z.n
-                            this_pdf[:,:,:,iz,is] .*= moments.neutral.dens[iz,is]
+                            this_pdf[:,:,:,iz,is] ./= moments.neutral.dens[iz,is]
                         end
                     elseif !moments.evolve_density && restart_evolve_density
                         # Need to unnormalise by density
                         for is ∈ nspecies, iz ∈ 1:z.n
-                            this_pdf[:,:,:,iz,is] ./= moments.neutral.dens[iz,is]
+                            this_pdf[:,:,:,iz,is] .*= moments.neutral.dens[iz,is]
                         end
                     end
                     if moments.evolve_ppar && !restart_evolve_ppar
                         # Need to normalise by vth
                         for is ∈ nspecies, iz ∈ 1:z.n
-                            this_pdf[:,:,:,iz,is] ./= moments.neutral.vth[iz,is]
+                            this_pdf[:,:,:,iz,is] .*= moments.neutral.vth[iz,is]
                         end
                     elseif !moments.evolve_ppar && restart_evolve_ppar
                         # Need to unnormalise by vth
                         for is ∈ nspecies, iz ∈ 1:z.n
-                            this_pdf[:,:,:,iz,is] .*= moments.neutral.vth[iz,is]
+                            this_pdf[:,:,:,iz,is] ./= moments.neutral.vth[iz,is]
                         end
                     end
 
