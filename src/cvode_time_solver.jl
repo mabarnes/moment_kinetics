@@ -100,6 +100,7 @@ function time_solve_with_cvode(mk_ddt_state...; reltol=1e-3, abstol=1e-6)
         rhs_counter = 0
         function cvode_rhs_call!(simtime, y, dydt)
             rhs_counter += 1
+            rhs_counter % 100 == 0 && println("$rhs_counter t=$simtime")
             unpack_cvode_data!(y, fvec, moments, composition.n_neutral_species)
 
             # Tell other processes to keep going.
