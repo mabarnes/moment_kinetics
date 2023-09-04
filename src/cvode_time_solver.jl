@@ -62,9 +62,9 @@ function cvode_solve!(f::Function,
     #                                 (Sundials.CVODEMemPtr, Sundials.realtype), mem,
     #                                 etamax)
 
-    ## Set linear solver
-    #LS = Sundials.SUNLinSol_SPGMR(y0nv, Sundials.PREC_NONE, -1)
-    #flag = Sundials.@checkflag Sundials.CVodeSetLinearSolver(mem, LS, C_NULL) true
+    # Set linear solver
+    LS = Sundials.SUNLinSol_SPGMR(y0nv, Sundials.PREC_NONE, -1)
+    flag = Sundials.@checkflag Sundials.CVodeSetLinearSolver(mem, LS, C_NULL) true
 
     ynv = Sundials.NVector(copy(y0))
     tout = [0.0]
