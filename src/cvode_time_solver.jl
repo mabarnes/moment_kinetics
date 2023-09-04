@@ -101,6 +101,17 @@ function time_solve_with_cvode(mk_ddt_state...)
         # p is something we don't need (maybe a pointer to the CVODE 'context'?)
         # y_nvector is the state vector, as an NVector
         function cvode_output_callback(p, simtime, y_nvector)
+            println("t=", simtime, " ", Dates.format(now(), dateformat"H:MM:SS"))
+            flush(stdout)
+
+            finish_now = false
+
+            if isfile(t_input.stopfile)
+                # Stop cleanly if a file called 'stop' was created
+                println("Found 'stop' file $(t_input.stopfile), aborting run")
+                finish_now = true
+            end
+
             y = convert(Vector, y_nvector)
             unpack_cvode_data!(y, fvec, moments, composition.n_neutral_species)
 
@@ -108,7 +119,6 @@ function time_solve_with_cvode(mk_ddt_state...)
             # wasteful, but easy to implement for now.
             calculate_ddt!(mk_ddt_state...)
 
-            finish_now = false
             if any(isapprox.(simtime, moments_times)) || finish_now
                 finish_now = do_moments_output!(pdf, nothing, t, t_input, vz, vr, vzeta, vpa,
                                                 vperp, gyrophase, z, r, moments, fields,
