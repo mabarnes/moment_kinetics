@@ -225,8 +225,9 @@ function get_backup_filename(filename)
     end
     backup_dfns_filename == "" && error("Failed to find a name for backup file.")
     backup_prefix_iblock = ("$(basename)_$(counter)", iblock)
+    original_prefix_iblock = (basename, iblock)
     return dfns_filename, backup_dfns_filename, parallel_io, moments_filename,
-           backup_moments_filename, backup_prefix_iblock
+           backup_moments_filename, backup_prefix_iblock, original_prefix_iblock
 end
 
 """
@@ -273,10 +274,10 @@ function restart_moment_kinetics(input_dict::Dict,
                                  restart_filename::Union{String,Nothing}=nothing,
                                  time_index::Int=-1)
 
+    run_name = input_dict["run_name"]
+    base_directory = get(input_dict, "base_directory", "runs")
+    output_dir = joinpath(base_directory, run_name)
     if restart_filename === nothing
-        run_name = input_dict["run_name"]
-        base_directory = get(input_dict, "base_directory", "runs")
-        output_dir = joinpath(base_directory, run_name)
         io_settings = get(input_dict, "output", Dict{String,Any}())
         binary_format = get(io_settings, "binary_format", hdf5)
         if binary_format === hdf5
@@ -293,14 +294,22 @@ function restart_moment_kinetics(input_dict::Dict,
         # Move the output file being restarted from to make sure it doesn't get
         # overwritten.
         dfns_filename, backup_dfns_filename, parallel_io, moments_filename,
-        backup_moments_filename, backup_prefix_iblock =
+        backup_moments_filename, backup_prefix_iblock, original_prefix_iblock =
             get_backup_filename(restart_filename)
         # Ensure every process got the filenames and checked files exist before moving
         # files
         MPI.Barrier(comm_world)
-        if (parallel_io && global_rank[] == 0) || (!parallel_io && block_rank[] == 0)
-            mv(dfns_filename, backup_dfns_filename)
-            mv(moments_filename, backup_moments_filename)
+
+        if abspath(output_dir) == abspath(dirname(dfns_filename))
+            # Only move the file if it is in our current run directory. Otherwise we are
+            # restarting from another run, and will not be overwriting the file.
+            if (parallel_io && global_rank[] == 0) || (!parallel_io && block_rank[] == 0)
+                mv(dfns_filename, backup_dfns_filename)
+                mv(moments_filename, backup_moments_filename)
+            end
+        else
+            # Reload from dfns_filename without moving the file
+            backup_prefix_iblock = original_prefix_iblock
         end
         # Ensure files have been moved before any process tries to read from them
         MPI.Barrier(comm_world)
