@@ -44,13 +44,27 @@ function cvode_solve!(f::Function,
     # Passing -1 disables the test for maximum number of steps. This is 'not recommended'
     # according to the CVODE manual.
     flag = Sundials.@checkflag Sundials.CVodeSetMaxNumSteps(mem, -1) true
-    # Make CVODE increase the timestep less agressively
-    flag = Sundials.@checkflag Sundials.CVodeSetFixedStepBounds(mem, 0.0, 1.1) true # Default was (0,0, 1.5), which means minimum increase of step size is a factor 1.5. Decrease this to 1.1.
-    flag = Sundials.@checkflag Sundials.CVodeSetEtaMax(mem, 1.2) true # Default was 10, which means increase in step size can be up to factor 10. Limit this to 1.2.
+    ## The following needs sundials-6.2, which is not supported yet by Sundials.jl (see
+    ## https://github.com/SciML/Sundials.jl/pull/415)
+    ###################################################################################
+    ## Make CVODE increase the timestep less agressively
+    ##flag = Sundials.@checkflag Sundials.CVodeSetEtaFixedStepBounds(mem, 0.0, 1.1) true # Default was (0,0, 1.5), which means minimum increase of step size is a factor 1.5. Decrease this to 1.1.
+    ##flag = Sundials.@checkflag Sundials.CVodeSetEtaMax(mem, 1.2) true # Default was 10, which means increase in step size can be up to factor 10. Limit this to 1.2.
+    #etastepbound_lower = 0.0
+    #etastepbound_upper = 1.1
+    #flag = Sundials.@checkflag ccall((:CVodeSetEtaFixedStepBounds,
+    #                                  Sundials.libsundials_cvodes), Cint,
+    #                                 (Sundials.CVODEMemPtr, Sundials.realtype,
+    #                                  Sundials.realtype), mem, etastepbound_lower,
+    #                                 etastepbound_upper)
+    #etamax = 1.2
+    #flag = Sundials.@checkflag ccall((:CVodeSetEtaMax, Sundials.libsundials_cvodes), Cint,
+    #                                 (Sundials.CVODEMemPtr, Sundials.realtype), mem,
+    #                                 etamax)
 
-    # Set linear solver
-    LS = Sundials.SUNLinSol_SPGMR(y0nv, Sundials.PREC_NONE, -1)
-    flag = Sundials.@checkflag Sundials.CVodeSetLinearSolver(mem, LS, C_NULL) true
+    ## Set linear solver
+    #LS = Sundials.SUNLinSol_SPGMR(y0nv, Sundials.PREC_NONE, -1)
+    #flag = Sundials.@checkflag Sundials.CVodeSetLinearSolver(mem, LS, C_NULL) true
 
     ynv = Sundials.NVector(copy(y0))
     tout = [0.0]
