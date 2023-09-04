@@ -92,7 +92,9 @@ function time_solve_with_cvode(mk_ddt_state...; reltol=1e-3, abstol=1e-6)
         # simtime is the simulation time.
         # y is the current state, to calculate time derivatives from.
         # dydt is the vector to put output (i.e. the time derivatives) into.
+        rhs_counter = 0
         function cvode_rhs_call!(simtime, y, dydt)
+            rhs_counter += 1
             unpack_cvode_data!(y, fvec, moments, composition.n_neutral_species)
 
             # Tell other processes to keep going.
@@ -114,8 +116,9 @@ function time_solve_with_cvode(mk_ddt_state...; reltol=1e-3, abstol=1e-6)
         iwrite_moments = 2
         iwrite_dfns = 2
         function cvode_output_callback(p, simtime, y_nvector)
-            println("t=", simtime, " ", Dates.format(now(), dateformat"H:MM:SS"))
+            println("t=", simtime, ", ", rhs_counter, " rhs evaluations, ", Dates.format(now(), dateformat"H:MM:SS"))
             flush(stdout)
+            global rhs_counter = 0
 
             finish_now = false
 
