@@ -341,7 +341,13 @@ function setup_moment_kinetics(input_dict::Dict;
             else
                 error("Unrecognized binary_format '$binary_format'")
             end
-            restart_filename = glob(joinpath(output_dir, run_name * ".dfns*." * ext))[1]
+            restart_filename_pattern = joinpath(output_dir, run_name * ".dfns*." * ext)
+            restart_filename_glob = glob(restart_filename_pattern)
+            if length(restart_filename_glob) == 0
+                error("No output file to restart from found matching the pattern "
+                      * "$restart_filename_pattern")
+            end
+            restart_filename = restart_filename_glob[1]
         else
             restart_filename = restart
         end
