@@ -63,10 +63,10 @@ function time_solve_with_cvode(mk_ddt_state...; reltol=1e-3, abstol=1e-6)
     end
 
     if block_rank[] == 0
-        dfvec_dt, fvec, pdf, fields, moments, advect_objects, vz, vr, vzeta, vpa,
-        vperp, gyrophase, z, r, t, t_input, spectral_objects, composition, collisions,
-        geometry, scratch_dummy, manufactured_source_list, external_source_settings,
-        num_diss_params, advance = mk_ddt_state
+        dfvec_dt, fvec, pdf, fields, moments, boundary_distributions, advect_objects, vz,
+        vr, vzeta, vpa, vperp, gyrophase, z, r, t, t_input, spectral_objects, composition,
+        collisions, geometry, scratch_dummy, manufactured_source_list,
+        external_source_settings, num_diss_params, advance = mk_ddt_state
 
         # y0 holds the initial state in a single vector. Need to allocate, then fill it
         # with the initial state from the moment_kinetics variables.
