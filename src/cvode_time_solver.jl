@@ -1,5 +1,8 @@
 # The code in this file is adapted from the `cvode!()` function in Sundials.jl:
 # https://github.com/SciML/Sundials.jl/blob/2f936e77bcbb6ea460f818864ca5afe953af65ff/src/simple.jl#L130
+# Here we use an unpreconditioned, matrix-free solver (the default Newton for nonlinear
+# solve, GMRES for linear solve). The example used a dense matrix solver, which is
+# unsuutable for problames as large as the onse we are solving.
 
 using ..communication
 
@@ -36,9 +39,8 @@ function cvode_solve!(f::Function,
 
     flag = Sundials.@checkflag Sundials.CVodeSetUserData(mem, userfun) true
     flag = Sundials.@checkflag Sundials.CVodeSStolerances(mem, reltol, abstol) true
-    A = Sundials.SUNDenseMatrix(length(y0), length(y0))
-    LS = Sundials.SUNLinSol_Dense(y0nv, A)
-    flag = Sundials.@checkflag Sundials.CVDlsSetLinearSolver(mem, LS, A) true
+    LS = Sundials.SUNLinSol_SPGMR(y0nv, Sundials.PREC_NONE, -1)
+    flag = Sundials.@checkflag Sundials.CVodeSetLinearSolver(mem, LS, C_NULL) true
 
     ynv = Sundials.NVector(copy(y0))
     tout = [0.0]
@@ -50,8 +52,7 @@ function cvode_solve!(f::Function,
         c = c + 1
     end
 
-    Sundials.SUNLinSolFree_Dense(LS)
-    Sundials.SUNMatDestroy_Dense(A)
+    Sundials.SUNLinSolFree_SPGMR(LS)
 
     return c
 end
