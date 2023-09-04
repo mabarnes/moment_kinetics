@@ -94,6 +94,7 @@ function time_solve_with_cvode(mk_ddt_state...; reltol=1e-3, abstol=1e-6)
 
             calculate_ddt!(mk_ddt_state...)
 
+            # Synchronize other processes so we can pack data
             _block_synchronize()
 
             pack_cvode_data!(dydt, dfvec_dt, moments, composition.n_neutral_species)
@@ -157,6 +158,9 @@ function time_solve_with_cvode(mk_ddt_state...; reltol=1e-3, abstol=1e-6)
             end
 
             calculate_ddt!(mk_ddt_state...)
+
+            # Synchronize so root process can pack data
+            _block_synchronize()
         end
     end
 
