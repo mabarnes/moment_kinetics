@@ -38,7 +38,14 @@ function cvode_solve!(f::Function,
     flag = Sundials.@checkflag Sundials.CVodeInit(mem, getcfun(userfun), t[1], convert(Sundials.NVector, y0nv)) true
 
     flag = Sundials.@checkflag Sundials.CVodeSetUserData(mem, userfun) true
+
+    # Settingns
     flag = Sundials.@checkflag Sundials.CVodeSStolerances(mem, reltol, abstol) true
+    # Passing -1 disables the test for maximum number of steps. This is 'not recommended'
+    # according to the CVODE manual.
+    flag = Sundials.@checkflag Sundials.CVodeSetMaxNumSteps(mem, -1) true
+
+    # Set linear solver
     LS = Sundials.SUNLinSol_SPGMR(y0nv, Sundials.PREC_NONE, -1)
     flag = Sundials.@checkflag Sundials.CVodeSetLinearSolver(mem, LS, C_NULL) true
 
