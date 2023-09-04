@@ -791,18 +791,26 @@ function update_chodura!(moments,ff,vpa,vperp,z,r,r_spectral,composition,geometr
             dffdr[ivpa,ivperp,iz,ir,is] = 0.0
         end
     end 
+    
+    del_vpa = minimum(vpa.grid[2:vpa.ngrid].-vpa.grid[1:vpa.ngrid-1])
     begin_s_r_region()
-    @loop_s_r is ir begin
-        if z.irank == 0
+    if z.irank == 0
+        @loop_s_r is ir begin
             @views moments.charged.chodura_integral_lower[ir,is] = update_chodura_integral_species!(ff[:,:,1,ir,is],dffdr[:,:,1,ir,is],
-            ff_dummy[:,:,1,ir,is],vpa,vperp,z,r,composition,geometry,z_advect[is].speed[1,:,:,ir],moments.charged.dens[1,ir,is])
-        else # we do not save this Chodura integral to the output file
+            ff_dummy[:,:,1,ir,is],vpa,vperp,z,r,composition,geometry,z_advect[is].speed[1,:,:,ir],moments.charged.dens[1,ir,is],del_vpa)
+        end
+    else # we do not save this Chodura integral to the output file
+        @loop_s_r is ir begin
             moments.charged.chodura_integral_lower[ir,is] = 0.0
         end
-        if z.irank == z.nrank - 1
+    end
+    if z.irank == z.nrank - 1
+        @loop_s_r is ir begin
             @views moments.charged.chodura_integral_upper[ir,is] = update_chodura_integral_species!(ff[:,:,end,ir,is],dffdr[:,:,end,ir,is],
-            ff_dummy[:,:,end,ir,is],vpa,vperp,z,r,composition,geometry,z_advect[is].speed[end,:,:,ir],moments.charged.dens[end,ir,is])
-        else # we do not save this Chodura integral to the output file
+            ff_dummy[:,:,end,ir,is],vpa,vperp,z,r,composition,geometry,z_advect[is].speed[end,:,:,ir],moments.charged.dens[end,ir,is],del_vpa)
+        end
+    else # we do not save this Chodura integral to the output file
+        @loop_s_r is ir begin
             moments.charged.chodura_integral_upper[ir,is] =  0.0
         end
     end
@@ -822,18 +830,19 @@ Chodura condition
  to a single species plasma with Z = 1
 
 """
-function update_chodura_integral_species!(ff,dffdr,ff_dummy,vpa,vperp,z,r,composition,geometry,vz,dens)
+function update_chodura_integral_species!(ff,dffdr,ff_dummy,vpa,vperp,z,r,composition,geometry,vz,dens,del_vpa)
     @boundscheck vpa.n == size(ff, 1) || throw(BoundsError(ff))
     @boundscheck vperp.n == size(ff, 2) || throw(BoundsError(ff))
     @boundscheck vpa.n == size(dffdr, 1) || throw(BoundsError(dffdr))
     @boundscheck vperp.n == size(dffdr, 2) || throw(BoundsError(dffdr))
     @boundscheck vpa.n == size(ff_dummy, 1) || throw(BoundsError(ff_dummy))
     @boundscheck vperp.n == size(ff_dummy, 2) || throw(BoundsError(ff_dummy))
-    zero = 1.0e-8
     bzed = geometry.bzed
     @loop_vperp_vpa ivperp ivpa begin
-        # avoid divide by zero
-        if abs(vz[ivpa,ivperp]) > zero
+        # avoid divide by zero by making sure 
+        # we are more than a vpa mimimum grid spacing away from 
+        # the vz(vpa,r) = 0 velocity boundary
+        if abs(vz[ivpa,ivperp]) > 2.0*del_vpa
             ff_dummy[ivpa,ivperp] = (ff[ivpa,ivperp]*bzed^2/(vz[ivpa,ivperp]^2) + 
                                 geometry.rhostar*dffdr[ivpa,ivperp]/vz[ivpa,ivperp])
         else
