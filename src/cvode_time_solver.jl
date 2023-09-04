@@ -44,6 +44,9 @@ function cvode_solve!(f::Function,
     # Passing -1 disables the test for maximum number of steps. This is 'not recommended'
     # according to the CVODE manual.
     flag = Sundials.@checkflag Sundials.CVodeSetMaxNumSteps(mem, -1) true
+    # Make CVODE increase the timestep less agressively
+    flag = Sundials.@checkflag Sundials.CVodeSetFixedStepBounds(mem, 0.0, 1.1) true # Default was (0,0, 1.5), which means minimum increase of step size is a factor 1.5. Decrease this to 1.1.
+    flag = Sundials.@checkflag Sundials.CVodeSetEtaMax(mem, 1.2) true # Default was 10, which means increase in step size can be up to factor 10. Limit this to 1.2.
 
     # Set linear solver
     LS = Sundials.SUNLinSol_SPGMR(y0nv, Sundials.PREC_NONE, -1)
