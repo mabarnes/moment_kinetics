@@ -193,13 +193,21 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     end
 
     # parameters related to the time stepping
+    time_stepper_type = get(scan_input, "time_stepper_type", "rk")
     nstep = get(scan_input, "nstep", 5)
     dt = get(scan_input, "dt", 0.00025/sqrt(species.charged[1].initial_temperature))
     nwrite_moments = get(scan_input, "nwrite", 1)
     nwrite_dfns = get(scan_input, "nwrite_dfns", nstep)
     # options are n_rk_stages = 1, 2, 3 or 4 (corresponding to forward Euler,
     # Heun's method, SSP RK3 and 4-stage SSP RK3)
-    n_rk_stages = get(scan_input, "n_rk_stages", 4)
+    if time_stepper_type == "rk"
+        n_rk_stages = get(scan_input, "n_rk_stages", 4)
+    elseif time_stepper_type == "cvode"
+        # Use this to create two `scratch_pdf` structs
+        n_rk_stages = 2
+    else
+        error("Unrecognised time_stepper_type=", t_input.time_stepper_type)
+    end
     split_operators = get(scan_input, "split_operators", false)
     runtime_plots = get(scan_input, "runtime_plots", false)
     stopfile_name = joinpath(output_dir, "stop")
@@ -387,9 +395,9 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     #irank_z = 0
     #nrank_z = 0
 
-    t_input = time_input(nstep, dt, nwrite_moments, nwrite_dfns, n_rk_stages,
-                         split_operators, runtime_plots, steady_state_residual,
-                         converged_residual_value,
+    t_input = time_input(time_stepper_type, nstep, dt, nwrite_moments, nwrite_dfns,
+                         n_rk_stages, split_operators, runtime_plots,
+                         steady_state_residual, converged_residual_value,
                          manufactured_solns_input.use_for_advance, stopfile_name)
     # replace mutable structures with immutable ones to optimize performance
     # and avoid possible misunderstandings	

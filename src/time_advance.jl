@@ -66,6 +66,8 @@ using CairoMakie
 using ..analysis: steady_state_residuals
 #using ..post_processing: draw_v_parallel_zero!
 
+include("cvode_time_solver.jl")
+
 struct scratch_dummy_arrays
     dummy_sr::Array{mk_float,2}
     dummy_vpavperp::Array{mk_float,2}
@@ -731,6 +733,31 @@ function setup_runge_kutta_coefficients(n_rk_stages)
     return rk_coefs
 end
 
+function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp,
+        gyrophase, z, r, moments, fields, spectral_objects, advect_objects, composition,
+        collisions, geometry, boundary_distributions, external_source_settings,
+        num_diss_params, advance, scratch_dummy, manufactured_source_list, ascii_io,
+        io_moments, io_dfns)
+
+    if t_input.time_stepper_type == "rk"
+        time_advance_fixed_step!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp,
+                                 gyrophase, z, r, moments, fields, spectral_objects,
+                                 advect_objects, composition, collisions, geometry,
+                                 boundary_distributions, external_source_settings,
+                                 num_diss_params, advance, scratch_dummy,
+                                 manufactured_source_list, ascii_io, io_moments, io_dfns)
+    elseif t_input.time_stepper_type == "cvode"
+        time_solve_with_cvode(scratch[2], scratch[1], pdf, fields, moments,
+                              boundary_distributions, advect_objects, vz, vr, vzeta, vpa,
+                              vperp, gyrophase, z, r, t, t_input, spectral_objects,
+                              composition, collisions, geometry, scratch_dummy,
+                              manufactured_source_list, external_source_settings,
+                              num_diss_params, advance; reltol=1e-8, abstol=1e-12)
+    else
+        error("Unrecognised time_stepper_type=", t_input.time_stepper_type)
+    end
+end
+
 """
 solve ∂f/∂t + v(z,t)⋅∂f/∂z + dvpa/dt ⋅ ∂f/∂vpa= 0
 define approximate characteristic velocity
@@ -739,11 +766,11 @@ df/dt + δv⋅∂f/∂z = 0, with δv(z,t)=v(z,t)-v₀(z)
 for prudent choice of v₀, expect δv≪v so that explicit
 time integrator can be used without severe CFL condition
 """
-function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
-           moments, fields, spectral_objects, advect_objects,
-           composition, collisions, geometry, boundary_distributions,
-           external_source_settings, num_diss_params, advance, scratch_dummy,
-           manufactured_source_list, ascii_io, io_moments, io_dfns)
+function time_advance_fixed_step!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp,
+        gyrophase, z, r, moments, fields, spectral_objects, advect_objects, composition,
+        collisions, geometry, boundary_distributions, external_source_settings,
+        num_diss_params, advance, scratch_dummy, manufactured_source_list, ascii_io,
+        io_moments, io_dfns)
 
     @debug_detect_redundant_block_synchronize begin
         # Only want to check for redundant _block_synchronize() calls during the
@@ -2065,10 +2092,10 @@ function calculate_ddt!(dfvec_dt, fvec, pdf, fields, moments, boundary_distribut
     zero_evolving_fields()
 
     if t_input.dt != 1.0
-        t_input = time_input(t_input.nstep, 1.0, t_input.nwrite_moments,
-                             t_input.nwrite_dfns, t_input.n_rk_stages,
-                             t_input.split_operators, t_input.runtime_plots,
-                             t_input.steady_state_residual,
+        t_input = time_input(t_input.time_stepper_type, t_input.nstep, 1.0,
+                             t_input.nwrite_moments, t_input.nwrite_dfns,
+                             t_input.n_rk_stages, t_input.split_operators,
+                             t_input.runtime_plots, t_input.steady_state_residual,
                              t_input.converged_residual_value,
                              t_input.use_manufactured_solns_for_advance, t_input.stopfile)
     end

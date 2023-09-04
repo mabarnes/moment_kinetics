@@ -34,6 +34,7 @@ end
 """
 """
 struct time_input
+    time_stepper_type::String
     nstep::mk_int
     dt::mk_float
     nwrite_moments::mk_int
