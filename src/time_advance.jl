@@ -828,13 +828,14 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
         end
         # write moments data to file every nwrite_moments time steps
         if mod(i,t_input.nwrite_moments) == 0 || finish_now
-            finish_now = do_moments_output!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa,
-                                            vperp, gyrophase, z, r, moments, fields,
-                                            composition, i, time_for_run, finish_now)
+            finish_now = do_moments_output!(ascii_io, io_moments, pdf, scratch, t,
+                                            t_input, vz, vr, vzeta, vpa, vperp, gyrophase,
+                                            z, r, moments, fields, composition, i,
+                                            time_for_run, finish_now)
         end
         if mod(i,t_input.nwrite_dfns) == 0 || finish_now
-            finish_now = do_dfns_output!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa,
-                                         vperp, gyrophase, z, r, moments, fields,
+            finish_now = do_dfns_output!(io_dfns, pdf, scratch, t, t_input, vz, vr, vzeta,
+                                         vpa, vperp, gyrophase, z, r, moments, fields,
                                          composition, i, time_for_run, finish_now)
         end
 
@@ -1044,14 +1045,14 @@ function time_advance_no_splitting!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa
 end
 
 """
-    do_moments_output!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp,
-                       gyrophase, z, r, moments, fields, composition, i,
+    do_moments_output!(ascii_io, io_moments, pdf, scratch, t, t_input, vz, vr, vzeta,
+                       vpa, vperp, gyrophase, z, r, moments, fields, composition, i,
                        time_for_run, finish_now)
 
 Write output for moments.
 """
-function do_moments_output!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp,
-                            gyrophase, z, r, moments, fields, composition, i,
+function do_moments_output!(ascii_io, io_moments, pdf, scratch, t, t_input, vz, vr, vzeta,
+                            vpa, vperp, gyrophase, z, r, moments, fields, composition, i,
                             time_for_run, finish_now)
 
     @debug_detect_redundant_block_synchronize begin
@@ -1231,13 +1232,15 @@ function do_moments_output!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp,
 end
 
 """
-    do_dfns_output(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z,
-                   r, moments, fields, composition, i, time_for_run, finish_now)
+    do_dfns_output(io_dfns, pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp,
+                   gyrophase, z, r, moments, fields, composition, i,
+                   time_for_run, finish_now)
 
 Write output for distribution functions.
 """
-function do_dfns_output(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z,
-                        r, moments, fields, composition, i, time_for_run, finish_now)
+function do_dfns_output(io_dfns, pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp,
+                        gyrophase, z, r, moments, fields, composition, i,
+                        time_for_run, finish_now)
     @debug_detect_redundant_block_synchronize begin
         # Skip check for redundant _block_synchronize() during file I/O because
         # it only runs infrequently

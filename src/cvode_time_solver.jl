@@ -120,14 +120,15 @@ function time_solve_with_cvode(mk_ddt_state...)
             calculate_ddt!(mk_ddt_state...)
 
             if any(isapprox.(simtime, moments_times)) || finish_now
-                finish_now = do_moments_output!(pdf, nothing, t, t_input, vz, vr, vzeta, vpa,
-                                                vperp, gyrophase, z, r, moments, fields,
+                finish_now = do_moments_output!(ascii_io, io_moments, pdf, nothing, t,
+                                                t_input, vz, vr, vzeta, vpa, vperp,
+                                                gyrophase, z, r, moments, fields,
                                                 composition, i, finish_now)
             end
             if any(isapprox.(simtime, dfns_times)) || finish_now
-                finish_now = do_dfns_output!(pdf, nothing, t, t_input, vz, vr, vzeta, vpa,
-                                             vperp, gyrophase, z, r, moments, fields,
-                                             composition, i, finish_now)
+                finish_now = do_dfns_output!(io_dfns, pdf, nothing, t, t_input, vz, vr,
+                                             vzeta, vpa, vperp, gyrophase, z, r, moments,
+                                             fields, composition, i, finish_now)
             end
 
             return Int64(finish_now)
