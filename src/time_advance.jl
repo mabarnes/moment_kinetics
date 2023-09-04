@@ -739,6 +739,28 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp,
         num_diss_params, advance, scratch_dummy, manufactured_source_list, ascii_io,
         io_moments, io_dfns)
 
+    @debug_detect_redundant_block_synchronize begin
+        # Only want to check for redundant _block_synchronize() calls during the
+        # time advance loop, so activate these checks here
+        debug_detect_redundant_is_active[] = true
+    end
+
+    if isfile(t_input.stopfile)
+        if filesize(t_input.stopfile) > 0
+            error("Found a 'stop file' at $(t_input.stopfile), but it contains some data "
+                  * "(file size is greater than zero), so will not delete.")
+        end
+        if global_rank[] == 0
+            rm(t_input.stopfile)
+        end
+    end
+
+    @serial_region begin
+        if global_rank[] == 0
+             println("beginning time advance   ", Dates.format(now(), dateformat"H:MM:SS"))
+        end
+    end
+
     if t_input.time_stepper_type == "rk"
         time_advance_fixed_step!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp,
                                  gyrophase, z, r, moments, fields, spectral_objects,
@@ -771,28 +793,6 @@ function time_advance_fixed_step!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, 
         collisions, geometry, boundary_distributions, external_source_settings,
         num_diss_params, advance, scratch_dummy, manufactured_source_list, ascii_io,
         io_moments, io_dfns)
-
-    @debug_detect_redundant_block_synchronize begin
-        # Only want to check for redundant _block_synchronize() calls during the
-        # time advance loop, so activate these checks here
-        debug_detect_redundant_is_active[] = true
-    end
-
-    if isfile(t_input.stopfile)
-        if filesize(t_input.stopfile) > 0
-            error("Found a 'stop file' at $(t_input.stopfile), but it contains some data "
-                  * "(file size is greater than zero), so will not delete.")
-        end
-        if global_rank[] == 0
-            rm(t_input.stopfile)
-        end
-    end
-
-    @serial_region begin
-        if global_rank[] == 0
-             println("beginning time advance   ", Dates.format(now(), dateformat"H:MM:SS"))
-        end
-    end
 
     start_time = now()
 
