@@ -379,12 +379,14 @@ function load_rank_data(fid; printout=false)
     coords = get_group(fid, "coords")
     z_irank = load_variable(get_group(coords, "z"), "irank")
     r_irank = load_variable(get_group(coords, "r"), "irank")
+    z_nrank = load_variable(get_group(coords, "z"), "nrank")
+    r_nrank = load_variable(get_group(coords, "r"), "nrank")
     
     if printout
         println("done.")
     end
 
-    return z_irank, r_irank
+    return z_irank, z_nrank, r_irank, r_nrank
 end
 
 """
@@ -1867,7 +1869,7 @@ function load_distributed_charged_pdf_slice(run_names::Tuple, nblocks::Tuple, t_
         for iblock in 0:nb-1
             fid = open_readonly_output_file(run_name, "dfns", iblock=iblock, printout=false)
 
-            z_irank, r_irank = load_rank_data(fid)
+            z_irank, z_nrank, r_irank, r_nrank = load_rank_data(fid)
 
             # max index set to avoid double assignment of repeated points
             # nr/nz if irank = nrank-1, (nr-1)/(nz-1) otherwise
@@ -2082,7 +2084,7 @@ function load_distributed_neutral_pdf_slice(run_names::Tuple, nblocks::Tuple, t_
         for iblock in 0:nb-1
             fid = open_readonly_output_file(run_name, "dfns", iblock=iblock, printout=false)
 
-            z_irank, r_irank = load_rank_data(fid)
+            z_irank, z_nrank, r_irank, r_nrank = load_rank_data(fid)
 
             # max index set to avoid double assignment of repeated points
             # nr/nz if irank = nrank-1, (nr-1)/(nz-1) otherwise

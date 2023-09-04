@@ -123,7 +123,7 @@ function trygif(anim, outfile; kwargs...)
 end
 
 """
-Read data
+Read data which is a function of (z,r,t) or (z,r,species,t)
 
 run_names is a tuple. If it has more than one entry, this means that there are multiple
 restarts (which are sequential in time), so concatenate the data from each entry together.
@@ -167,7 +167,7 @@ function read_distributed_zr_data!(var::Array{mk_float,N}, var_name::String,
             local_tind_end = local_tind_start + ntime_local - 1
             global_tind_end = global_tind_start + length(offset:iskip:ntime_local) - 1
 
-            z_irank, r_irank = load_rank_data(fid)
+            z_irank, z_nrank, r_irank, r_nrank = load_rank_data(fid)
 
             # min index set to avoid double assignment of repeated points
             # 1 if irank = 0, 2 otherwise
@@ -2995,7 +2995,7 @@ function compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,spec
     pdf_norm = zeros(mk_float,ntime)
     for iblock in 0:nblocks-1
         fid_pdfs = open_readonly_output_file(run_name,"dfns",iblock=iblock, printout=false)
-        z_irank, r_irank = load_rank_data(fid_pdfs,printout=false)
+        z_irank, z_nrank, r_irank, r_nrank = load_rank_data(fid_pdfs,printout=false)
         pdf = load_pdf_data(fid_pdfs, printout=false)
         # local local grid data on iblock=0
         z_local, _ = load_coordinate_data(fid_pdfs, "z")
@@ -3020,10 +3020,10 @@ function compare_charged_pdf_symbolic_test(run_name,manufactured_solns_list,spec
 
     # plot distribution at lower wall boundary
     # find the number of ranks
-    z_nrank, r_nrank = get_nranks(run_name,nblocks,"dfns")
+    #z_nrank, r_nrank = get_nranks(run_name,nblocks,"dfns")
     for iblock in 0:nblocks-1
         fid_pdfs = open_readonly_output_file(run_name,"dfns",iblock=iblock, printout=false)
-        z_irank, r_irank = load_rank_data(fid_pdfs,printout=false)
+        z_irank, z_nrank, r_irank, r_nrank = load_rank_data(fid_pdfs,printout=false)
         if (z_irank == 0 || z_irank == z_nrank - 1) && r_irank == 0
             pdf = load_pdf_data(fid_pdfs, printout=false)
             # local local grid data on iblock=0
@@ -3077,7 +3077,7 @@ function compare_neutral_pdf_symbolic_test(run_name,manufactured_solns_list,spec
     pdf_norm = zeros(mk_float,ntime)
     for iblock in 0:nblocks-1
         fid_pdfs = open_readonly_output_file(run_name,"dfns",iblock=iblock, printout=false)
-        z_irank, r_irank = load_rank_data(fid_pdfs,printout=false)
+        z_irank, z_nrank, r_irank, r_nrank = load_rank_data(fid_pdfs,printout=false)
         pdf = load_neutral_pdf_data(fid_pdfs, printout=false)
         # load local grid data
         z_local, _ = load_coordinate_data(fid_pdfs, "z", printout=false)
