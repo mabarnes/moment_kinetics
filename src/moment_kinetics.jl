@@ -290,6 +290,7 @@ function restart_moment_kinetics(input_dict::Dict,
         restart_filename = glob(joinpath(output_dir, run_name * ".dfns*." * ext))[1]
     end
 
+    mk_state = nothing
     try
         # Move the output file being restarted from to make sure it doesn't get
         # overwritten.
@@ -319,13 +320,11 @@ function restart_moment_kinetics(input_dict::Dict,
                                          restart_prefix_iblock=backup_prefix_iblock,
                                          restart_time_index=time_index)
 
-        try
-            time_advance!(mk_state...)
-        finally
-            # clean up i/o and communications
-            # last 2 elements of mk_state are `io` and `cdf`
-            cleanup_moment_kinetics!(mk_state[end-2:end]...)
-        end
+        time_advance!(mk_state...)
+
+        # clean up i/o and communications
+        # last 2 elements of mk_state are `io` and `cdf`
+        cleanup_moment_kinetics!(mk_state[end-2:end]...)
     catch e
         # Stop code from hanging when running on multiple processes if only one of them
         # throws an error
@@ -336,6 +335,10 @@ function restart_moment_kinetics(input_dict::Dict,
             flush(stdout)
             flush(stderr)
             MPI.Abort(comm_world, 1)
+        else
+            # Error almost certainly occured before cleanup. If running in serial we can
+            # still finalise file I/O
+            cleanup_moment_kinetics!(mk_state[end-2:end]...)
         end
 
         rethrow(e)
