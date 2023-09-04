@@ -81,7 +81,8 @@ function cvode_solve!(f::Function,
     return c
 end
 
-function time_solve_with_cvode(mk_ddt_state...; reltol=1e-3, abstol=1e-6)
+function time_solve_with_cvode(mk_ddt_state...; ascii_io, io_moments, io_dfns,
+                               reltol=1e-3, abstol=1e-6)
     if n_blocks[] != 1
         error("SUNDIALS.jl does not support MPI yet, so cannot use distributed memory.")
     end

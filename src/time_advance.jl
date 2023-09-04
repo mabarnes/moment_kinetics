@@ -774,7 +774,9 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp,
                               vperp, gyrophase, z, r, t, t_input, spectral_objects,
                               composition, collisions, geometry, scratch_dummy,
                               manufactured_source_list, external_source_settings,
-                              num_diss_params, advance; reltol=1e-8, abstol=1e-12)
+                              num_diss_params, advance; ascii_io=ascii_io,
+                              io_moments=io_moments, io_dfns=io_dfns, reltol=1e-8,
+                              abstol=1e-12)
     else
         error("Unrecognised time_stepper_type=", t_input.time_stepper_type)
     end
