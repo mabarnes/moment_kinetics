@@ -1,6 +1,8 @@
 # The code in this file is adapted from the `cvode!()` function in Sundials.jl:
 # https://github.com/SciML/Sundials.jl/blob/2f936e77bcbb6ea460f818864ca5afe953af65ff/src/simple.jl#L130
 
+using ..communication
+
 using Sundials
 
 function cvode_solve!(f::Function,
@@ -13,35 +15,35 @@ function cvode_solve!(f::Function,
     callback = (x, y, z) -> true)
 
     if integrator == :BDF
-        mem_ptr = CVodeCreate(CV_BDF)
+        mem_ptr = Sundials.CVodeCreate(Sundials.CV_BDF)
     elseif integrator == :Adams
-        mem_ptr = CVodeCreate(CV_ADAMS)
+        mem_ptr = Sundials.CVodeCreate(Sundials.CV_ADAMS)
     end
 
     (mem_ptr == C_NULL) && error("Failed to allocate CVODE solver object")
-    mem = Handle(mem_ptr)
+    mem = Sundials.Handle(mem_ptr)
 
     c = 1
 
-    userfun = UserFunctionAndData(f, userdata)
-    y0nv = NVector(y0)
+    userfun = Sundials.UserFunctionAndData(f, userdata)
+    y0nv = Sundials.NVector(y0)
 
     function getcfun(userfun::T) where {T}
         @cfunction(Sundials.cvodefun, Cint, (Sundials.realtype, Sundials.N_Vector,
                                              Sundials.N_Vector, Ref{T}))
     end
-    flag = Sundials.@checkflag CVodeInit(mem, getcfun(userfun), t[1], convert(NVector, y0nv)) true
+    flag = Sundials.@checkflag Sundials.CVodeInit(mem, getcfun(userfun), t[1], convert(Sundials.NVector, y0nv)) true
 
-    flag = Sundials.@checkflag CVodeSetUserData(mem, userfun) true
-    flag = Sundials.@checkflag CVodeSStolerances(mem, reltol, abstol) true
+    flag = Sundials.@checkflag Sundials.CVodeSetUserData(mem, userfun) true
+    flag = Sundials.@checkflag Sundials.CVodeSStolerances(mem, reltol, abstol) true
     A = Sundials.SUNDenseMatrix(length(y0), length(y0))
     LS = Sundials.SUNLinSol_Dense(y0nv, A)
     flag = Sundials.@checkflag Sundials.CVDlsSetLinearSolver(mem, LS, A) true
 
-    ynv = NVector(copy(y0))
+    ynv = Sundials.NVector(copy(y0))
     tout = [0.0]
     for k in 2:length(t)
-        flag = Sundials.@checkflag CVode(mem, t[k], ynv, tout, CV_NORMAL) true
+        flag = Sundials.@checkflag Sundials.CVode(mem, t[k], ynv, tout, Sundials.CV_NORMAL) true
         if !callback(mem, t[k], ynv)
             break
         end
@@ -75,20 +77,19 @@ function time_solve_with_cvode(mk_ddt_state...; reltol=1e-3, abstol=1e-6)
         moments_output_inds = collect(1:t_input.nwrite_moments:t_input.nstep)
         dfns_output_inds = collect(1:t_input.nwrite_dfns:t_input.nstep)
         all_output_inds = sort(unique(vcat(moments_output_inds, dfns_output_inds)))
-        moments_times = @. t + dt * moments_output_inds
-        dfns_times = @. t + dt * dfns_output_inds
-        all_time_points = @. t + dt * all_output_inds
+        moments_times = @. t + t_input.dt * moments_output_inds
+        dfns_times = @. t + t_input.dt * dfns_output_inds
+        all_time_points = @. t + t_input.dt * all_output_inds
 
-        # dydt is the vector to put output (i.e. the time derivatives) into.
+        # simtime is the simulation time.
         # y is the current state, to calculate time derivatives from.
-        # p is something we don't need (maybe a pointer to the CVODE 'context'?)
-        # t is (probably) the simulation time.
-        function cvode_rhs_call!(dydt, y, p, simtime)
+        # dydt is the vector to put output (i.e. the time derivatives) into.
+        function cvode_rhs_call!(simtime, y, dydt)
             unpack_cvode_data!(y, fvec, moments, composition.n_neutral_species)
 
             # Tell other processes to keep going.
             # Also synchronizes other processes so that they can use the unpacked data.
-            finished = MPI.Broadcast(0, 0, comm_block[])
+            finished = MPI.Bcast(0, 0, comm_block[])
 
             calculate_ddt!(mk_ddt_state...)
 
@@ -96,7 +97,7 @@ function time_solve_with_cvode(mk_ddt_state...; reltol=1e-3, abstol=1e-6)
 
             pack_cvode_data!(dydt, dfvec_dt, moments, composition.n_neutral_species)
 
-            return 0
+            return Sundials.CV_SUCCESS
         end
 
         # p is something we don't need (maybe a pointer to the CVODE 'context'?)
@@ -138,18 +139,18 @@ function time_solve_with_cvode(mk_ddt_state...; reltol=1e-3, abstol=1e-6)
                 iwrite_dfns += 1
             end
 
-            return Int64(finish_now)
+            return !finish_now
         end
 
         cvode_solve!(cvode_rhs_call!, y0, all_time_points; reltol=reltol, abstol=abstol,
                      callback=cvode_output_callback)
 
         # Tell other processes to stop
-        finished = MPI.Broadcast(1, 0, comm_block[])
+        finished = MPI.Bcast(1, 0, comm_block[])
     else
         while true
             # Check if run has finished
-            finished = MPI.Broadcast(0, 0, comm_block[])
+            finished = MPI.Bcast(0, 0, comm_block[])
             if finished != 0
                 break
             end
@@ -184,37 +185,25 @@ function get_cvode_state_size(fvec, moments, n_neutral_species)
 
     if n_neutral_species > 0
         # Add neutral pdf
-        n = length(fvec.pdf_neutral)
-        end_ind = start_ind + n - 1
-        y0[start_ind:end_ind] .= reshape(fvec.pdf_neutral, n)
-        start_ind = end_ind + 1
+        y0_size += length(fvec.pdf_neutral)
 
         if moments.evolve_density
             # Add neutral density
-            n = length(fvec.density_neutral)
-            end_ind = start_ind + n - 1
-            y0[start_ind:end_ind] .= reshape(fvec.density_neutral, n)
-            start_ind = end_ind + 1
+            y0_size += length(fvec.density_neutral)
         end
 
         if moments.evolve_upar
             # Add neutral parallel flow
-            n = length(fvec.uz_neutral)
-            end_ind = start_ind + n - 1
-            y0[start_ind:end_ind] .= reshape(fvec.uz_neutral, n)
-            start_ind = end_ind + 1
+            y0_size += length(fvec.uz_neutral)
         end
 
         if moments.evolve_ppar
             # Add neutral parallel pressure
-            n = length(fvec.pz_neutral)
-            end_ind = start_ind + n - 1
-            y0[start_ind:end_ind] .= reshape(fvec.pz_neutral, n)
-            start_ind = end_ind + 1
+            y0_size += length(fvec.pz_neutral)
         end
     end
 
-    return nothing
+    return y0_size
 end
 
 function pack_cvode_data!(y, fvec, moments, n_neutral_species)
