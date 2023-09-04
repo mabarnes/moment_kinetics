@@ -831,12 +831,15 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
             finish_now = do_moments_output!(ascii_io, io_moments, pdf, scratch, t,
                                             t_input, vz, vr, vzeta, vpa, vperp, gyrophase,
                                             z, r, moments, fields, composition, i,
-                                            time_for_run, finish_now)
+                                            iwrite_moments, time_for_run, finish_now)
+            iwrite_moments += 1
         end
         if mod(i,t_input.nwrite_dfns) == 0 || finish_now
             finish_now = do_dfns_output!(io_dfns, pdf, scratch, t, t_input, vz, vr, vzeta,
                                          vpa, vperp, gyrophase, z, r, moments, fields,
-                                         composition, i, time_for_run, finish_now)
+                                         composition, i, iwrite_dfns, time_for_run,
+                                         finish_now)
+            iwrite_dfns += 1
         end
 
         if finish_now
@@ -1047,13 +1050,13 @@ end
 """
     do_moments_output!(ascii_io, io_moments, pdf, scratch, t, t_input, vz, vr, vzeta,
                        vpa, vperp, gyrophase, z, r, moments, fields, composition, i,
-                       time_for_run, finish_now)
+                       iwrite_moments, time_for_run, finish_now)
 
 Write output for moments.
 """
 function do_moments_output!(ascii_io, io_moments, pdf, scratch, t, t_input, vz, vr, vzeta,
                             vpa, vperp, gyrophase, z, r, moments, fields, composition, i,
-                            time_for_run, finish_now)
+                            iwrite_moments, time_for_run, finish_now)
 
     @debug_detect_redundant_block_synchronize begin
         # Skip check for redundant _block_synchronize() during file I/O because
@@ -1221,7 +1224,6 @@ function do_moments_output!(ascii_io, io_moments, pdf, scratch, t, t_input, vz, 
             save("latest_plots$(iblock_index[]).png", fig)
         end
     end
-    iwrite_moments += 1
     begin_s_r_z_vperp_region()
     @debug_detect_redundant_block_synchronize begin
         # Reactivate check for redundant _block_synchronize()
@@ -1232,15 +1234,15 @@ function do_moments_output!(ascii_io, io_moments, pdf, scratch, t, t_input, vz, 
 end
 
 """
-    do_dfns_output(io_dfns, pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp,
-                   gyrophase, z, r, moments, fields, composition, i,
-                   time_for_run, finish_now)
+    do_dfns_output!(io_dfns, pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp,
+                    gyrophase, z, r, moments, fields, composition, i, iwrite_dfns,
+                    time_for_run, finish_now)
 
 Write output for distribution functions.
 """
-function do_dfns_output(io_dfns, pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp,
-                        gyrophase, z, r, moments, fields, composition, i,
-                        time_for_run, finish_now)
+function do_dfns_output!(io_dfns, pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp,
+                         gyrophase, z, r, moments, fields, composition, i, iwrite_dfns,
+                         time_for_run, finish_now)
     @debug_detect_redundant_block_synchronize begin
         # Skip check for redundant _block_synchronize() during file I/O because
         # it only runs infrequently
@@ -1257,7 +1259,6 @@ function do_dfns_output(io_dfns, pdf, scratch, t, t_input, vz, vr, vzeta, vpa, v
                               t, composition.n_ion_species,
                               composition.n_neutral_species, io_dfns, iwrite_dfns,
                               time_for_run, r, z, vperp, vpa, vzeta, vr, vz)
-    iwrite_dfns += 1
     begin_s_r_z_vperp_region()
     @debug_detect_redundant_block_synchronize begin
         # Reactivate check for redundant _block_synchronize()
