@@ -1966,12 +1966,15 @@ for dim ∈ one_dimension_combinations_no_t
                      n_runs = length(run_info)
 
                      frame_index = Observable(1)
-                     if length(run_info) == 1 || all(all(isapprox.(ri.time, run_info[1].time)) for ri ∈ run_info[2:end])
+                     if length(run_info) == 1 ||
+                         all(ri.nt == run_info[1].nt &&
+                             wall(isapprox.(ri.time, run_info[1].time))
+                             for ri ∈ run_info[2:end])
                          # All times are the same
                          title = lift(i->string("t = ", run_info[1].time[i]), frame_index)
                      else
                          title = lift(i->join((string("t", irun, " = ", ri.time[i])
-                                               for (irun,t) ∈ enumerate(run_info)), "; "),
+                                               for (irun,ri) ∈ enumerate(run_info)), "; "),
                                       frame_index)
                      end
                      fig, ax = get_1d_ax(xlabel="$($dim_str)",
