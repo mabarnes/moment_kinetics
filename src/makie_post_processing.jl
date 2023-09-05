@@ -4597,129 +4597,133 @@ function Chodura_condition_plots(run_info::Tuple; plot_prefix)
         return nothing
     end
 
-    println("Making Chodura condition plots")
-    flush(stdout)
+    try
+        println("Making Chodura condition plots")
+        flush(stdout)
 
-    n_runs = length(run_info)
+        n_runs = length(run_info)
 
-    if n_runs == 1
-        Chodura_condition_plots(run_info[1], plot_prefix=plot_prefix)
-        return nothing
-    end
-
-    figs = []
-    axes = Tuple([] for _ ∈ run_info)
-    if input.plot_vs_t
-        fig, ax = get_1d_ax(title="Chodura ratio at z=-L/2", xlabel="time",
-                            ylabel="ratio")
-        push!(figs, fig)
-        for a ∈ axes
-            push!(a, ax)
+        if n_runs == 1
+            Chodura_condition_plots(run_info[1], plot_prefix=plot_prefix)
+            return nothing
         end
 
-        fig, ax = get_1d_ax(title="Chodura ratio at z=+L/2", xlabel="time",
-                            ylabel="ratio")
-        push!(figs, fig)
-        for a ∈ axes
-            push!(a, ax)
+        figs = []
+        axes = Tuple([] for _ ∈ run_info)
+        if input.plot_vs_t
+            fig, ax = get_1d_ax(title="Chodura ratio at z=-L/2", xlabel="time",
+                                ylabel="ratio")
+            push!(figs, fig)
+            for a ∈ axes
+                push!(a, ax)
+            end
+
+            fig, ax = get_1d_ax(title="Chodura ratio at z=+L/2", xlabel="time",
+                                ylabel="ratio")
+            push!(figs, fig)
+            for a ∈ axes
+                push!(a, ax)
+            end
+        else
+            push!(figs, nothing)
+            for a ∈ axes
+                push!(a, nothing)
+            end
+            push!(figs, nothing)
+            for a ∈ axes
+                push!(a, nothing)
+            end
         end
-    else
-        push!(figs, nothing)
-        for a ∈ axes
-            push!(a, nothing)
+        if input.plot_vs_r
+            fig, ax = get_1d_ax(title="Chodura ratio at z=-L/2", xlabel="r",
+                                ylabel="ratio")
+            push!(figs, fig)
+            for a ∈ axes
+                push!(a, ax)
+            end
+
+            fig, ax = get_1d_ax(title="Chodura ratio at z=+L/2", xlabel="r",
+                                ylabel="ratio")
+            push!(figs, fig)
+            for a ∈ axes
+                push!(a, ax)
+            end
+        else
+            push!(figs, nothing)
+            for a ∈ axes
+                push!(a, nothing)
+            end
+            push!(figs, nothing)
+            for a ∈ axes
+                push!(a, nothing)
+            end
         end
-        push!(figs, nothing)
-        for a ∈ axes
-            push!(a, nothing)
-        end
-    end
-    if input.plot_vs_r
-        fig, ax = get_1d_ax(title="Chodura ratio at z=-L/2", xlabel="r",
-                            ylabel="ratio")
-        push!(figs, fig)
-        for a ∈ axes
-            push!(a, ax)
+        if input.plot_vs_r_t
+            fig, ax, colorbar_place = get_2d_ax(n_runs; title="Chodura ratio at z=-L/2",
+                                                xlabel="r", ylabel="time")
+            push!(figs, fig)
+            for (a, b, cbp) ∈ zip(axes, ax, colorbar_place)
+                push!(a, (b, cbp))
+            end
+
+            fig, ax, colorbar_place = get_2d_ax(n_runs; title="Chodura ratio at z=+L/2",
+                                                xlabel="r", ylabel="time")
+            push!(figs, fig)
+            for (a, b, cbp) ∈ zip(axes, ax, colorbar_place)
+                push!(a, (b, cbp))
+            end
+        else
+            push!(figs, nothing)
+            for a ∈ axes
+                push!(a, nothing)
+            end
+            push!(figs, nothing)
+            for a ∈ axes
+                push!(a, nothing)
+            end
         end
 
-        fig, ax = get_1d_ax(title="Chodura ratio at z=+L/2", xlabel="r",
-                            ylabel="ratio")
-        push!(figs, fig)
-        for a ∈ axes
-            push!(a, ax)
-        end
-    else
-        push!(figs, nothing)
-        for a ∈ axes
-            push!(a, nothing)
-        end
-        push!(figs, nothing)
-        for a ∈ axes
-            push!(a, nothing)
-        end
-    end
-    if input.plot_vs_r_t
-        fig, ax, colorbar_place = get_2d_ax(n_runs; title="Chodura ratio at z=-L/2",
-                                            xlabel="r", ylabel="time")
-        push!(figs, fig)
-        for (a, b, cbp) ∈ zip(axes, ax, colorbar_place)
-            push!(a, (b, cbp))
+        for (ri, ax) ∈ zip(run_info, axes)
+            Chodura_condition_plots(ri; axes=ax)
         end
 
-        fig, ax, colorbar_place = get_2d_ax(n_runs; title="Chodura ratio at z=+L/2",
-                                            xlabel="r", ylabel="time")
-        push!(figs, fig)
-        for (a, b, cbp) ∈ zip(axes, ax, colorbar_place)
-            push!(a, (b, cbp))
+        if input.plot_vs_t
+            fig = figs[1]
+            ax = axes[1][1]
+            put_legend_right(fig, ax)
+            outfile = string(plot_prefix, "Chodura_ratio_lower_vs_t.pdf")
+            save(outfile, fig)
+
+            fig = figs[2]
+            ax = axes[2][1]
+            put_legend_right(fig, ax)
+            outfile = string(plot_prefix, "Chodura_ratio_upper_vs_t.pdf")
+            save(outfile, fig)
         end
-    else
-        push!(figs, nothing)
-        for a ∈ axes
-            push!(a, nothing)
+        if input.plot_vs_r
+            fig = figs[3]
+            ax = axes[3][1]
+            put_legend_right(fig, ax)
+            outfile = string(plot_prefix, "Chodura_ratio_lower_vs_r.pdf")
+            save(outfile, fig)
+
+            fig = figs[4]
+            ax = axes[4][1]
+            put_legend_right(fig, ax)
+            outfile = string(plot_prefix, "Chodura_ratio_upper_vs_r.pdf")
+            save(outfile, fig)
         end
-        push!(figs, nothing)
-        for a ∈ axes
-            push!(a, nothing)
+        if input.plot_vs_r_t
+            fig = figs[5]
+            outfile = string(plot_prefix, "Chodura_ratio_lower_vs_r_t.pdf")
+            save(outfile, fig)
+
+            fig = figs[6]
+            outfile = string(plot_prefix, "Chodura_ratio_upper_vs_r_t.pdf")
+            save(outfile, fig)
         end
-    end
-
-    for (ri, ax) ∈ zip(run_info, axes)
-        Chodura_condition_plots(ri; axes=ax)
-    end
-
-    if input.plot_vs_t
-        fig = figs[1]
-        ax = axes[1][1]
-        put_legend_right(fig, ax)
-        outfile = string(plot_prefix, "Chodura_ratio_lower_vs_t.pdf")
-        save(outfile, fig)
-
-        fig = figs[2]
-        ax = axes[2][1]
-        put_legend_right(fig, ax)
-        outfile = string(plot_prefix, "Chodura_ratio_upper_vs_t.pdf")
-        save(outfile, fig)
-    end
-    if input.plot_vs_r
-        fig = figs[3]
-        ax = axes[3][1]
-        put_legend_right(fig, ax)
-        outfile = string(plot_prefix, "Chodura_ratio_lower_vs_r.pdf")
-        save(outfile, fig)
-
-        fig = figs[4]
-        ax = axes[4][1]
-        put_legend_right(fig, ax)
-        outfile = string(plot_prefix, "Chodura_ratio_upper_vs_r.pdf")
-        save(outfile, fig)
-    end
-    if input.plot_vs_r_t
-        fig = figs[5]
-        outfile = string(plot_prefix, "Chodura_ratio_lower_vs_r_t.pdf")
-        save(outfile, fig)
-
-        fig = figs[6]
-        outfile = string(plot_prefix, "Chodura_ratio_upper_vs_r_t.pdf")
-        save(outfile, fig)
+    catch e
+        println("Error in Chodura_condition_plots(). Error was ", e)
     end
 
     return nothing
