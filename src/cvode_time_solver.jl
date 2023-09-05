@@ -156,6 +156,18 @@ function time_solve_with_cvode(mk_ddt_state...; ascii_io, io_moments, io_dfns,
             # wasteful, but easy to implement for now.
             calculate_ddt!(mk_ddt_state...)
 
+            # Copy data from fvec into pdf and moments structs for output
+            pdf.charged.norm .= fvec.pdf
+            moments.charged.dens .= fvec.density
+            moments.charged.upar .= fvec.upar
+            moments.charged.ppar .= fvec.ppar
+            if composition.n_neutral_species > 0
+                pdf.neutral.norm .= fvec.pdf_neutral
+                moments.neutral.dens .= fvec.density_neutral
+                moments.neutral.uz .= fvec.uz_neutral
+                moments.neutral.pz .= fvec.pz_neutral
+            end
+
             if any(isapprox.(simtime, all_time_points)) || finish_now
                 time_for_run = to_minutes(now() - start_time)
             end
