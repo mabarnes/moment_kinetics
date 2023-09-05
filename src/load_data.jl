@@ -192,6 +192,9 @@ function load_coordinate_data(fid, name; printout=false, irank=nothing, nrank=no
         println("Loading $name coordinate data...")
     end
 
+    overview = get_group(fid, "overview")
+    parallel_io = load_variable(overview, "parallel_io")
+
     coord_group = get_group(get_group(fid, "coords"), name)
 
     ngrid = load_variable(coord_group, "ngrid")
@@ -262,7 +265,7 @@ function load_coordinate_data(fid, name; printout=false, irank=nothing, nrank=no
                        discretization, fd_option, bc, advection_input("", 0.0, 0.0, 0.0),
                        MPI.COMM_NULL, element_spacing_option)
 
-    coord, spectral = define_coordinate(input)
+    coord, spectral = define_coordinate(input, parallel_io)
 
     return coord, spectral, chunk_size
 end
