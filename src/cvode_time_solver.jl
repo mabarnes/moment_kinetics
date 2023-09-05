@@ -161,17 +161,17 @@ function time_solve_with_cvode(mk_ddt_state...; ascii_io, io_moments, io_dfns,
             end
 
             if any(isapprox.(simtime, moments_times)) || finish_now
-                finish_now = do_moments_output!(ascii_io, io_moments, pdf, nothing, t,
-                                                t_input, vz, vr, vzeta, vpa, vperp,
-                                                gyrophase, z, r, moments, fields,
+                finish_now = do_moments_output!(ascii_io, io_moments, pdf, nothing,
+                                                simtime, t_input, vz, vr, vzeta, vpa,
+                                                vperp, gyrophase, z, r, moments, fields,
                                                 composition, iwrite_moments,
                                                 iwrite_moments, time_for_run, finish_now)
                 iwrite_moments += 1
             end
             if any(isapprox.(simtime, dfns_times)) || finish_now
-                finish_now = do_dfns_output!(io_dfns, pdf, nothing, t, t_input, vz, vr,
-                                             vzeta, vpa, vperp, gyrophase, z, r, moments,
-                                             fields, composition, iwrite_dfns,
+                finish_now = do_dfns_output!(io_dfns, pdf, nothing, simtime, t_input, vz,
+                                             vr, vzeta, vpa, vperp, gyrophase, z, r,
+                                             moments, fields, composition, iwrite_dfns,
                                              iwrite_dfns, time_for_run, finish_now)
                 iwrite_dfns += 1
             end
