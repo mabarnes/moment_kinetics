@@ -214,15 +214,15 @@ function initialize_external_source_amplitude!(moments, external_source_settings
 end
 
 """
-    initialize_external_source_controller_integral!(moments,
-                                                    external_source_settings)
+function initialize_external_source_controller_integral!(
+             moments, external_source_settings, n_neutral_species)
 
 Initialize the arrays `moments.charged.external_source_controller_integral` and
 `moments.neutral.external_source_controller_integral`, using the settings in
 `external_source_settings`
 """
-function initialize_external_source_controller_integral!(moments,
-                                                         external_source_settings)
+function initialize_external_source_controller_integral!(
+             moments, external_source_settings, n_neutral_species)
     ion_source_settings = external_source_settings.ion
     if ion_source_settings.active
         if ion_source_settings.PI_density_controller_I != 0.0 &&

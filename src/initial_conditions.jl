@@ -196,7 +196,8 @@ function init_pdf_and_moments!(pdf, moments, boundary_distributions, geometry,
 
         initialize_external_source_amplitude!(moments, external_source_settings, vperp,
                                               vzeta, vr, n_neutral_species)
-        initialize_external_source_controller_integral!(moments, external_source_settings)
+        initialize_external_source_controller_integral!(moments, external_source_settings,
+                                                        n_neutral_species)
 
         if n_neutral_species > 0
             update_neutral_qz!(moments.neutral.qz, moments.neutral.qz_updated,
