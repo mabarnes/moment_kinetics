@@ -2167,7 +2167,7 @@ function calculate_ddt!(dfvec_dt, fvec, pdf, fields, moments, boundary_distribut
                     @loop_s_r is ir begin
                         @loop_vperp ivperp begin
                             ind = findlast(x->x<=0.0, vpa.grid)
-                            dfvec_dt.pdf[1:ind,ivperp,1,ir,is] .= 0.0
+                            dfvec_dt.pdf[1:ind,ivperp,end,ir,is] .= 0.0
                         end
                     end
                 elseif !moments.evolve_ppar
@@ -2175,7 +2175,7 @@ function calculate_ddt!(dfvec_dt, fvec, pdf, fields, moments, boundary_distribut
                         w_parallel_zero = -fvec.upar[end,ir,is]
                         @loop_vperp ivperp begin
                             ind = findlast(x->x<=w_parallel_zero, vpa.grid)
-                            dfvec_dt.pdf[1:ind,ivperp,1,ir,is] .= 0.0
+                            dfvec_dt.pdf[1:ind,ivperp,end,ir,is] .= 0.0
                         end
                     end
                 else
@@ -2184,7 +2184,7 @@ function calculate_ddt!(dfvec_dt, fvec, pdf, fields, moments, boundary_distribut
                                            moments.charged.vth[end,ir,is]
                         @loop_vperp ivperp begin
                             ind = findlast(x->x<=w_parallel_zero, vpa.grid)
-                            dfvec_dt.pdf[1:ind,ivperp,1,ir,is] .= 0.0
+                            dfvec_dt.pdf[1:ind,ivperp,end,ir,is] .= 0.0
                         end
                     end
                 end
@@ -2263,7 +2263,7 @@ function calculate_ddt!(dfvec_dt, fvec, pdf, fields, moments, boundary_distribut
                         @loop_sn_r isn ir begin
                             @loop_vzeta_vr ivzeta ivr begin
                                 ind = findlast(x->x<=0.0, vz.grid)
-                                dfvec_dt.pdf_neutral[1:ind,ivr,ivzeta,1,ir,isn] .= 0.0
+                                dfvec_dt.pdf_neutral[1:ind,ivr,ivzeta,end,ir,isn] .= 0.0
                             end
                         end
                     elseif !moments.evolve_ppar
@@ -2271,7 +2271,7 @@ function calculate_ddt!(dfvec_dt, fvec, pdf, fields, moments, boundary_distribut
                             w_parallel_zero = -fvec.uz_neutral[end,ir,isn]
                             @loop_vzeta_vr ivzeta ivr begin
                                 ind = findlast(x->x<=w_parallel_zero, vz.grid)
-                                dfvec_dt.pdf_neutral[1:ind,ivr,ivzeta,1,ir,isn] .= 0.0
+                                dfvec_dt.pdf_neutral[1:ind,ivr,ivzeta,end,ir,isn] .= 0.0
                             end
                         end
                     else
@@ -2280,7 +2280,7 @@ function calculate_ddt!(dfvec_dt, fvec, pdf, fields, moments, boundary_distribut
                             moments.neutral.vth[end,ir,isn]
                             @loop_vzeta_vr ivzeta ivr begin
                                 ind = findlast(x->x<=w_parallel_zero, vz.grid)
-                                dfvec_dt.pdf_neutral[1:ind,ivr,ivzeta,1,ir,isn] .= 0.0
+                                dfvec_dt.pdf_neutral[1:ind,ivr,ivzeta,end,ir,isn] .= 0.0
                             end
                         end
                     end
