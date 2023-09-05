@@ -1415,10 +1415,10 @@ function post_timestep!(fvec, moments, fields, boundary_distributions, vz, vr, v
         begin_s_r_z_region()
         try #below block causes DomainError if ppar < 0 or density, so exit cleanly if possible
             @loop_s_r_z is ir iz begin
-                moments.charged.vth[iz,ir,is] = sqrt(2.0*new_scratch.ppar[iz,ir,is]/new_scratch.density[iz,ir,is])
+                moments.charged.vth[iz,ir,is] = sqrt(2.0*fvec.ppar[iz,ir,is]/fvec.density[iz,ir,is])
             end
             @serial_region begin
-                if any(new_scratch.density .=== NaN)
+                if any(fvec.density .=== NaN)
                     error("Found NaN in density")
                 end
             end
@@ -1458,8 +1458,8 @@ function post_timestep!(fvec, moments, fields, boundary_distributions, vz, vr, v
                                                      fvec.density[iz,ir,is])
             end
             @serial_region begin
-                if any(@. new_scratch.density === NaN || new_scratch.density === Inf ||
-                       new_scratch.density === -Inf)
+                if any(@. fvec.density === NaN || fvec.density === Inf ||
+                       fvec.density === -Inf)
                     error("Found NaN in density")
                 end
             end
@@ -1495,7 +1495,7 @@ function post_timestep!(fvec, moments, fields, boundary_distributions, vz, vr, v
             begin_sn_r_z_region()
             try
                 @loop_sn_r_z isn ir iz begin
-                    moments.neutral.vth[iz,ir,isn] = sqrt(2.0*new_scratch.pz_neutral[iz,ir,isn]/new_scratch.density_neutral[iz,ir,isn])
+                    moments.neutral.vth[iz,ir,isn] = sqrt(2.0*fvec.pz_neutral[iz,ir,isn]/fvec.density_neutral[iz,ir,isn])
                 end
             catch e
                 global_catch_error(e)
