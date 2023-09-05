@@ -858,17 +858,21 @@ function time_advance_fixed_step!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, 
         end
         # write moments data to file every nwrite_moments time steps
         if mod(i,t_input.nwrite_moments) == 0 || finish_now
+            begin_serial_region()
             finish_now = do_moments_output!(ascii_io, io_moments, pdf, scratch, t,
                                             t_input, vz, vr, vzeta, vpa, vperp, gyrophase,
                                             z, r, moments, fields, composition, i,
                                             iwrite_moments, time_for_run, finish_now)
+            begin_s_r_z_vperp_region()
             iwrite_moments += 1
         end
         if mod(i,t_input.nwrite_dfns) == 0 || finish_now
+            begin_serial_region()
             finish_now = do_dfns_output!(io_dfns, pdf, scratch, t, t_input, vz, vr, vzeta,
                                          vpa, vperp, gyrophase, z, r, moments, fields,
                                          composition, i, iwrite_dfns, time_for_run,
                                          finish_now)
+            begin_s_r_z_vperp_region()
             iwrite_dfns += 1
         end
 
@@ -1093,7 +1097,6 @@ function do_moments_output!(ascii_io, io_moments, pdf, scratch, t, t_input, vz, 
         # it only runs infrequently
         debug_detect_redundant_is_active[] = false
     end
-    begin_serial_region()
     @serial_region begin
         if global_rank[] == 0
             print("finished time step ", rpad(string(i), 7),"  ",
@@ -1254,7 +1257,6 @@ function do_moments_output!(ascii_io, io_moments, pdf, scratch, t, t_input, vz, 
             save("latest_plots$(iblock_index[]).png", fig)
         end
     end
-    begin_s_r_z_vperp_region()
     @debug_detect_redundant_block_synchronize begin
         # Reactivate check for redundant _block_synchronize()
         debug_detect_redundant_is_active[] = true
@@ -1278,7 +1280,6 @@ function do_dfns_output!(io_dfns, pdf, scratch, t, t_input, vz, vr, vzeta, vpa, 
         # it only runs infrequently
         debug_detect_redundant_is_active[] = false
     end
-    begin_serial_region()
     @serial_region begin
         if global_rank[] == 0
             println("writing distribution functions at step ", i,"  ",
@@ -1289,7 +1290,6 @@ function do_dfns_output!(io_dfns, pdf, scratch, t, t_input, vz, vr, vzeta, vpa, 
                               t, composition.n_ion_species,
                               composition.n_neutral_species, io_dfns, iwrite_dfns,
                               time_for_run, r, z, vperp, vpa, vzeta, vr, vz)
-    begin_s_r_z_vperp_region()
     @debug_detect_redundant_block_synchronize begin
         # Reactivate check for redundant _block_synchronize()
         debug_detect_redundant_is_active[] = true
