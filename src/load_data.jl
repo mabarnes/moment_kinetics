@@ -565,8 +565,8 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                     else
                         # Need to modify the range to load the end-point that is duplicated on
                         # the next process
-                        r = coord.global_io_range
-                        return r.start:(r.stop+1)
+                        this_range = coord.global_io_range
+                        return this_range.start:(this_range.stop+1)
                     end
                 end
                 r_range = get_range(restart_r)
