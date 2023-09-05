@@ -4609,7 +4609,7 @@ function Chodura_condition_plots(run_info::Tuple; plot_prefix)
     end
 
     figs = []
-    axes = ([] for _ ∈ run_info)
+    axes = Tuple([] for _ ∈ run_info)
     if input.plot_vs_t
         fig, ax = get_1d_ax(title="Chodura ratio at z=-L/2", xlabel="time",
                             ylabel="ratio")
