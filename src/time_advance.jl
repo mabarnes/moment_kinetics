@@ -2114,7 +2114,7 @@ function calculate_ddt!(dfvec_dt, fvec, pdf, fields, moments, boundary_distribut
     function pdf_bc()
         # Ignoring periodic bc's here, although I'm not sure that's right [JTO]
 
-        if r.bc == "Dirichlet"
+        if r.bc == "Dirichlet" && r.n > 1
             begin_s_z_vperp_vpa_region()
             zero = 1.0e-10
             @loop_s_z_vperp_vpa is iz ivperp ivpa begin
@@ -2212,7 +2212,7 @@ function calculate_ddt!(dfvec_dt, fvec, pdf, fields, moments, boundary_distribut
         function neutral_pdf_bc()
             # Ignoring periodic bc's here, although I'm not sure that's right [JTO]
 
-            if r.bc == "Dirichlet"
+            if r.bc == "Dirichlet" && r.n > 1
                 begin_sn_z_vzeta_vr_region()
                 zero = 1.0e-10
                 @loop_sn_z_vzeta_vr_vz isn iz ivzeta ivr ivz begin
@@ -2221,7 +2221,7 @@ function calculate_ddt!(dfvec_dt, fvec, pdf, fields, moments, boundary_distribut
                     if r.irank == 0 && (r_diffusion || neutral_r_advect[isn].speed[ir,ivz,ivr,ivzeta,iz] > zero)
                         dfvec_dt.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] = 0.0
                     end
-                    ir = nr # r = L/2
+                    ir = r.n # r = L/2
                     # incoming particles and on highest rank
                     if r.irank == r.nrank - 1 && (r_diffusion || adv[isn].speed[ir,ivz,ivr,ivzeta,iz] < -zero)
                         dfvec_dt.pdf_neutral[ivz,ivr,ivzeta,iz,ir,isn] = 0.0
