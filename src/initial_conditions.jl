@@ -1630,18 +1630,15 @@ function enforce_neutral_wall_bc!(pdf, z, vzeta, vr, vz, pz, uz, density, wall_f
 
         if z.irank == 0
             ## treat z = -Lz/2 boundary ##
-            # populate vz.scratch2 array with dz/dt values at z = -Lz/2
-            vth = sqrt(2.0*pz[1]/density[1])
-            @. vz.scratch2 = vpagrid_to_dzdt(vz.grid, vth, uz[1], evolve_ppar, evolve_upar)
 
             # add the neutral species's contribution to the combined ion/neutral particle
             # flux out of the domain at z=-Lz/2
-            @views wall_flux_0 += integrate_over_negative_vz(abs.(vz.scratch2) .* pdf[:,:,:,1], vz.scratch2, vz.wgts, vz.scratch, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
+            @views wall_flux_0 += integrate_over_negative_vz(abs.(vz.grid) .* pdf[:,:,:,1], vz.grid, vz.wgts, vz.scratch, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
 
             # for left boundary in zed (z = -Lz/2), want
             # f_n(z=-Lz/2, v_parallel > 0) = Γ_0 * f_KW(v_parallel)
             @loop_vz ivz begin
-                if vz.scratch2[ivz] >= -zero
+                if vz.grid[ivz] >= -zero
                     @views @. pdf[ivz,:,:,1] = wall_flux_0 * knudsen_cosine[ivz,:,:]
                 end
             end
@@ -1649,18 +1646,15 @@ function enforce_neutral_wall_bc!(pdf, z, vzeta, vr, vz, pz, uz, density, wall_f
 
         if z.irank == z.nrank - 1
             ## treat the right boundary at z = Lz/2 ##
-            # populate vz.scratch2 array with dz/dt values at z = Lz/2
-            vth = sqrt(2.0*pz[end]/density[end])
-            @. vz.scratch2 = vpagrid_to_dzdt(vz.grid, vth, uz[end], evolve_ppar, evolve_upar)
 
             # add the neutral species's contribution to the combined ion/neutral particle
             # flux out of the domain at z=-Lz/2
-            @views wall_flux_L += integrate_over_positive_vz(abs.(vz.scratch2) .* pdf[:,:,:,end], vz.scratch2, vz.wgts, vz.scratch, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
+            @views wall_flux_L += integrate_over_positive_vz(abs.(vz.grid) .* pdf[:,:,:,end], vz.grid, vz.wgts, vz.scratch, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
 
             # for right boundary in zed (z = Lz/2), want
             # f_n(z=Lz/2, v_parallel < 0) = Γ_Lz * f_KW(v_parallel)
             @loop_vz ivz begin
-                if vz.scratch2[ivz] <= zero
+                if vz.grid[ivz] <= zero
                     @views @. pdf[ivz,:,:,end] = wall_flux_L * knudsen_cosine[ivz,:,:]
                 end
             end
@@ -1671,14 +1665,11 @@ function enforce_neutral_wall_bc!(pdf, z, vzeta, vr, vz, pz, uz, density, wall_f
 
         if z.irank == 0
             ## treat z = -Lz/2 boundary ##
-            # populate vz.scratch2 array with dz/dt values at z = -Lz/2
-            vth = sqrt(2.0*pz[1]/density[1])
-            @. vz.scratch2 = vpagrid_to_dzdt(vz.grid, vth, uz[1], evolve_ppar, evolve_upar)
 
             # Note the numerical integrol of knudsen_cosine was forced to be 1 (to machine
             # precision) when it was initialised.
-            @views pdf_integral_0 = integrate_over_negative_vz(pdf[:,:,:,1], vz.scratch2, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
-            knudsen_integral_0 = integrate_over_positive_vz(knudsen_cosine, vz.scratch2, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
+            @views pdf_integral_0 = integrate_over_negative_vz(pdf[:,:,:,1], vz.grid, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
+            knudsen_integral_0 = integrate_over_positive_vz(knudsen_cosine, vz.grid, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
 
             # Need to add incoming neutral flux to ion flux to get amplitude for Knudsen
             # distribution
@@ -1697,7 +1688,7 @@ function enforce_neutral_wall_bc!(pdf, z, vzeta, vr, vz, pz, uz, density, wall_f
             # for left boundary in zed (z = -Lz/2), want
             # f_n(z=-Lz/2, v_parallel > 0) = Γ_0 * f_KW(v_parallel) * pdf_norm_fac(-Lz/2)
             @loop_vz ivz begin
-                if vz.scratch2[ivz] >= -zero
+                if vz.grid[ivz] >= -zero
                     @views @. pdf[ivz,:,:,1] = norm_fac * normalised_knudsen_amplitude * knudsen_cosine[ivz,:,:]
                 else
                     @views @. pdf[ivz,:,:,1] *= norm_fac
@@ -1707,14 +1698,11 @@ function enforce_neutral_wall_bc!(pdf, z, vzeta, vr, vz, pz, uz, density, wall_f
 
         if z.irank == z.nrank - 1
             ## treat the right boundary at z = Lz/2 ##
-            # populate vz.scratch2 array with dz/dt values at z = Lz/2
-            vth = sqrt(2.0*pz[end]/density[end])
-            @. vz.scratch2 = vpagrid_to_dzdt(vz.grid, vth, uz[end], evolve_ppar, evolve_upar)
 
             # Note the numerical integrol of knudsen_cosine was forced to be 1 (to machine
             # precision) when it was initialised.
-            @views pdf_integral_0 = integrate_over_positive_vz(pdf[:,:,:,end], vz.scratch2, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
-            knudsen_integral_0 = integrate_over_negative_vz(knudsen_cosine, vz.scratch2, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
+            @views pdf_integral_0 = integrate_over_positive_vz(pdf[:,:,:,end], vz.grid, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
+            knudsen_integral_0 = integrate_over_negative_vz(knudsen_cosine, vz.grid, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
 
             # Need to add incoming neutral flux to ion flux to get amplitude for Knudsen
             # distribution
@@ -1733,7 +1721,7 @@ function enforce_neutral_wall_bc!(pdf, z, vzeta, vr, vz, pz, uz, density, wall_f
             # for right boundary in zed (z = Lz/2), want
             # f_n(z=Lz/2, v_parallel < 0) = Γ_Lz * f_KW(v_parallel) * pdf_norm_fac(Lz/2)
             @loop_vz ivz begin
-                if vz.scratch2[ivz] <= zero
+                if vz.grid[ivz] <= zero
                     @views @. pdf[ivz,:,:,end] = norm_fac * normalised_knudsen_amplitude * knudsen_cosine[ivz,:,:]
                 else
                     @views @. pdf[ivz,:,:,end] *= norm_fac
@@ -1744,7 +1732,11 @@ function enforce_neutral_wall_bc!(pdf, z, vzeta, vr, vz, pz, uz, density, wall_f
         if z.irank == 0
             ## treat z = -Lz/2 boundary ##
             # populate vz.scratch2 array with dz/dt values at z = -Lz/2
-            vth = sqrt(2.0*pz[1]/density[1])
+            if evolve_ppar
+                vth = sqrt(2.0*pz[1]/density[1])
+            else
+                vth = nothing
+            end
             @. vz.scratch2 = vpagrid_to_dzdt(vz.grid, vth, uz[1], evolve_ppar, evolve_upar)
 
             # First apply boundary condition that total neutral outflux is equal to ion
@@ -1854,7 +1846,11 @@ function enforce_neutral_wall_bc!(pdf, z, vzeta, vr, vz, pz, uz, density, wall_f
         if z.irank == z.nrank - 1
             ## treat the right boundary at z = Lz/2 ##
             # populate vz.scratch2 array with dz/dt values at z = Lz/2
-            vth = sqrt(2.0*pz[end]/density[end])
+            if evolve_ppar
+                vth = sqrt(2.0*pz[end]/density[end])
+            else
+                vth = nothing
+            end
             @. vz.scratch2 = vpagrid_to_dzdt(vz.grid, vth, uz[end], evolve_ppar, evolve_upar)
 
             # First apply boundary condition that total neutral outflux is equal to ion
