@@ -152,9 +152,16 @@ function time_solve_with_cvode(mk_ddt_state...; ascii_io, io_moments, io_dfns,
             y = convert(Vector, y_nvector)
             unpack_cvode_data!(y, fvec, moments, composition.n_neutral_species)
 
+            # Tell other processes to keep going.
+            # Also synchronizes other processes so that they can use the unpacked data.
+            finished = MPI.Bcast(0, 0, comm_block[])
+
             # Run calculate_ddt!() just to set the boundary conditions, etc. Slightly
             # wasteful, but easy to implement for now.
             calculate_ddt!(mk_ddt_state...)
+
+            # Synchronize other processes so we can pack data
+            _block_synchronize()
 
             # Copy data from fvec into pdf and moments structs for output
             pdf.charged.norm .= fvec.pdf
