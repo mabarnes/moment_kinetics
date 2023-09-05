@@ -1044,14 +1044,14 @@ function write_moments_data_to_binary(moments, fields, t, n_ion_species,
         if z.irank == 0 # lower wall 
             append_to_dynamic_var(io_moments.chodura_integral_lower, moments.charged.chodura_integral_lower, t_idx, r,
                               n_ion_species)
-        else
+        elseif io_moments.chodura_integral_lower !== nothing
             append_to_dynamic_var(io_moments.chodura_integral_lower, moments.charged.chodura_integral_lower, t_idx, 0,
                               n_ion_species)
         end
         if z.irank == z.nrank - 1 # upper wall
             append_to_dynamic_var(io_moments.chodura_integral_upper, moments.charged.chodura_integral_upper, t_idx, r,
                               n_ion_species)
-        else
+        elseif io_moments.chodura_integral_upper !== nothing
             append_to_dynamic_var(io_moments.chodura_integral_upper, moments.charged.chodura_integral_upper, t_idx, 0,
                               n_ion_species)
         end
