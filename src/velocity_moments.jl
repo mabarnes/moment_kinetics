@@ -32,6 +32,7 @@ export get_ppar
 export get_pperp
 export get_pressure
 export get_qpar
+export get_rmom
 
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_shared_float, allocate_bool
@@ -387,6 +388,16 @@ function get_qpar(ff, vpa, vperp, upar, mass, dummy_vpavperp)
     end
     return mass*integrate_over_vspace(@view(dummy_vpavperp[:,:]), vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
 end
+
+# generalised moment useful for computing numerical conserving terms in the collision operator
+function get_rmom(ff, vpa, vperp, upar, mass, dummy_vpavperp)
+    @loop_vperp_vpa ivperp ivpa begin
+        wpar = vpa.grid[ivpa]-upar
+        dummy_vpavperp[ivpa,ivperp] = ff[ivpa,ivperp]*( wpar^2 + vperp.grid[ivperp]^2)^2
+    end
+    return mass*integrate_over_vspace(@view(dummy_vpavperp[:,:]), vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
+end
+
 """
 calculate the neutral density from the neutral pdf
 """
