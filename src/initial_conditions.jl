@@ -1669,29 +1669,27 @@ function enforce_neutral_wall_bc!(pdf, z, vzeta, vr, vz, pz, uz, density, wall_f
             # Note the numerical integrol of knudsen_cosine was forced to be 1 (to machine
             # precision) when it was initialised.
             @views pdf_integral_0 = integrate_over_negative_vz(pdf[:,:,:,1], vz.grid, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
+            @views pdf_integral_1 = integrate_over_negative_vz(vz.grid .* pdf[:,:,:,1], vz.grid, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
             knudsen_integral_0 = integrate_over_positive_vz(knudsen_cosine, vz.grid, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
-
-            # Need to add incoming neutral flux to ion flux to get amplitude for Knudsen
-            # distribution
-            # account for the fact that the pdf here is the normalised pdf,
-            # and the integration in wall_flux is defined relative to the un-normalised pdf
-            @views wall_flux_0 += density[1] * pdf_integral_0
-
-            # To update the pdf normalised by density, divide density out from the
-            # prefactor for the Knudsen distribution
-            normalised_knudsen_amplitude = wall_flux_0 / density[1]
+            knudsen_integral_1 = 1.0 # This is enforced in initialization
 
             # Calculate normalisation factors N_in for the incoming and N_out for the
-            # Knudsen parts of the distirbution so that ∫dwpa F = 1
-            norm_fac = 1.0 / (pdf_integral_0 + normalised_knudsen_amplitude * knudsen_integral_0)
+            # Knudsen parts of the distirbution so that ∫dvpa F = 1 and ∫dvpa vpa F = uz
+            # Note wall_flux_0 is the ion flux into the wall, and the neutral flux should
+            # be out of the wall (i.e. uz>0) so n*uz = |n*uz| = wall_flux_0
+            # ⇒ N_in*pdf_integral_0 + N_out*knudsen_integral_0 = 1
+            #   N_in*pdf_integral_1 + N_out*knudsen_integral_1 = uz
+            uz = wall_flux_0 / density[1]
+            N_in = (1 - uz * knudsen_integral_0 / knudsen_integral_1) /
+                   (pdf_integral_0
+                    - pdf_integral_1 / knudsen_integral_1 * knudsen_integral_0)
+            N_out = (uz - N_in * pdf_integral_1) / knudsen_integral_1
 
-            # for left boundary in zed (z = -Lz/2), want
-            # f_n(z=-Lz/2, v_parallel > 0) = Γ_0 * f_KW(v_parallel) * pdf_norm_fac(-Lz/2)
             @loop_vz ivz begin
                 if vz.grid[ivz] >= -zero
-                    @views @. pdf[ivz,:,:,1] = norm_fac * normalised_knudsen_amplitude * knudsen_cosine[ivz,:,:]
+                    @views @. pdf[ivz,:,:,1] = N_out * knudsen_cosine[ivz,:,:]
                 else
-                    @views @. pdf[ivz,:,:,1] *= norm_fac
+                    @views @. pdf[ivz,:,:,1] *= N_in
                 end
             end
         end
@@ -1702,29 +1700,27 @@ function enforce_neutral_wall_bc!(pdf, z, vzeta, vr, vz, pz, uz, density, wall_f
             # Note the numerical integrol of knudsen_cosine was forced to be 1 (to machine
             # precision) when it was initialised.
             @views pdf_integral_0 = integrate_over_positive_vz(pdf[:,:,:,end], vz.grid, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
+            @views pdf_integral_1 = integrate_over_positive_vz(vz.grid .* pdf[:,:,:,end], vz.grid, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
             knudsen_integral_0 = integrate_over_negative_vz(knudsen_cosine, vz.grid, vz.wgts, vz.scratch3, vr.grid, vr.wgts, vzeta.grid, vzeta.wgts)
-
-            # Need to add incoming neutral flux to ion flux to get amplitude for Knudsen
-            # distribution
-            # account for the fact that the pdf here is the normalised pdf,
-            # and the integration in wall_flux is defined relative to the un-normalised pdf
-            @views wall_flux_L += density[end] * pdf_integral_0
-
-            # To update the pdf normalised by density, divide density out from the
-            # prefactor for the Knudsen distribution
-            normalised_knudsen_amplitude = wall_flux_L / density[end]
+            knudsen_integral_1 = -1.0 # This is enforced in initialization
 
             # Calculate normalisation factors N_in for the incoming and N_out for the
-            # Knudsen parts of the distirbution so that ∫dwpa F = 1
-            norm_fac = 1.0 / (pdf_integral_0 + normalised_knudsen_amplitude * knudsen_integral_0)
+            # Knudsen parts of the distirbution so that ∫dvpa F = 1 and ∫dvpa vpa F = uz
+            # Note wall_flux_L is the ion flux into the wall, and the neutral flux should
+            # be out of the wall (i.e. uz<0) so -n*uz = |n*uz| = wall_flux_L
+            # ⇒ N_in*pdf_integral_0 + N_out*knudsen_integral_0 = 1
+            #   N_in*pdf_integral_1 + N_out*knudsen_integral_1 = uz
+            uz = -wall_flux_L / density[end]
+            N_in = (1 - uz * knudsen_integral_0 / knudsen_integral_1) /
+                   (pdf_integral_0
+                    - pdf_integral_1 / knudsen_integral_1 * knudsen_integral_0)
+            N_out = (uz - N_in * pdf_integral_1) / knudsen_integral_1
 
-            # for right boundary in zed (z = Lz/2), want
-            # f_n(z=Lz/2, v_parallel < 0) = Γ_Lz * f_KW(v_parallel) * pdf_norm_fac(Lz/2)
             @loop_vz ivz begin
                 if vz.grid[ivz] <= zero
-                    @views @. pdf[ivz,:,:,end] = norm_fac * normalised_knudsen_amplitude * knudsen_cosine[ivz,:,:]
+                    @views @. pdf[ivz,:,:,end] = N_out * knudsen_cosine[ivz,:,:]
                 else
-                    @views @. pdf[ivz,:,:,end] *= norm_fac
+                    @views @. pdf[ivz,:,:,end] *= N_in
                 end
             end
         end
