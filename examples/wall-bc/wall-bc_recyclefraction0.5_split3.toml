@@ -65,12 +65,12 @@ z_discretization = "chebyshev_pseudospectral"
 vpa_ngrid = 10
 vpa_nelement = 63
 vpa_L = 18.0
-vpa_bc = "both_zero"
+vpa_bc = "zero"
 vpa_discretization = "chebyshev_pseudospectral"
 vz_ngrid = 10
 vz_nelement = 63
 vz_L = 18.0
-vz_bc = "both_zero"
+vz_bc = "zero"
 vz_discretization = "chebyshev_pseudospectral"
 
 [ion_source]
