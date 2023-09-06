@@ -751,7 +751,8 @@ function enforce_vpa_boundary_condition_local!(f::T, bc, adv_speed, vpa_diffusio
     if bc == "zero"
         if dvpadt > zero || vpa_diffusion
             f[1] = 0.0 # -infty forced to zero
-        elseif dvpadt < zero || vpa_diffusion
+        end
+        if dvpadt < zero || vpa_diffusion
             f[end] = 0.0 # +infty forced to zero
         end
     elseif bc == "periodic"
