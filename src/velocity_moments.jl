@@ -31,6 +31,7 @@ export get_upar
 export get_ppar
 export get_pperp
 export get_pressure
+export get_qpar
 
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_shared_float, allocate_bool
@@ -59,7 +60,7 @@ mutable struct moments_charged_substruct
     qpar::MPISharedArray{mk_float,3}
     # this is the thermal speed based on the parallel temperature Tpar = ppar/dens: vth = sqrt(2*Tpar/m)
     vth::MPISharedArray{mk_float,3}
-    # this is the entropy production dS/dt = - ln f sum_s' C_ss' [F_s,F_s']
+    # this is the entropy production dS/dt = - int (ln f sum_s' C_ss' [f_s,f_s']) d^3 v
     dSdt::MPISharedArray{mk_float,3}
 end
 
@@ -337,20 +338,20 @@ end
 NB: if this function is called and if ppar_updated is false, then
 the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
 """
-function update_qpar!(qpar, pdf, vpa, vperp, z, r, composition)
+function update_qpar!(qpar, pdf, vpa, vperp, z, r, composition, upar, dummy_vpavperp)
     @boundscheck composition.n_ion_species == size(qpar,3) || throw(BoundsError(qpar))
     
     begin_s_r_z_region()
 
     @loop_s is begin
-        @views update_qpar_species!(qpar[:,:,is], pdf[:,:,:,:,is], vpa, vperp, z, r)
+        @views update_qpar_species!(qpar[:,:,is], pdf[:,:,:,:,is], vpa, vperp, z, r, upar[:,:,is], dummy_vpavperp)
     end
 end
 
 """
 calculate the updated parallel heat flux (qpar) for a given species
 """
-function update_qpar_species!(qpar, ff, vpa, vperp, z, r)
+function update_qpar_species!(qpar, ff, vpa, vperp, z, r, upar, dummy_vpavperp)
     @boundscheck r.n == size(ff, 4) || throw(BoundsError(ff))
     @boundscheck z.n == size(ff, 3) || throw(BoundsError(ff))
     @boundscheck vperp.n == size(ff, 2) || throw(BoundsError(ff))
@@ -358,14 +359,34 @@ function update_qpar_species!(qpar, ff, vpa, vperp, z, r)
     @boundscheck r.n == size(qpar, 2) || throw(BoundsError(qpar))
     @boundscheck z.n == size(qpar, 1) || throw(BoundsError(qpar))
     
-    @loop_r_z ir iz begin
-        # old ! qpar[iz,ir] = integrate_over_vspace(@view(ff[:,iz,ir]), vpa.grid, 3, vpa.wgts) * vpanorm[iz,ir]^4
-        qpar[iz,ir] = integrate_over_vspace(@view(ff[:,:,iz,ir]),
-         vpa.grid, 3, vpa.wgts, vperp.grid, 0, vperp.wgts)
+    mass = 1.0 # only reference mass currently supported for all species
+    if vperp.n > 1
+        @loop_r_z ir iz begin
+            # old ! qpar[iz,ir] = integrate_over_vspace(@view(ff[:,iz,ir]), vpa.grid, 3, vpa.wgts) * vpanorm[iz,ir]^4
+            #qpar[iz,ir] = integrate_over_vspace(@view(ff[:,:,iz,ir]),
+            # vpa.grid, 3, vpa.wgts, vperp.grid, 0, vperp.wgts)
+            @views qpar[iz,ir] = get_qpar(ff[:,:,iz,ir], vpa, vperp, upar[iz,ir], mass, dummy_vpavperp)
+        end
+    else #1V definitions
+        @loop_r_z ir iz begin
+            qpar[iz,ir] = get_qpar_1V(@view(ff[:,:,iz,ir]), vpa, vperp, upar[iz,ir], mass)
+        end
     end
     return nothing
 end
 
+function get_qpar_1V(ff, vpa, vperp, upar, mass)
+    @. vpa.scratch = vpa.grid - upar
+    return mass*integrate_over_vspace(@view(ff[:,:]), vpa.scratch, 3, vpa.wgts, vperp.grid, 0, vperp.wgts)
+end
+
+function get_qpar(ff, vpa, vperp, upar, mass, dummy_vpavperp)
+    @loop_vperp_vpa ivperp ivpa begin
+        wpar = vpa.grid[ivpa]-upar
+        dummy_vpavperp[ivpa,ivperp] = ff[ivpa,ivperp]*wpar*( wpar^2 + vperp.grid[ivperp]^2)
+    end
+    return mass*integrate_over_vspace(@view(dummy_vpavperp[:,:]), vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
+end
 """
 calculate the neutral density from the neutral pdf
 """

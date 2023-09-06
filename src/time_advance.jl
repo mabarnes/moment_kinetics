@@ -820,7 +820,7 @@ function rk_update!(scratch, pdf, moments, fields, vz, vr, vzeta, vpa, vperp, z,
 		rethrow(e)
 	end
     # update the parallel heat flux
-    update_qpar!(moments.charged.qpar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
+    update_qpar!(moments.charged.qpar, pdf.charged.unnorm, vpa, vperp, z, r, composition, new_scratch.upar, scratch_dummy.dummy_vpavperp)
 
     ##
     # update the neutral particle distribution and moments
