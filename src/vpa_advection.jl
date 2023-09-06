@@ -107,7 +107,7 @@ function update_speed_n_u_p_evolution!(advect, fvec, moments, vpa, z, r, composi
     end
     # add in contributions from charge exchange and ionization collisions
     if composition.n_neutral_species > 0 &&
-            abs(collisions.charge_exchange) > 0.0 || abs(collisions.ionization) > 0.0
+            (abs(collisions.charge_exchange) > 0.0 || abs(collisions.ionization) > 0.0)
 
         @loop_s is begin
             @loop_r_z_vperp ir iz ivperp begin
