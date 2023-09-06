@@ -866,7 +866,7 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
 
             # Hack to save *.pdf of current pdf
             if t_input.runtime_plots
-                if global_rank[] == 0
+                if block_rank[] == 0
                     fig = Figure()
 
                     irow = 1
@@ -957,7 +957,7 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
 
                     resize_to_layout!(fig)
 
-                    save("latest_plots.png", fig)
+                    save("latest_plots$(iblock_index[]).png", fig)
                 end
             end
             iwrite_moments += 1
