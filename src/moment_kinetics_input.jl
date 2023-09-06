@@ -1043,6 +1043,8 @@ function check_coordinate_input(coord, coord_name, io)
         println(io,">$coord_name.bc = 'constant'.  enforcing constant incoming BC in $coord_name.")
     elseif coord.bc == "zero"
         println(io,">$coord_name.bc = 'zero'.  enforcing zero incoming BC in $coord_name.")
+    elseif coord.bc == "incoming_zero"
+        println(io,">$coord_name.bc = 'incoming_zero'.  enforcing zero incoming BC in $coord_name (even when there is diffusion).")
     elseif coord.bc == "both_zero"
         println(io,">$coord_name.bc = 'both_zero'.  enforcing zero BC in $coord_name.")
     elseif coord.bc == "periodic"
