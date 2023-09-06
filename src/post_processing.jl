@@ -195,7 +195,8 @@ function allocate_global_zr_charged_moments(nz_global,nr_global,n_ion_species,nt
     perpendicular_pressure = allocate_float(nz_global,nr_global,n_ion_species,ntime)
     parallel_heat_flux = allocate_float(nz_global,nr_global,n_ion_species,ntime)
     thermal_speed = allocate_float(nz_global,nr_global,n_ion_species,ntime)
-    return density, parallel_flow, parallel_pressure, perpendicular_pressure, parallel_heat_flux, thermal_speed
+    entropy_production = allocate_float(nz_global,nr_global,n_ion_species,ntime)
+    return density, parallel_flow, parallel_pressure, perpendicular_pressure, parallel_heat_flux, thermal_speed, entropy_production
 end
 
 function allocate_global_zr_neutral_moments(nz_global,nr_global,n_neutral_species,ntime)
@@ -324,7 +325,7 @@ function analyze_and_plot_data(path)
     
     # allocate arrays to contain the global fields as a function of (z,r,t)
     phi, Ez, Er = allocate_global_zr_fields(nz_global,nr_global,ntime)
-    density, parallel_flow, parallel_pressure, perpendicular_pressure, parallel_heat_flux, thermal_speed =
+    density, parallel_flow, parallel_pressure, perpendicular_pressure, parallel_heat_flux, thermal_speed, entropy_production =
         allocate_global_zr_charged_moments(nz_global,nr_global,n_ion_species,ntime)
     if n_neutral_species > 0
         neutral_density, neutral_uz, neutral_pz, neutral_qz, neutral_thermal_speed =
@@ -348,6 +349,7 @@ function analyze_and_plot_data(path)
     read_distributed_zr_data!(perpendicular_pressure,"perpendicular_pressure",run_name,"moments",nblocks,nz_local,nr_local)
     read_distributed_zr_data!(parallel_heat_flux,"parallel_heat_flux",run_name,"moments",nblocks,nz_local,nr_local)
     read_distributed_zr_data!(thermal_speed,"thermal_speed",run_name,"moments",nblocks,nz_local,nr_local)
+    read_distributed_zr_data!(entropy_production,"entropy_production",run_name,"moments",nblocks,nz_local,nr_local)
     # neutral particle moments 
     if n_neutral_species > 0
         read_distributed_zr_data!(neutral_density,"density_neutral",run_name,"moments",nblocks,nz_local,nr_local)
@@ -446,7 +448,8 @@ function analyze_and_plot_data(path)
     end 
     
     # make plots and animations of the phi, Ez and Er 
-    plot_charged_moments_2D(density, parallel_flow, parallel_pressure, perpendicular_pressure, thermal_speed, time, z, r, iz0, ir0, n_ion_species,
+    plot_charged_moments_2D(density, parallel_flow, parallel_pressure, 
+     perpendicular_pressure, thermal_speed, entropy_production, time, z, r, iz0, ir0, n_ion_species,
      itime_min, itime_max, nwrite_movie, run_name, pp)
     # make plots and animations of the phi, Ez and Er 
     plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
@@ -1686,7 +1689,7 @@ function plot_charged_pdf(pdf, vpa, vperp, z, r,
             outfile = string(run_name, "_pdf_vs_vperp_vpa", iz0_string, ir0_string, spec_string, ".gif")
             gif(anim, outfile, fps=5)
 
-            @views heatmap(vperp, vpa, pdf[:,:,iz0,ir0,is,itime_max], xlabel="r", ylabel="vpa", c = :deep, interpolation = :cubic)
+            @views heatmap(vperp, vpa, pdf[:,:,iz0,ir0,is,itime_max], xlabel="vperp", ylabel="vpa", c = :deep, interpolation = :cubic)
             outfile = string(run_name, "_pdf_vs_vpa_vperp", ir0_string, iz0_string, spec_string, ".pdf")
             savefig(outfile)
         end
@@ -1837,9 +1840,11 @@ function plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
     println("done.")
 end
 
-function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, perpendicular_pressure, thermal_speed, time, z, r, iz0, ir0, n_ion_species,
+function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, perpendicular_pressure, thermal_speed, 
+    entropy_production, time, z, r, iz0, ir0, n_ion_species,
     itime_min, itime_max, nwrite_movie, run_name, pp)
     nr = size(r,1)
+    ntime = size(time,1)
     print("Plotting charged moments data...")
     for is in 1:n_ion_species
 		description = "_ion_spec"*string(is)*"_"
@@ -1991,6 +1996,12 @@ function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, perp
 			savefig(outfile)
             @views plot(time, thermal_speed[iz0,ir0,is,:] .- thermal_speed[iz0,ir0,is,1], xlabel=L"t/c_{ref}", ylabel=L"v_{i,th}(t) - v_{i,th}(0)", label = "")
 			outfile = string(run_name, "_delta_thermal_speed"*description*"(iz0,ir0)_vs_t.pdf")
+			savefig(outfile)
+        end
+        # the entropy production
+        if pp.plot_dSdt0_vs_t
+            @views plot(time[2:ntime], entropy_production[iz0,ir0,is,2:ntime], xlabel=L"t/c_{ref}", ylabel=L"\dot{S}(t)", label = "")
+			outfile = string(run_name, "_entropy production"*description*"(iz0,ir0)_vs_t.pdf")
 			savefig(outfile)
         end
 	end

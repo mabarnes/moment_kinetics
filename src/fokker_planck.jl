@@ -883,8 +883,8 @@ distributions function derivatives, Rosenbluth potentials,
 and collision operator in place.
 """
 
-function explicit_fokker_planck_collisions!(pdf_out,pdf_in,composition,collisions,dt,fokkerplanck_arrays::fokkerplanck_arrays_struct,
-                                             scratch_dummy, r, z, vperp, vpa, vperp_spectral, vpa_spectral)
+function explicit_fokker_planck_collisions!(pdf_out,pdf_in,dSdt,composition,collisions,dt,fokkerplanck_arrays::fokkerplanck_arrays_struct,
+                                             scratch_dummy, r, z, vperp, vpa, vperp_spectral, vpa_spectral; diagnose_entropy_production = true)
 
     n_ion_species = composition.n_ion_species
     @boundscheck vpa.n == size(pdf_out,1) || throw(BoundsError(pdf_out))
@@ -897,19 +897,26 @@ function explicit_fokker_planck_collisions!(pdf_out,pdf_in,composition,collision
     @boundscheck z.n == size(pdf_in,3) || throw(BoundsError(pdf_in))
     @boundscheck r.n == size(pdf_in,4) || throw(BoundsError(pdf_in))
     @boundscheck n_ion_species == size(pdf_in,5) || throw(BoundsError(pdf_in))
+    @boundscheck z.n == size(dSdt,1) || throw(BoundsError(dSdt))
+    @boundscheck r.n == size(dSdt,2) || throw(BoundsError(dSdt))
+    @boundscheck n_ion_species == size(dSdt,3) || throw(BoundsError(dSdt))
     
     # setup species information
     mass = Array{mk_float,1}(undef,n_ion_species)
     mass[1] = 1.0 # generalise!
     nussp = Array{mk_float,2}(undef,n_ion_species,n_ion_species)
     nussp[1,1] = collisions.nuii # generalise!
-
+    
+    # assign Cssp to a dummy array
+    Cssp = scratch_dummy.dummy_s
+    
     # first, compute the require derivatives and store in the buffer arrays
     dfdvpa = scratch_dummy.buffer_vpavperpzrs_1
     d2fdvpa2 = scratch_dummy.buffer_vpavperpzrs_2
     d2fdvperpdvpa = scratch_dummy.buffer_vpavperpzrs_3
     dfdvperp = scratch_dummy.buffer_vpavperpzrs_4
     d2fdvperp2 = scratch_dummy.buffer_vpavperpzrs_5
+    logfC = scratch_dummy.buffer_vpavperpzrs_5
 
     begin_s_r_z_vperp_region()
     @loop_s_r_z_vperp is ir iz ivperp begin
@@ -952,22 +959,35 @@ function explicit_fokker_planck_collisions!(pdf_out,pdf_in,composition,collision
                                             fka.G1_weights,fka.H0_weights,fka.H1_weights,fka.H2_weights,fka.H3_weights,
                                             ivpa,ivperp,vpa.n,vperp.n)
                 
-                (Cssp = Cssp_fully_expanded_form(nussp[is,isp],mass[is],mass[isp],
+                (Cssp[isp] = Cssp_fully_expanded_form(nussp[is,isp],mass[is],mass[isp],
                                                 d2fdvpa2[ivpa,ivperp,iz,ir,is],d2fdvperp2[ivpa,ivperp,iz,ir,is],d2fdvperpdvpa[ivpa,ivperp,iz,ir,is],dfdvpa[ivpa,ivperp,iz,ir,is],dfdvperp[ivpa,ivperp,iz,ir,is],pdf_in[ivpa,ivperp,iz,ir,is],
                                                 fka.d2Gdvpa2[ivpa,ivperp],fka.d2Gdvperp2[ivpa,ivperp],fka.d2Gdvperpdvpa[ivpa,ivperp],fka.dGdvperp[ivpa,ivperp],
                                                 fka.dHdvpa[ivpa,ivperp],fka.dHdvperp[ivpa,ivperp],pdf_in[ivpa,ivperp,iz,ir,isp],vperp.grid[ivperp]) )
-                pdf_out[ivpa,ivperp,iz,ir,is] += dt*Cssp
+                pdf_out[ivpa,ivperp,iz,ir,is] += dt*Cssp[isp]
                 # for testing
-                fka.Cssp_result_vpavperp[ivpa,ivperp] = Cssp
+                fka.Cssp_result_vpavperp[ivpa,ivperp] = Cssp[isp]
                 fka.dfdvpa[ivpa,ivperp] = dfdvpa[ivpa,ivperp,iz,ir,is]
                 fka.d2fdvpa2[ivpa,ivperp] = d2fdvpa2[ivpa,ivperp,iz,ir,is]
                 fka.d2fdvperpdvpa[ivpa,ivperp] = d2fdvperpdvpa[ivpa,ivperp,iz,ir,is]
                 fka.dfdvperp[ivpa,ivperp] = dfdvperp[ivpa,ivperp,iz,ir,is]
                 fka.d2fdvperp2[ivpa,ivperp] = d2fdvperp2[ivpa,ivperp,iz,ir,is]
             end
+            # store the entropy production
+            # we use ln|f| to avoid problems with f < 0. This is ok if C_s[f,f] is small where f ~< 0
+            # + 1.0e-15 in case f = 0 exactly
+            #println(Cssp[:])
+            #println(pdf_in[ivpa,ivperp,iz,ir,is])
+            logfC[ivpa,ivperp,iz,ir,is] = log(abs(pdf_in[ivpa,ivperp,iz,ir,is]) + 1.0e-15)*sum(Cssp[:])
+            #println(dfdvpa[ivpa,ivperp,iz,ir,is])
        end
     end
-
+    if diagnose_entropy_production
+        # compute entropy production diagnostic
+        begin_s_r_z_region()
+        @loop_s_r_z is ir iz begin
+           @views dSdt[iz,ir,is] = -integrate_over_vspace(logfC[:,:,iz,ir,is], vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
+        end
+    end
     return nothing 
 end
 

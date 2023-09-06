@@ -59,6 +59,8 @@ mutable struct moments_charged_substruct
     qpar::MPISharedArray{mk_float,3}
     # this is the thermal speed based on the parallel temperature Tpar = ppar/dens: vth = sqrt(2*Tpar/m)
     vth::MPISharedArray{mk_float,3}
+    # this is the entropy production dS/dt = - ln f sum_s' C_ss' [F_s,F_s']
+    dSdt::MPISharedArray{mk_float,3}
 end
 
 """
@@ -102,9 +104,10 @@ function create_moments_charged(nz, nr, n_species)
     # allocate array of Bools that indicate if the parallel flow is updated for each species
     # allocate array used for the thermal speed
     thermal_speed = allocate_shared_float(nz, nr, n_species)
-    
+    entropy_production = allocate_shared_float(nz, nr, n_species)
     # return struct containing arrays needed to update moments
-    return moments_charged_substruct(density, parallel_flow, parallel_pressure, perpendicular_pressure, parallel_heat_flux, thermal_speed)
+    return moments_charged_substruct(density, parallel_flow, parallel_pressure,
+     perpendicular_pressure, parallel_heat_flux, thermal_speed, entropy_production)
 end
 
 # neutral particles have natural mean velocities 
