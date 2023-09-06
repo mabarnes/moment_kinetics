@@ -1675,8 +1675,9 @@ function enforce_neutral_wall_bc!(pdf, z, vzeta, vr, vz, pz, uz, density, wall_f
 
             # Calculate normalisation factors N_in for the incoming and N_out for the
             # Knudsen parts of the distirbution so that ∫dvpa F = 1 and ∫dvpa vpa F = uz
-            # Note wall_flux_0 is the ion flux into the wall, and the neutral flux should
-            # be out of the wall (i.e. uz>0) so n*uz = |n*uz| = wall_flux_0
+            # Note wall_flux_0 is the ion flux into the wall (reduced by the recycling
+            # fraction), and the neutral flux should be out of the wall (i.e. uz>0) so
+            # n*uz = |n*uz| = wall_flux_0
             # ⇒ N_in*pdf_integral_0 + N_out*knudsen_integral_0 = 1
             #   N_in*pdf_integral_1 + N_out*knudsen_integral_1 = uz
             uz = wall_flux_0 / density[1]
@@ -1706,8 +1707,9 @@ function enforce_neutral_wall_bc!(pdf, z, vzeta, vr, vz, pz, uz, density, wall_f
 
             # Calculate normalisation factors N_in for the incoming and N_out for the
             # Knudsen parts of the distirbution so that ∫dvpa F = 1 and ∫dvpa vpa F = uz
-            # Note wall_flux_L is the ion flux into the wall, and the neutral flux should
-            # be out of the wall (i.e. uz<0) so -n*uz = |n*uz| = wall_flux_L
+            # Note wall_flux_L is the ion flux into the wall (reduced by the recycling
+            # fraction), and the neutral flux should be out of the wall (i.e. uz<0) so
+            # -n*uz = |n*uz| = wall_flux_L
             # ⇒ N_in*pdf_integral_0 + N_out*knudsen_integral_0 = 1
             #   N_in*pdf_integral_1 + N_out*knudsen_integral_1 = uz
             uz = -wall_flux_L / density[end]
