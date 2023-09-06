@@ -176,36 +176,21 @@ function initialize_external_source_amplitude!(moments, external_source_settings
                                                vzeta, vr, n_neutral_species)
     ion_source_settings = external_source_settings.ion
     if ion_source_settings.active
-        if vperp.n == 1
-            # 1V case
-            prefactor = ion_source_settings.source_strength /
-            sqrt(ion_source_settings.source_T)
-        else
-            prefactor = ion_source_settings.source_strength /
-            ion_source_settings.source_T^1.5
-        end
         @loop_r_z ir iz begin
             moments.charged.external_source_amplitude[iz,ir] =
-            prefactor * ion_source_settings.r_amplitude[ir] *
-            ion_source_settings.z_amplitude[iz]
+                ion_source_settings.source_strength *
+                ion_source_settings.r_amplitude[ir] * ion_source_settings.z_amplitude[iz]
         end
     end
 
     if n_neutral_species > 0
         neutral_source_settings = external_source_settings.neutral
         if neutral_source_settings.active
-            if vzeta.n == 1 && vr.n == 1
-                # 1V case
-                prefactor = neutral_source_settings.source_strength /
-                sqrt(neutral_source_settings.source_T)
-            else
-                prefactor = neutral_source_settings.source_strength /
-                neutral_source_settings.source_T^1.5
-            end
             @loop_r_z ir iz begin
                 moments.neutral.external_source_amplitude[iz,ir] =
-                prefactor * neutral_source_settings.r_amplitude[ir] *
-                neutral_source_settings.z_amplitude[iz]
+                    neutral_source_settings.source_strength *
+                    neutral_source_settings.r_amplitude[ir] *
+                    neutral_source_settings.z_amplitude[iz]
             end
         end
     end
@@ -254,6 +239,11 @@ function external_ion_source(pdf, fvec, moments, ion_source_settings, vperp, vpa
 
     source_amplitude = moments.charged.external_source_amplitude
     source_T = ion_source_settings.source_T
+    if vperp.n == 1
+        vth_factor = 1.0 / sqrt(source_T)
+    else
+        vth_factor = 1.0 / source_T^1.5
+    end
     vpa_grid = vpa.grid
     vperp_grid = vperp.grid
 
@@ -264,7 +254,8 @@ function external_ion_source(pdf, fvec, moments, ion_source_settings, vperp, vpa
         @loop_s_r_z is ir iz begin
             this_vth = vth[iz,ir,is]
             this_upar = upar[iz,ir,is]
-            this_prefactor = dt * this_vth / density[iz,ir,is] * source_amplitude[iz,ir]
+            this_prefactor = dt * this_vth / density[iz,ir,is] * vth_factor *
+                             source_amplitude[iz,ir]
             @loop_vperp_vpa ivperp ivpa begin
                 # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
                 # normalisation of F
@@ -280,7 +271,7 @@ function external_ion_source(pdf, fvec, moments, ion_source_settings, vperp, vpa
         upar = fvec.upar
         @loop_s_r_z is ir iz begin
             this_upar = upar[iz,ir,is]
-            this_prefactor = dt / density[iz,ir,is] * source_amplitude[iz,ir]
+            this_prefactor = dt / density[iz,ir,is] * vth_factor * source_amplitude[iz,ir]
             @loop_vperp_vpa ivperp ivpa begin
                 # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
                 # normalisation of F
@@ -293,7 +284,7 @@ function external_ion_source(pdf, fvec, moments, ion_source_settings, vperp, vpa
     elseif moments.evolve_density
         density = fvec.density
         @loop_s_r_z is ir iz begin
-            this_prefactor = dt / density[iz,ir,is] * source_amplitude[iz,ir]
+            this_prefactor = dt / density[iz,ir,is] * vth_factor * source_amplitude[iz,ir]
             @loop_vperp_vpa ivperp ivpa begin
                 # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
                 # normalisation of F
@@ -304,7 +295,7 @@ function external_ion_source(pdf, fvec, moments, ion_source_settings, vperp, vpa
         end
     elseif !moments.evolve_ppar && !moments.evolve_upar && !moments.evolve_density
         @loop_s_r_z is ir iz begin
-            this_prefactor = dt * source_amplitude[iz,ir]
+            this_prefactor = dt * vth_factor * source_amplitude[iz,ir]
             @loop_vperp_vpa ivperp ivpa begin
                 # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
                 # normalisation of F
@@ -331,6 +322,11 @@ function external_neutral_source(pdf, fvec, moments, neutral_source_settings, vz
 
     source_amplitude = moments.neutral.external_source_amplitude
     source_T = neutral_source_settings.source_T
+    if vzeta.n == 1 && vr.n == 1
+        vth_factor = 1.0 / sqrt(source_T)
+    else
+        vth_factor = 1.0 / source_T^1.5
+    end
     vzeta_grid = vzeta.grid
     vr_grid = vr.grid
     vz_grid = vz.grid
@@ -342,7 +338,8 @@ function external_neutral_source(pdf, fvec, moments, neutral_source_settings, vz
         @loop_s_r_z is ir iz begin
             this_vth = vth[iz,ir,is]
             this_uz = uz[iz,ir,is]
-            this_prefactor = dt * this_vth / density[iz,ir,is] * source_amplitude[iz,ir]
+            this_prefactor = dt * this_vth / density[iz,ir,is] * vth_factor *
+                             source_amplitude[iz,ir]
             @loop_vzeta_vr_vz ivzeta ivr ivz begin
                 # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
                 # normalisation of F
@@ -359,7 +356,7 @@ function external_neutral_source(pdf, fvec, moments, neutral_source_settings, vz
         uz = fvec.uz_neutral
         @loop_s_r_z is ir iz begin
             this_uz = uz[iz,ir,is]
-            this_prefactor = dt / density[iz,ir,is] * source_amplitude[iz,ir]
+            this_prefactor = dt / density[iz,ir,is] * vth_factor * source_amplitude[iz,ir]
             @loop_vzeta_vr_vz ivzeta ivr ivz begin
                 # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
                 # normalisation of F
@@ -372,7 +369,7 @@ function external_neutral_source(pdf, fvec, moments, neutral_source_settings, vz
     elseif moments.evolve_density
         density = fvec.density_neutral
         @loop_s_r_z is ir iz begin
-            this_prefactor = dt / density[iz,ir,is] * source_amplitude[iz,ir]
+            this_prefactor = dt / density[iz,ir,is] * vth_factor * source_amplitude[iz,ir]
             @loop_vzeta_vr_vz ivzeta ivr ivz begin
                 # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
                 # normalisation of F
@@ -383,7 +380,7 @@ function external_neutral_source(pdf, fvec, moments, neutral_source_settings, vz
         end
     elseif !moments.evolve_ppar && !moments.evolve_upar && !moments.evolve_density
         @loop_s_r_z is ir iz begin
-            this_prefactor = dt * source_amplitude[iz,ir]
+            this_prefactor = dt * vth_factor * source_amplitude[iz,ir]
             @loop_vzeta_vr_vz ivzeta ivr ivz begin
                 # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
                 # normalisation of F
