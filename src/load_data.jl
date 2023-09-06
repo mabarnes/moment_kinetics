@@ -712,9 +712,9 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                     # => old_wpa = (new_wpa - upar)/vth
                     new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n, nspecies)
                     for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
-                        @. restart_vpa_vals =
-                            (vpa.grid - moments.charged.upar[iz,ir,is]) /
-                            moments.charged.vth[iz,ir,is]
+                        restart_vpa_vals =
+                            @. (vpa.grid - moments.charged.upar[iz,ir,is]) /
+                               moments.charged.vth[iz,ir,is]
                         @views interpolate_to_grid_1d!(
                             new_pdf[:,ivperp,iz,ir,is], restart_vpa_vals,
                             this_pdf[:,ivperp,iz,ir,is], restart_vpa,
@@ -740,9 +740,9 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                     # => old_wpa = (new_wpa + upar)/vth
                     new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n, nspecies)
                     for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
-                        @. restart_vpa_vals =
-                            (vpa.grid + moments.charged.upar[iz,ir,is]) /
-                            moments.charged.vth
+                        restart_vpa_vals =
+                            @. (vpa.grid + moments.charged.upar[iz,ir,is]) /
+                               moments.charged.vth
                         @views interpolate_to_grid_1d!(
                             new_pdf[:,ivperp,iz,ir,is], restart_vpa_vals,
                             this_pdf[:,ivperp,iz,ir,is], restart_vpa,
@@ -781,7 +781,7 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                     # => old_wpa = new_wpa*vth - upar/vth
                     new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n, nspecies)
                     for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
-                        @. restart_vpa_vals = vpa.grid * moments.charged.vth[iz,ir,is] -
+                        restart_vpa_vals = @. vpa.grid * moments.charged.vth[iz,ir,is] -
                                               moments.charged.upar[iz,ir,is]
                         @views interpolate_to_grid_1d!(
                             new_pdf[:,ivperp,iz,ir,is], restart_vpa_vals,
@@ -795,9 +795,9 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                     # => old_wpa = new_wpa - upar/vth
                     new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n, nspecies)
                     for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
-                        @. restart_vpa_vals =
-                            vpa.grid -
-                            moments.charged.upar[iz,ir,is]/moments.charged.vth[iz,ir,is]
+                        restart_vpa_vals =
+                            @. vpa.grid -
+                               moments.charged.upar[iz,ir,is]/moments.charged.vth[iz,ir,is]
                         @views interpolate_to_grid_1d!(
                             new_pdf[:,ivperp,iz,ir,is], restart_vpa_vals,
                             this_pdf[:,ivperp,iz,ir,is], restart_vpa,
@@ -810,7 +810,7 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                     # => old_wpa = new_wpa*vth + upar
                     new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n, nspecies)
                     for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
-                        @. restart_vpa_vals = vpa.grid * moments.charged.vth[iz,ir,is] +
+                        restart_vpa_vals = @. vpa.grid * moments.charged.vth[iz,ir,is] +
                                               moments.charged.upar[iz,ir,is]
                         @views interpolate_to_grid_1d!(
                             new_pdf[:,ivperp,iz,ir,is], restart_vpa_vals,
@@ -837,9 +837,9 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                     # => old_wpa = new_wpa + upar/vth
                     new_pdf = allocate_float(vpa.n, vperp.n, z.n, r.n, nspecies)
                     for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
-                        @. restart_vpa_vals =
-                            vpa.grid +
-                            moments.charged.upar[iz,ir,is] / moments.charged.vth[iz,ir,is]
+                        restart_vpa_vals =
+                            @. vpa.grid +
+                               moments.charged.upar[iz,ir,is] / moments.charged.vth[iz,ir,is]
                         @views interpolate_to_grid_1d!(
                             new_pdf[:,ivperp,iz,ir,is], restart_vpa_vals,
                             this_pdf[:,ivperp,iz,ir,is], restart_vpa,
@@ -966,9 +966,9 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                     # => old_wpa = (new_wpa - upar)/vth
                     new_pdf = allocate_float(vpa.n, vperp.n, z.n, nspecies)
                     for is ∈ nspecies, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
-                        @. restart_vpa_vals =
-                            (vpa.grid - moments.charged.upar[iz,is]) /
-                            moments.charged.vth[iz,is]
+                        restart_vpa_vals =
+                            @. (vpa.grid - moments.charged.upar[iz,is]) /
+                               moments.charged.vth[iz,is]
                         @views interpolate_to_grid_1d!(
                             new_pdf[:,ivperp,iz,is], restart_vpa_vals,
                             this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
@@ -992,9 +992,9 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                     # => old_wpa = (new_wpa + upar)/vth
                     new_pdf = allocate_float(vpa.n, vperp.n, z.n, nspecies)
                     for is ∈ nspecies, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
-                        @. restart_vpa_vals =
-                            (vpa.grid + moments.charged.upar[iz,is]) /
-                            moments.charged.vth
+                        restart_vpa_vals =
+                            @. (vpa.grid + moments.charged.upar[iz,is]) /
+                               moments.charged.vth
                         @views interpolate_to_grid_1d!(
                             new_pdf[:,ivperp,iz,is], restart_vpa_vals,
                             this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
@@ -1030,7 +1030,7 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                     # => old_wpa = new_wpa*vth - upar/vth
                     new_pdf = allocate_float(vpa.n, vperp.n, z.n, nspecies)
                     for is ∈ nspecies, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
-                        @. restart_vpa_vals = vpa.grid * moments.charged.vth[iz,is] -
+                        restart_vpa_vals = @. vpa.grid * moments.charged.vth[iz,is] -
                                               moments.charged.upar[iz,is]
                         @views interpolate_to_grid_1d!(
                             new_pdf[:,ivperp,iz,is], restart_vpa_vals,
@@ -1043,9 +1043,9 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                     # => old_wpa = new_wpa - upar/vth
                     new_pdf = allocate_float(vpa.n, vperp.n, z.n, nspecies)
                     for is ∈ nspecies, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
-                        @. restart_vpa_vals =
-                            vpa.grid -
-                            moments.charged.upar[iz,is]/moments.charged.vth[iz,is]
+                        restart_vpa_vals =
+                            @. vpa.grid -
+                               moments.charged.upar[iz,is]/moments.charged.vth[iz,is]
                         @views interpolate_to_grid_1d!(
                             new_pdf[:,ivperp,iz,is], restart_vpa_vals,
                             this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
@@ -1057,7 +1057,7 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                     # => old_wpa = new_wpa*vth + upar
                     new_pdf = allocate_float(vpa.n, vperp.n, z.n, nspecies)
                     for is ∈ nspecies, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
-                        @. restart_vpa_vals = vpa.grid * moments.charged.vth[iz,is] +
+                        restart_vpa_vals = @. vpa.grid * moments.charged.vth[iz,is] +
                                               moments.charged.upar[iz,is]
                         @views interpolate_to_grid_1d!(
                             new_pdf[:,ivperp,iz,is], restart_vpa_vals,
@@ -1082,9 +1082,9 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                     # => old_wpa = new_wpa + upar/vth
                     new_pdf = allocate_float(vpa.n, vperp.n, z.n, nspecies)
                     for is ∈ nspecies, iz ∈ 1:z.n, ivperp ∈ 1:vperp.n
-                        @. restart_vpa_vals =
-                            vpa.grid +
-                            moments.charged.upar[iz,is] / moments.charged.vth[iz,is]
+                        restart_vpa_vals =
+                            @. vpa.grid +
+                               moments.charged.upar[iz,is] / moments.charged.vth[iz,is]
                         @views interpolate_to_grid_1d!(
                             new_pdf[:,ivperp,iz,is], restart_vpa_vals,
                             this_pdf[:,ivperp,iz,is], restart_vpa, restart_vpa_spectral)
@@ -1265,9 +1265,9 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                         new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, r.n, nspecies)
                         for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivr ∈ 1:vr.n,
                                 ivzeta ∈ 1:vzeta.n
-                            @. restart_vz_vals =
-                                (vz.grid - moments.neutral.uz[iz,ir,is]) /
-                                moments.neutral.vth[iz,ir,is]
+                            restart_vz_vals =
+                                @. (vz.grid - moments.neutral.uz[iz,ir,is]) /
+                                   moments.neutral.vth[iz,ir,is]
                             @views interpolate_to_grid_1d!(
                                 new_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz_vals,
                                 this_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz,
@@ -1294,9 +1294,9 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                         new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, r.n, nspecies)
                         for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivr ∈ 1:vr.n,
                                 ivzeta ∈ 1:vzeta.n
-                            @. restart_vz_vals =
-                                (vz.grid + moments.neutral.uz[iz,ir,is]) /
-                                moments.neutral.vth
+                            restart_vz_vals =
+                                @. (vz.grid + moments.neutral.uz[iz,ir,is]) /
+                                   moments.neutral.vth
                             @views interpolate_to_grid_1d!(
                                 new_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz_vals,
                                 this_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz,
@@ -1338,9 +1338,9 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                         new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, r.n, nspecies)
                         for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivr ∈ 1:vr.n,
                                 ivzeta ∈ 1:vzeta.n
-                            @. restart_vz_vals =
-                                vz.grid * moments.neutral.vth[iz,ir,is] -
-                                moments.neutral.upar[iz,ir,is]
+                            restart_vz_vals =
+                                @. vz.grid * moments.neutral.vth[iz,ir,is] -
+                                   moments.neutral.upar[iz,ir,is]
                             @views interpolate_to_grid_1d!(
                                 new_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz_vals,
                                 this_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz,
@@ -1354,9 +1354,9 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                         new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, r.n, nspecies)
                         for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivr ∈ 1:vr.n,
                                 ivzeta ∈ 1:vzeta.n
-                            @. restart_vz_vals =
-                                vz.grid -
-                                moments.neutral.uz[iz,ir,is]/moments.neutral.vth[iz,ir,is]
+                            restart_vz_vals =
+                                @. vz.grid -
+                                   moments.neutral.uz[iz,ir,is]/moments.neutral.vth[iz,ir,is]
                             @views interpolate_to_grid_1d!(
                                 new_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz_vals,
                                 this_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz,
@@ -1370,9 +1370,9 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                         new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, r.n, nspecies)
                         for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivr ∈ 1:vr.n,
                                 ivzeta ∈ 1:vzeta.n
-                            @. restart_vz_vals =
-                                vz.grid * moments.neutral.vth[iz,ir,is] +
-                                moments.neutral.uz[iz,ir,is]
+                            restart_vz_vals =
+                                @. vz.grid * moments.neutral.vth[iz,ir,is] +
+                                   moments.neutral.uz[iz,ir,is]
                             @views interpolate_to_grid_1d!(
                                 new_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz_vals,
                                 this_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz,
@@ -1400,9 +1400,9 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                         new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, r.n, nspecies)
                         for is ∈ nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivr ∈ 1:vr.n,
                                 ivzeta ∈ 1:vzeta.n
-                            @. restart_vz_vals =
-                                vz.grid +
-                                moments.neutral.uz[iz,ir,is]/moments.neutral.vth[iz,ir,is]
+                            restart_vz_vals =
+                                @. vz.grid +
+                                   moments.neutral.uz[iz,ir,is]/moments.neutral.vth[iz,ir,is]
                             @views interpolate_to_grid_1d!(
                                 new_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz_vals,
                                 this_pdf[:,ivr,ivzeta,iz,ir,is], restart_vz,
@@ -1544,9 +1544,9 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                         # => old_wpa = (new_wpa - upar)/vth
                         new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, nspecies)
                         for is ∈ nspecies, iz ∈ 1:z.n, ivr ∈ 1:vr.n, ivzeta ∈ 1:vzeta.n
-                            @. restart_vz_vals =
-                                (vz.grid - moments.neutral.uz[iz,is]) /
-                                moments.neutral.vth[iz,is]
+                            restart_vz_vals =
+                                @. (vz.grid - moments.neutral.uz[iz,is]) /
+                                   moments.neutral.vth[iz,is]
                             @views interpolate_to_grid_1d!(
                                 new_pdf[:,ivr,ivzeta,iz,is], restart_vz_vals,
                                 this_pdf[:,ivr,ivzeta,iz,is], restart_vz,
@@ -1573,9 +1573,9 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                         # => old_wpa = (new_wpa + upar)/vth
                         new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, nspecies)
                         for is ∈ nspecies, iz ∈ 1:z.n, ivr ∈ 1:vr.n, ivzeta ∈ 1:vzeta.n
-                            @. restart_vz_vals =
-                                (vz.grid + moments.neutral.uz[iz,is]) /
-                                moments.neutral.vth
+                            restart_vz_vals =
+                                @. (vz.grid + moments.neutral.uz[iz,is]) /
+                                   moments.neutral.vth
                             @views interpolate_to_grid_1d!(
                                 new_pdf[:,ivr,ivzeta,iz,is], restart_vz_vals,
                                 this_pdf[:,ivr,ivzeta,iz,is], restart_vz,
@@ -1615,9 +1615,9 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                         # => old_wpa = new_wpa*vth - upar/vth
                         new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, nspecies)
                         for is ∈ nspecies, iz ∈ 1:z.n, ivr ∈ 1:vr.n, ivzeta ∈ 1:vzeta.n
-                            @. restart_vz_vals =
-                                vz.grid * moments.neutral.vth[iz,is] -
-                                moments.neutral.upar[iz,is]
+                            restart_vz_vals =
+                                @. vz.grid * moments.neutral.vth[iz,is] -
+                                   moments.neutral.upar[iz,is]
                             @views interpolate_to_grid_1d!(
                                 new_pdf[:,ivr,ivzeta,iz,is], restart_vz_vals,
                                 this_pdf[:,ivr,ivzeta,iz,is], restart_vz,
@@ -1630,9 +1630,9 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                         # => old_wpa = new_wpa - upar/vth
                         new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, nspecies)
                         for is ∈ nspecies, iz ∈ 1:z.n, ivr ∈ 1:vr.n, ivzeta ∈ 1:vzeta.n
-                            @. restart_vz_vals =
-                                vz.grid -
-                                moments.neutral.uz[iz,is]/moments.neutral.vth[iz,is]
+                            restart_vz_vals =
+                                @. vz.grid -
+                                   moments.neutral.uz[iz,is]/moments.neutral.vth[iz,is]
                             @views interpolate_to_grid_1d!(
                                 new_pdf[:,ivr,ivzeta,iz,is], restart_vz_vals,
                                 this_pdf[:,ivr,ivzeta,iz,is], restart_vz,
@@ -1645,9 +1645,9 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                         # => old_wpa = new_wpa*vth + upar
                         new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, nspecies)
                         for is ∈ nspecies, iz ∈ 1:z.n, ivr ∈ 1:vr.n, ivzeta ∈ 1:vzeta.n
-                            @. restart_vz_vals =
-                                vz.grid * moments.neutral.vth[iz,is] +
-                                moments.neutral.uz[iz,is]
+                            restart_vz_vals =
+                                @. vz.grid * moments.neutral.vth[iz,is] +
+                                   moments.neutral.uz[iz,is]
                             @views interpolate_to_grid_1d!(
                                 new_pdf[:,ivr,ivzeta,iz,is], restart_vz_vals,
                                 this_pdf[:,ivr,ivzeta,iz,is], restart_vz,
@@ -1673,9 +1673,9 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                         # => old_wpa = new_wpa + upar/vth
                         new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, nspecies)
                         for is ∈ nspecies, iz ∈ 1:z.n, ivr ∈ 1:vr.n, ivzeta ∈ 1:vzeta.n
-                            @. restart_vz_vals =
-                                vz.grid +
-                                moments.neutral.uz[iz,is]/moments.neutral.vth[iz,is]
+                            restart_vz_vals =
+                                @. vz.grid +
+                                   moments.neutral.uz[iz,is]/moments.neutral.vth[iz,is]
                             @views interpolate_to_grid_1d!(
                                 new_pdf[:,ivr,ivzeta,iz,is], restart_vz_vals,
                                 this_pdf[:,ivr,ivzeta,iz,is], restart_vz,
