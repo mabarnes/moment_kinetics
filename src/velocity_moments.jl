@@ -366,7 +366,7 @@ function update_qpar_species!(qpar, ff, vpa, vperp, z, r, upar, dummy_vpavperp)
             # old ! qpar[iz,ir] = integrate_over_vspace(@view(ff[:,iz,ir]), vpa.grid, 3, vpa.wgts) * vpanorm[iz,ir]^4
             #qpar[iz,ir] = integrate_over_vspace(@view(ff[:,:,iz,ir]),
             # vpa.grid, 3, vpa.wgts, vperp.grid, 0, vperp.wgts)
-            @views qpar[iz,ir] = get_qpar(ff[:,:,iz,ir], vpa, vperp, upar[iz,ir], mass, dummy_vpavperp)
+            qpar[iz,ir] = get_qpar(@view(ff[:,:,iz,ir]), vpa, vperp, upar[iz,ir], mass, dummy_vpavperp)
         end
     else #1V definitions
         @loop_r_z ir iz begin
