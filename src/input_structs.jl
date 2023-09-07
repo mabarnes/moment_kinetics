@@ -308,6 +308,8 @@ mutable struct collisions_input
     nuii_pitch::mk_float
     # ion-ion Krook operator collision frequency
     nuii_krook::mk_float
+    # numerical conserving terms (for Fokker-Planck operator only)
+    numerical_conserving_terms::Bool
 end
 
 """

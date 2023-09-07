@@ -185,7 +185,8 @@ function mk_input(scan_input=Dict())
     collisions.nuii = get(scan_input, "nuii", 0.0)
     collisions.nuii_pitch = get(scan_input, "nuii_pitch", 0.0)
     collisions.nuii_krook = get(scan_input, "nuii_krook", 0.0)
-
+    collisions.numerical_conserving_terms = get(scan_input, "numerical_conserving_terms", false)
+    
     # parameters related to the time stepping
     nstep = get(scan_input, "nstep", 5)
     dt = get(scan_input, "dt", 0.00025/sqrt(species.charged[1].initial_temperature))
@@ -883,7 +884,8 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     nuii = 0.0
     nuii_pitch = 0.0
     nuii_krook = 0.0
-    collisions = collisions_input(charge_exchange, ionization, constant_ionization_rate, nuii, nuii_pitch, nuii_krook)
+    numerical_conserving_terms = false
+    collisions = collisions_input(charge_exchange, ionization, constant_ionization_rate, nuii, nuii_pitch, nuii_krook, numerical_conserving_terms)
 
     Bzed = 1.0 # magnetic field component along z
     Bmag = 1.0 # magnetic field strength

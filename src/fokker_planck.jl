@@ -17,6 +17,8 @@ export F_Maxwellian, dFdvpa_Maxwellian, dFdvperp_Maxwellian
 export d2Fdvpa2_Maxwellian, d2Fdvperpdvpa_Maxwellian, d2Fdvperp2_Maxwellian
 
 export Cssp_fully_expanded_form, get_local_Cssp_coefficients!, init_fokker_planck_collisions
+# testing
+export symmetric_matrix_inverse
 
 using SpecialFunctions: ellipk, ellipe, erf
 using FastGaussQuadrature
@@ -25,6 +27,7 @@ using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_shared_float
 using ..communication: MPISharedArray
 using ..velocity_moments: integrate_over_vspace
+using ..velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_qpar, get_pressure, get_rmom
 using ..calculus: derivative!, second_derivative!
 using ..looping
 """
@@ -988,6 +991,14 @@ function explicit_fokker_planck_collisions!(pdf_out,pdf_in,dSdt,composition,coll
            @views dSdt[iz,ir,is] = -integrate_over_vspace(logfC[:,:,iz,ir,is], vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
         end
     end
+    if collisions.numerical_conserving_terms && false && n_ion_species == 1
+        # use an ad-hoc numerical model to conserve density, upar, vth
+        # a different model is required for inter-species collisions
+        # simply conserving particle density may be more appropriate in the multi-species case
+        apply_numerical_conserving_terms!(pdf_out,pdf_in,vperp,vpa,scratch_dummy.dummy_vpavperp,scratch_dummy.buffer_vpavperpzrs_1)
+    elseif collisions.numerical_conserving_terms && true #&& n_ion_species > 1
+        apply_density_conserving_terms!(pdf_out,pdf_in,vperp,vpa,scratch_dummy.buffer_vpavperpzrs_1)
+    end
     return nothing 
 end
 
@@ -1255,6 +1266,98 @@ function Cflux_vperp_Maxwellian_inputs(ms::mk_float,denss::mk_float,upars::mk_fl
     #fac *= (ms/msp)*(vths/vthsp)*dHdeta(etap)/etap
     #fac *= d2Gdeta2(etap) 
     return Cflux
+end
+
+# solves A x = b for a matrix of the form
+# A00  0    A02
+# 0    A11  A12
+# A02  A12  A22
+# appropriate for the moment numerical conserving terms
+function symmetric_matrix_inverse(A00,A02,A11,A12,A22,b0,b1,b2)
+    # matrix determinant
+    detA = A00*(A11*A22 - A12^2) - A11*A02^2
+    # cofactors C (also a symmetric matrix)
+    C00 = A11*A22 - A12^2
+    C01 = A12*A02
+    C02 = -A11*A02
+    C11 = A00*A22 - A02^2
+    C12 = -A00*A12
+    C22 = A00*A11
+    x0 = ( C00*b0 + C01*b1 + C02*b2 )/detA
+    x1 = ( C01*b0 + C11*b1 + C12*b2 )/detA
+    x2 = ( C02*b0 + C12*b1 + C22*b2 )/detA
+    return x0, x1, x2
+end
+
+# applies the numerical conservation to pdf_out, the advanced distribution function
+# uses the low-level moment integration routines from velocity moments
+# conserves n, upar, total pressure of each species
+# only correct for the self collision operator
+# multi-species cases requires conservation of  particle number and total momentum and total energy ( sum_s m_s upar_s, ... )
+function apply_numerical_conserving_terms!(pdf_out,pdf_in,vperp,vpa,dummy_vpavperp, buffer_pdf)
+    mass = 1.0
+    begin_s_r_z_region()
+    @loop_s_r_z is ir iz begin
+        # get moments of incoming and outgoing distribution functions
+        n_in = get_density(@view(pdf_in[:,:,iz,ir,is]), vpa, vperp)
+        upar_in = get_upar(@view(pdf_in[:,:,iz,ir,is]), vpa, vperp, n_in)
+        ppar_in = get_ppar(@view(pdf_in[:,:,iz,ir,is]), vpa, vperp, upar_in, mass)
+        pperp_in = get_pperp(@view(pdf_in[:,:,iz,ir,is]), vpa, vperp, mass)
+        pressure_in = get_pressure(ppar_in,pperp_in)
+        
+        n_out = get_density(@view(pdf_out[:,:,iz,ir,is]), vpa, vperp)
+        upar_out = get_upar(@view(pdf_out[:,:,iz,ir,is]), vpa, vperp, n_out)
+        ppar_out = get_ppar(@view(pdf_out[:,:,iz,ir,is]), vpa, vperp, upar_out, mass)
+        pperp_out = get_pperp(@view(pdf_out[:,:,iz,ir,is]), vpa, vperp, mass)
+        pressure_out = get_pressure(ppar_out,pperp_out)
+        qpar_out = get_qpar(@view(pdf_out[:,:,iz,ir,is]), vpa, vperp, upar_out, mass, dummy_vpavperp)
+        rmom_out = get_rmom(@view(pdf_out[:,:,iz,ir,is]), vpa, vperp, upar_out, mass, dummy_vpavperp)
+        
+        # form the appropriate matrix coefficients
+        b0, b1, b2 = n_in, n_in*(upar_in - upar_out), (3.0/2.0)*(pressure_in/mass) + n_in*(upar_in - upar_out)^2
+        A00, A02, A11, A12, A22 = n_out, (3.0/2.0)*(pressure_out/mass), 0.5*ppar_out/mass, qpar_out/mass, rmom_out/mass
+        
+        # obtain the coefficients for the corrections 
+        (x0, x1, x2) = symmetric_matrix_inverse(A00,A02,A11,A12,A22,b0,b1,b2)
+        
+        # fill the buffer with the corrected pdf 
+        @loop_vperp_vpa ivperp ivpa begin
+            wpar = vpa.grid[ivpa] - upar_out
+            buffer_pdf[ivpa,ivperp,iz,ir,is] = (x0 + x1*wpar + x2*(vperp.grid[ivperp]^2 + wpar^2) )*pdf_out[ivpa,ivperp]
+        end
+        
+    end
+    begin_s_r_z_vperp_vpa_region()
+    # update pdf_out
+    @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+        pdf_out[ivpa,ivperp,iz,ir,is] = buffer_pdf[ivpa,ivperp,iz,ir,is]
+    end
+end
+
+# function which corrects only for the loss of particles due to numerical error
+# suitable for use with multiple species collisions
+function apply_density_conserving_terms!(pdf_out,pdf_in,vperp,vpa,buffer_pdf)
+    begin_s_r_z_region()
+    @loop_s_r_z is ir iz begin
+        # get density moment of incoming and outgoing distribution functions
+        n_in = get_density(@view(pdf_in[:,:,iz,ir,is]), vpa, vperp)
+        
+        n_out = get_density(@view(pdf_out[:,:,iz,ir,is]), vpa, vperp)
+        
+        # obtain the coefficient for the corrections 
+        x0 = n_in/n_out
+        
+        # update pdf_out with the corrections 
+        @loop_vperp_vpa ivperp ivpa begin
+            buffer_pdf[ivpa,ivperp,iz,ir,is] = x0*pdf_out[ivpa,ivperp]
+        end
+        
+    end
+    begin_s_r_z_vperp_vpa_region()
+    # update pdf_out
+    @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+        pdf_out[ivpa,ivperp,iz,ir,is] = buffer_pdf[ivpa,ivperp,iz,ir,is]
+    end
 end
 
 end
