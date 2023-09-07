@@ -108,7 +108,7 @@ function source_terms_evolve_ppar_no_collisions!(pdf_out, pdf_in, dens, upar, pp
         source_T = ion_source_settings.source_T
         @loop_r_z ir iz begin
             term = dt * source_amplitude[iz,ir] *
-                   (1.5/dens[iz,ir] - (source_T + 2.0 * upar[iz,ir]^2) / ppar[iz,ir])
+                   (1.5/dens[iz,ir] - (0.25 * source_T + 0.5 * upar[iz,ir]^2) / ppar[iz,ir])
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz,ir] += term * pdf_in[ivpa,ivperp,iz,ir]
             end
@@ -242,7 +242,7 @@ function source_terms_evolve_ppar_no_collisions_neutral!(pdf_out, pdf_in, dens, 
         source_T = neutral_source_settings.source_T
         @loop_r_z ir iz begin
             term = dt * source_amplitude[iz,ir] *
-                   (1.5/dens[iz,ir] - (source_T + 2.0 * upar[iz,ir]^2) / ppar[iz,ir])
+                   (1.5/dens[iz,ir] - (0.25 * source_T + 0.5 * upar[iz,ir]^2) / ppar[iz,ir])
             @loop_vzeta_vr_vz ivzeta ivr ivz begin
                 pdf_out[ivz,ivr,ivzeta,iz,ir] += term * pdf_in[ivz,ivr,ivzeta,iz,ir]
             end
