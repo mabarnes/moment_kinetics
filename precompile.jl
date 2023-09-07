@@ -5,7 +5,12 @@ Pkg.activate(".")
 
 using PackageCompiler
 
-packages = [:moment_kinetics, :PackageCompiler, :ArgParse, :Combinatorics, :DelimitedFiles, :FFTW, :Glob, :IJulia, :LinearAlgebra, :LsqFit, :MPI, :NaturalSort, :NCDatasets, :OrderedCollections, :Plots, :Primes, :Roots, :SHA, :SpecialFunctions, :Statistics, :TOML, :TimerOutputs]
+using TOML
+project_file = TOML.parsefile("Project.toml")
+deps = (Symbol(d) for d ∈ keys(project_file["deps"]))
+
+packages = [:moment_kinetics, :PackageCompiler, deps...]
+println("precompling $packages")
 
 # Create the sysimage 'moment_kinetics.so' in the base moment_kinetics source directory
 # with both moment_kinetics and the dependencies listed above precompiled.
