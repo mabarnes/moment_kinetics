@@ -256,8 +256,7 @@ function update_speed_n_u_evolution!(advect, fvec, moments, vpa, z, r, compositi
         upar = fvec.upar
         vth = moments.charged.vth
         @loop_s_r_z is ir iz begin
-            term = source_amplitude[iz,ir] * upar[iz,ir,is] /
-                   (density[iz,ir,is] * vth[iz,ir,is]^2)
+            term = source_amplitude[iz,ir] * upar[iz,ir,is] / density[iz,ir,is]
             @loop_vperp_vpa ivperp ivpa begin
                 advect[is].speed[ivpa,ivperp,iz,ir] += term
             end
