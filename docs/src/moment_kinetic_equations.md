@@ -899,7 +899,7 @@ So then if we use the moment equations we can rewrite the DKE as
   - n_{s}n_{s'}\left(u_{s} - u_{s'}\right)^{2}\right)
   \mp\frac{1}{2}R_{\mathrm{ion}}\frac{n_{i}}{p_{\|,s}}\left(p_{\|,n}
   + n_{n}\left(u_{n} - u_{s}\right)^{2}\right)
-  - \frac{2}{p_{s}}\int dv_\parallel v_\parallel^2 S_{s} - \frac{2u_{s}^2}{p_{s}}\int dv_\parallel S_{s}\right) \\
+  - \frac{1}{2p_{\parallel,s}}\int dv_\parallel v_\parallel^2 S_{s} - \frac{u_{s}^2}{2p_{\parallel,s}}\int dv_\parallel S_{s}\right) \\
   & + \left[-\frac{1}{n_{s}v_{\mathrm{th},s}}\left(-\frac{\partial p_{\|,s}}{\partial z}
   + R_{ss'}n_{s}n_{s'}\left(u_{s'} - u_{s}\right)
   \pm R_{\mathrm{ion}}n_{i}n_{n}\left(u_{n} - u_{s}\right) - u_{s}\int dv_\parallel S_{s}\right)\right. \\
@@ -947,7 +947,7 @@ gives
   - n_{s}n_{s'}\left(u_{s} - u_{s'}\right)^{2}\right) \\
   & \qquad \left.\mp\frac{1}{2}R_{\mathrm{ion}}\frac{n_{i}}{p_{\|,s}}\left(p_{\|,n}
   + n_{n}\left(u_{n} - u_{s}\right)^{2}\right)
-  - \frac{2}{p_{s}}\int dv_\parallel v_\parallel^2 S_{s} - \frac{2u_{s}^2}{p_{s}}\int dv_\parallel S_{s}\right)g_{s} \\
+  - \frac{1}{2p_{\parallel,s}}\int dv_\parallel v_\parallel^2 S_{s} - \frac{u_{s}^2}{2p_{\parallel,s}}\int dv_\parallel S_{s}\right)g_{s} \\
   & + \left[-\frac{1}{n_{s}v_{\mathrm{th},s}}\left(-\frac{\partial p_{\|,s}}{\partial z}
   + R_{ss'}n_{s}n_{s'}\left(u_{s'} - u_{s}\right)
   \pm R_{\mathrm{ion}}n_{i}n_{n}\left(u_{n} - u_{s}\right) - u_{s}\int dv_\parallel S_{s}\right)\right. \\
@@ -980,7 +980,7 @@ Writing out the final result fully for ions
   - n_{i}n_{n}\left(u_{i} - u_{n}\right)^{2}\right) \\
   & \qquad \left. - \frac{1}{2}R_{\mathrm{ion}}\frac{n_{i}}{p_{\|,i}}\left(p_{\|,n}
   + n_{n}\left(u_{n} - u_{i}\right)^{2}\right)
-  - \frac{2}{p_{i}}\int dv_\parallel v_\parallel^2 S_{i} - \frac{2u_{i}^2}{p_{i}}\int dv_\parallel S_{i}\right)g_{i} \\
+  - \frac{1}{2p_{\parallel,i}}\int dv_\parallel v_\parallel^2 S_{i} - \frac{u_{i}^2}{2p_{\parallel,i}}\int dv_\parallel S_{i}\right)g_{i} \\
   & + \left[-\frac{1}{n_{i}v_{\mathrm{th},i}}\left(-\frac{\partial p_{\|,i}}{\partial z}
   + R_{in}n_{i}n_{n}\left(u_{n} - u_{i}\right)
   + R_{\mathrm{ion}}n_{i}n_{n}\left(u_{n} - u_{i}\right) - u_{i}\int dv_\parallel S_{i}\right)\right. \\
@@ -1012,7 +1012,7 @@ and for neutrals where several of the ionization terms cancel
   & \qquad \left. + \frac{1}{2p_{\|,n}}R_{in}\left(n_{i}p_{\|,n} - n_{n}p_{\|,i}
   - n_{n}n_{i}\left(u_{n} - u_{i}\right)^{2}\right)
   + \frac{1}{2}R_{\mathrm{ion}}n_{i}
-  - \frac{2}{p_{n}}\int dv_\parallel v_\parallel^2 S_{n} - \frac{2u_{n}^2}{p_{n}}\int dv_\parallel S_{n}\right)g_{n} \\
+  - \frac{1}{2p_{\parallel,n}}\int dv_\parallel v_\parallel^2 S_{n} - \frac{u_{n}^2}{2p_{\parallel,n}}\int dv_\parallel S_{n}\right)g_{n} \\
   & + \left[-\frac{1}{n_{n}v_{\mathrm{th},n}}\left(-\frac{\partial p_{\|,n}}{\partial z}
   + R_{in}n_{n}n_{i}\left(u_{i} - u_{n}\right) - u_{n}\int dv_\parallel S_{n}\right)\right. \\
   & \qquad-\frac{w_{\|,n}}{2}\frac{1}{p_{\|,n}}\left(-\frac{\partial q_{\|,n}}{\partial z}
