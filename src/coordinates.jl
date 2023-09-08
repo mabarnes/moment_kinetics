@@ -114,12 +114,12 @@ function define_coordinate(input, parallel_io::Bool=false)
     imin, imax = elemental_to_full_grid_map(input.ngrid, input.nelement_local)
     # initialise the data used to construct the grid
     # boundaries for each element
-    element_boundaries = allocate_float(nelement_global)
-    element_boundaries_local = allocate_float(nelement_local)
+    element_boundaries = allocate_float(input.nelement_global)
+    element_boundaries_local = allocate_float(input.nelement_local)
     
-    element_scale = allocate_float(nelement_local)
+    element_scale = allocate_float(input.nelement_local)
     # shift for each element
-    element_shift = allocate_float(nelement_local)
+    element_shift = allocate_float(input.nelement_local)
     # initialize the grid and the integration weights associated with the grid
     # also obtain the Chebyshev theta grid and spacing if chosen as discretization option
     grid, wgts, uniform_grid = init_grid(input.ngrid, input.nelement_global,
@@ -186,23 +186,39 @@ function set_element_boundaries(nelement_global, L, element_spacing_option)
     element_boundaries = allocate_float(nelement_global+1)
     if element_spacing_option == "sqrt"
         # number of boundaries of sqrt grid
-        nsqrt = floor(mk_int,(nelement_global+1)/2)
+        nsqrt = floor(mk_int,(nelement_global)/2) + 1
+        if nelement_global%2 > 0 # odd
+            #fac = 0.0
+            #for j in 2:nsqrt
+            #    fac += 2.0*(((j-2)/(nsqrt-1))^2 - ((j-1)/(nsqrt-1))^2 )
+            #end
+            x = ((nsqrt-2)/(nsqrt-1))^2
+            if nsqrt < 3
+                fac = 2.0/3.0
+            else
+                #fac = 0.5*(sqrt( 1.0 + 4.0*x) - 1.0)/x
+                fac = 1.0/( 3.0/2.0 - 0.5*((nsqrt-2)/(nsqrt-1))^2)
+            end
+        else
+            fac = 1.0
+        end
+        
         println("nsqrt",nsqrt)
         # number of boundaries of uniform grid
-        nuniform = nelement_global + 3 - 2*nsqrt
-        println("nuniform",nuniform)
-        DL = L/6.0 # 1/3 of the domain is uniformly spaced
-        delta = 2.0*DL/(nuniform-1) # length of each element in the uniform section
+        #nuniform = nelement_global + 3 - 2*nsqrt
+        #println("nuniform",nuniform)
+        #DL = L/6.0 # 1/3 of the domain is uniformly spaced
+        #delta = 2.0*DL/(nuniform-1) # length of each element in the uniform section
         for j in 1:nsqrt
-            element_boundaries[j] = -(L/2.0) + ((L/2.0) - DL)*((j-1)/(nsqrt-1))^2
+            element_boundaries[j] = -(L/2.0) + fac*(L/2.0)*((j-1)/(nsqrt-1))^2
         end
         println(element_boundaries)
-        for j in 2:nuniform-1 #nsqrt+1:nelement_global + 1 - nsqrt
-            element_boundaries[nsqrt-1+j] = -DL + delta*(j-1) 
-        end
+        #for j in 2:nuniform-1 #nsqrt+1:nelement_global + 1 - nsqrt
+        #    element_boundaries[nsqrt-1+j] = -DL + delta*(j-1) 
+        #end
         println(element_boundaries)
         for j in 1:nsqrt
-            element_boundaries[(nelement_global+1)+ 1 - j] = (L/2.0) - ((L/2.0) - DL)*((j-1)/(nsqrt-1))^2
+            element_boundaries[(nelement_global+1)+ 1 - j] = (L/2.0) - fac*(L/2.0)*((j-1)/(nsqrt-1))^2
         end
         println(element_boundaries)
     elseif element_spacing_option == "uniform" # uniform spacing 
