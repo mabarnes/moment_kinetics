@@ -4,6 +4,7 @@ module coordinates
 
 export define_coordinate, write_coordinate
 export equally_spaced_grid
+export set_element_boundaries
 
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_int
@@ -84,6 +85,12 @@ struct coordinate
     local_io_range::UnitRange{Int64}
     # global range to write into in output file
     global_io_range::UnitRange{Int64}
+    # scale for each element
+    element_scale::Array{mk_float,1}
+    # shift for each element
+    element_shift::Array{mk_float,1}
+    # boundaries for each element
+    element_boundaries::Array{mk_float,1}
 end
 
 """
@@ -105,6 +112,14 @@ function define_coordinate(input, parallel_io::Bool=false)
     # obtain (local) index mapping from the grid within each element
     # to the full grid
     imin, imax = elemental_to_full_grid_map(input.ngrid, input.nelement_local)
+    # initialise the data used to construct the grid
+    # boundaries for each element
+    element_boundaries = allocate_float(nelement_global)
+    element_boundaries_local = allocate_float(nelement_local)
+    
+    element_scale = allocate_float(nelement_local)
+    # shift for each element
+    element_shift = allocate_float(nelement_local)
     # initialize the grid and the integration weights associated with the grid
     # also obtain the Chebyshev theta grid and spacing if chosen as discretization option
     grid, wgts, uniform_grid = init_grid(input.ngrid, input.nelement_global,
@@ -126,7 +141,6 @@ function define_coordinate(input, parallel_io::Bool=false)
     # endpoints, so only two pieces of information must be shared
     send_buffer = allocate_float(1)
     receive_buffer = allocate_float(1)
-
     # Add some ranges to support parallel file io
     if !parallel_io
         # No parallel io, just write everything
@@ -149,7 +163,7 @@ function define_coordinate(input, parallel_io::Bool=false)
         cell_width, igrid, ielement, imin, imax, input.discretization, input.fd_option,
         input.bc, wgts, uniform_grid, duniform_dgrid, scratch, copy(scratch), copy(scratch),
         scratch_2d, copy(scratch_2d), advection, send_buffer, receive_buffer, input.comm,
-        local_io_range, global_io_range)
+        local_io_range, global_io_range, element_scale, element_shift, element_boundaries)
 
     if input.discretization == "chebyshev_pseudospectral" && coord.n > 1
         # create arrays needed for explicit Chebyshev pseudospectral treatment in this
@@ -165,6 +179,40 @@ function define_coordinate(input, parallel_io::Bool=false)
     end
 
     return coord, spectral
+end
+
+function set_element_boundaries(nelement_global, L, element_spacing_option)
+    # set global element boundaries
+    element_boundaries = allocate_float(nelement_global+1)
+    if element_spacing_option == "sqrt"
+        # number of boundaries of sqrt grid
+        nsqrt = floor(mk_int,(nelement_global+1)/2)
+        println("nsqrt",nsqrt)
+        # number of boundaries of uniform grid
+        nuniform = nelement_global + 3 - 2*nsqrt
+        println("nuniform",nuniform)
+        DL = L/6.0 # 1/3 of the domain is uniformly spaced
+        delta = 2.0*DL/(nuniform-1) # length of each element in the uniform section
+        for j in 1:nsqrt
+            element_boundaries[j] = -(L/2.0) + ((L/2.0) - DL)*((j-1)/(nsqrt-1))^2
+        end
+        println(element_boundaries)
+        for j in 2:nuniform-1 #nsqrt+1:nelement_global + 1 - nsqrt
+            element_boundaries[nsqrt-1+j] = -DL + delta*(j-1) 
+        end
+        println(element_boundaries)
+        for j in 1:nsqrt
+            element_boundaries[(nelement_global+1)+ 1 - j] = (L/2.0) - ((L/2.0) - DL)*((j-1)/(nsqrt-1))^2
+        end
+        println(element_boundaries)
+    elseif element_spacing_option == "uniform" # uniform spacing 
+        for j in 1:nelement_global+1
+            element_boundaries[j] = L*((j-1)/(nelement_global) - 0.5)
+        end
+    else 
+        println("ERROR: element_spacing_option: ",element_spacing_option, " not supported")
+    end
+    return element_boundaries
 end
 
 """
