@@ -69,6 +69,8 @@ function time_solve_with_cvode(mk_ddt_state...; reltol=1e-3, abstol=1e-6)
         error("SUNDIALS.jl does not support MPI yet, so cannot use distributed memory.")
     end
 
+    start_time = now()
+
     if block_rank[] == 0
         dfvec_dt, fvec, pdf, fields, moments, boundary_distributions, advect_objects, vz,
         vr, vzeta, vpa, vperp, gyrophase, z, r, t, t_input, spectral_objects, composition,
@@ -135,19 +137,23 @@ function time_solve_with_cvode(mk_ddt_state...; reltol=1e-3, abstol=1e-6)
             # wasteful, but easy to implement for now.
             calculate_ddt!(mk_ddt_state...)
 
+            if any(isapprox.(simtime, all_time_points)) || finish_now
+                time_for_run = to_minutes(now() - start_time)
+            end
+
             if any(isapprox.(simtime, moments_times)) || finish_now
                 finish_now = do_moments_output!(ascii_io, io_moments, pdf, nothing, t,
                                                 t_input, vz, vr, vzeta, vpa, vperp,
                                                 gyrophase, z, r, moments, fields,
                                                 composition, iwrite_moments,
-                                                iwrite_moments, finish_now)
+                                                iwrite_moments, time_for_run, finish_now)
                 iwrite_moments += 1
             end
             if any(isapprox.(simtime, dfns_times)) || finish_now
                 finish_now = do_dfns_output!(io_dfns, pdf, nothing, t, t_input, vz, vr,
                                              vzeta, vpa, vperp, gyrophase, z, r, moments,
                                              fields, composition, iwrite_dfns,
-                                             iwrite_dfns, finish_now)
+                                             iwrite_dfns, time_for_run, finish_now)
                 iwrite_dfns += 1
             end
 
