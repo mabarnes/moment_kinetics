@@ -3,12 +3,14 @@ Utility functions
 """
 module utils
 
-export get_unnormalized_parameters, print_unnormalized_parameters
+export get_unnormalized_parameters, print_unnormalized_parameters, to_seconds, to_minutes,
+       to_hours
 
 using ..constants
 using ..moment_kinetics_input: mk_input
 using ..reference_parameters
 
+using Dates
 using OrderedCollections
 using TOML
 using Unitful
@@ -95,5 +97,29 @@ function print_unnormalized_parameters(args...; kwargs...)
 
     return nothing
 end
+
+# Utility functions for dates, adapted from
+# https://discourse.julialang.org/t/convert-time-interval-to-seconds/3806/4
+
+"""
+    to_seconds(x::T) where {T<:TimePeriod}
+
+Convert a time period `x` to seconds
+"""
+to_seconds(x::T) where {T<:TimePeriod} = x/convert(T, Second(1))
+
+"""
+    to_minutes(x::T) where {T<:TimePeriod}
+
+Convert a time period `x` to seconds
+"""
+to_minutes(x::T) where {T<:TimePeriod} = x/convert(T, Minute(1))
+
+"""
+    to_hours(x::T) where {T<:TimePeriod}
+
+Convert a time period `x` to seconds
+"""
+to_hours(x::T) where {T<:TimePeriod} = x/convert(T, Hour(1))
 
 end #utils
