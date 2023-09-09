@@ -1602,7 +1602,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
                                     external_source_settings.ion, dt)
     if composition.n_neutral_species > 0
         external_neutral_source_controller!(fvec_in, moments.neutral,
-                                            external_source_settings.neutral, dt)
+                                            external_source_settings.neutral, r, z, dt)
     end
 
     if advance.vpa_advection
