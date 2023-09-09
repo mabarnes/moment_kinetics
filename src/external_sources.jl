@@ -136,7 +136,11 @@ function setup_external_sources!(input_dict, r, z)
                 error("recycling_controller_fraction must be ≤1. Got $recycling")
             end
 
-            controller_source_profile = allocate_shared_float(z.n, r.n)
+            if comm_block[] != MPI.COMM_NULL
+                controller_source_profile = allocate_shared_float(z.n, r.n)
+            else
+                controller_source_profile = allocate_float(z.n, r.n)
+            end
             if block_rank[] == 0
                 for ir ∈ 1:r.n, iz ∈ 1:z.n
                     controller_source_profile[iz,ir] = r_amplitude[ir] * z_amplitude[iz]
@@ -148,8 +152,10 @@ function setup_external_sources!(input_dict, r, z)
                     @views r.scratch[ir] = integral(controller_source_profile[:,ir], z.wgts)
                 end
                 controller_source_integral = integral(r.scratch, r.wgts)
-                controller_source_integral = MPI.Allreduce(controller_source_integral, +,
-                                                           comm_inter_block[])
+                if comm_inter_block[] != MPI.COMM_NULL
+                    controller_source_integral = MPI.Allreduce(controller_source_integral,
+                                                               +, comm_inter_block[])
+                end
                 controller_source_profile ./= controller_source_integral
             end
 
