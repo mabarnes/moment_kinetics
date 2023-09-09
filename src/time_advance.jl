@@ -1700,7 +1700,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
                             vperp, vpa, dt)
     end
     if advance.neutral_external_source
-        external_neutral_source(fvec_out.pdf, fvec_in, moments,
+        external_neutral_source(fvec_out.pdf_neutral, fvec_in, moments,
                                 external_source_settings.neutral, vzeta, vr, vz, dt)
     end
 

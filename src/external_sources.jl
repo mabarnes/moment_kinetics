@@ -320,7 +320,7 @@ Add external source term to the neutral kinetic equation.
 """
 function external_neutral_source(pdf, fvec, moments, neutral_source_settings, vzeta, vr,
                                  vz, dt)
-    begin_s_r_z_vzeta_vr_region()
+    begin_sn_r_z_vzeta_vr_region()
 
     source_amplitude = moments.neutral.external_source_amplitude
     source_T = neutral_source_settings.source_T
@@ -337,10 +337,10 @@ function external_neutral_source(pdf, fvec, moments, neutral_source_settings, vz
         vth = moments.vth_neutral
         density = fvec.density_neutral
         uz = fvec.uz_neutral
-        @loop_s_r_z is ir iz begin
-            this_vth = vth[iz,ir,is]
-            this_uz = uz[iz,ir,is]
-            this_prefactor = dt * this_vth / density[iz,ir,is] * vth_factor *
+        @loop_sn_r_z isn ir iz begin
+            this_vth = vth[iz,ir,isn]
+            this_uz = uz[iz,ir,isn]
+            this_prefactor = dt * this_vth / density[iz,ir,isn] * vth_factor *
                              source_amplitude[iz,ir]
             @loop_vzeta_vr_vz ivzeta ivr ivz begin
                 # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
@@ -348,7 +348,7 @@ function external_neutral_source(pdf, fvec, moments, neutral_source_settings, vz
                 vzeta_unnorm = vzeta_grid[ivzeta] * this_vth
                 vr_unnorm = vr_grid[ivr] * this_vth
                 vz_unnorm = vz_grid[ivz] * this_vth + this_uz
-                pdf[ivz,ivr,ivzeta,iz,ir,is] +=
+                pdf[ivz,ivr,ivzeta,iz,ir,isn] +=
                     this_prefactor *
                     exp(-(vzeta_unnorm^2 + vr_unnorm^2 + vz_unnorm^2) / source_T)
             end
@@ -356,37 +356,37 @@ function external_neutral_source(pdf, fvec, moments, neutral_source_settings, vz
     elseif moments.evolve_upar && moments.evolve_density
         density = fvec.density_neutral
         uz = fvec.uz_neutral
-        @loop_s_r_z is ir iz begin
-            this_uz = uz[iz,ir,is]
-            this_prefactor = dt / density[iz,ir,is] * vth_factor * source_amplitude[iz,ir]
+        @loop_sn_r_z isn ir iz begin
+            this_uz = uz[iz,ir,isn]
+            this_prefactor = dt / density[iz,ir,isn] * vth_factor * source_amplitude[iz,ir]
             @loop_vzeta_vr_vz ivzeta ivr ivz begin
                 # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
                 # normalisation of F
                 vz_unnorm = vz_grid[ivz] + this_uz
-                pdf[ivz,ivr,ivzeta,iz,ir,is] +=
+                pdf[ivz,ivr,ivzeta,iz,ir,isn] +=
                     this_prefactor *
                     exp(-(vzeta_grid[ivz]^2 + vr_grid[ivr]^2 + vz_unnorm^2) / source_T)
             end
         end
     elseif moments.evolve_density
         density = fvec.density_neutral
-        @loop_s_r_z is ir iz begin
-            this_prefactor = dt / density[iz,ir,is] * vth_factor * source_amplitude[iz,ir]
+        @loop_sn_r_z isn ir iz begin
+            this_prefactor = dt / density[iz,ir,isn] * vth_factor * source_amplitude[iz,ir]
             @loop_vzeta_vr_vz ivzeta ivr ivz begin
                 # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
                 # normalisation of F
-                pdf[ivz,ivr,ivzeta,iz,ir,is] +=
+                pdf[ivz,ivr,ivzeta,iz,ir,isn] +=
                     this_prefactor *
                     exp(-(vzeta_grid[ivzeta]^2 + vr_grid[ivr]^2 + vz_grid[ivz]^2) / source_T)
             end
         end
     elseif !moments.evolve_ppar && !moments.evolve_upar && !moments.evolve_density
-        @loop_s_r_z is ir iz begin
+        @loop_sn_r_z isn ir iz begin
             this_prefactor = dt * vth_factor * source_amplitude[iz,ir]
             @loop_vzeta_vr_vz ivzeta ivr ivz begin
                 # Factor of 1/sqrt(π) (for 1V) or 1/π^(3/2) (for 2V/3V) is absorbed by the
                 # normalisation of F
-                pdf[ivz,ivr,ivzeta,iz,ir,is] +=
+                pdf[ivz,ivr,ivzeta,iz,ir,isn] +=
                     this_prefactor *
                     exp(-(vzeta_grid[ivzeta]^2 + vr_grid[ivr]^2 + vz_grid[ivz]^2) / source_T)
             end
