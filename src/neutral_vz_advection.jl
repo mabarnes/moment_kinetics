@@ -133,14 +133,16 @@ function update_speed_n_u_p_evolution_neutral!(advect, fvec, moments, vz, z, r,
         uz = fvec.uz_neutral
         pz = fvec.pz_neutral
         vth = moments.neutral.vth
+        vz_grid = vz.grid
         @loop_s_r_z is ir iz begin
-            prefactor = dt * source_amplitude[iz,ir]
+            prefactor = source_amplitude[iz,ir]
             term1 = prefactor * uz[iz,ir,is]/(density[iz,ir,is]*vth[iz,ir,is])
             term2_over_vpa =
                 0.5 * prefactor * (-(0.5*source_T + uz[iz,ir,is]^2) / pz[iz,ir,is]
                                    + 1.0/density[iz,ir,is])
             @loop_vzeta_vr_vz ivzeta ivr ivz begin
-                advect[is].speed[ivz,ivr,ivzeta,iz,ir] += term1 + vz_grid[ivz] * term2
+                advect[is].speed[ivz,ivr,ivzeta,iz,ir] += term1 +
+                                                          vz_grid[ivz] * term2_over_vpa
             end
         end
     end
@@ -222,7 +224,7 @@ function update_speed_n_u_evolution_neutral!(advect, fvec, moments, vz, z, r, co
         uz = fvec.uz_neutral
         vth = moments.neutral.vth
         @loop_s_r_z is ir iz begin
-            term = dt * source_amplitude[iz,ir] * uz[iz,ir,is] / density[iz,ir,is]
+            term = source_amplitude[iz,ir] * uz[iz,ir,is] / density[iz,ir,is]
             @loop_vperp_vpa ivperp ivpa begin
                 advect[is].speed[ivpa,ivperp,iz,ir] += term
             end
