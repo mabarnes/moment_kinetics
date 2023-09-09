@@ -613,8 +613,9 @@ function external_neutral_source_controller!(fvec_in, neutral_moments,
 
         amplitude = neutral_moments.external_source_amplitude
         profile = neutral_source_settings.controller_source_profile
+        prefactor = target_flux * neutral_source_settings.recycling_controller_fraction
         @loop_r_z ir iz begin
-            amplitude[iz,ir] = target_flux * profile[iz,ir]
+            amplitude[iz,ir] = prefactor * profile[iz,ir]
         end
     else
         error("Unrecognised controller_type=$(neutral_source_settings.controller_type)")
