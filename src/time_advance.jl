@@ -56,6 +56,7 @@ using ..energy_equation: energy_equation!, neutral_energy_equation!
 using ..em_fields: setup_em_fields, update_phi!
 using ..manufactured_solns: manufactured_sources
 using ..advection: advection_info
+using ..utils: to_minutes
 @debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
 
 using Dates
@@ -764,6 +765,8 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
         end
     end
 
+    start_time = now()
+
     # main time advance loop
     iwrite_moments = 2
     iwrite_dfns = 2
@@ -800,6 +803,8 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
                 println("Found 'stop' file $(t_input.stopfile), aborting run")
                 finish_now = true
             end
+
+            time_for_run = to_minutes(now() - start_time)
         end
         # write moments data to file every nwrite_moments time steps
         if mod(i,t_input.nwrite_moments) == 0 || finish_now
@@ -820,7 +825,7 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
                                 ascii_io)
             write_moments_data_to_binary(moments, fields, t, composition.n_ion_species,
                                          composition.n_neutral_species, io_moments,
-                                         iwrite_moments, r, z)
+                                         iwrite_moments, time_for_run, r, z)
 
             if t_input.steady_state_residual
                 # Calculate some residuals to see how close simulation is to steady state
@@ -992,7 +997,7 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
             write_dfns_data_to_binary(pdf.charged.norm, pdf.neutral.norm, moments, fields,
                                       t, composition.n_ion_species,
                                       composition.n_neutral_species, io_dfns, iwrite_dfns,
-                                      r, z, vperp, vpa, vzeta, vr, vz)
+                                      time_for_run, r, z, vperp, vpa, vzeta, vr, vz)
             iwrite_dfns += 1
             begin_s_r_z_vperp_region()
             @debug_detect_redundant_block_synchronize begin
