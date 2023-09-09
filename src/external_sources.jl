@@ -433,8 +433,8 @@ function external_ion_source_controller!(fvec_in, ion_moments, ion_source_settin
                 amplitude = nothing
             end
             controller_amplitude[1] =
-                MPI.Broadcast(amplitude, ion_source_settings.PI_density_target_rank,
-                              comm_inter_block)
+                MPI.Bcast(amplitude, ion_source_settings.PI_density_target_rank,
+                          comm_inter_block)
         end
 
         begin_r_z_region()
@@ -507,8 +507,8 @@ function external_neutral_source_controller!(fvec_in, neutral_moments,
                 amplitude = nothing
             end
             controller_amplitude[1] =
-                MPI.Broadcast(amplitude, neutral_source_settings.PI_density_target_rank,
-                              comm_inter_block)
+                MPI.Bcast(amplitude, neutral_source_settings.PI_density_target_rank,
+                          comm_inter_block)
         end
 
         begin_r_z_region()
