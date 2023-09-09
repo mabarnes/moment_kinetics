@@ -96,7 +96,8 @@ const two_dimension_combinations = Tuple(
 """
     makie_post_process(run_dir...;
                        input_file::String=default_input_file_name,
-                       restart_index::Union{Nothing,mk_int,Tuple}=nothing)
+                       restart_index::Union{Nothing,mk_int,Tuple}=nothing,
+                       plot_prefix::Union{Nothing,AbstractString}=nothing)
 
 Run post processing with input read from a TOML file
 
@@ -109,11 +110,16 @@ restart with that index - `-1` indicates the latest restart (which does not have
 index). A tuple with the same length as `run_dir` can also be passed to give a different
 `restart_index` for each run.
 
+`plot_prefix` can be specified to give the prefix (directory and first part of file name)
+to use when saving plots/animations. By default the run directory and run name are used if
+there is only one run, and "comparison_plots/compare_" is used if there are multiple runs.
+
 If `input_file` does not exist, prints warning and uses default options.
 """
 function makie_post_process(run_dir...;
                             input_file::String=default_input_file_name,
-                            restart_index::Union{Nothing,mk_int,Tuple}=nothing)
+                            restart_index::Union{Nothing,mk_int,Tuple}=nothing,
+                            plot_prefix::Union{Nothing,AbstractString}=nothing)
     if isfile(input_file)
         new_input_dict = TOML.parsefile(input_file)
     else
@@ -122,13 +128,15 @@ function makie_post_process(run_dir...;
         new_input_dict = OrderedDict{String,Any}()
     end
 
-    return makie_post_process(run_dir, new_input_dict; restart_index=restart_index)
+    return makie_post_process(run_dir, new_input_dict; restart_index=restart_index,
+                              plot_prefix=plot_prefix)
 end
 
 """
     makie_post_process(run_dir::Union{String,Tuple},
                        new_input_dict::Dict{String,Any};
-                       restart_index::Union{Nothing,mk_int,Tuple}=nothing)
+                       restart_index::Union{Nothing,mk_int,Tuple}=nothing,
+                       plot_prefix::Union{Nothing,AbstractString}=nothing)
 
 Run post prossing, with (non-default) input given in a Dict
 
@@ -142,10 +150,15 @@ default (`nothing`) reads all restarts and concatenates them. An integer value r
 restart with that index - `-1` indicates the latest restart (which does not have an
 index). A tuple with the same length as `run_dir` can also be passed to give a different
 `restart_index` for each run.
+
+`plot_prefix` can be specified to give the prefix (directory and first part of file name)
+to use when saving plots/animations. By default the run directory and run name are used if
+there is only one run, and "comparison_plots/compare_" is used if there are multiple runs.
 """
 function makie_post_process(run_dir::Union{String,Tuple},
                             new_input_dict::AbstractDict{String,Any};
-                            restart_index::Union{Nothing,mk_int,Tuple}=nothing)
+                            restart_index::Union{Nothing,mk_int,Tuple}=nothing,
+                            plot_prefix::Union{Nothing,AbstractString}=nothing)
     if isa(run_dir, String)
         # Make run_dir a one-element tuple if it is not a tuple
         run_dir = (run_dir,)
@@ -221,10 +234,12 @@ function makie_post_process(run_dir::Union{String,Tuple},
         has_dfns = false
     end
 
-    if length(run_info) == 1
-        plot_prefix = run_info[1].run_prefix * "_"
-    else
-        plot_prefix = "comparison_plots/compare_"
+    if plot_prefix === nothing
+        if length(run_info) == 1
+            plot_prefix = run_info[1].run_prefix * "_"
+        else
+            plot_prefix = joinpath("comparison_plots", "compare_")
+        end
     end
 
     do_steady_state_residuals = any(input_dict[v]["steady_state_residual"]
