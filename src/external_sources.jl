@@ -480,7 +480,7 @@ function external_neutral_source_controller!(fvec_in, neutral_moments,
 
     if neutral_source_settings.controller_type == ""
         return nothing
-    elseif ion_source_settings.controller_type == "density_midpoint"
+    elseif neutral_source_settings.controller_type == "density_midpoint"
         begin_serial_region()
 
         # controller_amplitude error is a shared memory Vector of length 1
@@ -533,7 +533,7 @@ function external_neutral_source_controller!(fvec_in, neutral_moments,
             amplitude[iz,ir] = P * n_error + integral[iz,ir]
         end
     else
-        error("Unrecognised controller_type=$(ion_source_settings.controller_type)")
+        error("Unrecognised controller_type=$(neutral_source_settings.controller_type)")
     end
 
     return nothing
