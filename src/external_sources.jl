@@ -22,6 +22,8 @@ using ..coordinates
 using ..input_structs: set_defaults_and_check_section!, Dict_to_NamedTuple
 using ..looping
 
+using MPI
+
 """
     setup_external_sources!(input_dict, r, z)
 
