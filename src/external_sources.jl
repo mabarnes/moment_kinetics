@@ -16,7 +16,7 @@ export setup_external_sources!, external_ion_source!, external_neutral_source!,
        initialize_external_source_amplitude!,
        initialize_external_source_controller_integral!
 
-using ..array_allocation: allocate_shared_float
+using ..array_allocation: allocate_float, allocate_shared_float
 using ..communication
 using ..coordinates
 using ..input_structs: set_defaults_and_check_section!, Dict_to_NamedTuple
@@ -91,9 +91,14 @@ function setup_external_sources!(input_dict, r, z)
             PI_density_target_rank = nothing
         elseif input["controller_type"] == "density_midpoint"
             PI_density_target = input["PI_density_target_amplitude"]
-            PI_controller_amplitude = allocate_shared_float(1)
 
-            controller_source_profile = allocate_shared_float(z.n, r.n)
+            if comm_block[] != MPI.COMM_NULL
+                PI_controller_amplitude = allocate_shared_float(1)
+                controller_source_profile = allocate_shared_float(z.n, r.n)
+            else
+                PI_controller_amplitude = allocate_float(1)
+                controller_source_profile = allocate_float(z.n, r.n)
+            end
             for ir ∈ 1:r.n, iz ∈ 1:z.n
                 controller_source_profile[iz,ir] = r_amplitude[ir] * z_amplitude[iz]
             end
@@ -110,8 +115,10 @@ function setup_external_sources!(input_dict, r, z)
                 else
                     PI_density_target_rank = 0
                 end
-                PI_density_target_rank = MPI.Allreduce(PI_density_target_rank, +,
-                                                       comm_inter_block[])
+                if comm_inter_block[] != MPI.COMM_NULL
+                    PI_density_target_rank = MPI.Allreduce(PI_density_target_rank, +,
+                                                           comm_inter_block[])
+                end
             else
                 PI_density_target_rank = nothing
             end
