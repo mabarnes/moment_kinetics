@@ -76,11 +76,15 @@ end
 function write_single_value!(file_or_group::HDF5.H5DataStore, name,
                              data::Union{Number, AbstractString, AbstractArray{T,N}},
                              coords...; parallel_io, n_ion_species=nothing,
-                             n_neutral_species=nothing, description=nothing) where {T,N}
+                             n_neutral_species=nothing, description=nothing,
+                             units=nothing) where {T,N}
     if isa(data, Union{Number, AbstractString})
         file_or_group[name] = data
         if description !== nothing
             add_attribute!(file_or_group[name], "description", description)
+        end
+        if units !== nothing
+            add_attribute!(file_or_group[name], "units", units)
         end
         return nothing
     end

@@ -74,9 +74,16 @@ end
 function write_single_value!(file_or_group::NCDataset, name,
                              value::Union{Number, AbstractString, AbstractArray{T,N}},
                              coords...; parallel_io, n_ion_species=nothing,
-                             n_neutral_species=nothing, description=nothing) where {T,N}
-    if description !== nothing
-        attributes = Dict("description" => description)
+                             n_neutral_species=nothing, description=nothing,
+                             units=nothing) where {T,N}
+    if description !== nothing || units !== nothing
+        attributes = Dict{String, Any}()
+        if description !== nothing
+            attributes("description" => description)
+        end
+        if units !== nothing
+            attributes("units" => units)
+        end
     else
         attributes = ()
     end
