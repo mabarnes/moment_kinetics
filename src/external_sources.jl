@@ -383,7 +383,7 @@ function external_neutral_source(pdf, fvec, moments, neutral_source_settings, vz
     vz_grid = vz.grid
 
     if moments.evolve_ppar && moments.evolve_upar && moments.evolve_density
-        vth = moments.vth_neutral
+        vth = moments.neutral.vth
         density = fvec.density_neutral
         uz = fvec.uz_neutral
         @loop_sn_r_z isn ir iz begin
