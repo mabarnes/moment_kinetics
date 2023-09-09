@@ -17,6 +17,7 @@ export setup_external_sources!, external_ion_source!, external_neutral_source!,
        initialize_external_source_controller_integral!
 
 using ..array_allocation: allocate_float, allocate_shared_float
+using ..calculus
 using ..communication
 using ..coordinates
 using ..input_structs: set_defaults_and_check_section!, Dict_to_NamedTuple
@@ -38,32 +39,31 @@ Returns a NamedTuple `(ion=ion_source_settings, neutral=neutral_source_settings)
 containing two NamedTuples of settings.
 """
 function setup_external_sources!(input_dict, r, z)
-    external_ion_sources, external_neutral_sources = (
-        set_defaults_and_check_section!(
-             input_dict, section_name;
-             active=false,
-             source_strength=1.0,
-             source_T=1.0,
-             r_profile="constant",
-             r_width=1.0,
-             r_relative_minimum=0.0,
-             z_profile="constant",
-             z_width=1.0,
-             z_relative_minimum=0.0,
-             controller_type="",
-             PI_density_controller_P=0.0,
-             PI_density_controller_I=0.0,
-             PI_density_target_amplitude=1.0,
-             PI_density_target_r_profile="constant",
-             PI_density_target_r_width=1.0,
-             PI_density_target_r_relative_minimum=0.0,
-             PI_density_target_z_profile="constant",
-             PI_density_target_z_width=1.0,
-             PI_density_target_z_relative_minimum=0.0,
-            )
-        for section_name ∈ ("ion_source", "neutral_source"))
+    function get_settings(neutrals)
+        input = set_defaults_and_check_section!(
+                     input_dict, neutrals ? "neutral_source" : "ion_source";
+                     active=false,
+                     source_strength=1.0,
+                     source_T=neutrals ? get(input_dict, "T_wall", 1.0) : 1.0,
+                     r_profile="constant",
+                     r_width=1.0,
+                     r_relative_minimum=0.0,
+                     z_profile="constant",
+                     z_width=1.0,
+                     z_relative_minimum=0.0,
+                     controller_type="",
+                     PI_density_controller_P=0.0,
+                     PI_density_controller_I=0.0,
+                     PI_density_target_amplitude=1.0,
+                     PI_density_target_r_profile="constant",
+                     PI_density_target_r_width=1.0,
+                     PI_density_target_r_relative_minimum=0.0,
+                     PI_density_target_z_profile="constant",
+                     PI_density_target_z_width=1.0,
+                     PI_density_target_z_relative_minimum=0.0,
+                     recycling_controller_fraction=0.0,
+                    )
 
-    function get_settings(input)
         r_amplitude = get_source_profile(input["r_profile"], input["r_width"],
                                          input["r_relative_minimum"], r)
         z_amplitude = get_source_profile(input["z_profile"], input["z_width"],
@@ -79,10 +79,12 @@ function setup_external_sources!(input_dict, r, z)
                     input["PI_density_target_z_width"],
                     input["PI_density_target_z_relative_minimum"], z)
             PI_density_target = allocate_shared_float(z.n,r.n)
-            for ir ∈ 1:r.n, iz ∈ 1:z.n
-                PI_density_target[iz,ir] =
-                    PI_density_target_amplitude * PI_density_target_r_factor[ir] *
-                    PI_density_target_z_factor[iz]
+            @serial_region begin
+                for ir ∈ 1:r.n, iz ∈ 1:z.n
+                    PI_density_target[iz,ir] =
+                        PI_density_target_amplitude * PI_density_target_r_factor[ir] *
+                        PI_density_target_z_factor[iz]
+                end
             end
             PI_controller_amplitude = nothing
             controller_source_profile = nothing
@@ -122,6 +124,46 @@ function setup_external_sources!(input_dict, r, z)
             else
                 PI_density_target_rank = nothing
             end
+        elseif neutrals && input["controller_type"] == "recycling"
+            recycling = input["recycling_controller_fraction"]
+            if recycling ≤ 0.0
+                # Don't allow 0.0 as this is the default value, but makes no sense to have
+                # the recycling source active and not doing anything, so make sure user
+                # remembered to set a non-zero value for recycling_controller_fraction.
+                error("recycling_controller_fraction must be >0. Got $recycling")
+            end
+            if recycling > 1.0
+                error("recycling_controller_fraction must be ≤1. Got $recycling")
+            end
+
+            if comm_block[] != MPI.COMM_NULL
+                controller_source_profile = allocate_shared_float(z.n, r.n)
+            else
+                controller_source_profile = allocate_float(z.n, r.n)
+            end
+            if block_rank[] == 0
+                for ir ∈ 1:r.n, iz ∈ 1:z.n
+                    controller_source_profile[iz,ir] = r_amplitude[ir] * z_amplitude[iz]
+                end
+                # Normalise so that the integral of this profile over r and z is 1. That way
+                # we can just multiply by the integral over r of the ion flux to the target to
+                # get the source amplitude.
+                for ir ∈ 1:r.n
+                    @views r.scratch[ir] = integral(controller_source_profile[:,ir], z.wgts)
+                end
+                controller_source_integral = integral(r.scratch, r.wgts)
+                if comm_inter_block[] != MPI.COMM_NULL
+                    controller_source_integral = MPI.Allreduce(controller_source_integral,
+                                                               +, comm_inter_block[])
+                end
+                controller_source_profile ./= controller_source_integral
+            end
+
+            PI_density_target = nothing
+            PI_controller_amplitude = nothing
+            PI_density_target_ir = nothing
+            PI_density_target_iz = nothing
+            PI_density_target_rank = nothing
         elseif input["controller_type"] == ""
             PI_density_target = nothing
             PI_controller_amplitude = nothing
@@ -131,7 +173,8 @@ function setup_external_sources!(input_dict, r, z)
             PI_density_target_rank = nothing
         else
             error("Unrecognised controller_type=$(input["controller_type"])."
-                  * "Possible values are: \"\", density_profile, density_midpoint")
+                  * "Possible values are: \"\", density_profile, density_midpoint, "
+                  * "recycling (for neutrals only)")
         end
 
         return (; (Symbol(k)=>v for (k,v) ∈ input)..., r_amplitude=r_amplitude,
@@ -143,8 +186,7 @@ function setup_external_sources!(input_dict, r, z)
                 PI_density_target_rank=PI_density_target_rank)
     end
 
-    return (ion=get_settings(external_ion_sources),
-            neutral=get_settings(external_neutral_sources))
+    return (ion=get_settings(false), neutral=get_settings(true))
 end
 
 """
@@ -477,13 +519,13 @@ end
 
 """
     external_neutral_source_controller!(fvec_in, neutral_moments,
-                                        neutral_source_settings, dt)
+                                        neutral_source_settings, r, z, dt)
 
 Calculate the amplitude when using a PI controller for the density to set the external
 source amplitude.
 """
 function external_neutral_source_controller!(fvec_in, neutral_moments,
-                                             neutral_source_settings, dt)
+                                             neutral_source_settings, r, z, dt)
 
     is = 1
 
@@ -534,12 +576,46 @@ function external_neutral_source_controller!(fvec_in, neutral_moments,
         target = neutral_source_settings.PI_density_target
         P = neutral_source_settings.PI_density_controller_P
         I = neutral_source_settings.PI_density_controller_I
-        integral = neutral_moments.external_source_controller_integral
+        PI_integral = neutral_moments.external_source_controller_integral
         amplitude = neutral_moments.external_source_amplitude
         @loop_r_z ir iz begin
             n_error = target[iz,ir] - density[iz,ir,is]
-            integral[iz,ir] += dt * I * n_error
-            amplitude[iz,ir] = P * n_error + integral[iz,ir]
+            PI_integral[iz,ir] += dt * I * n_error
+            amplitude[iz,ir] = P * n_error + PI_integral[iz,ir]
+        end
+    elseif neutral_source_settings.controller_type == "recycling"
+        begin_serial_region()
+        target_flux = 0.0
+        @boundscheck size(fvec_in.density, 3) == 1
+        @boundscheck size(fvec_in.density_neutral, 3) == 1
+        is = 1
+
+        # First get target_flux on rank-0 of each shared memory block
+        @serial_region begin
+            if z.irank == 0
+                # Target flux from lower wall
+                @views @. r.scratch = -fvec_in.density[1,:,is] * fvec_in.upar[1,:,is]
+                target_flux += integral(r.scratch, r.wgts)
+            end
+            if z.irank == z.nrank - 1
+                # Target flux from upper wall
+                @views @. r.scratch = fvec_in.density[end,:,is] * fvec_in.upar[end,:,is]
+                target_flux += integral(r.scratch, r.wgts)
+            end
+            target_flux = MPI.Allreduce(target_flux, +, comm_inter_block[])
+        end
+
+        # Distribute target_flux to all processes in shared memory block
+        target_flux = MPI.Bcast(target_flux, 0, comm_block[])
+
+        # No need to synchronize as MPI.Bcast() synchronized already
+        begin_r_z_region(no_synchronize=true)
+
+        amplitude = neutral_moments.external_source_amplitude
+        profile = neutral_source_settings.controller_source_profile
+        prefactor = target_flux * neutral_source_settings.recycling_controller_fraction
+        @loop_r_z ir iz begin
+            amplitude[iz,ir] = prefactor * profile[iz,ir]
         end
     else
         error("Unrecognised controller_type=$(neutral_source_settings.controller_type)")
