@@ -11,7 +11,7 @@ the source contributes to several terms.
 """
 module external_sources
 
-export setup_external_sources!, external_ion_source, external_neutral_source,
+export setup_external_sources!, external_ion_source!, external_neutral_source!,
        external_ion_source_controller!, external_neutral_source_controller!,
        initialize_external_source_amplitude!,
        initialize_external_source_controller_integral!
@@ -281,11 +281,11 @@ function initialize_external_source_controller_integral!(
 end
 
 """
-    external_ion_source(pdf, fvec, moments, ion_source_settings, vperp, vpa, dt)
+    external_ion_source!(pdf, fvec, moments, ion_source_settings, vperp, vpa, dt)
 
 Add external source term to the ion kinetic equation.
 """
-function external_ion_source(pdf, fvec, moments, ion_source_settings, vperp, vpa, dt)
+function external_ion_source!(pdf, fvec, moments, ion_source_settings, vperp, vpa, dt)
     begin_s_r_z_vperp_region()
 
     source_amplitude = moments.charged.external_source_amplitude
@@ -362,12 +362,12 @@ function external_ion_source(pdf, fvec, moments, ion_source_settings, vperp, vpa
 end
 
 """
-    external_neutral_source(pdf, fvec, moments, neutral_source_settings, vzeta, vr,
+    external_neutral_source!(pdf, fvec, moments, neutral_source_settings, vzeta, vr,
                             vz, dt)
 
 Add external source term to the neutral kinetic equation.
 """
-function external_neutral_source(pdf, fvec, moments, neutral_source_settings, vzeta, vr,
+function external_neutral_source!(pdf, fvec, moments, neutral_source_settings, vzeta, vr,
                                  vz, dt)
     begin_sn_r_z_vzeta_vr_region()
 
