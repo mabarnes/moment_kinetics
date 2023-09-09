@@ -48,7 +48,7 @@ function setup_external_sources!(input_dict, r, z)
              z_profile="constant",
              z_width=1.0,
              z_relative_minimum=0.0,
-             PI_density_controller_type="",
+             controller_type="",
              PI_density_controller_P=0.0,
              PI_density_controller_I=0.0,
              PI_density_target_amplitude=1.0,
@@ -66,7 +66,7 @@ function setup_external_sources!(input_dict, r, z)
                                          input["r_relative_minimum"], r)
         z_amplitude = get_source_profile(input["z_profile"], input["z_width"],
                                          input["z_relative_minimum"], z)
-        if input["PI_density_controller_type"] == "profile"
+        if input["controller_type"] == "density_profile"
             PI_density_target_amplitude = input["PI_density_target_amplitude"]
             PI_density_target_r_factor =
                 get_source_profile(input["PI_density_target_r_profile"],
@@ -83,17 +83,17 @@ function setup_external_sources!(input_dict, r, z)
                     PI_density_target_z_factor[iz]
             end
             PI_controller_amplitude = nothing
-            PI_density_source_profile = nothing
+            controller_source_profile = nothing
             PI_density_target_ir = nothing
             PI_density_target_iz = nothing
             PI_density_target_rank = nothing
-        elseif input["PI_density_controller_type"] == "midpoint"
+        elseif input["controller_type"] == "density_midpoint"
             PI_density_target = input["PI_density_target_amplitude"]
             PI_controller_amplitude = allocate_shared_float(1)
 
-            PI_density_source_profile = allocate_shared_float(z.n, r.n)
+            controller_source_profile = allocate_shared_float(z.n, r.n)
             for ir ∈ 1:r.n, iz ∈ 1:z.n
-                PI_density_source_profile[iz,ir] = r_amplitude[ir] * z_amplitude[iz]
+                controller_source_profile[iz,ir] = r_amplitude[ir] * z_amplitude[iz]
             end
 
             # Find the indices, and process rank of the point at r=0, z=0.
@@ -113,22 +113,22 @@ function setup_external_sources!(input_dict, r, z)
             else
                 PI_density_target_rank = nothing
             end
-        elseif input["PI_density_controller_type"] == ""
+        elseif input["controller_type"] == ""
             PI_density_target = nothing
             PI_controller_amplitude = nothing
-            PI_density_source_profile = nothing
+            controller_source_profile = nothing
             PI_density_target_ir = nothing
             PI_density_target_iz = nothing
             PI_density_target_rank = nothing
         else
-            error("Unrecognised PI_density_controller_type=$(input["PI_density_controller_type"])."
-                  * "Possible values are: \"\", profile, midpoint")
+            error("Unrecognised controller_type=$(input["controller_type"])."
+                  * "Possible values are: \"\", density_profile, density_midpoint")
         end
 
         return (; (Symbol(k)=>v for (k,v) ∈ input)..., r_amplitude=r_amplitude,
                 z_amplitude=z_amplitude, PI_density_target=PI_density_target,
                 PI_controller_amplitude=PI_controller_amplitude,
-                PI_density_source_profile=PI_density_source_profile,
+                controller_source_profile=controller_source_profile,
                 PI_density_target_ir=PI_density_target_ir,
                 PI_density_target_iz=PI_density_target_iz,
                 PI_density_target_rank=PI_density_target_rank)
@@ -211,7 +211,7 @@ function initialize_external_source_controller_integral!(
     ion_source_settings = external_source_settings.ion
     if ion_source_settings.active
         if ion_source_settings.PI_density_controller_I != 0.0 &&
-            ion_source_settings.PI_density_controller_type != ""
+            ion_source_settings.controller_type != ""
             moments.charged.external_source_controller_integral .= 0.0
         end
     end
@@ -220,7 +220,7 @@ function initialize_external_source_controller_integral!(
         neutral_source_settings = external_source_settings.neutral
         if neutral_source_settings.active
             if neutral_source_settings.PI_density_controller_I != 0.0 &&
-                neutral_source_settings.PI_density_controller_type != ""
+                neutral_source_settings.controller_type != ""
                 moments.neutral.external_source_controller_integral .= 0.0
             end
         end
@@ -405,9 +405,9 @@ function external_ion_source_controller!(fvec_in, ion_moments, ion_source_settin
 
     is = 1
 
-    if ion_source_settings.PI_density_controller_type == ""
+    if ion_source_settings.controller_type == ""
         return nothing
-    elseif ion_source_settings.PI_density_controller_type == "midpoint"
+    elseif ion_source_settings.controller_type == "density_midpoint"
         begin_serial_region()
 
         # controller_amplitude error is a shared memory Vector of length 1
@@ -442,9 +442,9 @@ function external_ion_source_controller!(fvec_in, ion_moments, ion_source_settin
         amplitude = controller_amplitude[1]
         @loop_r_z ir iz begin
             ion_moments.external_source_amplitude[iz,ir] =
-                amplitude * ion_source_settings.PI_density_source_profile[iz,ir]
+                amplitude * ion_source_settings.controller_source_profile[iz,ir]
         end
-    elseif ion_source_settings.PI_density_controller_type == "profile"
+    elseif ion_source_settings.controller_type == "density_profile"
         begin_r_z_region()
 
         density = fvec_in.density
@@ -460,7 +460,7 @@ function external_ion_source_controller!(fvec_in, ion_moments, ion_source_settin
             amplitude[iz,ir] = max(P * n_error + integral[iz,ir], 0)
         end
     else
-        error("Unrecognised PI_density_controller_type=$(ion_source_settings.PI_density_controller_type)")
+        error("Unrecognised controller_type=$(ion_source_settings.controller_type)")
     end
 
     return nothing
@@ -478,9 +478,9 @@ function external_neutral_source_controller!(fvec_in, neutral_moments,
 
     is = 1
 
-    if neutral_source_settings.PI_density_controller_type == ""
+    if neutral_source_settings.controller_type == ""
         return nothing
-    elseif ion_source_settings.PI_density_controller_type == "midpoint"
+    elseif ion_source_settings.controller_type == "density_midpoint"
         begin_serial_region()
 
         # controller_amplitude error is a shared memory Vector of length 1
@@ -516,9 +516,9 @@ function external_neutral_source_controller!(fvec_in, neutral_moments,
         amplitude = controller_amplitude[1]
         @loop_r_z ir iz begin
             neutral_moments.external_source_amplitude[iz,ir] =
-                amplitude * neutral_source_settings.PI_density_source_profile[iz,ir]
+                amplitude * neutral_source_settings.controller_source_profile[iz,ir]
         end
-    elseif neutral_source_settings.PI_density_controller_type == "profile"
+    elseif neutral_source_settings.controller_type == "density_profile"
         begin_r_z_region()
 
         density = fvec_in.density_neutral
@@ -533,7 +533,7 @@ function external_neutral_source_controller!(fvec_in, neutral_moments,
             amplitude[iz,ir] = P * n_error + integral[iz,ir]
         end
     else
-        error("Unrecognised PI_density_controller_type=$(ion_source_settings.PI_density_controller_type)")
+        error("Unrecognised controller_type=$(ion_source_settings.controller_type)")
     end
 
     return nothing
