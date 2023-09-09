@@ -3,6 +3,8 @@ Utility functions
 """
 module utils
 
+export get_unnormalized_parameters, print_unnormalized_parameters
+
 using ..moment_kinetics_input: mk_input
 
 using OrderedCollections
