@@ -179,10 +179,10 @@ Get names of all variables
 function get_variable_keys() end
 
 """
-    write_single_value!(file_or_group, name, value; description=nothing)
+    write_single_value!(file_or_group, name, value; description=nothing, units=nothing)
 
-Write a single variable to a file or group. If a description is passed, add as an
-attribute of the variable.
+Write a single variable to a file or group. If a description or units are passed, add as
+attributes of the variable.
 """
 function write_single_value!() end
 
