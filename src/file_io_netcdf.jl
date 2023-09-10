@@ -211,6 +211,7 @@ end
 
 function append_to_dynamic_var(io_var::NCDatasets.CFVariable,
                                data::Union{Number,AbstractArray{T,N}}, t_idx,
+                               parallel_io::Bool,
                                coords...) where {T,N}
 
     if isa(data, Number)
