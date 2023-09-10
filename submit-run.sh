@@ -24,7 +24,8 @@ QOS=${JOBINFO[7]}
 POSTPROC=0
 SUBMIT=0
 FOLLOWFROM=""
-while getopts "haf:m:n:p:q:st:u:" opt; do
+MAKIEPOSTPROCESS=1
+while getopts "haf:m:n:p:oq:st:u:" opt; do
   case $opt in
     h)
       echo "Submit jobs for a simulation (using INPUT_FILE for input) and post-processing to the queue
@@ -34,6 +35,7 @@ Usage: submit-run.sh [option] INPUT_FILE
 -f JOBID       Make this job start after JOBID finishes successfully
 -m MEM         The requested memory for post-processing
 -n NODES       The number of nodes to use for the simulation
+-o             Use original post_processing, instead of makie_post_processing, for the post-processing job
 -p PARTITION   The 'partition' (passed to 'sbatch --partition')
 -q QOS         The 'quality of service' (passed to 'sbatch --qos')
 -s             Only create submission scripts, do not actually submit jobs
@@ -52,6 +54,9 @@ Usage: submit-run.sh [option] INPUT_FILE
       ;;
     n)
       NODES=$OPTARG
+      ;;
+    o)
+      MAKIEPOSTPROCESS=0
       ;;
     p)
       PARTITION=$OPTARG
@@ -103,7 +108,12 @@ fi
 if [[ $POSTPROC -eq 0 ]]; then
   # Create a submission script for post-processing
   POSTPROCJOBSCRIPT=${RUNDIR}$RUNNAME-post.job
-  sed -e "s|POSTPROCMEMORY|$POSTPROCMEMORY|" -e "s|POSTPROCTIME|$POSTPROCTIME|" -e "s|ACCOUNT|$ACCOUNT|" -e "s|RUNDIR|$RUNDIR|" machines/$MACHINE/jobscript-postprocess.template > $POSTPROCJOBSCRIPT
+  if [[ MAKIEPOSTPROCESS -eq 1 ]]; then
+    POSTPROCESSTEMPLATE=jobscript-postprocess.template
+  else
+    POSTPROCESSTEMPLATE=jobscript-postprocess-plotsjl.template
+  fi
+  sed -e "s|POSTPROCMEMORY|$POSTPROCMEMORY|" -e "s|POSTPROCTIME|$POSTPROCTIME|" -e "s|ACCOUNT|$ACCOUNT|" -e "s|RUNDIR|$RUNDIR|" machines/$MACHINE/$POSTPROCESSTEMPLATE > $POSTPROCJOBSCRIPT
 
   if [[ $SUBMIT -eq 0 ]]; then
     POSTID=$(sbatch -d afterany:$JOBID --parsable $POSTPROCJOBSCRIPT)
