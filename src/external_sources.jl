@@ -414,7 +414,7 @@ function external_neutral_source!(pdf, fvec, moments, neutral_source_settings, v
                 vz_unnorm = vz_grid[ivz] + this_uz
                 pdf[ivz,ivr,ivzeta,iz,ir,isn] +=
                     this_prefactor *
-                    exp(-(vzeta_grid[ivz]^2 + vr_grid[ivr]^2 + vz_unnorm^2) / source_T)
+                    exp(-(vzeta_grid[ivzeta]^2 + vr_grid[ivr]^2 + vz_unnorm^2) / source_T)
             end
         end
     elseif moments.evolve_density
