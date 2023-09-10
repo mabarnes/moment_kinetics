@@ -1190,21 +1190,21 @@ function update_neutral_qz_species!(qz, density, uz, vth, ff, vz, vr, vzeta, z, 
     elseif evolve_ppar
         @loop_r_z ir iz begin
             @. vz.scratch = vz.grid - uz[iz,ir]
-            qz[iz,ir] = integrate_over_neutral_vspace(@view(ff[:,:,:,iz,ir]), vz.grid, 3,
+            qz[iz,ir] = integrate_over_neutral_vspace(@view(ff[:,:,:,iz,ir]), vz.scratch, 3,
                             vz.wgts, vr.grid, 0, vr.wgts, vzeta.grid, 0, vzeta.wgts) *
                         density[iz,ir] * vth[iz,ir]^3
         end
     elseif evolve_density
         @loop_r_z ir iz begin
             @. vz.scratch = vz.grid - uz[iz,ir]
-            qz[iz,ir] = integrate_over_neutral_vspace(@view(ff[:,:,:,iz,ir]), vz.grid, 3,
+            qz[iz,ir] = integrate_over_neutral_vspace(@view(ff[:,:,:,iz,ir]), vz.scratch, 3,
                             vz.wgts, vr.grid, 0, vr.wgts, vzeta.grid, 0, vzeta.wgts) *
                         density[iz,ir]
         end
     else
         @loop_r_z ir iz begin
             @. vz.scratch = vz.grid - uz[iz,ir]
-            qz[iz,ir] = integrate_over_neutral_vspace(@view(ff[:,:,:,iz,ir]), vz.grid, 3,
+            qz[iz,ir] = integrate_over_neutral_vspace(@view(ff[:,:,:,iz,ir]), vz.scratch, 3,
                             vz.wgts, vr.grid, 0, vr.wgts, vzeta.grid, 0, vzeta.wgts)
         end
     end
