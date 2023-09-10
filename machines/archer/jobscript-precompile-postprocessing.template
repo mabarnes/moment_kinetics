@@ -20,8 +20,8 @@ source julia.env
 # See https://docs.archer2.ac.uk/faq/upgrade-2023/
 export SRUN_CPUS_PER_TASK=$SLURM_CPUS_PER_TASK
 
-echo "precompiling $(date)"
+echo "precompiling post-processing $(date)"
 
-bin/julia --project -O3 --check-bounds=no precompile.jl
+bin/julia --project precompile-makie-post-processing.jl
 
 echo "finished!"
