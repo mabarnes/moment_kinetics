@@ -8,7 +8,8 @@ export time_advance!
 using MPI
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_float, allocate_shared_float
-using ..communication: _block_synchronize, global_size, comm_world, MPISharedArray, global_rank
+using ..communication
+using ..communication: _block_synchronize
 using ..debugging
 using ..file_io: write_data_to_ascii, write_moments_data_to_binary, write_dfns_data_to_binary, debug_dump
 using ..looping
@@ -800,6 +801,25 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
             if isfile(t_input.stopfile)
                 # Stop cleanly if a file called 'stop' was created
                 println("Found 'stop' file $(t_input.stopfile), aborting run")
+                finish_now = true
+            end
+
+            # If NaNs are present, they should propagate into every field, so only need to
+            # check one. Choose phi because it is small (it has no species or velocity
+            # dimensions). If a NaN is found, stop the simulation.
+            if block_rank[] == 0
+                if any(isnan.(fields.phi))
+                    println("Found NaN, stopping simulation")
+                    found_nan = 1
+                else
+                    found_nan = 0
+                end
+                found_nan = MPI.Allreduce(found_nan, +, comm_inter_block[])
+            else
+                found_nan = 0
+            end
+            found_nan = MPI.Bcast(found_nan, 0, comm_block[])
+            if found_nan != 0
                 finish_now = true
             end
 
