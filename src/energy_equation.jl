@@ -80,7 +80,7 @@ function neutral_energy_equation!(pz, fvec, moments, collisions, dt, spectral,
         source_amplitude = moments.neutral.external_source_amplitude
         source_T = neutral_source_settings.source_T
         @loop_s_r_z is ir iz begin
-            pz[iz,ir,is] += dt * source_amplitude[iz,ir]
+            pz[iz,ir,is] += dt * source_amplitude[iz,ir] *
                             (0.5*source_T + fvec.uz_neutral[iz,ir,is]^2)
         end
     end
