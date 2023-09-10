@@ -1220,7 +1220,7 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                         # No chages to velocity-space coordinates, so just interpolate from
                         # one grid to the other
                         if interpolation_needed["vz"]
-                            new_pdf = allocate_float(vz.n, vperp.n, z.n, r.n, nspecies)
+                            new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, r.n, nspecies)
                             for is ∈ 1:nspecies, ir ∈ 1:r.n, iz ∈ 1:z.n, ivr ∈ 1:vr.n,
                                     ivzeta ∈ 1:vzeta.n
                                 @views interpolate_to_grid_1d!(
@@ -1502,7 +1502,7 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                         # No chages to velocity-space coordinates, so just interpolate from
                         # one grid to the other
                         if interpolation_needed["vz"]
-                            new_pdf = allocate_float(vz.n, vperp.n, z.n, nspecies)
+                            new_pdf = allocate_float(vz.n, vr.n, vzeta.n, z.n, nspecies)
                             for is ∈ 1:nspecies, iz ∈ 1:z.n, ivr ∈ 1:vr.n,
                                     ivzeta ∈ 1:vzeta.n
                                 @views interpolate_to_grid_1d!(
