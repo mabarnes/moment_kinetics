@@ -1005,8 +1005,8 @@ function write_moments_data_to_binary(moments, fields, t, n_ion_species,
         end
         if io_moments.external_source_controller_integral !== nothing
             if size(moments.charged.external_source_controller_integral) == (1,1)
-                append_to_dynamic_var(io_moments.external_source_controller_integral[1,1],
-                                      moments.charged.external_source_controller_integral,
+                append_to_dynamic_var(io_moments.external_source_controller_integral,
+                                      moments.charged.external_source_controller_integral[1,1],
                                       t_idx)
             else
                 append_to_dynamic_var(io_moments.external_source_controller_integral,
@@ -1032,8 +1032,8 @@ function write_moments_data_to_binary(moments, fields, t, n_ion_species,
             end
             if io_moments.external_source_neutral_controller_integral !== nothing
                 if size(moments.neutral.external_source_neutral_controller_integral) == (1,1)
-                    append_to_dynamic_var(io_moments.external_source_neutral_controller_integral[1,1],
-                                          moments.neutral.external_source_controller_integral,
+                    append_to_dynamic_var(io_moments.external_source_neutral_controller_integral,
+                                          moments.neutral.external_source_controller_integral[1,1],
                                           t_idx)
                 else
                     append_to_dynamic_var(io_moments.external_source_neutral_controller_integral,
@@ -1118,6 +1118,22 @@ end
                                   moments.charged.qpar.data, t_idx, z, r, n_ion_species)
             append_to_dynamic_var(io_moments.thermal_speed, moments.charged.vth.data,
                                   t_idx, z, r, n_ion_species)
+            if io_moments.external_source_amplitude !== nothing
+                append_to_dynamic_var(io_moments.external_source_amplitude,
+                                      moments.charged.external_source_amplitude.data,
+                                      t_idx, z, r)
+            end
+            if io_moments.external_source_controller_integral !== nothing
+                if size(moments.charged.external_source_controller_integral) == (1,1)
+                    append_to_dynamic_var(io_moments.external_source_controller_integral,
+                                          moments.charged.external_source_controller_integral[1,1],
+                                          t_idx)
+                else
+                    append_to_dynamic_var(io_moments.external_source_controller_integral,
+                                          moments.charged.external_source_controller_integral,data,
+                                          t_idx, z, r)
+                end
+            end
             if n_neutral_species > 0
                 append_to_dynamic_var(io_moments.density_neutral,
                                       moments.neutral.dens.data, t_idx, z, r,
@@ -1131,6 +1147,23 @@ end
                 append_to_dynamic_var(io_moments.thermal_speed_neutral,
                                       moments.neutral.vth.data, t_idx, z, r,
                                       n_neutral_species)
+
+                if io_moments.external_source_neutral_amplitude !== nothing
+                    append_to_dynamic_var(io_moments.external_source_neutral_amplitude,
+                                          moments.neutral.external_source_amplitude,
+                                          t_idx, z, r)
+                end
+                if io_moments.external_source_neutral_controller_integral !== nothing
+                    if size(moments.neutral.external_source_neutral_controller_integral) == (1,1)
+                        append_to_dynamic_var(io_moments.external_source_neutral_controller_integral,
+                                              moments.neutral.external_source_controller_integral[1,1],
+                                              t_idx)
+                    else
+                        append_to_dynamic_var(io_moments.external_source_neutral_controller_integral,
+                                              moments.neutral.external_source_controller_integral,
+                                              t_idx, z, r)
+                    end
+                end
             end
 
             closefile && close(io_moments.fid)
