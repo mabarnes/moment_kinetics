@@ -803,6 +803,25 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
                 finish_now = true
             end
 
+            # If NaNs are present, they should propagate into every field, so only need to
+            # check one. Choose phi because it is small (it has no species or velocity
+            # dimensions). If a NaN is found, stop the simulation.
+            if block_rank[] == 0
+                if any(isnan.(fields.phi))
+                    println("Found NaN, stopping simulation")
+                    found_nan = 1
+                else
+                    found_nan = 0
+                end
+                found_nan = MPI.Allreduce(found_nan, +, comm_inter_block[])
+            else
+                found_nan = 0
+            end
+            found_nan = MPI.Bcast(found_nan, 0, comm_block[])
+            if found_nan != 0
+                finish_now = true
+            end
+
             time_for_run = to_minutes(now() - start_time)
         end
         # write moments data to file every nwrite_moments time steps
