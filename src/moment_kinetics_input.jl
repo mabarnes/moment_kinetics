@@ -600,7 +600,8 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
 
     # check input to catch errors/unsupported options
     check_input(io, output_dir, nstep, dt, r_immutable, z_immutable, vpa_immutable,
-                composition, species_immutable, evolve_moments, num_diss_params)
+                composition, species_immutable, evolve_moments, num_diss_params,
+                save_inputs_to_txt)
 
     # return immutable structs for z, vpa, species and composition
     all_inputs = (io_immutable, evolve_moments, t_input,
@@ -1051,10 +1052,10 @@ end
 """
 check various input options to ensure they are all valid/consistent
 """
-function check_input(io, output_dir, nstep, dt, r, z, vpa,
-    composition, species, evolve_moments, num_diss_params)
+function check_input(io, output_dir, nstep, dt, r, z, vpa, composition, species,
+                     evolve_moments, num_diss_params, save_inputs_to_txt)
     # copy the input file to the output directory to be saved
-    if global_rank[] == 0
+    if save_inputs_to_txt && global_rank[] == 0
         cp(joinpath(@__DIR__, "moment_kinetics_input.jl"), joinpath(output_dir, "moment_kinetics_input.jl"), force=true)
     end
     # open ascii file in which informtaion about input choices will be written
