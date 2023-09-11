@@ -4,7 +4,9 @@ module coordinates
 
 export define_coordinate, write_coordinate
 export equally_spaced_grid
+# testing
 export set_element_boundaries
+export init_grid
 
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_int
@@ -90,7 +92,9 @@ struct coordinate
     # shift for each element
     element_shift::Array{mk_float,1}
     # boundaries for each element
-    element_boundaries::Array{mk_float,1}
+    #element_boundaries::Array{mk_float,1}
+    # option used to set up element spacing
+    element_spacing_option::String
 end
 
 """
@@ -114,16 +118,12 @@ function define_coordinate(input, parallel_io::Bool=false)
     imin, imax = elemental_to_full_grid_map(input.ngrid, input.nelement_local)
     # initialise the data used to construct the grid
     # boundaries for each element
-    element_boundaries = allocate_float(input.nelement_global)
-    element_boundaries_local = allocate_float(input.nelement_local)
-    
-    element_scale = allocate_float(input.nelement_local)
-    # shift for each element
-    element_shift = allocate_float(input.nelement_local)
+    element_boundaries = set_element_boundaries(input.nelement_global, input.L, input.element_spacing_option)
+    # shift and scale factors for each local element
+    element_scale, element_shift = set_element_scale_and_shift(input.nelement_global, input.nelement_local, input.irank, element_boundaries)
     # initialize the grid and the integration weights associated with the grid
     # also obtain the Chebyshev theta grid and spacing if chosen as discretization option
-    grid, wgts, uniform_grid = init_grid(input.ngrid, input.nelement_global,
-        input.nelement_local, n_global, n_local, input.irank, input.L,
+    grid, wgts, uniform_grid = init_grid(input.ngrid, input.nelement_local, n_global, n_local, input.irank, input.L, element_scale, element_shift,
         imin, imax, igrid, input.discretization, input.name)
     # calculate the widths of the cells between neighboring grid points
     cell_width = grid_spacing(grid, n_local)
@@ -163,7 +163,7 @@ function define_coordinate(input, parallel_io::Bool=false)
         cell_width, igrid, ielement, imin, imax, input.discretization, input.fd_option,
         input.bc, wgts, uniform_grid, duniform_dgrid, scratch, copy(scratch), copy(scratch),
         scratch_2d, copy(scratch_2d), advection, send_buffer, receive_buffer, input.comm,
-        local_io_range, global_io_range, element_scale, element_shift, element_boundaries)
+        local_io_range, global_io_range, element_scale, element_shift, input.element_spacing_option)#, element_boundaries)
 
     if input.discretization == "chebyshev_pseudospectral" && coord.n > 1
         # create arrays needed for explicit Chebyshev pseudospectral treatment in this
@@ -184,7 +184,7 @@ end
 function set_element_boundaries(nelement_global, L, element_spacing_option)
     # set global element boundaries
     element_boundaries = allocate_float(nelement_global+1)
-    if element_spacing_option == "sqrt"
+    if element_spacing_option == "sqrt" && nelement_global > 3
         # number of boundaries of sqrt grid
         nsqrt = floor(mk_int,(nelement_global)/2) + 1
         if nelement_global%2 > 0 # odd
@@ -203,25 +203,14 @@ function set_element_boundaries(nelement_global, L, element_spacing_option)
             fac = 1.0
         end
         
-        println("nsqrt",nsqrt)
-        # number of boundaries of uniform grid
-        #nuniform = nelement_global + 3 - 2*nsqrt
-        #println("nuniform",nuniform)
-        #DL = L/6.0 # 1/3 of the domain is uniformly spaced
-        #delta = 2.0*DL/(nuniform-1) # length of each element in the uniform section
         for j in 1:nsqrt
             element_boundaries[j] = -(L/2.0) + fac*(L/2.0)*((j-1)/(nsqrt-1))^2
         end
-        println(element_boundaries)
-        #for j in 2:nuniform-1 #nsqrt+1:nelement_global + 1 - nsqrt
-        #    element_boundaries[nsqrt-1+j] = -DL + delta*(j-1) 
-        #end
-        println(element_boundaries)
         for j in 1:nsqrt
             element_boundaries[(nelement_global+1)+ 1 - j] = (L/2.0) - fac*(L/2.0)*((j-1)/(nsqrt-1))^2
         end
-        println(element_boundaries)
-    elseif element_spacing_option == "uniform" # uniform spacing 
+        
+    elseif element_spacing_option == "uniform" || nelement_global < 4 # uniform spacing 
         for j in 1:nelement_global+1
             element_boundaries[j] = L*((j-1)/(nelement_global) - 0.5)
         end
@@ -231,10 +220,23 @@ function set_element_boundaries(nelement_global, L, element_spacing_option)
     return element_boundaries
 end
 
+function set_element_scale_and_shift(nelement_global, nelement_local, irank, element_boundaries)
+    element_scale = allocate_float(nelement_local)
+    element_shift = allocate_float(nelement_local)
+    
+    for j in 1:nelement_local
+        iel_global = j + irank*nelement_local
+        upper_boundary = element_boundaries[iel_global+1]
+        lower_boundary = element_boundaries[iel_global]
+        element_scale[j] = 0.5*(upper_boundary-lower_boundary)
+        element_shift[j] = 0.5*(upper_boundary+lower_boundary)
+    end
+    return element_scale, element_shift
+end
 """
 setup a grid with n_global grid points on the interval [-L/2,L/2]
 """
-function init_grid(ngrid, nelement_global, nelement_local, n_global, n_local, irank, L,
+function init_grid(ngrid, nelement_local, n_global, n_local, irank, L, element_scale, element_shift,
                    imin, imax, igrid, discretization, name)
     uniform_grid = equally_spaced_grid(n_global, n_local, irank, L)
     uniform_grid_shifted = equally_spaced_grid_shifted(n_global, n_local, irank, L)
@@ -251,7 +253,7 @@ function init_grid(ngrid, nelement_global, nelement_local, n_global, n_local, ir
     elseif discretization == "chebyshev_pseudospectral"
         if name == "vperp"
             # initialize chebyshev grid defined on [-L/2,L/2]
-            grid, wgts = scaled_chebyshev_grid(ngrid, nelement_global, nelement_local, n_local, irank, L, imin, imax)
+            grid, wgts = scaled_chebyshev_grid(ngrid, nelement_local, n_local, element_scale, element_shift, imin, imax)
             grid .= grid .+ L/2.0 # shift to [0,L] appropriate to vperp variable
             wgts = 2.0 .* wgts .* grid # to include 2 vperp in jacobian of integral
                                         # see note above on normalisation
@@ -262,7 +264,7 @@ function init_grid(ngrid, nelement_global, nelement_local, n_global, n_local, ir
             # needed to obtain Chebyshev spectral coefficients
             # 'wgts' are the integration weights attached to each grid points
             # that are those associated with Clenshaw-Curtis quadrature
-            grid, wgts = scaled_chebyshev_grid(ngrid, nelement_global, nelement_local, n_local, irank, L, imin, imax)
+            grid, wgts = scaled_chebyshev_grid(ngrid, nelement_local, n_local, element_scale, element_shift, imin, imax)
         end
     elseif discretization == "finite_difference"
         if name == "vperp"

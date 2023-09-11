@@ -521,6 +521,10 @@ function define_io_coordinate!(parent, coord, coord_name, description, parallel_
         write_single_value!(group, "bc", coord.bc; parallel_io=parallel_io,
                             description="boundary condition for $coord_name")
 
+        # write the boundary condition for the coordinate
+        write_single_value!(group, "element_spacing_option", coord.element_spacing_option; parallel_io=parallel_io,
+                            description="element_spacing_option for $coord_name")
+
         return group
     end
 

@@ -348,17 +348,18 @@ function run_test(test_input, rtol, atol, upar_rtol=nothing; args...)
         adv_input = advection_input("default", 1.0, 0.0, 0.0)
         nrank_per_block = 0 # dummy value
 		irank = 0 # dummy value
-		comm = MPI.COMM_NULL # dummy value 
+		comm = MPI.COMM_NULL # dummy value
+        element_spacing_option = "uniform"
 		input = grid_input("coord", test_input["z_ngrid"], test_input["z_nelement"], 
                            test_input["z_nelement"], nrank_per_block, irank,
 						   z_L, test_input["z_discretization"], "",
                            "periodic", #test_input["z_bc"],
-                           adv_input,comm)
+                           adv_input,comm, element_spacing_option)
         z, z_spectral = define_coordinate(input)
         input = grid_input("coord", test_input["vpa_ngrid"], test_input["vpa_nelement"],
                            test_input["vpa_nelement"], nrank_per_block, irank,
 						   vpa_L, test_input["vpa_discretization"], "",
-                           test_input["vpa_bc"], adv_input, comm)
+                           test_input["vpa_bc"], adv_input, comm, element_spacing_option)
         vpa, vpa_spectral = define_coordinate(input)
 
         # Test against values interpolated onto 'expected' grid which is fairly coarse no we

@@ -191,11 +191,12 @@ function run_test(test_input, expected_phi, tolerance; args...)
         adv_input = advection_input("default", 1.0, 0.0, 0.0)
 		nrank_per_block = 0 # dummy value
 		irank = 0 # dummy value
-		comm = MPI.COMM_NULL # dummy value 
+		comm = MPI.COMM_NULL # dummy value
+        element_spacing_option = "uniform"
         input = grid_input("coord", test_input["z_ngrid"], test_input["z_nelement"], 
 						   test_input["z_nelement"], nrank_per_block, irank, 1.0,
                            test_input["z_discretization"], "", test_input["z_bc"],
-                           adv_input, comm)
+                           adv_input, comm, element_spacing_option)
         z, z_spectral = define_coordinate(input)
 
         # Cross comparison of all discretizations to same benchmark
