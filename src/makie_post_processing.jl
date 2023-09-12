@@ -15,7 +15,9 @@ export makie_post_process, generate_example_input_file,
        irregular_heatmap!, postproc_load_variable, positive_or_nan
 
 using ..analysis: analyze_fields_data, check_Chodura_condition, get_r_perturbation,
-                  get_Fourier_modes_2D, get_Fourier_modes_1D, steady_state_residuals
+                  get_Fourier_modes_2D, get_Fourier_modes_1D, steady_state_residuals,
+                  get_unnormalised_f_dzdt_1d, get_unnormalised_f_coords_2d,
+                  get_unnormalised_f_1d, vpagrid_to_dzdt_2d, get_unnormalised_f_2d
 using ..array_allocation: allocate_float
 using ..coordinates: define_coordinate
 using ..input_structs: grid_input, advection_input, set_defaults_and_check_top_level!,
@@ -29,10 +31,7 @@ using ..load_data: open_readonly_output_file, get_group, load_block_data,
                    load_species_data, load_time_data
 using ..initial_conditions: vpagrid_to_dzdt
 using ..post_processing: calculate_and_write_frequencies, construct_global_zr_coords,
-                         get_geometry_and_composition, get_unnormalised_f_dzdt_1d,
-                         get_unnormalised_f_coords_2d, get_unnormalised_f_1d,
-                         vpagrid_to_dzdt_2d, get_unnormalised_f_2d,
-                         read_distributed_zr_data!
+                         get_geometry_and_composition, read_distributed_zr_data!
 using ..type_definitions: mk_float, mk_int
 
 using Combinatorics
