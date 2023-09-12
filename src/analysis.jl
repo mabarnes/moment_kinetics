@@ -10,6 +10,7 @@ using ..array_allocation: allocate_float
 using ..calculus: integral
 using ..communication
 using ..coordinates: coordinate
+using ..initial_conditions: vpagrid_to_dzdt
 using ..interpolation: interpolate_to_grid_1d
 using ..load_data: open_readonly_output_file, get_nranks, load_pdf_data, load_rank_data
 using ..load_data: load_distributed_charged_pdf_slice
@@ -752,6 +753,70 @@ end
 function _steady_state_absolute_residual(variable, variable_at_previous_time, reshaped_dt)
     absolute_residual = @. abs((variable - variable_at_previous_time) / reshaped_dt)
     return absolute_residual
+end
+
+"""
+Get the unnormalised distribution function and unnormalised ('lab space') dzdt
+coordinate at a point in space.
+
+Inputs should depend only on vpa.
+"""
+function get_unnormalised_f_dzdt_1d(f, vpa_grid, density, upar, vth, evolve_density,
+                                    evolve_upar, evolve_ppar)
+
+    dzdt = vpagrid_to_dzdt(vpa_grid, vth, upar, evolve_ppar, evolve_upar)
+
+    f_unnorm = get_unnormalised_f_1d(f, density, vth, evolve_density, evolve_ppar)
+
+    return f_unnorm, dzdt
+end
+function get_unnormalised_f_1d(f, density, vth, evolve_density, evolve_ppar)
+    if evolve_ppar
+        f_unnorm = @. f * density / vth
+    elseif evolve_density
+        f_unnorm = @. f * density
+    else
+        f_unnorm = f
+    end
+    return f_unnorm
+end
+
+"""
+Get the unnormalised distribution function and unnormalised ('lab space') coordinates.
+
+Inputs should depend only on z and vpa.
+"""
+function get_unnormalised_f_coords_2d(f, z_grid, vpa_grid, density, upar, vth,
+                                      evolve_density, evolve_upar, evolve_ppar)
+
+    nvpa, nz = size(f)
+    z2d = zeros(nvpa, nz)
+    for iz ∈ 1:nz
+        z2d[:,iz] .= z_grid[iz]
+    end
+    dzdt2d = vpagrid_to_dzdt_2d(vpa_grid, vth, upar, evolve_ppar, evolve_upar)
+    f_unnorm = get_unnormalised_f_2d(f, density, vth, evolve_density, evolve_ppar)
+
+    return f_unnorm, z2d, dzdt2d
+end
+function vpagrid_to_dzdt_2d(vpa_grid, vth, upar, evolve_ppar, evolve_upar)
+    nvpa = length(vpa_grid)
+    nz = length(vth)
+    dzdt2d = zeros(nvpa, nz)
+    for iz ∈ 1:nz
+        @views dzdt2d[:,iz] .= vpagrid_to_dzdt(vpa_grid, vth[iz], upar[iz], evolve_ppar,
+                                               evolve_upar)
+    end
+    return dzdt2d
+end
+function get_unnormalised_f_2d(f, density, vth, evolve_density, evolve_ppar)
+    f_unnorm = similar(f)
+    nz = size(f, 2)
+    for iz ∈ 1:nz
+        @views f_unnorm[:,iz] .= get_unnormalised_f_1d(f[:,iz], density[iz], vth[iz],
+                                                       evolve_density, evolve_ppar)
+    end
+    return f_unnorm
 end
 
 end
