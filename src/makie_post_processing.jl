@@ -4798,14 +4798,19 @@ function Chodura_condition_plots(run_info; plot_prefix=nothing, axes=nothing)
 
     time = run_info.time
     density = postproc_load_variable(run_info, "density")
+    upar = postproc_load_variable(run_info, "parallel_flow")
+    vth = postproc_load_variable(run_info, "thermal_speed")
     Er = postproc_load_variable(run_info, "Er")
     f_lower = postproc_load_variable(run_info, "f", iz=1)
     f_upper = postproc_load_variable(run_info, "f", iz=run_info.z.n_global)
 
     Chodura_ratio_lower, Chodura_ratio_upper =
         check_Chodura_condition(run_info.r_local, run_info.z_local, run_info.vperp,
-                                run_info.vpa, density, run_info.composition, Er,
-                                run_info.geometry, run_info.z.bc, nothing;
+                                run_info.vpa, density, upar, vth, run_info.composition,
+                                Er, run_info.geometry, run_info.z.bc, nothing;
+                                evolve_density=run_info.evolve_density,
+                                evolve_upar=run_info.evolve_upar,
+                                evolve_ppar=run_info.evolve_ppar,
                                 f_lower=f_lower, f_upper=f_upper)
 
     if input.plot_vs_t

@@ -98,11 +98,13 @@ Note that `integrate_over_vspace()` includes the 1/sqrt(pi) factor already.
 
 If `ir0` is passed, only load the data for as single r-point (to save memory).
 """
-function check_Chodura_condition(r, z, vperp, vpa, dens, composition, Er, geometry, z_bc,
-                                 nblocks, run_name=nothing,
+function check_Chodura_condition(r, z, vperp, vpa, dens, upar, vth, composition, Er,
+                                 geometry, z_bc, nblocks, run_name=nothing,
                                  it0::Union{Nothing, mk_int}=nothing,
                                  ir0::Union{Nothing, mk_int}=nothing;
-                                 f_lower=nothing, f_upper=nothing)
+                                 f_lower=nothing, f_upper=nothing,
+                                 evolve_density=false, evolve_upar=false,
+                                 evolve_ppar=false)
 
     if z_bc != "wall"
         return nothing, nothing
@@ -154,8 +156,15 @@ function check_Chodura_condition(r, z, vperp, vpa, dens, composition, Er, geomet
                           (size(f_upper, 1), size(f_upper, 2), 1, size(f_upper, 3),
                            size(f_upper, 4), size(f_upper, 5)))
     end
+
+    f_lower = @views get_unnormalised_f_1d(f_lower, dens[1,:,:,:], vth[1,:,:,:],
+                                           evolve_density, evolve_ppar)
+    f_upper = @views get_unnormalised_f_1d(f_upper, dens[end,:,:,:], vth[end,:,:,:],
+                                           evolve_density, evolve_ppar)
     for it ∈ 1:ntime, ir ∈ 1:nr
-        vpabar = @. vpa.grid - 0.5 * geometry.rhostar * Er[1,ir,it] / geometry.bzed
+        v_parallel = vpagrid_to_dzdt(vpa.grid, vth[1,ir,is,it], upar[1,ir,is,it],
+                                     evolve_ppar, evolve_upar)
+        vpabar = @. v_parallel - 0.5 * geometry.rhostar * Er[1,ir,it] / geometry.bzed
 
         # Get rid of a zero if it is there to avoid a blow up - f should be zero at that
         # point anyway
@@ -175,7 +184,9 @@ function check_Chodura_condition(r, z, vperp, vpa, dens, composition, Er, geomet
 
         lower_result[ir,it] *= 0.5 * composition.T_e / dens[1,ir,is,it]
 
-        vpabar = @. vpa.grid - 0.5 * geometry.rhostar * Er[end,ir,it] / geometry.bzed
+        v_parallel = vpagrid_to_dzdt(vpa.grid, vth[end,ir,is,it], upar[end,ir,is,it],
+                                     evolve_ppar, evolve_upar)
+        vpabar = @. v_parallel - 0.5 * geometry.rhostar * Er[end,ir,it] / geometry.bzed
 
         # Get rid of a zero if it is there to avoid a blow up - f should be zero at that
         # point anyway
