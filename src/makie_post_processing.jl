@@ -3851,7 +3851,7 @@ end
 """
     plot_f_unnorm_vs_vpa_z(run_info; input=nothing, neutral=false, it=nothing, is=1,
                            fig=nothing, ax=nothing, outfile=nothing, yscale=identity,
-                           transform=identity, kwargs...)
+                           transform=identity, rasterize=true, kwargs...)
 
 Plot unnormalized distribution function against \$v_\\parallel\$ and z.
 
@@ -3887,6 +3887,11 @@ plotted. For example when using a log scale on data that may contain some negati
 it might be useful to pass `transform=abs` (to plot the absolute value) or
 `transform=positive_or_nan` (to ignore any negative or zero values).
 
+`rasterize` is passed through to Makie's `mesh!()` function. The default is to rasterize
+plots as vectorized plots from `mesh!()` have a very large file size. Pass `false` to keep
+plots vectorized. Pass a number to increase the resolution of the rasterized plot by that
+factor.
+
 Any extra `kwargs` are passed to [`plot_2d`](@ref).
 """
 function plot_f_unnorm_vs_vpa_z end
@@ -3915,8 +3920,9 @@ function plot_f_unnorm_vs_vpa_z(run_info::Tuple; neutral=false, outfile=nothing,
 end
 
 function plot_f_unnorm_vs_vpa_z(run_info; input=nothing, neutral=false, it=nothing, is=1,
-                                fig=nothing, ax=nothing, colorbar_place=nothing,
-                                outfile=nothing, transform=identity, kwargs...)
+                                fig=nothing, ax=nothing, colorbar_place=nothing, title=nothing,
+                                outfile=nothing, transform=identity, rasterize=true,
+                                kwargs...)
     if input === nothing
         if neutral
             input = Dict_to_NamedTuple(input_dict_dfns["f_neutral"])
@@ -3966,8 +3972,8 @@ function plot_f_unnorm_vs_vpa_z(run_info; input=nothing, neutral=false, it=nothi
     f_unnorm = transform.(f_unnorm)
 
     # Rasterize the plot, otherwise the output files are very large
-    hm = plot_2d(dzdt, z, f_unnorm; ax=ax, colorbar_place=colorbar_place, rasterize=true,
-                 kwargs...)
+    hm = plot_2d(dzdt, z, f_unnorm; ax=ax, colorbar_place=colorbar_place,
+                 rasterize=rasterize, kwargs...)
 
     if outfile !== nothing
         if fig === nothing
