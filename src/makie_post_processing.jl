@@ -1589,15 +1589,15 @@ for dim ∈ one_dimension_combinations
              """
              function $($function_name_str)(run_info::Tuple, var_name; is=1, data=nothing,
                       $($spaces)input=nothing, outfile=nothing, yscale=nothing,
-                      $($spaces)transform=identity, it=nothing, ir=nothing, iz=nothing,
-                      $($spaces)ivperp=nothing, ivpa=nothing, ivzeta=nothing, ivr=nothing,
-                      $($spaces)ivz=nothing, kwargs...)
+                      transform=identity, axis_args=Dict{Symbol,Any}(), it=nothing,
+                      $($spaces)ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
+                      $($spaces)ivzeta=nothing, ivr=nothing, ivz=nothing, kwargs...)
              function $($function_name_str)(run_info, var_name; is=1, data=nothing,
                       $($spaces)input=nothing, ax=nothing, label=nothing,
                       $($spaces)outfile=nothing, yscale=nothing, transform=identity,
-                      $($spaces)it=nothing, ir=nothing, iz=nothing, ivperp=nothing,
-                      $($spaces)ivpa=nothing, ivzeta=nothing, ivr=nothing, ivz=nothing,
-                      $($spaces)kwargs...)
+                      $($spaces)axis_args=Dict{Symbol,Any}(), it=nothing, ir=nothing,
+                      $($spaces)iz=nothing, ivperp=nothing, ivpa=nothing, ivzeta=nothing,
+                      $($spaces)ivr=nothing, ivz=nothing, kwargs...)
 
              Plot `var_name` from the run(s) represented by `run_info` (as returned by
              [`get_run_info`](@ref)) vs $($dim_str).
@@ -1619,6 +1619,9 @@ for dim ∈ one_dimension_combinations
              using a log scale on data that may contain some negative values it might be
              useful to pass `transform=abs` (to plot the absolute value) or
              `transform=positive_or_nan` (to ignore any negative or zero values).
+
+             `axis_args` are passed as keyword arguments to `get_1d_ax()`, and from there
+             to the `Axis` constructor.
 
              Extra `kwargs` are passed to Makie's `lines!() function`.
 
@@ -1648,7 +1651,8 @@ for dim ∈ one_dimension_combinations
 
              function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
                                      input=nothing, outfile=nothing, yscale=nothing,
-                                     transform=identity, kwargs...)
+                                     transform=identity, axis_args=Dict{Symbol,Any}(),
+                                     kwargs...)
 
                  try
                      if data === nothing
@@ -1661,9 +1665,9 @@ for dim ∈ one_dimension_combinations
 
                      n_runs = length(run_info)
 
-                     fig, ax = get_1d_ax(xlabel="$($dim_str)",
+                     fig, ax = get_1d_ax(; xlabel="$($dim_str)",
                                          ylabel=get_variable_symbol(var_name),
-                                         yscale=yscale)
+                                         yscale=yscale, axis_args...)
                      for (d, ri) ∈ zip(data, run_info)
                          $function_name(ri, var_name, is=is, data=d, input=input, ax=ax,
                                         transform=transform, label=ri.run_name, kwargs...)
@@ -1693,9 +1697,11 @@ for dim ∈ one_dimension_combinations
 
              function $function_name(run_info, var_name; is=1, data=nothing,
                                      input=nothing, fig=nothing, ax=nothing,
-                                     label=nothing, outfile=nothing, it=nothing,
-                                     ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
-                                     ivzeta=nothing, ivr=nothing, ivz=nothing, kwargs...)
+                                     label=nothing, outfile=nothing,
+                                     axis_args=Dict{Symbol,Any}(), it=nothing,
+                                     ir=nothing, iz=nothing, ivperp=nothing,
+                                     ivpa=nothing, ivzeta=nothing, ivr=nothing,
+                                     ivz=nothing, kwargs...)
                  if input === nothing
                      if run_info.dfns
                          input = input_dict_dfns[var_name]
@@ -1722,7 +1728,8 @@ for dim ∈ one_dimension_combinations
 
                  if ax === nothing
                      fig, ax = get_1d_ax(; xlabel="$($dim_str)",
-                                         ylabel=get_variable_symbol(var_name))
+                                         ylabel=get_variable_symbol(var_name),
+                                         axis_args...)
                      ax_was_nothing = true
                  else
                      ax_was_nothing = false
@@ -1773,16 +1780,17 @@ for (dim1, dim2) ∈ two_dimension_combinations
              """
              function $($function_name_str)(run_info::Tuple, var_name; is=1, data=nothing,
                       $($spaces)input=nothing, outfile=nothing, colorscale=identity,
-                      $($spaces)transform=identity, it=nothing, ir=nothing, iz=nothing,
-                      $($spaces)ivperp=nothing, ivpa=nothing, ivzeta=nothing, ivr=nothing,
-                      $($spaces)ivz=nothing, kwargs...)
+                      $($spaces)transform=identity, axis_args=Dict{Symbol,Any}(),
+                      $($spaces)it=nothing, ir=nothing, iz=nothing, ivperp=nothing,
+                      $($spaces)ivpa=nothing, ivzeta=nothing, ivr=nothing, ivz=nothing,
+                      $($spaces)kwargs...)
              function $($function_name_str)(run_info, var_name; is=1, data=nothing,
                       $($spaces)input=nothing, ax=nothing,
                       $($spaces)colorbar_place=nothing, title=nothing,
                       $($spaces)outfile=nothing, colorscale=identity, transform=identity,
-                      $($spaces)it=nothing, ir=nothing, iz=nothing, ivperp=nothing,
-                      $($spaces)ivpa=nothing, ivzeta=nothing, ivr=nothing, ivz=nothing,
-                      $($spaces)kwargs...)
+                      $($spaces)axis_args=Dict{Symbol,Any}(), it=nothing, ir=nothing,
+                      $($spaces)iz=nothing, ivperp=nothing, ivpa=nothing, ivzeta=nothing,
+                      $($spaces)ivr=nothing, ivz=nothing, kwargs...)
 
              Plot `var_name` from the run(s) represented by `run_info` (as returned by
              [`get_run_info`](@ref))vs $($dim1_str) and $($dim2_str).
@@ -1804,6 +1812,9 @@ for (dim1, dim2) ∈ two_dimension_combinations
              using a log scale on data that may contain some negative values it might be
              useful to pass `transform=abs` (to plot the absolute value) or
              `transform=positive_or_nan` (to ignore any negative or zero values).
+
+             `axis_args` are passed as keyword arguments to `get_2d_ax()`, and from there
+             to the `Axis` constructor.
 
              Extra `kwargs` are passed to Makie's `heatmap!() function`.
 
@@ -1833,14 +1844,15 @@ for (dim1, dim2) ∈ two_dimension_combinations
 
              function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
                                      input=nothing, outfile=nothing, transform=identity,
-                                     kwargs...)
+                                     axis_args=Dict{Symbol,Any}(), kwargs...)
 
                  try
                      if data === nothing
                          data = Tuple(nothing for _ in run_info)
                      end
-                     fig, ax, colorbar_places = get_2d_ax(length(run_info),
-                                                          title=get_variable_symbol(var_name))
+                     fig, ax, colorbar_places = get_2d_ax(length(run_info);
+                                                          title=get_variable_symbol(var_name),
+                                                          axis_args...)
                      for (d, ri, a, cp) ∈ zip(data, run_info, ax, colorbar_places)
                          $function_name(ri, var_name; is=is, data=d, input=input, ax=a,
                                         transform=transform, colorbar_place=cp,
@@ -1860,9 +1872,10 @@ for (dim1, dim2) ∈ two_dimension_combinations
              function $function_name(run_info, var_name; is=1, data=nothing,
                                      input=nothing, ax=nothing,
                                      colorbar_place=nothing, title=nothing,
-                                     outfile=nothing, it=nothing, ir=nothing, iz=nothing,
-                                     ivperp=nothing, ivpa=nothing, ivzeta=nothing,
-                                     ivr=nothing, ivz=nothing, kwargs...)
+                                     outfile=nothing, axis_args=Dict{Symbol,Any}(),
+                                     it=nothing, ir=nothing, iz=nothing, ivperp=nothing,
+                                     ivpa=nothing, ivzeta=nothing, ivr=nothing,
+                                     ivz=nothing, kwargs...)
                  if input === nothing
                      if run_info.dfns
                          input = input_dict_dfns[var_name]
@@ -1898,7 +1911,7 @@ for (dim1, dim2) ∈ two_dimension_combinations
                  end
 
                  if ax === nothing
-                     fig, ax, colorbar_place = get_2d_ax(; title=title)
+                     fig, ax, colorbar_place = get_2d_ax(; title=title, axis_args...)
                      ax_was_nothing = true
                  else
                      fig = nothing
@@ -1953,15 +1966,17 @@ for dim ∈ one_dimension_combinations_no_t
              """
              function $($function_name_str)(run_info::Tuple, var_name; is=1, data=nothing,
                       $($spaces)input=nothing, outfile=nothing, yscale=nothing,
-                      $($spaces)transform=identity, ylims=nothing, it=nothing, ir=nothing,
-                      $($spaces)iz=nothing, ivperp=nothing, ivpa=nothing, ivzeta=nothing,
-                      $($spaces)ivr=nothing, ivz=nothing, kwargs...)
+                      $($spaces)transform=identity, ylims=nothing,
+                      $($spaces)axis_args=Dict{Symbol,Any}(), it=nothing, ir=nothing, iz=nothing,
+                      $($spaces)ivperp=nothing, ivpa=nothing, ivzeta=nothing, ivr=nothing,
+                      $($spaces)ivz=nothing, kwargs...)
              function $($function_name_str)(run_info, var_name; is=1, data=nothing,
                       $($spaces)input=nothing, frame_index=nothing, ax=nothing,
                       $($spaces)fig=nothing, outfile=nothing, yscale=nothing,
-                      $($spaces)transform=identity, ylims=nothing, it=nothing, ir=nothing,
-                      $($spaces)iz=nothing, ivperp=nothing, ivpa=nothing, ivzeta=nothing,
-                      $($spaces)ivr=nothing, ivz=nothing, kwargs...)
+                      $($spaces)transform=identity, ylims=nothing,
+                      $($spaces)axis_args=Dict{Symbol,Any}(), it=nothing, ir=nothing, iz=nothing,
+                      $($spaces)ivperp=nothing, ivpa=nothing, ivzeta=nothing, ivr=nothing,
+                      $($spaces)ivz=nothing, kwargs...)
 
              Animate `var_name` from the run(s) represented by `run_info` (as returned by
              [`get_run_info`](@ref))vs $($dim_str).
@@ -1984,6 +1999,9 @@ for dim ∈ one_dimension_combinations_no_t
              using a log scale on data that may contain some negative values it might be
              useful to pass `transform=abs` (to plot the absolute value) or
              `transform=positive_or_nan` (to ignore any negative or zero values).
+
+             `axis_args` are passed as keyword arguments to `get_1d_ax()`, and from there
+             to the `Axis` constructor.
 
              Extra `kwargs` are passed to Makie's `lines!() function`.
 
@@ -2013,7 +2031,8 @@ for dim ∈ one_dimension_combinations_no_t
 
              function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
                                      input=nothing, outfile=nothing, yscale=nothing,
-                                     ylims=nothing, it=nothing, kwargs...)
+                                     ylims=nothing, axis_args=Dict{Symbol,Any}(),
+                                     it=nothing, kwargs...)
 
                  try
                      if data === nothing
@@ -2041,9 +2060,9 @@ for dim ∈ one_dimension_combinations_no_t
                                                for (irun,ri) ∈ enumerate(run_info)), "; "),
                                       frame_index)
                      end
-                     fig, ax = get_1d_ax(xlabel="$($dim_str)",
+                     fig, ax = get_1d_ax(; xlabel="$($dim_str)",
                                          ylabel=get_variable_symbol(var_name),
-                                         title=title, yscale=yscale)
+                                         title=title, yscale=yscale, axis_args...)
 
                      for (d, ri) ∈ zip(data, run_info)
                          $function_name(ri, var_name; is=is, data=d, input=input,
@@ -2080,9 +2099,10 @@ for dim ∈ one_dimension_combinations_no_t
              function $function_name(run_info, var_name; is=1, data=nothing,
                                      input=nothing, frame_index=nothing, ax=nothing,
                                      fig=nothing, outfile=nothing, yscale=nothing,
-                                     ylims=nothing, it=nothing, ir=nothing, iz=nothing,
-                                     ivperp=nothing, ivpa=nothing, ivzeta=nothing,
-                                     ivr=nothing, ivz=nothing, kwargs...)
+                                     ylims=nothing, axis_args=Dict{Symbol,Any}(),
+                                     it=nothing, ir=nothing, iz=nothing, ivperp=nothing,
+                                     ivpa=nothing, ivzeta=nothing, ivr=nothing,
+                                     ivz=nothing, kwargs...)
                  if input === nothing
                      if run_info.dfns
                          input = input_dict_dfns[var_name]
@@ -2114,9 +2134,9 @@ for dim ∈ one_dimension_combinations_no_t
                  end
                  if ax === nothing
                      title = lift(i->string("t = ", run_info.time[i]), ind)
-                     fig, ax = get_1d_ax(xlabel="$($dim_str)",
+                     fig, ax = get_1d_ax(; xlabel="$($dim_str)",
                                          ylabel=get_variable_symbol(var_name),
-                                         yscale=yscale, title=title)
+                                         yscale=yscale, title=title, axis_args...)
                  else
                      fig = nothing
                  end
@@ -2173,16 +2193,18 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
              """
              function $($function_name_str)(run_info::Tuple, var_name; is=1, data=nothing,
                       $($spaces)input=nothing, outfile=nothing, colorscale=identity,
-                      $($spaces)transform=identity, it=nothing, ir=nothing, iz=nothing,
-                      $($spaces)ivperp=nothing, ivpa=nothing, ivzeta=nothing, ivr=nothing,
-                      $($spaces)ivz=nothing, kwargs...)
+                      $($spaces)transform=identity, axis_args=Dict{Symbol,Any}(),
+                      $($spaces)it=nothing, ir=nothing, iz=nothing, ivperp=nothing,
+                      $($spaces)ivpa=nothing, ivzeta=nothing, ivr=nothing, ivz=nothing,
+                      $($spaces)kwargs...)
              function $($function_name_str)(run_info, var_name; is=1, data=nothing,
                       $($spaces)input=nothing, frame_index=nothing, ax=nothing,
                       $($spaces)fig=nothing, colorbar_place=colorbar_place,
                       $($spaces)title=nothing, outfile=nothing, colorscale=identity,
-                      $($spaces)transform=identity, it=nothing, ir=nothing, iz=nothing,
-                      $($spaces)ivperp=nothing, ivpa=nothing, ivzeta=nothing, ivr=nothing,
-                      $($spaces)ivz=nothing, kwargs...)
+                      $($spaces)transform=identity, axis_args=Dict{Symbol,Any}(),
+                      $($spaces)it=nothing, ir=nothing, iz=nothing, ivperp=nothing,
+                      $($spaces)ivpa=nothing, ivzeta=nothing, ivr=nothing, ivz=nothing,
+                      $($spaces)kwargs...)
 
              Animate `var_name` from the run(s) represented by `run_info` (as returned by
              [`get_run_info`](@ref))vs $($dim1_str) and $($dim2_str).
@@ -2202,6 +2224,9 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
              using a log scale on data that may contain some negative values it might be
              useful to pass `transform=abs` (to plot the absolute value) or
              `transform=positive_or_nan` (to ignore any negative or zero values).
+
+             `axis_args` are passed as keyword arguments to `get_2d_ax()`, and from there
+             to the `Axis` constructor.
 
              Extra `kwargs` are passed to Makie's `heatmap!() function`.
 
@@ -2236,7 +2261,7 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
 
              function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
                                      input=nothing, outfile=nothing, transform=identity,
-                                     it=nothing, kwargs...)
+                                     axis_args=Dict{Symbol,Any}(), it=nothing, kwargs...)
 
                  try
                      if data === nothing
@@ -2261,7 +2286,8 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
                      end
                      fig, ax, colorbar_places = get_2d_ax(length(run_info),
                                                           title=title,
-                                                          subtitles=subtitles)
+                                                          subtitles=subtitles,
+                                                          axis_args...)
 
                      for (d, ri, a, cp) ∈ zip(data, run_info, ax, colorbar_places)
                          $function_name(ri, var_name; is=is, data=d, input=input,
@@ -2286,8 +2312,9 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
              function $function_name(run_info, var_name; is=1, data=nothing,
                                      input=nothing, frame_index=nothing, ax=nothing,
                                      fig=nothing, colorbar_place=colorbar_place,
-                                     title=nothing, outfile=nothing, it=nothing,
-                                     ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
+                                     title=nothing, outfile=nothing,
+                                     axis_args=Dict{Symbol,Any}(), it=nothing, ir=nothing,
+                                     iz=nothing, ivperp=nothing, ivpa=nothing,
                                      ivzeta=nothing, ivr=nothing, ivz=nothing, kwargs...)
                  if input === nothing
                      if run_info.dfns
@@ -2327,7 +2354,7 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
                  end
 
                  if ax === nothing
-                     fig, ax = get_2d_ax(; title=title)
+                     fig, ax = get_2d_ax(; title=title, axis_args...)
                      ax_was_nothing = true
                  else
                      ax_was_nothing = false
@@ -2541,7 +2568,8 @@ end
 
 """
     plot_1d(xcoord, data; ax=nothing, xlabel=nothing, ylabel=nothing, title=nothing,
-            yscale=nothing, transform=identity, kwargs...)
+            yscale=nothing, transform=identity, axis_args=Dict{Symbol,Any}(),
+            kwargs...)
 
 Make a 1d plot of `data` vs `xcoord`.
 
@@ -2558,15 +2586,19 @@ it might be useful to pass `transform=abs` (to plot the absolute value) or
 If `ax` is passed, the plot will be added to that existing `Axis`, otherwise a new
 `Figure` and `Axis` will be created.
 
+`axis_args` are passed as keyword arguments to `get_1d_ax()`, and from there to the `Axis`
+constructor.
+
 Other `kwargs` are passed to Makie's `lines!()` function.
 
 If `ax` is not passed, returns the `Figure`, otherwise returns the object returned by
 `lines!()`.
 """
 function plot_1d(xcoord, data; ax=nothing, xlabel=nothing, ylabel=nothing, title=nothing,
-                 yscale=nothing, transform=identity, kwargs...)
+                 yscale=nothing, transform=identity, axis_args=Dict{Symbol,Any}(),
+                 kwargs...)
     if ax === nothing
-        fig, ax = get_1d_ax()
+        fig, ax = get_1d_ax(; axis_args...)
     else
         fig = nothing
     end
@@ -2604,7 +2636,8 @@ end
 """
     plot_2d(xcoord, ycoord, data; ax=nothing, colorbar_place=nothing, xlabel=nothing,
             ylabel=nothing, title=nothing, colormap="reverse_deep",
-            colorscale=nothing, transform=identity, kwargs...)
+            colorscale=nothing, transform=identity, axis_args=Dict{Symbol,Any}(),
+            kwargs...)
 
 Make a 2d plot of `data` vs `xcoord` and `ycoord`.
 
@@ -2631,6 +2664,9 @@ When `xcoord` and `ycoord` are both one-dimensional, uses Makie's `heatmap!()` f
 for the plot. If either or both of `xcoord` and `ycoord` are two-dimensional, instead uses
 [`irregular_heatmap!`](@ref).
 
+`axis_args` are passed as keyword arguments to `get_2d_ax()`, and from there to the `Axis`
+constructor.
+
 Other `kwargs` are passed to Makie's `heatmap!()` function.
 
 If `ax` is not passed, returns the `Figure`, otherwise returns the object returned by
@@ -2638,9 +2674,10 @@ If `ax` is not passed, returns the `Figure`, otherwise returns the object return
 """
 function plot_2d(xcoord, ycoord, data; ax=nothing, colorbar_place=nothing, xlabel=nothing,
                  ylabel=nothing, title=nothing, colormap="reverse_deep",
-                 colorscale=nothing, transform=identity, kwargs...)
+                 colorscale=nothing, transform=identity, axis_args=Dict{Symbol,Any}(),
+                 kwargs...)
     if ax === nothing
-        fig, ax, colorbar_place = get_2d_ax()
+        fig, ax, colorbar_place = get_2d_ax(; axis_args...)
     else
         fig = nothing
     end
@@ -2711,7 +2748,8 @@ end
 """
     animate_1d(xcoord, data; frame_index=nothing, ax=nothing, fig=nothing,
                xlabel=nothing, ylabel=nothing, title=nothing, yscale=nothing,
-               transform=identity, outfile=nothing, ylims=nothing, kwargs...)
+               transform=identity, outfile=nothing, ylims=nothing,
+               axis_args=Dict{Symbol,Any}(), kwargs...)
 
 Make a 1d animation of `data` vs `xcoord`.
 
@@ -2738,6 +2776,9 @@ determines the file type. If `ax` is passed at the same time as `outfile` then t
 `Figure` containing `ax` must also be passed (to the `fig` argument) so that the animation
 can be saved.
 
+`axis_args` are passed as keyword arguments to `get_1d_ax()`, and from there to the `Axis`
+constructor.
+
 Other `kwargs` are passed to Makie's `lines!()` function.
 
 If `ax` is not passed, returns the `Figure`, otherwise returns the object returned by
@@ -2745,7 +2786,8 @@ If `ax` is not passed, returns the `Figure`, otherwise returns the object return
 """
 function animate_1d(xcoord, data; frame_index=nothing, ax=nothing, fig=nothing,
                     xlabel=nothing, ylabel=nothing, title=nothing, yscale=nothing,
-                    transform=identity, ylims=nothing, outfile=nothing, kwargs...)
+                    transform=identity, ylims=nothing, outfile=nothing,
+                    axis_args=Dict{Symbol,Any}(), kwargs...)
 
     if frame_index === nothing
         ind = Observable(1)
@@ -2754,7 +2796,8 @@ function animate_1d(xcoord, data; frame_index=nothing, ax=nothing, fig=nothing,
     end
 
     if ax === nothing
-        fig, ax = get_1d_ax(title=title, xlabel=xlabel, ylabel=ylabel, yscale=yscale)
+        fig, ax = get_1d_ax(; title=title, xlabel=xlabel, ylabel=ylabel, yscale=yscale,
+                            axis_args...)
     end
 
     if !isa(data, VariableCache)
@@ -2806,7 +2849,7 @@ end
     animate_2d(xcoord, ycoord, data; frame_index=nothing, ax=nothing, fig=nothing,
                colorbar_place=nothing, xlabel=nothing, ylabel=nothing, title=nothing,
                outfile=nothing, colormap="reverse_deep", colorscale=nothing,
-               transform=identity, kwargs...)
+               transform=identity, axis_args=Dict{Symbol,Any}(), kwargs...)
 
 Make a 2d animation of `data` vs `xcoord` and `ycoord`.
 
@@ -2840,6 +2883,9 @@ When `xcoord` and `ycoord` are both one-dimensional, uses Makie's `heatmap!()` f
 for the plot. If either or both of `xcoord` and `ycoord` are two-dimensional, instead uses
 [`irregular_heatmap!`](@ref).
 
+`axis_args` are passed as keyword arguments to `get_2d_ax()`, and from there to the `Axis`
+constructor.
+
 Other `kwargs` are passed to Makie's `heatmap!()` function.
 
 If `ax` is not passed, returns the `Figure`, otherwise returns the object returned by
@@ -2848,11 +2894,11 @@ If `ax` is not passed, returns the `Figure`, otherwise returns the object return
 function animate_2d(xcoord, ycoord, data; frame_index=nothing, ax=nothing, fig=nothing,
                     colorbar_place=nothing, xlabel=nothing, ylabel=nothing, title=nothing,
                     outfile=nothing, colormap="reverse_deep", colorscale=nothing,
-                    transform=identity, kwargs...)
+                    transform=identity, axis_args=Dict{Symbol,Any}(), kwargs...)
     colormap = parse_colormap(colormap)
 
     if ax === nothing
-        fig, ax, colorbar_place = get_2d_ax(title=title)
+        fig, ax, colorbar_place = get_2d_ax(; title=title, axis_args...)
     end
     if frame_index === nothing
         ind = Observable(1)
@@ -3753,7 +3799,8 @@ end
 """
     plot_f_unnorm_vs_vpa(run_info; input=nothing, neutral=false, it=nothing, is=1,
                          iz=nothing, fig=nothing, ax=nothing, outfile=nothing,
-                         yscale=identity, transform=identity, kwargs...)
+                         yscale=identity, transform=identity,
+                         axis_args=Dict{Symbol,Any}(), kwargs...)
 
 Plot an unnormalized distribution function against \$v_\\parallel\$ at a fixed z.
 
@@ -3790,16 +3837,20 @@ plotted. For example when using a log scale on data that may contain some negati
 it might be useful to pass `transform=abs` (to plot the absolute value) or
 `transform=positive_or_nan` (to ignore any negative or zero values).
 
+`axis_args` are passed as keyword arguments to `get_1d_ax()`, and from there to the `Axis`
+constructor.
+
 Any extra `kwargs` are passed to [`plot_1d`](@ref).
 """
 function plot_f_unnorm_vs_vpa end
 
-function plot_f_unnorm_vs_vpa(run_info::Tuple; neutral=false, outfile=nothing, kwargs...)
+function plot_f_unnorm_vs_vpa(run_info::Tuple; neutral=false, outfile=nothing,
+                              axis_args=Dict{Symbol,Any}(), kwargs...)
     try
         n_runs = length(run_info)
 
         ylabel = neutral ? L"f_{n,\mathrm{unnormalized}}" : L"f_{i,\mathrm{unnormalized}}"
-        fig, ax = get_1d_ax(xlabel=L"v_\parallel", ylabel=ylabel)
+        fig, ax = get_1d_ax(; xlabel=L"v_\parallel", ylabel=ylabel, axis_args...)
 
         for ri ∈ run_info
             plot_f_unnorm_vs_vpa(ri; neutral=neutral, ax=ax, kwargs...)
@@ -3821,7 +3872,7 @@ end
 
 function plot_f_unnorm_vs_vpa(run_info; input=nothing, neutral=false, it=nothing, is=1,
                               iz=nothing, fig=nothing, ax=nothing, outfile=nothing,
-                              transform=identity, kwargs...)
+                              transform=identity, axis_args=Dict{Symbol,Any}(), kwargs...)
     if input === nothing
         if neutral
             input = Dict_to_NamedTuple(input_dict_dfns["f_neutral"])
@@ -3841,7 +3892,7 @@ function plot_f_unnorm_vs_vpa(run_info; input=nothing, neutral=false, it=nothing
 
     if ax === nothing
         ylabel = neutral ? L"f_{n,\mathrm{unnormalized}}" : L"f_{i,\mathrm{unnormalized}}"
-        fig, ax = get_1d_ax(xlabel=L"v_\parallel", ylabel=ylabel)
+        fig, ax = get_1d_ax(; xlabel=L"v_\parallel", ylabel=ylabel, axis_args...)
     end
 
     if neutral
@@ -3890,7 +3941,8 @@ end
 """
     plot_f_unnorm_vs_vpa_z(run_info; input=nothing, neutral=false, it=nothing, is=1,
                            fig=nothing, ax=nothing, outfile=nothing, yscale=identity,
-                           transform=identity, rasterize=true, kwargs...)
+                           transform=identity, rasterize=true,
+                           axis_args=Dict{Symbol,Any}(), kwargs...)
 
 Plot unnormalized distribution function against \$v_\\parallel\$ and z.
 
@@ -3931,17 +3983,21 @@ plots as vectorized plots from `mesh!()` have a very large file size. Pass `fals
 plots vectorized. Pass a number to increase the resolution of the rasterized plot by that
 factor.
 
+`axis_args` are passed as keyword arguments to `get_2d_ax()`, and from there to the `Axis`
+constructor.
+
 Any extra `kwargs` are passed to [`plot_2d`](@ref).
 """
 function plot_f_unnorm_vs_vpa_z end
 
 function plot_f_unnorm_vs_vpa_z(run_info::Tuple; neutral=false, outfile=nothing,
-                                kwargs...)
+                                axis_args=Dict{Symbol,Any}(), kwargs...)
     try
         n_runs = length(run_info)
         title = neutral ? L"f_{n,\mathrm{unnormalized}}" : L"f_{i,\mathrm{unnormalized}}"
         fig, axes, colorbar_places =
-            get_2d_ax(n_runs; title=title, xlabel=L"v_\parallel", ylabel=L"z")
+            get_2d_ax(n_runs; title=title, xlabel=L"v_\parallel", ylabel=L"z",
+                      axis_args...)
 
         for (ri, ax, colorbar_place) ∈ zip(run_info, axes, colorbar_places)
             plot_f_unnorm_vs_vpa_z(ri; neutral=neutral, ax=ax, colorbar_place=colorbar_place,
@@ -3961,7 +4017,7 @@ end
 function plot_f_unnorm_vs_vpa_z(run_info; input=nothing, neutral=false, it=nothing, is=1,
                                 fig=nothing, ax=nothing, colorbar_place=nothing, title=nothing,
                                 outfile=nothing, transform=identity, rasterize=true,
-                                kwargs...)
+                                axis_args=Dict{Symbol,Any}(), kwargs...)
     if input === nothing
         if neutral
             input = Dict_to_NamedTuple(input_dict_dfns["f_neutral"])
@@ -3980,7 +4036,8 @@ function plot_f_unnorm_vs_vpa_z(run_info; input=nothing, neutral=false, it=nothi
         if title === nothing
             title = neutral ? L"f_{n,\mathrm{unnormalized}}" : L"f_{i,\mathrm{unnormalized}}"
         end
-        fig, ax, colorbar_place = get_2d_ax(title=title, xlabel=L"v_\parallel", ylabel=L"z")
+        fig, ax, colorbar_place = get_2d_ax(; title=title, xlabel=L"v_\parallel",
+                                            ylabel=L"z", axis_args...)
     else
         ax.title = run_info.run_name
     end
@@ -4035,7 +4092,7 @@ end
     animate_f_unnorm_vs_vpa(run_info; input=nothing, neutral=false, is=1, iz=nothing,
                             fig=nothing, ax=nothing, frame_index=nothing,
                             outfile=nothing, yscale=identity, transform=identity,
-                            kwargs...)
+                            axis_args=Dict{Symbol,Any}(), kwargs...)
 
 Plot an unnormalized distribution function against \$v_\\parallel\$ at a fixed z.
 
@@ -4074,12 +4131,16 @@ plotted. For example when using a log scale on data that may contain some negati
 it might be useful to pass `transform=abs` (to plot the absolute value) or
 `transform=positive_or_nan` (to ignore any negative or zero values).
 
+`axis_args` are passed as keyword arguments to `get_1d_ax()`, and from there to the `Axis`
+constructor.
+
 Any extra `kwargs` are passed to [`plot_1d`](@ref) (which is used to create the plot, as
 we have to handle time-varying coordinates so cannot use [`animate_1d`](@ref)).
 """
 function animate_f_unnorm_vs_vpa end
 
-function animate_f_unnorm_vs_vpa(run_info::Tuple; neutral=false, outfile=nothing, kwargs...)
+function animate_f_unnorm_vs_vpa(run_info::Tuple; neutral=false, outfile=nothing,
+                                 axis_args=Dict{Symbol,Any}(), kwargs...)
     try
         n_runs = length(run_info)
 
@@ -4094,7 +4155,8 @@ function animate_f_unnorm_vs_vpa(run_info::Tuple; neutral=false, outfile=nothing
                                               for (irun,ri) ∈ enumerate(run_info)), "; ")),
                          frame_index)
         end
-        fig, ax = get_1d_ax(xlabel=L"v_\parallel", ylabel=ylabel, title=title)
+        fig, ax = get_1d_ax(; xlabel=L"v_\parallel", ylabel=ylabel, title=title,
+                            axis_args...)
 
         for ri ∈ run_info
             animate_f_unnorm_vs_vpa(ri; neutral=neutral, ax=ax, frame_index=frame_index,
@@ -4118,7 +4180,8 @@ end
 
 function animate_f_unnorm_vs_vpa(run_info; input=nothing, neutral=false, is=1, iz=nothing,
                                  fig=nothing, ax=nothing, frame_index=nothing,
-                                 outfile=nothing, transform=identity, kwargs...)
+                                 outfile=nothing, transform=identity,
+                                 axis_args=Dict{Symbol,Any}(), kwargs...)
     if input === nothing
         if neutral
             input = Dict_to_NamedTuple(input_dict_dfns["f_neutral"])
@@ -4137,7 +4200,8 @@ function animate_f_unnorm_vs_vpa(run_info; input=nothing, neutral=false, is=1, i
         frame_index = Observable(1)
         title = lift(i->LaTeXString(string("t = ", run_info.time[i])), frame_index)
         ylabel = neutral ? L"f_{n,\mathrm{unnormalized}}" : L"f_{i,\mathrm{unnormalized}}"
-        fig, ax = get_1d_ax(xlabel=L"v_\parallel", ylabel=ylabel, title=title)
+        fig, ax = get_1d_ax(; xlabel=L"v_\parallel", ylabel=ylabel, title=title,
+                            axis_args...)
     end
     if frame_index === nothing
         error("Must pass an Observable to `frame_index` when passing `ax`.")
@@ -4213,7 +4277,7 @@ end
     animate_f_unnorm_vs_vpa_z(run_info; input=nothing, neutral=false, is=1,
                               fig=nothing, ax=nothing, frame_index=nothing,
                               outfile=nothing, yscale=identity, transform=identity,
-                              kwargs...)
+                              axis_args=Dict{Symbol,Any}(), kwargs...)
 
 Animate an unnormalized distribution function against \$v_\\parallel\$ and z.
 
@@ -4249,13 +4313,16 @@ plotted. For example when using a log scale on data that may contain some negati
 it might be useful to pass `transform=abs` (to plot the absolute value) or
 `transform=positive_or_nan` (to ignore any negative or zero values).
 
+`axis_args` are passed as keyword arguments to `get_2d_ax()`, and from there to the `Axis`
+constructor.
+
 Any extra `kwargs` are passed to [`plot_2d`](@ref) (which is used to create the plot, as
 we have to handle time-varying coordinates so cannot use [`animate_2d`](@ref)).
 """
 function animate_f_unnorm_vs_vpa_z end
 
 function animate_f_unnorm_vs_vpa_z(run_info::Tuple; neutral=false, outfile=nothing,
-                                   kwargs...)
+                                   axis_args=Dict{Symbol,Any}(), kwargs...)
     try
         n_runs = length(run_info)
 
@@ -4274,7 +4341,8 @@ function animate_f_unnorm_vs_vpa_z(run_info::Tuple; neutral=false, outfile=nothi
             subtitles = nothing
         end
         fig, axes, colorbar_places = get_2d_ax(n_runs; title=title, subtitles=subtitles,
-                                               xlabel=L"v_\parallel", ylabel=L"z")
+                                               xlabel=L"v_\parallel", ylabel=L"z",
+                                               axis_args...)
 
         for (ri, ax, colorbar_place) ∈ zip(run_info, axes, colorbar_places)
             animate_f_unnorm_vs_vpa_z(ri; neutral=neutral, ax=ax,
@@ -4296,7 +4364,8 @@ end
 function animate_f_unnorm_vs_vpa_z(run_info; input=nothing, neutral=false, is=1,
                                    fig=nothing, ax=nothing, colorbar_place=nothing,
                                    frame_index=nothing, outfile=nothing,
-                                   transform=identity, kwargs...)
+                                   transform=identity, axis_args=Dict{Symbol,Any}(),
+                                   kwargs...)
     if input === nothing
         if neutral
             input = Dict_to_NamedTuple(input_dict_dfns["f_neutral"])
@@ -4312,7 +4381,8 @@ function animate_f_unnorm_vs_vpa_z(run_info; input=nothing, neutral=false, is=1,
         var_name = neutral ? L"f_{n,\mathrm{unnormalized}}" : L"f_{i,\mathrm{unnormalized}}"
         title = lift(i->LaTeXString(string(var_name, "\nt = ", run_info.time[i])),
                      frame_index)
-        fig, ax, colorbar_place = get_2d_ax(title=title, xlabel=L"v_\parallel", ylabel=L"z")
+        fig, ax, colorbar_place = get_2d_ax(; title=title, xlabel=L"v_\parallel",
+                                            ylabel=L"z", axis_args...)
     end
     if frame_index === nothing
         error("Must pass an Observable to `frame_index` when passing `ax`.")
