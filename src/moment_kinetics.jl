@@ -347,6 +347,11 @@ function setup_moment_kinetics(input_dict::Dict; restart_prefix_iblock=nothing,
     # Set up MPI
     initialize_comms!()
 
+    if global_rank[] == 0
+        println("Starting setup   ", Dates.format(now(), dateformat"H:MM:SS"))
+        flush(stdout)
+    end
+
     input = mk_input(input_dict; save_inputs_to_txt=true, ignore_MPI=false)
     # obtain input options from moment_kinetics_input.jl
     # and check input to catch errors
