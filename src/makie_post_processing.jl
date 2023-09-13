@@ -1898,9 +1898,10 @@ for (dim1, dim2) ∈ two_dimension_combinations
                  end
 
                  if ax === nothing
-                     fig, ax = get_2d_ax(; title=title)
+                     fig, ax, colorbar_place = get_2d_ax(; title=title)
                      ax_was_nothing = true
                  else
+                     fig = nothing
                      ax_was_nothing = false
                  end
 
@@ -1912,9 +1913,9 @@ for (dim1, dim2) ∈ two_dimension_combinations
                  if $idim1 !== nothing
                      y = y[$idim1]
                  end
-                 fig = plot_2d(x, y, data; ax=ax, xlabel="$($dim2_str)",
-                               ylabel="$($dim1_str)",colorbar_place=colorbar_place,
-                               colormap=colormap, kwargs...)
+                 plot_2d(x, y, data; ax=ax, xlabel="$($dim2_str)",
+                         ylabel="$($dim1_str)", colorbar_place=colorbar_place,
+                         colormap=colormap, kwargs...)
 
                  if input.show_element_boundaries && Symbol($dim2_str) != :t
                      element_boundary_positions = run_info.$dim2.grid[begin:run_info.$dim2.ngrid-1:end]
