@@ -279,6 +279,14 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
     neutral_vz_advect = setup_advection(n_neutral_species_alloc, vz, vr, vzeta, z, r)
     if n_neutral_species > 0
         # initialise the z advection speed
+        @serial_region begin
+            # Initialise the vz 'advection speed' in case it does not need updating. It
+            # may still be used to decide which boundary is 'incoming' in the vz boundary
+            # condition.
+            @loop_sn isn begin
+                neutral_vz_advect[isn].speed .= 0.0
+            end
+        end
         begin_sn_r_z_vzeta_vr_region()
         @views update_speed_neutral_vz!(neutral_vz_advect, fields, scratch[1], moments,
                                         vz, vr, vzeta, z, r, composition, collisions)

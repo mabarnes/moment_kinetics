@@ -34,7 +34,7 @@ function continuity_equation!(dens_out, fvec_in, moments, composition, dt, spect
     diffusion_coefficient = num_diss_params.moment_dissipation_coefficient
     if diffusion_coefficient > 0.0
         @loop_s_r_z is ir iz begin
-            dens_out[iz,ir,is] += dt*diffusion_coefficient*moments.charged.d2dens_dz[iz,ir,is]
+            dens_out[iz,ir,is] += dt*diffusion_coefficient*moments.charged.d2dens_dz2[iz,ir,is]
         end
     end
 end
@@ -66,7 +66,7 @@ function neutral_continuity_equation!(dens_out, fvec_in, moments, composition, d
     diffusion_coefficient = num_diss_params.moment_dissipation_coefficient
     if diffusion_coefficient > 0.0
         @loop_sn_r_z isn ir iz begin
-            dens_out[iz,ir,isn] += dt*diffusion_coefficient*moments.neutral.d2dens_dz[iz,ir,isn]
+            dens_out[iz,ir,isn] += dt*diffusion_coefficient*moments.neutral.d2dens_dz2[iz,ir,isn]
         end
     end
 end

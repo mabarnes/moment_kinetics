@@ -90,8 +90,8 @@ jobs:
           # * `--mca mpi_yield_when_idle 1` changes a setting to prevent excessively
           #   terrible performance when oversubscribing.
           ## Don't use --compiled-modules=no for now, as it currently breaks Symbolics.jl
-          #mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes --compiled-modules=no debug_test/sound_wave_tests.jl --debug 3
-          mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes debug_test/sound_wave_tests.jl --debug 3
+          #mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes --compiled-modules=no debug_test/sound_wave_tests.jl --debug 2
+          mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes debug_test/sound_wave_tests.jl --debug 2
 
   debug-checks-wall-bc:
     runs-on: ${{ matrix.os }}
@@ -133,8 +133,8 @@ jobs:
           # * `--mca mpi_yield_when_idle 1` changes a setting to prevent excessively
           #   terrible performance when oversubscribing.
           ## Don't use --compiled-modules=no for now, as it currently breaks Symbolics.jl
-          #mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes --compiled-modules=no debug_test/wall_bc_tests.jl --debug 3
-          mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes debug_test/wall_bc_tests.jl --debug 3
+          #mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes --compiled-modules=no debug_test/wall_bc_tests.jl --debug 2
+          mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes debug_test/wall_bc_tests.jl --debug 2
 
   debug-checks-harrisonthompson:
     runs-on: ${{ matrix.os }}
@@ -176,8 +176,8 @@ jobs:
           # * `--mca mpi_yield_when_idle 1` changes a setting to prevent excessively
           #   terrible performance when oversubscribing.
           ## Don't use --compiled-modules=no for now, as it currently breaks Symbolics.jl
-          #mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes --compiled-modules=no debug_test/harrisonthompson.jl --debug 3
-          mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes debug_test/harrisonthompson.jl --debug 3
+          #mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes --compiled-modules=no debug_test/harrisonthompson.jl --debug 2
+          mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes debug_test/harrisonthompson.jl --debug 2
 
   debug-checks-mms:
     runs-on: ${{ matrix.os }}
@@ -219,5 +219,5 @@ jobs:
           # * `--mca mpi_yield_when_idle 1` changes a setting to prevent excessively
           #   terrible performance when oversubscribing.
           ## Don't use --compiled-modules=no for now, as it currently breaks Symbolics.jl
-          #mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes --compiled-modules=no debug_test/mms_tests.jl --debug 3
-          mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes debug_test/mms_tests.jl --debug 3
+          #mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes --compiled-modules=no debug_test/mms_tests.jl --debug 2
+          mpiexec -np 4 --mca rmaps_base_oversubscribe 1 julia --project --check-bounds=yes debug_test/mms_tests.jl --debug 2
