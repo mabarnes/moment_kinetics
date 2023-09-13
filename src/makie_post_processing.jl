@@ -182,10 +182,10 @@ function makie_post_process(run_dir::Union{String,Tuple},
     # set up `time` and `time_dfns` in run_info, but run_info is needed to set several
     # other default values in setup_makie_post_processing_input!().
     itime_min = get(new_input_dict, "itime_min", 1)
-    itime_max = get(new_input_dict, "itime_max", -1)
+    itime_max = get(new_input_dict, "itime_max", 0)
     itime_skip = get(new_input_dict, "itime_skip", 1)
     itime_min_dfns = get(new_input_dict, "itime_min_dfns", 1)
-    itime_max_dfns = get(new_input_dict, "itime_max_dfns", -1)
+    itime_max_dfns = get(new_input_dict, "itime_max_dfns", 0)
     itime_skip_dfns = get(new_input_dict, "itime_skip_dfns", 1)
     run_info_moments = Tuple(get_run_info(p, i, itime_min=itime_min, itime_max=itime_max,
                                           itime_skip=itime_skip)
@@ -690,7 +690,7 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
 end
 
 """
-    get_run_info(run_dir, restart_index=nothing; itime_min=1, itime_max=-1,
+    get_run_info(run_dir, restart_index=nothing; itime_min=1, itime_max=0,
                  itime_skip=1, dfns=false)
 
 Get file handles and other info for a single run
@@ -709,9 +709,10 @@ The `itime_min`, `itime_max` and `itime_skip` options can be used to select only
 of time points when loading data. In `makie_post_process` these options are read from the
 input (if they are set) before `get_run_info()` is called, so that the `run_info` returned
 can be passed to [`setup_makie_post_processing_input!`](@ref), to be used for defaults for
-the remaining options.
+the remaining options. If either `itime_min` or `itime_max` are ≤0, their values are used
+as offsets from the final time index of the run.
 """
-function get_run_info(run_dir, restart_index=nothing; itime_min=1, itime_max=-1,
+function get_run_info(run_dir, restart_index=nothing; itime_min=1, itime_max=0,
                       itime_skip=1, dfns=false)
     if !isdir(run_dir)
         error("$run_dir is not a directory")
@@ -775,8 +776,11 @@ function get_run_info(run_dir, restart_index=nothing; itime_min=1, itime_max=-1,
     end
 
     nt_unskipped, time, restarts_nt = load_time_data(fids0)
+    if itime_min <= 0
+        itime_min = nt_unskipped + itime_min
+    end
     if itime_max <= 0
-        itime_max = nt_unskipped
+        itime_max = nt_unskipped + itime_max
     end
     time = time[itime_min:itime_skip:itime_max]
     nt = length(time)
