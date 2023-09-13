@@ -3901,7 +3901,7 @@ end
 """
     plot_f_unnorm_vs_vpa_z(run_info; input=nothing, neutral=false, it=nothing, is=1,
                            fig=nothing, ax=nothing, outfile=nothing, yscale=identity,
-                           transform=identity, rasterize=true,
+                           transform=identity, rasterize=true, subtitles=nothing,
                            axis_args=Dict{Symbol,Any}(), kwargs...)
 
 Plot unnormalized distribution function against \$v_\\parallel\$ and z.
@@ -3943,6 +3943,9 @@ plots as vectorized plots from `mesh!()` have a very large file size. Pass `fals
 plots vectorized. Pass a number to increase the resolution of the rasterized plot by that
 factor.
 
+When `run_info` is a Tuple, `subtitles` can be passed a Tuple (with the same length as
+`run_info`) to set the subtitle for each subplot.
+
 `axis_args` are passed as keyword arguments to `get_2d_ax()`, and from there to the `Axis`
 constructor.
 
@@ -3951,17 +3954,23 @@ Any extra `kwargs` are passed to [`plot_2d`](@ref).
 function plot_f_unnorm_vs_vpa_z end
 
 function plot_f_unnorm_vs_vpa_z(run_info::Tuple; neutral=false, outfile=nothing,
-                                axis_args=Dict{Symbol,Any}(), kwargs...)
+                                axis_args=Dict{Symbol,Any}(), title=nothing,
+                                subtitles=nothing, kwargs...)
     try
         n_runs = length(run_info)
-        title = neutral ? L"f_{n,\mathrm{unnormalized}}" : L"f_{i,\mathrm{unnormalized}}"
+        if subtitles === nothing
+            subtitles = Tuple(nothing for _ ∈ 1:n_runs)
+        end
+        if title !== nothing
+            title = neutral ? L"f_{n,\mathrm{unnormalized}}" : L"f_{i,\mathrm{unnormalized}}"
+        end
         fig, axes, colorbar_places =
             get_2d_ax(n_runs; title=title, xlabel=L"v_\parallel", ylabel=L"z",
                       axis_args...)
 
-        for (ri, ax, colorbar_place) ∈ zip(run_info, axes, colorbar_places)
+        for (ri, ax, colorbar_place, st) ∈ zip(run_info, axes, colorbar_places, subtitles)
             plot_f_unnorm_vs_vpa_z(ri; neutral=neutral, ax=ax, colorbar_place=colorbar_place,
-                                   kwargs...)
+                                   title=st, kwargs...)
         end
 
         if outfile !== nothing
@@ -3999,7 +4008,11 @@ function plot_f_unnorm_vs_vpa_z(run_info; input=nothing, neutral=false, it=nothi
         fig, ax, colorbar_place = get_2d_ax(; title=title, xlabel=L"v_\parallel",
                                             ylabel=L"z", axis_args...)
     else
-        ax.title = run_info.run_name
+        if title === nothing
+            ax.title = run_info.run_name
+        else
+            ax.title = title
+        end
     end
 
     if neutral
