@@ -11,8 +11,11 @@ julia --project run_makie_post_processing.jl dir1 [dir2 [dir3 ...]]
 module makie_post_processing
 
 export makie_post_process, generate_example_input_file,
-       setup_makie_post_processing_input!, get_run_info, irregular_heatmap,
-       irregular_heatmap!, postproc_load_variable, positive_or_nan
+       setup_makie_post_processing_input!, get_run_info
+export animate_f_unnorm_vs_vpa, animate_f_unnorm_vs_vpa_z, get_1d_ax, get_2d_ax,
+       irregular_heatmap, irregular_heatmap!, plot_f_unnorm_vs_vpa,
+       plot_f_unnorm_vs_vpa_z, positive_or_nan, postproc_load_variable, positive_or_nan,
+       put_legend_above, put_legend_below, put_legend_left, put_legend_right
 
 using ..analysis: analyze_fields_data, check_Chodura_condition, get_r_perturbation,
                   get_Fourier_modes_2D, get_Fourier_modes_1D, steady_state_residuals,
