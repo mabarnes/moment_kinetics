@@ -11,8 +11,8 @@ julia --project run_makie_post_processing.jl dir1 [dir2 [dir3 ...]]
 module makie_post_processing
 
 export makie_post_process, generate_example_input_file,
-       setup_makie_post_processing_input!, get_run_info, postproc_load_variable,
-       positive_or_nan
+       setup_makie_post_processing_input!, get_run_info, irregular_heatmap,
+       irregular_heatmap!, postproc_load_variable, positive_or_nan
 
 using ..analysis: analyze_fields_data, check_Chodura_condition, get_r_perturbation,
                   get_Fourier_modes_2D, get_Fourier_modes_1D, steady_state_residuals
@@ -27,12 +27,17 @@ using ..load_data: open_readonly_output_file, get_group, load_block_data,
                    load_coordinate_data, load_distributed_charged_pdf_slice,
                    load_distributed_neutral_pdf_slice, load_input, load_mk_options,
                    load_species_data, load_time_data
+using ..initial_conditions: vpagrid_to_dzdt
 using ..post_processing: calculate_and_write_frequencies, construct_global_zr_coords,
-                         get_geometry_and_composition, read_distributed_zr_data!
+                         get_geometry_and_composition, get_unnormalised_f_dzdt_1d,
+                         get_unnormalised_f_coords_2d, get_unnormalised_f_1d,
+                         vpagrid_to_dzdt_2d, get_unnormalised_f_2d,
+                         read_distributed_zr_data!
 using ..type_definitions: mk_float, mk_int
 
 using Combinatorics
 using Glob
+using LaTeXStrings
 using LsqFit
 using MPI
 using NaNMath
@@ -91,7 +96,8 @@ const two_dimension_combinations = Tuple(
 """
     makie_post_process(run_dir...;
                        input_file::String=default_input_file_name,
-                       restart_index::Union{Nothing,mk_int,Tuple}=nothing)
+                       restart_index::Union{Nothing,mk_int,Tuple}=nothing,
+                       plot_prefix::Union{Nothing,AbstractString}=nothing)
 
 Run post processing with input read from a TOML file
 
@@ -104,11 +110,16 @@ restart with that index - `-1` indicates the latest restart (which does not have
 index). A tuple with the same length as `run_dir` can also be passed to give a different
 `restart_index` for each run.
 
+`plot_prefix` can be specified to give the prefix (directory and first part of file name)
+to use when saving plots/animations. By default the run directory and run name are used if
+there is only one run, and "comparison_plots/compare_" is used if there are multiple runs.
+
 If `input_file` does not exist, prints warning and uses default options.
 """
 function makie_post_process(run_dir...;
                             input_file::String=default_input_file_name,
-                            restart_index::Union{Nothing,mk_int,Tuple}=nothing)
+                            restart_index::Union{Nothing,mk_int,Tuple}=nothing,
+                            plot_prefix::Union{Nothing,AbstractString}=nothing)
     if isfile(input_file)
         new_input_dict = TOML.parsefile(input_file)
     else
@@ -117,13 +128,15 @@ function makie_post_process(run_dir...;
         new_input_dict = OrderedDict{String,Any}()
     end
 
-    return makie_post_process(run_dir, new_input_dict; restart_index=restart_index)
+    return makie_post_process(run_dir, new_input_dict; restart_index=restart_index,
+                              plot_prefix=plot_prefix)
 end
 
 """
     makie_post_process(run_dir::Union{String,Tuple},
                        new_input_dict::Dict{String,Any};
-                       restart_index::Union{Nothing,mk_int,Tuple}=nothing)
+                       restart_index::Union{Nothing,mk_int,Tuple}=nothing,
+                       plot_prefix::Union{Nothing,AbstractString}=nothing)
 
 Run post prossing, with (non-default) input given in a Dict
 
@@ -137,10 +150,15 @@ default (`nothing`) reads all restarts and concatenates them. An integer value r
 restart with that index - `-1` indicates the latest restart (which does not have an
 index). A tuple with the same length as `run_dir` can also be passed to give a different
 `restart_index` for each run.
+
+`plot_prefix` can be specified to give the prefix (directory and first part of file name)
+to use when saving plots/animations. By default the run directory and run name are used if
+there is only one run, and "comparison_plots/compare_" is used if there are multiple runs.
 """
 function makie_post_process(run_dir::Union{String,Tuple},
                             new_input_dict::AbstractDict{String,Any};
-                            restart_index::Union{Nothing,mk_int,Tuple}=nothing)
+                            restart_index::Union{Nothing,mk_int,Tuple}=nothing,
+                            plot_prefix::Union{Nothing,AbstractString}=nothing)
     if isa(run_dir, String)
         # Make run_dir a one-element tuple if it is not a tuple
         run_dir = (run_dir,)
@@ -216,10 +234,12 @@ function makie_post_process(run_dir::Union{String,Tuple},
         has_dfns = false
     end
 
-    if length(run_info) == 1
-        plot_prefix = run_info[1].run_prefix * "_"
-    else
-        plot_prefix = "comparison_plots/compare_"
+    if plot_prefix === nothing
+        if length(run_info) == 1
+            plot_prefix = run_info[1].run_prefix * "_"
+        else
+            plot_prefix = joinpath("comparison_plots", "compare_")
+        end
     end
 
     do_steady_state_residuals = any(input_dict[v]["steady_state_residual"]
@@ -540,6 +560,7 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
        animate_vs_z=false,
        animate_vs_r=false,
        animate_vs_z_r=false,
+       show_element_boundaries=false,
        steady_state_residual=false,
       )
 
@@ -573,6 +594,22 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
                 (o=>false for o ∈ animate_log_options_1d if String(o) ∉ keys(section_defaults))...,
                 (o=>false for o ∈ animate_options_2d if String(o) ∉ keys(section_defaults))...,
                 (o=>false for o ∈ animate_log_options_2d if String(o) ∉ keys(section_defaults))...,
+                plot_unnorm_vs_vpa=false,
+                plot_unnorm_vs_vz=false,
+                plot_unnorm_vs_vpa_z=false,
+                plot_unnorm_vs_vz_z=false,
+                plot_log_unnorm_vs_vpa=false,
+                plot_log_unnorm_vs_vz=false,
+                plot_log_unnorm_vs_vpa_z=false,
+                plot_log_unnorm_vs_vz_z=false,
+                animate_unnorm_vs_vpa=false,
+                animate_unnorm_vs_vz=false,
+                animate_unnorm_vs_vpa_z=false,
+                animate_unnorm_vs_vz_z=false,
+                animate_log_unnorm_vs_vpa=false,
+                animate_log_unnorm_vs_vz=false,
+                animate_log_unnorm_vs_vpa_z=false,
+                animate_log_unnorm_vs_vz_z=false,
                 OrderedDict(Symbol(k)=>v for (k,v) ∈ section_defaults)...)
             # Sort keys to make dict easier to read
             sort!(this_input_dict[variable_name])
@@ -797,7 +834,8 @@ function get_run_info(run_dir, restart_index=nothing; itime_min=1, itime_max=-1,
                 n_ion_species=n_ion_species, n_neutral_species=n_neutral_species,
                 evolve_moments=evolve_moments, composition=composition, species=species,
                 collisions=collisions, geometry=geometry, drive_input=drive_input,
-                num_diss_params=num_diss_params,
+                num_diss_params=num_diss_params, evolve_density=evolve_density,
+                evolve_upar=evolve_upar, evolve_ppar=evolve_ppar,
                 manufactured_solns_input=manufactured_solns_input, nt=nt,
                 nt_unskipped=nt_unskipped, restarts_nt=restarts_nt, itime_min=itime_min,
                 itime_skip=itime_skip, itime_max=itime_max, time=time, r=r, z=z,
@@ -815,7 +853,8 @@ function get_run_info(run_dir, restart_index=nothing; itime_min=1, itime_max=-1,
                 n_ion_species=n_ion_species, n_neutral_species=n_neutral_species,
                 evolve_moments=evolve_moments, composition=composition, species=species,
                 collisions=collisions, geometry=geometry, drive_input=drive_input,
-                num_diss_params=num_diss_params,
+                num_diss_params=num_diss_params, evolve_density=evolve_density,
+                evolve_upar=evolve_upar, evolve_ppar=evolve_ppar,
                 manufactured_solns_input=manufactured_solns_input, nt=nt,
                 nt_unskipped=nt_unskipped, restarts_nt=restarts_nt, itime_min=itime_min,
                 itime_skip=itime_skip, itime_max=itime_max, time=time, r=r, z=z,
@@ -1173,7 +1212,7 @@ function VariableCache(run_info, variable_name::String, t_chunk_size::mk_int;
                          data_chunk, dim_slices)
 end
 
-function get_cache_slice(variable_cache::VariableCache, tind::mk_int)
+function get_cache_slice(variable_cache::VariableCache, tind)
     tinds_chunk = variable_cache.tinds_chunk[]
     local_tind = findfirst(i->i==tind, tinds_chunk)
 
@@ -1196,7 +1235,7 @@ function get_cache_slice(variable_cache::VariableCache, tind::mk_int)
     end
 
     return selectdim(variable_cache.data_chunk, ndims(variable_cache.data_chunk),
-                      local_tind)
+                     local_tind)
 end
 
 function variable_cache_extrema(variable_cache::VariableCache; transform=identity)
@@ -1367,6 +1406,10 @@ function plots_for_dfn_variable(run_info, variable_name; plot_prefix, is_1D=fals
     end
     plot_dims = tuple(:t, animate_dims...)
 
+    moment_kinetic = any(ri !== nothing
+                         && (ri.evolve_density || ri.evolve_upar || ri.evolve_ppar)
+                         for ri ∈ run_info)
+
     # test if any plot is needed
     if !any(v for (k,v) in pairs(input) if
             startswith(String(k), "plot") || startswith(String(k), "animate"))
@@ -1428,6 +1471,53 @@ function plots_for_dfn_variable(run_info, variable_name; plot_prefix, is_1D=fals
                     outfile = var_prefix * "vs_$(dim2)_$(dim1)." * input.animation_ext
                     func(run_info, variable_name, is=is, input=input, outfile=outfile,
                          colorscale=yscale, transform=transform)
+                end
+            end
+
+            if is_neutral
+                if moment_kinetic && input[Symbol(:plot, log, :_unnorm_vs_vz)]
+                    outfile = var_prefix * "unnorm_vs_vz.pdf"
+                    plot_f_unnorm_vs_vpa(run_info; input=input, neutral=true, is=is,
+                                         outfile=outfile, yscale=yscale, transform=transform)
+                end
+                if moment_kinetic && input[Symbol(:plot, log, :_unnorm_vs_vz_z)]
+                    outfile = var_prefix * "unnorm_vs_vz_z.pdf"
+                    plot_f_unnorm_vs_vpa_z(run_info; input=input, neutral=true, is=is,
+                                           outfile=outfile, yscale=yscale,
+                                           transform=transform)
+                end
+                if moment_kinetic && input[Symbol(:animate, log, :_unnorm_vs_vz)]
+                    outfile = var_prefix * "unnorm_vs_vz." * input.animation_ext
+                    animate_f_unnorm_vs_vpa(run_info; input=input, neutral=true, is=is,
+                                            outfile=outfile, yscale=yscale,
+                                            transform=transform)
+                end
+                if moment_kinetic && input[Symbol(:animate, log, :_unnorm_vs_vz_z)]
+                    outfile = var_prefix * "unnorm_vs_vz_z." * input.animation_ext
+                    animate_f_unnorm_vs_vpa_z(run_info; input=input, neutral=true, is=is,
+                                              outfile=outfile, colorscale=yscale,
+                                              transform=transform)
+                end
+            else
+                if moment_kinetic && input[Symbol(:plot, log, :_unnorm_vs_vpa)]
+                    outfile = var_prefix * "unnorm_vs_vpa.pdf"
+                    plot_f_unnorm_vs_vpa(run_info; input=input, is=is, outfile=outfile,
+                                         yscale=yscale, transform=transform)
+                end
+                if moment_kinetic && input[Symbol(:plot, log, :_unnorm_vs_vpa_z)]
+                    outfile = var_prefix * "unnorm_vs_vpa_z.pdf"
+                    plot_f_unnorm_vs_vpa_z(run_info; input=input, is=is, outfile=outfile,
+                                           yscale=yscale, transform=transform)
+                end
+                if moment_kinetic && input[Symbol(:animate, log, :_unnorm_vs_vpa)]
+                    outfile = var_prefix * "unnorm_vs_vpa." * input.animation_ext
+                    animate_f_unnorm_vs_vpa(run_info; input=input, is=is, outfile=outfile,
+                                            yscale=yscale, transform=transform)
+                end
+                if moment_kinetic && input[Symbol(:animate, log, :_unnorm_vs_vpa_z)]
+                    outfile = var_prefix * "unnorm_vs_vpa_z." * input.animation_ext
+                    animate_f_unnorm_vs_vpa_z(run_info; input=input, is=is, outfile=outfile,
+                                              colorscale=yscale, transform=transform)
                 end
             end
         end
@@ -1520,6 +1610,10 @@ for dim ∈ one_dimension_combinations
                          data = Tuple(nothing for _ in run_info)
                      end
 
+                     if input isa AbstractDict
+                         input = Dict_to_NamedTuple(input)
+                     end
+
                      n_runs = length(run_info)
 
                      fig, ax = get_1d_ax(xlabel="$($dim_str)",
@@ -1528,6 +1622,14 @@ for dim ∈ one_dimension_combinations
                      for (d, ri) ∈ zip(data, run_info)
                          $function_name(ri, var_name, is=is, data=d, input=input, ax=ax,
                                         transform=transform, label=ri.run_name, kwargs...)
+                     end
+
+                     if input.show_element_boundaries && Symbol($dim_str) != :t
+                         # Just plot element boundaries from first run, assuming that all
+                         # runs being compared use the same grid.
+                         ri = run_info[1]
+                         element_boundary_positions = ri.$dim.grid[begin:ri.$dim.ngrid-1:end]
+                         vlines!(ax, element_boundary_positions, color=:black, alpha=0.3)
                      end
 
                      if n_runs > 1
@@ -1572,13 +1674,24 @@ for dim ∈ one_dimension_combinations
                                          ivzeta=ivzeta, ivr=ivr, ivz=ivz)
                  end
 
+                 if ax === nothing
+                     fig, ax = get_1d_ax(; xlabel="$($dim_str)",
+                                         ylabel=get_variable_symbol(var_name))
+                     ax_was_nothing = true
+                 else
+                     ax_was_nothing = false
+                 end
+
                  x = $dim_grid
                  if $idim !== nothing
                      x = x[$idim]
                  end
-                 fig = plot_1d(x, data; xlabel="$($dim_str)",
-                               ylabel=get_variable_symbol(var_name), label=label, ax=ax,
-                               kwargs...)
+                 fig = plot_1d(x, data; label=label, ax=ax, kwargs...)
+
+                 if input.show_element_boundaries && Symbol($dim_str) != :t && ax_was_nothing
+                     element_boundary_positions = run_info.$dim.grid[begin:run_info.$dim.ngrid-1:end]
+                     vlines!(ax, element_boundary_positions, color=:black, alpha=0.3)
+                 end
 
                  if outfile !== nothing
                      if fig === nothing
@@ -1737,6 +1850,13 @@ for (dim1, dim2) ∈ two_dimension_combinations
                      title = get_variable_symbol(var_name)
                  end
 
+                 if ax === nothing
+                     fig, ax = get_2d_ax(; title=title)
+                     ax_was_nothing = true
+                 else
+                     ax_was_nothing = false
+                 end
+
                  x = $dim2_grid
                  if $idim2 !== nothing
                      x = x[$idim2]
@@ -1745,9 +1865,18 @@ for (dim1, dim2) ∈ two_dimension_combinations
                  if $idim1 !== nothing
                      y = y[$idim1]
                  end
-                 fig = plot_2d(x, y, data; xlabel="$($dim2_str)", ylabel="$($dim1_str)",
-                               title=title, ax=ax, colorbar_place=colorbar_place,
+                 fig = plot_2d(x, y, data; ax=ax, xlabel="$($dim2_str)",
+                               ylabel="$($dim1_str)",colorbar_place=colorbar_place,
                                colormap=colormap, kwargs...)
+
+                 if input.show_element_boundaries && Symbol($dim2_str) != :t
+                     element_boundary_positions = run_info.$dim2.grid[begin:run_info.$dim2.ngrid-1:end]
+                     vlines!(ax, element_boundary_positions, color=:white, alpha=0.5)
+                 end
+                 if input.show_element_boundaries && Symbol($dim1_str) != :t
+                     element_boundary_positions = run_info.$dim1.grid[begin:run_info.$dim1.ngrid-1:end]
+                     hlines!(ax, element_boundary_positions, color=:white, alpha=0.5)
+                 end
 
                  if outfile !== nothing
                      if fig === nothing
@@ -1846,18 +1975,42 @@ for dim ∈ one_dimension_combinations_no_t
                          error("`outfile` is required for $($function_name_str)")
                      end
 
+                     if input isa AbstractDict
+                         input = Dict_to_NamedTuple(input)
+                     end
+
                      n_runs = length(run_info)
 
+                     frame_index = Observable(1)
+                     if length(run_info) == 1 ||
+                         all(ri.nt == run_info[1].nt &&
+                             wall(isapprox.(ri.time, run_info[1].time))
+                             for ri ∈ run_info[2:end])
+                         # All times are the same
+                         title = lift(i->string("t = ", run_info[1].time[i]), frame_index)
+                     else
+                         title = lift(i->join((string("t", irun, " = ", ri.time[i])
+                                               for (irun,ri) ∈ enumerate(run_info)), "; "),
+                                      frame_index)
+                     end
                      fig, ax = get_1d_ax(xlabel="$($dim_str)",
                                          ylabel=get_variable_symbol(var_name),
-                                         yscale=yscale)
-                     frame_index = Observable(1)
+                                         title=title, yscale=yscale)
 
                      for (d, ri) ∈ zip(data, run_info)
                          $function_name(ri, var_name; is=is, data=d, input=input,
                                         ylims=ylims, frame_index=frame_index, ax=ax,
                                         it=it, kwargs...)
                      end
+
+                     if input.show_element_boundaries
+                         # Just plot element boundaries from first run, assuming that all
+                         # runs being compared use the same grid.
+                         ri = run_info[1]
+                         element_boundary_positions = ri.$dim.grid[begin:ri.$dim.ngrid-1:end]
+                         vlines!(ax, element_boundary_positions, color=:black, alpha=0.3)
+                     end
+
                      if n_runs > 1
                          put_legend_above(fig, ax)
                      end
@@ -1911,9 +2064,10 @@ for dim ∈ one_dimension_combinations_no_t
                      ind = frame_index
                  end
                  if ax === nothing
+                     title = lift(i->string("t = ", run_info.time[i]), ind)
                      fig, ax = get_1d_ax(xlabel="$($dim_str)",
                                          ylabel=get_variable_symbol(var_name),
-                                         yscale=yscale)
+                                         yscale=yscale, title=title)
                  else
                      fig = nothing
                  end
@@ -1924,6 +2078,11 @@ for dim ∈ one_dimension_combinations_no_t
                  end
                  animate_1d(x, data; ax=ax, ylims=ylims, frame_index=ind,
                             label=run_info.run_name, kwargs...)
+
+                 if input.show_element_boundaries && fig !== nothing
+                     element_boundary_positions = run_info.$dim.grid[begin:run_info.$dim.ngrid-1:end]
+                     vlines!(ax, element_boundary_positions, color=:black, alpha=0.3)
+                 end
 
                  if frame_index === nothing
                      if outfile === nothing
@@ -2038,15 +2197,27 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
                          error("`outfile` is required for $($function_name_str)")
                      end
 
-                     fig, ax, colorbar_places = get_2d_ax(length(run_info),
-                                                          title=get_variable_symbol(var_name))
                      frame_index = Observable(1)
+
+                     if length(run_info) > 1
+                         title = get_variable_symbol(var_name)
+                         subtitles = (lift(i->string(ri.run_name, "\nt = ", ri.time[i]),
+                                           frame_index)
+                                      for ri ∈ run_info)
+                     else
+                         title = lift(i->string(get_variable_symbol(var_name), "\nt = ",
+                                                run_info[1].time[i]),
+                                      frame_index)
+                         subtitles = nothing
+                     end
+                     fig, ax, colorbar_places = get_2d_ax(length(run_info),
+                                                          title=title,
+                                                          subtitles=subtitles)
 
                      for (d, ri, a, cp) ∈ zip(data, run_info, ax, colorbar_places)
                          $function_name(ri, var_name; is=is, data=d, input=input,
                                         transform=transform, frame_index=frame_index,
-                                        ax=a, colorbar_place=cp, title=ri.run_name,
-                                        it=it, kwargs...)
+                                        ax=a, colorbar_place=cp, it=it, kwargs...)
                      end
 
                      if it === nothing
@@ -2099,8 +2270,17 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
                  else
                      colormap = input.colormap
                  end
-                 if title === nothing
-                     title = get_variable_symbol(var_name)
+                 if title === nothing && ax == nothing
+                     title = lift(i->string(get_variable_symbol(var_name), "\nt = ",
+                                            run_info.time[i]),
+                                  frame_index)
+                 end
+
+                 if ax === nothing
+                     fig, ax = get_2d_ax(; title=title)
+                     ax_was_nothing = true
+                 else
+                     ax_was_nothing = false
                  end
 
                  x = $dim2_grid
@@ -2112,10 +2292,18 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
                      y = y[$idim1]
                  end
                  fig = animate_2d(x, y, data; xlabel="$($dim2_str)",
-                                  ylabel="$($dim1_str)", title=title,
-                                  frame_index=frame_index, ax=ax,
+                                  ylabel="$($dim1_str)", frame_index=frame_index, ax=ax,
                                   colorbar_place=colorbar_place, colormap=colormap,
                                   kwargs...)
+
+                 if input.show_element_boundaries
+                     element_boundary_positions = run_info.$dim2.grid[begin:run_info.$dim2.ngrid-1:end]
+                     vlines!(ax, element_boundary_positions, color=:white, alpha=0.5)
+                 end
+                 if input.show_element_boundaries
+                     element_boundary_positions = run_info.$dim1.grid[begin:run_info.$dim1.ngrid-1:end]
+                     hlines!(ax, element_boundary_positions, color=:white, alpha=0.5)
+                 end
 
                  if frame_index === nothing
                      if outfile === nothing
@@ -2139,8 +2327,8 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
 end
 
 """
-    get_1d_ax(n=nothing; title=nothing, yscale=nothing, get_legend_place=nothing,
-              kwargs...)
+    get_1d_ax(n=nothing; title=nothing, subtitles=nothing, yscale=nothing,
+              get_legend_place=nothing, kwargs...)
 
 Create a new `Figure` `fig` and `Axis` `ax` intended for 1d plots.
 
@@ -2159,10 +2347,13 @@ increased in proportion to `n`.
 `get_legend_place` is set, `(fig, ax, legend_place)` is returned where `legend_place` is a
 `GridPosition` (if `n=nothing`) or a Tuple of `n` `GridPosition`s.
 
+When `n` is passed, `subtitles` can be passed a Tuple of length `n` which will be used to
+set a subtitle for each `Axis` in `ax`.
+
 Extra `kwargs` are passed to the `Axis()` constructor.
 """
-function get_1d_ax(n=nothing; title=nothing, yscale=nothing, get_legend_place=nothing,
-                   kwargs...)
+function get_1d_ax(n=nothing; title=nothing, subtitles=nothing, yscale=nothing,
+                   get_legend_place=nothing, kwargs...)
     valid_legend_places = (nothing, :left, :right, :above, :below)
     if get_legend_place ∉ valid_legend_places
         error("get_legend_place=$get_legend_place is not one of $valid_legend_places")
@@ -2196,19 +2387,44 @@ function get_1d_ax(n=nothing; title=nothing, yscale=nothing, get_legend_place=no
         end
 
         if get_legend_place === :left
-            ax = [Axis(plot_layout[1,2*i]; kwargs...) for i in 1:n]
+            if subtitles === nothing
+                ax = [Axis(plot_layout[1,2*i]; kwargs...) for i in 1:n]
+            else
+                ax = [Axis(plot_layout[1,2*i]; title=st, kwargs...)
+                      for (i,st) in zip(1:n, subtitles)]
+            end
             legend_place = [plot_layout[1,2*i-1] for i in 1:n]
         elseif get_legend_place === :right
-            ax = [Axis(plot_layout[1,2*i-1]; kwargs...) for i in 1:n]
+            if subtitles === nothing
+                ax = [Axis(plot_layout[1,2*i-1]; kwargs...) for i in 1:n]
+            else
+                ax = [Axis(plot_layout[1,2*i-1]; title=st, kwargs...)
+                      for (i,st) in zip(1:n, subtitles)]
+            end
             legend_place = [plot_layout[1,2*i] for i in 1:n]
         elseif get_legend_place === :above
-            ax = [Axis(plot_layout[2,i]; kwargs...) for i in 1:n]
+            if subtitles === nothing
+                ax = [Axis(plot_layout[2,i]; kwargs...) for i in 1:n]
+            else
+                ax = [Axis(plot_layout[2,i]; title=st, kwargs...)
+                      for (i,st) in zip(1:n, subtitles)]
+            end
             legend_place = [plot_layout[1,i] for i in 1:n]
         elseif get_legend_place === :below
-            ax = [Axis(plot_layout[1,i]; kwargs...) for i in 1:n]
+            if subtitles === nothing
+                ax = [Axis(plot_layout[1,i]; kwargs...) for i in 1:n]
+            else
+                ax = [Axis(plot_layout[1,i]; title=st, kwargs...)
+                      for (i,st) in zip(1:n, subtitles)]
+            end
             legend_place = [plot_layout[2,i] for i in 1:n]
         else
-            ax = [Axis(plot_layout[1,i]; kwargs...) for i in 1:n]
+            if subtitles === nothing
+                ax = [Axis(plot_layout[1,i]; kwargs...) for i in 1:n]
+            else
+                ax = [Axis(plot_layout[1,i]; title=st, kwargs...)
+                      for (i,st) in zip(1:n, subtitles)]
+            end
         end
     end
 
@@ -2220,7 +2436,7 @@ function get_1d_ax(n=nothing; title=nothing, yscale=nothing, get_legend_place=no
 end
 
 """
-    get_2d_ax(n=nothing; title=nothing, kwargs...)
+    get_2d_ax(n=nothing; title=nothing, subtitles=nothing, kwargs...)
 
 Create a new `Figure` `fig` and `Axis` `ax` intended for 2d plots.
 
@@ -2233,9 +2449,12 @@ If a number of axes `n` is passed, then `ax` is a `Vector{Axis}` and `colorbar_p
 `Vector{GridPosition}` of length `n` (even if `n` is 1). The axes are created in a
 horizontal row, and the width of the figure is increased in proportion to `n`.
 
+When `n` is passed, `subtitles` can be passed a Tuple of length `n` which will be used to
+set a subtitle for each `Axis` in `ax`.
+
 Extra `kwargs` are passed to the `Axis()` constructor.
 """
-function get_2d_ax(n=nothing; title=nothing, kwargs...)
+function get_2d_ax(n=nothing; title=nothing, subtitles=nothing, kwargs...)
     if n == nothing
         fig = Figure(resolution=(600, 400))
         if title !== nothing
@@ -2258,7 +2477,12 @@ function get_2d_ax(n=nothing; title=nothing, kwargs...)
         else
             plot_layout = fig[1,1] = GridLayout()
         end
-        ax = [Axis(plot_layout[1,2*i-1]; kwargs...) for i in 1:n]
+        if subtitles === nothing
+            ax = [Axis(plot_layout[1,2*i-1]; kwargs...) for i in 1:n]
+        else
+            ax = [Axis(plot_layout[1,2*i-1]; title=st, kwargs...)
+                  for (i,st) in zip(1:n, subtitles)]
+        end
         colorbar_place = [plot_layout[1,2*i] for i in 1:n]
     end
 
@@ -2310,8 +2534,13 @@ function plot_1d(xcoord, data; ax=nothing, xlabel=nothing, ylabel=nothing, title
         ax.yscale = yscale
     end
 
-    # Use transform to allow user to do something like data = abs.(data)
-    data = transform.(data)
+    if transform !== identity
+        # Use transform to allow user to do something like data = abs.(data)
+        # Don't actually apply identity transform in case this function is called with
+        # `data` being a Makie Observable (in which case transform.(data) would be an
+        # error).
+        data = transform.(data)
+    end
 
     l = lines!(ax, xcoord, data; kwargs...)
 
@@ -2348,6 +2577,10 @@ standard Makie mechanism of creating a struct that modifies the colormap. For ex
 `Reverse("deep")` can be passed as `"reverse_deep"`. This is useful so that these extra
 colormaps can be specified in an input file, but is not needed for interactive use.
 
+When `xcoord` and `ycoord` are both one-dimensional, uses Makie's `heatmap!()` function
+for the plot. If either or both of `xcoord` and `ycoord` are two-dimensional, instead uses
+[`irregular_heatmap!`](@ref).
+
 Other `kwargs` are passed to Makie's `heatmap!()` function.
 
 If `ax` is not passed, returns the `Figure`, otherwise returns the object returned by
@@ -2376,14 +2609,42 @@ function plot_2d(xcoord, ycoord, data; ax=nothing, colorbar_place=nothing, xlabe
         kwargs = tuple(kwargs..., :colorscale=>colorscale)
     end
 
-    # Use transform to allow user to do something like data = abs.(data)
-    data = transform.(data)
+    if transform !== identity
+        # Use transform to allow user to do something like data = abs.(data)
+        # Don't actually apply identity transform in case this function is called with
+        # `data` being a Makie Observable (in which case transform.(data) would be an
+        # error).
+        data = transform.(data)
+    end
 
     # Convert grid point values to 'cell face' values for heatmap
-    xcoord = grid_points_to_faces(xcoord)
-    ycoord = grid_points_to_faces(ycoord)
+    if xcoord isa Observable
+        xcoord = lift(grid_points_to_faces, xcoord)
+    else
+        xcoord = grid_points_to_faces(xcoord)
+    end
+    if ycoord isa Observable
+        ycoord = lift(grid_points_to_faces, ycoord)
+    else
+        ycoord = grid_points_to_faces(ycoord)
+    end
 
-    hm = heatmap!(ax, xcoord, ycoord, data; kwargs...)
+    if xcoord isa Observable
+        ndims_x = ndims(xcoord.val)
+    else
+        ndims_x = ndims(xcoord)
+    end
+    if ycoord isa Observable
+        ndims_y = ndims(ycoord.val)
+    else
+        ndims_y = ndims(ycoord)
+    end
+    if ndims_x == 1 && ndims_y == 1
+        hm = heatmap!(ax, xcoord, ycoord, data; colormap=colormap, kwargs...)
+    else
+        hm = irregular_heatmap!(ax, xcoord, ycoord, data; colormap=colormap, kwargs...)
+    end
+
     if colorbar_place === nothing
         println("Warning: colorbar_place argument is required to make a color bar")
     else
@@ -2525,6 +2786,10 @@ standard Makie mechanism of creating a struct that modifies the colormap. For ex
 `Reverse("deep")` can be passed as `"reverse_deep"`. This is useful so that these extra
 colormaps can be specified in an input file, but is not needed for interactive use.
 
+When `xcoord` and `ycoord` are both one-dimensional, uses Makie's `heatmap!()` function
+for the plot. If either or both of `xcoord` and `ycoord` are two-dimensional, instead uses
+[`irregular_heatmap!`](@ref).
+
 Other `kwargs` are passed to Makie's `heatmap!()` function.
 
 If `ax` is not passed, returns the `Figure`, otherwise returns the object returned by
@@ -2537,7 +2802,7 @@ function animate_2d(xcoord, ycoord, data; frame_index=nothing, ax=nothing, fig=n
     colormap = parse_colormap(colormap)
 
     if ax === nothing
-        fig, ax, colorbar_place = get_2d_ax()
+        fig, ax, colorbar_place = get_2d_ax(title=title)
     end
     if frame_index === nothing
         ind = Observable(1)
@@ -2549,9 +2814,6 @@ function animate_2d(xcoord, ycoord, data; frame_index=nothing, ax=nothing, fig=n
     end
     if ylabel !== nothing
         ax.ylabel = ylabel
-    end
-    if title !== nothing
-        ax.title = title
     end
     if colorscale !== nothing
         kwargs = tuple(kwargs..., :colorscale=>colorscale)
@@ -2567,7 +2829,11 @@ function animate_2d(xcoord, ycoord, data; frame_index=nothing, ax=nothing, fig=n
         data = transform.(data)
         heatmap_data = @lift(@view data[:,:,$ind])
     end
-    hm = heatmap!(ax, xcoord, ycoord, heatmap_data; colormap=colormap, kwargs...)
+    if ndims(xcoord) == 1 && ndims(ycoord) == 1
+        hm = heatmap!(ax, xcoord, ycoord, heatmap_data; colormap=colormap, kwargs...)
+    else
+        hm = irregular_heatmap!(ax, xcoord, ycoord, heatmap_data; colormap=colormap, kwargs...)
+    end
     Colorbar(colorbar_place, hm)
 
     if outfile !== nothing
@@ -2645,6 +2911,224 @@ Additional `kwargs` are passed to the `Legend()` constructor.
 """
 function put_legend_right(fig, ax; kwargs...)
     return Legend(fig[end,end+1], ax; kwargs...)
+end
+
+"""
+    curvilinear_grid_mesh(xs, ys, zs, colors)
+
+Tesselates the grid defined by `xs` and `ys` in order to form a mesh with per-face coloring
+given by `colors`.
+
+The grid defined by `xs` and `ys` must have dimensions `(nx, ny) == size(colors) .+ 1`, as
+is the case for heatmap/image.
+
+Code from: https://github.com/MakieOrg/Makie.jl/issues/742#issuecomment-1415809653
+"""
+function curvilinear_grid_mesh(xs, ys, zs, colors)
+    if zs isa Observable
+        nx, ny = size(zs.val)
+    else
+        nx, ny = size(zs)
+    end
+    if colors isa Observable
+        ni, nj = size(colors.val)
+        eltype_colors = eltype(colors.val)
+    else
+        ni, nj = size(colors)
+        eltype_colors = eltype(colors)
+    end
+    @assert (nx == ni+1) & (ny == nj+1) "Expected nx, ny = ni+1, nj+1; got nx=$nx, ny=$ny, ni=$ni, nj=$nj.  nx/y are size(zs), ni/j are size(colors)."
+    if xs isa Observable && ys isa Observable && zs isa Observable
+        input_points_vec = lift((x, y, z)->Makie.matrix_grid(identity, x, y, z), xs, ys, zs)
+    elseif xs isa Observable && ys isa Observable
+        input_points_vec = lift((x, y)->Makie.matrix_grid(identity, x, y, zs), xs, ys)
+    elseif ys isa Observable && zs isa Observable
+        input_points_vec = lift((y, z)->Makie.matrix_grid(identity, xs, y, z), ys, zs)
+    elseif xs isa Observable && zs isa Observable
+        input_points_vec = lift((x, z)->Makie.matrix_grid(identity, x, ys, z), xs, zs)
+    elseif xs isa Observable
+        input_points_vec = lift(x->Makie.matrix_grid(identity, x, ys, zs), xs)
+    elseif ys isa Observable
+        input_points_vec = lift(y->Makie.matrix_grid(identity, xs, y, zs), ys)
+    elseif zs isa Observable
+        input_points_vec = lift(z->Makie.matrix_grid(identity, xs, ys, z), zs)
+    else
+        input_points_vec = Makie.matrix_grid(identity, xs, ys, zs)
+    end
+    if input_points_vec isa Observable
+        input_points = lift(x->reshape(x, (ni, nj) .+ 1), input_points_vec)
+    else
+        input_points = reshape(input_points_vec, (ni, nj) .+ 1)
+    end
+
+    n_input_points = (ni + 1) * (nj + 1)
+
+    function get_triangle_points(input_points)
+        triangle_points = Vector{Point3f}()
+        sizehint!(triangle_points, n_input_points * 2 * 3)
+        @inbounds for j in 1:nj
+            for i in 1:ni
+                # push two triangles to make a square
+                # first triangle
+                push!(triangle_points, input_points[i, j])
+                push!(triangle_points, input_points[i+1, j])
+                push!(triangle_points, input_points[i+1, j+1])
+                # second triangle
+                push!(triangle_points, input_points[i+1, j+1])
+                push!(triangle_points, input_points[i, j+1])
+                push!(triangle_points, input_points[i, j])
+            end
+        end
+        return triangle_points
+    end
+    if input_points isa Observable
+        triangle_points = lift(get_triangle_points, input_points)
+    else
+        triangle_points = get_triangle_points(input_points)
+    end
+
+    function get_triangle_colors(colors)
+        triangle_colors = Vector{eltype_colors}()
+        sizehint!(triangle_colors, n_input_points * 2 * 3)
+        @inbounds for j in 1:nj
+            for i in 1:ni
+                # push two triangles to make a square
+                # first triangle
+                push!(triangle_colors, colors[i, j]); push!(triangle_colors, colors[i, j]); push!(triangle_colors, colors[i, j])
+                # second triangle
+                push!(triangle_colors, colors[i, j]); push!(triangle_colors, colors[i, j]); push!(triangle_colors, colors[i, j])
+            end
+        end
+        return triangle_colors
+    end
+    if colors isa Observable
+        triangle_colors = lift(get_triangle_colors, colors)
+    else
+        triangle_colors = get_triangle_colors(colors)
+    end
+
+    # Triangle faces is a constant vector of indices. Note this depends on the loop
+    # structure here being the same as that in get_triangle_points() and
+    # get_triangle_colors()
+    triangle_faces = Vector{CairoMakie.Makie.GeometryBasics.TriangleFace{UInt32}}()
+    sizehint!(triangle_faces, n_input_points * 2)
+    point_ind = 1
+    @inbounds for j in 1:nj
+        for i in 1:ni
+            # push two triangles to make a square
+            # first triangle
+            push!(triangle_faces, CairoMakie.Makie.GeometryBasics.TriangleFace{UInt32}((point_ind, point_ind+1, point_ind+2)))
+            point_ind += 3
+            # second triangle
+            push!(triangle_faces, CairoMakie.Makie.GeometryBasics.TriangleFace{UInt32}((point_ind, point_ind+1, point_ind+2)))
+            point_ind += 3
+        end
+    end
+
+    return triangle_points, triangle_faces, triangle_colors
+end
+
+"""
+    irregular_heatmap(xs, ys, zs; kwargs...)
+
+Plot a heatmap where `xs` and `ys` are allowed to define irregularly spaced, 2d grids.
+`zs` gives the value in each cell of the grid.
+
+The grid defined by `xs` and `ys` must have dimensions `(nx, ny) == size(zs) .+ 1`, as
+is the case for heatmap/image.
+
+`xs` be an array of size (nx,ny) or a vector of size (nx).
+
+`ys` be an array of size (nx,ny) or a vector of size (ny).
+
+`kwargs` are passed to Makie's `mesh()` function.
+
+Code adapted from: https://github.com/MakieOrg/Makie.jl/issues/742#issuecomment-1415809653
+"""
+function irregular_heatmap(xs, ys, zs; kwargs...)
+    fig = Figure()
+    ax = Axis(fig[1,1])
+    hm = irregular_heatmap!(ax, xs, ys, zs; kwargs...)
+
+    return fig, ax, hm
+end
+
+"""
+    irregular_heatmap!(ax, xs, ys, zs; kwargs...)
+
+Plot a heatmap onto the Axis `ax` where `xs` and `ys` are allowed to define irregularly
+spaced, 2d grids.  `zs` gives the value in each cell of the grid.
+
+The grid defined by `xs` and `ys` must have dimensions `(nx, ny) == size(zs) .+ 1`, as
+is the case for heatmap/image.
+
+`xs` be an array of size (nx,ny) or a vector of size (nx).
+
+`ys` be an array of size (nx,ny) or a vector of size (ny).
+
+`kwargs` are passed to Makie's `mesh()` function.
+
+Code adapted from: https://github.com/MakieOrg/Makie.jl/issues/742#issuecomment-1415809653
+"""
+function irregular_heatmap!(ax, xs, ys, zs; kwargs...)
+    if xs isa Observable
+        ndims_x = ndims(xs.val)
+        if ndims_x == 1
+            nx = length(xs.val)
+        else
+            nx = size(xs.val, 1)
+        end
+    else
+        ndims_x = ndims(xs)
+        if ndims(xs) == 1
+            nx = length(xs)
+        else
+            nx = size(xs, 1)
+        end
+    end
+    if ys isa Observable
+        ndims_y = ndims(ys.val)
+        if ndims_y == 1
+            ny = length(ys.val)
+        else
+            ny = size(ys.val, 2)
+        end
+    else
+        ndims_y = ndims(ys)
+        if ndims_y == 1
+            ny = length(ys)
+        else
+            ny = size(ys, 2)
+        end
+    end
+
+    if zs isa Observable
+        ni, nj = size(zs.val)
+    else
+        ni, nj = size(zs)
+    end
+    @assert (nx == ni+1) & (ny == nj+1) "Expected nx, ny = ni+1, nj+1; got nx=$nx, ny=$ny, ni=$ni, nj=$nj.  nx/y are size(xs)/size(ys), ni/j are size(zs)."
+
+    if ndims_x == 1
+        # Copy to an array of size (nx,ny)
+        if xs isa Observable
+            xs = lift(x->repeat(x, 1, ny), x)
+        else
+            xs = repeat(xs, 1, ny)
+        end
+    end
+    if ndims_y == 1
+        # Copy to an array of size (nx,ny)
+        if ys isa Observable
+            ys = lift(x->repeat(x', nx, 1), ys)
+        else
+            ys = repeat(ys', nx, 1)
+        end
+    end
+
+    vertices, faces, colors = curvilinear_grid_mesh(xs, ys, zeros(nx, ny), zs)
+
+    return mesh!(ax, vertices, faces; color = colors, shading = false, kwargs...)
 end
 
 """
@@ -2950,6 +3434,9 @@ end
 
 """
     grid_points_to_faces(coord::AbstractVector)
+    grid_points_to_faces(coord::Observable{T} where T <: AbstractVector)
+    grid_points_to_faces(coord::AbstractMatrix)
+    grid_points_to_faces(coord::Observable{T} where T <: AbstractMatrix)
 
 Turn grid points in `coord` into 'cell faces'.
 
@@ -2957,6 +3444,8 @@ Returns `faces`, which has a length one greater than `coord`. The first and last
 `faces` are the first and last values of `coord`. The intermediate values are the mid
 points between grid points.
 """
+function grid_points_to_faces end
+
 function grid_points_to_faces(coord::AbstractVector)
     n = length(coord)
     faces = allocate_float(n+1)
@@ -2965,6 +3454,66 @@ function grid_points_to_faces(coord::AbstractVector)
         faces[i] = 0.5*(coord[i-1] + coord[i])
     end
     faces[n+1] = coord[n]
+
+    return faces
+end
+
+function grid_points_to_faces(coord::Observable{T} where T <: AbstractVector)
+    n = length(coord.val)
+    faces = allocate_float(n+1)
+    faces[1] = coord.val[1]
+    for i ∈ 2:n
+        faces[i] = 0.5*(coord.val[i-1] + coord.val[i])
+    end
+    faces[n+1] = coord.val[n]
+
+    return faces
+end
+
+function grid_points_to_faces(coord::AbstractMatrix)
+    ni, nj = size(coord)
+    faces = allocate_float(ni+1, nj+1)
+    faces[1,1] = coord[1,1]
+    for j ∈ 2:nj
+        faces[1,j] = 0.5*(coord[1,j-1] + coord[1,j])
+    end
+    faces[1,nj+1] = coord[1,nj]
+    for i ∈ 2:ni
+        faces[i,1] = 0.5*(coord[i-1,1] + coord[i,1])
+        for j ∈ 2:nj
+            faces[i,j] = 0.25*(coord[i-1,j-1] + coord[i-1,j] + coord[i,j-1] + coord[i,j])
+        end
+        faces[i,nj+1] = 0.5*(coord[i-1,nj] + coord[i,nj])
+    end
+    faces[ni+1,1] = coord[ni,1]
+    for j ∈ 2:nj
+        faces[ni+1,j] = 0.5*(coord[ni,j-1] + coord[ni,j])
+    end
+    faces[ni+1,nj+1] = coord[ni,nj]
+
+    return faces
+end
+
+function grid_points_to_faces(coord::Observable{T} where T <: AbstractMatrix)
+    ni, nj = size(coord.val)
+    faces = allocate_float(ni+1, nj+1)
+    faces[1,1] = coord.val[1,1]
+    for j ∈ 2:nj
+        faces[1,j] = 0.5*(coord.val[1,j-1] + coord.val[1,j])
+    end
+    faces[1,nj+1] = coord.val[1,nj]
+    for i ∈ 2:ni
+        faces[i,1] = 0.5*(coord.val[i-1,1] + coord.val[i,1])
+        for j ∈ 2:nj
+            faces[i,j] = 0.25*(coord.val[i-1,j-1] + coord.val[i-1,j] + coord.val[i,j-1] + coord.val[i,j])
+        end
+        faces[i,nj+1] = 0.5*(coord.val[i-1,nj] + coord.val[i,nj])
+    end
+    faces[ni+1,1] = coord.val[ni,1]
+    for j ∈ 2:nj
+        faces[ni+1,j] = 0.5*(coord.val[ni,j-1] + coord.val[ni,j])
+    end
+    faces[ni+1,nj+1] = coord.val[ni,nj]
 
     return faces
 end
@@ -3151,6 +3700,637 @@ function calculate_steady_state_residual(run_info, variable_name; is=1, data=not
 end
 
 """
+    plot_f_unnorm_vs_vpa(run_info; input=nothing, neutral=false, it=nothing, is=1,
+                         iz=nothing, fig=nothing, ax=nothing, outfile=nothing,
+                         yscale=identity, transform=identity, kwargs...)
+
+Plot an unnormalized distribution function against \$v_\\parallel\$ at a fixed z.
+
+This function is only needed for moment-kinetic runs. These are currently only supported
+for the 1D1V case.
+
+The information for the runs to plot is passed in `run_info` (as returned by
+[`get_run_info`](@ref)). If `run_info` is a Tuple, comparison plots are made where plots
+from the different runs are overlayed on the same axis.
+
+By default plots the ion distribution function. If `neutrals=true` is passed, plots the
+neutral distribution function instead.
+
+`is` selects which species to analyse.
+
+`it` and `iz` specify the indices of the time- and z-points to choose. By default they are
+taken from `input`.
+
+If `input` is not passed, it is taken from `input_dict_dfns["f"]`.
+
+The data needed will be loaded from file.
+
+If `outfile` is given, the plot will be saved to a file with that name. The suffix
+determines the file type.
+
+When `run_info` is not a Tuple, an Axis can be passed to `ax` to have the plot added to
+`ax`. When `ax` is passed, if `outfile` is passed to save the plot, then the Figure
+containing `ax` must be passed to `fig`.
+
+`yscale` can be used to set the scaling function for the y-axis. Options are `identity`,
+`log`, `log2`, `log10`, `sqrt`, `Makie.logit`, `Makie.pseudolog10` and `Makie.Symlog10`.
+`transform` is a function that is applied element-by-element to the data before it is
+plotted. For example when using a log scale on data that may contain some negative values
+it might be useful to pass `transform=abs` (to plot the absolute value) or
+`transform=positive_or_nan` (to ignore any negative or zero values).
+
+Any extra `kwargs` are passed to [`plot_1d`](@ref).
+"""
+function plot_f_unnorm_vs_vpa end
+
+function plot_f_unnorm_vs_vpa(run_info::Tuple; neutral=false, outfile=nothing, kwargs...)
+    try
+        n_runs = length(run_info)
+
+        ylabel = neutral ? L"f_{n,\mathrm{unnormalized}}" : L"f_{i,\mathrm{unnormalized}}"
+        fig, ax = get_1d_ax(xlabel=L"v_\parallel", ylabel=ylabel)
+
+        for ri ∈ run_info
+            plot_f_unnorm_vs_vpa(ri; neutral=neutral, ax=ax, kwargs...)
+        end
+
+        if n_runs > 1
+            put_legend_above(fig, ax)
+        end
+
+        if outfile !== nothing
+            save(outfile, fig)
+        end
+
+        return fig
+    catch e
+        println("Error in plot_f_unnorm_vs_vpa(). Error was ", e)
+    end
+end
+
+function plot_f_unnorm_vs_vpa(run_info; input=nothing, neutral=false, it=nothing, is=1,
+                              iz=nothing, fig=nothing, ax=nothing, outfile=nothing,
+                              transform=identity, kwargs...)
+    if input === nothing
+        if neutral
+            input = Dict_to_NamedTuple(input_dict_dfns["f_neutral"])
+        else
+            input = Dict_to_NamedTuple(input_dict_dfns["f"])
+        end
+    elseif input isa AbstractDict
+        input = Dict_to_NamedTuple(input)
+    end
+
+    if it == nothing
+        it = input.it0
+    end
+    if iz == nothing
+        iz = input.iz0
+    end
+
+    if ax === nothing
+        ylabel = neutral ? L"f_{n,\mathrm{unnormalized}}" : L"f_{i,\mathrm{unnormalized}}"
+        fig, ax = get_1d_ax(xlabel=L"v_\parallel", ylabel=ylabel)
+    end
+
+    if neutral
+        f = postproc_load_variable(run_info, "f_neutral"; it=it, is=is, ir=input.ir0,
+                                   iz=iz, ivzeta=input.ivzeta0, ivr=input.ivr0)
+        density = postproc_load_variable(run_info, "density_neutral"; it=it, is=is,
+                                         ir=input.ir0, iz=iz)
+        upar = postproc_load_variable(run_info, "uz_neutral"; it=it, is=is, ir=input.ir0,
+                                      iz=iz)
+        vth = postproc_load_variable(run_info, "thermal_speed_neutral"; it=it, is=is,
+                                     ir=input.ir0, iz=iz)
+    else
+        f = postproc_load_variable(run_info, "f"; it=it, is=is, ir=input.ir0, iz=iz,
+                                   ivperp=input.ivperp0)
+        density = postproc_load_variable(run_info, "density"; it=it, is=is, ir=input.ir0,
+                                         iz=iz)
+        upar = postproc_load_variable(run_info, "parallel_flow"; it=it, is=is, ir=input.ir0, iz=iz)
+        vth = postproc_load_variable(run_info, "thermal_speed"; it=it, is=is,
+                                     ir=input.ir0, iz=iz)
+    end
+
+    f_unnorm, dzdt = get_unnormalised_f_dzdt_1d(f, run_info.vpa.grid, density, upar, vth,
+                                                run_info.evolve_density,
+                                                run_info.evolve_upar,
+                                                run_info.evolve_ppar)
+
+    f_unnorm = transform.(f_unnorm)
+
+    l = plot_1d(dzdt, f_unnorm; ax=ax, label=run_info.run_name, kwargs...)
+
+    if outfile !== nothing
+        if fig === nothing
+            error("When ax is passed, fig must also be passed to save the plot using "
+                  * "outfile")
+        end
+        save(outfile, fig)
+    end
+
+    if fig !== nothing
+        return fig
+    else
+        return l
+    end
+end
+
+"""
+    plot_f_unnorm_vs_vpa_z(run_info; input=nothing, neutral=false, it=nothing, is=1,
+                           fig=nothing, ax=nothing, outfile=nothing, yscale=identity,
+                           transform=identity, kwargs...)
+
+Plot unnormalized distribution function against \$v_\\parallel\$ and z.
+
+This function is only needed for moment-kinetic runs. These are currently only supported
+for the 1D1V case.
+
+The information for the runs to plot is passed in `run_info` (as returned by
+[`get_run_info`](@ref)). If `run_info` is a Tuple, comparison plots are made where plots
+from the different runs are displayed in a horizontal row.
+
+By default plots the ion distribution function. If `neutrals=true` is passed, plots the
+neutral distribution function instead.
+
+`is` selects which species to analyse.
+
+`it` specifies the time-index to choose. By default it is taken from `input`.
+
+If `input` is not passed, it is taken from `input_dict_dfns["f"]`.
+
+The data needed will be loaded from file.
+
+If `outfile` is given, the plot will be saved to a file with that name. The suffix
+determines the file type.
+
+When `run_info` is not a Tuple, an Axis can be passed to `ax` to have the plot created in
+`ax`. When `ax` is passed, if `outfile` is passed to save the plot, then the Figure
+containing `ax` must be passed to `fig`.
+
+`yscale` can be used to set the scaling function for the y-axis. Options are `identity`,
+`log`, `log2`, `log10`, `sqrt`, `Makie.logit`, `Makie.pseudolog10` and `Makie.Symlog10`.
+`transform` is a function that is applied element-by-element to the data before it is
+plotted. For example when using a log scale on data that may contain some negative values
+it might be useful to pass `transform=abs` (to plot the absolute value) or
+`transform=positive_or_nan` (to ignore any negative or zero values).
+
+Any extra `kwargs` are passed to [`plot_2d`](@ref).
+"""
+function plot_f_unnorm_vs_vpa_z end
+
+function plot_f_unnorm_vs_vpa_z(run_info::Tuple; neutral=false, outfile=nothing,
+                                kwargs...)
+    try
+        n_runs = length(run_info)
+        title = neutral ? L"f_{n,\mathrm{unnormalized}}" : L"f_{i,\mathrm{unnormalized}}"
+        fig, axes, colorbar_places =
+            get_2d_ax(n_runs; title=title, xlabel=L"v_\parallel", ylabel=L"z")
+
+        for (ri, ax, colorbar_place) ∈ zip(run_info, axes, colorbar_places)
+            plot_f_unnorm_vs_vpa_z(ri; neutral=neutral, ax=ax, colorbar_place=colorbar_place,
+                                   kwargs...)
+        end
+
+        if outfile !== nothing
+            save(outfile, fig)
+        end
+
+        return fig
+    catch e
+        println("Error in plot_f_unnorm_vs_vpa_z(). Error was ", e)
+    end
+end
+
+function plot_f_unnorm_vs_vpa_z(run_info; input=nothing, neutral=false, it=nothing, is=1,
+                                fig=nothing, ax=nothing, colorbar_place=nothing,
+                                outfile=nothing, transform=identity, kwargs...)
+    if input === nothing
+        if neutral
+            input = Dict_to_NamedTuple(input_dict_dfns["f_neutral"])
+        else
+            input = Dict_to_NamedTuple(input_dict_dfns["f"])
+        end
+    elseif input isa AbstractDict
+        input = Dict_to_NamedTuple(input)
+    end
+
+    if it == nothing
+        it = input.it0
+    end
+
+    if ax === nothing
+        title = neutral ? L"f_{n,\mathrm{unnormalized}}" : L"f_{i,\mathrm{unnormalized}}"
+        fig, ax, colorbar_place = get_2d_ax(title=title, xlabel=L"v_\parallel", ylabel=L"z")
+    else
+        ax.title = run_info.run_name
+    end
+
+    if neutral
+        f = postproc_load_variable(run_info, "f_neutral"; it=it, is=is, ir=input.ir0,
+                                   ivzeta=input.ivzeta0, ivr=input.ivr0)
+        density = postproc_load_variable(run_info, "density_neutral"; it=it, is=is,
+                                         ir=input.ir0)
+        upar = postproc_load_variable(run_info, "uz_neutral"; it=it, is=is, ir=input.ir0)
+        vth = postproc_load_variable(run_info, "thermal_speed_neutral"; it=it, is=is,
+                                     ir=input.ir0)
+        vpa_grid = run_info.vz.grid
+    else
+        f = postproc_load_variable(run_info, "f"; it=it, is=is, ir=input.ir0,
+                                   ivperp=input.ivperp0)
+        density = postproc_load_variable(run_info, "density"; it=it, is=is, ir=input.ir0)
+        upar = postproc_load_variable(run_info, "parallel_flow"; it=it, is=is, ir=input.ir0)
+        vth = postproc_load_variable(run_info, "thermal_speed"; it=it, is=is,
+                                     ir=input.ir0)
+        vpa_grid = run_info.vpa.grid
+    end
+
+    f_unnorm, z, dzdt = get_unnormalised_f_coords_2d(f, run_info.z.grid,
+                                                     vpa_grid, density, upar,
+                                                     vth, run_info.evolve_density,
+                                                     run_info.evolve_upar,
+                                                     run_info.evolve_ppar)
+
+    f_unnorm = transform.(f_unnorm)
+
+    # Rasterize the plot, otherwise the output files are very large
+    hm = plot_2d(dzdt, z, f_unnorm; ax=ax, colorbar_place=colorbar_place, rasterize=true,
+                 kwargs...)
+
+    if outfile !== nothing
+        if fig === nothing
+            error("When ax is passed, fig must also be passed to save the plot using "
+                  * "outfile")
+        end
+        save(outfile, fig)
+    end
+
+    if fig !== nothing
+        return fig
+    else
+        return hm
+    end
+end
+
+"""
+    animate_f_unnorm_vs_vpa(run_info; input=nothing, neutral=false, is=1, iz=nothing,
+                            fig=nothing, ax=nothing, frame_index=nothing,
+                            outfile=nothing, yscale=identity, transform=identity,
+                            kwargs...)
+
+Plot an unnormalized distribution function against \$v_\\parallel\$ at a fixed z.
+
+This function is only needed for moment-kinetic runs. These are currently only supported
+for the 1D1V case.
+
+The information for the runs to animate is passed in `run_info` (as returned by
+[`get_run_info`](@ref)). If `run_info` is a Tuple, comparison plots are made where plots
+from the different runs are overlayed on the same axis.
+
+By default animates the ion distribution function. If `neutrals=true` is passed, animates
+the neutral distribution function instead.
+
+`is` selects which species to analyse.
+
+`it` and `iz` specify the indices of the time- and z-points to choose. By default they are
+taken from `input`.
+
+If `input` is not passed, it is taken from `input_dict_dfns["f"]`.
+
+The data needed will be loaded from file.
+
+`outfile` is required for animations unless `ax` is passed. The animation will be saved to
+a file named `outfile`.  The suffix determines the file type. If both `outfile` and `ax`
+are passed, then the `Figure` containing `ax` must be passed to `fig` to allow the
+animation to be saved.
+
+When `run_info` is not a Tuple, an Axis can be passed to `ax` to have the plot added to
+`ax`. When `ax` is passed, if `outfile` is passed to save the plot, then the Figure
+containing `ax` must be passed to `fig`.
+
+`yscale` can be used to set the scaling function for the y-axis. Options are `identity`,
+`log`, `log2`, `log10`, `sqrt`, `Makie.logit`, `Makie.pseudolog10` and `Makie.Symlog10`.
+`transform` is a function that is applied element-by-element to the data before it is
+plotted. For example when using a log scale on data that may contain some negative values
+it might be useful to pass `transform=abs` (to plot the absolute value) or
+`transform=positive_or_nan` (to ignore any negative or zero values).
+
+Any extra `kwargs` are passed to [`plot_1d`](@ref) (which is used to create the plot, as
+we have to handle time-varying coordinates so cannot use [`animate_1d`](@ref)).
+"""
+function animate_f_unnorm_vs_vpa end
+
+function animate_f_unnorm_vs_vpa(run_info::Tuple; neutral=false, outfile=nothing, kwargs...)
+    try
+        n_runs = length(run_info)
+
+        frame_index = Observable(1)
+
+        ylabel = neutral ? L"f_{n,\mathrm{unnormalized}}" : L"f_{i,\mathrm{unnormalized}}"
+        if length(run_info) == 1 || all(all(isapprox.(ri.time, run_info[1].time)) for ri ∈ run_info[2:end])
+            # All times are the same
+            title = lift(i->LaTeXString(string("t = ", run_info[1].time[i])), frame_index)
+        else
+            title = lift(i->LaTeXString(join((string("t", irun, " = ", ri.time[i])
+                                              for (irun,t) ∈ enumerate(run_info)), "; ")),
+                         frame_index)
+        end
+        fig, ax = get_1d_ax(xlabel=L"v_\parallel", ylabel=ylabel, title=title)
+
+        for ri ∈ run_info
+            animate_f_unnorm_vs_vpa(ri; neutral=neutral, ax=ax, frame_index=frame_index,
+                                    kwargs...)
+        end
+
+        if n_runs > 1
+            put_legend_above(fig, ax)
+        end
+
+        if outfile !== nothing
+            nt = minimum(ri.nt for ri ∈ run_info)
+            save_animation(fig, frame_index, nt, outfile)
+        end
+
+        return fig
+    catch e
+        println("Error in animate_f_unnorm_vs_vpa(). Error was ", e)
+    end
+end
+
+function animate_f_unnorm_vs_vpa(run_info; input=nothing, neutral=false, is=1, iz=nothing,
+                                 fig=nothing, ax=nothing, frame_index=nothing,
+                                 outfile=nothing, transform=identity, kwargs...)
+    if input === nothing
+        if neutral
+            input = Dict_to_NamedTuple(input_dict_dfns["f_neutral"])
+        else
+            input = Dict_to_NamedTuple(input_dict_dfns["f"])
+        end
+    elseif input isa AbstractDict
+        input = Dict_to_NamedTuple(input)
+    end
+
+    if iz == nothing
+        iz = input.iz0
+    end
+
+    if ax === nothing
+        frame_index = Observable(1)
+        title = lift(i->LaTeXString(string("t = ", run_info.time[i])), frame_index)
+        ylabel = neutral ? L"f_{n,\mathrm{unnormalized}}" : L"f_{i,\mathrm{unnormalized}}"
+        fig, ax = get_1d_ax(xlabel=L"v_\parallel", ylabel=ylabel, title=title)
+    end
+    if frame_index === nothing
+        error("Must pass an Observable to `frame_index` when passing `ax`.")
+    end
+
+    if neutral
+        f = VariableCache(run_info, "f_neutral", chunk_size_1d; it=nothing, is=is,
+                          ir=input.ir0, iz=iz, ivperp=nothing, ivpa=nothing,
+                          ivzeta=input.ivzeta0, ivr=input.ivr0, ivz=nothing)
+        density = postproc_load_variable(run_info, "density_neutral"; is=is, ir=input.ir0,
+                                         iz=iz)
+        upar = postproc_load_variable(run_info, "uz_neutral"; is=is, ir=input.ir0, iz=iz)
+        vth = postproc_load_variable(run_info, "thermal_speed_neutral"; is=is,
+                                     ir=input.ir0, iz=iz)
+    else
+        f = VariableCache(run_info, "f", chunk_size_2d; it=nothing, is=is, ir=input.ir0, iz=iz,
+                          ivperp=input.ivperp0, ivpa=nothing, ivzeta=nothing, ivr=nothing,
+                          ivz=nothing)
+        density = postproc_load_variable(run_info, "density"; is=is, ir=input.ir0, iz=iz)
+        upar = postproc_load_variable(run_info, "parallel_flow"; is=is, ir=input.ir0, iz=iz)
+        vth = postproc_load_variable(run_info, "thermal_speed"; is=is, ir=input.ir0, iz=iz)
+    end
+
+    # Get extrema of dzdt
+    dzdtmin = Inf
+    dzdtmax = -Inf
+    fmin = Inf
+    fmax = -Inf
+    for it ∈ 1:run_info.nt
+        this_dzdt = vpagrid_to_dzdt(run_info.vpa.grid, vth[it], upar[it],
+                                    run_info.evolve_ppar, run_info.evolve_upar)
+        this_dzdtmin, this_dzdtmax = extrema(this_dzdt)
+        dzdtmin = min(dzdtmin, this_dzdtmin)
+        dzdtmax = max(dzdtmax, this_dzdtmax)
+
+        this_f_unnorm = get_unnormalised_f_1d(get_cache_slice(f, it), density[it],
+                                              vth[it], run_info.evolve_density,
+                                              run_info.evolve_ppar)
+        this_fmin, this_fmax = NaNMath.extrema(transform(this_f_unnorm))
+        fmin = min(fmin, this_fmin)
+        fmax = max(fmax, this_fmax)
+    end
+    yheight = fmax - fmin
+    xwidth = dzdtmax - dzdtmin
+    limits!(ax, dzdtmin - 0.01*xwidth, dzdtmax + 0.01*xwidth,
+            fmin - 0.01*yheight, fmax + 0.01*yheight)
+
+    dzdt = @lift vpagrid_to_dzdt(run_info.vpa.grid, vth[$frame_index], upar[$frame_index],
+                                 run_info.evolve_ppar, run_info.evolve_upar)
+    f_unnorm = @lift transform.(get_unnormalised_f_1d(
+                                    get_cache_slice(f, $frame_index),
+                                    density[$frame_index], vth[$frame_index],
+                                    run_info.evolve_density, run_info.evolve_ppar))
+
+    l = plot_1d(dzdt, f_unnorm; ax=ax, label=run_info.run_name, kwargs...)
+
+    if outfile !== nothing
+        if fig === nothing
+            error("When ax is passed, fig must also be passed to save the plot using "
+                  * "outfile")
+        end
+        save_animation(fig, frame_index, run_info.nt, outfile)
+    end
+
+    if fig !== nothing
+        return fig
+    else
+        return l
+    end
+end
+
+"""
+    animate_f_unnorm_vs_vpa_z(run_info; input=nothing, neutral=false, is=1,
+                              fig=nothing, ax=nothing, frame_index=nothing,
+                              outfile=nothing, yscale=identity, transform=identity,
+                              kwargs...)
+
+Animate an unnormalized distribution function against \$v_\\parallel\$ and z.
+
+This function is only needed for moment-kinetic runs. These are currently only supported
+for the 1D1V case.
+
+The information for the runs to plot is passed in `run_info` (as returned by
+[`get_run_info`](@ref)). If `run_info` is a Tuple, comparison plots are made where plots
+from the different runs are displayed in a horizontal row.
+
+By default animates the ion distribution function. If `neutrals=true` is passed, animates
+the neutral distribution function instead.
+
+`is` selects which species to analyse.
+
+If `input` is not passed, it is taken from `input_dict_dfns["f"]`.
+
+The data needed will be loaded from file.
+
+`outfile` is required for animations unless `ax` is passed. The animation will be saved to
+a file named `outfile`.  The suffix determines the file type. If both `outfile` and `ax`
+are passed, then the `Figure` containing `ax` must be passed to `fig` to allow the
+animation to be saved.
+
+When `run_info` is not a Tuple, an Axis can be passed to `ax` to have the animation
+created in `ax`. When `ax` is passed, if `outfile` is passed to save the animation, then
+the Figure containing `ax` must be passed to `fig`.
+
+`yscale` can be used to set the scaling function for the y-axis. Options are `identity`,
+`log`, `log2`, `log10`, `sqrt`, `Makie.logit`, `Makie.pseudolog10` and `Makie.Symlog10`.
+`transform` is a function that is applied element-by-element to the data before it is
+plotted. For example when using a log scale on data that may contain some negative values
+it might be useful to pass `transform=abs` (to plot the absolute value) or
+`transform=positive_or_nan` (to ignore any negative or zero values).
+
+Any extra `kwargs` are passed to [`plot_2d`](@ref) (which is used to create the plot, as
+we have to handle time-varying coordinates so cannot use [`animate_2d`](@ref)).
+"""
+function animate_f_unnorm_vs_vpa_z end
+
+function animate_f_unnorm_vs_vpa_z(run_info::Tuple; neutral=false, outfile=nothing,
+                                   kwargs...)
+    try
+        n_runs = length(run_info)
+
+        frame_index = Observable(1)
+
+        var_name = neutral ? L"f_{n,\mathrm{unnormalized}}" : L"f_{i,\mathrm{unnormalized}}"
+        if length(run_info) > 1
+            title = var_name
+            subtitles = (lift(i->LaTeXString(string(ri.run_name, "\nt = ", ri.time[i])),
+                              frame_index)
+                         for ri ∈ run_info)
+        else
+            title = lift(i->LaTeXString(string(var_name, L",\;t = ",
+                                               run_info[1].time[i])),
+                         frame_index)
+            subtitles = nothing
+        end
+        fig, axes, colorbar_places = get_2d_ax(n_runs; title=title, subtitles=subtitles,
+                                               xlabel=L"v_\parallel", ylabel=L"z")
+
+        for (ri, ax, colorbar_place) ∈ zip(run_info, axes, colorbar_places)
+            animate_f_unnorm_vs_vpa_z(ri; neutral=neutral, ax=ax,
+                                      colorbar_place=colorbar_place, frame_index=frame_index,
+                                      kwargs...)
+        end
+
+        if outfile !== nothing
+            nt = minimum(ri.nt for ri ∈ run_info)
+            save_animation(fig, frame_index, nt, outfile)
+        end
+
+        return fig
+    catch e
+        println("Error in animate_f_unnorm_vs_vpa_z(). Error was ", e)
+    end
+end
+
+function animate_f_unnorm_vs_vpa_z(run_info; input=nothing, neutral=false, is=1,
+                                   fig=nothing, ax=nothing, colorbar_place=nothing,
+                                   frame_index=nothing, outfile=nothing,
+                                   transform=identity, kwargs...)
+    if input === nothing
+        if neutral
+            input = Dict_to_NamedTuple(input_dict_dfns["f_neutral"])
+        else
+            input = Dict_to_NamedTuple(input_dict_dfns["f"])
+        end
+    elseif input isa AbstractDict
+        input = Dict_to_NamedTuple(input)
+    end
+
+    if ax === nothing
+        frame_index = Observable(1)
+        var_name = neutral ? L"f_{n,\mathrm{unnormalized}}" : L"f_{i,\mathrm{unnormalized}}"
+        title = lift(i->LaTeXString(string(var_name, "\nt = ", run_info.time[i])),
+                     frame_index)
+        fig, ax, colorbar_place = get_2d_ax(title=title, xlabel=L"v_\parallel", ylabel=L"z")
+    end
+    if frame_index === nothing
+        error("Must pass an Observable to `frame_index` when passing `ax`.")
+    end
+
+    if neutral
+        f = VariableCache(run_info, "f_neutral", chunk_size_2d; it=nothing, is=is,
+                          ir=input.ir0, iz=nothing, ivperp=nothing, ivpa=nothing,
+                          ivzeta=input.ivzeta0, ivr=input.ivr0, ivz=nothing)
+        density = VariableCache(run_info, "density_neutral", chunk_size_1d; it=nothing,
+                                is=is, ir=input.ir0, iz=nothing, ivperp=nothing,
+                                ivpa=nothing, ivzeta=nothing, ivr=nothing, ivz=nothing)
+        upar = VariableCache(run_info, "uz_neutral", chunk_size_1d; it=nothing, is=is,
+                             ir=input.ir0, iz=nothing, ivperp=nothing, ivpa=nothing,
+                             ivzeta=nothing, ivr=nothing, ivz=nothing)
+        vth = VariableCache(run_info, "thermal_speed_neutral", chunk_size_1d; it=nothing,
+                            is=is, ir=input.ir0, iz=nothing, ivperp=nothing, ivpa=nothing,
+                            ivzeta=nothing, ivr=nothing, ivz=nothing)
+        vpa_grid = run_info.vz.grid
+    else
+        f = VariableCache(run_info, "f", chunk_size_2d; it=nothing, is=is, ir=input.ir0,
+                          iz=nothing, ivperp=input.ivperp0, ivpa=nothing, ivzeta=nothing,
+                          ivr=nothing, ivz=nothing)
+        density = VariableCache(run_info, "density", chunk_size_1d; it=nothing, is=is,
+                                ir=input.ir0, iz=nothing, ivperp=nothing, ivpa=nothing,
+                                ivzeta=nothing, ivr=nothing, ivz=nothing)
+        upar = VariableCache(run_info, "parallel_flow", chunk_size_1d; it=nothing, is=is,
+                             ir=input.ir0, iz=nothing, ivperp=nothing, ivpa=nothing,
+                             ivzeta=nothing, ivr=nothing, ivz=nothing)
+        vth = VariableCache(run_info, "thermal_speed", chunk_size_1d; it=nothing, is=is,
+                            ir=input.ir0, iz=nothing, ivperp=nothing, ivpa=nothing,
+                            ivzeta=nothing, ivr=nothing, ivz=nothing)
+        vpa_grid = run_info.vpa.grid
+    end
+
+    # Get extrema of dzdt
+    dzdtmin = Inf
+    dzdtmax = -Inf
+    for it ∈ 1:run_info.nt
+        this_dzdt = vpagrid_to_dzdt_2d(vpa_grid, get_cache_slice(vth, it),
+                                       get_cache_slice(upar, it), run_info.evolve_ppar,
+                                       run_info.evolve_upar)
+        this_dzdtmin, this_dzdtmax = extrema(this_dzdt)
+        dzdtmin = min(dzdtmin, this_dzdtmin)
+        dzdtmax = max(dzdtmax, this_dzdtmax)
+    end
+    # Set x-limits of ax so that plot always fits within axis
+    xlims!(ax, dzdtmin, dzdtmax)
+
+    dzdt = @lift vpagrid_to_dzdt_2d(vpa_grid, get_cache_slice(vth, $frame_index),
+                                    get_cache_slice(upar, $frame_index),
+                                    run_info.evolve_ppar, run_info.evolve_upar)
+    f_unnorm = @lift transform.(get_unnormalised_f_2d(
+                                    get_cache_slice(f, $frame_index),
+                                    get_cache_slice(density, $frame_index),
+                                    get_cache_slice(vth, $frame_index),
+                                    run_info.evolve_density, run_info.evolve_ppar))
+
+    hm = plot_2d(dzdt, run_info.z.grid, f_unnorm; ax=ax, colorbar_place=colorbar_place,
+                 kwargs...)
+
+    if outfile !== nothing
+        if fig === nothing
+            error("When ax is passed, fig must also be passed to save the plot using "
+                  * "outfile")
+        end
+        save_animation(fig, frame_index, run_info.nt, outfile)
+    end
+
+    if fig !== nothing
+        return fig
+    else
+        return hm
+    end
+end
+
+"""
     plot_charged_pdf_2D_at_wall(run_info; plot_prefix)
 
 Make plots/animations of the charged particle distribution function at wall boundaries.
@@ -3191,6 +4371,9 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix)
 
     is_1D = all(ri !== nothing && ri.r.n == 1 for ri ∈ run_info)
     is_1V = all(ri !== nothing && ri.vperp.n == 1 for ri ∈ run_info)
+    moment_kinetic = any(ri !== nothing
+                         && (ri.evolve_density || ri.evolve_upar || ri.evolve_ppar)
+                         for ri ∈ run_info)
 
     for (z, z_range, label) ∈ ((z_lower, z_lower:z_lower+8, "wall-"),
                                (z_upper, z_upper-8:z_upper, "wall+"))
@@ -3200,6 +4383,11 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix)
         if input.plot
             plot_vs_vpa(run_info, "f"; is=1, input=f_input,
                         outfile=plot_prefix * "pdf_$(label)_vs_vpa.pdf")
+
+            if moment_kinetic
+                plot_f_unnorm_vs_vpa(run_info; input=f_input, is=1,
+                                     outfile=plot_prefix * "pdf_unnorm_$(label)_vs_vpa.pdf")
+            end
 
             if !is_1V
                 plot_vs_vpa_vperp(run_info, "f"; is=1, input=f_input,
@@ -3221,6 +4409,11 @@ function plot_charged_pdf_2D_at_wall(run_info; plot_prefix)
         if input.animate
             animate_vs_vpa(run_info, "f"; is=1, input=f_input,
                            outfile=plot_prefix * "pdf_$(label)_vs_vpa." * input.animation_ext)
+
+            if moment_kinetic
+                animate_f_unnorm_vs_vpa(run_info; input=f_input, is=1,
+                                        outfile=plot_prefix * "pdf_unnorm_$(label)_vs_vpa." * input.animation_ext)
+            end
 
             if !is_1V
                 animate_vs_vpa_vperp(run_info, "f"; is=1, input=f_input,
@@ -3284,6 +4477,9 @@ function plot_neutral_pdf_2D_at_wall(run_info; plot_prefix)
 
     is_1D = all(ri !== nothing && ri.r.n == 1 for ri ∈ run_info)
     is_1V = all(ri !== nothing && ri.vzeta.n == 1 && ri.vr.n == 1 for ri ∈ run_info)
+    moment_kinetic = any(ri !== nothing
+                         && (ri.evolve_density || ri.evolve_upar || ri.evolve_ppar)
+                         for ri ∈ run_info)
 
     for (z, z_range, label) ∈ ((z_lower, z_lower:z_lower+8, "wall-"),
                                (z_upper, z_upper-8:z_upper, "wall+"))
@@ -3293,6 +4489,11 @@ function plot_neutral_pdf_2D_at_wall(run_info; plot_prefix)
         if input.plot
             plot_vs_vz(run_info, "f_neutral"; is=1, input=f_neutral_input,
                        outfile=plot_prefix * "pdf_neutral_$(label)_vs_vz.pdf")
+
+            if moment_kinetic
+                plot_f_unnorm_vs_vpa(run_info; input=f_neutral_input, neutral=true, is=1,
+                                     outfile=plot_prefix * "pdf_neutral_unnorm_$(label)_vs_vpa.pdf")
+            end
 
             if !is_1V
                 plot_vs_vzeta_vr(run_info, "f_neutral"; is=1, input=f_neutral_input,
@@ -3332,6 +4533,11 @@ function plot_neutral_pdf_2D_at_wall(run_info; plot_prefix)
         if input.animate
             animate_vs_vz(run_info, "f_neutral"; is=1, input=f_neutral_input,
                           outfile=plot_prefix * "pdf_neutral_$(label)_vs_vz." * input.animation_ext)
+
+            if moment_kinetic
+                animate_f_unnorm_vs_vpa(run_info; input=f_neutral_input, neutral=true, is=1,
+                                        outfile=plot_prefix * "pdf_neutral_unnorm_$(label)_vs_vz." * input.animation_ext)
+            end
 
             if !is_1V
                 animate_vs_vzeta_vr(run_info, "f_neutral"; is=1, input=f_neutral_input,
@@ -3407,129 +4613,133 @@ function Chodura_condition_plots(run_info::Tuple; plot_prefix)
         return nothing
     end
 
-    println("Making Chodura condition plots")
-    flush(stdout)
+    try
+        println("Making Chodura condition plots")
+        flush(stdout)
 
-    n_runs = length(run_info)
+        n_runs = length(run_info)
 
-    if n_runs == 1
-        Chodura_condition_plots(run_info[1], plot_prefix=plot_prefix)
-        return nothing
-    end
-
-    figs = []
-    axes = ([] for _ ∈ run_info)
-    if input.plot_vs_t
-        fig, ax = get_1d_ax(title="Chodura ratio at z=-L/2", xlabel="time",
-                            ylabel="ratio")
-        push!(figs, fig)
-        for a ∈ axes
-            push!(a, ax)
+        if n_runs == 1
+            Chodura_condition_plots(run_info[1], plot_prefix=plot_prefix)
+            return nothing
         end
 
-        fig, ax = get_1d_ax(title="Chodura ratio at z=+L/2", xlabel="time",
-                            ylabel="ratio")
-        push!(figs, fig)
-        for a ∈ axes
-            push!(a, ax)
+        figs = []
+        axes = Tuple([] for _ ∈ run_info)
+        if input.plot_vs_t
+            fig, ax = get_1d_ax(title="Chodura ratio at z=-L/2", xlabel="time",
+                                ylabel="ratio")
+            push!(figs, fig)
+            for a ∈ axes
+                push!(a, ax)
+            end
+
+            fig, ax = get_1d_ax(title="Chodura ratio at z=+L/2", xlabel="time",
+                                ylabel="ratio")
+            push!(figs, fig)
+            for a ∈ axes
+                push!(a, ax)
+            end
+        else
+            push!(figs, nothing)
+            for a ∈ axes
+                push!(a, nothing)
+            end
+            push!(figs, nothing)
+            for a ∈ axes
+                push!(a, nothing)
+            end
         end
-    else
-        push!(figs, nothing)
-        for a ∈ axes
-            push!(a, nothing)
+        if input.plot_vs_r
+            fig, ax = get_1d_ax(title="Chodura ratio at z=-L/2", xlabel="r",
+                                ylabel="ratio")
+            push!(figs, fig)
+            for a ∈ axes
+                push!(a, ax)
+            end
+
+            fig, ax = get_1d_ax(title="Chodura ratio at z=+L/2", xlabel="r",
+                                ylabel="ratio")
+            push!(figs, fig)
+            for a ∈ axes
+                push!(a, ax)
+            end
+        else
+            push!(figs, nothing)
+            for a ∈ axes
+                push!(a, nothing)
+            end
+            push!(figs, nothing)
+            for a ∈ axes
+                push!(a, nothing)
+            end
         end
-        push!(figs, nothing)
-        for a ∈ axes
-            push!(a, nothing)
-        end
-    end
-    if input.plot_vs_r
-        fig, ax = get_1d_ax(title="Chodura ratio at z=-L/2", xlabel="r",
-                            ylabel="ratio")
-        push!(figs, fig)
-        for a ∈ axes
-            push!(a, ax)
+        if input.plot_vs_r_t
+            fig, ax, colorbar_place = get_2d_ax(n_runs; title="Chodura ratio at z=-L/2",
+                                                xlabel="r", ylabel="time")
+            push!(figs, fig)
+            for (a, b, cbp) ∈ zip(axes, ax, colorbar_place)
+                push!(a, (b, cbp))
+            end
+
+            fig, ax, colorbar_place = get_2d_ax(n_runs; title="Chodura ratio at z=+L/2",
+                                                xlabel="r", ylabel="time")
+            push!(figs, fig)
+            for (a, b, cbp) ∈ zip(axes, ax, colorbar_place)
+                push!(a, (b, cbp))
+            end
+        else
+            push!(figs, nothing)
+            for a ∈ axes
+                push!(a, nothing)
+            end
+            push!(figs, nothing)
+            for a ∈ axes
+                push!(a, nothing)
+            end
         end
 
-        fig, ax = get_1d_ax(title="Chodura ratio at z=+L/2", xlabel="r",
-                            ylabel="ratio")
-        push!(figs, fig)
-        for a ∈ axes
-            push!(a, ax)
-        end
-    else
-        push!(figs, nothing)
-        for a ∈ axes
-            push!(a, nothing)
-        end
-        push!(figs, nothing)
-        for a ∈ axes
-            push!(a, nothing)
-        end
-    end
-    if input.plot_vs_r_t
-        fig, ax, colorbar_place = get_2d_ax(n_runs; title="Chodura ratio at z=-L/2",
-                                            xlabel="r", ylabel="time")
-        push!(figs, fig)
-        for (a, b, cbp) ∈ zip(axes, ax, colorbar_place)
-            push!(a, (b, cbp))
+        for (ri, ax) ∈ zip(run_info, axes)
+            Chodura_condition_plots(ri; axes=ax)
         end
 
-        fig, ax, colorbar_place = get_2d_ax(n_runs; title="Chodura ratio at z=+L/2",
-                                            xlabel="r", ylabel="time")
-        push!(figs, fig)
-        for (a, b, cbp) ∈ zip(axes, ax, colorbar_place)
-            push!(a, (b, cbp))
+        if input.plot_vs_t
+            fig = figs[1]
+            ax = axes[1][1]
+            put_legend_right(fig, ax)
+            outfile = string(plot_prefix, "Chodura_ratio_lower_vs_t.pdf")
+            save(outfile, fig)
+
+            fig = figs[2]
+            ax = axes[2][1]
+            put_legend_right(fig, ax)
+            outfile = string(plot_prefix, "Chodura_ratio_upper_vs_t.pdf")
+            save(outfile, fig)
         end
-    else
-        push!(figs, nothing)
-        for a ∈ axes
-            push!(a, nothing)
+        if input.plot_vs_r
+            fig = figs[3]
+            ax = axes[3][1]
+            put_legend_right(fig, ax)
+            outfile = string(plot_prefix, "Chodura_ratio_lower_vs_r.pdf")
+            save(outfile, fig)
+
+            fig = figs[4]
+            ax = axes[4][1]
+            put_legend_right(fig, ax)
+            outfile = string(plot_prefix, "Chodura_ratio_upper_vs_r.pdf")
+            save(outfile, fig)
         end
-        push!(figs, nothing)
-        for a ∈ axes
-            push!(a, nothing)
+        if input.plot_vs_r_t
+            fig = figs[5]
+            outfile = string(plot_prefix, "Chodura_ratio_lower_vs_r_t.pdf")
+            save(outfile, fig)
+
+            fig = figs[6]
+            outfile = string(plot_prefix, "Chodura_ratio_upper_vs_r_t.pdf")
+            save(outfile, fig)
         end
-    end
-
-    for (ri, ax) ∈ zip(run_info, axes)
-        Chodura_condition_plots(ri; axes=ax)
-    end
-
-    if input.plot_vs_t
-        fig = figs[1]
-        ax = axes[1][1]
-        put_legend_right(fig, ax)
-        outfile = string(plot_prefix, "Chodura_ratio_lower_vs_t.pdf")
-        save(outfile, fig)
-
-        fig = figs[2]
-        ax = axes[2][1]
-        put_legend_right(fig, ax)
-        outfile = string(plot_prefix, "Chodura_ratio_upper_vs_t.pdf")
-        save(outfile, fig)
-    end
-    if input.plot_vs_r
-        fig = figs[3]
-        ax = axes[3][1]
-        put_legend_right(fig, ax)
-        outfile = string(plot_prefix, "Chodura_ratio_lower_vs_r.pdf")
-        save(outfile, fig)
-
-        fig = figs[4]
-        ax = axes[4][1]
-        put_legend_right(fig, ax)
-        outfile = string(plot_prefix, "Chodura_ratio_upper_vs_r.pdf")
-        save(outfile, fig)
-    end
-    if input.plot_vs_r_t
-        fig = figs[5]
-        outfile = string(plot_prefix, "Chodura_ratio_lower_vs_r_t.pdf")
-        save(outfile, fig)
-
-        fig = figs[6]
-        outfile = string(plot_prefix, "Chodura_ratio_upper_vs_r_t.pdf")
-        save(outfile, fig)
+    catch e
+        println("Error in Chodura_condition_plots(). Error was ", e)
     end
 
     return nothing

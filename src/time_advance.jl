@@ -8,7 +8,8 @@ export time_advance!
 using MPI
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_float, allocate_shared_float
-using ..communication: _block_synchronize, global_size, comm_world, MPISharedArray, global_rank
+using ..communication: _block_synchronize, block_rank, global_size, iblock_index,
+                       comm_world, MPISharedArray, global_rank
 using ..debugging
 using ..file_io: write_data_to_ascii, write_moments_data_to_binary, write_dfns_data_to_binary, debug_dump
 using ..looping
@@ -862,7 +863,7 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
 
             # Hack to save *.pdf of current pdf
             if t_input.runtime_plots
-                if global_rank[] == 0
+                if block_rank[] == 0
                     fig = Figure()
 
                     irow = 1
@@ -916,34 +917,44 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
                     layout = fig[irow,1] = GridLayout()
                     ax = Axis(layout[1,1], xlabel="z", ylabel="density", width=ax_width, height=ax_height)
                     plot_1d(z.grid, moments.charged.dens[:,1,1]; ax=ax, label="ion")
-                    plot_1d(z.grid, moments.neutral.dens[:,1,1]; ax=ax, label="neutral")
+                    if composition.n_neutral_species > 0
+                        plot_1d(z.grid, moments.neutral.dens[:,1,1]; ax=ax, label="neutral")
+                    end
                     #axislegend(ax)
                     ax = Axis(layout[1,2], xlabel="z", ylabel="upar", width=ax_width, height=ax_height)
                     plot_1d(z.grid, moments.charged.upar[:,1,1]; ax=ax, label="ion")
-                    plot_1d(z.grid, moments.neutral.uz[:,1,1]; ax=ax, label="neutral")
+                    if composition.n_neutral_species > 0
+                        plot_1d(z.grid, moments.neutral.uz[:,1,1]; ax=ax, label="neutral")
+                    end
                     #axislegend(ax)
 
                     irow += 1
                     layout = fig[irow,1] = GridLayout()
                     ax = Axis(layout[1,1], xlabel="z", ylabel="ppar", width=ax_width, height=ax_height)
                     plot_1d(z.grid, moments.charged.ppar[:,1,1]; ax=ax, label="ion")
-                    plot_1d(z.grid, moments.neutral.pz[:,1,1]; ax=ax, label="neutral")
+                    if composition.n_neutral_species > 0
+                        plot_1d(z.grid, moments.neutral.pz[:,1,1]; ax=ax, label="neutral")
+                    end
                     #axislegend(ax)
                     ax = Axis(layout[1,2], xlabel="z", ylabel="vth", width=ax_width, height=ax_height)
                     plot_1d(z.grid, moments.charged.vth[:,1,1]; ax=ax, label="ion")
-                    plot_1d(z.grid, moments.neutral.vth[:,1,1]; ax=ax, label="neutral")
+                    if composition.n_neutral_species > 0
+                        plot_1d(z.grid, moments.neutral.vth[:,1,1]; ax=ax, label="neutral")
+                    end
                     #axislegend(ax)
 
                     irow += 1
                     layout = fig[irow,1] = GridLayout()
                     ax = Axis(layout[1,1], xlabel="z", ylabel="qpar", width=ax_width, height=ax_height)
                     plot_1d(z.grid, moments.charged.qpar[:,1,1]; ax=ax, label="ion")
-                    plot_1d(z.grid, moments.neutral.qz[:,1,1]; ax=ax, label="neutral")
+                    if composition.n_neutral_species > 0
+                        plot_1d(z.grid, moments.neutral.qz[:,1,1]; ax=ax, label="neutral")
+                    end
                     #axislegend(ax)
 
                     resize_to_layout!(fig)
 
-                    save("latest_plots.png", fig)
+                    save("latest_plots$(iblock_index[]).png", fig)
                 end
             end
             iwrite_moments += 1
