@@ -4052,7 +4052,7 @@ function animate_f_unnorm_vs_vpa(run_info::Tuple; neutral=false, outfile=nothing
             title = lift(i->LaTeXString(string("t = ", run_info[1].time[i])), frame_index)
         else
             title = lift(i->LaTeXString(join((string("t", irun, " = ", ri.time[i])
-                                              for (irun,t) ∈ enumerate(run_info)), "; ")),
+                                              for (irun,ri) ∈ enumerate(run_info)), "; ")),
                          frame_index)
         end
         fig, ax = get_1d_ax(xlabel=L"v_\parallel", ylabel=ylabel, title=title)
