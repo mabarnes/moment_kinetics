@@ -2032,7 +2032,7 @@ for dim ∈ one_dimension_combinations_no_t
                      frame_index = Observable(1)
                      if length(run_info) == 1 ||
                          all(ri.nt == run_info[1].nt &&
-                             wall(isapprox.(ri.time, run_info[1].time))
+                             all(isapprox.(ri.time, run_info[1].time))
                              for ri ∈ run_info[2:end])
                          # All times are the same
                          title = lift(i->string("t = ", run_info[1].time[i]), frame_index)
