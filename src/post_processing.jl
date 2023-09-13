@@ -196,7 +196,6 @@ end
 function construct_global_zr_coords(r_local, z_local)
 
     function make_global_input(coord_local)
-        #element_spacing_option = "" # dummy value
         return grid_input(coord_local.name, coord_local.ngrid,
             coord_local.nelement_global, coord_local.nelement_global, 1, 0, coord_local.L,
             coord_local.discretization, coord_local.fd_option, coord_local.bc,
@@ -1055,7 +1054,7 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
         composition, species, collisions,
         geometry, drive_input, num_diss_params, manufactured_solns_input = input
 
-    if !is_1D1V || true
+    if !is_1D1V
         # make plots and animations of the phi, Ez and Er
         plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time,
                                 z_global.grid, r_global.grid, iz0, ir0, n_ion_species,

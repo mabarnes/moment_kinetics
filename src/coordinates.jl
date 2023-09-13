@@ -4,9 +4,7 @@ module coordinates
 
 export define_coordinate, write_coordinate
 export equally_spaced_grid
-# testing
 export set_element_boundaries
-export init_grid
 
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_int
@@ -91,8 +89,6 @@ struct coordinate
     element_scale::Array{mk_float,1}
     # shift for each element
     element_shift::Array{mk_float,1}
-    # boundaries for each element
-    #element_boundaries::Array{mk_float,1}
     # option used to set up element spacing
     element_spacing_option::String
 end
@@ -163,7 +159,7 @@ function define_coordinate(input, parallel_io::Bool=false)
         cell_width, igrid, ielement, imin, imax, input.discretization, input.fd_option,
         input.bc, wgts, uniform_grid, duniform_dgrid, scratch, copy(scratch), copy(scratch),
         scratch_2d, copy(scratch_2d), advection, send_buffer, receive_buffer, input.comm,
-        local_io_range, global_io_range, element_scale, element_shift, input.element_spacing_option)#, element_boundaries)
+        local_io_range, global_io_range, element_scale, element_shift, input.element_spacing_option)
 
     if input.discretization == "chebyshev_pseudospectral" && coord.n > 1
         # create arrays needed for explicit Chebyshev pseudospectral treatment in this
@@ -188,15 +184,9 @@ function set_element_boundaries(nelement_global, L, element_spacing_option)
         # number of boundaries of sqrt grid
         nsqrt = floor(mk_int,(nelement_global)/2) + 1
         if nelement_global%2 > 0 # odd
-            #fac = 0.0
-            #for j in 2:nsqrt
-            #    fac += 2.0*(((j-2)/(nsqrt-1))^2 - ((j-1)/(nsqrt-1))^2 )
-            #end
-            x = ((nsqrt-2)/(nsqrt-1))^2
             if nsqrt < 3
                 fac = 2.0/3.0
             else
-                #fac = 0.5*(sqrt( 1.0 + 4.0*x) - 1.0)/x
                 fac = 1.0/( 3.0/2.0 - 0.5*((nsqrt-2)/(nsqrt-1))^2)
             end
         else
@@ -210,7 +200,7 @@ function set_element_boundaries(nelement_global, L, element_spacing_option)
             element_boundaries[(nelement_global+1)+ 1 - j] = (L/2.0) - fac*(L/2.0)*((j-1)/(nsqrt-1))^2
         end
         
-    elseif element_spacing_option == "uniform" || nelement_global < 4 # uniform spacing 
+    elseif element_spacing_option == "uniform" || (element_spacing_option == "sqrt" && nelement_global < 4) # uniform spacing 
         for j in 1:nelement_global+1
             element_boundaries[j] = L*((j-1)/(nelement_global) - 0.5)
         end
