@@ -63,8 +63,6 @@ function scaled_chebyshev_grid(ngrid, nelement_local, n,
     @inbounds for j ∈ 1:nelement_local
         #wgts[imin[j]:imax[j]] .= sqrt.(1.0 .- reverse(chebyshev_grid)[k:ngrid].^2) * scale_factor
         # amount by which to shift the centre of this element from zero
-        #iel_global = j + irank*nelement_local
-        #shift = box_length*((float(iel_global)-0.5)/float(nelement_global) - 0.5)
         scale_factor = element_scale[j]
         shift = element_shift[j]
         # reverse the order of the original chebyshev_grid (ran from [1,-1])
