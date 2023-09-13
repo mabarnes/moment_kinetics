@@ -3938,7 +3938,9 @@ function plot_f_unnorm_vs_vpa_z(run_info; input=nothing, neutral=false, it=nothi
     end
 
     if ax === nothing
-        title = neutral ? L"f_{n,\mathrm{unnormalized}}" : L"f_{i,\mathrm{unnormalized}}"
+        if title === nothing
+            title = neutral ? L"f_{n,\mathrm{unnormalized}}" : L"f_{i,\mathrm{unnormalized}}"
+        end
         fig, ax, colorbar_place = get_2d_ax(title=title, xlabel=L"v_\parallel", ylabel=L"z")
     else
         ax.title = run_info.run_name
