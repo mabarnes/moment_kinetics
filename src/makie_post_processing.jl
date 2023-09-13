@@ -895,6 +895,7 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
         it = run_info.itime_min:run_info.itime_skip:run_info.itime_max
     elseif isa(it, mk_int)
         nt = 1
+        it = collect(run_info.itime_min:run_info.itime_skip:run_info.itime_max)[it]
     else
         nt = length(it)
     end
@@ -1668,6 +1669,7 @@ for dim ∈ one_dimension_combinations
                  end
                  if data === nothing
                      dim_slices = get_dimension_slice_indices($(QuoteNode(dim));
+                                                              run_info=run_info,
                                                               input=input, it=it, is=is,
                                                               ir=ir, iz=iz, ivperp=ivperp,
                                                               ivpa=ivpa, ivzeta=ivzeta,
@@ -1835,6 +1837,7 @@ for (dim1, dim2) ∈ two_dimension_combinations
                  if data === nothing
                      dim_slices = get_dimension_slice_indices($(QuoteNode(dim1)),
                                                               $(QuoteNode(dim2));
+                                                              run_info=run_info,
                                                               input=input, it=it, is=is,
                                                               ir=ir, iz=iz, ivperp=ivperp,
                                                               ivpa=ivpa, ivzeta=ivzeta,
@@ -2052,6 +2055,7 @@ for dim ∈ one_dimension_combinations_no_t
                  end
                  if data === nothing
                      dim_slices = get_dimension_slice_indices(:t, $(QuoteNode(dim));
+                                                              run_info=run_info,
                                                               input=input, it=it, is=is,
                                                               ir=ir, iz=iz, ivperp=ivperp,
                                                               ivpa=ivpa, ivzeta=ivzeta,
@@ -2258,6 +2262,7 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
                  if data === nothing
                      dim_slices = get_dimension_slice_indices(:t, $(QuoteNode(dim1)),
                                                               $(QuoteNode(dim2));
+                                                              run_info=run_info,
                                                               input=input, it=it, is=is,
                                                               ir=ir, iz=iz, ivperp=ivperp,
                                                               ivpa=ivpa, ivzeta=ivzeta,
@@ -3420,9 +3425,10 @@ The indices are taken from `input`, unless they are passed as keyword arguments
 The dimensions in `keep_dims` are not given a slice (those are the dimensions we want in
 the variable after slicing).
 """
-function get_dimension_slice_indices(keep_dims...; input, it=nothing, is=nothing,
-                                     ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
-                                     ivzeta=nothing, ivr=nothing, ivz=nothing)
+function get_dimension_slice_indices(keep_dims...; run_info, input, it=nothing,
+                                     is=nothing, ir=nothing, iz=nothing, ivperp=nothing,
+                                     ivpa=nothing, ivzeta=nothing, ivr=nothing,
+                                     ivz=nothing)
     if isa(input, AbstractDict)
         input = Dict_to_NamedTuple(input)
     end
