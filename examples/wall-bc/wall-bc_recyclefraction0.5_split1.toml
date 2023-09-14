@@ -77,7 +77,7 @@ vz_discretization = "chebyshev_pseudospectral"
 active = true
 z_profile = "gaussian"
 z_width = 0.125
-source_strength = 8.0
+source_strength = 2.0
 source_T = 2.0
 
 [numerical_dissipation]
