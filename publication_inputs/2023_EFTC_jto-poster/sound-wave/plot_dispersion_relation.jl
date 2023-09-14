@@ -10,6 +10,10 @@ using PlasmaDispersionFunctions
 
 using moment_kinetics.parameter_scans
 
+const ext = ".png"
+
+CairoMakie.activate!(; px_per_unit=4)
+
 """
 Equation (4.13) from Parra et al. "1D drift kinetic models with periodic
 boundary conditions" (TN-01)
@@ -410,8 +414,8 @@ function plot_n_scan()
     Legend(fig_omega[1,2], legend_data_list, legend_label_list)
     Legend(fig_gamma[1,2], legend_data_list, legend_label_list)
 
-    save("n_scan_omega.pdf", fig_omega)
-    save("n_scan_gamma.pdf", fig_gamma)
+    save("n_scan_omega$ext", fig_omega)
+    save("n_scan_gamma$ext", fig_gamma)
 
     return nothing
 end
@@ -499,8 +503,8 @@ function plot_T_scan()
     Legend(fig_omega[1,2], legend_data_list, legend_label_list)
     Legend(fig_gamma[1,2], legend_data_list, legend_label_list)
 
-    save("T_scan_omega.pdf", fig_omega)
-    save("T_scan_gamma.pdf", fig_gamma)
+    save("T_scan_omega$ext", fig_omega)
+    save("T_scan_gamma$ext", fig_gamma)
 
     return nothing
 end
