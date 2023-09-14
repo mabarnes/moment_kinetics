@@ -284,7 +284,7 @@ end
 function get_sim_omega_gamma(sim)
     try
         s = nothing
-        open(joinpath("..", "..", sim["base_directory"], sim["run_name"], basename(sim["run_name"]) * ".frequency_fit.txt"),
+        open(joinpath("..", "..", "..", sim["base_directory"], sim["run_name"], basename(sim["run_name"]) * ".frequency_fit.txt"),
              "r") do io
             s = split(readline(io))
         end
