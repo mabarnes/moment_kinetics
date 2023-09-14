@@ -762,6 +762,7 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
     @serial_region begin
         if global_rank[] == 0
              println("beginning time advance   ", Dates.format(now(), dateformat"H:MM:SS"))
+             flush(stdout)
         end
     end
 
@@ -801,6 +802,7 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
             if isfile(t_input.stopfile)
                 # Stop cleanly if a file called 'stop' was created
                 println("Found 'stop' file $(t_input.stopfile), aborting run")
+                flush(stdout)
                 finish_now = true
             end
 
@@ -861,12 +863,14 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
                 end
                 if global_rank[] == 0
                     println("    residuals:", result_string)
+                    flush(stdout)
                 end
                 if t_input.converged_residual_value > 0.0
                     if global_rank[] == 0
                         if all(r < t_input.converged_residual_value for r ∈ all_residuals)
                             println("Run converged! All tested residuals less than ",
                                     t_input.converged_residual_value)
+                            flush(stdout)
                             finish_now = true
                         end
                     end
@@ -875,6 +879,7 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
             else
                 if global_rank[] == 0
                     println()
+                    flush(stdout)
                 end
             end
 
@@ -992,6 +997,7 @@ function time_advance!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyro
                 if global_rank[] == 0
                     println("writing distribution functions at step ", i,"  ",
                                    Dates.format(now(), dateformat"H:MM:SS"))
+                    flush(stdout)
                 end
             end
             write_dfns_data_to_binary(pdf.charged.norm, pdf.neutral.norm, moments, fields,
