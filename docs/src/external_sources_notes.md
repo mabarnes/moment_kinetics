@@ -138,6 +138,31 @@ targets.
     [`moment_kinetics.external_sources.external_neutral_source_controller!`](@ref))
     to be used in 2D simulations.
 
+### Energy source
+
+When `source_type = "energy"`, rather than just adding particles with
+temperature $T_\mathrm{source},s$, the existing plasma or neutrals in the
+domain are swapped with plasma/neutrals from a Maxwellian with
+$T_\mathrm{source},s$, so that the density is unchanged, but energy is added
+(or potentially removed if the plasma/neutrals are hotter than
+$T_\mathrm{source},s$).
+```math
+\begin{align}
+S_i &= A_i(r,z) \left[ \frac{1}{(\pi)^{3/2} (2 T_{\mathrm{source},i} / m_i)^{3/2}} \exp\left( -\frac{(v_\perp^2 + v_\parallel^2)}{T_{\mathrm{source},i}} - f_i(v_\perp, v_\parallel) \right) \right] \\
+S_n &= A_n(r,z) \left[ \frac{1}{(\pi)^{3/2} (2 T_{\mathrm{source},n} / m_n)^{3/2}} \exp\left( -\frac{(v_\zeta^2 + v_r^2 + v_z^2)}{T_{\mathrm{source},n}} - f_n(v_\zeta, v_r, v_z) \right) \right]
+\end{align}
+```
+or in 1V simulations
+```math
+\begin{align}
+S_i &= A_i(r,z) \left[ \frac{1}{sqrt{\pi} \sqrt{2 T_{\mathrm{source},i} / m_i}} \exp\left( -\frac{v_\perp^2}{T_{\mathrm{source},i}} - f_i(v_\parallel) \right) \right] \\
+S_n &= A_n(r,z) \left[ \frac{1}{sqrt{\pi} \sqrt{2 T_{\mathrm{source},n} / m_n}} \exp\left( -\frac{v_z^2}{T_{\mathrm{source},n}} - f_n(v_z) \right) \right]
+\end{align}
+```
+Note that this source does not give a fixed power input (although that might be
+a nice feature to have), it just swaps plasma/neutral particles at a constant
+rate.
+
 API
 ---
 

@@ -1658,11 +1658,11 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     neutral_z_advect, neutral_r_advect, neutral_vz_advect = advect_objects.neutral_z_advect, advect_objects.neutral_r_advect, advect_objects.neutral_vz_advect
 
     if advance.external_source
-        external_ion_source_controller!(fvec_in, moments.charged,
-                                    external_source_settings.ion, dt)
+        external_ion_source_controller!(fvec_in, moments, external_source_settings.ion,
+                                        dt)
     end
     if advance.neutral_external_source
-        external_neutral_source_controller!(fvec_in, moments.neutral,
+        external_neutral_source_controller!(fvec_in, moments,
                                             external_source_settings.neutral, r, z, dt)
     end
 
