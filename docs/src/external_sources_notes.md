@@ -24,7 +24,7 @@ The sources are controlled by options in the `[ion_source]` and
 setting `active = true`. The constant temperature is set with the `source_T`
 option (default is 1 for ions and $T_\mathrm{wall}$ for neutrals). The
 amplitude can be set or controlled in various ways depending on the
-`controller_type` setting, as explained in the following subsection.
+`source_type` setting, as explained in the following subsection.
 
 Note that all the settings mentioned below have values given in normalised
 units (in the same way as the settings for initial profiles, etc.).
@@ -34,8 +34,8 @@ Amplitude
 
 ### Fixed amplitude (default)
 
-When `controller_type = ""` (the default), the amplitude of the source is fixed
-in time and controled by the profile options. The profile has the form
+When `source_type = "Maxwellian"` (the default), the amplitude of the source is
+fixed in time and controled by the profile options. The profile has the form
 ```math
 A(r,z) = A_0 R(r) Z(z)
 ```
@@ -59,7 +59,7 @@ available options for either are the same, so letting `x` stand for either of
 
 ### Midpoint density controller
 
-When `controller_type = "density_midpoint"` a PI controller
+When `source_type = "density_midpoint_control"` a PI controller
 ([Wikipedia](https://en.wikipedia.org/wiki/Proportional%E2%80%93integral%E2%80%93derivative_controller))
 is used to control the ion/neutral density. The 'midpoint' for the purposes of
 this controller is the point on the grid where $r=0$ and $z=0$ (there must be a
@@ -88,7 +88,7 @@ density.
 
 ### Density profile controller
 
-When `controller_type = "density_profile"` a PI controller
+When `source_type = "density_profile_control"` a PI controller
 ([Wikipedia](https://en.wikipedia.org/wiki/Proportional%E2%80%93integral%E2%80%93derivative_controller))
 is used to control the ion/neutral density profile.
 
@@ -117,7 +117,7 @@ density.
 
 The source of neutrals can be set so that some fraction of the flux of ions to
 the walls is recycled into the volume of the domain as neutrals by using the
-`controller_type = "recycling"` option.
+`source_type = "recycling"` option.
 
 The profile is set up whose spatial integral is 1
 ```math

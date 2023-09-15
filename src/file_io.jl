@@ -714,8 +714,8 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
                 parallel_io=parallel_io, description="Amplitude of the external pressure source for ions",
                 units="m_ref*n_ref*c_ref^2*c_ref/L_ref")
             if ion_source_settings.PI_density_controller_I != 0.0 &&
-                    ion_source_settings.PI_density_controller_type != ""
-                if ion_source_settings.PI_density_controller_type == "profile"
+                    ion_source_settings.source_type ∈ ("density_profile_control", "density_midpoint_control")
+                if ion_source_settings.source_type == "density_profile_control"
                     external_source_controller_integral = create_dynamic_variable!(
                         dynamic, "external_source_controller_integral", mk_float, z, r;
                         parallel_io=parallel_io,
@@ -756,8 +756,8 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
                 parallel_io=parallel_io, description="Amplitude of the external pressure source for neutrals",
                 units="m_ref*n_ref*c_ref^2*c_ref/L_ref")
             if neutral_source_settings.PI_density_controller_I != 0.0 &&
-                    neutral_source_settings.PI_density_controller_type != ""
-                if neutral_source_settings.PI_density_controller_type == "profile"
+                    neutral_source_settings.source_type ∈ ("density_profile_control", "density_midpoint_control")
+                if neutral_source_settings.source_type == "density_profile_control"
                     external_source_neutral_controller_integral = create_dynamic_variable!(
                         dynamic, "external_source_neutral_controller_integral", mk_float, z, r;
                         parallel_io=parallel_io,
