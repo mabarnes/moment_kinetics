@@ -219,8 +219,14 @@ end
     initialize_external_source_amplitude!(moments, external_source_settings, vperp,
                                           vzeta, vr, n_neutral_species)
 
-Initialize the arrays `moments.charged.external_source_amplitude` and
-`moments.neutral.external_source_amplitude`, using the settings in
+Initialize the arrays `moments.charged.external_source_amplitude`,
+`moments.charged.external_source_density_amplitude`,
+`moments.charged.external_source_momentum_amplitude`,
+`moments.charged.external_source_pressure_amplitude`,
+`moments.neutral.external_source_amplitude`,
+`moments.neutral.external_source_density_amplitude`,
+`moments.neutral.external_source_momentum_amplitude`, and
+`moments.neutral.external_source_pressure_amplitude`, using the settings in
 `external_source_settings`
 """
 function initialize_external_source_amplitude!(moments, external_source_settings, vperp,
@@ -231,6 +237,15 @@ function initialize_external_source_amplitude!(moments, external_source_settings
             moments.charged.external_source_amplitude[iz,ir] =
                 ion_source_settings.source_strength *
                 ion_source_settings.r_amplitude[ir] * ion_source_settings.z_amplitude[iz]
+            moments.charged.external_source_density_amplitude[iz,ir] =
+                ion_source_settings.source_strength *
+                ion_source_settings.r_amplitude[ir] * ion_source_settings.z_amplitude[iz]
+            moments.charged.external_source_momentum_amplitude[iz,ir] = 0.0
+            moments.charged.external_source_pressure_amplitude[iz,ir] =
+                (0.5 * ion_source_settings.source_T +
+                 moments.charged.parallel_flow[iz,ir]^2) *
+                ion_source_settings.source_strength *
+                ion_source_settings.r_amplitude[ir] * ion_source_settings.z_amplitude[iz]
         end
     end
 
@@ -239,6 +254,17 @@ function initialize_external_source_amplitude!(moments, external_source_settings
         if neutral_source_settings.active
             @loop_r_z ir iz begin
                 moments.neutral.external_source_amplitude[iz,ir] =
+                    neutral_source_settings.source_strength *
+                    neutral_source_settings.r_amplitude[ir] *
+                    neutral_source_settings.z_amplitude[iz]
+                moments.neutral.external_source_density_amplitude[iz,ir] =
+                    neutral_source_settings.source_strength *
+                    neutral_source_settings.r_amplitude[ir] *
+                    neutral_source_settings.z_amplitude[iz]
+                moments.neutral.external_source_momentum_amplitude[iz,ir] = 0.0
+                moments.neutral.external_source_pressure_amplitude[iz,ir] =
+                    (0.5 * neutral_source_settings.source_T +
+                     moments.neutral.uz[iz,ir]^2) *
                     neutral_source_settings.source_strength *
                     neutral_source_settings.r_amplitude[ir] *
                     neutral_source_settings.z_amplitude[iz]
@@ -457,7 +483,11 @@ function external_ion_source_controller!(fvec_in, ion_moments, ion_source_settin
     is = 1
 
     if ion_source_settings.controller_type == ""
-        return nothing
+        @loop_r_z ir iz begin
+            ion_moments.external_source_pressure_amplitude[iz,ir] =
+                (0.5 * ion_source_settings.source_T + fvec_in.upar[iz,ir,is]^2) *
+                ion_source_settings.external_source_amplitude[iz,ir]
+        end
     elseif ion_source_settings.controller_type == "density_midpoint"
         begin_serial_region()
 
@@ -494,6 +524,11 @@ function external_ion_source_controller!(fvec_in, ion_moments, ion_source_settin
         @loop_r_z ir iz begin
             ion_moments.external_source_amplitude[iz,ir] =
                 amplitude * ion_source_settings.controller_source_profile[iz,ir]
+            ion_moments.external_source_density_amplitude[iz,ir] =
+                amplitude * ion_source_settings.controller_source_profile[iz,ir]
+            ion_moments.external_source_pressure_amplitude[iz,ir] =
+                (0.5 * ion_source_settings.source_T + fvec_in.upar[iz,ir,is]^2) *
+                amplitude * ion_source_settings.controller_source_profile[iz,ir]
         end
     elseif ion_source_settings.controller_type == "density_profile"
         begin_r_z_region()
@@ -509,6 +544,10 @@ function external_ion_source_controller!(fvec_in, ion_moments, ion_source_settin
             integral[iz,ir] += dt * I * n_error
             # Only want a source, so never allow amplitude to be negative
             amplitude[iz,ir] = max(P * n_error + integral[iz,ir], 0)
+            ion_moments.external_source_density_amplitude[iz,ir] = amplitude[iz,ir]
+            ion_moments.external_source_pressure_amplitude[iz,ir] =
+                (0.5 * ion_source_settings.source_T + fvec_in.upar[iz,ir,is]^2) *
+                amplitude[iz,ir]
         end
     else
         error("Unrecognised controller_type=$(ion_source_settings.controller_type)")
@@ -530,7 +569,11 @@ function external_neutral_source_controller!(fvec_in, neutral_moments,
     is = 1
 
     if neutral_source_settings.controller_type == ""
-        return nothing
+        @loop_r_z ir iz begin
+            neutral_moments.external_source_pressure_amplitude[iz,ir] =
+                (0.5 * neutral_source_settings.source_T + fvec_in.upar[iz,ir,is]^2) *
+                neutral_source_settings.external_source_amplitude[iz,ir]
+        end
     elseif neutral_source_settings.controller_type == "density_midpoint"
         begin_serial_region()
 
@@ -568,6 +611,11 @@ function external_neutral_source_controller!(fvec_in, neutral_moments,
         @loop_r_z ir iz begin
             neutral_moments.external_source_amplitude[iz,ir] =
                 amplitude * neutral_source_settings.controller_source_profile[iz,ir]
+            neutral_moments.external_source_density_amplitude[iz,ir] =
+                amplitude * neutral_source_settings.controller_source_profile[iz,ir]
+            neutral_moments.external_source_pressure_amplitude[iz,ir] =
+                (0.5 * neutral_source_settings.source_T + fvec_in.upar[iz,ir,is]^2) *
+                amplitude * neutral_source_settings.controller_source_profile[iz,ir]
         end
     elseif neutral_source_settings.controller_type == "density_profile"
         begin_r_z_region()
@@ -582,6 +630,10 @@ function external_neutral_source_controller!(fvec_in, neutral_moments,
             n_error = target[iz,ir] - density[iz,ir,is]
             PI_integral[iz,ir] += dt * I * n_error
             amplitude[iz,ir] = P * n_error + PI_integral[iz,ir]
+            neutral_moments.external_source_density_amplitude[iz,ir] = amplitude[iz,ir]
+            neutral_moments.external_source_pressure_amplitude[iz,ir] =
+                (0.5 * neutral_source_settings.source_T + fvec_in.upar[iz,ir,is]^2) *
+                amplitude[iz,ir]
         end
     elseif neutral_source_settings.controller_type == "recycling"
         begin_serial_region()
@@ -616,6 +668,10 @@ function external_neutral_source_controller!(fvec_in, neutral_moments,
         prefactor = target_flux * neutral_source_settings.recycling_controller_fraction
         @loop_r_z ir iz begin
             amplitude[iz,ir] = prefactor * profile[iz,ir]
+            neutral_moments.external_source_density_amplitude[iz,ir] = amplitude[iz,ir]
+            neutral_moments.external_source_pressure_amplitude[iz,ir] =
+                (0.5 * neutral_source_settings.source_T + fvec_in.upar[iz,ir,is]^2) *
+                amplitude[iz,ir]
         end
     else
         error("Unrecognised controller_type=$(neutral_source_settings.controller_type)")

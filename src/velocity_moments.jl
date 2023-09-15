@@ -94,6 +94,14 @@ struct moments_charged_substruct
     dvth_dz::Union{MPISharedArray{mk_float,3},Nothing}
     # Spatially varying amplitude of the external source term
     external_source_amplitude::MPISharedArray{mk_float,2}
+    # Spatially varying amplitude of the density moment of the external source term
+    external_source_density_amplitude::MPISharedArray{mk_float,2}
+    # Spatially varying amplitude of the parallel momentum moment of the external source
+    # term
+    external_source_momentum_amplitude::MPISharedArray{mk_float,2}
+    # Spatially varying amplitude of the parallel pressure moment of the external source
+    # term
+    external_source_pressure_amplitude::MPISharedArray{mk_float,2}
     # Integral term for the PID controller of the external source term
     external_source_controller_integral::MPISharedArray{mk_float,2}
 end
@@ -167,6 +175,14 @@ struct moments_neutral_substruct
     dqz_dz::Union{MPISharedArray{mk_float,3},Nothing}
     # Spatially varying amplitude of the external source term
     external_source_amplitude::MPISharedArray{mk_float,2}
+    # Spatially varying amplitude of the density moment of the external source term
+    external_source_density_amplitude::MPISharedArray{mk_float,2}
+    # Spatially varying amplitude of the parallel momentum moment of the external source
+    # term
+    external_source_momentum_amplitude::MPISharedArray{mk_float,2}
+    # Spatially varying amplitude of the parallel pressure moment of the external source
+    # term
+    external_source_pressure_amplitude::MPISharedArray{mk_float,2}
     # Integral term for the PID controller of the external source term
     external_source_controller_integral::MPISharedArray{mk_float,2}
 end
@@ -255,6 +271,9 @@ function create_moments_charged(nz, nr, n_species, evolve_density, evolve_upar,
 
     if ion_source_settings.active
         external_source_amplitude = allocate_shared_float(nz, nr)
+        external_source_density_amplitude = allocate_shared_float(nz, nr)
+        external_source_momentum_amplitude = allocate_shared_float(nz, nr)
+        external_source_pressure_amplitude = allocate_shared_float(nz, nr)
         if ion_source_settings.PI_density_controller_I != 0.0 &&
                 ion_source_settings.PI_density_controller_type != ""
             if ion_source_settings.PI_density_controller_type == "profile"
@@ -267,6 +286,9 @@ function create_moments_charged(nz, nr, n_species, evolve_density, evolve_upar,
         end
     else
         external_source_amplitude = allocate_shared_float(1, 1)
+        external_source_density_amplitude = allocate_shared_float(1, 1)
+        external_source_momentum_amplitude = allocate_shared_float(1, 1)
+        external_source_pressure_amplitude = allocate_shared_float(1, 1)
         external_source_controller_integral = allocate_shared_float(1, 1)
     end
 
@@ -276,7 +298,8 @@ function create_moments_charged(nz, nr, n_species, evolve_density, evolve_upar,
         parallel_heat_flux, parallel_heat_flux_updated, thermal_speed, v_norm_fac,
         ddens_dz_upwind, d2dens_dz2, dupar_dz, dupar_dz_upwind, d2upar_dz2, dppar_dz,
         dppar_dz_upwind, d2ppar_dz2, dqpar_dz, dvth_dz, external_source_amplitude,
-        external_source_controller_integral)
+        external_source_density_amplitude, external_source_momentum_amplitude,
+        external_source_pressure_amplitude, external_source_controller_integral)
 end
 
 # neutral particles have natural mean velocities 
@@ -370,6 +393,9 @@ function create_moments_neutral(nz, nr, n_species, evolve_density, evolve_upar,
 
     if neutral_source_settings.active
         external_source_amplitude = allocate_shared_float(nz, nr)
+        external_source_density_amplitude = allocate_shared_float(nz, nr)
+        external_source_momentum_amplitude = allocate_shared_float(nz, nr)
+        external_source_pressure_amplitude = allocate_shared_float(nz, nr)
         if neutral_source_settings.PI_density_controller_I != 0.0 &&
                 neutral_source_settings.PI_density_controller_type != ""
             if neutral_source_settings.PI_density_controller_type == "profile"
@@ -382,6 +408,9 @@ function create_moments_neutral(nz, nr, n_species, evolve_density, evolve_upar,
         end
     else
         external_source_amplitude = allocate_shared_float(1, 1)
+        external_source_density_amplitude = allocate_shared_float(1, 1)
+        external_source_momentum_amplitude = allocate_shared_float(1, 1)
+        external_source_pressure_amplitude = allocate_shared_float(1, 1)
         external_source_controller_integral = allocate_shared_float(1, 1)
     end
 
@@ -390,7 +419,9 @@ function create_moments_neutral(nz, nr, n_species, evolve_density, evolve_upar,
         ur_updated, uzeta, uzeta_updated, pz, pz_updated, pr, pr_updated, pzeta,
         pzeta_updated, ptot, qz, qz_updated, vth, v_norm_fac, ddens_dz_upwind, d2dens_dz2,
         duz_dz, duz_dz_upwind, d2uz_dz2, dpz_dz, dpz_dz_upwind, d2pz_dz2, dqz_dz, dvth_dz,
-        external_source_amplitude, external_source_controller_integral)
+        external_source_amplitude, external_source_density_amplitude,
+        external_source_momentum_amplitude, external_source_pressure_amplitude,
+        external_source_controller_integral)
 end
 
 """
