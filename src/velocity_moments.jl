@@ -842,7 +842,7 @@ function update_chodura_integral_species!(ff,dffdr,ff_dummy,vpa,vperp,z,r,compos
         # avoid divide by zero by making sure 
         # we are more than a vpa mimimum grid spacing away from 
         # the vz(vpa,r) = 0 velocity boundary
-        if abs(vz[ivpa,ivperp]) > 2.0*del_vpa
+        if abs(vz[ivpa,ivperp]) > 0.5*del_vpa
             ff_dummy[ivpa,ivperp] = (ff[ivpa,ivperp]*bzed^2/(vz[ivpa,ivperp]^2) + 
                                 geometry.rhostar*dffdr[ivpa,ivperp]/vz[ivpa,ivperp])
         else
