@@ -275,8 +275,8 @@ function create_moments_charged(nz, nr, n_species, evolve_density, evolve_upar,
         external_source_momentum_amplitude = allocate_shared_float(nz, nr)
         external_source_pressure_amplitude = allocate_shared_float(nz, nr)
         if ion_source_settings.PI_density_controller_I != 0.0 &&
-                ion_source_settings.PI_density_controller_type != ""
-            if ion_source_settings.PI_density_controller_type == "profile"
+                ion_source_settings.source_type ∈ ("density_profile_control", "density_midpoint_control")
+            if ion_source_settings.source_type == "density_profile_control"
                 external_source_controller_integral = allocate_shared_float(nz, nr)
             else
                 external_source_controller_integral = allocate_shared_float(1, 1)
@@ -397,8 +397,8 @@ function create_moments_neutral(nz, nr, n_species, evolve_density, evolve_upar,
         external_source_momentum_amplitude = allocate_shared_float(nz, nr)
         external_source_pressure_amplitude = allocate_shared_float(nz, nr)
         if neutral_source_settings.PI_density_controller_I != 0.0 &&
-                neutral_source_settings.PI_density_controller_type != ""
-            if neutral_source_settings.PI_density_controller_type == "profile"
+                neutral_source_settings.source_type ∈ ("density_profile_control", "density_midpoint_control")
+            if neutral_source_settings.source_type == "density_profile_control"
                 external_source_controller_integral = allocate_shared_float(nz, nr)
             else
                 external_source_controller_integral = allocate_shared_float(1, 1)
