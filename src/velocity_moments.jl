@@ -271,9 +271,21 @@ function create_moments_charged(nz, nr, n_species, evolve_density, evolve_upar,
 
     if ion_source_settings.active
         external_source_amplitude = allocate_shared_float(nz, nr)
-        external_source_density_amplitude = allocate_shared_float(nz, nr)
-        external_source_momentum_amplitude = allocate_shared_float(nz, nr)
-        external_source_pressure_amplitude = allocate_shared_float(nz, nr)
+        if evolve_density
+            external_source_density_amplitude = allocate_shared_float(nz, nr)
+        else
+            external_source_density_amplitude = allocate_shared_float(1, 1)
+        end
+        if evolve_upar
+            external_source_momentum_amplitude = allocate_shared_float(nz, nr)
+        else
+            external_source_momentum_amplitude = allocate_shared_float(1, 1)
+        end
+        if evolve_ppar
+            external_source_pressure_amplitude = allocate_shared_float(nz, nr)
+        else
+            external_source_pressure_amplitude = allocate_shared_float(1, 1)
+        end
         if ion_source_settings.PI_density_controller_I != 0.0 &&
                 ion_source_settings.source_type ∈ ("density_profile_control", "density_midpoint_control")
             if ion_source_settings.source_type == "density_profile_control"
@@ -393,9 +405,21 @@ function create_moments_neutral(nz, nr, n_species, evolve_density, evolve_upar,
 
     if neutral_source_settings.active
         external_source_amplitude = allocate_shared_float(nz, nr)
-        external_source_density_amplitude = allocate_shared_float(nz, nr)
-        external_source_momentum_amplitude = allocate_shared_float(nz, nr)
-        external_source_pressure_amplitude = allocate_shared_float(nz, nr)
+        if evolve_density
+            external_source_density_amplitude = allocate_shared_float(nz, nr)
+        else
+            external_source_density_amplitude = allocate_shared_float(1, 1)
+        end
+        if evolve_upar
+            external_source_momentum_amplitude = allocate_shared_float(nz, nr)
+        else
+            external_source_momentum_amplitude = allocate_shared_float(1, 1)
+        end
+        if evolve_ppar
+            external_source_pressure_amplitude = allocate_shared_float(nz, nr)
+        else
+            external_source_pressure_amplitude = allocate_shared_float(1, 1)
+        end
         if neutral_source_settings.PI_density_controller_I != 0.0 &&
                 neutral_source_settings.source_type ∈ ("density_profile_control", "density_midpoint_control")
             if neutral_source_settings.source_type == "density_profile_control"
