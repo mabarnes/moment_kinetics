@@ -80,8 +80,14 @@ struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmomn, Tchodura_lower, Tchodur
 
     # handles for external source variables
     external_source_amplitude::Texti1
+    external_source_density_amplitude::Texti1
+    external_source_momentum_amplitude::Texti1
+    external_source_pressure_amplitude::Texti1
     external_source_controller_integral::Texti2
     external_source_neutral_amplitude::Textn1
+    external_source_neutral_density_amplitude::Texti1
+    external_source_neutral_momentum_amplitude::Texti1
+    external_source_neutral_pressure_amplitude::Texti1
     external_source_neutral_controller_integral::Textn2
 
     # cumulative wall clock time taken by the run
@@ -695,6 +701,18 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
                 dynamic, "external_source_amplitude", mk_float, z, r;
                 parallel_io=parallel_io, description="Amplitude of the external source for ions",
                 units="n_ref/c_ref^3*c_ref/L_ref")
+            external_source_density_amplitude = create_dynamic_variable!(
+                dynamic, "external_source_density_amplitude", mk_float, z, r;
+                parallel_io=parallel_io, description="Amplitude of the external density source for ions",
+                units="n_ref*c_ref/L_ref")
+            external_source_momentum_amplitude = create_dynamic_variable!(
+                dynamic, "external_source_momentum_amplitude", mk_float, z, r;
+                parallel_io=parallel_io, description="Amplitude of the external momentum source for ions",
+                units="m_ref*n_ref*c_ref*c_ref/L_ref")
+            external_source_pressure_amplitude = create_dynamic_variable!(
+                dynamic, "external_source_pressure_amplitude", mk_float, z, r;
+                parallel_io=parallel_io, description="Amplitude of the external pressure source for ions",
+                units="m_ref*n_ref*c_ref^2*c_ref/L_ref")
             if ion_source_settings.PI_density_controller_I != 0.0 &&
                     ion_source_settings.PI_density_controller_type != ""
                 if ion_source_settings.PI_density_controller_type == "profile"
@@ -713,6 +731,9 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
             end
         else
             external_source_amplitude = nothing
+            external_source_density_amplitude = nothing
+            external_source_momentum_amplitude = nothing
+            external_source_pressure_amplitude = nothing
             external_source_controller_integral = nothing
         end
 
@@ -722,6 +743,18 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
                 dynamic, "external_source_neutral_amplitude", mk_float, z, r;
                 parallel_io=parallel_io, description="Amplitude of the external source for neutrals",
                 units="n_ref/c_ref^3*c_ref/L_ref")
+            external_source_neutral_density_amplitude = create_dynamic_variable!(
+                dynamic, "external_source_neutral_density_amplitude", mk_float, z, r;
+                parallel_io=parallel_io, description="Amplitude of the external density source for neutrals",
+                units="n_ref*c_ref/L_ref")
+            external_source_neutral_momentum_amplitude = create_dynamic_variable!(
+                dynamic, "external_source_neutral_momentum_amplitude", mk_float, z, r;
+                parallel_io=parallel_io, description="Amplitude of the external momentum source for neutrals",
+                units="m_ref*n_ref*c_ref*c_ref/L_ref")
+            external_source_neutral_pressure_amplitude = create_dynamic_variable!(
+                dynamic, "external_source_neutral_pressure_amplitude", mk_float, z, r;
+                parallel_io=parallel_io, description="Amplitude of the external pressure source for neutrals",
+                units="m_ref*n_ref*c_ref^2*c_ref/L_ref")
             if neutral_source_settings.PI_density_controller_I != 0.0 &&
                     neutral_source_settings.PI_density_controller_type != ""
                 if neutral_source_settings.PI_density_controller_type == "profile"
@@ -740,6 +773,9 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
             end
         else
             external_source_neutral_amplitude = nothing
+            external_source_neutral_density_amplitude = nothing
+            external_source_neutral_momentum_amplitude = nothing
+            external_source_neutral_pressure_amplitude = nothing
             external_source_neutral_controller_integral = nothing
         end
 
@@ -752,8 +788,14 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
                                io_ppar, io_pperp, io_qpar, io_vth, io_chodura_lower, io_chodura_upper, io_density_neutral, io_uz_neutral,
                                io_pz_neutral, io_qz_neutral, io_thermal_speed_neutral,
                                external_source_amplitude,
+                               external_source_density_amplitude,
+                               external_source_momentum_amplitude,
+                               external_source_pressure_amplitude,
                                external_source_controller_integral,
                                external_source_neutral_amplitude,
+                               external_source_neutral_density_amplitude,
+                               external_source_neutral_momentum_amplitude,
+                               external_source_neutral_pressure_amplitude,
                                external_source_neutral_controller_integral,
                                io_time_for_run, parallel_io)
     end
@@ -901,8 +943,14 @@ function reopen_moments_io(file_info)
                                getvar("uz_neutral"), getvar("pz_neutral"),
                                getvar("qz_neutral"), getvar("thermal_speed_neutral"),
                                getvar("external_source_amplitude"),
+                               getvar("external_source_density_amplitude"),
+                               getvar("external_source_momentum_amplitude"),
+                               getvar("external_source_pressure_amplitude"),
                                getvar("external_source_controller_integral"),
                                getvar("external_source_neutral_amplitude"),
+                               getvar("external_source_neutral_density_amplitude"),
+                               getvar("external_source_neutral_momentum_amplitude"),
+                               getvar("external_source_neutral_pressure_amplitude"),
                                getvar("external_source_neutral_controller_integral"),
                                getvar("time_for_run"), parallel_io)
     end
@@ -994,8 +1042,14 @@ function reopen_dfns_io(file_info)
                                      getvar("qz_neutral"),
                                      getvar("thermal_speed_neutral"),
                                      getvar("external_source_amplitude"),
+                                     getvar("external_source_density_amplitude"),
+                                     getvar("external_source_momentum_amplitude"),
+                                     getvar("external_source_pressure_amplitude"),
                                      getvar("external_source_controller_integral"),
                                      getvar("external_source_neutral_amplitude"),
+                                     getvar("external_source_neutral_density_amplitude"),
+                                     getvar("external_source_neutral_momentum_amplitude"),
+                                     getvar("external_source_neutral_pressure_amplitude"),
                                      getvar("external_source_neutral_controller_integral"),
                                      getvar("time_for_run"),
                                      parallel_io)
@@ -1081,6 +1135,15 @@ function write_moments_data_to_binary(moments, fields, t, n_ion_species,
             append_to_dynamic_var(io_moments.external_source_amplitude,
                                   moments.charged.external_source_amplitude, t_idx,
                                   parallel_io, z, r)
+            append_to_dynamic_var(io_moments.external_source_density_amplitude,
+                                  moments.charged.external_source_density_amplitude,
+                                  t_idx, parallel_io, z, r)
+            append_to_dynamic_var(io_moments.external_source_momentum_amplitude,
+                                  moments.charged.external_source_momentum_amplitude,
+                                  t_idx, parallel_io, z, r)
+            append_to_dynamic_var(io_moments.external_source_pressure_amplitude,
+                                  moments.charged.external_source_pressure_amplitude,
+                                  t_idx, parallel_io, z, r)
         end
         if io_moments.external_source_controller_integral !== nothing
             if size(moments.charged.external_source_controller_integral) == (1,1)
@@ -1109,6 +1172,15 @@ function write_moments_data_to_binary(moments, fields, t, n_ion_species,
                 append_to_dynamic_var(io_moments.external_source_neutral_amplitude,
                                       moments.neutral.external_source_amplitude, t_idx,
                                       parallel_io, z, r)
+                append_to_dynamic_var(io_moments.external_source_neutral_density_amplitude,
+                                      moments.charged.external_source_neutral_density_amplitude,
+                                      t_idx, parallel_io, z, r)
+                append_to_dynamic_var(io_moments.external_source_neutral_momentum_amplitude,
+                                      moments.charged.external_source_neutral_momentum_amplitude,
+                                      t_idx, parallel_io, z, r)
+                append_to_dynamic_var(io_moments.external_source_neutral_pressure_amplitude,
+                                      moments.charged.external_source_neutral_pressure_amplitude,
+                                      t_idx, parallel_io, z, r)
             end
             if io_moments.external_source_neutral_controller_integral !== nothing
                 if size(moments.neutral.external_source_neutral_controller_integral) == (1,1)

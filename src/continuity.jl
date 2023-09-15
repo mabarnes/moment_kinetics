@@ -31,7 +31,7 @@ function continuity_equation!(dens_out, fvec_in, moments, composition, dt, spect
     end
 
     if ion_source_settings.active
-        source_amplitude = moments.charged.external_source_amplitude
+        source_amplitude = moments.charged.external_source_density_amplitude
         @loop_s_r_z is ir iz begin
             dens_out[iz,ir,is] +=
                 dt * source_amplitude[iz,ir]
@@ -72,7 +72,7 @@ function neutral_continuity_equation!(dens_out, fvec_in, moments, composition, d
     end
 
     if neutral_source_settings.active
-        source_amplitude = moments.neutral.external_source_amplitude
+        source_amplitude = moments.neutral.external_source_density_amplitude
         @loop_s_r_z is ir iz begin
             dens_out[iz,ir,is] +=
                 dt * source_amplitude[iz,ir]

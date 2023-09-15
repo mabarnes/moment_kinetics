@@ -1798,7 +1798,8 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     if advance.force_balance
         # fvec_out.upar is over-written in force_balance! and contains the particle flux
         force_balance!(fvec_out.upar, fvec_out.density, fvec_in, moments, fields,
-                       collisions, dt, z_spectral, composition, geometry, num_diss_params)
+                       collisions, dt, z_spectral, composition, geometry,
+                       external_source_settings.ion, num_diss_params)
     end
     if advance.energy
         energy_equation!(fvec_out.ppar, fvec_in, moments, collisions, dt, z_spectral,
@@ -1820,7 +1821,8 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
         # fvec_out.upar is over-written in force_balance! and contains the particle flux
         neutral_force_balance!(fvec_out.uz_neutral, fvec_out.density_neutral, fvec_in,
                                moments, fields, collisions, dt, z_spectral, composition,
-                               geometry, num_diss_params)
+                               geometry, external_source_settings.neutral,
+                               num_diss_params)
     end
     if advance.neutral_energy
         neutral_energy_equation!(fvec_out.pz_neutral, fvec_in, moments, collisions, dt,

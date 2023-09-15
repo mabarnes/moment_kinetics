@@ -13,7 +13,8 @@ use the force balance equation d(nu)/dt + d(ppar + n*upar*upar)/dz =
 to update the parallel particle flux dens*upar for each species
 """
 function force_balance!(pflx, density_out, fvec, moments, fields, collisions, dt,
-                        spectral, composition, geometry, num_diss_params)
+                        spectral, composition, geometry, ion_source_settings,
+                        num_diss_params)
 
     begin_s_r_z_region()
 
@@ -26,6 +27,14 @@ function force_balance!(pflx, density_out, fvec, moments, fields, collisions, dt
                              upar[iz,ir,is]*upar[iz,ir,is]*moments.charged.ddens_dz_upwind[iz,ir,is] +
                              2.0*density[iz,ir,is]*upar[iz,ir,is]*moments.charged.dupar_dz_upwind[iz,ir,is] -
                              0.5*geometry.bzed*fields.Ez[iz,ir]*density[iz,ir,is])
+    end
+
+    if ion_source_settings.active && false
+        source_amplitude = moments.charged.external_source_momentum_amplitude
+        @loop_s_r_z is ir iz begin
+            pflx[iz,ir,is] +=
+                dt * source_amplitude[iz,ir]
+        end
     end
 
     # Ad-hoc diffusion to stabilise numerics...
@@ -59,7 +68,8 @@ function force_balance!(pflx, density_out, fvec, moments, fields, collisions, dt
 end
 
 function neutral_force_balance!(pflx, density_out, fvec, moments, fields, collisions, dt,
-                                spectral, composition, geometry, num_diss_params)
+                                spectral, composition, geometry, neutral_source_settings,
+                                num_diss_params)
 
     begin_sn_r_z_region()
 
@@ -71,6 +81,14 @@ function neutral_force_balance!(pflx, density_out, fvec, moments, fields, collis
                           dt*(moments.neutral.dpz_dz[iz,ir,isn] +
                              uz[iz,ir,isn]*uz[iz,ir,isn]*moments.neutral.ddens_dz_upwind[iz,ir,isn] +
                              2.0*density[iz,ir,isn]*uz[iz,ir,isn]*moments.neutral.duz_dz_upwind[iz,ir,isn])
+    end
+
+    if neutral_source_settings.active && false
+        source_amplitude = moments.neutral.external_source_momentum_amplitude
+        @loop_sn_r_z isn ir iz begin
+            pflx[iz,ir,isn] +=
+                dt * source_amplitude[iz,ir]
+        end
     end
 
     # Ad-hoc diffusion to stabilise numerics...
