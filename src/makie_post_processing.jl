@@ -325,6 +325,13 @@ function makie_post_process(run_dir::Union{String,Tuple},
     manufactured_solutions_analysis(run_info; plot_prefix=plot_prefix, nvperp=nvperp)
     manufactured_solutions_analysis_dfns(run_info_dfns; plot_prefix=plot_prefix)
 
+    for ri ∈ run_info
+        close_run_info(ri)
+    end
+    for ri ∈ run_info_dfns
+        close_run_info(ri)
+    end
+
     return nothing
 end
 
@@ -875,6 +882,27 @@ function get_run_info(run_dir, restart_index=nothing; itime_min=1, itime_max=0,
                 z_spectral=z_spectral, r_chunk_size=r_chunk_size,
                 z_chunk_size=z_chunk_size, dfns=dfns)
     end
+end
+
+"""
+    close_run_info(run_info)
+
+Close all the files in a run_info NamedTuple.
+"""
+function close_run_info(run_info)
+    if run_info === nothing
+        return nothing
+    end
+    if !run_info.parallel_io
+        # Files are not kept open, so nothing to do
+        return nothing
+    end
+
+    for f ∈ run_info.files
+        close(f)
+    end
+
+    return nothing
 end
 
 """
