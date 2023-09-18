@@ -605,7 +605,7 @@ function external_ion_source_controller!(fvec_in, moments, ion_source_settings, 
             @loop_r_z ir iz begin
                 ion_moments.external_source_pressure_amplitude[iz,ir] =
                     (0.5 * ion_source_settings.source_T + fvec_in.upar[iz,ir,is]^2) *
-                    ion_source_settings.external_source_amplitude[iz,ir]
+                    ion_moments.external_source_amplitude[iz,ir]
             end
         end
     elseif ion_source_settings.source_type == "energy"
@@ -730,7 +730,7 @@ function external_neutral_source_controller!(fvec_in, moments, neutral_source_se
             @loop_r_z ir iz begin
                 neutral_moments.external_source_pressure_amplitude[iz,ir] =
                     (0.5 * neutral_source_settings.source_T + fvec_in.upar[iz,ir,is]^2) *
-                    neutral_source_settings.external_source_amplitude[iz,ir]
+                    neutral_moments.external_source_amplitude[iz,ir]
             end
         end
     elseif neutral_source_settings.source_type == "energy"
