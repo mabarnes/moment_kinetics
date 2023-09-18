@@ -8,12 +8,18 @@ function main()
     ext = ".png"
 
     CairoMakie.activate!(; px_per_unit=4)
+    update_theme!(fontsize=24)
 
     #run_dir = "runs/wall-bc_recyclefraction0.5"
     #run_dir = "runs/wall-bc_recyclefraction0.5_split3"
 
-    run_dirs = ("runs/wall-bc_volumerecycle", "runs/wall-bc_volumerecycle_split1",
-                "runs/wall-bc_volumerecycle_split2", "runs/wall-bc_volumerecycle_split3")
+    #run_dirs = ("runs/wall-bc_volumerecycle", "runs/wall-bc_volumerecycle_split1",
+    #            "runs/wall-bc_volumerecycle_split2", "runs/wall-bc_volumerecycle_split3")
+    run_dirs = ("runs/wall-bc_recyclefraction0.5",
+                "runs/wall-bc_recyclefraction0.5_split1",
+                "runs/wall-bc_recyclefraction0.5_split2",
+                "runs/wall-bc_recyclefraction0.5_split3")
+
     prefixes = ("full-f", "split1", "split2", "split3")
     short_labels = (L"full-f$$", L"n", L"n,u_\parallel", L"n,u_\parallel,p_\parallel")
     subtitles = (L"full-f$$", L"evolving-$n$", L"evolving-$n,u_\parallel$", L"evolving-$n,u_\parallel,p_\parallel$")
@@ -51,8 +57,8 @@ function main()
     #plot_vs_vz_z(run_info_dfns, "f_neutral"; title=L"f_n", outfile=joinpath(output_dir, "f_neutral$ext"), xlabel=L"v_\parallel", ylabel=L"z")
 
     ion_cbar_max = 3
-    neutral_cbar_max = 5
-    lims = (-10.0, 10.0, -0.5, 0.5)
+    neutral_cbar_max = 8
+    lims = (-12.0, 12.0, -0.5, 0.5)
     axis_args = Dict(:limits=>lims, :xgridvisible=>false, :ygridvisible=>false)
     #plot_f_unnorm_vs_vpa_z(run_info_dfns; title=L"f_i", outfile=joinpath(output_dir, "f_ion$ext"), xlabel=L"v_\parallel", ylabel=L"z", rasterize=4.0, colorrange=(0, ion_cbar_max), subtitles=subtitles, axis_args=axis_args)
     #plot_f_unnorm_vs_vpa_z(run_info_dfns; neutral=true, title=L"f_n", outfile=joinpath(output_dir, "f_neutral$ext"), xlabel=L"v_\parallel", ylabel=L"z", rasterize=4.0, colorrange=(0, neutral_cbar_max), subtitles=subtitles, axis_args=axis_args)
