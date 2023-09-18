@@ -1047,6 +1047,8 @@ function check_coordinate_input(coord, coord_name, io)
         println(io,">$coord_name.bc = 'incoming_zero'.  enforcing zero incoming BC in $coord_name (even when there is diffusion).")
     elseif coord.bc == "both_zero"
         println(io,">$coord_name.bc = 'both_zero'.  enforcing zero BC in $coord_name.")
+    elseif coord.bc == "zero_in_decaying_out"
+        println(io,">$coord_name.bc = 'zero_in_decaying_out'.  enforcing zero incoming BC and decaying outgoing BC in $coord_name.")
     elseif coord.bc == "periodic"
         println(io,">$coord_name.bc = 'periodic'.  enforcing periodicity in $coord_name.")
     elseif coord_name == "z" && coord.bc == "wall"

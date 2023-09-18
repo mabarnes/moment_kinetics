@@ -2123,6 +2123,19 @@ function enforce_v_boundary_condition_local!(f, bc, speed, v_diffusion)
             # 'upwind' boundary
             f[end] = 0.0
         end
+    elseif bc == "zero_in_decaying_out"
+        if speed[1] > 0.0
+            # 'upwind' boundary
+            f[1] = 0.0
+        elseif f[1] > f[2]
+            f[1] = f[2]
+        end
+        if speed[end] < 0.0
+            # 'upwind' boundary
+            f[end] = 0.0
+        elseif f[end] > f[end-1]
+            f[end] = f[end-1]
+        end
     elseif bc == "both_zero"
         f[1] = 0.0
         f[end] = 0.0
