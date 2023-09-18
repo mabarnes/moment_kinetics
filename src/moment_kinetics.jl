@@ -55,7 +55,7 @@ include("source_terms.jl")
 include("numerical_dissipation.jl")
 include("load_data.jl")
 include("moment_kinetics_input.jl")
-include("scan_input.jl")
+include("parameter_scans.jl")
 include("analysis.jl")
 include("post_processing_input.jl")
 include("post_processing.jl")
@@ -84,7 +84,7 @@ using .load_data: reload_evolving_fields!
 using .looping
 using .moment_constraints: hard_force_moment_constraints!
 using .looping: debug_setup_loop_ranges_split_one_combination!
-using .moment_kinetics_input: mk_input, read_input_file, run_type, performance_test
+using .moment_kinetics_input: mk_input, read_input_file
 using .time_advance: setup_time_advance!, time_advance!
 using .type_definitions: mk_int
 using .utils: to_minutes
@@ -94,24 +94,24 @@ using .utils: to_minutes
 """
 main function that contains all of the content of the program
 """
-function run_moment_kinetics(to::TimerOutput, input_dict=Dict())
+function run_moment_kinetics(to::Union{TimerOutput,Nothing}, input_dict=Dict())
     mk_state = nothing
     try
         # set up all the structs, etc. needed for a run
         mk_state = setup_moment_kinetics(input_dict)
 
         # solve the 1+1D kinetic equation to advance f in time by nstep time steps
-        if run_type == performance_test
-            @timeit to "time_advance" time_advance!(mk_state...)
-        else
+        if to === nothing
             time_advance!(mk_state...)
+        else
+            @timeit to "time_advance" time_advance!(mk_state...)
         end
 
         # clean up i/o and communications
         # last 3 elements of mk_state are ascii_io, io_moments, and io_dfns
         cleanup_moment_kinetics!(mk_state[end-2:end]...)
 
-        if block_rank[] == 0 && run_type == performance_test
+        if block_rank[] == 0 && to !== nothing
             # Print the timing information if this is a performance test
             display(to)
             println()
@@ -143,7 +143,7 @@ end
 """
 overload which takes a filename and loads input
 """
-function run_moment_kinetics(to::TimerOutput, input_filename::String)
+function run_moment_kinetics(to::Union{TimerOutput,Nothing}, input_filename::String)
     return run_moment_kinetics(to, read_input_file(input_filename))
 end
 
@@ -151,7 +151,7 @@ end
 overload with no TimerOutput arguments
 """
 function run_moment_kinetics(input)
-    return run_moment_kinetics(TimerOutput(), input)
+    return run_moment_kinetics(nothing, input)
 end
 
 """
@@ -369,7 +369,7 @@ reload data from time index given by `restart_time_index` for a restart.
 `debug_loop_type` and `debug_loop_parallel_dims` are used to force specific set ups for
 parallel loop ranges, and are only used by the tests in `debug_test/`.
 """
-function setup_moment_kinetics(input_dict::Dict; restart_prefix_iblock=nothing,
+function setup_moment_kinetics(input_dict::AbstractDict; restart_prefix_iblock=nothing,
         restart_time_index=-1,
         debug_loop_type::Union{Nothing,NTuple{N,Symbol} where N}=nothing,
         debug_loop_parallel_dims::Union{Nothing,NTuple{N,Symbol} where N}=nothing)

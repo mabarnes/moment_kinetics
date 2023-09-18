@@ -12,6 +12,7 @@ Pages = ["getting_started.md",
          "moment_kinetic_equations.md",
          "moment_constraints_notes.md",
          "boundary_conditions_notes.md",
+         "parameter_scans.md",
          "developing.md",
          "debugging-hints.md",
         ]
