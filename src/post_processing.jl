@@ -3456,6 +3456,11 @@ function plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
         end
         outfile = string(run_name, "_phi"*description*"_vs_r_z.gif")
         trygif(anim, outfile, fps=5)
+        anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+            @views plot(r, phi[1,:,i], xlabel="r", ylabel=L"\widetilde{\phi}", ylims = (phimin,phimax))
+        end
+        outfile = string(run_name, "_phi(zwall-)_vs_r.gif")
+        trygif(anim, outfile, fps=5)
     elseif pp.animate_phi_vs_r_z && nr == 1 # make a gif animation of ϕ(z) at different times
         anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
             @views plot(z, phi[:,1,i], xlabel="z", ylabel=L"\widetilde{\phi}", ylims = (phimin,phimax))
@@ -3471,8 +3476,8 @@ function plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
         trysavefig(outfile)
     end
     if pp.plot_wall_Ez_vs_r && nr > 1 # plot last timestep Ez[z_wall,r]
-        @views plot(r, Ez[end,:,end], xlabel=L"r/L_r", ylabel=L"E_z")
-        outfile = string(run_name, "_Ez"*description*"(r,z_wall)_vs_r.pdf")
+        @views plot(r, Ez[1,:,end], xlabel=L"r/L_r", ylabel=L"E_z")
+        outfile = string(run_name, "_Ez"*description*"(r,z_wall-)_vs_r.pdf")
         trysavefig(outfile)
     end
     if pp.animate_Ez_vs_r_z && nr > 1
@@ -3482,9 +3487,12 @@ function plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
         end
         outfile = string(run_name, "_Ez"*description*"_vs_r_z.gif")
         trygif(anim, outfile, fps=5)
+        anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+            @views plot(r, Ez[1,:,i], xlabel="r", ylabel=L"\widetilde{E}_z", ylims = (Ezmin,Ezmax))
+        end
+        outfile = string(run_name, "_Ez(zwall-)_vs_r.gif")
+        trygif(anim, outfile, fps=5)
     elseif pp.animate_Ez_vs_r_z && nr == 1
-        Ezmin = minimum(Ez)
-        Ezmax = maximum(Ez)
         anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
             @views plot(z, Ez[:,1,i], xlabel="z", ylabel=L"\widetilde{E}_z", ylims = (Ezmin,Ezmax))
         end
@@ -3499,9 +3507,14 @@ function plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
         trysavefig(outfile)
     end
     if pp.plot_wall_Er_vs_r && nr > 1 # plot last timestep Er[z_wall,r]
-        @views plot(r, Er[end,:,end], xlabel=L"r/L_r", ylabel=L"E_r")
-        outfile = string(run_name, "_Er"*description*"(r,z_wall)_vs_r.pdf")
+        @views plot(r, Er[1,:,end], xlabel=L"r/L_r", ylabel=L"E_r")
+        outfile = string(run_name, "_Er"*description*"(r,z_wall-)_vs_r.pdf")
         trysavefig(outfile)
+        anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+            @views plot(r, Er[1,:,i], xlabel="r", ylabel=L"\widetilde{E}_r", ylims = (Ermin,Ermax))
+        end
+        outfile = string(run_name, "_Er(zwall-)_vs_r.gif")
+        trygif(anim, outfile, fps=5)
     end
     if pp.animate_Er_vs_r_z && nr > 1
         # make a gif animation of ϕ(z) at different times
