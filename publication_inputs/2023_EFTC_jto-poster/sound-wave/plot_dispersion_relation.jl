@@ -13,6 +13,7 @@ using moment_kinetics.parameter_scans
 const ext = ".png"
 
 CairoMakie.activate!(; px_per_unit=4)
+update_theme!(fontsize=24)
 
 """
 Equation (4.13) from Parra et al. "1D drift kinetic models with periodic
@@ -351,15 +352,15 @@ function plot_n_scan()
     Th = 1.0
     Te = 1.0
 
-    fig_omega = Figure()
-    ax_omega = Axis(fig_omega[1,1],
-                    xlabel=L"(n_i + n_n)R_{in}/|k_\parallel|v_\mathrm{th}",
-                    ylabel=L"\omega/|k_\parallel|v_\mathrm{th}")
+    fig = Figure(; resolution=(1200, 600))
 
-    fig_gamma = Figure()
-    ax_gamma = Axis(fig_gamma[1,1],
+    ax_gamma = Axis(fig[1,1],
                     xlabel=L"(n_i + n_n)R_{in}/|k_\parallel|v_\mathrm{th}",
                     ylabel=L"\gamma/|k_\parallel|v_\mathrm{th}")
+
+    ax_omega = Axis(fig[1,2],
+                    xlabel=L"(n_i + n_n)R_{in}/|k_\parallel|v_\mathrm{th}",
+                    ylabel=L"\omega/|k_\parallel|v_\mathrm{th}")
 
     orig_stdout = stdout
     redirect_stdout(open("/dev/null", "w"))
@@ -369,13 +370,15 @@ function plot_n_scan()
     sim_inputs_split3 = get_scan_inputs("scan_sound-wave_nratio_split3.toml")
     redirect_stdout(orig_stdout)
 
-    legend_data_list = []
-    legend_label_list = []
-    for (ni, nn, label) ∈ ((2.0, 0.0, L"1"),
-                           (1.5, 0.5, L"3/4"),
-                           (1.0, 1.0, L"1/2"),
-                           (0.5, 1.5, L"1/4"),
-                           (0.0, 2.0, L"0"),
+    legend_data_list1 = []
+    legend_label_list1 = []
+    legend_data_list2 = []
+    legend_label_list2 = []
+    for (ni, nn, label) ∈ ((2.0, 0.0, L"n_i / n_\mathrm{tot} = 1"),
+                           (1.5, 0.5, L"n_i / n_\mathrm{tot} = 3/4"),
+                           (1.0, 1.0, L"n_i / n_\mathrm{tot} = 1/2"),
+                           (0.5, 1.5, L"n_i / n_\mathrm{tot} = 1/4"),
+                           (0.0, 2.0, L"n_i / n_\mathrm{tot} = 0"),
                           )
         sims = Tuple(i for i ∈ sim_inputs if isapprox(i["initial_density1"], ni, atol=2.0e-5))
         sims_split1 = Tuple(i for i ∈ sim_inputs_split1 if isapprox(i["initial_density1"], ni, atol=2.0e-5))
@@ -397,25 +400,23 @@ function plot_n_scan()
             #vlines!(ax_gamma, (ni + nn) * crossing_x / (kpar*vth), linestyle=:dot, color=p_gamma.color)
         end
 
-        push!(legend_data_list, [p_omega, s_omega, s_omega1, s_omega2, s_omega3])
-        push!(legend_label_list, label)
+        push!(legend_data_list1, [p_omega, s_omega, s_omega1, s_omega2, s_omega3])
+        push!(legend_label_list1, label)
     end
 
     # Add marker types to the legend
-    push!(legend_data_list, MarkerElement(marker=marker1, color=:black))
-    push!(legend_label_list, L"$$full-f")
-    push!(legend_data_list, MarkerElement(marker=marker2, color=:black))
-    push!(legend_label_list, L"evolving $n$")
-    push!(legend_data_list, MarkerElement(marker=marker3, color=:black))
-    push!(legend_label_list, L"evolving $n,\,u_\parallel$")
-    push!(legend_data_list, MarkerElement(marker=marker4, color=:black))
-    push!(legend_label_list, L"evolving $n,\,u_\parallel,\,p_\parallel$")
+    push!(legend_data_list2, MarkerElement(marker=marker1, color=:black))
+    push!(legend_label_list2, L"$$full-f")
+    push!(legend_data_list2, MarkerElement(marker=marker2, color=:black))
+    push!(legend_label_list2, L"evolving $n$")
+    push!(legend_data_list2, MarkerElement(marker=marker3, color=:black))
+    push!(legend_label_list2, L"evolving $n,\,u_\parallel$")
+    push!(legend_data_list2, MarkerElement(marker=marker4, color=:black))
+    push!(legend_label_list2, L"evolving $n,\,u_\parallel,\,p_\parallel$")
 
-    Legend(fig_omega[1,2], legend_data_list, legend_label_list)
-    Legend(fig_gamma[1,2], legend_data_list, legend_label_list)
+    Legend(fig[2,1:2], [legend_data_list1, legend_data_list2], [legend_label_list1, legend_label_list2], ["", ""]; tellheight=true, tellwidth=false, nbanks=5)
 
-    save("n_scan_omega$ext", fig_omega)
-    save("n_scan_gamma$ext", fig_gamma)
+    save("n_scan$ext", fig)
 
     return nothing
 end
@@ -426,17 +427,17 @@ function plot_T_scan()
     nn = 1.0
     Te = 1.0
 
-    fig_omega = Figure()
-    ax_omega = Axis(fig_omega[1,1],
-                    xlabel=L"(n_i + n_n)R_{in}/|k_\parallel|v_\mathrm{th}",
-                    ylabel=L"\omega/|k_\parallel|v_\mathrm{th}",
-                    limits=(-.2, 2.2, 0.0, 2.2))
+    fig = Figure(; resolution=(1200, 600))
 
-    fig_gamma = Figure()
-    ax_gamma = Axis(fig_gamma[1,1],
+    ax_gamma = Axis(fig[1,1],
                     xlabel=L"(n_i + n_n)R_{in}/|k_\parallel|v_\mathrm{th}",
                     ylabel=L"\gamma/|k_\parallel|v_\mathrm{th}",
-                    limits=(-.2, 2.2, -2.5, 0.0))
+                    limits=(-.1, 2.1, -2.5, 0.0))
+
+    ax_omega = Axis(fig[1,2],
+                    xlabel=L"(n_i + n_n)R_{in}/|k_\parallel|v_\mathrm{th}",
+                    ylabel=L"\omega/|k_\parallel|v_\mathrm{th}",
+                    limits=(-.1, 2.1, -0.1, 2.1))
 
     orig_stdout = stdout
     redirect_stdout(open("/dev/null", "w"))
@@ -462,13 +463,15 @@ function plot_T_scan()
                    get_scan_inputs("scan_sound-wave_T4_split3.toml"))
     redirect_stdout(orig_stdout)
 
-    legend_data_list = []
-    legend_label_list = []
-    for (Th, label, sims) ∈ ((0.25, L"1/4", sim_inputs025),
-                             (0.5, L"1/2", sim_inputs05),
-                             (1.0, L"1", sim_inputs1),
-                             (2.0, L"2", sim_inputs2),
-                             (4.0, L"4", sim_inputs4),
+    legend_data_list1 = []
+    legend_label_list1 = []
+    legend_data_list2 = []
+    legend_label_list2 = []
+    for (Th, label, sims) ∈ ((0.25, L"T/T_e = 1/4", sim_inputs025),
+                             (0.5, L"T/T_e = 1/2", sim_inputs05),
+                             (1.0, L"T/T_e = 1", sim_inputs1),
+                             (2.0, L"T/T_e = 2", sim_inputs2),
+                             (4.0, L"T/T_e = 4", sim_inputs4),
                             )
 
         p_omega, p_gamma, Ri_positive, gamma_positive =
@@ -486,25 +489,23 @@ function plot_T_scan()
             #vlines!(ax_gamma, (ni + nn) * crossing_x / (kpar * vth), linestyle=:dot, color=p_gamma.color)
         end
 
-        push!(legend_data_list, [p_omega, s_omega, s_omega1, s_omega2, s_omega3])
-        push!(legend_label_list, label)
+        push!(legend_data_list1, [p_omega, s_omega, s_omega1, s_omega2, s_omega3])
+        push!(legend_label_list1, label)
     end
 
     # Add marker types to the legend
-    push!(legend_data_list, MarkerElement(marker=marker1, color=:black))
-    push!(legend_label_list, L"$$full-f")
-    push!(legend_data_list, MarkerElement(marker=marker2, color=:black))
-    push!(legend_label_list, L"evolving $n$")
-    push!(legend_data_list, MarkerElement(marker=marker3, color=:black))
-    push!(legend_label_list, L"evolving $n,\,u_\parallel$")
-    push!(legend_data_list, MarkerElement(marker=marker4, color=:black))
-    push!(legend_label_list, L"evolving $n,\,u_\parallel,\,p_\parallel$")
+    push!(legend_data_list2, MarkerElement(marker=marker1, color=:black))
+    push!(legend_label_list2, L"$$full-f")
+    push!(legend_data_list2, MarkerElement(marker=marker2, color=:black))
+    push!(legend_label_list2, L"evolving $n$")
+    push!(legend_data_list2, MarkerElement(marker=marker3, color=:black))
+    push!(legend_label_list2, L"evolving $n,\,u_\parallel$")
+    push!(legend_data_list2, MarkerElement(marker=marker4, color=:black))
+    push!(legend_label_list2, L"evolving $n,\,u_\parallel,\,p_\parallel$")
 
-    Legend(fig_omega[1,2], legend_data_list, legend_label_list)
-    Legend(fig_gamma[1,2], legend_data_list, legend_label_list)
+    Legend(fig[2,1:2], [legend_data_list1, legend_data_list2], [legend_label_list1, legend_label_list2], ["", ""]; tellheight=true, tellwidth=false, nbanks=5)
 
-    save("T_scan_omega$ext", fig_omega)
-    save("T_scan_gamma$ext", fig_gamma)
+    save("T_scan$ext", fig)
 
     return nothing
 end
