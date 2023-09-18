@@ -123,7 +123,14 @@ function second_derivative!(d2f, f, Q, coord, spectral)
                                                         coord.scratch2_2d[:,ielement])
     end
 
-    if coord.bc ∈ ("wall", "zero", "both_zero", "incoming_zero")
+    if coord.bc == "periodic"
+        # Need to get first derivatives from opposite ends of grid
+        if coord.nelement_local != coord.nelement_global
+            error("Distributed memory MPI not yet supported here")
+        end
+        d2f[1] -= C * coord.scratch2_2d[end,end]
+        d2f[end] += C * coord.scratch2_2d[1,1]
+    else
         # For stability don't contribute to evolution at boundaries, in case these
         # points are not set by a boundary condition.
         # Full grid may be across processes and bc only applied to extreme ends of the
@@ -134,15 +141,6 @@ function second_derivative!(d2f, f, Q, coord, spectral)
         if coord.irank == coord.nrank - 1
             d2f[end] = 0.0
         end
-    elseif coord.bc == "periodic"
-        # Need to get first derivatives from opposite ends of grid
-        if coord.nelement_local != coord.nelement_global
-            error("Distributed memory MPI not yet supported here")
-        end
-        d2f[1] -= C * coord.scratch2_2d[end,end]
-        d2f[end] += C * coord.scratch2_2d[1,1]
-    else
-        error("Unsupported bc '$(coord.bc)'")
     end
     return nothing
 end
