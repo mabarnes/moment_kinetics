@@ -2299,7 +2299,7 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
 
              function $function_name(run_info, var_name; is=1, data=nothing,
                                      input=nothing, frame_index=nothing, ax=nothing,
-                                     fig=nothing, colorbar_place=colorbar_place,
+                                     fig=nothing, colorbar_place=nothing,
                                      title=nothing, outfile=nothing,
                                      axis_args=Dict{Symbol,Any}(), it=nothing, ir=nothing,
                                      iz=nothing, ivperp=nothing, ivpa=nothing,
@@ -2313,6 +2313,11 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
                  end
                  if isa(input, AbstractDict)
                      input = Dict_to_NamedTuple(input)
+                 end
+                 if frame_index === nothing
+                     ind = Observable(1)
+                 else
+                     ind = frame_index
                  end
                  if data === nothing
                      dim_slices = get_dimension_slice_indices(:t, $(QuoteNode(dim1)),
@@ -2338,11 +2343,11 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
                  if title === nothing && ax == nothing
                      title = lift(i->string(get_variable_symbol(var_name), "\nt = ",
                                             run_info.time[i]),
-                                  frame_index)
+                                  ind)
                  end
 
                  if ax === nothing
-                     fig, ax = get_2d_ax(; title=title, axis_args...)
+                     fig, ax, colorbar_place = get_2d_ax(; title=title, axis_args...)
                      ax_was_nothing = true
                  else
                      ax_was_nothing = false
@@ -2356,10 +2361,10 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
                  if $idim1 !== nothing
                      y = y[$idim1]
                  end
-                 fig = animate_2d(x, y, data; xlabel="$($dim2_str)",
-                                  ylabel="$($dim1_str)", frame_index=frame_index, ax=ax,
-                                  colorbar_place=colorbar_place, colormap=colormap,
-                                  kwargs...)
+                 anim = animate_2d(x, y, data; xlabel="$($dim2_str)",
+                                   ylabel="$($dim1_str)", frame_index=ind, ax=ax,
+                                   colorbar_place=colorbar_place, colormap=colormap,
+                                   kwargs...)
 
                  if input.show_element_boundaries
                      element_boundary_positions = run_info.$dim2.grid[begin:run_info.$dim2.ngrid-1:end]
@@ -2374,7 +2379,7 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
                      if outfile === nothing
                          error("`outfile` is required for $($function_name_str)")
                      end
-                     if fig === nothing
+                     if ax_was_nothing && fig === nothing
                          error("When `outfile` is passed to save the plot, must either pass both "
                                * "`fig` and `ax` or neither. Only `ax` was passed.")
                      end
