@@ -67,7 +67,7 @@ $ ./submit-restart.sh <path to input file>.toml
 ```
 will submit a job to run and post-process a restart using input file. The
 simulation will restart from the last time point of the previous run
-(`restart_moment_kinetics.jl` supports more flexibility, but for now you would
+(`run_moment_kinetics.jl` supports more flexibility, but for now you would
 need to write your own submission script to pass the options needed for that).
 
 Default parameters for the runs (number of nodes, time limit, etc.) were set up

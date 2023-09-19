@@ -22,6 +22,6 @@ export SRUN_CPUS_PER_TASK=$SLURM_CPUS_PER_TASK
 
 echo "running INPUTFILE $(date)"
 
-srun --distribution=block:block --hint=nomultithread --ntasks=$SLURM_NTASKS bin/julia -Jmoment_kinetics.so --project -O3 --check-bounds=no restart_moment_kinetics.jl INPUTFILE RESTARTFROM
+srun --distribution=block:block --hint=nomultithread --ntasks=$SLURM_NTASKS bin/julia -Jmoment_kinetics.so --project -O3 --check-bounds=no run_moment_kinetics.jl --restart INPUTFILE RESTARTFROM
 
 echo "finished INPUTFILE $(date)"

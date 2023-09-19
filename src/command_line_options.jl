@@ -28,6 +28,10 @@ const s = ArgParseSettings()
     "--long"
         help = "Include more tests, increasing test run time."
         action = :store_true
+    "--restart"
+        help = "Restart from latest output file in run directory (ignored if " *
+               "`restartfile` is passed)"
+        action = :store_true
     "--restart-time-index"
         help = "Time index in output file to restart from, defaults to final time point"
         arg_type = Int

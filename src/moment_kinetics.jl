@@ -2,7 +2,7 @@
 """
 module moment_kinetics
 
-export run_moment_kinetics, restart_moment_kinetics
+export run_moment_kinetics
 
 using MPI
 
@@ -89,11 +89,13 @@ using .type_definitions: mk_int
 """
 main function that contains all of the content of the program
 """
-function run_moment_kinetics(to::TimerOutput, input_dict=Dict())
+function run_moment_kinetics(to::TimerOutput, input_dict=Dict(); restart=false,
+                             restart_time_index=-1)
     mk_state = nothing
     try
         # set up all the structs, etc. needed for a run
-        mk_state = setup_moment_kinetics(input_dict)
+        mk_state = setup_moment_kinetics(input_dict; restart=restart,
+                                         restart_time_index=restart_time_index)
 
         # solve the 1+1D kinetic equation to advance f in time by nstep time steps
         if run_type == performance_test
@@ -136,27 +138,38 @@ end
 """
 overload which takes a filename and loads input
 """
-function run_moment_kinetics(to::TimerOutput, input_filename::String)
-    return run_moment_kinetics(to, read_input_file(input_filename))
+function run_moment_kinetics(to::TimerOutput, input_filename::String; restart=false,
+                             restart_time_index=-1)
+    return run_moment_kinetics(to, read_input_file(input_filename); restart=restart,
+                               restart_time_index=restart_time_index)
 end
 
 """
 overload with no TimerOutput arguments
 """
-function run_moment_kinetics(input)
-    return run_moment_kinetics(TimerOutput(), input)
+function run_moment_kinetics(input; restart=false, restart_time_index=-1)
+    return run_moment_kinetics(TimerOutput(), input; restart=restart,
+                               restart_time_index=restart_time_index)
 end
 
 """
 overload which gets the input file name from command line arguments
 """
 function run_moment_kinetics()
-    inputfile = get_options()["inputfile"]
-    if inputfile == nothing
-        run_moment_kinetics(Dict())
-    else
-        run_moment_kinetics(inputfile)
+    options = get_options()
+    inputfile = options["inputfile"]
+    restart = options["restart"]
+    if options["restart_file"] !== nothing
+        restart = options["restartfile"]
     end
+    restart_time_index = options["restart_time_index"]
+    if inputfile === nothing
+        this_input = Dict()
+    else
+        this_input = inputfile
+    end
+    run_moment_kinetics(this_input; restart=restart,
+                        restart_time_index=restart_time_index)
 end
 
 """
@@ -228,109 +241,6 @@ function get_backup_filename(filename)
 end
 
 """
-    restart_moment_kinetics(input_filename::String,
-                            restart_filename::Union{String,Nothing}=nothing,
-                            time_index::Int=-1)
-
-Restart moment kinetics from an existing run. Space/velocity-space resolution in the
-input must be the same as for the original run.
-
-`input_filename` is the input file to use.
-
-`restart_filename` can be used to pick a particular distribution-functions-output file to
-restart from. By default will use the most recent one (the one without the numerical
-suffix) in the run directory.
-
-`time_index` can be passed to select the time index from `restart_filename` to restart
-from. By default the latest time point is used.
-"""
-function restart_moment_kinetics(input_filename::String,
-                                 restart_filename::Union{String,Nothing}=nothing,
-                                 time_index::Int=-1)
-    restart_moment_kinetics(read_input_file(input_filename), restart_filename,
-                            time_index)
-    return nothing
-end
-function restart_moment_kinetics()
-    options = get_options()
-    inputfile = options["inputfile"]
-    if inputfile === nothing
-        error("Must pass input file as first argument to restart a run.")
-    end
-    restartfile = options["restartfile"]
-    if restartfile === nothing
-        error("Must pass output file to restart from as second argument.")
-    end
-    time_index = options["restart-time-index"]
-
-    restart_moment_kinetics(inputfile, restartfile, time_index)
-
-    return nothing
-end
-function restart_moment_kinetics(input_dict::Dict,
-                                 restart_filename::Union{String,Nothing}=nothing,
-                                 time_index::Int=-1)
-
-    if restart_filename === nothing
-        run_name = input_dict["run_name"]
-        base_directory = get(input_dict, "base_directory", "runs")
-        output_dir = joinpath(base_directory, run_name)
-        io_settings = get(input_dict, "output", Dict{String,Any}())
-        binary_format = get(io_settings, "binary_format", hdf5)
-        if binary_format === hdf5
-            ext = "h5"
-        elseif binary_format === netcdf
-            ext = "cdf"
-        else
-            error("Unrecognized binary_format '$binary_format'")
-        end
-        restart_filename = glob(joinpath(output_dir, run_name * ".dfns*." * ext))[1]
-    end
-
-    try
-        # Move the output file being restarted from to make sure it doesn't get
-        # overwritten.
-        dfns_filename, backup_dfns_filename, parallel_io, moments_filename,
-        backup_moments_filename, backup_prefix_iblock =
-            get_backup_filename(restart_filename)
-        # Ensure every process got the filenames and checked files exist before moving
-        # files
-        MPI.Barrier(comm_world)
-        if (parallel_io && global_rank[] == 0) || (!parallel_io && block_rank[] == 0)
-            mv(dfns_filename, backup_dfns_filename)
-            mv(moments_filename, backup_moments_filename)
-        end
-        # Ensure files have been moved before any process tries to read from them
-        MPI.Barrier(comm_world)
-
-        # Set up all the structs, etc. needed for a run.
-        mk_state = setup_moment_kinetics(input_dict,
-                                         restart_prefix_iblock=backup_prefix_iblock,
-                                         restart_time_index=time_index)
-
-        try
-            time_advance!(mk_state...)
-        finally
-            # clean up i/o and communications
-            # last 2 elements of mk_state are `io` and `cdf`
-            cleanup_moment_kinetics!(mk_state[end-2:end]...)
-        end
-    catch e
-        # Stop code from hanging when running on multiple processes if only one of them
-        # throws an error
-        if global_size[] > 1
-            println("Abort called on rank $(block_rank[]) due to error. Error message "
-                    * "was:\n", e)
-            MPI.Abort(comm_world, 1)
-        end
-
-        rethrow(e)
-    end
-
-    return nothing
-end
-
-"""
 Perform all the initialization steps for a run.
 
 If `backup_filename` is `nothing`, set up for a regular run; if a filename is passed,
@@ -339,8 +249,8 @@ reload data from time index given by `restart_time_index` for a restart.
 `debug_loop_type` and `debug_loop_parallel_dims` are used to force specific set ups for
 parallel loop ranges, and are only used by the tests in `debug_test/`.
 """
-function setup_moment_kinetics(input_dict::Dict; restart_prefix_iblock=nothing,
-        restart_time_index=-1,
+function setup_moment_kinetics(input_dict::Dict;
+        restart=false, restart_time_index=-1,
         debug_loop_type::Union{Nothing,NTuple{N,Symbol} where N}=nothing,
         debug_loop_parallel_dims::Union{Nothing,NTuple{N,Symbol} where N}=nothing)
 
@@ -402,7 +312,7 @@ function setup_moment_kinetics(input_dict::Dict; restart_prefix_iblock=nothing,
         allocate_pdf_and_moments(composition, r, z, vperp, vpa, vzeta, vr, vz,
                                  evolve_moments, collisions, num_diss_params)
 
-    if restart_prefix_iblock === nothing
+    if restart === false
         restarting = false
         # initialize f(z,vpa) and the lowest three v-space moments (density(z), upar(z) and ppar(z)),
         # each of which may be evolved separately depending on input choices.
@@ -416,10 +326,41 @@ function setup_moment_kinetics(input_dict::Dict; restart_prefix_iblock=nothing,
     else
         restarting = true
 
+        if restart === true
+            run_name = input_dict["run_name"]
+            base_directory = get(input_dict, "base_directory", "runs")
+            output_dir = joinpath(base_directory, run_name)
+            io_settings = get(input_dict, "output", Dict{String,Any}())
+            binary_format = get(io_settings, "binary_format", hdf5)
+            if binary_format === hdf5
+                ext = "h5"
+            elseif binary_format === netcdf
+                ext = "cdf"
+            else
+                error("Unrecognized binary_format '$binary_format'")
+            end
+            restart = glob(joinpath(output_dir, run_name * ".dfns*." * ext))[1]
+        end
+
+        # Move the output file being restarted from to make sure it doesn't get
+        # overwritten.
+        dfns_filename, backup_dfns_filename, parallel_io, moments_filename,
+        backup_moments_filename, backup_prefix_iblock =
+            get_backup_filename(restart)
+        # Ensure every process got the filenames and checked files exist before moving
+        # files
+        MPI.Barrier(comm_world)
+        if (parallel_io && global_rank[] == 0) || (!parallel_io && block_rank[] == 0)
+            mv(dfns_filename, backup_dfns_filename)
+            mv(moments_filename, backup_moments_filename)
+        end
+        # Ensure files have been moved before any process tries to read from them
+        MPI.Barrier(comm_world)
+
         # Reload pdf and moments from an existing output file
         code_time, previous_runs_info, restart_time_index =
             reload_evolving_fields!(pdf, moments, boundary_distributions,
-                                    restart_prefix_iblock, restart_time_index,
+                                    backup_prefix_iblock, restart_time_index,
                                     composition, r, z, vpa, vperp, vzeta, vr, vz)
         _block_synchronize()
     end
