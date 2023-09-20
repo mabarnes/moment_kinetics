@@ -1,6 +1,0 @@
-[deps]
-LaTeXStrings = "b964fa9f-0449-5b57-a5c2-d3ea65f4040f"
-Optim = "429524aa-4258-5aef-a3af-852621145aeb"
-PlasmaDispersionFunctions = "9207f8dc-3231-463e-84ff-2de753abf806"
-Roots = "f2b01f46-fcfa-551c-844a-d8ac1e96c665"
-moment_kinetics = "b5ff72cc-06fc-4161-ad14-dba1c22ed34e"
