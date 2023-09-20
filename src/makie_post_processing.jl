@@ -2460,10 +2460,13 @@ increased in proportion to `n`.
 When `n` is passed, `subtitles` can be passed a Tuple of length `n` which will be used to
 set a subtitle for each `Axis` in `ax`.
 
+`resolution` is passed through to the `Figure` constructor. Its default value is
+`(600, 400)` if `n` is not passed, or `(600*n, 400)` if `n` is passed.
+
 Extra `kwargs` are passed to the `Axis()` constructor.
 """
 function get_1d_ax(n=nothing; title=nothing, subtitles=nothing, yscale=nothing,
-                   get_legend_place=nothing, kwargs...)
+                   get_legend_place=nothing, resolution=(600, 400), kwargs...)
     valid_legend_places = (nothing, :left, :right, :above, :below)
     if get_legend_place ∉ valid_legend_places
         error("get_legend_place=$get_legend_place is not one of $valid_legend_places")
@@ -2472,7 +2475,10 @@ function get_1d_ax(n=nothing; title=nothing, subtitles=nothing, yscale=nothing,
         kwargs = tuple(kwargs..., :yscale=>yscale)
     end
     if n == nothing
-        fig = Figure(resolution=(600, 400))
+        if resolution == nothing
+            resolution = (600, 400)
+        end
+        fig = Figure(resolution=resolution)
         ax = Axis(fig[1,1]; kwargs...)
         if get_legend_place === :left
             legend_place = fig[1,0]
@@ -2488,7 +2494,10 @@ function get_1d_ax(n=nothing; title=nothing, subtitles=nothing, yscale=nothing,
             Label(title_layout[1,1:2], title)
         end
     else
-        fig = Figure(resolution=(600*n, 400))
+        if resolution == nothing
+            resolution = (600*n, 400)
+        end
+        fig = Figure(resolution=resolution)
         plot_layout = fig[1,1] = GridLayout()
 
         if title !== nothing
@@ -2562,11 +2571,18 @@ horizontal row, and the width of the figure is increased in proportion to `n`.
 When `n` is passed, `subtitles` can be passed a Tuple of length `n` which will be used to
 set a subtitle for each `Axis` in `ax`.
 
+`resolution` is passed through to the `Figure` constructor. Its default value is
+`(600, 400)` if `n` is not passed, or `(600*n, 400)` if `n` is passed.
+
 Extra `kwargs` are passed to the `Axis()` constructor.
 """
-function get_2d_ax(n=nothing; title=nothing, subtitles=nothing, kwargs...)
+function get_2d_ax(n=nothing; title=nothing, subtitles=nothing, resolution=nothing,
+                   kwargs...)
     if n == nothing
-        fig = Figure(resolution=(600, 400))
+        if resolution == nothing
+            resolution = (600, 400)
+        end
+        fig = Figure(resolution=resolution)
         if title !== nothing
             title_layout = fig[1,1] = GridLayout()
             Label(title_layout[1,1:2], title)
@@ -2577,7 +2593,10 @@ function get_2d_ax(n=nothing; title=nothing, subtitles=nothing, kwargs...)
         ax = Axis(fig[irow,1]; kwargs...)
         colorbar_place = fig[irow,2]
     else
-        fig = Figure(resolution=(600*n, 400))
+        if resolution == nothing
+            resolution = (600*n, 400)
+        end
+        fig = Figure(resolution=resolution)
 
         if title !== nothing
             title_layout = fig[1,1] = GridLayout()
