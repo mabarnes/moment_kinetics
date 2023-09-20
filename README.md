@@ -47,27 +47,49 @@ The full documentation is online at [https://mabarnes.github.io/moment_kinetics]
         ```
         julia> run_moment_kinetics("input.toml")
         ```
-5) To make plots and calculate frequencies/growth rates, run
+5) To restart a simulation using `input.toml` from the last time point in the existing run directory,
+    ```
+    $ julia -O3 --project run_moment_kinetics --restart input.toml
+    ```
+    or to restart from a specific output file - either from the same run or (if the settings are compatible) a different one - here `runs/example/example.dfns.h5`
+    ```
+    $ julia -O3 --project run_moment_kinetics input.toml runs/example/example.dfns.h5
+    ```
+    The output file must include distribution functions. When not using parallel I/O there will be multiple output files from different MPI ranks - any one of these can be passed.
+    * To do the same from the Julia REPL
+        ```
+        $ julia -O3 --project
+        julia> run_moment_kinetics("input.toml", restart=true)
+        ```
+        or
+        ```
+        julia> run_moment_kinetics("input.toml", restart="runs/example/example.dfns.h5")
+        ```
+    * When calling the `run_moment_kinetics()` function you can also choose a particular time index to restart from, e.g.
+        ```
+        julia> run_moment_kinetics("input.toml", restart="runs/example/example.dfns.h5", restart_time_index=42)
+        ```
+6) To make plots and calculate frequencies/growth rates, run
     ```
     $ julia --project run_post_processing.jl runs/<directory to process>
     ```
     passing the directory to process as a command line argument. Input options for post-processing can be specified in post_processing_input.jl.
 
-6) Parameter scans (see [Running parameter scans](#running-parameter-scans)) or performance tests can be performed by running
+7) Parameter scans (see [Running parameter scans](#running-parameter-scans)) or performance tests can be performed by running
     ```
     $ julia -O3 --project driver.jl
     ```
     If running a scan, it can be parallelised by passing the number of processors as an argument. Scan options are set in `scan_inputs.jl`.
 
-7) Post processing can be done for several directories at once using
+8) Post processing can be done for several directories at once using
     ```
     $ julia --project post_processing_driver.jl runs/<directory1> runs/<directory2> ...
     ```
     passing the directories to process as command line arguments. Optionally pass a number as the first argument to parallelise post processing of different directories. Input options for post-processing can be specified in `post_processing_input.jl`.
 
-8) In the course of development, it is sometimes helpful to upgrade the Julia veriosn. Upgrading the version of Julia or upgrading packages may require a fresh installation of `moment_kinetics`. To make a fresh install with the latest package versions it is necessary to remove (or rename) the `Manifest.jl` file in the main directory, and generate a new `Manifest.jl` with step 1) above. It can sometimes be necessary to remove or rename the `.julia/` folder in your root directory for this step to be successful.
+9) In the course of development, it is sometimes helpful to upgrade the Julia veriosn. Upgrading the version of Julia or upgrading packages may require a fresh installation of `moment_kinetics`. To make a fresh install with the latest package versions it is necessary to remove (or rename) the `Manifest.jl` file in the main directory, and generate a new `Manifest.jl` with step 1) above. It can sometimes be necessary to remove or rename the `.julia/` folder in your root directory for this step to be successful.
 
-9) One may have to set an environment variable to avoid error messages from the Qt library. If you execute the command
+10) One may have to set an environment variable to avoid error messages from the Qt library. If you execute the command
 
     ```
     $ julia --project run_post_processing.jl runs/your_run_dir/
