@@ -3,6 +3,7 @@
 using CairoMakie
 using DelimitedFiles
 using LaTeXStrings
+using MathTeXEngine
 using Optim
 using SpecialFunctions
 
@@ -14,7 +15,9 @@ const ext = ".png"
 const plot_dir = "sound-wave"
 
 CairoMakie.activate!(; px_per_unit=4)
-update_theme!(fontsize=24)
+update_theme!(fontsize=24, fonts=(; regular=texfont(:text), bold=texfont(:bold),
+                                  italic=texfont(:italic),
+                                  bold_italic=texfont(:bolditalic)))
 
 """
 Equation (4.13) from Parra et al. "1D drift kinetic models with periodic
