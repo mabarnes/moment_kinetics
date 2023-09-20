@@ -33,12 +33,9 @@ The full documentation is online at [https://mabarnes.github.io/moment_kinetics]
    this significantly decreases the load time but prevents code changes from taking effect when `moment_kinetics.so` is used without repeating the precompilation (to use this option, add an option `-Jmoment_kinetics.so` when starting julia).
 4) To run julia with optimization, type
     ```
-    $ julia -O3 --project run_moment_kinetics.jl
-    ```
-    Default input options are specified in `moment_kinetics_input.jl`. The defaults can be modified for a particular run by setting options in a TOML file, for example `input.toml`, which can be passed as an argument
-    ```
     $ julia -O3 --project run_moment_kinetics.jl input.toml
     ```
+    Options are specified in a TOML file, e.g. `input.toml` here. The defaults are specified in `moment_kinetics_input.jl`.
     * To run in parallel, just put `mpirun -np <n>` in front of the call you would normally use, with `<n>` the number of processes to use.
     * It may be more convenient when running `moment_kinetics` more than once to work from the Julia REPL, e.g.
         ```
