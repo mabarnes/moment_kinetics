@@ -4,7 +4,7 @@ using LaTeXStrings
 using moment_kinetics.makie_post_processing
 
 function main()
-    output_dir = "publication_inputs/2023_EFTC_jto-poster/wall-bc/"
+    output_dir = "wall-bc"
     ext = ".png"
 
     CairoMakie.activate!(; px_per_unit=4)
@@ -15,10 +15,11 @@ function main()
 
     #run_dirs = ("runs/wall-bc_volumerecycle", "runs/wall-bc_volumerecycle_split1",
     #            "runs/wall-bc_volumerecycle_split2", "runs/wall-bc_volumerecycle_split3")
-    run_dirs = ("runs/wall-bc_recyclefraction0.5",
-                "runs/wall-bc_recyclefraction0.5_split1",
-                "runs/wall-bc_recyclefraction0.5_split2",
-                "runs/wall-bc_recyclefraction0.5_split3")
+    run_dirs = ("../../runs/wall-bc_recyclefraction0.5",
+                "../../runs/wall-bc_recyclefraction0.5_split1",
+                "../../runs/wall-bc_recyclefraction0.5_split2",
+                "../../runs/wall-bc_recyclefraction0.5_split3",
+               )
 
     prefixes = ("full-f", "split1", "split2", "split3")
     short_labels = (L"full-f$$", L"n", L"n,u_\parallel", L"n,u_\parallel,p_\parallel")

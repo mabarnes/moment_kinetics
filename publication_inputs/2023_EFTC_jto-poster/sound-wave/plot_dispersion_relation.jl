@@ -11,6 +11,7 @@ using PlasmaDispersionFunctions
 using moment_kinetics.parameter_scans
 
 const ext = ".png"
+const plot_dir = "sound-wave"
 
 CairoMakie.activate!(; px_per_unit=4)
 update_theme!(fontsize=24)
@@ -289,7 +290,7 @@ end
 function get_sim_omega_gamma(sim)
     try
         s = nothing
-        open(joinpath("..", "..", "..", sim["base_directory"], sim["run_name"], basename(sim["run_name"]) * ".frequency_fit.txt"),
+        open(joinpath("..", "..", sim["base_directory"], sim["run_name"], basename(sim["run_name"]) * ".frequency_fit.txt"),
              "r") do io
             s = split(readline(io))
         end
@@ -364,10 +365,13 @@ function plot_n_scan()
 
     orig_stdout = stdout
     redirect_stdout(open("/dev/null", "w"))
-    sim_inputs = get_scan_inputs("scan_sound-wave_nratio.toml")
-    sim_inputs_split1 = get_scan_inputs("scan_sound-wave_nratio_split1.toml")
-    sim_inputs_split2 = get_scan_inputs("scan_sound-wave_nratio_split2.toml")
-    sim_inputs_split3 = get_scan_inputs("scan_sound-wave_nratio_split3.toml")
+    sim_inputs = get_scan_inputs(joinpath(plot_dir, "scan_sound-wave_nratio.toml"))
+    sim_inputs_split1 = get_scan_inputs(joinpath(plot_dir,
+                                                 "scan_sound-wave_nratio_split1.toml"))
+    sim_inputs_split2 = get_scan_inputs(joinpath(plot_dir,
+                                                 "scan_sound-wave_nratio_split2.toml"))
+    sim_inputs_split3 = get_scan_inputs(joinpath(plot_dir,
+                                                 "scan_sound-wave_nratio_split3.toml"))
     redirect_stdout(orig_stdout)
 
     legend_data_list1 = []
@@ -416,7 +420,7 @@ function plot_n_scan()
 
     Legend(fig[2,1:2], [legend_data_list1, legend_data_list2], [legend_label_list1, legend_label_list2], ["", ""]; tellheight=true, tellwidth=false, nbanks=5)
 
-    save("n_scan$ext", fig)
+    save(joinpath(plot_dir, "n_scan$ext"), fig)
 
     return nothing
 end
@@ -441,26 +445,26 @@ function plot_T_scan()
 
     orig_stdout = stdout
     redirect_stdout(open("/dev/null", "w"))
-    sim_inputs025 = (get_scan_inputs("scan_sound-wave_T0.25.toml"),
-                     get_scan_inputs("scan_sound-wave_T0.25_split1.toml"),
-                     get_scan_inputs("scan_sound-wave_T0.25_split2.toml"),
-                     get_scan_inputs("scan_sound-wave_T0.25_split3.toml"))
-    sim_inputs05 = (get_scan_inputs("scan_sound-wave_T0.5.toml"),
-                    get_scan_inputs("scan_sound-wave_T0.5_split1.toml"),
-                    get_scan_inputs("scan_sound-wave_T0.5_split2.toml"),
-                    get_scan_inputs("scan_sound-wave_T0.5_split3.toml"))
-    sim_inputs1 = (get_scan_inputs("scan_sound-wave_T1.toml"),
-                   get_scan_inputs("scan_sound-wave_T1_split1.toml"),
-                   get_scan_inputs("scan_sound-wave_T1_split2.toml"),
-                   get_scan_inputs("scan_sound-wave_T1_split3.toml"))
-    sim_inputs2 = (get_scan_inputs("scan_sound-wave_T2.toml"),
-                   get_scan_inputs("scan_sound-wave_T2_split1.toml"),
-                   get_scan_inputs("scan_sound-wave_T2_split2.toml"),
-                   get_scan_inputs("scan_sound-wave_T2_split3.toml"))
-    sim_inputs4 = (get_scan_inputs("scan_sound-wave_T4.toml"),
-                   get_scan_inputs("scan_sound-wave_T4_split1.toml"),
-                   get_scan_inputs("scan_sound-wave_T4_split2.toml"),
-                   get_scan_inputs("scan_sound-wave_T4_split3.toml"))
+    sim_inputs025 = (get_scan_inputs(joinpath(plot_dir, "scan_sound-wave_T0.25.toml")),
+                     get_scan_inputs(joinpath(plot_dir, "scan_sound-wave_T0.25_split1.toml")),
+                     get_scan_inputs(joinpath(plot_dir, "scan_sound-wave_T0.25_split2.toml")),
+                     get_scan_inputs(joinpath(plot_dir, "scan_sound-wave_T0.25_split3.toml")))
+    sim_inputs05 = (get_scan_inputs(joinpath(plot_dir, "scan_sound-wave_T0.5.toml")),
+                    get_scan_inputs(joinpath(plot_dir, "scan_sound-wave_T0.5_split1.toml")),
+                    get_scan_inputs(joinpath(plot_dir, "scan_sound-wave_T0.5_split2.toml")),
+                    get_scan_inputs(joinpath(plot_dir, "scan_sound-wave_T0.5_split3.toml")))
+    sim_inputs1 = (get_scan_inputs(joinpath(plot_dir, "scan_sound-wave_T1.toml")),
+                   get_scan_inputs(joinpath(plot_dir, "scan_sound-wave_T1_split1.toml")),
+                   get_scan_inputs(joinpath(plot_dir, "scan_sound-wave_T1_split2.toml")),
+                   get_scan_inputs(joinpath(plot_dir, "scan_sound-wave_T1_split3.toml")))
+    sim_inputs2 = (get_scan_inputs(joinpath(plot_dir, "scan_sound-wave_T2.toml")),
+                   get_scan_inputs(joinpath(plot_dir, "scan_sound-wave_T2_split1.toml")),
+                   get_scan_inputs(joinpath(plot_dir, "scan_sound-wave_T2_split2.toml")),
+                   get_scan_inputs(joinpath(plot_dir, "scan_sound-wave_T2_split3.toml")))
+    sim_inputs4 = (get_scan_inputs(joinpath(plot_dir, "scan_sound-wave_T4.toml")),
+                   get_scan_inputs(joinpath(plot_dir, "scan_sound-wave_T4_split1.toml")),
+                   get_scan_inputs(joinpath(plot_dir, "scan_sound-wave_T4_split2.toml")),
+                   get_scan_inputs(joinpath(plot_dir, "scan_sound-wave_T4_split3.toml")))
     redirect_stdout(orig_stdout)
 
     legend_data_list1 = []
@@ -505,7 +509,7 @@ function plot_T_scan()
 
     Legend(fig[2,1:2], [legend_data_list1, legend_data_list2], [legend_label_list1, legend_label_list2], ["", ""]; tellheight=true, tellwidth=false, nbanks=5)
 
-    save("T_scan$ext", fig)
+    save(joinpath(plot_dir, "T_scan$ext"), fig)
 
     return nothing
 end
