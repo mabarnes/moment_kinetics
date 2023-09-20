@@ -250,7 +250,7 @@ reload data from time index given by `restart_time_index` for a restart.
 parallel loop ranges, and are only used by the tests in `debug_test/`.
 """
 function setup_moment_kinetics(input_dict::Dict;
-        restart=false, restart_time_index=-1,
+        restart::Union{Bool,AbstractString}=false, restart_time_index::mk_int=-1,
         debug_loop_type::Union{Nothing,NTuple{N,Symbol} where N}=nothing,
         debug_loop_parallel_dims::Union{Nothing,NTuple{N,Symbol} where N}=nothing)
 
@@ -339,14 +339,16 @@ function setup_moment_kinetics(input_dict::Dict;
             else
                 error("Unrecognized binary_format '$binary_format'")
             end
-            restart = glob(joinpath(output_dir, run_name * ".dfns*." * ext))[1]
+            restart_filename = glob(joinpath(output_dir, run_name * ".dfns*." * ext))[1]
+        else
+            restart_filename = restart
         end
 
         # Move the output file being restarted from to make sure it doesn't get
         # overwritten.
         dfns_filename, backup_dfns_filename, parallel_io, moments_filename,
         backup_moments_filename, backup_prefix_iblock =
-            get_backup_filename(restart)
+            get_backup_filename(restart_filename)
         # Ensure every process got the filenames and checked files exist before moving
         # files
         MPI.Barrier(comm_world)
