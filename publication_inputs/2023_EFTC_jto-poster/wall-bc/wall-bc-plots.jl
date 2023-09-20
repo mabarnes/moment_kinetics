@@ -1,5 +1,6 @@
 using CairoMakie
 using LaTeXStrings
+using MathTeXEngine
 
 using moment_kinetics.makie_post_processing
 
@@ -8,7 +9,9 @@ function main()
     ext = ".png"
 
     CairoMakie.activate!(; px_per_unit=4)
-    update_theme!(fontsize=24)
+    update_theme!(fontsize=24, fonts=(; regular=texfont(:text), bold=texfont(:bold),
+                                      italic=texfont(:italic),
+                                      bold_italic=texfont(:bolditalic)))
 
     #run_dir = "runs/wall-bc_recyclefraction0.5"
     #run_dir = "runs/wall-bc_recyclefraction0.5_split3"
