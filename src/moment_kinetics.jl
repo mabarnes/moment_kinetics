@@ -159,10 +159,10 @@ function run_moment_kinetics()
     options = get_options()
     inputfile = options["inputfile"]
     restart = options["restart"]
-    if options["restart_file"] !== nothing
+    if options["restartfile"] !== nothing
         restart = options["restartfile"]
     end
-    restart_time_index = options["restart_time_index"]
+    restart_time_index = options["restart-time-index"]
     if inputfile === nothing
         this_input = Dict()
     else
