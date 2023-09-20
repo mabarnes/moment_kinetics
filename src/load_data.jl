@@ -682,6 +682,10 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
             moments.charged.qpar .= load_moment("parallel_heat_flux")
             moments.charged.qpar_updated .= true
             moments.charged.vth .= load_moment("thermal_speed")
+                moments.charged.chodura_integral_lower .= load_slice(dynamic, "chodura_integral_lower",
+                                                  r_range, :, time_index)
+                moments.charged.chodura_integral_upper .= load_slice(dynamic, "chodura_integral_upper",
+                                                  r_range, :, time_index)
 
             if "external_source_controller_integral" ∈ get_variable_keys(dynamic) &&
                     length(moments.charged.external_source_controller_integral) == 1
@@ -956,7 +960,18 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
             end
 
             pdf.charged.norm .= load_charged_pdf()
-
+                if z.irank == 0
+                    moments.charged.chodura_integral_lower .= load_slice(dynamic, "chodura_integral_lower", :, :,
+                                                  time_index)
+                else
+                    moments.charged.chodura_integral_lower .= 0.0
+                end
+                if z.irank == z.nrank - 1
+                    moments.charged.chodura_integral_upper .= load_slice(dynamic, "chodura_integral_upper", :, :,
+                                                  time_index)
+                else
+                    moments.charged.chodura_integral_upper .= 0.0
+                end
             boundary_distributions_io = get_group(fid, "boundary_distributions")
 
             function load_charged_boundary_pdf(var_name, ir)
