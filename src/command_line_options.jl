@@ -16,7 +16,7 @@ const s = ArgParseSettings()
         arg_type = String
         default = nothing
     "restartfile"
-        help = "Name of NetCDF file to restart from"
+        help = "Name of output file (HDF5 or NetCDF) to restart from"
         arg_type = String
         default = nothing
     "--debug", "-d"
@@ -24,14 +24,18 @@ const s = ArgParseSettings()
                "integer values activate more checks (and increase run time)"
         arg_type = Int
         default = 0
-    # Options for tests
-    "--long"
-        help = "Include more tests, increasing test run time."
+    "--restart"
+        help = "Restart from latest output file in run directory (ignored if " *
+               "`restartfile` is passed)"
         action = :store_true
     "--restart-time-index"
         help = "Time index in output file to restart from, defaults to final time point"
         arg_type = Int
         default = -1
+    # Options for tests
+    "--long"
+        help = "Include more tests, increasing test run time."
+        action = :store_true
     "--verbose", "-v"
         help = "Print verbose output from tests."
         action = :store_true

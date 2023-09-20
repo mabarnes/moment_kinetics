@@ -18,6 +18,6 @@ source julia.env
 
 echo "running INPUTFILE $(date)"
 
-mpirun -np $SLURM_NTASKS bin/julia -Jmoment_kinetics.so --project -O3 --check-bounds=no restart_moment_kinetics.jl INPUTFILE RESTARTFROM
+mpirun -np $SLURM_NTASKS bin/julia -Jmoment_kinetics.so --project -O3 --check-bounds=no run_moment_kinetics.jl --restart INPUTFILE RESTARTFROM
 
 echo "finished INPUTFILE $(date)"

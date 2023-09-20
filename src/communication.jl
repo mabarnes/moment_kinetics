@@ -125,8 +125,12 @@ function setup_distributed_memory_MPI(z_nelement_global,z_nelement_local,r_nelem
     end
 	# throw an error if user specified information is inconsistent
     if (nrank_per_zr_block*nblocks < nrank_global)
-        error("ERROR: You must choose global number of processes to be an integer multiple of the number of \n
-               nblocks = (r_nelement_global/r_nelement_local)*(z_nelement_global/z_nelement_local)")
+        error("ERROR: You must choose global number of processes to be an integer "
+              * "multiple of the number of\n"
+              * "nblocks($nblocks) = (r_nelement_global($r_nelement_global)/"
+              * "r_nelement_local($r_nelement_local))*"
+              * "(z_nelement_global($z_nelement_global)/"
+              * "z_nelement_local($z_nelement_local))")
     end
     
     # assign information regarding shared-memory blocks
