@@ -72,6 +72,8 @@ struct moments_charged_substruct
     # v_norm_fac accounts for this: it is vth if using the above definition for the parallel velocity,
     # and it is one otherwise
     v_norm_fac::Union{MPISharedArray{mk_float,3},Nothing}
+    # this is the z-derivative of the particle density
+    ddens_dz::Union{MPISharedArray{mk_float,3},Nothing}
     # this is the upwinded z-derivative of the particle density
     ddens_dz_upwind::Union{MPISharedArray{mk_float,3},Nothing}
     # this is the second-z-derivative of the particle density
@@ -154,6 +156,8 @@ struct moments_neutral_substruct
     # and it is one otherwise
     v_norm_fac::MPISharedArray{mk_float,3}
     # this is the z-derivative of the particle density
+    ddens_dz::Union{MPISharedArray{mk_float,3},Nothing}
+    # this is the z-derivative of the particle density
     ddens_dz_upwind::Union{MPISharedArray{mk_float,3},Nothing}
     # this is the second-z-derivative of the particle density
     d2dens_dz2::Union{MPISharedArray{mk_float,3},Nothing}
@@ -224,8 +228,10 @@ function create_moments_charged(nz, nr, n_species, evolve_density, evolve_upar,
     end
 
     if evolve_density
+        ddens_dz = allocate_shared_float(nz, nr, n_species)
         ddens_dz_upwind = allocate_shared_float(nz, nr, n_species)
     else
+        ddens_dz = nothing
         ddens_dz_upwind = nothing
     end
     if evolve_density &&
@@ -308,10 +314,11 @@ function create_moments_charged(nz, nr, n_species, evolve_density, evolve_upar,
     return moments_charged_substruct(density, density_updated, parallel_flow,
         parallel_flow_updated, parallel_pressure, parallel_pressure_updated,
         parallel_heat_flux, parallel_heat_flux_updated, thermal_speed, v_norm_fac,
-        ddens_dz_upwind, d2dens_dz2, dupar_dz, dupar_dz_upwind, d2upar_dz2, dppar_dz,
-        dppar_dz_upwind, d2ppar_dz2, dqpar_dz, dvth_dz, external_source_amplitude,
-        external_source_density_amplitude, external_source_momentum_amplitude,
-        external_source_pressure_amplitude, external_source_controller_integral)
+        ddens_dz, ddens_dz_upwind, d2dens_dz2, dupar_dz, dupar_dz_upwind, d2upar_dz2,
+        dppar_dz, dppar_dz_upwind, d2ppar_dz2, dqpar_dz, dvth_dz,
+        external_source_amplitude, external_source_density_amplitude,
+        external_source_momentum_amplitude, external_source_pressure_amplitude,
+        external_source_controller_integral)
 end
 
 # neutral particles have natural mean velocities 
@@ -358,8 +365,10 @@ function create_moments_neutral(nz, nr, n_species, evolve_density, evolve_upar,
     qz_updated .= false
 
     if evolve_density
+        ddens_dz = allocate_shared_float(nz, nr, n_species)
         ddens_dz_upwind = allocate_shared_float(nz, nr, n_species)
     else
+        ddens_dz = nothing
         ddens_dz_upwind = nothing
     end
     if evolve_density &&
@@ -441,9 +450,9 @@ function create_moments_neutral(nz, nr, n_species, evolve_density, evolve_upar,
     # return struct containing arrays needed to update moments
     return moments_neutral_substruct(density, density_updated, uz, uz_updated, ur,
         ur_updated, uzeta, uzeta_updated, pz, pz_updated, pr, pr_updated, pzeta,
-        pzeta_updated, ptot, qz, qz_updated, vth, v_norm_fac, ddens_dz_upwind, d2dens_dz2,
-        duz_dz, duz_dz_upwind, d2uz_dz2, dpz_dz, dpz_dz_upwind, d2pz_dz2, dqz_dz, dvth_dz,
-        external_source_amplitude, external_source_density_amplitude,
+        pzeta_updated, ptot, qz, qz_updated, vth, v_norm_fac, ddens_dz, ddens_dz_upwind,
+        d2dens_dz2, duz_dz, duz_dz_upwind, d2uz_dz2, dpz_dz, dpz_dz_upwind, d2pz_dz2,
+        dqz_dz, dvth_dz, external_source_amplitude, external_source_density_amplitude,
         external_source_momentum_amplitude, external_source_pressure_amplitude,
         external_source_controller_integral)
 end
@@ -755,6 +764,8 @@ function calculate_moment_derivatives!(moments, scratch, scratch_dummy, z, z_spe
         buffer_r_5 = @view scratch_dummy.buffer_rs_5[:,is]
         buffer_r_6 = @view scratch_dummy.buffer_rs_6[:,is]
         if moments.evolve_density
+            @views derivative_z!(moments.charged.ddens_dz[:,:,is], density, buffer_r_1,
+                                 buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
             # Upwinded using upar as advection velocity, to be used in continuity equation
             @loop_r_z ir iz begin
                 dummy_zr[iz,ir] = -upar[iz,ir]
@@ -1288,6 +1299,8 @@ function calculate_moment_derivatives_neutral!(moments, scratch, scratch_dummy, 
         buffer_r_5 = @view scratch_dummy.buffer_rsn_5[:,isn]
         buffer_r_6 = @view scratch_dummy.buffer_rsn_6[:,isn]
         if moments.evolve_density
+            @views derivative_z!(moments.neutral.ddens_dz[:,:,isn], density, buffer_r_1,
+                                 buffer_r_2, buffer_r_3, buffer_r_4, z_spectral, z)
             # Upwinded using upar as advection velocity, to be used in continuity equation
             @loop_r_z ir iz begin
                 dummy_zr[iz,ir] = -uz[iz,ir]
