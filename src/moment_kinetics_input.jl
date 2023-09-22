@@ -10,7 +10,10 @@ export read_input_file
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float
 using ..communication
+using ..coordinates: define_coordinate
 using ..file_io: io_has_parallel, input_option_error, open_ascii_output_file
+using ..constants
+using ..krook_collisions: setup_krook_collisions
 using ..finite_differences: fd_check_option
 using ..input_structs
 using ..numerical_dissipation: setup_numerical_dissipation
@@ -33,114 +36,6 @@ function read_input_file(input_filename::String)
     end
 
     return input
-end
-
-import Base: get
-"""
-Utility method for converting a string to an Enum when getting from a Dict, based on the
-type of the default value
-"""
-function get(d::Dict, key, default::Enum)
-    valstring = get(d, key, nothing)
-    if valstring == nothing
-        return default
-    # instances(typeof(default)) gets the possible values of the Enum. Then convert to
-    # Symbol, then to String.
-    elseif valstring ∈ (split(s, ".")[end] for s ∈ String.(Symbol.(instances(typeof(default)))))
-        return eval(Symbol(valstring))
-    else
-        error("Expected a $(typeof(default)), but '$valstring' is not in "
-              * "$(instances(typeof(default)))")
-    end
-end
-
-"""
-Set the defaults for options in the top level of the input, and check that there are not
-any unexpected options (i.e. options that have no default).
-
-Modifies the options[section_name]::Dict by adding defaults for any values that are not
-already present.
-
-Ignores any sections, as these will be checked separately.
-"""
-function set_defaults_and_check_top_level!(options::AbstractDict; kwargs...)
-    DictType = typeof(options)
-
-    # Check for any unexpected values in the options - all options that are set should be
-    # present in the kwargs of this function call
-    options_keys_symbols = keys(kwargs)
-    options_keys = (String(k) for k ∈ options_keys_symbols)
-    for (key, value) in options
-        # Ignore any ssections when checking
-        if !(isa(value, AbstractDict) || key ∈ options_keys)
-            error("Unexpected option '$key=$value' in top-level options")
-        end
-    end
-
-    # Set default values if a key was not set explicitly
-    explicit_keys = keys(options)
-    for (key_sym, value) ∈ kwargs
-        key = String(key_sym)
-        if !(key ∈ explicit_keys)
-            options[key] = value
-        end
-    end
-
-    return options
-end
-
-"""
-Set the defaults for options in a section, and check that there are not any unexpected
-options (i.e. options that have no default).
-
-Modifies the options[section_name]::Dict by adding defaults for any values that are not
-already present.
-"""
-function set_defaults_and_check_section!(options::AbstractDict, section_name;
-                                         kwargs...)
-    DictType = typeof(options)
-
-    if !(section_name ∈ keys(options))
-        # If section is not present, create it
-        options[section_name] = DictType()
-    end
-
-    if !isa(options[section_name], AbstractDict)
-        error("Expected '$section_name' to be a section in the input file, but it has a "
-              * "value '$(options[section_name])'")
-    end
-
-    section = options[section_name]
-
-    # Check for any unexpected values in the section - all options that are set should be
-    # present in the kwargs of this function call
-    section_keys_symbols = keys(kwargs)
-    section_keys = (String(k) for k ∈ section_keys_symbols)
-    for (key, value) in section
-        if !(key ∈ section_keys)
-            error("Unexpected option '$key=$value' in section '$section_name'")
-        end
-    end
-
-    # Set default values if a key was not set explicitly
-    explicit_keys = keys(section)
-    for (key_sym, value) ∈ kwargs
-        key = String(key_sym)
-        if !(key ∈ explicit_keys)
-            section[key] = value
-        end
-    end
-
-    return section
-end
-
-"""
-Convert a Dict whose keys are String or Symbol to a NamedTuple
-
-Useful as NamedTuple is immutable, so option values cannot be accidentally changed.
-"""
-function Dict_to_NamedTuple(d)
-    return NamedTuple(Symbol(k)=>v for (k,v) ∈ d)
 end
 
 """
@@ -197,27 +92,26 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     composition.Er_constant = get(scan_input, "Er_constant", 0.0)
 
     # Get reference parameters for normalizations
-    reference_parameter_section = set_defaults_and_check_section!(
+    reference_parameter_section = copy(set_defaults_and_check_section!(
         scan_input, "reference_params";
         Bref=1.0,
         Lref=10.0,
         Nref=1.0e19,
         Tref=100.0,
-       )
+        mref=deuteron_mass,
+       ))
+    reference_parameter_section["cref"] = sqrt(2.0 * proton_charge * reference_parameter_section["Tref"] / (reference_parameter_section["mref"]))
+    reference_parameter_section["timeref"] = reference_parameter_section["Lref"] / reference_parameter_section["cref"]
+    reference_parameter_section["Omegaref"] = proton_charge * reference_parameter_section["Bref"] / reference_parameter_section["mref"]
     reference_parameters = Dict_to_NamedTuple(reference_parameter_section)
 
-    elementary_charge = 1.602176634e-19 # C
-    mi = 3.3435837724e-27 # kg
-    cref = sqrt(2.0 * elementary_charge*reference_parameters.Tref / mi) # m/s
-    Omegaref = elementary_charge * reference_parameters.Bref / mi
-    
     ## set geometry_input
     geometry.Bzed = get(scan_input, "Bzed", 1.0)
     geometry.Bmag = get(scan_input, "Bmag", 1.0)
     geometry.bzed = geometry.Bzed/geometry.Bmag
     geometry.bzeta = sqrt(1.0 - geometry.bzed^2.0)
     geometry.Bzeta = geometry.Bmag*geometry.bzeta
-    geometry.rhostar = get(scan_input, "rhostar", cref/reference_parameters.Lref/Omegaref)
+    geometry.rhostar = get(scan_input, "rhostar", reference_parameters.cref/reference_parameters.Lref/reference_parameters.Omegaref)
     #println("Info: Bzed is ",geometry.Bzed)
     #println("Info: Bmag is ",geometry.Bmag)
     #println("Info: rhostar is ",geometry.rhostar)
@@ -284,6 +178,12 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     collisions.charge_exchange = get(scan_input, "charge_exchange_frequency", 2.0*sqrt(species.charged[1].initial_temperature))
     collisions.ionization = get(scan_input, "ionization_frequency", collisions.charge_exchange)
     collisions.constant_ionization_rate = get(scan_input, "constant_ionization_rate", false)
+    include_krook_collisions = get(scan_input, "krook_collisions", false)
+    if include_krook_collisions
+        collisions.krook_collision_frequency_prefactor = setup_krook_collisions(reference_parameters)
+    else
+        collisions.krook_collision_frequency_prefactor = -1.0
+    end
 
     # parameters related to the time stepping
     nstep = get(scan_input, "nstep", 5)
@@ -588,6 +488,23 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     io_immutable = io_input(; output_dir=output_dir, run_name=run_name,
                               Dict(Symbol(k)=>v for (k,v) in io_settings)...)
 
+    # initialize z grid and write grid point locations to file
+    z, z_spectral = define_coordinate(z_immutable, io_immutable.parallel_io)
+    # initialize r grid and write grid point locations to file
+    r, r_spectral = define_coordinate(r_immutable, io_immutable.parallel_io)
+    # initialize vpa grid and write grid point locations to file
+    vpa, vpa_spectral = define_coordinate(vpa_immutable, io_immutable.parallel_io)
+    # initialize vperp grid and write grid point locations to file
+    vperp, vperp_spectral = define_coordinate(vperp_immutable, io_immutable.parallel_io)
+    # initialize gyrophase grid and write grid point locations to file
+    gyrophase, gyrophase_spectral = define_coordinate(gyrophase_immutable, io_immutable.parallel_io)
+    # initialize vz grid and write grid point locations to file
+    vz, vz_spectral = define_coordinate(vz_immutable, io_immutable.parallel_io)
+    # initialize vr grid and write grid point locations to file
+    vr, vr_spectral = define_coordinate(vr_immutable, io_immutable.parallel_io)
+    # initialize vr grid and write grid point locations to file
+    vzeta, vzeta_spectral = define_coordinate(vzeta_immutable, io_immutable.parallel_io)
+
     if global_rank[] == 0 && save_inputs_to_txt
         # Make file to log some information about inputs into.
         # check to see if output_dir exists in the current directory
@@ -604,10 +521,12 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
                 save_inputs_to_txt)
 
     # return immutable structs for z, vpa, species and composition
-    all_inputs = (io_immutable, evolve_moments, t_input,
-                  z_immutable, r_immutable, vpa_immutable, vperp_immutable, gyrophase_immutable, vz_immutable, vr_immutable, vzeta_immutable,
-                  composition, species_immutable, collisions, geometry, drive_immutable,
-                  num_diss_params, manufactured_solns_input)
+    all_inputs = (io_immutable, evolve_moments, t_input, z, z_spectral, r, r_spectral,
+                  vpa, vpa_spectral, vperp, vperp_spectral, gyrophase, gyrophase_spectral,
+                  vz, vz_spectral, vr, vr_spectral, vzeta, vzeta_spectral, composition,
+                  species_immutable, collisions, geometry, drive_immutable,
+                  num_diss_params, manufactured_solns_input,
+                  reference_parameters)
     println(io, "\nAll inputs returned from mk_input():")
     println(io, all_inputs)
     close(io)
@@ -1036,7 +955,9 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     # ionization collision frequency
     ionization = 0.0
     constant_ionization_rate = false
-    collisions = collisions_input(charge_exchange, ionization, constant_ionization_rate)
+    krook_collision_frequency_prefactor = -1.0
+    collisions = collisions_input(charge_exchange, ionization, constant_ionization_rate,
+                                  krook_collision_frequency_prefactor)
 
     Bzed = 1.0 # magnetic field component along z
     Bmag = 1.0 # magnetic field strength

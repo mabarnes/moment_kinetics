@@ -18,11 +18,11 @@ using ..analysis: analyze_fields_data, check_Chodura_condition, get_r_perturbati
                   get_Fourier_modes_2D, get_Fourier_modes_1D, steady_state_residuals
 using ..array_allocation: allocate_float
 using ..coordinates: define_coordinate
-using ..input_structs: grid_input, advection_input
+using ..input_structs: grid_input, advection_input, set_defaults_and_check_top_level!,
+                       set_defaults_and_check_section!, Dict_to_NamedTuple
 using ..looping: all_dimensions, ion_dimensions, neutral_dimensions
 using ..manufactured_solns: manufactured_solutions, manufactured_electric_fields
-using ..moment_kinetics_input: mk_input, set_defaults_and_check_top_level!,
-                               set_defaults_and_check_section!, Dict_to_NamedTuple
+using ..moment_kinetics_input: mk_input
 using ..load_data: open_readonly_output_file, get_group, load_block_data,
                    load_coordinate_data, load_distributed_charged_pdf_slice,
                    load_distributed_neutral_pdf_slice, load_input, load_mk_options,
@@ -778,10 +778,9 @@ function get_run_info(run_dir, restart_index=nothing; itime_min=1, itime_max=-1,
 
     # obtain input options from moment_kinetics_input.jl
     # and check input to catch errors
-    io_input, evolve_moments, t_input, z_input, r_input, vpa_input, vperp_input,
-        gyrophase_input, vz_input, vr_input, vzeta_input, composition, species,
-        collisions, geometry, drive_input, num_diss_params, manufactured_solns_input =
-        mk_input(input)
+    io_input, evolve_moments, t_input, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _,
+        composition, species, collisions, geometry, drive_input, num_diss_params,
+        manufactured_solns_input, reference_parameters = mk_input(input)
 
     n_ion_species, n_neutral_species = load_species_data(file_final_restart)
     evolve_density, evolve_upar, evolve_ppar = load_mk_options(file_final_restart)
