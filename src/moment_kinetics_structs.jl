@@ -46,8 +46,16 @@ struct em_fields_struct
 end
 
 """
+discretization_info for one dimension
+
+All the specific discretizations in moment_kinetics are subtypes of this type.
 """
-struct chebyshev_info{TForward <: FFTW.cFFTWPlan, TBackward <: AbstractFFTs.ScaledPlan}
+abstract type discretization_info end
+
+"""
+Chebyshev pseudospectral discretization
+"""
+struct chebyshev_info{TForward <: FFTW.cFFTWPlan, TBackward <: AbstractFFTs.ScaledPlan} <: discretization_info
     # fext is an array for storing f(z) on the extended domain needed
     # to perform complex-to-complex FFT using the fact that f(theta) is even in theta
     fext::Array{Complex{mk_float},1}
@@ -63,5 +71,10 @@ struct chebyshev_info{TForward <: FFTW.cFFTWPlan, TBackward <: AbstractFFTs.Scal
     #backward_transform::FFTW.cFFTWPlan
     backward::TBackward
 end
+
+"""
+Finite difference discretization
+"""
+struct finite_difference_info <: discretization_info end
 
 end
