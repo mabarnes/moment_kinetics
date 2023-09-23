@@ -6,7 +6,8 @@ export derivative!, second_derivative!
 export reconcile_element_boundaries_MPI!
 export integral
 
-using ..moment_kinetics_structs: chebyshev_info
+using ..moment_kinetics_structs: discretization_info, finite_difference_info,
+                                 chebyshev_info
 using ..type_definitions: mk_float, mk_int
 using MPI
 using ..communication: block_rank
@@ -42,7 +43,7 @@ function elementwise_second_derivative! end
 
 Upwinding derivative.
 """
-function derivative!(df, f, coord, adv_fac, spectral::Union{Bool,<:chebyshev_info})
+function derivative!(df, f, coord, adv_fac, spectral::discretization_info)
     # get the derivative at each grid point within each element and store in
     # coord.scratch_2d
     elementwise_derivative!(coord, f, adv_fac, spectral)
@@ -65,7 +66,7 @@ function derivative!(df, f, coord, spectral)
     derivative_elements_to_full_grid!(df, coord.scratch_2d, coord)
 end
 
-function second_derivative!(df, f, coord, spectral::Bool)
+function second_derivative!(df, f, coord, spectral::finite_difference_info)
     # Finite difference version must use an appropriate second derivative stencil, not
     # apply the 1st derivative twice as for the spectral element method
 

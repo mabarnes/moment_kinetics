@@ -1,6 +1,7 @@
 module hermite_spline_interpolation
 
 using ..calculus: derivative!
+using ..moment_kinetics_structs: finite_difference_info
 import ..interpolation: interpolate_to_grid_1d!
 
 """
@@ -17,11 +18,12 @@ f : Array{mk_float}
     Field to be interpolated
 coord : coordinate
     `coordinate` struct giving the coordinate along which f varies
-not_spectral : Bool
-    A Bool argument here indicates that the coordinate is not spectral-element
-    discretized, i.e. it is on a uniform ('finite difference') grid.
+not_spectral : finite_difference_info
+    A finite_difference_info argument here indicates that the coordinate is not
+    spectral-element discretized, i.e. it is on a uniform ('finite difference') grid.
 """
-function interpolate_to_grid_1d!(result, new_grid, f, coord, not_spectral::Bool)
+function interpolate_to_grid_1d!(result, new_grid, f, coord,
+                                 not_spectral::finite_difference_info)
     x = coord.grid
     n_new = length(new_grid)
 

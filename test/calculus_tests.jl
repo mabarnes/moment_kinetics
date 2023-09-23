@@ -101,7 +101,7 @@ function runtests()
                 expected_df = @. 2.0 * π / L * cospi(2.0 * x.grid / L)
 
                 # differentiate f
-                derivative!(df, f, x, false)
+                derivative!(df, f, x, spectral)
 
                 rtol = 1.e2 / (nelement*(ngrid-1))^4
                 @test isapprox(df, expected_df, rtol=rtol, atol=1.e-15,
@@ -152,7 +152,7 @@ function runtests()
                     adv_fac .= advection
 
                     # differentiate f
-                    derivative!(df, f, x, adv_fac, false)
+                    derivative!(df, f, x, adv_fac, spectral)
 
                     rtol = 1.e2 / (nelement*(ngrid-1))^order
                     @test isapprox(df, expected_df, rtol=rtol, atol=1.e-15,
@@ -196,7 +196,7 @@ function runtests()
                 expected_df = @. -2.0 * π / L * sinpi(2.0 * x.grid / L)
 
                 # differentiate f
-                derivative!(df, f, x, false)
+                derivative!(df, f, x, spectral)
 
                 # Note: only get 1st order convergence at the boundary for an input
                 # function that has zero gradient at the boundary
@@ -251,7 +251,7 @@ function runtests()
                     adv_fac .= advection
 
                     # differentiate f
-                    derivative!(df, f, x, adv_fac, false)
+                    derivative!(df, f, x, adv_fac, spectral)
 
                     # Note: only get 1st order convergence at the boundary for an input
                     # function that has zero gradient at the boundary

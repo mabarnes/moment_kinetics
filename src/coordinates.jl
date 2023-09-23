@@ -11,6 +11,7 @@ using ..calculus: derivative!
 using ..chebyshev: scaled_chebyshev_grid, setup_chebyshev_pseudospectral
 using ..quadrature: composite_simpson_weights
 using ..input_structs: advection_input
+using ..moment_kinetics_structs: finite_difference_info
 
 using MPI
 
@@ -159,8 +160,9 @@ function define_coordinate(input, parallel_io::Bool=false)
         # obtain the local derivatives of the uniform grid with respect to the used grid
         derivative!(coord.duniform_dgrid, coord.uniform_grid, coord, spectral)
     else
-        # create dummy Bool variable to return in place of the above struct
-        spectral = false
+        # finite_difference_info is just a type so that derivative methods, etc., dispatch
+        # to the finite difference versions, it does not contain any information.
+        spectral = finite_difference_info()
         coord.duniform_dgrid .= 1.0
     end
 
