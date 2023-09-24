@@ -76,4 +76,14 @@ Finite difference discretization
 """
 struct finite_difference_info <: discretization_info end
 
+"""
+Type representing a spatial dimension with only one grid point
+"""
+struct null_spatial_dimension_info <: discretization_info end
+
+"""
+Type representing a velocity space dimension with only one grid point
+"""
+struct null_velocity_dimension_info <: discretization_info end
+
 end
