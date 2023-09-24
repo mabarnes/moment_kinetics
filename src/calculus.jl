@@ -7,7 +7,8 @@ export reconcile_element_boundaries_MPI!
 export integral
 
 using ..moment_kinetics_structs: discretization_info, finite_difference_info,
-                                 chebyshev_info
+                                 chebyshev_info, null_spatial_dimension_info,
+                                 null_velocity_dimension_info
 using ..type_definitions: mk_float, mk_int
 using MPI
 using ..communication: block_rank
@@ -64,6 +65,13 @@ function derivative!(df, f, coord, spectral)
     # map the derivative from the elem;ntal grid to the full grid;
     # at element boundaries, use the average of the derivatives from neighboring elements.
     derivative_elements_to_full_grid!(df, coord.scratch_2d, coord)
+end
+
+# Special versions for 'null' coordinates with only one point
+function derivative!(df, f, coord, spectral::Union{null_spatial_dimension_info,
+                                                   null_velocity_dimension_info})
+    df .= 0.0
+    return nothing
 end
 
 function second_derivative!(df, f, coord, spectral::finite_difference_info)
