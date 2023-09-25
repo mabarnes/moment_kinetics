@@ -690,8 +690,7 @@ function runtests()
 				nrank_per_block = 0 # dummy value
 				irank = 0 # dummy value
 				comm = MPI.COMM_NULL # dummy value
-                #element_spacing_option = "uniform"
-				input = grid_input("coord", ngrid, nelement,
+                input = grid_input("coord", ngrid, nelement,
                     nelement_local, nrank_per_block, irank, L,
                     "chebyshev_pseudospectral", fd_option, bc, adv_input, comm,
                     element_spacing_option)
@@ -727,7 +726,7 @@ function runtests()
         end
 
         @testset "Chebyshev pseudospectral derivatives upwinding (5 argument), Neumann" verbose=false begin
-            @testset "$nelement $ngrid" for bc ∈ ("constant", "zero"),
+            @testset "$nelement $ngrid" for bc ∈ ("constant", "zero"), element_spacing_option ∈ ("uniform", "sqrt"),
                     nelement ∈ (1:5), ngrid ∈ (3:33)
 
                 # define inputs needed for the test
@@ -742,8 +741,7 @@ function runtests()
 				nrank_per_block = 0 # dummy value
 				irank = 0 # dummy value
 				comm = MPI.COMM_NULL # dummy value
-                element_spacing_option = "uniform"
-				input = grid_input("coord", ngrid, nelement,
+                input = grid_input("coord", ngrid, nelement,
                     nelement_local, nrank_per_block, irank, L,
                     "chebyshev_pseudospectral", fd_option, bc, adv_input, comm,
                     element_spacing_option)
