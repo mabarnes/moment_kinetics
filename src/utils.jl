@@ -5,13 +5,15 @@ module utils
 
 export get_unnormalized_parameters, print_unnormalized_parameters
 
+using ..constants
 using ..moment_kinetics_input: mk_input
+using ..reference_parameters
 
 using OrderedCollections
 using TOML
 using Unitful
 
-Unitful.@unit eV "eV" "electron volt" 1.602176634e-19*Unitful.J true
+Unitful.@unit eV "eV" "electron volt" proton_charge*Unitful.J true
 
 function __init__()
     Unitful.register(utils)
@@ -29,18 +31,20 @@ function get_unnormalized_parameters(input::Dict)
     io_input, evolve_moments, t_input, z, z_spectral, r, r_spectral, vpa, vpa_spectral,
         vperp, vperp_spectral, gyrophase, gyrophase_spectral, vz, vz_spectral, vr,
         vr_spectral, vzeta, vzeta_spectral, composition, species, collisions, geometry,
-        drive_input, external_source_settings, num_diss_params, manufactured_solns_input,
-        reference_parameters = mk_input(input)
+        drive_input, external_source_settings, num_diss_params, manufactured_solns_input =
+            mk_input(input)
 
-    Nnorm = reference_parameters.Nref * Unitful.m^(-3)
-    Tnorm = reference_parameters.Tref * eV
-    Lnorm = reference_parameters.Lref * Unitful.m
-    Bnorm = reference_parameters.Bref * Unitful.T
-    cnorm = reference_parameters.cref * Unitful.m / Unitful.s
-    timenorm = reference_parameters.timeref * Unitful.s
+    reference_params = setup_reference_parameters(input)
+
+    Nnorm = reference_params.Nref * Unitful.m^(-3)
+    Tnorm = reference_params.Tref * eV
+    Lnorm = reference_params.Lref * Unitful.m
+    Bnorm = reference_params.Bref * Unitful.T
+    cnorm = reference_params.cref * Unitful.m / Unitful.s
+    timenorm = reference_params.timeref * Unitful.s
 
     # Assume single ion species so normalised ion mass is always 1
-    mi = reference_parameters.mnorm * Unitful.kg
+    mi = reference_params.mref * Unitful.kg
 
     parameters = OrderedDict{String,Any}()
     parameters["run_name"] = run_name

@@ -27,6 +27,7 @@ include("quadrature.jl")
 include("hermite_spline_interpolation.jl")
 include("derivatives.jl")
 include("input_structs.jl")
+include("reference_parameters.jl")
 include("coordinates.jl")
 include("file_io.jl")
 include("velocity_moments.jl")
@@ -355,8 +356,7 @@ function setup_moment_kinetics(input_dict::Dict; restart_prefix_iblock=nothing,
     io_input, evolve_moments, t_input, z, z_spectral, r, r_spectral, vpa, vpa_spectral,
         vperp, vperp_spectral, gyrophase, gyrophase_spectral, vz, vz_spectral, vr,
         vr_spectral, vzeta, vzeta_spectral, composition, species, collisions, geometry,
-        drive_input, num_diss_params, manufactured_solns_input,
-        reference_parameters = input
+        drive_input, num_diss_params, manufactured_solns_input = input
 
     # Create loop range variables for shared-memory-parallel loops
     if debug_loop_type === nothing

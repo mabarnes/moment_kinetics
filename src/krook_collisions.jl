@@ -10,11 +10,11 @@ Calculate normalized collision frequency at reference parameters for Coulomb col
 
 Currently valid only for hydrogenic ions (Z=1)
 """
-function setup_krook_collisions(reference_parameters)
-    Nref = reference_parameters.Nref
-    Tref = reference_parameters.Tref
-    mref = reference_parameters.mref
-    timeref = reference_parameters.timeref
+function setup_krook_collisions(reference_params)
+    Nref = reference_params.Nref
+    Tref = reference_params.Tref
+    mref = reference_params.mref
+    timeref = reference_params.timeref
 
     Nref_per_cm3 = Nref * 1.0e-6
 
