@@ -38,7 +38,6 @@ function runtests()
 				nrank_per_block = 0 # dummy value
 				irank = 0 # dummy value
 				comm = MPI.COMM_NULL # dummy value 
-                #element_spacing_option = "uniform" # dummy value
 				input = grid_input("coord", ngrid, nelement,
                     nelement_local, nrank_per_block, irank, L,
                     discretization, fd_option, bc, adv_input, comm,

@@ -228,7 +228,9 @@ function run_test(test_input, expected_phi, tolerance; args...)
 
         # Cross comparison of all discretizations to same benchmark
         if test_input["z_element_spacing_option"] == "uniform" 
-            # only support this test for uniform element spacing
+            # Only support this test for uniform element spacing.
+            # phi is better resolved by "sqrt" spacing grid, so disagrees with benchmark data from
+            # simulation with uniform element spacing.
             phi_interp = interpolate_to_grid_z(cross_compare_points, phi[:, end], z, z_spectral)
             @test isapprox(phi_interp, cross_compare_phi, rtol=tolerance, atol=1.e-15)
         end
