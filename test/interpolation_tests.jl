@@ -27,18 +27,21 @@ adv_input = advection_input("default", 1.0, 0.0, 0.0)
 function runtests()
     @testset "interpolation" verbose=use_verbose begin
         @testset "$discretization, $ntest, $nelement, $zlim" for
-                (discretization, rtol) ∈
-                    (("finite_difference", 1.e-5), ("chebyshev_pseudospectral", 1.e-8)),
+                (discretization, element_spacing_option, rtol) ∈
+                    (("finite_difference", "uniform", 1.e-5), ("chebyshev_pseudospectral", "uniform", 1.e-8),
+                    ("chebyshev_pseudospectral", "sqrt", 1.e-8)),
                     ntest ∈ (3, 14), nelement ∈ (2, 8), zlim ∈ (L/2.0, L/5.0)
 
             # create the 'input' struct containing input info needed to create a coordinate
 			nelement_local = nelement
 			nrank_per_block = 0 # dummy value
 			irank = 0 # dummy value
-			comm = MPI.COMM_NULL # dummy value 
+			comm = MPI.COMM_NULL # dummy value
+            #element_spacing_option = "uniform"
 			input = grid_input("coord", ngrid, nelement,
 				nelement_local, nrank_per_block, irank, L,
-				discretization, fd_option, bc, adv_input, comm)
+				discretization, fd_option, bc, adv_input, comm,
+                element_spacing_option)
             # create the coordinate struct 'z'
             z, spectral = define_coordinate(input)
 

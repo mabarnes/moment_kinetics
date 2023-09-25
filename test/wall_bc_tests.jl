@@ -82,6 +82,7 @@ test_input_finite_difference = Dict("n_ion_species" => 1,
                                     "z_nelement" => 1,
                                     "z_bc" => "wall",
                                     "z_discretization" => "finite_difference",
+                                    "z_element_spacing_option" => "uniform",
                                     "vpa_ngrid" => 400,
                                     "vpa_nelement" => 1,
                                     "vpa_L" => 8.0,
@@ -98,6 +99,32 @@ test_input_chebyshev = merge(test_input_finite_difference,
                                   "z_discretization" => "chebyshev_pseudospectral",
                                   "z_ngrid" => 9,
                                   "z_nelement" => 2,
+                                  "z_element_spacing_option" => "uniform",
+                                  "vpa_discretization" => "chebyshev_pseudospectral",
+                                  "vpa_ngrid" => 17,
+                                  "vpa_nelement" => 10,
+                                  "vz_discretization" => "chebyshev_pseudospectral",
+                                  "vz_ngrid" => 17,
+                                  "vz_nelement" => 10))
+                                  
+test_input_chebyshev_sqrt_grid_odd = merge(test_input_finite_difference,
+                             Dict("run_name" => "chebyshev_pseudospectral",
+                                  "z_discretization" => "chebyshev_pseudospectral",
+                                  "z_ngrid" => 9,
+                                  "z_nelement" => 5, # minimum nontrival nelement (odd)
+                                  "z_element_spacing_option" => "sqrt",
+                                  "vpa_discretization" => "chebyshev_pseudospectral",
+                                  "vpa_ngrid" => 17,
+                                  "vpa_nelement" => 10,
+                                  "vz_discretization" => "chebyshev_pseudospectral",
+                                  "vz_ngrid" => 17,
+                                  "vz_nelement" => 10))
+test_input_chebyshev_sqrt_grid_even = merge(test_input_finite_difference,
+                             Dict("run_name" => "chebyshev_pseudospectral",
+                                  "z_discretization" => "chebyshev_pseudospectral",
+                                  "z_ngrid" => 9,
+                                  "z_nelement" => 6, # minimum nontrival nelement (even)
+                                  "z_element_spacing_option" => "sqrt",
                                   "vpa_discretization" => "chebyshev_pseudospectral",
                                   "vpa_ngrid" => 17,
                                   "vpa_nelement" => 10,
@@ -125,7 +152,7 @@ function run_test(test_input, expected_phi, tolerance; args...)
     # update the default inputs
 
     # Convert keyword arguments to a unique name
-    name = test_input["run_name"]
+    name = test_input["run_name"] * ", with element spacing: " * test_input["z_element_spacing_option"]
     if length(args) > 0
         name = string(name, "_", (string(k, "-", v, "_") for (k, v) in args)...)
 
@@ -191,16 +218,22 @@ function run_test(test_input, expected_phi, tolerance; args...)
         adv_input = advection_input("default", 1.0, 0.0, 0.0)
 		nrank_per_block = 0 # dummy value
 		irank = 0 # dummy value
-		comm = MPI.COMM_NULL # dummy value 
+		comm = MPI.COMM_NULL # dummy value
+        element_spacing_option = "uniform"
         input = grid_input("coord", test_input["z_ngrid"], test_input["z_nelement"], 
 						   test_input["z_nelement"], nrank_per_block, irank, 1.0,
                            test_input["z_discretization"], "", test_input["z_bc"],
-                           adv_input, comm)
+                           adv_input, comm, test_input["z_element_spacing_option"])
         z, z_spectral = define_coordinate(input)
 
         # Cross comparison of all discretizations to same benchmark
-        phi_interp = interpolate_to_grid_z(cross_compare_points, phi[:, end], z, z_spectral)
-        @test isapprox(phi_interp, cross_compare_phi, rtol=tolerance, atol=1.e-15)
+        if test_input["z_element_spacing_option"] == "uniform" 
+            # Only support this test for uniform element spacing.
+            # phi is better resolved by "sqrt" spacing grid, so disagrees with benchmark data from
+            # simulation with uniform element spacing.
+            phi_interp = interpolate_to_grid_z(cross_compare_points, phi[:, end], z, z_spectral)
+            @test isapprox(phi_interp, cross_compare_phi, rtol=tolerance, atol=1.e-15)
+        end
     end
 end
 
@@ -213,10 +246,30 @@ function runtests()
             run_test(test_input_finite_difference, nothing, 2.e-3)
         end
 
-        @testset "Chebyshev" begin
+        @testset "Chebyshev uniform" begin
             run_test(test_input_chebyshev,
                      [-1.1689445031600718, -0.7479504438063098, -0.6947559936893813,
                       -0.6917252442591313, -0.7180152498764835, -0.9980114095597415],
+                     2.e-3)
+        end
+        
+        @testset "Chebyshev sqrt grid odd" begin
+            run_test(test_input_chebyshev_sqrt_grid_odd,
+                     [-1.2047298885671576, -0.9431378294506091, -0.8084332392927167,
+                     -0.7812620422650213, -0.7233303514000929, -0.7003878610612269,
+                     -0.69572751349158, -0.6933148921301019, -0.6992503992521327,
+                     -0.7115787972775218, -0.7596015032228407, -0.795776514029509,
+                     -0.876303297135126, -1.1471244425913258],
+                     2.e-3)
+        end
+        @testset "Chebyshev sqrt grid even" begin
+            run_test(test_input_chebyshev_sqrt_grid_even,
+                     [-1.213617049279473, -1.0054529928344382, -0.871444761913497,
+                     -0.836017699317097, -0.7552110924643832, -0.7264644073096705,
+                     -0.7149147366621806, -0.6950077192395091, -0.6923364889119271,
+                     -0.6950077192395089, -0.7149147366621814, -0.7264644073096692,
+                     -0.7552110924643836, -0.8360176993170979, -0.8714447619134948,
+                     -1.0054529928344376, -1.2136170492794727],
                      2.e-3)
         end
     end

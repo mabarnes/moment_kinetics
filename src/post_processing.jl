@@ -199,7 +199,7 @@ function construct_global_zr_coords(r_local, z_local)
         return grid_input(coord_local.name, coord_local.ngrid,
             coord_local.nelement_global, coord_local.nelement_global, 1, 0, coord_local.L,
             coord_local.discretization, coord_local.fd_option, coord_local.bc,
-            coord_local.advection, MPI.COMM_NULL)
+            coord_local.advection, MPI.COMM_NULL, coord_local.element_spacing_option)
     end
 
     r_global, r_global_spectral = define_coordinate(make_global_input(r_local))
