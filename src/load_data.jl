@@ -513,7 +513,8 @@ end
 Reload pdf and moments from an existing output file.
 """
 function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_prefix_iblock,
-                                 time_index, composition, r, z, vpa, vperp, vzeta, vr, vz)
+                                 time_index, composition, geometry, r, z, vpa, vperp,
+                                 vzeta, vr, vz)
     code_time = 0.0
     previous_runs_info = nothing
     begin_serial_region()
@@ -555,6 +556,18 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
                                       (vperp, restart_vperp), (vpa, restart_vpa),
                                       (vzeta, restart_vzeta), (vr, restart_vr),
                                       (vz, restart_vz)))
+
+            neutral_1V = (vzeta.n_global == 1 && vr.n_global == 1)
+            restart_neutral_1V = (restart_vzeta.n_global == 1 && restart_vr.n_global == 1)
+            if geometry.bzeta != 0.0 && ((neutral1V && !restart_neutral_1V) ||
+                                         (!neutral1V && restart_neutral_1V))
+                # One but not the other of the run being restarted from and this run are
+                # 1V, but the interpolation below does not allow for vz and vpa being in
+                # different directions. Therefore interpolation between 1V and 3V cases
+                # only works (at the moment!) if bzeta=0.
+                error("Interpolation between 1V and 3V neutrals not yet supported when "
+                      * "bzeta!=0.")
+            end
 
             code_time = load_slice(dynamic, "time", time_index)
 
