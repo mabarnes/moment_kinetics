@@ -68,9 +68,6 @@ function scaled_chebyshev_grid(ngrid, nelement_local, n,
     chebyshev_grid = chebyshevpoints(ngrid)
     # create array for the full grid
     grid = allocate_float(n)
-    # setup the scale factor by which the Chebyshev grid on [-1,1]
-    # is to be multiplied to account for the full domain [-L/2,L/2]
-    # and the splitting into nelement elements with ngrid grid points
     
     # account for the fact that the minimum index needed for the chebyshev_grid
     # within each element changes from 1 to 2 in going from the first element
