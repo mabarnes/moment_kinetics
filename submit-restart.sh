@@ -94,19 +94,10 @@ RUNNAME=$(util/get-run-name.jl $INPUTFILE)
 RUNDIR=runs/$RUNNAME/
 mkdir -p $RUNDIR
 
-# Get default file to restart from, which is the latest run in $RUNDIR
-if [[ -z $RESTARTFROM ]]; then
-  # "shopt -s extglob" is needed to let us use the ?() syntax within a script
-  # (it doesn't seem to be needed in an interactive shell!). See
-  # https://www.linuxjournal.com/content/pattern-matching-bash
-  shopt -s extglob
-  RESTARTFROM=$(ls $RUNDIR/$RUNNAME.dfns*.?(h5|cdf) | head -n 1)
-fi
-
 if [[ $POSTPROC -eq 0 ]]; then
-  echo "Submitting $INPUTFILE for restart from $RESTARTFROM and post-processing..."
+  echo "Submitting $INPUTFILE for restart from '$RESTARTFROM' and post-processing..."
 else
-  echo "Submitting $INPUTFILE for restart from $RESTARTFROM..."
+  echo "Submitting $INPUTFILE for restart from '$RESTARTFROM'..."
 fi
 
 # Create a submission script for the run

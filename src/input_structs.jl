@@ -130,6 +130,8 @@ mutable struct grid_input_mutable
     bc::String
     # mutable struct containing advection speed options
     advection::advection_input_mutable
+    # string option determining boundary spacing
+    element_spacing_option::String
 end
 
 """
@@ -159,6 +161,8 @@ struct grid_input
     advection::advection_input
     # MPI communicator
     comm::MPI.Comm
+    # string option determining boundary spacing
+    element_spacing_option::String
 end
 
 """

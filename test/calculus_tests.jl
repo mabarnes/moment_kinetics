@@ -14,7 +14,7 @@ function runtests()
         println("calculus tests")
         @testset "fundamental theorem of calculus" begin
             @testset "$discretization $ngrid $nelement" for
-                    discretization ∈ ("finite_difference", "chebyshev_pseudospectral"),
+                    (discretization, element_spacing_option, etol) ∈ (("finite_difference", "uniform", 1.0e-15), ("chebyshev_pseudospectral", "uniform", 1.0e-15), ("chebyshev_pseudospectral", "sqrt", 1.0e-2)),
                     ngrid ∈ (5,6,7,8,9,10), nelement ∈ (1, 2, 3, 4, 5)
 
                 if discretization == "finite_difference" && (ngrid - 1) * nelement % 2 == 1
@@ -26,7 +26,6 @@ function runtests()
                     continue
                 end
 
-                etol = 1.0e-15
                 # define inputs needed for the test
                 L = 6.0
                 bc = "periodic"
@@ -41,7 +40,8 @@ function runtests()
 				comm = MPI.COMM_NULL # dummy value 
 				input = grid_input("coord", ngrid, nelement,
                     nelement_local, nrank_per_block, irank, L,
-                    discretization, fd_option, bc, adv_input, comm)
+                    discretization, fd_option, bc, adv_input, comm,
+                    element_spacing_option)
                 # create the coordinate struct 'x'
                 x, spectral = define_coordinate(input)
                 # create array for the function f(x) to be differentiated/integrated
@@ -86,9 +86,11 @@ function runtests()
 				nrank_per_block = 0 # dummy value
 				irank = 0 # dummy value
 				comm = MPI.COMM_NULL # dummy value 
-				input = grid_input("coord", ngrid, nelement,
+				element_spacing_option = "uniform" # dummy value
+                input = grid_input("coord", ngrid, nelement,
                     nelement_local, nrank_per_block, irank, L,
-                    "finite_difference", fd_option, bc, adv_input, comm)
+                    "finite_difference", fd_option, bc, adv_input, comm,
+                    element_spacing_option)
                 # create the coordinate struct 'x'
                 x, spectral = define_coordinate(input)
 
@@ -132,10 +134,12 @@ function runtests()
                 nelement_local = nelement
 				nrank_per_block = 0 # dummy value
 				irank = 0 # dummy value
-				comm = MPI.COMM_NULL # dummy value 
+				comm = MPI.COMM_NULL # dummy value
+                element_spacing_option = "uniform" # dummy value
 				input = grid_input("coord", ngrid, nelement,
                     nelement_local, nrank_per_block, irank, L,
-                    "finite_difference", fd_option, bc, adv_input, comm)
+                    "finite_difference", fd_option, bc, adv_input, comm,
+                    element_spacing_option)
                 # create the coordinate struct 'x'
                 x, spectral = define_coordinate(input)
 
@@ -175,10 +179,12 @@ function runtests()
                 nelement_local = nelement
 				nrank_per_block = 0 # dummy value
 				irank = 0 # dummy value
-				comm = MPI.COMM_NULL # dummy value 
+				comm = MPI.COMM_NULL # dummy value
+                element_spacing_option = "uniform" # dummy value
 				input = grid_input("coord", ngrid, nelement,
                     nelement_local, nrank_per_block, irank, L,
-                    "finite_difference", fd_option, bc, adv_input, comm)
+                    "finite_difference", fd_option, bc, adv_input, comm,
+                    element_spacing_option)
                 # create the coordinate struct 'x'
                 x, spectral = define_coordinate(input)
 
@@ -226,10 +232,12 @@ function runtests()
                 nelement_local = nelement
 				nrank_per_block = 0 # dummy value
 				irank = 0 # dummy value
-				comm = MPI.COMM_NULL # dummy value 
+				comm = MPI.COMM_NULL # dummy value
+                element_spacing_option = "uniform" # dummy value
 				input = grid_input("coord", ngrid, nelement,
                     nelement_local, nrank_per_block, irank, L,
-                    "finite_difference", fd_option, bc, adv_input, comm)
+                    "finite_difference", fd_option, bc, adv_input, comm,
+                    element_spacing_option)
                # create the coordinate struct 'x'
                 x, spectral = define_coordinate(input)
 
@@ -440,10 +448,12 @@ function runtests()
                 nelement_local = nelement
 				nrank_per_block = 0 # dummy value
 				irank = 0 # dummy value
-				comm = MPI.COMM_NULL # dummy value 
+				comm = MPI.COMM_NULL # dummy value
+                element_spacing_option = "uniform"
 				input = grid_input("coord", ngrid, nelement,
                     nelement_local, nrank_per_block, irank, L,
-                    "chebyshev_pseudospectral", fd_option, bc, adv_input, comm)
+                    "chebyshev_pseudospectral", fd_option, bc, adv_input, comm,
+                    element_spacing_option)
                 # create the coordinate struct 'x' and info for derivatives, etc.
                 x, spectral = define_coordinate(input)
 
@@ -634,10 +644,12 @@ function runtests()
                 nelement_local = nelement
 				nrank_per_block = 0 # dummy value
 				irank = 0 # dummy value
-				comm = MPI.COMM_NULL # dummy value 
+				comm = MPI.COMM_NULL # dummy value
+                element_spacing_option = "uniform"
 				input = grid_input("coord", ngrid, nelement,
                     nelement_local, nrank_per_block, irank, L,
-                    "chebyshev_pseudospectral", fd_option, bc, adv_input, comm)
+                    "chebyshev_pseudospectral", fd_option, bc, adv_input, comm,
+                    element_spacing_option)
                 # create the coordinate struct 'x' and info for derivatives, etc.
                 x, spectral = define_coordinate(input)
 
@@ -662,7 +674,7 @@ function runtests()
         end
 
         @testset "Chebyshev pseudospectral derivatives (4 argument), Neumann" verbose=false begin
-            @testset "$nelement $ngrid" for bc ∈ ("constant", "zero"),
+            @testset "$nelement $ngrid" for bc ∈ ("constant", "zero"), element_spacing_option ∈ ("uniform", "sqrt"),
                     nelement ∈ (1:5), ngrid ∈ (3:33)
 
                 # define inputs needed for the test
@@ -676,10 +688,11 @@ function runtests()
                 nelement_local = nelement
 				nrank_per_block = 0 # dummy value
 				irank = 0 # dummy value
-				comm = MPI.COMM_NULL # dummy value 
-				input = grid_input("coord", ngrid, nelement,
+				comm = MPI.COMM_NULL # dummy value
+                input = grid_input("coord", ngrid, nelement,
                     nelement_local, nrank_per_block, irank, L,
-                    "chebyshev_pseudospectral", fd_option, bc, adv_input, comm)
+                    "chebyshev_pseudospectral", fd_option, bc, adv_input, comm,
+                    element_spacing_option)
                 # create the coordinate struct 'x' and info for derivatives, etc.
                 x, spectral = define_coordinate(input)
 
@@ -712,7 +725,7 @@ function runtests()
         end
 
         @testset "Chebyshev pseudospectral derivatives upwinding (5 argument), Neumann" verbose=false begin
-            @testset "$nelement $ngrid" for bc ∈ ("constant", "zero"),
+            @testset "$nelement $ngrid" for bc ∈ ("constant", "zero"), element_spacing_option ∈ ("uniform", "sqrt"),
                     nelement ∈ (1:5), ngrid ∈ (3:33)
 
                 # define inputs needed for the test
@@ -726,10 +739,11 @@ function runtests()
                 nelement_local = nelement
 				nrank_per_block = 0 # dummy value
 				irank = 0 # dummy value
-				comm = MPI.COMM_NULL # dummy value 
-				input = grid_input("coord", ngrid, nelement,
+				comm = MPI.COMM_NULL # dummy value
+                input = grid_input("coord", ngrid, nelement,
                     nelement_local, nrank_per_block, irank, L,
-                    "chebyshev_pseudospectral", fd_option, bc, adv_input, comm)
+                    "chebyshev_pseudospectral", fd_option, bc, adv_input, comm,
+                    element_spacing_option)
                 # create the coordinate struct 'x' and info for derivatives, etc.
                 x, spectral = define_coordinate(input)
 
@@ -940,9 +954,11 @@ function runtests()
 				nrank_per_block = 0 # dummy value
 				irank = 0 # dummy value
 				comm = MPI.COMM_NULL # dummy value
+                element_spacing_option = "uniform"
 				input = grid_input("coord", ngrid, nelement,
                     nelement_local, nrank_per_block, irank, L,
-                    "chebyshev_pseudospectral", fd_option, bc, adv_input, comm)
+                    "chebyshev_pseudospectral", fd_option, bc, adv_input, comm,
+                    element_spacing_option)
                 # create the coordinate struct 'x' and info for derivatives, etc.
                 x, spectral = define_coordinate(input)
 

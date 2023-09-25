@@ -41,9 +41,25 @@ end
 
 """
 initialize chebyshev grid scaled to interval [-box_length/2, box_length/2]
+we no longer pass the box_length to this function, but instead pass precomputed
+arrays element_scale and element_shift that are needed to compute the grid.
+
+ngrid -- number of points per element (including boundary points)
+nelement_local -- number of elements in the local (distributed memory MPI) grid
+n -- total number of points in the local grid (excluding duplicate points)
+element_scale -- the scale factor in the transform from the coordinates 
+                 where the element limits are -1, 1 to the coordinate where
+                 the limits are Aj = coord.grid[imin[j]-1] and Bj = coord.grid[imax[j]]
+                 element_scale = 0.5*(Bj - Aj)
+element_shift -- the centre of the element in the extended grid coordinate
+                 element_shift = 0.5*(Aj + Bj)
+imin -- the array of minimum indices of each element on the extended grid.
+        By convention, the duplicated points are not included, so for element index j > 1
+        the lower boundary point is actually imin[j] - 1
+imax -- the array of maximum indices of each element on the extended grid.
 """
-function scaled_chebyshev_grid(ngrid, nelement_global, nelement_local, n,
-			irank, box_length, imin, imax)
+function scaled_chebyshev_grid(ngrid, nelement_local, n,
+			element_scale, element_shift, imin, imax)
     # initialize chebyshev grid defined on [1,-1]
     # with n grid points chosen to facilitate
     # the fast Chebyshev transform (aka the discrete cosine transform)
@@ -52,19 +68,14 @@ function scaled_chebyshev_grid(ngrid, nelement_global, nelement_local, n,
     chebyshev_grid = chebyshevpoints(ngrid)
     # create array for the full grid
     grid = allocate_float(n)
-    # setup the scale factor by which the Chebyshev grid on [-1,1]
-    # is to be multiplied to account for the full domain [-L/2,L/2]
-    # and the splitting into nelement elements with ngrid grid points
-    scale_factor = 0.5*box_length/float(nelement_global)
+    
     # account for the fact that the minimum index needed for the chebyshev_grid
     # within each element changes from 1 to 2 in going from the first element
     # to the remaining elements
     k = 1
     @inbounds for j ∈ 1:nelement_local
-        #wgts[imin[j]:imax[j]] .= sqrt.(1.0 .- reverse(chebyshev_grid)[k:ngrid].^2) * scale_factor
-        # amount by which to shift the centre of this element from zero
-        iel_global = j + irank*nelement_local
-        shift = box_length*((float(iel_global)-0.5)/float(nelement_global) - 0.5)
+        scale_factor = element_scale[j]
+        shift = element_shift[j]
         # reverse the order of the original chebyshev_grid (ran from [1,-1])
         # and apply the scale factor and shift
         grid[imin[j]:imax[j]] .= (reverse(chebyshev_grid)[k:ngrid] * scale_factor) .+ shift
@@ -72,7 +83,7 @@ function scaled_chebyshev_grid(ngrid, nelement_global, nelement_local, n,
         # to avoid double-counting boundary element
         k = 2
     end
-    wgts = clenshaw_curtis_weights(ngrid, nelement_local, n, imin, imax, scale_factor)
+    wgts = clenshaw_curtis_weights(ngrid, nelement_local, n, imin, imax, element_scale)
     return grid, wgts
 end
 
@@ -88,11 +99,9 @@ function elementwise_derivative!(coord, ff, chebyshev::chebyshev_info)
     # check array bounds
     @boundscheck nelement == size(chebyshev.f,2) || throw(BoundsError(chebyshev.f))
     @boundscheck nelement == size(df,2) && coord.ngrid == size(df,1) || throw(BoundsError(df))
-    # note that one must multiply by 2*nelement/L to get derivative
-    # in scaled coordinate
-    scale_factor = 2.0*float(coord.nelement_global)/coord.L
-	# scale factor is (length of a single element/2)^{-1}
-	
+    # note that one must multiply by a coordinate transform factor 1/element_scale[j] 
+    # for each element j to get derivative on the extended grid
+    
     # variable k will be used to avoid double counting of overlapping point
     # at element boundaries (see below for further explanation)
     k = 0
@@ -112,7 +121,7 @@ function elementwise_derivative!(coord, ff, chebyshev::chebyshev_info)
         # and multiply by scaling factor needed to go
         # from Chebyshev z coordinate to actual z
         for i ∈ 1:coord.ngrid
-            df[i,j] *= scale_factor
+            df[i,j] /= coord.element_scale[j]
         end
         k = 1
     end
@@ -323,23 +332,21 @@ end
 returns wgts array containing the integration weights associated
 with all grid points for Clenshaw-Curtis quadrature
 """
-function clenshaw_curtis_weights(ngrid, nelement_local, n, imin, imax, scale_factor)
+function clenshaw_curtis_weights(ngrid, nelement_local, n, imin, imax, element_scale)
     # create array containing the integration weights
     wgts = zeros(mk_float, n)
     # calculate the modified Chebshev moments of the first kind
     μ = chebyshevmoments(ngrid)
+    # calculate the raw weights for a normalised grid on [-1,1]
+    w = clenshawcurtisweights(μ)
     @inbounds begin
         # calculate the weights within a single element and
         # scale to account for modified domain (not [-1,1])
-        wgts[1:ngrid] = clenshawcurtisweights(μ)*scale_factor
+        wgts[1:ngrid] = w*element_scale[1]
         if nelement_local > 1
-            # account for double-counting of points at inner element boundaries
-            wgts[ngrid] *= 2
             for j ∈ 2:nelement_local
-                wgts[imin[j]:imax[j]] .= wgts[2:ngrid]
+                wgts[imin[j]-1:imax[j]] .+= w*element_scale[j]
             end
-            # remove double-counting of outer element boundary for last element
-            wgts[n] *= 0.5
         end
     end
     return wgts

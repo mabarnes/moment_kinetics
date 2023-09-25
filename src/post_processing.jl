@@ -199,7 +199,7 @@ function construct_global_zr_coords(r_local, z_local)
         return grid_input(coord_local.name, coord_local.ngrid,
             coord_local.nelement_global, coord_local.nelement_global, 1, 0, coord_local.L,
             coord_local.discretization, coord_local.fd_option, coord_local.bc,
-            coord_local.advection, MPI.COMM_NULL)
+            coord_local.advection, MPI.COMM_NULL, coord_local.element_spacing_option)
     end
 
     r_global, r_global_spectral = define_coordinate(make_global_input(r_local))
@@ -373,12 +373,12 @@ are passed, the plots/movies are given names beginning with `compare_` and are c
 in the `comparison_plots/` subdirectory.
 
 By default plots output from all restarts in a directory. To select a single run, pass the
-`run_index` argument - the value corresponds to the `_<i>` suffix given to output files by
-`restart_moment_kinetics()`. `run_index` can be an integer (which is applied to all
-directories in `prefix...`), or a tuple of integers (which should have the same length as
-the number of directories passed to `prefix...`). Use `run_index=-1` to get the most
-recent run (which does not have a `_<i>` suffix). Note that `run_index` is only used when
-a directory (rather than the prefix of a specific output file) is passed to `prefix...`
+`run_index` argument - the value corresponds to the `_<i>` suffix given to output files
+when restarting. `run_index` can be an integer (which is applied to all directories in
+`prefix...`), or a tuple of integers (which should have the same length as the number of
+directories passed to `prefix...`). Use `run_index=-1` to get the most recent run (which
+does not have a `_<i>` suffix). Note that `run_index` is only used when a directory
+(rather than the prefix of a specific output file) is passed to `prefix...`
 """
 function analyze_and_plot_data(prefix...; run_index=nothing)
     if length(prefix) == 0
