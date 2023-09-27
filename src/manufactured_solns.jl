@@ -211,8 +211,8 @@ using IfElse
             Er, Ez, phi = electric_fields(Lr,Lz,r_bc,z_bc,composition,nr,manufactured_solns_input,species)
             rhostar = geometry.rhostar
             bzed = geometry.bzed
-            epsilon = composition.epsilon_offset
-            alpha = composition.alpha_switch
+            epsilon = manufactured_solns_input.epsilon_offset
+            alpha = manufactured_solns_input.alpha_switch
             upari =  ( (fluxconst/(sqrt(pi)*densi))*((z/Lz + 0.5)*nplus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha) 
                      - (0.5 - z/Lz)*nminus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha)) 
                      + alpha*(rhostar/(2.0*bzed))*Er )
@@ -226,8 +226,8 @@ using IfElse
             ppari = 0.0 # not supported
         elseif z_bc == "wall"
             densi = densi_sym(Lr,Lz,r_bc,z_bc,composition,manufactured_solns_input,species)
-            epsilon = composition.epsilon_offset
-            alpha = composition.alpha_switch
+            epsilon = manufactured_solns_input.epsilon_offset
+            alpha = manufactured_solns_input.alpha_switch
             ppari = ( pconst*((0.5 - z/Lz)*nminus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha) 
                       + (z/Lz + 0.5)*nplus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha)) 
                       + (z/Lz + 0.5)*(0.5 - z/Lz)*nzero_sym(Lr,Lz,r_bc,z_bc,alpha)  
@@ -243,8 +243,7 @@ using IfElse
         pperpi = densi # simple vperp^2 dependence of dfni
         return pperpi
     end
-    function jpari_into_LHS_wall_sym(Lr,Lz,r_bc,z_bc,composition,
-                                     manufactured_solns_input)
+    function jpari_into_LHS_wall_sym(Lr,Lz,r_bc,z_bc,manufactured_solns_input)
         if z_bc == "periodic"
             jpari_into_LHS_wall_sym = 0.0
         elseif z_bc == "wall"
@@ -316,7 +315,7 @@ using IfElse
         # get N_e factor for boltzmann response
         if composition.electron_physics == boltzmann_electron_response_with_simple_sheath && nr == 1 
             # so 1D MMS test with 3V neutrals where ion current can be calculated prior to knowing Er
-            jpari_into_LHS_wall = jpari_into_LHS_wall_sym(Lr, Lz, r_bc, z_bc, composition,
+            jpari_into_LHS_wall = jpari_into_LHS_wall_sym(Lr, Lz, r_bc, z_bc,
                                                           manufactured_solns_input)
             N_e = -2.0*sqrt(pi*composition.me_over_mi)*exp(-composition.phi_wall/composition.T_e)*jpari_into_LHS_wall
         elseif composition.electron_physics == boltzmann_electron_response_with_simple_sheath && nr > 1 

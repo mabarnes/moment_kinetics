@@ -844,20 +844,13 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     phi_wall = 0.0
     # constant to test nonzero Er
     Er_constant = 0.0
-    # constant to control Ez divergence 
-    epsilon_offset = 0.001
-    # bool to control functional form of dfni in MMS test
-    use_vpabar_in_mms_dfni = true
-    # float to control form of MMS density/potential/Er/Ez
-    alpha_switch = 1.0
     # ratio of the neutral particle mass to the ion particle mass
     mn_over_mi = 1.0
     # ratio of the electron particle mass to the ion particle mass
     me_over_mi = 1.0/1836.0
     composition = species_composition(n_species, n_ion_species, n_neutral_species,
         electron_physics, use_test_neutral_wall_pdf, T_e, T_wall, phi_wall, Er_constant,
-        epsilon_offset, use_vpabar_in_mms_dfni, alpha_switch, mn_over_mi, me_over_mi,
-        allocate_float(n_species))
+        mn_over_mi, me_over_mi, allocate_float(n_species))
     
     species_charged = Array{species_parameters_mutable,1}(undef,n_ion_species)
     species_neutral = Array{species_parameters_mutable,1}(undef,n_neutral_species)
