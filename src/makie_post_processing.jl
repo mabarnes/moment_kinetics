@@ -6362,6 +6362,9 @@ function manufactured_solutions_analysis(run_info; plot_prefix)
             if contains(variable_name, "neutral") && run_info.n_neutral_species == 0
                 continue
             end
+            if contains(variable_name, "Er") && run_info.r.n_global == 1
+                continue
+            end
 
             compare_moment_symbolic_test(run_info, plot_prefix, field_label, field_sym_label,
                                          norm_label, variable_name; io=io, input=input)
