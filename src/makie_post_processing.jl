@@ -5438,6 +5438,7 @@ function manufactured_solutions_get_field_and_field_sym(run_info, variable_name;
     variable_name = Symbol(variable_name)
 
     func_name_lookup = (phi=:phi_func, Er=:Er_func, Ez=:Ez_func, density=:densi_func,
+                        parallel_flow=:upari_func, parallel_pressure=:ppari_func,
                         density_neutral=:densn_func, f=:dfni_func, f_neutral=:dfnn_func)
 
     nt = run_info.nt
@@ -5467,7 +5468,8 @@ function manufactured_solutions_get_field_and_field_sym(run_info, variable_name;
                                          run_info.z.bc, run_info.composition,
                                          run_info.r.n, run_info.manufactured_solns_input,
                                          run_info.species)
-    elseif variable_name ∈ (:density, :density_neutral, :f, :f_neutral)
+    elseif variable_name ∈ (:density, :parallel_flow, :parallel_pressure,
+                            :density_neutral, :f, :f_neutral)
         manufactured_funcs =
             manufactured_solutions(run_info.manufactured_solns_input, Lr_in, run_info.z.L,
                                    run_info.r.bc, run_info.z.bc, run_info.geometry,
@@ -6353,6 +6355,8 @@ function manufactured_solutions_analysis(run_info; plot_prefix)
                  ("Er", L"\tilde{E}_r", L"\tilde{E}_r^{sym}", L"\varepsilon(\tilde{E}_r)"),
                  ("Ez", L"\tilde{E}_z", L"\tilde{E}_z^{sym}", L"\varepsilon(\tilde{E}_z)"),
                  ("density", L"\tilde{n}_i", L"\tilde{n}_i^{sym}", L"\varepsilon(\tilde{n}_i)"),
+                 ("parallel_flow", L"\tilde{u}_{i,\parallel}", L"\tilde{u}_{i,\parallel}^{sym}", L"\varepsilon(\tilde{u}_{i,\parallel})"),
+                 ("parallel_pressure", L"\tilde{p}_{i,\parallel}", L"\tilde{p}_{i,\parallel}^{sym}", L"\varepsilon(\tilde{p}_{i,\parallel})"),
                  ("density_neutral", L"\tilde{n}_n", L"\tilde{n}_n^{sym}", L"\varepsilon(\tilde{n}_n)"))
 
             if contains(variable_name, "neutral") && run_info.n_neutral_species == 0
