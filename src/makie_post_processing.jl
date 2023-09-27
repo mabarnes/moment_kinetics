@@ -5782,13 +5782,19 @@ plots/animations, `field_sym_label` is the label for the manufactured solution, 
 omitting `:t`.
 """
 function _MMS_pdf_plots(run_info, input, variable_name, plot_prefix, field_label,
-                        field_sym_label, norm_label, plot_dims, animate_dims)
+                        field_sym_label, norm_label, plot_dims, animate_dims, neutrals)
 
     nt = run_info.nt
     time = run_info.time
 
-    all_plot_slices = Tuple(Symbol(:i, d)=>input[Symbol(:i, d, :0)] for d ∈ plot_dims)
-    all_animate_slices = Tuple(Symbol(:i, d)=>input[Symbol(:i, d, :0)] for d ∈ animate_dims)
+    if neutrals
+        all_dims_no_t = (:r, :z, :vzeta, :vr, :vz)
+    else
+        all_dims_no_t = (:r, :z, :vperp, :vpa)
+    end
+    all_dims = tuple(:t, all_dims_no_t...)
+    all_plot_slices = Tuple(Symbol(:i, d)=>input[Symbol(:i, d, :0)] for d ∈ all_dims)
+    all_animate_slices = Tuple(Symbol(:i, d)=>input[Symbol(:i, d, :0)] for d ∈ all_dims_no_t)
 
     # Options to produce either regular or log-scale plots
     epsilon = 1.0e-30 # minimum data value to include in log plots
@@ -6079,7 +6085,7 @@ function compare_charged_pdf_symbolic_test(run_info, plot_prefix; io=nothing,
     end
     plot_dims = tuple(:t, animate_dims...)
     _MMS_pdf_plots(run_info, input, variable_name, plot_prefix, field_label,
-                   field_sym_label, norm_label, plot_dims, animate_dims)
+                   field_sym_label, norm_label, plot_dims, animate_dims, false)
 
     return field_norm
 end
@@ -6286,7 +6292,7 @@ function compare_neutral_pdf_symbolic_test(run_info, plot_prefix; io=nothing,
     end
     plot_dims = tuple(:t, animate_dims...)
     _MMS_pdf_plots(run_info, input, variable_name, plot_prefix, field_label,
-                   field_sym_label, norm_label, plot_dims, animate_dims)
+                   field_sym_label, norm_label, plot_dims, animate_dims, true)
 
     return field_norm
 end
