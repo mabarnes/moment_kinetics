@@ -434,7 +434,7 @@ function plot_T_scan()
     nn = 1.0
     Te = 1.0
 
-    fig = Figure(; resolution=(1200, 600))
+    fig = Figure(; resolution=(900, 450))
 
     ax_gamma = Axis(fig[1,1],
                     xlabel=L"(n_i + n_n)R_{in}/|k_\parallel|v_\mathrm{th}",
