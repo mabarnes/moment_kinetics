@@ -673,6 +673,7 @@ function _setup_single_input!(this_input_dict::OrderedDict{String,Any},
         (o=>section_defaults[String(o)] for o ∈ (:it0, :ir0, :iz0, :ivperp0, :ivpa0, :ivzeta0, :ivr0, :ivz0))...,
         colormap=this_input_dict["colormap"],
         animation_ext=this_input_dict["animation_ext"],
+        show_element_boundaries=this_input_dict["show_element_boundaries"],
        )
     sort!(this_input_dict["manufactured_solns"])
 
