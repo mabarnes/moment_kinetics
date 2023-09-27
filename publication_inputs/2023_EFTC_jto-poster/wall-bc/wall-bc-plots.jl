@@ -36,12 +36,12 @@ function main()
         joinpath(output_dir, "post_processing_input_eftc2023.toml"),
         run_info_moments=run_info, run_info_dfns=run_info_dfns)
 
-    fig, axes = get_1d_ax(3; xlabel=L"z",
+    fig, axes = get_1d_ax(3; xlabel=L"z/L",
                           subtitles=(L"density$$", L"parallel flow$$", L"temperature$$"),
                           resolution=(1200, 400))
-    for ((var_names, ylabel), ax) ∈ zip(((("density", "density_neutral"), L"n"),
-                                         (("parallel_flow", "uz_neutral"), L"u_\parallel"),
-                                         (("temperature", "temperature_neutral"), L"T")),
+    for ((var_names, ylabel), ax) ∈ zip(((("density", "density_neutral"), L"n/n_\mathrm{ref}"),
+                                         (("parallel_flow", "uz_neutral"), L"u_\parallel/v_\mathrm{ref}"),
+                                         (("temperature", "temperature_neutral"), L"T/T_\mathrm{ref}")),
                                         axes)
         for (ri, label1, linestyle) ∈ zip(run_info, short_labels,
                                           (nothing, :dash, :dashdot, :dot))
@@ -86,11 +86,11 @@ function main()
     hm_ion = nothing
     hm_neutral = nothing
     for (ri, p, ax_ion, ax_neutral) ∈ zip(run_info_dfns, prefixes, axes_ion, axes_neutral)
-        hm_ion = plot_f_unnorm_vs_vpa_z(ri; xlabel=L"v_\parallel", ylabel=L"z",
+        hm_ion = plot_f_unnorm_vs_vpa_z(ri; xlabel=L"v_\parallel/v_\mathrm{ref}", ylabel=L"z/L",
                                         rasterize=8.0, colorrange=(0, ion_cbar_max),
                                         ax=ax_ion, title="")
-        hm_neutral = plot_f_unnorm_vs_vpa_z(ri; neutral=true, xlabel=L"v_\parallel",
-                                            ylabel=L"z", rasterize=8.0,
+        hm_neutral = plot_f_unnorm_vs_vpa_z(ri; neutral=true, xlabel=L"v_\parallel/v_\mathrm{ref}",
+                                            ylabel=L"z/L", rasterize=8.0,
                                             colorrange=(0, neutral_cbar_max),
                                             ax=ax_neutral, title="")
 
