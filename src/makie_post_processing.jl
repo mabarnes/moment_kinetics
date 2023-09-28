@@ -1641,7 +1641,7 @@ for dim ∈ one_dimension_combinations
              function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
                                      input=nothing, outfile=nothing, yscale=nothing,
                                      transform=identity, axis_args=Dict{Symbol,Any}(),
-                                     kwargs...)
+                                     $idim=nothing, kwargs...)
 
                  try
                      if data === nothing
@@ -1659,14 +1659,18 @@ for dim ∈ one_dimension_combinations
                                          yscale=yscale, axis_args...)
                      for (d, ri) ∈ zip(data, run_info)
                          $function_name(ri, var_name, is=is, data=d, input=input, ax=ax,
-                                        transform=transform, label=ri.run_name, kwargs...)
+                                        transform=transform, label=ri.run_name,
+                                        $idim=$idim, kwargs...)
                      end
 
                      if input.show_element_boundaries && Symbol($dim_str) != :t
                          # Just plot element boundaries from first run, assuming that all
                          # runs being compared use the same grid.
                          ri = run_info[1]
-                         element_boundary_positions = ri.$dim.grid[begin:ri.$dim.ngrid-1:end]
+                         element_boundary_inds =
+                             [i for i ∈ 1:ri.$dim.ngrid-1:ri.$dim.n_global
+                                if $idim === nothing || i ∈ $idim]
+                         element_boundary_positions = ri.$dim.grid[element_boundary_inds]
                          vlines!(ax, element_boundary_positions, color=:black, alpha=0.3)
                      end
 
@@ -1730,7 +1734,10 @@ for dim ∈ one_dimension_combinations
                  fig = plot_1d(x, data; label=label, ax=ax, kwargs...)
 
                  if input.show_element_boundaries && Symbol($dim_str) != :t && ax_was_nothing
-                     element_boundary_positions = run_info.$dim.grid[begin:run_info.$dim.ngrid-1:end]
+                     element_boundary_inds =
+                         [i for i ∈ 1:run_info.$dim.ngrid-1:run_info.$dim.n_global
+                            if $idim === nothing || i ∈ $idim]
+                     element_boundary_positions = run_info.$dim.grid[element_boundary_inds]
                      vlines!(ax, element_boundary_positions, color=:black, alpha=0.3)
                  end
 
@@ -1919,11 +1926,17 @@ for (dim1, dim2) ∈ two_dimension_combinations
                          colormap=colormap, kwargs...)
 
                  if input.show_element_boundaries && Symbol($dim2_str) != :t
-                     element_boundary_positions = run_info.$dim2.grid[begin:run_info.$dim2.ngrid-1:end]
+                     element_boundary_inds =
+                         [i for i ∈ 1:run_info.$dim2.ngrid-1:run_info.$dim2.n_global
+                            if $idim2 === nothing || i ∈ $idim2]
+                     element_boundary_positions = run_info.$dim2.grid[element_boundary_inds]
                      vlines!(ax, element_boundary_positions, color=:white, alpha=0.5)
                  end
                  if input.show_element_boundaries && Symbol($dim1_str) != :t
-                     element_boundary_positions = run_info.$dim1.grid[begin:run_info.$dim1.ngrid-1:end]
+                     element_boundary_inds =
+                         [i for i ∈ 1:run_info.$dim1.ngrid-1:run_info.$dim1.n_global
+                            if $idim1 === nothing || i ∈ $idim1]
+                     element_boundary_positions = run_info.$dim1.grid[element_boundary_inds]
                      hlines!(ax, element_boundary_positions, color=:white, alpha=0.5)
                  end
 
@@ -2020,7 +2033,7 @@ for dim ∈ one_dimension_combinations_no_t
              function $function_name(run_info::Tuple, var_name; is=1, data=nothing,
                                      input=nothing, outfile=nothing, yscale=nothing,
                                      ylims=nothing, axis_args=Dict{Symbol,Any}(),
-                                     it=nothing, kwargs...)
+                                     it=nothing, $idim=nothing, kwargs...)
 
                  try
                      if data === nothing
@@ -2055,14 +2068,17 @@ for dim ∈ one_dimension_combinations_no_t
                      for (d, ri) ∈ zip(data, run_info)
                          $function_name(ri, var_name; is=is, data=d, input=input,
                                         ylims=ylims, frame_index=frame_index, ax=ax,
-                                        it=it, kwargs...)
+                                        it=it, $idim=$idim, kwargs...)
                      end
 
                      if input.show_element_boundaries
                          # Just plot element boundaries from first run, assuming that all
                          # runs being compared use the same grid.
                          ri = run_info[1]
-                         element_boundary_positions = ri.$dim.grid[begin:ri.$dim.ngrid-1:end]
+                         element_boundary_inds =
+                             [i for i ∈ 1:ri.$dim.ngrid-1:ri.$dim.n_global
+                                if $idim === nothing || i ∈ $idim]
+                         element_boundary_positions = ri.$dim.grid[element_boundary_inds]
                          vlines!(ax, element_boundary_positions, color=:black, alpha=0.3)
                      end
 
@@ -2137,7 +2153,10 @@ for dim ∈ one_dimension_combinations_no_t
                             label=run_info.run_name, kwargs...)
 
                  if input.show_element_boundaries && fig !== nothing
-                     element_boundary_positions = run_info.$dim.grid[begin:run_info.$dim.ngrid-1:end]
+                     element_boundary_inds =
+                         [i for i ∈ 1:run_info.$dim.ngrid-1:run_info.$dim.n_global
+                            if $idim === nothing || i ∈ $idim]
+                     element_boundary_positions = run_info.$dim.grid[element_boundary_inds]
                      vlines!(ax, element_boundary_positions, color=:black, alpha=0.3)
                  end
 
@@ -2367,11 +2386,17 @@ for (dim1, dim2) ∈ two_dimension_combinations_no_t
                                    kwargs...)
 
                  if input.show_element_boundaries
-                     element_boundary_positions = run_info.$dim2.grid[begin:run_info.$dim2.ngrid-1:end]
+                     element_boundary_inds =
+                         [i for i ∈ 1:run_info.$dim2.ngrid-1:run_info.$dim2.n_global
+                            if $idim2 === nothing || i ∈ $idim2]
+                     element_boundary_positions = run_info.$dim2.grid[element_boundary_inds]
                      vlines!(ax, element_boundary_positions, color=:white, alpha=0.5)
                  end
                  if input.show_element_boundaries
-                     element_boundary_positions = run_info.$dim1.grid[begin:run_info.$dim1.ngrid-1:end]
+                     element_boundary_inds =
+                         [i for i ∈ 1:run_info.$dim1.ngrid-1:run_info.$dim1.n_global
+                            if $idim1 === nothing || i ∈ $idim1]
+                     element_boundary_positions = run_info.$dim1.grid[element_boundary_inds]
                      hlines!(ax, element_boundary_positions, color=:white, alpha=0.5)
                  end
 
