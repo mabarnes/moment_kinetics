@@ -311,8 +311,7 @@ function get_geometry_and_composition(scan_input,n_ion_species,n_neutral_species
     me_over_mi = 1.0/1836.0
     composition = species_composition(n_species, n_ion_species, n_neutral_species,
         electron_physics, use_test_neutral_wall_pdf, T_e, T_wall, phi_wall, Er_constant,
-        epsilon_offset, use_vpabar_in_mms_dfni, alpha_switch, mn_over_mi, me_over_mi,
-        allocate_float(n_species))
+        mn_over_mi, me_over_mi, allocate_float(n_species))
     return geometry, composition
 
 end
