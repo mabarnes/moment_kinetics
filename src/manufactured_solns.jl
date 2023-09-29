@@ -222,6 +222,8 @@ using IfElse
     
     # ion parallel pressure symbolic function 
     function ppari_sym(Lr,Lz,r_bc,z_bc,composition,manufactured_solns_input,species)
+        # normalisation factor due to strange pressure normalisation convention in master
+        norm_fac = 0.5
         if z_bc == "periodic"
             ppari = 0.0 # not supported
         elseif z_bc == "wall"
@@ -234,7 +236,7 @@ using IfElse
                       - (2.0/(pi*densi))*((z/Lz + 0.5)*nplus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha) 
                       - (0.5 - z/Lz)*nminus_sym(Lr,Lz,r_bc,z_bc,epsilon,alpha))^2 )
         end
-        return ppari
+        return ppari*norm_fac
     end
     
     # ion perpendicular pressure symbolic function 
