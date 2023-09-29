@@ -1517,7 +1517,7 @@ function plots_for_dfn_variable(run_info, variable_name; plot_prefix, is_1D=fals
                 if moment_kinetic && input[Symbol(:plot, log, :_unnorm_vs_vz_z)]
                     outfile = var_prefix * "unnorm_vs_vz_z.pdf"
                     plot_f_unnorm_vs_vpa_z(run_info; input=input, neutral=true, is=is,
-                                           outfile=outfile, yscale=yscale,
+                                           outfile=outfile, colorscale=yscale,
                                            transform=transform)
                 end
                 if moment_kinetic && input[Symbol(:animate, log, :_unnorm_vs_vz)]
@@ -1541,7 +1541,7 @@ function plots_for_dfn_variable(run_info, variable_name; plot_prefix, is_1D=fals
                 if moment_kinetic && input[Symbol(:plot, log, :_unnorm_vs_vpa_z)]
                     outfile = var_prefix * "unnorm_vs_vpa_z.pdf"
                     plot_f_unnorm_vs_vpa_z(run_info; input=input, is=is, outfile=outfile,
-                                           yscale=yscale, transform=transform)
+                                           colorscale=yscale, transform=transform)
                 end
                 if moment_kinetic && input[Symbol(:animate, log, :_unnorm_vs_vpa)]
                     outfile = var_prefix * "unnorm_vs_vpa." * input.animation_ext
