@@ -372,7 +372,8 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     # need grid and MPI information to determine these values 
     # MRH just put dummy values now 
     if ignore_MPI
-        irank_z = nrank_z = irank_r = nrank_r = -1
+        irank_z = irank_r = 0
+        nrank_z = nrank_r = 1
         comm_sub_z = comm_sub_r = MPI.COMM_NULL
     else
         irank_z, nrank_z, comm_sub_z, irank_r, nrank_r, comm_sub_r = setup_distributed_memory_MPI(z.nelement_global,z.nelement_local,r.nelement_global,r.nelement_local)
