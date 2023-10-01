@@ -60,6 +60,8 @@ struct io_moments_info{Tfile, Ttime, Tphi, Tmomi, Tmomn}
     parallel_heat_flux::Tmomi
     # handle for the charged species thermal speed
     thermal_speed::Tmomi
+    # handle for the charged species entropy production
+    entropy_production::Tmomi
 
     # handle for the neutral species density
     density_neutral::Tmomn
@@ -380,6 +382,13 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
                                           parallel_io=parallel_io,
                                           description="charged species thermal speed",
                                           units="c_ref")
+        
+        # io_vth is the handle for the ion thermal speed
+        io_dSdt = create_dynamic_variable!(dynamic, "entropy_production", mk_float, z, r;
+                                          n_ion_species=n_ion_species,
+                                          parallel_io=parallel_io,
+                                          description="charged species entropy production",
+                                          units="")
 
         # io_density_neutral is the handle for the neutral particle density
         io_density_neutral = create_dynamic_variable!(dynamic, "density_neutral", mk_float, z, r;
@@ -417,7 +426,7 @@ function define_dynamic_moment_variables!(fid, n_ion_species, n_neutral_species,
             units="c_ref")
 
         return io_moments_info(fid, io_time, io_phi, io_Er, io_Ez, io_density, io_upar,
-                               io_ppar, io_pperp, io_qpar, io_vth, io_density_neutral, io_uz_neutral,
+                               io_ppar, io_pperp, io_qpar, io_vth, io_dSdt, io_density_neutral, io_uz_neutral,
                                io_pz_neutral, io_qz_neutral, io_thermal_speed_neutral,
                                parallel_io)
     end
@@ -587,6 +596,8 @@ function write_moments_data_to_binary(moments, fields, t, n_ion_species,
                               z, r, n_ion_species)
         append_to_dynamic_var(io_moments.thermal_speed, moments.charged.vth, t_idx, z, r,
                               n_ion_species)
+        append_to_dynamic_var(io_moments.entropy_production, moments.charged.dSdt, t_idx, z, r,
+                              n_ion_species)
         if n_neutral_species > 0
             append_to_dynamic_var(io_moments.density_neutral, moments.neutral.dens, t_idx,
                                   z, r, n_neutral_species)
@@ -652,6 +663,8 @@ end
             append_to_dynamic_var(io_moments.parallel_heat_flux.data,
                                   moments.charged.qpar, t_idx, z, r, n_ion_species)
             append_to_dynamic_var(io_moments.thermal_speed.data, moments.charged.vth,
+                                  t_idx, z, r, n_ion_species)
+            append_to_dynamic_var(io_moments.entropy_production.data, moments.charged.dSdt,
                                   t_idx, z, r, n_ion_species)
             if n_neutral_species > 0
                 append_to_dynamic_var(io_moments.density_neutral.data,

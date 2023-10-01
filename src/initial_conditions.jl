@@ -16,7 +16,7 @@ export enforce_neutral_z_boundary_condition!
 using SpecialFunctions: erfc
 # modules
 using ..type_definitions: mk_float
-using ..array_allocation: allocate_shared_float
+using ..array_allocation: allocate_shared_float, allocate_float
 using ..bgk: init_bgk_pdf!
 using ..communication
 using ..calculus: reconcile_element_boundaries_MPI!
@@ -88,9 +88,9 @@ function init_pdf_and_moments(vz, vr, vzeta, vpa, vperp, z, r, composition, geom
     neutral = create_moments_neutral(z.n, r.n, n_neutral_species_alloc)
     moments = moments_struct(charged,neutral)
     pdf = create_pdf(vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_species_alloc)
-    
+    dummy_vpavperp = allocate_float(vpa.n, vperp.n) # integration dummy array
     if use_manufactured_solns
-        init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_species, geometry, composition)
+        init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_species, geometry, composition, dummy_vpavperp)
     else 
         @serial_region begin
             #charged particles
@@ -117,7 +117,7 @@ function init_pdf_and_moments(vz, vr, vzeta, vpa, vperp, z, r, composition, geom
         init_pdf!(pdf, moments, vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_species, species)
             
         # calculate the self-consistent initial parallel heat flux and pressure from the initial un-normalised pdf
-        update_qpar!(moments.charged.qpar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
+        update_qpar!(moments.charged.qpar, pdf.charged.unnorm, vpa, vperp, z, r, composition, moments.charged.upar, dummy_vpavperp)
         # need neutral version!!! update_qpar!(moments.charged.qpar, moments.charged.qpar_updated, pdf.charged.unnorm, vpa, vperp, z, r, composition, moments.charged.vpa_norm_fac)
         # calculate self-consistent neutral moments 
         if n_neutral_species > 0
@@ -191,7 +191,7 @@ function init_pdf!(pdf, moments, vz, vr, vzeta, vpa, vperp, z, r, n_ion_species,
     return nothing
 end
 
-function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_species, geometry,composition)
+function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_species, geometry,composition,dummy_vpavperp)
     manufactured_solns_list = manufactured_solutions(r.L,z.L,r.bc,z.bc,geometry,composition,r.n,vperp.n) 
     dfni_func = manufactured_solns_list.dfni_func
     densi_func = manufactured_solns_list.densi_func
@@ -209,7 +209,7 @@ function init_pdf_moments_manufactured_solns!(pdf, moments, vz, vr, vzeta, vpa, 
     # update upar, ppar, qpar, vth consistent with manufactured solns
     update_density!(moments.charged.dens, pdf.charged.unnorm, vpa, vperp, z, r, composition)
     update_upar!(moments.charged.upar, pdf.charged.unnorm, vpa, vperp, z, r, composition, moments.charged.dens)
-    update_qpar!(moments.charged.qpar, pdf.charged.unnorm, vpa, vperp, z, r, composition)    
+    update_qpar!(moments.charged.qpar, pdf.charged.unnorm, vpa, vperp, z, r, composition, moments.charged.upar, dummy_vpavperp)    
     update_ppar!(moments.charged.ppar, pdf.charged.unnorm, vpa, vperp, z, r, composition, moments.charged.upar)
     update_pperp!(moments.charged.pperp, pdf.charged.unnorm, vpa, vperp, z, r, composition)
     update_vth!(moments.charged.vth, moments.charged.ppar, moments.charged.pperp, moments.charged.dens, vperp, z, r, composition)
@@ -752,7 +752,8 @@ function enforce_vpa_boundary_condition_local!(f::T, bc, adv_speed, vpa_diffusio
     if bc == "zero"
         if dvpadt > zero || vpa_diffusion
             f[1] = 0.0 # -infty forced to zero
-        elseif dvpadt < zero || vpa_diffusion
+        end
+        if dvpadt < zero || vpa_diffusion
             f[end] = 0.0 # +infty forced to zero
         end
     elseif bc == "zero_gradient"

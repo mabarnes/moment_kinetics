@@ -308,6 +308,8 @@ mutable struct collisions_input
     nuii_pitch::mk_float
     # ion-ion Krook operator collision frequency
     nuii_krook::mk_float
+    # numerical conserving terms (for Fokker-Planck operator only)
+    numerical_conserving_terms::Bool
 end
 
 """
@@ -363,6 +365,8 @@ struct pp_input
     plot_pperp0_vs_t::Bool
     # if plot_vth0_vs_t = true, create plots of species vth(z0) vs time
     plot_vth0_vs_t::Bool
+    # if plot_dSdt0_vs_t = true, create plots of species vth(z0) vs time
+    plot_dSdt0_vs_t::Bool
     # if plot_qpar0_vs_t = true, create plots of species qpar(z0) vs time
     plot_qpar0_vs_t::Bool
     # if plot_dens_vs_z_t = true, create plot of species density vs z and time

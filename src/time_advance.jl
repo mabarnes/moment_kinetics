@@ -53,6 +53,8 @@ using ..advection: advection_info
 @debug_detect_redundant_block_synchronize using ..communication: debug_detect_redundant_is_active
 
 mutable struct scratch_dummy_arrays
+    dummy_s::Array{mk_float,1}
+    
     dummy_sr::Array{mk_float,2}
     dummy_vpavperp::Array{mk_float,2}
     dummy_zr::MPISharedArray{mk_float,2}
@@ -89,6 +91,7 @@ mutable struct scratch_dummy_arrays
 	buffer_vpavperpzrs_3::MPISharedArray{mk_float,5}
 	buffer_vpavperpzrs_4::MPISharedArray{mk_float,5}
 	buffer_vpavperpzrs_5::MPISharedArray{mk_float,5}
+	buffer_vpavperpzrs_6::MPISharedArray{mk_float,5}
 	
 	buffer_vzvrvzetazsn_1::MPISharedArray{mk_float,5}
 	buffer_vzvrvzetazsn_2::MPISharedArray{mk_float,5}
@@ -359,7 +362,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
             @views update_speed_r!(r_advect[is], fields, vpa, vperp, z, r, geometry)
         end
         # enforce prescribed boundary condition in r on the distribution function f
-        @views enforce_r_boundary_condition!(pdf.charged.unnorm, boundary_distributions.pdf_rboundary_charged,
+        @views enforce_r_boundary_condition!(pdf.charged.norm, boundary_distributions.pdf_rboundary_charged,
                                             r.bc, r_advect, vpa, vperp, z, r, composition,
                                             scratch_dummy.buffer_vpavperpzs_1, scratch_dummy.buffer_vpavperpzs_2,
                                             scratch_dummy.buffer_vpavperpzs_3, scratch_dummy.buffer_vpavperpzs_4,
@@ -378,7 +381,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
             @views update_speed_z!(z_advect[is], fields, vpa, vperp, z, r, 0.0, geometry)
         end
         # enforce prescribed boundary condition in z on the distribution function f
-        @views enforce_z_boundary_condition!(pdf.charged.unnorm, z.bc, z_advect, vpa, vperp, z, r, composition,
+        @views enforce_z_boundary_condition!(pdf.charged.norm, z.bc, z_advect, vpa, vperp, z, r, composition,
                 scratch_dummy.buffer_vpavperprs_1, scratch_dummy.buffer_vpavperprs_2,
                 scratch_dummy.buffer_vpavperprs_3, scratch_dummy.buffer_vpavperprs_4,
                 scratch_dummy.buffer_vpavperpzrs_1)
@@ -420,6 +423,15 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
         begin_s_r_z_vpa_region()
         @views enforce_vperp_boundary_condition!(pdf.charged.norm[:,:,:,:,:],vperp,vperp_spectral)
     end
+    # update moments so that they are consistent with the distribution function
+    update_density!(moments.charged.dens, pdf.charged.norm, vpa, vperp, z, r, composition)
+    update_upar!(moments.charged.upar, pdf.charged.norm, vpa, vperp, z, r, composition, moments.charged.dens)
+    dummy_vpavperp = allocate_float(vpa.n, vperp.n) # integration dummy array
+    update_qpar!(moments.charged.qpar, pdf.charged.norm, vpa, vperp, z, r, composition, moments.charged.upar, dummy_vpavperp)    
+    update_ppar!(moments.charged.ppar, pdf.charged.norm, vpa, vperp, z, r, composition, moments.charged.upar)
+    update_pperp!(moments.charged.pperp, pdf.charged.norm, vpa, vperp, z, r, composition)
+    update_vth!(moments.charged.vth, moments.charged.ppar, moments.charged.pperp, moments.charged.dens, vperp, z, r, composition)
+    
     
     ##
     # Neutral particle advection
@@ -484,7 +496,9 @@ end
 
 function setup_dummy_and_buffer_arrays(nr,nz,nvpa,nvperp,nvz,nvr,nvzeta,nspecies_ion,nspecies_neutral)
 
-	dummy_sr = allocate_float(nr, nspecies_ion)
+	dummy_s = allocate_float(nspecies_ion)
+	
+    dummy_sr = allocate_float(nr, nspecies_ion)
     dummy_zr = allocate_shared_float(nz, nr)
     dummy_vpavperp = allocate_float(nvpa, nvperp)
 	
@@ -518,6 +532,7 @@ function setup_dummy_and_buffer_arrays(nr,nz,nvpa,nvperp,nvz,nvr,nvzeta,nspecies
 	buffer_vpavperpzrs_3 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
 	buffer_vpavperpzrs_4 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
 	buffer_vpavperpzrs_5 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
+	buffer_vpavperpzrs_6 = allocate_shared_float(nvpa,nvperp,nz,nr,nspecies_ion)
 	
 	buffer_vzvrvzetazsn_1 = allocate_shared_float(nvz,nvr,nvzeta,nz,nspecies_neutral)
 	buffer_vzvrvzetazsn_2 = allocate_shared_float(nvz,nvr,nvzeta,nz,nspecies_neutral)
@@ -535,12 +550,12 @@ function setup_dummy_and_buffer_arrays(nr,nz,nvpa,nvperp,nvz,nvr,nvzeta,nspecies
 	
 	buffer_vzvrvzetazrsn = allocate_shared_float(nvz,nvr,nvzeta,nz,nr,nspecies_neutral)
 	
-	return scratch_dummy_arrays(dummy_sr,dummy_vpavperp,dummy_zr,
+	return scratch_dummy_arrays(dummy_s, dummy_sr,dummy_vpavperp,dummy_zr,
 		buffer_z_1,buffer_z_2,buffer_z_3,buffer_z_4,
 		buffer_r_1,buffer_r_2,buffer_r_3,buffer_r_4,
 		buffer_vpavperpzs_1,buffer_vpavperpzs_2,buffer_vpavperpzs_3,buffer_vpavperpzs_4,buffer_vpavperpzs_5,buffer_vpavperpzs_6,
 		buffer_vpavperprs_1,buffer_vpavperprs_2,buffer_vpavperprs_3,buffer_vpavperprs_4,buffer_vpavperprs_5,buffer_vpavperprs_6,
-		buffer_vpavperpzrs_1,buffer_vpavperpzrs_2,buffer_vpavperpzrs_3,buffer_vpavperpzrs_4,buffer_vpavperpzrs_5,
+		buffer_vpavperpzrs_1,buffer_vpavperpzrs_2,buffer_vpavperpzrs_3,buffer_vpavperpzrs_4,buffer_vpavperpzrs_5,buffer_vpavperpzrs_6,
 		buffer_vzvrvzetazsn_1,buffer_vzvrvzetazsn_2,buffer_vzvrvzetazsn_3,buffer_vzvrvzetazsn_4,buffer_vzvrvzetazsn_5,buffer_vzvrvzetazsn_6,
 		buffer_vzvrvzetarsn_1,buffer_vzvrvzetarsn_2,buffer_vzvrvzetarsn_3,buffer_vzvrvzetarsn_4,buffer_vzvrvzetarsn_5,buffer_vzvrvzetarsn_6,
 		buffer_vzvrvzetazrsn)
@@ -814,7 +829,7 @@ function rk_update!(scratch, pdf, moments, fields, vz, vr, vzeta, vpa, vperp, z,
 		rethrow(e)
 	end
     # update the parallel heat flux
-    update_qpar!(moments.charged.qpar, pdf.charged.unnorm, vpa, vperp, z, r, composition)
+    update_qpar!(moments.charged.qpar, pdf.charged.unnorm, vpa, vperp, z, r, composition, new_scratch.upar, scratch_dummy.dummy_vpavperp)
 
     ##
     # update the neutral particle distribution and moments
@@ -1059,8 +1074,11 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     end
     
     if advance.explicit_fp_collisions
-        explicit_fokker_planck_collisions!(fvec_out.pdf, fvec_in.pdf,composition,collisions,dt,fp_arrays,
-                                             scratch_dummy, r, z, vperp, vpa, vperp_spectral, vpa_spectral)
+        update_entropy_diagnostic = (istage == 1)
+        explicit_fokker_planck_collisions!(fvec_out.pdf, fvec_in.pdf, moments.charged.dSdt, composition,collisions,dt,fp_arrays,
+                                             scratch_dummy, r, z, vperp, vpa, vperp_spectral, vpa_spectral,
+                                             diagnose_entropy_production = update_entropy_diagnostic)
+        #println(moments.charged.dSdt)
     end
     if advance.explicit_fp_F_FM_collisions
         explicit_fokker_planck_collisions_Maxwellian_coefficients!(fvec_out.pdf, fvec_in.pdf, 

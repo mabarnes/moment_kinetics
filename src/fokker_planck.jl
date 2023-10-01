@@ -17,6 +17,8 @@ export F_Maxwellian, dFdvpa_Maxwellian, dFdvperp_Maxwellian
 export d2Fdvpa2_Maxwellian, d2Fdvperpdvpa_Maxwellian, d2Fdvperp2_Maxwellian
 
 export Cssp_fully_expanded_form, get_local_Cssp_coefficients!, init_fokker_planck_collisions
+# testing
+export symmetric_matrix_inverse
 
 using SpecialFunctions: ellipk, ellipe, erf
 using FastGaussQuadrature
@@ -25,6 +27,7 @@ using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_shared_float
 using ..communication: MPISharedArray
 using ..velocity_moments: integrate_over_vspace
+using ..velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_qpar, get_pressure, get_rmom
 using ..calculus: derivative!, second_derivative!
 using ..looping
 """
@@ -883,8 +886,8 @@ distributions function derivatives, Rosenbluth potentials,
 and collision operator in place.
 """
 
-function explicit_fokker_planck_collisions!(pdf_out,pdf_in,composition,collisions,dt,fokkerplanck_arrays::fokkerplanck_arrays_struct,
-                                             scratch_dummy, r, z, vperp, vpa, vperp_spectral, vpa_spectral)
+function explicit_fokker_planck_collisions!(pdf_out,pdf_in,dSdt,composition,collisions,dt,fokkerplanck_arrays::fokkerplanck_arrays_struct,
+                                             scratch_dummy, r, z, vperp, vpa, vperp_spectral, vpa_spectral; diagnose_entropy_production = true)
 
     n_ion_species = composition.n_ion_species
     @boundscheck vpa.n == size(pdf_out,1) || throw(BoundsError(pdf_out))
@@ -897,19 +900,26 @@ function explicit_fokker_planck_collisions!(pdf_out,pdf_in,composition,collision
     @boundscheck z.n == size(pdf_in,3) || throw(BoundsError(pdf_in))
     @boundscheck r.n == size(pdf_in,4) || throw(BoundsError(pdf_in))
     @boundscheck n_ion_species == size(pdf_in,5) || throw(BoundsError(pdf_in))
+    @boundscheck z.n == size(dSdt,1) || throw(BoundsError(dSdt))
+    @boundscheck r.n == size(dSdt,2) || throw(BoundsError(dSdt))
+    @boundscheck n_ion_species == size(dSdt,3) || throw(BoundsError(dSdt))
     
     # setup species information
     mass = Array{mk_float,1}(undef,n_ion_species)
     mass[1] = 1.0 # generalise!
     nussp = Array{mk_float,2}(undef,n_ion_species,n_ion_species)
     nussp[1,1] = collisions.nuii # generalise!
-
+    
+    # assign Cssp to a dummy array
+    Cssp = scratch_dummy.dummy_s
+    
     # first, compute the require derivatives and store in the buffer arrays
     dfdvpa = scratch_dummy.buffer_vpavperpzrs_1
     d2fdvpa2 = scratch_dummy.buffer_vpavperpzrs_2
     d2fdvperpdvpa = scratch_dummy.buffer_vpavperpzrs_3
     dfdvperp = scratch_dummy.buffer_vpavperpzrs_4
     d2fdvperp2 = scratch_dummy.buffer_vpavperpzrs_5
+    logfC = scratch_dummy.buffer_vpavperpzrs_5
 
     begin_s_r_z_vperp_region()
     @loop_s_r_z_vperp is ir iz ivperp begin
@@ -952,22 +962,43 @@ function explicit_fokker_planck_collisions!(pdf_out,pdf_in,composition,collision
                                             fka.G1_weights,fka.H0_weights,fka.H1_weights,fka.H2_weights,fka.H3_weights,
                                             ivpa,ivperp,vpa.n,vperp.n)
                 
-                (Cssp = Cssp_fully_expanded_form(nussp[is,isp],mass[is],mass[isp],
+                (Cssp[isp] = Cssp_fully_expanded_form(nussp[is,isp],mass[is],mass[isp],
                                                 d2fdvpa2[ivpa,ivperp,iz,ir,is],d2fdvperp2[ivpa,ivperp,iz,ir,is],d2fdvperpdvpa[ivpa,ivperp,iz,ir,is],dfdvpa[ivpa,ivperp,iz,ir,is],dfdvperp[ivpa,ivperp,iz,ir,is],pdf_in[ivpa,ivperp,iz,ir,is],
                                                 fka.d2Gdvpa2[ivpa,ivperp],fka.d2Gdvperp2[ivpa,ivperp],fka.d2Gdvperpdvpa[ivpa,ivperp],fka.dGdvperp[ivpa,ivperp],
                                                 fka.dHdvpa[ivpa,ivperp],fka.dHdvperp[ivpa,ivperp],pdf_in[ivpa,ivperp,iz,ir,isp],vperp.grid[ivperp]) )
-                pdf_out[ivpa,ivperp,iz,ir,is] += dt*Cssp
+                pdf_out[ivpa,ivperp,iz,ir,is] += dt*Cssp[isp]
                 # for testing
-                fka.Cssp_result_vpavperp[ivpa,ivperp] = Cssp
+                fka.Cssp_result_vpavperp[ivpa,ivperp] = Cssp[isp]
                 fka.dfdvpa[ivpa,ivperp] = dfdvpa[ivpa,ivperp,iz,ir,is]
                 fka.d2fdvpa2[ivpa,ivperp] = d2fdvpa2[ivpa,ivperp,iz,ir,is]
                 fka.d2fdvperpdvpa[ivpa,ivperp] = d2fdvperpdvpa[ivpa,ivperp,iz,ir,is]
                 fka.dfdvperp[ivpa,ivperp] = dfdvperp[ivpa,ivperp,iz,ir,is]
                 fka.d2fdvperp2[ivpa,ivperp] = d2fdvperp2[ivpa,ivperp,iz,ir,is]
             end
+            # store the entropy production
+            # we use ln|f| to avoid problems with f < 0. This is ok if C_s[f,f] is small where f ~< 0
+            # + 1.0e-15 in case f = 0 exactly
+            #println(Cssp[:])
+            #println(pdf_in[ivpa,ivperp,iz,ir,is])
+            logfC[ivpa,ivperp,iz,ir,is] = log(abs(pdf_in[ivpa,ivperp,iz,ir,is]) + 1.0e-15)*sum(Cssp[:])
+            #println(dfdvpa[ivpa,ivperp,iz,ir,is])
        end
     end
-
+    if diagnose_entropy_production
+        # compute entropy production diagnostic
+        begin_s_r_z_region()
+        @loop_s_r_z is ir iz begin
+           @views dSdt[iz,ir,is] = -integrate_over_vspace(logfC[:,:,iz,ir,is], vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
+        end
+    end
+    if collisions.numerical_conserving_terms && false && n_ion_species == 1
+        # use an ad-hoc numerical model to conserve density, upar, vth
+        # a different model is required for inter-species collisions
+        # simply conserving particle density may be more appropriate in the multi-species case
+        apply_numerical_conserving_terms!(pdf_out,pdf_in,vperp,vpa,scratch_dummy.dummy_vpavperp,scratch_dummy.buffer_vpavperpzrs_1)
+    elseif collisions.numerical_conserving_terms && true #&& n_ion_species > 1
+        apply_density_conserving_terms!(pdf_out,pdf_in,vperp,vpa,scratch_dummy.buffer_vpavperpzrs_1)
+    end
     return nothing 
 end
 
@@ -1235,6 +1266,98 @@ function Cflux_vperp_Maxwellian_inputs(ms::mk_float,denss::mk_float,upars::mk_fl
     #fac *= (ms/msp)*(vths/vthsp)*dHdeta(etap)/etap
     #fac *= d2Gdeta2(etap) 
     return Cflux
+end
+
+# solves A x = b for a matrix of the form
+# A00  0    A02
+# 0    A11  A12
+# A02  A12  A22
+# appropriate for the moment numerical conserving terms
+function symmetric_matrix_inverse(A00,A02,A11,A12,A22,b0,b1,b2)
+    # matrix determinant
+    detA = A00*(A11*A22 - A12^2) - A11*A02^2
+    # cofactors C (also a symmetric matrix)
+    C00 = A11*A22 - A12^2
+    C01 = A12*A02
+    C02 = -A11*A02
+    C11 = A00*A22 - A02^2
+    C12 = -A00*A12
+    C22 = A00*A11
+    x0 = ( C00*b0 + C01*b1 + C02*b2 )/detA
+    x1 = ( C01*b0 + C11*b1 + C12*b2 )/detA
+    x2 = ( C02*b0 + C12*b1 + C22*b2 )/detA
+    return x0, x1, x2
+end
+
+# applies the numerical conservation to pdf_out, the advanced distribution function
+# uses the low-level moment integration routines from velocity moments
+# conserves n, upar, total pressure of each species
+# only correct for the self collision operator
+# multi-species cases requires conservation of  particle number and total momentum and total energy ( sum_s m_s upar_s, ... )
+function apply_numerical_conserving_terms!(pdf_out,pdf_in,vperp,vpa,dummy_vpavperp, buffer_pdf)
+    mass = 1.0
+    begin_s_r_z_region()
+    @loop_s_r_z is ir iz begin
+        # get moments of incoming and outgoing distribution functions
+        n_in = get_density(@view(pdf_in[:,:,iz,ir,is]), vpa, vperp)
+        upar_in = get_upar(@view(pdf_in[:,:,iz,ir,is]), vpa, vperp, n_in)
+        ppar_in = get_ppar(@view(pdf_in[:,:,iz,ir,is]), vpa, vperp, upar_in, mass)
+        pperp_in = get_pperp(@view(pdf_in[:,:,iz,ir,is]), vpa, vperp, mass)
+        pressure_in = get_pressure(ppar_in,pperp_in)
+        
+        n_out = get_density(@view(pdf_out[:,:,iz,ir,is]), vpa, vperp)
+        upar_out = get_upar(@view(pdf_out[:,:,iz,ir,is]), vpa, vperp, n_out)
+        ppar_out = get_ppar(@view(pdf_out[:,:,iz,ir,is]), vpa, vperp, upar_out, mass)
+        pperp_out = get_pperp(@view(pdf_out[:,:,iz,ir,is]), vpa, vperp, mass)
+        pressure_out = get_pressure(ppar_out,pperp_out)
+        qpar_out = get_qpar(@view(pdf_out[:,:,iz,ir,is]), vpa, vperp, upar_out, mass, dummy_vpavperp)
+        rmom_out = get_rmom(@view(pdf_out[:,:,iz,ir,is]), vpa, vperp, upar_out, mass, dummy_vpavperp)
+        
+        # form the appropriate matrix coefficients
+        b0, b1, b2 = n_in, n_in*(upar_in - upar_out), (3.0/2.0)*(pressure_in/mass) + n_in*(upar_in - upar_out)^2
+        A00, A02, A11, A12, A22 = n_out, (3.0/2.0)*(pressure_out/mass), 0.5*ppar_out/mass, qpar_out/mass, rmom_out/mass
+        
+        # obtain the coefficients for the corrections 
+        (x0, x1, x2) = symmetric_matrix_inverse(A00,A02,A11,A12,A22,b0,b1,b2)
+        
+        # fill the buffer with the corrected pdf 
+        @loop_vperp_vpa ivperp ivpa begin
+            wpar = vpa.grid[ivpa] - upar_out
+            buffer_pdf[ivpa,ivperp,iz,ir,is] = (x0 + x1*wpar + x2*(vperp.grid[ivperp]^2 + wpar^2) )*pdf_out[ivpa,ivperp]
+        end
+        
+    end
+    begin_s_r_z_vperp_vpa_region()
+    # update pdf_out
+    @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+        pdf_out[ivpa,ivperp,iz,ir,is] = buffer_pdf[ivpa,ivperp,iz,ir,is]
+    end
+end
+
+# function which corrects only for the loss of particles due to numerical error
+# suitable for use with multiple species collisions
+function apply_density_conserving_terms!(pdf_out,pdf_in,vperp,vpa,buffer_pdf)
+    begin_s_r_z_region()
+    @loop_s_r_z is ir iz begin
+        # get density moment of incoming and outgoing distribution functions
+        n_in = get_density(@view(pdf_in[:,:,iz,ir,is]), vpa, vperp)
+        
+        n_out = get_density(@view(pdf_out[:,:,iz,ir,is]), vpa, vperp)
+        
+        # obtain the coefficient for the corrections 
+        x0 = n_in/n_out
+        
+        # update pdf_out with the corrections 
+        @loop_vperp_vpa ivperp ivpa begin
+            buffer_pdf[ivpa,ivperp,iz,ir,is] = x0*pdf_out[ivpa,ivperp]
+        end
+        
+    end
+    begin_s_r_z_vperp_vpa_region()
+    # update pdf_out
+    @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
+        pdf_out[ivpa,ivperp,iz,ir,is] = buffer_pdf[ivpa,ivperp,iz,ir,is]
+    end
 end
 
 end
