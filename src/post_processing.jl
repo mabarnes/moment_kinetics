@@ -1631,6 +1631,7 @@ function plot_charged_pdf(pdf, vpa, vperp, z, r,
     ivperp0_string = string("_ivperp0", string(ivperp0))
     iz0_string = string("_iz0", string(iz0))
     ir0_string = string("_ir0", string(ir0))
+    nvperp = size(vperp,1)
     # create animations of the ion pdf
     for is ∈ 1:n_species
         if n_species > 1
@@ -1679,16 +1680,23 @@ function plot_charged_pdf(pdf, vpa, vperp, z, r,
             gif(anim, outfile, fps=5)
         end
         # make a gif animation of f(vpa,vperp,t) at a given (z,r) location
-        if pp.animate_f_vs_vperp_vpa
+        if pp.animate_f_vs_vperp_vpa && nvperp > 1
             anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
                 @views heatmap(vperp, vpa, pdf[:,:,iz0,ir0,is,i], xlabel="vperp", ylabel="vpa", c = :deep, interpolation = :cubic)
             end
             outfile = string(run_name, "_pdf_vs_vperp_vpa", iz0_string, ir0_string, spec_string, ".gif")
             gif(anim, outfile, fps=5)
 
-            @views heatmap(vperp, vpa, pdf[:,:,iz0,ir0,is,itime_max], xlabel="r", ylabel="vpa", c = :deep, interpolation = :cubic)
+            @views heatmap(vperp, vpa, pdf[:,:,iz0,ir0,is,itime_max], xlabel="vperp", ylabel="vpa", c = :deep, interpolation = :cubic)
             outfile = string(run_name, "_pdf_vs_vpa_vperp", ir0_string, iz0_string, spec_string, ".pdf")
             savefig(outfile)
+        elseif pp.animate_f_vs_vperp_vpa && nvperp == 1
+            # make a gif animation of ϕ(r) at different times
+            anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+                @views plot(vpa, pdf[:,1,iz0,ir0,is,i], xlabel="vpa", ylabel="f")
+            end
+            outfile = string(run_name, "_pdf_vs_vpa", ir0_string, iz0_string, spec_string, ".gif")
+            gif(anim, outfile, fps=5)        
         end
         # make a gif animation of f(z,r,t) at a given (vpa,vperp) location
         if pp.animate_f_vs_r_z
