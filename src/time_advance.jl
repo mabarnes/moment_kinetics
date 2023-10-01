@@ -398,7 +398,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     @serial_region begin
         for is ∈ 1:n_ion_species
             # enforce prescribed boundary condition in vpa on the distribution function f
-            @views enforce_vpa_boundary_condition!(pdf.charged.norm[:,:,:,:,is], vpa.bc, vpa_advect[is], advance.vpa_diffusion)
+            @views enforce_vpa_boundary_condition!(pdf.charged.norm[:,:,:,:,is], vpa.bc, vpa_advect[is], advance.vpa_diffusion, vpa, vpa_spectral)
         end
     end
 
@@ -1077,7 +1077,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     # enforce boundary conditions in r, z and vpa on the charged particle distribution function
     enforce_boundary_conditions!(fvec_out.pdf, boundary_distributions.pdf_rboundary_charged,
       vpa.bc, z.bc, r.bc, vpa, vperp, z, r, vpa_advect, z_advect, r_advect, composition,
-      scratch_dummy, advance, vperp_spectral)
+      scratch_dummy, advance, vperp_spectral, vpa_spectral)
     # enforce boundary conditions in r and z on the neutral particle distribution function
     if n_neutral_species > 0
         enforce_neutral_boundary_conditions!(fvec_out.pdf_neutral, fvec_out.pdf, boundary_distributions,

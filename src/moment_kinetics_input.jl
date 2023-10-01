@@ -994,6 +994,8 @@ function check_input_vpa(vpa, io, vpa_dissipation_coefficient)
         println(io,">vpa.bc = 'zero'.  enforcing zero incoming BC in vpa.")
     elseif vpa.bc == "zero" && vpa_dissipation_coefficient > 0.0
         println(io,">vpa.bc = 'zero', with vpa collision/diffusion terms: enforcing zero BC in vpa.")
+    elseif vpa.bc == "zero_gradient"
+        println(io,">vpa.bc = 'zero_gradient'.  enforcing zero gradients at limits of vpa domain.")
     elseif vpa.bc == "periodic"
         println(io,">vpa.bc = 'periodic'.  enforcing periodicity in vpa.")
     else

@@ -576,14 +576,14 @@ end
 function enforce_boundary_conditions!(f, f_r_bc,
           vpa_bc, z_bc, r_bc, vpa, vperp, z, r,
           vpa_adv::T1, z_adv::T2, r_adv::T3, composition,
-          scratch_dummy::T4, advance::T5, vperp_spectral::T6) where {T1, T2, T3, T4, T5, T6}
+          scratch_dummy::T4, advance::T5, vperp_spectral::T6, vpa_spectral::T7) where {T1, T2, T3, T4, T5, T6, T7}
     
     if vpa.n > 1
         begin_s_r_z_vperp_region()
         @loop_s_r_z_vperp is ir iz ivperp begin
             # enforce the vpa BC
             # use that adv.speed independent of vpa 
-            @views enforce_vpa_boundary_condition_local!(f[:,ivperp,iz,ir,is], vpa_bc, vpa_adv[is].speed[:,ivperp,iz,ir], advance.vpa_diffusion)
+            @views enforce_vpa_boundary_condition_local!(f[:,ivperp,iz,ir,is], vpa_bc, vpa_adv[is].speed[:,ivperp,iz,ir], advance.vpa_diffusion, vpa, vpa_spectral)
         end
     end
     if vperp.n > 1
@@ -728,14 +728,14 @@ end
 impose the prescribed vpa boundary condition on f
 at every z grid point
 """
-function enforce_vpa_boundary_condition!(f, bc, src::T, vpa_diffusion::Bool) where T
+function enforce_vpa_boundary_condition!(f, bc, src::T, vpa_diffusion::Bool, vpa, vpa_spectral) where T
     nvperp = size(f,2)
     nz = size(f,3)
     nr = size(f,4)
     for ir ∈ 1:nr
         for iz ∈ 1:nz
             for ivperp ∈ 1:nvperp
-                enforce_vpa_boundary_condition_local!(view(f,:,ivperp,iz,ir), bc, src.speed[:,ivperp,iz,ir], vpa_diffusion)
+                enforce_vpa_boundary_condition_local!(view(f,:,ivperp,iz,ir), bc, src.speed[:,ivperp,iz,ir], vpa_diffusion, vpa, vpa_spectral)
             end
         end
     end
@@ -743,17 +743,29 @@ end
 
 """
 """
-function enforce_vpa_boundary_condition_local!(f::T, bc, adv_speed, vpa_diffusion::Bool) where T
+function enforce_vpa_boundary_condition_local!(f::T, bc, adv_speed, vpa_diffusion::Bool, vpa, vpa_spectral) where T
     # define a zero that accounts for finite precision
     zero = 1.0e-10
     dvpadt = adv_speed[1] #use that dvpa/dt is indendent of vpa in the current model 
     nvpa = size(f,1)
+    ngrid = vpa.ngrid
     if bc == "zero"
         if dvpadt > zero || vpa_diffusion
             f[1] = 0.0 # -infty forced to zero
         elseif dvpadt < zero || vpa_diffusion
             f[end] = 0.0 # +infty forced to zero
         end
+    elseif bc == "zero_gradient"
+        D0 = vpa_spectral.lobatto.Dmat[1,:]
+        @loop_s_r_z_vperp is ir iz ivperp begin
+            # adjust F(vpa = -L/2) so that d F / d vpa = 0 at vpa = -L/2
+            f[1,ivperp,iz,ir,is] = -sum(D0[2:ngrid].*f[2:ngrid,ivperp,iz,ir,is])/D0[1]
+        end
+        D0 = vpa_spectral.lobatto.Dmat[end,:]
+        @loop_s_r_z_vperp is ir iz ivperp begin
+            # adjust F(vpa = L/2) so that d F / d vpa = 0 at vpa = L/2
+            f[nvpa,ivperp,iz,ir,is] = -sum(D0[1:ngrid-1].*f[nvpa-ngrid+1:nvpa-1,ivperp,iz,ir,is])/D0[ngrid]
+        end    
     elseif bc == "periodic"
         f[1] = 0.5*(f[nvpa]+f[1])
         f[nvpa] = f[1]
