@@ -1076,7 +1076,8 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
     if advance.explicit_fp_collisions
         update_entropy_diagnostic = (istage == 1)
         explicit_fokker_planck_collisions!(fvec_out.pdf, fvec_in.pdf, moments.charged.dSdt, composition,collisions,dt,fp_arrays,
-                                             scratch_dummy, r, z, vperp, vpa, vperp_spectral, vpa_spectral,
+                                             scratch_dummy, r, z, vperp, vpa, vperp_spectral, vpa_spectral, boundary_distributions, advance,
+                                             vpa_advect, z_advect, r_advect,
                                              diagnose_entropy_production = update_entropy_diagnostic)
         #println(moments.charged.dSdt)
     end

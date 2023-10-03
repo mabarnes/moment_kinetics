@@ -23,6 +23,7 @@ export symmetric_matrix_inverse
 using SpecialFunctions: ellipk, ellipe, erf
 using FastGaussQuadrature
 using Dates
+using ..initial_conditions: enforce_boundary_conditions!
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_shared_float
 using ..communication: MPISharedArray
@@ -887,8 +888,8 @@ and collision operator in place.
 """
 
 function explicit_fokker_planck_collisions!(pdf_out,pdf_in,dSdt,composition,collisions,dt,fokkerplanck_arrays::fokkerplanck_arrays_struct,
-                                             scratch_dummy, r, z, vperp, vpa, vperp_spectral, vpa_spectral; diagnose_entropy_production = true)
-
+                                             scratch_dummy, r, z, vperp, vpa, vperp_spectral, vpa_spectral, boundary_distributions, advance,
+                                             vpa_advect, z_advect, r_advect; diagnose_entropy_production = true)
     n_ion_species = composition.n_ion_species
     @boundscheck vpa.n == size(pdf_out,1) || throw(BoundsError(pdf_out))
     @boundscheck vperp.n == size(pdf_out,2) || throw(BoundsError(pdf_out))
@@ -991,13 +992,19 @@ function explicit_fokker_planck_collisions!(pdf_out,pdf_in,dSdt,composition,coll
            @views dSdt[iz,ir,is] = -integrate_over_vspace(logfC[:,:,iz,ir,is], vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
         end
     end
-    if collisions.numerical_conserving_terms && false && n_ion_species == 1
+    if collisions.numerical_conserving_terms == "density+u||+T"
         # use an ad-hoc numerical model to conserve density, upar, vth
         # a different model is required for inter-species collisions
         # simply conserving particle density may be more appropriate in the multi-species case
-        apply_numerical_conserving_terms!(pdf_out,pdf_in,vperp,vpa,scratch_dummy.dummy_vpavperp,scratch_dummy.buffer_vpavperpzrs_1)
-    elseif collisions.numerical_conserving_terms && true #&& n_ion_species > 1
-        apply_density_conserving_terms!(pdf_out,pdf_in,vperp,vpa,scratch_dummy.buffer_vpavperpzrs_1)
+        apply_numerical_conserving_terms!(pdf_out,pdf_in,boundary_distributions,
+      vpa, vperp, z, r, vpa_advect, z_advect, r_advect, composition,
+      scratch_dummy, advance, vperp_spectral, vpa_spectral)
+    elseif collisions.numerical_conserving_terms == "density"
+        apply_density_conserving_terms!(pdf_out,pdf_in,boundary_distributions,
+      vpa, vperp, z, r, vpa_advect, z_advect, r_advect, composition,
+      scratch_dummy, advance, vperp_spectral, vpa_spectral)
+    else
+        println("ERROR: collisions.numerical_conserving_terms = ",collisions.numerical_conserving_terms," NOT SUPPORTED")
     end
     return nothing 
 end
@@ -1294,7 +1301,16 @@ end
 # conserves n, upar, total pressure of each species
 # only correct for the self collision operator
 # multi-species cases requires conservation of  particle number and total momentum and total energy ( sum_s m_s upar_s, ... )
-function apply_numerical_conserving_terms!(pdf_out,pdf_in,vperp,vpa,dummy_vpavperp, buffer_pdf)
+function apply_numerical_conserving_terms!(pdf_out,pdf_in,boundary_distributions,
+      vpa, vperp, z, r, vpa_advect, z_advect, r_advect, composition,
+      scratch_dummy, advance, vperp_spectral, vpa_spectral)
+    # enforce bc prior to imposing conservation
+    enforce_boundary_conditions!(pdf_out, boundary_distributions.pdf_rboundary_charged,
+      vpa.bc, z.bc, r.bc, vpa, vperp, z, r, vpa_advect, z_advect, r_advect, composition,
+      scratch_dummy, advance, vperp_spectral, vpa_spectral)
+    # buffer arrays
+    buffer_pdf = scratch_dummy.buffer_vpavperpzrs_1
+    dummy_vpavperp = scratch_dummy.dummy_vpavperp
     mass = 1.0
     begin_s_r_z_region()
     @loop_s_r_z is ir iz begin
@@ -1323,7 +1339,7 @@ function apply_numerical_conserving_terms!(pdf_out,pdf_in,vperp,vpa,dummy_vpavpe
         # fill the buffer with the corrected pdf 
         @loop_vperp_vpa ivperp ivpa begin
             wpar = vpa.grid[ivpa] - upar_out
-            buffer_pdf[ivpa,ivperp,iz,ir,is] = (x0 + x1*wpar + x2*(vperp.grid[ivperp]^2 + wpar^2) )*pdf_out[ivpa,ivperp]
+            buffer_pdf[ivpa,ivperp,iz,ir,is] = (x0 + x1*wpar + x2*(vperp.grid[ivperp]^2 + wpar^2) )*pdf_out[ivpa,ivperp,iz,ir,is]
         end
         
     end
@@ -1336,7 +1352,15 @@ end
 
 # function which corrects only for the loss of particles due to numerical error
 # suitable for use with multiple species collisions
-function apply_density_conserving_terms!(pdf_out,pdf_in,vperp,vpa,buffer_pdf)
+function apply_density_conserving_terms!(pdf_out,pdf_in,boundary_distributions,
+      vpa, vperp, z, r, vpa_advect, z_advect, r_advect, composition,
+      scratch_dummy, advance, vperp_spectral, vpa_spectral)
+    # enforce bc prior to imposing conservation
+    enforce_boundary_conditions!(pdf_out, boundary_distributions.pdf_rboundary_charged,
+      vpa.bc, z.bc, r.bc, vpa, vperp, z, r, vpa_advect, z_advect, r_advect, composition,
+      scratch_dummy, advance, vperp_spectral, vpa_spectral)
+    # buffer array
+    buffer_pdf = scratch_dummy.buffer_vpavperpzrs_1
     begin_s_r_z_region()
     @loop_s_r_z is ir iz begin
         # get density moment of incoming and outgoing distribution functions
@@ -1349,7 +1373,7 @@ function apply_density_conserving_terms!(pdf_out,pdf_in,vperp,vpa,buffer_pdf)
         
         # update pdf_out with the corrections 
         @loop_vperp_vpa ivperp ivpa begin
-            buffer_pdf[ivpa,ivperp,iz,ir,is] = x0*pdf_out[ivpa,ivperp]
+            buffer_pdf[ivpa,ivperp,iz,ir,is] = x0*pdf_out[ivpa,ivperp,iz,ir,is]
         end
         
     end
