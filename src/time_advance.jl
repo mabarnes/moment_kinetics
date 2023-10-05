@@ -69,6 +69,10 @@ mutable struct scratch_dummy_arrays
 	buffer_r_2::MPISharedArray{mk_float,1}
 	buffer_r_3::MPISharedArray{mk_float,1}
 	buffer_r_4::MPISharedArray{mk_float,1}
+
+	buffer_zrs_1::MPISharedArray{mk_float,3}
+	buffer_zrs_2::MPISharedArray{mk_float,3}
+	buffer_zrs_3::MPISharedArray{mk_float,3}
 	
 	buffer_vpavperpzs_1::MPISharedArray{mk_float,4}
 	buffer_vpavperpzs_2::MPISharedArray{mk_float,4}
@@ -512,6 +516,10 @@ function setup_dummy_and_buffer_arrays(nr,nz,nvpa,nvperp,nvz,nvr,nvzeta,nspecies
 	buffer_r_2 = allocate_shared_float(nr)
 	buffer_r_3 = allocate_shared_float(nr)
 	buffer_r_4 = allocate_shared_float(nr)
+    
+	buffer_zrs_1 = allocate_shared_float(nz,nr,nspecies_ion)
+	buffer_zrs_2 = allocate_shared_float(nz,nr,nspecies_ion)
+	buffer_zrs_3 = allocate_shared_float(nz,nr,nspecies_ion)
 	
 	buffer_vpavperpzs_1 = allocate_shared_float(nvpa,nvperp,nz,nspecies_ion)
 	buffer_vpavperpzs_2 = allocate_shared_float(nvpa,nvperp,nz,nspecies_ion)
@@ -553,6 +561,7 @@ function setup_dummy_and_buffer_arrays(nr,nz,nvpa,nvperp,nvz,nvr,nvzeta,nspecies
 	return scratch_dummy_arrays(dummy_s, dummy_sr,dummy_vpavperp,dummy_zr,
 		buffer_z_1,buffer_z_2,buffer_z_3,buffer_z_4,
 		buffer_r_1,buffer_r_2,buffer_r_3,buffer_r_4,
+		buffer_zrs_1,buffer_zrs_2,buffer_zrs_3,
 		buffer_vpavperpzs_1,buffer_vpavperpzs_2,buffer_vpavperpzs_3,buffer_vpavperpzs_4,buffer_vpavperpzs_5,buffer_vpavperpzs_6,
 		buffer_vpavperprs_1,buffer_vpavperprs_2,buffer_vpavperprs_3,buffer_vpavperprs_4,buffer_vpavperprs_5,buffer_vpavperprs_6,
 		buffer_vpavperpzrs_1,buffer_vpavperpzrs_2,buffer_vpavperpzrs_3,buffer_vpavperpzrs_4,buffer_vpavperpzrs_5,buffer_vpavperpzrs_6,

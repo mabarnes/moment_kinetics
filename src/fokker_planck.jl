@@ -947,6 +947,13 @@ function explicit_fokker_planck_collisions!(pdf_out,pdf_in,dSdt,composition,coll
         @. d2fdvperpdvpa[ivpa,:,iz,ir,is] = vperp.scratch
     end
 
+    # to permit moment conservation, store the current moments of pdf_out
+    # this involves imposing the boundary conditions to the present pre-collisions pdf_out
+    if collisions.numerical_conserving_terms == "density+u||+T" || collisions.numerical_conserving_terms == "density"  
+        store_moments_in_buffer!(pdf_out,boundary_distributions,
+      vpa, vperp, z, r, vpa_advect, z_advect, r_advect, composition,
+      scratch_dummy, advance, vperp_spectral, vpa_spectral)
+    end
     # now parallelise over all dimensions and calculate the 
     # collision operator coefficients and the collision operator
     # in one loop, noting that we only require data local to 
@@ -1315,15 +1322,22 @@ function apply_numerical_conserving_terms!(pdf_out,pdf_in,boundary_distributions
     # buffer arrays
     buffer_pdf = scratch_dummy.buffer_vpavperpzrs_1
     dummy_vpavperp = scratch_dummy.dummy_vpavperp
+    # data precalculated by store_moments_in_buffer!
+    buffer_n = scratch_dummy.buffer_zrs_1
+    buffer_upar = scratch_dummy.buffer_zrs_2
+    buffer_pressure = scratch_dummy.buffer_zrs_3
     mass = 1.0
     begin_s_r_z_region()
     @loop_s_r_z is ir iz begin
         # get moments of incoming and outgoing distribution functions
-        n_in = get_density(@view(pdf_in[:,:,iz,ir,is]), vpa, vperp)
-        upar_in = get_upar(@view(pdf_in[:,:,iz,ir,is]), vpa, vperp, n_in)
-        ppar_in = get_ppar(@view(pdf_in[:,:,iz,ir,is]), vpa, vperp, upar_in, mass)
-        pperp_in = get_pperp(@view(pdf_in[:,:,iz,ir,is]), vpa, vperp, mass)
-        pressure_in = get_pressure(ppar_in,pperp_in)
+        #n_in = get_density(@view(pdf_in[:,:,iz,ir,is]), vpa, vperp)
+        #upar_in = get_upar(@view(pdf_in[:,:,iz,ir,is]), vpa, vperp, n_in)
+        #ppar_in = get_ppar(@view(pdf_in[:,:,iz,ir,is]), vpa, vperp, upar_in, mass)
+        #pperp_in = get_pperp(@view(pdf_in[:,:,iz,ir,is]), vpa, vperp, mass)
+        #pressure_in = get_pressure(ppar_in,pperp_in)
+        n_in = buffer_n[iz,ir,is]
+        upar_in = buffer_upar[iz,ir,is]
+        pressure_in = buffer_pressure[iz,ir,is]
         
         n_out = get_density(@view(pdf_out[:,:,iz,ir,is]), vpa, vperp)
         upar_out = get_upar(@view(pdf_out[:,:,iz,ir,is]), vpa, vperp, n_out)
@@ -1352,6 +1366,7 @@ function apply_numerical_conserving_terms!(pdf_out,pdf_in,boundary_distributions
     @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
         pdf_out[ivpa,ivperp,iz,ir,is] = buffer_pdf[ivpa,ivperp,iz,ir,is]
     end
+    return nothing
 end
 
 # function which corrects only for the loss of particles due to numerical error
@@ -1365,10 +1380,13 @@ function apply_density_conserving_terms!(pdf_out,pdf_in,boundary_distributions,
       scratch_dummy, advance, vperp_spectral, vpa_spectral)
     # buffer array
     buffer_pdf = scratch_dummy.buffer_vpavperpzrs_1
+    # data precalculated by store_moments_in_buffer!
+    buffer_n = scratch_dummy.buffer_zrs_1
     begin_s_r_z_region()
     @loop_s_r_z is ir iz begin
         # get density moment of incoming and outgoing distribution functions
-        n_in = get_density(@view(pdf_in[:,:,iz,ir,is]), vpa, vperp)
+        #n_in = get_density(@view(pdf_in[:,:,iz,ir,is]), vpa, vperp)
+        n_in = buffer_n[iz,ir,is]
         
         n_out = get_density(@view(pdf_out[:,:,iz,ir,is]), vpa, vperp)
         
@@ -1386,6 +1404,31 @@ function apply_density_conserving_terms!(pdf_out,pdf_in,boundary_distributions,
     @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
         pdf_out[ivpa,ivperp,iz,ir,is] = buffer_pdf[ivpa,ivperp,iz,ir,is]
     end
+    return nothing
 end
 
+function store_moments_in_buffer!(pdf_out,boundary_distributions,
+      vpa, vperp, z, r, vpa_advect, z_advect, r_advect, composition,
+      scratch_dummy, advance, vperp_spectral, vpa_spectral)
+    # enforce bc prior to calculating the moments
+    enforce_boundary_conditions!(pdf_out, boundary_distributions.pdf_rboundary_charged,
+      vpa.bc, z.bc, r.bc, vpa, vperp, z, r, vpa_advect, z_advect, r_advect, composition,
+      scratch_dummy, advance, vperp_spectral, vpa_spectral)
+    # buffer arrays
+    density = scratch_dummy.buffer_zrs_1
+    upar = scratch_dummy.buffer_zrs_2
+    pressure = scratch_dummy.buffer_zrs_3
+    # set the mass
+    mass = 1.0
+    
+    begin_s_r_z_region()
+    @loop_s_r_z is ir iz begin
+        density[iz,ir,is] = get_density(@view(pdf_out[:,:,iz,ir,is]), vpa, vperp)
+        upar[iz,ir,is] = get_upar(@view(pdf_out[:,:,iz,ir,is]), vpa, vperp, density[iz,ir,is])
+        ppar = get_ppar(@view(pdf_out[:,:,iz,ir,is]), vpa, vperp, upar[iz,ir,is], mass)
+        pperp = get_pperp(@view(pdf_out[:,:,iz,ir,is]), vpa, vperp, mass)
+        pressure[iz,ir,is] = get_pressure(ppar,pperp)
+    end
+    return nothing
+end
 end
