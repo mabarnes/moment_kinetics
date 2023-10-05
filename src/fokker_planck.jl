@@ -1330,11 +1330,6 @@ function apply_numerical_conserving_terms!(pdf_out,pdf_in,boundary_distributions
     begin_s_r_z_region()
     @loop_s_r_z is ir iz begin
         # get moments of incoming and outgoing distribution functions
-        #n_in = get_density(@view(pdf_in[:,:,iz,ir,is]), vpa, vperp)
-        #upar_in = get_upar(@view(pdf_in[:,:,iz,ir,is]), vpa, vperp, n_in)
-        #ppar_in = get_ppar(@view(pdf_in[:,:,iz,ir,is]), vpa, vperp, upar_in, mass)
-        #pperp_in = get_pperp(@view(pdf_in[:,:,iz,ir,is]), vpa, vperp, mass)
-        #pressure_in = get_pressure(ppar_in,pperp_in)
         n_in = buffer_n[iz,ir,is]
         upar_in = buffer_upar[iz,ir,is]
         pressure_in = buffer_pressure[iz,ir,is]
@@ -1385,7 +1380,6 @@ function apply_density_conserving_terms!(pdf_out,pdf_in,boundary_distributions,
     begin_s_r_z_region()
     @loop_s_r_z is ir iz begin
         # get density moment of incoming and outgoing distribution functions
-        #n_in = get_density(@view(pdf_in[:,:,iz,ir,is]), vpa, vperp)
         n_in = buffer_n[iz,ir,is]
         
         n_out = get_density(@view(pdf_out[:,:,iz,ir,is]), vpa, vperp)
