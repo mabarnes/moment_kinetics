@@ -1293,6 +1293,10 @@ function symmetric_matrix_inverse(A00,A02,A11,A12,A22,b0,b1,b2)
     x0 = ( C00*b0 + C01*b1 + C02*b2 )/detA
     x1 = ( C01*b0 + C11*b1 + C12*b2 )/detA
     x2 = ( C02*b0 + C12*b1 + C22*b2 )/detA
+    #println("b0: ",b0," b1: ",b1," b2: ",b2)
+    #println("A00: ",A00," A02: ",A02," A11: ",A11," A12: ",A12," A22: ",A22, " detA: ",detA)
+    #println("C00: ",C00," C02: ",C02," C11: ",C11," C12: ",C12," C22: ",C22)
+    #println("x0: ",x0," x1: ",x1," x2: ",x2)
     return x0, x1, x2
 end
 
