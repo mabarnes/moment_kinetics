@@ -2053,6 +2053,9 @@ function plot_Maxwellian_diagnostic(ff, density, parallel_flow, thermal_speed, v
         @views plot(time, ff_norm, xlabel=L"t/c_{ref}", ylabel=L"L^2(f - f_M)(t)", label = "")
 			outfile = string(run_name, "_L2_Maxwellian_norm"*description*"_vs_t.pdf")
 			savefig(outfile)
+        @views plot(time, ff_norm, xlabel=L"t/c_{ref}", ylabel=L"L^2(f - f_M)(t)", label = "", yscale=:log10)
+			outfile = string(run_name, "_L2_Maxwellian_norm_log_scale"*description*"_vs_t.pdf")
+			savefig(outfile)
     end
     return nothing
 end
