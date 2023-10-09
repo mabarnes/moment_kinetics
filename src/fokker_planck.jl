@@ -70,11 +70,11 @@ function allocate_fokkerplanck_arrays(vperp,vpa)
     nvpa = vpa.n
     nvperp = vperp.n
     
-    G1_weights = allocate_float(nvpa,nvperp,nvpa,nvperp)
-    H0_weights = allocate_float(nvpa,nvperp,nvpa,nvperp)
-    H1_weights = allocate_float(nvpa,nvperp,nvpa,nvperp)
-    H2_weights = allocate_float(nvpa,nvperp,nvpa,nvperp)
-    H3_weights = allocate_float(nvpa,nvperp,nvpa,nvperp)
+    G1_weights = allocate_shared_float(nvpa,nvperp,nvpa,nvperp)
+    H0_weights = allocate_shared_float(nvpa,nvperp,nvpa,nvperp)
+    H1_weights = allocate_shared_float(nvpa,nvperp,nvpa,nvperp)
+    H2_weights = allocate_shared_float(nvpa,nvperp,nvpa,nvperp)
+    H3_weights = allocate_shared_float(nvpa,nvperp,nvpa,nvperp)
     #Rosenbluth_G = allocate_float(nvpa,nvperp)
     d2Gdvpa2 = allocate_shared_float(nvpa,nvperp)
     d2Gdvperpdvpa = allocate_shared_float(nvpa,nvperp)
@@ -920,7 +920,7 @@ function explicit_fokker_planck_collisions!(pdf_out,pdf_in,dSdt,composition,coll
     d2fdvperpdvpa = scratch_dummy.buffer_vpavperpzrs_3
     dfdvperp = scratch_dummy.buffer_vpavperpzrs_4
     d2fdvperp2 = scratch_dummy.buffer_vpavperpzrs_5
-    logfC = scratch_dummy.buffer_vpavperpzrs_5
+    logfC = scratch_dummy.buffer_vpavperpzrs_6
 
     begin_s_r_z_vperp_region()
     @loop_s_r_z_vperp is ir iz ivperp begin
@@ -1010,7 +1010,7 @@ function explicit_fokker_planck_collisions!(pdf_out,pdf_in,dSdt,composition,coll
         apply_density_conserving_terms!(pdf_out,pdf_in,boundary_distributions,
       vpa, vperp, z, r, vpa_advect, z_advect, r_advect, composition,
       scratch_dummy, advance, vperp_spectral, vpa_spectral)
-    else
+    elseif !(collisions.numerical_conserving_terms == "none")
         println("ERROR: collisions.numerical_conserving_terms = ",collisions.numerical_conserving_terms," NOT SUPPORTED")
     end
     return nothing 
