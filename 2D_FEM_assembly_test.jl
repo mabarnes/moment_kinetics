@@ -15,13 +15,13 @@ if abspath(PROGRAM_FILE) == @__FILE__
     using moment_kinetics.gauss_legendre: setup_gausslegendre_pseudospectral, get_QQ_local!
     using moment_kinetics.type_definitions: mk_float, mk_int
     using SparseArrays: sparse
-    using LinearAlgebra: mul!, lu
+    using LinearAlgebra: mul!, lu, cholesky
     
     function print_matrix(matrix,name,n,m)
         println("\n ",name," \n")
         for i in 1:n
             for j in 1:m
-                @printf("%.1f ", matrix[i,j])
+                @printf("%.2f ", matrix[i,j])
             end
             println("")
         end
@@ -76,7 +76,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     end
     
     # define inputs needed for the test
-	ngrid = 5 #number of points per element 
+	ngrid = 9 #number of points per element 
 	nelement_local_vpa = 16 # number of elements per rank
 	nelement_global_vpa = nelement_local_vpa # total number of elements 
 	nelement_local_vperp = 16 # number of elements per rank
@@ -136,6 +136,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     # Assemble a 2D mass matrix in the global compound coordinate
     nc_global = vpa.n*vperp.n
     nc_local = vpa.ngrid*vperp.ngrid
+    Index2D = Array{mk_int,2}(undef,nc_global,nc_global)
     MM2D = Array{mk_float,2}(undef,nc_global,nc_global)
     MM2D .= 0.0
     KKpar2D = Array{mk_float,2}(undef,nc_global,nc_global)
@@ -147,6 +148,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     # local dummy arrays
     MMpar = Array{mk_float,2}(undef,vpa.ngrid,vpa.ngrid)
     MMperp = Array{mk_float,2}(undef,vperp.ngrid,vperp.ngrid)
+    MMperp_p1 = Array{mk_float,2}(undef,vperp.ngrid,vperp.ngrid)
     KKpar = Array{mk_float,2}(undef,vpa.ngrid,vpa.ngrid)
     KKperp = Array{mk_float,2}(undef,vperp.ngrid,vperp.ngrid)
     
@@ -167,31 +169,90 @@ if abspath(PROGRAM_FILE) == @__FILE__
         return ivpa_local, ivperp_local, ivpap_local, ivperpp_local, ic_global, icp_global
     end
     
+    function get_indices(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivpap_local,ivperp_local,ivperpp_local)
+        # global indices on the grids
+        ivpa_global = vpa.igrid_full[ivpa_local,ielement_vpa]
+        ivperp_global = vperp.igrid_full[ivperp_local,ielement_vperp]
+        ivpap_global = vpa.igrid_full[ivpap_local,ielement_vpa]
+        ivperpp_global = vperp.igrid_full[ivperpp_local,ielement_vperp]
+        # global compound indices
+        ic_global = ic_func(ivpa_global,ivperp_global,vpa.n)
+        icp_global = ic_func(ivpap_global,ivperpp_global,vpa.n)
+        return ic_global, icp_global
+    end
+    
     for ielement_vperp in 1:vperp.nelement_local
         for ielement_vpa in 1:vpa.nelement_local
-            for icp_local in 1:nc_local
-                for ic_local in 1:nc_local
-                    ivpa_local, ivperp_local, ivpap_local, ivperpp_local, ic_global, icp_global = get_indices(vpa,vperp,ielement_vpa,ielement_vperp,ic_local,icp_local)
-                    
-                    get_QQ_local!(MMpar,ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"M")
-                    get_QQ_local!(MMperp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"M")
-                    get_QQ_local!(KKpar,ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"K")
-                    get_QQ_local!(KKperp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"K")
-                    # assign mass matrix data
-                    MM2D[ic_global,icp_global] += MMpar[ivpa_local,ivpap_local]*
-                                                    MMperp[ivperp_local,ivperpp_local]
-                    KKpar2D[ic_global,icp_global] += KKpar[ivpa_local,ivpap_local]*
-                                                    MMperp[ivperp_local,ivperpp_local]
-                    KKperp2D[ic_global,icp_global] += MMpar[ivpa_local,ivpap_local]*
-                                                    KKperp[ivperp_local,ivperpp_local]
+            for ivperpp_local in 1:vperp.ngrid
+                for ivperp_local in 1:vperp.ngrid
+                    for ivpap_local in 1:vpa.ngrid
+                        for ivpa_local in 1:vpa.ngrid
+                            ic_global, icp_global = get_indices(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivpap_local,ivperp_local,ivperpp_local)
+                            println("ielement_vpa: ",ielement_vpa," ielement_vperp: ",ielement_vperp)
+                            println("ivpa_local: ",ivpa_local," ivpap_local: ",ivpap_local)
+                            println("ivperp_local: ",ivperp_local," ivperpp_local: ",ivperpp_local)
+                            println("ic: ",ic_global," icp: ",icp_global)
+                            get_QQ_local!(MMpar,ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"M")
+                            get_QQ_local!(MMperp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"M")
+                            get_QQ_local!(KKpar,ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"K")
+                            get_QQ_local!(KKperp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"K")
+                            # assign mass matrix data
+                            println("MM2D += ", MMpar[ivpa_local,ivpap_local]*MMperp[ivperp_local,ivperpp_local])
+                            MM2D[ic_global,icp_global] += MMpar[ivpa_local,ivpap_local]*
+                                                            MMperp[ivperp_local,ivperpp_local]
+                            KKpar2D[ic_global,icp_global] += KKpar[ivpa_local,ivpap_local]*
+                                                            MMperp[ivperp_local,ivperpp_local]
+                            KKperp2D[ic_global,icp_global] += MMpar[ivpa_local,ivpap_local]*
+                                                            KKperp[ivperp_local,ivperpp_local]
+                            # boundary condition possibilities
+                            lower_boundary_vpa = (ielement_vpa == 1 && ivpa_local == 1 && ivpap_local == 1) && false
+                            upper_boundary_vpa = (ielement_vpa == vpa.nelement_local && ivpa_local == vpa.ngrid && ivpap_local == vpa.ngrid) && false
+                            upper_boundary_vperp = (ielement_vperp == vperp.nelement_local && ivperp_local == vperp.ngrid && ivperpp_local == vperp.ngrid)# && false
+                            # lower boundary in vpa, not a boundary in vperp
+                            if lower_boundary_vpa #&& !upper_boundary_vperp
+                                MM2D[ic_global,icp_global] += MMpar[vpa.ngrid,vpa.ngrid]*
+                                                            MMperp[ivperp_local,ivperpp_local]
+                                #MM2D[ic_global,icp_global] = 1.0
+                                #println("MM2D = 1.0: BC")
+                            end
+                          #  if lower_boundary_vpa && upper_boundary_vperp
+                          #      MM2D[ic_global,icp_global] += MMpar[vpa.ngrid,vpa.ngrid]*
+                          #                                  MMperp_p1[1,1]
+                                #MM2D[ic_global,icp_global] = 1.0
+                                #println("MM2D = 1.0: BC")
+                          #  end
+                            # upper boundary in vpa, not a boundary in vperp
+                            if upper_boundary_vpa #&& !upper_boundary_vperp
+                                MM2D[ic_global,icp_global] += MMpar[1,1]*
+                                                            MMperp[ivperp_local,ivperpp_local]
+                                #MM2D[ic_global,icp_global] = 1.0
+                                #println("MM2D = 1.0: BC")
+                            end
+                       #     if upper_boundary_vpa && upper_boundary_vperp
+                       #         MM2D[ic_global,icp_global] += MMpar[1,1]*
+                       #                                     MMperp_p1[1,1]
+                                #MM2D[ic_global,icp_global] = 1.0
+                                #println("MM2D = 1.0: BC")
+                       #     end
+                            # upper boundary in vperp, not a boundary in vpa
+                         #   if upper_boundary_vperp && !(lower_boundary_vpa) && !(upper_boundary_vpa)
+                         #       get_QQ_local!(MMperp_p1,ielement_vperp+1,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"M")
+                         #       MM2D[ic_global,icp_global] += MMpar[ivpa_local,ivpap_local]*
+                         #                                   MMperp_p1[1,1]
+                         #       #MM2D[ic_global,icp_global] = 1.0
+                         #       #println("MM2D = 1.0: BC")
+                         #   end
+                        end
+                    end
                 end
             end
         end
     end
-    #print_matrix(MM2D,"MM2D",nc_global,nc_global)
-    #print_matrix(KKpar2D,"KKpar2D",nc_global,nc_global)
-    #print_matrix(KKperp2D,"KKperp2D",nc_global,nc_global)
-    
+    if nc_global < 30
+        print_matrix(MM2D,"MM2D",nc_global,nc_global)
+        print_matrix(KKpar2D,"KKpar2D",nc_global,nc_global)
+        print_matrix(KKperp2D,"KKperp2D",nc_global,nc_global)
+    end
     # convert these matrices to sparse matrices
     
     MM2D_sparse = sparse(MM2D)
@@ -201,10 +262,13 @@ if abspath(PROGRAM_FILE) == @__FILE__
     # create LU decomposition for mass matrix inversion
     
     lu_obj = lu(MM2D_sparse)
+    #cholesky_obj = cholesky(MM2D_sparse)
     
     # define a test function 
     
     fvpavperp = Array{mk_float,2}(undef,vpa.n,vperp.n)
+    fvpavperp_test = Array{mk_float,2}(undef,vpa.n,vperp.n)
+    fvpavperp_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
     d2fvpavperp_dvpa2_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
     d2fvpavperp_dvpa2_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
     d2fvpavperp_dvpa2_num = Array{mk_float,2}(undef,vpa.n,vperp.n)
@@ -227,20 +291,26 @@ if abspath(PROGRAM_FILE) == @__FILE__
     #print_matrix(fvpavperp,"fvpavperp",vpa.n,vperp.n)
     # fill fc with fvpavperp
     ravel_vpavperp_to_c!(fc,fvpavperp,vpa.n,vperp.n)
+    ravel_c_to_vpavperp!(fvpavperp_test,fc,nc_global,vpa.n)
+    @. fvpavperp_err = abs(fvpavperp - fvpavperp_test)
+    println("max(ravel_err)",maximum(fvpavperp_err))
     #print_vector(fc,"fc",nc_global)
     # multiply by KKpar2D and fill dfc
     mul!(dfc,KKpar2D_sparse,fc)
     # invert mass matrix and fill fc
     fc = lu_obj \ dfc
+    #fc = cholesky_obj \ dfc
     #print_vector(fc,"fc",nc_global)
     # unravel
     ravel_c_to_vpavperp!(d2fvpavperp_dvpa2_num,fc,nc_global,vpa.n)
-    print_matrix(d2fvpavperp_dvpa2_num,"d2fvpavperp_dvpa2_num",vpa.n,vperp.n)
-    print_matrix(d2fvpavperp_dvpa2_exact,"d2fvpavperp_dvpa2_num",vpa.n,vperp.n)
-    
+    if nc_global < 30
+        print_matrix(d2fvpavperp_dvpa2_num,"d2fvpavperp_dvpa2_num",vpa.n,vperp.n)
+    end
     @. d2fvpavperp_dvpa2_err = abs(d2fvpavperp_dvpa2_num - d2fvpavperp_dvpa2_exact)
     println("maximum(d2fvpavperp_dvpa2_err): ",maximum(d2fvpavperp_dvpa2_err))
-    
+    if nc_global < 30
+        print_matrix(d2fvpavperp_dvpa2_err,"d2fvpavperp_dvpa2_err",vpa.n,vperp.n)
+    end
     @views heatmap(vperp.grid, vpa.grid, d2fvpavperp_dvpa2_num[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
                 windowsize = (360,240), margin = 15pt)
                 outfile = string("d2fvpavperp_dvpa2_num.pdf")
