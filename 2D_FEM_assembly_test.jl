@@ -169,16 +169,25 @@ if abspath(PROGRAM_FILE) == @__FILE__
         return ivpa_local, ivperp_local, ivpap_local, ivperpp_local, ic_global, icp_global
     end
     
-    function get_indices(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivpap_local,ivperp_local,ivperpp_local)
+    #function get_indices(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivpap_local,ivperp_local,ivperpp_local)
+    #    # global indices on the grids
+    #    ivpa_global = vpa.igrid_full[ivpa_local,ielement_vpa]
+    #    ivperp_global = vperp.igrid_full[ivperp_local,ielement_vperp]
+    #    ivpap_global = vpa.igrid_full[ivpap_local,ielement_vpa]
+    #    ivperpp_global = vperp.igrid_full[ivperpp_local,ielement_vperp]
+    #    # global compound indices
+    #    ic_global = ic_func(ivpa_global,ivperp_global,vpa.n)
+    #    icp_global = ic_func(ivpap_global,ivperpp_global,vpa.n)
+    #    return ic_global, icp_global
+    #end
+    
+    function get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
         # global indices on the grids
         ivpa_global = vpa.igrid_full[ivpa_local,ielement_vpa]
         ivperp_global = vperp.igrid_full[ivperp_local,ielement_vperp]
-        ivpap_global = vpa.igrid_full[ivpap_local,ielement_vpa]
-        ivperpp_global = vperp.igrid_full[ivperpp_local,ielement_vperp]
-        # global compound indices
+        # global compound index
         ic_global = ic_func(ivpa_global,ivperp_global,vpa.n)
-        icp_global = ic_func(ivpap_global,ivperpp_global,vpa.n)
-        return ic_global, icp_global
+        return ic_global
     end
     
     for ielement_vperp in 1:vperp.nelement_local
@@ -187,7 +196,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 for ivperp_local in 1:vperp.ngrid
                     for ivpap_local in 1:vpa.ngrid
                         for ivpa_local in 1:vpa.ngrid
-                            ic_global, icp_global = get_indices(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivpap_local,ivperp_local,ivperpp_local)
+                            ic_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
+                            icp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpap_local,ivperpp_local) #get_indices(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivpap_local,ivperp_local,ivperpp_local)
                             println("ielement_vpa: ",ielement_vpa," ielement_vperp: ",ielement_vperp)
                             println("ivpa_local: ",ivpa_local," ivpap_local: ",ivpap_local)
                             println("ivperp_local: ",ivperp_local," ivperpp_local: ",ivperpp_local)
@@ -205,9 +215,9 @@ if abspath(PROGRAM_FILE) == @__FILE__
                             KKperp2D[ic_global,icp_global] += MMpar[ivpa_local,ivpap_local]*
                                                             KKperp[ivperp_local,ivperpp_local]
                             # boundary condition possibilities
-                            lower_boundary_vpa = (ielement_vpa == 1 && ivpa_local == 1 && ivpap_local == 1) && false
-                            upper_boundary_vpa = (ielement_vpa == vpa.nelement_local && ivpa_local == vpa.ngrid && ivpap_local == vpa.ngrid) && false
-                            upper_boundary_vperp = (ielement_vperp == vperp.nelement_local && ivperp_local == vperp.ngrid && ivperpp_local == vperp.ngrid)# && false
+                            lower_boundary_vpa = (ielement_vpa == 1 && ivpa_local == 1 && ivpap_local == 1)
+                            upper_boundary_vpa = (ielement_vpa == vpa.nelement_local && ivpa_local == vpa.ngrid && ivpap_local == vpa.ngrid)
+                            upper_boundary_vperp = (ielement_vperp == vperp.nelement_local && ivperp_local == vperp.ngrid && ivperpp_local == vperp.ngrid)
                             # lower boundary in vpa, not a boundary in vperp
                             if lower_boundary_vpa #&& !upper_boundary_vperp
                                 MM2D[ic_global,icp_global] += MMpar[vpa.ngrid,vpa.ngrid]*
@@ -215,12 +225,12 @@ if abspath(PROGRAM_FILE) == @__FILE__
                                 #MM2D[ic_global,icp_global] = 1.0
                                 #println("MM2D = 1.0: BC")
                             end
-                          #  if lower_boundary_vpa && upper_boundary_vperp
-                          #      MM2D[ic_global,icp_global] += MMpar[vpa.ngrid,vpa.ngrid]*
-                          #                                  MMperp_p1[1,1]
+                            if lower_boundary_vpa && upper_boundary_vperp
+                                MM2D[ic_global,icp_global] += MMpar[vpa.ngrid,vpa.ngrid]*
+                                                            MMperp_p1[1,1]
                                 #MM2D[ic_global,icp_global] = 1.0
                                 #println("MM2D = 1.0: BC")
-                          #  end
+                            end
                             # upper boundary in vpa, not a boundary in vperp
                             if upper_boundary_vpa #&& !upper_boundary_vperp
                                 MM2D[ic_global,icp_global] += MMpar[1,1]*
@@ -228,26 +238,59 @@ if abspath(PROGRAM_FILE) == @__FILE__
                                 #MM2D[ic_global,icp_global] = 1.0
                                 #println("MM2D = 1.0: BC")
                             end
-                       #     if upper_boundary_vpa && upper_boundary_vperp
-                       #         MM2D[ic_global,icp_global] += MMpar[1,1]*
-                       #                                     MMperp_p1[1,1]
+                            if upper_boundary_vpa && upper_boundary_vperp
+                                MM2D[ic_global,icp_global] += MMpar[1,1]*
+                                                            MMperp_p1[1,1]
                                 #MM2D[ic_global,icp_global] = 1.0
                                 #println("MM2D = 1.0: BC")
-                       #     end
+                            end
                             # upper boundary in vperp, not a boundary in vpa
-                         #   if upper_boundary_vperp && !(lower_boundary_vpa) && !(upper_boundary_vpa)
-                         #       get_QQ_local!(MMperp_p1,ielement_vperp+1,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"M")
-                         #       MM2D[ic_global,icp_global] += MMpar[ivpa_local,ivpap_local]*
-                         #                                   MMperp_p1[1,1]
-                         #       #MM2D[ic_global,icp_global] = 1.0
-                         #       #println("MM2D = 1.0: BC")
-                         #   end
+                            if upper_boundary_vperp && !(lower_boundary_vpa) && !(upper_boundary_vpa)
+                                get_QQ_local!(MMperp_p1,ielement_vperp+1,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"M")
+                                MM2D[ic_global,icp_global] += MMpar[ivpa_local,ivpap_local]*
+                                                            MMperp_p1[1,1]
+                                #MM2D[ic_global,icp_global] = 1.0
+                                #println("MM2D = 1.0: BC")
+                            end
                         end
                     end
                 end
             end
         end
     end
+    
+    function enforce_zero_bc!(fc,vpa,vperp)
+        # lower vpa boundary
+        ielement_vpa = 1
+        ivpa_local = 1
+        for ielement_vperp in 1:vperp.nelement_local
+            for ivperp_local in 1:vperp.ngrid
+                ic_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
+                fc[ic_global] = 0.0
+            end
+        end
+        
+        # upper vpa boundary
+        ielement_vpa = vpa.nelement_local
+        ivpa_local = vpa.ngrid
+        for ielement_vperp in 1:vperp.nelement_local
+            for ivperp_local in 1:vperp.ngrid
+                ic_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
+                fc[ic_global] = 0.0
+            end
+        end
+        
+        # upper vperp boundary
+        ielement_vperp = vperp.nelement_local
+        ivperp_local = vperp.ngrid
+        for ielement_vpa in 1:vpa.nelement_local
+            for ivpa_local in 1:vpa.ngrid
+                ic_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
+                fc[ic_global] = 0.0
+            end
+        end
+    end
+    
     if nc_global < 30
         print_matrix(MM2D,"MM2D",nc_global,nc_global)
         print_matrix(KKpar2D,"KKpar2D",nc_global,nc_global)
@@ -272,12 +315,18 @@ if abspath(PROGRAM_FILE) == @__FILE__
     d2fvpavperp_dvpa2_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
     d2fvpavperp_dvpa2_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
     d2fvpavperp_dvpa2_num = Array{mk_float,2}(undef,vpa.n,vperp.n)
+    d2fvpavperp_dvperp2_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
+    d2fvpavperp_dvperp2_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
+    d2fvpavperp_dvperp2_num = Array{mk_float,2}(undef,vpa.n,vperp.n)
     fc = Array{mk_float,1}(undef,nc_global)
     dfc = Array{mk_float,1}(undef,nc_global)
+    gc = Array{mk_float,1}(undef,nc_global)
+    dgc = Array{mk_float,1}(undef,nc_global)
     for ivperp in 1:vperp.n
         for ivpa in 1:vpa.n
             fvpavperp[ivpa,ivperp] = exp(-vpa.grid[ivpa]^2 - vperp.grid[ivperp]^2)
             d2fvpavperp_dvpa2_exact[ivpa,ivperp] = (4.0*vpa.grid[ivpa]^2 - 2.0)*exp(-vpa.grid[ivpa]^2 - vperp.grid[ivperp]^2)
+            d2fvpavperp_dvperp2_exact[ivpa,ivperp] = (4.0*vperp.grid[ivperp]^2 - 2.0)*exp(-vpa.grid[ivpa]^2 - vperp.grid[ivperp]^2)
         end
     end
     
@@ -297,17 +346,25 @@ if abspath(PROGRAM_FILE) == @__FILE__
     #print_vector(fc,"fc",nc_global)
     # multiply by KKpar2D and fill dfc
     mul!(dfc,KKpar2D_sparse,fc)
+    mul!(dgc,KKperp2D_sparse,fc)
+    # enforce zero bc ? 
+    #enforce_zero_bc!(fc,vpa,vperp)
+    #enforce_zero_bc!(gc,vpa,vperp)
     # invert mass matrix and fill fc
     fc = lu_obj \ dfc
+    gc = lu_obj \ dgc
     #fc = cholesky_obj \ dfc
     #print_vector(fc,"fc",nc_global)
     # unravel
     ravel_c_to_vpavperp!(d2fvpavperp_dvpa2_num,fc,nc_global,vpa.n)
+    ravel_c_to_vpavperp!(d2fvpavperp_dvperp2_num,gc,nc_global,vpa.n)
     if nc_global < 30
         print_matrix(d2fvpavperp_dvpa2_num,"d2fvpavperp_dvpa2_num",vpa.n,vperp.n)
     end
     @. d2fvpavperp_dvpa2_err = abs(d2fvpavperp_dvpa2_num - d2fvpavperp_dvpa2_exact)
     println("maximum(d2fvpavperp_dvpa2_err): ",maximum(d2fvpavperp_dvpa2_err))
+    @. d2fvpavperp_dvperp2_err = abs(d2fvpavperp_dvperp2_num - d2fvpavperp_dvperp2_exact)
+    println("maximum(d2fvpavperp_dvperp2_err): ",maximum(d2fvpavperp_dvperp2_err))
     if nc_global < 30
         print_matrix(d2fvpavperp_dvpa2_err,"d2fvpavperp_dvpa2_err",vpa.n,vperp.n)
     end
@@ -322,5 +379,18 @@ if abspath(PROGRAM_FILE) == @__FILE__
     @views heatmap(vperp.grid, vpa.grid, d2fvpavperp_dvpa2_err[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
                 windowsize = (360,240), margin = 15pt)
                 outfile = string("d2fvpavperp_dvpa2_err.pdf")
+                savefig(outfile)
+    
+    @views heatmap(vperp.grid, vpa.grid, d2fvpavperp_dvperp2_num[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
+                windowsize = (360,240), margin = 15pt)
+                outfile = string("d2fvpavperp_dvperp2_num.pdf")
+                savefig(outfile)
+    @views heatmap(vperp.grid, vpa.grid, d2fvpavperp_dvperp2_exact[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
+                windowsize = (360,240), margin = 15pt)
+                outfile = string("d2fvpavperp_dvperp2_exact.pdf")
+                savefig(outfile)
+    @views heatmap(vperp.grid, vpa.grid, d2fvpavperp_dvperp2_err[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
+                windowsize = (360,240), margin = 15pt)
+                outfile = string("d2fvpavperp_dvperp2_err.pdf")
                 savefig(outfile)
 end
