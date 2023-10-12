@@ -14,7 +14,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     using moment_kinetics.chebyshev: setup_chebyshev_pseudospectral
     using moment_kinetics.gauss_legendre: setup_gausslegendre_pseudospectral, get_QQ_local!
     using moment_kinetics.type_definitions: mk_float, mk_int
-    using moment_kinetics.fokker_planck: F_Maxwellian, H_Maxwellian
+    using moment_kinetics.fokker_planck: F_Maxwellian, H_Maxwellian, G_Maxwellian
     using SparseArrays: sparse
     using LinearAlgebra: mul!, lu, cholesky
     
@@ -412,13 +412,17 @@ if abspath(PROGRAM_FILE) == @__FILE__
     H_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
     H_M_num = Array{mk_float,2}(undef,vpa.n,vperp.n)
     H_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
+    G_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
+    G_M_num = Array{mk_float,2}(undef,vpa.n,vperp.n)
+    G_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
     dens = 1.0
-    upar = 0.0
+    upar = 1.0
     vth = 1.0
     for ivperp in 1:vperp.n
         for ivpa in 1:vpa.n
             F_M[ivpa,ivperp] = -(4.0/sqrt(pi))*F_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
             H_M_exact[ivpa,ivperp] = H_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+            G_M_exact[ivpa,ivperp] = G_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
         end
     end
     ravel_vpavperp_to_c!(fc,F_M,vpa.n,vperp.n)
@@ -440,6 +444,28 @@ if abspath(PROGRAM_FILE) == @__FILE__
     @views heatmap(vperp.grid, vpa.grid, H_M_err[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
                 windowsize = (360,240), margin = 15pt)
                 outfile = string("H_M_err.pdf")
+                savefig(outfile)
+    
+    @. F_M = 2.0*H_M_num
+    ravel_vpavperp_to_c!(fc,F_M,vpa.n,vperp.n)
+    #enforce_zero_bc!(fc,vpa,vperp)
+    mul!(dfc,MM2D,fc)
+    enforce_dirichlet_bc!(dfc,vpa,vperp,G_M_exact)
+    fc = lu_obj_LP \ dfc
+    ravel_c_to_vpavperp!(G_M_num,fc,nc_global,vpa.n)
+    @. G_M_err = abs(G_M_num - G_M_exact)
+    println("maximum(G_M_err): ",maximum(G_M_err))
+    @views heatmap(vperp.grid, vpa.grid, G_M_num[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
+                windowsize = (360,240), margin = 15pt)
+                outfile = string("G_M_num.pdf")
+                savefig(outfile)
+    @views heatmap(vperp.grid, vpa.grid, G_M_exact[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
+                windowsize = (360,240), margin = 15pt)
+                outfile = string("G_M_exact.pdf")
+                savefig(outfile)
+    @views heatmap(vperp.grid, vpa.grid, G_M_err[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
+                windowsize = (360,240), margin = 15pt)
+                outfile = string("G_M_err.pdf")
                 savefig(outfile)
 
 

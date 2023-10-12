@@ -15,6 +15,7 @@ export d2Gdvpa2, dGdvperp, d2Gdvperpdvpa, d2Gdvperp2
 export dHdvpa, dHdvperp, Cssp_Maxwellian_inputs
 export F_Maxwellian, dFdvpa_Maxwellian, dFdvperp_Maxwellian
 export d2Fdvpa2_Maxwellian, d2Fdvperpdvpa_Maxwellian, d2Fdvperp2_Maxwellian
+export H_Maxwellian, G_Maxwellian
 
 export Cssp_fully_expanded_form, get_local_Cssp_coefficients!, init_fokker_planck_collisions
 # testing
@@ -1103,6 +1104,39 @@ end
 # below are a series of functions that can be used to test the calculation 
 # of the Rosenbluth potentials for a shifted Maxwellian
 # or provide an estimate for collisional coefficients 
+
+# G (defined by Del^4 G = -(8/sqrt(pi))*F 
+# with F = cref^3 pi^(3/2) F_Maxwellian / nref 
+# the normalised Maxwellian
+function G_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+    # speed variable
+    eta = eta_func(upar,vth,vpa,vperp,ivpa,ivperp)
+    zero = 1.0e-10
+    if eta < zero
+        G = 2.0/sqrt(pi)
+    else 
+        # G_M = (1/2 eta)*( eta erf'(eta) + (1 + 2 eta^2) erf(eta))
+        G = (1.0/sqrt(pi))*exp(-eta^2) + ((0.5/eta) + eta)*erf(eta)
+    end
+    return G*dens*vth
+end
+
+# H (defined by Del^2 H = -(4/sqrt(pi))*F 
+# with F = cref^3 pi^(3/2) F_Maxwellian / nref 
+# the normalised Maxwellian
+function H_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+    # speed variable
+    eta = eta_func(upar,vth,vpa,vperp,ivpa,ivperp)
+    zero = 1.0e-10
+    if eta < zero
+        # erf(eta)/eta ~ 2/sqrt(pi) + O(eta^2) for eta << 1 
+        H = 2.0/sqrt(pi)
+    else 
+        # H_M =  erf(eta)/eta
+        H = erf(eta)/eta
+    end
+    return H*dens/vth
+end
 
 # 1D derivative functions
 
