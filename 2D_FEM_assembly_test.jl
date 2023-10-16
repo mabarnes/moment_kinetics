@@ -3,6 +3,7 @@ using Plots
 using LaTeXStrings
 using MPI
 using Measures
+using Dates
 
 if abspath(PROGRAM_FILE) == @__FILE__
     using Pkg
@@ -183,6 +184,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     end
     
     impose_BC_at_zero_vperp = false
+    println("begin elliptic operator assignment   ", Dates.format(now(), dateformat"H:MM:SS"))
     
     for ielement_vperp in 1:vperp.nelement_local
         get_QQ_local!(MMperp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"M")
@@ -303,6 +305,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
             end
         end
     end
+    println("finished elliptic operator assignment   ", Dates.format(now(), dateformat"H:MM:SS"))
     
     function enforce_zero_bc!(fc,vpa,vperp)
         # lower vpa boundary
@@ -388,6 +391,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         print_matrix(LV2D,"LV",nc_global,nc_global)
     end
     # convert these matrices to sparse matrices
+    println("begin conversion to sparse matrices   ", Dates.format(now(), dateformat"H:MM:SS"))
     
     MM2D_sparse = sparse(MM2D)
     KKpar2D_sparse = sparse(KKpar2D)
@@ -396,11 +400,13 @@ if abspath(PROGRAM_FILE) == @__FILE__
     LV2D_sparse = sparse(LV2D)
     
     # create LU decomposition for mass matrix inversion
+    println("begin LU decomposition initialisation   ", Dates.format(now(), dateformat"H:MM:SS"))
     
     lu_obj_MM = lu(MM2D_sparse)
     lu_obj_LP = lu(LP2D_sparse)
     lu_obj_LV = lu(LV2D_sparse)
     #cholesky_obj = cholesky(MM2D_sparse)
+    println("finish LU decomposition initialisation   ", Dates.format(now(), dateformat"H:MM:SS"))
     
     # define a test function 
     
@@ -530,6 +536,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
             dHdvperp_M_exact[ivpa,ivperp] = dHdvperp(dens,upar,vth,vpa,vperp,ivpa,ivperp)
         end
     end
+    
+    println("begin H calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
     ravel_vpavperp_to_c!(fc,F_M,vpa.n,vperp.n)
     #enforce_zero_bc!(fc,vpa,vperp)
     mul!(dfc,MM2D,fc)
@@ -537,6 +545,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     fc = lu_obj_LP \ dfc
     ravel_c_to_vpavperp!(H_M_num,fc,nc_global,vpa.n)
     @. H_M_err = abs(H_M_num - H_M_exact)
+    println("finish H calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
     println("maximum(H_M_err): ",maximum(H_M_err))
     @views heatmap(vperp.grid, vpa.grid, H_M_num[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
                 windowsize = (360,240), margin = 15pt)
@@ -550,7 +559,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 windowsize = (360,240), margin = 15pt)
                 outfile = string("H_M_err.pdf")
                 savefig(outfile)
-                
+    
+    println("begin dHdvpa calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
     ravel_vpavperp_to_c!(fc,F_M,vpa.n,vperp.n)
     #enforce_zero_bc!(fc,vpa,vperp)
     mul!(dfc,PPpar2D,fc)
@@ -558,6 +568,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     fc = lu_obj_LP \ dfc
     ravel_c_to_vpavperp!(dHdvpa_M_num,fc,nc_global,vpa.n)
     @. dHdvpa_M_err = abs(dHdvpa_M_num - dHdvpa_M_exact)
+    println("finish dHdvpa calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
     println("maximum(dHdvpa_M_err): ",maximum(dHdvpa_M_err))
     @views heatmap(vperp.grid, vpa.grid, dHdvpa_M_num[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
                 windowsize = (360,240), margin = 15pt)
@@ -572,6 +583,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 outfile = string("dHdvpa_M_err.pdf")
                 savefig(outfile)
 
+    println("begin dHdvperp calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
     ravel_vpavperp_to_c!(fc,F_M,vpa.n,vperp.n)
     #enforce_zero_bc!(fc,vpa,vperp)
     mul!(dfc,PUperp2D,fc)
@@ -579,6 +591,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     fc = lu_obj_LV \ dfc
     ravel_c_to_vpavperp!(dHdvperp_M_num,fc,nc_global,vpa.n)
     @. dHdvperp_M_err = abs(dHdvperp_M_num - dHdvperp_M_exact)
+    println("finish dHdvperp calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
     println("maximum(dHdvperp_M_err): ",maximum(dHdvperp_M_err))
     @views heatmap(vperp.grid, vpa.grid, dHdvperp_M_num[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
                 windowsize = (360,240), margin = 15pt)
@@ -593,6 +606,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 outfile = string("dHdvperp_M_err.pdf")
                 savefig(outfile)
     
+    println("begin G calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
     @. S_dummy = 2.0*H_M_num
     ravel_vpavperp_to_c!(fc,S_dummy,vpa.n,vperp.n)
     #enforce_zero_bc!(fc,vpa,vperp)
@@ -601,6 +615,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     fc = lu_obj_LP \ dfc
     ravel_c_to_vpavperp!(G_M_num,fc,nc_global,vpa.n)
     @. G_M_err = abs(G_M_num - G_M_exact)
+    println("finish G calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
     println("maximum(G_M_err): ",maximum(G_M_err))
     @views heatmap(vperp.grid, vpa.grid, G_M_num[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
                 windowsize = (360,240), margin = 15pt)
@@ -615,6 +630,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 outfile = string("G_M_err.pdf")
                 savefig(outfile)
                 
+    println("begin d2Gdvpa2 calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
     @. S_dummy = 2.0*H_M_num
     ravel_vpavperp_to_c!(fc,S_dummy,vpa.n,vperp.n)
     #enforce_zero_bc!(fc,vpa,vperp)
@@ -623,6 +639,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     fc = lu_obj_LP \ dfc
     ravel_c_to_vpavperp!(d2Gdvpa2_M_num,fc,nc_global,vpa.n)
     @. d2Gdvpa2_M_err = abs(d2Gdvpa2_M_num - d2Gdvpa2_M_exact)
+    println("finish d2Gdvpa2 calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
     println("maximum(d2Gdvpa2_M_err): ",maximum(d2Gdvpa2_M_err))
     @views heatmap(vperp.grid, vpa.grid, d2Gdvpa2_M_num[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
                 windowsize = (360,240), margin = 15pt)
@@ -637,6 +654,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 outfile = string("d2Gdvpa2_M_err.pdf")
                 savefig(outfile)
 
+    println("begin dGdvperp calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
     @. S_dummy = 2.0*H_M_num
     ravel_vpavperp_to_c!(fc,S_dummy,vpa.n,vperp.n)
     #enforce_zero_bc!(fc,vpa,vperp)
@@ -645,6 +663,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     fc = lu_obj_LV \ dfc
     ravel_c_to_vpavperp!(dGdvperp_M_num,fc,nc_global,vpa.n)
     @. dGdvperp_M_err = abs(dGdvperp_M_num - dGdvperp_M_exact)
+    println("finish dGdvperp calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
     println("maximum(dGdvperp_M_err): ",maximum(dGdvperp_M_err))
     @views heatmap(vperp.grid, vpa.grid, dGdvperp_M_num[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
                 windowsize = (360,240), margin = 15pt)
@@ -659,6 +678,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 outfile = string("dGdvperp_M_err.pdf")
                 savefig(outfile)
 
+    println("begin d2Gdvperpdvpa calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
     @. S_dummy = 2.0*H_M_num
     ravel_vpavperp_to_c!(fc,S_dummy,vpa.n,vperp.n)
     #enforce_zero_bc!(fc,vpa,vperp)
@@ -667,6 +687,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     fc = lu_obj_LV \ dfc
     ravel_c_to_vpavperp!(d2Gdvperpdvpa_M_num,fc,nc_global,vpa.n)
     @. d2Gdvperpdvpa_M_err = abs(d2Gdvperpdvpa_M_num - d2Gdvperpdvpa_M_exact)
+    println("finish d2Gdvperpdvpa calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
     println("maximum(d2Gdvperpdvpa_M_err): ",maximum(d2Gdvperpdvpa_M_err))
     @views heatmap(vperp.grid, vpa.grid, d2Gdvperpdvpa_M_num[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
                 windowsize = (360,240), margin = 15pt)
