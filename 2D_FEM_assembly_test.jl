@@ -15,7 +15,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     using moment_kinetics.gauss_legendre: setup_gausslegendre_pseudospectral, get_QQ_local!
     using moment_kinetics.type_definitions: mk_float, mk_int
     using moment_kinetics.fokker_planck: F_Maxwellian, H_Maxwellian, G_Maxwellian
-    using moment_kinetics.fokker_planck: d2Gdvpa2, dGdvperp, d2Gdvperpdvpa, dHdvpa
+    using moment_kinetics.fokker_planck: d2Gdvpa2, dGdvperp, d2Gdvperpdvpa, dHdvpa, dHdvperp
     using SparseArrays: sparse
     using LinearAlgebra: mul!, lu, cholesky
     
@@ -498,6 +498,9 @@ if abspath(PROGRAM_FILE) == @__FILE__
     dHdvpa_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
     dHdvpa_M_num = Array{mk_float,2}(undef,vpa.n,vperp.n)
     dHdvpa_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
+    dHdvperp_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
+    dHdvperp_M_num = Array{mk_float,2}(undef,vpa.n,vperp.n)
+    dHdvperp_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
 
     dens = 1.0
     upar = 1.0
@@ -511,6 +514,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
             dGdvperp_M_exact[ivpa,ivperp] = dGdvperp(dens,upar,vth,vpa,vperp,ivpa,ivperp)
             d2Gdvperpdvpa_M_exact[ivpa,ivperp] = d2Gdvperpdvpa(dens,upar,vth,vpa,vperp,ivpa,ivperp)
             dHdvpa_M_exact[ivpa,ivperp] = dHdvpa(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+            dHdvperp_M_exact[ivpa,ivperp] = dHdvperp(dens,upar,vth,vpa,vperp,ivpa,ivperp)
         end
     end
     ravel_vpavperp_to_c!(fc,F_M,vpa.n,vperp.n)
@@ -553,6 +557,27 @@ if abspath(PROGRAM_FILE) == @__FILE__
     @views heatmap(vperp.grid, vpa.grid, dHdvpa_M_err[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
                 windowsize = (360,240), margin = 15pt)
                 outfile = string("dHdvpa_M_err.pdf")
+                savefig(outfile)
+
+    ravel_vpavperp_to_c!(fc,F_M,vpa.n,vperp.n)
+    #enforce_zero_bc!(fc,vpa,vperp)
+    mul!(dfc,PUperp2D,fc)
+    enforce_dirichlet_bc!(dfc,vpa,vperp,dHdvperp_M_exact,dirichlet_vperp_BC=impose_BC_at_zero_vperp)
+    fc = lu_obj_LV \ dfc
+    ravel_c_to_vpavperp!(dHdvperp_M_num,fc,nc_global,vpa.n)
+    @. dHdvperp_M_err = abs(dHdvperp_M_num - dHdvperp_M_exact)
+    println("maximum(dHdvperp_M_err): ",maximum(dHdvperp_M_err))
+    @views heatmap(vperp.grid, vpa.grid, dHdvperp_M_num[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
+                windowsize = (360,240), margin = 15pt)
+                outfile = string("dHdvperp_M_num.pdf")
+                savefig(outfile)
+    @views heatmap(vperp.grid, vpa.grid, dHdvperp_M_exact[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
+                windowsize = (360,240), margin = 15pt)
+                outfile = string("dHdvperp_M_exact.pdf")
+                savefig(outfile)
+    @views heatmap(vperp.grid, vpa.grid, dHdvperp_M_err[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
+                windowsize = (360,240), margin = 15pt)
+                outfile = string("dHdvperp_M_err.pdf")
                 savefig(outfile)
     
     @. S_dummy = 2.0*H_M_num
