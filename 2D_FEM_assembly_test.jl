@@ -474,6 +474,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 
     # test the Laplacian solve with a standard F_Maxwellian -> H_Maxwellian test
     
+    S_dummy = Array{mk_float,2}(undef,vpa.n,vperp.n)
     F_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
     H_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
     H_M_num = Array{mk_float,2}(undef,vpa.n,vperp.n)
@@ -525,8 +526,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 outfile = string("H_M_err.pdf")
                 savefig(outfile)
     
-    @. F_M = 2.0*H_M_num
-    ravel_vpavperp_to_c!(fc,F_M,vpa.n,vperp.n)
+    @. S_dummy = 2.0*H_M_num
+    ravel_vpavperp_to_c!(fc,S_dummy,vpa.n,vperp.n)
     #enforce_zero_bc!(fc,vpa,vperp)
     mul!(dfc,MM2D,fc)
     enforce_dirichlet_bc!(dfc,vpa,vperp,G_M_exact,dirichlet_vperp_BC=impose_BC_at_zero_vperp)
@@ -547,8 +548,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 outfile = string("G_M_err.pdf")
                 savefig(outfile)
                 
-    @. F_M = 2.0*H_M_num
-    ravel_vpavperp_to_c!(fc,F_M,vpa.n,vperp.n)
+    @. S_dummy = 2.0*H_M_num
+    ravel_vpavperp_to_c!(fc,S_dummy,vpa.n,vperp.n)
     #enforce_zero_bc!(fc,vpa,vperp)
     mul!(dfc,KKpar2D,fc)
     enforce_dirichlet_bc!(dfc,vpa,vperp,d2Gdvpa2_M_exact,dirichlet_vperp_BC=impose_BC_at_zero_vperp)
@@ -569,8 +570,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 outfile = string("d2Gdvpa2_M_err.pdf")
                 savefig(outfile)
 
-    @. F_M = 2.0*H_M_num
-    ravel_vpavperp_to_c!(fc,F_M,vpa.n,vperp.n)
+    @. S_dummy = 2.0*H_M_num
+    ravel_vpavperp_to_c!(fc,S_dummy,vpa.n,vperp.n)
     #enforce_zero_bc!(fc,vpa,vperp)
     mul!(dfc,PUperp2D,fc)
     enforce_dirichlet_bc!(dfc,vpa,vperp,dGdvperp_M_exact,dirichlet_vperp_BC=impose_BC_at_zero_vperp)
@@ -591,8 +592,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 outfile = string("dGdvperp_M_err.pdf")
                 savefig(outfile)
 
-    @. F_M = 2.0*H_M_num
-    ravel_vpavperp_to_c!(fc,F_M,vpa.n,vperp.n)
+    @. S_dummy = 2.0*H_M_num
+    ravel_vpavperp_to_c!(fc,S_dummy,vpa.n,vperp.n)
     #enforce_zero_bc!(fc,vpa,vperp)
     mul!(dfc,PPparPUperp2D,fc)
     enforce_dirichlet_bc!(dfc,vpa,vperp,d2Gdvperpdvpa_M_exact,dirichlet_vperp_BC=impose_BC_at_zero_vperp)
@@ -612,6 +613,5 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 windowsize = (360,240), margin = 15pt)
                 outfile = string("d2Gdvperpdvpa_M_err.pdf")
                 savefig(outfile)
-
 
 end
