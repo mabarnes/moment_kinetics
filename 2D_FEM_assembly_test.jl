@@ -16,7 +16,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     using moment_kinetics.gauss_legendre: setup_gausslegendre_pseudospectral, get_QQ_local!
     using moment_kinetics.type_definitions: mk_float, mk_int
     using moment_kinetics.fokker_planck: F_Maxwellian, H_Maxwellian, G_Maxwellian
-    using moment_kinetics.fokker_planck: d2Gdvpa2, dGdvperp, d2Gdvperpdvpa, dHdvpa, dHdvperp
+    using moment_kinetics.fokker_planck: d2Gdvpa2, d2Gdvperp2, dGdvperp, d2Gdvperpdvpa, dHdvpa, dHdvperp
     using SparseArrays: sparse
     using LinearAlgebra: mul!, lu, cholesky
     
@@ -152,6 +152,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
     PPparPUperp2D .= 0.0
     PPpar2D = Array{mk_float,2}(undef,nc_global,nc_global)
     PPpar2D .= 0.0
+    MMparMNperp2D = Array{mk_float,2}(undef,nc_global,nc_global)
+    MMparMNperp2D .= 0.0
     # Laplacian matrix
     LP2D = Array{mk_float,2}(undef,nc_global,nc_global)
     LP2D .= 0.0
@@ -298,7 +300,9 @@ if abspath(PROGRAM_FILE) == @__FILE__
                                                             PUperp[ivperp_local,ivperpp_local]
                             PPpar2D[ic_global,icp_global] += PPpar[ivpa_local,ivpap_local]*
                                                             MMperp[ivperp_local,ivperpp_local]
-                            
+                            # assign RHS mass matrix for d2Gdvperp2
+                            MMparMNperp2D[ic_global,icp_global] += MMpar[ivpa_local,ivpap_local]*
+                                                            MNperp[ivperp_local,ivperpp_local]
                         end
                     end
                 end
@@ -508,6 +512,9 @@ if abspath(PROGRAM_FILE) == @__FILE__
     d2Gdvpa2_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
     d2Gdvpa2_M_num = Array{mk_float,2}(undef,vpa.n,vperp.n)
     d2Gdvpa2_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
+    d2Gdvperp2_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
+    d2Gdvperp2_M_num = Array{mk_float,2}(undef,vpa.n,vperp.n)
+    d2Gdvperp2_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
     dGdvperp_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
     dGdvperp_M_num = Array{mk_float,2}(undef,vpa.n,vperp.n)
     dGdvperp_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
@@ -530,6 +537,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
             H_M_exact[ivpa,ivperp] = H_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
             G_M_exact[ivpa,ivperp] = G_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
             d2Gdvpa2_M_exact[ivpa,ivperp] = d2Gdvpa2(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+            d2Gdvperp2_M_exact[ivpa,ivperp] = d2Gdvperp2(dens,upar,vth,vpa,vperp,ivpa,ivperp)
             dGdvperp_M_exact[ivpa,ivperp] = dGdvperp(dens,upar,vth,vpa,vperp,ivpa,ivperp)
             d2Gdvperpdvpa_M_exact[ivpa,ivperp] = d2Gdvperpdvpa(dens,upar,vth,vpa,vperp,ivpa,ivperp)
             dHdvpa_M_exact[ivpa,ivperp] = dHdvpa(dens,upar,vth,vpa,vperp,ivpa,ivperp)
@@ -700,6 +708,36 @@ if abspath(PROGRAM_FILE) == @__FILE__
     @views heatmap(vperp.grid, vpa.grid, d2Gdvperpdvpa_M_err[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
                 windowsize = (360,240), margin = 15pt)
                 outfile = string("d2Gdvperpdvpa_M_err.pdf")
+                savefig(outfile)
+
+    # use relation 2H = del2 G to compute d2Gdpverp2
+    println("begin d2Gdvperp2 calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+    @. S_dummy = -dGdvperp_M_num
+    ravel_vpavperp_to_c!(fc,S_dummy,vpa.n,vperp.n)
+    #enforce_zero_bc!(fc,vpa,vperp)
+    mul!(dfc,MMparMNperp2D,fc)
+    @. S_dummy = 2.0*H_M_num - d2Gdvpa2_M_num
+    ravel_vpavperp_to_c!(fc,S_dummy,vpa.n,vperp.n)
+    mul!(dgc,MM2D,fc)
+    dfc += dgc
+    enforce_dirichlet_bc!(dfc,vpa,vperp,d2Gdvperp2_M_exact,dirichlet_vperp_BC=impose_BC_at_zero_vperp)
+    fc = lu_obj_MM \ dfc
+    ravel_c_to_vpavperp!(d2Gdvperp2_M_num,fc,nc_global,vpa.n)
+    #@. d2Gdvperp2_M_num += 2.0*H_M_num - d2Gdvpa2_M_num
+    @. d2Gdvperp2_M_err = abs(d2Gdvperp2_M_num - d2Gdvperp2_M_exact)
+    println("finish d2Gdvperp2 calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+    println("maximum(d2Gdvperp2_M_err): ",maximum(d2Gdvperp2_M_err))
+    @views heatmap(vperp.grid, vpa.grid, d2Gdvperp2_M_num[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
+                windowsize = (360,240), margin = 15pt)
+                outfile = string("d2Gdvperp2_M_num.pdf")
+                savefig(outfile)
+    @views heatmap(vperp.grid, vpa.grid, d2Gdvperp2_M_exact[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
+                windowsize = (360,240), margin = 15pt)
+                outfile = string("d2Gdvperp2_M_exact.pdf")
+                savefig(outfile)
+    @views heatmap(vperp.grid, vpa.grid, d2Gdvperp2_M_err[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
+                windowsize = (360,240), margin = 15pt)
+                outfile = string("d2Gdvperp2_M_err.pdf")
                 savefig(outfile)
 
 end
