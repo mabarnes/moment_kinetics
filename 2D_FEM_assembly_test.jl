@@ -40,6 +40,21 @@ if abspath(PROGRAM_FILE) == @__FILE__
         println("\n")
     end 
 
+    function plot_test_data(func_exact,func_num,func_err,func_name,vpa,vperp)
+        @views heatmap(vperp.grid, vpa.grid, func_num[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
+                    windowsize = (360,240), margin = 15pt)
+                    outfile = string(func_name*"_num.pdf")
+                    savefig(outfile)
+        @views heatmap(vperp.grid, vpa.grid, func_exact[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
+                    windowsize = (360,240), margin = 15pt)
+                    outfile = string(func_name*"_exact.pdf")
+                    savefig(outfile)
+        @views heatmap(vperp.grid, vpa.grid, func_err[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
+                    windowsize = (360,240), margin = 15pt)
+                    outfile = string(func_name*"_err.pdf")
+                    savefig(outfile)
+        return nothing
+    end
 
     # Array in compound 1D form 
     
@@ -79,10 +94,11 @@ if abspath(PROGRAM_FILE) == @__FILE__
     end
     
     # define inputs needed for the test
-	ngrid = 17 #number of points per element 
+	plot_test_output = true
+    ngrid = 9 #number of points per element 
 	nelement_local_vpa = 4 # number of elements per rank
 	nelement_global_vpa = nelement_local_vpa # total number of elements 
-	nelement_local_vperp = 4 # number of elements per rank
+	nelement_local_vperp = 2 # number of elements per rank
 	nelement_global_vperp = nelement_local_vperp # total number of elements 
 	Lvpa = 6.0 #physical box size in reference units 
 	Lvperp = 3.0 #physical box size in reference units 
@@ -473,32 +489,10 @@ if abspath(PROGRAM_FILE) == @__FILE__
     if nc_global < 30
         print_matrix(d2fvpavperp_dvpa2_err,"d2fvpavperp_dvpa2_err",vpa.n,vperp.n)
     end
-    @views heatmap(vperp.grid, vpa.grid, d2fvpavperp_dvpa2_num[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
-                windowsize = (360,240), margin = 15pt)
-                outfile = string("d2fvpavperp_dvpa2_num.pdf")
-                savefig(outfile)
-    @views heatmap(vperp.grid, vpa.grid, d2fvpavperp_dvpa2_exact[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
-                windowsize = (360,240), margin = 15pt)
-                outfile = string("d2fvpavperp_dvpa2_exact.pdf")
-                savefig(outfile)
-    @views heatmap(vperp.grid, vpa.grid, d2fvpavperp_dvpa2_err[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
-                windowsize = (360,240), margin = 15pt)
-                outfile = string("d2fvpavperp_dvpa2_err.pdf")
-                savefig(outfile)
-    
-    @views heatmap(vperp.grid, vpa.grid, d2fvpavperp_dvperp2_num[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
-                windowsize = (360,240), margin = 15pt)
-                outfile = string("d2fvpavperp_dvperp2_num.pdf")
-                savefig(outfile)
-    @views heatmap(vperp.grid, vpa.grid, d2fvpavperp_dvperp2_exact[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
-                windowsize = (360,240), margin = 15pt)
-                outfile = string("d2fvpavperp_dvperp2_exact.pdf")
-                savefig(outfile)
-    @views heatmap(vperp.grid, vpa.grid, d2fvpavperp_dvperp2_err[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
-                windowsize = (360,240), margin = 15pt)
-                outfile = string("d2fvpavperp_dvperp2_err.pdf")
-                savefig(outfile)
-                
+    if plot_test_output
+        plot_test_data(d2fvpavperp_dvpa2_exact,d2fvpavperp_dvpa2_num,d2fvpavperp_dvpa2_err,"d2fvpavperp_dvpa2",vpa,vperp)
+        plot_test_data(d2fvpavperp_dvperp2_exact,d2fvpavperp_dvperp2_num,d2fvpavperp_dvperp2_err,"d2fvpavperp_dvperp2",vpa,vperp)
+    end
     # test the Laplacian solve with a standard F_Maxwellian -> H_Maxwellian test
     
     S_dummy = Array{mk_float,2}(undef,vpa.n,vperp.n)
@@ -555,18 +549,6 @@ if abspath(PROGRAM_FILE) == @__FILE__
     @. H_M_err = abs(H_M_num - H_M_exact)
     println("finish H calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
     println("maximum(H_M_err): ",maximum(H_M_err))
-    @views heatmap(vperp.grid, vpa.grid, H_M_num[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
-                windowsize = (360,240), margin = 15pt)
-                outfile = string("H_M_num.pdf")
-                savefig(outfile)
-    @views heatmap(vperp.grid, vpa.grid, H_M_exact[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
-                windowsize = (360,240), margin = 15pt)
-                outfile = string("H_M_exact.pdf")
-                savefig(outfile)
-    @views heatmap(vperp.grid, vpa.grid, H_M_err[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
-                windowsize = (360,240), margin = 15pt)
-                outfile = string("H_M_err.pdf")
-                savefig(outfile)
     
     println("begin dHdvpa calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
     ravel_vpavperp_to_c!(fc,F_M,vpa.n,vperp.n)
@@ -578,19 +560,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     @. dHdvpa_M_err = abs(dHdvpa_M_num - dHdvpa_M_exact)
     println("finish dHdvpa calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
     println("maximum(dHdvpa_M_err): ",maximum(dHdvpa_M_err))
-    @views heatmap(vperp.grid, vpa.grid, dHdvpa_M_num[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
-                windowsize = (360,240), margin = 15pt)
-                outfile = string("dHdvpa_M_num.pdf")
-                savefig(outfile)
-    @views heatmap(vperp.grid, vpa.grid, dHdvpa_M_exact[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
-                windowsize = (360,240), margin = 15pt)
-                outfile = string("dHdvpa_M_exact.pdf")
-                savefig(outfile)
-    @views heatmap(vperp.grid, vpa.grid, dHdvpa_M_err[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
-                windowsize = (360,240), margin = 15pt)
-                outfile = string("dHdvpa_M_err.pdf")
-                savefig(outfile)
-
+    
     println("begin dHdvperp calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
     ravel_vpavperp_to_c!(fc,F_M,vpa.n,vperp.n)
     #enforce_zero_bc!(fc,vpa,vperp)
@@ -601,18 +571,6 @@ if abspath(PROGRAM_FILE) == @__FILE__
     @. dHdvperp_M_err = abs(dHdvperp_M_num - dHdvperp_M_exact)
     println("finish dHdvperp calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
     println("maximum(dHdvperp_M_err): ",maximum(dHdvperp_M_err))
-    @views heatmap(vperp.grid, vpa.grid, dHdvperp_M_num[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
-                windowsize = (360,240), margin = 15pt)
-                outfile = string("dHdvperp_M_num.pdf")
-                savefig(outfile)
-    @views heatmap(vperp.grid, vpa.grid, dHdvperp_M_exact[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
-                windowsize = (360,240), margin = 15pt)
-                outfile = string("dHdvperp_M_exact.pdf")
-                savefig(outfile)
-    @views heatmap(vperp.grid, vpa.grid, dHdvperp_M_err[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
-                windowsize = (360,240), margin = 15pt)
-                outfile = string("dHdvperp_M_err.pdf")
-                savefig(outfile)
     
     println("begin G calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
     @. S_dummy = 2.0*H_M_num
@@ -625,18 +583,6 @@ if abspath(PROGRAM_FILE) == @__FILE__
     @. G_M_err = abs(G_M_num - G_M_exact)
     println("finish G calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
     println("maximum(G_M_err): ",maximum(G_M_err))
-    @views heatmap(vperp.grid, vpa.grid, G_M_num[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
-                windowsize = (360,240), margin = 15pt)
-                outfile = string("G_M_num.pdf")
-                savefig(outfile)
-    @views heatmap(vperp.grid, vpa.grid, G_M_exact[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
-                windowsize = (360,240), margin = 15pt)
-                outfile = string("G_M_exact.pdf")
-                savefig(outfile)
-    @views heatmap(vperp.grid, vpa.grid, G_M_err[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
-                windowsize = (360,240), margin = 15pt)
-                outfile = string("G_M_err.pdf")
-                savefig(outfile)
                 
     println("begin d2Gdvpa2 calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
     @. S_dummy = 2.0*H_M_num
@@ -649,19 +595,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     @. d2Gdvpa2_M_err = abs(d2Gdvpa2_M_num - d2Gdvpa2_M_exact)
     println("finish d2Gdvpa2 calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
     println("maximum(d2Gdvpa2_M_err): ",maximum(d2Gdvpa2_M_err))
-    @views heatmap(vperp.grid, vpa.grid, d2Gdvpa2_M_num[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
-                windowsize = (360,240), margin = 15pt)
-                outfile = string("d2Gdvpa2_M_num.pdf")
-                savefig(outfile)
-    @views heatmap(vperp.grid, vpa.grid, d2Gdvpa2_M_exact[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
-                windowsize = (360,240), margin = 15pt)
-                outfile = string("d2Gdvpa2_M_exact.pdf")
-                savefig(outfile)
-    @views heatmap(vperp.grid, vpa.grid, d2Gdvpa2_M_err[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
-                windowsize = (360,240), margin = 15pt)
-                outfile = string("d2Gdvpa2_M_err.pdf")
-                savefig(outfile)
-
+    
     println("begin dGdvperp calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
     @. S_dummy = 2.0*H_M_num
     ravel_vpavperp_to_c!(fc,S_dummy,vpa.n,vperp.n)
@@ -673,19 +607,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     @. dGdvperp_M_err = abs(dGdvperp_M_num - dGdvperp_M_exact)
     println("finish dGdvperp calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
     println("maximum(dGdvperp_M_err): ",maximum(dGdvperp_M_err))
-    @views heatmap(vperp.grid, vpa.grid, dGdvperp_M_num[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
-                windowsize = (360,240), margin = 15pt)
-                outfile = string("dGdvperp_M_num.pdf")
-                savefig(outfile)
-    @views heatmap(vperp.grid, vpa.grid, dGdvperp_M_exact[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
-                windowsize = (360,240), margin = 15pt)
-                outfile = string("dGdvperp_M_exact.pdf")
-                savefig(outfile)
-    @views heatmap(vperp.grid, vpa.grid, dGdvperp_M_err[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
-                windowsize = (360,240), margin = 15pt)
-                outfile = string("dGdvperp_M_err.pdf")
-                savefig(outfile)
-
+    
     println("begin d2Gdvperpdvpa calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
     @. S_dummy = 2.0*H_M_num
     ravel_vpavperp_to_c!(fc,S_dummy,vpa.n,vperp.n)
@@ -697,19 +619,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     @. d2Gdvperpdvpa_M_err = abs(d2Gdvperpdvpa_M_num - d2Gdvperpdvpa_M_exact)
     println("finish d2Gdvperpdvpa calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
     println("maximum(d2Gdvperpdvpa_M_err): ",maximum(d2Gdvperpdvpa_M_err))
-    @views heatmap(vperp.grid, vpa.grid, d2Gdvperpdvpa_M_num[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
-                windowsize = (360,240), margin = 15pt)
-                outfile = string("d2Gdvperpdvpa_M_num.pdf")
-                savefig(outfile)
-    @views heatmap(vperp.grid, vpa.grid, d2Gdvperpdvpa_M_exact[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
-                windowsize = (360,240), margin = 15pt)
-                outfile = string("d2Gdvperpdvpa_M_exact.pdf")
-                savefig(outfile)
-    @views heatmap(vperp.grid, vpa.grid, d2Gdvperpdvpa_M_err[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
-                windowsize = (360,240), margin = 15pt)
-                outfile = string("d2Gdvperpdvpa_M_err.pdf")
-                savefig(outfile)
-
+    
     # use relation 2H = del2 G to compute d2Gdpverp2
     println("begin d2Gdvperp2 calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
     @. S_dummy = -dGdvperp_M_num
@@ -727,17 +637,16 @@ if abspath(PROGRAM_FILE) == @__FILE__
     @. d2Gdvperp2_M_err = abs(d2Gdvperp2_M_num - d2Gdvperp2_M_exact)
     println("finish d2Gdvperp2 calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
     println("maximum(d2Gdvperp2_M_err): ",maximum(d2Gdvperp2_M_err))
-    @views heatmap(vperp.grid, vpa.grid, d2Gdvperp2_M_num[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
-                windowsize = (360,240), margin = 15pt)
-                outfile = string("d2Gdvperp2_M_num.pdf")
-                savefig(outfile)
-    @views heatmap(vperp.grid, vpa.grid, d2Gdvperp2_M_exact[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
-                windowsize = (360,240), margin = 15pt)
-                outfile = string("d2Gdvperp2_M_exact.pdf")
-                savefig(outfile)
-    @views heatmap(vperp.grid, vpa.grid, d2Gdvperp2_M_err[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
-                windowsize = (360,240), margin = 15pt)
-                outfile = string("d2Gdvperp2_M_err.pdf")
-                savefig(outfile)
+    
+    if plot_test_output
+        plot_test_data(H_M_exact,H_M_num,H_M_err,"H_M",vpa,vperp)
+        plot_test_data(dHdvpa_M_exact,dHdvpa_M_num,dHdvpa_M_err,"dHdvpa_M",vpa,vperp)
+        plot_test_data(dHdvperp_M_exact,dHdvperp_M_num,dHdvperp_M_err,"dHdvperp_M",vpa,vperp)
+        plot_test_data(G_M_exact,G_M_num,G_M_err,"G_M",vpa,vperp)
+        plot_test_data(dGdvperp_M_exact,dGdvperp_M_num,dGdvperp_M_err,"dGdvperp_M",vpa,vperp)
+        plot_test_data(d2Gdvperp2_M_exact,d2Gdvperp2_M_num,d2Gdvperp2_M_err,"d2Gdvperp2_M",vpa,vperp)
+        plot_test_data(d2Gdvperpdvpa_M_exact,d2Gdvperpdvpa_M_num,d2Gdvperpdvpa_M_err,"d2Gdvperpdvpa_M",vpa,vperp)
+        plot_test_data(d2Gdvpa2_M_exact,d2Gdvpa2_M_num,d2Gdvpa2_M_err,"d2Gdvpa2_M",vpa,vperp)
+    end
 
 end
