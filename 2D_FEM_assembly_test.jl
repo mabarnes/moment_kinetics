@@ -193,11 +193,22 @@ if abspath(PROGRAM_FILE) == @__FILE__
         get_QQ_local!(LLperp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"L")
         get_QQ_local!(PPperp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"P")
         get_QQ_local!(PUperp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"U")
+        #print_matrix(MMperp,"MMperp",vperp.ngrid,vperp.ngrid)
+        #print_matrix(MRperp,"MRperp",vperp.ngrid,vperp.ngrid)
+        #print_matrix(MNperp,"MNperp",vperp.ngrid,vperp.ngrid)
+        #print_matrix(KKperp,"KKperp",vperp.ngrid,vperp.ngrid)
+        #print_matrix(KJperp,"KJperp",vperp.ngrid,vperp.ngrid)
+        #print_matrix(LLperp,"LLperp",vperp.ngrid,vperp.ngrid)
+        #print_matrix(PPperp,"PPperp",vperp.ngrid,vperp.ngrid)
+        #print_matrix(PUperp,"PUperp",vperp.ngrid,vperp.ngrid)
         
         for ielement_vpa in 1:vpa.nelement_local
             get_QQ_local!(MMpar,ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"M")
             get_QQ_local!(KKpar,ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"K")
             get_QQ_local!(PPpar,ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"P")
+            #print_matrix(MMpar,"MMpar",vpa.ngrid,vpa.ngrid)
+            #print_matrix(KKpar,"KKpar",vpa.ngrid,vpa.ngrid)
+            #print_matrix(PPpar,"PPpar",vpa.ngrid,vpa.ngrid)
             
             for ivperpp_local in 1:vperp.ngrid
                 for ivperp_local in 1:vperp.ngrid
