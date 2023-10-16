@@ -1100,11 +1100,11 @@ function get_KJ_local!(QQ,ielement,
             # P0 factors make this a d^2 / dvperp^2 rather than (1/vperp) d ( vperp d (.) / d vperp)
             if ielement > 1 || coord.irank > 0 # lobatto points
                 @. QQ = (lobatto.K0*((shift_factor^2)/scale_factor) +
-                         lobatto.K1*shift_factor +
+                         lobatto.K1*2.0*shift_factor +
                          lobatto.K2*scale_factor)
             else # radau points 
                 @. QQ =  (radau.K0*((shift_factor^2)/scale_factor) +
-                         radau.K1*shift_factor +
+                         radau.K1*2.0*shift_factor +
                          radau.K2*scale_factor)
             end
         else # assume integrals of form int^infty_-infty (.) d vpa
