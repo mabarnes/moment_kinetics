@@ -15,7 +15,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     using moment_kinetics.gauss_legendre: setup_gausslegendre_pseudospectral, get_QQ_local!
     using moment_kinetics.type_definitions: mk_float, mk_int
     using moment_kinetics.fokker_planck: F_Maxwellian, H_Maxwellian, G_Maxwellian
-    using moment_kinetics.fokker_planck: d2Gdvpa2, dGdvperp, d2Gdvperpdvpa
+    using moment_kinetics.fokker_planck: d2Gdvpa2, dGdvperp, d2Gdvperpdvpa, dHdvpa
     using SparseArrays: sparse
     using LinearAlgebra: mul!, lu, cholesky
     
@@ -149,6 +149,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
     PUperp2D .= 0.0
     PPparPUperp2D = Array{mk_float,2}(undef,nc_global,nc_global)
     PPparPUperp2D .= 0.0
+    PPpar2D = Array{mk_float,2}(undef,nc_global,nc_global)
+    PPpar2D .= 0.0
     # Laplacian matrix
     LP2D = Array{mk_float,2}(undef,nc_global,nc_global)
     LP2D .= 0.0
@@ -279,6 +281,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
                                                             PUperp[ivperp_local,ivperpp_local]
                             PPparPUperp2D[ic_global,icp_global] += PPpar[ivpa_local,ivpap_local]*
                                                             PUperp[ivperp_local,ivperpp_local]
+                            PPpar2D[ic_global,icp_global] += PPpar[ivpa_local,ivpap_local]*
+                                                            MMperp[ivperp_local,ivperpp_local]
                             
                         end
                     end
@@ -491,7 +495,10 @@ if abspath(PROGRAM_FILE) == @__FILE__
     d2Gdvperpdvpa_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
     d2Gdvperpdvpa_M_num = Array{mk_float,2}(undef,vpa.n,vperp.n)
     d2Gdvperpdvpa_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
-    
+    dHdvpa_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
+    dHdvpa_M_num = Array{mk_float,2}(undef,vpa.n,vperp.n)
+    dHdvpa_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
+
     dens = 1.0
     upar = 1.0
     vth = 1.0
@@ -503,6 +510,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
             d2Gdvpa2_M_exact[ivpa,ivperp] = d2Gdvpa2(dens,upar,vth,vpa,vperp,ivpa,ivperp)
             dGdvperp_M_exact[ivpa,ivperp] = dGdvperp(dens,upar,vth,vpa,vperp,ivpa,ivperp)
             d2Gdvperpdvpa_M_exact[ivpa,ivperp] = d2Gdvperpdvpa(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+            dHdvpa_M_exact[ivpa,ivperp] = dHdvpa(dens,upar,vth,vpa,vperp,ivpa,ivperp)
         end
     end
     ravel_vpavperp_to_c!(fc,F_M,vpa.n,vperp.n)
@@ -524,6 +532,27 @@ if abspath(PROGRAM_FILE) == @__FILE__
     @views heatmap(vperp.grid, vpa.grid, H_M_err[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
                 windowsize = (360,240), margin = 15pt)
                 outfile = string("H_M_err.pdf")
+                savefig(outfile)
+                
+    ravel_vpavperp_to_c!(fc,F_M,vpa.n,vperp.n)
+    #enforce_zero_bc!(fc,vpa,vperp)
+    mul!(dfc,PPpar2D,fc)
+    enforce_dirichlet_bc!(dfc,vpa,vperp,dHdvpa_M_exact,dirichlet_vperp_BC=impose_BC_at_zero_vperp)
+    fc = lu_obj_LP \ dfc
+    ravel_c_to_vpavperp!(dHdvpa_M_num,fc,nc_global,vpa.n)
+    @. dHdvpa_M_err = abs(dHdvpa_M_num - dHdvpa_M_exact)
+    println("maximum(dHdvpa_M_err): ",maximum(dHdvpa_M_err))
+    @views heatmap(vperp.grid, vpa.grid, dHdvpa_M_num[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
+                windowsize = (360,240), margin = 15pt)
+                outfile = string("dHdvpa_M_num.pdf")
+                savefig(outfile)
+    @views heatmap(vperp.grid, vpa.grid, dHdvpa_M_exact[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
+                windowsize = (360,240), margin = 15pt)
+                outfile = string("dHdvpa_M_exact.pdf")
+                savefig(outfile)
+    @views heatmap(vperp.grid, vpa.grid, dHdvpa_M_err[:,:], ylabel=L"v_{\|\|}", xlabel=L"v_{\perp}", c = :deep, interpolation = :cubic,
+                windowsize = (360,240), margin = 15pt)
+                outfile = string("dHdvpa_M_err.pdf")
                 savefig(outfile)
     
     @. S_dummy = 2.0*H_M_num
