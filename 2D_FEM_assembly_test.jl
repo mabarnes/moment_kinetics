@@ -176,7 +176,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
             for ivperpp in 1:nvperp
                 for ivpap in 1:nvpa
                     func_data.lower_boundary_vpa[ivperp] += weight[ivpap,ivperpp,1,ivperp]*func_input[ivpap,ivperpp]
-                    func_data.upper_boundary_vpa[ivperp] += weight[ivpap,ivperpp,nvperp,ivperp]*func_input[ivpap,ivperpp]
+                    func_data.upper_boundary_vpa[ivperp] += weight[ivpap,ivperpp,nvpa,ivperp]*func_input[ivpap,ivperpp]
                 end
             end
         end
@@ -204,7 +204,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         for ivperp in 1:vperp.n
             @views derivative!(vpa.scratch, pdf[:,ivperp], vpa, vpa_spectral)
             @. dfdvpa[:,ivperp] = vpa.scratch
-            @views derivative!(vpa.scratch, pdf[:,ivperp], vpa, vpa_spectral)
+            @views derivative!(vpa.scratch, dfdvperp[:,ivperp], vpa, vpa_spectral)
             @. d2fdvperpdvpa[:,ivperp] = vpa.scratch
         end
         
@@ -381,13 +381,13 @@ if abspath(PROGRAM_FILE) == @__FILE__
     
     # define inputs needed for the test
 	plot_test_output = false#true
-    ngrid = 3 #number of points per element 
-	nelement_local_vpa = 32 # number of elements per rank
+    ngrid = 5 #number of points per element 
+	nelement_local_vpa = 16 # number of elements per rank
 	nelement_global_vpa = nelement_local_vpa # total number of elements 
-	nelement_local_vperp = 16 # number of elements per rank
+	nelement_local_vperp = 8 # number of elements per rank
 	nelement_global_vperp = nelement_local_vperp # total number of elements 
-	Lvpa = 6.0 #physical box size in reference units 
-	Lvperp = 3.0 #physical box size in reference units 
+	Lvpa = 12.0 #physical box size in reference units 
+	Lvperp = 6.0 #physical box size in reference units 
 	bc = "" #not required to take a particular value, not used 
 	# fd_option and adv_input not actually used so given values unimportant
 	#discretization = "chebyshev_pseudospectral"
