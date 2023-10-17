@@ -4,21 +4,25 @@ using LaTeXStrings
 using MPI
 using Measures
 using Dates
+import moment_kinetics
+using moment_kinetics.input_structs: grid_input, advection_input
+using moment_kinetics.coordinates: define_coordinate
+using moment_kinetics.chebyshev: setup_chebyshev_pseudospectral
+using moment_kinetics.gauss_legendre: setup_gausslegendre_pseudospectral, get_QQ_local!
+using moment_kinetics.type_definitions: mk_float, mk_int
+using moment_kinetics.fokker_planck: F_Maxwellian, H_Maxwellian, G_Maxwellian
+using moment_kinetics.fokker_planck: d2Gdvpa2, d2Gdvperp2, dGdvperp, d2Gdvperpdvpa, dHdvpa, dHdvperp
+using moment_kinetics.fokker_planck: init_fokker_planck_collisions, fokkerplanck_arrays_struct
+using moment_kinetics.calculus: derivative!
+using moment_kinetics.communication
+using moment_kinetics.looping
+using SparseArrays: sparse
+using LinearAlgebra: mul!, lu, cholesky
 
 if abspath(PROGRAM_FILE) == @__FILE__
     using Pkg
     Pkg.activate(".")
 
-    import moment_kinetics
-    using moment_kinetics.input_structs: grid_input, advection_input
-	using moment_kinetics.coordinates: define_coordinate
-    using moment_kinetics.chebyshev: setup_chebyshev_pseudospectral
-    using moment_kinetics.gauss_legendre: setup_gausslegendre_pseudospectral, get_QQ_local!
-    using moment_kinetics.type_definitions: mk_float, mk_int
-    using moment_kinetics.fokker_planck: F_Maxwellian, H_Maxwellian, G_Maxwellian
-    using moment_kinetics.fokker_planck: d2Gdvpa2, d2Gdvperp2, dGdvperp, d2Gdvperpdvpa, dHdvpa, dHdvperp
-    using SparseArrays: sparse
-    using LinearAlgebra: mul!, lu, cholesky
     
     function print_matrix(matrix,name,n,m)
         println("\n ",name," \n")
@@ -161,12 +165,226 @@ if abspath(PROGRAM_FILE) == @__FILE__
         return nothing
     end
     
+    
+    function calculate_boundary_data!(func_data::vpa_vperp_boundary_data,
+                                            weight,func_input,vpa,vperp)
+        nvpa = vpa.n
+        nvperp = vperp.n
+        for ivperp in 1:nvperp
+            func_data.lower_boundary_vpa[ivperp] = 0.0
+            func_data.upper_boundary_vpa[ivperp] = 0.0
+            for ivperpp in 1:nvperp
+                for ivpap in 1:nvpa
+                    func_data.lower_boundary_vpa[ivperp] += weight[ivpap,ivperpp,1,ivperp]*func_input[ivpap,ivperpp]
+                    func_data.upper_boundary_vpa[ivperp] += weight[ivpap,ivperpp,nvperp,ivperp]*func_input[ivpap,ivperpp]
+                end
+            end
+        end
+        for ivpa in 1:nvpa
+            func_data.upper_boundary_vperp[ivpa] = 0.0
+            for ivperpp in 1:nvperp
+                for ivpap in 1:nvpa
+                    func_data.upper_boundary_vperp[ivpa] += weight[ivpap,ivperpp,ivpa,nvperp]*func_input[ivpap,ivperpp]
+                end
+            end
+        end
+        return nothing
+    end
+    
+    function calculate_rosenbluth_potential_boundary_data!(rpbd::rosenbluth_potential_boundary_data,
+        fkpl::fokkerplanck_arrays_struct,pdf)
+        # get derivatives of pdf
+        dfdvperp = fkpl.dfdvperp
+        dfdvpa = fkpl.dfdvpa
+        d2fdvperpdvpa = fkpl.d2fdvperpdvpa
+        for ivpa in 1:vpa.n
+            @views derivative!(vperp.scratch, pdf[ivpa,:], vperp, vperp_spectral)
+            @. dfdvperp[ivpa,:] = vperp.scratch
+        end
+        for ivperp in 1:vperp.n
+            @views derivative!(vpa.scratch, pdf[:,ivperp], vpa, vpa_spectral)
+            @. dfdvpa[:,ivperp] = vpa.scratch
+            @views derivative!(vpa.scratch, pdf[:,ivperp], vpa, vpa_spectral)
+            @. d2fdvperpdvpa[:,ivperp] = vpa.scratch
+        end
+        
+        # carry out the numerical integration 
+        calculate_boundary_data!(rpbd.H_data,fkpl.H0_weights,pdf,vpa,vperp)
+        calculate_boundary_data!(rpbd.dHdvpa_data,fkpl.H0_weights,dfdvpa,vpa,vperp)
+        calculate_boundary_data!(rpbd.dHdvperp_data,fkpl.H1_weights,dfdvperp,vpa,vperp)
+        # NOT supported! calculate_boundary_data!(rpbd.G_data,G_weights,pdf,vpa,vperp)
+        calculate_boundary_data!(rpbd.dGdvperp_data,fkpl.G1_weights,dfdvperp,vpa,vperp)
+        calculate_boundary_data!(rpbd.d2Gdvperp2_data,fkpl.H2_weights,dfdvperp,vpa,vperp)
+        calculate_boundary_data!(rpbd.d2Gdvperpdvpa_data,fkpl.G1_weights,d2fdvperpdvpa,vpa,vperp)
+        calculate_boundary_data!(rpbd.d2Gdvpa2_data,fkpl.H3_weights,dfdvpa,vpa,vperp)
+        
+        return nothing
+    end
+    
+    function test_rosenbluth_potential_boundary_data(rpbd::rosenbluth_potential_boundary_data,
+        rpbd_exact::rosenbluth_potential_boundary_data,vpa,vperp)
+        
+        error_buffer_vpa = Array{mk_float,1}(undef,vpa.n)
+        error_buffer_vperp_1 = Array{mk_float,1}(undef,vperp.n)
+        error_buffer_vperp_2 = Array{mk_float,1}(undef,vperp.n)
+        test_boundary_data(rpbd.H_data,rpbd_exact.H_data,"H",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2)  
+        test_boundary_data(rpbd.dHdvpa_data,rpbd_exact.dHdvpa_data,"dHdvpa",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2)  
+        test_boundary_data(rpbd.dHdvperp_data,rpbd_exact.dHdvperp_data,"dHdvperp",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2)  
+        #test_boundary_data(rpbd.G_data,rpbd_exact.G_data,vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2)  
+        test_boundary_data(rpbd.dGdvperp_data,rpbd_exact.dGdvperp_data,"dGdvperp",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2)  
+        test_boundary_data(rpbd.d2Gdvperp2_data,rpbd_exact.d2Gdvperp2_data,"d2Gdvperp2",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2)  
+        test_boundary_data(rpbd.d2Gdvperpdvpa_data,rpbd_exact.d2Gdvperpdvpa_data,"d2Gdvperpdvpa",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2)  
+        test_boundary_data(rpbd.d2Gdvpa2_data,rpbd_exact.d2Gdvpa2_data,"d2Gdvpa2",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2)  
+
+        return nothing
+    end
+
+    function test_boundary_data(func,func_exact,func_name,vpa,vperp,buffer_vpa,buffer_vperp_1,buffer_vperp_2)
+        nvpa = vpa.n
+        nvperp = vperp.n
+        for ivperp in 1:nvperp
+            buffer_vperp_1 = abs(func.lower_boundary_vpa[ivperp] - func_exact.lower_boundary_vpa[ivperp])
+            buffer_vperp_2 = abs(func.upper_boundary_vpa[ivperp] - func_exact.upper_boundary_vpa[ivperp])
+        end
+        for ivpa in 1:nvpa
+            buffer_vpa = abs(func.upper_boundary_vperp[ivpa] - func_exact.upper_boundary_vperp[ivpa])
+        end
+        @serial_region begin
+            max_lower_vpa_err = maximum(buffer_vperp_1)
+            max_upper_vpa_err = maximum(buffer_vperp_2)
+            max_upper_vperp_err = maximum(buffer_vpa)
+            println(string(func_name*" boundary data:"))
+            println("max(lower_vpa_err) = ",max_lower_vpa_err)
+            println("max(upper_vpa_err) = ",max_upper_vpa_err)
+            println("max(upper_vperp_err) = ",max_upper_vperp_err)
+        end
+        return nothing
+    end
+    
+    function get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
+        # global indices on the grids
+        ivpa_global = vpa.igrid_full[ivpa_local,ielement_vpa]
+        ivperp_global = vperp.igrid_full[ivperp_local,ielement_vperp]
+        # global compound index
+        ic_global = ic_func(ivpa_global,ivperp_global,vpa.n)
+        return ic_global, ivpa_global, ivperp_global
+    end
+    function enforce_zero_bc!(fc,vpa,vperp)
+        # lower vpa boundary
+        ielement_vpa = 1
+        ivpa_local = 1
+        for ielement_vperp in 1:vperp.nelement_local
+            for ivperp_local in 1:vperp.ngrid
+                ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
+                fc[ic_global] = 0.0
+            end
+        end
+        
+        # upper vpa boundary
+        ielement_vpa = vpa.nelement_local
+        ivpa_local = vpa.ngrid
+        for ielement_vperp in 1:vperp.nelement_local
+            for ivperp_local in 1:vperp.ngrid
+                ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
+                fc[ic_global] = 0.0
+            end
+        end
+        
+        # upper vperp boundary
+        ielement_vperp = vperp.nelement_local
+        ivperp_local = vperp.ngrid
+        for ielement_vpa in 1:vpa.nelement_local
+            for ivpa_local in 1:vpa.ngrid
+                ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
+                fc[ic_global] = 0.0
+            end
+        end
+    end
+    
+    function enforce_dirichlet_bc!(fc,vpa,vperp,f_bc;dirichlet_vperp_BC=false)
+        # lower vpa boundary
+        ielement_vpa = 1
+        ivpa_local = 1
+        for ielement_vperp in 1:vperp.nelement_local
+            for ivperp_local in 1:vperp.ngrid
+                ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
+                fc[ic_global] = f_bc[ivpa_global,ivperp_global]
+            end
+        end
+        
+        # upper vpa boundary
+        ielement_vpa = vpa.nelement_local
+        ivpa_local = vpa.ngrid
+        for ielement_vperp in 1:vperp.nelement_local
+            for ivperp_local in 1:vperp.ngrid
+                ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
+                fc[ic_global] = f_bc[ivpa_global,ivperp_global]
+            end
+        end
+        
+        if dirichlet_vperp_BC
+            # upper vperp boundary
+            ielement_vperp = 1
+            ivperp_local = 1
+            for ielement_vpa in 1:vpa.nelement_local
+                for ivpa_local in 1:vpa.ngrid
+                    ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
+                    fc[ic_global] = f_bc[ivpa_global,ivperp_global]
+                end
+            end
+        end
+        
+        # upper vperp boundary
+        ielement_vperp = vperp.nelement_local
+        ivperp_local = vperp.ngrid
+        for ielement_vpa in 1:vpa.nelement_local
+            for ivpa_local in 1:vpa.ngrid
+                ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
+                fc[ic_global] = f_bc[ivpa_global,ivperp_global]
+            end
+        end
+    end
+    
+    function enforce_dirichlet_bc!(fc,vpa,vperp,f_bc::vpa_vperp_boundary_data)
+        # lower vpa boundary
+        ielement_vpa = 1
+        ivpa_local = 1
+        for ielement_vperp in 1:vperp.nelement_local
+            for ivperp_local in 1:vperp.ngrid
+                ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
+                fc[ic_global] = f_bc.lower_boundary_vpa[ivperp_global]
+            end
+        end
+        
+        # upper vpa boundary
+        ielement_vpa = vpa.nelement_local
+        ivpa_local = vpa.ngrid
+        for ielement_vperp in 1:vperp.nelement_local
+            for ivperp_local in 1:vperp.ngrid
+                ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
+                fc[ic_global] = f_bc.upper_boundary_vpa[ivperp_global]
+            end
+        end
+                
+        # upper vperp boundary
+        ielement_vperp = vperp.nelement_local
+        ivperp_local = vperp.ngrid
+        for ielement_vpa in 1:vpa.nelement_local
+            for ivpa_local in 1:vpa.ngrid
+                ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
+                fc[ic_global] = f_bc.upper_boundary_vperp[ivpa_global]
+            end
+        end
+        return nothing
+    end
+    
+    
     # define inputs needed for the test
 	plot_test_output = false#true
-    ngrid = 9 #number of points per element 
-	nelement_local_vpa = 4 # number of elements per rank
+    ngrid = 3 #number of points per element 
+	nelement_local_vpa = 32 # number of elements per rank
 	nelement_global_vpa = nelement_local_vpa # total number of elements 
-	nelement_local_vperp = 2 # number of elements per rank
+	nelement_local_vperp = 16 # number of elements per rank
 	nelement_global_vperp = nelement_local_vperp # total number of elements 
 	Lvpa = 6.0 #physical box size in reference units 
 	Lvperp = 3.0 #physical box size in reference units 
@@ -219,6 +437,15 @@ if abspath(PROGRAM_FILE) == @__FILE__
         vperp_spectral = false
         #vperp.duniform_dgrid .= 1.0
     end
+    # Set up MPI
+    initialize_comms!()
+    setup_distributed_memory_MPI(1,1,1,1)
+    looping.setup_loop_ranges!(block_rank[], block_size[];
+                                   s=1, sn=1,
+                                   r=1, z=1, vperp=vperp.n, vpa=vpa.n,
+                                   vzeta=1, vr=1, vz=1)
+    begin_serial_region()
+    
     
     # Assemble a 2D mass matrix in the global compound coordinate
     nc_global = vpa.n*vperp.n
@@ -259,19 +486,11 @@ if abspath(PROGRAM_FILE) == @__FILE__
     PPperp = Array{mk_float,2}(undef,vperp.ngrid,vperp.ngrid)
     PUperp = Array{mk_float,2}(undef,vperp.ngrid,vperp.ngrid)
     PPpar = Array{mk_float,2}(undef,vperp.ngrid,vperp.ngrid)
-    
-    function get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
-        # global indices on the grids
-        ivpa_global = vpa.igrid_full[ivpa_local,ielement_vpa]
-        ivperp_global = vperp.igrid_full[ivperp_local,ielement_vperp]
-        # global compound index
-        ic_global = ic_func(ivpa_global,ivperp_global,vpa.n)
-        return ic_global, ivpa_global, ivperp_global
-    end
-    
+        
     impose_BC_at_zero_vperp = false
-    println("begin elliptic operator assignment   ", Dates.format(now(), dateformat"H:MM:SS"))
-    
+    @serial_region begin
+        println("begin elliptic operator assignment   ", Dates.format(now(), dateformat"H:MM:SS"))
+    end
     for ielement_vperp in 1:vperp.nelement_local
         get_QQ_local!(MMperp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"M")
         get_QQ_local!(MRperp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"R")
@@ -393,142 +612,36 @@ if abspath(PROGRAM_FILE) == @__FILE__
             end
         end
     end
-    println("finished elliptic operator assignment   ", Dates.format(now(), dateformat"H:MM:SS"))
-    
-    function enforce_zero_bc!(fc,vpa,vperp)
-        # lower vpa boundary
-        ielement_vpa = 1
-        ivpa_local = 1
-        for ielement_vperp in 1:vperp.nelement_local
-            for ivperp_local in 1:vperp.ngrid
-                ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
-                fc[ic_global] = 0.0
-            end
-        end
+    @serial_region begin
+        println("finished elliptic operator assignment   ", Dates.format(now(), dateformat"H:MM:SS"))
         
-        # upper vpa boundary
-        ielement_vpa = vpa.nelement_local
-        ivpa_local = vpa.ngrid
-        for ielement_vperp in 1:vperp.nelement_local
-            for ivperp_local in 1:vperp.ngrid
-                ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
-                fc[ic_global] = 0.0
-            end
+        if nc_global < 30
+            print_matrix(MM2D,"MM2D",nc_global,nc_global)
+            print_matrix(KKpar2D,"KKpar2D",nc_global,nc_global)
+            print_matrix(KKperp2D,"KKperp2D",nc_global,nc_global)
+            print_matrix(LP2D,"LP",nc_global,nc_global)
+            print_matrix(LV2D,"LV",nc_global,nc_global)
         end
-        
-        # upper vperp boundary
-        ielement_vperp = vperp.nelement_local
-        ivperp_local = vperp.ngrid
-        for ielement_vpa in 1:vpa.nelement_local
-            for ivpa_local in 1:vpa.ngrid
-                ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
-                fc[ic_global] = 0.0
-            end
-        end
+        # convert these matrices to sparse matrices
+        println("begin conversion to sparse matrices   ", Dates.format(now(), dateformat"H:MM:SS"))
     end
-    
-    function enforce_dirichlet_bc!(fc,vpa,vperp,f_bc;dirichlet_vperp_BC=false)
-        # lower vpa boundary
-        ielement_vpa = 1
-        ivpa_local = 1
-        for ielement_vperp in 1:vperp.nelement_local
-            for ivperp_local in 1:vperp.ngrid
-                ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
-                fc[ic_global] = f_bc[ivpa_global,ivperp_global]
-            end
-        end
-        
-        # upper vpa boundary
-        ielement_vpa = vpa.nelement_local
-        ivpa_local = vpa.ngrid
-        for ielement_vperp in 1:vperp.nelement_local
-            for ivperp_local in 1:vperp.ngrid
-                ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
-                fc[ic_global] = f_bc[ivpa_global,ivperp_global]
-            end
-        end
-        
-        if dirichlet_vperp_BC
-            # upper vperp boundary
-            ielement_vperp = 1
-            ivperp_local = 1
-            for ielement_vpa in 1:vpa.nelement_local
-                for ivpa_local in 1:vpa.ngrid
-                    ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
-                    fc[ic_global] = f_bc[ivpa_global,ivperp_global]
-                end
-            end
-        end
-        
-        # upper vperp boundary
-        ielement_vperp = vperp.nelement_local
-        ivperp_local = vperp.ngrid
-        for ielement_vpa in 1:vpa.nelement_local
-            for ivpa_local in 1:vpa.ngrid
-                ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
-                fc[ic_global] = f_bc[ivpa_global,ivperp_global]
-            end
-        end
-    end
-    
-    function enforce_dirichlet_bc!(fc,vpa,vperp,f_bc::vpa_vperp_boundary_data)
-        # lower vpa boundary
-        ielement_vpa = 1
-        ivpa_local = 1
-        for ielement_vperp in 1:vperp.nelement_local
-            for ivperp_local in 1:vperp.ngrid
-                ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
-                fc[ic_global] = f_bc.lower_boundary_vpa[ivperp_global]
-            end
-        end
-        
-        # upper vpa boundary
-        ielement_vpa = vpa.nelement_local
-        ivpa_local = vpa.ngrid
-        for ielement_vperp in 1:vperp.nelement_local
-            for ivperp_local in 1:vperp.ngrid
-                ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
-                fc[ic_global] = f_bc.upper_boundary_vpa[ivperp_global]
-            end
-        end
-                
-        # upper vperp boundary
-        ielement_vperp = vperp.nelement_local
-        ivperp_local = vperp.ngrid
-        for ielement_vpa in 1:vpa.nelement_local
-            for ivpa_local in 1:vpa.ngrid
-                ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
-                fc[ic_global] = f_bc.upper_boundary_vperp[ivpa_global]
-            end
-        end
-        return nothing
-    end
-    
-    if nc_global < 30
-        print_matrix(MM2D,"MM2D",nc_global,nc_global)
-        print_matrix(KKpar2D,"KKpar2D",nc_global,nc_global)
-        print_matrix(KKperp2D,"KKperp2D",nc_global,nc_global)
-        print_matrix(LP2D,"LP",nc_global,nc_global)
-        print_matrix(LV2D,"LV",nc_global,nc_global)
-    end
-    # convert these matrices to sparse matrices
-    println("begin conversion to sparse matrices   ", Dates.format(now(), dateformat"H:MM:SS"))
-    
     MM2D_sparse = sparse(MM2D)
     KKpar2D_sparse = sparse(KKpar2D)
     KKperp2D_sparse = sparse(KKperp2D)
     LP2D_sparse = sparse(LP2D)
     LV2D_sparse = sparse(LV2D)
     
-    # create LU decomposition for mass matrix inversion
-    println("begin LU decomposition initialisation   ", Dates.format(now(), dateformat"H:MM:SS"))
-    
+    @serial_region begin
+        # create LU decomposition for mass matrix inversion
+        println("begin LU decomposition initialisation   ", Dates.format(now(), dateformat"H:MM:SS"))
+    end
     lu_obj_MM = lu(MM2D_sparse)
     lu_obj_LP = lu(LP2D_sparse)
     lu_obj_LV = lu(LV2D_sparse)
     #cholesky_obj = cholesky(MM2D_sparse)
-    println("finish LU decomposition initialisation   ", Dates.format(now(), dateformat"H:MM:SS"))
-    
+    @serial_region begin
+        println("finish LU decomposition initialisation   ", Dates.format(now(), dateformat"H:MM:SS"))
+    end
     # define a test function 
     
     fvpavperp = Array{mk_float,2}(undef,vpa.n,vperp.n)
@@ -564,7 +677,9 @@ if abspath(PROGRAM_FILE) == @__FILE__
     ravel_vpavperp_to_c!(fc,fvpavperp,vpa.n,vperp.n)
     ravel_c_to_vpavperp!(fvpavperp_test,fc,nc_global,vpa.n)
     @. fvpavperp_err = abs(fvpavperp - fvpavperp_test)
-    println("max(ravel_err)",maximum(fvpavperp_err))
+    @serial_region begin
+        println("max(ravel_err)",maximum(fvpavperp_err))
+    end
     #print_vector(fc,"fc",nc_global)
     # multiply by KKpar2D and fill dfc
     mul!(dfc,KKpar2D_sparse,fc)
@@ -580,24 +695,29 @@ if abspath(PROGRAM_FILE) == @__FILE__
     # unravel
     ravel_c_to_vpavperp!(d2fvpavperp_dvpa2_num,fc,nc_global,vpa.n)
     ravel_c_to_vpavperp!(d2fvpavperp_dvperp2_num,gc,nc_global,vpa.n)
-    if nc_global < 30
-        print_matrix(d2fvpavperp_dvpa2_num,"d2fvpavperp_dvpa2_num",vpa.n,vperp.n)
-    end
-    @. d2fvpavperp_dvpa2_err = abs(d2fvpavperp_dvpa2_num - d2fvpavperp_dvpa2_exact)
-    println("maximum(d2fvpavperp_dvpa2_err): ",maximum(d2fvpavperp_dvpa2_err))
-    @. d2fvpavperp_dvperp2_err = abs(d2fvpavperp_dvperp2_num - d2fvpavperp_dvperp2_exact)
-    println("maximum(d2fvpavperp_dvperp2_err): ",maximum(d2fvpavperp_dvperp2_err))
-    if nc_global < 30
-        print_matrix(d2fvpavperp_dvpa2_err,"d2fvpavperp_dvpa2_err",vpa.n,vperp.n)
-    end
-    if plot_test_output
-        plot_test_data(d2fvpavperp_dvpa2_exact,d2fvpavperp_dvpa2_num,d2fvpavperp_dvpa2_err,"d2fvpavperp_dvpa2",vpa,vperp)
-        plot_test_data(d2fvpavperp_dvperp2_exact,d2fvpavperp_dvperp2_num,d2fvpavperp_dvperp2_err,"d2fvpavperp_dvperp2",vpa,vperp)
+    @serial_region begin 
+        if nc_global < 30
+            print_matrix(d2fvpavperp_dvpa2_num,"d2fvpavperp_dvpa2_num",vpa.n,vperp.n)
+        end
+        @. d2fvpavperp_dvpa2_err = abs(d2fvpavperp_dvpa2_num - d2fvpavperp_dvpa2_exact)
+        println("maximum(d2fvpavperp_dvpa2_err): ",maximum(d2fvpavperp_dvpa2_err))
+        @. d2fvpavperp_dvperp2_err = abs(d2fvpavperp_dvperp2_num - d2fvpavperp_dvperp2_exact)
+        println("maximum(d2fvpavperp_dvperp2_err): ",maximum(d2fvpavperp_dvperp2_err))
+        if nc_global < 30
+            print_matrix(d2fvpavperp_dvpa2_err,"d2fvpavperp_dvpa2_err",vpa.n,vperp.n)
+        end
+        if plot_test_output
+            plot_test_data(d2fvpavperp_dvpa2_exact,d2fvpavperp_dvpa2_num,d2fvpavperp_dvpa2_err,"d2fvpavperp_dvpa2",vpa,vperp)
+            plot_test_data(d2fvpavperp_dvperp2_exact,d2fvpavperp_dvperp2_num,d2fvpavperp_dvperp2_err,"d2fvpavperp_dvperp2",vpa,vperp)
+        end
     end
     # test the Laplacian solve with a standard F_Maxwellian -> H_Maxwellian test
     
     S_dummy = Array{mk_float,2}(undef,vpa.n,vperp.n)
     F_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
+    dFdvpa_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
+    dFdvperp_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
+    d2Fdvperpdvpa_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
     H_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
     H_M_num = Array{mk_float,2}(undef,vpa.n,vperp.n)
     H_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
@@ -628,7 +748,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     vth = 1.0
     for ivperp in 1:vperp.n
         for ivpa in 1:vpa.n
-            F_M[ivpa,ivperp] = -(4.0/sqrt(pi))*F_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+            F_M[ivpa,ivperp] = F_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
             H_M_exact[ivpa,ivperp] = H_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
             G_M_exact[ivpa,ivperp] = G_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
             d2Gdvpa2_M_exact[ivpa,ivperp] = d2Gdvpa2(dens,upar,vth,vpa,vperp,ivpa,ivperp)
@@ -640,49 +760,70 @@ if abspath(PROGRAM_FILE) == @__FILE__
         end
     end
     # calculate the Rosenbluth potential boundary data (rpbd)
+    rpbd_exact = allocate_rosenbluth_potential_boundary_data(vpa,vperp)
     rpbd = allocate_rosenbluth_potential_boundary_data(vpa,vperp)
-    calculate_rosenbluth_potential_boundary_data_exact!(rpbd,
+    # use known test function to provide exact data
+    calculate_rosenbluth_potential_boundary_data_exact!(rpbd_exact,
       H_M_exact,dHdvpa_M_exact,dHdvperp_M_exact,G_M_exact,
       dGdvperp_M_exact,d2Gdvperp2_M_exact,
       d2Gdvperpdvpa_M_exact,d2Gdvpa2_M_exact,vpa,vperp)
+    # use numerical integration to find the boundary data
+    # initialise the weights
+    fkpl_arrays = init_fokker_planck_collisions(vperp,vpa; precompute_weights=true)
+    begin_serial_region()
+    # do the numerical integration at the boundaries (N.B. G not supported)
+    calculate_rosenbluth_potential_boundary_data!(rpbd,fkpl_arrays,F_M)
+    # test the boundary data calculation
+    test_rosenbluth_potential_boundary_data(rpbd,rpbd_exact,vpa,vperp)
     
-    println("begin H calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
-    ravel_vpavperp_to_c!(fc,F_M,vpa.n,vperp.n)
+    @serial_region begin
+        println("begin H calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+    end
+    @. S_dummy = -(4.0/sqrt(pi))*F_M
+    ravel_vpavperp_to_c!(fc,S_dummy,vpa.n,vperp.n)
     #enforce_zero_bc!(fc,vpa,vperp)
     mul!(dfc,MM2D,fc)
     #enforce_dirichlet_bc!(dfc,vpa,vperp,H_M_exact,dirichlet_vperp_BC=impose_BC_at_zero_vperp)
     enforce_dirichlet_bc!(dfc,vpa,vperp,rpbd.H_data)
     fc = lu_obj_LP \ dfc
     ravel_c_to_vpavperp!(H_M_num,fc,nc_global,vpa.n)
-    @. H_M_err = abs(H_M_num - H_M_exact)
-    println("finish H calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
-    println("maximum(H_M_err): ",maximum(H_M_err))
-    
-    println("begin dHdvpa calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
-    ravel_vpavperp_to_c!(fc,F_M,vpa.n,vperp.n)
+    @serial_region begin
+        @. H_M_err = abs(H_M_num - H_M_exact)
+        println("finish H calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+        println("maximum(H_M_err): ",maximum(H_M_err))
+        
+        println("begin dHdvpa calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+    end
+    @. S_dummy = -(4.0/sqrt(pi))*F_M
+    ravel_vpavperp_to_c!(fc,S_dummy,vpa.n,vperp.n)
     #enforce_zero_bc!(fc,vpa,vperp)
     mul!(dfc,PPpar2D,fc)
     #enforce_dirichlet_bc!(dfc,vpa,vperp,dHdvpa_M_exact,dirichlet_vperp_BC=impose_BC_at_zero_vperp)
     enforce_dirichlet_bc!(dfc,vpa,vperp,rpbd.dHdvpa_data)
     fc = lu_obj_LP \ dfc
     ravel_c_to_vpavperp!(dHdvpa_M_num,fc,nc_global,vpa.n)
-    @. dHdvpa_M_err = abs(dHdvpa_M_num - dHdvpa_M_exact)
-    println("finish dHdvpa calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
-    println("maximum(dHdvpa_M_err): ",maximum(dHdvpa_M_err))
-    
-    println("begin dHdvperp calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
-    ravel_vpavperp_to_c!(fc,F_M,vpa.n,vperp.n)
+    @serial_region begin
+        @. dHdvpa_M_err = abs(dHdvpa_M_num - dHdvpa_M_exact)
+        println("finish dHdvpa calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+        println("maximum(dHdvpa_M_err): ",maximum(dHdvpa_M_err))
+        
+        println("begin dHdvperp calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+    end
+    @. S_dummy = -(4.0/sqrt(pi))*F_M
+    ravel_vpavperp_to_c!(fc,S_dummy,vpa.n,vperp.n)
     #enforce_zero_bc!(fc,vpa,vperp)
     mul!(dfc,PUperp2D,fc)
     #enforce_dirichlet_bc!(dfc,vpa,vperp,dHdvperp_M_exact,dirichlet_vperp_BC=impose_BC_at_zero_vperp)
     enforce_dirichlet_bc!(dfc,vpa,vperp,rpbd.dHdvperp_data)
     fc = lu_obj_LV \ dfc
     ravel_c_to_vpavperp!(dHdvperp_M_num,fc,nc_global,vpa.n)
-    @. dHdvperp_M_err = abs(dHdvperp_M_num - dHdvperp_M_exact)
-    println("finish dHdvperp calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
-    println("maximum(dHdvperp_M_err): ",maximum(dHdvperp_M_err))
-    
-    println("begin G calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+    @serial_region begin
+        @. dHdvperp_M_err = abs(dHdvperp_M_num - dHdvperp_M_exact)
+        println("finish dHdvperp calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+        println("maximum(dHdvperp_M_err): ",maximum(dHdvperp_M_err))
+        
+        println("begin G calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+    end
     @. S_dummy = 2.0*H_M_num
     ravel_vpavperp_to_c!(fc,S_dummy,vpa.n,vperp.n)
     #enforce_zero_bc!(fc,vpa,vperp)
@@ -691,11 +832,13 @@ if abspath(PROGRAM_FILE) == @__FILE__
     enforce_dirichlet_bc!(dfc,vpa,vperp,rpbd.G_data)
     fc = lu_obj_LP \ dfc
     ravel_c_to_vpavperp!(G_M_num,fc,nc_global,vpa.n)
-    @. G_M_err = abs(G_M_num - G_M_exact)
-    println("finish G calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
-    println("maximum(G_M_err): ",maximum(G_M_err))
-                
-    println("begin d2Gdvpa2 calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+    @serial_region begin
+        @. G_M_err = abs(G_M_num - G_M_exact)
+        println("finish G calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+        println("maximum(G_M_err): ",maximum(G_M_err))
+                    
+        println("begin d2Gdvpa2 calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+    end
     @. S_dummy = 2.0*H_M_num
     ravel_vpavperp_to_c!(fc,S_dummy,vpa.n,vperp.n)
     #enforce_zero_bc!(fc,vpa,vperp)
@@ -704,11 +847,13 @@ if abspath(PROGRAM_FILE) == @__FILE__
     enforce_dirichlet_bc!(dfc,vpa,vperp,rpbd.d2Gdvpa2_data)
     fc = lu_obj_LP \ dfc
     ravel_c_to_vpavperp!(d2Gdvpa2_M_num,fc,nc_global,vpa.n)
-    @. d2Gdvpa2_M_err = abs(d2Gdvpa2_M_num - d2Gdvpa2_M_exact)
-    println("finish d2Gdvpa2 calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
-    println("maximum(d2Gdvpa2_M_err): ",maximum(d2Gdvpa2_M_err))
-    
-    println("begin dGdvperp calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+    @serial_region begin
+        @. d2Gdvpa2_M_err = abs(d2Gdvpa2_M_num - d2Gdvpa2_M_exact)
+        println("finish d2Gdvpa2 calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+        println("maximum(d2Gdvpa2_M_err): ",maximum(d2Gdvpa2_M_err))
+        
+        println("begin dGdvperp calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+    end
     @. S_dummy = 2.0*H_M_num
     ravel_vpavperp_to_c!(fc,S_dummy,vpa.n,vperp.n)
     #enforce_zero_bc!(fc,vpa,vperp)
@@ -717,11 +862,13 @@ if abspath(PROGRAM_FILE) == @__FILE__
     enforce_dirichlet_bc!(dfc,vpa,vperp,rpbd.dGdvperp_data)
     fc = lu_obj_LV \ dfc
     ravel_c_to_vpavperp!(dGdvperp_M_num,fc,nc_global,vpa.n)
-    @. dGdvperp_M_err = abs(dGdvperp_M_num - dGdvperp_M_exact)
-    println("finish dGdvperp calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
-    println("maximum(dGdvperp_M_err): ",maximum(dGdvperp_M_err))
-    
-    println("begin d2Gdvperpdvpa calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+    @serial_region begin
+        @. dGdvperp_M_err = abs(dGdvperp_M_num - dGdvperp_M_exact)
+        println("finish dGdvperp calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+        println("maximum(dGdvperp_M_err): ",maximum(dGdvperp_M_err))
+        
+        println("begin d2Gdvperpdvpa calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+    end
     @. S_dummy = 2.0*H_M_num
     ravel_vpavperp_to_c!(fc,S_dummy,vpa.n,vperp.n)
     #enforce_zero_bc!(fc,vpa,vperp)
@@ -730,12 +877,14 @@ if abspath(PROGRAM_FILE) == @__FILE__
     enforce_dirichlet_bc!(dfc,vpa,vperp,rpbd.d2Gdvperpdvpa_data)
     fc = lu_obj_LV \ dfc
     ravel_c_to_vpavperp!(d2Gdvperpdvpa_M_num,fc,nc_global,vpa.n)
-    @. d2Gdvperpdvpa_M_err = abs(d2Gdvperpdvpa_M_num - d2Gdvperpdvpa_M_exact)
-    println("finish d2Gdvperpdvpa calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
-    println("maximum(d2Gdvperpdvpa_M_err): ",maximum(d2Gdvperpdvpa_M_err))
-    
-    # use relation 2H = del2 G to compute d2Gdpverp2
-    println("begin d2Gdvperp2 calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+    @serial_region begin
+        @. d2Gdvperpdvpa_M_err = abs(d2Gdvperpdvpa_M_num - d2Gdvperpdvpa_M_exact)
+        println("finish d2Gdvperpdvpa calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+        println("maximum(d2Gdvperpdvpa_M_err): ",maximum(d2Gdvperpdvpa_M_err))
+        
+        # use relation 2H = del2 G to compute d2Gdpverp2
+        println("begin d2Gdvperp2 calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+    end
     @. S_dummy = -dGdvperp_M_num
     ravel_vpavperp_to_c!(fc,S_dummy,vpa.n,vperp.n)
     #enforce_zero_bc!(fc,vpa,vperp)
@@ -748,20 +897,20 @@ if abspath(PROGRAM_FILE) == @__FILE__
     enforce_dirichlet_bc!(dfc,vpa,vperp,rpbd.d2Gdvperp2_data)
     fc = lu_obj_MM \ dfc
     ravel_c_to_vpavperp!(d2Gdvperp2_M_num,fc,nc_global,vpa.n)
-    #@. d2Gdvperp2_M_num += 2.0*H_M_num - d2Gdvpa2_M_num
-    @. d2Gdvperp2_M_err = abs(d2Gdvperp2_M_num - d2Gdvperp2_M_exact)
-    println("finish d2Gdvperp2 calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
-    println("maximum(d2Gdvperp2_M_err): ",maximum(d2Gdvperp2_M_err))
-    
-    if plot_test_output
-        plot_test_data(H_M_exact,H_M_num,H_M_err,"H_M",vpa,vperp)
-        plot_test_data(dHdvpa_M_exact,dHdvpa_M_num,dHdvpa_M_err,"dHdvpa_M",vpa,vperp)
-        plot_test_data(dHdvperp_M_exact,dHdvperp_M_num,dHdvperp_M_err,"dHdvperp_M",vpa,vperp)
-        plot_test_data(G_M_exact,G_M_num,G_M_err,"G_M",vpa,vperp)
-        plot_test_data(dGdvperp_M_exact,dGdvperp_M_num,dGdvperp_M_err,"dGdvperp_M",vpa,vperp)
-        plot_test_data(d2Gdvperp2_M_exact,d2Gdvperp2_M_num,d2Gdvperp2_M_err,"d2Gdvperp2_M",vpa,vperp)
-        plot_test_data(d2Gdvperpdvpa_M_exact,d2Gdvperpdvpa_M_num,d2Gdvperpdvpa_M_err,"d2Gdvperpdvpa_M",vpa,vperp)
-        plot_test_data(d2Gdvpa2_M_exact,d2Gdvpa2_M_num,d2Gdvpa2_M_err,"d2Gdvpa2_M",vpa,vperp)
+    @serial_region begin
+        @. d2Gdvperp2_M_err = abs(d2Gdvperp2_M_num - d2Gdvperp2_M_exact)
+        println("finish d2Gdvperp2 calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+        println("maximum(d2Gdvperp2_M_err): ",maximum(d2Gdvperp2_M_err))
+        
+        if plot_test_output
+            plot_test_data(H_M_exact,H_M_num,H_M_err,"H_M",vpa,vperp)
+            plot_test_data(dHdvpa_M_exact,dHdvpa_M_num,dHdvpa_M_err,"dHdvpa_M",vpa,vperp)
+            plot_test_data(dHdvperp_M_exact,dHdvperp_M_num,dHdvperp_M_err,"dHdvperp_M",vpa,vperp)
+            plot_test_data(G_M_exact,G_M_num,G_M_err,"G_M",vpa,vperp)
+            plot_test_data(dGdvperp_M_exact,dGdvperp_M_num,dGdvperp_M_err,"dGdvperp_M",vpa,vperp)
+            plot_test_data(d2Gdvperp2_M_exact,d2Gdvperp2_M_num,d2Gdvperp2_M_err,"d2Gdvperp2_M",vpa,vperp)
+            plot_test_data(d2Gdvperpdvpa_M_exact,d2Gdvperpdvpa_M_num,d2Gdvperpdvpa_M_err,"d2Gdvperpdvpa_M",vpa,vperp)
+            plot_test_data(d2Gdvpa2_M_exact,d2Gdvpa2_M_num,d2Gdvpa2_M_err,"d2Gdvpa2_M",vpa,vperp)
+        end
     end
-
 end

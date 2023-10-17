@@ -4,7 +4,7 @@ module for including the Full-F Fokker-Planck Collision Operator
 module fokker_planck
 
 
-export init_fokker_planck_collisions
+export init_fokker_planck_collisions, fokkerplanck_arrays_struct
 export explicit_fokker_planck_collisions!
 export calculate_Rosenbluth_potentials!
 export calculate_collisional_fluxes, calculate_Maxwellian_Rosenbluth_coefficients
