@@ -93,8 +93,76 @@ if abspath(PROGRAM_FILE) == @__FILE__
         return ivpa_global
     end
     
+    struct vpa_vperp_boundary_data
+        lower_boundary_vpa::Array{mk_float,1}
+        upper_boundary_vpa::Array{mk_float,1}
+        upper_boundary_vperp::Array{mk_float,1}
+    end
+    
+    struct rosenbluth_potential_boundary_data
+        H_data::vpa_vperp_boundary_data
+        dHdvpa_data::vpa_vperp_boundary_data
+        dHdvperp_data::vpa_vperp_boundary_data
+        G_data::vpa_vperp_boundary_data
+        dGdvperp_data::vpa_vperp_boundary_data
+        d2Gdvperp2_data::vpa_vperp_boundary_data
+        d2Gdvperpdvpa_data::vpa_vperp_boundary_data
+        d2Gdvpa2_data::vpa_vperp_boundary_data
+    end
+    
+    function allocate_boundary_data(vpa,vperp)
+        lower_boundary_vpa = Array{mk_float,1}(undef,vperp.n)
+        upper_boundary_vpa = Array{mk_float,1}(undef,vperp.n)
+        upper_boundary_vperp = Array{mk_float,1}(undef,vpa.n)
+        return vpa_vperp_boundary_data(lower_boundary_vpa,
+                upper_boundary_vpa,upper_boundary_vperp)
+    end
+    
+    function assign_exact_boundary_data!(func_data::vpa_vperp_boundary_data,
+                                            func_exact,vpa,vperp)
+        nvpa = vpa.n
+        nvperp = vperp.n
+        for ivperp in 1:nvperp
+            func_data.lower_boundary_vpa[ivperp] = func_exact[1,ivperp]
+            func_data.upper_boundary_vpa[ivperp] = func_exact[nvpa,ivperp]
+        end
+        for ivpa in 1:nvpa
+            func_data.upper_boundary_vperp[ivpa] = func_exact[ivpa,nvperp]
+        end
+        return nothing
+    end
+        
+    function allocate_rosenbluth_potential_boundary_data(vpa,vperp)
+        H_data = allocate_boundary_data(vpa,vperp)
+        dHdvpa_data = allocate_boundary_data(vpa,vperp)
+        dHdvperp_data = allocate_boundary_data(vpa,vperp)
+        G_data = allocate_boundary_data(vpa,vperp)
+        dGdvperp_data = allocate_boundary_data(vpa,vperp)
+        d2Gdvperp2_data = allocate_boundary_data(vpa,vperp)
+        d2Gdvperpdvpa_data = allocate_boundary_data(vpa,vperp)
+        d2Gdvpa2_data = allocate_boundary_data(vpa,vperp)
+        return rosenbluth_potential_boundary_data(H_data,dHdvpa_data,
+            dHdvperp_data,G_data,dGdvperp_data,d2Gdvperp2_data,
+            d2Gdvperpdvpa_data,d2Gdvpa2_data)
+    end
+    
+    function calculate_rosenbluth_potential_boundary_data_exact!(rpbd::rosenbluth_potential_boundary_data,
+      H_exact,dHdvpa_exact,dHdvperp_exact,G_exact,dGdvperp_exact,
+      d2Gdvperp2_exact,d2Gdvperpdvpa_exact,d2Gdvpa2_exact,
+      vpa,vperp)
+        assign_exact_boundary_data!(rpbd.H_data,H_exact,vpa,vperp)
+        assign_exact_boundary_data!(rpbd.dHdvpa_data,dHdvpa_exact,vpa,vperp)
+        assign_exact_boundary_data!(rpbd.dHdvperp_data,dHdvperp_exact,vpa,vperp)
+        assign_exact_boundary_data!(rpbd.G_data,G_exact,vpa,vperp)
+        assign_exact_boundary_data!(rpbd.dGdvperp_data,dGdvperp_exact,vpa,vperp)
+        assign_exact_boundary_data!(rpbd.d2Gdvperp2_data,d2Gdvperp2_exact,vpa,vperp)
+        assign_exact_boundary_data!(rpbd.d2Gdvperpdvpa_data,d2Gdvperpdvpa_exact,vpa,vperp)
+        assign_exact_boundary_data!(rpbd.d2Gdvpa2_data,d2Gdvpa2_exact,vpa,vperp)
+        return nothing
+    end
+    
     # define inputs needed for the test
-	plot_test_output = true
+	plot_test_output = false#true
     ngrid = 9 #number of points per element 
 	nelement_local_vpa = 4 # number of elements per rank
 	nelement_global_vpa = nelement_local_vpa # total number of elements 
@@ -403,6 +471,39 @@ if abspath(PROGRAM_FILE) == @__FILE__
         end
     end
     
+    function enforce_dirichlet_bc!(fc,vpa,vperp,f_bc::vpa_vperp_boundary_data)
+        # lower vpa boundary
+        ielement_vpa = 1
+        ivpa_local = 1
+        for ielement_vperp in 1:vperp.nelement_local
+            for ivperp_local in 1:vperp.ngrid
+                ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
+                fc[ic_global] = f_bc.lower_boundary_vpa[ivperp_global]
+            end
+        end
+        
+        # upper vpa boundary
+        ielement_vpa = vpa.nelement_local
+        ivpa_local = vpa.ngrid
+        for ielement_vperp in 1:vperp.nelement_local
+            for ivperp_local in 1:vperp.ngrid
+                ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
+                fc[ic_global] = f_bc.upper_boundary_vpa[ivperp_global]
+            end
+        end
+                
+        # upper vperp boundary
+        ielement_vperp = vperp.nelement_local
+        ivperp_local = vperp.ngrid
+        for ielement_vpa in 1:vpa.nelement_local
+            for ivpa_local in 1:vpa.ngrid
+                ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
+                fc[ic_global] = f_bc.upper_boundary_vperp[ivpa_global]
+            end
+        end
+        return nothing
+    end
+    
     if nc_global < 30
         print_matrix(MM2D,"MM2D",nc_global,nc_global)
         print_matrix(KKpar2D,"KKpar2D",nc_global,nc_global)
@@ -538,12 +639,19 @@ if abspath(PROGRAM_FILE) == @__FILE__
             dHdvperp_M_exact[ivpa,ivperp] = dHdvperp(dens,upar,vth,vpa,vperp,ivpa,ivperp)
         end
     end
+    # calculate the Rosenbluth potential boundary data (rpbd)
+    rpbd = allocate_rosenbluth_potential_boundary_data(vpa,vperp)
+    calculate_rosenbluth_potential_boundary_data_exact!(rpbd,
+      H_M_exact,dHdvpa_M_exact,dHdvperp_M_exact,G_M_exact,
+      dGdvperp_M_exact,d2Gdvperp2_M_exact,
+      d2Gdvperpdvpa_M_exact,d2Gdvpa2_M_exact,vpa,vperp)
     
     println("begin H calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
     ravel_vpavperp_to_c!(fc,F_M,vpa.n,vperp.n)
     #enforce_zero_bc!(fc,vpa,vperp)
     mul!(dfc,MM2D,fc)
-    enforce_dirichlet_bc!(dfc,vpa,vperp,H_M_exact,dirichlet_vperp_BC=impose_BC_at_zero_vperp)
+    #enforce_dirichlet_bc!(dfc,vpa,vperp,H_M_exact,dirichlet_vperp_BC=impose_BC_at_zero_vperp)
+    enforce_dirichlet_bc!(dfc,vpa,vperp,rpbd.H_data)
     fc = lu_obj_LP \ dfc
     ravel_c_to_vpavperp!(H_M_num,fc,nc_global,vpa.n)
     @. H_M_err = abs(H_M_num - H_M_exact)
@@ -554,7 +662,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
     ravel_vpavperp_to_c!(fc,F_M,vpa.n,vperp.n)
     #enforce_zero_bc!(fc,vpa,vperp)
     mul!(dfc,PPpar2D,fc)
-    enforce_dirichlet_bc!(dfc,vpa,vperp,dHdvpa_M_exact,dirichlet_vperp_BC=impose_BC_at_zero_vperp)
+    #enforce_dirichlet_bc!(dfc,vpa,vperp,dHdvpa_M_exact,dirichlet_vperp_BC=impose_BC_at_zero_vperp)
+    enforce_dirichlet_bc!(dfc,vpa,vperp,rpbd.dHdvpa_data)
     fc = lu_obj_LP \ dfc
     ravel_c_to_vpavperp!(dHdvpa_M_num,fc,nc_global,vpa.n)
     @. dHdvpa_M_err = abs(dHdvpa_M_num - dHdvpa_M_exact)
@@ -565,7 +674,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
     ravel_vpavperp_to_c!(fc,F_M,vpa.n,vperp.n)
     #enforce_zero_bc!(fc,vpa,vperp)
     mul!(dfc,PUperp2D,fc)
-    enforce_dirichlet_bc!(dfc,vpa,vperp,dHdvperp_M_exact,dirichlet_vperp_BC=impose_BC_at_zero_vperp)
+    #enforce_dirichlet_bc!(dfc,vpa,vperp,dHdvperp_M_exact,dirichlet_vperp_BC=impose_BC_at_zero_vperp)
+    enforce_dirichlet_bc!(dfc,vpa,vperp,rpbd.dHdvperp_data)
     fc = lu_obj_LV \ dfc
     ravel_c_to_vpavperp!(dHdvperp_M_num,fc,nc_global,vpa.n)
     @. dHdvperp_M_err = abs(dHdvperp_M_num - dHdvperp_M_exact)
@@ -577,7 +687,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
     ravel_vpavperp_to_c!(fc,S_dummy,vpa.n,vperp.n)
     #enforce_zero_bc!(fc,vpa,vperp)
     mul!(dfc,MM2D,fc)
-    enforce_dirichlet_bc!(dfc,vpa,vperp,G_M_exact,dirichlet_vperp_BC=impose_BC_at_zero_vperp)
+    #enforce_dirichlet_bc!(dfc,vpa,vperp,G_M_exact,dirichlet_vperp_BC=impose_BC_at_zero_vperp)
+    enforce_dirichlet_bc!(dfc,vpa,vperp,rpbd.G_data)
     fc = lu_obj_LP \ dfc
     ravel_c_to_vpavperp!(G_M_num,fc,nc_global,vpa.n)
     @. G_M_err = abs(G_M_num - G_M_exact)
@@ -589,7 +700,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
     ravel_vpavperp_to_c!(fc,S_dummy,vpa.n,vperp.n)
     #enforce_zero_bc!(fc,vpa,vperp)
     mul!(dfc,KKpar2D,fc)
-    enforce_dirichlet_bc!(dfc,vpa,vperp,d2Gdvpa2_M_exact,dirichlet_vperp_BC=impose_BC_at_zero_vperp)
+    #enforce_dirichlet_bc!(dfc,vpa,vperp,d2Gdvpa2_M_exact,dirichlet_vperp_BC=impose_BC_at_zero_vperp)
+    enforce_dirichlet_bc!(dfc,vpa,vperp,rpbd.d2Gdvpa2_data)
     fc = lu_obj_LP \ dfc
     ravel_c_to_vpavperp!(d2Gdvpa2_M_num,fc,nc_global,vpa.n)
     @. d2Gdvpa2_M_err = abs(d2Gdvpa2_M_num - d2Gdvpa2_M_exact)
@@ -601,7 +713,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
     ravel_vpavperp_to_c!(fc,S_dummy,vpa.n,vperp.n)
     #enforce_zero_bc!(fc,vpa,vperp)
     mul!(dfc,PUperp2D,fc)
-    enforce_dirichlet_bc!(dfc,vpa,vperp,dGdvperp_M_exact,dirichlet_vperp_BC=impose_BC_at_zero_vperp)
+    #enforce_dirichlet_bc!(dfc,vpa,vperp,dGdvperp_M_exact,dirichlet_vperp_BC=impose_BC_at_zero_vperp)
+    enforce_dirichlet_bc!(dfc,vpa,vperp,rpbd.dGdvperp_data)
     fc = lu_obj_LV \ dfc
     ravel_c_to_vpavperp!(dGdvperp_M_num,fc,nc_global,vpa.n)
     @. dGdvperp_M_err = abs(dGdvperp_M_num - dGdvperp_M_exact)
@@ -613,7 +726,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
     ravel_vpavperp_to_c!(fc,S_dummy,vpa.n,vperp.n)
     #enforce_zero_bc!(fc,vpa,vperp)
     mul!(dfc,PPparPUperp2D,fc)
-    enforce_dirichlet_bc!(dfc,vpa,vperp,d2Gdvperpdvpa_M_exact,dirichlet_vperp_BC=impose_BC_at_zero_vperp)
+    #enforce_dirichlet_bc!(dfc,vpa,vperp,d2Gdvperpdvpa_M_exact,dirichlet_vperp_BC=impose_BC_at_zero_vperp)
+    enforce_dirichlet_bc!(dfc,vpa,vperp,rpbd.d2Gdvperpdvpa_data)
     fc = lu_obj_LV \ dfc
     ravel_c_to_vpavperp!(d2Gdvperpdvpa_M_num,fc,nc_global,vpa.n)
     @. d2Gdvperpdvpa_M_err = abs(d2Gdvperpdvpa_M_num - d2Gdvperpdvpa_M_exact)
@@ -630,7 +744,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
     ravel_vpavperp_to_c!(fc,S_dummy,vpa.n,vperp.n)
     mul!(dgc,MM2D,fc)
     dfc += dgc
-    enforce_dirichlet_bc!(dfc,vpa,vperp,d2Gdvperp2_M_exact,dirichlet_vperp_BC=impose_BC_at_zero_vperp)
+    #enforce_dirichlet_bc!(dfc,vpa,vperp,d2Gdvperp2_M_exact,dirichlet_vperp_BC=impose_BC_at_zero_vperp)
+    enforce_dirichlet_bc!(dfc,vpa,vperp,rpbd.d2Gdvperp2_data)
     fc = lu_obj_MM \ dfc
     ravel_c_to_vpavperp!(d2Gdvperp2_M_num,fc,nc_global,vpa.n)
     #@. d2Gdvperp2_M_num += 2.0*H_M_num - d2Gdvpa2_M_num
