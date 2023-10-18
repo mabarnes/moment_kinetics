@@ -12,9 +12,11 @@ using moment_kinetics.gauss_legendre: setup_gausslegendre_pseudospectral, get_QQ
 using moment_kinetics.type_definitions: mk_float, mk_int
 using moment_kinetics.fokker_planck: F_Maxwellian, H_Maxwellian, G_Maxwellian
 using moment_kinetics.fokker_planck: d2Gdvpa2, d2Gdvperp2, dGdvperp, d2Gdvperpdvpa, dHdvpa, dHdvperp
-using moment_kinetics.fokker_planck: init_fokker_planck_collisions, fokkerplanck_arrays_struct
+using moment_kinetics.fokker_planck: init_fokker_planck_collisions, fokkerplanck_arrays_struct, fokkerplanck_boundary_data_arrays_struct
+using moment_kinetics.fokker_planck: init_fokker_planck_collisions_new, boundary_integration_weights_struct
 using moment_kinetics.calculus: derivative!
 using moment_kinetics.communication
+using moment_kinetics.communication: MPISharedArray
 using moment_kinetics.looping
 using SparseArrays: sparse
 using LinearAlgebra: mul!, lu, cholesky
@@ -98,9 +100,9 @@ if abspath(PROGRAM_FILE) == @__FILE__
     end
     
     struct vpa_vperp_boundary_data
-        lower_boundary_vpa::Array{mk_float,1}
-        upper_boundary_vpa::Array{mk_float,1}
-        upper_boundary_vperp::Array{mk_float,1}
+        lower_boundary_vpa::MPISharedArray{mk_float,1}
+        upper_boundary_vpa::MPISharedArray{mk_float,1}
+        upper_boundary_vperp::MPISharedArray{mk_float,1}
     end
     
     struct rosenbluth_potential_boundary_data
@@ -167,10 +169,12 @@ if abspath(PROGRAM_FILE) == @__FILE__
     
     
     function calculate_boundary_data!(func_data::vpa_vperp_boundary_data,
-                                            weight,func_input,vpa,vperp)
+                                            weight::MPISharedArray{mk_float,4},func_input,vpa,vperp)
         nvpa = vpa.n
         nvperp = vperp.n
-        for ivperp in 1:nvperp
+        #for ivperp in 1:nvperp
+        begin_vperp_region()
+        @loop_vperp ivperp begin
             func_data.lower_boundary_vpa[ivperp] = 0.0
             func_data.upper_boundary_vpa[ivperp] = 0.0
             for ivperpp in 1:nvperp
@@ -180,7 +184,9 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 end
             end
         end
-        for ivpa in 1:nvpa
+        #for ivpa in 1:nvpa
+        begin_vpa_region()
+        @loop_vpa ivpa begin
             func_data.upper_boundary_vperp[ivpa] = 0.0
             for ivperpp in 1:nvperp
                 for ivpap in 1:nvpa
@@ -188,26 +194,65 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 end
             end
         end
+        # return to serial parallelisation
+        begin_serial_region()
+        return nothing
+    end
+    
+    function calculate_boundary_data!(func_data::vpa_vperp_boundary_data,
+                                      weight::boundary_integration_weights_struct,
+                                      func_input,vpa,vperp)
+        nvpa = vpa.n
+        nvperp = vperp.n
+        #for ivperp in 1:nvperp
+        begin_vperp_region()
+        @loop_vperp ivperp begin
+            func_data.lower_boundary_vpa[ivperp] = 0.0
+            func_data.upper_boundary_vpa[ivperp] = 0.0
+            for ivperpp in 1:nvperp
+                for ivpap in 1:nvpa
+                    func_data.lower_boundary_vpa[ivperp] += weight.lower_vpa_boundary[ivpap,ivperpp,ivperp]*func_input[ivpap,ivperpp]
+                    func_data.upper_boundary_vpa[ivperp] += weight.upper_vpa_boundary[ivpap,ivperpp,ivperp]*func_input[ivpap,ivperpp]
+                end
+            end
+        end
+        #for ivpa in 1:nvpa
+        begin_vpa_region()
+        @loop_vpa ivpa begin
+            func_data.upper_boundary_vperp[ivpa] = 0.0
+            for ivperpp in 1:nvperp
+                for ivpap in 1:nvpa
+                    func_data.upper_boundary_vperp[ivpa] += weight.upper_vperp_boundary[ivpap,ivperpp,ivpa]*func_input[ivpap,ivperpp]
+                end
+            end
+        end
+        # return to serial parallelisation
+        begin_serial_region()
         return nothing
     end
     
     function calculate_rosenbluth_potential_boundary_data!(rpbd::rosenbluth_potential_boundary_data,
-        fkpl::fokkerplanck_arrays_struct,pdf)
+        fkpl::Union{fokkerplanck_arrays_struct,fokkerplanck_boundary_data_arrays_struct},pdf)
         # get derivatives of pdf
         dfdvperp = fkpl.dfdvperp
         dfdvpa = fkpl.dfdvpa
         d2fdvperpdvpa = fkpl.d2fdvperpdvpa
-        for ivpa in 1:vpa.n
+        #for ivpa in 1:vpa.n
+        begin_vpa_region()
+        @loop_vpa ivpa begin
             @views derivative!(vperp.scratch, pdf[ivpa,:], vperp, vperp_spectral)
             @. dfdvperp[ivpa,:] = vperp.scratch
         end
-        for ivperp in 1:vperp.n
+        begin_vperp_region()
+        @loop_vperp ivperp begin
+        #for ivperp in 1:vperp.n
             @views derivative!(vpa.scratch, pdf[:,ivperp], vpa, vpa_spectral)
             @. dfdvpa[:,ivperp] = vpa.scratch
             @views derivative!(vpa.scratch, dfdvperp[:,ivperp], vpa, vpa_spectral)
             @. d2fdvperpdvpa[:,ivperp] = vpa.scratch
         end
-        
+        # ensure data is synchronized
+        begin_serial_region()
         # carry out the numerical integration 
         calculate_boundary_data!(rpbd.H_data,fkpl.H0_weights,pdf,vpa,vperp)
         calculate_boundary_data!(rpbd.dHdvpa_data,fkpl.H0_weights,dfdvpa,vpa,vperp)
@@ -381,13 +426,13 @@ if abspath(PROGRAM_FILE) == @__FILE__
     
     # define inputs needed for the test
 	plot_test_output = false#true
-    ngrid = 3 #number of points per element 
+    ngrid = 9 #number of points per element 
 	nelement_local_vpa = 16 # number of elements per rank
 	nelement_global_vpa = nelement_local_vpa # total number of elements 
 	nelement_local_vperp = 8 # number of elements per rank
 	nelement_global_vperp = nelement_local_vperp # total number of elements 
-	Lvpa = 6.0 #physical box size in reference units 
-	Lvperp = 3.0 #physical box size in reference units 
+	Lvpa = 12.0 #physical box size in reference units 
+	Lvperp = 6.0 #physical box size in reference units 
 	bc = "" #not required to take a particular value, not used 
 	# fd_option and adv_input not actually used so given values unimportant
 	#discretization = "chebyshev_pseudospectral"
@@ -769,10 +814,17 @@ if abspath(PROGRAM_FILE) == @__FILE__
       d2Gdvperpdvpa_M_exact,d2Gdvpa2_M_exact,vpa,vperp)
     # use numerical integration to find the boundary data
     # initialise the weights
-    fkpl_arrays = init_fokker_planck_collisions(vperp,vpa; precompute_weights=true)
+    #fkpl_arrays = init_fokker_planck_collisions(vperp,vpa; precompute_weights=true)
+    fkpl_arrays = init_fokker_planck_collisions_new(vpa,vperp; precompute_weights=true)
     begin_serial_region()
     # do the numerical integration at the boundaries (N.B. G not supported)
+    @serial_region begin 
+        println("begin boundary data calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+    end
     calculate_rosenbluth_potential_boundary_data!(rpbd,fkpl_arrays,F_M)
+    @serial_region begin 
+        println("finished boundary data calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+    end
     # test the boundary data calculation
     test_rosenbluth_potential_boundary_data(rpbd,rpbd_exact,vpa,vperp)
     #rpbd = rpbd_exact
