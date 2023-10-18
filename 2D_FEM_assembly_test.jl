@@ -425,7 +425,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     
     
     # define inputs needed for the test
-	plot_test_output = false#true
+	plot_test_output = true
     ngrid = 9 #number of points per element 
 	nelement_local_vpa = 16 # number of elements per rank
 	nelement_global_vpa = nelement_local_vpa # total number of elements 
@@ -760,6 +760,9 @@ if abspath(PROGRAM_FILE) == @__FILE__
     
     S_dummy = Array{mk_float,2}(undef,vpa.n,vperp.n)
     F_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
+    C_M_num = Array{mk_float,2}(undef,vpa.n,vperp.n)
+    C_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
+    C_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
     dFdvpa_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
     dFdvperp_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
     d2Fdvperpdvpa_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
@@ -802,6 +805,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
             d2Gdvperpdvpa_M_exact[ivpa,ivperp] = d2Gdvperpdvpa(dens,upar,vth,vpa,vperp,ivpa,ivperp)
             dHdvpa_M_exact[ivpa,ivperp] = dHdvpa(dens,upar,vth,vpa,vperp,ivpa,ivperp)
             dHdvperp_M_exact[ivpa,ivperp] = dHdvperp(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+            C_M_exact[ivpa,ivperp] = 0.0
         end
     end
     # calculate the Rosenbluth potential boundary data (rpbd)
@@ -965,4 +969,97 @@ if abspath(PROGRAM_FILE) == @__FILE__
             plot_test_data(d2Gdvpa2_M_exact,d2Gdvpa2_M_num,d2Gdvpa2_M_err,"d2Gdvpa2_M",vpa,vperp)
         end
     end
+    
+    rhsc = Array{mk_float,1}(undef,nc_global)
+        
+    function assemble_explicit_collision_operator_rhs!(rhsc,pdfs,d2Gspdvpa2,d2Gspdvperpdvpa,d2Gspdvperp2,dHspdvpa,dHspdvperp,ms,msp,nussp)
+        # assemble RHS of collision operator
+        @. rhsc = 0.0
+        YY0perp = Array{mk_float,3}(undef,vperp.ngrid,vperp.ngrid,vperp.ngrid)
+        YY1perp = Array{mk_float,3}(undef,vperp.ngrid,vperp.ngrid,vperp.ngrid)
+        YY2perp = Array{mk_float,3}(undef,vperp.ngrid,vperp.ngrid,vperp.ngrid)
+        YY3perp = Array{mk_float,3}(undef,vperp.ngrid,vperp.ngrid,vperp.ngrid)
+        YY0par = Array{mk_float,3}(undef,vpa.ngrid,vpa.ngrid,vpa.ngrid)
+        YY1par = Array{mk_float,3}(undef,vpa.ngrid,vpa.ngrid,vpa.ngrid)
+        YY2par = Array{mk_float,3}(undef,vpa.ngrid,vpa.ngrid,vpa.ngrid)
+        YY3par = Array{mk_float,3}(undef,vpa.ngrid,vpa.ngrid,vpa.ngrid)
+        #kvpa = 0
+        #kvperp = 0
+        # loop over elements
+        for ielement_vperp in 1:vperp.nelement_local
+            get_QQ_local!(YY0perp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"YY0")
+            get_QQ_local!(YY1perp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"YY1")
+            get_QQ_local!(YY2perp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"YY2")
+            get_QQ_local!(YY3perp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"YY3")
+            
+            #ivperp_min = vperp.imin[ielement_vperp] - kvperp
+            #ivperp_max = vperp.imax[ielement_vperp]
+            
+            for ielement_vpa in 1:vpa.nelement_local
+                get_QQ_local!(YY0par,ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"YY0")
+                get_QQ_local!(YY1par,ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"YY1")
+                get_QQ_local!(YY2par,ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"YY2")
+                get_QQ_local!(YY3par,ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"YY3")
+                
+                #ivpa_min = vpa.imin[ielement_vpa] - kvpa
+                #ivpa_max = vpa.imax[ielement_vpa]
+                # loop over field positions in each element
+                for ivperp_local in 1:vperp.ngrid
+                    for ivpa_local in 1:vpa.ngrid
+                        ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
+                        # carry out the matrix sum on each 2D element
+                        for jvperpp_local in 1:vperp.ngrid
+                            jvperpp = vperp.igrid_full[jvperpp_local,ielement_vperp]
+                            for kvperpp_local in 1:vperp.ngrid
+                                kvperpp = vperp.igrid_full[kvperpp_local,ielement_vperp]
+                                for jvpap_local in 1:vpa.ngrid
+                                    jvpap = vpa.igrid_full[jvpap_local,ielement_vpa]
+                                    pdfjj = pdfs[jvpap,jvperpp]
+                                    for kvpap_local in 1:vpa.ngrid
+                                        kvpap = vpa.igrid_full[kvpap_local,ielement_vpa]
+                                        #println(kvpap," ",kvperpp," ",jvpap," ",jvperpp)
+                                        # first three lines represent parallel flux terms
+                                        # second three lines represent perpendicular flux terms
+                                        rhsc[ic_global] += (YY0perp[kvperpp_local,jvperpp_local,ivperp_local]*YY2par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*d2Gspdvpa2[kvpap,kvperpp] +
+                                                            YY3perp[kvperpp_local,jvperpp_local,ivperp_local]*YY1par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*d2Gspdvperpdvpa[kvpap,kvperpp] - 
+                                                            2.0*(ms/msp)*YY0perp[kvperpp_local,jvperpp_local,ivperp_local]*YY1par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*dHspdvpa[kvpap,kvperpp] +
+                                                            # end parallel flux, start of perpendicular flux
+                                                            YY1perp[kvperpp_local,jvperpp_local,ivperp_local]*YY3par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*d2Gspdvperpdvpa[kvpap,kvperpp] + 
+                                                            YY2perp[kvperpp_local,jvperpp_local,ivperp_local]*YY0par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*d2Gspdvperp2[kvpap,kvperpp] - 
+                                                            2.0*(ms/msp)*YY1perp[kvperpp_local,jvperpp_local,ivperp_local]*YY0par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*dHspdvperp[kvpap,kvperpp])
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+                
+                #kvpa = 1
+            end
+            #kvperp = 1
+        end
+        # correct for minus sign due to integration by parts
+        # and multiply by the normalised collision frequency
+        rhsc *= -nussp
+        return nothing
+    end
+    
+    @serial_region begin
+        println("begin C calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+    end
+    ms = 1.0
+    msp = 1.0
+    nussp = 1.0
+    assemble_explicit_collision_operator_rhs!(rhsc,F_M,d2Gdvpa2_M_num,d2Gdvperpdvpa_M_num,d2Gdvperp2_M_num,dHdvpa_M_num,dHdvperp_M_num,ms,msp,nussp)
+    enforce_zero_bc!(rhsc,vpa,vperp)
+    # invert mass matrix and fill fc
+    fc = lu_obj_MM \ rhsc
+    ravel_c_to_vpavperp!(C_M_num,fc,nc_global,vpa.n)
+    @serial_region begin
+        @. C_M_err = abs(C_M_num - C_M_exact)
+        println("finish C calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+        println("maximum(C_M_err): ",maximum(C_M_err))
+        plot_test_data(C_M_exact,C_M_num,C_M_err,"C_M",vpa,vperp)
+    end
+
 end

@@ -65,6 +65,22 @@ struct gausslegendre_base_info{}
     P2::Array{mk_float,2}
     # boundary condition differentiation matrix (for vperp grid using radau points)
     D0::Array{mk_float,1}
+    # local nonlinear diffusion matrix Y00
+    Y00::Array{mk_float,3}
+    # local nonlinear diffusion matrix Y01
+    Y01::Array{mk_float,3}
+    # local nonlinear diffusion matrix Y10
+    Y10::Array{mk_float,3}
+    # local nonlinear diffusion matrix Y11
+    Y11::Array{mk_float,3}
+    # local nonlinear diffusion matrix Y20
+    Y20::Array{mk_float,3}
+    # local nonlinear diffusion matrix Y21
+    Y21::Array{mk_float,3}
+    # local nonlinear diffusion matrix Y30
+    Y30::Array{mk_float,3}
+    # local nonlinear diffusion matrix Y31
+    Y31::Array{mk_float,3}
 end
 
 struct gausslegendre_info{}
@@ -137,7 +153,25 @@ function setup_gausslegendre_pseudospectral_lobatto(coord)
     D0 = allocate_float(coord.ngrid)
     #@. D0 = Dmat[1,:] # values at lower extreme of element
     GaussLegendre_derivative_vector!(D0,-1.0,coord.ngrid,x,w,coord.L,coord.nelement_global)
-    return gausslegendre_base_info(Dmat,Mmat,Kmat,M0,M1,M2,S0,S1,K0,K1,K2,P0,P1,P2,D0)
+    Y00 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
+    GaussLegendre_weak_product_matrix!(Y00,coord.ngrid,x,w,coord.L,coord.nelement_global,"Y00")
+    Y01 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
+    GaussLegendre_weak_product_matrix!(Y01,coord.ngrid,x,w,coord.L,coord.nelement_global,"Y01")
+    Y10 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
+    GaussLegendre_weak_product_matrix!(Y10,coord.ngrid,x,w,coord.L,coord.nelement_global,"Y10")
+    Y11 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
+    GaussLegendre_weak_product_matrix!(Y11,coord.ngrid,x,w,coord.L,coord.nelement_global,"Y11")
+    Y20 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
+    GaussLegendre_weak_product_matrix!(Y20,coord.ngrid,x,w,coord.L,coord.nelement_global,"Y20")
+    Y21 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
+    GaussLegendre_weak_product_matrix!(Y21,coord.ngrid,x,w,coord.L,coord.nelement_global,"Y21")
+    Y30 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
+    GaussLegendre_weak_product_matrix!(Y30,coord.ngrid,x,w,coord.L,coord.nelement_global,"Y30")
+    Y31 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
+    GaussLegendre_weak_product_matrix!(Y31,coord.ngrid,x,w,coord.L,coord.nelement_global,"Y31")
+    
+    return gausslegendre_base_info(Dmat,Mmat,Kmat,M0,M1,M2,S0,S1,
+            K0,K1,K2,P0,P1,P2,D0,Y00,Y01,Y10,Y11,Y20,Y21,Y30,Y31)
 end
 
 function setup_gausslegendre_pseudospectral_radau(coord)
@@ -177,7 +211,24 @@ function setup_gausslegendre_pseudospectral_radau(coord)
     GaussLegendre_weak_product_matrix!(P2,coord.ngrid,xreverse,wreverse,coord.L,coord.nelement_global,"P2",radau=true)
     D0 = allocate_float(coord.ngrid)
     GaussLegendre_derivative_vector!(D0,-1.0,coord.ngrid,xreverse,wreverse,coord.L,coord.nelement_global,radau=true)
-    return gausslegendre_base_info(Dmat,Mmat,Kmat,M0,M1,M2,S0,S1,K0,K1,K2,P0,P1,P2,D0)
+    Y00 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
+    GaussLegendre_weak_product_matrix!(Y00,coord.ngrid,xreverse,wreverse,coord.L,coord.nelement_global,"Y00",radau=true)
+    Y01 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
+    GaussLegendre_weak_product_matrix!(Y01,coord.ngrid,xreverse,wreverse,coord.L,coord.nelement_global,"Y01",radau=true)
+    Y10 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
+    GaussLegendre_weak_product_matrix!(Y10,coord.ngrid,xreverse,wreverse,coord.L,coord.nelement_global,"Y10",radau=true)
+    Y11 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
+    GaussLegendre_weak_product_matrix!(Y11,coord.ngrid,xreverse,wreverse,coord.L,coord.nelement_global,"Y11",radau=true)
+    Y20 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
+    GaussLegendre_weak_product_matrix!(Y20,coord.ngrid,xreverse,wreverse,coord.L,coord.nelement_global,"Y20",radau=true)
+    Y21 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
+    GaussLegendre_weak_product_matrix!(Y21,coord.ngrid,xreverse,wreverse,coord.L,coord.nelement_global,"Y21",radau=true)
+    Y30 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
+    GaussLegendre_weak_product_matrix!(Y30,coord.ngrid,xreverse,wreverse,coord.L,coord.nelement_global,"Y30",radau=true)
+    Y31 = allocate_float(coord.ngrid, coord.ngrid, coord.ngrid)
+    GaussLegendre_weak_product_matrix!(Y31,coord.ngrid,xreverse,wreverse,coord.L,coord.nelement_global,"Y31",radau=true)
+    return gausslegendre_base_info(Dmat,Mmat,Kmat,M0,M1,M2,S0,S1,
+            K0,K1,K2,P0,P1,P2,D0,Y00,Y01,Y10,Y11,Y20,Y21,Y30,Y31)
 end 
 """
 function for taking the first derivative on Gauss-Legendre points
@@ -526,8 +577,9 @@ end
 
 """
 assign abitrary weak inner product matrix Q on a 1D line with Jacobian = 1
+matrix Q acts on a single vector x such that y = Q * x is also a vector
 """
-function GaussLegendre_weak_product_matrix!(QQ,ngrid,x,wgts,L,nelement_global,option;radau=false)
+function GaussLegendre_weak_product_matrix!(QQ::Array{mk_float,2},ngrid,x,wgts,L,nelement_global,option;radau=false)
     # coefficient in expansion of 
     # lagrange polys in terms of Legendre polys
     gamma = allocate_float(ngrid)
@@ -666,6 +718,136 @@ function GaussLegendre_weak_product_matrix!(QQ,ngrid,x,wgts,L,nelement_global,op
     #end
     # return normalised Q (no scale factors)
     #@. QQ *= (0.5*L/nelement_global)
+    return nothing
+end
+
+"""
+assign abitrary weak inner product matrix Q on a 1D line with Jacobian = 1
+matrix Q acts on two vectors x1 and x2 such that the quadratic form 
+y = x1 * Q * x2 is also a vector
+"""
+function GaussLegendre_weak_product_matrix!(QQ::Array{mk_float,3},ngrid,x,wgts,L,nelement_global,option;radau=false)
+    # coefficient in expansion of 
+    # lagrange polys in terms of Legendre polys
+    gamma = allocate_float(ngrid)
+    for i in 1:ngrid-1
+        gamma[i] = Legendre_h_n(i-1)
+    end
+    if radau
+        gamma[ngrid] = Legendre_h_n(ngrid-1)
+    else
+        gamma[ngrid] = 2.0/(ngrid - 1)
+    end
+    # appropriate inner product of Legendre polys
+    # definition depends on required matrix 
+    # for Y00: AA = < P_i P_j P_k >
+    # for Y01: AA = < P_i P_j P_k x >
+    # for Y10: AA = < P_i P_j P'_k >
+    # for Y11: AA = < P_i P_j P'_k x >
+    # for Y20: AA = < P_i P'_j P'_k >
+    # for Y21: AA = < P_i P'_j P'_k x >
+    # for Y31: AA = < P_i P'_j P_k x >
+    # for Y30: AA = < P_i P'_j P_k >
+    AA = allocate_float(ngrid,ngrid,ngrid)
+    nquad = 2*ngrid
+    zz, wz = gausslegendre(nquad)
+    @. AA = 0.0
+    if option == "Y00"
+        for k in 1:ngrid
+            for j in 1:ngrid
+                for i in 1:ngrid
+                    for q in 1:nquad
+                        AA[i,j,k] += wz[q]*Pl(zz[q],i-1)*Pl(zz[q],j-1)*Pl(zz[q],k-1)
+                    end
+                end
+            end
+        end
+    elseif option == "Y01"
+        for k in 1:ngrid
+            for j in 1:ngrid
+                for i in 1:ngrid
+                    for q in 1:nquad
+                        AA[i,j,k] += zz[q]*wz[q]*Pl(zz[q],i-1)*Pl(zz[q],j-1)*Pl(zz[q],k-1)
+                    end
+                end
+            end
+        end
+    elseif option == "Y10"
+        for k in 1:ngrid
+            for j in 1:ngrid
+                for i in 1:ngrid
+                    for q in 1:nquad
+                        AA[i,j,k] += wz[q]*Pl(zz[q],i-1)*Pl(zz[q],j-1)*dnPl(zz[q],k-1,1)
+                    end
+                end
+            end
+        end
+    elseif option == "Y11"
+        for k in 1:ngrid
+            for j in 1:ngrid
+                for i in 1:ngrid
+                    for q in 1:nquad
+                        AA[i,j,k] += zz[q]*wz[q]*Pl(zz[q],i-1)*Pl(zz[q],j-1)*dnPl(zz[q],k-1,1)
+                    end
+                end
+            end
+        end
+    elseif option == "Y20"
+        for k in 1:ngrid
+            for j in 1:ngrid
+                for i in 1:ngrid
+                    for q in 1:nquad
+                        AA[i,j,k] += wz[q]*Pl(zz[q],i-1)*dnPl(zz[q],j-1,1)*dnPl(zz[q],k-1,1)
+                    end
+                end
+            end
+        end
+    elseif option == "Y21"
+        for k in 1:ngrid
+            for j in 1:ngrid
+                for i in 1:ngrid
+                    for q in 1:nquad
+                        AA[i,j,k] += zz[q]*wz[q]*Pl(zz[q],i-1)*dnPl(zz[q],j-1,1)*dnPl(zz[q],k-1,1)
+                    end
+                end
+            end
+        end
+    elseif option == "Y31"
+        for k in 1:ngrid
+            for j in 1:ngrid
+                for i in 1:ngrid
+                    for q in 1:nquad
+                        AA[i,j,k] += zz[q]*wz[q]*Pl(zz[q],i-1)*dnPl(zz[q],j-1,1)*Pl(zz[q],k-1)
+                    end
+                end
+            end
+        end
+    elseif option == "Y30"
+        for k in 1:ngrid
+            for j in 1:ngrid
+                for i in 1:ngrid
+                    for q in 1:nquad
+                        AA[i,j,k] += wz[q]*Pl(zz[q],i-1)*dnPl(zz[q],j-1,1)*Pl(zz[q],k-1)
+                    end
+                end
+            end
+        end
+    end
+    
+    QQ .= 0.0
+    for k in 1:ngrid
+        for j in 1:ngrid
+            for i in 1:ngrid
+                for l in 1:ngrid
+                    for m in 1:ngrid
+                        for n in 1:ngrid
+                            QQ[i,j,k] += wgts[i]*wgts[j]*wgts[k]*Pl(x[i],n-1)*Pl(x[j],m-1)*Pl(x[k],l-1)*AA[n,m,l]/(gamma[n]*gamma[m]*gamma[l])
+                        end
+                    end
+                end
+            end
+        end
+    end
     return nothing
 end
 
@@ -998,7 +1180,7 @@ function setup_global_weak_form_matrix!(QQ_global::Array{mk_float,2},
     return nothing
 end
 
-function get_QQ_local!(QQ,ielement,
+function get_QQ_local!(QQ::Array{mk_float,2},ielement,
         lobatto::gausslegendre_base_info,
         radau::gausslegendre_base_info, 
         coord,option)
@@ -1227,6 +1409,108 @@ function get_PU_local!(QQ,ielement,
             end
         else # assume integrals of form int^infty_-infty (.) d vpa
             @. QQ = lobatto.P0
+        end 
+        return nothing
+end
+
+"""
+construction function for nonlinear diffusion matrices, only
+used in the assembly of the collision operator
+"""
+
+function get_QQ_local!(QQ::Array{mk_float,3},ielement,
+        lobatto::gausslegendre_base_info,
+        radau::gausslegendre_base_info, 
+        coord,option)
+  
+        if option == "YY0" # mass-like matrix
+            get_YY0_local!(QQ,ielement,lobatto,radau,coord)
+        elseif option == "YY1" # first-derivative-like matrix
+            get_YY1_local!(QQ,ielement,lobatto,radau,coord)
+        elseif option == "YY2" # second-derivative-like matrix
+            get_YY2_local!(QQ,ielement,lobatto,radau,coord)
+        elseif option == "YY3" # first-derivative-like matrix
+            get_YY3_local!(QQ,ielement,lobatto,radau,coord)
+        end
+        return nothing
+end
+
+function get_YY0_local!(QQ,ielement,
+        lobatto::gausslegendre_base_info,
+        radau::gausslegendre_base_info, 
+        coord)
+        
+        scale_factor = scale_factor_func(coord.L,coord.nelement_global)
+        shift_factor = shift_factor_func(coord.L,coord.nelement_global,coord.nelement_local,coord.irank,ielement) + 0.5*coord.L
+        if coord.name == "vperp" # assume integrals of form int^infty_0 (.) vperp d vperp
+            # extra scale and shift factors required because of vperp in integral
+            if ielement > 1 || coord.irank > 0 # lobatto points
+                @. QQ =  (shift_factor*lobatto.Y00 + scale_factor*lobatto.Y01)*scale_factor
+            else # radau points 
+                @. QQ =  (shift_factor*radau.Y00 + scale_factor*radau.Y01)*scale_factor
+            end
+        else # assume integrals of form int^infty_-infty (.) d vpa
+            @. QQ = lobatto.Y00*scale_factor
+        end 
+        return nothing
+end
+
+function get_YY1_local!(QQ,ielement,
+        lobatto::gausslegendre_base_info,
+        radau::gausslegendre_base_info, 
+        coord)
+        
+        scale_factor = scale_factor_func(coord.L,coord.nelement_global)
+        shift_factor = shift_factor_func(coord.L,coord.nelement_global,coord.nelement_local,coord.irank,ielement) + 0.5*coord.L
+        if coord.name == "vperp" # assume integrals of form int^infty_0 (.) vperp d vperp
+            # extra scale and shift factors required because of vperp in integral
+            if ielement > 1 || coord.irank > 0 # lobatto points
+                @. QQ =  shift_factor*lobatto.Y10 + scale_factor*lobatto.Y11
+            else # radau points 
+                @. QQ =  shift_factor*radau.Y10 + scale_factor*radau.Y11
+            end
+        else # assume integrals of form int^infty_-infty (.) d vpa
+            @. QQ = lobatto.Y10
+        end 
+        return nothing
+end
+
+function get_YY2_local!(QQ,ielement,
+        lobatto::gausslegendre_base_info,
+        radau::gausslegendre_base_info, 
+        coord)
+        
+        scale_factor = scale_factor_func(coord.L,coord.nelement_global)
+        shift_factor = shift_factor_func(coord.L,coord.nelement_global,coord.nelement_local,coord.irank,ielement) + 0.5*coord.L
+        if coord.name == "vperp" # assume integrals of form int^infty_0 (.) vperp d vperp
+            # extra scale and shift factors required because of vperp in integral
+            if ielement > 1 || coord.irank > 0 # lobatto points
+                @. QQ =  (shift_factor/scale_factor)*lobatto.Y20 + lobatto.Y21
+            else # radau points 
+                @. QQ =  (shift_factor/scale_factor)*radau.Y20 + radau.Y21
+            end
+        else # assume integrals of form int^infty_-infty (.) d vpa
+            @. QQ = lobatto.Y20/scale_factor
+        end 
+        return nothing
+end
+
+function get_YY3_local!(QQ,ielement,
+        lobatto::gausslegendre_base_info,
+        radau::gausslegendre_base_info, 
+        coord)
+        
+        scale_factor = scale_factor_func(coord.L,coord.nelement_global)
+        shift_factor = shift_factor_func(coord.L,coord.nelement_global,coord.nelement_local,coord.irank,ielement) + 0.5*coord.L
+        if coord.name == "vperp" # assume integrals of form int^infty_0 (.) vperp d vperp
+            # extra scale and shift factors required because of vperp in integral
+            if ielement > 1 || coord.irank > 0 # lobatto points
+                @. QQ =  shift_factor*lobatto.Y30 + scale_factor*lobatto.Y31
+            else # radau points 
+                @. QQ =  shift_factor*radau.Y30 + scale_factor*radau.Y31
+            end
+        else # assume integrals of form int^infty_-infty (.) d vpa
+            @. QQ = lobatto.Y30
         end 
         return nothing
 end
