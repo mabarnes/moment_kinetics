@@ -226,20 +226,8 @@ end
 function that precomputes the required integration weights
 """
 function init_Rosenbluth_potential_integration_weights!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,vperp,vpa)
-    @serial_region begin
-        println("setting up GL quadrature   ", Dates.format(now(), dateformat"H:MM:SS"))
-    end
     
-    # get Gauss-Legendre points and weights on (-1,1)
-    ngrid = max(vpa.ngrid,vperp.ngrid)
-    nquad = 2*ngrid
-    x_legendre, w_legendre = gausslegendre(nquad)
-    #nlaguerre = min(9,nquad) # to prevent points to close to the boundaries
-    nlaguerre = nquad
-    x_laguerre, w_laguerre = gausslaguerre(nlaguerre)
-    
-    x_vpa, w_vpa = Array{mk_float,1}(undef,4*nquad), Array{mk_float,1}(undef,4*nquad)
-    x_vperp, w_vperp = Array{mk_float,1}(undef,4*nquad), Array{mk_float,1}(undef,4*nquad)
+    x_vpa, w_vpa, x_vperp, w_vperp, x_legendre, w_legendre, x_laguerre, w_laguerre = setup_basic_quadratures(vpa,vperp)
     
     @serial_region begin
         println("beginning weights calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
@@ -283,6 +271,31 @@ function init_Rosenbluth_potential_integration_weights!(G0_weights,G1_weights,H0
     end
     return nothing
 end
+
+"""
+function for getting the basic quadratures used for the 
+numerical integration of the Lagrange polynomials and the 
+Green's function.
+"""
+function setup_basic_quadratures(vpa,vperp)
+    @serial_region begin
+        println("setting up GL quadrature   ", Dates.format(now(), dateformat"H:MM:SS"))
+    end
+    
+    # get Gauss-Legendre points and weights on (-1,1)
+    ngrid = max(vpa.ngrid,vperp.ngrid)
+    nquad = 2*ngrid
+    x_legendre, w_legendre = gausslegendre(nquad)
+    #nlaguerre = min(9,nquad) # to prevent points to close to the boundaries
+    nlaguerre = nquad
+    x_laguerre, w_laguerre = gausslaguerre(nlaguerre)
+    
+    x_vpa, w_vpa = Array{mk_float,1}(undef,4*nquad), Array{mk_float,1}(undef,4*nquad)
+    x_vperp, w_vperp = Array{mk_float,1}(undef,4*nquad), Array{mk_float,1}(undef,4*nquad)
+  
+    return x_vpa, w_vpa, x_vperp, w_vperp, x_legendre, w_legendre, x_laguerre, w_laguerre
+end
+
 
 """
 function for getting the indices used to choose the integration
