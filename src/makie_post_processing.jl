@@ -37,6 +37,7 @@ using ..initial_conditions: vpagrid_to_dzdt
 using ..post_processing: calculate_and_write_frequencies, construct_global_zr_coords,
                          get_geometry_and_composition, read_distributed_zr_data!
 using ..type_definitions: mk_float, mk_int
+using ..velocity_moments: integrate_over_vspace, integrate_over_neutral_vspace
 
 using Combinatorics
 using Glob
@@ -1547,52 +1548,158 @@ function plots_for_dfn_variable(run_info, variable_name; plot_prefix, is_1D=fals
                 end
             end
 
-            if is_neutral
-                if moment_kinetic && input[Symbol(:plot, log, :_unnorm_vs_vz)]
-                    outfile = var_prefix * "unnorm_vs_vz.pdf"
-                    plot_f_unnorm_vs_vpa(run_info; input=input, neutral=true, is=is,
-                                         outfile=outfile, yscale=yscale, transform=transform)
+            if moment_kinetic
+                if is_neutral
+                    if input[Symbol(:plot, log, :_unnorm_vs_vz)]
+                        outfile = var_prefix * "unnorm_vs_vz.pdf"
+                        plot_f_unnorm_vs_vpa(run_info; input=input, neutral=true, is=is,
+                                             outfile=outfile, yscale=yscale, transform=transform)
+                    end
+                    if input[Symbol(:plot, log, :_unnorm_vs_vz_z)]
+                        outfile = var_prefix * "unnorm_vs_vz_z.pdf"
+                        plot_f_unnorm_vs_vpa_z(run_info; input=input, neutral=true, is=is,
+                                               outfile=outfile, colorscale=yscale,
+                                               transform=transform)
+                    end
+                    if input[Symbol(:animate, log, :_unnorm_vs_vz)]
+                        outfile = var_prefix * "unnorm_vs_vz." * input.animation_ext
+                        animate_f_unnorm_vs_vpa(run_info; input=input, neutral=true, is=is,
+                                                outfile=outfile, yscale=yscale,
+                                                transform=transform)
+                    end
+                    if input[Symbol(:animate, log, :_unnorm_vs_vz_z)]
+                        outfile = var_prefix * "unnorm_vs_vz_z." * input.animation_ext
+                        animate_f_unnorm_vs_vpa_z(run_info; input=input, neutral=true, is=is,
+                                                  outfile=outfile, colorscale=yscale,
+                                                  transform=transform)
+                    end
+                else
+                    if input[Symbol(:plot, log, :_unnorm_vs_vpa)]
+                        outfile = var_prefix * "unnorm_vs_vpa.pdf"
+                        plot_f_unnorm_vs_vpa(run_info; input=input, is=is, outfile=outfile,
+                                             yscale=yscale, transform=transform)
+                    end
+                    if input[Symbol(:plot, log, :_unnorm_vs_vpa_z)]
+                        outfile = var_prefix * "unnorm_vs_vpa_z.pdf"
+                        plot_f_unnorm_vs_vpa_z(run_info; input=input, is=is, outfile=outfile,
+                                               colorscale=yscale, transform=transform)
+                    end
+                    if input[Symbol(:animate, log, :_unnorm_vs_vpa)]
+                        outfile = var_prefix * "unnorm_vs_vpa." * input.animation_ext
+                        animate_f_unnorm_vs_vpa(run_info; input=input, is=is, outfile=outfile,
+                                                yscale=yscale, transform=transform)
+                    end
+                    if input[Symbol(:animate, log, :_unnorm_vs_vpa_z)]
+                        outfile = var_prefix * "unnorm_vs_vpa_z." * input.animation_ext
+                        animate_f_unnorm_vs_vpa_z(run_info; input=input, is=is, outfile=outfile,
+                                                  colorscale=yscale, transform=transform)
+                    end
                 end
-                if moment_kinetic && input[Symbol(:plot, log, :_unnorm_vs_vz_z)]
-                    outfile = var_prefix * "unnorm_vs_vz_z.pdf"
-                    plot_f_unnorm_vs_vpa_z(run_info; input=input, neutral=true, is=is,
-                                           outfile=outfile, colorscale=yscale,
-                                           transform=transform)
-                end
-                if moment_kinetic && input[Symbol(:animate, log, :_unnorm_vs_vz)]
-                    outfile = var_prefix * "unnorm_vs_vz." * input.animation_ext
-                    animate_f_unnorm_vs_vpa(run_info; input=input, neutral=true, is=is,
-                                            outfile=outfile, yscale=yscale,
-                                            transform=transform)
-                end
-                if moment_kinetic && input[Symbol(:animate, log, :_unnorm_vs_vz_z)]
-                    outfile = var_prefix * "unnorm_vs_vz_z." * input.animation_ext
-                    animate_f_unnorm_vs_vpa_z(run_info; input=input, neutral=true, is=is,
-                                              outfile=outfile, colorscale=yscale,
-                                              transform=transform)
-                end
-            else
-                if moment_kinetic && input[Symbol(:plot, log, :_unnorm_vs_vpa)]
-                    outfile = var_prefix * "unnorm_vs_vpa.pdf"
-                    plot_f_unnorm_vs_vpa(run_info; input=input, is=is, outfile=outfile,
-                                         yscale=yscale, transform=transform)
-                end
-                if moment_kinetic && input[Symbol(:plot, log, :_unnorm_vs_vpa_z)]
-                    outfile = var_prefix * "unnorm_vs_vpa_z.pdf"
-                    plot_f_unnorm_vs_vpa_z(run_info; input=input, is=is, outfile=outfile,
-                                           colorscale=yscale, transform=transform)
-                end
-                if moment_kinetic && input[Symbol(:animate, log, :_unnorm_vs_vpa)]
-                    outfile = var_prefix * "unnorm_vs_vpa." * input.animation_ext
-                    animate_f_unnorm_vs_vpa(run_info; input=input, is=is, outfile=outfile,
-                                            yscale=yscale, transform=transform)
-                end
-                if moment_kinetic && input[Symbol(:animate, log, :_unnorm_vs_vpa_z)]
-                    outfile = var_prefix * "unnorm_vs_vpa_z." * input.animation_ext
-                    animate_f_unnorm_vs_vpa_z(run_info; input=input, is=is, outfile=outfile,
-                                              colorscale=yscale, transform=transform)
-                end
+                check_moment_constraints(run_info, is_neutral; input=input, plot_prefix)
             end
+        end
+    end
+
+    return nothing
+end
+
+function check_moment_constraints(run_info::Tuple, is_neutral; input, plot_prefix)
+    if !input.check_moments
+        return nothing
+    end
+
+    # For now, don't support comparison plots
+    if length(run_info) > 1
+        error("Comparison plots not supported by check_moment_constraints()")
+    end
+    return check_moment_constraints(run_info[1], is_neutral; input=input,
+                                    plot_prefix=plot_prefix)
+end
+
+function check_moment_constraints(run_info, is_neutral; input, plot_prefix)
+    if !input.check_moments
+        return nothing
+    end
+
+    # For now assume there is only one ion or neutral species
+    is = 1
+
+    if is_neutral
+        fn = postproc_load_variable(run_info, "f_neutral")
+        if run_info.evolve_density
+            moment = zeros(run_info.z.n, run_info.r.n, run_info.nt)
+            for it ∈ 1:run_info.nt, ir ∈ 1:run_info.r.n, iz ∈ 1:run_info.z.n
+                moment[iz,ir,it] = integrate_over_neutral_vspace(
+                    @view(fn[:,:,:,iz,ir,is,it]), run_info.vz.grid, 0, run_info.vz.wgts,
+                    run_info.vr.grid, 0, run_info.vr.wgts, run_info.vzeta.grid, 0,
+                    run_info.vzeta.wgts)
+            end
+            error = moment .- 1.0
+            animate_vs_z(run_info, "density moment neutral"; data=error, input=input,
+                         outfile=plot_prefix * "density_moment_neutral_check.gif")
+        end
+
+        if run_info.evolve_upar
+            moment = zeros(run_info.z.n, run_info.r.n, run_info.nt)
+            for it ∈ 1:run_info.nt, ir ∈ 1:run_info.r.n, iz ∈ 1:run_info.z.n
+                moment[iz,ir,it] = integrate_over_neutral_vspace(
+                    @view(fn[:,:,:,iz,ir,is,it]), run_info.vz.grid, 1, run_info.vz.wgts,
+                    run_info.vr.grid, 0, run_info.vr.wgts, run_info.vzeta.grid, 0,
+                    run_info.vzeta.wgts)
+            end
+            error = moment
+            animate_vs_z(run_info, "parallel flow neutral"; data=error, input=input,
+                         outfile=plot_prefix * "parallel_flow_moment_neutral_check.gif")
+        end
+
+        if run_info.evolve_ppar
+            moment = zeros(run_info.z.n, run_info.r.n, run_info.nt)
+            for it ∈ 1:run_info.nt, ir ∈ 1:run_info.r.n, iz ∈ 1:run_info.z.n
+                moment[iz,ir,it] = integrate_over_neutral_vspace(
+                    @view(fn[:,:,:,iz,ir,is,it]), run_info.vz.grid, 2, run_info.vz.wgts,
+                    run_info.vr.grid, 0, run_info.vr.wgts, run_info.vzeta.grid, 0,
+                    run_info.vzeta.wgts)
+            end
+            error = moment .- 0.5
+            animate_vs_z(run_info, "parallel pressure neutral"; data=error, input=input,
+                         outfile=plot_prefix * "parallel_pressure_moment_neutral_check.gif")
+        end
+    else
+        f = postproc_load_variable(run_info, "f")
+        if run_info.evolve_density
+            moment = zeros(run_info.z.n, run_info.r.n, run_info.nt)
+            for it ∈ 1:run_info.nt, ir ∈ 1:run_info.r.n, iz ∈ 1:run_info.z.n
+                moment[iz,ir,it] = integrate_over_vspace(
+                    @view(f[:,:,iz,ir,is,it]), run_info.vpa.grid, 0, run_info.vpa.wgts,
+                    run_info.vperp.grid, 0, run_info.vperp.wgts)
+            end
+            error = moment .- 1.0
+            animate_vs_z(run_info, "density moment"; data=error, input=input,
+                         outfile=plot_prefix * "density_moment_check.gif")
+        end
+
+        if run_info.evolve_upar
+            moment = zeros(run_info.z.n, run_info.r.n, run_info.nt)
+            for it ∈ 1:run_info.nt, ir ∈ 1:run_info.r.n, iz ∈ 1:run_info.z.n
+                moment[iz,ir,it] = integrate_over_vspace(
+                    @view(f[:,:,iz,ir,is,it]), run_info.vpa.grid, 1, run_info.vpa.wgts,
+                    run_info.vperp.grid, 0, run_info.vperp.wgts)
+            end
+            error = moment
+            animate_vs_z(run_info, "parallel flow moment"; data=error, input=input,
+                         outfile=plot_prefix * "parallel_flow_moment_check.gif")
+        end
+
+        if run_info.evolve_ppar
+            moment = zeros(run_info.z.n, run_info.r.n, run_info.nt)
+            for it ∈ 1:run_info.nt, ir ∈ 1:run_info.r.n, iz ∈ 1:run_info.z.n
+                moment[iz,ir,it] = integrate_over_vspace(
+                    @view(f[:,:,iz,ir,is,it]), run_info.vpa.grid, 2, run_info.vpa.wgts,
+                    run_info.vperp.grid, 0, run_info.vperp.wgts)
+            end
+            error = moment .- 0.5
+            animate_vs_z(run_info, "parallel pressure moment"; data=error, input=input,
+                         outfile=plot_prefix * "parallel_pressure_moment_check.gif")
         end
     end
 
