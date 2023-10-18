@@ -212,7 +212,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         calculate_boundary_data!(rpbd.H_data,fkpl.H0_weights,pdf,vpa,vperp)
         calculate_boundary_data!(rpbd.dHdvpa_data,fkpl.H0_weights,dfdvpa,vpa,vperp)
         calculate_boundary_data!(rpbd.dHdvperp_data,fkpl.H1_weights,dfdvperp,vpa,vperp)
-        # NOT supported! calculate_boundary_data!(rpbd.G_data,G_weights,pdf,vpa,vperp)
+        calculate_boundary_data!(rpbd.G_data,fkpl.G0_weights,pdf,vpa,vperp)
         calculate_boundary_data!(rpbd.dGdvperp_data,fkpl.G1_weights,dfdvperp,vpa,vperp)
         calculate_boundary_data!(rpbd.d2Gdvperp2_data,fkpl.H2_weights,dfdvperp,vpa,vperp)
         calculate_boundary_data!(rpbd.d2Gdvperpdvpa_data,fkpl.G1_weights,d2fdvperpdvpa,vpa,vperp)
@@ -230,7 +230,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         test_boundary_data(rpbd.H_data,rpbd_exact.H_data,"H",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2)  
         test_boundary_data(rpbd.dHdvpa_data,rpbd_exact.dHdvpa_data,"dHdvpa",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2)  
         test_boundary_data(rpbd.dHdvperp_data,rpbd_exact.dHdvperp_data,"dHdvperp",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2)  
-        #test_boundary_data(rpbd.G_data,rpbd_exact.G_data,vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2)  
+        test_boundary_data(rpbd.G_data,rpbd_exact.G_data,"G",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2)  
         test_boundary_data(rpbd.dGdvperp_data,rpbd_exact.dGdvperp_data,"dGdvperp",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2)  
         test_boundary_data(rpbd.d2Gdvperp2_data,rpbd_exact.d2Gdvperp2_data,"d2Gdvperp2",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2)  
         test_boundary_data(rpbd.d2Gdvperpdvpa_data,rpbd_exact.d2Gdvperpdvpa_data,"d2Gdvperpdvpa",vpa,vperp,error_buffer_vpa,error_buffer_vperp_1,error_buffer_vperp_2)  
@@ -381,13 +381,13 @@ if abspath(PROGRAM_FILE) == @__FILE__
     
     # define inputs needed for the test
 	plot_test_output = false#true
-    ngrid = 5 #number of points per element 
+    ngrid = 3 #number of points per element 
 	nelement_local_vpa = 16 # number of elements per rank
 	nelement_global_vpa = nelement_local_vpa # total number of elements 
 	nelement_local_vperp = 8 # number of elements per rank
 	nelement_global_vperp = nelement_local_vperp # total number of elements 
-	Lvpa = 12.0 #physical box size in reference units 
-	Lvperp = 6.0 #physical box size in reference units 
+	Lvpa = 6.0 #physical box size in reference units 
+	Lvperp = 3.0 #physical box size in reference units 
 	bc = "" #not required to take a particular value, not used 
 	# fd_option and adv_input not actually used so given values unimportant
 	#discretization = "chebyshev_pseudospectral"
@@ -775,7 +775,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     calculate_rosenbluth_potential_boundary_data!(rpbd,fkpl_arrays,F_M)
     # test the boundary data calculation
     test_rosenbluth_potential_boundary_data(rpbd,rpbd_exact,vpa,vperp)
-    
+    #rpbd = rpbd_exact
     @serial_region begin
         println("begin H calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
     end

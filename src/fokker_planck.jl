@@ -38,6 +38,7 @@ for the Fokker-Planck collision operator
 """
 
 struct fokkerplanck_arrays_struct
+    G0_weights::MPISharedArray{mk_float,4}
     G1_weights::MPISharedArray{mk_float,4}
     H0_weights::MPISharedArray{mk_float,4}
     H1_weights::MPISharedArray{mk_float,4}
@@ -71,6 +72,7 @@ function allocate_fokkerplanck_arrays(vperp,vpa)
     nvpa = vpa.n
     nvperp = vperp.n
     
+    G0_weights = allocate_shared_float(nvpa,nvperp,nvpa,nvperp)
     G1_weights = allocate_shared_float(nvpa,nvperp,nvpa,nvperp)
     H0_weights = allocate_shared_float(nvpa,nvperp,nvpa,nvperp)
     H1_weights = allocate_shared_float(nvpa,nvperp,nvpa,nvperp)
@@ -95,7 +97,7 @@ function allocate_fokkerplanck_arrays(vperp,vpa)
     dfdvperp = allocate_shared_float(nvpa,nvperp)
     d2fdvperp2 = allocate_shared_float(nvpa,nvperp)
     
-    return fokkerplanck_arrays_struct(G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
+    return fokkerplanck_arrays_struct(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
                                d2Gdvpa2,d2Gdvperpdvpa,d2Gdvperp2,dGdvperp,
                                dHdvpa,dHdvperp,buffer_vpavperp_1,buffer_vpavperp_2,
                                Cssp_result_vpavperp, dfdvpa, d2fdvpa2,
@@ -214,7 +216,7 @@ function that initialises the arrays needed for Fokker Planck collisions
 function init_fokker_planck_collisions(vperp,vpa; precompute_weights=false)
     fka = allocate_fokkerplanck_arrays(vperp,vpa)
     if vperp.n > 1 && precompute_weights
-        @views init_Rosenbluth_potential_integration_weights!(fka.G1_weights, fka.H0_weights, fka.H1_weights,
+        @views init_Rosenbluth_potential_integration_weights!(fka.G0_weights, fka.G1_weights, fka.H0_weights, fka.H1_weights,
                                         fka.H2_weights, fka.H3_weights, vperp, vpa)
     end
     return fka
@@ -223,7 +225,7 @@ end
 """
 function that precomputes the required integration weights
 """
-function init_Rosenbluth_potential_integration_weights!(G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,vperp,vpa)
+function init_Rosenbluth_potential_integration_weights!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,vperp,vpa)
     @serial_region begin
         println("setting up GL quadrature   ", Dates.format(now(), dateformat"H:MM:SS"))
     end
@@ -253,7 +255,7 @@ function init_Rosenbluth_potential_integration_weights!(G1_weights,H0_weights,H1
         vpa_val = vpa.grid[ivpa]
         for ivperpp in 1:vperp.n
             for ivpap in 1:vpa.n
-                # G_weights[ivpap,ivperpp,ivpa,ivperp] = 0.0  
+                G0_weights[ivpap,ivperpp,ivpa,ivperp] = 0.0  
                 G1_weights[ivpap,ivperpp,ivpa,ivperp] = 0.0  
                 # G2_weights[ivpap,ivperpp,ivpa,ivperp] = 0.0  
                 # G3_weights[ivpap,ivperpp,ivpa,ivperp] = 0.0  
@@ -265,7 +267,7 @@ function init_Rosenbluth_potential_integration_weights!(G1_weights,H0_weights,H1
             end
         end
         # loop over elements and grid points within elements on primed coordinate
-        @views loop_over_vperp_vpa_elements!(G1_weights[:,:,ivpa,ivperp],
+        @views loop_over_vperp_vpa_elements!(G0_weights[:,:,ivpa,ivperp],G1_weights[:,:,ivpa,ivperp],
                 H0_weights[:,:,ivpa,ivperp],H1_weights[:,:,ivpa,ivperp],
                 H2_weights[:,:,ivpa,ivperp],H3_weights[:,:,ivpa,ivperp],
                 vpa,ielement_vpa_low,ielement_vpa_hi, # info about primed vpa grids
@@ -533,7 +535,7 @@ function nel_hi(ielement,nelement)
     return 1- floor(mk_int, ielement/nelement)
 end
 
-function local_element_integration!(G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
+function local_element_integration!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
                             nquad_vpa,ielement_vpa,vpa_nodes,vpa, # info about primed vperp grids
                             nquad_vperp,ielement_vperp,vperp_nodes,vperp, # info about primed vperp grids
                             x_vpa, w_vpa, x_vperp, w_vperp, # points and weights for primed (source) grids
@@ -560,7 +562,7 @@ function local_element_integration!(G1_weights,H0_weights,H1_weights,H2_weights,
                     #if mm_test > 1.0
                     #    println("mm: ",mm_test," ellipe: ",ellipe_mm," ellipk: ",ellipk_mm)
                     #end
-                    #G_elliptic_integral_factor = 2.0*ellipe_mm*prefac/pi
+                    G_elliptic_integral_factor = 2.0*ellipe_mm*prefac/pi
                     G1_elliptic_integral_factor = -(2.0*prefac/pi)*( (2.0 - mm)*ellipe_mm - 2.0*(1.0 - mm)*ellipk_mm )/(3.0*mm)
                     #G2_elliptic_integral_factor = (2.0*prefac/pi)*( (7.0*mm^2 + 8.0*mm - 8.0)*ellipe_mm + 4.0*(2.0 - mm)*(1.0 - mm)*ellipk_mm )/(15.0*mm^2)
                     #G3_elliptic_integral_factor = (2.0*prefac/pi)*( 8.0*(mm^2 - mm + 1.0)*ellipe_mm - 4.0*(2.0 - mm)*(1.0 - mm)*ellipk_mm )/(15.0*mm^2)
@@ -570,9 +572,9 @@ function local_element_integration!(G1_weights,H0_weights,H1_weights,H2_weights,
                     lagrange_poly_vpa = lagrange_poly(igrid_vpa,vpa_nodes,x_kvpa)
                     lagrange_poly_vperp = lagrange_poly(igrid_vperp,vperp_nodes,x_kvperp)
                     
-                    #(G_weights[ivpap,ivperpp] += 
-                    #    lagrange_poly_vpa*lagrange_poly_vperp*
-                    #    G_elliptic_integral_factor*x_kvperp*w_kvperp*w_kvpa*2.0/sqrt(pi))
+                    (G0_weights[ivpap,ivperpp] += 
+                        lagrange_poly_vpa*lagrange_poly_vperp*
+                        G_elliptic_integral_factor*x_kvperp*w_kvperp*w_kvpa*2.0/sqrt(pi))
                     
                     (G1_weights[ivpap,ivperpp] += 
                         lagrange_poly_vpa*lagrange_poly_vperp*
@@ -613,7 +615,7 @@ function local_element_integration!(G1_weights,H0_weights,H1_weights,H2_weights,
     return nothing
 end
 
-function loop_over_vpa_elements!(G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
+function loop_over_vpa_elements!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
                             vpa,ielement_vpa_low,ielement_vpa_hi, # info about primed vperp grids
                             vperp,ielement_vperpp, # info about primed vperp grids
                             x_vpa, w_vpa, x_vperp, w_vperp, # arrays to store points and weights for primed (source) grids
@@ -628,7 +630,7 @@ function loop_over_vpa_elements!(G1_weights,H0_weights,H1_weights,H2_weights,H3_
         vpa_nodes = get_nodes(vpa,ielement_vpap)
         vpa_min, vpa_max = vpa_nodes[1], vpa_nodes[end]
         nquad_vpa = get_scaled_x_w_no_divergences!(x_vpa, w_vpa, x_legendre, w_legendre, vpa_min, vpa_max)
-        @views local_element_integration!(G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
+        @views local_element_integration!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
                     nquad_vpa,ielement_vpap,vpa_nodes,vpa,
                     nquad_vperp,ielement_vperpp,vperp_nodes,vperp,
                     x_vpa, w_vpa, x_vperp, w_vperp, 
@@ -642,7 +644,7 @@ function loop_over_vpa_elements!(G1_weights,H0_weights,H1_weights,H2_weights,H3_
         vpa_min, vpa_max = vpa_nodes[1], vpa_nodes[end]
         #nquad_vpa = get_scaled_x_w_no_divergences!(x_vpa, w_vpa, x_legendre, w_legendre, vpa_min, vpa_max)
         nquad_vpa = get_scaled_x_w!(x_vpa, w_vpa, x_legendre, w_legendre, x_laguerre, w_laguerre, vpa_min, vpa_max, vpa_nodes, igrid_vpa, vpa_val)
-        @views local_element_integration!(G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
+        @views local_element_integration!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
                     nquad_vpa,ielement_vpap,vpa_nodes,vpa,
                     nquad_vperp,ielement_vperpp,vperp_nodes,vperp,
                     x_vpa, w_vpa, x_vperp, w_vperp, 
@@ -654,7 +656,7 @@ function loop_over_vpa_elements!(G1_weights,H0_weights,H1_weights,H2_weights,H3_
         vpa_nodes = get_nodes(vpa,ielement_vpap)
         vpa_min, vpa_max = vpa_nodes[1], vpa_nodes[end]
         nquad_vpa = get_scaled_x_w_no_divergences!(x_vpa, w_vpa, x_legendre, w_legendre, vpa_min, vpa_max)
-        @views local_element_integration!(G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
+        @views local_element_integration!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
                     nquad_vpa,ielement_vpap,vpa_nodes,vpa,
                     nquad_vperp,ielement_vperpp,vperp_nodes,vperp,
                     x_vpa, w_vpa, x_vperp, w_vperp, 
@@ -664,7 +666,7 @@ function loop_over_vpa_elements!(G1_weights,H0_weights,H1_weights,H2_weights,H3_
     return nothing
 end
 
-function loop_over_vpa_elements_no_divergences!(G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
+function loop_over_vpa_elements_no_divergences!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
                             vpa,ielement_vpa_low,ielement_vpa_hi, # info about primed vperp grids
                             nquad_vperp,ielement_vperpp,vperp_nodes,vperp, # info about primed vperp grids
                             x_vpa, w_vpa, x_vperp, w_vperp, # arrays to store points and weights for primed (source) grids
@@ -675,7 +677,7 @@ function loop_over_vpa_elements_no_divergences!(G1_weights,H0_weights,H1_weights
         vpa_nodes = get_nodes(vpa,ielement_vpap)
         vpa_min, vpa_max = vpa_nodes[1], vpa_nodes[end]
         nquad_vpa = get_scaled_x_w_no_divergences!(x_vpa, w_vpa, x_legendre, w_legendre, vpa_min, vpa_max)
-        @views local_element_integration!(G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
+        @views local_element_integration!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
                     nquad_vpa,ielement_vpap,vpa_nodes,vpa,
                     nquad_vperp,ielement_vperpp,vperp_nodes,vperp,
                     x_vpa, w_vpa, x_vperp, w_vperp, 
@@ -685,7 +687,7 @@ function loop_over_vpa_elements_no_divergences!(G1_weights,H0_weights,H1_weights
     return nothing
 end
 
-function loop_over_vperp_vpa_elements!(G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
+function loop_over_vperp_vpa_elements!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
                 vpa,ielement_vpa_low,ielement_vpa_hi, # info about primed vpa grids
                 vperp,ielement_vperp_low,ielement_vperp_hi, # info about primed vperp grids
                 x_vpa, w_vpa, x_vperp, w_vperp, # arrays to store points and weights for primed (source) grids
@@ -697,7 +699,7 @@ function loop_over_vperp_vpa_elements!(G1_weights,H0_weights,H1_weights,H2_weigh
         vperp_max = vperp_nodes[end]
         vperp_min = vperp_nodes[1]*nel_low(ielement_vperpp,vperp.nelement_local) 
         nquad_vperp = get_scaled_x_w_no_divergences!(x_vperp, w_vperp, x_legendre, w_legendre, vperp_min, vperp_max)
-        @views loop_over_vpa_elements_no_divergences!(G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
+        @views loop_over_vpa_elements_no_divergences!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
                 vpa,ielement_vpa_low,ielement_vpa_hi, # info about primed vpa grids
                 nquad_vperp,ielement_vperpp,vperp_nodes,vperp, # info about primed vperp grids
                 x_vpa, w_vpa, x_vperp, w_vperp, # arrays to store points and weights for primed (source) grids
@@ -711,7 +713,7 @@ function loop_over_vperp_vpa_elements!(G1_weights,H0_weights,H1_weights,H2_weigh
         #vperp_min = vperp_nodes[1]*nel_low(ielement_vperpp,vperp.nelement_local) 
         #nquad_vperp = get_scaled_x_w_no_divergences!(x_vperp, w_vperp, x_legendre, w_legendre, vperp_min, vperp_max)
         #nquad_vperp = get_scaled_x_w!(x_vperp, w_vperp, x_legendre, w_legendre, x_laguerre, w_laguerre, vperp_min, vperp_max, vperp_nodes, igrid_vperp, vperp_val)
-        @views loop_over_vpa_elements!(G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
+        @views loop_over_vpa_elements!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
                 vpa,ielement_vpa_low,ielement_vpa_hi, # info about primed vpa grids
                 vperp,ielement_vperpp, # info about primed vperp grids
                 x_vpa, w_vpa, x_vperp, w_vperp, # arrays to store points and weights for primed (source) grids
@@ -724,7 +726,7 @@ function loop_over_vperp_vpa_elements!(G1_weights,H0_weights,H1_weights,H2_weigh
         vperp_max = vperp_nodes[end]
         vperp_min = vperp_nodes[1]*nel_low(ielement_vperpp,vperp.nelement_local) 
         nquad_vperp = get_scaled_x_w_no_divergences!(x_vperp, w_vperp, x_legendre, w_legendre, vperp_min, vperp_max)
-        @views loop_over_vpa_elements_no_divergences!(G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
+        @views loop_over_vpa_elements_no_divergences!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
                 vpa,ielement_vpa_low,ielement_vpa_hi, # info about primed vpa grids
                 nquad_vperp,ielement_vperpp,vperp_nodes,vperp, # info about primed vperp grids
                 x_vpa, w_vpa, x_vperp, w_vperp, # arrays to store points and weights for primed (source) grids
@@ -734,7 +736,7 @@ function loop_over_vperp_vpa_elements!(G1_weights,H0_weights,H1_weights,H2_weigh
     return nothing
 end
 
-function loop_over_vperp_vpa_elements_no_divergences!(G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
+function loop_over_vperp_vpa_elements_no_divergences!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
                 vpa,ielement_vpa_low,ielement_vpa_hi, # info about primed vpa grids
                 vperp,ielement_vperp_low,ielement_vperp_hi, # info about primed vperp grids
                 x_vpa, w_vpa, x_vperp, w_vperp, # arrays to store points and weights for primed (source) grids
@@ -745,7 +747,7 @@ function loop_over_vperp_vpa_elements_no_divergences!(G1_weights,H0_weights,H1_w
         vperp_max = vperp_nodes[end]
         vperp_min = vperp_nodes[1]*nel_low(ielement_vperpp,nelement_vperp) 
         nquad_vperp = get_scaled_x_w_no_divergences!(x_vperp, w_vperp, x_legendre, w_legendre, vperp_min, vperp_max)
-        @views loop_over_vpa_elements_no_divergences!(G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
+        @views loop_over_vpa_elements_no_divergences!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
                 vpa,ielement_vpa_low,ielement_vpa_hi, # info about primed vpa grids
                 nquad_vperp,ielement_vperpp,vperp_nodes,vperp, # info about primed vperp grids
                 x_vpa, w_vpa, x_vperp, w_vperp, # arrays to store points and weights for primed (source) grids
