@@ -16,6 +16,7 @@ using moment_kinetics.fokker_planck: init_fokker_planck_collisions, fokkerplanck
 using moment_kinetics.fokker_planck: init_fokker_planck_collisions_new, boundary_integration_weights_struct
 using moment_kinetics.fokker_planck: get_element_limit_indices
 using moment_kinetics.calculus: derivative!
+using moment_kinetics.velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_pressure
 using moment_kinetics.communication
 using moment_kinetics.communication: MPISharedArray
 using moment_kinetics.looping
@@ -440,11 +441,12 @@ if abspath(PROGRAM_FILE) == @__FILE__
     # define inputs needed for the test
 	plot_test_output = true
     impose_zero_gradient_BC = false#true
-    test_parallelism = true
-    ngrid = 3 #number of points per element 
-	nelement_local_vpa = 16 # number of elements per rank
+    test_parallelism = false#true
+    test_self_operator = false#true
+    ngrid = 9 #number of points per element 
+	nelement_local_vpa = 8 # number of elements per rank
 	nelement_global_vpa = nelement_local_vpa # total number of elements 
-	nelement_local_vperp = 8 # number of elements per rank
+	nelement_local_vperp = 4 # number of elements per rank
 	nelement_global_vperp = nelement_local_vperp # total number of elements 
 	Lvpa = 12.0 #physical box size in reference units 
 	Lvperp = 6.0 #physical box size in reference units 
@@ -878,10 +880,13 @@ if abspath(PROGRAM_FILE) == @__FILE__
     dHdvperp_M_num = Array{mk_float,2}(undef,vpa.n,vperp.n)
     dHdvperp_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
 
-    denss, upars, vths = 1.0, -1.0, 2.0/3.0
-    dens = 1.0
-    upar = 1.0
-    vth = 1.0
+    if test_self_operator
+        dens, upar, vth = 1.0, 1.0, 1.0
+        denss, upars, vths = dens, upar, vth
+    else
+        denss, upars, vths = 1.0, -1.0, 2.0/3.0
+        dens, upar, vth = 1.0, 1.0, 1.0
+    end
     ms = 1.0
     msp = 1.0
     nussp = 1.0
@@ -1282,5 +1287,21 @@ if abspath(PROGRAM_FILE) == @__FILE__
         println("maximum(C_M_err): ",maximum(C_M_err))
         plot_test_data(C_M_exact,C_M_num,C_M_err,"C_M",vpa,vperp)
     end
-
+    if test_self_operator
+        delta_n = get_density(C_M_num, vpa, vperp)
+        delta_upar = get_upar(C_M_num, vpa, vperp, dens)
+        delta_ppar = get_ppar(C_M_num, vpa, vperp, upar, msp)
+        delta_pperp = get_pperp(C_M_num, vpa, vperp, msp)
+        delta_pressure = get_pressure(delta_ppar,delta_pperp)
+        @serial_region begin
+            println("delta_n: ", delta_n)
+            println("delta_upar: ", delta_upar)
+            println("delta_pressure: ", delta_pressure)
+        end
+    else
+        delta_n = get_density(C_M_num, vpa, vperp)
+        @serial_region begin
+            println("delta_n: ", delta_n)
+        end
+    end
 end
