@@ -19,6 +19,7 @@ export d2Fdvpa2_Maxwellian, d2Fdvperpdvpa_Maxwellian, d2Fdvperp2_Maxwellian
 export H_Maxwellian, G_Maxwellian
 export boundary_integration_weights_struct, fokkerplanck_boundary_data_arrays_struct
 export Cssp_fully_expanded_form, get_local_Cssp_coefficients!, init_fokker_planck_collisions
+export get_element_limit_indices
 # testing
 export symmetric_matrix_inverse
 

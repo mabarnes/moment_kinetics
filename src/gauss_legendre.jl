@@ -1418,8 +1418,12 @@ construction function for nonlinear diffusion matrices, only
 used in the assembly of the collision operator
 """
 
-function get_QQ_local!(QQ::Array{mk_float,3},ielement,
-        lobatto::gausslegendre_base_info,
+function get_QQ_local!(QQ::Union{Array{mk_float,3},
+        SubArray{Float64, 3, Array{Float64, 4}, 
+        Tuple{Base.Slice{Base.OneTo{Int64}}, 
+        Base.Slice{Base.OneTo{Int64}}, 
+        Base.Slice{Base.OneTo{Int64}}, Int64}, true}},
+        ielement,lobatto::gausslegendre_base_info,
         radau::gausslegendre_base_info, 
         coord,option)
   
