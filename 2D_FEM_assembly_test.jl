@@ -10,7 +10,7 @@ using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.chebyshev: setup_chebyshev_pseudospectral
 using moment_kinetics.gauss_legendre: setup_gausslegendre_pseudospectral, get_QQ_local!
 using moment_kinetics.type_definitions: mk_float, mk_int
-using moment_kinetics.fokker_planck: F_Maxwellian, H_Maxwellian, G_Maxwellian
+using moment_kinetics.fokker_planck: F_Maxwellian, H_Maxwellian, G_Maxwellian, Cssp_Maxwellian_inputs
 using moment_kinetics.fokker_planck: d2Gdvpa2, d2Gdvperp2, dGdvperp, d2Gdvperpdvpa, dHdvpa, dHdvperp
 using moment_kinetics.fokker_planck: init_fokker_planck_collisions, fokkerplanck_arrays_struct, fokkerplanck_boundary_data_arrays_struct
 using moment_kinetics.fokker_planck: init_fokker_planck_collisions_new, boundary_integration_weights_struct
@@ -759,6 +759,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     # test the Laplacian solve with a standard F_Maxwellian -> H_Maxwellian test
     
     S_dummy = Array{mk_float,2}(undef,vpa.n,vperp.n)
+    Fs_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
     F_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
     C_M_num = Array{mk_float,2}(undef,vpa.n,vperp.n)
     C_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
@@ -791,11 +792,16 @@ if abspath(PROGRAM_FILE) == @__FILE__
     dHdvperp_M_num = Array{mk_float,2}(undef,vpa.n,vperp.n)
     dHdvperp_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
 
+    denss, upars, vths = 1.0, -1.0, 2.0/3.0
     dens = 1.0
     upar = 1.0
     vth = 1.0
+    ms = 1.0
+    msp = 1.0
+    nussp = 1.0
     for ivperp in 1:vperp.n
         for ivpa in 1:vpa.n
+            Fs_M[ivpa,ivperp] = F_Maxwellian(denss,upars,vths,vpa,vperp,ivpa,ivperp)
             F_M[ivpa,ivperp] = F_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
             H_M_exact[ivpa,ivperp] = H_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
             G_M_exact[ivpa,ivperp] = G_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
@@ -805,7 +811,9 @@ if abspath(PROGRAM_FILE) == @__FILE__
             d2Gdvperpdvpa_M_exact[ivpa,ivperp] = d2Gdvperpdvpa(dens,upar,vth,vpa,vperp,ivpa,ivperp)
             dHdvpa_M_exact[ivpa,ivperp] = dHdvpa(dens,upar,vth,vpa,vperp,ivpa,ivperp)
             dHdvperp_M_exact[ivpa,ivperp] = dHdvperp(dens,upar,vth,vpa,vperp,ivpa,ivperp)
-            C_M_exact[ivpa,ivperp] = 0.0
+            C_M_exact[ivpa,ivperp] = Cssp_Maxwellian_inputs(denss,upars,vths,ms,
+                                                            dens,upar,vth,msp,
+                                                            nussp,vpa,vperp,ivpa,ivperp)
         end
     end
     # calculate the Rosenbluth potential boundary data (rpbd)
@@ -1040,17 +1048,14 @@ if abspath(PROGRAM_FILE) == @__FILE__
         end
         # correct for minus sign due to integration by parts
         # and multiply by the normalised collision frequency
-        rhsc *= -nussp
+        @. rhsc *= -nussp
         return nothing
     end
     
     @serial_region begin
         println("begin C calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
     end
-    ms = 1.0
-    msp = 1.0
-    nussp = 1.0
-    assemble_explicit_collision_operator_rhs!(rhsc,F_M,d2Gdvpa2_M_num,d2Gdvperpdvpa_M_num,d2Gdvperp2_M_num,dHdvpa_M_num,dHdvperp_M_num,ms,msp,nussp)
+    assemble_explicit_collision_operator_rhs!(rhsc,Fs_M,d2Gdvpa2_M_num,d2Gdvperpdvpa_M_num,d2Gdvperp2_M_num,dHdvpa_M_num,dHdvperp_M_num,ms,msp,nussp)
     enforce_zero_bc!(rhsc,vpa,vperp)
     # invert mass matrix and fill fc
     fc = lu_obj_MM \ rhsc
