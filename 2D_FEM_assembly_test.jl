@@ -439,10 +439,10 @@ if abspath(PROGRAM_FILE) == @__FILE__
     # define inputs needed for the test
 	plot_test_output = true
     impose_zero_gradient_BC = false#true
-    ngrid = 9 #number of points per element 
-	nelement_local_vpa = 16 # number of elements per rank
+    ngrid = 3 #number of points per element 
+	nelement_local_vpa = 64 # number of elements per rank
 	nelement_global_vpa = nelement_local_vpa # total number of elements 
-	nelement_local_vperp = 8 # number of elements per rank
+	nelement_local_vperp = 32 # number of elements per rank
 	nelement_global_vperp = nelement_local_vperp # total number of elements 
 	Lvpa = 12.0 #physical box size in reference units 
 	Lvperp = 6.0 #physical box size in reference units 
@@ -1063,35 +1063,87 @@ if abspath(PROGRAM_FILE) == @__FILE__
     end
     
     rhsc = Array{mk_float,1}(undef,nc_global)
+    
+    struct YY_collision_operator_arrays
+        # let phi_j(vperp) be the jth Lagrange basis function, 
+        # and phi'_j(vperp) the first derivative of the Lagrange basis function
+        # on the iel^th element. Then, the arrays are defined as follows.
+        # YY0perp[i,j,k,iel] = \int phi_i(vperp) phi_j(vperp) phi_k(vperp) vperp d vperp
+        YY0perp::Array{mk_float,4}
+        # YY1perp[i,j,k,iel] = \int phi_i(vperp) phi_j(vperp) phi'_k(vperp) vperp d vperp
+        YY1perp::Array{mk_float,4}
+        # YY2perp[i,j,k,iel] = \int phi_i(vperp) phi'_j(vperp) phi'_k(vperp) vperp d vperp
+        YY2perp::Array{mk_float,4}
+        # YY3perp[i,j,k,iel] = \int phi_i(vperp) phi'_j(vperp) phi_k(vperp) vperp d vperp
+        YY3perp::Array{mk_float,4}
+        # YY0par[i,j,k,iel] = \int phi_i(vpa) phi_j(vpa) phi_k(vpa) vpa d vpa
+        YY0par::Array{mk_float,4}
+        # YY1par[i,j,k,iel] = \int phi_i(vpa) phi_j(vpa) phi'_k(vpa) vpa d vpa
+        YY1par::Array{mk_float,4}
+        # YY2par[i,j,k,iel] = \int phi_i(vpa) phi'_j(vpa) phi'_k(vpa) vpa d vpa
+        YY2par::Array{mk_float,4}
+        # YY3par[i,j,k,iel] = \int phi_i(vpa) phi'_j(vpa) phi_k(vpa) vpa d vpa
+        YY3par::Array{mk_float,4}
+    end
+    
+    function calculate_YY_arrays(vpa,vperp)
+        YY0perp = Array{mk_float,4}(undef,vperp.ngrid,vperp.ngrid,vperp.ngrid,vperp.nelement_local)
+        YY1perp = Array{mk_float,4}(undef,vperp.ngrid,vperp.ngrid,vperp.ngrid,vperp.nelement_local)
+        YY2perp = Array{mk_float,4}(undef,vperp.ngrid,vperp.ngrid,vperp.ngrid,vperp.nelement_local)
+        YY3perp = Array{mk_float,4}(undef,vperp.ngrid,vperp.ngrid,vperp.ngrid,vperp.nelement_local)
+        YY0par = Array{mk_float,4}(undef,vpa.ngrid,vpa.ngrid,vpa.ngrid,vpa.nelement_local)
+        YY1par = Array{mk_float,4}(undef,vpa.ngrid,vpa.ngrid,vpa.ngrid,vpa.nelement_local)
+        YY2par = Array{mk_float,4}(undef,vpa.ngrid,vpa.ngrid,vpa.ngrid,vpa.nelement_local)
+        YY3par = Array{mk_float,4}(undef,vpa.ngrid,vpa.ngrid,vpa.ngrid,vpa.nelement_local)
         
-    function assemble_explicit_collision_operator_rhs!(rhsc,pdfs,d2Gspdvpa2,d2Gspdvperpdvpa,d2Gspdvperp2,dHspdvpa,dHspdvperp,ms,msp,nussp)
+        for ielement_vperp in 1:vperp.nelement_local
+            @views get_QQ_local!(YY0perp[:,:,:,ielement_vperp],ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"YY0")
+            @views get_QQ_local!(YY1perp[:,:,:,ielement_vperp],ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"YY1")
+            @views get_QQ_local!(YY2perp[:,:,:,ielement_vperp],ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"YY2")
+            @views get_QQ_local!(YY3perp[:,:,:,ielement_vperp],ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"YY3")
+         end
+         for ielement_vpa in 1:vpa.nelement_local
+            @views get_QQ_local!(YY0par[:,:,:,ielement_vpa],ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"YY0")
+            @views get_QQ_local!(YY1par[:,:,:,ielement_vpa],ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"YY1")
+            @views get_QQ_local!(YY2par[:,:,:,ielement_vpa],ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"YY2")
+            @views get_QQ_local!(YY3par[:,:,:,ielement_vpa],ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"YY3")
+         end
+        
+        return YY_collision_operator_arrays(YY0perp,YY1perp,YY2perp,YY3perp,
+                                            YY0par,YY1par,YY2par,YY3par)
+    end
+    
+    function assemble_explicit_collision_operator_rhs_serial!(rhsc,pdfs,d2Gspdvpa2,d2Gspdvperpdvpa,
+        d2Gspdvperp2,dHspdvpa,dHspdvperp,ms,msp,nussp,
+        vpa,vperp,vpa_spectral,vperp_spectral,
+        YY_arrays::YY_collision_operator_arrays)
         # assemble RHS of collision operator
         @. rhsc = 0.0
-        YY0perp = Array{mk_float,3}(undef,vperp.ngrid,vperp.ngrid,vperp.ngrid)
-        YY1perp = Array{mk_float,3}(undef,vperp.ngrid,vperp.ngrid,vperp.ngrid)
-        YY2perp = Array{mk_float,3}(undef,vperp.ngrid,vperp.ngrid,vperp.ngrid)
-        YY3perp = Array{mk_float,3}(undef,vperp.ngrid,vperp.ngrid,vperp.ngrid)
-        YY0par = Array{mk_float,3}(undef,vpa.ngrid,vpa.ngrid,vpa.ngrid)
-        YY1par = Array{mk_float,3}(undef,vpa.ngrid,vpa.ngrid,vpa.ngrid)
-        YY2par = Array{mk_float,3}(undef,vpa.ngrid,vpa.ngrid,vpa.ngrid)
-        YY3par = Array{mk_float,3}(undef,vpa.ngrid,vpa.ngrid,vpa.ngrid)
+        
         #kvpa = 0
         #kvperp = 0
         # loop over elements
         for ielement_vperp in 1:vperp.nelement_local
-            get_QQ_local!(YY0perp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"YY0")
-            get_QQ_local!(YY1perp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"YY1")
-            get_QQ_local!(YY2perp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"YY2")
-            get_QQ_local!(YY3perp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"YY3")
-            
+            #get_QQ_local!(YY0perp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"YY0")
+            #get_QQ_local!(YY1perp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"YY1")
+            #get_QQ_local!(YY2perp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"YY2")
+            #get_QQ_local!(YY3perp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"YY3")
+            YY0perp = YY_arrays.YY0perp[:,:,:,ielement_vperp]
+            YY1perp = YY_arrays.YY1perp[:,:,:,ielement_vperp]
+            YY2perp = YY_arrays.YY2perp[:,:,:,ielement_vperp]
+            YY3perp = YY_arrays.YY3perp[:,:,:,ielement_vperp]
             #ivperp_min = vperp.imin[ielement_vperp] - kvperp
             #ivperp_max = vperp.imax[ielement_vperp]
             
             for ielement_vpa in 1:vpa.nelement_local
-                get_QQ_local!(YY0par,ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"YY0")
-                get_QQ_local!(YY1par,ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"YY1")
-                get_QQ_local!(YY2par,ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"YY2")
-                get_QQ_local!(YY3par,ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"YY3")
+                #get_QQ_local!(YY0par,ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"YY0")
+                #get_QQ_local!(YY1par,ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"YY1")
+                #get_QQ_local!(YY2par,ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"YY2")
+                #get_QQ_local!(YY3par,ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"YY3")
+                YY0par = YY_arrays.YY0par[:,:,:,ielement_vpa]
+                YY1par = YY_arrays.YY1par[:,:,:,ielement_vpa]
+                YY2par = YY_arrays.YY2par[:,:,:,ielement_vpa]
+                YY3par = YY_arrays.YY3par[:,:,:,ielement_vpa]
                 
                 #ivpa_min = vpa.imin[ielement_vpa] - kvpa
                 #ivpa_max = vpa.imax[ielement_vpa]
@@ -1139,7 +1191,11 @@ if abspath(PROGRAM_FILE) == @__FILE__
     @serial_region begin
         println("begin C calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
     end
-    assemble_explicit_collision_operator_rhs!(rhsc,Fs_M,d2Gdvpa2_M_num,d2Gdvperpdvpa_M_num,d2Gdvperp2_M_num,dHdvpa_M_num,dHdvperp_M_num,ms,msp,nussp)
+    YY_arrays = calculate_YY_arrays(vpa,vperp)
+    assemble_explicit_collision_operator_rhs_serial!(rhsc,Fs_M,
+      d2Gdvpa2_M_num,d2Gdvperpdvpa_M_num,d2Gdvperp2_M_num,
+      dHdvpa_M_num,dHdvperp_M_num,ms,msp,nussp,
+      vpa,vperp,vpa_spectral,vperp_spectral,YY_arrays)
     if impose_zero_gradient_BC
         enforce_zero_bc!(rhsc,vpa,vperp,impose_BC_at_zero_vperp=true)
         # invert mass matrix and fill fc
