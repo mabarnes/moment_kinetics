@@ -84,7 +84,16 @@ if abspath(PROGRAM_FILE) == @__FILE__
                 pdf_c[ic] = pdf_vpavperp[ivpa,ivperp]
             end
         end
-    return nothing
+        return nothing
+    end
+    
+    function ravel_vpavperp_to_c_parallel!(pdf_c,pdf_vpavperp,nvpa)
+        begin_vperp_vpa_region()
+        @loop_vperp_vpa ivperp ivpa begin 
+            ic = ic_func(ivpa,ivperp,nvpa)
+            pdf_c[ic] = pdf_vpavperp[ivpa,ivperp]
+        end
+        return nothing
     end
     
     function ravel_c_to_vpavperp!(pdf_vpavperp,pdf_c,nc,nvpa)
@@ -93,7 +102,16 @@ if abspath(PROGRAM_FILE) == @__FILE__
             ivperp = ivperp_func(ic,nvpa)
             pdf_vpavperp[ivpa,ivperp] = pdf_c[ic]
         end
-    return nothing
+        return nothing
+    end
+    
+    function ravel_c_to_vpavperp_parallel!(pdf_vpavperp,pdf_c,nvpa)
+        begin_vperp_vpa_region()
+        @loop_vperp_vpa ivperp ivpa begin
+            ic = ic_func(ivpa,ivperp,nvpa) 
+            pdf_vpavperp[ivpa,ivperp] = pdf_c[ic]
+        end
+        return nothing
     end
     
     function ivpa_global_func(ivpa_local,ielement_vpa,ngrid_vpa)
@@ -494,12 +512,12 @@ if abspath(PROGRAM_FILE) == @__FILE__
     
     
     # define inputs needed for the test
-	plot_test_output = true
+	plot_test_output = false#true
     impose_zero_gradient_BC = false#true
     test_parallelism = false#true
     test_self_operator = true
     test_dense_construction = false#true
-    ngrid = 9 #number of points per element 
+    ngrid = 3 #number of points per element 
 	nelement_local_vpa = 16 # number of elements per rank
 	nelement_global_vpa = nelement_local_vpa # total number of elements 
 	nelement_local_vperp = 8 # number of elements per rank
@@ -1127,6 +1145,175 @@ if abspath(PROGRAM_FILE) == @__FILE__
         return MM2DZG_sparse
     end
     
+    struct YY_collision_operator_arrays
+        # let phi_j(vperp) be the jth Lagrange basis function, 
+        # and phi'_j(vperp) the first derivative of the Lagrange basis function
+        # on the iel^th element. Then, the arrays are defined as follows.
+        # YY0perp[i,j,k,iel] = \int phi_i(vperp) phi_j(vperp) phi_k(vperp) vperp d vperp
+        YY0perp::Array{mk_float,4}
+        # YY1perp[i,j,k,iel] = \int phi_i(vperp) phi_j(vperp) phi'_k(vperp) vperp d vperp
+        YY1perp::Array{mk_float,4}
+        # YY2perp[i,j,k,iel] = \int phi_i(vperp) phi'_j(vperp) phi'_k(vperp) vperp d vperp
+        YY2perp::Array{mk_float,4}
+        # YY3perp[i,j,k,iel] = \int phi_i(vperp) phi'_j(vperp) phi_k(vperp) vperp d vperp
+        YY3perp::Array{mk_float,4}
+        # YY0par[i,j,k,iel] = \int phi_i(vpa) phi_j(vpa) phi_k(vpa) vpa d vpa
+        YY0par::Array{mk_float,4}
+        # YY1par[i,j,k,iel] = \int phi_i(vpa) phi_j(vpa) phi'_k(vpa) vpa d vpa
+        YY1par::Array{mk_float,4}
+        # YY2par[i,j,k,iel] = \int phi_i(vpa) phi'_j(vpa) phi'_k(vpa) vpa d vpa
+        YY2par::Array{mk_float,4}
+        # YY3par[i,j,k,iel] = \int phi_i(vpa) phi'_j(vpa) phi_k(vpa) vpa d vpa
+        YY3par::Array{mk_float,4}
+    end
+    
+    function calculate_YY_arrays(vpa,vperp)
+        YY0perp = Array{mk_float,4}(undef,vperp.ngrid,vperp.ngrid,vperp.ngrid,vperp.nelement_local)
+        YY1perp = Array{mk_float,4}(undef,vperp.ngrid,vperp.ngrid,vperp.ngrid,vperp.nelement_local)
+        YY2perp = Array{mk_float,4}(undef,vperp.ngrid,vperp.ngrid,vperp.ngrid,vperp.nelement_local)
+        YY3perp = Array{mk_float,4}(undef,vperp.ngrid,vperp.ngrid,vperp.ngrid,vperp.nelement_local)
+        YY0par = Array{mk_float,4}(undef,vpa.ngrid,vpa.ngrid,vpa.ngrid,vpa.nelement_local)
+        YY1par = Array{mk_float,4}(undef,vpa.ngrid,vpa.ngrid,vpa.ngrid,vpa.nelement_local)
+        YY2par = Array{mk_float,4}(undef,vpa.ngrid,vpa.ngrid,vpa.ngrid,vpa.nelement_local)
+        YY3par = Array{mk_float,4}(undef,vpa.ngrid,vpa.ngrid,vpa.ngrid,vpa.nelement_local)
+        
+        for ielement_vperp in 1:vperp.nelement_local
+            @views get_QQ_local!(YY0perp[:,:,:,ielement_vperp],ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"YY0")
+            @views get_QQ_local!(YY1perp[:,:,:,ielement_vperp],ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"YY1")
+            @views get_QQ_local!(YY2perp[:,:,:,ielement_vperp],ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"YY2")
+            @views get_QQ_local!(YY3perp[:,:,:,ielement_vperp],ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"YY3")
+         end
+         for ielement_vpa in 1:vpa.nelement_local
+            @views get_QQ_local!(YY0par[:,:,:,ielement_vpa],ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"YY0")
+            @views get_QQ_local!(YY1par[:,:,:,ielement_vpa],ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"YY1")
+            @views get_QQ_local!(YY2par[:,:,:,ielement_vpa],ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"YY2")
+            @views get_QQ_local!(YY3par[:,:,:,ielement_vpa],ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"YY3")
+         end
+        
+        return YY_collision_operator_arrays(YY0perp,YY1perp,YY2perp,YY3perp,
+                                            YY0par,YY1par,YY2par,YY3par)
+    end
+    
+    function assemble_explicit_collision_operator_rhs_serial!(rhsc,pdfs,d2Gspdvpa2,d2Gspdvperpdvpa,
+        d2Gspdvperp2,dHspdvpa,dHspdvperp,ms,msp,nussp,
+        vpa,vperp,vpa_spectral,vperp_spectral,
+        YY_arrays::YY_collision_operator_arrays)
+        # assemble RHS of collision operator
+        @. rhsc = 0.0
+        
+        # loop over elements
+        for ielement_vperp in 1:vperp.nelement_local
+            YY0perp = YY_arrays.YY0perp[:,:,:,ielement_vperp]
+            YY1perp = YY_arrays.YY1perp[:,:,:,ielement_vperp]
+            YY2perp = YY_arrays.YY2perp[:,:,:,ielement_vperp]
+            YY3perp = YY_arrays.YY3perp[:,:,:,ielement_vperp]
+            
+            for ielement_vpa in 1:vpa.nelement_local
+                YY0par = YY_arrays.YY0par[:,:,:,ielement_vpa]
+                YY1par = YY_arrays.YY1par[:,:,:,ielement_vpa]
+                YY2par = YY_arrays.YY2par[:,:,:,ielement_vpa]
+                YY3par = YY_arrays.YY3par[:,:,:,ielement_vpa]
+                
+                # loop over field positions in each element
+                for ivperp_local in 1:vperp.ngrid
+                    for ivpa_local in 1:vpa.ngrid
+                        ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
+                        # carry out the matrix sum on each 2D element
+                        for jvperpp_local in 1:vperp.ngrid
+                            jvperpp = vperp.igrid_full[jvperpp_local,ielement_vperp]
+                            for kvperpp_local in 1:vperp.ngrid
+                                kvperpp = vperp.igrid_full[kvperpp_local,ielement_vperp]
+                                for jvpap_local in 1:vpa.ngrid
+                                    jvpap = vpa.igrid_full[jvpap_local,ielement_vpa]
+                                    pdfjj = pdfs[jvpap,jvperpp]
+                                    for kvpap_local in 1:vpa.ngrid
+                                        kvpap = vpa.igrid_full[kvpap_local,ielement_vpa]
+                                        # first three lines represent parallel flux terms
+                                        # second three lines represent perpendicular flux terms
+                                        rhsc[ic_global] += (YY0perp[kvperpp_local,jvperpp_local,ivperp_local]*YY2par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*d2Gspdvpa2[kvpap,kvperpp] +
+                                                            YY3perp[kvperpp_local,jvperpp_local,ivperp_local]*YY1par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*d2Gspdvperpdvpa[kvpap,kvperpp] - 
+                                                            2.0*(ms/msp)*YY0perp[kvperpp_local,jvperpp_local,ivperp_local]*YY1par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*dHspdvpa[kvpap,kvperpp] +
+                                                            # end parallel flux, start of perpendicular flux
+                                                            YY1perp[kvperpp_local,jvperpp_local,ivperp_local]*YY3par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*d2Gspdvperpdvpa[kvpap,kvperpp] + 
+                                                            YY2perp[kvperpp_local,jvperpp_local,ivperp_local]*YY0par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*d2Gspdvperp2[kvpap,kvperpp] - 
+                                                            2.0*(ms/msp)*YY1perp[kvperpp_local,jvperpp_local,ivperp_local]*YY0par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*dHspdvperp[kvpap,kvperpp])
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end 
+            end
+        end
+        # correct for minus sign due to integration by parts
+        # and multiply by the normalised collision frequency
+        @. rhsc *= -nussp
+        return nothing
+    end
+    
+    function assemble_explicit_collision_operator_rhs_parallel!(rhsc,rhsvpavperp,pdfs,d2Gspdvpa2,d2Gspdvperpdvpa,
+        d2Gspdvperp2,dHspdvpa,dHspdvperp,ms,msp,nussp,
+        vpa,vperp,vpa_spectral,vperp_spectral,
+        YY_arrays::YY_collision_operator_arrays)
+        # assemble RHS of collision operator
+        begin_vperp_vpa_region() 
+        @loop_vperp_vpa ivperp ivpa begin
+            rhsvpavperp[ivpa,ivperp] = 0.0
+        end
+        # loop over collocation points to benefit from shared-memory parallelism
+        ngrid_vpa, ngrid_vperp = vpa.ngrid, vperp.ngrid
+        @loop_vperp_vpa ivperp_global ivpa_global begin
+            igrid_vpa, ielement_vpax, ielement_vpa_low, ielement_vpa_hi, igrid_vperp, ielement_vperpx, ielement_vperp_low, ielement_vperp_hi = get_element_limit_indices(ivpa_global,ivperp_global,vpa,vperp)
+            # loop over elements belonging to this collocation point
+            for ielement_vperp in ielement_vperp_low:ielement_vperp_hi
+                # correct local ivperp in the case that we on a boundary point
+                ivperp_local = igrid_vperp + (ielement_vperp - ielement_vperp_low)*(1-ngrid_vperp)
+                @views YY0perp = YY_arrays.YY0perp[:,:,:,ielement_vperp]
+                @views YY1perp = YY_arrays.YY1perp[:,:,:,ielement_vperp]
+                @views YY2perp = YY_arrays.YY2perp[:,:,:,ielement_vperp]
+                @views YY3perp = YY_arrays.YY3perp[:,:,:,ielement_vperp]
+                
+                for ielement_vpa in ielement_vpa_low:ielement_vpa_hi
+                    # correct local ivpa in the case that we on a boundary point
+                    ivpa_local = igrid_vpa + (ielement_vpa - ielement_vpa_low)*(1-ngrid_vpa)
+                    @views YY0par = YY_arrays.YY0par[:,:,:,ielement_vpa]
+                    @views YY1par = YY_arrays.YY1par[:,:,:,ielement_vpa]
+                    @views YY2par = YY_arrays.YY2par[:,:,:,ielement_vpa]
+                    @views YY3par = YY_arrays.YY3par[:,:,:,ielement_vpa]
+                    
+                    # carry out the matrix sum on each 2D element
+                    for jvperpp_local in 1:vperp.ngrid
+                        jvperpp = vperp.igrid_full[jvperpp_local,ielement_vperp]
+                        for kvperpp_local in 1:vperp.ngrid
+                            kvperpp = vperp.igrid_full[kvperpp_local,ielement_vperp]
+                            for jvpap_local in 1:vpa.ngrid
+                                jvpap = vpa.igrid_full[jvpap_local,ielement_vpa]
+                                pdfjj = pdfs[jvpap,jvperpp]
+                                for kvpap_local in 1:vpa.ngrid
+                                    kvpap = vpa.igrid_full[kvpap_local,ielement_vpa]
+                                    # first three lines represent parallel flux terms
+                                    # second three lines represent perpendicular flux terms
+                                    rhsvpavperp[ivpa_global,ivperp_global] += -nussp*(YY0perp[kvperpp_local,jvperpp_local,ivperp_local]*YY2par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*d2Gspdvpa2[kvpap,kvperpp] +
+                                                        YY3perp[kvperpp_local,jvperpp_local,ivperp_local]*YY1par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*d2Gspdvperpdvpa[kvpap,kvperpp] - 
+                                                        2.0*(ms/msp)*YY0perp[kvperpp_local,jvperpp_local,ivperp_local]*YY1par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*dHspdvpa[kvpap,kvperpp] +
+                                                        # end parallel flux, start of perpendicular flux
+                                                        YY1perp[kvperpp_local,jvperpp_local,ivperp_local]*YY3par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*d2Gspdvperpdvpa[kvpap,kvperpp] + 
+                                                        YY2perp[kvperpp_local,jvperpp_local,ivperp_local]*YY0par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*d2Gspdvperp2[kvpap,kvperpp] - 
+                                                        2.0*(ms/msp)*YY1perp[kvperpp_local,jvperpp_local,ivperp_local]*YY0par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*dHspdvperp[kvpap,kvperpp])
+                                end
+                            end
+                        end
+                    end
+                 end
+            end
+        end
+        # ravel to compound index
+        #begin_serial_region()
+        #ravel_vpavperp_to_c!(rhsc,rhsvpavperp,vpa.n,vperp.n)
+        ravel_vpavperp_to_c_parallel!(rhsc,rhsvpavperp,vpa.n)
+        return nothing
+    end
+    
     if test_dense_construction
         MM2D_sparse, KKpar2D_sparse, KKperp2D_sparse, LP2D_sparse, LV2D_sparse,
         PUperp2D_sparse, PPparPUperp2D_sparse, PPpar2D_sparse,
@@ -1304,6 +1491,16 @@ if abspath(PROGRAM_FILE) == @__FILE__
     # initialise the weights
     #fkpl_arrays = init_fokker_planck_collisions(vperp,vpa; precompute_weights=true)
     fkpl_arrays = init_fokker_planck_collisions_new(vpa,vperp; precompute_weights=true)
+    # initialise any arrays needed later for the collision operator
+    rhsc = MPISharedArray{mk_float,1}(undef,nc_global)
+    rhsc_check = Array{mk_float,1}(undef,nc_global)
+    rhsc_err = Array{mk_float,1}(undef,nc_global)
+    rhsvpavperp = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
+    @serial_region begin
+        println("begin YY array calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+    end
+    YY_arrays = calculate_YY_arrays(vpa,vperp)
+    
     begin_serial_region()
     # do the numerical integration at the boundaries (N.B. G not supported)
     @serial_region begin 
@@ -1454,183 +1651,6 @@ if abspath(PROGRAM_FILE) == @__FILE__
         end
     end
     
-    rhsc = Array{mk_float,1}(undef,nc_global)
-    rhsc_check = Array{mk_float,1}(undef,nc_global)
-    rhsc_err = Array{mk_float,1}(undef,nc_global)
-    rhsvpavperp = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
-    
-    struct YY_collision_operator_arrays
-        # let phi_j(vperp) be the jth Lagrange basis function, 
-        # and phi'_j(vperp) the first derivative of the Lagrange basis function
-        # on the iel^th element. Then, the arrays are defined as follows.
-        # YY0perp[i,j,k,iel] = \int phi_i(vperp) phi_j(vperp) phi_k(vperp) vperp d vperp
-        YY0perp::Array{mk_float,4}
-        # YY1perp[i,j,k,iel] = \int phi_i(vperp) phi_j(vperp) phi'_k(vperp) vperp d vperp
-        YY1perp::Array{mk_float,4}
-        # YY2perp[i,j,k,iel] = \int phi_i(vperp) phi'_j(vperp) phi'_k(vperp) vperp d vperp
-        YY2perp::Array{mk_float,4}
-        # YY3perp[i,j,k,iel] = \int phi_i(vperp) phi'_j(vperp) phi_k(vperp) vperp d vperp
-        YY3perp::Array{mk_float,4}
-        # YY0par[i,j,k,iel] = \int phi_i(vpa) phi_j(vpa) phi_k(vpa) vpa d vpa
-        YY0par::Array{mk_float,4}
-        # YY1par[i,j,k,iel] = \int phi_i(vpa) phi_j(vpa) phi'_k(vpa) vpa d vpa
-        YY1par::Array{mk_float,4}
-        # YY2par[i,j,k,iel] = \int phi_i(vpa) phi'_j(vpa) phi'_k(vpa) vpa d vpa
-        YY2par::Array{mk_float,4}
-        # YY3par[i,j,k,iel] = \int phi_i(vpa) phi'_j(vpa) phi_k(vpa) vpa d vpa
-        YY3par::Array{mk_float,4}
-    end
-    
-    function calculate_YY_arrays(vpa,vperp)
-        YY0perp = Array{mk_float,4}(undef,vperp.ngrid,vperp.ngrid,vperp.ngrid,vperp.nelement_local)
-        YY1perp = Array{mk_float,4}(undef,vperp.ngrid,vperp.ngrid,vperp.ngrid,vperp.nelement_local)
-        YY2perp = Array{mk_float,4}(undef,vperp.ngrid,vperp.ngrid,vperp.ngrid,vperp.nelement_local)
-        YY3perp = Array{mk_float,4}(undef,vperp.ngrid,vperp.ngrid,vperp.ngrid,vperp.nelement_local)
-        YY0par = Array{mk_float,4}(undef,vpa.ngrid,vpa.ngrid,vpa.ngrid,vpa.nelement_local)
-        YY1par = Array{mk_float,4}(undef,vpa.ngrid,vpa.ngrid,vpa.ngrid,vpa.nelement_local)
-        YY2par = Array{mk_float,4}(undef,vpa.ngrid,vpa.ngrid,vpa.ngrid,vpa.nelement_local)
-        YY3par = Array{mk_float,4}(undef,vpa.ngrid,vpa.ngrid,vpa.ngrid,vpa.nelement_local)
-        
-        for ielement_vperp in 1:vperp.nelement_local
-            @views get_QQ_local!(YY0perp[:,:,:,ielement_vperp],ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"YY0")
-            @views get_QQ_local!(YY1perp[:,:,:,ielement_vperp],ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"YY1")
-            @views get_QQ_local!(YY2perp[:,:,:,ielement_vperp],ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"YY2")
-            @views get_QQ_local!(YY3perp[:,:,:,ielement_vperp],ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"YY3")
-         end
-         for ielement_vpa in 1:vpa.nelement_local
-            @views get_QQ_local!(YY0par[:,:,:,ielement_vpa],ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"YY0")
-            @views get_QQ_local!(YY1par[:,:,:,ielement_vpa],ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"YY1")
-            @views get_QQ_local!(YY2par[:,:,:,ielement_vpa],ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"YY2")
-            @views get_QQ_local!(YY3par[:,:,:,ielement_vpa],ielement_vpa,vpa_spectral.lobatto,vpa_spectral.radau,vpa,"YY3")
-         end
-        
-        return YY_collision_operator_arrays(YY0perp,YY1perp,YY2perp,YY3perp,
-                                            YY0par,YY1par,YY2par,YY3par)
-    end
-    
-    function assemble_explicit_collision_operator_rhs_serial!(rhsc,pdfs,d2Gspdvpa2,d2Gspdvperpdvpa,
-        d2Gspdvperp2,dHspdvpa,dHspdvperp,ms,msp,nussp,
-        vpa,vperp,vpa_spectral,vperp_spectral,
-        YY_arrays::YY_collision_operator_arrays)
-        # assemble RHS of collision operator
-        @. rhsc = 0.0
-        
-        # loop over elements
-        for ielement_vperp in 1:vperp.nelement_local
-            YY0perp = YY_arrays.YY0perp[:,:,:,ielement_vperp]
-            YY1perp = YY_arrays.YY1perp[:,:,:,ielement_vperp]
-            YY2perp = YY_arrays.YY2perp[:,:,:,ielement_vperp]
-            YY3perp = YY_arrays.YY3perp[:,:,:,ielement_vperp]
-            
-            for ielement_vpa in 1:vpa.nelement_local
-                YY0par = YY_arrays.YY0par[:,:,:,ielement_vpa]
-                YY1par = YY_arrays.YY1par[:,:,:,ielement_vpa]
-                YY2par = YY_arrays.YY2par[:,:,:,ielement_vpa]
-                YY3par = YY_arrays.YY3par[:,:,:,ielement_vpa]
-                
-                # loop over field positions in each element
-                for ivperp_local in 1:vperp.ngrid
-                    for ivpa_local in 1:vpa.ngrid
-                        ic_global, ivpa_global, ivperp_global = get_global_compound_index(vpa,vperp,ielement_vpa,ielement_vperp,ivpa_local,ivperp_local)
-                        # carry out the matrix sum on each 2D element
-                        for jvperpp_local in 1:vperp.ngrid
-                            jvperpp = vperp.igrid_full[jvperpp_local,ielement_vperp]
-                            for kvperpp_local in 1:vperp.ngrid
-                                kvperpp = vperp.igrid_full[kvperpp_local,ielement_vperp]
-                                for jvpap_local in 1:vpa.ngrid
-                                    jvpap = vpa.igrid_full[jvpap_local,ielement_vpa]
-                                    pdfjj = pdfs[jvpap,jvperpp]
-                                    for kvpap_local in 1:vpa.ngrid
-                                        kvpap = vpa.igrid_full[kvpap_local,ielement_vpa]
-                                        # first three lines represent parallel flux terms
-                                        # second three lines represent perpendicular flux terms
-                                        rhsc[ic_global] += (YY0perp[kvperpp_local,jvperpp_local,ivperp_local]*YY2par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*d2Gspdvpa2[kvpap,kvperpp] +
-                                                            YY3perp[kvperpp_local,jvperpp_local,ivperp_local]*YY1par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*d2Gspdvperpdvpa[kvpap,kvperpp] - 
-                                                            2.0*(ms/msp)*YY0perp[kvperpp_local,jvperpp_local,ivperp_local]*YY1par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*dHspdvpa[kvpap,kvperpp] +
-                                                            # end parallel flux, start of perpendicular flux
-                                                            YY1perp[kvperpp_local,jvperpp_local,ivperp_local]*YY3par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*d2Gspdvperpdvpa[kvpap,kvperpp] + 
-                                                            YY2perp[kvperpp_local,jvperpp_local,ivperp_local]*YY0par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*d2Gspdvperp2[kvpap,kvperpp] - 
-                                                            2.0*(ms/msp)*YY1perp[kvperpp_local,jvperpp_local,ivperp_local]*YY0par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*dHspdvperp[kvpap,kvperpp])
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end 
-            end
-        end
-        # correct for minus sign due to integration by parts
-        # and multiply by the normalised collision frequency
-        @. rhsc *= -nussp
-        return nothing
-    end
-    
-    function assemble_explicit_collision_operator_rhs_parallel!(rhsc,rhsvpavperp,pdfs,d2Gspdvpa2,d2Gspdvperpdvpa,
-        d2Gspdvperp2,dHspdvpa,dHspdvperp,ms,msp,nussp,
-        vpa,vperp,vpa_spectral,vperp_spectral,
-        YY_arrays::YY_collision_operator_arrays)
-        # assemble RHS of collision operator
-        begin_vperp_vpa_region() 
-        @loop_vperp_vpa ivperp ivpa begin
-            rhsvpavperp[ivpa,ivperp] = 0.0
-        end
-        # loop over collocation points to benefit from shared-memory parallelism
-        ngrid_vpa, ngrid_vperp = vpa.ngrid, vperp.ngrid
-        @loop_vperp_vpa ivperp_global ivpa_global begin
-            igrid_vpa, ielement_vpax, ielement_vpa_low, ielement_vpa_hi, igrid_vperp, ielement_vperpx, ielement_vperp_low, ielement_vperp_hi = get_element_limit_indices(ivpa_global,ivperp_global,vpa,vperp)
-            # loop over elements belonging to this collocation point
-            for ielement_vperp in ielement_vperp_low:ielement_vperp_hi
-                # correct local ivperp in the case that we on a boundary point
-                ivperp_local = igrid_vperp + (ielement_vperp - ielement_vperp_low)*(1-ngrid_vperp)
-                YY0perp = YY_arrays.YY0perp[:,:,:,ielement_vperp]
-                YY1perp = YY_arrays.YY1perp[:,:,:,ielement_vperp]
-                YY2perp = YY_arrays.YY2perp[:,:,:,ielement_vperp]
-                YY3perp = YY_arrays.YY3perp[:,:,:,ielement_vperp]
-                
-                for ielement_vpa in ielement_vpa_low:ielement_vpa_hi
-                    # correct local ivpa in the case that we on a boundary point
-                    ivpa_local = igrid_vpa + (ielement_vpa - ielement_vpa_low)*(1-ngrid_vpa)
-                    YY0par = YY_arrays.YY0par[:,:,:,ielement_vpa]
-                    YY1par = YY_arrays.YY1par[:,:,:,ielement_vpa]
-                    YY2par = YY_arrays.YY2par[:,:,:,ielement_vpa]
-                    YY3par = YY_arrays.YY3par[:,:,:,ielement_vpa]
-                    
-                    # carry out the matrix sum on each 2D element
-                    for jvperpp_local in 1:vperp.ngrid
-                        jvperpp = vperp.igrid_full[jvperpp_local,ielement_vperp]
-                        for kvperpp_local in 1:vperp.ngrid
-                            kvperpp = vperp.igrid_full[kvperpp_local,ielement_vperp]
-                            for jvpap_local in 1:vpa.ngrid
-                                jvpap = vpa.igrid_full[jvpap_local,ielement_vpa]
-                                pdfjj = pdfs[jvpap,jvperpp]
-                                for kvpap_local in 1:vpa.ngrid
-                                    kvpap = vpa.igrid_full[kvpap_local,ielement_vpa]
-                                    # first three lines represent parallel flux terms
-                                    # second three lines represent perpendicular flux terms
-                                    rhsvpavperp[ivpa_global,ivperp_global] += -nussp*(YY0perp[kvperpp_local,jvperpp_local,ivperp_local]*YY2par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*d2Gspdvpa2[kvpap,kvperpp] +
-                                                        YY3perp[kvperpp_local,jvperpp_local,ivperp_local]*YY1par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*d2Gspdvperpdvpa[kvpap,kvperpp] - 
-                                                        2.0*(ms/msp)*YY0perp[kvperpp_local,jvperpp_local,ivperp_local]*YY1par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*dHspdvpa[kvpap,kvperpp] +
-                                                        # end parallel flux, start of perpendicular flux
-                                                        YY1perp[kvperpp_local,jvperpp_local,ivperp_local]*YY3par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*d2Gspdvperpdvpa[kvpap,kvperpp] + 
-                                                        YY2perp[kvperpp_local,jvperpp_local,ivperp_local]*YY0par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*d2Gspdvperp2[kvpap,kvperpp] - 
-                                                        2.0*(ms/msp)*YY1perp[kvperpp_local,jvperpp_local,ivperp_local]*YY0par[kvpap_local,jvpap_local,ivpa_local]*pdfjj*dHspdvperp[kvpap,kvperpp])
-                                end
-                            end
-                        end
-                    end
-                 end
-            end
-        end
-        # ravel to compound index
-        begin_serial_region()
-        ravel_vpavperp_to_c!(rhsc,rhsvpavperp,vpa.n,vperp.n)
-        return nothing
-    end
-    
-    @serial_region begin
-        println("begin YY array calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
-    end
-    YY_arrays = calculate_YY_arrays(vpa,vperp)
     @serial_region begin
         println("begin C calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
     end
@@ -1647,6 +1667,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
       d2Gdvpa2_M_num,d2Gdvperpdvpa_M_num,d2Gdvperp2_M_num,
       dHdvpa_M_num,dHdvperp_M_num,ms,msp,nussp,
       vpa,vperp,vpa_spectral,vperp_spectral,YY_arrays)
+    # switch back to serial region before matrix inverse
+    begin_serial_region()
     @serial_region begin
         println("finished C RHS assembly (parallel)   ", Dates.format(now(), dateformat"H:MM:SS"))
     end    
@@ -1665,7 +1687,9 @@ if abspath(PROGRAM_FILE) == @__FILE__
         # invert mass matrix and fill fc
         fc = lu_obj_MM \ rhsc
     end
-    ravel_c_to_vpavperp!(C_M_num,fc,nc_global,vpa.n)
+    #ravel_c_to_vpavperp!(C_M_num,fc,nc_global,vpa.n)
+    ravel_c_to_vpavperp_parallel!(C_M_num,fc,vpa.n)
+    begin_serial_region()
     @serial_region begin
         @. C_M_err = abs(C_M_num - C_M_exact)
         println("finished C calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
