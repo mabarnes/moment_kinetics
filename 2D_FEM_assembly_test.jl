@@ -28,7 +28,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     Pkg.activate(".")
 
     
-    function print_matrix(matrix,name,n,m)
+    function print_matrix(matrix,name::String,n::mk_int,m::mk_int)
         println("\n ",name," \n")
         for i in 1:n
             for j in 1:m
@@ -39,7 +39,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         println("\n")
     end
     
-    function print_vector(vector,name,m)
+    function print_vector(vector,name::String,m::mk_int)
         println("\n ",name," \n")
         for j in 1:m
             @printf("%.3f ", vector[j])
@@ -66,18 +66,18 @@ if abspath(PROGRAM_FILE) == @__FILE__
 
     # Array in compound 1D form 
     
-    function ic_func(ivpa,ivperp,nvpa)
+    function ic_func(ivpa::mk_int,ivperp::mk_int,nvpa::mk_int)
         return ivpa + nvpa*(ivperp-1)
     end
-    function ivperp_func(ic,nvpa)
+    function ivperp_func(ic::mk_int,nvpa::mk_int)
         return floor(Int64,(ic-1)/nvpa) + 1
     end
-    function ivpa_func(ic,nvpa)
+    function ivpa_func(ic::mk_int,nvpa::mk_int)
         ivpa = ic - nvpa*(ivperp_func(ic,nvpa) - 1)
         return ivpa
     end
 
-    function ravel_vpavperp_to_c!(pdf_c,pdf_vpavperp,nvpa,nvperp)
+    function ravel_vpavperp_to_c!(pdf_c,pdf_vpavperp,nvpa::mk_int,nvperp::mk_int)
         for ivperp in 1:nvperp
             for ivpa in 1:nvpa
                 ic = ic_func(ivpa,ivperp,nvpa)
@@ -87,7 +87,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         return nothing
     end
     
-    function ravel_vpavperp_to_c_parallel!(pdf_c,pdf_vpavperp,nvpa)
+    function ravel_vpavperp_to_c_parallel!(pdf_c,pdf_vpavperp,nvpa::mk_int)
         begin_vperp_vpa_region()
         @loop_vperp_vpa ivperp ivpa begin 
             ic = ic_func(ivpa,ivperp,nvpa)
@@ -96,7 +96,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         return nothing
     end
     
-    function ravel_c_to_vpavperp!(pdf_vpavperp,pdf_c,nc,nvpa)
+    function ravel_c_to_vpavperp!(pdf_vpavperp,pdf_c,nc::mk_int,nvpa::mk_int)
         for ic in 1:nc
             ivpa = ivpa_func(ic,nvpa)
             ivperp = ivperp_func(ic,nvpa)
@@ -105,7 +105,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         return nothing
     end
     
-    function ravel_c_to_vpavperp_parallel!(pdf_vpavperp,pdf_c,nvpa)
+    function ravel_c_to_vpavperp_parallel!(pdf_vpavperp,pdf_c,nvpa::mk_int)
         begin_vperp_vpa_region()
         @loop_vperp_vpa ivperp ivpa begin
             ic = ic_func(ivpa,ivperp,nvpa) 
@@ -114,7 +114,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         return nothing
     end
     
-    function ivpa_global_func(ivpa_local,ielement_vpa,ngrid_vpa)
+    function ivpa_global_func(ivpa_local::mk_int,ielement_vpa::mk_int,ngrid_vpa::mk_int)
         ivpa_global = ivpa_local + (ielement_vpa - 1)*(ngrid_vpa - 1)
         return ivpa_global
     end
@@ -148,7 +148,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         SS::Array{mk_float,1}
     end
     
-    function allocate_sparse_matrix_constructor(nsparse)
+    function allocate_sparse_matrix_constructor(nsparse::mk_int)
         II = Array{mk_int,1}(undef,nsparse)
         @. II = 0
         JJ = Array{mk_int,1}(undef,nsparse)
@@ -1418,38 +1418,38 @@ if abspath(PROGRAM_FILE) == @__FILE__
     end
     # test the Laplacian solve with a standard F_Maxwellian -> H_Maxwellian test
     
-    S_dummy = Array{mk_float,2}(undef,vpa.n,vperp.n)
+    S_dummy = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
     Fs_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
     F_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
-    C_M_num = Array{mk_float,2}(undef,vpa.n,vperp.n)
+    C_M_num = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
     C_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
     C_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
-    dFdvpa_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
-    dFdvperp_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
-    d2Fdvperpdvpa_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
+    #dFdvpa_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
+    #dFdvperp_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
+    #d2Fdvperpdvpa_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
     H_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
-    H_M_num = Array{mk_float,2}(undef,vpa.n,vperp.n)
+    H_M_num = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
     H_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
     G_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
-    G_M_num = Array{mk_float,2}(undef,vpa.n,vperp.n)
+    G_M_num = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
     G_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
     d2Gdvpa2_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
-    d2Gdvpa2_M_num = Array{mk_float,2}(undef,vpa.n,vperp.n)
+    d2Gdvpa2_M_num = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
     d2Gdvpa2_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
     d2Gdvperp2_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
-    d2Gdvperp2_M_num = Array{mk_float,2}(undef,vpa.n,vperp.n)
+    d2Gdvperp2_M_num = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
     d2Gdvperp2_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
     dGdvperp_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
-    dGdvperp_M_num = Array{mk_float,2}(undef,vpa.n,vperp.n)
+    dGdvperp_M_num = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
     dGdvperp_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
     d2Gdvperpdvpa_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
-    d2Gdvperpdvpa_M_num = Array{mk_float,2}(undef,vpa.n,vperp.n)
+    d2Gdvperpdvpa_M_num = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
     d2Gdvperpdvpa_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
     dHdvpa_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
-    dHdvpa_M_num = Array{mk_float,2}(undef,vpa.n,vperp.n)
+    dHdvpa_M_num = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
     dHdvpa_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
     dHdvperp_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
-    dHdvperp_M_num = Array{mk_float,2}(undef,vpa.n,vperp.n)
+    dHdvperp_M_num = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
     dHdvperp_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
 
     if test_self_operator
@@ -1493,6 +1493,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     fkpl_arrays = init_fokker_planck_collisions_new(vpa,vperp; precompute_weights=true)
     # initialise any arrays needed later for the collision operator
     rhsc = MPISharedArray{mk_float,1}(undef,nc_global)
+    sc = MPISharedArray{mk_float,1}(undef,nc_global)
     rhsc_check = Array{mk_float,1}(undef,nc_global)
     rhsc_err = Array{mk_float,1}(undef,nc_global)
     rhsvpavperp = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
@@ -1516,14 +1517,33 @@ if abspath(PROGRAM_FILE) == @__FILE__
     @serial_region begin
         println("begin H calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
     end
-    @. S_dummy = -(4.0/sqrt(pi))*F_M
-    ravel_vpavperp_to_c!(fc,S_dummy,vpa.n,vperp.n)
-    #enforce_zero_bc!(fc,vpa,vperp)
-    mul!(dfc,MM2D_sparse,fc)
-    #enforce_dirichlet_bc!(dfc,vpa,vperp,H_M_exact,dirichlet_vperp_BC=impose_BC_at_zero_vperp)
-    enforce_dirichlet_bc!(dfc,vpa,vperp,rpbd.H_data)
-    fc = lu_obj_LP \ dfc
-    ravel_c_to_vpavperp!(H_M_num,fc,nc_global,vpa.n)
+    
+    function elliptic_solve!(field,source,boundary_data::vpa_vperp_boundary_data,
+                lu_object_lhs,matrix_rhs,rhsc,sc,vpa,vperp)
+        # get data into the compound index format
+        begin_vperp_vpa_region()
+        ravel_vpavperp_to_c_parallel!(sc,source,vpa.n)
+        # assemble the rhs of the weak system
+        begin_serial_region()
+        mul!(rhsc,matrix_rhs,sc)
+        # enforce the boundary conditions
+        enforce_dirichlet_bc!(rhsc,vpa,vperp,boundary_data)
+        # solve the linear system
+        sc = lu_object_lhs \ rhsc
+        # get data into the vpa vperp indices format
+        begin_vperp_vpa_region()
+        ravel_c_to_vpavperp_parallel!(field,sc,vpa.n)
+        return nothing
+    end
+    
+    begin_vperp_vpa_region()
+    @loop_vperp_vpa ivperp ivpa begin
+        S_dummy[ivpa,ivperp] = -(4.0/sqrt(pi))*F_M[ivpa,ivperp]
+    
+    end
+    elliptic_solve!(H_M_num,S_dummy,rpbd.H_data,
+                lu_obj_LP,MM2D_sparse,rhsc,sc,vpa,vperp)
+    begin_serial_region()
     @serial_region begin
         @. H_M_err = abs(H_M_num - H_M_exact)
         println("finished H calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
