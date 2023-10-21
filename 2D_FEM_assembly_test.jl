@@ -64,6 +64,11 @@ if abspath(PROGRAM_FILE) == @__FILE__
         return nothing
     end
 
+    function print_test_data(func_exact,func_num,func_err,func_name)
+        @. func_err = abs(func_num - func_exact)
+        println("maximum("*func_name*"_err): ",maximum(func_err))
+        return nothing
+    end
     # Array in compound 1D form 
     
     function ic_func(ivpa::mk_int,ivperp::mk_int,nvpa::mk_int)
@@ -1511,11 +1516,9 @@ if abspath(PROGRAM_FILE) == @__FILE__
     @serial_region begin 
         println("finished boundary data calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
     end
-    # test the boundary data calculation
-    test_rosenbluth_potential_boundary_data(rpbd,rpbd_exact,vpa,vperp)
     #rpbd = rpbd_exact
     @serial_region begin
-        println("begin H calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+        println("begin elliptic solve   ", Dates.format(now(), dateformat"H:MM:SS"))
     end
     
     function elliptic_solve!(field,source,boundary_data::vpa_vperp_boundary_data,
@@ -1543,105 +1546,26 @@ if abspath(PROGRAM_FILE) == @__FILE__
     end
     elliptic_solve!(H_M_num,S_dummy,rpbd.H_data,
                 lu_obj_LP,MM2D_sparse,rhsc,sc,vpa,vperp)
+    elliptic_solve!(dHdvpa_M_num,S_dummy,rpbd.dHdvpa_data,
+                lu_obj_LP,PPpar2D_sparse,rhsc,sc,vpa,vperp)
+    elliptic_solve!(dHdvperp_M_num,S_dummy,rpbd.dHdvperp_data,
+                lu_obj_LV,PUperp2D_sparse,rhsc,sc,vpa,vperp)
+    
+    begin_vperp_vpa_region()
+    @loop_vperp_vpa ivperp ivpa begin
+        S_dummy[ivpa,ivperp] = 2.0*H_M_num[ivpa,ivperp]
+    
+    end
+    elliptic_solve!(G_M_num,S_dummy,rpbd.G_data,
+                lu_obj_LP,MM2D_sparse,rhsc,sc,vpa,vperp)
+    elliptic_solve!(d2Gdvpa2_M_num,S_dummy,rpbd.d2Gdvpa2_data,
+                lu_obj_LP,KKpar2D_sparse,rhsc,sc,vpa,vperp)
+    elliptic_solve!(dGdvperp_M_num,S_dummy,rpbd.dGdvperp_data,
+                lu_obj_LV,PUperp2D_sparse,rhsc,sc,vpa,vperp)
+    elliptic_solve!(d2Gdvperpdvpa_M_num,S_dummy,rpbd.d2Gdvperpdvpa_data,
+                lu_obj_LV,PPparPUperp2D_sparse,rhsc,sc,vpa,vperp)
+    
     begin_serial_region()
-    @serial_region begin
-        @. H_M_err = abs(H_M_num - H_M_exact)
-        println("finished H calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
-        println("maximum(H_M_err): ",maximum(H_M_err))
-        
-        println("begin dHdvpa calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
-    end
-    @. S_dummy = -(4.0/sqrt(pi))*F_M
-    ravel_vpavperp_to_c!(fc,S_dummy,vpa.n,vperp.n)
-    #enforce_zero_bc!(fc,vpa,vperp)
-    mul!(dfc,PPpar2D_sparse,fc)
-    #enforce_dirichlet_bc!(dfc,vpa,vperp,dHdvpa_M_exact,dirichlet_vperp_BC=impose_BC_at_zero_vperp)
-    enforce_dirichlet_bc!(dfc,vpa,vperp,rpbd.dHdvpa_data)
-    fc = lu_obj_LP \ dfc
-    ravel_c_to_vpavperp!(dHdvpa_M_num,fc,nc_global,vpa.n)
-    @serial_region begin
-        @. dHdvpa_M_err = abs(dHdvpa_M_num - dHdvpa_M_exact)
-        println("finished dHdvpa calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
-        println("maximum(dHdvpa_M_err): ",maximum(dHdvpa_M_err))
-        
-        println("begin dHdvperp calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
-    end
-    @. S_dummy = -(4.0/sqrt(pi))*F_M
-    ravel_vpavperp_to_c!(fc,S_dummy,vpa.n,vperp.n)
-    #enforce_zero_bc!(fc,vpa,vperp)
-    mul!(dfc,PUperp2D_sparse,fc)
-    #enforce_dirichlet_bc!(dfc,vpa,vperp,dHdvperp_M_exact,dirichlet_vperp_BC=impose_BC_at_zero_vperp)
-    enforce_dirichlet_bc!(dfc,vpa,vperp,rpbd.dHdvperp_data)
-    fc = lu_obj_LV \ dfc
-    ravel_c_to_vpavperp!(dHdvperp_M_num,fc,nc_global,vpa.n)
-    @serial_region begin
-        @. dHdvperp_M_err = abs(dHdvperp_M_num - dHdvperp_M_exact)
-        println("finished dHdvperp calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
-        println("maximum(dHdvperp_M_err): ",maximum(dHdvperp_M_err))
-        
-        println("begin G calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
-    end
-    @. S_dummy = 2.0*H_M_num
-    ravel_vpavperp_to_c!(fc,S_dummy,vpa.n,vperp.n)
-    #enforce_zero_bc!(fc,vpa,vperp)
-    mul!(dfc,MM2D_sparse,fc)
-    #enforce_dirichlet_bc!(dfc,vpa,vperp,G_M_exact,dirichlet_vperp_BC=impose_BC_at_zero_vperp)
-    enforce_dirichlet_bc!(dfc,vpa,vperp,rpbd.G_data)
-    fc = lu_obj_LP \ dfc
-    ravel_c_to_vpavperp!(G_M_num,fc,nc_global,vpa.n)
-    @serial_region begin
-        @. G_M_err = abs(G_M_num - G_M_exact)
-        println("finished G calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
-        println("maximum(G_M_err): ",maximum(G_M_err))
-                    
-        println("begin d2Gdvpa2 calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
-    end
-    @. S_dummy = 2.0*H_M_num
-    ravel_vpavperp_to_c!(fc,S_dummy,vpa.n,vperp.n)
-    #enforce_zero_bc!(fc,vpa,vperp)
-    mul!(dfc,KKpar2D_sparse,fc)
-    #enforce_dirichlet_bc!(dfc,vpa,vperp,d2Gdvpa2_M_exact,dirichlet_vperp_BC=impose_BC_at_zero_vperp)
-    enforce_dirichlet_bc!(dfc,vpa,vperp,rpbd.d2Gdvpa2_data)
-    fc = lu_obj_LP \ dfc
-    ravel_c_to_vpavperp!(d2Gdvpa2_M_num,fc,nc_global,vpa.n)
-    @serial_region begin
-        @. d2Gdvpa2_M_err = abs(d2Gdvpa2_M_num - d2Gdvpa2_M_exact)
-        println("finished d2Gdvpa2 calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
-        println("maximum(d2Gdvpa2_M_err): ",maximum(d2Gdvpa2_M_err))
-        
-        println("begin dGdvperp calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
-    end
-    @. S_dummy = 2.0*H_M_num
-    ravel_vpavperp_to_c!(fc,S_dummy,vpa.n,vperp.n)
-    #enforce_zero_bc!(fc,vpa,vperp)
-    mul!(dfc,PUperp2D_sparse,fc)
-    #enforce_dirichlet_bc!(dfc,vpa,vperp,dGdvperp_M_exact,dirichlet_vperp_BC=impose_BC_at_zero_vperp)
-    enforce_dirichlet_bc!(dfc,vpa,vperp,rpbd.dGdvperp_data)
-    fc = lu_obj_LV \ dfc
-    ravel_c_to_vpavperp!(dGdvperp_M_num,fc,nc_global,vpa.n)
-    @serial_region begin
-        @. dGdvperp_M_err = abs(dGdvperp_M_num - dGdvperp_M_exact)
-        println("finished dGdvperp calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
-        println("maximum(dGdvperp_M_err): ",maximum(dGdvperp_M_err))
-        
-        println("begin d2Gdvperpdvpa calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
-    end
-    @. S_dummy = 2.0*H_M_num
-    ravel_vpavperp_to_c!(fc,S_dummy,vpa.n,vperp.n)
-    #enforce_zero_bc!(fc,vpa,vperp)
-    mul!(dfc,PPparPUperp2D_sparse,fc)
-    #enforce_dirichlet_bc!(dfc,vpa,vperp,d2Gdvperpdvpa_M_exact,dirichlet_vperp_BC=impose_BC_at_zero_vperp)
-    enforce_dirichlet_bc!(dfc,vpa,vperp,rpbd.d2Gdvperpdvpa_data)
-    fc = lu_obj_LV \ dfc
-    ravel_c_to_vpavperp!(d2Gdvperpdvpa_M_num,fc,nc_global,vpa.n)
-    @serial_region begin
-        @. d2Gdvperpdvpa_M_err = abs(d2Gdvperpdvpa_M_num - d2Gdvperpdvpa_M_exact)
-        println("finished d2Gdvperpdvpa calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
-        println("maximum(d2Gdvperpdvpa_M_err): ",maximum(d2Gdvperpdvpa_M_err))
-        
-        # use relation 2H = del2 G to compute d2Gdpverp2
-        println("begin d2Gdvperp2 calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
-    end
     @. S_dummy = -dGdvperp_M_num
     ravel_vpavperp_to_c!(fc,S_dummy,vpa.n,vperp.n)
     #enforce_zero_bc!(fc,vpa,vperp)
@@ -1655,20 +1579,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     fc = lu_obj_MM \ dfc
     ravel_c_to_vpavperp!(d2Gdvperp2_M_num,fc,nc_global,vpa.n)
     @serial_region begin
-        @. d2Gdvperp2_M_err = abs(d2Gdvperp2_M_num - d2Gdvperp2_M_exact)
-        println("finished d2Gdvperp2 calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
-        println("maximum(d2Gdvperp2_M_err): ",maximum(d2Gdvperp2_M_err))
-        
-        if plot_test_output
-            plot_test_data(H_M_exact,H_M_num,H_M_err,"H_M",vpa,vperp)
-            plot_test_data(dHdvpa_M_exact,dHdvpa_M_num,dHdvpa_M_err,"dHdvpa_M",vpa,vperp)
-            plot_test_data(dHdvperp_M_exact,dHdvperp_M_num,dHdvperp_M_err,"dHdvperp_M",vpa,vperp)
-            plot_test_data(G_M_exact,G_M_num,G_M_err,"G_M",vpa,vperp)
-            plot_test_data(dGdvperp_M_exact,dGdvperp_M_num,dGdvperp_M_err,"dGdvperp_M",vpa,vperp)
-            plot_test_data(d2Gdvperp2_M_exact,d2Gdvperp2_M_num,d2Gdvperp2_M_err,"d2Gdvperp2_M",vpa,vperp)
-            plot_test_data(d2Gdvperpdvpa_M_exact,d2Gdvperpdvpa_M_num,d2Gdvperpdvpa_M_err,"d2Gdvperpdvpa_M",vpa,vperp)
-            plot_test_data(d2Gdvpa2_M_exact,d2Gdvpa2_M_num,d2Gdvpa2_M_err,"d2Gdvpa2_M",vpa,vperp)
-        end
+        println("finished elliptic solve   ", Dates.format(now(), dateformat"H:MM:SS"))
     end
     
     @serial_region begin
@@ -1711,10 +1622,32 @@ if abspath(PROGRAM_FILE) == @__FILE__
     ravel_c_to_vpavperp_parallel!(C_M_num,fc,vpa.n)
     begin_serial_region()
     @serial_region begin
-        @. C_M_err = abs(C_M_num - C_M_exact)
         println("finished C calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
-        println("maximum(C_M_err): ",maximum(C_M_err))
-        plot_test_data(C_M_exact,C_M_num,C_M_err,"C_M",vpa,vperp)
+        
+        # test the boundary data calculation
+        test_rosenbluth_potential_boundary_data(rpbd,rpbd_exact,vpa,vperp)
+        
+        print_test_data(H_M_exact,H_M_num,H_M_err,"H_M")
+        print_test_data(dHdvpa_M_exact,dHdvpa_M_num,dHdvpa_M_err,"dHdvpa_M")
+        print_test_data(dHdvperp_M_exact,dHdvperp_M_num,dHdvperp_M_err,"dHdvperp_M")
+        print_test_data(G_M_exact,G_M_num,G_M_err,"G_M")
+        print_test_data(d2Gdvpa2_M_exact,d2Gdvpa2_M_num,d2Gdvpa2_M_err,"d2Gdvpa2_M")
+        print_test_data(dGdvperp_M_exact,dGdvperp_M_num,dGdvperp_M_err,"dGdvperp_M")
+        print_test_data(d2Gdvperpdvpa_M_exact,d2Gdvperpdvpa_M_num,d2Gdvperpdvpa_M_err,"d2Gdvperpdvpa_M")
+        print_test_data(d2Gdvperp2_M_exact,d2Gdvperp2_M_num,d2Gdvperp2_M_err,"d2Gdvperp2_M")
+        print_test_data(C_M_exact,C_M_num,C_M_err,"C_M")
+        
+        if plot_test_output
+            plot_test_data(C_M_exact,C_M_num,C_M_err,"C_M",vpa,vperp)
+            plot_test_data(H_M_exact,H_M_num,H_M_err,"H_M",vpa,vperp)
+            plot_test_data(dHdvpa_M_exact,dHdvpa_M_num,dHdvpa_M_err,"dHdvpa_M",vpa,vperp)
+            plot_test_data(dHdvperp_M_exact,dHdvperp_M_num,dHdvperp_M_err,"dHdvperp_M",vpa,vperp)
+            plot_test_data(G_M_exact,G_M_num,G_M_err,"G_M",vpa,vperp)
+            plot_test_data(dGdvperp_M_exact,dGdvperp_M_num,dGdvperp_M_err,"dGdvperp_M",vpa,vperp)
+            plot_test_data(d2Gdvperp2_M_exact,d2Gdvperp2_M_num,d2Gdvperp2_M_err,"d2Gdvperp2_M",vpa,vperp)
+            plot_test_data(d2Gdvperpdvpa_M_exact,d2Gdvperpdvpa_M_num,d2Gdvperpdvpa_M_err,"d2Gdvperpdvpa_M",vpa,vperp)
+            plot_test_data(d2Gdvpa2_M_exact,d2Gdvpa2_M_num,d2Gdvpa2_M_err,"d2Gdvpa2_M",vpa,vperp)
+        end
     end
     if test_self_operator
         delta_n = get_density(C_M_num, vpa, vperp)
