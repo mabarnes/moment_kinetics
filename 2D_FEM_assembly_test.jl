@@ -66,8 +66,18 @@ if abspath(PROGRAM_FILE) == @__FILE__
 
     function print_test_data(func_exact,func_num,func_err,func_name)
         @. func_err = abs(func_num - func_exact)
-        println("maximum("*func_name*"_err): ",maximum(func_err))
-        return nothing
+        max_err = maximum(func_err)
+        println("maximum("*func_name*"_err): ",max_err)
+        return max_err
+    end
+    
+    function print_test_data(func_exact,func_num,func_err,func_name,vpa,vperp)
+        @. func_err = abs(func_num - func_exact)
+        max_err = maximum(func_err)
+        @. func_err = func_err^2
+        L2norm = get_density(func_err,vpa,vperp)
+        println("maximum("*func_name*"_err): ",max_err," L2("*func_name*"_err): ",L2norm)
+        return max_err, L2norm
     end
     # Array in compound 1D form 
     
@@ -517,7 +527,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     
     
     # define inputs needed for the test
-	plot_test_output = false#true
+	plot_test_output = true
     impose_zero_gradient_BC = false#true
     test_parallelism = false#true
     test_self_operator = true
@@ -1424,6 +1434,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     # test the Laplacian solve with a standard F_Maxwellian -> H_Maxwellian test
     
     S_dummy = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
+    Q_dummy = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
     Fs_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
     F_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
     C_M_num = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
@@ -1498,7 +1509,9 @@ if abspath(PROGRAM_FILE) == @__FILE__
     fkpl_arrays = init_fokker_planck_collisions_new(vpa,vperp; precompute_weights=true)
     # initialise any arrays needed later for the collision operator
     rhsc = MPISharedArray{mk_float,1}(undef,nc_global)
+    rhqc = MPISharedArray{mk_float,1}(undef,nc_global)
     sc = MPISharedArray{mk_float,1}(undef,nc_global)
+    qc = MPISharedArray{mk_float,1}(undef,nc_global)
     rhsc_check = Array{mk_float,1}(undef,nc_global)
     rhsc_err = Array{mk_float,1}(undef,nc_global)
     rhsvpavperp = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
@@ -1521,6 +1534,14 @@ if abspath(PROGRAM_FILE) == @__FILE__
         println("begin elliptic solve   ", Dates.format(now(), dateformat"H:MM:SS"))
     end
     
+    # Elliptic solve function. 
+    # field: the solution
+    # source: the source function on the RHS
+    # boundary data: the known values of field at infinity
+    # lu_object_lhs: the object for the differential operator that defines field
+    # matrix_rhs: the weak matrix acting on the source vector
+    # rhsc, sc: dummy arrays in the compound index (assumed MPISharedArray or SubArray type)
+    # vpa, vperp: coordinate structs
     function elliptic_solve!(field,source,boundary_data::vpa_vperp_boundary_data,
                 lu_object_lhs,matrix_rhs,rhsc,sc,vpa,vperp)
         # get data into the compound index format
@@ -1536,6 +1557,32 @@ if abspath(PROGRAM_FILE) == @__FILE__
         # get data into the vpa vperp indices format
         begin_vperp_vpa_region()
         ravel_c_to_vpavperp_parallel!(field,sc,vpa.n)
+        return nothing
+    end
+    # same as above but source is made of two different terms
+    # with different weak matrices
+    function elliptic_solve!(field,source_1,source_2,boundary_data::vpa_vperp_boundary_data,
+                lu_object_lhs,matrix_rhs_1,matrix_rhs_2,rhsc_1,rhsc_2,sc_1,sc_2,vpa,vperp)
+        # get data into the compound index format
+        begin_vperp_vpa_region()
+        ravel_vpavperp_to_c_parallel!(sc_1,source_1,vpa.n)
+        ravel_vpavperp_to_c_parallel!(sc_2,source_2,vpa.n)
+        
+        # assemble the rhs of the weak system
+        begin_serial_region()
+        mul!(rhsc_1,matrix_rhs_1,sc_1)
+        mul!(rhsc_2,matrix_rhs_2,sc_2)
+        @loop_vperp_vpa ivperp ivpa begin
+            ic = ic_func(ivpa,ivperp,vpa.n)
+            rhsc_1[ic] += rhsc_2[ic]
+        end
+        # enforce the boundary conditions
+        enforce_dirichlet_bc!(rhsc_1,vpa,vperp,boundary_data)
+        # solve the linear system
+        sc_1 = lu_object_lhs \ rhsc_1
+        # get data into the vpa vperp indices format
+        begin_vperp_vpa_region()
+        ravel_c_to_vpavperp_parallel!(field,sc_1,vpa.n)
         return nothing
     end
     
@@ -1565,19 +1612,30 @@ if abspath(PROGRAM_FILE) == @__FILE__
     elliptic_solve!(d2Gdvperpdvpa_M_num,S_dummy,rpbd.d2Gdvperpdvpa_data,
                 lu_obj_LV,PPparPUperp2D_sparse,rhsc,sc,vpa,vperp)
     
-    begin_serial_region()
-    @. S_dummy = -dGdvperp_M_num
-    ravel_vpavperp_to_c!(fc,S_dummy,vpa.n,vperp.n)
+    begin_vperp_vpa_region()
+    @loop_vperp_vpa ivperp ivpa begin
+        S_dummy[ivpa,ivperp] = 2.0*H_M_num[ivpa,ivperp] - d2Gdvpa2_M_num[ivpa,ivperp]
+        Q_dummy[ivpa,ivperp] = -dGdvperp_M_num[ivpa,ivperp]
+    end
+    # use the elliptic solve function to find
+    # d2Gdvperp2 = 2H - d2Gdvpa2 - (1/vperp)dGdvperp
+    # using a weak form
+    elliptic_solve!(d2Gdvperp2_M_num,S_dummy,Q_dummy,rpbd.d2Gdvperp2_data,
+                lu_obj_MM,MM2D_sparse,MMparMNperp2D_sparse,
+                rhsc,rhqc,sc,qc,vpa,vperp)
+    #begin_serial_region()
+    #@. S_dummy = -dGdvperp_M_num
+    #ravel_vpavperp_to_c!(fc,S_dummy,vpa.n,vperp.n)
     #enforce_zero_bc!(fc,vpa,vperp)
-    mul!(dfc,MMparMNperp2D_sparse,fc)
-    @. S_dummy = 2.0*H_M_num - d2Gdvpa2_M_num
-    ravel_vpavperp_to_c!(fc,S_dummy,vpa.n,vperp.n)
-    mul!(dgc,MM2D_sparse,fc)
-    dfc += dgc
+    #mul!(dfc,MMparMNperp2D_sparse,fc)
+    #@. S_dummy = 2.0*H_M_num - d2Gdvpa2_M_num
+    #ravel_vpavperp_to_c!(fc,S_dummy,vpa.n,vperp.n)
+    #mul!(dgc,MM2D_sparse,fc)
+    #dfc += dgc
     #enforce_dirichlet_bc!(dfc,vpa,vperp,d2Gdvperp2_M_exact,dirichlet_vperp_BC=impose_BC_at_zero_vperp)
-    enforce_dirichlet_bc!(dfc,vpa,vperp,rpbd.d2Gdvperp2_data)
-    fc = lu_obj_MM \ dfc
-    ravel_c_to_vpavperp!(d2Gdvperp2_M_num,fc,nc_global,vpa.n)
+    #enforce_dirichlet_bc!(dfc,vpa,vperp,rpbd.d2Gdvperp2_data)
+    #fc = lu_obj_MM \ dfc
+    #ravel_c_to_vpavperp!(d2Gdvperp2_M_num,fc,nc_global,vpa.n)
     @serial_region begin
         println("finished elliptic solve   ", Dates.format(now(), dateformat"H:MM:SS"))
     end
@@ -1627,15 +1685,15 @@ if abspath(PROGRAM_FILE) == @__FILE__
         # test the boundary data calculation
         test_rosenbluth_potential_boundary_data(rpbd,rpbd_exact,vpa,vperp)
         
-        print_test_data(H_M_exact,H_M_num,H_M_err,"H_M")
-        print_test_data(dHdvpa_M_exact,dHdvpa_M_num,dHdvpa_M_err,"dHdvpa_M")
-        print_test_data(dHdvperp_M_exact,dHdvperp_M_num,dHdvperp_M_err,"dHdvperp_M")
-        print_test_data(G_M_exact,G_M_num,G_M_err,"G_M")
-        print_test_data(d2Gdvpa2_M_exact,d2Gdvpa2_M_num,d2Gdvpa2_M_err,"d2Gdvpa2_M")
-        print_test_data(dGdvperp_M_exact,dGdvperp_M_num,dGdvperp_M_err,"dGdvperp_M")
-        print_test_data(d2Gdvperpdvpa_M_exact,d2Gdvperpdvpa_M_num,d2Gdvperpdvpa_M_err,"d2Gdvperpdvpa_M")
-        print_test_data(d2Gdvperp2_M_exact,d2Gdvperp2_M_num,d2Gdvperp2_M_err,"d2Gdvperp2_M")
-        print_test_data(C_M_exact,C_M_num,C_M_err,"C_M")
+        H_M_max_err, H_M_L2_err = print_test_data(H_M_exact,H_M_num,H_M_err,"H_M",vpa,vperp)
+        dHdvpa_M_max_err, dHdvpa_M_L2_err = print_test_data(dHdvpa_M_exact,dHdvpa_M_num,dHdvpa_M_err,"dHdvpa_M",vpa,vperp)
+        dHdvperp_M_max_err, dHdvperp_M_L2_err = print_test_data(dHdvperp_M_exact,dHdvperp_M_num,dHdvperp_M_err,"dHdvperp_M",vpa,vperp)
+        G_M_max_err, G_M_L2_err = print_test_data(G_M_exact,G_M_num,G_M_err,"G_M",vpa,vperp)
+        d2Gdvpa2_M_max_err, d2Gdvpa2_M_L2_err = print_test_data(d2Gdvpa2_M_exact,d2Gdvpa2_M_num,d2Gdvpa2_M_err,"d2Gdvpa2_M",vpa,vperp)
+        dGdvperp_M_max_err, dGdvperp_M_L2_err = print_test_data(dGdvperp_M_exact,dGdvperp_M_num,dGdvperp_M_err,"dGdvperp_M",vpa,vperp)
+        d2Gdvperpdvpa_M_max_err, d2Gdvperpdvpa_M_L2_err = print_test_data(d2Gdvperpdvpa_M_exact,d2Gdvperpdvpa_M_num,d2Gdvperpdvpa_M_err,"d2Gdvperpdvpa_M",vpa,vperp)
+        d2Gdvperp2_M_max_err, d2Gdvperp2_M_L2_err = print_test_data(d2Gdvperp2_M_exact,d2Gdvperp2_M_num,d2Gdvperp2_M_err,"d2Gdvperp2_M",vpa,vperp)
+        C_M_max_err, C_M_L2_err = print_test_data(C_M_exact,C_M_num,C_M_err,"C_M",vpa,vperp)
         
         if plot_test_output
             plot_test_data(C_M_exact,C_M_num,C_M_err,"C_M",vpa,vperp)
