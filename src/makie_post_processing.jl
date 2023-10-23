@@ -4110,7 +4110,13 @@ function plot_f_unnorm_vs_vpa(run_info; f_over_vpa2=false, input=nothing, neutra
                                                 run_info.evolve_ppar)
 
     if f_over_vpa2
-        @. f_unnorm /= dzdt^2
+        dzdt2 = dzdt.^2
+        for i ∈ eachindex(dzdt2)
+            if dzdt2[i] == 0.0
+                dzdt2[i] = 1.0
+            end
+        end
+        f_unnorm ./= dzdt2
     end
 
     f_unnorm = transform.(f_unnorm)
@@ -4443,7 +4449,14 @@ function animate_f_unnorm_vs_vpa(run_info; f_over_vpa2=false, input=nothing,
         if f_over_vpa2
             dzdt = vpagrid_to_dzdt(run_info.vpa.grid, vth[it], upar[it],
                                    run_info.evolve_ppar, run_info.evolve_upar)
-            f_unnorm = @. copy(f_unnorm) / dzdt^2
+            dzdt2 = dzdt.^2
+            for i ∈ eachindex(dzdt2)
+                if dzdt2[i] == 0.0
+                    dzdt2[i] = 1.0
+                end
+            end
+
+            f_unnorm = @. copy(f_unnorm) / dzdt2
         end
 
         return f_unnorm
