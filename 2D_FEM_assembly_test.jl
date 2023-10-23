@@ -367,7 +367,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     end
     
     function calculate_rosenbluth_potential_boundary_data!(rpbd::rosenbluth_potential_boundary_data,
-        fkpl::Union{fokkerplanck_arrays_struct,fokkerplanck_boundary_data_arrays_struct},pdf)
+        fkpl::Union{fokkerplanck_arrays_struct,fokkerplanck_boundary_data_arrays_struct},pdf,vpa,vperp,vpa_spectral,vperp_spectral)
         # get derivatives of pdf
         dfdvperp = fkpl.dfdvperp
         dfdvpa = fkpl.dfdvpa
@@ -1154,7 +1154,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         YY3par::Array{mk_float,4}
     end
     
-    function calculate_YY_arrays(vpa,vperp)
+    function calculate_YY_arrays(vpa,vperp,vpa_spectral,vperp_spectral)
         YY0perp = Array{mk_float,4}(undef,vperp.ngrid,vperp.ngrid,vperp.ngrid,vperp.nelement_local)
         YY1perp = Array{mk_float,4}(undef,vperp.ngrid,vperp.ngrid,vperp.ngrid,vperp.nelement_local)
         YY2perp = Array{mk_float,4}(undef,vperp.ngrid,vperp.ngrid,vperp.ngrid,vperp.nelement_local)
@@ -1183,8 +1183,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     
     function assemble_explicit_collision_operator_rhs_serial!(rhsc,pdfs,d2Gspdvpa2,d2Gspdvperpdvpa,
         d2Gspdvperp2,dHspdvpa,dHspdvperp,ms,msp,nussp,
-        vpa,vperp,vpa_spectral,vperp_spectral,
-        YY_arrays::YY_collision_operator_arrays)
+        vpa,vperp,YY_arrays::YY_collision_operator_arrays)
         # assemble RHS of collision operator
         @. rhsc = 0.0
         
@@ -1240,8 +1239,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     
     function assemble_explicit_collision_operator_rhs_parallel!(rhsc,rhsvpavperp,pdfs,d2Gspdvpa2,d2Gspdvperpdvpa,
         d2Gspdvperp2,dHspdvpa,dHspdvperp,ms,msp,nussp,
-        vpa,vperp,vpa_spectral,vperp_spectral,
-        YY_arrays::YY_collision_operator_arrays)
+        vpa,vperp,YY_arrays::YY_collision_operator_arrays)
         # assemble RHS of collision operator
         begin_vperp_vpa_region() 
         @loop_vperp_vpa ivperp ivpa begin
@@ -1355,417 +1353,575 @@ if abspath(PROGRAM_FILE) == @__FILE__
     end
     
     
-    
-    # define inputs needed for the test
-	plot_test_output = false#true
-    impose_zero_gradient_BC = false#true
-    test_parallelism = false#true
-    test_self_operator = true
-    test_dense_construction = false#true
-    ngrid = 3 #number of points per element 
-	nelement_local_vpa = 16 # number of elements per rank
-	nelement_global_vpa = nelement_local_vpa # total number of elements 
-	nelement_local_vperp = 8 # number of elements per rank
-	nelement_global_vperp = nelement_local_vperp # total number of elements 
-	Lvpa = 12.0 #physical box size in reference units 
-	Lvperp = 6.0 #physical box size in reference units 
-	bc = "" #not required to take a particular value, not used 
-	# fd_option and adv_input not actually used so given values unimportant
-	#discretization = "chebyshev_pseudospectral"
-	discretization = "gausslegendre_pseudospectral"
-    fd_option = "fourth_order_centered"
-    cheb_option = "matrix"
-	adv_input = advection_input("default", 1.0, 0.0, 0.0)
-	nrank = 1
-    irank = 0
-    comm = MPI.COMM_NULL
-	# create the 'input' struct containing input info needed to create a
-	# coordinate
-    vpa_input = grid_input("vpa", ngrid, nelement_global_vpa, nelement_local_vpa, 
-		nrank, irank, Lvpa, discretization, fd_option, cheb_option, bc, adv_input,comm)
-	vperp_input = grid_input("vperp", ngrid, nelement_global_vperp, nelement_local_vperp, 
-		nrank, irank, Lvperp, discretization, fd_option, cheb_option, bc, adv_input,comm)
-	# create the coordinate struct 'x'
-	println("made inputs")
-	println("vpa: ngrid: ",ngrid," nelement: ",nelement_local_vpa, " Lvpa: ",Lvpa)
-	println("vperp: ngrid: ",ngrid," nelement: ",nelement_local_vperp, " Lvperp: ",Lvperp)
-	vpa = define_coordinate(vpa_input)
-	vperp = define_coordinate(vperp_input)
-    if vpa.discretization == "chebyshev_pseudospectral" && vpa.n > 1
-        # create arrays needed for explicit Chebyshev pseudospectral treatment in vpa
-        # and create the plans for the forward and backward fast Chebyshev transforms
-        vpa_spectral = setup_chebyshev_pseudospectral(vpa)
-        # obtain the local derivatives of the uniform vpa-grid with respect to the used vpa-grid
-        #chebyshev_derivative!(vpa.duniform_dgrid, vpa.uniform_grid, vpa_spectral, vpa)
-    elseif vpa.discretization == "gausslegendre_pseudospectral" && vpa.n > 1
-        vpa_spectral = setup_gausslegendre_pseudospectral(vpa)
-    else
-        # create dummy Bool variable to return in place of the above struct
-        vpa_spectral = false
-        #vpa.duniform_dgrid .= 1.0
-    end
+    function test_weak_form_collisions(ngrid,nelement_vpa,nelement_vperp;
+        Lvpa=12.0,Lvperp=6.0,plot_test_output=false,impose_zero_gradient_BC=false,
+        test_parallelism=false,test_self_operator=true,
+        test_dense_construction=false,standalone=false)
+        # define inputs needed for the test
+        #plot_test_output = false#true
+        #impose_zero_gradient_BC = false#true
+        #test_parallelism = false#true
+        #test_self_operator = true
+        #test_dense_construction = false#true
+        #ngrid = 3 #number of points per element 
+        nelement_local_vpa = nelement_vpa # number of elements per rank
+        nelement_global_vpa = nelement_local_vpa # total number of elements 
+        nelement_local_vperp = nelement_vpa # number of elements per rank
+        nelement_global_vperp = nelement_local_vperp # total number of elements 
+        #Lvpa = 12.0 #physical box size in reference units 
+        #Lvperp = 6.0 #physical box size in reference units 
+        bc = "" #not required to take a particular value, not used 
+        # fd_option and adv_input not actually used so given values unimportant
+        #discretization = "chebyshev_pseudospectral"
+        discretization = "gausslegendre_pseudospectral"
+        fd_option = "fourth_order_centered"
+        cheb_option = "matrix"
+        adv_input = advection_input("default", 1.0, 0.0, 0.0)
+        nrank = 1
+        irank = 0
+        comm = MPI.COMM_NULL
+        # create the 'input' struct containing input info needed to create a
+        # coordinate
+        vpa_input = grid_input("vpa", ngrid, nelement_global_vpa, nelement_local_vpa, 
+            nrank, irank, Lvpa, discretization, fd_option, cheb_option, bc, adv_input,comm)
+        vperp_input = grid_input("vperp", ngrid, nelement_global_vperp, nelement_local_vperp, 
+            nrank, irank, Lvperp, discretization, fd_option, cheb_option, bc, adv_input,comm)
+        # create the coordinate struct 'x'
+        println("made inputs")
+        println("vpa: ngrid: ",ngrid," nelement: ",nelement_local_vpa, " Lvpa: ",Lvpa)
+        println("vperp: ngrid: ",ngrid," nelement: ",nelement_local_vperp, " Lvperp: ",Lvperp)
+        vpa = define_coordinate(vpa_input)
+        vperp = define_coordinate(vperp_input)
+        if vpa.discretization == "chebyshev_pseudospectral" && vpa.n > 1
+            # create arrays needed for explicit Chebyshev pseudospectral treatment in vpa
+            # and create the plans for the forward and backward fast Chebyshev transforms
+            vpa_spectral = setup_chebyshev_pseudospectral(vpa)
+            # obtain the local derivatives of the uniform vpa-grid with respect to the used vpa-grid
+            #chebyshev_derivative!(vpa.duniform_dgrid, vpa.uniform_grid, vpa_spectral, vpa)
+        elseif vpa.discretization == "gausslegendre_pseudospectral" && vpa.n > 1
+            vpa_spectral = setup_gausslegendre_pseudospectral(vpa)
+        else
+            # create dummy Bool variable to return in place of the above struct
+            vpa_spectral = false
+            #vpa.duniform_dgrid .= 1.0
+        end
 
-    if vperp.discretization == "chebyshev_pseudospectral" && vperp.n > 1
-        # create arrays needed for explicit Chebyshev pseudospectral treatment in vperp
-        # and create the plans for the forward and backward fast Chebyshev transforms
-        vperp_spectral = setup_chebyshev_pseudospectral(vperp)
-        # obtain the local derivatives of the uniform vperp-grid with respect to the used vperp-grid
-        #chebyshev_derivative!(vperp.duniform_dgrid, vperp.uniform_grid, vperp_spectral, vperp)
-    elseif vperp.discretization == "gausslegendre_pseudospectral" && vperp.n > 1
-        vperp_spectral = setup_gausslegendre_pseudospectral(vperp)
-    else
-        # create dummy Bool variable to return in place of the above struct
-        vperp_spectral = false
-        #vperp.duniform_dgrid .= 1.0
-    end
-    # Set up MPI
-    initialize_comms!()
-    setup_distributed_memory_MPI(1,1,1,1)
-    looping.setup_loop_ranges!(block_rank[], block_size[];
-                                   s=1, sn=1,
-                                   r=1, z=1, vperp=vperp.n, vpa=vpa.n,
-                                   vzeta=1, vr=1, vz=1)
-    nc_global = vpa.n*vperp.n
-    begin_serial_region()
-    
-    
-    
-    if test_dense_construction
-        MM2D_sparse, KKpar2D_sparse, KKperp2D_sparse, LP2D_sparse, LV2D_sparse,
-        PUperp2D_sparse, PPparPUperp2D_sparse, PPpar2D_sparse,
-        MMparMNperp2D_sparse = assemble_matrix_operators_dirichlet_bc(vpa,vperp,vpa_spectral,vperp_spectral)
-        MM2DZG_sparse = assemble_matrix_operators_dirichlet_bc_plus_vperp_zero_gradient(vpa,vperp,vpa_spectral,vperp_spectral)
-    else
-        MM2D_sparse, KKpar2D_sparse, KKperp2D_sparse, LP2D_sparse, LV2D_sparse,
-        PUperp2D_sparse, PPparPUperp2D_sparse, PPpar2D_sparse,
-        MMparMNperp2D_sparse = assemble_matrix_operators_dirichlet_bc_sparse(vpa,vperp,vpa_spectral,vperp_spectral)
-        MM2DZG_sparse = assemble_matrix_operators_dirichlet_bc_plus_vperp_zero_gradient_sparse(vpa,vperp,vpa_spectral,vperp_spectral)
-    end
-    #MM2D_sparse
-    @serial_region begin
-        # create LU decomposition for mass matrix inversion
-        println("begin LU decomposition initialisation   ", Dates.format(now(), dateformat"H:MM:SS"))
-    end
-    lu_obj_MM = lu(MM2D_sparse)
-    lu_obj_MMZG = lu(MM2DZG_sparse)
-    lu_obj_LP = lu(LP2D_sparse)
-    lu_obj_LV = lu(LV2D_sparse)
-    #cholesky_obj = cholesky(MM2D_sparse)
-    @serial_region begin
-        println("finished LU decomposition initialisation   ", Dates.format(now(), dateformat"H:MM:SS"))
-    end
-    # define a test function 
-    
-    fvpavperp = Array{mk_float,2}(undef,vpa.n,vperp.n)
-    fvpavperp_test = Array{mk_float,2}(undef,vpa.n,vperp.n)
-    fvpavperp_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
-    d2fvpavperp_dvpa2_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
-    d2fvpavperp_dvpa2_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
-    d2fvpavperp_dvpa2_num = Array{mk_float,2}(undef,vpa.n,vperp.n)
-    d2fvpavperp_dvperp2_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
-    d2fvpavperp_dvperp2_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
-    d2fvpavperp_dvperp2_num = Array{mk_float,2}(undef,vpa.n,vperp.n)
-    fc = Array{mk_float,1}(undef,nc_global)
-    dfc = Array{mk_float,1}(undef,nc_global)
-    gc = Array{mk_float,1}(undef,nc_global)
-    dgc = Array{mk_float,1}(undef,nc_global)
-    for ivperp in 1:vperp.n
-        for ivpa in 1:vpa.n
-            fvpavperp[ivpa,ivperp] = exp(-vpa.grid[ivpa]^2 - vperp.grid[ivperp]^2)
-            d2fvpavperp_dvpa2_exact[ivpa,ivperp] = (4.0*vpa.grid[ivpa]^2 - 2.0)*exp(-vpa.grid[ivpa]^2 - vperp.grid[ivperp]^2)
-            d2fvpavperp_dvperp2_exact[ivpa,ivperp] = (4.0*vperp.grid[ivperp]^2 - 2.0)*exp(-vpa.grid[ivpa]^2 - vperp.grid[ivperp]^2)
+        if vperp.discretization == "chebyshev_pseudospectral" && vperp.n > 1
+            # create arrays needed for explicit Chebyshev pseudospectral treatment in vperp
+            # and create the plans for the forward and backward fast Chebyshev transforms
+            vperp_spectral = setup_chebyshev_pseudospectral(vperp)
+            # obtain the local derivatives of the uniform vperp-grid with respect to the used vperp-grid
+            #chebyshev_derivative!(vperp.duniform_dgrid, vperp.uniform_grid, vperp_spectral, vperp)
+        elseif vperp.discretization == "gausslegendre_pseudospectral" && vperp.n > 1
+            vperp_spectral = setup_gausslegendre_pseudospectral(vperp)
+        else
+            # create dummy Bool variable to return in place of the above struct
+            vperp_spectral = false
+            #vperp.duniform_dgrid .= 1.0
         end
-    end
-    
-    # boundary conditions
-    
-    #fvpavperp[vpa.n,:] .= 0.0
-    #fvpavperp[1,:] .= 0.0
-    #fvpavperp[:,vperp.n] .= 0.0
-    
-    
-    #print_matrix(fvpavperp,"fvpavperp",vpa.n,vperp.n)
-    # fill fc with fvpavperp
-    ravel_vpavperp_to_c!(fc,fvpavperp,vpa.n,vperp.n)
-    ravel_c_to_vpavperp!(fvpavperp_test,fc,nc_global,vpa.n)
-    @. fvpavperp_err = abs(fvpavperp - fvpavperp_test)
-    @serial_region begin
-        println("max(ravel_err)",maximum(fvpavperp_err))
-    end
-    #print_vector(fc,"fc",nc_global)
-    # multiply by KKpar2D and fill dfc
-    mul!(dfc,KKpar2D_sparse,fc)
-    mul!(dgc,KKperp2D_sparse,fc)
-    if impose_zero_gradient_BC
-        # enforce zero bc  
-        enforce_zero_bc!(fc,vpa,vperp,impose_BC_at_zero_vperp=true)
-        enforce_zero_bc!(gc,vpa,vperp,impose_BC_at_zero_vperp=true)
-        # invert mass matrix and fill fc
-        fc = lu_obj_MMZG \ dfc
-        gc = lu_obj_MMZG \ dgc
-    else
-        # enforce zero bc  
-        enforce_zero_bc!(fc,vpa,vperp,impose_BC_at_zero_vperp=true)
-        enforce_zero_bc!(gc,vpa,vperp,impose_BC_at_zero_vperp=true)
-        # invert mass matrix and fill fc
-        fc = lu_obj_MMZG \ dfc
-        gc = lu_obj_MMZG \ dgc
-    end
-    #fc = cholesky_obj \ dfc
-    #print_vector(fc,"fc",nc_global)
-    # unravel
-    ravel_c_to_vpavperp!(d2fvpavperp_dvpa2_num,fc,nc_global,vpa.n)
-    ravel_c_to_vpavperp!(d2fvpavperp_dvperp2_num,gc,nc_global,vpa.n)
-    @serial_region begin 
-        if nc_global < 30
-            print_matrix(d2fvpavperp_dvpa2_num,"d2fvpavperp_dvpa2_num",vpa.n,vperp.n)
+        # Set up MPI
+        if standalone
+            initialize_comms!()
         end
-        @. d2fvpavperp_dvpa2_err = abs(d2fvpavperp_dvpa2_num - d2fvpavperp_dvpa2_exact)
-        println("maximum(d2fvpavperp_dvpa2_err): ",maximum(d2fvpavperp_dvpa2_err))
-        @. d2fvpavperp_dvperp2_err = abs(d2fvpavperp_dvperp2_num - d2fvpavperp_dvperp2_exact)
-        println("maximum(d2fvpavperp_dvperp2_err): ",maximum(d2fvpavperp_dvperp2_err))
-        if nc_global < 30
-            print_matrix(d2fvpavperp_dvpa2_err,"d2fvpavperp_dvpa2_err",vpa.n,vperp.n)
+        setup_distributed_memory_MPI(1,1,1,1)
+        looping.setup_loop_ranges!(block_rank[], block_size[];
+                                       s=1, sn=1,
+                                       r=1, z=1, vperp=vperp.n, vpa=vpa.n,
+                                       vzeta=1, vr=1, vz=1)
+        nc_global = vpa.n*vperp.n
+        begin_serial_region()
+        
+        
+        
+        if test_dense_construction
+            MM2D_sparse, KKpar2D_sparse, KKperp2D_sparse, LP2D_sparse, LV2D_sparse,
+            PUperp2D_sparse, PPparPUperp2D_sparse, PPpar2D_sparse,
+            MMparMNperp2D_sparse = assemble_matrix_operators_dirichlet_bc(vpa,vperp,vpa_spectral,vperp_spectral)
+            MM2DZG_sparse = assemble_matrix_operators_dirichlet_bc_plus_vperp_zero_gradient(vpa,vperp,vpa_spectral,vperp_spectral)
+        else
+            MM2D_sparse, KKpar2D_sparse, KKperp2D_sparse, LP2D_sparse, LV2D_sparse,
+            PUperp2D_sparse, PPparPUperp2D_sparse, PPpar2D_sparse,
+            MMparMNperp2D_sparse = assemble_matrix_operators_dirichlet_bc_sparse(vpa,vperp,vpa_spectral,vperp_spectral)
+            MM2DZG_sparse = assemble_matrix_operators_dirichlet_bc_plus_vperp_zero_gradient_sparse(vpa,vperp,vpa_spectral,vperp_spectral)
         end
-        if plot_test_output
-            plot_test_data(d2fvpavperp_dvpa2_exact,d2fvpavperp_dvpa2_num,d2fvpavperp_dvpa2_err,"d2fvpavperp_dvpa2",vpa,vperp)
-            plot_test_data(d2fvpavperp_dvperp2_exact,d2fvpavperp_dvperp2_num,d2fvpavperp_dvperp2_err,"d2fvpavperp_dvperp2",vpa,vperp)
+        #MM2D_sparse
+        @serial_region begin
+            # create LU decomposition for mass matrix inversion
+            println("begin LU decomposition initialisation   ", Dates.format(now(), dateformat"H:MM:SS"))
         end
-    end
-    # test the Laplacian solve with a standard F_Maxwellian -> H_Maxwellian test
-    
-    S_dummy = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
-    Q_dummy = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
-    Fs_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
-    F_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
-    C_M_num = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
-    C_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
-    C_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
-    #dFdvpa_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
-    #dFdvperp_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
-    #d2Fdvperpdvpa_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
-    H_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
-    H_M_num = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
-    H_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
-    G_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
-    G_M_num = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
-    G_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
-    d2Gdvpa2_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
-    d2Gdvpa2_M_num = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
-    d2Gdvpa2_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
-    d2Gdvperp2_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
-    d2Gdvperp2_M_num = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
-    d2Gdvperp2_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
-    dGdvperp_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
-    dGdvperp_M_num = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
-    dGdvperp_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
-    d2Gdvperpdvpa_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
-    d2Gdvperpdvpa_M_num = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
-    d2Gdvperpdvpa_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
-    dHdvpa_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
-    dHdvpa_M_num = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
-    dHdvpa_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
-    dHdvperp_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
-    dHdvperp_M_num = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
-    dHdvperp_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
+        lu_obj_MM = lu(MM2D_sparse)
+        lu_obj_MMZG = lu(MM2DZG_sparse)
+        lu_obj_LP = lu(LP2D_sparse)
+        lu_obj_LV = lu(LV2D_sparse)
+        #cholesky_obj = cholesky(MM2D_sparse)
+        @serial_region begin
+            println("finished LU decomposition initialisation   ", Dates.format(now(), dateformat"H:MM:SS"))
+        end
+        # define a test function 
+        
+        fvpavperp = Array{mk_float,2}(undef,vpa.n,vperp.n)
+        fvpavperp_test = Array{mk_float,2}(undef,vpa.n,vperp.n)
+        fvpavperp_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
+        d2fvpavperp_dvpa2_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
+        d2fvpavperp_dvpa2_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
+        d2fvpavperp_dvpa2_num = Array{mk_float,2}(undef,vpa.n,vperp.n)
+        d2fvpavperp_dvperp2_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
+        d2fvpavperp_dvperp2_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
+        d2fvpavperp_dvperp2_num = Array{mk_float,2}(undef,vpa.n,vperp.n)
+        fc = Array{mk_float,1}(undef,nc_global)
+        dfc = Array{mk_float,1}(undef,nc_global)
+        gc = Array{mk_float,1}(undef,nc_global)
+        dgc = Array{mk_float,1}(undef,nc_global)
+        for ivperp in 1:vperp.n
+            for ivpa in 1:vpa.n
+                fvpavperp[ivpa,ivperp] = exp(-vpa.grid[ivpa]^2 - vperp.grid[ivperp]^2)
+                d2fvpavperp_dvpa2_exact[ivpa,ivperp] = (4.0*vpa.grid[ivpa]^2 - 2.0)*exp(-vpa.grid[ivpa]^2 - vperp.grid[ivperp]^2)
+                d2fvpavperp_dvperp2_exact[ivpa,ivperp] = (4.0*vperp.grid[ivperp]^2 - 2.0)*exp(-vpa.grid[ivpa]^2 - vperp.grid[ivperp]^2)
+            end
+        end
+        
+        # boundary conditions
+        
+        #fvpavperp[vpa.n,:] .= 0.0
+        #fvpavperp[1,:] .= 0.0
+        #fvpavperp[:,vperp.n] .= 0.0
+        
+        
+        #print_matrix(fvpavperp,"fvpavperp",vpa.n,vperp.n)
+        # fill fc with fvpavperp
+        ravel_vpavperp_to_c!(fc,fvpavperp,vpa.n,vperp.n)
+        ravel_c_to_vpavperp!(fvpavperp_test,fc,nc_global,vpa.n)
+        @. fvpavperp_err = abs(fvpavperp - fvpavperp_test)
+        @serial_region begin
+            println("max(ravel_err)",maximum(fvpavperp_err))
+        end
+        #print_vector(fc,"fc",nc_global)
+        # multiply by KKpar2D and fill dfc
+        mul!(dfc,KKpar2D_sparse,fc)
+        mul!(dgc,KKperp2D_sparse,fc)
+        if impose_zero_gradient_BC
+            # enforce zero bc  
+            enforce_zero_bc!(fc,vpa,vperp,impose_BC_at_zero_vperp=true)
+            enforce_zero_bc!(gc,vpa,vperp,impose_BC_at_zero_vperp=true)
+            # invert mass matrix and fill fc
+            fc = lu_obj_MMZG \ dfc
+            gc = lu_obj_MMZG \ dgc
+        else
+            # enforce zero bc  
+            enforce_zero_bc!(fc,vpa,vperp,impose_BC_at_zero_vperp=true)
+            enforce_zero_bc!(gc,vpa,vperp,impose_BC_at_zero_vperp=true)
+            # invert mass matrix and fill fc
+            fc = lu_obj_MMZG \ dfc
+            gc = lu_obj_MMZG \ dgc
+        end
+        #fc = cholesky_obj \ dfc
+        #print_vector(fc,"fc",nc_global)
+        # unravel
+        ravel_c_to_vpavperp!(d2fvpavperp_dvpa2_num,fc,nc_global,vpa.n)
+        ravel_c_to_vpavperp!(d2fvpavperp_dvperp2_num,gc,nc_global,vpa.n)
+        @serial_region begin 
+            if nc_global < 30
+                print_matrix(d2fvpavperp_dvpa2_num,"d2fvpavperp_dvpa2_num",vpa.n,vperp.n)
+            end
+            @. d2fvpavperp_dvpa2_err = abs(d2fvpavperp_dvpa2_num - d2fvpavperp_dvpa2_exact)
+            println("maximum(d2fvpavperp_dvpa2_err): ",maximum(d2fvpavperp_dvpa2_err))
+            @. d2fvpavperp_dvperp2_err = abs(d2fvpavperp_dvperp2_num - d2fvpavperp_dvperp2_exact)
+            println("maximum(d2fvpavperp_dvperp2_err): ",maximum(d2fvpavperp_dvperp2_err))
+            if nc_global < 30
+                print_matrix(d2fvpavperp_dvpa2_err,"d2fvpavperp_dvpa2_err",vpa.n,vperp.n)
+            end
+            if plot_test_output
+                plot_test_data(d2fvpavperp_dvpa2_exact,d2fvpavperp_dvpa2_num,d2fvpavperp_dvpa2_err,"d2fvpavperp_dvpa2",vpa,vperp)
+                plot_test_data(d2fvpavperp_dvperp2_exact,d2fvpavperp_dvperp2_num,d2fvpavperp_dvperp2_err,"d2fvpavperp_dvperp2",vpa,vperp)
+            end
+        end
+        # test the Laplacian solve with a standard F_Maxwellian -> H_Maxwellian test
+        
+        S_dummy = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
+        Q_dummy = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
+        Fs_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
+        F_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
+        C_M_num = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
+        C_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
+        C_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
+        #dFdvpa_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
+        #dFdvperp_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
+        #d2Fdvperpdvpa_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
+        H_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
+        H_M_num = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
+        H_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
+        G_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
+        G_M_num = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
+        G_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
+        d2Gdvpa2_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
+        d2Gdvpa2_M_num = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
+        d2Gdvpa2_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
+        d2Gdvperp2_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
+        d2Gdvperp2_M_num = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
+        d2Gdvperp2_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
+        dGdvperp_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
+        dGdvperp_M_num = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
+        dGdvperp_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
+        d2Gdvperpdvpa_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
+        d2Gdvperpdvpa_M_num = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
+        d2Gdvperpdvpa_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
+        dHdvpa_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
+        dHdvpa_M_num = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
+        dHdvpa_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
+        dHdvperp_M_exact = Array{mk_float,2}(undef,vpa.n,vperp.n)
+        dHdvperp_M_num = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
+        dHdvperp_M_err = Array{mk_float,2}(undef,vpa.n,vperp.n)
 
-    if test_self_operator
-        dens, upar, vth = 1.0, 1.0, 1.0
-        denss, upars, vths = dens, upar, vth
-    else
-        denss, upars, vths = 1.0, -1.0, 2.0/3.0
-        dens, upar, vth = 1.0, 1.0, 1.0
-    end
-    ms = 1.0
-    msp = 1.0
-    nussp = 1.0
-    for ivperp in 1:vperp.n
-        for ivpa in 1:vpa.n
-            Fs_M[ivpa,ivperp] = F_Maxwellian(denss,upars,vths,vpa,vperp,ivpa,ivperp)
-            F_M[ivpa,ivperp] = F_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
-            H_M_exact[ivpa,ivperp] = H_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
-            G_M_exact[ivpa,ivperp] = G_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
-            d2Gdvpa2_M_exact[ivpa,ivperp] = d2Gdvpa2(dens,upar,vth,vpa,vperp,ivpa,ivperp)
-            d2Gdvperp2_M_exact[ivpa,ivperp] = d2Gdvperp2(dens,upar,vth,vpa,vperp,ivpa,ivperp)
-            dGdvperp_M_exact[ivpa,ivperp] = dGdvperp(dens,upar,vth,vpa,vperp,ivpa,ivperp)
-            d2Gdvperpdvpa_M_exact[ivpa,ivperp] = d2Gdvperpdvpa(dens,upar,vth,vpa,vperp,ivpa,ivperp)
-            dHdvpa_M_exact[ivpa,ivperp] = dHdvpa(dens,upar,vth,vpa,vperp,ivpa,ivperp)
-            dHdvperp_M_exact[ivpa,ivperp] = dHdvperp(dens,upar,vth,vpa,vperp,ivpa,ivperp)
-            C_M_exact[ivpa,ivperp] = Cssp_Maxwellian_inputs(denss,upars,vths,ms,
-                                                            dens,upar,vth,msp,
-                                                            nussp,vpa,vperp,ivpa,ivperp)
+        if test_self_operator
+            dens, upar, vth = 1.0, 1.0, 1.0
+            denss, upars, vths = dens, upar, vth
+        else
+            denss, upars, vths = 1.0, -1.0, 2.0/3.0
+            dens, upar, vth = 1.0, 1.0, 1.0
         end
-    end
-    # calculate the Rosenbluth potential boundary data (rpbd)
-    rpbd_exact = allocate_rosenbluth_potential_boundary_data(vpa,vperp)
-    rpbd = allocate_rosenbluth_potential_boundary_data(vpa,vperp)
-    # use known test function to provide exact data
-    calculate_rosenbluth_potential_boundary_data_exact!(rpbd_exact,
-      H_M_exact,dHdvpa_M_exact,dHdvperp_M_exact,G_M_exact,
-      dGdvperp_M_exact,d2Gdvperp2_M_exact,
-      d2Gdvperpdvpa_M_exact,d2Gdvpa2_M_exact,vpa,vperp)
-    # use numerical integration to find the boundary data
-    # initialise the weights
-    #fkpl_arrays = init_fokker_planck_collisions(vperp,vpa; precompute_weights=true)
-    fkpl_arrays = init_fokker_planck_collisions_new(vpa,vperp; precompute_weights=true)
-    # initialise any arrays needed later for the collision operator
-    rhsc = MPISharedArray{mk_float,1}(undef,nc_global)
-    rhqc = MPISharedArray{mk_float,1}(undef,nc_global)
-    sc = MPISharedArray{mk_float,1}(undef,nc_global)
-    qc = MPISharedArray{mk_float,1}(undef,nc_global)
-    rhsc_check = Array{mk_float,1}(undef,nc_global)
-    rhsc_err = Array{mk_float,1}(undef,nc_global)
-    rhsvpavperp = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
-    @serial_region begin
-        println("begin YY array calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
-    end
-    YY_arrays = calculate_YY_arrays(vpa,vperp)
-    
-    begin_serial_region()
-    # do the numerical integration at the boundaries (N.B. G not supported)
-    @serial_region begin 
-        println("begin boundary data calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
-    end
-    calculate_rosenbluth_potential_boundary_data!(rpbd,fkpl_arrays,F_M)
-    @serial_region begin 
-        println("finished boundary data calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
-    end
-    #rpbd = rpbd_exact
-    @serial_region begin
-        println("begin elliptic solve   ", Dates.format(now(), dateformat"H:MM:SS"))
-    end
-    
-    begin_vperp_vpa_region()
-    @loop_vperp_vpa ivperp ivpa begin
-        S_dummy[ivpa,ivperp] = -(4.0/sqrt(pi))*F_M[ivpa,ivperp]
-    
-    end
-    elliptic_solve!(H_M_num,S_dummy,rpbd.H_data,
-                lu_obj_LP,MM2D_sparse,rhsc,sc,vpa,vperp)
-    elliptic_solve!(dHdvpa_M_num,S_dummy,rpbd.dHdvpa_data,
-                lu_obj_LP,PPpar2D_sparse,rhsc,sc,vpa,vperp)
-    elliptic_solve!(dHdvperp_M_num,S_dummy,rpbd.dHdvperp_data,
-                lu_obj_LV,PUperp2D_sparse,rhsc,sc,vpa,vperp)
-    
-    begin_vperp_vpa_region()
-    @loop_vperp_vpa ivperp ivpa begin
-        S_dummy[ivpa,ivperp] = 2.0*H_M_num[ivpa,ivperp]
-    
-    end
-    elliptic_solve!(G_M_num,S_dummy,rpbd.G_data,
-                lu_obj_LP,MM2D_sparse,rhsc,sc,vpa,vperp)
-    elliptic_solve!(d2Gdvpa2_M_num,S_dummy,rpbd.d2Gdvpa2_data,
-                lu_obj_LP,KKpar2D_sparse,rhsc,sc,vpa,vperp)
-    elliptic_solve!(dGdvperp_M_num,S_dummy,rpbd.dGdvperp_data,
-                lu_obj_LV,PUperp2D_sparse,rhsc,sc,vpa,vperp)
-    elliptic_solve!(d2Gdvperpdvpa_M_num,S_dummy,rpbd.d2Gdvperpdvpa_data,
-                lu_obj_LV,PPparPUperp2D_sparse,rhsc,sc,vpa,vperp)
-    
-    begin_vperp_vpa_region()
-    @loop_vperp_vpa ivperp ivpa begin
-        S_dummy[ivpa,ivperp] = 2.0*H_M_num[ivpa,ivperp] - d2Gdvpa2_M_num[ivpa,ivperp]
-        Q_dummy[ivpa,ivperp] = -dGdvperp_M_num[ivpa,ivperp]
-    end
-    # use the elliptic solve function to find
-    # d2Gdvperp2 = 2H - d2Gdvpa2 - (1/vperp)dGdvperp
-    # using a weak form
-    elliptic_solve!(d2Gdvperp2_M_num,S_dummy,Q_dummy,rpbd.d2Gdvperp2_data,
-                lu_obj_MM,MM2D_sparse,MMparMNperp2D_sparse,
-                rhsc,rhqc,sc,qc,vpa,vperp)
-    @serial_region begin
-        println("finished elliptic solve   ", Dates.format(now(), dateformat"H:MM:SS"))
-    end
-    
-    @serial_region begin
-        println("begin C calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
-    end
-    if test_parallelism
-        assemble_explicit_collision_operator_rhs_serial!(rhsc_check,Fs_M,
+        ms = 1.0
+        msp = 1.0
+        nussp = 1.0
+        for ivperp in 1:vperp.n
+            for ivpa in 1:vpa.n
+                Fs_M[ivpa,ivperp] = F_Maxwellian(denss,upars,vths,vpa,vperp,ivpa,ivperp)
+                F_M[ivpa,ivperp] = F_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+                H_M_exact[ivpa,ivperp] = H_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+                G_M_exact[ivpa,ivperp] = G_Maxwellian(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+                d2Gdvpa2_M_exact[ivpa,ivperp] = d2Gdvpa2(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+                d2Gdvperp2_M_exact[ivpa,ivperp] = d2Gdvperp2(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+                dGdvperp_M_exact[ivpa,ivperp] = dGdvperp(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+                d2Gdvperpdvpa_M_exact[ivpa,ivperp] = d2Gdvperpdvpa(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+                dHdvpa_M_exact[ivpa,ivperp] = dHdvpa(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+                dHdvperp_M_exact[ivpa,ivperp] = dHdvperp(dens,upar,vth,vpa,vperp,ivpa,ivperp)
+                C_M_exact[ivpa,ivperp] = Cssp_Maxwellian_inputs(denss,upars,vths,ms,
+                                                                dens,upar,vth,msp,
+                                                                nussp,vpa,vperp,ivpa,ivperp)
+            end
+        end
+        # calculate the Rosenbluth potential boundary data (rpbd)
+        rpbd_exact = allocate_rosenbluth_potential_boundary_data(vpa,vperp)
+        rpbd = allocate_rosenbluth_potential_boundary_data(vpa,vperp)
+        # use known test function to provide exact data
+        calculate_rosenbluth_potential_boundary_data_exact!(rpbd_exact,
+          H_M_exact,dHdvpa_M_exact,dHdvperp_M_exact,G_M_exact,
+          dGdvperp_M_exact,d2Gdvperp2_M_exact,
+          d2Gdvperpdvpa_M_exact,d2Gdvpa2_M_exact,vpa,vperp)
+        # use numerical integration to find the boundary data
+        # initialise the weights
+        #fkpl_arrays = init_fokker_planck_collisions(vperp,vpa; precompute_weights=true)
+        fkpl_arrays = init_fokker_planck_collisions_new(vpa,vperp; precompute_weights=true)
+        # initialise any arrays needed later for the collision operator
+        rhsc = MPISharedArray{mk_float,1}(undef,nc_global)
+        rhqc = MPISharedArray{mk_float,1}(undef,nc_global)
+        sc = MPISharedArray{mk_float,1}(undef,nc_global)
+        qc = MPISharedArray{mk_float,1}(undef,nc_global)
+        rhsc_check = Array{mk_float,1}(undef,nc_global)
+        rhsc_err = Array{mk_float,1}(undef,nc_global)
+        rhsvpavperp = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
+        @serial_region begin
+            println("begin YY array calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+        end
+        YY_arrays = calculate_YY_arrays(vpa,vperp,vpa_spectral,vperp_spectral)
+        
+        begin_serial_region()
+        # do the numerical integration at the boundaries (N.B. G not supported)
+        @serial_region begin 
+            println("begin boundary data calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+        end
+        calculate_rosenbluth_potential_boundary_data!(rpbd,fkpl_arrays,F_M,vpa,vperp,vpa_spectral,vperp_spectral)
+        @serial_region begin 
+            println("finished boundary data calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+        end
+        #rpbd = rpbd_exact
+        @serial_region begin
+            println("begin elliptic solve   ", Dates.format(now(), dateformat"H:MM:SS"))
+        end
+        
+        begin_vperp_vpa_region()
+        @loop_vperp_vpa ivperp ivpa begin
+            S_dummy[ivpa,ivperp] = -(4.0/sqrt(pi))*F_M[ivpa,ivperp]
+        
+        end
+        elliptic_solve!(H_M_num,S_dummy,rpbd.H_data,
+                    lu_obj_LP,MM2D_sparse,rhsc,sc,vpa,vperp)
+        elliptic_solve!(dHdvpa_M_num,S_dummy,rpbd.dHdvpa_data,
+                    lu_obj_LP,PPpar2D_sparse,rhsc,sc,vpa,vperp)
+        elliptic_solve!(dHdvperp_M_num,S_dummy,rpbd.dHdvperp_data,
+                    lu_obj_LV,PUperp2D_sparse,rhsc,sc,vpa,vperp)
+        
+        begin_vperp_vpa_region()
+        @loop_vperp_vpa ivperp ivpa begin
+            S_dummy[ivpa,ivperp] = 2.0*H_M_num[ivpa,ivperp]
+        
+        end
+        elliptic_solve!(G_M_num,S_dummy,rpbd.G_data,
+                    lu_obj_LP,MM2D_sparse,rhsc,sc,vpa,vperp)
+        elliptic_solve!(d2Gdvpa2_M_num,S_dummy,rpbd.d2Gdvpa2_data,
+                    lu_obj_LP,KKpar2D_sparse,rhsc,sc,vpa,vperp)
+        elliptic_solve!(dGdvperp_M_num,S_dummy,rpbd.dGdvperp_data,
+                    lu_obj_LV,PUperp2D_sparse,rhsc,sc,vpa,vperp)
+        elliptic_solve!(d2Gdvperpdvpa_M_num,S_dummy,rpbd.d2Gdvperpdvpa_data,
+                    lu_obj_LV,PPparPUperp2D_sparse,rhsc,sc,vpa,vperp)
+        
+        begin_vperp_vpa_region()
+        @loop_vperp_vpa ivperp ivpa begin
+            S_dummy[ivpa,ivperp] = 2.0*H_M_num[ivpa,ivperp] - d2Gdvpa2_M_num[ivpa,ivperp]
+            Q_dummy[ivpa,ivperp] = -dGdvperp_M_num[ivpa,ivperp]
+        end
+        # use the elliptic solve function to find
+        # d2Gdvperp2 = 2H - d2Gdvpa2 - (1/vperp)dGdvperp
+        # using a weak form
+        elliptic_solve!(d2Gdvperp2_M_num,S_dummy,Q_dummy,rpbd.d2Gdvperp2_data,
+                    lu_obj_MM,MM2D_sparse,MMparMNperp2D_sparse,
+                    rhsc,rhqc,sc,qc,vpa,vperp)
+        @serial_region begin
+            println("finished elliptic solve   ", Dates.format(now(), dateformat"H:MM:SS"))
+        end
+        
+        @serial_region begin
+            println("begin C calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+        end
+        if test_parallelism
+            assemble_explicit_collision_operator_rhs_serial!(rhsc_check,Fs_M,
+              d2Gdvpa2_M_num,d2Gdvperpdvpa_M_num,d2Gdvperp2_M_num,
+              dHdvpa_M_num,dHdvperp_M_num,ms,msp,nussp,
+              vpa,vperp,YY_arrays)
+            @serial_region begin
+                println("finished C RHS assembly (serial)   ", Dates.format(now(), dateformat"H:MM:SS"))
+            end
+        end
+        assemble_explicit_collision_operator_rhs_parallel!(rhsc,rhsvpavperp,Fs_M,
           d2Gdvpa2_M_num,d2Gdvperpdvpa_M_num,d2Gdvperp2_M_num,
           dHdvpa_M_num,dHdvperp_M_num,ms,msp,nussp,
-          vpa,vperp,vpa_spectral,vperp_spectral,YY_arrays)
+          vpa,vperp,YY_arrays)
+        # switch back to serial region before matrix inverse
+        begin_serial_region()
         @serial_region begin
-            println("finished C RHS assembly (serial)   ", Dates.format(now(), dateformat"H:MM:SS"))
-        end
-    end
-    assemble_explicit_collision_operator_rhs_parallel!(rhsc,rhsvpavperp,Fs_M,
-      d2Gdvpa2_M_num,d2Gdvperpdvpa_M_num,d2Gdvperp2_M_num,
-      dHdvpa_M_num,dHdvperp_M_num,ms,msp,nussp,
-      vpa,vperp,vpa_spectral,vperp_spectral,YY_arrays)
-    # switch back to serial region before matrix inverse
-    begin_serial_region()
-    @serial_region begin
-        println("finished C RHS assembly (parallel)   ", Dates.format(now(), dateformat"H:MM:SS"))
-    end    
-    if test_parallelism
-        @serial_region begin
-            @. rhsc_err = abs(rhsc - rhsc_check)
-            println("maximum(rhsc_err) (test parallelisation): ",maximum(rhsc_err))
+            println("finished C RHS assembly (parallel)   ", Dates.format(now(), dateformat"H:MM:SS"))
         end    
-    end
-    if impose_zero_gradient_BC
-        enforce_zero_bc!(rhsc,vpa,vperp,impose_BC_at_zero_vperp=true)
-        # invert mass matrix and fill fc
-        fc = lu_obj_MMZG \ rhsc
-    else
-        enforce_zero_bc!(rhsc,vpa,vperp)
-        # invert mass matrix and fill fc
-        fc = lu_obj_MM \ rhsc
-    end
-    #ravel_c_to_vpavperp!(C_M_num,fc,nc_global,vpa.n)
-    ravel_c_to_vpavperp_parallel!(C_M_num,fc,vpa.n)
-    begin_serial_region()
-    fkerr = allocate_error_data()
-    println(fkerr)
-    @serial_region begin
-        println("finished C calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
-        
-        # test the boundary data calculation
-        test_rosenbluth_potential_boundary_data(rpbd,rpbd_exact,vpa,vperp)
-        
-        fkerr.H_M.max, fkerr.H_M.L2 = print_test_data(H_M_exact,H_M_num,H_M_err,"H_M",vpa,vperp)
-        fkerr.dHdvpa_M.max, fkerr.dHdvpa_M.L2 = print_test_data(dHdvpa_M_exact,dHdvpa_M_num,dHdvpa_M_err,"dHdvpa_M",vpa,vperp)
-        fkerr.dHdvperp_M.max, fkerr.dHdvperp_M.L2 = print_test_data(dHdvperp_M_exact,dHdvperp_M_num,dHdvperp_M_err,"dHdvperp_M",vpa,vperp)
-        fkerr.G_M.max, fkerr.G_M.L2 = print_test_data(G_M_exact,G_M_num,G_M_err,"G_M",vpa,vperp)
-        fkerr.d2Gdvpa2_M.max, fkerr.d2Gdvpa2_M.L2 = print_test_data(d2Gdvpa2_M_exact,d2Gdvpa2_M_num,d2Gdvpa2_M_err,"d2Gdvpa2_M",vpa,vperp)
-        fkerr.dGdvperp_M.max, fkerr.dGdvperp_M.L2 = print_test_data(dGdvperp_M_exact,dGdvperp_M_num,dGdvperp_M_err,"dGdvperp_M",vpa,vperp)
-        fkerr.d2Gdvperpdvpa_M.max, fkerr.d2Gdvperpdvpa_M.L2 = print_test_data(d2Gdvperpdvpa_M_exact,d2Gdvperpdvpa_M_num,d2Gdvperpdvpa_M_err,"d2Gdvperpdvpa_M",vpa,vperp)
-        fkerr.d2Gdvperp2_M.max, fkerr.d2Gdvperp2_M.L2 = print_test_data(d2Gdvperp2_M_exact,d2Gdvperp2_M_num,d2Gdvperp2_M_err,"d2Gdvperp2_M",vpa,vperp)
-        fkerr.C_M.max, fkerr.C_M.L2 = print_test_data(C_M_exact,C_M_num,C_M_err,"C_M",vpa,vperp)
-        
-        if plot_test_output
-            plot_test_data(C_M_exact,C_M_num,C_M_err,"C_M",vpa,vperp)
-            plot_test_data(H_M_exact,H_M_num,H_M_err,"H_M",vpa,vperp)
-            plot_test_data(dHdvpa_M_exact,dHdvpa_M_num,dHdvpa_M_err,"dHdvpa_M",vpa,vperp)
-            plot_test_data(dHdvperp_M_exact,dHdvperp_M_num,dHdvperp_M_err,"dHdvperp_M",vpa,vperp)
-            plot_test_data(G_M_exact,G_M_num,G_M_err,"G_M",vpa,vperp)
-            plot_test_data(dGdvperp_M_exact,dGdvperp_M_num,dGdvperp_M_err,"dGdvperp_M",vpa,vperp)
-            plot_test_data(d2Gdvperp2_M_exact,d2Gdvperp2_M_num,d2Gdvperp2_M_err,"d2Gdvperp2_M",vpa,vperp)
-            plot_test_data(d2Gdvperpdvpa_M_exact,d2Gdvperpdvpa_M_num,d2Gdvperpdvpa_M_err,"d2Gdvperpdvpa_M",vpa,vperp)
-            plot_test_data(d2Gdvpa2_M_exact,d2Gdvpa2_M_num,d2Gdvpa2_M_err,"d2Gdvpa2_M",vpa,vperp)
+        if test_parallelism
+            @serial_region begin
+                @. rhsc_err = abs(rhsc - rhsc_check)
+                println("maximum(rhsc_err) (test parallelisation): ",maximum(rhsc_err))
+            end    
         end
-    end
-    if test_self_operator
-        delta_n = get_density(C_M_num, vpa, vperp)
-        delta_upar = get_upar(C_M_num, vpa, vperp, dens)
-        delta_ppar = get_ppar(C_M_num, vpa, vperp, upar, msp)
-        delta_pperp = get_pperp(C_M_num, vpa, vperp, msp)
-        delta_pressure = get_pressure(delta_ppar,delta_pperp)
+        if impose_zero_gradient_BC
+            enforce_zero_bc!(rhsc,vpa,vperp,impose_BC_at_zero_vperp=true)
+            # invert mass matrix and fill fc
+            fc = lu_obj_MMZG \ rhsc
+        else
+            enforce_zero_bc!(rhsc,vpa,vperp)
+            # invert mass matrix and fill fc
+            fc = lu_obj_MM \ rhsc
+        end
+        #ravel_c_to_vpavperp!(C_M_num,fc,nc_global,vpa.n)
+        ravel_c_to_vpavperp_parallel!(C_M_num,fc,vpa.n)
+        begin_serial_region()
+        fkerr = allocate_error_data()
+        println(fkerr)
         @serial_region begin
-            println("delta_n: ", delta_n)
-            println("delta_upar: ", delta_upar)
-            println("delta_pressure: ", delta_pressure)
+            println("finished C calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+            
+            # test the boundary data calculation
+            test_rosenbluth_potential_boundary_data(rpbd,rpbd_exact,vpa,vperp)
+            
+            fkerr.H_M.max, fkerr.H_M.L2 = print_test_data(H_M_exact,H_M_num,H_M_err,"H_M",vpa,vperp)
+            fkerr.dHdvpa_M.max, fkerr.dHdvpa_M.L2 = print_test_data(dHdvpa_M_exact,dHdvpa_M_num,dHdvpa_M_err,"dHdvpa_M",vpa,vperp)
+            fkerr.dHdvperp_M.max, fkerr.dHdvperp_M.L2 = print_test_data(dHdvperp_M_exact,dHdvperp_M_num,dHdvperp_M_err,"dHdvperp_M",vpa,vperp)
+            fkerr.G_M.max, fkerr.G_M.L2 = print_test_data(G_M_exact,G_M_num,G_M_err,"G_M",vpa,vperp)
+            fkerr.d2Gdvpa2_M.max, fkerr.d2Gdvpa2_M.L2 = print_test_data(d2Gdvpa2_M_exact,d2Gdvpa2_M_num,d2Gdvpa2_M_err,"d2Gdvpa2_M",vpa,vperp)
+            fkerr.dGdvperp_M.max, fkerr.dGdvperp_M.L2 = print_test_data(dGdvperp_M_exact,dGdvperp_M_num,dGdvperp_M_err,"dGdvperp_M",vpa,vperp)
+            fkerr.d2Gdvperpdvpa_M.max, fkerr.d2Gdvperpdvpa_M.L2 = print_test_data(d2Gdvperpdvpa_M_exact,d2Gdvperpdvpa_M_num,d2Gdvperpdvpa_M_err,"d2Gdvperpdvpa_M",vpa,vperp)
+            fkerr.d2Gdvperp2_M.max, fkerr.d2Gdvperp2_M.L2 = print_test_data(d2Gdvperp2_M_exact,d2Gdvperp2_M_num,d2Gdvperp2_M_err,"d2Gdvperp2_M",vpa,vperp)
+            fkerr.C_M.max, fkerr.C_M.L2 = print_test_data(C_M_exact,C_M_num,C_M_err,"C_M",vpa,vperp)
+            
+            if plot_test_output
+                plot_test_data(C_M_exact,C_M_num,C_M_err,"C_M",vpa,vperp)
+                plot_test_data(H_M_exact,H_M_num,H_M_err,"H_M",vpa,vperp)
+                plot_test_data(dHdvpa_M_exact,dHdvpa_M_num,dHdvpa_M_err,"dHdvpa_M",vpa,vperp)
+                plot_test_data(dHdvperp_M_exact,dHdvperp_M_num,dHdvperp_M_err,"dHdvperp_M",vpa,vperp)
+                plot_test_data(G_M_exact,G_M_num,G_M_err,"G_M",vpa,vperp)
+                plot_test_data(dGdvperp_M_exact,dGdvperp_M_num,dGdvperp_M_err,"dGdvperp_M",vpa,vperp)
+                plot_test_data(d2Gdvperp2_M_exact,d2Gdvperp2_M_num,d2Gdvperp2_M_err,"d2Gdvperp2_M",vpa,vperp)
+                plot_test_data(d2Gdvperpdvpa_M_exact,d2Gdvperpdvpa_M_num,d2Gdvperpdvpa_M_err,"d2Gdvperpdvpa_M",vpa,vperp)
+                plot_test_data(d2Gdvpa2_M_exact,d2Gdvpa2_M_num,d2Gdvpa2_M_err,"d2Gdvpa2_M",vpa,vperp)
+            end
         end
-        fkerr.moments.delta_density = delta_n
-        fkerr.moments.delta_upar = delta_upar
-        fkerr.moments.delta_pressure = delta_pressure
-    else
-        delta_n = get_density(C_M_num, vpa, vperp)
-        @serial_region begin
-            println("delta_n: ", delta_n)
+        if test_self_operator
+            delta_n = get_density(C_M_num, vpa, vperp)
+            delta_upar = get_upar(C_M_num, vpa, vperp, dens)
+            delta_ppar = get_ppar(C_M_num, vpa, vperp, upar, msp)
+            delta_pperp = get_pperp(C_M_num, vpa, vperp, msp)
+            delta_pressure = get_pressure(delta_ppar,delta_pperp)
+            @serial_region begin
+                println("delta_n: ", delta_n)
+                println("delta_upar: ", delta_upar)
+                println("delta_pressure: ", delta_pressure)
+            end
+            fkerr.moments.delta_density = delta_n
+            fkerr.moments.delta_upar = delta_upar
+            fkerr.moments.delta_pressure = delta_pressure
+        else
+            delta_n = get_density(C_M_num, vpa, vperp)
+            @serial_region begin
+                println("delta_n: ", delta_n)
+            end
+            fkerr.moments.delta_density = delta_n
         end
-        fkerr.moments.delta_density = delta_n
+        if standalone
+            finalize_comms!()
+        end
+        return fkerr
     end
+
+    function expected_nelement_scaling!(expected,nelement_list,ngrid,nscan)
+        for iscan in 1:nscan
+            expected[iscan] = (1.0/nelement_list[iscan])^(ngrid - 1)
+        end
+    end
+
+    function expected_nelement_integral_scaling!(expected,nelement_list,ngrid,nscan)
+        for iscan in 1:nscan
+            expected[iscan] = (1.0/nelement_list[iscan])^(ngrid+1)
+        end
+    end
+
     
-    return fkerr
+    initialize_comms!()
+    ngrid = 3
+    plot_scan = true
+    plot_test_output = false
+    impose_zero_gradient_BC = false
+    test_parallelism = false
+    test_self_operator = true
+    test_dense_construction = false
+    nelement_list = Int[8, 16, 32, 64, 128]
+    #nelement_list = Int[2, 4, 8, 16, 32]
+    #nelement_list = Int[2, 4]
+    #nelement_list = Int[2, 4, 8]
+    #nelement_list = Int[100]
+    #nelement_list = Int[8]
+    nscan = size(nelement_list,1)
+    max_C_err = Array{mk_float,1}(undef,nscan)
+    max_H_err = Array{mk_float,1}(undef,nscan)
+    max_G_err = Array{mk_float,1}(undef,nscan)
+    max_dHdvpa_err = Array{mk_float,1}(undef,nscan)
+    max_dHdvperp_err = Array{mk_float,1}(undef,nscan)
+    max_d2Gdvperp2_err = Array{mk_float,1}(undef,nscan)
+    max_d2Gdvpa2_err = Array{mk_float,1}(undef,nscan)
+    max_d2Gdvperpdvpa_err = Array{mk_float,1}(undef,nscan)
+    max_dGdvperp_err = Array{mk_float,1}(undef,nscan)
+    L2_C_err = Array{mk_float,1}(undef,nscan)
+    L2_H_err = Array{mk_float,1}(undef,nscan)
+    L2_G_err = Array{mk_float,1}(undef,nscan)
+    L2_dHdvpa_err = Array{mk_float,1}(undef,nscan)
+    L2_dHdvperp_err = Array{mk_float,1}(undef,nscan)
+    L2_d2Gdvperp2_err = Array{mk_float,1}(undef,nscan)
+    L2_d2Gdvpa2_err = Array{mk_float,1}(undef,nscan)
+    L2_d2Gdvperpdvpa_err = Array{mk_float,1}(undef,nscan)
+    L2_dGdvperp_err = Array{mk_float,1}(undef,nscan)
+    #max_d2fsdvpa2_err = Array{mk_float,1}(undef,nscan)
+    #max_d2fsdvperp2_err = Array{mk_float,1}(undef,nscan)
+    n_err = Array{mk_float,1}(undef,nscan)
+    u_err = Array{mk_float,1}(undef,nscan)
+    p_err = Array{mk_float,1}(undef,nscan)
+    
+    expected = Array{mk_float,1}(undef,nscan)
+    expected_nelement_scaling!(expected,nelement_list,ngrid,nscan)
+    expected_integral = Array{mk_float,1}(undef,nscan)
+    expected_nelement_integral_scaling!(expected_integral,nelement_list,ngrid,nscan)
+    
+    expected_label = L"(1/N_{el})^{n_g - 1}"
+    expected_integral_label = L"(1/N_{el})^{n_g +1}"
+    
+    for iscan in 1:nscan
+        local nelement = nelement_list[iscan]
+        nelement_vpa = 2*nelement
+        nelement_vperp = nelement
+        fkerr = test_weak_form_collisions(ngrid,nelement_vpa,nelement_vperp,
+        plot_test_output=plot_test_output,
+        impose_zero_gradient_BC=impose_zero_gradient_BC,
+        test_parallelism=test_parallelism,
+        test_self_operator=test_self_operator,
+        test_dense_construction=test_dense_construction,
+        standalone=false)
+        max_C_err[iscan], L2_C_err[iscan] = fkerr.C_M.max ,fkerr.C_M.L2
+        max_H_err[iscan], L2_H_err[iscan] = fkerr.H_M.max ,fkerr.H_M.L2
+        max_dHdvpa_err[iscan], L2_dHdvpa_err[iscan] = fkerr.dHdvpa_M.max ,fkerr.dHdvpa_M.L2
+        max_dHdvperp_err[iscan], L2_dHdvperp_err[iscan] = fkerr.dHdvperp_M.max ,fkerr.dHdvperp_M.L2
+        max_G_err[iscan], L2_G_err[iscan] = fkerr.G_M.max ,fkerr.G_M.L2
+        max_dGdvperp_err[iscan], L2_dGdvperp_err[iscan] = fkerr.dGdvperp_M.max ,fkerr.dGdvperp_M.L2
+        max_d2Gdvpa2_err[iscan], L2_d2Gdvpa2_err[iscan] = fkerr.d2Gdvpa2_M.max ,fkerr.d2Gdvpa2_M.L2
+        max_d2Gdvperpdvpa_err[iscan], L2_d2Gdvperpdvpa_err[iscan] = fkerr.d2Gdvperpdvpa_M.max ,fkerr.d2Gdvperpdvpa_M.L2
+        max_d2Gdvperp2_err[iscan], L2_d2Gdvperp2_err[iscan] = fkerr.d2Gdvperp2_M.max ,fkerr.d2Gdvperp2_M.L2
+        n_err[iscan] = abs(fkerr.moments.delta_density)
+        u_err[iscan] = abs(fkerr.moments.delta_upar)
+        p_err[iscan] = abs(fkerr.moments.delta_pressure)
+    end
+    if global_rank[]==0 && plot_scan
+        fontsize = 8
+        ytick_sequence = Array([1.0e-13,1.0e-12,1.0e-11,1.0e-10,1.0e-9,1.0e-8,1.0e-7,1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0,1.0e1])
+        xlabel = L"N_{element}"
+        Clabel = L"|C|_{\infty}"
+        dHdvpalabel = L"|dH/d v_{\|\|}|_{\infty}"
+        dHdvperplabel = L"|dH/d v_{\perp}|_{\infty}"
+        d2Gdvperp2label = L"|d^2G/d v_{\perp}^2|_{\infty}"
+        d2Gdvpa2label = L"|d^2G/d v_{\|\|}^2|_{\infty}"
+        d2Gdvperpdvpalabel = L"|d^2G/d v_{\perp} d v_{\|\|}|_{\infty}"
+        dGdvperplabel = L"|dG/d v_{\perp}|_{\infty}"
+        
+        #println(max_G_err,max_H_err,max_dHdvpa_err,max_dHdvperp_err,max_d2Gdvperp2_err,max_d2Gdvpa2_err,max_d2Gdvperpdvpa_err,max_dGdvperp_err, expected, expected_integral)
+        plot(nelement_list, [max_C_err,max_dHdvpa_err,max_dHdvperp_err,max_d2Gdvperp2_err,max_d2Gdvpa2_err,max_d2Gdvperpdvpa_err,max_dGdvperp_err, expected, expected_integral],
+        xlabel=xlabel, label=[Clabel dHdvpalabel dHdvperplabel d2Gdvperp2label d2Gdvpa2label d2Gdvperpdvpalabel dGdvperplabel expected_label expected_integral_label], ylabel="",
+         shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_list, nelement_list), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2, 
+          xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize,
+          foreground_color_legend = nothing, background_color_legend = nothing, legend=:bottomleft)
+        outfile = "fkpl_coeffs_numerical_lagrange_integration_max_test_ngrid_"*string(ngrid)*"_GLL.pdf"
+        savefig(outfile)
+        println(outfile)
+        
+        ClabelL2 = L"|C|_{L2}"
+        dHdvpalabelL2 = L"|dH/d v_{\|\|}|_{L2}"
+        dHdvperplabelL2 = L"|dH/d v_{\perp}|_{L2}"
+        d2Gdvperp2labelL2 = L"|d^2G/d v_{\perp}^2|_{L2}"
+        d2Gdvpa2labelL2 = L"|d^2G/d v_{\|\|}^2|_{L2}"
+        d2GdvperpdvpalabelL2 = L"|d^2G/d v_{\perp} d v_{\|\|}|_{L2}"
+        dGdvperplabelL2 = L"|dG/d v_{\perp}|_{L2}"
+        
+        
+        plot(nelement_list, [L2_C_err,L2_dHdvpa_err,L2_dHdvperp_err,L2_d2Gdvperp2_err,L2_d2Gdvpa2_err,L2_d2Gdvperpdvpa_err,L2_dGdvperp_err, expected, expected_integral],
+        xlabel=xlabel, label=[ClabelL2 dHdvpalabelL2 dHdvperplabelL2 d2Gdvperp2labelL2 d2Gdvpa2labelL2 d2GdvperpdvpalabelL2 dGdvperplabelL2 expected_label expected_integral_label], ylabel="",
+         shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_list, nelement_list), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2, 
+          xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize,
+          foreground_color_legend = nothing, background_color_legend = nothing, legend=:bottomleft)
+        outfile = "fkpl_coeffs_numerical_lagrange_integration_L2_test_ngrid_"*string(ngrid)*"_GLL.pdf"
+        savefig(outfile)
+        println(outfile)
+        
+        nlabel = L"|\Delta n|"
+        ulabel = L"|\Delta u_{\|\|}|"
+        plabel = L"|\Delta p|"
+        
+        if test_self_operator
+            plot(nelement_list, [max_C_err, L2_C_err, n_err, u_err, p_err, expected, expected_integral],
+            xlabel=xlabel, label=[Clabel ClabelL2 nlabel ulabel plabel expected_label expected_integral_label], ylabel="",
+             shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_list, nelement_list), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2, 
+              xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize,
+              foreground_color_legend = nothing, background_color_legend = nothing, legend=:bottomleft)
+            outfile = "fkpl_conservation_test_ngrid_"*string(ngrid)*"_GLL.pdf"
+            savefig(outfile)
+            println(outfile)        
+        else
+            plot(nelement_list, [max_C_err, L2_C_err, n_err, expected, expected_integral],
+            xlabel=xlabel, label=[Clabel ClabelL2 nlabel expected_label expected_integral_label], ylabel="",
+             shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_list, nelement_list), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2, 
+              xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize,
+              foreground_color_legend = nothing, background_color_legend = nothing, legend=:bottomleft)
+            outfile = "fkpl_conservation_test_ngrid_"*string(ngrid)*"_GLL.pdf"
+            savefig(outfile)
+            println(outfile)        
+        end
+    end
+    finalize_comms!()
 end
