@@ -76,10 +76,11 @@ if abspath(PROGRAM_FILE) == @__FILE__
         max_err = maximum(func_err)
         @. func_err = func_err^2
         # compute the numerator
-        L2norm = get_density(func_err,vpa,vperp)
+        num = get_density(func_err,vpa,vperp)
         # compute the denominator
         @. func_err = 1.0
-        L2norm /= get_density(func_err,vpa,vperp)
+        denom = get_density(func_err,vpa,vperp)
+        L2norm = sqrt(num/denom)
         println("maximum("*func_name*"_err): ",max_err," L2("*func_name*"_err): ",L2norm)
         return max_err, L2norm
     end
@@ -568,79 +569,6 @@ if abspath(PROGRAM_FILE) == @__FILE__
         end
         return nothing
     end
-    
-    
-    # define inputs needed for the test
-	plot_test_output = false#true
-    impose_zero_gradient_BC = false#true
-    test_parallelism = false#true
-    test_self_operator = true
-    test_dense_construction = false#true
-    ngrid = 3 #number of points per element 
-	nelement_local_vpa = 16 # number of elements per rank
-	nelement_global_vpa = nelement_local_vpa # total number of elements 
-	nelement_local_vperp = 8 # number of elements per rank
-	nelement_global_vperp = nelement_local_vperp # total number of elements 
-	Lvpa = 12.0 #physical box size in reference units 
-	Lvperp = 6.0 #physical box size in reference units 
-	bc = "" #not required to take a particular value, not used 
-	# fd_option and adv_input not actually used so given values unimportant
-	#discretization = "chebyshev_pseudospectral"
-	discretization = "gausslegendre_pseudospectral"
-    fd_option = "fourth_order_centered"
-    cheb_option = "matrix"
-	adv_input = advection_input("default", 1.0, 0.0, 0.0)
-	nrank = 1
-    irank = 0
-    comm = MPI.COMM_NULL
-	# create the 'input' struct containing input info needed to create a
-	# coordinate
-    vpa_input = grid_input("vpa", ngrid, nelement_global_vpa, nelement_local_vpa, 
-		nrank, irank, Lvpa, discretization, fd_option, cheb_option, bc, adv_input,comm)
-	vperp_input = grid_input("vperp", ngrid, nelement_global_vperp, nelement_local_vperp, 
-		nrank, irank, Lvperp, discretization, fd_option, cheb_option, bc, adv_input,comm)
-	# create the coordinate struct 'x'
-	println("made inputs")
-	println("vpa: ngrid: ",ngrid," nelement: ",nelement_local_vpa, " Lvpa: ",Lvpa)
-	println("vperp: ngrid: ",ngrid," nelement: ",nelement_local_vperp, " Lvperp: ",Lvperp)
-	vpa = define_coordinate(vpa_input)
-	vperp = define_coordinate(vperp_input)
-    if vpa.discretization == "chebyshev_pseudospectral" && vpa.n > 1
-        # create arrays needed for explicit Chebyshev pseudospectral treatment in vpa
-        # and create the plans for the forward and backward fast Chebyshev transforms
-        vpa_spectral = setup_chebyshev_pseudospectral(vpa)
-        # obtain the local derivatives of the uniform vpa-grid with respect to the used vpa-grid
-        #chebyshev_derivative!(vpa.duniform_dgrid, vpa.uniform_grid, vpa_spectral, vpa)
-    elseif vpa.discretization == "gausslegendre_pseudospectral" && vpa.n > 1
-        vpa_spectral = setup_gausslegendre_pseudospectral(vpa)
-    else
-        # create dummy Bool variable to return in place of the above struct
-        vpa_spectral = false
-        #vpa.duniform_dgrid .= 1.0
-    end
-
-    if vperp.discretization == "chebyshev_pseudospectral" && vperp.n > 1
-        # create arrays needed for explicit Chebyshev pseudospectral treatment in vperp
-        # and create the plans for the forward and backward fast Chebyshev transforms
-        vperp_spectral = setup_chebyshev_pseudospectral(vperp)
-        # obtain the local derivatives of the uniform vperp-grid with respect to the used vperp-grid
-        #chebyshev_derivative!(vperp.duniform_dgrid, vperp.uniform_grid, vperp_spectral, vperp)
-    elseif vperp.discretization == "gausslegendre_pseudospectral" && vperp.n > 1
-        vperp_spectral = setup_gausslegendre_pseudospectral(vperp)
-    else
-        # create dummy Bool variable to return in place of the above struct
-        vperp_spectral = false
-        #vperp.duniform_dgrid .= 1.0
-    end
-    # Set up MPI
-    initialize_comms!()
-    setup_distributed_memory_MPI(1,1,1,1)
-    looping.setup_loop_ranges!(block_rank[], block_size[];
-                                   s=1, sn=1,
-                                   r=1, z=1, vperp=vperp.n, vpa=vpa.n,
-                                   vzeta=1, vr=1, vz=1)
-    nc_global = vpa.n*vperp.n
-    begin_serial_region()
     
     function assemble_matrix_operators_dirichlet_bc(vpa,vperp,vpa_spectral,vperp_spectral)
         nc_global = vpa.n*vperp.n
@@ -1373,6 +1301,135 @@ if abspath(PROGRAM_FILE) == @__FILE__
         return nothing
     end
     
+    
+    # Elliptic solve function. 
+    # field: the solution
+    # source: the source function on the RHS
+    # boundary data: the known values of field at infinity
+    # lu_object_lhs: the object for the differential operator that defines field
+    # matrix_rhs: the weak matrix acting on the source vector
+    # rhsc, sc: dummy arrays in the compound index (assumed MPISharedArray or SubArray type)
+    # vpa, vperp: coordinate structs
+    function elliptic_solve!(field,source,boundary_data::vpa_vperp_boundary_data,
+                lu_object_lhs,matrix_rhs,rhsc,sc,vpa,vperp)
+        # get data into the compound index format
+        begin_vperp_vpa_region()
+        ravel_vpavperp_to_c_parallel!(sc,source,vpa.n)
+        # assemble the rhs of the weak system
+        begin_serial_region()
+        mul!(rhsc,matrix_rhs,sc)
+        # enforce the boundary conditions
+        enforce_dirichlet_bc!(rhsc,vpa,vperp,boundary_data)
+        # solve the linear system
+        sc = lu_object_lhs \ rhsc
+        # get data into the vpa vperp indices format
+        begin_vperp_vpa_region()
+        ravel_c_to_vpavperp_parallel!(field,sc,vpa.n)
+        return nothing
+    end
+    # same as above but source is made of two different terms
+    # with different weak matrices
+    function elliptic_solve!(field,source_1,source_2,boundary_data::vpa_vperp_boundary_data,
+                lu_object_lhs,matrix_rhs_1,matrix_rhs_2,rhsc_1,rhsc_2,sc_1,sc_2,vpa,vperp)
+        # get data into the compound index format
+        begin_vperp_vpa_region()
+        ravel_vpavperp_to_c_parallel!(sc_1,source_1,vpa.n)
+        ravel_vpavperp_to_c_parallel!(sc_2,source_2,vpa.n)
+        
+        # assemble the rhs of the weak system
+        begin_serial_region()
+        mul!(rhsc_1,matrix_rhs_1,sc_1)
+        mul!(rhsc_2,matrix_rhs_2,sc_2)
+        @loop_vperp_vpa ivperp ivpa begin
+            ic = ic_func(ivpa,ivperp,vpa.n)
+            rhsc_1[ic] += rhsc_2[ic]
+        end
+        # enforce the boundary conditions
+        enforce_dirichlet_bc!(rhsc_1,vpa,vperp,boundary_data)
+        # solve the linear system
+        sc_1 = lu_object_lhs \ rhsc_1
+        # get data into the vpa vperp indices format
+        begin_vperp_vpa_region()
+        ravel_c_to_vpavperp_parallel!(field,sc_1,vpa.n)
+        return nothing
+    end
+    
+    
+    
+    # define inputs needed for the test
+	plot_test_output = false#true
+    impose_zero_gradient_BC = false#true
+    test_parallelism = false#true
+    test_self_operator = true
+    test_dense_construction = false#true
+    ngrid = 3 #number of points per element 
+	nelement_local_vpa = 16 # number of elements per rank
+	nelement_global_vpa = nelement_local_vpa # total number of elements 
+	nelement_local_vperp = 8 # number of elements per rank
+	nelement_global_vperp = nelement_local_vperp # total number of elements 
+	Lvpa = 12.0 #physical box size in reference units 
+	Lvperp = 6.0 #physical box size in reference units 
+	bc = "" #not required to take a particular value, not used 
+	# fd_option and adv_input not actually used so given values unimportant
+	#discretization = "chebyshev_pseudospectral"
+	discretization = "gausslegendre_pseudospectral"
+    fd_option = "fourth_order_centered"
+    cheb_option = "matrix"
+	adv_input = advection_input("default", 1.0, 0.0, 0.0)
+	nrank = 1
+    irank = 0
+    comm = MPI.COMM_NULL
+	# create the 'input' struct containing input info needed to create a
+	# coordinate
+    vpa_input = grid_input("vpa", ngrid, nelement_global_vpa, nelement_local_vpa, 
+		nrank, irank, Lvpa, discretization, fd_option, cheb_option, bc, adv_input,comm)
+	vperp_input = grid_input("vperp", ngrid, nelement_global_vperp, nelement_local_vperp, 
+		nrank, irank, Lvperp, discretization, fd_option, cheb_option, bc, adv_input,comm)
+	# create the coordinate struct 'x'
+	println("made inputs")
+	println("vpa: ngrid: ",ngrid," nelement: ",nelement_local_vpa, " Lvpa: ",Lvpa)
+	println("vperp: ngrid: ",ngrid," nelement: ",nelement_local_vperp, " Lvperp: ",Lvperp)
+	vpa = define_coordinate(vpa_input)
+	vperp = define_coordinate(vperp_input)
+    if vpa.discretization == "chebyshev_pseudospectral" && vpa.n > 1
+        # create arrays needed for explicit Chebyshev pseudospectral treatment in vpa
+        # and create the plans for the forward and backward fast Chebyshev transforms
+        vpa_spectral = setup_chebyshev_pseudospectral(vpa)
+        # obtain the local derivatives of the uniform vpa-grid with respect to the used vpa-grid
+        #chebyshev_derivative!(vpa.duniform_dgrid, vpa.uniform_grid, vpa_spectral, vpa)
+    elseif vpa.discretization == "gausslegendre_pseudospectral" && vpa.n > 1
+        vpa_spectral = setup_gausslegendre_pseudospectral(vpa)
+    else
+        # create dummy Bool variable to return in place of the above struct
+        vpa_spectral = false
+        #vpa.duniform_dgrid .= 1.0
+    end
+
+    if vperp.discretization == "chebyshev_pseudospectral" && vperp.n > 1
+        # create arrays needed for explicit Chebyshev pseudospectral treatment in vperp
+        # and create the plans for the forward and backward fast Chebyshev transforms
+        vperp_spectral = setup_chebyshev_pseudospectral(vperp)
+        # obtain the local derivatives of the uniform vperp-grid with respect to the used vperp-grid
+        #chebyshev_derivative!(vperp.duniform_dgrid, vperp.uniform_grid, vperp_spectral, vperp)
+    elseif vperp.discretization == "gausslegendre_pseudospectral" && vperp.n > 1
+        vperp_spectral = setup_gausslegendre_pseudospectral(vperp)
+    else
+        # create dummy Bool variable to return in place of the above struct
+        vperp_spectral = false
+        #vperp.duniform_dgrid .= 1.0
+    end
+    # Set up MPI
+    initialize_comms!()
+    setup_distributed_memory_MPI(1,1,1,1)
+    looping.setup_loop_ranges!(block_rank[], block_size[];
+                                   s=1, sn=1,
+                                   r=1, z=1, vperp=vperp.n, vpa=vpa.n,
+                                   vzeta=1, vr=1, vz=1)
+    nc_global = vpa.n*vperp.n
+    begin_serial_region()
+    
+    
+    
     if test_dense_construction
         MM2D_sparse, KKpar2D_sparse, KKperp2D_sparse, LP2D_sparse, LV2D_sparse,
         PUperp2D_sparse, PPparPUperp2D_sparse, PPpar2D_sparse,
@@ -1578,58 +1635,6 @@ if abspath(PROGRAM_FILE) == @__FILE__
         println("begin elliptic solve   ", Dates.format(now(), dateformat"H:MM:SS"))
     end
     
-    # Elliptic solve function. 
-    # field: the solution
-    # source: the source function on the RHS
-    # boundary data: the known values of field at infinity
-    # lu_object_lhs: the object for the differential operator that defines field
-    # matrix_rhs: the weak matrix acting on the source vector
-    # rhsc, sc: dummy arrays in the compound index (assumed MPISharedArray or SubArray type)
-    # vpa, vperp: coordinate structs
-    function elliptic_solve!(field,source,boundary_data::vpa_vperp_boundary_data,
-                lu_object_lhs,matrix_rhs,rhsc,sc,vpa,vperp)
-        # get data into the compound index format
-        begin_vperp_vpa_region()
-        ravel_vpavperp_to_c_parallel!(sc,source,vpa.n)
-        # assemble the rhs of the weak system
-        begin_serial_region()
-        mul!(rhsc,matrix_rhs,sc)
-        # enforce the boundary conditions
-        enforce_dirichlet_bc!(rhsc,vpa,vperp,boundary_data)
-        # solve the linear system
-        sc = lu_object_lhs \ rhsc
-        # get data into the vpa vperp indices format
-        begin_vperp_vpa_region()
-        ravel_c_to_vpavperp_parallel!(field,sc,vpa.n)
-        return nothing
-    end
-    # same as above but source is made of two different terms
-    # with different weak matrices
-    function elliptic_solve!(field,source_1,source_2,boundary_data::vpa_vperp_boundary_data,
-                lu_object_lhs,matrix_rhs_1,matrix_rhs_2,rhsc_1,rhsc_2,sc_1,sc_2,vpa,vperp)
-        # get data into the compound index format
-        begin_vperp_vpa_region()
-        ravel_vpavperp_to_c_parallel!(sc_1,source_1,vpa.n)
-        ravel_vpavperp_to_c_parallel!(sc_2,source_2,vpa.n)
-        
-        # assemble the rhs of the weak system
-        begin_serial_region()
-        mul!(rhsc_1,matrix_rhs_1,sc_1)
-        mul!(rhsc_2,matrix_rhs_2,sc_2)
-        @loop_vperp_vpa ivperp ivpa begin
-            ic = ic_func(ivpa,ivperp,vpa.n)
-            rhsc_1[ic] += rhsc_2[ic]
-        end
-        # enforce the boundary conditions
-        enforce_dirichlet_bc!(rhsc_1,vpa,vperp,boundary_data)
-        # solve the linear system
-        sc_1 = lu_object_lhs \ rhsc_1
-        # get data into the vpa vperp indices format
-        begin_vperp_vpa_region()
-        ravel_c_to_vpavperp_parallel!(field,sc_1,vpa.n)
-        return nothing
-    end
-    
     begin_vperp_vpa_region()
     @loop_vperp_vpa ivperp ivpa begin
         S_dummy[ivpa,ivperp] = -(4.0/sqrt(pi))*F_M[ivpa,ivperp]
@@ -1667,19 +1672,6 @@ if abspath(PROGRAM_FILE) == @__FILE__
     elliptic_solve!(d2Gdvperp2_M_num,S_dummy,Q_dummy,rpbd.d2Gdvperp2_data,
                 lu_obj_MM,MM2D_sparse,MMparMNperp2D_sparse,
                 rhsc,rhqc,sc,qc,vpa,vperp)
-    #begin_serial_region()
-    #@. S_dummy = -dGdvperp_M_num
-    #ravel_vpavperp_to_c!(fc,S_dummy,vpa.n,vperp.n)
-    #enforce_zero_bc!(fc,vpa,vperp)
-    #mul!(dfc,MMparMNperp2D_sparse,fc)
-    #@. S_dummy = 2.0*H_M_num - d2Gdvpa2_M_num
-    #ravel_vpavperp_to_c!(fc,S_dummy,vpa.n,vperp.n)
-    #mul!(dgc,MM2D_sparse,fc)
-    #dfc += dgc
-    #enforce_dirichlet_bc!(dfc,vpa,vperp,d2Gdvperp2_M_exact,dirichlet_vperp_BC=impose_BC_at_zero_vperp)
-    #enforce_dirichlet_bc!(dfc,vpa,vperp,rpbd.d2Gdvperp2_data)
-    #fc = lu_obj_MM \ dfc
-    #ravel_c_to_vpavperp!(d2Gdvperp2_M_num,fc,nc_global,vpa.n)
     @serial_region begin
         println("finished elliptic solve   ", Dates.format(now(), dateformat"H:MM:SS"))
     end
@@ -1774,4 +1766,6 @@ if abspath(PROGRAM_FILE) == @__FILE__
         end
         fkerr.moments.delta_density = delta_n
     end
+    
+    return fkerr
 end
