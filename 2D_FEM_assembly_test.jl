@@ -75,9 +75,53 @@ if abspath(PROGRAM_FILE) == @__FILE__
         @. func_err = abs(func_num - func_exact)
         max_err = maximum(func_err)
         @. func_err = func_err^2
+        # compute the numerator
         L2norm = get_density(func_err,vpa,vperp)
+        # compute the denominator
+        @. func_err = 1.0
+        L2norm /= get_density(func_err,vpa,vperp)
         println("maximum("*func_name*"_err): ",max_err," L2("*func_name*"_err): ",L2norm)
         return max_err, L2norm
+    end
+    
+    mutable struct error_data
+        max::mk_float
+        L2::mk_float
+    end
+    
+    mutable struct moments_error_data
+        delta_density::mk_float
+        delta_upar::mk_float
+        delta_pressure::mk_float
+    end
+    
+    struct fkpl_error_data
+        C_M::error_data
+        H_M::error_data
+        dHdvpa_M::error_data
+        dHdvperp_M::error_data
+        G_M::error_data
+        dGdvperp_M::error_data
+        d2Gdvpa2_M::error_data
+        d2Gdvperpdvpa_M::error_data
+        d2Gdvperp2_M::error_data
+        moments::moments_error_data
+    end
+    
+    function allocate_error_data()
+        C_M = error_data(0.0,0.0)
+        H_M = error_data(0.0,0.0)
+        dHdvpa_M = error_data(0.0,0.0)
+        dHdvperp_M = error_data(0.0,0.0)
+        G_M = error_data(0.0,0.0)
+        dGdvperp_M = error_data(0.0,0.0)
+        d2Gdvpa2_M = error_data(0.0,0.0)
+        d2Gdvperpdvpa_M = error_data(0.0,0.0)
+        d2Gdvperp2_M = error_data(0.0,0.0)
+        moments = moments_error_data(0.0,0.0,0.0)
+        return fkpl_error_data(C_M,H_M,dHdvpa_M,dHdvperp_M,
+            G_M,dGdvperp_M,d2Gdvpa2_M,d2Gdvperpdvpa_M,d2Gdvpa2_M,
+            moments)
     end
     # Array in compound 1D form 
     
@@ -527,7 +571,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     
     
     # define inputs needed for the test
-	plot_test_output = true
+	plot_test_output = false#true
     impose_zero_gradient_BC = false#true
     test_parallelism = false#true
     test_self_operator = true
@@ -1679,21 +1723,23 @@ if abspath(PROGRAM_FILE) == @__FILE__
     #ravel_c_to_vpavperp!(C_M_num,fc,nc_global,vpa.n)
     ravel_c_to_vpavperp_parallel!(C_M_num,fc,vpa.n)
     begin_serial_region()
+    fkerr = allocate_error_data()
+    println(fkerr)
     @serial_region begin
         println("finished C calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
         
         # test the boundary data calculation
         test_rosenbluth_potential_boundary_data(rpbd,rpbd_exact,vpa,vperp)
         
-        H_M_max_err, H_M_L2_err = print_test_data(H_M_exact,H_M_num,H_M_err,"H_M",vpa,vperp)
-        dHdvpa_M_max_err, dHdvpa_M_L2_err = print_test_data(dHdvpa_M_exact,dHdvpa_M_num,dHdvpa_M_err,"dHdvpa_M",vpa,vperp)
-        dHdvperp_M_max_err, dHdvperp_M_L2_err = print_test_data(dHdvperp_M_exact,dHdvperp_M_num,dHdvperp_M_err,"dHdvperp_M",vpa,vperp)
-        G_M_max_err, G_M_L2_err = print_test_data(G_M_exact,G_M_num,G_M_err,"G_M",vpa,vperp)
-        d2Gdvpa2_M_max_err, d2Gdvpa2_M_L2_err = print_test_data(d2Gdvpa2_M_exact,d2Gdvpa2_M_num,d2Gdvpa2_M_err,"d2Gdvpa2_M",vpa,vperp)
-        dGdvperp_M_max_err, dGdvperp_M_L2_err = print_test_data(dGdvperp_M_exact,dGdvperp_M_num,dGdvperp_M_err,"dGdvperp_M",vpa,vperp)
-        d2Gdvperpdvpa_M_max_err, d2Gdvperpdvpa_M_L2_err = print_test_data(d2Gdvperpdvpa_M_exact,d2Gdvperpdvpa_M_num,d2Gdvperpdvpa_M_err,"d2Gdvperpdvpa_M",vpa,vperp)
-        d2Gdvperp2_M_max_err, d2Gdvperp2_M_L2_err = print_test_data(d2Gdvperp2_M_exact,d2Gdvperp2_M_num,d2Gdvperp2_M_err,"d2Gdvperp2_M",vpa,vperp)
-        C_M_max_err, C_M_L2_err = print_test_data(C_M_exact,C_M_num,C_M_err,"C_M",vpa,vperp)
+        fkerr.H_M.max, fkerr.H_M.L2 = print_test_data(H_M_exact,H_M_num,H_M_err,"H_M",vpa,vperp)
+        fkerr.dHdvpa_M.max, fkerr.dHdvpa_M.L2 = print_test_data(dHdvpa_M_exact,dHdvpa_M_num,dHdvpa_M_err,"dHdvpa_M",vpa,vperp)
+        fkerr.dHdvperp_M.max, fkerr.dHdvperp_M.L2 = print_test_data(dHdvperp_M_exact,dHdvperp_M_num,dHdvperp_M_err,"dHdvperp_M",vpa,vperp)
+        fkerr.G_M.max, fkerr.G_M.L2 = print_test_data(G_M_exact,G_M_num,G_M_err,"G_M",vpa,vperp)
+        fkerr.d2Gdvpa2_M.max, fkerr.d2Gdvpa2_M.L2 = print_test_data(d2Gdvpa2_M_exact,d2Gdvpa2_M_num,d2Gdvpa2_M_err,"d2Gdvpa2_M",vpa,vperp)
+        fkerr.dGdvperp_M.max, fkerr.dGdvperp_M.L2 = print_test_data(dGdvperp_M_exact,dGdvperp_M_num,dGdvperp_M_err,"dGdvperp_M",vpa,vperp)
+        fkerr.d2Gdvperpdvpa_M.max, fkerr.d2Gdvperpdvpa_M.L2 = print_test_data(d2Gdvperpdvpa_M_exact,d2Gdvperpdvpa_M_num,d2Gdvperpdvpa_M_err,"d2Gdvperpdvpa_M",vpa,vperp)
+        fkerr.d2Gdvperp2_M.max, fkerr.d2Gdvperp2_M.L2 = print_test_data(d2Gdvperp2_M_exact,d2Gdvperp2_M_num,d2Gdvperp2_M_err,"d2Gdvperp2_M",vpa,vperp)
+        fkerr.C_M.max, fkerr.C_M.L2 = print_test_data(C_M_exact,C_M_num,C_M_err,"C_M",vpa,vperp)
         
         if plot_test_output
             plot_test_data(C_M_exact,C_M_num,C_M_err,"C_M",vpa,vperp)
@@ -1718,10 +1764,14 @@ if abspath(PROGRAM_FILE) == @__FILE__
             println("delta_upar: ", delta_upar)
             println("delta_pressure: ", delta_pressure)
         end
+        fkerr.moments.delta_density = delta_n
+        fkerr.moments.delta_upar = delta_upar
+        fkerr.moments.delta_pressure = delta_pressure
     else
         delta_n = get_density(C_M_num, vpa, vperp)
         @serial_region begin
             println("delta_n: ", delta_n)
         end
+        fkerr.moments.delta_density = delta_n
     end
 end
