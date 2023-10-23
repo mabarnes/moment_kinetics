@@ -1797,17 +1797,18 @@ if abspath(PROGRAM_FILE) == @__FILE__
     end
     
     initialize_comms!()
-    ngrid = 3
+    ngrid = 5
     plot_scan = true
     plot_test_output = false
     impose_zero_gradient_BC = false
     test_parallelism = false
     test_self_operator = true
     test_dense_construction = false
-    #nelement_list = Int[8, 16, 32, 64, 128]
+    #nelement_list = Int[8, 16, 32, 64, 128, 256]
     #nelement_list = Int[8, 16, 32, 64]
-    nelement_list = Int[2, 4]
-    #nelement_list = Int[2, 4, 8, 16]
+    nelement_list = Int[2, 4, 8]
+    #nelement_list = Int[4, 8, 16, 32, 64]
+    #nelement_list = Int[2, 4, 8, 16, 32]
     #nelement_list = Int[100]
     #nelement_list = Int[8]
     nscan = size(nelement_list,1)
@@ -1879,15 +1880,15 @@ if abspath(PROGRAM_FILE) == @__FILE__
         fontsize = 8
         ytick_sequence = Array([1.0e-13,1.0e-12,1.0e-11,1.0e-10,1.0e-9,1.0e-8,1.0e-7,1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0,1.0e1])
         xlabel = L"N_{element}"
-        Clabel = L"|C|_{\infty}"
-        Hlabel = L"|H|_{\infty}"
-        Glabel = L"|G|_{\infty}"
-        dHdvpalabel = L"|dH/d v_{\|\|}|_{\infty}"
-        dHdvperplabel = L"|dH/d v_{\perp}|_{\infty}"
-        d2Gdvperp2label = L"|d^2G/d v_{\perp}^2|_{\infty}"
-        d2Gdvpa2label = L"|d^2G/d v_{\|\|}^2|_{\infty}"
-        d2Gdvperpdvpalabel = L"|d^2G/d v_{\perp} d v_{\|\|}|_{\infty}"
-        dGdvperplabel = L"|dG/d v_{\perp}|_{\infty}"
+        Clabel = L"\epsilon_{\infty}(C)"
+        Hlabel = L"\epsilon_{\infty}(H)"
+        Glabel = L"\epsilon_{\infty}(G)"
+        dHdvpalabel = L"\epsilon_{\infty}(dH/d v_{\|\|})"
+        dHdvperplabel = L"\epsilon_{\infty}(dH/d v_{\perp})"
+        d2Gdvperp2label = L"\epsilon_{\infty}(d^2G/d v_{\perp}^2)"
+        d2Gdvpa2label = L"\epsilon_{\infty}(d^2G/d v_{\|\|}^2)"
+        d2Gdvperpdvpalabel = L"\epsilon_{\infty}(d^2G/d v_{\perp} d v_{\|\|})"
+        dGdvperplabel = L"\epsilon_{\infty}(dG/d v_{\perp})"
         
         #println(max_G_err,max_H_err,max_dHdvpa_err,max_dHdvperp_err,max_d2Gdvperp2_err,max_d2Gdvpa2_err,max_d2Gdvperpdvpa_err,max_dGdvperp_err, expected, expected_integral)
         plot(nelement_list, [max_C_err,max_H_err,max_G_err, expected, expected_integral],
@@ -1910,15 +1911,15 @@ if abspath(PROGRAM_FILE) == @__FILE__
         
         
         
-        ClabelL2 = L"|C|_{L2}"
-        HlabelL2 = L"|H|_{L2}"
-        GlabelL2 = L"|G|_{L2}"
-        dHdvpalabelL2 = L"|dH/d v_{\|\|}|_{L2}"
-        dHdvperplabelL2 = L"|dH/d v_{\perp}|_{L2}"
-        d2Gdvperp2labelL2 = L"|d^2G/d v_{\perp}^2|_{L2}"
-        d2Gdvpa2labelL2 = L"|d^2G/d v_{\|\|}^2|_{L2}"
-        d2GdvperpdvpalabelL2 = L"|d^2G/d v_{\perp} d v_{\|\|}|_{L2}"
-        dGdvperplabelL2 = L"|dG/d v_{\perp}|_{L2}"
+        ClabelL2 = L"\epsilon_{L2}(C)"
+        HlabelL2 = L"\epsilon_{L2}(H)"
+        GlabelL2 = L"\epsilon_{L2}(G)"
+        dHdvpalabelL2 = L"\epsilon_{L2}(dH/d v_{\|\|})"
+        dHdvperplabelL2 = L"\epsilon_{L2}(dH/d v_{\perp})"
+        d2Gdvperp2labelL2 = L"\epsilon_{L2}(d^2G/d v_{\perp}^2)"
+        d2Gdvpa2labelL2 = L"\epsilon_{L2}(d^2G/d v_{\|\|}^2)"
+        d2GdvperpdvpalabelL2 = L"\epsilon_{L2}(d^2G/d v_{\perp} d v_{\|\|})"
+        dGdvperplabelL2 = L"\epsilon_{L2}(dG/d v_{\perp})"
         
         
         plot(nelement_list, [L2_C_err,L2_H_err,L2_G_err, expected, expected_integral],
