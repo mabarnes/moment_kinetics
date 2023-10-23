@@ -1430,7 +1430,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
                                        vzeta=1, vr=1, vz=1)
         nc_global = vpa.n*vperp.n
         begin_serial_region()
-        
+        start_init_time = now()
         
         
         if test_dense_construction
@@ -1624,6 +1624,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
         end
         YY_arrays = calculate_YY_arrays(vpa,vperp,vpa_spectral,vperp_spectral)
         
+        finish_init_time = now()
+        
         begin_serial_region()
         # do the numerical integration at the boundaries (N.B. G not supported)
         @serial_region begin 
@@ -1717,6 +1719,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
         end
         #ravel_c_to_vpavperp!(C_M_num,fc,nc_global,vpa.n)
         ravel_c_to_vpavperp_parallel!(C_M_num,fc,vpa.n)
+        init_time = Dates.value(finish_init_time - start_init_time)
+        calculate_time = Dates.value(now() - finish_init_time)
         begin_serial_region()
         fkerr = allocate_error_data()
         println(fkerr)
@@ -1772,7 +1776,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         if standalone
             finalize_comms!()
         end
-        return fkerr
+        return fkerr, calculate_time, init_time
     end
 
     function expected_nelement_scaling!(expected,nelement_list,ngrid,nscan)
@@ -1789,17 +1793,17 @@ if abspath(PROGRAM_FILE) == @__FILE__
 
     
     initialize_comms!()
-    ngrid = 3
+    ngrid = 9
     plot_scan = true
     plot_test_output = false
     impose_zero_gradient_BC = false
     test_parallelism = false
     test_self_operator = true
     test_dense_construction = false
-    nelement_list = Int[8, 16, 32, 64, 128]
-    #nelement_list = Int[2, 4, 8, 16, 32]
+    #nelement_list = Int[8, 16, 32, 64, 128]
+    #nelement_list = Int[8, 16, 32, 64]
     #nelement_list = Int[2, 4]
-    #nelement_list = Int[2, 4, 8]
+    nelement_list = Int[2, 4, 8, 16]
     #nelement_list = Int[100]
     #nelement_list = Int[8]
     nscan = size(nelement_list,1)
@@ -1826,6 +1830,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
     n_err = Array{mk_float,1}(undef,nscan)
     u_err = Array{mk_float,1}(undef,nscan)
     p_err = Array{mk_float,1}(undef,nscan)
+    calculate_times = Array{mk_float,1}(undef,nscan)
+    init_times = Array{mk_float,1}(undef,nscan)
     
     expected = Array{mk_float,1}(undef,nscan)
     expected_nelement_scaling!(expected,nelement_list,ngrid,nscan)
@@ -1839,7 +1845,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         local nelement = nelement_list[iscan]
         nelement_vpa = 2*nelement
         nelement_vperp = nelement
-        fkerr = test_weak_form_collisions(ngrid,nelement_vpa,nelement_vperp,
+        fkerr, calculate_times[iscan], init_times[iscan] = test_weak_form_collisions(ngrid,nelement_vpa,nelement_vperp,
         plot_test_output=plot_test_output,
         impose_zero_gradient_BC=impose_zero_gradient_BC,
         test_parallelism=test_parallelism,
@@ -1922,6 +1928,17 @@ if abspath(PROGRAM_FILE) == @__FILE__
             savefig(outfile)
             println(outfile)        
         end
+        
+        calculate_timeslabel = "time/step (ms)"
+        init_timeslabel = "time/init (ms)"
+        plot(nelement_list, [calculate_times, init_times],
+        xlabel=xlabel, label=[calculate_timeslabel init_timeslabel], ylabel="",
+         shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_list, nelement_list), yticks = (ytick_sequence, ytick_sequence), markersize = 5, linewidth=2, 
+          xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize,
+          foreground_color_legend = nothing, background_color_legend = nothing, legend=:bottomleft)
+        outfile = "fkpl_timing_test_ngrid_"*string(ngrid)*"_GLL.pdf"
+        savefig(outfile)
+        println(outfile)
     end
     finalize_comms!()
 end
