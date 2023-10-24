@@ -18,8 +18,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
 	ngrid = 17 #number of points per element 
 	nelement_local = 20 # number of elements per rank
 	nelement_global = nelement_local # total number of elements 
-	Lvpa = 12.0 #physical box size in reference units 
-	Lvperp = 6.0 #physical box size in reference units 
+	Lvpa = 18.0 #physical box size in reference units 
+	Lvperp = 9.0 #physical box size in reference units 
 	bc = "" #not required to take a particular value, not used 
 	# fd_option and adv_input not actually used so given values unimportant
 	discretization = "chebyshev_pseudospectral"
