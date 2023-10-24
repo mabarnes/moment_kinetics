@@ -93,7 +93,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     upar = 2.0/3.0
     ppar = 2.0/3.0 
     mass = 1.0
-    vth = sqrt(ppar/(dens*mass))
+    vth = sqrt(2.0*ppar/(dens*mass))
     for ivz in 1:vz.n
         for ivr in 1:vr.n
             vz_val = vz.grid[ivz]
