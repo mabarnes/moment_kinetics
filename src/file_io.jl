@@ -785,8 +785,8 @@ function reopen_moments_io(file_info)
         end
         return io_moments_info(fid, getvar("time"), getvar("phi"), getvar("Er"),
                                getvar("Ez"), getvar("density"), getvar("parallel_flow"),
-                               getvar("parallel_pressure"), getvar("parallel_heat_flux"),
-                               getvar("perpendicular_pressure"),
+                               getvar("parallel_pressure"), getvar("perpendicular_pressure"),
+                               getvar("parallel_heat_flux"),
                                getvar("thermal_speed"), getvar("density_neutral"),
                                getvar("uz_neutral"), getvar("pz_neutral"),
                                getvar("qz_neutral"), getvar("thermal_speed_neutral"),
