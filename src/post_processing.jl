@@ -1166,9 +1166,9 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
          L"\widetilde{u}_{\|\|i}",L"\widetilde{u}_{\|\|i}^{sym}",L"\varepsilon(\widetilde{u}_{\|\|i})","upar")
         compare_moments_symbolic_test(run_name_label,parallel_pressure,ppar_sym,"ion",z_global.grid,r_global.grid,time,z_global.n,r_global.n,ntime,
          L"\widetilde{p}_{\|\|i}",L"\widetilde{p}_{\|\|i}^{sym}",L"\varepsilon(\widetilde{p}_{\|\|i})","ppar")
-        compare_moments_symbolic_test(run_name,perpendicular_pressure,pperp_sym,"ion",z_global.grid,r_global.grid,time,z_global.n,r_global.n,ntime,
+        compare_moments_symbolic_test(run_name_label,perpendicular_pressure,pperp_sym,"ion",z_global.grid,r_global.grid,time,z_global.n,r_global.n,ntime,
          L"\widetilde{p}_{\perp i}",L"\widetilde{p}_{\perp i}^{sym}",L"\varepsilon(\widetilde{p}_{\perp i})","pperp")
-        compare_moments_symbolic_test(run_name,thermal_speed,vthi_sym,"ion",z_global.grid,r_global.grid,time,z_global.n,r_global.n,ntime,
+        compare_moments_symbolic_test(run_name_label,thermal_speed,vthi_sym,"ion",z_global.grid,r_global.grid,time,z_global.n,r_global.n,ntime,
          L"\widetilde{v}_{th,i}",L"\widetilde{v}_{th,i}^{sym}",L"\varepsilon(\widetilde{v}_{th,i})","vthi")
 
         compare_charged_pdf_symbolic_test(run_name_label,manufactured_solns_list,"ion",
