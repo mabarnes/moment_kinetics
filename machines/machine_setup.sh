@@ -203,10 +203,11 @@ echo
 JULIA_DIRECTORY=$JULIA_DEPOT_PATH
 echo "It can be useful or necessary to set a non-default location for the "
 echo ".julia directory. Leave this empty if the default location is OK."
-echo "Enter the current directory '.' to isolate the julia used for this "
-echo "instance of moment_kinetics - this might be useful to ensure a 'clean'"
-echo "install or to check whether some error is related to conflicting or "
-echo "corrupted dependencies or cached precompilation files, etc."
+echo "Enter a name for a subdirectory of the current directory, e.g. "
+echo "'.julia', to isolate the julia used for this instance of "
+echo "moment_kinetics - this might be useful to ensure a 'clean' install or "
+echo "to check whether some error is related to conflicting or corrupted "
+echo "dependencies or cached precompilation files, etc."
 echo "Enter location that should be used for the .julia directory [$JULIA_DIRECTORY]:"
 # Use '-e' option to get path auto-completion
 read -e -p "> "  input
