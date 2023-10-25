@@ -456,6 +456,9 @@ using IfElse
         # ion manufactured solutions
         densi = densi_sym(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc, composition,
                           manufactured_solns_input, charged_species)
+        upari = upari_sym(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc, composition, geometry, r_coord.n, manufactured_solns_input, charged_species)
+        vthi = vthi_sym(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc, composition, manufactured_solns_input,
+                          charged_species, vperp_coord.n)
         dfni = dfni_sym(r_coord.L, z_coord.L, r_coord.bc, z_coord.bc, composition,
                         geometry, r_coord.n, manufactured_solns_input, charged_species)
         #dfni in vr vz vzeta coordinates
@@ -519,6 +522,19 @@ using IfElse
         if num_diss_params.z_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
             Si += - num_diss_params.z_dissipation_coefficient*Dz(Dz(dfni))
         end
+        nu_krook = collisions.krook_collision_frequency_prefactor
+        if nu_krook > 0.0
+            tempi = vthi^2
+            nu_ii = nu_krook * densi * (tempi^(-3.0/2.0))
+            if vperp_coord.n > 1
+                pvth  = 3
+            else 
+                pvth = 1
+            end
+            FMaxwellian = (densi/vthi^pvth)*exp( -( ( vpa-upari)^2 + vperp^2 )/vthi^2)
+            Si += -nu_krook*(FMaxwellian - dfni)
+        end
+
 
         Source_i = expand_derivatives(Si)
         
