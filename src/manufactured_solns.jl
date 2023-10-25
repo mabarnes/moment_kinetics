@@ -517,7 +517,7 @@ using IfElse
             Si += - num_diss_params.vpa_dissipation_coefficient*Dvpa(Dvpa(dfni))
         end
         if num_diss_params.r_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
-            Si += - num_diss_params.r_dissipation_coefficient*Dr(Dr(dfni))
+            Si += - rfac*num_diss_params.r_dissipation_coefficient*Dr(Dr(dfni))
         end
         if num_diss_params.z_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
             Si += - num_diss_params.z_dissipation_coefficient*Dz(Dz(dfni))
