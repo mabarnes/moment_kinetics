@@ -1366,7 +1366,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         #ngrid = 3 #number of points per element 
         nelement_local_vpa = nelement_vpa # number of elements per rank
         nelement_global_vpa = nelement_local_vpa # total number of elements 
-        nelement_local_vperp = nelement_vpa # number of elements per rank
+        nelement_local_vperp = nelement_vperp # number of elements per rank
         nelement_global_vperp = nelement_local_vperp # total number of elements 
         #Lvpa = 12.0 #physical box size in reference units 
         #Lvperp = 6.0 #physical box size in reference units 
@@ -1797,18 +1797,19 @@ if abspath(PROGRAM_FILE) == @__FILE__
     end
     
     initialize_comms!()
-    ngrid = 5
+    ngrid = 3
     plot_scan = true
     plot_test_output = false
     impose_zero_gradient_BC = false
     test_parallelism = false
     test_self_operator = true
     test_dense_construction = false
-    #nelement_list = Int[8, 16, 32, 64, 128, 256]
-    #nelement_list = Int[8, 16, 32, 64]
-    nelement_list = Int[2, 4, 8]
+    nelement_list = Int[8, 16, 32, 64, 128]
+    #nelement_list = Int[4, 8, 16, 32, 64]
+    #nelement_list = Int[2, 4, 8]
     #nelement_list = Int[4, 8, 16, 32, 64]
     #nelement_list = Int[2, 4, 8, 16, 32]
+    #nelement_list = Int[2, 4, 8, 16]
     #nelement_list = Int[100]
     #nelement_list = Int[8]
     nscan = size(nelement_list,1)
@@ -1878,7 +1879,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
     end
     if global_rank[]==0 && plot_scan
         fontsize = 8
-        ytick_sequence = Array([1.0e-13,1.0e-12,1.0e-11,1.0e-10,1.0e-9,1.0e-8,1.0e-7,1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0,1.0e1])
+        #ytick_sequence = Array([1.0e-13,1.0e-12,1.0e-11,1.0e-10,1.0e-9,1.0e-8,1.0e-7,1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1,1.0e-0,1.0e1])
+        ytick_sequence = Array([1.0e-12,1.0e-11,1.0e-10,1.0e-9,1.0e-8,1.0e-7,1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1])
         xlabel = L"N_{element}"
         Clabel = L"\epsilon_{\infty}(C)"
         Hlabel = L"\epsilon_{\infty}(H)"
@@ -1899,6 +1901,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         outfile = "fkpl_C_G_H_max_test_ngrid_"*string(ngrid)*"_GLL.pdf"
         savefig(outfile)
         println(outfile)
+        println([max_C_err,max_H_err,max_G_err, expected, expected_integral])
         
         plot(nelement_list,  [max_dHdvpa_err, max_dHdvperp_err, max_d2Gdvperp2_err, max_d2Gdvpa2_err, max_d2Gdvperpdvpa_err, max_dGdvperp_err, expected,      expected_integral],
         xlabel=xlabel, label=[dHdvpalabel     dHdvperplabel     d2Gdvperp2label     d2Gdvpa2label     d2Gdvperpdvpalabel     dGdvperplabel     expected_label expected_integral_label], ylabel="",
@@ -1908,7 +1911,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         outfile = "fkpl_coeffs_max_test_ngrid_"*string(ngrid)*"_GLL.pdf"
         savefig(outfile)
         println(outfile)
-        
+        println([max_dHdvpa_err, max_dHdvperp_err, max_d2Gdvperp2_err, max_d2Gdvpa2_err, max_d2Gdvperpdvpa_err, max_dGdvperp_err, expected,      expected_integral])
         
         
         ClabelL2 = L"\epsilon_{L2}(C)"
@@ -1930,6 +1933,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         outfile = "fkpl_C_G_H_L2_test_ngrid_"*string(ngrid)*"_GLL.pdf"
         savefig(outfile)
         println(outfile)
+        println([L2_C_err,L2_H_err,L2_G_err, expected, expected_integral])
         
         plot(nelement_list,  [L2_dHdvpa_err, L2_dHdvperp_err, L2_d2Gdvperp2_err, L2_d2Gdvpa2_err, L2_d2Gdvperpdvpa_err, L2_dGdvperp_err,  expected,      expected_integral],
         xlabel=xlabel, label=[dHdvpalabelL2  dHdvperplabelL2  d2Gdvperp2labelL2  d2Gdvpa2labelL2  d2GdvperpdvpalabelL2  dGdvperplabelL2   expected_label expected_integral_label], ylabel="",
@@ -1939,6 +1943,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         outfile = "fkpl_coeffs_L2_test_ngrid_"*string(ngrid)*"_GLL.pdf"
         savefig(outfile)
         println(outfile)
+        println([L2_dHdvpa_err, L2_dHdvperp_err, L2_d2Gdvperp2_err, L2_d2Gdvpa2_err, L2_d2Gdvperpdvpa_err, L2_dGdvperp_err,  expected,      expected_integral])
         
         nlabel = L"|\Delta n|"
         ulabel = L"|\Delta u_{\|\|}|"
@@ -1952,7 +1957,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
               foreground_color_legend = nothing, background_color_legend = nothing, legend=:bottomleft)
             outfile = "fkpl_conservation_test_ngrid_"*string(ngrid)*"_GLL.pdf"
             savefig(outfile)
-            println(outfile)        
+            println(outfile)
+            println([max_C_err, L2_C_err, n_err, u_err, p_err, expected, expected_integral])
         else
             plot(nelement_list, [max_C_err, L2_C_err, n_err, expected, expected_integral],
             xlabel=xlabel, label=[Clabel ClabelL2 nlabel expected_label expected_integral_label], ylabel="",
@@ -1962,18 +1968,21 @@ if abspath(PROGRAM_FILE) == @__FILE__
             outfile = "fkpl_conservation_test_ngrid_"*string(ngrid)*"_GLL.pdf"
             savefig(outfile)
             println(outfile)        
+            println([max_C_err, L2_C_err, n_err, expected, expected_integral])
         end
         
         calculate_timeslabel = "time/step (ms)"
         init_timeslabel = "time/init (ms)"
+        ytick_sequence_timing = Array([10^2,10^3,10^4,10^5,10^6])
         plot(nelement_list, [calculate_times, init_times, expected_t_2, expected_t_3],
         xlabel=xlabel, label=[calculate_timeslabel init_timeslabel expected_t_2_label expected_t_3_label], ylabel="",
          shape =:circle, xscale=:log10, yscale=:log10, xticks = (nelement_list, nelement_list), markersize = 5, linewidth=2, 
           xtickfontsize = fontsize, xguidefontsize = fontsize, ytickfontsize = fontsize, yguidefontsize = fontsize, legendfontsize = fontsize,
-          foreground_color_legend = nothing, background_color_legend = nothing, legend=:bottomleft)
+          foreground_color_legend = nothing, background_color_legend = nothing, legend=:topleft)
         outfile = "fkpl_timing_test_ngrid_"*string(ngrid)*"_GLL.pdf"
         savefig(outfile)
         println(outfile)
+        println([calculate_times, init_times, expected_t_2, expected_t_3])
     end
     finalize_comms!()
 end
