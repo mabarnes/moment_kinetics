@@ -208,8 +208,13 @@ function get_source_profile(profile_type, width, relative_minimum, coord)
         return @. (1.0 - relative_minimum) * exp(-(x / width)^2) + relative_minimum
     elseif profile_type == "parabolic"
         x = coord.grid
-        L = coord.L
-        return @. (1.0 - relative_minimum) * (1.0 - (2.0 * x / L)^2) + relative_minimum
+        profile = @. (1.0 - relative_minimum) * (1.0 - (2.0 * x / width)^2) + relative_minimum
+        for i ∈ eachindex(profile)
+            if profile[i] < relative_minimum
+                profile[i] = relative_minimum
+            end
+        end
+        return profile
     else
         error("Unrecognised source profile type '$profile_type'.")
     end
