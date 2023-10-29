@@ -5,6 +5,8 @@ module time_advance
 export setup_time_advance!
 export time_advance!
 export setup_dummy_and_buffer_arrays
+# functional testing
+export setup_runge_kutta_coefficients
 
 using MPI
 using ..type_definitions: mk_float

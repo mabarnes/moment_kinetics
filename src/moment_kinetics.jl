@@ -34,6 +34,8 @@ include("bgk.jl")
 include("manufactured_solns.jl") # MRH Here?
 include("initial_conditions.jl")
 #include("semi_lagrange.jl")
+include("fokker_planck_test.jl")
+include("fokker_planck_calculus.jl")
 include("fokker_planck.jl")
 include("collision_models.jl")
 include("advection.jl")

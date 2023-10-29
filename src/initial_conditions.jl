@@ -12,6 +12,10 @@ export enforce_neutral_boundary_conditions!
 export enforce_neutral_r_boundary_condition!
 export enforce_neutral_z_boundary_condition!
 
+# functional testing 
+export create_and_init_boundary_distributions
+export create_pdf
+
 # package
 using SpecialFunctions: erfc
 # modules

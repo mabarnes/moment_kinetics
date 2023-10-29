@@ -10,17 +10,12 @@ using moment_kinetics.input_structs: grid_input, advection_input, species_compos
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.chebyshev: setup_chebyshev_pseudospectral
 using moment_kinetics.gauss_legendre: setup_gausslegendre_pseudospectral, gausslegendre_mass_matrix_solve!
-using moment_kinetics.fokker_planck: evaluate_RMJ_collision_operator!
-using moment_kinetics.fokker_planck: calculate_Rosenbluth_potentials!
-#using moment_kinetics.fokker_planck: calculate_Rosenbluth_H_from_G!
 using moment_kinetics.fokker_planck: init_fokker_planck_collisions, explicit_fokker_planck_collisions!
-using moment_kinetics.fokker_planck: calculate_collisional_fluxes, calculate_Maxwellian_Rosenbluth_coefficients
-using moment_kinetics.fokker_planck: Cflux_vpa_Maxwellian_inputs, Cflux_vperp_Maxwellian_inputs
-using moment_kinetics.fokker_planck: calculate_Rosenbluth_H_from_G!
-using moment_kinetics.fokker_planck: d2Gdvpa2, dGdvperp, d2Gdvperpdvpa, d2Gdvperp2
-using moment_kinetics.fokker_planck: dHdvpa, dHdvperp, Cssp_Maxwellian_inputs
-using moment_kinetics.fokker_planck: F_Maxwellian, dFdvpa_Maxwellian, dFdvperp_Maxwellian
-using moment_kinetics.fokker_planck: d2Fdvpa2_Maxwellian, d2Fdvperpdvpa_Maxwellian, d2Fdvperp2_Maxwellian
+using moment_kinetics.fokker_planck_test: Cflux_vpa_Maxwellian_inputs, Cflux_vperp_Maxwellian_inputs
+using moment_kinetics.fokker_planck_test: d2Gdvpa2, dGdvperp, d2Gdvperpdvpa, d2Gdvperp2
+using moment_kinetics.fokker_planck_test: dHdvpa, dHdvperp, Cssp_Maxwellian_inputs
+using moment_kinetics.fokker_planck_test: F_Maxwellian, dFdvpa_Maxwellian, dFdvperp_Maxwellian
+using moment_kinetics.fokker_planck_test: d2Fdvpa2_Maxwellian, d2Fdvperpdvpa_Maxwellian, d2Fdvperp2_Maxwellian
 using moment_kinetics.type_definitions: mk_float, mk_int
 using moment_kinetics.calculus: derivative!, second_derivative!
 using moment_kinetics.velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_pressure
@@ -29,6 +24,10 @@ using moment_kinetics.communication
 using moment_kinetics.looping
 using moment_kinetics.array_allocation: allocate_shared_float, allocate_float
 using moment_kinetics.time_advance: setup_dummy_and_buffer_arrays
+using moment_kinetics.advection: setup_advection
+using moment_kinetics.initial_conditions: create_and_init_boundary_distributions, create_pdf
+using moment_kinetics.input_structs: advance_info
+using moment_kinetics.time_advance: setup_runge_kutta_coefficients
 
 function get_vth(pres,dens,mass)
         return sqrt(pres/(dens*mass))
@@ -133,18 +132,32 @@ if abspath(PROGRAM_FILE) == @__FILE__
         nvz = 1
         dt = 1.0
         adv_input = advection_input("default", 1.0, 0.0, 0.0)
+        vr_input = grid_input("vr", 1, 1, 1, 
+            1, 0, 1.0, "", "", "", "", adv_input,MPI.COMM_NULL)
+        vz_input = grid_input("vz", 1, 1, 1, 
+            1, 0, 1.0, "", "", "", "", adv_input,MPI.COMM_NULL)
+        vzeta_input = grid_input("vzeta", 1, 1, 1, 
+            1, 0, 1.0, "", "", "", "", adv_input,MPI.COMM_NULL)
         r_input = grid_input("r", 1, 1, 1, 
             1, 0, 1.0, "", "", "", "", adv_input,MPI.COMM_NULL)
         z_input = grid_input("z", 1, 1, 1, 
             1, 0, 1.0, "", "", "", "", adv_input,MPI.COMM_NULL)
+        vr = define_coordinate(vr_input)
+        vz = define_coordinate(vz_input)
+        vzeta = define_coordinate(vzeta_input)
         r = define_coordinate(r_input)
         z = define_coordinate(z_input)
         composition = species_composition(n_ion_species, n_ion_species, n_neutral_species,
         boltzmann_electron_response, false, 1:n_ion_species, n_ion_species+1:n_ion_species, 1.0, 1.0,
         1.0, 0.0, 0.0, false, 1.0, 1.0, 0.0, allocate_float(n_ion_species))
         nuii = 1.0
-        collisions = collisions_input(0.0, 0.0, false, nuii, 0.0, 0.0)
-        
+        collisions = collisions_input(0.0, 0.0, false, nuii, 0.0, 0.0, "none")
+        rk_coefs = setup_runge_kutta_coefficients(4)
+        advance = advance_info(false, false, false, false, false,
+                           false, false, false, false, false, false, 
+                           false, false, false, false, rk_coefs,
+                           false, false, true, true, false, false)
+
         # Set up MPI
         if standalone
             initialize_comms!()
@@ -227,16 +240,30 @@ if abspath(PROGRAM_FILE) == @__FILE__
                                                                   nussp,vpa,vperp,ivpa,ivperp)
             end
         end
+        vpa_advect = setup_advection(n_ion_species, vpa, vperp, z, r)
+        # initialise the vpa advection speed
+        begin_s_r_z_vperp_region()
+        begin_serial_region()
+        z_advect = setup_advection(n_ion_species, z, vpa, vperp, r)
+        r_advect = setup_advection(n_ion_species, r, vpa, vperp, z)
+        pdf_unused = create_pdf(vz, vr, vzeta, vpa, vperp, z, r, n_ion_species, n_neutral_species)
+        boundary_distributions = create_and_init_boundary_distributions(pdf_unused, vz, vr, vzeta, vpa, vperp, z, r, composition)
+        dSdt = 0.0
         
         # initialise the weights
         fokkerplanck_arrays = init_fokker_planck_collisions(vperp,vpa; precompute_weights=true)
         # evaluate the collision operator
-        explicit_fokker_planck_collisions!(fs_out,fs_in,composition,collisions,dt,fokkerplanck_arrays,
-                                             scratch_dummy, r, z, vperp, vpa, vperp_spectral, vpa_spectral)
+        explicit_fokker_planck_collisions!(fs_out,fs_in,dSdt,composition,collisions,dt,fokkerplanck_arrays,
+                                             scratch_dummy, r, z, vperp, vpa, vperp_spectral, vpa_spectral,
+                                             boundary_distributions, advance,
+                                             vpa_advect, z_advect, r_advect,
+                                             diagnose_entropy_production = false)
+        
         fka = fokkerplanck_arrays
         # error analysis of distribution function
         begin_serial_region()
         @serial_region begin
+            println("finished integration   ", Dates.format(now(), dateformat"H:MM:SS"))
             @. dfsdvpa_err = abs(fka.dfdvpa - dfsdvpa_Maxwell)
             max_dfsdvpa_err = maximum(dfsdvpa_err)
             println("max_dfsdvpa_err: ",max_dfsdvpa_err)
@@ -263,7 +290,6 @@ if abspath(PROGRAM_FILE) == @__FILE__
         plot_d2Gdvpa2 = false #true
         
         @serial_region begin
-            println("finished integration   ", Dates.format(now(), dateformat"H:MM:SS"))
             @. Cssp_err = abs(fka.Cssp_result_vpavperp - Cssp_Maxwell)
             max_C_err, max_C_index = findmax(Cssp_err)
             println("max_C_err: ",max_C_err," ",max_C_index)
@@ -396,14 +422,15 @@ if abspath(PROGRAM_FILE) == @__FILE__
     end
     if test_Lagrange_integral_scan
         initialize_comms!()
-        ngrid = 9
+        ngrid = 5
         plot_scan = true
         #nelement_list = Int[2, 4, 8, 16, 32, 64, 128]
         #nelement_list = Int[2, 4, 8, 16, 32]
         #nelement_list = Int[2, 4, 8, 16]
         #nelement_list = Int[2, 4, 8]
+        nelement_list = Int[2, 4]
         #nelement_list = Int[100]
-        nelement_list = Int[2,4,8,16]
+        #nelement_list = Int[2,4,8,16]
         nscan = size(nelement_list,1)
         max_C_err = Array{mk_float,1}(undef,nscan)
         max_dHdvpa_err = Array{mk_float,1}(undef,nscan)
