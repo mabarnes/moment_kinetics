@@ -161,49 +161,6 @@ function allocate_boundary_integration_weights(vpa,vperp)
             dfdvpa,d2fdvperpdvpa,dfdvperp)
 end
 
-# initialise the elliptic integral factor arrays 
-# note the definitions of ellipe & ellipk
-# `https://specialfunctions.juliamath.org/stable/functions_list/#SpecialFunctions.ellipe`
-# `https://specialfunctions.juliamath.org/stable/functions_list/#SpecialFunctions.ellipk`
-# `ellipe(m) = \int^{\pi/2}\_0 \sqrt{ 1 - m \sin^2(\theta)} d \theta`
-# `ellipe(k) = \int^{\pi/2}\_0 \frac{1}{\sqrt{ 1 - m \sin^2(\theta)}} d \theta`
-
-function init_elliptic_integral_factors!(elliptic_integral_E_factor, elliptic_integral_K_factor, vperp, vpa)
-    
-    # must loop over vpa, vperp, vpa', vperp'
-    # hence mix of looping macros for unprimed variables 
-    # & standard local `for' loop for primed variables
-    nvperp = vperp.n
-    nvpa = vpa.n
-    zero = 1.0e-10
-    for ivperpp in 1:nvperp
-        for ivpap in 1:nvpa
-            for ivperp in 1:nvperp
-                for ivpa in 1:nvpa                        
-                    # the argument of the elliptic integrals 
-                    # mm = 4 vperp vperp' / ( (vpa- vpa')^2 + (vperp + vperp'))
-                    denom = (vpa.grid[ivpa] - vpa.grid[ivpap])^2 + (vperp.grid[ivperp] + vperp.grid[ivperpp])^2 
-                    if denom < zero 
-                        println("denom = zero ",ivperpp," ",ivpap," ",ivperp," ",ivpa)
-                    end
-                    #    #then vpa = vpa' = vperp' = vperp = 0 
-                    #    mm = 0.0
-                    #    prefac = 0.0 # because vperp' wgt = 0 here 
-                    #else    
-                        mm = 4.0*vperp.grid[ivperp]*vperp.grid[ivperpp]/denom
-                        prefac = sqrt(denom)
-                    #end
-                    #println(mm," ",prefac," ",denom," ",ivperpp," ",ivpap," ",ivperp," ",ivpa)
-                    elliptic_integral_E_factor[ivpap,ivperpp,ivpa,ivperp] = 2.0*ellipe(mm)*prefac/pi
-                    elliptic_integral_K_factor[ivpap,ivperpp,ivpa,ivperp] = 2.0*ellipk(mm)/(pi*prefac)
-                    #println(elliptic_integral_K_factor[ivpap,ivperpp,ivpa,ivperp]," ",mm," ",prefac," ",denom," ",ivperpp," ",ivpap," ",ivperp," ",ivpa)
-                    
-                end
-            end
-        end
-    end
-
-end
 
 """
 function that initialises the arrays needed for Fokker Planck collisions
@@ -617,6 +574,13 @@ end
 function nel_hi(ielement,nelement)
     return 1- floor(mk_int, ielement/nelement)
 end
+
+# base level function for computing the Green's function weights
+# note the definitions of ellipe & ellipk
+# `https://specialfunctions.juliamath.org/stable/functions_list/#SpecialFunctions.ellipe`
+# `https://specialfunctions.juliamath.org/stable/functions_list/#SpecialFunctions.ellipk`
+# `ellipe(m) = \int^{\pi/2}\_0 \sqrt{ 1 - m \sin^2(\theta)} d \theta`
+# `ellipe(k) = \int^{\pi/2}\_0 \frac{1}{\sqrt{ 1 - m \sin^2(\theta)}} d \theta`
 
 function local_element_integration!(G0_weights,G1_weights,H0_weights,H1_weights,H2_weights,H3_weights,
                             nquad_vpa,ielement_vpa,vpa_nodes,vpa, # info about primed vperp grids
