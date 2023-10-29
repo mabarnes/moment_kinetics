@@ -25,13 +25,10 @@ using moment_kinetics.fokker_planck_test: d2Gdvpa2, d2Gdvperp2, d2Gdvperpdvpa, d
 using moment_kinetics.fokker_planck_test: dHdvperp, dHdvpa
 using moment_kinetics.fokker_planck_test: Cssp_Maxwellian_inputs
 
-using moment_kinetics.fokker_planck_calculus: assemble_matrix_operators_dirichlet_bc, assemble_matrix_operators_dirichlet_bc_plus_vperp_zero_gradient
-using moment_kinetics.fokker_planck_calculus: assemble_matrix_operators_dirichlet_bc_sparse, assemble_matrix_operators_dirichlet_bc_plus_vperp_zero_gradient_sparse
 using moment_kinetics.fokker_planck_calculus: assemble_explicit_collision_operator_rhs_serial!, assemble_explicit_collision_operator_rhs_parallel!
 using moment_kinetics.fokker_planck_calculus: elliptic_solve!, ravel_c_to_vpavperp!, ravel_vpavperp_to_c!, ravel_c_to_vpavperp_parallel!
 using moment_kinetics.fokker_planck_calculus: enforce_zero_bc!, allocate_rosenbluth_potential_boundary_data
 using moment_kinetics.fokker_planck_calculus: calculate_rosenbluth_potential_boundary_data!, calculate_rosenbluth_potential_boundary_data_exact!
-using moment_kinetics.fokker_planck_calculus: calculate_YY_arrays
 using moment_kinetics.fokker_planck_calculus: test_rosenbluth_potential_boundary_data
 
 
@@ -217,31 +214,23 @@ if abspath(PROGRAM_FILE) == @__FILE__
         begin_serial_region()
         start_init_time = now()
         
+        fkpl_arrays = init_fokker_planck_collisions_new(vpa,vperp,vpa_spectral,vperp_spectral; 
+                           precompute_weights=true, test_dense_matrix_construction=test_dense_construction)
         
-        if test_dense_construction
-            MM2D_sparse, KKpar2D_sparse, KKperp2D_sparse, LP2D_sparse, LV2D_sparse,
-            PUperp2D_sparse, PPparPUperp2D_sparse, PPpar2D_sparse,
-            MMparMNperp2D_sparse = assemble_matrix_operators_dirichlet_bc(vpa,vperp,vpa_spectral,vperp_spectral)
-            MM2DZG_sparse = assemble_matrix_operators_dirichlet_bc_plus_vperp_zero_gradient(vpa,vperp,vpa_spectral,vperp_spectral)
-        else
-            MM2D_sparse, KKpar2D_sparse, KKperp2D_sparse, LP2D_sparse, LV2D_sparse,
-            PUperp2D_sparse, PPparPUperp2D_sparse, PPpar2D_sparse,
-            MMparMNperp2D_sparse = assemble_matrix_operators_dirichlet_bc_sparse(vpa,vperp,vpa_spectral,vperp_spectral)
-            MM2DZG_sparse = assemble_matrix_operators_dirichlet_bc_plus_vperp_zero_gradient_sparse(vpa,vperp,vpa_spectral,vperp_spectral)
-        end
-        #MM2D_sparse
-        @serial_region begin
-            # create LU decomposition for mass matrix inversion
-            println("begin LU decomposition initialisation   ", Dates.format(now(), dateformat"H:MM:SS"))
-        end
-        lu_obj_MM = lu(MM2D_sparse)
-        lu_obj_MMZG = lu(MM2DZG_sparse)
-        lu_obj_LP = lu(LP2D_sparse)
-        lu_obj_LV = lu(LV2D_sparse)
-        #cholesky_obj = cholesky(MM2D_sparse)
-        @serial_region begin
-            println("finished LU decomposition initialisation   ", Dates.format(now(), dateformat"H:MM:SS"))
-        end
+        MM2D_sparse = fkpl_arrays.MM2D_sparse
+        KKpar2D_sparse = fkpl_arrays.KKpar2D_sparse
+        KKperp2D_sparse = fkpl_arrays.KKperp2D_sparse
+        LP2D_sparse = fkpl_arrays.LP2D_sparse
+        LV2D_sparse = fkpl_arrays.LV2D_sparse
+        PUperp2D_sparse = fkpl_arrays.PUperp2D_sparse
+        PPparPUperp2D_sparse = fkpl_arrays.PPparPUperp2D_sparse
+        PPpar2D_sparse = fkpl_arrays.PPpar2D_sparse
+        MMparMNperp2D_sparse = fkpl_arrays.MMparMNperp2D_sparse
+        MM2DZG_sparse = fkpl_arrays.MM2DZG_sparse
+        lu_obj_MM = fkpl_arrays.lu_obj_MM
+        lu_obj_MMZG = fkpl_arrays.lu_obj_MMZG
+        lu_obj_LP = fkpl_arrays.lu_obj_LP
+        lu_obj_LV = fkpl_arrays.lu_obj_LV
         # define a test function 
         
         fvpavperp = Array{mk_float,2}(undef,vpa.n,vperp.n)
@@ -322,8 +311,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
         end
         # test the Laplacian solve with a standard F_Maxwellian -> H_Maxwellian test
         
-        S_dummy = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
-        Q_dummy = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
+        S_dummy = fkpl_arrays.S_dummy
+        Q_dummy = fkpl_arrays.Q_dummy
         Fs_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
         F_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
         C_M_num = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
@@ -393,21 +382,16 @@ if abspath(PROGRAM_FILE) == @__FILE__
           dGdvperp_M_exact,d2Gdvperp2_M_exact,
           d2Gdvperpdvpa_M_exact,d2Gdvpa2_M_exact,vpa,vperp)
         # use numerical integration to find the boundary data
-        # initialise the weights
-        #fkpl_arrays = init_fokker_planck_collisions(vperp,vpa; precompute_weights=true)
-        fkpl_arrays = init_fokker_planck_collisions_new(vpa,vperp; precompute_weights=true)
         # initialise any arrays needed later for the collision operator
-        rhsc = MPISharedArray{mk_float,1}(undef,nc_global)
-        rhqc = MPISharedArray{mk_float,1}(undef,nc_global)
-        sc = MPISharedArray{mk_float,1}(undef,nc_global)
-        qc = MPISharedArray{mk_float,1}(undef,nc_global)
+        rhsc = fkpl_arrays.rhsc
+        rhqc = fkpl_arrays.rhqc
+        sc = fkpl_arrays.sc
+        qc = fkpl_arrays.qc
         rhsc_check = Array{mk_float,1}(undef,nc_global)
         rhsc_err = Array{mk_float,1}(undef,nc_global)
-        rhsvpavperp = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
-        @serial_region begin
-            println("begin YY array calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
-        end
-        YY_arrays = calculate_YY_arrays(vpa,vperp,vpa_spectral,vperp_spectral)
+        rhsvpavperp = fkpl_arrays.rhsvpavperp
+
+        YY_arrays = fkpl_arrays.YY_arrays
         
         finish_init_time = now()
         
@@ -416,7 +400,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
         @serial_region begin 
             println("begin boundary data calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
         end
-        calculate_rosenbluth_potential_boundary_data!(rpbd,fkpl_arrays,F_M,vpa,vperp,vpa_spectral,vperp_spectral)
+        calculate_rosenbluth_potential_boundary_data!(rpbd,fkpl_arrays.bwgt,F_M,vpa,vperp,vpa_spectral,vperp_spectral)
         @serial_region begin 
             println("finished boundary data calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
         end
@@ -583,7 +567,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     
     initialize_comms!()
     ngrid = 9
-    plot_scan = true
+    plot_scan = false#true
     plot_test_output = false
     impose_zero_gradient_BC = false
     test_parallelism = false
@@ -596,7 +580,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
     #nelement_list = Int[2, 4, 8, 16, 32]
     #nelement_list = Int[2, 4, 8, 16]
     #nelement_list = Int[100]
-    nelement_list = Int[4, 8]
+    nelement_list = Int[8]
     nscan = size(nelement_list,1)
     max_C_err = Array{mk_float,1}(undef,nscan)
     max_H_err = Array{mk_float,1}(undef,nscan)

@@ -35,8 +35,9 @@ using ..looping
 using moment_kinetics.gauss_legendre: get_QQ_local!
 using Dates
 using SpecialFunctions: ellipk, ellipe
-using SparseArrays: sparse
-using LinearAlgebra: mul!
+using SparseArrays: sparse, AbstractSparseArray
+using SuiteSparse
+using LinearAlgebra: mul!, LU
 using FastGaussQuadrature
 using Printf
 
@@ -62,7 +63,7 @@ end
 
 """
 a struct of dummy arrays and precalculated coefficients
-for the Fokker-Planck collision operator 
+for the strong-form Fokker-Planck collision operator 
 """
 
 struct fokkerplanck_arrays_struct
@@ -92,7 +93,6 @@ struct fokkerplanck_arrays_struct
     d2fdvperp2::MPISharedArray{mk_float,2}
 end
 
-
 """
 a struct to contain the integration weights for the boundary points
 in the (vpa,vperp) domain
@@ -119,6 +119,63 @@ struct fokkerplanck_boundary_data_arrays_struct
     dfdvperp::MPISharedArray{mk_float,2}    
 end
 
+
+struct YY_collision_operator_arrays
+    # let phi_j(vperp) be the jth Lagrange basis function, 
+    # and phi'_j(vperp) the first derivative of the Lagrange basis function
+    # on the iel^th element. Then, the arrays are defined as follows.
+    # YY0perp[i,j,k,iel] = \int phi_i(vperp) phi_j(vperp) phi_k(vperp) vperp d vperp
+    YY0perp::Array{mk_float,4}
+    # YY1perp[i,j,k,iel] = \int phi_i(vperp) phi_j(vperp) phi'_k(vperp) vperp d vperp
+    YY1perp::Array{mk_float,4}
+    # YY2perp[i,j,k,iel] = \int phi_i(vperp) phi'_j(vperp) phi'_k(vperp) vperp d vperp
+    YY2perp::Array{mk_float,4}
+    # YY3perp[i,j,k,iel] = \int phi_i(vperp) phi'_j(vperp) phi_k(vperp) vperp d vperp
+    YY3perp::Array{mk_float,4}
+    # YY0par[i,j,k,iel] = \int phi_i(vpa) phi_j(vpa) phi_k(vpa) vpa d vpa
+    YY0par::Array{mk_float,4}
+    # YY1par[i,j,k,iel] = \int phi_i(vpa) phi_j(vpa) phi'_k(vpa) vpa d vpa
+    YY1par::Array{mk_float,4}
+    # YY2par[i,j,k,iel] = \int phi_i(vpa) phi'_j(vpa) phi'_k(vpa) vpa d vpa
+    YY2par::Array{mk_float,4}
+    # YY3par[i,j,k,iel] = \int phi_i(vpa) phi'_j(vpa) phi_k(vpa) vpa d vpa
+    YY3par::Array{mk_float,4}
+end
+
+"""
+a struct of dummy arrays and precalculated coefficients
+for the weak-form Fokker-Planck collision operator 
+"""
+struct fokkerplanck_weakform_arrays_struct{N}
+    # boundary weights (Green's function) data
+    bwgt::fokkerplanck_boundary_data_arrays_struct
+    # assembled 2D weak-form matrices
+    MM2D_sparse::AbstractSparseArray{mk_float,mk_int,N}
+    KKpar2D_sparse::AbstractSparseArray{mk_float,mk_int,N}
+    KKperp2D_sparse::AbstractSparseArray{mk_float,mk_int,N}
+    LP2D_sparse::AbstractSparseArray{mk_float,mk_int,N}
+    LV2D_sparse::AbstractSparseArray{mk_float,mk_int,N}
+    PUperp2D_sparse::AbstractSparseArray{mk_float,mk_int,N}
+    PPparPUperp2D_sparse::AbstractSparseArray{mk_float,mk_int,N}
+    PPpar2D_sparse::AbstractSparseArray{mk_float,mk_int,N}
+    MMparMNperp2D_sparse::AbstractSparseArray{mk_float,mk_int,N}
+    MM2DZG_sparse::AbstractSparseArray{mk_float,mk_int,N}
+    # lu decomposition objects
+    lu_obj_MM::SuiteSparse.UMFPACK.UmfpackLU{mk_float,mk_int}
+    lu_obj_MMZG::SuiteSparse.UMFPACK.UmfpackLU{mk_float,mk_int}
+    lu_obj_LP::SuiteSparse.UMFPACK.UmfpackLU{mk_float,mk_int}
+    lu_obj_LV::SuiteSparse.UMFPACK.UmfpackLU{mk_float,mk_int}
+    # elemental matrices for the assembly of C[Fs,Fsp]
+    YY_arrays::YY_collision_operator_arrays
+    # dummy arrays for elliptic solvers
+    S_dummy::MPISharedArray{mk_float,2}
+    Q_dummy::MPISharedArray{mk_float,2}
+    rhsvpavperp::MPISharedArray{mk_float,2}
+    rhsc::MPISharedArray{mk_float,1}
+    rhqc::MPISharedArray{mk_float,1}
+    sc::MPISharedArray{mk_float,1}
+    qc::MPISharedArray{mk_float,1}
+end
 
 function allocate_boundary_integration_weight(vpa,vperp)
     nvpa = vpa.n
@@ -1770,27 +1827,6 @@ function assemble_matrix_operators_dirichlet_bc_plus_vperp_zero_gradient_sparse(
     return MM2DZG_sparse
 end
 
-struct YY_collision_operator_arrays
-    # let phi_j(vperp) be the jth Lagrange basis function, 
-    # and phi'_j(vperp) the first derivative of the Lagrange basis function
-    # on the iel^th element. Then, the arrays are defined as follows.
-    # YY0perp[i,j,k,iel] = \int phi_i(vperp) phi_j(vperp) phi_k(vperp) vperp d vperp
-    YY0perp::Array{mk_float,4}
-    # YY1perp[i,j,k,iel] = \int phi_i(vperp) phi_j(vperp) phi'_k(vperp) vperp d vperp
-    YY1perp::Array{mk_float,4}
-    # YY2perp[i,j,k,iel] = \int phi_i(vperp) phi'_j(vperp) phi'_k(vperp) vperp d vperp
-    YY2perp::Array{mk_float,4}
-    # YY3perp[i,j,k,iel] = \int phi_i(vperp) phi'_j(vperp) phi_k(vperp) vperp d vperp
-    YY3perp::Array{mk_float,4}
-    # YY0par[i,j,k,iel] = \int phi_i(vpa) phi_j(vpa) phi_k(vpa) vpa d vpa
-    YY0par::Array{mk_float,4}
-    # YY1par[i,j,k,iel] = \int phi_i(vpa) phi_j(vpa) phi'_k(vpa) vpa d vpa
-    YY1par::Array{mk_float,4}
-    # YY2par[i,j,k,iel] = \int phi_i(vpa) phi'_j(vpa) phi'_k(vpa) vpa d vpa
-    YY2par::Array{mk_float,4}
-    # YY3par[i,j,k,iel] = \int phi_i(vpa) phi'_j(vpa) phi_k(vpa) vpa d vpa
-    YY3par::Array{mk_float,4}
-end
 
 function calculate_YY_arrays(vpa,vperp,vpa_spectral,vperp_spectral)
     YY0perp = Array{mk_float,4}(undef,vperp.ngrid,vperp.ngrid,vperp.ngrid,vperp.nelement_local)

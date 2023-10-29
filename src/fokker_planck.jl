@@ -15,6 +15,7 @@ export symmetric_matrix_inverse
 using SpecialFunctions: ellipk, ellipe, erf
 using FastGaussQuadrature
 using Dates
+using LinearAlgebra: lu
 using ..initial_conditions: enforce_boundary_conditions!
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_shared_float
@@ -26,7 +27,12 @@ using ..looping
 using ..fokker_planck_calculus: init_Rosenbluth_potential_integration_weights!
 using ..fokker_planck_calculus: init_Rosenbluth_potential_boundary_integration_weights!
 using ..fokker_planck_calculus: allocate_boundary_integration_weights
-using ..fokker_planck_calculus: fokkerplanck_arrays_struct
+using ..fokker_planck_calculus: fokkerplanck_arrays_struct, fokkerplanck_weakform_arrays_struct
+using ..fokker_planck_calculus: assemble_matrix_operators_dirichlet_bc
+using ..fokker_planck_calculus: assemble_matrix_operators_dirichlet_bc_sparse
+using ..fokker_planck_calculus: assemble_matrix_operators_dirichlet_bc_plus_vperp_zero_gradient
+using ..fokker_planck_calculus: assemble_matrix_operators_dirichlet_bc_plus_vperp_zero_gradient_sparse
+using ..fokker_planck_calculus: calculate_YY_arrays
 using ..fokker_planck_test: Cssp_fully_expanded_form, calculate_collisional_fluxes
 """
 allocate the required ancilliary arrays 
@@ -77,13 +83,50 @@ at the boundary and using an elliptic solve to obtain the potentials
 in the rest of the velocity space domain.
 """
 
-function init_fokker_planck_collisions_new(vpa,vperp; precompute_weights=false)
+function init_fokker_planck_collisions_new(vpa,vperp,vpa_spectral,vperp_spectral; precompute_weights=false, test_dense_matrix_construction=false)
     bwgt = allocate_boundary_integration_weights(vpa,vperp)
     if vperp.n > 1 && precompute_weights
         @views init_Rosenbluth_potential_boundary_integration_weights!(bwgt.G0_weights, bwgt.G1_weights, bwgt.H0_weights, bwgt.H1_weights,
                                         bwgt.H2_weights, bwgt.H3_weights, vpa, vperp)
     end
-    return bwgt
+    if test_dense_matrix_construction
+        MM2D_sparse, KKpar2D_sparse, KKperp2D_sparse, LP2D_sparse, LV2D_sparse,
+        PUperp2D_sparse, PPparPUperp2D_sparse, PPpar2D_sparse,
+        MMparMNperp2D_sparse = assemble_matrix_operators_dirichlet_bc(vpa,vperp,vpa_spectral,vperp_spectral)
+        MM2DZG_sparse = assemble_matrix_operators_dirichlet_bc_plus_vperp_zero_gradient(vpa,vperp,vpa_spectral,vperp_spectral)
+    else
+        MM2D_sparse, KKpar2D_sparse, KKperp2D_sparse, LP2D_sparse, LV2D_sparse,
+        PUperp2D_sparse, PPparPUperp2D_sparse, PPpar2D_sparse,
+        MMparMNperp2D_sparse = assemble_matrix_operators_dirichlet_bc_sparse(vpa,vperp,vpa_spectral,vperp_spectral)
+        MM2DZG_sparse = assemble_matrix_operators_dirichlet_bc_plus_vperp_zero_gradient_sparse(vpa,vperp,vpa_spectral,vperp_spectral)
+    end
+    lu_obj_MM = lu(MM2D_sparse)
+    lu_obj_MMZG = lu(MM2DZG_sparse)
+    lu_obj_LP = lu(LP2D_sparse)
+    lu_obj_LV = lu(LV2D_sparse)
+    @serial_region begin
+        println("finished LU decomposition initialisation   ", Dates.format(now(), dateformat"H:MM:SS"))
+    end
+    
+    YY_arrays = calculate_YY_arrays(vpa,vperp,vpa_spectral,vperp_spectral)
+    @serial_region begin
+        println("finished YY array calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+    end
+    nvpa, nvperp = vpa.n, vperp.n
+    nc = nvpa*nvperp
+    S_dummy = allocate_shared_float(nvpa,nvperp)
+    Q_dummy = allocate_shared_float(nvpa,nvperp)
+    rhsvpavperp = allocate_shared_float(nvpa,nvperp)
+    rhsc = allocate_shared_float(nc)
+    rhqc = allocate_shared_float(nc)
+    sc = allocate_shared_float(nc)
+    qc = allocate_shared_float(nc)
+    fka = fokkerplanck_weakform_arrays_struct(bwgt,MM2D_sparse,KKpar2D_sparse,KKperp2D_sparse,
+                                           LP2D_sparse,LV2D_sparse,PUperp2D_sparse,PPparPUperp2D_sparse,
+                                           PPpar2D_sparse,MMparMNperp2D_sparse,MM2DZG_sparse,
+                                           lu_obj_MM,lu_obj_MMZG,lu_obj_LP,lu_obj_LV,
+                                           YY_arrays, S_dummy, Q_dummy, rhsvpavperp, rhsc, rhqc, sc, qc)
+    return fka
 end
 
 """
