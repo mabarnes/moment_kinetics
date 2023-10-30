@@ -313,7 +313,12 @@ function makie_post_process(run_dir::Union{String,Tuple},
 
     sound_wave_plots(run_info; plot_prefix=plot_prefix)
 
-    manufactured_solutions_analysis(run_info; plot_prefix=plot_prefix)
+    if all(ri === nothing for ri ∈ run_info_dfns)
+        nvperp = nothing
+    else
+        nvperp = maximum(ri.vperp.n_global for ri ∈ run_info_dfns if ri !== nothing)
+    end
+    manufactured_solutions_analysis(run_info; plot_prefix=plot_prefix, nvperp=nvperp)
     manufactured_solutions_analysis_dfns(run_info_dfns; plot_prefix=plot_prefix)
 
     return nothing
@@ -5433,7 +5438,7 @@ Returns `variable`, `variable_sym`.
 """
 function manufactured_solutions_get_field_and_field_sym(run_info, variable_name;
         it=nothing, ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing, ivzeta=nothing,
-        ivr=nothing, ivz=nothing)
+        ivr=nothing, ivz=nothing, nvperp)
 
     variable_name = Symbol(variable_name)
 
@@ -5473,7 +5478,8 @@ function manufactured_solutions_get_field_and_field_sym(run_info, variable_name;
         manufactured_funcs =
             manufactured_solutions(run_info.manufactured_solns_input, Lr_in, run_info.z.L,
                                    run_info.r.bc, run_info.z.bc, run_info.geometry,
-                                   run_info.composition, run_info.species, run_info.r.n)
+                                   run_info.composition, run_info.species, run_info.r.n,
+                                   nvperp)
     end
 
     variable_func = manufactured_funcs[func_name_lookup[variable_name]]
@@ -5560,7 +5566,8 @@ the label for the error (the difference between the computed and manufactured so
 If `io` is passed then error norms will be written to that file.
 """
 function compare_moment_symbolic_test(run_info, plot_prefix, field_label, field_sym_label,
-                                      norm_label, variable_name; io=nothing, input=nothing)
+                                      norm_label, variable_name; io=nothing,
+                                      input=nothing, nvperp)
 
     println("Doing MMS analysis and making plots for $variable_name")
     flush(stdout)
@@ -5570,7 +5577,7 @@ function compare_moment_symbolic_test(run_info, plot_prefix, field_label, field_
     end
 
     field, field_sym =
-        manufactured_solutions_get_field_and_field_sym(run_info, variable_name)
+        manufactured_solutions_get_field_and_field_sym(run_info, variable_name; nvperp=nvperp)
     error = field .- field_sym
 
     nt = run_info.nt
@@ -5808,7 +5815,7 @@ function _MMS_pdf_plots(run_info, input, variable_name, plot_prefix, field_label
                 slices = (k=>v for (k, v) ∈ all_plot_slices if k != Symbol(:i, dim))
                 f, f_sym =
                     manufactured_solutions_get_field_and_field_sym(
-                        run_info, variable_name; slices...)
+                        run_info, variable_name; nvperp=run_info.vperp.n, slices...)
                 error = f .- f_sym
 
                 fig, ax, legend_place = get_1d_ax(2; yscale=yscale, get_legend_place=:below)
@@ -5833,7 +5840,7 @@ function _MMS_pdf_plots(run_info, input, variable_name, plot_prefix, field_label
                           if k ∉ (Symbol(:i, dim1), Symbol(:i, dim2)))
                 f, f_sym =
                 manufactured_solutions_get_field_and_field_sym(
-                    run_info, variable_name; slices...)
+                    run_info, variable_name; nvperp=run_info.vperp.n, slices...)
                 error = f .- f_sym
 
                 fig, ax, colorbar_place = get_2d_ax(3)
@@ -5857,7 +5864,7 @@ function _MMS_pdf_plots(run_info, input, variable_name, plot_prefix, field_label
                 slices = (k=>v for (k, v) ∈ all_animate_slices if k != Symbol(:i, dim))
                 f, f_sym =
                     manufactured_solutions_get_field_and_field_sym(
-                        run_info, variable_name; slices...)
+                        run_info, variable_name; nvperp=run_info.vperp.n, slices...)
                 error = f .- f_sym
 
                 fig, ax, legend_place = get_1d_ax(2; yscale=yscale, get_legend_place=:below)
@@ -5885,7 +5892,7 @@ function _MMS_pdf_plots(run_info, input, variable_name, plot_prefix, field_label
                           if k ∉ (Symbol(:i, dim1), Symbol(:i, dim2)))
                 f, f_sym =
                 manufactured_solutions_get_field_and_field_sym(
-                    run_info, variable_name; slices...)
+                    run_info, variable_name; nvperp=run_info.vperp.n, slices...)
                 error = f .- f_sym
 
                 fig, ax, colorbar_place = get_2d_ax(3)
@@ -5992,7 +5999,8 @@ function compare_charged_pdf_symbolic_test(run_info, plot_prefix; io=nothing,
             for r_chunk ∈ r_chunks, z_chunk ∈ z_chunks
                 f, f_sym =
                     manufactured_solutions_get_field_and_field_sym(
-                        run_info, variable_name, it=it, ir=r_chunk, iz=z_chunk)
+                        run_info, variable_name; nvperp=run_info.vperp.n, it=it,
+                        ir=r_chunk, iz=z_chunk)
                 dummy += sum(@. (f - f_sym)^2)
                 #dummy_N += sum(f_sym.^2)
             end
@@ -6012,8 +6020,8 @@ function compare_charged_pdf_symbolic_test(run_info, plot_prefix; io=nothing,
         for (iz, z_label) ∈ ((1, "wall-"), (z.n, "wall+"))
             f, f_sym =
                 manufactured_solutions_get_field_and_field_sym(
-                    run_info, variable_name, it=input.it0, ir=input.ir0, iz=iz,
-                    ivperp=input.ivperp0)
+                    run_info, variable_name; nvperp=run_info.vperp.n, it=input.it0,
+                    ir=input.ir0, iz=iz, ivperp=input.ivperp0)
             error = f .- f_sym
 
             fig, ax, legend_place = get_1d_ax(2; get_legend_place=:below)
@@ -6032,7 +6040,8 @@ function compare_charged_pdf_symbolic_test(run_info, plot_prefix; io=nothing,
             if !is_1D
                 f, f_sym =
                 manufactured_solutions_get_field_and_field_sym(
-                    run_info, variable_name, it=input.it0, iz=iz, ivperp=input.ivperp0)
+                    run_info, variable_name; nvperp=run_info.vperp.n, it=input.it0, iz=iz,
+                    ivperp=input.ivperp0)
                 error = f .- f_sym
 
                 fig, ax, colorbar_place = get_2d_ax(3)
@@ -6053,7 +6062,8 @@ function compare_charged_pdf_symbolic_test(run_info, plot_prefix; io=nothing,
             if !is_1V
                 f, f_sym =
                 manufactured_solutions_get_field_and_field_sym(
-                    run_info, variable_name, it=input.it0, iz=iz, ir=input.ir0)
+                    run_info, variable_name; nvperp=run_info.vperp.n, it=input.it0, iz=iz,
+                    ir=input.ir0)
                 error = f .- f_sym
 
                 fig, ax, colorbar_place = get_2d_ax(3)
@@ -6174,7 +6184,8 @@ function compare_neutral_pdf_symbolic_test(run_info, plot_prefix; io=nothing,
             for r_chunk ∈ r_chunks, z_chunk ∈ z_chunks
                 f, f_sym =
                     manufactured_solutions_get_field_and_field_sym(
-                        run_info, variable_name, it=it, ir=r_chunk, iz=z_chunk)
+                        run_info, variable_name; nvperp=run_info.vperp.n, it=it,
+                        ir=r_chunk, iz=z_chunk)
                 dummy += sum(@. (f - f_sym)^2)
                 #dummy_N += sum(f_sym.^2)
             end
@@ -6194,8 +6205,8 @@ function compare_neutral_pdf_symbolic_test(run_info, plot_prefix; io=nothing,
         for (iz, z_label) ∈ ((1, "wall-"), (z.n, "wall+"))
             f, f_sym =
                 manufactured_solutions_get_field_and_field_sym(
-                    run_info, variable_name, it=input.it0, ir=input.ir0, iz=iz,
-                    ivzeta=input.ivzeta0, ivr=input.ivr0)
+                    run_info, variable_name; nvperp=run_info.vperp.n, it=input.it0,
+                    ir=input.ir0, iz=iz, ivzeta=input.ivzeta0, ivr=input.ivr0)
             error = f .- f_sym
 
             fig, ax, legend_place = get_1d_ax(2; get_legend_place=:below)
@@ -6214,8 +6225,8 @@ function compare_neutral_pdf_symbolic_test(run_info, plot_prefix; io=nothing,
             if !is_1D
                 f, f_sym =
                 manufactured_solutions_get_field_and_field_sym(
-                    run_info, variable_name, it=input.it0, iz=iz, ivzeta=input.ivzeta0,
-                    ivr=input.ivr0)
+                    run_info, variable_name; nvperp=run_info.vperp.n, it=input.it0, iz=iz,
+                    ivzeta=input.ivzeta0, ivr=input.ivr0)
                 error = f .- f_sym
 
                 fig, ax, colorbar_place = get_2d_ax(3)
@@ -6236,8 +6247,8 @@ function compare_neutral_pdf_symbolic_test(run_info, plot_prefix; io=nothing,
             if !is_1V
                 f, f_sym =
                 manufactured_solutions_get_field_and_field_sym(
-                    run_info, variable_name, it=input.it0, iz=iz, ir=input.ir0,
-                    ivzeta=input.ivzeta0)
+                    run_info, variable_name; nvperp=run_info.vperp.n, it=input.it0, iz=iz,
+                    ir=input.ir0, ivzeta=input.ivzeta0)
                 error = f .- f_sym
 
                 fig, ax, colorbar_place = get_2d_ax(3)
@@ -6259,8 +6270,8 @@ function compare_neutral_pdf_symbolic_test(run_info, plot_prefix; io=nothing,
 
                 f, f_sym =
                 manufactured_solutions_get_field_and_field_sym(
-                    run_info, variable_name, it=input.it0, iz=iz, ir=input.ir0,
-                    ivr=input.ivr0)
+                    run_info, variable_name; nvperp=run_info.vperp.n, it=input.it0, iz=iz,
+                    ir=input.ir0, ivr=input.ivr0)
                 error = f .- f_sym
 
                 fig, ax, colorbar_place = get_2d_ax(3)
@@ -6319,7 +6330,7 @@ greater than one will result in an error.
 """
 function manufactured_solutions_analysis end
 
-function manufactured_solutions_analysis(run_info::Tuple; plot_prefix)
+function manufactured_solutions_analysis(run_info::Tuple; plot_prefix, nvperp)
     if !any(ri !== nothing && ri.manufactured_solns_input.use_for_advance &&
             ri.manufactured_solns_input.use_for_init for ri ∈ run_info)
         # No manufactured solutions tests
@@ -6338,16 +6349,22 @@ function manufactured_solutions_analysis(run_info::Tuple; plot_prefix)
         return nothing
     end
     try
-        return manufactured_solutions_analysis(run_info[1]; plot_prefix=plot_prefix)
+        return manufactured_solutions_analysis(run_info[1]; plot_prefix=plot_prefix,
+                                               nvperp=nvperp)
     catch e
         println("Error in manufactured_solutions_analysis(). Error was ", e)
     end
 end
 
-function manufactured_solutions_analysis(run_info; plot_prefix)
+function manufactured_solutions_analysis(run_info; plot_prefix, nvperp)
     manufactured_solns_input = run_info.manufactured_solns_input
     if !(manufactured_solns_input.use_for_advance && manufactured_solns_input.use_for_init)
         return nothing
+    end
+
+    if nvperp === nothing
+        error("No `nvperp` found - must have distributions function outputs to plot MMS "
+              * "tests")
     end
 
     input = Dict_to_NamedTuple(input_dict["manufactured_solns"])
@@ -6373,7 +6390,8 @@ function manufactured_solutions_analysis(run_info; plot_prefix)
             end
 
             compare_moment_symbolic_test(run_info, plot_prefix, field_label, field_sym_label,
-                                         norm_label, variable_name; io=io, input=input)
+                                         norm_label, variable_name; io=io, input=input,
+                                         nvperp=nvperp)
         end
     end
 
