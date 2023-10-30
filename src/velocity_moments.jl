@@ -394,10 +394,7 @@ function update_moments!(moments, ff, vpa, vperp, z, r, composition)
                                         moments.evolve_upar)
             moments.charged.ppar_updated[is] = true
         end
-        @loop_r_z ir iz begin
-            moments.charged.vth[iz,ir,is] =
-                sqrt(2*moments.charged.ppar[iz,ir,is]/moments.charged.dens[iz,ir,is])
-        end
+        @views update_pperp_species!(moments.charged.pperp[:,:,is], ff[:,:,:,:,is], vpa, vperp, z, r)
         if moments.charged.qpar_updated[is] == false
             @views update_qpar_species!(moments.charged.qpar[:,:,is],
                                         moments.charged.dens[:,:,is],
@@ -408,6 +405,7 @@ function update_moments!(moments, ff, vpa, vperp, z, r, composition)
             moments.charged.qpar_updated[is] = true
         end
     end
+    update_vth!(moments.charged.vth, moments.charged.ppar, moments.charged.pperp, moments.charged.dens, vperp, z, r, composition)
     return nothing
 end
 
