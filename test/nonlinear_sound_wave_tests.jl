@@ -3,7 +3,6 @@ module NonlinearSoundWaveTests
 include("setup.jl")
 
 using Base.Filesystem: tempname
-using MPI
 using TimerOutputs
 
 using moment_kinetics.coordinates: define_coordinate
@@ -20,8 +19,7 @@ const analytical_rtol = 3.e-2
 const regression_rtol = 2.e-8
 
 # Create a temporary directory for test output
-test_output_directory = tempname()
-mkpath(test_output_directory)
+test_output_directory = get_MPI_tempdir()
 
 include("nonlinear_sound_wave_inputs_and_expected_data.jl")
 

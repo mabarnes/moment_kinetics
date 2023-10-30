@@ -14,8 +14,7 @@ using moment_kinetics.load_data: load_fields_data, load_time_data
 using moment_kinetics.load_data: load_species_data, load_coordinate_data
 
 # Create a temporary directory for test output
-test_output_directory = tempname()
-mkpath(test_output_directory)
+test_output_directory = get_MPI_tempdir()
 
 # Analytic solution given by implicit equation
 #   z = 1/2 ± 2/(π R_ion) * D(sqrt(-phi))

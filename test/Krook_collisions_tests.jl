@@ -5,7 +5,6 @@ module KrookCollisionsTests
 include("setup.jl")
 
 using Base.Filesystem: tempname
-using MPI
 
 using moment_kinetics.coordinates: define_coordinate
 using moment_kinetics.input_structs: grid_input, advection_input
@@ -18,8 +17,7 @@ using moment_kinetics.interpolation: interpolate_to_grid_z, interpolate_to_grid_
 using moment_kinetics.type_definitions: mk_float
 
 # Create a temporary directory for test output
-test_output_directory = tempname()
-mkpath(test_output_directory)
+test_output_directory = get_MPI_tempdir()
 
 # Useful parameters
 const z_L = 1.0 # always 1 in normalized units?
