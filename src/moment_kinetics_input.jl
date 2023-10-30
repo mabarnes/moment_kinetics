@@ -178,9 +178,12 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     collisions.charge_exchange = get(scan_input, "charge_exchange_frequency", 2.0*sqrt(species.charged[1].initial_temperature))
     collisions.ionization = get(scan_input, "ionization_frequency", collisions.charge_exchange)
     collisions.constant_ionization_rate = get(scan_input, "constant_ionization_rate", false)
-    include_krook_collisions = get(scan_input, "krook_collisions", false)
-    if include_krook_collisions
-        collisions.krook_collision_frequency_prefactor = setup_krook_collisions(reference_parameters)
+    collisions.krook_collisions_option = get(scan_input, "krook_collisions_option", "reference_parameters")
+    nuii_krook_default = setup_krook_collisions(reference_parameters)
+    if collisions.krook_collisions_option == "default"
+        collisions.krook_collision_frequency_prefactor = nuii_krook_default
+    elseif collisions.krook_collisions_option == "manual" # get the frequency from the input file
+        collisions.krook_collision_frequency_prefactor = get(scan_input, "nuii_krook", nuii_krook_default)
     else
         collisions.krook_collision_frequency_prefactor = -1.0
     end
@@ -950,7 +953,7 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     constant_ionization_rate = false
     krook_collision_frequency_prefactor = -1.0
     collisions = collisions_input(charge_exchange, ionization, constant_ionization_rate,
-                                  krook_collision_frequency_prefactor)
+                                  krook_collision_frequency_prefactor,"default")
 
     Bzed = 1.0 # magnetic field component along z
     Bmag = 1.0 # magnetic field strength

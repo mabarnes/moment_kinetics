@@ -525,14 +525,18 @@ using IfElse
         nu_krook = collisions.krook_collision_frequency_prefactor
         if nu_krook > 0.0
             tempi = vthi^2
-            nu_ii = nu_krook * densi * (tempi^(-3.0/2.0))
+            if collisions.krook_collisions_option == "manual"
+                nuii_krook = nu_krook
+            else # default option
+                nuii_krook = nu_krook * densi * tempi^(-1.5)
+            end
             if vperp_coord.n > 1
                 pvth  = 3
             else 
                 pvth = 1
             end
             FMaxwellian = (densi/vthi^pvth)*exp( -( ( vpa-upari)^2 + vperp^2 )/vthi^2)
-            Si += -nu_krook*(FMaxwellian - dfni)
+            Si += -nuii_krook*(FMaxwellian - dfni)
         end
 
 

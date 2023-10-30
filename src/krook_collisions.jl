@@ -48,14 +48,18 @@ function krook_collisions!(pdf_out, fvec_in, moments, composition, collisions, v
 
     # Note: do not need 1/sqrt(pi) for the 'Maxwellian' term because the pdf is already
     # normalized by sqrt(pi) (see velocity_moments.integrate_over_vspace).
-
+    if collisions.krook_collisions_option == "manual"
+        cfac = 0.0
+    else # default option, collisions.krook_collisions_option == "default"
+        cfac = 1.0
+    end
     if moments.evolve_ppar && moments.evolve_upar
         # Compared to evolve_upar version, grid is already normalized by vth, and multiply
         # through by vth, remembering pdf is already multiplied by vth
         @loop_s_r_z is ir iz begin
             n = fvec_in.density[iz,ir,is]
             T = (moments.charged.vth[iz,ir,is])^2
-            nu_ii = collisions.krook_collision_frequency_prefactor * n * T^(-1.5)
+            nu_ii = collisions.krook_collision_frequency_prefactor * ( n * T^(-1.5) * cfac + (1.0 - cfac))
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz,ir,is] -= dt * nu_ii *
                     (fvec_in.pdf[ivpa,ivperp,iz,ir,is]
@@ -69,7 +73,7 @@ function krook_collisions!(pdf_out, fvec_in, moments, composition, collisions, v
             n = fvec_in.density[iz,ir,is]
             vth = moments.charged.vth[iz,ir,is]
             T = vth^2
-            nu_ii = collisions.krook_collision_frequency_prefactor * n * T^(-1.5)
+            nu_ii = collisions.krook_collision_frequency_prefactor * ( n * T^(-1.5) * cfac + (1.0 - cfac))
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz,ir,is] -= dt * nu_ii *
                     (fvec_in.pdf[ivpa,ivperp,iz,ir,is]
@@ -83,7 +87,7 @@ function krook_collisions!(pdf_out, fvec_in, moments, composition, collisions, v
             n = fvec_in.density[iz,ir,is]
             vth = moments.charged.vth[iz,ir,is]
             T = vth^2
-            nu_ii = collisions.krook_collision_frequency_prefactor * n * T^(-1.5)
+            nu_ii = collisions.krook_collision_frequency_prefactor * ( n * T^(-1.5) * cfac + (1.0 - cfac))
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz,ir,is] -= dt * nu_ii *
                     (fvec_in.pdf[ivpa,ivperp,iz,ir,is]
@@ -98,7 +102,7 @@ function krook_collisions!(pdf_out, fvec_in, moments, composition, collisions, v
             n = fvec_in.density[iz,ir,is]
             vth = moments.charged.vth[iz,ir,is]
             T = vth^2
-            nu_ii = collisions.krook_collision_frequency_prefactor * n * T^(-1.5)
+            nu_ii = collisions.krook_collision_frequency_prefactor * ( n * T^(-1.5) * cfac + (1.0 - cfac))
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz,ir,is] -= dt * nu_ii *
                 (fvec_in.pdf[ivpa,ivperp,iz,ir,is]
@@ -117,7 +121,7 @@ function krook_collisions!(pdf_out, fvec_in, moments, composition, collisions, v
             else
                 vth_prefactor = 1.0 / vth^3
             end
-            nu_ii = collisions.krook_collision_frequency_prefactor * n * T^(-1.5)
+            nu_ii = collisions.krook_collision_frequency_prefactor * ( n * T^(-1.5) * cfac + (1.0 - cfac))
             @loop_vperp_vpa ivperp ivpa begin
                 pdf_out[ivpa,ivperp,iz,ir,is] -= dt * nu_ii *
                     (fvec_in.pdf[ivpa,ivperp,iz,ir,is]
