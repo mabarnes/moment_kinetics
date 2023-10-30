@@ -1647,10 +1647,10 @@ for dim ∈ one_dimension_combinations
              end
 
              function $function_name(run_info, var_name; is=1, data=nothing,
-                                     input=nothing, ax=nothing, label=nothing,
-                                     outfile=nothing, it=nothing, ir=nothing, iz=nothing,
-                                     ivperp=nothing, ivpa=nothing, ivzeta=nothing,
-                                     ivr=nothing, ivz=nothing, kwargs...)
+                                     input=nothing, fig=nothing, ax=nothing,
+                                     label=nothing, outfile=nothing, it=nothing,
+                                     ir=nothing, iz=nothing, ivperp=nothing, ivpa=nothing,
+                                     ivzeta=nothing, ivr=nothing, ivz=nothing, kwargs...)
                  if input === nothing
                      if run_info.dfns
                          input = input_dict_dfns[var_name]
@@ -1686,7 +1686,7 @@ for dim ∈ one_dimension_combinations
                  if $idim !== nothing
                      x = x[$idim]
                  end
-                 fig = plot_1d(x, data; label=label, ax=ax, kwargs...)
+                 plot_1d(x, data; label=label, ax=ax, kwargs...)
 
                  if input.show_element_boundaries && Symbol($dim_str) != :t && ax_was_nothing
                      element_boundary_positions = run_info.$dim.grid[begin:run_info.$dim.ngrid-1:end]
