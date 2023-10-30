@@ -100,7 +100,7 @@ function load_variable(file_or_group::NCDataset, name::String)
         if size(file_or_group[name].var) == ()
             var = file_or_group[name].var[]
         else
-            var = file_or_group[name].var[:]
+            var = copy(file_or_group[name].var)
         end
         if isa(var, Char)
             var = (var == Char(true))
@@ -213,6 +213,7 @@ function load_coordinate_data(fid, name; printout=false)
     discretization = load_variable(coord_group, "discretization")
     fd_option = load_variable(coord_group, "fd_option")
     bc = load_variable(coord_group, "bc")
+    element_spacing_option = load_variable(coord_group, "element_spacing_option")
 
     nelement_local = nothing
     if n_local == 1 && ngrid == 1
@@ -225,11 +226,10 @@ function load_coordinate_data(fid, name; printout=false)
     else
         nelement_global = (n_global-1) ÷ (ngrid-1)
     end
-
     # Define input to create coordinate struct
     input = grid_input(name, ngrid, nelement_global, nelement_local, nrank, irank, L,
                        discretization, fd_option, bc, advection_input("", 0.0, 0.0, 0.0),
-                       MPI.COMM_NULL)
+                       MPI.COMM_NULL, element_spacing_option)
 
     coord, spectral = define_coordinate(input)
 
