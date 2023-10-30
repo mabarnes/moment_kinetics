@@ -50,7 +50,7 @@ function krook_collisions!(pdf_out, fvec_in, moments, composition, collisions, v
     # normalized by sqrt(pi) (see velocity_moments.integrate_over_vspace).
     if collisions.krook_collisions_option == "manual"
         cfac = 0.0
-    else # default option, collisions.krook_collisions_option == "default"
+    else # default option, collisions.krook_collisions_option == "reference_parameters"
         cfac = 1.0
     end
     if moments.evolve_ppar && moments.evolve_upar

@@ -81,7 +81,6 @@ function runtests()
             ppar_test = get_ppar(dfn,vpa,vperp,upar_test)
             pperp_test = get_pperp(dfn,vpa,vperp)
             pres_test = pressure(ppar_test,pperp_test)
-            # output test results 
             @test isapprox(dens_test, dens; atol=atol)
             @test isapprox(upar_test, upar; atol=atol)
             @test isapprox(pres_test, pres; atol=atol)
@@ -102,7 +101,6 @@ function runtests()
             dens_test = get_density(dfn1D,vz,vr)
             upar_test = get_upar(dfn1D,vz,vr,dens_test)
             ppar_test = get_ppar(dfn1D,vz,vr,upar_test)
-            # output test results 
             @test isapprox(dens_test, dens; atol=atol)
             @test isapprox(upar_test, upar; atol=atol)
             @test isapprox(ppar_test, ppar; atol=atol)
@@ -131,7 +129,6 @@ function runtests()
             upar_test = get_upar(dfn,vpa,vperp,dens_test)
             ppar_test = get_ppar(dfn,vpa,vperp,upar_test)
             pperp_test = get_pperp(dfn,vpa,vperp)
-            # output test results 
 
             @test isapprox(dens_test, dens; atol=atol)
             @test isapprox(upar_test, upar; atol=atol)

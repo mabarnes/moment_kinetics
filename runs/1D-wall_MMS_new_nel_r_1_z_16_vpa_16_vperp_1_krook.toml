@@ -31,7 +31,6 @@ z_IC_temperature_amplitude2 = 0.0
 z_IC_temperature_phase2 = 0.0
 charge_exchange_frequency = 0.0
 ionization_frequency = 0.0
-#krook_collisions = false
 krook_collisions_option = "manual"
 nuii_krook = 1.0
 nstep = 2000
@@ -60,7 +59,6 @@ vperp_ngrid = 1
 vperp_nelement = 1
 vperp_L = 6.0
 vperp_bc = "periodic"
-#vperp_discretization = "finite_difference"
 vperp_discretization = "chebyshev_pseudospectral"
 
 vz_ngrid = 17

@@ -306,7 +306,7 @@ mutable struct collisions_input
     constant_ionization_rate::Bool
     # Coulomb collision rate at the reference density and temperature
     krook_collision_frequency_prefactor::mk_float
-    # Coulomb collision rate at the reference density and temperature
+    # Setting to switch between different options for Krook collision operator
     krook_collisions_option::String
 end
 
