@@ -42,7 +42,7 @@ Currently Krook collisions
 function krook_collisions!(pdf_out, fvec_in, moments, composition, collisions, vperp, vpa, dt)
     begin_s_r_z_region()
 
-    if vperp.n > 1
+    if vperp.n > 1 && (moments.evolve_density || moments.evolve_upar || moments.evolve_ppar)
         error("Krook collisions not implemented for 2V case yet")
     end
 
