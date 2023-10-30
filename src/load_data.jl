@@ -100,7 +100,7 @@ function load_variable(file_or_group::NCDataset, name::String)
         if size(file_or_group[name].var) == ()
             var = file_or_group[name].var[]
         else
-            var = file_or_group[name].var[:]
+            var = copy(file_or_group[name].var)
         end
         if isa(var, Char)
             var = (var == Char(true))

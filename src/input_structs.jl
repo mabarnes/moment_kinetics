@@ -263,13 +263,7 @@ mutable struct species_composition
     phi_wall::mk_float
     # constant for testing nonzero Er
     Er_constant::mk_float
-    # constant controlling divergence at wall boundaries in MMS test
-	epsilon_offset::mk_float
-    # logical controlling whether or not dfni(vpabar,z,r) or dfni(vpa,z,r) in MMS test
-    use_vpabar_in_mms_dfni::Bool
-    # associated float controlling form of assumed potential in MMS test
-    alpha_switch::mk_float    
-	# ratio of the neutral particle mass to the ion mass
+    # ratio of the neutral particle mass to the ion mass
     mn_over_mi::mk_float
     # ratio of the electron particle mass to the ion mass
     me_over_mi::mk_float
@@ -312,6 +306,8 @@ mutable struct collisions_input
     constant_ionization_rate::Bool
     # Coulomb collision rate at the reference density and temperature
     krook_collision_frequency_prefactor::mk_float
+    # Setting to switch between different options for Krook collision operator
+    krook_collisions_option::String
 end
 
 """

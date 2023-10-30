@@ -168,11 +168,18 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     collisions.charge_exchange = get(scan_input, "charge_exchange_frequency", 2.0*sqrt(species.charged[1].initial_temperature))
     collisions.ionization = get(scan_input, "ionization_frequency", collisions.charge_exchange)
     collisions.constant_ionization_rate = get(scan_input, "constant_ionization_rate", false)
-    include_krook_collisions = get(scan_input, "krook_collisions", false)
-    if include_krook_collisions
-        collisions.krook_collision_frequency_prefactor = setup_krook_collisions(reference_params)
-    else
+    collisions.krook_collisions_option = get(scan_input, "krook_collisions_option", "none")
+    nuii_krook_default = setup_krook_collisions(reference_params)
+    if collisions.krook_collisions_option == "reference_parameters"
+        collisions.krook_collision_frequency_prefactor = nuii_krook_default
+    elseif collisions.krook_collisions_option == "manual" # get the frequency from the input file
+        collisions.krook_collision_frequency_prefactor = get(scan_input, "nuii_krook", nuii_krook_default)
+    elseif collisions.krook_collisions_option == "none"
+        # By default, no krook collisions included
         collisions.krook_collision_frequency_prefactor = -1.0
+    else
+        error("Invalid option "
+              * "krook_collisions_option=$(collisions.krook_collisions_option) passed")
     end
 
     # parameters related to the time stepping
@@ -365,7 +372,8 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     # need grid and MPI information to determine these values 
     # MRH just put dummy values now 
     if ignore_MPI
-        irank_z = nrank_z = irank_r = nrank_r = -1
+        irank_z = irank_r = 0
+        nrank_z = nrank_r = 1
         comm_sub_z = comm_sub_r = MPI.COMM_NULL
     else
         irank_z, nrank_z, comm_sub_z, irank_r, nrank_r, comm_sub_r = setup_distributed_memory_MPI(z.nelement_global,z.nelement_local,r.nelement_global,r.nelement_local)
@@ -848,20 +856,13 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     phi_wall = 0.0
     # constant to test nonzero Er
     Er_constant = 0.0
-    # constant to control Ez divergence 
-    epsilon_offset = 0.001
-    # bool to control functional form of dfni in MMS test
-    use_vpabar_in_mms_dfni = true
-    # float to control form of MMS density/potential/Er/Ez
-    alpha_switch = 1.0
     # ratio of the neutral particle mass to the ion particle mass
     mn_over_mi = 1.0
     # ratio of the electron particle mass to the ion particle mass
     me_over_mi = 1.0/1836.0
     composition = species_composition(n_species, n_ion_species, n_neutral_species,
         electron_physics, use_test_neutral_wall_pdf, T_e, T_wall, phi_wall, Er_constant,
-        epsilon_offset, use_vpabar_in_mms_dfni, alpha_switch, mn_over_mi, me_over_mi,
-        allocate_float(n_species))
+        mn_over_mi, me_over_mi, allocate_float(n_species))
     
     species_charged = Array{species_parameters_mutable,1}(undef,n_ion_species)
     species_neutral = Array{species_parameters_mutable,1}(undef,n_neutral_species)
@@ -961,7 +962,7 @@ function load_defaults(n_ion_species, n_neutral_species, electron_physics)
     constant_ionization_rate = false
     krook_collision_frequency_prefactor = -1.0
     collisions = collisions_input(charge_exchange, ionization, constant_ionization_rate,
-                                  krook_collision_frequency_prefactor)
+                                  krook_collision_frequency_prefactor,"none")
 
     Bzed = 1.0 # magnetic field component along z
     Bmag = 1.0 # magnetic field strength
