@@ -1668,7 +1668,7 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
                                     collisions, dt)
     end
     
-    # Add a for Krook collision operoator for ions
+    # Add Krook collision operator for ions
     if advance.krook_collisions
         krook_collisions!(fvec_out.pdf, fvec_in, moments, composition, collisions,
                           vperp, vpa, dt)
