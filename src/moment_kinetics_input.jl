@@ -180,7 +180,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     collisions.constant_ionization_rate = get(scan_input, "constant_ionization_rate", false)
     collisions.krook_collisions_option = get(scan_input, "krook_collisions_option", "reference_parameters")
     nuii_krook_default = setup_krook_collisions(reference_parameters)
-    if collisions.krook_collisions_option == "default"
+    if collisions.krook_collisions_option == "reference_parameters"
         collisions.krook_collision_frequency_prefactor = nuii_krook_default
     elseif collisions.krook_collisions_option == "manual" # get the frequency from the input file
         collisions.krook_collision_frequency_prefactor = get(scan_input, "nuii_krook", nuii_krook_default)
