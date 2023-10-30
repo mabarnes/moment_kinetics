@@ -32,14 +32,17 @@ function runtests()
         comm = MPI.COMM_NULL
         # create the 'input' struct containing input info needed to create a
         # coordinate
-        vr_input = grid_input("vperp", 1, 1, 1, 
-                              nrank, irank, 1.0, discretization, fd_option, bc, adv_input,comm)
-        vz_input = grid_input("vpa", ngrid, nelement_global, nelement_local, 
-                              nrank, irank, Lvpa, discretization, fd_option, bc, adv_input,comm)
-        vpa_input = grid_input("vpa", ngrid, nelement_global, nelement_local, 
-                               nrank, irank, Lvpa, discretization, fd_option, bc, adv_input,comm)
-        vperp_input = grid_input("vperp", ngrid, nelement_global, nelement_local, 
-                                 nrank, irank, Lvperp, discretization, fd_option, bc, adv_input,comm)
+        vr_input = grid_input("vperp", 1, 1, 1, nrank, irank, 1.0, discretization,
+                              fd_option, bc, adv_input, comm, "uniform")
+        vz_input = grid_input("vpa", ngrid, nelement_global, nelement_local, nrank, irank,
+                              Lvpa, discretization, fd_option, bc, adv_input, comm,
+                              "uniform")
+        vpa_input = grid_input("vpa", ngrid, nelement_global, nelement_local, nrank,
+                               irank, Lvpa, discretization, fd_option, bc, adv_input,
+                               comm, "uniform")
+        vperp_input = grid_input("vperp", ngrid, nelement_global, nelement_local, nrank,
+                                 irank, Lvperp, discretization, fd_option, bc, adv_input,
+                                 comm, "uniform")
         # create the coordinate struct 'x'
         vpa, vpa_spectral = define_coordinate(vpa_input)
         vperp, vperp_spectral = define_coordinate(vperp_input)
@@ -100,12 +103,9 @@ function runtests()
             upar_test = get_upar(dfn1D,vz,vr,dens_test)
             ppar_test = get_ppar(dfn1D,vz,vr,upar_test)
             # output test results 
-            println("")
-            println("1D Maxwellian")
             @test isapprox(dens_test, dens; atol=atol)
             @test isapprox(upar_test, upar; atol=atol)
             @test isapprox(ppar_test, ppar; atol=atol)
-            println("")
         end
 
         @testset "biMaxwellian" begin
@@ -133,13 +133,9 @@ function runtests()
             pperp_test = get_pperp(dfn,vpa,vperp)
             # output test results 
 
-            println("")
-            println("biMaxwellian")
             @test isapprox(dens_test, dens; atol=atol)
             @test isapprox(upar_test, upar; atol=atol)
             @test isapprox(ppar_test, ppar; atol=atol)
-            println("pperp_test: ", pperp_test, " pperp: ", pperp, " error: ", abs(pperp_test-pperp))
-            println("")
         end
     end
 end 
