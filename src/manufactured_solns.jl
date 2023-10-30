@@ -524,11 +524,11 @@ using IfElse
         end
         nu_krook = collisions.krook_collision_frequency_prefactor
         if nu_krook > 0.0
-            tempi = vthi^2
+            Ti_over_Tref = vthi^2
             if collisions.krook_collisions_option == "manual"
                 nuii_krook = nu_krook
             else # default option
-                nuii_krook = nu_krook * densi * tempi^(-1.5)
+                nuii_krook = nu_krook * densi * Ti_over_Tref^(-1.5)
             end
             if vperp_coord.n > 1
                 pvth  = 3
