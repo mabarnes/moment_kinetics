@@ -12,11 +12,11 @@ using ..array_allocation: allocate_float
 using ..communication
 using ..coordinates: define_coordinate
 using ..file_io: io_has_parallel, input_option_error, open_ascii_output_file
-using ..constants
 using ..krook_collisions: setup_krook_collisions
 using ..finite_differences: fd_check_option
 using ..input_structs
 using ..numerical_dissipation: setup_numerical_dissipation
+using ..reference_parameters
 
 using MPI
 using TOML
@@ -91,19 +91,9 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     # constant to be used to test nonzero Er in wall boundary condition
     composition.Er_constant = get(scan_input, "Er_constant", 0.0)
 
-    # Get reference parameters for normalizations
-    reference_parameter_section = copy(set_defaults_and_check_section!(
-        scan_input, "reference_params";
-        Bref=1.0,
-        Lref=10.0,
-        Nref=1.0e19,
-        Tref=100.0,
-        mref=deuteron_mass,
-       ))
-    reference_parameter_section["cref"] = sqrt(2.0 * proton_charge * reference_parameter_section["Tref"] / (reference_parameter_section["mref"]))
-    reference_parameter_section["timeref"] = reference_parameter_section["Lref"] / reference_parameter_section["cref"]
-    reference_parameter_section["Omegaref"] = proton_charge * reference_parameter_section["Bref"] / reference_parameter_section["mref"]
-    reference_parameters = Dict_to_NamedTuple(reference_parameter_section)
+    # Reference parameters that define the conversion between physical quantities and
+    # normalised values used in the code.
+    reference_params = setup_reference_parameters(scan_input)
 
     ## set geometry_input
     geometry.Bzed = get(scan_input, "Bzed", 1.0)
@@ -111,7 +101,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     geometry.bzed = geometry.Bzed/geometry.Bmag
     geometry.bzeta = sqrt(1.0 - geometry.bzed^2.0)
     geometry.Bzeta = geometry.Bmag*geometry.bzeta
-    geometry.rhostar = get(scan_input, "rhostar", reference_parameters.cref/reference_parameters.Lref/reference_parameters.Omegaref)
+    geometry.rhostar = get(scan_input, "rhostar", get_default_rhostar(reference_params))
     #println("Info: Bzed is ",geometry.Bzed)
     #println("Info: Bmag is ",geometry.Bmag)
     #println("Info: rhostar is ",geometry.rhostar)
@@ -179,7 +169,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
     collisions.ionization = get(scan_input, "ionization_frequency", collisions.charge_exchange)
     collisions.constant_ionization_rate = get(scan_input, "constant_ionization_rate", false)
     collisions.krook_collisions_option = get(scan_input, "krook_collisions_option", "reference_parameters")
-    nuii_krook_default = setup_krook_collisions(reference_parameters)
+    nuii_krook_default = setup_krook_collisions(reference_params)
     if collisions.krook_collisions_option == "reference_parameters"
         collisions.krook_collision_frequency_prefactor = nuii_krook_default
     elseif collisions.krook_collisions_option == "manual" # get the frequency from the input file
@@ -535,8 +525,7 @@ function mk_input(scan_input=Dict(); save_inputs_to_txt=false, ignore_MPI=true)
                   vpa, vpa_spectral, vperp, vperp_spectral, gyrophase, gyrophase_spectral,
                   vz, vz_spectral, vr, vr_spectral, vzeta, vzeta_spectral, composition,
                   species_immutable, collisions, geometry, drive_immutable,
-                  num_diss_params, manufactured_solns_input,
-                  reference_parameters)
+                  num_diss_params, manufactured_solns_input)
     println(io, "\nAll inputs returned from mk_input():")
     println(io, all_inputs)
     close(io)
@@ -1133,6 +1122,15 @@ function check_input_initialization(composition, species, io)
         end
         println(io)
     end
+end
+
+"""
+    function get_default_rhostar(reference_params)
+
+Calculate the normalised ion gyroradius at reference parameters
+"""
+function get_default_rhostar(reference_params)
+    return reference_params.cref / reference_params.Omegaref / reference_params.Lref
 end
 
 end

@@ -9,12 +9,14 @@ function compare_collision_frequencies(input_file::String,
 
     io_input, evolve_moments, t_input, z_input, r_input, vpa_input, vperp_input,
     gyrophase_input, vz_input, vr_input, vzeta_input, composition, species, collisions,
-    geometry, drive_input, num_diss_params, manufactured_solns_input,
-    reference_parameters = moment_kinetics.moment_kinetics_input.mk_input(input)
+    geometry, drive_input, num_diss_params, manufactured_solns_input =
+        moment_kinetics.moment_kinetics_input.mk_input(input)
+
+    reference_params = moment_kinetics.reference_parameters.setup_reference_parameters(input)
 
     dimensional_parameters = moment_kinetics.utils.get_unnormalized_parameters(
-        input_file; Bnorm=reference_parameters.Bref, Lnorm=reference_parameters.Lref,
-        Nnorm=reference_parameters.Nref, Tnorm=reference_parameters.Tref)
+        input_file; Bnorm=reference_params.Bref, Lnorm=reference_params.Lref,
+        Nnorm=reference_params.Nref, Tnorm=reference_params.Tref)
 
     println("Omega_i0 ", dimensional_parameters["Omega_i0"])
     println("rho_i0 ", dimensional_parameters["rho_i0"])
@@ -149,7 +151,7 @@ function compare_collision_frequencies(input_file::String,
         hline!([nu_vpa_diss], label="nu_vpa_diss")
         ylabel!("frequency (s^-1)")
 
-        savefig(joinpath("runs", io_input.run_name,
+        savefig(joinpath(io_input.output_dir,
                          io_input.run_name * "_collision_frequencies.pdf"))
     end
 

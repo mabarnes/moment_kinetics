@@ -10,11 +10,11 @@ Calculate normalized collision frequency at reference parameters for Coulomb col
 
 Currently valid only for hydrogenic ions (Z=1)
 """
-function setup_krook_collisions(reference_parameters)
-    Nref = reference_parameters.Nref
-    Tref = reference_parameters.Tref
-    mref = reference_parameters.mref
-    timeref = reference_parameters.timeref
+function setup_krook_collisions(reference_params)
+    Nref = reference_params.Nref
+    Tref = reference_params.Tref
+    mref = reference_params.mref
+    timeref = reference_params.timeref
 
     Nref_per_cm3 = Nref * 1.0e-6
 
@@ -43,7 +43,7 @@ function krook_collisions!(pdf_out, fvec_in, moments, composition, collisions, v
     begin_s_r_z_region()
 
     if vperp.n > 1 && (moments.evolve_density || moments.evolve_upar || moments.evolve_ppar)
-        error("Krook collisions not implemented for 2V case yet")
+        error("Krook collisions not implemented for 2V moment-kinetic cases yet")
     end
 
     # Note: do not need 1/sqrt(pi) for the 'Maxwellian' term because the pdf is already
