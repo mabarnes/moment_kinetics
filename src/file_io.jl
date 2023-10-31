@@ -647,37 +647,37 @@ end
             append_to_dynamic_var(io_moments.time, t, t_idx)
 
             # add the electrostatic potential and electric field components at this time slice to the hdf5 file
-            append_to_dynamic_var(io_moments.phi.data, fields.phi, t_idx, z, r)
-            append_to_dynamic_var(io_moments.Er.data, fields.Er, t_idx, z, r)
-            append_to_dynamic_var(io_moments.Ez.data, fields.Ez, t_idx, z, r)
+            append_to_dynamic_var(io_moments.phi, fields.phi.data, t_idx, z, r)
+            append_to_dynamic_var(io_moments.Er, fields.Er.data, t_idx, z, r)
+            append_to_dynamic_var(io_moments.Ez, fields.Ez.data, t_idx, z, r)
 
             # add the density data at this time slice to the output file
-            append_to_dynamic_var(io_moments.density.data, moments.charged.dens, t_idx, z,
+            append_to_dynamic_var(io_moments.density, moments.charged.dens.data, t_idx, z,
                                   r, n_ion_species)
-            append_to_dynamic_var(io_moments.parallel_flow.data, moments.charged.upar,
+            append_to_dynamic_var(io_moments.parallel_flow, moments.charged.upar.data,
                                   t_idx, z, r, n_ion_species)
-            append_to_dynamic_var(io_moments.parallel_pressure.data, moments.charged.ppar,
+            append_to_dynamic_var(io_moments.parallel_pressure, moments.charged.ppar.data,
                                   t_idx, z, r, n_ion_species)
-            append_to_dynamic_var(io_moments.perpendicular_pressure.data, moments.charged.pperp,
+            append_to_dynamic_var(io_moments.perpendicular_pressure, moments.charged.pperp.data,
                                   t_idx, z, r, n_ion_species)
-            append_to_dynamic_var(io_moments.parallel_heat_flux.data,
-                                  moments.charged.qpar, t_idx, z, r, n_ion_species)
-            append_to_dynamic_var(io_moments.thermal_speed.data, moments.charged.vth,
+            append_to_dynamic_var(io_moments.parallel_heat_flux,
+                                  moments.charged.qpar.data, t_idx, z, r, n_ion_species)
+            append_to_dynamic_var(io_moments.thermal_speed, moments.charged.vth.data,
                                   t_idx, z, r, n_ion_species)
-            append_to_dynamic_var(io_moments.entropy_production.data, moments.charged.dSdt,
+            append_to_dynamic_var(io_moments.entropy_production, moments.charged.dSdt.data,
                                   t_idx, z, r, n_ion_species)
             if n_neutral_species > 0
-                append_to_dynamic_var(io_moments.density_neutral.data,
-                                      moments.neutral.dens, t_idx, z, r,
+                append_to_dynamic_var(io_moments.density_neutral,
+                                      moments.neutral.dens.data, t_idx, z, r,
                                       n_neutral_species)
-                append_to_dynamic_var(io_moments.uz_neutral.data, moments.neutral.uz,
+                append_to_dynamic_var(io_moments.uz_neutral, moments.neutral.uz.data,
                                       t_idx, z, r, n_neutral_species)
-                append_to_dynamic_var(io_moments.pz_neutral.data, moments.neutral.pz,
+                append_to_dynamic_var(io_moments.pz_neutral, moments.neutral.pz.data,
                                       t_idx, z, r, n_neutral_species)
-                append_to_dynamic_var(io_moments.qz_neutral.data, moments.neutral.qz,
+                append_to_dynamic_var(io_moments.qz_neutral, moments.neutral.qz.data,
                                       t_idx, z, r, n_neutral_species)
-                append_to_dynamic_var(io_moments.thermal_speed_neutral.data,
-                                      moments.neutral.vth, t_idx, z, r, n_neutral_species)
+                append_to_dynamic_var(io_moments.thermal_speed_neutral,
+                                      moments.neutral.vth.data, t_idx, z, r, n_neutral_species)
             end
         end
         return nothing
@@ -685,11 +685,8 @@ end
 end
 
 @debug_shared_array begin
-    # Special versions when using DebugMPISharedArray to avoid implicit conversion to
-    # Array, which is forbidden.
-    function write_dfns_data_to_binary(ff::DebugMPISharedArray, ff_neutral::DebugMPISharedArray,
-            t, n_ion_species, n_neutral_species, h5::hdf5_dfns_info, t_idx, r, z, vperp,
-            vpa, vzeta, vr, vz)
+    function write_dfns_data_to_binary(ff::DebugMPISharedArray, ff_neutral::DebugMPISharedArray, t, n_ion_species, n_neutral_species,
+                                       io_dfns, t_idx, r, z, vperp, vpa, vzeta, vr, vz)
         @serial_region begin
             # Only read/write from first process in each 'block'
 
@@ -697,12 +694,10 @@ end
             append_to_dynamic_var(io_dfns.time, t, t_idx)
 
             # add the distribution function data at this time slice to the output file
-            # add the distribution function data at this time slice to the output file
-            append_to_dynamic_var(io_dfns.f, ff.data, t_idx, vpa, vperp, z, r,
-                                  n_ion_species)
+            append_to_dynamic_var(io_dfns.f, ff.data, t_idx, vpa, vperp, z, r, n_ion_species)
             if n_neutral_species > 0
-                append_to_dynamic_var(io_dfns.f_neutral, ff_neutral.data, t_idx, vz, vr,
-                                      vzeta, z, r, n_neutral_species)
+                append_to_dynamic_var(io_dfns.f_neutral, ff_neutral.data, t_idx, vz, vr, vzeta, z,
+                                      r, n_neutral_species)
             end
         end
         return nothing

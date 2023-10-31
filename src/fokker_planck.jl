@@ -176,7 +176,7 @@ function explicit_fokker_planck_collisions_weak_form!(pdf_out,pdf_in,composition
     
     # N.B. parallelisation is only over vpa vperp
     # ensure s, r, z are local before initiating the s, r, z loop
-    begin_serial_region()
+    begin_vperp_vpa_region()
     @loop_s_r_z is ir iz begin
         # the functions within this loop will call
         # begin_vpa_region(), begin_vperp_region(), begin_vperp_vpa_region(), begin_serial_region() to synchronise the shared-memory arrays
@@ -295,16 +295,19 @@ function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp
           vpa,vperp,YY_arrays)
     end
     # solve the collision operator matrix eq
-    if impose_zero_gradient_BC
-        enforce_zero_bc!(rhsc,vpa,vperp,impose_BC_at_zero_vperp=true)
-        # invert mass matrix and fill fc
-        fc = lu_obj_MMZG \ rhsc
-    else
-        enforce_zero_bc!(rhsc,vpa,vperp)
-        # invert mass matrix and fill fc
-        fc = lu_obj_MM \ rhsc
+    begin_serial_region()
+    @serial_region begin
+        if impose_zero_gradient_BC
+            enforce_zero_bc!(rhsc,vpa,vperp,impose_BC_at_zero_vperp=true)
+            # invert mass matrix and fill fc
+            sc .= lu_obj_MMZG \ rhsc
+        else
+            enforce_zero_bc!(rhsc,vpa,vperp)
+            # invert mass matrix and fill fc
+            sc .= lu_obj_MM \ rhsc
+        end
     end
-    ravel_c_to_vpavperp_parallel!(CC,fc,vpa.n)
+    ravel_c_to_vpavperp_parallel!(CC,sc,vpa.n)
     return nothing
 end
 

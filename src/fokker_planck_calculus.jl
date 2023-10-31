@@ -959,9 +959,9 @@ function create_sparse_matrix(data::sparse_matrix_constructor)
 end
 
 function allocate_boundary_data(vpa,vperp)
-    lower_boundary_vpa = Array{mk_float,1}(undef,vperp.n)
-    upper_boundary_vpa = Array{mk_float,1}(undef,vperp.n)
-    upper_boundary_vperp = Array{mk_float,1}(undef,vpa.n)
+    lower_boundary_vpa = allocate_shared_float(vperp.n)
+    upper_boundary_vpa = allocate_shared_float(vperp.n)
+    upper_boundary_vperp = allocate_shared_float(vpa.n)
     return vpa_vperp_boundary_data(lower_boundary_vpa,
             upper_boundary_vpa,upper_boundary_vperp)
 end
@@ -1932,6 +1932,7 @@ function assemble_explicit_collision_operator_rhs_parallel!(rhsc,rhsvpavperp,pdf
     @loop_vperp_vpa ivperp ivpa begin
         rhsvpavperp[ivpa,ivperp] = 0.0
     end
+
     # loop over collocation points to benefit from shared-memory parallelism
     ngrid_vpa, ngrid_vperp = vpa.ngrid, vperp.ngrid
     @loop_vperp_vpa ivperp_global ivpa_global begin
@@ -2002,11 +2003,13 @@ function elliptic_solve!(field,source,boundary_data::vpa_vperp_boundary_data,
     ravel_vpavperp_to_c_parallel!(sc,source,vpa.n)
     # assemble the rhs of the weak system
     begin_serial_region()
-    mul!(rhsc,matrix_rhs,sc)
-    # enforce the boundary conditions
-    enforce_dirichlet_bc!(rhsc,vpa,vperp,boundary_data)
-    # solve the linear system
-    sc = lu_object_lhs \ rhsc
+    @serial_region begin
+        mul!(rhsc,matrix_rhs,sc)
+        # enforce the boundary conditions
+        enforce_dirichlet_bc!(rhsc,vpa,vperp,boundary_data)
+        # solve the linear system
+        sc .= lu_object_lhs \ rhsc
+    end
     # get data into the vpa vperp indices format
     begin_vperp_vpa_region()
     ravel_c_to_vpavperp_parallel!(field,sc,vpa.n)
@@ -2023,16 +2026,22 @@ function elliptic_solve!(field,source_1,source_2,boundary_data::vpa_vperp_bounda
     
     # assemble the rhs of the weak system
     begin_serial_region()
-    mul!(rhsc_1,matrix_rhs_1,sc_1)
-    mul!(rhsc_2,matrix_rhs_2,sc_2)
+    @serial_region begin
+        mul!(rhsc_1,matrix_rhs_1,sc_1)
+        mul!(rhsc_2,matrix_rhs_2,sc_2)
+    end
+    begin_vperp_vpa_region()
     @loop_vperp_vpa ivperp ivpa begin
         ic = ic_func(ivpa,ivperp,vpa.n)
         rhsc_1[ic] += rhsc_2[ic]
     end
-    # enforce the boundary conditions
-    enforce_dirichlet_bc!(rhsc_1,vpa,vperp,boundary_data)
-    # solve the linear system
-    sc_1 = lu_object_lhs \ rhsc_1
+    begin_serial_region()
+    @serial_region begin
+        # enforce the boundary conditions
+        enforce_dirichlet_bc!(rhsc_1,vpa,vperp,boundary_data)
+        # solve the linear system
+        sc_1 .= lu_object_lhs \ rhsc_1
+    end
     # get data into the vpa vperp indices format
     begin_vperp_vpa_region()
     ravel_c_to_vpavperp_parallel!(field,sc_1,vpa.n)
