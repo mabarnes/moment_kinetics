@@ -1884,10 +1884,10 @@ function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, perp
 			savefig(outfile)
 		end
 		if pp.plot_dens0_vs_t
-            @views plot(time, density[iz0,ir0,is,:], xlabel=L"t/c_{ref}", ylabel=L"n_i", label = "")
+            @views plot(time, density[iz0,ir0,is,:], xlabel=L"t/ (L_{ref}/c_{ref})", ylabel=L"n_i", label = "")
 			outfile = string(run_name, "_density"*description*"(iz0,ir0)_vs_t.pdf")
 			savefig(outfile)
-            @views plot(time, density[iz0,ir0,is,:] .- density[iz0,ir0,is,1], xlabel=L"t/c_{ref}", ylabel=L"n_i(t) - n_i(0)", label = "")
+            @views plot(time, density[iz0,ir0,is,:] .- density[iz0,ir0,is,1], xlabel=L"t/ (L_{ref}/c_{ref})", ylabel=L"n_i(t) - n_i(0)", label = "")
 			outfile = string(run_name, "_delta_density"*description*"(iz0,ir0)_vs_t.pdf")
 			savefig(outfile)
         end
@@ -1919,10 +1919,10 @@ function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, perp
 			savefig(outfile)
 		end
 		if pp.plot_upar0_vs_t
-            @views plot(time, parallel_flow[iz0,ir0,is,:], xlabel=L"t/c_{ref}", ylabel=L"u_{i\|\|}(t)", label = "")
+            @views plot(time, parallel_flow[iz0,ir0,is,:], xlabel=L"t/ (L_{ref}/c_{ref})", ylabel=L"u_{i\|\|}(t)", label = "")
 			outfile = string(run_name, "_parallel_flow"*description*"(iz0,ir0)_vs_t.pdf")
 			savefig(outfile)
-            @views plot(time, parallel_flow[iz0,ir0,is,:] .- parallel_flow[iz0,ir0,is,1], xlabel=L"t/c_{ref}", ylabel=L"u_{i\|\|}(t) - u_{i\|\|}(0)", label = "")
+            @views plot(time, parallel_flow[iz0,ir0,is,:] .- parallel_flow[iz0,ir0,is,1], xlabel=L"t/ (L_{ref}/c_{ref})", ylabel=L"u_{i\|\|}(t) - u_{i\|\|}(0)", label = "")
 			outfile = string(run_name, "_delta_parallel_flow"*description*"(iz0,ir0)_vs_t.pdf")
 			savefig(outfile)
         end
@@ -1954,19 +1954,19 @@ function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, perp
 			savefig(outfile)
 		end
         if pp.plot_ppar0_vs_t
-            @views plot(time, parallel_pressure[iz0,ir0,is,:], xlabel=L"t/c_{ref}", ylabel=L"p_{i\|\|}(t)", label = "")
+            @views plot(time, parallel_pressure[iz0,ir0,is,:], xlabel=L"t/ (L_{ref}/c_{ref})", ylabel=L"p_{i\|\|}(t)", label = "")
 			outfile = string(run_name, "_parallel_pressure"*description*"(iz0,ir0)_vs_t.pdf")
 			savefig(outfile)
-            @views plot(time, parallel_pressure[iz0,ir0,is,:] .- parallel_pressure[iz0,ir0,is,1], xlabel=L"t/c_{ref}", ylabel=L"p_{i\|\|}(t) - p_{i\|\|}(0)", label = "")
+            @views plot(time, parallel_pressure[iz0,ir0,is,:] .- parallel_pressure[iz0,ir0,is,1], xlabel=L"t/ (L_{ref}/c_{ref})", ylabel=L"p_{i\|\|}(t) - p_{i\|\|}(0)", label = "")
 			outfile = string(run_name, "_delta_parallel_pressure"*description*"(iz0,ir0)_vs_t.pdf")
 			savefig(outfile)
         end
         # the perpendicular pressure
         if pp.plot_pperp0_vs_t
-            @views plot(time, perpendicular_pressure[iz0,ir0,is,:], xlabel=L"t/c_{ref}", ylabel=L"p_{i\perp}(t)", label = "")
+            @views plot(time, perpendicular_pressure[iz0,ir0,is,:], xlabel=L"t/ (L_{ref}/c_{ref})", ylabel=L"p_{i\perp}(t)", label = "")
 			outfile = string(run_name, "_perpendicular_pressure"*description*"(iz0,ir0)_vs_t.pdf")
 			savefig(outfile)
-            @views plot(time, perpendicular_pressure[iz0,ir0,is,:] .- perpendicular_pressure[iz0,ir0,is,1], xlabel=L"t/c_{ref}", ylabel=L"p_{i\perp}(t) - p_{i\perp}(0)", label = "")
+            @views plot(time, perpendicular_pressure[iz0,ir0,is,:] .- perpendicular_pressure[iz0,ir0,is,1], xlabel=L"t/ (L_{ref}/c_{ref})", ylabel=L"p_{i\perp}(t) - p_{i\perp}(0)", label = "")
 			outfile = string(run_name, "_delta_perpendicular_pressure"*description*"(iz0,ir0)_vs_t.pdf")
 			savefig(outfile)
         end
@@ -1975,40 +1975,40 @@ function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, perp
             @views plot([time, time, time] , 
             [parallel_pressure[iz0,ir0,is,:], perpendicular_pressure[iz0,ir0,is,:], 
             (2.0/3.0).*perpendicular_pressure[iz0,ir0,is,:] .+ (1.0/3.0).*parallel_pressure[iz0,ir0,is,:]],
-            xlabel=L"t/c_{ref}", ylabel="", label = [L"p_{i\|\|}(t)" L"p_{i\perp}(t)" L"p_{i}(t)"])
+            xlabel=L"t/ (L_{ref}/c_{ref})", ylabel="", label = [L"p_{i\|\|}(t)" L"p_{i\perp}(t)" L"p_{i}(t)"])
 			outfile = string(run_name, "_pressures"*description*"(iz0,ir0)_vs_t.pdf")
 			savefig(outfile)
             @views plot([time, time, time] , 
             [parallel_pressure[iz0,ir0,is,:] .- parallel_pressure[iz0,ir0,is,1], perpendicular_pressure[iz0,ir0,is,:] .- perpendicular_pressure[iz0,ir0,is,1], 
             (2.0/3.0).*(perpendicular_pressure[iz0,ir0,is,:] .- perpendicular_pressure[iz0,ir0,is,1]).+
             (1.0/3.0).*(parallel_pressure[iz0,ir0,is,:] .- parallel_pressure[iz0,ir0,is,1])],
-            xlabel=L"t/c_{ref}", ylabel="", label = [L"p_{i\|\|}(t) - p_{i\|\|}(0)" L"p_{i\perp}(t) - p_{i\perp}(0)" L"p_{i}(t) - p_{i}(0)"])
+            xlabel=L"t/ (L_{ref}/c_{ref})", ylabel="", label = [L"p_{i\|\|}(t) - p_{i\|\|}(0)" L"p_{i\perp}(t) - p_{i\perp}(0)" L"p_{i}(t) - p_{i}(0)"])
 			outfile = string(run_name, "_delta_pressures"*description*"(iz0,ir0)_vs_t.pdf")
 			savefig(outfile)
             @views plot([time] , 
             [(2.0/3.0).*perpendicular_pressure[iz0,ir0,is,:] .+ (1.0/3.0).*parallel_pressure[iz0,ir0,is,:]],
-            xlabel=L"t/c_{ref}", ylabel=L"p_{i}(t)", label = "")
+            xlabel=L"t/ (L_{ref}/c_{ref})", ylabel=L"p_{i}(t)", label = "")
 			outfile = string(run_name, "_pressure"*description*"(iz0,ir0)_vs_t.pdf")
 			savefig(outfile)
             @views plot([time] , 
             [(2.0/3.0).*(perpendicular_pressure[iz0,ir0,is,:] .- perpendicular_pressure[iz0,ir0,is,1]).+
             (1.0/3.0).*(parallel_pressure[iz0,ir0,is,:] .- parallel_pressure[iz0,ir0,is,1])],
-            xlabel=L"t/c_{ref}", ylabel=L"p_{i}(t) - p_{i}(0)", label = "")
+            xlabel=L"t/ (L_{ref}/c_{ref})", ylabel=L"p_{i}(t) - p_{i}(0)", label = "")
 			outfile = string(run_name, "_delta_pressure"*description*"(iz0,ir0)_vs_t.pdf")
 			savefig(outfile)
         end
         # the thermal speed
         if pp.plot_vth0_vs_t
-            @views plot(time, thermal_speed[iz0,ir0,is,:], xlabel=L"t/c_{ref}", ylabel=L"v_{i,th}(t)", label = "")
+            @views plot(time, thermal_speed[iz0,ir0,is,:], xlabel=L"t / (L_{ref}/c_{ref})", ylabel=L"v_{i,th}(t)", label = "")
 			outfile = string(run_name, "_thermal_speed"*description*"(iz0,ir0)_vs_t.pdf")
 			savefig(outfile)
-            @views plot(time, thermal_speed[iz0,ir0,is,:] .- thermal_speed[iz0,ir0,is,1], xlabel=L"t/c_{ref}", ylabel=L"v_{i,th}(t) - v_{i,th}(0)", label = "")
+            @views plot(time, thermal_speed[iz0,ir0,is,:] .- thermal_speed[iz0,ir0,is,1], xlabel=L"t/ (L_{ref}/c_{ref})", ylabel=L"v_{i,th}(t) - v_{i,th}(0)", label = "")
 			outfile = string(run_name, "_delta_thermal_speed"*description*"(iz0,ir0)_vs_t.pdf")
 			savefig(outfile)
         end
         # the entropy production
         if pp.plot_dSdt0_vs_t
-            @views plot(time[2:ntime], entropy_production[iz0,ir0,is,2:ntime], xlabel=L"t/c_{ref}", ylabel=L"\dot{S}(t)", label = "")
+            @views plot(time[2:ntime], entropy_production[iz0,ir0,is,2:ntime], xlabel=L"t/(L_{ref}/c_{ref})", ylabel=L"\dot{S}(t)", label = "")
 			outfile = string(run_name, "_entropy production"*description*"(iz0,ir0)_vs_t.pdf")
 			savefig(outfile)
         end
@@ -2050,10 +2050,10 @@ function plot_Maxwellian_diagnostic(ff, density, parallel_flow, thermal_speed, v
         iz0_string = string("_iz0", string(iz0))
         ir0_string = string("_ir0", string(ir0))
         description = "_ion_spec"*string(is)*"_"*iz0_string*ir0_string
-        @views plot(time, ff_norm, xlabel=L"t/c_{ref}", ylabel=L"L^2(f - f_M)(t)", label = "")
+        @views plot(time, ff_norm, xlabel=L"t/ (L_{ref}/c_{ref})", ylabel=L"L^2(f - f_M)(t)", label = "")
 			outfile = string(run_name, "_L2_Maxwellian_norm"*description*"_vs_t.pdf")
 			savefig(outfile)
-        @views plot(time, ff_norm, xlabel=L"t/c_{ref}", ylabel=L"L^2(f - f_M)(t)", label = "", yscale=:log10)
+        @views plot(time, ff_norm, xlabel=L"t/ (L_{ref}/c_{ref})", ylabel=L"L^2(f - f_M)(t)", label = "", yscale=:log10)
 			outfile = string(run_name, "_L2_Maxwellian_norm_log_scale"*description*"_vs_t.pdf")
 			savefig(outfile)
     end
