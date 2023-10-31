@@ -151,12 +151,12 @@ if abspath(PROGRAM_FILE) == @__FILE__
         boltzmann_electron_response, false, 1:n_ion_species, n_ion_species+1:n_ion_species, 1.0, 1.0,
         1.0, 0.0, 0.0, false, 1.0, 1.0, 0.0, allocate_float(n_ion_species))
         nuii = 1.0
-        collisions = collisions_input(0.0, 0.0, false, nuii, 0.0, 0.0, "none")
+        collisions = collisions_input(0.0, 0.0, false, false, nuii, 0.0, 0.0, "none")
         rk_coefs = setup_runge_kutta_coefficients(4)
         advance = advance_info(false, false, false, false, false,
                            false, false, false, false, false, false, 
                            false, false, false, false, rk_coefs,
-                           false, false, true, true, false, false)
+                           false, false, true, true, false, false, false)
 
         # Set up MPI
         if standalone

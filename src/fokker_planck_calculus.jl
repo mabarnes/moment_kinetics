@@ -17,6 +17,7 @@ export YY_collision_operator_arrays, calculate_YY_arrays
 export calculate_rosenbluth_potential_boundary_data!
 export elliptic_solve!
 export fokkerplanck_arrays_struct
+export fokkerplanck_weakform_arrays_struct
 
 # testing
 export calculate_rosenbluth_potential_boundary_data_exact!
@@ -119,6 +120,22 @@ struct fokkerplanck_boundary_data_arrays_struct
     dfdvperp::MPISharedArray{mk_float,2}    
 end
 
+struct vpa_vperp_boundary_data
+    lower_boundary_vpa::MPISharedArray{mk_float,1}
+    upper_boundary_vpa::MPISharedArray{mk_float,1}
+    upper_boundary_vperp::MPISharedArray{mk_float,1}
+end
+
+struct rosenbluth_potential_boundary_data
+    H_data::vpa_vperp_boundary_data
+    dHdvpa_data::vpa_vperp_boundary_data
+    dHdvperp_data::vpa_vperp_boundary_data
+    G_data::vpa_vperp_boundary_data
+    dGdvperp_data::vpa_vperp_boundary_data
+    d2Gdvperp2_data::vpa_vperp_boundary_data
+    d2Gdvperpdvpa_data::vpa_vperp_boundary_data
+    d2Gdvpa2_data::vpa_vperp_boundary_data
+end
 
 struct YY_collision_operator_arrays
     # let phi_j(vperp) be the jth Lagrange basis function, 
@@ -149,6 +166,8 @@ for the weak-form Fokker-Planck collision operator
 struct fokkerplanck_weakform_arrays_struct{N}
     # boundary weights (Green's function) data
     bwgt::fokkerplanck_boundary_data_arrays_struct
+    # dummy arrays for boundary data calculation
+    rpbd::rosenbluth_potential_boundary_data
     # assembled 2D weak-form matrices
     MM2D_sparse::AbstractSparseArray{mk_float,mk_int,N}
     KKpar2D_sparse::AbstractSparseArray{mk_float,mk_int,N}
@@ -175,6 +194,16 @@ struct fokkerplanck_weakform_arrays_struct{N}
     rhqc::MPISharedArray{mk_float,1}
     sc::MPISharedArray{mk_float,1}
     qc::MPISharedArray{mk_float,1}
+    # dummy array for the result of the calculation
+    CC::MPISharedArray{mk_float,2}
+    # dummy arrays for storing Rosenbluth potentials
+    HH::MPISharedArray{mk_float,2}
+    dHdvpa::MPISharedArray{mk_float,2}
+    dHdvperp::MPISharedArray{mk_float,2}
+    dGdvperp::MPISharedArray{mk_float,2}
+    d2Gdvperp2::MPISharedArray{mk_float,2}
+    d2Gdvpa2::MPISharedArray{mk_float,2}
+    d2Gdvperpdvpa::MPISharedArray{mk_float,2}
 end
 
 function allocate_boundary_integration_weight(vpa,vperp)
@@ -927,22 +956,6 @@ end
 
 function create_sparse_matrix(data::sparse_matrix_constructor)
     return sparse(data.II,data.JJ,data.SS)
-end
-struct vpa_vperp_boundary_data
-    lower_boundary_vpa::MPISharedArray{mk_float,1}
-    upper_boundary_vpa::MPISharedArray{mk_float,1}
-    upper_boundary_vperp::MPISharedArray{mk_float,1}
-end
-
-struct rosenbluth_potential_boundary_data
-    H_data::vpa_vperp_boundary_data
-    dHdvpa_data::vpa_vperp_boundary_data
-    dHdvperp_data::vpa_vperp_boundary_data
-    G_data::vpa_vperp_boundary_data
-    dGdvperp_data::vpa_vperp_boundary_data
-    d2Gdvperp2_data::vpa_vperp_boundary_data
-    d2Gdvperpdvpa_data::vpa_vperp_boundary_data
-    d2Gdvpa2_data::vpa_vperp_boundary_data
 end
 
 function allocate_boundary_data(vpa,vperp)

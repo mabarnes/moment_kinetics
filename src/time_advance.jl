@@ -45,7 +45,8 @@ using ..continuity: continuity_equation!
 using ..force_balance: force_balance!
 using ..energy_equation: energy_equation!
 using ..em_fields: setup_em_fields, update_phi!
-using ..fokker_planck: init_fokker_planck_collisions, explicit_fokker_planck_collisions!, explicit_fokker_planck_collisions_Maxwellian_coefficients!
+using ..fokker_planck: init_fokker_planck_collisions_weak_form, init_fokker_planck_collisions, explicit_fokker_planck_collisions!
+using ..fokker_planck: explicit_fokker_planck_collisions_weak_form!, explicit_fokker_planck_collisions_Maxwellian_coefficients!
 using ..collision_models: explicit_krook_collisions!
 #using ..semi_lagrange: setup_semi_lagrange
 using Dates
@@ -220,9 +221,16 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     advance_force_balance = false
     advance_energy = false
     if collisions.nuii > 0.0 && vperp.n > 1
-        explicit_fp_collisions = true
+        if collisions.weakform_fokker_planck
+            explicit_fp_collisions = false
+            explicit_weakform_fp_collisions = true
+        else
+            explicit_fp_collisions = true
+            explicit_weakform_fp_collisions = false
+        end
     else 
         explicit_fp_collisions = false    
+        explicit_weakform_fp_collisions = false    
     end
     if collisions.nuii_pitch > 0.0 && vperp.n > 1
         explicit_fp_F_FM_collisions = true
@@ -241,7 +249,8 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     advance = advance_info(advance_vpa_advection, advance_z_advection, advance_r_advection, advance_neutral_z_advection, advance_neutral_r_advection,
                            advance_cx, advance_cx_1V, advance_ionization, advance_ionization_1V, advance_ionization_source, advance_numerical_dissipation, 
                            advance_sources, advance_continuity, advance_force_balance, advance_energy, rk_coefs,
-                           manufactured_solns_test, r_diffusion, vpa_diffusion, explicit_fp_collisions, explicit_fp_F_FM_collisions, explicit_krook_collisions)
+                           manufactured_solns_test, r_diffusion, vpa_diffusion, explicit_fp_collisions, explicit_weakform_fp_collisions,
+                           explicit_fp_F_FM_collisions, explicit_krook_collisions)
 
 
     if z.discretization == "chebyshev_pseudospectral" && z.n > 1
@@ -340,7 +349,13 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, composition, 
     scratch_dummy = setup_dummy_and_buffer_arrays(r.n,z.n,vpa.n,vperp.n,vz.n,vr.n,vzeta.n,
                                    composition.n_ion_species,n_neutral_species_alloc)
     # create arrays for Fokker-Planck collisions 
-    fp_arrays = init_fokker_planck_collisions(vperp,vpa; precompute_weights=explicit_fp_collisions)
+    if explicit_fp_collisions
+        fp_arrays = init_fokker_planck_collisions(vperp,vpa; precompute_weights=true)
+    elseif explicit_weakform_fp_collisions
+        fp_arrays = init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_spectral; precompute_weights=true)
+    else
+        fp_arrays = init_fokker_planck_collisions(vpa,vperp,vpa_spectral,vperp_spectral; precompute_weights=false)
+    end
     # create the "fields" structure that contains arrays
     # for the electrostatic potential phi and eventually the electromagnetic fields
     fields = setup_em_fields(z.n, r.n, drive_input.force_phi, drive_input.amplitude, drive_input.frequency, drive_input.force_Er_zero_at_wall)
@@ -1091,6 +1106,10 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
                                              vpa_advect, z_advect, r_advect,
                                              diagnose_entropy_production = update_entropy_diagnostic)
         #println(moments.charged.dSdt)
+    end
+    if advance.explicit_weakform_fp_collisions
+        explicit_fokker_planck_collisions_weak_form!(fvec_out.pdf,fvec_in.pdf,composition,collisions,dt,
+                                             fp_arrays,r,z,vperp,vpa,vperp_spectral,vpa_spectral)
     end
     if advance.explicit_fp_F_FM_collisions
         explicit_fokker_planck_collisions_Maxwellian_coefficients!(fvec_out.pdf, fvec_in.pdf, 

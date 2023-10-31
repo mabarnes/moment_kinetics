@@ -11,7 +11,8 @@ using moment_kinetics.chebyshev: setup_chebyshev_pseudospectral
 using moment_kinetics.gauss_legendre: setup_gausslegendre_pseudospectral, get_QQ_local!
 using moment_kinetics.type_definitions: mk_float, mk_int
 using moment_kinetics.fokker_planck: init_fokker_planck_collisions 
-using moment_kinetics.fokker_planck: init_fokker_planck_collisions_new
+using moment_kinetics.fokker_planck: init_fokker_planck_collisions_weak_form
+using moment_kinetics.fokker_planck: fokker_planck_collision_operator_weak_form!
 using moment_kinetics.calculus: derivative!
 using moment_kinetics.velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_pressure
 using moment_kinetics.communication
@@ -25,7 +26,6 @@ using moment_kinetics.fokker_planck_test: d2Gdvpa2, d2Gdvperp2, d2Gdvperpdvpa, d
 using moment_kinetics.fokker_planck_test: dHdvperp, dHdvpa
 using moment_kinetics.fokker_planck_test: Cssp_Maxwellian_inputs
 
-using moment_kinetics.fokker_planck_calculus: assemble_explicit_collision_operator_rhs_serial!, assemble_explicit_collision_operator_rhs_parallel!
 using moment_kinetics.fokker_planck_calculus: elliptic_solve!, ravel_c_to_vpavperp!, ravel_vpavperp_to_c!, ravel_c_to_vpavperp_parallel!
 using moment_kinetics.fokker_planck_calculus: enforce_zero_bc!, allocate_rosenbluth_potential_boundary_data
 using moment_kinetics.fokker_planck_calculus: calculate_rosenbluth_potential_boundary_data!, calculate_rosenbluth_potential_boundary_data_exact!
@@ -214,24 +214,13 @@ if abspath(PROGRAM_FILE) == @__FILE__
         begin_serial_region()
         start_init_time = now()
         
-        fkpl_arrays = init_fokker_planck_collisions_new(vpa,vperp,vpa_spectral,vperp_spectral; 
+        fkpl_arrays = init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_spectral; 
                            precompute_weights=true, test_dense_matrix_construction=test_dense_construction)
-        
-        MM2D_sparse = fkpl_arrays.MM2D_sparse
         KKpar2D_sparse = fkpl_arrays.KKpar2D_sparse
         KKperp2D_sparse = fkpl_arrays.KKperp2D_sparse
-        LP2D_sparse = fkpl_arrays.LP2D_sparse
-        LV2D_sparse = fkpl_arrays.LV2D_sparse
-        PUperp2D_sparse = fkpl_arrays.PUperp2D_sparse
-        PPparPUperp2D_sparse = fkpl_arrays.PPparPUperp2D_sparse
-        PPpar2D_sparse = fkpl_arrays.PPpar2D_sparse
-        MMparMNperp2D_sparse = fkpl_arrays.MMparMNperp2D_sparse
-        MM2DZG_sparse = fkpl_arrays.MM2DZG_sparse
         lu_obj_MM = fkpl_arrays.lu_obj_MM
         lu_obj_MMZG = fkpl_arrays.lu_obj_MMZG
-        lu_obj_LP = fkpl_arrays.lu_obj_LP
-        lu_obj_LV = fkpl_arrays.lu_obj_LV
-        # define a test function 
+        finish_init_time = now()
         
         fvpavperp = Array{mk_float,2}(undef,vpa.n,vperp.n)
         fvpavperp_test = Array{mk_float,2}(undef,vpa.n,vperp.n)
@@ -254,14 +243,6 @@ if abspath(PROGRAM_FILE) == @__FILE__
             end
         end
         
-        # boundary conditions
-        
-        #fvpavperp[vpa.n,:] .= 0.0
-        #fvpavperp[1,:] .= 0.0
-        #fvpavperp[:,vperp.n] .= 0.0
-        
-        
-        #print_matrix(fvpavperp,"fvpavperp",vpa.n,vperp.n)
         # fill fc with fvpavperp
         ravel_vpavperp_to_c!(fc,fvpavperp,vpa.n,vperp.n)
         ravel_c_to_vpavperp!(fvpavperp_test,fc,nc_global,vpa.n)
@@ -282,11 +263,11 @@ if abspath(PROGRAM_FILE) == @__FILE__
             gc = lu_obj_MMZG \ dgc
         else
             # enforce zero bc  
-            enforce_zero_bc!(fc,vpa,vperp,impose_BC_at_zero_vperp=true)
-            enforce_zero_bc!(gc,vpa,vperp,impose_BC_at_zero_vperp=true)
+            enforce_zero_bc!(fc,vpa,vperp,impose_BC_at_zero_vperp=false)
+            enforce_zero_bc!(gc,vpa,vperp,impose_BC_at_zero_vperp=false)
             # invert mass matrix and fill fc
-            fc = lu_obj_MMZG \ dfc
-            gc = lu_obj_MMZG \ dgc
+            fc = lu_obj_MM \ dfc
+            gc = lu_obj_MM \ dgc
         end
         #fc = cholesky_obj \ dfc
         #print_vector(fc,"fc",nc_global)
@@ -311,8 +292,6 @@ if abspath(PROGRAM_FILE) == @__FILE__
         end
         # test the Laplacian solve with a standard F_Maxwellian -> H_Maxwellian test
         
-        S_dummy = fkpl_arrays.S_dummy
-        Q_dummy = fkpl_arrays.Q_dummy
         Fs_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
         F_M = Array{mk_float,2}(undef,vpa.n,vperp.n)
         C_M_num = MPISharedArray{mk_float,2}(undef,vpa.n,vperp.n)
@@ -373,121 +352,46 @@ if abspath(PROGRAM_FILE) == @__FILE__
                                                                 nussp,vpa,vperp,ivpa,ivperp)
             end
         end
-        # calculate the Rosenbluth potential boundary data (rpbd)
         rpbd_exact = allocate_rosenbluth_potential_boundary_data(vpa,vperp)
-        rpbd = allocate_rosenbluth_potential_boundary_data(vpa,vperp)
         # use known test function to provide exact data
         calculate_rosenbluth_potential_boundary_data_exact!(rpbd_exact,
-          H_M_exact,dHdvpa_M_exact,dHdvperp_M_exact,G_M_exact,
-          dGdvperp_M_exact,d2Gdvperp2_M_exact,
-          d2Gdvperpdvpa_M_exact,d2Gdvpa2_M_exact,vpa,vperp)
-        # use numerical integration to find the boundary data
-        # initialise any arrays needed later for the collision operator
-        rhsc = fkpl_arrays.rhsc
-        rhqc = fkpl_arrays.rhqc
-        sc = fkpl_arrays.sc
-        qc = fkpl_arrays.qc
-        rhsc_check = Array{mk_float,1}(undef,nc_global)
-        rhsc_err = Array{mk_float,1}(undef,nc_global)
-        rhsvpavperp = fkpl_arrays.rhsvpavperp
-
-        YY_arrays = fkpl_arrays.YY_arrays
-        
-        finish_init_time = now()
-        
-        begin_serial_region()
-        # do the numerical integration at the boundaries (N.B. G not supported)
-        @serial_region begin 
-            println("begin boundary data calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
-        end
-        calculate_rosenbluth_potential_boundary_data!(rpbd,fkpl_arrays.bwgt,F_M,vpa,vperp,vpa_spectral,vperp_spectral)
-        @serial_region begin 
-            println("finished boundary data calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
-        end
-        #rpbd = rpbd_exact
-        @serial_region begin
-            println("begin elliptic solve   ", Dates.format(now(), dateformat"H:MM:SS"))
-        end
-        
-        begin_vperp_vpa_region()
-        @loop_vperp_vpa ivperp ivpa begin
-            S_dummy[ivpa,ivperp] = -(4.0/sqrt(pi))*F_M[ivpa,ivperp]
-        
-        end
-        elliptic_solve!(H_M_num,S_dummy,rpbd.H_data,
-                    lu_obj_LP,MM2D_sparse,rhsc,sc,vpa,vperp)
-        elliptic_solve!(dHdvpa_M_num,S_dummy,rpbd.dHdvpa_data,
-                    lu_obj_LP,PPpar2D_sparse,rhsc,sc,vpa,vperp)
-        elliptic_solve!(dHdvperp_M_num,S_dummy,rpbd.dHdvperp_data,
-                    lu_obj_LV,PUperp2D_sparse,rhsc,sc,vpa,vperp)
-        
-        begin_vperp_vpa_region()
-        @loop_vperp_vpa ivperp ivpa begin
-            S_dummy[ivpa,ivperp] = 2.0*H_M_num[ivpa,ivperp]
-        
-        end
-        elliptic_solve!(G_M_num,S_dummy,rpbd.G_data,
-                    lu_obj_LP,MM2D_sparse,rhsc,sc,vpa,vperp)
-        elliptic_solve!(d2Gdvpa2_M_num,S_dummy,rpbd.d2Gdvpa2_data,
-                    lu_obj_LP,KKpar2D_sparse,rhsc,sc,vpa,vperp)
-        elliptic_solve!(dGdvperp_M_num,S_dummy,rpbd.dGdvperp_data,
-                    lu_obj_LV,PUperp2D_sparse,rhsc,sc,vpa,vperp)
-        elliptic_solve!(d2Gdvperpdvpa_M_num,S_dummy,rpbd.d2Gdvperpdvpa_data,
-                    lu_obj_LV,PPparPUperp2D_sparse,rhsc,sc,vpa,vperp)
-        
-        begin_vperp_vpa_region()
-        @loop_vperp_vpa ivperp ivpa begin
-            S_dummy[ivpa,ivperp] = 2.0*H_M_num[ivpa,ivperp] - d2Gdvpa2_M_num[ivpa,ivperp]
-            Q_dummy[ivpa,ivperp] = -dGdvperp_M_num[ivpa,ivperp]
-        end
-        # use the elliptic solve function to find
-        # d2Gdvperp2 = 2H - d2Gdvpa2 - (1/vperp)dGdvperp
-        # using a weak form
-        elliptic_solve!(d2Gdvperp2_M_num,S_dummy,Q_dummy,rpbd.d2Gdvperp2_data,
-                    lu_obj_MM,MM2D_sparse,MMparMNperp2D_sparse,
-                    rhsc,rhqc,sc,qc,vpa,vperp)
-        @serial_region begin
-            println("finished elliptic solve   ", Dates.format(now(), dateformat"H:MM:SS"))
-        end
-        
+              H_M_exact,dHdvpa_M_exact,dHdvperp_M_exact,G_M_exact,
+              dGdvperp_M_exact,d2Gdvperp2_M_exact,
+              d2Gdvperpdvpa_M_exact,d2Gdvpa2_M_exact,vpa,vperp)
         @serial_region begin
             println("begin C calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
         end
-        if test_parallelism
-            assemble_explicit_collision_operator_rhs_serial!(rhsc_check,Fs_M,
-              d2Gdvpa2_M_num,d2Gdvperpdvpa_M_num,d2Gdvperp2_M_num,
-              dHdvpa_M_num,dHdvperp_M_num,ms,msp,nussp,
-              vpa,vperp,YY_arrays)
-            @serial_region begin
-                println("finished C RHS assembly (serial)   ", Dates.format(now(), dateformat"H:MM:SS"))
-            end
+
+        fokker_planck_collision_operator_weak_form!(Fs_M,F_M,ms,msp,nussp,
+                                             fkpl_arrays,
+                                             vperp, vpa, vperp_spectral, vpa_spectral,
+                                             test_assembly_serial=test_parallelism,
+                                             impose_zero_gradient_BC=impose_zero_gradient_BC)
+        # extract C[Fs,Fs'] result
+        # and Rosenbluth potentials for testing
+        begin_vperp_vpa_region()
+        @loop_vperp_vpa ivperp ivpa begin
+            C_M_num[ivpa,ivperp] = fkpl_arrays.CC[ivpa,ivperp]
+            H_M_num[ivpa,ivperp] = fkpl_arrays.HH[ivpa,ivperp]
+            dHdvpa_M_num[ivpa,ivperp] = fkpl_arrays.dHdvpa[ivpa,ivperp]
+            dGdvperp_M_num[ivpa,ivperp] = fkpl_arrays.dHdvperp[ivpa,ivperp]
+            dGdvperp_M_num[ivpa,ivperp] = fkpl_arrays.dGdvperp[ivpa,ivperp]
+            d2Gdvperp2_M_num[ivpa,ivperp] = fkpl_arrays.d2Gdvperp2[ivpa,ivperp]
+            d2Gdvpa2_M_num[ivpa,ivperp] = fkpl_arrays.d2Gdvpa2[ivpa,ivperp]
+            d2Gdvperpdvpa_M_num[ivpa,ivperp] = fkpl_arrays.d2Gdvperpdvpa[ivpa,ivperp]
         end
-        assemble_explicit_collision_operator_rhs_parallel!(rhsc,rhsvpavperp,Fs_M,
-          d2Gdvpa2_M_num,d2Gdvperpdvpa_M_num,d2Gdvperp2_M_num,
-          dHdvpa_M_num,dHdvperp_M_num,ms,msp,nussp,
-          vpa,vperp,YY_arrays)
-        # switch back to serial region before matrix inverse
-        begin_serial_region()
-        @serial_region begin
-            println("finished C RHS assembly (parallel)   ", Dates.format(now(), dateformat"H:MM:SS"))
-        end    
-        if test_parallelism
-            @serial_region begin
-                @. rhsc_err = abs(rhsc - rhsc_check)
-                println("maximum(rhsc_err) (test parallelisation): ",maximum(rhsc_err))
-            end    
+        
+        S_dummy = fkpl_arrays.S_dummy
+        begin_vperp_vpa_region()
+        @loop_vperp_vpa ivperp ivpa begin
+            S_dummy[ivpa,ivperp] = 2.0*H_M_num[ivpa,ivperp]
         end
-        if impose_zero_gradient_BC
-            enforce_zero_bc!(rhsc,vpa,vperp,impose_BC_at_zero_vperp=true)
-            # invert mass matrix and fill fc
-            fc = lu_obj_MMZG \ rhsc
-        else
-            enforce_zero_bc!(rhsc,vpa,vperp)
-            # invert mass matrix and fill fc
-            fc = lu_obj_MM \ rhsc
-        end
-        #ravel_c_to_vpavperp!(C_M_num,fc,nc_global,vpa.n)
-        ravel_c_to_vpavperp_parallel!(C_M_num,fc,vpa.n)
+        # solve for G as an added test bonus
+        elliptic_solve!(G_M_num,S_dummy,fkpl_arrays.rpbd.G_data,
+                fkpl_arrays.lu_obj_LP,fkpl_arrays.MM2D_sparse,fkpl_arrays.rhsc,
+                fkpl_arrays.sc,vpa,vperp)
+    
+        
         init_time = Dates.value(finish_init_time - start_init_time)
         calculate_time = Dates.value(now() - finish_init_time)
         begin_serial_region()
@@ -496,7 +400,7 @@ if abspath(PROGRAM_FILE) == @__FILE__
             println("finished C calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
             
             # test the boundary data calculation
-            test_rosenbluth_potential_boundary_data(rpbd,rpbd_exact,vpa,vperp)
+            test_rosenbluth_potential_boundary_data(fkpl_arrays.rpbd,rpbd_exact,vpa,vperp)
             
             fkerr.H_M.max, fkerr.H_M.L2 = print_test_data(H_M_exact,H_M_num,H_M_err,"H_M",vpa,vperp)
             fkerr.dHdvpa_M.max, fkerr.dHdvpa_M.L2 = print_test_data(dHdvpa_M_exact,dHdvpa_M_num,dHdvpa_M_err,"dHdvpa_M",vpa,vperp)
@@ -566,8 +470,8 @@ if abspath(PROGRAM_FILE) == @__FILE__
     end
     
     initialize_comms!()
-    ngrid = 9
-    plot_scan = false#true
+    ngrid = 5
+    plot_scan = true
     plot_test_output = false
     impose_zero_gradient_BC = false
     test_parallelism = false
@@ -578,9 +482,9 @@ if abspath(PROGRAM_FILE) == @__FILE__
     #nelement_list = Int[2, 4, 8]
     #nelement_list = Int[4, 8, 16, 32, 64]
     #nelement_list = Int[2, 4, 8, 16, 32]
-    #nelement_list = Int[2, 4, 8, 16]
+    nelement_list = Int[2, 4, 8, 16]
     #nelement_list = Int[100]
-    nelement_list = Int[8]
+    #nelement_list = Int[8]
     nscan = size(nelement_list,1)
     max_C_err = Array{mk_float,1}(undef,nscan)
     max_H_err = Array{mk_float,1}(undef,nscan)

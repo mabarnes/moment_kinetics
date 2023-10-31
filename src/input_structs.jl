@@ -66,6 +66,7 @@ mutable struct advance_info
     r_diffusion::Bool #flag to control how r bc is imposed when r diffusion terms are present
     vpa_diffusion::Bool #flag to control how vpa bc is imposed when vpa diffusion terms are present
     explicit_fp_collisions::Bool
+    explicit_weakform_fp_collisions::Bool
     explicit_fp_F_FM_collisions::Bool
     explicit_krook_collisions::Bool
 end
@@ -302,6 +303,8 @@ mutable struct collisions_input
     ionization::mk_float
     # if constant_ionization_rate = true, use an ionization term that is constant in z
     constant_ionization_rate::Bool
+    # Fokker-Planck operator choice
+    weakform_fokker_planck::Bool
     # ion-ion self collision frequency
     nuii::mk_float
     # ion-ion self collision frequency with C[F_s,F_Ms'] operator

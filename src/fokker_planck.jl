@@ -5,12 +5,14 @@ module fokker_planck
 
 
 export init_fokker_planck_collisions, fokkerplanck_arrays_struct
-export init_fokker_planck_collisions_new
+export init_fokker_planck_collisions_weak_form
+export explicit_fokker_planck_collisions_weak_form!
 export explicit_fokker_planck_collisions!
 export calculate_Maxwellian_Rosenbluth_coefficients
 export get_local_Cssp_coefficients!, init_fokker_planck_collisions
 # testing
 export symmetric_matrix_inverse
+export fokker_planck_collision_operator_weak_form!
 
 using SpecialFunctions: ellipk, ellipe, erf
 using FastGaussQuadrature
@@ -27,12 +29,17 @@ using ..looping
 using ..fokker_planck_calculus: init_Rosenbluth_potential_integration_weights!
 using ..fokker_planck_calculus: init_Rosenbluth_potential_boundary_integration_weights!
 using ..fokker_planck_calculus: allocate_boundary_integration_weights
+using ..fokker_planck_calculus: allocate_rosenbluth_potential_boundary_data
 using ..fokker_planck_calculus: fokkerplanck_arrays_struct, fokkerplanck_weakform_arrays_struct
 using ..fokker_planck_calculus: assemble_matrix_operators_dirichlet_bc
 using ..fokker_planck_calculus: assemble_matrix_operators_dirichlet_bc_sparse
 using ..fokker_planck_calculus: assemble_matrix_operators_dirichlet_bc_plus_vperp_zero_gradient
 using ..fokker_planck_calculus: assemble_matrix_operators_dirichlet_bc_plus_vperp_zero_gradient_sparse
+using ..fokker_planck_calculus: assemble_explicit_collision_operator_rhs_serial!
+using ..fokker_planck_calculus: assemble_explicit_collision_operator_rhs_parallel!
 using ..fokker_planck_calculus: calculate_YY_arrays
+using ..fokker_planck_calculus: calculate_rosenbluth_potential_boundary_data!
+using ..fokker_planck_calculus: enforce_zero_bc!, elliptic_solve!, ravel_c_to_vpavperp_parallel!
 using ..fokker_planck_test: Cssp_fully_expanded_form, calculate_collisional_fluxes
 """
 allocate the required ancilliary arrays 
@@ -83,12 +90,13 @@ at the boundary and using an elliptic solve to obtain the potentials
 in the rest of the velocity space domain.
 """
 
-function init_fokker_planck_collisions_new(vpa,vperp,vpa_spectral,vperp_spectral; precompute_weights=false, test_dense_matrix_construction=false)
+function init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_spectral; precompute_weights=false, test_dense_matrix_construction=false)
     bwgt = allocate_boundary_integration_weights(vpa,vperp)
     if vperp.n > 1 && precompute_weights
         @views init_Rosenbluth_potential_boundary_integration_weights!(bwgt.G0_weights, bwgt.G1_weights, bwgt.H0_weights, bwgt.H1_weights,
                                         bwgt.H2_weights, bwgt.H3_weights, vpa, vperp)
     end
+    rpbd = allocate_rosenbluth_potential_boundary_data(vpa,vperp)
     if test_dense_matrix_construction
         MM2D_sparse, KKpar2D_sparse, KKperp2D_sparse, LP2D_sparse, LV2D_sparse,
         PUperp2D_sparse, PPparPUperp2D_sparse, PPpar2D_sparse,
@@ -121,12 +129,183 @@ function init_fokker_planck_collisions_new(vpa,vperp,vpa_spectral,vperp_spectral
     rhqc = allocate_shared_float(nc)
     sc = allocate_shared_float(nc)
     qc = allocate_shared_float(nc)
-    fka = fokkerplanck_weakform_arrays_struct(bwgt,MM2D_sparse,KKpar2D_sparse,KKperp2D_sparse,
+    
+    CC = allocate_shared_float(nvpa,nvperp)
+    HH = allocate_shared_float(nvpa,nvperp)
+    dHdvpa = allocate_shared_float(nvpa,nvperp)
+    dHdvperp = allocate_shared_float(nvpa,nvperp)
+    dGdvperp = allocate_shared_float(nvpa,nvperp)
+    d2Gdvperp2 = allocate_shared_float(nvpa,nvperp)
+    d2Gdvpa2 = allocate_shared_float(nvpa,nvperp)
+    d2Gdvperpdvpa = allocate_shared_float(nvpa,nvperp)
+    
+    fka = fokkerplanck_weakform_arrays_struct(bwgt,rpbd,MM2D_sparse,KKpar2D_sparse,KKperp2D_sparse,
                                            LP2D_sparse,LV2D_sparse,PUperp2D_sparse,PPparPUperp2D_sparse,
                                            PPpar2D_sparse,MMparMNperp2D_sparse,MM2DZG_sparse,
                                            lu_obj_MM,lu_obj_MMZG,lu_obj_LP,lu_obj_LV,
-                                           YY_arrays, S_dummy, Q_dummy, rhsvpavperp, rhsc, rhqc, sc, qc)
+                                           YY_arrays, S_dummy, Q_dummy, rhsvpavperp, rhsc, rhqc, sc, qc,
+                                           CC, HH, dHdvpa, dHdvperp, dGdvperp, d2Gdvperp2, d2Gdvpa2, d2Gdvperpdvpa)
     return fka
+end
+
+"""
+Function for advancing with the explicit, weak-form, self-collision operator
+"""
+
+function explicit_fokker_planck_collisions_weak_form!(pdf_out,pdf_in,composition,collisions,dt,
+                                             fkpl_arrays::fokkerplanck_weakform_arrays_struct,
+                                             r, z, vperp, vpa, vperp_spectral, vpa_spectral;
+                                             test_assembly_serial=false,impose_zero_gradient_BC=false)
+    # N.B. only self-collisions are currently supported
+    # This can be modified by adding a loop over s' below
+    n_ion_species = composition.n_ion_species
+    @boundscheck vpa.n == size(pdf_out,1) || throw(BoundsError(pdf_out))
+    @boundscheck vperp.n == size(pdf_out,2) || throw(BoundsError(pdf_out))
+    @boundscheck z.n == size(pdf_out,3) || throw(BoundsError(pdf_out))
+    @boundscheck r.n == size(pdf_out,4) || throw(BoundsError(pdf_out))
+    @boundscheck n_ion_species == size(pdf_out,5) || throw(BoundsError(pdf_out))
+    @boundscheck vpa.n == size(pdf_in,1) || throw(BoundsError(pdf_in))
+    @boundscheck vperp.n == size(pdf_in,2) || throw(BoundsError(pdf_in))
+    @boundscheck z.n == size(pdf_in,3) || throw(BoundsError(pdf_in))
+    @boundscheck r.n == size(pdf_in,4) || throw(BoundsError(pdf_in))
+    @boundscheck n_ion_species == size(pdf_in,5) || throw(BoundsError(pdf_in))
+    
+    # masses and collision frequencies
+    ms, msp = 1.0, 1.0 # generalise!
+    nussp = collisions.nuii # generalise!
+    
+    # N.B. parallelisation is only over vpa vperp
+    # ensure s, r, z are local before initiating the s, r, z loop
+    begin_serial_region()
+    @loop_s_r_z is ir iz begin
+        # the functions within this loop will call
+        # begin_vpa_region(), begin_vperp_region(), begin_vperp_vpa_region(), begin_serial_region() to synchronise the shared-memory arrays
+        # first argument is Fs, and second argument is Fs' in C[Fs,Fs'] 
+        @views fokker_planck_collision_operator_weak_form!(pdf_in[:,:,iz,ir,is],pdf_in[:,:,iz,ir,is],ms,msp,nussp,
+                                             fkpl_arrays,vperp,vpa,vperp_spectral,vpa_spectral)        
+        # advance this part of s,r,z with the resulting C[Fs,Fs]
+        begin_vperp_vpa_region()
+        @loop_vperp_vpa ivperp ivpa begin
+            pdf_out[ivpa,ivperp,iz,ir,is] += dt*fkpl_arrays.CC[ivpa,ivperp]
+        end
+    end
+    return nothing
+end
+
+"""
+Function for evaluating Css' = Css'[Fs,Fs']
+"""
+function fokker_planck_collision_operator_weak_form!(ffs_in,ffsp_in,ms,msp,nussp,
+                                             fkpl_arrays::fokkerplanck_weakform_arrays_struct,
+                                             vperp, vpa, vperp_spectral, vpa_spectral;
+                                             test_assembly_serial=false,impose_zero_gradient_BC=false)
+    @boundscheck vpa.n == size(ffsp_in,1) || throw(BoundsError(ffsp_in))
+    @boundscheck vperp.n == size(ffsp_in,2) || throw(BoundsError(ffsp_in))
+    @boundscheck vpa.n == size(ffs_in,1) || throw(BoundsError(ffs_in))
+    @boundscheck vperp.n == size(ffs_in,2) || throw(BoundsError(ffs_in))
+    
+    # extract the necessary precalculated and buffer arrays from fokkerplanck_arrays
+    MM2D_sparse = fkpl_arrays.MM2D_sparse
+    KKpar2D_sparse = fkpl_arrays.KKpar2D_sparse
+    KKperp2D_sparse = fkpl_arrays.KKperp2D_sparse
+    LP2D_sparse = fkpl_arrays.LP2D_sparse
+    LV2D_sparse = fkpl_arrays.LV2D_sparse
+    PUperp2D_sparse = fkpl_arrays.PUperp2D_sparse
+    PPparPUperp2D_sparse = fkpl_arrays.PPparPUperp2D_sparse
+    PPpar2D_sparse = fkpl_arrays.PPpar2D_sparse
+    MMparMNperp2D_sparse = fkpl_arrays.MMparMNperp2D_sparse
+    MM2DZG_sparse = fkpl_arrays.MM2DZG_sparse
+    lu_obj_MM = fkpl_arrays.lu_obj_MM
+    lu_obj_MMZG = fkpl_arrays.lu_obj_MMZG
+    lu_obj_LP = fkpl_arrays.lu_obj_LP
+    lu_obj_LV = fkpl_arrays.lu_obj_LV
+    
+    S_dummy = fkpl_arrays.S_dummy
+    Q_dummy = fkpl_arrays.Q_dummy
+    rhsc = fkpl_arrays.rhsc
+    rhqc = fkpl_arrays.rhqc
+    sc = fkpl_arrays.sc
+    qc = fkpl_arrays.qc
+    rhsvpavperp = fkpl_arrays.rhsvpavperp
+    YY_arrays = fkpl_arrays.YY_arrays    
+    bwgt = fkpl_arrays.bwgt
+    rpbd = fkpl_arrays.rpbd
+    
+    CC = fkpl_arrays.CC
+    HH = fkpl_arrays.HH
+    dHdvpa = fkpl_arrays.dHdvpa
+    dHdvperp = fkpl_arrays.dHdvperp
+    dGdvperp = fkpl_arrays.dGdvperp
+    d2Gdvperp2 = fkpl_arrays.d2Gdvperp2
+    d2Gdvpa2 = fkpl_arrays.d2Gdvpa2
+    d2Gdvperpdvpa = fkpl_arrays.d2Gdvperpdvpa
+    
+    # the functions within this loop will call
+    # begin_vpa_region(), begin_vperp_region(), begin_vperp_vpa_region(), begin_serial_region() to synchronise the shared-memory arrays
+    # calculate the boundary data
+    calculate_rosenbluth_potential_boundary_data!(rpbd,bwgt,@view(ffsp_in[:,:,]),vpa,vperp,vpa_spectral,vperp_spectral)
+    # carry out the elliptic solves required
+    begin_vperp_vpa_region()
+    @loop_vperp_vpa ivperp ivpa begin
+        S_dummy[ivpa,ivperp] = -(4.0/sqrt(pi))*ffsp_in[ivpa,ivperp]
+    end
+    elliptic_solve!(HH,S_dummy,rpbd.H_data,
+                lu_obj_LP,MM2D_sparse,rhsc,sc,vpa,vperp)
+    elliptic_solve!(dHdvpa,S_dummy,rpbd.dHdvpa_data,
+                lu_obj_LP,PPpar2D_sparse,rhsc,sc,vpa,vperp)
+    elliptic_solve!(dHdvperp,S_dummy,rpbd.dHdvperp_data,
+                lu_obj_LV,PUperp2D_sparse,rhsc,sc,vpa,vperp)
+    
+    begin_vperp_vpa_region()
+    @loop_vperp_vpa ivperp ivpa begin
+        S_dummy[ivpa,ivperp] = 2.0*HH[ivpa,ivperp]
+    
+    end
+    #elliptic_solve!(G_M_num,S_dummy,rpbd.G_data,
+    #            lu_obj_LP,MM2D_sparse,rhsc,sc,vpa,vperp)
+    elliptic_solve!(d2Gdvpa2,S_dummy,rpbd.d2Gdvpa2_data,
+                lu_obj_LP,KKpar2D_sparse,rhsc,sc,vpa,vperp)
+    elliptic_solve!(dGdvperp,S_dummy,rpbd.dGdvperp_data,
+                lu_obj_LV,PUperp2D_sparse,rhsc,sc,vpa,vperp)
+    elliptic_solve!(d2Gdvperpdvpa,S_dummy,rpbd.d2Gdvperpdvpa_data,
+                lu_obj_LV,PPparPUperp2D_sparse,rhsc,sc,vpa,vperp)
+    
+    begin_vperp_vpa_region()
+    @loop_vperp_vpa ivperp ivpa begin
+        S_dummy[ivpa,ivperp] = 2.0*HH[ivpa,ivperp] - d2Gdvpa2[ivpa,ivperp]
+        Q_dummy[ivpa,ivperp] = -dGdvperp[ivpa,ivperp]
+    end
+    # use the elliptic solve function to find
+    # d2Gdvperp2 = 2H - d2Gdvpa2 - (1/vperp)dGdvperp
+    # using a weak form
+    elliptic_solve!(d2Gdvperp2,S_dummy,Q_dummy,rpbd.d2Gdvperp2_data,
+                lu_obj_MM,MM2D_sparse,MMparMNperp2D_sparse,
+                rhsc,rhqc,sc,qc,vpa,vperp)
+    
+    # assemble the RHS of the collision operator matrix eq
+    if test_assembly_serial
+        assemble_explicit_collision_operator_rhs_serial!(rhsc,@view(ffs_in[:,:,]),
+          d2Gdvpa,d2Gdvperpdvpa,d2Gdvperp2,
+          dHdvpa,dHdvperp,ms,msp,nussp,
+          vpa,vperp,YY_arrays)
+    else
+        assemble_explicit_collision_operator_rhs_parallel!(rhsc,rhsvpavperp,@view(ffs_in[:,:,]),
+          d2Gdvpa2,d2Gdvperpdvpa,d2Gdvperp2,
+          dHdvpa,dHdvperp,ms,msp,nussp,
+          vpa,vperp,YY_arrays)
+    end
+    # solve the collision operator matrix eq
+    if impose_zero_gradient_BC
+        enforce_zero_bc!(rhsc,vpa,vperp,impose_BC_at_zero_vperp=true)
+        # invert mass matrix and fill fc
+        fc = lu_obj_MMZG \ rhsc
+    else
+        enforce_zero_bc!(rhsc,vpa,vperp)
+        # invert mass matrix and fill fc
+        fc = lu_obj_MM \ rhsc
+    end
+    ravel_c_to_vpavperp_parallel!(CC,fc,vpa.n)
+    return nothing
 end
 
 """
