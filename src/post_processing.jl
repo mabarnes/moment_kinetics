@@ -2044,8 +2044,9 @@ function plot_Maxwellian_diagnostic(ff, density, parallel_flow, thermal_speed, v
     ff_norm = copy(time)
     for is in 1:n_ion_species
         for it in 1:ntime
-            @views ff_norm[it] = integrate_over_vspace( (ff[:,:,is,it] .- ff_Maxwellian[:,:,is,it]).^2 , vpa_local, 0, vpa_local_wgts, vperp_local, 0, vperp_local_wgts)
-            @views ff_norm[it] /= integrate_over_vspace(ff_ones[:,:,is,it], vpa_local, 0, vpa_local_wgts, vperp_local, 0, vperp_local_wgts)
+            @views num = integrate_over_vspace( (ff[:,:,is,it] .- ff_Maxwellian[:,:,is,it]).^2 , vpa_local, 0, vpa_local_wgts, vperp_local, 0, vperp_local_wgts)
+            @views denom = integrate_over_vspace(ff_ones[:,:,is,it], vpa_local, 0, vpa_local_wgts, vperp_local, 0, vperp_local_wgts)
+            ff_norm[it] = sqrt(num/denom)
         end
         iz0_string = string("_iz0", string(iz0))
         ir0_string = string("_ir0", string(ir0))
