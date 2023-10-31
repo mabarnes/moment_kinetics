@@ -534,20 +534,68 @@ function reload_evolving_fields!(pdf, moments, boundary_distributions, restart_p
             previous_runs_info = load_run_info_history(fid)
 
             restart_n_ion_species, restart_n_neutral_species = load_species_data(fid)
-            restart_z, restart_z_spectral, _ =
-                load_coordinate_data(fid, "z"; irank=z.irank, nrank=z.nrank)
-            restart_r, restart_r_spectral, _ =
-                load_coordinate_data(fid, "r"; irank=r.irank, nrank=r.nrank)
-            restart_vperp, restart_vperp_spectral, _ =
-                load_coordinate_data(fid, "vperp"; irank=vperp.irank, nrank=vperp.nrank)
-            restart_vpa, restart_vpa_spectral, _ =
-                load_coordinate_data(fid, "vpa"; irank=vpa.irank, nrank=vpa.nrank)
-            restart_vzeta, restart_vzeta_spectral, _ =
-                load_coordinate_data(fid, "vzeta"; irank=vzeta.irank, nrank=vzeta.nrank)
-            restart_vr, restart_vr_spectral, _ =
-                load_coordinate_data(fid, "vr"; irank=vr.irank, nrank=vr.nrank)
-            restart_vz, restart_vz_spectral, _ =
-                load_coordinate_data(fid, "vz"; irank=vz.irank, nrank=vz.nrank)
+            if parallel_io
+                restart_z, restart_z_spectral, _ =
+                    load_coordinate_data(fid, "z"; irank=z.irank, nrank=z.nrank)
+                restart_r, restart_r_spectral, _ =
+                    load_coordinate_data(fid, "r"; irank=r.irank, nrank=r.nrank)
+                restart_vperp, restart_vperp_spectral, _ =
+                    load_coordinate_data(fid, "vperp"; irank=vperp.irank, nrank=vperp.nrank)
+                restart_vpa, restart_vpa_spectral, _ =
+                    load_coordinate_data(fid, "vpa"; irank=vpa.irank, nrank=vpa.nrank)
+                restart_vzeta, restart_vzeta_spectral, _ =
+                    load_coordinate_data(fid, "vzeta"; irank=vzeta.irank, nrank=vzeta.nrank)
+                restart_vr, restart_vr_spectral, _ =
+                    load_coordinate_data(fid, "vr"; irank=vr.irank, nrank=vr.nrank)
+                restart_vz, restart_vz_spectral, _ =
+                    load_coordinate_data(fid, "vz"; irank=vz.irank, nrank=vz.nrank)
+            else
+                restart_z, restart_z_spectral, _ = load_coordinate_data(fid, "z")
+                restart_r, restart_r_spectral, _ = load_coordinate_data(fid, "r")
+                restart_vperp, restart_vperp_spectral, _ =
+                    load_coordinate_data(fid, "vperp")
+                restart_vpa, restart_vpa_spectral, _ = load_coordinate_data(fid, "vpa")
+                restart_vzeta, restart_vzeta_spectral, _ =
+                    load_coordinate_data(fid, "vzeta")
+                restart_vr, restart_vr_spectral, _ = load_coordinate_data(fid, "vr")
+                restart_vz, restart_vz_spectral, _ = load_coordinate_data(fid, "vz")
+
+                if restart_r.nrank != r.nrank
+                    error("Not using parallel I/O, and distributed MPI layout has "
+                          * "changed: now r.nrank=$(r.nrank), but we are trying to "
+                          * "restart from files ith restart_r.nrank=$(restart_r.nrank).")
+                end
+                if restart_z.nrank != z.nrank
+                    error("Not using parallel I/O, and distributed MPI layout has "
+                          * "changed: now z.nrank=$(z.nrank), but we are trying to "
+                          * "restart from files ith restart_z.nrank=$(restart_z.nrank).")
+                end
+                if restart_vperp.nrank != vperp.nrank
+                    error("Not using parallel I/O, and distributed MPI layout has "
+                          * "changed: now vperp.nrank=$(vperp.nrank), but we are trying to "
+                          * "restart from files ith restart_vperp.nrank=$(restart_vperp.nrank).")
+                end
+                if restart_vpa.nrank != vpa.nrank
+                    error("Not using parallel I/O, and distributed MPI layout has "
+                          * "changed: now vpa.nrank=$(vpa.nrank), but we are trying to "
+                          * "restart from files ith restart_vpa.nrank=$(restart_vpa.nrank).")
+                end
+                if restart_vzeta.nrank != vzeta.nrank
+                    error("Not using parallel I/O, and distributed MPI layout has "
+                          * "changed: now vzeta.nrank=$(vzeta.nrank), but we are trying to "
+                          * "restart from files ith restart_vzeta.nrank=$(restart_vzeta.nrank).")
+                end
+                if restart_vr.nrank != vr.nrank
+                    error("Not using parallel I/O, and distributed MPI layout has "
+                          * "changed: now vr.nrank=$(vr.nrank), but we are trying to "
+                          * "restart from files ith restart_vr.nrank=$(restart_vr.nrank).")
+                end
+                if restart_vz.nrank != vz.nrank
+                    error("Not using parallel I/O, and distributed MPI layout has "
+                          * "changed: now vz.nrank=$(vz.nrank), but we are trying to "
+                          * "restart from files ith restart_vz.nrank=$(restart_vz.nrank).")
+                end
+            end
 
             # Test whether any interpolation is needed
             interpolation_needed = Dict(
