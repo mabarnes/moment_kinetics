@@ -69,9 +69,17 @@ restart_test_input_chebyshev_split_3_moments =
 Run a sound-wave test for a single set of parameters
 """
 # Note 'name' should not be shared by any two tests in this file
-function run_test(test_input, message, rtol, atol, test_upar=true; kwargs...)
+function run_test(test_input, message, rtol, atol; tol_3V, kwargs...)
     # by passing keyword arguments to run_test, kwargs becomes a Tuple of Pairs which can be used to
     # update the default inputs
+
+    if tol_3V === nothing
+        atol_3V = atol
+        rtol_3V = rtol
+    else
+        atol_3V = tol_3V
+        rtol_3V = tol_3V
+    end
 
     parallel_io = test_input["output"]["parallel_io"]
     # Convert keyword arguments to a unique name
@@ -206,10 +214,8 @@ function run_test(test_input, message, rtol, atol, test_upar=true; kwargs...)
         newgrid_n_charged = interpolate_to_grid_z(expected.z, n_charged[:, :, end], z, z_spectral)
         @test isapprox(expected.n_charged[:, end], newgrid_n_charged[:,1], rtol=rtol)
 
-        if test_upar
-            newgrid_upar_charged = interpolate_to_grid_z(expected.z, upar_charged[:, :, end], z, z_spectral)
-            @test isapprox(expected.upar_charged[:, end], newgrid_upar_charged[:,1], rtol=rtol, atol=atol)
-        end
+        newgrid_upar_charged = interpolate_to_grid_z(expected.z, upar_charged[:, :, end], z, z_spectral)
+        @test isapprox(expected.upar_charged[:, end], newgrid_upar_charged[:,1], rtol=rtol, atol=atol_3V)
 
         newgrid_ppar_charged = interpolate_to_grid_z(expected.z, ppar_charged[:, :, end], z, z_spectral)
         @test isapprox(expected.ppar_charged[:, end], newgrid_ppar_charged[:,1], rtol=rtol)
@@ -231,7 +237,7 @@ function run_test(test_input, message, rtol, atol, test_upar=true; kwargs...)
             end
             newgrid_f_charged[:,iz,1] = interpolate_to_grid_vpa(wpa, temp[:,iz,1], vpa, vpa_spectral)
         end
-        @test isapprox(expected.f_charged[:, :, end], newgrid_f_charged[:,:,1], rtol=rtol)
+        @test isapprox(expected.f_charged[:, :, end], newgrid_f_charged[:,:,1], rtol=rtol_3V)
 
         # Check neutral particle moments and f
         ######################################
@@ -239,13 +245,14 @@ function run_test(test_input, message, rtol, atol, test_upar=true; kwargs...)
         newgrid_n_neutral = interpolate_to_grid_z(expected.z, n_neutral[:, :, end], z, z_spectral)
         @test isapprox(expected.n_neutral[:, end], newgrid_n_neutral[:,1], rtol=rtol)
 
-        if test_upar
-            newgrid_upar_neutral = interpolate_to_grid_z(expected.z, upar_neutral[:, :, end], z, z_spectral)
-            @test isapprox(expected.upar_neutral[:, end], newgrid_upar_neutral[:,1], rtol=rtol, atol=atol)
-        end
+        newgrid_upar_neutral = interpolate_to_grid_z(expected.z, upar_neutral[:, :, end], z, z_spectral)
+        @test isapprox(expected.upar_neutral[:, end], newgrid_upar_neutral[:,1], rtol=rtol, atol=atol_3V)
 
+        # The errors on ppar_neutral when using a 3V grid are large - probably because of
+        # linear interpolation in ion-neutral interaction operators - so for the 3V tests
+        # we have to use a very loose tolerance for ppar_neutral.
         newgrid_ppar_neutral = interpolate_to_grid_z(expected.z, ppar_neutral[:, :, end], z, z_spectral)
-        @test isapprox(expected.ppar_neutral[:, end], newgrid_ppar_neutral[:,1], rtol=rtol)
+        @test isapprox(expected.ppar_neutral[:, end], newgrid_ppar_neutral[:,1], rtol=rtol_3V)
 
         newgrid_vth_neutral = @. sqrt(2.0*newgrid_ppar_neutral/newgrid_n_neutral)
         newgrid_f_neutral = interpolate_to_grid_z(expected.z, f_neutral[:, :, :, end], z, z_spectral)
@@ -271,7 +278,7 @@ end
 
 function runtests()
     function do_tests(label, rtol=1.0e-3, nstep=50, include_moment_kinetic=true;
-                      kwargs...)
+                      tol_3V=nothing, kwargs...)
         # Only testing Chebyshev discretization because interpolation not yet implemented
         # for finite-difference
 
@@ -306,27 +313,26 @@ function runtests()
                 # (~50%), and it is not clear why, but ignore this so test can pass.
                 this_input = deepcopy(restart_test_input_chebyshev)
                 this_input["output"]["parallel_io"] = parallel_io
-                run_test(this_input, message, rtol, 1.e-15, include_moment_kinetic;
-                         kwargs...)
+                run_test(this_input, message, rtol, 1.e-15; tol_3V=tol_3V, kwargs...)
             end
             if include_moment_kinetic
                 message = "restart split 1 from $base_label$label"
                 @testset "$message" begin
                     this_input = deepcopy(restart_test_input_chebyshev_split_1_moment)
                     this_input["output"]["parallel_io"] = parallel_io
-                    run_test(this_input, message, rtol, 1.e-15; kwargs...)
+                    run_test(this_input, message, rtol, 1.e-15; tol_3V=tol_3V, kwargs...)
                 end
                 message = "restart split 2 from $base_label$label"
                 @testset "$message" begin
                     this_input = deepcopy(restart_test_input_chebyshev_split_2_moments)
                     this_input["output"]["parallel_io"] = parallel_io
-                    run_test(this_input, message, rtol, 1.e-15; kwargs...)
+                    run_test(this_input, message, rtol, 1.e-15; tol_3V=tol_3V, kwargs...)
                 end
                 message = "restart split 3 from $base_label$label"
                 @testset "$message" begin
                     this_input = deepcopy(restart_test_input_chebyshev_split_3_moments)
                     this_input["output"]["parallel_io"] = parallel_io
-                    run_test(this_input, message, rtol, 1.e-15; kwargs...)
+                    run_test(this_input, message, rtol, 1.e-15; tol_3V=tol_3V, kwargs...)
                 end
             end
         end
@@ -339,11 +345,12 @@ function runtests()
 
         # Note: only do 2 steps in 2V/3V mode because it is so slow. Also, linear
         # interpolation used for ion-neutral coupling in 2V/3V case has low accuracy, so
-        # use looser tolerance.
-        @long do_tests(", 2V/3V", 1.0e-1, 98, false; nstep=2, r_ngrid=1, r_nelement=1,
-                       vperp_ngrid=17, vperp_nelement=4, vperp_L=vpa_L, vpa_ngrid=17,
-                       vpa_nelement=8, vzeta_ngrid=17, vzeta_nelement=4, vzeta_L=vpa_L,
-                       vr_ngrid=17, vr_nelement=4, vr_L=vpa_L, vz_ngrid=17, vz_nelement=8)
+        # use looser tolerance for various things.
+        @long do_tests(", 2V/3V", 1.0e-1, 98, false; tol_3V=0.3, nstep=2, r_ngrid=1,
+                       r_nelement=1, vperp_ngrid=17, vperp_nelement=4, vperp_L=vpa_L,
+                       vpa_ngrid=17, vpa_nelement=8, vzeta_ngrid=17, vzeta_nelement=4,
+                       vzeta_L=vpa_L, vr_ngrid=17, vr_nelement=4, vr_L=vpa_L, vz_ngrid=17,
+                       vz_nelement=8)
 
         if io_has_parallel(Val(hdf5))
             orig_base_input = deepcopy(base_input)
@@ -354,11 +361,13 @@ function runtests()
             do_tests(", parallel I/O")
 
             # Note: only do 2 steps in 2V/3V mode because it is so slow
-            @long do_tests(", 2V/3V, parallel I/O", 2.0e-1, 98, false; nstep=2, r_ngrid=1,
-                           r_nelement=1, vperp_ngrid=17, vperp_nelement=4, vperp_L=vpa_L,
-                           vpa_ngrid=17, vpa_nelement=8, vzeta_ngrid=17, vzeta_nelement=4,
-                           vzeta_L=vpa_L, vr_ngrid=17, vr_nelement=4, vr_L=vpa_L,
-                           vz_ngrid=17, vz_nelement=8)
+            # interpolation used for ion-neutral coupling in 2V/3V case has low accuracy,
+            # so use looser tolerance for various things.
+            @long do_tests(", 2V/3V, parallel I/O", 2.0e-1, 98, false; tol_3V=0.3,
+                           nstep=2, r_ngrid=1, r_nelement=1, vperp_ngrid=17,
+                           vperp_nelement=4, vperp_L=vpa_L, vpa_ngrid=17, vpa_nelement=8,
+                           vzeta_ngrid=17, vzeta_nelement=4, vzeta_L=vpa_L, vr_ngrid=17,
+                           vr_nelement=4, vr_L=vpa_L, vz_ngrid=17, vz_nelement=8)
 
             global base_input = orig_base_input
         end
