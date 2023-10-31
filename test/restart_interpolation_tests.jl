@@ -16,6 +16,7 @@ using moment_kinetics.load_data: open_readonly_output_file, load_coordinate_data
                                  load_neutral_particle_moments_data,
                                  load_neutral_pdf_data, load_time_data, load_species_data
 using moment_kinetics.interpolation: interpolate_to_grid_z, interpolate_to_grid_vpa
+using moment_kinetics.makie_post_processing: get_run_info, postproc_load_variable
 using moment_kinetics.type_definitions: mk_float
 
 # Create a temporary directory for test output
@@ -30,32 +31,36 @@ base_input["nwrite"] = 50
 base_input["nwrite_dfns"] = 50
 if global_size[] > 1 && global_size[] % 2 == 0
     # Test using distributed-memory
-    base_input["z_nelement"] /= 2
+    base_input["z_nelement_local"] = base_input["z_nelement"] ÷ 2
 end
 base_input["output"] = Dict{String,Any}("parallel_io" => false)
 
 restart_test_input_chebyshev =
-    merge(base_input,
+    merge(deepcopy(base_input),
           Dict("run_name" => "restart_chebyshev_pseudospectral",
                "r_ngrid" => 3, "r_nelement" => 2,
                "r_discretization" => "chebyshev_pseudospectral",
                "z_ngrid" => 17, "z_nelement" => 2,
                "vpa_ngrid" => 9, "vpa_nelement" => 32,
                "vz_ngrid" => 9, "vz_nelement" => 32))
+if global_size[] > 1 && global_size[] % 2 == 0
+    # Test using distributed-memory
+    restart_test_input_chebyshev["z_nelement_local"] = restart_test_input_chebyshev["z_nelement"] ÷ 2
+end
 
 restart_test_input_chebyshev_split_1_moment =
-    merge(restart_test_input_chebyshev,
+    merge(deepcopy(restart_test_input_chebyshev),
           Dict("run_name" => "restart_chebyshev_pseudospectral_split_1_moment",
                "evolve_moments_density" => true))
 
 restart_test_input_chebyshev_split_2_moments =
-    merge(restart_test_input_chebyshev_split_1_moment,
+    merge(deepcopy(restart_test_input_chebyshev_split_1_moment),
           Dict("run_name" => "restart_chebyshev_pseudospectral_split_2_moments",
                "r_ngrid" => 1, "r_nelement" => 1,
                "evolve_moments_parallel_flow" => true))
 
 restart_test_input_chebyshev_split_3_moments =
-    merge(restart_test_input_chebyshev_split_2_moments,
+    merge(deepcopy(restart_test_input_chebyshev_split_2_moments),
           Dict("run_name" => "restart_chebyshev_pseudospectral_split_3_moments",
                "evolve_moments_parallel_pressure" => true,
                "vpa_L" => 1.5*vpa_L, "vz_L" => 1.5*vpa_L))
@@ -123,38 +128,38 @@ function run_test(test_input, message, rtol, atol, test_upar=true; kwargs...)
             # Load and analyse output
             #########################
 
-            path = joinpath(realpath(input["base_directory"]), name, name)
+            # Read the output data
+            path = joinpath(realpath(input["base_directory"]), name)
 
-            # open the netcdf file containing moments data and give it the handle 'fid'
-            fid = open_readonly_output_file(path, "moments")
-
-            # load species, time coordinate data
-            n_ion_species, n_neutral_species = load_species_data(fid)
-            ntime, time = load_time_data(fid)
-            n_ion_species, n_neutral_species = load_species_data(fid)
-
-            # load fields data
-            phi_zrt, Er_zrt, Ez_zrt = load_fields_data(fid)
-
-            # load velocity moments data
-            n_charged_zrst, upar_charged_zrst, ppar_charged_zrst, qpar_charged_zrst, v_t_charged_zrst = load_charged_particle_moments_data(fid)
-            n_neutral_zrst, upar_neutral_zrst, ppar_neutral_zrst, qpar_neutral_zrst, v_t_neutral_zrst = load_neutral_particle_moments_data(fid)
-            z, z_spectral = load_coordinate_data(fid, "z")
-
-            close(fid)
-
-            # open the netcdf file containing pdf data
-            fid = open_readonly_output_file(path, "dfns")
-
-            # load particle distribution function (pdf) data
-            f_charged_vpavperpzrst = load_pdf_data(fid)
-            f_neutral_vzvrvzetazrst = load_neutral_pdf_data(fid)
-            vpa, vpa_spectral = load_coordinate_data(fid, "vpa")
-            vzeta, vzeta_spectral = load_coordinate_data(fid, "vzeta")
-            vr, vr_spectral = load_coordinate_data(fid, "vr")
-            vz, vz_spectral = load_coordinate_data(fid, "vz")
-
-            close(fid)
+            run_info = get_run_info(path, -1; dfns=true)
+            time = run_info.time
+            n_ion_species = run_info.n_ion_species
+            n_neutral_species = run_info.n_neutral_species
+            n_charged_zrst = postproc_load_variable(run_info, "density")
+            upar_charged_zrst = postproc_load_variable(run_info, "parallel_flow")
+            ppar_charged_zrst = postproc_load_variable(run_info, "parallel_pressure")
+            qpar_charged_zrst = postproc_load_variable(run_info, "parallel_heat_flux")
+            v_t_charged_zrst = postproc_load_variable(run_info, "thermal_speed")
+            f_charged_vpavperpzrst  = postproc_load_variable(run_info, "f")
+            n_neutral_zrst = postproc_load_variable(run_info, "density_neutral")
+            upar_neutral_zrst = postproc_load_variable(run_info, "uz_neutral")
+            ppar_neutral_zrst = postproc_load_variable(run_info, "pz_neutral")
+            qpar_neutral_zrst = postproc_load_variable(run_info, "qz_neutral")
+            v_t_neutral_zrst = postproc_load_variable(run_info, "thermal_speed_neutral")
+            f_neutral_vzvrvzetazrst   = postproc_load_variable(run_info, "f_neutral")
+            phi_zrt = postproc_load_variable(run_info, "phi")
+            Er_zrt = postproc_load_variable(run_info, "Er")
+            Ez_zrt = postproc_load_variable(run_info, "Ez")
+            z = run_info.z
+            z_spectral = run_info.z_spectral
+            vpa = run_info.vpa
+            vpa_spectral = run_info.vpa_spectral
+            vzeta = run_info.vzeta
+            vzeta_spectral = run_info.vzeta_spectral
+            vr = run_info.vr
+            vr_spectral = run_info.vr_spectral
+            vz = run_info.vz
+            vz_spectral = run_info.vz_spectral
 
             # Delete output because output files for 3V tests can be large
             rm(joinpath(realpath(input["base_directory"]), name); recursive=true)
@@ -299,21 +304,29 @@ function runtests()
                 # When not including moment-kinetic tests (because we are running a 2V/3V
                 # simulation) don't test upar. upar and uz end up with large 'errors'
                 # (~50%), and it is not clear why, but ignore this so test can pass.
-                run_test(restart_test_input_chebyshev, message, rtol, 1.e-15,
-                         include_moment_kinetic; kwargs...)
+                this_input = deepcopy(restart_test_input_chebyshev)
+                this_input["output"]["parallel_io"] = parallel_io
+                run_test(this_input, message, rtol, 1.e-15, include_moment_kinetic;
+                         kwargs...)
             end
             if include_moment_kinetic
                 message = "restart split 1 from $base_label$label"
                 @testset "$message" begin
-                    run_test(restart_test_input_chebyshev_split_1_moment, message, rtol, 1.e-15; kwargs...)
+                    this_input = deepcopy(restart_test_input_chebyshev_split_1_moment)
+                    this_input["output"]["parallel_io"] = parallel_io
+                    run_test(this_input, message, rtol, 1.e-15; kwargs...)
                 end
                 message = "restart split 2 from $base_label$label"
                 @testset "$message" begin
-                    run_test(restart_test_input_chebyshev_split_2_moments, message, rtol, 1.e-15; kwargs...)
+                    this_input = deepcopy(restart_test_input_chebyshev_split_2_moments)
+                    this_input["output"]["parallel_io"] = parallel_io
+                    run_test(this_input, message, rtol, 1.e-15; kwargs...)
                 end
                 message = "restart split 3 from $base_label$label"
                 @testset "$message" begin
-                    run_test(restart_test_input_chebyshev_split_3_moments, message, rtol, 1.e-15; kwargs...)
+                    this_input = deepcopy(restart_test_input_chebyshev_split_3_moments)
+                    this_input["output"]["parallel_io"] = parallel_io
+                    run_test(this_input, message, rtol, 1.e-15; kwargs...)
                 end
             end
         end
@@ -333,7 +346,7 @@ function runtests()
                        vr_ngrid=17, vr_nelement=4, vr_L=vpa_L, vz_ngrid=17, vz_nelement=8)
 
         if io_has_parallel(Val(hdf5))
-            orig_base_input = copy(base_input)
+            orig_base_input = deepcopy(base_input)
             # Also test not using parallel_io
             base_input["output"]["parallel_io"] = true
             base_input["run_name"] *= "_parallel_io"
