@@ -10,7 +10,7 @@ julia --project run_makie_post_processing.jl dir1 [dir2 [dir3 ...]]
 """
 module makie_post_processing
 
-export makie_post_process, generate_example_input_file,
+export makie_post_process, generate_example_input_file, get_variable,
        setup_makie_post_processing_input!, get_run_info, irregular_heatmap,
        irregular_heatmap!, postproc_load_variable, positive_or_nan
 
@@ -1184,6 +1184,43 @@ function postproc_load_variable(run_info, variable_name; it=nothing, is=nothing,
     return result
 end
 
+"""
+    get_variable(run_info::Tuple, variable_name; kwargs...)
+    get_variable(run_info, variable_name; kwargs...)
+
+Get an array (or Tuple of arrays, if `run_info` is a Tuple) of the data for
+`variable_name` from `run_info`.
+
+Some derived variables need to be calculated from the saved output, not just loaded from
+file (with `postproc_load_variable`). This function takes care of that calculation, and
+handles the case where `run_info` is a Tuple (which `postproc_load_data` does not handle).
+
+`kwargs...` are passed through to `postproc_load_variable()`.
+"""
+function get_variable end
+
+function get_variable(run_info::Tuple, variable_name; kwargs...)
+    return Tuple(get_variable(ri, variable_name; kwargs...) for ri ∈ run_info)
+end
+
+function get_variable(run_info, variable_name; kwargs...)
+    if variable_name == "temperature"
+        vth = postproc_load_variable(run_info, "thermal_speed")
+        variable = vth.^2
+    elseif variable_name == "collision_frequency"
+        n = postproc_load_variable(run_info, "density")
+        vth = postproc_load_variable(run_info, "thermal_speed")
+        variable = get_collision_frequency(run_info.collisions, n, vth)
+    elseif variable_name == "temperature_neutral"
+        vth = postproc_load_variable(run_info, "thermal_speed_neutral")
+        variable = vth.^2
+    else
+        variable = postproc_load_variable(run_info, variable_name)
+    end
+
+    return variable
+end
+
 const chunk_size_1d = 10000
 const chunk_size_2d = 100
 struct VariableCache{T1,T2,N}
@@ -1293,33 +1330,17 @@ function plots_for_variable(run_info, variable_name; plot_prefix, is_1D=false,
 
     if is_1D && variable_name == "Er"
         return nothing
+    elseif variable_name == "collision_frequency" &&
+            all(ri.collisions.krook_collisions_option == "none" for ri ∈ run_info)
+        # No Krook collisions active, so do not make plots.
+        return nothing
     end
 
     println("Making plots for $variable_name")
     flush(stdout)
 
-    if variable_name == "temperature"
-        vth = Tuple(postproc_load_variable(ri, "thermal_speed")
-                    for ri ∈ run_info)
-        variable = Tuple(v.^2 for v ∈ vth)
-    elseif variable_name == "collision_frequency"
-        if all(ri.collisions.krook_collisions_option == "none" for ri ∈ run_info)
-            return nothing
-        end
-        n = Tuple(postproc_load_variable(ri, "density")
-                  for ri ∈ run_info)
-        vth = Tuple(postproc_load_variable(ri, "thermal_speed")
-                    for ri ∈ run_info)
-        variable = Tuple(get_collision_frequency(ri.collisions, this_n, this_vth)
-                         for (ri, this_n, this_vth) ∈ zip(run_info, n, vth))
-    elseif variable_name == "temperature_neutral"
-        vth = Tuple(postproc_load_variable(ri, "thermal_speed_neutral")
-                    for ri ∈ run_info)
-        variable = Tuple(v.^2 for v ∈ vth)
-    else
-        variable = Tuple(postproc_load_variable(ri, variable_name)
-                         for ri ∈ run_info)
-    end
+    variable = get_variable(run_info, variable_name)
+
     if variable_name ∈ em_variables
         species_indices = (nothing,)
     elseif variable_name ∈ neutral_moment_variables ||
