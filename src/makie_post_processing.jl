@@ -20,6 +20,7 @@ using ..array_allocation: allocate_float
 using ..coordinates: define_coordinate
 using ..input_structs: grid_input, advection_input, set_defaults_and_check_top_level!,
                        set_defaults_and_check_section!, Dict_to_NamedTuple
+using ..krook_collisions: get_collision_frequency
 using ..looping: all_dimensions, ion_dimensions, neutral_dimensions
 using ..manufactured_solns: manufactured_solutions, manufactured_electric_fields
 using ..moment_kinetics_input: mk_input
@@ -68,7 +69,8 @@ const input_dict_dfns = OrderedDict{String,Any}()
 
 const em_variables = ("phi", "Er", "Ez")
 const ion_moment_variables = ("density", "parallel_flow", "parallel_pressure",
-                              "thermal_speed", "temperature", "parallel_heat_flux")
+                              "thermal_speed", "temperature", "parallel_heat_flux",
+                              "collision_frequency")
 const neutral_moment_variables = ("density_neutral", "uz_neutral", "pz_neutral",
                                   "thermal_speed_neutral", "temperature_neutral",
                                   "qz_neutral")
@@ -1300,6 +1302,16 @@ function plots_for_variable(run_info, variable_name; plot_prefix, is_1D=false,
         vth = Tuple(postproc_load_variable(ri, "thermal_speed")
                     for ri ∈ run_info)
         variable = Tuple(v.^2 for v ∈ vth)
+    elseif variable_name == "collision_frequency"
+        if all(ri.collisions.krook_collisions_option == "none" for ri ∈ run_info)
+            return nothing
+        end
+        n = Tuple(postproc_load_variable(ri, "density")
+                  for ri ∈ run_info)
+        vth = Tuple(postproc_load_variable(ri, "thermal_speed")
+                    for ri ∈ run_info)
+        variable = Tuple(get_collision_frequency(ri.collisions, this_n, this_vth)
+                         for (ri, this_n, this_vth) ∈ zip(run_info, n, vth))
     elseif variable_name == "temperature_neutral"
         vth = Tuple(postproc_load_variable(ri, "thermal_speed_neutral")
                     for ri ∈ run_info)
