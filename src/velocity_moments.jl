@@ -10,7 +10,9 @@ export update_moments!
 export update_density!
 export update_upar!
 export update_ppar!
+export update_pperp!
 export update_qpar!
+export update_vth!
 export reset_moments_status!
 export moments_chrg_substruct, moments_ntrl_substruct
 export update_neutral_density!
@@ -21,6 +23,13 @@ export update_neutral_pz!
 export update_neutral_pr!
 export update_neutral_pzeta!
 export update_neutral_qz!
+
+# for testing 
+export get_density
+export get_upar
+export get_ppar
+export get_pperp
+export get_pressure
 
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_shared_float, allocate_bool, allocate_float
@@ -58,6 +67,8 @@ struct moments_charged_substruct
     # sets/uses the value for the same subset of species. This means ppar_update does
     # not need to be a shared memory array.
     ppar_updated::Vector{Bool}
+    # this is the perpendicular pressure
+    pperp::MPISharedArray{mk_float,3}
     # this is the parallel heat flux
     qpar::MPISharedArray{mk_float,3}
     # flag that keeps track of whether or not qpar needs updating before use
@@ -182,6 +193,8 @@ function create_moments_charged(nz, nr, n_species, evolve_density, evolve_upar,
     # allocate array of Bools that indicate if the parallel pressure is updated for each species
     parallel_pressure_updated = allocate_bool(n_species)
     parallel_pressure_updated .= false
+    # allocate array used for the perpendicular pressure
+    perpendicular_pressure = allocate_shared_float(nz, nr, n_species)
     # allocate array used for the parallel flow
     parallel_heat_flux = allocate_shared_float(nz, nr, n_species)
     # allocate array of Bools that indicate if the parallel flow is updated for each species
@@ -247,7 +260,7 @@ function create_moments_charged(nz, nr, n_species, evolve_density, evolve_upar,
     
     # return struct containing arrays needed to update moments
     return moments_charged_substruct(density, density_updated, parallel_flow,
-        parallel_flow_updated, parallel_pressure, parallel_pressure_updated,
+        parallel_flow_updated, parallel_pressure, parallel_pressure_updated,perpendicular_pressure,
         parallel_heat_flux, parallel_heat_flux_updated, thermal_speed, v_norm_fac,
         ddens_dz_upwind, d2dens_dz2, dupar_dz, dupar_dz_upwind, d2upar_dz2, dppar_dz,
         dppar_dz_upwind, d2ppar_dz2, dqpar_dz, dvth_dz)
@@ -381,10 +394,7 @@ function update_moments!(moments, ff, vpa, vperp, z, r, composition)
                                         moments.evolve_upar)
             moments.charged.ppar_updated[is] = true
         end
-        @loop_r_z ir iz begin
-            moments.charged.vth[iz,ir,is] =
-                sqrt(2*moments.charged.ppar[iz,ir,is]/moments.charged.dens[iz,ir,is])
-        end
+        @views update_pperp_species!(moments.charged.pperp[:,:,is], ff[:,:,:,:,is], vpa, vperp, z, r)
         if moments.charged.qpar_updated[is] == false
             @views update_qpar_species!(moments.charged.qpar[:,:,is],
                                         moments.charged.dens[:,:,is],
@@ -395,6 +405,7 @@ function update_moments!(moments, ff, vpa, vperp, z, r, composition)
             moments.charged.qpar_updated[is] = true
         end
     end
+    update_vth!(moments.charged.vth, moments.charged.ppar, moments.charged.pperp, moments.charged.dens, vperp, z, r, composition)
     return nothing
 end
 
@@ -431,11 +442,14 @@ function update_density_species!(dens, ff, vpa, vperp, z, r)
     @loop_r_z ir iz begin
         # When evolve_density = false, the evolved pdf is the 'true' pdf, and the vpa
         # coordinate is (dz/dt) / c_s.
-        # Integrating calculates n_s / N_e = (1/√π)∫d(vpa/c_s) (√π f_s c_s / N_e)
-        dens[iz,ir] = integrate_over_vspace(@view(ff[:,:,iz,ir]), 
-            vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
+        dens[iz,ir] = get_density(@view(ff[:,:,iz,ir]), vpa, vperp)
     end
     return nothing
+end
+
+function get_density(ff, vpa, vperp)
+    # Integrating calculates n_s / N_e = (0/√π)∫d(vpa/c_s) (√π f_s c_s / N_e)
+    return integrate_over_vspace(@view(ff[:,:]), vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
 end
 
 """
@@ -475,10 +489,10 @@ function update_upar_species!(upar, density, ppar, ff, vpa, vperp, z, r, evolve_
         # Integrating calculates
         # (upar_s / vth_s) = (1/√π)∫d(vpa/vth_s) * (vpa/vth_s) * (√π f_s vth_s / n_s)
         # so convert from upar_s / vth_s to upar_s / c_s
+        # we set the input density to get_upar = 1.0 as the normalised distribution has density of 1.0
         @loop_r_z ir iz begin
             vth = sqrt(2.0*ppar[iz,ir]/density[iz,ir])
-            upar[iz,ir] = integrate_over_vspace(@view(ff[:,:,iz,ir]),
-                              vpa.grid, 1, vpa.wgts, vperp.grid, 0, vperp.wgts) * vth
+            upar[iz,ir] = vth*get_upar(@view(ff[:,:,iz,ir]), vpa, vperp, 1.0)
         end
     elseif evolve_density
         # corresponds to case where only the density is evolved separately from the
@@ -486,9 +500,9 @@ function update_upar_species!(upar, density, ppar, ff, vpa, vperp, z, r, evolve_
         # (dz/dt) / c_s.
         # Integrating calculates
         # (upar_s / c_s) = (1/√π)∫d(vpa/c_s) * (vpa/c_s) * (√π f_s c_s / n_s)
+        # we set the input density to get_upar = 1.0 as the normalised distribution has density of 1.0
         @loop_r_z ir iz begin
-            upar[iz,ir] = integrate_over_vspace(@view(ff[:,:,iz,ir]),
-                              vpa.grid, 1, vpa.wgts, vperp.grid, 0, vperp.wgts)
+            upar[iz,ir] = get_upar(@view(ff[:,:,iz,ir]), vpa, vperp, 1.0)
         end
     else
         # When evolve_density = false, the evolved pdf is the 'true' pdf,
@@ -496,12 +510,19 @@ function update_upar_species!(upar, density, ppar, ff, vpa, vperp, z, r, evolve_
         # Integrating calculates
         # (n_s / N_e) * (upar_s / c_s) = (1/√π)∫d(vpa/c_s) * (vpa/c_s) * (√π f_s c_s / N_e)
         @loop_r_z ir iz begin
-            upar[iz,ir] = integrate_over_vspace(@view(ff[:,:,iz,ir]),
-                              vpa.grid, 1, vpa.wgts, vperp.grid, 0, vperp.wgts) /
-                          density[iz,ir]
+            upar[iz,ir] = get_upar(@view(ff[:,:,iz,ir]), vpa, vperp, density[iz,ir])
         end
     end
     return nothing
+end
+
+function get_upar(ff, vpa, vperp, density)
+    # Integrating calculates
+    # (n_s / N_e) * (upar_s / c_s) = (1/√π)∫d(vpa/c_s) * (vpa/c_s) * (√π f_s c_s / N_e)
+    # so we divide by the density of f_s
+    upar = integrate_over_vspace(@view(ff[:,:]), vpa.grid, 1, vpa.wgts, vperp.grid, 0, vperp.wgts)
+    upar /= density
+    return upar
 end
 
 """
@@ -540,38 +561,100 @@ function update_ppar_species!(ppar, density, upar, ff, vpa, vperp, z, r, evolve_
     if evolve_upar
         # this is the case where the parallel flow and density are evolved separately
         # from the normalized pdf, g_s = (√π f_s c_s / n_s); the vpa coordinate is
-        # ((dz/dt) - upar_s) / c_s>
-        # Integrating calculates (p_parallel/m_s n_s c_s^2) = (1/√π)∫d((vpa-upar_s)/c_s) (1/2)*((vpa-upar_s)/c_s)^2 * (√π f_s c_s / n_s)
-        # so convert from p_s / m_s n_s c_s^2 to ppar_s = p_s / m_s N_e c_s^2
+        # ((dz/dt) - upar_s) / c_s> and so we set upar = 0 in the call to get_ppar
+        # because the mean flow of the normalised ff is zero
         @loop_r_z ir iz begin
-            ppar[iz,ir] = integrate_over_vspace(@view(ff[:,:,iz,ir]), vpa.grid, 2, vpa.wgts, vperp.grid, 0, vperp.wgts) *
-                          density[iz,ir]
+            ppar[iz,ir] = density[iz,ir]*get_ppar(@view(ff[:,:,iz,ir]), vpa, vperp, 0.0)
         end
     elseif evolve_density
         # corresponds to case where only the density is evolved separately from the
         # normalised pdf, given by g_s = (√π f_s c_s / n_s); the vpa coordinate is
         # (dz/dt) / c_s.
-        # Integrating calculates
-        # (p_parallel/m_s n_s c_s^2) + (upar_s/c_s)^2 = (1/√π)∫d(vpa/c_s) (vpa/c_s)^2 * (√π f_s c_s / n_s)
-        # so subtract off the mean kinetic energy and multiply by density to get the
-        # internal energy density (aka pressure)
         @loop_r_z ir iz begin
-            ppar[iz,ir] = (integrate_over_vspace(@view(ff[:,:,iz,ir]), vpa.grid, 2, vpa.wgts, vperp.grid, 0, vperp.wgts) -
-                           upar[iz,ir]^2) * density[iz,ir]
+            ppar[iz,ir] = density[iz,ir]*get_ppar(@view(ff[:,:,iz,ir]), vpa, vperp, upar[iz,ir])
         end
     else
         # When evolve_density = false, the evolved pdf is the 'true' pdf,
         # and the vpa coordinate is (dz/dt) / c_s.
-        # Integrating calculates
-        # (p_parallel/m_s N_e c_s^2) + (n_s/N_e)*(upar_s/c_s)^2 = (1/√π)∫d(vpa/c_s) (vpa/c_s)^2 * (√π f_s c_s / N_e)
-        # so subtract off the mean kinetic energy density to get the internal energy
-        # density (aka pressure)
         @loop_r_z ir iz begin
-            ppar[iz,ir] = integrate_over_vspace(@view(ff[:,:,iz,ir]), vpa.grid, 2, vpa.wgts, vperp.grid, 0, vperp.wgts) -
-                          density[iz,ir]*upar[iz,ir]^2
+            ppar[iz,ir] = get_ppar(@view(ff[:,:,iz,ir]), vpa, vperp, upar[iz,ir])
         end
     end
     return nothing
+end
+
+function get_ppar(ff, vpa, vperp, upar)
+    # Integrating calculates
+    # (p_parallel/m_s N_e c_s^2) = (1/√π)∫d(vpa/c_s) ((vpa-upar)/c_s)^2 * (√π f_s c_s / N_e)
+    # the internal energy density (aka pressure of f_s)
+
+    # modify input vpa.grid to account for the mean flow
+    @. vpa.scratch = vpa.grid - upar
+    norm_fac = 1.0 # normalise to m_s N_e c_s^2
+    #norm_fac = 2.0 # normalise to 0.5 m_s N_e c_s^2 = N_e T_s
+    return norm_fac*integrate_over_vspace(@view(ff[:,:]), vpa.scratch, 2, vpa.wgts, vperp.grid, 0, vperp.wgts)
+end
+
+function update_pperp!(pperp, pdf, vpa, vperp, z, r, composition)
+    @boundscheck composition.n_ion_species == size(pperp,3) || throw(BoundsError(pperp))
+    @boundscheck r.n == size(pperp,2) || throw(BoundsError(pperp))
+    @boundscheck z.n == size(pperp,1) || throw(BoundsError(pperp))
+    
+    begin_s_r_z_region()
+    
+    @loop_s is begin
+        @views update_pperp_species!(pperp[:,:,is], pdf[:,:,:,:,is], vpa, vperp, z, r)
+    end
+end
+
+"""
+calculate the updated perpendicular pressure (pperp) for a given species
+"""
+function update_pperp_species!(pperp, ff, vpa, vperp, z, r)
+    @boundscheck vpa.n == size(ff, 1) || throw(BoundsError(ff))
+    @boundscheck vperp.n == size(ff, 2) || throw(BoundsError(ff))
+    @boundscheck z.n == size(ff, 3) || throw(BoundsError(ff))
+    @boundscheck r.n == size(ff, 4) || throw(BoundsError(ff))
+    @boundscheck z.n == size(pperp, 1) || throw(BoundsError(pperp))
+    @boundscheck r.n == size(pperp, 2) || throw(BoundsError(pperp))
+    @loop_r_z ir iz begin
+        pperp[iz,ir] = get_pperp(@view(ff[:,:,iz,ir]), vpa, vperp)
+    end
+    return nothing
+end
+
+function get_pperp(ff, vpa, vperp)
+    norm_fac = 0.5 # normalise to m_s N_e c_s^2
+    #norm_fac = 1.0 # normalise to 0.5 m_s N_e c_s^2 = N_e T_s
+    return norm_fac*integrate_over_vspace(@view(ff[:,:]), vpa.grid, 0, vpa.wgts, vperp.grid, 2, vperp.wgts)
+end
+
+function update_vth!(vth, ppar, pperp, dens, vperp, z, r, composition)
+    @boundscheck composition.n_ion_species == size(vth,3) || throw(BoundsError(vth))
+    @boundscheck r.n == size(vth,2) || throw(BoundsError(vth))
+    @boundscheck z.n == size(vth,1) || throw(BoundsError(vth))
+    
+    begin_s_r_z_region()
+    normfac = 2.0 # if ppar normalised to 2*nref Tref = mref cref^2
+    #normfac = 1.0 # if ppar normalised to nref Tref = 0.5 * mref cref^2
+    if vperp.n > 1 #2V definition
+        @loop_s_r_z is ir iz begin
+            piso = get_pressure(ppar[iz,ir,is],pperp[iz,ir,is])
+            vth[iz,ir,is] = sqrt(normfac*piso/dens[iz,ir,is])
+        end
+    else #1V definition 
+        @loop_s_r_z is ir iz begin
+            vth[iz,ir,is] = sqrt(normfac*ppar[iz,ir,is]/dens[iz,ir,is])
+        end
+    end
+end
+
+"""
+compute the isotropic pressure from the already computed ppar and pperp
+"""
+function get_pressure(ppar::mk_float,pperp::mk_float)
+    pres = (1.0/3.0)*(ppar + 2.0*pperp) 
+    return pres
 end
 
 """

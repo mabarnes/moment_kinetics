@@ -14,6 +14,8 @@ export collisions_input
 export io_input
 export pp_input
 export geometry_input
+export set_defaults_and_check_top_level!, set_defaults_and_check_section!,
+       Dict_to_NamedTuple
 
 using ..type_definitions: mk_float, mk_int
 
@@ -59,6 +61,7 @@ mutable struct advance_info
     ionization_collisions::Bool
     ionization_collisions_1V::Bool
     ionization_source::Bool
+    krook_collisions::Bool
     numerical_dissipation::Bool
     source_terms::Bool
     continuity::Bool
@@ -260,13 +263,7 @@ mutable struct species_composition
     phi_wall::mk_float
     # constant for testing nonzero Er
     Er_constant::mk_float
-    # constant controlling divergence at wall boundaries in MMS test
-	epsilon_offset::mk_float
-    # logical controlling whether or not dfni(vpabar,z,r) or dfni(vpa,z,r) in MMS test
-    use_vpabar_in_mms_dfni::Bool
-    # associated float controlling form of assumed potential in MMS test
-    alpha_switch::mk_float    
-	# ratio of the neutral particle mass to the ion mass
+    # ratio of the neutral particle mass to the ion mass
     mn_over_mi::mk_float
     # ratio of the electron particle mass to the ion mass
     me_over_mi::mk_float
@@ -307,6 +304,10 @@ mutable struct collisions_input
     ionization::mk_float
     # if constant_ionization_rate = true, use an ionization term that is constant in z
     constant_ionization_rate::Bool
+    # Coulomb collision rate at the reference density and temperature
+    krook_collision_frequency_prefactor::mk_float
+    # Setting to switch between different options for Krook collision operator
+    krook_collisions_option::String
 end
 
 """
@@ -504,6 +505,114 @@ struct pp_input
     diagnostics_chodura_t::Bool
     # Calculate and plot the 'Chodura criterion' at the wall boundaries vs r at fixed t
     diagnostics_chodura_r::Bool
+end
+
+import Base: get
+"""
+Utility method for converting a string to an Enum when getting from a Dict, based on the
+type of the default value
+"""
+function get(d::Dict, key, default::Enum)
+    valstring = get(d, key, nothing)
+    if valstring == nothing
+        return default
+    # instances(typeof(default)) gets the possible values of the Enum. Then convert to
+    # Symbol, then to String.
+    elseif valstring ∈ (split(s, ".")[end] for s ∈ String.(Symbol.(instances(typeof(default)))))
+        return eval(Symbol(valstring))
+    else
+        error("Expected a $(typeof(default)), but '$valstring' is not in "
+              * "$(instances(typeof(default)))")
+    end
+end
+
+"""
+Set the defaults for options in the top level of the input, and check that there are not
+any unexpected options (i.e. options that have no default).
+
+Modifies the options[section_name]::Dict by adding defaults for any values that are not
+already present.
+
+Ignores any sections, as these will be checked separately.
+"""
+function set_defaults_and_check_top_level!(options::AbstractDict; kwargs...)
+    DictType = typeof(options)
+
+    # Check for any unexpected values in the options - all options that are set should be
+    # present in the kwargs of this function call
+    options_keys_symbols = keys(kwargs)
+    options_keys = (String(k) for k ∈ options_keys_symbols)
+    for (key, value) in options
+        # Ignore any ssections when checking
+        if !(isa(value, AbstractDict) || key ∈ options_keys)
+            error("Unexpected option '$key=$value' in top-level options")
+        end
+    end
+
+    # Set default values if a key was not set explicitly
+    explicit_keys = keys(options)
+    for (key_sym, value) ∈ kwargs
+        key = String(key_sym)
+        if !(key ∈ explicit_keys)
+            options[key] = value
+        end
+    end
+
+    return options
+end
+
+"""
+Set the defaults for options in a section, and check that there are not any unexpected
+options (i.e. options that have no default).
+
+Modifies the options[section_name]::Dict by adding defaults for any values that are not
+already present.
+"""
+function set_defaults_and_check_section!(options::AbstractDict, section_name;
+                                         kwargs...)
+    DictType = typeof(options)
+
+    if !(section_name ∈ keys(options))
+        # If section is not present, create it
+        options[section_name] = DictType()
+    end
+
+    if !isa(options[section_name], AbstractDict)
+        error("Expected '$section_name' to be a section in the input file, but it has a "
+              * "value '$(options[section_name])'")
+    end
+
+    section = options[section_name]
+
+    # Check for any unexpected values in the section - all options that are set should be
+    # present in the kwargs of this function call
+    section_keys_symbols = keys(kwargs)
+    section_keys = (String(k) for k ∈ section_keys_symbols)
+    for (key, value) in section
+        if !(key ∈ section_keys)
+            error("Unexpected option '$key=$value' in section '$section_name'")
+        end
+    end
+
+    # Set default values if a key was not set explicitly
+    explicit_keys = keys(section)
+    for (key_sym, value) ∈ kwargs
+        key = String(key_sym)
+        if !(key ∈ explicit_keys)
+            section[key] = value
+        end
+    end
+
+    return section
+end
+
+"""
+Convert a Dict whose keys are String or Symbol to a NamedTuple
+
+Useful as NamedTuple is immutable, so option values cannot be accidentally changed.
+"""
+function Dict_to_NamedTuple(d)
+    return NamedTuple(Symbol(k)=>v for (k,v) ∈ d)
 end
 
 end

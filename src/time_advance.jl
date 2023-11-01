@@ -14,9 +14,8 @@ using ..debugging
 using ..file_io: write_data_to_ascii, write_moments_data_to_binary, write_dfns_data_to_binary, debug_dump
 using ..looping
 using ..moment_kinetics_structs: scratch_pdf
-using ..moment_kinetics_structs: scratch_pdf
 using ..velocity_moments: update_moments!, update_moments_neutral!, reset_moments_status!
-using ..velocity_moments: update_density!, update_upar!, update_ppar!, update_qpar!
+using ..velocity_moments: update_density!, update_upar!, update_ppar!, update_pperp!, update_qpar!, update_vth!
 using ..velocity_moments: update_neutral_density!, update_neutral_qz!
 using ..velocity_moments: update_neutral_uzeta!, update_neutral_uz!, update_neutral_ur!
 using ..velocity_moments: update_neutral_pzeta!, update_neutral_pz!, update_neutral_pr!
@@ -40,6 +39,7 @@ using ..vperp_advection: update_speed_vperp!, vperp_advection!
 using ..vpa_advection: update_speed_vpa!, vpa_advection!
 using ..charge_exchange: charge_exchange_collisions_1V!, charge_exchange_collisions_3V!
 using ..ionization: ionization_collisions_1V!, ionization_collisions_3V!, constant_ionization_source!
+using ..krook_collisions: krook_collisions!
 using ..numerical_dissipation: vpa_boundary_buffer_decay!,
                                vpa_boundary_buffer_diffusion!, vpa_dissipation!,
                                z_dissipation!, r_dissipation!,
@@ -404,6 +404,7 @@ function setup_advance_flags(moments, composition, t_input, collisions, num_diss
     advance_ionization = false
     advance_ionization_1V = false
     advance_ionization_source = false
+    advance_krook_collisions = false
     advance_numerical_dissipation = false
     advance_sources = false
     advance_continuity = false
@@ -473,6 +474,9 @@ function setup_advance_flags(moments, composition, t_input, collisions, num_diss
         if collisions.ionization > 0.0 && collisions.constant_ionization_rate
             advance_ionization_source = true
         end
+        if collisions.krook_collision_frequency_prefactor > 0.0
+            advance_krook_collisions = true
+        end
         advance_numerical_dissipation = true
         # if evolving the density, must advance the continuity equation,
         # in addition to including sources arising from the use of a modified distribution
@@ -521,12 +525,12 @@ function setup_advance_flags(moments, composition, t_input, collisions, num_diss
                         advance_neutral_z_advection, advance_neutral_r_advection,
                         advance_neutral_vz_advection, advance_cx, advance_cx_1V,
                         advance_ionization, advance_ionization_1V,
-                        advance_ionization_source, advance_numerical_dissipation,
-                        advance_sources, advance_continuity, advance_force_balance,
-                        advance_energy, advance_neutral_sources,
-                        advance_neutral_continuity, advance_neutral_force_balance,
-                        advance_neutral_energy, rk_coefs, manufactured_solns_test,
-                        r_diffusion, vpa_diffusion, vz_diffusion)
+                        advance_ionization_source, advance_krook_collisions,
+                        advance_numerical_dissipation, advance_sources,
+                        advance_continuity, advance_force_balance, advance_energy,
+                        advance_neutral_sources, advance_neutral_continuity,
+                        advance_neutral_force_balance, advance_neutral_energy, rk_coefs,
+                        manufactured_solns_test, r_diffusion, vpa_diffusion, vz_diffusion)
 end
 
 function setup_dummy_and_buffer_arrays(nr,nz,nvpa,nvperp,nvz,nvr,nvzeta,nspecies_ion,nspecies_neutral)
@@ -651,6 +655,7 @@ function setup_scratch_arrays(moments, pdf_charged_in, pdf_neutral_in, n_rk_stag
         density_array = allocate_shared_float(moment_dims...)
         upar_array = allocate_shared_float(moment_dims...)
         ppar_array = allocate_shared_float(moment_dims...)
+        pperp_array = allocate_shared_float(moment_dims...)
         temp_z_s_array = allocate_shared_float(moment_dims...)
 
         pdf_neutral_array = allocate_shared_float(pdf_neutral_dims...)
@@ -660,7 +665,7 @@ function setup_scratch_arrays(moments, pdf_charged_in, pdf_neutral_in, n_rk_stag
 
 
         scratch[istage] = scratch_pdf(pdf_array, density_array, upar_array,
-                                      ppar_array, temp_z_s_array,
+                                      ppar_array, pperp_array, temp_z_s_array,
                                       pdf_neutral_array, density_neutral_array,
                                       uz_neutral_array, pz_neutral_array)
         @serial_region begin
@@ -668,6 +673,7 @@ function setup_scratch_arrays(moments, pdf_charged_in, pdf_neutral_in, n_rk_stag
             scratch[istage].density .= moments.charged.dens
             scratch[istage].upar .= moments.charged.upar
             scratch[istage].ppar .= moments.charged.ppar
+            scratch[istage].pperp .= moments.charged.pperp
 
             scratch[istage].pdf_neutral .= pdf_neutral_in
             scratch[istage].density_neutral .= moments.neutral.dens
@@ -1064,6 +1070,14 @@ function time_advance_split_operators!(pdf, scratch, t, t_input, vpa, z,
                 advance.ionization_collisions = false
             end
         end
+        if collisions.krook_collision_frequency_prefactor  > 0.0
+            advance.krook_collisions = true
+            time_advance_no_splitting!(pdf, scratch, t, t_input, z, vpa,
+                z_spectral, vpa_spectral, moments, fields, z_advect, vpa_advect,
+                z_SL, vpa_SL, composition, collisions, sources, num_diss_params,
+                advance, istep)
+            advance.krook_collisions = false
+        end
         # and add the source terms associated with redefining g = pdf/density or pdf*vth/density
         # to the kinetic equation
         if moments.evolve_density || moments.evolve_upar || moments.evolve_ppar
@@ -1215,7 +1229,9 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
     ##
     # update the charged particle distribution and moments
     ##
-
+    # MRH here we seem to have duplicate arrays for storing n, u||, p||, etc, but not for vth
+    # MRH 'scratch' is for the multiple stages of time advanced quantities, but 'moments' can be updated directly at each stage
+    # MRH in the standard drift-kinetic model. Consider taking moment quantities out of scratch for clarity.
     @loop_s_r_z_vperp_vpa is ir iz ivperp ivpa begin
         new_scratch.pdf[ivpa,ivperp,iz,ir,is] = rk_coefs[1]*pdf.charged.norm[ivpa,ivperp,iz,ir,is] + rk_coefs[2]*old_scratch.pdf[ivpa,ivperp,iz,ir,is] + rk_coefs[3]*new_scratch.pdf[ivpa,ivperp,iz,ir,is]
     end
@@ -1246,15 +1262,12 @@ function rk_update!(scratch, pdf, moments, fields, boundary_distributions, vz, v
                                                   vpa)
         end
     end
-
     # update remaining velocity moments that are calculable from the evolved pdf
     update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composition)
     # update the thermal speed
     begin_s_r_z_region()
     try #below block causes DomainError if ppar < 0 or density, so exit cleanly if possible
-        @loop_s_r_z is ir iz begin
-            moments.charged.vth[iz,ir,is] = sqrt(2.0*new_scratch.ppar[iz,ir,is]/new_scratch.density[iz,ir,is])
-        end
+        update_vth!(moments.charged.vth, new_scratch.ppar, new_scratch.pperp, new_scratch.density, vperp, z, r, composition)
     catch e
         if global_size[] > 1
             println("ERROR: error calculating vth in time_advance.jl")
@@ -1418,7 +1431,8 @@ function update_derived_moments!(new_scratch, moments, vpa, vperp, z, r, composi
         update_ppar!(new_scratch.ppar, moments.charged.ppar_updated, new_scratch.density,
                      new_scratch.upar, new_scratch.pdf, vpa, vperp, z, r, composition,
                      moments.evolve_density, moments.evolve_upar)
-    end
+    end 
+    update_pperp!(new_scratch.pperp, new_scratch.pdf, vpa, vperp, z, r, composition)
 end
 
 """
@@ -1463,6 +1477,7 @@ function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase,
         first_scratch.density[iz,ir,is] = moments.charged.dens[iz,ir,is]
         first_scratch.upar[iz,ir,is] = moments.charged.upar[iz,ir,is]
         first_scratch.ppar[iz,ir,is] = moments.charged.ppar[iz,ir,is]
+        first_scratch.pperp[iz,ir,is] = moments.charged.pperp[iz,ir,is]
     end
 
     if composition.n_neutral_species > 0
@@ -1513,6 +1528,7 @@ function ssp_rk!(pdf, scratch, t, t_input, vz, vr, vzeta, vpa, vperp, gyrophase,
         moments.charged.dens[iz,ir,is] = final_scratch.density[iz,ir,is]
         moments.charged.upar[iz,ir,is] = final_scratch.upar[iz,ir,is]
         moments.charged.ppar[iz,ir,is] = final_scratch.ppar[iz,ir,is]
+        moments.charged.pperp[iz,ir,is] = final_scratch.pperp[iz,ir,is]
     end
     if composition.n_neutral_species > 0
         # No need to synchronize here as we only change neutral quantities and previous
@@ -1677,6 +1693,12 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
                                     collisions, dt)
     end
     
+    # Add Krook collision operator for ions
+    if advance.krook_collisions
+        krook_collisions!(fvec_out.pdf, fvec_in, moments, composition, collisions,
+                          vperp, vpa, dt)
+    end
+
     # add numerical dissipation
     if advance.numerical_dissipation
         vpa_dissipation!(fvec_out.pdf, fvec_in.pdf, vpa, vpa_spectral, dt,

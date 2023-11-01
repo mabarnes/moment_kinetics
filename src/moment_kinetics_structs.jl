@@ -16,6 +16,7 @@ struct scratch_pdf{n_distribution_charged, n_moment, n_distribution_neutral,n_mo
     density::MPISharedArray{mk_float, n_moment}
     upar::MPISharedArray{mk_float, n_moment}
     ppar::MPISharedArray{mk_float, n_moment}
+    pperp::MPISharedArray{mk_float, n_moment}
     temp_z_s::MPISharedArray{mk_float, n_moment}
     # neutral particles 
     pdf_neutral::MPISharedArray{mk_float, n_distribution_neutral}
