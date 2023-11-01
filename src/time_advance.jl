@@ -1108,8 +1108,10 @@ function euler_time_advance!(fvec_out, fvec_in, pdf, fields, moments,
         #println(moments.charged.dSdt)
     end
     if advance.explicit_weakform_fp_collisions
-        explicit_fokker_planck_collisions_weak_form!(fvec_out.pdf,fvec_in.pdf,composition,collisions,dt,
-                                             fp_arrays,r,z,vperp,vpa,vperp_spectral,vpa_spectral)
+        update_entropy_diagnostic = (istage == 1)
+        explicit_fokker_planck_collisions_weak_form!(fvec_out.pdf,fvec_in.pdf,moments.charged.dSdt,composition,collisions,dt,
+                                             fp_arrays,r,z,vperp,vpa,vperp_spectral,vpa_spectral,
+                                             diagnose_entropy_production = update_entropy_diagnostic)
     end
     if advance.explicit_fp_F_FM_collisions
         explicit_fokker_planck_collisions_Maxwellian_coefficients!(fvec_out.pdf, fvec_in.pdf, 

@@ -152,10 +152,11 @@ end
 Function for advancing with the explicit, weak-form, self-collision operator
 """
 
-function explicit_fokker_planck_collisions_weak_form!(pdf_out,pdf_in,composition,collisions,dt,
+function explicit_fokker_planck_collisions_weak_form!(pdf_out,pdf_in,dSdt,composition,collisions,dt,
                                              fkpl_arrays::fokkerplanck_weakform_arrays_struct,
                                              r, z, vperp, vpa, vperp_spectral, vpa_spectral;
-                                             test_assembly_serial=false,impose_zero_gradient_BC=false)
+                                             test_assembly_serial=false,impose_zero_gradient_BC=false,
+                                             diagnose_entropy_production=false)
     # N.B. only self-collisions are currently supported
     # This can be modified by adding a loop over s' below
     n_ion_species = composition.n_ion_species
@@ -169,6 +170,9 @@ function explicit_fokker_planck_collisions_weak_form!(pdf_out,pdf_in,composition
     @boundscheck z.n == size(pdf_in,3) || throw(BoundsError(pdf_in))
     @boundscheck r.n == size(pdf_in,4) || throw(BoundsError(pdf_in))
     @boundscheck n_ion_species == size(pdf_in,5) || throw(BoundsError(pdf_in))
+    @boundscheck z.n == size(dSdt,1) || throw(BoundsError(dSdt))
+    @boundscheck r.n == size(dSdt,2) || throw(BoundsError(dSdt))
+    @boundscheck n_ion_species == size(dSdt,3) || throw(BoundsError(dSdt))
     
     # masses and collision frequencies
     ms, msp = 1.0, 1.0 # generalise!
@@ -184,9 +188,21 @@ function explicit_fokker_planck_collisions_weak_form!(pdf_out,pdf_in,composition
         @views fokker_planck_collision_operator_weak_form!(pdf_in[:,:,iz,ir,is],pdf_in[:,:,iz,ir,is],ms,msp,nussp,
                                              fkpl_arrays,vperp,vpa,vperp_spectral,vpa_spectral)        
         # advance this part of s,r,z with the resulting C[Fs,Fs]
+        Css = fkpl_arrays.CC
         begin_vperp_vpa_region()
         @loop_vperp_vpa ivperp ivpa begin
-            pdf_out[ivpa,ivperp,iz,ir,is] += dt*fkpl_arrays.CC[ivpa,ivperp]
+            pdf_out[ivpa,ivperp,iz,ir,is] += dt*Css[ivpa,ivperp]
+        end
+        if diagnose_entropy_production
+            # assign dummy array
+            lnfC = fkpl_arrays.rhsvpavperp
+            @loop_vperp_vpa ivperp ivpa begin
+                lnfC[ivpa,ivperp] = log(abs(pdf_in[ivpa,ivperp,iz,ir,is]) + 1.0e-15)*Css[ivpa,ivperp]
+            end
+            begin_serial_region()
+            @serial_region begin
+                dSdt[iz,ir,is] = -get_density(lnfC,vpa,vperp)
+            end
         end
     end
     return nothing
