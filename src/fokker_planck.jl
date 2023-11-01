@@ -21,7 +21,7 @@ using LinearAlgebra: lu
 using ..initial_conditions: enforce_boundary_conditions!
 using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_shared_float
-using ..communication: MPISharedArray
+using ..communication: MPISharedArray, global_rank
 using ..velocity_moments: integrate_over_vspace
 using ..velocity_moments: get_density, get_upar, get_ppar, get_pperp, get_qpar, get_pressure, get_rmom
 using ..calculus: derivative!, second_derivative!
@@ -113,12 +113,16 @@ function init_fokker_planck_collisions_weak_form(vpa,vperp,vpa_spectral,vperp_sp
     lu_obj_LP = lu(LP2D_sparse)
     lu_obj_LV = lu(LV2D_sparse)
     @serial_region begin
-        println("finished LU decomposition initialisation   ", Dates.format(now(), dateformat"H:MM:SS"))
+        if global_rank[] == 0
+            println("finished LU decomposition initialisation   ", Dates.format(now(), dateformat"H:MM:SS"))
+        end
     end
     
     YY_arrays = calculate_YY_arrays(vpa,vperp,vpa_spectral,vperp_spectral)
     @serial_region begin
-        println("finished YY array calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+        if global_rank[] == 0
+            println("finished YY array calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+        end
     end
     nvpa, nvperp = vpa.n, vperp.n
     nc = nvpa*nvperp

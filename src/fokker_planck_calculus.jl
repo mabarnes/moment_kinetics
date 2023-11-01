@@ -31,7 +31,7 @@ using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_shared_float
 using ..calculus: derivative!
 using ..communication
-using ..communication: MPISharedArray
+using ..communication: MPISharedArray, global_rank
 using ..looping
 using moment_kinetics.gauss_legendre: get_QQ_local!
 using Dates
@@ -242,7 +242,9 @@ function init_Rosenbluth_potential_integration_weights!(G0_weights,G1_weights,H0
     x_vpa, w_vpa, x_vperp, w_vperp, x_legendre, w_legendre, x_laguerre, w_laguerre = setup_basic_quadratures(vpa,vperp)
     
     @serial_region begin
-        println("beginning weights calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+        if global_rank[] == 0
+            println("beginning weights calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+        end
     end
 
     # precalculated weights, integrating over Lagrange polynomials
@@ -279,7 +281,9 @@ function init_Rosenbluth_potential_integration_weights!(G0_weights,G1_weights,H0
     
     
     @serial_region begin
-        println("finished weights calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+        if global_rank[] == 0
+            println("finished weights calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+        end
     end
     return nothing
 end
@@ -291,7 +295,9 @@ Green's function.
 """
 function setup_basic_quadratures(vpa,vperp)
     @serial_region begin
-        println("setting up GL quadrature   ", Dates.format(now(), dateformat"H:MM:SS"))
+        if global_rank[] == 0
+            println("setting up GL quadrature   ", Dates.format(now(), dateformat"H:MM:SS"))
+        end
     end
     
     # get Gauss-Legendre points and weights on (-1,1)
@@ -338,7 +344,9 @@ function init_Rosenbluth_potential_boundary_integration_weights!(G0_weights,
     x_vpa, w_vpa, x_vperp, w_vperp, x_legendre, w_legendre, x_laguerre, w_laguerre = setup_basic_quadratures(vpa,vperp)
     
     @serial_region begin
-        println("beginning (boundary) weights calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+        if global_rank[] == 0
+            println("beginning (boundary) weights calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+        end
     end
 
     # precalculate weights, integrating over Lagrange polynomials
@@ -449,7 +457,9 @@ function init_Rosenbluth_potential_boundary_integration_weights!(G0_weights,
     # return the parallelisation status to serial
     begin_serial_region()
     @serial_region begin
-        println("finished (boundary) weights calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+        if global_rank[] == 0
+            println("finished (boundary) weights calculation   ", Dates.format(now(), dateformat"H:MM:SS"))
+        end
     end
     return nothing
 end
@@ -1320,7 +1330,9 @@ function assemble_matrix_operators_dirichlet_bc(vpa,vperp,vpa_spectral,vperp_spe
         
     impose_BC_at_zero_vperp = false
     @serial_region begin
-        println("begin elliptic operator assignment   ", Dates.format(now(), dateformat"H:MM:SS"))
+        if global_rank[] == 0
+            println("begin elliptic operator assignment   ", Dates.format(now(), dateformat"H:MM:SS"))
+        end
     end
     for ielement_vperp in 1:vperp.nelement_local
         get_QQ_local!(MMperp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"M")
@@ -1444,8 +1456,9 @@ function assemble_matrix_operators_dirichlet_bc(vpa,vperp,vpa_spectral,vperp_spe
         end
     end
     @serial_region begin
-        println("finished elliptic operator assignment   ", Dates.format(now(), dateformat"H:MM:SS"))
-        
+        if global_rank[] == 0
+            println("finished elliptic operator assignment   ", Dates.format(now(), dateformat"H:MM:SS"))
+        end
         if nc_global < 60
             print_matrix(MM2D,"MM2D",nc_global,nc_global)
             #print_matrix(KKpar2D,"KKpar2D",nc_global,nc_global)
@@ -1454,7 +1467,9 @@ function assemble_matrix_operators_dirichlet_bc(vpa,vperp,vpa_spectral,vperp_spe
             #print_matrix(LV2D,"LV",nc_global,nc_global)
         end
         # convert these matrices to sparse matrices
-        println("begin conversion to sparse matrices   ", Dates.format(now(), dateformat"H:MM:SS"))
+        if global_rank[] == 0
+            println("begin conversion to sparse matrices   ", Dates.format(now(), dateformat"H:MM:SS"))
+        end
     end
     MM2D_sparse = sparse(MM2D)
     KKpar2D_sparse = sparse(KKpar2D)
@@ -1481,7 +1496,9 @@ function assemble_matrix_operators_dirichlet_bc_plus_vperp_zero_gradient(vpa,vpe
     MMperp = Array{mk_float,2}(undef,vperp.ngrid,vperp.ngrid)
         
     @serial_region begin
-        println("begin elliptic operator assignment (zero gradient at vperp = 0)  ", Dates.format(now(), dateformat"H:MM:SS"))
+        if global_rank[] == 0
+            println("begin elliptic operator assignment (zero gradient at vperp = 0)  ", Dates.format(now(), dateformat"H:MM:SS"))
+        end
     end
     for ielement_vperp in 1:vperp.nelement_local
         get_QQ_local!(MMperp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"M")
@@ -1536,12 +1553,16 @@ function assemble_matrix_operators_dirichlet_bc_plus_vperp_zero_gradient(vpa,vpe
         end
     end
     @serial_region begin
-        println("finished elliptic operator assignment (zero gradient at vperp = 0)   ", Dates.format(now(), dateformat"H:MM:SS"))
+        if global_rank[] == 0
+            println("finished elliptic operator assignment (zero gradient at vperp = 0)   ", Dates.format(now(), dateformat"H:MM:SS"))
+        end
         if nc_global < 30
             print_matrix(MM2DZG,"MM2DZG",nc_global,nc_global)
         end
         # convert these matrices to sparse matrices
-        println("begin conversion to sparse matrices   ", Dates.format(now(), dateformat"H:MM:SS"))
+        if global_rank[] == 0
+            println("begin conversion to sparse matrices   ", Dates.format(now(), dateformat"H:MM:SS"))
+        end
     end
     MM2DZG_sparse = sparse(MM2DZG)
     return MM2DZG_sparse
@@ -1586,7 +1607,9 @@ function assemble_matrix_operators_dirichlet_bc_sparse(vpa,vperp,vpa_spectral,vp
         
     impose_BC_at_zero_vperp = false
     @serial_region begin
-        println("begin elliptic operator assignment   ", Dates.format(now(), dateformat"H:MM:SS"))
+        if global_rank[] == 0
+            println("begin elliptic operator assignment   ", Dates.format(now(), dateformat"H:MM:SS"))
+        end
     end
     for ielement_vperp in 1:nelement_vperp
         get_QQ_local!(MMperp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"M")
@@ -1733,8 +1756,9 @@ function assemble_matrix_operators_dirichlet_bc_sparse(vpa,vperp,vpa_spectral,vp
     PPpar2D_sparse = create_sparse_matrix(PPpar2D)
     MMparMNperp2D_sparse = create_sparse_matrix(MMparMNperp2D)
     @serial_region begin
-        println("finished elliptic operator constructor assignment   ", Dates.format(now(), dateformat"H:MM:SS"))
-        
+        if global_rank[] == 0
+            println("finished elliptic operator constructor assignment   ", Dates.format(now(), dateformat"H:MM:SS"))
+        end
         if nc_global < 60
             println("MM2D_sparse \n",MM2D_sparse)
             print_matrix(Array(MM2D_sparse),"MM2D_sparse",nc_global,nc_global)
@@ -1768,7 +1792,9 @@ function assemble_matrix_operators_dirichlet_bc_plus_vperp_zero_gradient_sparse(
     MMperp = Array{mk_float,2}(undef,vperp.ngrid,vperp.ngrid)
         
     @serial_region begin
-        println("begin elliptic operator assignment (zero gradient at vperp = 0)  ", Dates.format(now(), dateformat"H:MM:SS"))
+        if global_rank[] == 0
+            println("begin elliptic operator assignment (zero gradient at vperp = 0)  ", Dates.format(now(), dateformat"H:MM:SS"))
+        end
     end
     for ielement_vperp in 1:vperp.nelement_local
         get_QQ_local!(MMperp,ielement_vperp,vperp_spectral.lobatto,vperp_spectral.radau,vperp,"M")
@@ -1829,12 +1855,16 @@ function assemble_matrix_operators_dirichlet_bc_plus_vperp_zero_gradient_sparse(
         end
     end
     @serial_region begin
-        println("finished elliptic operator assignment (zero gradient at vperp = 0)   ", Dates.format(now(), dateformat"H:MM:SS"))
+        if global_rank[] == 0
+            println("finished elliptic operator assignment (zero gradient at vperp = 0)   ", Dates.format(now(), dateformat"H:MM:SS"))
+        end
         #if nc_global < 30
         #    print_matrix(MM2DZG,"MM2DZG",nc_global,nc_global)
         #end
         # convert these matrices to sparse matrices
-        println("begin conversion to sparse matrices   ", Dates.format(now(), dateformat"H:MM:SS"))
+        if global_rank[] == 0
+            println("begin conversion to sparse matrices   ", Dates.format(now(), dateformat"H:MM:SS"))
+        end
     end
     MM2DZG_sparse = create_sparse_matrix(MM2DZG)
     return MM2DZG_sparse
