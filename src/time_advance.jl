@@ -201,6 +201,12 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
         fields.phi0 .= fields.phi
     end
 
+    # Preliminary calculation of moment derivatives, to be used for initial version of
+    # 'speed' in advect objects, which are needed for boundary conditions on the
+    # distribution function which is then used to (possibly) re-calculate the moments
+    # after which the initial values of moment derivatives are re-calculated.
+    calculate_moment_derivatives!(moments, scratch[1], scratch_dummy, z, z_spectral, num_diss_params)
+
     ##
     # Charged particle advection only
     ##
