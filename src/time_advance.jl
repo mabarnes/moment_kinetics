@@ -283,6 +283,7 @@ function setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
         @serial_region begin
             for is ∈ 1:n_ion_species
                 @views update_speed_vperp!(vperp_advect[is], vpa, vperp, z, r)
+            end
         end
     end
     

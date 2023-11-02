@@ -10,7 +10,7 @@ using ..type_definitions: mk_float, mk_int
 using ..array_allocation: allocate_float, allocate_int
 using ..calculus: derivative!
 using ..chebyshev: scaled_chebyshev_grid, scaled_chebyshev_radau_grid, setup_chebyshev_pseudospectral
-using ..gauss_legendre: scaled_gauss_legendre_lobatto_grid, scaled_gauss_legendre_radau_grid, setup_gauss_legendre_pseudospectral
+using ..gauss_legendre: scaled_gauss_legendre_lobatto_grid, scaled_gauss_legendre_radau_grid, setup_gausslegendre_pseudospectral
 using ..quadrature: composite_simpson_weights
 using ..input_structs: advection_input
 
@@ -176,7 +176,7 @@ function define_coordinate(input, parallel_io::Bool=false)
     elseif input.discretization == "gausslegendre_pseudospectral" && coord.n > 1
         # create arrays needed for explicit GaussLegendre pseudospectral treatment in this
         # coordinate and create the matrices for differentiation
-        spectral = setup_gauss_legendre_pseudospectral(coord)
+        spectral = setup_gausslegendre_pseudospectral(coord)
         # obtain the local derivatives of the uniform grid with respect to the used grid
         derivative!(coord.duniform_dgrid, coord.uniform_grid, coord, spectral)
     else

@@ -10,6 +10,7 @@ export scaled_chebyshev_radau_grid
 export chebyshev_spectral_derivative!
 export chebyshev_info
 export chebyshev_base_info
+export chebyshev_derivative!
 
 using LinearAlgebra: mul!
 using FFTW
@@ -199,11 +200,9 @@ function scaled_chebyshev_radau_grid(ngrid, nelement_global, nelement_local, n,
 end
 
 """
-    elementwise_derivative!(coord, ff, chebyshev::chebyshev_info)
-
 Chebyshev transform f to get Chebyshev spectral coefficients and use them to calculate f'.
 """
-function elementwise_derivative!(coord, ff, chebyshev::chebyshev_info)
+function chebyshev_derivative!(df, ff, chebyshev, coord)
     df = coord.scratch_2d
     # define local variable nelement for convenience
     nelement = coord.nelement_local
@@ -296,16 +295,6 @@ function elementwise_derivative!(coord, ff, chebyshev::chebyshev_info)
     return nothing
 end
 
-"""
-    elementwise_derivative!(coord, ff, adv_fac, spectral::chebyshev_info)
-
-Chebyshev transform f to get Chebyshev spectral coefficients and use them to calculate f'.
-
-Note: Chebyshev derivative does not make use of upwinding information within each element.
-"""
-function elementwise_derivative!(coord, ff, adv_fac, spectral::chebyshev_info)
-    return elementwise_derivative!(coord, ff, spectral)
-end
 
 """
 """

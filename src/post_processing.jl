@@ -3266,28 +3266,32 @@ function plot_charged_pdf(run_name, run_name_label, vpa, vperp, z, r, z_local, r
         end
     end
     # make a gif animation of f(vpa,vperp,t) at a given (z,r) location
-    if pp.animate_f_vs_vperp_vpa && vperp.n
+    if pp.animate_f_vs_vperp_vpa
         pdf = load_distributed_charged_pdf_slice(run_name, nblocks,
                                                  itime_min:iskip:itime_max, n_species,
                                                  r_local, z_local, vperp, vpa; iz=iz0,
                                                  ir=ir0)
-        for is ∈ 1:n_species
-            anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-                @views heatmap(vperp.grid, vpa.grid, pdf[:,:,is,i], xlabel="vperp", ylabel="vpa", c = :deep, interpolation = :cubic)
-            end
-            outfile = string(run_name_label, "_pdf_vs_vperp_vpa", iz0_string, ir0_string, spec_string[is], ".gif")
-            trygif(anim, outfile, fps=5)
+        if vperp.n > 1
+            for is ∈ 1:n_species
+                anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+                    @views heatmap(vperp.grid, vpa.grid, pdf[:,:,is,i], xlabel="vperp", ylabel="vpa", c = :deep, interpolation = :cubic)
+                end
+                outfile = string(run_name_label, "_pdf_vs_vperp_vpa", iz0_string, ir0_string, spec_string[is], ".gif")
+                trygif(anim, outfile, fps=5)
 
-            @views heatmap(vperp.grid, vpa.grid, pdf[:,:,is,itime_max], xlabel="vperp", ylabel="vpa", c = :deep, interpolation = :cubic)
-            outfile = string(run_name_label, "_pdf_vs_vpa_vperp", ir0_string, iz0_string, spec_string, ".pdf")
-            savefig(outfile)
-        elseif pp.animate_f_vs_vperp_vpa && nvperp == 1
-            # make a gif animation of ϕ(r) at different times
-            anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
-                @views plot(vpa.grid, pdf[:,1,is,i], xlabel="vpa", ylabel="f")
+                @views heatmap(vperp.grid, vpa.grid, pdf[:,:,is,itime_max], xlabel="vperp", ylabel="vpa", c = :deep, interpolation = :cubic)
+                outfile = string(run_name_label, "_pdf_vs_vpa_vperp", ir0_string, iz0_string, spec_string[is], ".pdf")
+                savefig(outfile)
             end
-            outfile = string(run_name_label, "_pdf_vs_vpa", ir0_string, iz0_string, spec_string, ".gif")
-            gif(anim, outfile, fps=5)        
+        elseif vperp.n == 1
+            for is ∈ 1:n_species
+                # make a gif animation of ϕ(r) at different times
+                anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+                    @views plot(vpa.grid, pdf[:,1,is,i], xlabel="vpa", ylabel="f")
+                end
+                outfile = string(run_name_label, "_pdf_vs_vpa", ir0_string, iz0_string, spec_string[is], ".gif")
+                gif(anim, outfile, fps=5) 
+            end
         end
     end
     # make a gif animation of f(z,r,t) at a given (vpa,vperp) location
