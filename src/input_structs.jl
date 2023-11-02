@@ -62,6 +62,9 @@ mutable struct advance_info
     ionization_collisions_1V::Bool
     ionization_source::Bool
     krook_collisions::Bool
+    explicit_fp_collisions::Bool
+    explicit_weakform_fp_collisions::Bool
+    explicit_fp_F_FM_collisions::Bool
     numerical_dissipation::Bool
     source_terms::Bool
     continuity::Bool
@@ -126,6 +129,8 @@ mutable struct grid_input_mutable
     discretization::String
     # finite difference option (only used if discretization is "finite_difference")
     fd_option::String
+    # cheb option (only used if discretization is "chebyshev_pseudospectral")
+    cheb_option::String
     # boundary option
     bc::String
     # mutable struct containing advection speed options
@@ -155,6 +160,8 @@ struct grid_input
     discretization::String
     # finite difference option (only used if discretization is "finite_difference")
     fd_option::String
+    # cheb option (only used if discretization is "chebyshev_pseudospectral")
+    cheb_option::String
     # boundary option
     bc::String
     # struct containing advection speed options
@@ -308,6 +315,13 @@ mutable struct collisions_input
     krook_collision_frequency_prefactor::mk_float
     # Setting to switch between different options for Krook collision operator
     krook_collisions_option::String
+    # Fokker-Planck operator choice
+    weakform_fokker_planck::Bool
+    # ion-ion self collision frequency
+    nuii::mk_float
+    # ion-ion self collision frequency with C[F_s,F_Ms'] operator
+    nuii_pitch::mk_float
+    # numerical conserving terms (for strong form Fokker-Planck operator only)
 end
 
 """
@@ -359,8 +373,12 @@ struct pp_input
     plot_upar0_vs_t::Bool
     # if plot_ppar0_vs_t = true, create plots of species ppar(z0) vs time
     plot_ppar0_vs_t::Bool
+    # if plot_pperp0_vs_t = true, create plots of species pperp(z0) vs time
+    plot_pperp0_vs_t::Bool
     # if plot_vth0_vs_t = true, create plots of species vth(z0) vs time
     plot_vth0_vs_t::Bool
+    # if plot_dSdt0_vs_t = true, create plots of species vth(z0) vs time
+    plot_dSdt0_vs_t::Bool
     # if plot_qpar0_vs_t = true, create plots of species qpar(z0) vs time
     plot_qpar0_vs_t::Bool
     # if plot_dens_vs_z_t = true, create plot of species density vs z and time

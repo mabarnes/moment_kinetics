@@ -17,14 +17,18 @@ const plot_phi0_vs_t = true
 const plot_phi_vs_z_t = true
 # if animate_phi_vs_z = true, create animation of phi(z) at different time slices
 const animate_phi_vs_z = true
-# if plot_dens0_vs_t = true, create plots of species density(z0) vs time
+# if plot_dens0_vs_t = true, create plots of species density(z0,r0) vs time
 const plot_dens0_vs_t = true
-# if plot_upar0_vs_t = true, create plots of species upar(z0) vs time
-const plot_upar0_vs_t = false
-# if plot_ppar0_vs_t = true, create plots of species ppar(z0) vs time
-const plot_ppar0_vs_t = false
-# if plot_vth0_vs_t = true, create plots of species vth(z0) vs time
-const plot_vth0_vs_t = false
+# if plot_upar0_vs_t = true, create plots of species upar(z0,r0) vs time
+const plot_upar0_vs_t = true
+# if plot_ppar0_vs_t = true, create plots of species ppar(z0,r0) vs time
+const plot_ppar0_vs_t = true
+# if plot_pperp0_vs_t = true, create plots of species pperp(z0,r0) vs time
+const plot_pperp0_vs_t = true
+# if plot_vth0_vs_t = true, create plots of species vth(z0,r0) vs time
+const plot_vth0_vs_t = true
+# if plot_dSdt0_vs_t = true, create plots of species dSdt(z0,r0) vs time
+const plot_dSdt0_vs_t = true
 # if plot_qpar0_vs_t = true, create plots of species qpar(z0) vs time
 const plot_qpar0_vs_t = false
 # if plot_dens_vs_z_t = true, create heatmap of species density vs z and time
@@ -74,7 +78,7 @@ const animate_f_vs_vperp_z =  true
 # if animate_f_vs_vperp_r = true, create animation of f(vperp,r) at different time slices
 const animate_f_vs_vperp_r = false
 # if animate_f_vs_vperp_vpa = true, create animation of f(vperp,vpa) at different time slices
-const animate_f_vs_vperp_vpa = false
+const animate_f_vs_vperp_vpa = true
 # if animate_f_vs_r_z = true, create animation of f(r,z) at different time slices
 const animate_f_vs_r_z = true
 # if animate_f_vs_vz_z = true, create animation of f(vz,z) at different time slices
@@ -154,7 +158,8 @@ const diagnostics_chodura_t = false
 const diagnostics_chodura_r = false
 
 pp = pp_input(calculate_frequencies, plot_phi0_vs_t, plot_phi_vs_z_t, animate_phi_vs_z,
-    plot_dens0_vs_t, plot_upar0_vs_t, plot_ppar0_vs_t, plot_vth0_vs_t, plot_qpar0_vs_t,
+    plot_dens0_vs_t, plot_upar0_vs_t, plot_ppar0_vs_t, plot_pperp0_vs_t,
+    plot_vth0_vs_t, plot_dSdt0_vs_t, plot_qpar0_vs_t,
     plot_dens_vs_z_t, plot_upar_vs_z_t, plot_ppar_vs_z_t, plot_Tpar_vs_z_t,
     plot_qpar_vs_z_t, animate_dens_vs_z, animate_upar_vs_z, animate_ppar_vs_z,
     animate_Tpar_vs_z, animate_vth_vs_z, animate_qpar_vs_z, plot_f_unnormalized_vs_vpa_z,

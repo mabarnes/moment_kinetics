@@ -19,10 +19,11 @@ include("moment_kinetics_structs.jl")
 include("looping.jl")
 include("array_allocation.jl")
 include("interpolation.jl")
-include("calculus.jl")
 include("clenshaw_curtis.jl")
+include("gauss_legendre.jl")
 include("chebyshev.jl")
 include("finite_differences.jl")
+include("calculus.jl")
 include("quadrature.jl")
 include("hermite_spline_interpolation.jl")
 include("derivatives.jl")
@@ -37,6 +38,9 @@ include("bgk.jl")
 include("manufactured_solns.jl") # MRH Here?
 include("initial_conditions.jl")
 include("moment_constraints.jl")
+include("fokker_planck_test.jl")
+include("fokker_planck_calculus.jl")
+include("fokker_planck.jl")
 include("advection.jl")
 include("vpa_advection.jl")
 include("z_advection.jl")
@@ -374,7 +378,7 @@ function setup_moment_kinetics(input_dict::Dict;
     # the main time advance loop -- including normalisation of f by density if requested
 
     moments, fields, spectral_objects, advect_objects,
-    scratch, advance, scratch_dummy, manufactured_source_list =
+    scratch, advance, fp_arrays, scratch_dummy, manufactured_source_list =
         setup_time_advance!(pdf, vz, vr, vzeta, vpa, vperp, z, r, vz_spectral,
             vr_spectral, vzeta_spectral, vpa_spectral, vperp_spectral, z_spectral,
             r_spectral, composition, drive_input, moments, t_input, collisions, species,
@@ -401,7 +405,7 @@ function setup_moment_kinetics(input_dict::Dict;
     return pdf, scratch, code_time, t_input, vz, vr, vzeta, vpa, vperp, gyrophase, z, r,
            moments, fields, spectral_objects, advect_objects,
            composition, collisions, geometry, boundary_distributions,
-           num_diss_params, advance, scratch_dummy, manufactured_source_list,
+           num_diss_params, advance, fp_arrays, scratch_dummy, manufactured_source_list,
            ascii_io, io_moments, io_dfns
 end
 

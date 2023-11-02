@@ -4,7 +4,8 @@ module numerical_dissipation
 
 export setup_numerical_dissipation, vpa_boundary_buffer_decay!,
        vpa_boundary_buffer_diffusion!, vpa_dissipation!, z_dissipation!,
-       r_dissipation!, force_minimum_pdf_value!, force_minimum_pdf_value_neutral!
+       r_dissipation!, force_minimum_pdf_value!, force_minimum_pdf_value_neutral!,
+       vperp_dissipation!
 
 using Base.Iterators: flatten
 
@@ -18,6 +19,7 @@ Base.@kwdef struct numerical_dissipation_parameters
     vpa_boundary_buffer_diffusion_coefficient::mk_float = -1.0
     vpa_dissipation_coefficient::mk_float = -1.0
     vz_dissipation_coefficient::mk_float = -1.0
+    vperp_dissipation_coefficient::mk_float = -1.0
     z_dissipation_coefficient::mk_float = -1.0
     r_dissipation_coefficient::mk_float = -1.0
     moment_dissipation_coefficient::mk_float = -1.0
@@ -242,7 +244,7 @@ function vpa_dissipation!(f_out, f_in, vpa, spectral::T_spectral, dt,
         num_diss_params::numerical_dissipation_parameters) where T_spectral
 
     diffusion_coefficient = num_diss_params.vpa_dissipation_coefficient
-    if diffusion_coefficient <= 0.0
+    if diffusion_coefficient <= 0.0 || vpa.n == 1
         return nothing
     end
 
@@ -258,8 +260,13 @@ function vpa_dissipation!(f_out, f_in, vpa, spectral::T_spectral, dt,
     #     # expected convergence of Chebyshev pseudospectral scheme
     #     diffusion_coefficient *= (vpa.L/vpa.nelement)^(vpa.ngrid-1)
     # end
-
-    @loop_s_r_z_vperp is ir iz ivperp begin
+    if vpa.discretization == "gausslegendre_pseudospectral"
+        @loop_s_r_z_vperp is ir iz ivperp begin
+           @views second_derivative!(vpa.scratch2, f_in[:,ivperp,iz,ir,is], vpa, spectral)
+           @views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch2 
+        end
+    else
+        @loop_s_r_z_vperp is ir iz ivperp begin
         # # Don't want to dissipate the fluid moments, so divide out the Maxwellian, then
         # # diffuse the result, i.e.
         # # df/dt += diffusion_coefficient * f_M d2(f/f_M)/dvpa2
@@ -284,9 +291,39 @@ function vpa_dissipation!(f_out, f_in, vpa, spectral::T_spectral, dt,
         # derivative!(vpa.scratch3, vpa.scratch2, vpa, spectral, Val(2))
         # @views @. f_out[:,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch *
         #                                vpa.scratch3
-        vpa.scratch2 .= 1.0 # placeholder for Q in d / d vpa ( Q d f / d vpa)
-        @views second_derivative!(vpa.scratch, f_in[:,ivperp,iz,ir,is], vpa.scratch2, vpa, spectral)
-        @views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch
+            vpa.scratch2 .= 1.0 # placeholder for Q in d / d vpa ( Q d f / d vpa)
+            @views second_derivative!(vpa.scratch, f_in[:,ivperp,iz,ir,is], vpa.scratch2, vpa, spectral)
+            @views @. f_out[:,ivperp,iz,ir,is] += dt * diffusion_coefficient * vpa.scratch
+        end
+    end
+    return nothing
+end
+
+"""
+Add diffusion in the vperp direction to suppress oscillations
+
+Disabled by default.
+
+The diffusion coefficient is set in the input TOML file by the parameter
+```
+[numerical_dissipation]
+vperp_dissipation_coefficient = 0.1
+```
+"""
+function vperp_dissipation!(f_out, f_in, vperp, spectral::T_spectral, dt,
+        num_diss_params::numerical_dissipation_parameters) where T_spectral
+    
+    begin_s_r_z_vpa_region()
+
+    diffusion_coefficient = num_diss_params.vperp_dissipation_coefficient
+    if diffusion_coefficient <= 0.0 || vperp.n == 1
+        return nothing
+    end
+    
+    @loop_s_r_z_vpa is ir iz ivpa begin
+        @views derivative!(vperp.scratch, f_in[ivpa,:,iz,ir,is], vperp, spectral)
+        @views derivative!(vperp.scratch2, vperp.scratch, vperp, spectral)
+        @views @. f_out[ivpa,:,iz,ir,is] += dt * diffusion_coefficient * vperp.scratch2
     end
 
     return nothing
@@ -312,7 +349,7 @@ function z_dissipation!(f_out, f_in, z, z_spectral::T_spectral, dt,
         num_diss_params::numerical_dissipation_parameters, scratch_dummy) where T_spectral
 
     diffusion_coefficient = num_diss_params.z_dissipation_coefficient
-    if diffusion_coefficient <= 0.0
+    if diffusion_coefficient <= 0.0 || z.n == 1
         return nothing
     end
 

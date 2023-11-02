@@ -489,6 +489,7 @@ using IfElse
         Bzed = geometry.Bzed
         Bmag = geometry.Bmag
         rhostar = geometry.rhostar
+        nu_krook = collisions.nuii_krook
         #exceptions for cases with missing terms 
         if composition.n_neutral_species > 0
             cx_frequency = collisions.charge_exchange
@@ -511,7 +512,15 @@ using IfElse
         # the ion source to maintain the manufactured solution
         Si = ( Dt(dfni) + ( vpa * (Bzed/Bmag) - 0.5*rhostar*Er ) * Dz(dfni) + ( 0.5*rhostar*Ez*rfac ) * Dr(dfni) + ( 0.5*Ez*Bzed/Bmag ) * Dvpa(dfni)
                + cx_frequency*( densn*dfni - densi*gav_dfnn )  - ionization_frequency*dense*gav_dfnn)
-
+        if nu_krook > 0.0
+            if vperp_coord.n > 1
+                pvth  = 3
+            else 
+                pvth = 1
+            end
+            FMaxwellian = (densi/vthi^pvth)*exp( -( ( vpa-upari)^2 + vperp^2 )/vthi^2)
+            Si += - nu_krook*(FMaxwellian - dfni)
+        end
         include_num_diss_in_MMS = true
         if num_diss_params.vpa_dissipation_coefficient > 0.0 && include_num_diss_in_MMS
             Si += - num_diss_params.vpa_dissipation_coefficient*Dvpa(Dvpa(dfni))

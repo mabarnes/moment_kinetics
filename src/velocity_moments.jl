@@ -30,6 +30,8 @@ export get_upar
 export get_ppar
 export get_pperp
 export get_pressure
+export get_qpar
+export get_rmom
 
 using ..type_definitions: mk_float
 using ..array_allocation: allocate_shared_float, allocate_bool, allocate_float
@@ -103,6 +105,8 @@ struct moments_charged_substruct
     dqpar_dz::Union{MPISharedArray{mk_float,3},Nothing}
     # this is the z-derivative of the thermal speed based on the parallel temperature Tpar = ppar/dens: vth = sqrt(2*Tpar/m)
     dvth_dz::Union{MPISharedArray{mk_float,3},Nothing}
+    # this is the entropy production dS/dt = - int (ln f sum_s' C_ss' [f_s,f_s']) d^3 v
+    dSdt::MPISharedArray{mk_float,3}
 end
 
 """
@@ -258,12 +262,13 @@ function create_moments_charged(nz, nr, n_species, evolve_density, evolve_upar,
         dvth_dz = nothing
     end
     
+    entropy_production = allocate_shared_float(nz, nr, n_species)
     # return struct containing arrays needed to update moments
     return moments_charged_substruct(density, density_updated, parallel_flow,
         parallel_flow_updated, parallel_pressure, parallel_pressure_updated,perpendicular_pressure,
         parallel_heat_flux, parallel_heat_flux_updated, thermal_speed, v_norm_fac,
         ddens_dz_upwind, d2dens_dz2, dupar_dz, dupar_dz_upwind, d2upar_dz2, dppar_dz,
-        dppar_dz_upwind, d2ppar_dz2, dqpar_dz, dvth_dz)
+        dppar_dz_upwind, d2ppar_dz2, dqpar_dz, dvth_dz, entropy_production)
 end
 
 # neutral particles have natural mean velocities 
@@ -458,7 +463,6 @@ the incoming pdf is the un-normalized pdf that satisfies int dv pdf = density
 """
 function update_upar!(upar, upar_updated, density, ppar, pdf, vpa, vperp, z, r,
                       composition, evolve_density, evolve_ppar)
-
     begin_s_r_z_region()
 
     n_species = size(pdf,5)
@@ -478,10 +482,12 @@ calculate the updated parallel flow (upar) for a given species
 """
 function update_upar_species!(upar, density, ppar, ff, vpa, vperp, z, r, evolve_density,
                               evolve_ppar)
+    @boundscheck vpa.n == size(ff, 1) || throw(BoundsError(ff))
     @boundscheck vperp.n == size(ff, 2) || throw(BoundsError(ff))
     @boundscheck z.n == size(ff, 3) || throw(BoundsError(ff))
     @boundscheck r.n == size(ff, 4) || throw(BoundsError(ff))
     @boundscheck z.n == size(upar, 1) || throw(BoundsError(upar))
+    @boundscheck r.n == size(upar, 2) || throw(BoundsError(upar))
     if evolve_density && evolve_ppar
         # this is the case where the density and parallel pressure are evolved
         # separately from the normalized pdf, g_s = (√π f_s vth_s / n_s); the vpa
@@ -681,6 +687,7 @@ calculate the updated parallel heat flux (qpar) for a given species
 """
 function update_qpar_species!(qpar, density, upar, vth, ff, vpa, vperp, z, r, evolve_density,
                               evolve_upar, evolve_ppar)
+    @boundscheck r.n == size(ff, 4) || throw(BoundsError(ff))
     @boundscheck z.n == size(ff, 3) || throw(BoundsError(ff))
     @boundscheck vperp.n == size(ff, 2) || throw(BoundsError(ff))
     @boundscheck vpa.n == size(ff, 1) || throw(BoundsError(ff))
@@ -871,6 +878,28 @@ function update_moments_neutral!(moments, pdf, vz, vr, vzeta, z, r, composition)
         end
     end
     return nothing
+end
+
+function get_qpar_1V(ff, vpa, vperp, upar)
+    @. vpa.scratch = vpa.grid - upar
+    return integrate_over_vspace(@view(ff[:,:]), vpa.scratch, 3, vpa.wgts, vperp.grid, 0, vperp.wgts)
+end
+
+function get_qpar(ff, vpa, vperp, upar, dummy_vpavperp)
+    @loop_vperp_vpa ivperp ivpa begin
+        wpar = vpa.grid[ivpa]-upar
+        dummy_vpavperp[ivpa,ivperp] = ff[ivpa,ivperp]*wpar*( wpar^2 + vperp.grid[ivperp]^2)
+    end
+    return integrate_over_vspace(@view(dummy_vpavperp[:,:]), vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
+end
+
+# generalised moment useful for computing numerical conserving terms in the collision operator
+function get_rmom(ff, vpa, vperp, upar, dummy_vpavperp)
+    @loop_vperp_vpa ivperp ivpa begin
+        wpar = vpa.grid[ivpa]-upar
+        dummy_vpavperp[ivpa,ivperp] = ff[ivpa,ivperp]*( wpar^2 + vperp.grid[ivperp]^2)^2
+    end
+    return integrate_over_vspace(@view(dummy_vpavperp[:,:]), vpa.grid, 0, vpa.wgts, vperp.grid, 0, vperp.wgts)
 end
 
 """

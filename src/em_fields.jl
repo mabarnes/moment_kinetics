@@ -110,9 +110,9 @@ function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral, sc
     ## calculate the electric fields after obtaining phi
     #Er = - d phi / dr 
     if r.n > 1
-        @views derivative_r!(fields.Er,-fields.phi,
-                scratch_dummy.buffer_zs_1[:,1], scratch_dummy.buffer_zs_2[:,1],
-                scratch_dummy.buffer_zs_3[:,1], scratch_dummy.buffer_zs_4[:,1],
+        derivative_r!(fields.Er,-fields.phi,
+                scratch_dummy.buffer_z_1, scratch_dummy.buffer_z_2,
+                scratch_dummy.buffer_z_3, scratch_dummy.buffer_z_4,
                 r_spectral,r)
         if z.irank == 0 && fields.force_Er_zero_at_wall
             fields.Er[1,:] .= 0.0
@@ -127,10 +127,16 @@ function update_phi!(fields, fvec, z, r, composition, z_spectral, r_spectral, sc
         end
     end
     #Ez = - d phi / dz
-    @views derivative_z!(fields.Ez,-fields.phi,
-                scratch_dummy.buffer_rs_1[:,1], scratch_dummy.buffer_rs_2[:,1],
-                scratch_dummy.buffer_rs_3[:,1], scratch_dummy.buffer_rs_4[:,1],
+    if z.n > 1
+        derivative_z!(fields.Ez,-fields.phi,
+                scratch_dummy.buffer_r_1, scratch_dummy.buffer_r_2,
+                scratch_dummy.buffer_r_3, scratch_dummy.buffer_r_4,
                 z_spectral,z)
+    else
+        @serial_region begin
+            fields.Ez[:,:] .= 0.0
+        end
+    end
 
 end
 

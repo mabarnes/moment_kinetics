@@ -12,6 +12,7 @@ export allocate_global_zr_charged_moments
 export allocate_global_zr_neutral_moments
 export allocate_global_zr_fields
 export get_coords_nelement
+export get_coords_ngrid
 
 # Next three lines only used for workaround needed by plot_unnormalised()
 using PyCall
@@ -226,7 +227,8 @@ function allocate_global_zr_charged_moments(nz_global,nr_global,n_ion_species,nt
     perpendicular_pressure = allocate_float(nz_global,nr_global,n_ion_species,ntime)
     parallel_heat_flux = allocate_float(nz_global,nr_global,n_ion_species,ntime)
     thermal_speed = allocate_float(nz_global,nr_global,n_ion_species,ntime)
-    return density, parallel_flow, parallel_pressure, perpendicular_pressure, parallel_heat_flux, thermal_speed
+    entropy_production = allocate_float(nz_global,nr_global,n_ion_species,ntime)
+    return density, parallel_flow, parallel_pressure, perpendicular_pressure, parallel_heat_flux, thermal_speed, entropy_production
 end
 
 function allocate_global_zr_charged_dfns(nvpa_global, nvperp_global, nz_global, nr_global,
@@ -262,6 +264,18 @@ function get_coords_nelement(scan_input)
     vr_nelement = get(scan_input, "vr_nelement", 1)
     vzeta_nelement = get(scan_input, "vzeta_nelement", 1)
     return z_nelement, r_nelement, vpa_nelement, vperp_nelement, vz_nelement, vr_nelement, vzeta_nelement
+end
+
+function get_coords_ngrid(scan_input)
+    # use 1 as default because these values should be set in input .toml
+    z_ngrid = get(scan_input, "z_ngrid", 1)
+    r_ngrid = get(scan_input, "r_ngrid", 1)
+    vpa_ngrid = get(scan_input, "vpa_ngrid", 1)
+    vperp_ngrid = get(scan_input, "vperp_ngrid", 1)
+    vz_ngrid = get(scan_input, "vz_ngrid", 1)
+    vr_ngrid = get(scan_input, "vr_ngrid", 1)
+    vzeta_ngrid = get(scan_input, "vzeta_ngrid", 1)
+    return z_ngrid, r_ngrid, vpa_ngrid, vperp_ngrid, vz_ngrid, vr_ngrid, vzeta_ngrid
 end
 
 function get_geometry_and_composition(scan_input,n_ion_species,n_neutral_species)
@@ -489,7 +503,7 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
                                              Tuple(this_z.n_global for this_z ∈ z),
                                              Tuple(this_r.n_global for this_r ∈ r),
                                              ntime)
-    density, parallel_flow, parallel_pressure, perpendicular_pressure, parallel_heat_flux, thermal_speed =
+    density, parallel_flow, parallel_pressure, perpendicular_pressure, parallel_heat_flux, thermal_speed, entropy_production =
         get_tuple_of_return_values(allocate_global_zr_charged_moments,
                                    Tuple(this_z.n_global for this_z ∈ z),
                                    Tuple(this_r.n_global for this_r ∈ r),
@@ -541,6 +555,10 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
                                Tuple(this_z.n for this_z ∈ z),
                                Tuple(this_r.n for this_r ∈ r), iskip)
     get_tuple_of_return_values(read_distributed_zr_data!, thermal_speed, "thermal_speed",
+                               run_names, "moments", nblocks,
+                               Tuple(this_z.n for this_z ∈ z),
+                               Tuple(this_r.n for this_r ∈ r), iskip)
+    get_tuple_of_return_values(read_distributed_zr_data!, entropy_production, "entropy_production",
                                run_names, "moments", nblocks,
                                Tuple(this_z.n for this_z ∈ z),
                                Tuple(this_r.n for this_r ∈ r), iskip)
@@ -1071,6 +1089,14 @@ function analyze_and_plot_data(prefix...; run_index=nothing)
                          ivpa0, ivperp0, iz0, ir0, spec_type, n_ion_species, ntime_pdfs,
                          nblocks, itime_min_pdfs, itime_max_pdfs, iskip_pdfs,
                          nwrite_movie_pdfs, pp)
+        Maxwellian_diagnostic = true
+        if Maxwellian_diagnostic
+            pressure = copy(parallel_pressure)
+            @. pressure = (2.0*perpendicular_pressure + parallel_pressure)/3.0
+            plot_Maxwellian_diagnostic(ff[:,:,iz0,ir0,:,:], density[iz0,ir0,:,:],
+             parallel_flow[iz0,ir0,:,:], thermal_speed[iz0,ir0,:,:], vpa_local, vpa_local_wgts, 
+             vperp_local, vperp_local_wgts, time, iz0, ir0, run_name, n_ion_species)
+        end
         # make plots and animations of the neutral pdf
         if n_neutral_species > 0
             spec_type = "neutral"
@@ -3168,6 +3194,7 @@ function plot_charged_pdf(run_name, run_name_label, vpa, vperp, z, r, z_local, r
     ivperp0_string = string("_ivperp0", string(ivperp0))
     iz0_string = string("_iz0", string(iz0))
     ir0_string = string("_ir0", string(ir0))
+    nvperp = size(vperp,1)
     # create animations of the ion pdf
     if n_species > 1
         spec_string = [string("_", spec_type, "_spec", string(is)) for is ∈ 1:n_species]
@@ -3239,7 +3266,7 @@ function plot_charged_pdf(run_name, run_name_label, vpa, vperp, z, r, z_local, r
         end
     end
     # make a gif animation of f(vpa,vperp,t) at a given (z,r) location
-    if pp.animate_f_vs_vperp_vpa
+    if pp.animate_f_vs_vperp_vpa && vperp.n
         pdf = load_distributed_charged_pdf_slice(run_name, nblocks,
                                                  itime_min:iskip:itime_max, n_species,
                                                  r_local, z_local, vperp, vpa; iz=iz0,
@@ -3250,6 +3277,17 @@ function plot_charged_pdf(run_name, run_name_label, vpa, vperp, z, r, z_local, r
             end
             outfile = string(run_name_label, "_pdf_vs_vperp_vpa", iz0_string, ir0_string, spec_string[is], ".gif")
             trygif(anim, outfile, fps=5)
+
+            @views heatmap(vperp.grid, vpa.grid, pdf[:,:,is,itime_max], xlabel="vperp", ylabel="vpa", c = :deep, interpolation = :cubic)
+            outfile = string(run_name_label, "_pdf_vs_vpa_vperp", ir0_string, iz0_string, spec_string, ".pdf")
+            savefig(outfile)
+        elseif pp.animate_f_vs_vperp_vpa && nvperp == 1
+            # make a gif animation of ϕ(r) at different times
+            anim = @animate for i ∈ itime_min:nwrite_movie:itime_max
+                @views plot(vpa.grid, pdf[:,1,is,i], xlabel="vpa", ylabel="f")
+            end
+            outfile = string(run_name_label, "_pdf_vs_vpa", ir0_string, iz0_string, spec_string, ".gif")
+            gif(anim, outfile, fps=5)        
         end
     end
     # make a gif animation of f(z,r,t) at a given (vpa,vperp) location
@@ -3423,9 +3461,11 @@ function plot_fields_2D(phi, Ez, Er, time, z, r, iz0, ir0,
     println("done.")
 end
 
-function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time, z, r, iz0, ir0, n_ion_species,
+function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, perpendicular_pressure, thermal_speed, 
+    entropy_production, time, z, r, iz0, ir0, n_ion_species,
     itime_min, itime_max, nwrite_movie, run_name, pp)
     nr = size(r,1)
+    ntime = size(time,1)
     print("Plotting charged moments data...")
     for is in 1:n_ion_species
 		description = "_ion_spec"*string(is)*"_"
@@ -3456,7 +3496,14 @@ function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time
 			outfile = string(run_name, "_density"*description*"_vs_r_z.pdf")
 			trysavefig(outfile)
 		end
-		
+		if pp.plot_dens0_vs_t
+            @views plot(time, density[iz0,ir0,is,:], xlabel=L"t/ (L_{ref}/c_{ref})", ylabel=L"n_i", label = "")
+			outfile = string(run_name, "_density"*description*"(iz0,ir0)_vs_t.pdf")
+			savefig(outfile)
+            @views plot(time, density[iz0,ir0,is,:] .- density[iz0,ir0,is,1], xlabel=L"t/ (L_{ref}/c_{ref})", ylabel=L"n_i(t) - n_i(0)", label = "")
+			outfile = string(run_name, "_delta_density"*description*"(iz0,ir0)_vs_t.pdf")
+			savefig(outfile)
+        end
 		# the parallel flow
 		parallel_flowmin = minimum(parallel_flow[:,:,is,:])
 		parallel_flowmax = maximum(parallel_flow)
@@ -3484,7 +3531,14 @@ function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time
 			outfile = string(run_name, "_parallel_flow"*description*"_vs_r_z.pdf")
 			trysavefig(outfile)
 		end
-		
+		if pp.plot_upar0_vs_t
+            @views plot(time, parallel_flow[iz0,ir0,is,:], xlabel=L"t/ (L_{ref}/c_{ref})", ylabel=L"u_{i\|\|}(t)", label = "")
+			outfile = string(run_name, "_parallel_flow"*description*"(iz0,ir0)_vs_t.pdf")
+			savefig(outfile)
+            @views plot(time, parallel_flow[iz0,ir0,is,:] .- parallel_flow[iz0,ir0,is,1], xlabel=L"t/ (L_{ref}/c_{ref})", ylabel=L"u_{i\|\|}(t) - u_{i\|\|}(0)", label = "")
+			outfile = string(run_name, "_delta_parallel_flow"*description*"(iz0,ir0)_vs_t.pdf")
+			savefig(outfile)
+        end
 		# the parallel pressure
 		parallel_pressuremin = minimum(parallel_pressure[:,:,is,:])
 		parallel_pressuremax = maximum(parallel_pressure)
@@ -3540,10 +3594,113 @@ function plot_charged_moments_2D(density, parallel_flow, parallel_pressure, time
                     outfile = string(run_name, "_temperature"*description*"_vs_r_z.pdf")
                     trysavefig(outfile)
                 end
+        if pp.plot_ppar0_vs_t
+            @views plot(time, parallel_pressure[iz0,ir0,is,:], xlabel=L"t/ (L_{ref}/c_{ref})", ylabel=L"p_{i\|\|}(t)", label = "")
+			outfile = string(run_name, "_parallel_pressure"*description*"(iz0,ir0)_vs_t.pdf")
+			savefig(outfile)
+            @views plot(time, parallel_pressure[iz0,ir0,is,:] .- parallel_pressure[iz0,ir0,is,1], xlabel=L"t/ (L_{ref}/c_{ref})", ylabel=L"p_{i\|\|}(t) - p_{i\|\|}(0)", label = "")
+			outfile = string(run_name, "_delta_parallel_pressure"*description*"(iz0,ir0)_vs_t.pdf")
+			savefig(outfile)
+        end
+        # the perpendicular pressure
+        if pp.plot_pperp0_vs_t
+            @views plot(time, perpendicular_pressure[iz0,ir0,is,:], xlabel=L"t/ (L_{ref}/c_{ref})", ylabel=L"p_{i\perp}(t)", label = "")
+			outfile = string(run_name, "_perpendicular_pressure"*description*"(iz0,ir0)_vs_t.pdf")
+			savefig(outfile)
+            @views plot(time, perpendicular_pressure[iz0,ir0,is,:] .- perpendicular_pressure[iz0,ir0,is,1], xlabel=L"t/ (L_{ref}/c_{ref})", ylabel=L"p_{i\perp}(t) - p_{i\perp}(0)", label = "")
+			outfile = string(run_name, "_delta_perpendicular_pressure"*description*"(iz0,ir0)_vs_t.pdf")
+			savefig(outfile)
+        end
+        # the total pressure
+        if pp.plot_ppar0_vs_t && pp.plot_pperp0_vs_t
+            @views plot([time, time, time] , 
+            [parallel_pressure[iz0,ir0,is,:], perpendicular_pressure[iz0,ir0,is,:], 
+            (2.0/3.0).*perpendicular_pressure[iz0,ir0,is,:] .+ (1.0/3.0).*parallel_pressure[iz0,ir0,is,:]],
+            xlabel=L"t/ (L_{ref}/c_{ref})", ylabel="", label = [L"p_{i\|\|}(t)" L"p_{i\perp}(t)" L"p_{i}(t)"])
+			outfile = string(run_name, "_pressures"*description*"(iz0,ir0)_vs_t.pdf")
+			savefig(outfile)
+            @views plot([time, time, time] , 
+            [parallel_pressure[iz0,ir0,is,:] .- parallel_pressure[iz0,ir0,is,1], perpendicular_pressure[iz0,ir0,is,:] .- perpendicular_pressure[iz0,ir0,is,1], 
+            (2.0/3.0).*(perpendicular_pressure[iz0,ir0,is,:] .- perpendicular_pressure[iz0,ir0,is,1]).+
+            (1.0/3.0).*(parallel_pressure[iz0,ir0,is,:] .- parallel_pressure[iz0,ir0,is,1])],
+            xlabel=L"t/ (L_{ref}/c_{ref})", ylabel="", label = [L"p_{i\|\|}(t) - p_{i\|\|}(0)" L"p_{i\perp}(t) - p_{i\perp}(0)" L"p_{i}(t) - p_{i}(0)"])
+			outfile = string(run_name, "_delta_pressures"*description*"(iz0,ir0)_vs_t.pdf")
+			savefig(outfile)
+            @views plot([time] , 
+            [(2.0/3.0).*perpendicular_pressure[iz0,ir0,is,:] .+ (1.0/3.0).*parallel_pressure[iz0,ir0,is,:]],
+            xlabel=L"t/ (L_{ref}/c_{ref})", ylabel=L"p_{i}(t)", label = "")
+			outfile = string(run_name, "_pressure"*description*"(iz0,ir0)_vs_t.pdf")
+			savefig(outfile)
+            @views plot([time] , 
+            [(2.0/3.0).*(perpendicular_pressure[iz0,ir0,is,:] .- perpendicular_pressure[iz0,ir0,is,1]).+
+            (1.0/3.0).*(parallel_pressure[iz0,ir0,is,:] .- parallel_pressure[iz0,ir0,is,1])],
+            xlabel=L"t/ (L_{ref}/c_{ref})", ylabel=L"p_{i}(t) - p_{i}(0)", label = "")
+			outfile = string(run_name, "_delta_pressure"*description*"(iz0,ir0)_vs_t.pdf")
+			savefig(outfile)
+        end
+        # the thermal speed
+        if pp.plot_vth0_vs_t
+            @views plot(time, thermal_speed[iz0,ir0,is,:], xlabel=L"t / (L_{ref}/c_{ref})", ylabel=L"v_{i,th}(t)", label = "")
+			outfile = string(run_name, "_thermal_speed"*description*"(iz0,ir0)_vs_t.pdf")
+			savefig(outfile)
+            @views plot(time, thermal_speed[iz0,ir0,is,:] .- thermal_speed[iz0,ir0,is,1], xlabel=L"t/ (L_{ref}/c_{ref})", ylabel=L"v_{i,th}(t) - v_{i,th}(0)", label = "")
+			outfile = string(run_name, "_delta_thermal_speed"*description*"(iz0,ir0)_vs_t.pdf")
+			savefig(outfile)
+        end
+        # the entropy production
+        if pp.plot_dSdt0_vs_t
+            @views plot(time[2:ntime], entropy_production[iz0,ir0,is,2:ntime], xlabel=L"t/(L_{ref}/c_{ref})", ylabel=L"\dot{S}(t)", label = "")
+			outfile = string(run_name, "_entropy production"*description*"(iz0,ir0)_vs_t.pdf")
+			savefig(outfile)
+        end
 	end
     println("done.")
 end
 
+function plot_Maxwellian_diagnostic(ff, density, parallel_flow, thermal_speed, vpa_local, vpa_local_wgts, 
+            vperp_local, vperp_local_wgts, time, iz0, ir0, run_name, n_ion_species)
+    ff_Maxwellian = copy(ff)
+    ff_ones = copy(ff)
+    nvpa = size(vpa_local,1)
+    nvperp = size(vperp_local,1)
+    ntime = size(time,1)
+    if nvperp > 1
+        pvth = 3
+    else
+        pvth = 1
+    end
+    for it in 1:ntime
+        for is in 1:n_ion_species
+            for ivperp in 1:nvperp
+                for ivpa in 1:nvpa
+                   ff_Maxwellian[ivpa,ivperp,is,it] = (density[is,it]/thermal_speed[is,it]^pvth)*
+                                                    exp(- (((vpa_local[ivpa] - parallel_flow[is,it])^2) +
+                                                     (vperp_local[ivperp]^2) )/(thermal_speed[is,it]^2) ) 
+                   ff_ones[ivpa,ivperp,is,it] = 1.0  
+                end
+            end
+        end
+    end
+    # form the L2 norm
+    ff_norm = copy(time)
+    for is in 1:n_ion_species
+        for it in 1:ntime
+            @views num = integrate_over_vspace( (ff[:,:,is,it] .- ff_Maxwellian[:,:,is,it]).^2 , vpa_local, 0, vpa_local_wgts, vperp_local, 0, vperp_local_wgts)
+            @views denom = integrate_over_vspace(ff_ones[:,:,is,it], vpa_local, 0, vpa_local_wgts, vperp_local, 0, vperp_local_wgts)
+            ff_norm[it] = sqrt(num/denom)
+        end
+        iz0_string = string("_iz0", string(iz0))
+        ir0_string = string("_ir0", string(ir0))
+        description = "_ion_spec"*string(is)*"_"*iz0_string*ir0_string
+        @views plot(time, ff_norm, xlabel=L"t/ (L_{ref}/c_{ref})", ylabel=L"L^2(f - f_M)(t)", label = "")
+			outfile = string(run_name, "_L2_Maxwellian_norm"*description*"_vs_t.pdf")
+			savefig(outfile)
+        @views plot(time, ff_norm, xlabel=L"t/ (L_{ref}/c_{ref})", ylabel=L"L^2(f - f_M)(t)", label = "", yscale=:log10)
+			outfile = string(run_name, "_L2_Maxwellian_norm_log_scale"*description*"_vs_t.pdf")
+			savefig(outfile)
+    end
+    return nothing
+end
 function plot_charged_pdf_2D_at_wall(run_name, run_name_label, r_global, z_global,
                                      nblocks, n_ion_species, r, z, vperp, vpa, ntime)
     print("Plotting charged pdf data at wall boundaries...")

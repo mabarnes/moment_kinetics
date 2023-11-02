@@ -9,12 +9,13 @@ using moment_kinetics.calculus: derivative!, second_derivative!, integral
 using MPI
 using Random
 
+#cheb_option_global = "FFT" # "matrix" #
 function runtests()
     @testset "calculus" verbose=use_verbose begin
         println("calculus tests")
         @testset "fundamental theorem of calculus" begin
             @testset "$discretization $ngrid $nelement" for
-                    (discretization, element_spacing_option, etol) ∈ (("finite_difference", "uniform", 1.0e-15), ("chebyshev_pseudospectral", "uniform", 1.0e-15), ("chebyshev_pseudospectral", "sqrt", 1.0e-2)),
+                    (discretization, element_spacing_option, etol, cheb_option) ∈ (("finite_difference", "uniform", 1.0e-15, ""), ("chebyshev_pseudospectral", "uniform", 1.0e-15, "FFT"), ("chebyshev_pseudospectral", "uniform", 1.0e-15, "matrix"), ("chebyshev_pseudospectral", "sqrt", 1.0e-2, "FFT")),
                     ngrid ∈ (5,6,7,8,9,10), nelement ∈ (1, 2, 3, 4, 5)
 
                 if discretization == "finite_difference" && (ngrid - 1) * nelement % 2 == 1
@@ -32,6 +33,7 @@ function runtests()
                 # fd_option and adv_input not actually used so given values unimportant
                 fd_option = ""
                 adv_input = advection_input("default", 1.0, 0.0, 0.0)
+                #cheb_option = cheb_option_global #"FFT"
                 # create the 'input' struct containing input info needed to create a
                 # coordinate
                 nelement_local = nelement
@@ -40,7 +42,7 @@ function runtests()
 				comm = MPI.COMM_NULL # dummy value 
 				input = grid_input("coord", ngrid, nelement,
                     nelement_local, nrank_per_block, irank, L,
-                    discretization, fd_option, bc, adv_input, comm,
+                    discretization, fd_option, cheb_option, bc, adv_input, comm,
                     element_spacing_option)
                 # create the coordinate struct 'x'
                 x, spectral = define_coordinate(input)
@@ -80,6 +82,7 @@ function runtests()
                 # fd_option and adv_input not actually used so given values unimportant
                 fd_option = ""
                 adv_input = advection_input("default", 1.0, 0.0, 0.0)
+                cheb_option = ""
                 # create the 'input' struct containing input info needed to create a
                 # coordinate
                 nelement_local = nelement
@@ -89,7 +92,7 @@ function runtests()
 				element_spacing_option = "uniform" # dummy value
                 input = grid_input("coord", ngrid, nelement,
                     nelement_local, nrank_per_block, irank, L,
-                    "finite_difference", fd_option, bc, adv_input, comm,
+                    "finite_difference", fd_option, cheb_option, bc, adv_input, comm,
                     element_spacing_option)
                 # create the coordinate struct 'x'
                 x, spectral = define_coordinate(input)
@@ -129,6 +132,7 @@ function runtests()
                 # fd_option and adv_input not actually used so given values unimportant
                 fd_option = "fourth_order_centered"
                 adv_input = advection_input("default", 1.0, 0.0, 0.0)
+                cheb_option = ""
                 # create the 'input' struct containing input info needed to create a
                 # coordinate
                 nelement_local = nelement
@@ -138,7 +142,7 @@ function runtests()
                 element_spacing_option = "uniform" # dummy value
 				input = grid_input("coord", ngrid, nelement,
                     nelement_local, nrank_per_block, irank, L,
-                    "finite_difference", fd_option, bc, adv_input, comm,
+                    "finite_difference", fd_option, cheb_option, bc, adv_input, comm,
                     element_spacing_option)
                 # create the coordinate struct 'x'
                 x, spectral = define_coordinate(input)
@@ -174,6 +178,7 @@ function runtests()
                 # fd_option and adv_input not actually used so given values unimportant
                 fd_option = ""
                 adv_input = advection_input("default", 1.0, 0.0, 0.0)
+                cheb_option = ""
                 # create the 'input' struct containing input info needed to create a
                 # coordinate
                 nelement_local = nelement
@@ -183,7 +188,7 @@ function runtests()
                 element_spacing_option = "uniform" # dummy value
 				input = grid_input("coord", ngrid, nelement,
                     nelement_local, nrank_per_block, irank, L,
-                    "finite_difference", fd_option, bc, adv_input, comm,
+                    "finite_difference", fd_option, cheb_option, bc, adv_input, comm,
                     element_spacing_option)
                 # create the coordinate struct 'x'
                 x, spectral = define_coordinate(input)
@@ -227,6 +232,7 @@ function runtests()
                 L = 6.0
                 # fd_option and adv_input not actually used so given values unimportant
                 adv_input = advection_input("default", 1.0, 0.0, 0.0)
+                cheb_option = ""
                 # create the 'input' struct containing input info needed to create a
                 # coordinate
                 nelement_local = nelement
@@ -236,7 +242,7 @@ function runtests()
                 element_spacing_option = "uniform" # dummy value
 				input = grid_input("coord", ngrid, nelement,
                     nelement_local, nrank_per_block, irank, L,
-                    "finite_difference", fd_option, bc, adv_input, comm,
+                    "finite_difference", fd_option, cheb_option, bc, adv_input, comm,
                     element_spacing_option)
                # create the coordinate struct 'x'
                 x, spectral = define_coordinate(input)
@@ -435,7 +441,7 @@ function runtests()
                      (5, 31, 8.e-13),
                      (5, 32, 8.e-13),
                      (5, 33, 8.e-13),
-                    )
+                    ), cheb_option in ("FFT","matrix")
 
                 # define inputs needed for the test
                 L = 6.0
@@ -443,6 +449,7 @@ function runtests()
                 # fd_option and adv_input not actually used so given values unimportant
                 fd_option = ""
                 adv_input = advection_input("default", 1.0, 0.0, 0.0)
+                #cheb_option = cheb_option_global #"FFT"
                 # create the 'input' struct containing input info needed to create a
                 # coordinate
                 nelement_local = nelement
@@ -452,7 +459,7 @@ function runtests()
                 element_spacing_option = "uniform"
 				input = grid_input("coord", ngrid, nelement,
                     nelement_local, nrank_per_block, irank, L,
-                    "chebyshev_pseudospectral", fd_option, bc, adv_input, comm,
+                    "chebyshev_pseudospectral", fd_option, cheb_option, bc, adv_input, comm,
                     element_spacing_option)
                 # create the coordinate struct 'x' and info for derivatives, etc.
                 x, spectral = define_coordinate(input)
@@ -631,7 +638,7 @@ function runtests()
                      (5, 31, 8.e-13),
                      (5, 32, 8.e-13),
                      (5, 33, 8.e-13),
-                    )
+                    ), cheb_option in ("FFT","matrix")
 
                 # define inputs needed for the test
                 L = 6.0
@@ -639,6 +646,7 @@ function runtests()
                 # fd_option and adv_input not actually used so given values unimportant
                 fd_option = ""
                 adv_input = advection_input("default", 1.0, 0.0, 0.0)
+                #cheb_option = cheb_option_global #"FFT"
                 # create the 'input' struct containing input info needed to create a
                 # coordinate
                 nelement_local = nelement
@@ -648,7 +656,7 @@ function runtests()
                 element_spacing_option = "uniform"
 				input = grid_input("coord", ngrid, nelement,
                     nelement_local, nrank_per_block, irank, L,
-                    "chebyshev_pseudospectral", fd_option, bc, adv_input, comm,
+                    "chebyshev_pseudospectral", fd_option, cheb_option, bc, adv_input, comm,
                     element_spacing_option)
                 # create the coordinate struct 'x' and info for derivatives, etc.
                 x, spectral = define_coordinate(input)
@@ -675,7 +683,7 @@ function runtests()
 
         @testset "Chebyshev pseudospectral derivatives (4 argument), Neumann" verbose=false begin
             @testset "$nelement $ngrid" for bc ∈ ("constant", "zero"), element_spacing_option ∈ ("uniform", "sqrt"),
-                    nelement ∈ (1:5), ngrid ∈ (3:33)
+                    nelement ∈ (1:5), ngrid ∈ (3:33), cheb_option in ("FFT","matrix")
 
                 # define inputs needed for the test
                 L = 1.0
@@ -683,6 +691,7 @@ function runtests()
                 # fd_option and adv_input not actually used so given values unimportant
                 fd_option = ""
                 adv_input = advection_input("default", 1.0, 0.0, 0.0)
+                #cheb_option = cheb_option_global #"FFT"
                 # create the 'input' struct containing input info needed to create a
                 # coordinate
                 nelement_local = nelement
@@ -691,11 +700,10 @@ function runtests()
 				comm = MPI.COMM_NULL # dummy value
                 input = grid_input("coord", ngrid, nelement,
                     nelement_local, nrank_per_block, irank, L,
-                    "chebyshev_pseudospectral", fd_option, bc, adv_input, comm,
+                    "chebyshev_pseudospectral", fd_option, cheb_option, bc, adv_input, comm,
                     element_spacing_option)
                 # create the coordinate struct 'x' and info for derivatives, etc.
                 x, spectral = define_coordinate(input)
-
                 # test polynomials up to order ngrid-1
                 for n ∈ 0:ngrid-1
                     # create array for the function f(x) to be differentiated/integrated
@@ -726,7 +734,7 @@ function runtests()
 
         @testset "Chebyshev pseudospectral derivatives upwinding (5 argument), Neumann" verbose=false begin
             @testset "$nelement $ngrid" for bc ∈ ("constant", "zero"), element_spacing_option ∈ ("uniform", "sqrt"),
-                    nelement ∈ (1:5), ngrid ∈ (3:33)
+                    nelement ∈ (1:5), ngrid ∈ (3:33), cheb_option in ("FFT","matrix")
 
                 # define inputs needed for the test
                 L = 1.0
@@ -734,6 +742,7 @@ function runtests()
                 # fd_option and adv_input not actually used so given values unimportant
                 fd_option = ""
                 adv_input = advection_input("default", 1.0, 0.0, 0.0)
+                #cheb_option = cheb_option_global #"FFT"
                 # create the 'input' struct containing input info needed to create a
                 # coordinate
                 nelement_local = nelement
@@ -742,11 +751,10 @@ function runtests()
 				comm = MPI.COMM_NULL # dummy value
                 input = grid_input("coord", ngrid, nelement,
                     nelement_local, nrank_per_block, irank, L,
-                    "chebyshev_pseudospectral", fd_option, bc, adv_input, comm,
+                    "chebyshev_pseudospectral", fd_option, cheb_option, bc, adv_input, comm,
                     element_spacing_option)
                 # create the coordinate struct 'x' and info for derivatives, etc.
                 x, spectral = define_coordinate(input)
-
                 # test polynomials up to order ngrid-1
                 for n ∈ 0:ngrid-1
                     # create array for the function f(x) to be differentiated/integrated
@@ -940,7 +948,7 @@ function runtests()
                      (5, 31, 8.e-13),
                      (5, 32, 8.e-13),
                      (5, 33, 8.e-13),
-                    )
+                    ), cheb_option in ("FFT","matrix")
 
                 # define inputs needed for the test
                 L = 6.0
@@ -948,6 +956,7 @@ function runtests()
                 # fd_option and adv_input not actually used so given values unimportant
                 fd_option = ""
                 adv_input = advection_input("default", 1.0, 0.0, 0.0)
+                #cheb_option = cheb_option_global #"FFT"
                 # create the 'input' struct containing input info needed to create a
                 # coordinate
                 nelement_local = nelement
@@ -957,7 +966,7 @@ function runtests()
                 element_spacing_option = "uniform"
 				input = grid_input("coord", ngrid, nelement,
                     nelement_local, nrank_per_block, irank, L,
-                    "chebyshev_pseudospectral", fd_option, bc, adv_input, comm,
+                    "chebyshev_pseudospectral", fd_option, cheb_option, bc, adv_input, comm,
                     element_spacing_option)
                 # create the coordinate struct 'x' and info for derivatives, etc.
                 x, spectral = define_coordinate(input)
